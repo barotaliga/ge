@@ -174,6 +174,79 @@ void comb_stretch(const Level& level, const Stretch& stretch, const CoursePrep& 
   }
 }
 
+// THE CRESTS SHAVED: the piste's profile down the course (its stations' heights) held to bend
+// over no crest tighter than `radius` m: every station standing too high over the chord between
+// its neighbours lowered onto it, again and again until none does (which only ever cuts snow
+// away), and the ground under each station cut by as much, across the piste and eased out over
+// its shoulders, a box at a time down the course. A knoll a racer would fly off onto the flat past
+// it becomes a rounded roll he flies off onto its own downslope.
+void shave_crests(const Level& level, const Stretch& stretch, const CoursePrep& P, double radius,
+                  Heightfield& ground, std::vector<TrackPoint>& points) {
+  const double lo = stretch.from;
+  const double hi = num::min(level.track.length, stretch.to + P.outrun_length / 2);
+  std::vector<size_t> idx;
+  for (size_t i = 0; i < points.size(); i++) {
+    if (points[i].s >= lo && points[i].s <= hi) idx.push_back(i);
+  }
+  const size_t n = idx.size();
+  if (n < 3) return;
+  std::vector<double> y(n);
+  for (size_t k = 0; k < n; k++) y[k] = points[idx[k]].y;
+  const std::vector<double> was = y;
+  const double h = (points[idx[n - 1]].s - points[idx[0]].s) / double(n - 1);
+  const double lim = (h * h) / radius;
+  for (int pass = 0; pass < 4000; pass++) {
+    bool moved = false;
+    for (size_t k = 1; k + 1 < n; k++) {
+      if (y[k - 1] - 2 * y[k] + y[k + 1] < -lim - 1e-9) {
+        y[k] = (y[k - 1] + y[k + 1] + lim) / 2;
+        moved = true;
+      }
+    }
+    if (!moved) break;
+  }
+  std::vector<double> cut(n);
+  bool any = false;
+  for (size_t k = 0; k < n; k++) {
+    cut[k] = was[k] - y[k];
+    if (cut[k] > 1e-4) any = true;
+    points[idx[k]].y = y[k];
+  }
+  if (!any) return;
+  const double s0 = points[idx[0]].s;
+  const auto depth_at = [&](double s) {
+    const double f = clamp((s - s0) / h, 0, double(n - 1));
+    const auto k = static_cast<size_t>(num::min(double(n - 2), std::floor(f)));
+    return cut[k] + (cut[k + 1] - cut[k]) * (f - double(k));
+  };
+  const double ease = P.comb.ease;
+  std::vector<uint8_t> seen(ground.data.size(), 0);
+  for (int box = 0; lo + kBox * box < hi; box++) {
+    const double a = lo + kBox * box;
+    const double b = num::min(hi, a + kBox);
+    // A box of the course with nothing to cut in it is passed over.
+    double deepest = 0;
+    for (int k = 0; a + 2.0 * k <= b; k++) deepest = num::max(deepest, depth_at(a + 2.0 * k));
+    if (deepest < 1e-3) continue;
+    const Cells c = cells_round(level, ground, a, b, ease + 2);
+    for (int r = c.r0; r <= c.r1; r++) {
+      for (int col = c.c0; col <= c.c1; col++) {
+        const size_t i =
+            static_cast<size_t>(r) * static_cast<size_t>(ground.cols) + static_cast<size_t>(col);
+        if (seen[i] == 1) continue;
+        seen[i] = 1;
+        const TrackHit hit = nearest_track_point(level.track, ground.origin_x + col * ground.cell,
+                                                 ground.origin_z + r * ground.cell);
+        if (hit.s < lo || hit.s > hi) continue;
+        const double half = half_width_at(level, hit);
+        const double weight = 1 - smoothstep(half, half + ease, hit.distance);
+        if (weight <= 0) continue;
+        ground.data[i] = static_cast<float>(ground.data[i] - weight * depth_at(hit.s));
+      }
+    }
+  }
+}
+
 // THE COURSE PREPARED HARD: a race is run on a piste groomed and set firm from the start hut to
 // the end of the run-out, whatever drift (R17) the wind laid across it: the packed field (R10)
 // brought back to the groomer's across the piste and its shoulders over that stretch, and the
@@ -228,6 +301,7 @@ Level prepare_course(const Level& level, const Stretch& stretch, const CoursePre
   if (auto packed = groom_stretch(level, stretch, P)) out.packed.data = std::move(*packed);
   for (const Cut& cut : cuts) apply_cut(level, cut, out.ground, out.track.points);
   comb_stretch(level, stretch, P, out.ground, out.track.points);
+  if (P.crest > 0) shave_crests(level, stretch, P, P.crest, out.ground, out.track.points);
   out.kickers = std::move(kept);
   return out;
 }

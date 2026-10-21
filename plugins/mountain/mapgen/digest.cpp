@@ -137,6 +137,20 @@ std::string level_digest(const Level& level) {
     f.mix(race.to);
     for (const Checkpoint& c : level.checkpoints) {
       if (c.pole) f.word(*c.pole == PoleGate::open ? "open" : "closed");
+      if (c.panels) {
+        f.word("panels");
+        f.mix(c.turn);
+      }
+    }
+    for (const double j : race.jumps) f.mix(j);
+    if (race.trap) {
+      f.word("trap");
+      f.mix(race.trap->s);
+    }
+    if (race.nets) {
+      f.word("nets");
+      f.mix(race.nets->from);
+      f.mix(race.nets->to);
     }
     for (const RaceCourse::LinePoint& p : race.line) {
       f.mix(p.s);
