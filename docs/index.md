@@ -89,6 +89,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | `tests/loop_run_clock_test.cpp` | Golden test: loop/run_clock, bit for bit | `testing` |  |
 | `tests/main.cpp` | Runs every TEST registered in a test executable | `testing` |  |
 | `tests/mountain_generate_test.cpp` | Golden test: the v1 generator's maps, section by section | `testing` `mountain` |  |
+| `tests/package/consumer/main.cpp` | Links the installed engine package the way a game does (release smoke test) | `release` |  |
 | `tests/racing_records_test.cpp` | Golden test: racing/records, bit for bit | `testing` `racing` |  |
 | `tests/racing_standings_test.cpp` | Golden test: racing/standings, bit for bit | `testing` `racing` |  |
 | `tests/racing_tape_test.cpp` | Golden test: racing/tape and a stored ghost, byte for byte | `testing` `racing` |  |
@@ -142,6 +143,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | codec | `plugins/racing/tape.cpp` |
 | concepts | `tools/skill-lessons.mjs` |
 | consolidation | `tools/skill-lessons.mjs` |
+| consumer | `tests/package/consumer/main.cpp` |
 | continental | `plugins/mountain/mapgen/regions.hpp` |
 | controls | `plugins/racing/tape.hpp` |
 | conventions | `engine/core/math.hpp` |
@@ -178,6 +180,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | fell | `plugins/mountain/mapgen/regions.hpp` |
 | field | `plugins/racing/standings.hpp` |
 | find | `tools/agents-index.mjs` |
+| find-package | `tests/package/consumer/main.cpp` |
 | finding | `plugins/mountain/analysis/index.hpp` |
 | findings | `plugins/mountain/analysis/index.hpp` |
 | fingerprint | `plugins/mountain/mapgen/digest.hpp` `plugins/racing/tape.hpp` |
@@ -218,6 +221,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | index | `tools/agents-index.mjs` |
 | info | `engine/core/output.hpp` |
 | input | `plugins/racing/tape.hpp` |
+| install | `tests/package/consumer/main.cpp` |
 | integrate | `engine/core/quat.hpp` |
 | internal | `engine/core/libm/fdlibm_internal.hpp` |
 | interpolation | `engine/loop/run_clock.hpp` |
@@ -266,6 +270,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | order | `plugins/racing/standings.hpp` |
 | orientation | `engine/core/quat.hpp` |
 | output | `engine/core/output.cpp` `engine/core/output.hpp` `tests/core_output_test.cpp` |
+| package | `tests/package/consumer/main.cpp` |
 | pause | `engine/loop/run_clock.hpp` |
 | personal-best | `plugins/racing/records.hpp` |
 | pi | `engine/core/math.hpp` |
@@ -295,6 +300,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | refraction | `engine/core/solar.cpp` `engine/core/solar.hpp` |
 | region | `plugins/mountain/mapgen/regions.cpp` `plugins/mountain/mapgen/regions.hpp` |
 | regions | `plugins/mountain/mapgen/regions.hpp` |
+| release | `tests/package/consumer/main.cpp` |
 | replay | `plugins/racing/tape.hpp` |
 | resume | `engine/loop/run_clock.hpp` |
 | ridged | `plugins/mountain/mapgen/terrain.cpp` |
@@ -327,6 +333,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | skills | `tools/check-agents.sh` |
 | sky | `plugins/mountain/mapgen/weather.hpp` |
 | slope | `engine/core/heightfield.hpp` |
+| smoke-test | `tests/package/consumer/main.cpp` |
 | smooth | `engine/core/noise.hpp` |
 | smoothstep | `engine/core/math.hpp` |
 | snows | `plugins/mountain/mapgen/weather.hpp` |
