@@ -142,14 +142,15 @@ void run(ge::lab::Lab& lab) {
       lab.fail("no GPU device, and GE_GPU_REQUIRE=1",
                "Install Mesa's Vulkan drivers (apt install mesa-vulkan-drivers). Skill: gpu.");
     }
-    lab.metric("gpu-errors", 0, "count");
-    lab.metric("pipelines-after-load", 0, "count");
     lab.note("No GPU adapter on this machine: the pictures are placeholders.");
     for (const std::string& name : views) {
       ge::lab::Picture none = ge::lab::create_picture(width, height, {40, 40, 48});
       ge::lab::draw_text(none, 4, 4, "NO GPU ADAPTER", {230, 230, 230});
       lab.shot(shot_of(name), none, Det::measured);
     }
+    // The digest hashes in call order: the shots, then these two, as the device path does.
+    lab.metric("gpu-errors", 0, "count");
+    lab.metric("pipelines-after-load", 0, "count");
     return;
   }
   const auto& r = device->report;
