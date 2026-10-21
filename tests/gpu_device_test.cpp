@@ -126,7 +126,7 @@ TEST(a_device_without_validation_still_draws) {
   wgpu::CommandBuffer commands = encoder.Finish();
   d->queue.Submit(1, &commands);
   const ge::gpu::Image img = ge::gpu::read_now(*d, target);
-  CHECK(img.rgba.size() == 16 * 16 * 4);
+  CHECK(img.rgba.size() == size_t{16} * 16 * 4);
   CHECK(!img.rgba.empty() && img.rgba[3] == 255);
   CHECK(d->errors.load() == 0);
 }
