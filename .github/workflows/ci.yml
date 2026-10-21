@@ -16,7 +16,7 @@ env:
   GE_LINUX_PACKAGES: >-
     libx11-dev libxext-dev libxcursor-dev libxrandr-dev libxi-dev libxss-dev libxfixes-dev
     libxtst-dev libxkbcommon-dev libwayland-dev wayland-protocols libdecor-0-dev
-    mesa-vulkan-drivers xvfb xauth
+    libasound2-dev libpulse-dev libpipewire-0.3-dev mesa-vulkan-drivers xvfb xauth
 
 concurrency:
   group: ci-${{ github.ref }}

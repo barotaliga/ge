@@ -31,9 +31,20 @@ std::optional<mapgen::RegionId> region_named(const std::string& name) {
   return std::nullopt;
 }
 
-std::optional<mapgen::Level> build_map(ge::lab::Lab& lab, double seed) {
+std::vector<int> map_versions(const ge::lab::Lab& lab) {
+  std::vector<int> out;
+  for (const double v : lab.arg_nums("version")) out.push_back(static_cast<int>(v));
+  return out;
+}
+
+std::string map_id(double seed, int version) {
+  const std::string id = "seed-" + std::to_string(static_cast<long long>(seed));
+  return version == 1 ? id : id + "-v" + std::to_string(version);
+}
+
+std::optional<mapgen::Level> build_map(ge::lab::Lab& lab, double seed, std::optional<int> version) {
   mapgen::GenerateOptions opts;
-  opts.version = static_cast<int>(lab.arg_num("version"));
+  opts.version = version ? *version : map_versions(lab).front();
   opts.region = region_named(lab.arg("region"));
   if (!opts.region) {
     lab.fail("--region=" + lab.arg("region") + " is not a region",
@@ -46,6 +57,7 @@ std::optional<mapgen::Level> build_map(ge::lab::Lab& lab, double seed) {
     lab.fail(
         "seed " + std::to_string(static_cast<long long>(seed)) + " did not build: " + e.what(),
         "Run `make lab LAB=analyze ARGS=\"--seeds=" + std::to_string(static_cast<long long>(seed)) +
+            " --version=" + std::to_string(*opts.version) +
             " --refusals\"` to see each attempt's refusal. Skill: mountain.");
     return std::nullopt;
   }

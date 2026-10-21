@@ -32,6 +32,24 @@ void encode(TerrainPass&, gpu::Encoder&);                 // GPU: bind and dispa
 - `prepare` allocates nothing. It fills staging arrays reserved at load.
 - `encode` makes no decisions. If it needs a branch, the branch belongs in `prepare`.
 
+## What is built (M7a, M7b), and where
+
+| File | What |
+| --- | --- |
+| `engine/render/view.hpp` | `FrameView` (what a game extracts each frame), the camera's matrices (camera-relative, reversed-z, infinite far), the frustum's planes |
+| `engine/render/frame.hpp` | `FrameUniforms` (twin of `wgsl/frame_types.wgsl`), `FrameTargets` (`hdr`, `depth`), `PassRow` and `check_pass_table`, `FrameRecorder` (timestamps and `FrameStats` per pass), `make_layout` / `make_group` / `make_buffer` / `make_texture` |
+| `engine/render/sky.hpp` | The atmosphere's tables by compute (`sky_tables.wgsl`), the sky pass (`sky.wgsl`), `frame_layout` and `frame_group` (group 0 of every draw) |
+| `engine/render/terrain.hpp` | The GPU-culled geometry clipmap (`terrain.wgsl`, `terrain_cull.wgsl`, `terrain_normals.wgsl`), `clipmap_levels`, `min_max_pyramid` |
+| `engine/render/horizon.hpp` | The ground's own shadow: two horizon maps either side of the sun's bearing (`horizon.wgsl` bakes one), the bake decision (`prepare_horizon`, `Horizon::bakes`), the CPU reference `horizon_tan`, `read_horizon`; the terrain owns one and its draw reads it (`horizon_light` in `terrain.wgsl`) |
+| `engine/render/post.hpp` | Exposure from the sky, the tone curve, dither, encoding (`post.wgsl`) |
+| `engine/render/wgsl/` | The shared WGSL: `frame_types.wgsl`, `atmosphere.wgsl` (the air, the tables' maps, the scattering march), `frame.wgsl` (group 0, the haze, the sun's light, the sky's irradiance), `terrain_common.wgsl` (the terrain's params block, the horizon's blend in it) |
+| `games/fall_line/app/frame.hpp` | Fall Line's pass table (`kPassTable`) and the `GameFrame` that owns the GPU half; `create_frame` is the manifest |
+| `games/fall_line/app/views.hpp`, `look.hpp` | The named views and the map's day; the ground's albedo |
+
+Group 0 is the frame block and the sky's tables; group 1 is the pass's own. A compute pass
+that WRITES a table binds it only in its group 1 (a dispatch may not read and write one
+texture), so the sky's table passes use their own group 0 (`sky.in`).
+
 ## The rules that keep it fast
 
 1. **The CPU never walks instances in a frame.** Repeated things are an instance
@@ -65,6 +83,17 @@ void encode(TerrainPass&, gpu::Encoder&);                 // GPU: bind and dispa
   measured costs onto these passes. Put both pictures in the PR.
 
 ## Labs
+
+**`world`** (`games/fall_line/labs/gpu_world_lab.cpp`): Fall Line's frame from each named view
+of a seed (`--seed`, `--views`, `--hour`, `--width`, `--height`), captured headless; the tiles
+the cull drew, every pass's GPU ms and the CPU half are measured metrics beside each picture.
+Run it before and after any change to a pass, and look at every view's picture against its
+`look_for`. For a shadow change, run it at several `--hour`s.
+
+**`shadows`** (`games/fall_line/labs/gpu_shadows_lab.cpp`): the horizon maps themselves, the
+map from straight above at each `--hours` hour with its shadowed share, and the bake counter
+of a sun swept from `--from` to `--to` (deterministic, no GPU: `sweep-bakes` is two plus one
+per bearing step crossed). A change to the bake or its decision runs it before and after.
 
 Every pass lands with a `picture` lab. Until the GPU capture exists (M6–M7), a lab draws on
 the CPU raster (`engine/lab/raster.hpp`). After that, a lab renders a named view offscreen

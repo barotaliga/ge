@@ -49,16 +49,24 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   only directory that includes `webgpu.h`.
 - **`engine/render`**: generic rendering mechanisms (the pass table and named targets,
   GPU-driven instance families, the heightfield clipmap, shadows, the sky tables and
-  clouds, TAA-U, post, compute particles, skinning). A pass owns its GPU buffers and
-  exposes `prepare(view)` and `encode(pass)`. **`docs/rendering.md` is the plan** for
-  this layer and `engine/gpu`.
-- **`engine/audio`**: the synth: voice definitions, a DSP graph
-  (oscillators, noise, biquads, envelopes, echo), racks and `play_def`. It runs on the
-  platform's audio stream.
+  clouds, TAA-U, post, compute particles, skinning), built as `ge_render` with the GPU. A
+  pass owns its GPU buffers and exposes `prepare(view)` and `encode(pass)`; the frame core
+  (the view and camera, the pass table, the sky, the terrain, post) is built (M7a).
+  **`docs/rendering.md` is the plan** for this layer and `engine/gpu`.
+- **`engine/audio`**: the synth (built, M9a): the vocabulary (`Tone`, `Noise`, `LayerSpec`,
+  `LayerTarget`), a fixed-capacity DSP graph (polyBLEP oscillators, coloured noise pools,
+  state-variable filters, envelopes, soft saturation, four buses, an echo and a soft-knee
+  limiter), sounds as data (`SoundDef`, `play_def`), racks of steered layers, the meter and WAV
+  bytes. It renders 48 kHz stereo float with no platform: the game thread's calls cross to the
+  render thread through a lock-free ring, and the render is deterministic to the bit (core/libm,
+  core::Rng), so a buffer is a golden and a lab digest. `engine/platform`'s audio device pulls
+  it on SDL's audio thread and converts to the hardware's rate.
 - **`engine/ui`**: the immediate-mode 2D layer (rects, images, SDF text), plus Dear
   ImGui behind `GE_DEV_UI`.
-- **`games/fall_line/app`**: Fall Line's presentation: it builds the frame from
-  `GameState`, Fall Line's own shaders and looks, its HUD and cards, and its sound beds.
+- **`games/fall_line/app`**: Fall Line's presentation, the `fall_line_app` library (which
+  the window and the game's GPU labs link): its pass table over `engine/render`, the
+  `FrameView` it extracts (from named views now, from `GameState` once the run lands),
+  Fall Line's own looks, then its HUD and cards, and its sound beds.
 - **`engine/lab`**: the lab contract and the `labs` runner (`docs/labs.md`): how any
   subsystem, plugin or game declares a lab, the CPU raster and PNG writer its pictures are
   drawn with, and the report, contact sheet and digest a run leaves. Labs themselves sit in
@@ -135,7 +143,8 @@ run_clock.frame(dt) → n steps
 for n:  sim::step(state, input)                      // 120 Hz, deterministic, no allocation
 extract(state, alpha) → FrameView                    // plain data, interpolated
 render: prepare passes (CPU, may be parallel) → encode the pass table (fixed order) → submit → present
-audio: beds read FrameView; the device thread pulls samples
+audio: beds read the state once a frame and steer their layers; events fire one-shots;
+       the device thread pulls blocks through the synth's ring
 ui:    HUD + cards drawn last
 ```
 

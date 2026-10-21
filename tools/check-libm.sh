@@ -6,8 +6,9 @@
 #
 # Simulation code: engine/core (except engine/core/libm itself), engine/loop, every plugin
 # (except a plugin's app/ directory, its presentation half), games/*/sim, and engine/lab and
-# every labs/ directory, whose pictures and digests must match on every CI row. Renderer, audio
-# and UI code may use <cmath>: they feed no digest.
+# every labs/ directory, whose pictures and digests must match on every CI row, and engine/audio,
+# whose rendered buffers are goldens and lab digests. Renderer and UI code may use <cmath>: they
+# feed no digest.
 #
 # ge:summary Fails any <cmath> transcendental in simulation code (make libm-check)
 # ge:keywords ci check libm cmath transcendental determinism
@@ -32,7 +33,7 @@ want_ok=$'x.cpp:5:  double a = libm::sin(t);\nx.cpp:6:  // std::sin(x) would dif
 [[ -z "$(scan <<<"$want_ok")" ]] || { echo "check-libm: self-test flagged an allowed call; fix BAD in $0" >&2; exit 2; }
 
 dirs=()
-for d in engine/core engine/loop engine/lab plugins games/*/sim games/*/labs; do [[ -d "$d" ]] && dirs+=("$d"); done
+for d in engine/core engine/loop engine/audio engine/lab plugins games/*/sim games/*/labs; do [[ -d "$d" ]] && dirs+=("$d"); done
 hits="$(git ls-files -- "${dirs[@]}" | grep -E '\.(cpp|hpp|h)$' | grep -v '^engine/core/libm/' | grep -v '^plugins/[^/]*/app/' \
   | xargs -r grep -nE "$FNS|hypot|__builtin_" /dev/null | scan)"
 if [[ -n "$hits" ]]; then

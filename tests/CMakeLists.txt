@@ -6,8 +6,8 @@ file(GLOB GE_TEST_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/*_test.c
 get_property(GE_PLUGIN_TARGETS GLOBAL PROPERTY GE_PLUGIN_TARGETS)
 get_property(GE_GAME_TARGETS GLOBAL PROPERTY GE_GAME_TARGETS)
 # tests/cli_*_test.cpp need GE_CLI and link ge_cli (the ge command line).
-# tests/gpu_*_test.cpp need GE_GPU and link ge_gpu; tests/platform_*_test.cpp need GE_PLATFORM
-# and GE_GPU (a window is only worth opening to present to). Either kind exits 77 (CTest's
+# tests/gpu_*_test.cpp need GE_GPU and link ge_gpu (tests/render_*_test.cpp link ge_render);
+# tests/platform_*_test.cpp need GE_PLATFORM and GE_GPU (a window is only worth opening to present to). Either kind exits 77 (CTest's
 # SKIP) when the machine cannot run it (no adapter, no display), except where the environment
 # sets GE_GPU_REQUIRE=1 (CI's Linux x64 rows, with lavapipe and a virtual display): there a
 # skip is a failure.
@@ -20,6 +20,11 @@ foreach(src ${GE_TEST_SOURCES})
       continue()
     endif()
     set(extra ge_gpu)
+  elseif(name MATCHES "^render_")
+    if(NOT GE_GPU)
+      continue()
+    endif()
+    set(extra ge_render)
   elseif(name MATCHES "^cli_")
     if(NOT GE_CLI)
       continue()
@@ -32,7 +37,7 @@ foreach(src ${GE_TEST_SOURCES})
     set(extra ge_platform ge_gpu)
   endif()
   add_executable(${name} ${src} main.cpp)
-  target_link_libraries(${name} PRIVATE ge_core ge_lab ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
+  target_link_libraries(${name} PRIVATE ge_core ge_audio ge_lab ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
     ${extra} ${cli})
   target_compile_definitions(${name} PRIVATE GE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
   add_test(NAME ${name} COMMAND ${name})

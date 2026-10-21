@@ -1,0 +1,5 @@
+# seed region, then the map raced (mountain_resort_level_test)
+38 alpine attempt=0 course=1 grade=green courses=7 gates=10 digest=9f20fe18
+1 maritime attempt=0 course=5 grade=red courses=7 gates=47 digest=fce7b344
+3 fell attempt=2 course=1 grade=green courses=6 gates=12 digest=621fa096
+4 continental attempt=1 course=1 grade=green courses=8 gates=11 digest=6b1a1c09
