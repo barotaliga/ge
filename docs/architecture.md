@@ -34,7 +34,7 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   nothing.
 - **`plugins/<name>`**: a mechanism one genre or world shares (§ Plugins). Its simulation
   half may include only the engine targets and plugins its `ge_add_plugin` call declares.
-- **`games/fall_line/sim`**: the part of game5's `engine/` that is Fall Line's alone. It may
+- **`games/fall_line/sim`**: Fall Line's own simulation. It may
   include only `engine/core`, `engine/loop`, the plugins it links and itself. It has no platform, no GPU and no wall
   clock. This is the line game5's `imports_test` holds, restated for C++.
 - **`engine/platform`**: SDL3 behind a narrow C++ API: the window, input events, the
@@ -78,7 +78,7 @@ first line is written (the `plugins` skill has the questions):
 - **Layout.**
   ```
   plugins/<name>/CMakeLists.txt          ge_add_plugin(<name> ENGINE core PLUGINS racing)
-  plugins/<name>/[<module>/]*.{hpp,cpp} the simulation half, mirroring the oracle's directory
+  plugins/<name>/[<module>/]*.{hpp,cpp} the simulation half, a directory per module
   plugins/<name>/app/                    the presentation half (refused by the build until the
                                          first one splits it into ge_<name>_app, M7+)
   plugins/<name>/labs/                   its labs, never compiled into ge_<name>
@@ -88,7 +88,7 @@ first line is written (the `plugins` skill has the questions):
 - **Naming.** A plugin's name is one lower-case word, and it is the directory, the namespace
   (`ge::<name>`), the target (`ge_<name>`), the skill and the test prefix. It never equals an
   `engine/` or `games/` directory. Headers are included as `"<name>/<file>.hpp"` or, when the plugin
-  ports more than one oracle directory, `"<name>/<module>/<file>.hpp"`.
+  has more than one module, `"<name>/<module>/<file>.hpp"`.
 - **Build.** `cmake/Plugins.cmake` defines `ge_add_plugin`; the root `CMakeLists.txt` adds every
   `plugins/*/CMakeLists.txt` it finds, so there is no list to register in. Tests link every
   plugin. The plugin's targets carry the same FP flags as the core, through `ge_core`.

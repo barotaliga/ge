@@ -1,11 +1,11 @@
 ---
 name: sim
-description: "Use for games/fall_line/sim (what of game5's engine/ is Fall Line's alone): createGame and the 120 Hz step's order, the modes, the course, the field, the bot, the headless sim CLI, and engine/loop's run clock. The mountain generator is the mountain skill's."
+description: "Use for games/fall_line/sim (Fall Line's own simulation): createGame and the 120 Hz step's order, the modes, the course, the field, the bot, the headless sim CLI, and engine/loop's run clock. The mountain generator is the mountain skill's."
 ---
 
 # The Fall Line simulation
 
-`games/fall_line/sim/` is the part of game5's `engine/` that is Fall Line's alone, in C++:
+`games/fall_line/sim/` is Fall Line's own simulation:
 headless, deterministic and platform-free. It may include only `engine/core`, `engine/loop`,
 the plugins it links and itself. What another game of the genre would reuse goes in a plugin
 instead (the `plugins` skill): the generator is `plugins/mountain` (the `mountain` skill), the

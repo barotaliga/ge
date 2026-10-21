@@ -116,9 +116,9 @@ and Windows. Releases are dispatched, never hand-made (`release` skill,
 | `engine/ui/` | Immediate-mode 2D and text, plus the dev UI (M10) | `ui` |
 | `plugins/` | Plugins: one directory each, one `ge_add_plugin` call in its `CMakeLists.txt`, built as `ge_<name>`; the build half is `cmake/Plugins.cmake`, the check `tools/check-plugins.mjs` | `plugins` |
 | `plugins/racing/` | The racing primitives (`ge::racing`): `tape.hpp` (the control tape a ghost and a replay are kept on: the axis grid, the RLE + base64 byte format, the recorder, the reader, the map fingerprint), `records.hpp` (the record book's policy: `beats`, `split_gap`, `note_record`), `standings.hpp` (the field's order: `leg_progress`, `field_order`, `place_among`) | `racing` |
-| `plugins/mountain/mapgen/` | game5's `engine/mapgen/` ported (`ge::mountain::mapgen`), a file per oracle module: `generate.hpp` (`generate_level`, the attempts, the compile), `digest.hpp` (`level_digest`), `rules.hpp` (LEVEL_RULES), `types.hpp` (the `Level`), and every step it calls. v1 (the single piste) so far (M4a); the ski area is M4b | `mountain` |
-| `plugins/mountain/analysis/` | game5's `engine/analysis/` ported (`ge::mountain::analysis`): `analyze_level`, the rule book re-checked on a finished map, in the oracle's own message text | `mountain` |
-| `games/fall_line/sim/` | What of game5's `engine/` is Fall Line's alone: `create_game`, the step's order, the modes, the bot (M5) | `sim` |
+| `plugins/mountain/mapgen/` | The world generator (`ge::mountain::mapgen`): `generate.hpp` (`generate_level`, the attempts, the compile), `digest.hpp` (`level_digest`), `rules.hpp` (LEVEL_RULES), `types.hpp` (the `Level`), and every step it calls. v1 (the single piste) so far (M4a); the ski area is M4b | `mountain` |
+| `plugins/mountain/analysis/` | The rule book re-checked on a finished map (`ge::mountain::analysis`): `analyze_level` | `mountain` |
+| `games/fall_line/sim/` | Fall Line's own simulation: `create_game`, the step's order, the modes, the bot (M5) | `sim` |
 | `games/fall_line/app/` | game5's `pwa/` ported: the frame, the look, the HUD, the beds | `render`, `ui`, `audio` |
 | `tests/` | `<topic>_test.cpp`, one executable each; `check.hpp` (harness), `golden.hpp`, `golden/` | `testing` |
 | `tools/parity/` | Node scripts that run the TS oracle and write `tests/golden/` | `testing` |
