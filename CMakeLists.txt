@@ -95,6 +95,13 @@ if(GE_GPU)
   add_library(ge_gpu STATIC ${GE_GPU_SOURCES})
   target_link_libraries(ge_gpu PUBLIC ge_core dawn::webgpu_dawn)
   ge_embed_wgsl(ge_gpu engine/gpu/test_scene.wgsl)
+  # The frame core (M7): the pass table's mechanisms, the sky, the terrain, post.
+  file(GLOB GE_RENDER_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/render/*.cpp)
+  add_library(ge_render STATIC ${GE_RENDER_SOURCES})
+  target_link_libraries(ge_render PUBLIC ge_gpu)
+  ge_embed_wgsl(ge_render engine/render/sky_tables.wgsl engine/render/sky.wgsl
+    engine/render/terrain.wgsl engine/render/terrain_cull.wgsl engine/render/terrain_normals.wgsl
+    engine/render/post.wgsl)
 endif()
 
 # The plugins: every plugins/<name>/CMakeLists.txt, each one ge_add_plugin(...) call. A new
@@ -128,13 +135,15 @@ if(PROJECT_IS_TOP_LEVEL)
     ${CMAKE_CURRENT_SOURCE_DIR}/engine/lab/labs/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/plugins/*/labs/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/games/*/labs/*.cpp)
-  # The engine's GPU and window labs (gpu_*_lab.cpp, platform_*_lab.cpp) build only with
-  # the layer they measure.
+  # GPU and window labs (gpu_*_lab.cpp, platform_*_lab.cpp, in any labs/ directory) build only
+  # with the layer they measure; a game's GPU labs link its app library (<game>_app).
   set(GE_LAB_EXTRA "")
   if(GE_GPU)
-    list(APPEND GE_LAB_EXTRA ge_gpu)
+    list(APPEND GE_LAB_EXTRA ge_gpu ge_render)
+    get_property(GE_GAME_APPS GLOBAL PROPERTY GE_GAME_APPS)
+    list(APPEND GE_LAB_EXTRA ${GE_GAME_APPS})
   else()
-    list(FILTER GE_LAB_SOURCES EXCLUDE REGEX "/engine/lab/labs/gpu_[^/]*$")
+    list(FILTER GE_LAB_SOURCES EXCLUDE REGEX "/labs/gpu_[^/]*$")
   endif()
   if(GE_PLATFORM AND GE_GPU)
     list(APPEND GE_LAB_EXTRA ge_platform)

@@ -1,0 +1,161 @@
+// THE FRAME'S SHARED HALF: what every pass of a frame reads and the order they run in.
+//
+// - `FrameUniforms`: the per-frame block (camera, sun, size, time, frustum), the C++ twin of
+//   `struct Frame` in render/wgsl/frame_types.wgsl. Change both together; `static_assert`s
+//   below hold the size.
+// - THE NAMED TARGETS of a frame (`FrameTargets`): `hdr` (linear light, RGBA16F) and `depth`
+//   (reversed-z Depth32Float), at the render size. The output (`final`) is the caller's: an
+//   offscreen target or the surface's texture.
+// - THE PASS TABLE: a game lists its passes in order as `PassRow`s, each naming the targets it
+//   reads and writes. `check_pass_table` says what is wrong with an order (a read before any
+//   write) with no GPU, so a test holds the game's table. Dawn places the barriers; the table is
+//   the frame's graph, written where an agent can read it (docs/rendering.md § The frame).
+// - `FrameStats`: what a frame cost, per pass: GPU ms (timestamp queries; NaN without the
+//   tier or on the first frame), draws and dispatches; the lab sheets and the dev UI read it.
+// - Bind group layouts by a short list of slot kinds (`make_layout`): binding i is the i-th
+//   slot.
+//
+// ge:summary The frame's shared half: uniforms, named targets, the pass table and its stats
+// ge:keywords render frame uniforms frame-uniforms targets hdr depth reverse-z pass-table
+// ge:keywords pass-row named-targets check_pass_table frame-stats gpu-ms draws dispatches
+// ge:keywords bind-group-layout make_layout slot fill_uniforms create_targets
+// ge:skill render gpu
+// ge:test tests/render_frame_test.cpp
+#pragma once
+
+#include <array>
+#include <cstdint>
+#include <initializer_list>
+#include <span>
+#include <string>
+#include <string_view>
+#include <vector>
+
+#include "gpu/device.hpp"
+#include "gpu/timer.hpp"
+#include "render/view.hpp"
+
+namespace ge::render {
+
+// render/wgsl/frame_types.wgsl's `struct Frame`, field for field.
+struct FrameUniforms {
+  float view_proj[16];      // camera-relative world -> clip
+  float inv_view_proj[16];  // clip -> camera-relative world
+  float eye[4];             // world xyz (m); w: the eye's altitude over the sea, km
+  float sun[4];             // unit direction toward the sun; w: its illuminance
+  float size[4];            // render width, height, 1/width, 1/height
+  float time[4];            // seconds, frame number, 0, 0
+  float world[4];           // x: y = 0's altitude over the sea, km
+  float planes[6][4];       // the frustum (view.hpp's five), the sixth all zero
+};
+static_assert(sizeof(FrameUniforms) == 64 * 2 + 16 * 5 + 16 * 6, "match frame_types.wgsl");
+
+void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint32_t height);
+
+inline constexpr wgpu::TextureFormat kHdrFormat = wgpu::TextureFormat::RGBA16Float;
+inline constexpr wgpu::TextureFormat kDepthFormat = wgpu::TextureFormat::Depth32Float;
+
+struct FrameTargets {
+  uint32_t width = 0, height = 0;
+  wgpu::Texture hdr, depth;
+  wgpu::TextureView hdr_view, depth_view;
+};
+FrameTargets create_targets(gpu::Device& device, std::string_view label, uint32_t width,
+                            uint32_t height);
+
+// ── The pass table ──
+
+// A row: the pass's name (also its timestamp's and stats' name) and the targets it reads and
+// writes, each list space-separated ("terrain.tiles sky.aerial").
+struct PassRow {
+  std::string_view name;
+  std::string_view reads;
+  std::string_view writes;
+};
+
+// Empty when the order holds: every target a pass reads is written by an earlier pass or is
+// in `inputs` (space-separated, made at load: a height texture). Otherwise one
+// agent-actionable line per fault.
+std::string check_pass_table(std::span<const PassRow> rows, std::string_view inputs);
+
+inline constexpr int kMaxPasses = 16;
+
+struct PassStat {
+  std::string_view name;
+  double gpu_ms = 0;  // NaN when not measured
+  uint32_t draws = 0;
+  uint32_t dispatches = 0;
+};
+
+struct FrameStats {
+  std::array<PassStat, kMaxPasses> passes{};
+  int count = 0;
+  double cpu_ms = 0;  // every prepare and encode of the frame, wall clock
+  uint32_t draws() const;
+  uint32_t dispatches() const;
+};
+
+// THE RECORDER a frame's passes are opened through: each pass gets its timestamp pair (when
+// the tier is on) and its row in the stats, in the order the pass table runs them.
+struct FrameRecorder {
+  gpu::PassTimer timer;
+  FrameStats stats;
+  bool timed = false;
+
+  // Room for `passes` passes a frame.
+  void init(gpu::Device& device, std::string_view label, int passes);
+  // Start a frame's stats (the GPU times are the last readings that came back).
+  void begin_frame(gpu::Device& device);
+  wgpu::ComputePassEncoder compute(wgpu::CommandEncoder& encoder, std::string_view name);
+  wgpu::RenderPassEncoder render(wgpu::CommandEncoder& encoder, wgpu::RenderPassDescriptor desc,
+                                 std::string_view name);
+  // The pass opened last: count its draws and dispatches here.
+  PassStat& current() { return stats.passes[static_cast<size_t>(stats.count - 1)]; }
+  // After the last pass, in the same encoder; then after the submit.
+  void end_frame(wgpu::CommandEncoder& encoder);
+  void after_submit(gpu::Device& device);
+  // Labs and tests: wait for this frame's GPU times.
+  void wait(gpu::Device& device);
+};
+
+// ── Bind group layouts ──
+
+enum class Slot : uint8_t {
+  uniform,       // a uniform buffer
+  storage_read,  // a read-only storage buffer
+  storage,       // a read-write storage buffer
+  sampler,       // a filtering sampler
+  texture,       // a filterable float 2D texture
+  texture_raw,   // an unfilterable float 2D texture (textureLoad only: R32F, RG32F)
+  texture_3d,    // a filterable float 3D texture
+  store_2d,      // a write-only RGBA16F 2D storage texture
+  store_3d,      // a write-only RGBA16F 3D storage texture
+};
+
+wgpu::BindGroupLayout make_layout(gpu::Device& device, std::string_view label,
+                                  std::initializer_list<Slot> slots, wgpu::ShaderStage visibility);
+wgpu::PipelineLayout make_pipeline_layout(gpu::Device& device, std::string_view label,
+                                          std::initializer_list<wgpu::BindGroupLayout> groups);
+
+// One entry of a bind group: a buffer, a texture view or a sampler, at binding = its position.
+struct Bind {
+  wgpu::Buffer buffer = nullptr;
+  wgpu::TextureView view = nullptr;
+  wgpu::Sampler sampler = nullptr;
+  Bind(wgpu::Buffer b) : buffer(std::move(b)) {}     // NOLINT(google-explicit-constructor)
+  Bind(wgpu::TextureView v) : view(std::move(v)) {}  // NOLINT(google-explicit-constructor)
+  Bind(wgpu::Sampler s) : sampler(std::move(s)) {}   // NOLINT(google-explicit-constructor)
+};
+wgpu::BindGroup make_group(gpu::Device& device, std::string_view label,
+                           const wgpu::BindGroupLayout& layout, std::initializer_list<Bind> binds);
+
+// A texture, labelled; `depth` > 1 makes it 3D, `mips` > 1 gives it a mip chain.
+wgpu::Texture make_texture(gpu::Device& device, std::string_view label, uint32_t width,
+                           uint32_t height, uint32_t depth, wgpu::TextureFormat format,
+                           wgpu::TextureUsage usage, uint32_t mips = 1);
+
+// A buffer of `size` bytes with `usage` (CopyDst added), labelled.
+wgpu::Buffer make_buffer(gpu::Device& device, std::string_view label, uint64_t size,
+                         wgpu::BufferUsage usage);
+
+}  // namespace ge::render

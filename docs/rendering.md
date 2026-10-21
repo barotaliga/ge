@@ -169,9 +169,22 @@ schedules barriers from those uses. There is no general render graph; the table 
 graph, written out where an agent can read it. A pass has two halves:
 
 ```cpp
-void prepare(Pass&, const FrameView&, Upload&);   // CPU: decide, fill staging; testable with no GPU
-void encode(Pass&, gpu::Encoder&);                 // GPU: bind and dispatch or draw; makes no decisions
+void prepare_terrain(gpu::Device&, Terrain&, const FrameView&);   // CPU: decide, stage, upload
+void encode_terrain(const Terrain&, const gpu::PipelineSet&,      // GPU: bind and draw;
+                    FrameRecorder&, wgpu::CommandEncoder&, ...);  // makes no decisions
 ```
+
+**As built (M7a).** The table is a `constexpr` array of `render::PassRow {name, reads,
+writes}` in the game's app (`games/fall_line/app/frame.cpp`, `kPassTable`), the read and
+write lists space-separated target names; `render::check_pass_table` names any read before
+its write (or a pass listed twice) with no GPU, and the `world` lab holds the game's table
+to it. Each pass is opened through `render::FrameRecorder`, which gives it its timestamp
+pair and its row in `FrameStats` (GPU ms a frame late, draws, dispatches, the CPU half).
+The camera is at the origin of every matrix (the GPU works camera-relative in float, so a
+point kilometres away keeps its millimetres), and depth is **reversed-z with an infinite
+far plane** in `Depth32Float`, cleared to 0 and tested `greater`. The frame block (`FrameUniforms`,
+`render/wgsl/frame_types.wgsl`) and the sky's tables are group 0 of every draw
+(`render/wgsl/frame.wgsl`).
 
 The order, with what each stage is for:
 
@@ -277,6 +290,20 @@ texture and a material function.
   for vertices it does not need.
 - **The material function** is the game's or the plugin's: the snow, its age, its
   grooves and glitter (§ Where the code goes).
+- **Past the map's edge the grid is read mirrored** (height, normals and albedo alike), so
+  the ground runs on to the horizon as its own reflection, with no seam at the edge,
+  instead of the edge's heights stretched outward. The far ranges replace it with M8.
+
+**As built (M7a)** (`render/terrain.hpp`): eight levels of 4 × 4 tiles of 32 × 32 quads,
+level 0 at 1 m a quad, so the clipmap reaches about 8 km from the eye; each level's square
+is centred on the eye snapped to twice its spacing, which puts every finer square on its
+coarser neighbour's grid. Every tile is an instance of one 16-bit indexed mesh whose
+vertices are pulled from the vertex index; a compute pass culls the tiles (boxes from a
+min/max pyramid with a texture's mip chain) into one indirect draw. The morph runs by the
+vertex's distance from the eye, from 80 % to 95 % of a level's half side, so nothing pops
+as the eye moves; a coarse vertex inside the finer square sinks two spacings. The normals
+are baked once into an `RGBA16Float` texture by compute. The game hands the albedo as an
+sRGB texture over the same grid (Fall Line's: snow, the packed piste, steep rock).
 
 Snow marks are two **toroidal textures** that follow the camera: the trail map (where
 the snow was cut and packed) and the deformation field (how high the snow stands).
@@ -329,6 +356,18 @@ figures' atlas only.
   whole buffer is marched again. The noise volumes are built by compute at load.
 - **The night sky** (moon, stars, the galaxy band) is drawn into the sky's pass.
 
+**As built (M7a)** (`render/sky.hpp`, `render/wgsl/atmosphere.wgsl`): an Earth-like air
+(Rayleigh, Mie, an ozone layer) over a planet of 6360 km, the eye's altitude from the map's
+own (`FrameView::altitude_m`). Tables in `RGBA16Float`: transmittance 256 × 64 and multiple
+scattering 32 × 32 once; the sky view 192 × 108 (rows crowded at the horizon, columns round
+the sun) and the **sky's light** (the irradiance an up-facing surface gets from the sky, and
+the sun's transmittance at the eye, in a small storage buffer) when the sun turns past
+half a degree or the eye moves 50 m; the aerial volume 32³ over the screen, its slices
+spaced as the square of their index out to 8 km, every frame. Every luminance is per unit
+of the sun's illuminance (`FrameView::sun_illuminance` scales them all). The sky pass is a
+full-screen triangle at the far plane tested `equal`, with the sun's disc. `frame.wgsl`
+holds the one copy of the haze, the sun's light at a point and the sky's irradiance.
+
 ## Anti-aliasing and resolution
 
 **Temporal anti-aliasing with upscaling (TAA-U)** is the default. Each frame's
@@ -349,12 +388,21 @@ tile memory resolves MSAA almost for free.
 
 ## Post
 
-One compute pass reads the resolved HDR frame and writes the swapchain image:
+One full-screen fragment pass reads the resolved HDR frame and writes the swapchain image
+(a fragment pass, not a compute one: a compute shader may not store to the surface's
+`BGRA8Unorm` without an optional feature, and a tile GPU keeps a full-screen fragment pass
+in tile memory):
 
 - exposure from the sky's brightness, not from a histogram, so it never pumps;
 - bloom from a half-resolution mip chain (dual-filter down and up), cheap and stable;
 - the colour grade as a 32³ 3D lookup table the game bakes from its look;
 - tone mapping, a blue-noise dither against banding, and the output transfer function.
+
+**As built (M7a)** (`render/post.hpp`): the exposure maps a white Lambertian surface under
+the sun and the sky (read from the sky's light) to 0.78; the tone curve is the Khronos PBR
+neutral operator (linear to 0.76, a smooth shoulder above, so snow keeps its colour); the
+dither is interleaved gradient noise until the blue-noise texture lands; the sRGB encoding
+is an `override` constant off for an `*Srgb` output. Bloom and the grade land with M7d.
 
 Linear light is used throughout, and the conversion happens here, once.
 
