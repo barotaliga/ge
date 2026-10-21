@@ -48,7 +48,8 @@ inline std::string band_text(mapgen::Band b, const char* unit = "") {
 }
 
 // Re-check a finished level against the rule book: a single piste's checks, or on a map with a
-// `resort` its course's and its area's (resort.hpp), the course's first.
+// `resort` its course's and its area's (resort.hpp), the course's first; on a map with a race
+// course set over it, the course's discipline's (race.hpp).
 LevelAnalysis analyze_level(const mapgen::Level& level);
 
 }  // namespace ge::mountain::analysis
