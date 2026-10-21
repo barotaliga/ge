@@ -7,4 +7,5 @@ level 4490929c4816a055
 mapgen-cost 3baf51b6907817f3
 noise 3d3a828834f144cb
 resort f82a1fca6fb6ba42
+ride f7dc714b2493f95a
 run-clock 81607c7ac1161166

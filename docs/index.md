@@ -158,6 +158,19 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | `plugins/racing/standings.hpp` | The field's order: home first by the clock, then further round | `racing` | `tests/racing_standings_test.cpp` |
 | `plugins/racing/tape.cpp` | The control tape's codec: base64, run-length streams, recorder, reader | `racing` | `tests/racing_tape_test.cpp` |
 | `plugins/racing/tape.hpp` | The control tape a ghost and a replay are kept on: axes, RLE, base64 | `racing` | `tests/racing_tape_test.cpp` |
+| `plugins/skier/labs/ride_lab.cpp` | Lab: the ride scenarios run and measured; the line and the speed drawn | `skier` `labs` | `tests/skier_scenarios_test.cpp` |
+| `plugins/skier/limits.hpp` | What a skier can do: edge at speed, carve curvature, corner speed, terminal speed | `skier` | `tests/skier_scenarios_test.cpp` |
+| `plugins/skier/scenarios.cpp` | The scenario table and run_scenario: stage, script, step and measure | `skier` `labs` | `tests/skier_scenarios_test.cpp` |
+| `plugins/skier/scenarios.hpp` | The ride scenarios: staged moments with scripted inputs, run and measured | `skier` `labs` | `tests/skier_scenarios_test.cpp` |
+| `plugins/skier/skier.cpp` | step_skier's body: contact impulses, grip, yaw, flight, landing, trunks, wipeout | `skier` | `tests/skier_scenarios_test.cpp` |
+| `plugins/skier/skier.hpp` | The skier on the snow: SkierState, SkierInput, the events and step_skier | `skier` | `tests/skier_scenarios_test.cpp` |
+| `plugins/skier/skis.hpp` | A pair of skis and the skier on them: SkiSpec and the reference pair | `skier` | `tests/skier_scenarios_test.cpp` |
+| `plugins/skier/snow.hpp` | The snow under the skis: sink, base friction, plough, sideways grip, brake | `skier` | `tests/skier_scenarios_test.cpp` |
+| `plugins/skier/synthetic.cpp` | Builds the synthetic slope and the drag strip | `skier` | `tests/skier_scenarios_test.cpp` |
+| `plugins/skier/synthetic.hpp` | The hand-built maps the skier is staged on: the slope and the drag strip | `skier` | `tests/skier_scenarios_test.cpp` |
+| `plugins/skier/trees.cpp` | Builds the tree grid and answers which trunk a body overlaps | `skier` | `tests/skier_scenarios_test.cpp` |
+| `plugins/skier/trees.hpp` | The trunks indexed on a grid once a map, and the nearest one a skier overlaps | `skier` | `tests/skier_scenarios_test.cpp` |
+| `plugins/skier/tuning.hpp` | The skier's shared tuning numbers: snow, grip, steering, drive, jump, air, wipeout | `skier` | `tests/skier_scenarios_test.cpp` |
 | `tests/check.hpp` | The test harness: TEST blocks, CHECK, CHECK_BITS, skip | `testing` |  |
 | `tests/core_heightfield_test.cpp` | Golden test: core/heightfield, bit for bit | `testing` |  |
 | `tests/core_libm_test.cpp` | Golden test: core/libm, bit for bit | `testing` |  |
@@ -183,6 +196,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | `tests/racing_records_test.cpp` | Golden test: racing/records, bit for bit | `testing` `racing` |  |
 | `tests/racing_standings_test.cpp` | Golden test: racing/standings, bit for bit | `testing` `racing` |  |
 | `tests/racing_tape_test.cpp` | Golden test: racing/tape and a stored ghost, byte for byte | `testing` `racing` |  |
+| `tests/skier_scenarios_test.cpp` | Test: the ride scenarios' digests and their expectations, on the reference pair | `skier` `testing` |  |
 | `tools/agents-index.mjs` | Checks the ge: tag blocks, writes docs/index.md, answers keyword queries | `write-code` |  |
 | `tools/check-agents.sh` | The agent guidance's structure check (make agents-check) | `write-code` |  |
 | `tools/check-libm.sh` | Fails any <cmath> transcendental in simulation code (make libm-check) | `determinism` |  |
@@ -208,6 +222,8 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | adler32 | `engine/lab/png.cpp` `engine/lab/png.hpp` |
 | agents | `tools/check-agents.sh` |
 | agents-check | `tools/agents-index.mjs` |
+| air | `plugins/skier/skier.hpp` `plugins/skier/tuning.hpp` |
+| air-density | `plugins/skier/tuning.hpp` |
 | alpha | `engine/lab/labs/loop_run_clock_lab.cpp` `engine/loop/run_clock.hpp` |
 | alpine | `plugins/mountain/mapgen/regions.hpp` |
 | analysis | `plugins/mountain/analysis/cliffs.cpp` `plugins/mountain/analysis/cliffs.hpp` `plugins/mountain/analysis/crossings.cpp` `plugins/mountain/analysis/crossings.hpp` `plugins/mountain/analysis/index.cpp` `plugins/mountain/analysis/index.hpp` |
@@ -255,8 +271,11 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | bottom-footprint | `plugins/mountain/mapgen/station_clear.cpp` `plugins/mountain/mapgen/station_clear.hpp` |
 | box | `engine/lab/raster.hpp` |
 | box-of | `plugins/mountain/mapgen/links.cpp` |
+| brake | `plugins/skier/snow.hpp` |
 | branch | `plugins/mountain/labs/junctions_lab.cpp` `plugins/mountain/mapgen/links.cpp` |
 | branch-lane | `plugins/mountain/mapgen/links.hpp` |
+| build | `plugins/skier/synthetic.cpp` |
+| build_tree_index | `plugins/skier/trees.cpp` `plugins/skier/trees.hpp` |
 | build-area | `plugins/mountain/labs/resort_map.cpp` |
 | build-map | `plugins/mountain/labs/level_map.cpp` `plugins/mountain/labs/level_map.hpp` |
 | build-resort | `plugins/mountain/labs/resort_map.hpp` `plugins/mountain/mapgen/resort_build.hpp` |
@@ -267,8 +286,12 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | canvas | `engine/lab/raster.hpp` |
 | caption | `engine/lab/lab.cpp` `engine/lab/lab.hpp` `engine/lab/report.hpp` `tests/lab_runner_test.cpp` |
 | capture | `engine/gpu/target.hpp` `engine/gpu/test_scene.hpp` `engine/lab/labs/gpu_capture_lab.cpp` `tests/gpu_capture_test.cpp` |
+| carve | `plugins/skier/labs/ride_lab.cpp` `plugins/skier/limits.hpp` `plugins/skier/scenarios.hpp` `plugins/skier/skier.hpp` `tests/skier_scenarios_test.cpp` |
+| carve_curvature | `plugins/skier/limits.hpp` |
 | cat-track | `plugins/mountain/mapgen/lanes.hpp` |
 | cbrt | `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/libm.hpp` |
+| cda | `plugins/skier/skis.hpp` |
+| ceiling | `plugins/skier/limits.hpp` |
 | cell-key | `plugins/mountain/mapgen/net_index.cpp` |
 | chain-bottom | `plugins/mountain/mapgen/lift_chain.cpp` `plugins/mountain/mapgen/lift_chain.hpp` |
 | chain-of | `plugins/mountain/mapgen/lift_chain.hpp` |
@@ -295,6 +318,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | cmath | `tools/check-libm.sh` |
 | cocoa | `engine/platform/window.cpp` |
 | codec | `plugins/racing/tape.cpp` |
+| collision | `plugins/skier/trees.hpp` |
 | compare | `engine/lab/report.cpp` `engine/lab/report.hpp` `engine/lab/runner.hpp` `tests/lab_runner_test.cpp` |
 | compilation-info | `engine/gpu/pipeline.hpp` |
 | compilation-message | `engine/gpu/pipeline.cpp` |
@@ -303,7 +327,9 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | concepts | `tools/skill-lessons.mjs` |
 | configure | `engine/gpu/surface.hpp` |
 | consolidation | `tools/skill-lessons.mjs` |
+| constants | `plugins/skier/tuning.hpp` |
 | consumer | `tests/package/consumer/main.cpp` |
+| contact | `plugins/skier/skier.cpp` `plugins/skier/skier.hpp` |
 | contact-sheet | `engine/lab/report.cpp` `engine/lab/report.hpp` |
 | continental | `plugins/mountain/mapgen/regions.hpp` |
 | contract | `engine/lab/lab.hpp` |
@@ -311,6 +337,8 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | conventions | `engine/core/math.hpp` |
 | copy-texture-to-buffer | `engine/gpu/target.hpp` |
 | core | `plugins/mountain/mapgen/network_stamp.cpp` `plugins/mountain/mapgen/network_stamp.hpp` |
+| corner_speed | `plugins/skier/limits.hpp` |
+| corner-speed | `plugins/skier/limits.hpp` |
 | corral-tail | `plugins/mountain/mapgen/lift_line.hpp` |
 | corridor | `plugins/mountain/mapgen/network_stamp.hpp` |
 | corridor-index | `plugins/mountain/mapgen/network_stamp.cpp` |
@@ -320,6 +348,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | course-arc | `plugins/mountain/mapgen/courses.cpp` `plugins/mountain/mapgen/courses.hpp` |
 | courses | `plugins/mountain/labs/resort_lab.cpp` `plugins/mountain/labs/resort_map.cpp` `plugins/mountain/labs/resort_map.hpp` `plugins/mountain/mapgen/courses.cpp` `plugins/mountain/mapgen/courses.hpp` `plugins/mountain/mapgen/resort_courses.cpp` `tests/mountain_resort_build_test.cpp` |
 | covers | `plugins/mountain/mapgen/net_index.cpp` `plugins/mountain/mapgen/net_index.hpp` |
+| crash | `plugins/skier/skier.hpp` |
 | crc32 | `engine/lab/png.cpp` `engine/lab/png.hpp` `tests/lab_raster_test.cpp` |
 | create_device | `engine/gpu/device.hpp` |
 | create_shader | `engine/gpu/pipeline.hpp` |
@@ -330,8 +359,10 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | creation-counter | `engine/gpu/pipeline.hpp` |
 | cross-fall | `plugins/mountain/mapgen/network_build.cpp` `plugins/mountain/mapgen/network_build.hpp` |
 | crossing | `plugins/mountain/analysis/crossings.hpp` |
+| crr | `plugins/skier/snow.hpp` |
 | crust | `plugins/mountain/mapgen/resort_features.cpp` `plugins/mountain/mapgen/surface.cpp` `plugins/mountain/mapgen/surface.hpp` |
 | ctest | `tests/main.cpp` |
+| curvature | `plugins/skier/limits.hpp` |
 | cut-approach | `plugins/mountain/mapgen/station_pad.cpp` `plugins/mountain/mapgen/station_pad.hpp` |
 | dawn | `engine/gpu/device.hpp` |
 | day | `plugins/mountain/mapgen/resort_courses.cpp` `plugins/mountain/mapgen/sun.hpp` |
@@ -345,7 +376,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | device-creation | `engine/gpu/device.cpp` |
 | device-lost | `engine/gpu/device.cpp` `engine/gpu/device.hpp` |
 | diagnostics | `engine/core/output.hpp` |
-| digest | `engine/lab/lab.cpp` `engine/lab/lab.hpp` `plugins/mountain/mapgen/digest.cpp` `plugins/mountain/mapgen/digest.hpp` `tests/lab_runner_test.cpp` `tests/mountain_resort_build_test.cpp` |
+| digest | `engine/lab/lab.cpp` `engine/lab/lab.hpp` `plugins/mountain/mapgen/digest.cpp` `plugins/mountain/mapgen/digest.hpp` `plugins/skier/scenarios.cpp` `tests/lab_runner_test.cpp` `tests/mountain_resort_build_test.cpp` `tests/skier_scenarios_test.cpp` |
 | digests | `engine/lab/runner.cpp` `engine/lab/runner.hpp` |
 | direction | `tools/check-plugins.mjs` |
 | disable_robustness | `engine/gpu/device.hpp` |
@@ -355,11 +386,13 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | display_available | `engine/platform/window.hpp` |
 | dist2 | `engine/core/math.hpp` |
 | distance-to | `plugins/mountain/mapgen/resort_features.cpp` |
-| drag | `plugins/mountain/mapgen/resort.hpp` |
+| drag | `plugins/mountain/mapgen/resort.hpp` `plugins/skier/snow.hpp` |
+| drag-area | `plugins/skier/skis.hpp` |
 | drag-arm | `plugins/mountain/mapgen/lift_line.hpp` |
 | drag-back | `plugins/mountain/mapgen/drags.cpp` `plugins/mountain/mapgen/drags.hpp` |
 | drag-lift | `tests/mountain_resort_build_test.cpp` |
 | drag-relaid | `plugins/mountain/mapgen/station_clear.hpp` |
+| drag-strip | `plugins/skier/synthetic.hpp` |
 | drag-top | `plugins/mountain/mapgen/station_pad.cpp` `plugins/mountain/mapgen/station_pad.hpp` |
 | drag-tops | `plugins/mountain/mapgen/resort_access.cpp` |
 | drag-tops-of | `plugins/mountain/mapgen/station_pad.hpp` |
@@ -369,12 +402,17 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | draw-area | `plugins/mountain/labs/resort_map.cpp` |
 | drift | `plugins/mountain/mapgen/drift.cpp` `plugins/mountain/mapgen/drift.hpp` |
 | drifts | `plugins/mountain/mapgen/drift.hpp` `plugins/mountain/mapgen/resort_graded.cpp` |
-| drive | `engine/lab/lab.hpp` |
-| drop | `plugins/mountain/analysis/cliffs.hpp` `plugins/mountain/mapgen/drops.cpp` `plugins/mountain/mapgen/drops.hpp` |
+| drive | `engine/lab/lab.hpp` `plugins/skier/skier.hpp` `plugins/skier/tuning.hpp` |
+| drop | `plugins/mountain/analysis/cliffs.hpp` `plugins/mountain/mapgen/drops.cpp` `plugins/mountain/mapgen/drops.hpp` `plugins/skier/scenarios.hpp` `tests/skier_scenarios_test.cpp` |
 | drops | `plugins/mountain/mapgen/drops.hpp` `plugins/mountain/mapgen/resort_graded.cpp` |
 | each-cell | `plugins/mountain/mapgen/summit_ramps.cpp` |
 | earthworks | `plugins/mountain/mapgen/lift_chain.cpp` `plugins/mountain/mapgen/lift_chain.hpp` |
 | ecotone | `plugins/mountain/mapgen/resort_woods.cpp` `plugins/mountain/mapgen/resort_woods.hpp` |
+| edge | `plugins/skier/skier.hpp` `plugins/skier/snow.hpp` `plugins/skier/tuning.hpp` |
+| edge_for_curvature | `plugins/skier/limits.hpp` |
+| edge_most | `plugins/skier/limits.hpp` |
+| edge-max | `plugins/skier/skis.hpp` |
+| edge-most | `plugins/skier/limits.hpp` |
 | elevation | `engine/core/solar.hpp` |
 | encode | `engine/lab/png.hpp` |
 | end_load | `engine/gpu/device.hpp` `tests/gpu_device_test.cpp` |
@@ -414,6 +452,9 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | fixed-step | `engine/loop/run_clock.hpp` |
 | fixture | `tests/golden.hpp` |
 | flags | `engine/lab/lab.hpp` `engine/lab/runner.hpp` |
+| flat | `plugins/skier/synthetic.cpp` `plugins/skier/synthetic.hpp` |
+| flat_strip | `plugins/skier/synthetic.hpp` |
+| flight | `plugins/skier/labs/ride_lab.cpp` `plugins/skier/skier.hpp` |
 | floor-point | `plugins/mountain/mapgen/hub.hpp` |
 | fma | `engine/core/libm/pow.cpp` |
 | fnv | `engine/lab/lab.cpp` `plugins/mountain/mapgen/digest.cpp` `plugins/mountain/mapgen/digest.hpp` |
@@ -430,6 +471,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | frame | `engine/lab/labs/loop_run_clock_lab.cpp` `engine/loop/run_clock.hpp` |
 | frame-loop | `engine/lab/labs/platform_frame_pace_lab.cpp` `games/fall_line/app/main.cpp` |
 | frame-pace | `engine/lab/labs/platform_frame_pace_lab.cpp` `games/fall_line/app/main.cpp` |
+| friction | `plugins/skier/skier.hpp` `plugins/skier/snow.hpp` |
 | funnel-into | `plugins/mountain/mapgen/network_build.cpp` `plugins/mountain/mapgen/network_build.hpp` |
 | gates | `plugins/mountain/labs/level_lab.cpp` `plugins/mountain/labs/level_map.hpp` `plugins/mountain/mapgen/spawn.hpp` |
 | ge_add_plugin | `tools/check-plugins.mjs` |
@@ -443,7 +485,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | glibc | `engine/core/libm/pow.cpp` |
 | glide | `plugins/mountain/mapgen/run_start.hpp` |
 | glyph | `engine/lab/raster.cpp` `engine/lab/raster.hpp` |
-| golden | `tests/core_heightfield_test.cpp` `tests/core_libm_test.cpp` `tests/core_math_test.cpp` `tests/core_noise_test.cpp` `tests/core_num_test.cpp` `tests/core_output_test.cpp` `tests/core_prng_test.cpp` `tests/core_quat_test.cpp` `tests/core_solar_test.cpp` `tests/golden.hpp` `tests/loop_run_clock_test.cpp` `tests/mountain_generate_test.cpp` `tests/mountain_resort_build_test.cpp` `tests/racing_records_test.cpp` `tests/racing_standings_test.cpp` `tests/racing_tape_test.cpp` |
+| golden | `tests/core_heightfield_test.cpp` `tests/core_libm_test.cpp` `tests/core_math_test.cpp` `tests/core_noise_test.cpp` `tests/core_num_test.cpp` `tests/core_output_test.cpp` `tests/core_prng_test.cpp` `tests/core_quat_test.cpp` `tests/core_solar_test.cpp` `tests/golden.hpp` `tests/loop_run_clock_test.cpp` `tests/mountain_generate_test.cpp` `tests/mountain_resort_build_test.cpp` `tests/racing_records_test.cpp` `tests/racing_standings_test.cpp` `tests/racing_tape_test.cpp` `tests/skier_scenarios_test.cpp` |
 | golden-image | `engine/gpu/test_scene.hpp` `engine/lab/labs/gpu_capture_lab.cpp` `tests/gpu_capture_test.cpp` `tests/gpu_support.hpp` |
 | gondola | `plugins/mountain/mapgen/resort.hpp` |
 | gpu | `engine/gpu/device.cpp` `engine/gpu/device.hpp` `engine/gpu/pipeline.cpp` `engine/gpu/pipeline.hpp` `engine/gpu/surface.cpp` `engine/gpu/surface.hpp` `engine/gpu/target.cpp` `engine/gpu/target.hpp` `engine/gpu/test_scene.cpp` `engine/gpu/test_scene.hpp` `engine/gpu/timer.cpp` `engine/gpu/timer.hpp` `engine/lab/labs/gpu_capture_lab.cpp` `tests/gpu_capture_test.cpp` `tests/gpu_device_test.cpp` `tests/gpu_support.hpp` |
@@ -454,15 +496,20 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | grades | `plugins/mountain/mapgen/grades.hpp` |
 | gradient | `engine/core/heightfield.hpp` |
 | graph | `plugins/mountain/mapgen/access_build.hpp` |
-| grid | `engine/core/heightfield.hpp` |
+| gravity | `plugins/skier/tuning.hpp` |
+| grid | `engine/core/heightfield.hpp` `plugins/skier/trees.cpp` `plugins/skier/trees.hpp` |
+| grip | `plugins/skier/skier.cpp` `plugins/skier/skier.hpp` `plugins/skier/snow.hpp` `plugins/skier/tuning.hpp` |
 | groom | `plugins/mountain/mapgen/resort_features.cpp` |
 | groom-hub | `plugins/mountain/mapgen/hub.cpp` `plugins/mountain/mapgen/hub.hpp` |
 | groom-pads | `plugins/mountain/mapgen/station_pad.cpp` `plugins/mountain/mapgen/station_pad.hpp` |
 | groom-ramps | `plugins/mountain/mapgen/summit_ramps.cpp` `plugins/mountain/mapgen/summit_ramps.hpp` |
 | groom-way | `plugins/mountain/mapgen/lift_chain.hpp` |
 | groomed | `plugins/mountain/mapgen/drift.hpp` |
+| groomer | `plugins/skier/snow.hpp` |
 | ground | `engine/core/heightfield.hpp` |
+| hand-built | `plugins/skier/synthetic.hpp` |
 | harness | `tests/check.hpp` |
+| harsh | `plugins/skier/tuning.hpp` |
 | hash | `engine/core/noise.hpp` |
 | hash2 | `engine/core/noise.hpp` |
 | head-below | `plugins/mountain/mapgen/run_start.cpp` |
@@ -480,6 +527,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | high-word | `engine/core/libm/fdlibm_internal.hpp` |
 | hillshade | `plugins/mountain/labs/level_map.cpp` `plugins/mountain/labs/level_map.hpp` `plugins/mountain/labs/resort_map.hpp` |
 | hitch | `engine/lab/labs/loop_run_clock_lab.cpp` `engine/lab/labs/platform_frame_pace_lab.cpp` |
+| hockey-stop | `plugins/skier/scenarios.hpp` |
 | home-of | `plugins/mountain/mapgen/access_build.cpp` |
 | hub | `plugins/mountain/labs/resort_lab.cpp` `plugins/mountain/labs/resort_map.hpp` `plugins/mountain/mapgen/drift.hpp` `plugins/mountain/mapgen/hub.cpp` `plugins/mountain/mapgen/hub.hpp` `plugins/mountain/mapgen/resort_features.cpp` `plugins/mountain/mapgen/resort_rules.hpp` `tests/mountain_resort_build_test.cpp` |
 | hub-at | `plugins/mountain/mapgen/hub.hpp` |
@@ -493,12 +541,13 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | ihdr | `engine/lab/png.cpp` |
 | image | `engine/gpu/target.hpp` `engine/lab/png.hpp` |
 | image-compare | `tests/gpu_support.hpp` |
+| impulse | `plugins/skier/skier.cpp` `plugins/skier/skier.hpp` |
 | imul | `engine/core/num.hpp` |
 | in-approach | `plugins/mountain/mapgen/summit_ramps.cpp` |
 | include | `tools/check-plugins.mjs` |
 | index | `engine/lab/report.hpp` `tools/agents-index.mjs` |
 | info | `engine/core/output.hpp` |
-| input | `engine/platform/window.hpp` `plugins/racing/tape.hpp` `tests/platform_window_test.cpp` |
+| input | `engine/platform/window.hpp` `plugins/racing/tape.hpp` `plugins/skier/scenarios.hpp` `tests/platform_window_test.cpp` |
 | input-snapshot | `engine/platform/window.hpp` |
 | install | `tests/package/consumer/main.cpp` |
 | integrate | `engine/core/quat.hpp` |
@@ -511,18 +560,20 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | json | `engine/lab/report.cpp` `engine/lab/report.hpp` |
 | judder | `engine/lab/labs/loop_run_clock_lab.cpp` |
 | julian-day | `engine/core/solar.cpp` `engine/core/solar.hpp` |
+| jump | `plugins/skier/skier.hpp` `plugins/skier/tuning.hpp` |
 | junction | `plugins/mountain/labs/junctions_lab.cpp` `plugins/mountain/mapgen/courses.hpp` `plugins/mountain/mapgen/network_build.hpp` `plugins/mountain/mapgen/network_stamp.hpp` `plugins/mountain/mapgen/resort_graded.cpp` |
 | junctions | `plugins/mountain/labs/junctions_lab.cpp` |
 | keep-off | `plugins/mountain/mapgen/resort_graded.cpp` |
 | keeps-chain | `plugins/mountain/mapgen/lift_chain.hpp` |
 | keyboard | `engine/platform/window.hpp` |
 | keywords | `tools/agents-index.mjs` |
-| kicker | `plugins/mountain/mapgen/kickers.cpp` `plugins/mountain/mapgen/kickers.hpp` |
+| kicker | `plugins/mountain/mapgen/kickers.cpp` `plugins/mountain/mapgen/kickers.hpp` `plugins/skier/scenarios.hpp` `plugins/skier/synthetic.hpp` `tests/skier_scenarios_test.cpp` |
 | kickers | `plugins/mountain/labs/level_lab.cpp` `plugins/mountain/labs/level_map.hpp` `plugins/mountain/mapgen/kickers.hpp` `plugins/mountain/mapgen/resort_graded.cpp` |
 | krummholz | `plugins/mountain/mapgen/forest.hpp` |
-| lab | `engine/lab/lab.cpp` `engine/lab/lab.hpp` `engine/lab/labs/core_noise_lab.cpp` `engine/lab/labs/gpu_capture_lab.cpp` `engine/lab/labs/loop_run_clock_lab.cpp` `engine/lab/labs/platform_frame_pace_lab.cpp` `engine/lab/main.cpp` `engine/lab/report.cpp` `engine/lab/report.hpp` `engine/lab/runner.cpp` `engine/lab/runner.hpp` `plugins/mountain/labs/analyze_lab.cpp` `plugins/mountain/labs/junctions_lab.cpp` `plugins/mountain/labs/level_lab.cpp` `plugins/mountain/labs/level_map.cpp` `plugins/mountain/labs/level_map.hpp` `plugins/mountain/labs/mapgen_cost_lab.cpp` `plugins/mountain/labs/resort_lab.cpp` `plugins/mountain/labs/resort_map.cpp` `plugins/mountain/labs/resort_map.hpp` `tests/lab_raster_test.cpp` `tests/lab_runner_test.cpp` |
+| lab | `engine/lab/lab.cpp` `engine/lab/lab.hpp` `engine/lab/labs/core_noise_lab.cpp` `engine/lab/labs/gpu_capture_lab.cpp` `engine/lab/labs/loop_run_clock_lab.cpp` `engine/lab/labs/platform_frame_pace_lab.cpp` `engine/lab/main.cpp` `engine/lab/report.cpp` `engine/lab/report.hpp` `engine/lab/runner.cpp` `engine/lab/runner.hpp` `plugins/mountain/labs/analyze_lab.cpp` `plugins/mountain/labs/junctions_lab.cpp` `plugins/mountain/labs/level_lab.cpp` `plugins/mountain/labs/level_map.cpp` `plugins/mountain/labs/level_map.hpp` `plugins/mountain/labs/mapgen_cost_lab.cpp` `plugins/mountain/labs/resort_lab.cpp` `plugins/mountain/labs/resort_map.cpp` `plugins/mountain/labs/resort_map.hpp` `plugins/skier/labs/ride_lab.cpp` `tests/lab_raster_test.cpp` `tests/lab_runner_test.cpp` |
 | label | `engine/lab/raster.hpp` |
 | labs | `engine/lab/lab.hpp` `engine/lab/main.cpp` |
+| landing | `plugins/skier/labs/ride_lab.cpp` `plugins/skier/skier.cpp` `plugins/skier/skier.hpp` `plugins/skier/tuning.hpp` |
 | lane | `plugins/mountain/labs/junctions_lab.cpp` `plugins/mountain/mapgen/network.hpp` |
 | lane-ask | `plugins/mountain/mapgen/lanes.hpp` |
 | lane-route | `plugins/mountain/mapgen/lanes.hpp` |
@@ -551,7 +602,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | lift-look | `plugins/mountain/mapgen/lift_line.hpp` |
 | lift-plan | `plugins/mountain/mapgen/resort.hpp` |
 | lifts | `plugins/mountain/labs/resort_lab.cpp` `plugins/mountain/labs/resort_map.hpp` |
-| limits | `engine/gpu/device.hpp` |
+| limits | `engine/gpu/device.hpp` `plugins/skier/limits.hpp` |
 | line | `engine/lab/raster.cpp` `engine/lab/raster.hpp` |
 | line-cap | `tools/check-agents.sh` |
 | link | `plugins/mountain/mapgen/links.cpp` |
@@ -560,10 +611,12 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | lip | `plugins/mountain/labs/junctions_lab.cpp` |
 | list | `engine/lab/runner.cpp` |
 | llvmpipe | `engine/gpu/device.hpp` |
+| load | `plugins/skier/skier.hpp` |
 | log | `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/libm.hpp` `engine/core/output.cpp` `engine/core/output.hpp` `tests/core_output_test.cpp` |
 | log2 | `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/libm.hpp` |
 | logging | `engine/core/output.hpp` |
 | logging-callback | `engine/gpu/device.cpp` |
+| lone-tree | `plugins/skier/synthetic.hpp` |
 | loop | `engine/loop/run_clock.hpp` |
 | lost | `engine/gpu/surface.cpp` |
 | low-word | `engine/core/libm/fdlibm_internal.hpp` |
@@ -574,10 +627,12 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | map-async | `engine/gpu/target.hpp` |
 | mapgen | `plugins/mountain/labs/mapgen_cost_lab.cpp` `plugins/mountain/mapgen/generate.hpp` `tests/mountain_generate_test.cpp` |
 | maritime | `plugins/mountain/mapgen/regions.hpp` |
+| mass | `plugins/skier/skis.hpp` |
 | massif | `plugins/mountain/mapgen/massif.cpp` `plugins/mountain/mapgen/massif.hpp` `plugins/mountain/mapgen/resort_rules.hpp` |
 | massif-row | `plugins/mountain/mapgen/massif.cpp` |
 | math | `engine/core/math.hpp` `tests/core_math_test.cpp` |
 | max | `engine/core/num.hpp` |
+| measure | `plugins/skier/labs/ride_lab.cpp` `plugins/skier/scenarios.cpp` `plugins/skier/scenarios.hpp` |
 | measured-access | `plugins/mountain/mapgen/resort_access.cpp` `tests/mountain_resort_build_test.cpp` |
 | measured-colour | `plugins/mountain/mapgen/resort_graded.cpp` |
 | measured-picture | `engine/lab/labs/gpu_capture_lab.cpp` |
@@ -594,6 +649,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | mod | `engine/core/num.hpp` |
 | module-state | `engine/core/output.cpp` `engine/core/output.hpp` `engine/lab/lab.cpp` |
 | modulo | `engine/core/num.hpp` |
+| moment | `plugins/skier/scenarios.hpp` |
 | monotonic | `engine/platform/window.hpp` |
 | moon | `engine/core/solar.cpp` `engine/core/solar.hpp` `tests/core_solar_test.cpp` |
 | mountain | `plugins/mountain/mapgen/massif.hpp` `plugins/mountain/mapgen/resort_build.cpp` `plugins/mountain/mapgen/resort_build.hpp` `plugins/mountain/mapgen/terrain.hpp` |
@@ -620,6 +676,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | num | `engine/core/num.hpp` `engine/core/num_text.cpp` `engine/core/num_text.hpp` `tests/core_num_test.cpp` |
 | number | `engine/core/num.hpp` |
 | number-format | `engine/core/num_text.cpp` `engine/core/num_text.hpp` |
+| numbers | `plugins/skier/tuning.hpp` |
 | nursery | `plugins/mountain/mapgen/resort.hpp` |
 | octaves | `engine/core/noise.hpp` |
 | off-kickers | `plugins/mountain/mapgen/resort_features.cpp` `tests/mountain_resort_build_test.cpp` |
@@ -637,8 +694,9 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | outdated | `engine/gpu/surface.cpp` |
 | output | `engine/core/output.cpp` `engine/core/output.hpp` `tests/core_output_test.cpp` |
 | outside-hub | `plugins/mountain/mapgen/hub.cpp` `plugins/mountain/mapgen/hub.hpp` |
+| overlap | `plugins/skier/trees.hpp` |
 | package | `tests/package/consumer/main.cpp` |
-| packed | `plugins/mountain/mapgen/network_stamp.hpp` |
+| packed | `plugins/mountain/mapgen/network_stamp.hpp` `plugins/skier/snow.hpp` `plugins/skier/synthetic.hpp` |
 | pad | `plugins/mountain/mapgen/station_pad.hpp` |
 | pad-grade | `plugins/mountain/mapgen/drags.cpp` `plugins/mountain/mapgen/drags.hpp` |
 | pad-shape | `plugins/mountain/mapgen/station_pad.hpp` |
@@ -646,6 +704,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | padded-rows | `engine/gpu/target.cpp` |
 | pads | `plugins/mountain/mapgen/resort_build.cpp` `plugins/mountain/mapgen/resort_build.hpp` |
 | painters | `engine/lab/raster.cpp` |
+| pair | `plugins/skier/skis.hpp` |
 | pass-timestamp-writes | `engine/gpu/timer.hpp` |
 | past-junction | `plugins/mountain/mapgen/network_stamp.cpp` |
 | pause | `engine/loop/run_clock.hpp` |
@@ -654,6 +713,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | percentile | `engine/lab/labs/platform_frame_pace_lab.cpp` |
 | perf | `plugins/mountain/labs/mapgen_cost_lab.cpp` |
 | personal-best | `plugins/racing/records.hpp` |
+| physics | `plugins/skier/skier.hpp` |
 | pi | `engine/core/math.hpp` |
 | pick | `engine/core/prng.hpp` |
 | picture | `engine/lab/labs/core_noise_lab.cpp` `engine/lab/raster.hpp` `plugins/mountain/labs/level_lab.cpp` `plugins/mountain/labs/resort_lab.cpp` `tests/lab_raster_test.cpp` |
@@ -669,6 +729,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | piste | `plugins/mountain/labs/level_map.hpp` `plugins/mountain/mapgen/resort_rules.hpp` `plugins/mountain/mapgen/track.hpp` |
 | pitch | `engine/core/quat.hpp` `plugins/mountain/labs/junctions_lab.cpp` |
 | pitch-band | `plugins/mountain/mapgen/lanes.cpp` |
+| pivot | `plugins/skier/skier.hpp` `plugins/skier/tuning.hpp` |
 | pixel | `engine/lab/raster.hpp` |
 | pixel-size | `engine/platform/window.hpp` |
 | place | `plugins/racing/standings.hpp` |
@@ -684,19 +745,24 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | plan-resort | `plugins/mountain/mapgen/resort.cpp` `plugins/mountain/mapgen/resort.hpp` |
 | plan-run | `plugins/mountain/mapgen/access_build.hpp` |
 | plan-runs | `plugins/mountain/mapgen/links.hpp` |
-| plane | `plugins/mountain/mapgen/network_build.hpp` |
+| plane | `plugins/mountain/mapgen/network_build.hpp` `plugins/skier/snow.hpp` |
 | plane-of | `plugins/mountain/mapgen/network_build.cpp` |
+| planing | `plugins/skier/snow.hpp` |
 | platform | `engine/platform/window.hpp` |
 | playtest | `engine/lab/lab.hpp` |
+| plough | `plugins/skier/snow.hpp` |
 | plugin | `tools/check-plugins.mjs` |
 | plugins | `tools/check-plugins.mjs` |
 | png | `engine/lab/png.cpp` `engine/lab/png.hpp` `tests/lab_raster_test.cpp` |
 | point-at | `plugins/mountain/mapgen/drags.cpp` |
 | pointer | `engine/platform/window.hpp` |
+| pole | `plugins/skier/skier.hpp` `plugins/skier/tuning.hpp` |
 | poll | `engine/platform/window.hpp` `tests/platform_window_test.cpp` |
 | poll_input | `engine/platform/window.hpp` |
+| pop | `plugins/skier/skier.hpp` `plugins/skier/tuning.hpp` |
 | position | `plugins/racing/standings.hpp` |
 | pow | `engine/core/libm/libm.hpp` `engine/core/libm/pow.cpp` |
+| powder | `plugins/skier/snow.hpp` `plugins/skier/synthetic.hpp` |
 | power | `engine/core/libm/pow.cpp` |
 | ppm | `tests/gpu_support.hpp` |
 | present | `engine/gpu/surface.hpp` `engine/lab/labs/platform_frame_pace_lab.cpp` `games/fall_line/app/main.cpp` `tests/platform_window_test.cpp` |
@@ -736,6 +802,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | recording | `plugins/racing/tape.hpp` |
 | records | `plugins/racing/records.hpp` `tests/racing_records_test.cpp` |
 | rect-off | `plugins/mountain/mapgen/lift_chain.cpp` |
+| reference-skis | `plugins/skier/skis.hpp` |
 | refraction | `engine/core/solar.cpp` `engine/core/solar.hpp` |
 | refusals | `plugins/mountain/labs/analyze_lab.cpp` `plugins/mountain/labs/resort_lab.cpp` |
 | region | `plugins/mountain/labs/level_map.hpp` `plugins/mountain/mapgen/regions.cpp` `plugins/mountain/mapgen/regions.hpp` |
@@ -769,6 +836,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | resume | `engine/loop/run_clock.hpp` |
 | rgba | `engine/lab/raster.hpp` |
 | rgba8 | `engine/gpu/target.hpp` |
+| ride | `plugins/skier/labs/ride_lab.cpp` `plugins/skier/scenarios.hpp` `tests/skier_scenarios_test.cpp` |
 | ridge-share | `plugins/mountain/mapgen/massif.cpp` `plugins/mountain/mapgen/massif.hpp` |
 | ridged | `plugins/mountain/mapgen/terrain.cpp` |
 | ring-buffer | `engine/core/output.cpp` |
@@ -779,6 +847,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | road | `plugins/mountain/mapgen/resort_rules.hpp` |
 | road-row | `plugins/mountain/mapgen/resort.cpp` `plugins/mountain/mapgen/resort.hpp` |
 | roll | `engine/core/quat.hpp` |
+| rollers | `plugins/skier/scenarios.hpp` `plugins/skier/synthetic.hpp` |
 | room | `plugins/mountain/mapgen/links.cpp` |
 | room-blocked | `plugins/mountain/mapgen/summit_ramps.cpp` `plugins/mountain/mapgen/summit_ramps.hpp` |
 | rotation | `engine/core/quat.hpp` |
@@ -789,6 +858,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | rule-book | `plugins/mountain/labs/analyze_lab.cpp` `plugins/mountain/mapgen/rules.hpp` |
 | rule-check | `plugins/mountain/analysis/index.hpp` |
 | rules | `plugins/mountain/labs/analyze_lab.cpp` `plugins/mountain/mapgen/rules.hpp` |
+| run_scenario | `plugins/skier/scenarios.cpp` `plugins/skier/scenarios.hpp` |
 | run-clock | `engine/lab/labs/loop_run_clock_lab.cpp` `engine/lab/labs/platform_frame_pace_lab.cpp` `engine/loop/run_clock.hpp` `games/fall_line/app/main.cpp` `tests/loop_run_clock_test.cpp` |
 | run-colour | `plugins/mountain/mapgen/network.cpp` `plugins/mountain/mapgen/network.hpp` |
 | run-cover | `plugins/mountain/mapgen/summit_ramps.hpp` |
@@ -800,9 +870,12 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | sample_noise | `engine/lab/labs/core_noise_lab.cpp` |
 | scale | `engine/lab/labs/core_noise_lab.cpp` |
 | scancode | `engine/platform/window.cpp` |
-| scenario | `engine/lab/lab.hpp` |
+| scenario | `engine/lab/lab.hpp` `plugins/skier/labs/ride_lab.cpp` `plugins/skier/scenarios.cpp` `plugins/skier/scenarios.hpp` |
+| scenarios | `plugins/skier/labs/ride_lab.cpp` `plugins/skier/scenarios.hpp` `tests/skier_scenarios_test.cpp` |
+| schuss | `plugins/skier/scenarios.hpp` |
 | scope | `tools/skill-lessons.mjs` |
 | screenshot | `engine/gpu/target.hpp` `engine/lab/lab.hpp` `engine/lab/labs/gpu_capture_lab.cpp` `engine/lab/png.hpp` `tests/gpu_capture_test.cpp` |
+| scripted | `plugins/skier/scenarios.hpp` |
 | sdl | `engine/platform/window.cpp` `engine/platform/window.hpp` |
 | sdl3 | `engine/platform/window.cpp` |
 | search | `plugins/mountain/mapgen/lanes.hpp` `tools/agents-index.mjs` |
@@ -820,39 +893,54 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | shot | `engine/lab/lab.cpp` `engine/lab/lab.hpp` |
 | shoulder | `plugins/mountain/mapgen/massif.hpp` |
 | siblings | `plugins/mountain/mapgen/run_start.hpp` |
+| side-grip | `plugins/skier/snow.hpp` |
 | sidecar | `engine/lab/report.hpp` |
+| sidecut | `plugins/skier/skis.hpp` |
 | sidereal | `engine/core/solar.cpp` |
 | sign | `engine/core/num.hpp` |
 | simulation | `engine/lab/lab.hpp` |
 | sin | `engine/core/libm/fdlibm_trig.cpp` `engine/core/libm/libm.hpp` |
-| sink | `engine/core/output.cpp` `engine/core/output.hpp` |
+| sink | `engine/core/output.cpp` `engine/core/output.hpp` `plugins/skier/skier.hpp` `plugins/skier/snow.hpp` |
+| sink_target | `plugins/skier/snow.hpp` |
 | size-bars | `tools/skill-lessons.mjs` |
-| skate | `plugins/mountain/mapgen/access_build.hpp` |
+| skate | `plugins/mountain/mapgen/access_build.hpp` `plugins/skier/scenarios.hpp` `plugins/skier/skier.hpp` `plugins/skier/tuning.hpp` |
 | ski-area | `plugins/mountain/labs/junctions_lab.cpp` `plugins/mountain/labs/resort_lab.cpp` `plugins/mountain/labs/resort_map.hpp` `tests/mountain_resort_build_test.cpp` |
+| ski-spec | `plugins/skier/skis.hpp` |
+| skid | `plugins/skier/skier.hpp` `plugins/skier/snow.hpp` |
+| skier | `plugins/skier/labs/ride_lab.cpp` `plugins/skier/skier.cpp` `plugins/skier/skier.hpp` `tests/skier_scenarios_test.cpp` |
+| skier_hash | `plugins/skier/skier.cpp` `plugins/skier/skier.hpp` |
+| skier-events | `plugins/skier/skier.hpp` |
+| skier-input | `plugins/skier/skier.hpp` |
+| skier-state | `plugins/skier/skier.hpp` |
 | skill-reflection | `tools/skill-lessons.mjs` |
 | skills | `tools/check-agents.sh` |
 | skip | `tests/check.hpp` `tests/gpu_support.hpp` |
 | skip_validation | `engine/gpu/device.hpp` |
+| skis | `plugins/skier/skis.hpp` |
 | sky | `plugins/mountain/mapgen/weather.hpp` |
 | sky-gradient | `engine/gpu/test_scene.hpp` |
 | slide | `plugins/mountain/mapgen/station_clear.hpp` |
 | slides | `plugins/mountain/mapgen/station_clear.cpp` |
-| slope | `engine/core/heightfield.hpp` |
+| slope | `engine/core/heightfield.hpp` `plugins/skier/synthetic.cpp` `plugins/skier/synthetic.hpp` |
 | slots | `plugins/mountain/mapgen/resort.cpp` `plugins/mountain/mapgen/resort.hpp` |
 | smoke | `engine/gpu/test_scene.hpp` `engine/lab/runner.cpp` `engine/lab/runner.hpp` `tests/lab_runner_test.cpp` |
 | smoke-test | `tests/package/consumer/main.cpp` |
 | smooth | `engine/core/noise.hpp` |
 | smooth-run | `plugins/mountain/mapgen/network.cpp` `plugins/mountain/mapgen/network.hpp` |
 | smoothstep | `engine/core/math.hpp` |
+| snow | `plugins/skier/snow.hpp` `plugins/skier/tuning.hpp` |
 | snows | `plugins/mountain/mapgen/weather.hpp` |
 | software-adapter | `engine/gpu/device.hpp` `engine/lab/labs/gpu_capture_lab.cpp` |
 | solar | `engine/core/solar.cpp` `engine/core/solar.hpp` `plugins/mountain/mapgen/sun.hpp` `tests/core_solar_test.cpp` |
 | spatial-hash | `plugins/mountain/mapgen/net_index.hpp` `plugins/mountain/mapgen/query.cpp` `plugins/mountain/mapgen/query.hpp` |
+| spatial-index | `plugins/skier/trees.hpp` |
 | spawn | `plugins/mountain/mapgen/spawn.cpp` `plugins/mountain/mapgen/spawn.hpp` |
 | spec | `engine/lab/lab.hpp` |
 | splits | `plugins/racing/records.hpp` |
 | stage | `plugins/mountain/mapgen/resort_build.cpp` `plugins/mountain/mapgen/resort_build.hpp` |
+| staged | `plugins/skier/scenarios.hpp` |
 | stamp-run | `plugins/mountain/mapgen/network_stamp.cpp` `plugins/mountain/mapgen/network_stamp.hpp` |
+| stand_skier | `plugins/skier/skier.cpp` |
 | standings | `plugins/racing/standings.hpp` `tests/racing_standings_test.cpp` |
 | stands-level | `plugins/mountain/mapgen/station_clear.hpp` |
 | start | `plugins/mountain/mapgen/spawn.hpp` |
@@ -864,8 +952,12 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | stations-clear | `tests/mountain_resort_build_test.cpp` |
 | status | `engine/core/output.hpp` |
 | steep-share | `plugins/mountain/mapgen/massif.cpp` |
-| step | `engine/lab/labs/loop_run_clock_lab.cpp` `plugins/mountain/labs/junctions_lab.cpp` |
+| steer | `plugins/skier/tuning.hpp` |
+| step | `engine/lab/labs/loop_run_clock_lab.cpp` `plugins/mountain/labs/junctions_lab.cpp` `plugins/skier/skier.hpp` |
+| step_skier | `plugins/skier/skier.cpp` `plugins/skier/skier.hpp` |
+| stop | `plugins/skier/labs/ride_lab.cpp` `tests/skier_scenarios_test.cpp` |
 | stored-deflate | `engine/lab/png.cpp` |
+| strip | `plugins/skier/synthetic.cpp` `plugins/skier/synthetic.hpp` |
 | summit-ramps | `plugins/mountain/mapgen/summit_ramps.cpp` `plugins/mountain/mapgen/summit_ramps.hpp` |
 | sun | `engine/core/solar.cpp` `engine/core/solar.hpp` `plugins/mountain/mapgen/sun.cpp` `plugins/mountain/mapgen/sun.hpp` `tests/core_solar_test.cpp` |
 | sunrise | `engine/core/solar.hpp` |
@@ -881,10 +973,13 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | swapchain | `engine/gpu/surface.hpp` |
 | sweep | `plugins/mountain/labs/analyze_lab.cpp` `plugins/mountain/mapgen/network.hpp` |
 | symlinks | `tools/check-agents.sh` |
+| synthetic | `plugins/skier/synthetic.cpp` `plugins/skier/synthetic.hpp` |
+| synthetic_slope | `plugins/skier/synthetic.hpp` |
 | t-bar | `plugins/mountain/mapgen/drags.hpp` |
-| table | `engine/lab/lab.hpp` |
+| table | `engine/lab/lab.hpp` `plugins/skier/scenarios.cpp` |
 | tag | `engine/lab/runner.hpp` |
 | tags | `tools/agents-index.mjs` |
+| takeoff | `plugins/skier/skier.cpp` `plugins/skier/skier.hpp` |
 | tall-at-depth | `plugins/mountain/mapgen/resort_woods.cpp` `plugins/mountain/mapgen/resort_woods.hpp` |
 | tall-tilt | `plugins/mountain/mapgen/resort.cpp` |
 | tan | `engine/core/libm/fdlibm_trig.cpp` `engine/core/libm/libm.hpp` |
@@ -892,9 +987,13 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | tape | `plugins/racing/tape.cpp` `plugins/racing/tape.hpp` `tests/racing_tape_test.cpp` |
 | target | `engine/gpu/target.hpp` |
 | tau | `engine/core/math.hpp` |
+| terminal | `plugins/skier/labs/ride_lab.cpp` `tests/skier_scenarios_test.cpp` |
+| terminal_speed | `plugins/skier/limits.hpp` |
+| terminal-speed | `plugins/skier/limits.hpp` |
 | terrain | `engine/core/heightfield.hpp` `engine/core/noise.hpp` `plugins/mountain/mapgen/terrain.cpp` `plugins/mountain/mapgen/terrain.hpp` |
-| test | `tests/check.hpp` `tests/core_heightfield_test.cpp` `tests/core_libm_test.cpp` `tests/core_math_test.cpp` `tests/core_noise_test.cpp` `tests/core_num_test.cpp` `tests/core_output_test.cpp` `tests/core_prng_test.cpp` `tests/core_quat_test.cpp` `tests/core_solar_test.cpp` `tests/golden.hpp` `tests/gpu_capture_test.cpp` `tests/gpu_device_test.cpp` `tests/gpu_support.hpp` `tests/lab_raster_test.cpp` `tests/lab_runner_test.cpp` `tests/loop_run_clock_test.cpp` `tests/main.cpp` `tests/mountain_generate_test.cpp` `tests/mountain_resort_build_test.cpp` `tests/platform_window_test.cpp` `tests/racing_records_test.cpp` `tests/racing_standings_test.cpp` `tests/racing_tape_test.cpp` |
+| test | `tests/check.hpp` `tests/core_heightfield_test.cpp` `tests/core_libm_test.cpp` `tests/core_math_test.cpp` `tests/core_noise_test.cpp` `tests/core_num_test.cpp` `tests/core_output_test.cpp` `tests/core_prng_test.cpp` `tests/core_quat_test.cpp` `tests/core_solar_test.cpp` `tests/golden.hpp` `tests/gpu_capture_test.cpp` `tests/gpu_device_test.cpp` `tests/gpu_support.hpp` `tests/lab_raster_test.cpp` `tests/lab_runner_test.cpp` `tests/loop_run_clock_test.cpp` `tests/main.cpp` `tests/mountain_generate_test.cpp` `tests/mountain_resort_build_test.cpp` `tests/platform_window_test.cpp` `tests/racing_records_test.cpp` `tests/racing_standings_test.cpp` `tests/racing_tape_test.cpp` `tests/skier_scenarios_test.cpp` |
 | test_device | `tests/gpu_support.hpp` |
+| test-map | `plugins/skier/synthetic.hpp` |
 | test-scene | `engine/gpu/test_scene.cpp` `engine/gpu/test_scene.hpp` |
 | text | `engine/core/num_text.hpp` `engine/lab/raster.cpp` `engine/lab/raster.hpp` |
 | texture | `engine/gpu/target.hpp` |
@@ -913,19 +1012,28 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | to-uint32 | `engine/core/num.hpp` |
 | toggles | `engine/gpu/device.cpp` |
 | tolerance | `tests/gpu_support.hpp` |
+| top-speed | `plugins/skier/labs/ride_lab.cpp` `plugins/skier/limits.hpp` |
 | tops | `plugins/mountain/mapgen/access_build.cpp` |
+| trace | `plugins/skier/labs/ride_lab.cpp` `plugins/skier/scenarios.cpp` `plugins/skier/scenarios.hpp` |
 | track | `plugins/mountain/mapgen/track.cpp` `plugins/mountain/mapgen/track.hpp` |
 | transcendental | `engine/core/libm/libm.hpp` `tools/check-libm.sh` |
+| tree | `plugins/skier/scenarios.hpp` `tests/skier_scenarios_test.cpp` |
+| tree_overlap | `plugins/skier/trees.cpp` `plugins/skier/trees.hpp` |
+| tree-index | `plugins/skier/trees.cpp` `plugins/skier/trees.hpp` |
 | tree-line | `plugins/mountain/mapgen/resort_courses.cpp` `plugins/mountain/mapgen/resort_woods.hpp` |
 | tree-line-massif | `plugins/mountain/mapgen/resort_rules.hpp` |
-| trees | `plugins/mountain/labs/level_map.hpp` `plugins/mountain/mapgen/forest.hpp` |
+| trees | `plugins/mountain/labs/level_map.hpp` `plugins/mountain/mapgen/forest.hpp` `plugins/skier/skier.cpp` `plugins/skier/skier.hpp` `plugins/skier/trees.cpp` `plugins/skier/trees.hpp` `plugins/skier/tuning.hpp` |
 | triangle | `engine/gpu/test_scene.hpp` |
 | trig | `engine/core/libm/fdlibm_trig.cpp` |
 | trim-drifts | `plugins/mountain/mapgen/drift.hpp` |
+| trunk | `plugins/skier/trees.hpp` |
 | tsv | `engine/lab/report.cpp` `engine/lab/report.hpp` |
+| tuck | `plugins/skier/skier.hpp` `plugins/skier/skis.hpp` `plugins/skier/tuning.hpp` |
+| tuning | `plugins/skier/tuning.hpp` |
 | tunnel | `plugins/mountain/mapgen/resort_rules.hpp` |
 | tunnel-bed | `plugins/mountain/mapgen/hub.hpp` |
 | turn-cost | `plugins/mountain/mapgen/lanes.cpp` |
+| turns | `plugins/skier/scenarios.hpp` |
 | types | `plugins/mountain/mapgen/types.hpp` |
 | uncaptured-error | `engine/gpu/device.cpp` `engine/gpu/device.hpp` |
 | unload-point | `plugins/mountain/mapgen/station_pad.hpp` |
@@ -969,13 +1077,15 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | wind-tunnels | `plugins/mountain/mapgen/resort_features.cpp` `tests/mountain_resort_build_test.cpp` |
 | window | `engine/lab/labs/platform_frame_pace_lab.cpp` `engine/platform/window.hpp` `games/fall_line/app/main.cpp` `tests/platform_window_test.cpp` |
 | windrow | `plugins/mountain/mapgen/berm.hpp` `plugins/mountain/mapgen/network_stamp.hpp` |
+| wipeout | `plugins/skier/labs/ride_lab.cpp` `plugins/skier/skier.cpp` `plugins/skier/skier.hpp` `plugins/skier/tuning.hpp` |
 | woods | `plugins/mountain/labs/resort_lab.cpp` `plugins/mountain/mapgen/forest.hpp` `plugins/mountain/mapgen/resort_courses.cpp` `tests/mountain_resort_build_test.cpp` |
 | woods-at-depth | `plugins/mountain/mapgen/resort_woods.cpp` `plugins/mountain/mapgen/resort_woods.hpp` |
 | woods-by-height | `plugins/mountain/mapgen/resort_woods.hpp` |
 | woods-row | `plugins/mountain/mapgen/resort_woods.cpp` |
 | word | `engine/core/libm/fdlibm_internal.hpp` |
+| world | `plugins/skier/skier.hpp` |
 | x11 | `engine/gpu/surface.hpp` `engine/platform/window.cpp` |
 | xvfb | `engine/lab/labs/platform_frame_pace_lab.cpp` `tests/platform_window_test.cpp` |
-| yaw | `engine/core/quat.hpp` |
+| yaw | `engine/core/quat.hpp` `plugins/skier/skier.cpp` `plugins/skier/skier.hpp` |
 | zig-zag | `plugins/mountain/mapgen/network.hpp` |
 | zlib | `engine/lab/png.cpp` |

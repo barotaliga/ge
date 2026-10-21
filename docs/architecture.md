@@ -13,7 +13,8 @@ games/fall_line/sim      the game itself, headless: create_game, the step's orde
         │                the bot (M5; deterministic, no platform, no GPU)
         ▼
 plugins/<name>           reusable by any game of one genre or world (§ Plugins):
-        │                racing (tape, records, standings), mountain (mapgen, analysis)
+        │                racing (tape, records, standings), mountain (mapgen, analysis),
+        │                skier (the skier on the snow: step_skier, snow, limits)
         ▼
 engine/render  engine/audio  engine/ui     generic draw passes, the synth, the 2D layer
         │             │          │

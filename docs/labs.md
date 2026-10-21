@@ -42,7 +42,7 @@ its words) and `fail` (what failed and the next action, in the
 | Kind | What it does | Today |
 | --- | --- | --- |
 | `sim` | Headless runs of the real code over seeds or a sweep. Numbers and tables. | `analyze`, `run-clock` |
-| `scenario` | One staged situation, such as a skier placed at a moment on a synthetic slope with a scripted input, measured exactly. | M5 (below) |
+| `scenario` | One staged situation, such as a skier placed at a moment on a synthetic slope with a scripted input, measured exactly. | `ride` |
 | `picture` | A captioned picture of a subject. It is drawn on the CPU raster now, and from M7 it is a GPU frame read back. | `level`, `noise` |
 | `drive` | A pilot plays the game, either the bot or an agent over stdio. The run is the report, and the control tape is the replay. | M5 (below) |
 | `bench` | What something costs. Its wall-clock metrics are `measured`, which means they are printed and compared but never put in the digest. | `mapgen-cost` |
@@ -180,17 +180,18 @@ lab.shot({"chase-12", "CHASE AT 12 S", "...", "...", inputs}, capture(view, spec
   the lab says it is stable (a software adapter on CI). Otherwise its pixels are left out
   of the digest, while its metrics still count.
 
-## Scenario labs (M5)
+## Scenario labs
 
 A scenario stages ONE exact situation instead of skiing into it: a hand-built map (a
 synthetic slope with a kicker, rollers and a lone tree, or a flat drag strip of packed snow
-or powder), a moment to stand the skier at (`place_run`: position, heading, speed, height,
-attitude, the gate owed), a scripted input as a function of run time and state, a length in
-seconds, and the numbers that say how it went (`lab.metric`).
+or powder: `plugins/skier/synthetic.hpp`), a moment to stand the skier at (`stand_skier`:
+position, heading, speed, height over the snow), a scripted input as a function of run time and
+state, a length in seconds, and the numbers that say how it went (`lab.metric`).
 
-A scenario lab is a table of these (one `LabSpec`, with `--scenario=<id>` choosing a row),
-so `make lab LAB=ride ARGS=--scenario=kicker` stages the kicker taken at a known speed. The
-same rows back the physics tests, so a scenario is written once and is both a test and a lab.
+A scenario lab is a table of these (one `LabSpec`, with `--scenario=<id>` choosing a row), so
+`make lab LAB=ride ARGS=--scenario=kicker` stages the kicker taken at a known speed. The same
+rows (`plugins/skier/scenarios.cpp`) back the physics tests
+(`tests/skier_scenarios_test.cpp`), so a scenario is written once and is both a test and a lab.
 
 ## Drive labs: the bot, the rivals and agents at the controls (M5)
 
@@ -238,9 +239,9 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 | `junctions` | picture | plugin:mountain | `plugins/mountain/mapgen/network_stamp.cpp` (where runs meet) | M4b3d (now) |
 | `routes`, `skijump-hills` | picture | plugin:mountain | the routes, the jump hills | M4c |
 | `real-faces` | picture | plugin:mountain | the real faces | M4d |
-| `sim` | drive | game:fall_line | the step, the bot | M5 |
-| `ride` | scenario | plugin:skier | the skier on the snow | M5 |
-| `play` | drive | engine | an agent over stdio | M5 |
+| `sim` | drive | game:fall_line | the step, the bot | M5b |
+| `ride` | scenario | plugin:skier | `plugins/skier` (`step_skier`, the snow, the limits) | M5a (now) |
+| `play` | drive | game:fall_line | an agent over stdio | M5c |
 | `gpu-capture` | picture | engine | `engine/gpu` (the headless capture) | M6 (now) |
 | `frame-pace` | bench | engine | the platform's frame loop | M6 (now) |
 | `world` | picture | game:fall_line | the first picture | M7 |

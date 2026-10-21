@@ -9,7 +9,8 @@ description: "Use for games/fall_line/sim (Fall Line's own simulation): create_g
 headless, deterministic and platform-free. It may include only `engine/core`, `engine/loop`,
 the plugins it links and itself. What another game of the genre would reuse goes in a plugin
 instead (the `plugins` skill): the generator is `plugins/mountain` (the `mountain` skill), the
-tape and standings `plugins/racing`, and M5's skier on snow is expected to be `plugins/skier`.
+tape and standings `plugins/racing`, and the skier on the snow `plugins/skier` (the `skier`
+skill: `step_skier`, the snow, the limits a bot plans on, the ride scenarios).
 
 ## What it is
 
@@ -28,11 +29,11 @@ system is carried over.
 ## Order of work (docs/goals.md M4 → M5)
 
 1. `mapgen`: the `mountain` skill (M4a–M4d).
-2. `game`: classify each file first (the `plugins` skill), then state, then skier physics (`skier`, `suspension`, `snow`, `poles`,
-   `flight`, `chassis`), then collision, course, run and step. Each is held by a per-step
-   state hash on synthetic levels (a hand-built slope and a flat strip, built first) and
-   then on generated ones.
-3. `sim`: the bot and `simulate`, which gives the `sim` CLI (`tools/sim/`) printing the
+2. The skier on the snow: `plugins/skier` (M5a, done), held by its scenarios on the hand-built
+   maps (`tests/skier_scenarios_test.cpp`).
+3. `game`: classify each file first (the `plugins` skill), then the state, the course, the
+   step, held by a per-step state hash on generated maps.
+4. `sim`: the bot and `simulate`, which gives the `sim` CLI (`tools/sim/`) printing the
    `RunReport` table. Its digests are golden.
 
 ## Rules
