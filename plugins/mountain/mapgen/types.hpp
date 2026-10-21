@@ -97,7 +97,12 @@ struct TreeDef {
 // A gate across the piste. Index 0 of `Level::checkpoints` is the START GATE, the last the
 // FINISH LINE (R11). A SLALOM GATE down a ski area's course (R28) stands `offset` m off the line
 // (positive right of travel) on a piste `span` m wide there, its `width` its own panels'; both are
-// absent on every other gate.
+// absent on every other gate. A POLE GATE of a slalom set over a map (R31) is two poles and no
+// panel: `pole` says whether it is OPEN (across the hill: its turning pole `turn` × half its
+// `width` right of its centre, -1 or +1) or CLOSED (its poles one above the other, `width` m apart
+// down the hill, `heading` turned across it); absent on every other gate.
+enum class PoleGate : uint8_t { open, closed };
+
 struct Checkpoint {
   double x;
   double z;
@@ -108,6 +113,8 @@ struct Checkpoint {
   GateColour colour;
   std::optional<double> offset = std::nullopt;
   std::optional<double> span = std::nullopt;
+  std::optional<PoleGate> pole = std::nullopt;
+  int turn = 0;
 };
 
 struct TrackPoint {
@@ -301,6 +308,40 @@ struct ResortMap {
   std::vector<WindTunnel> tunnels;
 };
 
+// R31–R36 — the race disciplines a course is set over a built map in (discipline_rules.hpp).
+enum class Discipline : uint8_t { slalom };
+inline const char* discipline_name(Discipline d) {
+  switch (d) {
+    case Discipline::slalom:
+      return "slalom";
+  }
+  return "unknown";
+}
+
+struct Level;
+
+// A RACE COURSE set over a built map (R31–): the discipline and its run, the map it was set
+// over (`base`, before any course: what the next run's course is set over), the start gate's
+// arc and the finish line's on the piste, the vertical between, and THE LINE A RACER TAKES —
+// points down the course, each `x` m right of the piste's line `s` m down it, a cosine between
+// each two (`slalom_line_at`). A slalom counts the combinations its setter laid.
+struct RaceCourse {
+  struct LinePoint {
+    double s;
+    double x;
+  };
+  Discipline discipline = Discipline::slalom;
+  int run = 1;
+  std::shared_ptr<const Level> base;
+  double from = 0;
+  double to = 0;
+  double vertical = 0;
+  int hairpins = 0;
+  int verticals = 0;
+  int delays = 0;
+  std::vector<LinePoint> line;
+};
+
 struct TrackIndex;  // query.hpp: the spatial hash `nearest_track_point` reads
 
 // THE PISTE, open: from the start line (s = 0) to the finish (s = length). `index` is built
@@ -336,6 +377,7 @@ struct Level {
   std::optional<PisteGrade> grade;             // the grade built to (R23); absent on v1
   std::optional<ge::core::Heightfield> crust;  // the region's wind crust (R21), if it lays one
   std::optional<ResortMap> resort;             // the ski area (R25–R30); absent on v1
+  std::optional<RaceCourse> race;              // a course set over the map (R31–); else absent
 
   double ground_at(double x, double z) const { return ge::core::sample_field(ground, x, z); }
   double packed_at(double x, double z) const { return ge::core::sample_field(packed, x, z); }
