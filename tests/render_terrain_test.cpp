@@ -53,7 +53,7 @@ TEST(pyramid_bounds_every_sample) {
   ge::core::Heightfield f = ge::core::create_heightfield(0, 0, 2, 37, 23);
   for (int r = 0; r < f.rows; ++r) {
     for (int c = 0; c < f.cols; ++c) {
-      f.data[static_cast<size_t>(r * f.cols + c)] =
+      f.data[static_cast<size_t>(r) * f.cols + c] =
           static_cast<float>(std::sin(c * 0.37) * 40 + std::cos(r * 0.21) * 25 + r);
     }
   }
@@ -79,7 +79,7 @@ TEST(pyramid_bounds_every_sample) {
         const int r1 = ty == h - 1 ? f.rows - 1 : (ty + 1) * span;
         for (int r = ty * span; r <= r1; ++r) {
           for (int c = tx * span; c <= c1; ++c) {
-            const float v = f.data[static_cast<size_t>(r * f.cols + c)];
+            const float v = f.data[static_cast<size_t>(r) * f.cols + c];
             CHECK(v >= lo && v <= hi);
           }
         }

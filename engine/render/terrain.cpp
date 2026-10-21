@@ -159,7 +159,8 @@ void create_terrain(gpu::Device& device, gpu::PipelineSet& pipelines, Terrain& t
   t.indices = make_buffer(device, "terrain.indices", idx.size() * 2, BU::Index);
   device.queue.WriteBuffer(t.indices, 0, idx.data(), idx.size() * 2);
   t.params = make_buffer(device, "terrain.params", sizeof(Terrain::Params), BU::Uniform);
-  t.tiles = make_buffer(device, "terrain.tiles", kMaxLevels * kTilesPerLevel * 4, BU::Storage);
+  t.tiles =
+      make_buffer(device, "terrain.tiles", uint64_t{kMaxLevels} * kTilesPerLevel * 4, BU::Storage);
   t.indirect =
       make_buffer(device, "terrain.indirect", 20, BU::Storage | BU::Indirect | BU::CopySrc);
 

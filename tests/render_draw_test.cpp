@@ -91,7 +91,7 @@ TEST(frame_core_draws_sky_and_ground) {
   ge::core::Heightfield field = ge::core::create_heightfield(0, 0, 4, 129, 129);
   for (int row = 0; row < field.rows; ++row) {
     for (int col = 0; col < field.cols; ++col) {
-      field.data[static_cast<size_t>(row * field.cols + col)] =
+      field.data[static_cast<size_t>(row) * field.cols + col] =
           static_cast<float>(20 * std::sin(col * 0.1) * std::cos(row * 0.13));
     }
   }
