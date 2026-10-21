@@ -2,16 +2,17 @@
 // a map that is already built (R1–R30). The map is the mountain; a discipline is how a race uses
 // it: where on the piste its course starts and finishes, which gates stand down it, what the
 // organisers do to the hill first (`CoursePrep`, course_prep.hpp). The slalom (R31), the downhill
-// (R32), the super-G (R33), the giant slalom (R36) and the speed-skiing track (R34) are set
-// today; the ski cross follows (docs/goals.md M4b4).
+// (R32), the super-G (R33), the giant slalom (R36), the speed-skiing track (R34) and the ski cross
+// (R35) are set today.
 //
 // The research behind each discipline's numbers and its rule, by number, stand below the includes.
 //
-// ge:summary The disciplines' rule book (R31-R34, R36): each course's numbers, what it prepares
+// ge:summary The disciplines' rule book (R31-R36): each course's numbers, what it prepares
 // ge:keywords discipline-rules rule-book slalom course-prep start-drop comb arena hairpin
 // ge:keywords vertical-combination delayed-gate pole-gate r31 downhill super-g giant-slalom
 // ge:keywords turn-rule line-rule trap-rule speed-trap a-nets r32 r33 r36
 // ge:keywords speed-skiing speed-ski timing-zone run-out launch r34
+// ge:keywords ski-cross berm rollers step-down start-ramp corridor-gate fence r35
 // ge:skill mountain
 // ge:test tests/mountain_slalom_test.cpp
 #pragma once
@@ -121,6 +122,18 @@
 // neighbouring start points may give no more than 15 km/h apart; a race is a qualification from
 // a lower start, then a final from the top.
 //
+// THE RESEARCH BEHIND THE SKI CROSS'S NUMBERS, the international freestyle rules for ski cross: a
+// top-level course is 800–1300 m long (at least 600 m, and 450 m lower down), drops 100–250 m and
+// runs at a mean of 7–11° (about 12–20 %); it is 6–16 m wide, the track some 20 m on the mean,
+// fenced its whole length with its edges painted blue; a start device of one door per racer
+// stands in the middle of a platform at least 6 m long and 12 ± 4 m wide, its doors dropping
+// together; the first direction change is some 100 m below the start; down it stand berms,
+// rollers, jumps and other terrain features (the rules set no sizes: the game's are estimates);
+// a gate is a stubby turning pole and a long outside pole joined by a triangular flag, gates on
+// both sides of every feature, a single turning gate on the inside of a turn and none in a
+// landing; the finish line is 15 ± 5 m wide with a finish area of 60 ± 10 m past it, at least
+// 30 m wide; a race is a timed qualification, then heats of four, two through from each.
+//
 // R34 THE SPEED-SKIING TRACK. A speed track is cut STRAIGHT down a built map's face, its own line
 //     and not the piste: a straight line from a column of the face (`speed_ski::search`), its
 //     bearing within a few degrees of the fall line, whose GRADED PROFILE (the ground across the
@@ -144,6 +157,41 @@
 //     the START GATE under the house and the timing zone's two LINES across the track and its
 //     margins. A race is two RUNS: the QUALIFICATION from a start lowered down the track until it
 //     gives `speed_ski::qualify` km/h less, and the FINAL from the top.
+//
+// R35 THE SKI-CROSS COURSE. A ski cross is BUILT on a built map's piste — on a ski area, the
+//     course at least `ski_cross::course.length` metres long whose mean gradient comes nearest
+//     `ski_cross::course.grade` — on the stretch of it, `ski_cross::axis` metres long, whose
+//     course comes nearest `ski_cross::grade.aim` of mean gradient (inside `ski_cross::grade`,
+//     `ski_cross::vertical` and `ski_cross::length` where one does), crossing the fewest drops,
+//     and then the lowest. Its line is its own, WEAVING down that stretch: a START STRAIGHT of
+//     `ski_cross::start.straight` metres down the piste, then LEGS swung either side of the
+//     piste's line in turn, `ski_cross::swing` metres across and `ski_cross::leg` metres apart
+//     down it, each corner rounded into a TURN of `ski_cross::turn.radius` metres (tighter, to
+//     `ski_cross::turn.tightest`, only where the legs leave no room), and a FINISH STRAIGHT back
+//     onto the piste's line. Its PROFILE is the ground across the course's width taken to its
+//     mean along it over `ski_cross::smooth` metres, never rising, its crests rounded to no
+//     tighter than `ski_cross::crest` and its knees to `ski_cross::knee` metres of radius; the
+//     start a PLATFORM level for `ski_cross::start.platform` metres, the snow below its doors cut
+//     into a START RAMP as steep as `ski_cross::start.ramp.grade`. On it the setter BUILDS its
+//     features: every turn of more than `ski_cross::turn.least` degrees a BERM, its outside banked
+//     up to `ski_cross::turn.bank` degrees; on the straights between them as many features as
+//     fit, `ski_cross::between` metres apart and dealt off the map's seed by
+//     `ski_cross::weights` — a series of ROLLERS (`ski_cross::rollers`), a JUMP with a table and a
+//     landing (`ski_cross::jump`), a STEP-DOWN onto a lower landing (`ski_cross::step`) — none
+//     within `ski_cross::clear` metres before a turn nor `ski_cross::exit` after one, a small jump
+//     on the start straight and a FINISH JUMP on the last, each straight's set centred on it. The
+//     course is `ski_cross::width` metres wide (the start's `ski_cross::start.width`), graded to
+//     its built profile across that width, every berm's wall carried `ski_cross::turn.wall`
+//     metres past its edge, the grading eased out over `ski_cross::ease`, groomed hard, FENCED
+//     along both edges `ski_cross::fence.gap` metres outside them, every tree within
+//     `ski_cross::clear_trees` metres of its edges and in the finish area cleared, and the
+//     piste's kickers and drops in it taken out. Its GATES are triangular flags: a TURNING GATE
+//     on the inside of every berm, a CORRIDOR GATE across the course `ski_cross::gate_before`
+//     metres before every feature, none in a landing, red and blue in turn; the START GATE is
+//     `ski_cross::start.lanes` doors abreast `ski_cross::start.lane` metres apart, and the FINISH
+//     LINE is `ski_cross::finish.width` metres wide with `ski_cross::finish.area` metres of
+//     finish area past it. Four racers ski it at once, the inside of the first berm the first
+//     lane.
 //
 // Every value is a decimal literal, so the doubles are fixed bits. Held by
 // tests/mountain_slalom_test.cpp and the analysis (analysis/race.hpp).
@@ -526,5 +574,124 @@ struct Arena {
 inline constexpr Arena arena{90, 40, 45};
 
 }  // namespace discipline_rules::speed_ski
+
+namespace discipline_rules::ski_cross {
+
+// THE STRETCH of the piste the course is built on, m down the piste: its least and most length,
+// tried in `len_step` strides of length and `step` strides down the piste. A course weaving down
+// a stretch runs about as far as a line through the piste's line a leg apart: what its swings add,
+// its rounded corners and the piste's own bends it cuts take off.
+struct Axis {
+  double min, max, len_step, step;
+};
+inline constexpr Axis axis{600, 1400, 50, 25};
+// THE COURSE of a ski area a ski cross is built on: one at least `length` m long, its mean
+// gradient nearest `grade` (a stretch of it gentler still is what is built on).
+struct CourseAim {
+  double length, grade;
+};
+inline constexpr CourseAim course{900, 0.25};
+// The course's MEAN GRADIENT (its drop over its length along the snow): the band it is held to
+// and the one aimed at — the top level's 12–20 %, a little steeper since the berms and the
+// rollers take speed off; its vertical, m; its length, m; and what a drop across the stretch
+// costs a candidate, a share of grade.
+struct Grade {
+  double min, max, aim;
+};
+inline constexpr Grade grade{0.12, 0.24, 0.18};
+inline constexpr Band vertical{100, 250};
+inline constexpr Band length{800, 1300};
+inline constexpr double drop = 0.1;
+// The course's width, m: wide enough for four abreast out of the gate and a pass in a berm.
+inline constexpr double width = 14;
+// THE START: the platform level for `platform` m and `width` m wide; `lanes` doors abreast `lane`
+// m apart, the racer stood `stand` m behind his door; the START RAMP cut below it to `grade` at
+// its steepest over `length` m (never more than `most` m deep), eased back over `ease`; and the
+// START STRAIGHT from the doors to the first direction change, m, its end corner a further `room`
+// m on for the first turn.
+struct Ramp {
+  double length, grade, most, ease;
+};
+struct Start {
+  double platform, width;
+  int lanes;
+  double lane, stand;
+  Ramp ramp;
+  double straight, room;
+};
+inline constexpr Start start{6, 12, 4, 2.2, 0.9, {18, 0.55, 4, 40}, 100, 30};
+// THE LEGS: how far across the piste's line each is swung, m, either side in turn, and how far
+// apart down it, m, dealt a leg at a time off the map's seed.
+inline constexpr Band swing{16, 26};
+inline constexpr Band leg{80, 120};
+// THE TURNS: each corner rounded to a radius dealt in `radius`, m (no tighter than `tightest`,
+// and never cutting more than `room` of either leg); a BERM where it turns more than `least`
+// degrees, its outside banked up to `bank` degrees at the apex on a turn of `full` degrees or
+// more (half that on a gentler one), eased in over `ease` m before and after it; its wall
+// carried `wall` m past the course's outside edge.
+struct Turn {
+  Band radius;
+  double tightest, room, least, bank, full, ease, wall;
+};
+inline constexpr Turn turn{{22, 32}, 16, 0.45, 20, 28, 60, 12, 3};
+// THE PROFILE: the mean across the course taken along it over this many metres either side; no
+// crest tighter than `crest` m of radius (a racer at 15–20 m/s leaves the snow over anything
+// tighter than v²/g, and the course's jumps are its own) and no knee tighter than `knee`.
+inline constexpr double smooth = 14;
+inline constexpr double crest = 45;
+inline constexpr double knee = 30;
+// How far past the course's edge its grading eases out, m.
+inline constexpr double ease = 8;
+// No feature within `clear` m before a turn nor `exit` m after one, two on one straight
+// `between` m apart, and no feature dealt into less than `room` m.
+inline constexpr double clear = 8;
+inline constexpr double exit = 16;
+inline constexpr double between = 8;
+inline constexpr double room = 20;
+// ROLLERS: a series of `count` crests `spacing` m apart, each `height` m over the line.
+struct Rollers {
+  int least, most;
+  Band spacing, height;
+};
+inline constexpr Rollers rollers{3, 5, {14, 16}, {0.6, 0.9}};
+// A JUMP: a lip `height` m over the line up a ramp of `ramp` m, a level table `deck` m long, and
+// a long landing slope of `fall` m dug `dig` m under the line, with `out` m back up onto it:
+// shaped so a racer at 12–18 m/s lands on the slope, not the table's knuckle nor the flat past it.
+struct Jump {
+  Band height, ramp, deck, fall;
+  double dig, out;
+};
+inline constexpr Jump jump{{1.3, 1.6}, {7.5, 8.5}, {1.5, 2.5}, {28, 32}, 1.5, 8};
+// A STEP-DOWN: the line raised `drop` m at the lip over an approach of `approach` m, a lip `deck`
+// m long, and a landing of `fall` m back down onto it, `out` m to settle.
+struct Step {
+  Band drop;
+  double approach, deck;
+  Band fall;
+  double out;
+};
+inline constexpr Step step{{1.6, 2.4}, 40, 2, {11, 14}, 2};
+// What each straight between two turns is dealt, by weight.
+struct Weights {
+  double rollers, jump, step;
+};
+inline constexpr Weights weights{0.4, 0.35, 0.25};
+// THE FENCE: its line outside the course's edge, m, and how tall it stands, m.
+inline constexpr NetRule fence{1.5, 1.4};
+// Trees cleared within this of the course's edges, m: the fence and the spill zones beyond it.
+inline constexpr double clear_trees = 12;
+// A corridor gate this far short of a feature's foot, m.
+inline constexpr double gate_before = 4;
+// THE FINISH: the line's width, m, and the finish area past it, m; its box for the trees, back
+// up and across (half), m; the FINISH STRAIGHT above the area, m of the piste's line (a finish
+// jump's room after the last turn); and the room left between the finish jump and the line, m.
+struct Finish {
+  double width, area, before, half, straight, last;
+};
+inline constexpr Finish finish{15, 60, 20, 30, 120, 25};
+// The course's stations apart, m.
+inline constexpr double station = 2;
+
+}  // namespace discipline_rules::ski_cross
 
 }  // namespace ge::mountain::mapgen
