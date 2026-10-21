@@ -26,9 +26,18 @@ set(GE_INSTALL_CMAKEDIR "${CMAKE_INSTALL_LIBDIR}/cmake/gameengine2")
 
 # target -> export name (consumers see ge::<export name>)
 set(GE_EXPORTED_TARGETS ge_fp fp ge_core core ge_audio audio)
-# Every plugin is published as ge::<plugin> (cmake/Plugins.cmake collects them).
+# Every plugin is published as ge::<plugin> (cmake/Plugins.cmake collects them), and its
+# presentation half as ge::<plugin>_app when every engine target it links is published here
+# (APP audio is; render, gpu and platform are not yet, below).
+set(GE_PUBLISHED_MODULES core audio)
 get_property(_ge_plugins GLOBAL PROPERTY GE_PLUGIN_TARGETS)
 foreach(_target IN LISTS _ge_plugins)
+  get_property(_app_modules TARGET ${_target} PROPERTY GE_APP_MODULES)
+  set(_unpublished ${_app_modules})
+  list(REMOVE_ITEM _unpublished ${GE_PUBLISHED_MODULES})
+  if(_unpublished)
+    continue()
+  endif()
   string(REGEX REPLACE "^ge_" "" _name ${_target})
   list(APPEND GE_EXPORTED_TARGETS ${_target} ${_name})
 endforeach()
@@ -58,12 +67,13 @@ install(DIRECTORY "${PROJECT_SOURCE_DIR}/engine/"
   PATTERN "gpu" EXCLUDE PATTERN "platform" EXCLUDE PATTERN "render" EXCLUDE)
 
 # A plugin's headers install beside the engine's (a plugin's name never equals an engine
-# directory), so "racing/tape.hpp" is spelled the same in-tree and installed. Labs and a
-# plugin's presentation half are not part of the published simulation.
+# directory), so "racing/tape.hpp" is spelled the same in-tree and installed. Labs are not
+# published; a presentation half's headers install with it (a half that is not published, above,
+# is never linked, so its headers are inert).
 install(DIRECTORY "${PROJECT_SOURCE_DIR}/plugins/"
   DESTINATION ${GE_INSTALL_INCLUDEDIR}
   FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h" PATTERN "*.inl"
-  PATTERN "labs" EXCLUDE PATTERN "app" EXCLUDE)
+  PATTERN "labs" EXCLUDE)
 
 install(EXPORT gameengine2Targets
   NAMESPACE ge::
