@@ -173,7 +173,8 @@ LOD bands. Figures: linear-blend skinning. Snow: a custom shader (packed share, 
 grooves from a trail-map texture). Sky: a baked transmittance/radiance table and haze
 applied per material. Shadows: a sun shadow map plus a shadow box for the riders.
 Particles: spray, snow cloud and snowfall. Post: a colour grade. Each becomes one draw
-system in `engine/render` (or `games/fall_line/render` when it is Fall Line's own look).
+system in `engine/render` (or a plugin's `app/` when a genre shares it, or
+`games/fall_line/app` when it is Fall Line's own look; `docs/architecture.md` § Plugins).
 The pipeline is written out as a fixed, ordered list of passes. No render graph is built
 until the pass count makes one worth it.
 

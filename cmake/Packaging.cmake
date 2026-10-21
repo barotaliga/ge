@@ -14,7 +14,7 @@
 # only as $<BUILD_INTERFACE:...> and never reaches a consumer.
 #
 # Headers install under include/gameengine2/ with the same layout as
-# engine/, so an #include is spelled the same in-tree and installed.
+# engine/ and plugins/, so an #include is spelled the same in-tree and installed.
 
 include_guard(GLOBAL)
 include(GNUInstallDirs)
@@ -25,7 +25,13 @@ set(GE_INSTALL_INCLUDEDIR "${CMAKE_INSTALL_INCLUDEDIR}/gameengine2")
 set(GE_INSTALL_CMAKEDIR "${CMAKE_INSTALL_LIBDIR}/cmake/gameengine2")
 
 # target -> export name (consumers see ge::<export name>)
-set(GE_EXPORTED_TARGETS ge_fp fp ge_core core ge_racing racing)
+set(GE_EXPORTED_TARGETS ge_fp fp ge_core core)
+# Every plugin is published as ge::<plugin> (cmake/Plugins.cmake collects them).
+get_property(_ge_plugins GLOBAL PROPERTY GE_PLUGIN_TARGETS)
+foreach(_target IN LISTS _ge_plugins)
+  string(REGEX REPLACE "^ge_" "" _name ${_target})
+  list(APPEND GE_EXPORTED_TARGETS ${_target} ${_name})
+endforeach()
 
 set(_ge_targets "")
 while(GE_EXPORTED_TARGETS)
@@ -46,6 +52,14 @@ install(TARGETS ${_ge_targets}
 install(DIRECTORY "${PROJECT_SOURCE_DIR}/engine/"
   DESTINATION ${GE_INSTALL_INCLUDEDIR}
   FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h" PATTERN "*.inl")
+
+# A plugin's headers install beside the engine's (a plugin's name never equals an engine
+# directory), so "racing/tape.hpp" is spelled the same in-tree and installed. Labs and a
+# plugin's presentation half are not part of the published simulation.
+install(DIRECTORY "${PROJECT_SOURCE_DIR}/plugins/"
+  DESTINATION ${GE_INSTALL_INCLUDEDIR}
+  FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h" PATTERN "*.inl"
+  PATTERN "labs" EXCLUDE PATTERN "app" EXCLUDE)
 
 install(EXPORT gameengine2Targets
   NAMESPACE ge::

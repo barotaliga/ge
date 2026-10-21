@@ -1,15 +1,15 @@
 # gameengine2 — the top-level build. Targets:
 #   ge_core      the deterministic pool and the run clock (engine/core, engine/loop;
 #                headers, plus libm, solar and output compiled)
-#   ge_racing    the racing primitives (engine/racing: tape, records, standings)
-#   fall_line_sim  game5's engine/ ported (games/fall_line/sim: mapgen, analysis)
+#   ge_<plugin>  one per plugins/<plugin>/ (cmake/Plugins.cmake): ge_racing (tape, records,
+#                standings), ge_mountain (the generated ski mountain: mapgen, analysis)
 #   <x>_test     one executable per tests/<x>_test.cpp, registered with CTest
 #   ge_fp        the FP flags of the DETERMINISM CONTRACT (AGENTS.md), linked by
 #                ge_core and published as ge::fp; a target that drops them can
 #                silently change the bits a simulation produces
 #   ge_flags     warnings, -Werror, sanitizers: this tree only, never published
-# ge_core, ge_racing and ge_fp are installed and published as ge::core,
-# ge::racing and ge::fp (cmake/Packaging.cmake, docs/publishing.md).
+# ge_core, ge_fp and every plugin target are installed and published as ge::core,
+# ge::fp and ge::<plugin> (cmake/Packaging.cmake, docs/publishing.md).
 cmake_minimum_required(VERSION 3.25)
 project(gameengine2 LANGUAGES CXX)
 
@@ -75,18 +75,23 @@ elseif(MSVC)
   set_source_files_properties(${GE_LIBM_VENDORED} PROPERTIES COMPILE_OPTIONS "/wd4244;/wd4146;/wd4701;/wd4723")
 endif()
 
-# The racing primitives. Headers, plus the tape's codec compiled.
-add_library(ge_racing STATIC engine/racing/tape.cpp)
-target_link_libraries(ge_racing PUBLIC ge_core)
+# The plugins: every plugins/<name>/CMakeLists.txt, each one ge_add_plugin(...) call. A new
+# plugin is a new directory; nothing is listed here (docs/architecture.md § Plugins).
+include(cmake/Plugins.cmake)
+file(GLOB GE_PLUGIN_DIRS CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/plugins/*/CMakeLists.txt)
+foreach(plugin_cmake ${GE_PLUGIN_DIRS})
+  get_filename_component(plugin_dir ${plugin_cmake} DIRECTORY)
+  add_subdirectory(${plugin_dir})
+endforeach()
 
-# The demo game's simulation (games/fall_line/sim). It is the demo, not part of the
-# published engine, so only the top-level build makes it.
+# The games: games/<game>/CMakeLists.txt, once a game has code (Fall Line's lands with M5).
+# A game is the demo, not part of the published engine, so only the top-level build makes it.
 if(PROJECT_IS_TOP_LEVEL)
-  file(GLOB_RECURSE FALL_LINE_SIM_SOURCES CONFIGURE_DEPENDS
-    ${CMAKE_CURRENT_SOURCE_DIR}/games/fall_line/sim/*.cpp)
-  add_library(fall_line_sim STATIC ${FALL_LINE_SIM_SOURCES})
-  target_include_directories(fall_line_sim PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/games/fall_line/sim)
-  target_link_libraries(fall_line_sim PUBLIC ge_core)
+  file(GLOB GE_GAME_DIRS CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/games/*/CMakeLists.txt)
+  foreach(game_cmake ${GE_GAME_DIRS})
+    get_filename_component(game_dir ${game_cmake} DIRECTORY)
+    add_subdirectory(${game_dir})
+  endforeach()
 
   enable_testing()
   add_subdirectory(tests)
