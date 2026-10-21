@@ -41,3 +41,10 @@ engine, and are written in the same shape as `.agents/skills/` (front matter and
 
 Until M12, keep any message, doc or skill you write consistent with this shape, so
 the CLI only has to package it.
+
+## Labs
+
+A lab's `fail` lines follow the diagnostics shape, and its report, `report.json` and
+contact sheet are written for an agent to read first. `labs play --stdio` (M5,
+`docs/labs.md` § Drive labs) is the engine's playtest interface for agents. M12's `ge new`
+scaffolds a game's `labs/` directory and ships the `labs` skill to consumers.

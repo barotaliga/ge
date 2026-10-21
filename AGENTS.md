@@ -27,8 +27,9 @@ updates that row's Status in its PR.
 
 | Doc | What it holds |
 | --- | --- |
-| [`docs/goals.md`](docs/goals.md) | The long-term goals (G1–G7), the non-goals and the milestone roadmap |
+| [`docs/goals.md`](docs/goals.md) | The long-term goals (G1–G9), the non-goals and the milestone roadmap |
 | [`docs/architecture.md`](docs/architecture.md) | The layers and their dependency direction, the frame, the code conventions, diagnostics, the determinism contract and the build |
+| [`docs/labs.md`](docs/labs.md) | The labs: the contract every subsystem, plugin and game plugs into, the kinds (sim, scenario, picture, drive, bench), captions, digests, and the labs each milestone lands |
 | [`docs/index.md`](docs/index.md) | GENERATED from the code's `ge:` tags: every file's one-line summary, owning skill and test; keyword to files |
 | [`docs/rendering.md`](docs/rendering.md) | The GPU backend (Dawn), the frame's pass table, every rendering technique and why, budgets, lab hooks, and what was considered and not taken |
 | [`docs/publishing.md`](docs/publishing.md) | What a release is (GitHub Releases + GitHub Packages), how a game consumes it, changeset fragments, cutting a release, the credentials |
@@ -96,6 +97,10 @@ porting ends, and nothing outside it may depend on it except `make golden`.
   says why. No `<cmath>` transcendentals in simulation code, no FMA contraction and no
   fast-math. Randomness only from `core::Rng`. Every simulation module lands with a golden
   test (`determinism` and `testing` skills).
+- **LABS, NOT GUESSES** (G9). Every subsystem, plugin and game has labs (`docs/labs.md`).
+  A change in a lab's subject runs it before and after (`--tag=before`, then
+  `--compare=before`) and puts both in the PR. A milestone row is done only when the labs
+  in its **Labs it lands** cell run in `make labs-smoke` (`labs` skill).
 - **AGENT-ACTIONABLE OUTPUT** (G6). Every error, assert and log line says what failed,
   where, and the next action to take (`docs/architecture.md` § Diagnostics).
 - **GREEN, THEN MERGE** (G7). CI must pass on every row. A PR you open is yours to drive
@@ -122,6 +127,8 @@ make build        # cmake --preset debug && cmake --build (PRESET=release for -O
 make test         # build + ctest
 make fmt          # clang-format in place;  make fmt-check is what CI runs
 make lint         # clang-tidy over the sources (bug-finding checks only)
+make labs         # list the labs;  make lab LAB=level ARGS="--seeds=38" runs one
+make labs-smoke   # every lab at its smoke flags, twice, digests against tests/labs_digests.txt
 make agents-check # symlinks, skills ↔ this router, the 1000-line cap, ge: tags, docs/index.md fresh, lesson fragments
 make index        # regenerate docs/index.md from every file's ge: tags
 make find Q="noise sample_field"  # files, skills, lessons and the porting map matching any word
@@ -147,6 +154,8 @@ and Windows. Releases are dispatched, never hand-made (`release` skill,
 | --- | --- | --- |
 | `engine/core/` | The deterministic pool: `prng.hpp` (mulberry32), `math.hpp` (hypot family, clamp, smoothstep), `libm/` (every transcendental the simulation calls, with the same bits on every platform; vendored, with `LICENSE.md`), `num.hpp` (the simulation's number semantics: rounding, integer wrap, NaN-aware max/min, sign, remainder), `num_text.hpp` (numbers as text, for diagnostic lines), `noise.hpp` (hash2, value noise, the cached field), `heightfield.hpp` (the baked grid and its bilinear reads), `quat.hpp` (orientation; the Euler sign flip), `solar.hpp` (the sun and the moon, by geometry and on a real date), `output.hpp` (the one diagnostic channel; module state) | `determinism` |
 | `engine/loop/` | `run_clock.hpp`: the fixed-step accumulator between the display's frames and the 120 Hz step | `sim` |
+| `engine/lab/` | The lab contract and runner: `lab.hpp` (`LabSpec`, `GE_LAB`, the `Lab` context: metrics, tables, captioned shots, failures, the digest), `runner.hpp` (the `labs` command line: list, run, tag, compare, smoke, repeat, digest baseline), `report.hpp` (report.json, metrics.tsv, the contact sheet), `raster.hpp` (the CPU picture and 5x7 font), `png.hpp`; `labs/` holds the engine's own labs | `labs` |
+| `*/labs/` | Labs beside their subject, compiled into the one `labs` executable: `engine/lab/labs/`, `plugins/<name>/labs/`, `games/<name>/labs/` | `labs` |
 | `engine/platform/` | SDL3: window, input, gamepad, audio device, files (M6); the only place SDL is included | `platform` |
 | `engine/gpu/` | The webgpu.h wrapper over Dawn (M6): device, feature tiers, pipeline manifest, timestamps, readback; the only place webgpu.h is included | `gpu` |
 | `engine/render/` | Generic rendering mechanisms (M7–M8): the pass table, GPU-driven instances, the clipmap, shadows, sky, TAA-U, post (`docs/rendering.md`) | `render` |
@@ -236,5 +245,6 @@ and the directories agree.
 | `render` | A draw pass, the pass table, GPU-driven instances, shadows, sky, TAA-U, post, lab captures, extraction from `GameState` |
 | `audio` | The synth, a voice, a bed, the audio thread |
 | `ui` | The 2D layer, text, the HUD, a card, the dev UI |
+| `labs` | Writing, running or reading a lab: a measurement, a captioned screenshot, a scenario, a drive, a bench; the before-and-after a PR owes |
 | `perf` | Any optimisation, a benchmark, a profile, a cost claim |
 | `agent-interface` | Diagnostics wording, consumer skills, the `ge` CLI (M12) |

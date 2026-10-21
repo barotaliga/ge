@@ -43,3 +43,9 @@ system is carried over.
 - The renderer and the app never write `GameState`.
 - `engine/loop/run_clock.hpp` is the run clock: the clamp (`kMaxFrameSeconds` = 0.1),
   whole steps, and `alpha` for interpolation only.
+
+## Labs
+
+`run-clock` covers the run clock (the generator's labs are the `mountain` skill's). M5 lands
+the `sim` drive lab (the bot over seeds), the `ride` scenario lab and `play` (an agent over
+stdio); their design is `docs/labs.md`. The `labs` skill owns how.

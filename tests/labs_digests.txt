@@ -1,0 +1,6 @@
+# lab digests at their smoke flags: labs --all --smoke --write-digests
+analyze 06a600c2252d9fef
+level 4490929c4816a055
+mapgen-cost 3baf51b6907817f3
+noise 3d3a828834f144cb
+run-clock 81607c7ac1161166

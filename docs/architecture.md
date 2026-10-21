@@ -55,6 +55,13 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   ImGui behind `GE_DEV_UI`.
 - **`games/fall_line/app`**: Fall Line's presentation: it builds the frame from
   `GameState`, Fall Line's own shaders and looks, its HUD and cards, and its sound beds.
+- **`engine/lab`**: the lab contract and the `labs` runner (`docs/labs.md`): how any
+  subsystem, plugin or game declares a lab, the CPU raster and PNG writer its pictures are
+  drawn with, and the report, contact sheet and digest a run leaves. Labs themselves sit in
+  a `labs/` directory beside their subject (`engine/lab/labs/`, `plugins/<name>/labs/`,
+  `games/<name>/labs/`) and are compiled into one `labs` executable. A lab may include
+  anything, and nothing includes a lab. Lab code keeps the simulation's numeric rules (no
+  `<cmath>` transcendental, `core::Rng` only), because its digest is checked on every CI row.
 - **`tools/`**: the structure checks, the headless `sim` CLI, level-map image output and
   the labs. Tools may include anything, and nothing includes a tool.
 - **`porting/`**: the WORKING area, deleted when porting ends (`AGENTS.md` § The working
@@ -189,6 +196,8 @@ itself does no I/O. Tests print in the same shape through `tests/check.hpp`.
 - Iteration order is explicit. No `unordered_map` iteration feeds a result. Sorting
   uses `std::stable_sort`: equal keys keep their order, and that order is part of the
   result.
+- Every lab's digest (`docs/labs.md` § Digests) is checked twice in one process and against
+  `tests/labs_digests.txt` on every CI row (`labs_smoke`), so a lab is a determinism test too.
 - Determinism is proven by the golden tables in `tests/golden/`, not by eye. They are the
   engine's own: a deliberate change of behaviour rewrites them in the PR that makes it.
 

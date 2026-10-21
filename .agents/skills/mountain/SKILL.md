@@ -36,3 +36,10 @@ one game's: which maps a game races, its modes and its strings stay in the game.
 - The generator and the analysis read one rule book and share nothing else.
 - A game's lists of which seeds it races belong to the game; their digests are this plugin's
   tests.
+
+## Labs
+
+`plugins/mountain/labs/`: `level` (the map from above, captioned, with its gate table),
+`analyze` (the rule book over seeds, `--refusals` for why attempts were thrown away) and
+`mapgen-cost` (`PRESET=release`). A change to mapgen or analysis runs `level` and `analyze`
+before and after (`--tag=before`, then `--compare=before`). The `labs` skill owns how.

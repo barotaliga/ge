@@ -81,3 +81,10 @@ there before the first edit.
   speed alone.
 - Test both sides of every feature tier: a test can create the device with a feature
   forced off.
+
+## Labs
+
+M6 lands the headless capture `Lab::shot` takes GPU frames from: an offscreen target on the
+software adapter, so it runs in the GPU-less Linux container and on CI, read back to RGBA8
+(`docs/labs.md` § Pictures before and after the renderer). Its smoke lab clears to a known
+colour and checks the pixels.
