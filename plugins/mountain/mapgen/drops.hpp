@@ -1,17 +1,15 @@
-// R24 — THE DROPS: cliff bands a black piste is built over. Port of game5
-// `engine/mapgen/drops.ts`.
+// R24 — THE DROPS: cliff bands a black piste is built over.
 //
 // A drop is R22's cliff profile laid ACROSS the line, added to the graded line by arc before
 // the corridor is pressed, with no apron (the face falls straight back onto the line, so the
 // fall is the drop's and no more). Laid on a stretch that falls steeply and turns little, off
 // the start, the finish and every gate, and before the kickers, which keep clear of them.
 // Dealt off a stream of their own, so a grade without drops (every v1 map) draws nothing.
-// Parity: through tests/mountain_generate_test.cpp; no v1 map lays one, so the black's drops are
+// Held by tests/mountain_generate_test.cpp; no v1 map lays one, so the black's drops are
 // held from M4b on.
 //
 // ge:summary R24 drops across a black piste: chosen on the graded line and published as cliffs
-// ge:keywords drop drops layDrops publishDrops
-// ge:oracle game5/engine/mapgen/drops.ts
+// ge:keywords drop drops
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #pragma once

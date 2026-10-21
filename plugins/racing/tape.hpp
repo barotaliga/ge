@@ -1,6 +1,5 @@
-// THE CONTROL TAPE: a run kept as the CONTROLS that rode it. Port of oss-game-framework
-// `src/racing/tape.ts`, byte for byte: a tape game5 stored decodes here and re-encodes to the
-// same text, so a ghost or a replay crosses between the two runtimes unchanged.
+// THE CONTROL TAPE: a run kept as the CONTROLS that rode it. The byte format is fixed: a stored
+// tape decodes and re-encodes to the same text, so a stored ghost or replay never goes stale.
 //
 // On a deterministic engine the same map and the same inputs put the vehicle over the same
 // metre of ground, so a ghost is what the hands did, not where the vehicle went. The bargain is
@@ -13,19 +12,18 @@
 //   `Lever` (0..1 on 256) and `Flags` (eight booleans in a byte). The names are the stored
 //   tape's keys, so renaming one is a format change.
 // - Each axis is one stream: a byte per step, run-length encoded as (run, value) pairs with a
-//   run capped at 255, then base64 (with `=` padding, as `btoa` writes it).
-// - Decoding is forgiving the way `atob` is (ASCII whitespace skipped, missing padding
+//   run capped at 255, then base64 (RFC 4648, with `=` padding).
+// - Decoding is WHATWG's forgiving base64 (ASCII whitespace skipped, missing padding
 //   accepted), and a short or damaged stream leaves its tail at zero instead of failing.
+// - A NaN value is written as 0 and never merged into a run: each NaN step is a run of one.
 //
-// Not ported: `isControlTape` (the shape check on a parsed JSON blob). It belongs with the
-// ghost store and its JSON reader (M10). Parity: tests/racing_tape_test.cpp against
-// tests/golden/racing_tape_*.txt and racing_ghost.txt (tools/parity/golden-racing.mjs).
+// The shape check on a stored tape belongs with the ghost store and its JSON reader (M10).
+// Bits: tests/racing_tape_test.cpp against tests/golden/racing_tape_*.txt and racing_ghost.txt.
 //
 // ge:summary The control tape a ghost and a replay are kept on: axes, RLE, base64
-// ge:keywords racing tape ghost replay controls input recording rle base64 snapAxis recorder reader
-// ge:keywords fingerprint ControlTape
-// ge:oracle oss-game-framework/src/racing/tape.ts
-// ge:skill racing port
+// ge:keywords racing tape ghost replay controls input recording rle base64 recorder reader
+// ge:keywords fingerprint
+// ge:skill racing
 // ge:test tests/racing_tape_test.cpp
 #pragma once
 
@@ -35,8 +33,8 @@
 #include <string_view>
 #include <vector>
 
-#include "core/js.hpp"
 #include "core/math.hpp"
+#include "core/num.hpp"
 
 namespace ge::racing {
 
@@ -45,11 +43,11 @@ inline constexpr int kSignedSteps = 127;
 // Positions on a lever, 0 to full.
 inline constexpr int kLeverSteps = 255;
 
-// How an axis is kept on the tape (the oracle's "signed" | "lever" | "flags").
+// How an axis is kept on the tape ("signed" | "lever" | "flags" in a stored tape).
 enum class AxisKind : uint8_t { Signed, Lever, Flags };
 
-// One stream of a tape's layout. The order of a schema's axes is the order the oracle's schema
-// object lists its keys, and every value array below is in that order.
+// One stream of a tape's layout. The order of a schema's axes is the order a stored tape lists
+// its keys in, and every value array below is in that order.
 struct TapeAxis {
   std::string_view name;
   AxisKind kind;
@@ -65,36 +63,35 @@ struct ControlTape {
 // Snap onto a grid of `steps` positions per unit. Centre comes back as +0: rounding a hair
 // below it gives -0, which the tape cannot write down.
 inline double snap_to_grid(double v, double steps) {
-  const double index = core::js::round(v * steps);
+  const double index = core::num::round(v * steps);
   return index == 0 ? 0.0 : index / steps;
 }
 
 // ONE AXIS ON THE GRID THE TAPE WRITES: clamped to the axis's range, then snapped. Idempotent.
-// A flags value comes back as it went in. (core::clamp passes NaN through, as the oracle's does.)
+// A flags value comes back as it went in. (core::clamp passes NaN through.)
 inline double snap_axis(double v, AxisKind kind) {
   if (kind == AxisKind::Signed) return snap_to_grid(core::clamp(v, -1, 1), kSignedSteps);
   if (kind == AxisKind::Lever) return snap_to_grid(core::clamp(v, 0, 1), kLeverSteps);
   return v;
 }
 
-// The byte an axis value is written as. The oracle computes a number and stores it into a byte
-// array, which maps NaN to 0; this returns that stored byte. (Only the tape encoder can tell a
-// NaN byte from a 0, and it asks `axis_is_nan`.)
+// The byte an axis value is written as: the grid position, with NaN mapped to 0. (Only the
+// tape encoder needs to tell a NaN byte from a 0, and it asks `axis_is_nan`.)
 inline uint8_t axis_to_byte(double v, AxisKind kind) {
   double b;
   if (kind == AxisKind::Signed) {
-    b = core::js::round(core::clamp(v, -1, 1) * kSignedSteps) + kSignedSteps;
+    b = core::num::round(core::clamp(v, -1, 1) * kSignedSteps) + kSignedSteps;
   } else if (kind == AxisKind::Lever) {
-    b = core::js::round(core::clamp(v, 0, 1) * kLeverSteps);
+    b = core::num::round(core::clamp(v, 0, 1) * kLeverSteps);
   } else {
-    return static_cast<uint8_t>(core::js::to_int32(v) & 0xff);
+    return static_cast<uint8_t>(core::num::to_int32(v) & 0xff);
   }
   return b == b ? static_cast<uint8_t>(b) : uint8_t{0};  // in 0..255 once clamped
 }
 
-// Whether `axis_to_byte` saw a NaN the oracle would carry as NaN: a signed or lever value (a
-// flags value is masked to an integer first). The encoder writes such a byte as 0 but never
-// merges it into a run, because NaN === NaN is false.
+// Whether `axis_to_byte` saw a NaN: a signed or lever value (a flags value is masked to an
+// integer first). The encoder writes such a byte as 0 but never merges it into a run (the
+// format's NaN rule above).
 inline bool axis_is_nan(double v, AxisKind kind) { return kind != AxisKind::Flags && v != v; }
 
 // The value a byte reads back as.
@@ -104,17 +101,17 @@ inline double byte_to_axis(uint8_t b, AxisKind kind) {
   return double(b);
 }
 
-// Base64 as `btoa` writes it, and `atob`'s forgiving decode. `base64_decode` returns false
-// (leaving `out` empty) where `atob` throws.
+// Base64 with `=` padding, and the forgiving decode. `base64_decode` returns false (leaving
+// `out` empty) on text the forgiving decode rejects.
 std::string base64_encode(std::span<const uint8_t> bytes);
 bool base64_decode(std::string_view text, std::vector<uint8_t>& out);
 
 // Run-length encode a byte per step, then base64 it. `nan` (may be empty) marks the steps whose
-// byte the oracle held as NaN (`axis_is_nan`); they are written as 0 in runs of one.
+// value was NaN (`axis_is_nan`); they are written as 0 in runs of one.
 std::string encode_stream(std::span<const uint8_t> bytes, std::span<const uint8_t> nan = {});
 
-// Decode `out.size()` steps. A short or damaged stream leaves its tail at 0; text `atob` rejects
-// leaves all of it at 0.
+// Decode `out.size()` steps. A short or damaged stream leaves its tail at 0; text the forgiving
+// decode rejects leaves all of it at 0.
 void decode_stream(std::string_view text, std::span<uint8_t> out);
 
 // Writes a tape step by step, run-length encoding as it goes: one value per schema axis each
@@ -160,10 +157,10 @@ class TapeReader {
 struct Fingerprint {
   uint32_t hash = 0x811c9dc5u;
   Fingerprint& mix(double v) {
-    const auto n = static_cast<uint32_t>(core::js::to_int32(core::js::round(v * 100)));
+    const auto n = static_cast<uint32_t>(core::num::to_int32(core::num::round(v * 100)));
     for (int s = 0; s < 32; s += 8) {
       hash ^= (n >> s) & 0xffu;
-      hash *= 0x01000193u;  // Math.imul then >>> 0: the low 32 bits
+      hash *= 0x01000193u;  // FNV-1a's prime, keeping the low 32 bits
     }
     return *this;
   }

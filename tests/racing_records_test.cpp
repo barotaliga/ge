@@ -1,9 +1,9 @@
-// plugins/racing/records against the TypeScript oracle (tests/golden/racing_records.txt,
-// written by tools/parity/golden-racing.mjs): `beats` over non-figures and ties both ways,
-// `split_gap` at every edge, and a book grown by `note_record` compared whole after each call.
+// plugins/racing/records against tests/golden/racing_records.txt: `beats` over non-figures and ties
+// both ways, `split_gap` at every edge, and a book grown by `note_record` compared whole after each
+// call.
 //
-// ge:summary Parity test: racing/records against the oracle
-// ge:keywords test parity golden records
+// ge:summary Golden test: racing/records, bit for bit
+// ge:keywords test golden records
 // ge:skill testing racing
 #include "racing/records.hpp"
 
@@ -29,7 +29,7 @@ std::string id_of(double k) { return "r/" + std::to_string(int(k)); }
 
 }  // namespace
 
-TEST(records_match_oracle) {
+TEST(records_match_golden) {
   const auto rows = ge::test::golden_rows("tests/golden/racing_records.txt");
   r::Book<r::RecordRow> book;
   int counts[4] = {};

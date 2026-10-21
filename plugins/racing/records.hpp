@@ -1,5 +1,5 @@
 // THE RECORD BOOK'S POLICY: the best figure a run has set, one row per whatever the game says
-// names a row. Port of oss-game-framework `src/racing/records.ts`, bit for bit:
+// names a row:
 // - A row is beaten OUTRIGHT, never on a tie.
 // - A figure that is not a figure (not finite, not positive) beats nothing.
 // - Which way is better is the book's (`Better`): seconds lower, points higher.
@@ -7,19 +7,15 @@
 //   record at each checkpoint (`split_gap`).
 //
 // What names a row and what else a row carries (the skis it was set on) are the game's: a game
-// row derives from `RecordRow`, and `Book<Row>` holds any of them. The oracle's book is an
-// immutable object; here `note_record` writes the book in place, which is what a caller who
-// replaces its book with the returned one observes. Rows keep insertion order, as the
-// oracle's object keys do (game5's ids are never integer-like).
-//
-// Not ported: `readBook` (a stored JSON blob read row by row). It belongs with the record
-// store and its JSON reader (M10). Parity: tests/racing_records_test.cpp against
+// row derives from `RecordRow`, and `Book<Row>` holds any of them. `note_record` writes the
+// book in place. Rows keep insertion order, which is the order a stored book lists them in.
+// Reading a stored book belongs with the record store and its JSON reader (M10).
+// Bits: tests/racing_records_test.cpp against
 // tests/golden/racing_records.txt.
 //
 // ge:summary The record book's policy: what beats a row, split gaps, noting a record
-// ge:keywords racing records record-book best beats splitGap noteRecord splits personal-best
-// ge:oracle oss-game-framework/src/racing/records.ts
-// ge:skill racing port
+// ge:keywords racing records record-book best beats splits personal-best
+// ge:skill racing
 // ge:test tests/racing_records_test.cpp
 #pragma once
 
@@ -38,7 +34,7 @@ namespace ge::racing {
 enum class Better : uint8_t { Lower, Higher };
 
 // The generic half of a row: the figure, when (a unix ms stamp), and the clock at each crossing.
-// `has_splits` is whether the oracle's optional `splits` is present (an empty list is present).
+// `has_splits` is whether the row carries splits at all (an empty list is carried).
 struct RecordRow {
   double value = 0;
   double at = 0;

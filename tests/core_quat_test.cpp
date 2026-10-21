@@ -1,11 +1,10 @@
-// engine/core/quat.hpp against the oracle's runtime (tests/golden/core_quat.txt, written by
-// tools/parity/golden-core-libm.mjs under game5's pinned Node: make golden-libm). Row:
+// engine/core/quat.hpp against tests/golden/core_quat.txt (make golden-libm). Row:
 //   in:  heading pitch roll  ax ay az angle  wx wy wz dt  vx vy vz  s
-//   out: fromEuler[4] fromAxisAngle[4] multiply(qe, qa)[4] rotate(qe, v)[3] unrotate(qe, v)[3]
-//        integrate(qe, w, dt)[4] toEuler(qe)[3] normalize(qe * s)[4]
+//   out: from_euler[4] from_axis_angle[4] multiply(qe, qa)[4] rotate(qe, v)[3]
+//        unrotate(qe, v)[3] integrate(qe, w, dt)[4] to_euler(qe)[3] normalize(qe * s)[4]
 //
-// ge:summary Parity test: core/quat against the oracle
-// ge:keywords test parity golden quat
+// ge:summary Golden test: core/quat, bit for bit
+// ge:keywords test golden quat
 // ge:skill testing
 #include "core/quat.hpp"
 
@@ -32,7 +31,7 @@ void check_vec(const Vec3& v, const std::vector<uint64_t>& row, size_t at) {
 
 }  // namespace
 
-TEST(quat_matches_oracle_bit_for_bit) {
+TEST(quat_matches_golden_bit_for_bit) {
   const auto rows = ge::test::golden_rows("tests/golden/core_quat.txt");
   CHECK(rows.size() == 800);
   for (const auto& row : rows) {

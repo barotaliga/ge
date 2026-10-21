@@ -1,9 +1,8 @@
 // R2, R3 — THE MOUNTAIN BEFORE ANYBODY SKIS IT: one flank falling from a summit ridge along
 // the top edge to a valley floor along the bottom, side ridges either hand, and a face folded
-// into spurs and gullies, bowls, headwalls and rollers. Port of game5
-// `engine/mapgen/terrain.ts` (the single piste's half: `planTerrain`, `bakeCountry`,
-// `flankAt`, `descentAt`, the noise stack). The ski area's massif, a real face and the sea
-// arrive with M4b–M4d.
+// into spurs and gullies, bowls, headwalls and rollers: the single piste's mountain (the plan,
+// the bake, the flank, the descent, the noise stack). The ski area's massif, a real face and
+// the sea arrive with M4b–M4d.
 //
 // Everything is a pure function of a PLAN (numbers drawn off the attempt's stream once) and a
 // plan point, so the search asks "how high is the untouched ground here?" of the arithmetic
@@ -13,11 +12,10 @@
 // THE PROFILE is the mountain's shape down the fall line, integrated once into a table and
 // scaled to fall the dealt vertical; the headwalls are steps taken out of that vertical and
 // put back as short bands. The ground falls toward +z: heading 0 is the fall line.
-// Parity: through tests/mountain_generate_test.cpp (`ground`).
+// Held by tests/mountain_generate_test.cpp (`ground`).
 //
-// ge:summary R2, R3 the mountain: planTerrain and the baked country
-// ge:keywords terrain mountain heightfield planTerrain bakeCountry descentAt flankAt profile
-// ge:oracle game5/engine/mapgen/terrain.ts
+// ge:summary R2, R3 the mountain: plan_terrain and the baked country
+// ge:keywords terrain mountain heightfield profile
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #pragma once

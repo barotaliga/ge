@@ -1,21 +1,20 @@
-// Port of game5 `engine/mapgen/terrain.ts` (the single piste's half).
+// The definitions behind terrain.hpp (the single piste's half).
 //
 // ge:summary The mountain's plan draws and the bake of every noise layer onto the grid
-// ge:keywords terrain planTerrain bakeCountry fbm ridged
-// ge:oracle game5/engine/mapgen/terrain.ts
+// ge:keywords terrain fbm ridged
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #include "mountain/mapgen/terrain.hpp"
 
 #include <cmath>
 
-#include "core/js.hpp"
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
+#include "core/num.hpp"
 
 namespace ge::mountain::mapgen {
 
-namespace js = ge::core::js;
+namespace num = ge::core::num;
 namespace libm = ge::core::libm;
 namespace R = rules;
 using ge::core::noise_field;
@@ -30,7 +29,7 @@ using ProfileTable = std::array<double, kProfileSamples + 1>;
 // The grade's shape down the fall line, before it is scaled to the vertical.
 double grade_shape(const ProfileShape& p, double u) {
   const double shoulder = p.shoulder + (1 - p.shoulder) * smoothstep(0, p.shoulder_run, u);
-  const double ease = libm::pow(js::max(0.0, 1 - u), p.ease);
+  const double ease = libm::pow(num::max(0.0, 1 - u), p.ease);
   return shoulder * (ease * (1 - p.runout) + p.runout);
 }
 
@@ -47,7 +46,7 @@ ProfileTable tabulate_profile(const ProfileShape& p) {
   return table;
 }
 
-// One table a grade row, worked out once (the oracle memoizes them by shape).
+// One table a grade row, worked out once.
 const ProfileTable* profile_for(const GradeRow& grade) {
   static const std::array<ProfileTable, 5> tables{
       tabulate_profile(kUngraded.profile), tabulate_profile(grade_row(PisteGrade::green).profile),
@@ -195,7 +194,7 @@ double country_at(const TerrainPlan& plan, CountryFields& f, double x, double z)
   for (const Bowl& b : plan.bowls) {
     const double ex = x - b.x;
     const double ez = z - b.z;
-    const double d2 = (ex * ex + ez * ez) / (b.r * b.r);  // `**2` is x*x in V8
+    const double d2 = (ex * ex + ez * ez) / (b.r * b.r);  // a square is x * x, never pow
     if (d2 < 1) h -= b.depth * (1 - d2) * (1 - d2);
   }
   // THE SIDE RIDGES with crests of their own, and the summit ridge's crests fading down.
@@ -206,7 +205,7 @@ double country_at(const TerrainPlan& plan, CountryFields& f, double x, double z)
     const double rz = wx * 0.5 + wz * 0.866;
     const double crests =
         plan.crests * (ridged(f.crests, rx, rz) * 0.75 + ridged(f.crests_fine, rz, rx) * 0.25);
-    h += plan.flank * flank * std::sqrt(flank) + crests * js::max(flank, ridge);
+    h += plan.flank * flank * std::sqrt(flank) + crests * num::max(flank, ridge);
   }
   return h;
 }
@@ -279,7 +278,7 @@ TerrainPlan plan_terrain(ge::core::Rng& rng, const Region& region, const GradeRo
 
 ge::core::Heightfield bake_country(const TerrainPlan& plan) {
   const double cell = R::world::cell;
-  const int n = static_cast<int>(js::round(plan.size / cell)) + 1;
+  const int n = static_cast<int>(num::round(plan.size / cell)) + 1;
   ge::core::Heightfield field = ge::core::create_heightfield(0, 0, cell, n, n);
   float* d = field.data.data();
   CountryFields fields = country_fields(plan);

@@ -1,16 +1,13 @@
 // THE RULE BOOK'S NUMBERS (R1–R24): every number the single-piste generator builds to and the
-// analysis holds a finished map to. Port of game5 `engine/mapgen/rules.ts` (`LEVEL_RULES`,
-// `bendFloor`, `inBand`, `withinBand`); the prose of each rule is the oracle's header, which
-// game5's docs/level-generator.md mirrors verbatim. Read a rule's meaning there; read its
-// numbers here. The `trick` block (R20, the terrain park) is not ported yet: no map the port
-// builds carries a park (docs/goals.md M4c).
+// analysis holds a finished map to, with the band helpers. Each namespace's comment says what
+// its rule asks. The `trick` block (R20, the terrain park) is not here yet: no map the
+// generator builds carries a park (docs/goals.md M4c).
 //
-// Every value is the oracle's literal, so the doubles are the same bits. A band is [min, max].
-// Parity: through tests/mountain_generate_test.cpp (every map is built off these numbers).
+// Every value is a decimal literal, so the doubles are fixed bits. A band is [min, max].
+// Held by tests/mountain_generate_test.cpp (every map is built off these numbers).
 //
-// ge:summary The rule book's numbers (LEVEL_RULES, R1-R24) as constexpr namespaces
-// ge:keywords rules LEVEL_RULES rule-book inBand withinBand bendFloor
-// ge:oracle game5/engine/mapgen/rules.ts
+// ge:summary The rule book's numbers (R1-R24) as constexpr namespaces
+// ge:keywords rules rule-book
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #pragma once
@@ -18,8 +15,8 @@
 #include <array>
 #include <cstdint>
 
-#include "core/js.hpp"
 #include "core/math.hpp"
+#include "core/num.hpp"
 #include "core/prng.hpp"
 
 namespace ge::mountain::mapgen {
@@ -311,8 +308,8 @@ inline constexpr double finish_clear = 120;
 // to the steep radius past the knee.
 inline double bend_floor(double grade) {
   namespace T = rules::track;
-  const double t = ge::core::js::min(
-      1.0, ge::core::js::max(0.0, (grade - T::bend_knee) / (T::max_grade - T::bend_knee)));
+  const double t = ge::core::num::min(
+      1.0, ge::core::num::max(0.0, (grade - T::bend_knee) / (T::max_grade - T::bend_knee)));
   const double ease = t * t * (3 - 2 * t);
   return T::min_radius + (T::steep_radius - T::min_radius) * ease;
 }

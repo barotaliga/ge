@@ -1,18 +1,16 @@
-// A REGULAR GRID OF HEIGHTS over the plan (x, z), read back bilinearly. Port of
-// oss-game-framework `src/core/heightfield.ts`, bit for bit. A world compiler bakes one (the
+// A REGULAR GRID OF HEIGHTS over the plan (x, z), read back bilinearly. A world
+// compiler bakes one (the
 // ground, a distance field, anything that is a function of the plan) once, and everything
 // downstream (the physics' probes, collision, the terrain mesh, a lab's map) reads it here:
 // a sample is two lerps instead of a stack of noise octaves at the physics rate.
 //
 // Samples outside the grid clamp to the nearest edge cell, so a probe past the world's edge
-// never reads a hole. Storage is float (the oracle's Float32Array); every read widens to
-// double exactly, as a JS typed-array read does.
-// Parity: tests/core_heightfield_test.cpp against tests/golden/core_heightfield.txt.
+// never reads a hole. Storage is float; every read widens to double exactly, and the sums
+// run in double from there.
+// Bits: tests/core_heightfield_test.cpp against tests/golden/core_heightfield.txt.
 //
 // ge:summary A baked regular grid of heights over the plan, read back bilinearly
-// ge:keywords heightfield grid bilinear terrain ground gradient slope sample bake createHeightfield
-// ge:keywords fillField sampleField sampleFieldGradient fieldGradient fieldCell
-// ge:oracle oss-game-framework/src/core/heightfield.ts
+// ge:keywords heightfield grid bilinear terrain ground gradient slope sample bake
 // ge:skill determinism
 // ge:test tests/core_heightfield_test.cpp
 #pragma once
@@ -44,7 +42,7 @@ inline Heightfield create_heightfield(double origin_x, double origin_z, double c
 
 // The four corners and the weights of the cell a point falls in, after the edge clamp. Both
 // samplers below share it so their weights are the same bits. `ok` is false for a NaN point,
-// where the oracle reads `data[NaN]` (undefined) and every result is NaN.
+// where no cell is read and every result is NaN.
 struct FieldCell {
   double a, b, c, e;  // (c0,r0) (c1,r0) (c0,r1) (c1,r1)
   double tx, tz;

@@ -1,8 +1,7 @@
-// Port of game5 `engine/mapgen/query.ts`.
+// The definitions behind query.hpp.
 //
 // ge:summary The piste's lazily built spatial hash and the nearest-point searches
-// ge:keywords query nearestTrackPoint nearestWithin spatial-hash
-// ge:oracle game5/engine/mapgen/query.ts
+// ge:keywords query spatial-hash
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #include "mountain/mapgen/query.hpp"
@@ -11,12 +10,12 @@
 #include <limits>
 #include <memory>
 
-#include "core/js.hpp"
 #include "core/math.hpp"
+#include "core/num.hpp"
 
 namespace ge::mountain::mapgen {
 
-namespace js = ge::core::js;
+namespace num = ge::core::num;
 using ge::core::cell_key;
 
 namespace {
@@ -37,10 +36,10 @@ const TrackIndex& index_of(const Track& track) {
   for (size_t i = 0; i + 1 < n; i++) {
     const TrackPoint& a = points[i];
     const TrackPoint& b = points[i + 1];
-    const auto c0 = static_cast<int32_t>(std::floor(js::min(a.x, b.x) / kCell));
-    const auto c1 = static_cast<int32_t>(std::floor(js::max(a.x, b.x) / kCell));
-    const auto r0 = static_cast<int32_t>(std::floor(js::min(a.z, b.z) / kCell));
-    const auto r1 = static_cast<int32_t>(std::floor(js::max(a.z, b.z) / kCell));
+    const auto c0 = static_cast<int32_t>(std::floor(num::min(a.x, b.x) / kCell));
+    const auto c1 = static_cast<int32_t>(std::floor(num::max(a.x, b.x) / kCell));
+    const auto r0 = static_cast<int32_t>(std::floor(num::min(a.z, b.z) / kCell));
+    const auto r1 = static_cast<int32_t>(std::floor(num::max(a.z, b.z) / kCell));
     for (int32_t c = c0; c <= c1; c++) {
       for (int32_t r = r0; r <= r1; r++) index->cells[cell_key(c, r)].push_back(int32_t(i));
     }
@@ -70,7 +69,7 @@ void try_segment(const std::vector<TrackPoint>& points, size_t i, double x, doub
   const double d = ge::core::hypot(ex, ez);
   if (d >= held) return;
   double len = std::sqrt(len2);
-  if (len == 0) len = 1;  // `Math.sqrt(len2) || 1`
+  if (len == 0) len = 1;  // a zero-length segment divides by 1
   hit.index = static_cast<int>(i);
   hit.s = a.s + (b.s - a.s) * t;
   hit.distance = d;
@@ -89,7 +88,7 @@ void nearest_within(const Track& track, double x, double z, double within, Track
   const auto qr = static_cast<int32_t>(std::floor(z / kCell));
   const int rings = within == kInf
                         ? kMaxRings
-                        : static_cast<int>(js::min(kMaxRings, std::ceil(within / kCell) + 1));
+                        : static_cast<int>(num::min(kMaxRings, std::ceil(within / kCell) + 1));
   for (int ring = 0; ring <= rings; ring++) {
     for (int dc = -ring; dc <= ring; dc++) {
       const bool edge = dc == -ring || dc == ring;
@@ -123,7 +122,8 @@ TrackPoint track_point_at(const Track& track, double s) {
   const auto n = static_cast<double>(points.size());
   const double u = s <= 0 ? 0 : s >= length ? length : s;
   // Stations are evenly spaced, so the guess is nearly always the answer.
-  size_t i = static_cast<size_t>(js::min(n - 2, js::max(0.0, std::floor((u / length) * (n - 1)))));
+  size_t i =
+      static_cast<size_t>(num::min(n - 2, num::max(0.0, std::floor((u / length) * (n - 1)))));
   while (i > 0 && points[i].s > u) i--;
   while (double(i) < n - 2 && points[i + 1].s <= u) i++;
   const TrackPoint& a = points[i];

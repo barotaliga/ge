@@ -1,8 +1,7 @@
-// Port of game5 `engine/mapgen/track.ts`.
+// The definitions behind track.hpp.
 //
 // ge:summary The piste's walk, grading and corridor stamp
-// ge:keywords track drawPiste gradePiste stampCorridor bendRoom
-// ge:oracle game5/engine/mapgen/track.ts
+// ge:keywords track
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #include "mountain/mapgen/track.hpp"
@@ -11,17 +10,17 @@
 #include <limits>
 #include <unordered_map>
 
-#include "core/js.hpp"
-#include "core/js_text.hpp"
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "core/noise.hpp"
+#include "core/num.hpp"
+#include "core/num_text.hpp"
 #include "mountain/mapgen/berm.hpp"
 #include "mountain/mapgen/spawn.hpp"
 
 namespace ge::mountain::mapgen {
 
-namespace js = ge::core::js;
+namespace num = ge::core::num;
 namespace libm = ge::core::libm;
 namespace R = rules;
 using ge::core::angle_diff;
@@ -108,7 +107,7 @@ double steer(const ge::core::Heightfield& ground, double x, double z, double wan
     // A traverse: at least this far off the fall line to hold the grade.
     const double theta = libm::acos(steepest / grade);
     const double off = angle_diff(down, want);
-    const double side = std::abs(off) < 1e-6 ? (bend >= 0 ? 1 : -1) : js::sign(off);
+    const double side = std::abs(off) < 1e-6 ? (bend >= 0 ? 1 : -1) : num::sign(off);
     if (std::abs(off) < theta) return down + side * theta;
     return want;
   }
@@ -157,7 +156,7 @@ double radius_at(const std::vector<TrackPoint>& pts, size_t i, size_t k) {
 }
 
 size_t turn_k() {
-  return static_cast<size_t>(js::max(1.0, js::round(R::track::turn_window / 2 / R::track::step)));
+  return static_cast<size_t>(num::max(1.0, num::round(R::track::turn_window / 2 / R::track::step)));
 }
 
 // One box-blur pass down an open profile, half-window k: carried on at its own grade above the
@@ -215,7 +214,7 @@ std::variant<Piste, std::string> draw_piste(ge::core::Rng& rng, const TerrainPla
   const double z_end = size * T::finish_z;
   const double edge = R::mountain::flank::inner - 120;
   const auto most = static_cast<size_t>(std::ceil((T::length.max + 100) / step));
-  const auto straight = static_cast<size_t>(js::round(T::finish / step));
+  const auto straight = static_cast<size_t>(num::round(T::finish / step));
   std::vector<double> cross(most + straight + 2, 0.0);
   // R7 — the width at a station: the noise's wander inside the grade's band, narrowed where
   // the untouched face falls steeply across the line; and the cross-slope, kept for the camber.
@@ -235,7 +234,7 @@ std::variant<Piste, std::string> draw_piste(ge::core::Rng& rng, const TerrainPla
   // R6 — the turn a step may make, rad: the least radius the pitch allows, or the bench
   // radius of a wide piste, whichever is wider.
   const auto turn_for = [&](double width, double grade) {
-    return (step / js::max(bend_floor(grade), width / 2 + T::shoulder_flat + R::berm::width + 4)) *
+    return (step / num::max(bend_floor(grade), width / 2 + T::shoulder_flat + R::berm::width + 4)) *
            0.85;
   };
   // The pitch under the walk: the raw ground's fall along the heading, ahead and behind.
@@ -245,7 +244,7 @@ std::variant<Piste, std::string> draw_piste(ge::core::Rng& rng, const TerrainPla
     const double here = sample_field(ground, px, pz);
     const double ahead = (here - sample_field(ground, px + dx, pz + dz)) / kBendPitch;
     const double behind = (sample_field(ground, px - dx, pz - dz) - here) / kBendPitch;
-    return js::max(ahead, behind);
+    return num::max(ahead, behind);
   };
   double x = start.x;
   double z = start.z;
@@ -264,10 +263,10 @@ std::variant<Piste, std::string> draw_piste(ge::core::Rng& rng, const TerrainPla
       const double vary =
           1 + T::wander_vary * (ge::core::value_noise(s, 0, 500, bend_seed) * 2 - 1);
       phase += (kTau * step) / (period * vary);
-      const double need = clamp((z_end - z) / js::max(step, aim - s), 0.25, 1);
+      const double need = clamp((z_end - z) / num::max(step, aim - s), 0.25, 1);
       const double a = amplitude_for(need);
       const double wave = libm::sin(phase);
-      double bend = a * js::sign(wave) * libm::pow(std::abs(wave), kWaveShape);
+      double bend = a * num::sign(wave) * libm::pow(std::abs(wave), kWaveShape);
       // THE SWEEPS, eased into and out of.
       for (const Sweep& sw : sweeps) {
         const double into = s - sw.at;
@@ -281,7 +280,7 @@ std::variant<Piste, std::string> draw_piste(ge::core::Rng& rng, const TerrainPla
       // THE FACE: turned back from the side ridges.
       const double across = x - size / 2;
       const double away = smoothstep(edge, edge + 120, std::abs(across));
-      bend = bend * (1 - away) + -js::sign(across) * 0.8 * away;
+      bend = bend * (1 - away) + -num::sign(across) * 0.8 * away;
       want = clamp(steer(ground, x, z, bend, bend, G.track.steepest), -T::swing, T::swing);
     }
     const double max_turn = turn_for(points.back().width, pitch_at(x, z, h) * G.track.pitch);
@@ -308,7 +307,7 @@ std::variant<Piste, std::string> draw_piste(ge::core::Rng& rng, const TerrainPla
   }
   const double length = s;
   if (length < G.track.length.min || length > G.track.length.max) {
-    return "the piste comes out " + js::to_fixed(length, 0) + " m long";
+    return "the piste comes out " + num::to_fixed(length, 0) + " m long";
   }
   smooth_walk(points, start);
   const size_t walked = points.size() - straight - 1;
@@ -320,7 +319,7 @@ std::variant<Piste, std::string> draw_piste(ge::core::Rng& rng, const TerrainPla
   }
   // R8 — the camber varies slowly down the piste: a running mean of the cross-fall over the
   // camber window, so the corridor's edges do not corrugate.
-  const auto cw = static_cast<long>(js::round(kCamberWindow / step));
+  const auto cw = static_cast<long>(num::round(kCamberWindow / step));
   const size_t n = points.size();
   const std::vector<double> raw_cross(cross.begin(), cross.begin() + long(n));
   for (long i = 0; i < long(n); i++) {
@@ -340,14 +339,14 @@ std::variant<Piste, std::string> draw_piste(ge::core::Rng& rng, const TerrainPla
   const BendReading bend = tightest_bend(
       piste.track, [&](size_t i) { return sample_field(ground, pts[i].x, pts[i].z); });
   if (bend.radius < bend.floor) {
-    return "a bend tightens to " + js::to_fixed(bend.radius, 0) + " m on a " +
-           js::to_fixed(bend.grade * 100, 0) + " % pitch";
+    return "a bend tightens to " + num::to_fixed(bend.radius, 0) + " m on a " +
+           num::to_fixed(bend.grade * 100, 0) + " % pitch";
   }
   const double room = bend_room(piste.track);
-  if (room < 0) return "a bend folds the inside bench by " + js::to_fixed(-room, 0) + " m";
+  if (room < 0) return "a bend folds the inside bench by " + num::to_fixed(-room, 0) + " m";
   const double gap = min_separation(piste.track);
   if (gap < T::separation_plan) {
-    return "two stretches of the piste pass " + js::to_fixed(gap, 0) + " m apart";
+    return "two stretches of the piste pass " + num::to_fixed(gap, 0) + " m apart";
   }
   // R1, R2 — the whole corridor, bank and all, stays on the map and on the face.
   const double reach = T::width.max / 2 + T::shoulder_flat + R::berm::width + T::bank_max + 10;
@@ -390,7 +389,7 @@ BendReading tightest_bend(const Track& track, const std::function<double(size_t)
   const size_t n = pts.size();
   const double step = R::track::step;
   const size_t k = turn_k();
-  const auto m = static_cast<size_t>(js::max(1.0, js::round(kBendPitch / step)));
+  const auto m = static_cast<size_t>(num::max(1.0, num::round(kBendPitch / step)));
   BendReading worst{kInf, R::track::min_radius, 0, 0};
   double ratio = kInf;
   for (size_t i = k; i + k < n; i++) {
@@ -398,7 +397,7 @@ BendReading tightest_bend(const Track& track, const std::function<double(size_t)
     if (r == kInf) continue;
     const size_t a = i >= m ? i - m : 0;
     const size_t b = std::min(n - 1, i + m);
-    const double grade = (y_at(a) - y_at(b)) / js::max(step, pts[b].s - pts[a].s);
+    const double grade = (y_at(a) - y_at(b)) / num::max(step, pts[b].s - pts[a].s);
     const double floor = bend_floor(grade);
     if (r / floor < ratio) {
       ratio = r / floor;
@@ -463,7 +462,7 @@ double min_separation(const Track& track) {
 WindowGrades window_grades(const std::vector<double>& y, double step,
                            const std::vector<uint8_t>& skip) {
   const size_t n = y.size();
-  const auto k = static_cast<size_t>(js::max(1.0, js::round(R::track::grade_window / step)));
+  const auto k = static_cast<size_t>(num::max(1.0, num::round(R::track::grade_window / step)));
   double steepest = -kInf;
   double gentlest = kInf;
   for (size_t i = 0; i + k < n; i++) {
@@ -489,47 +488,47 @@ std::optional<std::string> grade_piste(Piste& piste, const ge::core::Heightfield
   const double most = max_grade * 0.95 * step;
   // NEVER CLIMBS: the cut from above and the fill from below, and their mean.
   std::vector<double> cut(raw);
-  for (size_t i = 1; i < n; i++) cut[i] = js::min(raw[i], cut[i - 1] - least);
+  for (size_t i = 1; i < n; i++) cut[i] = num::min(raw[i], cut[i - 1] - least);
   std::vector<double> fill(raw);
-  for (size_t i = n - 1; i-- > 0;) fill[i] = js::max(raw[i], fill[i + 1] + least);
+  for (size_t i = n - 1; i-- > 0;) fill[i] = num::max(raw[i], fill[i + 1] + least);
   std::vector<double> y(n);
   for (size_t i = 0; i < n; i++) y[i] = (cut[i] + fill[i]) / 2;
   // NEVER STEEPER THAN THE RULE: the fill that holds every step from above and the cut that
   // holds it from below, and their mean — and on a graded map every colour window likewise.
   const size_t K =
-      colour ? static_cast<size_t>(js::max(1.0, js::round(T::colour_window / step))) : 0;
+      colour ? static_cast<size_t>(num::max(1.0, num::round(T::colour_window / step))) : 0;
   const double most_k = colour ? *colour * kColourMargin * double(K) * step : kInf;
   std::vector<double> held(y);
   for (size_t i = 1; i < n; i++) {
-    held[i] = js::max(held[i], held[i - 1] - most);
-    if (K > 0 && i >= K) held[i] = js::max(held[i], held[i - K] - most_k);
+    held[i] = num::max(held[i], held[i - 1] - most);
+    if (K > 0 && i >= K) held[i] = num::max(held[i], held[i - K] - most_k);
   }
   std::vector<double> shaved(y);
   for (size_t i = n - 1; i-- > 0;) {
-    shaved[i] = js::min(shaved[i], shaved[i + 1] + most);
-    if (K > 0 && i + K < n) shaved[i] = js::min(shaved[i], shaved[i + K] + most_k);
+    shaved[i] = num::min(shaved[i], shaved[i + 1] + most);
+    if (K > 0 && i + K < n) shaved[i] = num::min(shaved[i], shaved[i + K] + most_k);
   }
   for (size_t i = 0; i < n; i++) y[i] = (held[i] + shaved[i]) / 2;
   // THE FINISH STRAIGHT, flat, and the run-out eased into it.
-  const double flat_d = js::max(0.0, double(n) - 1 - js::round(T::finish / step));
+  const double flat_d = num::max(0.0, double(n) - 1 - num::round(T::finish / step));
   const auto flat = static_cast<size_t>(flat_d);
   for (size_t i = flat; i < n; i++) y[i] = y[flat];
-  const int k = static_cast<int>(js::round(12 / step));
+  const int k = static_cast<int>(num::round(12 / step));
   y = blur(blur(y, k), k);
-  const int ease = static_cast<int>(js::round(T::runout / (2 * step)));
+  const int ease = static_cast<int>(num::round(T::runout / (2 * step)));
   const std::vector<double> eased = blur(y, ease);
-  const double from = js::max(0.0, flat_d - js::round((T::runout + 12) / step));
+  const double from = num::max(0.0, flat_d - num::round((T::runout + 12) / step));
   for (size_t i = static_cast<size_t>(from); i < n; i++) {
-    const double w = smoothstep(from, js::min(double(n) - 1, from + ease), double(i));
+    const double w = smoothstep(from, num::min(double(n) - 1, from + ease), double(i));
     y[i] = y[i] + (eased[i] - y[i]) * w;
   }
   double deepest = 0;
   for (size_t i = 0; i < n; i++) {
     pts[i].y = y[i];
-    deepest = js::max(deepest, std::abs(y[i] - raw[i]));
+    deepest = num::max(deepest, std::abs(y[i] - raw[i]));
   }
   if (deepest > T::max_cut) {
-    return "the piste has to be cut " + js::to_fixed(deepest, 1) + " m into the mountain";
+    return "the piste has to be cut " + num::to_fixed(deepest, 1) + " m into the mountain";
   }
   return std::nullopt;
 }
@@ -561,7 +560,7 @@ Corridor stamp_corridor(const Piste& piste, ge::core::Heightfield& ground) {
     fz[i] = libm::cos(pts[i].heading);
     const TrackPoint& a = pts[i == 0 ? 0 : i - 1];
     const TrackPoint& b = pts[std::min(n - 1, i + 1)];
-    kappa[i] = angle_diff(a.heading, b.heading) / js::max(1e-9, b.s - a.s);
+    kappa[i] = angle_diff(a.heading, b.heading) / num::max(1e-9, b.s - a.s);
   }
   const double length = piste.track.length;
   // The graded line's height s m down it, carried on at its own grade off either end.
@@ -592,12 +591,12 @@ Corridor stamp_corridor(const Piste& piste, ge::core::Heightfield& ground) {
     const double dz = b.z - a.z;
     double len2 = dx * dx + dz * dz;
     if (len2 == 0) len2 = 1;  // `|| 1`
-    const int c0 = int(js::max(0.0, std::floor((js::min(a.x, b.x) - reach_max) / cell)));
+    const int c0 = int(num::max(0.0, std::floor((num::min(a.x, b.x) - reach_max) / cell)));
     const int c1 =
-        int(js::min(double(cols - 1), std::ceil((js::max(a.x, b.x) + reach_max) / cell)));
-    const int r0 = int(js::max(0.0, std::floor((js::min(a.z, b.z) - reach_max) / cell)));
+        int(num::min(double(cols - 1), std::ceil((num::max(a.x, b.x) + reach_max) / cell)));
+    const int r0 = int(num::max(0.0, std::floor((num::min(a.z, b.z) - reach_max) / cell)));
     const int r1 =
-        int(js::min(double(rows - 1), std::ceil((js::max(a.z, b.z) + reach_max) / cell)));
+        int(num::min(double(rows - 1), std::ceil((num::max(a.z, b.z) + reach_max) / cell)));
     for (int r = r0; r <= r1; r++) {
       const double z = r * cell;
       for (int c = c0; c <= c1; c++) {
@@ -633,7 +632,8 @@ Corridor stamp_corridor(const Piste& piste, ge::core::Heightfield& ground) {
     const double toe = hw + T::shoulder_flat;
     const double flat = toe + R::berm::width;
     const double delta = double(target[o]) - double(g[o]);
-    const double bank = js::min(T::bank_max, js::max(T::bank_min, std::abs(delta) / T::bank_slope));
+    const double bank =
+        num::min(T::bank_max, num::max(T::bank_min, std::abs(delta) / T::bank_slope));
     const double w = d <= flat ? 1 : 1 - smoothstep(flat, flat + bank, d);
     g[o] = static_cast<float>(g[o] + w * delta);
     if (d > toe && d < flat) {

@@ -1,14 +1,12 @@
-// DETERMINISTIC 2D VALUE NOISE. Port of oss-game-framework `src/core/noise.ts`, bit for bit.
-// Everything spatial in game5 that must agree across modules (the terrain's shape and colour,
+// DETERMINISTIC 2D VALUE NOISE. Everything spatial in a simulation that must agree across
+// modules (the terrain's shape and colour,
 // what grows where, the ground a physics step rides) and every per-tick coin a step flips
 // without touching the Rng (`hash2(tick, k, seed)`) comes from here.
-// `tiledValueNoise` is not ported: game5 calls it nowhere.
-// Parity: tests/core_noise_test.cpp against tests/golden/core_noise.txt.
+// Bits: tests/core_noise_test.cpp against tests/golden/core_noise.txt.
 //
 // ge:summary Deterministic 2D value noise, the lattice hash and the cached noise field
-// ge:keywords noise value-noise hash hash2 lattice octaves fbm smooth valueNoise noiseField
-// ge:keywords sampleNoise terrain
-// ge:oracle oss-game-framework/src/core/noise.ts
+// ge:keywords noise value-noise hash hash2 lattice octaves fbm smooth
+// ge:keywords terrain
 // ge:skill determinism
 // ge:test tests/core_noise_test.cpp
 #pragma once
@@ -17,18 +15,18 @@
 #include <cstdint>
 #include <limits>
 
-#include "core/js.hpp"
+#include "core/num.hpp"
 
 namespace ge::core {
 
-// Deterministic lattice hash in [0, 1). JS sums the three products in DOUBLE before `| 0`
-// (`seed * 2246822519` passes 2^53 for a large seed and rounds), so the sum stays in double
-// here too, left to right; only then does it become 32 bits. Arguments are doubles because
-// game5 passes floored doubles, `| 0` words and plain uint32 seeds alike.
+// Deterministic lattice hash in [0, 1). The three products are summed in DOUBLE, left to
+// right (`seed * 2246822519` passes 2^53 for a large seed and rounds, and that rounding is
+// part of the hash); only then does the sum become 32 bits. Arguments are doubles because
+// callers pass floored doubles, int32 words and plain uint32 seeds alike.
 inline double hash2(double ix, double iz, double seed) {
-  uint32_t h = js::to_uint32(ix * 374761393.0 + iz * 668265263.0 + seed * 2246822519.0);
-  // `Math.imul(h ^ (h >>> 13), 1274126177)` and `(h ^ (h >>> 16)) >>> 0`: the low 32 bits of
-  // uint32 arithmetic are the same word as JS's int32 ones.
+  uint32_t h = num::to_uint32(ix * 374761393.0 + iz * 668265263.0 + seed * 2246822519.0);
+  // The mixing multiplies keep the low 32 bits of the product, so unsigned arithmetic (which
+  // wraps, where signed overflow is UB) gives the word.
   h = (h ^ (h >> 13)) * 1274126177u;
   return static_cast<double>(h ^ (h >> 16)) / 4294967296.0;
 }

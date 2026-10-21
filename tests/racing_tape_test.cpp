@@ -1,9 +1,8 @@
-// plugins/racing/tape against the TypeScript oracle (tests/golden/racing_tape_*.txt and
-// racing_ghost.txt, written by tools/parity/golden-racing.mjs). The ghost is game5's own
-// recorder on a bot lap: it must decode, read back and re-encode byte for byte (M3's exit).
+// plugins/racing/tape against tests/golden/racing_tape_*.txt and racing_ghost.txt. The ghost is
+// a stored tape of a bot lap: it must decode, read back and re-encode byte for byte (M3's exit).
 //
-// ge:summary Parity test: racing/tape and game5's own ghost, byte for byte
-// ge:keywords test parity golden tape ghost
+// ge:summary Golden test: racing/tape and a stored ghost, byte for byte
+// ge:keywords test golden tape ghost
 // ge:skill testing racing
 #include "racing/tape.hpp"
 
@@ -21,7 +20,7 @@ namespace {
 
 r::AxisKind kind_of(uint64_t k) { return static_cast<r::AxisKind>(k); }
 
-// game5's ghost layout (pwa/src/game/ghost.ts `TAPE`), in its key order.
+// Fall Line's ghost layout, in its stored key order.
 constexpr std::array<r::TapeAxis, 5> kGhost{{{"steer", r::AxisKind::Signed},
                                              {"lean", r::AxisKind::Signed},
                                              {"tuck", r::AxisKind::Lever},
@@ -30,7 +29,7 @@ constexpr std::array<r::TapeAxis, 5> kGhost{{{"steer", r::AxisKind::Signed},
 
 }  // namespace
 
-TEST(axis_snap_and_bytes_match_oracle) {
+TEST(axis_snap_and_bytes_match_golden) {
   const auto rows = ge::test::golden_rows("tests/golden/racing_tape_axis.txt");
   CHECK(rows.size() > 3000);
   for (const auto& row : rows) {
@@ -39,7 +38,7 @@ TEST(axis_snap_and_bytes_match_oracle) {
     const double v = as_double(row[1]);
     const double js_byte = as_double(row[3]);
     const auto u8 = static_cast<uint8_t>(as_double(row[4]));
-    CHECK_JS_BITS(r::snap_axis(v, kind), as_double(row[2]));
+    CHECK_BITS_ANY_NAN(r::snap_axis(v, kind), as_double(row[2]));
     CHECK_BITS(r::snap_axis(r::snap_axis(v, kind), kind), r::snap_axis(v, kind));
     CHECK(r::axis_to_byte(v, kind) == u8);
     CHECK(r::axis_is_nan(v, kind) == (js_byte != js_byte));
@@ -47,7 +46,7 @@ TEST(axis_snap_and_bytes_match_oracle) {
   }
 }
 
-TEST(streams_encode_and_decode_like_oracle) {
+TEST(streams_encode_and_decode_like_golden) {
   const auto rows = ge::test::golden_words("tests/golden/racing_tape_stream.txt");
   int enc = 0, dec = 0;
   for (const auto& row : rows) {
@@ -82,14 +81,14 @@ TEST(streams_encode_and_decode_like_oracle) {
   CHECK(enc == 66 && dec == 63);
 }
 
-TEST(game5_ghost_decodes_and_reencodes_byte_for_byte) {
+TEST(stored_ghost_decodes_and_reencodes_byte_for_byte) {
   const auto rows = ge::test::golden_words("tests/golden/racing_ghost.txt");
   CHECK(rows.size() > 400 && rows[0][0] == "tape" && rows[0].size() == 7);
   r::ControlTape tape;
   tape.steps = std::stoi(rows[0][1]);
   for (size_t k = 0; k < kGhost.size(); k++) tape.streams.push_back(rows[0][2 + k]);
 
-  // Every sample the oracle's reader gave, and the steps it refused.
+  // Every sample the golden's reader gave, and the steps it refused.
   const r::TapeReader reader(tape, kGhost);
   CHECK(reader.steps() == tape.steps);
   std::array<double, 5> got{};
@@ -123,7 +122,7 @@ TEST(game5_ghost_decodes_and_reencodes_byte_for_byte) {
   }
 }
 
-TEST(fingerprints_match_oracle) {
+TEST(fingerprints_match_golden) {
   const auto rows = ge::test::golden_rows("tests/golden/racing_fingerprint.txt");
   CHECK(rows.size() == 63);
   for (const auto& row : rows) {

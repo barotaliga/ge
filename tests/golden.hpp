@@ -1,9 +1,9 @@
 // Reads a tests/golden/*.txt file: one row per line, whitespace-separated
 // hex words (IEEE 754 bit patterns or plain hex integers), or words of text (golden_words). Lines
-// starting with '#' are provenance (which Node wrote the file) and are skipped.
+// starting with '#' are provenance (the environment that wrote the file) and are skipped.
 //
 // ge:summary Reads tests/golden/*.txt rows of hex words or text
-// ge:keywords test golden fixture parity hex reader
+// ge:keywords test golden fixture hex reader
 // ge:skill testing
 #pragma once
 

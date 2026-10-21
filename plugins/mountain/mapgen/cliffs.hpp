@@ -1,5 +1,4 @@
-// R22 — THE CLIFFS: an edge a skier drops off into the lower ground below. Port of game5
-// `engine/mapgen/cliffs.ts`.
+// R22 — THE CLIFFS: an edge a skier drops off into the lower ground below.
 //
 // A cliff is a profile along the way a skier goes over it, like a kicker's but taking the
 // ground away: a SHELF climbing out of the country (smoothstepped, so the skier leaves the edge
@@ -7,11 +6,10 @@
 // falling away the way he is going, so a drop is landed onto a slope. Each faces down the fall
 // line. Dealt off a stream of their own (the attempt's sub-seed, salted): they move the ground
 // the forest then grows on and nothing else the map draws.
-// Parity: through tests/mountain_generate_test.cpp (`cliffs`, `ground`).
+// Held by tests/mountain_generate_test.cpp (`cliffs`, `ground`).
 //
 // ge:summary R22 cliffs off the piste: their profile, footprint, laying and stamp
-// ge:keywords cliff cliffs cliffProfile cliffFootprint onCliff layCliffs stampCliff
-// ge:oracle game5/engine/mapgen/cliffs.ts
+// ge:keywords cliff cliffs
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #pragma once

@@ -15,8 +15,7 @@ be swapped in. The web build uses Emscripten's emdawnwebgpu.
   on destruction. No abstraction over WebGPU's model: an agent reading the WebGPU
   spec should recognise every call.
 - Device creation asks for the adapter's own limits and turns on the optional features
-  it has (`timestamp-query`, `shader-f16`, `float32-filterable`), following game5's
-  `gpu-device.ts`.
+  it has (`timestamp-query`, `shader-f16`, `float32-filterable`).
 - One frame = acquire the surface texture, one command encoder, the passes in fixed
   order, submit, present.
 - Timestamp queries per pass feed the `perf` skill's GPU numbers.
@@ -25,8 +24,9 @@ be swapped in. The web build uses Emscripten's emdawnwebgpu.
 
 - WGSL, one file per pass under the pass's directory (`*.wgsl`), embedded at build time
   as a string by a CMake step. No runtime file reads.
-- game5's TSL/GLSL is the oracle for the look. Port the maths and keep the names. Every
-  hand-written shader works in linear light and converts at the end, as game5's do.
+- Every shader works in linear light and converts to the output colour space at the
+  end. While porting, `porting/subsystems.md` § gpu says where each look's maths comes
+  from.
 
 ## Rules
 

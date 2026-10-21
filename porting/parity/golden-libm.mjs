@@ -5,7 +5,7 @@
 //   make golden-libm NODE=/path/to/node24
 //
 // It must run under game5's pinned Node major (../game5/.nvmrc, 24): V8's Math functions
-// changed between majors (docs/research.md section 2). Math.pow in Node 24 is the HOST libm,
+// changed between majors (porting/research.md section 2). Math.pow in Node 24 is the HOST libm,
 // so the tables must also come from game5's reference platform: Linux x86-64 with glibc. The
 // script refuses anything else rather than writing tables the engine should not match.
 //

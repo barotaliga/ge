@@ -1,16 +1,14 @@
 // LEVEL ANALYSIS — the generator's scoreboard, and its gate: re-check a FINISHED map against
-// the rule book, rule by rule, reading only what the `Level` publishes. Port of the single
-// piste's half of game5 `engine/analysis/index.ts` (the resort's branches, R25–R28, and the
-// terrain park's, R20, arrive with docs/goals.md M4b–M4c; the `stats` block arrives with the
-// analyze CLI that prints it).
+// the rule book, rule by rule, reading only what the `Level` publishes. The single piste's
+// checks so far (the resort's, R25–R28, and the terrain park's, R20, arrive with
+// docs/goals.md M4b–M4c; the `stats` block arrives with the analyze CLI that prints it).
 //
-// Every message is the oracle's, to the character: `generate_level` writes the rejected
+// Every message's text is fixed, to the character: `generate_level` writes the rejected
 // attempts' findings into its debug line, and the golden table holds that line.
-// Parity: tests/mountain_generate_test.cpp (`findings`, and the `log` of seeds 20 and 50).
+// Bits: tests/mountain_generate_test.cpp (`findings`, and the `log` of seeds 20 and 50).
 //
-// ge:summary Level analysis: analyzeLevel, the rule book re-checked on a finished map
-// ge:keywords analysis analyzeLevel finding findings severity rule-check
-// ge:oracle game5/engine/analysis/index.ts
+// ge:summary Level analysis: analyze_level, the rule book re-checked on a finished map
+// ge:keywords analysis finding findings severity rule-check
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #pragma once
@@ -19,7 +17,7 @@
 #include <string>
 #include <vector>
 
-#include "core/js_text.hpp"
+#include "core/num_text.hpp"
 #include "mountain/mapgen/rules.hpp"
 #include "mountain/mapgen/types.hpp"
 
@@ -38,15 +36,15 @@ struct LevelAnalysis {
   std::vector<Finding> findings;
 };
 
-// How a check files a finding (the oracle's `add`).
+// How a check files a finding.
 using Add = std::function<void(const char* rule, Severity severity, std::string message)>;
 
-// The messages' numbers as the oracle writes them: `v.toFixed(digits)`, `${v}`, and a band as
-// `${b.min}–${b.max}${unit}`.
-inline std::string fmt(double v, int digits = 1) { return ge::core::js::to_fixed(v, digits); }
-inline std::string num(double v) { return ge::core::js::to_string(v); }
+// The messages' numbers: fixed to `digits` decimals, the shortest round-trip, and a band as
+// "<min>–<max><unit>".
+inline std::string fmt(double v, int digits = 1) { return ge::core::num::to_fixed(v, digits); }
+inline std::string str(double v) { return ge::core::num::to_string(v); }
 inline std::string band_text(mapgen::Band b, const char* unit = "") {
-  return num(b.min) + "\u2013" + num(b.max) + unit;
+  return str(b.min) + "\u2013" + str(b.max) + unit;
 }
 
 // Re-check a finished single-piste level against the rule book.

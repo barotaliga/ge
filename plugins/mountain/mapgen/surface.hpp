@@ -1,13 +1,11 @@
 // R21 — THE REGION'S OWN SNOW: the wind crust, laid only where a region's row asks for it, off
 // a stream of its own, over broad patches of slow noise and over every crest a few metres
-// proud of the ground round it. Port of game5 `engine/mapgen/surface.ts`. It never reaches the
-// piste: it is folded into the packed field only past `kClear` m of the centreline, so R10
-// holds.
-// Parity: through tests/mountain_generate_test.cpp (`crust`, `packed` on the fell and continental).
+// proud of the ground round it. It never reaches the piste: it is folded into the packed field only
+// past `kClear` m of the centreline, so R10 holds. Held by tests/mountain_generate_test.cpp
+// (`crust`, `packed` on the fell and continental).
 //
 // ge:summary R21 the wind crust: laid off its own stream, folded into the packed field
-// ge:keywords surface crust wind-crust layCrust foldSurface
-// ge:oracle game5/engine/mapgen/surface.ts
+// ge:keywords surface crust wind-crust
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #pragma once

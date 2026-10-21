@@ -1,10 +1,9 @@
 // R5 — DOES THE PISTE CROSS ITSELF: every pair of non-adjacent segments tested for a proper
-// intersection, off a 16 m spatial hash. Port of game5 `engine/analysis/crossings.ts`.
-// Parity: through tests/mountain_generate_test.cpp (`findings`).
+// intersection, off a 16 m spatial hash.
+// Held by tests/mountain_generate_test.cpp (`findings`).
 //
 // ge:summary R5 whether the piste crosses itself
-// ge:keywords analysis selfCrossings crossing
-// ge:oracle game5/engine/analysis/crossings.ts
+// ge:keywords analysis crossing
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #pragma once

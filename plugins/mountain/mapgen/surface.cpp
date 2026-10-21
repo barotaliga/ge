@@ -1,20 +1,19 @@
-// Port of game5 `engine/mapgen/surface.ts`.
+// The definitions behind surface.hpp.
 //
-// ge:summary The crust's blur, patches and fold, float32 like the oracle's grids
-// ge:keywords surface crust layCrust foldSurface blur
-// ge:oracle game5/engine/mapgen/surface.ts
+// ge:summary The crust's blur, patches and fold, on float32 grids
+// ge:keywords surface crust blur
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #include "mountain/mapgen/surface.hpp"
 
-#include "core/js.hpp"
 #include "core/math.hpp"
 #include "core/noise.hpp"
+#include "core/num.hpp"
 #include "core/prng.hpp"
 
 namespace ge::mountain::mapgen {
 
-namespace js = ge::core::js;
+namespace num = ge::core::num;
 using ge::core::smoothstep;
 
 namespace {
@@ -25,7 +24,7 @@ constexpr uint32_t kCrustSalt = 0x0c2057a1;
 constexpr double kEase = 10;
 
 // One box pass along a line of n values `stride` apart, `radius` either way, as a running sum
-// in double (the oracle's JS number) stored back as float.
+// in double, stored back as float.
 void box_line(const std::vector<float>& src, std::vector<float>& dst, size_t start, size_t stride,
               int n, int radius) {
   double sum = 0;
@@ -73,7 +72,7 @@ std::optional<ge::core::Heightfield> lay_crust(uint32_t sub, const Region& regio
   const double cell = ground.cell;
   // What stands proud of the country within fifty metres of it is what the wind scours.
   const std::vector<float> around =
-      blur(ground.data, cols, rows, static_cast<int>(js::round(12 / cell)) * 2);
+      blur(ground.data, cols, rows, static_cast<int>(num::round(12 / cell)) * 2);
   ge::core::Heightfield crust =
       ge::core::create_heightfield(ground.origin_x, ground.origin_z, cell, cols, rows);
   const double edge = 1 - spec.cover;
@@ -87,7 +86,7 @@ std::optional<ge::core::Heightfield> lay_crust(uint32_t sub, const Region& regio
       const double patch = smoothstep(edge - 0.08, edge + 0.08, n);
       const double proud =
           smoothstep(0.4, 3.5, double(ground.data[o]) - double(around[o])) * spec.exposed;
-      crust.data[o] = static_cast<float>(js::max(patch, proud));
+      crust.data[o] = static_cast<float>(num::max(patch, proud));
     }
   }
   return crust;
@@ -101,7 +100,7 @@ void fold_surface(ge::core::Heightfield& packed, const std::vector<float>& dist,
   for (size_t o = 0; o < packed.data.size(); o++) {
     const double m = smoothstep(kClear, kClear + kEase, dist[o]);
     k[o] = static_cast<float>(k[o] * m);
-    p[o] = static_cast<float>(js::max(double(p[o]), k[o] * support));
+    p[o] = static_cast<float>(num::max(double(p[o]), k[o] * support));
   }
 }
 

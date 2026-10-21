@@ -1,8 +1,7 @@
-// Port of game5 `engine/mapgen/kickers.ts`.
+// The definitions behind kickers.hpp.
 //
 // ge:summary Places and stamps the kickers on the piste and off it
-// ge:keywords kicker layTrackKickers layOffKickers stampKicker
-// ge:oracle game5/engine/mapgen/kickers.ts
+// ge:keywords kicker
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #include "mountain/mapgen/kickers.hpp"
@@ -11,16 +10,16 @@
 #include <cmath>
 #include <string>
 
-#include "core/js.hpp"
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
+#include "core/num.hpp"
 #include "mountain/mapgen/query.hpp"
 #include "mountain/mapgen/regions.hpp"
 #include "mountain/mapgen/spawn.hpp"
 
 namespace ge::mountain::mapgen {
 
-namespace js = ge::core::js;
+namespace num = ge::core::num;
 namespace libm = ge::core::libm;
 namespace R = rules;
 using ge::core::angle_diff;
@@ -74,8 +73,8 @@ std::vector<TrackKicker> lay_track_kickers(ge::core::Rng& rng, Piste& piste, con
       static_cast<long>(std::ceil((R::grid::back + step + R::spawn::kicker_gap) / step));
   const long last =
       n - 1 - static_cast<long>(std::ceil((R::track::finish + R::track::runout + landing) / step));
-  const auto ramp_steps = static_cast<long>(js::round(ramp / step));
-  const auto landing_steps = static_cast<long>(js::round(landing / step));
+  const auto ramp_steps = static_cast<long>(num::round(ramp / step));
+  const auto landing_steps = static_cast<long>(num::round(landing / step));
   for (long i = first; i < last; i += 2) {
     if (i - back < 0 || i + ahead >= n) continue;
     // A roll: the line comes down to the lip gently and falls away past it at least as steeply,
@@ -175,7 +174,7 @@ std::vector<Kicker> lay_off_kickers(ge::core::Rng& rng, const TerrainPlan& plan,
     const double ramp = in_band(rng, K::ramp);
     const double landing = in_band(rng, K::landing);
     const double width = in_band(rng, K::width);
-    const double reach = js::max(ramp, landing) + width / 2 + R::kickers::edge;
+    const double reach = num::max(ramp, landing) + width / 2 + R::kickers::edge;
     if (flank_at(plan, x, z) > 0.02 || descent_at(plan, z) > 1) continue;
     // Down the fall line, on ground a lip can be shaped on …
     const ge::core::FieldSlope g = ge::core::field_gradient(ground, x, z);
@@ -191,7 +190,7 @@ std::vector<Kicker> lay_off_kickers(ge::core::Rng& rng, const TerrainPlan& plan,
     if (distance - reach < R::track::width.max / 2 + K::clearance) continue;
     bool crowded = false;
     for (const Kicker& k : out) {
-      if (hypot(k.x - x, k.z - z) < reach + js::max(k.ramp, k.landing) + 20) crowded = true;
+      if (hypot(k.x - x, k.z - z) < reach + num::max(k.ramp, k.landing) + 20) crowded = true;
     }
     if (crowded) continue;
     const double y0 = sample_field(ground, x, z);
@@ -209,12 +208,12 @@ void stamp_kicker(ge::core::Heightfield& ground, double x, double z, double head
   const double fx = libm::sin(heading);
   const double fz = libm::cos(heading);
   const double edge = R::kickers::edge;
-  const double reach = js::max(ramp, landing) + width / 2 + edge;
+  const double reach = num::max(ramp, landing) + width / 2 + edge;
   const double cell = ground.cell;
-  const int c0 = int(js::max(0.0, std::floor((x - reach) / cell)));
-  const int c1 = int(js::min(double(ground.cols - 1), std::ceil((x + reach) / cell)));
-  const int r0 = int(js::max(0.0, std::floor((z - reach) / cell)));
-  const int r1 = int(js::min(double(ground.rows - 1), std::ceil((z + reach) / cell)));
+  const int c0 = int(num::max(0.0, std::floor((x - reach) / cell)));
+  const int c1 = int(num::min(double(ground.cols - 1), std::ceil((x + reach) / cell)));
+  const int r0 = int(num::max(0.0, std::floor((z - reach) / cell)));
+  const int r1 = int(num::min(double(ground.rows - 1), std::ceil((z + reach) / cell)));
   for (int r = r0; r <= r1; r++) {
     for (int c = c0; c <= c1; c++) {
       const double dx = c * cell - x;

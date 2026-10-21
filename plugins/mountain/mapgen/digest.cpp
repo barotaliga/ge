@@ -1,8 +1,7 @@
-// Port of game5 `engine/mapgen/digest.ts`.
+// The definitions behind digest.hpp.
 //
-// ge:summary levelDigest's mixing order, word for word with the oracle
-// ge:keywords digest fnv levelDigest
-// ge:oracle game5/engine/mapgen/digest.ts
+// ge:summary level_digest's mixing order, word for word
+// ge:keywords digest fnv
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #include "mountain/mapgen/digest.hpp"
@@ -10,14 +9,14 @@
 #include <cstdio>
 #include <string_view>
 
-#include "core/js.hpp"
+#include "core/num.hpp"
 #include "mountain/mapgen/grades.hpp"
 #include "mountain/mapgen/regions.hpp"
 #include "mountain/mapgen/weather.hpp"
 
 namespace ge::mountain::mapgen {
 
-namespace js = ge::core::js;
+namespace num = ge::core::num;
 
 namespace {
 
@@ -29,7 +28,7 @@ struct Fnv {
   void byte(uint32_t b) { hash = (hash ^ (b & 0xffu)) * 0x01000193u; }
   // Four bytes of the centimetre-rounded value.
   void mix(double v) {
-    const auto n = static_cast<uint32_t>(js::to_int32(js::round(v * 100)));
+    const auto n = static_cast<uint32_t>(num::to_int32(num::round(v * 100)));
     for (int shift = 0; shift < 32; shift += 8) byte(n >> shift);
   }
   void word(std::string_view s) {

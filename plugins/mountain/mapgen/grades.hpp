@@ -1,17 +1,16 @@
 // R23 — THE PISTE GRADES: how hard a run is, as the colour on its signs, and what building one
-// to that colour asks of the mountain under it. Port of game5 `engine/mapgen/grades.ts` (the
-// rows, `pisteGradeOf`, `steepestSpan`, `verticalBand`; `dealGrade` and `scaledRow`
-// arrive with the ski area, M4b).
+// to that colour asks of the mountain under it (the rows, the colour a piste measures as, its
+// steepest span, its vertical band; dealing a grade and scaling a row arrive with the ski
+// area, M4b).
 //
 // A grade is a ROW, like a region, and the generator builds to it. THE UNGRADED ROW is the
 // generator before there were grades: every number the rule book's own, drawn in the same
-// order off the same stream and no drop laid, so a version-1 map (`singlePiste`) is exactly
+// order off the same stream and no drop laid, so a version-1 map (`single_piste`) is exactly
 // the map it was. Its colour is only ever measured, never built to.
-// Parity: through tests/mountain_generate_test.cpp.
+// Held by tests/mountain_generate_test.cpp.
 //
 // ge:summary R23 the piste grades: the ungraded row and the four colours
-// ge:keywords grade grades GRADES UNGRADED gradeRow pisteGradeOf steepestSpan verticalBand
-// ge:oracle game5/engine/mapgen/grades.ts
+// ge:keywords grade grades
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #pragma once
@@ -35,7 +34,7 @@ struct ProfileShape {
 };
 
 // One grade's row: everything R23 lets a colour change. Comments on each block are the
-// oracle's `GradeRow`.
+// grade's row.
 struct GradeRow {
   std::optional<PisteGrade> id;  // none on the UNGRADED row
   Band steepest;                 // R23: the band the steepest colour window must fall in, m per m
@@ -78,7 +77,7 @@ extern const GradeRow kUngraded;
 // Every grade's row, in PisteGrade order.
 const GradeRow& grade_row(std::optional<PisteGrade> id);
 
-// The colour's name as the oracle spells it ("green", …): the digest mixes it in.
+// The colour's name ("green", …): the digest mixes it in, so the spelling is fixed.
 const char* grade_name(PisteGrade grade);
 
 // R8, R23 — the colour a piste whose steepest colour window falls at `steepest` m per m is
@@ -86,7 +85,7 @@ const char* grade_name(PisteGrade grade);
 PisteGrade piste_grade_of(double steepest);
 
 // The steepest `track.colour_window` of a piste, m per m, kickers and drops included but a
-// terrain park's (none on any map the port builds yet).
+// terrain park's (none on any map the generator builds yet).
 double steepest_span(const Track& track, std::span<const Kicker> kickers);
 
 // R2, R23 — the band a map's vertical is dealt from.
