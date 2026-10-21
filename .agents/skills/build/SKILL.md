@@ -7,8 +7,10 @@ description: "Use for CMake, presets, the Makefile, compiler flags, adding a dep
 
 ## Layout
 
-- Root `CMakeLists.txt`: the project, `ge_flags` (warnings plus the **determinism
-  flags**, linked by every target), `ge_core`, and `add_subdirectory(tests)`. Each
+- Root `CMakeLists.txt`: the project, `ge_fp` (the **determinism flags**, linked by
+  `ge_core` and published as `ge::fp`), `ge_flags` (warnings, `-Werror`, sanitizers;
+  this tree only, never published), `ge_core`, `add_subdirectory(tests)` when
+  top-level, and `include(cmake/Packaging.cmake)` (the installed package, `release` skill). Each
   later layer adds a library target (`ge_platform`, `ge_gpu`, …) linking the layers
   below it, and nothing above it.
 - `CMakePresets.json`: `debug` (ASan + UBSan) and `release`. Ninja generator,
@@ -26,7 +28,8 @@ webgpu only by `ge_gpu`.
 
 ## Flags
 
-- `ge_flags` is the only place compile options are set. Never add a flag on one
+- `ge_fp` (determinism, travels to consumers) and `ge_flags` (hygiene, this tree only)
+  are the only places compile options are set. Never add a flag on one
   target to work around something; fix the code.
 - Never add `-ffast-math`, `-Ofast` or `-march=native` (they break bit parity; see the
   `determinism` skill).

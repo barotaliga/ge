@@ -28,6 +28,7 @@ C++ engine that ports game5 against a read-only TypeScript oracle.
 | `port` | The bottom-up procedure from a TS oracle file to a bit-exact C++ port |
 | `testing` | The header harness, golden files from the oracle, CTest |
 | `build` | CMake, presets, pinned dependencies, the CI matrix, workflow hygiene |
+| `release` | Changeset fragments, the installed package, cutting a release to GitHub Releases + Packages |
 | `sim` | Fall Line's headless simulation: mapgen, the step, the bot, the run clock |
 | `platform` | SDL3: window, input, gamepad, audio device, files, focus |
 | `gpu` | webgpu.h: device, surface, resources, pipelines, WGSL |
