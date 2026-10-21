@@ -1,5 +1,9 @@
 // engine/core/libm against the oracle's runtime: tests/golden/libm_<fn>.txt, written by
 // tools/parity/golden-libm.mjs under game5's pinned Node (make golden-libm). Bits, not closeness.
+//
+// ge:summary Parity test: core/libm against Node 24
+// ge:keywords test parity golden libm
+// ge:skill testing
 #include "core/libm/libm.hpp"
 
 #include <cmath>

@@ -1,6 +1,10 @@
 // engine/racing/tape against the TypeScript oracle (tests/golden/racing_tape_*.txt and
 // racing_ghost.txt, written by tools/parity/golden-racing.mjs). The ghost is game5's own
 // recorder on a bot lap: it must decode, read back and re-encode byte for byte (M3's exit).
+//
+// ge:summary Parity test: racing/tape and game5's own ghost, byte for byte
+// ge:keywords test parity golden tape ghost
+// ge:skill testing
 #include "racing/tape.hpp"
 
 #include <array>

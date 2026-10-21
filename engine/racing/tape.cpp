@@ -1,5 +1,11 @@
 // The control tape's codec: base64, the run-length streams, the recorder and the reader.
 // Header: racing/tape.hpp. Oracle: oss-game-framework `src/racing/tape.ts`.
+//
+// ge:summary The control tape's codec: base64, run-length streams, recorder, reader
+// ge:keywords racing tape ghost codec base64 atob btoa rle encodeStream decodeStream
+// ge:oracle oss-game-framework/src/racing/tape.ts
+// ge:skill port
+// ge:test tests/racing_tape_test.cpp
 #include "racing/tape.hpp"
 
 #include <algorithm>

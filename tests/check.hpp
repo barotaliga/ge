@@ -2,6 +2,10 @@
 // TEST(name) blocks; CHECK records a failure and carries on, so one run
 // names every broken case. Each test file is its own executable, registered
 // with CTest by tests/CMakeLists.txt; exit code 1 on any failure.
+//
+// ge:summary The test harness: TEST blocks, CHECK, CHECK_BITS
+// ge:keywords test harness check check-bits assert
+// ge:skill testing
 #pragma once
 
 #include <cstdint>

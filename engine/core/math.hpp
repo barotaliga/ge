@@ -7,6 +7,13 @@
 //
 // World convention: the plan is x/z, y is up; heading 0 points down +z and
 // grows clockwise seen from above.
+//
+// ge:summary Small deterministic math: the hypot family, clamp, lerp, smoothstep, angles
+// ge:keywords math hypot hypot3 hypot4 clamp lerp smoothstep approach angle angleDiff dist2 pi tau
+// ge:keywords heading conventions
+// ge:oracle oss-game-framework/src/core/math.ts
+// ge:skill determinism
+// ge:test tests/core_math_test.cpp
 #pragma once
 
 #include <cmath>

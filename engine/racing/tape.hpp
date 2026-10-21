@@ -20,6 +20,13 @@
 // Not ported: `isControlTape` (the shape check on a parsed JSON blob). It belongs with the
 // ghost store and its JSON reader (M10). Parity: tests/racing_tape_test.cpp against
 // tests/golden/racing_tape_*.txt and racing_ghost.txt (tools/parity/golden-racing.mjs).
+//
+// ge:summary The control tape a ghost and a replay are kept on: axes, RLE, base64
+// ge:keywords racing tape ghost replay controls input recording rle base64 snapAxis recorder reader
+// ge:keywords fingerprint ControlTape
+// ge:oracle oss-game-framework/src/racing/tape.ts
+// ge:skill port
+// ge:test tests/racing_tape_test.cpp
 #pragma once
 
 #include <cstdint>

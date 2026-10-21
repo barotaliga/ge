@@ -1,5 +1,11 @@
 // Port of oss-game-framework `src/core/solar.ts`; see solar.hpp. Statement order and operand
 // order follow the oracle line for line, because a reordered sum is a different double.
+//
+// ge:summary The solar and lunar geometry behind solar.hpp, in the oracle's operation order
+// ge:keywords solar sun moon julian-day sidereal ephemeris refraction
+// ge:oracle oss-game-framework/src/core/solar.ts
+// ge:skill determinism
+// ge:test tests/core_solar_test.cpp
 #include "core/solar.hpp"
 
 #include <cmath>

@@ -9,6 +9,10 @@
 //
 // Re-run only when the oracle moves (a framework tag bump); a diff in the
 // golden files is then the change to review.
+//
+// ge:summary Writes tests/golden/core_* and loop_* from the framework oracle
+// ge:keywords golden parity oracle generator core loop
+// ge:skill testing
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { oracleLoader } from "./oracle-import.mjs";

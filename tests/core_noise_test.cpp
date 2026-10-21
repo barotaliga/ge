@@ -1,5 +1,9 @@
 // engine/core/noise.hpp against the TypeScript oracle (tests/golden/core_noise.txt, written by
 // tools/parity/golden-core.mjs). Row: ix iz seed hash2 | x z scale vseed valueNoise.
+//
+// ge:summary Parity test: core/noise against the oracle
+// ge:keywords test parity golden noise
+// ge:skill testing
 #include "core/noise.hpp"
 
 #include "golden.hpp"

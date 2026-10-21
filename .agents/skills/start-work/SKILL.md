@@ -1,6 +1,6 @@
 ---
 name: start-work
-description: "Use before beginning any task in gameengine2, before edits. Confirms a clean tree, syncs with origin/main, clones the read-only oracle repos beside the checkout, and names the docs/goals.md milestone row the task serves."
+description: "Use before beginning any task in gameengine2, before edits. Confirms a clean tree, syncs with origin/main, clones the read-only oracle repos beside the checkout, and names the docs/goals.md milestone row the task serves, then finds what already exists (make find, the skills' lessons)."
 ---
 
 # Start work
@@ -44,7 +44,18 @@ Open `docs/goals.md` and name the milestone row this task serves. If no row fits
 task is probably out of scope (G4), so ask before you build it. Then load the skill
 `AGENTS.md` routes the subject to, plus `write-code`.
 
-## 5. The build works before you touch it
+## 5. What already exists
+
+```sh
+make find Q="<the task's nouns> <the oracle's identifiers>"   # files, skills, lessons
+make lessons ARGS="<skill> --scope=<the dir you will edit>"     # per loaded skill
+```
+
+`docs/index.md` lists every file with its summary, and which oracle files are already ported
+(§ Oracle to port). Read the lessons of each skill you loaded before the first edit (the
+`skill-reflection` skill, OPEN).
+
+## 6. The build works before you touch it
 
 ```sh
 make test

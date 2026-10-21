@@ -12,6 +12,13 @@
 // - THE SIMULATION NEVER LEARNS THE FRAME RATE. Steps are whole; the leftover fraction carries
 //   to the next frame, and `alpha` is for the renderer's interpolation only.
 // Parity: tests/loop_run_clock_test.cpp against tests/golden/loop_run_clock.txt.
+//
+// ge:summary The fixed-step accumulator between display frames and the 120 Hz step
+// ge:keywords loop run-clock fixed-step timestep accumulator frame alpha interpolation pause resume
+// ge:keywords focus createRunClock MAX_FRAME_SECONDS
+// ge:oracle oss-game-framework/src/loop/run-clock.ts
+// ge:skill sim
+// ge:test tests/loop_run_clock_test.cpp
 #pragma once
 
 #include <cmath>

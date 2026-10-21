@@ -2,6 +2,13 @@
 // (mulberry32), bit for bit: every random draw in a simulation comes from
 // one of these, never from the platform, so a seed reproduces a world and a
 // run. Parity: tests/core_prng_test.cpp against tests/golden/core_prng.txt.
+//
+// ge:summary The seeded stream (mulberry32): every random draw in a simulation
+// ge:keywords prng rng random seed mulberry32 next range chance pick pickIndex createRng
+// ge:keywords determinism
+// ge:oracle oss-game-framework/src/core/prng.ts
+// ge:skill determinism
+// ge:test tests/core_prng_test.cpp
 #pragma once
 
 #include <cmath>

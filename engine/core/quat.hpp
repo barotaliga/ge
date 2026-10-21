@@ -10,6 +10,13 @@
 // about the right axis) and `roll` is RIGHT SIDE DOWN positive (a negative rotation about the
 // forward axis). from_euler and to_euler own that sign flip; body-frame angular velocities
 // stay right-handed, so a nose-up pitch rate is a negative wx.
+//
+// ge:summary Unit quaternions as orientation: Euler conversion, integration, the sign flip
+// ge:keywords quat quaternion orientation rotation euler pitch roll heading yaw fromEuler toEuler
+// ge:keywords fromAxisAngle integrate angular-velocity vec3
+// ge:oracle oss-game-framework/src/core/quat.ts
+// ge:skill determinism
+// ge:test tests/core_quat_test.cpp
 #pragma once
 
 #include "core/js.hpp"

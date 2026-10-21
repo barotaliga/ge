@@ -8,6 +8,10 @@
 // changed between majors (docs/research.md section 2). Math.pow in Node 24 is the HOST libm,
 // so the tables must also come from game5's reference platform: Linux x86-64 with glibc. The
 // script refuses anything else rather than writing tables the engine should not match.
+//
+// ge:summary Writes tests/golden/libm_*.txt under game5's pinned Node
+// ge:keywords golden parity generator libm node24
+// ge:skill testing
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { requireOracleNode } from "./oracle-node.mjs";

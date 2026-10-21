@@ -9,6 +9,13 @@
 //
 // Pure, allocation-free, and it reads nothing of one game's state. Parity:
 // tests/racing_standings_test.cpp against tests/golden/racing_standings.txt.
+//
+// ge:summary The field's order: home first by the clock, then further round
+// ge:keywords racing standings place position field order leaderboard legProgress fieldOrder
+// ge:keywords placeAmong
+// ge:oracle oss-game-framework/src/racing/standings.ts
+// ge:skill port
+// ge:test tests/racing_standings_test.cpp
 #pragma once
 
 #include <cstdint>

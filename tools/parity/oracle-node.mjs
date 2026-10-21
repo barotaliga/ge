@@ -3,6 +3,10 @@
 // Math functions changed between majors and Math.pow in Node 24 is the host libm
 // (docs/research.md section 2). Exits with the fix when it is anything else; returns the
 // provenance banner the golden file's first line carries.
+//
+// ge:summary Refuses a golden run not under game5's pinned Node on Linux x86-64 glibc
+// ge:keywords oracle node24 nvmrc glibc guard provenance
+// ge:skill testing
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 

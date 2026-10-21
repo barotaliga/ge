@@ -1,7 +1,9 @@
 # Agent skills
 
 Each skill is a `SKILL.md` playbook under `.agents/skills/<name>/`, with `name` and
-`description` front matter and a `.lessons/` directory that `skill-reflection` fills.
+`description` front matter and a `.lessons/` directory that `skill-reflection` fills: one
+`<unix-timestamp>-<slug>.md` fragment per lesson, read back with `make lessons` and checked by
+`make agents-check`. `make find Q="..."` searches skills, lessons and the code's `ge:` tags at once.
 `.claude/skills` and `.gemini/skills` are symlinks to this directory. `AGENTS.md` is the
 router that says which skill to load. `tools/check-agents.sh` checks this list, the
 router's Skills table and the directories against each other.
@@ -14,9 +16,9 @@ C++ engine that ports game5 against a read-only TypeScript oracle.
 | Skill | One line |
 | --- | --- |
 | `start-work` | The preflight: clean tree, sync with main, clone the oracle, name the milestone row |
-| `write-code` | File shape, naming, data-first design, comments, the edit loop |
+| `write-code` | File shape, naming, the `ge:` discovery tags, data-first design, comments, the edit loop |
 | `commit` | Gates, the public-repo check, commit, PR, green then merge |
-| `skill-reflection` | Read lessons first; record, merge, prune and promote at the end |
+| `skill-reflection` | Read lessons first; record, fix, prune, merge, promote and re-key at the end |
 
 ## Craft
 

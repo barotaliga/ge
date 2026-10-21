@@ -8,13 +8,16 @@ description: "Use to end every gameengine2 work session: run the gates, write a 
 ## 1. Gates (cheapest first)
 
 ```sh
+make index          # docs/index.md from the ge: tags (the `write-code` skill)
 make fmt            # then: git diff, to see what it changed
-make agents-check
+make agents-check   # structure, ge: tags, index fresh, lesson fragments
 make test           # debug preset, with ASan + UBSan
 make test PRESET=release
 ```
 
 All of them must be green. A failure you did not cause is still yours to fix or report.
+Before the gates, run the `skill-reflection` skill's CLOSE pass for every skill the session
+loaded, so its lessons ship in this commit.
 
 ## 2. Public-repo check
 

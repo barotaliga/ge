@@ -5,6 +5,10 @@
 // with doubles as IEEE 754 bit patterns.
 //
 //   node tools/parity/golden-js.mjs
+//
+// ge:summary Writes tests/golden/core_js.txt from Node's number semantics
+// ge:keywords golden parity generator js
+// ge:skill testing
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 

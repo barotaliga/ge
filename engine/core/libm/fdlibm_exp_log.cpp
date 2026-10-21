@@ -19,6 +19,11 @@
 // game5 never calls are gone. Do not tidy it: each operation's order is part of the bits
 // (docs/research.md section 2). API and contract: libm.hpp. Test: tests/core_libm_test.cpp.
 // Licences: LICENSE.md.
+//
+// ge:summary Vendored V8 fdlibm: exp, expm1, log, log2, cbrt, tanh
+// ge:keywords libm fdlibm vendored v8 exp expm1 log log2 cbrt tanh
+// ge:skill determinism
+// ge:test tests/core_libm_test.cpp
 
 #include <cmath>
 #include <cstdint>

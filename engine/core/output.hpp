@@ -11,6 +11,13 @@
 // process, shared by every caller (that is the point: one log). Like the oracle it is
 // single-threaded: emit from the simulation's thread only.
 // Parity: tests/core_output_test.cpp against tests/golden/core_output.txt.
+//
+// ge:summary The one diagnostic channel: semantic log helpers, a pluggable sink, a boot buffer
+// ge:keywords output log logging diagnostics sink status info warn error debug recentLogs
+// ge:keywords setOutputSink header module-state
+// ge:oracle oss-game-framework/src/core/output.ts
+// ge:skill determinism agent-interface
+// ge:test tests/core_output_test.cpp
 #pragma once
 
 #include <cstdint>

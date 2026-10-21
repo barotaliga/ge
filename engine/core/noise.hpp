@@ -4,6 +4,13 @@
 // without touching the Rng (`hash2(tick, k, seed)`) comes from here.
 // `tiledValueNoise` is not ported: game5 calls it nowhere.
 // Parity: tests/core_noise_test.cpp against tests/golden/core_noise.txt.
+//
+// ge:summary Deterministic 2D value noise, the lattice hash and the cached noise field
+// ge:keywords noise value-noise hash hash2 lattice octaves fbm smooth valueNoise noiseField
+// ge:keywords sampleNoise terrain
+// ge:oracle oss-game-framework/src/core/noise.ts
+// ge:skill determinism
+// ge:test tests/core_noise_test.cpp
 #pragma once
 
 #include <cmath>

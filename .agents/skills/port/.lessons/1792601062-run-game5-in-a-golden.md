@@ -1,7 +1,10 @@
 ---
-skill: port
-scope: golden generators that need game5 itself
+title: A golden script can run game5's own code with no npm install, through a resolve hook
+date: 2026-10-21
+scope: tools/parity/golden-racing.mjs
+concepts: [golden, oracle, resolve-hook, ghost]
 ---
+
 A golden script can run game5's own code (its engine, `pwa/src/game/*.ts`, `tests/support/*`)
 with no `npm install` in the oracle: a `registerHooks` resolve hook maps
 `@niclaslindstedt/oss-game-framework/<sub>` to `../oss-game-framework/src/<sub>.ts` and
