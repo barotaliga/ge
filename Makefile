@@ -40,7 +40,7 @@ find:
 lessons:
 	node tools/skill-lessons.mjs $(ARGS)
 
-# Rewrites tests/golden/core_* (bar quat and solar), loop_*, core_js and racing_* from the
+# Rewrites tests/golden/core_* (bar quat and solar), loop_*, core_js* and racing_* from the
 # TypeScript oracle (needs Node 22+ and checkouts of oss-game-framework and game5 beside this
 # one, or FRAMEWORK=path GAME5=path; no npm install in either).
 FRAMEWORK ?= ../oss-game-framework
@@ -50,13 +50,14 @@ golden:
 	node tools/parity/golden-js.mjs
 	node --experimental-strip-types --disable-warning=ExperimentalWarning tools/parity/golden-racing.mjs --framework $(FRAMEWORK) --game5 $(GAME5)
 
-# Rewrites tests/golden/libm_*.txt, core_quat.txt and core_solar.txt: everything that reaches a
-# transcendental. Needs game5's pinned Node (NODE=path, ../game5/.nvmrc) on Linux x86-64 with
+# Rewrites tests/golden/libm_*.txt, core_quat.txt, core_solar.txt and mapgen_generate.txt:
+# everything that reaches a transcendental. Needs game5's pinned Node (NODE=path, ../game5/.nvmrc) on Linux x86-64 with
 # glibc; the scripts refuse anything else and say why (tools/parity/oracle-node.mjs).
 NODE ?= node
 golden-libm:
 	$(NODE) tools/parity/golden-libm.mjs --game5 $(GAME5)
 	$(NODE) --experimental-strip-types --disable-warning=ExperimentalWarning tools/parity/golden-core-libm.mjs --game5 $(GAME5) --framework $(FRAMEWORK)
+	$(NODE) --experimental-strip-types --disable-warning=ExperimentalWarning tools/parity/golden-mapgen.mjs --game5 $(GAME5) --framework $(FRAMEWORK)
 
 clean:
 	rm -rf build
