@@ -2,11 +2,14 @@
 // real `step`, every control recorded on the tape: THE RUN REPORT table (finished, time, gates
 // taken and missed, resets, wipeouts, flights, top and mean speed, the hardest landing, the
 // run's digest) and, per seed, the map from above with the bot's line drawn over the piste. It
-// is Fall Line's headless `sim` CLI: `make sim SEEDS=1,2,3`. A seed the bot does not finish is a
-// failure (exit 1), so a regression in the skier, the course or the bot shows here first.
+// is Fall Line's headless `sim` CLI: `make sim SEEDS=1,2,3`. With `--rivals=N` the bot rides N
+// rivals on the same grid (each at his dealt pace and lane) and a FIELD table gives every
+// racer's place, time and shoulders, every line drawn on the map. A seed the bot does not finish is
+// a failure (exit 1), so a regression in the skier, the course or the bot shows here first.
 //
 // ge:summary Lab: the bot over seeds, the run report table, its line on the map; the sim CLI
 // ge:keywords lab sim simulate bot run-report digest seeds finish time gates wipeouts cli
+// ge:keywords rivals field place shoulders
 // ge:skill sim labs
 // ge:test tests/fall_line_sim_test.cpp
 #include <memory>
@@ -41,10 +44,15 @@ void run(ge::lab::Lab& lab) {
   fs::SimOptions opts;
   opts.max_seconds = lab.arg_num("limit");
   opts.version = static_cast<int>(lab.arg_num("version"));
+  opts.rivals = static_cast<int32_t>(lab.arg_num("rivals"));
   ge::lab::LabTable table{"runs",
                           {"seed", "finish", "time s", "gates", "missed", "resets", "wipeouts",
-                           "flights", "top km/h", "mean km/h", "landing g", "digest"},
+                           "flights", "top km/h", "mean km/h", "landing g", "place", "digest"},
                           {}};
+  ge::lab::LabTable field_table{"field",
+                                {"seed", "racer", "pace", "lane m", "finish", "time s", "place",
+                                 "gates", "missed", "resets", "wipeouts", "shoulders"},
+                                {}};
   int finished = 0;
   double total_time = 0;
   for (const double seed : seeds) {
@@ -58,8 +66,8 @@ void run(ge::lab::Lab& lab) {
                    " --refusals` (skill: mountain).");
       continue;
     }
-    std::vector<fs::LinePoint> line;
-    const fs::RunReport r = fs::simulate_on(level, seed, opts, pictures ? &line : nullptr);
+    std::vector<std::vector<fs::LinePoint>> lines;
+    const fs::RunReport r = fs::simulate_on(level, seed, opts, pictures ? &lines : nullptr);
     if (r.finished) {
       finished++;
       total_time += r.time;
@@ -84,37 +92,70 @@ void run(ge::lab::Lab& lab) {
                           std::to_string(r.missed), std::to_string(r.resets),
                           std::to_string(r.wipeouts), std::to_string(r.flights),
                           fixed(r.top_speed * 3.6, 1), fixed(r.mean_speed * 3.6, 1),
-                          fixed(r.max_landing_g, 1), hex(r.digest)});
+                          fixed(r.max_landing_g, 1), std::to_string(r.place), hex(r.digest)});
+    if (opts.rivals > 0) {
+      lab.metric(k + ".place", r.place, "place");
+      for (size_t i = 0; i < r.field.size(); i++) {
+        const fs::FieldRow& f = r.field[i];
+        const std::string who = i == 0 ? "player" : "rival-" + std::to_string(i);
+        std::string key = k;
+        key += "." + who;
+        lab.metric(key + ".time", f.time, "s");
+        lab.metric(key + ".shoulders", f.shoulders, "count");
+        if (!f.finished) {
+          std::string what = k;
+          what += ": " + who;
+          lab.fail(what + " did not finish (" + std::to_string(f.gates) + " of " +
+                       std::to_string(r.gate_count) + " gates)",
+                   "Look at previews/sim/" + k +
+                       ".png for where his line stops, then read the lane and the pace in "
+                       "games/fall_line/sim/bot.cpp and field.cpp (skill: sim).");
+        }
+        field_table.rows.push_back({fixed(seed, 0), who, fixed(f.pace, 3), fixed(f.lane, 1),
+                                    f.finished ? "yes" : "NO", fixed(f.time, 2),
+                                    std::to_string(f.place), std::to_string(f.gates),
+                                    std::to_string(f.missed), std::to_string(f.resets),
+                                    std::to_string(f.wipeouts), std::to_string(f.shoulders)});
+      }
+    }
     if (!pictures) continue;
     constexpr int kPx = 768;
     ge::lab::Picture pic = ge::mountain::labs::draw_map(*level, kPx);
     const double px = kPx / level->size;
-    for (size_t i = 1; i < line.size(); i++) {
-      const auto& a = line[i - 1];
-      const auto& b = line[i];
-      const Rgba c = b.down ? Rgba{230, 0, 200} : b.on_snow ? Rgba{10, 20, 90} : Rgba{255, 160, 0};
-      ge::lab::draw_line(pic, a.x * px, a.z * px, b.x * px, b.z * px, c, 2);
+    // The rivals first, so the player's line is drawn over theirs.
+    for (size_t n = lines.size(); n-- > 0;) {
+      const Rgba snow = n == 0 ? Rgba{10, 20, 90} : Rgba{0, 150, 170};
+      const auto& line = lines[n];
+      for (size_t i = 1; i < line.size(); i++) {
+        const auto& a = line[i - 1];
+        const auto& b = line[i];
+        const Rgba c = b.down ? Rgba{230, 0, 200} : b.on_snow ? snow : Rgba{255, 160, 0};
+        ge::lab::draw_line(pic, a.x * px, a.z * px, b.x * px, b.z * px, c, n == 0 ? 2 : 1);
+      }
     }
     lab.shot(
         {k,
          "SEED " + fixed(seed, 0) + " SKIED BY THE BOT",
          "The map from above (+x right, +z down; the face shaded by height, the piste red, "
          "gates numbered, kickers orange, trees dark green) with the bot's line over it: "
-         "dark blue on the snow, orange in the air, magenta down after a wipeout. " +
-             std::string(r.finished ? "Finished" : "DID NOT FINISH") + " in " + fixed(r.time, 1) +
-             " s, " + std::to_string(r.gates) + " of " + std::to_string(r.gate_count) +
-             " gates, top " + fixed(r.top_speed * 3.6, 0) + " km/h.",
+         "dark blue on the snow, orange in the air, magenta down after a wipeout" +
+             std::string(opts.rivals > 0 ? "; the rivals' lines thinner, teal on the snow" : "") +
+             ". " + std::string(r.finished ? "Finished" : "DID NOT FINISH") + " in " +
+             fixed(r.time, 1) + " s, " + std::to_string(r.gates) + " of " +
+             std::to_string(r.gate_count) + " gates, top " + fixed(r.top_speed * 3.6, 0) + " km/h.",
          "the line follows the piste through every gate from START to FINISH; no magenta; "
          "orange only over the kickers",
          {{"seed", fixed(seed, 0)},
           {"version", lab.arg("version")},
           {"skis", "reference"},
-          {"pilot", "bot"}}},
+          {"pilot", "bot"},
+          {"rivals", lab.arg("rivals")}}},
         pic);
   }
   lab.metric("finished", finished, "count");
   lab.metric("mean-time", finished ? total_time / finished : 0, "s");
   lab.table(std::move(table));
+  if (opts.rivals > 0) lab.table(std::move(field_table));
 }
 
 const ge::lab::LabSpec kSpec{
@@ -129,9 +170,10 @@ const ge::lab::LabSpec kSpec{
         {"seeds", "1,2,3,4,5,6,7,8,38", "seeds, comma-separated"},
         {"limit", "600", "the run's time limit, s"},
         {"version", "1", "the generator's version"},
+        {"rivals", "0", "bots on the grid beside the player (at most the grid's slots less one)"},
         {"no-pictures", "", "skip the map pictures", true},
     },
-    "--seeds=38",
+    "--seeds=38 --rivals=3",
     run,
 };
 GE_LAB(kSpec);

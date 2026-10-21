@@ -83,18 +83,21 @@ Controls bot_controls(const GameState& state, int32_t i, const BotPlan& plan) {
   const mg::Level& level = *state.level;
   const mg::TrackHit hit = mg::nearest_track_point(level.track, s.x, s.z);
   const double v = s.speed;
-  // The line: pursue the centreline a look ahead down the piste.
+  // The line: pursue his lane a look ahead down the piste.
   const double look =
       core::clamp(bot::kLookTime * v + bot::kLookLeast, bot::kLookLeast, bot::kLookMost);
   const mg::TrackPoint aim = mg::track_point_at(level.track, hit.s + look);
-  const double dx = aim.x - s.x;
-  const double dz = aim.z - s.z;
+  // His lane: held right of the centreline, never nearer the piste's edge than `kLaneMargin`.
+  const double room = num::max(0.0, aim.width / 2 - bot::kLaneMargin);
+  const double lane = core::clamp(r.rider.lane, -room, room);
+  const double dx = aim.x + core::libm::cos(aim.heading) * lane - s.x;
+  const double dz = aim.z - core::libm::sin(aim.heading) * lane - s.z;
   const double alpha = core::angle_diff(s.heading, core::libm::atan2(dx, dz));
   const double curvature = 2 * core::libm::sin(alpha) / num::max(core::hypot(dx, dz), 1.0);
   const double edge = sk::edge_for_curvature(state.spec, curvature);
   const double most = sk::edge_most(state.spec, v, s.tuck);
   if (s.on_snow) c.ski.steer = num::sign(alpha) * num::min(1.0, most > 0 ? edge / most : 1.0);
-  // The speed: the plan's least over the stretch ahead.
+  // The speed: the plan's least over the stretch ahead, at his pace.
   const auto& pts = level.track.points;
   const size_t from = static_cast<size_t>(hit.index);
   const auto ahead = static_cast<size_t>((bot::kReadTime * v + bot::kReadLeast) / 2) + 1;
@@ -102,6 +105,7 @@ Controls bot_controls(const GameState& state, int32_t i, const BotPlan& plan) {
   for (size_t k = from + 1; k < pts.size() && k <= from + ahead; k++) {
     cap = num::min(cap, plan.speed[k]);
   }
+  cap *= r.rider.pace;
   if (v > cap + 0.5) {
     c.ski.brake = core::clamp((v - cap) / 4, 0.2, 1);
   } else if (v < cap - 1 && (c.ski.steer < 0 ? -c.ski.steer : c.ski.steer) < 0.35) {

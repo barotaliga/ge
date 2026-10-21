@@ -36,14 +36,15 @@ struct Controls {
 };
 
 enum class EventKind : uint8_t {
-  gate,     // a gate taken (`gate` its index; the start gate is 0)
-  missed,   // the owed gate skied past outside its width
-  finish,   // the finish line crossed (`value` the run's time, s)
-  takeoff,  // a flight began (it passed the skier's least flight)
-  landing,  // back on the snow (`value` the landing's load, g)
-  wipeout,  // went down (`gate` the skier's Wipeout as a number)
-  glance,   // brushed a trunk and kept going
-  reset,    // stood back on the piste (`gate` the gate owed)
+  gate,      // a gate taken (`gate` its index; the start gate is 0)
+  missed,    // the owed gate skied past outside its width
+  finish,    // the finish line crossed (`value` the run's time, s)
+  takeoff,   // a flight began (it passed the skier's least flight)
+  landing,   // back on the snow (`value` the landing's load, g)
+  wipeout,   // went down (`gate` the skier's Wipeout as a number)
+  glance,    // brushed a trunk and kept going
+  reset,     // stood back on the piste (`gate` the gate owed)
+  shoulder,  // two racers met (`racer` and `gate` the two, `value` the closing speed)
 };
 
 const char* event_name(EventKind kind);
@@ -69,9 +70,17 @@ struct Progress {
   double stuck = 0;          // s going nowhere on his skis
 };
 
+// How a racer rides when the bot has his controls (field.hpp deals it): the share of the bot's
+// speed plan he dares, and how far right of the piste's centre he holds his line, m.
+struct Rider {
+  double pace = 1;
+  double lane = 0;
+};
+
 struct Racer {
   ge::skier::SkierState skier;
   Progress progress;
+  Rider rider;
 };
 
 struct GameState {

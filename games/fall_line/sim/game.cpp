@@ -9,6 +9,7 @@
 #include <cstring>
 
 #include "fall_line/sim/course.hpp"
+#include "fall_line/sim/field.hpp"
 #include "mountain/mapgen/generate.hpp"
 #include "skier/skier.hpp"
 
@@ -35,6 +36,8 @@ const char* event_name(EventKind kind) {
       return "glance";
     case EventKind::reset:
       return "reset";
+    case EventKind::shoulder:
+      return "shoulder";
   }
   return "?";
 }
@@ -55,11 +58,16 @@ GameState create_game_on(std::shared_ptr<const mg::Level> level, int32_t racers)
   state.level = std::move(level);
   state.trees = sk::build_tree_index(*state.level);
   state.spec = sk::kReferenceSkis;
-  state.racers.resize(static_cast<size_t>(racers < 1 ? 1 : racers));
+  const auto slots = static_cast<int32_t>(state.level->grid.size());
+  const int32_t most = slots < 1 ? 1 : slots;
+  state.racers.resize(static_cast<size_t>(racers > most ? most : racers < 1 ? 1 : racers));
   state.events.reserve(kEventsReserve);
+  const std::vector<Rider> field =
+      deal_field(*state.level, static_cast<int32_t>(state.racers.size()));
   for (int32_t i = 0; i < static_cast<int32_t>(state.racers.size()); i++) {
     reset_racer(state, i);
     state.racers[static_cast<size_t>(i)].progress = Progress{};
+    state.racers[static_cast<size_t>(i)].rider = field[static_cast<size_t>(i)];
   }
   state.events.clear();
   return state;
@@ -95,6 +103,7 @@ void step(GameState& state, std::span<const Controls> controls) {
       reset_racer(state, i);
     }
   }
+  meet_racers(state);
   state.steps++;
   state.t = static_cast<double>(state.steps) * kDt;
 }

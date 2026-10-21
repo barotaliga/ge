@@ -8,9 +8,11 @@
 //    finished; then the course (`step_course`: a gate, a miss, the finish); then the skier's
 //    events become the run's; then the run's own resets (down `kDownReset` s, stuck
 //    `kStuckReset` s).
-// 3. The clock advances.
+// 3. Skier against skier (`meet_racers`, field.hpp), the field in pair order.
+// 4. The clock advances.
 //
-// Nothing here draws a random number: a run is a pure function of its map and its controls.
+// The only draws are the field's, made once when the run is created (`deal_field`, off a stream
+// of the map's seed); `step` draws nothing, so a run is a pure function of its map and controls.
 //
 // ge:summary A run: create_game on a map or a seed, step in its stated order, the state's digest
 // ge:keywords game create_game step order run digest state_hash game-options racers
@@ -38,7 +40,8 @@ struct GameOptions {
 ge::mountain::mapgen::Level race_map(double seed, std::optional<int> version = {});
 
 GameState create_game(const GameOptions& opts);
-// A run on a map already built: `racers` on the grid's slots in order, at rest.
+// A run on a map already built: `racers` on the grid's slots in order, at rest, as many as the
+// grid has slots (at least the player).
 GameState create_game_on(std::shared_ptr<const ge::mountain::mapgen::Level> level, int32_t racers);
 
 // ONE STEP. `controls` holds one entry per racer, in field order.
