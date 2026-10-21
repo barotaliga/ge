@@ -60,11 +60,11 @@ golden-libm:
 	$(NODE) --experimental-strip-types --disable-warning=ExperimentalWarning tools/parity/golden-mapgen.mjs --game5 $(GAME5) --framework $(FRAMEWORK)
 
 # The release plumbing (docs/publishing.md): fragments valid, tools tested,
-# and the version the next release would get.
+# and the version the next release would get (none right after a release).
 release-check:
 	python3 -m unittest tools/release_test.py
 	python3 tools/release.py check
-	python3 tools/release.py bump
+	@echo "next release: $$(python3 tools/release.py bump 2>/dev/null || echo 'none (no fragments in .changes/unreleased/)')"
 
 clean:
 	rm -rf build
