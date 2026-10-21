@@ -26,6 +26,7 @@
 #include <string>
 #include <vector>
 
+#include "core/libm/libm.hpp"
 #include "fall_line/app/frame.hpp"
 #include "fall_line/app/views.hpp"
 #include "gpu/device.hpp"
@@ -166,8 +167,8 @@ void run(ge::lab::Lab& lab) {
   for (int i = 0; i < frames; ++i) {
     if (i > 0) {
       view.heading += turn * 3.14159265358979323846 / 180.0 / 60.0;
-      view.eye[0] += std::sin(view.heading) * speed / 60.0;
-      view.eye[2] += std::cos(view.heading) * speed / 60.0;
+      view.eye[0] += ge::core::libm::sin(view.heading) * speed / 60.0;
+      view.eye[2] += ge::core::libm::cos(view.heading) * speed / 60.0;
     }
     view.frame = static_cast<uint64_t>(i);
     view.time_s = i / 60.0;
