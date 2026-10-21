@@ -53,7 +53,7 @@ double trunk_radius(double age) {
 std::vector<TreeDef> grow_forest(ge::core::Rng& rng, const TerrainPlan& plan,
                                  const ge::core::Heightfield& ground, const Track& piste,
                                  std::span<const Kicker> kickers, std::span<const Cliff> cliffs,
-                                 double line_y) {
+                                 double line_y, const ForestOptions* resort) {
   const auto& W = plan.region->forest;
   const double density = F::density * W.density * F::open;
   const double meadow = num::min(1.0, F::meadow * W.meadow);
@@ -123,11 +123,16 @@ std::vector<TreeDef> grow_forest(ge::core::Rng& rng, const TerrainPlan& plan,
     if (y > line_y) return true;
     const ge::core::FieldSlope g = ge::core::field_gradient(ground, x, z);
     if (hypot(g.gx, g.gz) > F::max_slope) return true;
-    nearest_within(piste, x, z, reach, hit);
-    if (hit.distance < piste.points[size_t(hit.index)].width / 2 + F::corridor) return true;
+    if (resort) {
+      if (resort->clear(x, z)) return true;
+    } else {
+      nearest_within(piste, x, z, reach, hit);
+      if (hit.distance < piste.points[size_t(hit.index)].width / 2 + F::corridor) return true;
+    }
     if (on_kicker(kickers, x, z, 4)) return true;
     if (on_cliff(cliffs, x, z, 4)) return true;
-    return on_lane(x, z);
+    // On a resort the runs are the cuts through the woods.
+    return resort ? false : on_lane(x, z);
   };
   // THE GAP: every tree kept is filed in a hash of `gap`-sized buckets, so a candidate asks
   // only the nine round it whether one stands too near.
@@ -168,7 +173,8 @@ std::vector<TreeDef> grow_forest(ge::core::Rng& rng, const TerrainPlan& plan,
   // in the krummholz band.
   const auto height_of = [&](double woods, double size, double y) {
     const double up = num::max(0.0, num::min(1.0, (y - base_y) / (line_y - base_y)));
-    const double tall = 0.35 + 0.45 * woods + 0.2 * size - 0.45 * up;
+    const double tall = resort ? resort->tall(y) * (0.7 + 0.2 * woods + 0.1 * size)
+                               : 0.35 + 0.45 * woods + 0.2 * size - 0.45 * up;
     const double stunt = 1 - (1 - F::krummholz_height) * smoothstep(stunt_y, line_y, y);
     const double h = F::height.min + (F::height.max - F::height.min) *
                                          num::max(0.0, num::min(1.0, tall)) * W.height;
@@ -184,8 +190,13 @@ std::vector<TreeDef> grow_forest(ge::core::Rng& rng, const TerrainPlan& plan,
       const double cx = (c + 0.2 + 0.6 * hash2(c, r, seed + 11)) * C::spacing;
       const double cz = (r + 0.2 + 0.6 * hash2(c, r, seed + 12)) * C::spacing;
       const Woods wc = woods_at(cx, cz);
-      const double woods = wc.woods;
+      double woods = wc.woods;
       double odds = 1;
+      if (resort) {
+        const WoodsCover cover = resort->cover(sample_field(ground, cx, cz));
+        woods = wc.woods + (1 - wc.woods) * cover.close;
+        odds = cover.keep;
+      }
       odds *= (C::meadow + (C::woods - C::meadow) * woods) * wc.clear * W.density;
       if (hash2(c, r, seed + 13) >= odds) continue;
       const double want =
@@ -220,14 +231,24 @@ std::vector<TreeDef> grow_forest(ge::core::Rng& rng, const TerrainPlan& plan,
       const double z = (r + 0.1 + jz * 0.8) * F::spacing;
       const Woods wc = woods_at(x, z);
       const double y = sample_field(ground, x, z);
-      double share = density * (meadow + (1 - meadow) * wc.woods * wc.clear);
-      // The krummholz thins toward the line as well as stunting.
-      share *= 1 - 0.6 * smoothstep(stunt_y, line_y, y);
+      double woods = wc.woods;
+      double share = 0;
+      if (resort) {
+        // R14 on a resort: the woods by height, closed low down, thinning through the ecotone
+        // to the tree line.
+        const WoodsCover cover = resort->cover(y);
+        woods = wc.woods + (1 - wc.woods) * cover.close;
+        share = density * (meadow + (1 - meadow) * woods * wc.clear) * cover.keep;
+      } else {
+        share = density * (meadow + (1 - meadow) * wc.woods * wc.clear);
+        // The krummholz thins toward the line as well as stunting.
+        share *= 1 - 0.6 * smoothstep(stunt_y, line_y, y);
+      }
       if (keep >= share) continue;
       // Both refusals are pure, so the cheap one asks first.
       if (crowded(x, z, -1)) continue;
       if (refused(x, z, y)) continue;
-      stand(x, z, y, height_of(wc.woods, size, y), -1, x, z);
+      stand(x, z, y, height_of(woods, size, y), -1, x, z);
     }
   }
   return trees;

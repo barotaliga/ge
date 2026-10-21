@@ -16,13 +16,16 @@
 //     snow (R26); and once the mountain's own features are laid no off-piste kicker or cliff
 //     stands on a run (R4, R22), every finish on the floor and valley station is inside the hub
 //     (R29), both wind tunnels are laid along it (R30), and every run is still packed along its
-//     line but in its drifts.
+//     line but in its drifts; once the woods are grown no trunk stands above the tree line, on a
+//     run or in the hub (R14); and every course is in its length band, falls, and runs from its
+//     own run's top to a run that reaches the floor (R28).
 //
 // A debug build (sanitizers) holds the first rows; a release build holds them all.
 //
 // ge:summary The ski-area build held by its own checks: determinism, a digest golden, the rules
 // ge:keywords test resort ski-area determinism digest golden walk access lanes drag-lift graded
 // ge:keywords ramps stations-clear measured-access features hub wind-tunnels off-kickers cliffs
+// ge:keywords woods courses
 // ge:skill testing mountain
 #include <chrono>
 #include <cstdio>
@@ -40,6 +43,7 @@
 #include "golden.hpp"
 #include "mountain/mapgen/access_build.hpp"
 #include "mountain/mapgen/cliffs.hpp"
+#include "mountain/mapgen/courses.hpp"
 #include "mountain/mapgen/drift.hpp"
 #include "mountain/mapgen/generate.hpp"
 #include "mountain/mapgen/hub.hpp"
@@ -181,6 +185,25 @@ std::vector<std::pair<std::string, std::string>> sections(const mg::ResortAttemp
       for (const double v : {p.x, p.z, p.y, p.s}) d.f64(v);
   }
   out.emplace_back("hub", d.hex());
+  out.emplace_back("trees", std::to_string(a.trees.size()));
+  d = {};
+  for (const mg::TreeDef& t : a.trees)
+    for (const double v : {t.x, t.z, t.y, t.height, t.radius, t.age}) d.f64(v);
+  out.emplace_back("woods", d.hex());
+  out.emplace_back("courses", std::to_string(a.courses.size()));
+  d = {};
+  d.f64(a.facing);
+  for (const mg::Course& c : a.courses) {
+    d.str(c.id);
+    d.str(mg::grade_name(c.grade));
+    for (const std::string& r : c.runs) d.str(r);
+    d.f64(c.length);
+    d.f64(c.drop);
+  }
+  for (const mg::CoursePlan& c : a.course_plans)
+    for (const mg::TrackPoint& p : c.points)
+      for (const double v : {p.x, p.z, p.y, p.heading, p.width}) d.f64(v);
+  out.emplace_back("course", d.hex());
   out.emplace_back("rng", std::to_string(a.rng.a));
   return out;
 }
@@ -387,6 +410,48 @@ void check_features(const mg::ResortAttempt& a, const std::string& where) {
   }
 }
 
+// R14 over the woods: no trunk above the tree line, on a run's corridor or in the hub's lanes.
+void check_woods(const mg::ResortAttempt& a, const std::string& where) {
+  const double line_y = ge::core::sample_field(a.ground, a.village.x, a.village.z) +
+                        (a.plan.tree_line - a.plan.altitude);
+  mg::NetHit hit;
+  for (const mg::TreeDef& t : a.trees) {
+    const std::string at =
+        cat({where, " tree at (", std::to_string(t.x), ", ", std::to_string(t.z), ")"});
+    CHECK_MSG(t.y <= line_y, at + ": stands above the tree line (R14); read grow_forest");
+    CHECK_MSG(!a.net.covers(t.x, t.z, 0, hit),
+              cat({at, ": stands on run ", a.built[size_t(hit.run)].walked.spec.id,
+                   " (R14); read the clear in resort_courses.cpp"}));
+    CHECK_MSG(!mg::hub_clear(a.hub.hub, a.sub, t.x, t.z),
+              at + ": stands in the hub (R29); read the clear in resort_courses.cpp");
+  }
+}
+
+// R28 over the courses: at least one, each in the length band, falling, starting on the run it is
+// named by and ending on a run that reaches the floor, its points every step down it.
+void check_courses(const mg::ResortAttempt& a, const std::string& where) {
+  CHECK_MSG(!a.courses.empty(), where + ": no course (R28); read resort_courses");
+  for (size_t i = 0; i < a.courses.size(); i++) {
+    const mg::Course& c = a.courses[i];
+    const mg::CoursePlan& plan = a.course_plans[i];
+    const std::string at = cat({where, " course ", c.id});
+    CHECK_MSG(c.length >= mg::resort_rules::course::length.min &&
+                  c.length <= mg::resort_rules::course::length.max,
+              at + ": its length is outside R28's band; read resort_courses");
+    CHECK_MSG(c.drop > 0, at + ": does not fall to the village; read compose_course");
+    CHECK_MSG(!c.runs.empty() && c.runs.front() == c.id,
+              at + ": does not start on its own run; read compose_course");
+    const mg::WalkedRun& last = a.built[size_t(plan.pieces.back().run)].walked;
+    CHECK_MSG(!last.into, at + ": ends on a run that merges on; read compose_course");
+    for (size_t k = 1; k < plan.points.size(); k++) {
+      const double ds = plan.points[k].s - plan.points[k - 1].s;
+      CHECK_MSG(ds > 0 && ds < 2 * mg::rules::track::step,
+                cat({at, ": its stations are uneven at ", std::to_string(k),
+                     "; read the resampling in compose_course"}));
+    }
+  }
+}
+
 // Builds one attempt as far as it stands, checking each stage's rules as it is reached when
 // `check`; the last stage it reached and its sections.
 std::vector<std::pair<std::string, std::string>> build(const Case& c, int attempt,
@@ -409,6 +474,14 @@ std::vector<std::pair<std::string, std::string>> build(const Case& c, int attemp
           if (!mg::resort_features(a)) {
             stage = "features";
             if (check) check_features(a, key);
+            if (!mg::resort_woods(a)) {
+              stage = "woods";
+              if (check) check_woods(a, key);
+              if (!mg::resort_courses(a)) {
+                stage = "courses";
+                if (check) check_courses(a, key);
+              }
+            }
           }
         }
       }
@@ -456,7 +529,7 @@ TEST(resort_builds_are_deterministic_and_keep_their_digest) {
                        "\nIf the move is meant, rewrite ", kGolden,
                        " with GE_GOLDEN_WRITE=1 and say why in the PR."}));
       }
-      if (first[0].second == "features") through++;
+      if (first[0].second == "courses") through++;
       const double ms =
           std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
       std::printf("  %s: through %s, %s runs, built twice in %.0f ms\n", key.c_str(),
@@ -464,7 +537,7 @@ TEST(resort_builds_are_deterministic_and_keep_their_digest) {
     }
   }
   CHECK_MSG(through > 0,
-            "no attempt held reached its features; the later stages' rules went unchecked");
+            "no attempt held reached its courses; the later stages' rules went unchecked");
   if (write) {
     std::ofstream out(ge::test::root_path(kGolden));
     out << "# seed region attempt, then each section of the area built "

@@ -94,6 +94,9 @@ RampAt ramp_frame(const SummitRamp& r, double x, double z);
 // A ramp's surface at `t` (0..1) along it: eased off the pad, even on down to its foot.
 double ramp_height(const SummitRamp& r, double t);
 
+// How far (x, z) stands off a lift's line from its bottom to its top, m.
+double off_line(const LiftPlan& l, double x, double z);
+
 // How far (x, z) stands outside a ramp's corridor (its width and the ground eased into it), m;
 // negative within it.
 double off_ramp(const SummitRamp& r, double x, double z);

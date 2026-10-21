@@ -25,6 +25,9 @@ inline const ge::lab::LabFlag kVersionFlag{"version", "1",
 inline const ge::lab::LabFlag kRegionFlag{"region", "alpine",
                                           "snow country: alpine, fell, continental, maritime"};
 
+// The region a `--region` word names; nothing for a word that names none.
+std::optional<mapgen::RegionId> region_named(const std::string& name);
+
 // The map for `seed` under the lab's --version and --region; nothing (and a lab.fail naming the
 // seed and the generator's own words) when it cannot be built.
 std::optional<mapgen::Level> build_map(ge::lab::Lab& lab, double seed);

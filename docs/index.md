@@ -66,15 +66,21 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | `plugins/mountain/analysis/index.cpp` | The single piste's checks, R1-R19, with their fixed message text | `mountain` | `tests/mountain_generate_test.cpp` |
 | `plugins/mountain/analysis/index.hpp` | Level analysis: analyze_level, the rule book re-checked on a finished map | `mountain` | `tests/mountain_generate_test.cpp` |
 | `plugins/mountain/labs/analyze_lab.cpp` | Lab: maps over seeds held to the rule book; findings by R-rule; refused attempts | `mountain` `labs` | `tests/lab_runner_test.cpp` |
+| `plugins/mountain/labs/junctions_lab.cpp` | Lab: where a ski area's groomed snow steps where runs meet: steps found, named, drawn | `mountain` `labs` | `tests/lab_runner_test.cpp` |
 | `plugins/mountain/labs/level_lab.cpp` | Lab: one generated map from above (captioned) with its gate table and numbers | `mountain` `labs` | `tests/lab_runner_test.cpp` |
 | `plugins/mountain/labs/level_map.cpp` | The map labs' build-from-flags and the from-above painter | `mountain` `labs` | `tests/lab_runner_test.cpp` |
 | `plugins/mountain/labs/level_map.hpp` | mountain labs' shared map helpers: build a map from lab flags, draw it from above | `mountain` `labs` | `tests/lab_runner_test.cpp` |
 | `plugins/mountain/labs/mapgen_cost_lab.cpp` | Lab: wall-clock cost of building maps (measured), with each map's level_digest | `mountain` `labs` `perf` | `tests/lab_runner_test.cpp` |
+| `plugins/mountain/labs/resort_lab.cpp` | Lab: one generated ski area from above and its courses, with its lifts, runs, courses | `mountain` `labs` | `tests/lab_runner_test.cpp` |
+| `plugins/mountain/labs/resort_map.cpp` | The ski-area labs' build-from-flags and the from-above area painter | `mountain` `labs` | `tests/lab_runner_test.cpp` |
+| `plugins/mountain/labs/resort_map.hpp` | The ski-area labs' build-from-flags and the area painter, plan and courses | `mountain` `labs` | `tests/lab_runner_test.cpp` |
 | `plugins/mountain/mapgen/access_build.cpp` | The access graph walked: exits, tops, reach from a start, the way home's cost | `mountain` | `tests/mountain_resort_build_test.cpp` |
 | `plugins/mountain/mapgen/access_build.hpp` | R29 the plan's access reckoning: every piste skiable again, every lift reached | `mountain` | `tests/mountain_resort_build_test.cpp` |
 | `plugins/mountain/mapgen/berm.hpp` | The windrow's cross-section either side of the piste (R18) | `mountain` | `tests/mountain_generate_test.cpp` |
 | `plugins/mountain/mapgen/cliffs.cpp` | Lays the cliffs on the face clear of the piste and cuts them into the ground | `mountain` | `tests/mountain_generate_test.cpp` |
 | `plugins/mountain/mapgen/cliffs.hpp` | R22 cliffs off the piste: their profile, footprint, laying and stamp | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/courses.cpp` | Composes a course down the network and reads a run's arc as the course's | `mountain` | `tests/mountain_resort_build_test.cpp` |
+| `plugins/mountain/mapgen/courses.hpp` | R28 a ski area's courses: runs chained down the network to the village, resampled | `mountain` | `tests/mountain_resort_build_test.cpp` |
 | `plugins/mountain/mapgen/digest.cpp` | level_digest's mixing order, word for word | `mountain` | `tests/mountain_generate_test.cpp` |
 | `plugins/mountain/mapgen/digest.hpp` | A map's fingerprint: level_digest, FNV-1a over what a skier meets | `mountain` | `tests/mountain_generate_test.cpp` |
 | `plugins/mountain/mapgen/drags.cpp` | Drag lifts placed beside a foot, fitted to the ground, kept where access turns | `mountain` | `tests/mountain_resort_build_test.cpp` |
@@ -119,9 +125,12 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | `plugins/mountain/mapgen/resort_access.cpp` | Stage 5 of the ski-area build: the ramps laid, the drags settled, the stations cleared | `mountain` | `tests/mountain_resort_build_test.cpp` |
 | `plugins/mountain/mapgen/resort_build.cpp` | The ski-area build's stages over one attempt's state | `mountain` | `tests/mountain_resort_build_test.cpp` |
 | `plugins/mountain/mapgen/resort_build.hpp` | R25-R30 the ski-area build: its attempt's state and its stages, in order | `mountain` | `tests/mountain_resort_build_test.cpp` |
+| `plugins/mountain/mapgen/resort_courses.cpp` | Stages 7 to 9 of the ski-area build: the woods, the day and the courses | `mountain` | `tests/mountain_resort_build_test.cpp` |
 | `plugins/mountain/mapgen/resort_features.cpp` | Stage 6 of the ski-area build: off-piste features, crust, hub, grooming, tunnels | `mountain` | `tests/mountain_resort_build_test.cpp` |
 | `plugins/mountain/mapgen/resort_graded.cpp` | Stage 4 of the ski-area build: runs graded, featured and pressed in order, renumbered | `mountain` | `tests/mountain_resort_build_test.cpp` |
 | `plugins/mountain/mapgen/resort_rules.hpp` | The resort rule book's numbers (R25-R30) as constexpr namespaces | `mountain` | `tests/mountain_resort_build_test.cpp` |
+| `plugins/mountain/mapgen/resort_woods.cpp` | The region rows of a ski area's woods by height and the curves read off them | `mountain` | `tests/mountain_resort_build_test.cpp` |
+| `plugins/mountain/mapgen/resort_woods.hpp` | R14 a ski area's woods by height: the ecotone's curve and the trees' heights | `mountain` | `tests/mountain_resort_build_test.cpp` |
 | `plugins/mountain/mapgen/rules.hpp` | The rule book's numbers (R1-R24) as constexpr namespaces | `mountain` | `tests/mountain_generate_test.cpp` |
 | `plugins/mountain/mapgen/run_start.cpp` | A run's start: the fair heading off it, the slide to a glide's fall, the search | `mountain` | `tests/mountain_resort_build_test.cpp` |
 | `plugins/mountain/mapgen/run_start.hpp` | R12 R27 a run's start under its top: on the contour, slid down to a glide's fall | `mountain` | `tests/mountain_resort_build_test.cpp` |
@@ -134,7 +143,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | `plugins/mountain/mapgen/summit_ramps.cpp` | The ramps off a top: their room, then each planned off the rim, pressed and groomed | `mountain` | `tests/mountain_resort_build_test.cpp` |
 | `plugins/mountain/mapgen/summit_ramps.hpp` | R26 the ramps off a top: their room kept as runs are walked, then laid and pressed | `mountain` | `tests/mountain_resort_build_test.cpp` |
 | `plugins/mountain/mapgen/sun.cpp` | The day's draws, in their fixed order | `mountain` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/mapgen/sun.hpp` | R15 the day: declination, the sun's window and deal_sun | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/sun.hpp` | R15 the day: declination, the sun's window, deal_sun and the face's bearing | `mountain` | `tests/mountain_generate_test.cpp` |
 | `plugins/mountain/mapgen/surface.cpp` | The crust's blur, patches and fold, on float32 grids | `mountain` | `tests/mountain_generate_test.cpp` |
 | `plugins/mountain/mapgen/surface.hpp` | R21 the wind crust: laid off its own stream, folded into the packed field | `mountain` | `tests/mountain_generate_test.cpp` |
 | `plugins/mountain/mapgen/terrain.cpp` | The mountain's plan draws and the bake of every noise layer onto the grid | `mountain` | `tests/mountain_generate_test.cpp` |
@@ -226,6 +235,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | bank | `plugins/mountain/mapgen/network_stamp.hpp` |
 | base64 | `plugins/racing/tape.cpp` `plugins/racing/tape.hpp` |
 | baseline | `engine/lab/runner.cpp` `engine/lab/runner.hpp` |
+| bearing | `plugins/mountain/mapgen/sun.hpp` |
 | beats | `plugins/racing/records.hpp` |
 | bed-of | `plugins/mountain/mapgen/hub.cpp` |
 | before-after | `engine/lab/report.cpp` `plugins/mountain/labs/mapgen_cost_lab.cpp` |
@@ -245,10 +255,11 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | bottom-footprint | `plugins/mountain/mapgen/station_clear.cpp` `plugins/mountain/mapgen/station_clear.hpp` |
 | box | `engine/lab/raster.hpp` |
 | box-of | `plugins/mountain/mapgen/links.cpp` |
-| branch | `plugins/mountain/mapgen/links.cpp` |
+| branch | `plugins/mountain/labs/junctions_lab.cpp` `plugins/mountain/mapgen/links.cpp` |
 | branch-lane | `plugins/mountain/mapgen/links.hpp` |
+| build-area | `plugins/mountain/labs/resort_map.cpp` |
 | build-map | `plugins/mountain/labs/level_map.cpp` `plugins/mountain/labs/level_map.hpp` |
-| build-resort | `plugins/mountain/mapgen/resort_build.hpp` |
+| build-resort | `plugins/mountain/labs/resort_map.hpp` `plugins/mountain/mapgen/resort_build.hpp` |
 | bytes-per-row | `engine/gpu/target.hpp` |
 | cadence | `engine/lab/labs/loop_run_clock_lab.cpp` |
 | camber | `plugins/mountain/mapgen/network_build.hpp` |
@@ -271,7 +282,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | chunk | `engine/lab/png.cpp` |
 | ci | `tools/check-agents.sh` `tools/check-libm.sh` |
 | clamp | `engine/core/math.hpp` |
-| clear | `engine/gpu/test_scene.hpp` |
+| clear | `engine/gpu/test_scene.hpp` `plugins/mountain/mapgen/resort_courses.cpp` |
 | clear-bottom | `plugins/mountain/mapgen/station_clear.cpp` |
 | clear-drag | `plugins/mountain/mapgen/station_clear.cpp` |
 | clear-stations | `plugins/mountain/mapgen/resort_access.cpp` `plugins/mountain/mapgen/station_clear.cpp` `plugins/mountain/mapgen/station_clear.hpp` |
@@ -287,6 +298,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | compare | `engine/lab/report.cpp` `engine/lab/report.hpp` `engine/lab/runner.hpp` `tests/lab_runner_test.cpp` |
 | compilation-info | `engine/gpu/pipeline.hpp` |
 | compilation-message | `engine/gpu/pipeline.cpp` |
+| compose-course | `plugins/mountain/mapgen/courses.cpp` `plugins/mountain/mapgen/courses.hpp` |
 | compute-pipeline | `engine/gpu/pipeline.hpp` |
 | concepts | `tools/skill-lessons.mjs` |
 | configure | `engine/gpu/surface.hpp` |
@@ -304,7 +316,9 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | corridor-index | `plugins/mountain/mapgen/network_stamp.cpp` |
 | cos | `engine/core/libm/fdlibm_trig.cpp` `engine/core/libm/libm.hpp` |
 | cost | `plugins/mountain/labs/mapgen_cost_lab.cpp` |
-| course | `plugins/mountain/mapgen/resort_rules.hpp` |
+| course | `plugins/mountain/mapgen/courses.hpp` `plugins/mountain/mapgen/resort_rules.hpp` |
+| course-arc | `plugins/mountain/mapgen/courses.cpp` `plugins/mountain/mapgen/courses.hpp` |
+| courses | `plugins/mountain/labs/resort_lab.cpp` `plugins/mountain/labs/resort_map.cpp` `plugins/mountain/labs/resort_map.hpp` `plugins/mountain/mapgen/courses.cpp` `plugins/mountain/mapgen/courses.hpp` `plugins/mountain/mapgen/resort_courses.cpp` `tests/mountain_resort_build_test.cpp` |
 | covers | `plugins/mountain/mapgen/net_index.cpp` `plugins/mountain/mapgen/net_index.hpp` |
 | crc32 | `engine/lab/png.cpp` `engine/lab/png.hpp` `tests/lab_raster_test.cpp` |
 | create_device | `engine/gpu/device.hpp` |
@@ -320,7 +334,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | ctest | `tests/main.cpp` |
 | cut-approach | `plugins/mountain/mapgen/station_pad.cpp` `plugins/mountain/mapgen/station_pad.hpp` |
 | dawn | `engine/gpu/device.hpp` |
-| day | `plugins/mountain/mapgen/sun.hpp` |
+| day | `plugins/mountain/mapgen/resort_courses.cpp` `plugins/mountain/mapgen/sun.hpp` |
 | daylight | `engine/core/solar.hpp` |
 | debug | `engine/core/output.hpp` |
 | decimal | `engine/core/num_text.cpp` |
@@ -350,8 +364,9 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | drag-tops | `plugins/mountain/mapgen/resort_access.cpp` |
 | drag-tops-of | `plugins/mountain/mapgen/station_pad.hpp` |
 | drags | `plugins/mountain/mapgen/drags.cpp` `plugins/mountain/mapgen/drags.hpp` |
-| draw | `engine/gpu/test_scene.cpp` `engine/lab/raster.hpp` `plugins/mountain/labs/level_map.cpp` `plugins/mountain/labs/level_map.hpp` |
+| draw | `engine/gpu/test_scene.cpp` `engine/lab/raster.hpp` `plugins/mountain/labs/level_map.cpp` `plugins/mountain/labs/level_map.hpp` `plugins/mountain/labs/resort_map.hpp` |
 | draw_test_scene | `engine/gpu/test_scene.hpp` |
+| draw-area | `plugins/mountain/labs/resort_map.cpp` |
 | drift | `plugins/mountain/mapgen/drift.cpp` `plugins/mountain/mapgen/drift.hpp` |
 | drifts | `plugins/mountain/mapgen/drift.hpp` `plugins/mountain/mapgen/resort_graded.cpp` |
 | drive | `engine/lab/lab.hpp` |
@@ -359,6 +374,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | drops | `plugins/mountain/mapgen/drops.hpp` `plugins/mountain/mapgen/resort_graded.cpp` |
 | each-cell | `plugins/mountain/mapgen/summit_ramps.cpp` |
 | earthworks | `plugins/mountain/mapgen/lift_chain.cpp` `plugins/mountain/mapgen/lift_chain.hpp` |
+| ecotone | `plugins/mountain/mapgen/resort_woods.cpp` `plugins/mountain/mapgen/resort_woods.hpp` |
 | elevation | `engine/core/solar.hpp` |
 | encode | `engine/lab/png.hpp` |
 | end_load | `engine/gpu/device.hpp` `tests/gpu_device_test.cpp` |
@@ -375,6 +391,8 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | exp | `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/libm.hpp` |
 | expm1 | `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/libm.hpp` |
 | exponent | `engine/core/libm/pow.cpp` |
+| face-the-sun | `plugins/mountain/mapgen/sun.hpp` |
+| facing | `plugins/mountain/mapgen/resort_courses.cpp` `plugins/mountain/mapgen/sun.hpp` |
 | fair-heading | `plugins/mountain/mapgen/run_start.cpp` `plugins/mountain/mapgen/run_start.hpp` |
 | fall-line | `games/fall_line/app/main.cpp` |
 | fbm | `engine/core/noise.hpp` `plugins/mountain/mapgen/terrain.cpp` |
@@ -460,10 +478,10 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | hex | `tests/golden.hpp` |
 | hidpi | `engine/platform/window.hpp` |
 | high-word | `engine/core/libm/fdlibm_internal.hpp` |
-| hillshade | `plugins/mountain/labs/level_map.cpp` `plugins/mountain/labs/level_map.hpp` |
+| hillshade | `plugins/mountain/labs/level_map.cpp` `plugins/mountain/labs/level_map.hpp` `plugins/mountain/labs/resort_map.hpp` |
 | hitch | `engine/lab/labs/loop_run_clock_lab.cpp` `engine/lab/labs/platform_frame_pace_lab.cpp` |
 | home-of | `plugins/mountain/mapgen/access_build.cpp` |
-| hub | `plugins/mountain/mapgen/drift.hpp` `plugins/mountain/mapgen/hub.cpp` `plugins/mountain/mapgen/hub.hpp` `plugins/mountain/mapgen/resort_features.cpp` `plugins/mountain/mapgen/resort_rules.hpp` `tests/mountain_resort_build_test.cpp` |
+| hub | `plugins/mountain/labs/resort_lab.cpp` `plugins/mountain/labs/resort_map.hpp` `plugins/mountain/mapgen/drift.hpp` `plugins/mountain/mapgen/hub.cpp` `plugins/mountain/mapgen/hub.hpp` `plugins/mountain/mapgen/resort_features.cpp` `plugins/mountain/mapgen/resort_rules.hpp` `tests/mountain_resort_build_test.cpp` |
 | hub-at | `plugins/mountain/mapgen/hub.hpp` |
 | hub-clear | `plugins/mountain/mapgen/hub.cpp` `plugins/mountain/mapgen/hub.hpp` |
 | hwnd | `engine/gpu/surface.hpp` |
@@ -493,7 +511,8 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | json | `engine/lab/report.cpp` `engine/lab/report.hpp` |
 | judder | `engine/lab/labs/loop_run_clock_lab.cpp` |
 | julian-day | `engine/core/solar.cpp` `engine/core/solar.hpp` |
-| junction | `plugins/mountain/mapgen/network_build.hpp` `plugins/mountain/mapgen/network_stamp.hpp` `plugins/mountain/mapgen/resort_graded.cpp` |
+| junction | `plugins/mountain/labs/junctions_lab.cpp` `plugins/mountain/mapgen/courses.hpp` `plugins/mountain/mapgen/network_build.hpp` `plugins/mountain/mapgen/network_stamp.hpp` `plugins/mountain/mapgen/resort_graded.cpp` |
+| junctions | `plugins/mountain/labs/junctions_lab.cpp` |
 | keep-off | `plugins/mountain/mapgen/resort_graded.cpp` |
 | keeps-chain | `plugins/mountain/mapgen/lift_chain.hpp` |
 | keyboard | `engine/platform/window.hpp` |
@@ -501,10 +520,10 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | kicker | `plugins/mountain/mapgen/kickers.cpp` `plugins/mountain/mapgen/kickers.hpp` |
 | kickers | `plugins/mountain/labs/level_lab.cpp` `plugins/mountain/labs/level_map.hpp` `plugins/mountain/mapgen/kickers.hpp` `plugins/mountain/mapgen/resort_graded.cpp` |
 | krummholz | `plugins/mountain/mapgen/forest.hpp` |
-| lab | `engine/lab/lab.cpp` `engine/lab/lab.hpp` `engine/lab/labs/core_noise_lab.cpp` `engine/lab/labs/gpu_capture_lab.cpp` `engine/lab/labs/loop_run_clock_lab.cpp` `engine/lab/labs/platform_frame_pace_lab.cpp` `engine/lab/main.cpp` `engine/lab/report.cpp` `engine/lab/report.hpp` `engine/lab/runner.cpp` `engine/lab/runner.hpp` `plugins/mountain/labs/analyze_lab.cpp` `plugins/mountain/labs/level_lab.cpp` `plugins/mountain/labs/level_map.cpp` `plugins/mountain/labs/level_map.hpp` `plugins/mountain/labs/mapgen_cost_lab.cpp` `tests/lab_raster_test.cpp` `tests/lab_runner_test.cpp` |
+| lab | `engine/lab/lab.cpp` `engine/lab/lab.hpp` `engine/lab/labs/core_noise_lab.cpp` `engine/lab/labs/gpu_capture_lab.cpp` `engine/lab/labs/loop_run_clock_lab.cpp` `engine/lab/labs/platform_frame_pace_lab.cpp` `engine/lab/main.cpp` `engine/lab/report.cpp` `engine/lab/report.hpp` `engine/lab/runner.cpp` `engine/lab/runner.hpp` `plugins/mountain/labs/analyze_lab.cpp` `plugins/mountain/labs/junctions_lab.cpp` `plugins/mountain/labs/level_lab.cpp` `plugins/mountain/labs/level_map.cpp` `plugins/mountain/labs/level_map.hpp` `plugins/mountain/labs/mapgen_cost_lab.cpp` `plugins/mountain/labs/resort_lab.cpp` `plugins/mountain/labs/resort_map.cpp` `plugins/mountain/labs/resort_map.hpp` `tests/lab_raster_test.cpp` `tests/lab_runner_test.cpp` |
 | label | `engine/lab/raster.hpp` |
 | labs | `engine/lab/lab.hpp` `engine/lab/main.cpp` |
-| lane | `plugins/mountain/mapgen/network.hpp` |
+| lane | `plugins/mountain/labs/junctions_lab.cpp` `plugins/mountain/mapgen/network.hpp` |
 | lane-ask | `plugins/mountain/mapgen/lanes.hpp` |
 | lane-route | `plugins/mountain/mapgen/lanes.hpp` |
 | lane-share | `plugins/mountain/mapgen/links.hpp` |
@@ -531,12 +550,14 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | lift-line | `plugins/mountain/mapgen/lift_line.hpp` `plugins/mountain/mapgen/summit_ramps.hpp` |
 | lift-look | `plugins/mountain/mapgen/lift_line.hpp` |
 | lift-plan | `plugins/mountain/mapgen/resort.hpp` |
+| lifts | `plugins/mountain/labs/resort_lab.cpp` `plugins/mountain/labs/resort_map.hpp` |
 | limits | `engine/gpu/device.hpp` |
 | line | `engine/lab/raster.cpp` `engine/lab/raster.hpp` |
 | line-cap | `tools/check-agents.sh` |
 | link | `plugins/mountain/mapgen/links.cpp` |
 | link-lane | `plugins/mountain/mapgen/links.hpp` |
 | links | `plugins/mountain/mapgen/links.cpp` `plugins/mountain/mapgen/links.hpp` |
+| lip | `plugins/mountain/labs/junctions_lab.cpp` |
 | list | `engine/lab/runner.cpp` |
 | llvmpipe | `engine/gpu/device.hpp` |
 | log | `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/libm.hpp` `engine/core/output.cpp` `engine/core/output.hpp` `tests/core_output_test.cpp` |
@@ -562,7 +583,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | measured-picture | `engine/lab/labs/gpu_capture_lab.cpp` |
 | measured-shot | `tests/lab_runner_test.cpp` |
 | measurement | `engine/gpu/timer.hpp` |
-| merge | `plugins/mountain/mapgen/network.hpp` |
+| merge | `plugins/mountain/labs/junctions_lab.cpp` `plugins/mountain/mapgen/courses.hpp` `plugins/mountain/mapgen/network.hpp` |
 | metadata | `tools/agents-index.mjs` |
 | metal-layer | `engine/gpu/surface.hpp` |
 | metal-view | `engine/platform/window.cpp` |
@@ -635,7 +656,8 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | personal-best | `plugins/racing/records.hpp` |
 | pi | `engine/core/math.hpp` |
 | pick | `engine/core/prng.hpp` |
-| picture | `engine/lab/labs/core_noise_lab.cpp` `engine/lab/raster.hpp` `plugins/mountain/labs/level_lab.cpp` `tests/lab_raster_test.cpp` |
+| picture | `engine/lab/labs/core_noise_lab.cpp` `engine/lab/raster.hpp` `plugins/mountain/labs/level_lab.cpp` `plugins/mountain/labs/resort_lab.cpp` `tests/lab_raster_test.cpp` |
+| piece | `plugins/mountain/mapgen/courses.hpp` |
 | pin | `plugins/mountain/mapgen/network_build.hpp` |
 | pin-of | `plugins/mountain/mapgen/network_build.cpp` |
 | pinned_adapter | `tests/gpu_support.hpp` |
@@ -645,13 +667,14 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | pipeline-set | `engine/gpu/pipeline.hpp` |
 | pipelines_after_load | `engine/gpu/pipeline.cpp` |
 | piste | `plugins/mountain/labs/level_map.hpp` `plugins/mountain/mapgen/resort_rules.hpp` `plugins/mountain/mapgen/track.hpp` |
-| pitch | `engine/core/quat.hpp` |
+| pitch | `engine/core/quat.hpp` `plugins/mountain/labs/junctions_lab.cpp` |
 | pitch-band | `plugins/mountain/mapgen/lanes.cpp` |
 | pixel | `engine/lab/raster.hpp` |
 | pixel-size | `engine/platform/window.hpp` |
 | place | `plugins/racing/standings.hpp` |
 | place-start | `plugins/mountain/mapgen/run_start.cpp` `plugins/mountain/mapgen/run_start.hpp` |
 | place-stations | `plugins/mountain/mapgen/resort.cpp` `plugins/mountain/mapgen/resort.hpp` |
+| plan | `plugins/mountain/labs/resort_lab.cpp` `plugins/mountain/labs/resort_map.cpp` `plugins/mountain/labs/resort_map.hpp` |
 | plan-drag | `plugins/mountain/mapgen/drags.cpp` `plugins/mountain/mapgen/drags.hpp` |
 | plan-hub | `plugins/mountain/mapgen/hub.cpp` `plugins/mountain/mapgen/hub.hpp` |
 | plan-lift | `plugins/mountain/mapgen/access_build.hpp` |
@@ -714,13 +737,14 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | records | `plugins/racing/records.hpp` `tests/racing_records_test.cpp` |
 | rect-off | `plugins/mountain/mapgen/lift_chain.cpp` |
 | refraction | `engine/core/solar.cpp` `engine/core/solar.hpp` |
-| refusals | `plugins/mountain/labs/analyze_lab.cpp` |
+| refusals | `plugins/mountain/labs/analyze_lab.cpp` `plugins/mountain/labs/resort_lab.cpp` |
 | region | `plugins/mountain/labs/level_map.hpp` `plugins/mountain/mapgen/regions.cpp` `plugins/mountain/mapgen/regions.hpp` |
 | regions | `plugins/mountain/mapgen/regions.hpp` |
 | registry | `engine/lab/lab.cpp` `engine/lab/lab.hpp` `tests/lab_runner_test.cpp` |
 | regrade-leg | `plugins/mountain/mapgen/lift_chain.hpp` `plugins/mountain/mapgen/resort_access.cpp` |
 | release | `tests/package/consumer/main.cpp` |
 | relevel-pads | `plugins/mountain/mapgen/station_pad.cpp` `plugins/mountain/mapgen/station_pad.hpp` |
+| relief | `plugins/mountain/labs/junctions_lab.cpp` |
 | render-pass | `engine/gpu/test_scene.cpp` |
 | render-pipeline | `engine/gpu/pipeline.hpp` |
 | render-target | `engine/gpu/target.hpp` |
@@ -729,16 +753,19 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | report | `engine/lab/report.cpp` `engine/lab/report.hpp` `tests/lab_runner_test.cpp` |
 | request-adapter | `engine/gpu/device.cpp` |
 | request-device | `engine/gpu/device.cpp` |
+| resample | `plugins/mountain/mapgen/courses.cpp` |
 | resize | `engine/gpu/surface.hpp` `engine/platform/window.hpp` |
 | resolve | `engine/gpu/timer.hpp` |
 | resolve-query-set | `engine/gpu/timer.cpp` |
-| resort | `plugins/mountain/mapgen/massif.hpp` `plugins/mountain/mapgen/resort.cpp` `plugins/mountain/mapgen/resort.hpp` `tests/mountain_resort_build_test.cpp` |
+| resort | `plugins/mountain/labs/resort_lab.cpp` `plugins/mountain/labs/resort_map.cpp` `plugins/mountain/labs/resort_map.hpp` `plugins/mountain/mapgen/massif.hpp` `plugins/mountain/mapgen/resort.cpp` `plugins/mountain/mapgen/resort.hpp` `tests/mountain_resort_build_test.cpp` |
 | resort-access | `plugins/mountain/mapgen/resort_access.cpp` |
 | resort-attempt | `plugins/mountain/mapgen/resort_build.hpp` |
 | resort-build | `plugins/mountain/mapgen/resort_build.cpp` `plugins/mountain/mapgen/resort_build.hpp` |
+| resort-courses | `plugins/mountain/mapgen/resort_courses.cpp` |
 | resort-features | `plugins/mountain/mapgen/resort_features.cpp` |
 | resort-graded | `plugins/mountain/mapgen/resort_graded.cpp` |
 | resort-rules | `plugins/mountain/mapgen/resort_rules.hpp` |
+| resort-woods | `plugins/mountain/mapgen/resort_courses.cpp` `plugins/mountain/mapgen/resort_woods.cpp` `plugins/mountain/mapgen/resort_woods.hpp` |
 | resume | `engine/loop/run_clock.hpp` |
 | rgba | `engine/lab/raster.hpp` |
 | rgba8 | `engine/gpu/target.hpp` |
@@ -768,6 +795,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | run-spec | `plugins/mountain/mapgen/network.hpp` |
 | run-start | `plugins/mountain/mapgen/run_start.cpp` `plugins/mountain/mapgen/run_start.hpp` |
 | runner | `engine/lab/runner.cpp` `engine/lab/runner.hpp` `tests/lab_runner_test.cpp` `tests/main.cpp` |
+| runs | `plugins/mountain/labs/resort_lab.cpp` `plugins/mountain/labs/resort_map.hpp` |
 | sample | `engine/core/heightfield.hpp` |
 | sample_noise | `engine/lab/labs/core_noise_lab.cpp` |
 | scale | `engine/lab/labs/core_noise_lab.cpp` |
@@ -800,7 +828,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | sink | `engine/core/output.cpp` `engine/core/output.hpp` |
 | size-bars | `tools/skill-lessons.mjs` |
 | skate | `plugins/mountain/mapgen/access_build.hpp` |
-| ski-area | `tests/mountain_resort_build_test.cpp` |
+| ski-area | `plugins/mountain/labs/junctions_lab.cpp` `plugins/mountain/labs/resort_lab.cpp` `plugins/mountain/labs/resort_map.hpp` `tests/mountain_resort_build_test.cpp` |
 | skill-reflection | `tools/skill-lessons.mjs` |
 | skills | `tools/check-agents.sh` |
 | skip | `tests/check.hpp` `tests/gpu_support.hpp` |
@@ -836,7 +864,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | stations-clear | `tests/mountain_resort_build_test.cpp` |
 | status | `engine/core/output.hpp` |
 | steep-share | `plugins/mountain/mapgen/massif.cpp` |
-| step | `engine/lab/labs/loop_run_clock_lab.cpp` |
+| step | `engine/lab/labs/loop_run_clock_lab.cpp` `plugins/mountain/labs/junctions_lab.cpp` |
 | stored-deflate | `engine/lab/png.cpp` |
 | summit-ramps | `plugins/mountain/mapgen/summit_ramps.cpp` `plugins/mountain/mapgen/summit_ramps.hpp` |
 | sun | `engine/core/solar.cpp` `engine/core/solar.hpp` `plugins/mountain/mapgen/sun.cpp` `plugins/mountain/mapgen/sun.hpp` `tests/core_solar_test.cpp` |
@@ -857,6 +885,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | table | `engine/lab/lab.hpp` |
 | tag | `engine/lab/runner.hpp` |
 | tags | `tools/agents-index.mjs` |
+| tall-at-depth | `plugins/mountain/mapgen/resort_woods.cpp` `plugins/mountain/mapgen/resort_woods.hpp` |
 | tall-tilt | `plugins/mountain/mapgen/resort.cpp` |
 | tan | `engine/core/libm/fdlibm_trig.cpp` `engine/core/libm/libm.hpp` |
 | tanh | `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/libm.hpp` |
@@ -872,6 +901,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | ticks | `engine/platform/window.hpp` |
 | tilt | `plugins/mountain/mapgen/resort.cpp` `plugins/mountain/mapgen/resort.hpp` |
 | tilted | `plugins/mountain/mapgen/resort.cpp` |
+| timberline | `plugins/mountain/mapgen/resort_woods.hpp` |
 | timer | `engine/gpu/timer.hpp` `tests/gpu_capture_test.cpp` |
 | timestamp | `engine/gpu/timer.cpp` `engine/gpu/timer.hpp` `engine/lab/labs/gpu_capture_lab.cpp` `tests/gpu_capture_test.cpp` |
 | timestamp-query | `engine/gpu/timer.hpp` |
@@ -886,6 +916,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | tops | `plugins/mountain/mapgen/access_build.cpp` |
 | track | `plugins/mountain/mapgen/track.cpp` `plugins/mountain/mapgen/track.hpp` |
 | transcendental | `engine/core/libm/libm.hpp` `tools/check-libm.sh` |
+| tree-line | `plugins/mountain/mapgen/resort_courses.cpp` `plugins/mountain/mapgen/resort_woods.hpp` |
 | tree-line-massif | `plugins/mountain/mapgen/resort_rules.hpp` |
 | trees | `plugins/mountain/labs/level_map.hpp` `plugins/mountain/mapgen/forest.hpp` |
 | triangle | `engine/gpu/test_scene.hpp` |
@@ -912,12 +943,14 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | version | `plugins/mountain/labs/level_map.hpp` |
 | versions | `plugins/mountain/mapgen/versions.hpp` |
 | video-driver | `engine/platform/window.cpp` |
+| village | `plugins/mountain/mapgen/courses.hpp` |
 | vocab | `tools/skill-lessons.mjs` |
 | vsync | `engine/gpu/surface.hpp` `engine/lab/labs/platform_frame_pace_lab.cpp` `games/fall_line/app/main.cpp` `tests/platform_window_test.cpp` |
 | wait | `engine/gpu/device.hpp` |
 | walk | `tests/mountain_resort_build_test.cpp` |
 | walk-run | `plugins/mountain/mapgen/network.cpp` `plugins/mountain/mapgen/network.hpp` |
 | walked-run | `plugins/mountain/mapgen/network.hpp` |
+| wall | `plugins/mountain/labs/junctions_lab.cpp` |
 | wall-clock | `plugins/mountain/labs/mapgen_cost_lab.cpp` |
 | warn | `engine/core/output.hpp` |
 | way-falls | `plugins/mountain/mapgen/lift_chain.hpp` |
@@ -936,7 +969,10 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | wind-tunnels | `plugins/mountain/mapgen/resort_features.cpp` `tests/mountain_resort_build_test.cpp` |
 | window | `engine/lab/labs/platform_frame_pace_lab.cpp` `engine/platform/window.hpp` `games/fall_line/app/main.cpp` `tests/platform_window_test.cpp` |
 | windrow | `plugins/mountain/mapgen/berm.hpp` `plugins/mountain/mapgen/network_stamp.hpp` |
-| woods | `plugins/mountain/mapgen/forest.hpp` |
+| woods | `plugins/mountain/labs/resort_lab.cpp` `plugins/mountain/mapgen/forest.hpp` `plugins/mountain/mapgen/resort_courses.cpp` `tests/mountain_resort_build_test.cpp` |
+| woods-at-depth | `plugins/mountain/mapgen/resort_woods.cpp` `plugins/mountain/mapgen/resort_woods.hpp` |
+| woods-by-height | `plugins/mountain/mapgen/resort_woods.hpp` |
+| woods-row | `plugins/mountain/mapgen/resort_woods.cpp` |
 | word | `engine/core/libm/fdlibm_internal.hpp` |
 | x11 | `engine/gpu/surface.hpp` `engine/platform/window.cpp` |
 | xvfb | `engine/lab/labs/platform_frame_pace_lab.cpp` `tests/platform_window_test.cpp` |

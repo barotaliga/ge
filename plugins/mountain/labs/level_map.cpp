@@ -19,7 +19,11 @@ using ge::lab::Rgba;
 
 namespace {
 
-std::optional<mapgen::RegionId> region_of(const std::string& name) {
+uint8_t mix(double a, double b, double t) { return static_cast<uint8_t>(a + (b - a) * t); }
+
+}  // namespace
+
+std::optional<mapgen::RegionId> region_named(const std::string& name) {
   if (name == "alpine") return mapgen::RegionId::alpine;
   if (name == "fell") return mapgen::RegionId::fell;
   if (name == "continental") return mapgen::RegionId::continental;
@@ -27,14 +31,10 @@ std::optional<mapgen::RegionId> region_of(const std::string& name) {
   return std::nullopt;
 }
 
-uint8_t mix(double a, double b, double t) { return static_cast<uint8_t>(a + (b - a) * t); }
-
-}  // namespace
-
 std::optional<mapgen::Level> build_map(ge::lab::Lab& lab, double seed) {
   mapgen::GenerateOptions opts;
   opts.version = static_cast<int>(lab.arg_num("version"));
-  opts.region = region_of(lab.arg("region"));
+  opts.region = region_named(lab.arg("region"));
   if (!opts.region) {
     lab.fail("--region=" + lab.arg("region") + " is not a region",
              "Use alpine, fell, continental or maritime (mapgen/regions.hpp).");

@@ -22,6 +22,7 @@
 
 #include "core/heightfield.hpp"
 #include "core/prng.hpp"
+#include "mountain/mapgen/courses.hpp"
 #include "mountain/mapgen/hub.hpp"
 #include "mountain/mapgen/lift_chain.hpp"
 #include "mountain/mapgen/links.hpp"
@@ -32,6 +33,7 @@
 #include "mountain/mapgen/resort.hpp"
 #include "mountain/mapgen/station_pad.hpp"
 #include "mountain/mapgen/summit_ramps.hpp"
+#include "mountain/mapgen/sun.hpp"
 #include "mountain/mapgen/terrain.hpp"
 
 namespace ge::mountain::mapgen {
@@ -93,6 +95,13 @@ struct ResortAttempt {
   std::optional<ge::core::Heightfield> crust;
   HubPlan hub{};
   std::vector<WindTunnel> tunnels;
+  // 7. the woods
+  std::vector<TreeDef> trees;
+  // 8. the day and the bearing the face is turned to, rad; 9. the courses down to the village
+  DealtSun day{};
+  double facing = 0;
+  std::vector<CoursePlan> course_plans;
+  std::vector<Course> courses;
 };
 
 // A step's answer: why the attempt is refused, or nothing to go on.
@@ -137,5 +146,18 @@ StageResult resort_access(ResortAttempt& a);
 // into the packed field; the hub laid across the floor and groomed (the drifts it reaches cut
 // back); the pads, the way and the ramps groomed; and the two wind tunnels on their beds.
 StageResult resort_features(ResortAttempt& a);
+
+// 7. THE WOODS (R14): grown by height under the tree line, kept off every run's corridor, every
+// lift's line, the pads, the ramps, the way to the next queue and the hub.
+StageResult resort_woods(ResortAttempt& a);
+
+// 8. THE DAY (R15) and 9. THE COURSES (R28): the day dealt and the face turned to its sun; a course
+// composed down the network from every piste's top, kept where its length is in the band and
+// coloured by its steepest stretch. Refused when no course reaches the village.
+StageResult resort_courses(ResortAttempt& a);
+
+// Every stage in order until one refuses: why it refused (nothing when the courses stand), and in
+// `reached` the last stage that stood ("" when the massif itself was refused).
+StageResult build_resort(ResortAttempt& a, std::string& reached);
 
 }  // namespace ge::mountain::mapgen
