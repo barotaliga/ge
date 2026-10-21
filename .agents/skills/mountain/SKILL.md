@@ -19,6 +19,15 @@ one game's: which maps a game races, its modes and its strings stay in the game.
   `digest.hpp` is `level_digest`.
 - `mountain/analysis/` (`ge::mountain::analysis`): the rule book (`mapgen/rules.hpp`, the
   R-rules) re-checked on the finished map, reading only what the `Level` publishes.
+- A SKI AREA RACED AS A MAP (version 8): the build (`resort_build.hpp`) runs its stages, then
+  `resort_level.hpp` moves the grids and woods out of the attempt ONCE into a base map
+  (`resort_base`) and stands each course up on it in place (`set_course`: the course's line, its
+  slalom gates from `course_gates.hpp`, its own day from `course_day.hpp`, the kickers and drops
+  it skis named by its arc). `generate.cpp` holds the area to `analysis::analyze_resort` on the
+  first course's map, each course to `analysis::analyze_course` (one that fails is not offered),
+  and races `choose_course`'s pick (`GenerateOptions::course`, `grade`, else `deal_grade`).
+  `analyze_level` answers both on a map with a `resort`; `analysis/shared.hpp` holds the checks
+  every map shares (the start line, the day, the weather).
 
 ## Order of work (docs/goals.md M4a to M4d)
 
@@ -40,7 +49,8 @@ one game's: which maps a game races, its modes and its strings stay in the game.
 ## Labs
 
 `plugins/mountain/labs/`: `level` (the map from above, captioned, with its gate table),
-`analyze` (the rule book over seeds, `--refusals` for why attempts were thrown away) and
+`analyze` (the rule book over seeds, `--refusals` for why attempts were thrown away; both take
+`--version=1,8`, the single piste and a ski area's race map) and
 `mapgen-cost` (`PRESET=release`), and for the ski area `resort` (the area from above and its
 courses, with its lifts, runs and courses as tables and the attempts tried) and `junctions`
 (where the groomed snow steps where runs meet, the worst drawn as relief). A change to mapgen or

@@ -1,9 +1,9 @@
 # lab digests at their smoke flags: labs --all --smoke --write-digests
-analyze 06a600c2252d9fef
+analyze 47aeb41752f58f41
 frame-pace c5058023a52812c3
 gpu-capture 8b5d5e3b7be5a4fc
 junctions 036999ca677e12e6
-level 4490929c4816a055
+level 4fbff3da7a82c4aa
 mapgen-cost 3baf51b6907817f3
 noise 3d3a828834f144cb
 play 1cc3e19bd8dced06
@@ -12,5 +12,6 @@ ride f7dc714b2493f95a
 run-clock 81607c7ac1161166
 shadows 5b0d6051c10638b4
 sim a9c6d0f6bb29ce2a
+synth 39e6460e5c8a8c8e
 taa 01ee5d58d90a05ce
 world 7c12b61f90b651e7

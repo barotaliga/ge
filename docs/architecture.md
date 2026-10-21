@@ -53,9 +53,14 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   pass owns its GPU buffers and exposes `prepare(view)` and `encode(pass)`; the frame core
   (the view and camera, the pass table, the sky, the terrain, post) is built (M7a).
   **`docs/rendering.md` is the plan** for this layer and `engine/gpu`.
-- **`engine/audio`**: the synth: voice definitions, a DSP graph
-  (oscillators, noise, biquads, envelopes, echo), racks and `play_def`. It runs on the
-  platform's audio stream.
+- **`engine/audio`**: the synth (built, M9a): the vocabulary (`Tone`, `Noise`, `LayerSpec`,
+  `LayerTarget`), a fixed-capacity DSP graph (polyBLEP oscillators, coloured noise pools,
+  state-variable filters, envelopes, soft saturation, four buses, an echo and a soft-knee
+  limiter), sounds as data (`SoundDef`, `play_def`), racks of steered layers, the meter and WAV
+  bytes. It renders 48 kHz stereo float with no platform: the game thread's calls cross to the
+  render thread through a lock-free ring, and the render is deterministic to the bit (core/libm,
+  core::Rng), so a buffer is a golden and a lab digest. `engine/platform`'s audio device pulls
+  it on SDL's audio thread and converts to the hardware's rate.
 - **`engine/ui`**: the immediate-mode 2D layer (rects, images, SDF text), plus Dear
   ImGui behind `GE_DEV_UI`.
 - **`games/fall_line/app`**: Fall Line's presentation, the `fall_line_app` library (which
@@ -138,7 +143,8 @@ run_clock.frame(dt) → n steps
 for n:  sim::step(state, input)                      // 120 Hz, deterministic, no allocation
 extract(state, alpha) → FrameView                    // plain data, interpolated
 render: prepare passes (CPU, may be parallel) → encode the pass table (fixed order) → submit → present
-audio: beds read FrameView; the device thread pulls samples
+audio: beds read the state once a frame and steer their layers; events fire one-shots;
+       the device thread pulls blocks through the synth's ring
 ui:    HUD + cards drawn last
 ```
 

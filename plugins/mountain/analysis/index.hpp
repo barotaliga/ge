@@ -1,7 +1,7 @@
 // LEVEL ANALYSIS — the generator's scoreboard, and its gate: re-check a FINISHED map against
-// the rule book, rule by rule, reading only what the `Level` publishes. The single piste's
-// checks so far (the resort's, R25–R28, and the terrain park's, R20, arrive with
-// docs/goals.md M4b–M4c; the `stats` block arrives with the analyze CLI that prints it).
+// the rule book, rule by rule, reading only what the `Level` publishes: the single piste's checks
+// here, and a ski area's course and area in resort.hpp (the terrain park's, R20, arrive with
+// docs/goals.md M4b5; the `stats` block arrives with the analyze CLI that prints it).
 //
 // Every message's text is fixed, to the character: `generate_level` writes the rejected
 // attempts' findings into its debug line, and the golden table holds that line.
@@ -47,7 +47,8 @@ inline std::string band_text(mapgen::Band b, const char* unit = "") {
   return str(b.min) + "\u2013" + str(b.max) + unit;
 }
 
-// Re-check a finished single-piste level against the rule book.
+// Re-check a finished level against the rule book: a single piste's checks, or on a map with a
+// `resort` its course's and its area's (resort.hpp), the course's first.
 LevelAnalysis analyze_level(const mapgen::Level& level);
 
 }  // namespace ge::mountain::analysis

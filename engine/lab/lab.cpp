@@ -177,6 +177,12 @@ void Lab::shot(Shot s, const Picture& picture, Det det) {
   shots_.push_back(Taken{std::move(s), std::move(out), det});
 }
 
+void Lab::attach(std::string name, std::vector<uint8_t> bytes, Det det) {
+  hash(name.data(), name.size() + 1);
+  if (det == Det::deterministic) hash(bytes.data(), bytes.size());
+  files_.push_back(File{std::move(name), std::move(bytes), det});
+}
+
 void Lab::fail(const std::string& what, const std::string& next_action) {
   std::string line = spec_->id;
   line.append(": ").append(what).append("\n    ").append(next_action);
