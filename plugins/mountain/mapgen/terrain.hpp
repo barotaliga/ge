@@ -21,6 +21,8 @@
 #pragma once
 
 #include <array>
+#include <memory>
+#include <optional>
 #include <vector>
 
 #include "core/heightfield.hpp"
@@ -37,10 +39,15 @@ struct Bowl {
 };
 
 // A headwall: a band across the face where the profile drops `drop` m more over `run` m,
-// centred `z` down the map (R3).
+// centred `z` down the map (R3). On a resort's massif (R25) it is a band of the face: centred
+// on `x` and reaching a bell's sigma `spread` across it (both absent on the single piste's).
 struct Headwall {
   double z, drop, run;
+  std::optional<double> x;
+  std::optional<double> spread;
 };
+
+struct Massif;  // massif.hpp
 
 // How finely the profile is tabulated over the descent.
 inline constexpr int kProfileSamples = 1024;
@@ -68,6 +75,19 @@ struct TerrainPlan {
   struct {
     double warp, flank, hills, ridges, rollers, crests, headwalls;
   } seeds;  // one noise seed per layer, so the layers do not echo each other
+  // R25 — how far over the sea the map's lowest ground stands, m (from v8; absent before, where
+  // the floor stands at `altitude`).
+  std::optional<double> sea;
+  // R25 — how many times R3's wavelengths the hills and the spurs and gullies are drawn at (from
+  // v8, `massif.relief.scale`); one before. Multiplying by one is exact, so it is always applied.
+  double fold = 1;
+  // R25 — THE RESORT'S MOUNTAIN (massif.hpp): the height is the massif's where set.
+  std::shared_ptr<const Massif> massif;
+  // R2 — where the side ridges start and reach their height, m across from the map's middle:
+  // the rule book's `mountain.flank` but on a resort's wider face (R25).
+  struct {
+    double inner, outer;
+  } flank_band{rules::mountain::flank::inner, rules::mountain::flank::outer};
 };
 
 // Deal the mountain's plan off the attempt's stream, in `region` (R21), for a piste of `grade`.
@@ -83,5 +103,37 @@ inline double descent_at(const TerrainPlan& plan, double z) {
 
 // R2 — how far up a side ridge a plan point stands, 0 on the face … 1 at the flank's height.
 double flank_at(const TerrainPlan& plan, double x, double z);
+
+// R25 — where the sea stands in the map's frame, m: from v8 the lowest ground's height less the
+// plan's `sea`; before, under the village by the floor's altitude.
+double sea_level_of(const TerrainPlan& plan, const ge::core::Heightfield& ground,
+                    const Vec3& village);
+
+// THE NOISE STACK the mountain is read off (the country's fields, fractal and ridged),
+// shared with the massif's bake (massif.hpp). Each field keeps the lattice square it last read,
+// and a bake reads its grid in order, so nearly every read reuses its corners.
+struct RidgedFields {
+  ge::core::NoiseField coarse;
+  ge::core::NoiseField fine;
+};
+struct CountryFields {
+  ge::core::NoiseField warp_x;
+  ge::core::NoiseField warp_z;
+  ge::core::NoiseField flank;
+  std::array<ge::core::NoiseField, 4> hills;
+  RidgedFields ridges;
+  RidgedFields rollers;
+  RidgedFields crests;
+  RidgedFields crests_fine;
+  std::vector<ge::core::NoiseField> headwalls;
+};
+CountryFields country_fields(const TerrainPlan& plan);
+// Fractal value noise centred on zero, roughly −1..1, over the four hill octaves.
+double fbm(std::array<ge::core::NoiseField, 4>& fields, double x, double z);
+// Ridged noise, 0..1 with sharp crests at 1.
+double ridged(RidgedFields& f, double x, double z);
+// How open the side ridges are at z, and the flank across x with that already read.
+double flank_open(const TerrainPlan& plan, double z);
+double flank_across(const TerrainPlan& plan, double noise, double x, double open);
 
 }  // namespace ge::mountain::mapgen

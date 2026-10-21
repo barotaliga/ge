@@ -7,6 +7,7 @@
 #include "mountain/mapgen/terrain.hpp"
 
 #include <cmath>
+#include <limits>
 
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
@@ -56,20 +57,6 @@ const ProfileTable* profile_for(const GradeRow& grade) {
   return &tables[grade.id ? 1 + static_cast<size_t>(*grade.id) : 0];
 }
 
-// Fractal value noise centred on zero, roughly −1..1: octaves halving in scale and weight.
-template <size_t N>
-double fbm(std::array<NoiseField, N>& fields, double x, double z) {
-  double sum = 0;
-  double amp = 1;
-  double norm = 0;
-  for (NoiseField& f : fields) {
-    sum += (sample_noise(f, x, z) * 2 - 1) * amp;
-    norm += amp;
-    amp *= 0.5;
-  }
-  return sum / norm;
-}
-
 template <size_t N>
 std::array<NoiseField, N> fbm_fields(double scale, double seed) {
   std::array<NoiseField, N> fields{};
@@ -81,64 +68,8 @@ std::array<NoiseField, N> fbm_fields(double scale, double seed) {
   return fields;
 }
 
-struct RidgedFields {
-  NoiseField coarse;
-  NoiseField fine;
-};
-
 RidgedFields ridged_fields(double scale, double seed) {
   return {noise_field(scale, seed), noise_field(scale * 0.5, seed + 31)};
-}
-
-// Ridged noise, 0..1 with sharp crests at 1: v^1.25 without a pow.
-double ridged(RidgedFields& f, double x, double z) {
-  const double a = 1 - std::abs(sample_noise(f.coarse, x, z) * 2 - 1);
-  const double b = 1 - std::abs(sample_noise(f.fine, x, z) * 2 - 1);
-  const double v = a * a * 0.7 + b * b * 0.3;
-  return v * std::sqrt(std::sqrt(v));
-}
-
-// Every noise field the mountain is read off, for one plan. Each keeps the lattice square it
-// last read, and the bake reads its grid in order, so nearly every read reuses its corners.
-struct CountryFields {
-  NoiseField warp_x;
-  NoiseField warp_z;
-  NoiseField flank;
-  std::array<NoiseField, 4> hills;
-  RidgedFields ridges;
-  RidgedFields rollers;
-  RidgedFields crests;
-  RidgedFields crests_fine;
-  std::vector<NoiseField> headwalls;
-};
-
-CountryFields country_fields(const TerrainPlan& plan) {
-  const auto& s = plan.seeds;
-  CountryFields f{noise_field(420, s.warp),
-                  noise_field(420, s.warp + 17),
-                  noise_field(260, s.flank),
-                  fbm_fields<4>(R::face::hills::scale, s.hills),
-                  ridged_fields(R::face::ridges::scale, s.ridges),
-                  ridged_fields(R::face::rollers::scale, s.rollers),
-                  ridged_fields(170, s.crests),
-                  ridged_fields(60, s.crests + 5),
-                  {}};
-  for (size_t i = 0; i < plan.headwalls.size(); i++) {
-    f.headwalls.push_back(noise_field(160, s.headwalls + double(i) * 101));
-  }
-  return f;
-}
-
-double flank_open(const TerrainPlan& plan, double z) {
-  namespace F = R::mountain::flank;
-  return 1 - smoothstep(F::open.min, F::open.max, descent_at(plan, z));
-}
-
-double flank_across(const TerrainPlan& plan, double noise, double x, double open) {
-  namespace F = R::mountain::flank;
-  const double warp = (noise * 2 - 1) * F::warp;
-  const double across = std::abs(x - plan.size / 2) + warp;
-  return smoothstep(F::inner, F::outer, across) * open;
 }
 
 double flank_of(const TerrainPlan& plan, double noise, double x, double z) {
@@ -212,6 +143,56 @@ double country_at(const TerrainPlan& plan, CountryFields& f, double x, double z)
 
 }  // namespace
 
+// Fractal value noise centred on zero, roughly −1..1: octaves halving in scale and weight.
+double fbm(std::array<NoiseField, 4>& fields, double x, double z) {
+  double sum = 0;
+  double amp = 1;
+  double norm = 0;
+  for (NoiseField& f : fields) {
+    sum += (sample_noise(f, x, z) * 2 - 1) * amp;
+    norm += amp;
+    amp *= 0.5;
+  }
+  return sum / norm;
+}
+
+// Ridged noise, 0..1 with sharp crests at 1: v^1.25 without a pow.
+double ridged(RidgedFields& f, double x, double z) {
+  const double a = 1 - std::abs(sample_noise(f.coarse, x, z) * 2 - 1);
+  const double b = 1 - std::abs(sample_noise(f.fine, x, z) * 2 - 1);
+  const double v = a * a * 0.7 + b * b * 0.3;
+  return v * std::sqrt(std::sqrt(v));
+}
+
+CountryFields country_fields(const TerrainPlan& plan) {
+  const auto& s = plan.seeds;
+  CountryFields f{noise_field(420, s.warp),
+                  noise_field(420, s.warp + 17),
+                  noise_field(260, s.flank),
+                  fbm_fields<4>(R::face::hills::scale * plan.fold, s.hills),
+                  ridged_fields(R::face::ridges::scale * plan.fold, s.ridges),
+                  ridged_fields(R::face::rollers::scale, s.rollers),
+                  ridged_fields(170, s.crests),
+                  ridged_fields(60, s.crests + 5),
+                  {}};
+  for (size_t i = 0; i < plan.headwalls.size(); i++) {
+    f.headwalls.push_back(noise_field(160, s.headwalls + double(i) * 101));
+  }
+  return f;
+}
+
+double flank_open(const TerrainPlan& plan, double z) {
+  namespace F = R::mountain::flank;
+  return 1 - smoothstep(F::open.min, F::open.max, descent_at(plan, z));
+}
+
+double flank_across(const TerrainPlan& plan, double noise, double x, double open) {
+  namespace F = R::mountain::flank;
+  const double warp = (noise * 2 - 1) * F::warp;
+  const double across = std::abs(x - plan.size / 2) + warp;
+  return smoothstep(plan.flank_band.inner, plan.flank_band.outer, across) * open;
+}
+
 TerrainPlan plan_terrain(ge::core::Rng& rng, const Region& region, const GradeRow& grade) {
   namespace M = R::mountain;
   namespace F = R::face;
@@ -245,7 +226,8 @@ TerrainPlan plan_terrain(ge::core::Rng& rng, const Region& region, const GradeRo
     const double drop =
         in_band(rng, scale_band(F::headwalls::drop, K.headwalls.drop * G.headwalls.drop));
     const double run = in_band(rng, F::headwalls::run);
-    headwalls.push_back({summit_z + (base_z - summit_z) * u, drop, run});
+    headwalls.push_back(
+        {summit_z + (base_z - summit_z) * u, drop, run, std::nullopt, std::nullopt});
   }
   const double altitude = in_band(rng, region.altitude.base);
   const double tree_line = in_band(rng, region.altitude.tree_line);
@@ -265,7 +247,11 @@ TerrainPlan plan_terrain(ge::core::Rng& rng, const Region& region, const GradeRo
                    profile_for(grade),
                    &region,
                    &grade,
-                   {}};
+                   {},
+                   std::nullopt,
+                   1,
+                   nullptr,
+                   {R::mountain::flank::inner, R::mountain::flank::outer}};
   plan.seeds.warp = seed();
   plan.seeds.flank = seed();
   plan.seeds.hills = seed();
@@ -294,6 +280,18 @@ ge::core::Heightfield bake_country(const TerrainPlan& plan) {
 
 double flank_at(const TerrainPlan& plan, double x, double z) {
   return flank_of(plan, ge::core::value_noise(x, z, 260, plan.seeds.flank), x, z);
+}
+
+double sea_level_of(const TerrainPlan& plan, const ge::core::Heightfield& ground,
+                    const Vec3& village) {
+  if (!plan.sea) return village.y - plan.altitude;
+  // A plain loop and compare: the samples are floats, never NaN, and the lowest of them is the
+  // same whichever comparison finds it.
+  double low = std::numeric_limits<double>::infinity();
+  for (const float v : ground.data) {
+    if (v < low) low = v;
+  }
+  return low - *plan.sea;
 }
 
 }  // namespace ge::mountain::mapgen
