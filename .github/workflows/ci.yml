@@ -1,0 +1,68 @@
+# Every push and pull request: format, the agent guidance's structure, then
+# build + test on each compiler and OS the engine promises to produce the
+# same bits on. A determinism break shows as a parity test failing on ONE
+# row of the matrix — that row's compiler or libm is the suspect.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fmt:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: make fmt-check
+
+  agents:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: make agents-check
+
+  test:
+    name: test (${{ matrix.os }}, ${{ matrix.cxx }}, ${{ matrix.preset }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-24.04, cxx: g++, preset: debug }
+          - { os: ubuntu-24.04, cxx: g++, preset: release }
+          - { os: ubuntu-24.04, cxx: clang++, preset: release }
+          - { os: ubuntu-24.04-arm, cxx: g++, preset: release }
+          - { os: macos-15, cxx: clang++, preset: release }
+    env:
+      CXX: ${{ matrix.cxx }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Ninja (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja
+      - run: cmake --preset ${{ matrix.preset }}
+      - run: cmake --build --preset ${{ matrix.preset }}
+      - run: ctest --preset ${{ matrix.preset }}
+
+  windows:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+      - run: cmake --preset release
+      - run: cmake --build --preset release
+      - run: ctest --preset release
+
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: make lint PRESET=release
