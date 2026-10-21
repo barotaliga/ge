@@ -111,10 +111,23 @@ const Case kCases[] = {
 
 constexpr const char* kGolden = "tests/golden/audio_synth.txt";
 
+// Whether an environment variable is set (MSVC deprecates std::getenv in favour of its own).
+bool env_set(const char* name) {
+#ifdef _MSC_VER
+  char* v = nullptr;
+  size_t n = 0;
+  const bool set = _dupenv_s(&v, &n, name) == 0 && v != nullptr;
+  std::free(v);
+  return set;
+#else
+  return std::getenv(name) != nullptr;
+#endif
+}
+
 }  // namespace
 
 TEST(the_reference_renders_are_deterministic_and_held_by_the_golden) {
-  const bool write = std::getenv("GE_GOLDEN_WRITE") != nullptr;
+  const bool write = env_set("GE_GOLDEN_WRITE");
   std::vector<std::vector<std::string>> want;
   if (!write) want = ge::test::golden_words(kGolden);
   std::string written = "# FNV-1a 64 of each reference render's float bytes (audio_synth_test)\n";
