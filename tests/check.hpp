@@ -45,6 +45,18 @@ inline void fail(const char* file, int line, const std::string& what) {
 // The project root, so a test can open tests/golden/* from any build dir.
 inline std::string root_path(const char* rel) { return std::string(GE_SOURCE_DIR) + "/" + rel; }
 
+// The body of CHECK_BITS / CHECK_JS_BITS: a function, so a long expression never truncates.
+inline void check_bits(double got, double want, bool any_nan, const char* expr, const char* file,
+                       int line) {
+  if (any_nan && got != got && want != want) return;
+  if (bits(got) == bits(want)) return;
+  char m[128];
+  std::snprintf(m, sizeof m, ": got %.17g (%016llx) want %.17g (%016llx)", got,
+                static_cast<unsigned long long>(bits(got)), want,
+                static_cast<unsigned long long>(bits(want)));
+  fail(file, line, std::string(expr) + m);
+}
+
 }  // namespace ge::test
 
 #define GE_CAT2(a, b) a##b
@@ -57,28 +69,9 @@ inline std::string root_path(const char* rel) { return std::string(GE_SOURCE_DIR
 #define CHECK(cond) ((cond) ? (void)0 : ::ge::test::fail(__FILE__, __LINE__, "CHECK(" #cond ")"))
 
 // Bit equality of two doubles — the determinism contract is bits, not closeness.
-#define CHECK_BITS(got, want)                                                                \
-  do {                                                                                       \
-    const double g_ = (got), w_ = (want);                                                    \
-    if (::ge::test::bits(g_) != ::ge::test::bits(w_)) {                                      \
-      char m_[160];                                                                          \
-      std::snprintf(m_, sizeof m_, "%s: got %.17g (%016llx) want %.17g (%016llx)", #got, g_, \
-                    (unsigned long long)::ge::test::bits(g_), w_,                            \
-                    (unsigned long long)::ge::test::bits(w_));                               \
-      ::ge::test::fail(__FILE__, __LINE__, m_);                                              \
-    }                                                                                        \
-  } while (0)
+#define CHECK_BITS(got, want) ::ge::test::check_bits((got), (want), false, #got, __FILE__, __LINE__)
 
 // CHECK_BITS as JS can observe it: any NaN equals any NaN, because JS has one NaN and V8 does
 // not keep NaN payloads or signs stable. Use it for results JS code produced.
-#define CHECK_JS_BITS(got, want)                                                             \
-  do {                                                                                       \
-    const double g_ = (got), w_ = (want);                                                    \
-    if (!(g_ != g_ && w_ != w_) && ::ge::test::bits(g_) != ::ge::test::bits(w_)) {           \
-      char m_[160];                                                                          \
-      std::snprintf(m_, sizeof m_, "%s: got %.17g (%016llx) want %.17g (%016llx)", #got, g_, \
-                    (unsigned long long)::ge::test::bits(g_), w_,                            \
-                    (unsigned long long)::ge::test::bits(w_));                               \
-      ::ge::test::fail(__FILE__, __LINE__, m_);                                              \
-    }                                                                                        \
-  } while (0)
+#define CHECK_JS_BITS(got, want) \
+  ::ge::test::check_bits((got), (want), true, #got, __FILE__, __LINE__)

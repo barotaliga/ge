@@ -25,7 +25,13 @@ and prints `ok` or `FAIL` per test.
   never by hand and never by the C++ under test.
 - Format: one row per line, whitespace-separated hex (`%016llx` doubles, plain hex
   integers). Inputs come first, then outputs. A leading `#` line may carry
-  provenance (the Node version).
+  provenance (the Node version). Booleans are `0`/`1` doubles; an optional is the pair
+  `has value` (`0 0` when absent). A module with no numbers (`core/output`) gets a text
+  transcript the C++ test reproduces by running the same script.
+- Generators load the framework's `.ts` sources through `tools/parity/oracle-import.mjs`
+  (it resolves the extensionless relative imports). Anything that reaches a
+  transcendental goes in a script that calls `requireOracleNode` (`oracle-node.mjs`) and
+  runs under `make golden-libm`.
 - Committed. Regenerating them is a reviewed change: say in the PR why the oracle
   moved.
 - Keep a file under about 1 MB. Draw inputs from a fixed mulberry32 seed so the table
