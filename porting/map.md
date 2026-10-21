@@ -40,6 +40,8 @@ the row when the file moves.
 | `plugins/mountain/analysis/crossings.hpp` | `game5/engine/analysis/crossings.ts` | selfCrossings |
 | `plugins/mountain/analysis/index.cpp` | `game5/engine/analysis/index.ts` | analyzeLevel |
 | `plugins/mountain/analysis/index.hpp` | `game5/engine/analysis/index.ts` | analyzeLevel |
+| `plugins/mountain/analysis/race.cpp` | `game5/tests/slalom_test.ts` | the slalom course's assertions, as R31's analysis |
+| `plugins/mountain/analysis/race.hpp` | `game5/engine/mapgen/race-course.ts` | raceCourseOf |
 | `plugins/mountain/analysis/resort.cpp` | `game5/engine/analysis/resort.ts` | analyzeResort (the engine's own subset of its checks) |
 | `plugins/mountain/analysis/resort.hpp` | `game5/engine/analysis/resort.ts` | analyzeResort |
 | `plugins/mountain/analysis/shared.cpp` | `game5/engine/analysis/index.ts` | analyzeLevel (R13, R15, R19) |
@@ -48,6 +50,7 @@ the row when the file moves.
 | `plugins/mountain/labs/resort_lab.cpp` | `game5/scripts/resort-map.mjs` | the plan, the listing (no panorama or charts yet) |
 | `plugins/mountain/labs/resort_map.cpp` | `game5/scripts/lib/resort-draw.mjs` | renderResortPlan |
 | `plugins/mountain/labs/resort_map.hpp` | `game5/scripts/lib/resort-draw.mjs` | renderResortPlan |
+| `plugins/mountain/labs/slalom_lab.cpp` | `game5/scripts/level-map.mjs` | the course drawn (the straightened panel is the engine's own) |
 | `plugins/mountain/mapgen/access_build.cpp` | `game5/engine/mapgen/access-build.ts` |  |
 | `plugins/mountain/mapgen/access_build.hpp` | `game5/engine/mapgen/access-build.ts` |  |
 | `plugins/mountain/mapgen/berm.hpp` | `game5/engine/mapgen/berm.ts` | bermProfile bermCrest |
@@ -57,10 +60,13 @@ the row when the file moves.
 | `plugins/mountain/mapgen/course_day.hpp` | `game5/engine/mapgen/course-day.ts` | courseDay |
 | `plugins/mountain/mapgen/course_gates.cpp` | `game5/engine/mapgen/course-gates.ts` | courseGates hashPick chooseCourse |
 | `plugins/mountain/mapgen/course_gates.hpp` | `game5/engine/mapgen/course-gates.ts` | courseGates hashPick chooseCourse |
+| `plugins/mountain/mapgen/course_prep.cpp` | `game5/engine/mapgen/course-prep.ts` | prepareCourse startDrop combStretch groomStretch clearedTrees (shaveCrests waits for the speed events) |
+| `plugins/mountain/mapgen/course_prep.hpp` | `game5/engine/mapgen/course-prep.ts` | Stretch CoursePrep prepareCourse clearedTrees |
 | `plugins/mountain/mapgen/courses.cpp` | `game5/engine/mapgen/courses.ts` | composeCourse courseArc runAt nearestOn |
 | `plugins/mountain/mapgen/courses.hpp` | `game5/engine/mapgen/courses.ts` | Piece CoursePlan composeCourse courseArc |
 | `plugins/mountain/mapgen/digest.cpp` | `game5/engine/mapgen/digest.ts` | levelDigest |
 | `plugins/mountain/mapgen/digest.hpp` | `game5/engine/mapgen/digest.ts` | levelDigest |
+| `plugins/mountain/mapgen/discipline_rules.hpp` | `game5/engine/mapgen/discipline-rules.ts` | DISCIPLINE_RULES.slalom |
 | `plugins/mountain/mapgen/drags.cpp` | `game5/engine/mapgen/drags.ts` |  |
 | `plugins/mountain/mapgen/drags.hpp` | `game5/engine/mapgen/drags.ts` |  |
 | `plugins/mountain/mapgen/drift.cpp` | `game5/engine/mapgen/drift.ts` | dealDrifts stampDrifts trimDrifts |
@@ -114,6 +120,8 @@ the row when the file moves.
 | `plugins/mountain/mapgen/rules.hpp` | `game5/engine/mapgen/rules.ts` | LEVEL_RULES inBand withinBand bendFloor |
 | `plugins/mountain/mapgen/run_start.cpp` | `game5/engine/mapgen/run-start.ts` |  |
 | `plugins/mountain/mapgen/run_start.hpp` | `game5/engine/mapgen/run-start.ts` |  |
+| `plugins/mountain/mapgen/slalom.cpp` | `game5/engine/mapgen/slalom.ts` | slalomStretch layGates layAt dealCombos comboSize fitBends courseOver setSlalom slalomLineAt |
+| `plugins/mountain/mapgen/slalom.hpp` | `game5/engine/mapgen/slalom.ts` | SlalomStretch slalomStretch setSlalom slalomLineAt SlalomCourse |
 | `plugins/mountain/mapgen/spawn.cpp` | `game5/engine/mapgen/spawn.ts` | chooseStart gridOnTrack layCheckpoints |
 | `plugins/mountain/mapgen/spawn.hpp` | `game5/engine/mapgen/spawn.ts` | chooseStart gridOnTrack layCheckpoints startGateArc |
 | `plugins/mountain/mapgen/station_clear.cpp` | `game5/engine/mapgen/station-clear.ts` | bottomFootprint clearStations clearBottom clearDrag candidates standsLevel SLIDES DRAG_TOP DRAG_FOOT |
@@ -139,3 +147,4 @@ the row when the file moves.
 | `plugins/racing/tape.cpp` | `oss-game-framework/src/racing/tape.ts` | encodeStream decodeStream |
 | `plugins/racing/tape.hpp` | `oss-game-framework/src/racing/tape.ts` | snapAxis ControlTape |
 | `tests/mountain_generate_test.cpp` |  | generateLevel levelDigest analyzeLevel |
+| `tests/mountain_slalom_test.cpp` | `game5/tests/slalom_test.ts` | the slalom course (R31) |

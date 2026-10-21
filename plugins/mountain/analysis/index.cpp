@@ -17,6 +17,7 @@
 #include "core/solar.hpp"
 #include "mountain/analysis/cliffs.hpp"
 #include "mountain/analysis/crossings.hpp"
+#include "mountain/analysis/race.hpp"
 #include "mountain/analysis/resort.hpp"
 #include "mountain/analysis/shared.hpp"
 #include "mountain/mapgen/grades.hpp"
@@ -56,6 +57,7 @@ constexpr double kSummitSlack = 2;
 }  // namespace
 
 LevelAnalysis analyze_level(const mapgen::Level& level) {
+  if (level.race) return analyze_race(level);
   if (level.resort) {
     LevelAnalysis out = analyze_course(level);
     LevelAnalysis area = analyze_resort(level);
