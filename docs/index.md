@@ -35,11 +35,15 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | `plugins/mountain/analysis/crossings.hpp` | R5 whether the piste crosses itself | `mountain` | `tests/mountain_generate_test.cpp` |
 | `plugins/mountain/analysis/index.cpp` | The single piste's checks, R1-R19, with their fixed message text | `mountain` | `tests/mountain_generate_test.cpp` |
 | `plugins/mountain/analysis/index.hpp` | Level analysis: analyze_level, the rule book re-checked on a finished map | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/access_build.cpp` | The access graph walked: exits, tops, reach from a start, the way home's cost | `mountain` | `tests/mountain_resort_build_test.cpp` |
+| `plugins/mountain/mapgen/access_build.hpp` | R29 the plan's access reckoning: every piste skiable again, every lift reached | `mountain` | `tests/mountain_resort_build_test.cpp` |
 | `plugins/mountain/mapgen/berm.hpp` | The windrow's cross-section either side of the piste (R18) | `mountain` | `tests/mountain_generate_test.cpp` |
 | `plugins/mountain/mapgen/cliffs.cpp` | Lays the cliffs on the face clear of the piste and cuts them into the ground | `mountain` | `tests/mountain_generate_test.cpp` |
 | `plugins/mountain/mapgen/cliffs.hpp` | R22 cliffs off the piste: their profile, footprint, laying and stamp | `mountain` | `tests/mountain_generate_test.cpp` |
 | `plugins/mountain/mapgen/digest.cpp` | level_digest's mixing order, word for word | `mountain` | `tests/mountain_generate_test.cpp` |
 | `plugins/mountain/mapgen/digest.hpp` | A map's fingerprint: level_digest, FNV-1a over what a skier meets | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/drags.cpp` | Drag lifts placed beside a foot, fitted to the ground, kept where access turns | `mountain` | `tests/mountain_resort_build_test.cpp` |
+| `plugins/mountain/mapgen/drags.hpp` | R26 R29 a drag lift from a piste's foot back up: placed, fitted, settled | `mountain` | `tests/mountain_resort_build_test.cpp` |
 | `plugins/mountain/mapgen/drift.cpp` | The drift dealer and the packed field's thinning under a drift | `mountain` | `tests/mountain_generate_test.cpp` |
 | `plugins/mountain/mapgen/drift.hpp` | R17 drifts across the piste: dealt off their own stream, stamped into the packed field | `mountain` | `tests/mountain_generate_test.cpp` |
 | `plugins/mountain/mapgen/drops.cpp` | The drops' placement and profile, off their own stream (none on v1) | `mountain` | `tests/mountain_generate_test.cpp` |
@@ -52,13 +56,41 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | `plugins/mountain/mapgen/grades.hpp` | R23 the piste grades: the ungraded row and the four colours | `mountain` | `tests/mountain_generate_test.cpp` |
 | `plugins/mountain/mapgen/kickers.cpp` | Places and stamps the kickers on the piste and off it | `mountain` | `tests/mountain_generate_test.cpp` |
 | `plugins/mountain/mapgen/kickers.hpp` | R4, R9 the kickers: on the piste and off it, their profile and stamp | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/lanes.cpp` | The lane search: each cell's nearest run, the step costs, the row-by-row sweep | `mountain` | `tests/mountain_resort_build_test.cpp` |
+| `plugins/mountain/mapgen/lanes.hpp` | R27 a lane's route: a search over a coarse grid to the cheapest join on a piste | `mountain` | `tests/mountain_resort_build_test.cpp` |
+| `plugins/mountain/mapgen/lift_chain.cpp` | The chair's bottom placed by an aim, the way's earthworks, the way pressed and groomed | `mountain` | `tests/mountain_resort_build_test.cpp` |
+| `plugins/mountain/mapgen/lift_chain.hpp` | R26 the way off the gondola's top to the peak's chair's queue, laid and graded | `mountain` | `tests/mountain_resort_build_test.cpp` |
+| `plugins/mountain/mapgen/lift_line.hpp` | Where a lift's boarding ring lies and where a rider is let go at its top | `mountain` | `tests/mountain_resort_build_test.cpp` |
+| `plugins/mountain/mapgen/links.cpp` | Branch and link lanes: sectors, branch points, the access rounds, the way home | `mountain` | `tests/mountain_resort_build_test.cpp` |
+| `plugins/mountain/mapgen/links.hpp` | R27 R29 the lanes between the runs: branch lanes across sectors, link lanes home | `mountain` | `tests/mountain_resort_build_test.cpp` |
+| `plugins/mountain/mapgen/massif.cpp` | The massif's plan draws, its profile tables and its row-by-row bake | `mountain` | `tests/mountain_resort_build_test.cpp` |
+| `plugins/mountain/mapgen/massif.hpp` | R25 the resort's massif: its plan and the baked mountain a ski area stands on | `mountain` | `tests/mountain_resort_build_test.cpp` |
+| `plugins/mountain/mapgen/net_index.cpp` | The runs' spatial hash: segments added, cells held in a grid or a map, covers | `mountain` | `tests/mountain_resort_build_test.cpp` |
+| `plugins/mountain/mapgen/net_index.hpp` | R27 the runs' spatial hash: the nearest other run to a point, and what covers it | `mountain` | `tests/mountain_resort_build_test.cpp` |
+| `plugins/mountain/mapgen/network.cpp` | The walk of a run: heading choice, merging, lanes crossing, the finish and checks | `mountain` | `tests/mountain_resort_build_test.cpp` |
+| `plugins/mountain/mapgen/network.hpp` | R27 a run's spec and its walk down the mountain: merging, crossing, the finish | `mountain` | `tests/mountain_resort_build_test.cpp` |
+| `plugins/mountain/mapgen/network_build.cpp` | Grading a walked run: envelopes, start hold, finish, the junction's plane and pins | `mountain` | `tests/mountain_resort_build_test.cpp` |
+| `plugins/mountain/mapgen/network_build.hpp` | R8 R27 a walked run graded onto the ground and onto the run it merges into | `mountain` | `tests/mountain_resort_build_test.cpp` |
 | `plugins/mountain/mapgen/query.cpp` | The piste's lazily built spatial hash and the nearest-point searches | `mountain` | `tests/mountain_generate_test.cpp` |
 | `plugins/mountain/mapgen/query.hpp` | Where on the piste a point is: nearest_track_point, its spatial hash, track_point_at | `mountain` | `tests/mountain_generate_test.cpp` |
 | `plugins/mountain/mapgen/regions.cpp` | The four regions' rows and the tree roster's hash pick | `mountain` | `tests/mountain_generate_test.cpp` |
 | `plugins/mountain/mapgen/regions.hpp` | R21 the regions: each snow country's row of multiples, roster and crust | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/resort.cpp` | The stations and lifts on the massif, and the run slots in walk order | `mountain` | `tests/mountain_resort_build_test.cpp` |
+| `plugins/mountain/mapgen/resort.hpp` | R26 R27 the resort's plan: the stations, the lifts and the run slots | `mountain` | `tests/mountain_resort_build_test.cpp` |
+| `plugins/mountain/mapgen/resort_build.cpp` | The ski-area build's stages over one attempt's state | `mountain` | `tests/mountain_resort_build_test.cpp` |
+| `plugins/mountain/mapgen/resort_build.hpp` | R25-R30 the ski-area build: its attempt's state and its stages, in order | `mountain` | `tests/mountain_resort_build_test.cpp` |
+| `plugins/mountain/mapgen/resort_rules.hpp` | The resort rule book's numbers (R25-R30) as constexpr namespaces | `mountain` | `tests/mountain_resort_build_test.cpp` |
 | `plugins/mountain/mapgen/rules.hpp` | The rule book's numbers (R1-R24) as constexpr namespaces | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/run_start.cpp` | A run's start: the fair heading off it, the slide to a glide's fall, the search | `mountain` | `tests/mountain_resort_build_test.cpp` |
+| `plugins/mountain/mapgen/run_start.hpp` | R12 R27 a run's start under its top: on the contour, slid down to a glide's fall | `mountain` | `tests/mountain_resort_build_test.cpp` |
 | `plugins/mountain/mapgen/spawn.cpp` | Chooses the start off the summit and lays the gates and the grid on the piste | `mountain` | `tests/mountain_generate_test.cpp` |
 | `plugins/mountain/mapgen/spawn.hpp` | R11-R13 the start: the start hut, the gates and the start line's grid | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/station_clear.cpp` | A station's footprint read as points across and along its line | `mountain` | `tests/mountain_resort_build_test.cpp` |
+| `plugins/mountain/mapgen/station_clear.hpp` | R26 a lift's bottom station footprint, read as points | `mountain` | `tests/mountain_resort_build_test.cpp` |
+| `plugins/mountain/mapgen/station_pad.cpp` | The pads pressed into the ground, the approach cut, the unload ramp, the grooming | `mountain` | `tests/mountain_resort_build_test.cpp` |
+| `plugins/mountain/mapgen/station_pad.hpp` | R26 the station pads: pressed, levelled again, groomed; a chair's unload ramp | `mountain` | `tests/mountain_resort_build_test.cpp` |
+| `plugins/mountain/mapgen/summit_ramps.cpp` | The room a ramp off a top needs: the rim, the glide, the lines and cuts it avoids | `mountain` | `tests/mountain_resort_build_test.cpp` |
+| `plugins/mountain/mapgen/summit_ramps.hpp` | R26 the room a ramp off a top needs: placed with a run's start, kept by the rest | `mountain` | `tests/mountain_resort_build_test.cpp` |
 | `plugins/mountain/mapgen/sun.cpp` | The day's draws, in their fixed order | `mountain` | `tests/mountain_generate_test.cpp` |
 | `plugins/mountain/mapgen/sun.hpp` | R15 the day: declination, the sun's window and deal_sun | `mountain` | `tests/mountain_generate_test.cpp` |
 | `plugins/mountain/mapgen/surface.cpp` | The crust's blur, patches and fold, on float32 grids | `mountain` | `tests/mountain_generate_test.cpp` |
@@ -89,6 +121,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | `tests/loop_run_clock_test.cpp` | Golden test: loop/run_clock, bit for bit | `testing` |  |
 | `tests/main.cpp` | Runs every TEST registered in a test executable | `testing` |  |
 | `tests/mountain_generate_test.cpp` | Golden test: the v1 generator's maps, section by section | `testing` `mountain` |  |
+| `tests/mountain_resort_build_test.cpp` | The ski-area build held by its own checks: determinism, a digest golden, R27 R29 | `testing` `mountain` |  |
 | `tests/package/consumer/main.cpp` | Links the installed engine package the way a game does (release smoke test) | `release` |  |
 | `tests/racing_records_test.cpp` | Golden test: racing/records, bit for bit | `testing` `racing` |  |
 | `tests/racing_standings_test.cpp` | Golden test: racing/standings, bit for bit | `testing` `racing` |  |
@@ -103,8 +136,11 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 
 | Keyword | Files |
 | --- | --- |
+| access | `plugins/mountain/mapgen/access_build.hpp` `tests/mountain_resort_build_test.cpp` |
+| access-build | `plugins/mountain/mapgen/access_build.cpp` `plugins/mountain/mapgen/access_build.hpp` |
 | accumulator | `engine/loop/run_clock.hpp` |
 | acos | `engine/core/libm/fdlibm_arc.cpp` `engine/core/libm/libm.hpp` |
+| add | `plugins/mountain/mapgen/net_index.cpp` |
 | agents | `tools/check-agents.sh` |
 | agents-check | `tools/agents-index.mjs` |
 | alpha | `engine/loop/run_clock.hpp` |
@@ -113,6 +149,8 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | angle | `engine/core/math.hpp` |
 | angular-velocity | `engine/core/quat.hpp` |
 | approach | `engine/core/math.hpp` |
+| approach-cut | `plugins/mountain/mapgen/summit_ramps.hpp` |
+| approached | `plugins/mountain/mapgen/lift_chain.cpp` |
 | argument-reduction | `engine/core/libm/fdlibm_trig.cpp` |
 | arm | `engine/core/libm/pow.cpp` |
 | asin | `engine/core/libm/fdlibm_arc.cpp` `engine/core/libm/libm.hpp` |
@@ -120,22 +158,42 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | atan | `engine/core/libm/fdlibm_arc.cpp` `engine/core/libm/libm.hpp` |
 | atan2 | `engine/core/libm/fdlibm_arc.cpp` `engine/core/libm/libm.hpp` |
 | attempt | `plugins/mountain/mapgen/generate.hpp` |
+| attempt-resort | `plugins/mountain/mapgen/resort_build.cpp` `plugins/mountain/mapgen/resort_build.hpp` |
 | azimuth | `engine/core/solar.hpp` |
 | bake | `engine/core/heightfield.hpp` |
+| bake-massif | `plugins/mountain/mapgen/massif.cpp` `plugins/mountain/mapgen/massif.hpp` |
 | base64 | `plugins/racing/tape.cpp` `plugins/racing/tape.hpp` |
 | beats | `plugins/racing/records.hpp` |
+| bench | `plugins/mountain/mapgen/massif.hpp` |
+| bench-share | `plugins/mountain/mapgen/massif.cpp` |
 | berm | `plugins/mountain/mapgen/berm.hpp` |
+| beside-cost | `plugins/mountain/mapgen/lanes.cpp` |
 | best | `plugins/racing/records.hpp` |
 | bilinear | `engine/core/heightfield.hpp` |
 | bit-cast | `engine/core/libm/fdlibm_internal.hpp` |
 | bits | `engine/core/libm/libm.hpp` |
 | blur | `plugins/mountain/mapgen/surface.cpp` |
+| boarding-ring | `plugins/mountain/mapgen/lift_line.hpp` |
+| bottom-footprint | `plugins/mountain/mapgen/station_clear.cpp` `plugins/mountain/mapgen/station_clear.hpp` |
+| box-of | `plugins/mountain/mapgen/links.cpp` |
+| branch | `plugins/mountain/mapgen/links.cpp` |
+| branch-lane | `plugins/mountain/mapgen/links.hpp` |
+| build-resort | `plugins/mountain/mapgen/resort_build.hpp` |
+| camber | `plugins/mountain/mapgen/network_build.hpp` |
+| cat-track | `plugins/mountain/mapgen/lanes.hpp` |
 | cbrt | `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/libm.hpp` |
+| cell-key | `plugins/mountain/mapgen/net_index.cpp` |
+| chain-bottom | `plugins/mountain/mapgen/lift_chain.cpp` `plugins/mountain/mapgen/lift_chain.hpp` |
+| chain-of | `plugins/mountain/mapgen/lift_chain.hpp` |
+| chain-way | `plugins/mountain/mapgen/lift_chain.cpp` `plugins/mountain/mapgen/lift_chain.hpp` |
+| chair | `plugins/mountain/mapgen/resort.hpp` |
 | chance | `engine/core/prng.hpp` |
 | check | `tests/check.hpp` `tools/check-agents.sh` `tools/check-libm.sh` `tools/check-plugins.mjs` |
 | check-bits | `tests/check.hpp` |
+| choose-heading | `plugins/mountain/mapgen/network.cpp` `plugins/mountain/mapgen/network.hpp` |
 | ci | `tools/check-agents.sh` `tools/check-libm.sh` |
 | clamp | `engine/core/math.hpp` |
+| clearance | `plugins/mountain/mapgen/network.hpp` |
 | cliff | `plugins/mountain/analysis/cliffs.hpp` `plugins/mountain/mapgen/cliffs.cpp` `plugins/mountain/mapgen/cliffs.hpp` |
 | cliffs | `plugins/mountain/mapgen/cliffs.hpp` |
 | clump | `plugins/mountain/mapgen/forest.cpp` `plugins/mountain/mapgen/forest.hpp` |
@@ -147,34 +205,49 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | continental | `plugins/mountain/mapgen/regions.hpp` |
 | controls | `plugins/racing/tape.hpp` |
 | conventions | `engine/core/math.hpp` |
+| corral-tail | `plugins/mountain/mapgen/lift_line.hpp` |
 | cos | `engine/core/libm/fdlibm_trig.cpp` `engine/core/libm/libm.hpp` |
+| course | `plugins/mountain/mapgen/resort_rules.hpp` |
+| covers | `plugins/mountain/mapgen/net_index.cpp` `plugins/mountain/mapgen/net_index.hpp` |
+| cross-fall | `plugins/mountain/mapgen/network_build.cpp` `plugins/mountain/mapgen/network_build.hpp` |
 | crossing | `plugins/mountain/analysis/crossings.hpp` |
 | crust | `plugins/mountain/mapgen/surface.cpp` `plugins/mountain/mapgen/surface.hpp` |
 | ctest | `tests/main.cpp` |
+| cut-approach | `plugins/mountain/mapgen/station_pad.cpp` `plugins/mountain/mapgen/station_pad.hpp` |
 | day | `plugins/mountain/mapgen/sun.hpp` |
 | daylight | `engine/core/solar.hpp` |
 | debug | `engine/core/output.hpp` |
 | decimal | `engine/core/num_text.cpp` |
 | depends | `tools/check-plugins.mjs` |
-| determinism | `engine/core/prng.hpp` `tools/check-libm.sh` |
+| determinism | `engine/core/prng.hpp` `tests/mountain_resort_build_test.cpp` `tools/check-libm.sh` |
 | diagnostics | `engine/core/output.hpp` |
-| digest | `plugins/mountain/mapgen/digest.cpp` `plugins/mountain/mapgen/digest.hpp` |
+| digest | `plugins/mountain/mapgen/digest.cpp` `plugins/mountain/mapgen/digest.hpp` `tests/mountain_resort_build_test.cpp` |
 | direction | `tools/check-plugins.mjs` |
 | discovery | `tools/agents-index.mjs` |
 | dist2 | `engine/core/math.hpp` |
+| drag | `plugins/mountain/mapgen/resort.hpp` |
+| drag-arm | `plugins/mountain/mapgen/lift_line.hpp` |
+| drag-back | `plugins/mountain/mapgen/drags.cpp` `plugins/mountain/mapgen/drags.hpp` |
+| drag-lift | `tests/mountain_resort_build_test.cpp` |
+| drag-top | `plugins/mountain/mapgen/station_pad.cpp` `plugins/mountain/mapgen/station_pad.hpp` |
+| drag-tops-of | `plugins/mountain/mapgen/station_pad.hpp` |
+| drags | `plugins/mountain/mapgen/drags.cpp` `plugins/mountain/mapgen/drags.hpp` |
 | drift | `plugins/mountain/mapgen/drift.cpp` `plugins/mountain/mapgen/drift.hpp` |
 | drifts | `plugins/mountain/mapgen/drift.hpp` |
 | drop | `plugins/mountain/analysis/cliffs.hpp` `plugins/mountain/mapgen/drops.cpp` `plugins/mountain/mapgen/drops.hpp` |
 | drops | `plugins/mountain/mapgen/drops.hpp` |
+| earthworks | `plugins/mountain/mapgen/lift_chain.cpp` `plugins/mountain/mapgen/lift_chain.hpp` |
 | elevation | `engine/core/solar.hpp` |
 | engine-plugin-game | `tools/check-plugins.mjs` |
 | ephemeris | `engine/core/solar.cpp` |
 | error | `engine/core/output.hpp` |
 | euler | `engine/core/quat.hpp` |
 | evening | `plugins/mountain/mapgen/weather.hpp` |
+| exits | `plugins/mountain/mapgen/access_build.cpp` |
 | exp | `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/libm.hpp` |
 | expm1 | `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/libm.hpp` |
 | exponent | `engine/core/libm/pow.cpp` |
+| fair-heading | `plugins/mountain/mapgen/run_start.cpp` `plugins/mountain/mapgen/run_start.hpp` |
 | fbm | `engine/core/noise.hpp` `plugins/mountain/mapgen/terrain.cpp` |
 | fdlibm | `engine/core/libm/fdlibm_arc.cpp` `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/fdlibm_internal.hpp` `engine/core/libm/fdlibm_trig.cpp` `engine/core/libm/libm.hpp` |
 | fell | `plugins/mountain/mapgen/regions.hpp` |
@@ -184,39 +257,56 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | finding | `plugins/mountain/analysis/index.hpp` |
 | findings | `plugins/mountain/analysis/index.hpp` |
 | fingerprint | `plugins/mountain/mapgen/digest.hpp` `plugins/racing/tape.hpp` |
+| fits | `plugins/mountain/mapgen/drags.cpp` |
 | fixed-step | `engine/loop/run_clock.hpp` |
 | fixture | `tests/golden.hpp` |
 | fma | `engine/core/libm/pow.cpp` |
 | fnv | `plugins/mountain/mapgen/digest.cpp` `plugins/mountain/mapgen/digest.hpp` |
 | focus | `engine/loop/run_clock.hpp` |
+| follow-route | `plugins/mountain/mapgen/network.cpp` |
+| footprint | `plugins/mountain/mapgen/station_clear.cpp` `plugins/mountain/mapgen/station_clear.hpp` |
 | forest | `plugins/mountain/mapgen/forest.cpp` `plugins/mountain/mapgen/forest.hpp` |
 | forgiving-base64 | `plugins/racing/tape.cpp` |
 | fragments | `tools/skill-lessons.mjs` |
 | frame | `engine/loop/run_clock.hpp` |
+| funnel-into | `plugins/mountain/mapgen/network_build.cpp` `plugins/mountain/mapgen/network_build.hpp` |
 | gates | `plugins/mountain/mapgen/spawn.hpp` |
 | ge_add_plugin | `tools/check-plugins.mjs` |
 | ge-tags | `tools/agents-index.mjs` |
 | generate | `plugins/mountain/mapgen/generate.cpp` `plugins/mountain/mapgen/generate.hpp` |
 | ghost | `plugins/racing/tape.cpp` `plugins/racing/tape.hpp` `tests/racing_tape_test.cpp` |
 | glibc | `engine/core/libm/pow.cpp` |
-| golden | `tests/core_heightfield_test.cpp` `tests/core_libm_test.cpp` `tests/core_math_test.cpp` `tests/core_noise_test.cpp` `tests/core_num_test.cpp` `tests/core_output_test.cpp` `tests/core_prng_test.cpp` `tests/core_quat_test.cpp` `tests/core_solar_test.cpp` `tests/golden.hpp` `tests/loop_run_clock_test.cpp` `tests/mountain_generate_test.cpp` `tests/racing_records_test.cpp` `tests/racing_standings_test.cpp` `tests/racing_tape_test.cpp` |
+| glide | `plugins/mountain/mapgen/run_start.hpp` |
+| golden | `tests/core_heightfield_test.cpp` `tests/core_libm_test.cpp` `tests/core_math_test.cpp` `tests/core_noise_test.cpp` `tests/core_num_test.cpp` `tests/core_output_test.cpp` `tests/core_prng_test.cpp` `tests/core_quat_test.cpp` `tests/core_solar_test.cpp` `tests/golden.hpp` `tests/loop_run_clock_test.cpp` `tests/mountain_generate_test.cpp` `tests/mountain_resort_build_test.cpp` `tests/racing_records_test.cpp` `tests/racing_standings_test.cpp` `tests/racing_tape_test.cpp` |
+| gondola | `plugins/mountain/mapgen/resort.hpp` |
 | grade | `plugins/mountain/mapgen/grades.cpp` `plugins/mountain/mapgen/grades.hpp` |
+| grade-run | `plugins/mountain/mapgen/network_build.cpp` `plugins/mountain/mapgen/network_build.hpp` |
 | grades | `plugins/mountain/mapgen/grades.hpp` |
 | gradient | `engine/core/heightfield.hpp` |
+| graph | `plugins/mountain/mapgen/access_build.hpp` |
 | grid | `engine/core/heightfield.hpp` |
+| groom-pads | `plugins/mountain/mapgen/station_pad.cpp` `plugins/mountain/mapgen/station_pad.hpp` |
+| groom-way | `plugins/mountain/mapgen/lift_chain.hpp` |
 | ground | `engine/core/heightfield.hpp` |
 | harness | `tests/check.hpp` |
 | hash | `engine/core/noise.hpp` |
 | hash2 | `engine/core/noise.hpp` |
+| head-below | `plugins/mountain/mapgen/run_start.cpp` |
+| head-on-contour | `plugins/mountain/mapgen/run_start.cpp` `plugins/mountain/mapgen/run_start.hpp` |
 | header | `engine/core/output.hpp` |
 | heading | `engine/core/math.hpp` `engine/core/quat.hpp` |
+| heading-at | `plugins/mountain/mapgen/network.cpp` |
+| height-at | `plugins/mountain/mapgen/massif.cpp` |
 | heightfield | `engine/core/heightfield.hpp` `plugins/mountain/mapgen/terrain.hpp` `tests/core_heightfield_test.cpp` |
 | hex | `tests/golden.hpp` |
 | high-word | `engine/core/libm/fdlibm_internal.hpp` |
+| home-of | `plugins/mountain/mapgen/access_build.cpp` |
+| hub | `plugins/mountain/mapgen/resort_rules.hpp` |
 | hypot | `engine/core/math.hpp` `tests/core_math_test.cpp` |
 | hypot3 | `engine/core/math.hpp` |
 | hypot4 | `engine/core/math.hpp` |
 | imul | `engine/core/num.hpp` |
+| in-approach | `plugins/mountain/mapgen/summit_ramps.cpp` |
 | include | `tools/check-plugins.mjs` |
 | index | `tools/agents-index.mjs` |
 | info | `engine/core/output.hpp` |
@@ -226,20 +316,41 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | internal | `engine/core/libm/fdlibm_internal.hpp` |
 | interpolation | `engine/loop/run_clock.hpp` |
 | inverse-trig | `engine/core/libm/fdlibm_arc.cpp` |
+| joinable | `plugins/mountain/mapgen/lanes.cpp` `plugins/mountain/mapgen/lanes.hpp` |
 | julian-day | `engine/core/solar.cpp` `engine/core/solar.hpp` |
+| junction | `plugins/mountain/mapgen/network_build.hpp` |
+| keeps-chain | `plugins/mountain/mapgen/lift_chain.hpp` |
 | keywords | `tools/agents-index.mjs` |
 | kicker | `plugins/mountain/mapgen/kickers.cpp` `plugins/mountain/mapgen/kickers.hpp` |
 | kickers | `plugins/mountain/mapgen/kickers.hpp` |
 | krummholz | `plugins/mountain/mapgen/forest.hpp` |
-| lanes | `plugins/mountain/mapgen/forest.cpp` |
+| lane | `plugins/mountain/mapgen/network.hpp` |
+| lane-ask | `plugins/mountain/mapgen/lanes.hpp` |
+| lane-route | `plugins/mountain/mapgen/lanes.hpp` |
+| lane-share | `plugins/mountain/mapgen/links.hpp` |
+| lane-spec | `plugins/mountain/mapgen/links.cpp` |
+| lanes | `plugins/mountain/mapgen/forest.cpp` `plugins/mountain/mapgen/lanes.cpp` `plugins/mountain/mapgen/lanes.hpp` `tests/mountain_resort_build_test.cpp` |
 | latitude | `plugins/mountain/mapgen/sun.hpp` |
 | lattice | `engine/core/noise.hpp` |
+| lay-access | `plugins/mountain/mapgen/links.cpp` `plugins/mountain/mapgen/links.hpp` |
+| lay-chain | `plugins/mountain/mapgen/lift_chain.hpp` `plugins/mountain/mapgen/resort_build.cpp` |
+| lay-links | `plugins/mountain/mapgen/links.cpp` `plugins/mountain/mapgen/links.hpp` |
 | leaderboard | `plugins/racing/standings.hpp` |
 | lerp | `engine/core/math.hpp` |
 | lessons | `tools/skill-lessons.mjs` |
+| let-go-of | `plugins/mountain/mapgen/lift_line.hpp` |
 | level | `plugins/mountain/mapgen/generate.hpp` |
+| level-pad | `plugins/mountain/mapgen/station_pad.cpp` |
 | libm | `engine/core/libm/fdlibm_arc.cpp` `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/fdlibm_internal.hpp` `engine/core/libm/fdlibm_trig.cpp` `engine/core/libm/libm.hpp` `engine/core/libm/pow.cpp` `tests/core_libm_test.cpp` `tools/check-libm.sh` |
+| lift | `plugins/mountain/mapgen/resort_rules.hpp` `plugins/mountain/mapgen/station_clear.hpp` |
+| lift-chain | `plugins/mountain/mapgen/lift_chain.cpp` `plugins/mountain/mapgen/lift_chain.hpp` |
+| lift-line | `plugins/mountain/mapgen/lift_line.hpp` `plugins/mountain/mapgen/summit_ramps.hpp` |
+| lift-look | `plugins/mountain/mapgen/lift_line.hpp` |
+| lift-plan | `plugins/mountain/mapgen/resort.hpp` |
 | line-cap | `tools/check-agents.sh` |
+| link | `plugins/mountain/mapgen/links.cpp` |
+| link-lane | `plugins/mountain/mapgen/links.hpp` |
+| links | `plugins/mountain/mapgen/links.cpp` `plugins/mountain/mapgen/links.hpp` |
 | log | `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/libm.hpp` `engine/core/output.cpp` `engine/core/output.hpp` `tests/core_output_test.cpp` |
 | log2 | `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/libm.hpp` |
 | logging | `engine/core/output.hpp` |
@@ -248,135 +359,237 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | main | `tests/main.cpp` |
 | mapgen | `plugins/mountain/mapgen/generate.hpp` `tests/mountain_generate_test.cpp` |
 | maritime | `plugins/mountain/mapgen/regions.hpp` |
+| massif | `plugins/mountain/mapgen/massif.cpp` `plugins/mountain/mapgen/massif.hpp` `plugins/mountain/mapgen/resort_rules.hpp` |
+| massif-row | `plugins/mountain/mapgen/massif.cpp` |
 | math | `engine/core/math.hpp` `tests/core_math_test.cpp` |
 | max | `engine/core/num.hpp` |
+| merge | `plugins/mountain/mapgen/network.hpp` |
 | metadata | `tools/agents-index.mjs` |
 | min | `engine/core/num.hpp` |
 | mod | `engine/core/num.hpp` |
 | module-state | `engine/core/output.cpp` `engine/core/output.hpp` |
 | modulo | `engine/core/num.hpp` |
 | moon | `engine/core/solar.cpp` `engine/core/solar.hpp` `tests/core_solar_test.cpp` |
-| mountain | `plugins/mountain/mapgen/terrain.hpp` |
+| mountain | `plugins/mountain/mapgen/massif.hpp` `plugins/mountain/mapgen/resort_build.cpp` `plugins/mountain/mapgen/resort_build.hpp` `plugins/mountain/mapgen/terrain.hpp` |
+| moves | `plugins/mountain/mapgen/lanes.cpp` |
 | mulberry32 | `engine/core/prng.hpp` |
 | nan | `engine/core/num.hpp` |
+| near-room | `plugins/mountain/mapgen/summit_ramps.cpp` `plugins/mountain/mapgen/summit_ramps.hpp` |
+| nearer-ahead | `plugins/mountain/mapgen/network_build.cpp` |
+| nearest | `plugins/mountain/mapgen/net_index.hpp` |
+| nearest-on | `plugins/mountain/mapgen/access_build.cpp` |
+| nearest-raster | `plugins/mountain/mapgen/lanes.cpp` `plugins/mountain/mapgen/lanes.hpp` |
+| neck | `plugins/mountain/mapgen/network.hpp` |
 | negative-zero | `engine/core/num.hpp` |
+| net-index | `plugins/mountain/mapgen/net_index.cpp` `plugins/mountain/mapgen/net_index.hpp` |
+| network | `plugins/mountain/mapgen/network.cpp` `plugins/mountain/mapgen/network.hpp` `plugins/mountain/mapgen/resort_rules.hpp` |
+| network-build | `plugins/mountain/mapgen/network_build.cpp` `plugins/mountain/mapgen/network_build.hpp` |
 | next | `engine/core/prng.hpp` |
 | noise | `engine/core/noise.hpp` `tests/core_noise_test.cpp` |
 | num | `engine/core/num.hpp` `engine/core/num_text.cpp` `engine/core/num_text.hpp` `tests/core_num_test.cpp` |
 | number | `engine/core/num.hpp` |
 | number-format | `engine/core/num_text.cpp` `engine/core/num_text.hpp` |
+| nursery | `plugins/mountain/mapgen/resort.hpp` |
 | octaves | `engine/core/noise.hpp` |
+| off-line | `plugins/mountain/mapgen/summit_ramps.cpp` |
+| off-queue | `plugins/mountain/mapgen/lift_chain.hpp` |
+| off-way | `plugins/mountain/mapgen/lift_chain.hpp` |
 | optimized-routines | `engine/core/libm/pow.cpp` |
 | order | `plugins/racing/standings.hpp` |
 | orientation | `engine/core/quat.hpp` |
+| orphans | `plugins/mountain/mapgen/access_build.hpp` |
 | output | `engine/core/output.cpp` `engine/core/output.hpp` `tests/core_output_test.cpp` |
 | package | `tests/package/consumer/main.cpp` |
+| pad | `plugins/mountain/mapgen/station_pad.hpp` |
+| pad-grade | `plugins/mountain/mapgen/drags.cpp` `plugins/mountain/mapgen/drags.hpp` |
+| pad-shape | `plugins/mountain/mapgen/station_pad.hpp` |
+| pad-surface | `plugins/mountain/mapgen/station_pad.hpp` |
+| pads | `plugins/mountain/mapgen/resort_build.cpp` `plugins/mountain/mapgen/resort_build.hpp` |
 | pause | `engine/loop/run_clock.hpp` |
+| peak | `plugins/mountain/mapgen/massif.hpp` |
 | personal-best | `plugins/racing/records.hpp` |
 | pi | `engine/core/math.hpp` |
 | pick | `engine/core/prng.hpp` |
+| pin | `plugins/mountain/mapgen/network_build.hpp` |
+| pin-of | `plugins/mountain/mapgen/network_build.cpp` |
 | pinned-map | `plugins/mountain/mapgen/digest.hpp` |
-| piste | `plugins/mountain/mapgen/track.hpp` |
+| piste | `plugins/mountain/mapgen/resort_rules.hpp` `plugins/mountain/mapgen/track.hpp` |
 | pitch | `engine/core/quat.hpp` |
+| pitch-band | `plugins/mountain/mapgen/lanes.cpp` |
 | place | `plugins/racing/standings.hpp` |
+| place-start | `plugins/mountain/mapgen/run_start.cpp` `plugins/mountain/mapgen/run_start.hpp` |
+| place-stations | `plugins/mountain/mapgen/resort.cpp` `plugins/mountain/mapgen/resort.hpp` |
+| plan-drag | `plugins/mountain/mapgen/drags.cpp` `plugins/mountain/mapgen/drags.hpp` |
+| plan-lift | `plugins/mountain/mapgen/access_build.hpp` |
+| plan-lifts | `plugins/mountain/mapgen/drags.hpp` |
+| plan-massif | `plugins/mountain/mapgen/massif.cpp` `plugins/mountain/mapgen/massif.hpp` |
+| plan-resort | `plugins/mountain/mapgen/resort.cpp` `plugins/mountain/mapgen/resort.hpp` |
+| plan-run | `plugins/mountain/mapgen/access_build.hpp` |
+| plan-runs | `plugins/mountain/mapgen/links.hpp` |
+| plane | `plugins/mountain/mapgen/network_build.hpp` |
+| plane-of | `plugins/mountain/mapgen/network_build.cpp` |
 | plugin | `tools/check-plugins.mjs` |
 | plugins | `tools/check-plugins.mjs` |
+| point-at | `plugins/mountain/mapgen/drags.cpp` |
 | position | `plugins/racing/standings.hpp` |
 | pow | `engine/core/libm/libm.hpp` `engine/core/libm/pow.cpp` |
 | power | `engine/core/libm/pow.cpp` |
+| press-box | `plugins/mountain/mapgen/lift_chain.cpp` |
+| press-pads | `plugins/mountain/mapgen/resort_build.cpp` `plugins/mountain/mapgen/station_pad.cpp` `plugins/mountain/mapgen/station_pad.hpp` |
+| press-way | `plugins/mountain/mapgen/lift_chain.cpp` `plugins/mountain/mapgen/lift_chain.hpp` |
 | prng | `engine/core/prng.hpp` `tests/core_prng_test.cpp` |
 | profile | `plugins/mountain/mapgen/terrain.hpp` |
 | quat | `engine/core/quat.hpp` `tests/core_quat_test.cpp` |
 | quaternion | `engine/core/quat.hpp` |
 | query | `plugins/mountain/mapgen/query.cpp` `plugins/mountain/mapgen/query.hpp` |
+| queue-lane | `plugins/mountain/mapgen/lift_line.hpp` |
 | racing | `plugins/racing/records.hpp` `plugins/racing/standings.hpp` `plugins/racing/tape.cpp` `plugins/racing/tape.hpp` |
+| ramp-fit | `plugins/mountain/mapgen/summit_ramps.hpp` |
+| ramp-room | `plugins/mountain/mapgen/summit_ramps.cpp` `plugins/mountain/mapgen/summit_ramps.hpp` |
 | random | `engine/core/prng.hpp` |
 | range | `engine/core/prng.hpp` |
+| rank | `plugins/mountain/mapgen/network.hpp` |
+| reach | `plugins/mountain/mapgen/access_build.cpp` |
 | reader | `plugins/racing/tape.hpp` `tests/golden.hpp` |
+| reckon-access | `plugins/mountain/mapgen/access_build.cpp` `plugins/mountain/mapgen/access_build.hpp` |
 | record-book | `plugins/racing/records.hpp` |
 | recorder | `plugins/racing/tape.hpp` |
 | recording | `plugins/racing/tape.hpp` |
 | records | `plugins/racing/records.hpp` `tests/racing_records_test.cpp` |
+| rect-off | `plugins/mountain/mapgen/lift_chain.cpp` |
 | refraction | `engine/core/solar.cpp` `engine/core/solar.hpp` |
 | region | `plugins/mountain/mapgen/regions.cpp` `plugins/mountain/mapgen/regions.hpp` |
 | regions | `plugins/mountain/mapgen/regions.hpp` |
 | release | `tests/package/consumer/main.cpp` |
+| relevel-pads | `plugins/mountain/mapgen/station_pad.cpp` `plugins/mountain/mapgen/station_pad.hpp` |
 | replay | `plugins/racing/tape.hpp` |
+| resort | `plugins/mountain/mapgen/massif.hpp` `plugins/mountain/mapgen/resort.cpp` `plugins/mountain/mapgen/resort.hpp` `tests/mountain_resort_build_test.cpp` |
+| resort-attempt | `plugins/mountain/mapgen/resort_build.hpp` |
+| resort-build | `plugins/mountain/mapgen/resort_build.cpp` `plugins/mountain/mapgen/resort_build.hpp` |
+| resort-rules | `plugins/mountain/mapgen/resort_rules.hpp` |
 | resume | `engine/loop/run_clock.hpp` |
+| ridge-share | `plugins/mountain/mapgen/massif.cpp` `plugins/mountain/mapgen/massif.hpp` |
 | ridged | `plugins/mountain/mapgen/terrain.cpp` |
 | ring-buffer | `engine/core/output.cpp` |
+| ring-frame | `plugins/mountain/mapgen/lift_line.hpp` |
+| ring-scan | `plugins/mountain/mapgen/net_index.hpp` |
 | rle | `plugins/racing/tape.cpp` `plugins/racing/tape.hpp` |
 | rng | `engine/core/prng.hpp` `tests/core_prng_test.cpp` |
+| road | `plugins/mountain/mapgen/resort_rules.hpp` |
+| road-row | `plugins/mountain/mapgen/resort.cpp` `plugins/mountain/mapgen/resort.hpp` |
 | roll | `engine/core/quat.hpp` |
+| room | `plugins/mountain/mapgen/links.cpp` |
+| room-blocked | `plugins/mountain/mapgen/summit_ramps.cpp` `plugins/mountain/mapgen/summit_ramps.hpp` |
 | rotation | `engine/core/quat.hpp` |
 | round | `engine/core/num.hpp` |
 | round-trip | `engine/core/num_text.cpp` |
+| route-lane | `plugins/mountain/mapgen/lanes.cpp` `plugins/mountain/mapgen/lanes.hpp` |
 | router | `tools/check-agents.sh` |
 | rule-book | `plugins/mountain/mapgen/rules.hpp` |
 | rule-check | `plugins/mountain/analysis/index.hpp` |
 | rules | `plugins/mountain/mapgen/rules.hpp` |
 | run-clock | `engine/loop/run_clock.hpp` `tests/loop_run_clock_test.cpp` |
+| run-colour | `plugins/mountain/mapgen/network.cpp` `plugins/mountain/mapgen/network.hpp` |
+| run-spec | `plugins/mountain/mapgen/network.hpp` |
+| run-start | `plugins/mountain/mapgen/run_start.cpp` `plugins/mountain/mapgen/run_start.hpp` |
 | runner | `tests/main.cpp` |
 | sample | `engine/core/heightfield.hpp` |
 | scope | `tools/skill-lessons.mjs` |
-| search | `tools/agents-index.mjs` |
+| search | `plugins/mountain/mapgen/lanes.hpp` `tools/agents-index.mjs` |
+| sectors | `plugins/mountain/mapgen/links.cpp` `plugins/mountain/mapgen/links.hpp` |
 | seed | `engine/core/prng.hpp` `plugins/mountain/mapgen/generate.hpp` |
+| segment | `plugins/mountain/mapgen/net_index.cpp` |
+| segments | `plugins/mountain/mapgen/net_index.hpp` |
 | semantics | `engine/core/num.hpp` |
+| settle-drags | `plugins/mountain/mapgen/drags.cpp` `plugins/mountain/mapgen/drags.hpp` |
 | severity | `plugins/mountain/analysis/index.hpp` |
 | shortest | `engine/core/num_text.cpp` |
+| shoulder | `plugins/mountain/mapgen/massif.hpp` |
+| siblings | `plugins/mountain/mapgen/run_start.hpp` |
 | sidereal | `engine/core/solar.cpp` |
 | sign | `engine/core/num.hpp` |
 | sin | `engine/core/libm/fdlibm_trig.cpp` `engine/core/libm/libm.hpp` |
 | sink | `engine/core/output.cpp` `engine/core/output.hpp` |
 | size-bars | `tools/skill-lessons.mjs` |
+| skate | `plugins/mountain/mapgen/access_build.hpp` |
+| ski-area | `tests/mountain_resort_build_test.cpp` |
 | skill-reflection | `tools/skill-lessons.mjs` |
 | skills | `tools/check-agents.sh` |
 | sky | `plugins/mountain/mapgen/weather.hpp` |
 | slope | `engine/core/heightfield.hpp` |
+| slots | `plugins/mountain/mapgen/resort.cpp` `plugins/mountain/mapgen/resort.hpp` |
 | smoke-test | `tests/package/consumer/main.cpp` |
 | smooth | `engine/core/noise.hpp` |
+| smooth-run | `plugins/mountain/mapgen/network.cpp` `plugins/mountain/mapgen/network.hpp` |
 | smoothstep | `engine/core/math.hpp` |
 | snows | `plugins/mountain/mapgen/weather.hpp` |
 | solar | `engine/core/solar.cpp` `engine/core/solar.hpp` `plugins/mountain/mapgen/sun.hpp` `tests/core_solar_test.cpp` |
-| spatial-hash | `plugins/mountain/mapgen/query.cpp` `plugins/mountain/mapgen/query.hpp` |
+| spatial-hash | `plugins/mountain/mapgen/net_index.hpp` `plugins/mountain/mapgen/query.cpp` `plugins/mountain/mapgen/query.hpp` |
 | spawn | `plugins/mountain/mapgen/spawn.cpp` `plugins/mountain/mapgen/spawn.hpp` |
 | splits | `plugins/racing/records.hpp` |
+| stage | `plugins/mountain/mapgen/resort_build.cpp` `plugins/mountain/mapgen/resort_build.hpp` |
 | standings | `plugins/racing/standings.hpp` `tests/racing_standings_test.cpp` |
 | start | `plugins/mountain/mapgen/spawn.hpp` |
+| start-top | `plugins/mountain/mapgen/run_start.hpp` |
+| station | `plugins/mountain/mapgen/station_clear.hpp` |
+| station-clear | `plugins/mountain/mapgen/station_clear.cpp` `plugins/mountain/mapgen/station_clear.hpp` |
+| station-pad | `plugins/mountain/mapgen/station_pad.cpp` `plugins/mountain/mapgen/station_pad.hpp` |
 | status | `engine/core/output.hpp` |
+| steep-share | `plugins/mountain/mapgen/massif.cpp` |
+| summit-ramps | `plugins/mountain/mapgen/summit_ramps.cpp` `plugins/mountain/mapgen/summit_ramps.hpp` |
 | sun | `engine/core/solar.cpp` `engine/core/solar.hpp` `plugins/mountain/mapgen/sun.cpp` `plugins/mountain/mapgen/sun.hpp` `tests/core_solar_test.cpp` |
 | sunrise | `engine/core/solar.hpp` |
 | sunset | `engine/core/solar.hpp` |
 | surface | `plugins/mountain/mapgen/surface.cpp` `plugins/mountain/mapgen/surface.hpp` |
+| surface-lift | `plugins/mountain/mapgen/drags.hpp` |
+| sweep | `plugins/mountain/mapgen/network.hpp` |
 | symlinks | `tools/check-agents.sh` |
+| t-bar | `plugins/mountain/mapgen/drags.hpp` |
 | tags | `tools/agents-index.mjs` |
+| tall-tilt | `plugins/mountain/mapgen/resort.cpp` |
 | tan | `engine/core/libm/fdlibm_trig.cpp` `engine/core/libm/libm.hpp` |
 | tanh | `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/libm.hpp` |
 | tape | `plugins/racing/tape.cpp` `plugins/racing/tape.hpp` `tests/racing_tape_test.cpp` |
 | tau | `engine/core/math.hpp` |
 | terrain | `engine/core/heightfield.hpp` `engine/core/noise.hpp` `plugins/mountain/mapgen/terrain.cpp` `plugins/mountain/mapgen/terrain.hpp` |
-| test | `tests/check.hpp` `tests/core_heightfield_test.cpp` `tests/core_libm_test.cpp` `tests/core_math_test.cpp` `tests/core_noise_test.cpp` `tests/core_num_test.cpp` `tests/core_output_test.cpp` `tests/core_prng_test.cpp` `tests/core_quat_test.cpp` `tests/core_solar_test.cpp` `tests/golden.hpp` `tests/loop_run_clock_test.cpp` `tests/main.cpp` `tests/mountain_generate_test.cpp` `tests/racing_records_test.cpp` `tests/racing_standings_test.cpp` `tests/racing_tape_test.cpp` |
+| test | `tests/check.hpp` `tests/core_heightfield_test.cpp` `tests/core_libm_test.cpp` `tests/core_math_test.cpp` `tests/core_noise_test.cpp` `tests/core_num_test.cpp` `tests/core_output_test.cpp` `tests/core_prng_test.cpp` `tests/core_quat_test.cpp` `tests/core_solar_test.cpp` `tests/golden.hpp` `tests/loop_run_clock_test.cpp` `tests/main.cpp` `tests/mountain_generate_test.cpp` `tests/mountain_resort_build_test.cpp` `tests/racing_records_test.cpp` `tests/racing_standings_test.cpp` `tests/racing_tape_test.cpp` |
 | text | `engine/core/num_text.hpp` |
+| tilt | `plugins/mountain/mapgen/resort.cpp` `plugins/mountain/mapgen/resort.hpp` |
+| tilted | `plugins/mountain/mapgen/resort.cpp` |
 | timestep | `engine/loop/run_clock.hpp` |
 | to-fixed | `engine/core/num_text.hpp` `tests/core_num_test.cpp` |
 | to-int32 | `engine/core/num.hpp` |
 | to-string | `engine/core/num_text.hpp` `tests/core_num_test.cpp` |
 | to-uint32 | `engine/core/num.hpp` |
+| tops | `plugins/mountain/mapgen/access_build.cpp` |
 | track | `plugins/mountain/mapgen/track.cpp` `plugins/mountain/mapgen/track.hpp` |
 | transcendental | `engine/core/libm/libm.hpp` `tools/check-libm.sh` |
+| tree-line-massif | `plugins/mountain/mapgen/resort_rules.hpp` |
 | trees | `plugins/mountain/mapgen/forest.hpp` |
 | trig | `engine/core/libm/fdlibm_trig.cpp` |
+| tunnel | `plugins/mountain/mapgen/resort_rules.hpp` |
+| turn-cost | `plugins/mountain/mapgen/lanes.cpp` |
 | types | `plugins/mountain/mapgen/types.hpp` |
+| unload-point | `plugins/mountain/mapgen/station_pad.hpp` |
+| unload-rise | `plugins/mountain/mapgen/station_pad.cpp` |
 | v8 | `engine/core/libm/fdlibm_arc.cpp` `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/fdlibm_trig.cpp` |
 | value-noise | `engine/core/noise.hpp` |
 | vec3 | `engine/core/quat.hpp` |
 | vendored | `engine/core/libm/fdlibm_arc.cpp` `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/fdlibm_internal.hpp` `engine/core/libm/fdlibm_trig.cpp` |
 | versions | `plugins/mountain/mapgen/versions.hpp` |
 | vocab | `tools/skill-lessons.mjs` |
+| walk | `tests/mountain_resort_build_test.cpp` |
+| walk-run | `plugins/mountain/mapgen/network.cpp` `plugins/mountain/mapgen/network.hpp` |
+| walked-run | `plugins/mountain/mapgen/network.hpp` |
 | warn | `engine/core/output.hpp` |
+| way-falls | `plugins/mountain/mapgen/lift_chain.hpp` |
+| way-home | `plugins/mountain/mapgen/access_build.hpp` |
+| way-levels | `plugins/mountain/mapgen/lift_chain.cpp` |
+| way-target | `plugins/mountain/mapgen/lift_chain.cpp` |
 | weather | `plugins/mountain/mapgen/weather.cpp` `plugins/mountain/mapgen/weather.hpp` |
 | wind-crust | `plugins/mountain/mapgen/surface.hpp` |
 | windrow | `plugins/mountain/mapgen/berm.hpp` |
 | woods | `plugins/mountain/mapgen/forest.hpp` |
 | word | `engine/core/libm/fdlibm_internal.hpp` |
 | yaw | `engine/core/quat.hpp` |
+| zig-zag | `plugins/mountain/mapgen/network.hpp` |

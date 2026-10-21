@@ -159,6 +159,8 @@ size_t turn_k() {
   return static_cast<size_t>(num::max(1.0, num::round(R::track::turn_window / 2 / R::track::step)));
 }
 
+}  // namespace
+
 // One box-blur pass down an open profile, half-window k: carried on at its own grade above the
 // start, held past the end.
 std::vector<double> blur(const std::vector<double>& y, int k) {
@@ -175,6 +177,8 @@ std::vector<double> blur(const std::vector<double>& y, int k) {
   }
   return out;
 }
+
+namespace {
 
 // How far inside a grade's colour ceiling the grading holds every colour window (R23).
 constexpr double kColourMargin = 0.9;

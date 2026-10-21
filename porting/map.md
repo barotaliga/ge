@@ -30,11 +30,15 @@ the row when the file moves.
 | `plugins/mountain/analysis/crossings.hpp` | `game5/engine/analysis/crossings.ts` | selfCrossings |
 | `plugins/mountain/analysis/index.cpp` | `game5/engine/analysis/index.ts` | analyzeLevel |
 | `plugins/mountain/analysis/index.hpp` | `game5/engine/analysis/index.ts` | analyzeLevel |
+| `plugins/mountain/mapgen/access_build.cpp` | `game5/engine/mapgen/access-build.ts` |  |
+| `plugins/mountain/mapgen/access_build.hpp` | `game5/engine/mapgen/access-build.ts` |  |
 | `plugins/mountain/mapgen/berm.hpp` | `game5/engine/mapgen/berm.ts` | bermProfile bermCrest |
 | `plugins/mountain/mapgen/cliffs.cpp` | `game5/engine/mapgen/cliffs.ts` | layCliffs stampCliff |
 | `plugins/mountain/mapgen/cliffs.hpp` | `game5/engine/mapgen/cliffs.ts` | cliffProfile cliffFootprint onCliff layCliffs stampCliff |
 | `plugins/mountain/mapgen/digest.cpp` | `game5/engine/mapgen/digest.ts` | levelDigest |
 | `plugins/mountain/mapgen/digest.hpp` | `game5/engine/mapgen/digest.ts` | levelDigest |
+| `plugins/mountain/mapgen/drags.cpp` | `game5/engine/mapgen/drags.ts` |  |
+| `plugins/mountain/mapgen/drags.hpp` | `game5/engine/mapgen/drags.ts` |  |
 | `plugins/mountain/mapgen/drift.cpp` | `game5/engine/mapgen/drift.ts` | dealDrifts stampDrifts |
 | `plugins/mountain/mapgen/drift.hpp` | `game5/engine/mapgen/drift.ts` | dealDrifts driftAt stampDrifts |
 | `plugins/mountain/mapgen/drops.cpp` | `game5/engine/mapgen/drops.ts` | layDrops publishDrops |
@@ -47,13 +51,41 @@ the row when the file moves.
 | `plugins/mountain/mapgen/grades.hpp` | `game5/engine/mapgen/grades.ts` | GRADES UNGRADED gradeRow pisteGradeOf steepestSpan verticalBand |
 | `plugins/mountain/mapgen/kickers.cpp` | `game5/engine/mapgen/kickers.ts` | layTrackKickers layOffKickers stampKicker |
 | `plugins/mountain/mapgen/kickers.hpp` | `game5/engine/mapgen/kickers.ts` | layTrackKickers publishTrackKickers layOffKickers stampKicker onKicker |
+| `plugins/mountain/mapgen/lanes.cpp` | `game5/engine/mapgen/lanes.ts` |  |
+| `plugins/mountain/mapgen/lanes.hpp` | `game5/engine/mapgen/lanes.ts` |  |
+| `plugins/mountain/mapgen/lift_chain.cpp` | `game5/engine/mapgen/lift-chain.ts` | chainBottom chainWay wayTarget wayLevels rectOff pressWay pressBox |
+| `plugins/mountain/mapgen/lift_chain.hpp` | `game5/engine/mapgen/lift-chain.ts` | chainBottom chainWay layChain wayFalls keepsChain chainOf offWay offQueue groomWay pressWay |
+| `plugins/mountain/mapgen/lift_line.hpp` | `game5/engine/game/lift-line.ts` | ringFrame letGoOf queueLane LIFT_LOOK CORRAL_TAIL DRAG_ARM |
+| `plugins/mountain/mapgen/links.cpp` | `game5/engine/mapgen/links.ts` |  |
+| `plugins/mountain/mapgen/links.hpp` | `game5/engine/mapgen/links.ts` |  |
+| `plugins/mountain/mapgen/massif.cpp` | `game5/engine/mapgen/massif.ts` | planMassif bakeMassif ridgeShare steepShare benchShare massifRow heightAt |
+| `plugins/mountain/mapgen/massif.hpp` | `game5/engine/mapgen/massif.ts` | planMassif bakeMassif ridgeShare |
+| `plugins/mountain/mapgen/net_index.cpp` | `game5/engine/mapgen/net-index.ts` |  |
+| `plugins/mountain/mapgen/net_index.hpp` | `game5/engine/mapgen/net-index.ts` |  |
+| `plugins/mountain/mapgen/network.cpp` | `game5/engine/mapgen/network.ts` |  |
+| `plugins/mountain/mapgen/network.hpp` | `game5/engine/mapgen/network.ts` |  |
+| `plugins/mountain/mapgen/network_build.cpp` | `game5/engine/mapgen/network-build.ts` |  |
+| `plugins/mountain/mapgen/network_build.hpp` | `game5/engine/mapgen/network-build.ts` |  |
 | `plugins/mountain/mapgen/query.cpp` | `game5/engine/mapgen/query.ts` | nearestTrackPoint nearestWithin |
 | `plugins/mountain/mapgen/query.hpp` | `game5/engine/mapgen/query.ts` | nearestTrackPoint nearestWithin trackPointAt |
 | `plugins/mountain/mapgen/regions.cpp` | `game5/engine/mapgen/regions.ts` | REGIONS treeKindAt scaleCount |
 | `plugins/mountain/mapgen/regions.hpp` | `game5/engine/mapgen/regions.ts` | regionRow treeKindAt |
+| `plugins/mountain/mapgen/resort.cpp` | `game5/engine/mapgen/resort.ts` | planResort placeStations SLOTS TILT TALL_TILT ROAD_ROW |
+| `plugins/mountain/mapgen/resort.hpp` | `game5/engine/mapgen/resort.ts` | planResort placeStations ROAD_ROW LiftPlan |
+| `plugins/mountain/mapgen/resort_build.cpp` | `game5/engine/mapgen/resort-build.ts` | attemptResort layChain pressPads |
+| `plugins/mountain/mapgen/resort_build.hpp` | `game5/engine/mapgen/resort-build.ts` | attemptResort buildResort ResortAttempt |
+| `plugins/mountain/mapgen/resort_rules.hpp` | `game5/engine/mapgen/resort-rules.ts` | RESORT_RULES TREE_LINE_MASSIF |
 | `plugins/mountain/mapgen/rules.hpp` | `game5/engine/mapgen/rules.ts` | LEVEL_RULES inBand withinBand bendFloor |
+| `plugins/mountain/mapgen/run_start.cpp` | `game5/engine/mapgen/run-start.ts` |  |
+| `plugins/mountain/mapgen/run_start.hpp` | `game5/engine/mapgen/run-start.ts` |  |
 | `plugins/mountain/mapgen/spawn.cpp` | `game5/engine/mapgen/spawn.ts` | chooseStart gridOnTrack layCheckpoints |
 | `plugins/mountain/mapgen/spawn.hpp` | `game5/engine/mapgen/spawn.ts` | chooseStart gridOnTrack layCheckpoints startGateArc |
+| `plugins/mountain/mapgen/station_clear.cpp` | `game5/engine/mapgen/station-clear.ts` | bottomFootprint |
+| `plugins/mountain/mapgen/station_clear.hpp` | `game5/engine/mapgen/station-clear.ts` | bottomFootprint |
+| `plugins/mountain/mapgen/station_pad.cpp` | `game5/engine/mapgen/station-pad.ts` | pressPads levelPad cutApproach unloadRise relevelPads groomPads dragTop |
+| `plugins/mountain/mapgen/station_pad.hpp` | `game5/engine/mapgen/station-pad.ts` | padShape pressPads relevelPads groomPads padSurface dragTop dragTopsOf unloadPoint cutApproach |
+| `plugins/mountain/mapgen/summit_ramps.cpp` | `game5/engine/mapgen/summit-ramps.ts` |  |
+| `plugins/mountain/mapgen/summit_ramps.hpp` | `game5/engine/mapgen/summit-ramps.ts` |  |
 | `plugins/mountain/mapgen/sun.cpp` | `game5/engine/mapgen/sun.ts` | dealSun declinationOf |
 | `plugins/mountain/mapgen/sun.hpp` | `game5/engine/mapgen/sun.ts` | declinationOf sunWindow dealSun |
 | `plugins/mountain/mapgen/surface.cpp` | `game5/engine/mapgen/surface.ts` | layCrust foldSurface |

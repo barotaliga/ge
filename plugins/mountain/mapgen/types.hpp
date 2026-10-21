@@ -64,6 +64,22 @@ struct Vec3 {
   double z;
 };
 
+// A point in plan: a station, a target, a corner.
+struct PlanPoint {
+  double x;
+  double z;
+};
+
+// R26 — the kinds of lift, by name.
+enum class LiftKind : uint8_t { gondola, chair, drag };
+inline const char* lift_kind_name(LiftKind k) {
+  return k == LiftKind::gondola ? "gondola" : k == LiftKind::chair ? "chair" : "drag";
+}
+
+// R27 — a groomed piste, or a transport lane.
+enum class RunKind : uint8_t { piste, road };
+inline const char* run_kind_name(RunKind k) { return k == RunKind::piste ? "piste" : "road"; }
+
 // A snow-loaded tree. The trunk is what the skier meets; the crown is drawn.
 struct TreeDef {
   double x;

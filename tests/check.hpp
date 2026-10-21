@@ -72,6 +72,10 @@ inline void check_bits(double got, double want, bool any_nan, const char* expr, 
 
 #define CHECK(cond) ((cond) ? (void)0 : ::ge::test::fail(__FILE__, __LINE__, "CHECK(" #cond ")"))
 
+// CHECK with the failure said in words: what failed, where, and what to read next. The message
+// is built only when the check fails.
+#define CHECK_MSG(cond, msg) ((cond) ? (void)0 : ::ge::test::fail(__FILE__, __LINE__, (msg)))
+
 // Bit equality of two doubles — the determinism contract is bits, not closeness.
 #define CHECK_BITS(got, want) ::ge::test::check_bits((got), (want), false, #got, __FILE__, __LINE__)
 

@@ -29,11 +29,6 @@ namespace ge::mountain::mapgen {
 double cliff_profile(double drop, double shelf, double face, double apron, double landing,
                      double u);
 
-struct PlanPoint {
-  double x;
-  double z;
-};
-
 // Plan points over a cliff's footprint (shelf, face, landing, run-out) every `step` m: what
 // the piste is kept clear of.
 std::vector<PlanPoint> cliff_footprint(const Cliff& c, double step = 12);

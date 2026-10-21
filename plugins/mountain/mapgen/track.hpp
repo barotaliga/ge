@@ -54,6 +54,10 @@ std::variant<Piste, std::string> draw_piste(ge::core::Rng& rng, const TerrainPla
 std::optional<std::string> grade_piste(Piste& piste, const ge::core::Heightfield& country,
                                        double max_grade, std::optional<double> colour);
 
+// One box-blur pass down an open profile, half-window k: carried on at its own grade above the
+// start, held past the end.
+std::vector<double> blur(const std::vector<double>& y, int k);
+
 // Headings off the central difference down the line, one-sided at the ends.
 void set_headings(std::vector<TrackPoint>& points);
 
