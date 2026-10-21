@@ -2,27 +2,40 @@
 // head of every run a rider can ski onto from it, a WIDE groomed ramp graded into the mountain,
 // so the way from the lift to the slope is one smooth run-out rather than the raw face between.
 //
-// This half is the ROOM a ramp needs, read while the runs are walked: a start off a leaning pad
-// is placed only where a straight line from the pad's rim reaches it over no other run, pad,
-// station, lift line or approach cut, falling at least a glide all the way and no steeper than
-// the run's colour lets a rider meet; and every run walked after keeps off that room. Every
-// number is `resort_rules::lift::top::ramp`'s. The ramps themselves are laid once the runs are
-// pressed (docs/goals.md M4b3).
+// The ROOM a ramp needs is read while the runs are walked: a start off a leaning pad is placed
+// only where a straight line from the pad's rim reaches it over no other run, pad, station, lift
+// line or approach cut, falling at least a glide all the way and no steeper than the run's colour
+// lets a rider meet; and every run walked after keeps off that room.
 //
-// Held by tests/mountain_resort_build_test.cpp (`rooms`).
+// The RAMPS are laid once the runs are pressed: off every pad, one to each run leaving its top
+// that lies far enough under the deck and near enough, from the point of the rim whose straight
+// line first meets the run's snow over no other run's ground, station, lift line or approach
+// cut. Of those, the shortest that falls at least a glide and no more than a green's or a blue's
+// `grade` (the gentlest where none does), never steeper than the run's colour, never across
+// another ramp off the same pad. Each is eased off the pad and falls evenly to its foot, pressed
+// into the ground everywhere but a run's own ground and a station's, only ever cut under a
+// lift's line, and groomed. Every number is `resort_rules::lift::top::ramp`'s.
 //
-// ge:summary R26 the room a ramp off a top needs: placed with a run's start, kept by the rest
+// Held by tests/mountain_resort_build_test.cpp (`rooms`, and the ramps after the access stage).
+//
+// ge:summary R26 the ramps off a top: their room kept as runs are walked, then laid and pressed
 // ge:keywords summit-ramps ramp-room room-blocked near-room ramp-fit approach-cut lift-line
+// ge:keywords lay-ramps plan-ramps press-ramps groom-ramps ramp-frame ramp-height off-ramp
+// ge:keywords run-cover even-fall
 // ge:skill mountain
 // ge:test tests/mountain_resort_build_test.cpp
 #pragma once
 
 #include <functional>
+#include <map>
 #include <optional>
 #include <span>
+#include <string>
 #include <vector>
 
+#include "core/heightfield.hpp"
 #include "mountain/mapgen/grades.hpp"
+#include "mountain/mapgen/network.hpp"
 #include "mountain/mapgen/resort.hpp"
 #include "mountain/mapgen/station_pad.hpp"
 
@@ -64,5 +77,50 @@ std::optional<RampRoom> ramp_room(const StationPad& p, std::span<const StationPa
 BlockedAt room_blocked(const StationPad* pad, std::span<const StationPad> pads,
                        std::span<const PlanPoint> stations, std::span<const RampRoom> rooms,
                        double keep_pad, double keep_station, BlockedAt on_run);
+
+// Which run's ground (x, z) is on, by its place among the runs handed in: its snow (`past` 0) or
+// out to `past` m beyond its edge; -1 for none.
+using RunCover = std::function<int(double x, double z, double past)>;
+
+// Where (x, z) stands against a ramp: `t` along it from the rim (0) to its foot (1), `d` m off
+// its line either side, and its plan length.
+struct RampAt {
+  double t;
+  double d;
+  double length;
+};
+RampAt ramp_frame(const SummitRamp& r, double x, double z);
+
+// A ramp's surface at `t` (0..1) along it: eased off the pad, even on down to its foot.
+double ramp_height(const SummitRamp& r, double t);
+
+// How far (x, z) stands outside a ramp's corridor (its width and the ground eased into it), m;
+// negative within it.
+double off_ramp(const SummitRamp& r, double x, double z);
+
+// A run as the ramps read it: its spec (its id, the lift it leaves, its kind and colour) and its
+// line as pressed.
+struct RampRun {
+  const RunSpec* spec;
+  const std::vector<TrackPoint>* points;
+};
+
+// Every pad's ramps, by the lift whose top it is.
+using RampsByLift = std::map<std::string, std::vector<SummitRamp>>;
+
+// R26 — THE RAMPS off every pad laid and pressed into `ground`, off every run's ground (`cover`),
+// every lift's bottom station, every run's head but the one it makes for, every lift's line and
+// approach cut, and the way to the next lift's queue (`way`: how far off its ground, m).
+RampsByLift lay_ramps(ge::core::Heightfield& ground, std::span<const StationPad> pads,
+                      std::span<const RampRun> runs, const RunCover& cover,
+                      std::span<const LiftPlan> lifts,
+                      const std::function<double(double x, double z)>& way,
+                      const RampFit& fit = {});
+
+// R26 — groom every ramp, up to a run's edge and never over its snow, nor over another run's
+// ground out to `past` m past its edge.
+void groom_ramps(ge::core::Heightfield& packed, const RampsByLift& ramps,
+                 std::span<const StationPad> pads, std::span<const RampRun> runs,
+                 const RunCover& cover, double past);
 
 }  // namespace ge::mountain::mapgen

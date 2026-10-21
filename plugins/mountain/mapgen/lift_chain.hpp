@@ -1,7 +1,7 @@
 // R26 — THE NEXT LIFT'S QUEUE OFF A TOP: where the gondola tops out beside the peak's chair,
 // the rider let go at the top reaches that chair's boarding ring by skiing ON — the ring lies
 // AHEAD of him and to his right, on snow that falls to it all the way. A dealt massif's
-// half: a real face's aim search is M4d, and grading the leg again once the ramps stand is M4b3.
+// half: a real face's aim search is M4d.
 //
 // `chain_bottom` places the chair's bottom station so its ring lands on an aim; `lay_chain`
 // takes the first aim whose way asks no more than R26's earthworks and grades the way into the
@@ -11,7 +11,7 @@
 //
 // ge:summary R26 the way off the gondola's top to the peak's chair's queue, laid and graded
 // ge:keywords lift-chain chain-bottom chain-way lay-chain way-falls keeps-chain chain-of off-way
-// ge:keywords off-queue groom-way earthworks press-way
+// ge:keywords off-queue groom-way earthworks press-way regrade-leg
 // ge:skill mountain
 // ge:test tests/mountain_resort_build_test.cpp
 #pragma once
@@ -74,6 +74,14 @@ bool keeps_chain(std::span<const LiftPlan> lifts, const HeightAt& height, bool s
 
 // The way off the gondola's top to the peak's chair's queue, or none without either.
 std::optional<ChainWay> chain_of(std::span<const LiftPlan> lifts);
+
+// R26 — THE WAY'S FIRST LEG GRADED AGAIN once the ramps stand and the stations are cleared: from
+// where it leaves the gondola's pad (its cells left as the pad pressed them) to the ring, a line
+// falling evenly between the two as the ground now stands, eased out beside it and filled only
+// off the pad's edge; a ramp off the deck crossing it is never cut under, so a rider down the ramp
+// meets no trench across it.
+void regrade_leg(ge::core::Heightfield& ground, std::span<const LiftPlan> lifts,
+                 std::span<const StationPad> pads, const RampsByLift& ramps);
 
 // The way GROOMED, never over a run's own snow (R26).
 void groom_way(const ChainWay& way, ge::core::Heightfield& packed, const OnRun& on_run);
