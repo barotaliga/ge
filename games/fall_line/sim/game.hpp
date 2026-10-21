@@ -1,0 +1,53 @@
+// A RUN OF FALL LINE: `create_game` builds the state on a map (generated off a seed, or handed
+// in), `step` advances it one 1/120 s step. THE ORDER OF A STEP is stated here once and is part
+// of every digest:
+//
+// 1. The events of the last step are cleared.
+// 2. For each racer in field order (the player first): a reset asked for is made; then his skis
+//    are stepped (`ge::skier::step_skier`) on his controls, or on a held brake once he has
+//    finished; then the course (`step_course`: a gate, a miss, the finish); then the skier's
+//    events become the run's; then the run's own resets (down `kDownReset` s, stuck
+//    `kStuckReset` s).
+// 3. Skier against skier (`meet_racers`, field.hpp), the field in pair order.
+// 4. The clock advances.
+//
+// The only draws are the field's, made once when the run is created (`deal_field`, off a stream
+// of the map's seed); `step` draws nothing, so a run is a pure function of its map and controls.
+//
+// ge:summary A run: create_game on a map or a seed, step in its stated order, the state's digest
+// ge:keywords game create_game step order run digest state_hash game-options racers
+// ge:skill sim
+// ge:test tests/fall_line_sim_test.cpp
+#pragma once
+
+#include <cstdint>
+#include <memory>
+#include <optional>
+#include <span>
+
+#include "fall_line/sim/state.hpp"
+#include "mountain/mapgen/types.hpp"
+
+namespace fall_line::sim {
+
+struct GameOptions {
+  double seed = 38;
+  int32_t racers = 1;          // the player and his rivals, the player first
+  std::optional<int> version;  // the generator's; Fall Line races v1, the single piste
+};
+
+// The map for `seed` as Fall Line races it (throws the generator's GenerateError).
+ge::mountain::mapgen::Level race_map(double seed, std::optional<int> version = {});
+
+GameState create_game(const GameOptions& opts);
+// A run on a map already built: `racers` on the grid's slots in order, at rest, as many as the
+// grid has slots (at least the player).
+GameState create_game_on(std::shared_ptr<const ge::mountain::mapgen::Level> level, int32_t racers);
+
+// ONE STEP. `controls` holds one entry per racer, in field order.
+void step(GameState& state, std::span<const Controls> controls);
+
+// FNV-1a 64 over every racer's skier and progress and the clock, folded into `h`.
+uint64_t state_hash(const GameState& state, uint64_t h);
+
+}  // namespace fall_line::sim

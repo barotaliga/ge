@@ -1,0 +1,4 @@
+# seed, then per racer: finished finish-time-bits place gates shoulders; then the digest (fall_line_field_test, 3 rivals, generator v1)
+38 1 406df5e817eab837 2 27 0 1 406f66362aa477d1 4 27 0 1 406ed4d6b85e4da0 3 27 0 1 406d1c4487914663 1 27 0 afea91e39e9d15f2
+1 1 406ccf156054cf31 2 28 0 1 406c3bc7230b30c4 1 28 0 1 406e7f467336d0dd 4 28 0 1 406e652e1b6c0481 3 28 0 3d513cd048a739c1
+2 1 4070224e42ed721e 2 28 0 1 40711736f8a7581f 4 28 0 1 406fda1af1dfca9a 1 28 0 1 4070e8b6d277f72c 3 28 0 735ddffdf04fde34

@@ -4,6 +4,7 @@
 #   ge_<plugin>  one per plugins/<plugin>/ (cmake/Plugins.cmake): ge_racing (tape, records,
 #                standings), ge_mountain (the generated ski mountain: mapgen, analysis)
 #   ge_lab       the lab framework (engine/lab: the contract, the runner, the raster, the PNG)
+#   fall_line_sim  Fall Line's simulation (games/fall_line: create_game, step, the bot)
 #   labs         the lab executable: every labs/ directory's files (engine, plugins, games)
 #   ge_platform  the window, input and the frame clock over SDL3 (engine/platform; GE_PLATFORM,
 #                cmake/SDL.cmake)
@@ -106,7 +107,8 @@ foreach(plugin_cmake ${GE_PLUGIN_DIRS})
   add_subdirectory(${plugin_dir})
 endforeach()
 
-# The games: games/<game>/CMakeLists.txt, once a game has code (Fall Line's lands with M5).
+# The games: games/<game>/CMakeLists.txt, each adding its targets to GE_GAME_TARGETS, which the
+# labs and the tests link.
 # A game is the demo, not part of the published engine, so only the top-level build makes it.
 if(PROJECT_IS_TOP_LEVEL)
   file(GLOB GE_GAME_DIRS CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/games/*/CMakeLists.txt)
@@ -142,8 +144,10 @@ if(PROJECT_IS_TOP_LEVEL)
     list(FILTER GE_LAB_SOURCES EXCLUDE REGEX "/engine/lab/labs/platform_[^/]*$")
   endif()
   get_property(GE_PLUGIN_TARGETS GLOBAL PROPERTY GE_PLUGIN_TARGETS)
+  get_property(GE_GAME_TARGETS GLOBAL PROPERTY GE_GAME_TARGETS)
   add_executable(labs engine/lab/main.cpp ${GE_LAB_SOURCES})
-  target_link_libraries(labs PRIVATE ge_lab ge_core ${GE_PLUGIN_TARGETS} ${GE_LAB_EXTRA})
+  target_link_libraries(labs PRIVATE ge_lab ge_core ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
+    ${GE_LAB_EXTRA})
 
   enable_testing()
   add_subdirectory(tests)
