@@ -6,6 +6,8 @@
 // ge:test tests/mountain_generate_test.cpp
 #include "mountain/mapgen/sun.hpp"
 
+#include <cmath>
+
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "core/num.hpp"
@@ -57,6 +59,12 @@ double face_the_sun(uint32_t sub, const DealtSun& sun) {
   const double heading = at.azimuth + ge::core::range(rng, -rules::sun::facing, rules::sun::facing);
   const double t = num::mod(heading, 2 * kPi);
   return t < 0 ? t + 2 * kPi : t;
+}
+
+double sun_off_face(const Sun& sun) {
+  const ge::core::SunPlace at =
+      ge::core::sun_at(sun.hour, sun.latitude, declination_of(sun.day_of_year));
+  return std::abs(ge::core::angle_diff(sun.facing.value_or(0), at.azimuth));
 }
 
 }  // namespace ge::mountain::mapgen

@@ -9,7 +9,11 @@
 //   pitch steepens).
 // - THE LINE: pure pursuit of the racer's LANE (his `Rider::lane`, right of the centreline) a
 //   speed-scaled look ahead; the curvature to the point is turned into the edge it needs
-//   (`edge_for_curvature`) and that into a steer.
+//   (`edge_for_curvature`) and that into a steer. On a course whose SLALOM GATES stand off the
+//   line (a ski area's, R28), the plan first lays a WEAVE through them (`BotPlan::line`: from each
+//   gate's offset to the next's on a smoothstep, so it passes every gate parallel to the piste)
+//   and the lane is held about that weave, inside the gate's panels by `kLaneMargin`; the weave's
+//   own bends are what the speed plan slows for.
 // - THE SPEED: the brake past the plan's speed over the next stretch times his `Rider::pace`,
 //   the tuck under it on a straight (which at a crawl is the skater's push). The player's rider
 //   is pace 1 on the centreline: the plain bot.
@@ -55,6 +59,10 @@ inline constexpr double kLaneMargin = 2;
 struct BotPlan {
   std::vector<double> curvature;  // 1/m at each piste point, signed (+ bending right)
   std::vector<double> speed;      // m/s, the fastest the bot means to be at each point
+  // The weave through the slalom gates, m right of the centreline at each piste point, and the
+  // half-room a lane has about it; both empty on a piste whose gates all stand on the line.
+  std::vector<double> line;
+  std::vector<double> room;
 };
 
 BotPlan plan_bot(const ge::mountain::mapgen::Level& level, const ge::skier::SkiSpec& spec);

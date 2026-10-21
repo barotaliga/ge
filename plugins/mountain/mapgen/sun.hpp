@@ -16,6 +16,7 @@
 #include "core/prng.hpp"
 #include "core/solar.hpp"
 #include "mountain/mapgen/rules.hpp"
+#include "mountain/mapgen/types.hpp"
 
 namespace ge::mountain::mapgen {
 
@@ -38,5 +39,9 @@ DealtSun deal_sun(ge::core::Rng& rng, Band latitude, Band day_of_year);
 // `sun.facing` of the sun's own bearing at `sun`'s hour, off a stream of its own (`sub`, salted).
 // The mountain shades itself, so the face a run goes down is turned to the light. On [0, 2π).
 double face_the_sun(uint32_t sub, const DealtSun& sun);
+
+// R15 — how far off the face's own bearing the sun stands at the run's hour, rad: 0 where the
+// skier skis straight at it. A sun with no `facing` is read against due north.
+double sun_off_face(const Sun& sun);
 
 }  // namespace ge::mountain::mapgen

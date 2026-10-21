@@ -23,7 +23,7 @@ tests):
 | `game.hpp/.cpp` | `race_map(seed)` (v1, the single piste), `create_game`, `create_game_on`, `step` (THE ORDER of a step, stated once in the header), `state_hash` |
 | `course.hpp/.cpp` | The gates in order, a miss, the finish's clock inside its step, the reset (`reset_racer`), `bearing_to_next` |
 | `controls.hpp` | The control tape's schema (steer, tuck, brake, flags) and `snap_controls` |
-| `bot.hpp/.cpp` | `plan_bot` (the speed plan off `skier/limits.hpp`) and `bot_controls` (pure pursuit of the racer's lane, brake over the plan at his pace, tuck under it) |
+| `bot.hpp/.cpp` | `plan_bot` (the speed plan off `skier/limits.hpp`, and on a course whose slalom gates stand off the line the weave through them) and `bot_controls` (pure pursuit of the racer's lane about the weave, brake over the plan at his pace, tuck under it) |
 | `field.hpp/.cpp` | The rivals: `deal_field` (each rival's pace off a stream of the map's seed, his lane off his grid slot), `meet_racers` (skier against skier: the shoulder), `standings` and `place_of` (off `plugins/racing`) |
 | `simulate.hpp/.cpp` | `Driver` (THE ONE STEP every pilot drives: snapped, taped, the rivals' bots, `step`, hashed), `simulate`, `simulate_on`, `replay_tape`, the `RunReport` and its `FieldRow`s |
 | `play.hpp/.cpp` | `PlaySession`: an agent at the controls over JSON lines (`hello`, `observe`, `act`, `tape`, `end`); THE PROTOCOL is stated once in its header |

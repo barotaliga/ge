@@ -288,6 +288,8 @@ inline constexpr double band_green = 0.16;
 inline constexpr double band_blue = 0.27;
 inline constexpr double band_red = 0.47;
 inline constexpr double region_share = 0.35;
+// The odds a seed nobody asked a colour of is dealt each colour at, in PisteGrade order.
+inline constexpr std::array<double, 4> odds{0.2, 0.3, 0.3, 0.2};
 }  // namespace grade
 
 namespace drop {

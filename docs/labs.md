@@ -254,8 +254,8 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 | --- | --- | --- | --- | --- |
 | `noise` | picture | engine | `engine/core/noise.hpp` | M2 (now) |
 | `run-clock` | sim | engine | `engine/loop/run_clock.hpp` | M2 (now) |
-| `level` | picture | plugin:mountain | `plugins/mountain/mapgen` | M4a (now) |
-| `analyze` | sim | plugin:mountain | `plugins/mountain/analysis` | M4a (now) |
+| `level` | picture | plugin:mountain | `plugins/mountain/mapgen` (`--version=1,8`: the single piste, a ski area's race map) | M4a, M4b4a (now) |
+| `analyze` | sim | plugin:mountain | `plugins/mountain/analysis` (a race map's course and area at `--version=8`) | M4a, M4b4a (now) |
 | `mapgen-cost` | bench | plugin:mountain | `plugins/mountain/mapgen` | M4a (now) |
 | `resort` | picture | plugin:mountain | `plugins/mountain/mapgen/resort_build.hpp` (the ski area, its courses) | M4b3d (now) |
 | `junctions` | picture | plugin:mountain | `plugins/mountain/mapgen/network_stamp.cpp` (where runs meet) | M4b3d (now) |

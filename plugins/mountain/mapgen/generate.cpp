@@ -16,7 +16,9 @@
 #include "core/output.hpp"
 #include "core/prng.hpp"
 #include "mountain/analysis/index.hpp"
+#include "mountain/analysis/resort.hpp"
 #include "mountain/mapgen/cliffs.hpp"
+#include "mountain/mapgen/course_gates.hpp"
 #include "mountain/mapgen/drift.hpp"
 #include "mountain/mapgen/drops.hpp"
 #include "mountain/mapgen/forest.hpp"
@@ -24,6 +26,8 @@
 #include "mountain/mapgen/kickers.hpp"
 #include "mountain/mapgen/query.hpp"
 #include "mountain/mapgen/regions.hpp"
+#include "mountain/mapgen/resort_build.hpp"
+#include "mountain/mapgen/resort_level.hpp"
 #include "mountain/mapgen/spawn.hpp"
 #include "mountain/mapgen/sun.hpp"
 #include "mountain/mapgen/surface.hpp"
@@ -153,6 +157,51 @@ std::string join(const std::vector<std::string>& parts, const char* sep) {
   return out;
 }
 
+// The errors among an analysis's findings, as one line.
+std::string errors_of(const analysis::LevelAnalysis& checked) {
+  std::vector<std::string> errors;
+  for (const analysis::Finding& f : checked.findings) {
+    if (f.severity == analysis::Severity::error) errors.push_back(f.rule + " " + f.message);
+  }
+  return join(errors, ", ");
+}
+
+// R25–R28 — one attempt at a ski area raced as a map: the area built, its first course's map
+// stood up and the area held to its rules on it, then every course held on its own map (one that
+// will not stand is not offered), and the course asked for set on the map, written to `level`.
+// Why the attempt is refused, or nothing.
+std::optional<std::string> attempt_resort(double seed, int attempt, int laps, int version,
+                                          const Region& region, const GenerateOptions& opts,
+                                          const std::string& name, Level& level) {
+  ResortAttempt a = begin_resort(seed, attempt, sub_seed(seed, attempt), region, version);
+  std::string reached;
+  if (StageResult why = build_resort(a, reached)) return why;
+  level = resort_base(a, laps);
+  set_course(level, a, 0);
+  const analysis::LevelAnalysis area = analysis::analyze_resort(level);
+  if (!area.ok) return errors_of(area);
+  std::vector<CoursePlan> plans;
+  std::vector<Course> courses;
+  for (size_t i = 0; i < a.courses.size(); i++) {
+    if (i > 0) set_course(level, a, i);
+    const analysis::LevelAnalysis checked = analysis::analyze_course(level);
+    if (!checked.ok) {
+      ge::core::output::debug(name + ": course " + a.courses[i].id + " left out — " +
+                              errors_of(checked));
+      continue;
+    }
+    plans.push_back(std::move(a.course_plans[i]));
+    courses.push_back(std::move(a.courses[i]));
+  }
+  if (courses.empty()) return "no course down the network stands";
+  a.course_plans = std::move(plans);
+  a.courses = std::move(courses);
+  if (level.resort) level.resort->courses = a.courses;
+  const size_t index = choose_course(a.courses, seed, opts.course, opts.grade, deal_grade(seed));
+  set_course(level, a, index);
+  return std::nullopt;
+}
+
 }  // namespace
 
 uint32_t sub_seed(double seed, int attempt) {
@@ -175,11 +224,11 @@ Level generate_level(double seed, const GenerateOptions& opts) {
   const int laps = opts.laps.value_or(rules::race::laps);
   const GeneratorTraits& traits = generator_traits(opts.version);
   const std::string name = "level " + num::to_string(seed);
-  if (!traits.single_piste) {
+  if (!traits.no_routes) {
     throw GenerateError(name + ": generator version " + std::to_string(traits.version) +
-                        " builds a ski area, which is not built yet (docs/goals.md M4b). " +
-                        "Ask for version 1 (GenerateOptions::version = 1), or build the ski " +
-                        "area first.");
+                        " lays the ski routes, which are not built yet (docs/goals.md M4c). " +
+                        "Ask for version 8 (the ski area, GenerateOptions::version = 8) or 1 " +
+                        "(the single piste).");
   }
   const Region& region = region_row(opts.region);
   const GradeRow& grade = kUngraded;
@@ -187,6 +236,23 @@ Level generate_level(double seed, const GenerateOptions& opts) {
   const int first = opts.only ? *opts.only : 0;
   const int end =
       opts.only ? (*opts.only >= 0 && *opts.only < attempts ? *opts.only + 1 : 0) : attempts;
+  if (!traits.single_piste) {
+    for (int a = first; a < end; a++) {
+      Level level;
+      if (const auto why =
+              attempt_resort(seed, a, laps, traits.version, region, opts, name, level)) {
+        reasons.push_back("#" + std::to_string(a) + ": " + *why);
+        continue;
+      }
+      if (!reasons.empty()) {
+        ge::core::output::debug(name + ": accepted attempt " + std::to_string(a) + " after " +
+                                join(reasons, "; "));
+      }
+      return level;
+    }
+    throw GenerateError(name + ": no clean ski area in " + std::to_string(attempts) +
+                        " attempts — " + join(reasons, "; "));
+  }
   for (int a = first; a < end; a++) {
     auto built = attempt_level(seed, a, laps, traits.version, region, grade);
     if (auto* why = std::get_if<std::string>(&built)) {
@@ -202,11 +268,7 @@ Level generate_level(double seed, const GenerateOptions& opts) {
       }
       return std::move(level);
     }
-    std::vector<std::string> errors;
-    for (const analysis::Finding& f : checked.findings) {
-      if (f.severity == analysis::Severity::error) errors.push_back(f.rule + " " + f.message);
-    }
-    reasons.push_back("#" + std::to_string(a) + ": " + join(errors, ", "));
+    reasons.push_back("#" + std::to_string(a) + ": " + errors_of(checked));
   }
   throw GenerateError(name + ": no clean map in " + std::to_string(attempts) + " attempts — " +
                       join(reasons, "; "));

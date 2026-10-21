@@ -107,6 +107,28 @@ std::string level_digest(const Level& level) {
   f.word(sky.evening ? "evening" : "day");
   if (level.region != RegionId::alpine) f.word(region_name(level.region));
   if (level.grade) f.word(grade_name(*level.grade));
+  if (level.resort) {
+    const ResortMap& area = *level.resort;
+    f.word(area.course);
+    f.mix(double(area.runs.size()));
+    for (const Run& r : area.runs) {
+      f.word(r.id);
+      f.word(grade_name(r.grade));
+      f.mix(r.length);
+    }
+    f.mix(double(area.lifts.size()));
+    for (const Lift& l : area.lifts) {
+      f.word(l.id);
+      f.mix(l.bottom.x);
+      f.mix(l.bottom.z);
+      f.mix(l.top.x);
+      f.mix(l.top.z);
+    }
+    for (const Course& c : area.courses) {
+      f.word(c.id);
+      f.mix(c.length);
+    }
+  }
   char out[9];
   std::snprintf(out, sizeof out, "%08x", f.hash);
   return out;

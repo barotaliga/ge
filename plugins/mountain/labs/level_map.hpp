@@ -12,6 +12,7 @@
 
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
@@ -20,17 +21,25 @@
 namespace ge::mountain::labs {
 
 // The flags a map lab takes beside its own: `version` and `region`.
-inline const ge::lab::LabFlag kVersionFlag{"version", "1",
-                                           "generator version (this tree builds v1; M4b adds 8)"};
+inline const ge::lab::LabFlag kVersionFlag{
+    "version", "1", "generator versions, comma-separated: 1 the single piste, 8 the ski area"};
 inline const ge::lab::LabFlag kRegionFlag{"region", "alpine",
                                           "snow country: alpine, fell, continental, maritime"};
 
 // The region a `--region` word names; nothing for a word that names none.
 std::optional<mapgen::RegionId> region_named(const std::string& name);
 
-// The map for `seed` under the lab's --version and --region; nothing (and a lab.fail naming the
-// seed and the generator's own words) when it cannot be built.
-std::optional<mapgen::Level> build_map(ge::lab::Lab& lab, double seed);
+// The generator versions the lab's --version names, in order.
+std::vector<int> map_versions(const ge::lab::Lab& lab);
+
+// The map for `seed` at `version` under the lab's --region; nothing (and a lab.fail naming the
+// seed and the generator's own words) when it cannot be built. Without a version, the first
+// --version names.
+std::optional<mapgen::Level> build_map(ge::lab::Lab& lab, double seed,
+                                       std::optional<int> version = std::nullopt);
+
+// A map's name in a lab's metrics, tables and shots: `seed-38`, or `seed-38-v8` past version 1.
+std::string map_id(double seed, int version);
 
 // The map from above, `px` pixels a side: +x to the right, +z down the picture.
 ge::lab::Picture draw_map(const mapgen::Level& level, int px);

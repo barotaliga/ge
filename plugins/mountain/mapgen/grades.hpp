@@ -1,7 +1,7 @@
 // R23 — THE PISTE GRADES: how hard a run is, as the colour on its signs, and what building one
 // to that colour asks of the mountain under it (the rows, the colour a piste measures as, its
-// steepest span, its vertical band; dealing a grade and scaling a row arrive with the ski
-// area, M4b).
+// steepest span, its vertical band, a row scaled to a ski area's run, and the colour a seed
+// deals).
 //
 // A grade is a ROW, like a region, and the generator builds to it. THE UNGRADED ROW is the
 // generator before there were grades: every number the rule book's own, drawn in the same
@@ -92,6 +92,10 @@ GradeRow scaled_row(const GradeRow& row, double length);
 // The steepest `track.colour_window` of a piste, m per m, kickers and drops included but a
 // terrain park's (none on any map the generator builds yet).
 double steepest_span(const Track& track, std::span<const Kicker> kickers);
+
+// R23, R28 — the colour a seed nobody asked a colour of races: dealt off a stream of the seed's
+// own at `grade::odds`, so every map of one seed asks for the same colour.
+PisteGrade deal_grade(double seed);
 
 // R2, R23 — the band a map's vertical is dealt from.
 Band vertical_band(const Region& region, const GradeRow& grade);
