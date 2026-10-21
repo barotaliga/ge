@@ -265,8 +265,6 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | `tools/check-agents.sh` | The agent guidance's structure check (make agents-check) | `write-code` |  |
 | `tools/check-libm.sh` | Fails any <cmath> transcendental in simulation code (make libm-check) | `determinism` |  |
 | `tools/check-plugins.mjs` | Checks the plugin contract: names, skills, declared dependencies, no cycles | `plugins` `write-code` |  |
-| `tools/check-plugins.mjs` | Checks the plugin contract: names, skills, declared dependencies, no cycles | `plugins` `write-code` |  |
-| `tools/check-plugins.mjs` | Checks the plugin contract: names, skills, declared dependencies, no cycles | `plugins` `write-code` |  |
 | `tools/skill-lessons.mjs` | Prints, filters and checks the skills' lesson fragments (make lessons) | `skill-reflection` |  |
 
 ## Keywords
