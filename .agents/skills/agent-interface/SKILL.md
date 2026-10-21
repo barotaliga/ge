@@ -48,6 +48,11 @@ string literals are judged, so put the next action in a literal, not in a variab
   hash matches `.agents/skills/ge-skills.lock`; a hand-edited one, or a repo skill of the same
   name, is left and reported until `--force`. `.lessons/` are never touched. A skill the engine
   drops is removed with its lessons kept.
+- **Scaffold with a released ge** (a package's `bin/ge`). `VERSION` on `main` is the last
+  release, so a ge built from `main` pins that release, which lacks whatever `main` added since
+  (v0.1.0 has no `ge::lab` and no `ge`): its scaffold downloads and verifies, then fails to
+  configure. The release workflow writes the new `VERSION` before it builds, so a released ge
+  pins itself.
 - **Try it here:** `make ge ARGS="new ../snow-racer"`, then in that repo
   `cmake --preset debug -DFETCHCONTENT_SOURCE_DIR_GAMEENGINE2=<this tree>`, `make test` and
   `make agents-check`. Packaging's `scaffold` job does exactly that on every PR.
