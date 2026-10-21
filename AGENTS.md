@@ -64,6 +64,13 @@ updates that row's Status in its PR.
 - **SKILLS LEARN.** Read each loaded skill's lessons before the first edit, and before the
   commit record what the session learned, fix what the skill got wrong, and promote what
   is always true (the `skill-reflection` skill). Lessons ship in the same PR as the work.
+- **THE MAIN ENVIRONMENT IS LINUX WITH NO GPU.** Every test, lab, scenario and screenshot
+  harness runs headless in a GPU-less Linux container, rendering in software. The
+  secondary environment is an Apple M3 Max on macOS (Metal), used only for what the
+  container cannot do (GPU timings, Metal or real-GPU-only bugs, interactive play;
+  `docs/rendering.md` § Where it is developed). When a task needs the Mac, say so to the
+  user and open a GitHub issue labelled `needs-mac` with the exact commands, what to look
+  at and what to paste back. Never do that because the Mac would only be faster.
 - **Every work session ends with the `commit` skill.**
 
 ## Build and test

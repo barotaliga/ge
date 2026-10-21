@@ -1,6 +1,6 @@
 ---
 name: gpu
-description: "Use for engine/gpu in gameengine2: the webgpu.h wrapper over Dawn (device, feature tiers, surface, buffers, textures, bind groups, pipelines and the pipeline manifest, the frame encoder, timestamp queries, staging uploads, readback), WGSL embedding and make shaders-check, emdawnwebgpu on the web, and Dawn on lavapipe in CI."
+description: "Use for engine/gpu in gameengine2: the webgpu.h wrapper over Dawn (device, feature tiers, surface, buffers, textures, bind groups, pipelines and the pipeline manifest, the frame encoder, timestamp queries, staging uploads, readback), WGSL embedding and make shaders-check, Dawn built for desktop, iOS and Android, mobile tiers, and Dawn on a software adapter in the GPU-less container and CI."
 ---
 
 # GPU (WebGPU through Dawn)
@@ -11,15 +11,18 @@ there before the first edit.
 
 ## The backend
 
-- **Dawn on every target.** Desktop links Dawn's prebuilt GitHub release, pinned to its
-  tag. The web build uses emdawnwebgpu, Dawn's Emscripten port, so shaders and
-  validation behave the same in both places.
+- **Dawn native on every target**: macOS, Linux, Windows, iOS, iPadOS, the Mac App
+  Store and Android. There is no web build. Desktop links Dawn's prebuilt GitHub
+  release, pinned to its tag. iOS, iPadOS and Android build Dawn from source, cached in
+  CI.
+- **Debug validates, release does not.** Debug builds keep Dawn's validation. Release
+  builds set `skip_validation` and `disable_robustness`.
 - **Keep to the standard header.** Use a Dawn-only entry point only behind a feature
   tier, with a path for when it is missing. Code that keeps to `webgpu.h` could still
   run on wgpu-native.
 - **No second graphics API.** If WebGPU blocks a measured goal, the answer is a Dawn
   native extension behind a tier. Never add Vulkan, Metal or D3D12 code.
-- Rows without a Dawn prebuilt build with `GE_GPU=OFF` (everything except
+- Rows without a Dawn build yet use `GE_GPU=OFF` (everything except
   `engine/gpu`, `engine/render` and the app).
 
 ## The wrapper's job
@@ -66,8 +69,15 @@ there before the first edit.
 ## Testing
 
 - CI has no GPU. Every pass's `prepare` is testable without a device.
-- CI's Linux x64 row runs Dawn on Mesa's lavapipe (software Vulkan): the device smoke
-  test, every pipeline in the manifest, and the lab captures against golden images
-  within a tolerance. A capture from another driver is never compared bit for bit.
+- **The main environment has no GPU.** The development container and CI's Linux x64
+  row run Dawn on the same pinned software Vulkan adapter (SwiftShader or lavapipe):
+  the device smoke test, every pipeline in the manifest, and the lab captures against
+  golden images within a tolerance. A capture from another driver is never compared
+  bit for bit.
+- **The Mac (M3 Max, Metal) is for what software cannot show**: GPU timings, Metal-only
+  or real-GPU-only bugs, the full-resolution look. `docs/rendering.md` § Where it is
+  developed lists them. When a task needs it, tell the person and open a `needs-mac`
+  GitHub issue with the commands, what to look at and what to paste back. Never for
+  speed alone.
 - Test both sides of every feature tier: a test can create the device with a feature
   forced off.

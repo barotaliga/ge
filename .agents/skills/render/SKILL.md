@@ -51,11 +51,13 @@ void encode(TerrainPass&, gpu::Encoder&);                 // GPU: bind and dispa
 
 ## Checking a pass
 
-- **Capture it.** Every target is named, and the lab tools can capture any of them
-  headless with per-pass stats beside the picture (`docs/rendering.md` § Lab hooks).
-  Put before and after captures in the PR.
-- **Price it.** Report GPU ms, draws, instances and triangles per pass from the frame's
-  stats, and keep the frame inside the `perf` skill's budgets.
+- **Capture it, in the container.** Every target is named, and the lab tools capture
+  any of them headless on the software adapter, at the lab's small default size, with
+  per-pass stats beside the picture (`docs/rendering.md` § Lab hooks). Put before and
+  after captures in the PR. A pass that cannot be checked this way is not done.
+- **Price it.** Draws, instances and triangles per pass come from the container. GPU ms
+  only means something on a real GPU, so a timing claim needs the Mac: open a
+  `needs-mac` issue (`docs/rendering.md` § Where it is developed) and say so.
 - **Reset temporal state for stills.** A capture calls `reset_history()` and renders the
   settle frames, so a picture does not depend on what came before.
 - **Reference pictures** for the demo game's look, and the mapping from the original

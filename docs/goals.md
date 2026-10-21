@@ -30,8 +30,9 @@ port is correct when it reproduces their results.
 4. **G4: Only what game5 needs.** Each component traces back to something game5 does.
    Nothing is built for a hypothetical second game. A general engine feature earns its
    place when the port needs it.
-5. **G5: Ships where game5 ships.** The engine runs as a desktop app (Linux, macOS and
-   Windows) and in the browser (WebAssembly + WebGPU), from one codebase.
+5. **G5: Native on desktop and mobile.** The engine runs as a native app on macOS, Linux
+   and Windows, and in the stores on iOS, iPadOS, the Mac App Store and Android, from
+   one codebase. There is no web build.
 6. **G6: Consumed by agents.** Downstream game repos that use the engine are also
    built by agents, so the engine is a product for agents too. Every error, assert
    and log line says what went wrong, where, and the next action to take, so it reads
@@ -48,6 +49,7 @@ port is correct when it reproduces their results.
 - Any physics, renderer or audio middleware that game5 does not need. game5's skier
   physics is its own and is ported as it is.
 - Music. game5 has none by design.
+- A web build. The engine is native only.
 - Changes to game5 or oss-game-framework. They are read-only from here.
 
 ## Milestones
@@ -73,7 +75,7 @@ row's exit criterion is what makes it `done`.
 | M8 | **The world drawn**: the forest as an instance family, the snow material, the trail and deformation maps stamped in compute, the cloud volume and night sky, compute particles (spray, snow cloud, snowfall), skinned figures and the crowd, the skis as glTF models (cgltf), and the quality ladder with its automatic fit | Side-by-side screenshots against the reference pictures for each lab view; the frame inside `docs/rendering.md` § Measurement's budgets at the top and middle of the ladder | open |
 | M9 | **Sound**: a port of the framework's synth as a DSP graph on SDL3 audio, plus game5's beds and the bank | `audition` parity: rendered buffers compared with an offline WebAudio render | open |
 | M10 | **HUD and shell**: the HUD, the cards, settings, records and ghosts, and every word in `strings` | A full race is playable from the title to the finish plate | open |
-| M11 | **Web build**: Emscripten + emdawnwebgpu, served from GitHub Pages | The same race in the browser at parity | open |
+| M11 | **Mobile and store builds**: iOS and iPadOS (Metal), Android (Vulkan) and the Mac App Store; touch input, Dawn built from source and cached in CI, the mobile tiers of `docs/rendering.md` § Mobile GPUs | The same race on an iPad, an iPhone and an Android phone inside the mobile budget; each store build signs and installs | open |
 | M12 | **Agent-facing engine**: the `ge` CLI (`ge new`, `ge skills sync`, `ge doctor`), consumer skills shipped under `consumer-skills/`, and the diagnostics convention (`docs/architecture.md` § Diagnostics) enforced by a test | `ge new` scaffolds a repo that builds against the released engine and passes its own `agents-check` | open |
 | M13+ | **The free ride**: the machines, the crowd and every other game5 system, one row per system as `docs/features.md` lists them in game5 | One row each, added when it is started | open |
 

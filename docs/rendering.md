@@ -34,38 +34,49 @@ most of the scene; CPU time spent choosing instances; shader programs compiled i
 middle of a run, which cause visible hitches; and, on a phone, the ground's fragment
 shader taking more than half of the GPU's time. Each of those has a direct answer below.
 
-## The backend: WebGPU through Dawn
+## The backend: WebGPU through Dawn, native only
 
-**Decision: WebGPU through the standard `webgpu.h` C header, implemented by Dawn on
-every target.** Desktop builds link Dawn's prebuilt release, and the web build uses
-emdawnwebgpu, Dawn's own Emscripten port. Both use the same implementation, the same
-WGSL compiler (Tint) and the same validation, so a shader that compiles on the desktop
-compiles in the browser.
+The targets are macOS, Linux and Windows on the desktop, and iOS, iPadOS, the Mac App
+Store and Android on the stores. There is no web build. Under the hood that is Metal on
+Apple, Vulkan on Linux and Android, and D3D12 or Vulkan on Windows.
 
-Why:
+**Decision: the WebGPU API through the standard `webgpu.h` C header, implemented by
+Dawn, compiled natively on every target.** With no web build, the case rests on these
+reasons:
 
-- **One API on desktop and in the browser** (G5). WebGPU is the only modern API that a
-  browser exposes. Writing a Vulkan, Metal and D3D12 renderer for the desktop would
-  still leave the web build needing a fourth.
-- **Dawn already is a thin RHI.** It translates to D3D12, Metal and Vulkan, tracks
-  resource state and places barriers, and validates every call with an error message
-  that names the object. Writing our own layer over three native APIs would duplicate
-  that work, and agents would have to maintain three backends.
-- **Native extensions without forking the code.** Dawn native exposes features that are
-  not, or not yet, on the web (multi-draw indirect, subgroups, push-constant-like
-  "immediates", timestamps inside passes). The engine turns them on per adapter and
-  keeps a path for when they are missing (§ Feature tiers).
-- **A software GPU for CI.** Dawn runs on Mesa's lavapipe (a Vulkan driver on the CPU)
-  on Linux. CI runners have no GPU, but they can run the renderer and capture
-  screenshots with it (§ Lab hooks).
+- **One API over every native backend.** Dawn translates to Metal, Vulkan and D3D12.
+  Our own layer would mean at least two backends (Metal for the App Store, Vulkan for
+  Linux and Android) for agents to keep correct, plus our own barrier tracking and
+  memory management.
+- **Mobile drivers come with workarounds.** Dawn is the GPU layer of a large browser on
+  Android, macOS and Windows, so it carries per-vendor workarounds for driver bugs
+  (Adreno, Mali, PowerVR, Apple, and the desktop vendors) that a hand-written Vulkan
+  backend would have to rediscover one crash at a time.
+- **Validation an agent can act on.** In debug builds, every call is validated and an
+  error names the object by its label and says what was wrong. A GPU-side fault in raw
+  Vulkan or Metal is often a hang or a corrupt frame with no message, which only agents
+  can debug here. Release builds turn validation off (Dawn's `skip_validation` toggle)
+  and drop the shader robustness transform (`disable_robustness`), so the checks cost
+  nothing in a shipped frame. M6 verifies both toggles.
+- **WGSL everywhere, compiled by one compiler.** Tint compiles WGSL to MSL, SPIR-V and
+  HLSL, so there is no shader cross-compiler toolchain in the build, and
+  `make shaders-check` validates every shader offline.
+- **Native extensions without forking the code.** Dawn native exposes what the web
+  spec lacks (multi-draw indirect, subgroups, push-constant-like "immediates",
+  timestamps inside passes, memoryless transient attachments). The engine turns them
+  on per adapter and keeps a path for when they are missing (§ Feature tiers).
+- **A software GPU for the main development environment and CI.** Dawn runs on
+  SwiftShader or Mesa's lavapipe (Vulkan drivers on the CPU) on Linux. The everyday
+  environment and the CI runners have no GPU, and both can still run the renderer and
+  capture screenshots (§ Where it is developed).
 
 **What we give up**, and why it is acceptable for this workload:
 
 | Missing from WebGPU | What it would buy | Why the game does not need it |
 | --- | --- | --- |
 | Bindless resources | Any texture from any shader with no binding | Few materials; texture arrays per size class and a material table cover it (§ Geometry and resources) |
-| Mesh shaders | Meshlet culling inside the pipeline | Compute culling plus indirect draws gets the same culling at instance granularity, which is what a forest of identical shapes needs |
-| Ray tracing | RT shadows, reflections, GI | Outdoor snow under one sun; the techniques below cover the look |
+| Mesh shaders | Meshlet culling inside the pipeline | Compute culling plus indirect draws gets the same culling at instance granularity, which is what a forest of identical shapes needs; most phones lack mesh shaders anyway |
+| Ray tracing | RT shadows, reflections, GI | Outdoor snow under one sun; the techniques below cover the look, and phones could not afford it |
 | Async compute queues | Overlapping compute and graphics | One queue. Compute work is ordered so it sits where the GPU would otherwise be idle, and a frame is small enough that overlap gains little |
 | Explicit barriers | Hand-tuned synchronisation | Dawn places them. Passes are ordered so that independent work is not forced to wait |
 
@@ -74,20 +85,46 @@ extension behind a feature tier, never a second graphics API.
 
 **Alternatives** (the full comparison is in `docs/research.md` § GPU API):
 
-- **wgpu-native** implements the same header. It is not used, because two
-  implementations would double the platform matrix for shader and validation
-  behaviour, and the web build is Dawn's anyway. Code that keeps to the standard header
-  keeps the option open.
-- **SDL3's GPU API** (stable since SDL 3.2) targets Vulkan, Metal and D3D12, but it has
-  no web backend and needs a shader cross-compiler in the build.
-- **bgfx, sokol_gfx, Diligent, Filament**: each brings its own shader dialect and build,
-  and each either has no WebGPU backend or limits it to the subset its other backends
-  share.
+- **Vulkan everywhere, with MoltenVK or KosmicKrisp on Apple.** One API with bindless,
+  async compute and full control. It was rejected because agents would own manual
+  synchronisation and memory, mobile driver bugs and the Metal translation layer, and
+  the workload has no measured need for what it adds.
+- **Our own thin layer over Metal and Vulkan.** The most control and the best fit to each
+  platform, at the cost of two backends to keep in step.
+- **SDL3's GPU API** (stable since SDL 3.2) covers Vulkan, Metal and D3D12, including
+  iOS and Android, and SDL is already a dependency. It was rejected for now because it
+  has no GPU timestamp queries, which the perf-first goal needs, and it needs a shader
+  cross-compiler (SPIR-V, MSL, DXIL) in the build.
+- **wgpu-native** implements the same header. Two implementations would double the
+  platform matrix for shader and validation behaviour. Code that keeps to the standard
+  header keeps the option open.
+- **bgfx, sokol_gfx, Diligent, Filament**: each brings its own shader dialect, build and
+  abstraction for agents to learn, and none gives more of what this workload needs.
 
-**Where Dawn is built.** The prebuilt release covers Linux x64, Windows x64 and macOS
-(x64 and arm64). On any other CI row, `GE_GPU=OFF` builds and tests everything except
-`engine/gpu`, `engine/render` and the app, until a cached source build of Dawn is
-worth its CI time.
+**Where Dawn is built.** The prebuilt GitHub release covers Linux x64, Windows x64 and
+macOS. iOS, iPadOS and Android (and Linux arm64) build Dawn from source with its CMake
+build, cached in CI. Until that cache exists, those rows build with `GE_GPU=OFF`, which
+builds and tests everything except `engine/gpu`, `engine/render` and the app.
+
+## Mobile GPUs
+
+Phones and tablets (Apple's GPUs, Adreno, Mali) render in tiles. That changes a few
+choices, and each is a feature tier, not a separate renderer:
+
+- **No depth prepass on tile GPUs.** Apple's GPUs remove hidden surfaces in hardware,
+  and Adreno and Mali have their own early-depth schemes, so a prepass mostly costs a
+  second vertex pass. On a tiler, the opaque pass draws front to back with
+  `less-equal`, and the two-phase occlusion culling runs one phase against last frame's
+  pyramid. The rule against `discard` in opaque shaders matters even more there.
+- **Memoryless attachments.** Depth, MSAA colour and other targets that do not outlive a
+  pass are transient (Dawn's transient attachments: memoryless on Metal, lazily
+  allocated on Vulkan), so they never leave tile memory.
+- **Bandwidth over arithmetic.** Targets are 16-bit floats or packed formats where the
+  look allows; post work is merged into as few full-screen passes as possible; MSAA
+  resolves in the tile.
+- **Thermal headroom.** A phone holds its clock only below full load, so the budget for
+  the middle of the ladder leaves headroom (§ Measurement), and the game can cap the
+  frame rate at 30 or 60 Hz.
 
 ## Feature tiers
 
@@ -104,11 +141,13 @@ the lab tests, so neither one can rot.
 | `subgroups` | Prefix sums and reductions in culling and the depth pyramid | Workgroup shared memory |
 | `shader-f16` | Half-precision particle and post maths | 32-bit floats |
 | `float32-filterable` | Filtering the height and sky tables in 32-bit | 16-bit float copies of those tables |
-| `texture-compression-bc` / `-astc` / `-etc2` | Compressed textures for authored assets | Uncompressed RGBA8 |
+| `texture-compression-bc` / `-astc` / `-etc2` | Compressed textures for authored assets (BC on the desktop, ASTC on Apple and most phones) | Uncompressed RGBA8 |
+| Transient attachments (Dawn extension) | Depth and MSAA targets kept in tile memory on mobile | Ordinary textures |
 
 Only core WebGPU is a hard requirement. Compatibility mode (WebGPU over GLES or D3D11)
 is not targeted, because its limits (few or no storage buffers in the vertex stage)
-would rule out vertex pulling.
+would rule out vertex pulling. On Android that means a Vulkan 1.1 device, which covers
+the phones that can run the game at all.
 
 ## The frame
 
@@ -136,7 +175,7 @@ The order, with what each stage is for:
    - instance culling, phase one (§ GPU-driven instances).
 3. **Shadow views:** the cached sun cascades when they are due, and the figures' shadow
    atlas every frame.
-4. **Depth prepass** of the terrain and opaque instances, then a **depth pyramid**
+4. **Depth prepass** (desktop GPUs; skipped on tile GPUs, § Mobile GPUs) of the terrain and opaque instances, then a **depth pyramid**
    (Hi-Z) built from it, then culling **phase two** for what the pyramid shows was
    wrongly culled.
 5. **Opaque colour** with the depth test set to `equal`: every pixel of the expensive
@@ -351,11 +390,52 @@ benchmark lab fills.
   (read back from the indirect buffers a frame late), bytes uploaded, and pipelines
   created. The developer UI and the lab tests read the same struct.
 - CPU zones use Tracy behind `GE_TRACY=ON`.
-- **Budgets.** On the reference desktop GPU, the top of the picture ladder at 1440p
-  output fits in 8.3 ms of GPU (120 Hz). On an integrated or phone-class GPU in the
-  browser, the middle of the ladder fits in 16.6 ms (60 Hz). The renderer's CPU half
+- **Budgets.** On the reference desktop GPU (the M3 Max), the top of the picture ladder
+  at 1440p output fits in 8.3 ms of GPU (120 Hz). On a recent phone or tablet, the
+  middle of the ladder fits in 12 ms of GPU, leaving thermal headroom under a 16.6 ms
+  (60 Hz) frame. The renderer's CPU half
   (every `prepare` and `encode`) stays under 1 ms on one core, whatever the instance
   counts. The `perf` skill says how a claim against these budgets is proven.
+
+## Where it is developed
+
+**The main development environment is a Linux container with no GPU.** Every pass must
+be buildable, runnable and verifiable by screenshot there. A secondary environment is
+an Apple M3 Max laptop on macOS (Metal), used only for what the container cannot do.
+
+**In the Linux container:**
+
+- Dawn draws on a **software Vulkan adapter**: SwiftShader, which Dawn can build in and
+  which needs no system driver, or Mesa's lavapipe where the package is installed. M6
+  picks one and pins it; `ge_gpu_info` prints which adapter a run used.
+- Software rendering is one to two orders of magnitude slower than a GPU, and the
+  container has a few cores. Labs therefore render at a small default size (640×360),
+  with the fewest settle frames that make a still repeatable, and a lab can name the
+  views and passes it needs, so it does not draw the whole frame for one target.
+- Every feature tier's fallback path runs here, since a software adapter lacks some
+  optional features. A lab can also force a feature off, so both paths stay covered.
+- **What it can verify:** that a pass builds and validates, every pipeline in the
+  manifest, every named target, and the picture (by capture and golden comparison). It
+  can count draws, instances and triangles, and check that nothing is created or
+  allocated mid-run.
+- **What it cannot verify:** speed. GPU milliseconds from a software adapter say
+  nothing about a real GPU, so no performance claim is made from them.
+
+**What needs the Mac**, and nothing else:
+
+| Task | Why the container cannot do it |
+| --- | --- |
+| A GPU performance claim: per-pass ms, the frame budget, the quality ladder's price table, the automatic preset | Software timings do not predict a real GPU |
+| A bug that shows only on Metal, or only on a real GPU (precision, filtering, driver behaviour) | The container has neither |
+| The final look sign-off at full resolution and the top of the ladder, where a software render is too slow to iterate | Practical only on real hardware |
+| Running the desktop app interactively (input feel, vsync, frame pacing) | No display, no GPU |
+| Building, signing and running the iOS, iPadOS and Mac App Store builds on hardware | Needs Xcode and Apple devices (CI's macOS runner can build, not run on a device) |
+
+When a task needs the Mac, the agent says so to the person, and opens a GitHub issue
+labelled `needs-mac` with the exact commands to run, what to look at, and what to paste
+back. Speed alone is not a reason: work that is only slower in the container stays in
+the container. A check that needs a physical phone or tablet (Android or iOS) is
+handled the same way, with an issue labelled `needs-device`.
 
 ## Lab hooks
 
@@ -374,10 +454,11 @@ contract (scenes, captions, sheets). The renderer's half is:
   driver.
 - **Per-pass stats with every capture**: GPU ms, draws, instances and triangles, so a
   lab sheet can show what a picture costs beside the picture.
-- **CI captures on lavapipe.** CI's Linux x64 row runs Dawn on Mesa's lavapipe and
-  compares captures with committed golden images within a tolerance: a per-pixel delta
-  and a cap on the share of pixels that exceed it. Pictures from different drivers are
-  never compared bit for bit. Golden images are regenerated only on that row.
+- **Golden captures on the software adapter.** The development container and CI's
+  Linux x64 row run the same pinned software adapter, so a golden image regenerated in
+  the container is the one CI compares against. The comparison is within a tolerance:
+  a per-pixel delta and a cap on the share of pixels that exceed it. Pictures from
+  different drivers (the Mac's Metal included) are never compared bit for bit.
 
 ## Where the code goes
 
@@ -397,7 +478,7 @@ Each library is added in the milestone that first needs it, pinned to a tag.
 
 | Library | Licence | For | Milestone |
 | --- | --- | --- | --- |
-| Dawn | BSD-3-Clause | WebGPU on desktop; emdawnwebgpu on the web; Tint for `make shaders-check` | M6 |
+| Dawn | BSD-3-Clause | WebGPU on every target (prebuilt on the desktop, from source for iOS, iPadOS and Android); Tint for `make shaders-check` | M6 |
 | SDL3 | zlib | The window and the surface (already the platform layer) | M6 |
 | cgltf | MIT | Loading authored glTF meshes | M8 |
 | Tracy | BSD-3-Clause | CPU and GPU zones, behind `GE_TRACY=ON` | M7 |

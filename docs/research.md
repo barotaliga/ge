@@ -147,28 +147,26 @@ step whole fixed steps, and give the renderer `alpha` for interpolation. It port
 | Native per-OS | Most control and most code; not justified. |
 
 **Decision: SDL3**, statically linked. It is the one dependency that covers window,
-input, gamepad rumble (game5 has `rumble.ts`), audio output and the web target.
+input, gamepad rumble (game5 has `rumble.ts`), audio output, iOS and Android.
 
 ### GPU API
 
-| Option | Web | Notes |
-| --- | --- | --- |
-| **WebGPU via `webgpu.h`** (Dawn / wgpu-native; Emscripten's emdawnwebgpu) | yes | The standard C header, implemented by Dawn (Chrome's WebGPU, on D3D12, Metal and Vulkan) and wgpu-native (Firefox's). Compute shaders, storage buffers, indirect draws, timestamp queries. Shaders in WGSL. Dawn native adds multi-draw indirect, subgroups and immediates as extensions. Dawn publishes prebuilt binaries and an emdawnwebgpu package on GitHub, and runs on Mesa's lavapipe for GPU-less CI. |
-| SDL3 GPU | no | Stable since SDL 3.2 (Vulkan, Metal, D3D12, with compute), but no web backend, and shaders are cross-compiled per backend. |
-| A thin RHI of our own over Vulkan, Metal and D3D12 | no | Bindless, mesh shaders, ray tracing and async compute become available, but it means three backends to maintain, a fourth for the web, and our own barrier tracking. |
-| bgfx | WebGL2 only | Mature, with its own shader dialect and build. |
-| sokol_gfx | WebGL2/WebGPU | Small and pleasant, but a lowest-common-denominator feature set. |
-| Vulkan + MoltenVK | no | Most work; no web target. |
+The targets are macOS, Linux, Windows, iOS, iPadOS and Android (G5). There is no web
+build.
 
-**Decision: WebGPU through `webgpu.h`.** It is the only option that is the same API on
-desktop and in the browser (G5). game5 is already moving its renderer onto WebGPU
-(`docs/webgpu.md` there), so the shader logic it ports into TSL/WGSL carries across.
-**Revised: Dawn on every target**, from its
-prebuilt GitHub release on the desktop and emdawnwebgpu on the web, so the desktop and
-the browser share one implementation, one WGSL compiler and one validation layer. The
-code keeps to the standard header, so wgpu-native remains possible. SDL3 provides the
-window and the surface. What WebGPU lacks (bindless, mesh shaders, ray tracing, async
-compute) and why the workload does not need it is in `docs/rendering.md` § The backend.
+| Option | Platforms | Notes |
+| --- | --- | --- |
+| **WebGPU API via `webgpu.h`, Dawn native** | All of them (Metal, Vulkan, D3D12) | One API, WGSL compiled by Tint to every backend, validation with labelled errors, automatic barriers, per-vendor driver workarounds from a large browser's Android and desktop use. Native extensions: multi-draw indirect, subgroups, immediates, transient attachments. Prebuilt for desktop; built from source for mobile. Runs on SwiftShader or lavapipe for GPU-less development. |
+| wgpu-native (same header) | All of them | A second implementation of the same API; no reason to run two. |
+| SDL3 GPU | All of them | Stable since 3.2, SDL is already a dependency. No GPU timestamp queries, and shaders must be cross-compiled to SPIR-V, MSL and DXIL. |
+| Vulkan + MoltenVK / KosmicKrisp on Apple | All of them | Bindless, async compute, full control; manual synchronisation and memory, mobile driver bugs and a Metal translation layer become ours. |
+| Own thin RHI over Metal and Vulkan | All of them | The most control; two backends for agents to keep in step. |
+| bgfx, sokol_gfx, Diligent, Filament | Most | Each has its own shader dialect, build and abstraction; none adds what this workload needs. |
+
+**Decision: the WebGPU API on Dawn, native on every target.** The reasons, what WebGPU
+lacks (bindless, mesh shaders, ray tracing, async compute) and why this workload does
+not need it, and the mobile tiers are in `docs/rendering.md` § The backend and § Mobile
+GPUs. SDL3 provides the window and the surface.
 
 ### Rendering techniques game5 uses (what we must build, no more)
 
@@ -228,7 +226,7 @@ No runtime asset database.
 | Determinism | Own `core/libm` matched to the oracle's V8; FP flags in CMake; golden parity tests |
 | Loop | Fixed 120 Hz accumulator (port of `loop/run-clock`), interpolated rendering |
 | Platform | SDL3 |
-| GPU | WebGPU through `webgpu.h`, Dawn on every target (prebuilt on desktop, emdawnwebgpu on web); techniques in `docs/rendering.md` |
+| GPU | WebGPU through `webgpu.h`, Dawn native on every target (prebuilt on the desktop, from source on mobile); techniques in `docs/rendering.md` |
 | Shaders | WGSL, embedded at build |
 | Audio | Port of the framework synth as a DSP graph on SDL3 audio |
 | UI | Own immediate-mode 2D + SDF text; Dear ImGui for dev tools |
