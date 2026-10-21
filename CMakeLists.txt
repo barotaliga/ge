@@ -128,9 +128,22 @@ if(PROJECT_IS_TOP_LEVEL)
     ${CMAKE_CURRENT_SOURCE_DIR}/engine/lab/labs/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/plugins/*/labs/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/games/*/labs/*.cpp)
+  # The engine's GPU and window labs (gpu_*_lab.cpp, platform_*_lab.cpp) build only with
+  # the layer they measure.
+  set(GE_LAB_EXTRA "")
+  if(GE_GPU)
+    list(APPEND GE_LAB_EXTRA ge_gpu)
+  else()
+    list(FILTER GE_LAB_SOURCES EXCLUDE REGEX "/engine/lab/labs/gpu_[^/]*$")
+  endif()
+  if(GE_PLATFORM AND GE_GPU)
+    list(APPEND GE_LAB_EXTRA ge_platform)
+  else()
+    list(FILTER GE_LAB_SOURCES EXCLUDE REGEX "/engine/lab/labs/platform_[^/]*$")
+  endif()
   get_property(GE_PLUGIN_TARGETS GLOBAL PROPERTY GE_PLUGIN_TARGETS)
   add_executable(labs engine/lab/main.cpp ${GE_LAB_SOURCES})
-  target_link_libraries(labs PRIVATE ge_lab ge_core ${GE_PLUGIN_TARGETS})
+  target_link_libraries(labs PRIVATE ge_lab ge_core ${GE_PLUGIN_TARGETS} ${GE_LAB_EXTRA})
 
   enable_testing()
   add_subdirectory(tests)

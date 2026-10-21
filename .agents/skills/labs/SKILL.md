@@ -17,8 +17,10 @@ and the subject's own skill (the lab's `skill` field names it).
 
 Every lab runs on the GPU-less Linux container, which is the primary environment
 (`docs/labs.md` § Where labs run). Pictures come from the CPU raster or, from M6, a
-software GPU adapter read back to a `Picture`. Never write a lab that needs a window or a
-person. A measurement only the Mac can make keeps a Linux smoke mode and follows the
+software GPU adapter read back to a `Picture` (`gpu-capture` is the pattern). A GPU frame
+is a `Det::measured` shot, so its pixels stay out of the digest. Never write a lab that
+needs a window or a person: `frame-pace` runs under `xvfb-run -a` and passes, noting it,
+without a display. A measurement only the Mac can make keeps a Linux smoke mode and follows the
 needs-the-Mac rule in `AGENTS.md`.
 
 ## Run one

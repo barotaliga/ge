@@ -1,6 +1,6 @@
 // THE GPU TEST SCENE: the smallest frame that exercises the whole path (an embedded shader
 // with an #include, a pipeline from the manifest, a render pass, a readback or a present). It
-// is the picture `tests/gpu_capture_test.cpp` holds to its golden image, the `gpu-clear` lab's
+// is the picture `tests/gpu_capture_test.cpp` holds to its golden image, the `gpu-capture` lab's
 // shot and what the demo's window shows until the frame core draws a scene (M7): a sky
 // gradient, pale at the bottom and deep blue at the top, and one triangle with a red (bottom
 // left), a green (bottom right) and a blue (top) corner.

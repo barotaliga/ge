@@ -71,10 +71,12 @@ A lab may include anything (it is tooling), and nothing includes a lab.
 
 **The primary development environment is a Linux container with no GPU**, and every lab
 must run and be verifiable there: the CPU raster today, and from M6 GPU pictures through a
-software adapter (a CPU Vulkan driver under the WebGPU backend), so a screenshot lab works on
+software adapter (a CPU Vulkan driver under Dawn), so a screenshot lab works on
 CI and in an agent's container alike. A lab that renders reads its frame back to a
 `Picture`, and the agent opens the PNG and the contact sheet. No lab may need a window, a
-display server or a person.
+display server or a person: the one lab that measures a window (`frame-pace`) runs under a
+virtual display (`xvfb-run -a`) in the container, and without a display it notes that and
+passes, with the same digest.
 
 Some things can only be measured on the secondary machine, an Apple-silicon Mac: real GPU
 timings, Metal-specific behaviour and the feel of the frame pacing on a real display. A lab
@@ -132,7 +134,11 @@ for a reader who sees only that picture.
 
 A lab's **digest** is an FNV-1a 64 over what it wrote, in order: each deterministic metric's
 key and bits, every table cell, and every picture's id and pixels (the caption band
-included). `measured` metrics are left out. Three checks use it:
+included). `measured` metrics are left out, and so are the pixels of a `measured` picture
+(`lab.shot(shot, picture, Det::measured)`): a GPU frame is rasterised by each adapter in
+its own way, so its id is hashed and its pixels are not, and its sidecar and contact sheet
+say so. A lab that holds a GPU frame to an image does it itself, on the pinned adapter, and
+fails when it is off. Three checks use it:
 
 - **`--repeat=N`** runs the lab N times in one process and fails when the digests differ.
   That catches state kept between runs and unseeded draws.
@@ -234,7 +240,8 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 | `sim` | drive | game:fall_line | the step, the bot | M5 |
 | `ride` | scenario | plugin:skier | the skier on the snow | M5 |
 | `play` | drive | engine | an agent over stdio | M5 |
-| `frame-pace` | bench | engine | the platform's frame loop | M6 |
+| `gpu-capture` | picture | engine | `engine/gpu` (the headless capture) | M6 (now) |
+| `frame-pace` | bench | engine | the platform's frame loop | M6 (now) |
 | `world` | picture | game:fall_line | the first picture | M7 |
 | `profile` | bench | engine | a frame's CPU and GPU cost | M7 |
 | `forest`, `snow`, `trails`, `spray`, `skis`, `skier` | picture | game:fall_line | the world drawn | M8 |

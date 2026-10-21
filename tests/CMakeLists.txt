@@ -41,3 +41,9 @@ endforeach()
 add_test(NAME labs_smoke COMMAND labs --all --smoke --repeat=2 --quiet
   --out=${PROJECT_BINARY_DIR}/previews
   --check-digests=${PROJECT_SOURCE_DIR}/tests/labs_digests.txt)
+# From the repository's root, where a lab finds its golden images (gpu-capture). With the GPU
+# in, the software driver's worker threads keep allocations past exit (as in the gpu_ tests).
+set_tests_properties(labs_smoke PROPERTIES WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+if(GE_GPU)
+  set_tests_properties(labs_smoke PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
+endif()

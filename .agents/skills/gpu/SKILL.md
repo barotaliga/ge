@@ -120,7 +120,16 @@ there before the first edit.
 
 ## Labs
 
-M6 lands the headless capture `Lab::shot` takes GPU frames from: an offscreen target on the
-software adapter, so it runs in the GPU-less Linux container and on CI, read back to RGBA8
-(`docs/labs.md` § Pictures before and after the renderer). Its smoke lab clears to a known
-colour and checks the pixels.
+- **`gpu-capture`** (`engine/lab/labs/gpu_capture_lab.cpp`): the test scene drawn into an
+  offscreen target, read back with `read_now` and handed to `Lab::shot` as a `Picture`. That
+  is the pattern every renderer lab follows (`docs/labs.md` § Pictures before and after the
+  renderer). On the pinned adapter at 96x64 it holds the frame to the golden and fails when
+  it is off; with no adapter it draws a placeholder and notes it.
+- **A GPU frame is a `measured` shot**: `lab.shot(shot, picture, Det::measured)`. Each
+  adapter rasterises in its own way, so its pixels never enter the lab's digest (the id
+  does). Whatever must hold across rows goes in a deterministic metric, and a pixel check
+  is the lab's own, on the pinned adapter.
+- GPU and window labs are named `gpu_*_lab.cpp` and `platform_*_lab.cpp` in
+  `engine/lab/labs/`; the root `CMakeLists.txt` drops them from the `labs` executable when
+  `GE_GPU` (or `GE_PLATFORM`) is off, so every lab's digest must be the same whether or not
+  an adapter or a display is there.

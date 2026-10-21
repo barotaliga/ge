@@ -1,5 +1,7 @@
 # lab digests at their smoke flags: labs --all --smoke --write-digests
 analyze 06a600c2252d9fef
+frame-pace c5058023a52812c3
+gpu-capture 8b5d5e3b7be5a4fc
 level 4490929c4816a055
 mapgen-cost 3baf51b6907817f3
 noise 3d3a828834f144cb

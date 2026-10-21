@@ -47,6 +47,9 @@ sees plain structs.
 
 ## Labs
 
-M6 lands `frame-pace`, a `bench` lab over the real window's frame loop beside the `run-clock`
-cadence lab. The labs run headless, so nothing in `engine/platform` may be required to run
-the `labs` executable.
+- **`frame-pace`** (`engine/lab/labs/platform_frame_pace_lab.cpp`, a `bench`): the real
+  window's loop presents the test scene N frames and reports the present intervals (mean,
+  p50, p99, max) and the run clock's steps a frame, all `measured`. Run it as
+  `xvfb-run -a build/debug/labs frame-pace` in the container, where Xvfb has no vsync and
+  the intervals are the loop's own cost; pacing at vsync is a real-display check. Without a
+  display it notes that and passes with the same digest, so `labs_smoke` never needs one.

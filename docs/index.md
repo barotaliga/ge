@@ -43,7 +43,9 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | `engine/lab/lab.cpp` | The lab registry, the Lab context's sinks, the digest and the caption band | `labs` | `tests/lab_runner_test.cpp` |
 | `engine/lab/lab.hpp` | The lab contract: LabSpec, the Lab context, GE_LAB registration, the lab kinds | `labs` | `tests/lab_runner_test.cpp` |
 | `engine/lab/labs/core_noise_lab.cpp` | Lab: value noise pictured at several scales, its range, cached-field agreement | `labs` `determinism` | `tests/lab_runner_test.cpp` |
+| `engine/lab/labs/gpu_capture_lab.cpp` | Lab: the GPU test scene captured headless, read back and held to its golden | `gpu` `labs` | `tests/gpu_capture_test.cpp` |
 | `engine/lab/labs/loop_run_clock_lab.cpp` | Lab: the run clock's cadence (steps a frame, alpha, hitches) at display rates | `labs` `sim` | `tests/lab_runner_test.cpp` |
+| `engine/lab/labs/platform_frame_pace_lab.cpp` | Lab: the window's frame loop timed (present intervals, percentiles, steps) | `platform` `labs` | `tests/platform_window_test.cpp` |
 | `engine/lab/main.cpp` | The labs executable's main: hands the command line to the runner | `labs` |  |
 | `engine/lab/png.cpp` | The PNG writer's chunks, stored deflate and checksums | `labs` | `tests/lab_raster_test.cpp` |
 | `engine/lab/png.hpp` | The labs' PNG writer: RGBA8, stored deflate, CRC-32 and Adler-32 | `labs` | `tests/lab_raster_test.cpp` |
@@ -173,8 +175,6 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | `tools/check-agents.sh` | The agent guidance's structure check (make agents-check) | `write-code` |  |
 | `tools/check-libm.sh` | Fails any <cmath> transcendental in simulation code (make libm-check) | `determinism` |  |
 | `tools/check-plugins.mjs` | Checks the plugin contract: names, skills, declared dependencies, no cycles | `plugins` `write-code` |  |
-| `tools/check-plugins.mjs` | Checks the plugin contract: names, skills, declared dependencies, no cycles | `plugins` `write-code` |  |
-| `tools/check-plugins.mjs` | Checks the plugin contract: names, skills, declared dependencies, no cycles | `plugins` `write-code` |  |
 | `tools/skill-lessons.mjs` | Prints, filters and checks the skills' lesson fragments (make lessons) | `skill-reflection` |  |
 
 ## Keywords
@@ -187,7 +187,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | accumulator | `engine/loop/run_clock.hpp` |
 | acos | `engine/core/libm/fdlibm_arc.cpp` `engine/core/libm/libm.hpp` |
 | acquire | `engine/gpu/surface.hpp` |
-| adapter | `engine/gpu/device.hpp` |
+| adapter | `engine/gpu/device.hpp` `engine/lab/labs/gpu_capture_lab.cpp` |
 | adapter-info | `engine/gpu/device.cpp` |
 | add | `plugins/mountain/mapgen/net_index.cpp` |
 | add_compute | `engine/gpu/pipeline.hpp` |
@@ -225,7 +225,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | baseline | `engine/lab/runner.cpp` `engine/lab/runner.hpp` |
 | beats | `plugins/racing/records.hpp` |
 | before-after | `engine/lab/report.cpp` `plugins/mountain/labs/mapgen_cost_lab.cpp` |
-| bench | `engine/lab/lab.hpp` `plugins/mountain/labs/mapgen_cost_lab.cpp` `plugins/mountain/mapgen/massif.hpp` `plugins/mountain/mapgen/network_stamp.cpp` `plugins/mountain/mapgen/network_stamp.hpp` |
+| bench | `engine/lab/lab.hpp` `engine/lab/labs/platform_frame_pace_lab.cpp` `plugins/mountain/labs/mapgen_cost_lab.cpp` `plugins/mountain/mapgen/massif.hpp` `plugins/mountain/mapgen/network_stamp.cpp` `plugins/mountain/mapgen/network_stamp.hpp` |
 | bench-share | `plugins/mountain/mapgen/massif.cpp` |
 | berm | `plugins/mountain/mapgen/berm.hpp` |
 | beside-cost | `plugins/mountain/mapgen/lanes.cpp` |
@@ -251,7 +251,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | candidates | `plugins/mountain/mapgen/station_clear.cpp` |
 | canvas | `engine/lab/raster.hpp` |
 | caption | `engine/lab/lab.cpp` `engine/lab/lab.hpp` `engine/lab/report.hpp` `tests/lab_runner_test.cpp` |
-| capture | `engine/gpu/target.hpp` `engine/gpu/test_scene.hpp` `tests/gpu_capture_test.cpp` |
+| capture | `engine/gpu/target.hpp` `engine/gpu/test_scene.hpp` `engine/lab/labs/gpu_capture_lab.cpp` `tests/gpu_capture_test.cpp` |
 | cat-track | `plugins/mountain/mapgen/lanes.hpp` |
 | cbrt | `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/libm.hpp` |
 | cell-key | `plugins/mountain/mapgen/net_index.cpp` |
@@ -404,8 +404,8 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | fps | `engine/lab/labs/loop_run_clock_lab.cpp` |
 | fragments | `tools/skill-lessons.mjs` |
 | frame | `engine/lab/labs/loop_run_clock_lab.cpp` `engine/loop/run_clock.hpp` |
-| frame-loop | `games/fall_line/app/main.cpp` |
-| frame-pace | `games/fall_line/app/main.cpp` |
+| frame-loop | `engine/lab/labs/platform_frame_pace_lab.cpp` `games/fall_line/app/main.cpp` |
+| frame-pace | `engine/lab/labs/platform_frame_pace_lab.cpp` `games/fall_line/app/main.cpp` |
 | funnel-into | `plugins/mountain/mapgen/network_build.cpp` `plugins/mountain/mapgen/network_build.hpp` |
 | gates | `plugins/mountain/labs/level_lab.cpp` `plugins/mountain/labs/level_map.hpp` `plugins/mountain/mapgen/spawn.hpp` |
 | ge_add_plugin | `tools/check-plugins.mjs` |
@@ -420,9 +420,9 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | glide | `plugins/mountain/mapgen/run_start.hpp` |
 | glyph | `engine/lab/raster.cpp` `engine/lab/raster.hpp` |
 | golden | `tests/core_heightfield_test.cpp` `tests/core_libm_test.cpp` `tests/core_math_test.cpp` `tests/core_noise_test.cpp` `tests/core_num_test.cpp` `tests/core_output_test.cpp` `tests/core_prng_test.cpp` `tests/core_quat_test.cpp` `tests/core_solar_test.cpp` `tests/golden.hpp` `tests/loop_run_clock_test.cpp` `tests/mountain_generate_test.cpp` `tests/mountain_resort_build_test.cpp` `tests/racing_records_test.cpp` `tests/racing_standings_test.cpp` `tests/racing_tape_test.cpp` |
-| golden-image | `engine/gpu/test_scene.hpp` `tests/gpu_capture_test.cpp` `tests/gpu_support.hpp` |
+| golden-image | `engine/gpu/test_scene.hpp` `engine/lab/labs/gpu_capture_lab.cpp` `tests/gpu_capture_test.cpp` `tests/gpu_support.hpp` |
 | gondola | `plugins/mountain/mapgen/resort.hpp` |
-| gpu | `engine/gpu/device.cpp` `engine/gpu/device.hpp` `engine/gpu/pipeline.cpp` `engine/gpu/pipeline.hpp` `engine/gpu/surface.cpp` `engine/gpu/surface.hpp` `engine/gpu/target.cpp` `engine/gpu/target.hpp` `engine/gpu/test_scene.cpp` `engine/gpu/test_scene.hpp` `engine/gpu/timer.cpp` `engine/gpu/timer.hpp` `tests/gpu_capture_test.cpp` `tests/gpu_device_test.cpp` `tests/gpu_support.hpp` |
+| gpu | `engine/gpu/device.cpp` `engine/gpu/device.hpp` `engine/gpu/pipeline.cpp` `engine/gpu/pipeline.hpp` `engine/gpu/surface.cpp` `engine/gpu/surface.hpp` `engine/gpu/target.cpp` `engine/gpu/target.hpp` `engine/gpu/test_scene.cpp` `engine/gpu/test_scene.hpp` `engine/gpu/timer.cpp` `engine/gpu/timer.hpp` `engine/lab/labs/gpu_capture_lab.cpp` `tests/gpu_capture_test.cpp` `tests/gpu_device_test.cpp` `tests/gpu_support.hpp` |
 | gpu-ms | `engine/gpu/timer.hpp` |
 | grade | `plugins/mountain/labs/level_lab.cpp` `plugins/mountain/mapgen/grades.cpp` `plugins/mountain/mapgen/grades.hpp` `plugins/mountain/mapgen/resort_graded.cpp` |
 | grade-run | `plugins/mountain/mapgen/network_build.cpp` `plugins/mountain/mapgen/network_build.hpp` |
@@ -444,7 +444,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | header | `engine/core/output.hpp` |
 | heading | `engine/core/math.hpp` `engine/core/quat.hpp` |
 | heading-at | `plugins/mountain/mapgen/network.cpp` |
-| headless | `engine/platform/window.hpp` |
+| headless | `engine/lab/labs/gpu_capture_lab.cpp` `engine/platform/window.hpp` |
 | height-at | `plugins/mountain/mapgen/massif.cpp` |
 | heightfield | `engine/core/heightfield.hpp` `plugins/mountain/mapgen/terrain.hpp` `tests/core_heightfield_test.cpp` |
 | help | `engine/lab/runner.cpp` `engine/lab/runner.hpp` |
@@ -452,7 +452,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | hidpi | `engine/platform/window.hpp` |
 | high-word | `engine/core/libm/fdlibm_internal.hpp` |
 | hillshade | `plugins/mountain/labs/level_map.cpp` `plugins/mountain/labs/level_map.hpp` |
-| hitch | `engine/lab/labs/loop_run_clock_lab.cpp` |
+| hitch | `engine/lab/labs/loop_run_clock_lab.cpp` `engine/lab/labs/platform_frame_pace_lab.cpp` |
 | home-of | `plugins/mountain/mapgen/access_build.cpp` |
 | hub | `plugins/mountain/mapgen/resort_rules.hpp` |
 | hwnd | `engine/gpu/surface.hpp` |
@@ -475,6 +475,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | integrate | `engine/core/quat.hpp` |
 | internal | `engine/core/libm/fdlibm_internal.hpp` |
 | interpolation | `engine/lab/labs/loop_run_clock_lab.cpp` `engine/loop/run_clock.hpp` |
+| interval | `engine/lab/labs/platform_frame_pace_lab.cpp` |
 | inverse-trig | `engine/core/libm/fdlibm_arc.cpp` |
 | jitter | `engine/lab/labs/loop_run_clock_lab.cpp` |
 | joinable | `plugins/mountain/mapgen/lanes.cpp` `plugins/mountain/mapgen/lanes.hpp` |
@@ -489,7 +490,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | kicker | `plugins/mountain/mapgen/kickers.cpp` `plugins/mountain/mapgen/kickers.hpp` |
 | kickers | `plugins/mountain/labs/level_lab.cpp` `plugins/mountain/labs/level_map.hpp` `plugins/mountain/mapgen/kickers.hpp` `plugins/mountain/mapgen/resort_graded.cpp` |
 | krummholz | `plugins/mountain/mapgen/forest.hpp` |
-| lab | `engine/lab/lab.cpp` `engine/lab/lab.hpp` `engine/lab/labs/core_noise_lab.cpp` `engine/lab/labs/loop_run_clock_lab.cpp` `engine/lab/main.cpp` `engine/lab/report.cpp` `engine/lab/report.hpp` `engine/lab/runner.cpp` `engine/lab/runner.hpp` `plugins/mountain/labs/analyze_lab.cpp` `plugins/mountain/labs/level_lab.cpp` `plugins/mountain/labs/level_map.cpp` `plugins/mountain/labs/level_map.hpp` `plugins/mountain/labs/mapgen_cost_lab.cpp` `tests/lab_raster_test.cpp` `tests/lab_runner_test.cpp` |
+| lab | `engine/lab/lab.cpp` `engine/lab/lab.hpp` `engine/lab/labs/core_noise_lab.cpp` `engine/lab/labs/gpu_capture_lab.cpp` `engine/lab/labs/loop_run_clock_lab.cpp` `engine/lab/labs/platform_frame_pace_lab.cpp` `engine/lab/main.cpp` `engine/lab/report.cpp` `engine/lab/report.hpp` `engine/lab/runner.cpp` `engine/lab/runner.hpp` `plugins/mountain/labs/analyze_lab.cpp` `plugins/mountain/labs/level_lab.cpp` `plugins/mountain/labs/level_map.cpp` `plugins/mountain/labs/level_map.hpp` `plugins/mountain/labs/mapgen_cost_lab.cpp` `tests/lab_raster_test.cpp` `tests/lab_runner_test.cpp` |
 | label | `engine/lab/raster.hpp` |
 | labs | `engine/lab/lab.hpp` `engine/lab/main.cpp` |
 | lane | `plugins/mountain/mapgen/network.hpp` |
@@ -500,7 +501,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | lanes | `plugins/mountain/mapgen/forest.cpp` `plugins/mountain/mapgen/lanes.cpp` `plugins/mountain/mapgen/lanes.hpp` `tests/mountain_resort_build_test.cpp` |
 | latitude | `plugins/mountain/mapgen/sun.hpp` |
 | lattice | `engine/core/noise.hpp` `engine/lab/labs/core_noise_lab.cpp` |
-| lavapipe | `engine/gpu/device.hpp` `tests/gpu_support.hpp` |
+| lavapipe | `engine/gpu/device.hpp` `engine/lab/labs/gpu_capture_lab.cpp` `tests/gpu_support.hpp` |
 | lay-access | `plugins/mountain/mapgen/links.cpp` `plugins/mountain/mapgen/links.hpp` |
 | lay-chain | `plugins/mountain/mapgen/lift_chain.hpp` `plugins/mountain/mapgen/resort_build.cpp` |
 | lay-links | `plugins/mountain/mapgen/links.cpp` `plugins/mountain/mapgen/links.hpp` |
@@ -546,6 +547,8 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | max | `engine/core/num.hpp` |
 | measured-access | `plugins/mountain/mapgen/resort_access.cpp` `tests/mountain_resort_build_test.cpp` |
 | measured-colour | `plugins/mountain/mapgen/resort_graded.cpp` |
+| measured-picture | `engine/lab/labs/gpu_capture_lab.cpp` |
+| measured-shot | `tests/lab_runner_test.cpp` |
 | measurement | `engine/gpu/timer.hpp` |
 | merge | `plugins/mountain/mapgen/network.hpp` |
 | metadata | `tools/agents-index.mjs` |
@@ -613,6 +616,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | pause | `engine/loop/run_clock.hpp` |
 | peak | `plugins/mountain/mapgen/massif.hpp` |
 | per-pass | `engine/gpu/timer.hpp` |
+| percentile | `engine/lab/labs/platform_frame_pace_lab.cpp` |
 | perf | `plugins/mountain/labs/mapgen_cost_lab.cpp` |
 | personal-best | `plugins/racing/records.hpp` |
 | pi | `engine/core/math.hpp` |
@@ -657,7 +661,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | pow | `engine/core/libm/libm.hpp` `engine/core/libm/pow.cpp` |
 | power | `engine/core/libm/pow.cpp` |
 | ppm | `tests/gpu_support.hpp` |
-| present | `engine/gpu/surface.hpp` `games/fall_line/app/main.cpp` `tests/platform_window_test.cpp` |
+| present | `engine/gpu/surface.hpp` `engine/lab/labs/platform_frame_pace_lab.cpp` `games/fall_line/app/main.cpp` `tests/platform_window_test.cpp` |
 | press | `plugins/mountain/mapgen/resort_graded.cpp` |
 | press-box | `plugins/mountain/mapgen/lift_chain.cpp` |
 | press-pads | `plugins/mountain/mapgen/resort_build.cpp` `plugins/mountain/mapgen/station_pad.cpp` `plugins/mountain/mapgen/station_pad.hpp` |
@@ -685,7 +689,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | raster | `engine/lab/raster.cpp` `engine/lab/raster.hpp` `tests/lab_raster_test.cpp` |
 | reach | `plugins/mountain/mapgen/access_build.cpp` |
 | read_now | `engine/gpu/target.hpp` |
-| readback | `engine/gpu/target.cpp` `engine/gpu/target.hpp` `tests/gpu_capture_test.cpp` |
+| readback | `engine/gpu/target.cpp` `engine/gpu/target.hpp` `engine/lab/labs/gpu_capture_lab.cpp` `tests/gpu_capture_test.cpp` |
 | reader | `plugins/racing/tape.hpp` `tests/golden.hpp` |
 | reckon-access | `plugins/mountain/mapgen/access_build.cpp` `plugins/mountain/mapgen/access_build.hpp` |
 | record-book | `plugins/racing/records.hpp` |
@@ -741,7 +745,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | rule-book | `plugins/mountain/labs/analyze_lab.cpp` `plugins/mountain/mapgen/rules.hpp` |
 | rule-check | `plugins/mountain/analysis/index.hpp` |
 | rules | `plugins/mountain/labs/analyze_lab.cpp` `plugins/mountain/mapgen/rules.hpp` |
-| run-clock | `engine/lab/labs/loop_run_clock_lab.cpp` `engine/loop/run_clock.hpp` `games/fall_line/app/main.cpp` `tests/loop_run_clock_test.cpp` |
+| run-clock | `engine/lab/labs/loop_run_clock_lab.cpp` `engine/lab/labs/platform_frame_pace_lab.cpp` `engine/loop/run_clock.hpp` `games/fall_line/app/main.cpp` `tests/loop_run_clock_test.cpp` |
 | run-colour | `plugins/mountain/mapgen/network.cpp` `plugins/mountain/mapgen/network.hpp` |
 | run-cover | `plugins/mountain/mapgen/summit_ramps.hpp` |
 | run-spec | `plugins/mountain/mapgen/network.hpp` |
@@ -753,7 +757,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | scancode | `engine/platform/window.cpp` |
 | scenario | `engine/lab/lab.hpp` |
 | scope | `tools/skill-lessons.mjs` |
-| screenshot | `engine/gpu/target.hpp` `engine/lab/lab.hpp` `engine/lab/png.hpp` `tests/gpu_capture_test.cpp` |
+| screenshot | `engine/gpu/target.hpp` `engine/lab/lab.hpp` `engine/lab/labs/gpu_capture_lab.cpp` `engine/lab/png.hpp` `tests/gpu_capture_test.cpp` |
 | sdl | `engine/platform/window.cpp` `engine/platform/window.hpp` |
 | sdl3 | `engine/platform/window.cpp` |
 | search | `plugins/mountain/mapgen/lanes.hpp` `tools/agents-index.mjs` |
@@ -796,7 +800,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | smooth-run | `plugins/mountain/mapgen/network.cpp` `plugins/mountain/mapgen/network.hpp` |
 | smoothstep | `engine/core/math.hpp` |
 | snows | `plugins/mountain/mapgen/weather.hpp` |
-| software-adapter | `engine/gpu/device.hpp` |
+| software-adapter | `engine/gpu/device.hpp` `engine/lab/labs/gpu_capture_lab.cpp` |
 | solar | `engine/core/solar.cpp` `engine/core/solar.hpp` `plugins/mountain/mapgen/sun.hpp` `tests/core_solar_test.cpp` |
 | spatial-hash | `plugins/mountain/mapgen/net_index.hpp` `plugins/mountain/mapgen/query.cpp` `plugins/mountain/mapgen/query.hpp` |
 | spawn | `plugins/mountain/mapgen/spawn.cpp` `plugins/mountain/mapgen/spawn.hpp` |
@@ -852,7 +856,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | tilt | `plugins/mountain/mapgen/resort.cpp` `plugins/mountain/mapgen/resort.hpp` |
 | tilted | `plugins/mountain/mapgen/resort.cpp` |
 | timer | `engine/gpu/timer.hpp` `tests/gpu_capture_test.cpp` |
-| timestamp | `engine/gpu/timer.cpp` `engine/gpu/timer.hpp` `tests/gpu_capture_test.cpp` |
+| timestamp | `engine/gpu/timer.cpp` `engine/gpu/timer.hpp` `engine/lab/labs/gpu_capture_lab.cpp` `tests/gpu_capture_test.cpp` |
 | timestamp-query | `engine/gpu/timer.hpp` |
 | timestep | `engine/loop/run_clock.hpp` |
 | timing | `plugins/mountain/labs/mapgen_cost_lab.cpp` |
@@ -889,7 +893,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | versions | `plugins/mountain/mapgen/versions.hpp` |
 | video-driver | `engine/platform/window.cpp` |
 | vocab | `tools/skill-lessons.mjs` |
-| vsync | `engine/gpu/surface.hpp` `games/fall_line/app/main.cpp` `tests/platform_window_test.cpp` |
+| vsync | `engine/gpu/surface.hpp` `engine/lab/labs/platform_frame_pace_lab.cpp` `games/fall_line/app/main.cpp` `tests/platform_window_test.cpp` |
 | wait | `engine/gpu/device.hpp` |
 | walk | `tests/mountain_resort_build_test.cpp` |
 | walk-run | `plugins/mountain/mapgen/network.cpp` `plugins/mountain/mapgen/network.hpp` |
@@ -908,12 +912,12 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | wgsl-include | `tests/gpu_capture_test.cpp` |
 | win32 | `engine/platform/window.cpp` |
 | wind-crust | `plugins/mountain/mapgen/surface.hpp` |
-| window | `engine/platform/window.hpp` `games/fall_line/app/main.cpp` `tests/platform_window_test.cpp` |
+| window | `engine/lab/labs/platform_frame_pace_lab.cpp` `engine/platform/window.hpp` `games/fall_line/app/main.cpp` `tests/platform_window_test.cpp` |
 | windrow | `plugins/mountain/mapgen/berm.hpp` `plugins/mountain/mapgen/network_stamp.hpp` |
 | woods | `plugins/mountain/mapgen/forest.hpp` |
 | word | `engine/core/libm/fdlibm_internal.hpp` |
 | x11 | `engine/gpu/surface.hpp` `engine/platform/window.cpp` |
-| xvfb | `tests/platform_window_test.cpp` |
+| xvfb | `engine/lab/labs/platform_frame_pace_lab.cpp` `tests/platform_window_test.cpp` |
 | yaw | `engine/core/quat.hpp` |
 | zig-zag | `plugins/mountain/mapgen/network.hpp` |
 | zlib | `engine/lab/png.cpp` |
