@@ -1,5 +1,5 @@
-// R4, R9 — THE KICKERS: crests shaped so a skier at speed leaves the snow. Port of game5
-// `engine/mapgen/kickers.ts` (the park's built landings, R20, arrive with M4c).
+// R4, R9 — THE KICKERS: crests shaped so a skier at speed leaves the snow (the park's built
+// landings, R20, arrive with M4c).
 //
 // A kicker is a profile along the way a skier crosses it: a RAMP rising `height` over `ramp`
 // m as t² (steepest right at the lip, so it hands the skier upward speed at the one moment it
@@ -7,11 +7,10 @@
 // PISTE (R9) the profile is added to the graded line by arc, before the corridor is pressed,
 // only where the line comes down to the lip gently and falls away past it at least as steeply.
 // OFF THE PISTE (R4) it is stamped into the ground in plan on a roll of the face.
-// Parity: through tests/mountain_generate_test.cpp (`kickers`, `ground`).
+// Held by tests/mountain_generate_test.cpp (`kickers`, `ground`).
 //
 // ge:summary R4, R9 the kickers: on the piste and off it, their profile and stamp
-// ge:keywords kicker kickers layTrackKickers publishTrackKickers layOffKickers stampKicker onKicker
-// ge:oracle game5/engine/mapgen/kickers.ts
+// ge:keywords kicker kickers
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #pragma once

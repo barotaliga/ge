@@ -1,7 +1,7 @@
-// engine/core/math.hpp against the TypeScript oracle (tests/golden/core_math.txt).
+// engine/core/math.hpp against tests/golden/core_math.txt.
 //
-// ge:summary Parity test: core/math against the oracle
-// ge:keywords test parity golden math hypot
+// ge:summary Golden test: core/math, bit for bit
+// ge:keywords test golden math hypot
 // ge:skill testing
 #include "core/math.hpp"
 
@@ -11,7 +11,7 @@
 
 using ge::test::as_double;
 
-TEST(hypot_family_matches_oracle_bit_for_bit) {
+TEST(hypot_family_matches_golden_bit_for_bit) {
   const auto rows = ge::test::golden_rows("tests/golden/core_math.txt");
   CHECK(rows.size() == 4000);
   for (const auto& row : rows) {
@@ -26,19 +26,20 @@ TEST(hypot_family_matches_oracle_bit_for_bit) {
   }
 }
 
-// angleDiff(a, b) rows: a b want (tests/golden/core_math_angle.txt).
-TEST(angle_diff_matches_oracle_bit_for_bit) {
+// angle_diff(a, b) rows: a b want (tests/golden/core_math_angle.txt).
+TEST(angle_diff_matches_golden_bit_for_bit) {
   const auto rows = ge::test::golden_rows("tests/golden/core_math_angle.txt");
   CHECK(rows.size() == 2100);
   for (const auto& row : rows) {
-    CHECK_JS_BITS(ge::core::angle_diff(as_double(row[0]), as_double(row[1])), as_double(row[2]));
+    CHECK_BITS_ANY_NAN(ge::core::angle_diff(as_double(row[0]), as_double(row[1])),
+                       as_double(row[2]));
   }
 }
 
 TEST(hypot_special_values) {
   constexpr double inf = std::numeric_limits<double>::infinity();
   constexpr double nan = std::numeric_limits<double>::quiet_NaN();
-  CHECK(ge::core::hypot(inf, nan) == inf);  // JS: Infinity wins over NaN
+  CHECK(ge::core::hypot(inf, nan) == inf);  // an infinity wins over NaN
   CHECK(ge::core::hypot(0.0, -0.0) == 0.0);
   CHECK(ge::core::hypot(3.0, nan) != ge::core::hypot(3.0, nan));
 }

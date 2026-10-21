@@ -16,10 +16,9 @@ place an answer lives, and has to change it safely.
 
 ## What this is
 
-A C++20 game engine, built to run **Fall Line** (`niclaslindstedt/game5`, a downhill
-skiing game in TypeScript) natively and fast. Fall Line is ported here first and stays in
-the tree as the demo game (`games/fall_line/`). The generic half comes from porting
-`niclaslindstedt/oss-game-framework`. **It is not a ski engine**: generic code is in
+A C++20 game engine: fast, deterministic to the bit, and built for agents. Its first game
+is **Fall Line**, a downhill skiing game, which stays in the tree as the demo game
+(`games/fall_line/`). **It is not a ski engine**: generic code is in
 `engine/`, what a genre or a world shares (racing, the generated ski mountain) is in
 `plugins/<name>/` for any game of that kind to link, and only Fall Line's own is in
 `games/fall_line/` ([`docs/architecture.md`](docs/architecture.md) § Plugins). **The goal spec and the roadmap are
@@ -29,19 +28,46 @@ updates that row's Status in its PR.
 | Doc | What it holds |
 | --- | --- |
 | [`docs/goals.md`](docs/goals.md) | The long-term goals (G1–G7), the non-goals and the milestone roadmap |
-| [`docs/research.md`](docs/research.md) | What game5 needs, how established engines solve each part, the libm measurement, and the decisions |
 | [`docs/architecture.md`](docs/architecture.md) | The layers and their dependency direction, the frame, the code conventions, diagnostics, the determinism contract and the build |
+| [`docs/index.md`](docs/index.md) | GENERATED from the code's `ge:` tags: every file's one-line summary, owning skill and test; keyword to files |
 | [`docs/rendering.md`](docs/rendering.md) | The GPU backend (Dawn), the frame's pass table, every rendering technique and why, budgets, lab hooks, and what was considered and not taken |
-| [`docs/porting.md`](docs/porting.md) | How a TS module becomes C++: the oracle, layout and type mapping, the JS-semantics traps, parity levels |
-| [`docs/index.md`](docs/index.md) | GENERATED from the code's `ge:` tags: every file's one-line summary, owning skill, oracle and test; oracle file to port; keyword to files |
 | [`docs/publishing.md`](docs/publishing.md) | What a release is (GitHub Releases + GitHub Packages), how a game consumes it, changeset fragments, cutting a release, the credentials |
+
+**The working area.** `porting/` holds everything that only matters while modules are
+being carried over from their reference sources: the porting guide (`porting/README.md`),
+the research behind it, the porting map (`porting/map.md`: which reference module each
+engine file reproduces), the golden-table generators (`porting/parity/`) and their make
+targets (`porting/porting.mk`). It is a WORKING area, not documentation: it is deleted when
+porting ends, and nothing outside it may depend on it except `make golden`.
 
 ## Rules for every task
 
-- **WRITE ONLY TO THIS REPOSITORY.** `game5` and `oss-game-framework` are the read-only
-  **oracle**. Clone them beside this checkout (`../game5`, `../oss-game-framework`),
-  read them and run them, but never commit, push, open issues or comment there. If the
-  oracle has a bug, the port reproduces it and you tell the user.
+- **A CLEAN SLATE: NO LEGACY REFERENCES.** The engine and its games stand on their own; they
+  are not a continuation of the code they were carried over from. Outside `porting/`,
+  nothing (code, comments, `ge:` tags, docs, skills, lessons, this file, the Makefile,
+  CMake, CI, commit messages and PR titles) names the reference repositories or kit, the
+  reference language or its files and identifiers, or treats the reference as the
+  authority, and no file is described by where it came from; nothing justifies a choice by
+  what a reference runtime does. Say what the code does and why in
+  the engine's own terms: "rounds halves toward +inf", "held bit-exact by
+  `tests/golden/core_num.txt`". The link from an engine file to its reference is a row in
+  `porting/map.md`; porting procedure and research go elsewhere in `porting/`. `make
+  agents-check` scans every tracked file outside `porting/`, the `port` skill and
+  `tests/golden/` and fails on a reference name (`tools/agents-index.mjs`, `LEGACY`).
+- **C++ ONLY, AND NO INHERITED ARCHITECTURE.** The engine and every game on it are written in
+  C++. The only other languages allowed are the thinnest platform glue a store demands
+  (Swift or Objective-C for Apple's app shell, Java or Kotlin for Android's), kept as small as
+  the platform allows, plus the small Node scripts under `tools/` that check the
+  repository's structure and ship in no game. Nothing about the reference sources'
+  architecture (their layers, module split, file layout, state shape, names or data
+  formats) is assumed to carry over: each design decision is made here, for this engine,
+  and recorded in `docs/architecture.md`. Where a carried-over module keeps a behaviour (a
+  golden pins its bits), that is a decision about the result, not about the structure
+  around it.
+- **WRITE ONLY TO THIS REPOSITORY.** The reference sources (`porting/README.md` names
+  them) are read-only: clone them beside this checkout, read them and run them, but never
+  commit, push, open issues or comment there. If a reference has a bug, the engine
+  reproduces it and you tell the user.
 - **THIS REPOSITORY IS PUBLIC.** Nothing sensitive goes in the tree, in workflow files or
   in repository variables: no tokens, keys, passwords, e-mail addresses, account or
   device ids, or paths under a home directory. Credentials live only in **GitHub
@@ -57,15 +83,19 @@ updates that row's Status in its PR.
   `plugins` skill: any genre would use it → `engine/`; any game of one genre or world →
   `plugins/<name>/`; only this game → `games/<game>/`. Dependencies run game → plugin →
   engine; `make agents-check` holds them.
-- **ONLY WHAT GAME5 NEEDS** (G4). Before you build a component, name the game5 feature
-  it serves. A general-purpose feature with no game5 user is out of scope.
+- **ONLY WHAT THE GAME NEEDS** (G4). Before you build a component, name the Fall Line
+  feature it serves. A general-purpose feature with no user is out of scope.
 - **FAST, AND PROVEN FAST** (G2). Hot paths do not allocate, branch on virtuals or chase
   pointers. A performance claim carries a before-and-after measurement in the PR
   (`perf` skill).
-- **BITS, NOT CLOSENESS** (G1). The simulation must reproduce the oracle's IEEE 754
-  doubles. No `<cmath>` transcendentals in simulation code, no FMA contraction and no
-  fast-math. Randomness only from `core::Rng`. Every port lands with a golden parity
-  test (`determinism` and `port` skills).
+- **DETERMINISTIC ON ITS OWN TERMS** (G1). The simulation produces the same IEEE 754
+  doubles for the same seed and inputs on every compiler and OS, so replays, ghosts and
+  tests reproduce everywhere; the golden tables in `tests/golden/` are the engine's own
+  record of those bits. Matching a reference implementation's bits is NOT a requirement: a
+  deliberate change of behaviour rewrites the affected goldens in the PR that makes it, and
+  says why. No `<cmath>` transcendentals in simulation code, no FMA contraction and no
+  fast-math. Randomness only from `core::Rng`. Every simulation module lands with a golden
+  test (`determinism` and `testing` skills).
 - **AGENT-ACTIONABLE OUTPUT** (G6). Every error, assert and log line says what failed,
   where, and the next action to take (`docs/architecture.md` § Diagnostics).
 - **GREEN, THEN MERGE** (G7). CI must pass on every row. A PR you open is yours to drive
@@ -94,17 +124,17 @@ make fmt          # clang-format in place;  make fmt-check is what CI runs
 make lint         # clang-tidy over the sources (bug-finding checks only)
 make agents-check # symlinks, skills ↔ this router, the 1000-line cap, ge: tags, docs/index.md fresh, lesson fragments
 make index        # regenerate docs/index.md from every file's ge: tags
-make find Q="noise sampleField"   # files, skills and lessons matching any word
+make find Q="noise sample_field"  # files, skills, lessons and the porting map matching any word
 make lessons ARGS="port --scope=engine/core"   # read a skill's lessons, filtered (no ARGS: the inventory)
-make golden       # regenerate tests/golden/core_*, loop_*, racing_* from the TS oracle (needs Node 22+, ../oss-game-framework and ../game5)
-make golden-libm NODE=<node 24>  # regenerate tests/golden/libm_*, core_quat, core_solar, mapgen_generate under game5's pinned Node, on Linux x86-64
+make golden       # regenerate the golden tables (working area: porting/porting.mk, porting/README.md)
+make golden-libm  # the golden tables that reach a transcendental (same place)
 make libm-check   # no <cmath> transcendental in simulation code
 make release-check # the changeset fragments valid + tools/release.py's tests; prints the next version
 ```
 
 CI (`.github/workflows/ci.yml`) runs fmt-check, agents-check, libm-check and lint, plus build and
 test on Linux x64 (GCC debug+ASan, GCC release, Clang release), Linux arm64 (GCC),
-macOS (Apple Clang) and Windows (MSVC). A parity failure on one row points at that
+macOS (Apple Clang) and Windows (MSVC). A golden failure on one row points at that
 row's compiler or libm. `.github/workflows/packaging.yml` holds every PR to what a
 release needs: a `.changes/unreleased/` fragment for a shipped change (or the
 `no-changelog` label), and the installed package building a consumer on Linux, macOS
@@ -115,7 +145,7 @@ and Windows. Releases are dispatched, never hand-made (`release` skill,
 
 | Path | What | Skill |
 | --- | --- | --- |
-| `engine/core/` | The deterministic pool: `prng.hpp` (mulberry32), `math.hpp` (hypot family, clamp, smoothstep), `libm/` (every transcendental game5 calls, at Node 24's bits; vendored, with `LICENSE.md`), `js.hpp` (JS number semantics), `js_text.hpp` (`toFixed` and `String(n)`, for log lines in the oracle's words), `noise.hpp` (hash2, value noise, the cached field), `heightfield.hpp` (the baked grid and its bilinear reads), `quat.hpp` (orientation; the Euler sign flip), `solar.hpp` (the sun and the moon, by geometry and on a real date), `output.hpp` (the one diagnostic channel; module state) | `determinism` |
+| `engine/core/` | The deterministic pool: `prng.hpp` (mulberry32), `math.hpp` (hypot family, clamp, smoothstep), `libm/` (every transcendental the simulation calls, with the same bits on every platform; vendored, with `LICENSE.md`), `num.hpp` (the simulation's number semantics: rounding, integer wrap, NaN-aware max/min, sign, remainder), `num_text.hpp` (numbers as text, for diagnostic lines), `noise.hpp` (hash2, value noise, the cached field), `heightfield.hpp` (the baked grid and its bilinear reads), `quat.hpp` (orientation; the Euler sign flip), `solar.hpp` (the sun and the moon, by geometry and on a real date), `output.hpp` (the one diagnostic channel; module state) | `determinism` |
 | `engine/loop/` | `run_clock.hpp`: the fixed-step accumulator between the display's frames and the 120 Hz step | `sim` |
 | `engine/platform/` | SDL3: window, input, gamepad, audio device, files (M6); the only place SDL is included | `platform` |
 | `engine/gpu/` | The webgpu.h wrapper over Dawn (M6): device, feature tiers, pipeline manifest, timestamps, readback; the only place webgpu.h is included | `gpu` |
@@ -124,12 +154,12 @@ and Windows. Releases are dispatched, never hand-made (`release` skill,
 | `engine/ui/` | Immediate-mode 2D and text, plus the dev UI (M10) | `ui` |
 | `plugins/` | Plugins: one directory each, one `ge_add_plugin` call in its `CMakeLists.txt`, built as `ge_<name>`; the build half is `cmake/Plugins.cmake`, the check `tools/check-plugins.mjs` | `plugins` |
 | `plugins/racing/` | The racing primitives (`ge::racing`): `tape.hpp` (the control tape a ghost and a replay are kept on: the axis grid, the RLE + base64 byte format, the recorder, the reader, the map fingerprint), `records.hpp` (the record book's policy: `beats`, `split_gap`, `note_record`), `standings.hpp` (the field's order: `leg_progress`, `field_order`, `place_among`) | `racing` |
-| `plugins/mountain/mapgen/` | The world generator (`ge::mountain::mapgen`): `generate.hpp` (`generate_level`, the attempts, the compile), `digest.hpp` (`level_digest`), `rules.hpp` (LEVEL_RULES), `types.hpp` (the `Level`), and every step it calls. v1 (the single piste) so far (M4a); the ski area is M4b | `mountain` |
+| `plugins/mountain/mapgen/` | The world generator (`ge::mountain::mapgen`): `generate.hpp` (`generate_level`, the attempts, the compile), `digest.hpp` (`level_digest`), `rules.hpp` (the rule book's numbers), `types.hpp` (the `Level`), and every step it calls. v1 (the single piste) so far (M4a); the ski area is M4b | `mountain` |
 | `plugins/mountain/analysis/` | The rule book re-checked on a finished map (`ge::mountain::analysis`): `analyze_level` | `mountain` |
 | `games/fall_line/sim/` | Fall Line's own simulation: `create_game`, the step's order, the modes, the bot (M5) | `sim` |
-| `games/fall_line/app/` | game5's `pwa/` ported: the frame, the look, the HUD, the beds | `render`, `ui`, `audio` |
+| `games/fall_line/app/` | Fall Line's presentation: the frame, the look, the HUD, the beds | `render`, `ui`, `audio` |
 | `tests/` | `<topic>_test.cpp`, one executable each; `check.hpp` (harness), `golden.hpp`, `golden/` | `testing` |
-| `tools/parity/` | Node scripts that run the TS oracle and write `tests/golden/` | `testing` |
+| `porting/` | The WORKING AREA (above): the porting guide, the porting map, the golden-table generators. Deleted when porting ends | `port` |
 | `tools/check-agents.sh`, `tools/agents-index.mjs` | The structure check; the `ge:` tag check, `docs/index.md` and `make find` | `write-code` |
 | `tools/skill-lessons.mjs` | Reads, filters and checks the skills' lesson fragments (`make lessons`) | `skill-reflection` |
 | `CMakeLists.txt`, `CMakePresets.json`, `cmake/`, `Makefile`, `.github/workflows/` | The build and CI | `build` |
@@ -139,19 +169,20 @@ and Windows. Releases are dispatched, never hand-made (`release` skill,
 Agents find code by grep, so the tree is built to be grepped:
 
 - **Every source file ends its leading comment with a `ge:` tag block**: `ge:summary` (one
-  line), `ge:keywords` (kebab concepts plus the oracle's TypeScript identifiers),
-  `ge:skill`, and `ge:oracle` / `ge:test` where they apply. The format is the `write-code`
-  skill's § Discovery tags. `make agents-check` fails an untagged file, an unknown skill or a
-  missing test path.
-- **`make find Q="word word"`** searches every file's tags, every skill's description and
-  every lesson's title, scope and concepts at once. `grep -rn "ge:keywords.*<word>"` is the
+  line), `ge:keywords` (lower-case concepts in the engine's words, kebab or snake case),
+  `ge:skill`, and `ge:test` where it applies. The format is the `write-code` skill's §
+  Discovery tags. `make agents-check` fails an untagged file, an unknown skill, a missing
+  test path, a keyword with a capital, and the retired tag that named a file's reference.
+- **`make find Q="word word"`** searches every file's tags, every skill's description,
+  every lesson's title, scope and concepts, and the porting map's rows at once (so a
+  reference identifier still finds the engine file while porting lasts). `grep -rn "ge:keywords.*<word>"` is the
   same search for files alone. A search that misses is fixed by adding the word you tried to
   the right file's `ge:keywords` (`skill-reflection`, question 6).
 - **[`docs/index.md`](docs/index.md)** is generated from the tags by `make index`; commit it
   with the change. On a merge conflict there, take either side and rerun `make index`.
-- **Names mirror the oracle** (`run-clock.ts` → `engine/loop/run_clock.hpp`, its test
-  `tests/loop_run_clock_test.cpp`, its golden `tests/golden/loop_run_clock.txt`; `createGame`
-  → `create_game`), so the oracle's name is a search key for the port.
+- **One name, everywhere**: a module `engine/loop/run_clock.hpp` has its test
+  `tests/loop_run_clock_test.cpp` and its golden `tests/golden/loop_run_clock.txt`; a plugin's
+  test is `tests/<plugin>_<file>_test.cpp`. Names are `snake_case`.
 
 ### Stated once
 
@@ -161,23 +192,22 @@ Agents find code by grep, so the tree is built to be grepped:
 - **The plugin contract** (homes, layout, naming, dependencies, registration):
   `docs/architecture.md` § Plugins; built by `cmake/Plugins.cmake`, checked by
   `tools/check-plugins.mjs`.
-- **World conventions** (from game5): the plan is x/z with y up; heading 0 = +z,
+- **World conventions**: the plan is x/z with y up; heading 0 = +z,
   clockwise from above; pitch tips-up positive; roll right-side-down positive; `steer`
   and `edge` positive to the right. Stated in `engine/core/math.hpp`'s header.
 - **The PRNG**: `engine/core/prng.hpp`. Nothing else makes random numbers.
-- **The transcendentals**: `engine/core/libm/libm.hpp` says which upstream each function
-  is and why (V8's fdlibm, and glibc's pow for `Math.pow`). Nothing in simulation code
-  calls `<cmath>`'s.
-- **JS number semantics** (`Math.round`, `|0`, `>>>0`, `Math.imul`, `Math.max`/`min`,
-  `Math.sign`, `%`): `engine/core/js.hpp`; numbers as text (`toFixed`, `String(n)`):
-  `engine/core/js_text.hpp`.
+- **The transcendentals**: `engine/core/libm/libm.hpp` says which vendored upstream each
+  function is (fdlibm, and glibc's pow). Nothing in simulation code calls `<cmath>`'s.
+- **Number semantics** (rounding, `to_int32`/`to_uint32` wrap, `imul`, NaN-aware
+  `max`/`min`, `sign`, `mod`): `engine/core/num.hpp`; numbers as text (`to_fixed`,
+  `to_string`): `engine/core/num_text.hpp`.
 - **The test harness**: `tests/check.hpp`. Bit comparison is `CHECK_BITS`.
 
 ## Commit and PR conventions
 
 - Conventional commits (`feat(core): …`, `fix(render): …`, `docs: …`, `ci: …`), scoped by
   directory. PRs are squash-merged, and the PR title is itself a conventional subject.
-- A PR states which milestone row it serves and includes its parity or perf evidence.
+- A PR states which milestone row it serves and includes its golden or perf evidence.
 
 ## Skills
 
@@ -192,14 +222,14 @@ and the directories agree.
 | `write-code` | On every code change: file shape, naming, comments, the edit loop, the line cap |
 | `commit` | To end every session: the gates, the commit, the push, the PR, driving it to green, merging |
 | `skill-reflection` | At the start and end of a session: read and record a skill's lessons |
-| `determinism` | Anything in `engine/core`, any floating-point or RNG question, a parity failure |
-| `port` | Porting any game5 or framework module to C++ |
-| `testing` | Writing a test, a golden table or a parity script |
+| `determinism` | Anything in `engine/core`, any floating-point or RNG question, a golden failure |
+| `port` | Carrying a module over from its reference source (the working area's skill: `porting/`) |
+| `testing` | Writing a test, a golden table or a golden generator |
 | `build` | CMake, presets, dependencies (`FetchContent`), compiler flags, CI workflows |
 | `release` | A changeset fragment, `cmake/Packaging.cmake`, a public target, cutting or dry-running a release |
 | `plugins` | Deciding where code lives (engine, plugin or game), adding a plugin, moving code between homes |
 | `racing` | `plugins/racing`: the control tape, the record book's policy, the standings |
-| `mountain` | `plugins/mountain`: the generated ski mountain (mapgen, analysis, `levelDigest`) |
+| `mountain` | `plugins/mountain`: the generated ski mountain (mapgen, analysis, `level_digest`) |
 | `sim` | `games/fall_line/sim`: `create_game`, the step, the bot, the headless sim CLI, the run clock |
 | `platform` | `engine/platform`: SDL3, the window, input, the gamepad, the audio device, files |
 | `gpu` | `engine/gpu`: the webgpu.h device over Dawn, feature tiers, buffers, pipelines and the manifest, WGSL and `make shaders-check` |

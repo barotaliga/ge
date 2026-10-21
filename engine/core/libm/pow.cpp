@@ -1,23 +1,23 @@
-// JS `Math.pow` and `**` as Node 24 computes them on game5's reference platform (Linux x86-64,
-// glibc >= 2.28, a CPU with FMA). Header: libm.hpp. Test: tests/core_libm_test.cpp.
+// pow with the bits of glibc >= 2.28 on an FMA-capable x86-64. Header: libm.hpp. Test:
+// tests/core_libm_test.cpp.
 //
-// WHY THIS IS NOT FDLIBM: V8 13.6 (Node 24) runs `--use-std-math-pow` by default, so `Math.pow`
-// is V8's `math::pow` wrapper (src/numbers/ieee754.cc) over the HOST `std::pow`. On Linux that
-// is glibc's pow, which is Arm's optimized-routines pow (math/pow.c, MIT) built with FMA
-// contraction on an FMA-capable x86-64 (glibc's ifunc picks `__pow_fma`). This file is that
-// algorithm with every contraction GCC makes written as an explicit `std::fma`, so the bits do
-// not depend on this compiler's own contraction choices (`-ffp-contract=off` holds the rest).
-// Without those FMAs the result differs in about 1 call in 2,400 (measured; docs/research.md).
+// WHY THIS IS NOT FDLIBM: the pow the engine's tables pin is glibc's, which is Arm's
+// optimized-routines pow (math/pow.c, MIT) built with FMA contraction on an FMA-capable x86-64
+// (glibc's ifunc picks `__pow_fma`), behind a wrapper that takes the special cases and two
+// shortcuts first. This file is that algorithm with every contraction GCC makes written as an
+// explicit `std::fma`, so the bits do not depend on this compiler's own contraction choices
+// (`-ffp-contract=off` holds the rest). Without those FMAs the result differs in about 1 call
+// in 2,400 (measured).
 // std::fma is correctly rounded everywhere (hardware, or the C library's exact fallback), so
 // these bits hold on every row; it is a call rather than one instruction unless the target has
-// FMA, which is a perf question, not a parity one.
+// FMA, which is a perf question, not a determinism one.
 //
-// Ported from Arm optimized-routines math/pow.c. Copyright (c) 2018-2026, Arm Limited.
+// Derived from Arm optimized-routines math/pow.c. Copyright (c) 2018-2026, Arm Limited.
 // SPDX-License-Identifier: MIT. Full notice: engine/core/libm/LICENSE.md.
 //
-// Errno and floating-point exception signalling are dropped: JS observes neither.
+// Errno and floating-point exception signalling are dropped: the simulation observes neither.
 //
-// ge:summary Math.pow and ** as glibc's FMA pow computes them on Linux x86-64
+// ge:summary pow as glibc's FMA pow computes it on Linux x86-64
 // ge:keywords libm pow exponent power fma glibc optimized-routines arm
 // ge:skill determinism
 // ge:test tests/core_libm_test.cpp
@@ -435,8 +435,8 @@ double glibc_pow(double x, double y) {
 }  // namespace
 
 double pow(double x, double y) {
-  // V8's math::pow: the ECMAScript special cases, then the two shortcuts its optimizing
-  // compilers take, then the host pow.
+  // The wrapper: the special cases (a NaN exponent, and +-1 to an infinite power, are NaN),
+  // then the two shortcuts (y == 2 is x * x, y == 0.5 is sqrt), then the algorithm.
   if (std::isnan(y)) return std::numeric_limits<double>::quiet_NaN();
   if (std::isinf(y) && (x == 1 || x == -1)) return std::numeric_limits<double>::quiet_NaN();
   if (y == 2) return x * x;

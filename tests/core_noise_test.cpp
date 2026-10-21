@@ -1,8 +1,8 @@
-// engine/core/noise.hpp against the TypeScript oracle (tests/golden/core_noise.txt, written by
-// tools/parity/golden-core.mjs). Row: ix iz seed hash2 | x z scale vseed valueNoise.
+// engine/core/noise.hpp against tests/golden/core_noise.txt.
+// Row: ix iz seed hash2 | x z scale vseed value_noise.
 //
-// ge:summary Parity test: core/noise against the oracle
-// ge:keywords test parity golden noise
+// ge:summary Golden test: core/noise, bit for bit
+// ge:keywords test golden noise
 // ge:skill testing
 #include "core/noise.hpp"
 
@@ -10,7 +10,7 @@
 
 using ge::test::as_double;
 
-TEST(hash2_matches_oracle_bit_for_bit) {
+TEST(hash2_matches_golden_bit_for_bit) {
   const auto rows = ge::test::golden_rows("tests/golden/core_noise.txt");
   CHECK(rows.size() == 4000);
   for (const auto& row : rows) {
@@ -19,7 +19,7 @@ TEST(hash2_matches_oracle_bit_for_bit) {
   }
 }
 
-TEST(value_noise_matches_oracle_bit_for_bit) {
+TEST(value_noise_matches_golden_bit_for_bit) {
   for (const auto& row : ge::test::golden_rows("tests/golden/core_noise.txt")) {
     CHECK_BITS(ge::core::value_noise(as_double(row[4]), as_double(row[5]), as_double(row[6]),
                                      as_double(row[7])),
@@ -28,7 +28,7 @@ TEST(value_noise_matches_oracle_bit_for_bit) {
 }
 
 // The rows come in runs of 40 sharing a scale and seed and walking in small steps: one
-// NoiseField per run, read in order, must give valueNoise's bits whether its cache hits or not.
+// NoiseField per run, read in order, must give value_noise's bits whether its cache hits or not.
 TEST(noise_field_is_value_noise_bit_for_bit) {
   const auto rows = ge::test::golden_rows("tests/golden/core_noise.txt");
   ge::core::NoiseField field = ge::core::noise_field(1.0, 0.0);

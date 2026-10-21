@@ -60,5 +60,6 @@ void encode(TerrainPass&, gpu::Encoder&);                 // GPU: bind and dispa
   `needs-mac` issue (`docs/rendering.md` § Where it is developed) and say so.
 - **Reset temporal state for stills.** A capture calls `reset_history()` and renders the
   settle frames, so a picture does not depend on what came before.
-- **Reference pictures** for the demo game's look, and the mapping from the original
-  renderer to these passes, are in the working note `porting/rendering-survey.md`.
+- **While porting**, reference pictures of the same views are made as
+  `porting/subsystems.md` § render says, and `porting/rendering-survey.md` maps the
+  measured costs onto these passes. Put both pictures in the PR.

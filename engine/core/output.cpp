@@ -1,10 +1,9 @@
-// Port of oss-game-framework `src/core/output.ts`; see output.hpp. The oracle's buffer is an
-// array it shifts from the front; here it is a ring of 200 strings whose storage is reused,
-// so a steady stream of lines stops allocating once the ring has filled.
+// The output channel's state; see output.hpp. The recent lines are a ring of 200 strings
+// whose storage is reused, so a steady stream of lines stops allocating once the ring has
+// filled.
 //
 // ge:summary The output channel's module state: the sink, the debug switch, the recent-line ring
 // ge:keywords output log sink ring-buffer module-state
-// ge:oracle oss-game-framework/src/core/output.ts
 // ge:skill determinism agent-interface
 // ge:test tests/core_output_test.cpp
 #include "core/output.hpp"
@@ -38,7 +37,7 @@ void emit(Level level, std::string_view message) {
     slot = &s.ring[(s.head + s.count) % kRecentCap];
     s.count++;
   } else {
-    slot = &s.ring[s.head];  // the oldest line is overwritten: the oracle's shift()
+    slot = &s.ring[s.head];  // the oldest line is overwritten
     s.head = (s.head + 1) % kRecentCap;
   }
   slot->level = level;

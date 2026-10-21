@@ -1,6 +1,6 @@
 ---
 name: start-work
-description: "Use before beginning any task in gameengine2, before edits. Confirms a clean tree, syncs with origin/main, clones the read-only oracle repos beside the checkout, and names the docs/goals.md milestone row the task serves, then finds what already exists (make find, the skills' lessons)."
+description: "Use before beginning any task in gameengine2, before edits. Confirms a clean tree, syncs with origin/main, sets up the porting references when the task ports, and names the docs/goals.md milestone row the task serves, then finds what already exists (make find, the skills' lessons)."
 ---
 
 # Start work
@@ -29,14 +29,11 @@ git rebase origin/main          # on a feature branch; on main: git merge --ff-o
 If the branch's PR is already merged, restart the branch from `origin/main` and do not
 stack new commits on merged history.
 
-## 3. The oracle
+## 3. The references (porting tasks only)
 
-```sh
-[ -d ../game5 ] || git clone --depth 1 https://github.com/niclaslindstedt/game5 ../game5
-[ -d ../oss-game-framework ] || git clone --depth 1 https://github.com/niclaslindstedt/oss-game-framework ../oss-game-framework
-```
-
-Both are **read-only**. Never commit, push or comment there.
+A task that carries a module over, or regenerates a golden table, clones the read-only
+reference sources beside the checkout: `porting/README.md` § The references has the
+commands. Never commit, push or comment there.
 
 ## 4. The row
 
@@ -47,12 +44,12 @@ task is probably out of scope (G4), so ask before you build it. Then load the sk
 ## 5. What already exists
 
 ```sh
-make find Q="<the task's nouns> <the oracle's identifiers>"   # files, skills, lessons
+make find Q="<the task's nouns> <identifiers>"   # files, skills, lessons, the porting map
 make lessons ARGS="<skill> --scope=<the dir you will edit>"     # per loaded skill
 ```
 
-`docs/index.md` lists every file with its summary, and which oracle files are already ported
-(§ Oracle to port). Read the lessons of each skill you loaded before the first edit (the
+`docs/index.md` lists every file with its summary; `porting/map.md` says which reference
+modules are already ported. Read the lessons of each skill you loaded before the first edit (the
 `skill-reflection` skill, OPEN).
 
 ## 6. The build works before you touch it

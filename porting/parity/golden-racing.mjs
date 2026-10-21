@@ -4,7 +4,7 @@
 // the ghost's provenance line still names the Node that rode it, because the bot's line (not
 // the codec) depends on game5's libm.
 //
-//   node --experimental-strip-types tools/parity/golden-racing.mjs \
+//   node --experimental-strip-types porting/parity/golden-racing.mjs \
 //     [--framework ../oss-game-framework] [--game5 ../game5]
 //
 // Files (hex words unless noted; doubles as IEEE 754 bit patterns):

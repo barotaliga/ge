@@ -1,23 +1,22 @@
-// Port of game5 `engine/mapgen/weather.ts` (`dealWeather`, `windIn`, `sunsetOf`).
+// The definitions behind weather.hpp: the weather's deal, the wind, the evening.
 //
-// ge:summary The weather's own stream and its draws, in the oracle's order
-// ge:keywords weather dealWeather windIn
-// ge:oracle game5/engine/mapgen/weather.ts
+// ge:summary The weather's own stream and its draws, in their fixed order
+// ge:keywords weather
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #include "mountain/mapgen/weather.hpp"
 
 #include <array>
 
-#include "core/js.hpp"
 #include "core/math.hpp"
+#include "core/num.hpp"
 #include "core/prng.hpp"
 #include "core/solar.hpp"
 #include "mountain/mapgen/sun.hpp"
 
 namespace ge::mountain::mapgen {
 
-namespace js = ge::core::js;
+namespace num = ge::core::num;
 namespace W = rules::weather;
 
 namespace {
@@ -41,7 +40,7 @@ double wind_in(WeatherKind kind, double u, double snowfall) {
     const Band heavy = W::snowfall_storm;
     at = 0.4 * u + (0.6 * (snowfall - heavy.min)) / (heavy.max - heavy.min);
   }
-  return band.min + (band.max - band.min) * js::min(1.0, js::max(0.0, at));
+  return band.min + (band.max - band.min) * num::min(1.0, num::max(0.0, at));
 }
 
 }  // namespace

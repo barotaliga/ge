@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Holds BITS, NOT CLOSENESS for transcendentals (CI's `agents` job, `make libm-check`):
 # simulation code never calls the platform libm's sin/cos/exp/pow/..., whose bits differ
-# between glibc, Apple, MSVC and V8. It calls ge::core::libm (engine/core/libm/libm.hpp),
-# which matches game5's runtime. Exact functions (sqrt, fabs, floor, ceil, trunc, fmod) are fine.
+# between glibc, Apple and MSVC. It calls ge::core::libm (engine/core/libm/libm.hpp), whose
+# bits are the same everywhere. Exact functions (sqrt, fabs, floor, ceil, trunc, fmod) are fine.
 #
 # Simulation code: engine/core (except engine/core/libm itself), engine/loop, every plugin
 # (except a plugin's app/ directory, its presentation half) and games/*/sim. Renderer, audio and
@@ -26,7 +26,7 @@ scan() {  # reads "path:line:text" lines, strips // comments, prints offenders
 
 # Self-test, so a regex edit cannot silently turn the check off.
 want_bad=$'x.cpp:1:  double a = std::sin(t);\nx.cpp:2:  y = pow(b, 2);\nx.cpp:3:using std::exp;\nx.cpp:4:  q = std::hypot(a, b);'
-want_ok=$'x.cpp:5:  double a = libm::sin(t);\nx.cpp:6:  // std::sin(x) would differ\nx.cpp:7:  h = core::hypot(a, b) + js::round(c) + std::sqrt(d);\nx.cpp:8:  s.log(1);'
+want_ok=$'x.cpp:5:  double a = libm::sin(t);\nx.cpp:6:  // std::sin(x) would differ\nx.cpp:7:  h = core::hypot(a, b) + num::round(c) + std::sqrt(d);\nx.cpp:8:  s.log(1);'
 [[ "$(scan <<<"$want_bad" | wc -l)" -eq 4 ]] || { echo "check-libm: self-test failed to flag a banned call; fix BAD in $0" >&2; exit 2; }
 [[ -z "$(scan <<<"$want_ok")" ]] || { echo "check-libm: self-test flagged an allowed call; fix BAD in $0" >&2; exit 2; }
 
@@ -37,8 +37,9 @@ hits="$(git ls-files -- "${dirs[@]}" | grep -E '\.(cpp|hpp|h)$' | grep -v '^engi
 if [[ -n "$hits" ]]; then
   echo "$hits" >&2
   echo "check-libm: simulation code calls a platform transcendental (above). Call the same" >&2
-  echo "function in ge::core::libm (#include \"core/libm/libm.hpp\") so the bits match game5;" >&2
-  echo "for Math.hypot use ge::core::hypot. If libm lacks the function, port it there first." >&2
+  echo "function in ge::core::libm (#include \"core/libm/libm.hpp\") so the bits are the same on" >&2
+  echo "every platform; for hypot use ge::core::hypot. If libm lacks the function, vendor it there" >&2
+  echo "first, with its golden table (the determinism skill)." >&2
   exit 1
 fi
 echo "check-libm: ok (${#dirs[@]} simulation dirs)"

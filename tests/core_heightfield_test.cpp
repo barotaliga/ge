@@ -1,11 +1,10 @@
-// engine/core/heightfield.hpp against the TypeScript oracle (tests/golden/core_heightfield.txt,
-// written by tools/parity/golden-core.mjs). Per field: a header row
-//   originX originZ cell cols rows nSamples
-// the data row as the oracle's fillField stored it, then nSamples rows of
-//   x z sampleField  sampleFieldGradient[0..2]  fieldGradient.gx .gz
+// engine/core/heightfield.hpp against tests/golden/core_heightfield.txt. Per field: a header row
+//   origin_x origin_z cell cols rows n_samples
+// the data row as fill_field stored it, then n_samples rows of
+//   x z sample_field  sample_field_gradient[0..2]  field_gradient.gx .gz
 //
-// ge:summary Parity test: core/heightfield against the oracle
-// ge:keywords test parity golden heightfield
+// ge:summary Golden test: core/heightfield, bit for bit
+// ge:keywords test golden heightfield
 // ge:skill testing
 #include "core/heightfield.hpp"
 
@@ -16,7 +15,7 @@ using ge::test::as_double;
 
 namespace {
 
-// The oracle's fill function, restated (tools/parity/golden-core.mjs `fieldFn`).
+// The fill function the golden's fields were filled with (its generator states the same one).
 double field_fn(double x, double z) {
   return ge::core::value_noise(x, z, 37.0, 5.0) * 100.0 + x * 0.013 - z * 0.007 +
          1e-3 / (1.0 + x * x);
@@ -24,7 +23,7 @@ double field_fn(double x, double z) {
 
 }  // namespace
 
-TEST(heightfield_matches_oracle_bit_for_bit) {
+TEST(heightfield_matches_golden_bit_for_bit) {
   const auto rows = ge::test::golden_rows("tests/golden/core_heightfield.txt");
   size_t at = 0;
   int fields = 0;
@@ -44,15 +43,15 @@ TEST(heightfield_matches_oracle_bit_for_bit) {
     for (size_t s = 0; s < samples; s++) {
       const auto& row = rows[at++];
       const double x = as_double(row[0]), z = as_double(row[1]);
-      CHECK_JS_BITS(ge::core::sample_field(f, x, z), as_double(row[2]));
+      CHECK_BITS_ANY_NAN(ge::core::sample_field(f, x, z), as_double(row[2]));
       double g[3];
       ge::core::sample_field_gradient(f, x, z, g);
-      CHECK_JS_BITS(g[0], as_double(row[3]));
-      CHECK_JS_BITS(g[1], as_double(row[4]));
-      CHECK_JS_BITS(g[2], as_double(row[5]));
+      CHECK_BITS_ANY_NAN(g[0], as_double(row[3]));
+      CHECK_BITS_ANY_NAN(g[1], as_double(row[4]));
+      CHECK_BITS_ANY_NAN(g[2], as_double(row[5]));
       const ge::core::FieldSlope slope = ge::core::field_gradient(f, x, z);
-      CHECK_JS_BITS(slope.gx, as_double(row[6]));
-      CHECK_JS_BITS(slope.gz, as_double(row[7]));
+      CHECK_BITS_ANY_NAN(slope.gx, as_double(row[6]));
+      CHECK_BITS_ANY_NAN(slope.gz, as_double(row[7]));
     }
     fields++;
   }

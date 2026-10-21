@@ -1,7 +1,7 @@
 # Architecture
 
-The layout gameengine2 builds toward. `docs/research.md` explains why each decision
-was made, and `docs/goals.md` says in which order. Where a part is not built yet, this
+The layout gameengine2 builds toward, and the decisions behind it (§ Decisions).
+`docs/goals.md` says in which order. Where a part is not built yet, this
 page is the plan it is built to. Change this page in the same PR that changes the plan.
 
 ## The layers
@@ -25,18 +25,17 @@ engine/core  engine/loop                   the deterministic pool; the run clock
 
 One direction of dependency, held by `tools/check-agents.sh` once each layer exists:
 
-- **`engine/core`**: the deterministic pool (port of the framework's `core/`): prng,
-  math, libm, js (JS semantics helpers), noise, heightfield, quat, solar and output
-  (the framework's `polyline` is not ported: game5 never calls it). It depends on nothing but the C++ standard library headers that do no I/O and
+- **`engine/core`**: the deterministic pool: prng, math, libm, num (the number semantics
+  helpers), noise, heightfield, quat, solar and output. It depends on nothing but the C++
+  standard library headers that do no I/O and
   no floating-point transcendentals: no `<cmath>` trig, exp or pow; `sqrt`, `fabs` and
   `floor` are allowed.
-- **`engine/loop`**: the fixed-step run clock (port of `loop/run-clock`). Depends on
-  nothing.
+- **`engine/loop`**: the fixed-step run clock. Depends on nothing.
 - **`plugins/<name>`**: a mechanism one genre or world shares (§ Plugins). Its simulation
   half may include only the engine targets and plugins its `ge_add_plugin` call declares.
 - **`games/fall_line/sim`**: Fall Line's own simulation. It may
   include only `engine/core`, `engine/loop`, the plugins it links and itself. It has no platform, no GPU and no wall
-  clock. This is the line game5's `imports_test` holds, restated for C++.
+  clock.
 - **`engine/platform`**: SDL3 behind a narrow C++ API: the window, input events, the
   gamepad and rumble, the audio device, time, storage paths and the clipboard. It is the
   only directory that includes SDL headers.
@@ -49,16 +48,18 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   clouds, TAA-U, post, compute particles, skinning). A pass owns its GPU buffers and
   exposes `prepare(view)` and `encode(pass)`. **`docs/rendering.md` is the plan** for
   this layer and `engine/gpu`.
-- **`engine/audio`**: the port of the framework's synth: voice definitions, a DSP graph
+- **`engine/audio`**: the synth: voice definitions, a DSP graph
   (oscillators, noise, biquads, envelopes, echo), racks and `play_def`. It runs on the
   platform's audio stream.
 - **`engine/ui`**: the immediate-mode 2D layer (rects, images, SDF text), plus Dear
   ImGui behind `GE_DEV_UI`.
-- **`games/fall_line/app`**: the port of game5's `pwa/`: it builds the frame from
+- **`games/fall_line/app`**: Fall Line's presentation: it builds the frame from
   `GameState`, Fall Line's own shaders and looks, its HUD and cards, and its sound beds.
-- **`tools/`**: the parity oracle scripts (Node, which run the TypeScript sources),
-  the headless `sim` CLI, level-map image output and the labs. Tools may include
-  anything, and nothing includes a tool.
+- **`tools/`**: the structure checks, the headless `sim` CLI, level-map image output and
+  the labs. Tools may include anything, and nothing includes a tool.
+- **`porting/`**: the WORKING area, deleted when porting ends (`AGENTS.md` § The working
+  area): the porting guide and map, and the generators of the golden tables. Nothing
+  outside it includes or names anything in it but the `make golden` targets.
 - **`tests/`**: one executable per topic.
 
 A new game would sit beside `games/fall_line` and link the plugins it shares with it.
@@ -128,7 +129,6 @@ ui:    HUD + cards drawn last
 ```
 
 The simulation never sees the frame rate, and the renderer never writes `GameState`.
-These are the same two rules game5 has.
 
 ## Data and code conventions (for agents and for speed)
 
@@ -143,17 +143,17 @@ These are the same two rules game5 has.
   arrays. Everything else uses the natural struct. Change a layout only with a
   measurement.
 - **One subject per file, under 1000 lines** (`agents:allow-large-file: <reason>` for
-  honest exceptions). A file opens with a comment that states what it owns and which
-  game5 or framework file it ports.
+  honest exceptions). A file opens with a comment that states what it owns, in the
+  engine's own terms (never where it came from: `AGENTS.md` § A clean slate).
 - **Every number has a unit in its name or its comment** (`speed_mps`, `cell_m`), and
-  every tuning number lives in its `defs/` table exactly as game5's `TUNING` does.
+  every tuning number lives in its `defs/` table.
 - **Stated once.** Each answer (the sign conventions, what the snow does, which
   generator built a map) is written in one function, and `AGENTS.md` lists where.
   A second copy is a bug.
-- **Mirror game5's names.** `createGame` becomes `create_game`, and
-  `engine/mapgen/forest.ts` becomes `plugins/mountain/mapgen/forest.{hpp,cpp}` (or
-  `games/fall_line/sim/<dir>/` for what is Fall Line's alone). The same
-  path means an agent can open the oracle beside the port.
+- **One name for a module everywhere.** `plugins/mountain/mapgen/forest.{hpp,cpp}`, its
+  test `tests/mountain_forest_test.cpp`, its golden `tests/golden/mountain_forest.txt`.
+  Names are `snake_case`, so `create_game` is a search key for the function, its callers
+  and its test.
 - **Headers declare, sources define.** Small hot math is `inline` in headers. A system's
   header shows its whole API with comments, so it can be read without the `.cpp`.
 - **Errors**: engine code returns status values or asserts; there are no exceptions on
@@ -167,7 +167,7 @@ and system), and **the next action** (the test to run, the skill to load, or the
 to read). For example:
 
 ```
-ge: parity: core_math_test row 1834: hypot3 got 0x41fc7f55b85cfc98 want 0x41fc7f55b85cfc97.
+ge: golden: core_math_test row 1834: hypot3 got 0x41fc7f55b85cfc98 want 0x41fc7f55b85cfc97.
     A last-bit difference means an FP contraction or a libm call crept in.
     Check -ffp-contract=off for this target; skill: determinism.
 ```
@@ -187,9 +187,27 @@ itself does no I/O. Tests print in the same shape through `tests/check.hpp`.
   release gets them too).
 - Randomness only through `core::Rng` streams owned by the state. No clock in `sim/`.
 - Iteration order is explicit. No `unordered_map` iteration feeds a result. Sorting
-  uses `std::stable_sort`, because JS `Array.prototype.sort` is stable.
-- Parity is proven by golden files the TypeScript oracle writes (`tools/parity/`), not
-  by eye.
+  uses `std::stable_sort`: equal keys keep their order, and that order is part of the
+  result.
+- Determinism is proven by the golden tables in `tests/golden/`, not by eye. They are the
+  engine's own: a deliberate change of behaviour rewrites them in the PR that makes it.
+
+## Decisions
+
+| Part | Decision |
+| --- | --- |
+| Language | C++20, no exceptions or RTTI in engine code paths (they may stay enabled for tools) |
+| Game-object model | POD state structs and explicit arrays, systems as free functions in a written order; no generic ECS, because the simulation is already a fixed set of systems over flat arrays |
+| Determinism | The engine's own `core/libm` (vendored fdlibm and glibc's pow) and `core/num`, so every platform gives the same bits; FP flags in CMake; golden tests |
+| Loop | A fixed 120 Hz accumulator (`engine/loop/run_clock.hpp`), interpolated rendering |
+| Platform | SDL3, statically linked: one dependency for the window, input, gamepad, audio device and files on every desktop and the web |
+| GPU | WebGPU through `webgpu.h` (wgpu-native first, Dawn optional, emdawnwebgpu on the web): the same API on desktop and browser |
+| Shaders | WGSL, embedded at build |
+| Audio | Our own DSP graph on SDL3 audio: every sound is synthesized, so no middleware |
+| UI | Our own immediate-mode 2D layer + SDF text; Dear ImGui for dev tools |
+| Assets | cgltf for the modelled skis; everything else generated in code or baked to embedded blobs |
+| Tests | Our own header harness, CTest, golden tables |
+| Build/CI | CMake + Ninja + presets; GitHub Actions on Linux x64/arm64 (GCC, Clang), macOS, Windows |
 
 ## Build
 

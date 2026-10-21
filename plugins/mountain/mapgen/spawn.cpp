@@ -1,8 +1,7 @@
-// Port of game5 `engine/mapgen/spawn.ts`.
+// The definitions behind spawn.hpp.
 //
 // ge:summary Chooses the start off the summit and lays the gates and the grid on the piste
-// ge:keywords spawn chooseStart gridOnTrack layCheckpoints
-// ge:oracle game5/engine/mapgen/spawn.ts
+// ge:keywords spawn
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #include "mountain/mapgen/spawn.hpp"
@@ -10,13 +9,13 @@
 #include <array>
 #include <limits>
 
-#include "core/js.hpp"
 #include "core/libm/libm.hpp"
+#include "core/num.hpp"
 #include "mountain/mapgen/query.hpp"
 
 namespace ge::mountain::mapgen {
 
-namespace js = ge::core::js;
+namespace num = ge::core::num;
 namespace libm = ge::core::libm;
 namespace R = rules;
 using ge::core::sample_field;
@@ -98,7 +97,7 @@ void grid_on_track(const Track& track, Spawn& spawn, std::vector<Spawn>& grid) {
 
 std::vector<double> gate_arcs(double length) {
   const double s0 = start_gate_arc();
-  const double count = js::max(2.0, js::round((length - s0) / R::checkpoint::spacing_target));
+  const double count = num::max(2.0, num::round((length - s0) / R::checkpoint::spacing_target));
   const double spacing = (length - s0) / count;
   std::vector<double> out;
   for (int k = 0; k <= int(count); k++) out.push_back(k == count ? length : s0 + k * spacing);

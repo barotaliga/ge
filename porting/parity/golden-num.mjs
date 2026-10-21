@@ -1,14 +1,14 @@
-// Writes tests/golden/core_js.txt: the JS number semantics engine/core/js.hpp ports, evaluated
+// Writes tests/golden/core_num.txt: the JS number semantics engine/core/num.hpp ports, evaluated
 // by Node. These are exact operations, the same on every Node version. Each line is hex:
 //   x  y  Math.round(x)  x|0 (as uint32)  x>>>0  Math.sign(x)  Math.max(x,y)  Math.min(x,y)
 //   x%y  Math.imul(x|0, y|0) (as uint32)
-// with doubles as IEEE 754 bit patterns. It also writes tests/golden/core_js_text.txt for
-// engine/core/js_text.hpp, one row per number: its bits, `String(x)`, then `x.toFixed(d)` for
+// with doubles as IEEE 754 bit patterns. It also writes tests/golden/core_num_text.txt for
+// engine/core/num_text.hpp, one row per number: its bits, `String(x)`, then `x.toFixed(d)` for
 // d = 0, 1, 2, 3 and 20.
 //
-//   node tools/parity/golden-js.mjs
+//   node porting/parity/golden-num.mjs
 //
-// ge:summary Writes tests/golden/core_js.txt and core_js_text.txt from Node's number semantics
+// ge:summary Writes tests/golden/core_num.txt and core_num_text.txt from Node's number semantics
 // ge:keywords golden parity generator js toFixed toString
 // ge:skill testing
 import { writeFileSync } from "node:fs";
@@ -55,7 +55,7 @@ const row = (x, y) =>
     hex(Math.max(x, y)), hex(Math.min(x, y)), hex(x % y), u32(Math.imul(x | 0, y | 0))].join(" "));
 for (const x of SPECIAL) for (const y of [0, -0, NaN, 1, -3.5]) row(x, y);
 while (rows.length < 4096) row(gen(), gen());
-const path = resolve("tests/golden/core_js.txt");
+const path = resolve("tests/golden/core_num.txt");
 writeFileSync(path, rows.join("\n") + "\n");
 console.log(`${path}: ${rows.length} rows`);
 
@@ -65,6 +65,6 @@ const TEXT_SPECIAL = [0.05, 0.15, 0.25, 0.35, 1.005, 2.675, 1e-7, 1.5e-7, 1e-6, 
   0.1 + 0.2, 1 / 3, -1 / 3, 31.6, 53.2, 468, 36.4, 4500, 0.000001234, 12345678901234567890];
 for (const x of [...SPECIAL, ...TEXT_SPECIAL]) textRow(x);
 while (text.length < 2048) textRow(gen());
-const textPath = resolve("tests/golden/core_js_text.txt");
+const textPath = resolve("tests/golden/core_num_text.txt");
 writeFileSync(textPath, text.join("\n") + "\n");
 console.log(`${textPath}: ${text.length} rows`);

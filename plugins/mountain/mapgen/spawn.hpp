@@ -1,16 +1,14 @@
 // R11–R13 — WHERE THE RUN STARTS: the start under the summit ridge, the start line the
-// skiers stand on, the start gate ahead of them, and the gates down to the finish. Port of
-// game5 `engine/mapgen/spawn.ts`.
+// skiers stand on, the start gate ahead of them, and the gates down to the finish.
 //
 // The start is the piste's ORIGIN (the walk begins there). What is searched for is the
 // HEADING out of the gate: the fall line first, then wider either side, and the first the
 // untouched ground makes a fair start along (no steeper than a skier holds from standing,
 // never really climbing).
-// Parity: through tests/mountain_generate_test.cpp (`start`, `gates`).
+// Held by tests/mountain_generate_test.cpp (`start`, `gates`).
 //
 // ge:summary R11-R13 the start: the start hut, the gates and the start line's grid
-// ge:keywords spawn start chooseStart gridOnTrack layCheckpoints startGateArc gates
-// ge:oracle game5/engine/mapgen/spawn.ts
+// ge:keywords spawn start gates
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #pragma once

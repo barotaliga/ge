@@ -1,6 +1,6 @@
 // A UNIT QUATERNION as a vehicle's orientation, and the operations a rigid body needs on it.
-// Port of oss-game-framework `src/core/quat.ts`, bit for bit (sin/cos/atan2/asin through
-// core::libm). Parity: tests/core_quat_test.cpp against tests/golden/core_quat.txt.
+// Every transcendental (sin/cos/atan2/asin) goes through core::libm.
+// Bits: tests/core_quat_test.cpp against tests/golden/core_quat.txt.
 //
 // CONVENTIONS, stated once. A quaternion rotates BODY axes into WORLD axes: body x is the
 // vehicle's right, y its up, z its forward; world x is east, z north, y up. Every rotation is
@@ -12,16 +12,15 @@
 // stay right-handed, so a nose-up pitch rate is a negative wx.
 //
 // ge:summary Unit quaternions as orientation: Euler conversion, integration, the sign flip
-// ge:keywords quat quaternion orientation rotation euler pitch roll heading yaw fromEuler toEuler
-// ge:keywords fromAxisAngle integrate angular-velocity vec3
-// ge:oracle oss-game-framework/src/core/quat.ts
+// ge:keywords quat quaternion orientation rotation euler pitch roll heading yaw
+// ge:keywords integrate angular-velocity vec3
 // ge:skill determinism
 // ge:test tests/core_quat_test.cpp
 #pragma once
 
-#include "core/js.hpp"
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
+#include "core/num.hpp"
 
 namespace ge::core {
 
@@ -52,8 +51,7 @@ inline Quat multiply(const Quat& a, const Quat& b) {
 }
 
 // Renormalise in place and return q. Integration drifts the length by a part in a million a
-// step, which after a minute at 120 Hz is a visible skew. JS `hypot4(...) || 1`: a zero or NaN
-// length divides by 1.
+// step, which after a minute at 120 Hz is a visible skew. A zero or NaN length divides by 1.
 inline Quat& normalize(Quat& q) {
   double n = hypot4(q.x, q.y, q.z, q.w);
   if (n == 0.0 || n != n) n = 1.0;
@@ -119,7 +117,7 @@ inline Quat from_euler(double heading, double pitch, double roll) {
 inline Euler to_euler(const Quat& q) {
   const Vec3 f = rotate(q, Vec3{0.0, 0.0, 1.0});
   const double heading = libm::atan2(f.x, f.z);
-  const double pitch = libm::asin(js::max(-1.0, js::min(1.0, f.y)));
+  const double pitch = libm::asin(num::max(-1.0, num::min(1.0, f.y)));
   // Strip yaw and pitch back off; what is left is a pure rotation about the forward axis,
   // whose angle is read off its vector part exactly.
   const Quat yp = from_euler(heading, pitch, 0.0);

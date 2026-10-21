@@ -1,16 +1,15 @@
 // THE SHAPE OF A GENERATED MAP: the contract between the generator and everything that skis,
-// draws or measures one. Port of the single-piste half of game5 `engine/mapgen/types.ts`
-// (`Level`, `TrackPoint`, `Checkpoint`, `Kicker`, `Cliff`, `Drift`, `Weather`, `Mountain`,
-// `GenerateOptions`, `TrackHit`). The ski area's fields (`resort`, the courses, the venues,
+// draws or measures one: the single piste's half (`Level`, `TrackPoint`, `Checkpoint`,
+// `Kicker`, `Cliff`, `Drift`, `Weather`, `Mountain`, `GenerateOptions`, `TrackHit`). The ski
+// area's fields (`resort`, the courses, the venues,
 // the water) arrive with the milestone that builds them (docs/goals.md M4b–M4d).
 //
-// The oracle's optional fields that `generateLevel` always sets are plain members here; the
-// ones it sets only sometimes are `std::optional`. A tree's `kind` is `spruce` where the oracle
-// leaves it out, and its `clump` is -1 where the oracle leaves it out.
+// A field `generate_level` always sets is a plain member; one it sets only sometimes is a
+// `std::optional`. A tree with no kind of its own is a `spruce`, and one in no clump has
+// `clump` -1.
 //
 // ge:summary The Level and its parts: what a generated map publishes
-// ge:keywords types Level TrackPoint Checkpoint Kicker Cliff TreeDef Weather Sun GenerateOptions
-// ge:oracle game5/engine/mapgen/types.ts
+// ge:keywords types
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #pragma once
@@ -74,7 +73,7 @@ struct TreeDef {
   double radius;  // trunk collision radius at breast height, m (its age's girth, R14)
   double age;     // years
   double crown;   // crown radius at its widest, m
-  TreeKind kind;  // spruce where the oracle leaves `kind` out
+  TreeKind kind;  // spruce unless the forest gave it a kind
   int32_t clump;  // the clump it grew in (R14), -1 for a tree standing alone
 };
 
@@ -209,7 +208,7 @@ struct Level {
 
   double ground_at(double x, double z) const { return ge::core::sample_field(ground, x, z); }
   double packed_at(double x, double z) const { return ge::core::sample_field(packed, x, z); }
-  // The ground's unit normal off the bilinear patch's own gradient (compile.ts `normalAt`).
+  // The ground's unit normal off the bilinear patch's own gradient (the compile's normal).
   void normal_at(double x, double z, Vec3& out) const;
 };
 

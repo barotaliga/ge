@@ -1,8 +1,7 @@
-// Port of game5 `engine/analysis/crossings.ts`.
+// The definitions behind crossings.hpp.
 //
 // ge:summary The segment-pair test off a 16 m spatial hash
-// ge:keywords analysis selfCrossings
-// ge:oracle game5/engine/analysis/crossings.ts
+// ge:keywords analysis
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #include "mountain/analysis/crossings.hpp"
@@ -12,11 +11,11 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include "core/js.hpp"
+#include "core/num.hpp"
 
 namespace ge::mountain::analysis {
 
-namespace js = ge::core::js;
+namespace num = ge::core::num;
 using mapgen::TrackPoint;
 
 namespace {
@@ -40,10 +39,10 @@ int self_crossings(const std::vector<TrackPoint>& points) {
   for (size_t i = 0; i + 1 < n; i++) {
     const TrackPoint& a = points[i];
     const TrackPoint& b = points[i + 1];
-    const auto c0 = int64_t(std::floor(js::min(a.x, b.x) / kCell));
-    const auto c1 = int64_t(std::floor(js::max(a.x, b.x) / kCell));
-    const auto r0 = int64_t(std::floor(js::min(a.z, b.z) / kCell));
-    const auto r1 = int64_t(std::floor(js::max(a.z, b.z) / kCell));
+    const auto c0 = int64_t(std::floor(num::min(a.x, b.x) / kCell));
+    const auto c1 = int64_t(std::floor(num::max(a.x, b.x) / kCell));
+    const auto r0 = int64_t(std::floor(num::min(a.z, b.z) / kCell));
+    const auto r1 = int64_t(std::floor(num::max(a.z, b.z) / kCell));
     for (int64_t c = c0; c <= c1; c++) {
       for (int64_t r = r0; r <= r1; r++) cells[c * 8192 + r].push_back(i);
     }

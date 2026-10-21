@@ -1,12 +1,11 @@
 // R15 — THE DAY THE RUN IS SKIED ON: a latitude, a winter's day and a solar hour at which the
-// sun is well up in a clear sky. Port of the generator's half of game5 `engine/mapgen/sun.ts`
-// (the free ride's `withDay` / `withPlace` arrive with the app). The sun's arithmetic is
+// sun is well up in a clear sky: the generator's half (choosing a day or a place by hand
+// arrives with the app). The sun's arithmetic is
 // `core/solar`'s; what is this game's is which day and which hours count.
-// Parity: through tests/mountain_generate_test.cpp (`world`).
+// Held by tests/mountain_generate_test.cpp (`world`).
 //
-// ge:summary R15 the day: declination, the sun's window and dealSun
-// ge:keywords sun day solar declinationOf sunWindow dealSun latitude
-// ge:oracle game5/engine/mapgen/sun.ts
+// ge:summary R15 the day: declination, the sun's window and deal_sun
+// ge:keywords sun day solar latitude
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #pragma once

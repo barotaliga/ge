@@ -1,9 +1,8 @@
-// engine/core/solar.cpp against the oracle's runtime (tests/golden/core_solar.txt, written by
-// tools/parity/golden-core-libm.mjs under game5's pinned Node: make golden-libm). The row
-// layout is stated in that script; the column index of each output is spelled out below.
+// engine/core/solar.cpp against tests/golden/core_solar.txt (make golden-libm). The column
+// index of each input and output is spelled out below.
 //
-// ge:summary Parity test: core/solar against the oracle
-// ge:keywords test parity golden solar sun moon
+// ge:summary Golden test: core/solar, bit for bit
+// ge:keywords test golden solar sun moon
 // ge:skill testing
 #include "core/solar.hpp"
 
@@ -34,7 +33,7 @@ void check_window(const std::optional<ge::core::HourWindow>& got, const Row& row
 
 }  // namespace
 
-TEST(solar_matches_oracle_bit_for_bit) {
+TEST(solar_matches_golden_bit_for_bit) {
   namespace c = ge::core;
   const auto rows = ge::test::golden_rows("tests/golden/core_solar.txt");
   CHECK(rows.size() == 600);
@@ -42,7 +41,7 @@ TEST(solar_matches_oracle_bit_for_bit) {
     const double hour = as_double(row[0]), lat = as_double(row[1]), dec = as_double(row[2]);
     const double age = as_double(row[3]), year = as_double(row[4]), doy = as_double(row[5]);
     const double lon = as_double(row[6]), min_el = as_double(row[7]), el = as_double(row[8]);
-    // The oracle script's civil date off the day of the year.
+    // The golden's civil date off the day of the year.
     const double month = 1.0 + static_cast<double>(static_cast<int>(doy) % 12);
     const double day = 1.0 + static_cast<double>(static_cast<int>(doy) % 28);
 

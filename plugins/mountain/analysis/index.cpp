@@ -1,9 +1,8 @@
-// Port of the single piste's half of game5 `engine/analysis/index.ts` (`analyzeLevel` with no
-// resort, no real face and no terrain park: every junction mask is empty).
+// The single piste's checks behind index.hpp (no resort, no real face and no terrain park:
+// every junction mask is empty).
 //
-// ge:summary The single piste's checks, R1-R19, with the oracle's message text
-// ge:keywords analysis analyzeLevel
-// ge:oracle game5/engine/analysis/index.ts
+// ge:summary The single piste's checks, R1-R19, with their fixed message text
+// ge:keywords analysis
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #include "mountain/analysis/index.hpp"
@@ -12,9 +11,9 @@
 #include <cmath>
 #include <unordered_map>
 
-#include "core/js.hpp"
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
+#include "core/num.hpp"
 #include "core/solar.hpp"
 #include "mountain/analysis/cliffs.hpp"
 #include "mountain/analysis/crossings.hpp"
@@ -28,7 +27,7 @@
 
 namespace ge::mountain::analysis {
 
-namespace js = ge::core::js;
+namespace num = ge::core::num;
 namespace libm = ge::core::libm;
 namespace R = mapgen::rules;
 using ge::core::angle_diff;
@@ -135,13 +134,13 @@ LevelAnalysis analyze_level(const mapgen::Level& level) {
   }
   const int crossings = self_crossings(pts);
   if (crossings > 0) {
-    add("R5", Severity::error, "the piste crosses itself " + num(crossings) + " time(s)");
+    add("R5", Severity::error, "the piste crosses itself " + str(crossings) + " time(s)");
   }
   const double separation = mapgen::min_separation(level.track);
   if (separation < R::track::separation_plan - 0.5) {
     add("R5", Severity::error,
         "two stretches pass " + fmt(separation) + " m apart (least " +
-            num(R::track::separation_plan) + " m)");
+            str(R::track::separation_plan) + " m)");
   }
   if (n > 0 && pts[n - 1].z < R::track::finish_z * size - 1) {
     add("R5", Severity::error, "the piste ends above the valley floor");
@@ -163,8 +162,8 @@ LevelAnalysis analyze_level(const mapgen::Level& level) {
   double width_min = INFINITY;
   double width_max = 0;
   for (const TrackPoint& p : pts) {
-    width_min = js::min(width_min, p.width);
-    width_max = js::max(width_max, p.width);
+    width_min = num::min(width_min, p.width);
+    width_max = num::max(width_max, p.width);
   }
   const Band widths{G.track.width.min, R::track::width.max};
   if (!within_band(width_min, widths) || !within_band(width_max, widths)) {
@@ -204,16 +203,16 @@ LevelAnalysis analyze_level(const mapgen::Level& level) {
   const double max_grade = mapgen::window_grades(ys, step, steep).steepest;
   const double steepest_span = mapgen::steepest_span(level.track, level.kickers);
   const mapgen::PisteGrade colour = mapgen::piste_grade_of(steepest_span);
-  const double climb = js::max(0.0, -whole.gentlest);
-  const double ceiling = js::min(R::track::max_grade, G.track.max_grade);
+  const double climb = num::max(0.0, -whole.gentlest);
+  const double ceiling = num::min(R::track::max_grade, G.track.max_grade);
   if (max_grade > ceiling + 0.01) {
     add("R8", Severity::error,
-        "the line falls at " + fmt(max_grade, 3) + " (most " + num(ceiling) + ")");
+        "the line falls at " + fmt(max_grade, 3) + " (most " + str(ceiling) + ")");
   }
   if (level.grade && colour != *level.grade) {
     add("R23", Severity::error,
         std::string("a ") + mapgen::grade_name(*level.grade) + " piste whose steepest " +
-            num(R::track::colour_window) + " m falls at " + fmt(steepest_span * 100, 0) +
+            str(R::track::colour_window) + " m falls at " + fmt(steepest_span * 100, 0) +
             " % — a " + mapgen::grade_name(colour) + "'s");
   }
   if (climb > 0.005) {
@@ -228,7 +227,7 @@ LevelAnalysis analyze_level(const mapgen::Level& level) {
   const double least_grade = R::track::min_grade;
   if (min_grade < least_grade - 0.01) {
     add("R8", Severity::error,
-        "the line falls only " + fmt(min_grade, 3) + " (least " + num(least_grade) + ")");
+        "the line falls only " + fmt(min_grade, 3) + " (least " + str(least_grade) + ")");
   }
   const TrackPoint flat_from = mapgen::track_point_at(level.track, L - R::track::finish);
   const double finish_grade = (flat_from.y - pts[n - 1].y) / R::track::finish;
@@ -267,7 +266,7 @@ LevelAnalysis analyze_level(const mapgen::Level& level) {
   const auto& crests = track_kickers;
   if (!within_band(double(crests.size()), G.kickers.on)) {
     add("R9", Severity::error,
-        num(double(crests.size())) + " kicker(s) on the piste (band " + band_text(G.kickers.on) +
+        str(double(crests.size())) + " kicker(s) on the piste (band " + band_text(G.kickers.on) +
             ")");
   }
   for (size_t a = 0; a < crests.size(); a++) {
@@ -297,7 +296,7 @@ LevelAnalysis analyze_level(const mapgen::Level& level) {
   }
   for (const Kicker* k : off_kickers) {
     const double distance = mapgen::nearest_track_point(level.track, k->x, k->z).distance;
-    const double reach = js::max(k->ramp, k->landing) + k->width / 2 + R::kickers::edge;
+    const double reach = num::max(k->ramp, k->landing) + k->width / 2 + R::kickers::edge;
     if (distance - reach < R::track::width.max / 2 + R::kickers::off::clearance - 1) {
       add("R4", Severity::error, k->id + " stands " + fmt(distance, 0) + " m from the piste");
     }
@@ -305,7 +304,7 @@ LevelAnalysis analyze_level(const mapgen::Level& level) {
   if (double(off_kickers.size()) <
       mapgen::scale_count(R::kickers::off::count, region.kickers * G.kickers.off).min) {
     add("R4", Severity::warn,
-        "only " + num(double(off_kickers.size())) + " kicker(s) off the piste");
+        "only " + str(double(off_kickers.size())) + " kicker(s) off the piste");
   }
 
   // R22 — the cliffs; R24 — the drops across the piste.
@@ -325,11 +324,11 @@ LevelAnalysis analyze_level(const mapgen::Level& level) {
   double packed_high = 0;
   for (size_t i = 0; i < n; i += 5) {
     const TrackPoint& p = pts[i];
-    if (!drifted(p.s)) packed_low = js::min(packed_low, level.packed_at(p.x, p.z));
+    if (!drifted(p.s)) packed_low = num::min(packed_low, level.packed_at(p.x, p.z));
     const double off = p.width / 2 + R::track::shoulder_packed + 3;
     const double rx = libm::cos(p.heading);
     const double rz = -libm::sin(p.heading);
-    packed_high = js::max(packed_high, level.packed_at(p.x + rx * off, p.z + rz * off));
+    packed_high = num::max(packed_high, level.packed_at(p.x + rx * off, p.z + rz * off));
   }
   if (packed_low < 0.98) {
     add("R10", Severity::error, "the centreline is only " + fmt(packed_low, 2) + " packed");
@@ -346,17 +345,17 @@ LevelAnalysis analyze_level(const mapgen::Level& level) {
     const mapgen::Checkpoint& a = cps[i];
     if (i + 1 < cps.size()) {
       const double d = cps[i + 1].s - a.s;
-      spacing_min = js::min(spacing_min, d);
-      spacing_max = js::max(spacing_max, d);
+      spacing_min = num::min(spacing_min, d);
+      spacing_max = num::max(spacing_max, d);
       if (d <= 0) {
         add("R11", Severity::error,
-            "gate " + num(double(i + 1)) + " stands up the piste from gate " + num(double(i)));
+            "gate " + str(double(i + 1)) + " stands up the piste from gate " + str(double(i)));
       }
     }
     const mapgen::TrackHit hit = mapgen::nearest_track_point(level.track, a.x, a.z);
     if (std::abs(hit.distance) > 0.75) {
       add("R11", Severity::error,
-          "gate " + num(double(i)) + " stands " + fmt(hit.distance) + " m off the line");
+          "gate " + str(double(i)) + " stands " + fmt(hit.distance) + " m off the line");
     }
   }
   const Band gap = R::checkpoint::spacing;
@@ -391,8 +390,8 @@ LevelAnalysis analyze_level(const mapgen::Level& level) {
   for (double u = 0; u + R::track::grade_window <= R::spawn::run; u += step) {
     const TrackPoint a = mapgen::track_point_at(level.track, gate_arc + u);
     const TrackPoint b = mapgen::track_point_at(level.track, gate_arc + u + R::track::grade_window);
-    bend = js::max(bend, std::abs(angle_diff(b.heading, gate.heading)));
-    steepest = js::max(steepest, (a.y - b.y) / R::track::grade_window);
+    bend = num::max(bend, std::abs(angle_diff(b.heading, gate.heading)));
+    steepest = num::max(steepest, (a.y - b.y) / R::track::grade_window);
   }
   if (bend > R::spawn::straight + 0.02) {
     add("R12", Severity::error, "the run out of the gate turns " + fmt(bend, 2) + " rad");
@@ -410,13 +409,13 @@ LevelAnalysis analyze_level(const mapgen::Level& level) {
 
   // R13 — the start line.
   if (level.grid.size() != size_t(R::grid::slots)) {
-    add("R13", Severity::error, num(double(level.grid.size())) + " start slots");
+    add("R13", Severity::error, str(double(level.grid.size())) + " start slots");
   }
   for (size_t i = 0; i <= level.grid.size(); i++) {
     const mapgen::Spawn& g = i == 0 ? level.spawn : level.grid[i - 1];
     const mapgen::TrackHit hit = mapgen::nearest_track_point(level.track, g.x, g.z);
     const TrackPoint& p = pts[size_t(hit.index)];
-    const std::string who = i == 0 ? "the spawn" : "start slot " + num(double(i - 1));
+    const std::string who = i == 0 ? "the spawn" : "start slot " + str(double(i - 1));
     if (hit.distance > p.width / 2 - 1) add("R13", Severity::error, who + " stands off the piste");
     if (level.packed_at(g.x, g.z) < 0.98) {
       add("R13", Severity::error, who + " is not on packed snow");
@@ -436,7 +435,7 @@ LevelAnalysis analyze_level(const mapgen::Level& level) {
       const double d = hypot(level.grid[a].x - level.grid[b].x, level.grid[a].z - level.grid[b].z);
       if (d < R::grid::spacing - 0.05) {
         add("R13", Severity::error,
-            "start slots " + num(double(a)) + " and " + num(double(b)) + " stand " + fmt(d) +
+            "start slots " + str(double(a)) + " and " + str(double(b)) + " stand " + fmt(d) +
                 " m apart");
       }
     }
@@ -457,12 +456,12 @@ LevelAnalysis analyze_level(const mapgen::Level& level) {
     if (t.y > tree_line_y + 0.01) above_line++;
   }
   if (on_corridor > 0) {
-    add("R14", Severity::error, num(on_corridor) + " tree(s) stand on the piste's corridor");
+    add("R14", Severity::error, str(on_corridor) + " tree(s) stand on the piste's corridor");
   }
   if (above_line > 0) {
-    add("R14", Severity::error, num(above_line) + " tree(s) stand above the tree line");
+    add("R14", Severity::error, str(above_line) + " tree(s) stand above the tree line");
   }
-  // Keyed `bx * 8192 + bz` as the oracle's Map is; looked up only, never iterated.
+  // Keyed `bx * 8192 + bz`; looked up only, never iterated.
   std::unordered_map<int64_t, std::vector<uint32_t>> buckets;
   double tree_gap = INFINITY;
   double clump_gap = INFINITY;
@@ -479,10 +478,10 @@ LevelAnalysis analyze_level(const mapgen::Level& level) {
           const mapgen::TreeDef& u = level.trees[ui];
           const double d = hypot(u.x - t.x, u.z - t.z);
           if (t.clump >= 0 && u.clump == t.clump) {
-            clump_gap = js::min(clump_gap, d);
-            clump_spread = js::max(clump_spread, d);
+            clump_gap = num::min(clump_gap, d);
+            clump_spread = num::max(clump_spread, d);
           } else {
-            tree_gap = js::min(tree_gap, d);
+            tree_gap = num::min(tree_gap, d);
           }
         }
       }
@@ -494,7 +493,7 @@ LevelAnalysis analyze_level(const mapgen::Level& level) {
   }
   if (tree_gap < R::forest::gap - 0.01) {
     add("R14", Severity::error,
-        "two trunks stand " + fmt(tree_gap) + " m apart (least " + num(R::forest::gap) + " m)");
+        "two trunks stand " + fmt(tree_gap) + " m apart (least " + str(R::forest::gap) + " m)");
   }
   if (clump_gap < R::forest::clumps::gap - 0.01) {
     add("R14", Severity::error, "two trunks of a clump stand " + fmt(clump_gap) + " m apart");
@@ -503,7 +502,7 @@ LevelAnalysis analyze_level(const mapgen::Level& level) {
     add("R14", Severity::error, "a clump spreads " + fmt(clump_spread) + " m");
   }
   if (double(level.trees.size()) < 600 * region.forest.density) {
-    add("R14", Severity::warn, "only " + num(double(level.trees.size())) + " trees");
+    add("R14", Severity::warn, "only " + str(double(level.trees.size())) + " trees");
   }
 
   // R15 — the day, from the region's own bands; an evening map starts from sunset instead.
@@ -520,7 +519,7 @@ LevelAnalysis analyze_level(const mapgen::Level& level) {
   if (!start_ok || !within_band(day.latitude, region.sun.latitude) ||
       !within_band(day.day_of_year, region.sun.day_of_year)) {
     add("R15", Severity::error,
-        "the sun: " + fmt(day.hour) + " h on day " + num(day.day_of_year) + " at " +
+        "the sun: " + fmt(day.hour) + " h on day " + str(day.day_of_year) + " at " +
             fmt(day.latitude) + "°N, " + fmt(elevation) + "° up");
   }
   if (day.facing) {
@@ -553,7 +552,7 @@ LevelAnalysis analyze_level(const mapgen::Level& level) {
   }
 
   // R16 — one run.
-  if (level.laps != R::race::laps) add("R16", Severity::error, num(level.laps) + " runs");
+  if (level.laps != R::race::laps) add("R16", Severity::error, str(level.laps) + " runs");
 
   // R17 — the drifts.
   double drift_length = 0;
@@ -580,11 +579,12 @@ LevelAnalysis analyze_level(const mapgen::Level& level) {
       }
     }
     double deepest = 0;
-    // The oracle steps a JS number by 5 m from a fractional start: the counter stays a double.
+    // The scan steps by 5 m from a fractional start, so the counter is a double: those are the
+    // distances the golden's findings were measured at.
     // NOLINTNEXTLINE(clang-analyzer-security.FloatLoopCounter)
     for (double s = d.from; s <= d.to; s += 5) {
       const TrackPoint p = mapgen::track_point_at(level.track, s);
-      deepest = js::max(deepest, level.packed_at(p.x, p.z));
+      deepest = num::max(deepest, level.packed_at(p.x, p.z));
     }
     if (deepest > R::drift::packed + 0.05) {
       add("R17", Severity::error,
@@ -618,7 +618,7 @@ LevelAnalysis analyze_level(const mapgen::Level& level) {
       for (int j = 1; j <= kAcross; j++) {
         const double u = (double(j) / kAcross) * R::berm::width;
         const double y = at(hw + toe + u);
-        crest = js::max(crest, y - edge);
+        crest = num::max(crest, y - edge);
         const double face = std::abs(y - prev) / (R::berm::width / kAcross);
         if (face > berm_steep) {
           berm_steep = face;
@@ -639,7 +639,7 @@ LevelAnalysis analyze_level(const mapgen::Level& level) {
   }
   if (berm_steep > R::berm::max_slope + kBermSteepSlack) {
     add("R18", Severity::error,
-        "a windrow's face climbs at " + fmt(berm_steep, 2) + " (most " + num(R::berm::max_slope) +
+        "a windrow's face climbs at " + fmt(berm_steep, 2) + " (most " + str(R::berm::max_slope) +
             ") at s " + fmt(steep_berm, 0) + " m");
   }
 

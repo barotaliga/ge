@@ -4,7 +4,7 @@
 // cos, atan2, acos, exp, log and pow, so this runs under game5's pinned Node on Linux x86-64
 // (oracle-node.mjs refuses anything else).
 //
-//   <node 24> --experimental-strip-types tools/parity/golden-mapgen.mjs \
+//   <node 24> --experimental-strip-types porting/parity/golden-mapgen.mjs \
 //     [--framework ../oss-game-framework] [--game5 ../game5]
 //
 // One row per map, words of text: `seed version region` then `key=value` pairs. `digest` is

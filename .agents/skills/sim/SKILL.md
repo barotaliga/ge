@@ -1,6 +1,6 @@
 ---
 name: sim
-description: "Use for games/fall_line/sim (Fall Line's own simulation): createGame and the 120 Hz step's order, the modes, the course, the field, the bot, the headless sim CLI, and engine/loop's run clock. The mountain generator is the mountain skill's."
+description: "Use for games/fall_line/sim (Fall Line's own simulation): create_game and the 120 Hz step's order, the modes, the course, the field, the bot, the headless sim CLI, and engine/loop's run clock. The mountain generator is the mountain skill's."
 ---
 
 # The Fall Line simulation
@@ -11,7 +11,7 @@ the plugins it links and itself. What another game of the genre would reuse goes
 instead (the `plugins` skill): the generator is `plugins/mountain` (the `mountain` skill), the
 tape and standings `plugins/racing`, and M5's skier on snow is expected to be `plugins/skier`.
 
-## What it is (from game5)
+## What it is
 
 - `generate_level(seed, opts)` → `Level`: the heightfield (`ground`, `packed`), the open
   piste (`track`, a point every 2 m), the `checkpoints` (start gate through finish),
@@ -22,26 +22,24 @@ tape and standings `plugins/racing`, and M5's skier on snow is expected to be `p
   1/120 s step and leaves its events on `state.events`.
 - `sim/` (the bot and `simulate`) drives the same `step` headlessly.
 
-Read `../game5/AGENTS.md` (its "Stated once" list is the map of where every answer
-lives) and `../game5/docs/architecture.md` before porting a system.
+While porting, `porting/subsystems.md` § sim says what to read in the reference before a
+system is carried over.
 
 ## Order of work (docs/goals.md M4 → M5)
 
 1. `mapgen`: the `mountain` skill (M4a–M4d).
 2. `game`: classify each file first (the `plugins` skill), then state, then skier physics (`skier`, `suspension`, `snow`, `poles`,
-   `flight`, `chassis`), then collision, course, run and step. Parity is a per-step
-   state hash on synthetic levels (port `tests/support/synthetic.ts` first) and then
-   on generated ones.
+   `flight`, `chassis`), then collision, course, run and step. Each is held by a per-step
+   state hash on synthetic levels (a hand-built slope and a flat strip, built first) and
+   then on generated ones.
 3. `sim`: the bot and `simulate`, which gives the `sim` CLI (`tools/sim/`) printing the
-   oracle's `RunReport` table. Its digests match game5's `make sim`.
+   `RunReport` table. Its digests are golden.
 
 ## Rules
 
-- The order of systems inside `step` is the oracle's, exactly. It is part of the
-  digest.
+- The order of systems inside `step` is fixed and part of the digest.
 - No allocation in `step`. `GameState` holds fixed-capacity storage sized at create.
-- Tuning numbers live in `defs/` tables mirroring `TUNING`, `SKIS` and `RACE`, with
-  their units.
+- Tuning numbers live in `defs/` tables (`tuning`, `skis`, `race`), with their units.
 - The renderer and the app never write `GameState`.
-- `engine/loop/run_clock.hpp` is the port of `loop/run-clock`: the clamp
-  (`MAX_FRAME_SECONDS` = 0.1), whole steps, and `alpha` for interpolation only.
+- `engine/loop/run_clock.hpp` is the run clock: the clamp (`kMaxFrameSeconds` = 0.1),
+  whole steps, and `alpha` for interpolation only.

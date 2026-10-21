@@ -1,10 +1,9 @@
 // The control tape's codec: base64, the run-length streams, the recorder and the reader.
-// Header: racing/tape.hpp. Oracle: oss-game-framework `src/racing/tape.ts`.
+// Header: racing/tape.hpp.
 //
 // ge:summary The control tape's codec: base64, run-length streams, recorder, reader
-// ge:keywords racing tape ghost codec base64 atob btoa rle encodeStream decodeStream
-// ge:oracle oss-game-framework/src/racing/tape.ts
-// ge:skill racing port
+// ge:keywords racing tape ghost codec base64 forgiving-base64 rle
+// ge:skill racing
 // ge:test tests/racing_tape_test.cpp
 #include "racing/tape.hpp"
 
@@ -17,7 +16,7 @@ namespace {
 
 constexpr char kAlphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-// atob's alphabet: the sextet a character stands for, or -1.
+// The base64 alphabet: the sextet a character stands for, or -1.
 int sextet(char c) {
   if (c >= 'A' && c <= 'Z') return c - 'A';
   if (c >= 'a' && c <= 'z') return c - 'a' + 26;
@@ -27,7 +26,7 @@ int sextet(char c) {
   return -1;
 }
 
-// The HTML spec's ASCII whitespace, which atob strips before anything else.
+// The HTML spec's ASCII whitespace, which the forgiving decode strips before anything else.
 bool is_ascii_space(char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\f' || c == '\r'; }
 
 }  // namespace
@@ -54,7 +53,7 @@ std::string base64_encode(std::span<const uint8_t> bytes) {
   return out;
 }
 
-// The WHATWG "forgiving-base64 decode" atob runs: strip ASCII whitespace; at a length of 4n
+// The WHATWG "forgiving-base64 decode": strip ASCII whitespace; at a length of 4n
 // drop up to two trailing '='; then a length of 4n+1, or any character outside the alphabet
 // (a '=' left anywhere included), is an error. Bits left over past the last whole byte are
 // discarded, whatever they are.
@@ -123,8 +122,8 @@ void decode_stream(std::string_view text, std::span<uint8_t> out) {
 TapeRecorder::TapeRecorder(TapeSchema schema)
     : schema_(schema.begin(), schema.end()), streams_(schema.size()) {}
 
-// The oracle buffers every byte and encodes at seal; this keeps each stream's open run instead.
-// Same pairs: a run grows while the byte repeats, it is not a NaN, and it is under 255.
+// Each stream keeps its open run rather than buffering every byte until seal: a run grows
+// while the byte repeats, it is not a NaN, and it is under 255.
 void TapeRecorder::record(std::span<const double> values) {
   for (size_t k = 0; k < schema_.size(); k++) {
     Stream& s = streams_[k];

@@ -1,17 +1,16 @@
-// Port of oss-game-framework `src/core/solar.ts`; see solar.hpp. Statement order and operand
-// order follow the oracle line for line, because a reordered sum is a different double.
+// The solar and lunar geometry; see solar.hpp. Statement order and operand order are the ones
+// tests/golden/core_solar.txt was cut under: a reordered sum is a different double.
 //
-// ge:summary The solar and lunar geometry behind solar.hpp, in the oracle's operation order
+// ge:summary The solar and lunar geometry behind solar.hpp, in its fixed operation order
 // ge:keywords solar sun moon julian-day sidereal ephemeris refraction
-// ge:oracle oss-game-framework/src/core/solar.ts
 // ge:skill determinism
 // ge:test tests/core_solar_test.cpp
 #include "core/solar.hpp"
 
 #include <cmath>
 
-#include "core/js.hpp"
 #include "core/libm/libm.hpp"
+#include "core/num.hpp"
 
 namespace ge::core {
 namespace {
@@ -26,7 +25,7 @@ double clamp_unit(double v) { return v < -1.0 ? -1.0 : v > 1.0 ? 1.0 : v; }
 double sin_d(double x) { return libm::sin(x * kDeg); }
 double cos_d(double x) { return libm::cos(x * kDeg); }
 double tan_d(double x) { return libm::tan(x * kDeg); }
-double wrap360(double x) { return js::mod(js::mod(x, 360.0) + 360.0, 360.0); }
+double wrap360(double x) { return num::mod(num::mod(x, 360.0) + 360.0, 360.0); }
 
 // Greenwich mean sidereal time at jd, degrees.
 double sidereal_time(double jd) {
@@ -55,7 +54,7 @@ Horizontal horizontal_of(double declination, double hour_angle, double latitude)
 SunPlace sun_at(double hour, double latitude, double declination) {
   const double lat = latitude * kDeg;
   const double dec = declination * kDeg;
-  const double h = (js::mod(js::mod(hour, 24.0) + 24.0, 24.0) - 12.0) * 15.0 * kDeg;
+  const double h = (num::mod(num::mod(hour, 24.0) + 24.0, 24.0) - 12.0) * 15.0 * kDeg;
   const double sin_el =
       libm::sin(lat) * libm::sin(dec) + libm::cos(lat) * libm::cos(dec) * libm::cos(h);
   const double elevation = libm::asin(clamp_unit(sin_el));
@@ -69,9 +68,9 @@ std::optional<double> hour_of_elevation(double elevation, bool rising, double la
                                         double declination) {
   const double from = rising ? 0.0 : 12.0;
   double was = sun_at(from, latitude, declination).elevation - elevation;
-  // The oracle's `for (let h = ...; h <= ...; h += STEP)` accumulates h in floating point, and
-  // the hours it visits are those bits, so h is accumulated here too. It is a while loop
-  // because clang-tidy rejects a floating-point `for` counter; the visits are the same.
+  // The scan ACCUMULATES h in floating point (h += kStep), and the hours it visits are those
+  // bits, not from + i * kStep. It is a while loop because clang-tidy rejects a floating-point
+  // `for` counter.
   double h = from + kStep;
   while (h <= from + 12.0 + 1e-9) {
     const double now = sun_at(h, latitude, declination).elevation - elevation;
@@ -96,7 +95,7 @@ std::optional<HourWindow> daylight_window(double latitude, double min_elevation,
 }
 
 MoonPlace moon_at(double hour, double latitude, double sun_declination, double age) {
-  const double phase = js::mod(js::mod(age / kSynodicMonth, 1.0) + 1.0, 1.0);
+  const double phase = num::mod(num::mod(age / kSynodicMonth, 1.0) + 1.0, 1.0);
   const double lag = phase * 24.0;
   const double declination = sun_declination * libm::cos(2.0 * kPi * phase);
   const SunPlace place = sun_at(hour - lag, latitude, declination);
@@ -183,7 +182,7 @@ std::optional<double> hour_of_sun_on_date(double elevation, bool rising, double 
   };
   const double from = rising ? 0.0 : 12.0;
   double was = off(from);
-  double h = from + kStep;  // accumulated as the oracle does (see hour_of_elevation)
+  double h = from + kStep;  // accumulated, as in hour_of_elevation
   while (h <= from + 12.0 + 1e-9) {
     const double now = off(h);
     if ((rising && was < 0 && now >= 0) || (!rising && was > 0 && now <= 0)) {

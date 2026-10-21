@@ -3,19 +3,16 @@
 Each skill is a `SKILL.md` playbook under `.agents/skills/<name>/`, with `name` and
 `description` front matter and a `.lessons/` directory that `skill-reflection` fills: one
 `<unix-timestamp>-<slug>.md` fragment per lesson, read back with `make lessons` and checked by
-`make agents-check`. `make find Q="..."` searches skills, lessons and the code's `ge:` tags at once.
+`make agents-check`. `make find Q="..."` searches skills, lessons, the code's `ge:` tags and the porting map at once.
 `.claude/skills` and `.gemini/skills` are symlinks to this directory. `AGENTS.md` is the
 router that says which skill to load. `tools/check-agents.sh` checks this list, the
 router's Skills table and the directories against each other.
-
-The shape is ported from game5's `.agents/skills/`. The procedures are rewritten for a
-C++ engine that ports game5 against a read-only TypeScript oracle.
 
 ## Session workflow
 
 | Skill | One line |
 | --- | --- |
-| `start-work` | The preflight: clean tree, sync with main, clone the oracle, name the milestone row |
+| `start-work` | The preflight: clean tree, sync with main, name the milestone row |
 | `write-code` | File shape, naming, the `ge:` discovery tags, data-first design, comments, the edit loop |
 | `commit` | Gates, the public-repo check, commit, PR, green then merge |
 | `skill-reflection` | Read lessons first; record, fix, prune, merge, promote and re-key at the end |
@@ -24,16 +21,16 @@ C++ engine that ports game5 against a read-only TypeScript oracle.
 
 | Skill | One line |
 | --- | --- |
-| `determinism` | Bits, not closeness: FP flags, the libm rule, JS semantics, parity failures |
-| `port` | The bottom-up procedure from a TS oracle file to a bit-exact C++ port |
-| `testing` | The header harness, golden files from the oracle, CTest |
+| `determinism` | Bits, not closeness: FP flags, the libm rule, number semantics, golden failures |
+| `port` | WORKING skill (deleted with `porting/`): carrying a module over from its reference, bottom-up, bit-exact |
+| `testing` | The header harness, golden tables, CTest |
 | `build` | CMake, presets, pinned dependencies, the CI matrix, workflow hygiene |
 | `release` | Changeset fragments, the installed package, cutting a release to GitHub Releases + Packages |
 | `sim` | Fall Line's headless simulation: mapgen, the step, the bot, the run clock |
 | `platform` | SDL3: window, input, gamepad, audio device, files, focus |
 | `gpu` | webgpu.h over Dawn: device, feature tiers, resources, the pipeline manifest, WGSL |
 | `render` | The pass table, a pass's two halves, the rules that keep a frame fast, captures and prices |
-| `audio` | The synth's DSP graph, the beds, the audio thread, parity by meter |
+| `audio` | The synth's DSP graph, the beds, the audio thread, checking a sound by meter |
 | `ui` | The 2D layer and text, the HUD and cards, the strings table, the dev UI |
 | `perf` | Budgets, measuring, the proofs a speed-up owes, the levers |
 | `agent-interface` | Diagnostics as prompts, consumer skills, the `ge` CLI |

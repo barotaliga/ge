@@ -1,11 +1,10 @@
 // R18 — THE WINDROW'S SHAPE: the ridge the groomer's tiller leaves along each edge of the
-// piste, as two pure functions of where across it and how far down it. Port of game5
-// `engine/mapgen/berm.ts`; read by the corridor's stamp (track.cpp) and, from M7, the ground
-// the app draws. Parity: through tests/mountain_generate_test.cpp (`ground`).
+// piste, as two pure functions of where across it and how far down it. Read by the corridor's
+// stamp (track.cpp) and, from M7, the ground
+// the app draws. Held by tests/mountain_generate_test.cpp (`ground`).
 //
 // ge:summary The windrow's cross-section either side of the piste (R18)
-// ge:keywords berm windrow bermProfile bermCrest
-// ge:oracle game5/engine/mapgen/berm.ts
+// ge:keywords berm windrow
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #pragma once

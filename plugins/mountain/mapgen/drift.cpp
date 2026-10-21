@@ -1,21 +1,20 @@
-// Port of game5 `engine/mapgen/drift.ts`.
+// The definitions behind drift.hpp.
 //
 // ge:summary The drift dealer and the packed field's thinning under a drift
-// ge:keywords drift dealDrifts stampDrifts
-// ge:oracle game5/engine/mapgen/drift.ts
+// ge:keywords drift
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #include "mountain/mapgen/drift.hpp"
 
 #include <algorithm>
 
-#include "core/js.hpp"
 #include "core/math.hpp"
+#include "core/num.hpp"
 #include "core/prng.hpp"
 
 namespace ge::mountain::mapgen {
 
-namespace js = ge::core::js;
+namespace num = ge::core::num;
 namespace D = rules::drift;
 
 namespace {
@@ -43,7 +42,7 @@ std::vector<Drift> deal_drifts(uint32_t sub, double length, std::span<const Kick
   double laid = 0;
   const double lo = D::clear + D::fade;
   for (int t = 0; t < kTries && laid < target; t++) {
-    const double len = js::min(in_band(rng, D::length), target - laid + D::length.min);
+    const double len = num::min(in_band(rng, D::length), target - laid + D::length.min);
     const double hi = length - D::clear - D::fade - len;
     if (hi <= lo) break;
     const double from = ge::core::range(rng, lo, hi);
@@ -68,9 +67,9 @@ std::vector<Drift> deal_drifts(uint32_t sub, double length, std::span<const Kick
 double drift_at(std::span<const Drift> drifts, double s) {
   double w = 0;
   for (const Drift& d : drifts) {
-    const double into = js::min(s - (d.from - D::fade), d.to + D::fade - s);
+    const double into = num::min(s - (d.from - D::fade), d.to + D::fade - s);
     if (into <= 0) continue;
-    w = js::max(w, ge::core::smoothstep(0, D::fade, into));
+    w = num::max(w, ge::core::smoothstep(0, D::fade, into));
   }
   return w;
 }
