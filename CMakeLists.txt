@@ -79,8 +79,8 @@ endif()
 add_library(ge_racing STATIC engine/racing/tape.cpp)
 target_link_libraries(ge_racing PUBLIC ge_core)
 
-# The demo game's simulation: game5's engine/ ported, one .cpp per oracle module. It is
-# the demo, not part of the published engine, so only the top-level build makes it.
+# The demo game's simulation (games/fall_line/sim). It is the demo, not part of the
+# published engine, so only the top-level build makes it.
 if(PROJECT_IS_TOP_LEVEL)
   file(GLOB_RECURSE FALL_LINE_SIM_SOURCES CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/games/fall_line/sim/*.cpp)
