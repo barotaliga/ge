@@ -49,16 +49,19 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   only directory that includes `webgpu.h`.
 - **`engine/render`**: generic rendering mechanisms (the pass table and named targets,
   GPU-driven instance families, the heightfield clipmap, shadows, the sky tables and
-  clouds, TAA-U, post, compute particles, skinning). A pass owns its GPU buffers and
-  exposes `prepare(view)` and `encode(pass)`. **`docs/rendering.md` is the plan** for
-  this layer and `engine/gpu`.
+  clouds, TAA-U, post, compute particles, skinning), built as `ge_render` with the GPU. A
+  pass owns its GPU buffers and exposes `prepare(view)` and `encode(pass)`; the frame core
+  (the view and camera, the pass table, the sky, the terrain, post) is built (M7a).
+  **`docs/rendering.md` is the plan** for this layer and `engine/gpu`.
 - **`engine/audio`**: the synth: voice definitions, a DSP graph
   (oscillators, noise, biquads, envelopes, echo), racks and `play_def`. It runs on the
   platform's audio stream.
 - **`engine/ui`**: the immediate-mode 2D layer (rects, images, SDF text), plus Dear
   ImGui behind `GE_DEV_UI`.
-- **`games/fall_line/app`**: Fall Line's presentation: it builds the frame from
-  `GameState`, Fall Line's own shaders and looks, its HUD and cards, and its sound beds.
+- **`games/fall_line/app`**: Fall Line's presentation, the `fall_line_app` library (which
+  the window and the game's GPU labs link): its pass table over `engine/render`, the
+  `FrameView` it extracts (from named views now, from `GameState` once the run lands),
+  Fall Line's own looks, then its HUD and cards, and its sound beds.
 - **`engine/lab`**: the lab contract and the `labs` runner (`docs/labs.md`): how any
   subsystem, plugin or game declares a lab, the CPU raster and PNG writer its pictures are
   drawn with, and the report, contact sheet and digest a run leaves. Labs themselves sit in
