@@ -41,5 +41,9 @@ one game's: which maps a game races, its modes and its strings stay in the game.
 
 `plugins/mountain/labs/`: `level` (the map from above, captioned, with its gate table),
 `analyze` (the rule book over seeds, `--refusals` for why attempts were thrown away) and
-`mapgen-cost` (`PRESET=release`). A change to mapgen or analysis runs `level` and `analyze`
-before and after (`--tag=before`, then `--compare=before`). The `labs` skill owns how.
+`mapgen-cost` (`PRESET=release`), and for the ski area `resort` (the area from above and its
+courses, with its lifts, runs and courses as tables and the attempts tried) and `junctions`
+(where the groomed snow steps where runs meet, the worst drawn as relief). A change to mapgen or
+analysis runs `level` and `analyze` before and after (`--tag=before`, then `--compare=before`);
+a change to the ski area's build runs `resort` and `junctions` the same way. The `labs` skill
+owns how.

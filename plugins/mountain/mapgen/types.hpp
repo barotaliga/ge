@@ -174,6 +174,16 @@ struct Hub {
   std::vector<double> bottom;
 };
 
+// R28 — A COURSE down a ski area: named by the run it starts on, the colour its steepest stretch
+// measures, the runs it skis in order, its length and its fall, m.
+struct Course {
+  std::string id;
+  PisteGrade grade;
+  std::vector<std::string> runs;
+  double length;
+  double drop;
+};
+
 // R30 — A WIND TUNNEL: a horizontal lift along the hub that blows a skier from its entrance to its
 // exit, its line every few metres on the ground (`s` its arc, `heading` the way the wind blows).
 struct WindTunnel {

@@ -83,7 +83,8 @@ bool in_approach(std::span<const StationPad> pads, double x, double z, double ke
   return false;
 }
 
-// How far (x, z) stands off a lift's line from bottom to top, m.
+}  // namespace
+
 double off_line(const LiftPlan& l, double x, double z) {
   const double ex = l.top.x - l.bottom.x;
   const double ez = l.top.z - l.bottom.z;
@@ -92,8 +93,6 @@ double off_line(const LiftPlan& l, double x, double z) {
       0.0, num::min(1.0, ((x - l.bottom.x) * ex + (z - l.bottom.z) * ez) / (len2 == 0 ? 1 : len2)));
   return hypot(x - (l.bottom.x + ex * k), z - (l.bottom.z + ez * k));
 }
-
-}  // namespace
 
 double near_room(const RampRoom& r, double x, double z) {
   const double ex = r.to.x - r.from.x;
