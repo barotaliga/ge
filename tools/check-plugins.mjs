@@ -19,7 +19,7 @@ import { join } from "node:path";
 const ROOT = new URL("..", import.meta.url).pathname;
 // Which engine target each engine/ directory is built into (the root CMakeLists.txt). A new
 // engine directory adds its row here; the check says so if one is missing.
-const ENGINE_TARGET = { core: "core", loop: "core" };
+const ENGINE_TARGET = { core: "core", loop: "core", lab: "lab" };
 
 const errors = [];
 const err = (msg) => errors.push(msg);
@@ -80,8 +80,11 @@ for (const [name, decl] of plugins) {
   const allowed = new Set([name, ...decl.plugins, ...engineDirs.filter((d) => decl.engine.includes(ENGINE_TARGET[d]))]);
   for (const f of files(`plugins/${name}`)) {
     if (/\.(cpp|hpp|h)$/.test(f)) {
+      // A plugin's labs/ is built into the `labs` executable, not the plugin (docs/labs.md), so
+      // it may also include the lab framework.
+      const isLab = f.startsWith(`plugins/${name}/labs/`);
       for (const root of includes(f)) {
-        if (!allowed.has(root)) {
+        if (!allowed.has(root) && !(isLab && root === "lab")) {
           err(`${f} includes "${root}/...", which plugins/${name} does not declare. Add it to ENGINE or ` +
             `PLUGINS in plugins/${name}/CMakeLists.txt if the dependency is right; a plugin never ` +
             `includes a game (skill: plugins).`);

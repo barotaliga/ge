@@ -3,6 +3,8 @@
 #                headers, plus libm, solar and output compiled)
 #   ge_<plugin>  one per plugins/<plugin>/ (cmake/Plugins.cmake): ge_racing (tape, records,
 #                standings), ge_mountain (the generated ski mountain: mapgen, analysis)
+#   ge_lab       the lab framework (engine/lab: the contract, the runner, the raster, the PNG)
+#   labs         the lab executable: every labs/ directory's files (engine, plugins, games)
 #   <x>_test     one executable per tests/<x>_test.cpp, registered with CTest
 #   ge_fp        the FP flags of the DETERMINISM CONTRACT (AGENTS.md), linked by
 #                ge_core and published as ge::fp; a target that drops them can
@@ -92,6 +94,23 @@ if(PROJECT_IS_TOP_LEVEL)
     get_filename_component(game_dir ${game_cmake} DIRECTORY)
     add_subdirectory(${game_dir})
   endforeach()
+
+  # The lab framework, and the one `labs` executable every lab is linked into (docs/labs.md).
+  # A lab registers itself from a static initializer, so labs are compiled into the executable,
+  # never into a static library (whose unreferenced objects the linker would drop). Any file in
+  # a `labs/` directory under engine/lab, plugins/<name> or games/<name> is part of it, and it
+  # links every plugin, so a plugin's labs need no wiring. Labs are this tree's tooling, never
+  # published.
+  add_library(ge_lab STATIC engine/lab/lab.cpp engine/lab/report.cpp engine/lab/runner.cpp
+    engine/lab/raster.cpp engine/lab/png.cpp)
+  target_link_libraries(ge_lab PUBLIC ge_core)
+  file(GLOB GE_LAB_SOURCES CONFIGURE_DEPENDS
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine/lab/labs/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/plugins/*/labs/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/games/*/labs/*.cpp)
+  get_property(GE_PLUGIN_TARGETS GLOBAL PROPERTY GE_PLUGIN_TARGETS)
+  add_executable(labs engine/lab/main.cpp ${GE_LAB_SOURCES})
+  target_link_libraries(labs PRIVATE ge_lab ge_core ${GE_PLUGIN_TARGETS})
 
   enable_testing()
   add_subdirectory(tests)

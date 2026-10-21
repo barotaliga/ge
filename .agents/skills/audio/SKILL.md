@@ -33,3 +33,8 @@ Put both meters in the PR.
 
 - A `SoundDef` is plain data, one field per parameter the graph reads.
 - One master and the two faders (`mix_of`). Nothing else changes the volume.
+
+## Labs
+
+M9 lands `audition`: render each voice and bed to a buffer offline and meter it (level,
+spectrum, envelope) as metrics, with its waveform as a captioned picture (the `labs` skill).

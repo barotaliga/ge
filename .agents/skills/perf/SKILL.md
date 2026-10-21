@@ -53,3 +53,10 @@ The engine exists to be fast (G2). Speed is proven by measurement.
 
 When a perf ledger exists (`docs/perf.md`), add a row: what changed, before and after,
 and how.
+
+## Labs
+
+A cost claim is a `bench` lab run before and after: `make lab LAB=<bench> PRESET=release
+ARGS=--tag=before`, then `--compare=before`. Wall-clock metrics are `Det::measured` (compared,
+never hashed), and the digest still holds the work's OUTPUT, so a speed-up that changed what
+was built shows as a digest move. `mapgen-cost` is the worked example.
