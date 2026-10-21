@@ -228,7 +228,7 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 | `level` | picture | plugin:mountain | `plugins/mountain/mapgen` | M4a (now) |
 | `analyze` | sim | plugin:mountain | `plugins/mountain/analysis` | M4a (now) |
 | `mapgen-cost` | bench | plugin:mountain | `plugins/mountain/mapgen` | M4a (now) |
-| `resort`, `junctions` | picture | plugin:mountain | the ski area | M4b3b, M4b3d |
+| `resort`, `junctions` | picture | plugin:mountain | the ski area | M4b3d |
 | `routes`, `skijump-hills` | picture | plugin:mountain | the routes, the jump hills | M4c |
 | `real-faces` | picture | plugin:mountain | the real faces | M4d |
 | `sim` | drive | game:fall_line | the step, the bot | M5 |
