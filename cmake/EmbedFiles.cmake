@@ -2,7 +2,8 @@
 # a C++ file holding every consumer skill (consumer-skills/<name>/SKILL.md), every scaffold file
 # (scaffold/**) and the engine's VERSION, as byte arrays behind ge::cli::embedded_files() and
 # ge::cli::engine_version() (engine/cli/embedded.hpp). Byte arrays, not string literals: no
-# compiler caps their length and no file's text can end one early. Inputs: ROOT, OUT.
+# compiler caps their length and no file's text can end one early. Line ends are LF on every
+# platform. Inputs: ROOT, OUT.
 cmake_minimum_required(VERSION 3.25)
 
 file(GLOB_RECURSE files LIST_DIRECTORIES false RELATIVE "${ROOT}"
@@ -18,7 +19,12 @@ set(arrays "")
 set(rows "")
 set(i 0)
 foreach(file IN LISTS files)
-  file(READ "${ROOT}/${file}" hex HEX)
+  # Every '\r' dropped: a Windows checkout turns LF into CRLF, and ge writes and hashes the same
+  # bytes on every platform (read_text drops '\r' too).
+  file(READ "${ROOT}/${file}" text)
+  string(REPLACE "\r" "" text "${text}")
+  file(WRITE "${OUT}.lf" "${text}")
+  file(READ "${OUT}.lf" hex HEX)
   string(LENGTH "${hex}" digits)
   math(EXPR size "${digits} / 2")
   # 32 bytes a line keeps the generated file readable in a debugger.
@@ -50,4 +56,4 @@ std::string_view engine_version() { return \"${version}\"; }
 ")
 # Only a changed file is rewritten, so an unrelated rebuild does not recompile it.
 file(COPY_FILE "${OUT}.tmp" "${OUT}" ONLY_IF_DIFFERENT)
-file(REMOVE "${OUT}.tmp")
+file(REMOVE "${OUT}.tmp" "${OUT}.lf")
