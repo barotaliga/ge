@@ -37,7 +37,7 @@ std::optional<mapgen::Level> build_map(ge::lab::Lab& lab, double seed) {
   opts.region = region_named(lab.arg("region"));
   if (!opts.region) {
     lab.fail("--region=" + lab.arg("region") + " is not a region",
-             "Use alpine, fell, continental or maritime (mapgen/regions.hpp).");
+             "next: rerun with alpine, fell, continental or maritime (mapgen/regions.hpp).");
     return std::nullopt;
   }
   try {

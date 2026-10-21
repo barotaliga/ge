@@ -1,0 +1,43 @@
+// THE GAME'S SIMULATION: the whole state of a run and the fixed step that advances it. The game
+// is decided here; a renderer, a sound or a HUD only ever reads a GameState. It is deterministic:
+// the same seed and the same inputs give the same bits on every platform, so a replay, a ghost
+// and every test reproduce. Time is the step count; every random draw comes from `rng`, in step
+// order (skill: sim-system).
+//
+// ge:summary The game's state and its fixed 120 Hz step: create_game, step, digest
+// ge:keywords sim simulation state step create_game digest fixed-step determinism rng input
+// ge:skill sim-system
+// ge:test tests/sim_game_test.cpp
+#pragma once
+
+#include <cstdint>
+
+#include "core/prng.hpp"
+
+namespace {{ident}}::sim {
+
+inline constexpr double kStepHz = 120.0;
+inline constexpr double kDt = 1.0 / kStepHz;
+
+// What the player (or a bot, or an agent) does this step.
+struct Input {
+  double steer = 0;  // -1 (left) .. 1 (right)
+};
+
+struct GameState {
+  uint32_t seed = 0;
+  int64_t steps = 0;     // the one clock: a run is steps * kDt seconds old
+  ge::core::Rng rng{0};  // every random draw, in step order
+  double x_m = 0;        // the demo body, across the field
+  double vx_mps = 0;
+};
+
+GameState create_game(uint32_t seed);
+
+// One fixed step of kDt seconds.
+void step(GameState& state, const Input& input);
+
+// FNV-1a 64 over the state's bits: two runs with equal digests are the same run.
+uint64_t digest(const GameState& state);
+
+}  // namespace {{ident}}::sim

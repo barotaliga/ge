@@ -1,0 +1,54 @@
+# {{name}}: the build. Targets:
+#   {{ident}}_sim  the game's simulation (sim/): state, the fixed step; links ge::core
+#   labs           every labs/*.cpp in one executable over ge::lab (`make lab LAB=<id>`)
+#   <x>_test       one executable per tests/<x>_test.cpp, registered with CTest
+#   ge             the engine's command line, from the pinned release (cmake/engine.cmake)
+cmake_minimum_required(VERSION 3.25)
+project({{name}} LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+include(cmake/engine.cmake)
+
+# This repo's own hygiene. The FP flags are not here: ge::core carries them (ge::fp) to every
+# target that links it, and nothing here may loosen them (ge doctor checks).
+option(GAME_SANITIZE "Build with address + undefined sanitizers" OFF)
+add_library(game_flags INTERFACE)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+  target_compile_options(game_flags INTERFACE
+    -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wno-sign-conversion -Werror)
+  if(GAME_SANITIZE)
+    target_compile_options(game_flags INTERFACE -fsanitize=address,undefined -fno-omit-frame-pointer)
+    target_link_options(game_flags INTERFACE -fsanitize=address,undefined)
+  endif()
+elseif(MSVC)
+  target_compile_options(game_flags INTERFACE /W4 /permissive- /WX)
+endif()
+
+file(GLOB_RECURSE GAME_SIM_SOURCES CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/sim/*.cpp)
+add_library({{ident}}_sim STATIC ${GAME_SIM_SOURCES})
+target_include_directories({{ident}}_sim PUBLIC ${PROJECT_SOURCE_DIR})
+target_link_libraries({{ident}}_sim PUBLIC ge::core $<BUILD_INTERFACE:game_flags>)
+
+# A lab registers itself from a static initializer, so labs compile into the executable, never
+# into a library whose unreferenced objects the linker would drop (skill: labs).
+file(GLOB GAME_LAB_SOURCES CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/labs/*.cpp)
+add_executable(labs ${GAME_LAB_SOURCES})
+target_link_libraries(labs PRIVATE {{ident}}_sim ge::lab)
+
+enable_testing()
+file(GLOB GAME_TEST_SOURCES CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/tests/*_test.cpp)
+foreach(src ${GAME_TEST_SOURCES})
+  get_filename_component(name ${src} NAME_WE)
+  add_executable(${name} ${src} ${PROJECT_SOURCE_DIR}/tests/main.cpp)
+  target_link_libraries(${name} PRIVATE {{ident}}_sim)
+  add_test(NAME ${name} COMMAND ${name})
+endforeach()
+
+# Every lab at its smoke flags, twice in one process: a digest that moves between the two runs is
+# a determinism break.
+add_test(NAME labs_smoke COMMAND labs --all --smoke --repeat=2 --quiet
+  --out=${PROJECT_BINARY_DIR}/previews)

@@ -4,6 +4,8 @@
 #   ge_<plugin>  one per plugins/<plugin>/ (cmake/Plugins.cmake): ge_racing (tape, records,
 #                standings), ge_mountain (the generated ski mountain: mapgen, analysis)
 #   ge_lab       the lab framework (engine/lab: the contract, the runner, the raster, the PNG)
+#   ge_cli, ge   the ge command line (engine/cli: ge new, ge skills sync, ge doctor, ge lessons;
+#                cmake/Cli.cmake)
 #   fall_line_sim  Fall Line's simulation (games/fall_line: create_game, step, the bot)
 #   labs         the lab executable: every labs/ directory's files (engine, plugins, games)
 #   ge_platform  the window, input and the frame clock over SDL3 (engine/platform; GE_PLATFORM,
@@ -15,8 +17,9 @@
 #                ge_core and published as ge::fp; a target that drops them can
 #                silently change the bits a simulation produces
 #   ge_flags     warnings, -Werror, sanitizers: this tree only, never published
-# ge_core, ge_fp and every plugin target are installed and published as ge::core,
-# ge::fp and ge::<plugin> (cmake/Packaging.cmake, docs/publishing.md).
+# ge_core, ge_fp, ge_lab and every plugin target are installed and published as ge::core,
+# ge::fp, ge::lab and ge::<plugin>, and the ge executable is installed to bin/
+# (cmake/Packaging.cmake, docs/publishing.md).
 cmake_minimum_required(VERSION 3.25)
 project(gameengine2 LANGUAGES CXX)
 
@@ -98,6 +101,17 @@ if(GE_GPU)
   ge_embed_wgsl(ge_gpu engine/gpu/test_scene.wgsl)
 endif()
 
+# The lab framework (engine/lab: the contract, the runner, the raster, the PNG), published as
+# ge::lab so a game's labs plug into the same contract as the engine's (docs/labs.md).
+add_library(ge_lab STATIC engine/lab/lab.cpp engine/lab/report.cpp engine/lab/runner.cpp
+  engine/lab/raster.cpp engine/lab/png.cpp)
+target_link_libraries(ge_lab PUBLIC ge_core)
+
+# The ge command line (engine/cli, cmake/Cli.cmake): built here too when a game pulls the engine
+# in, so the game runs the ge of the engine it pins.
+include(cmake/Cli.cmake)
+ge_add_cli()
+
 # The plugins: every plugins/<name>/CMakeLists.txt, each one ge_add_plugin(...) call. A new
 # plugin is a new directory; nothing is listed here (docs/architecture.md § Plugins).
 include(cmake/Plugins.cmake)
@@ -117,15 +131,12 @@ if(PROJECT_IS_TOP_LEVEL)
     add_subdirectory(${game_dir})
   endforeach()
 
-  # The lab framework, and the one `labs` executable every lab is linked into (docs/labs.md).
+  # The one `labs` executable every lab is linked into (docs/labs.md).
   # A lab registers itself from a static initializer, so labs are compiled into the executable,
   # never into a static library (whose unreferenced objects the linker would drop). Any file in
   # a `labs/` directory under engine/lab, plugins/<name> or games/<name> is part of it, and it
-  # links every plugin, so a plugin's labs need no wiring. Labs are this tree's tooling, never
-  # published.
-  add_library(ge_lab STATIC engine/lab/lab.cpp engine/lab/report.cpp engine/lab/runner.cpp
-    engine/lab/raster.cpp engine/lab/png.cpp)
-  target_link_libraries(ge_lab PUBLIC ge_core)
+  # links every plugin, so a plugin's labs need no wiring. This tree's labs are never published;
+  # a game builds its own `labs` executable over ge::lab.
   file(GLOB GE_LAB_SOURCES CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/engine/lab/labs/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/plugins/*/labs/*.cpp

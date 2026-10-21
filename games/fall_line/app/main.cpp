@@ -69,7 +69,7 @@ int main(int argc, char** argv) {
   if (!parse(argc, argv, args)) {
     out::error(
         "fall_line: unknown flag. Usage: fall_line [--frames=N] [--size=WxH] "
-        "[--no-vsync]");
+        "[--no-vsync]; next: rerun with those flags only.");
     return 2;
   }
   auto window =

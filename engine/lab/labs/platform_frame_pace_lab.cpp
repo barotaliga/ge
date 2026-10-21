@@ -34,7 +34,7 @@ void run(ge::lab::Lab& lab) {
   const int height = static_cast<int>(lab.arg_num("height"));
   const bool vsync = !lab.arg_bool("no-vsync");
   if (frames < 2 || width <= 0 || height <= 0) {
-    lab.fail("--frames must be at least 2 and the size positive", "Pass --frames=120.");
+    lab.fail("--frames must be at least 2 and the size positive", "next: rerun with --frames=120.");
     return;
   }
   lab.metric("frames", frames, "count");

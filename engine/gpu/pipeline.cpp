@@ -34,7 +34,8 @@ wgpu::ShaderModule create_shader(Device& device, std::string_view wgsl, std::str
                                     " Run make shaders-check for every shader's errors; "
                                     "skill: gpu.");
                        } else {
-                         out::warn("gpu: shader " + where + ": " + to_string(m.message));
+                         out::warn("gpu: shader " + where + ": " + to_string(m.message) +
+                                   " Run make shaders-check; skill: gpu.");
                        }
                      }
                    }));
@@ -50,7 +51,7 @@ uint32_t PipelineSet::note(Device& device, std::string label) {
                "real GPU, so this is a hitch: add it to the manifest; skill: gpu, § Pipelines.");
   }
   if (label.empty()) {
-    out::warn("gpu: a pipeline with no label; give it one, errors and captures name it.");
+    out::warn("gpu: a pipeline with no label; next: give it one, errors and captures name it.");
   }
   Entry entry;
   entry.label = std::move(label);
