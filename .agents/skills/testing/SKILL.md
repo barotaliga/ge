@@ -17,7 +17,8 @@ and prints `ok` or `FAIL` per test.
   registered by hand.
 - `ge::test::root_path("tests/golden/x.txt")` opens files relative to the repo.
 - `tests/golden.hpp`: `golden_rows(path)` returns rows of `uint64_t` hex words, and
-  `as_double(u)` reinterprets them.
+  `as_double(u)` reinterprets them. A codec's strings (the tape's base64) go in a text file
+  read with `golden_words(path)`, with arbitrary text hex-encoded (`unhex`).
 
 ## Golden files
 
