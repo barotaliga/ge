@@ -13,13 +13,16 @@
 //     no kicker over a junction (R9, R17, R27); and once access is reckoned on the pressed
 //     mountain every piste can still be skied again and every lift is reached (R29), no bottom
 //     station stands on a run, and every ramp off a top falls from its pad onto its own run's
-//     snow (R26).
+//     snow (R26); and once the mountain's own features are laid no off-piste kicker or cliff
+//     stands on a run (R4, R22), every finish on the floor and valley station is inside the hub
+//     (R29), both wind tunnels are laid along it (R30), and every run is still packed along its
+//     line but in its drifts.
 //
 // A debug build (sanitizers) holds the first rows; a release build holds them all.
 //
 // ge:summary The ski-area build held by its own checks: determinism, a digest golden, the rules
 // ge:keywords test resort ski-area determinism digest golden walk access lanes drag-lift graded
-// ge:keywords ramps stations-clear measured-access
+// ge:keywords ramps stations-clear measured-access features hub wind-tunnels off-kickers cliffs
 // ge:skill testing mountain
 #include <chrono>
 #include <cstdio>
@@ -36,8 +39,10 @@
 #include "check.hpp"
 #include "golden.hpp"
 #include "mountain/mapgen/access_build.hpp"
+#include "mountain/mapgen/cliffs.hpp"
 #include "mountain/mapgen/drift.hpp"
 #include "mountain/mapgen/generate.hpp"
+#include "mountain/mapgen/hub.hpp"
 #include "mountain/mapgen/links.hpp"
 #include "mountain/mapgen/regions.hpp"
 #include "mountain/mapgen/resort_build.hpp"
@@ -160,6 +165,22 @@ std::vector<std::pair<std::string, std::string>> sections(const mg::ResortAttemp
     }
   }
   out.emplace_back("ramps", d.hex());
+  d = {};
+  for (const mg::Kicker& k : a.off_kickers)
+    for (const double v : {k.x, k.z, k.y, k.heading, k.height, k.ramp, k.landing, k.width})
+      d.f64(v);
+  for (const mg::Cliff& c : a.cliffs)
+    for (const double v : {c.x, c.z, c.y, c.heading, c.drop, c.shelf, c.width}) d.f64(v);
+  out.emplace_back("features", d.hex());
+  d = {};
+  for (const double v : a.hub.hub.top) d.f64(v);
+  for (const double v : a.hub.hub.bottom) d.f64(v);
+  for (const mg::WindTunnel& t : a.tunnels) {
+    d.str(t.id);
+    for (const auto& p : t.points)
+      for (const double v : {p.x, p.z, p.y, p.s}) d.f64(v);
+  }
+  out.emplace_back("hub", d.hex());
   out.emplace_back("rng", std::to_string(a.rng.a));
   return out;
 }
@@ -225,6 +246,22 @@ void check_links(const mg::ResortAttempt& a, const std::string& where) {
   }
 }
 
+// Every run is packed along its line but in its drifts; `read` names where to look when not.
+void check_packed(const mg::ResortAttempt& a, const mg::BuiltRun& b, const std::string& at,
+                  const char* read) {
+  for (const mg::TrackPoint& p : b.walked.track.points) {
+    // A grid cell reads the line a cell's width either side of the point: clear of a drift's
+    // fade by that much.
+    if (mg::drift_at(b.drifts, p.s - 4) > 0 || mg::drift_at(b.drifts, p.s + 4) > 0) continue;
+    const int c = int(std::lround(p.x / a.packed.cell));
+    const int q = int(std::lround(p.z / a.packed.cell));
+    if (c < 0 || q < 0 || c >= a.packed.cols || q >= a.packed.rows) continue;
+    const float v = a.packed.data[size_t(q) * size_t(a.packed.cols) + size_t(c)];
+    CHECK_MSG(v > 0.99f,
+              cat({at, ": unpacked on its line at s=", std::to_string(p.s), "; read ", read}));
+  }
+}
+
 // R23, R27 over the runs graded and pressed: each falls from its start to its end, is packed
 // along its line but in its drifts, and carries no kicker or drop over a junction down it.
 void check_graded(const mg::ResortAttempt& a, const std::string& where) {
@@ -241,17 +278,7 @@ void check_graded(const mg::ResortAttempt& a, const std::string& where) {
     CHECK_MSG(
         pts.front().y > pts.back().y,
         at + ": ends higher than it starts once pressed; read stamp_run in network_stamp.cpp");
-    for (const mg::TrackPoint& p : pts) {
-      // A grid cell reads the line a cell's width either side of the point: clear of a drift's
-      // fade by that much.
-      if (mg::drift_at(b.drifts, p.s - 4) > 0 || mg::drift_at(b.drifts, p.s + 4) > 0) continue;
-      const int c = int(std::lround(p.x / a.packed.cell));
-      const int q = int(std::lround(p.z / a.packed.cell));
-      if (c < 0 || q < 0 || c >= a.packed.cols || q >= a.packed.rows) continue;
-      const float v = a.packed.data[size_t(q) * size_t(a.packed.cols) + size_t(c)];
-      CHECK_MSG(v > 0.99f, cat({at, ": unpacked on its line at s=", std::to_string(p.s),
-                                "; read stamp_run in network_stamp.cpp"}));
-    }
+    check_packed(a, b, at, "stamp_run in network_stamp.cpp");
     for (const mg::Kicker& k : b.kickers) {
       const double ks = k.s.value_or(0);
       for (const double s : junctions[r]) {
@@ -321,6 +348,45 @@ void check_access(const mg::ResortAttempt& a, const std::string& where) {
   }
 }
 
+// R4, R22, R29, R30 over the mountain's own features: no off-piste kicker or cliff on a run, every
+// finish on the floor and every valley station inside the hub, both tunnels laid along it, and
+// every run still packed along its line but in its drifts.
+void check_features(const mg::ResortAttempt& a, const std::string& where) {
+  mg::NetHit hit;
+  for (const mg::Kicker& k : a.off_kickers) {
+    CHECK_MSG(
+        !a.net.covers(k.x, k.z, k.landing, hit),
+        cat({where, " kicker ", k.id, " stands on run ", a.built[size_t(hit.run)].walked.spec.id,
+             " (R4); read the distance in resort_features.cpp"}));
+  }
+  for (const mg::Cliff& c : a.cliffs) {
+    for (const mg::PlanPoint& p : mg::cliff_footprint(c)) {
+      CHECK_MSG(
+          !a.net.covers(p.x, p.z, 0, hit),
+          cat({where, " cliff ", c.id, " stands on run ", a.built[size_t(hit.run)].walked.spec.id,
+               " (R22); read the distance in resort_features.cpp"}));
+    }
+  }
+  for (const mg::BuiltRun& b : a.built) {
+    const mg::WalkedRun& w = b.walked;
+    if (w.into || w.spec.to) continue;
+    const mg::TrackPoint& end = w.track.points.back();
+    CHECK_MSG(mg::outside_hub(a.hub.hub, end.x, end.z) == 0,
+              cat({where, " run ", w.spec.id, " finishes outside the hub (R29); read plan_hub"}));
+  }
+  for (const mg::LiftPlan& l : a.lift_plans) {
+    if (l.bottom.z < a.plan.base_z - 1) continue;
+    CHECK_MSG(
+        mg::outside_hub(a.hub.hub, l.bottom.x, l.bottom.z) == 0,
+        cat({where, " lift ", l.id, "'s bottom stands outside the hub (R29); read plan_hub"}));
+  }
+  CHECK_MSG(a.tunnels.size() == 2 && a.tunnels[0].length > 0 && a.tunnels[1].length > 0,
+            where + ": the hub has not its two wind tunnels (R30); read lay_tunnels in hub.cpp");
+  for (const mg::BuiltRun& b : a.built) {
+    check_packed(a, b, where + " run " + b.walked.spec.id, "trim_drifts in drift.cpp");
+  }
+}
+
 // Builds one attempt as far as it stands, checking each stage's rules as it is reached when
 // `check`; the last stage it reached and its sections.
 std::vector<std::pair<std::string, std::string>> build(const Case& c, int attempt,
@@ -340,6 +406,10 @@ std::vector<std::pair<std::string, std::string>> build(const Case& c, int attemp
         if (!mg::resort_access(a)) {
           stage = "access";
           if (check) check_access(a, key);
+          if (!mg::resort_features(a)) {
+            stage = "features";
+            if (check) check_features(a, key);
+          }
         }
       }
     }
@@ -386,14 +456,15 @@ TEST(resort_builds_are_deterministic_and_keep_their_digest) {
                        "\nIf the move is meant, rewrite ", kGolden,
                        " with GE_GOLDEN_WRITE=1 and say why in the PR."}));
       }
-      if (first[0].second == "access") through++;
+      if (first[0].second == "features") through++;
       const double ms =
           std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
       std::printf("  %s: through %s, %s runs, built twice in %.0f ms\n", key.c_str(),
                   first[0].second.c_str(), first[4].second.c_str(), ms);
     }
   }
-  CHECK_MSG(through > 0, "no attempt held reached access; the later stages' rules went unchecked");
+  CHECK_MSG(through > 0,
+            "no attempt held reached its features; the later stages' rules went unchecked");
   if (write) {
     std::ofstream out(ge::test::root_path(kGolden));
     out << "# seed region attempt, then each section of the area built "

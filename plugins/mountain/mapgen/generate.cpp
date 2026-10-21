@@ -22,6 +22,7 @@
 #include "mountain/mapgen/forest.hpp"
 #include "mountain/mapgen/grades.hpp"
 #include "mountain/mapgen/kickers.hpp"
+#include "mountain/mapgen/query.hpp"
 #include "mountain/mapgen/regions.hpp"
 #include "mountain/mapgen/spawn.hpp"
 #include "mountain/mapgen/sun.hpp"
@@ -81,7 +82,9 @@ std::variant<Level, std::string> attempt_level(double seed, int attempt, int lap
       lay_track_kickers(rng, piste.track, grade, track_drops);
   std::vector<Cliff> drops = publish_drops(piste.track, track_drops);
   Corridor corridor = stamp_corridor(piste, ground);
-  std::vector<Kicker> off_kickers = lay_off_kickers(rng, plan, ground, piste);
+  std::vector<Kicker> off_kickers = lay_off_kickers(rng, plan, ground, [&](double x, double z) {
+    return nearest_track_point(piste.track, x, z).distance;
+  });
   std::vector<Cliff> cliffs = lay_cliffs(sub, plan, ground, piste.track, off_kickers, drops);
 
   // Publish the heights the ground actually carries.

@@ -48,10 +48,10 @@ std::vector<TrackKicker> lay_track_kickers(ge::core::Rng& rng, Track& track, con
 // Publish the piste's kickers against the finished line (`K1…`).
 std::vector<Kicker> publish_track_kickers(const Track& track, std::span<const TrackKicker> kickers);
 
-// R4 — stand the natural kickers on the face's rolls clear of the piste, facing down the fall
-// line, and stamp them into the ground (`X1…`).
+// R4 — stand the natural kickers on the face's rolls clear of the runs (`distance_to`), facing
+// down the fall line, and stamp them into the ground (`X1…`).
 std::vector<Kicker> lay_off_kickers(ge::core::Rng& rng, const TerrainPlan& plan,
-                                    ge::core::Heightfield& ground, const Piste& piste);
+                                    ge::core::Heightfield& ground, const DistanceTo& distance_to);
 
 // Add one kicker's profile to the ground in plan.
 void stamp_kicker(ge::core::Heightfield& ground, double x, double z, double heading, double height,

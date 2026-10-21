@@ -114,8 +114,8 @@ StageResult resort_access(ResortAttempt& a) {
     std::vector<std::string> froms;
     froms.reserve(runs.size());
     for (const RampRun& r : runs) froms.push_back(r.spec->from);
-    const std::vector<StationPad> drag_tops = drag_tops_of(a.lift_plans, froms, height);
-    for (auto& [id, off] : lay_ramps(a.ground, drag_tops, runs, cover, a.lift_plans, nullptr)) {
+    a.drag_tops = drag_tops_of(a.lift_plans, froms, height);
+    for (auto& [id, off] : lay_ramps(a.ground, a.drag_tops, runs, cover, a.lift_plans, nullptr)) {
       a.ramps[id] = std::move(off);
     }
   }

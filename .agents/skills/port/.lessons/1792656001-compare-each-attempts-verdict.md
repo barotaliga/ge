@@ -13,3 +13,7 @@ run: refused or not, and the refusal's text. For the access stage (M4b3b) all tw
 attempts gave the same verdict and the same reason ("R26: D1 stands on a run wherever its station
 is moved", and so on). That showed that the half of the attempts that are refused are refused by
 design, and not because of a bug in the port.
+For the features stage (M4b3c) the same script also printed the counts of each attempt that
+stands: ramps, off-piste kickers, cliffs, tunnel length, hub columns, drifts left after the
+trim, and whether a crust was laid. All six standing attempts matched on every count. A count
+that matches across a stage is good evidence that the stage was carried over whole.

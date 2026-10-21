@@ -1,7 +1,7 @@
 // R25–R30 — A RESORT BUILT, stage by stage: the massif, the lifts and their pads, every run
 // walked, graded and pressed in order, the lanes and drags that make every piste skiable again,
 // the mountain's own features round them, the hub, the woods and the courses. The
-// stages so far run through the access; the rest land under docs/goals.md M4b3–M4b5.
+// stages so far run through the features; the rest land under docs/goals.md M4b3–M4b5.
 //
 // THE SHAPE OF THE BUILD. One attempt's state is a `ResortAttempt`, and each stage is a function
 // over it that answers a refusal (why the attempt is given up) or nothing; the build runs
@@ -22,6 +22,7 @@
 
 #include "core/heightfield.hpp"
 #include "core/prng.hpp"
+#include "mountain/mapgen/hub.hpp"
 #include "mountain/mapgen/lift_chain.hpp"
 #include "mountain/mapgen/links.hpp"
 #include "mountain/mapgen/net_index.hpp"
@@ -83,8 +84,15 @@ struct ResortAttempt {
   // 5. the ramps off every top, by its lift (a drag's top's too, on a leaning pad's area), and the
   // drag lifts settled on the pressed mountain
   RampsByLift ramps;
+  std::vector<StationPad> drag_tops;  // the drags' tops a run leaves, on an area whose pads lean
   int settled_drags = 0;
   int settled_home = 0;
+  // 6. the mountain's own features clear of the runs, the crust, the hub and its wind tunnels
+  std::vector<Kicker> off_kickers;
+  std::vector<Cliff> cliffs;
+  std::optional<ge::core::Heightfield> crust;
+  HubPlan hub{};
+  std::vector<WindTunnel> tunnels;
 };
 
 // A step's answer: why the attempt is refused, or nothing to go on.
@@ -123,5 +131,11 @@ StageResult resort_graded(ResortAttempt& a);
 // station slid clear of the runs (refused where one fits nowhere), the way to the peak's chair's
 // queue graded again, and the ramps off the drags' tops.
 StageResult resort_access(ResortAttempt& a);
+
+// 6. THE MOUNTAIN'S OWN, CLEAR OF THE RUNS (R4, R21, R22, R26, R29, R30): the off-piste kickers and
+// the cliffs kept off every run, pad, ramp and the way to the next queue; the wind crust folded
+// into the packed field; the hub laid across the floor and groomed (the drifts it reaches cut
+// back); the pads, the way and the ramps groomed; and the two wind tunnels on their beds.
+StageResult resort_features(ResortAttempt& a);
 
 }  // namespace ge::mountain::mapgen
