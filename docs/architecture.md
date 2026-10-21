@@ -23,8 +23,8 @@ engine/racing  ──►  engine/core            tape, records, standings; the d
 One direction of dependency, held by `tools/check-agents.sh` once each layer exists:
 
 - **`engine/core`**: the deterministic pool (port of the framework's `core/`): prng,
-  math, libm, js (JS semantics helpers), noise, heightfield, polyline, quat, solar and
-  output. It depends on nothing but the C++ standard library headers that do no I/O and
+  math, libm, js (JS semantics helpers), noise, heightfield, quat, solar and output
+  (the framework's `polyline` is not ported: game5 never calls it). It depends on nothing but the C++ standard library headers that do no I/O and
   no floating-point transcendentals: no `<cmath>` trig, exp or pow; `sqrt`, `fabs` and
   `floor` are allowed.
 - **`engine/racing`**: tape, records and standings (port of `racing/`). Depends on
@@ -116,8 +116,9 @@ ge: parity: core_math_test row 1834: hypot3 got 0x41fc7f55b85cfc98 want 0x41fc7f
     Check -ffp-contract=off for this target; skill: determinism.
 ```
 
-`engine/core/output` (M2) carries the convention. Until then, tests print in this
-shape through `tests/check.hpp`.
+`engine/core/output` (`status`, `info`, `warn`, `error`, `header`, `debug`) is the one
+channel every such line goes through; the host attaches the sink that prints it, and core
+itself does no I/O. Tests print in the same shape through `tests/check.hpp`.
 
 ## Determinism contract
 

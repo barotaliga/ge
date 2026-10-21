@@ -17,6 +17,17 @@ TEST(hypot_family_matches_oracle_bit_for_bit) {
     CHECK_BITS(ge::core::hypot3(a, b, c), as_double(row[5]));
     CHECK_BITS(ge::core::hypot4(a, b, c, d), as_double(row[6]));
     CHECK_BITS(ge::core::smoothstep(-std::fabs(c), std::fabs(d), a), as_double(row[7]));
+    CHECK_BITS(ge::core::lerp(a, b, c), as_double(row[8]));
+    CHECK_BITS(ge::core::approach(a, b, std::fabs(c)), as_double(row[9]));
+  }
+}
+
+// angleDiff(a, b) rows: a b want (tests/golden/core_math_angle.txt).
+TEST(angle_diff_matches_oracle_bit_for_bit) {
+  const auto rows = ge::test::golden_rows("tests/golden/core_math_angle.txt");
+  CHECK(rows.size() == 2100);
+  for (const auto& row : rows) {
+    CHECK_JS_BITS(ge::core::angle_diff(as_double(row[0]), as_double(row[1])), as_double(row[2]));
   }
 }
 

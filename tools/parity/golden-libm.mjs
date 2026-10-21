@@ -8,34 +8,15 @@
 // changed between majors (docs/research.md section 2). Math.pow in Node 24 is the HOST libm,
 // so the tables must also come from game5's reference platform: Linux x86-64 with glibc. The
 // script refuses anything else rather than writing tables the engine should not match.
-import { readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { requireOracleNode } from "./oracle-node.mjs";
 
 const argv = process.argv.slice(2);
 const at = argv.indexOf("--game5");
 const game5 = resolve(at >= 0 ? argv[at + 1] : "../game5");
 const ROWS = 2048;
-
-const pinned = readFileSync(resolve(game5, ".nvmrc"), "utf8").trim().replace(/^v/, "");
-const major = process.versions.node.split(".")[0];
-const glibc = process.report?.getReport().header.glibcVersionRuntime;
-if (major !== pinned.split(".")[0]) {
-  console.error(
-    `golden-libm: running Node ${process.versions.node}, but game5 pins Node ${pinned} ` +
-      `(${game5}/.nvmrc). Install that major from https://nodejs.org/dist/ and rerun with ` +
-      `make golden-libm NODE=<its bin/node>.`,
-  );
-  process.exit(1);
-}
-if (process.platform !== "linux" || process.arch !== "x64" || !glibc) {
-  console.error(
-    `golden-libm: Math.pow in Node ${major} is the host libm; game5's reference platform is ` +
-      `Linux x86-64 with glibc, but this is ${process.platform}-${process.arch}` +
-      `${glibc ? ` glibc ${glibc}` : ""}. Run it on Linux x86-64 (e.g. an ubuntu CI runner).`,
-  );
-  process.exit(1);
-}
-const banner = `# node ${process.versions.node} v8 ${process.versions.v8} ${process.platform}-${process.arch} glibc ${glibc}`;
+const banner = requireOracleNode(game5, "golden-libm");
 
 // mulberry32 off a fixed seed, so the inputs are the same on every run.
 let s = 20261021 >>> 0;

@@ -1,9 +1,9 @@
 // SMALL DETERMINISTIC MATH. Port of the libm-free half of oss-game-framework
 // `src/core/math.ts`. Every function here uses only IEEE 754 correctly
-// rounded operations (+ - * / sqrt, compares), so it returns the same bits
-// on every compiler that keeps `-ffp-contract=off` (see AGENTS.md, "The
-// determinism contract"). Functions that need sin/cos/exp wait for
-// `core/libm` (docs/goals.md, M1). Parity: tests/core_math_test.cpp.
+// rounded operations (+ - * / sqrt, fmod, compares), so it returns the same
+// bits on every compiler that keeps `-ffp-contract=off` (see AGENTS.md, "The
+// determinism contract"). `decay` and `blockOffsets` are not ported: game5
+// calls neither. Parity: tests/core_math_test.cpp.
 //
 // World convention: the plan is x/z, y is up; heading 0 points down +z and
 // grows clockwise seen from above.
@@ -12,6 +12,8 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+
+#include "core/js.hpp"
 
 namespace ge::core {
 
@@ -26,6 +28,21 @@ inline double lerp(double a, double b, double t) { return a + (b - a) * t; }
 inline double smoothstep(double a, double b, double v) {
   const double t = v <= a ? 0.0 : v >= b ? 1.0 : (v - a) / (b - a);
   return t * t * (3.0 - 2.0 * t);
+}
+
+// Signed shortest angular difference b - a, in (-pi, pi]. JS `%` is fmod.
+inline double angle_diff(double a, double b) {
+  double d = js::mod(b - a, kTau);
+  if (d > kPi) d -= kTau;
+  if (d <= -kPi) d += kTau;
+  return d;
+}
+
+// Move v toward target by at most max_delta.
+inline double approach(double v, double target, double max_delta) {
+  const double d = target - v;
+  if (std::fabs(d) <= max_delta) return target;
+  return v + js::sign(d) * max_delta;
 }
 
 // JS `Math.hypot(a, b)` bit for bit (V8's scale-by-max recipe). A bare

@@ -69,8 +69,8 @@ make test         # build + ctest
 make fmt          # clang-format in place;  make fmt-check is what CI runs
 make lint         # clang-tidy over the sources (bug-finding checks only)
 make agents-check # symlinks, skills ↔ this router, the 1000-line cap
-make golden       # regenerate tests/golden/core_* from the TS oracle (needs Node 22+ and ../oss-game-framework)
-make golden-libm NODE=<node 24>  # regenerate tests/golden/libm_* under game5's pinned Node, on Linux x86-64
+make golden       # regenerate tests/golden/core_*, loop_* from the TS oracle (needs Node 22+ and ../oss-game-framework)
+make golden-libm NODE=<node 24>  # regenerate tests/golden/libm_*, core_quat, core_solar under game5's pinned Node, on Linux x86-64
 make libm-check   # no <cmath> transcendental in simulation code
 ```
 
@@ -83,9 +83,9 @@ row's compiler or libm.
 
 | Path | What | Skill |
 | --- | --- | --- |
-| `engine/core/` | The deterministic pool: `prng.hpp` (mulberry32), `math.hpp` (hypot family, clamp, smoothstep), `libm/` (every transcendental game5 calls, at Node 24's bits; vendored, with `LICENSE.md`), `js.hpp` (JS number semantics). Next: noise, heightfield, quat, solar, output | `determinism` |
+| `engine/core/` | The deterministic pool: `prng.hpp` (mulberry32), `math.hpp` (hypot family, clamp, smoothstep), `libm/` (every transcendental game5 calls, at Node 24's bits; vendored, with `LICENSE.md`), `js.hpp` (JS number semantics), `noise.hpp` (hash2, value noise, the cached field), `heightfield.hpp` (the baked grid and its bilinear reads), `quat.hpp` (orientation; the Euler sign flip), `solar.hpp` (the sun and the moon, by geometry and on a real date), `output.hpp` (the one diagnostic channel; module state) | `determinism` |
 | `engine/racing/` | Tape, records, standings (M3) | `port` |
-| `engine/loop/` | The fixed-step run clock (M2) | `sim` |
+| `engine/loop/` | `run_clock.hpp`: the fixed-step accumulator between the display's frames and the 120 Hz step | `sim` |
 | `engine/platform/` | SDL3: window, input, gamepad, audio device, files (M6); the only place SDL is included | `platform` |
 | `engine/gpu/` | The webgpu.h wrapper (M6); the only place webgpu.h is included | `gpu` |
 | `engine/render/` | Generic draw passes Fall Line needs (M7–M8) | `render` |

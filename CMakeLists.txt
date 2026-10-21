@@ -1,5 +1,6 @@
 # gameengine2 — the top-level build. Targets:
-#   ge_core      the deterministic pool (headers, plus core/libm compiled)
+#   ge_core      the deterministic pool and the run clock (engine/core, engine/loop;
+#                headers, plus libm, solar and output compiled)
 #   <x>_test     one executable per tests/<x>_test.cpp, registered with CTest
 # The flags below are part of the DETERMINISM CONTRACT (AGENTS.md); a target
 # that drops them can silently change the bits a simulation produces.
@@ -38,12 +39,13 @@ elseif(MSVC)
   endif()
 endif()
 
-# The deterministic pool. Mostly headers; core/libm is compiled.
+# The deterministic pool. Mostly headers; libm, solar and output are compiled.
 set(GE_LIBM_VENDORED
   engine/core/libm/fdlibm_trig.cpp
   engine/core/libm/fdlibm_arc.cpp
   engine/core/libm/fdlibm_exp_log.cpp)
-add_library(ge_core STATIC ${GE_LIBM_VENDORED} engine/core/libm/pow.cpp)
+add_library(ge_core STATIC ${GE_LIBM_VENDORED} engine/core/libm/pow.cpp
+  engine/core/solar.cpp engine/core/output.cpp)
 target_include_directories(ge_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/engine)
 target_link_libraries(ge_core PUBLIC ge_flags)
 # fdlibm is kept line for line with V8's copy; its deliberate int/double word conversions

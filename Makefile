@@ -27,19 +27,22 @@ agents-check:
 libm-check:
 	tools/check-libm.sh
 
-# Rewrites tests/golden/* from the TypeScript oracle (needs Node 22+ and a
+# Rewrites tests/golden/core_* (bar quat and solar), loop_* and core_js from the TypeScript
+# oracle (needs Node 22+ and a
 # checkout of oss-game-framework beside this one, or FRAMEWORK=path).
 FRAMEWORK ?= ../oss-game-framework
 golden:
 	node --experimental-strip-types --disable-warning=ExperimentalWarning tools/parity/golden-core.mjs --framework $(FRAMEWORK)
 	node tools/parity/golden-js.mjs
 
-# Rewrites tests/golden/libm_*.txt. Needs game5's pinned Node (NODE=path, ../game5/.nvmrc)
-# on Linux x86-64 with glibc; the script refuses anything else and says why.
+# Rewrites tests/golden/libm_*.txt, core_quat.txt and core_solar.txt: everything that reaches a
+# transcendental. Needs game5's pinned Node (NODE=path, ../game5/.nvmrc) on Linux x86-64 with
+# glibc; the scripts refuse anything else and say why (tools/parity/oracle-node.mjs).
 NODE ?= node
 GAME5 ?= ../game5
 golden-libm:
 	$(NODE) tools/parity/golden-libm.mjs --game5 $(GAME5)
+	$(NODE) --experimental-strip-types --disable-warning=ExperimentalWarning tools/parity/golden-core-libm.mjs --game5 $(GAME5) --framework $(FRAMEWORK)
 
 clean:
 	rm -rf build
