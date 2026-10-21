@@ -1,0 +1,17 @@
+# seed version region, then each speed event's course (mountain_speed_events_test)
+38 v1 alpine downhill run=1 from=8 to=3092 vertical=936 gates=38 jumps=0 trap=1858 digest=b94567a4
+38 v1 alpine super-g run=1 from=716 to=3092 vertical=600 gates=48 jumps=0 trap=2294 digest=19814b6c
+38 v1 alpine giant-slalom run=1 from=1050 to=3092 vertical=400 gates=75 jumps=0 trap=- digest=805b2cbd
+38 v1 alpine giant-slalom run=2 from=1050 to=3092 vertical=400 gates=75 jumps=0 trap=- digest=24b3daa8
+1 v1 maritime downhill run=1 from=8 to=3260 vertical=828 gates=40 jumps=0 trap=2993 digest=9d32f27a
+1 v1 maritime super-g run=1 from=572 to=3260 vertical=599 gates=54 jumps=1 trap=2948 digest=eacd1c55
+1 v1 maritime giant-slalom run=1 from=1168 to=3260 vertical=400 gates=77 jumps=0 trap=- digest=dd666f9b
+1 v1 maritime giant-slalom run=2 from=1168 to=3260 vertical=400 gates=77 jumps=0 trap=- digest=8dc4b567
+3 v1 fell downhill run=1 from=8 to=3172 vertical=519 gates=39 jumps=0 trap=2284 digest=c7def22e
+3 v1 fell super-g run=1 from=8 to=3172 vertical=519 gates=64 jumps=2 trap=2290 digest=19f1e738
+3 v1 fell giant-slalom run=1 from=578 to=3172 vertical=400 gates=95 jumps=0 trap=- digest=2a4c8059
+3 v1 fell giant-slalom run=2 from=578 to=3172 vertical=400 gates=95 jumps=0 trap=- digest=216e144a
+38 v8 alpine downhill run=1 from=8 to=3812 vertical=1028 gates=47 jumps=0 trap=2800 digest=99825b71
+38 v8 alpine super-g run=1 from=1410 to=4299 vertical=600 gates=58 jumps=2 trap=3639 digest=8c907534
+38 v8 alpine giant-slalom run=1 from=2030 to=4299 vertical=399 gates=83 jumps=0 trap=- digest=b12d44b5
+38 v8 alpine giant-slalom run=2 from=2030 to=4299 vertical=399 gates=83 jumps=0 trap=- digest=ab0d0442

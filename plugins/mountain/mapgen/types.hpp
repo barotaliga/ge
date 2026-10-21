@@ -100,7 +100,9 @@ struct TreeDef {
 // absent on every other gate. A POLE GATE of a slalom set over a map (R31) is two poles and no
 // panel: `pole` says whether it is OPEN (across the hill: its turning pole `turn` × half its
 // `width` right of its centre, -1 or +1) or CLOSED (its poles one above the other, `width` m apart
-// down the hill, `heading` turned across it); absent on every other gate.
+// down the hill, `heading` turned across it); absent on every other gate. A speed event's gate
+// (R32, R33, R36) is four poles and two panels (`panels`), `width` m between its inner poles; one
+// that turns the racer names its turning pole's side in `turn` too.
 enum class PoleGate : uint8_t { open, closed };
 
 struct Checkpoint {
@@ -115,6 +117,7 @@ struct Checkpoint {
   std::optional<double> span = std::nullopt;
   std::optional<PoleGate> pole = std::nullopt;
   int turn = 0;
+  bool panels = false;
 };
 
 struct TrackPoint {
@@ -309,11 +312,17 @@ struct ResortMap {
 };
 
 // R31–R36 — the race disciplines a course is set over a built map in (discipline_rules.hpp).
-enum class Discipline : uint8_t { slalom };
+enum class Discipline : uint8_t { slalom, downhill, super_g, giant_slalom };
 inline const char* discipline_name(Discipline d) {
   switch (d) {
     case Discipline::slalom:
       return "slalom";
+    case Discipline::downhill:
+      return "downhill";
+    case Discipline::super_g:
+      return "super-g";
+    case Discipline::giant_slalom:
+      return "giant-slalom";
   }
   return "unknown";
 }
@@ -323,12 +332,20 @@ struct Level;
 // A RACE COURSE set over a built map (R31–): the discipline and its run, the map it was set
 // over (`base`, before any course: what the next run's course is set over), the start gate's
 // arc and the finish line's on the piste, the vertical between, and THE LINE A RACER TAKES —
-// points down the course, each `x` m right of the piste's line `s` m down it, a cosine between
-// each two (`slalom_line_at`). A slalom counts the combinations its setter laid.
+// points down the course, each `x` m right of the piste's line `s` m down it (a slalom's a
+// cosine between each two, `slalom_line_at`; a speed event's every 4 m, `speed_line_at`). A slalom
+// counts the combinations its setter laid; a speed event names its JUMPS by arc, the safety NETS
+// along both edges, its SPEED TRAP (a downhill's and a super-G's) and how many gates turn.
 struct RaceCourse {
   struct LinePoint {
     double s;
     double x;
+  };
+  struct Trap {
+    double s, x, z, heading, width;
+  };
+  struct Nets {
+    double gap, height, from, to;
   };
   Discipline discipline = Discipline::slalom;
   int run = 1;
@@ -340,6 +357,10 @@ struct RaceCourse {
   int verticals = 0;
   int delays = 0;
   std::vector<LinePoint> line;
+  std::vector<double> jumps;
+  std::optional<Nets> nets;
+  std::optional<Trap> trap;
+  int turns = 0;
 };
 
 struct TrackIndex;  // query.hpp: the spatial hash `nearest_track_point` reads

@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
@@ -43,11 +44,15 @@ std::string map_id(double seed, int version) {
 }
 
 std::optional<mapgen::Level> build_map(ge::lab::Lab& lab, double seed, std::optional<int> version,
-                                       std::optional<mapgen::PisteGrade> grade) {
+                                       std::optional<mapgen::PisteGrade> grade,
+                                       std::optional<std::string> course) {
   mapgen::GenerateOptions opts;
   const int v = version ? *version : map_versions(lab).front();
   opts.version = v;
-  if (v != 1) opts.grade = grade;
+  if (v != 1) {
+    opts.grade = grade;
+    opts.course = std::move(course);
+  }
   opts.region = region_named(lab.arg("region"));
   if (!opts.region) {
     lab.fail("--region=" + lab.arg("region") + " is not a region",

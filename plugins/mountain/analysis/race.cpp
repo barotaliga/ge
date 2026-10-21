@@ -10,6 +10,8 @@
 // ge:test tests/mountain_slalom_test.cpp
 #include "mountain/analysis/race.hpp"
 
+#include "mountain/analysis/race_checks.hpp"
+
 #include <cmath>
 #include <string>
 #include <vector>
@@ -40,21 +42,6 @@ constexpr double kSlack = 0.5;
 constexpr double kLineClear = 0.3;
 // How packed the course must read from the hut to the end of the run-out (R10's groomer).
 constexpr double kGroomed = 0.98;
-
-// A gate's two poles: the first its turning pole on an open gate.
-struct Poles {
-  PlanPoint a;
-  PlanPoint b;
-};
-Poles poles_of(const Checkpoint& g) {
-  const double rx = libm::cos(g.heading);
-  const double rz = -libm::sin(g.heading);
-  const double t = g.turn != 0 ? double(g.turn) : 1.0;
-  const double h = g.width / 2;
-  return {{g.x + rx * t * h, g.z + rz * t * h}, {g.x - rx * t * h, g.z - rz * t * h}};
-}
-
-std::string gate_name(size_t i) { return "gate " + std::to_string(i); }
 
 void check_slalom(const mapgen::Level& level, const mapgen::RaceCourse& race, const Add& add) {
   const mapgen::Track& track = level.track;
@@ -121,7 +108,7 @@ void check_slalom(const mapgen::Level& level, const mapgen::RaceCourse& race, co
           at + " is " + fmt(g.width, 2) + " m between its poles, outside " + band_text(band, " m"));
     }
     if (kind == PoleGate::open) open_count++;
-    const Poles p = poles_of(g);
+    const GatePoles p = poles_of(g);
     for (const PlanPoint& pole : {p.a, p.b}) {
       const TrackHit hit = mapgen::nearest_track_point(track, pole.x, pole.z);
       const double half = track.points[static_cast<size_t>(hit.index)].width / 2;
@@ -189,22 +176,38 @@ void check_slalom(const mapgen::Level& level, const mapgen::RaceCourse& race, co
   }
   if (open_count == 0) add("R31", Severity::error, "the slalom sets no open gate");
   // The hill prepared: no kicker left on it, groomed hard, the woods cut.
+  check_prepared(level, race, S::prep, "R31", add);
+}
+
+}  // namespace
+
+GatePoles poles_of(const Checkpoint& g) {
+  const double rx = libm::cos(g.heading);
+  const double rz = -libm::sin(g.heading);
+  const double t = g.turn != 0 ? double(g.turn) : 1.0;
+  const double h = g.width / 2;
+  return {{g.x + rx * t * h, g.z + rz * t * h}, {g.x - rx * t * h, g.z - rz * t * h}};
+}
+
+void check_prepared(const mapgen::Level& level, const mapgen::RaceCourse& race,
+                    const mapgen::CoursePrep& P, const char* rule, const Add& add) {
+  const mapgen::Track& track = level.track;
   for (const mapgen::Kicker& k : level.kickers) {
     if (!k.on_track || !k.s) continue;
-    if (*k.s + k.landing >= race.from - S::clearance && *k.s - k.ramp <= race.to + S::clearance) {
-      add("R31", Severity::error,
-          "kicker " + k.id + " stands on the slalom at s " + fmt(*k.s) + " m");
+    if (*k.s + k.landing >= race.from - P.clearance && *k.s - k.ramp <= race.to + P.clearance) {
+      add(rule, Severity::error,
+          "kicker " + k.id + " stands on the course at s " + fmt(*k.s) + " m");
     }
   }
   // (The groomer's edge down the run-out reads a cell soft either side of it.)
-  const double groomed = num::min(track.length, race.to + S::outrun_length - 2 * level.cell);
+  const double groomed = num::min(track.length, race.to + P.outrun_length - 2 * level.cell);
   for (int k = 0; race.from + 2.0 * k <= groomed; k++) {
     const double s = race.from + 2.0 * k;
     const mapgen::TrackPoint p = mapgen::track_point_at(track, s);
     const double firm = level.packed_at(p.x, p.z);
     if (firm < kGroomed) {
-      add("R31", Severity::error,
-          "the slalom is only " + fmt(firm, 2) + " packed at s " + fmt(s) + " m");
+      add(rule, Severity::error,
+          "the course is only " + fmt(firm, 2) + " packed at s " + fmt(s) + " m");
       break;
     }
   }
@@ -212,19 +215,17 @@ void check_slalom(const mapgen::Level& level, const mapgen::RaceCourse& race, co
   for (const mapgen::TrackPoint& p : track.points) widest = num::max(widest, p.width);
   for (const mapgen::TreeDef& t : level.trees) {
     TrackHit hit;
-    mapgen::nearest_within(track, t.x, t.z, widest / 2 + S::clear, hit);
+    mapgen::nearest_within(track, t.x, t.z, widest / 2 + P.clear, hit);
     if (!std::isfinite(hit.distance) || hit.s < race.from || hit.s > race.to) continue;
-    const double keep = track.points[static_cast<size_t>(hit.index)].width / 2 + S::clear - 1;
+    const double keep = track.points[static_cast<size_t>(hit.index)].width / 2 + P.clear - 1;
     if (hit.distance <= keep) {
-      add("R31", Severity::error,
-          "a tree stands " + fmt(hit.distance) + " m off the slalom's line at s " + fmt(hit.s) +
+      add(rule, Severity::error,
+          "a tree stands " + fmt(hit.distance) + " m off the course's line at s " + fmt(hit.s) +
               " m, inside the " + fmt(keep) + " m cleared");
       break;
     }
   }
 }
-
-}  // namespace
 
 LevelAnalysis analyze_race(const mapgen::Level& level) {
   LevelAnalysis out;
@@ -239,6 +240,13 @@ LevelAnalysis analyze_race(const mapgen::Level& level) {
   switch (level.race->discipline) {
     case mapgen::Discipline::slalom:
       check_slalom(level, *level.race, add);
+      break;
+    case mapgen::Discipline::downhill:
+      check_downhill(level, *level.race, add);
+      break;
+    case mapgen::Discipline::super_g:
+    case mapgen::Discipline::giant_slalom:
+      check_turns(level, *level.race, add);
       break;
   }
   return out;
