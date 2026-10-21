@@ -3,7 +3,6 @@
 // and the optional scope and concepts filters) and the lesson in the body. One file per lesson
 // means parallel sessions never conflict; this script is how the next session reads them back
 // and how a reflection pass finds the stale, the oversized and the duplicated.
-// The design follows oss-game-framework's `ogf-skill-lessons`, rewritten for this repository.
 //
 //   node tools/skill-lessons.mjs                    inventory: every skill, its lessons, its verdict
 //   node tools/skill-lessons.mjs <skill>            that skill's lessons in full, oldest first

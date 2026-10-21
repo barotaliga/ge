@@ -1,16 +1,15 @@
-// Port of game5 `engine/analysis/cliffs.ts` (single piste).
+// The definitions behind cliffs.hpp.
 //
 // ge:summary The cliff and drop checks' readings of the ground
-// ge:keywords analysis checkCliffs checkDrops
-// ge:oracle game5/engine/analysis/cliffs.ts
+// ge:keywords analysis
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #include "mountain/analysis/cliffs.hpp"
 
 #include <cmath>
 
-#include "core/js.hpp"
 #include "core/libm/libm.hpp"
+#include "core/num.hpp"
 #include "mountain/mapgen/cliffs.hpp"
 #include "mountain/mapgen/grades.hpp"
 #include "mountain/mapgen/query.hpp"
@@ -18,7 +17,7 @@
 
 namespace ge::mountain::analysis {
 
-namespace js = ge::core::js;
+namespace num = ge::core::num;
 namespace libm = ge::core::libm;
 namespace R = mapgen::rules;
 using mapgen::Cliff;
@@ -50,7 +49,7 @@ void check_cliffs(const Level& level, const Add& add) {
     }
     double nearest = INFINITY;
     for (const mapgen::PlanPoint& p : mapgen::cliff_footprint(c)) {
-      nearest = js::min(nearest, mapgen::nearest_track_point(level.track, p.x, p.z).distance);
+      nearest = num::min(nearest, mapgen::nearest_track_point(level.track, p.x, p.z).distance);
     }
     if (nearest < clear - 1) {
       add("R22", Severity::error,
@@ -59,7 +58,7 @@ void check_cliffs(const Level& level, const Add& add) {
   }
   const auto& region = mapgen::region_row(level.region);
   if (count < mapgen::scale_count(R::cliff::count, region.kickers * G.count).min) {
-    add("R22", Severity::warn, "only " + num(count) + " cliff(s)");
+    add("R22", Severity::warn, "only " + str(count) + " cliff(s)");
   }
 }
 
@@ -72,8 +71,8 @@ void check_drops(const Level& level, std::span<const Kicker* const> kickers, con
   }
   if (!mapgen::within_band(double(drops.size()), band)) {
     add("R24", Severity::error,
-        num(double(drops.size())) + " drop(s) across the piste (band " + num(band.min) + "–" +
-            num(band.max) + ")");
+        str(double(drops.size())) + " drop(s) across the piste (band " + str(band.min) + "–" +
+            str(band.max) + ")");
   }
   for (size_t a = 0; a < drops.size(); a++) {
     const Cliff& d = *drops[a];

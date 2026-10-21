@@ -1,9 +1,8 @@
-// plugins/racing/standings against the TypeScript oracle (tests/golden/racing_standings.txt,
-// written by tools/parity/golden-racing.mjs): legs to the bit, and whole fields' order and
-// every rider's place, dead heats included.
+// plugins/racing/standings against tests/golden/racing_standings.txt: legs to the bit, and whole
+// fields' order and every rider's place, dead heats included.
 //
-// ge:summary Parity test: racing/standings against the oracle
-// ge:keywords test parity golden standings
+// ge:summary Golden test: racing/standings, bit for bit
+// ge:keywords test golden standings
 // ge:skill testing racing
 #include "racing/standings.hpp"
 
@@ -14,7 +13,7 @@
 using ge::test::as_double;
 namespace r = ge::racing;
 
-TEST(standings_match_oracle) {
+TEST(standings_match_golden) {
   const auto rows = ge::test::golden_rows("tests/golden/racing_standings.txt");
   int legs = 0, fields = 0;
   for (const auto& row : rows) {
@@ -24,7 +23,7 @@ TEST(standings_match_oracle) {
     if (v[0] == 0) {
       legs++;
       CHECK(v.size() == 9);
-      CHECK_JS_BITS(r::leg_progress(v[1], v[2], v[3], v[4], v[5], v[6], v[7]), v[8]);
+      CHECK_BITS_ANY_NAN(r::leg_progress(v[1], v[2], v[3], v[4], v[5], v[6], v[7]), v[8]);
       continue;
     }
     fields++;

@@ -1,7 +1,6 @@
 // R14 — THE FOREST: snow-loaded trees where a slow noise says woods, glades between, clearings
-// cut out of the woods, nothing above the tree line, and nothing in the run's way. Port of the
-// single piste's half of game5 `engine/mapgen/forest.ts` (a ski area's woods, `ForestOptions`,
-// arrive with M4b).
+// cut out of the woods, nothing above the tree line, and nothing in the run's way. The single
+// piste's woods (a ski area's, and their options, arrive with M4b).
 //
 // CLUMPS are grown first (a few trunks round a centre, off hashes of the forest's seed), then
 // the SCAN stands one candidate a 6 m cell, jittered inside it, kept with the probability the
@@ -10,11 +9,10 @@
 // tree already standing — which is what makes a wood SKIABLE. Every cell takes four draws off
 // the stream whatever happens to it, so a refusal never shifts the trees after it. Ages and
 // kinds come off hashes of where a trunk stands, never the stream.
-// Parity: through tests/mountain_generate_test.cpp (`trees`).
+// Held by tests/mountain_generate_test.cpp (`trees`).
 //
 // ge:summary R14 the forest: clumps, the scan, lanes, gaps, ages and trunks
-// ge:keywords forest trees woods growForest treeAge trunkRadius clump krummholz
-// ge:oracle game5/engine/mapgen/forest.ts
+// ge:keywords forest trees woods clump krummholz
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #pragma once

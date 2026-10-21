@@ -1,8 +1,7 @@
-// Port of the single piste's half of game5 `engine/mapgen/forest.ts`.
+// The definitions behind forest.hpp.
 //
 // ge:summary Grows the single piste's woods: the clumps first, then the scan
-// ge:keywords forest growForest clump lanes
-// ge:oracle game5/engine/mapgen/forest.ts
+// ge:keywords forest clump lanes
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #include "mountain/mapgen/forest.hpp"
@@ -11,10 +10,10 @@
 #include <cmath>
 #include <unordered_map>
 
-#include "core/js.hpp"
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "core/noise.hpp"
+#include "core/num.hpp"
 #include "mountain/mapgen/cliffs.hpp"
 #include "mountain/mapgen/kickers.hpp"
 #include "mountain/mapgen/query.hpp"
@@ -22,7 +21,7 @@
 
 namespace ge::mountain::mapgen {
 
-namespace js = ge::core::js;
+namespace num = ge::core::num;
 namespace libm = ge::core::libm;
 namespace F = rules::forest;
 using ge::core::cell_key;
@@ -35,7 +34,7 @@ using ge::core::value_noise;
 
 double tree_age(double grew, double x, double z, double seed) {
   namespace A = F::age;
-  const double h = js::min(grew, A::top * 0.97);
+  const double h = num::min(grew, A::top * 0.97);
   const double typical = -libm::log(1 - h / A::top) / A::rate;
   const double ix = std::floor(x * 8);
   const double iz = std::floor(z * 8);
@@ -43,12 +42,12 @@ double tree_age(double grew, double x, double z, double seed) {
       (hash2(ix, iz, seed + 41) + hash2(ix, iz, seed + 42) + hash2(ix, iz, seed + 43) - 1.5) * 2;
   double age = typical * libm::exp(A::spread * normal);
   if (hash2(ix, iz, seed + 44) < A::veterans) age *= A::veteran;
-  return js::min(A::max, age);
+  return num::min(A::max, age);
 }
 
 double trunk_radius(double age) {
   namespace T = F::trunk;
-  return T::floor + T::top * libm::pow(1 - libm::exp(-T::rate * js::max(0.0, age)), T::shape);
+  return T::floor + T::top * libm::pow(1 - libm::exp(-T::rate * num::max(0.0, age)), T::shape);
 }
 
 std::vector<TreeDef> grow_forest(ge::core::Rng& rng, const TerrainPlan& plan,
@@ -57,7 +56,7 @@ std::vector<TreeDef> grow_forest(ge::core::Rng& rng, const TerrainPlan& plan,
                                  double line_y) {
   const auto& W = plan.region->forest;
   const double density = F::density * W.density * F::open;
-  const double meadow = js::min(1.0, F::meadow * W.meadow);
+  const double meadow = num::min(1.0, F::meadow * W.meadow);
   // The krummholz band under the tree line, and the valley floor, as heights.
   const double stunt_y = line_y - F::krummholz;
   const double base_y = line_y - (plan.tree_line - plan.altitude);
@@ -85,7 +84,7 @@ std::vector<TreeDef> grow_forest(ge::core::Rng& rng, const TerrainPlan& plan,
     double clear = 1;
     for (const Clearing& cl : clearings) {
       const double d = hypot(x - cl.x, z - cl.z);
-      if (d < cl.r + 12) clear = js::min(clear, smoothstep(cl.r * 0.8, cl.r + 12, d));
+      if (d < cl.r + 12) clear = num::min(clear, smoothstep(cl.r * 0.8, cl.r + 12, d));
     }
     return Woods{smoothstep(0.42, 0.58, n), clear};
   };
@@ -108,11 +107,11 @@ std::vector<TreeDef> grow_forest(ge::core::Rng& rng, const TerrainPlan& plan,
     for (const Lane& lane : lanes) {
       const double w = bend(x, z, lane.noise);
       const double u = x * lane.cos + z * lane.sin + w - lane.offset;
-      const double d = std::abs(u - L::spacing * js::round(u / L::spacing));
+      const double d = std::abs(u - L::spacing * num::round(u / L::spacing));
       if (d > L::width) continue;
       const double gx = lane.cos + (bend(x + 1, z, lane.noise) - w);
       const double gz = lane.sin + (bend(x, z + 1, lane.noise) - w);
-      if (d / js::max(0.2, hypot(gx, gz)) < L::width / 2) return true;
+      if (d / num::max(0.2, hypot(gx, gz)) < L::width / 2) return true;
     }
     return false;
   };
@@ -159,21 +158,21 @@ std::vector<TreeDef> grow_forest(ge::core::Rng& rng, const TerrainPlan& plan,
     // Aged off the height it would have grown to unstunted: a krummholz tree is as old as the
     // tall one, only beaten down.
     const double stunt = 1 - (1 - F::krummholz_height) * smoothstep(stunt_y, line_y, y);
-    const double age = tree_age(height / js::max(1e-6, stunt), x, z, seed);
+    const double age = tree_age(height / num::max(1e-6, stunt), x, z, seed);
     trees.push_back(TreeDef{x, z, y, height, trunk_radius(age), age,
-                            js::min(F::crown_max, F::crown * height),
+                            num::min(F::crown_max, F::crown * height),
                             tree_kind_at(*plan.region, kx, kz), clump});
     buckets[cell_key(bucket_of(x), bucket_of(z))].push_back(uint32_t(trees.size() - 1));
   };
   // Tall in the thick of a wood and low down, short at its edge and up the mountain, stunted
   // in the krummholz band.
   const auto height_of = [&](double woods, double size, double y) {
-    const double up = js::max(0.0, js::min(1.0, (y - base_y) / (line_y - base_y)));
+    const double up = num::max(0.0, num::min(1.0, (y - base_y) / (line_y - base_y)));
     const double tall = 0.35 + 0.45 * woods + 0.2 * size - 0.45 * up;
     const double stunt = 1 - (1 - F::krummholz_height) * smoothstep(stunt_y, line_y, y);
-    const double h = F::height.min +
-                     (F::height.max - F::height.min) * js::max(0.0, js::min(1.0, tall)) * W.height;
-    return js::max(F::height.min, h * stunt);
+    const double h = F::height.min + (F::height.max - F::height.min) *
+                                         num::max(0.0, num::min(1.0, tall)) * W.height;
+    return num::max(F::height.min, h * stunt);
   };
 
   // THE CLUMPS, before the scan: one chance a cell, off the forest's seed.

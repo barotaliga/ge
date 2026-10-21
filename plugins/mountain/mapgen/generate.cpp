@@ -1,9 +1,8 @@
-// Port of game5 `engine/mapgen/generate.ts` (`subSeed`, `attemptLevel` and `searchLevel` on the
-// single piste) and `engine/mapgen/compile.ts` (`compileLevel`, `normalAt`).
+// The definitions behind generate.hpp: the sub-seeds, one attempt, the search over attempts
+// (single piste), and the compile that bakes the grids.
 //
 // ge:summary One attempt's fixed draw order, the search over attempts and the compile
-// ge:keywords generate attemptLevel searchLevel compileLevel normalAt
-// ge:oracle game5/engine/mapgen/generate.ts
+// ge:keywords generate
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #include "mountain/mapgen/generate.hpp"
@@ -12,8 +11,8 @@
 #include <variant>
 
 #include "core/heightfield.hpp"
-#include "core/js.hpp"
-#include "core/js_text.hpp"
+#include "core/num.hpp"
+#include "core/num_text.hpp"
 #include "core/output.hpp"
 #include "core/prng.hpp"
 #include "mountain/analysis/index.hpp"
@@ -34,7 +33,7 @@
 
 namespace ge::mountain::mapgen {
 
-namespace js = ge::core::js;
+namespace num = ge::core::num;
 using ge::core::sample_field;
 
 namespace {
@@ -76,7 +75,7 @@ std::variant<Level, std::string> attempt_level(double seed, int attempt, int lap
 
   const std::vector<TrackDrop> track_drops = lay_drops(sub, piste, grade);
   if (double(track_drops.size()) < grade.drops.min) {
-    return "only " + js::to_string(double(track_drops.size())) + " drop(s) fit the piste (R24)";
+    return "only " + num::to_string(double(track_drops.size())) + " drop(s) fit the piste (R24)";
   }
   const std::vector<TrackKicker> track_kickers = lay_track_kickers(rng, piste, grade, track_drops);
   std::vector<Cliff> drops = publish_drops(piste, track_drops);
@@ -152,7 +151,9 @@ std::string join(const std::vector<std::string>& parts, const char* sep) {
 
 }  // namespace
 
-uint32_t sub_seed(double seed, int attempt) { return js::to_uint32(seed + attempt * 2654435769.0); }
+uint32_t sub_seed(double seed, int attempt) {
+  return num::to_uint32(seed + attempt * 2654435769.0);
+}
 
 void Level::normal_at(double x, double z, Vec3& out) const {
   double g[3];
@@ -169,11 +170,11 @@ Level generate_level(double seed, const GenerateOptions& opts) {
   const int attempts = opts.attempts.value_or(16);
   const int laps = opts.laps.value_or(rules::race::laps);
   const GeneratorTraits& traits = generator_traits(opts.version);
-  const std::string name = "level " + js::to_string(seed);
+  const std::string name = "level " + num::to_string(seed);
   if (!traits.single_piste) {
     throw GenerateError(name + ": generator version " + std::to_string(traits.version) +
-                        " builds a ski area, which is not ported yet (docs/goals.md M4b). " +
-                        "Ask for version 1 (GenerateOptions::version = 1), or port the ski " +
+                        " builds a ski area, which is not built yet (docs/goals.md M4b). " +
+                        "Ask for version 1 (GenerateOptions::version = 1), or build the ski " +
                         "area first.");
   }
   const Region& region = region_row(opts.region);

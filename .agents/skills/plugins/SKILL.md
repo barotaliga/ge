@@ -62,10 +62,10 @@ mechanism's (vehicle, checkpoint, track).
 1. `git mv` the files (so history follows), then rewrite includes and namespaces with one `sed`
    over the moved files and their tests.
 2. Retag: `ge:skill` names the new owner; test and golden files take the new prefix
-   (`tests/golden/<name>_*.txt`, and the `tools/parity/` script that writes them).
+   (`tests/golden/<name>_*.txt`, and the `porting/parity/` script that writes them).
 3. `make test`, `make agents-check`, `make libm-check`. A move changes no bits: every golden
    passes unchanged.
-4. Update AGENTS.md's table, `docs/porting.md`'s layout map when a whole directory moved,
+4. Update AGENTS.md's table, `porting/README.md`'s layout map when a whole directory moved,
    and any skill or lesson `scope:` that names the old path.
 5. Tell every open thread that edits the moved files where they went (the old path, the new
    path, the namespace sed), because their branch will not rebase cleanly by itself.

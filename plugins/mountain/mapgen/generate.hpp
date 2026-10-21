@@ -1,17 +1,16 @@
 // THE GENERATOR'S OUTER LOOP: a seed in, a clean map out, or a thrown error that names what
-// could not be made clean. Port of the single piste's half of game5
-// `engine/mapgen/generate.ts` (`generateLevel` at version 1) and of `compile.ts`.
+// could not be made clean, and the compile that bakes its grids. Version 1 (the single piste)
+// so far.
 //
 // Each ATTEMPT draws everything off `sub_seed(seed, attempt)` in a fixed order (the mountain,
 // the start, the piste, the drops, the kickers, the corridor, the off-piste kickers, the
 // cliffs, the drifts, the crust, the forest, the day, the weather, the gates and the start
 // line), and is accepted only if `analysis::analyze_level` finds no error. A rejected attempt
-// is logged at debug level in the oracle's words.
-// Parity: tests/mountain_generate_test.cpp against tests/golden/mountain_generate.txt.
+// is logged at debug level, its findings' text fixed by the golden.
+// Bits: tests/mountain_generate_test.cpp against tests/golden/mountain_generate.txt.
 //
-// ge:summary The generator's outer loop: generateLevel, its attempts and the compile
-// ge:keywords generate generateLevel mapgen level seed subSeed attempt compileLevel
-// ge:oracle game5/engine/mapgen/generate.ts
+// ge:summary The generator's outer loop: generate_level, its attempts and the compile
+// ge:keywords generate mapgen level seed attempt
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #pragma once

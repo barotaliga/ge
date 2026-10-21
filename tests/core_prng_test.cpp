@@ -1,8 +1,7 @@
-// engine/core/prng.hpp against the TypeScript oracle (tests/golden/core_prng.txt,
-// written by tools/parity/golden-core.mjs).
+// engine/core/prng.hpp against tests/golden/core_prng.txt.
 //
-// ge:summary Parity test: core/prng against the oracle
-// ge:keywords test parity golden prng rng
+// ge:summary Golden test: core/prng, bit for bit
+// ge:keywords test golden prng rng
 // ge:skill testing
 #include "core/prng.hpp"
 
@@ -10,7 +9,7 @@
 
 using ge::test::as_double;
 
-TEST(prng_matches_oracle_bit_for_bit) {
+TEST(prng_matches_golden_bit_for_bit) {
   const auto rows = ge::test::golden_rows("tests/golden/core_prng.txt");
   CHECK(rows.size() == 8);
   for (const auto& row : rows) {

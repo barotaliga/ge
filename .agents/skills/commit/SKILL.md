@@ -38,7 +38,7 @@ squash-merged). The body contains:
 
 - **Milestone**: the `docs/goals.md` row, and the Status change made in this PR.
 - **What**: the change, in a few lines.
-- **Evidence**: the parity tests added (rows × functions, all bit-exact), or perf
+- **Evidence**: the golden tests added (rows × functions, all bit-exact), or perf
   before and after, or screenshots.
 - **Next step**: the next open row.
 

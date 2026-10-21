@@ -1,8 +1,7 @@
-// Port of game5 `engine/mapgen/drops.ts`.
+// The definitions behind drops.hpp.
 //
 // ge:summary The drops' placement and profile, off their own stream (none on v1)
-// ge:keywords drop layDrops publishDrops
-// ge:oracle game5/engine/mapgen/drops.ts
+// ge:keywords drop
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #include "mountain/mapgen/drops.hpp"
@@ -12,15 +11,15 @@
 #include <limits>
 #include <string>
 
-#include "core/js.hpp"
 #include "core/math.hpp"
+#include "core/num.hpp"
 #include "core/prng.hpp"
 #include "mountain/mapgen/cliffs.hpp"
 #include "mountain/mapgen/spawn.hpp"
 
 namespace ge::mountain::mapgen {
 
-namespace js = ge::core::js;
+namespace num = ge::core::num;
 namespace R = rules;
 
 namespace {
@@ -47,20 +46,20 @@ std::vector<TrackDrop> lay_drops(uint32_t sub, Piste& piste, const GradeRow& gra
   const std::vector<double> gates = gate_arcs(piste.track.length);
   const double lo = start_gate_arc() + R::spawn::kicker_gap + D::shelf.max;
   const double hi = finish_from(piste.track.length) - D::finish_clear;
-  const auto w = static_cast<long>(js::max(1.0, js::round(R::track::grade_window / step)));
+  const auto w = static_cast<long>(num::max(1.0, num::round(R::track::grade_window / step)));
   // The least fall over a grade window between two arcs, m per m.
   const auto least_fall = [&](double a, double b) {
     double least = std::numeric_limits<double>::infinity();
-    const long i0 = long(js::max(0.0, std::floor(a / step)));
-    const long i1 = long(js::min(double(n - 1 - w), std::ceil(b / step)));
+    const long i0 = long(num::max(0.0, std::floor(a / step)));
+    const long i1 = long(num::min(double(n - 1 - w), std::ceil(b / step)));
     for (long i = i0; i <= i1; i++) {
-      least = js::min(least, (pts[size_t(i)].y - pts[size_t(i + w)].y) / (double(w) * step));
+      least = num::min(least, (pts[size_t(i)].y - pts[size_t(i + w)].y) / (double(w) * step));
     }
     return least;
   };
   std::vector<TrackDrop> chosen;
   for (int t = 0; t < want * kTries && int(chosen.size()) < want && hi > lo; t++) {
-    const auto index = static_cast<size_t>(js::round(ge::core::range(rng, lo, hi) / step));
+    const auto index = static_cast<size_t>(num::round(ge::core::range(rng, lo, hi) / step));
     const double drop = in_band(rng, D::drop);
     const double s0 = pts[index].s;
     const double apron = 0;
@@ -70,8 +69,8 @@ std::vector<TrackDrop> lay_drops(uint32_t sub, Piste& piste, const GradeRow& gra
     // A PITCH under it, and a shelf long enough that its steepest rise leaves the line still
     // falling: sized off the pitch under the shortest shelf, then the pitch read again.
     const auto shelf_for = [&](double fall) {
-      return js::max(D::shelf.min,
-                     (1.5 * top) / js::max(1e-3, fall - R::track::min_grade - kShelfSlack));
+      return num::max(D::shelf.min,
+                      (1.5 * top) / num::max(1e-3, fall - R::track::min_grade - kShelfSlack));
     };
     double fall = least_fall(s0 - D::shelf.min, s0 + face + landing);
     if (fall < D::min_fall) continue;
@@ -90,8 +89,8 @@ std::vector<TrackDrop> lay_drops(uint32_t sub, Piste& piste, const GradeRow& gra
     for (long i = long(std::floor(from / step)); double(i) < std::ceil(to / step) && i + 1 < n;
          i++) {
       turned += ge::core::angle_diff(pts[size_t(i)].heading, pts[size_t(i + 1)].heading);
-      lo2 = js::min(lo2, turned);
-      hi2 = js::max(hi2, turned);
+      lo2 = num::min(lo2, turned);
+      hi2 = num::max(hi2, turned);
     }
     if (hi2 - lo2 > D::straight) continue;
     // Off the gates and the other drops.

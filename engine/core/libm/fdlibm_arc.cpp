@@ -13,13 +13,13 @@
 // modified significantly by Google Inc.
 // Copyright 2016 the V8 project authors. All rights reserved.
 //
-// VENDORED from V8 13.6.233.17 (Node 24) src/base/ieee754.cc: the fdlibm port Math.asin, Math.acos,
-// Math.atan and Math.atan2 run on under game5's pinned Node. Kept line for line with that file so
-// it diffs against upstream; only the namespace, the V8 macros and the functions game5 never calls
-// are gone. Do not tidy it: each operation's order is part of the bits (docs/research.md section
-// 2). API and contract: libm.hpp. Test: tests/core_libm_test.cpp. Licences: LICENSE.md.
+// VENDORED fdlibm: asin, acos, atan and atan2, from V8 13.6.233.17's src/base/ieee754.cc (V8's copy
+// of fdlibm). Kept line for line with that file so it diffs against upstream; only the namespace,
+// the V8 macros and the functions the engine does not call are gone. Do not tidy it: each
+// operation's order is part of the bits. API and contract: libm.hpp. Test:
+// tests/core_libm_test.cpp. Licences: LICENSE.md.
 //
-// ge:summary Vendored V8 fdlibm: asin, acos, atan, atan2
+// ge:summary Vendored fdlibm: asin, acos, atan, atan2
 // ge:keywords libm fdlibm vendored v8 asin acos atan atan2 inverse-trig
 // ge:skill determinism
 // ge:test tests/core_libm_test.cpp

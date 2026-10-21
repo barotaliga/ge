@@ -1,19 +1,18 @@
-// Port of game5 `engine/mapgen/grades.ts`.
+// The definitions behind grades.hpp.
 //
 // ge:summary The grade rows' numbers and the colour a measured piste is signed with
-// ge:keywords grade GRADES UNGRADED steepestSpan
-// ge:oracle game5/engine/mapgen/grades.ts
+// ge:keywords grade
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #include "mountain/mapgen/grades.hpp"
 
 #include <array>
 
-#include "core/js.hpp"
+#include "core/num.hpp"
 
 namespace ge::mountain::mapgen {
 
-namespace js = ge::core::js;
+namespace num = ge::core::num;
 namespace R = rules;
 
 namespace {
@@ -42,7 +41,7 @@ const GradeRow kUngraded{
 
 namespace {
 
-// The oracle's comments on what each colour is building toward are in grades.ts.
+// One row a colour, in PisteGrade order.
 const std::array<GradeRow, 4> kGrades{{
     {PisteGrade::green,
      {0, kGreen},
@@ -118,18 +117,18 @@ PisteGrade piste_grade_of(double steepest) {
 }
 
 double steepest_span(const Track& track, std::span<const Kicker> kickers) {
-  // A park's kickers (`trick`) are left out of the read in the oracle; no kicker the port lays
-  // is one, so every window is read.
+  // A park's kickers (`trick`) are to be left out of the read; no kicker the generator lays
+  // yet is one, so every window is read.
   (void)kickers;
   const auto& pts = track.points;
   const size_t n = pts.size();
   if (n < 2) return 0;
   const double step = track.length / static_cast<double>(n - 1);
-  const double span = js::max(1.0, js::round(R::track::colour_window / step));
+  const double span = num::max(1.0, num::round(R::track::colour_window / step));
   const size_t k = static_cast<size_t>(span);
   double steepest = 0;
   for (size_t i = 0; i + k < n; i++) {
-    steepest = js::max(steepest, (pts[i].y - pts[i + k].y) / (span * step));
+    steepest = num::max(steepest, (pts[i].y - pts[i + k].y) / (span * step));
   }
   return steepest;
 }

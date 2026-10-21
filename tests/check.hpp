@@ -49,7 +49,7 @@ inline void fail(const char* file, int line, const std::string& what) {
 // The project root, so a test can open tests/golden/* from any build dir.
 inline std::string root_path(const char* rel) { return std::string(GE_SOURCE_DIR) + "/" + rel; }
 
-// The body of CHECK_BITS / CHECK_JS_BITS: a function, so a long expression never truncates.
+// The body of CHECK_BITS / CHECK_BITS_ANY_NAN: a function, so a long expression never truncates.
 inline void check_bits(double got, double want, bool any_nan, const char* expr, const char* file,
                        int line) {
   if (any_nan && got != got && want != want) return;
@@ -75,7 +75,7 @@ inline void check_bits(double got, double want, bool any_nan, const char* expr, 
 // Bit equality of two doubles — the determinism contract is bits, not closeness.
 #define CHECK_BITS(got, want) ::ge::test::check_bits((got), (want), false, #got, __FILE__, __LINE__)
 
-// CHECK_BITS as JS can observe it: any NaN equals any NaN, because JS has one NaN and V8 does
-// not keep NaN payloads or signs stable. Use it for results JS code produced.
-#define CHECK_JS_BITS(got, want) \
+// CHECK_BITS with every NaN equal to every NaN: the determinism contract has one NaN, and its
+// payload and sign are not part of it. Use it wherever a golden row may hold a NaN.
+#define CHECK_BITS_ANY_NAN(got, want) \
   ::ge::test::check_bits((got), (want), true, #got, __FILE__, __LINE__)

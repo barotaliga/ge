@@ -8,145 +8,95 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 
 ## Files
 
-| File | What | Skill | Oracle | Test |
-| --- | --- | --- | --- | --- |
-| `engine/core/heightfield.hpp` | A baked regular grid of heights over the plan, read back bilinearly | `determinism` | `oss-game-framework/src/core/heightfield.ts` | `tests/core_heightfield_test.cpp` |
-| `engine/core/js.hpp` | JavaScript number semantics: Math.round, \|0, >>>0, Math.imul, max/min, sign, % | `determinism` |  | `tests/core_js_test.cpp` |
-| `engine/core/js_text.cpp` | The exact decimal expansion and shortest round-trip behind js_text.hpp | `determinism` `agent-interface` |  | `tests/core_js_test.cpp` |
-| `engine/core/js_text.hpp` | JS numbers as text: Number.prototype.toFixed and String(n) | `determinism` `agent-interface` |  | `tests/core_js_test.cpp` |
-| `engine/core/libm/fdlibm_arc.cpp` | Vendored V8 fdlibm: asin, acos, atan, atan2 | `determinism` |  | `tests/core_libm_test.cpp` |
-| `engine/core/libm/fdlibm_exp_log.cpp` | Vendored V8 fdlibm: exp, expm1, log, log2, cbrt, tanh | `determinism` |  | `tests/core_libm_test.cpp` |
-| `engine/core/libm/fdlibm_internal.hpp` | Word-access helpers the vendored fdlibm files are written against | `determinism` |  | `tests/core_libm_test.cpp` |
-| `engine/core/libm/fdlibm_trig.cpp` | Vendored V8 fdlibm: sin, cos, tan | `determinism` |  | `tests/core_libm_test.cpp` |
-| `engine/core/libm/libm.hpp` | The deterministic libm: every transcendental at Node 24's bits | `determinism` |  | `tests/core_libm_test.cpp` |
-| `engine/core/libm/pow.cpp` | Math.pow and ** as glibc's FMA pow computes them on Linux x86-64 | `determinism` |  | `tests/core_libm_test.cpp` |
-| `engine/core/math.hpp` | Small deterministic math: the hypot family, clamp, lerp, smoothstep, angles | `determinism` | `oss-game-framework/src/core/math.ts` | `tests/core_math_test.cpp` |
-| `engine/core/noise.hpp` | Deterministic 2D value noise, the lattice hash and the cached noise field | `determinism` | `oss-game-framework/src/core/noise.ts` | `tests/core_noise_test.cpp` |
-| `engine/core/output.cpp` | The output channel's module state: the sink, the debug switch, the recent-line ring | `determinism` `agent-interface` | `oss-game-framework/src/core/output.ts` | `tests/core_output_test.cpp` |
-| `engine/core/output.hpp` | The one diagnostic channel: semantic log helpers, a pluggable sink, a boot buffer | `determinism` `agent-interface` | `oss-game-framework/src/core/output.ts` | `tests/core_output_test.cpp` |
-| `engine/core/prng.hpp` | The seeded stream (mulberry32): every random draw in a simulation | `determinism` | `oss-game-framework/src/core/prng.ts` | `tests/core_prng_test.cpp` |
-| `engine/core/quat.hpp` | Unit quaternions as orientation: Euler conversion, integration, the sign flip | `determinism` | `oss-game-framework/src/core/quat.ts` | `tests/core_quat_test.cpp` |
-| `engine/core/solar.cpp` | The solar and lunar geometry behind solar.hpp, in the oracle's operation order | `determinism` | `oss-game-framework/src/core/solar.ts` | `tests/core_solar_test.cpp` |
-| `engine/core/solar.hpp` | Where the sun and the moon are: elevation, azimuth, daylight windows, dates | `determinism` | `oss-game-framework/src/core/solar.ts` | `tests/core_solar_test.cpp` |
-| `engine/loop/run_clock.hpp` | The fixed-step accumulator between display frames and the 120 Hz step | `sim` | `oss-game-framework/src/loop/run-clock.ts` | `tests/loop_run_clock_test.cpp` |
-| `plugins/mountain/analysis/cliffs.cpp` | The cliff and drop checks' readings of the ground | `mountain` | `game5/engine/analysis/cliffs.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/analysis/cliffs.hpp` | R22 cliffs and R24 drops held on the finished map | `mountain` | `game5/engine/analysis/cliffs.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/analysis/crossings.cpp` | The segment-pair test off a 16 m spatial hash | `mountain` | `game5/engine/analysis/crossings.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/analysis/crossings.hpp` | R5 whether the piste crosses itself | `mountain` | `game5/engine/analysis/crossings.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/analysis/index.cpp` | The single piste's checks, R1-R19, with the oracle's message text | `mountain` | `game5/engine/analysis/index.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/analysis/index.hpp` | Level analysis: analyzeLevel, the rule book re-checked on a finished map | `mountain` | `game5/engine/analysis/index.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/mapgen/berm.hpp` | The windrow's cross-section either side of the piste (R18) | `mountain` | `game5/engine/mapgen/berm.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/mapgen/cliffs.cpp` | Lays the cliffs on the face clear of the piste and cuts them into the ground | `mountain` | `game5/engine/mapgen/cliffs.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/mapgen/cliffs.hpp` | R22 cliffs off the piste: their profile, footprint, laying and stamp | `mountain` | `game5/engine/mapgen/cliffs.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/mapgen/digest.cpp` | levelDigest's mixing order, word for word with the oracle | `mountain` | `game5/engine/mapgen/digest.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/mapgen/digest.hpp` | A map's fingerprint: levelDigest, FNV-1a over what a skier meets | `mountain` | `game5/engine/mapgen/digest.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/mapgen/drift.cpp` | The drift dealer and the packed field's thinning under a drift | `mountain` | `game5/engine/mapgen/drift.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/mapgen/drift.hpp` | R17 drifts across the piste: dealt off their own stream, stamped into the packed field | `mountain` | `game5/engine/mapgen/drift.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/mapgen/drops.cpp` | The drops' placement and profile, off their own stream (none on v1) | `mountain` | `game5/engine/mapgen/drops.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/mapgen/drops.hpp` | R24 drops across a black piste: chosen on the graded line and published as cliffs | `mountain` | `game5/engine/mapgen/drops.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/mapgen/forest.cpp` | Grows the single piste's woods: the clumps first, then the scan | `mountain` | `game5/engine/mapgen/forest.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/mapgen/forest.hpp` | R14 the forest: clumps, the scan, lanes, gaps, ages and trunks | `mountain` | `game5/engine/mapgen/forest.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/mapgen/generate.cpp` | One attempt's fixed draw order, the search over attempts and the compile | `mountain` | `game5/engine/mapgen/generate.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/mapgen/generate.hpp` | The generator's outer loop: generateLevel, its attempts and the compile | `mountain` | `game5/engine/mapgen/generate.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/mapgen/grades.cpp` | The grade rows' numbers and the colour a measured piste is signed with | `mountain` | `game5/engine/mapgen/grades.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/mapgen/grades.hpp` | R23 the piste grades: the ungraded row and the four colours | `mountain` | `game5/engine/mapgen/grades.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/mapgen/kickers.cpp` | Places and stamps the kickers on the piste and off it | `mountain` | `game5/engine/mapgen/kickers.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/mapgen/kickers.hpp` | R4, R9 the kickers: on the piste and off it, their profile and stamp | `mountain` | `game5/engine/mapgen/kickers.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/mapgen/query.cpp` | The piste's lazily built spatial hash and the nearest-point searches | `mountain` | `game5/engine/mapgen/query.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/mapgen/query.hpp` | Where on the piste a point is: nearestTrackPoint, its spatial hash, trackPointAt | `mountain` | `game5/engine/mapgen/query.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/mapgen/regions.cpp` | The four regions' rows and the tree roster's hash pick | `mountain` | `game5/engine/mapgen/regions.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/mapgen/regions.hpp` | R21 the regions: each snow country's row of multiples, roster and crust | `mountain` | `game5/engine/mapgen/regions.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/mapgen/rules.hpp` | The rule book's numbers (LEVEL_RULES, R1-R24) as constexpr namespaces | `mountain` | `game5/engine/mapgen/rules.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/mapgen/spawn.cpp` | Chooses the start off the summit and lays the gates and the grid on the piste | `mountain` | `game5/engine/mapgen/spawn.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/mapgen/spawn.hpp` | R11-R13 the start: the start hut, the gates and the start line's grid | `mountain` | `game5/engine/mapgen/spawn.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/mapgen/sun.cpp` | The day's draws, in the oracle's order | `mountain` | `game5/engine/mapgen/sun.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/mapgen/sun.hpp` | R15 the day: declination, the sun's window and dealSun | `mountain` | `game5/engine/mapgen/sun.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/mapgen/surface.cpp` | The crust's blur, patches and fold, float32 like the oracle's grids | `mountain` | `game5/engine/mapgen/surface.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/mapgen/surface.hpp` | R21 the wind crust: laid off its own stream, folded into the packed field | `mountain` | `game5/engine/mapgen/surface.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/mapgen/terrain.cpp` | The mountain's plan draws and the bake of every noise layer onto the grid | `mountain` | `game5/engine/mapgen/terrain.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/mapgen/terrain.hpp` | R2, R3 the mountain: planTerrain and the baked country | `mountain` | `game5/engine/mapgen/terrain.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/mapgen/track.cpp` | The piste's walk, grading and corridor stamp | `mountain` | `game5/engine/mapgen/track.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/mapgen/track.hpp` | R5-R8, R10, R18 the piste: the walk, the grading, the bends and the corridor stamp | `mountain` | `game5/engine/mapgen/track.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/mapgen/types.hpp` | The Level and its parts: what a generated map publishes | `mountain` | `game5/engine/mapgen/types.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/mapgen/versions.hpp` | Which generator built a map: the versions and their traits | `mountain` | `game5/engine/mapgen/versions.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/mapgen/weather.cpp` | The weather's own stream and its draws, in the oracle's order | `mountain` | `game5/engine/mapgen/weather.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/mountain/mapgen/weather.hpp` | R19 the weather: the sky, the fall, the fog, the wind and the evening | `mountain` | `game5/engine/mapgen/weather.ts` | `tests/mountain_generate_test.cpp` |
-| `plugins/racing/records.hpp` | The record book's policy: what beats a row, split gaps, noting a record | `racing` `port` | `oss-game-framework/src/racing/records.ts` | `tests/racing_records_test.cpp` |
-| `plugins/racing/standings.hpp` | The field's order: home first by the clock, then further round | `racing` `port` | `oss-game-framework/src/racing/standings.ts` | `tests/racing_standings_test.cpp` |
-| `plugins/racing/tape.cpp` | The control tape's codec: base64, run-length streams, recorder, reader | `racing` `port` | `oss-game-framework/src/racing/tape.ts` | `tests/racing_tape_test.cpp` |
-| `plugins/racing/tape.hpp` | The control tape a ghost and a replay are kept on: axes, RLE, base64 | `racing` `port` | `oss-game-framework/src/racing/tape.ts` | `tests/racing_tape_test.cpp` |
-| `tests/check.hpp` | The test harness: TEST blocks, CHECK, CHECK_BITS | `testing` |  |  |
-| `tests/core_heightfield_test.cpp` | Parity test: core/heightfield against the oracle | `testing` |  |  |
-| `tests/core_js_test.cpp` | Parity test: core/js and core/js_text against Node | `testing` |  |  |
-| `tests/core_libm_test.cpp` | Parity test: core/libm against Node 24 | `testing` |  |  |
-| `tests/core_math_test.cpp` | Parity test: core/math against the oracle | `testing` |  |  |
-| `tests/core_noise_test.cpp` | Parity test: core/noise against the oracle | `testing` |  |  |
-| `tests/core_output_test.cpp` | Parity test: core/output's transcript against the oracle | `testing` |  |  |
-| `tests/core_prng_test.cpp` | Parity test: core/prng against the oracle | `testing` |  |  |
-| `tests/core_quat_test.cpp` | Parity test: core/quat against the oracle | `testing` |  |  |
-| `tests/core_solar_test.cpp` | Parity test: core/solar against the oracle | `testing` |  |  |
-| `tests/golden.hpp` | Reads tests/golden/*.txt rows of hex words or text | `testing` |  |  |
-| `tests/loop_run_clock_test.cpp` | Parity test: loop/run_clock against the oracle | `testing` |  |  |
-| `tests/main.cpp` | Runs every TEST registered in a test executable | `testing` |  |  |
-| `tests/mountain_generate_test.cpp` | Parity test: the v1 generator's maps against game5's, section by section | `testing` `mountain` |  |  |
-| `tests/package/consumer/main.cpp` | Links the installed engine package the way a game does (release smoke test) | `release` |  |  |
-| `tests/racing_records_test.cpp` | Parity test: racing/records against the oracle | `testing` `racing` |  |  |
-| `tests/racing_standings_test.cpp` | Parity test: racing/standings against the oracle | `testing` `racing` |  |  |
-| `tests/racing_tape_test.cpp` | Parity test: racing/tape and game5's own ghost, byte for byte | `testing` `racing` |  |  |
-| `tools/agents-index.mjs` | Checks the ge: tag blocks, writes docs/index.md, answers keyword queries | `write-code` |  |  |
-| `tools/check-agents.sh` | The agent guidance's structure check (make agents-check) | `write-code` |  |  |
-| `tools/check-libm.sh` | Fails any <cmath> transcendental in simulation code (make libm-check) | `determinism` |  |  |
-| `tools/check-plugins.mjs` | Checks the plugin contract: names, skills, declared dependencies, no cycles | `plugins` `write-code` |  |  |
-| `tools/parity/golden-core-libm.mjs` | Writes tests/golden/core_quat and core_solar under game5's pinned Node | `testing` |  |  |
-| `tools/parity/golden-core.mjs` | Writes tests/golden/core_* and loop_* from the framework oracle | `testing` |  |  |
-| `tools/parity/golden-js.mjs` | Writes tests/golden/core_js.txt and core_js_text.txt from Node's number semantics | `testing` |  |  |
-| `tools/parity/golden-libm.mjs` | Writes tests/golden/libm_*.txt under game5's pinned Node | `testing` |  |  |
-| `tools/parity/golden-mapgen.mjs` | Writes tests/golden/mountain_generate.txt from game5's own generateLevel (v1) | `testing` `sim` |  |  |
-| `tools/parity/golden-racing.mjs` | Writes tests/golden/racing_* from the framework oracle and a game5 ghost | `testing` |  |  |
-| `tools/parity/oracle-import.mjs` | Imports a framework .ts source into Node with types stripped | `testing` |  |  |
-| `tools/parity/oracle-node.mjs` | Refuses a golden run not under game5's pinned Node on Linux x86-64 glibc | `testing` |  |  |
-| `tools/skill-lessons.mjs` | Prints, filters and checks the skills' lesson fragments (make lessons) | `skill-reflection` |  |  |
-
-## Oracle to port
-
-Which C++ files port each oracle file. An oracle file missing here is not ported yet.
-
-| Oracle | Port |
-| --- | --- |
-| `game5/engine/analysis/cliffs.ts` | `plugins/mountain/analysis/cliffs.cpp` `plugins/mountain/analysis/cliffs.hpp` |
-| `game5/engine/analysis/crossings.ts` | `plugins/mountain/analysis/crossings.cpp` `plugins/mountain/analysis/crossings.hpp` |
-| `game5/engine/analysis/index.ts` | `plugins/mountain/analysis/index.cpp` `plugins/mountain/analysis/index.hpp` |
-| `game5/engine/mapgen/berm.ts` | `plugins/mountain/mapgen/berm.hpp` |
-| `game5/engine/mapgen/cliffs.ts` | `plugins/mountain/mapgen/cliffs.cpp` `plugins/mountain/mapgen/cliffs.hpp` |
-| `game5/engine/mapgen/digest.ts` | `plugins/mountain/mapgen/digest.cpp` `plugins/mountain/mapgen/digest.hpp` |
-| `game5/engine/mapgen/drift.ts` | `plugins/mountain/mapgen/drift.cpp` `plugins/mountain/mapgen/drift.hpp` |
-| `game5/engine/mapgen/drops.ts` | `plugins/mountain/mapgen/drops.cpp` `plugins/mountain/mapgen/drops.hpp` |
-| `game5/engine/mapgen/forest.ts` | `plugins/mountain/mapgen/forest.cpp` `plugins/mountain/mapgen/forest.hpp` |
-| `game5/engine/mapgen/generate.ts` | `plugins/mountain/mapgen/generate.cpp` `plugins/mountain/mapgen/generate.hpp` |
-| `game5/engine/mapgen/grades.ts` | `plugins/mountain/mapgen/grades.cpp` `plugins/mountain/mapgen/grades.hpp` |
-| `game5/engine/mapgen/kickers.ts` | `plugins/mountain/mapgen/kickers.cpp` `plugins/mountain/mapgen/kickers.hpp` |
-| `game5/engine/mapgen/query.ts` | `plugins/mountain/mapgen/query.cpp` `plugins/mountain/mapgen/query.hpp` |
-| `game5/engine/mapgen/regions.ts` | `plugins/mountain/mapgen/regions.cpp` `plugins/mountain/mapgen/regions.hpp` |
-| `game5/engine/mapgen/rules.ts` | `plugins/mountain/mapgen/rules.hpp` |
-| `game5/engine/mapgen/spawn.ts` | `plugins/mountain/mapgen/spawn.cpp` `plugins/mountain/mapgen/spawn.hpp` |
-| `game5/engine/mapgen/sun.ts` | `plugins/mountain/mapgen/sun.cpp` `plugins/mountain/mapgen/sun.hpp` |
-| `game5/engine/mapgen/surface.ts` | `plugins/mountain/mapgen/surface.cpp` `plugins/mountain/mapgen/surface.hpp` |
-| `game5/engine/mapgen/terrain.ts` | `plugins/mountain/mapgen/terrain.cpp` `plugins/mountain/mapgen/terrain.hpp` |
-| `game5/engine/mapgen/track.ts` | `plugins/mountain/mapgen/track.cpp` `plugins/mountain/mapgen/track.hpp` |
-| `game5/engine/mapgen/types.ts` | `plugins/mountain/mapgen/types.hpp` |
-| `game5/engine/mapgen/versions.ts` | `plugins/mountain/mapgen/versions.hpp` |
-| `game5/engine/mapgen/weather.ts` | `plugins/mountain/mapgen/weather.cpp` `plugins/mountain/mapgen/weather.hpp` |
-| `oss-game-framework/src/core/heightfield.ts` | `engine/core/heightfield.hpp` |
-| `oss-game-framework/src/core/math.ts` | `engine/core/math.hpp` |
-| `oss-game-framework/src/core/noise.ts` | `engine/core/noise.hpp` |
-| `oss-game-framework/src/core/output.ts` | `engine/core/output.cpp` `engine/core/output.hpp` |
-| `oss-game-framework/src/core/prng.ts` | `engine/core/prng.hpp` |
-| `oss-game-framework/src/core/quat.ts` | `engine/core/quat.hpp` |
-| `oss-game-framework/src/core/solar.ts` | `engine/core/solar.cpp` `engine/core/solar.hpp` |
-| `oss-game-framework/src/loop/run-clock.ts` | `engine/loop/run_clock.hpp` |
-| `oss-game-framework/src/racing/records.ts` | `plugins/racing/records.hpp` |
-| `oss-game-framework/src/racing/standings.ts` | `plugins/racing/standings.hpp` |
-| `oss-game-framework/src/racing/tape.ts` | `plugins/racing/tape.cpp` `plugins/racing/tape.hpp` |
+| File | What | Skill | Test |
+| --- | --- | --- | --- |
+| `engine/core/heightfield.hpp` | A baked regular grid of heights over the plan, read back bilinearly | `determinism` | `tests/core_heightfield_test.cpp` |
+| `engine/core/libm/fdlibm_arc.cpp` | Vendored fdlibm: asin, acos, atan, atan2 | `determinism` | `tests/core_libm_test.cpp` |
+| `engine/core/libm/fdlibm_exp_log.cpp` | Vendored fdlibm: exp, expm1, log, log2, cbrt, tanh | `determinism` | `tests/core_libm_test.cpp` |
+| `engine/core/libm/fdlibm_internal.hpp` | Word-access helpers the vendored fdlibm files are written against | `determinism` | `tests/core_libm_test.cpp` |
+| `engine/core/libm/fdlibm_trig.cpp` | Vendored fdlibm: sin, cos, tan | `determinism` | `tests/core_libm_test.cpp` |
+| `engine/core/libm/libm.hpp` | The deterministic libm: every transcendental, the same bits on every platform | `determinism` | `tests/core_libm_test.cpp` |
+| `engine/core/libm/pow.cpp` | pow as glibc's FMA pow computes it on Linux x86-64 | `determinism` | `tests/core_libm_test.cpp` |
+| `engine/core/math.hpp` | Small deterministic math: the hypot family, clamp, lerp, smoothstep, angles | `determinism` | `tests/core_math_test.cpp` |
+| `engine/core/noise.hpp` | Deterministic 2D value noise, the lattice hash and the cached noise field | `determinism` | `tests/core_noise_test.cpp` |
+| `engine/core/num.hpp` | The number semantics: round, to_int32, to_uint32, imul, max/min, sign, mod | `determinism` | `tests/core_num_test.cpp` |
+| `engine/core/num_text.cpp` | The exact decimal expansion and shortest round-trip behind num_text.hpp | `determinism` `agent-interface` | `tests/core_num_test.cpp` |
+| `engine/core/num_text.hpp` | Numbers as text: fixed-point (to_fixed) and shortest round-trip (to_string) | `determinism` `agent-interface` | `tests/core_num_test.cpp` |
+| `engine/core/output.cpp` | The output channel's module state: the sink, the debug switch, the recent-line ring | `determinism` `agent-interface` | `tests/core_output_test.cpp` |
+| `engine/core/output.hpp` | The one diagnostic channel: semantic log helpers, a pluggable sink, a boot buffer | `determinism` `agent-interface` | `tests/core_output_test.cpp` |
+| `engine/core/prng.hpp` | The seeded stream (mulberry32): every random draw in a simulation | `determinism` | `tests/core_prng_test.cpp` |
+| `engine/core/quat.hpp` | Unit quaternions as orientation: Euler conversion, integration, the sign flip | `determinism` | `tests/core_quat_test.cpp` |
+| `engine/core/solar.cpp` | The solar and lunar geometry behind solar.hpp, in its fixed operation order | `determinism` | `tests/core_solar_test.cpp` |
+| `engine/core/solar.hpp` | Where the sun and the moon are: elevation, azimuth, daylight windows, dates | `determinism` | `tests/core_solar_test.cpp` |
+| `engine/loop/run_clock.hpp` | The fixed-step accumulator between display frames and the 120 Hz step | `sim` | `tests/loop_run_clock_test.cpp` |
+| `plugins/mountain/analysis/cliffs.cpp` | The cliff and drop checks' readings of the ground | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/analysis/cliffs.hpp` | R22 cliffs and R24 drops held on the finished map | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/analysis/crossings.cpp` | The segment-pair test off a 16 m spatial hash | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/analysis/crossings.hpp` | R5 whether the piste crosses itself | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/analysis/index.cpp` | The single piste's checks, R1-R19, with their fixed message text | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/analysis/index.hpp` | Level analysis: analyze_level, the rule book re-checked on a finished map | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/berm.hpp` | The windrow's cross-section either side of the piste (R18) | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/cliffs.cpp` | Lays the cliffs on the face clear of the piste and cuts them into the ground | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/cliffs.hpp` | R22 cliffs off the piste: their profile, footprint, laying and stamp | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/digest.cpp` | level_digest's mixing order, word for word | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/digest.hpp` | A map's fingerprint: level_digest, FNV-1a over what a skier meets | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/drift.cpp` | The drift dealer and the packed field's thinning under a drift | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/drift.hpp` | R17 drifts across the piste: dealt off their own stream, stamped into the packed field | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/drops.cpp` | The drops' placement and profile, off their own stream (none on v1) | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/drops.hpp` | R24 drops across a black piste: chosen on the graded line and published as cliffs | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/forest.cpp` | Grows the single piste's woods: the clumps first, then the scan | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/forest.hpp` | R14 the forest: clumps, the scan, lanes, gaps, ages and trunks | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/generate.cpp` | One attempt's fixed draw order, the search over attempts and the compile | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/generate.hpp` | The generator's outer loop: generate_level, its attempts and the compile | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/grades.cpp` | The grade rows' numbers and the colour a measured piste is signed with | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/grades.hpp` | R23 the piste grades: the ungraded row and the four colours | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/kickers.cpp` | Places and stamps the kickers on the piste and off it | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/kickers.hpp` | R4, R9 the kickers: on the piste and off it, their profile and stamp | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/query.cpp` | The piste's lazily built spatial hash and the nearest-point searches | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/query.hpp` | Where on the piste a point is: nearest_track_point, its spatial hash, track_point_at | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/regions.cpp` | The four regions' rows and the tree roster's hash pick | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/regions.hpp` | R21 the regions: each snow country's row of multiples, roster and crust | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/rules.hpp` | The rule book's numbers (R1-R24) as constexpr namespaces | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/spawn.cpp` | Chooses the start off the summit and lays the gates and the grid on the piste | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/spawn.hpp` | R11-R13 the start: the start hut, the gates and the start line's grid | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/sun.cpp` | The day's draws, in their fixed order | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/sun.hpp` | R15 the day: declination, the sun's window and deal_sun | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/surface.cpp` | The crust's blur, patches and fold, on float32 grids | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/surface.hpp` | R21 the wind crust: laid off its own stream, folded into the packed field | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/terrain.cpp` | The mountain's plan draws and the bake of every noise layer onto the grid | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/terrain.hpp` | R2, R3 the mountain: plan_terrain and the baked country | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/track.cpp` | The piste's walk, grading and corridor stamp | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/track.hpp` | R5-R8, R10, R18 the piste: the walk, the grading, the bends and the corridor stamp | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/types.hpp` | The Level and its parts: what a generated map publishes | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/versions.hpp` | Which generator built a map: the versions and their traits | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/weather.cpp` | The weather's own stream and its draws, in their fixed order | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/weather.hpp` | R19 the weather: the sky, the fall, the fog, the wind and the evening | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/racing/records.hpp` | The record book's policy: what beats a row, split gaps, noting a record | `racing` | `tests/racing_records_test.cpp` |
+| `plugins/racing/standings.hpp` | The field's order: home first by the clock, then further round | `racing` | `tests/racing_standings_test.cpp` |
+| `plugins/racing/tape.cpp` | The control tape's codec: base64, run-length streams, recorder, reader | `racing` | `tests/racing_tape_test.cpp` |
+| `plugins/racing/tape.hpp` | The control tape a ghost and a replay are kept on: axes, RLE, base64 | `racing` | `tests/racing_tape_test.cpp` |
+| `tests/check.hpp` | The test harness: TEST blocks, CHECK, CHECK_BITS | `testing` |  |
+| `tests/core_heightfield_test.cpp` | Golden test: core/heightfield, bit for bit | `testing` |  |
+| `tests/core_libm_test.cpp` | Golden test: core/libm, bit for bit | `testing` |  |
+| `tests/core_math_test.cpp` | Golden test: core/math, bit for bit | `testing` |  |
+| `tests/core_noise_test.cpp` | Golden test: core/noise, bit for bit | `testing` |  |
+| `tests/core_num_test.cpp` | Golden test: core/num and core/num_text, bit for bit | `testing` |  |
+| `tests/core_output_test.cpp` | Golden test: core/output's transcript, bit for bit | `testing` |  |
+| `tests/core_prng_test.cpp` | Golden test: core/prng, bit for bit | `testing` |  |
+| `tests/core_quat_test.cpp` | Golden test: core/quat, bit for bit | `testing` |  |
+| `tests/core_solar_test.cpp` | Golden test: core/solar, bit for bit | `testing` |  |
+| `tests/golden.hpp` | Reads tests/golden/*.txt rows of hex words or text | `testing` |  |
+| `tests/loop_run_clock_test.cpp` | Golden test: loop/run_clock, bit for bit | `testing` |  |
+| `tests/main.cpp` | Runs every TEST registered in a test executable | `testing` |  |
+| `tests/mountain_generate_test.cpp` | Golden test: the v1 generator's maps, section by section | `testing` `mountain` |  |
+| `tests/racing_records_test.cpp` | Golden test: racing/records, bit for bit | `testing` `racing` |  |
+| `tests/racing_standings_test.cpp` | Golden test: racing/standings, bit for bit | `testing` `racing` |  |
+| `tests/racing_tape_test.cpp` | Golden test: racing/tape and a stored ghost, byte for byte | `testing` `racing` |  |
+| `tools/agents-index.mjs` | Checks the ge: tag blocks, writes docs/index.md, answers keyword queries | `write-code` |  |
+| `tools/check-agents.sh` | The agent guidance's structure check (make agents-check) | `write-code` |  |
+| `tools/check-libm.sh` | Fails any <cmath> transcendental in simulation code (make libm-check) | `determinism` |  |
+| `tools/check-plugins.mjs` | Checks the plugin contract: names, skills, declared dependencies, no cycles | `plugins` `write-code` |  |
+| `tools/skill-lessons.mjs` | Prints, filters and checks the skills' lesson fragments (make lessons) | `skill-reflection` |  |
 
 ## Keywords
 
@@ -159,9 +109,7 @@ Which C++ files port each oracle file. An oracle file missing here is not ported
 | alpha | `engine/loop/run_clock.hpp` |
 | alpine | `plugins/mountain/mapgen/regions.hpp` |
 | analysis | `plugins/mountain/analysis/cliffs.cpp` `plugins/mountain/analysis/cliffs.hpp` `plugins/mountain/analysis/crossings.cpp` `plugins/mountain/analysis/crossings.hpp` `plugins/mountain/analysis/index.cpp` `plugins/mountain/analysis/index.hpp` |
-| analyzeLevel | `plugins/mountain/analysis/index.cpp` `plugins/mountain/analysis/index.hpp` `tests/mountain_generate_test.cpp` |
 | angle | `engine/core/math.hpp` |
-| angleDiff | `engine/core/math.hpp` |
 | angular-velocity | `engine/core/quat.hpp` |
 | approach | `engine/core/math.hpp` |
 | argument-reduction | `engine/core/libm/fdlibm_trig.cpp` |
@@ -170,85 +118,53 @@ Which C++ files port each oracle file. An oracle file missing here is not ported
 | assert | `tests/check.hpp` |
 | atan | `engine/core/libm/fdlibm_arc.cpp` `engine/core/libm/libm.hpp` |
 | atan2 | `engine/core/libm/fdlibm_arc.cpp` `engine/core/libm/libm.hpp` |
-| atob | `plugins/racing/tape.cpp` |
 | attempt | `plugins/mountain/mapgen/generate.hpp` |
-| attemptLevel | `plugins/mountain/mapgen/generate.cpp` |
 | azimuth | `engine/core/solar.hpp` |
 | bake | `engine/core/heightfield.hpp` |
-| bakeCountry | `plugins/mountain/mapgen/terrain.cpp` `plugins/mountain/mapgen/terrain.hpp` |
 | base64 | `plugins/racing/tape.cpp` `plugins/racing/tape.hpp` |
 | beats | `plugins/racing/records.hpp` |
-| bendFloor | `plugins/mountain/mapgen/rules.hpp` |
-| bendRoom | `plugins/mountain/mapgen/track.cpp` |
 | berm | `plugins/mountain/mapgen/berm.hpp` |
-| bermCrest | `plugins/mountain/mapgen/berm.hpp` |
-| bermProfile | `plugins/mountain/mapgen/berm.hpp` |
 | best | `plugins/racing/records.hpp` |
 | bilinear | `engine/core/heightfield.hpp` |
 | bit-cast | `engine/core/libm/fdlibm_internal.hpp` |
 | bits | `engine/core/libm/libm.hpp` |
 | blur | `plugins/mountain/mapgen/surface.cpp` |
-| btoa | `plugins/racing/tape.cpp` |
 | cbrt | `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/libm.hpp` |
 | chance | `engine/core/prng.hpp` |
 | check | `tests/check.hpp` `tools/check-agents.sh` `tools/check-libm.sh` `tools/check-plugins.mjs` |
 | check-bits | `tests/check.hpp` |
-| checkCliffs | `plugins/mountain/analysis/cliffs.cpp` `plugins/mountain/analysis/cliffs.hpp` |
-| checkDrops | `plugins/mountain/analysis/cliffs.cpp` `plugins/mountain/analysis/cliffs.hpp` |
-| Checkpoint | `plugins/mountain/mapgen/types.hpp` |
-| chooseStart | `plugins/mountain/mapgen/spawn.cpp` `plugins/mountain/mapgen/spawn.hpp` |
 | ci | `tools/check-agents.sh` `tools/check-libm.sh` |
 | clamp | `engine/core/math.hpp` |
 | cliff | `plugins/mountain/analysis/cliffs.hpp` `plugins/mountain/mapgen/cliffs.cpp` `plugins/mountain/mapgen/cliffs.hpp` |
-| Cliff | `plugins/mountain/mapgen/types.hpp` |
-| cliffFootprint | `plugins/mountain/mapgen/cliffs.hpp` |
-| cliffProfile | `plugins/mountain/mapgen/cliffs.hpp` |
 | cliffs | `plugins/mountain/mapgen/cliffs.hpp` |
 | clump | `plugins/mountain/mapgen/forest.cpp` `plugins/mountain/mapgen/forest.hpp` |
 | cmath | `tools/check-libm.sh` |
 | codec | `plugins/racing/tape.cpp` |
-| compileLevel | `plugins/mountain/mapgen/generate.cpp` `plugins/mountain/mapgen/generate.hpp` |
 | concepts | `tools/skill-lessons.mjs` |
 | consolidation | `tools/skill-lessons.mjs` |
-| consumer | `tests/package/consumer/main.cpp` |
 | continental | `plugins/mountain/mapgen/regions.hpp` |
 | controls | `plugins/racing/tape.hpp` |
-| ControlTape | `plugins/racing/tape.hpp` |
 | conventions | `engine/core/math.hpp` |
-| core | `tools/parity/golden-core.mjs` |
 | cos | `engine/core/libm/fdlibm_trig.cpp` `engine/core/libm/libm.hpp` |
-| createHeightfield | `engine/core/heightfield.hpp` |
-| createRng | `engine/core/prng.hpp` |
-| createRunClock | `engine/loop/run_clock.hpp` |
 | crossing | `plugins/mountain/analysis/crossings.hpp` |
 | crust | `plugins/mountain/mapgen/surface.cpp` `plugins/mountain/mapgen/surface.hpp` |
 | ctest | `tests/main.cpp` |
-| CURRENT_GENERATOR_VERSION | `plugins/mountain/mapgen/versions.hpp` |
 | day | `plugins/mountain/mapgen/sun.hpp` |
 | daylight | `engine/core/solar.hpp` |
-| daylightWindow | `engine/core/solar.hpp` |
-| dealDrifts | `plugins/mountain/mapgen/drift.cpp` `plugins/mountain/mapgen/drift.hpp` |
-| dealSun | `plugins/mountain/mapgen/sun.cpp` `plugins/mountain/mapgen/sun.hpp` |
-| dealWeather | `plugins/mountain/mapgen/weather.cpp` `plugins/mountain/mapgen/weather.hpp` |
 | debug | `engine/core/output.hpp` |
-| declinationOf | `plugins/mountain/mapgen/sun.cpp` `plugins/mountain/mapgen/sun.hpp` |
-| decodeStream | `plugins/racing/tape.cpp` |
+| decimal | `engine/core/num_text.cpp` |
 | depends | `tools/check-plugins.mjs` |
-| descentAt | `plugins/mountain/mapgen/terrain.hpp` |
 | determinism | `engine/core/prng.hpp` `tools/check-libm.sh` |
 | diagnostics | `engine/core/output.hpp` |
 | digest | `plugins/mountain/mapgen/digest.cpp` `plugins/mountain/mapgen/digest.hpp` |
 | direction | `tools/check-plugins.mjs` |
 | discovery | `tools/agents-index.mjs` |
 | dist2 | `engine/core/math.hpp` |
-| drawPiste | `plugins/mountain/mapgen/track.cpp` `plugins/mountain/mapgen/track.hpp` |
 | drift | `plugins/mountain/mapgen/drift.cpp` `plugins/mountain/mapgen/drift.hpp` |
-| driftAt | `plugins/mountain/mapgen/drift.hpp` |
 | drifts | `plugins/mountain/mapgen/drift.hpp` |
 | drop | `plugins/mountain/analysis/cliffs.hpp` `plugins/mountain/mapgen/drops.cpp` `plugins/mountain/mapgen/drops.hpp` |
 | drops | `plugins/mountain/mapgen/drops.hpp` |
 | elevation | `engine/core/solar.hpp` |
-| encodeStream | `plugins/racing/tape.cpp` |
 | engine-plugin-game | `tools/check-plugins.mjs` |
 | ephemeris | `engine/core/solar.cpp` |
 | error | `engine/core/output.hpp` |
@@ -261,50 +177,31 @@ Which C++ files port each oracle file. An oracle file missing here is not ported
 | fdlibm | `engine/core/libm/fdlibm_arc.cpp` `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/fdlibm_internal.hpp` `engine/core/libm/fdlibm_trig.cpp` `engine/core/libm/libm.hpp` |
 | fell | `plugins/mountain/mapgen/regions.hpp` |
 | field | `plugins/racing/standings.hpp` |
-| fieldCell | `engine/core/heightfield.hpp` |
-| fieldGradient | `engine/core/heightfield.hpp` |
-| fieldOrder | `plugins/racing/standings.hpp` |
-| fillField | `engine/core/heightfield.hpp` |
 | find | `tools/agents-index.mjs` |
-| find-package | `tests/package/consumer/main.cpp` |
 | finding | `plugins/mountain/analysis/index.hpp` |
 | findings | `plugins/mountain/analysis/index.hpp` |
 | fingerprint | `plugins/mountain/mapgen/digest.hpp` `plugins/racing/tape.hpp` |
 | fixed-step | `engine/loop/run_clock.hpp` |
 | fixture | `tests/golden.hpp` |
-| flankAt | `plugins/mountain/mapgen/terrain.hpp` |
 | fma | `engine/core/libm/pow.cpp` |
 | fnv | `plugins/mountain/mapgen/digest.cpp` `plugins/mountain/mapgen/digest.hpp` |
 | focus | `engine/loop/run_clock.hpp` |
-| foldSurface | `plugins/mountain/mapgen/surface.cpp` `plugins/mountain/mapgen/surface.hpp` |
 | forest | `plugins/mountain/mapgen/forest.cpp` `plugins/mountain/mapgen/forest.hpp` |
+| forgiving-base64 | `plugins/racing/tape.cpp` |
 | fragments | `tools/skill-lessons.mjs` |
 | frame | `engine/loop/run_clock.hpp` |
-| fromAxisAngle | `engine/core/quat.hpp` |
-| fromEuler | `engine/core/quat.hpp` |
 | gates | `plugins/mountain/mapgen/spawn.hpp` |
 | ge_add_plugin | `tools/check-plugins.mjs` |
 | ge-tags | `tools/agents-index.mjs` |
 | generate | `plugins/mountain/mapgen/generate.cpp` `plugins/mountain/mapgen/generate.hpp` |
-| generateLevel | `plugins/mountain/mapgen/generate.hpp` `tests/mountain_generate_test.cpp` `tools/parity/golden-mapgen.mjs` |
-| GenerateOptions | `plugins/mountain/mapgen/types.hpp` |
-| generator | `tools/parity/golden-core-libm.mjs` `tools/parity/golden-core.mjs` `tools/parity/golden-js.mjs` `tools/parity/golden-libm.mjs` `tools/parity/golden-mapgen.mjs` `tools/parity/golden-racing.mjs` |
-| GENERATOR_VERSIONS | `plugins/mountain/mapgen/versions.hpp` |
-| generatorTraits | `plugins/mountain/mapgen/versions.hpp` |
-| ghost | `plugins/racing/tape.cpp` `plugins/racing/tape.hpp` `tests/racing_tape_test.cpp` `tools/parity/golden-racing.mjs` |
-| glibc | `engine/core/libm/pow.cpp` `tools/parity/oracle-node.mjs` |
-| golden | `tests/core_heightfield_test.cpp` `tests/core_js_test.cpp` `tests/core_libm_test.cpp` `tests/core_math_test.cpp` `tests/core_noise_test.cpp` `tests/core_output_test.cpp` `tests/core_prng_test.cpp` `tests/core_quat_test.cpp` `tests/core_solar_test.cpp` `tests/golden.hpp` `tests/loop_run_clock_test.cpp` `tests/mountain_generate_test.cpp` `tests/racing_records_test.cpp` `tests/racing_standings_test.cpp` `tests/racing_tape_test.cpp` `tools/parity/golden-core-libm.mjs` `tools/parity/golden-core.mjs` `tools/parity/golden-js.mjs` `tools/parity/golden-libm.mjs` `tools/parity/golden-mapgen.mjs` `tools/parity/golden-racing.mjs` |
+| ghost | `plugins/racing/tape.cpp` `plugins/racing/tape.hpp` `tests/racing_tape_test.cpp` |
+| glibc | `engine/core/libm/pow.cpp` |
+| golden | `tests/core_heightfield_test.cpp` `tests/core_libm_test.cpp` `tests/core_math_test.cpp` `tests/core_noise_test.cpp` `tests/core_num_test.cpp` `tests/core_output_test.cpp` `tests/core_prng_test.cpp` `tests/core_quat_test.cpp` `tests/core_solar_test.cpp` `tests/golden.hpp` `tests/loop_run_clock_test.cpp` `tests/mountain_generate_test.cpp` `tests/racing_records_test.cpp` `tests/racing_standings_test.cpp` `tests/racing_tape_test.cpp` |
 | grade | `plugins/mountain/mapgen/grades.cpp` `plugins/mountain/mapgen/grades.hpp` |
-| gradePiste | `plugins/mountain/mapgen/track.cpp` `plugins/mountain/mapgen/track.hpp` |
-| gradeRow | `plugins/mountain/mapgen/grades.hpp` |
 | grades | `plugins/mountain/mapgen/grades.hpp` |
-| GRADES | `plugins/mountain/mapgen/grades.cpp` `plugins/mountain/mapgen/grades.hpp` |
 | gradient | `engine/core/heightfield.hpp` |
 | grid | `engine/core/heightfield.hpp` |
-| gridOnTrack | `plugins/mountain/mapgen/spawn.cpp` `plugins/mountain/mapgen/spawn.hpp` |
 | ground | `engine/core/heightfield.hpp` |
-| growForest | `plugins/mountain/mapgen/forest.cpp` `plugins/mountain/mapgen/forest.hpp` |
-| guard | `tools/parity/oracle-node.mjs` |
 | harness | `tests/check.hpp` |
 | hash | `engine/core/noise.hpp` |
 | hash2 | `engine/core/noise.hpp` |
@@ -313,106 +210,70 @@ Which C++ files port each oracle file. An oracle file missing here is not ported
 | heightfield | `engine/core/heightfield.hpp` `plugins/mountain/mapgen/terrain.hpp` `tests/core_heightfield_test.cpp` |
 | hex | `tests/golden.hpp` |
 | high-word | `engine/core/libm/fdlibm_internal.hpp` |
-| hourOfElevation | `engine/core/solar.hpp` |
 | hypot | `engine/core/math.hpp` `tests/core_math_test.cpp` |
 | hypot3 | `engine/core/math.hpp` |
 | hypot4 | `engine/core/math.hpp` |
-| import | `tools/parity/oracle-import.mjs` |
-| imul | `engine/core/js.hpp` |
-| inBand | `plugins/mountain/mapgen/rules.hpp` |
+| imul | `engine/core/num.hpp` |
 | include | `tools/check-plugins.mjs` |
 | index | `tools/agents-index.mjs` |
 | info | `engine/core/output.hpp` |
 | input | `plugins/racing/tape.hpp` |
-| install | `tests/package/consumer/main.cpp` |
 | integrate | `engine/core/quat.hpp` |
 | internal | `engine/core/libm/fdlibm_internal.hpp` |
 | interpolation | `engine/loop/run_clock.hpp` |
 | inverse-trig | `engine/core/libm/fdlibm_arc.cpp` |
-| javascript | `engine/core/js.hpp` |
-| js | `engine/core/js.hpp` `engine/core/js_text.cpp` `engine/core/js_text.hpp` `tests/core_js_test.cpp` `tools/parity/golden-js.mjs` |
 | julian-day | `engine/core/solar.cpp` `engine/core/solar.hpp` |
 | keywords | `tools/agents-index.mjs` |
 | kicker | `plugins/mountain/mapgen/kickers.cpp` `plugins/mountain/mapgen/kickers.hpp` |
-| Kicker | `plugins/mountain/mapgen/types.hpp` |
 | kickers | `plugins/mountain/mapgen/kickers.hpp` |
 | krummholz | `plugins/mountain/mapgen/forest.hpp` |
 | lanes | `plugins/mountain/mapgen/forest.cpp` |
 | latitude | `plugins/mountain/mapgen/sun.hpp` |
 | lattice | `engine/core/noise.hpp` |
-| layCheckpoints | `plugins/mountain/mapgen/spawn.cpp` `plugins/mountain/mapgen/spawn.hpp` |
-| layCliffs | `plugins/mountain/mapgen/cliffs.cpp` `plugins/mountain/mapgen/cliffs.hpp` |
-| layCrust | `plugins/mountain/mapgen/surface.cpp` `plugins/mountain/mapgen/surface.hpp` |
-| layDrops | `plugins/mountain/mapgen/drops.cpp` `plugins/mountain/mapgen/drops.hpp` |
-| layOffKickers | `plugins/mountain/mapgen/kickers.cpp` `plugins/mountain/mapgen/kickers.hpp` |
-| layTrackKickers | `plugins/mountain/mapgen/kickers.cpp` `plugins/mountain/mapgen/kickers.hpp` |
 | leaderboard | `plugins/racing/standings.hpp` |
-| legProgress | `plugins/racing/standings.hpp` |
 | lerp | `engine/core/math.hpp` |
 | lessons | `tools/skill-lessons.mjs` |
 | level | `plugins/mountain/mapgen/generate.hpp` |
-| Level | `plugins/mountain/mapgen/types.hpp` |
-| LEVEL_RULES | `plugins/mountain/mapgen/rules.hpp` |
-| levelDigest | `plugins/mountain/mapgen/digest.cpp` `plugins/mountain/mapgen/digest.hpp` `tests/mountain_generate_test.cpp` `tools/parity/golden-mapgen.mjs` |
-| libm | `engine/core/libm/fdlibm_arc.cpp` `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/fdlibm_internal.hpp` `engine/core/libm/fdlibm_trig.cpp` `engine/core/libm/libm.hpp` `engine/core/libm/pow.cpp` `tests/core_libm_test.cpp` `tools/check-libm.sh` `tools/parity/golden-libm.mjs` |
+| libm | `engine/core/libm/fdlibm_arc.cpp` `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/fdlibm_internal.hpp` `engine/core/libm/fdlibm_trig.cpp` `engine/core/libm/libm.hpp` `engine/core/libm/pow.cpp` `tests/core_libm_test.cpp` `tools/check-libm.sh` |
 | line-cap | `tools/check-agents.sh` |
-| loader | `tools/parity/oracle-import.mjs` |
 | log | `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/libm.hpp` `engine/core/output.cpp` `engine/core/output.hpp` `tests/core_output_test.cpp` |
 | log2 | `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/libm.hpp` |
 | logging | `engine/core/output.hpp` |
-| loop | `engine/loop/run_clock.hpp` `tools/parity/golden-core.mjs` |
+| loop | `engine/loop/run_clock.hpp` |
 | low-word | `engine/core/libm/fdlibm_internal.hpp` |
 | main | `tests/main.cpp` |
-| mapgen | `plugins/mountain/mapgen/generate.hpp` `tests/mountain_generate_test.cpp` `tools/parity/golden-mapgen.mjs` |
+| mapgen | `plugins/mountain/mapgen/generate.hpp` `tests/mountain_generate_test.cpp` |
 | maritime | `plugins/mountain/mapgen/regions.hpp` |
 | math | `engine/core/math.hpp` `tests/core_math_test.cpp` |
-| max | `engine/core/js.hpp` |
-| MAX_FRAME_SECONDS | `engine/loop/run_clock.hpp` |
+| max | `engine/core/num.hpp` |
 | metadata | `tools/agents-index.mjs` |
-| min | `engine/core/js.hpp` |
-| minSeparation | `plugins/mountain/mapgen/track.hpp` |
-| mod | `engine/core/js.hpp` |
+| min | `engine/core/num.hpp` |
+| mod | `engine/core/num.hpp` |
 | module-state | `engine/core/output.cpp` `engine/core/output.hpp` |
-| modulo | `engine/core/js.hpp` |
+| modulo | `engine/core/num.hpp` |
 | moon | `engine/core/solar.cpp` `engine/core/solar.hpp` `tests/core_solar_test.cpp` |
-| moonAt | `engine/core/solar.hpp` |
-| moonOnDate | `engine/core/solar.hpp` |
 | mountain | `plugins/mountain/mapgen/terrain.hpp` |
 | mulberry32 | `engine/core/prng.hpp` |
-| nan | `engine/core/js.hpp` |
-| nearestTrackPoint | `plugins/mountain/mapgen/query.cpp` `plugins/mountain/mapgen/query.hpp` |
-| nearestWithin | `plugins/mountain/mapgen/query.cpp` `plugins/mountain/mapgen/query.hpp` |
-| negative-zero | `engine/core/js.hpp` |
+| nan | `engine/core/num.hpp` |
+| negative-zero | `engine/core/num.hpp` |
 | next | `engine/core/prng.hpp` |
-| node24 | `engine/core/libm/libm.hpp` `tools/parity/golden-core-libm.mjs` `tools/parity/golden-libm.mjs` `tools/parity/oracle-node.mjs` |
 | noise | `engine/core/noise.hpp` `tests/core_noise_test.cpp` |
-| noiseField | `engine/core/noise.hpp` |
-| normalAt | `plugins/mountain/mapgen/generate.cpp` |
-| noteRecord | `plugins/racing/records.hpp` |
-| number-format | `engine/core/js_text.hpp` |
-| nvmrc | `tools/parity/oracle-node.mjs` |
+| num | `engine/core/num.hpp` `engine/core/num_text.cpp` `engine/core/num_text.hpp` `tests/core_num_test.cpp` |
+| number | `engine/core/num.hpp` |
+| number-format | `engine/core/num_text.cpp` `engine/core/num_text.hpp` |
 | octaves | `engine/core/noise.hpp` |
-| onCliff | `plugins/mountain/mapgen/cliffs.hpp` |
-| onKicker | `plugins/mountain/mapgen/kickers.hpp` |
 | optimized-routines | `engine/core/libm/pow.cpp` |
-| oracle | `tools/parity/golden-core-libm.mjs` `tools/parity/golden-core.mjs` `tools/parity/oracle-import.mjs` `tools/parity/oracle-node.mjs` |
 | order | `plugins/racing/standings.hpp` |
 | orientation | `engine/core/quat.hpp` |
 | output | `engine/core/output.cpp` `engine/core/output.hpp` `tests/core_output_test.cpp` |
-| package | `tests/package/consumer/main.cpp` |
-| parity | `tests/core_heightfield_test.cpp` `tests/core_js_test.cpp` `tests/core_libm_test.cpp` `tests/core_math_test.cpp` `tests/core_noise_test.cpp` `tests/core_output_test.cpp` `tests/core_prng_test.cpp` `tests/core_quat_test.cpp` `tests/core_solar_test.cpp` `tests/golden.hpp` `tests/loop_run_clock_test.cpp` `tests/mountain_generate_test.cpp` `tests/racing_records_test.cpp` `tests/racing_standings_test.cpp` `tests/racing_tape_test.cpp` `tools/parity/golden-core-libm.mjs` `tools/parity/golden-core.mjs` `tools/parity/golden-js.mjs` `tools/parity/golden-libm.mjs` `tools/parity/golden-mapgen.mjs` `tools/parity/golden-racing.mjs` |
 | pause | `engine/loop/run_clock.hpp` |
 | personal-best | `plugins/racing/records.hpp` |
 | pi | `engine/core/math.hpp` |
 | pick | `engine/core/prng.hpp` |
-| pickIndex | `engine/core/prng.hpp` |
 | pinned-map | `plugins/mountain/mapgen/digest.hpp` |
 | piste | `plugins/mountain/mapgen/track.hpp` |
-| pisteGradeOf | `plugins/mountain/mapgen/grades.hpp` |
 | pitch | `engine/core/quat.hpp` |
 | place | `plugins/racing/standings.hpp` |
-| placeAmong | `plugins/racing/standings.hpp` |
-| planTerrain | `plugins/mountain/mapgen/terrain.cpp` `plugins/mountain/mapgen/terrain.hpp` |
 | plugin | `tools/check-plugins.mjs` |
 | plugins | `tools/check-plugins.mjs` |
 | position | `plugins/racing/standings.hpp` |
@@ -420,29 +281,21 @@ Which C++ files port each oracle file. An oracle file missing here is not ported
 | power | `engine/core/libm/pow.cpp` |
 | prng | `engine/core/prng.hpp` `tests/core_prng_test.cpp` |
 | profile | `plugins/mountain/mapgen/terrain.hpp` |
-| provenance | `tools/parity/oracle-node.mjs` |
-| publishDrops | `plugins/mountain/mapgen/drops.cpp` `plugins/mountain/mapgen/drops.hpp` |
-| publishTrackKickers | `plugins/mountain/mapgen/kickers.hpp` |
-| quat | `engine/core/quat.hpp` `tests/core_quat_test.cpp` `tools/parity/golden-core-libm.mjs` |
+| quat | `engine/core/quat.hpp` `tests/core_quat_test.cpp` |
 | quaternion | `engine/core/quat.hpp` |
 | query | `plugins/mountain/mapgen/query.cpp` `plugins/mountain/mapgen/query.hpp` |
-| racing | `plugins/racing/records.hpp` `plugins/racing/standings.hpp` `plugins/racing/tape.cpp` `plugins/racing/tape.hpp` `tools/parity/golden-racing.mjs` |
+| racing | `plugins/racing/records.hpp` `plugins/racing/standings.hpp` `plugins/racing/tape.cpp` `plugins/racing/tape.hpp` |
 | random | `engine/core/prng.hpp` |
 | range | `engine/core/prng.hpp` |
 | reader | `plugins/racing/tape.hpp` `tests/golden.hpp` |
-| recentLogs | `engine/core/output.hpp` |
 | record-book | `plugins/racing/records.hpp` |
 | recorder | `plugins/racing/tape.hpp` |
 | recording | `plugins/racing/tape.hpp` |
-| records | `plugins/racing/records.hpp` `tests/racing_records_test.cpp` `tools/parity/golden-racing.mjs` |
+| records | `plugins/racing/records.hpp` `tests/racing_records_test.cpp` |
 | refraction | `engine/core/solar.cpp` `engine/core/solar.hpp` |
 | region | `plugins/mountain/mapgen/regions.cpp` `plugins/mountain/mapgen/regions.hpp` |
-| regionRow | `plugins/mountain/mapgen/regions.hpp` |
 | regions | `plugins/mountain/mapgen/regions.hpp` |
-| REGIONS | `plugins/mountain/mapgen/regions.cpp` |
-| release | `tests/package/consumer/main.cpp` |
 | replay | `plugins/racing/tape.hpp` |
-| resolve-hook | `tools/parity/oracle-import.mjs` |
 | resume | `engine/loop/run_clock.hpp` |
 | ridged | `plugins/mountain/mapgen/terrain.cpp` |
 | ring-buffer | `engine/core/output.cpp` |
@@ -450,7 +303,8 @@ Which C++ files port each oracle file. An oracle file missing here is not ported
 | rng | `engine/core/prng.hpp` `tests/core_prng_test.cpp` |
 | roll | `engine/core/quat.hpp` |
 | rotation | `engine/core/quat.hpp` |
-| round | `engine/core/js.hpp` |
+| round | `engine/core/num.hpp` |
+| round-trip | `engine/core/num_text.cpp` |
 | router | `tools/check-agents.sh` |
 | rule-book | `plugins/mountain/mapgen/rules.hpp` |
 | rule-check | `plugins/mountain/analysis/index.hpp` |
@@ -458,105 +312,64 @@ Which C++ files port each oracle file. An oracle file missing here is not ported
 | run-clock | `engine/loop/run_clock.hpp` `tests/loop_run_clock_test.cpp` |
 | runner | `tests/main.cpp` |
 | sample | `engine/core/heightfield.hpp` |
-| sampleField | `engine/core/heightfield.hpp` |
-| sampleFieldGradient | `engine/core/heightfield.hpp` |
-| sampleNoise | `engine/core/noise.hpp` |
-| scaleCount | `plugins/mountain/mapgen/regions.cpp` |
 | scope | `tools/skill-lessons.mjs` |
 | search | `tools/agents-index.mjs` |
-| searchLevel | `plugins/mountain/mapgen/generate.cpp` |
 | seed | `engine/core/prng.hpp` `plugins/mountain/mapgen/generate.hpp` |
-| selfCrossings | `plugins/mountain/analysis/crossings.cpp` `plugins/mountain/analysis/crossings.hpp` |
-| semantics | `engine/core/js.hpp` |
-| setOutputSink | `engine/core/output.hpp` |
+| semantics | `engine/core/num.hpp` |
 | severity | `plugins/mountain/analysis/index.hpp` |
+| shortest | `engine/core/num_text.cpp` |
 | sidereal | `engine/core/solar.cpp` |
-| sign | `engine/core/js.hpp` |
+| sign | `engine/core/num.hpp` |
 | sin | `engine/core/libm/fdlibm_trig.cpp` `engine/core/libm/libm.hpp` |
-| singlePiste | `plugins/mountain/mapgen/versions.hpp` |
 | sink | `engine/core/output.cpp` `engine/core/output.hpp` |
 | size-bars | `tools/skill-lessons.mjs` |
 | skill-reflection | `tools/skill-lessons.mjs` |
 | skills | `tools/check-agents.sh` |
 | sky | `plugins/mountain/mapgen/weather.hpp` |
 | slope | `engine/core/heightfield.hpp` |
-| smoke-test | `tests/package/consumer/main.cpp` |
 | smooth | `engine/core/noise.hpp` |
 | smoothstep | `engine/core/math.hpp` |
-| snapAxis | `plugins/racing/tape.hpp` |
 | snows | `plugins/mountain/mapgen/weather.hpp` |
-| solar | `engine/core/solar.cpp` `engine/core/solar.hpp` `plugins/mountain/mapgen/sun.hpp` `tests/core_solar_test.cpp` `tools/parity/golden-core-libm.mjs` |
+| solar | `engine/core/solar.cpp` `engine/core/solar.hpp` `plugins/mountain/mapgen/sun.hpp` `tests/core_solar_test.cpp` |
 | spatial-hash | `plugins/mountain/mapgen/query.cpp` `plugins/mountain/mapgen/query.hpp` |
 | spawn | `plugins/mountain/mapgen/spawn.cpp` `plugins/mountain/mapgen/spawn.hpp` |
-| splitGap | `plugins/racing/records.hpp` |
 | splits | `plugins/racing/records.hpp` |
-| stampCliff | `plugins/mountain/mapgen/cliffs.cpp` `plugins/mountain/mapgen/cliffs.hpp` |
-| stampCorridor | `plugins/mountain/mapgen/track.cpp` `plugins/mountain/mapgen/track.hpp` |
-| stampDrifts | `plugins/mountain/mapgen/drift.cpp` `plugins/mountain/mapgen/drift.hpp` |
-| stampKicker | `plugins/mountain/mapgen/kickers.cpp` `plugins/mountain/mapgen/kickers.hpp` |
-| standings | `plugins/racing/standings.hpp` `tests/racing_standings_test.cpp` `tools/parity/golden-racing.mjs` |
+| standings | `plugins/racing/standings.hpp` `tests/racing_standings_test.cpp` |
 | start | `plugins/mountain/mapgen/spawn.hpp` |
-| startGateArc | `plugins/mountain/mapgen/spawn.hpp` |
 | status | `engine/core/output.hpp` |
-| steepestSpan | `plugins/mountain/mapgen/grades.cpp` `plugins/mountain/mapgen/grades.hpp` |
-| string | `tests/core_js_test.cpp` |
-| strip-types | `tools/parity/oracle-import.mjs` |
-| subSeed | `plugins/mountain/mapgen/generate.hpp` |
 | sun | `engine/core/solar.cpp` `engine/core/solar.hpp` `plugins/mountain/mapgen/sun.cpp` `plugins/mountain/mapgen/sun.hpp` `tests/core_solar_test.cpp` |
-| Sun | `plugins/mountain/mapgen/types.hpp` |
-| sunAt | `engine/core/solar.hpp` |
-| sunOnDate | `engine/core/solar.hpp` |
 | sunrise | `engine/core/solar.hpp` |
 | sunset | `engine/core/solar.hpp` |
-| sunsetOf | `plugins/mountain/mapgen/weather.hpp` |
-| sunWindow | `plugins/mountain/mapgen/sun.hpp` |
 | surface | `plugins/mountain/mapgen/surface.cpp` `plugins/mountain/mapgen/surface.hpp` |
 | symlinks | `tools/check-agents.sh` |
 | tags | `tools/agents-index.mjs` |
 | tan | `engine/core/libm/fdlibm_trig.cpp` `engine/core/libm/libm.hpp` |
 | tanh | `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/libm.hpp` |
-| tape | `plugins/racing/tape.cpp` `plugins/racing/tape.hpp` `tests/racing_tape_test.cpp` `tools/parity/golden-racing.mjs` |
+| tape | `plugins/racing/tape.cpp` `plugins/racing/tape.hpp` `tests/racing_tape_test.cpp` |
 | tau | `engine/core/math.hpp` |
 | terrain | `engine/core/heightfield.hpp` `engine/core/noise.hpp` `plugins/mountain/mapgen/terrain.cpp` `plugins/mountain/mapgen/terrain.hpp` |
-| test | `tests/check.hpp` `tests/core_heightfield_test.cpp` `tests/core_js_test.cpp` `tests/core_libm_test.cpp` `tests/core_math_test.cpp` `tests/core_noise_test.cpp` `tests/core_output_test.cpp` `tests/core_prng_test.cpp` `tests/core_quat_test.cpp` `tests/core_solar_test.cpp` `tests/golden.hpp` `tests/loop_run_clock_test.cpp` `tests/main.cpp` `tests/mountain_generate_test.cpp` `tests/racing_records_test.cpp` `tests/racing_standings_test.cpp` `tests/racing_tape_test.cpp` |
-| text | `engine/core/js_text.hpp` |
-| tightestBend | `plugins/mountain/mapgen/track.hpp` |
+| test | `tests/check.hpp` `tests/core_heightfield_test.cpp` `tests/core_libm_test.cpp` `tests/core_math_test.cpp` `tests/core_noise_test.cpp` `tests/core_num_test.cpp` `tests/core_output_test.cpp` `tests/core_prng_test.cpp` `tests/core_quat_test.cpp` `tests/core_solar_test.cpp` `tests/golden.hpp` `tests/loop_run_clock_test.cpp` `tests/main.cpp` `tests/mountain_generate_test.cpp` `tests/racing_records_test.cpp` `tests/racing_standings_test.cpp` `tests/racing_tape_test.cpp` |
+| text | `engine/core/num_text.hpp` |
 | timestep | `engine/loop/run_clock.hpp` |
-| to-int32 | `engine/core/js.hpp` |
-| to-uint32 | `engine/core/js.hpp` |
-| toEuler | `engine/core/quat.hpp` |
-| tofixed | `tests/core_js_test.cpp` |
-| toFixed | `engine/core/js_text.cpp` `engine/core/js_text.hpp` `tools/parity/golden-js.mjs` |
-| toString | `engine/core/js_text.cpp` `engine/core/js_text.hpp` `tools/parity/golden-js.mjs` |
+| to-fixed | `engine/core/num_text.hpp` `tests/core_num_test.cpp` |
+| to-int32 | `engine/core/num.hpp` |
+| to-string | `engine/core/num_text.hpp` `tests/core_num_test.cpp` |
+| to-uint32 | `engine/core/num.hpp` |
 | track | `plugins/mountain/mapgen/track.cpp` `plugins/mountain/mapgen/track.hpp` |
-| TrackPoint | `plugins/mountain/mapgen/types.hpp` |
-| trackPointAt | `plugins/mountain/mapgen/query.hpp` |
 | transcendental | `engine/core/libm/libm.hpp` `tools/check-libm.sh` |
-| treeAge | `plugins/mountain/mapgen/forest.hpp` |
-| TreeDef | `plugins/mountain/mapgen/types.hpp` |
-| treeKindAt | `plugins/mountain/mapgen/regions.cpp` `plugins/mountain/mapgen/regions.hpp` |
 | trees | `plugins/mountain/mapgen/forest.hpp` |
 | trig | `engine/core/libm/fdlibm_trig.cpp` |
-| trunkRadius | `plugins/mountain/mapgen/forest.hpp` |
 | types | `plugins/mountain/mapgen/types.hpp` |
-| UNGRADED | `plugins/mountain/mapgen/grades.cpp` `plugins/mountain/mapgen/grades.hpp` |
-| v8 | `engine/core/libm/fdlibm_arc.cpp` `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/fdlibm_trig.cpp` `engine/core/libm/libm.hpp` |
+| v8 | `engine/core/libm/fdlibm_arc.cpp` `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/fdlibm_trig.cpp` |
 | value-noise | `engine/core/noise.hpp` |
-| valueNoise | `engine/core/noise.hpp` |
 | vec3 | `engine/core/quat.hpp` |
 | vendored | `engine/core/libm/fdlibm_arc.cpp` `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/fdlibm_internal.hpp` `engine/core/libm/fdlibm_trig.cpp` |
 | versions | `plugins/mountain/mapgen/versions.hpp` |
-| verticalBand | `plugins/mountain/mapgen/grades.hpp` |
 | vocab | `tools/skill-lessons.mjs` |
 | warn | `engine/core/output.hpp` |
 | weather | `plugins/mountain/mapgen/weather.cpp` `plugins/mountain/mapgen/weather.hpp` |
-| Weather | `plugins/mountain/mapgen/types.hpp` |
-| WEATHER_KINDS | `plugins/mountain/mapgen/weather.hpp` |
 | wind-crust | `plugins/mountain/mapgen/surface.hpp` |
-| windIn | `plugins/mountain/mapgen/weather.cpp` |
-| windowGrades | `plugins/mountain/mapgen/track.hpp` |
 | windrow | `plugins/mountain/mapgen/berm.hpp` |
-| withinBand | `plugins/mountain/mapgen/rules.hpp` |
 | woods | `plugins/mountain/mapgen/forest.hpp` |
 | word | `engine/core/libm/fdlibm_internal.hpp` |
 | yaw | `engine/core/quat.hpp` |

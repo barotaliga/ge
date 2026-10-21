@@ -1,13 +1,12 @@
-// R17 — THE DRIFTS: stretches of the groomed piste the wind has laid fresh snow across. Port of
-// game5 `engine/mapgen/drift.ts`. Dealt by arc down the finished piste off a stream of their
+// R17 — THE DRIFTS: stretches of the groomed piste the wind has laid fresh snow across.
+// Dealt by arc down the finished piste off a stream of their
 // own (the attempt's sub-seed, salted), so they only thin the packed field over the line
 // already laid and move nothing else; stamped through the corridor's nearest-segment index, so
 // a drift covers the piste's full width and eases in and out along the line.
-// Parity: through tests/mountain_generate_test.cpp (`drifts`, `packed`).
+// Held by tests/mountain_generate_test.cpp (`drifts`, `packed`).
 //
 // ge:summary R17 drifts across the piste: dealt off their own stream, stamped into the packed field
-// ge:keywords drift drifts dealDrifts driftAt stampDrifts
-// ge:oracle game5/engine/mapgen/drift.ts
+// ge:keywords drift drifts
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #pragma once

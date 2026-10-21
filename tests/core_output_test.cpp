@@ -1,10 +1,10 @@
-// engine/core/output against the TypeScript oracle: tests/golden/core_output.txt is the
-// transcript tools/parity/golden-core.mjs wrote while running a script against the oracle's
-// output module. This test runs the SAME script (keep the two in step) and must print the same
+// engine/core/output against tests/golden/core_output.txt: the transcript of a fixed script of
+// calls. This test runs the SAME script (keep it in step with the golden's generator) and must
+// print the same
 // lines: what each sink received, in order, and the buffer's contents at two points.
 //
-// ge:summary Parity test: core/output's transcript against the oracle
-// ge:keywords test parity golden output log
+// ge:summary Golden test: core/output's transcript, bit for bit
+// ge:keywords test golden output log
 // ge:skill testing
 #include "core/output.hpp"
 
@@ -39,7 +39,7 @@ void dump_recent(Transcript& t) {
 
 }  // namespace
 
-TEST(output_transcript_matches_oracle) {
+TEST(output_transcript_matches_golden) {
   Transcript t;
   for (int i = 0; i < 5; i++) out::status("boot " + std::to_string(i));
   out::debug("dropped before any sink");
@@ -70,7 +70,7 @@ TEST(output_transcript_matches_oracle) {
       ge::test::fail(__FILE__, __LINE__,
                      "transcript line " + std::to_string(i + 1) + ": got \"" + t.lines[i] +
                          "\" want \"" + want[i] +
-                         "\". engine/core/output.cpp has drifted from the oracle's output.ts.");
+                         "\". engine/core/output.cpp has drifted from the golden transcript.");
       break;
     }
   }

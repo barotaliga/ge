@@ -1,5 +1,4 @@
-// R5–R8, R10 — THE PISTE: walked, measured, graded into the mountain. Port of game5
-// `engine/mapgen/track.ts`.
+// R5–R8, R10 — THE PISTE: walked, measured, graded into the mountain.
 //
 // THE SHAPE IS A WALK DOWN THE FALL LINE: two metres at a time from the start, its heading
 // bending either side of the fall line on a slow wave, with a few sweeps held across the face
@@ -15,12 +14,10 @@
 // finished line into the ground: level across the width (a little camber kept on a traverse),
 // the flat shoulder and the bench, the groomer's windrow on that bench (R18), a bank back to
 // the mountain, and the packed field (R10).
-// Parity: through tests/mountain_generate_test.cpp (`points`, `ground`, `packed`).
+// Held by tests/mountain_generate_test.cpp (`points`, `ground`, `packed`).
 //
 // ge:summary R5-R8, R10, R18 the piste: the walk, the grading, the bends and the corridor stamp
-// ge:keywords track piste drawPiste gradePiste stampCorridor tightestBend windowGrades
-// ge:keywords minSeparation
-// ge:oracle game5/engine/mapgen/track.ts
+// ge:keywords track piste
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #pragma once

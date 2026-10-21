@@ -30,7 +30,7 @@ make lessons ARGS="port --list"                       # one skill's index: file,
 make lessons ARGS="port"                              # its lessons in full, oldest first
 make lessons ARGS="--scope=engine/core/noise.hpp"     # across every skill, by the path you will edit
 make lessons ARGS="determinism --concepts=libm,fma"   # by concept
-make find Q="heightfield sampleField"                 # files, skills AND lessons matching any word
+make find Q="heightfield sample_field"                # files, skills, lessons AND the porting map
 ```
 
 - **A lesson with no `scope` is global**: it answers every `--scope` query.
@@ -50,7 +50,7 @@ Read the lessons before the first edit, not after the first surprise.
 ---
 title: The claim the next session must know, in one line
 date: YYYY-MM-DD
-scope: engine/core/noise.hpp, tools/parity/golden-core.mjs
+scope: engine/core/noise.hpp, porting/parity/golden-core.mjs
 concepts: [noise, golden, operand-order]
 ---
 
@@ -60,7 +60,7 @@ that taught it. Name the files and commands involved and the failure it prevents
 
 | Field | Required | Meaning |
 | --- | --- | --- |
-| `title` | yes | A CLAIM, not a topic: "A reordered sum is a different double, so keep the oracle's operand order", never "About sums". |
+| `title` | yes | A CLAIM, not a topic: "A reordered sum is a different double, so keep the operand order the golden was cut under", never "About sums". |
 | `date` | yes | `YYYY-MM-DD`, the day it was learned. A merge keeps the oldest source's date. |
 | `scope` | no | Repo-relative paths, comma-separated, where it stays true. Omitted means global. |
 | `concepts` | no | Lower-case kebab tags: what a future task would search for. Reuse a tag from `--vocab` over a synonym. |

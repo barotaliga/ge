@@ -5,7 +5,7 @@
 // then outputs, as IEEE 754 bit patterns, so the C++ test compares bits and
 // nothing is lost to decimal printing. core_output.txt is text: a transcript.
 //
-//   node --experimental-strip-types tools/parity/golden-core.mjs [--framework ../oss-game-framework]
+//   node --experimental-strip-types porting/parity/golden-core.mjs [--framework ../oss-game-framework]
 //
 // Re-run only when the oracle moves (a framework tag bump); a diff in the
 // golden files is then the change to review.

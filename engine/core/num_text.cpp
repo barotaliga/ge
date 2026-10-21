@@ -1,23 +1,23 @@
-// JS numbers as text: see js_text.hpp.
+// Numbers as text: see num_text.hpp.
 //
-// ge:summary The exact decimal expansion and shortest round-trip behind js_text.hpp
-// ge:keywords js toFixed toString
+// ge:summary The exact decimal expansion and shortest round-trip behind num_text.hpp
+// ge:keywords num number-format shortest round-trip decimal
 // ge:skill determinism agent-interface
-// ge:test tests/core_js_test.cpp
-#include "core/js_text.hpp"
+// ge:test tests/core_num_test.cpp
+#include "core/num_text.hpp"
 
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
 
-namespace ge::core::js {
+namespace ge::core::num {
 
 namespace {
 
 // The shortest digits of a finite x > 0 that read back as x, and its decimal exponent: x is
 // 0.DIGITS × 10^exp10. `%.Ng` is the nearest N-digit decimal, so the first N that round-trips
-// is the shortest and, among the shortest, the closest (what JS's Number::toString picks).
+// is the shortest and, among the shortest, the closest (the digits num_text.hpp promises).
 void shortest(double x, std::string& digits, int& exp10) {
   char buf[64];
   for (int n = 1; n <= 17; n++) {
@@ -95,4 +95,4 @@ std::string to_fixed(double x, int digits) {
   return out;
 }
 
-}  // namespace ge::core::js
+}  // namespace ge::core::num

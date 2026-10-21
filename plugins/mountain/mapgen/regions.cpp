@@ -1,17 +1,16 @@
-// Port of game5 `engine/mapgen/regions.ts`: the four rows and the helpers over them.
+// The definitions behind regions.hpp: the four rows and the helpers over them.
 //
 // ge:summary The four regions' rows and the tree roster's hash pick
-// ge:keywords region REGIONS treeKindAt scaleCount
-// ge:oracle game5/engine/mapgen/regions.ts
+// ge:keywords region
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #include "mountain/mapgen/regions.hpp"
 
-#include "core/js.hpp"
+#include "core/num.hpp"
 
 namespace ge::mountain::mapgen {
 
-namespace js = ge::core::js;
+namespace num = ge::core::num;
 using TK = TreeKind;
 
 namespace {
@@ -51,7 +50,7 @@ constexpr std::array<RosterRow, 8> kMaritimeRoster{{{TK::fir, 0.38},
                                                     {TK::alder, 0.04},
                                                     {TK::snag, 0.04}}};
 
-// In RegionId order. The comments are the oracle's: what kind of country each row is.
+// In RegionId order. Each row's comment says what kind of country it is.
 const std::array<Region, 4> kRegions{{
     // THE ALPINE: the rules as written. All ones, nothing laid.
     {RegionId::alpine,
@@ -113,7 +112,7 @@ const char* region_name(RegionId id) {
 
 Band scale_count(Band band, double k) {
   if (k == 1) return band;
-  return Band{js::max(0.0, js::round(band.min * k)), js::max(0.0, js::round(band.max * k))};
+  return Band{num::max(0.0, num::round(band.min * k)), num::max(0.0, num::round(band.max * k))};
 }
 
 TreeKind tree_kind_at(const Region& region, double x, double z) {
@@ -121,7 +120,7 @@ TreeKind tree_kind_at(const Region& region, double x, double z) {
   if (roster.size() == 1) return roster[0].kind;
   // `(round(x*8) * 374761393 + round(z*8) * 668265263) | 0`, summed in double first.
   uint32_t h = static_cast<uint32_t>(
-      js::to_int32(js::round(x * 8) * 374761393.0 + js::round(z * 8) * 668265263.0));
+      num::to_int32(num::round(x * 8) * 374761393.0 + num::round(z * 8) * 668265263.0));
   h = (h ^ (h >> 13)) * 1274126177u;
   const double u = static_cast<double>(h ^ (h >> 16)) / 4294967296.0;
   double acc = 0;

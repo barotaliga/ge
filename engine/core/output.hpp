@@ -1,4 +1,4 @@
-// THE ONE OUTPUT CHANNEL. Port of oss-game-framework `src/core/output.ts`: every diagnostic
+// THE ONE OUTPUT CHANNEL. Every diagnostic
 // line the engine and a game emit goes through these semantic helpers, never straight to
 // stdout or stderr (core does no I/O: printing is the host's sink). The engine runs under
 // more than one host (the app, a headless CLI, a test), so the sink is pluggable: the host
@@ -8,14 +8,13 @@
 // (docs/architecture.md § Diagnostics).
 //
 // MODULE STATE: the sink, the debug switch and the buffer live in output.cpp, one per
-// process, shared by every caller (that is the point: one log). Like the oracle it is
-// single-threaded: emit from the simulation's thread only.
-// Parity: tests/core_output_test.cpp against tests/golden/core_output.txt.
+// process, shared by every caller (that is the point: one log). It is single-threaded: emit
+// from the simulation's thread only.
+// Bits: tests/core_output_test.cpp against tests/golden/core_output.txt.
 //
 // ge:summary The one diagnostic channel: semantic log helpers, a pluggable sink, a boot buffer
-// ge:keywords output log logging diagnostics sink status info warn error debug recentLogs
-// ge:keywords setOutputSink header module-state
-// ge:oracle oss-game-framework/src/core/output.ts
+// ge:keywords output log logging diagnostics sink status info warn error debug
+// ge:keywords header module-state
 // ge:skill determinism agent-interface
 // ge:test tests/core_output_test.cpp
 #pragma once
@@ -29,7 +28,7 @@ namespace ge::core::output {
 
 enum class Level : uint8_t { status, info, warn, error, debug };
 
-// "status", "info", "warn", "error" or "debug": the oracle's level names.
+// "status", "info", "warn", "error" or "debug": the level's name as a line prints it.
 std::string_view level_name(Level level);
 
 // A host's sink. `user` is handed back untouched (the host's own context).

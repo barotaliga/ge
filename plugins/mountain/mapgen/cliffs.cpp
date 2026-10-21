@@ -1,8 +1,7 @@
-// Port of game5 `engine/mapgen/cliffs.ts`.
+// The definitions behind cliffs.hpp.
 //
 // ge:summary Lays the cliffs on the face clear of the piste and cuts them into the ground
-// ge:keywords cliff layCliffs stampCliff
-// ge:oracle game5/engine/mapgen/cliffs.ts
+// ge:keywords cliff
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #include "mountain/mapgen/cliffs.hpp"
@@ -10,9 +9,9 @@
 #include <cmath>
 #include <string>
 
-#include "core/js.hpp"
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
+#include "core/num.hpp"
 #include "core/prng.hpp"
 #include "mountain/mapgen/kickers.hpp"
 #include "mountain/mapgen/query.hpp"
@@ -20,7 +19,7 @@
 
 namespace ge::mountain::mapgen {
 
-namespace js = ge::core::js;
+namespace num = ge::core::num;
 namespace libm = ge::core::libm;
 namespace R = rules;
 using ge::core::hypot;
@@ -63,9 +62,9 @@ std::vector<PlanPoint> cliff_footprint(const Cliff& c, double step) {
   const double fx = libm::sin(c.heading);
   const double fz = libm::cos(c.heading);
   std::vector<PlanPoint> out;
-  const double nu = js::max(1.0, std::ceil((e.back + e.ahead) / step));
-  const double nv = js::max(1.0, std::ceil((2 * e.side) / step));
-  // Whole counters: the oracle's are JS numbers, but only ever integers, so the bits match.
+  const double nu = num::max(1.0, std::ceil((e.back + e.ahead) / step));
+  const double nv = num::max(1.0, std::ceil((2 * e.side) / step));
+  // Whole counters: they only ever hold integers, so int and double give the same points.
   for (int i = 0; i <= int(nu); i++) {
     const double u = -e.back + ((e.back + e.ahead) * i) / nu;
     for (int j = 0; j <= int(nv); j++) {
@@ -185,12 +184,12 @@ void stamp_cliff(ge::core::Heightfield& ground, const Cliff& c) {
   const double ahead = c.face + c.landing;
   const double fx = libm::sin(c.heading);
   const double fz = libm::cos(c.heading);
-  const double reach = hypot(js::max(e.back, ahead), e.side);
+  const double reach = hypot(num::max(e.back, ahead), e.side);
   const double cell = ground.cell;
-  const int c0 = int(js::max(0.0, std::floor((c.x - reach) / cell)));
-  const int c1 = int(js::min(double(ground.cols - 1), std::ceil((c.x + reach) / cell)));
-  const int r0 = int(js::max(0.0, std::floor((c.z - reach) / cell)));
-  const int r1 = int(js::min(double(ground.rows - 1), std::ceil((c.z + reach) / cell)));
+  const int c0 = int(num::max(0.0, std::floor((c.x - reach) / cell)));
+  const int c1 = int(num::min(double(ground.cols - 1), std::ceil((c.x + reach) / cell)));
+  const int r0 = int(num::max(0.0, std::floor((c.z - reach) / cell)));
+  const int r1 = int(num::min(double(ground.rows - 1), std::ceil((c.z + reach) / cell)));
   for (int r = r0; r <= r1; r++) {
     for (int col = c0; col <= c1; col++) {
       const double dx = col * cell - c.x;

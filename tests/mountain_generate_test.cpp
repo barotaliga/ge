@@ -1,11 +1,11 @@
-// plugins/mountain (mapgen, analysis) vs the TS oracle (tests/golden/mountain_generate.txt,
-// written by tools/parity/golden-mapgen.mjs from game5's own generateLevel at version 1). Each
-// row is one map: its levelDigest, the attempt the search accepted, a 64-bit FNV-1a over each
-// section of the level (the layout below is the script's; keep the two in step), the
+// plugins/mountain (mapgen, analysis) against tests/golden/mountain_generate.txt, maps built at
+// version 1. Each row is one map: its level_digest, the attempt the search accepted, a 64-bit
+// FNV-1a over each section of the level (the byte layout below is the golden's generator's
+// too; keep the two in step), the
 // analysis' findings and the debug lines of the attempts it refused. M4a's exit.
 //
-// ge:summary Parity test: the v1 generator's maps against game5's, section by section
-// ge:keywords test parity golden mapgen generateLevel levelDigest analyzeLevel
+// ge:summary Golden test: the v1 generator's maps, section by section
+// ge:keywords test golden mapgen
 // ge:skill testing mountain
 #include "mountain/mapgen/generate.hpp"
 
@@ -39,7 +39,7 @@ struct Section {
     for (int i = 0; i < 8; i++) byte(uint8_t(u >> (8 * i)));
   }
   void f64(const std::optional<double>& v) {
-    // DataView writes JS's one NaN for an absent value.
+    // An absent value is written as the quiet NaN.
     if (v) return f64(*v);
     for (int i = 0; i < 8; i++) byte(uint8_t(0x7ff8000000000000ull >> (8 * i)));
   }
@@ -155,7 +155,7 @@ std::vector<std::string> debug_lines;
 
 }  // namespace
 
-TEST(single_piste_levels_match_oracle) {
+TEST(single_piste_levels_match_golden) {
   const auto rows = ge::test::golden_words("tests/golden/mountain_generate.txt");
   CHECK(rows.size() == 11);
   ge::core::output::set_debug_enabled(true);
@@ -174,10 +174,11 @@ TEST(single_piste_levels_match_oracle) {
     try {
       level = mg::generate_level(seed, opts);
     } catch (const mg::GenerateError& e) {
-      ge::test::fail(__FILE__, __LINE__,
-                     where + ": generate_level threw `" + std::string(e.what()).substr(0, 600) +
-                         "` where game5 built a map. Diff the refusal against game5's "
-                         "attemptLevel on this seed (the first draw that differs is upstream).");
+      ge::test::fail(
+          __FILE__, __LINE__,
+          where + ": generate_level threw `" + std::string(e.what()).substr(0, 600) +
+              "` where the golden has a map. The first draw that differs is upstream of the "
+              "refusal (porting/README.md § Bisecting, while porting lasts).");
       continue;
     }
     const double ms =
@@ -188,10 +189,15 @@ TEST(single_piste_levels_match_oracle) {
       const std::string want = word(row, key);
       if (got == want) return;
       std::string m = where;
-      m.append(": `").append(key).append("` is ").append(got).append(", game5 has ").append(want);
+      m.append(": `")
+          .append(key)
+          .append("` is ")
+          .append(got)
+          .append(", the golden has ")
+          .append(want);
       m += ". The first section that moves (in generate order: ground, points, kickers, cliffs, "
-           "packed, drifts, crust, trees, world, gates, start) is where the port diverges; "
-           "compare that step's oracle line by line.";
+           "packed, drifts, crust, trees, world, gates, start) is the step that diverges; "
+           "bisect inside it (the determinism skill).";
       ge::test::fail(__FILE__, __LINE__, m);
     };
     expect("digest", mg::level_digest(level));
@@ -210,9 +216,12 @@ TEST(single_piste_levels_match_oracle) {
     const std::string want_log = unhex(word(row, "log"));
     if (log != want_log) {
       std::string m = where;
-      m.append(": the search logged\n  ").append(log).append("\ngame5 logged\n  ").append(want_log);
+      m.append(": the search logged\n  ")
+          .append(log)
+          .append("\nthe golden logged\n  ")
+          .append(want_log);
       m += "\nA refused attempt's findings differ: check the analysis rule the line names, and "
-           "its message's number formatting (core/js_text).";
+           "its message's number formatting (core/num_text).";
       ge::test::fail(__FILE__, __LINE__, m);
     }
   }

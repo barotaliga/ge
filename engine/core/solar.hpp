@@ -1,10 +1,8 @@
-// WHERE THE SUN AND THE MOON ARE: textbook solar geometry. Port of oss-game-framework
-// `src/core/solar.ts`, bit for bit (every transcendental through core::libm, every `**`
-// through libm::pow). game5's generator asks which hours of a day are daylight before it
-// draws one, its run clock asks where the sun and the moon stand at the hour a run has
-// reached, and its sky reads the same answers: one implementation of sunset.
-// `TWILIGHT` is not ported: game5 reads it nowhere.
-// Parity: tests/core_solar_test.cpp against tests/golden/core_solar.txt.
+// WHERE THE SUN AND THE MOON ARE: textbook solar geometry (every transcendental through
+// core::libm, every power through libm::pow). A world generator asks which hours of a day
+// are daylight before it draws one, a run clock asks where the sun and the moon stand at the
+// hour a run has reached, and the sky reads the same answers: one implementation of sunset.
+// Bits: tests/core_solar_test.cpp against tests/golden/core_solar.txt.
 //
 // ANGLES: an elevation is radians above the horizon, negative under it. An azimuth is a WORLD
 // HEADING in the engine's convention (0 along +z, clockwise toward +x), so +z is north and the
@@ -15,9 +13,7 @@
 // of a civil date.
 //
 // ge:summary Where the sun and the moon are: elevation, azimuth, daylight windows, dates
-// ge:keywords solar sun moon elevation azimuth daylight sunrise sunset julian-day refraction sunAt
-// ge:keywords moonAt daylightWindow sunOnDate moonOnDate hourOfElevation
-// ge:oracle oss-game-framework/src/core/solar.ts
+// ge:keywords solar sun moon elevation azimuth daylight sunrise sunset julian-day refraction
 // ge:skill determinism
 // ge:test tests/core_solar_test.cpp
 #pragma once

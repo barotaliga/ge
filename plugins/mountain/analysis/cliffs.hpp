@@ -1,11 +1,9 @@
 // R22 — THE CLIFFS, and R24 — THE DROPS across the piste, held on the finished map: read off
-// the cliffs the level publishes and the ground under them. Port of the single piste's half of
-// game5 `engine/analysis/cliffs.ts`.
-// Parity: through tests/mountain_generate_test.cpp (`findings`).
+// the cliffs the level publishes and the ground under them (the single piste's checks).
+// Held by tests/mountain_generate_test.cpp (`findings`).
 //
 // ge:summary R22 cliffs and R24 drops held on the finished map
-// ge:keywords analysis checkCliffs checkDrops cliff drop
-// ge:oracle game5/engine/analysis/cliffs.ts
+// ge:keywords analysis cliff drop
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #pragma once

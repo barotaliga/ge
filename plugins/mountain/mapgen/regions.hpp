@@ -1,13 +1,12 @@
-// R21 — THE REGIONS: which kind of snow country a mountain stands in, as data. Port of game5
-// `engine/mapgen/regions.ts`. Every number is a multiple of the rule book's own, so the ALPINE
+// R21 — THE REGIONS: which kind of snow country a mountain stands in, as data.
+// Every number is a multiple of the rule book's own, so the ALPINE
 // row is all ones and lays nothing: a band scaled by one is the same band, and the alpine
 // path draws exactly what it would with no region table at all. Nothing else in mapgen names
 // a region; the terrain, the forest, the sun and the surface read their row from here.
-// Parity: through tests/mountain_generate_test.cpp (a map in every region).
+// Held by tests/mountain_generate_test.cpp (a map in every region).
 //
 // ge:summary R21 the regions: each snow country's row of multiples, roster and crust
-// ge:keywords region regions alpine fell continental maritime regionRow treeKindAt
-// ge:oracle game5/engine/mapgen/regions.ts
+// ge:keywords region regions alpine fell continental maritime
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #pragma once
@@ -65,7 +64,7 @@ struct Region {
 // The row for a region; the alpine's when none is asked.
 const Region& region_row(std::optional<RegionId> id);
 
-// The region's name as the oracle spells it ("alpine", "fell", …): the digest mixes it in.
+// The region's name ("alpine", "fell", …): the digest mixes it in, so the spelling is fixed.
 const char* region_name(RegionId id);
 
 // A band scaled by `k` (the same band at one).
