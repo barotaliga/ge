@@ -40,4 +40,10 @@ void check_downhill(const mapgen::Level& level, const mapgen::RaceCourse& race, 
 // inside the line's apex, the crests shaved, the nets (and a super-G's trap), the hill prepared.
 void check_turns(const mapgen::Level& level, const mapgen::RaceCourse& race, const Add& add);
 
+// R34 — the speed-skiing track: straight, graded (never rising, its crests and knees rounded, the
+// ground under it its profile), the launch, the zone and the run-out, the final in the band and
+// the qualification under it, the start gate and the zone's two lines, the margin cleared, groomed,
+// clear of the lift stations, no kicker or drop on it.
+void check_speed_ski(const mapgen::Level& level, const mapgen::RaceCourse& race, const Add& add);
+
 }  // namespace ge::mountain::analysis

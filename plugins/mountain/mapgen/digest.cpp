@@ -147,6 +147,13 @@ std::string level_digest(const Level& level) {
       f.word("trap");
       f.mix(race.trap->s);
     }
+    if (race.zone) {
+      f.word("zone");
+      f.mix(race.zone->from);
+      f.mix(race.zone->to);
+      f.mix(race.top);
+      f.mix(race.stop);
+    }
     if (race.nets) {
       f.word("nets");
       f.mix(race.nets->from);

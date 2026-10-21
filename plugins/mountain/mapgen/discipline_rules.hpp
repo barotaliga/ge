@@ -2,15 +2,16 @@
 // a map that is already built (R1–R30). The map is the mountain; a discipline is how a race uses
 // it: where on the piste its course starts and finishes, which gates stand down it, what the
 // organisers do to the hill first (`CoursePrep`, course_prep.hpp). The slalom (R31), the downhill
-// (R32), the super-G (R33) and the giant slalom (R36) are set today; speed skiing and the ski
-// cross follow (docs/goals.md M4b4).
+// (R32), the super-G (R33), the giant slalom (R36) and the speed-skiing track (R34) are set
+// today; the ski cross follows (docs/goals.md M4b4).
 //
 // The research behind each discipline's numbers and its rule, by number, stand below the includes.
 //
-// ge:summary The disciplines' rule book (R31-R33, R36): each course's numbers, what it prepares
+// ge:summary The disciplines' rule book (R31-R34, R36): each course's numbers, what it prepares
 // ge:keywords discipline-rules rule-book slalom course-prep start-drop comb arena hairpin
 // ge:keywords vertical-combination delayed-gate pole-gate r31 downhill super-g giant-slalom
 // ge:keywords turn-rule line-rule trap-rule speed-trap a-nets r32 r33 r36
+// ge:keywords speed-skiing speed-ski timing-zone run-out launch r34
 // ge:skill mountain
 // ge:test tests/mountain_slalom_test.cpp
 #pragma once
@@ -110,6 +111,39 @@
 //     tighter swing, a shorter start drop, nets along both edges and no speed trap. It is two
 //     RUNS on the same stretch, the second's gates and swing dealt afresh. (Its line held off a
 //     lift tower standing on the piste waits for the towers, which the map does not publish yet.)
+//
+// THE RESEARCH BEHIND SPEED SKIING'S NUMBERS, speed skiing's own rules: a track is cut straight
+// down a face, at least 30 m wide from above the timing zone to the run-out's end, with a 25 m
+// safety margin cleared of every obstacle either side of it past 180 km/h; the racer launches
+// from a start point near the top (a typical track's launch 300–400 m, the fastest tracks'
+// 800–900), is timed over a 100 m zone, and is stopped on a run-out (real ones 325–840 m) whose
+// braking line no racer may skid or turn before; the top class's tour winners go 180–230 km/h;
+// neighbouring start points may give no more than 15 km/h apart; a race is a qualification from
+// a lower start, then a final from the top.
+//
+// R34 THE SPEED-SKIING TRACK. A speed track is cut STRAIGHT down a built map's face, its own line
+//     and not the piste: a straight line from a column of the face (`speed_ski::search`), its
+//     bearing within a few degrees of the fall line, whose GRADED PROFILE (the ground across the
+//     track's width taken to its mean along it over `speed_ski::smooth` metres, never rising,
+//     every crest rounded to no tighter than `speed_ski::crest` metres of radius and every knee
+//     to no tighter than `speed_ski::knee`) lies within `speed_ski::cut` metres of the ground
+//     under its middle. Down it, from `speed_ski::platform` metres above the final's start house:
+//     a LAUNCH of one of `speed_ski::launch` metres along the snow, the TIMING ZONE of
+//     `speed_ski::trap` metres along the snow, and a RUN-OUT that stops a racer stood up into the
+//     wind and skidding past its braking line (`speed_ski::stop`, `speed_ski::run_out`) before
+//     the line leaves the map, the track running `speed_ski::past` metres beyond to the finish
+//     enclosure. Of the lines and launches that fit, the one whose final the top class skis
+//     nearest the speed the map's track is built for (dealt off its seed in
+//     `speed_ski::speed::aim`, inside `speed_ski::speed` where one is) wins, its trap on a gentle
+//     stretch, its launch near a typical track's and its run-out no longer than a real one's
+//     (`speed_ski::fit`), then the least graded. The track is `speed_ski::width` metres wide,
+//     graded to its profile across that width and eased out over `speed_ski::ease`, groomed hard,
+//     every tree within `speed_ski::margin` metres of its edges (the safety margin) and in the
+//     finish enclosure (`speed_ski::arena`) cleared, and the piste's kickers and drops in the cut
+//     taken out; no lift station stands within `speed_ski::stations` metres of it. Its gates are
+//     the START GATE under the house and the timing zone's two LINES across the track and its
+//     margins. A race is two RUNS: the QUALIFICATION from a start lowered down the track until it
+//     gives `speed_ski::qualify` km/h less, and the FINAL from the top.
 //
 // Every value is a decimal literal, so the doubles are fixed bits. Held by
 // tests/mountain_slalom_test.cpp and the analysis (analysis/race.hpp).
@@ -411,5 +445,86 @@ inline constexpr TurnRule rule{
 inline constexpr double apart = 10;
 
 }  // namespace discipline_rules::giant_slalom
+
+namespace discipline_rules::speed_ski {
+
+// The track's width, m (the rule's least from above the trap to the run-out's end), and the
+// SAFETY MARGIN cleared of every tree either side of it, m.
+inline constexpr double width = 30;
+inline constexpr double margin = 25;
+// How far past the track's edge its grading eases out, m.
+inline constexpr double ease = 14;
+// THE LAUNCHES tried from the final's start to the timing zone's top line, m along the snow.
+inline constexpr std::array<double, 7> launch{300, 400, 500, 600, 700, 800, 900};
+// THE TIMING ZONE, m along the snow.
+inline constexpr double trap = 100;
+// The final's speed through the trap, km/h: the band a track is held in, and the band the speed
+// a track is BUILT FOR is dealt in off its map's seed (one track slow, another fast).
+namespace speed {
+inline constexpr double min = 180;
+inline constexpr double max = 240;
+inline constexpr Band aim{185, 235};
+}  // namespace speed
+// THE QUALIFICATION'S START, lowered down the track until it gives this much less, km/h.
+inline constexpr double qualify = 12;
+// THE PROFILE: the mean across the track taken along it over this many metres either side;
+// every crest no tighter than `crest` m of radius (a racer at 65 m/s leaves the snow over a crest
+// tighter than v²/(g cos θ), some 480 m on the steep); every KNEE no tighter than `knee` m (at
+// 55 m/s some 0.9 g on the legs, a compression a racer holds his tuck through); and no point of
+// the profile more than `cut` m from the ground under the track's middle.
+inline constexpr double smooth = 30;
+inline constexpr double crest = 600;
+inline constexpr double knee = 350;
+inline constexpr double cut = 9;
+// How far the track runs on up the slope above the final's start, m (the house stands on it),
+// and how far above the wand the racer stands, m.
+inline constexpr double platform = 10;
+inline constexpr double stand = 1.1;
+// THE STOP the run-out is sized for: a racer of the top class (107 kg, the drag areas of a tuck
+// and of a body stood up into the wind, m²) stood up past the trap, skidding at `skid` g once
+// under `below` m/s past the braking line, stopped at `rest` m/s; the base's rolling friction
+// and the air's density, kg/m³.
+struct Stop {
+  double mass, tuck, stood, friction, air, skid, below, rest;
+};
+inline constexpr Stop stop{107, 0.08, 0.6, 0.035, 1.05, 0.15, 40, 3};
+// WHICH FIT WINS beside the speed (each a km/h's worth of miss): the trap on a gentle stretch
+// (`trap` a unit of grade past `trap_grade`), a launch near `launch_aim` (`launch` a metre off
+// it), a run-out no longer than `outrun_most` (`outrun` a metre past it), and the least grading
+// (`cut` a metre).
+struct Fit {
+  double trap, trap_grade, launch, launch_aim, outrun, outrun_most, cut;
+};
+inline constexpr Fit fit{100, 0.3, 0.01, 400, 0.02, 800, 0.5};
+// THE RUN-OUT as a racer home rides it: untucking over the first `untuck` m past the zone, the
+// BRAKING LINE `brake` m past it, skidding hard only under `below` m/s.
+namespace run_out {
+inline constexpr double untuck = 120;
+inline constexpr double brake = 150;
+inline constexpr double below = 40;
+}  // namespace run_out
+// How far the track runs past the stop, m: the finish enclosure.
+inline constexpr double past = 120;
+// THE SEARCH: the columns tried across the face, `stride` m apart and `edge` m in from the map's
+// sides; the bearings tried either side of the fall line, degrees; where on the face a line is
+// read from, m down from its top edge; the step it is read in, m; every how many steps a start
+// is tried.
+namespace search {
+inline constexpr double stride = 50;
+inline constexpr double edge = 150;
+inline constexpr std::array<double, 9> bearings{-20, -15, -10, -5, 0, 5, 10, 15, 20};
+inline constexpr double top = 250;
+inline constexpr double step = 4;
+inline constexpr int starts = 6;
+}  // namespace search
+// No lift station within this of the track's edge, m.
+inline constexpr double stations = 40;
+// The finish enclosure's box past the stop, m: along, back up, across (half).
+struct Arena {
+  double past, before, half;
+};
+inline constexpr Arena arena{90, 40, 45};
+
+}  // namespace discipline_rules::speed_ski
 
 }  // namespace ge::mountain::mapgen

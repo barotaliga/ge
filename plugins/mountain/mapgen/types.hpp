@@ -312,7 +312,7 @@ struct ResortMap {
 };
 
 // R31–R36 — the race disciplines a course is set over a built map in (discipline_rules.hpp).
-enum class Discipline : uint8_t { slalom, downhill, super_g, giant_slalom };
+enum class Discipline : uint8_t { slalom, downhill, super_g, giant_slalom, speed_ski };
 inline const char* discipline_name(Discipline d) {
   switch (d) {
     case Discipline::slalom:
@@ -323,6 +323,8 @@ inline const char* discipline_name(Discipline d) {
       return "super-g";
     case Discipline::giant_slalom:
       return "giant-slalom";
+    case Discipline::speed_ski:
+      return "speed-skiing";
   }
   return "unknown";
 }
@@ -335,7 +337,10 @@ struct Level;
 // points down the course, each `x` m right of the piste's line `s` m down it (a slalom's a
 // cosine between each two, `slalom_line_at`; a speed event's every 4 m, `speed_line_at`). A slalom
 // counts the combinations its setter laid; a speed event names its JUMPS by arc, the safety NETS
-// along both edges, its SPEED TRAP (a downhill's and a super-G's) and how many gates turn.
+// along both edges, its SPEED TRAP (a downhill's and a super-G's) and how many gates turn. A
+// SPEED-SKIING TRACK (R34) is a track of its own cut down the face (the map's `track` is the
+// track): it names its TIMING ZONE, the final's start at its top, the stop on its run-out, the
+// qualification's lowered start and its width.
 struct RaceCourse {
   struct LinePoint {
     double s;
@@ -361,6 +366,14 @@ struct RaceCourse {
   std::optional<Nets> nets;
   std::optional<Trap> trap;
   int turns = 0;
+  struct Zone {
+    double from, to, length;  // the zone's two lines by arc, and its length along the snow, m
+  };
+  std::optional<Zone> zone;
+  double top = 0;      // the final's start (the platform's lip), m of arc
+  double qualify = 0;  // the qualification's lowered start, m of arc
+  double stop = 0;     // where the run-out stops the top class, m of arc
+  double width = 0;    // the track's width, m
 };
 
 struct TrackIndex;  // query.hpp: the spatial hash `nearest_track_point` reads

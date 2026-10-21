@@ -1,0 +1,9 @@
+# seed version region, then each run of its speed track (mountain_speed_ski_test)
+38 v1 alpine run=1 length=1270 from=56 zone=432-529 stop=1150 kmh=214 digest=f3ebef8d
+38 v1 alpine run=2 length=1270 from=10 zone=432-529 stop=1150 kmh=226 digest=2261b7c8
+1 v1 maritime run=1 length=1302 from=61 zone=442-540 stop=1182 kmh=209 digest=93d1cc50
+1 v1 maritime run=2 length=1302 from=10 zone=442-540 stop=1182 kmh=221 digest=6c682d3d
+3 v1 fell run=1 length=1502 from=109 zone=477-573 stop=1382 kmh=176 digest=f35a92e5
+3 v1 fell run=2 length=1502 from=10 zone=477-573 stop=1382 kmh=188 digest=54f6f3c4
+38 v8 alpine run=1 length=1402 from=85 zone=649-747 stop=1282 kmh=212 digest=99d729e9
+38 v8 alpine run=2 length=1402 from=10 zone=649-747 stop=1282 kmh=224 digest=0f055842

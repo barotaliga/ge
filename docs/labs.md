@@ -259,6 +259,7 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 | `mapgen-cost` | bench | plugin:mountain | `plugins/mountain/mapgen` | M4a (now) |
 | `slalom` | picture | plugin:mountain | `plugins/mountain/mapgen/slalom.hpp` (a slalom set over a map, both runs, straightened and from above) | M4b4b (now) |
 | `speed-events` | picture | plugin:mountain | `plugins/mountain/mapgen/speed_events.hpp` (the downhill, super-G and giant slalom set over a map, straightened and from above) | M4b4c (now) |
+| `speed-ski` | picture | plugin:mountain | `plugins/mountain/mapgen/speed_ski.hpp` (a speed-skiing track cut down a map's face, its profile from the side and the map from above) | M4b4d (now) |
 | `resort` | picture | plugin:mountain | `plugins/mountain/mapgen/resort_build.hpp` (the ski area, its courses) | M4b3d (now) |
 | `junctions` | picture | plugin:mountain | `plugins/mountain/mapgen/network_stamp.cpp` (where runs meet) | M4b3d (now) |
 | `routes`, `skijump-hills` | picture | plugin:mountain | the routes, the jump hills | M4c |
