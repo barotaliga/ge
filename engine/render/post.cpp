@@ -39,8 +39,8 @@ void create_post(gpu::Device& device, gpu::PipelineSet& pipelines, Post& post,
   post.p_draw = pipelines.add_render(device, desc);
 }
 
-wgpu::BindGroup post_group(gpu::Device& device, const Post& post, const FrameTargets& targets) {
-  return make_group(device, "post", post.layout, {targets.hdr_view});
+wgpu::BindGroup post_group(gpu::Device& device, const Post& post, const wgpu::TextureView& hdr) {
+  return make_group(device, "post", post.layout, {hdr});
 }
 
 void encode_post(const Post& post, const gpu::PipelineSet& pipelines, FrameRecorder& rec,

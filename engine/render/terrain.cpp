@@ -10,7 +10,9 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <initializer_list>
 #include <string>
+#include <vector>
 
 #include "render/terrain.wgsl.hpp"
 #include "render/terrain_cull.wgsl.hpp"
@@ -202,33 +204,59 @@ void create_terrain(gpu::Device& device, gpu::PipelineSet& pipelines, Terrain& t
   nd.compute.entryPoint = "bake";
   t.p_normals = pipelines.add_compute(device, nd);
 
+  // One vertex stage for every terrain pipeline (the prepass, the colour pass and the probe),
+  // so the depths they compute are the same bits.
   const wgpu::ShaderModule draw = gpu::create_shader(device, wgsl::terrain, "terrain");
+  const wgpu::PipelineLayout draw_layout =
+      make_pipeline_layout(device, "terrain.draw", {frame, t.layout});
   wgpu::ConstantEntry tile{};
   tile.key = "kTile";
   tile.value = kTileQuads;
-  wgpu::ColorTargetState colour{};
-  colour.format = kHdrFormat;
-  wgpu::FragmentState fragment{};
-  fragment.module = draw;
-  fragment.entryPoint = "fs_main";
-  fragment.targetCount = 1;
-  fragment.targets = &colour;
-  wgpu::DepthStencilState depth{};
-  depth.format = kDepthFormat;
-  depth.depthWriteEnabled = true;
-  depth.depthCompare = wgpu::CompareFunction::Greater;
-  wgpu::RenderPipelineDescriptor desc{};
-  desc.label = "terrain.draw";
-  desc.layout = make_pipeline_layout(device, "terrain.draw", {frame, t.layout});
-  desc.vertex.module = draw;
-  desc.vertex.entryPoint = "vs_main";
-  desc.vertex.constantCount = 1;
-  desc.vertex.constants = &tile;
-  desc.primitive.topology = wgpu::PrimitiveTopology::TriangleList;
-  desc.primitive.cullMode = wgpu::CullMode::None;
-  desc.depthStencil = &depth;
-  desc.fragment = &fragment;
-  t.p_draw = pipelines.add_render(device, desc);
+  auto pipeline = [&](const char* label, const char* entry,
+                      std::initializer_list<wgpu::TextureFormat> targets, bool write_depth,
+                      wgpu::CompareFunction compare, bool add) {
+    wgpu::BlendState blend{};
+    blend.color = {wgpu::BlendOperation::Add, wgpu::BlendFactor::One, wgpu::BlendFactor::One};
+    blend.alpha = blend.color;
+    std::vector<wgpu::ColorTargetState> colours;
+    for (wgpu::TextureFormat format : targets) {
+      wgpu::ColorTargetState c{};
+      c.format = format;
+      if (add) c.blend = &blend;
+      colours.push_back(c);
+    }
+    wgpu::FragmentState fragment{};
+    fragment.module = draw;
+    fragment.entryPoint = entry;
+    fragment.targetCount = colours.size();
+    fragment.targets = colours.data();
+    wgpu::DepthStencilState depth{};
+    depth.format = kDepthFormat;
+    depth.depthWriteEnabled = write_depth;
+    depth.depthCompare = compare;
+    wgpu::RenderPipelineDescriptor desc{};
+    desc.label = label;
+    desc.layout = draw_layout;
+    desc.vertex.module = draw;
+    desc.vertex.entryPoint = "vs_main";
+    desc.vertex.constantCount = 1;
+    desc.vertex.constants = &tile;
+    desc.primitive.topology = wgpu::PrimitiveTopology::TriangleList;
+    desc.primitive.cullMode = wgpu::CullMode::None;
+    desc.depthStencil = &depth;
+    desc.fragment = entry ? &fragment : nullptr;
+    return pipelines.add_render(device, desc);
+  };
+  using CF = wgpu::CompareFunction;
+  t.p_depth = pipeline("terrain.depth", nullptr, {}, true, CF::Greater, false);
+  t.p_draw =
+      pipeline("terrain.draw", "fs_main", {kHdrFormat, kMotionFormat}, false, CF::Equal, false);
+  if (source.overdraw_probe) {
+    const auto r16 = wgpu::TextureFormat::R16Float;
+    t.p_count_equal = pipeline("terrain.count.equal", "fs_count", {r16}, false, CF::Equal, true);
+    t.p_count_greater =
+        pipeline("terrain.count.greater", "fs_count", {r16}, true, CF::Greater, true);
+  }
 
   // The grid's half of the params never moves; prepare fills the levels.
   t.staged.info[1] = static_cast<float>(kTileQuads);
@@ -289,30 +317,84 @@ void encode_terrain_horizon(Terrain& t, const gpu::PipelineSet& pipelines, Frame
   encode_horizon(t.horizon, pipelines, rec, encoder);
 }
 
-void encode_terrain(const Terrain& t, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
-                    wgpu::CommandEncoder& encoder, const FrameTargets& targets,
-                    const wgpu::BindGroup& frame) {
-  wgpu::RenderPassColorAttachment colour{};
-  colour.view = targets.hdr_view;
-  colour.loadOp = wgpu::LoadOp::Clear;
-  colour.storeOp = wgpu::StoreOp::Store;
-  colour.clearValue = {0, 0, 0, 1};
-  wgpu::RenderPassDepthStencilAttachment depth{};
-  depth.view = targets.depth_view;
-  depth.depthLoadOp = wgpu::LoadOp::Clear;
-  depth.depthStoreOp = wgpu::StoreOp::Store;
-  depth.depthClearValue = 0.0f;  // reversed-z: 0 is infinitely far
-  wgpu::RenderPassDescriptor desc{};
-  desc.colorAttachmentCount = 1;
-  desc.colorAttachments = &colour;
-  desc.depthStencilAttachment = &depth;
-  wgpu::RenderPassEncoder pass = rec.render(encoder, desc, "terrain");
-  pass.SetPipeline(pipelines.render(t.p_draw));
+namespace {
+
+void draw_tiles(const Terrain& t, wgpu::RenderPassEncoder& pass, uint32_t pipeline_id,
+                const gpu::PipelineSet& pipelines, const wgpu::BindGroup& frame) {
+  pass.SetPipeline(pipelines.render(pipeline_id));
   pass.SetBindGroup(0, frame);
   pass.SetBindGroup(1, t.group);
   pass.SetIndexBuffer(t.indices, wgpu::IndexFormat::Uint16);
   pass.DrawIndexedIndirect(t.indirect, 0);
+}
+
+wgpu::RenderPassDepthStencilAttachment depth_attachment(const FrameTargets& targets, bool clear) {
+  wgpu::RenderPassDepthStencilAttachment depth{};
+  depth.view = targets.depth_view;
+  if (clear) {
+    depth.depthLoadOp = wgpu::LoadOp::Clear;
+    depth.depthStoreOp = wgpu::StoreOp::Store;
+    depth.depthClearValue = 0.0f;  // reversed-z: 0 is infinitely far
+  } else {
+    depth.depthReadOnly = true;
+  }
+  return depth;
+}
+
+}  // namespace
+
+void encode_terrain_depth(const Terrain& t, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
+                          wgpu::CommandEncoder& encoder, const FrameTargets& targets,
+                          const wgpu::BindGroup& frame) {
+  const wgpu::RenderPassDepthStencilAttachment depth = depth_attachment(targets, true);
+  wgpu::RenderPassDescriptor desc{};
+  desc.depthStencilAttachment = &depth;
+  wgpu::RenderPassEncoder pass = rec.render(encoder, desc, "terrain.depth");
+  draw_tiles(t, pass, t.p_depth, pipelines, frame);
   ++rec.current().draws;
+  pass.End();
+}
+
+void encode_terrain(const Terrain& t, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
+                    wgpu::CommandEncoder& encoder, const FrameTargets& targets,
+                    const wgpu::BindGroup& frame) {
+  wgpu::RenderPassColorAttachment colours[2]{};
+  colours[0].view = targets.hdr_view;
+  colours[1].view = targets.motion_view;
+  for (auto& c : colours) {
+    c.loadOp = wgpu::LoadOp::Clear;
+    c.storeOp = wgpu::StoreOp::Store;
+    c.clearValue = {0, 0, 0, 0};
+  }
+  colours[0].clearValue = {0, 0, 0, 1};
+  const wgpu::RenderPassDepthStencilAttachment depth = depth_attachment(targets, false);
+  wgpu::RenderPassDescriptor desc{};
+  desc.colorAttachmentCount = 2;
+  desc.colorAttachments = colours;
+  desc.depthStencilAttachment = &depth;
+  wgpu::RenderPassEncoder pass = rec.render(encoder, desc, "terrain");
+  draw_tiles(t, pass, t.p_draw, pipelines, frame);
+  ++rec.current().draws;
+  pass.End();
+}
+
+void encode_terrain_overdraw(const Terrain& t, const gpu::PipelineSet& pipelines,
+                             wgpu::CommandEncoder& encoder, const FrameTargets& targets,
+                             const wgpu::BindGroup& frame, const wgpu::TextureView& count,
+                             bool after_prepass) {
+  wgpu::RenderPassColorAttachment colour{};
+  colour.view = count;
+  colour.loadOp = wgpu::LoadOp::Clear;
+  colour.storeOp = wgpu::StoreOp::Store;
+  colour.clearValue = {0, 0, 0, 0};
+  const wgpu::RenderPassDepthStencilAttachment depth = depth_attachment(targets, !after_prepass);
+  wgpu::RenderPassDescriptor desc{};
+  desc.label = "terrain.overdraw";
+  desc.colorAttachmentCount = 1;
+  desc.colorAttachments = &colour;
+  desc.depthStencilAttachment = &depth;
+  wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&desc);
+  draw_tiles(t, pass, after_prepass ? t.p_count_equal : t.p_count_greater, pipelines, frame);
   pass.End();
 }
 

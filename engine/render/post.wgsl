@@ -8,8 +8,6 @@
 // Whether the output is a UNORM target this pass encodes to sRGB (an *Srgb target encodes on
 // store by itself).
 override kEncodeSrgb: bool = true;
-// What a white surface lit by the sun and the sky maps to before the tone curve.
-const kWhiteKey = 0.78;
 
 @group(1) @binding(0) var hdr: texture_2d<f32>;
 
@@ -42,14 +40,6 @@ fn tone(c: vec3f) -> vec3f {
   col *= np / peak;
   let g = 1.0 - 1.0 / (desat * (peak - np) + 1.0);
   return mix(col, vec3f(np), g);
-}
-
-// The exposure that maps a white Lambertian surface under this sun and sky to kWhiteKey.
-fn exposure() -> f32 {
-  let sun = sky_light.sun_at_eye.rgb * frame.sun.w * max(frame.sun.y, 0.0);
-  let sky = sky_light.irradiance_up.rgb * frame.sun.w;
-  let white = dot((sun + sky) / PI, vec3f(0.2126, 0.7152, 0.0722));
-  return kWhiteKey / max(white, 1e-4);
 }
 
 // Interleaved gradient noise: a fixed screen-space dither, -0.5 .. 0.5 of one 8-bit step.

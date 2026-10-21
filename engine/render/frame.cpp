@@ -8,17 +8,42 @@
 #include "render/frame.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <vector>
 
 namespace ge::render {
 
-void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint32_t height) {
+void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint32_t height,
+                   FrameHistory* history, const double* jitter_px) {
   std::memset(&u, 0, sizeof u);
   const CameraMatrices cam =
       camera_matrices(view, static_cast<double>(width) / static_cast<double>(height));
-  std::memcpy(u.view_proj, cam.view_proj.m, sizeof u.view_proj);
-  std::memcpy(u.inv_view_proj, cam.inv_view_proj.m, sizeof u.inv_view_proj);
+  // The jitter moves every point's NDC by a constant: clip.xy += offset * clip.w.
+  const double jx = jitter_px ? jitter_px[0] : 0.0, jy = jitter_px ? jitter_px[1] : 0.0;
+  Mat4 shift{};
+  shift.m[0] = shift.m[5] = shift.m[10] = shift.m[15] = 1;
+  shift.m[12] = static_cast<float>(2.0 * jx / width);
+  shift.m[13] = static_cast<float>(-2.0 * jy / height);
+  const Mat4 jittered = mul(shift, cam.view_proj);
+  const Mat4 inv = jitter_px ? inverse(jittered) : cam.inv_view_proj;
+  std::memcpy(u.view_proj, jittered.m, sizeof u.view_proj);
+  std::memcpy(u.inv_view_proj, inv.m, sizeof u.inv_view_proj);
+  u.jitter[0] = static_cast<float>(jx);
+  u.jitter[1] = static_cast<float>(jy);
+  u.jitter[2] = static_cast<float>(jx / width);
+  u.jitter[3] = static_cast<float>(jy / height);
+  if (history && history->valid) {
+    std::memcpy(u.prev_view_proj, history->view_proj.m, sizeof u.prev_view_proj);
+    for (int i = 0; i < 3; ++i) u.eye_delta[i] = static_cast<float>(view.eye[i] - history->eye[i]);
+  } else {
+    std::memcpy(u.prev_view_proj, cam.view_proj.m, sizeof u.prev_view_proj);
+  }
+  if (history) {
+    history->valid = true;
+    history->view_proj = cam.view_proj;
+    for (int i = 0; i < 3; ++i) history->eye[i] = view.eye[i];
+  }
   for (int i = 0; i < 3; ++i) u.eye[i] = static_cast<float>(view.eye[i]);
   u.eye[3] = static_cast<float>((view.altitude_m + view.eye[1]) * 1e-3);
   double s[3];
@@ -51,10 +76,15 @@ FrameTargets create_targets(gpu::Device& device, std::string_view label, uint32_
   };
   t.hdr = make("hdr", kHdrFormat,
                wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding);
+  // CopySrc: the labs and tests read the depth back (render/hiz.hpp's read_depth).
   t.depth = make("depth", kDepthFormat,
-                 wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding);
+                 wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding |
+                     wgpu::TextureUsage::CopySrc);
+  t.motion = make("motion", kMotionFormat,
+                  wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding);
   t.hdr_view = t.hdr.CreateView();
   t.depth_view = t.depth.CreateView();
+  t.motion_view = t.motion.CreateView();
   return t;
 }
 
@@ -216,6 +246,16 @@ wgpu::BindGroupLayout make_layout(gpu::Device& device, std::string_view label,
             s == Slot::store_2d ? wgpu::TextureViewDimension::e2D : wgpu::TextureViewDimension::e3D;
         e.visibility = visibility & ~wgpu::ShaderStage::Vertex;
         break;
+      case Slot::depth:
+        e.texture.sampleType = wgpu::TextureSampleType::Depth;
+        e.texture.viewDimension = wgpu::TextureViewDimension::e2D;
+        break;
+      case Slot::store_r32:
+        e.storageTexture.access = wgpu::StorageTextureAccess::WriteOnly;
+        e.storageTexture.format = wgpu::TextureFormat::R32Float;
+        e.storageTexture.viewDimension = wgpu::TextureViewDimension::e2D;
+        e.visibility = visibility & ~wgpu::ShaderStage::Vertex;
+        break;
     }
     entries.push_back(e);
   }
@@ -280,6 +320,66 @@ wgpu::Texture make_texture(gpu::Device& device, std::string_view label, uint32_t
   desc.format = format;
   desc.mipLevelCount = mips;
   return device.device.CreateTexture(&desc);
+}
+
+float half_to_float(uint16_t h) {
+  const uint32_t sign = (h >> 15) & 1u, exp = (h >> 10) & 0x1fu, man = h & 0x3ffu;
+  float v;
+  if (exp == 0) {
+    v = std::ldexp(static_cast<float>(man), -24);
+  } else if (exp == 31) {
+    v = man ? std::nanf("") : INFINITY;
+  } else {
+    v = std::ldexp(static_cast<float>(man | 0x400u), static_cast<int>(exp) - 25);
+  }
+  return sign ? -v : v;
+}
+
+std::vector<float> read_red(gpu::Device& device, const wgpu::Texture& texture, uint32_t mip,
+                            uint32_t w, uint32_t h, wgpu::TextureFormat format) {
+  const bool half =
+      format == wgpu::TextureFormat::R16Float || format == wgpu::TextureFormat::RGBA16Float;
+  const uint32_t texel = format == wgpu::TextureFormat::RGBA16Float ? 8 : half ? 2 : 4;
+  const uint32_t row = (w * texel + 255) / 256 * 256;
+  wgpu::BufferDescriptor bd{};
+  bd.label = "render.readback";
+  bd.size = uint64_t{row} * h;
+  bd.usage = wgpu::BufferUsage::MapRead | wgpu::BufferUsage::CopyDst;
+  wgpu::Buffer buffer = device.device.CreateBuffer(&bd);
+  wgpu::TexelCopyTextureInfo src{};
+  src.texture = texture;
+  src.mipLevel = mip;
+  if (format == kDepthFormat) src.aspect = wgpu::TextureAspect::DepthOnly;
+  wgpu::TexelCopyBufferInfo dst{};
+  dst.buffer = buffer;
+  dst.layout.bytesPerRow = row;
+  dst.layout.rowsPerImage = h;
+  const wgpu::Extent3D size{w, h, 1};
+  wgpu::CommandEncoder encoder = device.device.CreateCommandEncoder();
+  encoder.CopyTextureToBuffer(&src, &dst, &size);
+  wgpu::CommandBuffer commands = encoder.Finish();
+  device.queue.Submit(1, &commands);
+  gpu::wait(device,
+            buffer.MapAsync(wgpu::MapMode::Read, 0, bd.size, wgpu::CallbackMode::WaitAnyOnly,
+                            [](wgpu::MapAsyncStatus, wgpu::StringView) {}));
+  std::vector<float> out(size_t{w} * h);
+  if (const void* p = buffer.GetConstMappedRange(0, bd.size)) {
+    const auto* bytes = static_cast<const uint8_t*>(p);
+    for (uint32_t y = 0; y < h; ++y) {
+      for (uint32_t x = 0; x < w; ++x) {
+        const uint8_t* at = bytes + size_t{y} * row + size_t{x} * texel;
+        if (half) {
+          uint16_t v;
+          std::memcpy(&v, at, 2);
+          out[size_t{y} * w + x] = half_to_float(v);
+        } else {
+          std::memcpy(&out[size_t{y} * w + x], at, 4);
+        }
+      }
+    }
+  }
+  buffer.Unmap();
+  return out;
 }
 
 }  // namespace ge::render

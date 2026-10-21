@@ -75,6 +75,58 @@ TEST(uniforms_carry_the_view) {
   for (float p : u.planes[5]) CHECK(p == 0);
 }
 
+// The pixel a camera-relative point lands on under a block's (column-major) view_proj.
+static void pixel_of(const float* m, const double rel[3], double w, double h, double out[2]) {
+  double c[4];
+  for (int r = 0; r < 4; ++r) {
+    c[r] = m[r] * rel[0] + m[4 + r] * rel[1] + m[8 + r] * rel[2] + m[12 + r];
+  }
+  out[0] = (c[0] / c[3] * 0.5 + 0.5) * w;
+  out[1] = (0.5 - c[1] / c[3] * 0.5) * h;
+}
+
+TEST(jitter_moves_every_point_by_the_offset) {
+  ge::render::FrameView v;
+  v.eye[1] = 10;
+  v.heading = 0.4;
+  v.pitch = -0.1;
+  ge::render::FrameUniforms plain, jittered;
+  ge::render::fill_uniforms(plain, v, 640, 360);
+  const double j[2] = {0.25, -0.375};
+  ge::render::fill_uniforms(jittered, v, 640, 360, nullptr, j);
+  CHECK(jittered.jitter[0] == 0.25f && jittered.jitter[1] == -0.375f);
+  CHECK(std::fabs(jittered.jitter[2] - 0.25f / 640) < 1e-9f);
+  const double points[2][3] = {{3, -2, 40}, {-30, 5, 400}};
+  for (const auto& rel : points) {
+    double a[2], b[2];
+    pixel_of(plain.view_proj, rel, 640, 360, a);
+    pixel_of(jittered.view_proj, rel, 640, 360, b);
+    CHECK(std::fabs(b[0] - a[0] - 0.25) < 1e-3 && std::fabs(b[1] - a[1] + 0.375) < 1e-3);
+  }
+  // Unjittered, the previous camera is this one: no motion.
+  for (int i = 0; i < 16; ++i) CHECK(plain.prev_view_proj[i] == plain.view_proj[i]);
+}
+
+TEST(history_carries_the_last_camera) {
+  ge::render::FrameView v;
+  v.eye[0] = 5;
+  ge::render::FrameHistory h;
+  ge::render::FrameUniforms first, second;
+  const double j[2] = {0.1, 0.2};
+  ge::render::fill_uniforms(first, v, 320, 200, &h, j);
+  CHECK(h.valid);
+  CHECK(first.eye_delta[0] == 0 && first.eye_delta[1] == 0 && first.eye_delta[2] == 0);
+  ge::render::FrameUniforms unjittered;
+  ge::render::fill_uniforms(unjittered, v, 320, 200);
+  for (int i = 0; i < 16; ++i) CHECK(first.prev_view_proj[i] == unjittered.view_proj[i]);
+  v.eye[0] = 7.5;
+  v.heading = 0.2;
+  ge::render::fill_uniforms(second, v, 320, 200, &h, j);
+  CHECK(second.eye_delta[0] == 2.5f && second.eye_delta[2] == 0);
+  // The previous camera is the first frame's, unjittered.
+  for (int i = 0; i < 16; ++i) CHECK(second.prev_view_proj[i] == unjittered.view_proj[i]);
+}
+
 TEST(stats_sum_their_passes) {
   ge::render::FrameStats s;
   s.count = 2;
