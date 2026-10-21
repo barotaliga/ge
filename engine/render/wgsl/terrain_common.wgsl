@@ -1,11 +1,15 @@
-// What the terrain's shaders share (render/terrain.hpp): the parameters block, the grid's
-// mirrored addressing past the map's edge, and its bilinear height.
+// What the terrain's shaders share (render/terrain.hpp): the parameters block (the horizon maps'
+// blend in it, render/horizon.hpp), the grid's mirrored addressing past the map's edge, and its
+// bilinear height.
 
 struct TerrainParams {
   levels: array<vec4f, 10>,  // each level's min corner x, z (world m) and spacing (m)
   info: vec4f,               // level count, tile quads, sink (in spacings), morph start (0..1)
   field: vec4f,              // the grid's origin x, z (world m) and cell (m)
   field_size: vec4u,         // cols, rows, pyramid mips
+  horizon: vec4f,            // the horizon maps' blend: share toward the next, low slot, penumbra, on
+  horizon_grid: vec4f,       // the maps' origin x, z (world m) and cell (m)
+  horizon_size: vec4u,       // the maps' width, height
 }
 
 // Grid coordinates (in samples) folded back into the grid: past its edge the grid repeats

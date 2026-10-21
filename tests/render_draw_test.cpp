@@ -70,6 +70,7 @@ ge::gpu::Image draw(ge::gpu::Device& d, Scene& s, const r::FrameView& v,
   wgpu::CommandEncoder e = d.device.CreateCommandEncoder();
   r::encode_sky_tables(s.sky, s.pipelines, s.rec, e);
   r::encode_terrain_cull(s.terrain, s.pipelines, s.rec, e, s.frame);
+  r::encode_terrain_horizon(s.terrain, s.pipelines, s.rec, e);
   r::encode_terrain(s.terrain, s.pipelines, s.rec, e, s.targets, s.frame);
   r::encode_sky(s.sky, s.pipelines, s.rec, e, s.targets, s.frame);
   r::encode_post(s.post, s.pipelines, s.rec, e, s.frame, s.post_group, out.view);
@@ -114,7 +115,7 @@ TEST(frame_core_draws_sky_and_ground) {
   ge::gpu::end_load(d);
   s.frame = r::frame_group(d, s.layout, s.uniforms, s.sky);
   s.post_group = r::post_group(d, s.post, s.targets);
-  s.rec.init(d, "test.timer", 5);
+  s.rec.init(d, "test.timer", 6);
   const ge::gpu::Target out = ge::gpu::create_target(d, "test.final", kW, kH);
 
   r::FrameView v;
