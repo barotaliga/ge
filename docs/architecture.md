@@ -40,11 +40,11 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   input events and the frame's monotonic clock (built, M6), then the gamepad and rumble,
   touch, the audio device and storage paths as their milestones need them. It is the only
   directory that includes SDL headers, and it hands the GPU a plain `NativeWindow` struct.
-- **`engine/gpu`**: the WebGPU device over Dawn (built, M6): the device and its feature
+- **`engine/gpu`**: the native GPU device over Dawn (built, M6): the device and its feature
   tiers, error lines, shader modules from embedded WGSL, the pipeline manifest and its
   creation counter, the surface, offscreen targets and readback, and per-pass timestamps.
   It uses Dawn's `webgpu_cpp.h` handles (already reference-counted RAII) directly rather
-  than wrapping them again, so every call reads as the WebGPU spec spells it. It is the
+  than wrapping them again, so every call reads as Dawn's API spells it. It is the
   only directory that includes `webgpu.h`.
 - **`engine/render`**: generic rendering mechanisms (the pass table and named targets,
   GPU-driven instance families, the heightfield clipmap, shadows, the sky tables and
@@ -212,8 +212,8 @@ itself does no I/O. Tests print in the same shape through `tests/check.hpp`.
 | Game-object model | POD state structs and explicit arrays, systems as free functions in a written order; no generic ECS, because the simulation is already a fixed set of systems over flat arrays |
 | Determinism | The engine's own `core/libm` (vendored fdlibm and glibc's pow) and `core/num`, so every platform gives the same bits; FP flags in CMake; golden tests |
 | Loop | A fixed 120 Hz accumulator (`engine/loop/run_clock.hpp`), interpolated rendering |
-| Platform | SDL3, statically linked: one dependency for the window, input, gamepad, audio device and files on every desktop and the web |
-| GPU | WebGPU through `webgpu.h` (wgpu-native first, Dawn optional, emdawnwebgpu on the web): the same API on desktop and browser |
+| Platform | SDL3, statically linked: one dependency for the window, input, gamepad, audio device and files on every desktop and phone |
+| GPU | Dawn, native on every target (Metal, Vulkan, D3D12), through its `webgpu.h` header; no web build (`docs/rendering.md` § The backend) |
 | Shaders | WGSL, embedded at build |
 | Audio | Our own DSP graph on SDL3 audio: every sound is synthesized, so no middleware |
 | UI | Our own immediate-mode 2D layer + SDF text; Dear ImGui for dev tools |

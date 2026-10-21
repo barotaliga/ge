@@ -1,14 +1,14 @@
 // THE GPU DEVICE: the one place an adapter is chosen, a device is made and its errors are
 // heard. engine/gpu is the only directory that includes webgpu.h (here through Dawn's C++
 // header, webgpu_cpp.h, whose `wgpu::` handles are already reference-counted RAII: the engine
-// adds no second handle layer over them, so every call reads as the WebGPU spec spells it).
+// adds no second handle layer over them, so every call reads as Dawn's API spells it).
 //
 // What `create_device` decides, each once:
 // - THE ADAPTER: the default (high-performance) one, or the first software adapter when the
 //   machine has nothing else, as in the GPU-less container and on CI, where it is Mesa's
 //   lavapipe on Vulkan (docs/rendering.md § Where it is developed). The adapter's name, driver
 //   and backend are printed once, so a run says what drew it.
-// - THE LIMITS: the adapter's own, not WebGPU's low defaults.
+// - THE LIMITS: the adapter's own, not the API's low portable defaults.
 // - THE FEATURE TIERS: every optional feature of docs/rendering.md § Feature tiers that the
 //   adapter has is turned on and recorded in `Features`; a pass branches on that struct,
 //   never on a vendor string. `DeviceOptions::force_off` turns one off, so a test covers the
@@ -111,7 +111,7 @@ void end_load(Device& device);
 // captures only: never inside a frame.
 void wait(Device& device, wgpu::Future future);
 
-// A WebGPU string (a message, a label) as a std::string.
+// A Dawn string (a message, a label) as a std::string.
 std::string to_string(wgpu::StringView s);
 
 // One line for logs and lab stamps: "llvmpipe (...) / Mesa ... / vulkan (software)".

@@ -244,7 +244,7 @@ and the directories agree.
 | `mountain` | `plugins/mountain`: the generated ski mountain (mapgen, analysis, `level_digest`) |
 | `sim` | `games/fall_line/sim`: `create_game`, the step, the bot, the headless sim CLI, the run clock |
 | `platform` | `engine/platform`: SDL3, the window, input, the gamepad, the audio device, files |
-| `gpu` | `engine/gpu`: the webgpu.h device over Dawn, feature tiers, buffers, pipelines and the manifest, WGSL and `make shaders-check` |
+| `gpu` | `engine/gpu`: the native GPU device over Dawn (Dawn's `webgpu.h`), feature tiers, buffers, pipelines and the manifest, WGSL and `make shaders-check` |
 | `render` | A draw pass, the pass table, GPU-driven instances, shadows, sky, TAA-U, post, lab captures, extraction from `GameState` |
 | `audio` | The synth, a voice, a bed, the audio thread |
 | `ui` | The 2D layer, text, the HUD, a card, the dev UI |

@@ -28,7 +28,7 @@
 namespace ge::gpu {
 
 // Compile `wgsl` into a module labelled `label`. Compile errors are error lines quoting the
-// label, line and column; the module is still returned (WebGPU makes it an error object, and
+// label, line and column; the module is still returned (Dawn makes it an error object, and
 // a pipeline that uses it fails validation by name).
 wgpu::ShaderModule create_shader(Device& device, std::string_view wgsl, std::string_view label);
 

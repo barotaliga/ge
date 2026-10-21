@@ -1,4 +1,4 @@
-# Bug-finding checks only; style is clang-format's. EnumCastOutOfRange is off because WebGPU's
+# Bug-finding checks only; style is clang-format's. EnumCastOutOfRange is off because Dawn's
 # flag enums (wgpu::TextureUsage, BufferUsage) are combined with | by design.
 Checks: >
   -*,

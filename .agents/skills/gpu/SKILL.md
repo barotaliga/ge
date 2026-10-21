@@ -1,9 +1,9 @@
 ---
 name: gpu
-description: "Use for engine/gpu in gameengine2: the webgpu.h wrapper over Dawn (device, feature tiers, surface, buffers, textures, bind groups, pipelines and the pipeline manifest, the frame encoder, timestamp queries, staging uploads, readback), WGSL embedding and make shaders-check, Dawn built for desktop, iOS and Android, mobile tiers, and Dawn on a software adapter in the GPU-less container and CI."
+description: "Use for engine/gpu in gameengine2: the native GPU device over Dawn (its webgpu.h header) (device, feature tiers, surface, buffers, textures, bind groups, pipelines and the pipeline manifest, the frame encoder, timestamp queries, staging uploads, readback), WGSL embedding and make shaders-check, Dawn built for desktop, iOS and Android, mobile tiers, and Dawn on a software adapter in the GPU-less container and CI."
 ---
 
-# GPU (WebGPU through Dawn)
+# GPU (Dawn, native)
 
 `engine/gpu/` is the only directory that includes `webgpu.h`. The plan, and the reasons
 for each choice, are in `docs/rendering.md`. Read § The backend and § Feature tiers
@@ -20,7 +20,7 @@ there before the first edit.
 - **Keep to the standard header.** Use a Dawn-only entry point only behind a feature
   tier, with a path for when it is missing. Code that keeps to `webgpu.h` could still
   run on wgpu-native.
-- **No second graphics API.** If WebGPU blocks a measured goal, the answer is a Dawn
+- **No second graphics API.** If Dawn's core API blocks a measured goal, the answer is a Dawn
   native extension behind a tier. Never add Vulkan, Metal or D3D12 code.
 - Rows without a Dawn build yet use `GE_GPU=OFF` (everything except
   `engine/gpu`, `engine/render` and the app).
@@ -43,7 +43,7 @@ there before the first edit.
 - **Dawn's `webgpu_cpp.h` handles are the RAII handles** (`wgpu::Buffer`, `wgpu::Texture`,
   …, reference-counted, released on destruction). The engine adds no second handle layer:
   it adds the decisions (the device's choices, the manifest, readback, timing). An agent
-  reading the WebGPU spec recognises every call.
+  reading Dawn's API recognises every call.
 - **Device creation** asks for the adapter's own limits and turns on every feature in
   `docs/rendering.md` § Feature tiers that the adapter has. `gpu::Features` records
   which ones are on, and a pass branches on that struct, never on a vendor string.

@@ -7,7 +7,7 @@
 #   labs         the lab executable: every labs/ directory's files (engine, plugins, games)
 #   ge_platform  the window, input and the frame clock over SDL3 (engine/platform; GE_PLATFORM,
 #                cmake/SDL.cmake)
-#   ge_gpu       the WebGPU device over Dawn (engine/gpu; GE_GPU, cmake/Dawn.cmake), with its
+#   ge_gpu       the native GPU device over Dawn (engine/gpu; GE_GPU, cmake/Dawn.cmake), with its
 #                shaders embedded (cmake/Wgsl.cmake) and checked by `shaders_check`
 #   <x>_test     one executable per tests/<x>_test.cpp, registered with CTest
 #   ge_fp        the FP flags of the DETERMINISM CONTRACT (AGENTS.md), linked by

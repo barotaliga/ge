@@ -1,4 +1,4 @@
-# THE GPU BACKEND's dependency: Dawn (the WebGPU API, webgpu.h) as its prebuilt GitHub release,
+# THE GPU BACKEND's dependency: Dawn (a native GPU API over Metal, Vulkan and D3D12; header webgpu.h) as its prebuilt GitHub release,
 # pinned to one tag, and Tint (`tint`, its shader compiler) from the same archive for
 # `make shaders-check`. docs/rendering.md § The backend is the decision; the gpu skill is the
 # procedure for moving the pin.
