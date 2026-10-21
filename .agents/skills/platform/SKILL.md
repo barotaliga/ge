@@ -30,3 +30,9 @@ sees plain structs.
 - The mobile builds (M11: iOS, iPadOS, Android) use SDL's iOS and Android backends through the same API. There is no web build.
 - Headless tests never create a window. The platform layer has a null backend for
   CI.
+
+## Labs
+
+M6 lands `frame-pace`, a `bench` lab over the real window's frame loop beside the `run-clock`
+cadence lab. The labs run headless, so nothing in `engine/platform` may be required to run
+the `labs` executable.

@@ -46,7 +46,11 @@ task is probably out of scope (G4), so ask before you build it. Then load the sk
 ```sh
 make find Q="<the task's nouns> <identifiers>"   # files, skills, lessons, the porting map
 make lessons ARGS="<skill> --scope=<the dir you will edit>"     # per loaded skill
+make labs                                                        # the labs of your subject
 ```
+
+Run the subject's labs now with `--tag=before`, so the PR can show `--compare=before` (the
+`labs` skill).
 
 `docs/index.md` lists every file with its summary; `porting/map.md` says which reference
 modules are already ported. Read the lessons of each skill you loaded before the first edit (the

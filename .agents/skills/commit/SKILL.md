@@ -15,6 +15,8 @@ make test           # debug preset, with ASan + UBSan
 make test PRESET=release
 ```
 
+`make test` includes `labs_smoke`: every lab, twice, against `tests/labs_digests.txt`.
+
 All of them must be green. A failure you did not cause is still yours to fix or report.
 Before the gates, run the `skill-reflection` skill's CLOSE pass for every skill the session
 loaded, so its lessons ship in this commit.
@@ -38,8 +40,9 @@ squash-merged). The body contains:
 
 - **Milestone**: the `docs/goals.md` row, and the Status change made in this PR.
 - **What**: the change, in a few lines.
-- **Evidence**: the golden tests added (rows × functions, all bit-exact), or perf
-  before and after, or screenshots.
+- **Evidence**: the golden tests added (rows × functions, all bit-exact), and the labs of
+  the subject run before and after (the `--compare` table and the captioned pictures that
+  moved; the `labs` skill). If a lab's digest moved on purpose, say which and why.
 - **Next step**: the next open row.
 
 ## 5. Green, then merge

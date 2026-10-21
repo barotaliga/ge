@@ -32,6 +32,7 @@ router's Skills table and the directories against each other.
 | `render` | The pass table, a pass's two halves, the rules that keep a frame fast, captures and prices |
 | `audio` | The synth's DSP graph, the beds, the audio thread, checking a sound by meter |
 | `ui` | The 2D layer and text, the HUD and cards, the strings table, the dev UI |
+| `labs` | The lab contract: write, run and read a lab; captions, digests, before-and-after |
 | `perf` | Budgets, measuring, the proofs a speed-up owes, the levers |
 | `agent-interface` | Diagnostics as prompts, consumer skills, the `ge` CLI |
 | `plugins` | Engine, plugin or game: where code lives, adding a plugin, moving code between homes |

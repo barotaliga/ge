@@ -4,7 +4,7 @@ PRESET ?= debug
 # Tracked AND new (untracked, not ignored) files, so a file not yet `git add`ed is formatted too.
 SOURCES := $(shell git ls-files --cached --others --exclude-standard '*.cpp' '*.hpp' 2>/dev/null)
 
-.PHONY: build test fmt fmt-check lint agents-check index find lessons libm-check release-check clean
+.PHONY: build test fmt fmt-check lint agents-check index find lessons labs lab labs-smoke labs-digests libm-check release-check clean
 
 build:
 	cmake --preset $(PRESET)
@@ -27,6 +27,23 @@ agents-check:
 
 libm-check:
 	tools/check-libm.sh
+
+# The labs (docs/labs.md, skill: labs). `labs` lists them; `lab` runs one:
+#   make lab LAB=level ARGS="--seeds=38,7"     (ARGS=--help for its flags)
+# `labs-smoke` is CI's labs_smoke case; `labs-digests` rewrites its baseline (a reviewed change).
+LABS = build/$(PRESET)/labs
+LAB ?=
+labs: build
+	$(LABS)
+
+lab: build
+	$(LABS) $(LAB) $(ARGS)
+
+labs-smoke: build
+	$(LABS) --all --smoke --repeat=2 --quiet --check-digests=tests/labs_digests.txt
+
+labs-digests: build
+	$(LABS) --all --smoke --quiet --write-digests=tests/labs_digests.txt
 
 # Discovery (AGENTS.md § Finding things). `index` rewrites docs/index.md from every file's ge:
 # tags; `find` searches the files, the skills and their lessons: make find Q="noise heightfield".

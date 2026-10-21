@@ -51,7 +51,7 @@ mechanism's (vehicle, checkpoint, track).
 5. Tests: `tests/<name>_<topic>_test.cpp`, goldens `tests/golden/<name>_<topic>.txt`. Every test
    links every plugin; nothing to wire.
 6. Labs: `plugins/<name>/labs/` (not compiled into `ge_<name>`), registered through the lab
-   contract (`docs/architecture.md` § Plugins).
+   contract (`docs/labs.md`, the `labs` skill), with `owner = "plugin:<name>"`.
 7. A presentation half (draw passes, sound beds) goes in `plugins/<name>/app/`. The build refuses
    sources there until the first one splits it into its own `ge_<name>_app` target, so the
    simulation target never links a renderer.

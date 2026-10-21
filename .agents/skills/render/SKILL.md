@@ -63,3 +63,12 @@ void encode(TerrainPass&, gpu::Encoder&);                 // GPU: bind and dispa
 - **While porting**, reference pictures of the same views are made as
   `porting/subsystems.md` § render says, and `porting/rendering-survey.md` maps the
   measured costs onto these passes. Put both pictures in the PR.
+
+## Labs
+
+Every pass lands with a `picture` lab. Until the GPU capture exists (M6–M7), a lab draws on
+the CPU raster (`engine/lab/raster.hpp`). After that, a lab renders a named view offscreen
+(`docs/rendering.md` § Lab hooks), reads it back to a `ge::lab::Picture` and hands it to
+`Lab::shot`, so it gets the same caption band, sidecar and contact sheet. Caption every view
+with what to look for. The design is `docs/labs.md` § Pictures before and after the renderer,
+and the `labs` skill owns how.

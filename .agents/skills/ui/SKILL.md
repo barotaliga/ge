@@ -35,3 +35,8 @@ Dear ImGui, compiled only with `GE_DEV_UI=ON`, for the developer page (the instr
 the free camera, the REPRO line). It is never on a release path.
 
 Check the UI at the reference viewports: 1280×720, 390×844 and 844×390.
+
+## Labs
+
+M10 lands `screenshots`: the HUD and every card at 1280x720, 390x844 and 844x390, each
+captioned with its state and what to look for (overlap, clipping, legibility).

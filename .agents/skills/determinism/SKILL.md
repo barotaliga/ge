@@ -63,3 +63,10 @@ function's bits.
 3. Bisect: dump intermediate values as hex and compare them with the golden's generator
    (while porting: `porting/README.md` § Bisecting).
 4. Fix the cause. Never loosen `CHECK_BITS` to a tolerance.
+
+## Labs
+
+Every lab's digest is a determinism check (`labs_smoke`): two runs in one process must
+agree, and every CI row must reproduce `tests/labs_digests.txt`. A digest that differs
+between the two runs points at state kept between runs. A digest that differs on one row
+points at that row's compiler, so treat it as a parity failure.
