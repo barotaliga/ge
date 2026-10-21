@@ -128,6 +128,7 @@ make test         # build + ctest
 make fmt          # clang-format in place;  make fmt-check is what CI runs
 make lint         # clang-tidy over the sources (bug-finding checks only)
 make labs         # list the labs;  make lab LAB=level ARGS="--seeds=38" runs one
+make sim SEEDS=38 # the bot down a seed: the run report table and its line on the map (the sim lab)
 make labs-smoke   # every lab at its smoke flags, twice, digests against tests/labs_digests.txt
 make agents-check # symlinks, skills ↔ this router, the 1000-line cap, ge: tags, docs/index.md fresh, lesson fragments
 make index        # regenerate docs/index.md from every file's ge: tags
@@ -169,7 +170,8 @@ and Windows. Releases are dispatched, never hand-made (`release` skill,
 | `plugins/mountain/mapgen/` | The world generator (`ge::mountain::mapgen`): `generate.hpp` (`generate_level`, the attempts, the compile), `digest.hpp` (`level_digest`), `rules.hpp` (the rule book's numbers), `types.hpp` (the `Level`), and every step it calls. v1 (the single piste, M4a), and the ski area (M4b) stage by stage: `resort_build.hpp` (the attempt's state and its stages), `massif.hpp`, `resort.hpp` (the plan), `station_pad.hpp`, `lift_chain.hpp`, `lift_line.hpp`, `resort_rules.hpp` (the ski area's rule book's numbers), the walk (`network.hpp`, `network_build.hpp`, `net_index.hpp`, `run_start.hpp`, `summit_ramps.hpp`) and the lanes and drag lifts that link it (`lanes.hpp`, `access_build.hpp`, `drags.hpp`, `links.hpp`) | `mountain` |
 | `plugins/mountain/analysis/` | The rule book re-checked on a finished map (`ge::mountain::analysis`): `analyze_level` | `mountain` |
 | `plugins/skier/` | The skier on the snow (`ge::skier`): `skier.hpp` (`step_skier`, the model's order stated once), `snow.hpp` (sink, friction, grip, brake), `limits.hpp` (what a skier can do; a pilot plans on it), `skis.hpp`, `tuning.hpp`, `trees.hpp` (the trunks' grid), `synthetic.hpp` (the hand-built maps), `scenarios.hpp` (the ride scenarios the tests and the `ride` lab share) | `skier` |
-| `games/fall_line/sim/` | Fall Line's own simulation: `create_game`, the step's order, the modes, the bot (M5) | `sim` |
+| `games/fall_line/sim/` | Fall Line's own simulation (`fall_line::sim`, the `fall_line_sim` target): `state.hpp` (`GameState`, the events), `game.hpp` (`create_game`, `step`: the step's order stated once), `course.hpp` (gates, a miss, the finish, the reset), `controls.hpp` (the tape's schema, `snap_controls`), `bot.hpp` (the speed plan and the pursuit), `simulate.hpp` (the headless run, `RunReport`, replay) | `sim` |
+| `games/fall_line/labs/` | Fall Line's labs: `sim` (the bot over seeds; the headless sim CLI, `make sim`) | `sim`, `labs` |
 | `games/fall_line/app/` | Fall Line's presentation: `main.cpp` (the `fall_line` app: the window, the frame loop on the run clock), then the frame, the look, the HUD, the beds | `platform`, `gpu`, `render`, `ui`, `audio` |
 | `tests/` | `<topic>_test.cpp`, one executable each; `check.hpp` (harness), `golden.hpp`, `golden/` | `testing` |
 | `porting/` | The WORKING AREA (above): the porting guide, the porting map, the golden-table generators. Deleted when porting ends | `port` |

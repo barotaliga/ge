@@ -44,7 +44,7 @@ its words) and `fail` (what failed and the next action, in the
 | `sim` | Headless runs of the real code over seeds or a sweep. Numbers and tables. | `analyze`, `run-clock` |
 | `scenario` | One staged situation, such as a skier placed at a moment on a synthetic slope with a scripted input, measured exactly. | `ride` |
 | `picture` | A captioned picture of a subject. It is drawn on the CPU raster now, and from M7 it is a GPU frame read back. | `level`, `noise` |
-| `drive` | A pilot plays the game, either the bot or an agent over stdio. The run is the report, and the control tape is the replay. | M5 (below) |
+| `drive` | A pilot plays the game, either the bot or an agent over stdio. The run is the report, and the control tape is the replay. | `sim`; `play` (M5c) |
 | `bench` | What something costs. Its wall-clock metrics are `measured`, which means they are printed and compared but never put in the digest. | `mapgen-cost` |
 
 ### Where labs live, and how they register
@@ -204,9 +204,10 @@ for each step:  input = pilot(state)  →  tape.record(input)  →  step(state, 
 report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 ```
 
-- **The bot** (`games/fall_line/sim/bot`) is a pilot. The `sim` drive lab rides it over
-  seeds and prints the run report table (finish, time, gates, crashes, digest). Its digests
-  are M5's exit.
+- **The bot** (`games/fall_line/sim/bot.hpp`) is a pilot. The `sim` drive lab (`make sim`)
+  rides it over seeds and prints the run report table (finish, time, gates, crashes, digest)
+  with its line drawn on each map; `simulate.hpp` is the one loop every pilot drives, and
+  `tests/fall_line_sim_test.cpp` holds its digests golden.
 - **Rivals** are bots with profiles, on the same grid, through the same `step`.
 - **Every drive is recorded on the control tape** (`plugins/racing/tape.hpp`, the format a
   ghost and a replay use). A drive's seed, options and tape reproduce it exactly, so any
@@ -239,7 +240,7 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 | `junctions` | picture | plugin:mountain | `plugins/mountain/mapgen/network_stamp.cpp` (where runs meet) | M4b3d (now) |
 | `routes`, `skijump-hills` | picture | plugin:mountain | the routes, the jump hills | M4c |
 | `real-faces` | picture | plugin:mountain | the real faces | M4d |
-| `sim` | drive | game:fall_line | the step, the bot | M5b |
+| `sim` | drive | game:fall_line | `games/fall_line/sim` (the step, the course, the bot) | M5b (now) |
 | `ride` | scenario | plugin:skier | `plugins/skier` (`step_skier`, the snow, the limits) | M5a (now) |
 | `play` | drive | game:fall_line | an agent over stdio | M5c |
 | `gpu-capture` | picture | engine | `engine/gpu` (the headless capture) | M6 (now) |

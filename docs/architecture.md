@@ -66,8 +66,8 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   `games/<name>/labs/`) and are compiled into one `labs` executable. A lab may include
   anything, and nothing includes a lab. Lab code keeps the simulation's numeric rules (no
   `<cmath>` transcendental, `core::Rng` only), because its digest is checked on every CI row.
-- **`tools/`**: the structure checks, the headless `sim` CLI, level-map image output and
-  the labs. Tools may include anything, and nothing includes a tool.
+- **`tools/`**: the structure checks and the index. The headless `sim` CLI is Fall Line's
+  `sim` lab (`make sim`), and level-map pictures are the `level` lab's. Tools may include anything, and nothing includes a tool.
 - **`porting/`**: the WORKING area, deleted when porting ends (`AGENTS.md` § The working
   area): the porting guide and map, and the generators of the golden tables. Nothing
   outside it includes or names anything in it but the `make golden` targets.
