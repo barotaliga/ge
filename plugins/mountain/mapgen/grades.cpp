@@ -11,6 +11,7 @@
 #include <cmath>
 
 #include "core/num.hpp"
+#include "core/prng.hpp"
 
 namespace ge::mountain::mapgen {
 
@@ -150,6 +151,18 @@ GradeRow scaled_row(const GradeRow& row, double length) {
                     std::max(least, num::round(row.kickers.on.max * k))};
   out.drops = {std::floor(row.drops.min * k), num::round(row.drops.max * k)};
   return out;
+}
+
+PisteGrade deal_grade(double seed) {
+  constexpr uint32_t kGradeSalt = 0x6a7ade5;
+  ge::core::Rng rng = ge::core::make_rng(num::to_uint32(seed) ^ kGradeSalt);
+  const double u = ge::core::next(rng);
+  double acc = 0;
+  for (size_t i = 0; i < R::grade::odds.size(); i++) {
+    acc += R::grade::odds[i];
+    if (u < acc) return static_cast<PisteGrade>(i);
+  }
+  return PisteGrade::black;
 }
 
 }  // namespace ge::mountain::mapgen

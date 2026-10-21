@@ -1,4 +1,5 @@
-// LAB `analyze`: the generator's scoreboard over a seed or a sweep: build each map, hold the
+// LAB `analyze`: the generator's scoreboard over a seed or a sweep: build each map (at each
+// --version: a ski area's map is held to its course's and its area's checks), hold the
 // finished map to the rule book
 // (`analysis::analyze_level`, the same verdict the generator accepts on), and name every finding
 // by its R-rule. With `--refusals`, also build each attempt the search threw away and print
@@ -28,45 +29,48 @@ void run(ge::lab::Lab& lab) {
     for (int i = 0; i < count; i++) seeds.push_back(lab.arg_num("from") + i);
   }
   const bool refusals = lab.arg_bool("refusals");
-  ge::lab::LabTable maps{"maps", {"seed", "attempt", "errors", "warns", "rules"}, {}};
-  ge::lab::LabTable refused{"refused attempts", {"seed", "attempt", "why"}, {}};
+  ge::lab::LabTable maps{"maps", {"map", "attempt", "errors", "warns", "rules"}, {}};
+  ge::lab::LabTable refused{"refused attempts", {"map", "attempt", "why"}, {}};
   std::map<std::string, int> by_rule;
   int maps_built = 0, attempts = 0, errors = 0, warns = 0;
-  for (const double seed : seeds) {
-    const std::string s = std::to_string(static_cast<long long>(seed));
-    const auto built = ge::mountain::labs::build_map(lab, seed);
-    if (!built) continue;
-    const ge::mountain::mapgen::Level* level = &*built;
-    maps_built++;
-    attempts += level->attempt + 1;
-    const an::LevelAnalysis a = an::analyze_level(*level);
-    int e = 0, w = 0;
-    std::string rules;
-    for (const an::Finding& f : a.findings) {
-      (f.severity == an::Severity::error ? e : w)++;
-      by_rule[f.rule]++;
-      rules += (rules.empty() ? "" : " ") + f.rule;
-    }
-    errors += e;
-    warns += w;
-    maps.rows.push_back({s, std::to_string(level->attempt), std::to_string(e), std::to_string(w),
-                         rules.empty() ? "-" : rules});
-    if (e) {
-      lab.fail("seed " + s + " was accepted with " + std::to_string(e) + " error findings",
-               "The generator must refuse what the analysis errors on: compare "
-               "plugins/mountain/mapgen/generate.cpp's accept test with analysis/index.cpp. Skill: "
-               "mountain.");
-    }
-    for (int k = 0; refusals && k < level->attempt; k++) {
-      ge::mountain::mapgen::GenerateOptions opts;
-      opts.version = level->version;
-      opts.region = level->region;
-      opts.only = k;
-      try {
-        ge::mountain::mapgen::generate_level(seed, opts);
-        refused.rows.push_back({s, std::to_string(k), "(built when tried alone)"});
-      } catch (const ge::mountain::mapgen::GenerateError& err) {
-        refused.rows.push_back({s, std::to_string(k), err.what()});
+  for (const int version : ge::mountain::labs::map_versions(lab)) {
+    for (const double seed : seeds) {
+      const std::string s = ge::mountain::labs::map_id(seed, version);
+      const auto built = ge::mountain::labs::build_map(lab, seed, version);
+      if (!built) continue;
+      const ge::mountain::mapgen::Level* level = &*built;
+      maps_built++;
+      attempts += level->attempt + 1;
+      const an::LevelAnalysis a = an::analyze_level(*level);
+      int e = 0, w = 0;
+      std::string rules;
+      for (const an::Finding& f : a.findings) {
+        (f.severity == an::Severity::error ? e : w)++;
+        by_rule[f.rule]++;
+        rules += (rules.empty() ? "" : " ") + f.rule;
+      }
+      errors += e;
+      warns += w;
+      maps.rows.push_back({s, std::to_string(level->attempt), std::to_string(e), std::to_string(w),
+                           rules.empty() ? "-" : rules});
+      if (e) {
+        lab.fail(
+            "seed " + s + " was accepted with " + std::to_string(e) + " error findings",
+            "The generator must refuse what the analysis errors on: compare "
+            "plugins/mountain/mapgen/generate.cpp's accept test with analysis/index.cpp. Skill: "
+            "mountain.");
+      }
+      for (int k = 0; refusals && k < level->attempt; k++) {
+        ge::mountain::mapgen::GenerateOptions opts;
+        opts.version = level->version;
+        opts.region = level->region;
+        opts.only = k;
+        try {
+          ge::mountain::mapgen::generate_level(seed, opts);
+          refused.rows.push_back({s, std::to_string(k), "(built when tried alone)"});
+        } catch (const ge::mountain::mapgen::GenerateError& err) {
+          refused.rows.push_back({s, std::to_string(k), err.what()});
+        }
       }
     }
   }
@@ -95,7 +99,7 @@ const ge::lab::LabSpec kSpec{
         ge::mountain::labs::kVersionFlag,
         ge::mountain::labs::kRegionFlag,
     },
-    "--seeds=38",
+    "--seeds=38 --version=1,8",
     run,
 };
 GE_LAB(kSpec);

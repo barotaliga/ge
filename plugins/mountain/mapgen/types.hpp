@@ -1,8 +1,8 @@
 // THE SHAPE OF A GENERATED MAP: the contract between the generator and everything that skis,
 // draws or measures one: the single piste's half (`Level`, `TrackPoint`, `Checkpoint`,
-// `Kicker`, `Cliff`, `Drift`, `Weather`, `Mountain`, `GenerateOptions`, `TrackHit`). The ski
-// area's fields (`resort`, the courses, the venues,
-// the water) arrive with the milestone that builds them (docs/goals.md M4b–M4d).
+// `Kicker`, `Cliff`, `Drift`, `Weather`, `Mountain`, `GenerateOptions`, `TrackHit`) and the ski
+// area a course's map is raced down (`ResortMap`: its runs, lifts, courses, village, hub and wind
+// tunnels). The venues and the water arrive with the milestones that build them (docs/goals.md).
 //
 // A field `generate_level` always sets is a plain member; one it sets only sometimes is a
 // `std::optional`. A tree with no kind of its own is a `spruce`, and one in no clump has
@@ -95,7 +95,9 @@ struct TreeDef {
 };
 
 // A gate across the piste. Index 0 of `Level::checkpoints` is the START GATE, the last the
-// FINISH LINE (R11).
+// FINISH LINE (R11). A SLALOM GATE down a ski area's course (R28) stands `offset` m off the line
+// (positive right of travel) on a piste `span` m wide there, its `width` its own panels'; both are
+// absent on every other gate.
 struct Checkpoint {
   double x;
   double z;
@@ -104,6 +106,8 @@ struct Checkpoint {
   double width;
   double s;  // arc length down the piste, m
   GateColour colour;
+  std::optional<double> offset = std::nullopt;
+  std::optional<double> span = std::nullopt;
 };
 
 struct TrackPoint {
@@ -247,6 +251,56 @@ struct Sun {
   std::optional<double> facing;  // the face's compass bearing; absent: due north (every v1 map)
 };
 
+// R27 — A RUN of the ski area as a map publishes it: its line (`track`, arc from its head), its
+// colour as measured on the pressed mountain (a lane's is green), the lift whose top it leaves,
+// and where it ends or starts part-way: `into` the run it merges into, the arc there, and the arc
+// on THIS run from which it closes on that one; `branch` the run a branch lane leaves and the arc
+// it leaves at; `to` the lift whose bottom station a link lane runs to. `drifts` by its own arc.
+struct Run {
+  struct Into {
+    std::string run;
+    double s;
+    double from;
+  };
+  struct Branch {
+    std::string run;
+    double s;
+  };
+  std::string id;
+  RunKind kind;
+  PisteGrade grade;
+  std::vector<TrackPoint> points;
+  double length;
+  std::string from;
+  std::optional<Into> into;
+  std::optional<Branch> branch;
+  std::optional<std::string> to;
+  std::vector<Drift> drifts;
+};
+
+// R26 — A LIFT as a map publishes it: its stations on the ground and the ramps off its top.
+struct Lift {
+  std::string id;
+  LiftKind kind;
+  Vec3 bottom;
+  Vec3 top;
+  std::vector<SummitRamp> ramps;
+};
+
+// R25–R30 — THE SKI AREA a course's map is raced down: every run, lift and course (the courses
+// the analysis let stand), which course `Level::track` is, the village, the line down the map
+// from which the valley floor lies (`floor_z`), the hub and its wind tunnels.
+struct ResortMap {
+  std::vector<Run> runs;
+  std::vector<Lift> lifts;
+  std::vector<Course> courses;
+  std::string course;
+  Vec3 village;
+  double floor_z;
+  Hub hub;
+  std::vector<WindTunnel> tunnels;
+};
+
 struct TrackIndex;  // query.hpp: the spatial hash `nearest_track_point` reads
 
 // THE PISTE, open: from the start line (s = 0) to the finish (s = length). `index` is built
@@ -281,6 +335,7 @@ struct Level {
   RegionId region = RegionId::alpine;
   std::optional<PisteGrade> grade;             // the grade built to (R23); absent on v1
   std::optional<ge::core::Heightfield> crust;  // the region's wind crust (R21), if it lays one
+  std::optional<ResortMap> resort;             // the ski area (R25–R30); absent on v1
 
   double ground_at(double x, double z) const { return ge::core::sample_field(ground, x, z); }
   double packed_at(double x, double z) const { return ge::core::sample_field(packed, x, z); }
@@ -295,6 +350,10 @@ struct GenerateOptions {
   std::optional<int> version;   // versions.hpp; the current rules when absent or unknown
   std::optional<RegionId> region;
   std::optional<int> only;  // build this one attempt alone and throw its refusal
+  // R28 — on a ski area, the course to race by its id, else one of this colour (the nearest there
+  // is), else the colour the seed deals (`deal_grade`).
+  std::optional<std::string> course;
+  std::optional<PisteGrade> grade;
 };
 
 // The answer to "where on the piste is this point nearest?"
