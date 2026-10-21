@@ -1,7 +1,7 @@
 // R25–R30 — A RESORT BUILT, stage by stage: the massif, the lifts and their pads, every run
 // walked, graded and pressed in order, the lanes and drags that make every piste skiable again,
 // the mountain's own features round them, the hub, the woods and the courses. The
-// stages so far run through the lanes; the rest land under docs/goals.md M4b3–M4b5.
+// stages so far run through the access; the rest land under docs/goals.md M4b3–M4b5.
 //
 // THE SHAPE OF THE BUILD. One attempt's state is a `ResortAttempt`, and each stage is a function
 // over it that answers a refusal (why the attempt is given up) or nothing; the build runs
@@ -30,6 +30,7 @@
 #include "mountain/mapgen/regions.hpp"
 #include "mountain/mapgen/resort.hpp"
 #include "mountain/mapgen/station_pad.hpp"
+#include "mountain/mapgen/summit_ramps.hpp"
 #include "mountain/mapgen/terrain.hpp"
 
 namespace ge::mountain::mapgen {
@@ -79,6 +80,11 @@ struct ResortAttempt {
   NetworkStamp stamp;
   NetIndex net;
   int dropped = 0;  // runs left out by the grading
+  // 5. the ramps off every top, by its lift (a drag's top's too, on a leaning pad's area), and the
+  // drag lifts settled on the pressed mountain
+  RampsByLift ramps;
+  int settled_drags = 0;
+  int settled_home = 0;
 };
 
 // A step's answer: why the attempt is refused, or nothing to go on.
@@ -111,5 +117,11 @@ StageResult resort_links(ResortAttempt& a);
 // merging into it or leaving it with it. Then the pads pressed again at their levels, and every
 // run's colour measured on the pressed mountain. Refused when too few pistes stand.
 StageResult resort_graded(ResortAttempt& a);
+
+// 5. ACCESS, AS THE RUNS STAND (R26, R29): the ramps off the tops laid and pressed; R29 reckoned
+// again on the colours the pressed runs measure, the drag lifts settled to it; every bottom
+// station slid clear of the runs (refused where one fits nowhere), the way to the peak's chair's
+// queue graded again, and the ramps off the drags' tops.
+StageResult resort_access(ResortAttempt& a);
 
 }  // namespace ge::mountain::mapgen

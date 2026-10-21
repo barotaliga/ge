@@ -169,6 +169,22 @@ struct ArcSpan {
   double to;
 };
 
+// R26 — a ramp off a top: from a point of its pad's rim (`from`, at the pad's surface) down to
+// where its line first meets run `run`'s snow (`to`, at that snow's height, `s` m down the run),
+// `width` m across.
+struct SummitRamp {
+  struct Head {
+    double x, y, z;
+  };
+  struct Foot {
+    double x, y, z, s;
+  };
+  std::string run;
+  Head from;
+  Foot to;
+  double width;
+};
+
 // A stretch of the piste the wind has drifted over (R17): its full-depth core, by arc, m.
 struct Drift {
   double from;

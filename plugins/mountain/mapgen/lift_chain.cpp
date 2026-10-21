@@ -8,7 +8,9 @@
 #include "mountain/mapgen/lift_chain.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <limits>
 
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
@@ -38,6 +40,9 @@ struct Ends {
 // The lift that tops out at the mid-station and the one that leaves it.
 constexpr const char* kUpper = "G1";
 constexpr const char* kLower = "C1";
+
+// How steeply a ramp's flank falls off its edge where it crosses the leg, m per m.
+constexpr double kRampFlank = 0.5;
 
 // The step the way is read at, m, and its ground for its earthworks, m.
 constexpr double kRead = 1;
@@ -367,6 +372,67 @@ void groom_way(const ChainWay& way, ge::core::Heightfield& packed, const OnRun& 
       if (groom > packed.data[i] && !on_run(x, z)) packed.data[i] = static_cast<float>(groom);
     }
   }
+}
+
+void regrade_leg(ge::core::Heightfield& ground, std::span<const LiftPlan> lifts,
+                 std::span<const StationPad> pads, const RampsByLift& ramps) {
+  const std::optional<ChainWay> way = chain_of(lifts);
+  if (!way) return;
+  const StationPad* pad = nullptr;
+  for (const StationPad& p : pads) {
+    if (p.lift == kUpper) pad = &p;
+  }
+  // Where the leg leaves a circle of radius `r` about the pad.
+  const auto leaves = [&](double r) -> PlanPoint {
+    const double ex = way->ring.x - way->from.x;
+    const double ez = way->ring.z - way->from.z;
+    const double fx = way->from.x - pad->x;
+    const double fz = way->from.z - pad->z;
+    const double e2 = ex * ex + ez * ez;
+    const double a = e2 != 0 ? e2 : 1;
+    const double b = fx * ex + fz * ez;
+    const double c = fx * fx + fz * fz - r * r;
+    if (c >= 0) return way->from;
+    const double t = num::min(1.0, (-b + std::sqrt(b * b - a * c)) / a);
+    return {way->from.x + ex * t, way->from.z + ez * t};
+  };
+  // Off the pad's own edge: its height read just inside it, its cells left as they were pressed.
+  const double keep = pad ? pad->r : 0;
+  const PlanPoint from = pad ? leaves(keep) : way->from;
+  const PlanPoint edge = pad ? leaves(pad->r - ground.cell) : way->from;
+  const double y0 = sample_field(ground, edge.x, edge.z);
+  const double reach = hypot(way->ring.x - from.x, way->ring.z - from.z);
+  const double y_ring = sample_field(ground, way->ring.x, way->ring.z);
+  // A ramp off the deck crossing the leg: its own even fall and its flanks falling off it.
+  const auto off = ramps.find(kUpper);
+  const auto ramp_floor = [&](double x, double z) {
+    double floor = -std::numeric_limits<double>::infinity();
+    if (off == ramps.end()) return floor;
+    for (const SummitRamp& r : off->second) {
+      const SegHit at = seg_at({r.from.x, r.from.z}, {r.to.x, r.to.z}, x, z);
+      const double side = at.d - r.width / 2;
+      if (side >= resort_rules::lift::top::ramp::blend) continue;
+      floor =
+          num::max(floor, r.from.y + (r.to.y - r.from.y) * at.k - num::max(0.0, side) * kRampFlank);
+    }
+    return floor;
+  };
+  const std::array<PlanPoint, 2> corners{from, way->ring};
+  press_box(ground, corners, C::half + C::blend, [&](double x, double z, double y) {
+    if (pad && hypot(x - pad->x, z - pad->z) < keep) return y;
+    const SegHit at = seg_at(from, way->ring, x, z);
+    const double out = num::max(0.0, at.d - C::half);
+    if (out >= C::blend) return y;
+    const double w = 1 - smoothstep(0, C::blend, out);
+    const double line = y0 + (y_ring - y0) * at.k;
+    const double to = y + (line - y) * w;
+    const double floor = ramp_floor(x, z);
+    if (to < y) return num::max(to, num::min(y, floor));
+    // Filled only off the pad's edge, fading over `lift.chain.lip` m, so the way leaves the pad
+    // without a step down onto it, and never on a ramp, left falling as it was pressed.
+    if (floor > -std::numeric_limits<double>::infinity()) return y;
+    return y + (to - y) * (1 - smoothstep(0, C::lip, at.k * reach));
+  });
 }
 
 std::vector<RampRoom> chain_rooms(const std::optional<ChainWay>& way) {
