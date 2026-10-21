@@ -164,19 +164,22 @@ void create_terrain(gpu::Device& device, gpu::PipelineSet& pipelines, Terrain& t
   t.indirect =
       make_buffer(device, "terrain.indirect", 20, BU::Storage | BU::Indirect | BU::CopySrc);
 
+  create_horizon(device, pipelines, t.horizon, f, source.horizon, t.params, t.height.CreateView());
+
   const auto vf = wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment;
-  t.layout = make_layout(
-      device, "terrain.draw",
-      {Slot::uniform, Slot::texture_raw, Slot::texture, Slot::texture, Slot::storage_read}, vf);
+  t.layout = make_layout(device, "terrain.draw",
+                         {Slot::uniform, Slot::texture_raw, Slot::texture, Slot::texture,
+                          Slot::storage_read, Slot::texture, Slot::texture},
+                         vf);
   t.cull_layout = make_layout(device, "terrain.cull",
                               {Slot::uniform, Slot::texture_raw, Slot::storage, Slot::storage},
                               wgpu::ShaderStage::Compute);
   t.normals_layout =
       make_layout(device, "terrain.normals", {Slot::uniform, Slot::texture_raw, Slot::store_2d},
                   wgpu::ShaderStage::Compute);
-  t.group = make_group(
-      device, "terrain.draw", t.layout,
-      {t.params, t.height.CreateView(), t.normals.CreateView(), t.albedo.CreateView(), t.tiles});
+  t.group = make_group(device, "terrain.draw", t.layout,
+                       {t.params, t.height.CreateView(), t.normals.CreateView(),
+                        t.albedo.CreateView(), t.tiles, t.horizon.views[0], t.horizon.views[1]});
   t.cull_group = make_group(device, "terrain.cull", t.cull_layout,
                             {t.params, t.pyramid.CreateView(), t.tiles, t.indirect});
   t.normals_group = make_group(device, "terrain.normals", t.normals_layout,
@@ -237,6 +240,11 @@ void create_terrain(gpu::Device& device, gpu::PipelineSet& pipelines, Terrain& t
   t.staged.field_size[0] = w;
   t.staged.field_size[1] = h;
   t.staged.field_size[2] = static_cast<uint32_t>(t.pyramid_mips);
+  t.staged.horizon_grid[0] = static_cast<float>(t.horizon.origin_x);
+  t.staged.horizon_grid[1] = static_cast<float>(t.horizon.origin_z);
+  t.staged.horizon_grid[2] = static_cast<float>(t.horizon.cell);
+  t.staged.horizon_size[0] = static_cast<uint32_t>(t.horizon.width);
+  t.staged.horizon_size[1] = static_cast<uint32_t>(t.horizon.height);
 }
 
 void prepare_terrain(gpu::Device& device, Terrain& t, const FrameView& view) {
@@ -249,6 +257,8 @@ void prepare_terrain(gpu::Device& device, Terrain& t, const FrameView& view) {
     t.staged.levels[i][3] = 0;
   }
   t.staged.info[0] = static_cast<float>(t.levels);
+  prepare_horizon(&device, t.horizon, view);
+  std::memcpy(t.staged.horizon, t.horizon.blend, sizeof t.staged.horizon);
   device.queue.WriteBuffer(t.params, 0, &t.staged, sizeof t.staged);
   const uint32_t args[5] = {kIndexCount, 0, 0, 0, 0};
   device.queue.WriteBuffer(t.indirect, 0, args, sizeof args);
@@ -272,6 +282,11 @@ void encode_terrain_cull(Terrain& t, const gpu::PipelineSet& pipelines, FrameRec
   pass.DispatchWorkgroups(static_cast<uint32_t>(t.levels));
   ++stat.dispatches;
   pass.End();
+}
+
+void encode_terrain_horizon(Terrain& t, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
+                            wgpu::CommandEncoder& encoder) {
+  encode_horizon(t.horizon, pipelines, rec, encoder);
 }
 
 void encode_terrain(const Terrain& t, const gpu::PipelineSet& pipelines, FrameRecorder& rec,

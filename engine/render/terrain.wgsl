@@ -1,7 +1,8 @@
 // THE TERRAIN'S DRAW (render/terrain.hpp): a tile of the clipmap, its vertices pulled from the
 // vertex index and placed by its instance's level and tile; the odd vertices morphed onto the
 // coarser grid toward the level's edge, the vertices a finer level covers sunk under it; lit by
-// the sun and the sky through the shared functions of frame.wgsl, and seen through the haze.
+// the sun past the ground's own horizon and the sky through the shared functions of frame.wgsl,
+// and seen through the haze.
 #include "render/wgsl/frame.wgsl"
 #include "render/wgsl/terrain_common.wgsl"
 
@@ -14,6 +15,28 @@ const kMorphEnd = 0.95;
 @group(1) @binding(2) var normals: texture_2d<f32>;
 @group(1) @binding(3) var albedo: texture_2d<f32>;
 @group(1) @binding(4) var<storage, read> tiles: array<u32>;
+@group(1) @binding(5) var horizon0: texture_2d<f32>;
+@group(1) @binding(6) var horizon1: texture_2d<f32>;
+
+// How much of the sun reaches world (x, z) past the ground's own horizon (render/horizon.hpp):
+// each of the two maps either side of the sun's bearing gives a soft step where the sun's
+// elevation crosses the horizon, blended by where the sun lies between their bearings.
+fn horizon_light(xz: vec2f) -> f32 {
+  if (params.horizon.w == 0.0) {
+    return 1.0;
+  }
+  let maxc = vec2f(params.horizon_size.xy) - 1.0;
+  let g = mirror_grid((xz - params.horizon_grid.xy) / params.horizon_grid.z, maxc);
+  let uv = (g + 0.5) / vec2f(params.horizon_size.xy);
+  let a = textureSampleLevel(horizon0, linear_clamp, uv, 0.0).r;
+  let b = textureSampleLevel(horizon1, linear_clamp, uv, 0.0).r;
+  let odd = params.horizon.y > 0.5;
+  let lo = select(a, b, odd);
+  let hi = select(b, a, odd);
+  let sun_tan = frame.sun.y / max(length(frame.sun.xz), 1e-4);
+  let w = params.horizon.z;
+  return mix(smoothstep(-w, w, sun_tan - lo), smoothstep(-w, w, sun_tan - hi), params.horizon.x);
+}
 
 struct VertexOut {
   @builtin(position) position: vec4f,
@@ -64,7 +87,7 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
   let n = normalize(textureSampleLevel(normals, linear_clamp, uv, 0.0).xyz * vec3f(flip.x, 1.0, flip.y));
   let a = textureSampleLevel(albedo, linear_clamp, uv, 0.0).rgb;
   let y = in.rel.y + frame.eye.y;
-  let sun = sun_light(y) * max(dot(n, frame.sun.xyz), 0.0);
+  let sun = sun_light(y) * max(dot(n, frame.sun.xyz), 0.0) * horizon_light(in.xz);
   let c = a / PI * (sun + sky_irradiance(n));
   return vec4f(haze(c, in.position.xy * frame.size.zw, length(in.rel)), 1.0);
 }

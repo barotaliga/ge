@@ -38,6 +38,7 @@
 #include "gpu/device.hpp"
 #include "gpu/pipeline.hpp"
 #include "render/frame.hpp"
+#include "render/horizon.hpp"
 
 namespace ge::render {
 
@@ -61,6 +62,7 @@ struct TerrainSource {
   const std::vector<uint8_t>* albedo = nullptr;
   double base_spacing = 1.0;  // level 0's quad, m
   int levels = 7;             // ≤ kMaxLevels
+  HorizonSettings horizon;    // the ground's own shadow
 };
 
 struct Terrain {
@@ -75,23 +77,31 @@ struct Terrain {
   wgpu::BindGroup group, cull_group, normals_group;
   uint32_t p_draw = 0, p_cull = 0, p_normals = 0;
   bool normals_built = false;
+  Horizon horizon;
   // terrain.wgsl's `TerrainParams`, filled by prepare.
   struct Params {
     float levels[kMaxLevels][4];  // origin x, origin z, spacing, 0
     float info[4];                // level count, tile quads, sink (spacings), morph start
     float field[4];               // origin x, origin z, cell, 0
     uint32_t field_size[4];       // cols, rows, pyramid mips, 0
+    float horizon[4];             // the horizon maps' blend (Horizon::blend)
+    float horizon_grid[4];        // the maps' origin x, z, cell, 0
+    uint32_t horizon_size[4];     // the maps' width, height, 0, 0
   } staged{};
 };
 
 // Upload the source's grids, bake the min/max pyramid and add the pipelines to the manifest.
 void create_terrain(gpu::Device& device, gpu::PipelineSet& pipelines, Terrain& terrain,
                     const TerrainSource& source, const wgpu::BindGroupLayout& frame);
-// The levels round this frame's eye, staged and uploaded; the indirect count reset.
+// The levels round this frame's eye and the horizon maps the sun needs, staged and uploaded; the
+// indirect count reset.
 void prepare_terrain(gpu::Device& device, Terrain& terrain, const FrameView& view);
 // The normals' bake (the first frame) and the cull ("terrain.cull" compute pass).
 void encode_terrain_cull(Terrain& terrain, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
                          wgpu::CommandEncoder& encoder, const wgpu::BindGroup& frame);
+// The horizon maps' bakes that are due ("terrain.horizon").
+void encode_terrain_horizon(Terrain& terrain, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
+                            wgpu::CommandEncoder& encoder);
 // The draw ("terrain"): clears the HDR target and the depth, draws every visible tile.
 void encode_terrain(const Terrain& terrain, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
                     wgpu::CommandEncoder& encoder, const FrameTargets& targets,

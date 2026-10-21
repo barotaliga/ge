@@ -257,6 +257,7 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 | `gpu-capture` | picture | engine | `engine/gpu` (the headless capture) | M6 (now) |
 | `frame-pace` | bench | engine | the platform's frame loop | M6 (now) |
 | `world` | picture | game:fall_line | Fall Line's frame from named views of a seed (`games/fall_line/labs/gpu_world_lab.cpp`) | M7a (now) |
+| `shadows` | picture | game:fall_line | the horizon maps over a day from above, and the bake counter of a sun sweep (`games/fall_line/labs/gpu_shadows_lab.cpp`) | M7b (now) |
 | `profile` | bench | game:fall_line | a frame's CPU and GPU cost | M7d |
 | `forest`, `snow`, `trails`, `spray`, `skis`, `skier` | picture | game:fall_line | the world drawn | M8 |
 | `audition` | sim | engine | the synth, the beds | M9 |

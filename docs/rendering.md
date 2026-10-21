@@ -341,6 +341,26 @@ Filtering is hardware comparison sampling with a small rotated Poisson kernel. A
 contact-hardening (PCSS-style) blocker search is a quality-ladder option for the
 figures' atlas only.
 
+**As built (M7b)** (`render/horizon.hpp`): the horizon map. A turn is split into 180 bearings
+(2° each); the maps for the two bearings either side of the sun's sit in two `RGBA16Float`
+textures, each bearing in the slot of its index's parity, so a step of the sun into the next
+interval rebakes one map and leaves the other's bits alone. A map's texel is every second
+sample of the field (Fall Line: 751 × 751 at 4 m over its 3 km map); the bake marches 96
+samples toward the bearing, growing geometrically from one texel to 8 km, reads the field's
+bilinear heights mirrored past the edge (as the terrain draws them), takes the planet's
+curvature off each sample and keeps the highest tangent of elevation. The terrain's
+fragment shader (`horizon_light`) turns each map into a soft step where the sun's tangent
+crosses it (a penumbra of 0.008, the sun's disc and the grid's interpolation) and blends the
+two by where the sun lies between their bearings. A bake is a whole map in one dispatch, in
+its own `terrain.horizon` compute pass, only on a frame that needs one: two at load, then one
+each time the sun crosses a 2° step (on seed 38, 69 bakes from 7 to 17 h, about one every
+nine minutes of the day; the `shadows` lab counts them). On the software adapter a bake takes about 0.4 s; real-GPU
+timings, and slicing a bake over frames if one shows as a hitch, wait for the `profile` lab
+(M7d). Past the map's edge the ground is drawn mirrored and so are its maps: the shadows
+there fall at the mirrored bearing, which only the distant ground shows until the far
+ranges replace it (M8). The cascades and the figures' atlas have nothing to shade until the
+instances and the skier are drawn, so they land with them (M7d).
+
 ## Sky, atmosphere and clouds
 
 - **A physically based sky from lookup tables** (the scheme of Hillaire, 2020), all
