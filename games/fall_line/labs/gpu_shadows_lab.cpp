@@ -60,11 +60,10 @@ std::string fixed(double v, int places) {
 
 // terrain.wgsl's `horizon_light` on the CPU, over the maps read back.
 double light_at(const r::Horizon& h, const std::vector<float> maps[2], int x, int y,
-                const r::FrameView& v) {
+                double sun_tan) {
   const size_t i = static_cast<size_t>(y) * static_cast<size_t>(h.width) + static_cast<size_t>(x);
   const bool odd = h.blend[1] > 0.5f;
   const double lo = maps[odd ? 1 : 0][i], hi = maps[odd ? 0 : 1][i];
-  const double sun_tan = std::tan(v.sun_elevation);
   const double w = h.blend[2];
   auto step = [w](double d) {
     const double t = std::clamp((d + w) / (2 * w), 0.0, 1.0);
@@ -169,6 +168,8 @@ void run(ge::lab::Lab& lab) {
                                         r::read_horizon(*device, h, 1)};
     double sun[3];
     r::sun_direction(v, sun);
+    // As the terrain's shader takes it: the sun's height over its run in the plan.
+    const double sun_tan = sun[1] / std::max(std::sqrt(sun[0] * sun[0] + sun[2] * sun[2]), 1e-4);
     ge::lab::Picture pic = ge::lab::create_picture(h.width, h.height, {0, 0, 0});
     size_t dark = 0;
     for (int y = 0; y < h.height; ++y) {
@@ -179,7 +180,7 @@ void run(ge::lab::Lab& lab) {
         const double nl = std::max((n[0] * sun[0] + n[1] * sun[1] + n[2] * sun[2]) /
                                        std::sqrt(g.gx * g.gx + 1 + g.gz * g.gz),
                                    0.0);
-        const double lit = light_at(h, maps, x, y, v);
+        const double lit = light_at(h, maps, x, y, sun_tan);
         if (lit < 0.5) ++dark;
         const double s = 0.25 + 0.75 * nl * lit;
         const auto c = [&](double base, double shade) {
