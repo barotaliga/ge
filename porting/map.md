@@ -35,10 +35,15 @@ the row when the file moves.
 | `engine/loop/run_clock.hpp` | `oss-game-framework/src/loop/run-clock.ts` | createRunClock MAX_FRAME_SECONDS |
 | `plugins/mountain/analysis/cliffs.cpp` | `game5/engine/analysis/cliffs.ts` | checkCliffs checkDrops |
 | `plugins/mountain/analysis/cliffs.hpp` | `game5/engine/analysis/cliffs.ts` | checkCliffs checkDrops |
+| `plugins/mountain/analysis/course.cpp` | `game5/engine/analysis/index.ts` | analyzeLevel (a resort's course, `network: false`; the engine's own checks) |
 | `plugins/mountain/analysis/crossings.cpp` | `game5/engine/analysis/crossings.ts` | selfCrossings |
 | `plugins/mountain/analysis/crossings.hpp` | `game5/engine/analysis/crossings.ts` | selfCrossings |
 | `plugins/mountain/analysis/index.cpp` | `game5/engine/analysis/index.ts` | analyzeLevel |
 | `plugins/mountain/analysis/index.hpp` | `game5/engine/analysis/index.ts` | analyzeLevel |
+| `plugins/mountain/analysis/resort.cpp` | `game5/engine/analysis/resort.ts` | analyzeResort (the engine's own subset of its checks) |
+| `plugins/mountain/analysis/resort.hpp` | `game5/engine/analysis/resort.ts` | analyzeResort |
+| `plugins/mountain/analysis/shared.cpp` | `game5/engine/analysis/index.ts` | analyzeLevel (R13, R15, R19) |
+| `plugins/mountain/analysis/shared.hpp` | `game5/engine/analysis/index.ts` | analyzeLevel (R13, R15, R19) |
 | `plugins/mountain/labs/junctions_lab.cpp` | `game5/scripts/junctions-lab.mjs` | the steps by kind, the sheet (read down each run's line, not every packed cell) |
 | `plugins/mountain/labs/resort_lab.cpp` | `game5/scripts/resort-map.mjs` | the plan, the listing (no panorama or charts yet) |
 | `plugins/mountain/labs/resort_map.cpp` | `game5/scripts/lib/resort-draw.mjs` | renderResortPlan |
@@ -48,6 +53,10 @@ the row when the file moves.
 | `plugins/mountain/mapgen/berm.hpp` | `game5/engine/mapgen/berm.ts` | bermProfile bermCrest |
 | `plugins/mountain/mapgen/cliffs.cpp` | `game5/engine/mapgen/cliffs.ts` | layCliffs stampCliff |
 | `plugins/mountain/mapgen/cliffs.hpp` | `game5/engine/mapgen/cliffs.ts` | cliffProfile cliffFootprint onCliff layCliffs stampCliff |
+| `plugins/mountain/mapgen/course_day.cpp` | `game5/engine/mapgen/course-day.ts` | courseDay DAY_SALT |
+| `plugins/mountain/mapgen/course_day.hpp` | `game5/engine/mapgen/course-day.ts` | courseDay |
+| `plugins/mountain/mapgen/course_gates.cpp` | `game5/engine/mapgen/course-gates.ts` | courseGates hashPick chooseCourse |
+| `plugins/mountain/mapgen/course_gates.hpp` | `game5/engine/mapgen/course-gates.ts` | courseGates hashPick chooseCourse |
 | `plugins/mountain/mapgen/courses.cpp` | `game5/engine/mapgen/courses.ts` | composeCourse courseArc runAt nearestOn |
 | `plugins/mountain/mapgen/courses.hpp` | `game5/engine/mapgen/courses.ts` | Piece CoursePlan composeCourse courseArc |
 | `plugins/mountain/mapgen/digest.cpp` | `game5/engine/mapgen/digest.ts` | levelDigest |
@@ -60,9 +69,9 @@ the row when the file moves.
 | `plugins/mountain/mapgen/drops.hpp` | `game5/engine/mapgen/drops.ts` | layDrops publishDrops |
 | `plugins/mountain/mapgen/forest.cpp` | `game5/engine/mapgen/forest.ts` | growForest (and its resort options) |
 | `plugins/mountain/mapgen/forest.hpp` | `game5/engine/mapgen/forest.ts` | growForest treeAge trunkRadius ForestOptions |
-| `plugins/mountain/mapgen/generate.cpp` | `game5/engine/mapgen/generate.ts` | attemptLevel searchLevel compileLevel normalAt |
+| `plugins/mountain/mapgen/generate.cpp` | `game5/engine/mapgen/generate.ts` | attemptLevel searchLevel compileLevel normalAt generateResortLevel |
 | `plugins/mountain/mapgen/generate.hpp` | `game5/engine/mapgen/generate.ts` | generateLevel subSeed compileLevel |
-| `plugins/mountain/mapgen/grades.cpp` | `game5/engine/mapgen/grades.ts` | GRADES UNGRADED steepestSpan |
+| `plugins/mountain/mapgen/grades.cpp` | `game5/engine/mapgen/grades.ts` | GRADES UNGRADED steepestSpan dealGrade GRADE_SALT |
 | `plugins/mountain/mapgen/grades.hpp` | `game5/engine/mapgen/grades.ts` | GRADES UNGRADED gradeRow pisteGradeOf steepestSpan verticalBand |
 | `plugins/mountain/mapgen/hub.cpp` | `game5/engine/mapgen/hub.ts` | planHub hubClear groomHub layTunnels bedOf pressBed hubAt outsideHub EDGE_SCALE BED_EASE |
 | `plugins/mountain/mapgen/hub.hpp` | `game5/engine/mapgen/hub.ts` | planHub hubClear groomHub layTunnels hubAt outsideHub HubPlan FloorPoint Hub WindTunnel |
@@ -97,6 +106,8 @@ the row when the file moves.
 | `plugins/mountain/mapgen/resort_courses.cpp` | `game5/engine/mapgen/resort-build.ts` | attemptResort (the woods, the day's bearings, the courses) |
 | `plugins/mountain/mapgen/resort_features.cpp` | `game5/engine/mapgen/resort-build.ts` | attemptResort distanceTo RAMP_GROOM |
 | `plugins/mountain/mapgen/resort_graded.cpp` | `game5/engine/mapgen/resort-build.ts` | attemptResort scaledRow |
+| `plugins/mountain/mapgen/resort_level.cpp` | `game5/engine/mapgen/resort-level.ts` | resortLevel |
+| `plugins/mountain/mapgen/resort_level.hpp` | `game5/engine/mapgen/resort-level.ts` | resortLevel |
 | `plugins/mountain/mapgen/resort_rules.hpp` | `game5/engine/mapgen/resort-rules.ts` | RESORT_RULES TREE_LINE_MASSIF |
 | `plugins/mountain/mapgen/resort_woods.cpp` | `game5/engine/mapgen/resort-woods.ts` | WOODS woodsAtDepth tallAtDepth |
 | `plugins/mountain/mapgen/resort_woods.hpp` | `game5/engine/mapgen/resort-woods.ts` | WOODS woodsAtDepth tallAtDepth |
@@ -111,7 +122,7 @@ the row when the file moves.
 | `plugins/mountain/mapgen/station_pad.hpp` | `game5/engine/mapgen/station-pad.ts` | padShape pressPads relevelPads groomPads padSurface dragTop dragTopsOf unloadPoint cutApproach |
 | `plugins/mountain/mapgen/summit_ramps.cpp` | `game5/engine/mapgen/summit-ramps.ts` | rampRoom roomBlocked nearRoom evenFall rampTo planRamps betterRamp overlaps eachCell headIndex layRamps pressRamps groomRamps offOwn nearLine |
 | `plugins/mountain/mapgen/summit_ramps.hpp` | `game5/engine/mapgen/summit-ramps.ts` | rampRoom roomBlocked nearRoom RampFit RampRoom RunCover rampFrame rampHeight offRamp layRamps groomRamps nearLine |
-| `plugins/mountain/mapgen/sun.cpp` | `game5/engine/mapgen/sun.ts` | dealSun declinationOf faceTheSun |
+| `plugins/mountain/mapgen/sun.cpp` | `game5/engine/mapgen/sun.ts` | dealSun declinationOf faceTheSun sunOffFace |
 | `plugins/mountain/mapgen/sun.hpp` | `game5/engine/mapgen/sun.ts` | declinationOf sunWindow dealSun faceTheSun |
 | `plugins/mountain/mapgen/surface.cpp` | `game5/engine/mapgen/surface.ts` | layCrust foldSurface |
 | `plugins/mountain/mapgen/surface.hpp` | `game5/engine/mapgen/surface.ts` | layCrust foldSurface |
