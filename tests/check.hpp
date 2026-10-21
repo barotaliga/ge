@@ -68,3 +68,17 @@ inline std::string root_path(const char* rel) { return std::string(GE_SOURCE_DIR
       ::ge::test::fail(__FILE__, __LINE__, m_);                                              \
     }                                                                                        \
   } while (0)
+
+// CHECK_BITS as JS can observe it: any NaN equals any NaN, because JS has one NaN and V8 does
+// not keep NaN payloads or signs stable. Use it for results JS code produced.
+#define CHECK_JS_BITS(got, want)                                                             \
+  do {                                                                                       \
+    const double g_ = (got), w_ = (want);                                                    \
+    if (!(g_ != g_ && w_ != w_) && ::ge::test::bits(g_) != ::ge::test::bits(w_)) {           \
+      char m_[160];                                                                          \
+      std::snprintf(m_, sizeof m_, "%s: got %.17g (%016llx) want %.17g (%016llx)", #got, g_, \
+                    (unsigned long long)::ge::test::bits(g_), w_,                            \
+                    (unsigned long long)::ge::test::bits(w_));                               \
+      ::ge::test::fail(__FILE__, __LINE__, m_);                                              \
+    }                                                                                        \
+  } while (0)

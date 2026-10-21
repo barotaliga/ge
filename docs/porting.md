@@ -24,6 +24,9 @@ reviewed as a change.
 Golden files for anything that reaches `Math.sin`, `exp`, `pow` or similar are written
 under **game5's pinned Node** (`../game5/.nvmrc`) and record the Node version in their
 first line. Bit-exact functions (`+ − × ÷ √`, hypot, the PRNG) are the same on any Node.
+`Math.pow` in Node 24 is the host C library's `pow`, so its tables must also come from
+game5's reference platform, Linux x86-64 with glibc (`make golden-libm` refuses anything
+else).
 
 ## Layout mapping
 
@@ -71,18 +74,23 @@ becomes `run_start.hpp`. Each port file's first comment names its oracle file.
 5. **`%`** on doubles is `std::fmod` (exact, with the sign of the dividend), not
    `std::remainder`.
 6. **Transcendentals** (`Math.sin`, `cos`, `tan`, `atan`, `atan2`, `asin`, `acos`, `exp`,
-   `expm1`, `log`, `log2`, `pow`, `cbrt`, `tanh`): only `core::libm`, never `<cmath>`.
+   `expm1`, `log`, `log2`, `pow`, `cbrt`, `tanh`): only `core::libm`, never `<cmath>`
+   (`tools/check-libm.sh` fails the build's CI otherwise). Those fourteen are every one
+   game5's engine calls. A port that meets another (`Math.log10`, `sinh` …) ports it into
+   `core/libm` from the same upstream first (`determinism` skill).
    `Math.sqrt`, `abs`, `floor`, `ceil` and `trunc` are exact and may use `<cmath>`.
 7. **`Math.hypot`**: `core::hypot` / `hypot3` / `hypot4` (done, bit for bit).
-8. **`**`** is `Math.pow`, so it goes through `core::libm::pow`, even for `x ** 2` (V8
-   may or may not turn `x ** 2` into `x * x`; check the golden values).
+8. **`**`** is `Math.pow`, so it goes through `core::libm::pow`, even for `x ** 2`.
+   (Node 24 answers `x ** 2` with `x * x` and `x ** 0.5` with `sqrt(x + 0)`; `libm::pow`
+   does the same, so writing `x * x` by hand is also exact for a constant 2.)
 9. **`Array.prototype.sort`** is stable, so use `std::stable_sort` with the same
    comparator. With no comparator, JS sorts **as strings**, so port that faithfully
    if it occurs.
 10. **Object and `Map` iteration order** is insertion order (integer-like object keys
     first, in ascending order). Never iterate an `unordered_map` to produce a result.
 11. **`toFixed`, `String(n)` and template literals** used inside a hash or a key: port
-    the exact formatting. `std::to_chars` gives the shortest round-trip digits, but JS
+    the exact formatting. (game5's engine uses `toFixed` only in diagnostic messages and
+    `toString(16)` only on the uint32 digests, so M1 ships no helper for it.) `std::to_chars` gives the shortest round-trip digits, but JS
     switches to exponent form at 1e21 and below 1e-6.
 12. **Integer division**: `Math.floor(a / b)` is a double divide followed by a floor.
     Keep it in double; do not turn it into C++ `int / int` (which truncates).

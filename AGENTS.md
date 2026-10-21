@@ -69,10 +69,12 @@ make test         # build + ctest
 make fmt          # clang-format in place;  make fmt-check is what CI runs
 make lint         # clang-tidy over the sources (bug-finding checks only)
 make agents-check # symlinks, skills ↔ this router, the 1000-line cap
-make golden       # regenerate tests/golden/* from the TS oracle (needs Node 22+ and ../oss-game-framework)
+make golden       # regenerate tests/golden/core_* from the TS oracle (needs Node 22+ and ../oss-game-framework)
+make golden-libm NODE=<node 24>  # regenerate tests/golden/libm_* under game5's pinned Node, on Linux x86-64
+make libm-check   # no <cmath> transcendental in simulation code
 ```
 
-CI (`.github/workflows/ci.yml`) runs fmt-check, agents-check and lint, plus build and
+CI (`.github/workflows/ci.yml`) runs fmt-check, agents-check, libm-check and lint, plus build and
 test on Linux x64 (GCC debug+ASan, GCC release, Clang release), Linux arm64 (GCC),
 macOS (Apple Clang) and Windows (MSVC). A parity failure on one row points at that
 row's compiler or libm.
@@ -81,7 +83,7 @@ row's compiler or libm.
 
 | Path | What | Skill |
 | --- | --- | --- |
-| `engine/core/` | The deterministic pool: `prng.hpp` (mulberry32), `math.hpp` (hypot family, clamp, smoothstep). Next: libm, js, noise, heightfield, quat, solar, output | `determinism` |
+| `engine/core/` | The deterministic pool: `prng.hpp` (mulberry32), `math.hpp` (hypot family, clamp, smoothstep), `libm/` (every transcendental game5 calls, at Node 24's bits; vendored, with `LICENSE.md`), `js.hpp` (JS number semantics). Next: noise, heightfield, quat, solar, output | `determinism` |
 | `engine/racing/` | Tape, records, standings (M3) | `port` |
 | `engine/loop/` | The fixed-step run clock (M2) | `sim` |
 | `engine/platform/` | SDL3: window, input, gamepad, audio device, files (M6); the only place SDL is included | `platform` |
@@ -103,6 +105,11 @@ row's compiler or libm.
   clockwise from above; pitch tips-up positive; roll right-side-down positive; `steer`
   and `edge` positive to the right. Stated in `engine/core/math.hpp`'s header.
 - **The PRNG**: `engine/core/prng.hpp`. Nothing else makes random numbers.
+- **The transcendentals**: `engine/core/libm/libm.hpp` says which upstream each function
+  is and why (V8's fdlibm, and glibc's pow for `Math.pow`). Nothing in simulation code
+  calls `<cmath>`'s.
+- **JS number semantics** (`Math.round`, `|0`, `>>>0`, `Math.imul`, `Math.max`/`min`,
+  `Math.sign`, `%`): `engine/core/js.hpp`.
 - **The test harness**: `tests/check.hpp`. Bit comparison is `CHECK_BITS`.
 
 ## Commit and PR conventions

@@ -1,5 +1,5 @@
 # gameengine2 — the top-level build. Targets:
-#   ge_core      the deterministic pool (header-only today)
+#   ge_core      the deterministic pool (headers, plus core/libm compiled)
 #   <x>_test     one executable per tests/<x>_test.cpp, registered with CTest
 # The flags below are part of the DETERMINISM CONTRACT (AGENTS.md); a target
 # that drops them can silently change the bits a simulation produces.
@@ -38,9 +38,21 @@ elseif(MSVC)
   endif()
 endif()
 
-add_library(ge_core INTERFACE)
-target_include_directories(ge_core INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/engine)
-target_link_libraries(ge_core INTERFACE ge_flags)
+# The deterministic pool. Mostly headers; core/libm is compiled.
+set(GE_LIBM_VENDORED
+  engine/core/libm/fdlibm_trig.cpp
+  engine/core/libm/fdlibm_arc.cpp
+  engine/core/libm/fdlibm_exp_log.cpp)
+add_library(ge_core STATIC ${GE_LIBM_VENDORED} engine/core/libm/pow.cpp)
+target_include_directories(ge_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/engine)
+target_link_libraries(ge_core PUBLIC ge_flags)
+# fdlibm is kept line for line with V8's copy; its deliberate int/double word conversions
+# are not rewritten to quiet warnings. The FP flags above still apply to it.
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+  set_source_files_properties(${GE_LIBM_VENDORED} PROPERTIES COMPILE_OPTIONS "-Wno-conversion")
+elseif(MSVC)
+  set_source_files_properties(${GE_LIBM_VENDORED} PROPERTIES COMPILE_OPTIONS "/wd4244;/wd4146;/wd4701;/wd4723")
+endif()
 
 enable_testing()
 add_subdirectory(tests)
