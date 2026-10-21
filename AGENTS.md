@@ -30,6 +30,7 @@ updates that row's Status in its PR.
 | [`docs/architecture.md`](docs/architecture.md) | The layers and their dependency direction, the frame, the code conventions, diagnostics, the determinism contract and the build |
 | [`docs/porting.md`](docs/porting.md) | How a TS module becomes C++: the oracle, layout and type mapping, the JS-semantics traps, parity levels |
 | [`docs/index.md`](docs/index.md) | GENERATED from the code's `ge:` tags: every file's one-line summary, owning skill, oracle and test; oracle file to port; keyword to files |
+| [`docs/publishing.md`](docs/publishing.md) | What a release is (GitHub Releases + GitHub Packages), how a game consumes it, changeset fragments, cutting a release, the credentials |
 
 ## Rules for every task
 
@@ -42,8 +43,12 @@ updates that row's Status in its PR.
   device ids, or paths under a home directory. Credentials live only in **GitHub
   Actions secrets** and are referenced as `${{ secrets.NAME }}`. Locally they come from
   the environment or a gitignored `.env`. Workflows request the narrowest
-  `permissions:` they need. Write every comment, doc and commit message for a stranger
-  reading it.
+  `permissions:` they need, map a secret into `env:` (never interpolate it into a
+  `run:` script) and never print one. Actions **variables** and workflow logs are public
+  too. An agent never handles a credential's value: a maintainer enters secrets in the
+  repository settings. Releases need only the built-in `GITHUB_TOKEN`
+  ([`docs/publishing.md`](docs/publishing.md) lists every credential). Write every
+  comment, doc and commit message for a stranger reading it.
 - **ONLY WHAT GAME5 NEEDS** (G4). Before you build a component, name the game5 feature
   it serves. A general-purpose feature with no game5 user is out of scope.
 - **FAST, AND PROVEN FAST** (G2). Hot paths do not allocate, branch on virtuals or chase
@@ -79,12 +84,17 @@ make lessons ARGS="port --scope=engine/core"   # read a skill's lessons, filtere
 make golden       # regenerate tests/golden/core_*, loop_*, racing_* from the TS oracle (needs Node 22+, ../oss-game-framework and ../game5)
 make golden-libm NODE=<node 24>  # regenerate tests/golden/libm_*, core_quat, core_solar, mapgen_generate under game5's pinned Node, on Linux x86-64
 make libm-check   # no <cmath> transcendental in simulation code
+make release-check # the changeset fragments valid + tools/release.py's tests; prints the next version
 ```
 
 CI (`.github/workflows/ci.yml`) runs fmt-check, agents-check, libm-check and lint, plus build and
 test on Linux x64 (GCC debug+ASan, GCC release, Clang release), Linux arm64 (GCC),
 macOS (Apple Clang) and Windows (MSVC). A parity failure on one row points at that
-row's compiler or libm.
+row's compiler or libm. `.github/workflows/packaging.yml` holds every PR to what a
+release needs: a `.changes/unreleased/` fragment for a shipped change (or the
+`no-changelog` label), and the installed package building a consumer on Linux, macOS
+and Windows. Releases are dispatched, never hand-made (`release` skill,
+[`docs/publishing.md`](docs/publishing.md)).
 
 ## Where things live
 
@@ -129,7 +139,9 @@ Agents find code by grep, so the tree is built to be grepped:
 
 ### Stated once
 
-- **The FP flags**: `ge_flags` in the root `CMakeLists.txt`. Every target links it.
+- **The FP flags**: `ge_fp` in the root `CMakeLists.txt`, linked by `ge_core` (so by every
+  target) and published with it as `ge::fp`. `ge_flags` is the tree's own warnings and
+  sanitizers, never published.
 - **World conventions** (from game5): the plan is x/z with y up; heading 0 = +z,
   clockwise from above; pitch tips-up positive; roll right-side-down positive; `steer`
   and `edge` positive to the right. Stated in `engine/core/math.hpp`'s header.
@@ -165,6 +177,7 @@ and the directories agree.
 | `port` | Porting any game5 or framework module to C++ |
 | `testing` | Writing a test, a golden table or a parity script |
 | `build` | CMake, presets, dependencies (`FetchContent`), compiler flags, CI workflows |
+| `release` | A changeset fragment, `cmake/Packaging.cmake`, a public target, cutting or dry-running a release |
 | `sim` | `games/fall_line/sim`: mapgen, the step, the bot, the headless sim CLI, the run clock |
 | `platform` | `engine/platform`: SDL3, the window, input, the gamepad, the audio device, files |
 | `gpu` | `engine/gpu`: the webgpu.h device, surfaces, buffers, pipelines, WGSL |

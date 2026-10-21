@@ -126,7 +126,9 @@ itself does no I/O. Tests print in the same shape through `tests/check.hpp`.
   `pow` and the rest are forbidden in `engine/core`, `engine/racing`, `engine/loop` and
   `games/*/sim`; `tools/check-libm.sh` (`make libm-check`, CI's `agents` job) fails a call.
 - FP flags: `-ffp-contract=off -fno-fast-math` (GCC: `-fexcess-precision=standard`;
-  MSVC: `/fp:strict`), set once on `ge_flags` in the root `CMakeLists.txt`.
+  MSVC: `/fp:strict`), set once on `ge_fp` in the root `CMakeLists.txt`
+  (linked by `ge_core` and published with it as `ge::fp`, so a game built against a
+  release gets them too).
 - Randomness only through `core::Rng` streams owned by the state. No clock in `sim/`.
 - Iteration order is explicit. No `unordered_map` iteration feeds a result. Sorting
   uses `std::stable_sort`, because JS `Array.prototype.sort` is stable.

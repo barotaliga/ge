@@ -89,6 +89,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | `tests/loop_run_clock_test.cpp` | Parity test: loop/run_clock against the oracle | `testing` |  |  |
 | `tests/main.cpp` | Runs every TEST registered in a test executable | `testing` |  |  |
 | `tests/mapgen_generate_test.cpp` | Parity test: the v1 generator's maps against game5's, section by section | `testing` `sim` |  |  |
+| `tests/package/consumer/main.cpp` | Links the installed engine package the way a game does (release smoke test) | `release` |  |  |
 | `tests/racing_records_test.cpp` | Parity test: racing/records against the oracle | `testing` |  |  |
 | `tests/racing_standings_test.cpp` | Parity test: racing/standings against the oracle | `testing` |  |  |
 | `tests/racing_tape_test.cpp` | Parity test: racing/tape and game5's own ghost, byte for byte | `testing` |  |  |
@@ -208,6 +209,7 @@ Which C++ files port each oracle file. An oracle file missing here is not ported
 | compileLevel | `games/fall_line/sim/mapgen/generate.cpp` `games/fall_line/sim/mapgen/generate.hpp` |
 | concepts | `tools/skill-lessons.mjs` |
 | consolidation | `tools/skill-lessons.mjs` |
+| consumer | `tests/package/consumer/main.cpp` |
 | continental | `games/fall_line/sim/mapgen/regions.hpp` |
 | controls | `engine/racing/tape.hpp` |
 | ControlTape | `engine/racing/tape.hpp` |
@@ -260,6 +262,7 @@ Which C++ files port each oracle file. An oracle file missing here is not ported
 | fieldOrder | `engine/racing/standings.hpp` |
 | fillField | `engine/core/heightfield.hpp` |
 | find | `tools/agents-index.mjs` |
+| find-package | `tests/package/consumer/main.cpp` |
 | finding | `games/fall_line/sim/analysis/index.hpp` |
 | findings | `games/fall_line/sim/analysis/index.hpp` |
 | fingerprint | `engine/racing/tape.hpp` `games/fall_line/sim/mapgen/digest.hpp` |
@@ -315,6 +318,7 @@ Which C++ files port each oracle file. An oracle file missing here is not ported
 | index | `tools/agents-index.mjs` |
 | info | `engine/core/output.hpp` |
 | input | `engine/racing/tape.hpp` |
+| install | `tests/package/consumer/main.cpp` |
 | integrate | `engine/core/quat.hpp` |
 | internal | `engine/core/libm/fdlibm_internal.hpp` |
 | interpolation | `engine/loop/run_clock.hpp` |
@@ -389,6 +393,7 @@ Which C++ files port each oracle file. An oracle file missing here is not ported
 | order | `engine/racing/standings.hpp` |
 | orientation | `engine/core/quat.hpp` |
 | output | `engine/core/output.cpp` `engine/core/output.hpp` `tests/core_output_test.cpp` |
+| package | `tests/package/consumer/main.cpp` |
 | parity | `tests/core_heightfield_test.cpp` `tests/core_js_test.cpp` `tests/core_libm_test.cpp` `tests/core_math_test.cpp` `tests/core_noise_test.cpp` `tests/core_output_test.cpp` `tests/core_prng_test.cpp` `tests/core_quat_test.cpp` `tests/core_solar_test.cpp` `tests/golden.hpp` `tests/loop_run_clock_test.cpp` `tests/mapgen_generate_test.cpp` `tests/racing_records_test.cpp` `tests/racing_standings_test.cpp` `tests/racing_tape_test.cpp` `tools/parity/golden-core-libm.mjs` `tools/parity/golden-core.mjs` `tools/parity/golden-js.mjs` `tools/parity/golden-libm.mjs` `tools/parity/golden-mapgen.mjs` `tools/parity/golden-racing.mjs` |
 | pause | `engine/loop/run_clock.hpp` |
 | personal-best | `engine/racing/records.hpp` |
@@ -427,6 +432,7 @@ Which C++ files port each oracle file. An oracle file missing here is not ported
 | regionRow | `games/fall_line/sim/mapgen/regions.hpp` |
 | regions | `games/fall_line/sim/mapgen/regions.hpp` |
 | REGIONS | `games/fall_line/sim/mapgen/regions.cpp` |
+| release | `tests/package/consumer/main.cpp` |
 | replay | `engine/racing/tape.hpp` |
 | resolve-hook | `tools/parity/oracle-import.mjs` |
 | resume | `engine/loop/run_clock.hpp` |
@@ -466,6 +472,7 @@ Which C++ files port each oracle file. An oracle file missing here is not ported
 | skills | `tools/check-agents.sh` |
 | sky | `games/fall_line/sim/mapgen/weather.hpp` |
 | slope | `engine/core/heightfield.hpp` |
+| smoke-test | `tests/package/consumer/main.cpp` |
 | smooth | `engine/core/noise.hpp` |
 | smoothstep | `engine/core/math.hpp` |
 | snapAxis | `engine/racing/tape.hpp` |

@@ -28,7 +28,7 @@ void mismatch(const char* fn, const std::string& args, double got, double want) 
   std::snprintf(m, sizeof m,
                 "libm::%s(%s) = %016llx, Node 24 gives %016llx. The vendored routine has "
                 "drifted from V8/glibc: diff engine/core/libm against its upstream "
-                "(engine/core/libm/libm.hpp says which) and check the target links ge_flags.",
+                "(engine/core/libm/libm.hpp says which) and check the target links ge_fp.",
                 fn, args.c_str(), static_cast<unsigned long long>(bits(got)),
                 static_cast<unsigned long long>(bits(want)));
   ge::test::fail(__FILE__, __LINE__, m);

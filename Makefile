@@ -4,7 +4,7 @@ PRESET ?= debug
 # Tracked AND new (untracked, not ignored) files, so a file not yet `git add`ed is formatted too.
 SOURCES := $(shell git ls-files --cached --others --exclude-standard '*.cpp' '*.hpp' 2>/dev/null)
 
-.PHONY: build test fmt fmt-check lint agents-check index find lessons golden golden-libm libm-check clean
+.PHONY: build test fmt fmt-check lint agents-check index find lessons golden golden-libm libm-check release-check clean
 
 build:
 	cmake --preset $(PRESET)
@@ -58,6 +58,13 @@ golden-libm:
 	$(NODE) tools/parity/golden-libm.mjs --game5 $(GAME5)
 	$(NODE) --experimental-strip-types --disable-warning=ExperimentalWarning tools/parity/golden-core-libm.mjs --game5 $(GAME5) --framework $(FRAMEWORK)
 	$(NODE) --experimental-strip-types --disable-warning=ExperimentalWarning tools/parity/golden-mapgen.mjs --game5 $(GAME5) --framework $(FRAMEWORK)
+
+# The release plumbing (docs/publishing.md): fragments valid, tools tested,
+# and the version the next release would get.
+release-check:
+	python3 -m unittest tools/release_test.py
+	python3 tools/release.py check
+	python3 tools/release.py bump
 
 clean:
 	rm -rf build

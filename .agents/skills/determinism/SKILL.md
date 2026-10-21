@@ -20,8 +20,8 @@ a failure.
 ## The rules
 
 1. **Flags**: `-ffp-contract=off -fno-fast-math` (GCC `-fexcess-precision=standard`,
-   MSVC `/fp:strict`), set on `ge_flags` in `CMakeLists.txt`. Every target links
-   `ge_flags`. Never add `-ffast-math`, `-Ofast` or `-march=native` to a sim target.
+   MSVC `/fp:strict`), set on `ge_fp` in `CMakeLists.txt`. Every target links
+   `ge_fp` (through `ge_core`), and a published package carries it as `ge::fp`. Never add `-ffast-math`, `-Ofast` or `-march=native` to a sim target.
 2. **libm**: simulation code calls `ge::core::libm::*` for sin, cos, tan, atan,
    atan2, asin, acos, exp, expm1, log, log2, pow, cbrt and tanh. It may use `<cmath>`
    only for exact functions: `sqrt`, `fabs`, `floor`, `ceil`, `trunc` and `fmod`.
@@ -64,7 +64,7 @@ a failure.
 1. Read the failing row: the inputs and the got/want bits. A difference of one ULP
    means a contraction or a libm call. A large difference means a logic or ordering
    bug.
-2. Check that the target links `ge_flags`.
+2. Check that the target links `ge_fp` (directly or through `ge_core`).
 3. Bisect: dump intermediate values as hex from both sides (add a temporary print to
    a copy of the oracle under `tools/parity/`, never to the oracle repo).
 4. Fix the cause. Never loosen `CHECK_BITS` to a tolerance.
