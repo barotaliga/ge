@@ -33,7 +33,7 @@ namespace mg = ge::mountain::mapgen;
 constexpr const char* kGolden = "tests/golden/fall_line_sim.txt";
 // The reference seeds, the order the golden lists them in.
 constexpr double kSeeds[] = {38, 1, 2, 3, 4, 5, 6, 7, 8};
-constexpr size_t kDebugSeeds = 2;
+[[maybe_unused]] constexpr size_t kDebugSeeds = 2;
 
 // Whether an environment variable is set (MSVC deprecates std::getenv in favour of its own).
 bool env_set(const char* name) {

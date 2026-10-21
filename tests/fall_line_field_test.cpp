@@ -31,7 +31,7 @@ namespace fs = fall_line::sim;
 namespace mg = ge::mountain::mapgen;
 constexpr const char* kGolden = "tests/golden/fall_line_field.txt";
 constexpr double kSeeds[] = {38, 1, 2};
-constexpr size_t kDebugSeeds = 1;
+[[maybe_unused]] constexpr size_t kDebugSeeds = 1;
 constexpr int32_t kRivals = 3;
 
 bool env_set(const char* name) {
