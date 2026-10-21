@@ -68,10 +68,12 @@ std::string json_pairs(const std::vector<std::pair<std::string, std::string>>& p
   return out + "}";
 }
 
-std::string shot_json(const Shot& s) {
+std::string shot_json(const Lab::Taken& taken) {
+  const Shot& s = taken.shot;
   return "{\"id\": " + json_str(s.id) + ", \"title\": " + json_str(s.title) +
          ", \"caption\": " + json_str(s.caption) + ", \"look_for\": " + json_str(s.look_for) +
-         ", \"inputs\": " + json_pairs(s.inputs) + ", \"file\": " + json_str(s.id + ".png") + "}";
+         ", \"inputs\": " + json_pairs(s.inputs) + ", \"file\": " + json_str(s.id + ".png") +
+         ", \"deterministic\": " + (taken.det == Det::deterministic ? "true" : "false") + "}";
 }
 
 // A table as aligned text columns.
@@ -178,7 +180,7 @@ bool write_report(const Lab& lab, const std::string& dir, std::string& error) {
   for (size_t i = 0; i < lab.notes().size(); i++) j += (i ? ", " : "") + json_str(lab.notes()[i]);
   j += "],\n  \"shots\": [";
   for (size_t i = 0; i < lab.shots().size(); i++) {
-    j += std::string(i ? "," : "") + "\n    " + shot_json(lab.shots()[i].shot);
+    j += std::string(i ? "," : "") + "\n    " + shot_json(lab.shots()[i]);
   }
   j += "\n  ],\n  \"failures\": [";
   for (size_t i = 0; i < lab.failures().size(); i++) {
@@ -200,9 +202,10 @@ bool write_report(const Lab& lab, const std::string& dir, std::string& error) {
       error = "could not write " + path + " (is the directory writable?)";
       return false;
     }
-    if (!write_text(dir + "/" + s.id + ".json", shot_json(s) + "\n", error)) return false;
+    if (!write_text(dir + "/" + s.id + ".json", shot_json(taken) + "\n", error)) return false;
     md += "\n## " + s.title + "\n\n![" + s.title + "](" + file + ")\n\n" + s.caption + "\n";
     if (!s.look_for.empty()) md += "\n**Look for:** " + s.look_for + "\n";
+    if (taken.det == Det::measured) md += "\n*Measured: its pixels are not in the digest.*\n";
     if (!s.inputs.empty()) {
       md += "\n**Inputs:**";
       for (const auto& [k, v] : s.inputs) md.append(" ").append(k).append("=`").append(v) += "`";

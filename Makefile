@@ -4,7 +4,8 @@ PRESET ?= debug
 # Tracked AND new (untracked, not ignored) files, so a file not yet `git add`ed is formatted too.
 SOURCES := $(shell git ls-files --cached --others --exclude-standard '*.cpp' '*.hpp' 2>/dev/null)
 
-.PHONY: build test fmt fmt-check lint agents-check index find lessons labs lab labs-smoke labs-digests libm-check release-check clean
+.PHONY: build test fmt fmt-check lint agents-check index find lessons labs lab labs-smoke labs-digests \
+	libm-check release-check shaders-check clean
 
 build:
 	cmake --preset $(PRESET)
@@ -21,6 +22,12 @@ fmt-check:
 
 lint: build
 	clang-tidy -p build/$(PRESET) --quiet $(filter %.cpp,$(SOURCES))
+
+# Every embedded WGSL shader compiled by Tint offline, every entry point (cmake/Wgsl.cmake): a
+# shader error fails here with its file and line, no GPU needed. Needs GE_GPU (Dawn's tint).
+shaders-check:
+	cmake --preset $(PRESET)
+	cmake --build --preset $(PRESET) --target shaders_check
 
 agents-check:
 	tools/check-agents.sh
