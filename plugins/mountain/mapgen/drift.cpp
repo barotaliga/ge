@@ -7,7 +7,10 @@
 #include "mountain/mapgen/drift.hpp"
 
 #include <algorithm>
+#include <cmath>
+#include <cstdint>
 
+#include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "core/num.hpp"
 #include "core/prng.hpp"
@@ -86,6 +89,73 @@ void stamp_drifts(ge::core::Heightfield& packed, const std::vector<int32_t>& nea
     const double w = drift_at(drifts, (i + double(along[o])) * step);
     if (w > 0) p[o] = static_cast<float>(p[o] * (1 - (1 - D::packed) * w));
   }
+}
+
+namespace {
+
+// The step a drift is cut back by, m, and the shortest kept, m.
+constexpr double kTrimStep = 4;
+constexpr double kTrimLeast = 20;
+
+}  // namespace
+
+void trim_drifts(std::span<const TrackPoint> points, std::vector<Drift>& drifts,
+                 ge::core::Heightfield& packed, std::span<const float> before) {
+  if (points.empty() || drifts.empty()) return;
+  const auto at = [&](double s) -> const TrackPoint& {
+    const TrackPoint* best = &points[0];
+    for (const TrackPoint& p : points) {
+      if (std::abs(p.s - s) < std::abs(best->s - s)) best = &p;
+    }
+    return *best;
+  };
+  const auto cell_of = [&](double x, double z) {
+    return static_cast<int64_t>(num::round((z - packed.origin_z) / packed.cell)) * packed.cols +
+           static_cast<int64_t>(num::round((x - packed.origin_x) / packed.cell));
+  };
+  const auto inside = [&](int64_t i) { return i >= 0 && i < int64_t(packed.data.size()); };
+  const auto hubbed = [&](double s) {
+    const TrackPoint& p = at(s);
+    const double rx = ge::core::libm::cos(p.heading);
+    const double rz = -ge::core::libm::sin(p.heading);
+    for (const double u : {-0.5, -0.25, 0.0, 0.25, 0.5}) {
+      const int64_t i = cell_of(p.x + rx * u * p.width, p.z + rz * u * p.width);
+      if (inside(i) && packed.data[size_t(i)] > before[size_t(i)] + 0.02f) return true;
+    }
+    return false;
+  };
+  const auto groom_over = [&](double from, double to) {
+    const double cell = packed.cell;
+    for (const TrackPoint& p : points) {
+      if (p.s < from || p.s > to) continue;
+      const double r = p.width / 2 + cell;
+      const int steps = static_cast<int>(std::floor((2 * r) / cell));
+      for (int a = 0; a <= steps; a++) {
+        const double dz = -r + a * cell;
+        for (int b = 0; b <= steps; b++) {
+          const double dx = -r + b * cell;
+          if (dx * dx + dz * dz > r * r) continue;
+          const int64_t i = cell_of(p.x + dx, p.z + dz);
+          if (inside(i) && packed.data[size_t(i)] < 1.0f) packed.data[size_t(i)] = 1.0f;
+        }
+      }
+    }
+  };
+  std::vector<Drift> kept;
+  for (const Drift& d : drifts) {
+    double to = d.to;
+    while (to > d.from && hubbed(to)) to -= kTrimStep;
+    double from = d.from;
+    while (from < to && hubbed(from)) from += kTrimStep;
+    if (to < d.to) groom_over(to, d.to + kTrimStep);
+    if (from > d.from) groom_over(d.from - kTrimStep, from);
+    if (to - from >= kTrimLeast) {
+      kept.push_back({from, to});
+    } else {
+      groom_over(d.from - kTrimStep, d.to + kTrimStep);
+    }
+  }
+  drifts = std::move(kept);
 }
 
 }  // namespace ge::mountain::mapgen

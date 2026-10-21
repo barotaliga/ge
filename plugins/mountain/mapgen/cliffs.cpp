@@ -91,13 +91,13 @@ bool on_cliff(std::span<const Cliff> cliffs, double x, double z, double margin) 
 
 std::vector<Cliff> lay_cliffs(uint32_t sub, const TerrainPlan& plan, ge::core::Heightfield& ground,
                               const Track& piste, std::span<const Kicker> kickers,
-                              std::span<const Cliff> drops) {
+                              std::span<const Cliff> drops, const DistanceTo& distance_to) {
   namespace C = R::cliff;
   const auto& G = plan.grade->cliffs;
   ge::core::Rng rng = ge::core::make_rng(sub ^ kCliffSalt);
   const Band count = scale_count(C::count, plan.region->kickers * G.count);
   const double size = plan.size;
-  const double face = R::mountain::flank::inner - 40;
+  const double face = plan.flank_band.inner - 40;
   const double clear = R::track::width.max / 2 + G.clearance;
   std::vector<Cliff> out;
   const double length = piste.length;
@@ -134,7 +134,9 @@ std::vector<Cliff> lay_cliffs(uint32_t sub, const TerrainPlan& plan, ge::core::H
       if (flank_at(plan, p.x, p.z) > 0.02) return false;
     }
     for (const PlanPoint& p : foot) {
-      if (nearest_track_point(piste, p.x, p.z).distance < clear) return false;
+      const double far =
+          distance_to ? distance_to(p.x, p.z) : nearest_track_point(piste, p.x, p.z).distance;
+      if (far < clear) return false;
     }
     for (const PlanPoint& p : foot) {
       if (on_kicker(kickers, p.x, p.z, 6) || on_cliff(out, p.x, p.z, 10) ||

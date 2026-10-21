@@ -164,14 +164,14 @@ std::vector<Kicker> publish_track_kickers(const Track& track,
 }
 
 std::vector<Kicker> lay_off_kickers(ge::core::Rng& rng, const TerrainPlan& plan,
-                                    ge::core::Heightfield& ground, const Piste& piste) {
+                                    ge::core::Heightfield& ground, const DistanceTo& distance_to) {
   namespace K = R::kickers::off;
   // R21, R23 — the region's and the grade's multiple of the rule's count.
   const Band count = scale_count(K::count, plan.region->kickers * plan.grade->kickers.off);
   const int want = ge::core::int_in(rng, int32_t(count.min), int32_t(count.max));
   std::vector<Kicker> out;
   const double size = plan.size;
-  const double face = R::mountain::flank::inner - 60;
+  const double face = plan.flank_band.inner - 60;
   for (int tries = 0; tries < want * 40 && int(out.size()) < want; tries++) {
     const double x = size / 2 + ge::core::range(rng, -face, face);
     const double z =
@@ -192,7 +192,7 @@ std::vector<Kicker> lay_off_kickers(ge::core::Rng& rng, const TerrainPlan& plan,
                                   z - libm::cos(heading) * ramp, heading, ramp);
     const Fall below = fall_along(ground, x, z, heading, landing);
     if (below.steepest - above.gentlest < K::roll) continue;
-    const double distance = nearest_track_point(piste.track, x, z).distance;
+    const double distance = distance_to(x, z);
     if (distance - reach < R::track::width.max / 2 + K::clearance) continue;
     bool crowded = false;
     for (const Kicker& k : out) {

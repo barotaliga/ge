@@ -15,6 +15,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -162,6 +163,33 @@ struct Cliff {
   bool on_track;
   std::optional<double> s;  // a drop's arc down the piste, m
 };
+
+// R29 — THE HUB: the groomed band across the valley floor every finish runs out into and every
+// valley lift leaves from, read as columns every `step` m from `x0`, each with its upper edge
+// (`top`, toward the mountain) and its lower edge (`bottom`), z on the map.
+struct Hub {
+  double x0;
+  double step;
+  std::vector<double> top;
+  std::vector<double> bottom;
+};
+
+// R30 — A WIND TUNNEL: a horizontal lift along the hub that blows a skier from its entrance to its
+// exit, its line every few metres on the ground (`s` its arc, `heading` the way the wind blows).
+struct WindTunnel {
+  struct Point {
+    double x, z, y, s, heading;
+  };
+  std::string id;
+  std::vector<Point> points;
+  double length;
+  double width;
+  double speed;
+};
+
+// How far a plan point stands off the runs a feature keeps clear of, m, read as a piste's
+// distance from its line.
+using DistanceTo = std::function<double(double x, double z)>;
 
 // A stretch of a run by arc, m: a feature keeps off it.
 struct ArcSpan {

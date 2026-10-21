@@ -37,10 +37,12 @@ std::vector<PlanPoint> cliff_footprint(const Cliff& c, double step = 12);
 bool on_cliff(std::span<const Cliff> cliffs, double x, double z, double margin);
 
 // R22 — stand the cliffs on the face clear of the piste, the kickers and the drops, and cut
-// them into the ground: first those the grade stands BESIDE the piste (R23), then the rest.
+// them into the ground: first those the grade stands BESIDE the piste (R23), then the rest. A
+// ski area hands its own `distance_to` (how far off its runs, pads and ramps), read in place of
+// the piste's line.
 std::vector<Cliff> lay_cliffs(uint32_t sub, const TerrainPlan& plan, ge::core::Heightfield& ground,
                               const Track& piste, std::span<const Kicker> kickers,
-                              std::span<const Cliff> drops);
+                              std::span<const Cliff> drops, const DistanceTo& distance_to = {});
 
 // Add one cliff's profile to the ground in plan.
 void stamp_cliff(ge::core::Heightfield& ground, const Cliff& c);

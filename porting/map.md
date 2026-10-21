@@ -39,8 +39,8 @@ the row when the file moves.
 | `plugins/mountain/mapgen/digest.hpp` | `game5/engine/mapgen/digest.ts` | levelDigest |
 | `plugins/mountain/mapgen/drags.cpp` | `game5/engine/mapgen/drags.ts` |  |
 | `plugins/mountain/mapgen/drags.hpp` | `game5/engine/mapgen/drags.ts` |  |
-| `plugins/mountain/mapgen/drift.cpp` | `game5/engine/mapgen/drift.ts` | dealDrifts stampDrifts |
-| `plugins/mountain/mapgen/drift.hpp` | `game5/engine/mapgen/drift.ts` | dealDrifts driftAt stampDrifts |
+| `plugins/mountain/mapgen/drift.cpp` | `game5/engine/mapgen/drift.ts` | dealDrifts stampDrifts trimDrifts |
+| `plugins/mountain/mapgen/drift.hpp` | `game5/engine/mapgen/drift.ts` | dealDrifts driftAt stampDrifts trimDrifts |
 | `plugins/mountain/mapgen/drops.cpp` | `game5/engine/mapgen/drops.ts` | layDrops publishDrops |
 | `plugins/mountain/mapgen/drops.hpp` | `game5/engine/mapgen/drops.ts` | layDrops publishDrops |
 | `plugins/mountain/mapgen/forest.cpp` | `game5/engine/mapgen/forest.ts` | growForest |
@@ -49,6 +49,8 @@ the row when the file moves.
 | `plugins/mountain/mapgen/generate.hpp` | `game5/engine/mapgen/generate.ts` | generateLevel subSeed compileLevel |
 | `plugins/mountain/mapgen/grades.cpp` | `game5/engine/mapgen/grades.ts` | GRADES UNGRADED steepestSpan |
 | `plugins/mountain/mapgen/grades.hpp` | `game5/engine/mapgen/grades.ts` | GRADES UNGRADED gradeRow pisteGradeOf steepestSpan verticalBand |
+| `plugins/mountain/mapgen/hub.cpp` | `game5/engine/mapgen/hub.ts` | planHub hubClear groomHub layTunnels bedOf pressBed hubAt outsideHub EDGE_SCALE BED_EASE |
+| `plugins/mountain/mapgen/hub.hpp` | `game5/engine/mapgen/hub.ts` | planHub hubClear groomHub layTunnels hubAt outsideHub HubPlan FloorPoint Hub WindTunnel |
 | `plugins/mountain/mapgen/kickers.cpp` | `game5/engine/mapgen/kickers.ts` | layTrackKickers layOffKickers stampKicker |
 | `plugins/mountain/mapgen/kickers.hpp` | `game5/engine/mapgen/kickers.ts` | layTrackKickers publishTrackKickers layOffKickers stampKicker onKicker |
 | `plugins/mountain/mapgen/lanes.cpp` | `game5/engine/mapgen/lanes.ts` |  |
@@ -77,6 +79,7 @@ the row when the file moves.
 | `plugins/mountain/mapgen/resort_access.cpp` | `game5/engine/mapgen/resort-build.ts` | attemptResort planRuns settleDrags clearStations dragTopsOf |
 | `plugins/mountain/mapgen/resort_build.cpp` | `game5/engine/mapgen/resort-build.ts` | attemptResort layChain pressPads |
 | `plugins/mountain/mapgen/resort_build.hpp` | `game5/engine/mapgen/resort-build.ts` | attemptResort buildResort ResortAttempt |
+| `plugins/mountain/mapgen/resort_features.cpp` | `game5/engine/mapgen/resort-build.ts` | attemptResort distanceTo RAMP_GROOM |
 | `plugins/mountain/mapgen/resort_graded.cpp` | `game5/engine/mapgen/resort-build.ts` | attemptResort scaledRow |
 | `plugins/mountain/mapgen/resort_rules.hpp` | `game5/engine/mapgen/resort-rules.ts` | RESORT_RULES TREE_LINE_MASSIF |
 | `plugins/mountain/mapgen/rules.hpp` | `game5/engine/mapgen/rules.ts` | LEVEL_RULES inBand withinBand bendFloor |
