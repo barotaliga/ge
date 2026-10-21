@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdio>
+#include <fstream>
 
 namespace ge::lab {
 
@@ -85,14 +86,17 @@ std::vector<uint8_t> encode_png(const Picture& picture) {
 
 bool write_png(const std::string& path, const Picture& picture) {
   const std::vector<uint8_t> bytes = encode_png(picture);
-  std::FILE* f = std::fopen(path.c_str(), "wb");
-  if (!f) return false;
-  const bool ok = std::fwrite(bytes.data(), 1, bytes.size(), f) == bytes.size();
-  if (std::fclose(f) != 0 || !ok) {
-    std::remove(path.c_str());
-    return false;
+  bool ok = false;
+  {
+    std::ofstream f(path, std::ios::binary | std::ios::trunc);
+    if (!f) return false;
+    f.write(reinterpret_cast<const char*>(bytes.data()),
+            static_cast<std::streamsize>(bytes.size()));
+    f.close();
+    ok = !f.fail();
   }
-  return true;
+  if (!ok) std::remove(path.c_str());
+  return ok;
 }
 
 }  // namespace ge::lab
