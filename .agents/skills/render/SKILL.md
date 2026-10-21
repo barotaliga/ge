@@ -1,43 +1,62 @@
 ---
 name: render
-description: "Use for a draw pass, the frame's pass order, a shader's look, or extracting the FrameView from GameState in gameengine2 (engine/render and games/fall_line/app). What game5 draws, pass by pass, and how a pass is built and checked against game5's pictures."
+description: "Use for engine/render and a game's draw code in gameengine2: the pass table and named targets, a pass's prepare/encode halves, GPU-driven instance families and two-phase culling, the depth prepass, the heightfield clipmap, shadows (horizon map, cached cascades, shadow atlas), the sky tables and clouds, TAA-U and post, particles, skinning, the quality ladder, lab captures and frame budgets."
 ---
 
 # Render
 
-The renderer reads `GameState` through one extraction per frame (`FrameView`, plain
-data, interpolated by `alpha`) and never writes it.
+The renderer reads the simulation through one extraction a frame (`FrameView`, plain
+data, interpolated by `alpha`) and never writes simulation state. **`docs/rendering.md`
+is the plan**: the workload, every technique and why, the pass order, and what was
+rejected. Read the section for your pass before the first edit. If you change a
+technique, change that page in the same PR.
 
-## The passes game5 needs (port in roughly this order; docs/goals.md M7–M8)
+## Where a piece goes
 
-1. Sky + haze (game5 `sky.ts`, `haze.ts`, baked `sky-table.ts`): one `SkyLook` per
-   frame. Every world material fades into the haze along its own view direction.
-2. Terrain: a geometry clipmap over the level's heightfield (`terrain.ts`), with the
-   snow shader (`snow-glsl.ts`: packed share, glitter, corduroy) and the trail map's
-   grooves (`trail-map.ts`, `trail-stamp.ts`).
-3. Sun shadows: a shadow map plus the riders' shadow box (`shadow-box.ts`).
-4. Forest: instanced procedural trees, ten variants a kind at three LODs, in bands
-   (`tree-shapes.ts`, `tree-bands.ts`).
-5. Figures: skinned skier and crowd (`skier-*.ts`, `skier-dress.ts`), and the glTF skis
-   (`pwa/models/`, loaded with cgltf).
-6. Particles: spray, snow cloud and snowfall.
-7. Post: the colour grade.
+- `engine/render/`: a mechanism any game could use, with no genre's words (a
+  heightfield, an instance family, a cloud volume, TAA-U).
+- `plugins/<genre>/app/`: a genre's looks, such as a snow material or tree shapes.
+- `games/<game>/app/`: the game's pass table, its quality ladder's values, its grade.
 
 ## A pass
 
 ```cpp
 struct TerrainPass { /* GPU buffers, pipelines, CPU staging */ };
-void prepare(TerrainPass&, const FrameView&);       // CPU: cull, fill staging; testable headless
-void encode(TerrainPass&, gpu::RenderPass&);        // GPU: bind + draw, no decisions
+void prepare(TerrainPass&, const FrameView&, Upload&);   // CPU: decide, fill staging; testable with no GPU
+void encode(TerrainPass&, gpu::Encoder&);                 // GPU: bind and dispatch or draw; makes no decisions
 ```
 
-A pass is generic (`engine/render/`) when it carries no Fall Line word, and goes in
-`games/fall_line/app/` otherwise. The pass order lives in one function.
+- The **pass table** is one function in the game's app that lists the passes in order.
+  Each pass declares the named targets it reads and writes. Add a pass by adding a row
+  there, never by drawing from inside another pass.
+- `prepare` allocates nothing. It fills staging arrays reserved at load.
+- `encode` makes no decisions. If it needs a branch, the branch belongs in `prepare`.
+
+## The rules that keep it fast
+
+1. **The CPU never walks instances in a frame.** Repeated things are an instance
+   family, culled and LOD-selected in compute, drawn with indirect draws. The CPU
+   writes only the instances that moved.
+2. **Every opaque pixel is shaded once.** Opaque draws go in the depth prepass, and the
+   colour pass tests `equal`. Opaque shaders never `discard`; alpha-tested foliage
+   writes its coverage in the prepass only.
+3. **Nothing is created mid-run.** No pipeline, no buffer, no texture after load (the
+   `gpu` skill's manifest).
+4. **What stands still is not redrawn.** Shadow cascades, sky tables and the horizon map
+   are updated when their inputs move past a threshold, not every frame.
+5. **One copy of each shading idea.** The haze, the sun, shadow lookups and decoding
+   live in the shared WGSL library. A pass that needs them includes them.
+6. **Quality is data.** A ladder stop changes pass parameters and `override` constants,
+   never which code runs.
 
 ## Checking a pass
 
-- Compare against game5's own pictures: run game5's `make world SEED=38` (in
-  `../game5`, read-only) and the port's screenshot tool on the same views, and put
-  both in the PR.
-- Count draw calls, triangles and GPU ms per pass (timestamp queries), and keep the
-  frame inside the `perf` skill's budget.
+- **Capture it.** Every target is named, and the lab tools can capture any of them
+  headless with per-pass stats beside the picture (`docs/rendering.md` § Lab hooks).
+  Put before and after captures in the PR.
+- **Price it.** Report GPU ms, draws, instances and triangles per pass from the frame's
+  stats, and keep the frame inside the `perf` skill's budgets.
+- **Reset temporal state for stills.** A capture calls `reset_history()` and renders the
+  settle frames, so a picture does not depend on what came before.
+- **Reference pictures** for the demo game's look, and the mapping from the original
+  renderer to these passes, are in the working note `porting/rendering-survey.md`.

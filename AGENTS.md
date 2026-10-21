@@ -28,6 +28,7 @@ updates that row's Status in its PR.
 | [`docs/goals.md`](docs/goals.md) | The long-term goals (G1–G7), the non-goals and the milestone roadmap |
 | [`docs/research.md`](docs/research.md) | What game5 needs, how established engines solve each part, the libm measurement, and the decisions |
 | [`docs/architecture.md`](docs/architecture.md) | The layers and their dependency direction, the frame, the code conventions, diagnostics, the determinism contract and the build |
+| [`docs/rendering.md`](docs/rendering.md) | The GPU backend (Dawn), the frame's pass table, every rendering technique and why, budgets, lab hooks, and what was considered and not taken |
 | [`docs/porting.md`](docs/porting.md) | How a TS module becomes C++: the oracle, layout and type mapping, the JS-semantics traps, parity levels |
 | [`docs/index.md`](docs/index.md) | GENERATED from the code's `ge:` tags: every file's one-line summary, owning skill, oracle and test; oracle file to port; keyword to files |
 
@@ -94,8 +95,8 @@ row's compiler or libm.
 | `engine/racing/` | The racing primitives: `tape.hpp` (the control tape a ghost and a replay are kept on: the axis grid, the RLE + base64 byte format, the recorder, the reader, the map fingerprint), `records.hpp` (the record book's policy: `beats`, `split_gap`, `note_record`), `standings.hpp` (the field's order: `leg_progress`, `field_order`, `place_among`) | `port` |
 | `engine/loop/` | `run_clock.hpp`: the fixed-step accumulator between the display's frames and the 120 Hz step | `sim` |
 | `engine/platform/` | SDL3: window, input, gamepad, audio device, files (M6); the only place SDL is included | `platform` |
-| `engine/gpu/` | The webgpu.h wrapper (M6); the only place webgpu.h is included | `gpu` |
-| `engine/render/` | Generic draw passes Fall Line needs (M7–M8) | `render` |
+| `engine/gpu/` | The webgpu.h wrapper over Dawn (M6): device, feature tiers, pipeline manifest, timestamps, readback; the only place webgpu.h is included | `gpu` |
+| `engine/render/` | Generic rendering mechanisms (M7–M8): the pass table, GPU-driven instances, the clipmap, shadows, sky, TAA-U, post (`docs/rendering.md`) | `render` |
 | `engine/audio/` | The synth's DSP graph (M9) | `audio` |
 | `engine/ui/` | Immediate-mode 2D and text, plus the dev UI (M10) | `ui` |
 | `games/fall_line/sim/mapgen/` | game5's `engine/mapgen/` ported, a file per oracle module: `generate.hpp` (`generate_level`, the attempts, the compile), `digest.hpp` (`level_digest`), `rules.hpp` (LEVEL_RULES), `types.hpp` (the `Level`), and every step it calls. v1 (the single piste) so far (M4a); the ski area is M4b | `sim` |
@@ -167,8 +168,8 @@ and the directories agree.
 | `build` | CMake, presets, dependencies (`FetchContent`), compiler flags, CI workflows |
 | `sim` | `games/fall_line/sim`: mapgen, the step, the bot, the headless sim CLI, the run clock |
 | `platform` | `engine/platform`: SDL3, the window, input, the gamepad, the audio device, files |
-| `gpu` | `engine/gpu`: the webgpu.h device, surfaces, buffers, pipelines, WGSL |
-| `render` | A draw pass, the frame's pass order, a shader, extraction from `GameState` |
+| `gpu` | `engine/gpu`: the webgpu.h device over Dawn, feature tiers, buffers, pipelines and the manifest, WGSL and `make shaders-check` |
+| `render` | A draw pass, the pass table, GPU-driven instances, shadows, sky, TAA-U, post, lab captures, extraction from `GameState` |
 | `audio` | The synth, a voice, a bed, the audio thread |
 | `ui` | The 2D layer, text, the HUD, a card, the dev UI |
 | `perf` | Any optimisation, a benchmark, a profile, a cost claim |

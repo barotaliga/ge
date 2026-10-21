@@ -153,8 +153,9 @@ input, gamepad rumble (game5 has `rumble.ts`), audio output and the web target.
 
 | Option | Web | Notes |
 | --- | --- | --- |
-| **WebGPU via `webgpu.h`** (Dawn / wgpu-native; Emscripten's emdawnwebgpu) | yes | The standard C header, implemented by Dawn (Chrome's WebGPU, on D3D12, Metal and Vulkan) and wgpu-native (Firefox's). Compute shaders, storage buffers, instancing, timestamp queries. Shaders in WGSL. |
-| SDL3 GPU | not in a stable release as far as we found | Vulkan, Metal and D3D12, with shaders cross-compiled per backend. |
+| **WebGPU via `webgpu.h`** (Dawn / wgpu-native; Emscripten's emdawnwebgpu) | yes | The standard C header, implemented by Dawn (Chrome's WebGPU, on D3D12, Metal and Vulkan) and wgpu-native (Firefox's). Compute shaders, storage buffers, indirect draws, timestamp queries. Shaders in WGSL. Dawn native adds multi-draw indirect, subgroups and immediates as extensions. Dawn publishes prebuilt binaries and an emdawnwebgpu package on GitHub, and runs on Mesa's lavapipe for GPU-less CI. |
+| SDL3 GPU | no | Stable since SDL 3.2 (Vulkan, Metal, D3D12, with compute), but no web backend, and shaders are cross-compiled per backend. |
+| A thin RHI of our own over Vulkan, Metal and D3D12 | no | Bindless, mesh shaders, ray tracing and async compute become available, but it means three backends to maintain, a fourth for the web, and our own barrier tracking. |
 | bgfx | WebGL2 only | Mature, with its own shader dialect and build. |
 | sokol_gfx | WebGL2/WebGPU | Small and pleasant, but a lowest-common-denominator feature set. |
 | Vulkan + MoltenVK | no | Most work; no web target. |
@@ -162,9 +163,12 @@ input, gamepad rumble (game5 has `rumble.ts`), audio output and the web target.
 **Decision: WebGPU through `webgpu.h`.** It is the only option that is the same API on
 desktop and in the browser (G5). game5 is already moving its renderer onto WebGPU
 (`docs/webgpu.md` there), so the shader logic it ports into TSL/WGSL carries across.
-Native builds start on **wgpu-native's prebuilt release** (a download, so CI stays
-quick) and keep to the header so that Dawn can be swapped in. SDL3 provides the window
-and the surface.
+**Revised: Dawn on every target**, from its
+prebuilt GitHub release on the desktop and emdawnwebgpu on the web, so the desktop and
+the browser share one implementation, one WGSL compiler and one validation layer. The
+code keeps to the standard header, so wgpu-native remains possible. SDL3 provides the
+window and the surface. What WebGPU lacks (bindless, mesh shaders, ray tracing, async
+compute) and why the workload does not need it is in `docs/rendering.md` § The backend.
 
 ### Rendering techniques game5 uses (what we must build, no more)
 
@@ -172,10 +176,11 @@ Terrain: a geometry clipmap over the engine's heightfield. Forest: GPU instancin
 LOD bands. Figures: linear-blend skinning. Snow: a custom shader (packed share, glitter,
 grooves from a trail-map texture). Sky: a baked transmittance/radiance table and haze
 applied per material. Shadows: a sun shadow map plus a shadow box for the riders.
-Particles: spray, snow cloud and snowfall. Post: a colour grade. Each becomes one draw
-system in `engine/render` (or `games/fall_line/render` when it is Fall Line's own look).
-The pipeline is written out as a fixed, ordered list of passes. No render graph is built
-until the pass count makes one worth it.
+Particles: spray, snow cloud and snowfall. Post: a colour grade. The techniques
+the engine uses to draw them (GPU-driven instance culling, a depth prepass, a horizon
+map plus cached cascades plus a shadow atlas, sky lookup tables, temporal upscaling,
+compute particles) and the ones considered and not taken are in `docs/rendering.md`.
+The frame is a fixed, ordered pass table; no general render graph.
 
 ### Audio
 
@@ -223,7 +228,7 @@ No runtime asset database.
 | Determinism | Own `core/libm` matched to the oracle's V8; FP flags in CMake; golden parity tests |
 | Loop | Fixed 120 Hz accumulator (port of `loop/run-clock`), interpolated rendering |
 | Platform | SDL3 |
-| GPU | WebGPU through `webgpu.h` (wgpu-native first, Dawn optional, emdawnwebgpu on web) |
+| GPU | WebGPU through `webgpu.h`, Dawn on every target (prebuilt on desktop, emdawnwebgpu on web); techniques in `docs/rendering.md` |
 | Shaders | WGSL, embedded at build |
 | Audio | Port of the framework synth as a DSP graph on SDL3 audio |
 | UI | Own immediate-mode 2D + SDF text; Dear ImGui for dev tools |

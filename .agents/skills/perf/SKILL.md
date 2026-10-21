@@ -13,8 +13,12 @@ The engine exists to be fast (G2). Speed is proven by measurement.
   three rivals).
 - **Level build**: faster than game5's `generateLevel` on the same machine, measured
   per seed.
-- **Frame**: the display's refresh on the reference machines with the picture at its
-  top. Timestamp queries per pass give the GPU numbers.
+- **Frame**: `docs/rendering.md` § Measurement: the top of the picture ladder at 1440p
+  in 8.3 ms of GPU on the reference desktop, the middle of it in 16.6 ms on an
+  integrated or phone-class GPU in the browser, and the renderer's CPU half under 1 ms.
+  Timestamp queries per pass give the GPU numbers.
+- **GPU claims** carry per-pass GPU ms, draws and instances before and after, from the
+  frame's stats on a real GPU. Lavapipe's numbers say nothing about speed.
 
 ## Measuring
 
