@@ -4,7 +4,7 @@ file(GLOB GE_TEST_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/*_test.c
 foreach(src ${GE_TEST_SOURCES})
   get_filename_component(name ${src} NAME_WE)
   add_executable(${name} ${src} main.cpp)
-  target_link_libraries(${name} PRIVATE ge_core)
+  target_link_libraries(${name} PRIVATE ge_core ge_racing)
   target_compile_definitions(${name} PRIVATE GE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
   add_test(NAME ${name} COMMAND ${name})
 endforeach()

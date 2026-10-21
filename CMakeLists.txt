@@ -1,6 +1,7 @@
 # gameengine2 — the top-level build. Targets:
 #   ge_core      the deterministic pool and the run clock (engine/core, engine/loop;
 #                headers, plus libm, solar and output compiled)
+#   ge_racing    the racing primitives (engine/racing: tape, records, standings)
 #   <x>_test     one executable per tests/<x>_test.cpp, registered with CTest
 # The flags below are part of the DETERMINISM CONTRACT (AGENTS.md); a target
 # that drops them can silently change the bits a simulation produces.
@@ -55,6 +56,10 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 elseif(MSVC)
   set_source_files_properties(${GE_LIBM_VENDORED} PROPERTIES COMPILE_OPTIONS "/wd4244;/wd4146;/wd4701;/wd4723")
 endif()
+
+# The racing primitives. Headers, plus the tape's codec compiled.
+add_library(ge_racing STATIC engine/racing/tape.cpp)
+target_link_libraries(ge_racing PUBLIC ge_core)
 
 enable_testing()
 add_subdirectory(tests)
