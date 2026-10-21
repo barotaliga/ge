@@ -7,17 +7,20 @@ page is the plan it is built to. Change this page in the same PR that changes th
 ## The layers
 
 ```
-games/fall_line/app      the demo game's shell: cards, HUD, draw systems of its own look, beds
+games/fall_line/app      the demo game's shell: cards, HUD, its own look, the bank
         │
-games/fall_line/sim      the game itself, headless: mapgen, the step, the bot, analysis
-        │                (port of game5's engine/, deterministic, no platform, no GPU)
+games/fall_line/sim      the game itself, headless: create_game, the step's order, the modes,
+        │                the bot (M5; deterministic, no platform, no GPU)
+        ▼
+plugins/<name>           reusable by any game of one genre or world (§ Plugins):
+        │                racing (tape, records, standings), mountain (mapgen, analysis)
         ▼
 engine/render  engine/audio  engine/ui     generic draw passes, the synth, the 2D layer
         │             │          │
 engine/gpu     engine/platform             webgpu.h wrapper; SDL3 window, input, audio device, files
         │             │
         ▼             ▼
-engine/racing  ──►  engine/core            tape, records, standings; the deterministic pool
+engine/core  engine/loop                   the deterministic pool; the run clock
 ```
 
 One direction of dependency, held by `tools/check-agents.sh` once each layer exists:
@@ -27,12 +30,12 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   (the framework's `polyline` is not ported: game5 never calls it). It depends on nothing but the C++ standard library headers that do no I/O and
   no floating-point transcendentals: no `<cmath>` trig, exp or pow; `sqrt`, `fabs` and
   `floor` are allowed.
-- **`engine/racing`**: tape, records and standings (port of `racing/`). Depends on
-  `core`.
 - **`engine/loop`**: the fixed-step run clock (port of `loop/run-clock`). Depends on
   nothing.
-- **`games/fall_line/sim`**: the port of game5's `engine/`. It may include only
-  `engine/core`, `engine/racing` and itself. It has no platform, no GPU and no wall
+- **`plugins/<name>`**: a mechanism one genre or world shares (§ Plugins). Its simulation
+  half may include only the engine targets and plugins its `ge_add_plugin` call declares.
+- **`games/fall_line/sim`**: the part of game5's `engine/` that is Fall Line's alone. It may
+  include only `engine/core`, `engine/loop`, the plugins it links and itself. It has no platform, no GPU and no wall
   clock. This is the line game5's `imports_test` holds, restated for C++.
 - **`engine/platform`**: SDL3 behind a narrow C++ API: the window, input events, the
   gamepad and rumble, the audio device, time, storage paths and the clipboard. It is the
@@ -56,9 +59,59 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   anything, and nothing includes a tool.
 - **`tests/`**: one executable per topic.
 
-A new game would sit beside `games/fall_line`. Until a second game exists, a generic
-directory earns a piece of code only when Fall Line needs it and it carries none of
-Fall Line's words (the framework's rule: name the mechanism, never one game's use of it).
+A new game would sit beside `games/fall_line` and link the plugins it shares with it.
+Fall Line's needs decide WHAT is built (G4); § Plugins decides WHERE it goes (G8).
+
+## Plugins
+
+The engine is genre-agnostic. Every piece of code has one of three homes, decided before its
+first line is written (the `plugins` skill has the questions):
+
+| Home | Holds | Words it may use |
+| --- | --- | --- |
+| `engine/<module>/` | What a game of any genre would use unchanged | The mechanism's only (vehicle, checkpoint, track) |
+| `plugins/<name>/` | What any game of one genre or world would use unchanged | Its world's (a ski plugin says skier, piste, gate), never one game's |
+| `games/<game>/` | What makes this game this game: modes, rules, the order of the step, the bot, pinned maps, strings, the HUD, its look | Its own |
+
+**The contract**, stated here once:
+
+- **Layout.**
+  ```
+  plugins/<name>/CMakeLists.txt          ge_add_plugin(<name> ENGINE core PLUGINS racing)
+  plugins/<name>/[<module>/]*.{hpp,cpp} the simulation half, mirroring the oracle's directory
+  plugins/<name>/app/                    the presentation half (refused by the build until the
+                                         first one splits it into ge_<name>_app, M7+)
+  plugins/<name>/labs/                   its labs, never compiled into ge_<name>
+  .agents/skills/<name>/                 its skill and lessons
+  tests/<name>_<topic>_test.cpp          its tests; goldens tests/golden/<name>_<topic>.txt
+  ```
+- **Naming.** A plugin's name is one lower-case word, and it is the directory, the namespace
+  (`ge::<name>`), the target (`ge_<name>`), the skill and the test prefix. It never equals an
+  `engine/` or `games/` directory. Headers are included as `"<name>/<file>.hpp"` or, when the plugin
+  ports more than one oracle directory, `"<name>/<module>/<file>.hpp"`.
+- **Build.** `cmake/Plugins.cmake` defines `ge_add_plugin`; the root `CMakeLists.txt` adds every
+  `plugins/*/CMakeLists.txt` it finds, so there is no list to register in. Tests link every
+  plugin. The plugin's targets carry the same FP flags as the core, through `ge_core`.
+- **Dependencies.** A plugin's `ENGINE` and `PLUGINS` lists are its whole dependency contract.
+  Games depend on plugins, plugins on the engine and on the plugins they declare, with no
+  cycle; the engine never includes a plugin. `tools/check-plugins.mjs` (`make agents-check`)
+  holds the includes to the lists; the compiler holds the rest, since a target only sees the
+  include roots it links.
+- **Registration is the build.** No run-time registry, no static-initializer
+  self-registration, no virtual plugin interface: they cost a pointer chase on hot paths,
+  static libraries drop unreferenced self-registering objects, and their order is
+  unspecified, which breaks determinism. A plugin exposes plain functions and POD data; the
+  game links `ge_<name>` and calls it from its own `create_game` and `step`, in the order it
+  states once.
+- **Skills and tags.** Each plugin owns the skill named after it. Every file in the plugin
+  names that skill first in its `ge:skill` line, so `make find` and `docs/index.md` route to
+  it. When the `ge` CLI (M12) syncs consumer skills, a consumer receives the skill of each
+  plugin it links.
+- **Labs.** A plugin's labs live in `plugins/<name>/labs/` and register through the engine's
+  lab contract, the same way the engine's and a game's do; a lab that needs a game (the bot,
+  the modes) belongs to the game.
+- **Determinism.** A plugin's simulation half is simulation code: `make libm-check` holds it,
+  and every rule in § Determinism contract applies.
 
 ## The frame
 
@@ -96,7 +149,8 @@ These are the same two rules game5 has.
   generator built a map) is written in one function, and `AGENTS.md` lists where.
   A second copy is a bug.
 - **Mirror game5's names.** `createGame` becomes `create_game`, and
-  `engine/game/skier.ts` becomes `games/fall_line/sim/game/skier.{hpp,cpp}`. The same
+  `engine/mapgen/forest.ts` becomes `plugins/mountain/mapgen/forest.{hpp,cpp}` (or
+  `games/fall_line/sim/<dir>/` for what is Fall Line's alone). The same
   path means an agent can open the oracle beside the port.
 - **Headers declare, sources define.** Small hot math is `inline` in headers. A system's
   header shows its whole API with comments, so it can be read without the `.cpp`.
@@ -123,7 +177,7 @@ itself does no I/O. Tests print in the same shape through `tests/check.hpp`.
 ## Determinism contract
 
 - Only `core/libm` provides transcendentals to simulation code. `<cmath>`'s `sin`, `exp`,
-  `pow` and the rest are forbidden in `engine/core`, `engine/racing`, `engine/loop` and
+  `pow` and the rest are forbidden in `engine/core`, `engine/loop`, `plugins/*` (bar a plugin's `app/`) and
   `games/*/sim`; `tools/check-libm.sh` (`make libm-check`, CI's `agents` job) fails a call.
 - FP flags: `-ffp-contract=off -fno-fast-math` (GCC: `-fexcess-precision=standard`;
   MSVC: `/fp:strict`), set once on `ge_fp` in the root `CMakeLists.txt`

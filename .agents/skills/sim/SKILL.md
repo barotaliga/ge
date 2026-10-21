@@ -1,12 +1,15 @@
 ---
 name: sim
-description: "Use for games/fall_line/sim (the port of game5's engine/): mapgen and generateLevel, createGame and the 120 Hz step, the skier, the course, the field, the bot, the headless sim CLI, and engine/loop's run clock."
+description: "Use for games/fall_line/sim (what of game5's engine/ is Fall Line's alone): createGame and the 120 Hz step's order, the modes, the course, the field, the bot, the headless sim CLI, and engine/loop's run clock. The mountain generator is the mountain skill's."
 ---
 
 # The Fall Line simulation
 
-`games/fall_line/sim/` is game5's `engine/` in C++: headless, deterministic and
-platform-free. It may include only `engine/core`, `engine/racing` and itself.
+`games/fall_line/sim/` is the part of game5's `engine/` that is Fall Line's alone, in C++:
+headless, deterministic and platform-free. It may include only `engine/core`, `engine/loop`,
+the plugins it links and itself. What another game of the genre would reuse goes in a plugin
+instead (the `plugins` skill): the generator is `plugins/mountain` (the `mountain` skill), the
+tape and standings `plugins/racing`, and M5's skier on snow is expected to be `plugins/skier`.
 
 ## What it is (from game5)
 
@@ -24,10 +27,8 @@ lives) and `../game5/docs/architecture.md` before porting a system.
 
 ## Order of work (docs/goals.md M4 → M5)
 
-1. `mapgen` bottom-up: types, query (nearest track point), the compile step, then
-   generate. Parity is checked by a structure dump plus `levelDigest` on
-   `LEVEL_SEEDS` and the pinned maps.
-2. `game`: state, then skier physics (`skier`, `suspension`, `snow`, `poles`,
+1. `mapgen`: the `mountain` skill (M4a–M4d).
+2. `game`: classify each file first (the `plugins` skill), then state, then skier physics (`skier`, `suspension`, `snow`, `poles`,
    `flight`, `chassis`), then collision, course, run and step. Parity is a per-step
    state hash on synthetic levels (port `tests/support/synthetic.ts` first) and then
    on generated ones.

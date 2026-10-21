@@ -30,7 +30,7 @@ foreach(_dir IN LISTS _ge_includes)
 endforeach()
 
 add_executable(consumer main.cpp "${_ge_tu}")
-target_link_libraries(consumer PRIVATE ge::core ge::racing)
+target_link_libraries(consumer PRIVATE ge::core ge::racing ge::mountain)
 target_compile_features(consumer PRIVATE cxx_std_20)
 
 enable_testing()

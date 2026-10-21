@@ -50,7 +50,7 @@ golden:
 	node tools/parity/golden-js.mjs
 	node --experimental-strip-types --disable-warning=ExperimentalWarning tools/parity/golden-racing.mjs --framework $(FRAMEWORK) --game5 $(GAME5)
 
-# Rewrites tests/golden/libm_*.txt, core_quat.txt, core_solar.txt and mapgen_generate.txt:
+# Rewrites tests/golden/libm_*.txt, core_quat.txt, core_solar.txt and mountain_generate.txt:
 # everything that reaches a transcendental. Needs game5's pinned Node (NODE=path, ../game5/.nvmrc) on Linux x86-64 with
 # glibc; the scripts refuse anything else and say why (tools/parity/oracle-node.mjs).
 NODE ?= node

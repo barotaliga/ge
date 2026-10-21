@@ -41,5 +41,6 @@ JavaScript traps. This skill is the procedure.
   game5 itself.
 - A port that "simplifies" the math (`x*x` for `x**2`, `sqrt(a*a+b*b)` for `hypot`)
   breaks parity. Every simplification needs a golden test that shows it holds.
-- The oracle's words for the game (skier, piste, gate) stay in `games/fall_line/`.
-  `engine/` names the mechanism (vehicle, checkpoint, track).
+- Place the port in its home first (the `plugins` skill): `engine/` names the mechanism
+  (vehicle, checkpoint, track), a plugin may use its world's words (skier, piste, gate),
+  and only `games/fall_line/` uses Fall Line's own (its modes, strings, pinned maps).

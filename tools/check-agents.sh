@@ -8,7 +8,8 @@
 #   - no source file passes the 1000-line cap;
 #   - every source file carries its ge: tag block and docs/index.md is fresh
 #     (tools/agents-index.mjs), and every lesson fragment is well formed
-#     (tools/skill-lessons.mjs).
+#     (tools/skill-lessons.mjs);
+#   - every plugin keeps the plugin contract (tools/check-plugins.mjs).
 #
 # ge:summary The agent guidance's structure check (make agents-check)
 # ge:keywords ci check agents symlinks skills router line-cap
@@ -56,6 +57,7 @@ while read -r f; do
 done < <(git ls-files --cached --others --exclude-standard '*.cpp' '*.hpp' '*.h' '*.mjs' '*.sh' '*.cmake' 'CMakeLists.txt')
 
 node tools/agents-index.mjs --check || fail=1
+node tools/check-plugins.mjs || fail=1
 node tools/skill-lessons.mjs --check || fail=1
 
 (( fail == 0 )) && echo "agents-check: ok (${#skills[@]} skills)"

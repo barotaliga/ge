@@ -1,7 +1,7 @@
 ---
 title: Positional aggregate init of a struct of doubles swaps fields silently
 date: 2026-10-21
-scope: games/fall_line/sim/mapgen/forest.cpp
+scope: plugins/mountain/mapgen/forest.cpp
 concepts: [aggregate-init, struct, field-order, parity]
 ---
 

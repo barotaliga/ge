@@ -1,7 +1,7 @@
 ---
 title: A roadmap row is a guess at what game5 needs; the import survey is the answer
 date: 2026-10-21
-scope: engine/core, engine/racing, tools/parity/oracle-import.mjs
+scope: engine/core, plugins/racing, tools/parity/oracle-import.mjs
 concepts: [survey, framework, scope, oracle]
 ---
 

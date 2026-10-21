@@ -30,8 +30,9 @@ Every archive has a signed build-provenance attestation.
 ## Consuming a release
 
 The CMake package is `gameengine2`; its targets are `ge::core` (the
-deterministic pool, the libm and the run clock), `ge::racing` (the control
-tape, records and standings) and `ge::fp` (the floating-point determinism flags, which `ge::core`
+deterministic pool, the libm and the run clock), one `ge::<plugin>` per plugin
+(`ge::racing`: the control tape, records and standings; `ge::mountain`: the generated
+ski mountain; `docs/architecture.md` § Plugins) and `ge::fp` (the floating-point determinism flags, which `ge::core`
 carries to the consumer so a game computes what the engine's tests did).
 
 **From source, pinned to a tag** (what a game in CI should do — no install
