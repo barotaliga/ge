@@ -12,6 +12,12 @@
 // Every function takes and returns JS semantics (NaN in, NaN out; the ECMAScript special
 // cases of Math.pow). Parity: tests/core_libm_test.cpp against tests/golden/libm_*.txt.
 // Licences: engine/core/libm/LICENSE.md.
+//
+// ge:summary The deterministic libm: every transcendental at Node 24's bits
+// ge:keywords libm transcendental sin cos tan asin acos atan atan2 exp expm1 log log2 cbrt tanh pow
+// ge:keywords fdlibm v8 node24 bits
+// ge:skill determinism
+// ge:test tests/core_libm_test.cpp
 #pragma once
 
 namespace ge::core::libm {

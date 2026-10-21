@@ -12,7 +12,8 @@ description: "Use when writing or changing a test, a golden table, or a parity s
 doubles by bit pattern and prints both values in hex. `tests/main.cpp` runs every case
 and prints `ok` or `FAIL` per test.
 
-- One file per topic: `tests/<topic>_test.cpp`. `tests/CMakeLists.txt` globs
+- One file per topic: `tests/<topic>_test.cpp`, with a `ge:` tag block like every source
+  file (the `write-code` skill, § Discovery tags); the module it tests names it in `ge:test`. `tests/CMakeLists.txt` globs
   `*_test.cpp`, and each file becomes its own executable and CTest case, so nothing is
   registered by hand.
 - `ge::test::root_path("tests/golden/x.txt")` opens files relative to the repo.

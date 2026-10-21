@@ -1,4 +1,8 @@
 // engine/core/js.hpp against Node (tests/golden/core_js.txt, tools/parity/golden-js.mjs).
+//
+// ge:summary Parity test: core/js against Node
+// ge:keywords test parity golden js
+// ge:skill testing
 #include "core/js.hpp"
 
 #include <cmath>

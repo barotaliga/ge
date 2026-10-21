@@ -8,6 +8,13 @@
 // never reads a hole. Storage is float (the oracle's Float32Array); every read widens to
 // double exactly, as a JS typed-array read does.
 // Parity: tests/core_heightfield_test.cpp against tests/golden/core_heightfield.txt.
+//
+// ge:summary A baked regular grid of heights over the plan, read back bilinearly
+// ge:keywords heightfield grid bilinear terrain ground gradient slope sample bake createHeightfield
+// ge:keywords fillField sampleField sampleFieldGradient fieldGradient fieldCell
+// ge:oracle oss-game-framework/src/core/heightfield.ts
+// ge:skill determinism
+// ge:test tests/core_heightfield_test.cpp
 #pragma once
 
 #include <cmath>

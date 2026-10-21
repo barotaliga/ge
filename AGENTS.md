@@ -29,6 +29,7 @@ updates that row's Status in its PR.
 | [`docs/research.md`](docs/research.md) | What game5 needs, how established engines solve each part, the libm measurement, and the decisions |
 | [`docs/architecture.md`](docs/architecture.md) | The layers and their dependency direction, the frame, the code conventions, diagnostics, the determinism contract and the build |
 | [`docs/porting.md`](docs/porting.md) | How a TS module becomes C++: the oracle, layout and type mapping, the JS-semantics traps, parity levels |
+| [`docs/index.md`](docs/index.md) | GENERATED from the code's `ge:` tags: every file's one-line summary, owning skill, oracle and test; oracle file to port; keyword to files |
 
 ## Rules for every task
 
@@ -59,6 +60,9 @@ updates that row's Status in its PR.
   get there.
 - **WHEN A TASK IS DONE, NAME THE NEXT STEP.** Update the roadmap row in
   `docs/goals.md`, then name the next open milestone row as the follow-up.
+- **SKILLS LEARN.** Read each loaded skill's lessons before the first edit, and before the
+  commit record what the session learned, fix what the skill got wrong, and promote what
+  is always true (the `skill-reflection` skill). Lessons ship in the same PR as the work.
 - **Every work session ends with the `commit` skill.**
 
 ## Build and test
@@ -68,7 +72,10 @@ make build        # cmake --preset debug && cmake --build (PRESET=release for -O
 make test         # build + ctest
 make fmt          # clang-format in place;  make fmt-check is what CI runs
 make lint         # clang-tidy over the sources (bug-finding checks only)
-make agents-check # symlinks, skills ↔ this router, the 1000-line cap
+make agents-check # symlinks, skills ↔ this router, the 1000-line cap, ge: tags, docs/index.md fresh, lesson fragments
+make index        # regenerate docs/index.md from every file's ge: tags
+make find Q="noise sampleField"   # files, skills and lessons matching any word
+make lessons ARGS="port --scope=engine/core"   # read a skill's lessons, filtered (no ARGS: the inventory)
 make golden       # regenerate tests/golden/core_*, loop_*, racing_* from the TS oracle (needs Node 22+, ../oss-game-framework and ../game5)
 make golden-libm NODE=<node 24>  # regenerate tests/golden/libm_*, core_quat, core_solar under game5's pinned Node, on Linux x86-64
 make libm-check   # no <cmath> transcendental in simulation code
@@ -95,8 +102,28 @@ row's compiler or libm.
 | `games/fall_line/app/` | game5's `pwa/` ported: the frame, the look, the HUD, the beds | `render`, `ui`, `audio` |
 | `tests/` | `<topic>_test.cpp`, one executable each; `check.hpp` (harness), `golden.hpp`, `golden/` | `testing` |
 | `tools/parity/` | Node scripts that run the TS oracle and write `tests/golden/` | `testing` |
-| `tools/check-agents.sh` | The structure check | `write-code` |
+| `tools/check-agents.sh`, `tools/agents-index.mjs` | The structure check; the `ge:` tag check, `docs/index.md` and `make find` | `write-code` |
+| `tools/skill-lessons.mjs` | Reads, filters and checks the skills' lesson fragments (`make lessons`) | `skill-reflection` |
 | `CMakeLists.txt`, `CMakePresets.json`, `Makefile`, `.github/workflows/` | The build and CI | `build` |
+
+### Finding things
+
+Agents find code by grep, so the tree is built to be grepped:
+
+- **Every source file ends its leading comment with a `ge:` tag block**: `ge:summary` (one
+  line), `ge:keywords` (kebab concepts plus the oracle's TypeScript identifiers),
+  `ge:skill`, and `ge:oracle` / `ge:test` where they apply. The format is the `write-code`
+  skill's § Discovery tags. `make agents-check` fails an untagged file, an unknown skill or a
+  missing test path.
+- **`make find Q="word word"`** searches every file's tags, every skill's description and
+  every lesson's title, scope and concepts at once. `grep -rn "ge:keywords.*<word>"` is the
+  same search for files alone. A search that misses is fixed by adding the word you tried to
+  the right file's `ge:keywords` (`skill-reflection`, question 6).
+- **[`docs/index.md`](docs/index.md)** is generated from the tags by `make index`; commit it
+  with the change. On a merge conflict there, take either side and rerun `make index`.
+- **Names mirror the oracle** (`run-clock.ts` → `engine/loop/run_clock.hpp`, its test
+  `tests/loop_run_clock_test.cpp`, its golden `tests/golden/loop_run_clock.txt`; `createGame`
+  → `create_game`), so the oracle's name is a search key for the port.
 
 ### Stated once
 

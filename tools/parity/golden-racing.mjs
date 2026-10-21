@@ -20,6 +20,10 @@
 //                            1 hasRecord hasSplits n splits... index time hasGap gap
 //                            2 better id value at hasSplits n splits... record   (a noteRecord)
 //                            3 rows (id value at hasSplits n splits...)*rows     (the book after)
+//
+// ge:summary Writes tests/golden/racing_* from the framework oracle and a game5 ghost
+// ge:keywords golden parity generator racing tape ghost records standings
+// ge:skill testing
 import { writeFileSync } from "node:fs";
 import { registerHooks } from "node:module";
 import { resolve } from "node:path";

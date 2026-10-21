@@ -18,6 +18,11 @@
 // it diffs against upstream; only the namespace, the V8 macros and the functions game5 never calls
 // are gone. Do not tidy it: each operation's order is part of the bits (docs/research.md section
 // 2). API and contract: libm.hpp. Test: tests/core_libm_test.cpp. Licences: LICENSE.md.
+//
+// ge:summary Vendored V8 fdlibm: asin, acos, atan, atan2
+// ge:keywords libm fdlibm vendored v8 asin acos atan atan2 inverse-trig
+// ge:skill determinism
+// ge:test tests/core_libm_test.cpp
 
 #include <cmath>
 #include <cstdint>

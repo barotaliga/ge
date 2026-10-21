@@ -1,6 +1,10 @@
 // engine/racing/records against the TypeScript oracle (tests/golden/racing_records.txt,
 // written by tools/parity/golden-racing.mjs): `beats` over non-figures and ties both ways,
 // `split_gap` at every edge, and a book grown by `note_record` compared whole after each call.
+//
+// ge:summary Parity test: racing/records against the oracle
+// ge:keywords test parity golden records
+// ge:skill testing
 #include "racing/records.hpp"
 
 #include <string>

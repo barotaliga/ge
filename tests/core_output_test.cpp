@@ -2,6 +2,10 @@
 // transcript tools/parity/golden-core.mjs wrote while running a script against the oracle's
 // output module. This test runs the SAME script (keep the two in step) and must print the same
 // lines: what each sink received, in order, and the buffer's contents at two points.
+//
+// ge:summary Parity test: core/output's transcript against the oracle
+// ge:keywords test parity golden output log
+// ge:skill testing
 #include "core/output.hpp"
 
 #include <fstream>

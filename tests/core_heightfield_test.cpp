@@ -3,6 +3,10 @@
 //   originX originZ cell cols rows nSamples
 // the data row as the oracle's fillField stored it, then nSamples rows of
 //   x z sampleField  sampleFieldGradient[0..2]  fieldGradient.gx .gz
+//
+// ge:summary Parity test: core/heightfield against the oracle
+// ge:keywords test parity golden heightfield
+// ge:skill testing
 #include "core/heightfield.hpp"
 
 #include "core/noise.hpp"

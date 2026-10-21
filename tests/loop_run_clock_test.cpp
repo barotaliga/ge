@@ -1,6 +1,10 @@
 // engine/loop/run_clock.hpp against the TypeScript oracle (tests/golden/loop_run_clock.txt,
 // written by tools/parity/golden-core.mjs). Per clock: a header row  hz maxFrame nOps, then
 // nOps rows of  op arg steps alpha dropped paused  (op 0 = frame(arg), 1 = pause, 2 = resume).
+//
+// ge:summary Parity test: loop/run_clock against the oracle
+// ge:keywords test parity golden run-clock
+// ge:skill testing
 #include "loop/run_clock.hpp"
 
 #include <limits>

@@ -1,4 +1,8 @@
 // engine/core/math.hpp against the TypeScript oracle (tests/golden/core_math.txt).
+//
+// ge:summary Parity test: core/math against the oracle
+// ge:keywords test parity golden math hypot
+// ge:skill testing
 #include "core/math.hpp"
 
 #include <limits>

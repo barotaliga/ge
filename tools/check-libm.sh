@@ -6,6 +6,10 @@
 #
 # Simulation code: engine/core (except engine/core/libm itself), engine/racing, engine/loop
 # and games/*/sim. Renderer, audio and UI code may use <cmath>: they feed no digest.
+#
+# ge:summary Fails any <cmath> transcendental in simulation code (make libm-check)
+# ge:keywords ci check libm cmath transcendental determinism
+# ge:skill determinism
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

@@ -11,12 +11,14 @@ JavaScript traps. This skill is the procedure.
 ## Procedure
 
 1. **Find the oracle file** in `../game5` or `../oss-game-framework` and list its
-   imports. Every import must already be ported with parity. If one is not, port it
+   imports. `docs/index.md` § Oracle to port says which oracle files are ported already. Every import must already be ported with parity. If one is not, port it
    first (bottom-up).
 2. **Read the oracle's tests** (`../game5/tests/<topic>_test.ts`). They say which
    behaviours matter and which inputs are interesting.
 3. **Place the port**: the path that mirrors the oracle (`docs/porting.md` § Layout
-   mapping). Its first comment names the oracle file.
+   mapping). Its first comment names the oracle file and ends with the `ge:` tag block:
+   `ge:oracle` is the oracle path, and `ge:keywords` carries the oracle's exported
+   identifiers as TypeScript spells them (the `write-code` skill, § Discovery tags).
 4. **Write the golden generator** in `tools/parity/golden-<module>.mjs`. It imports the
    oracle `.ts` directly (Node `--experimental-strip-types`) and writes
    `tests/golden/<module>.txt` as hex words. Cover the edges: zeros, signed zeros,
@@ -31,7 +33,7 @@ JavaScript traps. This skill is the procedure.
    insertion-ordered storage.
 7. **Run** `make test` on both presets. Every row must be bit-exact.
 8. **Update** `AGENTS.md`'s "Where things live" row and the milestone Status in
-   `docs/goals.md`.
+   `docs/goals.md`, and run `make index`.
 
 ## Rules
 

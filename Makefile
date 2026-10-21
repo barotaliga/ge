@@ -1,9 +1,10 @@
 # The everyday commands. CMake is the build; this file only names its calls.
 # PRESET=debug (default: sanitizers on) or PRESET=release.
 PRESET ?= debug
-SOURCES := $(shell git ls-files '*.cpp' '*.hpp' 2>/dev/null)
+# Tracked AND new (untracked, not ignored) files, so a file not yet `git add`ed is formatted too.
+SOURCES := $(shell git ls-files --cached --others --exclude-standard '*.cpp' '*.hpp' 2>/dev/null)
 
-.PHONY: build test fmt fmt-check lint agents-check golden golden-libm libm-check clean
+.PHONY: build test fmt fmt-check lint agents-check index find lessons golden golden-libm libm-check clean
 
 build:
 	cmake --preset $(PRESET)
@@ -26,6 +27,18 @@ agents-check:
 
 libm-check:
 	tools/check-libm.sh
+
+# Discovery (AGENTS.md § Finding things). `index` rewrites docs/index.md from every file's ge:
+# tags; `find` searches the files, the skills and their lessons: make find Q="noise heightfield".
+# `lessons` reads the skills' lessons: make lessons ARGS="port --scope=engine/core".
+index:
+	node tools/agents-index.mjs --write
+
+find:
+	node tools/agents-index.mjs --find $(Q)
+
+lessons:
+	node tools/skill-lessons.mjs $(ARGS)
 
 # Rewrites tests/golden/core_* (bar quat and solar), loop_*, core_js and racing_* from the
 # TypeScript oracle (needs Node 22+ and checkouts of oss-game-framework and game5 beside this

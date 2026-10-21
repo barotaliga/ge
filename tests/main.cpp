@@ -1,4 +1,8 @@
 // Runs every TEST registered in this executable, prints one line per test.
+//
+// ge:summary Runs every TEST registered in a test executable
+// ge:keywords test runner main ctest
+// ge:skill testing
 #include <cstdio>
 
 #include "check.hpp"

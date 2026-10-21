@@ -1,5 +1,9 @@
 // engine/core/prng.hpp against the TypeScript oracle (tests/golden/core_prng.txt,
 // written by tools/parity/golden-core.mjs).
+//
+// ge:summary Parity test: core/prng against the oracle
+// ge:keywords test parity golden prng rng
+// ge:skill testing
 #include "core/prng.hpp"
 
 #include "golden.hpp"

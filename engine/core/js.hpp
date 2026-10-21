@@ -13,6 +13,12 @@
 //   Math.max / Math.min     js::max / js::min    std::max/min (NaN and -0 wrong)
 //   Math.sign(x)            js::sign(x)          a hand-rolled ternary (-0 and NaN wrong)
 //   a % b                   js::mod(a, b)        std::remainder (rounds the quotient)
+//
+// ge:summary JavaScript number semantics: Math.round, |0, >>>0, Math.imul, max/min, sign, %
+// ge:keywords js javascript semantics round to-int32 to-uint32 imul max min sign mod modulo
+// ge:keywords negative-zero nan
+// ge:skill determinism
+// ge:test tests/core_js_test.cpp
 #pragma once
 
 #include <cmath>

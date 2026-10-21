@@ -27,6 +27,10 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
+      # tools/agents-index.mjs and tools/skill-lessons.mjs: plain Node, no npm install.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - run: make agents-check
       - run: make libm-check
 

@@ -5,6 +5,10 @@
 // an absent optional (`null`) is the pair `0 0` where a present one is `1 value`.
 //
 //   make golden-libm NODE=/path/to/node24 [FRAMEWORK=../oss-game-framework]
+//
+// ge:summary Writes tests/golden/core_quat and core_solar under game5's pinned Node
+// ge:keywords golden parity oracle generator quat solar node24
+// ge:skill testing
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { oracleLoader } from "./oracle-import.mjs";

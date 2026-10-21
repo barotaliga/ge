@@ -16,6 +16,11 @@
 // SPDX-License-Identifier: MIT. Full notice: engine/core/libm/LICENSE.md.
 //
 // Errno and floating-point exception signalling are dropped: JS observes neither.
+//
+// ge:summary Math.pow and ** as glibc's FMA pow computes them on Linux x86-64
+// ge:keywords libm pow exponent power fma glibc optimized-routines arm
+// ge:skill determinism
+// ge:test tests/core_libm_test.cpp
 #include <cmath>
 #include <cstdint>
 #include <cstring>

@@ -16,6 +16,11 @@
 // Internal to engine/core/libm: the word-access macros and helpers V8's fdlibm port
 // (src/base/ieee754.cc, V8 13.6) is written against, so the vendored .cpp files stay line for
 // line with upstream. Nothing outside engine/core/libm/*.cpp includes this.
+//
+// ge:summary Word-access helpers the vendored fdlibm files are written against
+// ge:keywords libm fdlibm vendored internal bit-cast word high-word low-word
+// ge:skill determinism
+// ge:test tests/core_libm_test.cpp
 #pragma once
 
 #include <cmath>

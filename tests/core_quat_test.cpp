@@ -3,6 +3,10 @@
 //   in:  heading pitch roll  ax ay az angle  wx wy wz dt  vx vy vz  s
 //   out: fromEuler[4] fromAxisAngle[4] multiply(qe, qa)[4] rotate(qe, v)[3] unrotate(qe, v)[3]
 //        integrate(qe, w, dt)[4] toEuler(qe)[3] normalize(qe * s)[4]
+//
+// ge:summary Parity test: core/quat against the oracle
+// ge:keywords test parity golden quat
+// ge:skill testing
 #include "core/quat.hpp"
 
 #include "golden.hpp"

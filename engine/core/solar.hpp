@@ -13,6 +13,13 @@
 // TIMES: an `hour` is the place's apparent solar hour, 0..24 (noon = the sun on the meridian).
 // A Julian day `jd` counts days from noon UT on 1 January 4713 BC; `jd0` is the one at 0h UT
 // of a civil date.
+//
+// ge:summary Where the sun and the moon are: elevation, azimuth, daylight windows, dates
+// ge:keywords solar sun moon elevation azimuth daylight sunrise sunset julian-day refraction sunAt
+// ge:keywords moonAt daylightWindow sunOnDate moonOnDate hourOfElevation
+// ge:oracle oss-game-framework/src/core/solar.ts
+// ge:skill determinism
+// ge:test tests/core_solar_test.cpp
 #pragma once
 
 #include <optional>

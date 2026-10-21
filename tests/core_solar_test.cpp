@@ -1,6 +1,10 @@
 // engine/core/solar.cpp against the oracle's runtime (tests/golden/core_solar.txt, written by
 // tools/parity/golden-core-libm.mjs under game5's pinned Node: make golden-libm). The row
 // layout is stated in that script; the column index of each output is spelled out below.
+//
+// ge:summary Parity test: core/solar against the oracle
+// ge:keywords test parity golden solar sun moon
+// ge:skill testing
 #include "core/solar.hpp"
 
 #include <optional>

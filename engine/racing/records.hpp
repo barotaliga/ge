@@ -15,6 +15,12 @@
 // Not ported: `readBook` (a stored JSON blob read row by row). It belongs with the record
 // store and its JSON reader (M10). Parity: tests/racing_records_test.cpp against
 // tests/golden/racing_records.txt.
+//
+// ge:summary The record book's policy: what beats a row, split gaps, noting a record
+// ge:keywords racing records record-book best beats splitGap noteRecord splits personal-best
+// ge:oracle oss-game-framework/src/racing/records.ts
+// ge:skill port
+// ge:test tests/racing_records_test.cpp
 #pragma once
 
 #include <cmath>
