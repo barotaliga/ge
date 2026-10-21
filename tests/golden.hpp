@@ -1,5 +1,6 @@
 // Reads a tests/golden/*.txt file: one row per line, whitespace-separated
-// hex words (IEEE 754 bit patterns or plain hex integers).
+// hex words (IEEE 754 bit patterns or plain hex integers). Lines starting with '#' are
+// provenance (which Node wrote the file) and are skipped.
 #pragma once
 
 #include <cstdint>
@@ -18,6 +19,7 @@ inline std::vector<std::vector<uint64_t>> golden_rows(const char* rel) {
   std::ifstream in(root_path(rel));
   std::string line;
   while (std::getline(in, line)) {
+    if (!line.empty() && line[0] == '#') continue;  // provenance line
     std::istringstream words(line);
     std::vector<uint64_t> row;
     std::string w;

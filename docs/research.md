@@ -67,7 +67,35 @@ Conclusions:
    results are identical in every correct implementation, which is the better place to
    end up. `tanh` needs its own answer either way. This is milestone M1, and it is
    settled by golden tables generated under game5's pinned Node, not by reasoning.
-4. **`Math.hypot` is already solved.** The framework's `hypot`/`hypot3`/`hypot4` use only
+4. **Settled by M1 (2026-10-21), measured under game5's pinned Node 24.22.1 (V8
+   13.6.233.17) on Linux x86-64, glibc 2.39, one million inputs per function** (game5's
+   ranges, the reductions' awkward points and arbitrary bit patterns; the interpreter
+   and the optimizing tiers give identical tables):
+
+   | function | V8 13.6 fdlibm ≠ Node 24 | glibc ≠ Node 24 | correctly rounded ≠ Node 24 |
+   | --- | --- | --- | --- |
+   | sin, cos, tan | 0 | 2.3–2.8% | 2.3–2.9% |
+   | asin, acos, atan, atan2 | 0 | 2.2–3.9% | 2.3–4.6% |
+   | exp, expm1 | 0 | 6.0%, 0.03% | 6.9%, 3.3% |
+   | log, log2 | 0 | 1.7%, 0.13% | 1.9%, 0.16% |
+   | cbrt, tanh | 0 | 48.7%, 2.0% | 6.0%, 5.1% |
+   | pow | 6.2% | **0** | 0.11% |
+
+   ("Correctly rounded" is a 300-bit mpmath reference on a 20,000-row sample. A correctly
+   rounded result is unique, so it stands for LLVM libc or CORE-MATH, which current V8
+   `main` forwards to; Node 24 predates that switch.) Conclusions: Node 24's V8 does
+   **not** define `V8_USE_LIBM_TRIG_FUNCTIONS`, so thirteen functions are V8's fdlibm port,
+   and `engine/core/libm` vendors exactly that file. **`Math.pow` is different**: V8 13.6
+   defaults to `--use-std-math-pow`, so `Math.pow` (and `**`) is V8's `math::pow` wrapper
+   (`x ** 2` → `x * x`, `x ** 0.5` → `sqrt`) over the host's `std::pow`. Node 24's pow
+   therefore depends on the machine game5 runs on: glibc on Linux, Apple's libm on macOS,
+   the UCRT on Windows. game5's digests are cut on Linux CI, so the reference is glibc's
+   pow, which is Arm's optimized-routines pow; on an x86-64 with FMA glibc runs the build
+   that GCC contracted into FMAs, and without those FMAs 1 call in 2,400 differs. The port
+   (`engine/core/libm/pow.cpp`) writes each of GCC's contractions as an explicit
+   `std::fma` and matches glibc on 1M Node rows plus 40M direct comparisons. A correctly
+   rounded libm would have been the cleaner target, but it is not what the oracle runs.
+5. **`Math.hypot` is already solved.** The framework's `hypot`/`hypot3`/`hypot4` use only
    correctly rounded operations. The C++ port (`engine/core/math.hpp`) matches the
    TypeScript bit for bit on 4,000 rows spanning magnitudes from 1e−20 to 1e20 (M0's
    test), on every CI row.

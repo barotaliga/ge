@@ -59,7 +59,7 @@ row's exit criterion is what makes it `done`.
 | --- | --- | --- | --- |
 | M0 | **Groundwork**: AGENTS.md and its symlinks, skills, the research and architecture docs, the CMake build, the test harness, CI on five OS/compiler rows, and `core/prng` and `core/math` (hypot) at bit parity | CI green; the parity tests pass on every row | done |
 | M0.1 | **Publishing and secrets**: how the engine is published from GitHub, with credentials only in GitHub secrets | Release workflow documented in AGENTS.md; no credential in the tree | in progress (separate thread) |
-| M1 | **The deterministic libm**: `core/libm` (sin, cos, tan, atan, atan2, asin, acos, exp, expm1, log, log2, pow, cbrt, tanh) that matches the oracle's runtime, plus `core/js` (the JS semantics helpers listed in `docs/porting.md`) | Golden tables from game5's pinned Node match bit for bit on every CI row | open |
+| M1 | **The deterministic libm**: `core/libm` (sin, cos, tan, atan, atan2, asin, acos, exp, expm1, log, log2, pow, cbrt, tanh) that matches the oracle's runtime, plus `core/js` (the JS semantics helpers listed in `docs/porting.md`) | Golden tables from game5's pinned Node match bit for bit on every CI row | done (V8 fdlibm + glibc pow; `docs/research.md` §2) |
 | M2 | **The rest of the core pool**: noise, heightfield, polyline, quat, solar, output, and the run clock (`loop/run-clock`) | Every function has a golden test from the framework | open |
 | M3 | **Racing primitives**: tape (byte-identical encoding), records, standings | A game5 ghost tape decodes and re-encodes byte for byte | open |
 | M4 | **The level**: `games/fall_line/mapgen`, which ports `generateLevel` and its compile step | `levelDigest` matches game5 on `LEVEL_SEEDS` and on every pinned map | open |

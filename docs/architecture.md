@@ -121,8 +121,9 @@ shape through `tests/check.hpp`.
 
 ## Determinism contract
 
-- Only `core/libm` provides transcendentals to `sim/` code. `<cmath>`'s `sin`, `exp`
-  and `pow` are forbidden there (a check enforces this from M1).
+- Only `core/libm` provides transcendentals to simulation code. `<cmath>`'s `sin`, `exp`,
+  `pow` and the rest are forbidden in `engine/core`, `engine/racing`, `engine/loop` and
+  `games/*/sim`; `tools/check-libm.sh` (`make libm-check`, CI's `agents` job) fails a call.
 - FP flags: `-ffp-contract=off -fno-fast-math` (GCC: `-fexcess-precision=standard`;
   MSVC: `/fp:strict`), set once on `ge_flags` in the root `CMakeLists.txt`.
 - Randomness only through `core::Rng` streams owned by the state. No clock in `sim/`.

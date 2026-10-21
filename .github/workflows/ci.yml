@@ -28,6 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - run: make agents-check
+      - run: make libm-check
 
   test:
     name: test (${{ matrix.os }}, ${{ matrix.cxx }}, ${{ matrix.preset }})
