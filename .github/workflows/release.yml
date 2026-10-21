@@ -10,14 +10,16 @@ name: release
 #            against the installed package, archive it
 #   publish  collate CHANGELOG.md, commit VERSION + CHANGELOG, tag vX.Y.Z,
 #            push; GitHub Release with the packages, the source, SHA256SUMS
-#            and build provenance; the same files to GitHub Packages as an
-#            OCI artifact (ghcr.io/<owner>/gameengine2:X.Y.Z and :latest)
+#            and build provenance
+#   mirror   the release's files to GitHub Packages as an OCI artifact
+#            (ghcr.yml: ghcr.io/<owner>/gameengine2:X.Y.Z and :latest)
 #
 # Nothing is tagged until every platform's package is built and tested, and
 # the push is refused if main moved since the plan, so a run that fails
 # before publish leaves nothing behind: fix it and dispatch again. One that
-# fails inside publish is finished with "Re-run failed jobs". `dry_run` runs
-# plan + package only.
+# fails inside publish is finished with "Re-run failed jobs"; a failed mirror
+# is redone by dispatching ghcr.yml with the tag. `dry_run` runs plan +
+# package only.
 #
 # Credentials: the built-in GITHUB_TOKEN covers the release, the packages and
 # the attestations. RELEASE_TOKEN is an OPTIONAL repository secret, used only
@@ -141,7 +143,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      packages: write
       id-token: write
       attestations: write
     env:
@@ -156,7 +157,7 @@ jobs:
 
       # Every step from here is safe to re-run ("Re-run failed jobs"): a tag
       # already pushed by an earlier attempt is reused, a release already
-      # created gets its files replaced, an OCI push overwrites.
+      # created gets its files replaced.
       - name: Collate CHANGELOG, commit, tag, push
         run: |
           if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
@@ -203,20 +204,11 @@ jobs:
               --verify-tag
           fi
 
-      - uses: oras-project/setup-oras@v2
-
-      - name: GitHub Packages (OCI artifact on ghcr.io)
-        env:
-          GHCR_TOKEN: ${{ github.token }}
-        run: |
-          REF="ghcr.io/${GITHUB_REPOSITORY,,}"
-          printf '%s' "$GHCR_TOKEN" | oras login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-          cd dist
-          oras push "$REF:$VERSION" \
-            --artifact-type application/vnd.gameengine2.release.v1 \
-            --annotation "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
-            --annotation "org.opencontainers.image.version=$VERSION" \
-            --annotation "org.opencontainers.image.description=gameengine2 $TAG: CMake packages per platform, source, SHA256SUMS" \
-            *.tar.gz:application/gzip SHA256SUMS:text/plain
-          oras tag "$REF:$VERSION" latest
-          echo "Published $REF:$VERSION" >> "$GITHUB_STEP_SUMMARY"
+  mirror:
+    needs: [plan, publish]
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/ghcr.yml
+    with:
+      tag: v${{ needs.plan.outputs.version }}

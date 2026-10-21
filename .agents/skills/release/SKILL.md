@@ -48,7 +48,11 @@ how a game consumes it, which credentials exist).
    on `main` and dispatch again. One that failed inside `publish` (after the
    tag push) is finished by re-running its failed jobs (`actions_run_trigger`
    `method: rerun_failed_jobs`): every publish step reuses what an earlier
-   attempt pushed. Never delete a pushed tag.
+   attempt pushed. Never delete a pushed tag. A re-run uses the workflow file
+   of the original run, so a fix to the workflow itself does not reach it.
+6. The ghcr.io copy failed or is missing: dispatch `ghcr.yml` on `main` with
+   `inputs: {tag: "vX.Y.Z", latest: "true"}`. It mirrors the GitHub Release's
+   own files, so it works for any past release with the current workflow.
 
 ## Secrets (public repository)
 

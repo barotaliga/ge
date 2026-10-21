@@ -108,13 +108,16 @@ The run:
    unit), archives the install.
 3. **publish** — only when every package passed: collates `CHANGELOG.md`,
    commits `VERSION` + `CHANGELOG.md`, tags `vX.Y.Z`, pushes (refused if
-   `main` moved since the plan), then the GitHub Release, the attestation and
-   the ghcr.io push.
+   `main` moved since the plan), then the GitHub Release and the attestation.
+4. **mirror** — `.github/workflows/ghcr.yml` downloads the release's files,
+   checks them against `SHA256SUMS` and pushes them to ghcr.io.
 
 A run that fails in plan or package leaves no tag and no release: fix the
 cause and dispatch again. One that fails inside publish is finished by
 re-running its failed jobs — every publish step reuses what an earlier
-attempt pushed.
+attempt pushed. A release whose ghcr.io copy is missing or stale is mirrored
+again by dispatching `ghcr.yml` with its tag (`tag: vX.Y.Z`); that works for
+any past release, from the current workflow file.
 `dry_run: true` runs plan and package only — the way to prove a release
 would succeed without publishing anything.
 
