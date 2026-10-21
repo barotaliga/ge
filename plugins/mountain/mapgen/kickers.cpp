@@ -38,10 +38,11 @@ double kicker_profile(double height, double ramp, double landing, double u) {
   return height * t * t;
 }
 
-std::vector<TrackKicker> lay_track_kickers(ge::core::Rng& rng, Piste& piste, const GradeRow& grade,
-                                           std::span<const TrackDrop> drops) {
+std::vector<TrackKicker> lay_track_kickers(ge::core::Rng& rng, Track& track, const GradeRow& grade,
+                                           std::span<const TrackDrop> drops,
+                                           std::span<const ArcSpan> keep_off) {
   namespace K = R::kickers::on;
-  auto& pts = piste.track.points;
+  auto& pts = track.points;
   const auto n = static_cast<long>(pts.size());
   const double step = R::track::step;
   const auto& G = grade.kickers;
@@ -125,6 +126,11 @@ std::vector<TrackKicker> lay_track_kickers(ge::core::Rng& rng, Piste& piste, con
       }
       if (on_drop) continue;
     }
+    if (std::any_of(keep_off.begin(), keep_off.end(), [&](const ArcSpan& k) {
+          return s_c - height * ramp_of < k.to && s_c + height * landing_of > k.from;
+        })) {
+      continue;
+    }
     chosen.push_back({size_t(c.index), height, height * ramp_of, height * landing_of});
   }
   std::stable_sort(chosen.begin(), chosen.end(),
@@ -143,11 +149,11 @@ std::vector<TrackKicker> lay_track_kickers(ge::core::Rng& rng, Piste& piste, con
   return chosen;
 }
 
-std::vector<Kicker> publish_track_kickers(const Piste& piste,
+std::vector<Kicker> publish_track_kickers(const Track& track,
                                           std::span<const TrackKicker> kickers) {
   std::vector<Kicker> out;
   for (const TrackKicker& k : kickers) {
-    const TrackPoint& p = piste.track.points[k.index];
+    const TrackPoint& p = track.points[k.index];
     out.push_back(
         Kicker{"", p.x, p.z, p.y, p.heading, k.height, k.ramp, k.landing, p.width, true, p.s});
   }

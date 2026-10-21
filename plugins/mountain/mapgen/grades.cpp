@@ -6,7 +6,9 @@
 // ge:test tests/mountain_generate_test.cpp
 #include "mountain/mapgen/grades.hpp"
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 
 #include "core/num.hpp"
 
@@ -137,6 +139,17 @@ Band vertical_band(const Region& region, const GradeRow& grade) {
   const double k = region.relief.vertical;
   if (!grade.id) return scale_band(grade.vertical, k);
   return scale_band(grade.vertical, 1 + (k - 1) * R::grade::region_share);
+}
+
+GradeRow scaled_row(const GradeRow& row, double length) {
+  constexpr double kKickerReach = 2000;
+  const double k = std::min(1.4, length / kKickerReach);
+  const double least = !row.id || *row.id == PisteGrade::green ? 0 : 1;
+  GradeRow out = row;
+  out.kickers.on = {std::max(least, std::floor(row.kickers.on.min * k)),
+                    std::max(least, num::round(row.kickers.on.max * k))};
+  out.drops = {std::floor(row.drops.min * k), num::round(row.drops.max * k)};
+  return out;
 }
 
 }  // namespace ge::mountain::mapgen

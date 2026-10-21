@@ -39,12 +39,14 @@ struct TrackKicker {
 };
 
 // R9 — choose the piste's kickers and add them to the graded profile, as many and as tall as
-// the grade asks, `drop.kicker_clear` off every drop (R24). In order down the line.
-std::vector<TrackKicker> lay_track_kickers(ge::core::Rng& rng, Piste& piste, const GradeRow& grade,
-                                           std::span<const TrackDrop> drops);
+// the grade asks, `drop.kicker_clear` off every drop (R24), none over a `keep_off` stretch. In
+// order down the line.
+std::vector<TrackKicker> lay_track_kickers(ge::core::Rng& rng, Track& track, const GradeRow& grade,
+                                           std::span<const TrackDrop> drops,
+                                           std::span<const ArcSpan> keep_off = {});
 
 // Publish the piste's kickers against the finished line (`K1…`).
-std::vector<Kicker> publish_track_kickers(const Piste& piste, std::span<const TrackKicker> kickers);
+std::vector<Kicker> publish_track_kickers(const Track& track, std::span<const TrackKicker> kickers);
 
 // R4 — stand the natural kickers on the face's rolls clear of the piste, facing down the fall
 // line, and stamp them into the ground (`X1…`).

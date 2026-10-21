@@ -163,6 +163,12 @@ struct Cliff {
   std::optional<double> s;  // a drop's arc down the piste, m
 };
 
+// A stretch of a run by arc, m: a feature keeps off it.
+struct ArcSpan {
+  double from;
+  double to;
+};
+
 // A stretch of the piste the wind has drifted over (R17): its full-depth core, by arc, m.
 struct Drift {
   double from;

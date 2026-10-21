@@ -84,6 +84,11 @@ const char* grade_name(PisteGrade grade);
 // signed with: the MEASURED grade.
 PisteGrade piste_grade_of(double steepest);
 
+// A row's kicker and drop counts scaled to a run `length` m long: the row's bands are a
+// downhill course's, and a ski area's runs are shorter. A run of two kilometres carries the
+// whole band, and any run but a green at least one kicker.
+GradeRow scaled_row(const GradeRow& row, double length);
+
 // The steepest `track.colour_window` of a piste, m per m, kickers and drops included but a
 // terrain park's (none on any map the generator builds yet).
 double steepest_span(const Track& track, std::span<const Kicker> kickers);

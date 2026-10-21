@@ -73,19 +73,20 @@ std::variant<Level, std::string> attempt_level(double seed, int attempt, int lap
   if (!found) return "no piste fits this mountain (last: " + why + ")";
   Piste& piste = *found;
 
-  const std::vector<TrackDrop> track_drops = lay_drops(sub, piste, grade);
+  const std::vector<TrackDrop> track_drops = lay_drops(sub, piste.track, grade);
   if (double(track_drops.size()) < grade.drops.min) {
     return "only " + num::to_string(double(track_drops.size())) + " drop(s) fit the piste (R24)";
   }
-  const std::vector<TrackKicker> track_kickers = lay_track_kickers(rng, piste, grade, track_drops);
-  std::vector<Cliff> drops = publish_drops(piste, track_drops);
+  const std::vector<TrackKicker> track_kickers =
+      lay_track_kickers(rng, piste.track, grade, track_drops);
+  std::vector<Cliff> drops = publish_drops(piste.track, track_drops);
   Corridor corridor = stamp_corridor(piste, ground);
   std::vector<Kicker> off_kickers = lay_off_kickers(rng, plan, ground, piste);
   std::vector<Cliff> cliffs = lay_cliffs(sub, plan, ground, piste.track, off_kickers, drops);
 
   // Publish the heights the ground actually carries.
   for (TrackPoint& p : piste.track.points) p.y = sample_field(ground, p.x, p.z);
-  std::vector<Kicker> kickers = publish_track_kickers(piste, track_kickers);
+  std::vector<Kicker> kickers = publish_track_kickers(piste.track, track_kickers);
   kickers.insert(kickers.end(), off_kickers.begin(), off_kickers.end());
   for (Kicker& k : kickers) k.y = sample_field(ground, k.x, k.z);
   for (Cliff& d : drops) d.y = sample_field(ground, d.x, d.z);

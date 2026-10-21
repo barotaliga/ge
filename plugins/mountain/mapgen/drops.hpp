@@ -15,6 +15,7 @@
 #pragma once
 
 #include <cstdint>
+#include <span>
 #include <vector>
 
 #include "mountain/mapgen/grades.hpp"
@@ -34,10 +35,11 @@ struct TrackDrop {
 };
 
 // R24 — choose the drops across the piste and add them to the graded profile, in order down
-// the line.
-std::vector<TrackDrop> lay_drops(uint32_t sub, Piste& piste, const GradeRow& grade);
+// the line, none over a `keep_off` stretch.
+std::vector<TrackDrop> lay_drops(uint32_t sub, Track& track, const GradeRow& grade,
+                                 std::span<const ArcSpan> keep_off = {});
 
 // Publish the drops against the finished line: `D1…`, each a cliff across the piste.
-std::vector<Cliff> publish_drops(const Piste& piste, const std::vector<TrackDrop>& drops);
+std::vector<Cliff> publish_drops(const Track& track, const std::vector<TrackDrop>& drops);
 
 }  // namespace ge::mountain::mapgen

@@ -35,17 +35,18 @@ constexpr double kShelfSlack = 0.04;
 
 }  // namespace
 
-std::vector<TrackDrop> lay_drops(uint32_t sub, Piste& piste, const GradeRow& grade) {
+std::vector<TrackDrop> lay_drops(uint32_t sub, Track& track, const GradeRow& grade,
+                                 std::span<const ArcSpan> keep_off) {
   if (grade.drops.max <= 0) return {};
   namespace D = R::drop;
   ge::core::Rng rng = ge::core::make_rng(sub ^ kDropSalt);
   const int want = ge::core::int_in(rng, int32_t(grade.drops.min), int32_t(grade.drops.max));
-  auto& pts = piste.track.points;
+  auto& pts = track.points;
   const auto n = static_cast<long>(pts.size());
-  const double step = piste.track.length / double(n - 1);
-  const std::vector<double> gates = gate_arcs(piste.track.length);
+  const double step = track.length / double(n - 1);
+  const std::vector<double> gates = gate_arcs(track.length);
   const double lo = start_gate_arc() + R::spawn::kicker_gap + D::shelf.max;
-  const double hi = finish_from(piste.track.length) - D::finish_clear;
+  const double hi = finish_from(track.length) - D::finish_clear;
   const auto w = static_cast<long>(num::max(1.0, num::round(R::track::grade_window / step)));
   // The least fall over a grade window between two arcs, m per m.
   const auto least_fall = [&](double a, double b) {
@@ -103,6 +104,10 @@ std::vector<TrackDrop> lay_drops(uint32_t sub, Piste& piste, const GradeRow& gra
         })) {
       continue;
     }
+    if (std::any_of(keep_off.begin(), keep_off.end(),
+                    [&](const ArcSpan& k) { return from < k.to && to > k.from; })) {
+      continue;
+    }
     chosen.push_back({index, drop, shelf, face, apron, landing});
   }
   std::stable_sort(chosen.begin(), chosen.end(),
@@ -120,11 +125,11 @@ std::vector<TrackDrop> lay_drops(uint32_t sub, Piste& piste, const GradeRow& gra
   return chosen;
 }
 
-std::vector<Cliff> publish_drops(const Piste& piste, const std::vector<TrackDrop>& drops) {
+std::vector<Cliff> publish_drops(const Track& track, const std::vector<TrackDrop>& drops) {
   std::vector<Cliff> out;
   for (size_t k = 0; k < drops.size(); k++) {
     const TrackDrop& d = drops[k];
-    const TrackPoint& p = piste.track.points[d.index];
+    const TrackPoint& p = track.points[d.index];
     out.push_back(Cliff{"D" + std::to_string(k + 1), p.x, p.z, p.y, p.heading, d.drop, d.face,
                         d.apron, d.landing, d.shelf, p.width, true, p.s});
   }
