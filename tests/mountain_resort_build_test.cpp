@@ -141,6 +141,19 @@ std::vector<std::pair<std::string, std::string>> build(const Case& c, int attemp
   return sections(a, stage);
 }
 
+// Whether an environment variable is set (MSVC deprecates std::getenv in favour of its own).
+bool env_set(const char* name) {
+#ifdef _MSC_VER
+  char* v = nullptr;
+  size_t n = 0;
+  const bool set = _dupenv_s(&v, &n, name) == 0 && v != nullptr;
+  std::free(v);
+  return set;
+#else
+  return std::getenv(name) != nullptr;
+#endif
+}
+
 // Words joined into one message, with no temporaries.
 std::string cat(std::initializer_list<std::string_view> parts) {
   std::string out;
@@ -192,7 +205,7 @@ void check_rules(const mg::ResortAttempt& a, const std::string& where) {
 }  // namespace
 
 TEST(resort_builds_are_deterministic_and_keep_their_digest) {
-  const bool write = std::getenv("GE_GOLDEN_WRITE") != nullptr;
+  const bool write = env_set("GE_GOLDEN_WRITE");
   std::vector<std::string> want_rows;
   for (const auto& row : ge::test::golden_words(kGolden)) {
     std::string line;
