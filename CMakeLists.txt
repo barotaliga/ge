@@ -104,13 +104,14 @@ if(GE_GPU)
   add_library(ge_gpu STATIC ${GE_GPU_SOURCES})
   target_link_libraries(ge_gpu PUBLIC ge_core dawn::webgpu_dawn)
   ge_embed_wgsl(ge_gpu engine/gpu/test_scene.wgsl)
-  # The frame core (M7): the pass table's mechanisms, the sky, the terrain, post.
+  # The frame core (M7): the pass table's mechanisms, the sky, the terrain and its horizon
+  # map, post.
   file(GLOB GE_RENDER_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/render/*.cpp)
   add_library(ge_render STATIC ${GE_RENDER_SOURCES})
   target_link_libraries(ge_render PUBLIC ge_gpu)
   ge_embed_wgsl(ge_render engine/render/sky_tables.wgsl engine/render/sky.wgsl
     engine/render/terrain.wgsl engine/render/terrain_cull.wgsl engine/render/terrain_normals.wgsl
-    engine/render/post.wgsl)
+    engine/render/horizon.wgsl engine/render/post.wgsl)
 endif()
 
 # The plugins: every plugins/<name>/CMakeLists.txt, each one ge_add_plugin(...) call. A new

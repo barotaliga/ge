@@ -21,7 +21,10 @@ namespace r = ge::render;
 constexpr r::PassRow kPassTable[] = {
     {"sky.tables", "", "sky.view sky.aerial sky.light"},
     {"terrain.cull", "terrain.pyramid", "terrain.tiles terrain.indirect"},
-    {"terrain", "terrain.tiles terrain.indirect terrain.height sky.aerial sky.light", "hdr depth"},
+    {"terrain.horizon", "terrain.height", "terrain.horizon"},
+    {"terrain",
+     "terrain.tiles terrain.indirect terrain.height terrain.horizon sky.aerial sky.light",
+     "hdr depth"},
     {"sky", "sky.view depth", "hdr"},
     {"post", "hdr sky.light", "final"},
 };
@@ -82,6 +85,7 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& view,
   wgpu::CommandEncoder encoder = device.device.CreateCommandEncoder();
   r::encode_sky_tables(f.sky, f.pipelines, f.recorder, encoder);
   r::encode_terrain_cull(f.terrain, f.pipelines, f.recorder, encoder, f.frame_group);
+  r::encode_terrain_horizon(f.terrain, f.pipelines, f.recorder, encoder);
   r::encode_terrain(f.terrain, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
   r::encode_sky(f.sky, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
   r::encode_post(f.post, f.pipelines, f.recorder, encoder, f.frame_group, f.post_group, output);
