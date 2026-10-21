@@ -4,6 +4,12 @@
 exists to map them onto the engine. Delete it when M8 is done. The plan itself is
 `docs/rendering.md`, which names no legacy source.
 
+The old renderer is evidence of what the scene needs and what it costs, not an
+architecture to keep. `docs/rendering.md` is designed on its own merits; where it lands
+on a technique the old renderer also used (a horizon map, a clipmap), it is because the
+measurements below argue for it. Nothing here is ported as code: the engine and its
+games are C++.
+
 Surveyed on game5 `3717f39` (2026-10-21), from `pwa/src/game/`, `docs/webgpu.md` and
 `docs/performance.md` there.
 
