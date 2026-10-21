@@ -1,0 +1,10 @@
+# Bug-finding checks only; style is clang-format's.
+Checks: >
+  -*,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-narrowing-conversions,
+  performance-*,
+  clang-analyzer-*
+WarningsAsErrors: '*'
+HeaderFilterRegex: '(engine|games|tests)/.*'
