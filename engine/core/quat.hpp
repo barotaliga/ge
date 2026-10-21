@@ -80,7 +80,9 @@ inline Vec3 rotate(const Quat& q, const Vec3& v) {
 }
 
 // Rotate a world-frame vector into the body frame (the inverse rotation).
-inline Vec3 unrotate(const Quat& q, const Vec3& v) { return rotate(Quat{-q.x, -q.y, -q.z, q.w}, v); }
+inline Vec3 unrotate(const Quat& q, const Vec3& v) {
+  return rotate(Quat{-q.x, -q.y, -q.z, q.w}, v);
+}
 
 // Advance the orientation by a BODY-frame angular velocity (rad/s) over dt (s):
 // q * exp(w dt / 2), exact for a rate held constant over the step. Post-multiplied because the

@@ -29,8 +29,10 @@ struct Heightfield {
 // A zeroed field of cols x rows samples from the origin.
 inline Heightfield create_heightfield(double origin_x, double origin_z, double cell, int cols,
                                       int rows) {
-  return Heightfield{origin_x, origin_z, cell, cols, rows,
-                     std::vector<float>(static_cast<size_t>(cols) * static_cast<size_t>(rows))};
+  return Heightfield{
+      origin_x, origin_z,
+      cell,     cols,
+      rows,     std::vector<float>(static_cast<size_t>(cols) * static_cast<size_t>(rows))};
 }
 
 // The four corners and the weights of the cell a point falls in, after the edge clamp. Both
@@ -58,8 +60,13 @@ inline FieldCell field_cell(const Heightfield& f, double x, double z) {
   const size_t ir1 = r0 < max_r ? ir0 + 1 : ir0;
   const size_t cols = static_cast<size_t>(f.cols);
   const float* d = f.data.data();
-  return FieldCell{d[ir0 * cols + ic0], d[ir0 * cols + ic1], d[ir1 * cols + ic0],
-                   d[ir1 * cols + ic1], cx - c0, cz - r0, true};
+  return FieldCell{d[ir0 * cols + ic0],
+                   d[ir0 * cols + ic1],
+                   d[ir1 * cols + ic0],
+                   d[ir1 * cols + ic1],
+                   cx - c0,
+                   cz - r0,
+                   true};
 }
 
 // Bilinear sample at a world point, clamped to the grid's edge.

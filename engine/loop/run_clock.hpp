@@ -25,10 +25,10 @@ namespace ge::loop {
 inline constexpr double kMaxFrameSeconds = 0.1;
 
 struct RunClock {
-  double hz;         // fixed steps per second
-  double dt;         // 1 / hz, s
-  double max_frame;  // the clamp, s
-  double acc = 0;    // unspent frame time, s
+  double hz;           // fixed steps per second
+  double dt;           // 1 / hz, s
+  double max_frame;    // the clamp, s
+  double acc = 0;      // unspent frame time, s
   double dropped = 0;  // frame time the clamp has dropped so far, s (a stutter diagnostic)
   bool paused = false;
 };

@@ -13,7 +13,9 @@ namespace {
 
 using Row = std::vector<uint64_t>;
 
-void check_bool(bool got, const Row& row, size_t at) { CHECK_BITS(got ? 1.0 : 0.0, as_double(row[at])); }
+void check_bool(bool got, const Row& row, size_t at) {
+  CHECK_BITS(got ? 1.0 : 0.0, as_double(row[at]));
+}
 
 void check_opt(const std::optional<double>& got, const Row& row, size_t at) {
   check_bool(got.has_value(), row, at);

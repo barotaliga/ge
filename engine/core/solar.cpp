@@ -122,13 +122,12 @@ SolarCoordinates solar_coordinates(double jd) {
   const double eps0 =
       23.0 + (26.0 + (21.448 - t * (46.815 + t * (0.00059 - t * 0.001813))) / 60.0) / 60.0;
   const double obliquity = eps0 + 0.00256 * cos_d(omega);
-  const double declination =
-      libm::asin(clamp_unit(sin_d(obliquity) * sin_d(longitude))) / kDeg;
+  const double declination = libm::asin(clamp_unit(sin_d(obliquity) * sin_d(longitude))) / kDeg;
   const double y = libm::pow(tan_d(obliquity / 2.0), 2.0);
   const double equation_of_time =
-      (4.0 / kDeg) * (y * sin_d(2.0 * l0) - 2.0 * e * sin_d(m) +
-                      4.0 * e * y * sin_d(m) * cos_d(2.0 * l0) - 0.5 * y * y * sin_d(4.0 * l0) -
-                      1.25 * e * e * sin_d(2.0 * m));
+      (4.0 / kDeg) *
+      (y * sin_d(2.0 * l0) - 2.0 * e * sin_d(m) + 4.0 * e * y * sin_d(m) * cos_d(2.0 * l0) -
+       0.5 * y * y * sin_d(4.0 * l0) - 1.25 * e * e * sin_d(2.0 * m));
   return SolarCoordinates{declination, equation_of_time, wrap360(longitude), obliquity};
 }
 
@@ -242,8 +241,7 @@ MoonOrbit lunar_coordinates(double jd) {
          0.035 * sin_d(dd) - 0.031 * sin_d(m + ms) - 0.015 * sin_d(2.0 * f - 2.0 * dd) +
          0.011 * sin_d(m - 4.0 * dd);
   lat += -0.173 * sin_d(f - 2.0 * dd) - 0.055 * sin_d(m - f - 2.0 * dd) -
-         0.046 * sin_d(m + f - 2.0 * dd) + 0.033 * sin_d(f + 2.0 * dd) +
-         0.017 * sin_d(2.0 * m + f);
+         0.046 * sin_d(m + f - 2.0 * dd) + 0.033 * sin_d(f + 2.0 * dd) + 0.017 * sin_d(2.0 * m + f);
   r += -0.58 * cos_d(m - 2.0 * dd) - 0.46 * cos_d(2.0 * dd);
   lon = wrap360(lon);
   const double ecl = 23.4393 - 3.563e-7 * d;
