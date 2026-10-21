@@ -66,6 +66,8 @@ the row when the file moves.
 | `plugins/mountain/mapgen/network.hpp` | `game5/engine/mapgen/network.ts` |  |
 | `plugins/mountain/mapgen/network_build.cpp` | `game5/engine/mapgen/network-build.ts` |  |
 | `plugins/mountain/mapgen/network_build.hpp` | `game5/engine/mapgen/network-build.ts` |  |
+| `plugins/mountain/mapgen/network_stamp.cpp` | `game5/engine/mapgen/network-build.ts` | networkStamp onCore stampRun pastJunction |
+| `plugins/mountain/mapgen/network_stamp.hpp` | `game5/engine/mapgen/network-build.ts` | networkStamp onCore stampRun NetworkStamp |
 | `plugins/mountain/mapgen/query.cpp` | `game5/engine/mapgen/query.ts` | nearestTrackPoint nearestWithin |
 | `plugins/mountain/mapgen/query.hpp` | `game5/engine/mapgen/query.ts` | nearestTrackPoint nearestWithin trackPointAt |
 | `plugins/mountain/mapgen/regions.cpp` | `game5/engine/mapgen/regions.ts` | REGIONS treeKindAt scaleCount |
@@ -74,6 +76,7 @@ the row when the file moves.
 | `plugins/mountain/mapgen/resort.hpp` | `game5/engine/mapgen/resort.ts` | planResort placeStations ROAD_ROW LiftPlan |
 | `plugins/mountain/mapgen/resort_build.cpp` | `game5/engine/mapgen/resort-build.ts` | attemptResort layChain pressPads |
 | `plugins/mountain/mapgen/resort_build.hpp` | `game5/engine/mapgen/resort-build.ts` | attemptResort buildResort ResortAttempt |
+| `plugins/mountain/mapgen/resort_graded.cpp` | `game5/engine/mapgen/resort-build.ts` | attemptResort scaledRow |
 | `plugins/mountain/mapgen/resort_rules.hpp` | `game5/engine/mapgen/resort-rules.ts` | RESORT_RULES TREE_LINE_MASSIF |
 | `plugins/mountain/mapgen/rules.hpp` | `game5/engine/mapgen/rules.ts` | LEVEL_RULES inBand withinBand bendFloor |
 | `plugins/mountain/mapgen/run_start.cpp` | `game5/engine/mapgen/run-start.ts` |  |

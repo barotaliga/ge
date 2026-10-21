@@ -21,9 +21,10 @@
 namespace ge::mountain::mapgen {
 
 // R17 — deal the drifted stretches of a piste `length` m long, clear of the start, the finish,
-// every on-piste kicker and every drop, a `share` of it (the grade's).
+// every on-piste kicker, every drop and every `keep_off` stretch, a `share` of it (the grade's).
 std::vector<Drift> deal_drifts(uint32_t sub, double length, std::span<const Kicker> kickers,
-                               Band share, std::span<const Cliff> drops);
+                               Band share, std::span<const Cliff> drops,
+                               std::span<const ArcSpan> keep_off = {});
 
 // How deep a drift lies at arc s, 0 (groomed) … 1 (a drift's core).
 double drift_at(std::span<const Drift> drifts, double s);

@@ -28,7 +28,8 @@ constexpr int kTries = 60;
 }  // namespace
 
 std::vector<Drift> deal_drifts(uint32_t sub, double length, std::span<const Kicker> kickers,
-                               Band share, std::span<const Cliff> drops) {
+                               Band share, std::span<const Cliff> drops,
+                               std::span<const ArcSpan> keep_off) {
   ge::core::Rng rng = ge::core::make_rng(sub ^ kDriftSalt);
   const double target = in_band(rng, share) * length;
   // The stretches no drift (with its ease) may touch: each kicker's ramp and landing and each
@@ -38,6 +39,7 @@ std::vector<Drift> deal_drifts(uint32_t sub, double length, std::span<const Kick
     if (k.on_track && k.s) kept.push_back({*k.s - k.ramp, *k.s + k.landing});
   }
   for (const Cliff& d : drops) kept.push_back({*d.s - d.shelf, *d.s + d.face + d.landing});
+  for (const ArcSpan& k : keep_off) kept.push_back({k.from, k.to});
   std::vector<Drift> drifts;
   double laid = 0;
   const double lo = D::clear + D::fade;

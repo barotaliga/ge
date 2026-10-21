@@ -26,12 +26,23 @@
 #include "mountain/mapgen/links.hpp"
 #include "mountain/mapgen/net_index.hpp"
 #include "mountain/mapgen/network.hpp"
+#include "mountain/mapgen/network_stamp.hpp"
 #include "mountain/mapgen/regions.hpp"
 #include "mountain/mapgen/resort.hpp"
 #include "mountain/mapgen/station_pad.hpp"
 #include "mountain/mapgen/terrain.hpp"
 
 namespace ge::mountain::mapgen {
+
+// A run that stands once graded and pressed: its walk, the colour it measures on the pressed
+// mountain (a lane's is green), and what was laid down it.
+struct BuiltRun {
+  WalkedRun walked;
+  PisteGrade grade = PisteGrade::green;
+  std::vector<Kicker> kickers;
+  std::vector<Cliff> drops;
+  std::vector<Drift> drifts;
+};
 
 // One attempt at a resort: everything the build keeps between its stages.
 struct ResortAttempt {
@@ -60,6 +71,14 @@ struct ResortAttempt {
   std::vector<RampRoom> rooms;
   // 3b. what the lanes and drags laid for access did, and the pistes left out for it
   AccessLaid access;
+  // 4. the runs that stand, graded and pressed in walk order and numbered among themselves (a
+  // merge names the run it joins by its place here), the packed field, the press's shared mask,
+  // and the index every later stage keeps off (over `built`; `walking` is spent)
+  std::deque<BuiltRun> built;
+  ge::core::Heightfield packed{};
+  NetworkStamp stamp;
+  NetIndex net;
+  int dropped = 0;  // runs left out by the grading
 };
 
 // A step's answer: why the attempt is refused, or nothing to go on.
@@ -85,5 +104,12 @@ StageResult resort_pistes(ResortAttempt& a);
 // 3b. THE LANES BETWEEN THE RUNS (R27, R29): the link lanes and drag lifts that make every piste
 // skiable again and reach every lift, then the branch lanes between the sectors.
 StageResult resort_links(ResortAttempt& a);
+
+// 4. THE RUNS GRADED AND PRESSED, IN ORDER (R8, R9, R17, R23, R24, R27): each run graded onto
+// the mountain as the runs before it left it (a merging run onto the other's surface), its drops,
+// kickers and drifts laid, and pressed in; a run that will not grade is left out, and every run
+// merging into it or leaving it with it. Then the pads pressed again at their levels, and every
+// run's colour measured on the pressed mountain. Refused when too few pistes stand.
+StageResult resort_graded(ResortAttempt& a);
 
 }  // namespace ge::mountain::mapgen

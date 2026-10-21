@@ -1,13 +1,13 @@
-# seed region attempt, then each section of the area built (mapgen_resort_test)
-1 maritime 0 stage=links ground=aa03881b lifts=b9018016 pads=4facc112 runs=12 walked=c8190b62 rooms=2befb56d lost=0 rng=3184323342
-1 maritime 1 stage=links ground=155308cc lifts=fc98ad5f pads=0ac1957d runs=13 walked=cf420386 rooms=b89d589f lost=0 rng=884981742
-2 alpine 0 stage=links ground=4690e204 lifts=70df8ccc pads=132c91b6 runs=10 walked=e5a2bc94 rooms=557c2ec8 lost=0 rng=450004472
-2 alpine 1 stage=links ground=0e7062a3 lifts=f02c2229 pads=6a5fafa5 runs=10 walked=f5900595 rooms=7a1570d0 lost=0 rng=3506570820
-3 fell 0 stage=links ground=75c0f22b lifts=e48418e1 pads=85821e41 runs=14 walked=ca4181ab rooms=1c52c09a lost=0 rng=3616759123
-3 fell 1 stage=links ground=67bd507a lifts=d25004bd pads=619707e5 runs=10 walked=41289e1b rooms=27139788 lost=0 rng=2081381090
-4 continental 0 stage=links ground=c435ac8e lifts=1da2026f pads=e1211346 runs=10 walked=a6f84605 rooms=215ed144 lost=0 rng=4188899100
-4 continental 1 stage=links ground=f6abd443 lifts=b4d433a4 pads=64331c64 runs=11 walked=bff3bb05 rooms=4a46c63f lost=0 rng=3322323531
-38 alpine 0 stage=links ground=638c87b7 lifts=328050cd pads=ddea2d28 runs=11 walked=85a9671f rooms=bfe5b81e lost=0 rng=1352757566
-38 alpine 1 stage=links ground=79d26a2e lifts=16b2a094 pads=6fed5d30 runs=10 walked=01a443ff rooms=c0c43d69 lost=0 rng=3111101871
-7 maritime 0 stage=links ground=5b673f96 lifts=4483bc61 pads=5ec6c42e runs=12 walked=63a32b79 rooms=fb221ec6 lost=0 rng=656980668
-7 maritime 1 stage=links ground=5da23dcc lifts=0f6eddf0 pads=575a6121 runs=12 walked=72bef72d rooms=f81ad654 lost=0 rng=2480180876
+# seed region attempt, then each section of the area built (mountain_resort_build_test)
+1 maritime 0 stage=graded ground=964026fa lifts=b9018016 pads=4facc112 runs=11 walked=811c9dc5 rooms=2befb56d lost=0 built=b0efbb5f packed=f0eac888 rng=1772456799
+1 maritime 1 stage=graded ground=c2ba2bae lifts=fc98ad5f pads=0ac1957d runs=13 walked=811c9dc5 rooms=b89d589f lost=0 built=adcbcc5d packed=071c00c3 rng=736786539
+2 alpine 0 stage=graded ground=d28c0f24 lifts=70df8ccc pads=132c91b6 runs=10 walked=811c9dc5 rooms=557c2ec8 lost=0 built=04434f9c packed=50f2d81c rng=2803092252
+2 alpine 1 stage=graded ground=114c1633 lifts=f02c2229 pads=6a5fafa5 runs=8 walked=811c9dc5 rooms=7a1570d0 lost=0 built=5874c247 packed=5f855787 rng=718303143
+3 fell 0 stage=graded ground=7dd14533 lifts=e48418e1 pads=85821e41 runs=14 walked=811c9dc5 rooms=1c52c09a lost=0 built=f2ae12bf packed=db725e31 rng=2648235456
+3 fell 1 stage=graded ground=00e10f34 lifts=d25004bd pads=619707e5 runs=10 walked=811c9dc5 rooms=27139788 lost=0 built=7e02dea7 packed=0111c757 rng=526479553
+4 continental 0 stage=graded ground=12f9a25b lifts=1da2026f pads=e1211346 runs=10 walked=811c9dc5 rooms=215ed144 lost=0 built=262ec235 packed=b2666a9b rng=479394968
+4 continental 1 stage=graded ground=c3d532a5 lifts=b4d433a4 pads=64331c64 runs=9 walked=811c9dc5 rooms=4a46c63f lost=0 built=033cb8fb packed=9a278b01 rng=3997787589
+38 alpine 0 stage=graded ground=39a4ff37 lifts=328050cd pads=ddea2d28 runs=11 walked=811c9dc5 rooms=bfe5b81e lost=0 built=4e78fb83 packed=7e779c6a rng=3550988549
+38 alpine 1 stage=graded ground=c0e650dc lifts=16b2a094 pads=6fed5d30 runs=9 walked=811c9dc5 rooms=c0c43d69 lost=0 built=e51830bc packed=42b8c29a rng=3572013438
+7 maritime 0 stage=graded ground=066917fa lifts=4483bc61 pads=5ec6c42e runs=12 walked=811c9dc5 rooms=fb221ec6 lost=0 built=8da90fb6 packed=383f533f rng=1053951038
+7 maritime 1 stage=graded ground=b3f4ebb8 lifts=0f6eddf0 pads=575a6121 runs=12 walked=811c9dc5 rooms=f81ad654 lost=0 built=30f35460 packed=0839570a rng=2098949785
