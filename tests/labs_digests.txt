@@ -2,8 +2,13 @@
 analyze 06a600c2252d9fef
 frame-pace c5058023a52812c3
 gpu-capture 8b5d5e3b7be5a4fc
+junctions 036999ca677e12e6
 level 4490929c4816a055
 mapgen-cost 3baf51b6907817f3
 noise 3d3a828834f144cb
+play 1cc3e19bd8dced06
+resort f82a1fca6fb6ba42
+ride f7dc714b2493f95a
 run-clock 81607c7ac1161166
+sim a9c6d0f6bb29ce2a
 world b4b7834e61746dc9

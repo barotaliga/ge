@@ -42,9 +42,9 @@ its words) and `fail` (what failed and the next action, in the
 | Kind | What it does | Today |
 | --- | --- | --- |
 | `sim` | Headless runs of the real code over seeds or a sweep. Numbers and tables. | `analyze`, `run-clock` |
-| `scenario` | One staged situation, such as a skier placed at a moment on a synthetic slope with a scripted input, measured exactly. | M5 (below) |
+| `scenario` | One staged situation, such as a skier placed at a moment on a synthetic slope with a scripted input, measured exactly. | `ride` |
 | `picture` | A captioned picture of a subject. It is drawn on the CPU raster now, and from M7 it is a GPU frame read back. | `level`, `noise` |
-| `drive` | A pilot plays the game, either the bot or an agent over stdio. The run is the report, and the control tape is the replay. | M5 (below) |
+| `drive` | A pilot plays the game, either the bot or an agent over stdio. The run is the report, and the control tape is the replay. | `sim`, `play` |
 | `bench` | What something costs. Its wall-clock metrics are `measured`, which means they are printed and compared but never put in the digest. | `mapgen-cost` |
 
 ### Where labs live, and how they register
@@ -180,17 +180,18 @@ lab.shot({"chase-12", "CHASE AT 12 S", "...", "...", inputs}, capture(view, spec
   the lab says it is stable (a software adapter on CI). Otherwise its pixels are left out
   of the digest, while its metrics still count.
 
-## Scenario labs (M5)
+## Scenario labs
 
 A scenario stages ONE exact situation instead of skiing into it: a hand-built map (a
 synthetic slope with a kicker, rollers and a lone tree, or a flat drag strip of packed snow
-or powder), a moment to stand the skier at (`place_run`: position, heading, speed, height,
-attitude, the gate owed), a scripted input as a function of run time and state, a length in
-seconds, and the numbers that say how it went (`lab.metric`).
+or powder: `plugins/skier/synthetic.hpp`), a moment to stand the skier at (`stand_skier`:
+position, heading, speed, height over the snow), a scripted input as a function of run time and
+state, a length in seconds, and the numbers that say how it went (`lab.metric`).
 
-A scenario lab is a table of these (one `LabSpec`, with `--scenario=<id>` choosing a row),
-so `make lab LAB=ride ARGS=--scenario=kicker` stages the kicker taken at a known speed. The
-same rows back the physics tests, so a scenario is written once and is both a test and a lab.
+A scenario lab is a table of these (one `LabSpec`, with `--scenario=<id>` choosing a row), so
+`make lab LAB=ride ARGS=--scenario=kicker` stages the kicker taken at a known speed. The same
+rows (`plugins/skier/scenarios.cpp`) back the physics tests
+(`tests/skier_scenarios_test.cpp`), so a scenario is written once and is both a test and a lab.
 
 ## Drive labs: the bot, the rivals and agents at the controls (M5)
 
@@ -203,24 +204,36 @@ for each step:  input = pilot(state)  →  tape.record(input)  →  step(state, 
 report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 ```
 
-- **The bot** (`games/fall_line/sim/bot`) is a pilot. The `sim` drive lab rides it over
-  seeds and prints the run report table (finish, time, gates, crashes, digest). Its digests
-  are M5's exit.
-- **Rivals** are bots with profiles, on the same grid, through the same `step`.
+- **The bot** (`games/fall_line/sim/bot.hpp`) is a pilot. The `sim` drive lab (`make sim`)
+  rides it over seeds and prints the run report table (finish, time, gates, crashes, digest)
+  with its line drawn on each map; `simulate.hpp` is the one loop every pilot drives, and
+  `tests/fall_line_sim_test.cpp` holds its digests golden.
+- **Rivals** are bots with profiles (`Rider`: a pace off a stream of the map's seed, a lane off
+  the grid slot), on the same grid, through the same `step`; `make sim ARGS=--rivals=3` prints
+  the field table (`games/fall_line/sim/field.hpp`).
 - **Every drive is recorded on the control tape** (`plugins/racing/tape.hpp`, the format a
   ghost and a replay use). A drive's seed, options and tape reproduce it exactly, so any
   run (a bot's, an agent's, a player's) becomes a repro or a scenario.
-- **An agent at the controls**: `labs play --stdio` runs a game under a line protocol, with
-  one JSON object a line in each direction, so an agent can playtest without a screen:
+- **An agent at the controls**: `labs play --quiet --stdio` runs a game under a line protocol,
+  with one JSON object a line in each direction, so an agent can playtest without a screen
+  (`--seed`, `--rivals`; the runner's `--quiet` keeps stdout to the protocol). The session
+  opens with a `hello` line (the seed, the field, the gates, the piste's length, the step rate,
+  the ops). The protocol is stated once in `games/fall_line/sim/play.hpp`:
 
   | Agent sends | Engine answers |
   | --- | --- |
-  | `{"op":"observe"}` | the run time, speed, place, the gate owed and its bearing, the events since the last observe |
-  | `{"op":"act","input":{...},"steps":n}` | the state after n steps with that input held |
+  | `{"op":"observe"}` | the clock and step; where he is, his heading, speed and edge, on the snow or in the air, down or not; the gate owed, its bearing off his heading (+ right) and its distance; where he stands on the piste (`piste_lateral`, `piste_width`, `piste_heading`, `piste_bend` over the next 30 m); finished and the finish time; his place in the field; his events since the last answer |
+  | `{"op":"act","input":{"steer":s,"tuck":t,"brake":b,"jump":j,"reset":r},"steps":n}` | the observation after n steps (1 to 1200) with that input held; every input key is optional, and `reset` is taken on the first step |
   | `{"op":"shot","view":"chase"}` (M7) | the path of a captioned picture of that view now |
-  | `{"op":"tape"}` | the tape so far, base64: the run as a replay |
-  | `{"op":"end"}` | the drive's report and digest |
+  | `{"op":"tape"}` | the tape so far, one base64 stream per axis: the run as a replay |
+  | `{"op":"end"}` | the drive's report and digest; the session ends |
 
+  A line the session cannot use answers `{"op":"error","error":...,"next":...}`: what was wrong
+  and what to send instead. Numbers are fixed-point text to three decimals. The session drives
+  the same step as the bot (`Driver`), so an agent's tape played back with the same rivals is
+  its run again, and an agent that sends the bot's moves rides the bot's run to the bit
+  (`tests/fall_line_play_test.cpp`). Without `--stdio`, the `play` lab has the bot play through
+  the protocol's text and checks exactly that; `--script=<file>` plays a file's lines.
   Two agents (or an agent and the bot) racing one map is two pilots on one grid. The
   protocol carries only what a player could know, so an agent's playtest is a player's
   run.
@@ -234,12 +247,13 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 | `level` | picture | plugin:mountain | `plugins/mountain/mapgen` | M4a (now) |
 | `analyze` | sim | plugin:mountain | `plugins/mountain/analysis` | M4a (now) |
 | `mapgen-cost` | bench | plugin:mountain | `plugins/mountain/mapgen` | M4a (now) |
-| `resort`, `junctions` | picture | plugin:mountain | the ski area | M4b3d |
+| `resort` | picture | plugin:mountain | `plugins/mountain/mapgen/resort_build.hpp` (the ski area, its courses) | M4b3d (now) |
+| `junctions` | picture | plugin:mountain | `plugins/mountain/mapgen/network_stamp.cpp` (where runs meet) | M4b3d (now) |
 | `routes`, `skijump-hills` | picture | plugin:mountain | the routes, the jump hills | M4c |
 | `real-faces` | picture | plugin:mountain | the real faces | M4d |
-| `sim` | drive | game:fall_line | the step, the bot | M5 |
-| `ride` | scenario | plugin:skier | the skier on the snow | M5 |
-| `play` | drive | engine | an agent over stdio | M5 |
+| `sim` | drive | game:fall_line | `games/fall_line/sim` (the step, the course, the bot, the field) | M5b–M5c (now) |
+| `ride` | scenario | plugin:skier | `plugins/skier` (`step_skier`, the snow, the limits) | M5a (now) |
+| `play` | drive | game:fall_line | `games/fall_line/sim/play` (an agent over stdio) | M5c (now) |
 | `gpu-capture` | picture | engine | `engine/gpu` (the headless capture) | M6 (now) |
 | `frame-pace` | bench | engine | the platform's frame loop | M6 (now) |
 | `world` | picture | game:fall_line | Fall Line's frame from named views of a seed (`games/fall_line/labs/gpu_world_lab.cpp`) | M7a (now) |

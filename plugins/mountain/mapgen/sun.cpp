@@ -9,6 +9,8 @@
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "core/num.hpp"
+#include "core/prng.hpp"
+#include "core/solar.hpp"
 
 namespace ge::mountain::mapgen {
 
@@ -39,6 +41,22 @@ DealtSun deal_sun(ge::core::Rng& rng, Band latitude, Band day_of_year) {
   }
   // The band's own southern edge in its latest week always has a noon.
   return {12, day_of_year.max, latitude.min};
+}
+
+namespace {
+
+// Salt on the attempt's sub-seed for the face's bearing's own stream.
+constexpr uint32_t kFacingSalt = 0x5a1f0ce;
+
+}  // namespace
+
+double face_the_sun(uint32_t sub, const DealtSun& sun) {
+  ge::core::Rng rng = ge::core::make_rng(sub ^ kFacingSalt);
+  const ge::core::SunPlace at =
+      ge::core::sun_at(sun.hour, sun.latitude, declination_of(sun.day_of_year));
+  const double heading = at.azimuth + ge::core::range(rng, -rules::sun::facing, rules::sun::facing);
+  const double t = num::mod(heading, 2 * kPi);
+  return t < 0 ? t + 2 * kPi : t;
 }
 
 }  // namespace ge::mountain::mapgen

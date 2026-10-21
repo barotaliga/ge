@@ -1,9 +1,10 @@
 # Every tests/<topic>_test.cpp becomes its own executable and CTest case.
 # New test file = new topic; nothing to register by hand.
 file(GLOB GE_TEST_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/*_test.cpp)
-# Every test links the engine and every plugin, so a plugin's tests (tests/<plugin>_*_test.cpp)
-# need no wiring either.
+# Every test links the engine, every plugin and every game's simulation, so a plugin's tests
+# (tests/<plugin>_*_test.cpp) need no wiring either.
 get_property(GE_PLUGIN_TARGETS GLOBAL PROPERTY GE_PLUGIN_TARGETS)
+get_property(GE_GAME_TARGETS GLOBAL PROPERTY GE_GAME_TARGETS)
 # tests/gpu_*_test.cpp need GE_GPU and link ge_gpu (tests/render_*_test.cpp link ge_render);
 # tests/platform_*_test.cpp need GE_PLATFORM and GE_GPU (a window is only worth opening to present to). Either kind exits 77 (CTest's
 # SKIP) when the machine cannot run it (no adapter, no display), except where the environment
@@ -29,7 +30,8 @@ foreach(src ${GE_TEST_SOURCES})
     set(extra ge_platform ge_gpu)
   endif()
   add_executable(${name} ${src} main.cpp)
-  target_link_libraries(${name} PRIVATE ge_core ge_lab ${GE_PLUGIN_TARGETS} ${extra})
+  target_link_libraries(${name} PRIVATE ge_core ge_lab ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
+    ${extra})
   target_compile_definitions(${name} PRIVATE GE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
   add_test(NAME ${name} COMMAND ${name})
   if(extra)

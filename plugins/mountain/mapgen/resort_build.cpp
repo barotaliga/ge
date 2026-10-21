@@ -121,6 +121,25 @@ ResortAttempt begin_resort(double seed, int attempt, uint32_t sub, const Region&
   return a;
 }
 
+StageResult build_resort(ResortAttempt& a, std::string& reached) {
+  using Stage = StageResult (*)(ResortAttempt&);
+  struct Step {
+    Stage run;
+    const char* name;
+  };
+  static constexpr Step kSteps[] = {
+      {resort_mountain, "mountain"}, {resort_pads, "pads"},     {resort_pistes, "pistes"},
+      {resort_links, "links"},       {resort_graded, "graded"}, {resort_access, "access"},
+      {resort_features, "features"}, {resort_woods, "woods"},   {resort_courses, "courses"},
+  };
+  reached.clear();
+  for (const Step& s : kSteps) {
+    if (StageResult why = s.run(a)) return why;
+    reached = s.name;
+  }
+  return std::nullopt;
+}
+
 StageResult resort_mountain(ResortAttempt& a) {
   a.plan = plan_massif(a.rng, *a.region);
   a.ground = bake_massif(a.plan);

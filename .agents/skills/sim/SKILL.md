@@ -9,43 +9,71 @@ description: "Use for games/fall_line/sim (Fall Line's own simulation): create_g
 headless, deterministic and platform-free. It may include only `engine/core`, `engine/loop`,
 the plugins it links and itself. What another game of the genre would reuse goes in a plugin
 instead (the `plugins` skill): the generator is `plugins/mountain` (the `mountain` skill), the
-tape and standings `plugins/racing`, and M5's skier on snow is expected to be `plugins/skier`.
+tape and standings `plugins/racing`, and the skier on the snow `plugins/skier` (the `skier`
+skill: `step_skier`, the snow, the limits a bot plans on, the ride scenarios).
 
 ## What it is
 
-- `generate_level(seed, opts)` → `Level`: the heightfield (`ground`, `packed`), the open
-  piste (`track`, a point every 2 m), the `checkpoints` (start gate through finish),
-  the spawn and grid, the trees, kickers, the sun and the weather. A map is a pure
-  function of its seed: each attempt draws off `sub_seed(seed, attempt)` and is
-  accepted only if `analyze_level` finds it clean.
-- `create_game(opts)` → `GameState`, and `step(state, input)` advances exactly one
-  1/120 s step and leaves its events on `state.events`.
-- `sim/` (the bot and `simulate`) drives the same `step` headlessly.
+`games/fall_line/sim/` (`fall_line::sim`, target `fall_line_sim`, linked by the labs and the
+tests):
 
-While porting, `porting/subsystems.md` § sim says what to read in the reference before a
-system is carried over.
+| File | What |
+| --- | --- |
+| `state.hpp` | `GameState` (the map, the trees' index, the pair, the racers, this step's events, the clock), `Racer`, `Rider` (a bot's pace and lane), `Progress`, `Controls`, the events; `kHz` = 120 |
+| `game.hpp/.cpp` | `race_map(seed)` (v1, the single piste), `create_game`, `create_game_on`, `step` (THE ORDER of a step, stated once in the header), `state_hash` |
+| `course.hpp/.cpp` | The gates in order, a miss, the finish's clock inside its step, the reset (`reset_racer`), `bearing_to_next` |
+| `controls.hpp` | The control tape's schema (steer, tuck, brake, flags) and `snap_controls` |
+| `bot.hpp/.cpp` | `plan_bot` (the speed plan off `skier/limits.hpp`) and `bot_controls` (pure pursuit of the racer's lane, brake over the plan at his pace, tuck under it) |
+| `field.hpp/.cpp` | The rivals: `deal_field` (each rival's pace off a stream of the map's seed, his lane off his grid slot), `meet_racers` (skier against skier: the shoulder), `standings` and `place_of` (off `plugins/racing`) |
+| `simulate.hpp/.cpp` | `Driver` (THE ONE STEP every pilot drives: snapped, taped, the rivals' bots, `step`, hashed), `simulate`, `simulate_on`, `replay_tape`, the `RunReport` and its `FieldRow`s |
+| `play.hpp/.cpp` | `PlaySession`: an agent at the controls over JSON lines (`hello`, `observe`, `act`, `tape`, `end`); THE PROTOCOL is stated once in its header |
 
-## Order of work (docs/goals.md M4 → M5)
+The generator is `plugins/mountain` (the `mountain` skill); a map is a pure function of its
+seed. The skier on the snow is `plugins/skier` (the `skier` skill).
 
-1. `mapgen`: the `mountain` skill (M4a–M4d).
-2. `game`: classify each file first (the `plugins` skill), then state, then skier physics (`skier`, `suspension`, `snow`, `poles`,
-   `flight`, `chassis`), then collision, course, run and step. Each is held by a per-step
-   state hash on synthetic levels (a hand-built slope and a flat strip, built first) and
-   then on generated ones.
-3. `sim`: the bot and `simulate`, which gives the `sim` CLI (`tools/sim/`) printing the
-   `RunReport` table. Its digests are golden.
+## Order of work
+
+1. The skier on the snow: `plugins/skier` (M5a, done).
+2. The run: the state, the course, the step, the bot, `simulate` and the `sim` lab (M5b, done).
+3. The field and an agent at the controls: rivals on one grid, skier against skier, the
+   standings off `plugins/racing`, and the `play` lab over stdio (M5c, done).
+4. Next: the modes and their rules (the race formats) arrive with the app's cards (M10); the
+   ski area's maps (M4b) are raced once `race_map` is asked for v8 and up.
 
 ## Rules
 
-- The order of systems inside `step` is fixed and part of the digest.
-- No allocation in `step`. `GameState` holds fixed-capacity storage sized at create.
-- Tuning numbers live in `defs/` tables (`tuning`, `skis`, `race`), with their units.
-- The renderer and the app never write `GameState`.
+- **The order of systems inside `step` is stated once in `game.hpp` and is part of every
+  digest.** A change to it, to the course, to the bot or to the skier moves
+  `tests/golden/fall_line_sim.txt`: run `make sim` before and after (`ARGS=--tag=before`, then
+  `--compare=before`), rewrite the golden with
+  `GE_GOLDEN_WRITE=1 build/release/tests/fall_line_sim_test` (and `fall_line_field_test` for
+  the field), and put both tables in the PR (`make sim ARGS=--rivals=3` for the field's).
+- **The bot plans on the skier's limits** (`skier/limits.hpp`), never on a ceiling of its own;
+  its own numbers are `bot::` constants in `bot.hpp`, each with its unit.
+- **Every pilot drives through `Driver::step`** (the bot, a tape, an agent): the player's
+  controls are snapped onto the tape's grid before `step` sees them, so a tape played back
+  (with the same number of rivals) is the run again. Only the player is taped: a rival's
+  controls are a pure function of the run.
+- **The play protocol is stated once**, in `play.hpp`'s header, and mirrored in
+  `docs/labs.md` § An agent at the controls. An observation carries only what a player could
+  know. A new op or field changes both and `tests/fall_line_play_test.cpp`.
+- No allocation in `step`: the racers are sized at create and the events reserved.
+- Nothing in a step draws a random number: the field's only draws (the rivals' paces) are
+  made once, in `deal_field`, off a stream of the map's seed. The renderer and the app never
+  write `GameState`.
+- The field is at most the grid's slots (`create_game_on` caps it), the player first.
 - `engine/loop/run_clock.hpp` is the run clock: the clamp (`kMaxFrameSeconds` = 0.1),
   whole steps, and `alpha` for interpolation only.
 
 ## Labs
 
-`run-clock` covers the run clock (the generator's labs are the `mountain` skill's). M5 lands
-the `sim` drive lab (the bot over seeds), the `ride` scenario lab and `play` (an agent over
-stdio); their design is `docs/labs.md`. The `labs` skill owns how.
+`sim` (drive, `games/fall_line/labs/sim_lab.cpp`): the bot over seeds (`make sim SEEDS=38`, the
+reference seeds by default), the run report table and each run's line drawn on its map; a seed
+not finished fails the lab. It is Fall Line's headless sim CLI; `--rivals=3` puts a field on
+the grid and adds the field table (every racer's pace, lane, place and shoulders).
+
+`play` (drive, `games/fall_line/labs/play_lab.cpp`): an agent at the controls.
+`build/debug/labs play --quiet --stdio --seed=38 --rivals=3` puts the protocol on stdio;
+`--script=<file>` plays a file's lines; with neither, the bot plays through the protocol's own
+text and its tape must replay to the session's digest. `run-clock` covers the run clock, `ride`
+the skier (the `skier` skill). The `labs` skill owns how.

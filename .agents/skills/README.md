@@ -45,3 +45,4 @@ One skill per plugin, named after it (`docs/architecture.md` § Plugins).
 | --- | --- |
 | `racing` | `plugins/racing`: the control tape, the record book's policy, the standings |
 | `mountain` | `plugins/mountain`: the generated ski mountain, its generator and its rule book |
+| `skier` | `plugins/skier`: the skier on the snow, its limits, the hand-built maps and the ride scenarios |

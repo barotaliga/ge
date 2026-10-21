@@ -1,0 +1,10 @@
+# seed finished time-bits gates missed resets wipeouts flights digest (fall_line_sim_test, the bot, generator v1)
+38 1 406df5e817eab837 27 0 0 0 2 f881694eb8a19b3f
+1 1 406ccf156054cf31 28 0 0 0 4 115b94db49a6b3d7
+2 1 4070224e42ed721e 28 0 0 0 6 e71f3cd99ca55c5a
+3 1 406a2c3ca3ae4c80 27 0 0 0 5 2c5905305270fcd9
+4 1 406aa3a5758131d5 27 0 0 0 2 93c14d6cefa11ee7
+5 1 406d9e59da1f514e 27 0 0 0 2 56be49a4f35dde2d
+6 1 40706e0ef2bdf63a 28 0 0 0 3 b23abb34b0cede5c
+7 1 406c331e116f92cd 26 0 0 0 3 acba9e2f63c1f265
+8 1 406be6553a88b97d 27 0 0 0 4 d96deebae6b67d00

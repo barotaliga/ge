@@ -19,7 +19,7 @@ place an answer lives, and has to change it safely.
 A C++20 game engine: fast, deterministic to the bit, and built for agents. Its first game
 is **Fall Line**, a downhill skiing game, which stays in the tree as the demo game
 (`games/fall_line/`). **It is not a ski engine**: generic code is in
-`engine/`, what a genre or a world shares (racing, the generated ski mountain) is in
+`engine/`, what a genre or a world shares (racing, the generated ski mountain, the skier on snow) is in
 `plugins/<name>/` for any game of that kind to link, and only Fall Line's own is in
 `games/fall_line/` ([`docs/architecture.md`](docs/architecture.md) § Plugins). **The goal spec and the roadmap are
 [`docs/goals.md`](docs/goals.md).** Every task serves one of its milestone rows and
@@ -128,6 +128,9 @@ make test         # build + ctest
 make fmt          # clang-format in place;  make fmt-check is what CI runs
 make lint         # clang-tidy over the sources (bug-finding checks only)
 make labs         # list the labs;  make lab LAB=level ARGS="--seeds=38" runs one
+make sim SEEDS=38 # the bot down a seed: the run report table and its line on the map (the sim lab)
+make sim ARGS=--rivals=3  # the same with a field of four: the field table, every line drawn
+make play         # an agent at the controls: the play protocol on stdio (games/fall_line/sim/play.hpp)
 make labs-smoke   # every lab at its smoke flags, twice, digests against tests/labs_digests.txt
 make agents-check # symlinks, skills ↔ this router, the 1000-line cap, ge: tags, docs/index.md fresh, lesson fragments
 make index        # regenerate docs/index.md from every file's ge: tags
@@ -168,7 +171,9 @@ and Windows. Releases are dispatched, never hand-made (`release` skill,
 | `plugins/racing/` | The racing primitives (`ge::racing`): `tape.hpp` (the control tape a ghost and a replay are kept on: the axis grid, the RLE + base64 byte format, the recorder, the reader, the map fingerprint), `records.hpp` (the record book's policy: `beats`, `split_gap`, `note_record`), `standings.hpp` (the field's order: `leg_progress`, `field_order`, `place_among`) | `racing` |
 | `plugins/mountain/mapgen/` | The world generator (`ge::mountain::mapgen`): `generate.hpp` (`generate_level`, the attempts, the compile), `digest.hpp` (`level_digest`), `rules.hpp` (the rule book's numbers), `types.hpp` (the `Level`), and every step it calls. v1 (the single piste, M4a), and the ski area (M4b) stage by stage: `resort_build.hpp` (the attempt's state and its stages), `massif.hpp`, `resort.hpp` (the plan), `station_pad.hpp`, `lift_chain.hpp`, `lift_line.hpp`, `resort_rules.hpp` (the ski area's rule book's numbers), the walk (`network.hpp`, `network_build.hpp`, `net_index.hpp`, `run_start.hpp`, `summit_ramps.hpp`) and the lanes and drag lifts that link it (`lanes.hpp`, `access_build.hpp`, `drags.hpp`, `links.hpp`) | `mountain` |
 | `plugins/mountain/analysis/` | The rule book re-checked on a finished map (`ge::mountain::analysis`): `analyze_level` | `mountain` |
-| `games/fall_line/sim/` | Fall Line's own simulation: `create_game`, the step's order, the modes, the bot (M5) | `sim` |
+| `plugins/skier/` | The skier on the snow (`ge::skier`): `skier.hpp` (`step_skier`, the model's order stated once), `snow.hpp` (sink, friction, grip, brake), `limits.hpp` (what a skier can do; a pilot plans on it), `skis.hpp`, `tuning.hpp`, `trees.hpp` (the trunks' grid), `synthetic.hpp` (the hand-built maps), `scenarios.hpp` (the ride scenarios the tests and the `ride` lab share) | `skier` |
+| `games/fall_line/sim/` | Fall Line's own simulation (`fall_line::sim`, the `fall_line_sim` target): `state.hpp` (`GameState`, the events), `game.hpp` (`create_game`, `step`: the step's order stated once), `course.hpp` (gates, a miss, the finish, the reset), `controls.hpp` (the tape's schema, `snap_controls`), `bot.hpp` (the speed plan and the pursuit), `field.hpp` (the rivals' deal, skier against skier, the standings), `simulate.hpp` (`Driver`: the one taped, hashed step; the headless run, `RunReport`, replay), `play.hpp` (an agent at the controls: the line protocol) | `sim` |
+| `games/fall_line/labs/` | Fall Line's labs: `sim` (the bot over seeds, `--rivals` for a field; the headless sim CLI, `make sim`), `play` (an agent at the controls over stdio) | `sim`, `labs` |
 | `games/fall_line/app/` | Fall Line's presentation (`fall_line_app`, spelled `fall_line/app/<file>.hpp`): `frame.hpp` (the game's pass table over engine/render), `look.hpp` (the ground's albedo), `views.hpp` (the named views and the map's day), `main.cpp` (the `fall_line` window: the frame loop on the run clock); then the HUD, the beds | `platform`, `gpu`, `render`, `ui`, `audio` |
 | `tests/` | `<topic>_test.cpp`, one executable each; `check.hpp` (harness), `golden.hpp`, `golden/` | `testing` |
 | `porting/` | The WORKING AREA (above): the porting guide, the porting map, the golden-table generators. Deleted when porting ends | `port` |
@@ -242,6 +247,7 @@ and the directories agree.
 | `plugins` | Deciding where code lives (engine, plugin or game), adding a plugin, moving code between homes |
 | `racing` | `plugins/racing`: the control tape, the record book's policy, the standings |
 | `mountain` | `plugins/mountain`: the generated ski mountain (mapgen, analysis, `level_digest`) |
+| `skier` | `plugins/skier`: the skier on the snow (`step_skier`, the snow, the limits), the hand-built maps, the ride scenarios |
 | `sim` | `games/fall_line/sim`: `create_game`, the step, the bot, the headless sim CLI, the run clock |
 | `platform` | `engine/platform`: SDL3, the window, input, the gamepad, the audio device, files |
 | `gpu` | `engine/gpu`: the native GPU device over Dawn (Dawn's `webgpu.h`), feature tiers, buffers, pipelines and the manifest, WGSL and `make shaders-check` |

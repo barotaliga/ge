@@ -4,8 +4,8 @@ PRESET ?= debug
 # Tracked AND new (untracked, not ignored) files, so a file not yet `git add`ed is formatted too.
 SOURCES := $(shell git ls-files --cached --others --exclude-standard '*.cpp' '*.hpp' 2>/dev/null)
 
-.PHONY: build test fmt fmt-check lint agents-check index find lessons labs lab labs-smoke labs-digests \
-	libm-check release-check shaders-check clean
+.PHONY: build test fmt fmt-check lint agents-check index find lessons labs lab sim play labs-smoke \
+	labs-digests libm-check release-check shaders-check clean
 
 build:
 	cmake --preset $(PRESET)
@@ -45,6 +45,16 @@ labs: build
 
 lab: build
 	$(LABS) $(LAB) $(ARGS)
+
+# Fall Line's headless sim CLI is the `sim` lab: make sim SEEDS=1,2,38 (empty: the reference seeds).
+SEEDS ?=
+sim: build
+	$(LABS) sim $(if $(SEEDS),--seeds=$(SEEDS)) $(ARGS)
+
+# The play protocol on stdio: the build's output goes to stderr, so stdout is the protocol alone.
+play:
+	@$(MAKE) --no-print-directory build >&2
+	@$(LABS) play --quiet --stdio $(ARGS)
 
 labs-smoke: build
 	$(LABS) --all --smoke --repeat=2 --quiet --check-digests=tests/labs_digests.txt
