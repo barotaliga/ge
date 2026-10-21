@@ -114,6 +114,16 @@ notes, where the pictures went, any failures and the digest. Under `previews/<id
 | `index.md` | **The contact sheet**: every picture with its title, caption, what to look for and its inputs. An agent reads this first, then opens the pictures it needs. |
 | `<shot>.png` | The picture with its **caption band** burned in under it. |
 | `<shot>.json` | The shot's words beside the picture. |
+| any attached file | What `lab.attach(name, bytes)` wrote, listed at the foot of the contact sheet: a rendered sound's `<shot>.wav`, for a reader with speakers to hear exactly what was metered. Its bytes are in the digest unless it is `measured`. |
+
+### Sounds
+
+A lab shows a rendered sound with `ge::lab::sound_shot(lab, shot, stereo)` (`engine/lab/sound.hpp`):
+it meters the buffer (`engine/audio/meter.hpp`), writes `<id>.loudest-db`, `.peak-db`,
+`.centroid-hz`, `.onset-s` and `.length-s`, draws one picture (the waveform zoomed to its peak,
+the 10 ms level envelope from -80 to 0 dBFS, the ten octave bands) and attaches the WAV. A session
+that cannot listen reads the sound by those numbers and that picture. The synth renders the same
+bytes on every platform, so a sound's metrics and its WAV are in the digest like a raster's pixels.
 
 ### Captions
 
@@ -259,5 +269,6 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 | `world` | picture | game:fall_line | Fall Line's frame from named views of a seed (`games/fall_line/labs/gpu_world_lab.cpp`) | M7a (now) |
 | `profile` | bench | game:fall_line | a frame's CPU and GPU cost | M7d |
 | `forest`, `snow`, `trails`, `spray`, `skis`, `skier` | picture | game:fall_line | the world drawn | M8 |
-| `audition` | sim | engine | the synth, the beds | M9 |
+| `synth` | sim | engine | `engine/audio` (every voice the synth can play, metered, pictured and written as WAV; the render's cost) | M9a (now) |
+| `audition` | sim | game:fall_line | Fall Line's bank and the skier's beds, metered | M9b |
 | `screenshots` | picture | game:fall_line | the HUD and the cards at 1280x720, 390x844, 844x390 | M10 |

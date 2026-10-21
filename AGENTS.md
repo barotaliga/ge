@@ -128,6 +128,7 @@ make test         # build + ctest
 make fmt          # clang-format in place;  make fmt-check is what CI runs
 make lint         # clang-tidy over the sources (bug-finding checks only)
 make labs         # list the labs;  make lab LAB=level ARGS="--seeds=38" runs one
+make lab LAB=synth # every voice the synth can play, metered, pictured and written as WAV
 make sim SEEDS=38 # the bot down a seed: the run report table and its line on the map (the sim lab)
 make sim ARGS=--rivals=3  # the same with a field of four: the field table, every line drawn
 make play         # an agent at the controls: the play protocol on stdio (games/fall_line/sim/play.hpp)
@@ -160,12 +161,12 @@ and Windows. Releases are dispatched, never hand-made (`release` skill,
 | --- | --- | --- |
 | `engine/core/` | The deterministic pool: `prng.hpp` (mulberry32), `math.hpp` (hypot family, clamp, smoothstep), `libm/` (every transcendental the simulation calls, with the same bits on every platform; vendored, with `LICENSE.md`), `num.hpp` (the simulation's number semantics: rounding, integer wrap, NaN-aware max/min, sign, remainder), `num_text.hpp` (numbers as text, for diagnostic lines), `noise.hpp` (hash2, value noise, the cached field), `heightfield.hpp` (the baked grid and its bilinear reads), `quat.hpp` (orientation; the Euler sign flip), `solar.hpp` (the sun and the moon, by geometry and on a real date), `output.hpp` (the one diagnostic channel; module state) | `determinism` |
 | `engine/loop/` | `run_clock.hpp`: the fixed-step accumulator between the display's frames and the 120 Hz step | `sim` |
-| `engine/lab/` | The lab contract and runner: `lab.hpp` (`LabSpec`, `GE_LAB`, the `Lab` context: metrics, tables, captioned shots, failures, the digest), `runner.hpp` (the `labs` command line: list, run, tag, compare, smoke, repeat, digest baseline), `report.hpp` (report.json, metrics.tsv, the contact sheet), `raster.hpp` (the CPU picture and 5x7 font), `png.hpp`; `labs/` holds the engine's own labs | `labs` |
+| `engine/lab/` | The lab contract and runner: `lab.hpp` (`LabSpec`, `GE_LAB`, the `Lab` context: metrics, tables, captioned shots, attached files, failures, the digest), `sound.hpp` (a rendered sound metered, pictured and attached as WAV), `runner.hpp` (the `labs` command line: list, run, tag, compare, smoke, repeat, digest baseline), `report.hpp` (report.json, metrics.tsv, the contact sheet), `raster.hpp` (the CPU picture and 5x7 font), `png.hpp`; `labs/` holds the engine's own labs | `labs` |
 | `*/labs/` | Labs beside their subject, compiled into the one `labs` executable: `engine/lab/labs/`, `plugins/<name>/labs/`, `games/<name>/labs/` | `labs` |
-| `engine/platform/` | SDL3 (`cmake/SDL.cmake`, `GE_PLATFORM`): `window.hpp` (the window, its native handles, the input snapshot, the frame clock); gamepad, touch, audio and files as their milestones need them. The only place SDL is included | `platform` |
+| `engine/platform/` | SDL3 (`cmake/SDL.cmake`, `GE_PLATFORM`): `window.hpp` (the window, its native handles, the input snapshot, the frame clock), `audio.hpp` (the output stream, pulled on SDL's audio thread; SDL's `dummy` driver headless); gamepad, touch and files as their milestones need them. The only place SDL is included | `platform` |
 | `engine/gpu/` | The native GPU device over Dawn's prebuilt release (`cmake/Dawn.cmake`, `GE_GPU`): `device.hpp` (adapter, feature tiers, error lines), `pipeline.hpp` (shaders, the manifest and its creation counter), `surface.hpp`, `target.hpp` (offscreen targets, readback), `timer.hpp` (GPU ms per pass), `test_scene.hpp`; WGSL embedded by `cmake/Wgsl.cmake`. The only place webgpu.h is included | `gpu` |
 | `engine/render/` | Generic rendering mechanisms (M7–M8; `docs/rendering.md`): `view.hpp` (the `FrameView` a game extracts, the camera, reversed-z), `frame.hpp` (the frame block, the named targets, the pass table and its check, the recorder and stats, layouts), `sky.hpp` (the atmosphere's tables, aerial perspective, the sky pass, group 0), `terrain.hpp` (the GPU-culled heightfield clipmap), `post.hpp`; WGSL beside each, the shared library in `render/wgsl/`. Then shadows, instances, TAA-U | `render` |
-| `engine/audio/` | The synth's DSP graph (M9) | `audio` |
+| `engine/audio/` | The synth (`ge::audio`, M9a): `voice.hpp` (the vocabulary: `Tone`, `Noise`, `LayerSpec`, `LayerTarget`), `synth.hpp` (the DSP graph: one-shots, steered layers, buses, echo, limiter; the producer-to-render ring), `dsp.hpp` (tables, polyBLEP oscillators, the SVF), `sound.hpp` (`SoundDef`, `PlayShape`, `play_def`), `rack.hpp` (a bed's layers), `meter.hpp` (level, bands, centroid, onset, length), `wav.hpp`. Deterministic, no platform; `make libm-check` holds it | `audio` |
 | `engine/ui/` | Immediate-mode 2D and text, plus the dev UI (M10) | `ui` |
 | `plugins/` | Plugins: one directory each, one `ge_add_plugin` call in its `CMakeLists.txt`, built as `ge_<name>`; the build half is `cmake/Plugins.cmake`, the check `tools/check-plugins.mjs` | `plugins` |
 | `plugins/racing/` | The racing primitives (`ge::racing`): `tape.hpp` (the control tape a ghost and a replay are kept on: the axis grid, the RLE + base64 byte format, the recorder, the reader, the map fingerprint), `records.hpp` (the record book's policy: `beats`, `split_gap`, `note_record`), `standings.hpp` (the field's order: `leg_progress`, `field_order`, `place_among`) | `racing` |
@@ -219,6 +220,8 @@ Agents find code by grep, so the tree is built to be grepped:
   `max`/`min`, `sign`, `mod`): `engine/core/num.hpp`; numbers as text (`to_fixed`,
   `to_string`): `engine/core/num_text.hpp`.
 - **The test harness**: `tests/check.hpp`. Bit comparison is `CHECK_BITS`.
+- **The audio rate and format**: `kRate` (48 kHz) in `engine/audio/voice.hpp`, interleaved stereo
+  float; the device converts to the hardware. The faders are the synth's buses (`bus_gain`).
 
 ## Commit and PR conventions
 

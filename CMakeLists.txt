@@ -3,6 +3,8 @@
 #                headers, plus libm, solar and output compiled)
 #   ge_<plugin>  one per plugins/<plugin>/ (cmake/Plugins.cmake): ge_racing (tape, records,
 #                standings), ge_mountain (the generated ski mountain: mapgen, analysis)
+#   ge_audio     the synth: voices, layers, buses, echo, limiter, the meter, WAV bytes
+#                (engine/audio; deterministic, no platform)
 #   ge_lab       the lab framework (engine/lab: the contract, the runner, the raster, the PNG)
 #   fall_line_sim  Fall Line's simulation (games/fall_line: create_game, step, the bot)
 #   labs         the lab executable: every labs/ directory's files (engine, plugins, games)
@@ -82,13 +84,19 @@ elseif(MSVC)
   set_source_files_properties(${GE_LIBM_VENDORED} PROPERTIES COMPILE_OPTIONS "/wd4244;/wd4146;/wd4701;/wd4723")
 endif()
 
+# The synth (M9): plain C++ over the core's libm and stream, so it builds, renders and is
+# metered with no platform; engine/platform's audio device plays it.
+file(GLOB GE_AUDIO_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/audio/*.cpp)
+add_library(ge_audio STATIC ${GE_AUDIO_SOURCES})
+target_link_libraries(ge_audio PUBLIC ge_core)
+
 # The platform and the GPU (M6). Each is optional (GE_PLATFORM, GE_GPU) and nothing else
 # depends on them: the simulation, the plugins and their tests build without either.
 include(cmake/Dawn.cmake)
 include(cmake/SDL.cmake)
 include(cmake/Wgsl.cmake)
 if(GE_PLATFORM)
-  add_library(ge_platform STATIC engine/platform/window.cpp)
+  add_library(ge_platform STATIC engine/platform/window.cpp engine/platform/audio.cpp)
   target_link_libraries(ge_platform PUBLIC ge_core PRIVATE SDL3::SDL3-static)
 endif()
 if(GE_GPU)
@@ -131,8 +139,8 @@ if(PROJECT_IS_TOP_LEVEL)
   # links every plugin, so a plugin's labs need no wiring. Labs are this tree's tooling, never
   # published.
   add_library(ge_lab STATIC engine/lab/lab.cpp engine/lab/report.cpp engine/lab/runner.cpp
-    engine/lab/raster.cpp engine/lab/png.cpp)
-  target_link_libraries(ge_lab PUBLIC ge_core)
+    engine/lab/raster.cpp engine/lab/png.cpp engine/lab/sound.cpp)
+  target_link_libraries(ge_lab PUBLIC ge_core ge_audio)
   file(GLOB GE_LAB_SOURCES CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/engine/lab/labs/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/plugins/*/labs/*.cpp
@@ -155,7 +163,7 @@ if(PROJECT_IS_TOP_LEVEL)
   get_property(GE_PLUGIN_TARGETS GLOBAL PROPERTY GE_PLUGIN_TARGETS)
   get_property(GE_GAME_TARGETS GLOBAL PROPERTY GE_GAME_TARGETS)
   add_executable(labs engine/lab/main.cpp ${GE_LAB_SOURCES})
-  target_link_libraries(labs PRIVATE ge_lab ge_core ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
+  target_link_libraries(labs PRIVATE ge_lab ge_core ge_audio ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
     ${GE_LAB_EXTRA})
 
   enable_testing()

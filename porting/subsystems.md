@@ -75,11 +75,14 @@ with the same names.
 
 ## audio
 
-`engine/audio/` ports the framework's `src/audio/` (voice, synth, rack, play, types, view);
-`synth.ts` builds WebAudio graphs, and the DSP graph keeps WebAudio's biquad formulas (the
-Audio EQ Cookbook), `envelopeShape` and its 128-frame render quantum. Fall Line's sound ports
-game5's `pwa/src/game/audio/`, and the faders are `mixOf`. A sound is checked against a
-headless Chromium `OfflineAudioContext` render of the same `SoundDef` (a script here).
+`engine/audio/` carries over the framework's `src/audio/` DESIGN (the voice vocabulary, the
+envelope's rules, layers steered by targets, racks, sounds as data with a play's shape, the
+faders) and none of its implementation: WebAudio's graph is replaced by the engine's own DSP
+(state-variable filters instead of the cookbook biquads, a balance pan law, buses instead of
+volume-scaled views, a lock-free ring). Bit or sample parity with a WebAudio render is not a
+goal (the project dropped bit parity); a sound is checked by its meters (the `audio` skill).
+Fall Line's sound ports game5's `pwa/src/game/audio/` the same way: its bank's numbers and its
+beds' target functions are the starting point, retuned by meter where the DSP differs.
 
 ## perf
 

@@ -11,6 +11,15 @@ the row when the file moves.
 
 | Engine file | Reference module | Reference identifiers |
 | --- | --- | --- |
+| `engine/audio/dsp.cpp` | `oss-game-framework/src/audio/synth.ts` | fillNoise shaperCurve |
+| `engine/audio/dsp.hpp` | `oss-game-framework/src/audio/synth.ts` | NOISE_POOL_S SHAPER_STEPS |
+| `engine/audio/rack.cpp` | `oss-game-framework/src/audio/rack.ts` | createRack |
+| `engine/audio/rack.hpp` | `oss-game-framework/src/audio/rack.ts` | Rack createRack |
+| `engine/audio/sound.cpp` | `oss-game-framework/src/audio/play.ts` | playDef playSound shaped |
+| `engine/audio/sound.hpp` | `oss-game-framework/src/audio/types.ts`, `play.ts` | SoundVoice SoundDef SoundBank PlayShape playDef playSound |
+| `engine/audio/synth.cpp` | `oss-game-framework/src/audio/synth.ts` | createSynth envelope steer layer tone noise |
+| `engine/audio/synth.hpp` | `oss-game-framework/src/audio/synth.ts`, `view.ts` | createSynth EchoOptions SynthOptions scaledView LIMITER_THRESHOLD_DB |
+| `engine/audio/voice.hpp` | `oss-game-framework/src/audio/voice.ts` | ToneOptions NoiseOptions LayerSpec LayerTarget MIN_ATTACK_MS MAX_CUTOFF_RATIO safeCutoff shaperSteepness shaperPush envelopeShape |
 | `engine/core/heightfield.hpp` | `oss-game-framework/src/core/heightfield.ts` | createHeightfield fillField sampleField sampleFieldGradient fieldGradient fieldCell |
 | `engine/core/math.hpp` | `oss-game-framework/src/core/math.ts` | angleDiff |
 | `engine/core/noise.hpp` | `oss-game-framework/src/core/noise.ts` | valueNoise noiseField sampleNoise |

@@ -19,7 +19,7 @@
 //
 // ge:summary The lab contract: LabSpec, the Lab context, GE_LAB registration, the lab kinds
 // ge:keywords lab labs registry contract spec flags metric table shot caption digest
-// ge:keywords screenshot simulation scenario drive bot playtest bench
+// ge:keywords screenshot simulation scenario drive bot playtest bench attach file wav
 // ge:skill labs
 // ge:test tests/lab_runner_test.cpp
 #pragma once
@@ -130,6 +130,9 @@ class Lab {
   // A picture whose pixels differ run to run or machine to machine (a GPU frame: each adapter
   // rasterises in its own way) is `measured`: its id is hashed, its pixels are not.
   void shot(Shot shot, const Picture& picture, Det det = Det::deterministic);
+  // A file written beside the report (previews/<lab>/<name>): a rendered sound's WAV, anything a
+  // reader opens with another tool. Its bytes are in the digest unless it is `measured`.
+  void attach(std::string name, std::vector<uint8_t> bytes, Det det = Det::deterministic);
   // A failure in the diagnostics' shape: what failed, and the next action. The run carries on
   // so every failure is named; the runner exits non-zero.
   void fail(const std::string& what, const std::string& next_action);
@@ -144,6 +147,12 @@ class Lab {
   const std::vector<LabTable>& tables() const { return tables_; }
   const std::vector<std::string>& notes() const { return notes_; }
   const std::vector<Taken>& shots() const { return shots_; }
+  struct File {
+    std::string name;
+    std::vector<uint8_t> bytes;
+    Det det;
+  };
+  const std::vector<File>& files() const { return files_; }
   const std::vector<std::string>& failures() const { return failures_; }
   const std::vector<std::pair<std::string, std::string>>& args() const { return args_; }
   uint64_t digest() const { return digest_; }
@@ -156,6 +165,7 @@ class Lab {
   std::vector<LabTable> tables_;
   std::vector<std::string> notes_;
   std::vector<Taken> shots_;
+  std::vector<File> files_;
   std::vector<std::string> failures_;
   uint64_t digest_ = 0xcbf29ce484222325ull;
 };
