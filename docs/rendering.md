@@ -1,8 +1,9 @@
 # Rendering
 
 How the engine draws a frame: the GPU backend, the frame's passes, and the techniques
-each pass uses. Nothing here is built yet. Milestones M6 to M8 in `docs/goals.md` build
-it, and this page is the plan they build to. Change this page in the same PR that
+each pass uses. Milestones M6 to M8 in `docs/goals.md` build it, and this page is the plan
+they build to: M6 built the backend (`engine/gpu`, `engine/platform`); the passes are M7 and
+M8. Change this page in the same PR that
 changes the plan.
 
 The aim is a picture that looks good and costs little. Every technique below was
@@ -34,15 +35,17 @@ most of the scene; CPU time spent choosing instances; shader programs compiled i
 middle of a run, which cause visible hitches; and, on a phone, the ground's fragment
 shader taking more than half of the GPU's time. Each of those has a direct answer below.
 
-## The backend: WebGPU through Dawn, native only
+## The backend: Dawn, native only
 
 The targets are macOS, Linux and Windows on the desktop, and iOS, iPadOS, the Mac App
 Store and Android on the stores. There is no web build. Under the hood that is Metal on
 Apple, Vulkan on Linux and Android, and D3D12 or Vulkan on Windows.
 
-**Decision: the WebGPU API through the standard `webgpu.h` C header, implemented by
-Dawn, compiled natively on every target.** With no web build, the case rests on these
-reasons:
+**Decision: Dawn, compiled natively on every target, through its standard `webgpu.h` C
+header.** The header's name comes from the API's origin as a browser standard; nothing
+here runs in a browser or ships for the web. Dawn is a native library that translates
+that API to Metal, Vulkan and D3D12, and the engine uses it only for that. With no web
+build, the case rests on these reasons:
 
 - **One API over every native backend.** Dawn translates to Metal, Vulkan and D3D12.
   Our own layer would mean at least two backends (Metal for the App Store, Vulkan for
@@ -57,7 +60,8 @@ reasons:
   Vulkan or Metal is often a hang or a corrupt frame with no message, which only agents
   can debug here. Release builds turn validation off (Dawn's `skip_validation` toggle)
   and drop the shader robustness transform (`disable_robustness`), so the checks cost
-  nothing in a shipped frame. M6 verifies both toggles.
+  nothing in a shipped frame. `gpu::create_device` sets both in a release build
+  (`tests/gpu_device_test.cpp` draws with them on).
 - **WGSL everywhere, compiled by one compiler.** Tint compiles WGSL to MSL, SPIR-V and
   HLSL, so there is no shader cross-compiler toolchain in the build, and
   `make shaders-check` validates every shader offline.
@@ -72,7 +76,7 @@ reasons:
 
 **What we give up**, and why it is acceptable for this workload:
 
-| Missing from WebGPU | What it would buy | Why the game does not need it |
+| Missing from Dawn's core API | What it would buy | Why the game does not need it |
 | --- | --- | --- |
 | Bindless resources | Any texture from any shader with no binding | Few materials; texture arrays per size class and a material table cover it (§ Geometry and resources) |
 | Mesh shaders | Meshlet culling inside the pipeline | Compute culling plus indirect draws gets the same culling at instance granularity, which is what a forest of identical shapes needs; most phones lack mesh shaders anyway |
@@ -102,9 +106,17 @@ extension behind a feature tier, never a second graphics API.
   abstraction for agents to learn, and none gives more of what this workload needs.
 
 **Where Dawn is built.** The prebuilt GitHub release covers Linux x64, Windows x64 and
-macOS. iOS, iPadOS and Android (and Linux arm64) build Dawn from source with its CMake
-build, cached in CI. Until that cache exists, those rows build with `GE_GPU=OFF`, which
+macOS (arm64): `cmake/Dawn.cmake` pins one release tag and each archive's SHA-256, and
+downloads it into `.cache/deps/` at configure time (the archive also carries `tint`, which
+`make shaders-check` runs). The prebuilt library is a Release build, so an MSVC Debug build
+refuses `GE_GPU=ON`. iOS, iPadOS and Android (and Linux arm64) will build Dawn from source with
+its CMake build, cached in CI (M11). Until then those rows build with `GE_GPU=OFF`, which
 builds and tests everything except `engine/gpu`, `engine/render` and the app.
+
+**The C++ surface.** `engine/gpu` calls Dawn's `webgpu_cpp.h` (`wgpu::Device`,
+`wgpu::Buffer`, …), whose handles are reference-counted RAII already. The engine adds
+behaviour (the device's choices, the error lines, the manifest's counter, readback, timing)
+and no second layer of handles, so the code reads as Dawn's API spells it.
 
 ## Mobile GPUs
 
@@ -144,7 +156,7 @@ the lab tests, so neither one can rot.
 | `texture-compression-bc` / `-astc` / `-etc2` | Compressed textures for authored assets (BC on the desktop, ASTC on Apple and most phones) | Uncompressed RGBA8 |
 | Transient attachments (Dawn extension) | Depth and MSAA targets kept in tile memory on mobile | Ordinary textures |
 
-Only core WebGPU is a hard requirement. Compatibility mode (WebGPU over GLES or D3D11)
+Only Dawn's core API is a hard requirement. Compatibility mode (Dawn over GLES or D3D11)
 is not targeted, because its limits (few or no storage buffers in the vertex stage)
 would rule out vertex pulling. On Android that means a Vulkan 1.1 device, which covers
 the phones that can run the game at all.
@@ -405,9 +417,13 @@ an Apple M3 Max laptop on macOS (Metal), used only for what the container cannot
 
 **In the Linux container:**
 
-- Dawn draws on a **software Vulkan adapter**: SwiftShader, which Dawn can build in and
-  which needs no system driver, or Mesa's lavapipe where the package is installed. M6
-  picks one and pins it; `ge_gpu_info` prints which adapter a run used.
+- Dawn draws on a **software Vulkan adapter: Mesa's lavapipe** (it names itself
+  `llvmpipe`), from Ubuntu 24.04's `mesa-vulkan-drivers` package, the same package the
+  development container and CI's Linux x64 rows install, so a golden image made in one
+  matches the other. Lavapipe was chosen over SwiftShader because it is a system package
+  (no extra build of Dawn) and has the optional features the tiers test (timestamps,
+  subgroups, f16). `gpu::create_device` prints the adapter a run used
+  (`gpu::adapter_line`), and the golden tests compare pixels only on it.
 - Software rendering is one to two orders of magnitude slower than a GPU, and the
   container has a few cores. Labs therefore render at a small default size (640×360),
   with the fewest settle frames that make a still repeatable, and a lab can name the
@@ -478,7 +494,7 @@ Each library is added in the milestone that first needs it, pinned to a tag.
 
 | Library | Licence | For | Milestone |
 | --- | --- | --- | --- |
-| Dawn | BSD-3-Clause | WebGPU on every target (prebuilt on the desktop, from source for iOS, iPadOS and Android); Tint for `make shaders-check` | M6 |
+| Dawn | BSD-3-Clause | The GPU API on every target (prebuilt on the desktop, from source for iOS, iPadOS and Android); Tint for `make shaders-check` | M6 |
 | SDL3 | zlib | The window and the surface (already the platform layer) | M6 |
 | cgltf | MIT | Loading authored glTF meshes | M8 |
 | Tracy | BSD-3-Clause | CPU and GPU zones, behind `GE_TRACY=ON` | M7 |
@@ -498,7 +514,7 @@ any render-graph or scene library, and any shader cross-compiler.
 | Virtual shadow maps | They need a page table, sparse allocation and feedback; the horizon map plus cached cascades plus the figures' atlas give the same sharpness where it is seen, at a fraction of the complexity |
 | Meshlet (cluster) culling | Instances are many and small, so instance-level culling removes the work; clusters would pay off only for large unique meshes, which the game does not have |
 | Screen-space GI or reflections | Snow under open sky is lit by the sun and the sky's irradiance table; the look does not call for them |
-| Async compute | WebGPU has one queue |
+| Async compute | Dawn's API has one queue |
 
 Each of these can be revisited when a measurement on this workload shows the current
 technique is the bottleneck. Record the measurement in the PR that does it.

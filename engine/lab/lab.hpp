@@ -127,7 +127,9 @@ class Lab {
   void metric(std::string key, double value, std::string unit, Det det = Det::deterministic);
   void table(LabTable table);
   void note(std::string line);
-  void shot(Shot shot, const Picture& picture);
+  // A picture whose pixels differ run to run or machine to machine (a GPU frame: each adapter
+  // rasterises in its own way) is `measured`: its id is hashed, its pixels are not.
+  void shot(Shot shot, const Picture& picture, Det det = Det::deterministic);
   // A failure in the diagnostics' shape: what failed, and the next action. The run carries on
   // so every failure is named; the runner exits non-zero.
   void fail(const std::string& what, const std::string& next_action);
@@ -136,6 +138,7 @@ class Lab {
   struct Taken {
     Shot shot;
     Picture picture;  // with its caption band
+    Det det;
   };
   const std::vector<Metric>& metrics() const { return metrics_; }
   const std::vector<LabTable>& tables() const { return tables_; }

@@ -5,6 +5,10 @@
 #                standings), ge_mountain (the generated ski mountain: mapgen, analysis)
 #   ge_lab       the lab framework (engine/lab: the contract, the runner, the raster, the PNG)
 #   labs         the lab executable: every labs/ directory's files (engine, plugins, games)
+#   ge_platform  the window, input and the frame clock over SDL3 (engine/platform; GE_PLATFORM,
+#                cmake/SDL.cmake)
+#   ge_gpu       the native GPU device over Dawn (engine/gpu; GE_GPU, cmake/Dawn.cmake), with its
+#                shaders embedded (cmake/Wgsl.cmake) and checked by `shaders_check`
 #   <x>_test     one executable per tests/<x>_test.cpp, registered with CTest
 #   ge_fp        the FP flags of the DETERMINISM CONTRACT (AGENTS.md), linked by
 #                ge_core and published as ge::fp; a target that drops them can
@@ -77,6 +81,22 @@ elseif(MSVC)
   set_source_files_properties(${GE_LIBM_VENDORED} PROPERTIES COMPILE_OPTIONS "/wd4244;/wd4146;/wd4701;/wd4723")
 endif()
 
+# The platform and the GPU (M6). Each is optional (GE_PLATFORM, GE_GPU) and nothing else
+# depends on them: the simulation, the plugins and their tests build without either.
+include(cmake/Dawn.cmake)
+include(cmake/SDL.cmake)
+include(cmake/Wgsl.cmake)
+if(GE_PLATFORM)
+  add_library(ge_platform STATIC engine/platform/window.cpp)
+  target_link_libraries(ge_platform PUBLIC ge_core PRIVATE SDL3::SDL3-static)
+endif()
+if(GE_GPU)
+  file(GLOB GE_GPU_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/gpu/*.cpp)
+  add_library(ge_gpu STATIC ${GE_GPU_SOURCES})
+  target_link_libraries(ge_gpu PUBLIC ge_core dawn::webgpu_dawn)
+  ge_embed_wgsl(ge_gpu engine/gpu/test_scene.wgsl)
+endif()
+
 # The plugins: every plugins/<name>/CMakeLists.txt, each one ge_add_plugin(...) call. A new
 # plugin is a new directory; nothing is listed here (docs/architecture.md § Plugins).
 include(cmake/Plugins.cmake)
@@ -108,12 +128,30 @@ if(PROJECT_IS_TOP_LEVEL)
     ${CMAKE_CURRENT_SOURCE_DIR}/engine/lab/labs/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/plugins/*/labs/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/games/*/labs/*.cpp)
+  # The engine's GPU and window labs (gpu_*_lab.cpp, platform_*_lab.cpp) build only with
+  # the layer they measure.
+  set(GE_LAB_EXTRA "")
+  if(GE_GPU)
+    list(APPEND GE_LAB_EXTRA ge_gpu)
+  else()
+    list(FILTER GE_LAB_SOURCES EXCLUDE REGEX "/engine/lab/labs/gpu_[^/]*$")
+  endif()
+  if(GE_PLATFORM AND GE_GPU)
+    list(APPEND GE_LAB_EXTRA ge_platform)
+  else()
+    list(FILTER GE_LAB_SOURCES EXCLUDE REGEX "/engine/lab/labs/platform_[^/]*$")
+  endif()
   get_property(GE_PLUGIN_TARGETS GLOBAL PROPERTY GE_PLUGIN_TARGETS)
   add_executable(labs engine/lab/main.cpp ${GE_LAB_SOURCES})
-  target_link_libraries(labs PRIVATE ge_lab ge_core ${GE_PLUGIN_TARGETS})
+  target_link_libraries(labs PRIVATE ge_lab ge_core ${GE_PLUGIN_TARGETS} ${GE_LAB_EXTRA})
 
   enable_testing()
   add_subdirectory(tests)
+endif()
+
+# Every embedded shader through Tint: `make shaders-check` (after every ge_embed_wgsl call).
+if(GE_GPU AND GE_TINT)
+  ge_add_shaders_check()
 endif()
 
 include(cmake/Packaging.cmake)

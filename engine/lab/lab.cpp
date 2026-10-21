@@ -170,11 +170,11 @@ void Lab::table(LabTable t) {
 
 void Lab::note(std::string line) { notes_.push_back(std::move(line)); }
 
-void Lab::shot(Shot s, const Picture& picture) {
+void Lab::shot(Shot s, const Picture& picture, Det det) {
   Picture out = framed(s, picture);
   hash(s.id.data(), s.id.size() + 1);
-  hash(out.rgba.data(), out.rgba.size());
-  shots_.push_back(Taken{std::move(s), std::move(out)});
+  if (det == Det::deterministic) hash(out.rgba.data(), out.rgba.size());
+  shots_.push_back(Taken{std::move(s), std::move(out), det});
 }
 
 void Lab::fail(const std::string& what, const std::string& next_action) {

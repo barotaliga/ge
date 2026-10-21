@@ -61,7 +61,7 @@ jobs:
       - name: Build, install, consume
         run: |
           ROOT=$(cygpath -m "$PWD" 2>/dev/null || pwd)  # a path CMake reads on Windows too
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DGE_PLATFORM=OFF -DGE_GPU=OFF
           cmake --build build --config Release --parallel
           cmake --install build --config Release --prefix stage
           cmake -S tests/package/consumer -B build-consumer -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$ROOT/stage"

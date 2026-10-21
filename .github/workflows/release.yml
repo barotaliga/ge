@@ -111,7 +111,7 @@ jobs:
 
       - name: Build and test
         run: |
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DGE_PLATFORM=OFF -DGE_GPU=OFF
           cmake --build build --config Release --parallel
           ctest --test-dir build -C Release --output-on-failure
 

@@ -4,7 +4,7 @@
 // it runs are registered here, so the test holds the lab runner, not any one lab.
 //
 // ge:summary Tests the lab runner: flags, the report's files, tag and compare, repeat, digests
-// ge:keywords test lab runner registry report digest repeat compare caption smoke
+// ge:keywords test lab runner registry report digest repeat compare caption smoke measured-shot
 // ge:skill labs testing
 #include <filesystem>
 #include <fstream>
@@ -126,4 +126,17 @@ TEST(digest_baseline) {
   CHECK(run({"toy", "--n=9", "--check-digests=" + base}) == 1);
   // A lab missing from the baseline fails too.
   CHECK(run({"drift", "--check-digests=" + base}) == 1);
+}
+
+TEST(a_measured_shot_keeps_its_pixels_out_of_the_digest) {
+  const auto digest = [](Rgba colour, Det det) {
+    Lab lab(kToy, {});
+    lab.shot({"box", "A BOX", "A box.", "", {}}, create_picture(8, 8, colour), det);
+    return lab.digest();
+  };
+  // Measured: the id is hashed, the pixels are not.
+  CHECK(digest({0, 90, 0}, Det::measured) == digest({200, 0, 0}, Det::measured));
+  // Deterministic: the pixels are hashed.
+  CHECK(digest({0, 90, 0}, Det::deterministic) != digest({200, 0, 0}, Det::deterministic));
+  CHECK(digest({0, 90, 0}, Det::measured) != digest({0, 90, 0}, Det::deterministic));
 }
