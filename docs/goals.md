@@ -34,8 +34,9 @@ Line Fall Line is in `games/fall_line/` (G8).
    does. Nothing is built for a hypothetical second game. A general engine feature earns
    its place when the game needs it. G8 decides WHERE a component lives, never WHETHER it is
    built.
-5. **G5: Desktop and web.** The engine runs as a desktop app (Linux, macOS and
-   Windows) and in the browser (WebAssembly + WebGPU), from one codebase.
+5. **G5: Native on desktop and mobile.** The engine runs as a native app on macOS, Linux
+   and Windows, and in the stores on iOS, iPadOS, the Mac App Store and Android, from
+   one codebase. There is no web build.
 6. **G6: Consumed by agents.** Downstream game repos that use the engine are also
    built by agents, so the engine is a product for agents too. Every error, assert
    and log line says what went wrong, where, and the next action to take, so it reads
@@ -60,6 +61,7 @@ Line Fall Line is in `games/fall_line/` (G8).
   is the game's own.
 - Music. Fall Line has none by design: its sound is its effects.
 - Changes to the reference sources used while porting. They are read-only from here.
+- A web build. The engine is native only.
 
 ## Milestones
 
@@ -81,12 +83,12 @@ row's exit criterion is what makes it `done`.
 | M4c | **The ski routes** (v9, v10, R42): the orange routes, the wild line, the felled trunks and the jumps on it | Every jump hill and a v10 seed sweep build clean, with golden digests | open |
 | M4d | **The real faces** (R25): the baked heights and hints, the woods by height, and the generator's real-face branch | Every real face builds a clean map, with golden digests | open |
 | M5 | **The run**: `games/fall_line/sim`: `create_game` and `step` (the skier, the snow, the course, the field) and the bot | The bot finishes the reference seeds, golden `sim` digests pin the runs, and the headless `sim` CLI exists | open |
-| M6 | **The platform and the GPU**: an SDL3 window, input, the frame loop and webgpu.h (desktop: wgpu-native or Dawn) | A window clears to the sky colour at vsync on every desktop row; a headless GPU smoke test runs in CI | open |
-| M7 | **The first picture**: the terrain clipmap, the sky and the haze, the sun's shadow, and the skier as a placeholder, all drawn from `GameState` | A seed's screenshots of the named views, reviewed in the PR (the `render` skill) | open |
-| M8 | **The world drawn**: the forest, the snow shader, the trail map and grooves, the spray, the figures, and the skis as glTF models | Screenshots of every named view, reviewed in the PR | open |
+| M6 | **The platform and the GPU** (`docs/rendering.md` § The backend, § Feature tiers): an SDL3 window, input and the frame loop; `engine/gpu` over Dawn (the device and its feature tiers, RAII handles, the pipeline manifest and its creation counter, timestamp queries, staging uploads, offscreen targets and readback); WGSL embedding and `make shaders-check` (Tint offline); Dawn on lavapipe on CI's Linux x64 row | A window clears to the sky colour at vsync on every desktop row; on CI, a headless capture of a test scene matches its golden image within tolerance, and `make shaders-check` runs | open |
+| M7 | **The frame core** (`engine/render`, generic): the pass table and named targets, `FrameView` extraction, GPU-driven instance families with two-phase depth-pyramid culling, the depth prepass and `equal`-tested opaque pass, the heightfield clipmap, the horizon map, cached shadow cascades and the figures' shadow atlas, the sky tables and aerial perspective, TAA-U, the post pass, and the skier as a placeholder, all drawn from `GameState` | The screenshot lab's views of a seed are reviewed in the PR (the `render` skill); GPU ms per pass is reported; no pipeline is created after load; the renderer's CPU half is under 1 ms a frame | open |
+| M8 | **The world drawn**: the forest as an instance family, the snow material, the trail and deformation maps stamped in compute, the cloud volume and night sky, compute particles (spray, snow cloud, snowfall), skinned figures and the crowd, the skis as glTF models (cgltf), and the quality ladder with its automatic fit | Screenshots of every named view, reviewed in the PR; the frame inside `docs/rendering.md` § Measurement's budgets at the top and middle of the ladder | open |
 | M9 | **Sound**: the synth as a DSP graph on SDL3 audio, plus Fall Line's beds and the bank | Every sound's rendered buffer meets its meters (the `audio` skill) | open |
 | M10 | **HUD and shell**: the HUD, the cards, settings, records and ghosts, and every word in `strings` | A full race is playable from the title to the finish plate | open |
-| M11 | **Web build**: Emscripten + emdawnwebgpu, served from GitHub Pages | The same race in the browser, bit for bit | open |
+| M11 | **Mobile and store builds**: iOS and iPadOS (Metal), Android (Vulkan) and the Mac App Store; touch input, Dawn built from source and cached in CI, the mobile tiers of `docs/rendering.md` § Mobile GPUs | The same race on an iPad, an iPhone and an Android phone inside the mobile budget; each store build signs and installs | open |
 | M12 | **Agent-facing engine**: the `ge` CLI (`ge new`, `ge skills sync`, `ge doctor`), consumer skills shipped under `consumer-skills/`, and the diagnostics convention (`docs/architecture.md` § Diagnostics) enforced by a test | `ge new` scaffolds a repo that builds against the released engine and passes its own `agents-check` | open |
 | M13+ | **The free ride**: the machines, the crowd and every other Fall Line system, one row per system | One row each, added when it is started | open |
 
@@ -98,8 +100,8 @@ Classify each file with the `plugins` skill when its row starts; this is the exp
 | --- | --- | --- | --- |
 | M4b–M4d | | `mountain` (the ski area, the routes, the real faces) | which seeds and maps the game races (the pinned lists) |
 | M5 | | `skier` (the skier on snow: the legs, the snow, the edge, the poles, flight, the crash and the body); `racing` (the field's standings) | `create_game`, the order of systems in `step`, the modes and their rules, the course as Fall Line runs it, the bot, the `sim` CLI |
-| M6, M11 | `platform`, `gpu`, the web build | | |
-| M7–M8 | the generic passes (terrain clipmap, instancing with LOD bands, skinning, particles, sky and haze, shadows, post) | `mountain/app` (the snow shader, the trail map and grooves, the forest's look), `skier/app` (the figure, the spray) | Fall Line's own look and tuning of those passes |
+| M6, M11 | `platform`, `gpu`, the mobile and store builds | | |
+| M7–M8 | `render`: the pass table, GPU-driven instance families, the heightfield clipmap, shadows, sky and clouds, TAA-U, post, compute particles, skinning (`docs/rendering.md`) | `mountain/app` (the snow shader, the trail map and grooves, the forest's look), `skier/app` (the figure, the spray) | Fall Line's own look and tuning of those passes |
 | M9 | the synth's DSP graph, racks, `play_def` | the snow and edge beds | the bank, the listener table |
 | M10 | the 2D layer, text, the dev UI | `racing` (the ghost and record stores) | the HUD, the cards, settings, every word in `strings` |
 | M12 | the `ge` CLI, consumer skills | each plugin's skill, copied when a consumer links it | |

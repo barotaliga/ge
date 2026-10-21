@@ -13,8 +13,15 @@ The engine exists to be fast (G2). Speed is proven by measurement.
   three rivals).
 - **Level build**: well under a second a seed on one core (`generate_level`, measured
   per seed), and never slower than the last release.
-- **Frame**: the display's refresh on the reference machines with the picture at its
-  top. Timestamp queries per pass give the GPU numbers.
+- **Frame**: `docs/rendering.md` § Measurement: the top of the picture ladder at 1440p
+  in 8.3 ms of GPU on the reference desktop (M3 Max), the middle of it in 12 ms of GPU
+  on a recent phone or tablet (thermal headroom under 60 Hz), and the renderer's CPU
+  half under 1 ms.
+  Timestamp queries per pass give the GPU numbers.
+- **GPU claims** carry per-pass GPU ms, draws and instances before and after, from the
+  frame's stats on a real GPU. The development container renders in software, so its GPU
+  numbers say nothing about speed: a GPU timing claim is measured on the Mac through a
+  `needs-mac` issue (`docs/rendering.md` § Where it is developed).
 
 ## Measuring
 

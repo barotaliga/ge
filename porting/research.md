@@ -147,24 +147,26 @@ step whole fixed steps, and give the renderer `alpha` for interpolation. It port
 | Native per-OS | Most control and most code; not justified. |
 
 **Decision: SDL3**, statically linked. It is the one dependency that covers window,
-input, gamepad rumble (game5 has `rumble.ts`), audio output and the web target.
+input, gamepad rumble (game5 has `rumble.ts`), audio output, iOS and Android.
 
 ### GPU API
 
-| Option | Web | Notes |
-| --- | --- | --- |
-| **WebGPU via `webgpu.h`** (Dawn / wgpu-native; Emscripten's emdawnwebgpu) | yes | The standard C header, implemented by Dawn (Chrome's WebGPU, on D3D12, Metal and Vulkan) and wgpu-native (Firefox's). Compute shaders, storage buffers, instancing, timestamp queries. Shaders in WGSL. |
-| SDL3 GPU | not in a stable release as far as we found | Vulkan, Metal and D3D12, with shaders cross-compiled per backend. |
-| bgfx | WebGL2 only | Mature, with its own shader dialect and build. |
-| sokol_gfx | WebGL2/WebGPU | Small and pleasant, but a lowest-common-denominator feature set. |
-| Vulkan + MoltenVK | no | Most work; no web target. |
+The targets are macOS, Linux, Windows, iOS, iPadOS and Android (G5). There is no web
+build.
 
-**Decision: WebGPU through `webgpu.h`.** It is the only option that is the same API on
-desktop and in the browser (G5). game5 is already moving its renderer onto WebGPU
-(`docs/webgpu.md` there), so the shader logic it ports into TSL/WGSL carries across.
-Native builds start on **wgpu-native's prebuilt release** (a download, so CI stays
-quick) and keep to the header so that Dawn can be swapped in. SDL3 provides the window
-and the surface.
+| Option | Platforms | Notes |
+| --- | --- | --- |
+| **WebGPU API via `webgpu.h`, Dawn native** | All of them (Metal, Vulkan, D3D12) | One API, WGSL compiled by Tint to every backend, validation with labelled errors, automatic barriers, per-vendor driver workarounds from a large browser's Android and desktop use. Native extensions: multi-draw indirect, subgroups, immediates, transient attachments. Prebuilt for desktop; built from source for mobile. Runs on SwiftShader or lavapipe for GPU-less development. |
+| wgpu-native (same header) | All of them | A second implementation of the same API; no reason to run two. |
+| SDL3 GPU | All of them | Stable since 3.2, SDL is already a dependency. No GPU timestamp queries, and shaders must be cross-compiled to SPIR-V, MSL and DXIL. |
+| Vulkan + MoltenVK / KosmicKrisp on Apple | All of them | Bindless, async compute, full control; manual synchronisation and memory, mobile driver bugs and a Metal translation layer become ours. |
+| Own thin RHI over Metal and Vulkan | All of them | The most control; two backends for agents to keep in step. |
+| bgfx, sokol_gfx, Diligent, Filament | Most | Each has its own shader dialect, build and abstraction; none adds what this workload needs. |
+
+**Decision: the WebGPU API on Dawn, native on every target.** The reasons, what WebGPU
+lacks (bindless, mesh shaders, ray tracing, async compute) and why this workload does
+not need it, and the mobile tiers are in `docs/rendering.md` § The backend and § Mobile
+GPUs. SDL3 provides the window and the surface.
 
 ### Rendering techniques game5 uses (what we must build, no more)
 
@@ -172,11 +174,13 @@ Terrain: a geometry clipmap over the engine's heightfield. Forest: GPU instancin
 LOD bands. Figures: linear-blend skinning. Snow: a custom shader (packed share, glitter,
 grooves from a trail-map texture). Sky: a baked transmittance/radiance table and haze
 applied per material. Shadows: a sun shadow map plus a shadow box for the riders.
-Particles: spray, snow cloud and snowfall. Post: a colour grade. Each becomes one draw
-system in `engine/render` (or a plugin's `app/` when a genre shares it, or
-`games/fall_line/app` when it is Fall Line's own look; `docs/architecture.md` § Plugins).
-The pipeline is written out as a fixed, ordered list of passes. No render graph is built
-until the pass count makes one worth it.
+Particles: spray, snow cloud and snowfall. Post: a colour grade. The techniques
+the engine uses to draw them (GPU-driven instance culling, a depth prepass, a horizon
+map plus cached cascades plus a shadow atlas, sky lookup tables, temporal upscaling,
+compute particles), where each lives (`engine/render`, a plugin's `app/`, or
+`games/fall_line/app`; `docs/architecture.md` § Plugins), and the ones considered and
+not taken are in `docs/rendering.md`. The frame is a fixed, ordered pass table; no
+general render graph.
 
 ### Audio
 
@@ -224,7 +228,7 @@ No runtime asset database.
 | Determinism | Own `core/libm` matched to the oracle's V8; FP flags in CMake; golden parity tests |
 | Loop | Fixed 120 Hz accumulator (port of `loop/run-clock`), interpolated rendering |
 | Platform | SDL3 |
-| GPU | WebGPU through `webgpu.h` (wgpu-native first, Dawn optional, emdawnwebgpu on web) |
+| GPU | WebGPU through `webgpu.h`, Dawn native on every target (prebuilt on the desktop, from source on mobile); techniques in `docs/rendering.md` |
 | Shaders | WGSL, embedded at build |
 | Audio | Port of the framework synth as a DSP graph on SDL3 audio |
 | UI | Own immediate-mode 2D + SDF text; Dear ImGui for dev tools |

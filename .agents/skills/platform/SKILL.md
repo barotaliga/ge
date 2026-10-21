@@ -27,6 +27,6 @@ sees plain structs.
 
 - SDL is fetched with `FetchContent`, pinned to a release tag, and statically linked.
 - Poll events once per frame on the main thread.
-- The web build (M11) uses SDL's Emscripten backend through the same API.
+- The mobile builds (M11: iOS, iPadOS, Android) use SDL's iOS and Android backends through the same API. There is no web build.
 - Headless tests never create a window. The platform layer has a null backend for
   CI.

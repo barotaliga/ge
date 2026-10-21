@@ -28,8 +28,8 @@ router's Skills table and the directories against each other.
 | `release` | Changeset fragments, the installed package, cutting a release to GitHub Releases + Packages |
 | `sim` | Fall Line's headless simulation: mapgen, the step, the bot, the run clock |
 | `platform` | SDL3: window, input, gamepad, audio device, files, focus |
-| `gpu` | webgpu.h: device, surface, resources, pipelines, WGSL |
-| `render` | The draw passes Fall Line needs, the pass shape, checking a picture |
+| `gpu` | webgpu.h over Dawn: device, feature tiers, resources, the pipeline manifest, WGSL |
+| `render` | The pass table, a pass's two halves, the rules that keep a frame fast, captures and prices |
 | `audio` | The synth's DSP graph, the beds, the audio thread, checking a sound by meter |
 | `ui` | The 2D layer and text, the HUD and cards, the strings table, the dev UI |
 | `perf` | Budgets, measuring, the proofs a speed-up owes, the levers |

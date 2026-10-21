@@ -39,13 +39,15 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
 - **`engine/platform`**: SDL3 behind a narrow C++ API: the window, input events, the
   gamepad and rumble, the audio device, time, storage paths and the clipboard. It is the
   only directory that includes SDL headers.
-- **`engine/gpu`**: a thin RAII wrapper over `webgpu.h`: the device, the surface, buffers,
-  textures, pipelines, the frame's command encoder, and timestamp queries. It is the only
-  directory that includes `webgpu.h`.
-- **`engine/render`**: generic draw passes Fall Line needs (the terrain clipmap,
-  instanced meshes with LOD bands, skinned meshes, particles, the sky and haze, sun
-  shadows, the post grade). A pass owns its GPU buffers and exposes `prepare(view)` and
-  `encode(pass)`.
+- **`engine/gpu`**: a thin RAII wrapper over `webgpu.h`, implemented by Dawn: the device
+  and its feature tiers, the surface, buffers, textures, pipelines and the pipeline
+  manifest, the frame's command encoder, timestamp queries, uploads and readback. It is
+  the only directory that includes `webgpu.h`.
+- **`engine/render`**: generic rendering mechanisms (the pass table and named targets,
+  GPU-driven instance families, the heightfield clipmap, shadows, the sky tables and
+  clouds, TAA-U, post, compute particles, skinning). A pass owns its GPU buffers and
+  exposes `prepare(view)` and `encode(pass)`. **`docs/rendering.md` is the plan** for
+  this layer and `engine/gpu`.
 - **`engine/audio`**: the synth: voice definitions, a DSP graph
   (oscillators, noise, biquads, envelopes, echo), racks and `play_def`. It runs on the
   platform's audio stream.
@@ -121,7 +123,7 @@ platform.poll()  →  input snapshot (the engine's signs: steer +right, etc.)
 run_clock.frame(dt) → n steps
 for n:  sim::step(state, input)                      // 120 Hz, deterministic, no allocation
 extract(state, alpha) → FrameView                    // plain data, interpolated
-render: prepare passes (CPU, may be parallel) → encode passes (fixed order) → submit → present
+render: prepare passes (CPU, may be parallel) → encode the pass table (fixed order) → submit → present
 audio: beds read FrameView; the device thread pulls samples
 ui:    HUD + cards drawn last
 ```
@@ -210,7 +212,7 @@ itself does no I/O. Tests print in the same shape through `tests/check.hpp`.
 ## Build
 
 CMake ≥ 3.25 + Ninja, `CMakePresets.json` (`debug` with ASan/UBSan, `release`).
-Dependencies come through `FetchContent`, pinned to a tag or commit (SDL3, wgpu-native
-or Dawn, cgltf, Dear ImGui, Tracy), and each one is added in the milestone that needs
+Dependencies come through `FetchContent`, pinned to a tag or commit (SDL3, Dawn,
+cgltf, Dear ImGui, Tracy), and each one is added in the milestone that needs
 it. `Makefile` names the everyday commands. CI (`.github/workflows/ci.yml`) runs format,
 agents-check, lint and the test matrix.

@@ -30,6 +30,7 @@ updates that row's Status in its PR.
 | [`docs/goals.md`](docs/goals.md) | The long-term goals (G1–G7), the non-goals and the milestone roadmap |
 | [`docs/architecture.md`](docs/architecture.md) | The layers and their dependency direction, the frame, the code conventions, diagnostics, the determinism contract and the build |
 | [`docs/index.md`](docs/index.md) | GENERATED from the code's `ge:` tags: every file's one-line summary, owning skill and test; keyword to files |
+| [`docs/rendering.md`](docs/rendering.md) | The GPU backend (Dawn), the frame's pass table, every rendering technique and why, budgets, lab hooks, and what was considered and not taken |
 | [`docs/publishing.md`](docs/publishing.md) | What a release is (GitHub Releases + GitHub Packages), how a game consumes it, changeset fragments, cutting a release, the credentials |
 
 **The working area.** `porting/` holds everything that only matters while modules are
@@ -105,6 +106,13 @@ porting ends, and nothing outside it may depend on it except `make golden`.
 - **SKILLS LEARN.** Read each loaded skill's lessons before the first edit, and before the
   commit record what the session learned, fix what the skill got wrong, and promote what
   is always true (the `skill-reflection` skill). Lessons ship in the same PR as the work.
+- **THE MAIN ENVIRONMENT IS LINUX WITH NO GPU.** Every test, lab, scenario and screenshot
+  harness runs headless in a GPU-less Linux container, rendering in software. The
+  secondary environment is an Apple M3 Max on macOS (Metal), used only for what the
+  container cannot do (GPU timings, Metal or real-GPU-only bugs, interactive play;
+  `docs/rendering.md` § Where it is developed). When a task needs the Mac, say so to the
+  user and open a GitHub issue labelled `needs-mac` with the exact commands, what to look
+  at and what to paste back. Never do that because the Mac would only be faster.
 - **Every work session ends with the `commit` skill.**
 
 ## Build and test
@@ -140,8 +148,8 @@ and Windows. Releases are dispatched, never hand-made (`release` skill,
 | `engine/core/` | The deterministic pool: `prng.hpp` (mulberry32), `math.hpp` (hypot family, clamp, smoothstep), `libm/` (every transcendental the simulation calls, with the same bits on every platform; vendored, with `LICENSE.md`), `num.hpp` (the simulation's number semantics: rounding, integer wrap, NaN-aware max/min, sign, remainder), `num_text.hpp` (numbers as text, for diagnostic lines), `noise.hpp` (hash2, value noise, the cached field), `heightfield.hpp` (the baked grid and its bilinear reads), `quat.hpp` (orientation; the Euler sign flip), `solar.hpp` (the sun and the moon, by geometry and on a real date), `output.hpp` (the one diagnostic channel; module state) | `determinism` |
 | `engine/loop/` | `run_clock.hpp`: the fixed-step accumulator between the display's frames and the 120 Hz step | `sim` |
 | `engine/platform/` | SDL3: window, input, gamepad, audio device, files (M6); the only place SDL is included | `platform` |
-| `engine/gpu/` | The webgpu.h wrapper (M6); the only place webgpu.h is included | `gpu` |
-| `engine/render/` | Generic draw passes Fall Line needs (M7–M8) | `render` |
+| `engine/gpu/` | The webgpu.h wrapper over Dawn (M6): device, feature tiers, pipeline manifest, timestamps, readback; the only place webgpu.h is included | `gpu` |
+| `engine/render/` | Generic rendering mechanisms (M7–M8): the pass table, GPU-driven instances, the clipmap, shadows, sky, TAA-U, post (`docs/rendering.md`) | `render` |
 | `engine/audio/` | The synth's DSP graph (M9) | `audio` |
 | `engine/ui/` | Immediate-mode 2D and text, plus the dev UI (M10) | `ui` |
 | `plugins/` | Plugins: one directory each, one `ge_add_plugin` call in its `CMakeLists.txt`, built as `ge_<name>`; the build half is `cmake/Plugins.cmake`, the check `tools/check-plugins.mjs` | `plugins` |
@@ -224,8 +232,8 @@ and the directories agree.
 | `mountain` | `plugins/mountain`: the generated ski mountain (mapgen, analysis, `level_digest`) |
 | `sim` | `games/fall_line/sim`: `create_game`, the step, the bot, the headless sim CLI, the run clock |
 | `platform` | `engine/platform`: SDL3, the window, input, the gamepad, the audio device, files |
-| `gpu` | `engine/gpu`: the webgpu.h device, surfaces, buffers, pipelines, WGSL |
-| `render` | A draw pass, the frame's pass order, a shader, extraction from `GameState` |
+| `gpu` | `engine/gpu`: the webgpu.h device over Dawn, feature tiers, buffers, pipelines and the manifest, WGSL and `make shaders-check` |
+| `render` | A draw pass, the pass table, GPU-driven instances, shadows, sky, TAA-U, post, lab captures, extraction from `GameState` |
 | `audio` | The synth, a voice, a bed, the audio thread |
 | `ui` | The 2D layer, text, the HUD, a card, the dev UI |
 | `perf` | Any optimisation, a benchmark, a profile, a cost claim |
