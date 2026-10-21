@@ -47,7 +47,11 @@ bool parse(int argc, char** argv, Args& a) {
     if (arg.rfind("--frames=", 0) == 0) {
       a.frames = std::strtol(argv[i] + 9, nullptr, 10);
     } else if (arg.rfind("--size=", 0) == 0) {
-      if (std::sscanf(argv[i] + 7, "%dx%d", &a.width, &a.height) != 2) return false;
+      char* x = nullptr;
+      a.width = static_cast<int>(std::strtol(argv[i] + 7, &x, 10));
+      if (!x || *x != 'x') return false;
+      a.height = static_cast<int>(std::strtol(x + 1, nullptr, 10));
+      if (a.width <= 0 || a.height <= 0) return false;
     } else if (arg == "--no-vsync") {
       a.vsync = false;
     } else {

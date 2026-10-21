@@ -20,6 +20,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
 #include <memory>
 #include <string>
 #include <vector>
@@ -30,9 +31,18 @@
 
 namespace ge::test {
 
+// Whether an environment variable is "1" (MSVC deprecates std::getenv in favour of its own).
 inline bool env_on(const char* name) {
+#ifdef _MSC_VER
+  char* v = nullptr;
+  size_t n = 0;
+  const bool on = _dupenv_s(&v, &n, name) == 0 && v != nullptr && std::strcmp(v, "1") == 0;
+  std::free(v);
+  return on;
+#else
   const char* v = std::getenv(name);
   return v && std::strcmp(v, "1") == 0;
+#endif
 }
 
 inline std::unique_ptr<gpu::Device> test_device(gpu::DeviceOptions options = {}) {
@@ -58,33 +68,35 @@ inline bool pinned_adapter(const gpu::Device& device) {
 }
 
 inline bool write_ppm(const std::string& path, const gpu::Image& img) {
-  FILE* f = std::fopen(path.c_str(), "wb");
+  std::ofstream f(path, std::ios::binary);
   if (!f) return false;
-  std::fprintf(f, "P6\n%u %u\n255\n", img.width, img.height);
-  for (size_t i = 0; i + 3 < img.rgba.size(); i += 4) std::fwrite(&img.rgba[i], 1, 3, f);
-  return std::fclose(f) == 0;
+  f << "P6\n" << img.width << " " << img.height << "\n255\n";
+  for (size_t i = 0; i + 3 < img.rgba.size(); i += 4) {
+    f.write(reinterpret_cast<const char*>(&img.rgba[i]), 3);
+  }
+  return static_cast<bool>(f);
 }
 
 // An RGB golden read back as RGBA (alpha 255). Empty when missing or malformed.
 inline gpu::Image read_ppm(const std::string& path) {
   gpu::Image img;
-  FILE* f = std::fopen(path.c_str(), "rb");
-  if (!f) return img;
+  std::ifstream f(path, std::ios::binary);
+  std::string magic;
   unsigned w = 0, h = 0, maxval = 0;
-  if (std::fscanf(f, "P6 %u %u %u", &w, &h, &maxval) == 3 && maxval == 255 &&
-      std::fgetc(f) != EOF && w > 0 && h > 0 && w < 16384 && h < 16384) {
-    std::vector<uint8_t> rgb(size_t{w} * h * 3);
-    if (std::fread(rgb.data(), 1, rgb.size(), f) == rgb.size()) {
-      img.width = w;
-      img.height = h;
-      img.rgba.resize(size_t{w} * h * 4);
-      for (size_t p = 0; p < size_t{w} * h; ++p) {
-        std::memcpy(&img.rgba[p * 4], &rgb[p * 3], 3);
-        img.rgba[p * 4 + 3] = 255;
-      }
-    }
+  if (!(f >> magic >> w >> h >> maxval) || magic != "P6" || maxval != 255 || w == 0 || h == 0 ||
+      w >= 16384 || h >= 16384) {
+    return img;
   }
-  std::fclose(f);
+  f.get();  // the one whitespace byte before the pixels
+  std::vector<char> rgb(size_t{w} * h * 3);
+  if (!f.read(rgb.data(), static_cast<std::streamsize>(rgb.size()))) return img;
+  img.width = w;
+  img.height = h;
+  img.rgba.resize(size_t{w} * h * 4);
+  for (size_t p = 0; p < size_t{w} * h; ++p) {
+    std::memcpy(&img.rgba[p * 4], &rgb[p * 3], 3);
+    img.rgba[p * 4 + 3] = 255;
+  }
   return img;
 }
 
