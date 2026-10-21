@@ -33,10 +33,11 @@ else).
 | Oracle | Port |
 | --- | --- |
 | `oss-game-framework/src/core/<x>.ts` | `engine/core/<x>.hpp` (+ `.cpp` when it is not small) |
-| `oss-game-framework/src/racing/<x>.ts` | `engine/racing/<x>.hpp/.cpp` |
+| `oss-game-framework/src/racing/<x>.ts` | `plugins/racing/<x>.hpp/.cpp` |
 | `oss-game-framework/src/loop/run-clock.ts` | `engine/loop/run_clock.hpp` |
 | `oss-game-framework/src/audio/*` | `engine/audio/*` |
-| `game5/engine/<dir>/<x>.ts` | `games/fall_line/sim/<dir>/<x>.hpp/.cpp` |
+| `game5/engine/mapgen/<x>.ts`, `engine/analysis/<x>.ts` | `plugins/mountain/<dir>/<x>.hpp/.cpp` |
+| `game5/engine/<dir>/<x>.ts` (any other) | its home by the `plugins` skill: `plugins/<plugin>/<dir>/<x>.hpp/.cpp`, or `games/fall_line/sim/<dir>/<x>.hpp/.cpp` when it is Fall Line's alone |
 | `game5/pwa/src/game/<x>.ts` | `games/fall_line/app/<x>.hpp/.cpp` (or `engine/render/` when generic) |
 | `game5/tests/<topic>_test.ts` | `tests/<topic>_test.cpp` (a parity test plus the behavioural asserts that matter) |
 | `game5/scripts/<lab>.mjs` | `tools/<lab>/` (C++ CLI) when the lab is a measuring tool |

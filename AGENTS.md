@@ -19,7 +19,10 @@ place an answer lives, and has to change it safely.
 A C++20 game engine, built to run **Fall Line** (`niclaslindstedt/game5`, a downhill
 skiing game in TypeScript) natively and fast. Fall Line is ported here first and stays in
 the tree as the demo game (`games/fall_line/`). The generic half comes from porting
-`niclaslindstedt/oss-game-framework`. **The goal spec and the roadmap are
+`niclaslindstedt/oss-game-framework`. **It is not a ski engine**: generic code is in
+`engine/`, what a genre or a world shares (racing, the generated ski mountain) is in
+`plugins/<name>/` for any game of that kind to link, and only Fall Line's own is in
+`games/fall_line/` ([`docs/architecture.md`](docs/architecture.md) § Plugins). **The goal spec and the roadmap are
 [`docs/goals.md`](docs/goals.md).** Every task serves one of its milestone rows and
 updates that row's Status in its PR.
 
@@ -31,6 +34,7 @@ updates that row's Status in its PR.
 | [`docs/rendering.md`](docs/rendering.md) | The GPU backend (Dawn), the frame's pass table, every rendering technique and why, budgets, lab hooks, and what was considered and not taken |
 | [`docs/porting.md`](docs/porting.md) | How a TS module becomes C++: the oracle, layout and type mapping, the JS-semantics traps, parity levels |
 | [`docs/index.md`](docs/index.md) | GENERATED from the code's `ge:` tags: every file's one-line summary, owning skill, oracle and test; oracle file to port; keyword to files |
+| [`docs/publishing.md`](docs/publishing.md) | What a release is (GitHub Releases + GitHub Packages), how a game consumes it, changeset fragments, cutting a release, the credentials |
 
 ## Rules for every task
 
@@ -43,8 +47,16 @@ updates that row's Status in its PR.
   device ids, or paths under a home directory. Credentials live only in **GitHub
   Actions secrets** and are referenced as `${{ secrets.NAME }}`. Locally they come from
   the environment or a gitignored `.env`. Workflows request the narrowest
-  `permissions:` they need. Write every comment, doc and commit message for a stranger
-  reading it.
+  `permissions:` they need, map a secret into `env:` (never interpolate it into a
+  `run:` script) and never print one. Actions **variables** and workflow logs are public
+  too. An agent never handles a credential's value: a maintainer enters secrets in the
+  repository settings. Releases need only the built-in `GITHUB_TOKEN`
+  ([`docs/publishing.md`](docs/publishing.md) lists every credential). Write every
+  comment, doc and commit message for a stranger reading it.
+- **ENGINE, PLUGIN OR GAME** (G8). Before the first edit, decide each file's home with the
+  `plugins` skill: any genre would use it → `engine/`; any game of one genre or world →
+  `plugins/<name>/`; only this game → `games/<game>/`. Dependencies run game → plugin →
+  engine; `make agents-check` holds them.
 - **ONLY WHAT GAME5 NEEDS** (G4). Before you build a component, name the game5 feature
   it serves. A general-purpose feature with no game5 user is out of scope.
 - **FAST, AND PROVEN FAST** (G2). Hot paths do not allocate, branch on virtuals or chase
@@ -87,34 +99,40 @@ make lessons ARGS="port --scope=engine/core"   # read a skill's lessons, filtere
 make golden       # regenerate tests/golden/core_*, loop_*, racing_* from the TS oracle (needs Node 22+, ../oss-game-framework and ../game5)
 make golden-libm NODE=<node 24>  # regenerate tests/golden/libm_*, core_quat, core_solar, mapgen_generate under game5's pinned Node, on Linux x86-64
 make libm-check   # no <cmath> transcendental in simulation code
+make release-check # the changeset fragments valid + tools/release.py's tests; prints the next version
 ```
 
 CI (`.github/workflows/ci.yml`) runs fmt-check, agents-check, libm-check and lint, plus build and
 test on Linux x64 (GCC debug+ASan, GCC release, Clang release), Linux arm64 (GCC),
 macOS (Apple Clang) and Windows (MSVC). A parity failure on one row points at that
-row's compiler or libm.
+row's compiler or libm. `.github/workflows/packaging.yml` holds every PR to what a
+release needs: a `.changes/unreleased/` fragment for a shipped change (or the
+`no-changelog` label), and the installed package building a consumer on Linux, macOS
+and Windows. Releases are dispatched, never hand-made (`release` skill,
+[`docs/publishing.md`](docs/publishing.md)).
 
 ## Where things live
 
 | Path | What | Skill |
 | --- | --- | --- |
 | `engine/core/` | The deterministic pool: `prng.hpp` (mulberry32), `math.hpp` (hypot family, clamp, smoothstep), `libm/` (every transcendental game5 calls, at Node 24's bits; vendored, with `LICENSE.md`), `js.hpp` (JS number semantics), `js_text.hpp` (`toFixed` and `String(n)`, for log lines in the oracle's words), `noise.hpp` (hash2, value noise, the cached field), `heightfield.hpp` (the baked grid and its bilinear reads), `quat.hpp` (orientation; the Euler sign flip), `solar.hpp` (the sun and the moon, by geometry and on a real date), `output.hpp` (the one diagnostic channel; module state) | `determinism` |
-| `engine/racing/` | The racing primitives: `tape.hpp` (the control tape a ghost and a replay are kept on: the axis grid, the RLE + base64 byte format, the recorder, the reader, the map fingerprint), `records.hpp` (the record book's policy: `beats`, `split_gap`, `note_record`), `standings.hpp` (the field's order: `leg_progress`, `field_order`, `place_among`) | `port` |
 | `engine/loop/` | `run_clock.hpp`: the fixed-step accumulator between the display's frames and the 120 Hz step | `sim` |
 | `engine/platform/` | SDL3: window, input, gamepad, audio device, files (M6); the only place SDL is included | `platform` |
 | `engine/gpu/` | The webgpu.h wrapper over Dawn (M6): device, feature tiers, pipeline manifest, timestamps, readback; the only place webgpu.h is included | `gpu` |
 | `engine/render/` | Generic rendering mechanisms (M7–M8): the pass table, GPU-driven instances, the clipmap, shadows, sky, TAA-U, post (`docs/rendering.md`) | `render` |
 | `engine/audio/` | The synth's DSP graph (M9) | `audio` |
 | `engine/ui/` | Immediate-mode 2D and text, plus the dev UI (M10) | `ui` |
-| `games/fall_line/sim/mapgen/` | game5's `engine/mapgen/` ported, a file per oracle module: `generate.hpp` (`generate_level`, the attempts, the compile), `digest.hpp` (`level_digest`), `rules.hpp` (LEVEL_RULES), `types.hpp` (the `Level`), and every step it calls. v1 (the single piste) so far (M4a); the ski area is M4b | `sim` |
-| `games/fall_line/sim/analysis/` | game5's `engine/analysis/` ported: `analyze_level`, the rule book re-checked on a finished map, in the oracle's own message text | `sim` |
-| `games/fall_line/sim/` | game5's `engine/` ported: the step and the bot next (M5), library `fall_line_sim` | `sim` |
+| `plugins/` | Plugins: one directory each, one `ge_add_plugin` call in its `CMakeLists.txt`, built as `ge_<name>`; the build half is `cmake/Plugins.cmake`, the check `tools/check-plugins.mjs` | `plugins` |
+| `plugins/racing/` | The racing primitives (`ge::racing`): `tape.hpp` (the control tape a ghost and a replay are kept on: the axis grid, the RLE + base64 byte format, the recorder, the reader, the map fingerprint), `records.hpp` (the record book's policy: `beats`, `split_gap`, `note_record`), `standings.hpp` (the field's order: `leg_progress`, `field_order`, `place_among`) | `racing` |
+| `plugins/mountain/mapgen/` | The world generator (`ge::mountain::mapgen`): `generate.hpp` (`generate_level`, the attempts, the compile), `digest.hpp` (`level_digest`), `rules.hpp` (LEVEL_RULES), `types.hpp` (the `Level`), and every step it calls. v1 (the single piste) so far (M4a); the ski area is M4b | `mountain` |
+| `plugins/mountain/analysis/` | The rule book re-checked on a finished map (`ge::mountain::analysis`): `analyze_level` | `mountain` |
+| `games/fall_line/sim/` | Fall Line's own simulation: `create_game`, the step's order, the modes, the bot (M5) | `sim` |
 | `games/fall_line/app/` | game5's `pwa/` ported: the frame, the look, the HUD, the beds | `render`, `ui`, `audio` |
 | `tests/` | `<topic>_test.cpp`, one executable each; `check.hpp` (harness), `golden.hpp`, `golden/` | `testing` |
 | `tools/parity/` | Node scripts that run the TS oracle and write `tests/golden/` | `testing` |
 | `tools/check-agents.sh`, `tools/agents-index.mjs` | The structure check; the `ge:` tag check, `docs/index.md` and `make find` | `write-code` |
 | `tools/skill-lessons.mjs` | Reads, filters and checks the skills' lesson fragments (`make lessons`) | `skill-reflection` |
-| `CMakeLists.txt`, `CMakePresets.json`, `Makefile`, `.github/workflows/` | The build and CI | `build` |
+| `CMakeLists.txt`, `CMakePresets.json`, `cmake/`, `Makefile`, `.github/workflows/` | The build and CI | `build` |
 
 ### Finding things
 
@@ -137,7 +155,12 @@ Agents find code by grep, so the tree is built to be grepped:
 
 ### Stated once
 
-- **The FP flags**: `ge_flags` in the root `CMakeLists.txt`. Every target links it.
+- **The FP flags**: `ge_fp` in the root `CMakeLists.txt`, linked by `ge_core` (so by every
+  target) and published with it as `ge::fp`. `ge_flags` is the tree's own warnings and
+  sanitizers, never published.
+- **The plugin contract** (homes, layout, naming, dependencies, registration):
+  `docs/architecture.md` § Plugins; built by `cmake/Plugins.cmake`, checked by
+  `tools/check-plugins.mjs`.
 - **World conventions** (from game5): the plan is x/z with y up; heading 0 = +z,
   clockwise from above; pitch tips-up positive; roll right-side-down positive; `steer`
   and `edge` positive to the right. Stated in `engine/core/math.hpp`'s header.
@@ -173,7 +196,11 @@ and the directories agree.
 | `port` | Porting any game5 or framework module to C++ |
 | `testing` | Writing a test, a golden table or a parity script |
 | `build` | CMake, presets, dependencies (`FetchContent`), compiler flags, CI workflows |
-| `sim` | `games/fall_line/sim`: mapgen, the step, the bot, the headless sim CLI, the run clock |
+| `release` | A changeset fragment, `cmake/Packaging.cmake`, a public target, cutting or dry-running a release |
+| `plugins` | Deciding where code lives (engine, plugin or game), adding a plugin, moving code between homes |
+| `racing` | `plugins/racing`: the control tape, the record book's policy, the standings |
+| `mountain` | `plugins/mountain`: the generated ski mountain (mapgen, analysis, `levelDigest`) |
+| `sim` | `games/fall_line/sim`: `create_game`, the step, the bot, the headless sim CLI, the run clock |
 | `platform` | `engine/platform`: SDL3, the window, input, the gamepad, the audio device, files |
 | `gpu` | `engine/gpu`: the webgpu.h device over Dawn, feature tiers, buffers, pipelines and the manifest, WGSL and `make shaders-check` |
 | `render` | A draw pass, the pass table, GPU-driven instances, shadows, sky, TAA-U, post, lab captures, extraction from `GameState` |

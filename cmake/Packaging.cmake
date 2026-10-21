@@ -1,0 +1,91 @@
+# Installs the engine as the CMake package `gameengine2`, the thing every
+# release publishes (docs/publishing.md). Included once, at the end of the
+# root CMakeLists.txt, after every exported target exists.
+#
+#   find_package(gameengine2 0.1 REQUIRED)
+#   target_link_libraries(game PRIVATE ge::core ge::racing)   # ge::fp comes with them
+#
+# The package version is the VERSION file — the one place it is stated; the
+# release workflow writes it. Every target a consumer links is listed in
+# GE_EXPORTED_TARGETS below with its export name; a new public target is a
+# row there. ge::fp carries the floating-point determinism flags to the
+# consumer, so a game built against the package computes what the engine's
+# own tests computed. ge_flags (warnings, -Werror) is linked
+# only as $<BUILD_INTERFACE:...> and never reaches a consumer.
+#
+# Headers install under include/gameengine2/ with the same layout as
+# engine/ and plugins/, so an #include is spelled the same in-tree and installed.
+
+include_guard(GLOBAL)
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+
+file(STRINGS "${PROJECT_SOURCE_DIR}/VERSION" GE_PACKAGE_VERSION LIMIT_COUNT 1)
+set(GE_INSTALL_INCLUDEDIR "${CMAKE_INSTALL_INCLUDEDIR}/gameengine2")
+set(GE_INSTALL_CMAKEDIR "${CMAKE_INSTALL_LIBDIR}/cmake/gameengine2")
+
+# target -> export name (consumers see ge::<export name>)
+set(GE_EXPORTED_TARGETS ge_fp fp ge_core core)
+# Every plugin is published as ge::<plugin> (cmake/Plugins.cmake collects them).
+get_property(_ge_plugins GLOBAL PROPERTY GE_PLUGIN_TARGETS)
+foreach(_target IN LISTS _ge_plugins)
+  string(REGEX REPLACE "^ge_" "" _name ${_target})
+  list(APPEND GE_EXPORTED_TARGETS ${_target} ${_name})
+endforeach()
+
+set(_ge_targets "")
+while(GE_EXPORTED_TARGETS)
+  list(POP_FRONT GE_EXPORTED_TARGETS _target _export_name)
+  set_target_properties(${_target} PROPERTIES EXPORT_NAME ${_export_name})
+  list(APPEND _ge_targets ${_target})
+  add_library(ge::${_export_name} ALIAS ${_target})  # same spelling under FetchContent
+endwhile()
+
+target_include_directories(ge_core INTERFACE $<INSTALL_INTERFACE:${GE_INSTALL_INCLUDEDIR}>)
+
+install(TARGETS ${_ge_targets}
+  EXPORT gameengine2Targets
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+install(DIRECTORY "${PROJECT_SOURCE_DIR}/engine/"
+  DESTINATION ${GE_INSTALL_INCLUDEDIR}
+  FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h" PATTERN "*.inl")
+
+# A plugin's headers install beside the engine's (a plugin's name never equals an engine
+# directory), so "racing/tape.hpp" is spelled the same in-tree and installed. Labs and a
+# plugin's presentation half are not part of the published simulation.
+install(DIRECTORY "${PROJECT_SOURCE_DIR}/plugins/"
+  DESTINATION ${GE_INSTALL_INCLUDEDIR}
+  FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h" PATTERN "*.inl"
+  PATTERN "labs" EXCLUDE PATTERN "app" EXCLUDE)
+
+install(EXPORT gameengine2Targets
+  NAMESPACE ge::
+  DESTINATION ${GE_INSTALL_CMAKEDIR})
+
+configure_package_config_file(
+  "${CMAKE_CURRENT_LIST_DIR}/gameengine2Config.cmake.in"
+  "${PROJECT_BINARY_DIR}/gameengine2Config.cmake"
+  INSTALL_DESTINATION ${GE_INSTALL_CMAKEDIR})
+
+# 0.x: a minor bump may break (tools/release.py), so 0.x matches only its own
+# minor; from 1.0 on, any later version of the same major satisfies a request.
+if(GE_PACKAGE_VERSION VERSION_LESS 1.0.0)
+  set(_ge_compat SameMinorVersion)
+else()
+  set(_ge_compat SameMajorVersion)
+endif()
+write_basic_package_version_file(
+  "${PROJECT_BINARY_DIR}/gameengine2ConfigVersion.cmake"
+  VERSION ${GE_PACKAGE_VERSION}
+  COMPATIBILITY ${_ge_compat})
+
+install(FILES
+  "${PROJECT_BINARY_DIR}/gameengine2Config.cmake"
+  "${PROJECT_BINARY_DIR}/gameengine2ConfigVersion.cmake"
+  DESTINATION ${GE_INSTALL_CMAKEDIR})
+
+install(FILES "${PROJECT_SOURCE_DIR}/LICENSE" "${PROJECT_SOURCE_DIR}/CHANGELOG.md"
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/gameengine2 OPTIONAL)

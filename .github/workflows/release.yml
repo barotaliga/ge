@@ -1,0 +1,222 @@
+name: release
+
+# Cuts a release of the engine. Dispatched on main — by an agent through the
+# GitHub API (`actions/workflows/release.yml/dispatches`) or by hand — and
+# runs unattended from there (docs/publishing.md):
+#
+#   plan     the next version off the .changes/unreleased/ fragments
+#            (tools/release.py bump), refusing a tag that already exists
+#   package  on every platform: build, test, install, build a consumer
+#            against the installed package, archive it
+#   publish  collate CHANGELOG.md, commit VERSION + CHANGELOG, tag vX.Y.Z,
+#            push; GitHub Release with the packages, the source, SHA256SUMS
+#            and build provenance; the same files to GitHub Packages as an
+#            OCI artifact (ghcr.io/<owner>/gameengine2:X.Y.Z and :latest)
+#
+# Nothing is tagged until every platform's package is built and tested, and
+# the push is refused if main moved since the plan, so a run that fails
+# before publish leaves nothing behind: fix it and dispatch again. One that
+# fails inside publish is finished with "Re-run failed jobs". `dry_run` runs
+# plan + package only.
+#
+# Credentials: the built-in GITHUB_TOKEN covers the release, the packages and
+# the attestations. RELEASE_TOKEN is an OPTIONAL repository secret, used only
+# for the commit and tag push when set (a protected main, or a tag push that
+# should trigger other workflows). This repository is public: no token or
+# other sensitive value is ever written in this file, a variable or a log.
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Semver bump. 'auto' derives it from .changes/unreleased/ (breaking → major, Added/Changed/Deprecated/Removed → minor, Fixed/Security → patch; breaking is a minor while on 0.x)."
+        required: true
+        type: choice
+        default: auto
+        options: [auto, patch, minor, major]
+      dry_run:
+        description: "Plan and build every package, publish nothing."
+        required: true
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+      sha: ${{ steps.plan.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Validate fragments
+        run: python3 tools/release.py check
+
+      - name: Plan the version
+        id: plan
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          if [ "$BUMP" = "auto" ]; then BUMP=--auto; fi
+          VERSION=$(python3 tools/release.py bump "$BUMP")
+          if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
+            echo "::error::tag v$VERSION already exists"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "Releasing v$VERSION from $(git rev-parse --short HEAD)" >> "$GITHUB_STEP_SUMMARY"
+
+  package:
+    needs: plan
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - platform: linux-x64
+            os: ubuntu-latest
+          - platform: macos-arm64
+            os: macos-latest
+          - platform: windows-x64
+            os: windows-latest
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+      NAME: gameengine2-${{ needs.plan.outputs.version }}-${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+
+      # The publish job commits this same VERSION, so the package is built
+      # from exactly what the tag will hold.
+      - run: printf '%s\n' "$VERSION" > VERSION
+
+      - name: Build and test
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release --parallel
+          ctest --test-dir build -C Release --output-on-failure
+
+      - name: Install
+        run: cmake --install build --config Release --prefix "stage/$NAME"
+
+      - name: Build a consumer against the installed package
+        run: |
+          ROOT=$(cygpath -m "$PWD" 2>/dev/null || pwd)  # a path CMake reads on Windows too
+          cmake -S tests/package/consumer -B build-consumer -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$ROOT/stage/$NAME" -DGE_EXPECT_VERSION="$VERSION"
+          cmake --build build-consumer --config Release
+          ctest --test-dir build-consumer -C Release --output-on-failure
+
+      - name: Archive
+        run: |
+          mkdir dist
+          tar -C stage -czf "dist/$NAME.tar.gz" "$NAME"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: package-${{ matrix.platform }}
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    needs: [plan, package]
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+      TAG: v${{ needs.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN || github.token }}
+
+      # Every step from here is safe to re-run ("Re-run failed jobs"): a tag
+      # already pushed by an earlier attempt is reused, a release already
+      # created gets its files replaced, an OCI push overwrites.
+      - name: Collate CHANGELOG, commit, tag, push
+        run: |
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "$TAG already pushed by an earlier attempt; reusing it"
+            git checkout -q "$TAG"
+          else
+            python3 tools/release.py collate "$VERSION"
+            git config user.name 'github-actions[bot]'
+            git config user.email 'github-actions[bot]@users.noreply.github.com'
+            git add VERSION CHANGELOG.md .changes/unreleased
+            git commit -m "chore(release): $TAG"
+            git tag -a "$TAG" -m "Release $TAG"
+            git push origin HEAD:main
+            git push origin "$TAG"
+          fi
+          python3 tools/release.py notes "$VERSION" > "$RUNNER_TEMP/notes.md"
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: package-*
+          path: dist
+          merge-multiple: true
+
+      - name: Source archive and checksums
+        run: |
+          git archive --format=tar.gz --prefix="gameengine2-$VERSION/" -o "dist/gameengine2-$VERSION-src.tar.gz" "$TAG"
+          (cd dist && sha256sum *.tar.gz > SHA256SUMS)
+          cat dist/SHA256SUMS >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: dist/*.tar.gz
+
+      - name: GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* \
+              --title "$TAG" \
+              --notes-file "$RUNNER_TEMP/notes.md" \
+              --verify-tag
+          fi
+
+      - uses: oras-project/setup-oras@v2
+
+      - name: GitHub Packages (OCI artifact on ghcr.io)
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: |
+          REF="ghcr.io/${GITHUB_REPOSITORY,,}"
+          printf '%s' "$GHCR_TOKEN" | oras login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          cd dist
+          oras push "$REF:$VERSION" \
+            --artifact-type application/vnd.gameengine2.release.v1 \
+            --annotation "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+            --annotation "org.opencontainers.image.version=$VERSION" \
+            --annotation "org.opencontainers.image.description=gameengine2 $TAG: CMake packages per platform, source, SHA256SUMS" \
+            *.tar.gz:application/gzip SHA256SUMS:text/plain
+          oras tag "$REF:$VERSION" latest
+          echo "Published $REF:$VERSION" >> "$GITHUB_STEP_SUMMARY"

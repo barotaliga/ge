@@ -1,0 +1,69 @@
+name: packaging
+
+# Holds every pull request to what the release workflow will need, so a
+# dispatched release does not find out first (docs/publishing.md):
+#   release-tools  tools/release.py's tests, and every fragment valid
+#   changeset      a change to the engine's build or headers ships a
+#                  .changes/unreleased/ fragment, or carries `no-changelog`
+#   package        install the package and build a consumer against it,
+#                  on every platform a release ships
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: packaging-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release-tools:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: make release-check
+
+  changeset:
+    if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'no-changelog')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: A shipped change carries a fragment
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          CHANGED=$(git diff --name-only "$BASE"...HEAD)
+          SHIPPED=$(echo "$CHANGED" | grep -E '^(engine/|cmake/|CMakeLists\.txt$)' || true)
+          FRAGMENTS=$(git diff --name-only --diff-filter=A "$BASE"...HEAD -- '.changes/unreleased/*.md' | grep -v README.md || true)
+          if [ -n "$SHIPPED" ] && [ -z "$FRAGMENTS" ]; then
+            echo "::error::This PR changes what a release ships but adds no .changes/unreleased/ fragment."
+            echo "Add one (see .changes/unreleased/README.md), or label the PR no-changelog if no consumer can notice."
+            echo "$SHIPPED"
+            exit 1
+          fi
+
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build, install, consume
+        run: |
+          ROOT=$(cygpath -m "$PWD" 2>/dev/null || pwd)  # a path CMake reads on Windows too
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release --parallel
+          cmake --install build --config Release --prefix stage
+          cmake -S tests/package/consumer -B build-consumer -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$ROOT/stage"
+          cmake --build build-consumer --config Release
+          ctest --test-dir build-consumer -C Release --output-on-failure

@@ -28,6 +28,7 @@ C++ engine that ports game5 against a read-only TypeScript oracle.
 | `port` | The bottom-up procedure from a TS oracle file to a bit-exact C++ port |
 | `testing` | The header harness, golden files from the oracle, CTest |
 | `build` | CMake, presets, pinned dependencies, the CI matrix, workflow hygiene |
+| `release` | Changeset fragments, the installed package, cutting a release to GitHub Releases + Packages |
 | `sim` | Fall Line's headless simulation: mapgen, the step, the bot, the run clock |
 | `platform` | SDL3: window, input, gamepad, audio device, files, focus |
 | `gpu` | webgpu.h over Dawn: device, feature tiers, resources, the pipeline manifest, WGSL |
@@ -36,3 +37,13 @@ C++ engine that ports game5 against a read-only TypeScript oracle.
 | `ui` | The 2D layer and text, the HUD and cards, the strings table, the dev UI |
 | `perf` | Budgets, measuring, the proofs a speed-up owes, the levers |
 | `agent-interface` | Diagnostics as prompts, consumer skills, the `ge` CLI |
+| `plugins` | Engine, plugin or game: where code lives, adding a plugin, moving code between homes |
+
+## Plugins
+
+One skill per plugin, named after it (`docs/architecture.md` § Plugins).
+
+| Skill | One line |
+| --- | --- |
+| `racing` | `plugins/racing`: the control tape, the record book's policy, the standings |
+| `mountain` | `plugins/mountain`: the generated ski mountain, its generator and its rule book |

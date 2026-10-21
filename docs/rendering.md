@@ -466,7 +466,7 @@ contract (scenes, captions, sheets). The renderer's half is:
 | --- | --- |
 | `engine/gpu/` | The `webgpu.h` wrapper: the device and its feature tiers, RAII handles, the pipeline manifest and creation counter, timestamp queries, staging uploads, readback. The only directory that includes `webgpu.h` |
 | `engine/render/` | Mechanisms any game could use: the pass table and named targets, the frame's stats, GPU-driven instance families and their culling, the depth pyramid, the heightfield clipmap renderer, the horizon map, cascaded shadows and the shadow atlas, the sky tables and aerial perspective, the cloud volume, TAA-U, post, compute particles, skinning, and the shared WGSL library |
-| `plugins/<genre>/app/` | A genre's looks, shared by every game of that genre: for a snowy mountain, the snow material, the trail and deformation maps and their stamping, and the procedural tree shapes |
+| `plugins/<name>/app/` | A plugin's presentation half, shared by every game that links the plugin: `mountain/app` holds the snow material, the trail and deformation maps and their stamping, and the procedural tree shapes; `skier/app` holds the figure and the spray emitters (`docs/architecture.md` § Plugins) |
 | `games/fall_line/app/` | The game's own: its pass table, its quality ladder's values, its grade, and whatever draws only this game has |
 
 A piece goes in `engine/render` only if it carries no genre's words. A heightfield, an

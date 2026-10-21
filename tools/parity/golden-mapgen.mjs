@@ -1,4 +1,4 @@
-// Writes tests/golden/mapgen_generate.txt from the TypeScript ORACLE: game5's own generateLevel,
+// Writes tests/golden/mountain_generate.txt from the TypeScript ORACLE: game5's own generateLevel,
 // on the maps M4a ports (generator v1, the single piste): LEVEL_SEEDS in the alpine, the
 // benchmark's map, and one map in each region that lays a crust. The generator reaches sin,
 // cos, atan2, acos, exp, log and pow, so this runs under game5's pinned Node on Linux x86-64
@@ -10,7 +10,7 @@
 // One row per map, words of text: `seed version region` then `key=value` pairs. `digest` is
 // game5's own levelDigest and `attempt` the sub-seed the search accepted; every other value is
 // a 64-bit FNV-1a (hex) over one SECTION of the level laid out as little-endian bytes, so a
-// failing C++ test names the section that moved. The layout is tests/mapgen_generate_test.cpp's
+// failing C++ test names the section that moved. The layout is tests/mountain_generate_test.cpp's
 // `LevelBytes` (keep the two in step):
 //   ground, packed, crust  the grids' float32 samples (crust "-" when the region lays none)
 //   points                 x z y s heading width (f64) per station
@@ -30,7 +30,7 @@
 //   log                    the debug lines the search wrote (the attempts it refused and why),
 //                          UTF-8 as hex, joined by '\n' ("-" when it accepted the first)
 //
-// ge:summary Writes tests/golden/mapgen_generate.txt from game5's own generateLevel (v1)
+// ge:summary Writes tests/golden/mountain_generate.txt from game5's own generateLevel (v1)
 // ge:keywords golden parity generator mapgen generateLevel levelDigest
 // ge:skill testing sim
 import { writeFileSync } from "node:fs";
@@ -189,6 +189,6 @@ for (const { seed, region } of CASES) {
   rows.push(words.join(" "));
   console.log(`${seed} ${region}: ${levelDigest(level)} attempt ${level.attempt} in ${ms.toFixed(0)} ms`);
 }
-const path = resolve("tests/golden/mapgen_generate.txt");
+const path = resolve("tests/golden/mountain_generate.txt");
 writeFileSync(path, [banner, ...rows].join("\n") + "\n");
 console.log(`${path}: ${rows.length} rows`);

@@ -20,18 +20,19 @@ and the file explains itself.
 - **Names**: `snake_case` for files, functions and variables; `PascalCase` for types;
   `kConstant`. Mirror the oracle's names (`createGame` becomes `create_game`). Units go
   in names or comments (`speed_mps`, `cell_m`, `dt_s`).
-- **Namespaces**: `ge::<dir>` for the engine (`ge::core`), `fall_line::<dir>` for the
-  demo game.
+- **Namespaces**: `ge::<dir>` for the engine (`ge::core`), `ge::<plugin>::<dir>` for a
+  plugin (`ge::mountain::mapgen`), `fall_line::<dir>` for the demo game.
 - **Paths mirror the oracle.** A port of `<oracle>/src/<dir>/<name>.ts` is
   `engine/<dir>/<name>.hpp` (a game5 `engine/<dir>/<name>.ts` is
-  `games/fall_line/sim/<dir>/<name>.hpp`), with kebab-case turned to snake_case
+  `plugins/<plugin>/<dir>/<name>.hpp` or `games/fall_line/sim/<dir>/<name>.hpp`, by the
+  `plugins` skill's test), with kebab-case turned to snake_case
   (`run-clock.ts` is `run_clock.hpp`). Its test is `tests/<dir>_<name>_test.cpp`, its
   golden table `tests/golden/<dir>_<name>.txt`, and the script that writes it
   `tools/parity/golden-<dir>.mjs`. Knowing one of the five names gives the other four.
 
 ## Discovery tags
 
-Agents find code by grep. Every source file (`engine/`, `games/`, `tests/`, `tools/`) ends its
+Agents find code by grep. Every source file (`engine/`, `plugins/`, `games/`, `tests/`, `tools/`) ends its
 leading comment with a block of `ge:` lines, which `make index` turns into
 [`docs/index.md`](../../../docs/index.md) and `make agents-check` holds:
 
@@ -50,7 +51,7 @@ leading comment with a block of `ge:` lines, which `make index` turns into
 | --- | --- | --- |
 | `ge:summary` | yes | One line, under about 100 characters: what the file owns. It is the file's row in the index. |
 | `ge:keywords` | yes | Space-separated. Lower-case kebab CONCEPTS (`value-noise`, `fixed-step`) and the oracle's IDENTIFIERS as TypeScript spells them (`sampleField`, `MAX_FRAME_SECONDS`), so a grep for the oracle's name lands on the port. Include the synonyms an agent would type (`rng random prng`). |
-| `ge:skill` | yes | The skill(s) that own the subject, space-separated; each must exist. |
+| `ge:skill` | yes | The skill(s) that own the subject, space-separated; each must exist. A file in `plugins/<name>/` names `<name>` first (`tools/check-plugins.mjs`). |
 | `ge:oracle` | ports | `game5/<path>` or `oss-game-framework/<path>`: the file it ports. Checked against `../<repo>` when cloned there. |
 | `ge:test` | when one exists | The test file(s) that hold it; each must exist. |
 

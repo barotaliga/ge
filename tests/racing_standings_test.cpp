@@ -1,10 +1,10 @@
-// engine/racing/standings against the TypeScript oracle (tests/golden/racing_standings.txt,
+// plugins/racing/standings against the TypeScript oracle (tests/golden/racing_standings.txt,
 // written by tools/parity/golden-racing.mjs): legs to the bit, and whole fields' order and
 // every rider's place, dead heats included.
 //
 // ge:summary Parity test: racing/standings against the oracle
 // ge:keywords test parity golden standings
-// ge:skill testing
+// ge:skill testing racing
 #include "racing/standings.hpp"
 
 #include <vector>

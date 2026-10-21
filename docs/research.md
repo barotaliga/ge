@@ -177,8 +177,10 @@ applied per material. Shadows: a sun shadow map plus a shadow box for the riders
 Particles: spray, snow cloud and snowfall. Post: a colour grade. The techniques
 the engine uses to draw them (GPU-driven instance culling, a depth prepass, a horizon
 map plus cached cascades plus a shadow atlas, sky lookup tables, temporal upscaling,
-compute particles) and the ones considered and not taken are in `docs/rendering.md`.
-The frame is a fixed, ordered pass table; no general render graph.
+compute particles), where each lives (`engine/render`, a plugin's `app/`, or
+`games/fall_line/app`; `docs/architecture.md` § Plugins), and the ones considered and
+not taken are in `docs/rendering.md`. The frame is a fixed, ordered pass table; no
+general render graph.
 
 ### Audio
 
