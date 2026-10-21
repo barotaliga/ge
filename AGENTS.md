@@ -137,12 +137,15 @@ make golden       # regenerate the golden tables (working area: porting/porting.
 make golden-libm  # the golden tables that reach a transcendental (same place)
 make libm-check   # no <cmath> transcendental in simulation code
 make release-check # the changeset fragments valid + tools/release.py's tests; prints the next version
+make shaders-check # every embedded WGSL shader compiled by Tint offline (needs GE_GPU)
 ```
 
-CI (`.github/workflows/ci.yml`) runs fmt-check, agents-check, libm-check and lint, plus build and
+CI (`.github/workflows/ci.yml`) runs fmt-check, agents-check, libm-check, lint and shaders-check, plus build and
 test on Linux x64 (GCC debug+ASan, GCC release, Clang release), Linux arm64 (GCC),
 macOS (Apple Clang) and Windows (MSVC). A golden failure on one row points at that
-row's compiler or libm. `.github/workflows/packaging.yml` holds every PR to what a
+row's compiler or libm. The Linux x64 rows install Mesa's lavapipe and run the tests under a
+virtual X display with `GE_GPU_REQUIRE=1`, so the GPU and window tests run there and a skip
+fails; elsewhere they run when the runner has an adapter and skip (CTest's exit 77) when not. `.github/workflows/packaging.yml` holds every PR to what a
 release needs: a `.changes/unreleased/` fragment for a shipped change (or the
 `no-changelog` label), and the installed package building a consumer on Linux, macOS
 and Windows. Releases are dispatched, never hand-made (`release` skill,
@@ -156,8 +159,8 @@ and Windows. Releases are dispatched, never hand-made (`release` skill,
 | `engine/loop/` | `run_clock.hpp`: the fixed-step accumulator between the display's frames and the 120 Hz step | `sim` |
 | `engine/lab/` | The lab contract and runner: `lab.hpp` (`LabSpec`, `GE_LAB`, the `Lab` context: metrics, tables, captioned shots, failures, the digest), `runner.hpp` (the `labs` command line: list, run, tag, compare, smoke, repeat, digest baseline), `report.hpp` (report.json, metrics.tsv, the contact sheet), `raster.hpp` (the CPU picture and 5x7 font), `png.hpp`; `labs/` holds the engine's own labs | `labs` |
 | `*/labs/` | Labs beside their subject, compiled into the one `labs` executable: `engine/lab/labs/`, `plugins/<name>/labs/`, `games/<name>/labs/` | `labs` |
-| `engine/platform/` | SDL3: window, input, gamepad, audio device, files (M6); the only place SDL is included | `platform` |
-| `engine/gpu/` | The webgpu.h wrapper over Dawn (M6): device, feature tiers, pipeline manifest, timestamps, readback; the only place webgpu.h is included | `gpu` |
+| `engine/platform/` | SDL3 (`cmake/SDL.cmake`, `GE_PLATFORM`): `window.hpp` (the window, its native handles, the input snapshot, the frame clock); gamepad, touch, audio and files as their milestones need them. The only place SDL is included | `platform` |
+| `engine/gpu/` | The native GPU device over Dawn's prebuilt release (`cmake/Dawn.cmake`, `GE_GPU`): `device.hpp` (adapter, feature tiers, error lines), `pipeline.hpp` (shaders, the manifest and its creation counter), `surface.hpp`, `target.hpp` (offscreen targets, readback), `timer.hpp` (GPU ms per pass), `test_scene.hpp`; WGSL embedded by `cmake/Wgsl.cmake`. The only place webgpu.h is included | `gpu` |
 | `engine/render/` | Generic rendering mechanisms (M7–M8): the pass table, GPU-driven instances, the clipmap, shadows, sky, TAA-U, post (`docs/rendering.md`) | `render` |
 | `engine/audio/` | The synth's DSP graph (M9) | `audio` |
 | `engine/ui/` | Immediate-mode 2D and text, plus the dev UI (M10) | `ui` |
@@ -166,7 +169,7 @@ and Windows. Releases are dispatched, never hand-made (`release` skill,
 | `plugins/mountain/mapgen/` | The world generator (`ge::mountain::mapgen`): `generate.hpp` (`generate_level`, the attempts, the compile), `digest.hpp` (`level_digest`), `rules.hpp` (the rule book's numbers), `types.hpp` (the `Level`), and every step it calls. v1 (the single piste, M4a), and the ski area (M4b) stage by stage: `resort_build.hpp` (the attempt's state and its stages), `massif.hpp`, `resort.hpp` (the plan), `station_pad.hpp`, `lift_chain.hpp`, `lift_line.hpp`, `resort_rules.hpp` (the ski area's rule book's numbers), the walk (`network.hpp`, `network_build.hpp`, `net_index.hpp`, `run_start.hpp`, `summit_ramps.hpp`) and the lanes and drag lifts that link it (`lanes.hpp`, `access_build.hpp`, `drags.hpp`, `links.hpp`) | `mountain` |
 | `plugins/mountain/analysis/` | The rule book re-checked on a finished map (`ge::mountain::analysis`): `analyze_level` | `mountain` |
 | `games/fall_line/sim/` | Fall Line's own simulation: `create_game`, the step's order, the modes, the bot (M5) | `sim` |
-| `games/fall_line/app/` | Fall Line's presentation: the frame, the look, the HUD, the beds | `render`, `ui`, `audio` |
+| `games/fall_line/app/` | Fall Line's presentation: `main.cpp` (the `fall_line` app: the window, the frame loop on the run clock), then the frame, the look, the HUD, the beds | `platform`, `gpu`, `render`, `ui`, `audio` |
 | `tests/` | `<topic>_test.cpp`, one executable each; `check.hpp` (harness), `golden.hpp`, `golden/` | `testing` |
 | `porting/` | The WORKING AREA (above): the porting guide, the porting map, the golden-table generators. Deleted when porting ends | `port` |
 | `tools/check-agents.sh`, `tools/agents-index.mjs` | The structure check; the `ge:` tag check, `docs/index.md` and `make find` | `write-code` |

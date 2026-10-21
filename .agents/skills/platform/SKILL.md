@@ -23,13 +23,27 @@ sees plain structs.
   key (settings, records, ghosts).
 - **Time**: a monotonic clock for the frame delta only. The simulation never sees it.
 
+## What is built (M6)
+
+- `engine/platform/window.hpp`: `open_window`, `Window::native()` (X11, Wayland, a
+  `CAMetalLayer` on Apple, Win32), `pixel_size`, `poll_input` into an `InputSnapshot`
+  (keys by USB HID usage, the pointer, focus, resize, quit), `now_ns`, `display_available`.
+- `cmake/SDL.cmake`: `GE_PLATFORM` and THE PIN (SDL's version and its archive's SHA-256).
+  On Linux SDL needs the X11 and Wayland headers (CI's `GE_LINUX_PACKAGES` lists them); a
+  missing one fails the configure with the package to install.
+- `games/fall_line/app/main.cpp`: the frame loop: input, focus pauses the run clock, the
+  steps it grants, acquire, draw, present.
+
 ## Rules
 
 - SDL is fetched with `FetchContent`, pinned to a release tag, and statically linked.
 - Poll events once per frame on the main thread.
 - The mobile builds (M11: iOS, iPadOS, Android) use SDL's iOS and Android backends through the same API. There is no web build.
-- Headless tests never create a window. The platform layer has a null backend for
-  CI.
+- Headless tests never create a window. A test that needs one checks
+  `display_available()` and skips without a display; in the container and on CI's Linux
+  x64 rows it runs under `xvfb-run -a`.
+- A new window system (Android, UIKit in M11) is a `NativeWindow::Kind`, a case in
+  `Window::native` and a case in `engine/gpu/surface.cpp`, nothing else.
 
 ## Labs
 

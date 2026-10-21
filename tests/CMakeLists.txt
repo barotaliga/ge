@@ -4,12 +4,35 @@ file(GLOB GE_TEST_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/*_test.c
 # Every test links the engine and every plugin, so a plugin's tests (tests/<plugin>_*_test.cpp)
 # need no wiring either.
 get_property(GE_PLUGIN_TARGETS GLOBAL PROPERTY GE_PLUGIN_TARGETS)
+# tests/gpu_*_test.cpp need GE_GPU and link ge_gpu; tests/platform_*_test.cpp need GE_PLATFORM
+# and GE_GPU (a window is only worth opening to present to). Either kind exits 77 (CTest's
+# SKIP) when the machine cannot run it (no adapter, no display), except where the environment
+# sets GE_GPU_REQUIRE=1 (CI's Linux x64 rows, with lavapipe and a virtual display): there a
+# skip is a failure.
 foreach(src ${GE_TEST_SOURCES})
   get_filename_component(name ${src} NAME_WE)
+  set(extra)
+  if(name MATCHES "^gpu_")
+    if(NOT GE_GPU)
+      continue()
+    endif()
+    set(extra ge_gpu)
+  elseif(name MATCHES "^platform_")
+    if(NOT GE_PLATFORM OR NOT GE_GPU)
+      continue()
+    endif()
+    set(extra ge_platform ge_gpu)
+  endif()
   add_executable(${name} ${src} main.cpp)
-  target_link_libraries(${name} PRIVATE ge_core ge_lab ${GE_PLUGIN_TARGETS})
+  target_link_libraries(${name} PRIVATE ge_core ge_lab ${GE_PLUGIN_TARGETS} ${extra})
   target_compile_definitions(${name} PRIVATE GE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
   add_test(NAME ${name} COMMAND ${name})
+  if(extra)
+    # The software driver's worker threads keep allocations past exit, which the leak check
+    # would report as ours; every other test keeps it.
+    set_tests_properties(${name} PROPERTIES SKIP_RETURN_CODE 77
+      ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
+  endif()
 endforeach()
 
 # Every lab at its smoke flags, twice in one process (a digest that moves between the two runs

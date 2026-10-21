@@ -49,9 +49,13 @@ install(TARGETS ${_ge_targets}
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
+# engine/platform and engine/gpu are not published yet: a consumer would need SDL3 and Dawn
+# from the package too, which the store builds (M11) and the ge CLI (M12) decide. The release
+# and packaging workflows build with -DGE_PLATFORM=OFF -DGE_GPU=OFF.
 install(DIRECTORY "${PROJECT_SOURCE_DIR}/engine/"
   DESTINATION ${GE_INSTALL_INCLUDEDIR}
-  FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h" PATTERN "*.inl")
+  FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h" PATTERN "*.inl"
+  PATTERN "gpu" EXCLUDE PATTERN "platform" EXCLUDE)
 
 # A plugin's headers install beside the engine's (a plugin's name never equals an engine
 # directory), so "racing/tape.hpp" is spelled the same in-tree and installed. Labs and a

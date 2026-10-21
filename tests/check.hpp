@@ -3,8 +3,8 @@
 // names every broken case. Each test file is its own executable, registered
 // with CTest by tests/CMakeLists.txt; exit code 1 on any failure.
 //
-// ge:summary The test harness: TEST blocks, CHECK, CHECK_BITS
-// ge:keywords test harness check check-bits assert
+// ge:summary The test harness: TEST blocks, CHECK, CHECK_BITS, skip
+// ge:keywords test harness check check-bits assert skip
 // ge:skill testing
 #pragma once
 
@@ -39,6 +39,17 @@ inline uint64_t bits(double v) {
   uint64_t u;
   std::memcpy(&u, &v, sizeof u);
   return u;
+}
+
+// A test executable that cannot run here (no GPU adapter, no display) skips: main() exits 77,
+// which CTest reports as skipped rather than passed.
+inline bool& skipped() {
+  static bool s = false;
+  return s;
+}
+inline void skip(const std::string& why) {
+  if (!skipped()) std::fprintf(stderr, "SKIP %s\n", why.c_str());
+  skipped() = true;
 }
 
 inline void fail(const char* file, int line, const std::string& what) {

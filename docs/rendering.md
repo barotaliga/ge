@@ -1,8 +1,9 @@
 # Rendering
 
 How the engine draws a frame: the GPU backend, the frame's passes, and the techniques
-each pass uses. Nothing here is built yet. Milestones M6 to M8 in `docs/goals.md` build
-it, and this page is the plan they build to. Change this page in the same PR that
+each pass uses. Milestones M6 to M8 in `docs/goals.md` build it, and this page is the plan
+they build to: M6 built the backend (`engine/gpu`, `engine/platform`); the passes are M7 and
+M8. Change this page in the same PR that
 changes the plan.
 
 The aim is a picture that looks good and costs little. Every technique below was
@@ -57,7 +58,8 @@ reasons:
   Vulkan or Metal is often a hang or a corrupt frame with no message, which only agents
   can debug here. Release builds turn validation off (Dawn's `skip_validation` toggle)
   and drop the shader robustness transform (`disable_robustness`), so the checks cost
-  nothing in a shipped frame. M6 verifies both toggles.
+  nothing in a shipped frame. `gpu::create_device` sets both in a release build
+  (`tests/gpu_device_test.cpp` draws with them on).
 - **WGSL everywhere, compiled by one compiler.** Tint compiles WGSL to MSL, SPIR-V and
   HLSL, so there is no shader cross-compiler toolchain in the build, and
   `make shaders-check` validates every shader offline.
@@ -102,9 +104,17 @@ extension behind a feature tier, never a second graphics API.
   abstraction for agents to learn, and none gives more of what this workload needs.
 
 **Where Dawn is built.** The prebuilt GitHub release covers Linux x64, Windows x64 and
-macOS. iOS, iPadOS and Android (and Linux arm64) build Dawn from source with its CMake
-build, cached in CI. Until that cache exists, those rows build with `GE_GPU=OFF`, which
+macOS (arm64): `cmake/Dawn.cmake` pins one release tag and each archive's SHA-256, and
+downloads it into `.cache/deps/` at configure time (the archive also carries `tint`, which
+`make shaders-check` runs). The prebuilt library is a Release build, so an MSVC Debug build
+refuses `GE_GPU=ON`. iOS, iPadOS and Android (and Linux arm64) will build Dawn from source with
+its CMake build, cached in CI (M11). Until then those rows build with `GE_GPU=OFF`, which
 builds and tests everything except `engine/gpu`, `engine/render` and the app.
+
+**The C++ surface.** `engine/gpu` calls Dawn's `webgpu_cpp.h` (`wgpu::Device`,
+`wgpu::Buffer`, …), whose handles are reference-counted RAII already. The engine adds
+behaviour (the device's choices, the error lines, the manifest's counter, readback, timing)
+and no second layer of handles, so the code reads as the WebGPU spec spells it.
 
 ## Mobile GPUs
 
@@ -405,9 +415,13 @@ an Apple M3 Max laptop on macOS (Metal), used only for what the container cannot
 
 **In the Linux container:**
 
-- Dawn draws on a **software Vulkan adapter**: SwiftShader, which Dawn can build in and
-  which needs no system driver, or Mesa's lavapipe where the package is installed. M6
-  picks one and pins it; `ge_gpu_info` prints which adapter a run used.
+- Dawn draws on a **software Vulkan adapter: Mesa's lavapipe** (it names itself
+  `llvmpipe`), from Ubuntu 24.04's `mesa-vulkan-drivers` package, the same package the
+  development container and CI's Linux x64 rows install, so a golden image made in one
+  matches the other. Lavapipe was chosen over SwiftShader because it is a system package
+  (no extra build of Dawn) and has the optional features the tiers test (timestamps,
+  subgroups, f16). `gpu::create_device` prints the adapter a run used
+  (`gpu::adapter_line`), and the golden tests compare pixels only on it.
 - Software rendering is one to two orders of magnitude slower than a GPU, and the
   container has a few cores. Labs therefore render at a small default size (640×360),
   with the fewest settle frames that make a still repeatable, and a lab can name the

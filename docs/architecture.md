@@ -36,13 +36,16 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
 - **`games/fall_line/sim`**: Fall Line's own simulation. It may
   include only `engine/core`, `engine/loop`, the plugins it links and itself. It has no platform, no GPU and no wall
   clock.
-- **`engine/platform`**: SDL3 behind a narrow C++ API: the window, input events, the
-  gamepad and rumble, the audio device, time, storage paths and the clipboard. It is the
-  only directory that includes SDL headers.
-- **`engine/gpu`**: a thin RAII wrapper over `webgpu.h`, implemented by Dawn: the device
-  and its feature tiers, the surface, buffers, textures, pipelines and the pipeline
-  manifest, the frame's command encoder, timestamp queries, uploads and readback. It is
-  the only directory that includes `webgpu.h`.
+- **`engine/platform`**: SDL3 behind a narrow C++ API: the window and its native handles,
+  input events and the frame's monotonic clock (built, M6), then the gamepad and rumble,
+  touch, the audio device and storage paths as their milestones need them. It is the only
+  directory that includes SDL headers, and it hands the GPU a plain `NativeWindow` struct.
+- **`engine/gpu`**: the WebGPU device over Dawn (built, M6): the device and its feature
+  tiers, error lines, shader modules from embedded WGSL, the pipeline manifest and its
+  creation counter, the surface, offscreen targets and readback, and per-pass timestamps.
+  It uses Dawn's `webgpu_cpp.h` handles (already reference-counted RAII) directly rather
+  than wrapping them again, so every call reads as the WebGPU spec spells it. It is the
+  only directory that includes `webgpu.h`.
 - **`engine/render`**: generic rendering mechanisms (the pass table and named targets,
   GPU-driven instance families, the heightfield clipmap, shadows, the sky tables and
   clouds, TAA-U, post, compute particles, skinning). A pass owns its GPU buffers and
@@ -221,7 +224,11 @@ itself does no I/O. Tests print in the same shape through `tests/check.hpp`.
 ## Build
 
 CMake ≥ 3.25 + Ninja, `CMakePresets.json` (`debug` with ASan/UBSan, `release`).
-Dependencies come through `FetchContent`, pinned to a tag or commit (SDL3, Dawn,
-cgltf, Dear ImGui, Tracy), and each one is added in the milestone that needs
-it. `Makefile` names the everyday commands. CI (`.github/workflows/ci.yml`) runs format,
+Dependencies are pinned to a tag and a SHA-256, and each one is added in the milestone that
+needs it: SDL3 through `FetchContent` from its release archive (`cmake/SDL.cmake`), Dawn as its
+prebuilt GitHub release (`cmake/Dawn.cmake`; Tint comes in the same archive), later cgltf,
+Dear ImGui and Tracy. Downloads land in `.cache/deps/` (gitignored, shared by every preset,
+cached by CI). `GE_PLATFORM` and `GE_GPU` switch the platform layer and the GPU off; the
+simulation, the plugins and their tests never need either, and `GE_GPU` defaults off where
+Dawn publishes no archive (Linux arm64). `Makefile` names the everyday commands. CI (`.github/workflows/ci.yml`) runs format,
 agents-check, lint and the test matrix.
