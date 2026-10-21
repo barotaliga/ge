@@ -2,6 +2,7 @@
 #   ge_core      the deterministic pool and the run clock (engine/core, engine/loop;
 #                headers, plus libm, solar and output compiled)
 #   ge_racing    the racing primitives (engine/racing: tape, records, standings)
+#   fall_line_sim  game5's engine/ ported (games/fall_line/sim: mapgen, analysis)
 #   <x>_test     one executable per tests/<x>_test.cpp, registered with CTest
 # The flags below are part of the DETERMINISM CONTRACT (AGENTS.md); a target
 # that drops them can silently change the bits a simulation produces.
@@ -46,7 +47,7 @@ set(GE_LIBM_VENDORED
   engine/core/libm/fdlibm_arc.cpp
   engine/core/libm/fdlibm_exp_log.cpp)
 add_library(ge_core STATIC ${GE_LIBM_VENDORED} engine/core/libm/pow.cpp
-  engine/core/solar.cpp engine/core/output.cpp)
+  engine/core/solar.cpp engine/core/output.cpp engine/core/js_text.cpp)
 target_include_directories(ge_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/engine)
 target_link_libraries(ge_core PUBLIC ge_flags)
 # fdlibm is kept line for line with V8's copy; its deliberate int/double word conversions
@@ -60,6 +61,13 @@ endif()
 # The racing primitives. Headers, plus the tape's codec compiled.
 add_library(ge_racing STATIC engine/racing/tape.cpp)
 target_link_libraries(ge_racing PUBLIC ge_core)
+
+# The demo game's simulation: game5's engine/ ported, one .cpp per oracle module.
+file(GLOB_RECURSE FALL_LINE_SIM_SOURCES CONFIGURE_DEPENDS
+  ${CMAKE_CURRENT_SOURCE_DIR}/games/fall_line/sim/*.cpp)
+add_library(fall_line_sim STATIC ${FALL_LINE_SIM_SOURCES})
+target_include_directories(fall_line_sim PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/games/fall_line/sim)
+target_link_libraries(fall_line_sim PUBLIC ge_core)
 
 enable_testing()
 add_subdirectory(tests)

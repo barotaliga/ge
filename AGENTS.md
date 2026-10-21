@@ -77,7 +77,7 @@ make index        # regenerate docs/index.md from every file's ge: tags
 make find Q="noise sampleField"   # files, skills and lessons matching any word
 make lessons ARGS="port --scope=engine/core"   # read a skill's lessons, filtered (no ARGS: the inventory)
 make golden       # regenerate tests/golden/core_*, loop_*, racing_* from the TS oracle (needs Node 22+, ../oss-game-framework and ../game5)
-make golden-libm NODE=<node 24>  # regenerate tests/golden/libm_*, core_quat, core_solar under game5's pinned Node, on Linux x86-64
+make golden-libm NODE=<node 24>  # regenerate tests/golden/libm_*, core_quat, core_solar, mapgen_generate under game5's pinned Node, on Linux x86-64
 make libm-check   # no <cmath> transcendental in simulation code
 ```
 
@@ -90,7 +90,7 @@ row's compiler or libm.
 
 | Path | What | Skill |
 | --- | --- | --- |
-| `engine/core/` | The deterministic pool: `prng.hpp` (mulberry32), `math.hpp` (hypot family, clamp, smoothstep), `libm/` (every transcendental game5 calls, at Node 24's bits; vendored, with `LICENSE.md`), `js.hpp` (JS number semantics), `noise.hpp` (hash2, value noise, the cached field), `heightfield.hpp` (the baked grid and its bilinear reads), `quat.hpp` (orientation; the Euler sign flip), `solar.hpp` (the sun and the moon, by geometry and on a real date), `output.hpp` (the one diagnostic channel; module state) | `determinism` |
+| `engine/core/` | The deterministic pool: `prng.hpp` (mulberry32), `math.hpp` (hypot family, clamp, smoothstep), `libm/` (every transcendental game5 calls, at Node 24's bits; vendored, with `LICENSE.md`), `js.hpp` (JS number semantics), `js_text.hpp` (`toFixed` and `String(n)`, for log lines in the oracle's words), `noise.hpp` (hash2, value noise, the cached field), `heightfield.hpp` (the baked grid and its bilinear reads), `quat.hpp` (orientation; the Euler sign flip), `solar.hpp` (the sun and the moon, by geometry and on a real date), `output.hpp` (the one diagnostic channel; module state) | `determinism` |
 | `engine/racing/` | The racing primitives: `tape.hpp` (the control tape a ghost and a replay are kept on: the axis grid, the RLE + base64 byte format, the recorder, the reader, the map fingerprint), `records.hpp` (the record book's policy: `beats`, `split_gap`, `note_record`), `standings.hpp` (the field's order: `leg_progress`, `field_order`, `place_among`) | `port` |
 | `engine/loop/` | `run_clock.hpp`: the fixed-step accumulator between the display's frames and the 120 Hz step | `sim` |
 | `engine/platform/` | SDL3: window, input, gamepad, audio device, files (M6); the only place SDL is included | `platform` |
@@ -98,7 +98,9 @@ row's compiler or libm.
 | `engine/render/` | Generic draw passes Fall Line needs (M7–M8) | `render` |
 | `engine/audio/` | The synth's DSP graph (M9) | `audio` |
 | `engine/ui/` | Immediate-mode 2D and text, plus the dev UI (M10) | `ui` |
-| `games/fall_line/sim/` | game5's `engine/` ported: mapgen, the step, the bot (M4–M5) | `sim` |
+| `games/fall_line/sim/mapgen/` | game5's `engine/mapgen/` ported, a file per oracle module: `generate.hpp` (`generate_level`, the attempts, the compile), `digest.hpp` (`level_digest`), `rules.hpp` (LEVEL_RULES), `types.hpp` (the `Level`), and every step it calls. v1 (the single piste) so far (M4a); the ski area is M4b | `sim` |
+| `games/fall_line/sim/analysis/` | game5's `engine/analysis/` ported: `analyze_level`, the rule book re-checked on a finished map, in the oracle's own message text | `sim` |
+| `games/fall_line/sim/` | game5's `engine/` ported: the step and the bot next (M5), library `fall_line_sim` | `sim` |
 | `games/fall_line/app/` | game5's `pwa/` ported: the frame, the look, the HUD, the beds | `render`, `ui`, `audio` |
 | `tests/` | `<topic>_test.cpp`, one executable each; `check.hpp` (harness), `golden.hpp`, `golden/` | `testing` |
 | `tools/parity/` | Node scripts that run the TS oracle and write `tests/golden/` | `testing` |
@@ -136,7 +138,8 @@ Agents find code by grep, so the tree is built to be grepped:
   is and why (V8's fdlibm, and glibc's pow for `Math.pow`). Nothing in simulation code
   calls `<cmath>`'s.
 - **JS number semantics** (`Math.round`, `|0`, `>>>0`, `Math.imul`, `Math.max`/`min`,
-  `Math.sign`, `%`): `engine/core/js.hpp`.
+  `Math.sign`, `%`): `engine/core/js.hpp`; numbers as text (`toFixed`, `String(n)`):
+  `engine/core/js_text.hpp`.
 - **The test harness**: `tests/check.hpp`. Bit comparison is `CHECK_BITS`.
 
 ## Commit and PR conventions

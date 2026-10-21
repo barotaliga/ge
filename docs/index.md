@@ -12,6 +12,8 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | --- | --- | --- | --- | --- |
 | `engine/core/heightfield.hpp` | A baked regular grid of heights over the plan, read back bilinearly | `determinism` | `oss-game-framework/src/core/heightfield.ts` | `tests/core_heightfield_test.cpp` |
 | `engine/core/js.hpp` | JavaScript number semantics: Math.round, \|0, >>>0, Math.imul, max/min, sign, % | `determinism` |  | `tests/core_js_test.cpp` |
+| `engine/core/js_text.cpp` | The exact decimal expansion and shortest round-trip behind js_text.hpp | `determinism` `agent-interface` |  | `tests/core_js_test.cpp` |
+| `engine/core/js_text.hpp` | JS numbers as text: Number.prototype.toFixed and String(n) | `determinism` `agent-interface` |  | `tests/core_js_test.cpp` |
 | `engine/core/libm/fdlibm_arc.cpp` | Vendored V8 fdlibm: asin, acos, atan, atan2 | `determinism` |  | `tests/core_libm_test.cpp` |
 | `engine/core/libm/fdlibm_exp_log.cpp` | Vendored V8 fdlibm: exp, expm1, log, log2, cbrt, tanh | `determinism` |  | `tests/core_libm_test.cpp` |
 | `engine/core/libm/fdlibm_internal.hpp` | Word-access helpers the vendored fdlibm files are written against | `determinism` |  | `tests/core_libm_test.cpp` |
@@ -31,9 +33,51 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | `engine/racing/standings.hpp` | The field's order: home first by the clock, then further round | `port` | `oss-game-framework/src/racing/standings.ts` | `tests/racing_standings_test.cpp` |
 | `engine/racing/tape.cpp` | The control tape's codec: base64, run-length streams, recorder, reader | `port` | `oss-game-framework/src/racing/tape.ts` | `tests/racing_tape_test.cpp` |
 | `engine/racing/tape.hpp` | The control tape a ghost and a replay are kept on: axes, RLE, base64 | `port` | `oss-game-framework/src/racing/tape.ts` | `tests/racing_tape_test.cpp` |
+| `games/fall_line/sim/analysis/cliffs.cpp` | The cliff and drop checks' readings of the ground | `sim` | `game5/engine/analysis/cliffs.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/analysis/cliffs.hpp` | R22 cliffs and R24 drops held on the finished map | `sim` | `game5/engine/analysis/cliffs.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/analysis/crossings.cpp` | The segment-pair test off a 16 m spatial hash | `sim` | `game5/engine/analysis/crossings.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/analysis/crossings.hpp` | R5 whether the piste crosses itself | `sim` | `game5/engine/analysis/crossings.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/analysis/index.cpp` | The single piste's checks, R1-R19, with the oracle's message text | `sim` | `game5/engine/analysis/index.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/analysis/index.hpp` | Level analysis: analyzeLevel, the rule book re-checked on a finished map | `sim` | `game5/engine/analysis/index.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/mapgen/berm.hpp` | The windrow's cross-section either side of the piste (R18) | `sim` | `game5/engine/mapgen/berm.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/mapgen/cliffs.cpp` | Lays the cliffs on the face clear of the piste and cuts them into the ground | `sim` | `game5/engine/mapgen/cliffs.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/mapgen/cliffs.hpp` | R22 cliffs off the piste: their profile, footprint, laying and stamp | `sim` | `game5/engine/mapgen/cliffs.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/mapgen/digest.cpp` | levelDigest's mixing order, word for word with the oracle | `sim` | `game5/engine/mapgen/digest.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/mapgen/digest.hpp` | A map's fingerprint: levelDigest, FNV-1a over what a skier meets | `sim` | `game5/engine/mapgen/digest.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/mapgen/drift.cpp` | The drift dealer and the packed field's thinning under a drift | `sim` | `game5/engine/mapgen/drift.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/mapgen/drift.hpp` | R17 drifts across the piste: dealt off their own stream, stamped into the packed field | `sim` | `game5/engine/mapgen/drift.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/mapgen/drops.cpp` | The drops' placement and profile, off their own stream (none on v1) | `sim` | `game5/engine/mapgen/drops.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/mapgen/drops.hpp` | R24 drops across a black piste: chosen on the graded line and published as cliffs | `sim` | `game5/engine/mapgen/drops.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/mapgen/forest.cpp` | Grows the single piste's woods: the clumps first, then the scan | `sim` | `game5/engine/mapgen/forest.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/mapgen/forest.hpp` | R14 the forest: clumps, the scan, lanes, gaps, ages and trunks | `sim` | `game5/engine/mapgen/forest.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/mapgen/generate.cpp` | One attempt's fixed draw order, the search over attempts and the compile | `sim` | `game5/engine/mapgen/generate.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/mapgen/generate.hpp` | The generator's outer loop: generateLevel, its attempts and the compile | `sim` | `game5/engine/mapgen/generate.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/mapgen/grades.cpp` | The grade rows' numbers and the colour a measured piste is signed with | `sim` | `game5/engine/mapgen/grades.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/mapgen/grades.hpp` | R23 the piste grades: the ungraded row and the four colours | `sim` | `game5/engine/mapgen/grades.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/mapgen/kickers.cpp` | Places and stamps the kickers on the piste and off it | `sim` | `game5/engine/mapgen/kickers.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/mapgen/kickers.hpp` | R4, R9 the kickers: on the piste and off it, their profile and stamp | `sim` | `game5/engine/mapgen/kickers.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/mapgen/query.cpp` | The piste's lazily built spatial hash and the nearest-point searches | `sim` | `game5/engine/mapgen/query.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/mapgen/query.hpp` | Where on the piste a point is: nearestTrackPoint, its spatial hash, trackPointAt | `sim` | `game5/engine/mapgen/query.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/mapgen/regions.cpp` | The four regions' rows and the tree roster's hash pick | `sim` | `game5/engine/mapgen/regions.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/mapgen/regions.hpp` | R21 the regions: each snow country's row of multiples, roster and crust | `sim` | `game5/engine/mapgen/regions.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/mapgen/rules.hpp` | The rule book's numbers (LEVEL_RULES, R1-R24) as constexpr namespaces | `sim` | `game5/engine/mapgen/rules.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/mapgen/spawn.cpp` | Chooses the start off the summit and lays the gates and the grid on the piste | `sim` | `game5/engine/mapgen/spawn.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/mapgen/spawn.hpp` | R11-R13 the start: the start hut, the gates and the start line's grid | `sim` | `game5/engine/mapgen/spawn.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/mapgen/sun.cpp` | The day's draws, in the oracle's order | `sim` | `game5/engine/mapgen/sun.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/mapgen/sun.hpp` | R15 the day: declination, the sun's window and dealSun | `sim` | `game5/engine/mapgen/sun.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/mapgen/surface.cpp` | The crust's blur, patches and fold, float32 like the oracle's grids | `sim` | `game5/engine/mapgen/surface.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/mapgen/surface.hpp` | R21 the wind crust: laid off its own stream, folded into the packed field | `sim` | `game5/engine/mapgen/surface.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/mapgen/terrain.cpp` | The mountain's plan draws and the bake of every noise layer onto the grid | `sim` | `game5/engine/mapgen/terrain.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/mapgen/terrain.hpp` | R2, R3 the mountain: planTerrain and the baked country | `sim` | `game5/engine/mapgen/terrain.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/mapgen/track.cpp` | The piste's walk, grading and corridor stamp | `sim` | `game5/engine/mapgen/track.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/mapgen/track.hpp` | R5-R8, R10, R18 the piste: the walk, the grading, the bends and the corridor stamp | `sim` | `game5/engine/mapgen/track.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/mapgen/types.hpp` | The Level and its parts: what a generated map publishes | `sim` | `game5/engine/mapgen/types.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/mapgen/versions.hpp` | Which generator built a map: the versions and their traits | `sim` | `game5/engine/mapgen/versions.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/mapgen/weather.cpp` | The weather's own stream and its draws, in the oracle's order | `sim` | `game5/engine/mapgen/weather.ts` | `tests/mapgen_generate_test.cpp` |
+| `games/fall_line/sim/mapgen/weather.hpp` | R19 the weather: the sky, the fall, the fog, the wind and the evening | `sim` | `game5/engine/mapgen/weather.ts` | `tests/mapgen_generate_test.cpp` |
 | `tests/check.hpp` | The test harness: TEST blocks, CHECK, CHECK_BITS | `testing` |  |  |
 | `tests/core_heightfield_test.cpp` | Parity test: core/heightfield against the oracle | `testing` |  |  |
-| `tests/core_js_test.cpp` | Parity test: core/js against Node | `testing` |  |  |
+| `tests/core_js_test.cpp` | Parity test: core/js and core/js_text against Node | `testing` |  |  |
 | `tests/core_libm_test.cpp` | Parity test: core/libm against Node 24 | `testing` |  |  |
 | `tests/core_math_test.cpp` | Parity test: core/math against the oracle | `testing` |  |  |
 | `tests/core_noise_test.cpp` | Parity test: core/noise against the oracle | `testing` |  |  |
@@ -44,6 +88,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | `tests/golden.hpp` | Reads tests/golden/*.txt rows of hex words or text | `testing` |  |  |
 | `tests/loop_run_clock_test.cpp` | Parity test: loop/run_clock against the oracle | `testing` |  |  |
 | `tests/main.cpp` | Runs every TEST registered in a test executable | `testing` |  |  |
+| `tests/mapgen_generate_test.cpp` | Parity test: the v1 generator's maps against game5's, section by section | `testing` `sim` |  |  |
 | `tests/racing_records_test.cpp` | Parity test: racing/records against the oracle | `testing` |  |  |
 | `tests/racing_standings_test.cpp` | Parity test: racing/standings against the oracle | `testing` |  |  |
 | `tests/racing_tape_test.cpp` | Parity test: racing/tape and game5's own ghost, byte for byte | `testing` |  |  |
@@ -52,8 +97,9 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | `tools/check-libm.sh` | Fails any <cmath> transcendental in simulation code (make libm-check) | `determinism` |  |  |
 | `tools/parity/golden-core-libm.mjs` | Writes tests/golden/core_quat and core_solar under game5's pinned Node | `testing` |  |  |
 | `tools/parity/golden-core.mjs` | Writes tests/golden/core_* and loop_* from the framework oracle | `testing` |  |  |
-| `tools/parity/golden-js.mjs` | Writes tests/golden/core_js.txt from Node's number semantics | `testing` |  |  |
+| `tools/parity/golden-js.mjs` | Writes tests/golden/core_js.txt and core_js_text.txt from Node's number semantics | `testing` |  |  |
 | `tools/parity/golden-libm.mjs` | Writes tests/golden/libm_*.txt under game5's pinned Node | `testing` |  |  |
+| `tools/parity/golden-mapgen.mjs` | Writes tests/golden/mapgen_generate.txt from game5's own generateLevel (v1) | `testing` `sim` |  |  |
 | `tools/parity/golden-racing.mjs` | Writes tests/golden/racing_* from the framework oracle and a game5 ghost | `testing` |  |  |
 | `tools/parity/oracle-import.mjs` | Imports a framework .ts source into Node with types stripped | `testing` |  |  |
 | `tools/parity/oracle-node.mjs` | Refuses a golden run not under game5's pinned Node on Linux x86-64 glibc | `testing` |  |  |
@@ -65,6 +111,29 @@ Which C++ files port each oracle file. An oracle file missing here is not ported
 
 | Oracle | Port |
 | --- | --- |
+| `game5/engine/analysis/cliffs.ts` | `games/fall_line/sim/analysis/cliffs.cpp` `games/fall_line/sim/analysis/cliffs.hpp` |
+| `game5/engine/analysis/crossings.ts` | `games/fall_line/sim/analysis/crossings.cpp` `games/fall_line/sim/analysis/crossings.hpp` |
+| `game5/engine/analysis/index.ts` | `games/fall_line/sim/analysis/index.cpp` `games/fall_line/sim/analysis/index.hpp` |
+| `game5/engine/mapgen/berm.ts` | `games/fall_line/sim/mapgen/berm.hpp` |
+| `game5/engine/mapgen/cliffs.ts` | `games/fall_line/sim/mapgen/cliffs.cpp` `games/fall_line/sim/mapgen/cliffs.hpp` |
+| `game5/engine/mapgen/digest.ts` | `games/fall_line/sim/mapgen/digest.cpp` `games/fall_line/sim/mapgen/digest.hpp` |
+| `game5/engine/mapgen/drift.ts` | `games/fall_line/sim/mapgen/drift.cpp` `games/fall_line/sim/mapgen/drift.hpp` |
+| `game5/engine/mapgen/drops.ts` | `games/fall_line/sim/mapgen/drops.cpp` `games/fall_line/sim/mapgen/drops.hpp` |
+| `game5/engine/mapgen/forest.ts` | `games/fall_line/sim/mapgen/forest.cpp` `games/fall_line/sim/mapgen/forest.hpp` |
+| `game5/engine/mapgen/generate.ts` | `games/fall_line/sim/mapgen/generate.cpp` `games/fall_line/sim/mapgen/generate.hpp` |
+| `game5/engine/mapgen/grades.ts` | `games/fall_line/sim/mapgen/grades.cpp` `games/fall_line/sim/mapgen/grades.hpp` |
+| `game5/engine/mapgen/kickers.ts` | `games/fall_line/sim/mapgen/kickers.cpp` `games/fall_line/sim/mapgen/kickers.hpp` |
+| `game5/engine/mapgen/query.ts` | `games/fall_line/sim/mapgen/query.cpp` `games/fall_line/sim/mapgen/query.hpp` |
+| `game5/engine/mapgen/regions.ts` | `games/fall_line/sim/mapgen/regions.cpp` `games/fall_line/sim/mapgen/regions.hpp` |
+| `game5/engine/mapgen/rules.ts` | `games/fall_line/sim/mapgen/rules.hpp` |
+| `game5/engine/mapgen/spawn.ts` | `games/fall_line/sim/mapgen/spawn.cpp` `games/fall_line/sim/mapgen/spawn.hpp` |
+| `game5/engine/mapgen/sun.ts` | `games/fall_line/sim/mapgen/sun.cpp` `games/fall_line/sim/mapgen/sun.hpp` |
+| `game5/engine/mapgen/surface.ts` | `games/fall_line/sim/mapgen/surface.cpp` `games/fall_line/sim/mapgen/surface.hpp` |
+| `game5/engine/mapgen/terrain.ts` | `games/fall_line/sim/mapgen/terrain.cpp` `games/fall_line/sim/mapgen/terrain.hpp` |
+| `game5/engine/mapgen/track.ts` | `games/fall_line/sim/mapgen/track.cpp` `games/fall_line/sim/mapgen/track.hpp` |
+| `game5/engine/mapgen/types.ts` | `games/fall_line/sim/mapgen/types.hpp` |
+| `game5/engine/mapgen/versions.ts` | `games/fall_line/sim/mapgen/versions.hpp` |
+| `game5/engine/mapgen/weather.ts` | `games/fall_line/sim/mapgen/weather.cpp` `games/fall_line/sim/mapgen/weather.hpp` |
 | `oss-game-framework/src/core/heightfield.ts` | `engine/core/heightfield.hpp` |
 | `oss-game-framework/src/core/math.ts` | `engine/core/math.hpp` |
 | `oss-game-framework/src/core/noise.ts` | `engine/core/noise.hpp` |
@@ -86,6 +155,9 @@ Which C++ files port each oracle file. An oracle file missing here is not ported
 | agents | `tools/check-agents.sh` |
 | agents-check | `tools/agents-index.mjs` |
 | alpha | `engine/loop/run_clock.hpp` |
+| alpine | `games/fall_line/sim/mapgen/regions.hpp` |
+| analysis | `games/fall_line/sim/analysis/cliffs.cpp` `games/fall_line/sim/analysis/cliffs.hpp` `games/fall_line/sim/analysis/crossings.cpp` `games/fall_line/sim/analysis/crossings.hpp` `games/fall_line/sim/analysis/index.cpp` `games/fall_line/sim/analysis/index.hpp` |
+| analyzeLevel | `games/fall_line/sim/analysis/index.cpp` `games/fall_line/sim/analysis/index.hpp` `tests/mapgen_generate_test.cpp` |
 | angle | `engine/core/math.hpp` |
 | angleDiff | `engine/core/math.hpp` |
 | angular-velocity | `engine/core/quat.hpp` |
@@ -97,25 +169,46 @@ Which C++ files port each oracle file. An oracle file missing here is not ported
 | atan | `engine/core/libm/fdlibm_arc.cpp` `engine/core/libm/libm.hpp` |
 | atan2 | `engine/core/libm/fdlibm_arc.cpp` `engine/core/libm/libm.hpp` |
 | atob | `engine/racing/tape.cpp` |
+| attempt | `games/fall_line/sim/mapgen/generate.hpp` |
+| attemptLevel | `games/fall_line/sim/mapgen/generate.cpp` |
 | azimuth | `engine/core/solar.hpp` |
 | bake | `engine/core/heightfield.hpp` |
+| bakeCountry | `games/fall_line/sim/mapgen/terrain.cpp` `games/fall_line/sim/mapgen/terrain.hpp` |
 | base64 | `engine/racing/tape.cpp` `engine/racing/tape.hpp` |
 | beats | `engine/racing/records.hpp` |
+| bendFloor | `games/fall_line/sim/mapgen/rules.hpp` |
+| bendRoom | `games/fall_line/sim/mapgen/track.cpp` |
+| berm | `games/fall_line/sim/mapgen/berm.hpp` |
+| bermCrest | `games/fall_line/sim/mapgen/berm.hpp` |
+| bermProfile | `games/fall_line/sim/mapgen/berm.hpp` |
 | best | `engine/racing/records.hpp` |
 | bilinear | `engine/core/heightfield.hpp` |
 | bit-cast | `engine/core/libm/fdlibm_internal.hpp` |
 | bits | `engine/core/libm/libm.hpp` |
+| blur | `games/fall_line/sim/mapgen/surface.cpp` |
 | btoa | `engine/racing/tape.cpp` |
 | cbrt | `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/libm.hpp` |
 | chance | `engine/core/prng.hpp` |
 | check | `tests/check.hpp` `tools/check-agents.sh` `tools/check-libm.sh` |
 | check-bits | `tests/check.hpp` |
+| checkCliffs | `games/fall_line/sim/analysis/cliffs.cpp` `games/fall_line/sim/analysis/cliffs.hpp` |
+| checkDrops | `games/fall_line/sim/analysis/cliffs.cpp` `games/fall_line/sim/analysis/cliffs.hpp` |
+| Checkpoint | `games/fall_line/sim/mapgen/types.hpp` |
+| chooseStart | `games/fall_line/sim/mapgen/spawn.cpp` `games/fall_line/sim/mapgen/spawn.hpp` |
 | ci | `tools/check-agents.sh` `tools/check-libm.sh` |
 | clamp | `engine/core/math.hpp` |
+| cliff | `games/fall_line/sim/analysis/cliffs.hpp` `games/fall_line/sim/mapgen/cliffs.cpp` `games/fall_line/sim/mapgen/cliffs.hpp` |
+| Cliff | `games/fall_line/sim/mapgen/types.hpp` |
+| cliffFootprint | `games/fall_line/sim/mapgen/cliffs.hpp` |
+| cliffProfile | `games/fall_line/sim/mapgen/cliffs.hpp` |
+| cliffs | `games/fall_line/sim/mapgen/cliffs.hpp` |
+| clump | `games/fall_line/sim/mapgen/forest.cpp` `games/fall_line/sim/mapgen/forest.hpp` |
 | cmath | `tools/check-libm.sh` |
 | codec | `engine/racing/tape.cpp` |
+| compileLevel | `games/fall_line/sim/mapgen/generate.cpp` `games/fall_line/sim/mapgen/generate.hpp` |
 | concepts | `tools/skill-lessons.mjs` |
 | consolidation | `tools/skill-lessons.mjs` |
+| continental | `games/fall_line/sim/mapgen/regions.hpp` |
 | controls | `engine/racing/tape.hpp` |
 | ControlTape | `engine/racing/tape.hpp` |
 | conventions | `engine/core/math.hpp` |
@@ -124,55 +217,92 @@ Which C++ files port each oracle file. An oracle file missing here is not ported
 | createHeightfield | `engine/core/heightfield.hpp` |
 | createRng | `engine/core/prng.hpp` |
 | createRunClock | `engine/loop/run_clock.hpp` |
+| crossing | `games/fall_line/sim/analysis/crossings.hpp` |
+| crust | `games/fall_line/sim/mapgen/surface.cpp` `games/fall_line/sim/mapgen/surface.hpp` |
 | ctest | `tests/main.cpp` |
+| CURRENT_GENERATOR_VERSION | `games/fall_line/sim/mapgen/versions.hpp` |
+| day | `games/fall_line/sim/mapgen/sun.hpp` |
 | daylight | `engine/core/solar.hpp` |
 | daylightWindow | `engine/core/solar.hpp` |
+| dealDrifts | `games/fall_line/sim/mapgen/drift.cpp` `games/fall_line/sim/mapgen/drift.hpp` |
+| dealSun | `games/fall_line/sim/mapgen/sun.cpp` `games/fall_line/sim/mapgen/sun.hpp` |
+| dealWeather | `games/fall_line/sim/mapgen/weather.cpp` `games/fall_line/sim/mapgen/weather.hpp` |
 | debug | `engine/core/output.hpp` |
+| declinationOf | `games/fall_line/sim/mapgen/sun.cpp` `games/fall_line/sim/mapgen/sun.hpp` |
 | decodeStream | `engine/racing/tape.cpp` |
+| descentAt | `games/fall_line/sim/mapgen/terrain.hpp` |
 | determinism | `engine/core/prng.hpp` `tools/check-libm.sh` |
 | diagnostics | `engine/core/output.hpp` |
+| digest | `games/fall_line/sim/mapgen/digest.cpp` `games/fall_line/sim/mapgen/digest.hpp` |
 | discovery | `tools/agents-index.mjs` |
 | dist2 | `engine/core/math.hpp` |
+| drawPiste | `games/fall_line/sim/mapgen/track.cpp` `games/fall_line/sim/mapgen/track.hpp` |
+| drift | `games/fall_line/sim/mapgen/drift.cpp` `games/fall_line/sim/mapgen/drift.hpp` |
+| driftAt | `games/fall_line/sim/mapgen/drift.hpp` |
+| drifts | `games/fall_line/sim/mapgen/drift.hpp` |
+| drop | `games/fall_line/sim/analysis/cliffs.hpp` `games/fall_line/sim/mapgen/drops.cpp` `games/fall_line/sim/mapgen/drops.hpp` |
+| drops | `games/fall_line/sim/mapgen/drops.hpp` |
 | elevation | `engine/core/solar.hpp` |
 | encodeStream | `engine/racing/tape.cpp` |
 | ephemeris | `engine/core/solar.cpp` |
 | error | `engine/core/output.hpp` |
 | euler | `engine/core/quat.hpp` |
+| evening | `games/fall_line/sim/mapgen/weather.hpp` |
 | exp | `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/libm.hpp` |
 | expm1 | `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/libm.hpp` |
 | exponent | `engine/core/libm/pow.cpp` |
-| fbm | `engine/core/noise.hpp` |
+| fbm | `engine/core/noise.hpp` `games/fall_line/sim/mapgen/terrain.cpp` |
 | fdlibm | `engine/core/libm/fdlibm_arc.cpp` `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/fdlibm_internal.hpp` `engine/core/libm/fdlibm_trig.cpp` `engine/core/libm/libm.hpp` |
+| fell | `games/fall_line/sim/mapgen/regions.hpp` |
 | field | `engine/racing/standings.hpp` |
 | fieldCell | `engine/core/heightfield.hpp` |
 | fieldGradient | `engine/core/heightfield.hpp` |
 | fieldOrder | `engine/racing/standings.hpp` |
 | fillField | `engine/core/heightfield.hpp` |
 | find | `tools/agents-index.mjs` |
-| fingerprint | `engine/racing/tape.hpp` |
+| finding | `games/fall_line/sim/analysis/index.hpp` |
+| findings | `games/fall_line/sim/analysis/index.hpp` |
+| fingerprint | `engine/racing/tape.hpp` `games/fall_line/sim/mapgen/digest.hpp` |
 | fixed-step | `engine/loop/run_clock.hpp` |
 | fixture | `tests/golden.hpp` |
+| flankAt | `games/fall_line/sim/mapgen/terrain.hpp` |
 | fma | `engine/core/libm/pow.cpp` |
+| fnv | `games/fall_line/sim/mapgen/digest.cpp` `games/fall_line/sim/mapgen/digest.hpp` |
 | focus | `engine/loop/run_clock.hpp` |
+| foldSurface | `games/fall_line/sim/mapgen/surface.cpp` `games/fall_line/sim/mapgen/surface.hpp` |
+| forest | `games/fall_line/sim/mapgen/forest.cpp` `games/fall_line/sim/mapgen/forest.hpp` |
 | fragments | `tools/skill-lessons.mjs` |
 | frame | `engine/loop/run_clock.hpp` |
 | fromAxisAngle | `engine/core/quat.hpp` |
 | fromEuler | `engine/core/quat.hpp` |
+| gates | `games/fall_line/sim/mapgen/spawn.hpp` |
 | ge-tags | `tools/agents-index.mjs` |
-| generator | `tools/parity/golden-core-libm.mjs` `tools/parity/golden-core.mjs` `tools/parity/golden-js.mjs` `tools/parity/golden-libm.mjs` `tools/parity/golden-racing.mjs` |
+| generate | `games/fall_line/sim/mapgen/generate.cpp` `games/fall_line/sim/mapgen/generate.hpp` |
+| generateLevel | `games/fall_line/sim/mapgen/generate.hpp` `tests/mapgen_generate_test.cpp` `tools/parity/golden-mapgen.mjs` |
+| GenerateOptions | `games/fall_line/sim/mapgen/types.hpp` |
+| generator | `tools/parity/golden-core-libm.mjs` `tools/parity/golden-core.mjs` `tools/parity/golden-js.mjs` `tools/parity/golden-libm.mjs` `tools/parity/golden-mapgen.mjs` `tools/parity/golden-racing.mjs` |
+| GENERATOR_VERSIONS | `games/fall_line/sim/mapgen/versions.hpp` |
+| generatorTraits | `games/fall_line/sim/mapgen/versions.hpp` |
 | ghost | `engine/racing/tape.cpp` `engine/racing/tape.hpp` `tests/racing_tape_test.cpp` `tools/parity/golden-racing.mjs` |
 | glibc | `engine/core/libm/pow.cpp` `tools/parity/oracle-node.mjs` |
-| golden | `tests/core_heightfield_test.cpp` `tests/core_js_test.cpp` `tests/core_libm_test.cpp` `tests/core_math_test.cpp` `tests/core_noise_test.cpp` `tests/core_output_test.cpp` `tests/core_prng_test.cpp` `tests/core_quat_test.cpp` `tests/core_solar_test.cpp` `tests/golden.hpp` `tests/loop_run_clock_test.cpp` `tests/racing_records_test.cpp` `tests/racing_standings_test.cpp` `tests/racing_tape_test.cpp` `tools/parity/golden-core-libm.mjs` `tools/parity/golden-core.mjs` `tools/parity/golden-js.mjs` `tools/parity/golden-libm.mjs` `tools/parity/golden-racing.mjs` |
+| golden | `tests/core_heightfield_test.cpp` `tests/core_js_test.cpp` `tests/core_libm_test.cpp` `tests/core_math_test.cpp` `tests/core_noise_test.cpp` `tests/core_output_test.cpp` `tests/core_prng_test.cpp` `tests/core_quat_test.cpp` `tests/core_solar_test.cpp` `tests/golden.hpp` `tests/loop_run_clock_test.cpp` `tests/mapgen_generate_test.cpp` `tests/racing_records_test.cpp` `tests/racing_standings_test.cpp` `tests/racing_tape_test.cpp` `tools/parity/golden-core-libm.mjs` `tools/parity/golden-core.mjs` `tools/parity/golden-js.mjs` `tools/parity/golden-libm.mjs` `tools/parity/golden-mapgen.mjs` `tools/parity/golden-racing.mjs` |
+| grade | `games/fall_line/sim/mapgen/grades.cpp` `games/fall_line/sim/mapgen/grades.hpp` |
+| gradePiste | `games/fall_line/sim/mapgen/track.cpp` `games/fall_line/sim/mapgen/track.hpp` |
+| gradeRow | `games/fall_line/sim/mapgen/grades.hpp` |
+| grades | `games/fall_line/sim/mapgen/grades.hpp` |
+| GRADES | `games/fall_line/sim/mapgen/grades.cpp` `games/fall_line/sim/mapgen/grades.hpp` |
 | gradient | `engine/core/heightfield.hpp` |
 | grid | `engine/core/heightfield.hpp` |
+| gridOnTrack | `games/fall_line/sim/mapgen/spawn.cpp` `games/fall_line/sim/mapgen/spawn.hpp` |
 | ground | `engine/core/heightfield.hpp` |
+| growForest | `games/fall_line/sim/mapgen/forest.cpp` `games/fall_line/sim/mapgen/forest.hpp` |
 | guard | `tools/parity/oracle-node.mjs` |
 | harness | `tests/check.hpp` |
 | hash | `engine/core/noise.hpp` |
 | hash2 | `engine/core/noise.hpp` |
 | header | `engine/core/output.hpp` |
 | heading | `engine/core/math.hpp` `engine/core/quat.hpp` |
-| heightfield | `engine/core/heightfield.hpp` `tests/core_heightfield_test.cpp` |
+| heightfield | `engine/core/heightfield.hpp` `games/fall_line/sim/mapgen/terrain.hpp` `tests/core_heightfield_test.cpp` |
 | hex | `tests/golden.hpp` |
 | high-word | `engine/core/libm/fdlibm_internal.hpp` |
 | hourOfElevation | `engine/core/solar.hpp` |
@@ -181,6 +311,7 @@ Which C++ files port each oracle file. An oracle file missing here is not ported
 | hypot4 | `engine/core/math.hpp` |
 | import | `tools/parity/oracle-import.mjs` |
 | imul | `engine/core/js.hpp` |
+| inBand | `games/fall_line/sim/mapgen/rules.hpp` |
 | index | `tools/agents-index.mjs` |
 | info | `engine/core/output.hpp` |
 | input | `engine/racing/tape.hpp` |
@@ -189,14 +320,30 @@ Which C++ files port each oracle file. An oracle file missing here is not ported
 | interpolation | `engine/loop/run_clock.hpp` |
 | inverse-trig | `engine/core/libm/fdlibm_arc.cpp` |
 | javascript | `engine/core/js.hpp` |
-| js | `engine/core/js.hpp` `tests/core_js_test.cpp` `tools/parity/golden-js.mjs` |
+| js | `engine/core/js.hpp` `engine/core/js_text.cpp` `engine/core/js_text.hpp` `tests/core_js_test.cpp` `tools/parity/golden-js.mjs` |
 | julian-day | `engine/core/solar.cpp` `engine/core/solar.hpp` |
 | keywords | `tools/agents-index.mjs` |
+| kicker | `games/fall_line/sim/mapgen/kickers.cpp` `games/fall_line/sim/mapgen/kickers.hpp` |
+| Kicker | `games/fall_line/sim/mapgen/types.hpp` |
+| kickers | `games/fall_line/sim/mapgen/kickers.hpp` |
+| krummholz | `games/fall_line/sim/mapgen/forest.hpp` |
+| lanes | `games/fall_line/sim/mapgen/forest.cpp` |
+| latitude | `games/fall_line/sim/mapgen/sun.hpp` |
 | lattice | `engine/core/noise.hpp` |
+| layCheckpoints | `games/fall_line/sim/mapgen/spawn.cpp` `games/fall_line/sim/mapgen/spawn.hpp` |
+| layCliffs | `games/fall_line/sim/mapgen/cliffs.cpp` `games/fall_line/sim/mapgen/cliffs.hpp` |
+| layCrust | `games/fall_line/sim/mapgen/surface.cpp` `games/fall_line/sim/mapgen/surface.hpp` |
+| layDrops | `games/fall_line/sim/mapgen/drops.cpp` `games/fall_line/sim/mapgen/drops.hpp` |
+| layOffKickers | `games/fall_line/sim/mapgen/kickers.cpp` `games/fall_line/sim/mapgen/kickers.hpp` |
+| layTrackKickers | `games/fall_line/sim/mapgen/kickers.cpp` `games/fall_line/sim/mapgen/kickers.hpp` |
 | leaderboard | `engine/racing/standings.hpp` |
 | legProgress | `engine/racing/standings.hpp` |
 | lerp | `engine/core/math.hpp` |
 | lessons | `tools/skill-lessons.mjs` |
+| level | `games/fall_line/sim/mapgen/generate.hpp` |
+| Level | `games/fall_line/sim/mapgen/types.hpp` |
+| LEVEL_RULES | `games/fall_line/sim/mapgen/rules.hpp` |
+| levelDigest | `games/fall_line/sim/mapgen/digest.cpp` `games/fall_line/sim/mapgen/digest.hpp` `tests/mapgen_generate_test.cpp` `tools/parity/golden-mapgen.mjs` |
 | libm | `engine/core/libm/fdlibm_arc.cpp` `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/fdlibm_internal.hpp` `engine/core/libm/fdlibm_trig.cpp` `engine/core/libm/libm.hpp` `engine/core/libm/pow.cpp` `tests/core_libm_test.cpp` `tools/check-libm.sh` `tools/parity/golden-libm.mjs` |
 | line-cap | `tools/check-agents.sh` |
 | loader | `tools/parity/oracle-import.mjs` |
@@ -206,48 +353,66 @@ Which C++ files port each oracle file. An oracle file missing here is not ported
 | loop | `engine/loop/run_clock.hpp` `tools/parity/golden-core.mjs` |
 | low-word | `engine/core/libm/fdlibm_internal.hpp` |
 | main | `tests/main.cpp` |
+| mapgen | `games/fall_line/sim/mapgen/generate.hpp` `tests/mapgen_generate_test.cpp` `tools/parity/golden-mapgen.mjs` |
+| maritime | `games/fall_line/sim/mapgen/regions.hpp` |
 | math | `engine/core/math.hpp` `tests/core_math_test.cpp` |
 | max | `engine/core/js.hpp` |
 | MAX_FRAME_SECONDS | `engine/loop/run_clock.hpp` |
 | metadata | `tools/agents-index.mjs` |
 | min | `engine/core/js.hpp` |
+| minSeparation | `games/fall_line/sim/mapgen/track.hpp` |
 | mod | `engine/core/js.hpp` |
 | module-state | `engine/core/output.cpp` `engine/core/output.hpp` |
 | modulo | `engine/core/js.hpp` |
 | moon | `engine/core/solar.cpp` `engine/core/solar.hpp` `tests/core_solar_test.cpp` |
 | moonAt | `engine/core/solar.hpp` |
 | moonOnDate | `engine/core/solar.hpp` |
+| mountain | `games/fall_line/sim/mapgen/terrain.hpp` |
 | mulberry32 | `engine/core/prng.hpp` |
 | nan | `engine/core/js.hpp` |
+| nearestTrackPoint | `games/fall_line/sim/mapgen/query.cpp` `games/fall_line/sim/mapgen/query.hpp` |
+| nearestWithin | `games/fall_line/sim/mapgen/query.cpp` `games/fall_line/sim/mapgen/query.hpp` |
 | negative-zero | `engine/core/js.hpp` |
 | next | `engine/core/prng.hpp` |
 | node24 | `engine/core/libm/libm.hpp` `tools/parity/golden-core-libm.mjs` `tools/parity/golden-libm.mjs` `tools/parity/oracle-node.mjs` |
 | noise | `engine/core/noise.hpp` `tests/core_noise_test.cpp` |
 | noiseField | `engine/core/noise.hpp` |
+| normalAt | `games/fall_line/sim/mapgen/generate.cpp` |
 | noteRecord | `engine/racing/records.hpp` |
+| number-format | `engine/core/js_text.hpp` |
 | nvmrc | `tools/parity/oracle-node.mjs` |
 | octaves | `engine/core/noise.hpp` |
+| onCliff | `games/fall_line/sim/mapgen/cliffs.hpp` |
+| onKicker | `games/fall_line/sim/mapgen/kickers.hpp` |
 | optimized-routines | `engine/core/libm/pow.cpp` |
 | oracle | `tools/parity/golden-core-libm.mjs` `tools/parity/golden-core.mjs` `tools/parity/oracle-import.mjs` `tools/parity/oracle-node.mjs` |
 | order | `engine/racing/standings.hpp` |
 | orientation | `engine/core/quat.hpp` |
 | output | `engine/core/output.cpp` `engine/core/output.hpp` `tests/core_output_test.cpp` |
-| parity | `tests/core_heightfield_test.cpp` `tests/core_js_test.cpp` `tests/core_libm_test.cpp` `tests/core_math_test.cpp` `tests/core_noise_test.cpp` `tests/core_output_test.cpp` `tests/core_prng_test.cpp` `tests/core_quat_test.cpp` `tests/core_solar_test.cpp` `tests/golden.hpp` `tests/loop_run_clock_test.cpp` `tests/racing_records_test.cpp` `tests/racing_standings_test.cpp` `tests/racing_tape_test.cpp` `tools/parity/golden-core-libm.mjs` `tools/parity/golden-core.mjs` `tools/parity/golden-js.mjs` `tools/parity/golden-libm.mjs` `tools/parity/golden-racing.mjs` |
+| parity | `tests/core_heightfield_test.cpp` `tests/core_js_test.cpp` `tests/core_libm_test.cpp` `tests/core_math_test.cpp` `tests/core_noise_test.cpp` `tests/core_output_test.cpp` `tests/core_prng_test.cpp` `tests/core_quat_test.cpp` `tests/core_solar_test.cpp` `tests/golden.hpp` `tests/loop_run_clock_test.cpp` `tests/mapgen_generate_test.cpp` `tests/racing_records_test.cpp` `tests/racing_standings_test.cpp` `tests/racing_tape_test.cpp` `tools/parity/golden-core-libm.mjs` `tools/parity/golden-core.mjs` `tools/parity/golden-js.mjs` `tools/parity/golden-libm.mjs` `tools/parity/golden-mapgen.mjs` `tools/parity/golden-racing.mjs` |
 | pause | `engine/loop/run_clock.hpp` |
 | personal-best | `engine/racing/records.hpp` |
 | pi | `engine/core/math.hpp` |
 | pick | `engine/core/prng.hpp` |
 | pickIndex | `engine/core/prng.hpp` |
+| pinned-map | `games/fall_line/sim/mapgen/digest.hpp` |
+| piste | `games/fall_line/sim/mapgen/track.hpp` |
+| pisteGradeOf | `games/fall_line/sim/mapgen/grades.hpp` |
 | pitch | `engine/core/quat.hpp` |
 | place | `engine/racing/standings.hpp` |
 | placeAmong | `engine/racing/standings.hpp` |
+| planTerrain | `games/fall_line/sim/mapgen/terrain.cpp` `games/fall_line/sim/mapgen/terrain.hpp` |
 | position | `engine/racing/standings.hpp` |
 | pow | `engine/core/libm/libm.hpp` `engine/core/libm/pow.cpp` |
 | power | `engine/core/libm/pow.cpp` |
 | prng | `engine/core/prng.hpp` `tests/core_prng_test.cpp` |
+| profile | `games/fall_line/sim/mapgen/terrain.hpp` |
 | provenance | `tools/parity/oracle-node.mjs` |
+| publishDrops | `games/fall_line/sim/mapgen/drops.cpp` `games/fall_line/sim/mapgen/drops.hpp` |
+| publishTrackKickers | `games/fall_line/sim/mapgen/kickers.hpp` |
 | quat | `engine/core/quat.hpp` `tests/core_quat_test.cpp` `tools/parity/golden-core-libm.mjs` |
 | quaternion | `engine/core/quat.hpp` |
+| query | `games/fall_line/sim/mapgen/query.cpp` `games/fall_line/sim/mapgen/query.hpp` |
 | racing | `engine/racing/records.hpp` `engine/racing/standings.hpp` `engine/racing/tape.cpp` `engine/racing/tape.hpp` `tools/parity/golden-racing.mjs` |
 | random | `engine/core/prng.hpp` |
 | range | `engine/core/prng.hpp` |
@@ -258,9 +423,14 @@ Which C++ files port each oracle file. An oracle file missing here is not ported
 | recording | `engine/racing/tape.hpp` |
 | records | `engine/racing/records.hpp` `tests/racing_records_test.cpp` `tools/parity/golden-racing.mjs` |
 | refraction | `engine/core/solar.cpp` `engine/core/solar.hpp` |
+| region | `games/fall_line/sim/mapgen/regions.cpp` `games/fall_line/sim/mapgen/regions.hpp` |
+| regionRow | `games/fall_line/sim/mapgen/regions.hpp` |
+| regions | `games/fall_line/sim/mapgen/regions.hpp` |
+| REGIONS | `games/fall_line/sim/mapgen/regions.cpp` |
 | replay | `engine/racing/tape.hpp` |
 | resolve-hook | `tools/parity/oracle-import.mjs` |
 | resume | `engine/loop/run_clock.hpp` |
+| ridged | `games/fall_line/sim/mapgen/terrain.cpp` |
 | ring-buffer | `engine/core/output.cpp` |
 | rle | `engine/racing/tape.cpp` `engine/racing/tape.hpp` |
 | rng | `engine/core/prng.hpp` `tests/core_prng_test.cpp` |
@@ -268,59 +438,110 @@ Which C++ files port each oracle file. An oracle file missing here is not ported
 | rotation | `engine/core/quat.hpp` |
 | round | `engine/core/js.hpp` |
 | router | `tools/check-agents.sh` |
+| rule-book | `games/fall_line/sim/mapgen/rules.hpp` |
+| rule-check | `games/fall_line/sim/analysis/index.hpp` |
+| rules | `games/fall_line/sim/mapgen/rules.hpp` |
 | run-clock | `engine/loop/run_clock.hpp` `tests/loop_run_clock_test.cpp` |
 | runner | `tests/main.cpp` |
 | sample | `engine/core/heightfield.hpp` |
 | sampleField | `engine/core/heightfield.hpp` |
 | sampleFieldGradient | `engine/core/heightfield.hpp` |
 | sampleNoise | `engine/core/noise.hpp` |
+| scaleCount | `games/fall_line/sim/mapgen/regions.cpp` |
 | scope | `tools/skill-lessons.mjs` |
 | search | `tools/agents-index.mjs` |
-| seed | `engine/core/prng.hpp` |
+| searchLevel | `games/fall_line/sim/mapgen/generate.cpp` |
+| seed | `engine/core/prng.hpp` `games/fall_line/sim/mapgen/generate.hpp` |
+| selfCrossings | `games/fall_line/sim/analysis/crossings.cpp` `games/fall_line/sim/analysis/crossings.hpp` |
 | semantics | `engine/core/js.hpp` |
 | setOutputSink | `engine/core/output.hpp` |
+| severity | `games/fall_line/sim/analysis/index.hpp` |
 | sidereal | `engine/core/solar.cpp` |
 | sign | `engine/core/js.hpp` |
 | sin | `engine/core/libm/fdlibm_trig.cpp` `engine/core/libm/libm.hpp` |
+| singlePiste | `games/fall_line/sim/mapgen/versions.hpp` |
 | sink | `engine/core/output.cpp` `engine/core/output.hpp` |
 | size-bars | `tools/skill-lessons.mjs` |
 | skill-reflection | `tools/skill-lessons.mjs` |
 | skills | `tools/check-agents.sh` |
+| sky | `games/fall_line/sim/mapgen/weather.hpp` |
 | slope | `engine/core/heightfield.hpp` |
 | smooth | `engine/core/noise.hpp` |
 | smoothstep | `engine/core/math.hpp` |
 | snapAxis | `engine/racing/tape.hpp` |
-| solar | `engine/core/solar.cpp` `engine/core/solar.hpp` `tests/core_solar_test.cpp` `tools/parity/golden-core-libm.mjs` |
+| snows | `games/fall_line/sim/mapgen/weather.hpp` |
+| solar | `engine/core/solar.cpp` `engine/core/solar.hpp` `games/fall_line/sim/mapgen/sun.hpp` `tests/core_solar_test.cpp` `tools/parity/golden-core-libm.mjs` |
+| spatial-hash | `games/fall_line/sim/mapgen/query.cpp` `games/fall_line/sim/mapgen/query.hpp` |
+| spawn | `games/fall_line/sim/mapgen/spawn.cpp` `games/fall_line/sim/mapgen/spawn.hpp` |
 | splitGap | `engine/racing/records.hpp` |
 | splits | `engine/racing/records.hpp` |
+| stampCliff | `games/fall_line/sim/mapgen/cliffs.cpp` `games/fall_line/sim/mapgen/cliffs.hpp` |
+| stampCorridor | `games/fall_line/sim/mapgen/track.cpp` `games/fall_line/sim/mapgen/track.hpp` |
+| stampDrifts | `games/fall_line/sim/mapgen/drift.cpp` `games/fall_line/sim/mapgen/drift.hpp` |
+| stampKicker | `games/fall_line/sim/mapgen/kickers.cpp` `games/fall_line/sim/mapgen/kickers.hpp` |
 | standings | `engine/racing/standings.hpp` `tests/racing_standings_test.cpp` `tools/parity/golden-racing.mjs` |
+| start | `games/fall_line/sim/mapgen/spawn.hpp` |
+| startGateArc | `games/fall_line/sim/mapgen/spawn.hpp` |
 | status | `engine/core/output.hpp` |
+| steepestSpan | `games/fall_line/sim/mapgen/grades.cpp` `games/fall_line/sim/mapgen/grades.hpp` |
+| string | `tests/core_js_test.cpp` |
 | strip-types | `tools/parity/oracle-import.mjs` |
-| sun | `engine/core/solar.cpp` `engine/core/solar.hpp` `tests/core_solar_test.cpp` |
+| subSeed | `games/fall_line/sim/mapgen/generate.hpp` |
+| sun | `engine/core/solar.cpp` `engine/core/solar.hpp` `games/fall_line/sim/mapgen/sun.cpp` `games/fall_line/sim/mapgen/sun.hpp` `tests/core_solar_test.cpp` |
+| Sun | `games/fall_line/sim/mapgen/types.hpp` |
 | sunAt | `engine/core/solar.hpp` |
 | sunOnDate | `engine/core/solar.hpp` |
 | sunrise | `engine/core/solar.hpp` |
 | sunset | `engine/core/solar.hpp` |
+| sunsetOf | `games/fall_line/sim/mapgen/weather.hpp` |
+| sunWindow | `games/fall_line/sim/mapgen/sun.hpp` |
+| surface | `games/fall_line/sim/mapgen/surface.cpp` `games/fall_line/sim/mapgen/surface.hpp` |
 | symlinks | `tools/check-agents.sh` |
 | tags | `tools/agents-index.mjs` |
 | tan | `engine/core/libm/fdlibm_trig.cpp` `engine/core/libm/libm.hpp` |
 | tanh | `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/libm.hpp` |
 | tape | `engine/racing/tape.cpp` `engine/racing/tape.hpp` `tests/racing_tape_test.cpp` `tools/parity/golden-racing.mjs` |
 | tau | `engine/core/math.hpp` |
-| terrain | `engine/core/heightfield.hpp` `engine/core/noise.hpp` |
-| test | `tests/check.hpp` `tests/core_heightfield_test.cpp` `tests/core_js_test.cpp` `tests/core_libm_test.cpp` `tests/core_math_test.cpp` `tests/core_noise_test.cpp` `tests/core_output_test.cpp` `tests/core_prng_test.cpp` `tests/core_quat_test.cpp` `tests/core_solar_test.cpp` `tests/golden.hpp` `tests/loop_run_clock_test.cpp` `tests/main.cpp` `tests/racing_records_test.cpp` `tests/racing_standings_test.cpp` `tests/racing_tape_test.cpp` |
+| terrain | `engine/core/heightfield.hpp` `engine/core/noise.hpp` `games/fall_line/sim/mapgen/terrain.cpp` `games/fall_line/sim/mapgen/terrain.hpp` |
+| test | `tests/check.hpp` `tests/core_heightfield_test.cpp` `tests/core_js_test.cpp` `tests/core_libm_test.cpp` `tests/core_math_test.cpp` `tests/core_noise_test.cpp` `tests/core_output_test.cpp` `tests/core_prng_test.cpp` `tests/core_quat_test.cpp` `tests/core_solar_test.cpp` `tests/golden.hpp` `tests/loop_run_clock_test.cpp` `tests/main.cpp` `tests/mapgen_generate_test.cpp` `tests/racing_records_test.cpp` `tests/racing_standings_test.cpp` `tests/racing_tape_test.cpp` |
+| text | `engine/core/js_text.hpp` |
+| tightestBend | `games/fall_line/sim/mapgen/track.hpp` |
 | timestep | `engine/loop/run_clock.hpp` |
 | to-int32 | `engine/core/js.hpp` |
 | to-uint32 | `engine/core/js.hpp` |
 | toEuler | `engine/core/quat.hpp` |
+| tofixed | `tests/core_js_test.cpp` |
+| toFixed | `engine/core/js_text.cpp` `engine/core/js_text.hpp` `tools/parity/golden-js.mjs` |
+| toString | `engine/core/js_text.cpp` `engine/core/js_text.hpp` `tools/parity/golden-js.mjs` |
+| track | `games/fall_line/sim/mapgen/track.cpp` `games/fall_line/sim/mapgen/track.hpp` |
+| TrackPoint | `games/fall_line/sim/mapgen/types.hpp` |
+| trackPointAt | `games/fall_line/sim/mapgen/query.hpp` |
 | transcendental | `engine/core/libm/libm.hpp` `tools/check-libm.sh` |
+| treeAge | `games/fall_line/sim/mapgen/forest.hpp` |
+| TreeDef | `games/fall_line/sim/mapgen/types.hpp` |
+| treeKindAt | `games/fall_line/sim/mapgen/regions.cpp` `games/fall_line/sim/mapgen/regions.hpp` |
+| trees | `games/fall_line/sim/mapgen/forest.hpp` |
 | trig | `engine/core/libm/fdlibm_trig.cpp` |
+| trunkRadius | `games/fall_line/sim/mapgen/forest.hpp` |
+| types | `games/fall_line/sim/mapgen/types.hpp` |
+| UNGRADED | `games/fall_line/sim/mapgen/grades.cpp` `games/fall_line/sim/mapgen/grades.hpp` |
 | v8 | `engine/core/libm/fdlibm_arc.cpp` `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/fdlibm_trig.cpp` `engine/core/libm/libm.hpp` |
 | value-noise | `engine/core/noise.hpp` |
 | valueNoise | `engine/core/noise.hpp` |
 | vec3 | `engine/core/quat.hpp` |
 | vendored | `engine/core/libm/fdlibm_arc.cpp` `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/fdlibm_internal.hpp` `engine/core/libm/fdlibm_trig.cpp` |
+| versions | `games/fall_line/sim/mapgen/versions.hpp` |
+| verticalBand | `games/fall_line/sim/mapgen/grades.hpp` |
 | vocab | `tools/skill-lessons.mjs` |
 | warn | `engine/core/output.hpp` |
+| weather | `games/fall_line/sim/mapgen/weather.cpp` `games/fall_line/sim/mapgen/weather.hpp` |
+| Weather | `games/fall_line/sim/mapgen/types.hpp` |
+| WEATHER_KINDS | `games/fall_line/sim/mapgen/weather.hpp` |
+| wind-crust | `games/fall_line/sim/mapgen/surface.hpp` |
+| windIn | `games/fall_line/sim/mapgen/weather.cpp` |
+| windowGrades | `games/fall_line/sim/mapgen/track.hpp` |
+| windrow | `games/fall_line/sim/mapgen/berm.hpp` |
+| withinBand | `games/fall_line/sim/mapgen/rules.hpp` |
+| woods | `games/fall_line/sim/mapgen/forest.hpp` |
 | word | `engine/core/libm/fdlibm_internal.hpp` |
 | yaw | `engine/core/quat.hpp` |
