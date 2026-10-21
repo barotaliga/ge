@@ -63,14 +63,18 @@ std::optional<double> hour_of_elevation(double elevation, bool rising, double la
                                         double declination) {
   const double from = rising ? 0.0 : 12.0;
   double was = sun_at(from, latitude, declination).elevation - elevation;
-  // The oracle accumulates h by repeated += STEP; so does this, for the same hours.
-  for (double h = from + kStep; h <= from + 12.0 + 1e-9; h += kStep) {
+  // The oracle's `for (let h = ...; h <= ...; h += STEP)` accumulates h in floating point, and
+  // the hours it visits are those bits, so h is accumulated here too. It is a while loop
+  // because clang-tidy rejects a floating-point `for` counter; the visits are the same.
+  double h = from + kStep;
+  while (h <= from + 12.0 + 1e-9) {
     const double now = sun_at(h, latitude, declination).elevation - elevation;
     if ((rising && was < 0 && now >= 0) || (!rising && was > 0 && now <= 0)) {
       const double f = was / (was - now);  // a twentieth of an hour of a cosine is straight
       return h - kStep + f * kStep;
     }
     was = now;
+    h += kStep;
   }
   return std::nullopt;
 }
@@ -173,7 +177,8 @@ std::optional<double> hour_of_sun_on_date(double elevation, bool rising, double 
   };
   const double from = rising ? 0.0 : 12.0;
   double was = off(from);
-  for (double h = from + kStep; h <= from + 12.0 + 1e-9; h += kStep) {
+  double h = from + kStep;  // accumulated as the oracle does (see hour_of_elevation)
+  while (h <= from + 12.0 + 1e-9) {
     const double now = off(h);
     if ((rising && was < 0 && now >= 0) || (!rising && was > 0 && now <= 0)) {
       double lo = h - kStep;
@@ -190,6 +195,7 @@ std::optional<double> hour_of_sun_on_date(double elevation, bool rising, double 
       return (lo + hi) / 2.0;
     }
     was = now;
+    h += kStep;
   }
   return std::nullopt;
 }
