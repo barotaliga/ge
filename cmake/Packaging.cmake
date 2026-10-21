@@ -3,7 +3,7 @@
 # root CMakeLists.txt, after every exported target exists.
 #
 #   find_package(gameengine2 0.1 REQUIRED)
-#   target_link_libraries(game PRIVATE ge::core ge::racing)   # ge::fp comes with them
+#   target_link_libraries(game PRIVATE ge::core ge::audio ge::racing)   # ge::fp comes with them
 #
 # The package version is the VERSION file — the one place it is stated; the
 # release workflow writes it. Every target a consumer links is listed in
@@ -25,7 +25,7 @@ set(GE_INSTALL_INCLUDEDIR "${CMAKE_INSTALL_INCLUDEDIR}/gameengine2")
 set(GE_INSTALL_CMAKEDIR "${CMAKE_INSTALL_LIBDIR}/cmake/gameengine2")
 
 # target -> export name (consumers see ge::<export name>)
-set(GE_EXPORTED_TARGETS ge_fp fp ge_core core)
+set(GE_EXPORTED_TARGETS ge_fp fp ge_core core ge_audio audio)
 # Every plugin is published as ge::<plugin> (cmake/Plugins.cmake collects them).
 get_property(_ge_plugins GLOBAL PROPERTY GE_PLUGIN_TARGETS)
 foreach(_target IN LISTS _ge_plugins)

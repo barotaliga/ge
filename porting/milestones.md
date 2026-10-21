@@ -16,5 +16,5 @@ reference.
 | M4d | `levelDigest` matches game5 on every real face's map. |
 | M5 | `createGame` and `step`; the `make sim` digests match game5's for the reference seeds. |
 | M7–M8 | Screenshots against game5's `make world` views (`subsystems.md` § render). |
-| M9 | The framework's synth; `audition` parity against an offline WebAudio render. |
+| M9 | The framework's synth's design (M9a); game5's bank and beds (M9b). No render parity: the meters decide. |
 | M13+ | game5's free-ride systems, one row each as game5's `docs/features.md` lists them. |

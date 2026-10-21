@@ -1,0 +1,6 @@
+# FNV-1a 64 of each reference render's float bytes (audio_synth_test)
+sine 4ce3121b87c5ebe9
+square-glide f8656be2518e79f5
+saw-pair-vibrato-drive 372cb3805976da47
+noise-colours 9fc9b9f4cae4489d
+layers e057a579e9be1b20

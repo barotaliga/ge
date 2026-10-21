@@ -30,7 +30,7 @@ foreach(src ${GE_TEST_SOURCES})
     set(extra ge_platform ge_gpu)
   endif()
   add_executable(${name} ${src} main.cpp)
-  target_link_libraries(${name} PRIVATE ge_core ge_lab ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
+  target_link_libraries(${name} PRIVATE ge_core ge_audio ge_lab ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
     ${extra})
   target_compile_definitions(${name} PRIVATE GE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
   add_test(NAME ${name} COMMAND ${name})

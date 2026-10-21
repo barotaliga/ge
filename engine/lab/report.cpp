@@ -129,6 +129,7 @@ std::string format_report(const Lab& lab, const std::string& dir) {
   for (const LabTable& t : lab.tables()) out += format_table(t);
   for (const std::string& n : lab.notes()) out += "  " + n + "\n";
   for (const auto& s : lab.shots()) out += "  picture: " + dir + "/" + s.shot.id + ".png\n";
+  for (const auto& f : lab.files()) out += "  file: " + dir + "/" + f.name + "\n";
   if (!lab.shots().empty()) out += "  contact sheet: " + dir + "/index.md\n";
   for (const std::string& f : lab.failures()) out += "  FAIL " + f + "\n";
   out += "  digest " + hex64(lab.digest()) + "\n";
@@ -189,6 +190,16 @@ bool write_report(const Lab& lab, const std::string& dir, std::string& error) {
   j += "],\n  \"digest\": " + json_str(hex64(lab.digest())) + "\n}\n";
   if (!write_text(dir + "/report.json", j, error)) return false;
 
+  for (const auto& f : lab.files()) {
+    const std::string path = dir + "/" + f.name;
+    std::ofstream file(path, std::ios::binary);
+    file.write(reinterpret_cast<const char*>(f.bytes.data()),
+               static_cast<std::streamsize>(f.bytes.size()));
+    if (!file) {
+      error = "could not write " + path + " (is the directory writable?)";
+      return false;
+    }
+  }
   if (lab.shots().empty()) return true;
   std::string md =
       "# Lab `" + std::string(spec.id) + "`: contact sheet\n\n" + spec.question + "\n\nInputs:";
@@ -211,6 +222,10 @@ bool write_report(const Lab& lab, const std::string& dir, std::string& error) {
       for (const auto& [k, v] : s.inputs) md.append(" ").append(k).append("=`").append(v) += "`";
       md += "\n";
     }
+  }
+  if (!lab.files().empty()) {
+    md += "\n## Files\n\n";
+    for (const auto& f : lab.files()) md += "- [" + f.name + "](" + f.name + ")\n";
   }
   return write_text(dir + "/index.md", md, error);
 }
