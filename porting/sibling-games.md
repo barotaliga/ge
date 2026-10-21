@@ -1,6 +1,6 @@
 # Working notes: what the sibling games imply for the plugin boundaries
 
-A WORKING DOCUMENT for the porting phase, not part of the engine's official docs. It records
+A WORKING DOCUMENT for the porting phase (porting/ is deleted when porting ends). It records
 the survey behind `docs/goals.md` § Open for extension: niclaslindstedt's earlier games, read
 (never written) as candidates for porting onto the engine later.
 
