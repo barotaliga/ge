@@ -283,7 +283,8 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 | `taa` | picture | game:fall_line | TAA-U on a moving camera against the converged still: ghosting, aliasing, stills repeat (`games/fall_line/labs/gpu_taa_lab.cpp`) | M7c (now) |
 | `shadows` | picture | game:fall_line | the horizon maps over a day from above, and the bake counter of a sun sweep (`games/fall_line/labs/gpu_shadows_lab.cpp`) | M7b (now) |
 | `profile` | bench | game:fall_line | Fall Line's frame over a stretch of the bot's run from the chase camera: every pass's GPU ms (median, p95, worst), its draws and dispatches, and the renderer's CPU half against `--cpu-budget` (`games/fall_line/labs/gpu_profile_lab.cpp`) | M7d3 (now) |
-| `forest`, `snow`, `trails`, `spray`, `skis`, `skier` | picture | game:fall_line | the world drawn | M8 |
+| `snow` | picture | game:fall_line | The snow's material up close (`plugins/mountain/app/snow.wgsl` in Fall Line's frame): the `corduroy`, `powder` and `glitter` views at each `--hours` hour, each PLAIN (the material's gains at nought: the albedo lit) and SNOW, with the ground's mean luma, its detail and its glints beside each (`games/fall_line/labs/gpu_snow_lab.cpp`) | M8a (now) |
+| `forest`, `trails`, `spray`, `skis`, `skier` | picture | game:fall_line | the world drawn | M8b–M8e |
 | `synth` | sim | engine | `engine/audio` (every voice the synth can play, metered, pictured and written as WAV; the render's cost) | M9a (now) |
 | `audition` | sim | game:fall_line | Fall Line's bank, the skier's beds at seven moments and the bot's whole run, metered, pictured and written as WAV | M9b (now) |
 | `screenshots` | picture | game:fall_line | the HUD and the cards at 1280x720, 390x844, 844x390 | M10 |
