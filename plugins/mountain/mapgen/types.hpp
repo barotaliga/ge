@@ -2,7 +2,9 @@
 // draws or measures one: the single piste's half (`Level`, `TrackPoint`, `Checkpoint`,
 // `Kicker`, `Cliff`, `Drift`, `Weather`, `Mountain`, `GenerateOptions`, `TrackHit`) and the ski
 // area a course's map is raced down (`ResortMap`: its runs, lifts, courses, village, hub and wind
-// tunnels). The venues and the water arrive with the milestones that build them (docs/goals.md).
+// tunnels), a ski jumping hill built over a map (`SkiJumpHill`) and a venue's analytic surface
+// (`VenueSurface`). The other venues and the water arrive with the milestones that build them
+// (docs/goals.md).
 //
 // A field `generate_level` always sets is a plain member; one it sets only sometimes is a
 // `std::optional`. A tree with no kind of its own is a `spruce`, and one in no clump has
@@ -14,6 +16,8 @@
 // ge:test tests/mountain_generate_test.cpp
 #pragma once
 
+#include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -455,6 +459,92 @@ struct RaceCourse {
   std::optional<Stretch> stretch;
 };
 
+// R37 — A VENUE'S ANALYTIC SURFACE (straight_venue.hpp): a profile finer than the grid (a ski
+// jump's 3 m wall under its edge), drawn every `dx` m of plan along the venue's line from (x, z)
+// at `heading` (`fx`, `fz` its sine and cosine) and raised by `shift`. It answers the map's
+// ground `half` m either side of the line between 0 and `end` m along it, and only `narrow_half`
+// m before `narrow_until` (a raised in-run's deck, the ground far under it beside).
+struct VenueSurface {
+  double x = 0;
+  double z = 0;
+  double heading = 0;
+  double fx = 0;
+  double fz = 1;
+  double dx = 1;
+  std::vector<double> y;
+  double shift = 0;
+  double half = 0;
+  double end = 0;
+  double narrow_until = 0;
+  double narrow_half = 0;
+
+  // The surface `along` m down the line, m, read between its samples (clamped to its ends).
+  double height_at(double along) const {
+    const double last = double(y.size() - 1);
+    double f = along / dx;
+    f = f < 0 ? 0 : (f > last ? last : f);
+    const size_t i = std::min(y.size() - 2, size_t(f));
+    return y[i] + (y[i + 1] - y[i]) * (f - double(i)) + shift;
+  }
+  // Whether the surface answers at plan point (px, pz); `along` set to how far down the line.
+  bool covers(double px, double pz, double& along) const {
+    along = (px - x) * fx + (pz - z) * fz;
+    if (!(along > 0 && along < end)) return false;
+    const double across = (px - x) * fz - (pz - z) * fx;
+    const double reach = along < narrow_until ? narrow_half : half;
+    return across < reach && across > -reach;
+  }
+};
+
+// R43 — which hill of the construction norm a ski jumping hill is built to.
+enum class JumpHill : uint8_t { large, normal };
+inline const char* jump_hill_name(JumpHill h) { return h == JumpHill::large ? "large" : "normal"; }
+
+struct Level;
+
+// R43 — A SKI JUMPING HILL as it was built over a map (ski_jump.hpp): its own `track`, every place
+// down it m of plan along its line (the tower's deck at 0).
+struct SkiJumpHill {
+  struct Gate {
+    int number;  // 1 the lowest
+    double x;    // where it stands, m of plan
+    double y;    // its height, m
+    double e;    // its distance from the edge along the in-run, m
+  };
+  std::shared_ptr<const Level> base;  // the map it was built over, before any course
+  JumpHill hill = JumpHill::large;
+  double w = 0;   // K's distance, m
+  double hs = 0;  // the hill size, m
+  // The start gate's (the top gate's) and the finish line's (the fall line's) places, and the
+  // vertical between them, m.
+  double from = 0;
+  double to = 0;
+  double vertical = 0;
+  // The in-run's straight's top, the curve's top, the table's start, the EDGE, P, K, L, U and the
+  // out-run's end, m of plan.
+  double straight = 0;
+  double curve = 0;
+  double table = 0;
+  double edge = 0;
+  double p = 0;
+  double k = 0;
+  double l = 0;
+  double u = 0;
+  double outrun = 0;
+  double take_off = 0;      // the table's angle at the edge, rad, down positive
+  double lip = 0;           // the edge's height over the knoll's foot under it, m
+  std::vector<Gate> gates;  // the lowest first
+  int design = 0;           // the design gate: the lowest reaching `speed` in calm air (an index)
+  double speed = 0;         // the design speed off the edge, m/s
+  // The scoring numbers: points a metre, a metre of in-run, a m/s of head and of tail wind.
+  double metre = 0;
+  double gate_factor = 0;
+  double head_factor = 0;
+  double tail_factor = 0;
+  double width = 0;  // the hill's width, m
+  double deck = 0;   // how far either side of the line the raised in-run's deck reaches, m
+};
+
 struct TrackIndex;  // query.hpp: the spatial hash `nearest_track_point` reads
 
 // THE PISTE, open: from the start line (s = 0) to the finish (s = length). `index` is built
@@ -491,8 +581,15 @@ struct Level {
   std::optional<ge::core::Heightfield> crust;  // the region's wind crust (R21), if it lays one
   std::optional<ResortMap> resort;             // the ski area (R25–R30); absent on v1
   std::optional<RaceCourse> race;              // a course set over the map (R31–); else absent
+  std::optional<SkiJumpHill> ski_jump;         // a ski jumping hill built over it (R43)
+  std::shared_ptr<const VenueSurface> venue;   // a venue's analytic surface (R37), else none
 
-  double ground_at(double x, double z) const { return ge::core::sample_field(ground, x, z); }
+  // The snow's height: a venue's own surface where it answers, the grid everywhere else.
+  double ground_at(double x, double z) const {
+    double along = 0;
+    if (venue && venue->covers(x, z, along)) return venue->height_at(along);
+    return ge::core::sample_field(ground, x, z);
+  }
   double packed_at(double x, double z) const { return ge::core::sample_field(packed, x, z); }
   // The ground's unit normal off the bilinear patch's own gradient (the compile's normal).
   void normal_at(double x, double z, Vec3& out) const;
