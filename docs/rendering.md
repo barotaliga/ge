@@ -360,12 +360,17 @@ figure, the machines). They come in as **glTF 2.0** and nothing else.
   box of every pose) and the mesh's sphere is the reach's, so the cull keeps a figure in
   every pose.
 - **Made in Blender, by script.** A model's source is a Blender Python builder run headless
-  (`ge asset`, roadmap row M8g), fed the game's own numbers; the committed `.glb` is the
-  engine's input, and CI never runs Blender.
+  by `ge asset build`, fed the game's own numbers as a data set (`GE_ASSET_DATA`, compiled into
+  the `assets` executable), so a skeleton or a ski's sidecut is stated once, in the code. The
+  committed `.glb` is the engine's input, beside a STAMP of the hashes of everything it was
+  built from and under a size BUDGET its manifest states (`engine/assets/manifest.hpp`); the
+  `assets_check` test fails a model older than its sources or over its budget, and CI never
+  runs Blender.
 
 **As built (M8e1).** The loader, posing, the CPU reference and the `skinning` pass, held to
 each other within one 16-bit step on the software adapter (`tests/render_skinning_test.cpp`),
-and the `models` lab. Still to come with the figure drawn in the world (M8e2): last frame's
+and the `models` lab. **M8g** added `ge asset` and the first built model, the skier on the
+reference skis (`plugins/skier/assets/skier/`), and **M8e2** its poser (`plugins/skier/app/rig_pose.hpp`: the rig posed from a `SkierState`, then `rig_locals` for the model, ready for the palette and the `skinning` pass). Still to come with the figure drawn in the world (M8e2): last frame's
 skinned positions for the motion vectors (a family's motion is its instance's, so a limb that
 swings gets none of its own and TAA may smear it), the crowd skinned in the vertex stage from
 per-instance palettes, and the skis and the skier as models.

@@ -9,7 +9,8 @@
 #
 # The consumer skills (consumer-skills/<name>/SKILL.md), the game scaffold (scaffold/**), the
 # piece templates `ge add` writes (templates/**), the plugins' CMakeLists.txt (`ge use` reads
-# their names and links) and the VERSION file are compiled into ge (cmake/EmbedFiles.cmake), so a ge carries the skills and the
+# their names and links), the model builders' library (engine/assets/blender/ge_asset.py, `ge asset`
+# writes it beside a build) and the VERSION file are compiled into ge (cmake/EmbedFiles.cmake), so a ge carries the skills and the
 # scaffold of exactly the engine it was built from and reads nothing from disk to write them.
 include_guard(GLOBAL)
 include(GNUInstallDirs)
@@ -23,7 +24,7 @@ function(ge_add_cli)
   set(root "${PROJECT_SOURCE_DIR}")
   file(GLOB_RECURSE embedded CONFIGURE_DEPENDS LIST_DIRECTORIES false
     "${root}/consumer-skills/*/SKILL.md" "${root}/scaffold/*" "${root}/templates/*"
-    "${root}/plugins/*/CMakeLists.txt")
+    "${root}/plugins/*/CMakeLists.txt" "${root}/engine/assets/blender/*.py")
   set(script "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/EmbedFiles.cmake")
   set(gen "${PROJECT_BINARY_DIR}/gen/cli/embedded_files.cpp")
   add_custom_command(OUTPUT "${gen}"
@@ -36,8 +37,9 @@ function(ge_add_cli)
   list(FILTER sources EXCLUDE REGEX "/main\\.cpp$")
   add_library(ge_cli STATIC ${sources} "${gen}")
   target_include_directories(ge_cli PUBLIC "$<BUILD_INTERFACE:${root}/engine>")
-  # ge_lab: `ge graph` draws with the labs' chart kit (engine/lab/chart.hpp).
-  target_link_libraries(ge_cli PUBLIC ge_core ge_play ge_lab)
+  # ge_lab: `ge graph` draws with the labs' chart kit (engine/lab/chart.hpp). ge_assets: `ge asset`
+  # reads the asset manifests (engine/assets/manifest.hpp).
+  target_link_libraries(ge_cli PUBLIC ge_core ge_play ge_lab ge_assets)
   # The tree this ge was built from: `ge find` and `ge explain` read the engine's tags there when
   # no other engine tree is found (engine/cli/index.hpp).
   target_compile_definitions(ge_cli PRIVATE GE_ENGINE_SOURCE_DIR="${root}")
