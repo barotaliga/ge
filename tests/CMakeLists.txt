@@ -11,6 +11,10 @@ get_property(GE_GAME_TARGETS GLOBAL PROPERTY GE_GAME_TARGETS)
 # SKIP) when the machine cannot run it (no adapter, no display), except where the environment
 # sets GE_GPU_REQUIRE=1 (CI's Linux x64 rows, with lavapipe and a virtual display): there a
 # skip is a failure.
+# The runner every test executable shares, compiled once (and linted once) rather than per test.
+add_library(ge_test_main OBJECT main.cpp)
+target_link_libraries(ge_test_main PRIVATE ge_core)
+target_compile_definitions(ge_test_main PRIVATE GE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
 foreach(src ${GE_TEST_SOURCES})
   get_filename_component(name ${src} NAME_WE)
   set(extra)
@@ -36,11 +40,15 @@ foreach(src ${GE_TEST_SOURCES})
     endif()
     set(extra ge_platform ge_gpu)
   endif()
-  add_executable(${name} ${src} main.cpp)
+  add_executable(${name} ${src} $<TARGET_OBJECTS:ge_test_main>)
   target_link_libraries(${name} PRIVATE ge_core ge_audio ge_lab ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
     ${extra} ${cli})
   target_compile_definitions(${name} PRIVATE GE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
   add_test(NAME ${name} COMMAND ${name})
+  if(name MATCHES "^mountain_")
+    # The generator's tests build whole maps and are the slowest cases: start them early.
+    set_tests_properties(${name} PROPERTIES COST 50)
+  endif()
   if(cli)
     # A machine that cannot make symlinks (Windows without Developer Mode) cannot hold a game
     # repo's guidance; the scaffold's tests skip there.
@@ -57,12 +65,19 @@ endforeach()
 # Every lab at its smoke flags, twice in one process (a digest that moves between the two runs
 # is a determinism break), and each digest against the committed baseline, which the same code
 # must reproduce on every compiler row (docs/labs.md § Digests; `make labs-digests` rewrites it).
-add_test(NAME labs_smoke COMMAND labs --all --smoke --repeat=2 --quiet
-  --out=${PROJECT_BINARY_DIR}/previews
-  --check-digests=${PROJECT_SOURCE_DIR}/tests/labs_digests.txt)
-# From the repository's root, where a lab finds its golden images (gpu-capture). With the GPU
-# in, the software driver's worker threads keep allocations past exit (as in the gpu_ tests).
-set_tests_properties(labs_smoke PROPERTIES WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
-if(GE_GPU)
-  set_tests_properties(labs_smoke PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
-endif()
+# The labs are cut into GE_LABS_SHARDS slices (labs_smoke_1 ... labs_smoke_N, every Nth lab
+# each), so a parallel ctest runs them side by side; together they run every lab once.
+set(GE_LABS_SHARDS 8 CACHE STRING "How many CTest cases the labs' smoke pass is split into")
+foreach(i RANGE 1 ${GE_LABS_SHARDS})
+  set(name labs_smoke_${i})
+  add_test(NAME ${name} COMMAND labs --all --smoke --repeat=2 --quiet --shard=${i}/${GE_LABS_SHARDS}
+    --out=${PROJECT_BINARY_DIR}/previews
+    --check-digests=${PROJECT_SOURCE_DIR}/tests/labs_digests.txt)
+  # From the repository's root, where a lab finds its golden images (gpu-capture). With the GPU
+  # in, the software driver's worker threads keep allocations past exit (as in the gpu_ tests).
+  # COST: start the slices first, so a parallel ctest is not left waiting on one at the end.
+  set_tests_properties(${name} PROPERTIES WORKING_DIRECTORY ${PROJECT_SOURCE_DIR} COST 100)
+  if(GE_GPU)
+    set_tests_properties(${name} PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
+  endif()
+endforeach()

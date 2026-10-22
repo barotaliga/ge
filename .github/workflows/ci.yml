@@ -2,6 +2,11 @@
 # build + test on each compiler and OS the engine promises to produce the
 # same bits on. A determinism break shows as a parity test failing on ONE
 # row of the matrix — that row's compiler or libm is the suspect.
+#
+# Speed: every ctest runs its cases in parallel (CTEST_PARALLEL_LEVEL; the labs' smoke pass is
+# cut into slices for it), the Linux and macOS rows compile through ccache (restored on every
+# run, saved only from main so pull requests do not churn the cache), and on a pull request the
+# lint checks only what the change can reach (tools/lint.sh); main lints every file.
 name: ci
 
 on:
@@ -17,6 +22,8 @@ env:
     libx11-dev libxext-dev libxcursor-dev libxrandr-dev libxi-dev libxss-dev libxfixes-dev
     libxtst-dev libxkbcommon-dev libwayland-dev wayland-protocols libdecor-0-dev
     libasound2-dev libpulse-dev libpipewire-0.3-dev mesa-vulkan-drivers xvfb xauth
+  # Every runner has four cores (three on macOS); ctest runs that many cases at once.
+  CTEST_PARALLEL_LEVEL: "4"
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -54,25 +61,42 @@ jobs:
           - { os: macos-15, cxx: clang++, preset: release }
     env:
       CXX: ${{ matrix.cxx }}
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+      CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_MAXSIZE: 500M
     steps:
       - uses: actions/checkout@v5
-      - name: Install Ninja (macOS)
+      - name: Install Ninja and ccache (macOS)
         if: runner.os == 'macOS'
-        run: brew install ninja
+        run: brew install ninja ccache
       # SDL3's X11 and Wayland headers (engine/platform), Mesa's software Vulkan driver
       # (lavapipe: the GPU tests' adapter) and a virtual X display for the window test.
       - name: Install the platform's and the GPU's Linux packages
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ${{ env.GE_LINUX_PACKAGES }}
+          sudo apt-get install -y --no-install-recommends ${{ env.GE_LINUX_PACKAGES }} ccache
       # Dawn's prebuilt archive and SDL's source, keyed on the pins that name them.
       - uses: actions/cache@v4
         with:
           path: .cache/deps
           key: deps-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('cmake/Dawn.cmake', 'cmake/SDL.cmake') }}
+      # The compiler cache: the newest one main saved for this row.
+      - uses: actions/cache/restore@v4
+        with:
+          path: .cache/ccache
+          key: ccache-${{ matrix.os }}-${{ matrix.cxx }}-${{ matrix.preset }}-${{ github.sha }}
+          restore-keys: ccache-${{ matrix.os }}-${{ matrix.cxx }}-${{ matrix.preset }}-
       - run: cmake --preset ${{ matrix.preset }}
       - run: cmake --build --preset ${{ matrix.preset }}
+      - run: ccache --show-stats
+      - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/ccache
+          key: ccache-${{ matrix.os }}-${{ matrix.cxx }}-${{ matrix.preset }}-${{ github.sha }}
       # Linux x64 has Dawn and lavapipe: there a GPU or window test that skips is a failure.
       - name: ctest (Linux x64, GPU and window tests required)
         if: runner.os == 'Linux' && runner.arch == 'X64'
@@ -96,17 +120,40 @@ jobs:
       - run: cmake --build --preset release
       - run: ctest --preset release
 
+  # clang-tidy's bug-finding checks (.clang-tidy), in parallel. On a pull request only the files
+  # the change can reach: each changed .cpp and each .cpp that includes a changed header
+  # (tools/lint.sh); a change to the lint's inputs, and every push to main, lints them all.
   lint:
     runs-on: ubuntu-24.04
+    env:
+      CXX: g++
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+      CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_MAXSIZE: 500M
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ${{ env.GE_LINUX_PACKAGES }}
+          sudo apt-get install -y --no-install-recommends ${{ env.GE_LINUX_PACKAGES }} ccache
       - uses: actions/cache@v4
         with:
           path: .cache/deps
           key: deps-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('cmake/Dawn.cmake', 'cmake/SDL.cmake') }}
-      - run: make lint PRESET=release
+      # The same compiler and preset as the g++ release row: share its cache.
+      - uses: actions/cache/restore@v4
+        with:
+          path: .cache/ccache
+          key: ccache-ubuntu-24.04-g++-release-${{ github.sha }}
+          restore-keys: ccache-ubuntu-24.04-g++-release-
+      - name: make lint (pull request; what the change reaches)
+        if: github.event_name == 'pull_request'
+        run: make lint PRESET=release BASE=origin/${{ github.base_ref }}
+      - name: make lint (every file)
+        if: github.event_name != 'pull_request'
+        run: make lint PRESET=release
       # Every embedded WGSL shader through Tint, offline (no GPU needed).
       - run: make shaders-check PRESET=release

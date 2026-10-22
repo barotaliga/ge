@@ -41,6 +41,17 @@ Jobs: `fmt` (clang-format), `agents` (`tools/check-agents.sh`), `lint` (clang-ti
 Clang), and `windows` (MSVC). `fail-fast: false`, so one row's golden failure shows
 alongside the others.
 
+- **Kept fast**: ctest runs four cases at
+  once (`CTEST_PARALLEL_LEVEL`; `make test` uses every core), the labs' smoke pass is eight
+  CTest cases (`labs_smoke_1`..`_8`, `labs --all --smoke --shard=I/N`) and the slow cases carry
+  a `COST` so they start first. The Linux and macOS rows compile through ccache, restored on
+  every run and saved only from main (a pull request never writes the cache). On a pull
+  request `lint` checks only what the change reaches (`tools/lint.sh BUILD BASE`: each changed
+  `.cpp`, and each `.cpp` whose object includes a changed header, read off Ninja's deps); a
+  change to `.clang-tidy`, `tools/lint.sh` or the CMake lints everything, and so does every
+  push to main. A new slow test: give it a `COST`; never cut a row to save time without
+  saying what it covered and where that coverage went.
+
 - **Public repo**: workflows use `permissions:` scoped to the minimum (`contents: read`
   by default). Credentials are only `${{ secrets.NAME }}`. Never echo a secret, never
   put one in `env:` at workflow level, and never take secrets in a `pull_request_target`

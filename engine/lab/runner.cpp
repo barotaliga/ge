@@ -14,6 +14,7 @@
 #include <map>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "core/output.hpp"
@@ -34,6 +35,9 @@ const LabFlag kRunnerFlags[] = {
     {"repeat", "1", "run each lab N times in this process; different digests fail the run"},
     {"smoke", "", "run at the lab's smoke flags (what CI runs)", true},
     {"all", "", "run every registered lab", true},
+    {"shard", "",
+     "with --all, run only slice I of N (I/N, from 1/N): every Nth lab, so CTest runs them in "
+     "parallel"},
     {"check-digests", "", "compare each lab's digest with this baseline file"},
     {"write-digests", "", "rewrite this baseline file from this run's digests"},
     {"quiet", "", "print only failures and the summary", true},
@@ -239,6 +243,22 @@ int run_labs(int argc, const char* const* argv) {
     labs = registered_labs();
   else
     labs.push_back(spec);
+  if (const std::string shard = get(runner, "shard"); !shard.empty()) {
+    const auto slash = shard.find('/');
+    const int index = slash == std::string::npos ? 0 : std::atoi(shard.substr(0, slash).c_str());
+    const int count = slash == std::string::npos ? 0 : std::atoi(shard.substr(slash + 1).c_str());
+    if (!all || count < 1 || index < 1 || index > count) {
+      std::fprintf(stderr,
+                   "labs: --shard=%s: want --all --shard=I/N with 1 <= I <= N, e.g. --shard=2/4.\n",
+                   shard.c_str());
+      return 2;
+    }
+    std::vector<const LabSpec*> slice;
+    for (size_t k = static_cast<size_t>(index - 1); k < labs.size();
+         k += static_cast<size_t>(count))
+      slice.push_back(labs[k]);
+    labs = std::move(slice);
+  }
   const auto baseline = check.empty() ? std::map<std::string, std::string>{} : read_digests(check);
   if (!check.empty() && baseline.empty()) {
     std::fprintf(stderr, "labs: %s holds no digests; write one with --write-digests=%s.\n",

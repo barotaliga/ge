@@ -114,4 +114,5 @@ code now makes obvious.
 4. Before committing: `make index`, `make fmt`, `make test`, `make agents-check` (the
    `commit` skill).
 
-`make lint` (clang-tidy) runs in CI. Run it locally when you touch many files.
+`make lint` (clang-tidy's bug-finding checks, in parallel) runs in CI. `make lint
+BASE=origin/main` checks only what your change reaches, in seconds; run it before a push.

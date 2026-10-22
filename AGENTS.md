@@ -126,7 +126,7 @@ porting ends, and nothing outside it may depend on it except `make golden`.
 make build        # cmake --preset debug && cmake --build (PRESET=release for -O2, no sanitizers)
 make test         # build + ctest
 make fmt          # clang-format in place;  make fmt-check is what CI runs
-make lint         # clang-tidy over the sources (bug-finding checks only)
+make lint         # clang-tidy's bug-finding checks, in parallel (BASE=origin/main: only what the change reaches)
 make labs         # list the labs;  make lab LAB=level ARGS="--seeds=38" runs one
 make lab LAB=synth # every voice the synth can play, metered, pictured and written as WAV
 make lab LAB=audition # Fall Line's bank, the skier's beds and the bot's run, metered and written as WAV

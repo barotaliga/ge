@@ -153,7 +153,8 @@ fails when it is off. Three checks use it:
 - **`--repeat=N`** runs the lab N times in one process and fails when the digests differ.
   That catches state kept between runs and unseeded draws.
 - **`--check-digests=tests/labs_digests.txt`** compares each lab's smoke-run digest with
-  the committed baseline. CTest's `labs_smoke` runs it on every CI row, so a lab whose
+  the committed baseline. CTest's `labs_smoke_1`..`_8` (one slice of the labs each,
+  `--shard=I/N`) run it on every CI row, so a lab whose
   output differs between compilers fails on the row that differs.
 - A lab that has to move (its drawing changed, or the code it runs changed on purpose)
   rewrites the baseline with `make labs-digests`, and the PR says why.

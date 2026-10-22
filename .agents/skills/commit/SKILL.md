@@ -15,7 +15,7 @@ make test           # debug preset, with ASan + UBSan
 make test PRESET=release
 ```
 
-`make test` includes `labs_smoke`: every lab, twice, against `tests/labs_digests.txt`.
+`make test` includes the `labs_smoke_*` slices: every lab, twice, against `tests/labs_digests.txt`.
 
 All of them must be green. A failure you did not cause is still yours to fix or report.
 Before the gates, run the `skill-reflection` skill's CLOSE pass for every skill the session

@@ -375,6 +375,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | `tools/check-agents.sh` | The agent guidance's structure check (make agents-check) | `write-code` |  |
 | `tools/check-libm.sh` | Fails any <cmath> transcendental in simulation code (make libm-check) | `determinism` |  |
 | `tools/check-plugins.mjs` | Checks the plugin contract: names, skills, declared dependencies, no cycles | `plugins` `write-code` |  |
+| `tools/lint.sh` | Runs clang-tidy in parallel over every .cpp, or what a change reaches (make lint) | `build` |  |
 | `tools/skill-lessons.mjs` | Prints, filters and checks the skills' lesson fragments (make lessons) | `skill-reflection` |  |
 
 ## Keywords
@@ -536,6 +537,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | chain-way | `plugins/mountain/mapgen/lift_chain.cpp` `plugins/mountain/mapgen/lift_chain.hpp` |
 | chair | `plugins/mountain/mapgen/resort.hpp` |
 | chance | `engine/core/prng.hpp` |
+| changed-files | `tools/lint.sh` |
 | chase | `games/fall_line/sound/listener.hpp` |
 | chase_view | `games/fall_line/app/views.hpp` |
 | chase-camera | `games/fall_line/app/views.hpp` `games/fall_line/labs/gpu_world_lab.cpp` |
@@ -555,8 +557,9 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | choose-course | `plugins/mountain/mapgen/course_gates.cpp` `plugins/mountain/mapgen/course_gates.hpp` `tests/mountain_resort_level_test.cpp` |
 | choose-heading | `plugins/mountain/mapgen/network.cpp` `plugins/mountain/mapgen/network.hpp` |
 | chunk | `engine/lab/png.cpp` |
-| ci | `tools/check-agents.sh` `tools/check-libm.sh` |
+| ci | `tools/check-agents.sh` `tools/check-libm.sh` `tools/lint.sh` |
 | clamp | `engine/core/math.hpp` |
+| clang-tidy | `tools/lint.sh` |
 | clatter | `games/fall_line/sound/bank.cpp` |
 | clear | `engine/gpu/test_scene.hpp` `plugins/mountain/mapgen/resort_courses.cpp` |
 | clear-bottom | `plugins/mountain/mapgen/station_clear.cpp` |
@@ -955,6 +958,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | head-index | `plugins/mountain/mapgen/summit_ramps.cpp` |
 | head-on-contour | `plugins/mountain/mapgen/run_start.cpp` `plugins/mountain/mapgen/run_start.hpp` |
 | header | `engine/audio/wav.cpp` `engine/core/output.hpp` `tests/audio_meter_test.cpp` |
+| header-dependencies | `tools/lint.sh` |
 | heading | `engine/core/math.hpp` `engine/core/quat.hpp` `engine/render/view.hpp` `tests/render_view_test.cpp` |
 | heading-at | `plugins/mountain/mapgen/network.cpp` |
 | headless | `engine/lab/labs/gpu_capture_lab.cpp` `engine/platform/window.hpp` `games/fall_line/labs/gpu_world_lab.cpp` `games/fall_line/sim/simulate.hpp` |
@@ -1107,6 +1111,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | link | `plugins/mountain/mapgen/links.cpp` |
 | link-lane | `plugins/mountain/mapgen/links.hpp` |
 | links | `plugins/mountain/mapgen/links.cpp` `plugins/mountain/mapgen/links.hpp` |
+| lint | `tools/lint.sh` |
 | lip | `plugins/mountain/labs/junctions_lab.cpp` |
 | list | `engine/lab/runner.cpp` |
 | listen | `engine/audio/meter.hpp` `engine/audio/wav.hpp` `games/fall_line/labs/audition_lab.cpp` |
@@ -1283,6 +1288,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | painters | `engine/lab/raster.cpp` |
 | pair | `plugins/skier/skis.hpp` |
 | pan | `engine/audio/sound.hpp` `engine/audio/voice.hpp` `tests/audio_synth_test.cpp` |
+| parallel | `tools/lint.sh` |
 | park | `plugins/mountain/labs/park_lab.cpp` `plugins/mountain/mapgen/park.hpp` `tests/mountain_park_test.cpp` |
 | park-altitude | `plugins/mountain/mapgen/park.cpp` |
 | parse_lesson | `engine/cli/skills.cpp` |
@@ -1625,6 +1631,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | shaper | `engine/audio/dsp.hpp` |
 | shaper_push | `engine/audio/voice.hpp` |
 | shaper_steepness | `engine/audio/voice.hpp` |
+| shard | `engine/lab/runner.hpp` `tests/lab_runner_test.cpp` |
 | shave-crests | `plugins/mountain/mapgen/course_prep.hpp` |
 | shimmer | `games/fall_line/labs/gpu_world_lab.cpp` |
 | shortest | `engine/core/num_text.cpp` |
