@@ -316,7 +316,8 @@ The **cull check**: the `world` lab draws every view a second time with occlusio
 off and counts the pixels that differ, which must be none (`cull-faults`);
 `tests/render_instances_test.cpp` holds the phases' counts on a wall with boxes behind it.
 On seed 38 at 640 × 360 a run's moment draws about 3,000 trees of 21,000 and the pyramid
-hides about 9,000; the forest is three placeholder meshes at two LODs each.
+hides about 9,000; the forest is twenty meshes (five forms, four variants each) at three LODs
+each (`plugins/mountain/app/trees.hpp`), 9 to 384 triangles a tree.
 
 ## Geometry and resources
 
