@@ -33,6 +33,7 @@ bool udp_open(UdpSocket& s, const Address& bind, std::string* error) {
   }
   const auto handle = static_cast<intptr_t>(h);
   v6_only(h, sa);
+  allow_broadcast(h, sa);
   const bool nonblocking = set_nonblocking(h);
   if (!nonblocking || ::bind(h, reinterpret_cast<const sockaddr*>(&sa), len) != 0) {
     if (error)
