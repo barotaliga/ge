@@ -228,7 +228,10 @@ void step(GameState& state, std::span<const Controls> controls) {
           GameEvent{EventKind::wipeout, i, static_cast<int32_t>(ev.cause), r.skier.speed});
     }
     if (p.finished) continue;
-    p.stuck = !r.skier.down && r.skier.speed < kStuckSpeed ? p.stuck + kDt : 0;
+    // Going nowhere while asking to go. A race's racer always is; on the free ride a skier
+    // standing still to look at the view has his poles still, and is left there.
+    const bool asks = state.mode != Mode::free || in.tuck > 0;
+    p.stuck = !r.skier.down && asks && r.skier.speed < kStuckSpeed ? p.stuck + kDt : 0;
     if ((r.skier.down && r.skier.down_time > kDownReset) || p.stuck > kStuckReset) {
       reset(state, i);
     }
