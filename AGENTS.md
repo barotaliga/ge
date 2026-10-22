@@ -32,6 +32,7 @@ updates that row's Status in its PR.
 | [`docs/labs.md`](docs/labs.md) | The labs: the contract every subsystem, plugin and game plugs into, the kinds (sim, scenario, picture, drive, bench), captions, digests, and the labs each milestone lands |
 | `docs/index.md` | GENERATED from the code's `ge:` tags by `make index` (and `make agents-check`) in every checkout, never committed: every file's one-line summary, owning skill and test; keyword to files |
 | [`docs/rendering.md`](docs/rendering.md) | The GPU backend (Dawn), the frame's pass table, every rendering technique and why, budgets, lab hooks, and what was considered and not taken |
+| [`docs/perf.md`](docs/perf.md) | The performance ledger: every speed-up, before and after, and how it was measured |
 | [`docs/publishing.md`](docs/publishing.md) | What a release is (GitHub Releases + GitHub Packages), how a game consumes it, changeset fragments, cutting a release, the credentials |
 
 **The working area.** `porting/` holds everything that only matters while modules are
@@ -161,7 +162,7 @@ and Windows. Releases are dispatched, never hand-made (`release` skill,
 
 | Path | What | Skill |
 | --- | --- | --- |
-| `engine/core/` | The deterministic pool: `prng.hpp` (mulberry32), `math.hpp` (hypot family, clamp, smoothstep), `libm/` (every transcendental the simulation calls, with the same bits on every platform; vendored, with `LICENSE.md`), `num.hpp` (the simulation's number semantics: rounding, integer wrap, NaN-aware max/min, sign, remainder), `num_text.hpp` (numbers as text, for diagnostic lines), `noise.hpp` (hash2, value noise, the cached field), `heightfield.hpp` (the baked grid and its bilinear reads), `quat.hpp` (orientation; the Euler sign flip), `solar.hpp` (the sun and the moon, by geometry and on a real date), `output.hpp` (the one diagnostic channel; module state) | `determinism` |
+| `engine/core/` | The deterministic pool: `prng.hpp` (mulberry32), `math.hpp` (hypot family, clamp, smoothstep), `libm/` (every transcendental the simulation calls, with the same bits on every platform; vendored, with `LICENSE.md`), `num.hpp` (the simulation's number semantics: rounding, integer wrap, NaN-aware max/min, sign, remainder), `num_text.hpp` (numbers as text, for diagnostic lines), `noise.hpp` (hash2, value noise, the cached field), `heightfield.hpp` (the baked grid and its bilinear reads), `quat.hpp` (orientation; the Euler sign flip), `solar.hpp` (the sun and the moon, by geometry and on a real date), `output.hpp` (the one diagnostic channel; module state), `parallel.hpp` (a bake's independent rows in bands on threads) | `determinism` |
 | `engine/loop/` | `run_clock.hpp`: the fixed-step accumulator between the display's frames and the 120 Hz step | `sim` |
 | `engine/lab/` | The lab contract and runner: `lab.hpp` (`LabSpec`, `GE_LAB`, the `Lab` context: metrics, tables, captioned shots, attached files, failures, the digest), `sound.hpp` (a rendered sound metered, pictured and attached as WAV), `runner.hpp` (the `labs` command line: list, run, tag, compare, smoke, repeat, digest baseline), `report.hpp` (report.json, metrics.tsv, the contact sheet), `raster.hpp` (the CPU picture and 5x7 font), `png.hpp`; `labs/` holds the engine's own labs. Published as `ge::lab`, so a game's labs use the same contract | `labs` |
 | `engine/cli/` | The `ge` command line for game repos (`cmake/Cli.cmake`): `scaffold.hpp` (`ge new`), `skills.hpp` (`ge skills sync`, the lock, `ge lessons`), `doctor.hpp` (`ge doctor`: a game repo held to the engine's rules), `diagnostic.hpp` (the diagnostics convention as a check: `tests/cli_diagnostics_test.cpp` holds the whole tree to it), `finding.hpp` (what, where, next), `embedded.hpp` (what ge carries) | `agent-interface` |
@@ -213,7 +214,8 @@ Agents find code by grep, so the tree is built to be grepped:
 ### Stated once
 
 - **The FP flags**: `ge_fp` in the root `CMakeLists.txt`, linked by `ge_core` (so by every
-  target) and published with it as `ge::fp`. `ge_flags` is the tree's own warnings and
+  target) and published with it as `ge::fp`. **The instruction-set baseline** (AVX2 on
+  x86-64): `ge_isa` beside it, published as `ge::isa`. `ge_flags` is the tree's own warnings and
   sanitizers, never published.
 - **The plugin contract** (homes, layout, naming, dependencies, registration):
   `docs/architecture.md` § Plugins; built by `cmake/Plugins.cmake`, checked by

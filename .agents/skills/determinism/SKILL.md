@@ -34,7 +34,13 @@ and a deliberate behaviour change rewrites them in its PR (the `testing` skill).
    because C++ does not define their evaluation order.
 5. **Order**: no `unordered_map` or `unordered_set` iteration feeds a result. Sort with
    `std::stable_sort`.
-6. **No clock and no thread-timing dependence** in the simulation.
+6. **No clock and no thread-timing dependence** in the simulation. A bake whose outputs are
+   each a pure function of their index may run its rows on threads with
+   `core::parallel_bands` (`engine/core/parallel.hpp`): one writer per output, nothing summed
+   across bands, so the bits are the same on any number of workers. Never inside a step.
+7. **SIMD** (the compiler's, or intrinsics) is exact only with `+ − × ÷ √`, compares and
+   integer ops lane by lane: no FMA intrinsic, no approximate reciprocal or rsqrt, no
+   horizontal sum that changes the order of additions.
 
 ## The libm (M1, settled)
 

@@ -14,7 +14,7 @@ line all come from the same release.
 
 | Target | What | Headers |
 | --- | --- | --- |
-| `ge::core` | The deterministic pool: the PRNG, math, the libm, noise, the heightfield, quaternions, the sun, the run clock, the output channel; carries `ge::fp` | `core/*.hpp`, `loop/*.hpp` |
+| `ge::core` | The deterministic pool: the PRNG, math, the libm, noise, the heightfield, quaternions, the sun, the run clock, the output channel, `parallel.hpp` (a bake's rows on threads); carries `ge::fp` and `ge::isa` | `core/*.hpp`, `loop/*.hpp` |
 | `ge::lab` | The lab contract and runner (skill: `labs`) | `lab/*.hpp` |
 | `ge::<plugin>` | A genre's shared code (for example `ge::racing`, `ge::mountain`, `ge::skier`) | `<plugin>/*.hpp` |
 
@@ -28,8 +28,11 @@ concept. Read a header's comments before calling it.
 The engine's simulation code computes the same bits on every compiler and OS, and so must the
 game's `sim/`:
 
-- **Link `ge::core`**: it carries `ge::fp` (no FMA contraction, no fast-math) to every target.
+- **Link `ge::core`**: it carries `ge::fp` (no FMA contraction, no fast-math) to every target,
+  and `ge::isa` (on x86-64 the game requires AVX2, as the engine does).
   Never add `-ffast-math`, `-Ofast`, `-ffp-contract=fast` or `/fp:fast`.
+- **Threads only in a bake** whose every output is a pure function of its index
+  (`core/parallel.hpp`'s `parallel_bands`), never in a step.
 - **Transcendentals from `core/libm/libm.hpp`** (`ge::core::libm::sin`, `pow`, ...), never
   `<cmath>`'s, whose bits differ between platforms. Exact functions (`sqrt`, `floor`, `fabs`,
   `fmod`) are fine.
