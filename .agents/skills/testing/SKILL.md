@@ -36,6 +36,12 @@ and prints `ok` or `FAIL` per test.
 - Committed. A deliberate change of behaviour rewrites the tables it moves in the same PR,
   and the PR says why the values moved and shows the behaviour is still right (a map still
   builds clean, a run still finishes). An unexplained move is a bug.
+- A table the engine writes itself has a `GE_GOLDEN_WRITE` branch in its test (set, the test
+  writes its file instead of comparing). `make ge ARGS="golden write <topic>_test"` runs it on
+  the release build, runs it again to hold it, and answers with what moved;
+  `make ge ARGS="golden diff --base=origin/main"` is the same table for every golden file the
+  branch changed: each column that moved, in how many rows, and the rows (a double's bits shown
+  as the double). Paste that into the PR's why.
 - Keep a file under about 1 MB. Draw inputs from a fixed mulberry32 seed so the table
   is reproducible.
 

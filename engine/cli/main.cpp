@@ -9,8 +9,8 @@
 //
 // ge:summary The ge executable: parses the command line against the catalog and runs each command
 // ge:keywords cli ge main command-line usage dispatch help version new find explain use add
-// ge:keywords build test check lab graph shot upgrade doctor skills lessons json bench profile
-// ge:keywords mem leaks
+// ge:keywords build test check digest golden lab graph shot upgrade doctor skills lessons json
+// ge:keywords bench profile mem leaks
 // ge:skill agent-interface
 // ge:test tests/cli_commands_test.cpp
 #include <algorithm>
@@ -23,6 +23,7 @@
 #include "cli/commands.hpp"
 #include "cli/doctor.hpp"
 #include "cli/embedded.hpp"
+#include "cli/golden.hpp"
 #include "cli/graph.hpp"
 #include "cli/index.hpp"
 #include "cli/json.hpp"
@@ -163,6 +164,13 @@ Outcome run(const Args& a) {
   if (name == "build") return run_build(build_options(a));
   if (name == "test") return run_test(build_options(a), flag_value(a, "filter"));
   if (name == "check") return run_check(build_options(a));
+  if (name == "digest") {
+    return run_digest(build_options(a), a.words.empty() ? "" : a.words[0], has_flag(a, "write"));
+  }
+  if (name == "golden diff") {
+    return run_golden_diff(fs::absolute(repo_of(a)), a.words, flag_value(a, "base", "HEAD"));
+  }
+  if (name == "golden write") return run_golden_write(build_options(a, "release"), a.words[0]);
   if (name == "lab") {
     LabOptions lab;
     lab.id = a.words.empty() ? "" : a.words[0];

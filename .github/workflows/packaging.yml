@@ -113,7 +113,7 @@ jobs:
           "$G" mem --seeds=1 --steps=600 "$E"
           "$G" leaks --seeds=1 "$E"
 
-      - name: a racer from ge new plays a seed, replays it, shoots it and finds where two runs part
+      - name: a racer from ge new plays a seed, replays it, shoots it, finds where two runs part, holds its bits
         run: |
           G="$GITHUB_WORKSPACE/build/ge"
           E=--engine="$GITHUB_WORKSPACE"
@@ -134,3 +134,14 @@ jobs:
           # One input changed: diverge names the first step that differs.
           sed -e '/^digest/d' -e '/^steps/d' -e '9s/.*/1 1 0 0/' runs/kart_racer-38.inputs > runs/edited.inputs
           "$G" diverge runs/kart_racer-38.inputs runs/edited.inputs "$E" --json | grep -q '"same":false'
+          # The recorded bits: every lab's digest committed and held by ge test, one lab checked
+          # alone; a golden file's rows diffed column by column; a test with no golden written.
+          "$G" digest --write "$E"
+          test -s tests/labs_digests.txt
+          "$G" digest look "$E" --json | grep -q '"state":"same"'
+          "$G" test --filter=labs_smoke "$E"
+          mkdir -p tests/golden
+          printf '# lap time-bits\n1 4059000000000000\n2 405a000000000000\n' > tests/golden/laps.txt
+          "$G" golden diff --json | grep -q '"rows_changed":2'
+          "$G" golden diff tests/golden/laps.txt --json | grep -q '"column":"time-bits"'
+          "$G" golden write laps_test --preset=debug "$E" --json | grep -q 'does not write its golden'

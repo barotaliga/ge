@@ -136,6 +136,12 @@ TEST(digest_baseline) {
   CHECK(run({"toy", "--n=9", "--check-digests=" + base}) == 1);
   // A lab missing from the baseline fails too.
   CHECK(run({"drift", "--check-digests=" + base}) == 1);
+  // Writing one lab's row keeps the others: drift's row joins toy's, sorted by id.
+  CHECK(run({"drift", "--smoke", "--write-digests=" + base}) == 0);
+  const std::string both = slurp(base);
+  CHECK_MSG(both.find("drift ") != std::string::npos && both.find("toy ") > both.find("drift "),
+            both);
+  CHECK(run({"toy", "--smoke", "--check-digests=" + base}) == 0);
 }
 
 TEST(a_measured_shot_keeps_its_pixels_out_of_the_digest) {

@@ -40,7 +40,8 @@ const LabFlag kRunnerFlags[] = {
      "with --all, run only slice I of N (I/N, from 1/N): every Nth lab, so CTest runs them in "
      "parallel"},
     {"check-digests", "", "compare each lab's digest with this baseline file"},
-    {"write-digests", "", "rewrite this baseline file from this run's digests"},
+    {"write-digests", "",
+     "rewrite this baseline file from this run's digests (only the labs run, unless --all)"},
     {"quiet", "", "print only failures and the summary", true},
     {"debug", "", "let the engine's debug lines through", true},
     {"log", "",
@@ -311,7 +312,11 @@ int run_labs(int argc, const char* const* argv) {
   }
 
   int failed = 0;
-  std::string digests = "# lab digests at their smoke flags: labs --all --smoke --write-digests\n";
+  // --write-digests over every lab rewrites the file; over one lab or a shard it rewrites only
+  // those rows and keeps the rest, so one lab's baseline moves without running the others.
+  const bool every = all && get(runner, "shard").empty();
+  std::map<std::string, std::string> digests =
+      write.empty() || every ? std::map<std::string, std::string>{} : read_digests(write);
   for (const LabSpec* s : labs) {
     const Args args = lab_args(*s, smoke, typed, error);
     if (!error.empty()) {
@@ -369,22 +374,23 @@ int run_labs(int argc, const char* const* argv) {
         ok = false;
       }
     }
-    digests += std::string(s->id) + " " + hex64(first) + "\n";
+    digests[s->id] = hex64(first);
     if (!check.empty()) {
       const auto it = baseline.find(s->id);
       if (it == baseline.end()) {
         std::fprintf(stderr,
                      "FAIL %s: not in %s. A new lab: add its digest with "
-                     "`make labs-digests` and commit the file.\n",
-                     s->id, check.c_str());
+                     "`ge digest %s --write` and commit the file.\n",
+                     s->id, check.c_str(), s->id);
         ok = false;
       } else if (it->second != hex64(first)) {
         std::fprintf(stderr,
                      "FAIL %s: digest %s, the baseline %s says %s.\n"
-                     "    If this change meant to move the lab's output, run `make labs-digests` "
-                     "and say why in the PR.\n    If not, the code it runs moved: rerun it with "
-                     "--tag/--compare against main to see what. Skill: labs, determinism.\n",
-                     s->id, hex64(first).c_str(), check.c_str(), it->second.c_str());
+                     "    If this change meant to move the lab's output, run `ge digest %s "
+                     "--write` and say why in the PR.\n    If not, the code it runs moved: rerun "
+                     "it with --tag/--compare against main to see what. Skill: labs, "
+                     "determinism.\n",
+                     s->id, hex64(first).c_str(), check.c_str(), it->second.c_str(), s->id);
         ok = false;
       }
     }
@@ -392,7 +398,8 @@ int run_labs(int argc, const char* const* argv) {
   }
   if (!write.empty()) {
     std::ofstream f(write, std::ios::binary);
-    f << digests;
+    f << "# lab digests at their smoke flags: labs --all --smoke --write-digests\n";
+    for (const auto& [id, hex] : digests) f << id << " " << hex << "\n";
     if (!f) {
       std::fprintf(stderr, "labs: could not write %s.\n", write.c_str());
       return 1;

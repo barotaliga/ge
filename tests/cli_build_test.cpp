@@ -71,16 +71,20 @@ TEST(failed_tests_and_their_harness_lines_become_findings) {
   const std::string out = in_repo("tests/sim_wind_test.cpp") +
                           ":36: FAIL level 4.1 after 20 s, want inside (-1, 1)\n"
                           "  FAIL look: the mark left the picture\n"
+                          "FAIL run: digest 1111111111111111, the baseline tests/labs_digests.txt "
+                          "says 2222222222222222.\n"
                           "50% tests passed, 2 tests failed out of 4\n\n"
                           "The following tests FAILED:\n"
                           "\t  2 - sim_wind_test (Failed)\n"
                           "\t  4 - labs_smoke (Failed)\n";
   const auto f = test_findings(kRepo, out, "debug");
-  CHECK_MSG(f.size() == 4, std::to_string(f.size()) + " findings");
-  if (f.size() != 4) return;
+  CHECK_MSG(f.size() == 5, std::to_string(f.size()) + " findings");
+  if (f.size() != 5) return;
   CHECK(f[0].where == "tests/sim_wind_test.cpp:36" && f[0].what.starts_with("level 4.1"));
   CHECK(f[1].where == "lab look" && f[1].next == "run it alone: ge lab look --smoke");
-  CHECK(f[2].what == "test sim_wind_test failed (Failed)" &&
-        f[2].next.find("--filter=^sim_wind_test$") != std::string::npos);
-  CHECK(f[3].where == "labs");
+  // A digest off its baseline points at ge digest, the one command that checks and moves it.
+  CHECK(f[2].where == "lab run" && f[2].next.starts_with("ge digest run checks it alone"));
+  CHECK(f[3].what == "test sim_wind_test failed (Failed)" &&
+        f[3].next.find("--filter=^sim_wind_test$") != std::string::npos);
+  CHECK(f[4].where == "labs");
 }
