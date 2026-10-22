@@ -1,0 +1,74 @@
+// THE GAME'S SIMULATION: the whole state of a run and the fixed step that advances it. The game
+// is decided here; a renderer, a sound or a HUD only ever reads a GameState. It is deterministic:
+// the same seed and the same inputs give the same bits on every platform, so a replay, a ghost
+// and every test reproduce. Time is the step count; every random draw comes from `rng`, in step
+// order (skill: sim-system).
+//
+// THE RACER: a car on a loop of gates the seed lays out, raced for kLaps laps. The car turns at
+// most as hard as its grip holds at its speed; a gate is taken by driving through its circle, in
+// order, and the start gate closes each lap. The plan is x/z with y up; heading 0 = +z, clockwise
+// from above, so the car's way is (sin h, cos h); steer positive turns right.
+//
+// ge:summary The racer's state and its fixed 120 Hz step: the gates, the car, the laps, the pilot
+// ge:keywords sim simulation state step create_game digest fixed-step determinism rng input
+// ge:keywords racer car gates laps track grip autopilot
+// ge:skill sim-system
+// ge:test tests/sim_game_test.cpp
+#pragma once
+
+#include <array>
+#include <cstdint>
+
+#include "core/prng.hpp"
+
+namespace {{ident}}::sim {
+
+inline constexpr double kStepHz = 120.0;
+inline constexpr double kDt = 1.0 / kStepHz;
+inline constexpr int kGates = 8;
+inline constexpr int kLaps = 2;
+inline constexpr double kGateRadius = 7.0;  // m: a gate is taken within this of its centre
+
+// What the driver (a player, the pilot or an agent) does this step. A driver that sets only the
+// steer drives flat out.
+struct Input {
+  double steer = 0;     // -1 (left) .. 1 (right)
+  double throttle = 1;  // 0 .. 1
+  double brake = 0;     // 0 .. 1
+};
+
+struct Gate {
+  double x_m = 0;
+  double z_m = 0;
+};
+
+struct GameState {
+  uint32_t seed = 0;
+  int64_t steps = 0;     // the one clock: a run is steps * kDt seconds old
+  ge::core::Rng rng{0};  // every random draw, in step order
+  std::array<Gate, kGates> gates{};
+  double x_m = 0;  // the car
+  double z_m = 0;
+  double heading = 0;  // radians
+  double speed_mps = 0;
+  double vx_mps = 0;  // its velocity, written by the step
+  double vz_mps = 0;
+  int32_t next_gate = 1;     // the gate to take next; gate 0 is the start and finish
+  int32_t laps = 0;          // laps done
+  int64_t finish_step = -1;  // the step the last lap closed, -1 until then
+};
+
+GameState create_game(uint32_t seed);
+
+// One fixed step of kDt seconds.
+void step(GameState& state, const Input& input);
+
+bool finished(const GameState& state);
+
+// The game's own driver: aim at the next gate, lift and brake for a sharp turn.
+Input autopilot(const GameState& state);
+
+// FNV-1a 64 over the state's bits: two runs with equal digests are the same run.
+uint64_t digest(const GameState& state);
+
+}  // namespace {{ident}}::sim

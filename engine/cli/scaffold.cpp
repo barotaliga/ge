@@ -7,6 +7,8 @@
 // ge:test tests/cli_scaffold_test.cpp
 #include "cli/scaffold.hpp"
 
+#include <algorithm>
+#include <map>
 #include <regex>
 #include <system_error>
 
@@ -18,6 +20,7 @@ namespace ge::cli {
 namespace {
 
 constexpr std::string_view kScaffold = "scaffold/";
+constexpr std::string_view kOverlays = "templates/game-";
 
 void replace_all(std::string& s, std::string_view from, std::string_view to) {
   for (size_t at = s.find(from); at != std::string::npos; at = s.find(from, at + to.size())) {
@@ -68,12 +71,33 @@ NewResult new_game(const NewOptions& options) {
     return r;
   }
 
-  const std::string ident = ident_of(name);
+  if (std::find(std::begin(kGames), std::end(kGames), options.game) == std::end(kGames)) {
+    std::string games;
+    for (const std::string_view g : kGames) games += std::string(games.empty() ? "" : ", ") += g;
+    r.findings.push_back({Severity::error, "no starting game \"" + options.game + "\"",
+                          dir.generic_string(), "rerun with --game= one of " + games});
+    return r;
+  }
+
+  // The scaffold's files, each replaced by the starting game's of the same path, then the
+  // starting game's own.
+  const std::string overlay =
+      options.game == "demo" ? "" : std::string(kOverlays) + options.game + "/";
+  std::map<std::string, std::string_view> files;
   for (const EmbeddedFile& f : embedded_files()) {
-    if (!f.path.starts_with(kScaffold)) continue;
-    std::string rel(f.path.substr(kScaffold.size()));
+    if (f.path.starts_with(kScaffold)) files.emplace(f.path.substr(kScaffold.size()), f.text);
+  }
+  for (const EmbeddedFile& f : embedded_files()) {
+    if (!overlay.empty() && f.path.starts_with(overlay)) {
+      files[std::string(f.path.substr(overlay.size()))] = f.text;
+    }
+  }
+
+  const std::string ident = ident_of(name);
+  for (const auto& [path, body] : files) {
+    std::string rel = path;
     if (rel.ends_with(".in")) rel.resize(rel.size() - 3);
-    std::string text(f.text);
+    std::string text(body);
     replace_all(text, "{{name}}", name);
     replace_all(text, "{{ident}}", ident);
     replace_all(text, "{{engine_version}}", engine_version());

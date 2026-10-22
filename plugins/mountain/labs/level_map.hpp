@@ -1,7 +1,5 @@
 // What the mountain labs share about a map: building one from the flags every map lab takes
-// (`--version`, `--region`), and the map drawn from above (the face shaded by height, the packed
-// piste, the woods, the piste's line, every gate numbered, every kicker and cliff labelled, the
-// start and finish).
+// (`--version`, `--region`), and the map drawn from above (mountain/picture/map_picture.hpp).
 //
 // ge:summary mountain labs' shared map helpers: build a map from lab flags, draw it from above
 // ge:keywords lab level map draw hillshade gates kickers cliffs
@@ -17,6 +15,7 @@
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
 #include "mountain/mapgen/types.hpp"
+#include "mountain/picture/map_picture.hpp"
 
 namespace ge::mountain::labs {
 
@@ -47,8 +46,8 @@ std::optional<mapgen::Level> build_map(ge::lab::Lab& lab, double seed,
 // A map's name in a lab's metrics, tables and shots: `seed-38`, or `seed-38-v8` past version 1.
 std::string map_id(double seed, int version);
 
-// The map from above, `px` pixels a side: +x to the right, +z down the picture.
-ge::lab::Picture draw_map(const mapgen::Level& level, int px);
+// The map from above (mountain/picture/map_picture.hpp).
+using picture::draw_map;
 
 // The flags a map was built under, for a shot's inputs.
 std::vector<std::pair<std::string, std::string>> map_inputs(const ge::lab::Lab& lab,

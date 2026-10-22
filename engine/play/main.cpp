@@ -1,7 +1,7 @@
 // The `play` command line (main.hpp).
 //
 // ge:summary play_main: parses the play command line and prints each command's JSON answer
-// ge:keywords play main command-line describe sim replay state diverge bench json
+// ge:keywords play main command-line describe sim replay state diverge bench shot png json
 // ge:skill agent-interface
 // ge:test tests/play_session_test.cpp
 #include "play/main.hpp"
@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "core/num_text.hpp"
+#include "lab/png.hpp"
 #include "play/bench.hpp"
 #include "play/session.hpp"
 #include "prof/memory.hpp"
@@ -55,6 +56,15 @@ bool read_log(const std::string& path, InputLog& log, std::string& error) {
   return true;
 }
 
+std::string views_json(const GameSpec& spec) {
+  std::string out;
+  for (const View& v : spec.views) {
+    out += std::string(out.empty() ? "" : ",") + "{\"name\":" + quote(v.name) +
+           ",\"help\":" + quote(v.help) + "}";
+  }
+  return out;
+}
+
 std::string describe(const GameSpec& spec) {
   using core::num::to_string;
   std::string axes;
@@ -73,7 +83,8 @@ std::string describe(const GameSpec& spec) {
   }
   return "{\"game\":" + quote(spec.name) + ",\"summary\":" + quote(spec.summary) +
          ",\"hz\":" + to_string(spec.hz) + ",\"most_seconds\":" + to_string(spec.most_seconds) +
-         ",\"axes\":[" + axes + "],\"options\":[" + options + "]}";
+         ",\"axes\":[" + axes + "],\"options\":[" + options + "],\"views\":[" + views_json(spec) +
+         "]}";
 }
 
 std::string played_json(const Played& p) {
@@ -245,6 +256,59 @@ int diverge_cmd(const GameSpec& spec, const Line& l, std::ostream& out) {
   return d->same ? 0 : 1;
 }
 
+// `shot`: a log played to --step (its end by default), or the pilot's run of --seed, and the
+// view drawn, framed and written as a PNG.
+int shot_cmd(const GameSpec& spec, const Line& l, std::ostream& out) {
+  if (l.words.size() > 1) {
+    return problem(out, 2, "shot takes at most one input log", "the command line",
+                   "play shot runs/x.inputs --step=600 --view=map");
+  }
+  InputLog log;
+  std::string error;
+  if (l.words.size() == 1) {
+    if (!read_log(l.words[0], log, error))
+      return problem(out, 1, error, l.words[0], "pass an input log");
+  } else {
+    double seed = 0;
+    if (!number_flag(l, "seed", 1, seed)) {
+      return problem(out, 2, "--seed is not a number", "the command line", "pass --seed=38");
+    }
+    Setup setup;
+    if (!make_setup(spec, seed, options_of(l, {"seed", "step", "view", "out"}), setup, error)) {
+      return problem(out, 2, error, "the command line", "play describe lists the options");
+    }
+    auto p = pilot_run(spec, setup, error);
+    if (!p) return problem(out, 1, error, "seed " + core::num::to_string(seed), "fix the game");
+    log = std::move(p->log);
+  }
+  double step = 0;
+  if (!number_flag(l, "step", static_cast<double>(log.steps()), step)) {
+    return problem(out, 2, "--step is not a number", "the command line", "pass --step=600");
+  }
+  const auto view_it = l.flags.find("view");
+  const std::string view = view_it == l.flags.end() ? "" : view_it->second;
+  const auto still = shot_at(spec, log, static_cast<int64_t>(step), view, error);
+  if (!still) {
+    return problem(out, 1, error, l.words.empty() ? "the pilot's run" : l.words[0],
+                   "play describe lists the views; pass a --step inside the log");
+  }
+  const auto out_it = l.flags.find("out");
+  const fs::path dir = out_it == l.flags.end() ? fs::path("runs") : fs::path(out_it->second);
+  std::error_code ec;
+  fs::create_directories(dir, ec);
+  const fs::path file = dir / (std::string(spec.name) + "-" + core::num::to_string(log.seed) + "-" +
+                               still->view + "-" + std::to_string(still->step) + ".png");
+  if (!lab::write_png(file.string(), still->picture)) {
+    return problem(out, 1, "cannot write " + file.generic_string(), file.generic_string(),
+                   "check --out");
+  }
+  out << "{\"png\":" << quote(file.generic_string()) << ",\"view\":" << quote(still->view)
+      << ",\"step\":" << still->step << ",\"digest\":" << quote(hex64(still->digest))
+      << ",\"caption\":" << quote(still->caption) << ",\"width\":" << still->picture.width
+      << ",\"height\":" << still->picture.height << ",\"views\":[" << views_json(spec) << "]}\n";
+  return 0;
+}
+
 std::string fixed(double v, int places) { return core::num::to_fixed(v, places); }
 
 std::string bench_json(const GameSpec& spec, double seed, const BenchRun& b,
@@ -390,8 +454,9 @@ int play_main(int argc, char** argv, std::istream& in, std::ostream& out) {
   if (l.op == "state") return state_cmd(*spec, l, out);
   if (l.op == "diverge") return diverge_cmd(*spec, l, out);
   if (l.op == "bench") return bench_cmd(*spec, l, out);
+  if (l.op == "shot") return shot_cmd(*spec, l, out);
   return problem(out, 2, "unknown command `" + l.op + "`", "the command line",
-                 "run describe, sim, replay, state, diverge or bench, or no command for the "
+                 "run describe, sim, replay, state, diverge, bench or shot, or no command for the "
                  "protocol");
 }
 

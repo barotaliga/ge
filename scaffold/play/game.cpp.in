@@ -1,21 +1,24 @@
 // THE GAME ON THE PLAY CONTRACT: what an agent plays through `ge play` and the pilot plays
 // through `ge sim`. The spec names the axes (the whole input: here the steer), the options a run
 // is opened with, and the Run wraps the simulation: one step on the snapped axes, what a player
-// sees, everything that decides the next step, the report and the game's own pilot. Grow it with
-// the game: a new input is an axis, a new setting an option (skill: play-test).
+// sees, everything that decides the next step, the report, the game's own pilot and the views
+// `ge shot` draws. Grow it with the game: a new input is an axis, a new setting an option, a new
+// picture a view (skill: play-test).
 //
 // ge:summary The game on the play contract: its axes, options, observe, state, report and pilot
-// ge:keywords play contract game spec run axes options observe state report pilot ge_game
+// ge:keywords play contract game spec run axes options observe state report pilot ge_game shoot
 // ge:skill play-test
 // ge:test tests/sim_game_test.cpp
 #include <array>
 #include <memory>
 #include <span>
 #include <string>
+#include <string_view>
 
 #include "core/math.hpp"
 #include "core/num.hpp"
 #include "core/num_text.hpp"
+#include "lab/raster.hpp"
 #include "play/game.hpp"
 #include "sim/game.hpp"
 
@@ -47,6 +50,23 @@ class Run final : public ge::play::Run {
     input[0] = ge::core::clamp(-(state_.x_m + state_.vx_mps), -1, 1);
     return true;
   }
+  // `ge shot`'s one view: the field from above, 10 m either side of the middle, the body on it.
+  bool shoot(std::string_view view, ge::lab::Picture& out, std::string& caption,
+             std::string& error) override {
+    if (view != "field") {
+      error = "no view `" + std::string(view) + "`";
+      return false;
+    }
+    constexpr int kW = 480, kH = 96;
+    constexpr double kPxPerM = kW / 20.0;
+    out = ge::lab::create_picture(kW, kH, {226, 232, 238});
+    ge::lab::draw_line(out, kW / 2.0, 0, kW / 2.0, kH, {150, 160, 170});
+    const double x = kW / 2.0 + state_.x_m * kPxPerM;
+    ge::lab::fill_disc(out, x, kH / 2.0, 8, {200, 40, 40});
+    caption = "The demo body " + num::to_fixed(state_.x_m, 2) + " m from the middle (the grey "
+              "line), moving at " + num::to_fixed(state_.vx_mps, 2) + " m/s.";
+    return true;
+  }
 
  private:
   {{ident}}::sim::GameState state_;
@@ -60,6 +80,10 @@ std::unique_ptr<ge::play::Run> open(const ge::play::Setup& setup, std::string& e
   return std::make_unique<Run>(static_cast<uint32_t>(setup.seed));
 }
 
+constexpr std::array<ge::play::View, 1> kViews{{
+    {"field", "the field from above, 10 m either side of the middle, the body on it"},
+}};
+
 constexpr std::array<ge::play::Axis, 1> kAxes{{
     {"steer", ge::play::AxisKind::signed_unit, "-1 left .. 1 right"},
 }};
@@ -72,6 +96,7 @@ const ge::play::GameSpec kGame{
     kAxes,
     {},
     open,
+    kViews,
 };
 
 }  // namespace
