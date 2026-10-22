@@ -1,0 +1,36 @@
+# Every push and pull request: the agent guidance and the rules (ge doctor), the format, then the
+# build and every test and lab, with the sanitizers and without.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ninja-build
+      - run: make agents-check
+      - run: make fmt-check
+
+  test:
+    name: test (${{ matrix.preset }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        preset: [debug, release]
+    steps:
+      - uses: actions/checkout@v5
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ninja-build
+      - run: make test PRESET=${{ matrix.preset }}

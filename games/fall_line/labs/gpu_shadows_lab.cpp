@@ -78,7 +78,7 @@ void run(ge::lab::Lab& lab) {
   const double from = lab.arg_num("from"), to = lab.arg_num("to"), step = lab.arg_num("step");
   if (hours.empty() || step <= 0 || to < from) {
     lab.fail("--hours needs at least one hour, --step must be positive and --to at least --from",
-             "Pass --hours=9,12,15 --from=7 --to=17 --step=0.05.");
+             "next: pass --hours=9,12,15 --from=7 --to=17 --step=0.05.");
     return;
   }
   ge::mountain::mapgen::GenerateOptions opts;

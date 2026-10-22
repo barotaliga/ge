@@ -74,7 +74,7 @@ std::vector<const mg::FaceCrop*> faces_of(ge::lab::Lab& lab) {
       out.push_back(c);
     } else {
       lab.fail("--faces names " + id + ", which no face is",
-               "Name faces by their ids in plugins/mountain/mapgen/real_face_crops.hpp.");
+               "next: name faces by their ids in plugins/mountain/mapgen/real_face_crops.hpp.");
     }
   }
   return out;

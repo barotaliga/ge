@@ -205,7 +205,7 @@ std::unique_ptr<Device> create_device(const DeviceOptions& options) {
   if (!dev->device) return nullptr;
   dev->device.SetLoggingCallback([](wgpu::LoggingType type, wgpu::StringView message) {
     if (type == wgpu::LoggingType::Warning || type == wgpu::LoggingType::Error) {
-      out::warn("gpu: dawn: " + to_string(message));
+      out::warn("gpu: dawn: " + to_string(message) + " (skill: gpu)");
     } else {
       out::debug("gpu: dawn: " + to_string(message));
     }

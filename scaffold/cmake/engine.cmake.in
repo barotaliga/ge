@@ -1,0 +1,27 @@
+# THE ENGINE PIN: the one place this game names the engine release it is built on. Everything
+# else follows from it: the libraries (ge::core with the FP flags, ge::lab, ge::<plugin>), and the
+# `ge` command line this repo runs (`make agents-check`, `make skills`), built from the same
+# release so its skills and its rules are that release's (skill: engine).
+#
+# To move to another release: skill: engine, § Upgrade. ge doctor holds this file.
+include_guard(GLOBAL)
+
+set(GE_ENGINE_VERSION {{engine_version}})
+# The release's -src.tar.gz line in its SHA256SUMS; empty skips the check (ge doctor notes it).
+set(GE_ENGINE_SHA256 "{{engine_sha256}}")
+
+# The engine's window and GPU layers are not published yet; the simulation needs neither.
+set(GE_GPU OFF CACHE BOOL "The engine's GPU layer (unpublished)")
+set(GE_PLATFORM OFF CACHE BOOL "The engine's window layer (unpublished)")
+
+set(_ge_url "{{engine_repo}}/releases/download/v${GE_ENGINE_VERSION}/gameengine2-${GE_ENGINE_VERSION}-src.tar.gz")
+set(_ge_hash "")
+if(GE_ENGINE_SHA256)
+  set(_ge_hash URL_HASH SHA256=${GE_ENGINE_SHA256})
+endif()
+
+# A local engine checkout instead of the download, for working on both at once:
+#   cmake --preset debug -DFETCHCONTENT_SOURCE_DIR_GAMEENGINE2=<path to the engine>
+include(FetchContent)
+FetchContent_Declare(gameengine2 URL ${_ge_url} ${_ge_hash} DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+FetchContent_MakeAvailable(gameengine2)
