@@ -123,7 +123,6 @@ std::vector<fs::GameEvent> stand(fs::GameState& state, double seconds, int32_t s
     if (stars > 0 && state.wanted.ended == fs::WantedEnd::running && state.wanted.stars > 0) {
       pin(state, stars);
     }
-    state.racers[0].progress.stuck = 0;
     fs::step(state, std::span<const fs::Controls>(&none, 1));
     for (const fs::GameEvent& e : state.events) {
       if (e.kind == fs::EventKind::army) all.push_back(e);

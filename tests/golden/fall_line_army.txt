@@ -1,6 +1,6 @@
 # each minute: state digest, men out, riding, holding; then the lift taken, the lifted men sent, the waves' men, the men let off (fall_line_army_test, the seed 38 hunt)
-756b8fb3411642f9 4 4 0
-79f0d3927294a515 12 4 8
-0b770dcb4d2e7538 24 2 20
-c02fdf31f622594f 36 0 36
+7658413ca14bfbb3 4 4 0
+8cb1c4b219111bef 12 4 8
+4f771aa052ff5a26 24 2 20
+c0e9b13f02c861d5 36 0 36
 3 4 32 4

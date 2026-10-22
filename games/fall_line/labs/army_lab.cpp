@@ -123,7 +123,6 @@ Hunt run_scene(const std::shared_ptr<const mg::Level>& level, Scene scene, doubl
     }
     // He stands where he was put, even on a slope his skis would slide down.
     st.racers[0].skier = ge::skier::stand_skier(st.world(), at.x, at.z, 0, 0);
-    st.racers[0].progress.stuck = 0;
     fs::step(st, std::span<const fs::Controls>(&none, 1));
     for (const fs::GameEvent& e : st.events) {
       if (e.kind != fs::EventKind::army) continue;
