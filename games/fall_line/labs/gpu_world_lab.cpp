@@ -234,8 +234,8 @@ void run(ge::lab::Lab& lab) {
       sc.name = "run-" + fixed(t, 0);
       sc.caption = "The bot's run " + fixed(run.state().t, 1) +
                    " s after the start, from the chase camera behind and over him; the racers "
-                   "are placeholder figures (boxes, cylinders and a ball, each in his own "
-                   "jacket) and the trees placeholder cones and crowns.";
+                   "are the skier model, posed from each one's state and skinned on the GPU, "
+                   "each in his own jacket.";
       for (const auto& racer : run.state().racers) sc.skiers.push_back(racer.skier);
       fall_line::app::day_view(level, hour, sc.view);
       fall_line::app::chase_view(level, sc.skiers[0], sc.view);
@@ -391,7 +391,7 @@ void run(ge::lab::Lab& lab) {
     lab.metric(name + ".trees-late", trees.late, "count", Det::measured);
     lab.metric(name + ".trees-hidden", trees.hidden, "count", Det::measured);
     lab.metric(name + ".trees-outside", trees.frustum + trees.small, "count", Det::measured);
-    lab.metric(name + ".figure-pieces", figures.early + figures.late, "count", Det::measured);
+    lab.metric(name + ".figures", figures.early + figures.late, "count", Det::measured);
     lab.metric(name + ".cpu-ms", stats.cpu_ms, "ms", Det::measured);
     for (int p = 0; p < stats.count; ++p) {
       const auto& ps = stats.passes[static_cast<size_t>(p)];

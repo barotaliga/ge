@@ -265,6 +265,16 @@ void RigPoser::pose(const SkierState& s, double dt, RigPose& out) {
   }
 }
 
+assets::Box pose_reach() {
+  assets::Box box;
+  const float lo[3] = {-2.0f, -0.3f, -1.8f}, hi[3] = {2.0f, 2.3f, 1.8f};
+  for (int k = 0; k < 3; k++) {
+    box.min[k] = lo[k];
+    box.max[k] = hi[k];
+  }
+  return box;
+}
+
 RigBinding bind_rig(const assets::Model& model) {
   RigBinding b;
   const size_t n = model.joints.size();

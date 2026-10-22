@@ -65,6 +65,13 @@ the row when the file moves.
 | `games/fall_line/sound/mix.hpp` | `game5/pwa/src/game/settings.ts`, `audio/bus.ts` | mixOf setAudioVolumes |
 | `games/fall_line/sound/route.cpp` | `game5/pwa/src/game/audio/route.ts` | soundForEvent soundsForStep |
 | `games/fall_line/sound/route.hpp` | `game5/pwa/src/game/audio/route.ts` | soundForEvent soundsForStep |
+| `plugins/helicopter/heli.cpp` | `game5/engine/game/heli.ts`, `heli-rotor.ts` | stepHeli crashHeli heliDown heliWithin freshHeli thrustMost inducedFlow |
+| `plugins/helicopter/heli.hpp` | `game5/engine/game/heli-state.ts`, `heli.ts` | HeliState HeliControls heliQuat discQuat heliPoint heliMass |
+| `plugins/helicopter/pilot.cpp` | `game5/engine/game/heli-pilot.ts` | pilotControls pilotInput |
+| `plugins/helicopter/pilot.hpp` | `game5/engine/game/heli-pilot.ts` | pilotControls HeliAim |
+| `plugins/helicopter/spec.hpp` | `game5/engine/game/defs/heli.ts` | HELI |
+| `plugins/helicopter/wash.cpp` | `game5/engine/game/heli-wash.ts` | washAt inducedOf |
+| `plugins/helicopter/wash.hpp` | `game5/engine/game/heli-wash.ts` | washAt |
 | `plugins/mountain/analysis/cliffs.cpp` | `game5/engine/analysis/cliffs.ts` | checkCliffs checkDrops |
 | `plugins/mountain/analysis/cliffs.hpp` | `game5/engine/analysis/cliffs.ts` | checkCliffs checkDrops |
 | `plugins/mountain/analysis/course.cpp` | `game5/engine/analysis/index.ts` | analyzeLevel (a resort's course, `network: false`; the engine's own checks) |
