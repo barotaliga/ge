@@ -1,7 +1,7 @@
 // The definitions behind terrain.hpp (the single piste's half).
 //
 // ge:summary The mountain's plan draws and the bake of every noise layer onto the grid
-// ge:keywords terrain fbm ridged
+// ge:keywords terrain fbm ridged bake-country parallel
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #include "mountain/mapgen/terrain.hpp"
@@ -12,6 +12,7 @@
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "core/num.hpp"
+#include "core/parallel.hpp"
 
 namespace ge::mountain::mapgen {
 
@@ -268,14 +269,17 @@ ge::core::Heightfield bake_country(const TerrainPlan& plan) {
   const int n = static_cast<int>(num::round(plan.size / cell)) + 1;
   ge::core::Heightfield field = ge::core::create_heightfield(0, 0, cell, n, n);
   float* d = field.data.data();
-  CountryFields fields = country_fields(plan);
-  for (int r = 0; r < n; r++) {
-    const double z = r * cell;
-    for (int c = 0; c < n; c++) {
-      d[static_cast<size_t>(r) * size_t(n) + size_t(c)] =
-          static_cast<float>(country_at(plan, fields, c * cell, z));
+  // Every height is a pure function of its cell, so the rows bake in bands side by side.
+  ge::core::parallel_bands(size_t(n), [&](size_t r0, size_t r1) {
+    CountryFields fields = country_fields(plan);
+    for (int r = int(r0); r < int(r1); r++) {
+      const double z = r * cell;
+      for (int c = 0; c < n; c++) {
+        d[static_cast<size_t>(r) * size_t(n) + size_t(c)] =
+            static_cast<float>(country_at(plan, fields, c * cell, z));
+      }
     }
-  }
+  });
   return field;
 }
 
