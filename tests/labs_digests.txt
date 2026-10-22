@@ -1,6 +1,6 @@
 # lab digests at their smoke flags: labs --all --smoke --write-digests
 analyze 47aeb41752f58f41
-anim bffad50e67b78f6e
+anim 46ec0296ddd73853
 army 1457c5929690588c
 audition d47fda4a9cb22fbb
 charts 77f2319a5ea24272
