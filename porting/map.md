@@ -64,6 +64,7 @@ the row when the file moves.
 | `plugins/mountain/labs/junctions_lab.cpp` | `game5/scripts/junctions-lab.mjs` | the steps by kind, the sheet (read down each run's line, not every packed cell) |
 | `plugins/mountain/labs/park_lab.cpp` | `game5/scripts/level-map.mjs` | the park drawn (the close-up and the detrended profile are the engine's own) |
 | `plugins/mountain/labs/real_faces_lab.cpp` | `game5/scripts/real-faces.mjs`, `game5/scripts/lib/real-face-files.mjs` | crop smooth encode measure writeFaceFile writeFaceIndex (the crop search not carried) |
+| `plugins/mountain/labs/real_maps_lab.cpp` | `game5/scripts/resort-map.mjs`, `game5/tests/real_faces_test.ts` | every face built on a seed: the attempt, the build time, what it carries |
 | `plugins/mountain/labs/resort_lab.cpp` | `game5/scripts/resort-map.mjs` | the plan, the listing (no panorama or charts yet) |
 | `plugins/mountain/labs/resort_map.cpp` | `game5/scripts/lib/resort-draw.mjs` | renderResortPlan |
 | `plugins/mountain/labs/resort_map.hpp` | `game5/scripts/lib/resort-draw.mjs` | renderResortPlan |
@@ -107,12 +108,12 @@ the row when the file moves.
 | `plugins/mountain/mapgen/kickers.hpp` | `game5/engine/mapgen/kickers.ts` | layTrackKickers publishTrackKickers layOffKickers stampKicker onKicker |
 | `plugins/mountain/mapgen/lanes.cpp` | `game5/engine/mapgen/lanes.ts` |  |
 | `plugins/mountain/mapgen/lanes.hpp` | `game5/engine/mapgen/lanes.ts` |  |
-| `plugins/mountain/mapgen/lift_chain.cpp` | `game5/engine/mapgen/lift-chain.ts` | chainBottom chainWay wayTarget wayLevels rectOff pressWay pressBox regradeLeg leaves RAMP_FLANK |
+| `plugins/mountain/mapgen/lift_chain.cpp` | `game5/engine/mapgen/lift-chain.ts` | chainBottom chainWay wayTarget wayLevels rectOff pressWay pressBox regradeLeg leaves RAMP_FLANK searchAims AIM_MARGIN AIM_STEP (the real face's `most`, `hold`) |
 | `plugins/mountain/mapgen/lift_chain.hpp` | `game5/engine/mapgen/lift-chain.ts` | chainBottom chainWay layChain wayFalls keepsChain chainOf offWay offQueue groomWay pressWay regradeLeg |
 | `plugins/mountain/mapgen/lift_line.hpp` | `game5/engine/game/lift-line.ts` | ringFrame letGoOf queueLane LIFT_LOOK CORRAL_TAIL DRAG_ARM |
 | `plugins/mountain/mapgen/links.cpp` | `game5/engine/mapgen/links.ts` |  |
 | `plugins/mountain/mapgen/links.hpp` | `game5/engine/mapgen/links.ts` |  |
-| `plugins/mountain/mapgen/massif.cpp` | `game5/engine/mapgen/massif.ts` | planMassif bakeMassif ridgeShare steepShare benchShare massifRow heightAt |
+| `plugins/mountain/mapgen/massif.cpp` | `game5/engine/mapgen/massif.ts` | planMassif bakeMassif ridgeShare steepShare benchShare massifRow heightAt readFace faceLift (the town and the hints wait for M4d3) |
 | `plugins/mountain/mapgen/massif.hpp` | `game5/engine/mapgen/massif.ts` | planMassif bakeMassif ridgeShare |
 | `plugins/mountain/mapgen/net_index.cpp` | `game5/engine/mapgen/net-index.ts` |  |
 | `plugins/mountain/mapgen/net_index.hpp` | `game5/engine/mapgen/net-index.ts` |  |
@@ -167,12 +168,12 @@ the row when the file moves.
 | `plugins/mountain/mapgen/speed_ski.cpp` | `game5/engine/mapgen/speed-ski.ts` | hullOf roundProfile readLine tuckDown stopOn sampleAt lerpAt clearOf findTrack arcAlong heightAt zoneSpeed gradeTrack across setSpeedSki runOver speedSkiAim speedSkiLines |
 | `plugins/mountain/mapgen/speed_ski.hpp` | `game5/engine/mapgen/speed-ski.ts` | setSpeedSki speedSkiAim speedSkiLines hullOf SpeedSkiCourse |
 | `plugins/mountain/mapgen/station_clear.cpp` | `game5/engine/mapgen/station-clear.ts` | bottomFootprint clearStations clearBottom clearDrag candidates standsLevel SLIDES DRAG_TOP DRAG_FOOT |
-| `plugins/mountain/mapgen/station_clear.hpp` | `game5/engine/mapgen/station-clear.ts` | bottomFootprint clearStations standsLevel StationGround |
+| `plugins/mountain/mapgen/station_clear.hpp` | `game5/engine/mapgen/station-clear.ts` | bottomFootprint clearStations standsLevel StationGround StationGround.level |
 | `plugins/mountain/mapgen/station_pad.cpp` | `game5/engine/mapgen/station-pad.ts` | pressPads levelPad cutApproach unloadRise relevelPads groomPads dragTop |
 | `plugins/mountain/mapgen/station_pad.hpp` | `game5/engine/mapgen/station-pad.ts` | padShape pressPads relevelPads groomPads padSurface dragTop dragTopsOf unloadPoint cutApproach |
 | `plugins/mountain/mapgen/straight_venue.cpp` | `game5/engine/mapgen/straight-venue.ts` | findLine gradeVenue originalOf nearStations |
 | `plugins/mountain/mapgen/straight_venue.hpp` | `game5/engine/mapgen/straight-venue.ts` | VenueProfile VenueRule VenueLine findLine gradeVenue (the pen, the landing shaper and the mogul lines not carried) |
-| `plugins/mountain/mapgen/summit_ramps.cpp` | `game5/engine/mapgen/summit-ramps.ts` | rampRoom roomBlocked nearRoom evenFall rampTo planRamps betterRamp overlaps eachCell headIndex layRamps pressRamps groomRamps offOwn nearLine |
+| `plugins/mountain/mapgen/summit_ramps.cpp` | `game5/engine/mapgen/summit-ramps.ts` | rampRoom roomBlocked nearRoom evenFall rampTo planRamps betterRamp overlaps eachCell headIndex layRamps pressRamps groomRamps offOwn nearLine rankRamps chooseRamps JOINT_KEEP JOINT_APART JOINT_TRIES |
 | `plugins/mountain/mapgen/summit_ramps.hpp` | `game5/engine/mapgen/summit-ramps.ts` | rampRoom roomBlocked nearRoom RampFit RampRoom RunCover rampFrame rampHeight offRamp layRamps groomRamps nearLine |
 | `plugins/mountain/mapgen/sun.cpp` | `game5/engine/mapgen/sun.ts` | dealSun declinationOf faceTheSun sunOffFace |
 | `plugins/mountain/mapgen/sun.hpp` | `game5/engine/mapgen/sun.ts` | declinationOf sunWindow dealSun faceTheSun |
@@ -199,7 +200,7 @@ the row when the file moves.
 | `plugins/skier/app/wind_bed.hpp` | `game5/pwa/src/game/audio/wind-voice.ts` | WindVoice WindMix WindLayer WIND_LAYERS WIND_GLIDE windTargets |
 | `tests/mountain_generate_test.cpp` |  | generateLevel levelDigest analyzeLevel |
 | `tests/mountain_park_test.cpp` | `game5/engine/mapgen/trick-field.ts` | the terrain park (R20) |
-| `tests/mountain_real_face_test.cpp` | `game5/tests/real_faces_test.ts` | every face decodes to a mountain over its floor |
+| `tests/mountain_real_face_test.cpp` | `game5/tests/real_faces_test.ts` | every face decodes to a mountain over its floor; a face builds a clean map |
 | `tests/mountain_ski_cross_test.cpp` | `game5/engine/mapgen/ski-cross.ts` | the ski-cross course (R35) |
 | `tests/mountain_ski_jump_test.cpp` | `game5/tests/ski_jump_test.ts` | the ski jumping hill (R43) |
 | `tests/mountain_ski_routes_test.cpp` | `game5/engine/mapgen/ski-routes.ts` | the ski routes (R42) |

@@ -1,8 +1,8 @@
 // R2, R3 — THE MOUNTAIN BEFORE ANYBODY SKIS IT: one flank falling from a summit ridge along
 // the top edge to a valley floor along the bottom, side ridges either hand, and a face folded
 // into spurs and gullies, bowls, headwalls and rollers: the single piste's mountain (the plan,
-// the bake, the flank, the descent, the noise stack). The ski area's massif, a real face and
-// the sea arrive with M4b–M4d.
+// the bake, the flank, the descent, the noise stack). The ski area's massif and a real face it is
+// laid off (`PlanFace`) are massif.hpp's.
 //
 // Everything is a pure function of a PLAN (numbers drawn off the attempt's stream once) and a
 // plan point, so the search asks "how high is the untouched ground here?" of the arithmetic
@@ -29,6 +29,7 @@
 #include "core/noise.hpp"
 #include "core/prng.hpp"
 #include "mountain/mapgen/grades.hpp"
+#include "mountain/mapgen/real_face.hpp"
 #include "mountain/mapgen/regions.hpp"
 
 namespace ge::mountain::mapgen {
@@ -53,6 +54,15 @@ struct Massif;  // massif.hpp
 inline constexpr int kProfileSamples = 1024;
 
 // Everything the mountain is drawn from, dealt once an attempt.
+// R25 — A REAL FACE a massif is laid 1:1 off (real_face.hpp): its heights, its valley floor's real
+// height (the map's nought, so a map height is the real one less it), and its own profile: its
+// mean height a grid row at a time over the floor, never climbing below the ridge, m.
+struct PlanFace {
+  std::shared_ptr<const RealFace> grid;
+  double floor = 0;
+  std::vector<double> rows;
+};
+
 struct TerrainPlan {
   double vertical;   // valley floor to summit ridge, m (R2)
   double altitude;   // the valley floor over the sea, m
@@ -88,6 +98,8 @@ struct TerrainPlan {
   struct {
     double inner, outer;
   } flank_band{rules::mountain::flank::inner, rules::mountain::flank::outer};
+  // R25 — the real face the massif is laid off; null on a dealt massif.
+  std::shared_ptr<const PlanFace> face;
 };
 
 // Deal the mountain's plan off the attempt's stream, in `region` (R21), for a piste of `grade`.

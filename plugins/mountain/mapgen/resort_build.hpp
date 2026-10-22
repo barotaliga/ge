@@ -16,6 +16,7 @@
 
 #include <cstdint>
 #include <deque>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -28,6 +29,7 @@
 #include "mountain/mapgen/links.hpp"
 #include "mountain/mapgen/net_index.hpp"
 #include "mountain/mapgen/network.hpp"
+#include "mountain/mapgen/network_build.hpp"
 #include "mountain/mapgen/network_stamp.hpp"
 #include "mountain/mapgen/regions.hpp"
 #include "mountain/mapgen/resort.hpp"
@@ -56,6 +58,9 @@ struct ResortAttempt {
   const Region* region = nullptr;
   int version = 8;
   ge::core::Rng rng{0};  // the attempt's stream, `createRng(sub)`
+  // R25 — the real face the massif is laid off (real_face.hpp); null on a dealt massif. A real
+  // face bends the rule book where its mountain is not a dealt one's (`massif::real::least`).
+  std::shared_ptr<const RealFace> face;
 
   // 1. the massif
   TerrainPlan plan{};
@@ -108,9 +113,17 @@ struct ResortAttempt {
 // A step's answer: why the attempt is refused, or nothing to go on.
 using StageResult = std::optional<std::string>;
 
-// The attempt begun: its stream dealt off `sub`.
+// The attempt begun: its stream dealt off `sub`, on `face` where one is given.
 ResortAttempt begin_resort(double seed, int attempt, uint32_t sub, const Region& region,
-                           int version);
+                           int version, std::shared_ptr<const RealFace> face = nullptr);
+
+// How a ramp off one of the attempt's tops may fall (R26): a real face's own, whose crowded tops
+// have their ramps chosen together.
+RampFit ramp_fit(const ResortAttempt& a);
+
+// How one of the attempt's runs is graded (R8): a real face's own (`massif::real::least`), its
+// start cut through the real knolls rather than filled over them.
+GradeFace grade_face(const ResortAttempt& a);
 
 // 1. THE MASSIF (R25), baked once onto the grid.
 StageResult resort_mountain(ResortAttempt& a);

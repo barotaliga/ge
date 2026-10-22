@@ -3,7 +3,7 @@
 // lanes, the hub, the wind tunnels and the courses. Each
 // group's comment says what its numbers mean.
 //
-// Not here yet: the real faces' numbers (docs/goals.md M4d).
+// The real faces' bends are `massif::real` (R25, M4d); the real ski area's hints arrive with M4d3.
 // Held by tests/mountain_resort_build_test.cpp (every ski area is built off these numbers).
 //
 // ge:summary The resort rule book's numbers (R25-R30) as constexpr namespaces
@@ -92,6 +92,62 @@ namespace flank {
 inline constexpr double inner = 1180;
 inline constexpr double outer = 1420;
 }  // namespace flank
+// R25 — A REAL FACE (real_face.hpp), laid 1:1: what is read off it and how the rule book bends
+// to it.
+namespace real {
+// The share of R3's hills and spurs laid over a face (it carries its own at the scale the 30 m
+// model sees; the folds add what lies under it).
+inline constexpr double folds = 0.35;
+// The band a face's vertical (its real peak over its real floor) is held to: it only catches a
+// face read wrong, m.
+inline constexpr Band vertical{200, 2500};
+// How far down the map a face's summit ridge may stand, m: the highest row of its mean profile
+// between the rule book's ridge row and this.
+inline constexpr double ridge = 1000;
+// The most trees a face stands: laid 1:1, a low face is wooded top to bottom.
+inline constexpr int trees = 80000;
+// The attempts a face is searched over (a dealt map is given 16): the later ones give the dealt
+// peak, shoulder and valley back (`placed`).
+inline constexpr int attempts = 32;
+// The BROW the summit stands on: the share of the face's drop its mean profile may fall from the
+// ridge to it, and how far down the map it may stand, m.
+namespace brow {
+inline constexpr double share = 0.05;
+inline constexpr double most = 1400;
+}  // namespace brow
+// The attempts the real peak, shoulder and valley are built on; the dealt ones after them.
+inline constexpr int placed = 8;
+// The descent (u) over which the relief across the face fades out onto its own profile on the
+// valley floor, and how far either side of the middle its floor and profile are read, m.
+inline constexpr Band floor{0.82, 0.98};
+inline constexpr double reach = 1300;
+// What a real face holds a ski area to where a dealt massif's rule does not: at least `runs`
+// pistes; a top's pad level to `pad` m across its cut; a rope `rope` m into its clearance; a run
+// falling `fall` m per m at the least where R8 asks `track::min_grade` and cut or filled `cut` m
+// at the most where R8 asks `track::max_cut`; the way off the gondola's top graded with up to
+// `chain`'s fill and dig, its aims searched over R26's whole band; R29's way home down runs up
+// to `harder` colours harder; a ramp off a top falling `ramp_glide` at the least and
+// `ramp_gentle` at the most down to a green's or a blue's run; a bottom station on ground falling
+// up to `level` m per m; the way to the peak's chair's queue rising `rise` m at the most; a
+// course's finish straight falling up to `finish` m per m; and a run climbing up to `climb` m per
+// m over R27's window.
+namespace least {
+inline constexpr int runs = 4;
+inline constexpr double pad = 0.6;
+inline constexpr double rope = 1;
+inline constexpr double fall = 0.02;
+inline constexpr double cut = 30;
+inline constexpr double chain_fill = 20;
+inline constexpr double chain_dig = 40;
+inline constexpr int harder = 1;
+inline constexpr double ramp_glide = 0.04;
+inline constexpr double ramp_gentle = 0.3;
+inline constexpr double level = 0.35;
+inline constexpr double rise = 1.2;
+inline constexpr double finish = 0.06;
+inline constexpr double climb = 0.04;
+}  // namespace least
+}  // namespace real
 }  // namespace massif
 
 namespace lift {

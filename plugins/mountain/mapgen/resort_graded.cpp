@@ -71,7 +71,8 @@ StageResult resort_graded(ResortAttempt& a) {
     WalkedRun* onto = w.into ? &walked[size_t(w.into->run)] : nullptr;
     if (onto) funnel_into(w, *onto);
     const auto grade = [&] {
-      return grade_run(w, ground, row.track.max_grade, colour_cap(w), onto, &pressed);
+      return grade_run(w, ground, row.track.max_grade, colour_cap(w), onto, &pressed, false,
+                       grade_face(a));
     };
     std::optional<std::string> why;
     if (a.access.is_lost(i)) {
@@ -162,7 +163,7 @@ StageResult resort_graded(ResortAttempt& a) {
     b.grade = run_colour(w.track.points, onto ? &onto->track.points : nullptr);
     graded++;
   }
-  if (graded < RR::network::runs_min) {
+  if (graded < (a.face ? RR::massif::real::least::runs : RR::network::runs_min)) {
     return "only " + std::to_string(graded) + " piste(s) could be graded into the mountain";
   }
   for (const BuiltRun& b : a.built) {
