@@ -33,12 +33,14 @@ ge play [--seed=1]               # you at the controls: one JSON line each way
 ge replay <log>                  # a run played back to its digest
 ge state <log> [--step=N]        # everything that decides the next step
 ge diverge <log-a> <log-b>       # where two runs part, field by field (skill: play-test)
+ge graph <file>... [--kind=<k>]  # chart traces, benches, profiles: PNG + SVG, outliers as notes
 ge check                         # the whole gate: format, doctor, build, tests (what CI runs)
 ```
 
 Around it: `ge new <dir>` scaffolds a game repo; `ge doctor` is the rules alone; `ge skills
 sync` rewrites the engine's skills after an upgrade; `ge lessons <skill>` reads a skill's
-lessons before you start.
+lessons before you start. The `debug` skill says how to switch on the log channels for a run
+(`-- --log=<spec>`) and how to read what `ge graph` rings.
 
 Build, test and check write the tools' full output to `build/<preset>/ge-*.log` and answer
 with findings instead, so a clean run is one line. Read the log only when a finding says to.

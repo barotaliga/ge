@@ -5,7 +5,8 @@
 #                standings), ge_mountain (the generated ski mountain: mapgen, analysis)
 #   ge_audio     the synth: voices, layers, buses, echo, limiter, the meter, WAV bytes
 #                (engine/audio; deterministic, no platform)
-#   ge_lab       the lab framework (engine/lab: the contract, the runner, the raster, the PNG)
+#   ge_lab       the lab framework (engine/lab: the contract, the runner, the raster, the PNG,
+#                the series files and the charts)
 #   ge_play      the play contract (engine/play: GameSpec and Run, the session, the input log)
 #   ge_cli, ge   the ge command line (engine/cli: ge new, ge skills sync, ge doctor, ge lessons;
 #                cmake/Cli.cmake)
@@ -122,7 +123,8 @@ endif()
 # The lab framework (engine/lab: the contract, the runner, the raster, the PNG), published as
 # ge::lab so a game's labs plug into the same contract as the engine's (docs/labs.md).
 add_library(ge_lab STATIC engine/lab/lab.cpp engine/lab/report.cpp engine/lab/runner.cpp
-  engine/lab/raster.cpp engine/lab/png.cpp engine/lab/inflate.cpp engine/lab/sound.cpp)
+  engine/lab/raster.cpp engine/lab/png.cpp engine/lab/inflate.cpp engine/lab/sound.cpp
+  engine/lab/series.cpp engine/lab/stats.cpp engine/lab/plot.cpp engine/lab/chart.cpp)
 target_link_libraries(ge_lab PUBLIC ge_core ge_audio)
 
 # The play contract (engine/play: a game's spec and Run, the session and its line protocol, the

@@ -45,9 +45,9 @@ namespace {
 
 namespace out = ge::core::output;
 
-void print_line(ge::core::output::Level level, std::string_view message, void*) {
-  std::FILE* to = level == ge::core::output::Level::error ? stderr : stdout;
-  std::fprintf(to, "%.*s\n", static_cast<int>(message.size()), message.data());
+void print_line(const ge::core::output::LogLine& line, void*) {
+  std::FILE* to = line.level == ge::core::output::Level::error ? stderr : stdout;
+  std::fprintf(to, "%.*s\n", static_cast<int>(line.message.size()), line.message.data());
 }
 
 struct Args {

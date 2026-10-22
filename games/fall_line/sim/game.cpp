@@ -1,12 +1,16 @@
 // The run's create and its step (game.hpp has the order).
 //
 // ge:summary create_game, step and state_hash's bodies
-// ge:keywords game create_game step state_hash
+// ge:keywords game create_game step state_hash log channel course skier field log_step
 // ge:skill sim
 // ge:test tests/fall_line_sim_test.cpp
 #include "fall_line/sim/game.hpp"
 
 #include <cstring>
+#include <string>
+
+#include "core/num_text.hpp"
+#include "core/output.hpp"
 
 #include "fall_line/sim/course.hpp"
 #include "fall_line/sim/field.hpp"
@@ -17,6 +21,69 @@ namespace fall_line::sim {
 
 namespace mg = ge::mountain::mapgen;
 namespace sk = ge::skier;
+namespace out = ge::core::output;
+
+namespace {
+
+// THE RUN'S LOG (docs/debugging.md): this step's events on three channels (`course`: gates,
+// misses, the finish, resets; `skier`: flights, landings, wipeouts, glances; `field`: racers
+// meeting) at debug, and every racer's state each step on `skier` at trace. Off by default: a
+// dropped line costs a table read and formats nothing.
+void log_step(const GameState& state) {
+  static const out::Channel kCourse = out::channel("course");
+  static const out::Channel kSkier = out::channel("skier");
+  static const out::Channel kField = out::channel("field");
+  const auto f = [](double v, int d) { return ge::core::num::to_fixed(v, d); };
+  for (const GameEvent& e : state.events) {
+    const bool course = e.kind == EventKind::gate || e.kind == EventKind::missed ||
+                        e.kind == EventKind::finish || e.kind == EventKind::reset;
+    const out::Channel ch = e.kind == EventKind::shoulder ? kField : course ? kCourse : kSkier;
+    if (!out::enabled(ch, out::Level::debug)) continue;
+    const sk::SkierState& s = state.racers[static_cast<size_t>(e.racer)].skier;
+    std::string line = "racer " + std::to_string(e.racer) + " ";
+    line += e.kind == EventKind::gate ? "took" : event_name(e.kind);
+    switch (e.kind) {
+      case EventKind::gate:
+      case EventKind::missed:
+        line += " gate " + std::to_string(e.gate);
+        break;
+      case EventKind::reset:
+        line += ", owing gate " + std::to_string(e.gate);
+        break;
+      case EventKind::finish:
+        line += " in " + f(e.value, 3) + " s";
+        break;
+      case EventKind::landing:
+        line += " at " + f(e.value, 2) + " g, owing gate " + std::to_string(e.gate);
+        break;
+      case EventKind::wipeout:
+        line += " (cause " + std::to_string(e.gate) + ") at " + f(e.value * 3.6, 1) + " km/h";
+        break;
+      case EventKind::glance:
+        line += " tree " + std::to_string(e.gate);
+        break;
+      case EventKind::shoulder:
+        line += " with racer " + std::to_string(e.gate) + " closing at " + f(e.value, 2) + " m/s";
+        break;
+      case EventKind::takeoff:
+        line += " owing gate " + std::to_string(e.gate);
+        break;
+    }
+    line += " at x " + f(s.x, 1) + " z " + f(s.z, 1) + ", " + f(s.speed * 3.6, 1) + " km/h";
+    out::log_on(ch, out::Level::debug, line);
+  }
+  if (!out::enabled(kSkier, out::Level::trace)) return;
+  for (size_t i = 0; i < state.racers.size(); i++) {
+    const sk::SkierState& s = state.racers[i].skier;
+    out::log_on(kSkier, out::Level::trace,
+                "racer " + std::to_string(i) + " x " + f(s.x, 2) + " z " + f(s.z, 2) + " speed " +
+                    f(s.speed * 3.6, 2) + " km/h edge " + f(s.edge, 3) + " tuck " + f(s.tuck, 2) +
+                    " lean " + f(s.lean, 3) + " g_lat " + f(s.g_lat, 2) +
+                    (s.on_snow ? "" : " air") + (s.down ? " down" : ""));
+  }
+}
+
+}  // namespace
 
 const char* event_name(EventKind kind) {
   switch (kind) {
@@ -74,6 +141,7 @@ GameState create_game_on(std::shared_ptr<const mg::Level> level, int32_t racers)
 }
 
 void step(GameState& state, std::span<const Controls> controls) {
+  out::set_step(state.steps);
   state.events.clear();
   const sk::World world = state.world();
   for (int32_t i = 0; i < static_cast<int32_t>(state.racers.size()); i++) {
@@ -104,6 +172,7 @@ void step(GameState& state, std::span<const Controls> controls) {
     }
   }
   meet_racers(state);
+  log_step(state);
   state.steps++;
   state.t = static_cast<double>(state.steps) * kDt;
 }
