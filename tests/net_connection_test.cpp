@@ -159,3 +159,137 @@ TEST(connection_drops_unreliable_with_no_room_and_refuses_past_the_window) {
   while (connection_queue(a, 2, big.data(), 4)) queued++;
   CHECK(queued == kReliableInFlight);
 }
+
+namespace {
+
+ChannelConfig with_big(uint32_t largest) {
+  ChannelConfig c = three();
+  c.largest[2] = largest;
+  return c;
+}
+
+std::string pattern(size_t n, int seed) {
+  std::string s(n, '\0');
+  for (size_t i = 0; i < n; i++)
+    s[i] = static_cast<char>((i * 31 + static_cast<size_t>(seed)) & 0xff);
+  return s;
+}
+
+bool queue_text(Connection& c, int channel, const std::string& m) {
+  return connection_queue(c, channel, reinterpret_cast<const uint8_t*>(m.data()), m.size());
+}
+
+}  // namespace
+
+TEST(connection_big_message_arrives_whole_through_loss) {
+  Connection a, b;
+  connection_init(a, with_big(kMaxBigMessage), 5, 0);
+  connection_init(b, with_big(kMaxBigMessage), 5, 0);
+  const std::string big = pattern(kMaxBigMessage, 3), mid = pattern(5000, 9);
+  CHECK(queue_text(a, 2, "before"));
+  CHECK(queue_text(a, 2, big));
+  CHECK(queue_text(a, 2, mid));
+  CHECK(queue_text(a, 2, "after"));
+  CHECK(a.stats.messages_sent == 4);
+  Got ga, gb;
+  int ia = 0, ib = 0;
+  for (int64_t t = 0; t < 8000000 && gb.msgs.size() < 4; t += 16000) {
+    pump(a, b, gb, t, false, drop_every_third, ia);
+    pump(b, a, ga, t + 8000, true, drop_every_third, ib);
+    connection_audit(a, t + 8000);
+    connection_audit(b, t + 8000);
+  }
+  CHECK_MSG(gb.msgs.size() == 4, std::to_string(gb.msgs.size()) + " of 4 arrived");
+  if (gb.msgs.size() == 4) {
+    CHECK(gb.msgs[0].second == "before" && gb.msgs[3].second == "after");
+    CHECK_MSG(gb.msgs[1].second == big,
+              "the 64 KB message is " + std::to_string(gb.msgs[1].second.size()) + " bytes");
+    CHECK(gb.msgs[2].second == mid);
+  }
+  CHECK(b.stats.messages_received == 4 && b.stats.oversize == 0);
+  CHECK(a.stats.resends > 0);
+}
+
+TEST(connection_big_message_limits) {
+  Connection a;
+  connection_init(a, with_big(10000), 5, 0);
+  const std::string over = pattern(10001, 1);
+  CHECK(!queue_text(a, 2, over));                         // past the channel's largest
+  CHECK(!queue_text(a, 1, pattern(kMaxMessage + 1, 1)));  // a sequenced channel takes no pieces
+  Connection plain;
+  connection_init(plain, three(), 5, 0);
+  CHECK(!queue_text(plain, 2, pattern(kMaxMessage + 1, 1)));  // largest unset: one packet
+  CHECK(queue_text(plain, 2, pattern(kMaxMessage, 1)));
+  // All of a message's pieces or none: with fewer free slots than pieces, nothing is queued.
+  int small = 0;
+  while (small < kReliableInFlight - 5 && queue_text(a, 2, "x")) small++;
+  const uint64_t before = a.stats.messages_sent;
+  CHECK(!queue_text(a, 2, pattern(9000, 2)));  // eight pieces, five slots
+  CHECK(a.stats.messages_sent == before);
+  CHECK(queue_text(a, 2, pattern(5000, 2)));  // five pieces fit
+}
+
+TEST(connection_big_message_past_the_receiver_s_largest_is_dropped_whole) {
+  Connection a, b;
+  connection_init(a, with_big(kMaxBigMessage), 5, 0);
+  connection_init(b, with_big(3000), 5, 0);
+  CHECK(queue_text(a, 2, pattern(8000, 4)));
+  CHECK(queue_text(a, 2, "next"));
+  Got ga, gb;
+  int ia = 0, ib = 0;
+  for (int64_t t = 0; t < 2000000; t += 16000) {
+    pump(a, b, gb, t, false, nullptr, ia);
+    pump(b, a, ga, t + 8000, true, nullptr, ib);
+  }
+  CHECK(b.stats.oversize == 1);
+  CHECK(gb.msgs.size() == 1 && gb.msgs[0].second == "next");
+}
+
+TEST(connection_priority_rides_first) {
+  ChannelConfig c;
+  c.count = 2;
+  c.delivery[0] = Delivery::unreliable;
+  c.delivery[1] = Delivery::unreliable;
+  c.priority[1] = 5;
+  Connection a, b;
+  connection_init(a, c, 5, 0);
+  connection_init(b, c, 5, 0);
+  const std::string low = pattern(900, 1), high = pattern(900, 2);
+  CHECK(queue_text(a, 0, low));
+  CHECK(queue_text(a, 1, high));
+  uint8_t buf[kMaxPacket];
+  Got g;
+  for (int k = 0; k < 2; k++) {
+    const size_t n = connection_write(a, 1, buf, 0, false);
+    CHECK(n > 0);
+    Reader r = make_reader(buf, n);
+    uint32_t p;
+    PacketType t;
+    PayloadHeader h;
+    read_packet_start(r, p, t);
+    read_payload_header(r, h);
+    connection_read(b, h, r, 0, {sink_fn, &g});
+  }
+  CHECK(g.msgs.size() == 2 && g.msgs[0].first == 1 && g.msgs[1].first == 0);
+}
+
+TEST(connection_budget_caps_what_it_sends) {
+  ChannelConfig c = three();
+  c.budget_kbps = 100;
+  Connection a;
+  connection_init(a, c, 5, 0);
+  const std::string snap = pattern(1000, 5);
+  uint8_t buf[kMaxPacket];
+  const int64_t end = 2000000;
+  for (int64_t t = 0; t < end; t += 16000) {
+    for (int k = 0; k < 4; k++) queue_text(a, 0, snap);  // 2 Mbit/s offered
+    for (int k = 0; k < 8 && connection_write(a, 1, buf, t, false); k++) {
+    }
+    connection_end_flush(a);
+  }
+  // 100 kbit/s for 2 s is 25000 bytes, and the bucket's 50 ms (two packets) on top.
+  CHECK_MSG(a.stats.bytes_sent <= 25000 + 2 * kMaxPacket + kMaxPacket,
+            std::to_string(a.stats.bytes_sent) + " bytes in 2 s");
+  CHECK(a.stats.bytes_sent > 20000);
+  CHECK(a.stats.dropped_unsent > 0 && a.stats.budget_held > 0);
+}

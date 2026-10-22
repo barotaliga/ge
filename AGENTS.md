@@ -216,7 +216,7 @@ characters.
 | `templates/` | What `ge add` writes (a system, a test, a lab of each kind) and the starting games of `ge new --game=<name>`, compiled into `ge` | `agent-interface` |
 | `*/assets/<name>/` | Built models (`ge asset`): the manifest, the Blender builder, the committed .glb and its data | `assets` |
 | `*/labs/` | Labs beside their subject, compiled into the one `labs` executable | `labs` |
-| `engine/net/` | Multiplayer networking (`ge::net`, `docs/networking.md`): addresses, the wire format, UDP sockets, the link layer, the simulated network; the only place socket headers are included | `net` |
+| `engine/net/` | Multiplayer networking (`ge::net`, `docs/networking.md`): addresses, the wire format, UDP and TCP sockets, the link layer, the simulated network; the only place socket headers are included | `net` |
 | `engine/platform/` | SDL3 (`GE_PLATFORM`): the window, input, the frame clock, the audio device; the only place SDL is included | `platform` |
 | `engine/gpu/` | The native GPU device over Dawn (`GE_GPU`): adapters and tiers, pipelines and the manifest, surfaces, targets, timers; the only place webgpu.h is included | `gpu` |
 | `engine/render/` | Generic rendering mechanisms (`docs/rendering.md`): the frame and its pass table, sky, terrain, shadows, Hi-Z, TAA-U, bloom, post, meshes, instances, skinning; WGSL beside each | `render` |
@@ -232,6 +232,7 @@ characters.
 | `plugins/skier/` | The skier on the snow (`ge::skier`): the step, the snow, the limits, the skis and tuning, the trees, the hand-built maps, the ride scenarios | `skier` |
 | `plugins/skier/app/` | The skier as seen and heard (`ge_skier_app`): the rig and figure, the wind and snow beds, the tracks | `skier`, `audio` |
 | `plugins/snowmobile/` | The snowmobile on the snow (`ge::snowmobile`): the spec, the step, the body, the drive, the bot's hands, the scenarios | `snowmobile` |
+| `plugins/helicopter/` | The helicopter in the air and on the snow (`ge::helicopter`): the spec, the step, the bot's hands, the downwash, the scenarios | `helicopter` |
 | `games/fall_line/sim/` | Fall Line's own simulation (`fall_line_sim`): the state, the step, the course, the free ride and lifts, the bot and the field, the headless run, the hunt, the play contract | `sim` |
 | `games/fall_line/sound/` | Fall Line's sound (`fall_line_sound`, no GPU): the bank, the route, the listener, the mix | `audio`, `sim` |
 | `games/fall_line/labs/` | Fall Line's labs, the headless ones and the GPU's | `sim`, `labs`, `audio` |
@@ -313,6 +314,7 @@ and the directories agree.
 | `mountain` | `plugins/mountain`: the generated ski mountain (mapgen, analysis, `level_digest`) |
 | `skier` | `plugins/skier`: the skier on the snow (`step_skier`, the snow, the limits), the hand-built maps, the ride scenarios |
 | `snowmobile` | `plugins/snowmobile`: the snowmobile on the snow (`step_sled`, the body, the drive), what throws its rider, the bot's hands on it, the sled scenarios |
+| `helicopter` | `plugins/helicopter`: the helicopter (`step_heli`, the rotor, the disc, the landing, the strikes), the downwash, the bot's hands on it, the heli scenarios |
 | `sim` | `games/fall_line/sim`: `create_game`, the step, the bot, the headless sim CLI, the run clock |
 | `platform` | `engine/platform`: SDL3, the window, input, the gamepad, the audio device, files |
 | `gpu` | `engine/gpu`: the native GPU device over Dawn (Dawn's `webgpu.h`), feature tiers, buffers, pipelines and the manifest, WGSL and `make shaders-check` |

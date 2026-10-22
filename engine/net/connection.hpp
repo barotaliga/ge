@@ -14,9 +14,22 @@
 //   are kept until a packet carrying them is acked, ride every packet until then once the resend
 //   timeout (SRTT + 4 RTTVAR, 20 ms to 1 s) has passed since they last rode, and are delivered
 //   once each, in the order sent, per channel.
-// - LIMITS. At most kReliableInFlight reliable messages wait for acks across the channels, and a
-//   channel's oldest waiting id is never more than kReliableSpan behind its newest: a send past
-//   either is refused (`connection_queue` returns false) so the game sees the back-pressure.
+// - BIG MESSAGES. A reliable channel configured to take more than kMaxMessage (`largest`, up to
+//   kMaxBigMessage) sends a bigger message as pieces of kMaxMessage, each a reliable message of
+//   its own whose `more` bit says another follows; the receiver joins them in order and delivers
+//   the whole message once. Its pieces are queued together or not at all. Unreliable and
+//   sequenced messages stay within one packet: a snapshot bigger than that is a delta's job.
+// - PRIORITY. When a packet or the budget has no room for everything due, the channels with the
+//   higher `priority` go first, reliable messages before loose ones at each level; with every
+//   priority equal the order is the order queued.
+// - THE BUDGET. `budget_kbps` caps what the connection sends: a token bucket filling at that rate,
+//   holding at most 50 ms of it (two packets at least). With the bucket empty a flush sends only
+//   what keeps the link alive (an ack, a keepalive); reliable messages wait for the next flush
+//   and loose ones are dropped at its end, counted in `dropped_unsent`.
+// - LIMITS. At most kReliableInFlight reliable messages (pieces) wait for acks across the
+//   channels, and a channel's oldest waiting id is never more than kReliableSpan behind its
+//   newest: a send past either is refused (`connection_queue` returns false) so the game sees the
+//   back-pressure.
 //
 // Everything is sized at `connection_init`; nothing allocates afterwards. The clock is the
 // caller's (`now_us`); nothing here reads one.
@@ -24,7 +37,8 @@
 // ge:summary One connection: sequences, acks, RTT and loss, unreliable/sequenced/reliable channels
 // ge:keywords net connection reliability reliable unreliable sequenced ordered channel ack
 // ge:keywords ack-bits rtt round-trip ping srtt rttvar rto resend retransmit loss packet-loss
-// ge:keywords jitter bandwidth link-stats stats delivery
+// ge:keywords jitter bandwidth link-stats stats delivery fragment fragmentation reassembly
+// ge:keywords big-message priority budget token-bucket rate-limit
 // ge:skill net
 // ge:test tests/net_connection_test.cpp
 #pragma once
@@ -40,9 +54,17 @@ namespace ge::net {
 enum class Delivery : uint8_t { unreliable, sequenced, reliable };
 const char* delivery_name(Delivery d);
 
+// The biggest message a reliable channel can be configured to take, as pieces (BIG MESSAGES).
+constexpr size_t kMaxBigMessage = size_t{64} * 1024;
+
 struct ChannelConfig {
   Delivery delivery[kMaxChannels] = {};
   int count = 1;
+  // The largest message each channel takes, bytes; 0 is kMaxMessage. Only a reliable channel
+  // takes more, up to kMaxBigMessage, and keeps a buffer that size to join the pieces in.
+  uint32_t largest[kMaxChannels] = {};
+  uint8_t priority[kMaxChannels] = {};  // higher rides first when room is short
+  double budget_kbps = 0;               // the most the connection sends, kbit/s; 0: no cap
 };
 
 constexpr int kSentRing = 1024;         // packets remembered for their acks
@@ -65,6 +87,8 @@ struct LinkStats {
   uint64_t dropped_unsent = 0;  // unreliable messages that found no room before the flush ended
   uint64_t duplicates = 0;      // packets received twice (the second dropped)
   uint64_t stale = 0;           // packets too old to place, and sequenced messages overtaken
+  uint64_t oversize = 0;        // big messages received larger than the channel takes (dropped)
+  uint64_t budget_held = 0;     // flushes the budget cut short with messages still due
   uint64_t rtt_samples = 0;
 };
 
@@ -91,6 +115,7 @@ struct Connection {
 
   struct Out {
     bool used = false;
+    bool more = false;  // a big message's piece, not its last
     uint8_t channel = 0;
     uint16_t id = 0;
     uint16_t size = 0;
@@ -101,8 +126,15 @@ struct Connection {
   uint16_t next_id[kMaxChannels] = {};
   // Unreliable and sequenced messages queued since the last flush, already encoded.
   std::vector<uint8_t> loose;
-  std::vector<uint32_t> loose_ends;  // where each message's encoding ends in `loose`
-  size_t loose_next = 0;             // the first message not yet in a packet this flush
+  std::vector<uint32_t> loose_ends;   // where each message's encoding ends in `loose`
+  std::vector<uint8_t> loose_chan;    // each message's channel
+  std::vector<uint8_t> loose_done;    // each message already in a packet this flush
+  size_t loose_first = 0;             // every message before it is in a packet
+  uint8_t levels[kMaxChannels] = {};  // the channels' priorities, highest first, once each
+  int level_count = 0;
+  // The budget's bucket, bytes (THE BUDGET).
+  double budget_bytes = 0;
+  int64_t budget_at_us = 0;
 
   // Receiving.
   bool any_received = false;
@@ -114,12 +146,19 @@ struct Connection {
   uint16_t seq_newest[kMaxChannels] = {};
   struct Held {
     bool used = false;
+    bool more = false;
     uint8_t channel = 0;
     uint16_t id = 0;
     uint16_t size = 0;
   };
   std::vector<Held> held;           // reliable messages that arrived ahead of their turn
   std::vector<uint8_t> held_bytes;  // kReliableSpan * kMaxMessage
+  // A big message's pieces joined, per channel: its place in `assembly`, how much has come, and
+  // whether it outgrew the channel (then it is dropped when its last piece comes).
+  std::vector<uint8_t> assembly;
+  uint32_t assembly_at[kMaxChannels] = {};
+  uint32_t assembly_size[kMaxChannels] = {};
+  bool assembly_bad[kMaxChannels] = {};
 
   // The bandwidth windows.
   int64_t window_start_us = 0;
@@ -130,8 +169,8 @@ struct Connection {
 // Size every buffer for `channels` and start the stream at `now_us` with `key`.
 void connection_init(Connection& c, const ChannelConfig& channels, uint64_t key, int64_t now_us);
 
-// Queue a message on `channel`; false when it is too big (kMaxMessage), the channel unknown, or a
-// reliable window is full.
+// Queue a message on `channel`; false when it is bigger than the channel takes (kMaxMessage, or
+// its `largest`), the channel unknown, or a reliable window has no room for all of its pieces.
 bool connection_queue(Connection& c, int channel, const uint8_t* data, size_t size);
 
 // The next packet to send into `out` (kMaxPacket bytes): its size, or 0 when there is nothing to

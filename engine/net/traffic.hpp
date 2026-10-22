@@ -13,7 +13,7 @@
 // ge:summary Fake traffic: a host and clients over the simulated network, measured end to end
 // ge:keywords net traffic fake-traffic generator load session simulate bots latency loss
 // ge:keywords reliable-delivery in-order goodput bandwidth report digest stress mix
-// ge:keywords traffic-mix action rpg world lockstep racing
+// ge:keywords traffic-mix action rpg world lockstep racing download bulk budget
 // ge:skill net
 // ge:test tests/net_traffic_test.cpp
 #pragma once
@@ -32,10 +32,12 @@
 namespace ge::net {
 
 // The traffic's channels: 0 sequenced (inputs up), 1 unreliable (snapshots down), 2 reliable
-// (events both ways).
+// (events both ways), and with a bulk in the mix 3 reliable (big messages down, sent in pieces,
+// at a lower priority than the rest).
 constexpr int kTrafficInputs = 0;
 constexpr int kTrafficSnapshots = 1;
 constexpr int kTrafficEvents = 2;
+constexpr int kTrafficBulk = 3;
 
 struct TrafficMix {
   double input_hz = 60;  // each client to the host
@@ -44,6 +46,8 @@ struct TrafficMix {
   size_t snapshot_bytes = 320;
   double event_hz = 4;  // each way, on every link
   size_t event_bytes = 48;
+  double bulk_hz = 0;  // the host to each client: big messages (a map, a save), up to 64 KB
+  size_t bulk_bytes = 0;
 };
 
 struct TrafficPlan {
@@ -55,6 +59,7 @@ struct TrafficPlan {
   uint32_t seed = 1;
   LinkConditions conditions;  // every link, both ways
   TrafficMix mix;
+  double budget_kbps = 0;  // every connection's send budget (connection.hpp); 0: none
   bool capture = false;    // capture the host's transport
   double sample_s = 0.25;  // the series' step
 };
@@ -69,7 +74,8 @@ struct TrafficReport {
   int connected = 0;  // clients that reached connected
   int denied = 0;     // clients refused (the host was full)
   int dropped = 0;    // connections lost before the end
-  StreamTally inputs, snapshots, events_up, events_down;
+  StreamTally inputs, snapshots, events_up, events_down, bulk;
+  uint64_t bulk_broken = 0;  // big messages delivered but not whole (never, when all is well)
   // What the host's links measured at the end of the sending, averaged over its peers.
   double rtt_ms = 0, rtt_var_ms = 0, jitter_ms = 0, loss = 0;
   double loss_total = 0;  // the host's packets lost over the whole sending, of those settled
@@ -85,7 +91,8 @@ TrafficReport run_traffic(const TrafficPlan& plan);
 
 // Named mixes, one a shape of game (docs/networking.md § The shapes), for the labs and `ge net
 // sim`: racing (the default numbers above), action (fast inputs, big snapshots), rpg, world (few
-// inputs, a busy world), lockstep (inputs and turns, no snapshots).
+// inputs, a busy world), lockstep (inputs and turns, no snapshots), download (racing while each
+// client is sent a 64 KB message every two seconds).
 const std::vector<std::string>& mix_names();
 bool traffic_mix(std::string_view name, TrafficMix& out);
 // "inputs 60 Hz × 24 B, snapshots 20 Hz × 320 B, events 4 Hz × 48 B".

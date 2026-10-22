@@ -22,7 +22,7 @@ target_link_libraries(fall_line_sound PUBLIC fall_line_sim ge_skier_app ge_audio
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS fall_line_sound)
 
 # Its app half: `fall_line_app`, the game's frame (its pass table over engine/render, the look it hands the
-# passes, its named views, its forest and figures), which the `fall_line` window and the game's GPU labs both link; it
+# passes, its named views, its forest and its skinned skiers), which the `fall_line` window and the game's GPU labs both link; it
 # needs the GPU. Headers are spelled "fall_line/app/<file>.hpp".
 if(GE_GPU)
   file(GLOB FALL_LINE_APP_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/app/*.cpp)
@@ -30,6 +30,9 @@ if(GE_GPU)
   add_library(fall_line_app STATIC ${FALL_LINE_APP_SOURCES})
   target_include_directories(fall_line_app PUBLIC ${PROJECT_SOURCE_DIR}/games)
   target_link_libraries(fall_line_app PUBLIC ge_render ge_prof ge_mountain_app ge_skier_app)
+  # The skier model the racers are drawn as (scene.hpp), compiled in: the game reads no file.
+  ge_embed_binary(fall_line_app fall_line_skier_glb
+    ${PROJECT_SOURCE_DIR}/plugins/skier/assets/skier/skier.glb)
   set_property(GLOBAL APPEND PROPERTY GE_GAME_APPS fall_line_app)
 endif()
 if(GE_PLATFORM AND GE_GPU)

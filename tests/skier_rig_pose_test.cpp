@@ -9,6 +9,8 @@
 //     step stays small.
 //   * THE MODEL: `rig_locals` gives the skier model locals that pose every rig joint back where
 //     the poser put it.
+//   * THE REACH: the posed model stays inside `pose_reach` through the turns, a jump, a hard
+//     landing and a wipeout on a trunk, so the GPU's skinning never clamps it.
 //
 // ge:summary Tests for the skier poser: bone lengths, the snow, a lean flip, the model's locals
 // ge:keywords test skier rig pose poser ik stretch clip pop snow pole model locals
@@ -37,9 +39,9 @@ double dist(Vec3 p, Vec3 q) {
                    (p.z - q.z) * (p.z - q.z));
 }
 
-// The poses of the `turns` scenario, one a step.
-std::vector<sk::RigPose> ride_turns() {
-  const sk::Scenario* sc = sk::find_scenario("turns");
+// The poses of ride scenario `name`, one a step.
+std::vector<sk::RigPose> ride(const char* name) {
+  const sk::Scenario* sc = sk::find_scenario(name);
   CHECK(sc != nullptr);
   std::vector<sk::RigPose> poses;
   if (!sc) return poses;
@@ -59,7 +61,7 @@ std::vector<sk::RigPose> ride_turns() {
 }
 
 const std::vector<sk::RigPose>& turns() {
-  static const std::vector<sk::RigPose> k = ride_turns();
+  static const std::vector<sk::RigPose> k = ride("turns");
   return k;
 }
 
@@ -136,9 +138,14 @@ TEST(a_lean_flipped_in_one_step_moves_the_body_smoothly) {
                                       std::to_string(step) + " m: a pop");
 }
 
-TEST(the_models_locals_pose_every_rig_joint_where_the_poser_put_it) {
-  const a::LoadResult r =
+const a::LoadResult& skier_model() {
+  static const a::LoadResult k =
       a::load_gltf_file(std::string(GE_SOURCE_DIR) + "/plugins/skier/assets/skier/skier.glb");
+  return k;
+}
+
+TEST(the_models_locals_pose_every_rig_joint_where_the_poser_put_it) {
+  const a::LoadResult& r = skier_model();
   CHECK_MSG(r.ok, r.error);
   if (!r.ok) return;
   const a::Model& m = r.model;
@@ -174,4 +181,37 @@ TEST(the_models_locals_pose_every_rig_joint_where_the_poser_put_it) {
   CHECK_MSG(lowest_ski > -2e-3,
             "the posed skis' base goes " + std::to_string(-lowest_ski) +
                 " m into the snow; next: make lab LAB=anim ARGS=--scenario=turns");
+}
+
+TEST(the_posed_model_stays_inside_its_reach) {
+  const a::LoadResult& r = skier_model();
+  CHECK_MSG(r.ok, r.error);
+  if (!r.ok) return;
+  const a::Model& m = r.model;
+  const sk::RigBinding binding = sk::bind_rig(m);
+  const a::Box reach = sk::pose_reach();
+  std::vector<a::Trs> local(m.joints.size());
+  std::vector<a::Affine> global(m.joints.size()), palette(m.joints.size());
+  const a::Mesh& mesh = m.meshes[0];
+  const size_t n = size_t{3} * mesh.vertex_count();
+  std::vector<float> positions(n), normals(n);
+  for (const char* name : {"turns", "kicker", "drop-harsh", "tree"}) {
+    // The room left to the nearest wall, m: negative is outside.
+    double room = 1e9;
+    for (const sk::RigPose& p : ride(name)) {
+      sk::rig_locals(m, binding, p, local);
+      a::pose_globals(m, local, global);
+      a::skin_palette(m, global, palette);
+      a::skin_mesh(mesh, palette, positions, normals);
+      for (size_t v = 0; v < n; v += 3) {
+        for (size_t k = 0; k < 3; k++) {
+          room = std::fmin(room, positions[v + k] - reach.min[k]);
+          room = std::fmin(room, reach.max[k] - positions[v + k]);
+        }
+      }
+    }
+    CHECK_MSG(room > 0.02, std::string("the posed model comes within ") + std::to_string(room) +
+                               " m of pose_reach's wall in `" + name +
+                               "`; next: widen pose_reach in skier/app/rig_pose.cpp");
+  }
 }
