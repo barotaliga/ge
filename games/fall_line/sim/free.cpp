@@ -14,6 +14,7 @@
 #include "fall_line/sim/army.hpp"
 #include "fall_line/sim/army_rules.hpp"
 #include "fall_line/sim/course.hpp"
+#include "fall_line/sim/sled_ride.hpp"
 #include "fall_line/sim/wanted.hpp"
 #include "mountain/mapgen/generate.hpp"
 #include "mountain/mapgen/query.hpp"
@@ -149,6 +150,7 @@ GameState create_free_ride(std::shared_ptr<const mg::Level> level, int32_t start
   stand_on(state, 0, f.start, kHeadIn);
   f.run = -1;
   f.last = -1;
+  place_sled(state);
   return state;
 }
 

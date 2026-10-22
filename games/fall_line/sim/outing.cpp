@@ -22,53 +22,42 @@ namespace core = ge::core;
 
 namespace {
 
-// Lays a line through points on the snow: every `kEvery` m between them, its arc, its height on
-// the ground and its heading; a point under half a step from the last is dropped.
-class LineLayer {
- public:
-  static constexpr double kEvery = 2;
-  explicit LineLayer(const mg::Level& level) : level_(level) {}
-
-  void to(double x, double z, double width) {
-    if (t_.points.empty()) {
-      push(x, z, 0, width);
-      return;
-    }
-    const mg::TrackPoint b = t_.points.back();
-    const double d = core::hypot(x - b.x, z - b.z);
-    if (d < kEvery / 2) return;
-    const auto n = static_cast<int>(std::ceil(d / kEvery));
-    for (int k = 1; k <= n; k++) {
-      const double f = static_cast<double>(k) / n;
-      push(b.x + (x - b.x) * f, b.z + (z - b.z) * f, b.s + d * f, width);
-    }
-  }
-
-  mg::Track done() {
-    auto& pts = t_.points;
-    for (size_t i = 0; i < pts.size(); i++) {
-      const size_t a = i == 0 ? 0 : i - 1;
-      const size_t b = i + 1 >= pts.size() ? pts.size() - 1 : i + 1;
-      if (a != b) pts[i].heading = core::libm::atan2(pts[b].x - pts[a].x, pts[b].z - pts[a].z);
-    }
-    t_.length = pts.empty() ? 0 : pts.back().s;
-    return std::move(t_);
-  }
-
- private:
-  void push(double x, double z, double s, double width) {
-    t_.points.push_back(mg::TrackPoint{x, z, level_.ground_at(x, z), s, 0, width});
-  }
-  const mg::Level& level_;
-  mg::Track t_;
-};
-
 // A point in the lift's line frame, in the world.
 mg::PlanPoint on_line(const ml::LiftPlan& p, double u, double v) {
   return {p.bottom.x + p.dx * u + p.dz * v, p.bottom.z + p.dz * u - p.dx * v};
 }
 
 }  // namespace
+
+void LineLayer::to(double x, double z, double width) {
+  if (t_.points.empty()) {
+    push(x, z, 0, width);
+    return;
+  }
+  const mg::TrackPoint b = t_.points.back();
+  const double d = core::hypot(x - b.x, z - b.z);
+  if (d < kEvery / 2) return;
+  const auto n = static_cast<int>(std::ceil(d / kEvery));
+  for (int k = 1; k <= n; k++) {
+    const double f = static_cast<double>(k) / n;
+    push(b.x + (x - b.x) * f, b.z + (z - b.z) * f, b.s + d * f, width);
+  }
+}
+
+mg::Track LineLayer::done() {
+  auto& pts = t_.points;
+  for (size_t i = 0; i < pts.size(); i++) {
+    const size_t a = i == 0 ? 0 : i - 1;
+    const size_t b = i + 1 >= pts.size() ? pts.size() - 1 : i + 1;
+    if (a != b) pts[i].heading = core::libm::atan2(pts[b].x - pts[a].x, pts[b].z - pts[a].z);
+  }
+  t_.length = pts.empty() ? 0 : pts.back().s;
+  return std::move(t_);
+}
+
+void LineLayer::push(double x, double z, double s, double width) {
+  t_.points.push_back(mg::TrackPoint{x, z, level_.ground_at(x, z), s, 0, width});
+}
 
 Outing outing_from(const mg::Level& level, const std::vector<ml::LiftPlan>& lifts, int32_t first) {
   Outing o;

@@ -1,2 +1,2 @@
 # run, finished, time bits, lifts, runs skied, ride bits, metres bits, digest (fall_line_lift_ride_test, seed 38, generator v10)
-2 1 4085722222222222 1 2 4073991111111110 40b15455966c83b1 0b46afa9534bef28
+2 1 4085722222222222 1 2 4073991111111110 40b15455966c83b1 d1acd33f1f2ed510
