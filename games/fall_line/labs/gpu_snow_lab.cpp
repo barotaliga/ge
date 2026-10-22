@@ -25,6 +25,7 @@
 #include <cstring>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "fall_line/app/frame.hpp"
@@ -141,7 +142,11 @@ void run(ge::lab::Lab& lab) {
     const std::string hour_s = hr < 0 ? fixed(level.sun.hour, 2) : fixed(hr, 2);
     for (const std::string& name : views) {
       for (const bool snow : {false, true}) {
-        Scene sc{name + "-" + hour_s + (snow ? "-snow" : "-plain"), name, hour_s, snow, {}};
+        std::string id = name;
+        id += "-";
+        id += hour_s;
+        id += snow ? "-snow" : "-plain";
+        Scene sc{std::move(id), name, hour_s, snow, {}};
         fall_line::app::day_view(level, hr, sc.frame);
         if (!fall_line::app::make_view(level, name, sc.frame)) {
           lab.fail("no view named '" + name + "'",

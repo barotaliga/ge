@@ -31,7 +31,8 @@ Level flat_map(double heading) {
   level.ground = ge::core::create_heightfield(0, 0, 2, 33, 33);
   level.packed = ge::core::create_heightfield(0, 0, 2, 33, 33);
   for (int r = 0; r < 33; ++r) {
-    for (int c = 0; c < 16; ++c) level.packed.data[static_cast<size_t>(r * 33 + c)] = 1;
+    for (int c = 0; c < 16; ++c)
+      level.packed.data[static_cast<size_t>(r) * 33 + static_cast<size_t>(c)] = 1;
   }
   for (int i = -20; i <= 20; ++i) {
     const double d = i * 2.0;
@@ -42,7 +43,7 @@ Level flat_map(double heading) {
 }
 
 uint8_t texel(const std::vector<uint8_t>& map, int c, int r, int k) {
-  return map[static_cast<size_t>(r * 33 + c) * 4 + static_cast<size_t>(k)];
+  return map[(static_cast<size_t>(r) * 33 + static_cast<size_t>(c)) * 4 + static_cast<size_t>(k)];
 }
 
 TEST(rock_rises_with_the_slope) {
@@ -58,7 +59,8 @@ TEST(the_map_carries_the_packed_share_and_the_rock) {
   // A cliff along the last columns: 4 m up a 2 m cell.
   for (int r = 0; r < 33; ++r) {
     for (int c = 30; c < 33; ++c)
-      level.ground.data[static_cast<size_t>(r * 33 + c)] = 4.0f * static_cast<float>(c - 29);
+      level.ground.data[static_cast<size_t>(r) * 33 + static_cast<size_t>(c)] =
+          4.0f * static_cast<float>(c - 29);
   }
   const std::vector<uint8_t> map = app::bake_snow_ground(level);
   CHECK(map.size() == size_t{33} * 33 * 4);
