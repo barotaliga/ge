@@ -8,6 +8,9 @@
 // ge:skill testing
 #include "core/heightfield.hpp"
 
+#include <cstdint>
+#include <limits>
+
 #include "core/noise.hpp"
 #include "golden.hpp"
 
@@ -56,4 +59,25 @@ TEST(heightfield_matches_golden_bit_for_bit) {
     fields++;
   }
   CHECK(fields == 5);
+}
+
+// A power-of-two pitch multiplies by its exact inverse; any other divides. Either way a sample
+// is the division's bits.
+TEST(pitch_inverse_is_exact_or_absent) {
+  CHECK(ge::core::exact_inverse(2) == 0.5);
+  CHECK(ge::core::exact_inverse(0.25) == 4);
+  CHECK(ge::core::exact_inverse(1) == 1);
+  CHECK(ge::core::exact_inverse(10) == 0);
+  CHECK(ge::core::exact_inverse(3) == 0);
+  CHECK(ge::core::exact_inverse(0) == 0);
+  CHECK(ge::core::exact_inverse(-2) == 0);
+  CHECK(ge::core::exact_inverse(std::numeric_limits<double>::infinity()) == 0);
+  uint64_t h = 0x853c49e6748fea9bull;
+  for (int i = 0; i < 4000; i++) {
+    h = h * 6364136223846793005ull + 1442695040888963407ull;
+    const double v = (double(h >> 11) / 9007199254740992.0 - 0.3) * 5000;
+    for (const double cell : {0.5, 2.0, 4.0, 16.0}) {
+      CHECK_BITS(v * ge::core::exact_inverse(cell), v / cell);
+    }
+  }
 }
