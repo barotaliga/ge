@@ -53,6 +53,8 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | `engine/gpu/test_scene.hpp` | The GPU test scene: a sky gradient and an RGB triangle, the golden capture's frame | `gpu` | `tests/gpu_capture_test.cpp` |
 | `engine/gpu/timer.cpp` | Timestamp query set, resolve, readback and conversion to milliseconds | `gpu` `perf` | `tests/gpu_capture_test.cpp` |
 | `engine/gpu/timer.hpp` | GPU time per pass from timestamp query pairs, read back a frame late | `gpu` `perf` | `tests/gpu_capture_test.cpp` |
+| `engine/lab/inflate.cpp` | The labs' inflater: deflate's stored, fixed and dynamic blocks decoded | `labs` | `tests/lab_raster_test.cpp` |
+| `engine/lab/inflate.hpp` | The labs' inflater: a zlib stream's deflate blocks back to bytes | `labs` | `tests/lab_raster_test.cpp` |
 | `engine/lab/lab.cpp` | The lab registry, the Lab context's sinks, the digest and the caption band | `labs` | `tests/lab_runner_test.cpp` |
 | `engine/lab/lab.hpp` | The lab contract: LabSpec, the Lab context, GE_LAB registration, the lab kinds | `labs` | `tests/lab_runner_test.cpp` |
 | `engine/lab/labs/audio_synth_lab.cpp` | Lab: the synth's every voice, colour, filter, drive, echo, layer and the limiter, | `audio` `labs` | `tests/audio_synth_test.cpp` |
@@ -152,12 +154,15 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | `plugins/mountain/analysis/speed_race.cpp` | R32 R33 R36 checks: the speed gates, the line, the crests, the nets and the trap | `mountain` | `tests/mountain_speed_events_test.cpp` |
 | `plugins/mountain/analysis/speed_track.cpp` | R34 checks: the speed track straight, graded, timed, run out, cleared and groomed | `mountain` | `tests/mountain_speed_ski_test.cpp` |
 | `plugins/mountain/labs/analyze_lab.cpp` | Lab: maps over seeds held to the rule book; findings by R-rule; refused attempts | `mountain` `labs` | `tests/lab_runner_test.cpp` |
+| `plugins/mountain/labs/dem_tiles.cpp` | Lab tooling: the GeoTIFF tile reader (tags, blocks, the floating-point predictor) | `mountain` `labs` | `tests/lab_runner_test.cpp` |
+| `plugins/mountain/labs/dem_tiles.hpp` | Lab tooling: the 30 m elevation model's tiles fetched, kept and read bilinearly | `mountain` `labs` | `tests/lab_runner_test.cpp` |
 | `plugins/mountain/labs/junctions_lab.cpp` | Lab: where a ski area's groomed snow steps where runs meet: steps found, named, drawn | `mountain` `labs` | `tests/lab_runner_test.cpp` |
 | `plugins/mountain/labs/level_lab.cpp` | Lab: one generated map from above (captioned) with its gate table and numbers | `mountain` `labs` | `tests/lab_runner_test.cpp` |
 | `plugins/mountain/labs/level_map.cpp` | The map labs' build-from-flags and the from-above painter | `mountain` `labs` | `tests/lab_runner_test.cpp` |
 | `plugins/mountain/labs/level_map.hpp` | mountain labs' shared map helpers: build a map from lab flags, draw it from above | `mountain` `labs` | `tests/lab_runner_test.cpp` |
 | `plugins/mountain/labs/mapgen_cost_lab.cpp` | Lab: wall-clock cost of building maps (measured), with each map's level_digest | `mountain` `labs` `perf` | `tests/lab_runner_test.cpp` |
 | `plugins/mountain/labs/park_lab.cpp` | Lab: the terrain park on a tricks map, close up, from the side and from above | `mountain` `labs` | `tests/lab_runner_test.cpp` |
+| `plugins/mountain/labs/real_faces_lab.cpp` | Lab: the real faces' heights decoded and measured, drawn, and baked off the model | `mountain` `labs` | `tests/lab_runner_test.cpp` |
 | `plugins/mountain/labs/resort_lab.cpp` | Lab: one generated ski area from above and its courses, with its lifts, runs, courses | `mountain` `labs` | `tests/lab_runner_test.cpp` |
 | `plugins/mountain/labs/resort_map.cpp` | The ski-area labs' build-from-flags and the from-above area painter | `mountain` `labs` | `tests/lab_runner_test.cpp` |
 | `plugins/mountain/labs/resort_map.hpp` | The ski-area labs' build-from-flags and the area painter, plan and courses | `mountain` `labs` | `tests/lab_runner_test.cpp` |
@@ -220,6 +225,124 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | `plugins/mountain/mapgen/park.hpp` | R20 the terrain park: planned down a piste, built against the horizontal, stamped | `mountain` | `tests/mountain_park_test.cpp` |
 | `plugins/mountain/mapgen/query.cpp` | The piste's lazily built spatial hash and the nearest-point searches | `mountain` | `tests/mountain_generate_test.cpp` |
 | `plugins/mountain/mapgen/query.hpp` | Where on the piste a point is: nearest_track_point, its spatial hash, track_point_at | `mountain` | `tests/mountain_generate_test.cpp` |
+| `plugins/mountain/mapgen/real_face.cpp` | R25 a real face's grid decoded and encoded, its bicubic sample and its globe | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_face.hpp` | R25 a real face's heights: the kept grid decoded, sampled bicubically, the globe | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_face_crops.hpp` | R25 the real faces' crops: each face's place, its middle and the turn of its window | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_alpine_1.cpp` | R25 the real face alpine-1's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_alpine_10.cpp` | R25 the real face alpine-10's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_alpine_11.cpp` | R25 the real face alpine-11's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_alpine_12.cpp` | R25 the real face alpine-12's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_alpine_13.cpp` | R25 the real face alpine-13's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_alpine_14.cpp` | R25 the real face alpine-14's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_alpine_15.cpp` | R25 the real face alpine-15's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_alpine_16.cpp` | R25 the real face alpine-16's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_alpine_17.cpp` | R25 the real face alpine-17's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_alpine_18.cpp` | R25 the real face alpine-18's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_alpine_19.cpp` | R25 the real face alpine-19's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_alpine_2.cpp` | R25 the real face alpine-2's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_alpine_20.cpp` | R25 the real face alpine-20's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_alpine_21.cpp` | R25 the real face alpine-21's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_alpine_22.cpp` | R25 the real face alpine-22's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_alpine_23.cpp` | R25 the real face alpine-23's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_alpine_24.cpp` | R25 the real face alpine-24's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_alpine_25.cpp` | R25 the real face alpine-25's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_alpine_26.cpp` | R25 the real face alpine-26's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_alpine_27.cpp` | R25 the real face alpine-27's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_alpine_28.cpp` | R25 the real face alpine-28's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_alpine_29.cpp` | R25 the real face alpine-29's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_alpine_3.cpp` | R25 the real face alpine-3's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_alpine_30.cpp` | R25 the real face alpine-30's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_alpine_31.cpp` | R25 the real face alpine-31's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_alpine_32.cpp` | R25 the real face alpine-32's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_alpine_33.cpp` | R25 the real face alpine-33's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_alpine_4.cpp` | R25 the real face alpine-4's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_alpine_5.cpp` | R25 the real face alpine-5's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_alpine_6.cpp` | R25 the real face alpine-6's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_alpine_7.cpp` | R25 the real face alpine-7's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_alpine_8.cpp` | R25 the real face alpine-8's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_alpine_9.cpp` | R25 the real face alpine-9's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_continental_1.cpp` | R25 the real face continental-1's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_continental_10.cpp` | R25 the real face continental-10's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_continental_11.cpp` | R25 the real face continental-11's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_continental_12.cpp` | R25 the real face continental-12's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_continental_13.cpp` | R25 the real face continental-13's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_continental_14.cpp` | R25 the real face continental-14's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_continental_15.cpp` | R25 the real face continental-15's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_continental_16.cpp` | R25 the real face continental-16's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_continental_17.cpp` | R25 the real face continental-17's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_continental_18.cpp` | R25 the real face continental-18's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_continental_19.cpp` | R25 the real face continental-19's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_continental_2.cpp` | R25 the real face continental-2's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_continental_20.cpp` | R25 the real face continental-20's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_continental_21.cpp` | R25 the real face continental-21's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_continental_22.cpp` | R25 the real face continental-22's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_continental_23.cpp` | R25 the real face continental-23's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_continental_24.cpp` | R25 the real face continental-24's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_continental_3.cpp` | R25 the real face continental-3's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_continental_4.cpp` | R25 the real face continental-4's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_continental_5.cpp` | R25 the real face continental-5's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_continental_6.cpp` | R25 the real face continental-6's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_continental_7.cpp` | R25 the real face continental-7's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_continental_8.cpp` | R25 the real face continental-8's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_continental_9.cpp` | R25 the real face continental-9's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_fell_1.cpp` | R25 the real face fell-1's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_fell_10.cpp` | R25 the real face fell-10's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_fell_11.cpp` | R25 the real face fell-11's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_fell_12.cpp` | R25 the real face fell-12's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_fell_13.cpp` | R25 the real face fell-13's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_fell_14.cpp` | R25 the real face fell-14's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_fell_15.cpp` | R25 the real face fell-15's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_fell_16.cpp` | R25 the real face fell-16's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_fell_17.cpp` | R25 the real face fell-17's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_fell_18.cpp` | R25 the real face fell-18's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_fell_19.cpp` | R25 the real face fell-19's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_fell_2.cpp` | R25 the real face fell-2's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_fell_20.cpp` | R25 the real face fell-20's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_fell_21.cpp` | R25 the real face fell-21's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_fell_22.cpp` | R25 the real face fell-22's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_fell_23.cpp` | R25 the real face fell-23's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_fell_24.cpp` | R25 the real face fell-24's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_fell_25.cpp` | R25 the real face fell-25's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_fell_26.cpp` | R25 the real face fell-26's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_fell_27.cpp` | R25 the real face fell-27's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_fell_28.cpp` | R25 the real face fell-28's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_fell_29.cpp` | R25 the real face fell-29's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_fell_3.cpp` | R25 the real face fell-3's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_fell_30.cpp` | R25 the real face fell-30's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_fell_31.cpp` | R25 the real face fell-31's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_fell_32.cpp` | R25 the real face fell-32's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_fell_4.cpp` | R25 the real face fell-4's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_fell_5.cpp` | R25 the real face fell-5's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_fell_6.cpp` | R25 the real face fell-6's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_fell_7.cpp` | R25 the real face fell-7's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_fell_8.cpp` | R25 the real face fell-8's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_fell_9.cpp` | R25 the real face fell-9's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_maritime_1.cpp` | R25 the real face maritime-1's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_maritime_10.cpp` | R25 the real face maritime-10's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_maritime_11.cpp` | R25 the real face maritime-11's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_maritime_12.cpp` | R25 the real face maritime-12's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_maritime_13.cpp` | R25 the real face maritime-13's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_maritime_14.cpp` | R25 the real face maritime-14's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_maritime_15.cpp` | R25 the real face maritime-15's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_maritime_16.cpp` | R25 the real face maritime-16's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_maritime_17.cpp` | R25 the real face maritime-17's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_maritime_18.cpp` | R25 the real face maritime-18's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_maritime_19.cpp` | R25 the real face maritime-19's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_maritime_2.cpp` | R25 the real face maritime-2's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_maritime_20.cpp` | R25 the real face maritime-20's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_maritime_21.cpp` | R25 the real face maritime-21's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_maritime_22.cpp` | R25 the real face maritime-22's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_maritime_23.cpp` | R25 the real face maritime-23's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_maritime_24.cpp` | R25 the real face maritime-24's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_maritime_25.cpp` | R25 the real face maritime-25's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_maritime_3.cpp` | R25 the real face maritime-3's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_maritime_4.cpp` | R25 the real face maritime-4's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_maritime_5.cpp` | R25 the real face maritime-5's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_maritime_6.cpp` | R25 the real face maritime-6's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_maritime_7.cpp` | R25 the real face maritime-7's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_maritime_8.cpp` | R25 the real face maritime-8's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/face_maritime_9.cpp` | R25 the real face maritime-9's heights (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
+| `plugins/mountain/mapgen/real_faces/index.cpp` | R25 the real faces baked, listed (generated) | `mountain` | `tests/mountain_real_face_test.cpp` |
 | `plugins/mountain/mapgen/regions.cpp` | The four regions' rows and the tree roster's hash pick | `mountain` | `tests/mountain_generate_test.cpp` |
 | `plugins/mountain/mapgen/regions.hpp` | R21 the regions: each snow country's row of multiples, roster and crust | `mountain` | `tests/mountain_generate_test.cpp` |
 | `plugins/mountain/mapgen/resort.cpp` | The stations and lifts on the massif, and the run slots in walk order | `mountain` | `tests/mountain_resort_build_test.cpp` |
@@ -324,12 +447,13 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | `tests/gpu_capture_test.cpp` | Tests for headless capture: the test scene against its golden image, the timer | `gpu` `testing` |  |
 | `tests/gpu_device_test.cpp` | Tests for the GPU device: adapter, feature tiers, error lines, pipeline counter | `gpu` `testing` |  |
 | `tests/gpu_support.hpp` | GPU test support: a validated device or a skip; golden PPM images with tolerance | `testing` `gpu` |  |
-| `tests/lab_raster_test.cpp` | Tests the labs' raster painters, the 5x7 font and the PNG writer's framing | `labs` `testing` |  |
+| `tests/lab_raster_test.cpp` | Tests the labs' raster painters, the 5x7 font, the PNG writer and the inflater | `labs` `testing` |  |
 | `tests/lab_runner_test.cpp` | Tests the lab runner: flags, the report's files, tag and compare, repeat, digests | `labs` `testing` |  |
 | `tests/loop_run_clock_test.cpp` | Golden test: loop/run_clock, bit for bit | `testing` |  |
 | `tests/main.cpp` | Runs every TEST registered in a test executable | `testing` |  |
 | `tests/mountain_generate_test.cpp` | Golden test: the v1 generator's maps, section by section | `testing` `mountain` |  |
 | `tests/mountain_park_test.cpp` | The terrain park on a tricks map: determinism, its kickers, a golden, analysis | `testing` `mountain` |  |
+| `tests/mountain_real_face_test.cpp` | The real faces: the crops, the grid's codec, the globe, every face decoded, a golden | `testing` `mountain` |  |
 | `tests/mountain_resort_build_test.cpp` | The ski-area build held by its own checks: determinism, a digest golden, the rules | `testing` `mountain` |  |
 | `tests/mountain_resort_level_test.cpp` | A ski area raced as a map: determinism, a digest golden, its analysis and the gates | `testing` `mountain` |  |
 | `tests/mountain_ski_cross_test.cpp` | A ski-cross course built over a map: determinism, its features, a golden, analysis | `testing` `mountain` |  |
@@ -382,7 +506,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | add_ellipsoid | `engine/render/mesh.hpp` |
 | add_render | `engine/gpu/pipeline.hpp` |
 | add_test_scene | `engine/gpu/test_scene.hpp` |
-| adler32 | `engine/lab/png.cpp` `engine/lab/png.hpp` |
+| adler32 | `engine/lab/inflate.hpp` `engine/lab/png.cpp` `engine/lab/png.hpp` |
 | aerial | `games/fall_line/app/views.hpp` |
 | aerial-perspective | `engine/render/sky.hpp` |
 | agent | `games/fall_line/labs/play_lab.cpp` `games/fall_line/sim/play.hpp` `tests/fall_line_play_test.cpp` |
@@ -409,6 +533,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | approach | `engine/core/math.hpp` |
 | approach-cut | `plugins/mountain/mapgen/summit_ramps.hpp` |
 | approached | `plugins/mountain/mapgen/lift_chain.cpp` |
+| area | `plugins/mountain/mapgen/real_face_crops.hpp` |
 | arena | `plugins/mountain/labs/skijump_hills_lab.cpp` `plugins/mountain/mapgen/discipline_rules.hpp` |
 | argument-reduction | `engine/core/libm/fdlibm_trig.cpp` |
 | arm | `engine/core/libm/pow.cpp` |
@@ -428,20 +553,22 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | audio-thread | `engine/platform/audio.hpp` |
 | audition | `engine/lab/sound.hpp` `games/fall_line/labs/audition_lab.cpp` |
 | azimuth | `engine/core/solar.hpp` |
-| bake | `engine/core/heightfield.hpp` `engine/render/horizon.cpp` `engine/render/horizon.hpp` `games/fall_line/app/look.cpp` `games/fall_line/app/look.hpp` |
+| bake | `engine/core/heightfield.hpp` `engine/render/horizon.cpp` `engine/render/horizon.hpp` `games/fall_line/app/look.cpp` `games/fall_line/app/look.hpp` `plugins/mountain/labs/real_faces_lab.cpp` |
 | bake_albedo | `games/fall_line/app/look.hpp` |
 | bake-decision | `tests/render_horizon_test.cpp` |
 | bake-massif | `plugins/mountain/mapgen/massif.cpp` `plugins/mountain/mapgen/massif.hpp` |
+| baked-faces | `plugins/mountain/mapgen/real_faces/index.cpp` |
 | bakes | `games/fall_line/labs/gpu_shadows_lab.cpp` |
 | balance | `engine/audio/meter.hpp` `tests/audio_meter_test.cpp` |
 | band | `engine/lab/lab.cpp` `tests/audio_meter_test.cpp` |
 | bandpass | `engine/audio/voice.hpp` |
 | bands | `engine/audio/meter.cpp` `engine/lab/sound.cpp` `engine/lab/sound.hpp` |
 | bank | `engine/audio/sound.hpp` `games/fall_line/labs/audition_lab.cpp` `games/fall_line/sound/bank.cpp` `games/fall_line/sound/bank.hpp` `plugins/mountain/mapgen/network_stamp.hpp` `plugins/mountain/mapgen/ski_cross.cpp` `tests/audio_sound_test.cpp` `tests/fall_line_sound_test.cpp` |
+| bare | `plugins/mountain/mapgen/real_face_crops.hpp` |
 | base-vertex | `engine/render/instances.hpp` |
-| base64 | `plugins/racing/tape.cpp` `plugins/racing/tape.hpp` |
+| base64 | `plugins/mountain/mapgen/real_face.cpp` `plugins/racing/tape.cpp` `plugins/racing/tape.hpp` |
 | baseline | `engine/lab/runner.cpp` `engine/lab/runner.hpp` |
-| bearing | `games/fall_line/sim/course.hpp` `plugins/mountain/mapgen/sun.hpp` `tests/render_horizon_test.cpp` |
+| bearing | `games/fall_line/sim/course.hpp` `plugins/mountain/mapgen/real_face_crops.hpp` `plugins/mountain/mapgen/sun.hpp` `tests/render_horizon_test.cpp` |
 | bearing_index | `engine/render/horizon.hpp` |
 | bearing_to_next | `games/fall_line/sim/course.cpp` `games/fall_line/sim/course.hpp` |
 | beats | `plugins/racing/records.hpp` |
@@ -454,7 +581,8 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | beside-cost | `plugins/mountain/mapgen/lanes.cpp` |
 | best | `plugins/racing/records.hpp` |
 | bgra-swizzle | `engine/gpu/target.cpp` |
-| bilinear | `engine/core/heightfield.hpp` |
+| bicubic | `plugins/mountain/mapgen/real_face.hpp` |
+| bilinear | `engine/core/heightfield.hpp` `plugins/mountain/labs/dem_tiles.hpp` |
 | bind-group | `engine/render/frame.cpp` |
 | bind-group-layout | `engine/render/frame.hpp` |
 | biquad | `engine/audio/dsp.hpp` |
@@ -499,13 +627,14 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | camera-relative | `engine/render/view.hpp` |
 | camera-rig | `games/fall_line/app/views.hpp` |
 | candidates | `plugins/mountain/mapgen/station_clear.cpp` |
+| canonical-code | `engine/lab/inflate.cpp` |
 | canvas | `engine/lab/raster.hpp` |
 | caption | `engine/lab/lab.cpp` `engine/lab/lab.hpp` `engine/lab/report.hpp` `tests/lab_runner_test.cpp` |
 | capture | `engine/gpu/target.hpp` `engine/gpu/test_scene.hpp` `engine/lab/labs/gpu_capture_lab.cpp` `tests/gpu_capture_test.cpp` |
 | carve | `plugins/skier/labs/ride_lab.cpp` `plugins/skier/limits.hpp` `plugins/skier/scenarios.hpp` `plugins/skier/skier.hpp` `tests/skier_scenarios_test.cpp` |
 | carve_curvature | `plugins/skier/limits.hpp` |
 | cat-track | `plugins/mountain/mapgen/lanes.hpp` |
-| catmull-rom | `engine/render/taa.hpp` |
+| catmull-rom | `engine/render/taa.hpp` `plugins/mountain/mapgen/real_face.hpp` |
 | cbrt | `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/libm.hpp` |
 | cda | `plugins/skier/skis.hpp` |
 | ceiling | `plugins/skier/limits.hpp` |
@@ -582,6 +711,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | controls_to_axes | `games/fall_line/sim/controls.hpp` |
 | conventions | `engine/core/math.hpp` |
 | convex-hull | `plugins/mountain/mapgen/speed_ski.hpp` |
+| copernicus | `plugins/mountain/labs/dem_tiles.hpp` |
 | copy-texture-to-buffer | `engine/gpu/target.hpp` |
 | core | `plugins/mountain/mapgen/network_stamp.cpp` `plugins/mountain/mapgen/network_stamp.hpp` |
 | corner | `games/fall_line/sim/bot.hpp` |
@@ -634,6 +764,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | ctest | `tests/main.cpp` |
 | cull | `engine/render/instances.cpp` `engine/render/terrain.cpp` `tests/render_draw_test.cpp` `tests/render_instances_test.cpp` |
 | cull-check | `games/fall_line/labs/gpu_world_lab.cpp` |
+| curl | `plugins/mountain/labs/dem_tiles.cpp` |
 | curvature | `games/fall_line/sim/bot.hpp` `plugins/skier/limits.hpp` |
 | curve | `engine/audio/dsp.hpp` `tests/audio_dsp_test.cpp` |
 | cut | `plugins/mountain/labs/skijump_hills_lab.cpp` |
@@ -652,9 +783,13 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | decay | `engine/audio/meter.hpp` `engine/audio/synth.cpp` `engine/audio/voice.hpp` |
 | decimal | `engine/core/num_text.cpp` |
 | deck | `plugins/mountain/mapgen/park.hpp` |
-| deflate | `engine/lab/png.hpp` |
+| decode | `plugins/mountain/mapgen/real_face.hpp` `tests/mountain_real_face_test.cpp` |
+| decode-face-grid | `plugins/mountain/mapgen/real_face.cpp` |
+| decompress | `engine/lab/inflate.hpp` |
+| deflate | `engine/lab/inflate.cpp` `engine/lab/inflate.hpp` `engine/lab/png.hpp` |
 | delay | `engine/audio/synth.hpp` `plugins/mountain/labs/slalom_lab.cpp` `plugins/mountain/mapgen/slalom.cpp` |
 | delayed-gate | `plugins/mountain/mapgen/discipline_rules.hpp` `plugins/mountain/mapgen/slalom.hpp` |
+| dem | `plugins/mountain/labs/dem_tiles.hpp` |
 | depends | `tools/check-plugins.mjs` |
 | depth | `engine/render/frame.hpp` |
 | depth-pyramid | `engine/render/hiz.cpp` `engine/render/hiz.hpp` |
@@ -706,7 +841,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | drifts | `plugins/mountain/mapgen/drift.hpp` `plugins/mountain/mapgen/resort_graded.cpp` |
 | drive | `engine/audio/voice.hpp` `engine/lab/lab.hpp` `plugins/skier/skier.hpp` `plugins/skier/tuning.hpp` |
 | driver | `games/fall_line/sim/simulate.cpp` |
-| drop | `plugins/mountain/analysis/cliffs.hpp` `plugins/mountain/labs/routes_lab.cpp` `plugins/mountain/mapgen/drops.cpp` `plugins/mountain/mapgen/drops.hpp` `plugins/mountain/mapgen/ski_routes.hpp` `plugins/skier/scenarios.hpp` `tests/skier_scenarios_test.cpp` |
+| drop | `plugins/mountain/analysis/cliffs.hpp` `plugins/mountain/labs/real_faces_lab.cpp` `plugins/mountain/labs/routes_lab.cpp` `plugins/mountain/mapgen/drops.cpp` `plugins/mountain/mapgen/drops.hpp` `plugins/mountain/mapgen/ski_routes.hpp` `plugins/skier/scenarios.hpp` `tests/skier_scenarios_test.cpp` |
 | drops | `plugins/mountain/mapgen/drops.hpp` `plugins/mountain/mapgen/resort_graded.cpp` |
 | drops-on | `plugins/mountain/mapgen/ski_routes.cpp` |
 | dsp | `engine/audio/dsp.cpp` `engine/audio/dsp.hpp` `tests/audio_dsp_test.cpp` |
@@ -724,8 +859,9 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | edge-speed | `plugins/mountain/mapgen/ski_jump.cpp` `plugins/mountain/mapgen/ski_jump.hpp` `tests/mountain_ski_jump_test.cpp` |
 | effects | `games/fall_line/sound/mix.hpp` |
 | elevation | `engine/core/solar.hpp` |
+| elevation-model | `plugins/mountain/labs/dem_tiles.cpp` `plugins/mountain/labs/dem_tiles.hpp` `plugins/mountain/labs/real_faces_lab.cpp` |
 | ellipsoid | `engine/render/mesh.cpp` |
-| encode | `engine/audio/wav.cpp` `engine/audio/wav.hpp` `engine/lab/png.hpp` `engine/render/post.hpp` |
+| encode | `engine/audio/wav.cpp` `engine/audio/wav.hpp` `engine/lab/png.hpp` `engine/render/post.hpp` `tests/mountain_real_face_test.cpp` |
 | encode_hiz | `engine/render/hiz.hpp` |
 | encode_horizon | `engine/render/horizon.hpp` |
 | encode_instances | `engine/render/instances.hpp` |
@@ -735,6 +871,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | encode_sky_tables | `engine/render/sky.hpp` |
 | encode_taa | `engine/render/taa.hpp` |
 | encode_terrain_cull | `engine/render/terrain.hpp` |
+| encode-face-grid | `plugins/mountain/mapgen/real_face.cpp` |
 | end | `games/fall_line/sim/play.cpp` `games/fall_line/sim/play.hpp` `tests/fall_line_play_test.cpp` |
 | end_load | `engine/gpu/device.hpp` `tests/gpu_device_test.cpp` |
 | engine-plugin-game | `tools/check-plugins.mjs` |
@@ -756,12 +893,16 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | exponent | `engine/core/libm/pow.cpp` |
 | export | `engine/audio/wav.hpp` |
 | exposure | `engine/render/post.hpp` |
+| face-crop | `plugins/mountain/mapgen/real_face_crops.hpp` `tests/mountain_real_face_test.cpp` |
+| face-grid | `plugins/mountain/mapgen/real_face.hpp` `tests/mountain_real_face_test.cpp` |
+| face-height | `plugins/mountain/mapgen/real_face.hpp` |
 | face-the-sun | `plugins/mountain/mapgen/sun.hpp` |
 | facing | `plugins/mountain/mapgen/course_day.hpp` `plugins/mountain/mapgen/resort_courses.cpp` `plugins/mountain/mapgen/sun.hpp` |
 | fader | `engine/audio/synth.hpp` |
 | faders | `games/fall_line/sound/mix.hpp` `tests/fall_line_sound_test.cpp` |
 | fair-heading | `plugins/mountain/mapgen/run_start.cpp` `plugins/mountain/mapgen/run_start.hpp` |
 | fall-line | `games/fall_line/app/frame.cpp` `games/fall_line/app/frame.hpp` `games/fall_line/app/look.cpp` `games/fall_line/app/look.hpp` `games/fall_line/app/main.cpp` `games/fall_line/app/scene.cpp` `games/fall_line/app/scene.hpp` `games/fall_line/app/views.cpp` `games/fall_line/app/views.hpp` `games/fall_line/labs/audition_lab.cpp` `games/fall_line/labs/gpu_shadows_lab.cpp` `games/fall_line/labs/gpu_taa_lab.cpp` `games/fall_line/labs/gpu_world_lab.cpp` |
+| falls | `plugins/mountain/labs/real_faces_lab.cpp` |
 | family | `engine/render/instances.cpp` |
 | far | `games/fall_line/sound/listener.hpp` |
 | fbm | `engine/core/noise.hpp` `plugins/mountain/mapgen/terrain.cpp` |
@@ -772,6 +913,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | fell | `plugins/mountain/mapgen/regions.hpp` |
 | fell-on-routes | `plugins/mountain/mapgen/route_features.cpp` `plugins/mountain/mapgen/route_features.hpp` |
 | fence | `plugins/mountain/analysis/cross_course.cpp` `plugins/mountain/mapgen/discipline_rules.hpp` `plugins/mountain/mapgen/ski_cross.hpp` |
+| fetch | `plugins/mountain/labs/dem_tiles.hpp` |
 | field | `games/fall_line/labs/sim_lab.cpp` `games/fall_line/sim/field.cpp` `games/fall_line/sim/field.hpp` `games/fall_line/sim/simulate.hpp` `games/fall_line/sim/state.hpp` `plugins/racing/standings.hpp` `tests/fall_line_field_test.cpp` |
 | field-row | `games/fall_line/sim/simulate.hpp` |
 | fifo | `engine/gpu/surface.hpp` |
@@ -853,7 +995,9 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | ge-tags | `tools/agents-index.mjs` |
 | generate | `plugins/mountain/mapgen/generate.cpp` `plugins/mountain/mapgen/generate.hpp` |
 | generate_level | `plugins/mountain/labs/mapgen_cost_lab.cpp` |
+| generated | `plugins/mountain/mapgen/real_faces/face_alpine_1.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_10.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_11.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_12.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_13.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_14.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_15.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_16.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_17.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_18.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_19.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_2.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_20.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_21.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_22.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_23.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_24.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_25.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_26.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_27.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_28.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_29.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_3.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_30.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_31.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_32.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_33.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_4.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_5.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_6.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_7.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_8.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_9.cpp` `plugins/mountain/mapgen/real_faces/face_continental_1.cpp` `plugins/mountain/mapgen/real_faces/face_continental_10.cpp` `plugins/mountain/mapgen/real_faces/face_continental_11.cpp` `plugins/mountain/mapgen/real_faces/face_continental_12.cpp` `plugins/mountain/mapgen/real_faces/face_continental_13.cpp` `plugins/mountain/mapgen/real_faces/face_continental_14.cpp` `plugins/mountain/mapgen/real_faces/face_continental_15.cpp` `plugins/mountain/mapgen/real_faces/face_continental_16.cpp` `plugins/mountain/mapgen/real_faces/face_continental_17.cpp` `plugins/mountain/mapgen/real_faces/face_continental_18.cpp` `plugins/mountain/mapgen/real_faces/face_continental_19.cpp` `plugins/mountain/mapgen/real_faces/face_continental_2.cpp` `plugins/mountain/mapgen/real_faces/face_continental_20.cpp` `plugins/mountain/mapgen/real_faces/face_continental_21.cpp` `plugins/mountain/mapgen/real_faces/face_continental_22.cpp` `plugins/mountain/mapgen/real_faces/face_continental_23.cpp` `plugins/mountain/mapgen/real_faces/face_continental_24.cpp` `plugins/mountain/mapgen/real_faces/face_continental_3.cpp` `plugins/mountain/mapgen/real_faces/face_continental_4.cpp` `plugins/mountain/mapgen/real_faces/face_continental_5.cpp` `plugins/mountain/mapgen/real_faces/face_continental_6.cpp` `plugins/mountain/mapgen/real_faces/face_continental_7.cpp` `plugins/mountain/mapgen/real_faces/face_continental_8.cpp` `plugins/mountain/mapgen/real_faces/face_continental_9.cpp` `plugins/mountain/mapgen/real_faces/face_fell_1.cpp` `plugins/mountain/mapgen/real_faces/face_fell_10.cpp` `plugins/mountain/mapgen/real_faces/face_fell_11.cpp` `plugins/mountain/mapgen/real_faces/face_fell_12.cpp` `plugins/mountain/mapgen/real_faces/face_fell_13.cpp` `plugins/mountain/mapgen/real_faces/face_fell_14.cpp` `plugins/mountain/mapgen/real_faces/face_fell_15.cpp` `plugins/mountain/mapgen/real_faces/face_fell_16.cpp` `plugins/mountain/mapgen/real_faces/face_fell_17.cpp` `plugins/mountain/mapgen/real_faces/face_fell_18.cpp` `plugins/mountain/mapgen/real_faces/face_fell_19.cpp` `plugins/mountain/mapgen/real_faces/face_fell_2.cpp` `plugins/mountain/mapgen/real_faces/face_fell_20.cpp` `plugins/mountain/mapgen/real_faces/face_fell_21.cpp` `plugins/mountain/mapgen/real_faces/face_fell_22.cpp` `plugins/mountain/mapgen/real_faces/face_fell_23.cpp` `plugins/mountain/mapgen/real_faces/face_fell_24.cpp` `plugins/mountain/mapgen/real_faces/face_fell_25.cpp` `plugins/mountain/mapgen/real_faces/face_fell_26.cpp` `plugins/mountain/mapgen/real_faces/face_fell_27.cpp` `plugins/mountain/mapgen/real_faces/face_fell_28.cpp` `plugins/mountain/mapgen/real_faces/face_fell_29.cpp` `plugins/mountain/mapgen/real_faces/face_fell_3.cpp` `plugins/mountain/mapgen/real_faces/face_fell_30.cpp` `plugins/mountain/mapgen/real_faces/face_fell_31.cpp` `plugins/mountain/mapgen/real_faces/face_fell_32.cpp` `plugins/mountain/mapgen/real_faces/face_fell_4.cpp` `plugins/mountain/mapgen/real_faces/face_fell_5.cpp` `plugins/mountain/mapgen/real_faces/face_fell_6.cpp` `plugins/mountain/mapgen/real_faces/face_fell_7.cpp` `plugins/mountain/mapgen/real_faces/face_fell_8.cpp` `plugins/mountain/mapgen/real_faces/face_fell_9.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_1.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_10.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_11.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_12.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_13.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_14.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_15.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_16.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_17.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_18.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_19.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_2.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_20.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_21.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_22.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_23.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_24.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_25.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_3.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_4.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_5.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_6.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_7.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_8.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_9.cpp` `plugins/mountain/mapgen/real_faces/index.cpp` |
 | geometry-clipmap | `engine/render/terrain.hpp` |
+| geotiff | `engine/lab/inflate.hpp` `plugins/mountain/labs/dem_tiles.cpp` `plugins/mountain/labs/dem_tiles.hpp` |
 | get-current-texture | `engine/gpu/surface.cpp` |
 | ghost | `games/fall_line/sim/controls.hpp` `plugins/racing/tape.cpp` `plugins/racing/tape.hpp` `tests/racing_tape_test.cpp` |
 | ghosting | `games/fall_line/labs/gpu_taa_lab.cpp` |
@@ -862,8 +1006,10 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | glide | `engine/audio/dsp.hpp` `engine/audio/synth.cpp` `plugins/mountain/mapgen/run_start.hpp` `tests/audio_dsp_test.cpp` `tests/audio_synth_test.cpp` |
 | glide_coeff | `engine/audio/dsp.cpp` |
 | glides | `engine/audio/rack.hpp` |
+| glo-30 | `plugins/mountain/labs/dem_tiles.hpp` |
+| globe-at | `plugins/mountain/mapgen/real_face.hpp` `tests/mountain_real_face_test.cpp` |
 | glyph | `engine/lab/raster.cpp` `engine/lab/raster.hpp` |
-| golden | `tests/audio_synth_test.cpp` `tests/core_heightfield_test.cpp` `tests/core_libm_test.cpp` `tests/core_math_test.cpp` `tests/core_noise_test.cpp` `tests/core_num_test.cpp` `tests/core_output_test.cpp` `tests/core_prng_test.cpp` `tests/core_quat_test.cpp` `tests/core_solar_test.cpp` `tests/fall_line_field_test.cpp` `tests/fall_line_sim_test.cpp` `tests/golden.hpp` `tests/loop_run_clock_test.cpp` `tests/mountain_generate_test.cpp` `tests/mountain_park_test.cpp` `tests/mountain_resort_build_test.cpp` `tests/mountain_resort_level_test.cpp` `tests/mountain_ski_cross_test.cpp` `tests/mountain_ski_jump_test.cpp` `tests/mountain_ski_routes_test.cpp` `tests/mountain_slalom_test.cpp` `tests/mountain_speed_events_test.cpp` `tests/mountain_speed_ski_test.cpp` `tests/racing_records_test.cpp` `tests/racing_standings_test.cpp` `tests/racing_tape_test.cpp` `tests/skier_scenarios_test.cpp` |
+| golden | `tests/audio_synth_test.cpp` `tests/core_heightfield_test.cpp` `tests/core_libm_test.cpp` `tests/core_math_test.cpp` `tests/core_noise_test.cpp` `tests/core_num_test.cpp` `tests/core_output_test.cpp` `tests/core_prng_test.cpp` `tests/core_quat_test.cpp` `tests/core_solar_test.cpp` `tests/fall_line_field_test.cpp` `tests/fall_line_sim_test.cpp` `tests/golden.hpp` `tests/loop_run_clock_test.cpp` `tests/mountain_generate_test.cpp` `tests/mountain_park_test.cpp` `tests/mountain_real_face_test.cpp` `tests/mountain_resort_build_test.cpp` `tests/mountain_resort_level_test.cpp` `tests/mountain_ski_cross_test.cpp` `tests/mountain_ski_jump_test.cpp` `tests/mountain_ski_routes_test.cpp` `tests/mountain_slalom_test.cpp` `tests/mountain_speed_events_test.cpp` `tests/mountain_speed_ski_test.cpp` `tests/racing_records_test.cpp` `tests/racing_standings_test.cpp` `tests/racing_tape_test.cpp` `tests/skier_scenarios_test.cpp` |
 | golden-image | `engine/gpu/test_scene.hpp` `engine/lab/labs/gpu_capture_lab.cpp` `tests/gpu_capture_test.cpp` `tests/gpu_support.hpp` |
 | gondola | `plugins/mountain/mapgen/resort.hpp` |
 | gpu | `engine/gpu/device.cpp` `engine/gpu/device.hpp` `engine/gpu/pipeline.cpp` `engine/gpu/pipeline.hpp` `engine/gpu/surface.cpp` `engine/gpu/surface.hpp` `engine/gpu/target.cpp` `engine/gpu/target.hpp` `engine/gpu/test_scene.cpp` `engine/gpu/test_scene.hpp` `engine/gpu/timer.cpp` `engine/gpu/timer.hpp` `engine/lab/labs/gpu_capture_lab.cpp` `tests/gpu_capture_test.cpp` `tests/gpu_device_test.cpp` `tests/gpu_support.hpp` `tests/render_draw_test.cpp` |
@@ -915,6 +1061,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | headless | `engine/lab/labs/gpu_capture_lab.cpp` `engine/platform/window.hpp` `games/fall_line/labs/gpu_world_lab.cpp` `games/fall_line/sim/simulate.hpp` |
 | height-at | `plugins/mountain/mapgen/massif.cpp` |
 | heightfield | `engine/core/heightfield.hpp` `engine/render/terrain.hpp` `plugins/mountain/mapgen/terrain.hpp` `tests/core_heightfield_test.cpp` |
+| heights | `plugins/mountain/mapgen/real_faces/face_alpine_1.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_10.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_11.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_12.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_13.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_14.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_15.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_16.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_17.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_18.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_19.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_2.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_20.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_21.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_22.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_23.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_24.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_25.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_26.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_27.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_28.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_29.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_3.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_30.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_31.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_32.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_33.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_4.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_5.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_6.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_7.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_8.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_9.cpp` `plugins/mountain/mapgen/real_faces/face_continental_1.cpp` `plugins/mountain/mapgen/real_faces/face_continental_10.cpp` `plugins/mountain/mapgen/real_faces/face_continental_11.cpp` `plugins/mountain/mapgen/real_faces/face_continental_12.cpp` `plugins/mountain/mapgen/real_faces/face_continental_13.cpp` `plugins/mountain/mapgen/real_faces/face_continental_14.cpp` `plugins/mountain/mapgen/real_faces/face_continental_15.cpp` `plugins/mountain/mapgen/real_faces/face_continental_16.cpp` `plugins/mountain/mapgen/real_faces/face_continental_17.cpp` `plugins/mountain/mapgen/real_faces/face_continental_18.cpp` `plugins/mountain/mapgen/real_faces/face_continental_19.cpp` `plugins/mountain/mapgen/real_faces/face_continental_2.cpp` `plugins/mountain/mapgen/real_faces/face_continental_20.cpp` `plugins/mountain/mapgen/real_faces/face_continental_21.cpp` `plugins/mountain/mapgen/real_faces/face_continental_22.cpp` `plugins/mountain/mapgen/real_faces/face_continental_23.cpp` `plugins/mountain/mapgen/real_faces/face_continental_24.cpp` `plugins/mountain/mapgen/real_faces/face_continental_3.cpp` `plugins/mountain/mapgen/real_faces/face_continental_4.cpp` `plugins/mountain/mapgen/real_faces/face_continental_5.cpp` `plugins/mountain/mapgen/real_faces/face_continental_6.cpp` `plugins/mountain/mapgen/real_faces/face_continental_7.cpp` `plugins/mountain/mapgen/real_faces/face_continental_8.cpp` `plugins/mountain/mapgen/real_faces/face_continental_9.cpp` `plugins/mountain/mapgen/real_faces/face_fell_1.cpp` `plugins/mountain/mapgen/real_faces/face_fell_10.cpp` `plugins/mountain/mapgen/real_faces/face_fell_11.cpp` `plugins/mountain/mapgen/real_faces/face_fell_12.cpp` `plugins/mountain/mapgen/real_faces/face_fell_13.cpp` `plugins/mountain/mapgen/real_faces/face_fell_14.cpp` `plugins/mountain/mapgen/real_faces/face_fell_15.cpp` `plugins/mountain/mapgen/real_faces/face_fell_16.cpp` `plugins/mountain/mapgen/real_faces/face_fell_17.cpp` `plugins/mountain/mapgen/real_faces/face_fell_18.cpp` `plugins/mountain/mapgen/real_faces/face_fell_19.cpp` `plugins/mountain/mapgen/real_faces/face_fell_2.cpp` `plugins/mountain/mapgen/real_faces/face_fell_20.cpp` `plugins/mountain/mapgen/real_faces/face_fell_21.cpp` `plugins/mountain/mapgen/real_faces/face_fell_22.cpp` `plugins/mountain/mapgen/real_faces/face_fell_23.cpp` `plugins/mountain/mapgen/real_faces/face_fell_24.cpp` `plugins/mountain/mapgen/real_faces/face_fell_25.cpp` `plugins/mountain/mapgen/real_faces/face_fell_26.cpp` `plugins/mountain/mapgen/real_faces/face_fell_27.cpp` `plugins/mountain/mapgen/real_faces/face_fell_28.cpp` `plugins/mountain/mapgen/real_faces/face_fell_29.cpp` `plugins/mountain/mapgen/real_faces/face_fell_3.cpp` `plugins/mountain/mapgen/real_faces/face_fell_30.cpp` `plugins/mountain/mapgen/real_faces/face_fell_31.cpp` `plugins/mountain/mapgen/real_faces/face_fell_32.cpp` `plugins/mountain/mapgen/real_faces/face_fell_4.cpp` `plugins/mountain/mapgen/real_faces/face_fell_5.cpp` `plugins/mountain/mapgen/real_faces/face_fell_6.cpp` `plugins/mountain/mapgen/real_faces/face_fell_7.cpp` `plugins/mountain/mapgen/real_faces/face_fell_8.cpp` `plugins/mountain/mapgen/real_faces/face_fell_9.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_1.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_10.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_11.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_12.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_13.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_14.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_15.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_16.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_17.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_18.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_19.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_2.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_20.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_21.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_22.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_23.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_24.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_25.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_3.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_4.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_5.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_6.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_7.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_8.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_9.cpp` |
 | hello | `games/fall_line/sim/play.cpp` `games/fall_line/sim/play.hpp` |
 | helmet | `games/fall_line/sound/listener.hpp` |
 | help | `engine/lab/runner.cpp` `engine/lab/runner.hpp` |
@@ -945,6 +1092,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | hub | `plugins/mountain/labs/resort_lab.cpp` `plugins/mountain/labs/resort_map.hpp` `plugins/mountain/mapgen/drift.hpp` `plugins/mountain/mapgen/hub.cpp` `plugins/mountain/mapgen/hub.hpp` `plugins/mountain/mapgen/resort_features.cpp` `plugins/mountain/mapgen/resort_rules.hpp` `tests/mountain_resort_build_test.cpp` |
 | hub-at | `plugins/mountain/mapgen/hub.hpp` |
 | hub-clear | `plugins/mountain/mapgen/hub.cpp` `plugins/mountain/mapgen/hub.hpp` |
+| huffman | `engine/lab/inflate.cpp` `engine/lab/inflate.hpp` |
 | hull | `plugins/mountain/mapgen/speed_ski.cpp` |
 | hwnd | `engine/gpu/surface.hpp` |
 | hypot | `engine/core/math.hpp` `tests/core_math_test.cpp` |
@@ -961,10 +1109,11 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | in-approach | `plugins/mountain/mapgen/summit_ramps.cpp` |
 | in-run | `plugins/mountain/mapgen/ski_jump.cpp` `plugins/mountain/mapgen/ski_jump.hpp` `plugins/mountain/mapgen/venue_rules.hpp` |
 | include | `tools/check-plugins.mjs` |
-| index | `engine/lab/report.hpp` `tools/agents-index.mjs` |
+| index | `engine/lab/report.hpp` `plugins/mountain/mapgen/real_faces/index.cpp` `tools/agents-index.mjs` |
 | indirect | `engine/render/instances.cpp` `engine/render/terrain.cpp` `tests/render_draw_test.cpp` `tests/render_instances_test.cpp` |
 | indirect-draw | `engine/render/instances.hpp` `engine/render/terrain.hpp` |
 | infinite-far | `engine/render/view.hpp` |
+| inflate | `engine/lab/inflate.cpp` `engine/lab/inflate.hpp` `plugins/mountain/labs/dem_tiles.cpp` `tests/lab_raster_test.cpp` |
 | info | `engine/core/output.hpp` |
 | input | `engine/platform/window.hpp` `plugins/racing/tape.hpp` `plugins/skier/scenarios.hpp` `tests/platform_window_test.cpp` |
 | input-snapshot | `engine/platform/window.hpp` |
@@ -1002,7 +1151,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | knee | `plugins/mountain/analysis/speed_track.cpp` `plugins/mountain/mapgen/speed_ski.hpp` |
 | knoll | `plugins/mountain/mapgen/ski_jump.hpp` `plugins/mountain/mapgen/venue_rules.hpp` |
 | krummholz | `plugins/mountain/mapgen/forest.hpp` |
-| lab | `engine/lab/lab.cpp` `engine/lab/lab.hpp` `engine/lab/labs/core_noise_lab.cpp` `engine/lab/labs/gpu_capture_lab.cpp` `engine/lab/labs/loop_run_clock_lab.cpp` `engine/lab/labs/platform_frame_pace_lab.cpp` `engine/lab/main.cpp` `engine/lab/report.cpp` `engine/lab/report.hpp` `engine/lab/runner.cpp` `engine/lab/runner.hpp` `engine/lab/sound.cpp` `engine/lab/sound.hpp` `games/fall_line/labs/audition_lab.cpp` `games/fall_line/labs/gpu_shadows_lab.cpp` `games/fall_line/labs/gpu_taa_lab.cpp` `games/fall_line/labs/gpu_world_lab.cpp` `games/fall_line/labs/play_lab.cpp` `games/fall_line/labs/sim_lab.cpp` `plugins/mountain/labs/analyze_lab.cpp` `plugins/mountain/labs/junctions_lab.cpp` `plugins/mountain/labs/level_lab.cpp` `plugins/mountain/labs/level_map.cpp` `plugins/mountain/labs/level_map.hpp` `plugins/mountain/labs/mapgen_cost_lab.cpp` `plugins/mountain/labs/park_lab.cpp` `plugins/mountain/labs/resort_lab.cpp` `plugins/mountain/labs/resort_map.cpp` `plugins/mountain/labs/resort_map.hpp` `plugins/mountain/labs/routes_lab.cpp` `plugins/mountain/labs/ski_cross_lab.cpp` `plugins/mountain/labs/skijump_hills_lab.cpp` `plugins/mountain/labs/slalom_lab.cpp` `plugins/mountain/labs/speed_events_lab.cpp` `plugins/mountain/labs/speed_ski_lab.cpp` `plugins/skier/labs/ride_lab.cpp` `tests/lab_raster_test.cpp` `tests/lab_runner_test.cpp` |
+| lab | `engine/lab/lab.cpp` `engine/lab/lab.hpp` `engine/lab/labs/core_noise_lab.cpp` `engine/lab/labs/gpu_capture_lab.cpp` `engine/lab/labs/loop_run_clock_lab.cpp` `engine/lab/labs/platform_frame_pace_lab.cpp` `engine/lab/main.cpp` `engine/lab/report.cpp` `engine/lab/report.hpp` `engine/lab/runner.cpp` `engine/lab/runner.hpp` `engine/lab/sound.cpp` `engine/lab/sound.hpp` `games/fall_line/labs/audition_lab.cpp` `games/fall_line/labs/gpu_shadows_lab.cpp` `games/fall_line/labs/gpu_taa_lab.cpp` `games/fall_line/labs/gpu_world_lab.cpp` `games/fall_line/labs/play_lab.cpp` `games/fall_line/labs/sim_lab.cpp` `plugins/mountain/labs/analyze_lab.cpp` `plugins/mountain/labs/junctions_lab.cpp` `plugins/mountain/labs/level_lab.cpp` `plugins/mountain/labs/level_map.cpp` `plugins/mountain/labs/level_map.hpp` `plugins/mountain/labs/mapgen_cost_lab.cpp` `plugins/mountain/labs/park_lab.cpp` `plugins/mountain/labs/real_faces_lab.cpp` `plugins/mountain/labs/resort_lab.cpp` `plugins/mountain/labs/resort_map.cpp` `plugins/mountain/labs/resort_map.hpp` `plugins/mountain/labs/routes_lab.cpp` `plugins/mountain/labs/ski_cross_lab.cpp` `plugins/mountain/labs/skijump_hills_lab.cpp` `plugins/mountain/labs/slalom_lab.cpp` `plugins/mountain/labs/speed_events_lab.cpp` `plugins/mountain/labs/speed_ski_lab.cpp` `plugins/skier/labs/ride_lab.cpp` `tests/lab_raster_test.cpp` `tests/lab_runner_test.cpp` |
 | label | `engine/lab/raster.hpp` |
 | labs | `engine/lab/lab.hpp` `engine/lab/main.cpp` |
 | landing | `games/fall_line/sim/state.hpp` `games/fall_line/sound/bank.cpp` `games/fall_line/sound/bank.hpp` `games/fall_line/sound/route.cpp` `games/fall_line/sound/route.hpp` `plugins/mountain/analysis/cross_course.cpp` `plugins/skier/labs/ride_lab.cpp` `plugins/skier/skier.cpp` `plugins/skier/skier.hpp` `plugins/skier/tuning.hpp` |
@@ -1015,7 +1164,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | lane-share | `plugins/mountain/mapgen/links.hpp` |
 | lane-spec | `plugins/mountain/mapgen/links.cpp` |
 | lanes | `plugins/mountain/analysis/cross_course.cpp` `plugins/mountain/mapgen/forest.cpp` `plugins/mountain/mapgen/lanes.cpp` `plugins/mountain/mapgen/lanes.hpp` `tests/mountain_resort_build_test.cpp` |
-| latitude | `plugins/mountain/mapgen/sun.hpp` |
+| latitude | `plugins/mountain/mapgen/real_face_crops.hpp` `plugins/mountain/mapgen/sun.hpp` |
 | lattice | `engine/core/noise.hpp` `engine/lab/labs/core_noise_lab.cpp` |
 | launch | `plugins/mountain/labs/speed_ski_lab.cpp` `plugins/mountain/mapgen/discipline_rules.hpp` `plugins/mountain/mapgen/speed_ski.hpp` |
 | lavapipe | `engine/gpu/device.hpp` `engine/lab/labs/gpu_capture_lab.cpp` `tests/gpu_support.hpp` |
@@ -1036,6 +1185,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | lean | `plugins/skier/app/figure.cpp` `plugins/skier/app/figure.hpp` `tests/skier_figure_test.cpp` |
 | legs | `plugins/skier/app/figure.hpp` |
 | length | `engine/audio/meter.hpp` `tests/audio_meter_test.cpp` |
+| length-distance | `engine/lab/inflate.cpp` |
 | lerp | `engine/core/math.hpp` |
 | lessons | `tools/skill-lessons.mjs` |
 | let-go-of | `plugins/mountain/mapgen/lift_line.hpp` |
@@ -1073,6 +1223,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | logging | `engine/core/output.hpp` |
 | logging-callback | `engine/gpu/device.cpp` |
 | lone-tree | `plugins/skier/synthetic.hpp` |
+| longitude | `plugins/mountain/mapgen/real_face_crops.hpp` |
 | look | `games/fall_line/app/look.hpp` |
 | look_dir | `engine/render/view.hpp` |
 | lookahead | `games/fall_line/sim/bot.hpp` |
@@ -1094,6 +1245,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | manifest | `engine/gpu/pipeline.hpp` |
 | map | `plugins/mountain/labs/level_lab.cpp` `plugins/mountain/labs/level_map.cpp` `plugins/mountain/labs/level_map.hpp` |
 | map-async | `engine/gpu/target.hpp` |
+| map-at | `plugins/mountain/mapgen/real_face.hpp` `tests/mountain_real_face_test.cpp` |
 | mapgen | `plugins/mountain/labs/mapgen_cost_lab.cpp` `plugins/mountain/mapgen/generate.hpp` `tests/mountain_generate_test.cpp` |
 | march | `engine/render/horizon.cpp` `tests/render_horizon_test.cpp` |
 | margin | `plugins/mountain/analysis/speed_track.cpp` |
@@ -1232,7 +1384,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | pan | `engine/audio/sound.hpp` `engine/audio/voice.hpp` `tests/audio_synth_test.cpp` |
 | park | `plugins/mountain/labs/park_lab.cpp` `plugins/mountain/mapgen/park.hpp` `tests/mountain_park_test.cpp` |
 | park-altitude | `plugins/mountain/mapgen/park.cpp` |
-| part | `engine/render/mesh.hpp` |
+| part | `engine/render/mesh.hpp` `plugins/mountain/mapgen/real_face_crops.hpp` |
 | pass_table_faults | `games/fall_line/app/frame.hpp` |
 | pass-row | `engine/render/frame.hpp` |
 | pass-table | `engine/render/frame.cpp` `engine/render/frame.hpp` `games/fall_line/app/frame.cpp` `games/fall_line/app/frame.hpp` `games/fall_line/labs/gpu_world_lab.cpp` `tests/render_frame_test.cpp` |
@@ -1251,7 +1403,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | pi | `engine/core/math.hpp` |
 | pick | `engine/core/prng.hpp` |
 | pick_lod | `engine/render/instances.hpp` |
-| picture | `engine/lab/labs/core_noise_lab.cpp` `engine/lab/raster.hpp` `games/fall_line/labs/gpu_shadows_lab.cpp` `games/fall_line/labs/gpu_world_lab.cpp` `plugins/mountain/labs/level_lab.cpp` `plugins/mountain/labs/park_lab.cpp` `plugins/mountain/labs/resort_lab.cpp` `plugins/mountain/labs/routes_lab.cpp` `plugins/mountain/labs/ski_cross_lab.cpp` `plugins/mountain/labs/skijump_hills_lab.cpp` `plugins/mountain/labs/slalom_lab.cpp` `plugins/mountain/labs/speed_events_lab.cpp` `plugins/mountain/labs/speed_ski_lab.cpp` `tests/lab_raster_test.cpp` |
+| picture | `engine/lab/labs/core_noise_lab.cpp` `engine/lab/raster.hpp` `games/fall_line/labs/gpu_shadows_lab.cpp` `games/fall_line/labs/gpu_world_lab.cpp` `plugins/mountain/labs/level_lab.cpp` `plugins/mountain/labs/park_lab.cpp` `plugins/mountain/labs/real_faces_lab.cpp` `plugins/mountain/labs/resort_lab.cpp` `plugins/mountain/labs/routes_lab.cpp` `plugins/mountain/labs/ski_cross_lab.cpp` `plugins/mountain/labs/skijump_hills_lab.cpp` `plugins/mountain/labs/slalom_lab.cpp` `plugins/mountain/labs/speed_events_lab.cpp` `plugins/mountain/labs/speed_ski_lab.cpp` `tests/lab_raster_test.cpp` |
 | piece | `plugins/mountain/mapgen/courses.hpp` |
 | pieces | `plugins/skier/app/figure.cpp` `plugins/skier/app/figure.hpp` `tests/skier_figure_test.cpp` |
 | pilot | `games/fall_line/sim/bot.hpp` `games/fall_line/sim/simulate.cpp` |
@@ -1325,6 +1477,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | powder | `plugins/skier/app/snow_bed.cpp` `plugins/skier/app/snow_bed.hpp` `plugins/skier/snow.hpp` `plugins/skier/synthetic.hpp` `tests/skier_ride_bed_test.cpp` |
 | power | `engine/core/libm/pow.cpp` |
 | ppm | `tests/gpu_support.hpp` |
+| predictor | `plugins/mountain/labs/dem_tiles.cpp` |
 | prepare_horizon | `engine/render/horizon.hpp` |
 | prepare_sky | `engine/render/sky.hpp` `tests/render_sky_test.cpp` |
 | prepare_terrain | `engine/render/terrain.hpp` |
@@ -1339,7 +1492,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | previews | `engine/lab/report.hpp` `engine/lab/runner.hpp` |
 | prng | `engine/core/prng.hpp` `tests/core_prng_test.cpp` |
 | producer | `engine/audio/synth.hpp` |
-| profile | `engine/gpu/timer.hpp` `games/fall_line/sim/field.hpp` `plugins/mountain/labs/park_lab.cpp` `plugins/mountain/labs/routes_lab.cpp` `plugins/mountain/labs/ski_cross_lab.cpp` `plugins/mountain/labs/skijump_hills_lab.cpp` `plugins/mountain/labs/speed_ski_lab.cpp` `plugins/mountain/mapgen/terrain.hpp` |
+| profile | `engine/gpu/timer.hpp` `games/fall_line/sim/field.hpp` `plugins/mountain/labs/park_lab.cpp` `plugins/mountain/labs/real_faces_lab.cpp` `plugins/mountain/labs/routes_lab.cpp` `plugins/mountain/labs/ski_cross_lab.cpp` `plugins/mountain/labs/skijump_hills_lab.cpp` `plugins/mountain/labs/speed_ski_lab.cpp` `plugins/mountain/mapgen/terrain.hpp` |
 | progress | `games/fall_line/sim/state.hpp` |
 | projection | `engine/render/view.hpp` `tests/render_view_test.cpp` |
 | protocol | `games/fall_line/labs/play_lab.cpp` `games/fall_line/sim/play.hpp` `tests/fall_line_play_test.cpp` |
@@ -1357,6 +1510,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | queue-lane | `plugins/mountain/mapgen/lift_line.hpp` |
 | quit | `engine/platform/window.hpp` |
 | r20 | `plugins/mountain/analysis/park.cpp` `plugins/mountain/analysis/shared.hpp` `plugins/mountain/labs/park_lab.cpp` `plugins/mountain/mapgen/park.cpp` `plugins/mountain/mapgen/park.hpp` `tests/mountain_park_test.cpp` |
+| r25 | `plugins/mountain/labs/real_faces_lab.cpp` `plugins/mountain/mapgen/real_face.hpp` `plugins/mountain/mapgen/real_face_crops.hpp` `tests/mountain_real_face_test.cpp` |
 | r31 | `plugins/mountain/analysis/race.cpp` `plugins/mountain/analysis/race.hpp` `plugins/mountain/labs/slalom_lab.cpp` `plugins/mountain/mapgen/discipline_rules.hpp` `plugins/mountain/mapgen/slalom.cpp` `plugins/mountain/mapgen/slalom.hpp` `tests/mountain_slalom_test.cpp` |
 | r32 | `plugins/mountain/analysis/speed_race.cpp` `plugins/mountain/labs/speed_events_lab.cpp` `plugins/mountain/mapgen/discipline_rules.hpp` `plugins/mountain/mapgen/speed_events.hpp` `tests/mountain_speed_events_test.cpp` |
 | r33 | `plugins/mountain/analysis/speed_race.cpp` `plugins/mountain/labs/speed_events_lab.cpp` `plugins/mountain/mapgen/discipline_rules.hpp` `plugins/mountain/mapgen/speed_events.hpp` `tests/mountain_speed_events_test.cpp` |
@@ -1387,7 +1541,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | ramp-to | `plugins/mountain/mapgen/summit_ramps.cpp` |
 | ramps | `plugins/mountain/mapgen/resort_access.cpp` `tests/mountain_resort_build_test.cpp` |
 | random | `engine/core/prng.hpp` |
-| range | `engine/core/prng.hpp` |
+| range | `engine/core/prng.hpp` `plugins/mountain/mapgen/real_face_crops.hpp` |
 | rank | `plugins/mountain/mapgen/network.hpp` |
 | raster | `engine/lab/raster.cpp` `engine/lab/raster.hpp` `tests/lab_raster_test.cpp` |
 | reach | `plugins/mountain/mapgen/access_build.cpp` |
@@ -1398,6 +1552,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | read_now | `engine/gpu/target.hpp` |
 | readback | `engine/gpu/target.cpp` `engine/gpu/target.hpp` `engine/lab/labs/gpu_capture_lab.cpp` `engine/render/hiz.cpp` `engine/render/horizon.cpp` `tests/gpu_capture_test.cpp` `tests/render_draw_test.cpp` |
 | reader | `games/fall_line/sim/play.cpp` `plugins/racing/tape.hpp` `tests/golden.hpp` |
+| real-face | `plugins/mountain/labs/real_faces_lab.cpp` `plugins/mountain/mapgen/real_face.cpp` `plugins/mountain/mapgen/real_face.hpp` `plugins/mountain/mapgen/real_face_crops.hpp` `plugins/mountain/mapgen/real_faces/face_alpine_1.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_10.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_11.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_12.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_13.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_14.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_15.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_16.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_17.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_18.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_19.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_2.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_20.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_21.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_22.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_23.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_24.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_25.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_26.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_27.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_28.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_29.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_3.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_30.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_31.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_32.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_33.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_4.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_5.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_6.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_7.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_8.cpp` `plugins/mountain/mapgen/real_faces/face_alpine_9.cpp` `plugins/mountain/mapgen/real_faces/face_continental_1.cpp` `plugins/mountain/mapgen/real_faces/face_continental_10.cpp` `plugins/mountain/mapgen/real_faces/face_continental_11.cpp` `plugins/mountain/mapgen/real_faces/face_continental_12.cpp` `plugins/mountain/mapgen/real_faces/face_continental_13.cpp` `plugins/mountain/mapgen/real_faces/face_continental_14.cpp` `plugins/mountain/mapgen/real_faces/face_continental_15.cpp` `plugins/mountain/mapgen/real_faces/face_continental_16.cpp` `plugins/mountain/mapgen/real_faces/face_continental_17.cpp` `plugins/mountain/mapgen/real_faces/face_continental_18.cpp` `plugins/mountain/mapgen/real_faces/face_continental_19.cpp` `plugins/mountain/mapgen/real_faces/face_continental_2.cpp` `plugins/mountain/mapgen/real_faces/face_continental_20.cpp` `plugins/mountain/mapgen/real_faces/face_continental_21.cpp` `plugins/mountain/mapgen/real_faces/face_continental_22.cpp` `plugins/mountain/mapgen/real_faces/face_continental_23.cpp` `plugins/mountain/mapgen/real_faces/face_continental_24.cpp` `plugins/mountain/mapgen/real_faces/face_continental_3.cpp` `plugins/mountain/mapgen/real_faces/face_continental_4.cpp` `plugins/mountain/mapgen/real_faces/face_continental_5.cpp` `plugins/mountain/mapgen/real_faces/face_continental_6.cpp` `plugins/mountain/mapgen/real_faces/face_continental_7.cpp` `plugins/mountain/mapgen/real_faces/face_continental_8.cpp` `plugins/mountain/mapgen/real_faces/face_continental_9.cpp` `plugins/mountain/mapgen/real_faces/face_fell_1.cpp` `plugins/mountain/mapgen/real_faces/face_fell_10.cpp` `plugins/mountain/mapgen/real_faces/face_fell_11.cpp` `plugins/mountain/mapgen/real_faces/face_fell_12.cpp` `plugins/mountain/mapgen/real_faces/face_fell_13.cpp` `plugins/mountain/mapgen/real_faces/face_fell_14.cpp` `plugins/mountain/mapgen/real_faces/face_fell_15.cpp` `plugins/mountain/mapgen/real_faces/face_fell_16.cpp` `plugins/mountain/mapgen/real_faces/face_fell_17.cpp` `plugins/mountain/mapgen/real_faces/face_fell_18.cpp` `plugins/mountain/mapgen/real_faces/face_fell_19.cpp` `plugins/mountain/mapgen/real_faces/face_fell_2.cpp` `plugins/mountain/mapgen/real_faces/face_fell_20.cpp` `plugins/mountain/mapgen/real_faces/face_fell_21.cpp` `plugins/mountain/mapgen/real_faces/face_fell_22.cpp` `plugins/mountain/mapgen/real_faces/face_fell_23.cpp` `plugins/mountain/mapgen/real_faces/face_fell_24.cpp` `plugins/mountain/mapgen/real_faces/face_fell_25.cpp` `plugins/mountain/mapgen/real_faces/face_fell_26.cpp` `plugins/mountain/mapgen/real_faces/face_fell_27.cpp` `plugins/mountain/mapgen/real_faces/face_fell_28.cpp` `plugins/mountain/mapgen/real_faces/face_fell_29.cpp` `plugins/mountain/mapgen/real_faces/face_fell_3.cpp` `plugins/mountain/mapgen/real_faces/face_fell_30.cpp` `plugins/mountain/mapgen/real_faces/face_fell_31.cpp` `plugins/mountain/mapgen/real_faces/face_fell_32.cpp` `plugins/mountain/mapgen/real_faces/face_fell_4.cpp` `plugins/mountain/mapgen/real_faces/face_fell_5.cpp` `plugins/mountain/mapgen/real_faces/face_fell_6.cpp` `plugins/mountain/mapgen/real_faces/face_fell_7.cpp` `plugins/mountain/mapgen/real_faces/face_fell_8.cpp` `plugins/mountain/mapgen/real_faces/face_fell_9.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_1.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_10.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_11.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_12.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_13.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_14.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_15.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_16.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_17.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_18.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_19.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_2.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_20.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_21.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_22.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_23.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_24.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_25.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_3.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_4.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_5.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_6.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_7.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_8.cpp` `plugins/mountain/mapgen/real_faces/face_maritime_9.cpp` `plugins/mountain/mapgen/real_faces/index.cpp` `tests/mountain_real_face_test.cpp` |
 | realtime | `engine/lab/labs/audio_synth_lab.cpp` |
 | rebuild | `engine/render/sky.cpp` `tests/render_sky_test.cpp` |
 | reckon-access | `plugins/mountain/mapgen/access_build.cpp` `plugins/mountain/mapgen/access_build.hpp` |
@@ -1417,7 +1572,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | regrade-leg | `plugins/mountain/mapgen/lift_chain.hpp` `plugins/mountain/mapgen/resort_access.cpp` |
 | release | `tests/package/consumer/main.cpp` |
 | relevel-pads | `plugins/mountain/mapgen/station_pad.cpp` `plugins/mountain/mapgen/station_pad.hpp` |
-| relief | `plugins/mountain/labs/junctions_lab.cpp` |
+| relief | `plugins/mountain/labs/junctions_lab.cpp` `plugins/mountain/labs/real_faces_lab.cpp` |
 | render | `engine/audio/synth.cpp` `engine/audio/synth.hpp` `engine/render/frame.cpp` `engine/render/frame.hpp` `engine/render/hiz.cpp` `engine/render/hiz.hpp` `engine/render/horizon.cpp` `engine/render/horizon.hpp` `engine/render/instances.cpp` `engine/render/instances.hpp` `engine/render/mesh.cpp` `engine/render/mesh.hpp` `engine/render/post.cpp` `engine/render/post.hpp` `engine/render/sky.cpp` `engine/render/sky.hpp` `engine/render/taa.cpp` `engine/render/taa.hpp` `engine/render/terrain.cpp` `engine/render/terrain.hpp` `engine/render/view.cpp` `engine/render/view.hpp` `games/fall_line/app/frame.hpp` `tests/audio_synth_test.cpp` `tests/render_draw_test.cpp` `tests/render_frame_test.cpp` `tests/render_horizon_test.cpp` `tests/render_instances_test.cpp` `tests/render_mesh_test.cpp` `tests/render_sky_test.cpp` `tests/render_terrain_test.cpp` `tests/render_view_test.cpp` |
 | render-pass | `engine/gpu/test_scene.cpp` |
 | render-pipeline | `engine/gpu/pipeline.hpp` |
@@ -1755,7 +1910,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | terrain | `engine/core/heightfield.hpp` `engine/core/noise.hpp` `engine/render/terrain.cpp` `engine/render/terrain.hpp` `games/fall_line/labs/gpu_world_lab.cpp` `plugins/mountain/mapgen/terrain.cpp` `plugins/mountain/mapgen/terrain.hpp` `tests/render_draw_test.cpp` `tests/render_terrain_test.cpp` |
 | terrain-park | `plugins/mountain/analysis/park.cpp` `plugins/mountain/labs/park_lab.cpp` `plugins/mountain/mapgen/park.cpp` `plugins/mountain/mapgen/park.hpp` `tests/mountain_park_test.cpp` |
 | terrain-shadow | `engine/render/horizon.hpp` `games/fall_line/labs/gpu_shadows_lab.cpp` |
-| test | `tests/audio_dsp_test.cpp` `tests/audio_meter_test.cpp` `tests/audio_sound_test.cpp` `tests/audio_synth_test.cpp` `tests/check.hpp` `tests/core_heightfield_test.cpp` `tests/core_libm_test.cpp` `tests/core_math_test.cpp` `tests/core_noise_test.cpp` `tests/core_num_test.cpp` `tests/core_output_test.cpp` `tests/core_prng_test.cpp` `tests/core_quat_test.cpp` `tests/core_solar_test.cpp` `tests/fall_line_field_test.cpp` `tests/fall_line_play_test.cpp` `tests/fall_line_sim_test.cpp` `tests/fall_line_sound_test.cpp` `tests/golden.hpp` `tests/gpu_capture_test.cpp` `tests/gpu_device_test.cpp` `tests/gpu_support.hpp` `tests/lab_raster_test.cpp` `tests/lab_runner_test.cpp` `tests/loop_run_clock_test.cpp` `tests/main.cpp` `tests/mountain_generate_test.cpp` `tests/mountain_park_test.cpp` `tests/mountain_resort_build_test.cpp` `tests/mountain_resort_level_test.cpp` `tests/mountain_ski_cross_test.cpp` `tests/mountain_ski_jump_test.cpp` `tests/mountain_ski_routes_test.cpp` `tests/mountain_slalom_test.cpp` `tests/mountain_speed_events_test.cpp` `tests/mountain_speed_ski_test.cpp` `tests/platform_audio_test.cpp` `tests/platform_window_test.cpp` `tests/racing_records_test.cpp` `tests/racing_standings_test.cpp` `tests/racing_tape_test.cpp` `tests/render_draw_test.cpp` `tests/render_frame_test.cpp` `tests/render_horizon_test.cpp` `tests/render_instances_test.cpp` `tests/render_mesh_test.cpp` `tests/render_sky_test.cpp` `tests/render_terrain_test.cpp` `tests/render_view_test.cpp` `tests/skier_figure_test.cpp` `tests/skier_ride_bed_test.cpp` `tests/skier_scenarios_test.cpp` |
+| test | `tests/audio_dsp_test.cpp` `tests/audio_meter_test.cpp` `tests/audio_sound_test.cpp` `tests/audio_synth_test.cpp` `tests/check.hpp` `tests/core_heightfield_test.cpp` `tests/core_libm_test.cpp` `tests/core_math_test.cpp` `tests/core_noise_test.cpp` `tests/core_num_test.cpp` `tests/core_output_test.cpp` `tests/core_prng_test.cpp` `tests/core_quat_test.cpp` `tests/core_solar_test.cpp` `tests/fall_line_field_test.cpp` `tests/fall_line_play_test.cpp` `tests/fall_line_sim_test.cpp` `tests/fall_line_sound_test.cpp` `tests/golden.hpp` `tests/gpu_capture_test.cpp` `tests/gpu_device_test.cpp` `tests/gpu_support.hpp` `tests/lab_raster_test.cpp` `tests/lab_runner_test.cpp` `tests/loop_run_clock_test.cpp` `tests/main.cpp` `tests/mountain_generate_test.cpp` `tests/mountain_park_test.cpp` `tests/mountain_real_face_test.cpp` `tests/mountain_resort_build_test.cpp` `tests/mountain_resort_level_test.cpp` `tests/mountain_ski_cross_test.cpp` `tests/mountain_ski_jump_test.cpp` `tests/mountain_ski_routes_test.cpp` `tests/mountain_slalom_test.cpp` `tests/mountain_speed_events_test.cpp` `tests/mountain_speed_ski_test.cpp` `tests/platform_audio_test.cpp` `tests/platform_window_test.cpp` `tests/racing_records_test.cpp` `tests/racing_standings_test.cpp` `tests/racing_tape_test.cpp` `tests/render_draw_test.cpp` `tests/render_frame_test.cpp` `tests/render_horizon_test.cpp` `tests/render_instances_test.cpp` `tests/render_mesh_test.cpp` `tests/render_sky_test.cpp` `tests/render_terrain_test.cpp` `tests/render_view_test.cpp` `tests/skier_figure_test.cpp` `tests/skier_ride_bed_test.cpp` `tests/skier_scenarios_test.cpp` |
 | test_device | `tests/gpu_support.hpp` |
 | test-map | `plugins/skier/synthetic.hpp` |
 | test-scene | `engine/gpu/test_scene.cpp` `engine/gpu/test_scene.hpp` |
@@ -1764,7 +1919,8 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | thread | `tests/platform_audio_test.cpp` |
 | threshold | `engine/render/sky.cpp` `tests/render_sky_test.cpp` |
 | ticks | `engine/platform/window.hpp` |
-| tile | `engine/render/terrain.hpp` |
+| tiff | `plugins/mountain/labs/dem_tiles.cpp` `plugins/mountain/labs/dem_tiles.hpp` |
+| tile | `engine/render/terrain.hpp` `plugins/mountain/labs/dem_tiles.hpp` |
 | tiles-drawn | `games/fall_line/labs/gpu_world_lab.cpp` |
 | tilt | `plugins/mountain/mapgen/resort.cpp` `plugins/mountain/mapgen/resort.hpp` |
 | tilted | `plugins/mountain/mapgen/resort.cpp` |
@@ -1844,6 +2000,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | value_noise | `engine/lab/labs/core_noise_lab.cpp` |
 | value-noise | `engine/core/noise.hpp` `engine/lab/labs/core_noise_lab.cpp` |
 | variance-clip | `engine/render/taa.hpp` |
+| varint | `plugins/mountain/mapgen/real_face.cpp` |
 | vec3 | `engine/core/quat.hpp` |
 | vendored | `engine/core/libm/fdlibm_arc.cpp` `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/fdlibm_internal.hpp` `engine/core/libm/fdlibm_trig.cpp` |
 | venue-profile | `plugins/mountain/mapgen/straight_venue.hpp` |
@@ -1915,4 +2072,5 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | yaw | `engine/core/quat.hpp` `plugins/skier/skier.cpp` `plugins/skier/skier.hpp` |
 | ycocg | `engine/render/taa.hpp` |
 | zig-zag | `plugins/mountain/mapgen/network.hpp` |
-| zlib | `engine/lab/png.cpp` |
+| zigzag | `plugins/mountain/mapgen/real_face.cpp` |
+| zlib | `engine/lab/inflate.hpp` `engine/lab/png.cpp` |

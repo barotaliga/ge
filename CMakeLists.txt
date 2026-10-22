@@ -141,7 +141,7 @@ if(PROJECT_IS_TOP_LEVEL)
   # links every plugin, so a plugin's labs need no wiring. Labs are this tree's tooling, never
   # published.
   add_library(ge_lab STATIC engine/lab/lab.cpp engine/lab/report.cpp engine/lab/runner.cpp
-    engine/lab/raster.cpp engine/lab/png.cpp engine/lab/sound.cpp)
+    engine/lab/raster.cpp engine/lab/png.cpp engine/lab/inflate.cpp engine/lab/sound.cpp)
   target_link_libraries(ge_lab PUBLIC ge_core ge_audio)
   file(GLOB GE_LAB_SOURCES CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/engine/lab/labs/*.cpp

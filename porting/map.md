@@ -59,8 +59,11 @@ the row when the file moves.
 | `plugins/mountain/analysis/shared.hpp` | `game5/engine/analysis/index.ts` | analyzeLevel (R13, R15, R19) |
 | `plugins/mountain/analysis/speed_race.cpp` | `game5/tests/downhill_test.ts` | the downhill, super-G and giant slalom assertions (also super_g_test.ts, giant_slalom_test.ts), as R32, R33 and R36's analysis |
 | `plugins/mountain/analysis/speed_track.cpp` | `game5/tests/speed_ski_test.ts` | the speed track's assertions, as R34's analysis |
+| `plugins/mountain/labs/dem_tiles.cpp` | `game5/scripts/lib/dem-tiles.mjs` | openTiff createDem tileName fetchTile heightAt |
+| `plugins/mountain/labs/dem_tiles.hpp` | `game5/scripts/lib/dem-tiles.mjs` | createDem tileName fetchTile heightAt |
 | `plugins/mountain/labs/junctions_lab.cpp` | `game5/scripts/junctions-lab.mjs` | the steps by kind, the sheet (read down each run's line, not every packed cell) |
 | `plugins/mountain/labs/park_lab.cpp` | `game5/scripts/level-map.mjs` | the park drawn (the close-up and the detrended profile are the engine's own) |
+| `plugins/mountain/labs/real_faces_lab.cpp` | `game5/scripts/real-faces.mjs`, `game5/scripts/lib/real-face-files.mjs` | crop smooth encode measure writeFaceFile writeFaceIndex (the crop search not carried) |
 | `plugins/mountain/labs/resort_lab.cpp` | `game5/scripts/resort-map.mjs` | the plan, the listing (no panorama or charts yet) |
 | `plugins/mountain/labs/resort_map.cpp` | `game5/scripts/lib/resort-draw.mjs` | renderResortPlan |
 | `plugins/mountain/labs/resort_map.hpp` | `game5/scripts/lib/resort-draw.mjs` | renderResortPlan |
@@ -123,6 +126,10 @@ the row when the file moves.
 | `plugins/mountain/mapgen/park.hpp` | `game5/engine/mapgen/trick-field.ts` | ParkAsk ParkLine planTrickField stampTrickField |
 | `plugins/mountain/mapgen/query.cpp` | `game5/engine/mapgen/query.ts` | nearestTrackPoint nearestWithin |
 | `plugins/mountain/mapgen/query.hpp` | `game5/engine/mapgen/query.ts` | nearestTrackPoint nearestWithin trackPointAt |
+| `plugins/mountain/mapgen/real_face.cpp` | `game5/engine/mapgen/real-face.ts`, `game5/scripts/lib/real-face-crops.mjs` | decode faceHeight faceMean faceExtreme globeAt mapAt; encode from `game5/scripts/real-faces.mjs` |
+| `plugins/mountain/mapgen/real_face.hpp` | `game5/engine/mapgen/real-face.ts`, `game5/engine/mapgen/real-faces-index.ts` | RealFace FaceData FACE_GRID realFace faceHeight globeAt mapAt |
+| `plugins/mountain/mapgen/real_face_crops.hpp` | `game5/scripts/lib/real-face-crops.mjs` | FACES SIZE (scale 1 dropped) |
+| `plugins/mountain/mapgen/real_faces/` | `game5/engine/mapgen/real-faces/`, `game5/engine/mapgen/real-faces-index.ts` | the faces' heights, baked again by the engine's own bake, the same bits |
 | `plugins/mountain/mapgen/regions.cpp` | `game5/engine/mapgen/regions.ts` | REGIONS treeKindAt scaleCount |
 | `plugins/mountain/mapgen/regions.hpp` | `game5/engine/mapgen/regions.ts` | regionRow treeKindAt |
 | `plugins/mountain/mapgen/resort.cpp` | `game5/engine/mapgen/resort.ts` | planResort placeStations SLOTS TILT TALL_TILT ROAD_ROW |
@@ -192,6 +199,7 @@ the row when the file moves.
 | `plugins/skier/app/wind_bed.hpp` | `game5/pwa/src/game/audio/wind-voice.ts` | WindVoice WindMix WindLayer WIND_LAYERS WIND_GLIDE windTargets |
 | `tests/mountain_generate_test.cpp` |  | generateLevel levelDigest analyzeLevel |
 | `tests/mountain_park_test.cpp` | `game5/engine/mapgen/trick-field.ts` | the terrain park (R20) |
+| `tests/mountain_real_face_test.cpp` | `game5/tests/real_faces_test.ts` | every face decodes to a mountain over its floor |
 | `tests/mountain_ski_cross_test.cpp` | `game5/engine/mapgen/ski-cross.ts` | the ski-cross course (R35) |
 | `tests/mountain_ski_jump_test.cpp` | `game5/tests/ski_jump_test.ts` | the ski jumping hill (R43) |
 | `tests/mountain_ski_routes_test.cpp` | `game5/engine/mapgen/ski-routes.ts` | the ski routes (R42) |
