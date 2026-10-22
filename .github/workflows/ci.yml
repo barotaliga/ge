@@ -122,7 +122,7 @@ jobs:
 
   # clang-tidy's bug-finding checks (.clang-tidy), in parallel. On a pull request only the files
   # the change can reach: each changed .cpp and each .cpp that includes a changed header
-  # (tools/lint.sh); a change to the lint's inputs, and every push to main, lints them all.
+  # (tools/lint.sh); a change to the lint's rules, and every push to main, lints them all.
   lint:
     runs-on: ubuntu-24.04
     env:
