@@ -180,8 +180,8 @@ const CommandSpec kCommands[] = {
      "on each preset",
      kPrecheckFlags, "ge precheck --preset=release", "commit"},
     {"ci", "[<pr>]", 0, 1, "build",
-     "why a pull request's CI is red: each failed job's log read back as findings (through gh, "
-     "or a saved log)",
+     "a pull request's state: whether it conflicts with its base, and each failed job's log "
+     "read back as findings (through gh, or a saved log)",
      kCiFlags, "ge ci 12", "commit"},
     {"digest", "[<lab>]", 0, 1, "build",
      "a lab (or every lab) at its smoke flags, twice: each digest beside the committed baseline; "

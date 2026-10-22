@@ -53,6 +53,10 @@ squash-merged). The body contains:
 
 ## 5. Green, then merge
 
-CI is the gate. On a red row, read its log, fix the cause and push. Never skip or
+CI is the gate. **After the push, check the PR every 15 minutes until it is merged**: schedule
+the check-in (never a sleep loop), and on each one look at both its checks and whether it still
+merges (`build/<preset>/ge ci <pr>` answers both: a conflict is an error finding, each red job's
+log comes back as findings). A conflict means merge `origin/main` into the branch, resolve it,
+`make precheck` and push; a red row means read its log, fix the cause and push. Never skip or
 weaken a test, and never push an empty commit to re-run CI. Once every job is green,
 squash-merge the PR yourself, then name the next step to the user.

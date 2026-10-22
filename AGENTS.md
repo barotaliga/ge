@@ -132,6 +132,11 @@ porting ends, and nothing outside it may depend on it except `make golden`.
 - **`make precheck` BEFORE EVERY PUSH.** It runs, in about 40 seconds, the gates that cost
   threads the most CI rounds (fmt-check, agents-check, libm-check, lint on the changed files,
   `cli_diagnostics_test` and the tests the change reaches). A game repo's is `ge precheck`.
+- **AFTER PUSHING A PR, CHECK IT EVERY 15 MINUTES UNTIL IT IS MERGED.** Each check-in looks at
+  the checks AND the merge state, since a branch left behind main is where threads get stuck:
+  `build/<preset>/ge ci <pr>` answers both in one command. A conflict: merge `origin/main`,
+  resolve it, `make precheck`, push. A red check: fix it and push. All green and mergeable:
+  squash-merge. Schedule the check-ins; never sleep in a loop.
 - **Every work session ends with the `commit` skill.**
 
 ## Build and test

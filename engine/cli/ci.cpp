@@ -184,13 +184,45 @@ Outcome run_ci(const fs::path& repo, const std::string& pr, const std::string& l
   }
   const std::string api = "repos/" + slug.str(1) + "/" + slug.str(2);
   // The commit the checks ran on: the pull request's head, or this checkout's.
-  std::string sha;
+  std::string sha, mergeable;
   if (!pr.empty()) {
-    const Logged head = run_to_log("gh api " + api + "/pulls/" + pr + " --jq .head.sha", log);
+    // The head, then whether it merges: GitHub's mergeable (null while it is still working it
+    // out), its mergeable_state ("dirty" is a conflict), open or closed, merged, and the base.
+    const Logged head = run_to_log("gh api " + api + "/pulls/" + pr +
+                                       " --jq .head.sha,.mergeable,.mergeable_state,.state,"
+                                       ".merged,.base.ref",
+                                   log);
     if (head.code != 0)
       return fail("gh could not read pull request " + pr + ": " + first_line(head.output),
                   "check the number, or `gh auth login`");
-    sha = first_line(head.output);
+    std::vector<std::string> w;
+    // One line a field; gh prints a null as an empty line.
+    for (std::string_view l : split_lines(head.output)) w.emplace_back(bare(l));
+    if (w.size() < 6)
+      return fail("gh answered pull request " + pr + " oddly: " + first_line(head.output),
+                  "rerun; if it persists, open the pull request's page");
+    sha = w[0];
+    mergeable = w[2];
+    const std::string& base = w[5];
+    if (w[4] == "true") {
+      out.findings.push_back({Severity::note, "pull request " + pr + " is merged", "",
+                              "restart the branch from " + base + " for the next change"});
+    } else if (w[3] != "open") {
+      out.findings.push_back({Severity::note, "pull request " + pr + " is closed", "",
+                              "reopen it, or open a new one"});
+    } else if (w[1] == "false" || w[2] == "dirty") {
+      out.findings.push_back(
+          {Severity::error, "pull request " + pr + " conflicts with " + base, "",
+           "git fetch origin " + base + " && git merge origin/" + base +
+               ", resolve each conflict, make precheck (ge precheck in a game repo), push"});
+    } else if (w[1].empty() || w[1] == "null") {
+      out.findings.push_back({Severity::note,
+                              "GitHub is still working out whether " + pr + " merges", "",
+                              "ge ci again in a minute"});
+    } else if (w[2] == "behind") {
+      out.findings.push_back({Severity::note, "pull request " + pr + " is behind " + base, "",
+                              "merge origin/" + base + " when the base requires it"});
+    }
   } else {
     const Logged head = run_to_log("git -C " + quoted(repo) + " rev-parse HEAD", log);
     sha = first_line(head.output);
@@ -234,15 +266,23 @@ Outcome run_ci(const fs::path& repo, const std::string& pr, const std::string& l
     }
     for (Finding& f : ci_log_findings(repo, name, job.output)) out.findings.push_back(std::move(f));
   }
-  for (const std::string& p : pending) {
-    out.findings.push_back({Severity::note, "check " + p + " is still running", "", "ge ci again"});
+  if (!pending.empty()) {
+    std::string names;
+    for (const std::string& p : pending) names.append(names.empty() ? "" : ", ").append(p);
+    out.findings.push_back({Severity::note,
+                            std::to_string(pending.size()) + " still running: " + names, "",
+                            "ge ci again when they finish"});
   }
   out.text = "  " + std::to_string(total) + " checks on " + sha.substr(0, 12) + ": " +
              std::to_string(failed.size()) + " failed, " + std::to_string(pending.size()) +
              " running\n";
-  out.result = json_obj({{"sha", json_str(sha)}, {"checks", json_arr(rows)}});
-  out.summary = pending.empty() ? "every check passed" : "nothing has failed yet";
-  out.next = pending.empty() ? "" : "ge ci again when they finish";
+  if (!mergeable.empty()) out.text += "  mergeable: " + mergeable + "\n";
+  out.result = json_obj(
+      {{"sha", json_str(sha)}, {"mergeable", json_str(mergeable)}, {"checks", json_arr(rows)}});
+  out.summary = !pending.empty()       ? "nothing has failed yet"
+                : mergeable == "clean" ? "every check passed and it merges cleanly: merge it"
+                                       : "every check passed";
+  out.next = pending.empty() ? "" : "ge ci again in 15 minutes, until every check is green";
   return out;
 }
 
