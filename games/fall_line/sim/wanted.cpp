@@ -103,31 +103,6 @@ void lose_stars(GameState& state) {
   push(state, WantedChange::lost, 0);
 }
 
-// Every tree filed in the 3x3 cells of the index round (x, z): every crown within a cell of the
-// point (a crown is far narrower than the index's 16 m cell).
-template <class F>
-void for_trees_near(const sk::TreeIndex& ix, double x, double z, F&& f) {
-  if (ix.cols == 0) return;
-  const auto cell = [&ix](double v, int32_t n) {
-    const double c = std::floor(v / ix.cell);
-    if (!(c >= 0)) return int32_t{0};
-    return c >= n - 1 ? n - 1 : static_cast<int32_t>(c);
-  };
-  const int32_t cx = cell(x, ix.cols);
-  const int32_t cz = cell(z, ix.rows);
-  for (int32_t r = cz - 1; r <= cz + 1; r++) {
-    if (r < 0 || r >= ix.rows) continue;
-    for (int32_t c = cx - 1; c <= cx + 1; c++) {
-      if (c < 0 || c >= ix.cols) continue;
-      const size_t at =
-          static_cast<size_t>(r) * static_cast<size_t>(ix.cols) + static_cast<size_t>(c);
-      for (int32_t k = ix.starts[at]; k < ix.starts[at + 1]; k++) {
-        f(ix.items[static_cast<size_t>(k)]);
-      }
-    }
-  }
-}
-
 // A crown's reach at `up` m over its trunk's foot: a cone from the tree's own crown radius at the
 // foot to nothing at its tip, never narrower than the trunk.
 double crown_reach(const mg::TreeDef& t, double up) {
@@ -256,7 +231,7 @@ bool through_woods(const mg::Level& level, const sk::TreeIndex& trees, Spot a, S
     const double x = a.x + (b.x - a.x) * k;
     const double y = a.y + (b.y - a.y) * k;
     const double z = a.z + (b.z - a.z) * k;
-    for_trees_near(trees, x, z, [&](int32_t ti) {
+    sk::for_each_tree_near(trees, x, z, [&](int32_t ti) {
       if (count >= wanted::kWoods) return;
       for (int32_t m = 0; m < count; m++) {
         if (met[static_cast<size_t>(m)] == ti) return;
@@ -275,7 +250,7 @@ bool under_cover(const GameState& state) {
   const sk::SkierState& c = state.racers.front().skier;
   if (ge::core::hypot(c.vx, c.vz) > wanted::kCoverSpeed) return false;
   bool covered = false;
-  for_trees_near(state.trees, c.x, c.z, [&](int32_t ti) {
+  sk::for_each_tree_near(state.trees, c.x, c.z, [&](int32_t ti) {
     if (covered) return;
     const mg::TreeDef& t = state.level->trees[static_cast<size_t>(ti)];
     const double up = c.y + wanted::kCoverHeadM - t.y;

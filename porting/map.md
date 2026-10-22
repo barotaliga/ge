@@ -33,7 +33,14 @@ the row when the file moves.
 | `engine/core/solar.cpp` | `oss-game-framework/src/core/solar.ts` |  |
 | `engine/core/solar.hpp` | `oss-game-framework/src/core/solar.ts` | sunAt moonAt daylightWindow sunOnDate moonOnDate hourOfElevation |
 | `engine/loop/run_clock.hpp` | `oss-game-framework/src/loop/run-clock.ts` | createRunClock MAX_FRAME_SECONDS |
+| `games/fall_line/labs/army_lab.cpp` | `game5/scripts/army-ground.mjs` | the ground army shown (here measured: the army table and every soldier's path, per scenario) |
 | `games/fall_line/labs/lift_ride_lab.cpp` | `game5/scripts/lift-ride-preview.mjs` | the lift ride shown (here measured as a table, every lift ridden from its load zone to its top) |
+| `games/fall_line/sim/army.cpp` | `game5/engine/game/army-ground.ts`, `army-lift.ts`, `army-wave.ts` | stepGround chase tryArrest writeTroops sendLiftSquads stepLiftTroops liftFor wayDown sendWave sendWaves retireWaves climbWithWave (the landings, the fire, the cover ring and the men on foot not carried) |
+| `games/fall_line/sim/army.hpp` | `game5/engine/game/army-ground.ts`, `army-lift.ts`, `army-wave.ts` | stepGround liftFor wayDown armyTroops |
+| `games/fall_line/sim/army_rules.hpp` | `game5/engine/game/defs/army-ground.ts`, `defs/army-wave.ts` | ARMY_GROUND ARMY_WAVE |
+| `games/fall_line/sim/army_state.hpp` | `game5/engine/game/army-state.ts` | Soldier ArmyState |
+| `games/fall_line/sim/army_troop.cpp` | `game5/engine/game/army-troop.ts` | goToward stopHere watchProgress slopeAlong wayToward |
+| `games/fall_line/sim/army_troop.hpp` | `game5/engine/game/army-troop.ts` | goToward stopHere watchProgress slopeAlong |
 | `games/fall_line/sim/free.cpp` | `game5/engine/game/skied.ts`, `course.ts` | runUnder noteRun noteSkied leftRunPoint skiedResetPoint freeSpawn |
 | `games/fall_line/sim/free.hpp` | `game5/engine/game/skied.ts`, `course.ts` | runUnder noteRun noteSkied leftRunPoint skiedResetPoint freeSpawn |
 | `games/fall_line/sim/lift_ride.cpp` | `game5/engine/game/lift-ride.ts`, `lift-board.ts` | stepLiftRide stepChairWait carrierPassing letGo setOff (the boarding ring, the queue, the gondola's platform, the hands, the swing and the skip not carried) |
