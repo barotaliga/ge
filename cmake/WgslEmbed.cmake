@@ -46,7 +46,8 @@ resolve("${IN}" wgsl)
 file(WRITE "${RESOLVED}" "${wgsl}")
 
 if(wgsl MATCHES "\\)wgsl\"")
-  message(FATAL_ERROR "wgsl: ${IN} contains ')wgsl\"', the embedding's raw-string delimiter.")
+  message(FATAL_ERROR "wgsl: ${IN} contains ')wgsl\"', the embedding's raw-string delimiter. "
+    "Reword that text; skill: gpu, § Shaders.")
 endif()
 string(LENGTH "${wgsl}" size)
 if(size GREATER 60000)

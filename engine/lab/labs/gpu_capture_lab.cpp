@@ -78,7 +78,8 @@ void run(ge::lab::Lab& lab) {
   const int width = static_cast<int>(lab.arg_num("width"));
   const int height = static_cast<int>(lab.arg_num("height"));
   if (width <= 0 || height <= 0 || width > 4096 || height > 4096) {
-    lab.fail("--width and --height must be 1..4096", "Pass a size such as --width=320.");
+    lab.fail("--width and --height must be 1..4096",
+             "next: rerun with a size such as --width=320.");
     return;
   }
   ge::lab::Shot shot{

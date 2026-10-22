@@ -95,7 +95,7 @@ std::vector<AttemptTried> build_area(ge::lab::Lab& lab, double seed, mapgen::Res
   const std::string seed_word = std::to_string(static_cast<long long>(seed));
   if (!region) {
     lab.fail("--region=" + lab.arg("region") + " is not a region",
-             "Use alpine, fell, continental or maritime (mapgen/regions.hpp).");
+             "next: rerun with alpine, fell, continental or maritime (mapgen/regions.hpp).");
     return tried;
   }
   const int attempts = static_cast<int>(lab.arg_num("attempts"));

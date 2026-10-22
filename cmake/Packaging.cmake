@@ -4,6 +4,10 @@
 #
 #   find_package(gameengine2 0.1 REQUIRED)
 #   target_link_libraries(game PRIVATE ge::core ge::audio ge::racing)   # ge::fp comes with them
+#   target_link_libraries(labs PRIVATE ge::lab)                         # a game's labs (docs/labs.md)
+#
+# The ge executable (cmake/Cli.cmake) installs to bin/ beside the libraries; it is a tool, not
+# a target a game links.
 #
 # The package version is the VERSION file — the one place it is stated; the
 # release workflow writes it. Every target a consumer links is listed in
@@ -25,11 +29,11 @@ set(GE_INSTALL_INCLUDEDIR "${CMAKE_INSTALL_INCLUDEDIR}/gameengine2")
 set(GE_INSTALL_CMAKEDIR "${CMAKE_INSTALL_LIBDIR}/cmake/gameengine2")
 
 # target -> export name (consumers see ge::<export name>)
-set(GE_EXPORTED_TARGETS ge_fp fp ge_core core ge_audio audio)
+set(GE_EXPORTED_TARGETS ge_fp fp ge_core core ge_audio audio ge_lab lab)
 # Every plugin is published as ge::<plugin> (cmake/Plugins.cmake collects them), and its
 # presentation half as ge::<plugin>_app when every engine target it links is published here
 # (APP audio is; render, gpu and platform are not yet, below).
-set(GE_PUBLISHED_MODULES core audio)
+set(GE_PUBLISHED_MODULES core audio lab)
 get_property(_ge_plugins GLOBAL PROPERTY GE_PLUGIN_TARGETS)
 foreach(_target IN LISTS _ge_plugins)
   get_property(_app_modules TARGET ${_target} PROPERTY GE_APP_MODULES)
@@ -64,7 +68,8 @@ install(TARGETS ${_ge_targets}
 install(DIRECTORY "${PROJECT_SOURCE_DIR}/engine/"
   DESTINATION ${GE_INSTALL_INCLUDEDIR}
   FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h" PATTERN "*.inl"
-  PATTERN "gpu" EXCLUDE PATTERN "platform" EXCLUDE PATTERN "render" EXCLUDE)
+  PATTERN "gpu" EXCLUDE PATTERN "platform" EXCLUDE PATTERN "render" EXCLUDE
+  PATTERN "cli" EXCLUDE)
 
 # A plugin's headers install beside the engine's (a plugin's name never equals an engine
 # directory), so "racing/tape.hpp" is spelled the same in-tree and installed. Labs are not

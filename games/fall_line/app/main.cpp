@@ -104,7 +104,8 @@ int main(int argc, char** argv) {
   if (!parse(argc, argv, args)) {
     out::error(
         "fall_line: unknown flag. Usage: fall_line [--frames=N] [--size=WxH] [--no-vsync] "
-        "[--seed=N] [--view=chase|start|piste|lookback|vista|aerial] [--hour=H] [--mute]");
+        "[--seed=N] [--view=chase|start|piste|lookback|vista|aerial] [--hour=H] [--mute]; "
+        "next: rerun with those flags only.");
     return 2;
   }
   auto window =

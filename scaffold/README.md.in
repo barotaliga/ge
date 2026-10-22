@@ -1,0 +1,12 @@
+# {{name}}
+
+A game on the engine at {{engine_repo}} (release {{engine_version}}, pinned in
+`cmake/engine.cmake`).
+
+```sh
+make test           # build, every test and every lab at its smoke flags
+make agents-check   # the repo against the engine's rules
+make lab LAB=run    # the simulation over seeds, with a captioned picture in previews/run/
+```
+
+Agents start at [`AGENTS.md`](AGENTS.md).

@@ -189,7 +189,8 @@ void create_family(gpu::Device& device, const InstancePipelines& ip, InstanceFam
     if (n < m.lods.size()) {
       core::output::error("render: family '" + f.label + "' has a mesh of " +
                           std::to_string(m.lods.size()) + " LODs; only the first " +
-                          std::to_string(kMaxLods) + " are drawn. Merge LODs or raise kMaxLods.");
+                          std::to_string(kMaxLods) +
+                          " are drawn; next: merge LODs or raise kMaxLods.");
     }
     for (size_t l = 0; l < n && lod_rows.size() < kMaxBuckets; ++l) {
       const LodSource& src = m.lods[l];
@@ -226,7 +227,7 @@ void create_family(gpu::Device& device, const InstancePipelines& ip, InstanceFam
   }
   if (lod_rows.size() >= kMaxBuckets) {
     core::output::error("render: family '" + f.label + "' reaches " + std::to_string(kMaxBuckets) +
-                        " LODs in all; the rest are not drawn. Split it into two families.");
+                        " LODs in all; the rest are not drawn; next: split it into two families.");
   }
   f.lod_count = static_cast<uint32_t>(lod_rows.size());
   if (words.empty()) words.assign(3, 0);
