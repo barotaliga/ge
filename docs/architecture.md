@@ -18,8 +18,9 @@ plugins/<name>           reusable by any game of one genre or world (§ Plugins)
         ▼
 engine/render  engine/audio  engine/ui     generic draw passes, the synth, the 2D layer
         │             │          │
-engine/gpu     engine/platform             webgpu.h wrapper; SDL3 window, input, audio device, files
-        │             │
+engine/gpu  engine/assets  engine/platform webgpu.h wrapper; authored models (glTF); SDL3 window,
+        │             │          │         input, audio device, files
+        │             │          │
         ▼             ▼
 engine/core  engine/loop                   the deterministic pool; the run clock
 ```
@@ -53,6 +54,11 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   pass owns its GPU buffers and exposes `prepare(view)` and `encode(pass)`; the frame core
   (the view and camera, the pass table, the sky, the terrain, post) is built (M7a).
   **`docs/rendering.md` is the plan** for this layer and `engine/gpu`.
+- **`engine/assets`**: authored models (built, M8e1): the glTF 2.0 loader over cgltf (the only
+  file that includes it), the `Model` it fills in the world's frame (skinned meshes, every node
+  a joint, materials, clips baked at 60 Hz), posing into a bone palette and CPU skinning. No
+  GPU and no platform; `engine/render`'s skinning pass reads its palette. `docs/rendering.md` §
+  Authored models is the design.
 - **`engine/audio`**: the synth (built, M9a): the vocabulary (`Tone`, `Noise`, `LayerSpec`,
   `LayerTarget`), a fixed-capacity DSP graph (polyBLEP oscillators, coloured noise pools,
   state-variable filters, envelopes, soft saturation, four buses, an echo and a soft-knee
@@ -256,7 +262,7 @@ whole tree to it, and `ge doctor` holds a game repo to it (the `agent-interface`
 | Shaders | WGSL, embedded at build |
 | Audio | Our own DSP graph on SDL3 audio: every sound is synthesized, so no middleware |
 | UI | Our own immediate-mode 2D layer + SDF text; Dear ImGui for dev tools |
-| Assets | cgltf for the modelled skis; everything else generated in code or baked to embedded blobs |
+| Assets | glTF 2.0 through cgltf (`engine/assets`) for the few authored models, made by Blender Python builders run headless offline (`ge asset`, M8g) and committed as .glb; everything else generated in code or baked to embedded blobs |
 | Built venues on a map | A venue whose features are finer than the 2 m grid (a ski jump's edge, its landing radius) answers `Level::ground_at` and `normal_at` off an ANALYTIC profile inside its width (`Level::venue`, one null check on the hot path), with the grid cut beneath it so a reader of the raw grid never sees ground above the surface |
 | Real-world data | Baked offline by a lab off free public datasets that need no credentials (the 30 m elevation model's public bucket), into GENERATED C++ sources committed in the tree (a real face's heights: a base64 string of second-differenced varints, about 21 KB a face), so a build reads no file and fetches nothing; the bake is re-runnable and reproduces the tree to the bit |
 | Tests | Our own header harness, CTest, golden tables |

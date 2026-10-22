@@ -164,7 +164,17 @@ PackedMesh pack_mesh(const MeshData& m) {
       hi[k] = std::max(hi[k], m.positions[i * 3 + k]);
     }
   }
-  for (int k = 0; k < 3; ++k) p.box_size[k] = n ? std::max(hi[k] - p.box_min[k], 1e-6f) : 1e-6f;
+  for (int k = 0; k < 3; ++k) hi[k] = n ? std::max(hi[k] - p.box_min[k], 1e-6f) : 1e-6f;
+  return pack_mesh(m, p.box_min, hi);
+}
+
+PackedMesh pack_mesh(const MeshData& m, const float box_min[3], const float box_size[3]) {
+  PackedMesh p;
+  const uint32_t n = m.vertex_count();
+  for (int k = 0; k < 3; ++k) {
+    p.box_min[k] = box_min[k];
+    p.box_size[k] = std::max(box_size[k], 1e-6f);
+  }
   p.words.reserve(size_t{n} * 3);
   for (uint32_t i = 0; i < n; ++i) {
     uint32_t q[3];

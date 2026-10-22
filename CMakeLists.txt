@@ -5,6 +5,8 @@
 #                standings), ge_mountain (the generated ski mountain: mapgen, analysis)
 #   ge_audio     the synth: voices, layers, buses, echo, limiter, the meter, WAV bytes
 #                (engine/audio; deterministic, no platform)
+#   ge_assets    authored models: the glTF loader (cgltf), the Model, posing, CPU skinning
+#                (engine/assets; cmake/Cgltf.cmake)
 #   ge_lab       the lab framework (engine/lab: the contract, the runner, the raster, the PNG,
 #                the series files and the charts)
 #   ge_play      the play contract (engine/play: GameSpec and Run, the session, the input log,
@@ -26,8 +28,8 @@
 #   ge_isa       the instruction-set baseline (x86-64: AVX2), linked by ge_core and
 #                published as ge::isa
 #   ge_flags     warnings, -Werror, sanitizers: this tree only, never published
-# ge_core, ge_fp, ge_isa, ge_lab, ge_play, ge_prof, ge_prof_alloc and every plugin target are
-# installed and published as ge::core, ge::fp, ge::isa, ge::lab, ge::play, ge::prof,
+# ge_core, ge_fp, ge_isa, ge_assets, ge_lab, ge_play, ge_prof, ge_prof_alloc and every plugin target are
+# installed and published as ge::core, ge::fp, ge::isa, ge::assets, ge::lab, ge::play, ge::prof,
 # ge::prof_alloc and ge::<plugin>, and the ge executable is installed to bin/
 # (cmake/Packaging.cmake, docs/publishing.md).
 cmake_minimum_required(VERSION 3.25)
@@ -118,6 +120,15 @@ file(GLOB GE_AUDIO_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/
 add_library(ge_audio STATIC ${GE_AUDIO_SOURCES})
 target_link_libraries(ge_audio PUBLIC ge_core)
 
+# Authored models (M8e): the glTF loader (cgltf, cmake/Cgltf.cmake, compiled into
+# engine/assets/gltf.cpp alone), the Model it fills, posing and CPU skinning. No GPU and no
+# platform; render/skinning.hpp skins on the GPU.
+include(cmake/Cgltf.cmake)
+file(GLOB GE_ASSETS_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/assets/*.cpp)
+add_library(ge_assets STATIC ${GE_ASSETS_SOURCES})
+target_link_libraries(ge_assets PUBLIC ge_core)
+target_include_directories(ge_assets SYSTEM PRIVATE ${GE_CGLTF_INCLUDE})
+
 # The platform and the GPU (M6). Each is optional (GE_PLATFORM, GE_GPU) and nothing else
 # depends on them: the simulation, the plugins and their tests build without either.
 include(cmake/Dawn.cmake)
@@ -136,11 +147,12 @@ if(GE_GPU)
   # map, the Hi-Z pyramid, TAA-U, post, the instance families and their meshes, the sun's shadows.
   file(GLOB GE_RENDER_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/render/*.cpp)
   add_library(ge_render STATIC ${GE_RENDER_SOURCES})
-  target_link_libraries(ge_render PUBLIC ge_gpu)
+  target_link_libraries(ge_render PUBLIC ge_gpu ge_assets)
   ge_embed_wgsl(ge_render engine/render/sky_tables.wgsl engine/render/sky.wgsl
     engine/render/terrain.wgsl engine/render/terrain_cull.wgsl engine/render/terrain_normals.wgsl
     engine/render/horizon.wgsl engine/render/hiz.wgsl engine/render/taa.wgsl engine/render/post.wgsl
-    engine/render/instances.wgsl engine/render/instances_cull.wgsl engine/render/bloom.wgsl)
+    engine/render/instances.wgsl engine/render/instances_cull.wgsl engine/render/bloom.wgsl
+    engine/render/skinning.wgsl)
 endif()
 
 # The lab framework (engine/lab: the contract, the runner, the raster, the PNG), published as
@@ -228,7 +240,7 @@ if(PROJECT_IS_TOP_LEVEL)
   get_property(GE_PLUGIN_TARGETS GLOBAL PROPERTY GE_PLUGIN_TARGETS)
   get_property(GE_GAME_TARGETS GLOBAL PROPERTY GE_GAME_TARGETS)
   add_executable(labs engine/lab/main.cpp ${GE_LAB_SOURCES})
-  target_link_libraries(labs PRIVATE ge_lab ge_play ge_core ge_audio ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
+  target_link_libraries(labs PRIVATE ge_lab ge_play ge_core ge_audio ge_assets ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
     ${GE_LAB_EXTRA})
 
   enable_testing()
