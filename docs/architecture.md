@@ -68,6 +68,12 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   render thread through a lock-free ring, and the render is deterministic to the bit (core/libm,
   core::Rng), so a buffer is a golden and a lab digest. `engine/platform`'s audio device pulls
   it on SDL's audio thread and converts to the hardware's rate.
+- **`engine/net`**: multiplayer networking (built from M17a; `docs/networking.md` is the design):
+  addresses, the wire, the OS's UDP sockets (`udp_socket.cpp`, the only file that includes
+  socket headers), the simulated network and its conditions, pcap captures, the transport, the
+  packet format, connections with their channels, and nodes of up to 32 peers. It depends on
+  `engine/core` only and reads no clock: the caller passes the time and the seeds, so a session
+  over the simulated network is deterministic and every net lab is a determinism test.
 - **`engine/ui`**: the immediate-mode 2D layer (rects, images, SDF text), plus Dear
   ImGui behind `GE_DEV_UI`.
 - **`games/fall_line/app`**: Fall Line's presentation, the `fall_line_app` library (which

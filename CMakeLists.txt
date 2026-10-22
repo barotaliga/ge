@@ -7,6 +7,8 @@
 #                (engine/audio; deterministic, no platform)
 #   ge_assets    authored models: the glTF loader (cgltf), the Model, posing, CPU skinning
 #                (engine/assets; cmake/Cgltf.cmake)
+#   ge_net       the network: links, the simulated network, captures, connections, nodes
+#                (engine/net; docs/networking.md)
 #   ge_lab       the lab framework (engine/lab: the contract, the runner, the raster, the PNG,
 #                the series files and the charts)
 #   ge_play      the play contract (engine/play: GameSpec and Run, the session, the input log,
@@ -28,8 +30,8 @@
 #   ge_isa       the instruction-set baseline (x86-64: AVX2), linked by ge_core and
 #                published as ge::isa
 #   ge_flags     warnings, -Werror, sanitizers: this tree only, never published
-# ge_core, ge_fp, ge_isa, ge_assets, ge_lab, ge_play, ge_prof, ge_prof_alloc and every plugin target are
-# installed and published as ge::core, ge::fp, ge::isa, ge::assets, ge::lab, ge::play, ge::prof,
+# ge_core, ge_fp, ge_isa, ge_assets, ge_net, ge_lab, ge_play, ge_prof, ge_prof_alloc and every plugin target are
+# installed and published as ge::core, ge::fp, ge::isa, ge::assets, ge::net, ge::lab, ge::play, ge::prof,
 # ge::prof_alloc and ge::<plugin>, and the ge executable is installed to bin/
 # (cmake/Packaging.cmake, docs/publishing.md).
 cmake_minimum_required(VERSION 3.25)
@@ -155,6 +157,17 @@ if(GE_GPU)
     engine/render/skinning.wgsl)
 endif()
 
+# The network (engine/net, docs/networking.md): addresses, the wire, the OS's UDP sockets (the only
+# file that includes them), the simulated network, captures, connections and nodes. No platform
+# layer and no clock: the caller passes the time, so a session over the simulated network is
+# deterministic.
+file(GLOB GE_NET_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/net/*.cpp)
+add_library(ge_net STATIC ${GE_NET_SOURCES})
+target_link_libraries(ge_net PUBLIC ge_core)
+if(WIN32)
+  target_link_libraries(ge_net PRIVATE ws2_32)
+endif()
+
 # The lab framework (engine/lab: the contract, the runner, the raster, the PNG), published as
 # ge::lab so a game's labs plug into the same contract as the engine's (docs/labs.md).
 add_library(ge_lab STATIC engine/lab/lab.cpp engine/lab/report.cpp engine/lab/runner.cpp
@@ -240,7 +253,7 @@ if(PROJECT_IS_TOP_LEVEL)
   get_property(GE_PLUGIN_TARGETS GLOBAL PROPERTY GE_PLUGIN_TARGETS)
   get_property(GE_GAME_TARGETS GLOBAL PROPERTY GE_GAME_TARGETS)
   add_executable(labs engine/lab/main.cpp ${GE_LAB_SOURCES})
-  target_link_libraries(labs PRIVATE ge_lab ge_play ge_core ge_audio ge_assets ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
+  target_link_libraries(labs PRIVATE ge_lab ge_play ge_core ge_audio ge_assets ge_net ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
     ${GE_LAB_EXTRA})
 
   enable_testing()
