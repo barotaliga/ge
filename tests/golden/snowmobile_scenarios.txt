@@ -1,0 +1,17 @@
+# scenario digest top-speed-bits distance-bits flights thrown (snowmobile_scenarios_test, the reference rider, 120 Hz)
+top-speed c1cbc4d984224c88 40446804c50fb361 40a4f5dde4c95ac4 0 none
+rest-powder e61a662d6f823169 3fed5ea0872e1146 3f99314c51038000 0 none
+launch-powder 29e3d916d533108c 4042308b7ec86fae 4082306372c9d761 0 none
+climb-24 dc01a6fa549d4494 40222b4ed4d4b36d 4066707717afbbc0 0 none
+high-mark-35 07cad7ad18bb289c 402bc057bf4e2a82 404aa20a85b11500 0 none
+turn-lock c300ce11df6d8dfa 4021a10432b35bfa 40523738a0249d9a 0 none
+powder-carve 71a6d874253efd01 4028a54d6c7e8f5d 405855e4fc078677 0 none
+powder-carve-left b95134817784ab09 4028a54d6c7e8f5c 405855e4fc07859a 0 none
+weave 4568c6fdffcffb02 402e6ddc6d723c2a 407202bd4a19e499 1 none
+brake 035a3585f51c7ee3 4030b17d4c0c18b6 40417d60d78d0950 0 none
+park-slope 7941e23a47998b6a 3fc3c1aa8b5b4ee0 3fd05a33aca84c00 0 none
+tree 7c06889dce48fd5e 40337ad6d758f351 404cd33333333338 1 tree
+drop c4c75e90b2dc4f43 4030fb5109a6e6da 4049817295d33f75 1 none
+cliff ecd56063d5fbf94b 40365d90e96e5607 403a97287909bfe0 1 landing
+pilot-climb cdd45e41c066122e 40374c2c437d6579 4084400bec500825 3 none
+pilot-trees d81ccfb931a08815 4034749fae15d02f 40715f5ac9693f35 0 none

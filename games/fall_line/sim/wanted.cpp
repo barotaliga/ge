@@ -231,7 +231,7 @@ bool through_woods(const mg::Level& level, const sk::TreeIndex& trees, Spot a, S
     const double x = a.x + (b.x - a.x) * k;
     const double y = a.y + (b.y - a.y) * k;
     const double z = a.z + (b.z - a.z) * k;
-    sk::for_trees_near(trees, x, z, [&](int32_t ti) {
+    sk::for_each_tree_near(trees, x, z, [&](int32_t ti) {
       if (count >= wanted::kWoods) return;
       for (int32_t m = 0; m < count; m++) {
         if (met[static_cast<size_t>(m)] == ti) return;
@@ -250,7 +250,7 @@ bool under_cover(const GameState& state) {
   const sk::SkierState& c = state.racers.front().skier;
   if (ge::core::hypot(c.vx, c.vz) > wanted::kCoverSpeed) return false;
   bool covered = false;
-  sk::for_trees_near(state.trees, c.x, c.z, [&](int32_t ti) {
+  sk::for_each_tree_near(state.trees, c.x, c.z, [&](int32_t ti) {
     if (covered) return;
     const mg::TreeDef& t = state.level->trees[static_cast<size_t>(ti)];
     const double up = c.y + wanted::kCoverHeadM - t.y;

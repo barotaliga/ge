@@ -65,7 +65,7 @@ double way_toward(const TroopWorld& w, const Soldier& s, double tx, double tz) {
   const double fz = lm::cos(want);
   const double ahead = army::kAheadM;
   double push = 0;
-  sk::for_trees_near(*w.trees, s.x + fx * ahead * 0.5, s.z + fz * ahead * 0.5, [&](int32_t i) {
+  sk::for_each_tree_near(*w.trees, s.x + fx * ahead * 0.5, s.z + fz * ahead * 0.5, [&](int32_t i) {
     const mg::TreeDef& u = level.trees[static_cast<size_t>(i)];
     const double dx = u.x - s.x;
     const double dz = u.z - s.z;
@@ -105,7 +105,7 @@ void move(const TroopWorld& w, Soldier& s) {
   const double vz = lm::cos(s.heading) * s.speed;
   s.x += vx * w.dt;
   s.z += vz * w.dt;
-  sk::for_trees_near(*w.trees, s.x, s.z, [&](int32_t i) {
+  sk::for_each_tree_near(*w.trees, s.x, s.z, [&](int32_t i) {
     const mg::TreeDef& u = level.trees[static_cast<size_t>(i)];
     const double dx = s.x - u.x;
     const double dz = s.z - u.z;

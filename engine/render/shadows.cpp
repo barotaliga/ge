@@ -251,6 +251,8 @@ void prepare_sun_shadows(gpu::Device& device, SunShadows& s, const FrameView& vi
   std::memcpy(s.staged.atlas, atlas, sizeof atlas);
   float open[5][4] = {};
   for (auto& p : open) p[3] = 1e9f;
+  // Tile k covers clip x, y in [-1, 1] about its figure, so [-1 - t, 1 - t] about the eye.
+  float reach[4] = {1e9f, 1e9f, -1e9f, -1e9f};
   for (int k = 0; k < kMaxShadowFigures; ++k) {
     float* t = s.staged.tile[k];
     if (k >= s.figures) {
@@ -258,8 +260,17 @@ void prepare_sun_shadows(gpu::Device& device, SunShadows& s, const FrameView& vi
       continue;
     }
     const std::array<double, 3>& at = figures[static_cast<size_t>(k)];
-    for (int i = 0; i < 3; ++i) t[i] = static_cast<float>(view.eye[i] - at[static_cast<size_t>(i)]);
+    // The eye's offset from the figure, in the tile's clip units: the view is affine, so a
+    // pixel's clip in every tile is its own clip plus this (sun_shadow.wgsl).
+    const double d[3] = {view.eye[0] - at[0], view.eye[1] - at[1], view.eye[2] - at[2]};
+    t[0] = static_cast<float>(dot3(basis[0], d) / set.figure_radius);
+    t[1] = static_cast<float>(dot3(basis[1], d) / set.figure_radius);
+    t[2] = static_cast<float>(dot3(basis[2], d) / (2 * set.figure_depth));
     t[3] = 1;
+    for (int i = 0; i < 2; ++i) {
+      reach[i] = std::min(reach[i], -1 - t[i]);
+      reach[2 + i] = std::max(reach[2 + i], 1 - t[i]);
+    }
     FrameUniforms u;
     fill_map_view(u, view, at.data(), atlas, open, tile_texels);
     device.queue.WriteBuffer(
@@ -279,6 +290,7 @@ void prepare_sun_shadows(gpu::Device& device, SunShadows& s, const FrameView& vi
   s.staged.info[1] = static_cast<float>(kTilesAcross);
   s.staged.info[2] = static_cast<float>(set.bias_m / (2 * set.depth));
   s.staged.info[3] = static_cast<float>(s.figures);
+  std::memcpy(s.staged.reach, reach, sizeof reach);
   device.queue.WriteBuffer(s.params, 0, &s.staged, sizeof s.staged);
 }
 
