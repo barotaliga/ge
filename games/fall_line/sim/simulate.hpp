@@ -64,12 +64,15 @@ struct RunReport {
   double top_speed = 0;   // m/s
   double mean_speed = 0;  // m/s, the piste's length over the time (finished runs)
   double max_landing_g = 0;
-  int32_t place = 1;     // the player's, at the run's end
-  double distance = 0;   // m skied (the free ride's odometer; 0 in a race)
-  int32_t runs = 0;      // runs skied (the free ride's)
-  int32_t lifts = 0;     // lifts ridden to the top (the free ride's)
-  double lift_wait = 0;  // s waiting in load zones for a carrier
-  double lift_ride = 0;  // s carried up lifts
+  int32_t place = 1;       // the player's, at the run's end
+  double distance = 0;     // m skied (the free ride's odometer; 0 in a race)
+  int32_t runs = 0;        // runs skied (the free ride's)
+  int32_t lifts = 0;       // lifts ridden to the top (the free ride's)
+  double lift_wait = 0;    // s waiting in load zones for a carrier
+  double lift_ride = 0;    // s carried up lifts
+  int32_t sled_rides = 0;  // times the free ride's snowmobile was taken
+  double sled_time = 0;    // s on its boards
+  double climbed = 0;      // m, the most the player rose over where he started
   int64_t steps = 0;
   uint64_t digest = 0;  // FNV-1a over every step's state
   ge::racing::ControlTape tape;
@@ -81,6 +84,7 @@ struct LinePoint {
   double x, z, speed;
   bool on_snow, down;
   bool lifted;  // a lift has him
+  bool sled;    // on the snowmobile's boards
 };
 
 // THE ONE STEP every pilot drives through (the bot in `simulate`, a tape in `replay_tape`, an
@@ -90,8 +94,9 @@ class Driver {
  public:
   Driver(std::shared_ptr<const ge::mountain::mapgen::Level> level, int32_t rivals);
   // A run already created (a race, or a free ride, whose bot skis his run's chain).
-  // `lifts`: on the free ride, the lifts he is to ride before a foot ends the run.
-  explicit Driver(GameState state, int32_t lifts = 0);
+  // `lifts`: on the free ride, the lifts he is to ride before a foot ends the run; `sled_rides`
+  // the times he is to have taken the snowmobile (and got off it) before one does.
+  explicit Driver(GameState state, int32_t lifts = 0, int32_t sled_rides = 0);
   void step(Controls player);
   // Every racer home (on the free ride, the player at a foot): nothing is left to drive.
   bool over() const;
@@ -118,6 +123,10 @@ class Driver {
   ge::ai::Why* why_ = nullptr;
   std::vector<BotHands> hands_;  // the rivals', by racer index (the player's is the pilot's)
   int32_t lifts_ = 0;
+  int32_t sled_rides_ = 0;
+  double sled_time_ = 0;
+  double y0_ = 0;
+  double climbed_ = 0;
   double boarded_at_ = 0;
   double lift_wait_ = 0;
   double lift_ride_ = 0;
@@ -145,6 +154,11 @@ RunReport simulate_outing(std::shared_ptr<const ge::mountain::mapgen::Level> lev
                           std::vector<std::vector<LinePoint>>* lines = nullptr);
 // `tape` played back on `level` with `rivals` bots beside it: the same run, step for step (its
 // digest is the report's).
+// The bot's outing on the free ride's snowmobile (sled_outing.hpp): from beside it, up the run
+// `sled_climb_run` picks, and down it on his skis to a foot.
+RunReport simulate_sled_outing(std::shared_ptr<const ge::mountain::mapgen::Level> level,
+                               double seed, const SimOptions& opts,
+                               std::vector<std::vector<LinePoint>>* lines = nullptr);
 RunReport replay_tape(std::shared_ptr<const ge::mountain::mapgen::Level> level, double seed,
                       const ge::racing::ControlTape& tape, int32_t rivals = 0);
 

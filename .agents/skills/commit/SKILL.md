@@ -58,5 +58,8 @@ the check-in (never a sleep loop), and on each one look at both its checks and w
 merges (`build/<preset>/ge ci <pr>` answers both: a conflict is an error finding, each red job's
 log comes back as findings). A conflict means merge `origin/main` into the branch, resolve it,
 `make precheck` and push; a red row means read its log, fix the cause and push. Never skip or
-weaken a test, and never push an empty commit to re-run CI. Once every job is green,
-squash-merge the PR yourself, then name the next step to the user.
+weaken a test, and never push an empty commit to re-run CI. Right after each push, arm squash
+auto-merge on the PR (GitHub's `enable_pr_auto_merge`; it needs the base to require checks, and
+GitHub refuses it on a PR that could merge now). Once every job is green and it has not merged
+itself, `build/<preset>/ge ci <pr> --merge` squash-merges it at the head the checks ran on. Then
+name the next step to the user.
