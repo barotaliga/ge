@@ -41,9 +41,10 @@ constexpr double kTurns[] = {0,    0.25,  -0.25, 0.5,  -0.5, 0.8,  -0.8,
                              1.05, -1.05, 1.3,   -1.3, 1.55, -1.55};
 
 // The start heading a run can be raced off (R12): the fall of the first stretch no steeper than
-// its colour's start, and on a black at least its floor; none where no heading holds.
+// its colour's start, and on a black at least its floor (but on a real `face`, whose run is
+// billed the colour it measures); none where no heading holds.
 std::optional<double> fair_heading(const ge::core::Heightfield& ground, double x, double z,
-                                   double want, const GradeRow& row) {
+                                   double want, const GradeRow& row, bool face) {
   const double run = R::grid::back + R::track::step + R::spawn::run;
   const double gw = R::track::grade_window;
   for (const double d : kTurns) {
@@ -65,7 +66,7 @@ std::optional<double> fair_heading(const ge::core::Heightfield& ground, double x
     const double end = sample_field(ground, x + sx * run, z + cz * run);
     const double mean = (sample_field(ground, x, z) - end) / run;
     if (steepest > row.spawn.max_slope * 0.85 || climb > 0.06) continue;
-    if (row.spawn.min_slope > 0 && mean < row.spawn.min_slope * 1.2) continue;
+    if (!face && row.spawn.min_slope > 0 && mean < row.spawn.min_slope * 1.2) continue;
     return h;
   }
   return std::nullopt;
@@ -112,7 +113,8 @@ std::optional<double> head_on_contour(const ge::core::Heightfield& ground, doubl
 
 std::optional<RunSpec> place_start(const ge::core::Heightfield& ground, const RunSpec& spec,
                                    double lean, std::span<const double> siblings,
-                                   const StartClear& clear, const std::optional<StartTop>& top) {
+                                   const StartClear& clear, const std::optional<StartTop>& top,
+                                   bool face) {
   const int dir = lean >= 0 ? 1 : -1;
   const double mid = (double(ground.cols - 1) * ground.cell) / 2;
   // Under a top, at half the step along the contour and a little further down the fall line at
@@ -141,7 +143,8 @@ std::optional<RunSpec> place_start(const ge::core::Heightfield& ground, const Ru
             hypot(x - top->x, z - top->z) > RR::lift::top::ramp::far - kReachSpare) {
           break;
         }
-        const std::optional<double> heading = fair_heading(ground, x, z, spec.heading, *spec.row);
+        const std::optional<double> heading =
+            fair_heading(ground, x, z, spec.heading, *spec.row, face);
         if (heading && clear(x, z, *heading)) {
           RunSpec out = spec;
           out.x = x;

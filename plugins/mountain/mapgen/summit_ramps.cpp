@@ -2,7 +2,8 @@
 //
 // ge:summary The ramps off a top: their room, then each planned off the rim, pressed and groomed
 // ge:keywords summit-ramps ramp-room room-blocked near-room in-approach off-line plan-ramps
-// ge:keywords lay-ramps press-ramps groom-ramps head-index ramp-to each-cell
+// ge:keywords lay-ramps press-ramps groom-ramps head-index ramp-to each-cell choose-ramps
+// ge:keywords rank-ramps joint
 // ge:skill mountain
 // ge:test tests/mountain_resort_build_test.cpp
 #include "mountain/mapgen/summit_ramps.hpp"
@@ -289,6 +290,102 @@ bool better_ramp(const Candidate& a, const Candidate& b) {
   return fits ? a.length < b.length : a.grade < b.grade;
 }
 
+// One run's ramps off a pad, best first: every one, the few told apart the joint choice weighs,
+// and whether it is a piste (which must have one, R26) or a lane (which may).
+struct RampChoices {
+  bool piste;
+  std::vector<Candidate> ramps;
+  std::vector<Candidate> few;
+};
+
+// How many of a run's ramps the joint choice weighs, how far apart two must leave or land to be
+// told apart, m, and how many arrangements it tries before it keeps the best found.
+constexpr size_t kJointKeep = 12;
+constexpr double kJointApart = 8;
+constexpr int kJointTries = 20000;
+
+// A run's ramps best first, and the first `kJointKeep` told apart: two leaving and landing within
+// `kJointApart` of each other are one ramp.
+RampChoices rank_ramps(std::vector<Candidate> all, bool piste) {
+  std::stable_sort(all.begin(), all.end(),
+                   [](const Candidate& a, const Candidate& b) { return better_ramp(a, b); });
+  std::vector<Candidate> kept;
+  for (const Candidate& c : all) {
+    if (kept.size() >= kJointKeep) break;
+    const bool same = std::any_of(kept.begin(), kept.end(), [&](const Candidate& k) {
+      return hypot(k.ramp.from.x - c.ramp.from.x, k.ramp.from.z - c.ramp.from.z) < kJointApart &&
+             hypot(k.ramp.to.x - c.ramp.to.x, k.ramp.to.z - c.ramp.to.z) < kJointApart;
+    });
+    if (!same) kept.push_back(c);
+  }
+  return RampChoices{piste, std::move(all), std::move(kept)};
+}
+
+// R26 — the ramps off one pad CHOSEN TOGETHER (a real face's, whose tops are crowded): each run's
+// best that clears the ramps chosen before it, as `plan_ramps` lays them one at a time; and where
+// that leaves a run with none though it has one that would stand, the arrangement that serves
+// the most pistes, then the most lanes, each run's ramp as near its best as that allows. A ramp
+// laid first to the shortest line onto its run can take the only room another run had.
+std::vector<SummitRamp> choose_ramps(const std::vector<RampChoices>& choices) {
+  const size_t n = choices.size();
+  std::vector<const Candidate*> greedy;
+  for (const RampChoices& c : choices) {
+    const Candidate* got = nullptr;
+    for (const Candidate& r : c.ramps) {
+      const bool clear = std::none_of(greedy.begin(), greedy.end(), [&](const Candidate* g) {
+        return g && overlaps(g->ramp, r.ramp);
+      });
+      if (clear) {
+        got = &r;
+        break;
+      }
+    }
+    greedy.push_back(got);
+  }
+  // A piste served outweighs every lane.
+  const auto worth = [](const RampChoices& c) { return c.piste ? 1000 : 1; };
+  std::vector<int> could(n + 1, 0);
+  for (size_t i = n; i-- > 0;) {
+    could[i] = could[i + 1] + (choices[i].ramps.empty() ? 0 : worth(choices[i]));
+  }
+  const int most = could[0];
+  std::vector<const Candidate*> best = greedy;
+  int best_served = 0;
+  for (size_t i = 0; i < n; i++) best_served += greedy[i] ? worth(choices[i]) : 0;
+  if (best_served < most) {
+    // Every arrangement, each run's ramps tried best first (or none), the first found serving the
+    // most kept: the nearest each run's best.
+    std::vector<const Candidate*> pick;
+    int tries = 0;
+    const auto walk = [&](const auto& self, size_t i, int got) -> void {
+      if (tries++ > kJointTries || best_served == most || got + could[i] <= best_served) return;
+      if (i == n) {
+        best = pick;
+        best_served = got;
+        return;
+      }
+      for (const Candidate& r : choices[i].few) {
+        const bool clash = std::any_of(pick.begin(), pick.end(), [&](const Candidate* g) {
+          return g && overlaps(g->ramp, r.ramp);
+        });
+        if (clash) continue;
+        pick.push_back(&r);
+        self(self, i + 1, got + worth(choices[i]));
+        pick.pop_back();
+      }
+      pick.push_back(nullptr);
+      self(self, i + 1, got);
+      pick.pop_back();
+    };
+    walk(walk, 0, 0);
+  }
+  std::vector<SummitRamp> out;
+  for (const Candidate* g : best) {
+    if (g) out.push_back(g->ramp);
+  }
+  return out;
+}
+
 // The ramps off every pad: to each run leaving its top joined below its deck near enough, the
 // best line off the rim (`better_ramp`) that falls at least a glide and no steeper than the run's
 // colour, off the ramps already laid off that pad.
@@ -298,10 +395,13 @@ RampsByLift plan_ramps(std::span<const StationPad> pads, std::span<const RampRun
   RampsByLift out;
   for (const StationPad& p : pads) {
     std::vector<SummitRamp> ramps;
+    // Every run's ramps that would stand, best first (`fit.joint`).
+    std::vector<RampChoices> choices;
     for (size_t own = 0; own < runs.size(); own++) {
       const RampRun& r = runs[own];
       if (r.spec->from != p.lift) continue;
       std::optional<Candidate> best;
+      std::vector<Candidate> all;
       const std::vector<TrackPoint>& pts = *r.points;
       for (size_t k = 0; k < pts.size(); k += kAimEvery) {
         const TrackPoint& q = pts[k];
@@ -318,9 +418,11 @@ RampsByLift plan_ramps(std::span<const StationPad> pads, std::span<const RampRun
           if (height(fx, fz) > p.y + kRimRise) continue;
           std::optional<SummitRamp> ramp =
               ramp_to(r, static_cast<int>(own), fx, fz, q, height, cover, station);
+          // Off the ramps already laid off this pad, or, where they are chosen together
+          // (`fit.joint`), off whichever are chosen.
           if (!ramp) continue;
-          if (std::any_of(ramps.begin(), ramps.end(),
-                          [&](const SummitRamp& o) { return overlaps(o, *ramp); })) {
+          if (!fit.joint && std::any_of(ramps.begin(), ramps.end(),
+                                        [&](const SummitRamp& o) { return overlaps(o, *ramp); })) {
             continue;
           }
           const double length = hypot(ramp->to.x - ramp->from.x, ramp->to.z - ramp->from.z);
@@ -330,10 +432,21 @@ RampsByLift plan_ramps(std::span<const StationPad> pads, std::span<const RampRun
           // at a crawl would not glide down.
           if (grade > steepest(*r.spec->row, fit) || grade < fit.glide) continue;
           Candidate found{std::move(*ramp), length, grade};
-          if (!best || better_ramp(found, *best)) best = std::move(found);
+          if (fit.joint) {
+            all.push_back(std::move(found));
+          } else if (!best || better_ramp(found, *best)) {
+            best = std::move(found);
+          }
         }
       }
-      if (best) ramps.push_back(std::move(best->ramp));
+      if (fit.joint) {
+        choices.push_back(rank_ramps(std::move(all), r.spec->kind != RunKind::road));
+      } else if (best) {
+        ramps.push_back(std::move(best->ramp));
+      }
+    }
+    if (fit.joint) {
+      for (SummitRamp& r : choose_ramps(choices)) ramps.push_back(std::move(r));
     }
     if (!ramps.empty()) out[p.lift] = std::move(ramps);
   }

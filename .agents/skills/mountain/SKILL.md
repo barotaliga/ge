@@ -82,6 +82,15 @@ one game's: which maps a game races, its modes and its strings stay in the game.
   model read off its public bucket with `curl` into the gitignored `.cache/dem/`, through the
   labs' GeoTIFF reader (`labs/dem_tiles.hpp`) and inflater (`engine/lab/inflate.hpp`). Never
   edit a face's file by hand; a crop moved is a face baked again and its golden row rewritten.
+  A face is BUILT ON by `GenerateOptions::face` (its region the map's, `massif::real::attempts`
+  attempts): `plan_massif` reads it (`read_face`: the summit ridge down to its brow, the peak,
+  shoulder and valley on the real sides, the floor and the face's own profile) and every draw is
+  still made, so the stream runs on as on a dealt massif; the height is `face_lift`, the real one
+  over the floor fading onto the profile on the valley floor. The rule book bends where a real
+  mountain is not a dealt one: every bend is a number in `massif::real::least`, read where the
+  dealt rule is (`grade_face`, `ramp_fit`, `ChainMost`, `place_start`'s `face`,
+  `StationGround::level`, the drags' and access's `slack`, the analysis's `level.face`). A new
+  bend is a number there and a branch beside the dealt rule's, never a second code path.
 
 ## Order of work (docs/goals.md M4a to M4d)
 
@@ -120,4 +129,7 @@ close up and from the side, the routes' table) at `--version=9,10`; a change to 
 jumping hill runs `skijump-hills` (each hill's earth moved, tower and arena as a table, its
 profile at true scale from the side, the map) at `--version=1,9`; a change to the real faces' crops,
 their codec or their bake runs `real-faces` (the table of every face and the sheet; with `--bake`,
-the samples each bake moves against the tree's). The `labs` skill owns how.
+the samples each bake moves against the tree's); a change to the face's massif or to any rule a
+real face bends runs `real-maps` over every face (`--faces=all`, about ten minutes on one core;
+split the faces over processes) before and after, and no face may stop building. The `labs` skill
+owns how.

@@ -19,6 +19,7 @@
 
 namespace ge::mountain::mapgen {
 
+namespace RR = resort_rules;
 using ge::core::sample_field;
 
 StageResult resort_access(ResortAttempt& a) {
@@ -37,7 +38,8 @@ StageResult resort_access(ResortAttempt& a) {
   }
   std::function<double(double, double)> way;
   if (a.way) way = [w = *a.way](double x, double z) { return off_queue(w, x, z); };
-  a.ramps = lay_ramps(a.ground, a.pads, runs, cover, a.lift_plans, way);
+  const RampFit fit = ramp_fit(a);
+  a.ramps = lay_ramps(a.ground, a.pads, runs, cover, a.lift_plans, way, fit);
 
   // ── ACCESS AS THE RUNS MEASURE (R29): a piste the mountain made gentler than it was built may
   // now merge into a harder run, and one left out may have carried a skier home; a drag lift
@@ -61,7 +63,7 @@ StageResult resort_access(ResortAttempt& a) {
     return PisteNear{hit.distance, hit.width, hit.heading};
   };
   pressed.floor = [base_z](PlanPoint p) { return p.z >= base_z - 1; };
-  pressed.slack = 0;
+  pressed.slack = a.face ? RR::massif::real::least::harder : 0;
   const DragsSettled settled = settle_drags(
       pressed, measured, a.lift_plans, [&](size_t i) { return a.built[i].walked.spec.id; },
       [&](const std::string& id) {
@@ -87,6 +89,8 @@ StageResult resort_access(ResortAttempt& a) {
   };
   beside.height = height;
   beside.floor = pressed.floor;
+  // A real face's bottom station may stand on ground falling more across its footprint.
+  if (a.face) beside.level = RR::massif::real::least::level;
   beside.link_ends = [&](const std::string& id) {
     std::vector<PlanPoint> ends;
     for (const BuiltRun& b : a.built) {
@@ -101,12 +105,12 @@ StageResult resort_access(ResortAttempt& a) {
       clear_stations(beside, a.lift_plans, [&](std::span<const LiftPlan> ls) {
         const PlanAccess v = reckon_access(measured, plan_lifts(pressed, ls), pressed.slack);
         return std::all_of(v.ok.begin(), v.ok.end(), [](bool ok) { return ok; }) &&
-               v.orphans.empty() && (!chained || keeps_chain(ls, height));
+               v.orphans.empty() && (!chained || keeps_chain(ls, height, !a.face));
       });
   if (stuck) return "R26: " + *stuck + " stands on a run wherever its station is moved";
   if (chained) {
     a.way = chain_of(a.lift_plans);
-    regrade_leg(a.ground, a.lift_plans, a.pads, a.ramps);
+    regrade_leg(a.ground, a.lift_plans, a.pads, a.ramps, a.face != nullptr);
   }
 
   // ── THE RAMPS OFF THE DRAGS' TOPS (R26), where they settled ──
@@ -115,7 +119,8 @@ StageResult resort_access(ResortAttempt& a) {
     froms.reserve(runs.size());
     for (const RampRun& r : runs) froms.push_back(r.spec->from);
     a.drag_tops = drag_tops_of(a.lift_plans, froms, height);
-    for (auto& [id, off] : lay_ramps(a.ground, a.drag_tops, runs, cover, a.lift_plans, nullptr)) {
+    for (auto& [id, off] :
+         lay_ramps(a.ground, a.drag_tops, runs, cover, a.lift_plans, nullptr, fit)) {
       a.ramps[id] = std::move(off);
     }
   }
