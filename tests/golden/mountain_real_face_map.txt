@@ -1,0 +1,2 @@
+# a real face's map: face, seed, the attempt accepted and level_digest (mountain_real_face_test)
+fell-1 seed=1 attempt=0 digest=951cbe13

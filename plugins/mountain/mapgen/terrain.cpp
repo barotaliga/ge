@@ -251,7 +251,8 @@ TerrainPlan plan_terrain(ge::core::Rng& rng, const Region& region, const GradeRo
                    std::nullopt,
                    1,
                    nullptr,
-                   {R::mountain::flank::inner, R::mountain::flank::outer}};
+                   {R::mountain::flank::inner, R::mountain::flank::outer},
+                   nullptr};
   plan.seeds.warp = seed();
   plan.seeds.flank = seed();
   plan.seeds.hills = seed();

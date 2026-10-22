@@ -12,9 +12,15 @@
 //     tests/golden/mountain_real_face.txt. A face baked again (a crop moved, the model updated)
 //     rewrites the file: `GE_GOLDEN_WRITE=1 build/<preset>/tests/mountain_real_face_test`, and the
 //     PR says why.
+//   * LAID 1:1 (massif.hpp): a face's massif stands the real heights over its floor down the
+//     upper face, its vertical the real peak's, no dealt side ridges, bowls or headwalls.
+//   * A SKI AREA ON A FACE: fell-1 builds a clean map on seed 1, in its region, and the map's
+//     digest is held in tests/golden/mountain_real_face_map.txt (rewritten the same way when a
+//     generator change moves it on purpose). The real-maps lab sweeps every face.
 //
 // ge:summary The real faces: the crops, the grid's codec, the globe, every face decoded, a golden
 // ge:keywords test real-face face-crop face-grid decode encode globe-at map-at golden r25
+// ge:keywords face-lift real-map generate-face
 // ge:skill testing mountain
 #include <cmath>
 #include <cstdint>
@@ -23,21 +29,30 @@
 #include <cstring>
 #include <fstream>
 #include <initializer_list>
+#include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "check.hpp"
+#include "core/prng.hpp"
 #include "golden.hpp"
+#include "mountain/mapgen/digest.hpp"
+#include "mountain/mapgen/generate.hpp"
+#include "mountain/mapgen/massif.hpp"
 #include "mountain/mapgen/real_face.hpp"
 #include "mountain/mapgen/regions.hpp"
+#include "mountain/mapgen/resort_rules.hpp"
 
 namespace mg = ge::mountain::mapgen;
 
 namespace {
 
 constexpr const char* kGolden = "tests/golden/mountain_real_face.txt";
+constexpr const char* kMapGolden = "tests/golden/mountain_real_face_map.txt";
 
 bool env_set(const char* name) {
 #ifdef _MSC_VER
@@ -204,4 +219,76 @@ TEST(every_face_decodes_to_a_mountain_over_its_floor) {
     for (const auto& r : got) out << r << "\n";
     std::printf("  wrote %zu rows to %s\n", got.size(), kGolden);
   }
+}
+
+TEST(a_real_face_is_laid_one_to_one) {
+  for (const char* id : {"fell-1", "alpine-1"}) {
+    std::optional<mg::RealFace> decoded = mg::real_face(id);
+    CHECK(decoded.has_value());
+    if (!decoded) continue;
+    const auto face = std::make_shared<const mg::RealFace>(std::move(*decoded));
+    const mg::Region& region = mg::region_row(face->crop->region);
+    ge::core::Rng rng = ge::core::make_rng(7);
+    const mg::TerrainPlan plan = mg::plan_massif(rng, region, face, 0);
+    CHECK_MSG(plan.face != nullptr, std::string(id) + ": the plan carries no face");
+    if (!plan.face) continue;
+    CHECK(plan.altitude == plan.face->floor);
+    CHECK(plan.flank == 0 && plan.crests == 0 && plan.bowls.empty() && plan.headwalls.empty());
+    CHECK_MSG(mg::within_band(plan.vertical, mg::resort_rules::massif::real::vertical),
+              std::string(id) + ": a vertical of " + f1(plan.vertical) + " m");
+    // Down the upper face the ground is the real height over the floor, the share of R3's folds
+    // laid over it aside.
+    const ge::core::Heightfield ground = mg::bake_massif(plan);
+    double off = 0;
+    int count = 0;
+    for (int r = 0; mg::descent_at(plan, plan.summit_z + r * 64) < 0.8; r++) {
+      const double z = plan.summit_z + r * 64;
+      for (int c = 0; c <= 50; c++) {
+        const double x = 400 + c * 64;
+        const double real = mg::face_height(*face, x, z) - plan.face->floor;
+        off += std::fabs(ge::core::sample_field(ground, x, z) - real);
+        count++;
+      }
+    }
+    const double mean = off / count;
+    CHECK_MSG(mean < 12, std::string(id) + ": the ground stands " + f1(mean) +
+                             " m off the real face on average down its upper face");
+  }
+}
+
+TEST(a_real_face_builds_a_clean_ski_area) {
+  const bool write = env_set("GE_GOLDEN_WRITE");
+  mg::GenerateOptions opts;
+  opts.face = "fell-1";
+  const mg::Level level = mg::generate_level(1, opts);
+  CHECK(level.face == std::optional<std::string>("fell-1"));
+  CHECK(level.region == mg::RegionId::fell);
+  CHECK(level.resort.has_value());
+  const std::string row = cat({"fell-1 seed=1 attempt=", std::to_string(level.attempt),
+                               " digest=", mg::level_digest(level)});
+  if (write) {
+    std::ofstream out(ge::test::root_path(kMapGolden));
+    out << "# a real face's map: face, seed, the attempt accepted and level_digest "
+           "(mountain_real_face_test)\n"
+        << row << "\n";
+    return;
+  }
+  const auto want = ge::test::golden_words(kMapGolden);
+  std::string line;
+  if (!want.empty()) {
+    for (const auto& w : want[0]) line += (line.empty() ? "" : " ") + w;
+  }
+  CHECK_MSG(row == line, cat({"the fell-1 map moved:\n  got  ", row, "\n  want ", line,
+                              "\nIf the move is meant, rewrite ", kMapGolden,
+                              " with GE_GOLDEN_WRITE=1 and say why in the PR."}));
+  // A face no crop names is refused with the place to look.
+  bool refused = false;
+  try {
+    mg::GenerateOptions bad;
+    bad.face = "nowhere-1";
+    (void)mg::generate_level(1, bad);
+  } catch (const mg::GenerateError&) {
+    refused = true;
+  }
+  CHECK(refused);
 }

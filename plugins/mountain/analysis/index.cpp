@@ -23,6 +23,7 @@
 #include "mountain/mapgen/grades.hpp"
 #include "mountain/mapgen/query.hpp"
 #include "mountain/mapgen/regions.hpp"
+#include "mountain/mapgen/resort_rules.hpp"
 #include "mountain/mapgen/spawn.hpp"
 #include "mountain/mapgen/sun.hpp"
 #include "mountain/mapgen/track.hpp"
@@ -235,14 +236,18 @@ LevelAnalysis analyze_level(const mapgen::Level& level) {
     if (pts[i].s > finish_at - R::track::grade_window) held[i] = 1;
   }
   const double min_grade = mapgen::window_grades(ys, step, held).gentlest;
-  const double least_grade = R::track::min_grade;
+  // A real face laid 1:1 runs out onto a valley floor flatter than a dealt one's (R25).
+  const double least_grade =
+      level.face ? mapgen::resort_rules::massif::real::least::fall : R::track::min_grade;
   if (min_grade < least_grade - 0.01) {
     add("R8", Severity::error,
         "the line falls only " + fmt(min_grade, 3) + " (least " + str(least_grade) + ")");
   }
   const TrackPoint flat_from = mapgen::track_point_at(level.track, L - R::track::finish);
   const double finish_grade = (flat_from.y - pts[n - 1].y) / R::track::finish;
-  if (std::abs(finish_grade) > 0.03) {
+  // …and a course's finish straight falls onto a real valley floor still falling into its hub.
+  if (std::abs(finish_grade) >
+      (level.face ? mapgen::resort_rules::massif::real::least::finish : 0.03)) {
     add("R8", Severity::error, "the finish straight falls at " + fmt(finish_grade, 3));
   }
   double max_cross = 0;

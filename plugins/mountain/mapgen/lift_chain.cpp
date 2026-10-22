@@ -275,9 +275,38 @@ double off_queue(const ChainWay& way, double x, double z) {
                   seg(way.ring, way.station, x, z) - C::half);
 }
 
+namespace {
+
+// How far inside R26's band a searched aim keeps, rad and m (the ring is solved onto it only
+// nearly), and the steps it is read at.
+constexpr double kAimMarginBearing = 0.05;
+constexpr double kAimMarginReach = 2;
+constexpr double kAimStepBearing = 0.1;
+constexpr double kAimStepReach = 4;
+
+// Every aim on a grid over R26's band (`lift.chain.bearing`, `.reach`), kept inside it.
+std::vector<std::array<double, 2>> search_aims() {
+  std::vector<std::array<double, 2>> out;
+  const double b1 = C::bearing.max - kAimMarginBearing;
+  const double r1 = C::reach.max - kAimMarginReach;
+  // Stepped by adding, as the band is walked: each aim is the sum of the steps before it.
+  double b = C::bearing.min + kAimMarginBearing;
+  while (b <= b1 + 1e-9) {
+    double r = C::reach.min + kAimMarginReach;
+    while (r <= r1 + 1e-9) {
+      out.push_back({b, r});
+      r += kAimStepReach;
+    }
+    b += kAimStepBearing;
+  }
+  return out;
+}
+
+}  // namespace
+
 std::optional<LaidChain> lay_chain(ge::core::Heightfield& ground, std::span<const float> raw,
                                    std::vector<LiftPlan>& lifts, std::vector<StationPad> pads,
-                                   const PadShape& shape) {
+                                   const PadShape& shape, const ChainMost& most) {
   const LiftPlan* up = find_lift(lifts, kUpper);
   const LiftPlan* lowp = find_lift(lifts, kLower);
   if (!up || !lowp) return std::nullopt;
@@ -290,8 +319,8 @@ std::optional<LaidChain> lay_chain(ge::core::Heightfield& ground, std::span<cons
     ChainWay way;
     Works works;
   };
-  // The way to the queue with the chair's bottom at `bottom`, or none where it stands on a pad
-  // or asks more earthworks than `lift.chain` allows.
+  // The way to the queue with the chair's bottom at `bottom`, or none where it stands on a pad,
+  // past a skate, or asks more earthworks than `most`.
   const auto tried = [&](PlanPoint bottom) -> std::optional<Tried> {
     const Ends ends{lower_kind, bottom, lower_top};
     for (const PlanPoint& p : bottom_footprint(lower_kind, bottom, lower_top)) {
@@ -299,9 +328,15 @@ std::optional<LaidChain> lay_chain(ge::core::Heightfield& ground, std::span<cons
         if (!(hypot(p.x - q.x, p.z - q.z) > q.r)) return std::nullopt;
       }
     }
+    // A real face's way may ask more earthworks of a further aim: its station is still kept a
+    // skate from the gondola's top (R29).
+    if (most.skate &&
+        hypot(bottom.x - upper.top.x, bottom.z - upper.top.z) >= resort_rules::access::skate) {
+      return std::nullopt;
+    }
     const ChainWay way = chain_way(upper, ends);
     const Works works = earthworks(ground, way, ends);
-    if (works.fill > C::fill || works.cut > C::dig || works.dig > C::dig) return std::nullopt;
+    if (works.fill > most.fill || works.cut > most.dig || works.dig > most.dig) return std::nullopt;
     return Tried{bottom, ends, way, works};
   };
   std::optional<Tried> found;
@@ -311,6 +346,21 @@ std::optional<LaidChain> lay_chain(ge::core::Heightfield& ground, std::span<cons
                          : chain_bottom(upper.kind, upper.bottom, upper.top, lower_kind, lower_top,
                                         C::aims[i]));
     moved = i > 0;
+  }
+  if (!found && most.search) {
+    // The whole band read, and the aim asking the least of the mountain.
+    double least = std::numeric_limits<double>::infinity();
+    for (const std::array<double, 2>& aim : search_aims()) {
+      std::optional<Tried> t =
+          tried(chain_bottom(upper.kind, upper.bottom, upper.top, lower_kind, lower_top, aim));
+      const double cost = t ? t->works.fill + num::max(t->works.cut, t->works.dig)
+                            : std::numeric_limits<double>::infinity();
+      if (cost < least) {
+        least = cost;
+        found = t;
+      }
+    }
+    moved = true;
   }
   if (!found) return std::nullopt;
   if (moved) {
@@ -375,7 +425,7 @@ void groom_way(const ChainWay& way, ge::core::Heightfield& packed, const OnRun& 
 }
 
 void regrade_leg(ge::core::Heightfield& ground, std::span<const LiftPlan> lifts,
-                 std::span<const StationPad> pads, const RampsByLift& ramps) {
+                 std::span<const StationPad> pads, const RampsByLift& ramps, bool hold) {
   const std::optional<ChainWay> way = chain_of(lifts);
   if (!way) return;
   const StationPad* pad = nullptr;
@@ -397,12 +447,18 @@ void regrade_leg(ge::core::Heightfield& ground, std::span<const LiftPlan> lifts,
     return {way->from.x + ex * t, way->from.z + ez * t};
   };
   // Off the pad's own edge: its height read just inside it, its cells left as they were pressed.
-  const double keep = pad ? pad->r : 0;
-  const PlanPoint from = pad ? leaves(keep) : way->from;
-  const PlanPoint edge = pad ? leaves(pad->r - ground.cell) : way->from;
+  // On a real face the leaning pad may stand higher at its edge than where he is let go, so the
+  // leg is cut from the let-go point itself.
+  const bool off_pad = pad && !hold;
+  const double keep = off_pad ? pad->r : 0;
+  const PlanPoint from = off_pad ? leaves(keep) : way->from;
+  const PlanPoint edge = off_pad ? leaves(pad->r - ground.cell) : way->from;
   const double y0 = sample_field(ground, edge.x, edge.z);
   const double reach = hypot(way->ring.x - from.x, way->ring.z - from.z);
-  const double y_ring = sample_field(ground, way->ring.x, way->ring.z);
+  // On a real face the ring is cut again to fall `lift.chain.grade` from him, as it was laid:
+  // its runs and ramps, graded through the real knolls since, may have left it nearly level.
+  const double ring = sample_field(ground, way->ring.x, way->ring.z);
+  const double y_ring = hold ? num::min(ring, y0 - C::grade * reach) : ring;
   // A ramp off the deck crossing the leg: its own even fall and its flanks falling off it.
   const auto off = ramps.find(kUpper);
   const auto ramp_floor = [&](double x, double z) {
@@ -417,6 +473,20 @@ void regrade_leg(ge::core::Heightfield& ground, std::span<const LiftPlan> lifts,
     }
     return floor;
   };
+  // On a real face, the highest any ramp stands over the leg's line from each share of it on, so
+  // the line held up to it falls all the way.
+  constexpr int kHold = 64;
+  std::array<double, kHold + 1> held;
+  held.fill(-std::numeric_limits<double>::infinity());
+  if (hold) {
+    for (int i = kHold; i >= 0; i--) {
+      const double k = double(i) / kHold;
+      const double f =
+          ramp_floor(from.x + (way->ring.x - from.x) * k, from.z + (way->ring.z - from.z) * k);
+      const auto at = static_cast<size_t>(i);
+      held[at] = num::max(f, i < kHold ? held[at + 1] : -std::numeric_limits<double>::infinity());
+    }
+  }
   const std::array<PlanPoint, 2> corners{from, way->ring};
   press_box(ground, corners, C::half + C::blend, [&](double x, double z, double y) {
     if (pad && hypot(x - pad->x, z - pad->z) < keep) return y;
@@ -425,9 +495,11 @@ void regrade_leg(ge::core::Heightfield& ground, std::span<const LiftPlan> lifts,
     if (out >= C::blend) return y;
     const double w = 1 - smoothstep(0, C::blend, out);
     const double line = y0 + (y_ring - y0) * at.k;
-    const double to = y + (line - y) * w;
+    const double up = num::min(y0, held[static_cast<size_t>(num::round(at.k * kHold))]);
+    const double to = y + (num::max(line, up) - y) * w;
     const double floor = ramp_floor(x, z);
     if (to < y) return num::max(to, num::min(y, floor));
+    if (up > line && floor == -std::numeric_limits<double>::infinity()) return to;
     // Filled only off the pad's edge, fading over `lift.chain.lip` m, so the way leaves the pad
     // without a step down onto it, and never on a ramp, left falling as it was pressed.
     if (floor > -std::numeric_limits<double>::infinity()) return y;

@@ -654,7 +654,10 @@ std::variant<WalkedRun, std::string> walk_run(ge::core::Rng& rng, const TerrainP
     }
     const double rx = libm::cos(q.heading) * (q.width / 2 + kBench);
     const double rz = -libm::sin(q.heading) * (q.width / 2 + kBench);
-    if (flank_at(plan, q.x + rx, q.z + rz) > 0.05 || flank_at(plan, q.x - rx, q.z - rz) > 0.05) {
+    // A real face lays no side ridges (R25): its ground beside the ski area is the real
+    // mountain's, and a run may go out to it.
+    if (!plan.face &&
+        (flank_at(plan, q.x + rx, q.z + rz) > 0.05 || flank_at(plan, q.x - rx, q.z - rz) > 0.05)) {
       return std::string("a run runs up a side ridge");
     }
   }

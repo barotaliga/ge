@@ -51,12 +51,18 @@ struct StationGround {
   std::function<double(double x, double z)> height;
   std::function<bool(PlanPoint p)> floor;
   std::function<std::vector<PlanPoint>(const std::string& id)> link_ends;
+  // The most the ground may fall across a bottom station's footprint, m per m: a real face's own
+  // (`massif::real::least::level`) where set, else `kStationLevel`.
+  std::optional<double> level;
 };
 
+// The most the ground may fall across a bottom station's footprint on a dealt massif, m per m.
+inline constexpr double kStationLevel = 0.22;
+
 // Whether a bottom station at `bottom` on a line to `top` stands on ground level enough to build
-// on: the ground across its footprint falls no more than a little over a fifth of a metre a metre.
+// on: the ground across its footprint falls no more than `most` m a metre.
 bool stands_level(const std::function<double(double x, double z)>& height, LiftKind kind,
-                  PlanPoint bottom, PlanPoint top);
+                  PlanPoint bottom, PlanPoint top, double most = kStationLevel);
 
 // R26 — every lift's bottom station (and a drag, re-laid) stood clear of the runs where it stands
 // on one, each the nearest way that leaves `ok` true. The lift that fits nowhere, or none. Moves

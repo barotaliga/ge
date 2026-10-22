@@ -577,6 +577,8 @@ struct Level {
   Weather weather{};
   int version = 0;  // the generator version that built it (versions.hpp)
   RegionId region = RegionId::alpine;
+  // R25 — the real face the map is laid off (real_face_crops.hpp's id); absent on a dealt map.
+  std::optional<std::string> face;
   std::optional<PisteGrade> grade;             // the grade built to (R23); absent on v1
   std::optional<ge::core::Heightfield> crust;  // the region's wind crust (R21), if it lays one
   std::optional<ResortMap> resort;             // the ski area (R25–R30); absent on v1
@@ -601,6 +603,9 @@ struct GenerateOptions {
   std::optional<int> laps;      // default R16's one
   std::optional<int> version;   // versions.hpp; the current rules when absent or unknown
   std::optional<RegionId> region;
+  // R25 — lay the ski area off this real face (its id), in its region; searched over
+  // `massif::real::attempts` unless `attempts` is given.
+  std::optional<std::string> face;
   std::optional<int> only;  // build this one attempt alone and throw its refusal
   // R28 — on a ski area, the course to race by its id, else one of this colour (the nearest there
   // is), else the colour the seed deals (`deal_grade`).

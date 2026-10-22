@@ -17,10 +17,13 @@
 //
 // ge:summary R14 a ski area's woods by height: the ecotone's curve and the trees' heights
 // ge:keywords resort-woods woods-by-height ecotone timberline tree-line
-// ge:keywords woods-at-depth tall-at-depth
+// ge:keywords woods-at-depth tall-at-depth thin-trees
 // ge:skill mountain
 // ge:test tests/mountain_resort_build_test.cpp
 #pragma once
+
+#include <cstddef>
+#include <vector>
 
 #include "mountain/mapgen/forest.hpp"
 #include "mountain/mapgen/types.hpp"
@@ -46,5 +49,10 @@ WoodsCover woods_at_depth(const WoodsRow& row, double d);
 // R14 — the tallest a tree `d` m under the tree line grows, as a share of the height band: the
 // krummholz's at the line, the whole band by the curve's reach and below.
 double tall_at_depth(const WoodsRow& row, double d);
+
+// `trees` thinned evenly to at most `most`, kept by a golden-ratio stride over their order (so no
+// stream is drawn on); left as they are where they hold no more (`massif::real::trees`: laid 1:1,
+// a low real face is wooded top to bottom).
+void thin_trees(std::vector<TreeDef>& trees, size_t most);
 
 }  // namespace ge::mountain::mapgen
