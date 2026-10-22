@@ -128,7 +128,8 @@ void run(gl::Lab& lab) {
   const sk::Scenario* sc = sk::find_scenario(lab.arg("scenario"));
   if (!sc) {
     lab.fail("no ride scenario \"" + lab.arg("scenario") + "\"",
-             "Pick one of plugins/skier/scenarios.cpp's ids (`make lab LAB=ride` lists them).");
+             "Run `make lab LAB=anim ARGS=--scenario=turns`, or another id from "
+             "plugins/skier/scenarios.cpp.");
     return;
   }
   const double seconds = lab.arg_num("seconds") > 0 ? lab.arg_num("seconds") : sc->seconds;
@@ -136,7 +137,7 @@ void run(gl::Lab& lab) {
   const size_t nf = track.frames();
   if (nf < 64) {
     lab.fail("the track has " + std::to_string(nf) + " frames, the views need 64",
-             "Pass a longer --seconds (at least 0.6).");
+             "Run `make lab LAB=anim ARGS=--seconds=4` (0.6 s at least).");
     return;
   }
   const gl::Motion motion = gl::measure_motion(track);
