@@ -53,6 +53,11 @@ TEST(a_manifest_parses_its_keys_and_refuses_what_it_does_not_know) {
   CHECK(ok.manifest.data == "skier" && ok.manifest.sources.size() == 2);
   CHECK(ok.manifest.budget_bytes == uint64_t{64} * 1024);
   CHECK(ok.manifest.model_path().filename() == "skier.glb");
+  // A CRLF checkout (git on Windows) reads the same.
+  const a::ManifestRead crlf =
+      a::parse_manifest("builder: build.py\r\ndata: skier\r\nbudget-kib: 64\r\n", "skier");
+  CHECK_MSG(crlf.ok, crlf.error);
+  CHECK(crlf.manifest.builder == "build.py" && crlf.manifest.budget_bytes == uint64_t{64} * 1024);
   for (const char* bad :
        {"builder: b.py\nbudget-kib: 1\ncolour: red\n", "builder: b.py\nbudget-kib: 1\njust words\n",
         "builder: b.py\nbudget-kib: lots\n", "budget-kib: 4\n", "builder: b.py\n"}) {

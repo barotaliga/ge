@@ -78,10 +78,12 @@ ManifestRead parse_manifest(std::string_view text, const fs::path& dir) {
   bool budget = false;
   while (std::getline(in, raw)) {
     line++;
+    // A checkout with CRLF line ends (git on Windows) reads the same as one with LF.
+    if (!raw.empty() && raw.back() == '\r') raw.pop_back();
     std::string_view s = raw;
     if (const size_t hash = s.find('#'); hash != std::string_view::npos) s = s.substr(0, hash);
     const std::string body = trim(s);
-    if (body.empty() || body == "\r") continue;
+    if (body.empty()) continue;
     const size_t colon = body.find(':');
     const std::string key = colon == std::string::npos ? body : trim(body.substr(0, colon));
     const std::string value = colon == std::string::npos ? "" : trim(body.substr(colon + 1));
