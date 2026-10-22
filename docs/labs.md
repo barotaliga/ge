@@ -96,7 +96,13 @@ make lab LAB=level ARGS=--compare=before      # every metric beside the kept run
 make labs-smoke                               # every lab at its smoke flags, twice, digests checked
 make labs-digests                             # rewrite tests/labs_digests.txt (a reviewed change)
 build/debug/labs --json                       # the list as one JSON array (what `ge lab` reads)
+make lab LAB=trace ARGS="--log=course=debug"  # any lab: the log spec's lines in previews/<id>/log.txt
 ```
+
+`--log=<spec>` switches on log channels for the run (`docs/debugging.md`): every line kept goes to
+`previews/<id>/log.txt` as `[step] level channel: message`, the debug and trace lines only
+there, and a note in the report counts them by channel and level. The log is `measured`: it
+never moves a digest.
 
 In a game repo, `ge lab` is the way in: `ge lab` lists, `ge lab <id> --tag=before` and
 `--compare=before` run one, and with `--json` the lab's whole `report.json` is the answer's
@@ -259,6 +265,7 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 | Lab | Kind | Owner | Subject | Lands |
 | --- | --- | --- | --- | --- |
 | `noise` | picture | engine | `engine/core/noise.hpp` | M2 (now) |
+| `charts` | picture | engine | `engine/lab/chart.hpp`, `plot.hpp`, `stats.hpp`, `series.hpp` (every chart form over seeded data with outliers planted at known places, each as a PNG and an SVG; a series file written and read back) | M14a (now) |
 | `run-clock` | sim | engine | `engine/loop/run_clock.hpp` | M2 (now) |
 | `level` | picture | plugin:mountain | `plugins/mountain/mapgen` (`--version=1,8`: the single piste, a ski area's race map) | M4a, M4b4a (now) |
 | `analyze` | sim | plugin:mountain | `plugins/mountain/analysis` (a race map's course and area at `--version=8`) | M4a, M4b4a (now) |
@@ -277,6 +284,8 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 | `sim` | drive | game:fall_line | `games/fall_line/sim` (the step, the course, the bot, the field) | M5b–M5c (now) |
 | `ride` | scenario | plugin:skier | `plugins/skier` (`step_skier`, the snow, the limits) | M5a (now) |
 | `play` | drive | game:fall_line | `games/fall_line/sim/play` (an agent over stdio) | M5c (now) |
+| `trace` | drive | game:fall_line | the player's skier step by step down one seed with the bot: `trace.tsv` (a series file), the speed, the sideways load and the edge and lean charted against the clock with gates, flights and spikes; `--log=` for the same run's events (docs/debugging.md) | M14a (now) |
+| `anim` | picture | plugin:skier | the figure's pose track: filmstrips, onion skins, joint charts, snaps, stretch and clips | M14b |
 | `gpu-capture` | picture | engine | `engine/gpu` (the headless capture) | M6 (now) |
 | `frame-pace` | bench | engine | the platform's frame loop | M6 (now) |
 | `world` | picture | game:fall_line | Fall Line's frame from named views of a seed, TAA-U on or off at a render scale, the shimmer, the overdraw probe, a run's moments from the chase camera with the field (`--moments`, `--rivals`) the cull check (every view redrawn with occlusion culling off, `cull-faults` must be 0), the `wood` view (the trees' shadows on sunlit snow) and the sun's cascades over the whole run (`cascade-redraws.near` and `.far`, deterministic, with no device) (`games/fall_line/labs/gpu_world_lab.cpp`) | M7a, M7d1, M7d2 (now) |

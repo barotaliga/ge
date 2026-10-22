@@ -50,6 +50,15 @@ constexpr FlagSpec kLabFlags[] = {
     kEngine,
     kRepo};
 
+constexpr FlagSpec kGraphFlags[] = {
+    {"kind", "<auto|line|scatter|hist|box|heat|spans>",
+     "the chart (default auto: spans for a spans file, line for the rest)"},
+    {"columns", "<a,b>", "only these columns (default: every numeric column but x)"},
+    {"x", "<column>", "the x column (default: the file's `# x:` or its first numeric column)"},
+    {"out", "<dir>", "where the PNGs and SVGs go (default: graphs/ beside the first file)"},
+    {"title", "<text>", "a title before each chart's own"},
+    {"log", "", "a log scale for the y axis (line and scatter)"}};
+
 const CommandSpec kCommands[] = {
     {"help",
      "[<command>]",
@@ -105,6 +114,10 @@ const CommandSpec kCommands[] = {
      "list the labs, or run one: its metrics, tables, captioned pictures and digest; its own "
      "flags go after --",
      kLabFlags, "ge lab run --json -- --seeds=1,2", "labs"},
+    {"graph", "<file>...", 1, -1, "see",
+     "chart series or spans files (a trace, a bench, a profile) to PNG and SVG; several files "
+     "overlay; every outlier comes back as a note",
+     kGraphFlags, "ge graph runs/before.tsv runs/after.tsv --columns=step_ms", "debug"},
     {"doctor", "", 0, 0, "maintain",
      "the repo against the engine's rules: guidance, skills, the pin, flags, sources, messages",
      kRepoOnly, "ge doctor", "ge"},

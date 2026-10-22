@@ -9,7 +9,7 @@
 //
 // ge:summary The ge executable: parses the command line against the catalog and runs each command
 // ge:keywords cli ge main command-line usage dispatch help version new find explain use add
-// ge:keywords build test check lab doctor skills lessons json
+// ge:keywords build test check lab graph doctor skills lessons json
 // ge:skill agent-interface
 // ge:test tests/cli_commands_test.cpp
 #include <algorithm>
@@ -22,6 +22,7 @@
 #include "cli/commands.hpp"
 #include "cli/doctor.hpp"
 #include "cli/embedded.hpp"
+#include "cli/graph.hpp"
 #include "cli/index.hpp"
 #include "cli/json.hpp"
 #include "cli/outcome.hpp"
@@ -148,6 +149,25 @@ Outcome run(const Args& a) {
     lab.compare = flag_value(a, "compare");
     lab.passthrough = a.passthrough;
     return run_lab(build_options(a), lab);
+  }
+  if (name == "graph") {
+    GraphOptions g;
+    g.files = a.words;
+    g.kind = flag_value(a, "kind", "auto");
+    const std::string cols = flag_value(a, "columns");
+    for (size_t start = 0; start < cols.size();) {
+      const size_t comma = cols.find(',', start);
+      const std::string one =
+          cols.substr(start, comma == std::string::npos ? comma : comma - start);
+      if (!one.empty()) g.columns.push_back(one);
+      if (comma == std::string::npos) break;
+      start = comma + 1;
+    }
+    g.x = flag_value(a, "x");
+    g.out = flag_value(a, "out");
+    g.title = flag_value(a, "title");
+    g.log_y = has_flag(a, "log");
+    return run_graph(g);
   }
   if (name == "doctor") {
     Outcome o;

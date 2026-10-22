@@ -28,12 +28,14 @@ ge use <plugin>                  # link racing, mountain or skier, and install i
 ge build                         # compiler and CMake errors come back as findings
 ge test [--filter=<regex>]       # every test and lab smoke; each failure a finding
 ge lab <id> [--tag=before | --compare=before] [-- <its flags>]   # measure and LOOK
+ge graph <file>... [--kind=<k>]  # chart traces, benches, profiles: PNG + SVG, outliers as notes
 ge check                         # the whole gate: format, doctor, build, tests (what CI runs)
 ```
 
 Around it: `ge new <dir>` scaffolds a game repo; `ge doctor` is the rules alone; `ge skills
 sync` rewrites the engine's skills after an upgrade; `ge lessons <skill>` reads a skill's
-lessons before you start.
+lessons before you start. The `debug` skill says how to switch on the log channels for a run
+(`-- --log=<spec>`) and how to read what `ge graph` rings.
 
 Build, test and check write the tools' full output to `build/<preset>/ge-*.log` and answer
 with findings instead, so a clean run is one line. Read the log only when a finding says to.
