@@ -121,7 +121,7 @@ endif()
 # The lab framework (engine/lab: the contract, the runner, the raster, the PNG), published as
 # ge::lab so a game's labs plug into the same contract as the engine's (docs/labs.md).
 add_library(ge_lab STATIC engine/lab/lab.cpp engine/lab/report.cpp engine/lab/runner.cpp
-  engine/lab/raster.cpp engine/lab/png.cpp engine/lab/sound.cpp)
+  engine/lab/raster.cpp engine/lab/png.cpp engine/lab/inflate.cpp engine/lab/sound.cpp)
 target_link_libraries(ge_lab PUBLIC ge_core ge_audio)
 
 # The ge command line (engine/cli, cmake/Cli.cmake): built here too when a game pulls the engine
@@ -172,6 +172,12 @@ if(PROJECT_IS_TOP_LEVEL)
     list(APPEND GE_LAB_EXTRA ge_platform)
   else()
     list(FILTER GE_LAB_SOURCES EXCLUDE REGEX "/engine/lab/labs/platform_[^/]*$")
+  endif()
+  # The ge command line's lab (cli_*_lab.cpp) builds only with the command line.
+  if(GE_CLI)
+    list(APPEND GE_LAB_EXTRA ge_cli)
+  else()
+    list(FILTER GE_LAB_SOURCES EXCLUDE REGEX "/labs/cli_[^/]*$")
   endif()
   get_property(GE_PLUGIN_TARGETS GLOBAL PROPERTY GE_PLUGIN_TARGETS)
   get_property(GE_GAME_TARGETS GLOBAL PROPERTY GE_GAME_TARGETS)

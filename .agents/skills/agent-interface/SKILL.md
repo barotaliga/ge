@@ -1,6 +1,6 @@
 ---
 name: agent-interface
-description: "Use for how the engine talks to agents in gameengine2 and in the game repos that consume it: the diagnostics convention and its test, the consumer skills (consumer-skills/), the game scaffold (scaffold/), and the ge CLI in engine/cli (ge new, ge skills sync, ge doctor, ge lessons)."
+description: "Use for how the engine talks to agents in gameengine2 and in the game repos that consume it: the diagnostics convention and its test, the consumer skills (consumer-skills/), the game scaffold (scaffold/), the ge CLI in engine/cli (its catalog, the --json answer, find, explain, new, use, add, build, test, check, lab, doctor, skills sync, lessons) and the templates ge add writes (templates/)."
 ---
 
 # The agent interface
@@ -30,39 +30,68 @@ string literals are judged, so put the next action in a literal, not in a variab
 
 ## The `ge` CLI (`engine/cli`, `cmake/Cli.cmake`)
 
+`ge` is the whole interface an agent has to a game repo: there is no editor. `commands.cpp`'s
+`kCommands` is the catalog (each command's arguments, flags, stage of the loop, summary,
+example and consumer skill); the parser, `ge help` and `ge help --json` all read it, and
+`tests/cli_commands_test.cpp` fails a command without its help, example or skill, and one the
+`ge` consumer skill does not mention.
+
 | Command | What | Code |
 | --- | --- | --- |
-| `ge new <dir> [--name=] [--engine-sha256=]` | A game repo from `scaffold/`, its links, its skills | `scaffold.hpp` |
-| `ge skills sync [--force]` | The engine's skills rewritten to this ge's version, the lock and the `AGENTS.md` block | `skills.hpp` |
-| `ge doctor` | A game repo held to the engine's rules; a game's `make agents-check` | `doctor.hpp` |
-| `ge lessons [<skill>] [--scope=]` | The skills' lessons read back; a game's `make lessons` | `skills.hpp` |
+| `ge help [<command>]`, `ge version` | The catalog, as text or `--json` | `commands.hpp` |
+| `ge find <words>`, `ge explain <file\|name>` | The repo's and the engine's files, skills and lessons by their `ge:` tags; one file's header, a symbol's declaration | `index.hpp` |
+| `ge new <dir>` | A game repo from `scaffold/`, its links, its skills | `scaffold.hpp` |
+| `ge use <plugin>` | Link a plugin into the game's sim, sync its skill (and the skills of the plugins it brings) | `add.hpp` |
+| `ge add system\|lab\|test <name>` | A working piece from `templates/`, tags filled, formatted, refusing to write over a file | `add.hpp` |
+| `ge build`, `ge test`, `ge check`, `ge lab` | Configure, build, test, the whole gate, a lab: the tool's output in `build/<preset>/ge-*.log`, the answer as findings | `build.hpp` |
+| `ge doctor`, `ge skills sync`, `ge lessons` | The repo against the rules; the engine's skills and the lock; a skill's lessons | `doctor.hpp`, `skills.hpp` |
 
+- **One answer shape.** Every command builds an `Outcome` (`outcome.hpp`: findings, written,
+  result, summary, next) and `emit` prints it as text or, with `--json`, one object
+  `{command, ok, exit, findings, written, result, summary, next}`. A failure's `next` is
+  blank: its findings carry the next actions. Exit codes: 0 done, 1 a finding is an error, 2 a
+  usage error.
+- **Output read back, not passed through.** `compiler_findings` and `test_findings`
+  (`build.cpp`) turn GCC/Clang, MSVC, CMake, linker, clang-format, CTest and the harness's
+  `FAIL` lines into findings at a repo-relative `file:line`, deduplicated and capped. A tool
+  whose output it does not recognise still fails with a finding that names the log. A new
+  shape is a case in `tests/cli_build_test.cpp` first.
+- **Every command is budgeted.** The `cli-loop` lab runs the loop on a scaffolded repo and
+  fails a text answer over its line budget: an agent pays for every line.
 - **ge carries what it writes.** `cmake/EmbedFiles.cmake` compiles every
-  `consumer-skills/*/SKILL.md`, every `scaffold/**` file and `VERSION` into it, so a ge writes
-  exactly its release's skills and scaffold. A game repo builds the ge of the engine it pins
-  (`cmake/Cli.cmake` runs in a FetchContent build too), and its Makefile runs that one, so the
-  version always matches; `ge doctor` reports a mismatch.
+  `consumer-skills/*/SKILL.md`, every `scaffold/**` and `templates/**` file, every
+  `plugins/*/CMakeLists.txt` (so `ge use` knows each plugin's links) and `VERSION` into it. A
+  game repo builds the ge of the engine it pins; a ge of another release run in a repo hands
+  the command to `build/<preset>/ge` once that is built (`main.cpp`'s `hand_to_pinned`), so
+  the rules are always the pinned release's.
+- **Templates** (`templates/<kind>/`, `.in` files) use `{{name}}`, `{{ident}}`, `{{snake}}`,
+  `{{kebab}}` and `{{Type}}`. Like the scaffold, each must pass a game's format and `ge doctor`:
+  `tests/cli_add_test.cpp` checks every piece is filled and doctor-clean, and the `scaffold`
+  job builds and tests every one.
+- **Plugin skills.** A consumer skill with `plugin: <name>` in its front matter is synced only
+  into a repo that links that plugin, directly or through another (`skills_for`).
 - **Every message is a `Finding`** (`finding.hpp`: severity, what, where, next), printed by
-  `format_finding`. Exit codes: 0 done, 1 the repo breaks a rule, 2 a usage error.
+  `format_finding`.
 - **The engine skills a game owns only by lock.** Sync writes an engine skill only while its
   hash matches `.agents/skills/ge-skills.lock`; a hand-edited one, or a repo skill of the same
   name, is left and reported until `--force`. `.lessons/` are never touched. A skill the engine
   drops is removed with its lessons kept.
 - **Scaffold with a released ge** (a package's `bin/ge`). `VERSION` on `main` is the last
-  release, so a ge built from `main` pins that release, which lacks whatever `main` added since
-  (v0.1.0 has no `ge::lab` and no `ge`): its scaffold downloads and verifies, then fails to
-  configure. The release workflow writes the new `VERSION` before it builds, so a released ge
-  pins itself.
-- **Try it here:** `make ge ARGS="new ../snow-racer"`, then in that repo
-  `cmake --preset debug -DFETCHCONTENT_SOURCE_DIR_GAMEENGINE2=<this tree>`, `make test` and
-  `make agents-check`. Packaging's `scaffold` job does exactly that on every PR.
+  release, so a ge built from `main` pins that release, which lacks whatever `main` added since:
+  its scaffold downloads and verifies, then fails to configure. Against this tree, pass
+  `--engine=<this tree>` to `ge build`, `ge test`, `ge check` or `ge lab`.
+- **Try it here:** `make ge ARGS="new ../snow-racer"`, then in that repo `<this tree>/build/debug/ge
+  use skier`, `ge add system wind` and `ge check --engine=<this tree>`. Packaging's `scaffold`
+  job does exactly that on every PR.
 
 ## Consumer skills (`consumer-skills/`)
 
 The skills a game repo needs, written for a game repo (its paths, its `make` targets, the
-engine as a dependency), never for this one: `start-work`, `write-code`, `engine` (the pin,
-the targets, determinism, upgrading, reporting an engine bug), `sim-system`, `labs`,
-`skill-reflection` and `commit`. Each is a `SKILL.md` alone: lessons accumulate in each game
+engine as a dependency), never for this one: `ge` (the command line and its loop),
+`start-work`, `write-code`, `engine` (the pin, determinism, upgrading, reporting an engine
+bug), `sim-system`, `labs`, `skill-reflection` and `commit`, plus one per plugin (`racing`,
+`mountain`, `skier`) with `plugin:` front matter.
+Each is a `SKILL.md` alone: lessons accumulate in each game
 repo, and a lesson that would hold for every game is promoted upstream into the skill's text.
 A new consumer skill is a directory with its `SKILL.md`; `tests/cli_skills_test.cpp` checks
 its front matter, and the scaffold's `AGENTS.md` routes it through the block sync writes.

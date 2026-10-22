@@ -7,8 +7,9 @@
 #   ge       the executable, written to the top-level build directory (build/<preset>/ge in
 #            this tree and in a game's) and installed to bin/ with the package
 #
-# The consumer skills (consumer-skills/<name>/SKILL.md), the game scaffold (scaffold/**) and the
-# VERSION file are compiled into ge (cmake/EmbedFiles.cmake), so a ge carries the skills and the
+# The consumer skills (consumer-skills/<name>/SKILL.md), the game scaffold (scaffold/**), the
+# piece templates `ge add` writes (templates/**), the plugins' CMakeLists.txt (`ge use` reads
+# their names and links) and the VERSION file are compiled into ge (cmake/EmbedFiles.cmake), so a ge carries the skills and the
 # scaffold of exactly the engine it was built from and reads nothing from disk to write them.
 include_guard(GLOBAL)
 include(GNUInstallDirs)
@@ -21,7 +22,8 @@ function(ge_add_cli)
   endif()
   set(root "${PROJECT_SOURCE_DIR}")
   file(GLOB_RECURSE embedded CONFIGURE_DEPENDS LIST_DIRECTORIES false
-    "${root}/consumer-skills/*/SKILL.md" "${root}/scaffold/*")
+    "${root}/consumer-skills/*/SKILL.md" "${root}/scaffold/*" "${root}/templates/*"
+    "${root}/plugins/*/CMakeLists.txt")
   set(script "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/EmbedFiles.cmake")
   set(gen "${PROJECT_BINARY_DIR}/gen/cli/embedded_files.cpp")
   add_custom_command(OUTPUT "${gen}"
@@ -35,6 +37,9 @@ function(ge_add_cli)
   add_library(ge_cli STATIC ${sources} "${gen}")
   target_include_directories(ge_cli PUBLIC "$<BUILD_INTERFACE:${root}/engine>")
   target_link_libraries(ge_cli PUBLIC ge_core)
+  # The tree this ge was built from: `ge find` and `ge explain` read the engine's tags there when
+  # no other engine tree is found (engine/cli/index.hpp).
+  target_compile_definitions(ge_cli PRIVATE GE_ENGINE_SOURCE_DIR="${root}")
 
   add_executable(ge "${root}/engine/cli/main.cpp")
   target_link_libraries(ge PRIVATE ge_cli)

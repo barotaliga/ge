@@ -7,8 +7,8 @@ name: packaging
 #                  .changes/unreleased/ fragment, or carries `no-changelog`
 #   package        install the package and build a consumer against it,
 #                  on every platform a release ships
-#   scaffold       `ge new` writes a game repo, which builds against this
-#                  tree and passes its own tests, labs, ge doctor and format
+#   scaffold       `ge new` writes a game repo and ge alone grows it (use, add
+#                  system, lab, test) and passes `ge check` against this tree
 on:
   pull_request:
   push:
@@ -40,7 +40,7 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha }}
         run: |
           CHANGED=$(git diff --name-only "$BASE"...HEAD)
-          SHIPPED=$(echo "$CHANGED" | grep -E '^(engine/|cmake/|consumer-skills/|scaffold/|CMakeLists\.txt$)' || true)
+          SHIPPED=$(echo "$CHANGED" | grep -E '^(engine/|cmake/|consumer-skills/|scaffold/|templates/|CMakeLists\.txt$)' || true)
           FRAGMENTS=$(git diff --name-only --diff-filter=A "$BASE"...HEAD -- '.changes/unreleased/*.md' | grep -v README.md || true)
           if [ -n "$SHIPPED" ] && [ -z "$FRAGMENTS" ]; then
             echo "::error::This PR changes what a release ships but adds no .changes/unreleased/ fragment."
@@ -64,7 +64,9 @@ jobs:
         run: |
           ROOT=$(cygpath -m "$PWD" 2>/dev/null || pwd)  # a path CMake reads on Windows too
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DGE_PLATFORM=OFF -DGE_GPU=OFF
-          cmake --build build --config Release --parallel
+          # A bounded job count: an unbounded one under Make runs every source at once and the
+          # runner runs out of memory.
+          cmake --build build --config Release --parallel 4
           cmake --install build --config Release --prefix stage
           cmake -S tests/package/consumer -B build-consumer -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$ROOT/stage"
           cmake --build build-consumer --config Release
@@ -75,14 +77,20 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - name: ge new, then the new repo's own gates, against this tree
+      - name: ge alone grows a new repo, then holds it to its whole gate, against this tree
         run: |
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DGE_PLATFORM=OFF -DGE_GPU=OFF
           cmake --build build --target ge
-          build/ge new "$RUNNER_TEMP/snow-racer"
+          G="$GITHUB_WORKSPACE/build/ge"
+          "$G" new "$RUNNER_TEMP/snow-racer"
           cd "$RUNNER_TEMP/snow-racer"
-          git init -q && git add -A
-          cmake --preset debug -DFETCHCONTENT_SOURCE_DIR_GAMEENGINE2="$GITHUB_WORKSPACE"
-          make test
-          make agents-check
-          make fmt-check
+          git init -q
+          "$G" use skier
+          "$G" add system wind
+          "$G" add lab wind-sweep --kind=sim
+          "$G" add lab wind-hold --kind=scenario
+          "$G" add lab wind-look --kind=picture
+          "$G" add lab wind-cost --kind=bench
+          "$G" add test wind
+          git add -A
+          "$G" check --engine="$GITHUB_WORKSPACE"

@@ -1,0 +1,49 @@
+// LAB `{{kebab}}` (scenario): one staged situation measured exactly. The run starts from a known
+// state, a scripted input is held for a set time, and what came of it is a metric with a band
+// that fails the lab when it is left. Say what situation it stages (skill: labs).
+//
+// ge:summary Lab {{kebab}}: one staged situation, a scripted input, measured (say which)
+// ge:keywords lab scenario {{kebab}} scripted-input staged metric band
+// ge:skill labs
+#include <string>
+
+#include "lab/lab.hpp"
+#include "sim/game.hpp"
+
+namespace {
+
+using namespace {{ident}}::sim;
+
+void run(ge::lab::Lab& lab) {
+  const double hold_s = lab.arg_num("hold");
+  const double steer = lab.arg_num("steer");
+  GameState s = create_game(static_cast<uint32_t>(lab.arg_num("seed")));
+  const int steps = static_cast<int>(hold_s * kStepHz);
+  for (int k = 0; k < steps; k++) step(s, Input{steer});
+  lab.metric("x", s.x_m, "m");
+  lab.metric("speed", s.vx_mps, "m/s");
+  if (steer > 0 && !(s.x_m > 0)) {
+    lab.fail("held steer " + std::to_string(steer) + " for " + std::to_string(hold_s) +
+                 " s and ended at x " + std::to_string(s.x_m) + " m, not right of the start",
+             "the input should push the body its way: read sim/game.cpp's step; skill: sim-system");
+  }
+}
+
+const ge::lab::LabSpec kSpec{
+    "{{kebab}}",
+    ge::lab::LabKind::scenario,
+    "game:{{name}}",
+    "sim/game.cpp",
+    "labs",
+    "From rest, where does a held input take the body? (rewrite: the situation it stages)",
+    {
+        {"seed", "38", "the run's seed"},
+        {"steer", "1", "the input held, -1 .. 1"},
+        {"hold", "2", "how long it is held, s"},
+    },
+    "--hold=1",
+    run,
+};
+GE_LAB(kSpec);
+
+}  // namespace

@@ -95,7 +95,12 @@ make lab LAB=level ARGS=--tag=before          # keep this run as previews/level@
 make lab LAB=level ARGS=--compare=before      # every metric beside the kept run's
 make labs-smoke                               # every lab at its smoke flags, twice, digests checked
 make labs-digests                             # rewrite tests/labs_digests.txt (a reviewed change)
+build/debug/labs --json                       # the list as one JSON array (what `ge lab` reads)
 ```
+
+In a game repo, `ge lab` is the way in: `ge lab` lists, `ge lab <id> --tag=before` and
+`--compare=before` run one, and with `--json` the lab's whole `report.json` is the answer's
+`result`.
 
 The binary is `build/<preset>/labs` (`PRESET=release` for anything timed). An unknown flag
 exits 2, a failed lab exits 1, and a clean run exits 0, because a measurement that ignores
@@ -267,7 +272,7 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 | `junctions` | picture | plugin:mountain | `plugins/mountain/mapgen/network_stamp.cpp` (where runs meet) | M4b3d (now) |
 | `routes` | picture | plugin:mountain | `plugins/mountain/mapgen/ski_routes.hpp`, `route_features.hpp` (the ski routes on a ski area: the area with every route in orange, each route close up with its drops and jumps, each from the side with its pitch against a black's ceiling and a route's; `--version=9,10`) | M4c1 |
 | `skijump-hills` | picture | plugin:mountain | `plugins/mountain/mapgen/ski_jump.hpp`, `straight_venue.hpp` (the ski jumping hill set over a map: the tower, the raised in-run, the dig, the landing hill's fill, cut and rms, the arena, the drop and the design gate as a table, least earth first; each hill's profile at true scale from the side and the map from above; `--hill=large,normal`, `--version=1,9`) | M4c2 (now) |
-| `real-faces` | picture | plugin:mountain | the real faces | M4d |
+| `real-faces` | picture | plugin:mountain | `plugins/mountain/mapgen/real_face.hpp`, `real_face_crops.hpp`, the generated `real_faces/` (every face decoded and measured: its floor, top, drop and the share of it falling down the map, as a table; a sheet of every face shaded; a face alone with its mean profile; `--bake` reads each face off the 30 m elevation model beside the tree's, `--fetch` downloads the tiles, `--write` writes the faces and the index) | M4d1 |
 | `sim` | drive | game:fall_line | `games/fall_line/sim` (the step, the course, the bot, the field) | M5b–M5c (now) |
 | `ride` | scenario | plugin:skier | `plugins/skier` (`step_skier`, the snow, the limits) | M5a (now) |
 | `play` | drive | game:fall_line | `games/fall_line/sim/play` (an agent over stdio) | M5c (now) |
@@ -281,3 +286,4 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 | `synth` | sim | engine | `engine/audio` (every voice the synth can play, metered, pictured and written as WAV; the render's cost) | M9a (now) |
 | `audition` | sim | game:fall_line | Fall Line's bank, the skier's beds at seven moments and the bot's whole run, metered, pictured and written as WAV | M9b (now) |
 | `screenshots` | picture | game:fall_line | the HUD and the cards at 1280x720, 390x844, 844x390 | M10 |
+| `cli-loop` | bench | engine | `engine/cli` (the `ge` commands of an agent's loop run on a scaffolded repo: each answer's lines, bytes and time, failed over its line budget; the catalog's shape is the digest) | M12a (now) |

@@ -5,7 +5,7 @@
 //
 // ge:summary ge's findings (what, where, next) and the repository file helpers every command uses
 // ge:keywords cli ge finding diagnostics prompt severity error warn note format_finding
-// ge:keywords read_text write_text fnv1a64 files
+// ge:keywords read_text write_text fnv1a64 files skipped_dir
 // ge:skill agent-interface
 // ge:test tests/cli_doctor_test.cpp
 #pragma once
@@ -46,6 +46,8 @@ bool write_text(const fs::path& path, std::string_view text, std::string& error)
 std::string fnv1a64_hex(std::string_view bytes);
 // `path` relative to `root` with '/' separators, as a finding's `where` spells it.
 std::string rel_path(const fs::path& root, const fs::path& path);
+// A directory a walk over the repo's own text skips: build output, dependencies, pictures.
+bool skipped_dir(std::string_view name);
 // Lines without their '\n'.
 std::vector<std::string_view> split_lines(std::string_view text);
 

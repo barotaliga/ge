@@ -71,6 +71,17 @@ one game's: which maps a game races, its modes and its strings stay in the game.
   (`Level::venue`): `ground_at` and `normal_at` answer off its profile inside its width (only the
   deck up the raised in-run), and the grid under it is cut to it, never above it. Any course or
   hill already on the map is set over the map under it (`original_of`).
+- THE REAL FACES (R25, M4d): 114 stretches of real ski mountains, each 4×4 km from its summit
+  ridge to its valley floor, turned so the fall line runs down the map and laid 1:1.
+  `real_face_crops.hpp` is the table (each face's id, region, place, middle and bearing);
+  `real_face.hpp` decodes a face's kept grid (126×126 samples 32 m apart, on 0.5 m steps over its
+  floor, second-differenced, zig-zag varints, base64) and samples it bicubically
+  (`face_height`), and turns a map point to the globe and back. The grids are GENERATED into
+  `real_faces/` (a file a face and `index.cpp`) by the `real-faces` lab's bake
+  (`--bake --fetch --write`, from the repository's root): the free Copernicus 30 m elevation
+  model read off its public bucket with `curl` into the gitignored `.cache/dem/`, through the
+  labs' GeoTIFF reader (`labs/dem_tiles.hpp`) and inflater (`engine/lab/inflate.hpp`). Never
+  edit a face's file by hand; a crop moved is a face baked again and its golden row rewritten.
 
 ## Order of work (docs/goals.md M4a to M4d)
 
@@ -107,4 +118,6 @@ change to the terrain park runs `park` (the park close up, its profile, the map)
 `--version=1,8`; a change to the ski routes runs `routes` (the area with its routes, each route
 close up and from the side, the routes' table) at `--version=9,10`; a change to a venue or the ski
 jumping hill runs `skijump-hills` (each hill's earth moved, tower and arena as a table, its
-profile at true scale from the side, the map) at `--version=1,9`. The `labs` skill owns how.
+profile at true scale from the side, the map) at `--version=1,9`; a change to the real faces' crops,
+their codec or their bake runs `real-faces` (the table of every face and the sheet; with `--bake`,
+the samples each bake moves against the tree's). The `labs` skill owns how.

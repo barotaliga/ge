@@ -1,6 +1,7 @@
 # lab digests at their smoke flags: labs --all --smoke --write-digests
 analyze 47aeb41752f58f41
 audition d47fda4a9cb22fbb
+cli-loop 03b6ac4f93244f7c
 frame-pace c5058023a52812c3
 gpu-capture 8b5d5e3b7be5a4fc
 junctions 036999ca677e12e6
@@ -10,6 +11,7 @@ noise 3d3a828834f144cb
 park d53bc7b207dfab4a
 play 1cc3e19bd8dced06
 profile 05a464004723898b
+real-faces b53c6303e783fd1b
 resort f82a1fca6fb6ba42
 ride f7dc714b2493f95a
 routes 739cf0534473b4f8
