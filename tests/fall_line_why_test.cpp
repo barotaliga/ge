@@ -2,7 +2,8 @@
 // 38 with a field of four, the pilot's first 20 s replayed with every agent traced keeps the
 // log's digest (recording moves no decision), every racer records the mode, the line and the
 // speed every step, the pilot agrees with its own log at every step, and each speed record says
-// what the controls did: a brake recorded where the log brakes, a tuck where it tucks.
+// what the controls did: a brake recorded where the log brakes, a tuck where it tucks. The `bot`
+// view draws the pilot's plan and aim over the near view and moves no digest.
 //
 // ge:summary Tests: Fall Line's bot decisions traced on seed 38 move no digest and match its input
 // ge:keywords test fall_line bot why decisions trace digest rivals speed brake tuck agrees
@@ -13,6 +14,7 @@
 
 #include "check.hpp"
 #include "fall_line/sim/play.hpp"
+#include "lab/raster.hpp"
 #include "play/session.hpp"
 #include "play/why.hpp"
 
@@ -64,4 +66,25 @@ TEST(the_bots_decisions_traced_move_no_digest_and_say_what_the_controls_did) {
   }
   CHECK(speeds > kSteps / 2);
   for (const int n : per_agent) CHECK(n >= 3 * kSteps / 2);
+}
+
+TEST(the_bot_view_draws_the_pilots_plan_and_says_what_it_decided) {
+  gp::Setup s;
+  std::string error;
+  gp::make_setup(fs::kGame, 38, {}, s, error);
+  gp::Session session(fs::kGame, s);
+  std::vector<double> in(fs::kGame.axes.size(), 0);
+  for (int i = 0; i < 1200 && !session.done(); i++) {
+    session.run().pilot(in);
+    session.step(in);
+  }
+  const uint64_t before = session.run().digest();
+  ge::lab::Picture near, bot;
+  std::string near_caption, caption;
+  CHECK_MSG(session.run().shoot("near", near, near_caption, error), error);
+  CHECK_MSG(session.run().shoot("bot", bot, caption, error), error);
+  CHECK(session.run().digest() == before);
+  CHECK(bot.width == near.width && bot.height == near.height && bot.rgba != near.rgba);
+  CHECK_MSG(caption.find("aims") != std::string::npos && caption.find("cap ") != std::string::npos,
+            caption);
 }

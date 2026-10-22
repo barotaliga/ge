@@ -215,6 +215,8 @@ Controls bot_controls(const GameState& state, int32_t i, const BotPlan& plan, ge
     why->fact("off_line_m", hit.distance);
     why->fact("look_m", look);
     why->fact("lane_m", lane);
+    why->fact("aim_x", s.x + dx);
+    why->fact("aim_z", s.z + dz);
     why->fact("bearing_rad", alpha);
     why->fact("curvature", curvature);
     why->fact("edge", edge);

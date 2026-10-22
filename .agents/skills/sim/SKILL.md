@@ -67,6 +67,8 @@ seed. The skier on the snow is `plugins/skier` (the `skier` skill).
   what they meant first (the `hands` decision). Late hands steer from further ahead
   (`bot_controls`' `lead_s`). `make lab LAB=humanness` and `ge sim --human -- --hands=human`
   measure them; `tests/fall_line_hands_test.cpp` holds them.
+- **The play contract's views** are `near`, `map` and `bot` (the pilot's plan, its read stretch
+  and its aim over `near`, off a decision record of its own; `ge shot --view=bot`).
 - **Every pilot drives through `Driver::step`** (the bot, a tape, an agent): the player's
   controls are snapped onto the tape's grid before `step` sees them, so a tape played back
   (with the same number of rivals) is the run again. Only the player is taped: a rival's

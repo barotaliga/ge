@@ -61,6 +61,7 @@ rebuilt when asked for.
 | `ge why <log> --agent=N --decision=speed` | One bot, one decision |
 | `ge why <log> --flips [--close=X]` | Every step it changed its mind over the whole run, and the close calls under margin X: dithering and odd choices are there |
 | `ge why <log> --timeline` | `runs/<log>-why-<agent>.tsv`: one row a step, each decision's choice, choice index, margin and facts; `ge graph` it |
+| `ge shot <log> --step=S --view=bot` | Fall Line: the pilot's mind drawn at a step: its line coloured by the plan's speed, the stretch it reads its cap off, the point it aims at; the caption its line and speed calls (the aim is the `line` decision's `aim_x`, `aim_z`) |
 | `{"op":"why"}` in `ge play` | What the pilot would do now and why, without stepping: an agent asks before taking over |
 | `--log=why=debug` on a lab | Each decision as a log line, by step, beside every other channel |
 
