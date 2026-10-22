@@ -123,6 +123,27 @@ TEST(the_reset_stands_him_down_his_last_run_or_at_the_head_before_any) {
   CHECK(std::abs(hit.s - (was + fs::kResetPast)) < 0.5 && hit.distance < 0.5);
 }
 
+TEST(a_skier_standing_still_is_never_reset_and_one_pushing_nowhere_is) {
+  // Stood across the fall line on the brake: he waits at a viewpoint well past `kStuckReset`.
+  fs::GameState state = fs::create_free_ride(slope());
+  fs::Controls c;
+  c.ski.brake = 1;
+  for (int i = 0; i < static_cast<int>((fs::kStuckReset + 4) * fs::kHz); i++) {
+    fs::step(state, std::span<const fs::Controls>(&c, 1));
+  }
+  CHECK_MSG(state.racers[0].progress.resets == 0 && state.racers[0].skier.speed < fs::kStuckSpeed,
+            "a skier standing still on the free ride was reset; read the stuck clock in "
+            "games/fall_line/sim/game.cpp (skill: sim)");
+  // Pushing (the tuck at a crawl) and going nowhere for as long: he is stood back on his run.
+  c.ski.tuck = 1;
+  for (int i = 0; i < static_cast<int>((fs::kStuckReset + 1) * fs::kHz); i++) {
+    state.racers[0].skier.vx = state.racers[0].skier.vy = state.racers[0].skier.vz = 0;
+    fs::step(state, std::span<const fs::Controls>(&c, 1));
+    if (state.racers[0].progress.resets > 0) break;
+  }
+  CHECK(state.racers[0].progress.resets == 1);
+}
+
 TEST(a_runs_chain_flows_into_the_runs_it_joins_down_to_a_foot) {
   const mg::Level& level = *seed38();
   if (!level.resort) {
