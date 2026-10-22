@@ -49,6 +49,10 @@ the row when the file moves.
 | `games/fall_line/sim/army_troop.hpp` | `game5/engine/game/army-troop.ts` | goToward stopHere watchProgress slopeAlong |
 | `games/fall_line/sim/free.cpp` | `game5/engine/game/skied.ts`, `course.ts` | runUnder noteRun noteSkied leftRunPoint skiedResetPoint freeSpawn |
 | `games/fall_line/sim/free.hpp` | `game5/engine/game/skied.ts`, `course.ts` | runUnder noteRun noteSkied leftRunPoint skiedResetPoint freeSpawn |
+| `games/fall_line/sim/heli_outing.cpp` | `game5/engine/sim/bot.ts`, `game5/engine/game/heli-pilot.ts` | the bot on the skid (pilotControls to an aim); the outing to a run's head and down on skis |
+| `games/fall_line/sim/heli_outing.hpp` | `game5/engine/sim/bot.ts` | the bot on the skid |
+| `games/fall_line/sim/heli_ride.cpp` | `game5/engine/game/heli.ts`, `heli-pad.ts` | stepHeli controlsFor crash park hold release drop heliWithin board startAgain openSpotNear leanOver clearAt summitward |
+| `games/fall_line/sim/heli_ride.hpp` | `game5/engine/game/heli.ts`, `heli-pad.ts`, `heli-state.ts`, `defs/heli.ts` | stepHeli heliWithin heliDown HeliPhaseEvent HELI.pad HELI.board HELI.drop HELI.home HELI.crash |
 | `games/fall_line/sim/lift_ride.cpp` | `game5/engine/game/lift-ride.ts`, `lift-board.ts` | stepLiftRide stepChairWait carrierPassing letGo setOff (the boarding ring, the queue, the gondola's platform, the hands, the swing and the skip not carried) |
 | `games/fall_line/sim/lift_ride.hpp` | `game5/engine/game/lift-ride.ts`, `lift-board.ts` | stepLiftRide stepChairWait letGo |
 | `games/fall_line/sim/sled_outing.cpp` | `game5/engine/sim/bot.ts`, `game5/engine/game/sled-pilot.ts` | the bot on the boards (sledPilot to an aim); the outing up a run and down on skis is the engine's own |

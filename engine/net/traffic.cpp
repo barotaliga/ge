@@ -18,7 +18,7 @@ namespace ge::net {
 
 namespace {
 
-enum Kind : uint8_t { kInput = 1, kSnapshot = 2, kEventUp = 3, kEventDown = 4 };
+enum Kind : uint8_t { kInput = 1, kSnapshot = 2, kEventUp = 3, kEventDown = 4, kBulk = 5 };
 constexpr size_t kHeader = 1 + 2 + 4 + 8;
 
 struct Fnv {
@@ -46,7 +46,7 @@ struct Side {
   Node node;
   int64_t connected_us = -1;
   bool gone = false;  // denied, failed or dropped: sends nothing more
-  Stream inputs, events_up, snapshots, events_down;  // up streams sent here, down received here
+  Stream inputs, events_up, snapshots, events_down, bulk;  // up sent here, down received here
 };
 
 void make_message(uint8_t* out, size_t size, Kind kind, int client, uint32_t count, int64_t now) {
@@ -56,6 +56,14 @@ void make_message(uint8_t* out, size_t size, Kind kind, int client, uint32_t cou
   write_u32(w, count);
   write_u64(w, static_cast<uint64_t>(now));
   for (size_t i = kHeader; i < size; i++) out[i] = static_cast<uint8_t>(count + i);
+}
+
+// A message's filler is what make_message wrote: a big message joined whole and in order.
+bool filler_whole(const uint8_t* d, size_t size, uint32_t count) {
+  for (size_t i = kHeader; i < size; i++) {
+    if (d[i] != static_cast<uint8_t>(count + i)) return false;
+  }
+  return true;
 }
 
 // How many of a stream are due `elapsed_us` after it started at `hz`.
@@ -89,6 +97,21 @@ TrafficReport run_traffic(const TrafficPlan& plan) {
   channels.delivery[kTrafficInputs] = Delivery::sequenced;
   channels.delivery[kTrafficSnapshots] = Delivery::unreliable;
   channels.delivery[kTrafficEvents] = Delivery::reliable;
+  const bool bulk = plan.mix.bulk_hz > 0 && plan.mix.bulk_bytes > 0;
+  const size_t bulk_bytes = !bulk                                  ? 0
+                            : plan.mix.bulk_bytes < kHeader        ? kHeader
+                            : plan.mix.bulk_bytes > kMaxBigMessage ? kMaxBigMessage
+                                                                   : plan.mix.bulk_bytes;
+  if (bulk) {
+    // The bulk rides behind the game's own traffic: inputs and events first, then snapshots.
+    channels.count = 4;
+    channels.delivery[kTrafficBulk] = Delivery::reliable;
+    channels.largest[kTrafficBulk] = static_cast<uint32_t>(bulk_bytes);
+    channels.priority[kTrafficInputs] = 2;
+    channels.priority[kTrafficEvents] = 2;
+    channels.priority[kTrafficSnapshots] = 1;
+  }
+  channels.budget_kbps = plan.budget_kbps;
 
   SimNetwork net = make_sim_network(plan.seed, plan.conditions);
   auto host = std::make_unique<Side>();
@@ -119,7 +142,7 @@ TrafficReport run_traffic(const TrafficPlan& plan) {
   std::vector<Stream> host_up_inputs(static_cast<size_t>(n)),
       host_up_events(static_cast<size_t>(n));
   std::vector<Stream> host_down_snaps(static_cast<size_t>(n)),
-      host_down_events(static_cast<size_t>(n));
+      host_down_events(static_cast<size_t>(n)), host_down_bulk(static_cast<size_t>(n));
   std::vector<int64_t> host_known_us(static_cast<size_t>(n), -1);
 
   const double tick_us = 1e6 / plan.tick_hz;
@@ -130,6 +153,7 @@ TrafficReport run_traffic(const TrafficPlan& plan) {
   bool summed = false;
   Fnv fnv;
   uint8_t msg[kMaxMessage];
+  std::vector<uint8_t> big(bulk_bytes);
 
   const auto host_means = [&](double& rtt, double& var, double& jit, double& loss) {
     rtt = var = jit = loss = 0;
@@ -218,6 +242,13 @@ TrafficReport run_traffic(const TrafficPlan& plan) {
             const auto sent = static_cast<int64_t>(read_u64(r));
             if (kind == kSnapshot) tally(rep.snapshots, c.snapshots, count, sent, now, false);
             if (kind == kEventDown) tally(rep.events_down, c.events_down, count, sent, now, true);
+            if (kind == kBulk) {
+              if (e.size == bulk_bytes && filler_whole(d, e.size, count)) {
+                tally(rep.bulk, c.bulk, count, sent, now, true);
+              } else {
+                rep.bulk_broken++;
+              }
+            }
             break;
           }
         }
@@ -267,6 +298,16 @@ TrafficReport run_traffic(const TrafficPlan& plan) {
           }
           rep.events_down.sent++;
           events.next_send++;
+        }
+        Stream& bulks = host_down_bulk[static_cast<size_t>(client)];
+        for (uint32_t k = bulks.next_send; bulk && k < due(elapsed, plan.mix.bulk_hz); k++) {
+          make_message(big.data(), bulk_bytes, kBulk, client, bulks.next_send, now);
+          if (!node_send(host->node, peer, kTrafficBulk, big.data(), bulk_bytes)) {
+            rep.bulk.refused++;
+            break;  // no room for all its pieces: the same one is tried again next tick
+          }
+          rep.bulk.sent++;
+          bulks.next_send++;
         }
       }
     }
@@ -329,9 +370,13 @@ struct NamedMix {
 };
 
 const NamedMix kMixes[] = {
-    {"racing", {60, 24, 20, 320, 4, 48}},  {"action", {60, 32, 30, 700, 8, 32}},
-    {"rpg", {20, 16, 10, 400, 10, 64}},    {"world", {10, 24, 10, 1000, 20, 96}},
-    {"lockstep", {10, 16, 0, 320, 2, 64}},
+    {"racing", {60, 24, 20, 320, 4, 48, 0, 0}},
+    {"action", {60, 32, 30, 700, 8, 32, 0, 0}},
+    {"rpg", {20, 16, 10, 400, 10, 64, 0, 0}},
+    {"world", {10, 24, 10, 1000, 20, 96, 0, 0}},
+    {"lockstep", {10, 16, 0, 320, 2, 64, 0, 0}},
+    // A racing session while every client downloads a 64 KB map every two seconds.
+    {"download", {60, 24, 20, 320, 4, 48, 0.5, size_t{64} * 1024}},
 };
 
 }  // namespace
@@ -363,7 +408,8 @@ std::string describe_mix(const TrafficMix& m) {
   };
   return one("inputs", m.input_hz, m.input_bytes) + ", " +
          one("snapshots", m.snapshot_hz, m.snapshot_bytes) + ", " +
-         one("events", m.event_hz, m.event_bytes);
+         one("events", m.event_hz, m.event_bytes) +
+         (m.bulk_hz > 0 ? ", " + one("bulk", m.bulk_hz, m.bulk_bytes) : std::string());
 }
 
 }  // namespace ge::net

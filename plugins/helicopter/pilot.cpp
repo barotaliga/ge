@@ -34,27 +34,41 @@ HeliControls heli_pilot(const HeliState& h, const HeliWorld& world, const HeliLo
   const double dx = aim.x - h.x;
   const double dz = aim.z - h.z;
   const double d = core::hypot(dx, dz);
+  // THE HEIGHT over the snow along the way, and the climb to it: the highest snow it will be
+  // over in the next `kAhead` s (never nearer than two readings). THE SPEED the way allows: every
+  // point of it reached no sooner than the climb to clear it takes, and the aim no sooner than the
+  // sink down to it takes (but never slower than `kDescend` for it, fast enough to sink freely: a
+  // machine still high over the aim comes down over it in the hover).
+  const double flat = core::hypot(h.vx, h.vz);
+  const double near = num::max(2 * P::kLookStep, flat * P::kAhead);
+  double ground = level.ground_at(h.x, h.z);
+  double rise_most = P::kCruise;
+  const double look = num::min(d, P::kLook);
+  for (int k = 1; P::kLookStep * k <= look; k++) {
+    const double s = P::kLookStep * k;
+    const double g = level.ground_at(h.x + dx / d * s, h.z + dz / d * s);
+    if (s <= near) ground = num::max(ground, g);
+    const double need = g + aim.height - h.y;
+    if (need > 0) rise_most = num::min(rise_most, P::kClimbShare * P::kClimb * s / need);
+  }
+  const double fall = h.y - level.ground_at(aim.x, aim.z) - aim.height;
+  if (fall > 0) {
+    rise_most = num::min(rise_most, num::max(P::kDescend, P::kClimbShare * P::kSink * d / fall));
+  }
   // THE WAY THERE: the velocity it wants, slowed in time to stop at the aim, and near it in
   // proportion to the distance, so the hover settles rather than hunting across the spot.
   const double reach = aim.land ? 0.0 : 4.0;
   const double left = num::max(0.0, d - reach);
-  const double speed = num::min(P::kCruise, num::min(std::sqrt(2 * P::kBrake * left), 0.4 * left));
+  const double speed = num::min(num::min(P::kCruise, rise_most),
+                                num::min(std::sqrt(2 * P::kBrake * left), 0.4 * left));
   const double vxw = d > 0.5 ? dx / d * speed : 0.0;
   const double vzw = d > 0.5 ? dz / d * speed : 0.0;
   // THE PEDALS: the nose the way it is going (or held, at the hover).
-  const double flat = core::hypot(h.vx, h.vz);
   const double going = flat > 6 ? lm::atan2(h.vx, h.vz) : h.heading;
   const double yaw_to = d > 15 && !aim.land                  ? lm::atan2(dx, dz)
                         : aim.land && aim.has_face && d < 40 ? aim.face
                                                              : going;
   const double turn = core::clamp(core::angle_diff(h.heading, yaw_to) * 1.2, -0.6, 0.6);
-  // THE HEIGHT over the snow along the way, and the climb to it.
-  double ground = level.ground_at(h.x, h.z);
-  const double look = num::min(d, 300.0);
-  for (int k = 1; 30.0 * k <= look; k++) {
-    const double s = 30.0 * k;
-    ground = num::max(ground, level.ground_at(h.x + dx / d * s, h.z + dz / d * s));
-  }
   const double over = h.y - level.ground_at(h.x, h.z);
   const double sink_most = flat > 15 ? P::kSink : P::kSinkSlow;
   double climb = core::clamp(0.4 * (ground + aim.height - h.y), -sink_most, P::kClimb);

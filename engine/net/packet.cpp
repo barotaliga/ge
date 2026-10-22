@@ -87,8 +87,9 @@ void write_payload_header(Writer& w, uint32_t protocol, const PayloadHeader& h) 
 }
 
 void write_message(Writer& w, uint8_t channel, bool has_id, uint16_t id, const uint8_t* data,
-                   size_t size) {
-  write_u8(w, static_cast<uint8_t>(channel | (has_id ? kMessageHasId : 0)));
+                   size_t size, bool more) {
+  write_u8(
+      w, static_cast<uint8_t>(channel | (has_id ? kMessageHasId : 0) | (more ? kMessageMore : 0)));
   if (has_id) write_u16(w, id);
   write_varint(w, size);
   write_bytes(w, data, size);
@@ -145,11 +146,12 @@ bool read_payload_header(Reader& r, PayloadHeader& h) {
 bool read_message(Reader& r, MessageView& m) {
   if (remaining(r) == 0) return false;
   const uint8_t c = read_u8(r);
-  m.channel = c & 0x7f;
+  m.channel = c & kMessageChannel;
   m.has_id = (c & kMessageHasId) != 0;
+  m.more = (c & kMessageMore) != 0;
   m.id = m.has_id ? read_u16(r) : 0;
   const uint64_t n = read_varint(r);
-  if (r.bad || m.channel >= kMaxChannels || n > remaining(r)) {
+  if (r.bad || m.channel >= kMaxChannels || (m.more && !m.has_id) || n > remaining(r)) {
     r.bad = true;
     return false;
   }
@@ -196,7 +198,7 @@ std::string describe_packet(const uint8_t* data, size_t size) {
   MessageView m;
   while (read_message(r, m)) {
     if (m.has_id) {
-      std::snprintf(b, sizeof b, " [ch%u#%u %zuB]", m.channel, m.id, m.size);
+      std::snprintf(b, sizeof b, " [ch%u#%u %zuB%s]", m.channel, m.id, m.size, m.more ? "+" : "");
     } else {
       std::snprintf(b, sizeof b, " [ch%u %zuB]", m.channel, m.size);
     }

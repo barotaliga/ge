@@ -367,6 +367,7 @@ Outcome run_net_sim(const NetSimOptions& opts) {
       {"preset", "conditions", "joined", "rtt ms", "jitter", "loss", "events", "order", "event p50",
        "p95", "snaps", "inputs", "host kbps out", "in", "resends", "digest"}};
   std::vector<std::string> results;
+  std::string bulk_lines;
   for (const std::string& name : presets) {
     net::TrafficPlan plan;
     if (name != "none" && !net::conditions_preset(name, plan.conditions)) {
@@ -386,6 +387,8 @@ Outcome run_net_sim(const NetSimOptions& opts) {
     plan.tick_hz = opts.tick_hz;
     plan.seed = opts.seed;
     plan.mix = mix;
+    plan.conditions.stream = plan.conditions.stream || opts.stream;
+    plan.budget_kbps = opts.budget_kbps;
     plan.capture = !opts.capture.empty();
     const net::TrafficReport r = net::run_traffic(plan);
 
@@ -406,6 +409,22 @@ Outcome run_net_sim(const NetSimOptions& opts) {
                     in_order ? "ok" : "BROKEN", fixed(p50, 1), fixed(p95, 1),
                     pct(share(r.snapshots)), pct(share(r.inputs)), fixed(r.host_send_kbps, 0),
                     fixed(r.host_recv_kbps, 0), std::to_string(r.resends), hex(r.digest, 16)});
+    if (r.bulk_broken || r.bulk.out_of_order || r.bulk.duplicated) {
+      o.findings.push_back(
+          {Severity::error,
+           name + ": " + std::to_string(r.bulk_broken) +
+               " big messages arrived broken or out of "
+               "order",
+           "engine/net/connection.cpp",
+           "the pieces of a big message were not joined whole: reproduce with these flags and "
+           "run tests/net_connection_test.cpp (skill: net)"});
+    }
+    if (mix.bulk_hz > 0) {
+      bulk_lines += "  " + name + ": big messages " + std::to_string(r.bulk.delivered) + "/" +
+                    std::to_string(r.bulk.sent) + " whole, p50 " +
+                    fixed(net::percentile_of(r.bulk.latency_ms, 50), 1) + " ms, p95 " +
+                    fixed(net::percentile_of(r.bulk.latency_ms, 95), 1) + " ms\n";
+    }
     if (ev_got != ev_sent || !in_order) {
       o.findings.push_back(
           {Severity::error,
@@ -451,6 +470,8 @@ Outcome run_net_sim(const NetSimOptions& opts) {
                   {"host_send_kbps", num(r.host_send_kbps)},
                   {"host_recv_kbps", num(r.host_recv_kbps)},
                   {"resends", json_num(static_cast<long long>(r.resends))},
+                  {"bulk_sent", json_num(static_cast<long long>(r.bulk.sent))},
+                  {"bulk_delivered", json_num(static_cast<long long>(r.bulk.delivered))},
                   {"digest", json_str(hex(r.digest, 16))},
                   {"capture", capture_path.empty() ? "null" : json_str(capture_path)}}));
   }
@@ -458,7 +479,7 @@ Outcome run_net_sim(const NetSimOptions& opts) {
            core::num::to_string(opts.seconds) + " s sending and " +
            core::num::to_string(opts.drain) + " s draining at " +
            core::num::to_string(opts.tick_hz) + " Hz, seed " + std::to_string(opts.seed) + "\n" +
-           table(rows) +
+           table(rows) + bulk_lines +
            "  rtt: the host's smoothed round trip at the end of the sending, its tick included; "
            "loss: the host's sends never acked; events: reliable, both ways, every one owed in "
            "order; snaps and inputs may be lost\n";
@@ -509,6 +530,13 @@ Outcome run_net(const Args& a) {
   n.presets = split_commas(flag_value(a, "presets"));
   n.mix = flag_value(a, "mix", "racing");
   n.link = flag_value(a, "link");
+  const std::string transport = flag_value(a, "transport", "udp");
+  if (transport != "udp" && transport != "tcp") {
+    return failed("--transport=" + transport + " is neither udp nor tcp", "the command line",
+                  "rerun with --transport=udp or --transport=tcp", 2);
+  }
+  n.stream = transport == "tcp";
+  if (!number("budget", 0, n.budget_kbps) || n.budget_kbps < 0) return bad("budget");
   if (!number("clients", 8, x)) return bad("clients");
   n.clients = static_cast<int>(x);
   if (!number("max-peers", 32, x)) return bad("max-peers");

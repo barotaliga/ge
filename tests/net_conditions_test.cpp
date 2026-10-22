@@ -101,3 +101,30 @@ TEST(conditions_fates_are_the_seed_s) {
   LinkConditions c;
   CHECK(!conditions_preset("nope", c));
 }
+
+TEST(conditions_a_stream_loses_nothing_and_keeps_the_order) {
+  LinkConditions c;
+  c.latency_ms = 20;
+  c.jitter_ms = 10;
+  c.loss = 0.1;
+  c.burst = 2;
+  c.duplicate = 0.2;
+  c.reorder = 0.2;
+  c.reorder_ms = 30;
+  c.queue_ms = 1;
+  c.bandwidth_kbps = 500;
+  c.stream = true;
+  const Run r = run(c, 20000, 5000, 600, 7);
+  CHECK(r.lost == 0 && r.dup == 0 && r.reordered == 0 && r.queue == 0);
+  // A dropped packet comes a resend later; count the arrivals that waited for one.
+  LinkState s;
+  auto rng = ge::core::make_rng(7);
+  int late = 0;
+  for (int i = 0; i < 20000; i++) {
+    const int64_t now = i * int64_t{5000};
+    const Fate f = decide(c, s, rng, now, 600);
+    late += f.arrive_us[0] - now >= static_cast<int64_t>(stream_resend_ms(c) * 1000);
+  }
+  CHECK_MSG(late > 1000, std::to_string(late) + " arrivals waited for a resend");
+  CHECK(stream_resend_ms(c) == 200);
+}

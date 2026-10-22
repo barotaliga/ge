@@ -63,13 +63,16 @@ engine/net/guard          input checks, interest, replay audits, cheat flags, re
 engine/net/stress         load, soak, chaos scripts, ramps to the breaking point, fuzzing (M17m)
         │
 engine/net  node          connections: handshake, keepalive, timeout, peers up to 32
-            channel       unreliable, sequenced, reliable-ordered messages; acks; resends
+            channel       unreliable, sequenced, reliable-ordered messages; acks; resends;
+                          big messages in pieces, priorities, the send budget
             packet        the wire format: header, acks, messages; decoded for the tools
             transport     one interface over a UDP socket, a TCP stream, a simulated network
             sim_network   the simulated network: every packet's fate off a seeded stream
             conditions    latency, jitter, loss and its bursts, duplicates, reorder, bandwidth
             capture       pcap files any packet tool opens, read back by `ge net`
-            udp_socket    the OS's sockets (POSIX and Winsock): the only file that includes them
+            udp_socket    the OS's UDP sockets (POSIX and Winsock)
+            tcp_socket    the OS's TCP sockets, carrying the packets as length-prefixed frames
+            os_socket     the socket shim both share: the only file that includes the OS's headers
             address, wire IPv4, IPv6 and simulated addresses; the byte writer and reader
         │
 engine/core               the seeded stream, output
@@ -85,11 +88,13 @@ the wire) would be a plugin's.
 | Part | Decision | Why |
 | --- | --- | --- |
 | Own protocol or a library | Our own, small, over UDP | The pieces are small and well understood (one header of acks, three channel kinds, a challenge handshake); a library (ENet, GameNetworkingSockets, yojimbo) brings its own allocator, threads, clock and logging, none of which a deterministic simulated network can drive. Ours runs on a virtual clock, so the same seed is the same packets, and every lab is a determinism test |
-| UDP and TCP | UDP is the default; a TCP stream transport carries the same packets length-framed (M17c) | A fast game cannot wait for a lost packet's resend; a turn-based game, a chat-heavy world or a network that blocks UDP can. The layers above the transport do not care which |
+| UDP and TCP | UDP is the default; a TCP transport carries the same packets as frames (a 16-bit length, then the bytes) on one stream a peer (M17c) | A fast game cannot wait for a lost packet's resend; a turn-based game, a chat-heavy world or a network that blocks UDP can. The layers above the transport do not care which: over a stream the acks and channels still run, and simply never see a loss, only the late packets head-of-line blocking makes |
 | The clock | The caller passes `now_us` into every call; nothing in `engine/net` reads a clock | The simulated network runs on a virtual clock and a real game on the frame's; the same code, and a test is exact |
 | Randomness | Salts and the simulated network's fates come from `core::Rng` streams the caller seeds; a real game seeds them from the OS's entropy (`os_entropy`) | A simulated session replays to the bit; a real one is not guessable |
 | Allocation | Fixed-capacity rings sized at create time (peers, the sent-packet ring, the reliable windows) | Nothing allocates in `node_update` once a node is made (G2) |
-| Packet size | At most 1200 bytes on the wire (`kMaxPacket`) | Fits the smallest MTU on the paths games use (IPv6's 1280 less its headers) with no fragmentation by IP; bigger messages are fragmented by the engine (M17c) |
+| Packet size | At most 1200 bytes on the wire (`kMaxPacket`) | Fits the smallest MTU on the paths games use (IPv6's 1280 less its headers) with no fragmentation by IP; bigger messages are sent in pieces by the engine (M17c) |
+| Big messages | Only on a reliable channel configured for them (`ChannelConfig::largest`, up to 64 KB): pieces of one packet each, reliable messages of their own with a "more follows" bit, joined in order and delivered once; queued all together or refused | The reliable channel already delivers once and in order, so joining is appending, with no fragment ids or timers of its own. An unreliable message bigger than a packet would be lost whenever any piece was: a snapshot that big is a delta's job (M17f) |
+| Priority and budget | Each channel has a priority; a connection may have a send budget (kbit/s, a token bucket of 50 ms). Higher priorities ride first; with the bucket empty only acks and keepalives go, reliable messages wait and loose ones are dropped at the flush's end | A map download must not starve the inputs, and a server with 32 clients must keep each inside what its link carries. With every priority equal the order is the order queued |
 | Acks | Every payload carries its sequence, the newest sequence received and 32 bits of the ones before it | One packet's loss is told by the next few, with no ack packets of their own; the round-trip time comes off the same acks |
 | Reliability | Per message, not per packet: a reliable message rides in packets until one carrying it is acked, resent once a round trip has passed | The newest data goes in every packet; nothing waits behind a lost packet but the reliable messages it carried |
 | Handshake | Request → challenge (a cookie only the host can make) → response → accept, all packets padded to the request's size | A spoofed address never gets past the challenge, the host keeps no state for it, and a reply is never bigger than the request (no amplification) |
@@ -116,8 +121,9 @@ endian; `engine/net/wire.hpp` writes and reads them.
 | `payload` | the session key, sequence (16 bits), ack, ack bits (32), then messages | both, once connected |
 | `disconnect` | the session key | either, three times |
 
-A message inside a payload is its channel (a byte), its reliable id when the channel is
-reliable (16 bits), its length (a varint) and its bytes. A payload with no messages is a
+A message inside a payload is its channel byte (the channel in the low bits; the top bit set
+when a 16-bit id follows, as on a sequenced or reliable channel; the next bit set on a big
+message's piece when more pieces follow), the id, its length (a varint) and its bytes. A payload with no messages is a
 keepalive. `describe_packet` decodes any packet into one line for the tools.
 
 The round-trip time is smoothed as TCP does (RFC 6298: SRTT and RTTVAR, gains 1/8 and 1/4) off
@@ -139,6 +145,7 @@ microseconds. Every directed link has its `LinkConditions`:
 | `reorder` | the share of packets held back `reorder_ms` so later ones overtake them; with none, jitter never reorders (a link is a queue) |
 | `bandwidth_kbps` | the link's rate (0 = unlimited): a packet waits for the ones before it to be clocked out |
 | `queue_ms` | how long the queue may grow before a packet is dropped at its tail |
+| `stream` | the link is a stream (TCP): nothing is lost, doubled or reordered; a packet the line drops arrives a resend timeout later (three latencies and two jitters, 200 ms at least) and every packet behind it waits (head-of-line blocking); a full queue makes the sender wait instead of dropping |
 
 Every fate (dropped, delayed, duplicated) is drawn from the network's seeded stream in the
 order the packets were sent, so the same seed and the same sends give the same deliveries, and
@@ -213,6 +220,7 @@ seeded and replayable. `engine/net/stress` and `ge net stress` push it until som
 | `ge net stats <pcap>` | M17b | Per peer: packets and bytes each way, round trip, loss, resends, bandwidth over time, charted |
 | `ge net sim` | M17b | A session of fake-traffic peers over chosen conditions, its numbers and its capture, no game needed |
 | traffic mixes (`traffic.hpp`) | M17b | The fake traffic shaped like a kind of game: racing, action (fast inputs, big snapshots), rpg, world (a busy shared world), lockstep (inputs and turns, no snapshots); `--mix` on the lab and on `ge net sim` |
+| `net-link --transport=tcp`, `--mix=download`, `--budget` | M17c | The same sessions with every link a stream (what head-of-line blocking does to the round trip and the resends), a 64 KB message to every client every two seconds checked whole byte for byte, and every connection held to a send budget; `ge net sim` takes the same flags |
 | a live node's capture | M17b | A game points its transport at a `Capture` with a size limit and saves it (`save_capture`) when a session ends or the player asks; the tools read it like a lab's |
 | the `net-session` lab | M17d | 32 peers join a lobby, chat to all, to a team and privately, one is kicked, one reconnects |
 | the `voice` lab | M17h | A voice through each preset, metered against the clean one, the WAV attached |
