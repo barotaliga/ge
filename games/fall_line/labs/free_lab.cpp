@@ -228,13 +228,22 @@ void run(ge::lab::Lab& lab) {
       if (rep.finished) {
         sleds_done++;
       } else {
-        lab.fail(key + ": the bot's outing on the snowmobile up run " + id +
-                     " did not end at a foot (taken " + std::to_string(rep.sled_rides) +
-                     " times, climbed " + fixed(rep.climbed, 0) + " m in " + fixed(rep.time, 1) +
-                     " s)",
-                 "Look at previews/free/" + k +
-                     "-sled.png for where his line stops, then read "
-                     "games/fall_line/sim/sled_outing.cpp and sled_ride.cpp (skill: sim).");
+        std::string what = key;
+        what += ": the bot's outing on the snowmobile up run ";
+        what += id;
+        what += " did not end at a foot (taken ";
+        what += std::to_string(rep.sled_rides);
+        what += " times, climbed ";
+        what += fixed(rep.climbed, 0);
+        what += " m in ";
+        what += fixed(rep.time, 1);
+        what += " s)";
+        std::string next = "Look at previews/free/";
+        next += k;
+        next +=
+            "-sled.png for where his line stops, then read "
+            "games/fall_line/sim/sled_outing.cpp and sled_ride.cpp (skill: sim).";
+        lab.fail(what, next);
       }
       lab.metric(key + ".time", rep.time, "s");
       lab.metric(key + ".climbed", rep.climbed, "m");
