@@ -197,7 +197,7 @@ void run(gl::Lab& lab) {
               "Angles that move with the turns, no ring.");
   lab.note(gl::chart_text(angles, 4));
   const gl::Chart jolt = gl::jolt_heatmap(
-      track, motion, {"every joint's jolt", sc->id, "t (s)", "log10(1 + jolt m/s^3)", 960, 0});
+      track, motion, {"every joint's jolt", sc->id, "t (s)", "jolt (m/s^3, log scale)", 960, 0});
   shoot_chart(lab, "jolt", jolt,
               "Every joint's jolt (the change of its acceleration) over the run, one row a joint, "
               "darker harder, on a log scale.",
