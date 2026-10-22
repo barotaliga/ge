@@ -13,6 +13,7 @@
 #include "core/output.hpp"
 #include "fall_line/app/look.hpp"
 #include "fall_line/app/scene.hpp"
+#include "prof/zones.hpp"
 
 namespace fall_line::app {
 
@@ -200,6 +201,7 @@ void forget_tracks(GameFrame& f) {
 
 void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& view, const FrameScene& scene,
           const wgpu::TextureView& output) {
+  GE_ZONE("frame");
   const auto start = std::chrono::steady_clock::now();
   f.recorder.begin_frame(device);
   // Prepare: every decision of the frame, and the uploads.
@@ -210,9 +212,16 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& view, const
   r::fill_uniforms(f.staged, view, f.targets.width, f.targets.height, &f.history,
                    f.options.taa ? jitter : nullptr);
   device.queue.WriteBuffer(f.uniforms, 0, &f.staged, sizeof f.staged);
-  r::prepare_sky(f.sky, view);
-  r::prepare_terrain(device, f.terrain, view);
+  {
+    GE_ZONE("frame.sky");
+    r::prepare_sky(f.sky, view);
+  }
+  {
+    GE_ZONE("frame.terrain");
+    r::prepare_terrain(device, f.terrain, view);
+  }
   if (f.tracks) {
+    GE_ZONE("frame.trails");
     track(f, scene);
     // The fine window is kept round the ground a quarter of its span ahead of the eye, where the
     // camera looks.
@@ -222,18 +231,24 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& view, const
                                       view.eye[2] + ahead * std::cos(view.heading));
   }
   const size_t racers = std::min<size_t>(scene.skiers.size(), kMaxFigures);
-  for (size_t k = 0; k < racers; ++k) {
-    figure_instances(
-        scene.skiers[k], *f.level, static_cast<int>(k),
-        std::span<r::Instance, ge::skier::kFigurePieces>(
-            f.staged_figures.data() + k * ge::skier::kFigurePieces, ge::skier::kFigurePieces));
+  {
+    GE_ZONE("frame.figures");
+    for (size_t k = 0; k < racers; ++k) {
+      figure_instances(
+          scene.skiers[k], *f.level, static_cast<int>(k),
+          std::span<r::Instance, ge::skier::kFigurePieces>(
+              f.staged_figures.data() + k * ge::skier::kFigurePieces, ge::skier::kFigurePieces));
+    }
+    r::set_instances(
+        device, f.figures, 0,
+        std::span<const r::Instance>(f.staged_figures.data(), racers * ge::skier::kFigurePieces));
+    r::set_instance_count(f.figures, static_cast<uint32_t>(racers * ge::skier::kFigurePieces));
   }
-  r::set_instances(
-      device, f.figures, 0,
-      std::span<const r::Instance>(f.staged_figures.data(), racers * ge::skier::kFigurePieces));
-  r::set_instance_count(f.figures, static_cast<uint32_t>(racers * ge::skier::kFigurePieces));
-  for (r::InstanceFamily* family : f.families) {
-    r::prepare_family(device, *family, view, f.targets.height, occlusion);
+  {
+    GE_ZONE("frame.instances");
+    for (r::InstanceFamily* family : f.families) {
+      r::prepare_family(device, *family, view, f.targets.height, occlusion);
+    }
   }
   // Each figure's tile is centred a metre over its skis.
   f.figure_centres.resize(racers);
@@ -243,8 +258,12 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& view, const
   }
   r::InstanceFamily* still[] = {&f.forest};
   r::InstanceFamily* moving[] = {&f.figures};
-  r::prepare_sun_shadows(device, f.shadows, view, f.figure_centres, still, moving);
-  // Encode, in the pass table's order.
+  {
+    GE_ZONE("frame.shadows");
+    r::prepare_sun_shadows(device, f.shadows, view, f.figure_centres, still, moving);
+  }
+  // Encode, in the pass table's order (the recorder times each pass's encoding).
+  GE_ZONE("frame.encode");
   wgpu::CommandEncoder encoder = device.device.CreateCommandEncoder();
   r::encode_sky_tables(f.sky, f.pipelines, f.recorder, encoder);
   const std::span<r::InstanceFamily* const> families(f.families);

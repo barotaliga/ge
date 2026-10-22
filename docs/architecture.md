@@ -18,8 +18,9 @@ plugins/<name>           reusable by any game of one genre or world (§ Plugins)
         ▼
 engine/render  engine/audio  engine/ui     generic draw passes, the synth, the 2D layer
         │             │          │
-engine/gpu     engine/platform             webgpu.h wrapper; SDL3 window, input, audio device, files
-        │             │
+engine/gpu  engine/assets  engine/platform webgpu.h wrapper; authored models (glTF); SDL3 window,
+        │             │          │         input, audio device, files
+        │             │          │
         ▼             ▼
 engine/core  engine/loop                   the deterministic pool; the run clock
 ```
@@ -53,6 +54,11 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   pass owns its GPU buffers and exposes `prepare(view)` and `encode(pass)`; the frame core
   (the view and camera, the pass table, the sky, the terrain, post) is built (M7a).
   **`docs/rendering.md` is the plan** for this layer and `engine/gpu`.
+- **`engine/assets`**: authored models (built, M8e1): the glTF 2.0 loader over cgltf (the only
+  file that includes it), the `Model` it fills in the world's frame (skinned meshes, every node
+  a joint, materials, clips baked at 60 Hz), posing into a bone palette and CPU skinning. No
+  GPU and no platform; `engine/render`'s skinning pass reads its palette. `docs/rendering.md` §
+  Authored models is the design.
 - **`engine/audio`**: the synth (built, M9a): the vocabulary (`Tone`, `Noise`, `LayerSpec`,
   `LayerTarget`), a fixed-capacity DSP graph (polyBLEP oscillators, coloured noise pools,
   state-variable filters, envelopes, soft saturation, four buses, an echo and a soft-knee
@@ -71,8 +77,16 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   replayed and inspected without a screen (its axes, its options, a `Run`: step, over, digest,
   observe, state, report, pilot), and everything the engine does with it once for every game:
   the session that snaps, records and steps every input, the line protocol, the plain-text
-  input log, replay, the state at a step, the divergence search, and the `play` executable's
-  main. It depends on `engine/core` alone; a game's `play` target links it and `ge` runs it.
+  input log, replay, the state at a step, the divergence search, the bench (the pilot's run
+  replayed and timed step by step and zone by zone, with its allocations: `ge bench`,
+  `ge profile`, `ge mem`), and the `play` executable's main. It depends on `engine/core` and
+  `engine/prof`; a game's `play` target links it and `ge` runs it.
+- **`engine/prof`**: the profiler (`ge::prof`): timing zones (`GE_ZONE("name")`, one relaxed
+  load when no recording runs; a span with its depth, time and allocations when one does), their
+  totals (a zone's own time and its children's), the counting `operator new` an executable
+  opts into (`ge::prof_alloc`: every allocation and its bytes, still through `malloc` so the
+  sanitizers see each block) and the peak resident set. It reads the steady clock and feeds
+  nothing back, so no digest depends on it; any layer may open a zone.
 - **`engine/lab`**: the lab contract and the `labs` runner (`docs/labs.md`): how any
   subsystem, plugin or game declares a lab, the CPU raster and PNG writer its pictures are
   drawn with, and the report, contact sheet and digest a run leaves. Labs themselves sit in
@@ -248,7 +262,7 @@ whole tree to it, and `ge doctor` holds a game repo to it (the `agent-interface`
 | Shaders | WGSL, embedded at build |
 | Audio | Our own DSP graph on SDL3 audio: every sound is synthesized, so no middleware |
 | UI | Our own immediate-mode 2D layer + SDF text; Dear ImGui for dev tools |
-| Assets | cgltf for the modelled skis; everything else generated in code or baked to embedded blobs |
+| Assets | glTF 2.0 through cgltf (`engine/assets`) for the few authored models, made by Blender Python builders run headless offline (`ge asset`, M8g) and committed as .glb; everything else generated in code or baked to embedded blobs |
 | Built venues on a map | A venue whose features are finer than the 2 m grid (a ski jump's edge, its landing radius) answers `Level::ground_at` and `normal_at` off an ANALYTIC profile inside its width (`Level::venue`, one null check on the hot path), with the grid cut beneath it so a reader of the raw grid never sees ground above the surface |
 | Real-world data | Baked offline by a lab off free public datasets that need no credentials (the 30 m elevation model's public bucket), into GENERATED C++ sources committed in the tree (a real face's heights: a base64 string of second-differenced varints, about 21 KB a face), so a build reads no file and fetches nothing; the bake is re-runnable and reproduces the tree to the bit |
 | Tests | Our own header harness, CTest, golden tables |
@@ -259,8 +273,8 @@ whole tree to it, and `ge doctor` holds a game repo to it (the `agent-interface`
 CMake ≥ 3.25 + Ninja, `CMakePresets.json` (`debug` with ASan/UBSan, `release`).
 Dependencies are pinned to a tag and a SHA-256, and each one is added in the milestone that
 needs it: SDL3 through `FetchContent` from its release archive (`cmake/SDL.cmake`), Dawn as its
-prebuilt GitHub release (`cmake/Dawn.cmake`; Tint comes in the same archive), later cgltf,
-Dear ImGui and Tracy. Downloads land in `.cache/deps/` (gitignored, shared by every preset,
+prebuilt GitHub release (`cmake/Dawn.cmake`; Tint comes in the same archive), later cgltf
+and Dear ImGui. Downloads land in `.cache/deps/` (gitignored, shared by every preset,
 cached by CI). `GE_PLATFORM` and `GE_GPU` switch the platform layer and the GPU off; the
 simulation, the plugins and their tests never need either, and `GE_GPU` defaults off where
 Dawn publishes no archive (Linux arm64). `Makefile` names the everyday commands. CI (`.github/workflows/ci.yml`) runs format,

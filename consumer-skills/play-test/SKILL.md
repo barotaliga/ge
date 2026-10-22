@@ -1,6 +1,6 @@
 ---
 name: play-test
-description: "Use to test this game by PLAYING it without a screen: the play contract a game fills (play/game.cpp: its axes, options, observe, state, report, pilot), ge play's line protocol, ge sim's pilot runs, the input log, ge replay to a digest, ge state at a step, and ge diverge to find the step two runs part. Load it to add an axis or an option, to make a replay hold, or to chase a determinism break."
+description: "Use to test this game by PLAYING it without a screen: the play contract a game fills (play/game.cpp: its axes, options, observe, state, report, pilot), ge play's line protocol, ge sim's pilot runs, the input log, ge replay to a digest, ge state at a step, ge diverge to find the step two runs part, and ge shot for a captioned still of any step. Load it to add an axis or an option, to make a replay hold, or to chase a determinism break."
 ---
 
 # Play-testing the game
@@ -25,6 +25,7 @@ number each: `signed_unit` -1..1, `lever` 0..1, `toggle` held, `press` taken onc
 | `state()` | everything that decides the next step (JSON object of scalars) | `ge state`, `ge diverge` |
 | `report()` | the run's result (JSON object) | `ge sim`, `ge replay`, `end` |
 | `pilot(input)` | the game's bot: fills the axes, returns true | `ge sim`, the `pilot` op |
+| `shoot(view, out, caption)` | one of the spec's **views** drawn on the CPU raster, and a line saying what it shows | `ge shot` |
 
 Rules:
 
@@ -35,6 +36,10 @@ Rules:
   `to_fixed`): `ge diverge` can only name the fields it is shown.
 - **`observe()` is for deciding, `state()` is for comparing.** Keep the observation small and in
   the player's terms (where the goal is from here, not the whole world).
+- **A view is drawn from the state, never stepped.** `shoot` reads the run as it stands and draws
+  on the CPU (`lab/raster.hpp`), so a still needs no GPU or window and reproduces from the log.
+  Its caption says what is in the picture in the game's terms (where, how fast, what is next);
+  the engine adds the seed, the options, the step and the digest under it.
 - **A new axis or option** is a row in the spec's arrays. It changes the input log's `axes` line,
   so old logs no longer `fit`: say so in the commit.
 
@@ -46,7 +51,14 @@ ge replay runs/<game>-1.inputs  # played back: must reach the digest it recorded
 ge play --seed=1                # you at the controls, one JSON line each way (below)
 ge state runs/<game>-1.inputs --step=600   # the whole state after 600 steps
 ge diverge runs/a.inputs runs/b.inputs     # where two runs part, and which fields differ
+ge shot runs/<game>-1.inputs --step=600 --view=<v>   # a captioned still at that step, a PNG
+ge shot --seed=1 --view=<v>                # the pilot's run of seed 1, at its end
 ```
+
+**LOOK at a run.** `ge shot` replays the log to the step and draws the view, framed with its
+caption, the seed, the options, the step and the digest; open the PNG it names. Shoot the step
+`ge diverge` names on both logs to see two runs part, and a step a lab or a bench flags to see
+what happened there. `ge shot` with no `--view` draws the first and lists the others.
 
 **The protocol** (`ge play`): the session opens with `hello` (the axes, the options, the ops).
 Then send one object a line: `{"op":"observe"}`; `{"op":"act","input":{"<axis>":v},"steps":n}`

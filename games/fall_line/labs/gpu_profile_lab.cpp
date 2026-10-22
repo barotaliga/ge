@@ -5,18 +5,22 @@
 // the shadows' cascades carried frame to frame. After each frame it waits for the frame's GPU
 // times, so every pass's time is this frame's.
 //
-// It reports, per pass of the pass table, the median, 95th percentile and worst GPU ms and the
-// draws and dispatches; the frame's GPU total; and the renderer's CPU half (every prepare and
-// encode, `FrameStats::cpu_ms`): its median, 95th percentile, worst, and the frames over
-// --cpu-budget ms, over every frame but the first (the cut's, which decides everything afresh
-// and is reported alone). Times are measured (a software adapter's say nothing of a real GPU's);
-// the pass table and the frame count are deterministic. Without an adapter it notes that and
-// reports the deterministic half alone, so the digest is the same on every row; GE_GPU_REQUIRE=1
-// fails instead. Built only with GE_GPU.
+// It reports, per pass of the pass table, the median, 95th percentile and worst GPU ms, the CPU
+// ms encoding it, and the draws and dispatches; the frame's GPU total; the renderer's CPU half
+// (every prepare and encode, `FrameStats::cpu_ms`): its median, 95th percentile, worst, and the
+// frames over --cpu-budget ms, over every frame but the first (the cut's, which decides everything
+// afresh and is reported alone); and where a frame's CPU goes, part by part: the prepare's timing
+// zones (GE_ZONE: frame.sky, frame.terrain, frame.figures, frame.instances, frame.shadows), each
+// pass's encoding, and the simulation's two steps between frames by their zones (the physics,
+// `skier`; the game's logic, `course` and `meet`; the bots, `bot`; the tape and the hash). Every
+// frame's numbers are attached as `frames.tsv` (one row a frame, for `ge graph`). Times are
+// measured (a software adapter's say nothing of a real GPU's); the pass table and the frame count
+// are deterministic. Without an adapter it notes that and reports the deterministic half alone, so
+// the digest is the same on every row; GE_GPU_REQUIRE=1 fails instead. Built only with GE_GPU.
 //
-// ge:summary Lab: Fall Line's frame cost per pass (GPU ms) and its CPU half over a bot run
+// ge:summary Lab: Fall Line's frame cost per pass (GPU and CPU ms), its prepare and its sim steps
 // ge:keywords lab profile bench gpu-ms cpu-ms cpu-half pass-cost median p95 budget frame-cost
-// ge:keywords fall-line timestamps chase-camera run
+// ge:keywords fall-line timestamps chase-camera run zones physics game-logic series
 // ge:skill render perf labs
 #include <algorithm>
 #include <cmath>
@@ -36,6 +40,7 @@
 #include "gpu/target.hpp"
 #include "lab/lab.hpp"
 #include "mountain/mapgen/generate.hpp"
+#include "prof/zones.hpp"
 
 namespace {
 
@@ -104,6 +109,8 @@ void run(ge::lab::Lab& lab) {
                "Install Mesa's Vulkan drivers (apt install mesa-vulkan-drivers). Skill: gpu.");
     }
     lab.note("No GPU adapter on this machine: nothing was timed.");
+    // The series is attached empty, so the digest (which holds its name) is every row's.
+    lab.attach("frames.tsv", {}, Det::measured);
     return;
   }
   const auto& rep = device->report;
@@ -132,7 +139,27 @@ void run(ge::lab::Lab& lab) {
   // Per pass, in the table's order: every frame's GPU ms, and the last frame's draws and
   // dispatches.
   std::vector<std::string> names;
-  std::map<std::string, std::vector<double>> gpu;
+  std::map<std::string, std::vector<double>> gpu, pass_cpu;
+  // Per CPU part (a zone of the frame or of the steps between frames), its exclusive ms each
+  // frame; and the frames' own rows for the series.
+  std::vector<std::string> parts;
+  std::map<std::string, std::vector<double>> part_ms;
+  std::vector<double> prepare, sim;
+  std::string series;
+  std::vector<ge::prof::ZoneTotal> rows;
+  auto fold = [&](size_t a, size_t e, int k, const char* prefix) {
+    ge::prof::totals(ge::prof::spans().subspan(a, e - a), rows);
+    for (const ge::prof::ZoneTotal& t : rows) {
+      const std::string name = prefix + std::string(ge::prof::zone_name(t.name));
+      std::vector<double>& v = part_ms[name];
+      if (v.empty() && std::find(parts.begin(), parts.end(), name) == parts.end()) {
+        parts.push_back(name);
+      }
+      v.resize(static_cast<size_t>(k) + 1, 0);
+      v[static_cast<size_t>(k)] += static_cast<double>(t.excl_ns) / 1e6;
+    }
+  };
+  ge::prof::start(static_cast<size_t>(frames) * 256);
   std::map<std::string, std::pair<uint32_t, uint32_t>> work;
   std::vector<double> cpu, totals;
   double cpu_first = 0;
@@ -146,7 +173,9 @@ void run(ge::lab::Lab& lab) {
     fall_line::app::chase_view(level, skiers[0], view);
     view.frame = static_cast<uint64_t>(k);
     view.time_s = racing.state().t;
+    const size_t drawn_from = ge::prof::spans().size();
     fall_line::app::draw(*device, *frame, view, {skiers}, target.view);
+    const size_t drawn_to = ge::prof::spans().size();
     frame->recorder.wait(*device);
     const ge::render::FrameStats& st = frame->recorder.stats;
     // The first frame after the cut uploads and decides everything afresh (both cascades, the
@@ -168,24 +197,89 @@ void run(ge::lab::Lab& lab) {
       work[name] = {p.draws, p.dispatches};
     }
     totals.push_back(total);
+    const int64_t t0 = ge::prof::now_ns();
     for (int s = 0; s < 2 && !racing.over(); ++s) step();
+    const double sim_ms = static_cast<double>(ge::prof::now_ns() - t0) / 1e6;
+    fold(drawn_from, drawn_to, k, "");
+    fold(drawn_to, ge::prof::spans().size(), k, "sim.");
+    if (k > 0) {
+      prepare.push_back(st.prepare_ms);
+      sim.push_back(sim_ms);
+      for (int i = 0; i < st.count; ++i) {
+        const ge::render::PassStat& p = st.passes[static_cast<size_t>(i)];
+        pass_cpu[std::string(p.name)].push_back(p.cpu_ms);
+      }
+    }
+    if (k == 0) {
+      series = "# title: Fall Line's frame, seed " + fixed(seed, 0);
+      series += ": CPU and GPU ms a frame\n# x: frame\n# unit.cpu_ms: ms\n# unit.gpu_ms: ms\n";
+      series += "frame\tcpu_ms\tprepare_ms\tsim_ms\tgpu_ms";
+      for (int i = 0; i < st.count; ++i) {
+        const std::string name(st.passes[static_cast<size_t>(i)].name);
+        series += "\tgpu.";
+        series += name;
+        series += "\tcpu.";
+        series += name;
+      }
+      series += "\n";
+    }
+    auto cell = [&](double v) {
+      series += "\t";
+      series += fixed(v, 4);
+    };
+    series += std::to_string(k);
+    cell(st.cpu_ms);
+    cell(st.prepare_ms);
+    cell(sim_ms);
+    cell(total);
+    for (int i = 0; i < st.count; ++i) {
+      const ge::render::PassStat& p = st.passes[static_cast<size_t>(i)];
+      cell(std::isfinite(p.gpu_ms) ? p.gpu_ms : 0);
+      cell(p.cpu_ms);
+    }
+    series += "\n";
   }
+  ge::prof::stop();
   lab.metric("passes", static_cast<double>(names.size()), "count", Det::measured);
 
   ge::lab::LabTable table{"GPU ms per pass over " + std::to_string(frames) + " frames",
-                          {"pass", "median", "p95", "worst", "draws", "dispatches"},
+                          {"pass", "median", "p95", "worst", "cpu median", "draws", "dispatches"},
                           {}};
   for (const std::string& name : names) {
     const std::vector<double>& v = gpu[name];
     const double med = quantile(v, 0.5), p95 = quantile(v, 0.95), worst = quantile(v, 1.0);
-    table.rows.push_back({name, fixed(med, 3), fixed(p95, 3), fixed(worst, 3),
+    const double cpu_med = quantile(pass_cpu[name], 0.5);
+    table.rows.push_back({name, fixed(med, 3), fixed(p95, 3), fixed(worst, 3), fixed(cpu_med, 3),
                           std::to_string(work[name].first), std::to_string(work[name].second)});
+    lab.metric("cpu-ms." + name + ".median", cpu_med, "ms", Det::measured);
     lab.metric("gpu-ms." + name + ".median", med, "ms", Det::measured);
     lab.metric("gpu-ms." + name + ".p95", p95, "ms", Det::measured);
   }
   table.rows.push_back({"(frame)", fixed(quantile(totals, 0.5), 3),
-                        fixed(quantile(totals, 0.95), 3), fixed(quantile(totals, 1.0), 3), "", ""});
+                        fixed(quantile(totals, 0.95), 3), fixed(quantile(totals, 1.0), 3),
+                        fixed(quantile(cpu, 0.5), 3), "", ""});
   lab.table(std::move(table), Det::measured);
+
+  // Where a frame's CPU goes: the prepare's zones, then the simulation's steps between frames.
+  ge::lab::LabTable split{"CPU ms a frame, by part (exclusive: a zone's own time)",
+                          {"part", "median", "p95", "worst"},
+                          {}};
+  split.rows.push_back({"prepare (before the first pass)", fixed(quantile(prepare, 0.5), 3),
+                        fixed(quantile(prepare, 0.95), 3), fixed(quantile(prepare, 1.0), 3)});
+  for (const std::string& name : parts) {
+    std::vector<double> v = part_ms[name];
+    v.resize(static_cast<size_t>(frames), 0);
+    v.erase(v.begin());  // the cut's frame is reported alone
+    split.rows.push_back({name, fixed(quantile(v, 0.5), 3), fixed(quantile(v, 0.95), 3),
+                          fixed(quantile(v, 1.0), 3)});
+    lab.metric("cpu-ms.zone." + name + ".median", quantile(v, 0.5), "ms", Det::measured);
+  }
+  split.rows.push_back({"sim (two steps a frame)", fixed(quantile(sim, 0.5), 3),
+                        fixed(quantile(sim, 0.95), 3), fixed(quantile(sim, 1.0), 3)});
+  lab.table(std::move(split), Det::measured);
+  lab.metric("cpu-ms.prepare.median", quantile(prepare, 0.5), "ms", Det::measured);
+  lab.metric("sim-ms.median", quantile(sim, 0.5), "ms", Det::measured);
+  lab.attach("frames.tsv", std::vector<uint8_t>(series.begin(), series.end()), Det::measured);
   lab.metric("gpu-ms.frame.median", quantile(totals, 0.5), "ms", Det::measured);
   lab.metric("gpu-ms.frame.p95", quantile(totals, 0.95), "ms", Det::measured);
   lab.metric("cpu-ms.median", quantile(cpu, 0.5), "ms", Det::measured);

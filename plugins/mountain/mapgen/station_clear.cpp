@@ -15,6 +15,7 @@
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "core/num.hpp"
+#include "core/parallel.hpp"
 
 namespace ge::mountain::mapgen {
 
@@ -43,6 +44,8 @@ constexpr int kDragTopBearings = 12;
 constexpr int kDragFootReach = 180;
 constexpr int kDragFootStep = 10;
 constexpr std::array<double, 5> kDragFootUp{0, 0.25, 0.45, 0.6, 0.72};
+// How many places a lift's end is read at side by side, at most.
+constexpr size_t kBatch = 256;
 // The nursery's drag, laid by the plan rather than to R29's bands.
 constexpr const char* kNursery = "D1";
 
@@ -183,13 +186,26 @@ std::optional<std::string> clear_stations(
     };
     if (fits(was_bottom, was_top)) continue;
     bool placed = false;
-    for (const Place& c : candidates(l)) {
-      if (!fits(c.bottom, c.top)) continue;
-      l.bottom = c.bottom;
-      l.top = c.top;
-      if (ok(lifts)) {
-        placed = true;
-        break;
+    // Whether a place fits is a pure reading of the ground and the runs, so a batch of places is
+    // read side by side; they are then tried in order, the first that fits and leaves `ok` true
+    // taken, as if read one by one.
+    const std::vector<Place> places = candidates(l);
+    std::vector<uint8_t> fit(places.size(), 0);
+    for (size_t b0 = 0; b0 < places.size() && !placed; b0 += kBatch) {
+      const size_t b1 = std::min(places.size(), b0 + kBatch);
+      ge::core::parallel_bands(b1 - b0, [&](size_t lo, size_t hi) {
+        for (size_t q = b0 + lo; q < b0 + hi; q++) {
+          fit[q] = fits(places[q].bottom, places[q].top) ? 1 : 0;
+        }
+      });
+      for (size_t q = b0; q < b1; q++) {
+        if (!fit[q]) continue;
+        l.bottom = places[q].bottom;
+        l.top = places[q].top;
+        if (ok(lifts)) {
+          placed = true;
+          break;
+        }
       }
     }
     if (!placed) {

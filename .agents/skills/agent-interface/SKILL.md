@@ -40,11 +40,11 @@ example and consumer skill); the parser, `ge help` and `ge help --json` all read
 | --- | --- | --- |
 | `ge help [<command>]`, `ge version` | The catalog, as text or `--json` | `commands.hpp` |
 | `ge find <words>`, `ge explain <file\|name>` | The repo's and the engine's files, skills and lessons by their `ge:` tags; one file's header, a symbol's declaration | `index.hpp` |
-| `ge new <dir>` | A game repo from `scaffold/`, its links, its skills | `scaffold.hpp` |
+| `ge new <dir> [--game=racer]` | A game repo from `scaffold/`, its links, its skills; a starting game other than the demo writes its files from `templates/game-<name>/` over it | `scaffold.hpp` |
 | `ge use <plugin>` | Link a plugin into the game's sim, sync its skill (and the skills of the plugins it brings) | `add.hpp` |
 | `ge add system\|lab\|test <name>` | A working piece from `templates/`, tags filled, formatted, refusing to write over a file | `add.hpp` |
 | `ge build`, `ge test`, `ge check`, `ge lab` | Configure, build, test, the whole gate, a lab: the tool's output in `build/<preset>/ge-*.log`, the answer as findings | `build.hpp` |
-| `ge play`, `ge sim`, `ge replay`, `ge state`, `ge diverge` | The game's `play` executable built and run: the protocol on the terminal, the pilot's runs and their input logs, a log replayed to its digest, the state at a step, where two runs part | `play.hpp` |
+| `ge play`, `ge sim`, `ge replay`, `ge state`, `ge diverge`, `ge shot` | The game's `play` executable built and run: the protocol on the terminal, the pilot's runs and their input logs, a log replayed to its digest, the state at a step, where two runs part, a captioned still of a view at a step | `play.hpp` |
 | `ge doctor`, `ge skills sync`, `ge lessons` | The repo against the rules; the engine's skills and the lock; a skill's lessons | `doctor.hpp`, `skills.hpp` |
 
 - **One answer shape.** Every command builds an `Outcome` (`outcome.hpp`: findings, written,

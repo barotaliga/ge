@@ -10,6 +10,7 @@
 #include <cmath>
 #include <limits>
 #include <map>
+#include <vector>
 
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
@@ -41,6 +42,32 @@ constexpr double kWalkMargin = 12;
 constexpr double kLookAhead[] = {20, 40, 60};
 // The headings a step chooses among, every this many rad either side of the fall line.
 constexpr double kHeadingStep = 0.06;
+
+// A heading a step may choose, and which way it faces.
+struct Heading {
+  double h, fx, fz;
+};
+
+// Every heading a step chooses among within `swing` of the fall line, in the order it weighs them.
+std::vector<Heading> headings_within(double swing) {
+  std::vector<Heading> out;
+  double h = -swing;
+  while (h <= swing + 1e-9) {
+    out.push_back({h, libm::sin(h), libm::cos(h)});
+    h += kHeadingStep;
+  }
+  return out;
+}
+
+// The headings a run's walk chooses among, worked once for each swing a walk is given.
+const std::vector<Heading>& headings_for(double swing, std::vector<Heading>& other) {
+  static const std::vector<Heading> piste = headings_within(R::track::swing);
+  static const std::vector<Heading> road = headings_within(RR::road::swing);
+  if (swing == R::track::swing) return piste;
+  if (swing == RR::road::swing) return road;
+  other = headings_within(swing);
+  return other;
+}
 // THE ZIG-ZAG: the side a traverse holds costs the other this much; it turns back when it has
 // strayed this far off the line to its target, m, or held one side this long, m.
 constexpr double kZigzagSide = 0.8;
@@ -184,10 +211,8 @@ double choose_heading(const ge::core::Heightfield& ground, double x, double z, d
   const double down =
       libm::atan2(-(sample_field(ground, x + w, z) - sample_field(ground, x - w, z)),
                   -(sample_field(ground, x, z + w) - sample_field(ground, x, z - w)));
-  double h = -swing;
-  while (h <= swing + 1e-9) {
-    const double fx = libm::sin(h);
-    const double fz = libm::cos(h);
+  std::vector<Heading> other;
+  for (const auto& [h, fx, fz] : headings_for(swing, other)) {
     double over = 0;
     double under = 0;
     double fall_sum = 0;
@@ -208,7 +233,6 @@ double choose_heading(const ge::core::Heightfield& ground, double x, double z, d
       best_cost = cost;
       best = h;
     }
-    h += kHeadingStep;
   }
   return best;
 }

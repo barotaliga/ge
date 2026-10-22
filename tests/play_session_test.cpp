@@ -1,10 +1,10 @@
 // The play session (engine/play/session.hpp, main.hpp, json_read.hpp) over a toy game: the
 // protocol's ops and refusals, a press taken once per hold, the pilot to the end, a log replayed
-// to its digest, the state at a step, two logs diverging at the input that differs, the `play`
-// command line's answers and exit codes, and the flat JSON reader.
+// to its digest, the state at a step, two logs diverging at the input that differs, a still of
+// the run at a step, the `play` command line's answers and exit codes, and the flat JSON reader.
 //
 // ge:summary Tests: the play protocol, pilot, replay, state, diverge and play_main on a toy game
-// ge:keywords test play session protocol pilot replay state diverge play_main json read_flat
+// ge:keywords test play session protocol pilot replay state diverge play_main json read_flat shot
 // ge:skill agent-interface testing
 // ge:test tests/play_session_test.cpp
 #include <array>
@@ -17,9 +17,12 @@
 
 #include "check.hpp"
 #include "core/num_text.hpp"
+#include "lab/raster.hpp"
+#include "play/bench.hpp"
 #include "play/json_read.hpp"
 #include "play/main.hpp"
 #include "play/session.hpp"
+#include "prof/zones.hpp"
 
 namespace gp = ge::play;
 
@@ -31,6 +34,7 @@ class Toy final : public gp::Run {
  public:
   explicit Toy(double seed) : x_(seed) {}
   void step(std::span<const double> in) override {
+    GE_ZONE("toy.move");
     v_ += in[0] * 0.5 + in[1];
     x_ += v_ / 60;
     kicks_ += in[1] != 0 ? 1 : 0;
@@ -46,6 +50,18 @@ class Toy final : public gp::Run {
   std::string report() const override { return "{\"kicks\":" + std::to_string(kicks_) + "}"; }
   bool pilot(std::span<double> out) override {
     out[0] = v_ < 6 ? 1 : 0;
+    return true;
+  }
+  // One view: the line, 12 m long, the body a white mark on it.
+  bool shoot(std::string_view view, ge::lab::Picture& out, std::string& caption,
+             std::string& error) override {
+    if (view != "line") {
+      error = "no such view";
+      return false;
+    }
+    out = ge::lab::create_picture(120, 20, {0, 0, 0});
+    ge::lab::fill_rect(out, x_ * 10, 0, 2, 20, {255, 255, 255});
+    caption = "the body at x " + ge::core::num::to_fixed(x_, 2);
     return true;
   }
 
@@ -68,7 +84,8 @@ constexpr std::array<gp::Axis, 2> kAxes{{
     {"kick", gp::AxisKind::press, "a step of speed, once"},
 }};
 constexpr std::array<gp::Option, 1> kOptions{{{"lanes", "1", "how many"}}};
-const gp::GameSpec kToy{"toy", "a body on a line", 60, 30, kAxes, kOptions, open_toy};
+constexpr std::array<gp::View, 1> kViews{{{"line", "the line from above"}}};
+const gp::GameSpec kToy{"toy", "a body on a line", 60, 30, kAxes, kOptions, open_toy, kViews};
 GE_GAME(kToy);
 
 gp::Setup setup(double seed = 0) {
@@ -200,4 +217,76 @@ TEST(the_flat_reader_reads_dotted_paths_and_refuses_what_it_should) {
   CHECK(gp::read_flat("{\"a\":[1,{\"b\":2}]}", m, error, true) && m.at("a.1.b").number == 2);
   CHECK(gp::json_text(m.at("a.0")) == "1");
   CHECK(!gp::read_flat("{\"a\":1} x", m, error) && has(error, "column 9"));
+}
+
+TEST(the_bench_times_every_step_of_the_pilots_run_and_folds_its_zones) {
+  std::string error;
+  const auto p = gp::pilot_run(kToy, setup(1), error);
+  CHECK_MSG(p.has_value(), error);
+  if (!p) return;
+  gp::BenchOptions o;
+  o.repeats = 2;
+  o.window = 10;
+  const auto b = gp::bench(kToy, p->log, o, error);
+  CHECK_MSG(b.has_value(), error);
+  if (!b) return;
+  CHECK(b->steps == p->steps && b->same_digest && b->digest == p->digest);
+  CHECK(b->step_us.size() == static_cast<size_t>(b->steps) && b->dropped_spans == 0);
+  CHECK(b->zones.size() == 1 && b->zones[0].name == "toy.move" && b->zones[0].calls_per_step == 1);
+  CHECK(b->warmup_steps == 60 && b->steps_allocating == 0 && b->first_allocating == -1);
+  // The toy's one zone is the only one a slow step can name, but on a coarse clock its time in that
+  // step can read 0 and the step then names none: which of the two is the timer's, not the code's.
+  CHECK(!b->slowest.empty() && (b->slowest[0].zone == "toy.move" || b->slowest[0].zone.empty()));
+  CHECK(has(b->series, "step\tstep_us\tallocs\ttoy.move_us\n0\t"));
+  CHECK(has(b->spans, "name\tdepth\tstart_ns\tdur_ns\ntoy.move\t0\t"));
+  // Only the first steps of the log, and the digest is not the log's to check then.
+  o.most_steps = 5;
+  const auto few = gp::bench(kToy, p->log, o, error);
+  CHECK(few && few->steps == 5 && few->same_digest);
+  CHECK(gp::quantile({3, 1, 2}, 0.5) == 2 && gp::quantile({}, 0.5) == 0);
+}
+
+TEST(play_bench_answers_in_one_line_and_writes_its_files) {
+  const auto dir = std::filesystem::temp_directory_path() / "ge_play_bench_test";
+  std::filesystem::remove_all(dir);
+  std::string out;
+  CHECK(play({"bench", "--seeds=0", "--repeats=1", "--out=" + dir.string()}, out) == 0);
+  CHECK_MSG(has(out, "\"game\":\"toy\"") && has(out, "\"same_digest\":true") &&
+                has(out, "\"name\":\"toy.move\"") && has(out, "\"counting\":true"),
+            out);
+  CHECK(std::filesystem::exists(dir / "toy-0.bench.tsv") &&
+        std::filesystem::exists(dir / "toy-0.spans.tsv"));
+  CHECK(play({"bench", "--repeats=0"}, out) == 2 && has(out, "--repeats"));
+  std::filesystem::remove_all(dir);
+}
+
+TEST(a_still_is_the_view_at_its_step_framed_with_its_words) {
+  std::string error;
+  const auto p = gp::pilot_run(kToy, setup(1), error);
+  if (!p) return;
+  const auto st = gp::shot_at(kToy, p->log, 30, "", error);
+  CHECK_MSG(st.has_value(), error);
+  if (!st) return;
+  // The default view is the first; the picture carries its caption band under the view.
+  CHECK(st->view == "line" && st->step == 30 && has(st->caption, "the body at x "));
+  CHECK(st->picture.width >= 120 && st->picture.height > 20);
+  const auto again = gp::state_at(kToy, p->log, 30, error);
+  const auto replayed = gp::replay(kToy, p->log, error);
+  CHECK(again && replayed);
+  CHECK(!gp::shot_at(kToy, p->log, 30, "side", error) && has(error, "the views are line"));
+  CHECK(!gp::shot_at(kToy, p->log, p->steps + 1, "line", error) && has(error, "outside"));
+}
+
+TEST(play_shot_writes_a_png_and_answers_where) {
+  const auto dir = std::filesystem::temp_directory_path() / "ge_play_shot_test";
+  std::filesystem::remove_all(dir);
+  std::string out;
+  CHECK(play({"shot", "--seed=1", "--step=20", "--out=" + dir.string()}, out) == 0);
+  CHECK_MSG(has(out, "\"view\":\"line\"") && has(out, "\"step\":20") &&
+                has(out, "\"caption\":\"the body at x "),
+            out);
+  CHECK(std::filesystem::file_size(dir / "toy-1-line-20.png") > 0);
+  CHECK(play({"describe"}, out) == 0 && has(out, "\"views\":[{\"name\":\"line\""));
+  CHECK(play({"shot", "--seed=1", "--view=side"}, out) == 1 && has(out, "the views are line"));
+  std::filesystem::remove_all(dir);
 }

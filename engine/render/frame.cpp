@@ -8,6 +8,7 @@
 #include "render/frame.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <vector>
@@ -146,6 +147,12 @@ uint32_t FrameStats::dispatches() const {
   return n;
 }
 
+static int64_t steady_ns() {
+  return std::chrono::duration_cast<std::chrono::nanoseconds>(
+             std::chrono::steady_clock::now().time_since_epoch())
+      .count();
+}
+
 void FrameRecorder::init(gpu::Device& device, std::string_view label, int passes) {
   timed = timer.init(device, label, static_cast<uint32_t>(passes));
 }
@@ -156,12 +163,28 @@ void FrameRecorder::begin_frame(gpu::Device& device) {
     stats.passes[static_cast<size_t>(i)].gpu_ms = timer.ms(static_cast<uint32_t>(i));
   }
   stats.count = 0;
+  mark_ns = steady_ns();
 }
 
-static PassStat& open_stat(FrameStats& stats, std::string_view name) {
+// The CPU time since the last mark goes to the pass opened last, or to the prepare before the
+// first.
+static void close_cpu(FrameStats& stats, int64_t& mark_ns) {
+  const int64_t now = steady_ns();
+  const double ms = static_cast<double>(now - mark_ns) / 1e6;
+  if (stats.count == 0) {
+    stats.prepare_ms = ms;
+  } else {
+    stats.passes[static_cast<size_t>(stats.count - 1)].cpu_ms = ms;
+  }
+  mark_ns = now;
+}
+
+static PassStat& open_stat(FrameStats& stats, int64_t& mark_ns, std::string_view name) {
+  close_cpu(stats, mark_ns);
   if (stats.count >= kMaxPasses) stats.count = kMaxPasses - 1;  // check_pass_table reports it
   PassStat& p = stats.passes[static_cast<size_t>(stats.count++)];
   p.name = name;
+  p.cpu_ms = 0;
   p.draws = 0;
   p.dispatches = 0;
   return p;
@@ -170,7 +193,7 @@ static PassStat& open_stat(FrameStats& stats, std::string_view name) {
 wgpu::ComputePassEncoder FrameRecorder::compute(wgpu::CommandEncoder& encoder,
                                                 std::string_view name) {
   const uint32_t i = static_cast<uint32_t>(stats.count);
-  open_stat(stats, name);
+  open_stat(stats, mark_ns, name);
   wgpu::ComputePassDescriptor desc{};
   desc.label = wgpu::StringView(name.data(), name.size());
   desc.timestampWrites = timed ? timer.writes(i) : nullptr;
@@ -181,13 +204,14 @@ wgpu::RenderPassEncoder FrameRecorder::render(wgpu::CommandEncoder& encoder,
                                               wgpu::RenderPassDescriptor desc,
                                               std::string_view name) {
   const uint32_t i = static_cast<uint32_t>(stats.count);
-  open_stat(stats, name);
+  open_stat(stats, mark_ns, name);
   desc.label = wgpu::StringView(name.data(), name.size());
   desc.timestampWrites = timed ? timer.writes(i) : nullptr;
   return encoder.BeginRenderPass(&desc);
 }
 
 void FrameRecorder::end_frame(wgpu::CommandEncoder& encoder) {
+  close_cpu(stats, mark_ns);
   if (timed) timer.resolve(encoder);
 }
 

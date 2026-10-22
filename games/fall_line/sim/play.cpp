@@ -1,8 +1,9 @@
 // Fall Line's Run on the play contract (play.hpp): the Driver behind it, the observation, the
-// state, the report and the bot as the pilot.
+// state, the report, the bot as the pilot and the views `ge shot` draws: the map from above with
+// the field on it, and the piste round the player.
 //
 // ge:summary FallLineRun: the Driver behind the play contract; observation, state, report, pilot
-// ge:keywords play run observation state report pilot driver events
+// ge:keywords play run observation state report pilot driver events shoot views map near
 // ge:skill sim agent-interface
 // ge:test tests/fall_line_play_test.cpp
 #include "fall_line/sim/play.hpp"
@@ -12,6 +13,7 @@
 #include <string>
 #include <vector>
 
+#include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "core/num_text.hpp"
 #include "fall_line/sim/bot.hpp"
@@ -21,6 +23,7 @@
 #include "fall_line/sim/simulate.hpp"
 #include "mountain/mapgen/generate.hpp"
 #include "mountain/mapgen/query.hpp"
+#include "mountain/picture/map_picture.hpp"
 #include "play/inputs.hpp"
 #include "play/session.hpp"
 
@@ -29,9 +32,14 @@ namespace fall_line::sim {
 namespace {
 
 namespace mg = ge::mountain::mapgen;
+namespace pic = ge::mountain::picture;
 namespace core = ge::core;
 namespace num = ge::core::num;
 using ge::play::quote;
+
+// A still's side in pixels, and the near view's side in metres.
+constexpr int kShotPx = 512;
+constexpr double kNearMetres = 160;
 
 std::string fixed(double v) { return num::to_fixed(v, 3); }
 std::string exact(double v) { return num::to_string(v); }
@@ -154,6 +162,55 @@ class FallLineRun final : public ge::play::Run {
     return true;
   }
 
+  bool shoot(std::string_view view, ge::lab::Picture& out, std::string& caption,
+             std::string& error) override {
+    const GameState& s = driver_.state();
+    const mg::Level& level = *s.level;
+    const Racer& me = s.racers[0];
+    const bool near = view == "near";
+    if (!near && view != "map") {
+      error = "no view `" + std::string(view) + "`";
+      return false;
+    }
+    const pic::MapWindow window = near ? pic::MapWindow{me.skier.x, me.skier.z, kNearMetres}
+                                       : pic::MapWindow{level.size / 2, level.size / 2, level.size};
+    out = pic::draw_map(level, kShotPx, window);
+    const double k = kShotPx / window.metres;
+    const double x0 = window.x - window.metres / 2, z0 = window.z - window.metres / 2;
+    // The field: each rival a blue disc, the player white ringed in red with a line for the
+    // heading (0 = +z, clockwise from above: the way is (sin h, cos h)).
+    for (size_t i = s.racers.size(); i-- > 0;) {
+      const auto& k2 = s.racers[i].skier;
+      const double px = (k2.x - x0) * k, pz = (k2.z - z0) * k;
+      const double r = near ? 5 : 3;
+      if (i == 0) {
+        const double len = near ? 18 : 10;
+        ge::lab::draw_line(out, px, pz, px + core::libm::sin(k2.heading) * len,
+                           pz + core::libm::cos(k2.heading) * len, {200, 20, 20}, 2);
+        ge::lab::fill_disc(out, px, pz, r + 2, {200, 20, 20});
+        ge::lab::fill_disc(out, px, pz, r, {255, 255, 255});
+      } else {
+        ge::lab::fill_disc(out, px, pz, r, {40, 80, 220});
+      }
+    }
+    const Progress& p = me.progress;
+    const auto gates = static_cast<int32_t>(level.checkpoints.size());
+    caption =
+        (near ? "The piste " + num::to_fixed(kNearMetres, 0) + " m round the player"
+              : "The whole map with the field") +
+        std::string(" at ") + num::to_fixed(s.t, 1) + " s: " +
+        (p.finished ? "finished in " + num::to_fixed(p.finish_time, 2) + " s"
+                    : "next gate " + std::to_string(p.next) + " of " + std::to_string(gates)) +
+        ", " + num::to_fixed(me.skier.speed * 3.6, 1) + " km/h, " +
+        (me.skier.down      ? "down"
+         : me.skier.on_snow ? "on the snow"
+                            : "in the air") +
+        ", place " + std::to_string(place_of(s, 0)) + " of " + std::to_string(s.racers.size()) +
+        ". The player is white ringed in red, the "
+        "rivals blue, the piste's line red, the gates numbered.";
+    return true;
+  }
+
  private:
   void collect() {
     for (const GameEvent& e : driver_.state().events) {
@@ -210,6 +267,11 @@ constexpr std::array<ge::play::Axis, 5> kAxes{{
     {"reset", ge::play::AxisKind::press, "stand back on the piste past the last gate taken"},
 }};
 
+constexpr std::array<ge::play::View, 2> kViews{{
+    {"near", "the piste 160 m round the player from above, the field on it"},
+    {"map", "the whole map from above: the face, the woods, the piste, the gates, the field"},
+}};
+
 constexpr std::array<ge::play::Option, 2> kOptions{{
     {"rivals", "0", "bots on the grid beside the player (0..7)"},
     {"version", "1", "the generator's version the race map is built by"},
@@ -221,7 +283,7 @@ const ge::play::GameSpec kGame{
     "fall_line", "a downhill race through the gates of a generated mountain, the field beside you",
     kHz,         600,
     kAxes,       kOptions,
-    open_run,
+    open_run,    kViews,
 };
 
 }  // namespace fall_line::sim
