@@ -113,8 +113,6 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | `games/fall_line/app/look.cpp` | The ground's albedo bake | `render` |  |
 | `games/fall_line/app/look.hpp` | Fall Line's ground albedo: snow, the packed piste and steep rock, baked per map | `render` |  |
 | `games/fall_line/app/main.cpp` | Fall Line's app: the window, the frame loop on the run clock, the GPU frame | `platform` `gpu` `render` `audio` |  |
-| `games/fall_line/app/main.cpp` | Fall Line's app: the window, the frame loop on the run clock, the GPU frame | `platform` `gpu` `render` `audio` |  |
-| `games/fall_line/app/main.cpp` | Fall Line's app: the window, the frame loop on the run clock, the GPU frame | `platform` `gpu` `render` `audio` |  |
 | `games/fall_line/app/scene.cpp` | Fall Line's forest and figure meshes, materials and instance placement | `render` |  |
 | `games/fall_line/app/scene.hpp` | Fall Line's forest and figures as instance families: meshes, materials, placement | `render` |  |
 | `games/fall_line/app/views.cpp` | The named views' camera rigs and the map's day | `render` |  |
@@ -122,8 +120,6 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | `games/fall_line/labs/audition_lab.cpp` | Lab: Fall Line's bank, its ride bed's moments and a whole run, metered and as WAV | `audio` `labs` | `tests/fall_line_sound_test.cpp` |
 | `games/fall_line/labs/gpu_shadows_lab.cpp` | Lab: the horizon maps over a day, from above, and the bake counter of a sun sweep | `render` `labs` |  |
 | `games/fall_line/labs/gpu_taa_lab.cpp` | Lab: TAA-U on a moving camera against the converged still: ghosting, aliasing, | `render` `labs` |  |
-| `games/fall_line/labs/gpu_world_lab.cpp` | Lab: Fall Line's frame from named views of a seed, captured headless | `render` `labs` |  |
-| `games/fall_line/labs/gpu_world_lab.cpp` | Lab: Fall Line's frame from named views of a seed, captured headless | `render` `labs` |  |
 | `games/fall_line/labs/gpu_world_lab.cpp` | Lab: Fall Line's frame from named views of a seed, captured headless | `render` `labs` |  |
 | `games/fall_line/labs/play_lab.cpp` | Lab: an agent at the controls over stdio (observe, act, tape, end); the bot's check | `sim` `agent-interface` `labs` | `tests/fall_line_play_test.cpp` |
 | `games/fall_line/labs/sim_lab.cpp` | Lab: the bot over seeds, the run report table, its line on the map; the sim CLI | `sim` `labs` | `tests/fall_line_sim_test.cpp` |
