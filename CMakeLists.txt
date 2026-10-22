@@ -116,7 +116,7 @@ if(GE_GPU)
   ge_embed_wgsl(ge_render engine/render/sky_tables.wgsl engine/render/sky.wgsl
     engine/render/terrain.wgsl engine/render/terrain_cull.wgsl engine/render/terrain_normals.wgsl
     engine/render/horizon.wgsl engine/render/hiz.wgsl engine/render/taa.wgsl engine/render/post.wgsl
-    engine/render/instances.wgsl engine/render/instances_cull.wgsl)
+    engine/render/instances.wgsl engine/render/instances_cull.wgsl engine/render/bloom.wgsl)
 endif()
 
 # The lab framework (engine/lab: the contract, the runner, the raster, the PNG), published as

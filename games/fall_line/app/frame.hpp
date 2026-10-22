@@ -21,7 +21,8 @@
 //   instances            -> hdr motion (both lists, where the depth is equal)
 //   sky                  -> hdr motion (behind depth)
 //   taa                  -> taa.history (at the output's size; with FrameOptions::taa)
-//   post                 -> final
+//   bloom                -> bloom (the glow's mip chain, from what post reads)
+//   post                 -> final (the bloom mixed in, the grade's table: look.hpp's)
 //
 // With TAA the frame renders at FrameOptions::scale of the output's size, jittered, and the
 // resolve brings it up to the output; without it, at the output's size, unjittered, and post
@@ -47,6 +48,7 @@
 #include "gpu/device.hpp"
 #include "gpu/pipeline.hpp"
 #include "mountain/mapgen/types.hpp"
+#include "render/bloom.hpp"
 #include "render/frame.hpp"
 #include "render/hiz.hpp"
 #include "render/instances.hpp"
@@ -65,6 +67,7 @@ struct FrameOptions {
   bool overdraw_probe = false;  // labs: the terrain's and the instances' overdraw pipelines
   bool occlusion = true;        // cull the instances by the depth pyramid (off: the frustum only)
   uint32_t shadow_size = 2048;  // the sun's shadow maps' texels a side
+  double bloom = 0.04;          // the share of the bloom's glow in the picture; 0: none
 };
 
 // What of the run a frame draws, besides the map: the racers, the player's first.
@@ -87,6 +90,7 @@ struct GameFrame {
   ge::render::Terrain terrain;
   ge::render::Hiz hiz;
   ge::render::Taa taa;
+  ge::render::Bloom bloom;
   ge::render::Post post;
   ge::render::InstancePipelines instancing;
   ge::render::InstanceFamily forest, figures;

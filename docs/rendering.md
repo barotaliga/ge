@@ -237,7 +237,7 @@ the frame block's `prev_view_proj` and `eye_delta` (`FrameHistory`, `frame_types
 `terrain.cull`, `instances.cull` (phase one, reading the last frame's pyramid),
 `terrain.horizon`, `terrain.depth`, `instances.depth`, `hiz`, `instances.cull.late`,
 `instances.depth.late`, `terrain`, `instances` (both phases' lists, tested `equal`), `sky`,
-`taa`, `post`. The late phase's depth lands before the colour pass, so it is still shaded
+`taa`, `bloom` (M7d3), `post`. The late phase's depth lands before the colour pass, so it is still shaded
 once; the late phase's draws are not in this frame's pyramid, which only makes the next
 frame's phase one keep a little more.
 
@@ -528,7 +528,23 @@ in tile memory):
 the sun and the sky (read from the sky's light) to 0.78; the tone curve is the Khronos PBR
 neutral operator (linear to 0.76, a smooth shoulder above, so snow keeps its colour); the
 dither is interleaved gradient noise until the blue-noise texture lands; the sRGB encoding
-is an `override` constant off for an `*Srgb` output. Bloom and the grade land with M7d3.
+is an `override` constant off for an `*Srgb` output.
+
+**As built (M7d3)** (`render/bloom.hpp`, `render/post.hpp`). **Bloom** is a compute pass
+(`bloom`) over a chain of half-size `RGBA16Float` mips of what the post pass reads (six levels
+in Fall Line: half the output's size down to a 64th). Down, each level is the 13-tap filter of
+the one above (four overlapping 2 × 2 boxes and a centre one, each a bilinear read); the first
+level weighs each box by 1 / (1 + its brightness), so a lone glint cannot flicker into a blob.
+Up, each level adds the level below through a 3 × 3 tent to its own down level, and alpha
+counts the levels summed. The post pass mixes `strength` of the average in (Fall Line: 0.04):
+nothing is thresholded, so the mix conserves energy (a flat field keeps its value; the test
+holds it to one 8-bit level) and only what is much brighter than its surroundings visibly
+glows. **The grade** is a 32³ `RGBA16Float` lookup table read trilinearly at the tone-mapped,
+sRGB-encoded colour, so its steps are spent where the eye judges colour; it starts as the
+identity, and the game bakes its own (`fall_line::app::bake_grade`: a little contrast
+through the middle tones with the ends held, cooler shadows, warmer highlights, 5 % more
+saturation). On the software adapter at 1280 × 720 the bloom costs about 11 ms and the post
+pass 7 ms (the `profile` lab); the bloom's cost on a real GPU waits for the Mac's numbers.
 
 Linear light is used throughout, and the conversion happens here, once.
 

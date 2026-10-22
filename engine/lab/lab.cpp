@@ -161,7 +161,11 @@ void Lab::metric(std::string key, double value, std::string unit, Det det) {
   metrics_.push_back(Metric{std::move(key), value, std::move(unit), det});
 }
 
-void Lab::table(LabTable t) {
+void Lab::table(LabTable t, Det det) {
+  if (det == Det::measured) {
+    tables_.push_back(std::move(t));
+    return;
+  }
   for (const auto& row : t.rows) {
     for (const auto& cell : row) hash(cell.data(), cell.size() + 1);
   }

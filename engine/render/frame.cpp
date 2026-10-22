@@ -342,6 +342,31 @@ float half_to_float(uint16_t h) {
   return sign ? -v : v;
 }
 
+uint16_t float_to_half(float f) {
+  uint32_t x;
+  std::memcpy(&x, &f, 4);
+  const auto sign = static_cast<uint16_t>((x >> 16) & 0x8000u);
+  const uint32_t exp = (x >> 23) & 0xffu;
+  uint32_t man = x & 0x7fffffu;
+  if (exp == 0xff) return static_cast<uint16_t>(sign | 0x7c00u | (man ? 0x200u : 0u));
+  const int e = static_cast<int>(exp) - 127 + 15;
+  if (e >= 31) return static_cast<uint16_t>(sign | 0x7c00u);
+  if (e <= 0) {
+    // A subnormal half (or zero): the implicit bit made explicit and shifted down.
+    if (e < -10) return sign;
+    man |= 0x800000u;
+    const auto shift = static_cast<uint32_t>(14 - e);
+    uint32_t h = man >> shift;
+    const uint32_t rest = man & ((1u << shift) - 1u), half = 1u << (shift - 1u);
+    if (rest > half || (rest == half && (h & 1u))) ++h;
+    return static_cast<uint16_t>(sign | h);
+  }
+  uint32_t h = (static_cast<uint32_t>(e) << 10) | (man >> 13);
+  const uint32_t rest = man & 0x1fffu;
+  if (rest > 0x1000u || (rest == 0x1000u && (h & 1u))) ++h;  // a carry may round up to infinity
+  return static_cast<uint16_t>(sign | h);
+}
+
 std::vector<float> read_red(gpu::Device& device, const wgpu::Texture& texture, uint32_t mip,
                             uint32_t w, uint32_t h, wgpu::TextureFormat format) {
   const bool half =
