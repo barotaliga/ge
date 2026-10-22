@@ -47,7 +47,9 @@ struct NetStatsOptions {
 struct NetSimOptions {
   std::vector<std::string> presets;  // empty: every preset
   std::string mix = "racing";
-  std::string link;  // overrides on every preset: "latency=40,jitter=10,loss=2%"
+  std::string link;        // overrides on every preset: "latency=40,jitter=10,loss=2%"
+  bool stream = false;     // every link a stream (TCP): --transport=tcp
+  double budget_kbps = 0;  // every connection's send budget
   int clients = 8;
   int max_peers = 32;
   double seconds = 10;

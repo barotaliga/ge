@@ -160,8 +160,8 @@ if(GE_GPU)
     engine/render/skinning.wgsl engine/render/particles.wgsl engine/render/particles_sim.wgsl)
 endif()
 
-# The network (engine/net, docs/networking.md): addresses, the wire, the OS's UDP sockets (the only
-# file that includes them), the simulated network, captures, connections and nodes. No platform
+# The network (engine/net, docs/networking.md): addresses, the wire, the OS's UDP and TCP sockets
+# (os_socket.hpp the only file that includes the OS's headers), the simulated network, captures, connections and nodes. No platform
 # layer and no clock: the caller passes the time, so a session over the simulated network is
 # deterministic.
 file(GLOB GE_NET_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/net/*.cpp)

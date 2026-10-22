@@ -77,3 +77,41 @@ TEST(traffic_host_full_denies_the_rest) {
   CHECK_MSG(read_capture(r.capture.bytes.data(), r.capture.bytes.size(), back, &err), err);
   CHECK(back.size() == r.capture.packets);
 }
+
+TEST(traffic_big_messages_arrive_whole_over_datagrams_and_streams) {
+  for (const bool stream : {false, true}) {
+    for (const char* preset : {"lan", "wifi", "bad"}) {
+      TrafficPlan plan;
+      plan.clients = 4;
+      plan.seconds = 4;
+      plan.drain_seconds = 4;
+      plan.seed = 5;
+      conditions_preset(preset, plan.conditions);
+      plan.conditions.stream = stream;
+      traffic_mix("download", plan.mix);
+      const TrafficReport r = run_traffic(plan);
+      const std::string at = std::string(preset) + (stream ? " (stream): " : ": ");
+      CHECK_MSG(r.bulk.sent >= 8 && r.bulk.delivered == r.bulk.sent,
+                at + std::to_string(r.bulk.delivered) + " of " + std::to_string(r.bulk.sent) +
+                    " big messages arrived");
+      CHECK_MSG(r.bulk_broken == 0 && r.bulk.out_of_order == 0 && r.bulk.duplicated == 0,
+                at + "a big message broken or out of order");
+      CHECK(r.events_down.delivered == r.events_down.sent);
+      // Nothing is lost on a stream: every snapshot arrives.
+      if (stream) CHECK_MSG(r.snapshots.delivered == r.snapshots.sent, at + "a snapshot lost");
+    }
+  }
+}
+
+TEST(traffic_budget_holds_the_host_to_its_rate) {
+  TrafficPlan plan;
+  plan.clients = 2;
+  plan.seconds = 4;
+  plan.drain_seconds = 2;
+  traffic_mix("action", plan.mix);  // 30 Hz x 700 B snapshots: about 170 kbit/s a client
+  plan.budget_kbps = 64;
+  const TrafficReport r = run_traffic(plan);
+  CHECK_MSG(r.host_send_kbps <= 2 * 64 * 1.1, std::to_string(r.host_send_kbps) + " kbit/s");
+  CHECK(r.dropped_unsent > 0);
+  CHECK(r.events_down.delivered == r.events_down.sent);  // reliable messages wait, never drop
+}

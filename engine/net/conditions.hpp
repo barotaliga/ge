@@ -13,13 +13,18 @@
 // - a packet that would wait in the queue past `queue_ms` is dropped at the tail (congestion);
 // - `duplicate` delivers a second copy just after the first; `reorder` holds a packet back
 //   `reorder_ms` so the ones behind it overtake it.
+// - a STREAM link (`stream`: TCP, or a network that only lets a stream through) loses nothing,
+//   doubles nothing and keeps the order: a packet the line drops arrives a resend timeout later
+//   (`stream_resend_ms`: three latencies and two jitters, 200 ms at least), every packet behind
+//   it waits for it (head-of-line blocking), and a full queue makes the sender wait rather than
+//   drop.
 // Each packet draws exactly five numbers whatever happens to it, so changing one condition moves
 // no other condition's draws.
 //
 // ge:summary A link's conditions (latency, jitter, loss, bursts, reorder, bandwidth) and fates
 // ge:keywords net network conditions conditioner latency jitter loss packet-loss burst
 // ge:keywords gilbert-elliott duplicate reorder bandwidth queue congestion preset lan wifi
-// ge:keywords mobile bad-network simulate fate
+// ge:keywords mobile bad-network simulate fate stream tcp head-of-line
 // ge:skill net
 // ge:test tests/net_conditions_test.cpp
 #pragma once
@@ -44,6 +49,7 @@ struct LinkConditions {
   double reorder_ms = 0;      // how far a held packet falls behind
   double bandwidth_kbps = 0;  // the link's rate, kbit/s (0: unlimited)
   double queue_ms = 250;      // the longest a packet may queue before it is dropped
+  bool stream = false;        // a stream: in order, nothing lost, a drop a resend's wait late
 };
 
 // What `decide` keeps between packets on one directed link.
@@ -63,6 +69,8 @@ struct Fate {
 };
 
 Fate decide(const LinkConditions& c, LinkState& s, core::Rng& rng, int64_t now_us, size_t bytes);
+// How late a stream link's dropped packet arrives: its resend timeout.
+double stream_resend_ms(const LinkConditions& c);
 
 // Named conditions the labs and `ge net` sweep: lan, broadband, wifi, mobile, bad, awful.
 const std::vector<std::string>& preset_names();

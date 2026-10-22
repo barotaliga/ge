@@ -33,6 +33,11 @@ const Preset kPresets[] = {
 
 }  // namespace
 
+double stream_resend_ms(const LinkConditions& c) {
+  const double t = 3 * c.latency_ms + 2 * c.jitter_ms;
+  return t > 200 ? t : 200;
+}
+
 Fate decide(const LinkConditions& c, LinkState& s, core::Rng& rng, int64_t now_us, size_t bytes) {
   // Five draws a packet, always, in this order (conditions.hpp).
   const double u_loss = core::next(rng);
@@ -55,7 +60,7 @@ Fate decide(const LinkConditions& c, LinkState& s, core::Rng& rng, int64_t now_u
   }
 
   const int64_t start = s.busy_until_us > now_us ? s.busy_until_us : now_us;
-  if (start - now_us > us(c.queue_ms)) {
+  if (!c.stream && start - now_us > us(c.queue_ms)) {
     f.queue_drop = true;
     return f;
   }
@@ -65,9 +70,17 @@ Fate decide(const LinkConditions& c, LinkState& s, core::Rng& rng, int64_t now_u
     out += us(static_cast<double>((bytes + kWireOverhead) * 8) / c.bandwidth_kbps);
   }
   s.busy_until_us = out;  // a packet lost on the line still took its time on it
-  if (lost) return f;
-
   int64_t arrive = out + us(c.latency_ms) + us(c.jitter_ms * u_jitter);
+  if (c.stream) {
+    // The stream sends a lost segment again after its timeout; everything behind waits for it.
+    if (lost) arrive += us(stream_resend_ms(c));
+    if (arrive < s.last_arrive_us) arrive = s.last_arrive_us;
+    s.last_arrive_us = arrive;
+    f.copies = 1;
+    f.arrive_us[0] = arrive;
+    return f;
+  }
+  if (lost) return f;
   if (u_reorder < c.reorder) {
     arrive += us(c.reorder_ms);
   } else {
@@ -109,11 +122,14 @@ std::string describe_conditions(const LinkConditions& c) {
     if (n < static_cast<int>(sizeof b)) n += std::snprintf(b + n, sizeof b - n, fmt, v...);
   };
   if (c.jitter_ms > 0) add(" +0..%g", c.jitter_ms);
-  if (c.loss > 0)
-    add(c.burst > 1 ? ", %g%% loss (bursts of %g)" : ", %g%% loss", c.loss * 100, c.burst);
-  if (c.duplicate > 0) add(", %g%% doubled", c.duplicate * 100);
-  if (c.reorder > 0) add(", %g%% held %g ms", c.reorder * 100, c.reorder_ms);
+  const char* drop = c.stream ? "resent" : "loss";
+  if (c.loss > 0) {
+    add(c.burst > 1 ? ", %g%% %s (bursts of %g)" : ", %g%% %s", c.loss * 100, drop, c.burst);
+  }
+  if (c.duplicate > 0 && !c.stream) add(", %g%% doubled", c.duplicate * 100);
+  if (c.reorder > 0 && !c.stream) add(", %g%% held %g ms", c.reorder * 100, c.reorder_ms);
   if (c.bandwidth_kbps > 0) add(", %g kbit/s", c.bandwidth_kbps);
+  if (c.stream) add("%s", ", as a stream");
   return b;
 }
 
