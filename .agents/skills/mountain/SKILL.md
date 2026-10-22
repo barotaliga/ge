@@ -49,6 +49,17 @@ one game's: which maps a game races, its modes and its strings stay in the game.
   gates round it (`course_gates` with the park as zones), and an area none of whose courses
   carries one is refused unless a course was asked for. `analysis/park.cpp` (`check_park`)
   holds the finished park; a map built without tricks moves by nothing.
+- THE SKI ROUTES (R42, `resort_rules::route`), from v9 on: `ski_routes.hpp` (`lay_ski_routes`)
+  finds the ORANGE lines on a built ski area, two cheapest-path searches over a grid of squares
+  (from every chair's and gondola's top, and back from every run) joined through one square
+  steeper than a black; v9 lays the shortest line, v10 the WILD one (a step's cost by the woods,
+  the edges and the cliff faces it crosses, drops over crags, the line threaded between the
+  trunks). `route_features.hpp` then fells the trunks on a wild line and cuts its jumps
+  (`O1…`, `Kicker::route`) and their gaps into the ground. `generate.cpp` (`lay_routes`) lays
+  them on the attempt's base map BEFORE the area is analysed, so `analysis/routes.cpp`
+  (`check_routes`) and every other rule hold the map with them; the jumps ride on
+  `ResortAttempt::route_kickers` into every course set. A map from v8 or before carries none,
+  and the digest reads routes only where there are some.
 
 ## Order of work (docs/goals.md M4a to M4d)
 
@@ -82,4 +93,5 @@ discipline runs its lab (`slalom`: both runs straightened, the map from above, t
 jumps, nets and speed trap; `speed-ski`: the track's profile from the side and the map from
 above; `ski-cross`: the course close up, its profile with the mean fall taken out, the map). A
 change to the terrain park runs `park` (the park close up, its profile, the map) at
-`--version=1,8`. The `labs` skill owns how.
+`--version=1,8`; a change to the ski routes runs `routes` (the area with its routes, each route
+close up and from the side, the routes' table) at `--version=9,10`. The `labs` skill owns how.

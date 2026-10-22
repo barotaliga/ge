@@ -128,6 +128,25 @@ std::string level_digest(const Level& level) {
       f.word(c.id);
       f.mix(c.length);
     }
+    // R42 — the ski routes, read only where a map has one, so a map from before them keeps its
+    // digest.
+    for (const SkiRoute& r : area.routes) {
+      f.word(r.id);
+      f.word(r.from);
+      f.word(r.into.run);
+      f.mix(r.length);
+      f.mix(r.steepest);
+      f.mix(double(r.points.size()));
+      for (size_t i = 0; i < r.points.size(); i += kTrackStride) {
+        f.mix(r.points[i].x);
+        f.mix(r.points[i].z);
+        f.mix(r.points[i].y);
+      }
+      for (const SkiRoute::Drop& d : r.drops) {
+        f.mix(d.s);
+        f.mix(d.height);
+      }
+    }
   }
   if (level.race) {
     const RaceCourse& race = *level.race;
