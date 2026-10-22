@@ -28,6 +28,15 @@ one game's: which maps a game races, its modes and its strings stay in the game.
   and races `choose_course`'s pick (`GenerateOptions::course`, `grade`, else `deal_grade`).
   `analyze_level` answers both on a map with a `resort`; `analysis/shared.hpp` holds the checks
   every map shares (the start line, the day, the weather).
+- A RACE COURSE SET OVER A BUILT MAP (R31–, the rule book's numbers in
+  `discipline_rules.hpp`): `course_prep.hpp` prepares the hill for any discipline (the piste's
+  kickers levelled, the start drop, groomed, combed, the woods cut), and each discipline sets its
+  course over it as a new map whose `Level::race` names it and keeps the map it was set over
+  (`RaceCourse::base`, so a second run is set over the same mountain). `slalom.hpp` is the slalom
+  (R31); `speed_events.hpp` the downhill (R32), the super-G (R33) and the giant slalom (R36),
+  their racing line, gate spacing and speed trap from `speed_course.hpp` (the crests shaved round
+  by `course_prep`). `analysis/race.hpp` holds a course to its discipline's rule; `analyze_level` answers it
+  on a map with a `race`.
 
 ## Order of work (docs/goals.md M4a to M4d)
 
@@ -55,5 +64,8 @@ one game's: which maps a game races, its modes and its strings stay in the game.
 courses, with its lifts, runs and courses as tables and the attempts tried) and `junctions`
 (where the groomed snow steps where runs meet, the worst drawn as relief). A change to mapgen or
 analysis runs `level` and `analyze` before and after (`--tag=before`, then `--compare=before`);
-a change to the ski area's build runs `resort` and `junctions` the same way. The `labs` skill
+a change to the ski area's build runs `resort` and `junctions` the same way, and a change to a
+discipline runs its lab (`slalom`: both runs straightened, the map from above, the gate table;
+`speed-events`: the downhill, super-G and both giant slalom runs straightened, with their
+jumps, nets and speed trap). The `labs` skill
 owns how.

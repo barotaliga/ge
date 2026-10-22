@@ -129,6 +129,34 @@ std::string level_digest(const Level& level) {
       f.mix(c.length);
     }
   }
+  if (level.race) {
+    const RaceCourse& race = *level.race;
+    f.word(discipline_name(race.discipline));
+    f.mix(race.run);
+    f.mix(race.from);
+    f.mix(race.to);
+    for (const Checkpoint& c : level.checkpoints) {
+      if (c.pole) f.word(*c.pole == PoleGate::open ? "open" : "closed");
+      if (c.panels) {
+        f.word("panels");
+        f.mix(c.turn);
+      }
+    }
+    for (const double j : race.jumps) f.mix(j);
+    if (race.trap) {
+      f.word("trap");
+      f.mix(race.trap->s);
+    }
+    if (race.nets) {
+      f.word("nets");
+      f.mix(race.nets->from);
+      f.mix(race.nets->to);
+    }
+    for (const RaceCourse::LinePoint& p : race.line) {
+      f.mix(p.s);
+      f.mix(p.x);
+    }
+  }
   char out[9];
   std::snprintf(out, sizeof out, "%08x", f.hash);
   return out;

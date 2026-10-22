@@ -1,0 +1,45 @@
+// THE RUN'S SOUND: the event route and the ride bed together, for one app. Two calls, at two
+// rates, because the simulation and the picture run at two:
+//
+//   run_sound_step   after every simulation step: this step's events become the bank's
+//                    one-shots (the events are cleared at the next step, so a frame that ran
+//                    three steps routes three times)
+//   run_sound_frame  once a rendered frame: the player's ride bed steered to where he is now
+//
+// WHAT IS HEARD is the PLAYER's run (racer 0): his gates, his landings, his trunks and his falls,
+// and any shoulder he is part of. A rival's own events are not routed; the field is heard when it
+// meets him. The snow under a landing picks its sound (deep loose snow is the whumpf, past half the
+// legs' limit it is the hard landing), and the load scales it.
+//
+// ge:summary The run's sound: events routed to the bank each step, the ride bed steered each frame
+// ge:keywords route events sound run_sound landing wipeout gate finish bed listener step frame
+// ge:skill audio sim
+// ge:test tests/fall_line_sound_test.cpp
+#pragma once
+
+#include "audio/synth.hpp"
+#include "fall_line/sim/state.hpp"
+#include "fall_line/sound/listener.hpp"
+#include "skier/app/ride_bed.hpp"
+
+namespace fall_line::sound {
+
+struct RunSound {
+  ge::skier::RideBed bed;
+  Seat seat = Seat::chase;
+};
+
+RunSound make_run_sound();
+
+// The one-shots for this step's events.
+void run_sound_step(RunSound& sound, ge::audio::Synth& synth, const sim::GameState& state);
+
+// Steer the ride bed for this frame. `duck` scales the whole bed, 0..1 (1 on his skis, less under
+// a card).
+void run_sound_frame(RunSound& sound, ge::audio::Synth& synth, const sim::GameState& state,
+                     float dt, float duck = 1);
+
+// The run is paused or left: the bed torn down, so nothing holds its last note behind a card.
+void run_sound_silence(RunSound& sound, ge::audio::Synth& synth);
+
+}  // namespace fall_line::sound

@@ -1,0 +1,9 @@
+# seed version region, then each run's course (mountain_slalom_test)
+38 v1 alpine run=1 from=952 to=1442 gates=42 hairpins=3 verticals=1 delays=2 digest=bac22cf4
+38 v1 alpine run=2 from=952 to=1442 gates=43 hairpins=4 verticals=1 delays=1 digest=a5db7385
+1 v1 maritime run=1 from=440 to=940 gates=43 hairpins=3 verticals=1 delays=1 digest=ca140aa0
+1 v1 maritime run=2 from=440 to=940 gates=45 hairpins=3 verticals=2 delays=1 digest=8eb89e2f
+3 v1 fell run=1 from=338 to=832 gates=45 hairpins=4 verticals=2 delays=2 digest=16c3a44a
+3 v1 fell run=2 from=338 to=832 gates=46 hairpins=4 verticals=2 delays=1 digest=5a259646
+38 v8 alpine run=1 from=74 to=684 gates=54 hairpins=3 verticals=1 delays=2 digest=afcb5e1e
+38 v8 alpine run=2 from=74 to=684 gates=53 hairpins=4 verticals=1 delays=1 digest=2a41d71b

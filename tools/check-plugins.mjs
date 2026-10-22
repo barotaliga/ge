@@ -1,11 +1,13 @@
 // THE PLUGIN CONTRACT's check (docs/architecture.md § Plugins; run by `make agents-check`).
 // Reads each plugins/<name>/CMakeLists.txt's one `ge_add_plugin(<name> ENGINE ... PLUGINS ...)`
-// call and holds the tree to it:
+// call (and its APP list, the engine targets the plugin's app/ half links) and holds the tree to
+// it:
 //   - the name is one lower-case word, equal to the directory, and shadows no engine/ directory;
 //   - every plugin has its skill at .agents/skills/<name>/, and every tagged file in the plugin
 //     names that skill in its ge:skill line;
 //   - every #include "<root>/..." in a plugin reaches only itself, an engine directory whose
-//     target it lists under ENGINE, or a plugin it lists under PLUGINS; never games/ or tools/;
+//     target it lists under ENGINE, or a plugin it lists under PLUGINS (and from app/, an engine
+//     directory whose target it lists under APP); never games/ or tools/;
 //   - the PLUGINS graph has no cycle;
 //   - nothing under engine/ includes a plugin, and no plugin's name is a games/ directory.
 //
@@ -51,13 +53,14 @@ for (const name of dirs("plugins")) {
     continue;
   }
   const words = call[1].split(/\s+/).filter(Boolean);
-  const decl = { name: words[0], engine: [], plugins: [] };
+  const decl = { name: words[0], engine: [], plugins: [], app: [] };
   let list = null;
   for (const w of words.slice(1)) {
     if (w === "ENGINE") list = decl.engine;
     else if (w === "PLUGINS") list = decl.plugins;
+    else if (w === "APP") list = decl.app;
     else if (list) list.push(w);
-    else err(`${cm}: '${w}' is outside an ENGINE or PLUGINS list.`);
+    else err(`${cm}: '${w}' is outside an ENGINE, PLUGINS or APP list.`);
   }
   if (decl.name !== name) err(`${cm} declares '${decl.name}'; a plugin's name is its directory's ('${name}').`);
   if (!/^[a-z][a-z0-9]*$/.test(name)) err(`plugins/${name}: a plugin name is one lower-case word (skill: plugins).`);
@@ -68,7 +71,7 @@ for (const name of dirs("plugins")) {
 
 for (const [name, decl] of plugins) {
   const engineTargets = new Set(Object.values(ENGINE_TARGET));
-  for (const t of decl.engine) {
+  for (const t of [...decl.engine, ...decl.app]) {
     if (!engineTargets.has(t)) err(`plugins/${name} lists ENGINE ${t}, which is not an engine target (${[...engineTargets].join(", ")}).`);
   }
   for (const p of decl.plugins) {
@@ -78,15 +81,18 @@ for (const [name, decl] of plugins) {
     err(`plugins/${name} has no skill: add .agents/skills/${name}/SKILL.md (skill: plugins, § Add a plugin).`);
   }
   const allowed = new Set([name, ...decl.plugins, ...engineDirs.filter((d) => decl.engine.includes(ENGINE_TARGET[d]))]);
+  const appAllowed = new Set([...allowed, ...engineDirs.filter((d) => decl.app.includes(ENGINE_TARGET[d]))]);
   for (const f of files(`plugins/${name}`)) {
     if (/\.(cpp|hpp|h)$/.test(f)) {
       // A plugin's labs/ is built into the `labs` executable, not the plugin (docs/labs.md), so
       // it may also include the lab framework.
       const isLab = f.startsWith(`plugins/${name}/labs/`);
+      const isApp = f.startsWith(`plugins/${name}/app/`);
+      const may = isApp || isLab ? appAllowed : allowed;
       for (const root of includes(f)) {
-        if (!allowed.has(root) && !(isLab && root === "lab")) {
-          err(`${f} includes "${root}/...", which plugins/${name} does not declare. Add it to ENGINE or ` +
-            `PLUGINS in plugins/${name}/CMakeLists.txt if the dependency is right; a plugin never ` +
+        if (!may.has(root) && !(isLab && root === "lab")) {
+          err(`${f} includes "${root}/...", which plugins/${name} does not declare. Add it to ENGINE, ` +
+            `PLUGINS or (for app/) APP in plugins/${name}/CMakeLists.txt if the dependency is right; a plugin never ` +
             `includes a game (skill: plugins).`);
         }
       }
