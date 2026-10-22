@@ -174,7 +174,8 @@ void run(ge::lab::Lab& lab) {
     view.frame = static_cast<uint64_t>(k);
     view.time_s = racing.state().t;
     const size_t drawn_from = ge::prof::spans().size();
-    fall_line::app::draw(*device, *frame, view, {skiers}, target.view);
+    // Two steps between frames: the figures' lags run as in the window at 60 Hz.
+    fall_line::app::draw(*device, *frame, view, {skiers, 2.0 / 120.0, k == 0}, target.view);
     const size_t drawn_to = ge::prof::spans().size();
     frame->recorder.wait(*device);
     const ge::render::FrameStats& st = frame->recorder.stats;

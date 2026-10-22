@@ -204,7 +204,9 @@ int main(int argc, char** argv) {
     skiers.clear();
     for (const auto& racer : run.state().racers) skiers.push_back(racer.skier);
     if (chase && !skiers.empty()) fall_line::app::chase_view(level, skiers[0], view);
-    fall_line::app::draw(*device, *frame, view, {skiers}, target);
+    // The figures' lags run over the steps this frame took; the first frame starts them settled.
+    fall_line::app::draw(*device, *frame, view,
+                         {skiers, static_cast<double>(granted) / 120.0, presented == 0}, target);
     surface.present();
     ++presented;
   }

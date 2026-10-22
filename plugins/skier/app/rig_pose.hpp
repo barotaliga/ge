@@ -23,7 +23,7 @@
 //
 // ge:summary The skier's rig posed from a SkierState, and the skier model's locals from the pose
 // ge:keywords skier rig pose poser ik two-bone lean angulation edge pivot pole tuck smoothing
-// ge:keywords rig_locals rig-binding skinned figure model anim
+// ge:keywords rig_locals rig-binding skinned figure model anim pose_reach reach-box
 // ge:skill skier assets
 // ge:test tests/skier_rig_pose_test.cpp
 #pragma once
@@ -33,6 +33,7 @@
 #include <vector>
 
 #include "assets/model.hpp"
+#include "assets/pose.hpp"
 #include "core/quat.hpp"
 #include "skier/app/rig.hpp"
 #include "skier/skier.hpp"
@@ -58,6 +59,11 @@ class RigPoser {
   bool primed_ = false;
   double lean1_ = 0, lean2_ = 0, edge_ = 0, tuck_ = 0;
 };
+
+// THE REACH every pose stays inside, in the figure's frame, m: wide enough for the body lying
+// over on its side when down and the poles trailing, so a skinned skier quantised into it on the
+// GPU (render/skinning.hpp) is never clamped against a wall.
+assets::Box pose_reach();
 
 // Which model joint each rig joint is, and the model's bind, read once at load.
 struct RigBinding {
