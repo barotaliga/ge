@@ -25,16 +25,22 @@ constexpr r::PassRow kPassTable[] = {
     {"terrain.cull", "terrain.pyramid", "terrain.tiles terrain.indirect"},
     {"instances.cull", "instances hiz.last", "instances.early"},
     {"terrain.horizon", "terrain.height", "terrain.horizon"},
+    {"shadows.cull", "instances", "shadows.lists"},
+    {"shadows.near", "instances shadows.lists", "shadows.maps"},
+    {"shadows.far", "instances shadows.lists", "shadows.maps"},
+    {"shadows.figures", "instances shadows.lists", "shadows.maps"},
     {"terrain.depth", "terrain.tiles terrain.indirect terrain.height", "depth"},
     {"instances.depth", "instances instances.early", "depth"},
     {"hiz", "depth", "hiz"},
     {"instances.cull.late", "instances hiz", "instances.late"},
     {"instances.depth.late", "instances instances.late", "depth"},
     {"terrain",
-     "terrain.tiles terrain.indirect terrain.height terrain.horizon sky.aerial sky.light depth",
+     "terrain.tiles terrain.indirect terrain.height terrain.horizon shadows.maps sky.aerial "
+     "sky.light depth",
      "hdr motion"},
     {"instances",
-     "instances instances.early instances.late terrain.horizon sky.aerial sky.light depth",
+     "instances instances.early instances.late terrain.horizon shadows.maps sky.aerial sky.light "
+     "depth",
      "hdr motion"},
     {"sky", "sky.view depth", "hdr motion"},
     {"taa", "hdr motion depth taa.history sky.light", "taa.history"},
@@ -117,6 +123,14 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
                    figure_materials(), kMaxFigures * ge::skier::kFigurePieces);
   f->staged_figures.resize(size_t{kMaxFigures} * ge::skier::kFigurePieces);
   f->instance_light = r::instance_light_group(device, f->instancing, f->terrain);
+  // The forest casts into the cascades (two caster slots), the figures into the atlas (one).
+  r::ShadowSettings shadows;
+  shadows.size = options.shadow_size;
+  r::create_sun_shadows(device, f->shadows, shadows, f->frame_layout, f->sky);
+  r::create_family_casters(device, f->instancing, f->forest, r::kCascades);
+  r::create_family_casters(device, f->instancing, f->figures, 1);
+  r::bind_terrain_shadows(f->terrain, f->shadows.group);
+  r::bind_instance_shadows(f->instancing, f->shadows.group);
   make_targets(device, *f, width, height);
   f->recorder.init(device, "frame.timer", kPasses);
   return f;
@@ -160,6 +174,15 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& view, const
   for (r::InstanceFamily* family : f.families) {
     r::prepare_family(device, *family, view, f.targets.height, occlusion);
   }
+  // Each figure's tile is centred a metre over its skis.
+  f.figure_centres.resize(racers);
+  for (size_t k = 0; k < racers; ++k) {
+    const ge::skier::SkierState& s = scene.skiers[k];
+    f.figure_centres[k] = {s.x, s.y + 1.0, s.z};
+  }
+  r::InstanceFamily* still[] = {&f.forest};
+  r::InstanceFamily* moving[] = {&f.figures};
+  r::prepare_sun_shadows(device, f.shadows, view, f.figure_centres, still, moving);
   // Encode, in the pass table's order.
   wgpu::CommandEncoder encoder = device.device.CreateCommandEncoder();
   r::encode_sky_tables(f.sky, f.pipelines, f.recorder, encoder);
@@ -168,6 +191,7 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& view, const
   r::encode_instances_cull(families, f.instancing, f.pipelines, f.recorder, encoder, f.frame_group,
                            false);
   r::encode_terrain_horizon(f.terrain, f.pipelines, f.recorder, encoder);
+  r::encode_sun_shadows(f.shadows, still, moving, f.instancing, f.pipelines, f.recorder, encoder);
   r::encode_terrain_depth(f.terrain, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
   r::encode_instances_depth(families, f.instancing, f.pipelines, f.recorder, encoder, f.targets,
                             f.frame_group, f.instance_light, false);

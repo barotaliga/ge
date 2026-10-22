@@ -25,11 +25,18 @@
 //   depth prepass only (its fragment discards; the colour pass tests `equal` and so shades only
 //   the pixels the prepass kept), so a LOD change never pops. `pick_lod` is the CPU twin.
 //
+// - CASTERS: a family that casts into the sun's shadow maps (render/shadows.hpp) has a CASTER
+//   SLOT a map it is drawn into (`create_family_casters`): lists and draws of its own, filled by
+//   the cull's `shadow` entry (the map's box, no pyramid, the LOD by the radius in the map's
+//   texels, no band) and drawn depth only, both faces, by `p_caster`.
+//
 // The passes, in a frame's order: `encode_instances_cull` early, `encode_instances_depth` early
 // (after the ground's prepass), the pyramid, the cull late, the depth late, then the colour pass
 // (`encode_instances`, both phases' lists, `equal`). Every family in a span shares each pass.
 // Group 1 of the draws is the light (`instance_light_group`: the ground's own shadow from the
-// terrain's horizon maps), group 2 the family. Shaders: instances.wgsl, instances_cull.wgsl.
+// terrain's horizon maps), group 2 the family, group 3 the sun's shadows of what stands
+// (`InstancePipelines::shadows`, bound by `bind_instance_shadows`; none until then). Shaders:
+// instances.wgsl, instances_cull.wgsl.
 //
 // ge:summary GPU-driven instance families: meshes and LODs, two-phase Hi-Z culling, indirect
 // draws
@@ -37,6 +44,7 @@
 // ge:keywords hi-z lod lod-band dither cross-fade bucket indirect-draw base-vertex compaction
 // ge:keywords vertex-pulling soa streams materials pick_lod create_family set_instances
 // ge:keywords encode_instances_cull encode_instances_depth encode_instances instance-stats
+// ge:keywords casters caster-slot shadow-cull create_family_casters draw_casters
 // ge:skill render
 // ge:test tests/render_instances_test.cpp
 #pragma once
@@ -103,8 +111,11 @@ struct InstanceStats {
 
 // The pipelines and layouts every family shares (added to the manifest once).
 struct InstancePipelines {
-  wgpu::BindGroupLayout cull_layout, draw_layout, light_layout;
+  wgpu::BindGroupLayout cull_layout, draw_layout, light_layout, empty_layout;
+  wgpu::BindGroup empty_group;
+  wgpu::BindGroup shadows;  // group 3 of the lit draws: render/shadows.hpp's receivers' group
   uint32_t p_early = 0, p_late = 0, p_depth = 0, p_draw = 0;
+  uint32_t p_shadow_cull = 0, p_caster = 0;         // a shadow map's cull and depth draw
   uint32_t p_count_equal = 0, p_count_greater = 0;  // the overdraw probe's, when asked for
 };
 void create_instance_pipelines(gpu::Device& device, gpu::PipelineSet& pipelines,
@@ -113,6 +124,15 @@ void create_instance_pipelines(gpu::Device& device, gpu::PipelineSet& pipelines,
 // Group 1 of the draws: the ground's own shadow, read from the terrain's horizon maps.
 wgpu::BindGroup instance_light_group(gpu::Device& device, const InstancePipelines& ip,
                                      const Terrain& terrain);
+// The sun's shadows the lit draws read (render/shadows.hpp's `SunShadows::group`).
+void bind_instance_shadows(InstancePipelines& ip, const wgpu::BindGroup& shadows);
+
+// A family's draws into one shadow map: its lists, arguments, parameters and groups.
+struct CasterSlot {
+  wgpu::Buffer params, lists, args;
+  wgpu::BindGroup cull_group, draw_group;
+  bool culled = false;  // this frame's cull runs (its arguments were reset)
+};
 
 struct InstanceFamily {
   std::string label;
@@ -123,6 +143,7 @@ struct InstanceFamily {
   std::vector<uint32_t> args_reset;  // the draws' arguments with no instances, and zero stats
   std::vector<float> streams;        // the CPU's copy of the instance streams
   std::vector<float> lod_px;         // each LOD's min_px
+  std::vector<CasterSlot> casters;   // a shadow map's draws each (create_family_casters)
   bool moved_since_cut = false;      // false: the next write's last frame is the write itself
   // instances_cull.wgsl's `FamilyParams`, filled by prepare.
   struct Params {
@@ -140,6 +161,10 @@ void create_family(gpu::Device& device, const InstancePipelines& ip, InstanceFam
 void bind_family_hiz(gpu::Device& device, const InstancePipelines& ip, InstanceFamily& family,
                      const Hiz& hiz);
 
+// Slots for `maps` shadow maps (before `bind_family_hiz`, which makes their cull groups).
+void create_family_casters(gpu::Device& device, const InstancePipelines& ip, InstanceFamily& family,
+                           int maps);
+
 // Write instances [first, first + n): this frame's place, and the last frame's from the place
 // written before (or this one, the first time and after `cut_family`). Grows `count` to cover.
 void set_instances(gpu::Device& device, InstanceFamily& family, uint32_t first,
@@ -152,6 +177,10 @@ void cut_family(InstanceFamily& family);
 // frame's pyramid may cull) and its draws' arguments reset.
 void prepare_family(gpu::Device& device, InstanceFamily& family, const FrameView& view,
                     uint32_t render_height, bool occlusion);
+
+// Caster slot `slot`'s cull this frame, for a map of `texels_per_m` (its arguments reset).
+void prepare_family_caster(gpu::Device& device, InstanceFamily& family, int slot,
+                           float texels_per_m);
 
 // The cull ("instances.cull", or "instances.cull.late" for the late phase) over every family.
 void encode_instances_cull(std::span<InstanceFamily* const> families, const InstancePipelines& ip,
@@ -178,7 +207,18 @@ void encode_instances_overdraw(std::span<InstanceFamily* const> families,
                                const wgpu::BindGroup& frame, const wgpu::BindGroup& light,
                                const wgpu::TextureView& count, bool after_prepass);
 
+// One shadow map's casters: in a compute pass, `cull_shadow` dispatches slot `slot`'s cull of
+// every family (the map's view is group 0, set by the caller); in a depth pass of the map,
+// `draw_casters` draws them. Both skip a slot not prepared this frame. Return the dispatches /
+// draws.
+uint32_t cull_shadow(wgpu::ComputePassEncoder& pass, std::span<InstanceFamily* const> families,
+                     int slot);
+uint32_t draw_casters(wgpu::RenderPassEncoder& pass, std::span<InstanceFamily* const> families,
+                      int slot);
+
 // Labs and tests (blocks): what the family's last cull did.
 InstanceStats read_instance_stats(gpu::Device& device, const InstanceFamily& family);
+// And what its last cull of caster slot `slot` did (`early`: drawn, `frustum`: outside the map).
+InstanceStats read_caster_stats(gpu::Device& device, const InstanceFamily& family, int slot);
 
 }  // namespace ge::render

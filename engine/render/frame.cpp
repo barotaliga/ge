@@ -256,6 +256,13 @@ wgpu::BindGroupLayout make_layout(gpu::Device& device, std::string_view label,
         e.storageTexture.viewDimension = wgpu::TextureViewDimension::e2D;
         e.visibility = visibility & ~wgpu::ShaderStage::Vertex;
         break;
+      case Slot::depth_array:
+        e.texture.sampleType = wgpu::TextureSampleType::Depth;
+        e.texture.viewDimension = wgpu::TextureViewDimension::e2DArray;
+        break;
+      case Slot::compare:
+        e.sampler.type = wgpu::SamplerBindingType::Comparison;
+        break;
     }
     entries.push_back(e);
   }

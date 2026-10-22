@@ -76,6 +76,7 @@ struct Terrain {
   wgpu::Buffer params, tiles, indirect, indices;
   wgpu::BindGroupLayout layout, cull_layout, normals_layout;
   wgpu::BindGroup group, cull_group, normals_group;
+  wgpu::BindGroup shadows;  // group 2 of the draws: what stands in the sun (render/shadows.hpp)
   uint32_t p_depth = 0, p_draw = 0, p_cull = 0, p_normals = 0;
   uint32_t p_count_equal = 0, p_count_greater = 0;  // the overdraw probe's, when asked for
   bool normals_built = false;
@@ -95,6 +96,9 @@ struct Terrain {
 // Upload the source's grids, bake the min/max pyramid and add the pipelines to the manifest.
 void create_terrain(gpu::Device& device, gpu::PipelineSet& pipelines, Terrain& terrain,
                     const TerrainSource& source, const wgpu::BindGroupLayout& frame);
+// The sun's shadows of what stands on the ground the draws read (render/shadows.hpp's
+// `SunShadows::group`; none until this is called).
+void bind_terrain_shadows(Terrain& terrain, const wgpu::BindGroup& shadows);
 // The levels round this frame's eye and the horizon maps the sun needs, staged and uploaded; the
 // indirect count reset.
 void prepare_terrain(gpu::Device& device, Terrain& terrain, const FrameView& view);

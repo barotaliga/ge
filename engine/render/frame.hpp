@@ -152,6 +152,8 @@ enum class Slot : uint8_t {
   store_3d,      // a write-only RGBA16F 3D storage texture
   depth,         // a depth texture (textureLoad only)
   store_r32,     // a write-only R32F 2D storage texture
+  depth_array,   // a depth 2D-array texture (comparison sampling)
+  compare,       // a comparison sampler
 };
 
 wgpu::BindGroupLayout make_layout(gpu::Device& device, std::string_view label,
