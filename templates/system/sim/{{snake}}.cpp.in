@@ -1,0 +1,41 @@
+// The definitions behind {{snake}}.hpp: a level that relaxes toward zero under seeded kicks.
+// Replace it with the system; keep its shape (skill: sim-system).
+//
+// ge:summary The {{snake}} system's step and digest
+// ge:keywords sim system {{snake}} step_{{snake}} digest_{{snake}}
+// ge:skill sim-system
+// ge:test tests/sim_{{snake}}_test.cpp
+#include "sim/{{snake}}.hpp"
+
+namespace {{ident}}::sim {
+
+namespace {
+
+constexpr double kKick = 1.0;    // the largest seeded kick, per second²
+constexpr double kSpring = 2.0;  // 1/s²: pulls the level back toward zero
+constexpr double kDamp = 1.5;    // 1/s
+
+void mix(uint64_t& h, const void* bytes, size_t n) {
+  const auto* p = static_cast<const unsigned char*>(bytes);
+  for (size_t i = 0; i < n; i++) {
+    h ^= p[i];
+    h *= 0x100000001b3ull;
+  }
+}
+
+}  // namespace
+
+void step_{{snake}}({{Type}}State& s, ge::core::Rng& rng, double dt_s) {
+  const double kick = ge::core::range(rng, -kKick, kKick);
+  s.rate += (kick - s.level * kSpring - s.rate * kDamp) * dt_s;
+  s.level += s.rate * dt_s;
+}
+
+uint64_t digest_{{snake}}(const {{Type}}State& s) {
+  uint64_t h = 0xcbf29ce484222325ull;
+  mix(h, &s.level, sizeof s.level);
+  mix(h, &s.rate, sizeof s.rate);
+  return h;
+}
+
+}  // namespace {{ident}}::sim

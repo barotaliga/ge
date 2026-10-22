@@ -6,7 +6,7 @@ description: "Use on every code change in a game repo built on the engine: file 
 # Write code
 
 The reader is always an agent with no context. Write so that a grep finds the answer and the
-file explains itself. `make agents-check` (`ge doctor`) holds every rule here that a program can.
+file explains itself. `ge doctor` (part of `ge check`) holds every rule here that a program can.
 
 ## File shape
 
@@ -55,11 +55,11 @@ Every error and warning is a prompt for an agent, in three parts:
 
 ```cpp
 ge::core::output::error("sim: seed 38 step 4410: the body left the field at x = 212.4 m; "
-                        "next: make lab LAB=run ARGS=--seeds=38, skill: sim-system");
+                        "next: ge lab run -- --seeds=38, skill: sim-system");
 ```
 
 Print through `core/output.hpp` (`status`, `info`, `warn`, `error`), never straight to
-stdout. `make agents-check` reads every `output::error`/`output::warn`, every `GE_ASSERT`, every
+stdout. `ge doctor` reads every `output::error`/`output::warn`, every `GE_ASSERT`, every
 lab's `fail` and every CMake `message(FATAL_ERROR|WARNING ...)` and fails a message that has
 fewer than three words or no next-action marker (`next:`, `skill:`, `make `, `run `, `rerun`,
 `see `, `docs/`).
@@ -73,5 +73,6 @@ obvious.
 
 1. Write the test first when the behaviour is defined (skill: `sim-system`).
 2. Make the change.
-3. Build and run only what it touches: `cmake --build build/debug && build/debug/<x>_test`.
+3. Build and run only what it touches: `ge test --filter=<x>` (failures come back as findings;
+   the full log is under `build/debug/`).
 4. Before committing: the `commit` skill's gates.

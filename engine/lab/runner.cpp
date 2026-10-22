@@ -42,6 +42,7 @@ const LabFlag kRunnerFlags[] = {
     {"write-digests", "", "rewrite this baseline file from this run's digests"},
     {"quiet", "", "print only failures and the summary", true},
     {"debug", "", "let the engine's debug lines through", true},
+    {"json", "", "with no lab named, list the labs as one JSON array", true},
 };
 
 void print_sink(core::output::Level level, std::string_view message, void*) {
@@ -217,6 +218,10 @@ int run_labs(int argc, const char* const* argv) {
   }
   const bool all = get(runner, "all") == "1";
   if (!spec && !all) {
+    if (get(runner, "json") == "1") {
+      std::printf("%s\n", list_json().c_str());
+      return 0;
+    }
     std::printf("%s", list_text().c_str());
     return 0;
   }

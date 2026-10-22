@@ -273,4 +273,22 @@ std::string format_compare(const std::vector<Metric>& before, const std::vector<
   return format_table(t);
 }
 
+std::string list_json() {
+  std::string j = "[";
+  for (const LabSpec* s : registered_labs()) {
+    if (j.size() > 1) j += ",";
+    j += "{\"id\":" + json_str(s->id) + ",\"kind\":" + json_str(std::string(kind_name(s->kind))) +
+         ",\"owner\":" + json_str(s->owner) + ",\"subject\":" + json_str(s->subject) +
+         ",\"skill\":" + json_str(s->skill) + ",\"question\":" + json_str(s->question) +
+         ",\"smoke\":" + json_str(s->smoke) + ",\"flags\":[";
+    for (size_t i = 0; i < s->flags.size(); i++) {
+      const LabFlag& f = s->flags[i];
+      j += (i ? "," : "") + std::string("{\"name\":") + json_str(f.name) +
+           ",\"default\":" + json_str(f.value) + ",\"help\":" + json_str(f.help) + "}";
+    }
+    j += "]}";
+  }
+  return j + "]";
+}
+
 }  // namespace ge::lab

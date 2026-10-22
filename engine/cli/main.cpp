@@ -1,28 +1,30 @@
-// THE ge COMMAND LINE: the engine's tool for the game repos agents build on it (skill:
-// agent-interface). Every message it prints is a finding (what, where, next), and its exit
-// code says what happened: 0 done, 1 the repo breaks a rule, 2 a usage error.
+// THE ge COMMAND LINE: the one interface an agent makes a game on this engine through (skill:
+// agent-interface). The commands, their arguments and flags are the catalog in commands.hpp, which
+// `ge help` prints and `ge help --json` hands over whole; every command answers in one shape
+// (outcome.hpp), as text or, with `--json`, as one JSON object. Exit codes: 0 done, 1 the work
+// found a problem, 2 a usage error.
 //
-//   ge new <dir> [--name=<kebab>] [--engine-sha256=<hex>]   scaffold a game repo
-//   ge skills sync [--force] [--repo=<dir>]                 the engine's skills, to this engine
-//   ge doctor [--repo=<dir>]                                the repo against the engine's rules
-//   ge lessons [<skill>] [--scope=<path>] [--repo=<dir>]    the skills' lessons, read back
-//   ge version                                              the engine version ge belongs to
+// In a game repo, `make ge ARGS=...` builds and runs the ge of the engine the repo pins; a ge from
+// a release package runs as is.
 //
-// In a game repo ge runs through its Makefile (`make agents-check`, `make skills`,
-// `make lessons`, `make ge ARGS=...`), which builds the ge of the engine the repo pins.
-//
-// ge:summary The ge executable: parses the command line and runs new, skills, doctor, lessons
-// ge:keywords cli ge main command-line usage new skills sync doctor lessons version help
+// ge:summary The ge executable: parses the command line against the catalog and runs each command
+// ge:keywords cli ge main command-line usage dispatch help version new find explain use add
+// ge:keywords build test check lab doctor skills lessons json
 // ge:skill agent-interface
-// ge:test tests/cli_scaffold_test.cpp
+// ge:test tests/cli_commands_test.cpp
 #include <algorithm>
 #include <iostream>
+#include <sstream>
 #include <string>
-#include <string_view>
-#include <vector>
 
+#include "cli/add.hpp"
+#include "cli/build.hpp"
+#include "cli/commands.hpp"
 #include "cli/doctor.hpp"
 #include "cli/embedded.hpp"
+#include "cli/index.hpp"
+#include "cli/json.hpp"
+#include "cli/outcome.hpp"
 #include "cli/scaffold.hpp"
 #include "cli/skills.hpp"
 
@@ -30,154 +32,193 @@ namespace {
 
 using namespace ge::cli;
 
-constexpr std::string_view kUsage =
-    "usage:\n"
-    "  ge new <dir> [--name=<kebab>] [--engine-sha256=<hex>]   scaffold a game repo\n"
-    "  ge skills sync [--force] [--repo=<dir>]                 the engine's skills, to this "
-    "engine\n"
-    "  ge doctor [--repo=<dir>]                                the repo against the engine's "
-    "rules\n"
-    "  ge lessons [<skill>] [--scope=<path>] [--repo=<dir>]    the skills' lessons, read back\n"
-    "  ge version                                              the engine version ge belongs "
-    "to\n";
+Outcome usage_error(const std::string& what, const std::string& next) {
+  Outcome o;
+  o.findings.push_back({Severity::error, what, "the command line", next});
+  o.exit = 2;
+  return o;
+}
 
-struct Args {
-  std::vector<std::string> words;                          // positional, command first
-  std::vector<std::pair<std::string, std::string>> flags;  // --name=value (value "" for a switch)
-};
+fs::path repo_of(const Args& a) {
+  return has_flag(a, "repo") ? fs::path(flag_value(a, "repo")) : fs::current_path();
+}
 
-Args parse(int argc, char** argv) {
-  Args a;
-  for (int i = 1; i < argc; i++) {
-    const std::string arg = argv[i];
-    if (arg.starts_with("--")) {
-      const size_t eq = arg.find('=');
-      a.flags.emplace_back(arg.substr(2, eq == std::string::npos ? std::string::npos : eq - 2),
-                           eq == std::string::npos ? "" : arg.substr(eq + 1));
-    } else {
-      a.words.push_back(arg);
+BuildOptions build_options(const Args& a) {
+  BuildOptions b;
+  b.repo = fs::absolute(repo_of(a));
+  b.preset = flag_value(a, "preset", "debug");
+  b.engine = flag_value(a, "engine");
+  return b;
+}
+
+Outcome cmd_help(const Args& a) {
+  const CommandSpec* one = nullptr;
+  if (!a.words.empty()) {
+    std::string name;
+    for (const std::string& w : a.words) name += (name.empty() ? "" : " ") + w;
+    one = find_command(name);
+    if (!one) return usage_error("no command \"" + name + "\"", "run `ge help` for the commands");
+  }
+  Outcome o;
+  o.text = help_text(one);
+  o.result = help_json(one);
+  return o;
+}
+
+Outcome cmd_new(const Args& a) {
+  const NewResult r = new_game({a.words[0], flag_value(a, "name"), flag_value(a, "engine-sha256")});
+  Outcome o;
+  o.findings = r.findings;
+  o.written = r.written;
+  o.result = json_obj({{"dir", json_str(a.words[0])}, {"engine", json_str(engine_version())}});
+  o.summary = "scaffolded " + a.words[0] + " against engine " + std::string(engine_version()) +
+              "; its AGENTS.md is the router";
+  o.next = "cd " + a.words[0] + " && git init && ge check";
+  return o;
+}
+
+Outcome cmd_lessons(const Args& a) {
+  const fs::path repo = repo_of(a);
+  Outcome o;
+  if (a.words.empty()) {
+    std::vector<std::string> rows;
+    for (const auto& [name, n] : lesson_inventory(repo)) {
+      rows.push_back(json_obj({{"skill", json_str(name)}, {"lessons", json_num(n)}}));
+      o.text += name + "  " + std::to_string(n) + (n == 1 ? " lesson\n" : " lessons\n");
     }
+    o.result = json_obj({{"skills", json_arr(rows)}});
+    o.next = "ge lessons <skill>";
+    return o;
   }
-  return a;
+  const auto inv = lesson_inventory(repo);
+  const std::string& skill = a.words[0];
+  if (std::none_of(inv.begin(), inv.end(), [&](const auto& s) { return s.first == skill; })) {
+    std::string all;
+    for (const auto& [name, n] : inv) all += (all.empty() ? "" : ", ") + name;
+    return usage_error("no skill \"" + skill + "\"", "name one of: " + all);
+  }
+  std::vector<std::string> rows;
+  for (const Lesson& l : lessons_of(repo, skill, flag_value(a, "scope"))) {
+    rows.push_back(json_obj({{"file", json_str(l.file)},
+                             {"title", json_str(l.title)},
+                             {"date", json_str(l.date)},
+                             {"scope", json_strs(l.scope)},
+                             {"concepts", json_strs(l.concepts)},
+                             {"body", json_str(l.body)}}));
+  }
+  std::ostringstream text;
+  print_lessons(repo, skill, flag_value(a, "scope"), text);
+  o.text = text.str();
+  o.result = json_obj({{"skill", json_str(skill)}, {"lessons", json_arr(rows)}});
+  return o;
 }
 
-int usage_error(std::string_view command, const std::string& what) {
-  std::cerr << format_finding(command, {Severity::error, what, "the command line",
-                                        "run `ge help` for the commands and their flags"})
-            << kUsage;
-  return 2;
-}
-
-// Unknown flags fail: a check run with a mistyped flag reports a confident wrong answer.
-bool only_flags(const Args& a, std::initializer_list<std::string_view> known, std::string& bad) {
-  for (const auto& [name, value] : a.flags) {
-    if (std::find(known.begin(), known.end(), name) == known.end()) {
-      bad = "--" + name;
-      return false;
+Outcome run(const Args& a) {
+  const std::string name(a.command->name);
+  if (name == "help") return cmd_help(a);
+  if (name == "version") {
+    Outcome o;
+    o.text = std::string(engine_version()) + "\n";
+    o.result = json_obj({{"version", json_str(engine_version())}});
+    return o;
+  }
+  if (name == "find") {
+    const std::string limit = flag_value(a, "limit", "15");
+    if (limit.find_first_not_of("0123456789") != std::string::npos || limit.empty()) {
+      return usage_error("--limit takes a whole number", "rerun with --limit=15");
     }
+    return run_find(repo_of(a), flag_value(a, "engine"), a.words, std::stoi(limit));
   }
-  return true;
+  if (name == "explain") return run_explain(repo_of(a), flag_value(a, "engine"), a.words[0]);
+  if (name == "lessons") return cmd_lessons(a);
+  if (name == "new") return cmd_new(a);
+  if (name == "use") return run_use(repo_of(a), a.words[0]);
+  if (name.starts_with("add ")) {
+    return run_add(repo_of(a), name.substr(4), a.words[0], flag_value(a, "kind"),
+                   has_flag(a, "dry-run"));
+  }
+  if (name == "build") return run_build(build_options(a));
+  if (name == "test") return run_test(build_options(a), flag_value(a, "filter"));
+  if (name == "check") return run_check(build_options(a));
+  if (name == "lab") {
+    LabOptions lab;
+    lab.id = a.words.empty() ? "" : a.words[0];
+    lab.smoke = has_flag(a, "smoke");
+    lab.tag = flag_value(a, "tag");
+    lab.compare = flag_value(a, "compare");
+    lab.passthrough = a.passthrough;
+    return run_lab(build_options(a), lab);
+  }
+  if (name == "doctor") {
+    Outcome o;
+    o.findings = doctor(repo_of(a));
+    o.summary = "ok against engine " + std::string(engine_version());
+    o.next = "ge check";
+    return o;
+  }
+  if (name == "skills sync") {
+    const SyncResult r = sync_skills(repo_of(a), has_flag(a, "force"));
+    Outcome o;
+    o.findings = r.findings;
+    o.written = r.written;
+    o.summary = "the engine's skills match engine " + std::string(engine_version());
+    return o;
+  }
+  return usage_error("ge " + name + " has no handler", "report it: this ge is broken");
 }
 
-std::string flag(const Args& a, std::string_view name) {
-  for (const auto& [n, v] : a.flags) {
-    if (n == name) return v;
+// A ge of another release run in a repo that pins this engine hands the command to the ge the pin
+// builds (build/<preset>/ge), so the rules and the skills are always the pinned release's. The
+// pinned ge's version matches the pin, so it never hands on again. -1: run here.
+int hand_to_pinned(const Args& a, int argc, char** argv) {
+  if (a.command && (a.command->name == "new" || a.command->name == "help")) return -1;
+  const fs::path repo = repo_of(a);
+  const auto pin = read_pin(repo);
+  if (!pin || pin->version == engine_version()) return -1;
+  for (const char* preset : {"debug", "release"}) {
+    fs::path exe = repo / "build" / preset / "ge";
+#ifdef _WIN32
+    exe += ".exe";
+#endif
+    std::error_code ec;
+    if (!fs::is_regular_file(exe, ec)) continue;
+    std::string line = "\"" + exe.string() + "\"";
+    for (int i = 1; i < argc; i++) line += " \"" + std::string(argv[i]) + "\"";
+    const int code = run_passthrough(line);
+    return code < 0 ? 2 : code;
   }
-  return "";
-}
-
-bool has_flag(const Args& a, std::string_view name) {
-  for (const auto& [n, v] : a.flags) {
-    if (n == name) return true;
-  }
-  return false;
-}
-
-// Prints every finding, then one summary line; returns the exit code.
-int report(std::string_view command, const std::vector<Finding>& findings, std::string_view clean) {
-  for (const Finding& f : findings) std::cout << format_finding(command, f);
-  const int errors = count_of(findings, Severity::error);
-  const int warns = count_of(findings, Severity::warn);
-  const int notes = count_of(findings, Severity::note);
-  if (errors == 0) {
-    std::cout << command << ": " << clean;
-    if (warns + notes > 0) {
-      std::cout << " (" << warns << " warn, " << notes << " note)";
-    }
-    std::cout << "\n";
-    return 0;
-  }
-  std::cout << command << ": " << errors << " error(s), " << warns << " warn, " << notes
-            << " note. Fix each error above from its next line, then rerun.\n";
-  return 1;
-}
-
-int cmd_new(const Args& a) {
-  std::string bad;
-  if (!only_flags(a, {"name", "engine-sha256"}, bad)) {
-    return usage_error("ge new", "unknown flag " + bad);
-  }
-  if (a.words.size() != 2) return usage_error("ge new", "ge new takes one directory");
-  NewOptions o{a.words[1], flag(a, "name"), flag(a, "engine-sha256")};
-  const NewResult r = new_game(o);
-  for (const std::string& path : r.written) std::cout << "  wrote " << path << "\n";
-  const std::string done = "scaffolded " + a.words[1] + " against engine " +
-                           std::string(engine_version()) +
-                           ". Next: cd into it, `git init`, then `make test` and `make "
-                           "agents-check`; AGENTS.md is the router";
-  return report("ge new", r.findings, done);
-}
-
-int cmd_skills(const Args& a) {
-  std::string bad;
-  if (!only_flags(a, {"force", "repo"}, bad)) {
-    return usage_error("ge skills", "unknown flag " + bad);
-  }
-  if (a.words.size() != 2 || a.words[1] != "sync") {
-    return usage_error("ge skills", "the only skills command is `ge skills sync`");
-  }
-  const fs::path repo = has_flag(a, "repo") ? fs::path(flag(a, "repo")) : fs::current_path();
-  const SyncResult r = sync_skills(repo, has_flag(a, "force"));
-  for (const std::string& path : r.written) std::cout << "  wrote " << path << "\n";
-  return report("ge skills sync", r.findings,
-                "the engine's skills match engine " + std::string(engine_version()));
-}
-
-int cmd_doctor(const Args& a) {
-  std::string bad;
-  if (!only_flags(a, {"repo"}, bad)) return usage_error("ge doctor", "unknown flag " + bad);
-  if (a.words.size() != 1) return usage_error("ge doctor", "ge doctor takes no arguments");
-  const fs::path repo = has_flag(a, "repo") ? fs::path(flag(a, "repo")) : fs::current_path();
-  return report("ge doctor", doctor(repo), "ok against engine " + std::string(engine_version()));
-}
-
-int cmd_lessons(const Args& a) {
-  std::string bad;
-  if (!only_flags(a, {"scope", "repo"}, bad)) {
-    return usage_error("ge lessons", "unknown flag " + bad);
-  }
-  if (a.words.size() > 2) return usage_error("ge lessons", "ge lessons takes at most one skill");
-  const fs::path repo = has_flag(a, "repo") ? fs::path(flag(a, "repo")) : fs::current_path();
-  return print_lessons(repo, a.words.size() == 2 ? a.words[1] : "", flag(a, "scope"), std::cout);
+  return -1;
 }
 
 }  // namespace
 
 int main(int argc, char** argv) {
-  const Args a = parse(argc, argv);
-  const std::string command = a.words.empty() ? "help" : a.words[0];
-  if (command == "help" || has_flag(a, "help")) {
-    std::cout << "ge " << engine_version() << ": the engine's command line for game repos.\n"
-              << kUsage;
-    return 0;
+  const Args a = parse_args(argc, argv);
+  if (const int handed = hand_to_pinned(a, argc, argv); handed >= 0) return handed;
+  const bool json = has_flag(a, "json");
+  if (!a.command) {
+    if (a.words.empty()) {
+      Args help = a;
+      help.command = find_command("help");
+      return emit("ge help", cmd_help(help), json, std::cout);
+    }
+    return emit(
+        "ge",
+        usage_error("unknown command \"" + a.words[0] + "\"", "run `ge help` for the commands"),
+        json, std::cout);
   }
-  if (command == "version" || has_flag(a, "version")) {
-    std::cout << engine_version() << "\n";
-    return 0;
+  const std::string command = "ge " + std::string(a.command->name);
+  if (has_flag(a, "help")) {
+    Outcome o;
+    o.text = help_text(a.command);
+    o.result = help_json(a.command);
+    return emit(command, o, json, std::cout);
   }
-  if (command == "new") return cmd_new(a);
-  if (command == "skills") return cmd_skills(a);
-  if (command == "doctor") return cmd_doctor(a);
-  if (command == "lessons") return cmd_lessons(a);
-  return usage_error("ge", "unknown command \"" + command + "\"");
+  if (const auto bad = check_args(a)) {
+    return emit(command,
+                usage_error(*bad, "run `ge help " + std::string(a.command->name) +
+                                      "` for its arguments and flags"),
+                json, std::cout);
+  }
+  return emit(command, run(a), json, std::cout);
 }

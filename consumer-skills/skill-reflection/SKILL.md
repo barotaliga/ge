@@ -1,6 +1,6 @@
 ---
 name: skill-reflection
-description: "Use at both ends of any session that loads another skill in a game repo: read that skill's lessons first (make lessons), and before the commit record what the session learned as lesson fragments, fix what the repo's own skills got wrong, prune and merge lessons, promote what is always true, and feed search misses back into the ge: keywords."
+description: "Use at both ends of any session that loads another skill in a game repo: read that skill's lessons first (ge lessons), and before the commit record what the session learned as lesson fragments, fix what the repo's own skills got wrong, prune and merge lessons, promote what is always true, and feed search misses back into the ge: keywords."
 ---
 
 # Skill reflection
@@ -11,9 +11,9 @@ work and before the commit, for every skill the session loaded.
 ## OPEN: read before you work
 
 ```sh
-make lessons                                  # every skill and its lesson count
-make lessons ARGS="<skill>"                   # its lessons in full, oldest first
-make lessons ARGS="<skill> --scope=sim/"      # only those whose scope overlaps the path
+ge lessons                                  # every skill and its lesson count
+ge lessons <skill>                          # its lessons in full, oldest first
+ge lessons <skill> --scope=sim/             # only those whose scope overlaps the path
 ```
 
 A lesson with no `scope` is global and always shows.
@@ -36,14 +36,14 @@ it prevents.
 ```
 
 `title` and `date` are required; `scope` (repo-relative paths) and `concepts` (lower-case kebab)
-are optional. `make agents-check` fails a bad file name, a missing title or date, a bad concept
+are optional. `ge doctor` fails a bad file name, a missing title or date, a bad concept
 or an empty body.
 
 ## Two kinds of skill
 
 - **The repo's own skills** are yours: fix their `SKILL.md` in place.
 - **The engine's skills** (the `ge:skills` block in `AGENTS.md`) are rewritten by
-  `make skills` on every engine upgrade. Never edit their `SKILL.md`: `make agents-check` fails
+  `ge skills sync` on every engine upgrade. Never edit their `SKILL.md`: `ge doctor` fails
   an edited one. Their `.lessons/` are this repo's and survive every sync, so what you learn
   about an engine skill goes there. A lesson that would hold in EVERY game on the engine belongs
   upstream: open an issue on the engine's repository quoting it, so a release can promote it into

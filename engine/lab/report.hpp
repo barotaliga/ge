@@ -39,4 +39,8 @@ std::string format_compare(const std::vector<Metric>& before, const std::vector<
 
 std::string hex64(uint64_t v);
 
+// Every registered lab as one JSON array (`labs --json`): id, kind, owner, subject, skill,
+// question, smoke and its flags, for a tool that lists labs without parsing the printed list.
+std::string list_json();
+
 }  // namespace ge::lab

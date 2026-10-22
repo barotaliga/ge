@@ -67,15 +67,17 @@ TEST(a_sync_writes_the_skills_the_lock_and_the_block_then_nothing) {
   const fs::path repo = fresh_repo("sync");
   const SyncResult first = sync_skills(repo, false);
   CHECK_MSG(first.findings.empty(), say(first.findings));
-  CHECK(first.written.size() == consumer_skills().size() + 1);  // every skill and AGENTS.md
-  for (const ConsumerSkill& s : consumer_skills()) {
+  // Every skill but the plugins' (the repo links none), and AGENTS.md.
+  const std::vector<ConsumerSkill> skills = skills_for(repo);
+  CHECK(skills.size() < consumer_skills().size());
+  CHECK(first.written.size() == skills.size() + 1);
+  for (const ConsumerSkill& s : skills) {
     const fs::path dir = repo / kSkillsDir / s.name;
     CHECK(read_text(dir / "SKILL.md").value_or("") == s.text);
     CHECK(fs::exists(dir / ".lessons" / ".gitkeep"));
   }
   const auto lock = read_lock(repo);
-  CHECK(lock && lock->engine == engine_version() &&
-        lock->skills.size() == consumer_skills().size());
+  CHECK(lock && lock->engine == engine_version() && lock->skills.size() == skills.size());
   const std::string agents = read_text(repo / "AGENTS.md").value_or("");
   CHECK(agents.find("| `engine` |") != std::string::npos);
   CHECK(agents.find("| `mine` |") != std::string::npos);

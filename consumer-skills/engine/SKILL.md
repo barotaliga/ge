@@ -36,21 +36,23 @@ game's `sim/`:
 - **Randomness from `ge::core::Rng`** in the state (`core/prng.hpp`). Time is the step count.
 - **The output channel** (`core/output.hpp`) is how the game prints; the host attaches a sink.
 
-`make agents-check` holds all four in `sim/` and `labs/`.
+`ge doctor` holds all four in `sim/` and `labs/`.
 
 ## The ge command line
 
-`ge` is built from the pinned release; run it through the Makefile so the version always matches:
+`ge` is how the repo is built, tested, grown and checked (skill: `ge`). The pinned release
+builds its own `ge` into `build/<preset>/ge`; a `ge` from another release run here hands the
+command to that one, so the version always matches the pin.
 
-| Make | ge | What |
-| --- | --- | --- |
-| `make agents-check` | `ge doctor` | The repo against the engine's rules; every finding says what, where and next |
-| `make skills` | `ge skills sync` | The engine's skills, rewritten to the pinned release; the repo's own skills and every lesson untouched |
-| `make lessons ARGS=<skill>` | `ge lessons <skill>` | A skill's lessons |
-| `make ge ARGS=...` | anything else | `ge help` lists it |
+| ge | What |
+| --- | --- |
+| `ge use <plugin>` | Link one of the engine's plugins (`racing`, `mountain`, `skier`) and install its skill |
+| `ge find <words>`, `ge explain <x>` | The engine's API, read from the pinned release's own `ge:` tags and header comments |
+| `ge doctor` | The repo against the engine's rules; every finding says what, where and next |
+| `ge skills sync` | The engine's skills, rewritten to the pinned release; the repo's own skills and every lesson untouched |
 
 An engine skill (one listed in the `ge:skills` block of `AGENTS.md`) is rewritten by
-`make skills`. Never edit one in place: write a lesson in its `.lessons/` (skill:
+`ge skills sync`. Never edit one in place: write a lesson in its `.lessons/` (skill:
 `skill-reflection`). `ge doctor` reports an edited one.
 
 ## Upgrade
@@ -60,8 +62,9 @@ An engine skill (one listed in the `ge:skills` block of `AGENTS.md`) is rewritte
 2. Run the labs you care about with `--tag=before` on the old pin.
 3. Set `GE_ENGINE_VERSION` to the new release, and `GE_ENGINE_SHA256` to the `-src.tar.gz` line
    of its `SHA256SUMS`.
-4. `make build`, then `make skills` (the new release's skills), then `make agents-check`.
-5. `make test`, and every lab again with `--compare=before`. A digest that moved is a behaviour
+4. `ge build` (it fetches the new release and builds its `ge`), then `ge skills sync` (the new
+   release's skills).
+5. `ge check`, and every lab again with `--compare=before`. A digest that moved is a behaviour
    the release changed: find it in the notes before you accept it.
 6. One commit: the pin, the synced skills, any fixes, and the lab comparison in the PR.
 
@@ -73,4 +76,4 @@ repro and what it printed. Work around it in the game, with a comment naming the
 release fixes it.
 
 To work on the engine and the game at once, point the build at a local engine checkout:
-`cmake --preset debug -DFETCHCONTENT_SOURCE_DIR_GAMEENGINE2=<path>`.
+`ge build --engine=<path>` (the preset keeps it; `ge find` and `ge explain` read it too).

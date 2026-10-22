@@ -5,6 +5,7 @@
 // comparison, the in-process determinism check and the committed digest baseline.
 //
 //   labs                                   the list: id, kind, owner, skill, question
+//   labs --json                            the list as one JSON array (what `ge lab` reads)
 //   labs <id> [--flag=value ...]           run one lab; its own flags are in `labs <id> --help`
 //   labs <id> --tag=before                 write to previews/<id>@before/ instead
 //   labs <id> --compare=before             print every metric beside the tagged run's
