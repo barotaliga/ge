@@ -19,16 +19,15 @@ set(arrays "")
 set(rows "")
 set(i 0)
 foreach(file IN LISTS files)
-  # Every '\r' dropped: a Windows checkout turns LF into CRLF, and ge writes and hashes the same
-  # bytes on every platform (read_text drops '\r' too).
-  file(READ "${ROOT}/${file}" text)
-  string(REPLACE "\r" "" text "${text}")
-  file(WRITE "${OUT}.lf" "${text}")
-  file(READ "${OUT}.lf" hex HEX)
-  string(LENGTH "${hex}" digits)
-  math(EXPR size "${digits} / 2")
-  # 32 bytes a line keeps the generated file readable in a debugger.
+  # Every '\r' byte (0x0d) dropped: a Windows checkout turns LF into CRLF, and ge writes and
+  # hashes the same bytes on every platform (read_text drops '\r' too). The bytes are handled as
+  # hex only, never as CMake text, so no platform's text mode or list syntax can touch them.
+  file(READ "${ROOT}/${file}" hex HEX)
   string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," bytes "${hex}")
+  string(REPLACE "0x0d," "" bytes "${bytes}")
+  string(LENGTH "${bytes}" chars)
+  math(EXPR size "${chars} / 5")
+  # 32 bytes a line keeps the generated file readable in a debugger.
   string(REGEX REPLACE "((0x[0-9a-f][0-9a-f],){32})" "\\1\n    " bytes "${bytes}")
   string(APPEND arrays "const unsigned char k${i}[] = {\n    ${bytes}0};\n")
   string(APPEND rows "    {\"${file}\", {reinterpret_cast<const char*>(k${i}), ${size}}},\n")
@@ -56,4 +55,4 @@ std::string_view engine_version() { return \"${version}\"; }
 ")
 # Only a changed file is rewritten, so an unrelated rebuild does not recompile it.
 file(COPY_FILE "${OUT}.tmp" "${OUT}" ONLY_IF_DIFFERENT)
-file(REMOVE "${OUT}.tmp" "${OUT}.lf")
+file(REMOVE "${OUT}.tmp")
