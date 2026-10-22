@@ -67,8 +67,9 @@ foreach(src ${GE_TEST_SOURCES})
     # repo's guidance; the scaffold's tests skip there.
     set_tests_properties(${name} PROPERTIES SKIP_RETURN_CODE 77)
   endif()
-  if(extra)
-    # The software driver's worker threads keep allocations past exit, which the leak check
+  if(extra OR app_includes)
+    # A plugin's app half draws with the GPU, so its tests skip without an adapter too. The
+    # software driver's worker threads keep allocations past exit, which the leak check
     # would report as ours; every other test keeps it.
     set_tests_properties(${name} PROPERTIES SKIP_RETURN_CODE 77
       ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
