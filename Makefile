@@ -11,8 +11,9 @@ build:
 	cmake --preset $(PRESET)
 	cmake --build --preset $(PRESET)
 
+# Every test case in parallel, one per core (CTEST_PARALLEL_LEVEL overrides).
 test: build
-	ctest --preset $(PRESET)
+	ctest --preset $(PRESET) -j $${CTEST_PARALLEL_LEVEL:-$$(nproc 2>/dev/null || sysctl -n hw.ncpu)}
 
 fmt:
 	clang-format -i $(SOURCES)
@@ -20,8 +21,11 @@ fmt:
 fmt-check:
 	clang-format --dry-run --Werror $(SOURCES)
 
+# clang-tidy's bug-finding checks, in parallel. BASE=origin/main lints only what the change since
+# that ref can reach (CI's lint on a pull request): make lint BASE=origin/main.
+BASE ?=
 lint: build
-	clang-tidy -p build/$(PRESET) --quiet $(filter %.cpp,$(SOURCES))
+	tools/lint.sh build/$(PRESET) $(BASE)
 
 # Every embedded WGSL shader compiled by Tint offline, every entry point (cmake/Wgsl.cmake): a
 # shader error fails here with its file and line, no GPU needed. Needs GE_GPU (Dawn's tint).

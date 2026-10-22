@@ -251,4 +251,5 @@ Dear ImGui and Tracy. Downloads land in `.cache/deps/` (gitignored, shared by ev
 cached by CI). `GE_PLATFORM` and `GE_GPU` switch the platform layer and the GPU off; the
 simulation, the plugins and their tests never need either, and `GE_GPU` defaults off where
 Dawn publishes no archive (Linux arm64). `Makefile` names the everyday commands. CI (`.github/workflows/ci.yml`) runs format,
-agents-check, lint and the test matrix.
+agents-check, lint and the test matrix, with ctest in parallel, ccache on the Linux and macOS
+rows and, on a pull request, lint over only what the change reaches (the `build` skill § CI).

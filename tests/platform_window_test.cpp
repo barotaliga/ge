@@ -6,7 +6,10 @@
 // ge:summary Tests for the window: open, surface, present at vsync, input poll
 // ge:keywords test window surface present vsync xvfb display input poll
 // ge:skill platform gpu testing
+#include <chrono>
+#include <memory>
 #include <string>
+#include <thread>
 
 #include "check.hpp"
 #include "gpu/pipeline.hpp"
@@ -24,8 +27,16 @@ TEST(a_window_presents_frames) {
     }
     return;
   }
-  auto window =
-      ge::platform::open_window({.title = "platform_window_test", .width = 320, .height = 200});
+  // A virtual X server starved of CPU (CI runs the tests four at a time) now and then refuses a
+  // connection ("Failed to connect to the X11 display server") right after the probe above
+  // closed one; a few tries a moment apart ride that out, and a display that never accepts
+  // still fails here.
+  std::unique_ptr<ge::platform::Window> window;
+  for (int attempt = 0; attempt < 5 && !window; ++attempt) {
+    if (attempt > 0) std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    window =
+        ge::platform::open_window({.title = "platform_window_test", .width = 320, .height = 200});
+  }
   CHECK(window != nullptr);
   if (!window) return;
   CHECK(window->native().kind != ge::platform::NativeWindow::Kind::none);
