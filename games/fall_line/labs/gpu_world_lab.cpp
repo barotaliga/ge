@@ -166,6 +166,7 @@ void run(ge::lab::Lab& lab) {
   options.scale = lab.arg_num("scale");
   options.overdraw_probe = true;
   options.snow = lab.arg_num("snow") != 0;
+  options.trails = lab.arg_num("trails") != 0;
   if (width <= 0 || height <= 0 || width > 4096 || height > 4096 || settle < 1 ||
       options.scale < 0.25 || options.scale > 1) {
     lab.fail("--width and --height must be 1..4096, --settle at least 1 and --scale 0.25..1",
@@ -201,10 +202,12 @@ void run(ge::lab::Lab& lab) {
     std::string caption;
     ge::render::FrameView view;
     std::vector<ge::skier::SkierState> skiers;
+    // The racers every fourth step since the last moment: the tracks laid before it is shot.
+    std::vector<std::vector<ge::skier::SkierState>> laid;
   };
   std::vector<Scene> scenes;
   for (const std::string& name : views) {
-    Scene sc{name, std::string(fall_line::app::view_caption(name)), {}, {}};
+    Scene sc{name, std::string(fall_line::app::view_caption(name)), {}, {}, {}};
     fall_line::app::day_view(level, hour, sc.view);
     if (!fall_line::app::make_view(level, name, sc.view)) {
       lab.fail("no view named '" + name + "'",
@@ -217,11 +220,16 @@ void run(ge::lab::Lab& lab) {
   const int rivals = static_cast<int>(lab.arg_num("rivals"));
   if (!moments.empty()) {
     fall_line::sim::Driver run(shared, std::max(rivals, 0));
+    int steps = 0;
     for (double t : moments) {
+      Scene sc;
       while (run.state().t < t && !run.over()) {
         run.step(fall_line::sim::bot_controls(run.state(), 0, run.plan()));
+        if (++steps % 4 == 0) {
+          sc.laid.emplace_back();
+          for (const auto& racer : run.state().racers) sc.laid.back().push_back(racer.skier);
+        }
       }
-      Scene sc;
       sc.name = "run-" + fixed(t, 0);
       sc.caption = "The bot's run " + fixed(run.state().t, 1) +
                    " s after the start, from the chase camera behind and over him; the racers "
@@ -345,6 +353,7 @@ void run(ge::lab::Lab& lab) {
       "per view (tiles drawn / trees drawn early+late, hidden / draws / dispatches):";
   for (Scene& sc : scenes) {
     const std::string& name = sc.name;
+    for (const auto& racers : sc.laid) fall_line::app::track(*frame, {racers});
     const ge::gpu::Image img = still(sc);
     frame->recorder.wait(*device);
     const ge::render::InstanceStats trees = ge::render::read_instance_stats(*device, frame->forest);
@@ -455,6 +464,7 @@ const ge::lab::LabSpec kSpec{
         {"taa", "1", "TAA-U on (1) or off (0)"},
         {"scale", "1", "the render size over the picture's, with TAA (0.25..1)"},
         {"snow", "1", "the snow's material (1) or the albedo lit (0)"},
+        {"trails", "1", "the tracks (1) or none (0); drawn only with the snow's material"},
         {"moments", "3,15,30",
          "seconds of the bot's run to shoot from the chase camera, comma-"
          "separated (empty: none)"},
