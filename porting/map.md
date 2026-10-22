@@ -216,6 +216,15 @@ the row when the file moves.
 | `plugins/skier/app/snow_bed.hpp` | `game5/pwa/src/game/audio/snow-voice.ts` | SkiVoice SnowVoice SnowMix SnowLayer SNOW_LAYERS SNOW_GLIDE snowTargets |
 | `plugins/skier/app/wind_bed.cpp` | `game5/pwa/src/game/audio/wind-voice.ts` | windTargets WIND_FULL WIND_TOP |
 | `plugins/skier/app/wind_bed.hpp` | `game5/pwa/src/game/audio/wind-voice.ts` | WindVoice WindMix WindLayer WIND_LAYERS WIND_GLIDE windTargets |
+| `plugins/snowmobile/body.cpp` | `game5/engine/game/sled-body.ts` | rideSled hullContacts landingPitch deriveSled sledLockAt |
+| `plugins/snowmobile/body.hpp` | `game5/engine/game/sled-body.ts` | rideSled SledStepReport deriveSled |
+| `plugins/snowmobile/drive.cpp` | `game5/engine/game/sled-drive.ts` | powerShare rpmAtTop maxDriveForce driveForce rpmGoal stepBelt stepRpm |
+| `plugins/snowmobile/drive.hpp` | `game5/engine/game/sled-drive.ts` | powerShare driveForce stepBelt stepRpm |
+| `plugins/snowmobile/pilot.cpp` | `game5/engine/game/sled-pilot.ts` | sledPilot dodge |
+| `plugins/snowmobile/pilot.hpp` | `game5/engine/game/sled-pilot.ts` | sledPilot SledAim |
+| `plugins/snowmobile/sled.cpp` | `game5/engine/game/sled.ts` | sledSolids sledBounds judgeLanding standSled riderFrame |
+| `plugins/snowmobile/sled.hpp` | `game5/engine/game/sled-state.ts`, `sled.ts` | SledState SledControls SledContact standSled |
+| `plugins/snowmobile/spec.hpp` | `game5/engine/game/defs/sled.ts` | SLED SLED_PROBES sledMass sledInertia SledProbe SledSuspension |
 | `tests/mountain_generate_test.cpp` |  | generateLevel levelDigest analyzeLevel |
 | `tests/mountain_park_test.cpp` | `game5/engine/mapgen/trick-field.ts` | the terrain park (R20) |
 | `tests/mountain_real_face_test.cpp` | `game5/tests/real_faces_test.ts` | every face decodes to a mountain over its floor; a face builds a clean map |
