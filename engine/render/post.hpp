@@ -2,7 +2,7 @@
 // target or the surface's texture) in one full-screen pass: the exposure read off the sky's
 // light (frame.wgsl's `exposure`), the tone curve, a dither and the output encoding. It reads
 // the frame at the output's size: TAA-U's resolve (render/taa.hpp) or, without it, the HDR target
-// itself. Bloom and the colour grade join it with M7d.
+// itself. Bloom and the colour grade join it with M7d3.
 //
 // A fragment pass rather than a compute one: it writes the surface's texture, which a compute
 // shader may not store to without an optional feature (bgra8unorm storage), and a tile GPU

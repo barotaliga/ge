@@ -2,8 +2,8 @@
 // read the input, hand the run clock the frame's wall time (engine/loop/run_clock.hpp: focus
 // lost pauses it), take the steps it grants (the bot skis the map's run, each step's events
 // routed to the bank: sound/route.hpp), steer the ride bed off the skier, and draw the map's
-// frame (frame.hpp) from a named view (views.hpp) at vsync. The camera still stands at that view;
-// following the skier comes with the run's camera.
+// frame (frame.hpp) at vsync, the racers drawn where the run has them, from the chase camera on
+// the player (views.hpp; --view names a fixed rig instead).
 //
 // THE SOUND: one synth, rendered on the audio device's thread (platform/audio.hpp) and fed from
 // this one through its ring. No device (a container, SDL_AUDIO_DRIVER=dummy failing) is not an
@@ -23,6 +23,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "audio/synth.hpp"
 #include "core/output.hpp"
@@ -54,7 +55,7 @@ struct Args {
   int width = 1280, height = 720;
   bool vsync = true;
   double seed = 38;
-  std::string view = "start";
+  std::string view = "chase";
   double hour = -1;  // the map's own
   bool mute = false;
 };
@@ -103,7 +104,7 @@ int main(int argc, char** argv) {
   if (!parse(argc, argv, args)) {
     out::error(
         "fall_line: unknown flag. Usage: fall_line [--frames=N] [--size=WxH] [--no-vsync] "
-        "[--seed=N] [--view=start|piste|lookback|vista|aerial] [--hour=H] [--mute]");
+        "[--seed=N] [--view=chase|start|piste|lookback|vista|aerial] [--hour=H] [--mute]");
     return 2;
   }
   auto window =
@@ -124,7 +125,8 @@ int main(int argc, char** argv) {
   const ge::mountain::mapgen::Level& level = *shared;
   ge::render::FrameView view;
   fall_line::app::day_view(level, args.hour, view);
-  if (!fall_line::app::make_view(level, args.view, view)) {
+  const bool chase = args.view == "chase";
+  if (!chase && !fall_line::app::make_view(level, args.view, view)) {
     out::error("fall_line: no view named '" + args.view + "'; see games/fall_line/app/views.hpp.");
     return 2;
   }
@@ -155,6 +157,8 @@ int main(int argc, char** argv) {
   const uint64_t first = last;
   long presented = 0;
   long steps = 0;
+  std::vector<ge::skier::SkierState> skiers;
+  skiers.reserve(run.state().racers.size());
   bool heard_out = false;
   while (args.frames == 0 || presented < args.frames) {
     ge::platform::poll_input(*window, input);
@@ -196,7 +200,10 @@ int main(int argc, char** argv) {
     if (!target) continue;
     view.time_s = static_cast<double>(now - first) * 1e-9;
     view.frame = static_cast<uint64_t>(presented);
-    fall_line::app::draw(*device, *frame, view, target);
+    skiers.clear();
+    for (const auto& racer : run.state().racers) skiers.push_back(racer.skier);
+    if (chase && !skiers.empty()) fall_line::app::chase_view(level, skiers[0], view);
+    fall_line::app::draw(*device, *frame, view, {skiers}, target);
     surface.present();
     ++presented;
   }

@@ -1,6 +1,7 @@
 // What the terrain's shaders share (render/terrain.hpp): the parameters block (the horizon maps'
-// blend in it, render/horizon.hpp), the grid's mirrored addressing past the map's edge, and its
-// bilinear height.
+// blend in it, render/horizon.hpp), the grid's mirrored addressing past the map's edge, its
+// bilinear height, and the ground's own shadow (`ground_shadow`), which the instanced draws
+// read too (render/instances.hpp).
 
 struct TerrainParams {
   levels: array<vec4f, 10>,  // each level's min corner x, z (world m) and spacing (m)
@@ -44,4 +45,26 @@ fn field_height(heights: texture_2d<f32>, p: TerrainParams, xz: vec2f) -> f32 {
   let c = textureLoad(heights, vec2i(i0.x, i1.y), 0).r;
   let e = textureLoad(heights, vec2i(i1.x, i1.y), 0).r;
   return mix(mix(a, b, t.x), mix(c, e, t.x), t.y);
+}
+
+// How much of the sun reaches world (x, z) past the ground's own horizon (render/horizon.hpp):
+// each of the two maps either side of the sun's bearing gives a soft step where the sun's
+// elevation crosses the horizon, blended by where the sun lies between their bearings. `sun` is
+// the unit direction toward it.
+fn ground_shadow(p: TerrainParams, h0: texture_2d<f32>, h1: texture_2d<f32>, s: sampler,
+                 sun: vec3f, xz: vec2f) -> f32 {
+  if (p.horizon.w == 0.0) {
+    return 1.0;
+  }
+  let maxc = vec2f(p.horizon_size.xy) - 1.0;
+  let g = mirror_grid((xz - p.horizon_grid.xy) / p.horizon_grid.z, maxc);
+  let uv = (g + 0.5) / vec2f(p.horizon_size.xy);
+  let a = textureSampleLevel(h0, s, uv, 0.0).r;
+  let b = textureSampleLevel(h1, s, uv, 0.0).r;
+  let odd = p.horizon.y > 0.5;
+  let lo = select(a, b, odd);
+  let hi = select(b, a, odd);
+  let sun_tan = sun.y / max(length(sun.xz), 1e-4);
+  let w = p.horizon.z;
+  return mix(smoothstep(-w, w, sun_tan - lo), smoothstep(-w, w, sun_tan - hi), p.horizon.x);
 }

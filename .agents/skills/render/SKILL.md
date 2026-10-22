@@ -32,7 +32,7 @@ void encode(TerrainPass&, gpu::Encoder&);                 // GPU: bind and dispa
 - `prepare` allocates nothing. It fills staging arrays reserved at load.
 - `encode` makes no decisions. If it needs a branch, the branch belongs in `prepare`.
 
-## What is built (M7a to M7c), and where
+## What is built (M7a to M7d1), and where
 
 | File | What |
 | --- | --- |
@@ -42,11 +42,14 @@ void encode(TerrainPass&, gpu::Encoder&);                 // GPU: bind and dispa
 | `engine/render/terrain.hpp` | The GPU-culled geometry clipmap (`terrain.wgsl`, `terrain_cull.wgsl`, `terrain_normals.wgsl`), `clipmap_levels`, `min_max_pyramid`; drawn twice, `encode_terrain_depth` (the prepass) then `encode_terrain` (`equal`, writing colour and motion); `encode_terrain_overdraw` is the labs' probe |
 | `engine/render/hiz.hpp` | The depth pyramid (`hiz.wgsl`): the farthest depth per texel down to 1 × 1, `hiz_reduce` its CPU reference, `read_hiz` and `read_depth` |
 | `engine/render/taa.hpp` | TAA-U (`taa.wgsl`): `taa_jitter` and `taa_phases`, `taa_render_size`, the history ping-pong, the resolve, `reset_taa`, `taa_output` (what post reads) |
-| `engine/render/horizon.hpp` | The ground's own shadow: two horizon maps either side of the sun's bearing (`horizon.wgsl` bakes one), the bake decision (`prepare_horizon`, `Horizon::bakes`), the CPU reference `horizon_tan`, `read_horizon`; the terrain owns one and its draw reads it (`horizon_light` in `terrain.wgsl`) |
+| `engine/render/horizon.hpp` | The ground's own shadow: two horizon maps either side of the sun's bearing (`horizon.wgsl` bakes one), the bake decision (`prepare_horizon`, `Horizon::bakes`), the CPU reference `horizon_tan`, `read_horizon`; the terrain owns one and its draw and the instances read it (`ground_shadow` in `wgsl/terrain_common.wgsl`) |
 | `engine/render/post.hpp` | Exposure from the sky, the tone curve, dither, encoding (`post.wgsl`) |
-| `engine/render/wgsl/` | The shared WGSL: `frame_types.wgsl` (and `screen_motion`, the one motion vector), `atmosphere.wgsl` (the air, the tables' maps, the scattering march), `frame.wgsl` (group 0, the haze, the sun's light, the sky's irradiance, the exposure), `terrain_common.wgsl` (the terrain's params block, the horizon's blend in it) |
+| `engine/render/mesh.hpp` | CPU meshes for instance families: `add_box`, `add_cylinder` (and cones), `add_ellipsoid`, all wound outward; `bounding_sphere`; `pack_mesh` (three words a vertex) and `unpack_vertex` |
+| `engine/render/instances.hpp` | Instance families (`instances_cull.wgsl`, `instances.wgsl`, `wgsl/instances_common.wgsl`): `create_family`, `set_instances` / `cut_family`, `prepare_family`; the two-phase cull (`encode_instances_cull`, `late` false then true), the depth draws, the lit draw over both phases, the overdraw probe; `pick_lod` (the CPU twin of the LOD band), `read_instance_stats` (the cull's counters) |
+| `engine/render/wgsl/` | The shared WGSL: `frame_types.wgsl` (and `screen_motion`, the one motion vector), `atmosphere.wgsl` (the air, the tables' maps, the scattering march), `frame.wgsl` (group 0, the haze, the sun's light, the sky's irradiance, the exposure), `terrain_common.wgsl` (the terrain's params block, `ground_shadow`), `instances_common.wgsl` (the family's blocks, the packed vertex, the list entry's bits) |
 | `games/fall_line/app/frame.hpp` | Fall Line's pass table (`kPassTable`) and the `GameFrame` that owns the GPU half; `create_frame` is the manifest, `FrameOptions` the TAA switch and the render scale, `cut` the camera cut |
-| `games/fall_line/app/views.hpp`, `look.hpp` | The named views and the map's day; the ground's albedo |
+| `games/fall_line/app/views.hpp`, `look.hpp` | The named views, the chase camera and the map's day; the ground's albedo |
+| `games/fall_line/app/scene.hpp`, `plugins/skier/app/figure.hpp` | The forest's and the racers' meshes, materials and instances; the placeholder figure posed from a `SkierState` |
 
 Group 0 is the frame block and the sky's tables; group 1 is the pass's own. A compute pass
 that WRITES a table binds it only in its group 1 (a dispatch may not read and write one

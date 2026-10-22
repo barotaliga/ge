@@ -12,7 +12,7 @@
 //
 // THE GRID: every `stride` samples of the field, so the march reads the field's own bilinear
 // heights (mirrored past the edge, as the terrain draws them). The terrain's draw reads the
-// maps through `TerrainParams` and `horizon_light` in render/wgsl/terrain_common.wgsl.
+// maps through `TerrainParams` and `ground_shadow` in render/wgsl/terrain_common.wgsl.
 //
 // ge:summary The terrain's horizon map: bearing slots, the bake decision, the bake pass, the CPU
 // reference
