@@ -1,7 +1,7 @@
 // THE RULE BOOK'S NUMBERS (R1–R24): every number the single-piste generator builds to and the
 // analysis holds a finished map to, with the band helpers. Each namespace's comment says what
-// its rule asks. The `trick` block (R20, the terrain park) is not here yet: no map the
-// generator builds carries a park (docs/goals.md M4c).
+// its rule asks; the `trick` block is R20's, the terrain park a map built for a tricks run
+// carries (park.hpp).
 //
 // Every value is a decimal literal, so the doubles are fixed bits. A band is [min, max].
 // Held by tests/mountain_generate_test.cpp (every map is built off these numbers).
@@ -303,6 +303,39 @@ inline constexpr double kicker_clear = 40;
 inline constexpr double gate_clear = 6;
 inline constexpr double finish_clear = 120;
 }  // namespace drop
+
+// R20 — THE TERRAIN PARK (park.hpp): how many kickers, `count`; each SIZE as built against the
+// horizontal, m: the lip's `height` over the ramp's foot, the ramp as a multiple of it (2/ratio
+// its slope at the lip, a take-off of about 15°, 25° and 35°), the level `deck` past the lip, the
+// landing slope's length `fall` down to a floor `dig` under the piste, and the `runout` climbing
+// back to the line. The low lip is a grab's, the medium a flip's, the high a flip with a spin in
+// it. A size whose turn it is waits for one that fits up to `wait` m on before a smaller one
+// takes its place; `gap` m of piste between one run-out and the next ramp; a gate stands no
+// nearer than `gate_before` m before a ramp's foot nor `gate_after` m past a run-out, and the line
+// falls `run_in` times the lip's height from the gate before a ramp to its foot; `lead` m of
+// piste after the start gate and before the finish; the line turns no more than `straight` rad
+// and falls no steeper than `max_grade` from a ramp's foot to its landing's foot; the park fades
+// into the mountain over `edge` m past the windrow's far toe; and a trunk the park moves more
+// than `tree_shift` m is taken off.
+namespace trick {
+inline constexpr Band count{6, 40};
+struct Size {
+  double height, ramp, deck, fall, dig, runout;
+};
+inline constexpr Size low{1, 7.5, 0, 22, 1, 20};
+inline constexpr Size medium{2, 4.3, 8, 22, 3, 24};
+inline constexpr Size high{3.2, 2.9, 4, 24, 6.5, 30};
+inline constexpr double wait = 80;
+inline constexpr double gap = 20;
+inline constexpr double gate_before = 24;
+inline constexpr double gate_after = 8;
+inline constexpr double run_in = 1;
+inline constexpr double lead = 120;
+inline constexpr double straight = 0.2;
+inline constexpr double max_grade = 0.22;
+inline constexpr double edge = 12;
+inline constexpr double tree_shift = 0.25;
+}  // namespace trick
 
 }  // namespace rules
 

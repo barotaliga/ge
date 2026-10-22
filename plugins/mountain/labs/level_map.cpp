@@ -45,8 +45,9 @@ std::string map_id(double seed, int version) {
 
 std::optional<mapgen::Level> build_map(ge::lab::Lab& lab, double seed, std::optional<int> version,
                                        std::optional<mapgen::PisteGrade> grade,
-                                       std::optional<std::string> course) {
+                                       std::optional<std::string> course, bool tricks) {
   mapgen::GenerateOptions opts;
+  opts.tricks = tricks;
   const int v = version ? *version : map_versions(lab).front();
   opts.version = v;
   if (v != 1) {

@@ -149,6 +149,18 @@ struct Mountain {
 };
 
 // A crest shaped to kick a skier into the air (R4, R9). `x, z` is the LIP.
+// R20 — a park kicker's size, and the landing it is BUILT with past its lip: a level `deck`, a
+// slope falling over `fall` m to a floor `dig` under the line, then the run-out back up.
+enum class TrickSize : uint8_t { low, medium, high };
+inline const char* trick_size_name(TrickSize s) {
+  return s == TrickSize::low ? "low" : s == TrickSize::medium ? "medium" : "high";
+}
+struct KickerShape {
+  double deck, fall, dig;
+};
+
+// A kicker. A PARK kicker (R20, `T1…` in the order skied) names its size (`trick`) and its built
+// landing (`shape`); every other kicker names neither.
 struct Kicker {
   std::string id;  // `K1…` on the piste in the order skied, `X1…` off it
   double x;
@@ -161,6 +173,8 @@ struct Kicker {
   double width;    // full-height width across, m
   bool on_track;
   std::optional<double> s;  // the lip's arc down the piste (on-piste kickers only), m
+  std::optional<TrickSize> trick = std::nullopt;
+  std::optional<KickerShape> shape = std::nullopt;
 };
 
 // A cliff a skier drops off (R22), or a DROP across the piste (R24, `on_track`). `x, z` is the
@@ -466,6 +480,8 @@ struct GenerateOptions {
   // is), else the colour the seed deals (`deal_grade`).
   std::optional<std::string> course;
   std::optional<PisteGrade> grade;
+  // R20 — lay the terrain park down the piste raced (a map for a tricks run).
+  bool tricks = false;
 };
 
 // The answer to "where on the piste is this point nearest?"

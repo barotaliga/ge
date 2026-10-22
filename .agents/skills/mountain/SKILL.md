@@ -40,6 +40,15 @@ one game's: which maps a game races, its modes and its strings stay in the game.
   (R35), a course BUILT on a stretch of the piste (its own weaving line, berms banked into the
   ground, rollers, jumps and step-downs built onto its profile), which replaces it too. `analysis/race.hpp` holds a course to its discipline's rule; `analyze_level` answers it
   on a map with a `race`.
+- THE TERRAIN PARK (R20, `rules::trick`), only on a map asked for with
+  `GenerateOptions::tricks`: `park.hpp` plans the kickers down a line (`plan_park`: the three
+  sizes in turn, clear of the line's kickers, drops, drifts and gates) and stamps them into the
+  finished ground (`stamp_park`). On the single piste the park is planned inside the attempt,
+  before the drifts, and an attempt whose piste carries none is refused; on a ski area
+  `set_parked_course` (`resort_level.hpp`) plans it down a course first and sets the course's
+  gates round it (`course_gates` with the park as zones), and an area none of whose courses
+  carries one is refused unless a course was asked for. `analysis/park.cpp` (`check_park`)
+  holds the finished park; a map built without tricks moves by nothing.
 
 ## Order of work (docs/goals.md M4a to M4d)
 
@@ -71,5 +80,6 @@ a change to the ski area's build runs `resort` and `junctions` the same way, and
 discipline runs its lab (`slalom`: both runs straightened, the map from above, the gate table;
 `speed-events`: the downhill, super-G and both giant slalom runs straightened, with their
 jumps, nets and speed trap; `speed-ski`: the track's profile from the side and the map from
-above; `ski-cross`: the course close up, its profile with the mean fall taken out, the map). The `labs` skill
-owns how.
+above; `ski-cross`: the course close up, its profile with the mean fall taken out, the map). A
+change to the terrain park runs `park` (the park close up, its profile, the map) at
+`--version=1,8`. The `labs` skill owns how.
