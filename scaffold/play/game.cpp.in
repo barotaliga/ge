@@ -25,16 +25,15 @@
 namespace {
 
 namespace num = ge::core::num;
+namespace sim = {{ident}}::sim;
 
 class Run final : public ge::play::Run {
  public:
-  explicit Run(uint32_t seed) : state_({{ident}}::sim::create_game(seed)) {}
+  explicit Run(uint32_t seed) : state_(sim::create_game(seed)) {}
 
-  void step(std::span<const double> input) override {
-    {{ident}}::sim::step(state_, {{ident}}::sim::Input{input[0]});
-  }
+  void step(std::span<const double> input) override { sim::step(state_, sim::Input{input[0]}); }
   bool over() const override { return false; }  // the demo runs to the spec's longest run
-  uint64_t digest() const override { return {{ident}}::sim::digest(state_); }
+  uint64_t digest() const override { return sim::digest(state_); }
   std::string observe() override {
     return "{\"x\":" + num::to_fixed(state_.x_m, 3) + ",\"vx\":" + num::to_fixed(state_.vx_mps, 3) +
            "}";
@@ -63,13 +62,14 @@ class Run final : public ge::play::Run {
     ge::lab::draw_line(out, kW / 2.0, 0, kW / 2.0, kH, {150, 160, 170});
     const double x = kW / 2.0 + state_.x_m * kPxPerM;
     ge::lab::fill_disc(out, x, kH / 2.0, 8, {200, 40, 40});
-    caption = "The demo body " + num::to_fixed(state_.x_m, 2) + " m from the middle (the grey "
-              "line), moving at " + num::to_fixed(state_.vx_mps, 2) + " m/s.";
+    caption = "The demo body " + num::to_fixed(state_.x_m, 2) +
+              " m from the middle (the grey line), moving at " + num::to_fixed(state_.vx_mps, 2) +
+              " m/s.";
     return true;
   }
 
  private:
-  {{ident}}::sim::GameState state_;
+  sim::GameState state_;
 };
 
 std::unique_ptr<ge::play::Run> open(const ge::play::Setup& setup, std::string& error) {
@@ -89,14 +89,14 @@ constexpr std::array<ge::play::Axis, 1> kAxes{{
 }};
 
 const ge::play::GameSpec kGame{
-    "{{ident}}",
-    "{{name}}: the demo body pushed by the steer and a seeded gust",
-    {{ident}}::sim::kStepHz,
-    30,
-    kAxes,
-    {},
-    open,
-    kViews,
+    .name = "{{ident}}",
+    .summary = "the demo body pushed by the steer and a seeded gust",
+    .hz = sim::kStepHz,
+    .most_seconds = 30,
+    .axes = kAxes,
+    .options = {},
+    .open = open,
+    .views = kViews,
 };
 
 }  // namespace

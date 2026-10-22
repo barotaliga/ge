@@ -143,10 +143,14 @@ constexpr std::array<ge::play::View, 2> kViews{{
 }};
 
 const ge::play::GameSpec kGame{
-    "{{ident}}", "{{name}}: a car round a loop of gates the seed lays out, two laps",
-    sim::kStepHz, 120,
-    kAxes,        {},
-    open,         kViews,
+    .name = "{{ident}}",
+    .summary = "a car round a loop of gates the seed lays out, two laps",
+    .hz = sim::kStepHz,
+    .most_seconds = 120,
+    .axes = kAxes,
+    .options = {},
+    .open = open,
+    .views = kViews,
 };
 
 }  // namespace
