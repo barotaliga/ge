@@ -9,6 +9,7 @@
 //   ge test    the build, then ctest --preset <p> [-R <filter>] (the tests and the labs' smoke)
 //   ge check   format (clang-format --dry-run), ge doctor, the build, the tests: the whole gate
 //   ge lab     the build, then build/<p>/labs: the list as JSON, or one lab with its report.json
+//   ge lab diff  the lab's pictures against a kept run's, per distance band (diff.json)
 //
 // ge:summary ge build, test, check and lab: CMake, CTest and the labs run, their output as findings
 // ge:keywords cli ge build test check lab cmake ctest clang-format compiler-errors findings log
@@ -42,6 +43,18 @@ struct LabOptions {
   std::vector<std::string> passthrough;  // the lab's own flags
 };
 Outcome run_lab(const BuildOptions& o, const LabOptions& lab);
+
+// `ge lab diff <id>`: every picture of the lab's last run (or, with `run`, a run now) against
+// the run kept with --tag=<against>, through the labs' own diff (engine/lab/diff.hpp); each band
+// under its floor is an error finding pointing at its sheet.
+struct LabDiffOptions {
+  std::string id;
+  std::string against = "before";
+  bool run = false;
+  std::string bands, psnr;               // "" keeps the labs' defaults
+  std::vector<std::string> passthrough;  // the lab's own flags, with `run`
+};
+Outcome run_lab_diff(const BuildOptions& o, const LabDiffOptions& diff);
 
 // The build `ge build` runs, for a command that needs it first: false with its findings in `out`.
 bool build_into(const BuildOptions& o, Outcome& out);

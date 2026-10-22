@@ -20,6 +20,7 @@
 // ge:summary The lab contract: LabSpec, the Lab context, GE_LAB registration, the lab kinds
 // ge:keywords lab labs registry contract spec flags metric table shot caption digest
 // ge:keywords screenshot simulation scenario drive bot playtest bench attach file wav
+// ge:keywords distance-map depth
 // ge:skill labs
 // ge:test tests/lab_runner_test.cpp
 #pragma once
@@ -97,6 +98,16 @@ struct LabTable {
   std::vector<std::vector<std::string>> rows;
 };
 
+// HOW FAR AWAY each pixel of a picture is, m, from the camera that took it (+infinity for the
+// sky): a GPU lab reads it off the frame's depth (render::read_distance) and hands it with the
+// shot, so a diff (diff.hpp) can weigh a change by how near the player it is. It may be smaller
+// than the picture (the frame's render scale); a reader takes the nearest sample.
+struct DistanceMap {
+  int width = 0;
+  int height = 0;
+  std::vector<float> metres;  // width * height, row-major from the top
+};
+
 // A SCREENSHOT'S WORDS. Every picture a lab writes carries them: burned into a caption band
 // under the image (so a picture pasted alone still says what it is), written beside it as
 // JSON, and listed in the lab's contact sheet. Write them for a reader who sees only this
@@ -134,7 +145,10 @@ class Lab {
   void note(std::string line);
   // A picture whose pixels differ run to run or machine to machine (a GPU frame: each adapter
   // rasterises in its own way) is `measured`: its id is hashed, its pixels are not.
-  void shot(Shot shot, const Picture& picture, Det det = Det::deterministic);
+  // `distance`, when given, is how far away each pixel is: written beside the picture as
+  // <id>.distance for a diff, never in the digest.
+  void shot(Shot shot, const Picture& picture, Det det = Det::deterministic,
+            DistanceMap distance = {});
   // A file written beside the report (previews/<lab>/<name>): a rendered sound's WAV, anything a
   // reader opens with another tool. Its bytes are in the digest unless it is `measured`.
   void attach(std::string name, std::vector<uint8_t> bytes, Det det = Det::deterministic);
@@ -147,6 +161,8 @@ class Lab {
     Shot shot;
     Picture picture;  // with its caption band
     Det det;
+    int width = 0, height = 0;  // the picture's own size, the band left out (the top-left)
+    DistanceMap distance;
   };
   const std::vector<Metric>& metrics() const { return metrics_; }
   const std::vector<LabTable>& tables() const { return tables_; }
