@@ -66,6 +66,7 @@ the row when the file moves.
 | `plugins/mountain/labs/resort_map.hpp` | `game5/scripts/lib/resort-draw.mjs` | renderResortPlan |
 | `plugins/mountain/labs/routes_lab.cpp` | `game5/scripts/level-map.mjs` | the routes drawn (the close-up and the side view are the engine's own) |
 | `plugins/mountain/labs/ski_cross_lab.cpp` | `game5/scripts/level-map.mjs` | the course drawn (the close-up and the detrended profile are the engine's own) |
+| `plugins/mountain/labs/skijump_hills_lab.cpp` | `game5/scripts/skijump-hills-lab.mjs` | measure (tower raised dig fill cut rms arena drop); the pictures are the engine's own |
 | `plugins/mountain/labs/slalom_lab.cpp` | `game5/scripts/level-map.mjs` | the course drawn (the straightened panel is the engine's own) |
 | `plugins/mountain/labs/speed_events_lab.cpp` | `game5/scripts/level-map.mjs` | the course drawn (the straightened panel is the engine's own) |
 | `plugins/mountain/labs/speed_ski_lab.cpp` | `game5/scripts/level-map.mjs` | the track drawn (the side profile is the engine's own) |
@@ -144,6 +145,8 @@ the row when the file moves.
 | `plugins/mountain/mapgen/run_start.hpp` | `game5/engine/mapgen/run-start.ts` |  |
 | `plugins/mountain/mapgen/ski_cross.cpp` | `game5/engine/mapgen/ski-cross.ts` | pickStretch corners lay poseAt baseProfile cutStart rollers jump stepDown layFeatures bankAt across skiCrossCourseOf setSkiCross courseOver |
 | `plugins/mountain/mapgen/ski_cross.hpp` | `game5/engine/mapgen/ski-cross.ts` | setSkiCross skiCrossCourseOf SkiCrossCourse CrossFeature |
+| `plugins/mountain/mapgen/ski_jump.cpp` | `game5/engine/mapgen/ski-jump.ts` | hillOf buildProfile edgeSpeed designGate jumpDistanceAt measuredDistance setSkiJump cutUnder |
+| `plugins/mountain/mapgen/ski_jump.hpp` | `game5/engine/mapgen/ski-jump.ts`, `ski-jump-types.ts` | HillElements SkiJumpProfile skiJumpProfile setSkiJump skiJumpHeightAt |
 | `plugins/mountain/mapgen/ski_routes.cpp` | `game5/engine/mapgen/ski-routes.ts` | STEPS DROPS Heap laySkiRoutes threadTrees dropsOn stationsOf steepestAlong |
 | `plugins/mountain/mapgen/ski_routes.hpp` | `game5/engine/mapgen/ski-routes.ts` | RouteGround DROP_SPAN steepestAlong laySkiRoutes |
 | `plugins/mountain/mapgen/slalom.cpp` | `game5/engine/mapgen/slalom.ts` | slalomStretch layGates layAt dealCombos comboSize fitBends courseOver setSlalom slalomLineAt |
@@ -160,6 +163,8 @@ the row when the file moves.
 | `plugins/mountain/mapgen/station_clear.hpp` | `game5/engine/mapgen/station-clear.ts` | bottomFootprint clearStations standsLevel StationGround |
 | `plugins/mountain/mapgen/station_pad.cpp` | `game5/engine/mapgen/station-pad.ts` | pressPads levelPad cutApproach unloadRise relevelPads groomPads dragTop |
 | `plugins/mountain/mapgen/station_pad.hpp` | `game5/engine/mapgen/station-pad.ts` | padShape pressPads relevelPads groomPads padSurface dragTop dragTopsOf unloadPoint cutApproach |
+| `plugins/mountain/mapgen/straight_venue.cpp` | `game5/engine/mapgen/straight-venue.ts` | findLine gradeVenue originalOf nearStations |
+| `plugins/mountain/mapgen/straight_venue.hpp` | `game5/engine/mapgen/straight-venue.ts` | VenueProfile VenueRule VenueLine findLine gradeVenue (the pen, the landing shaper and the mogul lines not carried) |
 | `plugins/mountain/mapgen/summit_ramps.cpp` | `game5/engine/mapgen/summit-ramps.ts` | rampRoom roomBlocked nearRoom evenFall rampTo planRamps betterRamp overlaps eachCell headIndex layRamps pressRamps groomRamps offOwn nearLine |
 | `plugins/mountain/mapgen/summit_ramps.hpp` | `game5/engine/mapgen/summit-ramps.ts` | rampRoom roomBlocked nearRoom RampFit RampRoom RunCover rampFrame rampHeight offRamp layRamps groomRamps nearLine |
 | `plugins/mountain/mapgen/sun.cpp` | `game5/engine/mapgen/sun.ts` | dealSun declinationOf faceTheSun sunOffFace |
@@ -170,7 +175,8 @@ the row when the file moves.
 | `plugins/mountain/mapgen/terrain.hpp` | `game5/engine/mapgen/terrain.ts` | planTerrain bakeCountry descentAt flankAt |
 | `plugins/mountain/mapgen/track.cpp` | `game5/engine/mapgen/track.ts` | drawPiste gradePiste stampCorridor bendRoom |
 | `plugins/mountain/mapgen/track.hpp` | `game5/engine/mapgen/track.ts` | drawPiste gradePiste stampCorridor tightestBend windowGrades minSeparation |
-| `plugins/mountain/mapgen/types.hpp` | `game5/engine/mapgen/types.ts` | Level TrackPoint Checkpoint Kicker Cliff TreeDef Weather Sun GenerateOptions |
+| `plugins/mountain/mapgen/types.hpp` | `game5/engine/mapgen/types.ts` | Level TrackPoint Checkpoint Kicker Cliff TreeDef Weather Sun GenerateOptions SkiJumpHill VenueSurface |
+| `plugins/mountain/mapgen/venue_rules.hpp` | `game5/engine/mapgen/trick-rules.ts` | R37 R43 SKI_JUMP_RULE |
 | `plugins/mountain/mapgen/versions.hpp` | `game5/engine/mapgen/versions.ts` | generatorTraits GENERATOR_VERSIONS CURRENT_GENERATOR_VERSION singlePiste |
 | `plugins/mountain/mapgen/weather.cpp` | `game5/engine/mapgen/weather.ts` | dealWeather windIn |
 | `plugins/mountain/mapgen/weather.hpp` | `game5/engine/mapgen/weather.ts` | dealWeather sunsetOf WEATHER_KINDS |
@@ -187,6 +193,7 @@ the row when the file moves.
 | `tests/mountain_generate_test.cpp` |  | generateLevel levelDigest analyzeLevel |
 | `tests/mountain_park_test.cpp` | `game5/engine/mapgen/trick-field.ts` | the terrain park (R20) |
 | `tests/mountain_ski_cross_test.cpp` | `game5/engine/mapgen/ski-cross.ts` | the ski-cross course (R35) |
+| `tests/mountain_ski_jump_test.cpp` | `game5/tests/ski_jump_test.ts` | the ski jumping hill (R43) |
 | `tests/mountain_ski_routes_test.cpp` | `game5/engine/mapgen/ski-routes.ts` | the ski routes (R42) |
 | `tests/mountain_slalom_test.cpp` | `game5/tests/slalom_test.ts` | the slalom course (R31) |
 | `tests/mountain_speed_events_test.cpp` | `game5/tests/downhill_test.ts` | the speed events' courses (also super_g_test.ts, giant_slalom_test.ts) |

@@ -148,6 +148,15 @@ std::string level_digest(const Level& level) {
       }
     }
   }
+  // R43 — a ski jumping hill, read only on a map carrying one.
+  if (level.ski_jump) {
+    const SkiJumpHill& hill = *level.ski_jump;
+    f.word(jump_hill_name(hill.hill));
+    f.mix(hill.edge);
+    f.mix(hill.k);
+    f.mix(hill.vertical);
+    f.mix(double(hill.design));
+  }
   if (level.race) {
     const RaceCourse& race = *level.race;
     f.word(discipline_name(race.discipline));

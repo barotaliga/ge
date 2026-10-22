@@ -1,0 +1,6 @@
+---
+type: Added
+title: Ski jumping's hills (R43) set over any built map, and the skijump-hills lab
+---
+
+A ski jumping hill can now be set over any built map (`set_ski_jump`). The LARGE hill (HS 140) and the NORMAL hill (HS 106) are each built element by element from the construction norm's formulas over a row of free choices (`venue_rules::ski_jump`): the start tower's deck, the in-run at 35° with its transition and table to the edge, the knoll, the landing radius through P, K and L, and the transition onto a level out-run, with the start gates no more than 0.4 m of height apart and the design gate found by a point mass down the in-run. The hill is laid as a STRAIGHT VENUE (R37, `straight_venue.hpp`): a line of its own down the face where the profile cuts and fills least, clear of the lifts and the village, the ground graded to it, groomed, and the woods and the finish arena cleared. The hill is an analytic surface (`Level::venue`) that `ground_at` and `normal_at` answer off inside its width, with the grid cut beneath it and the in-run a raised deck. The map's digest reads the hill where there is one; every other map is unchanged. The `skijump-hills` lab tabulates the earth each hill moves and draws its profile and its map.
