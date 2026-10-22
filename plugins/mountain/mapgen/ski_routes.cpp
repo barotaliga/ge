@@ -470,7 +470,7 @@ std::vector<SkiRoute> lay_ski_routes(const RouteGround& area, bool wild) {
   }
   // Metres of the step from square a to square c a trunk would be felled for, and whether the
   // trees stand clear all along it.
-  const auto felled = [&](int a, int c, double len) {
+  const auto walk_felled = [&](int a, int c, double len) {
     double m = 0;
     const double x0 = cx(a);
     const double z0 = cz(a);
@@ -482,9 +482,18 @@ std::vector<SkiRoute> lay_ski_routes(const RouteGround& area, bool wild) {
     }
     return m;
   };
+  // Both searches ask it of the same steps again and again, so each step's answer is walked
+  // once and kept, by its square and its move (one of the first kSteps; a drop never asks). The
+  // answer is a whole number of 2 m stretches, exact in a float, so keeping it changes no bits.
+  std::vector<float> felled_memo(N * kSteps, -1.0f);
+  const auto felled = [&](int a, int c, double len, size_t move) {
+    float& kept = felled_memo[size_t(a) * kSteps + move];
+    if (kept < 0) kept = float(walk_felled(a, c, len));
+    return double(kept);
+  };
   // What a step costs: its length on a straight line; on a wild one, by the squares it crosses,
   // dearer down the fall line, and dearer for every metre of trunk it fells.
-  const auto cost_of = [&](int a, int c, int di, int dj, double len) {
+  const auto cost_of = [&](int a, int c, int di, int dj, double len, size_t move) {
     if (!wild) return len;
     const double gx = fall_x[size_t(a)];
     const double gz = fall_z[size_t(a)];
@@ -492,15 +501,16 @@ std::vector<SkiRoute> lay_ski_routes(const RouteGround& area, bool wild) {
     const double down =
         m > 1e-6 ? num::max(0.0, -(gx * di + gz * dj) / (m * hypot(double(di), double(dj)))) : 0.0;
     const double pull = 1 + W::fall * down * down * num::min(1.0, m / 0.3);
-    return (share[size_t(a)] + share[size_t(c)]) / 2 * pull * len + W::fell * felled(a, c, len);
+    return (share[size_t(a)] + share[size_t(c)]) / 2 * pull * len +
+           W::fell * felled(a, c, len, move);
   };
   // Whether a skier may go from square a down to square c, `len` m: c open, no climb, no pitch
   // past the cliff's, and on a straight line the trees clear between.
-  const auto step = [&](int a, int c, double len) {
+  const auto step = [&](int a, int c, double len, size_t move) {
     if (!open[size_t(c)]) return false;
     const double drop = y[size_t(a)] - y[size_t(c)];
     if (drop < 0 || drop / len > K::cliff) return false;
-    return wild || felled(a, c, len) == 0;
+    return wild || felled(a, c, len, move) == 0;
   };
   // Whether a wild line may DROP from a over the square between to c: both open, ground past the
   // cliff's pitch between, falling no more than `wild::drop`.
@@ -552,9 +562,9 @@ std::vector<SkiRoute> lay_ski_routes(const RouteGround& area, bool wild) {
       const int mid = (j + dj / 2) * n + (i + di / 2);
       if (drop && run_of[size_t(mid)] >= 0) continue;
       const double cost =
-          from_cost[size_t(a)] + (drop ? len * W::huck : cost_of(a, c, di, dj, len));
+          from_cost[size_t(a)] + (drop ? len * W::huck : cost_of(a, c, di, dj, len, m));
       if (cost >= from_cost[size_t(c)]) continue;
-      if (drop ? !drop_over(a, c, mid) : !step(a, c, len)) continue;
+      if (drop ? !drop_over(a, c, mid) : !step(a, c, len, m)) continue;
       from_cost[size_t(c)] = cost;
       from_prev[size_t(c)] = a;
       from_top[size_t(c)] = from_top[size_t(a)];
@@ -588,9 +598,10 @@ std::vector<SkiRoute> lay_ski_routes(const RouteGround& area, bool wild) {
       const double len = hypot(double(di), double(dj)) * cell;
       const bool drop = is_drop(di, dj);
       const int mid = (jj + dj / 2) * n + (ii + di / 2);
-      const double cost = to_cost[size_t(c)] + (drop ? len * W::huck : cost_of(a, c, di, dj, len));
+      const double cost =
+          to_cost[size_t(c)] + (drop ? len * W::huck : cost_of(a, c, di, dj, len, m));
       if (cost >= to_cost[size_t(a)]) continue;
-      if (drop ? !drop_over(a, c, mid) : !step(a, c, len)) continue;
+      if (drop ? !drop_over(a, c, mid) : !step(a, c, len, m)) continue;
       to_cost[size_t(a)] = cost;
       to_next[size_t(a)] = c;
       drops_out[size_t(a)] = drop ? 1 : 0;

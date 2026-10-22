@@ -32,6 +32,10 @@ line this repo's checks run on.
   (skill: `write-code`, § Diagnostics). `ge doctor` holds every message to it.
 - **THE ENGINE IS NOT PATCHED HERE.** A bug in the engine is reported upstream with a repro
   (skill: `engine`); the build never edits `build/*/_deps/`.
+- **SAY WHAT `ge` LACKED.** When a task would have been easier with a `ge` command or flag that
+  does not exist, say so in the PR description under **ge wishlist** and to whoever directs the
+  work: the command, what it would answer, the steps it would have saved. A wish that recurs is
+  an engine request, filed upstream like a bug (skill: `engine`).
 - **THIS REPOSITORY MAY BE PUBLIC.** No tokens, keys, e-mail addresses or home paths in the tree,
   in workflows or in their logs; credentials live in the CI's secrets.
 - **SKILLS LEARN.** Read each loaded skill's lessons before the first edit, and record what the

@@ -36,12 +36,14 @@ ge diverge <log-a> <log-b>       # where two runs part, field by field (skill: p
 ge bench [--tag=before | --compare=before]   # each step's time against its budget (skill: perf)
 ge profile [--render]            # where the step's (and the frame's) time goes, zone by zone
 ge mem | ge leaks                # what the run allocates; what it never frees
+ge graph <file>... [--kind=<k>]  # chart traces, benches, profiles: PNG + SVG, outliers as notes
 ge check                         # the whole gate: format, doctor, build, tests (what CI runs)
 ```
 
 Around it: `ge new <dir>` scaffolds a game repo; `ge doctor` is the rules alone; `ge skills
 sync` rewrites the engine's skills after an upgrade; `ge lessons <skill>` reads a skill's
-lessons before you start.
+lessons before you start. The `debug` skill says how to switch on the log channels for a run
+(`-- --log=<spec>`) and how to read what `ge graph` rings.
 
 Build, test and check write the tools' full output to `build/<preset>/ge-*.log` and answer
 with findings instead, so a clean run is one line. Read the log only when a finding says to.

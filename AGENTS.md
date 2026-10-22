@@ -30,8 +30,10 @@ updates that row's Status in its PR.
 | [`docs/goals.md`](docs/goals.md) | The long-term goals (G1–G9), the non-goals and the milestone roadmap |
 | [`docs/architecture.md`](docs/architecture.md) | The layers and their dependency direction, the frame, the code conventions, diagnostics, the determinism contract and the build |
 | [`docs/labs.md`](docs/labs.md) | The labs: the contract every subsystem, plugin and game plugs into, the kinds (sim, scenario, picture, drive, bench), captions, digests, and the labs each milestone lands |
+| [`docs/debugging.md`](docs/debugging.md) | Debugging a run: the log channels and the log spec, log dumps, series traces and spans files, the outlier rule, the charts and `ge graph` |
 | `docs/index.md` | GENERATED from the code's `ge:` tags by `make index` (and `make agents-check`) in every checkout, never committed: every file's one-line summary, owning skill and test; keyword to files |
 | [`docs/rendering.md`](docs/rendering.md) | The GPU backend (Dawn), the frame's pass table, every rendering technique and why, budgets, lab hooks, and what was considered and not taken |
+| [`docs/perf.md`](docs/perf.md) | The performance ledger: every speed-up, before and after, and how it was measured |
 | [`docs/publishing.md`](docs/publishing.md) | What a release is (GitHub Releases + GitHub Packages), how a game consumes it, changeset fragments, cutting a release, the credentials |
 
 **The working area.** `porting/` holds everything that only matters while modules are
@@ -108,6 +110,12 @@ porting ends, and nothing outside it may depend on it except `make golden`.
   get there.
 - **WHEN A TASK IS DONE, NAME THE NEXT STEP.** Update the roadmap row in
   `docs/goals.md`, then name the next open milestone row as the follow-up.
+- **SAY WHAT `ge` LACKED.** `ge` is the agent's whole interface (G6), so it grows from what
+  agents miss. When a task would have been easier with a `ge` command or flag that does not
+  exist (to build, debug, inspect, measure or optimise), say so in the PR description under
+  **ge wishlist** and to whoever directs the work: the command, what it would answer, and the
+  steps it would have saved. Check `ge help` and the open rows in `docs/goals.md` first, and
+  add a wish that recurs to the `ge` backlog row there.
 - **SKILLS LEARN.** Read each loaded skill's lessons before the first edit, and before the
   commit record what the session learned, fix what the skill got wrong, and promote what
   is always true (the `skill-reflection` skill). Lessons ship in the same PR as the work.
@@ -130,6 +138,7 @@ make lint         # clang-tidy's bug-finding checks, in parallel (BASE=origin/ma
 make labs         # list the labs;  make lab LAB=level ARGS="--seeds=38" runs one
 make lab LAB=synth # every voice the synth can play, metered, pictured and written as WAV
 make lab LAB=audition # Fall Line's bank, the skier's beds and the bot's run, metered and written as WAV
+make lab LAB=trace ARGS="--seed=38 --log=course=debug" # one run step by step: trace.tsv, charts, log.txt
 make sim SEEDS=38 # the bot down a seed: the run report table and its line on the map (the sim lab)
 make sim ARGS=--rivals=3  # the same with a field of four: the field table, every line drawn
 make play         # an agent at the controls: the play protocol on stdio (engine/play/session.hpp)
@@ -168,12 +177,12 @@ and Windows. Releases are dispatched, never hand-made (`release` skill,
 
 | Path | What | Skill |
 | --- | --- | --- |
-| `engine/core/` | The deterministic pool: `prng.hpp` (mulberry32), `math.hpp` (hypot family, clamp, smoothstep), `libm/` (every transcendental the simulation calls, with the same bits on every platform; vendored, with `LICENSE.md`), `num.hpp` (the simulation's number semantics: rounding, integer wrap, NaN-aware max/min, sign, remainder), `num_text.hpp` (numbers as text, for diagnostic lines), `noise.hpp` (hash2, value noise, the cached field), `heightfield.hpp` (the baked grid and its bilinear reads), `quat.hpp` (orientation; the Euler sign flip), `solar.hpp` (the sun and the moon, by geometry and on a real date), `output.hpp` (the one diagnostic channel; module state) | `determinism` |
+| `engine/core/` | The deterministic pool: `prng.hpp` (mulberry32), `math.hpp` (hypot family, clamp, smoothstep), `libm/` (every transcendental the simulation calls, with the same bits on every platform; vendored, with `LICENSE.md`), `num.hpp` (the simulation's number semantics: rounding, integer wrap, NaN-aware max/min, sign, remainder), `num_text.hpp` (numbers as text, for diagnostic lines), `noise.hpp` (hash2, value noise, the cached field), `heightfield.hpp` (the baked grid and its bilinear reads), `quat.hpp` (orientation; the Euler sign flip), `solar.hpp` (the sun and the moon, by geometry and on a real date), `output.hpp` (the one diagnostic channel: named log channels, the log spec, the step on every line; module state), `parallel.hpp` (a bake's independent rows in bands on threads) | `determinism`, `debug` |
 | `engine/loop/` | `run_clock.hpp`: the fixed-step accumulator between the display's frames and the 120 Hz step | `sim` |
-| `engine/lab/` | The lab contract and runner: `lab.hpp` (`LabSpec`, `GE_LAB`, the `Lab` context: metrics, tables, captioned shots, attached files, failures, the digest), `sound.hpp` (a rendered sound metered, pictured and attached as WAV), `runner.hpp` (the `labs` command line: list, run, tag, compare, smoke, repeat, digest baseline), `report.hpp` (report.json, metrics.tsv, the contact sheet), `raster.hpp` (the CPU picture and 5x7 font), `png.hpp`; `labs/` holds the engine's own labs. Published as `ge::lab`, so a game's labs use the same contract | `labs` |
+| `engine/lab/` | The lab contract and runner: `lab.hpp` (`LabSpec`, `GE_LAB`, the `Lab` context: metrics, tables, captioned shots, attached files, failures, the digest), `sound.hpp` (a rendered sound metered, pictured and attached as WAV), `runner.hpp` (the `labs` command line: list, run, tag, compare, smoke, repeat, digest baseline), `report.hpp` (report.json, metrics.tsv, the contact sheet), `raster.hpp` (the CPU picture and 5x7 font), `png.hpp`, `series.hpp` (the series and spans text files every trace, bench and profile writes), `stats.hpp` (percentiles, outliers, spikes), `plot.hpp` (a drawing rendered to PNG or SVG), `chart.hpp` (line, scatter, histogram, box, heatmap and flame charts, outliers ringed); `labs/` holds the engine's own labs. Published as `ge::lab`, so a game's labs use the same contract | `labs`, `debug` |
 | `engine/play/` | The play contract (`ge::play`): `game.hpp` (`GameSpec`, the axes and options, `Run`: step, over, digest, observe, state, report, pilot; `GE_GAME`), `session.hpp` (the snapped, recorded step, the line protocol, `pilot_run`, `replay`, `state_at`, `diverge`), `inputs.hpp` (the plain-text input log), `json_read.hpp` (the flat JSON reader), `bench.hpp` (the pilot's run replayed and timed per step and per zone, with its allocations), `main.hpp` (the `play` executable's command line). A game's `play` target is driven by `ge play`, `ge sim`, `ge replay`, `ge state`, `ge diverge`, `ge bench`, `ge profile`, `ge mem`, `ge leaks` | `agent-interface` |
 | `engine/prof/` | The profiler (`ge::prof`): `zones.hpp` (`GE_ZONE`: a span with its depth, time and allocations while a recording runs, one load when none does; the totals), `memory.hpp` (the allocation counts, the peak resident set), `alloc_hook.cpp` (the counting `operator new`, its own target `ge::prof_alloc`). Feeds no digest | `perf` |
-| `engine/cli/` | The `ge` command line for game repos (`cmake/Cli.cmake`): `commands.hpp` (the catalog: every command, its flags, example and skill; the parser and `ge help`), `outcome.hpp` (the one answer shape, text or `--json`), `json.hpp`, `index.hpp` (`ge find`, `ge explain`: the repo's and the engine's tags), `build.hpp` (`ge build`, `ge test`, `ge check`, `ge lab`: the tools' output read back as findings), `play.hpp` (`ge play`, `ge sim`, `ge replay`, `ge state`, `ge diverge`: the game's `play` executable run), `perf.hpp` (`ge bench`, `ge profile`, `ge mem`, `ge leaks`: the step's cost, its zones, its allocations, its leaks), `add.hpp` (`ge use`, `ge add`), `scaffold.hpp` (`ge new`), `skills.hpp` (`ge skills sync`, the lock, plugin skills, `ge lessons`), `doctor.hpp` (`ge doctor`: a game repo held to the engine's rules), `diagnostic.hpp` (the diagnostics convention as a check: `tests/cli_diagnostics_test.cpp` holds the whole tree to it), `finding.hpp` (what, where, next), `embedded.hpp` (what ge carries) | `agent-interface` |
+| `engine/cli/` | The `ge` command line for game repos (`cmake/Cli.cmake`): `commands.hpp` (the catalog: every command, its flags, example and skill; the parser and `ge help`), `outcome.hpp` (the one answer shape, text or `--json`), `json.hpp`, `index.hpp` (`ge find`, `ge explain`: the repo's and the engine's tags), `build.hpp` (`ge build`, `ge test`, `ge check`, `ge lab`: the tools' output read back as findings), `graph.hpp` (`ge graph`: series and spans files charted, outliers as findings), `play.hpp` (`ge play`, `ge sim`, `ge replay`, `ge state`, `ge diverge`: the game's `play` executable run), `perf.hpp` (`ge bench`, `ge profile`, `ge mem`, `ge leaks`: the step's cost, its zones, its allocations, its leaks), `add.hpp` (`ge use`, `ge add`), `scaffold.hpp` (`ge new`), `skills.hpp` (`ge skills sync`, the lock, plugin skills, `ge lessons`), `doctor.hpp` (`ge doctor`: a game repo held to the engine's rules), `diagnostic.hpp` (the diagnostics convention as a check: `tests/cli_diagnostics_test.cpp` holds the whole tree to it), `finding.hpp` (what, where, next), `embedded.hpp` (what ge carries) | `agent-interface` |
 | `consumer-skills/` | The skills a game repo gets from `ge new` and `ge skills sync`, one `<name>/SKILL.md` each, compiled into `ge`; written for a game repo, never for this one | `agent-interface` |
 | `scaffold/` | The game repo `ge new` writes: every file with a `.in` suffix and `{{name}}`-style placeholders, compiled into `ge` | `agent-interface` |
 | `templates/` | What `ge add` writes: `system/`, `test/` and `lab-<kind>/`, each file with a `.in` suffix and `{{snake}}`, `{{kebab}}`, `{{Type}}` placeholders, compiled into `ge` | `agent-interface` |
@@ -224,7 +233,8 @@ Agents find code by grep, so the tree is built to be grepped:
 ### Stated once
 
 - **The FP flags**: `ge_fp` in the root `CMakeLists.txt`, linked by `ge_core` (so by every
-  target) and published with it as `ge::fp`. `ge_flags` is the tree's own warnings and
+  target) and published with it as `ge::fp`. **The instruction-set baseline** (AVX2 on
+  x86-64): `ge_isa` beside it, published as `ge::isa`. `ge_flags` is the tree's own warnings and
   sanitizers, never published.
 - **The plugin contract** (homes, layout, naming, dependencies, registration):
   `docs/architecture.md` § Plugins; built by `cmake/Plugins.cmake`, checked by
@@ -277,5 +287,6 @@ and the directories agree.
 | `audio` | The synth, a voice, a bed, the audio thread |
 | `ui` | The 2D layer, text, the HUD, a card, the dev UI |
 | `labs` | Writing, running or reading a lab: a measurement, a captioned screenshot, a scenario, a drive, a bench; the before-and-after a PR owes |
+| `debug` | Finding out why a run behaves as it does: log channels and `--log` dumps, series traces and spans, the outlier rule, the charts (PNG + SVG), `ge graph` |
 | `perf` | Any optimisation, a benchmark, a profile, a cost claim |
 | `agent-interface` | Diagnostics wording, consumer skills, the `ge` CLI (M12) |

@@ -43,6 +43,10 @@ The engine exists to be fast (G2). Speed is proven by measurement.
   LAB=profile`).
 - An engine module's own cost: a `bench` lab (below), median of N runs (N ≥ 20), on an idle
   machine, back to back before and after.
+- In the GPU-less container (no `perf` there), callgrind ranks where the instructions go:
+  `valgrind --tool=callgrind build/release/labs mapgen-cost --seeds=38 --reps=1 --version=10`,
+  then `callgrind_annotate --inclusive=yes`. Its counts rank; wall time from the bench lab
+  proves.
 - While porting, `porting/subsystems.md` § perf says how to time the reference on the
   same machine.
 
@@ -63,11 +67,16 @@ The engine exists to be fast (G2). Speed is proven by measurement.
 2. Memory: SoA for hot arrays, contiguous storage, no pointer chasing, reserve up
    front.
 3. Parallelism: only where the result does not depend on scheduling (per-pass
-   `prepare`, independent rows of a bake). Never inside `step`.
-4. SIMD: only with operations that are exact (add, mul, sqrt, compares, with no FMA).
+   `prepare`, independent rows of a bake: `core::parallel_bands`). Never inside `step`.
+4. SIMD: only with operations that are exact (add, mul, sqrt, compares, with no FMA). The
+   x86 build already targets AVX2 (`ge_isa`, the `build` skill), so the compiler vectorises
+   plain loops first; intrinsics only where a profile still points after that.
 
-When a perf ledger exists (`docs/perf.md`), add a row: what changed, before and after,
-and how.
+Hand-written assembly is not used: intrinsics give the same instructions, inline, in one
+source for the agent to read, and assembly would need an x86 and an ARM copy.
+
+The ledger is `docs/perf.md`: add a row for every speed-up (what changed, before and after,
+how measured).
 
 ## Labs
 
