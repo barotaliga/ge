@@ -3,7 +3,7 @@
 // it, groomed hard from the house to the run-out, the woods cut), and the speed events' checks
 // (speed_race.cpp). Each files its findings through `add` in a fixed order, with fixed text.
 //
-// ge:summary The checks every race course shares, and the speed events' (R32, R33, R36)
+// ge:summary The checks every race course shares, and each discipline's (R32-R36)
 // ge:keywords analysis race-course course-prep gate-poles groomed cleared-trees speed-event
 // ge:skill mountain
 // ge:test tests/mountain_speed_events_test.cpp
@@ -39,5 +39,18 @@ void check_downhill(const mapgen::Level& level, const mapgen::RaceCourse& race, 
 // the direction changes ask, spaced, side to side in turn, off the jumps), each turning pole
 // inside the line's apex, the crests shaved, the nets (and a super-G's trap), the hill prepared.
 void check_turns(const mapgen::Level& level, const mapgen::RaceCourse& race, const Add& add);
+
+// R34 — the speed-skiing track: straight, graded (never rising, its crests and knees rounded, the
+// ground under it its profile), the launch, the zone and the run-out, the final in the band and
+// the qualification under it, the start gate and the zone's two lines, the margin cleared, groomed,
+// clear of the lift stations, no kicker or drop on it.
+void check_speed_ski(const mapgen::Level& level, const mapgen::RaceCourse& race, const Add& add);
+
+// R35 — the ski-cross course: its stretch and its bands, the line (its width, no turn tighter
+// than the rule's), the profile (never rising off its features, its crests and knees rounded, the
+// ground under it), the features (spaced, clear of the turns, the jumps its own kickers), the
+// gates (a turning gate in every berm, a corridor gate before every feature, none in a landing,
+// red and blue in turn), the start's four lanes, the finish, the fence, groomed and cleared.
+void check_ski_cross(const mapgen::Level& level, const mapgen::RaceCourse& race, const Add& add);
 
 }  // namespace ge::mountain::analysis

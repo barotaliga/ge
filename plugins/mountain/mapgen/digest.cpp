@@ -141,16 +141,38 @@ std::string level_digest(const Level& level) {
         f.word("panels");
         f.mix(c.turn);
       }
+      if (c.flags) {
+        f.word("flags");
+        f.mix(c.turn);
+      }
     }
     for (const double j : race.jumps) f.mix(j);
     if (race.trap) {
       f.word("trap");
       f.mix(race.trap->s);
     }
+    if (race.zone) {
+      f.word("zone");
+      f.mix(race.zone->from);
+      f.mix(race.zone->to);
+      f.mix(race.top);
+      f.mix(race.stop);
+    }
     if (race.nets) {
       f.word("nets");
       f.mix(race.nets->from);
       f.mix(race.nets->to);
+    }
+    for (const RaceCourse::Feature& x : race.features) {
+      f.word(cross_feature_name(x.kind));
+      f.mix(x.from);
+      f.mix(x.to);
+      f.mix(x.height);
+    }
+    if (race.stretch) {
+      f.word("stretch");
+      f.mix(race.stretch->from);
+      f.mix(race.stretch->to);
     }
     for (const RaceCourse::LinePoint& p : race.line) {
       f.mix(p.s);

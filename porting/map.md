@@ -42,6 +42,7 @@ the row when the file moves.
 | `plugins/mountain/analysis/cliffs.cpp` | `game5/engine/analysis/cliffs.ts` | checkCliffs checkDrops |
 | `plugins/mountain/analysis/cliffs.hpp` | `game5/engine/analysis/cliffs.ts` | checkCliffs checkDrops |
 | `plugins/mountain/analysis/course.cpp` | `game5/engine/analysis/index.ts` | analyzeLevel (a resort's course, `network: false`; the engine's own checks) |
+| `plugins/mountain/analysis/cross_course.cpp` | `game5/engine/mapgen/ski-cross.ts` | the course's rule (R35) as its own analysis; the reference has no ski-cross assertions |
 | `plugins/mountain/analysis/crossings.cpp` | `game5/engine/analysis/crossings.ts` | selfCrossings |
 | `plugins/mountain/analysis/crossings.hpp` | `game5/engine/analysis/crossings.ts` | selfCrossings |
 | `plugins/mountain/analysis/index.cpp` | `game5/engine/analysis/index.ts` | analyzeLevel |
@@ -54,12 +55,15 @@ the row when the file moves.
 | `plugins/mountain/analysis/shared.cpp` | `game5/engine/analysis/index.ts` | analyzeLevel (R13, R15, R19) |
 | `plugins/mountain/analysis/shared.hpp` | `game5/engine/analysis/index.ts` | analyzeLevel (R13, R15, R19) |
 | `plugins/mountain/analysis/speed_race.cpp` | `game5/tests/downhill_test.ts` | the downhill, super-G and giant slalom assertions (also super_g_test.ts, giant_slalom_test.ts), as R32, R33 and R36's analysis |
+| `plugins/mountain/analysis/speed_track.cpp` | `game5/tests/speed_ski_test.ts` | the speed track's assertions, as R34's analysis |
 | `plugins/mountain/labs/junctions_lab.cpp` | `game5/scripts/junctions-lab.mjs` | the steps by kind, the sheet (read down each run's line, not every packed cell) |
 | `plugins/mountain/labs/resort_lab.cpp` | `game5/scripts/resort-map.mjs` | the plan, the listing (no panorama or charts yet) |
 | `plugins/mountain/labs/resort_map.cpp` | `game5/scripts/lib/resort-draw.mjs` | renderResortPlan |
 | `plugins/mountain/labs/resort_map.hpp` | `game5/scripts/lib/resort-draw.mjs` | renderResortPlan |
+| `plugins/mountain/labs/ski_cross_lab.cpp` | `game5/scripts/level-map.mjs` | the course drawn (the close-up and the detrended profile are the engine's own) |
 | `plugins/mountain/labs/slalom_lab.cpp` | `game5/scripts/level-map.mjs` | the course drawn (the straightened panel is the engine's own) |
 | `plugins/mountain/labs/speed_events_lab.cpp` | `game5/scripts/level-map.mjs` | the course drawn (the straightened panel is the engine's own) |
+| `plugins/mountain/labs/speed_ski_lab.cpp` | `game5/scripts/level-map.mjs` | the track drawn (the side profile is the engine's own) |
 | `plugins/mountain/mapgen/access_build.cpp` | `game5/engine/mapgen/access-build.ts` |  |
 | `plugins/mountain/mapgen/access_build.hpp` | `game5/engine/mapgen/access-build.ts` |  |
 | `plugins/mountain/mapgen/berm.hpp` | `game5/engine/mapgen/berm.ts` | bermProfile bermCrest |
@@ -75,7 +79,7 @@ the row when the file moves.
 | `plugins/mountain/mapgen/courses.hpp` | `game5/engine/mapgen/courses.ts` | Piece CoursePlan composeCourse courseArc |
 | `plugins/mountain/mapgen/digest.cpp` | `game5/engine/mapgen/digest.ts` | levelDigest |
 | `plugins/mountain/mapgen/digest.hpp` | `game5/engine/mapgen/digest.ts` | levelDigest |
-| `plugins/mountain/mapgen/discipline_rules.hpp` | `game5/engine/mapgen/discipline-rules.ts` | DISCIPLINE_RULES.slalom .downhill .superG .giantSlalom |
+| `plugins/mountain/mapgen/discipline_rules.hpp` | `game5/engine/mapgen/discipline-rules.ts` | DISCIPLINE_RULES.slalom .downhill .superG .giantSlalom .speedSki |
 | `plugins/mountain/mapgen/drags.cpp` | `game5/engine/mapgen/drags.ts` |  |
 | `plugins/mountain/mapgen/drags.hpp` | `game5/engine/mapgen/drags.ts` |  |
 | `plugins/mountain/mapgen/drift.cpp` | `game5/engine/mapgen/drift.ts` | dealDrifts stampDrifts trimDrifts |
@@ -129,6 +133,8 @@ the row when the file moves.
 | `plugins/mountain/mapgen/rules.hpp` | `game5/engine/mapgen/rules.ts` | LEVEL_RULES inBand withinBand bendFloor |
 | `plugins/mountain/mapgen/run_start.cpp` | `game5/engine/mapgen/run-start.ts` |  |
 | `plugins/mountain/mapgen/run_start.hpp` | `game5/engine/mapgen/run-start.ts` |  |
+| `plugins/mountain/mapgen/ski_cross.cpp` | `game5/engine/mapgen/ski-cross.ts` | pickStretch corners lay poseAt baseProfile cutStart rollers jump stepDown layFeatures bankAt across skiCrossCourseOf setSkiCross courseOver |
+| `plugins/mountain/mapgen/ski_cross.hpp` | `game5/engine/mapgen/ski-cross.ts` | setSkiCross skiCrossCourseOf SkiCrossCourse CrossFeature |
 | `plugins/mountain/mapgen/slalom.cpp` | `game5/engine/mapgen/slalom.ts` | slalomStretch layGates layAt dealCombos comboSize fitBends courseOver setSlalom slalomLineAt |
 | `plugins/mountain/mapgen/slalom.hpp` | `game5/engine/mapgen/slalom.ts` | SlalomStretch slalomStretch setSlalom slalomLineAt SlalomCourse |
 | `plugins/mountain/mapgen/spawn.cpp` | `game5/engine/mapgen/spawn.ts` | chooseStart gridOnTrack layCheckpoints |
@@ -137,6 +143,8 @@ the row when the file moves.
 | `plugins/mountain/mapgen/speed_course.hpp` | `game5/engine/mapgen/speed-course.ts` | LINE_STEP speedLineAt |
 | `plugins/mountain/mapgen/speed_events.cpp` | `game5/engine/mapgen/turn-course.ts` | mostVerticalCourseOf loweredStart gateArcs crestsOf turnCourse; downhill.ts downhillCourseOf setDownhill courseOver; super-g.ts superGStart setSuperG; giant-slalom.ts giantSlalomStart setGiantSlalom (clearTowers waits for the lifts' towers on the map) |
 | `plugins/mountain/mapgen/speed_events.hpp` | `game5/engine/mapgen/downhill.ts` | downhillCourseOf setDownhill; super-g.ts superGCourseOf superGStart setSuperG; giant-slalom.ts giantSlalomCourseOf giantSlalomStart setGiantSlalom |
+| `plugins/mountain/mapgen/speed_ski.cpp` | `game5/engine/mapgen/speed-ski.ts` | hullOf roundProfile readLine tuckDown stopOn sampleAt lerpAt clearOf findTrack arcAlong heightAt zoneSpeed gradeTrack across setSpeedSki runOver speedSkiAim speedSkiLines |
+| `plugins/mountain/mapgen/speed_ski.hpp` | `game5/engine/mapgen/speed-ski.ts` | setSpeedSki speedSkiAim speedSkiLines hullOf SpeedSkiCourse |
 | `plugins/mountain/mapgen/station_clear.cpp` | `game5/engine/mapgen/station-clear.ts` | bottomFootprint clearStations clearBottom clearDrag candidates standsLevel SLIDES DRAG_TOP DRAG_FOOT |
 | `plugins/mountain/mapgen/station_clear.hpp` | `game5/engine/mapgen/station-clear.ts` | bottomFootprint clearStations standsLevel StationGround |
 | `plugins/mountain/mapgen/station_pad.cpp` | `game5/engine/mapgen/station-pad.ts` | pressPads levelPad cutApproach unloadRise relevelPads groomPads dragTop |
@@ -166,5 +174,7 @@ the row when the file moves.
 | `plugins/skier/app/wind_bed.cpp` | `game5/pwa/src/game/audio/wind-voice.ts` | windTargets WIND_FULL WIND_TOP |
 | `plugins/skier/app/wind_bed.hpp` | `game5/pwa/src/game/audio/wind-voice.ts` | WindVoice WindMix WindLayer WIND_LAYERS WIND_GLIDE windTargets |
 | `tests/mountain_generate_test.cpp` |  | generateLevel levelDigest analyzeLevel |
+| `tests/mountain_ski_cross_test.cpp` | `game5/engine/mapgen/ski-cross.ts` | the ski-cross course (R35) |
 | `tests/mountain_slalom_test.cpp` | `game5/tests/slalom_test.ts` | the slalom course (R31) |
 | `tests/mountain_speed_events_test.cpp` | `game5/tests/downhill_test.ts` | the speed events' courses (also super_g_test.ts, giant_slalom_test.ts) |
+| `tests/mountain_speed_ski_test.cpp` | `game5/tests/speed_ski_test.ts` | the speed track (R34) |

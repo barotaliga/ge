@@ -248,6 +248,12 @@ LevelAnalysis analyze_race(const mapgen::Level& level) {
     case mapgen::Discipline::giant_slalom:
       check_turns(level, *level.race, add);
       break;
+    case mapgen::Discipline::speed_ski:
+      check_speed_ski(level, *level.race, add);
+      break;
+    case mapgen::Discipline::ski_cross:
+      check_ski_cross(level, *level.race, add);
+      break;
   }
   return out;
 }

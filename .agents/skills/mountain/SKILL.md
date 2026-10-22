@@ -35,7 +35,10 @@ one game's: which maps a game races, its modes and its strings stay in the game.
   (`RaceCourse::base`, so a second run is set over the same mountain). `slalom.hpp` is the slalom
   (R31); `speed_events.hpp` the downhill (R32), the super-G (R33) and the giant slalom (R36),
   their racing line, gate spacing and speed trap from `speed_course.hpp` (the crests shaved round
-  by `course_prep`). `analysis/race.hpp` holds a course to its discipline's rule; `analyze_level` answers it
+  by `course_prep`); `speed_ski.hpp` the speed-skiing track (R34), a track of its own searched
+  and cut straight down the face, which REPLACES the map's `track`; `ski_cross.hpp` the ski cross
+  (R35), a course BUILT on a stretch of the piste (its own weaving line, berms banked into the
+  ground, rollers, jumps and step-downs built onto its profile), which replaces it too. `analysis/race.hpp` holds a course to its discipline's rule; `analyze_level` answers it
   on a map with a `race`.
 
 ## Order of work (docs/goals.md M4a to M4d)
@@ -67,5 +70,6 @@ analysis runs `level` and `analyze` before and after (`--tag=before`, then `--co
 a change to the ski area's build runs `resort` and `junctions` the same way, and a change to a
 discipline runs its lab (`slalom`: both runs straightened, the map from above, the gate table;
 `speed-events`: the downhill, super-G and both giant slalom runs straightened, with their
-jumps, nets and speed trap). The `labs` skill
+jumps, nets and speed trap; `speed-ski`: the track's profile from the side and the map from
+above; `ski-cross`: the course close up, its profile with the mean fall taken out, the map). The `labs` skill
 owns how.

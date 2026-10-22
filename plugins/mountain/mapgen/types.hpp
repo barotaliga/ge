@@ -102,7 +102,9 @@ struct TreeDef {
 // `width` right of its centre, -1 or +1) or CLOSED (its poles one above the other, `width` m apart
 // down the hill, `heading` turned across it); absent on every other gate. A speed event's gate
 // (R32, R33, R36) is four poles and two panels (`panels`), `width` m between its inner poles; one
-// that turns the racer names its turning pole's side in `turn` too.
+// that turns the racer names its turning pole's side in `turn` too. A ski cross's gate (R35) is a
+// pair of triangular FLAGS (`flags`): a turning gate on the inside of a berm (`pole` open, `turn`
+// the side of its turning pole) or a corridor gate across the course before a feature.
 enum class PoleGate : uint8_t { open, closed };
 
 struct Checkpoint {
@@ -118,6 +120,7 @@ struct Checkpoint {
   std::optional<PoleGate> pole = std::nullopt;
   int turn = 0;
   bool panels = false;
+  bool flags = false;
 };
 
 struct TrackPoint {
@@ -312,7 +315,7 @@ struct ResortMap {
 };
 
 // R31–R36 — the race disciplines a course is set over a built map in (discipline_rules.hpp).
-enum class Discipline : uint8_t { slalom, downhill, super_g, giant_slalom };
+enum class Discipline : uint8_t { slalom, downhill, super_g, giant_slalom, speed_ski, ski_cross };
 inline const char* discipline_name(Discipline d) {
   switch (d) {
     case Discipline::slalom:
@@ -323,6 +326,10 @@ inline const char* discipline_name(Discipline d) {
       return "super-g";
     case Discipline::giant_slalom:
       return "giant-slalom";
+    case Discipline::speed_ski:
+      return "speed-skiing";
+    case Discipline::ski_cross:
+      return "ski-cross";
   }
   return "unknown";
 }
@@ -335,7 +342,27 @@ struct Level;
 // points down the course, each `x` m right of the piste's line `s` m down it (a slalom's a
 // cosine between each two, `slalom_line_at`; a speed event's every 4 m, `speed_line_at`). A slalom
 // counts the combinations its setter laid; a speed event names its JUMPS by arc, the safety NETS
-// along both edges, its SPEED TRAP (a downhill's and a super-G's) and how many gates turn.
+// along both edges, its SPEED TRAP (a downhill's and a super-G's) and how many gates turn. A
+// SPEED-SKIING TRACK (R34) is a track of its own cut down the face (the map's `track` is the
+// track): it names its TIMING ZONE, the final's start at its top, the stop on its run-out, the
+// qualification's lowered start and its width. A SKI-CROSS COURSE (R35) is a line of its own
+// weaving down a stretch of the piste (the map's `track` is the course): it names the STRETCH it
+// was built on (arcs down the piste under it), its FEATURES in order down it, its FENCE (`nets`)
+// and its width.
+enum class CrossFeature : uint8_t { berm, rollers, jump, step };
+inline const char* cross_feature_name(CrossFeature f) {
+  switch (f) {
+    case CrossFeature::berm:
+      return "berm";
+    case CrossFeature::rollers:
+      return "rollers";
+    case CrossFeature::jump:
+      return "jump";
+    case CrossFeature::step:
+      return "step-down";
+  }
+  return "unknown";
+}
 struct RaceCourse {
   struct LinePoint {
     double s;
@@ -361,6 +388,28 @@ struct RaceCourse {
   std::optional<Nets> nets;
   std::optional<Trap> trap;
   int turns = 0;
+  struct Zone {
+    double from, to, length;  // the zone's two lines by arc, and its length along the snow, m
+  };
+  std::optional<Zone> zone;
+  double top = 0;      // the final's start (the platform's lip), m of arc
+  double qualify = 0;  // the qualification's lowered start, m of arc
+  double stop = 0;     // where the run-out stops the top class, m of arc
+  double width = 0;    // the track's width, m
+  // A ski cross's feature: its arcs down the course; a jump's or a step-down's lip and its height
+  // (a roller's crests' height), m; a berm's inside, -1 left or +1 right, and how far it turns,
+  // degrees.
+  struct Feature {
+    CrossFeature kind;
+    double from, to, lip, height;
+    int side;
+    double angle;
+  };
+  std::vector<Feature> features;
+  struct Stretch {
+    double from, to;  // arcs down the piste it was built over, m
+  };
+  std::optional<Stretch> stretch;
 };
 
 struct TrackIndex;  // query.hpp: the spatial hash `nearest_track_point` reads
