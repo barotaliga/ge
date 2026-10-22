@@ -13,6 +13,7 @@ ride f7dc714b2493f95a
 run-clock 81607c7ac1161166
 shadows 5b0d6051c10638b4
 sim a9c6d0f6bb29ce2a
+ski-cross fbe386cdba062259
 slalom 2adb7c679ec93adf
 speed-events 2e575d7a0184d4b2
 speed-ski 55c4cfa78de28f7e
