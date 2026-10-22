@@ -17,6 +17,17 @@ description: "Use for CMake, presets, the Makefile, compiler flags, adding a dep
   `build/<preset>/`.
 - `Makefile`: names the everyday calls. The logic lives in CMake.
 
+## The session-start build
+
+`tools/session-start.sh` is the cloud session's SessionStart hook (registered in
+`.claude/settings.json`, the one Claude-specific config file; the script lives in `tools/` with the
+other checks). It returns at once and leaves a detached worker that installs the packages in
+`ci.yml`'s `GE_LINUX_PACKAGES` the container lacks (read from there, never restated) and runs
+`make build` into `build/debug/`. One worker at a time (`build/session-start.lock`); the log is
+`build/session-start.log`, the state `build/session-start.status`; `--wait` blocks until it ends.
+It does nothing outside a cloud session unless `GE_SESSION_BUILD=1`. A new system package a build
+needs goes in `GE_LINUX_PACKAGES`, and the hook picks it up.
+
 ## Adding a dependency
 
 Only when a milestone needs it (G4). Use `FetchContent_Declare` with `GIT_TAG` set to
