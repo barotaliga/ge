@@ -148,6 +148,15 @@ void sources_in(const fs::path& repo, std::vector<fs::path>& out) {
 
 }  // namespace
 
+Logged run_to_log(const std::string& command, const fs::path& log) {
+  const Ran r = run_logged(command, log);
+  return {r.code, r.output};
+}
+
+bool build_into(const BuildOptions& o, Outcome& out) { return build_step(o, out); }
+
+fs::path build_log(const BuildOptions& o, std::string_view name) { return log_path(o, name); }
+
 int run_quiet(const std::string& command) {
 #ifdef _WIN32
   return std::system(shell_line(command + " > NUL 2>&1").c_str());

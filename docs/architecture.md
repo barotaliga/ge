@@ -67,6 +67,12 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   the window and the game's GPU labs link): its pass table over `engine/render`, the
   `FrameView` it extracts (from named views now, from `GameState` once the run lands),
   Fall Line's own looks, then its HUD and cards, and its sound beds.
+- **`engine/play`**: the play contract (`ge::play`): what a game fills in so it can be played,
+  replayed and inspected without a screen (its axes, its options, a `Run`: step, over, digest,
+  observe, state, report, pilot), and everything the engine does with it once for every game:
+  the session that snaps, records and steps every input, the line protocol, the plain-text
+  input log, replay, the state at a step, the divergence search, and the `play` executable's
+  main. It depends on `engine/core` alone; a game's `play` target links it and `ge` runs it.
 - **`engine/lab`**: the lab contract and the `labs` runner (`docs/labs.md`): how any
   subsystem, plugin or game declares a lab, the CPU raster and PNG writer its pictures are
   drawn with, and the report, contact sheet and digest a run leaves. Labs themselves sit in
@@ -214,7 +220,13 @@ whole tree to it, and `ge doctor` holds a game repo to it (the `agent-interface`
   MSVC: `/fp:strict`), set once on `ge_fp` in the root `CMakeLists.txt`
   (linked by `ge_core` and published with it as `ge::fp`, so a game built against a
   release gets them too).
+- The instruction-set baseline: `ge_isa` (x86-64-v3, so AVX2, on x86-64; the default on
+  ARM64), linked by `ge_core` and published as `ge::isa`. It moves no bits, because
+  contraction stays off.
 - Randomness only through `core::Rng` streams owned by the state. No clock in `sim/`.
+- Threads only in a bake whose every output is a pure function of its index
+  (`core::parallel_bands`, `engine/core/parallel.hpp`): the same bits on any number of
+  workers, held by `tests/core_parallel_test.cpp` and every map digest. Never in a step.
 - Iteration order is explicit. No `unordered_map` iteration feeds a result. Sorting
   uses `std::stable_sort`: equal keys keep their order, and that order is part of the
   result.

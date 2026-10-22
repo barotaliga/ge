@@ -64,6 +64,11 @@ the hardest sideways load and the tightest path, flights and landings, the stop,
 with one picture each: the line from above coloured by what he was doing, and his speed.
 `make lab LAB=ride ARGS=--scenario=kicker` runs one. The `labs` skill owns how to read it.
 
+`anim` (scenario): the figure (`app/figure.hpp`) ridden through a scenario and recorded every
+step as a pose track in its own frame (`figure_frame`, `figure_joint_positions`): filmstrips,
+onion skins, joint angles, a jolt heatmap and the faults it shows (the `debug` skill reads it).
+A change to how the figure is posed runs it before and after.
+
 ## Still to come
 
 What the game does not ask for yet stays out (G4): the catalog of pairs, the wind, crust and

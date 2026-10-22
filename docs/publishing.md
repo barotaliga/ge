@@ -48,7 +48,8 @@ contract and runner a game's labs plug into), one `ge::<plugin>` per plugin
 ski mountain; `ge::skier`: the skier on the snow; `docs/architecture.md` § Plugins), a
 `ge::<plugin>_app` for a presentation half whose engine targets are all published
 (`ge::skier_app`: the skier's wind and snow beds, over `ge::audio`) and `ge::fp` (the floating-point determinism flags, which `ge::core`
-carries to the consumer so a game computes what the engine's tests did).
+carries to the consumer so a game computes what the engine's tests did), and `ge::isa` (the
+instruction-set baseline, AVX2 on x86-64, which `ge::core` carries too).
 
 **From source, pinned to a tag** (what a game in CI should do — no install
 step, no credentials, the repository is public):

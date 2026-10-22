@@ -4,8 +4,15 @@
 file(GLOB_RECURSE FALL_LINE_SIM_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/sim/*.cpp)
 add_library(fall_line_sim STATIC ${FALL_LINE_SIM_SOURCES})
 target_include_directories(fall_line_sim PUBLIC ${PROJECT_SOURCE_DIR}/games)
-target_link_libraries(fall_line_sim PUBLIC ge_core ge_racing ge_mountain ge_skier)
+target_link_libraries(fall_line_sim PUBLIC ge_core ge_play ge_racing ge_mountain ge_skier)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS fall_line_sim)
+
+# Its `play` executable (play/): the game on the play contract, which `ge play`, `ge sim`,
+# `ge replay`, `ge state` and `ge diverge` build and run (skill: agent-interface).
+# It lands at the build's root (build/<preset>/play), where ge looks for a game's play target.
+add_executable(play play/main.cpp)
+target_link_libraries(play PRIVATE fall_line_sim)
+set_target_properties(play PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
 
 # Its sound (sound/): the bank, the event route, the listener and the faders, over the skier's
 # beds. No GPU and no device, so the tests and the `audition` lab link it headless (skill: audio).

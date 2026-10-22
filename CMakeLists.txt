@@ -5,7 +5,9 @@
 #                standings), ge_mountain (the generated ski mountain: mapgen, analysis)
 #   ge_audio     the synth: voices, layers, buses, echo, limiter, the meter, WAV bytes
 #                (engine/audio; deterministic, no platform)
-#   ge_lab       the lab framework (engine/lab: the contract, the runner, the raster, the PNG)
+#   ge_lab       the lab framework (engine/lab: the contract, the runner, the raster, the PNG,
+#                the series files and the charts)
+#   ge_play      the play contract (engine/play: GameSpec and Run, the session, the input log)
 #   ge_cli, ge   the ge command line (engine/cli: ge new, ge skills sync, ge doctor, ge lessons;
 #                cmake/Cli.cmake)
 #   fall_line_sim  Fall Line's simulation (games/fall_line: create_game, step, the bot)
@@ -18,9 +20,12 @@
 #   ge_fp        the FP flags of the DETERMINISM CONTRACT (AGENTS.md), linked by
 #                ge_core and published as ge::fp; a target that drops them can
 #                silently change the bits a simulation produces
+#   ge_isa       the instruction-set baseline (x86-64: AVX2), linked by ge_core and
+#                published as ge::isa
 #   ge_flags     warnings, -Werror, sanitizers: this tree only, never published
-# ge_core, ge_fp, ge_lab and every plugin target are installed and published as ge::core,
-# ge::fp, ge::lab and ge::<plugin>, and the ge executable is installed to bin/
+# ge_core, ge_fp, ge_isa, ge_lab, ge_play and every plugin target are installed and published
+# as ge::core, ge::fp, ge::isa, ge::lab, ge::play and ge::<plugin>, and the ge executable is
+# installed to bin/
 # (cmake/Packaging.cmake, docs/publishing.md).
 cmake_minimum_required(VERSION 3.25)
 project(gameengine2 LANGUAGES CXX)
@@ -46,6 +51,21 @@ target_compile_options(ge_fp INTERFACE
   "$<$<CXX_COMPILER_ID:GNU>:-fexcess-precision=standard>"
   "$<$<CXX_COMPILER_ID:MSVC>:/fp:strict>")
 
+# The instruction-set baseline. On x86-64 the engine requires AVX2 (x86-64-v3: AVX2, FMA, BMI2,
+# every desktop x86 CPU since 2013), so the compiler vectorises with 256-bit registers; ARM64's
+# baseline already has NEON. It changes no bits: ge_fp keeps contraction off, so the FMA
+# instructions it allows are never formed from a*b+c. It travels with ge_core, so a game is
+# built for the same CPUs as the engine it links.
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
+  set(GE_ISA_X86 ON)
+endif()
+add_library(ge_isa INTERFACE)
+if(GE_ISA_X86)
+  target_compile_options(ge_isa INTERFACE
+    "$<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-march=x86-64-v3>"
+    "$<$<CXX_COMPILER_ID:MSVC>:/arch:AVX2>")
+endif()
+
 add_library(ge_flags INTERFACE)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   target_compile_options(ge_flags INTERFACE
@@ -65,6 +85,8 @@ elseif(MSVC)
 endif()
 
 # The deterministic pool. Mostly headers; libm, solar and output are compiled.
+# Threads: core/parallel.hpp runs a bake's independent rows side by side.
+find_package(Threads REQUIRED)
 set(GE_LIBM_VENDORED
   engine/core/libm/fdlibm_trig.cpp
   engine/core/libm/fdlibm_arc.cpp
@@ -73,7 +95,7 @@ add_library(ge_core STATIC ${GE_LIBM_VENDORED} engine/core/libm/pow.cpp
   engine/core/solar.cpp engine/core/output.cpp engine/core/num_text.cpp)
 target_include_directories(ge_core PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/engine>)
 target_compile_features(ge_core PUBLIC cxx_std_20)
-target_link_libraries(ge_core PUBLIC ge_fp)
+target_link_libraries(ge_core PUBLIC ge_fp ge_isa Threads::Threads)
 # Our warnings only when this tree is the top-level build: a game that pulls it in
 # with FetchContent, or links the installed package, gets ge_fp alone.
 if(PROJECT_IS_TOP_LEVEL)
@@ -121,8 +143,17 @@ endif()
 # The lab framework (engine/lab: the contract, the runner, the raster, the PNG), published as
 # ge::lab so a game's labs plug into the same contract as the engine's (docs/labs.md).
 add_library(ge_lab STATIC engine/lab/lab.cpp engine/lab/report.cpp engine/lab/runner.cpp
-  engine/lab/raster.cpp engine/lab/png.cpp engine/lab/inflate.cpp engine/lab/sound.cpp)
+  engine/lab/raster.cpp engine/lab/png.cpp engine/lab/inflate.cpp engine/lab/sound.cpp
+  engine/lab/series.cpp engine/lab/stats.cpp engine/lab/plot.cpp engine/lab/chart.cpp
+  engine/lab/anim.cpp)
 target_link_libraries(ge_lab PUBLIC ge_core ge_audio)
+
+# The play contract (engine/play: a game's spec and Run, the session and its line protocol, the
+# input log, replay and diverge, the `play` executable's main), published as ge::play so a game's
+# `play` target is driven by `ge play`, `ge sim`, `ge replay`, `ge state` and `ge diverge`.
+add_library(ge_play STATIC engine/play/inputs.cpp engine/play/json_read.cpp
+  engine/play/session.cpp engine/play/main.cpp)
+target_link_libraries(ge_play PUBLIC ge_core)
 
 # The ge command line (engine/cli, cmake/Cli.cmake): built here too when a game pulls the engine
 # in, so the game runs the ge of the engine it pins.
@@ -182,7 +213,7 @@ if(PROJECT_IS_TOP_LEVEL)
   get_property(GE_PLUGIN_TARGETS GLOBAL PROPERTY GE_PLUGIN_TARGETS)
   get_property(GE_GAME_TARGETS GLOBAL PROPERTY GE_GAME_TARGETS)
   add_executable(labs engine/lab/main.cpp ${GE_LAB_SOURCES})
-  target_link_libraries(labs PRIVATE ge_lab ge_core ge_audio ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
+  target_link_libraries(labs PRIVATE ge_lab ge_play ge_core ge_audio ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
     ${GE_LAB_EXTRA})
 
   enable_testing()

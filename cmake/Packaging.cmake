@@ -5,6 +5,7 @@
 #   find_package(gameengine2 0.1 REQUIRED)
 #   target_link_libraries(game PRIVATE ge::core ge::audio ge::racing)   # ge::fp comes with them
 #   target_link_libraries(labs PRIVATE ge::lab)                         # a game's labs (docs/labs.md)
+#   target_link_libraries(play PRIVATE ge::play)                       # its play target (ge play)
 #
 # The ge executable (cmake/Cli.cmake) installs to bin/ beside the libraries; it is a tool, not
 # a target a game links.
@@ -29,11 +30,11 @@ set(GE_INSTALL_INCLUDEDIR "${CMAKE_INSTALL_INCLUDEDIR}/gameengine2")
 set(GE_INSTALL_CMAKEDIR "${CMAKE_INSTALL_LIBDIR}/cmake/gameengine2")
 
 # target -> export name (consumers see ge::<export name>)
-set(GE_EXPORTED_TARGETS ge_fp fp ge_core core ge_audio audio ge_lab lab)
+set(GE_EXPORTED_TARGETS ge_fp fp ge_isa isa ge_core core ge_audio audio ge_lab lab ge_play play)
 # Every plugin is published as ge::<plugin> (cmake/Plugins.cmake collects them), and its
 # presentation half as ge::<plugin>_app when every engine target it links is published here
 # (APP audio is; render, gpu and platform are not yet, below).
-set(GE_PUBLISHED_MODULES core audio lab)
+set(GE_PUBLISHED_MODULES core audio lab play)
 get_property(_ge_plugins GLOBAL PROPERTY GE_PLUGIN_TARGETS)
 foreach(_target IN LISTS _ge_plugins)
   get_property(_app_modules TARGET ${_target} PROPERTY GE_APP_MODULES)

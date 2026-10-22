@@ -29,6 +29,7 @@
 #include "mountain/mapgen/park.hpp"
 #include "mountain/mapgen/query.hpp"
 #include "mountain/mapgen/real_face.hpp"
+#include "mountain/mapgen/real_hints.hpp"
 #include "mountain/mapgen/regions.hpp"
 #include "mountain/mapgen/resort_build.hpp"
 #include "mountain/mapgen/resort_level.hpp"
@@ -213,8 +214,10 @@ std::optional<std::string> attempt_resort(double seed, int attempt, int laps, in
                                           const Region& region, const GenerateOptions& opts,
                                           const std::string& name,
                                           const std::shared_ptr<const RealFace>& face,
+                                          const std::shared_ptr<const RealHints>& hints,
                                           Level& level) {
-  ResortAttempt a = begin_resort(seed, attempt, sub_seed(seed, attempt), region, version, face);
+  ResortAttempt a = begin_resort(seed, attempt, sub_seed(seed, attempt), region, version, face,
+                                 hints, opts.hints);
   std::string reached;
   if (StageResult why = build_resort(a, reached)) return why;
   level = resort_base(a, laps);
@@ -300,6 +303,7 @@ Level generate_level(double seed, const GenerateOptions& opts) {
   // R25 — a real face: its heights decoded once, its region the map's, and more attempts (its
   // later ones give the dealt peak, valley and stations back).
   std::shared_ptr<const RealFace> face;
+  std::shared_ptr<const RealHints> hints;
   if (opts.face) {
     std::optional<RealFace> decoded = real_face(*opts.face);
     if (!decoded) {
@@ -307,6 +311,9 @@ Level generate_level(double seed, const GenerateOptions& opts) {
                           "\"; pass an id from real_face_crops.hpp (kFaceCrops)");
     }
     face = std::make_shared<const RealFace>(std::move(*decoded));
+    if (std::optional<RealHints> h = real_hints(*opts.face)) {
+      hints = std::make_shared<const RealHints>(std::move(*h));
+    }
   }
   const int attempts = opts.attempts.value_or(face ? resort_rules::massif::real::attempts : 16);
   const int laps = opts.laps.value_or(rules::race::laps);
@@ -324,8 +331,8 @@ Level generate_level(double seed, const GenerateOptions& opts) {
   if (!traits.single_piste) {
     for (int a = first; a < end; a++) {
       Level level;
-      if (const auto why =
-              attempt_resort(seed, a, laps, traits.version, region, opts, name, face, level)) {
+      if (const auto why = attempt_resort(seed, a, laps, traits.version, region, opts, name, face,
+                                          hints, level)) {
         reasons.push_back("#" + std::to_string(a) + ": " + *why);
         continue;
       }

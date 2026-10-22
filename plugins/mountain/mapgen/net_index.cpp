@@ -21,17 +21,6 @@ int grid_side() {
 
 NetIndex::NetIndex() : side_(grid_side()), grid_(size_t(side_) * size_t(side_)) {}
 
-const std::vector<int>* NetIndex::list(int c, int r) const {
-  const int gc = c + kGridMargin;
-  const int gr = r + kGridMargin;
-  if (gc >= 0 && gc < side_ && gr >= 0 && gr < side_) {
-    const std::vector<int>& l = grid_[size_t(gr) * size_t(side_) + size_t(gc)];
-    return l.empty() ? nullptr : &l;
-  }
-  const auto it = cells_.find(ge::core::cell_key(c, r));
-  return it == cells_.end() ? nullptr : &it->second;
-}
-
 std::vector<int>& NetIndex::slot(int c, int r) {
   const int gc = c + kGridMargin;
   const int gr = r + kGridMargin;
@@ -60,6 +49,12 @@ int NetIndex::add(const std::vector<TrackPoint>& points, int rank, int into, dou
     const int r1 = static_cast<int>(std::floor(std::max(a.z, b.z) / kCell));
     for (int c = c0; c <= c1; c++) {
       for (int r = r0; r <= r1; r++) slot(c, r).push_back(g);
+    }
+    if (c0_ > c1_) {
+      c0_ = c0, c1_ = c1, r0_ = r0, r1_ = r1;
+    } else {
+      c0_ = std::min(c0_, c0), c1_ = std::max(c1_, c1);
+      r0_ = std::min(r0_, r0), r1_ = std::max(r1_, r1);
     }
   }
   return run;

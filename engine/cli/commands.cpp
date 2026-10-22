@@ -50,6 +50,21 @@ constexpr FlagSpec kLabFlags[] = {
     kEngine,
     kRepo};
 
+constexpr FlagSpec kPlayFlags[] = {
+    {"seed", "<n>", "the run's seed (default 1)"}, kPreset, kEngine, kRepo};
+constexpr FlagSpec kSimFlags[] = {
+    {"seeds", "<a,b,...>", "the seeds the pilot runs (default 1)"}, kPreset, kEngine, kRepo};
+constexpr FlagSpec kStateFlags[] = {
+    {"step", "<n>", "after this many steps (default: the log's end)"}, kPreset, kEngine, kRepo};
+constexpr FlagSpec kGraphFlags[] = {
+    {"kind", "<auto|line|scatter|hist|box|heat|spans>",
+     "the chart (default auto: spans for a spans file, line for the rest)"},
+    {"columns", "<a,b>", "only these columns (default: every numeric column but x)"},
+    {"x", "<column>", "the x column (default: the file's `# x:` or its first numeric column)"},
+    {"out", "<dir>", "where the PNGs and SVGs go (default: graphs/ beside the first file)"},
+    {"title", "<text>", "a title before each chart's own"},
+    {"log", "", "a log scale for the y axis (line and scatter)"}};
+
 const CommandSpec kCommands[] = {
     {"help",
      "[<command>]",
@@ -105,6 +120,27 @@ const CommandSpec kCommands[] = {
      "list the labs, or run one: its metrics, tables, captioned pictures and digest; its own "
      "flags go after --",
      kLabFlags, "ge lab run --json -- --seeds=1,2", "labs"},
+    {"graph", "<file>...", 1, -1, "see",
+     "chart series or spans files (a trace, a bench, a profile) to PNG and SVG; several files "
+     "overlay; every outlier comes back as a note",
+     kGraphFlags, "ge graph runs/before.tsv runs/after.tsv --columns=step_ms", "debug"},
+    {"play", "", 0, 0, "play",
+     "play the game over the line protocol on this terminal (observe, act, pilot, state, "
+     "inputs, end); the game's options go after --",
+     kPlayFlags, "ge play --seed=38 -- --rivals=3", "play-test"},
+    {"sim", "", 0, 0, "play",
+     "the game's pilot over each seed: each run's report and digest, its input log in runs/",
+     kSimFlags, "ge sim --seeds=38,7", "play-test"},
+    {"replay", "<log>", 1, 1, "play",
+     "an input log played back; a digest it misses is a determinism break", kBuildFlags,
+     "ge replay runs/fall_line-38.inputs", "play-test"},
+    {"state", "<log>", 1, 1, "play",
+     "everything that decides the next step, after a number of a log's steps", kStateFlags,
+     "ge state runs/fall_line-38.inputs --step=600", "play-test"},
+    {"diverge", "<log-a> <log-b>", 2, 2, "play",
+     "where two runs part: the first input that differs, the first step after which the states "
+     "differ, and the fields that do",
+     kBuildFlags, "ge diverge runs/a.inputs runs/b.inputs", "play-test"},
     {"doctor", "", 0, 0, "maintain",
      "the repo against the engine's rules: guidance, skills, the pin, flags, sources, messages",
      kRepoOnly, "ge doctor", "ge"},
@@ -223,8 +259,8 @@ std::optional<std::string> check_args(const Args& a) {
            (c.args.empty() ? std::string("no arguments") : std::string(c.args)) + ", got " +
            std::to_string(n) + " word(s)";
   }
-  if (!a.passthrough.empty() && c.name != "lab") {
-    return "only ge lab passes words after --";
+  if (!a.passthrough.empty() && c.name != "lab" && c.name != "play" && c.name != "sim") {
+    return "only ge lab, ge play and ge sim pass words after --";
   }
   return std::nullopt;
 }
