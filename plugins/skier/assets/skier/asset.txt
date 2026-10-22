@@ -1,0 +1,5 @@
+# The skier on his skis: a rigged, skinned figure (the rig in app/rig.hpp, fed as the `skier`
+# data set), the reference pair under his boots and his poles. Built by `ge asset build skier`.
+builder: build.py
+data: skier
+budget-kib: 384
