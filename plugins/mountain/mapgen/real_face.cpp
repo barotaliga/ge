@@ -8,12 +8,14 @@
 
 #include <algorithm>
 #include <array>
+#include <climits>
 #include <cmath>
 #include <cstdint>
 #include <limits>
 
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
+#include "mountain/mapgen/packed.hpp"
 
 namespace ge::mountain::mapgen {
 
@@ -21,21 +23,8 @@ namespace {
 
 namespace libm = ge::core::libm;
 
-constexpr std::string_view kAlphabet =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
 // Metres a degree of latitude spans.
 constexpr double kDegree = 111320;
-
-// The value of a base64 character, or -1.
-int sextet(char c) {
-  if (c >= 'A' && c <= 'Z') return c - 'A';
-  if (c >= 'a' && c <= 'z') return c - 'a' + 26;
-  if (c >= '0' && c <= '9') return c - '0' + 52;
-  if (c == '+') return 62;
-  if (c == '/') return 63;
-  return -1;
-}
 
 // A Catmull–Rom weight set for a fraction `t` between samples 1 and 2.
 std::array<double, 4> weights(double t) {
@@ -67,48 +56,22 @@ std::optional<RealFace> real_face(std::string_view id) {
 }
 
 std::optional<std::vector<float>> decode_face_grid(std::string_view data, double floor) {
-  std::vector<uint8_t> bytes;
-  bytes.reserve(data.size() * 3 / 4);
-  uint32_t acc = 0;
-  int bits = 0;
-  size_t pad = 0;
-  for (const char ch : data) {
-    if (ch == '=') {
-      pad++;
-      continue;
-    }
-    const int v = sextet(ch);
-    if (pad > 0) return std::nullopt;
-    if (v < 0) return std::nullopt;
-    acc = (acc << 6) | uint32_t(v);
-    bits += 6;
-    if (bits >= 8) {
-      bits -= 8;
-      bytes.push_back(uint8_t((acc >> bits) & 0xff));
-    }
-  }
+  const auto bytes = packed::from_base64(data);
+  if (!bytes) return std::nullopt;
   constexpr size_t n = kFaceN;
   std::vector<int> q(n * n);
-  size_t at = 0;
+  packed::Reader in{*bytes};
   for (size_t i = 0; i < n * n; i++) {
-    uint32_t z = 0;
-    int shift = 0;
-    uint8_t b = 0;
-    do {
-      if (at >= bytes.size() || shift > 28) return std::nullopt;
-      b = bytes[at++];
-      z |= uint32_t(b & 0x7f) << shift;
-      shift += 7;
-    } while (b & 0x80);
-    const int d = (z & 1) ? -int((z + 1) >> 1) : int(z >> 1);
+    const int64_t d = in.get();
+    if (!in.ok || d < INT32_MIN || d > INT32_MAX) return std::nullopt;
     const size_t r = i / n;
     const size_t c = i % n;
     const int left = c > 0 ? q[i - 1] : 0;
     const int up = r > 0 ? q[i - n] : 0;
     const int diag = r > 0 && c > 0 ? q[i - n - 1] : 0;
-    q[i] = d + left + up - diag;
+    q[i] = int(d) + left + up - diag;
   }
-  if (at != bytes.size()) return std::nullopt;
+  if (!in.done()) return std::nullopt;
   std::vector<float> out(n * n);
   for (size_t i = 0; i < n * n; i++) out[i] = static_cast<float>(floor + q[i] * kFaceStep);
   return out;
@@ -116,34 +79,16 @@ std::optional<std::vector<float>> decode_face_grid(std::string_view data, double
 
 std::string encode_face_grid(std::span<const int> steps) {
   constexpr size_t n = kFaceN;
-  std::vector<uint8_t> bytes;
-  bytes.reserve(n * n * 2);
+  packed::Writer out;
+  out.bytes.reserve(n * n * 2);
   const auto at = [&](size_t r, size_t c, bool on) { return on ? steps[r * n + c] : 0; };
   for (size_t r = 0; r < n; r++) {
     for (size_t c = 0; c < n; c++) {
-      const int d = at(r, c, true) - at(r, c - 1, c > 0) - at(r - 1, c, r > 0) +
-                    at(r - 1, c - 1, r > 0 && c > 0);
-      uint32_t z = d >= 0 ? uint32_t(d) * 2 : uint32_t(-d) * 2 - 1;
-      while (z >= 0x80) {
-        bytes.push_back(uint8_t((z & 0x7f) | 0x80));
-        z >>= 7;
-      }
-      bytes.push_back(uint8_t(z));
+      out.put(at(r, c, true) - at(r, c - 1, c > 0) - at(r - 1, c, r > 0) +
+              at(r - 1, c - 1, r > 0 && c > 0));
     }
   }
-  std::string out;
-  out.reserve((bytes.size() + 2) / 3 * 4);
-  for (size_t i = 0; i < bytes.size(); i += 3) {
-    const uint32_t b0 = bytes[i];
-    const uint32_t b1 = i + 1 < bytes.size() ? bytes[i + 1] : 0;
-    const uint32_t b2 = i + 2 < bytes.size() ? bytes[i + 2] : 0;
-    const uint32_t v = (b0 << 16) | (b1 << 8) | b2;
-    out += kAlphabet[(v >> 18) & 63];
-    out += kAlphabet[(v >> 12) & 63];
-    out += i + 1 < bytes.size() ? kAlphabet[(v >> 6) & 63] : '=';
-    out += i + 2 < bytes.size() ? kAlphabet[v & 63] : '=';
-  }
-  return out;
+  return packed::to_base64(out.bytes);
 }
 
 double face_height(const RealFace& face, double x, double z) {

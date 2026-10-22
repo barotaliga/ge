@@ -11,11 +11,12 @@
 // Held by tests/mountain_resort_build_test.cpp (the walk stage).
 //
 // ge:summary R27 the runs' spatial hash: the nearest other run to a point, and what covers it
-// ge:keywords net-index nearest covers spatial-hash segments ring-scan
+// ge:keywords net-index nearest covers spatial-hash segments ring-scan ring-walk
 // ge:skill mountain
 // ge:test tests/mountain_resort_build_test.cpp
 #pragma once
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -81,13 +82,25 @@ class NetIndex {
     const double bottom = (qr + 1) * kCell - z;
     const double inside =
         ge::core::num::min(ge::core::num::min(left, right), ge::core::num::min(top, bottom));
+    // Cells outside the box every segment so far lies in are empty, so each ring is walked
+    // only where it crosses the box, in the same column-then-row order as the whole ring.
+    const int bc0 = c0_ - qc;
+    const int bc1 = c1_ - qc;
+    const int br0 = r0_ - qr;
+    const int br1 = r1_ - qr;
+    const auto cell = [&](int dc, int dr) {
+      if (const std::vector<int>* list = this->list(qc + dc, qr + dr))
+        scan(*list, x, z, within, skip, out);
+    };
     for (int ring = 0; ring <= rings; ring++) {
-      for (int dc = -ring; dc <= ring; dc++) {
-        const bool edge = dc == -ring || dc == ring;
-        for (int dr = -ring; dr <= ring; dr += edge ? 1 : 2 * ring) {
-          if (const std::vector<int>* list = this->list(qc + dc, qr + dr))
-            scan(*list, x, z, within, skip, out);
-          if (ring == 0) break;
+      const int dc_hi = std::min(ring, bc1);
+      for (int dc = std::max(-ring, bc0); dc <= dc_hi; dc++) {
+        if (dc == -ring || dc == ring) {
+          const int dr_hi = std::min(ring, br1);
+          for (int dr = std::max(-ring, br0); dr <= dr_hi; dr++) cell(dc, dr);
+        } else {
+          if (-ring >= br0 && -ring <= br1) cell(dc, -ring);
+          if (ring >= br0 && ring <= br1) cell(dc, ring);
         }
       }
       const double beyond = ring * kCell + inside - kStopSlack;
@@ -102,13 +115,25 @@ class NetIndex {
 
  private:
   int side_;
+  // The box, in cells, every segment added so far lies in; empty (c0_ > c1_) before the first.
+  int c0_ = 1, c1_ = 0, r0_ = 1, r1_ = 0;
   std::vector<std::vector<int>> grid_;  // empty list = no cell
   std::unordered_map<int64_t, std::vector<int>> cells_;
   std::vector<int> seg_run_;
   std::vector<int> seg_index_;
   std::vector<double> seg_geo_;  // per segment: a.x, a.z, dx, dz, len2, a.s
 
-  const std::vector<int>* list(int c, int r) const;
+  // The segments in cell (c, r), or null for an empty one.
+  const std::vector<int>* list(int c, int r) const {
+    const int gc = c + kGridMargin;
+    const int gr = r + kGridMargin;
+    if (gc >= 0 && gc < side_ && gr >= 0 && gr < side_) {
+      const std::vector<int>& l = grid_[size_t(gr) * size_t(side_) + size_t(gc)];
+      return l.empty() ? nullptr : &l;
+    }
+    const auto it = cells_.find(ge::core::cell_key(c, r));
+    return it == cells_.end() ? nullptr : &it->second;
+  }
   std::vector<int>& slot(int c, int r);
 
   template <class Skip>

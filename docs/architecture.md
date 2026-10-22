@@ -226,7 +226,13 @@ whole tree to it, and `ge doctor` holds a game repo to it (the `agent-interface`
   MSVC: `/fp:strict`), set once on `ge_fp` in the root `CMakeLists.txt`
   (linked by `ge_core` and published with it as `ge::fp`, so a game built against a
   release gets them too).
+- The instruction-set baseline: `ge_isa` (x86-64-v3, so AVX2, on x86-64; the default on
+  ARM64), linked by `ge_core` and published as `ge::isa`. It moves no bits, because
+  contraction stays off.
 - Randomness only through `core::Rng` streams owned by the state. No clock in `sim/`.
+- Threads only in a bake whose every output is a pure function of its index
+  (`core::parallel_bands`, `engine/core/parallel.hpp`): the same bits on any number of
+  workers, held by `tests/core_parallel_test.cpp` and every map digest. Never in a step.
 - Iteration order is explicit. No `unordered_map` iteration feeds a result. Sorting
   uses `std::stable_sort`: equal keys keep their order, and that order is part of the
   result.

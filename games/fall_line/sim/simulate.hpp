@@ -5,10 +5,11 @@
 // controls are taped, because the rivals' are a pure function of the run. It is what the `sim` lab
 // prints a row of, what the tests hold golden, and, with a tape handed in, a replay: a run is a
 // pure function of its map and its controls, so the tape played back gives the same digest.
+// `simulate_free` is the bot on the free ride, from the head of a run until he reaches a foot.
 //
 // ge:summary The headless run: simulate a pilot over a map, the RunReport, the tape, replay
 // ge:keywords simulate sim run-report report digest tape replay headless time-limit trace
-// ge:keywords simulate_on replay_tape rivals field field-row place
+// ge:keywords simulate_on replay_tape rivals field field-row place simulate_free free-ride
 // ge:skill sim
 // ge:test tests/fall_line_sim_test.cpp
 #pragma once
@@ -59,7 +60,9 @@ struct RunReport {
   double top_speed = 0;   // m/s
   double mean_speed = 0;  // m/s, the piste's length over the time (finished runs)
   double max_landing_g = 0;
-  int32_t place = 1;  // the player's, at the run's end
+  int32_t place = 1;    // the player's, at the run's end
+  double distance = 0;  // m skied (the free ride's odometer; 0 in a race)
+  int32_t runs = 0;     // runs skied (the free ride's)
   int64_t steps = 0;
   uint64_t digest = 0;  // FNV-1a over every step's state
   ge::racing::ControlTape tape;
@@ -78,8 +81,10 @@ struct LinePoint {
 class Driver {
  public:
   Driver(std::shared_ptr<const ge::mountain::mapgen::Level> level, int32_t rivals);
+  // A run already created (a race, or a free ride, whose bot skis his run's chain).
+  explicit Driver(GameState state);
   void step(Controls player);
-  // Every racer home: nothing is left to drive.
+  // Every racer home (on the free ride, the player at a foot): nothing is left to drive.
   bool over() const;
   const GameState& state() const { return state_; }
   const BotPlan& plan() const { return plan_; }
@@ -105,6 +110,11 @@ RunReport simulate(double seed, const SimOptions& opts = {});
 // The bot down `level`; `lines`, when given, gets every racer's line, the player's first.
 RunReport simulate_on(std::shared_ptr<const ge::mountain::mapgen::Level> level, double seed,
                       const SimOptions& opts, std::vector<std::vector<LinePoint>>* lines = nullptr);
+// The bot on the free ride on `level`, from the head of run `run` to a foot; `lines`, when
+// given, gets his line.
+RunReport simulate_free(std::shared_ptr<const ge::mountain::mapgen::Level> level, double seed,
+                        int32_t run, const SimOptions& opts,
+                        std::vector<std::vector<LinePoint>>* lines = nullptr);
 // `tape` played back on `level` with `rivals` bots beside it: the same run, step for step (its
 // digest is the report's).
 RunReport replay_tape(std::shared_ptr<const ge::mountain::mapgen::Level> level, double seed,

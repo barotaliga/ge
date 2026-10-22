@@ -96,7 +96,13 @@ make lab LAB=level ARGS=--compare=before      # every metric beside the kept run
 make labs-smoke                               # every lab at its smoke flags, twice, digests checked
 make labs-digests                             # rewrite tests/labs_digests.txt (a reviewed change)
 build/debug/labs --json                       # the list as one JSON array (what `ge lab` reads)
+make lab LAB=trace ARGS="--log=course=debug"  # any lab: the log spec's lines in previews/<id>/log.txt
 ```
+
+`--log=<spec>` switches on log channels for the run (`docs/debugging.md`): every line kept goes to
+`previews/<id>/log.txt` as `[step] level channel: message`, the debug and trace lines only
+there, and a note in the report counts them by channel and level. The log is `measured`: it
+never moves a digest.
 
 In a game repo, `ge lab` is the way in: `ge lab` lists, `ge lab <id> --tag=before` and
 `--compare=before` run one, and with `--json` the lab's whole `report.json` is the answer's
@@ -274,6 +280,7 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 | Lab | Kind | Owner | Subject | Lands |
 | --- | --- | --- | --- | --- |
 | `noise` | picture | engine | `engine/core/noise.hpp` | M2 (now) |
+| `charts` | picture | engine | `engine/lab/chart.hpp`, `plot.hpp`, `stats.hpp`, `series.hpp` (every chart form over seeded data with outliers planted at known places, each as a PNG and an SVG; a series file written and read back) | M14a (now) |
 | `run-clock` | sim | engine | `engine/loop/run_clock.hpp` | M2 (now) |
 | `level` | picture | plugin:mountain | `plugins/mountain/mapgen` (`--version=1,8`: the single piste, a ski area's race map) | M4a, M4b4a (now) |
 | `analyze` | sim | plugin:mountain | `plugins/mountain/analysis` (a race map's course and area at `--version=8`) | M4a, M4b4a (now) |
@@ -288,10 +295,15 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 | `routes` | picture | plugin:mountain | `plugins/mountain/mapgen/ski_routes.hpp`, `route_features.hpp` (the ski routes on a ski area: the area with every route in orange, each route close up with its drops and jumps, each from the side with its pitch against a black's ceiling and a route's; `--version=9,10`) | M4c1 |
 | `skijump-hills` | picture | plugin:mountain | `plugins/mountain/mapgen/ski_jump.hpp`, `straight_venue.hpp` (the ski jumping hill set over a map: the tower, the raised in-run, the dig, the landing hill's fill, cut and rms, the arena, the drop and the design gate as a table, least earth first; each hill's profile at true scale from the side and the map from above; `--hill=large,normal`, `--version=1,9`) | M4c2 (now) |
 | `real-faces` | picture | plugin:mountain | `plugins/mountain/mapgen/real_face.hpp`, `real_face_crops.hpp`, the generated `real_faces/` (every face decoded and measured: its floor, top, drop and the share of it falling down the map, as a table; a sheet of every face shaded; a face alone with its mean profile; `--bake` reads each face off the 30 m elevation model beside the tree's, `--fetch` downloads the tiles, `--write` writes the faces and the index) | M4d1 |
-| `real-maps` | picture | plugin:mountain | `plugins/mountain/mapgen/massif.hpp` (a face's massif), every rule a real face bends (`massif::real`), `generate.hpp`'s `face` (a ski area built on every face named: whether a clean map stands, its attempt, its pistes, lifts, courses, vertical, the vertical its lifts ride and its trees, as a table; the build's seconds, measured; a face named alone, or two, drawn from above and with its courses) | M4d2 |
+| `real-hints` | picture | plugin:mountain | `plugins/mountain/mapgen/real_hints.hpp`, `packed.hpp`, the generated `real_hints/` (every face's real ski area decoded and counted: its chairs, gondolas and drags, its pistes by colour and their length, its tree line and its cover by band, as a table; a face named alone, or up to four, drawn over its shaded heights; `--bake` reads each face off the open map data (`--fetch` downloads it into `.cache/osm/`) beside the tree's, `--write` writes the faces and the index) | M4d3 |
+| `real-maps` | picture | plugin:mountain | `plugins/mountain/mapgen/massif.hpp` (a face's massif), every rule a real face bends (`massif::real`), `generate.hpp`'s `face` (a ski area built on every face named: whether a clean map stands, its attempt, its pistes, lifts, courses, vertical, the vertical its lifts ride and its trees, as a table; the build's seconds, measured; a face named alone, or two, drawn from above, the real ski area's pistes and lifts faintly over it, and with its courses; how far its pistes lie from the real ones, `off real m`; `--hints=0` builds without leaning on them) | M4d2, M4d3 |
 | `sim` | drive | game:fall_line | `games/fall_line/sim` (the step, the course, the bot, the field) | M5b–M5c (now) |
+| `free` | drive | game:fall_line | `games/fall_line/sim/free.hpp` (the free ride: the bot down every piste of each seed's ski area from its head to a foot; the chain, the foot, the time, the runs found under him, the metres, the digest; the ski area with every run and the bot's lines) | M13a1 (now) |
 | `ride` | scenario | plugin:skier | `plugins/skier` (`step_skier`, the snow, the limits) | M5a (now) |
 | `play` | drive | game:fall_line | `games/fall_line/sim/play` on `engine/play` (an agent over stdio, the bot through the protocol, its input log replayed) | M5c, M12b (now) |
+| `trace` | drive | game:fall_line | the player's skier step by step down one seed with the bot: `trace.tsv` (a series file), the speed, the sideways load and the edge and lean charted against the clock with gates, flights and spikes; `--log=` for the same run's events (docs/debugging.md) | M14a (now) |
+| `wanted` | scenario | game:fall_line | `games/fall_line/sim/wanted` (the wanted level on seed 38 against scripted pursuers: the hunt table of the stars reached and when, the share seen, the searches, how it ended; each scenario's line by the stars; the sight sheds of a soldier at the start gate and a helicopter over the middle: open, hidden by the ground, by the woods, out of range) | M15a (now) |
+| `anim` | scenario | plugin:skier | `engine/lab/anim.hpp` over the skier's figure (`plugins/skier/app/figure.hpp`) ridden through a ride scenario: filmstrips from the side, behind and above, onion skins with the hands' and tips' paths, the joints' angles, a jolt heatmap, `motion.tsv`, the faults found (pop, snap, angle snap, stretch, clip), and a copy with a pop, a stretch and a clip planted, each of which must be found | M14b (now) |
 | `gpu-capture` | picture | engine | `engine/gpu` (the headless capture) | M6 (now) |
 | `frame-pace` | bench | engine | the platform's frame loop | M6 (now) |
 | `world` | picture | game:fall_line | Fall Line's frame from named views of a seed, TAA-U on or off at a render scale, the shimmer, the overdraw probe, a run's moments from the chase camera with the field (`--moments`, `--rivals`) the cull check (every view redrawn with occlusion culling off, `cull-faults` must be 0), the `wood` view (the trees' shadows on sunlit snow) and the sun's cascades over the whole run (`cascade-redraws.near` and `.far`, deterministic, with no device) (`games/fall_line/labs/gpu_world_lab.cpp`) | M7a, M7d1, M7d2 (now) |

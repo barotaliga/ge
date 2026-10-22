@@ -68,9 +68,14 @@ bool lay_run(ResortAttempt& a, const RunSpec& fair, const SharedTop& shared) {
   const TerrainPlan& plan = a.plan;
   std::string why;
   const int tries = fair.kind == RunKind::road ? RR::road::tries : RR::network::tries;
+  // A real piste's bends are steered through on all but the last tries (R25).
+  RunSpec plain = fair;
+  plain.via.clear();
+  plain.follow = nullptr;
+  const int via_for = tries - RR::massif::real::via::last;
   for (int t = 0; t < tries; t++) {
     std::variant<WalkedRun, std::string> walked =
-        walk_run(a.rng, plan, ground, fair, a.walking, shared);
+        walk_run(a.rng, plan, ground, t < via_for ? fair : plain, a.walking, shared);
     if (auto* refused = std::get_if<std::string>(&walked)) {
       why += (why.empty() ? "" : " | ") + *refused;
       continue;
@@ -112,9 +117,12 @@ bool lay_run(ResortAttempt& a, const RunSpec& fair, const SharedTop& shared) {
 }  // namespace
 
 ResortAttempt begin_resort(double seed, int attempt, uint32_t sub, const Region& region,
-                           int version, std::shared_ptr<const RealFace> face) {
+                           int version, std::shared_ptr<const RealFace> face,
+                           std::shared_ptr<const RealHints> hints, bool lean) {
   ResortAttempt a;
   a.face = std::move(face);
+  a.hints = std::move(hints);
+  a.lean = lean;
   a.seed = seed;
   a.attempt = attempt;
   a.sub = sub;
@@ -154,7 +162,7 @@ GradeFace grade_face(const ResortAttempt& a) {
 }
 
 StageResult resort_mountain(ResortAttempt& a) {
-  a.plan = plan_massif(a.rng, *a.region, a.face, a.attempt);
+  a.plan = plan_massif(a.rng, *a.region, a.face, a.attempt, a.hints, a.lean);
   a.ground = bake_massif(a.plan);
   return std::nullopt;
 }

@@ -61,6 +61,9 @@ struct ResortAttempt {
   // R25 — the real face the massif is laid off (real_face.hpp); null on a dealt massif. A real
   // face bends the rule book where its mountain is not a dealt one's (`massif::real::least`).
   std::shared_ptr<const RealFace> face;
+  // …its real ski area's hints (its woods always; its lifts and pistes leant on where `lean`).
+  std::shared_ptr<const RealHints> hints;
+  bool lean = true;
 
   // 1. the massif
   TerrainPlan plan{};
@@ -113,9 +116,10 @@ struct ResortAttempt {
 // A step's answer: why the attempt is refused, or nothing to go on.
 using StageResult = std::optional<std::string>;
 
-// The attempt begun: its stream dealt off `sub`, on `face` where one is given.
+// The attempt begun: its stream dealt off `sub`, on `face` where one is given, with its `hints`.
 ResortAttempt begin_resort(double seed, int attempt, uint32_t sub, const Region& region,
-                           int version, std::shared_ptr<const RealFace> face = nullptr);
+                           int version, std::shared_ptr<const RealFace> face = nullptr,
+                           std::shared_ptr<const RealHints> hints = nullptr, bool lean = true);
 
 // How a ramp off one of the attempt's tops may fall (R26): a real face's own, whose crowded tops
 // have their ramps chosen together.

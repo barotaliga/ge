@@ -2,7 +2,7 @@
 //
 // ge:summary The massif's plan draws, its profile tables and its row-by-row bake
 // ge:keywords massif plan-massif bake-massif ridge-share steep-share bench-share massif-row
-// ge:keywords height-at read-face face-lift brow
+// ge:keywords height-at read-face face-lift brow parallel threads
 // ge:skill mountain
 // ge:test tests/mountain_resort_build_test.cpp
 #include "mountain/mapgen/massif.hpp"
@@ -18,6 +18,7 @@
 #include "core/math.hpp"
 #include "core/noise.hpp"
 #include "core/num.hpp"
+#include "core/parallel.hpp"
 #include "mountain/mapgen/grades.hpp"
 #include "mountain/mapgen/real_face.hpp"
 #include "mountain/mapgen/resort_rules.hpp"
@@ -308,7 +309,8 @@ FaceRead read_face(std::shared_ptr<const RealFace> grid, double size, double dea
 }  // namespace
 
 TerrainPlan plan_massif(ge::core::Rng& rng, const Region& region,
-                        const std::shared_ptr<const RealFace>& face, int attempt) {
+                        const std::shared_ptr<const RealFace>& face, int attempt,
+                        const std::shared_ptr<const RealHints>& hints, bool lean) {
   namespace M = RR::massif;
   namespace F = R::face;
   namespace Q = RR::massif::relief;
@@ -432,7 +434,12 @@ TerrainPlan plan_massif(ge::core::Rng& rng, const Region& region,
     plan.summit_z = real->summit_z;
     plan.vertical = face_height(*face, massif->peak_x, real->summit_z) - real->face->floor;
     plan.altitude = real->face->floor;
-    plan.tree_line = dealt_line;
+    // The face's woods where its map draws any: its own tree line, and its cover by height.
+    if (hints) {
+      real->face->woods = face_woods(*face, *hints);
+      if (lean && attempt < RR::massif::real::hinted) real->face->hints = hints;
+    }
+    plan.tree_line = real->face->woods ? real->face->woods->line : dealt_line;
     plan.flank = 0;
     plan.crests = 0;
     plan.hills = hills * RR::massif::real::folds;
@@ -470,14 +477,18 @@ ge::core::Heightfield bake_massif(const TerrainPlan& plan) {
   }
   ge::core::Heightfield field = ge::core::create_heightfield(0, 0, cell, n, n);
   float* d = field.data.data();
-  CountryFields fields = country_fields(plan);
-  for (size_t r = 0; r < nn; r++) {
-    const MassifRow row = massif_row(plan, m, double(r) * cell);
-    for (size_t c = 0; c < nn; c++) {
-      d[r * nn + c] = static_cast<float>(height_at(plan, fields, double(c) * cell, row, share[c],
-                                                   st[c], bn[c], walls.data() + c * k));
+  // Every height is a pure function of its cell (the noise fields' cache changes no bits), so
+  // the rows bake in bands side by side, each band with its own fields.
+  ge::core::parallel_bands(nn, [&](size_t r0, size_t r1) {
+    CountryFields fields = country_fields(plan);
+    for (size_t r = r0; r < r1; r++) {
+      const MassifRow row = massif_row(plan, m, double(r) * cell);
+      for (size_t c = 0; c < nn; c++) {
+        d[r * nn + c] = static_cast<float>(height_at(plan, fields, double(c) * cell, row, share[c],
+                                                     st[c], bn[c], walls.data() + c * k));
+      }
     }
-  }
+  });
   return field;
 }
 

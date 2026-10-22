@@ -606,6 +606,9 @@ struct GenerateOptions {
   // R25 — lay the ski area off this real face (its id), in its region; searched over
   // `massif::real::attempts` unless `attempts` is given.
   std::optional<std::string> face;
+  // …leaning its lifts and runs onto the real ski area's (real_hints.hpp); false builds the face
+  // as if it had none, which is what the hints are measured against.
+  bool hints = true;
   std::optional<int> only;  // build this one attempt alone and throw its refusal
   // R28 — on a ski area, the course to race by its id, else one of this colour (the nearest there
   // is), else the colour the seed deals (`deal_grade`).

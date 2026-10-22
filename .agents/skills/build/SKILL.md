@@ -44,6 +44,10 @@ webgpu only by `ge_gpu`.
   target to work around something; fix the code.
 - Never add `-ffast-math`, `-Ofast` or `-march=native` (they break cross-platform bits; see the
   `determinism` skill).
+- **The instruction-set baseline** is `ge_isa` (root `CMakeLists.txt`), linked by `ge_core` and
+  published as `ge::isa`: on x86-64, `-march=x86-64-v3` (MSVC `/arch:AVX2`), so AVX2 is
+  required; on ARM64, the compiler's default (NEON is baseline). It moves no bits because
+  `ge_fp` keeps contraction off. Raising it is a decision for the maintainer: it drops CPUs.
 
 ## CI (`.github/workflows/ci.yml`)
 

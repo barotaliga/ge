@@ -1,13 +1,15 @@
-// THE STATE OF A RUN: the map, the field of racers on it (each a skier and his progress down the
-// course), the run's clock and this step's events. `create_game` builds it (game.hpp) and
+// THE STATE OF A RUN: the map, the mode (a race down the course, or the free ride over the ski
+// area's runs), the field of racers on it (each a skier, his progress down the course and his
+// free ride), the run's clock and this step's events. `create_game` builds it (game.hpp) and
 // `step` is the only thing that writes it during a run; a pilot, a lab or a renderer reads it.
 //
-// Every buffer a step writes is sized at create time: `racers` never grows, and `events` is
-// reserved for `kEventsReserve` a step, so a step allocates nothing.
+// Every buffer a step writes is sized at create time: `racers` never grows, `events` is
+// reserved for `kEventsReserve` a step and a free ride's `skied` for every run, so a step
+// allocates nothing.
 //
 // ge:summary The state of a run: GameState, Racer, Progress, Controls, the events
 // ge:keywords game-state state racer progress controls events event-kind gate missed finish
-// ge:keywords reset wipeout landing takeoff field clock
+// ge:keywords reset wipeout landing takeoff field clock wanted mode free-ride onto arrived skied
 // ge:skill sim
 // ge:test tests/fall_line_sim_test.cpp
 #pragma once
@@ -20,6 +22,8 @@
 #include "skier/skier.hpp"
 #include "skier/skis.hpp"
 #include "skier/trees.hpp"
+
+#include "fall_line/sim/wanted_state.hpp"
 
 namespace fall_line::sim {
 
@@ -45,6 +49,9 @@ enum class EventKind : uint8_t {
   glance,    // brushed a trunk and kept going
   reset,     // stood back on the piste (`gate` the gate owed)
   shoulder,  // two racers met (`racer` and `gate` the two, `value` the closing speed)
+  wanted,    // the wanted level moved (`gate` the stars after, `value` its WantedChange)
+  onto,      // a free ride came onto a run (`gate` the run's index in the ski area)
+  arrived,   // a free ride reached a run's foot (`gate` the run, `value` the clock, s)
 };
 
 const char* event_name(EventKind kind);
@@ -77,18 +84,41 @@ struct Rider {
   double lane = 0;
 };
 
+// What a run is: a RACE down the course's gates to the finish, or the FREE RIDE over the ski
+// area's runs (free.hpp), with no gate and no finish line.
+enum class Mode : uint8_t { race, free };
+
+// Where a free ride has been (free.hpp): the run under his skis, the last one he was on and how
+// far down it, every run skied (in the order first skied), the metres skied, and the foot.
+struct FreeRide {
+  int32_t start = 0;           // the run he was stood at the head of
+  int32_t run = -1;            // the run under his skis, or -1 off every run
+  int32_t last = -1;           // the last run he was on, or -1 before any
+  double last_s = 0;           // m down `last` he was last on it
+  std::vector<int32_t> skied;  // reserved for every run at create
+  double distance = 0;         // m skied over the plan, on the snow
+  bool arrived = false;        // at a run's foot
+  double arrived_at = 0;       // s, the clock when he got there
+};
+
 struct Racer {
   ge::skier::SkierState skier;
   Progress progress;
   Rider rider;
+  FreeRide free;
 };
 
 struct GameState {
   std::shared_ptr<const ge::mountain::mapgen::Level> level;
+  Mode mode = Mode::race;
+  // A free ride's runs as lines the skier is found on (free.hpp's `run_tracks`), each index built
+  // at create; none in a race.
+  std::shared_ptr<const std::vector<ge::mountain::mapgen::Track>> runs;
   ge::skier::TreeIndex trees;
   ge::skier::SkiSpec spec;
   std::vector<Racer> racers;      // the player's first; sized at create
   std::vector<GameEvent> events;  // this step's, cleared at its start
+  WantedState wanted;             // the hunt for the player (wanted.hpp); inactive until raised
   double t = 0;                   // s since the start
   int64_t steps = 0;
 

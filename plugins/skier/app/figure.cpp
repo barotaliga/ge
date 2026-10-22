@@ -105,6 +105,15 @@ constexpr std::array<FigurePiece, kFigurePieces> kPieces = {{
     {FigureShape::cylinder, FigurePart::pole},
 }};
 
+constexpr std::array<FigureJoint, kFigureJoints> kJoints = {{
+    {"waist", -1, 0},    {"hip_l", 0, -1},       {"hip_r", 0, 1},       {"knee_l", 1, -1},
+    {"knee_r", 2, 1},    {"ankle_l", 3, -1},     {"ankle_r", 4, 1},     {"ski_tip_l", 5, -1},
+    {"ski_tip_r", 6, 1}, {"ski_tail_l", 5, -1},  {"ski_tail_r", 6, 1},  {"neck", 0, 0},
+    {"head", 11, 0},     {"shoulder_l", 11, -1}, {"shoulder_r", 11, 1}, {"elbow_l", 13, -1},
+    {"elbow_r", 14, 1},  {"hand_l", 15, -1},     {"hand_r", 16, 1},     {"grip_l", 17, -1},
+    {"grip_r", 18, 1},   {"pole_tip_l", 19, -1}, {"pole_tip_r", 20, 1},
+}};
+
 struct Legs {
   Vec3 knee, hip;  // the right leg's; the left mirrors x
 };
@@ -125,9 +134,7 @@ const std::array<FigurePiece, kFigurePieces>& figure_pieces() { return kPieces; 
 
 double figure_hip_height(double tuck) { return legs_for(tuck).hip.y; }
 
-void pose_figure(const SkierState& s, const World& world,
-                 std::array<PiecePose, kFigurePieces>& out) {
-  const double tuck = core::num::max(0.0, core::num::min(1.0, s.tuck));
+FigureFrame figure_frame(const SkierState& s, const World& world) {
   const Vec3 level_f{libm::sin(s.heading), 0, libm::cos(s.heading)};
   Vec3 up{0, 1, 0}, fwd = level_f;
   if (s.on_snow && !s.down && world.level) {
@@ -142,7 +149,13 @@ void pose_figure(const SkierState& s, const World& world,
     fwd = {level_f.x * libm::cos(p), libm::sin(p), level_f.z * libm::cos(p)};
     up = unit(cross(fwd, cross(Vec3{0, 1, 0}, fwd)));
   }
-  const Quat base = from_basis(unit(cross(up, fwd)), up, fwd);
+  return FigureFrame{Vec3{s.x, s.y, s.z}, from_basis(unit(cross(up, fwd)), up, fwd)};
+}
+
+void pose_figure(const SkierState& s, const World& world,
+                 std::array<PiecePose, kFigurePieces>& out) {
+  const double tuck = core::num::max(0.0, core::num::min(1.0, s.tuck));
+  const Quat base = figure_frame(s, world).rot;
   // Right side down is a negative turn about the forward axis (engine/core/quat.hpp).
   const double body_roll = s.down ? 1.45 : s.lean;
   const double ski_roll = s.down ? 1.45 : s.edge;
@@ -186,6 +199,33 @@ void pose_figure(const SkierState& s, const World& world,
     const Vec3 grip = add(hand, Vec3{0, 0.08, 0});
     const Vec3 along = unit(sub(tip, grip));
     segment(out[15 + static_cast<size_t>(side)], body, grip, add(grip, scale(along, 1.15)), 0.009);
+  }
+}
+
+const std::array<FigureJoint, kFigureJoints>& figure_joints() { return kJoints; }
+
+void figure_joint_positions(const std::array<PiecePose, kFigurePieces>& pieces,
+                            const FigureFrame& frame, std::array<Vec3, kFigureJoints>& out) {
+  // A piece's two ends along its length (a limb's y, a ski's z), in the figure's frame.
+  const auto end = [&](size_t piece, double sign, bool along_z) {
+    const PiecePose& p = pieces[piece];
+    const Vec3 half = along_z ? Vec3{0, 0, sign * p.size[2] / 2} : Vec3{0, sign * p.size[1] / 2, 0};
+    return core::unrotate(frame.rot, sub(add(p.centre, core::rotate(p.rotation, half)), frame.at));
+  };
+  out[0] = end(9, -1, false);                                             // waist
+  out[11] = end(9, 1, false);                                             // neck
+  out[12] = core::unrotate(frame.rot, sub(pieces[14].centre, frame.at));  // head
+  for (size_t side = 0; side < 2; ++side) {
+    out[1 + side] = end(6 + side, 1, false);     // hip
+    out[3 + side] = end(4 + side, 1, false);     // knee
+    out[5 + side] = end(4 + side, -1, false);    // ankle
+    out[7 + side] = end(side, 1, true);          // ski tip
+    out[9 + side] = end(side, -1, true);         // ski tail
+    out[13 + side] = end(10 + side, -1, false);  // shoulder
+    out[15 + side] = end(10 + side, 1, false);   // elbow
+    out[17 + side] = end(12 + side, 1, false);   // hand
+    out[19 + side] = end(15 + side, -1, false);  // grip
+    out[21 + side] = end(15 + side, 1, false);   // pole tip
   }
 }
 

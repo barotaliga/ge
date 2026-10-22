@@ -23,10 +23,10 @@ struct Transcript {
 };
 
 template <int N>
-void sink_to(out::Level level, std::string_view message, void* user) {
+void sink_to(const out::LogLine& line, void* user) {
   auto* t = static_cast<Transcript*>(user);
-  t->lines.push_back("sink" + std::to_string(N) + " " + std::string(out::level_name(level)) + " " +
-                     std::string(message));
+  t->lines.push_back("sink" + std::to_string(N) + " " + std::string(out::level_name(line.level)) +
+                     " " + line.message);
 }
 
 void dump_recent(Transcript& t) {
