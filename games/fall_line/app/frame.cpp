@@ -29,6 +29,7 @@ constexpr r::PassRow kPassTable[] = {
     {"terrain.horizon", "terrain.height", "terrain.horizon"},
     {"trails.fine", "", "trails.fine"},
     {"trails.coarse", "", "trails.coarse"},
+    {"particles.sim", "terrain.height", "particles"},
     {"shadows.cull", "instances", "shadows.lists"},
     {"shadows.near", "instances shadows.lists", "shadows.maps"},
     {"shadows.far", "instances shadows.lists", "shadows.maps"},
@@ -47,6 +48,8 @@ constexpr r::PassRow kPassTable[] = {
      "depth",
      "hdr motion"},
     {"sky", "sky.view depth", "hdr motion"},
+    {"particles", "particles terrain.horizon shadows.maps sky.aerial sky.light depth",
+     "hdr motion"},
     {"taa", "hdr motion depth taa.history sky.light", "taa.history"},
     {"bloom", "taa.history", "bloom"},
     {"post", "taa.history bloom sky.light", "final"},
@@ -69,6 +72,7 @@ void make_targets(ge::gpu::Device& device, GameFrame& f, uint32_t w, uint32_t h)
   r::create_hiz_targets(device, f.hiz, f.targets);
   for (r::InstanceFamily* family : f.families)
     r::bind_family_hiz(device, f.instancing, *family, f.hiz);
+  r::bind_particle_targets(device, f.particles, f.targets);
   // The post pass (and the bloom) read TAA's two histories, or the HDR target for both.
   wgpu::TextureView inputs[2] = {f.targets.hdr_view, f.targets.hdr_view};
   if (f.options.taa) {
@@ -82,6 +86,38 @@ void make_targets(ge::gpu::Device& device, GameFrame& f, uint32_t w, uint32_t h)
     f.post_groups[k] = r::post_group(device, f.post, inputs[k], glow ? f.bloom.view : nullptr);
   }
   f.history.valid = false;
+}
+
+// The racers' spray over the `dt` s since the last frame, handed to the pool as births.
+void throw_spray(GameFrame& f, const FrameScene& scene, double dt) {
+  if (!f.options.spray) return;
+  for (size_t k = f.spray_pens.size(); k < scene.skiers.size(); ++k) {
+    f.spray_pens.push_back(ge::skier::spray_pen(static_cast<uint32_t>(k)));
+  }
+  f.thrown.clear();
+  for (size_t k = 0; k < scene.skiers.size(); ++k) {
+    ge::skier::spray_grains(scene.skiers[k], dt, f.spray_pens[k], f.thrown);
+  }
+  f.births.resize(f.thrown.size());
+  for (size_t i = 0; i < f.thrown.size(); ++i) {
+    const ge::skier::SprayGrain& g = f.thrown[i];
+    r::Particle& p = f.births[i];
+    p = r::Particle{};
+    p.p[0] = static_cast<float>(g.x);
+    p.p[1] = static_cast<float>(g.y);
+    p.p[2] = static_cast<float>(g.z);
+    p.v[0] = static_cast<float>(g.vx);
+    p.v[1] = static_cast<float>(g.vy);
+    p.v[2] = static_cast<float>(g.vz);
+    p.life = static_cast<float>(g.life);
+    p.size = static_cast<float>(g.size);
+    p.drag = static_cast<float>(g.drag);
+    p.fall = static_cast<float>(g.fall);
+    p.streak = static_cast<float>(g.streak);
+    p.albedo = static_cast<float>(g.albedo);
+    p.opacity = static_cast<float>(g.opacity);
+  }
+  r::emit_particles(f.particles, f.births);
 }
 
 }  // namespace
@@ -121,6 +157,8 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
     source.material = f->snow.layout;
   }
   r::create_terrain(device, f->pipelines, f->terrain, source, f->frame_layout);
+  r::create_particles(device, f->pipelines, f->particles, f->frame_layout, f->terrain,
+                      options.particles);
   r::create_hiz_pipelines(device, f->pipelines, f->hiz);
   r::create_instance_pipelines(device, f->pipelines, f->instancing, f->frame_layout,
                                options.overdraw_probe);
@@ -159,6 +197,7 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
   r::bind_terrain_shadows(f->terrain, f->shadows.group);
   if (options.snow) r::bind_terrain_material(f->terrain, f->snow.group);
   r::bind_instance_shadows(f->instancing, f->shadows.group);
+  r::bind_particle_shadows(f->particles, f->shadows.group);
   make_targets(device, *f, width, height);
   f->recorder.init(device, "frame.timer", kPasses);
   return f;
@@ -194,6 +233,9 @@ void track(GameFrame& f, const FrameScene& scene) {
 }
 
 void forget_tracks(GameFrame& f) {
+  f.spray_pens.clear();
+  f.spray_placed = false;
+  f.spray_forget = true;
   if (!f.tracks) return;
   ge::mountain::app::clear_trails(f.trails);
   f.pens.clear();
@@ -229,6 +271,20 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& view, const
     ge::mountain::app::prepare_trails(device, f.pipelines, f.trails,
                                       view.eye[0] + ahead * std::sin(view.heading),
                                       view.eye[2] + ahead * std::cos(view.heading));
+  }
+  {
+    GE_ZONE("frame.spray");
+    if (f.spray_forget) {
+      r::clear_particles(device, f.particles);
+      f.spray_forget = false;
+    }
+    // The time since the last frame: none on the first, nor when the clock went back (a replay
+    // rewound), nor on a still drawn again at the same time.
+    const double dt = f.spray_placed ? std::max(view.time_s - f.spray_time, 0.0) : 0.0;
+    f.spray_time = view.time_s;
+    f.spray_placed = true;
+    throw_spray(f, scene, dt);
+    r::prepare_particles(device, f.particles, dt, view.near_m);
   }
   const size_t racers = std::min<size_t>(scene.skiers.size(), kMaxFigures);
   {
@@ -278,6 +334,7 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& view, const
     f.recorder.compute(encoder, "trails.fine").End();
     f.recorder.compute(encoder, "trails.coarse").End();
   }
+  r::encode_particles_sim(f.particles, f.pipelines, f.recorder, encoder);
   r::encode_sun_shadows(f.shadows, still, moving, f.instancing, f.pipelines, f.recorder, encoder);
   r::encode_terrain_depth(f.terrain, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
   r::encode_instances_depth(families, f.instancing, f.pipelines, f.recorder, encoder, f.targets,
@@ -291,6 +348,7 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& view, const
   r::encode_instances(families, f.instancing, f.pipelines, f.recorder, encoder, f.targets,
                       f.frame_group, f.instance_light);
   r::encode_sky(f.sky, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
+  r::encode_particles(f.particles, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
   if (f.options.taa) {
     r::encode_taa(device, f.taa, f.pipelines, f.recorder, encoder, f.frame_group);
   }
