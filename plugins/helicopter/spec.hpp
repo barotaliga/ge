@@ -142,7 +142,11 @@ inline constexpr double kSpool = 0.22;
 // at most, m/s (the sink held to `kSinkSlow` near the hover, under the vortex ring's onset); its
 // hands' natural frequency on the disc, rad/s, and their damping ratio; its gain on a vertical
 // speed missed, 1/s; the height over the snow it flies at with nothing asked, m; the sink it sets
-// down at, m/s.
+// down at, m/s; how far ahead it reads the snow and at what spacing, m, the seconds ahead whose
+// snow it holds its height over, and the share of its climb (and of its sink) it plans the way's
+// speed on, so the climb clears a rise ahead (and the sink comes down to the aim) with the rest
+// to spare, and the slowest it flies to come down to the aim, m/s (past the vortex ring's
+// speed, so it sinks at `kSink`).
 namespace pilot {
 inline constexpr double kCruise = 40;
 inline constexpr double kBrake = 1.6;
@@ -155,6 +159,11 @@ inline constexpr double kDamping = 0.9;
 inline constexpr double kHold = 1.5;
 inline constexpr double kClear = 45;
 inline constexpr double kSettle = 0.8;
+inline constexpr double kLook = 600;
+inline constexpr double kLookStep = 30;
+inline constexpr double kAhead = 10;
+inline constexpr double kDescend = 18;
+inline constexpr double kClimbShare = 0.7;
 }  // namespace pilot
 
 // ON THE SNOW AND INTO IT: the vertical speed the skids take on landing, m/s (the gear is

@@ -8,7 +8,9 @@
 //   outside ski's tail.
 // - SKID (`hockey-stop`): full brake at 15 m/s: a sheet thrown the way the skis slide.
 // - LANDING (`kicker`): a fifth of a second after he lands from the kicker: a burst round the skis.
-// - POWDER (`powder-turns`): linked turns in untouched snow: fines churned up behind him, hanging.
+// - POWDER (`powder-turns`): linked turns in untouched snow, in a 6 m/s crosswind: fines churned up
+//   behind him and the snow cloud over them, hanging and drifting off on the wind (the map's air,
+//   plugins/mountain/air/air.hpp, which the frame hands the particles).
 //
 // Each scene is shot from the chase camera and from the side (--side m to the skier's right,
 // looking across at him). Beside each: the grains the arithmetic threw (deterministic) and the
@@ -93,8 +95,12 @@ constexpr Scene kScenes[] = {
     {"landing", "kicker", 0.2, true, "straight over the kicker at 14 m/s, just landed",
      "a burst of grains out round the skis, low and wide, the fines hanging over it"},
     {"powder", "powder-turns", 2.5, false, "linked turns in untouched powder",
-     "a haze of fines churned up behind him and hanging over his line, thinning as it drifts"},
+     "a haze of fines churned up behind him and big thin puffs of cloud hanging over his line, "
+     "drifting off to the left on the crosswind"},
 };
+
+// The powder scene's wind at 10 m, m/s.
+constexpr double kCrosswind = 6;
 
 struct Frame60 {
   SkierState s;
@@ -123,6 +129,11 @@ void run(ge::lab::Lab& lab) {
       return;
     }
     levels.push_back(ge::skier::scenario_level(*scenario));
+    // The powder turns in a crosswind (from +x, blowing toward -x), so the cloud is seen to drift.
+    if (std::string_view(sc.id) == "powder") {
+      levels.back().weather.wind = kCrosswind;
+      levels.back().weather.wind_from = 1.5707963267948966;
+    }
     const ge::mountain::mapgen::Level& level = levels.back();
     const ge::skier::TreeIndex trees = ge::skier::build_tree_index(level);
     const ge::skier::World world{&level, &trees};

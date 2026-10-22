@@ -72,6 +72,8 @@ struct RunReport {
   double lift_ride = 0;    // s carried up lifts
   int32_t sled_rides = 0;  // times the free ride's snowmobile was taken
   double sled_time = 0;    // s on its boards
+  int32_t heli_rides = 0;  // times the free ride's helicopter was taken
+  double heli_time = 0;    // s sat on its skid
   double climbed = 0;      // m, the most the player rose over where he started
   int64_t steps = 0;
   uint64_t digest = 0;  // FNV-1a over every step's state
@@ -85,6 +87,7 @@ struct LinePoint {
   bool on_snow, down;
   bool lifted;  // a lift has him
   bool sled;    // on the snowmobile's boards
+  bool heli;    // on the helicopter's skid
 };
 
 // THE ONE STEP every pilot drives through (the bot in `simulate`, a tape in `replay_tape`, an
@@ -95,8 +98,10 @@ class Driver {
   Driver(std::shared_ptr<const ge::mountain::mapgen::Level> level, int32_t rivals);
   // A run already created (a race, or a free ride, whose bot skis his run's chain).
   // `lifts`: on the free ride, the lifts he is to ride before a foot ends the run; `sled_rides`
-  // the times he is to have taken the snowmobile (and got off it) before one does.
-  explicit Driver(GameState state, int32_t lifts = 0, int32_t sled_rides = 0);
+  // the times he is to have taken the snowmobile (and got off it) before one does, `heli_rides`
+  // the helicopter.
+  explicit Driver(GameState state, int32_t lifts = 0, int32_t sled_rides = 0,
+                  int32_t heli_rides = 0);
   void step(Controls player);
   // Every racer home (on the free ride, the player at a foot): nothing is left to drive.
   bool over() const;
@@ -125,6 +130,8 @@ class Driver {
   int32_t lifts_ = 0;
   int32_t sled_rides_ = 0;
   double sled_time_ = 0;
+  int32_t heli_rides_ = 0;
+  double heli_time_ = 0;
   double y0_ = 0;
   double climbed_ = 0;
   double boarded_at_ = 0;
@@ -157,6 +164,11 @@ RunReport simulate_outing(std::shared_ptr<const ge::mountain::mapgen::Level> lev
 // The bot's outing on the free ride's snowmobile (sled_outing.hpp): from beside it, up the run
 // `sled_climb_run` picks, and down it on his skis to a foot.
 RunReport simulate_sled_outing(std::shared_ptr<const ge::mountain::mapgen::Level> level,
+                               double seed, const SimOptions& opts,
+                               std::vector<std::vector<LinePoint>>* lines = nullptr);
+// The bot's outing on the free ride's helicopter (heli_outing.hpp): from beside its pad, flown to
+// the head of the run `heli_drop_run` picks, dropped there and down it on his skis to a foot.
+RunReport simulate_heli_outing(std::shared_ptr<const ge::mountain::mapgen::Level> level,
                                double seed, const SimOptions& opts,
                                std::vector<std::vector<LinePoint>>* lines = nullptr);
 RunReport replay_tape(std::shared_ptr<const ge::mountain::mapgen::Level> level, double seed,

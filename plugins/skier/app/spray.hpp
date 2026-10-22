@@ -11,7 +11,9 @@
 // - THE CARVE: a ski on a hard edge cuts and flings a thin curl out of the turn from the outside
 //   ski's tail, more the harder the turn loads him; a straight run on a flat ski throws nothing.
 // - THE POWDER: in loose snow the skis churn up FINES that drift and hang (light, slow to fall),
-//   more the deeper the snow and the faster he goes.
+//   more the deeper the snow and the faster he goes, and the SNOW CLOUD over them: a few big, thin
+//   puffs that hang for seconds behind him and drift off on the wind (the particles' drag pulls
+//   toward the air).
 // - THE LANDING: back on the snow after a flight, a burst out round the skis, bigger the harder
 //   he came down; and a skier DOWN sliding on his body throws snow all round him.
 // The grains of one frame are spread back along the way he came that frame, so a fast skier's
@@ -51,6 +53,7 @@ struct SprayGrain {
 inline constexpr double kSkidRate = 900;
 inline constexpr double kCarveRate = 500;
 inline constexpr double kPowderRate = 140;
+inline constexpr double kCloudRate = 30;
 inline constexpr double kDownRate = 500;
 inline constexpr int kMaxGrainsFrame = 1500;
 // A flight this long before a landing throws a burst, s.
@@ -62,12 +65,12 @@ inline constexpr double kScrapeFrom = 1.5;
 // grains owed, and his generator.
 struct SprayPen {
   core::Rng rng{1};
-  double owed[4] = {0, 0, 0, 0};  // skid, carve, powder, down
-  double air_time = 0;            // the last frame's
-  double vy = 0;                  // the last frame's vertical speed, m/s
-  double speed = 0;               // the last frame's speed, m/s
-  bool on_snow = false;           // the last frame's
-  bool placed = false;            // a frame has been seen
+  double owed[5] = {0, 0, 0, 0, 0};  // skid, carve, powder, down, cloud
+  double air_time = 0;               // the last frame's
+  double vy = 0;                     // the last frame's vertical speed, m/s
+  double speed = 0;                  // the last frame's speed, m/s
+  bool on_snow = false;              // the last frame's
+  bool placed = false;               // a frame has been seen
 };
 
 // A pen for racer `k`: its own stream.
