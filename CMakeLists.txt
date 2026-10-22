@@ -155,7 +155,7 @@ if(GE_GPU)
     engine/render/terrain.wgsl engine/render/terrain_cull.wgsl engine/render/terrain_normals.wgsl
     engine/render/horizon.wgsl engine/render/hiz.wgsl engine/render/taa.wgsl engine/render/post.wgsl
     engine/render/instances.wgsl engine/render/instances_cull.wgsl engine/render/bloom.wgsl
-    engine/render/skinning.wgsl)
+    engine/render/skinning.wgsl engine/render/particles.wgsl engine/render/particles_sim.wgsl)
 endif()
 
 # The lab framework (engine/lab: the contract, the runner, the raster, the PNG), published as

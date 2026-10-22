@@ -12,6 +12,7 @@
 //   trails.fine          -> trails.fine (the tracks laid since the last frame, or the whole
 //                           window redrawn from the history when it moved)
 //   trails.coarse        -> trails.coarse (the tracks laid since the last frame)
+//   particles.sim        -> particles (the spray thrown since the last frame, flown a frame)
 //   shadows.cull         -> shadows.lists (the casters of the maps drawn this frame)
 //   shadows.near         -> shadows.maps (the near cascade: the forest, when due)
 //   shadows.far          -> shadows.maps (the far cascade, when due)
@@ -25,6 +26,7 @@
 //                           reads shadows.maps and the trail maps)
 //   instances            -> hdr motion (both lists, where the depth is equal)
 //   sky                  -> hdr motion (behind depth)
+//   particles            -> hdr motion (the spray, over the picture; the motion's reactive b)
 //   taa                  -> taa.history (at the output's size; with FrameOptions::taa)
 //   bloom                -> bloom (the glow's mip chain, from what post reads)
 //   post                 -> final (the bloom mixed in, the grade's table: look.hpp's)
@@ -35,9 +37,11 @@
 //
 // The frame reads the game only through a FrameView (views.hpp), the map it was made for, and a
 // FrameScene: the racers' skiers this frame, drawn as skinned skiers (scene.hpp: each racer's
-// pose from skier/app/rig_pose.hpp's poser, its lags kept here between frames) and laying their
-// tracks
-// (`track`: skier/app/tracks.hpp's prints into the trail maps). Every pipeline is made
+// pose from skier/app/rig_pose.hpp's poser, its lags kept here between frames), laying their tracks
+// (`track`: skier/app/tracks.hpp's prints into the trail maps) and throwing their spray
+// (skier/app/spray.hpp's grains into the particle pool, render/particles.hpp, over the time between
+// two frames' `FrameView::time_s`: a frame at the same time throws nothing and holds the spray
+// still). Every pipeline is made
 // in `create_frame` (the manifest), and the device's load ends there: a pipeline made after it is
 // an error.
 //
@@ -64,6 +68,7 @@
 #include "render/frame.hpp"
 #include "render/hiz.hpp"
 #include "render/instances.hpp"
+#include "render/particles.hpp"
 #include "render/post.hpp"
 #include "render/shadows.hpp"
 #include "render/skinning.hpp"
@@ -71,6 +76,7 @@
 #include "render/taa.hpp"
 #include "render/terrain.hpp"
 #include "skier/app/rig_pose.hpp"
+#include "skier/app/spray.hpp"
 #include "skier/app/tracks.hpp"
 #include "skier/skier.hpp"
 
@@ -85,6 +91,8 @@ struct FrameOptions {
   double bloom = 0.04;          // the share of the bloom's glow in the picture; 0: none
   bool snow = true;             // the snow's material (mountain/app/snow.hpp); off: the albedo lit
   bool trails = true;           // the tracks (mountain/app/trails.hpp); drawn only with the snow
+  bool spray = true;            // the racers' spray (skier/app/spray.hpp) thrown into the particles
+  ge::render::ParticleSettings particles;
   ge::mountain::app::TrailOptions trail_maps;  // their sizes
 };
 
@@ -115,6 +123,13 @@ struct GameFrame {
   bool tracks = false;                    // the trails are made (FrameOptions::snow and ::trails)
   std::vector<ge::skier::TrackPen> pens;  // each racer's, by his place in the scene
   std::vector<ge::mountain::app::TrailStamp> laid;
+  ge::render::Particles particles;
+  std::vector<ge::skier::SprayPen> spray_pens;  // each racer's, by his place in the scene
+  std::vector<ge::skier::SprayGrain> thrown;
+  std::vector<ge::render::Particle> births;
+  double spray_time = 0;      // the last drawn frame's time_s
+  bool spray_placed = false;  // a frame has been drawn since the spray was last forgotten
+  bool spray_forget = false;  // kill every particle at the next draw
   ge::render::Hiz hiz;
   ge::render::Taa taa;
   ge::render::Bloom bloom;
@@ -165,7 +180,7 @@ void cut(GameFrame& frame);
 // steps so a turn is laid as a curve.
 void track(GameFrame& frame, const FrameScene& scene);
 
-// Forget every track (a new run on the same map).
+// Forget every track and all the spray (a new run on the same map).
 void forget_tracks(GameFrame& frame);
 
 // Encode and submit one frame of `view` and `scene` into `output` (a view of a texture of the

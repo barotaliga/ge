@@ -642,6 +642,25 @@ Linear light is used throughout, and the conversion happens here, once.
   They are drawn as camera-facing quads, softened against the depth buffer. Sorting is
   avoided by blend choice where possible; where a pool needs it, a bitonic sort in
   compute orders it.
+
+**As built (M8d1).** `engine/render/particles.hpp` is one pool of 16384 slots of 64 bytes, a
+ring: the game hands each frame's births (`emit_particles`) and `prepare_particles` writes
+them into the next slots, so a full pool lets its oldest go first. There is no compaction or
+indirect count yet: `particles.sim` (one thread a slot) skips a dead slot, and `particles`
+draws one quad a slot with a dead one folded away in the vertex stage. The flight is gravity
+times the particle's `fall` (1 a grain, about a tenth a fine that drifts), an exponential drag
+toward the still air, and the ground off the terrain's heights: a grain coming down on the
+snow is gone, a fine one settles and fades, and one under the snow and rising flies on (a ski
+sinks into soft snow, and what it throws starts there). `step_particle` is the flight's CPU
+twin, and `tests/render_particles_test.cpp` holds the pass to it. A particle is drawn as a
+streak along its motion over `streak` s (a camera's shutter sees spray as strokes), thinned by
+its length, faded in and out over its life, softened over `soft_m` against the depth, lit as
+the instances are (the sun past the horizon and the shadow maps, the sky) with a forward lobe
+toward the sun, hazed, blended premultiplied and unsorted, and it writes the motion target's
+reactive channel so TAA does not smear it. What fills the pool is the game's: Fall Line
+throws each racer's spray (`plugins/skier/app/spray.hpp`) over the time between two frames'
+`time_s`. On the software adapter the pass pair costs about 0.6 + 0.13 ms (the `profile`
+lab), the flight of all 16384 slots the larger half.
 - **Skinning** uses bone palettes in a storage buffer. A figure drawn in more than one
   view (the player in the main view, the sun's cascade and the shadow atlas) is skinned
   once by a compute pass into a vertex buffer that every view reads. Crowd members,
