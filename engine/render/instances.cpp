@@ -233,8 +233,9 @@ void create_family(gpu::Device& device, const InstancePipelines& ip, InstanceFam
     }
     for (size_t l = 0; l < n && lod_rows.size() < kMaxBuckets; ++l) {
       const LodSource& src = m.lods[l];
-      const PackedMesh p =
-          src.reach ? pack_mesh(src.mesh, src.reach_min, src.reach_size) : pack_mesh(src.mesh);
+      const PackedMesh p = src.reach
+                               ? pack_mesh(src.mesh, src.reach->min.data(), src.reach->size.data())
+                               : pack_mesh(src.mesh);
       LodRow lr{};
       for (int k = 0; k < 3; ++k) {
         lr.box_min[k] = p.box_min[k];
@@ -255,9 +256,10 @@ void create_family(gpu::Device& device, const InstancePipelines& ip, InstanceFam
       if (src.reach) {
         // The sphere round the reach box: every pose's.
         float r2 = 0;
-        for (int k = 0; k < 3; ++k) {
-          s[k] = src.reach_min[k] + src.reach_size[k] / 2;
-          r2 += src.reach_size[k] * src.reach_size[k] / 4;
+        const LodReach& b = *src.reach;
+        for (size_t k = 0; k < 3; ++k) {
+          s[k] = b.min[k] + b.size[k] / 2;
+          r2 += b.size[k] * b.size[k] / 4;
         }
         s[3] = std::sqrt(r2) * 1.0001f;
       } else {

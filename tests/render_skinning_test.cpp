@@ -133,9 +133,10 @@ TEST(a_skinned_lod_is_bounded_by_its_reach) {
   const a::Model m = a::make_test_model();
   const a::Box reach = a::reach_box(m, m.meshes[0]);
   const r::LodSource src = r::skinned_source(m.meshes[0], reach);
-  CHECK(src.reach);
+  CHECK(src.reach.has_value());
+  if (!src.reach) return;
   for (int k = 0; k < 3; ++k) {
-    CHECK(src.reach_min[k] == reach.min[k]);
-    CHECK(src.reach_size[k] == reach.max[k] - reach.min[k]);
+    CHECK(src.reach->min[static_cast<size_t>(k)] == reach.min[k]);
+    CHECK(src.reach->size[static_cast<size_t>(k)] == reach.max[k] - reach.min[k]);
   }
 }

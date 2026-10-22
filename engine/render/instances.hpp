@@ -49,7 +49,9 @@
 // ge:test tests/render_instances_test.cpp
 #pragma once
 
+#include <array>
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
@@ -73,12 +75,14 @@ inline constexpr uint32_t kMaxInstances = 1u << 23;  // a list entry's index bit
 // last LOD's is ignored (it is drawn down to kMinPixels). A LOD whose vertices are rewritten on
 // the GPU (a skinned mesh, render/skinning.hpp) gives the box its positions are packed into
 // (`reach`): the box of every pose, which also bounds the mesh's sphere for the cull.
+struct LodReach {
+  std::array<float, 3> min;
+  std::array<float, 3> size;
+};
 struct LodSource {
   MeshData mesh;
   float min_px = 0;
-  bool reach = false;
-  float reach_min[3] = {0, 0, 0};
-  float reach_size[3] = {0, 0, 0};
+  std::optional<LodReach> reach = std::nullopt;
 };
 struct MeshSource {
   std::vector<LodSource> lods;  // finest first, at most kMaxLods

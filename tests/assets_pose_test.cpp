@@ -81,6 +81,19 @@ uint64_t fnv(const std::vector<float>& v, uint64_t h = 0xcbf29ce484222325ull) {
   return h;
 }
 
+// Whether an environment variable is set (MSVC deprecates std::getenv in favour of its own).
+bool env_set(const char* name) {
+#ifdef _MSC_VER
+  char* v = nullptr;
+  size_t n = 0;
+  const bool set = _dupenv_s(&v, &n, name) == 0 && v != nullptr;
+  std::free(v);
+  return set;
+#else
+  return std::getenv(name) != nullptr;
+#endif
+}
+
 }  // namespace
 
 TEST(affine_inverse_and_trs_hold) {
@@ -179,7 +192,7 @@ TEST(posed_mesh_keeps_its_golden_bits) {
       got.push_back(line);
     }
   }
-  if (std::getenv("GE_GOLDEN_WRITE")) {
+  if (env_set("GE_GOLDEN_WRITE")) {
     std::ofstream out(ge::test::root_path(kGolden));
     out << "# clip (-1 rest) time, then FNV-1a 64 of the posed positions' and normals' bits\n";
     for (const auto& l : got) out << l << "\n";

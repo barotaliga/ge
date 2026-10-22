@@ -54,11 +54,12 @@ LodSource skinned_source(const assets::Mesh& mesh, const assets::Box& reach, flo
   LodSource src;
   src.mesh = mesh_data(mesh);
   src.min_px = min_px;
-  src.reach = true;
-  for (int k = 0; k < 3; ++k) {
-    src.reach_min[k] = reach.min[k];
-    src.reach_size[k] = reach.max[k] - reach.min[k];
+  LodReach box{};
+  for (size_t k = 0; k < 3; ++k) {
+    box.min[k] = reach.min[k];
+    box.size[k] = reach.max[k] - reach.min[k];
   }
+  src.reach = box;
   return src;
 }
 
