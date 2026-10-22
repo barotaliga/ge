@@ -9,8 +9,8 @@
 //
 // ge:summary The ge executable: parses the command line against the catalog and runs each command
 // ge:keywords cli ge main command-line usage dispatch help version new find explain use add
-// ge:keywords build test check digest golden lab graph shot upgrade doctor skills lessons json
-// ge:keywords bench profile mem leaks
+// ge:keywords build test check precheck ci digest golden lab graph shot upgrade doctor skills
+// ge:keywords lessons json bench profile mem leaks
 // ge:skill agent-interface
 // ge:test tests/cli_commands_test.cpp
 #include <algorithm>
@@ -20,6 +20,7 @@
 
 #include "cli/add.hpp"
 #include "cli/build.hpp"
+#include "cli/ci.hpp"
 #include "cli/commands.hpp"
 #include "cli/doctor.hpp"
 #include "cli/embedded.hpp"
@@ -175,6 +176,16 @@ Outcome run(const Args& a) {
     diff.psnr = flag_value(a, "psnr");
     diff.passthrough = a.passthrough;
     return run_lab_diff(build_options(a), diff);
+  }
+  if (name == "precheck") {
+    const std::string preset = flag_value(a, "preset");
+    return run_precheck(build_options(a), preset.empty()
+                                              ? std::vector<std::string>{"debug", "release"}
+                                              : std::vector<std::string>{preset});
+  }
+  if (name == "ci") {
+    return run_ci(fs::absolute(repo_of(a)), a.words.empty() ? "" : a.words[0],
+                  flag_value(a, "log"));
   }
   if (name == "digest") {
     return run_digest(build_options(a), a.words.empty() ? "" : a.words[0], has_flag(a, "write"));
