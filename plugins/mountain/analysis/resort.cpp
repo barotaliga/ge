@@ -16,7 +16,9 @@
 #include "mountain/analysis/resort.hpp"
 #include "mountain/analysis/routes.hpp"
 #include "mountain/mapgen/access_build.hpp"
+#include "mountain/mapgen/grades.hpp"
 #include "mountain/mapgen/hub.hpp"
+#include "mountain/mapgen/network.hpp"
 #include "mountain/mapgen/query.hpp"
 #include "mountain/mapgen/resort_rules.hpp"
 #include "mountain/mapgen/rules.hpp"
@@ -155,6 +157,20 @@ LevelAnalysis analyze_resort(const mapgen::Level& level) {
     }
     if (low < 0.98) {
       add("R27", Severity::error, "run " + run.id + "'s line is only " + fmt(low, 2) + " packed");
+    }
+    // The colour it is billed is the colour it measures; on a real face it may be billed the
+    // colour its real piste is signed, within `least::billed` colours of what it measures (R25).
+    if (run.kind == RunKind::piste) {
+      const int into = run.into ? run_index(runs, run.into->run) : -1;
+      const Run* onto = into >= 0 ? &runs[size_t(into)] : nullptr;
+      const mapgen::PisteGrade measured =
+          mapgen::run_colour(run.points, onto ? &onto->points : nullptr);
+      const int off = std::abs(int(measured) - int(run.grade));
+      if (off > (level.face ? RR::massif::real::least::billed : 0)) {
+        add("R27", Severity::error,
+            "run " + run.id + " is billed " + mapgen::grade_name(run.grade) + " and measures " +
+                mapgen::grade_name(measured));
+      }
     }
   }
   // A real face carries the runs its mountain gives it (R25).

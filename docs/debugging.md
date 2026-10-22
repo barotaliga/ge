@@ -127,9 +127,49 @@ an SVG, and the answer lists them in `written`, a summary of each series in `tex
   file and three charts (speed, sideways load, edge and lean) with gates, flights and spikes.
   `--log=course=debug,skier=debug` adds the same run's events by step.
 
-## Next: animation views (M14b)
+- `anim` (the skier plugin): the skier's figure ridden through a scenario and recorded as a pose
+  track: filmstrips, onion skins, joint angles, a jolt heatmap and its faults; a copy with a pop,
+  a stretch and a clip planted must have each found where it was put.
 
-A pose track (the figure's joints and bones, and its mesh when it has one, recorded every frame)
-drawn as filmstrips (wireframe and bones from the side, behind and above), onion skins with the
-hands' and feet's paths, joint angles and their acceleration, a jolt heatmap, limb stretch and
-clips, with snaps, pops, stretches and clips measured and flagged.
+## Animation views (`engine/lab/anim.hpp`)
+
+An animation is judged by LOOKING at it frame by frame and by MEASURING how its joints move: a
+pop or a stretched bone that a still frame hides is one number out of line on a chart. Any figure
+records into a POSE TRACK:
+
+- A `Rig`: the joints' names, each joint's parent (its bone runs from the parent; -1 is a root),
+  its side (left, centre, right: the colour it is drawn in) and the END joints whose paths an
+  onion skin traces (hands, tips, feet).
+- A frame a step: every joint in the FIGURE'S OWN FRAME (x right, y up, z forward, the ground at
+  `floor`), so the track shows the animation, not the figure travelling. A figure's pieces add
+  their boxes as a wireframe (`add_box_wire`).
+
+`measure_motion` gives every joint every frame its speed, acceleration and jolt, every bone its
+stretch against its median length, and every joint with a parent and a child its angle and the
+angle's rate. `anim_findings` reads them for five faults:
+
+| Fault | What it is | Flagged when |
+| --- | --- | --- |
+| `pop` | a joint jumps in one frame | its speed is a spike, more than 1 m/s over its neighbours |
+| `snap` | a joint's acceleration jerks | its acceleration is a spike, 100 m/s^2 over its neighbours, with no pop beside it |
+| `angle-snap` | a joint turns too fast for one frame | its angle's rate is a spike, 360 deg/s over its neighbours |
+| `stretch` | a bone changes length | more than 5% off its median length |
+| `clip` | a joint goes through the ground | more than 2 cm under the floor |
+
+A spike is the outlier rule's (`stats.hpp`) AND past the absolute floor (`AnimLimits`), so a
+smooth 120 Hz motion flags nothing. Neighbouring frames of one fault on one joint are one finding
+at its worst frame (a pop at the frame the joint jumped to), with a sentence saying what, where
+and against what.
+
+The views:
+
+| View | What it shows | What it catches |
+| --- | --- | --- |
+| `filmstrip` | chosen frames side by side from the side, behind or above; the wireframe grey under the bones (left blue, right orange, the spine ink); one scale for every panel; findings ringed red in their frame | a limb that changes size, a pose that reads wrong from one side only, the frame a fault is at |
+| `onion_skin` | frames laid over one another, the earlier fainter, and each end joint's path over every frame between | kinks and jumps in a path, a swing that is not symmetric |
+| `angle_chart` | the angle at chosen joints over time (chart.hpp, spikes ringed) | a joint that never bends, one that snaps |
+| `jolt_heatmap` | every joint's jolt over time, one row a joint, on a log scale | the moments the whole figure jerks, the joints that jerk alone |
+| `motion_series` | the measures as a series file: `<joint>.accel`, `.jolt`, `.angle` | anything else, through `ge graph` |
+
+`make lab LAB=anim ARGS="--scenario=turns"` is the skier's; a new figure gets a lab of its own
+that records its track the same way and plants the same three faults in a copy.

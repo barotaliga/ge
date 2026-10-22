@@ -13,7 +13,8 @@
 //   neighbours (a hitch in a frame time, a snap in a joint) is a spike, a slow climb is not. The
 //   robust scale of those deviations is floored at 1% of the series' p1..p99 range, so a smooth
 //   signal (a 120 Hz speed, whose step-to-step deviations are all near nothing) flags nothing
-//   but a real jump.
+//   but a real jump; and never under a millionth of the series' largest value, so a flat one's
+//   rounding flags nothing either.
 //
 // No transcendental, sorts on copies: everything here is deterministic.
 //

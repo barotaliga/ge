@@ -71,3 +71,24 @@ draw the same charts with `lab/chart.hpp` (`line_chart`, `histogram_chart`, `box
   unlike the rest. Find its row in the file.
 - **Many rings on one line** is a noisy signal, not many bugs: the worst are ringed first.
 - **Two files, two lines**: the gap between before and after is the change's effect.
+
+## Animations
+
+Judge a moving figure on a POSE TRACK (`lab/anim.hpp`), never by eye on the game alone. Record
+its joints every step in its own frame (x right, y up, z forward, the ground at `floor`), with its
+pieces' boxes as a wireframe, then:
+
+```cpp
+lab::PoseTrack track;                     // track.rig: joints, parents, sides, end joints
+track.add_frame(joints, wire);            // every step, from your figure's pose
+const lab::Motion m = lab::measure_motion(track);
+for (const lab::AnimFinding& f : lab::anim_findings(track, m)) lab.note(f.note);
+lab.shot({...}, lab::filmstrip(track, {lab::AnimView::side, lab::spread_frames(track, 16)}));
+```
+
+- **Filmstrips** (side, behind, above) show the frames, findings ringed red; **onion skins** show
+  the hands' and feet's paths; `angle_chart` and `jolt_heatmap` are charts like any other.
+- The faults: `pop` (a joint jumps in one frame), `snap` (its acceleration jerks), `angle-snap`
+  (a joint turns too fast), `stretch` (a bone changes length), `clip` (a joint under the ground).
+- Plant a pop, a stretch and a clip in a COPY of the track and fail the lab if one is missed, so
+  the measures stay honest; report the real track's findings and compare them before and after.

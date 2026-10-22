@@ -30,6 +30,7 @@
 #include "core/prng.hpp"
 #include "mountain/mapgen/grades.hpp"
 #include "mountain/mapgen/real_face.hpp"
+#include "mountain/mapgen/real_hints.hpp"
 #include "mountain/mapgen/regions.hpp"
 
 namespace ge::mountain::mapgen {
@@ -56,11 +57,15 @@ inline constexpr int kProfileSamples = 1024;
 // Everything the mountain is drawn from, dealt once an attempt.
 // R25 — A REAL FACE a massif is laid 1:1 off (real_face.hpp): its heights, its valley floor's real
 // height (the map's nought, so a map height is the real one less it), and its own profile: its
-// mean height a grid row at a time over the floor, never climbing below the ridge, m.
+// mean height a grid row at a time over the floor, never climbing below the ridge, m. With it,
+// the real ski area's lifts and pistes on the attempts they are leant on (real_hints.hpp), and
+// the face's woods by height where its map draws any.
 struct PlanFace {
   std::shared_ptr<const RealFace> grid;
   double floor = 0;
   std::vector<double> rows;
+  std::shared_ptr<const RealHints> hints;
+  std::optional<FaceWoods> woods;
 };
 
 struct TerrainPlan {

@@ -1,7 +1,7 @@
 // The run's create and its step (game.hpp has the order).
 //
 // ge:summary create_game, step and state_hash's bodies
-// ge:keywords game create_game step state_hash log channel course skier field log_step
+// ge:keywords game create_game step state_hash log channel course skier field log_step wanted
 // ge:skill sim
 // ge:test tests/fall_line_sim_test.cpp
 #include "fall_line/sim/game.hpp"
@@ -14,6 +14,8 @@
 
 #include "fall_line/sim/course.hpp"
 #include "fall_line/sim/field.hpp"
+#include "fall_line/sim/free.hpp"
+#include "fall_line/sim/wanted.hpp"
 #include "mountain/mapgen/generate.hpp"
 #include "prof/zones.hpp"
 #include "skier/skier.hpp"
@@ -26,19 +28,25 @@ namespace out = ge::core::output;
 
 namespace {
 
-// THE RUN'S LOG (docs/debugging.md): this step's events on three channels (`course`: gates,
+// THE RUN'S LOG (docs/debugging.md): this step's events on four channels (`course`: gates,
 // misses, the finish, resets; `skier`: flights, landings, wipeouts, glances; `field`: racers
-// meeting) at debug, and every racer's state each step on `skier` at trace. Off by default: a
-// dropped line costs a table read and formats nothing.
+// meeting; `wanted`: the stars, seen or searching, the arrest) at debug, and every racer's state
+// each step on `skier` at trace. Off by default: a dropped line costs a table read and formats
+// nothing.
 void log_step(const GameState& state) {
   static const out::Channel kCourse = out::channel("course");
   static const out::Channel kSkier = out::channel("skier");
   static const out::Channel kField = out::channel("field");
+  static const out::Channel kWanted = out::channel("wanted");
   const auto f = [](double v, int d) { return ge::core::num::to_fixed(v, d); };
   for (const GameEvent& e : state.events) {
     const bool course = e.kind == EventKind::gate || e.kind == EventKind::missed ||
-                        e.kind == EventKind::finish || e.kind == EventKind::reset;
-    const out::Channel ch = e.kind == EventKind::shoulder ? kField : course ? kCourse : kSkier;
+                        e.kind == EventKind::finish || e.kind == EventKind::reset ||
+                        e.kind == EventKind::onto || e.kind == EventKind::arrived;
+    const out::Channel ch = e.kind == EventKind::shoulder ? kField
+                            : e.kind == EventKind::wanted ? kWanted
+                            : course                      ? kCourse
+                                                          : kSkier;
     if (!out::enabled(ch, out::Level::debug)) continue;
     const sk::SkierState& s = state.racers[static_cast<size_t>(e.racer)].skier;
     std::string line = "racer " + std::to_string(e.racer) + " ";
@@ -69,6 +77,16 @@ void log_step(const GameState& state) {
       case EventKind::takeoff:
         line += " owing gate " + std::to_string(e.gate);
         break;
+      case EventKind::wanted:
+        line += " " + std::string(wanted_change_name(wanted_change(e))) + ", " +
+                std::to_string(e.gate) + " stars";
+        break;
+      case EventKind::onto:
+        line += " run " + std::to_string(e.gate);
+        break;
+      case EventKind::arrived:
+        line += " at the foot of run " + std::to_string(e.gate) + " in " + f(e.value, 3) + " s";
+        break;
     }
     line += " at x " + f(s.x, 1) + " z " + f(s.z, 1) + ", " + f(s.speed * 3.6, 1) + " km/h";
     out::log_on(ch, out::Level::debug, line);
@@ -81,6 +99,15 @@ void log_step(const GameState& state) {
                     f(s.speed * 3.6, 2) + " km/h edge " + f(s.edge, 3) + " tuck " + f(s.tuck, 2) +
                     " lean " + f(s.lean, 3) + " g_lat " + f(s.g_lat, 2) +
                     (s.on_snow ? "" : " air") + (s.down ? " down" : ""));
+  }
+}
+
+// The reset the run's mode makes.
+void reset(GameState& state, int32_t i) {
+  if (state.mode == Mode::free) {
+    reset_free(state, i);
+  } else {
+    reset_racer(state, i);
   }
 }
 
@@ -106,6 +133,12 @@ const char* event_name(EventKind kind) {
       return "reset";
     case EventKind::shoulder:
       return "shoulder";
+    case EventKind::wanted:
+      return "wanted";
+    case EventKind::onto:
+      return "onto";
+    case EventKind::arrived:
+      return "arrived";
   }
   return "?";
 }
@@ -130,6 +163,7 @@ GameState create_game_on(std::shared_ptr<const mg::Level> level, int32_t racers)
   const int32_t most = slots < 1 ? 1 : slots;
   state.racers.resize(static_cast<size_t>(racers > most ? most : racers < 1 ? 1 : racers));
   state.events.reserve(kEventsReserve);
+  state.wanted.pursuers.reserve(wanted::kMaxPursuers);
   const std::vector<Rider> field =
       deal_field(*state.level, static_cast<int32_t>(state.racers.size()));
   for (int32_t i = 0; i < static_cast<int32_t>(state.racers.size()); i++) {
@@ -150,7 +184,7 @@ void step(GameState& state, std::span<const Controls> controls) {
     Progress& p = r.progress;
     const Controls c =
         static_cast<size_t>(i) < controls.size() ? controls[static_cast<size_t>(i)] : Controls{};
-    if (c.reset && !p.finished) reset_racer(state, i);
+    if (c.reset && !p.finished) reset(state, i);
     sk::SkierInput in = c.ski;
     if (p.finished) in = sk::SkierInput{0, 0, 1, false};
     const double x0 = r.skier.x;
@@ -160,7 +194,10 @@ void step(GameState& state, std::span<const Controls> controls) {
       GE_ZONE("skier");
       sk::step_skier(r.skier, in, world, state.spec, kDt, ev);
     }
-    {
+    if (state.mode == Mode::free) {
+      GE_ZONE("free");
+      step_free(state, i, x0, z0);
+    } else {
       GE_ZONE("course");
       step_course(state, i, x0, z0);
     }
@@ -175,12 +212,16 @@ void step(GameState& state, std::span<const Controls> controls) {
     if (p.finished) continue;
     p.stuck = !r.skier.down && r.skier.speed < kStuckSpeed ? p.stuck + kDt : 0;
     if ((r.skier.down && r.skier.down_time > kDownReset) || p.stuck > kStuckReset) {
-      reset_racer(state, i);
+      reset(state, i);
     }
   }
   {
     GE_ZONE("meet");
     meet_racers(state);
+  }
+  {
+    GE_ZONE("wanted");
+    step_wanted(state);
   }
   log_step(state);
   state.steps++;
@@ -208,8 +249,18 @@ uint64_t state_hash(const GameState& state, uint64_t h) {
     mix(p.wipeouts);
     mix(p.missed_gates);
     mix(p.stuck);
+    if (state.mode != Mode::free) continue;
+    const FreeRide& f = r.free;
+    mix(f.run);
+    mix(f.last);
+    mix(f.last_s);
+    mix(static_cast<double>(f.skied.size()));
+    for (const int32_t k : f.skied) mix(k);
+    mix(f.distance);
+    mix(f.arrived ? 1 : 0);
+    mix(f.arrived_at);
   }
-  return h;
+  return wanted_hash(state.wanted, h);
 }
 
 }  // namespace fall_line::sim

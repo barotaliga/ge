@@ -16,8 +16,9 @@ Every row kept every level digest (v10: `0b310d692fbf2dee`, v1: `4c49f555e1c4e25
 | The ski routes' search keeps each step's felled metres instead of walking the line through the trees on every visit | about −8% | | `plugins/mountain/mapgen/ski_routes.cpp` |
 | The mountain's rows baked in bands on threads | about −12% | most of the v1 gain | `engine/core/parallel.hpp`, `massif.cpp`, `terrain.cpp` |
 | All three, together | 2906 ms → 2154 ms (−26%) | 542 ms → 277 ms (−49%) | |
+| The piste's nearest-point lookup on a dense grid over the cells it touches (was a hash map), and both it and the network index walking each ring only where it crosses the occupied cells | 2156 ms → 1543 ms (−28%) | 280 ms → 257 ms (−8%) | `query.cpp`, `net_index.hpp` |
 
-What is left, by callgrind's instruction counts on seed 38 (v10): the ski routes' two
-searches (about a fifth now), the run walker's nearest-run lookups (18%), the analysis (9%) and
-the piste's nearest-point lookup through its hash-map cells (8%), the next candidate for a dense
-grid like the network index's.
+The lookups' ring walks visited every cell of every ring out to the search radius, most of
+them empty: a query far from any run read up to 90 rings of hash-map misses. Clamping each ring
+to the box the segments lie in skips those cells and reads the occupied ones in the same order,
+so the segment that wins a tie is the same and no bit moves.

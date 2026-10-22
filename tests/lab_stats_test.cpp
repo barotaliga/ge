@@ -41,3 +41,12 @@ TEST(a_smooth_climb_has_no_spikes_and_a_jump_is_one) {
   const auto s = gl::spikes(v);
   CHECK(s.size() == 1 && s[0] == 300);
 }
+
+TEST(a_flat_series_rounding_is_not_a_spike) {
+  std::vector<double> v(600, 132.9);
+  for (size_t i = 0; i < v.size(); i += 7) v[i] += 3e-14;
+  CHECK(gl::spikes(v).empty());
+  v[200] += 1;
+  const auto s = gl::spikes(v);
+  CHECK(s.size() == 1 && s[0] == 200);
+}

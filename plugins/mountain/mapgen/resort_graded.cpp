@@ -16,6 +16,7 @@
 #include "mountain/mapgen/grades.hpp"
 #include "mountain/mapgen/kickers.hpp"
 #include "mountain/mapgen/network_build.hpp"
+#include "mountain/mapgen/real_lean.hpp"
 #include "mountain/mapgen/resort_build.hpp"
 #include "mountain/mapgen/resort_rules.hpp"
 
@@ -160,7 +161,9 @@ StageResult resort_graded(ResortAttempt& a) {
     const WalkedRun& w = b.walked;
     if (w.spec.kind != RunKind::piste) continue;
     const WalkedRun* onto = w.into ? &a.built[size_t(w.into->run)].walked : nullptr;
-    b.grade = run_colour(w.track.points, onto ? &onto->track.points : nullptr);
+    // On a real face a run is billed its real piste's signed colour where it measures near it.
+    b.grade = billed_colour(w.spec.signed_as,
+                            run_colour(w.track.points, onto ? &onto->track.points : nullptr));
     graded++;
   }
   if (graded < (a.face ? RR::massif::real::least::runs : RR::network::runs_min)) {

@@ -10,11 +10,13 @@
 
 #include "core/heightfield.hpp"
 #include "core/math.hpp"
+#include "core/num.hpp"
 #include "mountain/mapgen/courses.hpp"
 #include "mountain/mapgen/forest.hpp"
 #include "mountain/mapgen/grades.hpp"
 #include "mountain/mapgen/hub.hpp"
 #include "mountain/mapgen/lift_chain.hpp"
+#include "mountain/mapgen/real_hints.hpp"
 #include "mountain/mapgen/resort_build.hpp"
 #include "mountain/mapgen/resort_rules.hpp"
 #include "mountain/mapgen/resort_woods.hpp"
@@ -26,8 +28,12 @@ namespace ge::mountain::mapgen {
 
 using ge::core::hypot;
 using ge::core::sample_field;
+namespace num = ge::core::num;
 
 namespace {
+
+// R25 — how much of R14's woods a real face keeps where its map draws the band bare.
+constexpr double kFaceThinnest = 0.2;
 
 // The hour the face is turned to: the sun a little past noon, when most of a day's skiing is.
 constexpr double kFacingHour = 12.5;
@@ -62,7 +68,23 @@ StageResult resort_woods(ResortAttempt& a) {
     // Off every run's corridor, not only the nearest's (R14).
     return a.net.covers(x, z, rules::forest::corridor, hit);
   };
-  options.cover = [&](double y) { return woods_at_depth(row, line_y - y); };
+  // On a real face whose map draws woods, R14's curve is scaled by how wooded the real face is at
+  // the same height (laid 1:1 over its floor): its densest band keeps the whole curve, a bare one
+  // `kFaceThinnest` of it, so a band the map draws bare reads as a wood thinned out (R25).
+  const std::optional<FaceWoods>& face_woods =
+      a.plan.face ? a.plan.face->woods : std::optional<FaceWoods>{};
+  double peak = 0;
+  if (face_woods) {
+    for (const double b : face_woods->bands) peak = num::max(peak, b);
+  }
+  options.cover = [&](double y) {
+    WoodsCover c = woods_at_depth(row, line_y - y);
+    if (peak <= 0) return c;
+    const double share = num::min(1.0, face_cover_at(*face_woods, a.plan.face->floor + y) / peak);
+    c.keep *= kFaceThinnest + (1 - kFaceThinnest) * share;
+    c.close *= share;
+    return c;
+  };
   options.tall = [&](double y) { return tall_at_depth(row, line_y - y); };
   std::vector<Kicker> kickers;
   std::vector<Cliff> cliffs;

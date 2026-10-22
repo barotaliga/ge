@@ -33,6 +33,12 @@ the row when the file moves.
 | `engine/core/solar.cpp` | `oss-game-framework/src/core/solar.ts` |  |
 | `engine/core/solar.hpp` | `oss-game-framework/src/core/solar.ts` | sunAt moonAt daylightWindow sunOnDate moonOnDate hourOfElevation |
 | `engine/loop/run_clock.hpp` | `oss-game-framework/src/loop/run-clock.ts` | createRunClock MAX_FRAME_SECONDS |
+| `games/fall_line/sim/free.cpp` | `game5/engine/game/skied.ts`, `course.ts` | runUnder noteRun noteSkied leftRunPoint skiedResetPoint freeSpawn |
+| `games/fall_line/sim/free.hpp` | `game5/engine/game/skied.ts`, `course.ts` | runUnder noteRun noteSkied leftRunPoint skiedResetPoint freeSpawn |
+| `games/fall_line/sim/wanted.cpp` | `game5/engine/game/wanted.ts` | raiseHeat setWanted arrestSkier seesQuarry throughWoods underCover stepWanted groundWave wavesSent |
+| `games/fall_line/sim/wanted.hpp` | `game5/engine/game/wanted.ts` | quarryOf raiseHeat setWanted arrestSkier arrestedOf survivedOf rosterOf groundWave wavesSent seesQuarry throughWoods underCover stepWanted |
+| `games/fall_line/sim/wanted_rules.hpp` | `game5/engine/game/defs/wanted.ts` | WANTED WantedRoster WaveMix GroundWaves PursuerKind WantedCause |
+| `games/fall_line/sim/wanted_state.hpp` | `game5/engine/game/wanted-state.ts` | Pursuer WantedEnd WantedState WantedEvent |
 | `games/fall_line/sound/bank.cpp` | `game5/pwa/src/game/audio/bank.ts` | RUN_BANK |
 | `games/fall_line/sound/bank.hpp` | `game5/pwa/src/game/audio/bank.ts` | RUN_BANK |
 | `games/fall_line/sound/listener.hpp` | `game5/pwa/src/game/audio/listener.ts` | Listener LISTENERS listenerFor |
@@ -61,9 +67,12 @@ the row when the file moves.
 | `plugins/mountain/analysis/speed_track.cpp` | `game5/tests/speed_ski_test.ts` | the speed track's assertions, as R34's analysis |
 | `plugins/mountain/labs/dem_tiles.cpp` | `game5/scripts/lib/dem-tiles.mjs` | openTiff createDem tileName fetchTile heightAt |
 | `plugins/mountain/labs/dem_tiles.hpp` | `game5/scripts/lib/dem-tiles.mjs` | createDem tileName fetchTile heightAt |
+| `plugins/mountain/labs/fetch.cpp` | `game5/scripts/real-hints.mjs`, `game5/scripts/real-faces.mjs` | a download to a file through curl |
 | `plugins/mountain/labs/junctions_lab.cpp` | `game5/scripts/junctions-lab.mjs` | the steps by kind, the sheet (read down each run's line, not every packed cell) |
+| `plugins/mountain/labs/osm_data.cpp` | `game5/scripts/real-hints.mjs` | the map API's tiles and relations, read and cached (the XML read by the lab's own scanner) |
 | `plugins/mountain/labs/park_lab.cpp` | `game5/scripts/level-map.mjs` | the park drawn (the close-up and the detrended profile are the engine's own) |
 | `plugins/mountain/labs/real_faces_lab.cpp` | `game5/scripts/real-faces.mjs`, `game5/scripts/lib/real-face-files.mjs` | crop smooth encode measure writeFaceFile writeFaceIndex (the crop search not carried) |
+| `plugins/mountain/labs/real_hints_lab.cpp` | `game5/scripts/real-hints.mjs`, `game5/scripts/lib/real-face-forest.mjs`, `game5/scripts/lib/real-face-files.mjs` | fetch parse lifts pistes woods encode writeHintFile writeHintIndex (houses, streets, the town and water not carried) |
 | `plugins/mountain/labs/real_maps_lab.cpp` | `game5/scripts/resort-map.mjs`, `game5/tests/real_faces_test.ts` | every face built on a seed: the attempt, the build time, what it carries |
 | `plugins/mountain/labs/resort_lab.cpp` | `game5/scripts/resort-map.mjs` | the plan, the listing (no panorama or charts yet) |
 | `plugins/mountain/labs/resort_map.cpp` | `game5/scripts/lib/resort-draw.mjs` | renderResortPlan |
@@ -123,6 +132,7 @@ the row when the file moves.
 | `plugins/mountain/mapgen/network_build.hpp` | `game5/engine/mapgen/network-build.ts` |  |
 | `plugins/mountain/mapgen/network_stamp.cpp` | `game5/engine/mapgen/network-build.ts` | networkStamp onCore stampRun pastJunction |
 | `plugins/mountain/mapgen/network_stamp.hpp` | `game5/engine/mapgen/network-build.ts` | networkStamp onCore stampRun NetworkStamp |
+| `plugins/mountain/mapgen/packed.cpp` | `game5/engine/mapgen/real-face.ts`, `game5/engine/mapgen/real-hints.ts` | the zig-zag varint and base64 codec both decoders shared |
 | `plugins/mountain/mapgen/park.cpp` | `game5/engine/mapgen/trick-field.ts`, `game5/engine/mapgen/resort-park.ts` | trickKicker planTrickField stampTrickField parkCourse stampPark |
 | `plugins/mountain/mapgen/park.hpp` | `game5/engine/mapgen/trick-field.ts` | ParkAsk ParkLine planTrickField stampTrickField |
 | `plugins/mountain/mapgen/query.cpp` | `game5/engine/mapgen/query.ts` | nearestTrackPoint nearestWithin |
@@ -131,6 +141,9 @@ the row when the file moves.
 | `plugins/mountain/mapgen/real_face.hpp` | `game5/engine/mapgen/real-face.ts`, `game5/engine/mapgen/real-faces-index.ts` | RealFace FaceData FACE_GRID realFace faceHeight globeAt mapAt |
 | `plugins/mountain/mapgen/real_face_crops.hpp` | `game5/scripts/lib/real-face-crops.mjs` | FACES SIZE (scale 1 dropped) |
 | `plugins/mountain/mapgen/real_faces/` | `game5/engine/mapgen/real-faces/`, `game5/engine/mapgen/real-faces-index.ts` | the faces' heights, baked again by the engine's own bake, the same bits |
+| `plugins/mountain/mapgen/real_hints.cpp` | `game5/engine/mapgen/real-hints.ts`, `game5/engine/mapgen/real-face.ts` | decode realHints faceHasHints realFaceTrees faceCoverAt (houses, streets, the town and water not carried) |
+| `plugins/mountain/mapgen/real_hints/` | `game5/engine/mapgen/real-hints/`, `game5/engine/mapgen/real-hints-index.ts` | the faces' hints, baked again by the engine's own bake |
+| `plugins/mountain/mapgen/real_lean.cpp` | `game5/engine/mapgen/real-hints.ts`, `game5/engine/mapgen/resort.ts`, `game5/engine/mapgen/resort-woods.ts` | leanStation leanLift pisteFor pisteVia pisteAhead alongPiste pisteWidth billedColour |
 | `plugins/mountain/mapgen/regions.cpp` | `game5/engine/mapgen/regions.ts` | REGIONS treeKindAt scaleCount |
 | `plugins/mountain/mapgen/regions.hpp` | `game5/engine/mapgen/regions.ts` | regionRow treeKindAt |
 | `plugins/mountain/mapgen/resort.cpp` | `game5/engine/mapgen/resort.ts` | planResort placeStations SLOTS TILT TALL_TILT ROAD_ROW |
@@ -201,6 +214,7 @@ the row when the file moves.
 | `tests/mountain_generate_test.cpp` |  | generateLevel levelDigest analyzeLevel |
 | `tests/mountain_park_test.cpp` | `game5/engine/mapgen/trick-field.ts` | the terrain park (R20) |
 | `tests/mountain_real_face_test.cpp` | `game5/tests/real_faces_test.ts` | every face decodes to a mountain over its floor; a face builds a clean map |
+| `tests/mountain_real_hints_test.cpp` | `game5/tests/real_faces_test.ts` | every face's hints decode onto its map; the codec round trips |
 | `tests/mountain_ski_cross_test.cpp` | `game5/engine/mapgen/ski-cross.ts` | the ski-cross course (R35) |
 | `tests/mountain_ski_jump_test.cpp` | `game5/tests/ski_jump_test.ts` | the ski jumping hill (R43) |
 | `tests/mountain_ski_routes_test.cpp` | `game5/engine/mapgen/ski-routes.ts` | the ski routes (R42) |

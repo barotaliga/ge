@@ -40,6 +40,7 @@
 #include "core/prng.hpp"
 #include "mountain/mapgen/grades.hpp"
 #include "mountain/mapgen/net_index.hpp"
+#include "mountain/mapgen/real_lean.hpp"
 #include "mountain/mapgen/resort_rules.hpp"
 #include "mountain/mapgen/rules.hpp"
 #include "mountain/mapgen/terrain.hpp"
@@ -76,6 +77,13 @@ struct RunSpec {
   // A LINK LANE's end: the lift whose bottom station it runs to.
   std::optional<std::string> to = std::nullopt;
   AvoidAt avoid = nullptr;
+  // R25 — ON A REAL FACE (real_lean.hpp): the bends of a real piste it steers through, in order
+  // down the face; where it steers to follow the real pistes between them; the real width of the
+  // pistes it is laid on; and the colour the real piste it is laid on is signed.
+  std::vector<PlanPoint> via = {};
+  HintSteer follow = nullptr;
+  HintWidth width_at = nullptr;
+  std::optional<PisteGrade> signed_as = std::nullopt;
 };
 
 // Where a run merges into another: the other's index in the walk and the arc on it.
