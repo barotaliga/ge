@@ -17,7 +17,8 @@
 //   hiz                  -> hiz (the depth's pyramid)
 //   instances.cull.late  -> instances.late (what the last frame's pyramid hid, against this one)
 //   instances.depth.late -> depth
-//   terrain              -> hdr motion (shaded where the depth is equal; reads shadows.maps)
+//   terrain              -> hdr motion (shaded where the depth is equal, in the snow's material;
+//                           reads shadows.maps)
 //   instances            -> hdr motion (both lists, where the depth is equal)
 //   sky                  -> hdr motion (behind depth)
 //   taa                  -> taa.history (at the output's size; with FrameOptions::taa)
@@ -47,6 +48,7 @@
 
 #include "gpu/device.hpp"
 #include "gpu/pipeline.hpp"
+#include "mountain/app/snow.hpp"
 #include "mountain/mapgen/types.hpp"
 #include "render/bloom.hpp"
 #include "render/frame.hpp"
@@ -68,6 +70,7 @@ struct FrameOptions {
   bool occlusion = true;        // cull the instances by the depth pyramid (off: the frustum only)
   uint32_t shadow_size = 2048;  // the sun's shadow maps' texels a side
   double bloom = 0.04;          // the share of the bloom's glow in the picture; 0: none
+  bool snow = true;             // the snow's material (mountain/app/snow.hpp); off: the albedo lit
 };
 
 // What of the run a frame draws, besides the map: the racers, the player's first.
@@ -88,6 +91,7 @@ struct GameFrame {
   wgpu::BindGroup post_groups[2];  // over TAA's histories; [0] over the HDR target without TAA
   ge::render::Sky sky;
   ge::render::Terrain terrain;
+  ge::mountain::app::SnowMaterial snow;
   ge::render::Hiz hiz;
   ge::render::Taa taa;
   ge::render::Bloom bloom;

@@ -1,6 +1,6 @@
 ---
 name: agent-interface
-description: "Use for how the engine talks to agents in gameengine2 and in the game repos that consume it: the diagnostics convention and its test, the consumer skills (consumer-skills/), the game scaffold (scaffold/), the ge CLI in engine/cli (its catalog, the --json answer, find, explain, new, use, add, build, test, check, lab, doctor, skills sync, lessons) and the templates ge add writes (templates/)."
+description: "Use for how the engine talks to agents in gameengine2 and in the game repos that consume it: the diagnostics convention and its test, the consumer skills (consumer-skills/), the game scaffold (scaffold/), the ge CLI in engine/cli (its catalog, the --json answer, find, explain, new, use, add, build, test, check, lab, play, sim, replay, state, diverge, doctor, skills sync, lessons), the play contract in engine/play and the templates ge add writes (templates/)."
 ---
 
 # The agent interface
@@ -44,6 +44,7 @@ example and consumer skill); the parser, `ge help` and `ge help --json` all read
 | `ge use <plugin>` | Link a plugin into the game's sim, sync its skill (and the skills of the plugins it brings) | `add.hpp` |
 | `ge add system\|lab\|test <name>` | A working piece from `templates/`, tags filled, formatted, refusing to write over a file | `add.hpp` |
 | `ge build`, `ge test`, `ge check`, `ge lab` | Configure, build, test, the whole gate, a lab: the tool's output in `build/<preset>/ge-*.log`, the answer as findings | `build.hpp` |
+| `ge play`, `ge sim`, `ge replay`, `ge state`, `ge diverge` | The game's `play` executable built and run: the protocol on the terminal, the pilot's runs and their input logs, a log replayed to its digest, the state at a step, where two runs part | `play.hpp` |
 | `ge doctor`, `ge skills sync`, `ge lessons` | The repo against the rules; the engine's skills and the lock; a skill's lessons | `doctor.hpp`, `skills.hpp` |
 
 - **One answer shape.** Every command builds an `Outcome` (`outcome.hpp`: findings, written,
@@ -56,6 +57,17 @@ example and consumer skill); the parser, `ge help` and `ge help --json` all read
   `FAIL` lines into findings at a repo-relative `file:line`, deduplicated and capped. A tool
   whose output it does not recognise still fails with a finding that names the log. A new
   shape is a case in `tests/cli_build_test.cpp` first.
+- **The play contract** (`engine/play`, `ge::play`) is the engine's half of `ge play` and its
+  siblings: a game fills `GameSpec` and `Run` (`game.hpp`) and registers it with `GE_GAME` in its
+  `play` executable, whose `main` is `play_main` (`main.hpp`). Everything else is the engine's,
+  once for every game: `Session` snaps every input onto its axis's grid, records it on the input
+  log and steps the run (`session.hpp`), so an agent's run, the pilot's and a replay are written
+  down the same way. The play executable answers each batch command with one JSON line;
+  `play_answer` (`cli/play.cpp`) turns it into an outcome. The protocol and the log format are
+  stated in `session.hpp` and `inputs.hpp` alone; `docs/labs.md` § Drive labs and the
+  `play-test` consumer skill describe them, so a change to either moves all three.
+  `tests/play_session_test.cpp` holds the session on a toy game, `tests/fall_line_play_test.cpp`
+  on Fall Line, and the `scaffold` job plays a fresh repo.
 - **Every command is budgeted.** The `cli-loop` lab runs the loop on a scaffolded repo and
   fails a text answer over its line budget: an agent pays for every line.
 - **ge carries what it writes.** `cmake/EmbedFiles.cmake` compiles every
@@ -87,7 +99,8 @@ example and consumer skill); the parser, `ge help` and `ge help --json` all read
 ## Consumer skills (`consumer-skills/`)
 
 The skills a game repo needs, written for a game repo (its paths, its `make` targets, the
-engine as a dependency), never for this one: `ge` (the command line and its loop),
+engine as a dependency), never for this one: `ge` (the command line and its loop), `play-test` (the play contract,
+`ge play` and its siblings),
 `start-work`, `write-code`, `engine` (the pin, determinism, upgrading, reporting an engine
 bug), `sim-system`, `labs`, `skill-reflection` and `commit`, plus one per plugin (`racing`,
 `mountain`, `skier`) with `plugin:` front matter.

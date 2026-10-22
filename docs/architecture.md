@@ -67,6 +67,12 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   the window and the game's GPU labs link): its pass table over `engine/render`, the
   `FrameView` it extracts (from named views now, from `GameState` once the run lands),
   Fall Line's own looks, then its HUD and cards, and its sound beds.
+- **`engine/play`**: the play contract (`ge::play`): what a game fills in so it can be played,
+  replayed and inspected without a screen (its axes, its options, a `Run`: step, over, digest,
+  observe, state, report, pilot), and everything the engine does with it once for every game:
+  the session that snaps, records and steps every input, the line protocol, the plain-text
+  input log, replay, the state at a step, the divergence search, and the `play` executable's
+  main. It depends on `engine/core` alone; a game's `play` target links it and `ge` runs it.
 - **`engine/lab`**: the lab contract and the `labs` runner (`docs/labs.md`): how any
   subsystem, plugin or game declares a lab, the CPU raster and PNG writer its pictures are
   drawn with, and the report, contact sheet and digest a run leaves. Labs themselves sit in

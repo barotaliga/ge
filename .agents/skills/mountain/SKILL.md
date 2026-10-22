@@ -1,6 +1,6 @@
 ---
 name: mountain
-description: "Use for plugins/mountain in gameengine2: the generated ski mountain any game on one links. The world generator (mapgen: generate_level, the terrain, the piste, kickers, cliffs, the forest, the day and the weather, the gates, versions, level_digest) and the rule book every finished map is held to (analysis: analyze_level)."
+description: "Use for plugins/mountain in gameengine2: the generated ski mountain any game on one links. The world generator (mapgen: generate_level, the terrain, the piste, kickers, cliffs, the forest, the day and the weather, the gates, versions, level_digest), the rule book every finished map is held to (analysis: analyze_level), and the mountain as drawn (app: the snow's material, its corduroy, relief, wrap, glitter and glare)."
 ---
 
 # The mountain plugin
@@ -92,6 +92,32 @@ one game's: which maps a game races, its modes and its strings stay in the game.
   `StationGround::level`, the drags' and access's `slack`, the analysis's `level.face`). A new
   bend is a number there and a branch beside the dealt rule's, never a second code path.
 
+## The mountain as drawn (`mountain/app`, M8)
+
+`plugins/mountain/app/` (`ge_mountain_app`, namespace `ge::mountain::app`, built only with the
+GPU: `APP render gpu`) is what any game on a snow mountain draws the mountain with. Nothing in
+it moves the ground the simulation skis on; every term is light.
+
+- THE SNOW'S MATERIAL (`snow.hpp`, `snow.wgsl`): the terrain's `fs_main` over the engine's
+  `render/wgsl/terrain_draw.wgsl` (`TerrainSource::shader` and `material`, the `render` skill).
+  The game keeps its colours (the albedo it hands the terrain); the material is what the snow
+  does to the light. Its ground map (`bake_snow_ground`, baked once a map): the packed share, the
+  rock share (`rock_share` of the slope, which the game's albedo reads too, so the two agree),
+  and the piste's direction as the DOUBLED angle (a comb line has no front and back), faded to
+  nought over 4 m inside the piste's edge. The shader's terms, each with a gain in `SnowLook`
+  (1 the tuned look, 0 none of it): the relief (swells and grain on the loose snow, a broken face
+  on rock), the corduroy (14 cm a rib, worn in patches) and the lanes (5.2 m a swath) across the
+  piste's way, the wrap's blue terminator, the glare (forward scatter, harder on the piste) and
+  the glitter (one crystal at most a cell, a point, written to the reactive mask).
+- EVERY TERM FADES BY THE PIXEL'S FOOTPRINT (`foot`, m a pixel, from `fwidth` taken once at the
+  top of `fs_main`, in uniform control flow), never by distance alone: a term whose wavelength a
+  pixel spans a quarter of is aliasing, at any resolution and field of view.
+- To judge it: the `snow` lab (the close views, each PLAIN with every gain at nought beside
+  SNOW, at 10, 12 and 14 h) and the `world` lab's `corduroy`, `powder` and `glitter` views. A
+  close view finds a spot in the sun past the mountain and the trees (`views.cpp`'s `snow_spot`);
+  judge the material only where the sun is on the snow, because in shade only the relief and
+  the sky's light are left.
+
 ## Order of work (docs/goals.md M4a to M4d)
 
 1. Bottom-up: types, query (nearest track point), the steps, the compile, then generate.
@@ -132,4 +158,5 @@ their codec or their bake runs `real-faces` (the table of every face and the she
 the samples each bake moves against the tree's); a change to the face's massif or to any rule a
 real face bends runs `real-maps` over every face (`--faces=all`, about ten minutes on one core;
 split the faces over processes) before and after, and no face may stop building. The `labs` skill
-owns how.
+owns how. A change to the snow's material runs `snow` (and `world --views=corduroy,powder,glitter
+--hour=12`) before and after, and `profile --snow=0` beside `profile` for its cost.

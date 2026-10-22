@@ -55,10 +55,12 @@ SEEDS ?=
 sim: build
 	$(LABS) sim $(if $(SEEDS),--seeds=$(SEEDS)) $(ARGS)
 
-# The play protocol on stdio: the build's output goes to stderr, so stdout is the protocol alone.
+# The play protocol on stdio (Fall Line's `play` executable, engine/play/main.hpp): the build's
+# output goes to stderr, so stdout is the protocol alone. ARGS="--seed=38 --rivals=3", or a
+# command: ARGS="sim --seeds=38", ARGS="replay runs/fall_line-38.inputs".
 play:
 	@$(MAKE) --no-print-directory build >&2
-	@$(LABS) play --quiet --stdio $(ARGS)
+	@build/$(PRESET)/play $(ARGS)
 
 labs-smoke: build
 	$(LABS) --all --smoke --repeat=2 --quiet --check-digests=tests/labs_digests.txt

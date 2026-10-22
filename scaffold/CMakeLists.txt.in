@@ -1,6 +1,7 @@
 # {{name}}: the build. Targets:
 #   {{ident}}_sim  the game's simulation (sim/): state, the fixed step; links ge::core
-#   labs           every labs/*.cpp in one executable over ge::lab (`make lab LAB=<id>`)
+#   labs           every labs/*.cpp in one executable over ge::lab (`ge lab <id>`)
+#   play           the game on the play contract (play/), over ge::play (`ge play`, `ge sim`)
 #   <x>_test       one executable per tests/<x>_test.cpp, registered with CTest
 #   ge             the engine's command line, from the pinned release (cmake/engine.cmake)
 cmake_minimum_required(VERSION 3.25)
@@ -38,6 +39,12 @@ target_link_libraries({{ident}}_sim PUBLIC ge::core $<BUILD_INTERFACE:game_flags
 file(GLOB GAME_LAB_SOURCES CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/labs/*.cpp)
 add_executable(labs ${GAME_LAB_SOURCES})
 target_link_libraries(labs PRIVATE {{ident}}_sim ge::lab)
+
+# The game on the play contract, at the build's root where ge looks for it (skill: play-test).
+file(GLOB GAME_PLAY_SOURCES CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/play/*.cpp)
+add_executable(play ${GAME_PLAY_SOURCES})
+target_link_libraries(play PRIVATE {{ident}}_sim ge::play $<BUILD_INTERFACE:game_flags>)
+set_target_properties(play PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
 
 enable_testing()
 file(GLOB GAME_TEST_SOURCES CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/tests/*_test.cpp)

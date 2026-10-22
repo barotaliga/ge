@@ -229,7 +229,8 @@ of every texel below it that overlaps it, so an odd edge is never dropped; it ma
 reference (`hiz_reduce`) texel for texel, and the instance families' second culling phase
 reads it (§ GPU-driven instances). The colour pass and the sky write the **motion target** (`RGBA16Float` at
 the render size: rg the uv this pixel's surface moved since the last frame, unjittered; b the
-reactive mask, 0 for the ground and the sky until particles and glitter write it, M8) from
+reactive mask, 0 for the ground and the sky but where the snow's glitter writes it (M8a), and
+particles' later) from
 the frame block's `prev_view_proj` and `eye_delta` (`FrameHistory`, `frame_types.wgsl`'s
 `screen_motion`); the sky's motion is the camera's turn alone.
 
@@ -372,6 +373,24 @@ vertex's distance from the eye, from 80 % to 95 % of a level's half side, so not
 as the eye moves; a coarse vertex inside the finer square sinks two spacings. The normals
 are baked once into an `RGBA16Float` texture by compute. The game hands the albedo as an
 sRGB texture over the same grid (Fall Line's: snow, the packed piste, steep rock).
+
+**As built (M8a): the ground's material.** The terrain's colour pass is a material's: a
+shader that includes `render/wgsl/terrain_draw.wgsl` (the bindings of groups 1 and 2, the vertex
+stage, the overdraw probe and the two halves every material shares: `ground_at`, the pixel's
+place, normal, albedo and the sun that reaches it, and `ground_out`, the haze, the motion and the
+reactive mask) and defines `fs_main`, with a bind group of its own at group 3
+(`TerrainSource::shader`, `material`; `bind_terrain_material`). The prepass, the colour pass and
+the probe all run the material's module, so their depths are still the same bits. `terrain.wgsl`
+is the default: the albedo lit by the sun and the sky. Fall Line's is the snow's, in
+`plugins/mountain/app/snow.wgsl`, over a ground map baked once a map (the packed share, rock by
+slope, the piste's direction as its doubled angle): wind swells and grain bent into the normal on
+the loose snow, a broken face on rock, the groomer's corduroy (14 cm a rib, worn in patches) and
+lanes (5.2 m a swath, each its own shade) across the piste's way, every term faded by the pixel's
+own footprint before it aliases; the wrap's blue terminator; the glare, the sun scattered forward,
+harder on the piste; and the glitter, at most one crystal a cell of world space flaring as a point
+where its facet lines the sun up with the eye, written to the reactive mask so TAA-U keeps it.
+On the software adapter at 1280x720 the snow costs the terrain pass about 17 % over the plain
+albedo (the `profile` lab's `--snow=0`).
 
 Snow marks are two **toroidal textures** that follow the camera: the trail map (where
 the snow was cut and packed) and the deformation field (how high the snow stands).

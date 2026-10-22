@@ -79,6 +79,7 @@ void run(ge::lab::Lab& lab) {
   fall_line::app::FrameOptions options;
   options.taa = lab.arg_num("taa") != 0;
   options.scale = lab.arg_num("scale");
+  options.snow = lab.arg_num("snow") != 0;
   if (width <= 0 || height <= 0 || width > 4096 || height > 4096 || frames < 1 || from < 0 ||
       options.scale < 0.25 || options.scale > 1) {
     lab.fail(
@@ -221,6 +222,7 @@ const ge::lab::LabSpec kSpec{
         {"frames", "120", "frames drawn and timed (at 60 a second of the run)"},
         {"from", "10", "seconds into the bot's run the first frame is drawn at"},
         {"rivals", "3", "the bots racing beside him"},
+        {"snow", "1", "the snow's material (1) or the albedo lit (0)"},
         {"cpu-budget", "1", "the CPU half's budget a frame, ms"},
     },
     "--width=160 --height=90 --frames=4 --from=3 --rivals=1",

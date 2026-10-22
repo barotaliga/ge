@@ -27,3 +27,6 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ninja-build clang-format
       - run: make ge-build PRESET=${{ matrix.preset }}
       - run: build/${{ matrix.preset }}/ge check --preset=${{ matrix.preset }}
+      # The pilot plays three seeds and each run's input log is played back to its digest.
+      - run: build/${{ matrix.preset }}/ge sim --seeds=1,2,3 --preset=${{ matrix.preset }}
+      - run: for f in runs/*.inputs; do build/${{ matrix.preset }}/ge replay "$f" --preset=${{ matrix.preset }} || exit 1; done

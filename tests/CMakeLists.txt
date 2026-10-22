@@ -11,6 +11,8 @@ get_property(GE_GAME_TARGETS GLOBAL PROPERTY GE_GAME_TARGETS)
 # SKIP) when the machine cannot run it (no adapter, no display), except where the environment
 # sets GE_GPU_REQUIRE=1 (CI's Linux x64 rows, with lavapipe and a virtual display): there a
 # skip is a failure.
+# A test that includes a plugin's presentation half ("<plugin>/app/...") is built only when that
+# half is (cmake/Plugins.cmake: mountain's needs the GPU).
 # The runner every test executable shares, compiled once (and linted once) rather than per test.
 add_library(ge_test_main OBJECT main.cpp)
 target_link_libraries(ge_test_main PRIVATE ge_core)
@@ -40,8 +42,19 @@ foreach(src ${GE_TEST_SOURCES})
     endif()
     set(extra ge_platform ge_gpu)
   endif()
+  file(STRINGS ${src} app_includes REGEX "^#include \"[a-z0-9]+/app/")
+  set(missing_app FALSE)
+  foreach(line IN LISTS app_includes)
+    string(REGEX REPLACE "^#include \"([a-z0-9]+)/app/.*" "\\1" plugin "${line}")
+    if(NOT TARGET ge_${plugin}_app)
+      set(missing_app TRUE)
+    endif()
+  endforeach()
+  if(missing_app)
+    continue()
+  endif()
   add_executable(${name} ${src} $<TARGET_OBJECTS:ge_test_main>)
-  target_link_libraries(${name} PRIVATE ge_core ge_audio ge_lab ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
+  target_link_libraries(${name} PRIVATE ge_core ge_audio ge_lab ge_play ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
     ${extra} ${cli})
   target_compile_definitions(${name} PRIVATE GE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
   add_test(NAME ${name} COMMAND ${name})

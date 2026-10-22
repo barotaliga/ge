@@ -36,7 +36,7 @@ constexpr r::PassRow kPassTable[] = {
     {"instances.depth.late", "instances instances.late", "depth"},
     {"terrain",
      "terrain.tiles terrain.indirect terrain.height terrain.horizon shadows.maps sky.aerial "
-     "sky.light depth",
+     "sky.light snow.ground depth",
      "hdr motion"},
     {"instances",
      "instances instances.early instances.late terrain.horizon shadows.maps sky.aerial sky.light "
@@ -51,7 +51,7 @@ constexpr r::PassRow kPassTable[] = {
 // are written before the frame is encoded), and what is the last frame's (the TAA history, the
 // depth pyramid the early cull reads).
 constexpr std::string_view kLoadInputs =
-    "terrain.height terrain.pyramid terrain.albedo instances taa.history hiz.last";
+    "terrain.height terrain.pyramid terrain.albedo snow.ground instances taa.history hiz.last";
 
 constexpr int kPasses = static_cast<int>(std::size(kPassTable));
 
@@ -106,6 +106,12 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
   source.base_spacing = 1.0;
   source.levels = 8;
   source.overdraw_probe = options.overdraw_probe;
+  if (options.snow) {
+    ge::mountain::app::create_snow(device, f->snow, level);
+    source.shader = ge::mountain::app::snow_shader();
+    source.shader_label = "snow";
+    source.material = f->snow.layout;
+  }
   r::create_terrain(device, f->pipelines, f->terrain, source, f->frame_layout);
   r::create_hiz_pipelines(device, f->pipelines, f->hiz);
   r::create_instance_pipelines(device, f->pipelines, f->instancing, f->frame_layout,
@@ -143,6 +149,7 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
   r::create_family_casters(device, f->instancing, f->forest, r::kCascades);
   r::create_family_casters(device, f->instancing, f->figures, 1);
   r::bind_terrain_shadows(f->terrain, f->shadows.group);
+  if (options.snow) r::bind_terrain_material(f->terrain, f->snow.group);
   r::bind_instance_shadows(f->instancing, f->shadows.group);
   make_targets(device, *f, width, height);
   f->recorder.init(device, "frame.timer", kPasses);

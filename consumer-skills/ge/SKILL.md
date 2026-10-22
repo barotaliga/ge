@@ -1,6 +1,6 @@
 ---
 name: ge
-description: "Use whenever you build, test, run, grow or check this game: ge is the one command line for all of it (find, explain, new, use, add, build, test, check, lab, doctor, skills, lessons). Its commands, the --json answer every one gives, where each piece it writes goes, and the loop to work in."
+description: "Use whenever you build, test, play, run, grow or check this game: ge is the one command line for all of it (find, explain, new, use, add, build, test, check, lab, play, sim, replay, state, diverge, doctor, skills, lessons). Its commands, the --json answer every one gives, where each piece it writes goes, and the loop to work in."
 ---
 
 # ge, the game's command line
@@ -28,6 +28,11 @@ ge use <plugin>                  # link racing, mountain or skier, and install i
 ge build                         # compiler and CMake errors come back as findings
 ge test [--filter=<regex>]       # every test and lab smoke; each failure a finding
 ge lab <id> [--tag=before | --compare=before] [-- <its flags>]   # measure and LOOK
+ge sim [--seeds=1,2]             # the game's pilot plays each seed; input logs in runs/
+ge play [--seed=1]               # you at the controls: one JSON line each way
+ge replay <log>                  # a run played back to its digest
+ge state <log> [--step=N]        # everything that decides the next step
+ge diverge <log-a> <log-b>       # where two runs part, field by field (skill: play-test)
 ge graph <file>... [--kind=<k>]  # chart traces, benches, profiles: PNG + SVG, outliers as notes
 ge check                         # the whole gate: format, doctor, build, tests (what CI runs)
 ```

@@ -7,6 +7,7 @@
 #                (engine/audio; deterministic, no platform)
 #   ge_lab       the lab framework (engine/lab: the contract, the runner, the raster, the PNG,
 #                the series files and the charts)
+#   ge_play      the play contract (engine/play: GameSpec and Run, the session, the input log)
 #   ge_cli, ge   the ge command line (engine/cli: ge new, ge skills sync, ge doctor, ge lessons;
 #                cmake/Cli.cmake)
 #   fall_line_sim  Fall Line's simulation (games/fall_line: create_game, step, the bot)
@@ -20,8 +21,8 @@
 #                ge_core and published as ge::fp; a target that drops them can
 #                silently change the bits a simulation produces
 #   ge_flags     warnings, -Werror, sanitizers: this tree only, never published
-# ge_core, ge_fp, ge_lab and every plugin target are installed and published as ge::core,
-# ge::fp, ge::lab and ge::<plugin>, and the ge executable is installed to bin/
+# ge_core, ge_fp, ge_lab, ge_play and every plugin target are installed and published as
+# ge::core, ge::fp, ge::lab, ge::play and ge::<plugin>, and the ge executable is installed to bin/
 # (cmake/Packaging.cmake, docs/publishing.md).
 cmake_minimum_required(VERSION 3.25)
 project(gameengine2 LANGUAGES CXX)
@@ -126,6 +127,13 @@ add_library(ge_lab STATIC engine/lab/lab.cpp engine/lab/report.cpp engine/lab/ru
   engine/lab/series.cpp engine/lab/stats.cpp engine/lab/plot.cpp engine/lab/chart.cpp)
 target_link_libraries(ge_lab PUBLIC ge_core ge_audio)
 
+# The play contract (engine/play: a game's spec and Run, the session and its line protocol, the
+# input log, replay and diverge, the `play` executable's main), published as ge::play so a game's
+# `play` target is driven by `ge play`, `ge sim`, `ge replay`, `ge state` and `ge diverge`.
+add_library(ge_play STATIC engine/play/inputs.cpp engine/play/json_read.cpp
+  engine/play/session.cpp engine/play/main.cpp)
+target_link_libraries(ge_play PUBLIC ge_core)
+
 # The ge command line (engine/cli, cmake/Cli.cmake): built here too when a game pulls the engine
 # in, so the game runs the ge of the engine it pins.
 include(cmake/Cli.cmake)
@@ -184,7 +192,7 @@ if(PROJECT_IS_TOP_LEVEL)
   get_property(GE_PLUGIN_TARGETS GLOBAL PROPERTY GE_PLUGIN_TARGETS)
   get_property(GE_GAME_TARGETS GLOBAL PROPERTY GE_GAME_TARGETS)
   add_executable(labs engine/lab/main.cpp ${GE_LAB_SOURCES})
-  target_link_libraries(labs PRIVATE ge_lab ge_core ge_audio ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
+  target_link_libraries(labs PRIVATE ge_lab ge_play ge_core ge_audio ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
     ${GE_LAB_EXTRA})
 
   enable_testing()
