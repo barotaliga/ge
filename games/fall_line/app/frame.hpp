@@ -4,6 +4,7 @@
 // `pass_table_faults` holds the order to the engine's check.
 //
 //   sky.tables           -> sky.transmittance sky.multiscatter sky.view sky.aerial sky.light
+//   skinning             -> figures.posed (every racer's skier model posed into his mesh)
 //   terrain.cull         -> terrain.tiles terrain.indirect (and terrain.normals, once)
 //   instances.cull       -> instances.early (the forest and the figures: the frustum, the last
 //                           frame's pyramid)
@@ -37,7 +38,8 @@
 // reads the HDR target.
 //
 // The frame reads the game only through a FrameView (views.hpp), the map it was made for, and a
-// FrameScene: the racers' skiers this frame, drawn as figures (scene.hpp) and laying their tracks
+// FrameScene: the racers' skiers this frame, drawn as skinned skiers (scene.hpp: each racer's
+// pose from skier/app/rig_pose.hpp's poser, its lags kept here between frames), laying their tracks
 // (`track`: skier/app/tracks.hpp's prints into the trail maps) and throwing their spray
 // (skier/app/spray.hpp's grains into the particle pool, render/particles.hpp, over the time between
 // two frames' `FrameView::time_s`: a frame at the same time throws nothing and holds the spray
@@ -59,6 +61,7 @@
 #include <string>
 #include <vector>
 
+#include "fall_line/app/scene.hpp"
 #include "gpu/device.hpp"
 #include "gpu/pipeline.hpp"
 #include "mountain/app/snow.hpp"
@@ -71,10 +74,12 @@
 #include "render/particles.hpp"
 #include "render/post.hpp"
 #include "render/shadows.hpp"
+#include "render/skinning.hpp"
 #include "render/sky.hpp"
 #include "render/snowfall.hpp"
 #include "render/taa.hpp"
 #include "render/terrain.hpp"
+#include "skier/app/rig_pose.hpp"
 #include "skier/app/spray.hpp"
 #include "skier/app/tracks.hpp"
 #include "skier/skier.hpp"
@@ -97,9 +102,13 @@ struct FrameOptions {
   ge::mountain::app::TrailOptions trail_maps;  // their sizes
 };
 
-// What of the run a frame draws, besides the map: the racers, the player's first.
+// What of the run a frame draws, besides the map: the racers, the player's first. `settle` poses
+// every figure settled, keeping nothing of the last frame (a still, or a jump in the run); off, the
+// figures' lags run on over `dt`, the run's seconds since the last frame (0: no step was taken).
 struct FrameScene {
   std::span<const ge::skier::SkierState> skiers;
+  double dt = 0;
+  bool settle = true;
 };
 
 struct GameFrame {
@@ -138,6 +147,18 @@ struct GameFrame {
   wgpu::BindGroup instance_light;
   ge::render::SunShadows shadows;
   const ge::mountain::mapgen::Level* level = nullptr;
+  // The skinned skiers: the model (scene.hpp's `skier_model`), its rig binding, one skin and one
+  // poser a racer, and the pose's scratch.
+  const ge::assets::Model* skier = nullptr;
+  ge::skier::RigBinding binding;
+  uint32_t materials_per_racer = 0;
+  ge::render::SkinPipelines skinning;
+  std::array<ge::render::Skin, kMaxFigures> skins;
+  std::array<ge::render::Skin*, kMaxFigures> skin_list{};
+  std::array<ge::skier::RigPoser, kMaxFigures> posers;
+  ge::skier::RigPose rig_pose;
+  std::vector<ge::assets::Trs> locals;
+  std::vector<ge::assets::Affine> globals, palette;
   std::vector<ge::render::Instance> staged_figures;
   std::vector<std::array<double, 3>> figure_centres;
   ge::render::FrameRecorder recorder;

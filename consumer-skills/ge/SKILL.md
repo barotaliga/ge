@@ -1,6 +1,6 @@
 ---
 name: ge
-description: "Use whenever you build, test, play, run, grow or check this game: ge is the one command line for all of it (find, explain, new, use, add, build, test, check, precheck, ci, digest, golden, lab, graph, shot, record, play, sim, replay, state, diverge, bench, profile, mem, leaks, doctor, upgrade, skills, lessons). Its commands, the --json answer every one gives, where each piece it writes goes, and the loop to work in."
+description: "Use whenever you build, test, play, run, grow or check this game: ge is the one command line for all of it (find, explain, new, use, add, build, test, check, precheck, ci, digest, golden, lab, graph, net, shot, record, play, sim, replay, state, diverge, bench, profile, mem, leaks, doctor, upgrade, skills, lessons). Its commands, the --json answer every one gives, where each piece it writes goes, and the loop to work in."
 ---
 
 # ge, the game's command line
@@ -42,6 +42,9 @@ ge bench [--tag=before | --compare=before]   # each step's time against its budg
 ge profile [--render]            # where the step's (and the frame's) time goes, zone by zone
 ge mem | ge leaks                # what the run allocates; what it never frees
 ge graph <file>... [--kind=<k>]  # chart traces, benches, profiles: PNG + SVG, outliers as notes
+ge net inspect <pcap>            # a network capture, datagram by datagram (skill: multiplayer)
+ge net stats <pcap>              # per connection: kbps, round trip, loss, resends; charted
+ge net sim [--presets=wifi,bad]  # fake clients and a host over bad links, no game needed
 ge asset build [<name>]          # a model built in headless Blender off the game's data (skill: assets)
 ge check                         # the whole gate: format, doctor, build, tests
 ge precheck [--preset=<p>]       # what CI runs, both presets: ge check, the pilot, the replays

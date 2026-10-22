@@ -15,7 +15,8 @@ games/fall_line/sim      the game itself, headless: create_game, the step's orde
 plugins/<name>           reusable by any game of one genre or world (§ Plugins):
         │                racing (tape, records, standings), mountain (mapgen, analysis),
         │                skier (the skier on the snow: step_skier, snow, limits),
-        │                snowmobile (the machine on the snow: step_sled, the drive, the pilot)
+        │                snowmobile (the machine on the snow: step_sled, the drive, the pilot),
+        │                helicopter (the machine in the air: step_heli, the wash, the pilot)
         ▼
 engine/render  engine/audio  engine/ui     generic draw passes, the synth, the 2D layer
         │             │          │
@@ -68,6 +69,12 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   render thread through a lock-free ring, and the render is deterministic to the bit (core/libm,
   core::Rng), so a buffer is a golden and a lab digest. `engine/platform`'s audio device pulls
   it on SDL's audio thread and converts to the hardware's rate.
+- **`engine/net`**: multiplayer networking (built from M17a; `docs/networking.md` is the design):
+  addresses, the wire, the OS's UDP sockets (`udp_socket.cpp`, the only file that includes
+  socket headers), the simulated network and its conditions, pcap captures, the transport, the
+  packet format, connections with their channels, and nodes of up to 32 peers. It depends on
+  `engine/core` only and reads no clock: the caller passes the time and the seeds, so a session
+  over the simulated network is deterministic and every net lab is a determinism test.
 - **`engine/ui`**: the immediate-mode 2D layer (rects, images, SDF text), plus Dear
   ImGui behind `GE_DEV_UI`.
 - **`games/fall_line/app`**: Fall Line's presentation, the `fall_line_app` library (which
