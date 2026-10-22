@@ -70,10 +70,15 @@ inline constexpr float kMinPixels = 0.35f;   // the radius on screen under which
 inline constexpr uint32_t kMaxInstances = 1u << 23;  // a list entry's index bits
 
 // A level of detail: its mesh, and the radius on screen (px) down to which it is drawn. The
-// last LOD's is ignored (it is drawn down to kMinPixels).
+// last LOD's is ignored (it is drawn down to kMinPixels). A LOD whose vertices are rewritten on
+// the GPU (a skinned mesh, render/skinning.hpp) gives the box its positions are packed into
+// (`reach`): the box of every pose, which also bounds the mesh's sphere for the cull.
 struct LodSource {
   MeshData mesh;
   float min_px = 0;
+  bool reach = false;
+  float reach_min[3] = {0, 0, 0};
+  float reach_size[3] = {0, 0, 0};
 };
 struct MeshSource {
   std::vector<LodSource> lods;  // finest first, at most kMaxLods
@@ -143,6 +148,8 @@ struct InstanceFamily {
   std::vector<uint32_t> args_reset;  // the draws' arguments with no instances, and zero stats
   std::vector<float> streams;        // the CPU's copy of the instance streams
   std::vector<float> lod_px;         // each LOD's min_px
+  std::vector<uint32_t> mesh_lod;    // each mesh's first LOD
+  std::vector<uint32_t> lod_vertex;  // each LOD's first vertex in `vertices`
   std::vector<CasterSlot> casters;   // a shadow map's draws each (create_family_casters)
   bool moved_since_cut = false;      // false: the next write's last frame is the write itself
   // instances_cull.wgsl's `FamilyParams`, filled by prepare.

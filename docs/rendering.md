@@ -338,6 +338,37 @@ hides about 9,000; the forest is three placeholder meshes at two LODs each.
   directly into the shared buffers. Nothing is generated mid-run except the instances'
   positions.
 
+## Authored models
+
+Most of what the game draws is built in code at load (above). A few things are worth
+authoring: the rigged, detailed objects the camera sits close to (the skis, the player's
+figure, the machines). They come in as **glTF 2.0** and nothing else.
+
+- **Loaded once, into the engine's form** (`engine/assets`, the `assets` skill). The loader
+  (cgltf) fills a `Model`: every node a joint, every mesh skinned (a rigid part bound
+  whole to its node's joint), the base colours as materials, the clips baked at 60 Hz. glTF's
+  frame is mirrored in x into the world's, so a model faces heading 0. Nothing after the
+  load reads glTF.
+- **Posed on the CPU, skinned on the GPU.** A frame samples a clip (or the game's own pose)
+  into the joints' locals, chains them to model space and multiplies the inverse binds into
+  a bone palette (`assets/pose.hpp`; no allocation). The `skinning` compute pass
+  (`render/skinning.hpp`) moves each vertex by the linear blend of its four joints and packs
+  it, in the packed vertex format above, into the mesh's slot in an instance family's vertex
+  buffer. Every view that draws the family then reads the posed mesh, so the cull, the LODs
+  and the shadow casters need nothing new. Positions are packed into the mesh's REACH (the
+  box of every pose) and the mesh's sphere is the reach's, so the cull keeps a figure in
+  every pose.
+- **Made in Blender, by script.** A model's source is a Blender Python builder run headless
+  (`ge asset`, roadmap row M8g), fed the game's own numbers; the committed `.glb` is the
+  engine's input, and CI never runs Blender.
+
+**As built (M8e1).** The loader, posing, the CPU reference and the `skinning` pass, held to
+each other within one 16-bit step on the software adapter (`tests/render_skinning_test.cpp`),
+and the `models` lab. Still to come with the figure drawn in the world (M8e2): last frame's
+skinned positions for the motion vectors (a family's motion is its instance's, so a limb that
+swings gets none of its own and TAA may smear it), the crowd skinned in the vertex stage from
+per-instance palettes, and the skis and the skier as models.
+
 ## Terrain
 
 A generic **heightfield renderer** in `engine/render`, which a game hands a height
@@ -713,7 +744,7 @@ Each library is added in the milestone that first needs it, pinned to a tag.
 | --- | --- | --- | --- |
 | Dawn | BSD-3-Clause | The GPU API on every target (prebuilt on the desktop, from source for iOS, iPadOS and Android); Tint for `make shaders-check` | M6 |
 | SDL3 | zlib | The window and the surface (already the platform layer) | M6 |
-| cgltf | MIT | Loading authored glTF meshes | M8 |
+| cgltf | MIT | Loading authored glTF models (`cmake/Cgltf.cmake`: one header, pinned by commit and SHA-256) | M8e1 |
 | Tracy | BSD-3-Clause | CPU and GPU zones, behind `GE_TRACY=ON` | M7 |
 | Dear ImGui | MIT | The developer UI, behind `GE_DEV_UI` | M10 |
 

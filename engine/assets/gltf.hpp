@@ -1,0 +1,57 @@
+// THE glTF LOADER: a glTF 2.0 file (.glb, or .gltf with its buffers embedded or beside it) read
+// into a `Model` (assets/model.hpp) in the engine's frame, at load time. It is the one place a
+// file format meets the engine: everything after it reads the Model.
+//
+// What it takes from the file:
+// - every node of the scene as a joint, parents first, with its rest transform (TRS, or a
+//   matrix split into one);
+// - every mesh node's triangles as one Mesh (named after the node), its primitives' materials
+//   as parts: POSITION, NORMAL (a mesh without normals is made faceted: each triangle its own
+//   vertices and its face's normal), JOINTS_0 and WEIGHTS_0 (a skinned mesh), and the indices;
+//   a mesh with no skin is a rigid part bound whole to its node's joint;
+// - each skin's inverse bind matrices (a joint no skin names gets the inverse of its rest);
+// - each material's base colour factor (linear);
+// - each animation as a Clip baked at kClipRateHz: translations, rotations and scales, with
+//   STEP, LINEAR (rotations on the arc) and CUBICSPLINE samplers.
+//
+// THE FRAME. glTF is right-handed with +y up and an asset's front toward +z, so its +x is the
+// asset's left; the engine's +x is its right. Every position, normal, rotation and matrix is
+// mirrored in x on the way in (a rotation (x, y, z, w) becomes (x, -y, -z, w)), and every
+// triangle's last two indices swap so its front stays outside.
+//
+// What it skips, each named in `notes` so a reader knows what the model lost: textures, morph
+// targets, a second set of joints and weights, cameras and lights, and an animation of morph
+// weights. Points and lines are an error.
+//
+// ge:summary The glTF 2.0 loader: nodes, skins, meshes, materials and clips into a Model
+// ge:keywords assets gltf glb cgltf loader import load_gltf load_gltf_file mirror handedness
+// ge:keywords skin inverse-bind joints weights animation sampler step linear cubicspline
+// ge:keywords slerp bake clip base-colour faceted rigid-node blender export
+// ge:skill assets
+// ge:test tests/assets_gltf_test.cpp
+#pragma once
+
+#include <cstdint>
+#include <span>
+#include <string>
+#include <string_view>
+#include <vector>
+
+#include "assets/model.hpp"
+
+namespace ge::assets {
+
+struct LoadResult {
+  bool ok = false;
+  Model model;
+  std::string error;               // when not ok: what failed, where, and the next action
+  std::vector<std::string> notes;  // what was skipped, one line each
+};
+
+// A model from a file's bytes. `where` names it in messages and is the path relative URIs (a
+// .gltf's .bin) resolve against.
+LoadResult load_gltf(std::span<const uint8_t> bytes, std::string_view where);
+// A model from a file on disk.
+LoadResult load_gltf_file(const std::string& path);
+
+}  // namespace ge::assets

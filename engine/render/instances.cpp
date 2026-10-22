@@ -217,9 +217,12 @@ void create_family(gpu::Device& device, const InstancePipelines& ip, InstanceFam
   std::vector<MeshRow> mesh_rows;
   std::vector<LodRow> lod_rows;
   f.lod_px.clear();
+  f.mesh_lod.clear();
+  f.lod_vertex.clear();
   for (const MeshSource& m : meshes) {
     MeshRow row{};
     row.info[0] = static_cast<uint32_t>(lod_rows.size());
+    f.mesh_lod.push_back(row.info[0]);
     float sphere[4] = {0, 0, 0, 0};
     const size_t n = std::min<size_t>(m.lods.size(), kMaxLods);
     if (n < m.lods.size()) {
@@ -230,7 +233,8 @@ void create_family(gpu::Device& device, const InstancePipelines& ip, InstanceFam
     }
     for (size_t l = 0; l < n && lod_rows.size() < kMaxBuckets; ++l) {
       const LodSource& src = m.lods[l];
-      const PackedMesh p = pack_mesh(src.mesh);
+      const PackedMesh p =
+          src.reach ? pack_mesh(src.mesh, src.reach_min, src.reach_size) : pack_mesh(src.mesh);
       LodRow lr{};
       for (int k = 0; k < 3; ++k) {
         lr.box_min[k] = p.box_min[k];
@@ -240,6 +244,7 @@ void create_family(gpu::Device& device, const InstancePipelines& ip, InstanceFam
       lr.info[0] = static_cast<uint32_t>(indices.size());
       lr.info[1] = static_cast<uint32_t>(p.indices.size());
       lr.info[2] = static_cast<uint32_t>(words.size() / 3);
+      f.lod_vertex.push_back(lr.info[2]);
       lr.info[3] = static_cast<uint32_t>(mesh_rows.size());
       words.insert(words.end(), p.words.begin(), p.words.end());
       indices.insert(indices.end(), p.indices.begin(), p.indices.end());
@@ -247,7 +252,17 @@ void create_family(gpu::Device& device, const InstancePipelines& ip, InstanceFam
       f.lod_px.push_back(lr.box_min[3]);
       // The mesh's sphere holds every LOD's.
       float s[4];
-      bounding_sphere(src.mesh, s);
+      if (src.reach) {
+        // The sphere round the reach box: every pose's.
+        float r2 = 0;
+        for (int k = 0; k < 3; ++k) {
+          s[k] = src.reach_min[k] + src.reach_size[k] / 2;
+          r2 += src.reach_size[k] * src.reach_size[k] / 4;
+        }
+        s[3] = std::sqrt(r2) * 1.0001f;
+      } else {
+        bounding_sphere(src.mesh, s);
+      }
       if (l == 0) {
         std::memcpy(sphere, s, sizeof s);
       } else {
@@ -274,7 +289,7 @@ void create_family(gpu::Device& device, const InstancePipelines& ip, InstanceFam
   auto buffer = [&](const char* name, uint64_t size, wgpu::BufferUsage usage) {
     return make_buffer(device, f.label + "." + name, std::max<uint64_t>(size, 16), usage);
   };
-  f.vertices = buffer("vertices", words.size() * 4, BU::Storage);
+  f.vertices = buffer("vertices", words.size() * 4, BU::Storage | BU::CopySrc);
   device.queue.WriteBuffer(f.vertices, 0, words.data(), words.size() * 4);
   f.indices = buffer("indices", indices.size() * 4, BU::Index);
   device.queue.WriteBuffer(f.indices, 0, indices.data(), indices.size() * 4);
