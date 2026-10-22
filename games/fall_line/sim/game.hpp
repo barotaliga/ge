@@ -6,8 +6,10 @@
 // 2. For each racer in field order (the player first): a reset asked for is made; then his skis
 //    are stepped (`ge::skier::step_skier`) on his controls, or on a held brake once he has
 //    finished; then the course (`step_course`: a gate, a miss, the finish), or on the free ride
-//    the run under his skis (`step_free`, free.hpp); then the skier's events become the run's;
-//    then the run's own resets (down `kDownReset` s, stuck `kStuckReset` s), each the mode's.
+//    the run under his skis (`step_free`, free.hpp) and a lift's load zone (`board_lift`,
+//    lift_ride.hpp); then the skier's events become the run's; then the run's own resets (down
+//    `kDownReset` s, stuck `kStuckReset` s), each the mode's. On the free ride a lift that has
+//    him steps him instead (`step_lift`), and nothing else of his is stepped.
 // 3. Skier against skier (`meet_racers`, field.hpp), the field in pair order.
 // 4. The wanted level (`step_wanted`, wanted.hpp): the look, the climb, the search running out;
 //    nothing on a run that never raised the heat.

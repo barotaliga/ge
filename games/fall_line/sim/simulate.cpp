@@ -13,6 +13,7 @@
 #include "fall_line/sim/field.hpp"
 #include "fall_line/sim/free.hpp"
 #include "fall_line/sim/game.hpp"
+#include "fall_line/sim/outing.hpp"
 #include "prof/zones.hpp"
 
 namespace fall_line::sim {
@@ -23,14 +24,15 @@ namespace num = ge::core::num;
 Driver::Driver(std::shared_ptr<const mg::Level> level, int32_t rivals)
     : Driver(create_game_on(std::move(level), 1 + (rivals < 0 ? 0 : rivals))) {}
 
-Driver::Driver(GameState state)
+Driver::Driver(GameState state, int32_t lifts)
     : state_(std::move(state)),
       plan_(state_.mode == Mode::free
                 ? plan_free(*state_.level, state_.racers[0].free.start, state_.spec)
                 : plan_bot(*state_.level, state_.spec)),
       recorder_(kTapeSchema),
       controls_(state_.racers.size()),
-      shoulders_(state_.racers.size(), 0) {}
+      shoulders_(state_.racers.size(), 0),
+      lifts_(lifts) {}
 
 void Driver::step(Controls player) {
   std::array<double, 4> axes{};
@@ -58,6 +60,11 @@ void Driver::step(Controls player) {
       shoulders_[static_cast<size_t>(e.gate)]++;
     }
     if (e.racer != 0) continue;
+    if (e.kind == EventKind::boarded) boarded_at_ = state_.t;
+    if (e.kind == EventKind::unloaded) {
+      lift_ride_ += e.value;
+      lift_wait_ += state_.t - e.value - boarded_at_;
+    }
     if (e.kind == EventKind::landing) {
       flights_++;
       max_landing_g_ = num::max(max_landing_g_, e.value);
@@ -66,7 +73,10 @@ void Driver::step(Controls player) {
 }
 
 bool Driver::over() const {
-  if (state_.mode == Mode::free) return state_.racers[0].free.arrived;
+  if (state_.mode == Mode::free) {
+    const FreeRide& f = state_.racers[0].free;
+    return f.arrived && f.lift.ridden >= lifts_;
+  }
   for (const Racer& r : state_.racers) {
     if (!r.progress.finished) return false;
   }
@@ -94,11 +104,14 @@ RunReport Driver::report(double seed) const {
   rep.tape = recorder_.seal();
   if (state_.mode == Mode::free) {
     const FreeRide& f = me.free;
-    rep.finished = f.arrived;
-    rep.time = f.arrived ? f.arrived_at : state_.t;
+    rep.finished = over();
+    rep.time = rep.finished ? f.arrived_at : state_.t;
     rep.gates = 0;
     rep.distance = f.distance;
     rep.runs = static_cast<int32_t>(f.skied.size());
+    rep.lifts = f.lift.ridden;
+    rep.lift_wait = lift_wait_;
+    rep.lift_ride = lift_ride_;
     rep.mean_speed = rep.time > 0 ? f.distance / rep.time : 0;
   }
   for (size_t i = 0; i < state_.racers.size(); i++) {
@@ -126,9 +139,9 @@ RunReport drive(Driver d, double seed, double max_seconds, Pilot&& pilot,
     if (lines && d.state().steps % every == 0) {
       for (size_t i = 0; i < d.state().racers.size(); i++) {
         const Racer& r = d.state().racers[i];
-        if (r.progress.finished || r.free.arrived) continue;
-        (*lines)[i].push_back(
-            LinePoint{r.skier.x, r.skier.z, r.skier.speed, r.skier.on_snow, r.skier.down});
+        if (r.progress.finished) continue;
+        (*lines)[i].push_back(LinePoint{r.skier.x, r.skier.z, r.skier.speed, r.skier.on_snow,
+                                        r.skier.down, r.free.lift.phase != LiftPhase::none});
       }
     }
     d.step(pilot(d));
@@ -154,6 +167,17 @@ RunReport simulate_free(std::shared_ptr<const mg::Level> level, double seed, int
   return drive(
       Driver(create_free_ride(std::move(level), run)), seed, opts.max_seconds,
       [](const Driver& d) { return bot_controls(d.state(), 0, d.plan()); }, lines);
+}
+
+RunReport simulate_outing(std::shared_ptr<const mg::Level> level, double seed, int32_t run,
+                          const SimOptions& opts, std::vector<std::vector<LinePoint>>* lines) {
+  GameState state = create_free_ride(std::move(level), run);
+  const Outing o = outing_from(*state.level, *state.lifts, run);
+  if (o.lift < 0) return Driver(std::move(state), 1).report(seed);
+  const OutingPilot pilot(state, o);
+  return drive(
+      Driver(std::move(state), 1), seed, opts.max_seconds,
+      [&pilot](const Driver& d) { return pilot(d.state(), 0); }, lines);
 }
 
 RunReport replay_tape(std::shared_ptr<const mg::Level> level, double seed,

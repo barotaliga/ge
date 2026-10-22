@@ -106,6 +106,8 @@ void run_sound_step(RunSound& sound, ge::audio::Synth& synth, const sim::GameSta
       case EventKind::wanted:  // the hunt's sounds come with its pursuers
       case EventKind::onto:    // the free ride's bookkeeping, not heard
       case EventKind::arrived:
+      case EventKind::boarded:  // the lift is heard from its own bed, when it has one
+      case EventKind::unloaded:
         break;
     }
   }

@@ -8,7 +8,8 @@
 //   index.md       THE CONTACT SHEET: every picture with its title, caption, what to look
 //                  for and its inputs, as Markdown an agent reads before opening a picture
 //   <shot>.png     the picture with its caption band
-//   <shot>.json    the shot's words beside it
+//   <shot>.json    the shot's words beside it, with the picture's own size (the band left out)
+//   <shot>.distance  how far away each pixel is, when the lab handed a distance map (diff.hpp)
 //
 // ge:summary What a lab writes: the printed report, report.json, metrics.tsv, the contact sheet
 // ge:keywords lab report json tsv metrics contact-sheet index caption sidecar previews compare

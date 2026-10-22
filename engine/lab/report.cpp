@@ -13,6 +13,7 @@
 #include <fstream>
 #include <sstream>
 
+#include "lab/diff.hpp"
 #include "lab/png.hpp"
 
 namespace ge::lab {
@@ -73,6 +74,9 @@ std::string shot_json(const Lab::Taken& taken) {
   return "{\"id\": " + json_str(s.id) + ", \"title\": " + json_str(s.title) +
          ", \"caption\": " + json_str(s.caption) + ", \"look_for\": " + json_str(s.look_for) +
          ", \"inputs\": " + json_pairs(s.inputs) + ", \"file\": " + json_str(s.id + ".png") +
+         ", \"width\": " + std::to_string(taken.width) +
+         ", \"height\": " + std::to_string(taken.height) + ", \"distance\": " +
+         (taken.distance.metres.empty() ? std::string("null") : json_str(s.id + ".distance")) +
          ", \"deterministic\": " + (taken.det == Det::deterministic ? "true" : "false") + "}";
 }
 
@@ -214,6 +218,16 @@ bool write_report(const Lab& lab, const std::string& dir, std::string& error) {
       return false;
     }
     if (!write_text(dir + "/" + s.id + ".json", shot_json(taken) + "\n", error)) return false;
+    if (!taken.distance.metres.empty()) {
+      const std::vector<uint8_t> bytes = encode_distance(taken.distance);
+      std::ofstream f(dir + "/" + s.id + ".distance", std::ios::binary);
+      f.write(reinterpret_cast<const char*>(bytes.data()),
+              static_cast<std::streamsize>(bytes.size()));
+      if (!f) {
+        error = "could not write " + dir + "/" + s.id + ".distance (is the directory writable?)";
+        return false;
+      }
+    }
     md += "\n## " + s.title + "\n\n![" + s.title + "](" + file + ")\n\n" + s.caption + "\n";
     if (!s.look_for.empty()) md += "\n**Look for:** " + s.look_for + "\n";
     if (taken.det == Det::measured) md += "\n*Measured: its pixels are not in the digest.*\n";

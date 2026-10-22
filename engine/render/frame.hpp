@@ -188,6 +188,10 @@ wgpu::Texture make_texture(gpu::Device& device, std::string_view label, uint32_t
 // the texture's: R32Float, Depth32Float (the depth aspect), R16Float or RGBA16Float.
 std::vector<float> read_red(gpu::Device& device, const wgpu::Texture& texture, uint32_t mip,
                             uint32_t width, uint32_t height, wgpu::TextureFormat format);
+// Labs and tests (blocks): how far from the eye, m, each pixel of `targets`' depth lies, seen by
+// `view`'s camera (depth_distance), row-major from the top; infinity where nothing was drawn.
+std::vector<float> read_distance(gpu::Device& device, const FrameTargets& targets,
+                                 const FrameView& view);
 float half_to_float(uint16_t h);
 // The nearest half (rounding to even; overflow to infinity), for uploads of RGBA16F data.
 uint16_t float_to_half(float f);

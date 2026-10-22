@@ -10,6 +10,7 @@
 // ge:summary The state of a run: GameState, Racer, Progress, Controls, the events
 // ge:keywords game-state state racer progress controls events event-kind gate missed finish
 // ge:keywords reset wipeout landing takeoff field clock wanted mode free-ride onto arrived skied
+// ge:keywords lift-ride lift-phase boarded unloaded
 // ge:skill sim
 // ge:test tests/fall_line_sim_test.cpp
 #pragma once
@@ -18,6 +19,7 @@
 #include <memory>
 #include <vector>
 
+#include "mountain/lifts/lift_loop.hpp"
 #include "mountain/mapgen/types.hpp"
 #include "skier/skier.hpp"
 #include "skier/skis.hpp"
@@ -52,6 +54,8 @@ enum class EventKind : uint8_t {
   wanted,    // the wanted level moved (`gate` the stars after, `value` its WantedChange)
   onto,      // a free ride came onto a run (`gate` the run's index in the ski area)
   arrived,   // a free ride reached a run's foot (`gate` the run, `value` the clock, s)
+  boarded,   // a free ride came into a lift's load zone (`gate` the lift's index)
+  unloaded,  // a lift let him go at its top (`gate` the lift, `value` the ride's time, s)
 };
 
 const char* event_name(EventKind kind);
@@ -90,6 +94,17 @@ enum class Mode : uint8_t { race, free };
 
 // Where a free ride has been (free.hpp): the run under his skis, the last one he was on and how
 // far down it, every run skied (in the order first skied), the metres skied, and the foot.
+// Where a lift has him (lift_ride.hpp): not at all, waiting in its load zone for a carrier, or
+// carried up the line on one.
+enum class LiftPhase : uint8_t { none, waiting, carried };
+struct OnLift {
+  LiftPhase phase = LiftPhase::none;
+  int32_t lift = -1;     // the lift's index in the ski area
+  int32_t carrier = -1;  // the carrier he is on, once carried
+  double since = 0;      // s, the clock when he was taken from the load zone
+  int32_t ridden = 0;    // lifts ridden to the top this run
+};
+
 struct FreeRide {
   int32_t start = 0;           // the run he was stood at the head of
   int32_t run = -1;            // the run under his skis, or -1 off every run
@@ -97,8 +112,9 @@ struct FreeRide {
   double last_s = 0;           // m down `last` he was last on it
   std::vector<int32_t> skied;  // reserved for every run at create
   double distance = 0;         // m skied over the plan, on the snow
-  bool arrived = false;        // at a run's foot
+  bool arrived = false;        // at a run's foot (since the last lift let him go)
   double arrived_at = 0;       // s, the clock when he got there
+  OnLift lift;                 // the lift that has him, and the lifts ridden
 };
 
 struct Racer {
@@ -114,6 +130,8 @@ struct GameState {
   // A free ride's runs as lines the skier is found on (free.hpp's `run_tracks`), each index built
   // at create; none in a race.
   std::shared_ptr<const std::vector<ge::mountain::mapgen::Track>> runs;
+  // A free ride's lifts, planned at create (lift_loop.hpp); none in a race.
+  std::shared_ptr<const std::vector<ge::mountain::lifts::LiftPlan>> lifts;
   ge::skier::TreeIndex trees;
   ge::skier::SkiSpec spec;
   std::vector<Racer> racers;      // the player's first; sized at create

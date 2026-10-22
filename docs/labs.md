@@ -92,7 +92,8 @@ make labs                                     # the list: id, kind, owner, skill
 make lab LAB=level ARGS="--seeds=38,7"        # one lab; ARGS are its flags and the runner's
 make lab LAB=level ARGS=--help                # its flags, with defaults
 make lab LAB=level ARGS=--tag=before          # keep this run as previews/level@before/
-make lab LAB=level ARGS=--compare=before      # every metric beside the kept run's
+make lab LAB=level ARGS=--compare=before      # every metric beside the kept run's, every picture diffed
+make lab LAB=world ARGS=--diff=before         # run nothing: the last run's pictures against the kept run's
 make labs-smoke                               # every lab at its smoke flags, twice, digests checked
 make labs-digests                             # rewrite tests/labs_digests.txt (a reviewed change)
 make ge ARGS="digest level --write"           # rewrite one lab's row only; no --write: just check it
@@ -107,7 +108,36 @@ never moves a digest.
 
 In a game repo, `ge lab` is the way in: `ge lab` lists, `ge lab <id> --tag=before` and
 `--compare=before` run one, and with `--json` the lab's whole `report.json` is the answer's
-`result`.
+`result`. `ge lab diff <id>` diffs the pictures (below), every band under its floor a finding.
+
+### The picture diff: did the look move, and how near the player?
+
+`--compare=<tag>` diffs every picture of the run against the same picture of the kept run, and
+`--diff=<tag>` does it for the last run without running anything (`engine/lab/diff.hpp`). Each
+shot is cropped out of its caption band and measured over the whole picture and, when the lab
+handed a **distance map** with the shot (`Lab::shot`'s last argument; a GPU lab reads it off the
+frame's depth with `render::read_distance`), over every **distance band**: 0-25 m, 25-100 m,
+100-400 m, 400 m+ and the sky by default (`--diff-bands=25,100,400`). For each it gives the
+PSNR, the SSIM of the luma, the mean and largest channel change and the share of pixels changed
+by more than 8 levels, and over the whole picture a near-weighted mean (each pixel weighted by
+1 / (1 + distance / 25 m)).
+
+Each band is held to a **floor**, its PSNR in dB: 40, 36, 32 and 28 farther out, 28 for the sky
+(`--diff-psnr=40,36,32,28,28`), so a change on the far ridge may be coarser than one at the
+skis before it fails. A band under 64 pixels is reported and not judged; a picture with no
+distance map is held to the nearest floor. `--diff` exits 1 when a band is under its floor;
+`--compare` only prints it. Under `previews/<id>/diff/` it writes `diff.json` and a sheet a shot:
+
+| Panel | Shows |
+| --- | --- |
+| BEFORE, AFTER | the two pictures |
+| CHANGE | the after dimmed, every pixel changed by more than 8 levels coloured blue to yellow to red by how much, the bands' edges as contour lines |
+| DISTANCE BANDS | each band in its own colour over the picture, its edges drawn and its name (in metres) at its middle |
+
+with every band's numbers and verdict in the caption band under them. Two runs of the same code
+on the same machine give the same bits (PSNR 100 everywhere), so any number under 100 is the
+change. The `world` lab hands a distance map with every view; a GPU lab whose pictures guard a
+look should do the same.
 
 The binary is `build/<preset>/labs` (`PRESET=release` for anything timed). An unknown flag
 exits 2, a failed lab exits 1, and a clean run exits 0, because a measurement that ignores
@@ -125,7 +155,9 @@ notes, where the pictures went, any failures and the digest. Under `previews/<id
 | `metrics.tsv` | `key value unit det`, one metric a line. `--compare` reads it back. |
 | `index.md` | **The contact sheet**: every picture with its title, caption, what to look for and its inputs. An agent reads this first, then opens the pictures it needs. |
 | `<shot>.png` | The picture with its **caption band** burned in under it. |
-| `<shot>.json` | The shot's words beside the picture. |
+| `<shot>.json` | The shot's words beside the picture, with the picture's own size (the band left out). |
+| `<shot>.distance` | How far away each pixel is, when the lab handed a distance map: `GEDIST1\n`, the width and height as little-endian u32, then the metres as f32 (infinity for the sky). Never in the digest. |
+| `diff/` | With `--compare` or `--diff`: a sheet a shot and `diff.json` (above). |
 | any attached file | What `lab.attach(name, bytes)` wrote, listed at the foot of the contact sheet: a rendered sound's `<shot>.wav`, for a reader with speakers to hear exactly what was metered. Its bytes are in the digest unless it is `measured`. |
 
 ### Sounds
@@ -303,7 +335,8 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 | `real-hints` | picture | plugin:mountain | `plugins/mountain/mapgen/real_hints.hpp`, `packed.hpp`, the generated `real_hints/` (every face's real ski area decoded and counted: its chairs, gondolas and drags, its pistes by colour and their length, its tree line and its cover by band, as a table; a face named alone, or up to four, drawn over its shaded heights; `--bake` reads each face off the open map data (`--fetch` downloads it into `.cache/osm/`) beside the tree's, `--write` writes the faces and the index) | M4d3 |
 | `real-maps` | picture | plugin:mountain | `plugins/mountain/mapgen/massif.hpp` (a face's massif), every rule a real face bends (`massif::real`), `generate.hpp`'s `face` (a ski area built on every face named: whether a clean map stands, its attempt, its pistes, lifts, courses, vertical, the vertical its lifts ride and its trees, as a table; the build's seconds, measured; a face named alone, or two, drawn from above, the real ski area's pistes and lifts faintly over it, and with its courses; how far its pistes lie from the real ones, `off real m`; `--hints=0` builds without leaning on them) | M4d2, M4d3 |
 | `sim` | drive | game:fall_line | `games/fall_line/sim` (the step, the course, the bot, the field) | M5b–M5c (now) |
-| `free` | drive | game:fall_line | `games/fall_line/sim/free.hpp` (the free ride: the bot down every piste of each seed's ski area from its head to a foot; the chain, the foot, the time, the runs found under him, the metres, the digest; the ski area with every run and the bot's lines) | M13a1 (now) |
+| `free` | drive | game:fall_line | `games/fall_line/sim/free.hpp` (the free ride: the bot down every piste of each seed's ski area from its head to a foot; the chain, the foot, the time, the runs found under him, the metres, the digest; the ski area with every run and the bot's lines; `--outings`: the bot down a piste, up the lift at its foot and down another run, with the wait, the ride and his line, white on the lift) | M13a1, M13a2 (now) |
+| `lift-ride` | drive | game:fall_line | `plugins/mountain/lifts/lift_loop.hpp` and `games/fall_line/sim/lift_ride.hpp` (every lift of each seed ridden from its load zone to its top: the carriers, the rope's speed, the headway, the wait, the ride, the slowest and fastest he was carried, the biggest carried step, the let-go's distance from its point; the ski area with every lift's carriers where the clock puts them) | M13a2 (now) |
 | `ride` | scenario | plugin:skier | `plugins/skier` (`step_skier`, the snow, the limits) | M5a (now) |
 | `play` | drive | game:fall_line | `games/fall_line/sim/play` on `engine/play` (an agent over stdio, the bot through the protocol, its input log replayed) | M5c, M12b (now) |
 | `trace` | drive | game:fall_line | the player's skier step by step down one seed with the bot: `trace.tsv` (a series file), the speed, the sideways load and the edge and lean charted against the clock with gates, flights and spikes; `--log=` for the same run's events (docs/debugging.md) | M14a (now) |
