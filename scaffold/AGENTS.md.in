@@ -27,11 +27,15 @@ line this repo's checks run on.
   change can be played (`ge play`), run by the game's pilot (`ge sim`) and replayed to its digest
   (`ge replay`); a run that does not replay is a determinism break (skill: `play-test`).
 - **LABS, NOT GUESSES.** A change in a lab's subject runs the lab before and after and puts both
-  in the PR (skill: `labs`).
+  in the PR (skill: `labs`); a change for speed carries `ge bench --compare` (skill: `perf`).
 - **ERRORS ARE PROMPTS.** Every error and warning says what failed, where, and the next action
   (skill: `write-code`, § Diagnostics). `ge doctor` holds every message to it.
 - **THE ENGINE IS NOT PATCHED HERE.** A bug in the engine is reported upstream with a repro
   (skill: `engine`); the build never edits `build/*/_deps/`.
+- **SAY WHAT `ge` LACKED.** When a task would have been easier with a `ge` command or flag that
+  does not exist, say so in the PR description under **ge wishlist** and to whoever directs the
+  work: the command, what it would answer, the steps it would have saved. A wish that recurs is
+  an engine request, filed upstream like a bug (skill: `engine`).
 - **THIS REPOSITORY MAY BE PUBLIC.** No tokens, keys, e-mail addresses or home paths in the tree,
   in workflows or in their logs; credentials live in the CI's secrets.
 - **SKILLS LEARN.** Read each loaded skill's lessons before the first edit, and record what the
@@ -52,6 +56,7 @@ ge lab [<id>] [--tag=before | --compare=before] [-- <the lab's flags>]
 ge find <words> | ge explain <file|name>   # this repo's and the pinned engine's code
 ge sim [--seeds=1,2] | ge play [--seed=1]   # the pilot's runs; you at the controls
 ge replay <log> | ge state <log> --step=N | ge diverge <a> <b>   # the input logs in runs/
+ge bench [--tag=t | --compare=t] | ge profile | ge mem | ge leaks  # cost, zones, memory
 ge add system|lab|test <name>    # a working piece to start from, tags filled
 ge use <plugin>                  # link one of the engine's plugins, install its skill
 ge doctor | ge skills sync | ge lessons <skill>

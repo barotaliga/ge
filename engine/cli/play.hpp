@@ -25,6 +25,7 @@
 
 #include "cli/build.hpp"
 #include "cli/outcome.hpp"
+#include "play/json_read.hpp"
 
 namespace ge::cli {
 
@@ -42,9 +43,20 @@ Outcome run_replay(const BuildOptions& o, const std::string& log);
 Outcome run_state(const BuildOptions& o, const std::string& log, const std::string& step);
 Outcome run_diverge(const BuildOptions& o, const std::string& a, const std::string& b);
 
-// The play executable's JSON answer read into an outcome (exposed for the tests): `line` its
-// output, `code` its exit code.
+// The play executable's JSON answer read into an outcome (exposed for the tests): `output` what
+// it printed, `code` its exit code.
 Outcome play_answer(const BuildOptions& o, const std::string& command, int code,
                     const std::string& output);
+
+// The answer line of `output` read into `m` (arrays as path.0, path.1, ...): false, with a
+// finding in `out`, when there is none or it is an error answer (its paths made the repo's).
+bool read_answer(const BuildOptions& o, int code, const std::string& output, play::FlatJson& m,
+                 std::string& line, Outcome& out);
+// The build, then the play executable run with `args` (each word quoted, a leading space), its
+// answer read as read_answer does. The perf commands (perf.hpp) run on it.
+bool play_command(const BuildOptions& o, const std::string& args, play::FlatJson& m,
+                  std::string& line, Outcome& out);
+// A key of a flat answer as text: a string's own text, any other value's JSON ("" if absent).
+std::string text_of(const play::FlatJson& m, const std::string& key);
 
 }  // namespace ge::cli

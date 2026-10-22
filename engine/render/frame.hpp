@@ -15,13 +15,16 @@
 //   write) with no GPU, so a test holds the game's table. Dawn places the barriers; the table is
 //   the frame's graph, written where an agent can read it (docs/rendering.md § The frame).
 // - `FrameStats`: what a frame cost, per pass: GPU ms (timestamp queries; NaN without the
-//   tier or on the first frame), draws and dispatches; the lab sheets and the dev UI read it.
+//   tier or on the first frame), CPU ms encoding it (from its open to the next pass's), draws
+//   and dispatches; and the CPU ms of the frame's prepare, before the first pass. The lab sheets
+//   and the dev UI read it.
 // - Bind group layouts by a short list of slot kinds (`make_layout`): binding i is the i-th
 //   slot.
 //
 // ge:summary The frame's shared half: uniforms, named targets, the pass table and its stats
 // ge:keywords render frame uniforms frame-uniforms targets hdr depth reverse-z pass-table
 // ge:keywords pass-row named-targets check_pass_table frame-stats gpu-ms draws dispatches
+// ge:keywords cpu-ms prepare-ms
 // ge:keywords bind-group-layout make_layout slot fill_uniforms create_targets
 // ge:skill render gpu
 // ge:test tests/render_frame_test.cpp
@@ -103,6 +106,7 @@ inline constexpr int kMaxPasses = 24;
 struct PassStat {
   std::string_view name;
   double gpu_ms = 0;  // NaN when not measured
+  double cpu_ms = 0;  // encoding it: from its open to the next pass's (or the frame's end)
   uint32_t draws = 0;
   uint32_t dispatches = 0;
 };
@@ -110,7 +114,8 @@ struct PassStat {
 struct FrameStats {
   std::array<PassStat, kMaxPasses> passes{};
   int count = 0;
-  double cpu_ms = 0;  // every prepare and encode of the frame, wall clock
+  double cpu_ms = 0;      // every prepare and encode of the frame, wall clock
+  double prepare_ms = 0;  // from begin_frame to the first pass's open: the frame's decisions
   uint32_t draws() const;
   uint32_t dispatches() const;
 };
@@ -121,6 +126,7 @@ struct FrameRecorder {
   gpu::PassTimer timer;
   FrameStats stats;
   bool timed = false;
+  int64_t mark_ns = 0;  // when the last pass opened (begin_frame's time before the first)
 
   // Room for `passes` passes a frame.
   void init(gpu::Device& device, std::string_view label, int passes);

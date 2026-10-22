@@ -50,7 +50,6 @@ StageResult resort_woods(ResortAttempt& a) {
   for (const auto& [lift, off] : a.ramps) {
     for (const SummitRamp& r : off) ramps.push_back(&r);
   }
-  NetHit hit;
   const double keep = resort_rules::lift::clear;
   ForestOptions options;
   options.clear = [&](double x, double z) {
@@ -66,6 +65,7 @@ StageResult resort_woods(ResortAttempt& a) {
     }
     if (a.way && off_way(*a.way, x, z) < keep) return true;
     // Off every run's corridor, not only the nearest's (R14).
+    NetHit hit;
     return a.net.covers(x, z, rules::forest::corridor, hit);
   };
   // On a real face whose map draws woods, R14's curve is scaled by how wooded the real face is at

@@ -105,3 +105,10 @@ jobs:
           sed -e '/^digest/d' -e '/^steps/d' -e '9s/.*/1 1/' runs/snow_racer-1.inputs > runs/edited.inputs
           "$G" diverge runs/snow_racer-1.inputs runs/edited.inputs "$E" --json | grep -q '"same":false'
 
+          # Measured: the step's cost tagged and compared, its zones, its allocations (release),
+          # and its leaks under the debug build's LeakSanitizer.
+          "$G" bench --seeds=1 --repeats=2 --tag=before "$E"
+          "$G" bench --seeds=1 --repeats=2 --compare=before "$E"
+          "$G" profile --seeds=1 --repeats=1 "$E"
+          "$G" mem --seeds=1 --steps=600 "$E"
+          "$G" leaks --seeds=1 "$E"

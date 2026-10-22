@@ -649,7 +649,11 @@ benchmark lab fills.
 - Each frame keeps counters: passes, draws, dispatches, culled and drawn instances
   (read back from the indirect buffers a frame late), bytes uploaded, and pipelines
   created. The developer UI and the lab tests read the same struct.
-- CPU zones use Tracy behind `GE_TRACY=ON`.
+- Each pass's CPU time is kept beside its GPU time: the recorder times the encoding from one
+  pass's open to the next's, and the prepare before the first pass (`FrameStats::prepare_ms`).
+  The prepare's own parts are timing zones (`engine/prof`, `GE_ZONE`), which the game's
+  `profile` lab folds per frame with the simulation's zones between frames; `ge profile
+  --render` runs it.
 - **Budgets.** On the reference desktop GPU (the M3 Max), the top of the picture ladder
   at 1440p output fits in 8.3 ms of GPU (120 Hz). On a recent phone or tablet, the
   middle of the ladder fits in 12 ms of GPU, leaving thermal headroom under a 16.6 ms
@@ -745,12 +749,12 @@ Each library is added in the milestone that first needs it, pinned to a tag.
 | Dawn | BSD-3-Clause | The GPU API on every target (prebuilt on the desktop, from source for iOS, iPadOS and Android); Tint for `make shaders-check` | M6 |
 | SDL3 | zlib | The window and the surface (already the platform layer) | M6 |
 | cgltf | MIT | Loading authored glTF models (`cmake/Cgltf.cmake`: one header, pinned by commit and SHA-256) | M8e1 |
-| Tracy | BSD-3-Clause | CPU and GPU zones, behind `GE_TRACY=ON` | M7 |
 | Dear ImGui | MIT | The developer UI, behind `GE_DEV_UI` | M10 |
 
 Considered and not taken now: meshoptimizer (added if an authored mesh needs LOD
 simplification or vertex-cache ordering that the procedural builders cannot do
-themselves), the FidelityFX SDK (its algorithms are a reference, not a dependency),
+themselves), Tracy (the engine's own zones, `engine/prof`, answer through `ge` headless and
+need no viewer), the FidelityFX SDK (its algorithms are a reference, not a dependency),
 any render-graph or scene library, and any shader cross-compiler.
 
 ## Considered and not taken

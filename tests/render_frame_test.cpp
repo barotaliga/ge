@@ -130,9 +130,9 @@ TEST(history_carries_the_last_camera) {
 TEST(stats_sum_their_passes) {
   ge::render::FrameStats s;
   s.count = 2;
-  s.passes[0] = {"a", 0, 2, 1};
-  s.passes[1] = {"b", 0, 3, 4};
-  s.passes[2] = {"c", 0, 100, 100};  // past count: not this frame's
+  s.passes[0] = {.name = "a", .draws = 2, .dispatches = 1};
+  s.passes[1] = {.name = "b", .draws = 3, .dispatches = 4};
+  s.passes[2] = {.name = "c", .draws = 100, .dispatches = 100};  // past count: not this frame's
   CHECK(s.draws() == 5);
   CHECK(s.dispatches() == 5);
 }

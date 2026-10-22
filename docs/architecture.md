@@ -77,8 +77,16 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   replayed and inspected without a screen (its axes, its options, a `Run`: step, over, digest,
   observe, state, report, pilot), and everything the engine does with it once for every game:
   the session that snaps, records and steps every input, the line protocol, the plain-text
-  input log, replay, the state at a step, the divergence search, and the `play` executable's
-  main. It depends on `engine/core` alone; a game's `play` target links it and `ge` runs it.
+  input log, replay, the state at a step, the divergence search, the bench (the pilot's run
+  replayed and timed step by step and zone by zone, with its allocations: `ge bench`,
+  `ge profile`, `ge mem`), and the `play` executable's main. It depends on `engine/core` and
+  `engine/prof`; a game's `play` target links it and `ge` runs it.
+- **`engine/prof`**: the profiler (`ge::prof`): timing zones (`GE_ZONE("name")`, one relaxed
+  load when no recording runs; a span with its depth, time and allocations when one does), their
+  totals (a zone's own time and its children's), the counting `operator new` an executable
+  opts into (`ge::prof_alloc`: every allocation and its bytes, still through `malloc` so the
+  sanitizers see each block) and the peak resident set. It reads the steady clock and feeds
+  nothing back, so no digest depends on it; any layer may open a zone.
 - **`engine/lab`**: the lab contract and the `labs` runner (`docs/labs.md`): how any
   subsystem, plugin or game declares a lab, the CPU raster and PNG writer its pictures are
   drawn with, and the report, contact sheet and digest a run leaves. Labs themselves sit in
@@ -265,8 +273,8 @@ whole tree to it, and `ge doctor` holds a game repo to it (the `agent-interface`
 CMake ≥ 3.25 + Ninja, `CMakePresets.json` (`debug` with ASan/UBSan, `release`).
 Dependencies are pinned to a tag and a SHA-256, and each one is added in the milestone that
 needs it: SDL3 through `FetchContent` from its release archive (`cmake/SDL.cmake`), Dawn as its
-prebuilt GitHub release (`cmake/Dawn.cmake`; Tint comes in the same archive), later cgltf,
-Dear ImGui and Tracy. Downloads land in `.cache/deps/` (gitignored, shared by every preset,
+prebuilt GitHub release (`cmake/Dawn.cmake`; Tint comes in the same archive), later cgltf
+and Dear ImGui. Downloads land in `.cache/deps/` (gitignored, shared by every preset,
 cached by CI). `GE_PLATFORM` and `GE_GPU` switch the platform layer and the GPU off; the
 simulation, the plugins and their tests never need either, and `GE_GPU` defaults off where
 Dawn publishes no archive (Linux arm64). `Makefile` names the everyday commands. CI (`.github/workflows/ci.yml`) runs format,

@@ -9,7 +9,7 @@
 //
 // ge:summary The ge executable: parses the command line against the catalog and runs each command
 // ge:keywords cli ge main command-line usage dispatch help version new find explain use add
-// ge:keywords build test check lab graph doctor skills lessons json
+// ge:keywords build test check lab graph doctor skills lessons json bench profile mem leaks
 // ge:skill agent-interface
 // ge:test tests/cli_commands_test.cpp
 #include <algorithm>
@@ -26,6 +26,7 @@
 #include "cli/index.hpp"
 #include "cli/json.hpp"
 #include "cli/outcome.hpp"
+#include "cli/perf.hpp"
 #include "cli/play.hpp"
 #include "cli/scaffold.hpp"
 #include "cli/skills.hpp"
@@ -45,10 +46,10 @@ fs::path repo_of(const Args& a) {
   return has_flag(a, "repo") ? fs::path(flag_value(a, "repo")) : fs::current_path();
 }
 
-BuildOptions build_options(const Args& a) {
+BuildOptions build_options(const Args& a, const char* preset = "debug") {
   BuildOptions b;
   b.repo = fs::absolute(repo_of(a));
-  b.preset = flag_value(a, "preset", "debug");
+  b.preset = flag_value(a, "preset", preset);
   b.engine = flag_value(a, "engine");
   return b;
 }
@@ -155,6 +156,22 @@ Outcome run(const Args& a) {
   if (name == "replay") return run_replay(build_options(a), a.words[0]);
   if (name == "state") return run_state(build_options(a), a.words[0], flag_value(a, "step"));
   if (name == "diverge") return run_diverge(build_options(a), a.words[0], a.words[1]);
+  if (name == "bench" || name == "profile" || name == "mem" || name == "leaks") {
+    PerfOptions p;
+    p.seeds = flag_value(a, "seeds");
+    p.repeats = flag_value(a, "repeats");
+    p.steps = flag_value(a, "steps");
+    p.tag = flag_value(a, "tag");
+    p.compare = flag_value(a, "compare");
+    p.render = has_flag(a, "render");
+    p.valgrind = has_flag(a, "valgrind");
+    p.options = a.passthrough;
+    if (name == "leaks") return run_leaks(build_options(a), p);
+    const BuildOptions b = build_options(a, "release");
+    if (name == "bench") return run_bench(b, p);
+    if (name == "profile") return run_profile(b, p);
+    return run_mem(b, p);
+  }
   if (name == "graph") {
     GraphOptions g;
     g.files = a.words;
