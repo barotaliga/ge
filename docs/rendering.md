@@ -227,11 +227,19 @@ to 2.2 a pixel on seed 38's views, by how much of the mountain hides behind itse
 half the render size down to 1 × 1, each texel the farthest depth (reversed-z: the minimum)
 of every texel below it that overlaps it, so an odd edge is never dropped; it matches its CPU
 reference (`hiz_reduce`) texel for texel, and the instance families' second culling phase
-reads it (M7d). The colour pass and the sky write the **motion target** (`RGBA16Float` at
+reads it (§ GPU-driven instances). The colour pass and the sky write the **motion target** (`RGBA16Float` at
 the render size: rg the uv this pixel's surface moved since the last frame, unjittered; b the
 reactive mask, 0 for the ground and the sky until particles and glitter write it, M8) from
 the frame block's `prev_view_proj` and `eye_delta` (`FrameHistory`, `frame_types.wgsl`'s
 `screen_motion`); the sky's motion is the camera's turn alone.
+
+**As built (M7d1).** The table grows the instances around the terrain's: `sky.tables`,
+`terrain.cull`, `instances.cull` (phase one, reading the last frame's pyramid),
+`terrain.horizon`, `terrain.depth`, `instances.depth`, `hiz`, `instances.cull.late`,
+`instances.depth.late`, `terrain`, `instances` (both phases' lists, tested `equal`), `sky`,
+`taa`, `post`. The late phase's depth lands before the colour pass, so it is still shaded
+once; the late phase's draws are not in this frame's pyramid, which only makes the next
+frame's phase one keep a little more.
 
 **No pipeline is created after load.** Every pipeline the game can use is listed in a
 manifest and created with `createRenderPipelineAsync` behind the loading card. The GPU
@@ -266,6 +274,42 @@ never switches its shadows on.
 Each bucket is one indirect draw, or one multi-draw indirect call for a whole family
 where the feature exists. The forest and the crowd then cost a handful of draws
 whatever their size, and the CPU's frame cost no longer grows with the instance count.
+
+**As built (M7d1)** (`render/instances.hpp`, `instances_cull.wgsl`, `instances.wgsl`). A
+family's meshes are built on the CPU (`render/mesh.hpp`: boxes, cylinders and cones,
+ellipsoids, faceted, wound outward) and packed to three words a vertex: the position in
+16-bit steps of the mesh's box, a part (a material slot) and the normal octahedral in two
+snorm16s. The vertex stage pulls them from one storage buffer, so a family is one pipeline
+whatever its meshes. The instances are five streams of `vec4f` in one storage buffer
+(position and material, rotation, scale and mesh, last position, last rotation, the last two
+for the motion target); `set_instances` writes a range, and the CPU keeps a mirror so a write
+carries the old pose into the last one. A **bucket** is one (phase, LOD) pair with its own
+`DrawIndexedIndirect` arguments; portable indirect draws carry no first instance, so the
+bucket rides in `base_vertex` (`bucket << 20`) and the vertex stage reads its list slot from
+`vertex_index >> 20` and `instance_index`.
+
+The cull is one thread an instance. **Phase one** drops what lies outside the frustum, what
+is under 0.35 px of radius, and (with a last frame) what the last frame's pyramid hides,
+seen through the last frame's camera; that last kind is marked. **Phase two**, after the
+pyramid, retests the marked ones against this frame's. The test projects the bounding
+sphere's box, widens its rectangle by a render pixel (the last frame was drawn under a
+jitter this camera does not have), reads the mip where the rectangle spans at most three
+texels a side and compares the box's nearest depth with the farthest there. A mip's size is
+taken from the pyramid's halving, never from `textureDimensions(hiz, mip)`, which the
+software adapter answers wrongly when the level differs between threads. The **LOD** is
+picked by the radius on screen against each LOD's least size, with a band of ±15 % round
+each threshold where the instance is appended to both LODs and each discards its share of
+pixels by a dithered threshold in the depth prepass only (the colour pass tests `equal` and
+never discards); `pick_lod` is the CPU twin. The lit draw shades by the sun, the ground's own
+horizon shadow at the instance's point (`terrain_common.wgsl`'s `ground_shadow`, shared with
+the terrain) and the sky's light, hazed like the ground. Back faces are culled: the world is
+left-handed and the view a reflection, so a front face is clockwise on screen.
+
+The **cull check**: the `world` lab draws every view a second time with occlusion culling
+off and counts the pixels that differ, which must be none (`cull-faults`);
+`tests/render_instances_test.cpp` holds the phases' counts on a wall with boxes behind it.
+On seed 38 at 640 × 360 a run's moment draws about 3,000 trees of 21,000 and the pyramid
+hides about 9,000; the forest is three placeholder meshes at two LODs each.
 
 ## Geometry and resources
 
@@ -367,17 +411,17 @@ sample of the field (Fall Line: 751 × 751 at 4 m over its 3 km map); the bake m
 samples toward the bearing, growing geometrically from one texel to 8 km, reads the field's
 bilinear heights mirrored past the edge (as the terrain draws them), takes the planet's
 curvature off each sample and keeps the highest tangent of elevation. The terrain's
-fragment shader (`horizon_light`) turns each map into a soft step where the sun's tangent
+fragment shader (`ground_shadow`, in `wgsl/terrain_common.wgsl`, which the instanced draws read too) turns each map into a soft step where the sun's tangent
 crosses it (a penumbra of 0.008, the sun's disc and the grid's interpolation) and blends the
 two by where the sun lies between their bearings. A bake is a whole map in one dispatch, in
 its own `terrain.horizon` compute pass, only on a frame that needs one: two at load, then one
 each time the sun crosses a 2° step (on seed 38, 69 bakes from 7 to 17 h, about one every
 nine minutes of the day; the `shadows` lab counts them). On the software adapter a bake takes about 0.4 s; real-GPU
 timings, and slicing a bake over frames if one shows as a hitch, wait for the `profile` lab
-(M7d). Past the map's edge the ground is drawn mirrored and so are its maps: the shadows
+(M7d3). Past the map's edge the ground is drawn mirrored and so are its maps: the shadows
 there fall at the mirrored bearing, which only the distant ground shows until the far
 ranges replace it (M8). The cascades and the figures' atlas have nothing to shade until the
-instances and the skier are drawn, so they land with them (M7d).
+instances and the skier are drawn, so they land with them (M7d2).
 
 ## Sky, atmosphere and clouds
 
@@ -457,7 +501,7 @@ in tile memory):
 the sun and the sky (read from the sky's light) to 0.78; the tone curve is the Khronos PBR
 neutral operator (linear to 0.76, a smooth shoulder above, so snow keeps its colour); the
 dither is interleaved gradient noise until the blue-noise texture lands; the sRGB encoding
-is an `override` constant off for an `*Srgb` output. Bloom and the grade land with M7d.
+is an `override` constant off for an `*Srgb` output. Bloom and the grade land with M7d3.
 
 Linear light is used throughout, and the conversion happens here, once.
 
@@ -473,6 +517,14 @@ Linear light is used throughout, and the conversion happens here, once.
   once by a compute pass into a vertex buffer that every view reads. Crowd members,
   drawn at lower detail and in larger numbers, are skinned in the vertex shader from
   their instance's palette.
+
+**As built (M7d1).** Until skinning lands (M8) a skier is a **placeholder figure**
+(`plugins/skier/app/figure.hpp`): 17 rigid pieces (skis, boots, shins, thighs, pelvis,
+torso, arms, head, poles), each a unit box, cylinder or ball scaled to its size and posed
+every frame from the `SkierState` (the skis on the snow's normal rolled by the edge, the
+body rolled by the lean, the tuck folding the legs and the torso). Fall Line draws every
+racer's pieces as one instance family (`games/fall_line/app/scene.hpp`), a jacket colour a
+racer, written each frame; a cut writes them fresh so no motion is carried across it.
 
 ## Shaders
 

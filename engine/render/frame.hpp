@@ -98,7 +98,7 @@ struct PassRow {
 // agent-actionable line per fault.
 std::string check_pass_table(std::span<const PassRow> rows, std::string_view inputs);
 
-inline constexpr int kMaxPasses = 16;
+inline constexpr int kMaxPasses = 24;
 
 struct PassStat {
   std::string_view name;
