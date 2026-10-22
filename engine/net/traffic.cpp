@@ -11,6 +11,7 @@
 #include <cmath>
 #include <memory>
 
+#include "core/num_text.hpp"
 #include "net/node.hpp"
 
 namespace ge::net {
@@ -318,6 +319,51 @@ TrafficReport run_traffic(const TrafficPlan& plan) {
   rep.digest = fnv.h;
   host->transport.capture = nullptr;
   return rep;
+}
+
+namespace {
+
+struct NamedMix {
+  const char* name;
+  TrafficMix mix;
+};
+
+const NamedMix kMixes[] = {
+    {"racing", {60, 24, 20, 320, 4, 48}},  {"action", {60, 32, 30, 700, 8, 32}},
+    {"rpg", {20, 16, 10, 400, 10, 64}},    {"world", {10, 24, 10, 1000, 20, 96}},
+    {"lockstep", {10, 16, 0, 320, 2, 64}},
+};
+
+}  // namespace
+
+const std::vector<std::string>& mix_names() {
+  static const std::vector<std::string> names = [] {
+    std::vector<std::string> n;
+    for (const NamedMix& m : kMixes) n.emplace_back(m.name);
+    return n;
+  }();
+  return names;
+}
+
+bool traffic_mix(std::string_view name, TrafficMix& out) {
+  for (const NamedMix& m : kMixes) {
+    if (name == m.name) {
+      out = m.mix;
+      return true;
+    }
+  }
+  return false;
+}
+
+std::string describe_mix(const TrafficMix& m) {
+  const auto one = [](const char* what, double hz, size_t bytes) {
+    if (hz <= 0) return std::string("no ") + what;
+    return std::string(what) + " " + core::num::to_string(hz) + " Hz x " + std::to_string(bytes) +
+           " B";
+  };
+  return one("inputs", m.input_hz, m.input_bytes) + ", " +
+         one("snapshots", m.snapshot_hz, m.snapshot_bytes) + ", " +
+         one("events", m.event_hz, m.event_bytes);
 }
 
 }  // namespace ge::net

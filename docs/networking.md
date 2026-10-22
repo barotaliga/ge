@@ -160,6 +160,8 @@ preset, headless and deterministic.
 | `ge net inspect <pcap>` | M17b | Every packet decoded: type, sequence, acks, each message's channel and size |
 | `ge net stats <pcap>` | M17b | Per peer: packets and bytes each way, round trip, loss, resends, bandwidth over time, charted |
 | `ge net sim` | M17b | A session of fake-traffic peers over chosen conditions, its numbers and its capture, no game needed |
+| traffic mixes (`traffic.hpp`) | M17b | The fake traffic shaped like a kind of game: racing, action (fast inputs, big snapshots), rpg, world (a busy shared world), lockstep (inputs and turns, no snapshots); `--mix` on the lab and on `ge net sim` |
+| a live node's capture | M17b | A game points its transport at a `Capture` with a size limit and saves it (`save_capture`) when a session ends or the player asks; the tools read it like a lab's |
 | the `net-session` lab | M17d | 32 peers join a lobby, chat to all, to a team and privately, one is kicked, one reconnects |
 | the `voice` lab | M17h | A voice through each preset, metered against the clean one, the WAV attached |
 | the `accounts` lab | M17j | Sign-ups, logins (a wrong password refused, a brute force throttled), friend requests, presence and an invite, against the service on the simulated network |

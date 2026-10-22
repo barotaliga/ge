@@ -48,7 +48,12 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
   reliable events delivered and in order, latencies, delivery of snapshots and inputs, the host's
   bandwidth, resends), the round trip and loss charts, the reliable latency boxes, and one
   preset's session as `previews/net-link/<preset>.pcap` (opens in any packet tool).
-- Tests: `tests/net_*_test.cpp`. `net_traffic_test` holds the guarantees under every preset;
+- `ge net` (`build/debug/ge net ...`; `engine/cli/net.hpp`): `inspect <pcap>` decodes every
+  datagram, `stats <pcap>` measures each connection from the capturing node (rtt, loss each way,
+  dups, reorders, resends) and charts its kbps, rtt and loss, `sim` runs the same sessions as the
+  lab from the command line (`--presets`, `--mix`, `--link=latency=80,loss=3%`, `--capture`).
+  Read a lab's capture with `ge net stats previews/net-link/bad.pcap` before guessing.
+- Tests: `tests/net_*_test.cpp`, `tests/cli_net_test.cpp`. `net_traffic_test` holds the guarantees under every preset;
   `net_connection_test` holds the stream's rules on a scripted wire; `net_node_test` the
   handshake, the 32-peer limit, denial and timeouts.
 - Before and after a change here: `make lab LAB=net-link ARGS=--tag=before`, then

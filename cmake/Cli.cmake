@@ -36,8 +36,9 @@ function(ge_add_cli)
   list(FILTER sources EXCLUDE REGEX "/main\\.cpp$")
   add_library(ge_cli STATIC ${sources} "${gen}")
   target_include_directories(ge_cli PUBLIC "$<BUILD_INTERFACE:${root}/engine>")
-  # ge_lab: `ge graph` draws with the labs' chart kit (engine/lab/chart.hpp).
-  target_link_libraries(ge_cli PUBLIC ge_core ge_play ge_lab)
+  # ge_lab: `ge graph` draws with the labs' chart kit (engine/lab/chart.hpp). ge_net: `ge net`
+  # reads captures and runs fake traffic with the engine's own network (engine/net).
+  target_link_libraries(ge_cli PUBLIC ge_core ge_play ge_lab ge_net)
   # The tree this ge was built from: `ge find` and `ge explain` read the engine's tags there when
   # no other engine tree is found (engine/cli/index.hpp).
   target_compile_definitions(ge_cli PRIVATE GE_ENGINE_SOURCE_DIR="${root}")

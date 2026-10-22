@@ -12,7 +12,8 @@
 //
 // ge:summary Fake traffic: a host and clients over the simulated network, measured end to end
 // ge:keywords net traffic fake-traffic generator load session simulate bots latency loss
-// ge:keywords reliable-delivery in-order goodput bandwidth report digest stress
+// ge:keywords reliable-delivery in-order goodput bandwidth report digest stress mix
+// ge:keywords traffic-mix action rpg world lockstep racing
 // ge:skill net
 // ge:test tests/net_traffic_test.cpp
 #pragma once
@@ -20,6 +21,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "net/capture.hpp"
@@ -80,5 +82,13 @@ struct TrafficReport {
 };
 
 TrafficReport run_traffic(const TrafficPlan& plan);
+
+// Named mixes, one a shape of game (docs/networking.md § The shapes), for the labs and `ge net
+// sim`: racing (the default numbers above), action (fast inputs, big snapshots), rpg, world (few
+// inputs, a busy world), lockstep (inputs and turns, no snapshots).
+const std::vector<std::string>& mix_names();
+bool traffic_mix(std::string_view name, TrafficMix& out);
+// "inputs 60 Hz × 24 B, snapshots 20 Hz × 320 B, events 4 Hz × 48 B".
+std::string describe_mix(const TrafficMix& m);
 
 }  // namespace ge::net

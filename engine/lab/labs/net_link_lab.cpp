@@ -10,7 +10,7 @@
 //
 // ge:summary Lab: fake traffic over each network preset: delivery, RTT, loss, latency, bandwidth
 // ge:keywords lab net network link latency rtt ping loss packet-loss jitter bandwidth resend
-// ge:keywords fake-traffic preset pcap capture chart reliable
+// ge:keywords fake-traffic preset pcap capture chart reliable traffic-mix
 // ge:skill net labs
 // ge:test tests/net_traffic_test.cpp
 #include <cmath>
@@ -74,7 +74,7 @@ void run(gl::Lab& lab) {
   const std::string capture_preset = lab.arg("capture");
   gl::LabTable table{
       "fake traffic, " + lab.arg("clients") + " clients for " + lab.arg("seconds") +
-          " s, each preset",
+          " s, each preset; the " + lab.arg("mix") + " mix",
       {"preset", "conditions", "joined", "rtt ms", "want", "jitter", "loss", "want", "events",
        "order", "event p50", "p95", "snaps", "inputs", "host out kbps", "in", "resends"},
       {}};
@@ -105,6 +105,12 @@ void run(gl::Lab& lab) {
                "Pick from lan, broadband, wifi, mobile, bad, awful (engine/net/conditions.cpp); "
                "skill: net.");
       continue;
+    }
+    if (!gn::traffic_mix(lab.arg("mix"), plan.mix)) {
+      lab.fail("unknown traffic mix '" + lab.arg("mix") + "'",
+               "Pick from racing, action, rpg, world, lockstep (engine/net/traffic.cpp); "
+               "skill: net.");
+      return;
     }
     plan.clients = static_cast<int>(lab.arg_num("clients"));
     plan.seconds = lab.arg_num("seconds");
@@ -235,6 +241,7 @@ const gl::LabSpec kSpec{
     {
         {"presets", "lan,broadband,wifi,mobile,bad,awful", "condition presets, comma-separated"},
         {"clients", "8", "clients connecting to the host (at most the host's 32)"},
+        {"mix", "racing", "the traffic's shape: racing, action, rpg, world, lockstep"},
         {"seconds", "10", "how long everyone sends"},
         {"drain", "4", "seconds after, for the reliable messages to finish"},
         {"tick-hz", "60", "how often every node updates and flushes"},

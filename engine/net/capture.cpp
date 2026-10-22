@@ -9,6 +9,9 @@
 // ge:test tests/net_capture_test.cpp
 #include "net/capture.hpp"
 
+#include <fstream>
+#include <iterator>
+
 #include "net/wire.hpp"
 
 namespace ge::net {
@@ -77,6 +80,10 @@ void capture_datagram(Capture& c, int64_t at_us, const Address& from, const Addr
   const bool v6 = from.family == Family::ipv6 || to.family == Family::ipv6;
   const size_t ip_len = v6 ? 40 : 20;
   const size_t total = ip_len + 8 + size;
+  if (c.limit_bytes && c.bytes.size() + 16 + total > c.limit_bytes) {
+    c.dropped++;
+    return;
+  }
   const int64_t t = at_us < 0 ? 0 : at_us;
   put32le(c.bytes, static_cast<uint32_t>(t / 1000000));
   put32le(c.bytes, static_cast<uint32_t>(t % 1000000));
@@ -170,6 +177,35 @@ bool read_capture(const uint8_t* bytes, size_t size, std::vector<CapturedDatagra
     d.data.assign(u + 8, u + udp_len);
     out.push_back(std::move(d));
     index++;
+  }
+  return true;
+}
+
+bool save_capture(const Capture& c, const std::string& path, std::string* error) {
+  std::ofstream f(path, std::ios::binary);
+  if (!f) {
+    if (error) *error = "cannot open " + path + " to write: check the directory exists";
+    return false;
+  }
+  f.write(reinterpret_cast<const char*>(c.bytes.data()),
+          static_cast<std::streamsize>(c.bytes.size()));
+  f.close();
+  if (!f && error) *error = "cannot write all of " + path + ": check the disk has room";
+  return static_cast<bool>(f);
+}
+
+bool load_capture(const std::string& path, std::vector<CapturedDatagram>& out, std::string* error) {
+  std::ifstream f(path, std::ios::binary);
+  if (!f) {
+    if (error) *error = "cannot open " + path + ": check the path";
+    return false;
+  }
+  const std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(f)),
+                                   std::istreambuf_iterator<char>());
+  std::string why;
+  if (!read_capture(bytes.data(), bytes.size(), out, &why)) {
+    if (error) *error = path + ": " + why;
+    return false;
   }
   return true;
 }
