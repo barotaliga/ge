@@ -353,6 +353,20 @@ wgpu::Texture make_texture(gpu::Device& device, std::string_view label, uint32_t
   return device.device.CreateTexture(&desc);
 }
 
+std::vector<float> read_distance(gpu::Device& device, const FrameTargets& targets,
+                                 const FrameView& view) {
+  const uint32_t w = targets.width, h = targets.height;
+  std::vector<float> depth = read_red(device, targets.depth, 0, w, h, kDepthFormat);
+  const CameraMatrices m = camera_matrices(view, static_cast<double>(w) / h);
+  for (uint32_t y = 0; y < h; ++y) {
+    for (uint32_t x = 0; x < w; ++x) {
+      float& d = depth[size_t{y} * w + x];
+      d = static_cast<float>(depth_distance(m, (x + 0.5) / w * 2 - 1, 1 - (y + 0.5) / h * 2, d));
+    }
+  }
+  return depth;
+}
+
 float half_to_float(uint16_t h) {
   const uint32_t sign = (h >> 15) & 1u, exp = (h >> 10) & 0x1fu, man = h & 0x3ffu;
   float v;

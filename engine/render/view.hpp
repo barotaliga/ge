@@ -19,7 +19,7 @@
 // ge:summary The FrameView a game extracts each frame, and its camera matrices and frustum
 // ge:keywords render frame-view camera view projection reverse-z infinite-far camera-relative
 // ge:keywords frustum planes heading pitch fov mat4 inverse sun-direction camera_matrices
-// ge:keywords look_dir sun_direction
+// ge:keywords look_dir sun_direction depth_distance distance-from-depth unproject
 // ge:skill render
 // ge:test tests/render_view_test.cpp
 #pragma once
@@ -72,5 +72,11 @@ struct CameraMatrices {
 };
 
 CameraMatrices camera_matrices(const FrameView& view, double aspect);
+
+// How far from the eye, m, lies the surface a depth buffer shows at (ndc_x, ndc_y) (-1..1, y
+// up): the point on the near plane through that pixel, scaled out by 1 / `depth` (reversed-z
+// with an infinite far plane puts depth at near / distance along the view). Infinity where the
+// depth is 0, the cleared sky.
+double depth_distance(const CameraMatrices& m, double ndc_x, double ndc_y, float depth);
 
 }  // namespace ge::render
