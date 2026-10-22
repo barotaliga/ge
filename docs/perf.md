@@ -17,8 +17,18 @@ Every row kept every level digest (v10: `0b310d692fbf2dee`, v1: `4c49f555e1c4e25
 | The mountain's rows baked in bands on threads | about −12% | most of the v1 gain | `engine/core/parallel.hpp`, `massif.cpp`, `terrain.cpp` |
 | All three, together | 2906 ms → 2154 ms (−26%) | 542 ms → 277 ms (−49%) | |
 | The piste's nearest-point lookup on a dense grid over the cells it touches (was a hash map), and both it and the network index walking each ring only where it crosses the occupied cells | 2156 ms → 1543 ms (−28%) | 280 ms → 257 ms (−8%) | `query.cpp`, `net_index.hpp` |
+| The ski routes: a heap entry left at a dearer cost than its square was reached at is passed over, the felled metres of every downhill step worked once on threads, the two searches run side by side, the candidate lines judged on threads (only each top's best laid again), a line refused for its length before it is laid on the snow, headings worked only for a line kept | about −17% | | `ski_routes.cpp` |
+| The network index's cells hold their segments as spans of a run's consecutive ones with a box, a span too far off passed over whole; a ring walks a row only across the columns it holds segments in (a column only across its rows) | about −4% | | `net_index.hpp` |
+| Readings that are pure run on threads, the answers taken in their old order: a drag lift's candidate places, the woods' scan (its draws taken first, in order), a run's nearest-segment pass over the grid by bands of rows; the walk's candidate headings and their sines worked once | about −20% | about −10% | `station_clear.cpp`, `forest.cpp`, `network_stamp.cpp`, `network.cpp` |
+| All of the above, together | 1548 ms → 932 ms (−40%) | 257 ms → 224 ms (−13%) | |
 
 The lookups' ring walks visited every cell of every ring out to the search radius, most of
 them empty: a query far from any run read up to 90 rings of hash-map misses. Clamping each ring
 to the box the segments lie in skips those cells and reads the occupied ones in the same order,
 so the segment that wins a tie is the same and no bit moves.
+
+A reading run on threads must keep nothing between calls. The station and woods readings each
+wrote their answer into one `NetHit` the closure shared, harmless on one thread; on several the
+writes raced and the maps moved (the digest changed from one run to the next). Each call now
+answers into its own. A thread-sanitizer build of `mountain_resort_level_test`,
+`mountain_ski_routes_test` and `core_parallel_test` reports no race.

@@ -14,6 +14,7 @@
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "core/num.hpp"
+#include "core/parallel.hpp"
 #include "mountain/mapgen/berm.hpp"
 #include "mountain/mapgen/drift.hpp"
 #include "mountain/mapgen/rules.hpp"
@@ -165,44 +166,50 @@ void stamp_run(const WalkedRun& run, ge::core::Heightfield& ground, ge::core::He
     }
     return y_at(p.s + ds) + run.cross[k] * clamp(lateral, -hw, hw);
   };
-  // The nearest segment to every cell of the stretch, its distance and how far along it.
-  for (size_t i = 0; i + 1 < n; i++) {
-    const TrackPoint& a = pts[i];
-    const TrackPoint& b = pts[i + 1];
-    const double dx = b.x - a.x;
-    const double dz = b.z - a.z;
-    const double len2 = dx * dx + dz * dz > 0 ? dx * dx + dz * dz : 1;
-    const bool end_stretch = ends_inside && b.s > run.track.length - 2 * reach_max;
-    const double reach =
-        std::max(a.width, b.width) / 2 + T::shoulder_flat + rules::berm::width + T::bank_max;
-    const long sc0 = std::max(c0, long(std::floor((std::min(a.x, b.x) - reach) / cell)));
-    const long sc1 = std::min(c1, long(std::ceil((std::max(a.x, b.x) + reach) / cell)));
-    const long sr0 = std::max(r0, long(std::floor((std::min(a.z, b.z) - reach) / cell)));
-    const long sr1 = std::min(r1, long(std::ceil((std::max(a.z, b.z) + reach) / cell)));
-    for (long r = sr0; r <= sr1; r++) {
-      const double z = double(r) * cell;
-      for (long c = sc0; c <= sc1; c++) {
-        const double x = double(c) * cell;
-        // A run that merges ends inside the other: nothing of its last stretch past its last
-        // station, where the other's surface runs on. (Only its last stretch: a run that turns
-        // back across the fall line has earlier stretches beyond that plane too.)
-        if (end_stretch && past_end(x, z)) continue;
-        double t = ((x - a.x) * dx + (z - a.z) * dz) / len2;
-        t = t < 0 ? 0 : t > 1 ? 1 : t;
-        const double ex = x - (a.x + dx * t);
-        const double ez = z - (a.z + dz * t);
-        const size_t o = size_t(r - r0) * size_t(bw) + size_t(c - c0);
-        const double held = dist[o];
-        if (ex * ex + ez * ez > held * held * (1 + 1e-5)) continue;
-        const double d = hypot(ex, ez);
-        if (d < held) {
-          dist[o] = float(d);
-          near[o] = int32_t(i);
-          along[o] = float(t);
+  // The nearest segment to every cell of the stretch, its distance and how far along it. A cell's
+  // answer hangs only on the segments read in order, so bands of rows are read side by side, each
+  // reading every segment in order over its own rows.
+  ge::core::parallel_bands(size_t(r1 - r0 + 1), [&](size_t lo, size_t hi) {
+    const long band0 = r0 + long(lo);
+    const long band1 = r0 + long(hi) - 1;
+    for (size_t i = 0; i + 1 < n; i++) {
+      const TrackPoint& a = pts[i];
+      const TrackPoint& b = pts[i + 1];
+      const double dx = b.x - a.x;
+      const double dz = b.z - a.z;
+      const double len2 = dx * dx + dz * dz > 0 ? dx * dx + dz * dz : 1;
+      const bool end_stretch = ends_inside && b.s > run.track.length - 2 * reach_max;
+      const double reach =
+          std::max(a.width, b.width) / 2 + T::shoulder_flat + rules::berm::width + T::bank_max;
+      const long sc0 = std::max(c0, long(std::floor((std::min(a.x, b.x) - reach) / cell)));
+      const long sc1 = std::min(c1, long(std::ceil((std::max(a.x, b.x) + reach) / cell)));
+      const long sr0 = std::max(band0, long(std::floor((std::min(a.z, b.z) - reach) / cell)));
+      const long sr1 = std::min(band1, long(std::ceil((std::max(a.z, b.z) + reach) / cell)));
+      for (long r = sr0; r <= sr1; r++) {
+        const double z = double(r) * cell;
+        for (long c = sc0; c <= sc1; c++) {
+          const double x = double(c) * cell;
+          // A run that merges ends inside the other: nothing of its last stretch past its last
+          // station, where the other's surface runs on. (Only its last stretch: a run that turns
+          // back across the fall line has earlier stretches beyond that plane too.)
+          if (end_stretch && past_end(x, z)) continue;
+          double t = ((x - a.x) * dx + (z - a.z) * dz) / len2;
+          t = t < 0 ? 0 : t > 1 ? 1 : t;
+          const double ex = x - (a.x + dx * t);
+          const double ez = z - (a.z + dz * t);
+          const size_t o = size_t(r - r0) * size_t(bw) + size_t(c - c0);
+          const double held = dist[o];
+          if (ex * ex + ez * ez > held * held * (1 + 1e-5)) continue;
+          const double d = hypot(ex, ez);
+          if (d < held) {
+            dist[o] = float(d);
+            near[o] = int32_t(i);
+            along[o] = float(t);
+          }
         }
       }
     }
-  }
+  });
   float* g = ground.data.data();
   float* p = packed.data.data();
   const PastJunction past(run, onto);
