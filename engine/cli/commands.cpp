@@ -54,6 +54,17 @@ constexpr FlagSpec kLabFlags[] = {
     kEngine,
     kRepo};
 
+constexpr FlagSpec kLabDiffFlags[] = {
+    kPreset,
+    {"against", "<name>", "the kept run to diff against (default before: --tag=before)"},
+    {"run", "", "run the lab first (its own flags after --), then diff; else diff its last run"},
+    {"bands", "<m,m,...>", "the distance bands' edges (default 25,100,400)"},
+    {"psnr", "<dB,dB,...>",
+     "each band's floor, nearest first and the sky last (default "
+     "40,36,32,28,28)"},
+    kEngine,
+    kRepo};
+
 constexpr FlagSpec kPlayFlags[] = {
     {"seed", "<n>", "the run's seed (default 1)"}, kPreset, kEngine, kRepo};
 constexpr FlagSpec kSimFlags[] = {
@@ -160,6 +171,10 @@ const CommandSpec kCommands[] = {
      "list the labs, or run one: its metrics, tables, captioned pictures and digest; its own "
      "flags go after --",
      kLabFlags, "ge lab run --json -- --seeds=1,2", "labs"},
+    {"lab diff", "<id>", 1, 1, "see",
+     "diff every picture of a lab's last run against a kept run: PSNR, SSIM and the share "
+     "changed per distance band, each band held to its floor, a four-panel sheet a shot",
+     kLabDiffFlags, "ge lab diff world --run -- --views=start,vista", "labs"},
     {"graph", "<file>...", 1, -1, "see",
      "chart series or spans files (a trace, a bench, a profile) to PNG and SVG; several files "
      "overlay; every outlier comes back as a note",
@@ -323,11 +338,12 @@ std::optional<std::string> check_args(const Args& a) {
            (c.args.empty() ? std::string("no arguments") : std::string(c.args)) + ", got " +
            std::to_string(n) + " word(s)";
   }
-  static constexpr std::string_view kPassing[] = {"lab",   "play",    "sim", "shot",
-                                                  "bench", "profile", "mem", "leaks"};
+  static constexpr std::string_view kPassing[] = {"lab",   "lab diff", "play", "sim",  "shot",
+                                                  "bench", "profile",  "mem",  "leaks"};
   if (!a.passthrough.empty() &&
       std::find(std::begin(kPassing), std::end(kPassing), c.name) == std::end(kPassing)) {
-    return "only ge lab, play, sim, shot, bench, profile, mem and leaks pass words after --";
+    return "only ge lab, lab diff, play, sim, shot, bench, profile, mem and leaks pass words after "
+           "--";
   }
   return std::nullopt;
 }

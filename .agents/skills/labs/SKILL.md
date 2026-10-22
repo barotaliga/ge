@@ -30,15 +30,25 @@ make labs                                        # what exists: id, kind, owner,
 make lab LAB=<id> ARGS=--help                    # its flags and their defaults
 make lab LAB=<id> ARGS="--seeds=38 --tag=before" # BEFORE your change: kept in previews/<id>@before/
 # ...change the code...
-make lab LAB=<id> ARGS="--seeds=38 --compare=before"   # AFTER: every metric beside the kept run
+make lab LAB=<id> ARGS="--seeds=38 --compare=before"   # AFTER: every metric beside the kept run,
+                                                       # every picture diffed (previews/<id>/diff/)
 ```
+
+**A change to how something LOOKS** is proved by the picture diff, not by eye alone: the
+`--compare` table gives each picture's PSNR, SSIM and changed share per distance band, each
+band held to a floor (40 dB near down to 28 far), and `previews/<id>/diff/<shot>.png` shows
+before, after, the change as a heatmap with the bands' contours, and the bands in metres
+(`docs/labs.md` § The picture diff). A change meant only for far scenery should leave the near
+bands at 100 dB. A GPU lab that guards a look hands its distance map with each shot
+(`lab.shot(shot, picture, Det::measured, distance)`, the distance off
+`render::read_distance`).
 
 Then read `previews/<id>/index.md` (the contact sheet) and open the pictures it lists. Each
 picture's band says what it shows and what to look for, so check exactly that. Time a
 `bench` lab on `PRESET=release`, because a debug build times the sanitizers.
 
 **What a PR owes:** for a change in a lab's subject, the lab's output before and after (the
-`--compare` table, and the pictures that moved) in the PR body, plus `make labs-smoke`
+`--compare` table, the diff table and the sheets of the pictures that moved) in the PR body, plus `make labs-smoke`
 green. If the change moves a lab's digest on purpose, run `make labs-digests`, commit
 `tests/labs_digests.txt`, and say in the PR which lab moved and why.
 

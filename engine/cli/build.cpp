@@ -425,4 +425,66 @@ Outcome run_lab(const BuildOptions& o, const LabOptions& lab) {
   return out;
 }
 
+Outcome run_lab_diff(const BuildOptions& o, const LabDiffOptions& diff) {
+  Outcome out;
+  if (!build_step(o, out)) return out;
+  const fs::path exe = o.repo / "build" / o.preset / "labs";
+  const fs::path log = log_path(o, "ge-lab-diff");
+  const fs::path previews = o.repo / "previews";
+  std::error_code ec;
+  fs::remove(log, ec);
+  std::string cmd = quote_path(exe) + " " + diff.id + " --out=" + quote_path(previews) +
+                    (diff.run ? " --quiet --compare=" : " --diff=") + diff.against;
+  if (!diff.bands.empty()) cmd += " --diff-bands=" + diff.bands;
+  if (!diff.psnr.empty()) cmd += " --diff-psnr=" + diff.psnr;
+  for (const std::string& w : diff.passthrough) cmd += " \"" + w + "\"";
+  const Ran r = run_logged(cmd, log);
+  out.text = r.output;
+  if (r.code == 2) {
+    out.findings.push_back({Severity::error, "the labs refused the flags: " + tail_of(r.output, 2),
+                            "lab " + diff.id, "ge lab " + diff.id + " -- --help lists them"});
+    out.exit = 2;
+    return out;
+  }
+  const fs::path json = previews / diff.id / "diff" / "diff.json";
+  const auto report = read_text(json);
+  const std::string kept = rel_path(o.repo, previews / (diff.id + "@" + diff.against));
+  if (!report || report->find("\"error\": \"\"") == std::string::npos) {
+    out.findings.push_back({Severity::error, "nothing to diff: " + tail_of(r.output, 1), kept,
+                            "keep a run first: ge lab " + diff.id + " --tag=" + diff.against +
+                                ", change the code, then ge lab diff " + diff.id + " --run"});
+    return out;
+  }
+  // The labs print a "DIFF <shot> <band>: ..." line for every band under its floor, and a shot
+  // that could not be compared as "  <shot>: <why>".
+  for (const auto view : split_lines(r.output)) {
+    const std::string line(view);
+    if (line.starts_with("DIFF ")) {
+      const size_t at = line.find("; look at ");
+      const std::string sheet = at == std::string::npos ? "" : line.substr(at + 10);
+      out.findings.push_back(
+          {Severity::error, line.substr(5, at == std::string::npos ? std::string::npos : at - 5),
+           sheet.empty() ? "" : rel_path(o.repo, fs::path(sheet)),
+           "look at the sheet: a change meant, say so in the PR (or loosen --psnr for that band); "
+           "else find what moved it"});
+    } else if (line.find(": not in the kept run") != std::string::npos ||
+               line.find(": a different size") != std::string::npos ||
+               line.find(": its picture could not be read") != std::string::npos) {
+      out.findings.push_back(
+          {Severity::warn, "shot " + line.substr(line.find_first_not_of(' ')), kept,
+           "keep a run with the same flags: ge lab " + diff.id + " --tag=" + diff.against});
+    }
+  }
+  if (r.code != 0 && out.findings.empty()) {
+    out.findings.push_back({Severity::error, "the lab failed (exit " + std::to_string(r.code) + ")",
+                            rel_path(o.repo, log), "read the log"});
+  }
+  out.result =
+      json_obj({{"diff", report.value_or("null")}, {"log", json_str(rel_path(o.repo, log))}});
+  out.summary = "every picture of " + diff.id + " is within its bands' floors against " + kept +
+                "; the sheets are in " + rel_path(o.repo, previews / diff.id / "diff");
+  out.next = "look at the sheets, then put the diff table in the PR";
+  return out;
+}
+
 }  // namespace ge::cli

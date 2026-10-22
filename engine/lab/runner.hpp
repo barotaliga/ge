@@ -8,7 +8,10 @@
 //   labs --json                            the list as one JSON array (what `ge lab` reads)
 //   labs <id> [--flag=value ...]           run one lab; its own flags are in `labs <id> --help`
 //   labs <id> --tag=before                 write to previews/<id>@before/ instead
-//   labs <id> --compare=before             print every metric beside the tagged run's
+//   labs <id> --compare=before             print every metric beside the tagged run's, and
+//                                          diff every picture (diff.hpp: <out>/<id>/diff/)
+//   labs <id> --diff=before                run nothing: diff the last run's pictures against
+//                                          the tagged run's; exit 1 when a band is under its floor
 //   labs --all --smoke                     every lab at its smoke flags (CI)
 //   labs --all --smoke --repeat=2          ... twice each; different digests fail the run
 //   labs --all --smoke --check-digests=F   ... and each digest against the baseline file F
@@ -19,7 +22,7 @@
 //
 // ge:summary The labs command line: list, run, tag, compare, smoke, repeat, digest baseline
 // ge:keywords lab runner cli flags smoke compare tag repeat digests baseline previews shard
-// ge:keywords usage help
+// ge:keywords usage help diff picture-diff
 // ge:skill labs
 // ge:test tests/lab_runner_test.cpp
 #pragma once

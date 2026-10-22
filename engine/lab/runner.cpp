@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "core/output.hpp"
+#include "lab/diff.hpp"
 #include "lab/lab.hpp"
 #include "lab/report.hpp"
 
@@ -32,7 +33,13 @@ using Args = std::vector<std::pair<std::string, std::string>>;
 const LabFlag kRunnerFlags[] = {
     {"out", "previews", "the directory a lab's report goes under (previews/<id>/)"},
     {"tag", "", "write to <out>/<id>@<tag>/ instead, to keep a run for --compare"},
-    {"compare", "", "print every metric beside the run tagged <tag>"},
+    {"compare", "", "print every metric beside the run tagged <tag>, and diff every picture"},
+    {"diff", "",
+     "run nothing: diff the pictures of the last run (or --tag's) against the run tagged <tag>; "
+     "exit 1 when a band is under its floor"},
+    {"diff-bands", "25,100,400", "the diff's distance bands' edges, m"},
+    {"diff-psnr", "40,36,32,28,28",
+     "the diff's floor for each band, dB, nearest first and the sky last"},
     {"repeat", "1", "run each lab N times in this process; different digests fail the run"},
     {"smoke", "", "run at the lab's smoke flags (what CI runs)", true},
     {"all", "", "run every registered lab", true},
@@ -271,6 +278,23 @@ int run_labs(int argc, const char* const* argv) {
   const std::string compare = get(runner, "compare");
   const std::string check = get(runner, "check-digests");
   const std::string write = get(runner, "write-digests");
+  DiffOptions diff_options;
+  if (!parse_diff_options(get(runner, "diff-bands"), get(runner, "diff-psnr"), diff_options,
+                          error)) {
+    std::fprintf(stderr, "labs: %s\n", error.c_str());
+    return 2;
+  }
+  if (const std::string against = get(runner, "diff"); !against.empty()) {
+    if (all) {
+      std::fprintf(stderr, "labs: --diff takes one lab: labs <id> --diff=%s\n", against.c_str());
+      return 2;
+    }
+    const std::string after = out + "/" + spec->id + (tag.empty() ? "" : "@" + tag);
+    const RunDiff run =
+        diff_runs(out + "/" + spec->id + "@" + against, after, after + "/diff", diff_options);
+    std::printf("%s", format_run_diff(run).c_str());
+    return run.pass ? 0 : 1;
+  }
   core::output::set_debug_enabled(get(runner, "debug") == "1");
   LogDump dump;
   if (const std::string spec_text = get(runner, "log"); !spec_text.empty()) {
@@ -354,6 +378,12 @@ int run_labs(int argc, const char* const* argv) {
                          path.c_str(), compare.c_str());
           } else {
             std::printf("%s", format_compare(before, lab.metrics(), compare).c_str());
+          }
+          if (!lab.shots().empty()) {
+            std::string kept = out;
+            kept.append("/").append(s->id).append("@").append(compare);
+            const RunDiff run = diff_runs(kept, dir, dir + "/diff", diff_options);
+            std::printf("%s", format_run_diff(run).c_str());
           }
         }
         for (const std::string& f : lab.failures()) {

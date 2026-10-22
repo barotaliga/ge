@@ -18,7 +18,10 @@ ge lab run                             # one lab, its default flags
 ge lab run -- --help                   # its own flags; they go after --
 ge lab run -- --seeds=7                # one lab with its own flags
 ge lab run --tag=before                # write to previews/run@before/
-ge lab run --compare=before            # every metric beside the tagged run's
+ge lab run --compare=before            # every metric beside the tagged run's, every picture diffed
+ge lab diff run                        # the last run's pictures against previews/run@before/:
+                                       # PSNR and SSIM per distance band, each under its floor a finding
+ge lab diff run --run -- --seeds=7     # run it first, then diff
 ge lab run --json                      # the same, its report.json inside the answer
 ```
 
@@ -58,4 +61,7 @@ lines, discs, text), `lab/runner.hpp` (every flag).
 
 A change in a lab's subject runs the lab before (`--tag=before`, on the old code) and after
 (`--compare=before`), and the PR carries the comparison and the pictures that moved. A digest
-that moved on purpose says why.
+that moved on purpose says why. A change to how something looks is proved with `ge lab diff
+<id>`: a picture handed with a distance map (`lab.shot(shot, picture, Det::measured,
+distance)`) is judged band by band, so a change far off may be coarser than one near the
+player (`lab/diff.hpp` says how).
