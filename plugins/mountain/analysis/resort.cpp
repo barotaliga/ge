@@ -157,7 +157,8 @@ LevelAnalysis analyze_resort(const mapgen::Level& level) {
       add("R27", Severity::error, "run " + run.id + "'s line is only " + fmt(low, 2) + " packed");
     }
   }
-  if (pistes < RR::network::runs_min) {
+  // A real face carries the runs its mountain gives it (R25).
+  if (pistes < (level.face ? RR::massif::real::least::runs : RR::network::runs_min)) {
     add("R27", Severity::error, "only " + str(pistes) + " pistes");
   }
 
@@ -194,7 +195,9 @@ LevelAnalysis analyze_resort(const mapgen::Level& level) {
     lifts.push_back(
         {l.id, {l.bottom.x, l.bottom.z}, {l.top.x, l.top.z}, l.bottom.z >= area.floor_z - 1});
   }
-  const mapgen::PlanAccess access = mapgen::reckon_access(plan, lifts);
+  // On a real face the way home may run a colour harder (R25): its runs keep their own colours.
+  const mapgen::PlanAccess access =
+      mapgen::reckon_access(plan, lifts, level.face ? RR::massif::real::least::harder : 0);
   for (size_t i = 0; i < runs.size(); i++) {
     if (!access.ok[i]) {
       add("R29", Severity::error, "run " + runs[i].id + " cannot be skied again: " + access.why[i]);

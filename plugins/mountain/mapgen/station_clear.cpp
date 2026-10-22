@@ -26,10 +26,9 @@ using ge::core::hypot;
 
 // The step a footprint and a drag's line are read at, m.
 constexpr double kRead = 3;
-// How far off a run's surface a station keeps, m; the most the ground may fall across a bottom
-// station's footprint, m per m; how near a link lane's end its lift's bottom station stays, m.
+// How far off a run's surface a station keeps, m; how near a link lane's end its lift's bottom
+// station stays, m.
 constexpr double kMargin = 2;
-constexpr double kLevel = 0.22;
 constexpr double kLink = 18;
 // The least a drag climbs, m, and how far inside its steepest pull a drag re-laid keeps.
 constexpr double kRise = 30;
@@ -68,7 +67,7 @@ std::vector<PlanPoint> footprint(LiftKind kind, PlanPoint at, PlanPoint dir) {
 // Whether a bottom station at `bottom` on a line to `top` stands clear of the runs, on its own
 // level ground (its level first: reads of the ground, where the runs are a search).
 bool clear_bottom(const StationGround& g, LiftKind kind, PlanPoint bottom, PlanPoint top) {
-  if (!stands_level(g.height, kind, bottom, top)) return false;
+  if (!stands_level(g.height, kind, bottom, top, g.level.value_or(kStationLevel))) return false;
   for (const PlanPoint& p : bottom_footprint(kind, bottom, top)) {
     if (g.on_run(p.x, p.z, kMargin)) return false;
   }
@@ -150,7 +149,7 @@ std::vector<Place> candidates(const LiftPlan& l) {
 }  // namespace
 
 bool stands_level(const std::function<double(double x, double z)>& height, LiftKind kind,
-                  PlanPoint bottom, PlanPoint top) {
+                  PlanPoint bottom, PlanPoint top, double most) {
   double lo = std::numeric_limits<double>::infinity();
   double hi = -lo;
   for (const PlanPoint& p : bottom_footprint(kind, bottom, top)) {
@@ -159,7 +158,7 @@ bool stands_level(const std::function<double(double x, double z)>& height, LiftK
     hi = num::max(hi, y);
   }
   const auto& F = footprint_of(kind);
-  return (hi - lo) / num::max(F.back + F.ahead, 2 * F.half) <= kLevel;
+  return (hi - lo) / num::max(F.back + F.ahead, 2 * F.half) <= most;
 }
 
 std::optional<std::string> clear_stations(

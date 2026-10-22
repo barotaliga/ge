@@ -1,13 +1,15 @@
 // THE INSTANCES' DRAW (render/instances.hpp): one indirect draw a bucket, its bucket told by the
 // base vertex (the vertex index's bits 20 and up), its instance read from the bucket's list and
 // its vertex pulled from the shared buffer and decoded. Lit by the sun past the ground's own
-// horizon and the sky through frame.wgsl's functions, seen through the haze, with its motion
+// horizon and past what stands in the sun (wgsl/sun_shadow.wgsl), and the sky through
+// frame.wgsl's functions, seen through the haze, with its motion
 // from the last frame's place. Drawn twice from one `@invariant` vertex stage: depth only
 // (`fs_depth`, which keeps a LOD band's dithered share of the pixels), then shaded where the
 // depth is `equal` (`fs_main`, which never discards).
 #include "render/wgsl/frame.wgsl"
 #include "render/wgsl/terrain_common.wgsl"
 #include "render/wgsl/instances_common.wgsl"
+#include "render/wgsl/sun_shadow.wgsl"
 
 @group(1) @binding(0) var<uniform> ground: TerrainParams;
 @group(1) @binding(1) var horizon0: texture_2d<f32>;
@@ -19,6 +21,10 @@
 @group(2) @binding(3) var<storage, read> streams: array<vec4f>;
 @group(2) @binding(4) var<storage, read> lists: array<u32>;
 @group(2) @binding(5) var<storage, read> materials: array<vec4f>;
+
+@group(3) @binding(0) var<uniform> shadow: SunShadow;
+@group(3) @binding(1) var shadow_maps: texture_depth_2d_array;
+@group(3) @binding(2) var shadow_cmp: sampler_comparison;
 
 struct VertexOut {
   @invariant @builtin(position) position: vec4f,
@@ -93,7 +99,8 @@ fn fs_main(in: VertexOut, @builtin(front_facing) front: bool) -> FragmentOut {
   let y = in.rel.y + frame.eye.y;
   let xz = in.rel.xz + frame.eye.xz;
   let lit = max(dot(n, frame.sun.xyz), 0.0) *
-            ground_shadow(ground, horizon0, horizon1, linear_clamp, frame.sun.xyz, xz);
+            ground_shadow(ground, horizon0, horizon1, linear_clamp, frame.sun.xyz, xz) *
+            sun_shadow(shadow, shadow_maps, shadow_cmp, in.rel, n, in.position.xy, frame.time.y);
   let c = a / PI * (sun_light(y) * lit + sky_irradiance(n));
   var out: FragmentOut;
   out.colour = vec4f(haze(c, in.position.xy * frame.size.zw, length(in.rel)), 1.0);

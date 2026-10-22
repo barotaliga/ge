@@ -69,6 +69,7 @@ Level resort_base(ResortAttempt& a, int laps) {
   level.attempt = a.attempt;
   level.version = a.version;
   level.region = a.region->id;
+  if (a.face) level.face = a.face->crop->id;
 
   ResortMap area;
   area.runs.reserve(a.built.size());
@@ -94,6 +95,12 @@ Level resort_base(ResortAttempt& a, int laps) {
   level.mountain.vertical = a.plan.vertical;
   level.mountain.altitude = area.village.y - sea;
   level.mountain.tree_line = area.village.y - sea + (a.plan.tree_line - a.plan.altitude);
+  if (a.plan.face) {
+    // On a real face the floor's real height is the map's nought: the village stands its own
+    // height over it, and the tree line is the real one.
+    level.mountain.altitude = area.village.y + a.plan.altitude;
+    level.mountain.tree_line = a.plan.tree_line;
+  }
   level.mountain.sea = sea;
   level.resort = std::move(area);
   return level;

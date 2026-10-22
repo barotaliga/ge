@@ -229,7 +229,8 @@ of every texel below it that overlaps it, so an odd edge is never dropped; it ma
 reference (`hiz_reduce`) texel for texel, and the instance families' second culling phase
 reads it (§ GPU-driven instances). The colour pass and the sky write the **motion target** (`RGBA16Float` at
 the render size: rg the uv this pixel's surface moved since the last frame, unjittered; b the
-reactive mask, 0 for the ground and the sky until particles and glitter write it, M8) from
+reactive mask, 0 for the ground and the sky but where the snow's glitter writes it (M8a), and
+particles' later) from
 the frame block's `prev_view_proj` and `eye_delta` (`FrameHistory`, `frame_types.wgsl`'s
 `screen_motion`); the sky's motion is the camera's turn alone.
 
@@ -237,7 +238,7 @@ the frame block's `prev_view_proj` and `eye_delta` (`FrameHistory`, `frame_types
 `terrain.cull`, `instances.cull` (phase one, reading the last frame's pyramid),
 `terrain.horizon`, `terrain.depth`, `instances.depth`, `hiz`, `instances.cull.late`,
 `instances.depth.late`, `terrain`, `instances` (both phases' lists, tested `equal`), `sky`,
-`taa`, `post`. The late phase's depth lands before the colour pass, so it is still shaded
+`taa`, `bloom` (M7d3), `post`. The late phase's depth lands before the colour pass, so it is still shaded
 once; the late phase's draws are not in this frame's pyramid, which only makes the next
 frame's phase one keep a little more.
 
@@ -246,6 +247,12 @@ manifest and created with `createRenderPipelineAsync` behind the loading card. T
 layer counts pipeline creations, and after load a creation is an error that names the
 pipeline and says to add it to the manifest. A missing entry fails the lab tests
 instead of causing a hitch in a run.
+
+**As built (M7d2).** The sun's shadows land between the horizon bake and the prepass:
+`shadows.cull` (the casters' cull into each map drawn this frame), then `shadows.near`,
+`shadows.far` and `shadows.figures`, each a depth-only pass into its layer of the shadow maps;
+the `terrain` and `instances` rows read `shadows.maps`. A cascade that is not due still opens its
+pass (read-only, nothing drawn), so the recorder's GPU times keep their order.
 
 ## GPU-driven instances
 
@@ -367,6 +374,24 @@ as the eye moves; a coarse vertex inside the finer square sinks two spacings. Th
 are baked once into an `RGBA16Float` texture by compute. The game hands the albedo as an
 sRGB texture over the same grid (Fall Line's: snow, the packed piste, steep rock).
 
+**As built (M8a): the ground's material.** The terrain's colour pass is a material's: a
+shader that includes `render/wgsl/terrain_draw.wgsl` (the bindings of groups 1 and 2, the vertex
+stage, the overdraw probe and the two halves every material shares: `ground_at`, the pixel's
+place, normal, albedo and the sun that reaches it, and `ground_out`, the haze, the motion and the
+reactive mask) and defines `fs_main`, with a bind group of its own at group 3
+(`TerrainSource::shader`, `material`; `bind_terrain_material`). The prepass, the colour pass and
+the probe all run the material's module, so their depths are still the same bits. `terrain.wgsl`
+is the default: the albedo lit by the sun and the sky. Fall Line's is the snow's, in
+`plugins/mountain/app/snow.wgsl`, over a ground map baked once a map (the packed share, rock by
+slope, the piste's direction as its doubled angle): wind swells and grain bent into the normal on
+the loose snow, a broken face on rock, the groomer's corduroy (14 cm a rib, worn in patches) and
+lanes (5.2 m a swath, each its own shade) across the piste's way, every term faded by the pixel's
+own footprint before it aliases; the wrap's blue terminator; the glare, the sun scattered forward,
+harder on the piste; and the glitter, at most one crystal a cell of world space flaring as a point
+where its facet lines the sun up with the eye, written to the reactive mask so TAA-U keeps it.
+On the software adapter at 1280x720 the snow costs the terrain pass about 17 % over the plain
+albedo (the `profile` lab's `--snow=0`).
+
 Snow marks are two **toroidal textures** that follow the camera: the trail map (where
 the snow was cut and packed) and the deformation field (how high the snow stands).
 A compute pass stamps each contact as a capsule into them, and wraps the addressing
@@ -403,6 +428,28 @@ Filtering is hardware comparison sampling with a small rotated Poisson kernel. A
 contact-hardening (PCSS-style) blocker search is a quality-ladder option for the
 figures' atlas only.
 
+**As built (M7d2)** (`render/shadows.hpp`, `wgsl/sun_shadow.wgsl`): the cascades and the
+atlas are three layers of one `Depth32Float` array (2048 a side in Fall Line): the near cascade
+(48 m round the eye), the far one (400 m), and the figures' atlas of 4 × 4 tiles (1.4 m round
+each figure, 128 texels across: about a centimetre a texel). Each map is an orthographic view
+along the sun, 2 km deep, with depth 1 toward the sun, cleared to 0 so nothing casts; casters
+draw with `greater`, and a receiver is lit where its depth is at least the map's. A cascade is
+redrawn (`update_cascade`, pure CPU) only when it was never drawn, the eye has drifted a quarter
+of its radius across the sun, or the sun has turned 0.25° (near) or 1° (far); its centre is
+snapped to its texels across the sun, so a redraw does not swim. Seed 38's whole run from the
+chase camera redraws the near cascade on 187 of 14,382 frames and the far one on 22 (the
+`world` lab's `cascade-redraws`). The casters are each family's own slots
+(`create_family_casters`): the forest's two (one a cascade) culled against the map's box with
+no depth pyramid, the figures' one culled once for every tile, each tile drawn under its own
+viewport and scissor. A receiver (the terrain and every instance) offsets its point 1.5 texels
+along its normal, adds a 5 cm bias and takes four rotated Poisson taps, each a hardware 2 × 2
+comparison (interleaved gradient noise, turned every frame for the TAA to average); the near
+cascade where the point falls inside it, else the far one, and the darkest of the figures'
+tiles. Under the horizon nothing is drawn or read. On the software adapter a cascade's redraw
+costs 2 to 30 ms (near) and 50 to 85 ms (far), which is why they are cached; the atlas costs
+under 3 ms. The `wood` view (`games/fall_line/app/views.cpp`) stands across the sun from the
+sunlit edge of a wood, where the trees' shadows lie on the snow.
+
 **As built (M7b)** (`render/horizon.hpp`): the horizon map. A turn is split into 180 bearings
 (2° each); the maps for the two bearings either side of the sun's sit in two `RGBA16Float`
 textures, each bearing in the slot of its index's parity, so a step of the sun into the next
@@ -420,8 +467,7 @@ nine minutes of the day; the `shadows` lab counts them). On the software adapter
 timings, and slicing a bake over frames if one shows as a hitch, wait for the `profile` lab
 (M7d3). Past the map's edge the ground is drawn mirrored and so are its maps: the shadows
 there fall at the mirrored bearing, which only the distant ground shows until the far
-ranges replace it (M8). The cascades and the figures' atlas have nothing to shade until the
-instances and the skier are drawn, so they land with them (M7d2).
+ranges replace it (M8).
 
 ## Sky, atmosphere and clouds
 
@@ -501,7 +547,23 @@ in tile memory):
 the sun and the sky (read from the sky's light) to 0.78; the tone curve is the Khronos PBR
 neutral operator (linear to 0.76, a smooth shoulder above, so snow keeps its colour); the
 dither is interleaved gradient noise until the blue-noise texture lands; the sRGB encoding
-is an `override` constant off for an `*Srgb` output. Bloom and the grade land with M7d3.
+is an `override` constant off for an `*Srgb` output.
+
+**As built (M7d3)** (`render/bloom.hpp`, `render/post.hpp`). **Bloom** is a compute pass
+(`bloom`) over a chain of half-size `RGBA16Float` mips of what the post pass reads (six levels
+in Fall Line: half the output's size down to a 64th). Down, each level is the 13-tap filter of
+the one above (four overlapping 2 × 2 boxes and a centre one, each a bilinear read); the first
+level weighs each box by 1 / (1 + its brightness), so a lone glint cannot flicker into a blob.
+Up, each level adds the level below through a 3 × 3 tent to its own down level, and alpha
+counts the levels summed. The post pass mixes `strength` of the average in (Fall Line: 0.04):
+nothing is thresholded, so the mix conserves energy (a flat field keeps its value; the test
+holds it to one 8-bit level) and only what is much brighter than its surroundings visibly
+glows. **The grade** is a 32³ `RGBA16Float` lookup table read trilinearly at the tone-mapped,
+sRGB-encoded colour, so its steps are spent where the eye judges colour; it starts as the
+identity, and the game bakes its own (`fall_line::app::bake_grade`: a little contrast
+through the middle tones with the ends held, cooler shadows, warmer highlights, 5 % more
+saturation). On the software adapter at 1280 × 720 the bloom costs about 11 ms and the post
+pass 7 ms (the `profile` lab); the bloom's cost on a real GPU waits for the Mac's numbers.
 
 Linear light is used throughout, and the conversion happens here, once.
 

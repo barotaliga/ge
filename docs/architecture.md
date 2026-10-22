@@ -67,6 +67,12 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   the window and the game's GPU labs link): its pass table over `engine/render`, the
   `FrameView` it extracts (from named views now, from `GameState` once the run lands),
   Fall Line's own looks, then its HUD and cards, and its sound beds.
+- **`engine/play`**: the play contract (`ge::play`): what a game fills in so it can be played,
+  replayed and inspected without a screen (its axes, its options, a `Run`: step, over, digest,
+  observe, state, report, pilot), and everything the engine does with it once for every game:
+  the session that snaps, records and steps every input, the line protocol, the plain-text
+  input log, replay, the state at a step, the divergence search, and the `play` executable's
+  main. It depends on `engine/core` alone; a game's `play` target links it and `ge` runs it.
 - **`engine/lab`**: the lab contract and the `labs` runner (`docs/labs.md`): how any
   subsystem, plugin or game declares a lab, the CPU raster and PNG writer its pictures are
   drawn with, and the report, contact sheet and digest a run leaves. Labs themselves sit in
@@ -244,6 +250,7 @@ whole tree to it, and `ge doctor` holds a game repo to it (the `agent-interface`
 | UI | Our own immediate-mode 2D layer + SDF text; Dear ImGui for dev tools |
 | Assets | cgltf for the modelled skis; everything else generated in code or baked to embedded blobs |
 | Built venues on a map | A venue whose features are finer than the 2 m grid (a ski jump's edge, its landing radius) answers `Level::ground_at` and `normal_at` off an ANALYTIC profile inside its width (`Level::venue`, one null check on the hot path), with the grid cut beneath it so a reader of the raw grid never sees ground above the surface |
+| Real-world data | Baked offline by a lab off free public datasets that need no credentials (the 30 m elevation model's public bucket), into GENERATED C++ sources committed in the tree (a real face's heights: a base64 string of second-differenced varints, about 21 KB a face), so a build reads no file and fetches nothing; the bake is re-runnable and reproduces the tree to the bit |
 | Tests | Our own header harness, CTest, golden tables |
 | Build/CI | CMake + Ninja + presets; GitHub Actions on Linux x64/arm64 (GCC, Clang), macOS, Windows |
 
@@ -257,4 +264,5 @@ Dear ImGui and Tracy. Downloads land in `.cache/deps/` (gitignored, shared by ev
 cached by CI). `GE_PLATFORM` and `GE_GPU` switch the platform layer and the GPU off; the
 simulation, the plugins and their tests never need either, and `GE_GPU` defaults off where
 Dawn publishes no archive (Linux arm64). `Makefile` names the everyday commands. CI (`.github/workflows/ci.yml`) runs format,
-agents-check, lint and the test matrix.
+agents-check, lint and the test matrix, with ctest in parallel, ccache on the Linux and macOS
+rows and, on a pull request, lint over only what the change reaches (the `build` skill § CI).

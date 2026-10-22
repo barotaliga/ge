@@ -79,8 +79,9 @@ bool lay_run(ResortAttempt& a, const RunSpec& fair, const SharedTop& shared) {
     const bool road = run.spec.kind == RunKind::road;
     const GradeRow& row = road ? kRoadRow : *run.spec.row;
     const WalkedRun* onto = run.into ? &a.walked[size_t(run.into->run)] : nullptr;
+    const GradeFace face = grade_face(a);
     std::optional<std::string> graded =
-        grade_run(run, ground, row.track.max_grade, colour_cap(run), onto);
+        grade_run(run, ground, row.track.max_grade, colour_cap(run), onto, nullptr, false, face);
     // A run the mountain made gentler than its colour starts as the colour it measures (R12).
     if (!graded && !road) {
       const PisteGrade measured =
@@ -88,7 +89,8 @@ bool lay_run(ResortAttempt& a, const RunSpec& fair, const SharedTop& shared) {
       const PisteGrade built = run.spec.row->id.value_or(PisteGrade::black);
       if (static_cast<int>(measured) < static_cast<int>(built)) {
         run.start_slope = grade_row(measured).spawn.max_slope;
-        graded = grade_run(run, ground, row.track.max_grade, colour_cap(run), onto);
+        graded = grade_run(run, ground, row.track.max_grade, colour_cap(run), onto, nullptr, false,
+                           face);
       }
     }
     if (graded) {
@@ -110,8 +112,9 @@ bool lay_run(ResortAttempt& a, const RunSpec& fair, const SharedTop& shared) {
 }  // namespace
 
 ResortAttempt begin_resort(double seed, int attempt, uint32_t sub, const Region& region,
-                           int version) {
+                           int version, std::shared_ptr<const RealFace> face) {
   ResortAttempt a;
+  a.face = std::move(face);
   a.seed = seed;
   a.attempt = attempt;
   a.sub = sub;
@@ -140,8 +143,18 @@ StageResult build_resort(ResortAttempt& a, std::string& reached) {
   return std::nullopt;
 }
 
+RampFit ramp_fit(const ResortAttempt& a) {
+  if (!a.face) return RampFit{};
+  return RampFit{RR::massif::real::least::ramp_glide, RR::massif::real::least::ramp_gentle, true};
+}
+
+GradeFace grade_face(const ResortAttempt& a) {
+  if (!a.face) return GradeFace{};
+  return GradeFace{RR::massif::real::least::fall, RR::massif::real::least::cut, true};
+}
+
 StageResult resort_mountain(ResortAttempt& a) {
-  a.plan = plan_massif(a.rng, *a.region);
+  a.plan = plan_massif(a.rng, *a.region, a.face, a.attempt);
   a.ground = bake_massif(a.plan);
   return std::nullopt;
 }
@@ -157,8 +170,13 @@ StageResult resort_pads(ResortAttempt& a) {
   // The peak's chair's queue ahead of a rider out of the gondola, at the first aim whose way
   // the pressed snow carries him down (R26).
   std::vector<StationPad> pressed = press_pads(a.ground, a.lift_plans, a.shape);
+  // A real face's way may ask more earthworks of a further aim, searched over R26's whole band.
+  ChainMost most;
+  if (a.face) {
+    most = {RR::massif::real::least::chain_fill, RR::massif::real::least::chain_dig, true, true};
+  }
   std::optional<LaidChain> chain =
-      lay_chain(a.ground, raw, a.lift_plans, std::move(pressed), a.shape);
+      lay_chain(a.ground, raw, a.lift_plans, std::move(pressed), a.shape, most);
   if (!chain) return "R26: no way off the gondola's top falls to the peak's chair's queue";
   a.way = chain->way;
   a.pads = std::move(chain->pads);
@@ -168,7 +186,7 @@ StageResult resort_pads(ResortAttempt& a) {
 StageResult resort_pistes(ResortAttempt& a) {
   const ge::core::Heightfield& ground = a.ground;
   const TerrainPlan& plan = a.plan;
-  const RampFit fit{};
+  const RampFit fit = ramp_fit(a);
   // The tops: runs started under them where a ramp has room (R26, R27).
   const bool tight = a.shape.lean > 0;
   // Every station standing as the runs are walked: a lift's two ends, the valley floor's aside.
@@ -330,7 +348,7 @@ StageResult resort_pistes(ResortAttempt& a) {
                          ramp_blocked, fit);
         return room.has_value();
       };
-      fair = place_start(ground, spec, spec.lean, siblings, clear, top);
+      fair = place_start(ground, spec, spec.lean, siblings, clear, top, a.face != nullptr);
       // Never over a drag lift's line (R26): the runs off a drag's own top.
       if (fair && std::any_of(drags.begin(), drags.end(),
                               [&](const LiftPlan* l) { return l->id == spec.from; })) {
@@ -376,8 +394,15 @@ StageResult resort_pistes(ResortAttempt& a) {
   }
   int pistes = 0;
   for (const WalkedRun& w : a.walked) pistes += w.spec.kind == RunKind::piste ? 1 : 0;
-  if (pistes < RR::network::runs_min) {
+  const int fewest = a.face ? RR::massif::real::least::runs : RR::network::runs_min;
+  if (pistes < fewest) {
     return "only " + std::to_string(pistes) + " piste(s) could be walked down the mountain";
+  }
+  // On a real face, a nursery's drag no run could be walked off (a valley floor with no slope
+  // beside the village) is not laid.
+  if (a.face && std::none_of(a.walked.begin(), a.walked.end(),
+                             [](const WalkedRun& w) { return w.spec.from == "D1"; })) {
+    std::erase_if(a.lift_plans, [](const LiftPlan& l) { return l.id == "D1"; });
   }
   return std::nullopt;
 }
@@ -399,7 +424,8 @@ StageResult resort_links(ResortAttempt& a) {
   };
   // A station on the valley floor stands in the hub (R29).
   b.ground.floor = [base_z](PlanPoint p) { return p.z >= base_z - 1; };
-  b.ground.slack = 0;
+  // R29 on a real face: the way back from a piste's foot may run a colour harder.
+  b.ground.slack = a.face ? RR::massif::real::least::harder : 0;
   b.walked = &a.walked;
   b.lifts = &a.lift_plans;
   b.route = [&](double x, double z, double side, const std::function<bool(int)>& may,

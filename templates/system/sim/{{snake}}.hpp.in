@@ -1,0 +1,32 @@
+// THE {{snake}} SYSTEM: its own state and the fixed step that advances it, kept apart from the
+// game's other systems so it can be tested alone. Say here what it simulates, in what units, and
+// what it reads from and writes to the GameState. It is deterministic: time is the step count,
+// every random draw comes from the Rng it is handed, in step order (skill: sim-system).
+//
+// To wire it in: add a {{Type}}State to GameState (sim/game.hpp), call step_{{snake}} from step()
+// in sim/game.cpp, and mix digest_{{snake}} into digest().
+//
+// ge:summary The {{snake}} system: its state and fixed step (say what it simulates)
+// ge:keywords sim system {{snake}} step_{{snake}} digest_{{snake}} determinism
+// ge:skill sim-system
+// ge:test tests/sim_{{snake}}_test.cpp
+#pragma once
+
+#include <cstdint>
+
+#include "core/prng.hpp"
+
+namespace {{ident}}::sim {
+
+struct {{Type}}State {
+  double level = 0;  // the system's one quantity: rename it and give it its unit
+  double rate = 0;   // its change a second
+};
+
+// One fixed step of `dt_s` seconds. Draws from `rng` in a fixed order, or not at all.
+void step_{{snake}}({{Type}}State& state, ge::core::Rng& rng, double dt_s);
+
+// FNV-1a 64 over the state's bits, for the game's digest and the tests.
+uint64_t digest_{{snake}}(const {{Type}}State& state);
+
+}  // namespace {{ident}}::sim

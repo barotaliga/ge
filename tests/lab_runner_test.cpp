@@ -1,10 +1,11 @@
 // engine/lab's contract and runner, through the command line an agent types: the listing, an
 // unknown flag, a run's files (metrics.tsv, report.json, the contact sheet, the captioned
-// picture), --tag and --compare, the in-process repeat check and the digest baseline. The labs
-// it runs are registered here, so the test holds the lab runner, not any one lab.
+// picture), --tag and --compare, the in-process repeat check, --shard and the digest baseline. The
+// labs it runs are registered here, so the test holds the lab runner, not any one lab.
 //
 // ge:summary Tests the lab runner: flags, the report's files, tag and compare, repeat, digests
 // ge:keywords test lab runner registry report digest repeat compare caption smoke measured-shot
+// ge:keywords shard
 // ge:skill labs testing
 #include <filesystem>
 #include <fstream>
@@ -115,6 +116,15 @@ TEST(tag_and_compare) {
 TEST(repeat_catches_hidden_state) {
   CHECK(run({"toy", "--repeat=3"}) == 0);
   CHECK(run({"drift", "--repeat=2"}) == 1);
+}
+
+TEST(shards_split_the_labs) {
+  // The registry here is {drift, toy}: slice 1/2 is drift alone (fails its repeat), 2/2 toy.
+  CHECK(run({"--all", "--smoke", "--repeat=2", "--shard=1/2"}) == 1);
+  CHECK(run({"--all", "--smoke", "--repeat=2", "--shard=2/2"}) == 0);
+  CHECK(run({"--all", "--smoke", "--shard=3/2"}) == 2);
+  CHECK(run({"--all", "--smoke", "--shard=2"}) == 2);
+  CHECK(run({"toy", "--shard=1/2"}) == 2);  // a slice of one named lab means nothing
 }
 
 TEST(digest_baseline) {

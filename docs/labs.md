@@ -95,7 +95,18 @@ make lab LAB=level ARGS=--tag=before          # keep this run as previews/level@
 make lab LAB=level ARGS=--compare=before      # every metric beside the kept run's
 make labs-smoke                               # every lab at its smoke flags, twice, digests checked
 make labs-digests                             # rewrite tests/labs_digests.txt (a reviewed change)
+build/debug/labs --json                       # the list as one JSON array (what `ge lab` reads)
+make lab LAB=trace ARGS="--log=course=debug"  # any lab: the log spec's lines in previews/<id>/log.txt
 ```
+
+`--log=<spec>` switches on log channels for the run (`docs/debugging.md`): every line kept goes to
+`previews/<id>/log.txt` as `[step] level channel: message`, the debug and trace lines only
+there, and a note in the report counts them by channel and level. The log is `measured`: it
+never moves a digest.
+
+In a game repo, `ge lab` is the way in: `ge lab` lists, `ge lab <id> --tag=before` and
+`--compare=before` run one, and with `--json` the lab's whole `report.json` is the answer's
+`result`.
 
 The binary is `build/<preset>/labs` (`PRESET=release` for anything timed). An unknown flag
 exits 2, a failed lab exits 1, and a clean run exits 0, because a measurement that ignores
@@ -153,7 +164,8 @@ fails when it is off. Three checks use it:
 - **`--repeat=N`** runs the lab N times in one process and fails when the digests differ.
   That catches state kept between runs and unseeded draws.
 - **`--check-digests=tests/labs_digests.txt`** compares each lab's smoke-run digest with
-  the committed baseline. CTest's `labs_smoke` runs it on every CI row, so a lab whose
+  the committed baseline. CTest's `labs_smoke_1`..`_8` (one slice of the labs each,
+  `--shard=I/N`) run it on every CI row, so a lab whose
   output differs between compilers fails on the row that differs.
 - A lab that has to move (its drawing changed, or the code it runs changed on purpose)
   rewrites the baseline with `make labs-digests`, and the PR says why.
@@ -224,35 +236,51 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 - **Every drive is recorded on the control tape** (`plugins/racing/tape.hpp`, the format a
   ghost and a replay use). A drive's seed, options and tape reproduce it exactly, so any
   run (a bot's, an agent's, a player's) becomes a repro or a scenario.
-- **An agent at the controls**: `labs play --quiet --stdio` runs a game under a line protocol,
-  with one JSON object a line in each direction, so an agent can playtest without a screen
-  (`--seed`, `--rivals`; the runner's `--quiet` keeps stdout to the protocol). The session
-  opens with a `hello` line (the seed, the field, the gates, the piste's length, the step rate,
-  the ops). The protocol is stated once in `games/fall_line/sim/play.hpp`:
+- **An agent at the controls**: every game is played the same way, through the engine's
+  play contract (`engine/play/game.hpp`). A game names its axes (the whole input: Fall Line's
+  `steer`, `tuck`, `brake`, `jump`, `reset`) and options (`rivals`, `version`) and opens a
+  `Run` (step, over, digest, observe, state, report, pilot). The engine's session
+  (`engine/play/session.hpp`) snaps every input onto its axis's grid, records it on the INPUT
+  LOG (`engine/play/inputs.hpp`: plain text, one line per run of held steps) and steps the run,
+  so a run played by an agent, by the game's pilot or from a log is written down the same way
+  and replays to the same digest. The game's `play` executable (`build/<preset>/play`) carries
+  it, and `ge` drives it:
+
+  | Command | What |
+  | --- | --- |
+  | `ge play --seed=38 -- --rivals=3` | the line protocol on the terminal (below) |
+  | `ge sim --seeds=38,7` | the game's pilot over each seed: report, digest, `runs/<game>-<seed>.inputs` |
+  | `ge replay <log>` | the log played back; a digest it misses is a determinism break |
+  | `ge state <log> --step=N` | everything that decides the next step, after N steps |
+  | `ge diverge <a> <b>` | the first input and the first step two runs part, and the fields that differ |
+
+  The protocol is stated once in `engine/play/session.hpp`. The session opens with `hello`
+  (the game, the seed and options, the step rate, the axes, the ops); then:
 
   | Agent sends | Engine answers |
   | --- | --- |
-  | `{"op":"observe"}` | the clock and step; where he is, his heading, speed and edge, on the snow or in the air, down or not; the gate owed, its bearing off his heading (+ right) and its distance; where he stands on the piste (`piste_lateral`, `piste_width`, `piste_heading`, `piste_bend` over the next 30 m); finished and the finish time; his place in the field; his events since the last answer |
-  | `{"op":"act","input":{"steer":s,"tuck":t,"brake":b,"jump":j,"reset":r},"steps":n}` | the observation after n steps (1 to 1200) with that input held; every input key is optional, and `reset` is taken on the first step |
-  | `{"op":"shot","view":"chase"}` (M7) | the path of a captioned picture of that view now |
-  | `{"op":"tape"}` | the tape so far, one base64 stream per axis: the run as a replay |
-  | `{"op":"end"}` | the drive's report and digest; the session ends |
+  | `{"op":"observe"}` | the step and the clock, and the game's observation. Fall Line's: where he is, his heading, speed and edge, on the snow or in the air, down or not; the gate owed, its bearing off his heading (+ right) and its distance; where he stands on the piste (`piste_lateral`, `piste_width`, `piste_heading`, `piste_bend` over the next 30 m); finished and the finish time; his place in the field; his events since the last answer |
+  | `{"op":"act","input":{"<axis>":v,...},"steps":n}` | the observation after n steps (1 to 1200) with that input held; an absent axis is 0, a `press` axis (`reset`) is taken on the first step |
+  | `{"op":"pilot","steps":n}` | the game's own pilot plays n steps, then the observation: an agent hands over and takes back |
+  | `{"op":"state"}` | the game's whole state now, every field to the bit |
+  | `{"op":"inputs"}` | the input log so far, as its text: the run as a replay |
+  | `{"op":"end"}` | the run's report, steps and digest; the session ends |
 
   A line the session cannot use answers `{"op":"error","error":...,"next":...}`: what was wrong
-  and what to send instead. Numbers are fixed-point text to three decimals. The session drives
-  the same step as the bot (`Driver`), so an agent's tape played back with the same rivals is
-  its run again, and an agent that sends the bot's moves rides the bot's run to the bit
-  (`tests/fall_line_play_test.cpp`). Without `--stdio`, the `play` lab has the bot play through
-  the protocol's text and checks exactly that; `--script=<file>` plays a file's lines.
-  Two agents (or an agent and the bot) racing one map is two pilots on one grid. The
-  protocol carries only what a player could know, so an agent's playtest is a player's
-  run.
+  and what to send instead. An agent that sends the bot's moves rides the bot's run to the bit,
+  the pilot's run IS the bot's, and an agent's log played back is its run again
+  (`tests/fall_line_play_test.cpp`). The `play` lab runs the same session: `--stdio` for the
+  protocol, `--script=<file>` to play a file's lines, and with neither the bot plays through
+  the protocol's text and its log is replayed to the digest. Two logs one input apart
+  `ge diverge` at exactly that step, naming the fields that differ (the skier's yaw rate first).
+  The protocol carries only what a player could know, so an agent's playtest is a player's run.
 
 ## The labs
 
 | Lab | Kind | Owner | Subject | Lands |
 | --- | --- | --- | --- | --- |
 | `noise` | picture | engine | `engine/core/noise.hpp` | M2 (now) |
+| `charts` | picture | engine | `engine/lab/chart.hpp`, `plot.hpp`, `stats.hpp`, `series.hpp` (every chart form over seeded data with outliers planted at known places, each as a PNG and an SVG; a series file written and read back) | M14a (now) |
 | `run-clock` | sim | engine | `engine/loop/run_clock.hpp` | M2 (now) |
 | `level` | picture | plugin:mountain | `plugins/mountain/mapgen` (`--version=1,8`: the single piste, a ski area's race map) | M4a, M4b4a (now) |
 | `analyze` | sim | plugin:mountain | `plugins/mountain/analysis` (a race map's course and area at `--version=8`) | M4a, M4b4a (now) |
@@ -266,17 +294,22 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 | `junctions` | picture | plugin:mountain | `plugins/mountain/mapgen/network_stamp.cpp` (where runs meet) | M4b3d (now) |
 | `routes` | picture | plugin:mountain | `plugins/mountain/mapgen/ski_routes.hpp`, `route_features.hpp` (the ski routes on a ski area: the area with every route in orange, each route close up with its drops and jumps, each from the side with its pitch against a black's ceiling and a route's; `--version=9,10`) | M4c1 |
 | `skijump-hills` | picture | plugin:mountain | `plugins/mountain/mapgen/ski_jump.hpp`, `straight_venue.hpp` (the ski jumping hill set over a map: the tower, the raised in-run, the dig, the landing hill's fill, cut and rms, the arena, the drop and the design gate as a table, least earth first; each hill's profile at true scale from the side and the map from above; `--hill=large,normal`, `--version=1,9`) | M4c2 (now) |
-| `real-faces` | picture | plugin:mountain | the real faces | M4d |
+| `real-faces` | picture | plugin:mountain | `plugins/mountain/mapgen/real_face.hpp`, `real_face_crops.hpp`, the generated `real_faces/` (every face decoded and measured: its floor, top, drop and the share of it falling down the map, as a table; a sheet of every face shaded; a face alone with its mean profile; `--bake` reads each face off the 30 m elevation model beside the tree's, `--fetch` downloads the tiles, `--write` writes the faces and the index) | M4d1 |
+| `real-maps` | picture | plugin:mountain | `plugins/mountain/mapgen/massif.hpp` (a face's massif), every rule a real face bends (`massif::real`), `generate.hpp`'s `face` (a ski area built on every face named: whether a clean map stands, its attempt, its pistes, lifts, courses, vertical, the vertical its lifts ride and its trees, as a table; the build's seconds, measured; a face named alone, or two, drawn from above and with its courses) | M4d2 |
 | `sim` | drive | game:fall_line | `games/fall_line/sim` (the step, the course, the bot, the field) | M5b–M5c (now) |
 | `ride` | scenario | plugin:skier | `plugins/skier` (`step_skier`, the snow, the limits) | M5a (now) |
-| `play` | drive | game:fall_line | `games/fall_line/sim/play` (an agent over stdio) | M5c (now) |
+| `play` | drive | game:fall_line | `games/fall_line/sim/play` on `engine/play` (an agent over stdio, the bot through the protocol, its input log replayed) | M5c, M12b (now) |
+| `trace` | drive | game:fall_line | the player's skier step by step down one seed with the bot: `trace.tsv` (a series file), the speed, the sideways load and the edge and lean charted against the clock with gates, flights and spikes; `--log=` for the same run's events (docs/debugging.md) | M14a (now) |
+| `anim` | picture | plugin:skier | the figure's pose track: filmstrips, onion skins, joint charts, snaps, stretch and clips | M14b |
 | `gpu-capture` | picture | engine | `engine/gpu` (the headless capture) | M6 (now) |
 | `frame-pace` | bench | engine | the platform's frame loop | M6 (now) |
-| `world` | picture | game:fall_line | Fall Line's frame from named views of a seed, TAA-U on or off at a render scale, the shimmer, the overdraw probe, a run's moments from the chase camera with the field (`--moments`, `--rivals`) and the cull check (every view redrawn with occlusion culling off, `cull-faults` must be 0) (`games/fall_line/labs/gpu_world_lab.cpp`) | M7a, M7d1 (now) |
+| `world` | picture | game:fall_line | Fall Line's frame from named views of a seed, TAA-U on or off at a render scale, the shimmer, the overdraw probe, a run's moments from the chase camera with the field (`--moments`, `--rivals`) the cull check (every view redrawn with occlusion culling off, `cull-faults` must be 0), the `wood` view (the trees' shadows on sunlit snow) and the sun's cascades over the whole run (`cascade-redraws.near` and `.far`, deterministic, with no device) (`games/fall_line/labs/gpu_world_lab.cpp`) | M7a, M7d1, M7d2 (now) |
 | `taa` | picture | game:fall_line | TAA-U on a moving camera against the converged still: ghosting, aliasing, stills repeat (`games/fall_line/labs/gpu_taa_lab.cpp`) | M7c (now) |
 | `shadows` | picture | game:fall_line | the horizon maps over a day from above, and the bake counter of a sun sweep (`games/fall_line/labs/gpu_shadows_lab.cpp`) | M7b (now) |
-| `profile` | bench | game:fall_line | a frame's CPU and GPU cost | M7d3 |
-| `forest`, `snow`, `trails`, `spray`, `skis`, `skier` | picture | game:fall_line | the world drawn | M8 |
+| `profile` | bench | game:fall_line | Fall Line's frame over a stretch of the bot's run from the chase camera: every pass's GPU ms (median, p95, worst), its draws and dispatches, and the renderer's CPU half against `--cpu-budget` (`games/fall_line/labs/gpu_profile_lab.cpp`) | M7d3 (now) |
+| `snow` | picture | game:fall_line | The snow's material up close (`plugins/mountain/app/snow.wgsl` in Fall Line's frame): the `corduroy`, `powder` and `glitter` views at each `--hours` hour, each PLAIN (the material's gains at nought: the albedo lit) and SNOW, with the ground's mean luma, its detail and its glints beside each (`games/fall_line/labs/gpu_snow_lab.cpp`) | M8a (now) |
+| `forest`, `trails`, `spray`, `skis`, `skier` | picture | game:fall_line | the world drawn | M8b–M8e |
 | `synth` | sim | engine | `engine/audio` (every voice the synth can play, metered, pictured and written as WAV; the render's cost) | M9a (now) |
 | `audition` | sim | game:fall_line | Fall Line's bank, the skier's beds at seven moments and the bot's whole run, metered, pictured and written as WAV | M9b (now) |
 | `screenshots` | picture | game:fall_line | the HUD and the cards at 1280x720, 390x844, 844x390 | M10 |
+| `cli-loop` | bench | engine | `engine/cli` (the `ge` commands of an agent's loop run on a scaffolded repo: each answer's lines, bytes and time, failed over its line budget; the catalog's shape is the digest) | M12a (now) |

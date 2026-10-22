@@ -13,11 +13,12 @@ ship in the same commit as the work.
 ## 2. Gates (cheapest first)
 
 ```sh
-make fmt                 # then `git diff` to see what it changed
-make agents-check        # ge doctor: every finding says what, where and next
-make test                # debug, with the sanitizers
-make test PRESET=release
+ge check                   # format, ge doctor, the build, every test and lab (debug: sanitizers)
+ge check --preset=release
 ```
+
+Each finding says what, where and the next action; a format finding's next is the
+`clang-format -i` line to run (`make fmt` formats every file at once).
 
 All green. A failure you did not cause is still yours to fix or report.
 

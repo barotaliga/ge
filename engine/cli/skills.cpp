@@ -13,6 +13,7 @@
 #include <regex>
 #include <system_error>
 
+#include "cli/add.hpp"
 #include "cli/embedded.hpp"
 
 namespace ge::cli {
@@ -86,12 +87,12 @@ std::string upstream_next(std::string_view name) {
          std::string(kEngineRepo);
 }
 
-std::string expected_block() {
+std::string expected_block(const fs::path& repo) {
   std::string block(kBlockBegin);
   block +=
       "\n<!-- Written by `ge skills sync` from the engine's consumer skills: edits here are "
       "overwritten. -->\n| Skill | Load it when |\n| --- | --- |\n";
-  for (const ConsumerSkill& s : consumer_skills()) {
+  for (const ConsumerSkill& s : skills_for(repo)) {
     const auto doc = parse_skill(s.text);
     std::string when = doc ? doc->description : "";
     std::string escaped;
@@ -106,11 +107,11 @@ std::string expected_block() {
 }
 
 // AGENTS.md with its block replaced, or nothing when it has no block.
-std::optional<std::string> with_block(std::string_view agents) {
+std::optional<std::string> with_block(const fs::path& repo, std::string_view agents) {
   const size_t a = agents.find(kBlockBegin);
   const size_t b = agents.find(kBlockEnd);
   if (a == std::string_view::npos || b == std::string_view::npos || b < a) return std::nullopt;
-  return std::string(agents.substr(0, a)) + expected_block() +
+  return std::string(agents.substr(0, a)) + expected_block(repo) +
          std::string(agents.substr(b + kBlockEnd.size()));
 }
 
@@ -182,7 +183,7 @@ std::optional<SkillDoc> parse_skill(std::string_view text) {
   std::map<std::string, std::string> meta;
   std::string body;
   if (!split_front_matter(text, meta, body)) return std::nullopt;
-  return SkillDoc{unquote(meta["name"]), unquote(meta["description"])};
+  return SkillDoc{unquote(meta["name"]), unquote(meta["description"]), unquote(meta["plugin"])};
 }
 
 std::vector<ConsumerSkill> consumer_skills() {
@@ -194,6 +195,33 @@ std::vector<ConsumerSkill> consumer_skills() {
     if (name.find('/') == std::string_view::npos) skills.push_back({std::string(name), f.text});
   }
   return skills;
+}
+
+std::vector<ConsumerSkill> skills_for(const fs::path& repo) {
+  // The plugins the repo links, and every plugin those link in turn (skier brings mountain).
+  const auto infos = plugin_infos();
+  std::vector<std::string> linked;
+  for (const PluginInfo& p : infos) {
+    if (links_plugin(repo, p.name)) linked.push_back(p.name);
+  }
+  for (size_t i = 0; i < linked.size(); i++) {
+    for (const PluginInfo& p : infos) {
+      if (p.name != linked[i]) continue;
+      for (const std::string& dep : p.plugins) {
+        if (std::find(linked.begin(), linked.end(), dep) == linked.end()) linked.push_back(dep);
+      }
+    }
+  }
+  std::vector<ConsumerSkill> out;
+  for (ConsumerSkill& s : consumer_skills()) {
+    const auto doc = parse_skill(s.text);
+    if (doc && !doc->plugin.empty() &&
+        std::find(linked.begin(), linked.end(), doc->plugin) == linked.end()) {
+      continue;
+    }
+    out.push_back(std::move(s));
+  }
+  return out;
 }
 
 Lesson parse_lesson(std::string_view file_name, std::string_view text) {
@@ -330,7 +358,7 @@ std::vector<Finding> check_engine_skills(const fs::path& repo) {
   }
   std::map<std::string, std::string> locked;
   for (const LockEntry& e : lock->skills) locked[e.name] = e.hash;
-  for (const ConsumerSkill& s : consumer_skills()) {
+  for (const ConsumerSkill& s : skills_for(repo)) {
     const std::string where = skill_path(s.name);
     const auto it = locked.find(s.name);
     if (it == locked.end()) {
@@ -353,7 +381,7 @@ std::vector<Finding> check_engine_skills(const fs::path& repo) {
   }
   const auto agents = read_text(repo / "AGENTS.md");
   if (agents) {
-    const auto updated = with_block(*agents);
+    const auto updated = with_block(repo, *agents);
     if (!updated) {
       out.push_back(no_block_finding());
     } else if (*updated != *agents) {
@@ -373,7 +401,7 @@ SyncResult sync_skills(const fs::path& repo, bool force) {
   }
   std::vector<LockEntry> entries;
   std::vector<std::string> carried;
-  for (const ConsumerSkill& s : consumer_skills()) {
+  for (const ConsumerSkill& s : skills_for(repo)) {
     carried.push_back(s.name);
     const std::string where = skill_path(s.name);
     const fs::path path = repo / where;
@@ -441,7 +469,7 @@ SyncResult sync_skills(const fs::path& repo, bool force) {
     r.findings.push_back({Severity::error, "AGENTS.md is missing", "AGENTS.md",
                           "restore the router (`ge new` writes one; copy its shape), then "
                           "rerun `make skills`"});
-  } else if (const auto updated = with_block(*agents); !updated) {
+  } else if (const auto updated = with_block(repo, *agents); !updated) {
     r.findings.push_back(no_block_finding());
   } else if (*updated != *agents) {
     std::string error;
@@ -453,6 +481,29 @@ SyncResult sync_skills(const fs::path& repo, bool force) {
     }
   }
   return r;
+}
+
+std::vector<Lesson> lessons_of(const fs::path& repo, std::string_view skill,
+                               std::string_view scope) {
+  std::vector<Lesson> out;
+  for (const auto& [file, path] : lesson_files(repo / kSkillsDir / std::string(skill))) {
+    Lesson l = parse_lesson(file, read_text(path).value_or(""));
+    if (!scope.empty() && !l.scope.empty() &&
+        std::none_of(l.scope.begin(), l.scope.end(),
+                     [&](const std::string& p) { return overlaps(p, scope); })) {
+      continue;
+    }
+    out.push_back(std::move(l));
+  }
+  return out;
+}
+
+std::vector<std::pair<std::string, int>> lesson_inventory(const fs::path& repo) {
+  std::vector<std::pair<std::string, int>> out;
+  for (const std::string& name : skill_dirs(repo)) {
+    out.emplace_back(name, static_cast<int>(lesson_files(repo / kSkillsDir / name).size()));
+  }
+  return out;
 }
 
 int print_lessons(const fs::path& repo, std::string_view skill, std::string_view scope,
@@ -473,13 +524,8 @@ int print_lessons(const fs::path& repo, std::string_view skill, std::string_view
     return 2;
   }
   int shown = 0;
-  for (const auto& [file, path] : lesson_files(repo / kSkillsDir / std::string(skill))) {
-    const Lesson l = parse_lesson(file, read_text(path).value_or(""));
-    if (!scope.empty() && !l.scope.empty() &&
-        std::none_of(l.scope.begin(), l.scope.end(),
-                     [&](const std::string& p) { return overlaps(p, scope); })) {
-      continue;
-    }
+  for (const Lesson& l : lessons_of(repo, skill, scope)) {
+    const std::string& file = l.file;
     std::string scopes, concepts;
     for (const std::string& p : l.scope) scopes += (scopes.empty() ? "" : ", ") + p;
     for (const std::string& c : l.concepts) concepts += (concepts.empty() ? "" : ", ") + c;

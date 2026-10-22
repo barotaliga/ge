@@ -18,19 +18,27 @@
 // - NORMALS from the height texture, baked into a filterable texture at load by compute, so the
 //   vertex stays small and every pixel is lit by its own normal.
 //
+// - THE MATERIAL is the game's or a plugin's: a shader that includes render/wgsl/terrain_draw.wgsl
+//   (the vertex stage, the bindings, `ground_at` and `ground_out`) and defines `fs_main`, with a
+//   bind group of its own at group 3 (`TerrainSource::shader`, `material`; bind_terrain_material).
+//   terrain.wgsl is the default: the albedo lit by the sun and the sky.
+//
 // The pass draws into the frame's HDR target and depth (cleared here: it is the first opaque
-// pass until the depth prepass lands, M7c). Shaders: terrain.wgsl (draw), terrain_cull.wgsl
-// and terrain_normals.wgsl (compute).
+// pass until the depth prepass lands, M7c). Shaders: terrain.wgsl (the default material; every
+// material shares render/wgsl/terrain_draw.wgsl), terrain_cull.wgsl and terrain_normals.wgsl
+// (compute).
 //
 // ge:summary The heightfield renderer: a GPU-culled geometry clipmap with morphed seams
 // ge:keywords render terrain heightfield clipmap geometry-clipmap tile morph seam sink lod
 // ge:keywords gpu-culling indirect-draw min-max-pyramid normals albedo vertex-pulling
 // ge:keywords clipmap_levels create_terrain prepare_terrain encode_terrain_cull draw_terrain
+// ge:keywords ground-material terrain-material material-shader bind_terrain_material ground_at
 // ge:skill render
 // ge:test tests/render_terrain_test.cpp
 #pragma once
 
 #include <cstdint>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -64,6 +72,12 @@ struct TerrainSource {
   int levels = 7;               // ≤ kMaxLevels
   HorizonSettings horizon;      // the ground's own shadow
   bool overdraw_probe = false;  // labs: build the pipelines encode_terrain_overdraw draws with
+  // The ground's material: a whole shader over render/wgsl/terrain_draw.wgsl defining `fs_main`
+  // (empty: terrain.wgsl, the albedo lit), and the layout of its own group 3 (null: none; then
+  // bind its group with bind_terrain_material before the first draw).
+  std::string_view shader;
+  const char* shader_label = "terrain";
+  wgpu::BindGroupLayout material;
 };
 
 struct Terrain {
@@ -76,6 +90,9 @@ struct Terrain {
   wgpu::Buffer params, tiles, indirect, indices;
   wgpu::BindGroupLayout layout, cull_layout, normals_layout;
   wgpu::BindGroup group, cull_group, normals_group;
+  wgpu::BindGroup shadows;   // group 2 of the draws: what stands in the sun (render/shadows.hpp)
+  wgpu::BindGroup material;  // group 3: the material's own (TerrainSource::material)
+  bool has_material = false;
   uint32_t p_depth = 0, p_draw = 0, p_cull = 0, p_normals = 0;
   uint32_t p_count_equal = 0, p_count_greater = 0;  // the overdraw probe's, when asked for
   bool normals_built = false;
@@ -95,6 +112,11 @@ struct Terrain {
 // Upload the source's grids, bake the min/max pyramid and add the pipelines to the manifest.
 void create_terrain(gpu::Device& device, gpu::PipelineSet& pipelines, Terrain& terrain,
                     const TerrainSource& source, const wgpu::BindGroupLayout& frame);
+// The sun's shadows of what stands on the ground the draws read (render/shadows.hpp's
+// `SunShadows::group`; none until this is called).
+void bind_terrain_shadows(Terrain& terrain, const wgpu::BindGroup& shadows);
+// The material's own bind group (group 3, in TerrainSource::material's layout).
+void bind_terrain_material(Terrain& terrain, const wgpu::BindGroup& material);
 // The levels round this frame's eye and the horizon maps the sun needs, staged and uploaded; the
 // indirect count reset.
 void prepare_terrain(gpu::Device& device, Terrain& terrain, const FrameView& view);

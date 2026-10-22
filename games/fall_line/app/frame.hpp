@@ -8,16 +8,22 @@
 //   instances.cull       -> instances.early (the forest and the figures: the frustum, the last
 //                           frame's pyramid)
 //   terrain.horizon      -> terrain.horizon (the bakes due)
+//   shadows.cull         -> shadows.lists (the casters of the maps drawn this frame)
+//   shadows.near         -> shadows.maps (the near cascade: the forest, when due)
+//   shadows.far          -> shadows.maps (the far cascade, when due)
+//   shadows.figures      -> shadows.maps (the figures' atlas, every frame)
 //   terrain.depth        -> depth (the prepass)
 //   instances.depth      -> depth (the early lists' prepass)
 //   hiz                  -> hiz (the depth's pyramid)
 //   instances.cull.late  -> instances.late (what the last frame's pyramid hid, against this one)
 //   instances.depth.late -> depth
-//   terrain              -> hdr motion (shaded where the depth is equal)
+//   terrain              -> hdr motion (shaded where the depth is equal, in the snow's material;
+//                           reads shadows.maps)
 //   instances            -> hdr motion (both lists, where the depth is equal)
 //   sky                  -> hdr motion (behind depth)
 //   taa                  -> taa.history (at the output's size; with FrameOptions::taa)
-//   post                 -> final
+//   bloom                -> bloom (the glow's mip chain, from what post reads)
+//   post                 -> final (the bloom mixed in, the grade's table: look.hpp's)
 //
 // With TAA the frame renders at FrameOptions::scale of the output's size, jittered, and the
 // resolve brings it up to the output; without it, at the output's size, unjittered, and post
@@ -34,6 +40,7 @@
 // ge:skill render
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <span>
@@ -41,11 +48,14 @@
 
 #include "gpu/device.hpp"
 #include "gpu/pipeline.hpp"
+#include "mountain/app/snow.hpp"
 #include "mountain/mapgen/types.hpp"
+#include "render/bloom.hpp"
 #include "render/frame.hpp"
 #include "render/hiz.hpp"
 #include "render/instances.hpp"
 #include "render/post.hpp"
+#include "render/shadows.hpp"
 #include "render/sky.hpp"
 #include "render/taa.hpp"
 #include "render/terrain.hpp"
@@ -58,6 +68,9 @@ struct FrameOptions {
   double scale = 1.0;           // the render size over the output's, with TAA
   bool overdraw_probe = false;  // labs: the terrain's and the instances' overdraw pipelines
   bool occlusion = true;        // cull the instances by the depth pyramid (off: the frustum only)
+  uint32_t shadow_size = 2048;  // the sun's shadow maps' texels a side
+  double bloom = 0.04;          // the share of the bloom's glow in the picture; 0: none
+  bool snow = true;             // the snow's material (mountain/app/snow.hpp); off: the albedo lit
 };
 
 // What of the run a frame draws, besides the map: the racers, the player's first.
@@ -78,15 +91,19 @@ struct GameFrame {
   wgpu::BindGroup post_groups[2];  // over TAA's histories; [0] over the HDR target without TAA
   ge::render::Sky sky;
   ge::render::Terrain terrain;
+  ge::mountain::app::SnowMaterial snow;
   ge::render::Hiz hiz;
   ge::render::Taa taa;
+  ge::render::Bloom bloom;
   ge::render::Post post;
   ge::render::InstancePipelines instancing;
   ge::render::InstanceFamily forest, figures;
   ge::render::InstanceFamily* families[2] = {&forest, &figures};
   wgpu::BindGroup instance_light;
+  ge::render::SunShadows shadows;
   const ge::mountain::mapgen::Level* level = nullptr;
   std::vector<ge::render::Instance> staged_figures;
+  std::vector<std::array<double, 3>> figure_centres;
   ge::render::FrameRecorder recorder;
   std::vector<uint8_t> albedo;
 };

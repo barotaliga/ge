@@ -93,6 +93,11 @@ std::string rel_path(const fs::path& root, const fs::path& path) {
   return (ec || rel.empty()) ? path.generic_string() : rel.generic_string();
 }
 
+bool skipped_dir(std::string_view name) {
+  return name == ".git" || name.starts_with("build") || name == "_deps" || name == "previews" ||
+         name == ".cache" || name == "stage" || name == "node_modules";
+}
+
 std::vector<std::string_view> split_lines(std::string_view text) {
   std::vector<std::string_view> lines;
   size_t start = 0;

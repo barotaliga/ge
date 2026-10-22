@@ -1,0 +1,53 @@
+// LAB `{{kebab}}` (picture): a captioned picture of the game's state, so an agent can LOOK at it.
+// The caption says what the picture shows, under which inputs, and what to look for; the picture
+// is drawn on the CPU raster and its pixels are in the digest. Say what it shows (skill: labs).
+//
+// ge:summary Lab {{kebab}}: a captioned picture of the game's state (say what it shows)
+// ge:keywords lab picture {{kebab}} screenshot caption raster
+// ge:skill labs
+#include <string>
+
+#include "lab/lab.hpp"
+#include "sim/game.hpp"
+
+namespace {
+
+using namespace {{ident}}::sim;
+
+constexpr int kW = 320, kH = 120;
+constexpr double kPxPerMetre = 40.0;
+
+void run(ge::lab::Lab& lab) {
+  GameState s = create_game(static_cast<uint32_t>(lab.arg_num("seed")));
+  const int steps = static_cast<int>(lab.arg_num("steps"));
+  for (int k = 0; k < steps; k++) step(s, Input{});
+  auto pic = ge::lab::create_picture(kW, kH, {16, 20, 28});
+  ge::lab::draw_line(pic, kW / 2.0, 0, kW / 2.0, kH, {90, 90, 110});
+  const double x = kW / 2.0 + s.x_m * kPxPerMetre;
+  ge::lab::draw_line(pic, x, kH / 2.0 - 10, x, kH / 2.0 + 10, {255, 200, 120});
+  lab.metric("x", s.x_m, "m");
+  lab.shot({"field",
+            "THE BODY ON THE FIELD",
+            "The body's place across the field after the run; the grey line is x = 0.",
+            "the orange mark sits near the grey line and inside the picture",
+            {{"seed", lab.arg("seed")}, {"steps", lab.arg("steps")}}},
+           pic);
+}
+
+const ge::lab::LabSpec kSpec{
+    "{{kebab}}",
+    ge::lab::LabKind::picture,
+    "game:{{name}}",
+    "sim/game.cpp",
+    "labs",
+    "Where on the field is the body after a run? (rewrite: what the picture shows)",
+    {
+        {"seed", "38", "the run's seed"},
+        {"steps", "600", "steps before the picture (120 a second)"},
+    },
+    "--steps=120",
+    run,
+};
+GE_LAB(kSpec);
+
+}  // namespace

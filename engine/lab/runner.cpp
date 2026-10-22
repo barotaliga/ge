@@ -1,8 +1,9 @@
 // The runner's flag parsing, its listing and help, the smoke pass, the repeat check, the digest
-// baseline, and the sink that prints the engine's log while a lab runs.
+// baseline, and the sink that prints the engine's log while a lab runs (and, with --log, keeps
+// every kept line for the lab's log.txt).
 //
 // ge:summary The labs command line's parsing, listing, smoke pass, repeat and digest checks
-// ge:keywords lab runner cli usage smoke repeat digests baseline list help
+// ge:keywords lab runner cli usage smoke repeat digests baseline list help log-dump log-spec
 // ge:skill labs
 // ge:test tests/lab_runner_test.cpp
 #include "lab/runner.hpp"
@@ -14,6 +15,7 @@
 #include <map>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "core/output.hpp"
@@ -34,16 +36,50 @@ const LabFlag kRunnerFlags[] = {
     {"repeat", "1", "run each lab N times in this process; different digests fail the run"},
     {"smoke", "", "run at the lab's smoke flags (what CI runs)", true},
     {"all", "", "run every registered lab", true},
+    {"shard", "",
+     "with --all, run only slice I of N (I/N, from 1/N): every Nth lab, so CTest runs them in "
+     "parallel"},
     {"check-digests", "", "compare each lab's digest with this baseline file"},
     {"write-digests", "", "rewrite this baseline file from this run's digests"},
     {"quiet", "", "print only failures and the summary", true},
     {"debug", "", "let the engine's debug lines through", true},
+    {"log", "",
+     "a log spec (\"skier=trace,course=debug,*=warn\"): every line kept goes to "
+     "<out>/<id>/log.txt, debug and trace only there (docs/debugging.md)"},
+    {"json", "", "with no lab named, list the labs as one JSON array", true},
 };
 
-void print_sink(core::output::Level level, std::string_view message, void*) {
-  std::fprintf(stderr, "  [%.*s] %.*s\n", static_cast<int>(core::output::level_name(level).size()),
-               core::output::level_name(level).data(), static_cast<int>(message.size()),
-               message.data());
+// What the sink keeps while a lab runs under --log: every line as a dump writes it, and how many
+// of each channel and level, for the report's note.
+struct LogDump {
+  bool on = false;
+  std::string text;
+  std::map<std::string, int> counts;  // "skier debug" -> lines
+};
+
+void print_sink(const core::output::LogLine& line, void* user) {
+  namespace out = core::output;
+  auto* dump = static_cast<LogDump*>(user);
+  const bool detail = line.level == out::Level::debug || line.level == out::Level::trace;
+  if (dump && dump->on) {
+    dump->text += out::format_line(line);
+    dump->text.push_back('\n');
+    std::string key(out::channel_name(line.channel));
+    key += " ";
+    key += out::level_name(line.level);
+    dump->counts[key]++;
+    if (detail) return;  // the firehose goes to the file alone
+  }
+  const std::string_view level = out::level_name(line.level);
+  if (line.channel == out::kEngine) {
+    std::fprintf(stderr, "  [%.*s] %.*s\n", static_cast<int>(level.size()), level.data(),
+                 static_cast<int>(line.message.size()), line.message.data());
+  } else {
+    const std::string_view ch = out::channel_name(line.channel);
+    std::fprintf(stderr, "  [%.*s %.*s] %.*s\n", static_cast<int>(level.size()), level.data(),
+                 static_cast<int>(ch.size()), ch.data(), static_cast<int>(line.message.size()),
+                 line.message.data());
+  }
 }
 
 std::string usage(const LabSpec* spec) {
@@ -213,6 +249,10 @@ int run_labs(int argc, const char* const* argv) {
   }
   const bool all = get(runner, "all") == "1";
   if (!spec && !all) {
+    if (get(runner, "json") == "1") {
+      std::printf("%s\n", list_json().c_str());
+      return 0;
+    }
     std::printf("%s", list_text().c_str());
     return 0;
   }
@@ -232,13 +272,37 @@ int run_labs(int argc, const char* const* argv) {
   const std::string check = get(runner, "check-digests");
   const std::string write = get(runner, "write-digests");
   core::output::set_debug_enabled(get(runner, "debug") == "1");
-  core::output::set_output_sink(print_sink);
+  LogDump dump;
+  if (const std::string spec_text = get(runner, "log"); !spec_text.empty()) {
+    if (const std::string why = core::output::configure(spec_text); !why.empty()) {
+      std::fprintf(stderr, "labs: --log: %s.\n", why.c_str());
+      return 2;
+    }
+    dump.on = true;
+  }
+  core::output::set_output_sink(print_sink, &dump);
 
   std::vector<const LabSpec*> labs;
   if (all)
     labs = registered_labs();
   else
     labs.push_back(spec);
+  if (const std::string shard = get(runner, "shard"); !shard.empty()) {
+    const auto slash = shard.find('/');
+    const int index = slash == std::string::npos ? 0 : std::atoi(shard.substr(0, slash).c_str());
+    const int count = slash == std::string::npos ? 0 : std::atoi(shard.substr(slash + 1).c_str());
+    if (!all || count < 1 || index < 1 || index > count) {
+      std::fprintf(stderr,
+                   "labs: --shard=%s: want --all --shard=I/N with 1 <= I <= N, e.g. --shard=2/4.\n",
+                   shard.c_str());
+      return 2;
+    }
+    std::vector<const LabSpec*> slice;
+    for (size_t k = static_cast<size_t>(index - 1); k < labs.size();
+         k += static_cast<size_t>(count))
+      slice.push_back(labs[k]);
+    labs = std::move(slice);
+  }
   const auto baseline = check.empty() ? std::map<std::string, std::string>{} : read_digests(check);
   if (!check.empty() && baseline.empty()) {
     std::fprintf(stderr, "labs: %s holds no digests; write one with --write-digests=%s.\n",
@@ -259,7 +323,19 @@ int run_labs(int argc, const char* const* argv) {
     bool ok = true;
     for (int r = 0; r < repeat; r++) {
       Lab lab(*s, args);
+      dump.text.clear();
+      dump.counts.clear();
       s->run(lab);
+      if (r == 0 && dump.on) {
+        std::string counts;
+        for (const auto& [key, n] : dump.counts) {
+          counts += (counts.empty() ? "" : ", ") + key + " " + std::to_string(n);
+        }
+        lab.note("log.txt: every line the log spec kept, \"[step] level channel: message\" (" +
+                 (counts.empty() ? std::string("no lines") : counts) + ")");
+        lab.attach("log.txt", std::vector<uint8_t>(dump.text.begin(), dump.text.end()),
+                   Det::measured);
+      }
       if (r == 0) {
         first = lab.digest();
         if (!write_report(lab, dir, error)) {
@@ -323,6 +399,7 @@ int run_labs(int argc, const char* const* argv) {
     }
   }
   core::output::set_output_sink(nullptr);
+  core::output::configure("");
   if (all || labs.size() > 1 || failed) {
     std::printf("labs: %zu run, %d failed\n", labs.size(), failed);
   }

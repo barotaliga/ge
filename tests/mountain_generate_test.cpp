@@ -159,8 +159,8 @@ TEST(single_piste_levels_match_golden) {
   const auto rows = ge::test::golden_words("tests/golden/mountain_generate.txt");
   CHECK(rows.size() == 11);
   ge::core::output::set_debug_enabled(true);
-  ge::core::output::set_output_sink([](ge::core::output::Level level, std::string_view msg, void*) {
-    if (level == ge::core::output::Level::debug) debug_lines.emplace_back(msg);
+  ge::core::output::set_output_sink([](const ge::core::output::LogLine& line, void*) {
+    if (line.level == ge::core::output::Level::debug) debug_lines.emplace_back(line.message);
   });
   for (const auto& row : rows) {
     const double seed = std::stod(row[0]);

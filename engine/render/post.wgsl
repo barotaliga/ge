@@ -1,7 +1,7 @@
 // THE POST PASS (render/post.hpp; docs/rendering.md § Post): the HDR frame to the display, in
-// one full-screen pass: the exposure from the sky's brightness (never a histogram, so it never
-// pumps), the tone curve, a dither against banding and the output's encoding. Linear light
-// ends here.
+// one full-screen pass: the bloom's glow mixed in, the exposure from the sky's brightness (never
+// a histogram, so it never pumps), the tone curve, the colour grade's table, a dither against
+// banding and the output's encoding. Linear light ends here.
 #include "render/wgsl/frame.wgsl"
 #include "gpu/wgsl/colour.wgsl"
 
@@ -9,7 +9,13 @@
 // store by itself).
 override kEncodeSrgb: bool = true;
 
+// The share of the bloom mixed in (render/bloom.hpp); 0 reads none.
+override kBloom: f32 = 0.0;
+
 @group(1) @binding(0) var hdr: texture_2d<f32>;
+@group(1) @binding(1) var bloom: texture_2d<f32>;  // rgb summed over `a` levels
+@group(1) @binding(2) var lin: sampler;
+@group(1) @binding(3) var grade: texture_3d<f32>;
 
 struct VertexOut {
   @builtin(position) position: vec4f,
@@ -47,12 +53,25 @@ fn dither(p: vec2f) -> f32 {
   return fract(52.9829189 * fract(dot(p, vec2f(0.06711056, 0.00583715)))) - 0.5;
 }
 
+// The grade's table at an sRGB-encoded colour: texel centres span 0..1.
+fn graded(e: vec3f) -> vec3f {
+  let n = f32(textureDimensions(grade).x);
+  let at = clamp(e, vec3f(0.0), vec3f(1.0)) * ((n - 1.0) / n) + 0.5 / n;
+  return textureSampleLevel(grade, lin, at, 0.0).rgb;
+}
+
 @fragment
 fn fs_main(in: VertexOut) -> @location(0) vec4f {
-  let c = textureLoad(hdr, vec2i(in.position.xy), 0).rgb;
-  var o = clamp(tone(c * exposure()), vec3f(0.0), vec3f(1.0));
-  if (kEncodeSrgb) {
-    o = linear_to_srgb(o);
+  var c = textureLoad(hdr, vec2i(in.position.xy), 0).rgb;
+  if (kBloom > 0.0) {
+    let uv = in.position.xy / vec2f(textureDimensions(hdr));
+    let b = textureSampleLevel(bloom, lin, uv, 0.0);
+    c = mix(c, b.rgb / max(b.a, 1.0), kBloom);
+  }
+  let t = clamp(tone(c * exposure()), vec3f(0.0), vec3f(1.0));
+  var o = graded(linear_to_srgb(t));
+  if (!kEncodeSrgb) {
+    o = srgb_to_linear(o);
   }
   o += vec3f(dither(in.position.xy) / 255.0);
   return vec4f(o, 1.0);

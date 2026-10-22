@@ -5,7 +5,9 @@
 #                standings), ge_mountain (the generated ski mountain: mapgen, analysis)
 #   ge_audio     the synth: voices, layers, buses, echo, limiter, the meter, WAV bytes
 #                (engine/audio; deterministic, no platform)
-#   ge_lab       the lab framework (engine/lab: the contract, the runner, the raster, the PNG)
+#   ge_lab       the lab framework (engine/lab: the contract, the runner, the raster, the PNG,
+#                the series files and the charts)
+#   ge_play      the play contract (engine/play: GameSpec and Run, the session, the input log)
 #   ge_cli, ge   the ge command line (engine/cli: ge new, ge skills sync, ge doctor, ge lessons;
 #                cmake/Cli.cmake)
 #   fall_line_sim  Fall Line's simulation (games/fall_line: create_game, step, the bot)
@@ -21,8 +23,9 @@
 #   ge_isa       the instruction-set baseline (x86-64: AVX2), linked by ge_core and
 #                published as ge::isa
 #   ge_flags     warnings, -Werror, sanitizers: this tree only, never published
-# ge_core, ge_fp, ge_isa, ge_lab and every plugin target are installed and published as
-# ge::core, ge::fp, ge::isa, ge::lab and ge::<plugin>, and the ge executable is installed to bin/
+# ge_core, ge_fp, ge_isa, ge_lab, ge_play and every plugin target are installed and published
+# as ge::core, ge::fp, ge::isa, ge::lab, ge::play and ge::<plugin>, and the ge executable is
+# installed to bin/
 # (cmake/Packaging.cmake, docs/publishing.md).
 cmake_minimum_required(VERSION 3.25)
 project(gameengine2 LANGUAGES CXX)
@@ -127,21 +130,29 @@ if(GE_GPU)
   target_link_libraries(ge_gpu PUBLIC ge_core dawn::webgpu_dawn)
   ge_embed_wgsl(ge_gpu engine/gpu/test_scene.wgsl)
   # The frame core (M7): the pass table's mechanisms, the sky, the terrain and its horizon
-  # map, the Hi-Z pyramid, TAA-U, post, the instance families and their meshes.
+  # map, the Hi-Z pyramid, TAA-U, post, the instance families and their meshes, the sun's shadows.
   file(GLOB GE_RENDER_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/render/*.cpp)
   add_library(ge_render STATIC ${GE_RENDER_SOURCES})
   target_link_libraries(ge_render PUBLIC ge_gpu)
   ge_embed_wgsl(ge_render engine/render/sky_tables.wgsl engine/render/sky.wgsl
     engine/render/terrain.wgsl engine/render/terrain_cull.wgsl engine/render/terrain_normals.wgsl
     engine/render/horizon.wgsl engine/render/hiz.wgsl engine/render/taa.wgsl engine/render/post.wgsl
-    engine/render/instances.wgsl engine/render/instances_cull.wgsl)
+    engine/render/instances.wgsl engine/render/instances_cull.wgsl engine/render/bloom.wgsl)
 endif()
 
 # The lab framework (engine/lab: the contract, the runner, the raster, the PNG), published as
 # ge::lab so a game's labs plug into the same contract as the engine's (docs/labs.md).
 add_library(ge_lab STATIC engine/lab/lab.cpp engine/lab/report.cpp engine/lab/runner.cpp
-  engine/lab/raster.cpp engine/lab/png.cpp engine/lab/sound.cpp)
+  engine/lab/raster.cpp engine/lab/png.cpp engine/lab/inflate.cpp engine/lab/sound.cpp
+  engine/lab/series.cpp engine/lab/stats.cpp engine/lab/plot.cpp engine/lab/chart.cpp)
 target_link_libraries(ge_lab PUBLIC ge_core ge_audio)
+
+# The play contract (engine/play: a game's spec and Run, the session and its line protocol, the
+# input log, replay and diverge, the `play` executable's main), published as ge::play so a game's
+# `play` target is driven by `ge play`, `ge sim`, `ge replay`, `ge state` and `ge diverge`.
+add_library(ge_play STATIC engine/play/inputs.cpp engine/play/json_read.cpp
+  engine/play/session.cpp engine/play/main.cpp)
+target_link_libraries(ge_play PUBLIC ge_core)
 
 # The ge command line (engine/cli, cmake/Cli.cmake): built here too when a game pulls the engine
 # in, so the game runs the ge of the engine it pins.
@@ -192,10 +203,16 @@ if(PROJECT_IS_TOP_LEVEL)
   else()
     list(FILTER GE_LAB_SOURCES EXCLUDE REGEX "/engine/lab/labs/platform_[^/]*$")
   endif()
+  # The ge command line's lab (cli_*_lab.cpp) builds only with the command line.
+  if(GE_CLI)
+    list(APPEND GE_LAB_EXTRA ge_cli)
+  else()
+    list(FILTER GE_LAB_SOURCES EXCLUDE REGEX "/labs/cli_[^/]*$")
+  endif()
   get_property(GE_PLUGIN_TARGETS GLOBAL PROPERTY GE_PLUGIN_TARGETS)
   get_property(GE_GAME_TARGETS GLOBAL PROPERTY GE_GAME_TARGETS)
   add_executable(labs engine/lab/main.cpp ${GE_LAB_SOURCES})
-  target_link_libraries(labs PRIVATE ge_lab ge_core ge_audio ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
+  target_link_libraries(labs PRIVATE ge_lab ge_play ge_core ge_audio ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
     ${GE_LAB_EXTRA})
 
   enable_testing()

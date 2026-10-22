@@ -8,6 +8,8 @@
 #include "mountain/mapgen/generate.hpp"
 
 #include <cmath>
+#include <memory>
+#include <optional>
 #include <variant>
 
 #include "core/heightfield.hpp"
@@ -26,9 +28,11 @@
 #include "mountain/mapgen/kickers.hpp"
 #include "mountain/mapgen/park.hpp"
 #include "mountain/mapgen/query.hpp"
+#include "mountain/mapgen/real_face.hpp"
 #include "mountain/mapgen/regions.hpp"
 #include "mountain/mapgen/resort_build.hpp"
 #include "mountain/mapgen/resort_level.hpp"
+#include "mountain/mapgen/resort_rules.hpp"
 #include "mountain/mapgen/route_features.hpp"
 #include "mountain/mapgen/ski_routes.hpp"
 #include "mountain/mapgen/spawn.hpp"
@@ -207,8 +211,10 @@ void lay_routes(Level& level, ResortAttempt& a, int version) {
 
 std::optional<std::string> attempt_resort(double seed, int attempt, int laps, int version,
                                           const Region& region, const GenerateOptions& opts,
-                                          const std::string& name, Level& level) {
-  ResortAttempt a = begin_resort(seed, attempt, sub_seed(seed, attempt), region, version);
+                                          const std::string& name,
+                                          const std::shared_ptr<const RealFace>& face,
+                                          Level& level) {
+  ResortAttempt a = begin_resort(seed, attempt, sub_seed(seed, attempt), region, version, face);
   std::string reached;
   if (StageResult why = build_resort(a, reached)) return why;
   level = resort_base(a, laps);
@@ -291,11 +297,25 @@ void Level::normal_at(double x, double z, Vec3& out) const {
 }
 
 Level generate_level(double seed, const GenerateOptions& opts) {
-  const int attempts = opts.attempts.value_or(16);
+  // R25 — a real face: its heights decoded once, its region the map's, and more attempts (its
+  // later ones give the dealt peak, valley and stations back).
+  std::shared_ptr<const RealFace> face;
+  if (opts.face) {
+    std::optional<RealFace> decoded = real_face(*opts.face);
+    if (!decoded) {
+      throw GenerateError("level " + num::to_string(seed) + ": no real face \"" + *opts.face +
+                          "\"; pass an id from real_face_crops.hpp (kFaceCrops)");
+    }
+    face = std::make_shared<const RealFace>(std::move(*decoded));
+  }
+  const int attempts = opts.attempts.value_or(face ? resort_rules::massif::real::attempts : 16);
   const int laps = opts.laps.value_or(rules::race::laps);
   const GeneratorTraits& traits = generator_traits(opts.version);
   const std::string name = "level " + num::to_string(seed);
-  const Region& region = region_row(opts.region);
+  const Region& region = face ? region_row(face->crop->region) : region_row(opts.region);
+  if (face && traits.single_piste) {
+    throw GenerateError(name + ": a real face is laid only by a generator that builds a ski area");
+  }
   const GradeRow& grade = kUngraded;
   std::vector<std::string> reasons;
   const int first = opts.only ? *opts.only : 0;
@@ -305,7 +325,7 @@ Level generate_level(double seed, const GenerateOptions& opts) {
     for (int a = first; a < end; a++) {
       Level level;
       if (const auto why =
-              attempt_resort(seed, a, laps, traits.version, region, opts, name, level)) {
+              attempt_resort(seed, a, laps, traits.version, region, opts, name, face, level)) {
         reasons.push_back("#" + std::to_string(a) + ": " + *why);
         continue;
       }

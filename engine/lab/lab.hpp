@@ -125,7 +125,8 @@ class Lab {
 
   // What the lab found. All of them feed the report; the deterministic ones feed the digest.
   void metric(std::string key, double value, std::string unit, Det det = Det::deterministic);
-  void table(LabTable table);
+  // A table of times or anything else that differs run to run is `measured`: shown, not hashed.
+  void table(LabTable table, Det det = Det::deterministic);
   void note(std::string line);
   // A picture whose pixels differ run to run or machine to machine (a GPU frame: each adapter
   // rasterises in its own way) is `measured`: its id is hashed, its pixels are not.

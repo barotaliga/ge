@@ -8,6 +8,7 @@
 //
 // ge:summary Fall Line's named camera views over a map and the map's day for the renderer
 // ge:keywords fall-line views named-views camera-rig start piste vista lookback aerial sun day
+// ge:keywords wood sunlit-wood tree-shadows corduroy powder glitter snow-close snow_spot
 // ge:keywords view_names make_view day_view chase_view chase-camera run-moment
 // ge:skill render
 #pragma once
@@ -28,7 +29,8 @@ inline constexpr int kMapVersion = 1;
 // Every named view, in the order a lab shoots them.
 std::span<const std::string_view> view_names();
 
-// The view's camera over `level`, under the map's own day. False for an unknown name.
+// The view's camera over `level`, under the map's own day (`out`'s sun is read: `wood` finds the
+// wood that sun lights best). False for an unknown name.
 bool make_view(const ge::mountain::mapgen::Level& level, std::string_view name,
                ge::render::FrameView& out);
 

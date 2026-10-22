@@ -17,6 +17,17 @@ description: "Use for CMake, presets, the Makefile, compiler flags, adding a dep
   `build/<preset>/`.
 - `Makefile`: names the everyday calls. The logic lives in CMake.
 
+## The session-start build
+
+`tools/session-start.sh` is the cloud session's SessionStart hook (registered in
+`.claude/settings.json`, the one Claude-specific config file; the script lives in `tools/` with the
+other checks). It returns at once and leaves a detached worker that installs the packages in
+`ci.yml`'s `GE_LINUX_PACKAGES` the container lacks (read from there, never restated) and runs
+`make build` into `build/debug/`. One worker at a time (`build/session-start.lock`); the log is
+`build/session-start.log`, the state `build/session-start.status`; `--wait` blocks until it ends.
+It does nothing outside a cloud session unless `GE_SESSION_BUILD=1`. A new system package a build
+needs goes in `GE_LINUX_PACKAGES`, and the hook picks it up.
+
 ## Adding a dependency
 
 Only when a milestone needs it (G4). Use `FetchContent_Declare` with `GIT_TAG` set to
@@ -44,6 +55,17 @@ Jobs: `fmt` (clang-format), `agents` (`tools/check-agents.sh`), `lint` (clang-ti
 `test` (Linux x64 GCC debug, GCC release and Clang release; Linux arm64 GCC; macOS
 Clang), and `windows` (MSVC). `fail-fast: false`, so one row's golden failure shows
 alongside the others.
+
+- **Kept fast**: ctest runs four cases at
+  once (`CTEST_PARALLEL_LEVEL`; `make test` uses every core), the labs' smoke pass is eight
+  CTest cases (`labs_smoke_1`..`_8`, `labs --all --smoke --shard=I/N`) and the slow cases carry
+  a `COST` so they start first. The Linux and macOS rows compile through ccache, restored on
+  every run and saved only from main (a pull request never writes the cache). On a pull
+  request `lint` checks only what the change reaches (`tools/lint.sh BUILD BASE`: each changed
+  `.cpp`, and each `.cpp` whose object includes a changed header, read off Ninja's deps); a
+  change to `.clang-tidy`, `tools/lint.sh` or the CMake lints everything, and so does every
+  push to main. A new slow test: give it a `COST`; never cut a row to save time without
+  saying what it covered and where that coverage went.
 
 - **Public repo**: workflows use `permissions:` scoped to the minimum (`contents: read`
   by default). Credentials are only `${{ secrets.NAME }}`. Never echo a secret, never

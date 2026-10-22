@@ -1,5 +1,5 @@
-# Every push and pull request: the agent guidance and the rules (ge doctor), the format, then the
-# build and every test and lab, with the sanitizers and without.
+# Every push and pull request: `ge check` (the format, the agent guidance and the rules, the build
+# and every test and lab), with the sanitizers and without. The pinned release's ge is built first.
 name: ci
 
 on:
@@ -16,15 +16,7 @@ concurrency:
 
 jobs:
   check:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v5
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ninja-build
-      - run: make agents-check
-      - run: make fmt-check
-
-  test:
-    name: test (${{ matrix.preset }})
+    name: check (${{ matrix.preset }})
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -32,5 +24,9 @@ jobs:
         preset: [debug, release]
     steps:
       - uses: actions/checkout@v5
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ninja-build
-      - run: make test PRESET=${{ matrix.preset }}
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ninja-build clang-format
+      - run: make ge-build PRESET=${{ matrix.preset }}
+      - run: build/${{ matrix.preset }}/ge check --preset=${{ matrix.preset }}
+      # The pilot plays three seeds and each run's input log is played back to its digest.
+      - run: build/${{ matrix.preset }}/ge sim --seeds=1,2,3 --preset=${{ matrix.preset }}
+      - run: for f in runs/*.inputs; do build/${{ matrix.preset }}/ge replay "$f" --preset=${{ matrix.preset }} || exit 1; done

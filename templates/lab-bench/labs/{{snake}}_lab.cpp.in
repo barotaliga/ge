@@ -1,0 +1,44 @@
+// LAB `{{kebab}}` (bench): what the step costs, in wall-clock time. Times are `measured`: printed
+// and compared with --compare, never in the digest, because they differ run to run. Say what it
+// times; a speed-up's PR shows its --compare=before table (skill: labs).
+//
+// ge:summary Lab {{kebab}}: what the game's step costs in wall-clock time (say what it times)
+// ge:keywords lab bench {{kebab}} cost timing wall-clock measured performance
+// ge:skill labs
+#include <chrono>
+#include <string>
+
+#include "lab/lab.hpp"
+#include "sim/game.hpp"
+
+namespace {
+
+using namespace {{ident}}::sim;
+
+void run(ge::lab::Lab& lab) {
+  const int steps = static_cast<int>(lab.arg_num("steps"));
+  GameState s = create_game(38);
+  const auto t0 = std::chrono::steady_clock::now();
+  for (int k = 0; k < steps; k++) step(s, Input{});
+  const auto t1 = std::chrono::steady_clock::now();
+  const double us = std::chrono::duration<double, std::micro>(t1 - t0).count();
+  lab.metric("step", us / steps, "us", ge::lab::Det::measured);
+  lab.metric("steps", steps, "count");
+}
+
+const ge::lab::LabSpec kSpec{
+    "{{kebab}}",
+    ge::lab::LabKind::bench,
+    "game:{{name}}",
+    "sim/game.cpp",
+    "labs",
+    "What does one step cost? (rewrite: what this bench times)",
+    {
+        {"steps", "120000", "steps to time"},
+    },
+    "--steps=1200",
+    run,
+};
+GE_LAB(kSpec);
+
+}  // namespace

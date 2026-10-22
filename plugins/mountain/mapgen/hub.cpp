@@ -142,6 +142,12 @@ HubPlan plan_hub(const TerrainPlan& plan, const ge::core::Heightfield& ground,
     min_x = cx;
     max_x = cx;
   }
+  // On a REAL FACE a station may stand past the side ridges' inner edge: the tunnels are kept
+  // inside the band the hub is (a dealt map's stations never stand out there).
+  if (plan.face) {
+    min_x = num::max(cx - inner + H::step, num::min(cx + inner - H::step, min_x));
+    max_x = num::max(cx - inner + H::step, num::min(cx + inner - H::step, max_x));
+  }
   // The tunnels never shorter than `tunnel.length`: a hub whose stations stand close together is
   // still crossed end to end.
   const double short_by = T::length - (max_x - min_x);

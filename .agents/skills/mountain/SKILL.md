@@ -1,6 +1,6 @@
 ---
 name: mountain
-description: "Use for plugins/mountain in gameengine2: the generated ski mountain any game on one links. The world generator (mapgen: generate_level, the terrain, the piste, kickers, cliffs, the forest, the day and the weather, the gates, versions, level_digest) and the rule book every finished map is held to (analysis: analyze_level)."
+description: "Use for plugins/mountain in gameengine2: the generated ski mountain any game on one links. The world generator (mapgen: generate_level, the terrain, the piste, kickers, cliffs, the forest, the day and the weather, the gates, versions, level_digest), the rule book every finished map is held to (analysis: analyze_level), and the mountain as drawn (app: the snow's material, its corduroy, relief, wrap, glitter and glare)."
 ---
 
 # The mountain plugin
@@ -71,6 +71,52 @@ one game's: which maps a game races, its modes and its strings stay in the game.
   (`Level::venue`): `ground_at` and `normal_at` answer off its profile inside its width (only the
   deck up the raised in-run), and the grid under it is cut to it, never above it. Any course or
   hill already on the map is set over the map under it (`original_of`).
+- THE REAL FACES (R25, M4d): 114 stretches of real ski mountains, each 4×4 km from its summit
+  ridge to its valley floor, turned so the fall line runs down the map and laid 1:1.
+  `real_face_crops.hpp` is the table (each face's id, region, place, middle and bearing);
+  `real_face.hpp` decodes a face's kept grid (126×126 samples 32 m apart, on 0.5 m steps over its
+  floor, second-differenced, zig-zag varints, base64) and samples it bicubically
+  (`face_height`), and turns a map point to the globe and back. The grids are GENERATED into
+  `real_faces/` (a file a face and `index.cpp`) by the `real-faces` lab's bake
+  (`--bake --fetch --write`, from the repository's root): the free Copernicus 30 m elevation
+  model read off its public bucket with `curl` into the gitignored `.cache/dem/`, through the
+  labs' GeoTIFF reader (`labs/dem_tiles.hpp`) and inflater (`engine/lab/inflate.hpp`). Never
+  edit a face's file by hand; a crop moved is a face baked again and its golden row rewritten.
+  A face is BUILT ON by `GenerateOptions::face` (its region the map's, `massif::real::attempts`
+  attempts): `plan_massif` reads it (`read_face`: the summit ridge down to its brow, the peak,
+  shoulder and valley on the real sides, the floor and the face's own profile) and every draw is
+  still made, so the stream runs on as on a dealt massif; the height is `face_lift`, the real one
+  over the floor fading onto the profile on the valley floor. The rule book bends where a real
+  mountain is not a dealt one: every bend is a number in `massif::real::least`, read where the
+  dealt rule is (`grade_face`, `ramp_fit`, `ChainMost`, `place_start`'s `face`,
+  `StationGround::level`, the drags' and access's `slack`, the analysis's `level.face`). A new
+  bend is a number there and a branch beside the dealt rule's, never a second code path.
+
+## The mountain as drawn (`mountain/app`, M8)
+
+`plugins/mountain/app/` (`ge_mountain_app`, namespace `ge::mountain::app`, built only with the
+GPU: `APP render gpu`) is what any game on a snow mountain draws the mountain with. Nothing in
+it moves the ground the simulation skis on; every term is light.
+
+- THE SNOW'S MATERIAL (`snow.hpp`, `snow.wgsl`): the terrain's `fs_main` over the engine's
+  `render/wgsl/terrain_draw.wgsl` (`TerrainSource::shader` and `material`, the `render` skill).
+  The game keeps its colours (the albedo it hands the terrain); the material is what the snow
+  does to the light. Its ground map (`bake_snow_ground`, baked once a map): the packed share, the
+  rock share (`rock_share` of the slope, which the game's albedo reads too, so the two agree),
+  and the piste's direction as the DOUBLED angle (a comb line has no front and back), faded to
+  nought over 4 m inside the piste's edge. The shader's terms, each with a gain in `SnowLook`
+  (1 the tuned look, 0 none of it): the relief (swells and grain on the loose snow, a broken face
+  on rock), the corduroy (14 cm a rib, worn in patches) and the lanes (5.2 m a swath) across the
+  piste's way, the wrap's blue terminator, the glare (forward scatter, harder on the piste) and
+  the glitter (one crystal at most a cell, a point, written to the reactive mask).
+- EVERY TERM FADES BY THE PIXEL'S FOOTPRINT (`foot`, m a pixel, from `fwidth` taken once at the
+  top of `fs_main`, in uniform control flow), never by distance alone: a term whose wavelength a
+  pixel spans a quarter of is aliasing, at any resolution and field of view.
+- To judge it: the `snow` lab (the close views, each PLAIN with every gain at nought beside
+  SNOW, at 10, 12 and 14 h) and the `world` lab's `corduroy`, `powder` and `glitter` views. A
+  close view finds a spot in the sun past the mountain and the trees (`views.cpp`'s `snow_spot`);
+  judge the material only where the sun is on the snow, because in shade only the relief and
+  the sky's light are left.
 
 ## Order of work (docs/goals.md M4a to M4d)
 
@@ -107,4 +153,10 @@ change to the terrain park runs `park` (the park close up, its profile, the map)
 `--version=1,8`; a change to the ski routes runs `routes` (the area with its routes, each route
 close up and from the side, the routes' table) at `--version=9,10`; a change to a venue or the ski
 jumping hill runs `skijump-hills` (each hill's earth moved, tower and arena as a table, its
-profile at true scale from the side, the map) at `--version=1,9`. The `labs` skill owns how.
+profile at true scale from the side, the map) at `--version=1,9`; a change to the real faces' crops,
+their codec or their bake runs `real-faces` (the table of every face and the sheet; with `--bake`,
+the samples each bake moves against the tree's); a change to the face's massif or to any rule a
+real face bends runs `real-maps` over every face (`--faces=all`, about ten minutes on one core;
+split the faces over processes) before and after, and no face may stop building. The `labs` skill
+owns how. A change to the snow's material runs `snow` (and `world --views=corduroy,powder,glitter
+--hour=12`) before and after, and `profile --snow=0` beside `profile` for its cost.

@@ -2,8 +2,8 @@
 
 This file is the single source of truth for AI coding agents in this repo. `CLAUDE.md`,
 `GEMINI.md`, `.cursorrules` and `.github/copilot-instructions.md` are symlinks to it, and
-`.claude/skills` and `.gemini/skills` are symlinks to `.agents/skills`. `make agents-check`
-(`ge doctor`) holds them.
+`.claude/skills` and `.gemini/skills` are symlinks to `.agents/skills`. `ge doctor` holds
+them.
 
 **This file is the ROUTER, not the manual.** It says what the project is, the rules every task
 follows, where things live, and which skill owns each subject. The procedures live in
@@ -14,18 +14,22 @@ edit.
 
 {{name}} is a game written in C++20 on the engine at {{engine_repo}}, pinned to one release in
 `cmake/engine.cmake`. The engine gives the deterministic core (`ge::core`), the lab framework
-(`ge::lab`), its plugins (`ge::<plugin>`) and the `ge` command line this repo's checks run on.
+(`ge::lab`), the play contract (`ge::play`), its plugins (`ge::<plugin>`) and the `ge` command
+line this repo's checks run on.
 
 ## Rules for every task
 
 - **DETERMINISTIC.** The simulation (`sim/`) produces the same bits for the same seed and
   inputs on every platform: time is the step count, every random draw comes from the state's
   `ge::core::Rng`, transcendentals come from `core/libm/libm.hpp`, and no build flag loosens the
-  FP flags `ge::core` carries. `make agents-check` holds it (skills: `engine`, `sim-system`).
+  FP flags `ge::core` carries. `ge doctor` holds it (skills: `engine`, `sim-system`).
+- **PLAY IT TO TEST IT.** The game is on the engine's play contract (`play/game.cpp`), so every
+  change can be played (`ge play`), run by the game's pilot (`ge sim`) and replayed to its digest
+  (`ge replay`); a run that does not replay is a determinism break (skill: `play-test`).
 - **LABS, NOT GUESSES.** A change in a lab's subject runs the lab before and after and puts both
   in the PR (skill: `labs`).
 - **ERRORS ARE PROMPTS.** Every error and warning says what failed, where, and the next action
-  (skill: `write-code`, § Diagnostics). `make agents-check` holds every message to it.
+  (skill: `write-code`, § Diagnostics). `ge doctor` holds every message to it.
 - **THE ENGINE IS NOT PATCHED HERE.** A bug in the engine is reported upstream with a repro
   (skill: `engine`); the build never edits `build/*/_deps/`.
 - **THIS REPOSITORY MAY BE PUBLIC.** No tokens, keys, e-mail addresses or home paths in the tree,
@@ -34,36 +38,49 @@ edit.
   session learned before the commit (skill: `skill-reflection`).
 - **Every work session ends with the `commit` skill.**
 
-## Build and test
+## Build, test and grow it: ge
+
+`ge` is this repo's one command line (skill: `ge`): every command takes `--json` and answers
+with findings that say what failed, where and the next action. The pinned release builds its own
+`ge` into `build/<preset>/ge`; before the first build, use a release package's `ge` (or
+`make ge-build`).
 
 ```sh
-make build          # cmake --preset debug && cmake --build (PRESET=release: -O2, no sanitizers)
-make test           # build + ctest: every tests/*_test.cpp and every lab at its smoke flags
-make fmt            # clang-format in place;  make fmt-check is what CI runs
-make agents-check   # ge doctor: guidance, skills, the engine pin, build flags, sources, messages
-make skills         # ge skills sync: the engine's skills, to the pinned release
-make lessons ARGS=labs           # a skill's lessons (ARGS="labs --scope=sim/")
-make labs                        # list the labs;  make lab LAB=run ARGS="--seeds=7" runs one
+ge check                         # the gate: format, ge doctor, build, every test and lab smoke
+ge build | ge test [--filter=x]  # (--preset=release: -O2, no sanitizers)
+ge lab [<id>] [--tag=before | --compare=before] [-- <the lab's flags>]
+ge find <words> | ge explain <file|name>   # this repo's and the pinned engine's code
+ge sim [--seeds=1,2] | ge play [--seed=1]   # the pilot's runs; you at the controls
+ge replay <log> | ge state <log> --step=N | ge diverge <a> <b>   # the input logs in runs/
+ge add system|lab|test <name>    # a working piece to start from, tags filled
+ge use <plugin>                  # link one of the engine's plugins, install its skill
+ge doctor | ge skills sync | ge lessons <skill>
+ge help [<command>] [--json]     # the whole catalog
 ```
+
+`make` targets remain for people (`make test`, `make fmt` formats every file at once); an agent
+uses `ge`.
 
 ## Where things live
 
 | Path | What | Skill |
 | --- | --- | --- |
 | `sim/` | The simulation: the state, the fixed step, every system the game has | `sim-system` |
+| `play/` | The game on the play contract: its axes, options, observation, state, pilot | `play-test` |
+| `runs/` | The input logs `ge sim` writes (not committed) | `play-test` |
 | `labs/` | The labs: one `<id>_lab.cpp` each, all in the `labs` executable | `labs` |
 | `tests/` | `<topic>_test.cpp`, one executable each; `check.hpp` is the harness | `sim-system` |
 | `cmake/engine.cmake` | The engine pin: the release, its checksum | `engine` |
 | `.agents/skills/` | The skills: the engine's (synced) and this repo's own | `skill-reflection` |
 
 Every source file ends its leading comment with a `ge:` tag block (`ge:summary`, `ge:keywords`,
-`ge:skill`, `ge:test`), so `grep -rn "ge:keywords.*<word>"` finds it (skill: `write-code`).
+`ge:skill`, `ge:test`), so `ge find <word>` finds it (skill: `write-code`).
 
 ## Skills
 
 Skills live in `.agents/skills/`, each a `SKILL.md` with `name` and `description` front matter
 and a `.lessons/` directory. Lessons are this repo's; the engine's skills below are rewritten
-by `make skills` to the pinned release, so never edit one in place: write a lesson.
+by `ge skills sync` to the pinned release, so never edit one in place: write a lesson.
 
 The engine's skills:
 

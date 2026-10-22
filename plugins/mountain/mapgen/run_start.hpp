@@ -44,9 +44,11 @@ using StartClear = std::function<bool(double x, double z, double heading)>;
 
 // R12, R27 — where on the contour by its top station a run starts, and the heading it leaves
 // on: the spec moved there, or none within reach. `top` none looks along the line across the
-// face at whatever height.
+// face at whatever height. On a real `face` (R25) the start is the mountain's: the run is billed
+// the colour it measures, so it need not open as steeply as its colour's start.
 std::optional<RunSpec> place_start(const ge::core::Heightfield& ground, const RunSpec& spec,
                                    double lean, std::span<const double> siblings,
-                                   const StartClear& clear, const std::optional<StartTop>& top);
+                                   const StartClear& clear, const std::optional<StartTop>& top,
+                                   bool face = false);
 
 }  // namespace ge::mountain::mapgen

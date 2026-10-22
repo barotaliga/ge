@@ -1,14 +1,17 @@
-// The dealt massif: its plan, its profile tables and its bake (a real face's branch is M4d).
+// The massif, dealt or laid off a real face: its plan, its profile tables and its bake.
 //
 // ge:summary The massif's plan draws, its profile tables and its row-by-row bake
 // ge:keywords massif plan-massif bake-massif ridge-share steep-share bench-share massif-row
-// ge:keywords height-at parallel threads
+// ge:keywords height-at read-face face-lift brow parallel threads
 // ge:skill mountain
 // ge:test tests/mountain_resort_build_test.cpp
 #include "mountain/mapgen/massif.hpp"
 
+#include <algorithm>
 #include <cmath>
+#include <limits>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "core/libm/libm.hpp"
@@ -17,6 +20,7 @@
 #include "core/num.hpp"
 #include "core/parallel.hpp"
 #include "mountain/mapgen/grades.hpp"
+#include "mountain/mapgen/real_face.hpp"
 #include "mountain/mapgen/resort_rules.hpp"
 #include "mountain/mapgen/rules.hpp"
 
@@ -153,6 +157,25 @@ double wall_drop(const Headwall& w, double x, double st) {
   return w.drop * st * across;
 }
 
+// R25 — the ground at (x, z) of a real face laid 1:1: the real height over the face's floor,
+// metre for metre, everywhere but a hollow below the valley floor's level and the valley floor
+// itself, where the relief across the face fades out onto the face's own profile so the village
+// and the hub stand level. The dealt descent is not read: the face is the mountain.
+double face_lift(const TerrainPlan& plan, const PlanFace& real, double x, double z) {
+  constexpr int n = kFaceN;
+  const double t = num::min(double(n - 1), num::max(0.0, z / kFaceCell));
+  const int r = static_cast<int>(num::min(double(n - 2), std::floor(t)));
+  const auto ri = static_cast<size_t>(r);
+  const double row = real.rows[ri] + (real.rows[ri + 1] - real.rows[ri]) * (t - r);
+  // A hollow on the face deeper than the valley floor (a lake's basin, a side valley's bottom)
+  // is filled to the floor's level: the runs come down to the hub without climbing out of it.
+  const double real0 = face_height(*real.grid, x, z) - real.floor;
+  const double lifted = z > plan.summit_z ? num::max(real0, real.rows[size_t(n - 1)]) : real0;
+  const Band fade = RR::massif::real::floor;
+  const double floor = 1 - smoothstep(fade.min, fade.max, descent_at(plan, z));
+  return row + (lifted - row) * floor;
+}
+
 // R25, R3 — the massif's height at a plan point, with the shares across x and each headwall's
 // drop at x already read (`walls`, from `walls_at` on).
 double height_at(const TerrainPlan& plan, CountryFields& f, double x, const MassifRow& row,
@@ -164,6 +187,7 @@ double height_at(const TerrainPlan& plan, CountryFields& f, double x, const Mass
   const double plain = row.g * (1 - st) + row.s * st;
   const double benched = row.gb * (1 - st) + row.sb * st;
   double h = (plan.vertical * share - drops) * (plain * (1 - bn) + benched * bn);
+  if (plan.face) h = face_lift(plan, *plan.face, x, z);
   for (size_t i = 0; i < k; i++) {
     const Headwall& w = plan.headwalls[i];
     const double drop = walls[i];
@@ -176,7 +200,7 @@ double height_at(const TerrainPlan& plan, CountryFields& f, double x, const Mass
     const double wander = (sample_noise(f.headwalls[i], x, 0) * 2 - 1) * R::face::headwalls::wander;
     h += drop * (1 - smoothstep(-w.run / 2, w.run / 2, dz + wander));
   }
-  if (row.behind) h -= row.back;
+  if (row.behind && !plan.face) h -= row.back;
   const double wx = x + (sample_noise(f.warp_x, x, z) * 2 - 1) * 70;
   const double wz = z + (sample_noise(f.warp_z, x, z) * 2 - 1) * 70;
   const double flank = flank_across(plan, sample_noise(f.flank, x, z), x, row.open);
@@ -209,9 +233,83 @@ double height_at(const TerrainPlan& plan, CountryFields& f, double x, const Mass
   return h;
 }
 
+// R25 — what a real face stands in for: where its peak, its shoulder and its village are (each
+// kept in the band a dealt massif's is, on the side the real one stands), its summit ridge, its
+// valley floor's real height (the map's nought) and its own profile down the fall line.
+struct FaceRead {
+  double summit_z, side, peak_x, shoulder_x, village_x;
+  std::shared_ptr<PlanFace> face;
+};
+
+FaceRead read_face(std::shared_ptr<const RealFace> grid, double size, double dealt_summit_z,
+                   double base_z, double wide) {
+  namespace M = RR::massif;
+  const RealFace& g = *grid;
+  const double cx = size / 2;
+  const double reach = M::real::reach;
+  const double mean = face_mean(g, cx - reach, cx + reach, base_z - 60, size);
+  // THE SUMMIT RIDGE where the real one stands: the highest row of the face's mean profile from
+  // the rule book's ridge row down to `real::ridge` m. A crop whose top is a plateau or the back
+  // of the ridge has its summit ridge lower down the map, and the lifts top out and the runs
+  // leave there rather than on ground that does not fall.
+  double summit_z = dealt_summit_z;
+  double best = -std::numeric_limits<double>::infinity();
+  for (int j = 0; dealt_summit_z + j * kFaceCell <= M::real::ridge; j++) {
+    const double z = dealt_summit_z + j * kFaceCell;
+    const double h = face_mean(g, cx - reach, cx + reach, z, z);
+    if (h > best) {
+      best = h;
+      summit_z = z;
+    }
+  }
+  // …and on down to its BROW: a fell's ridge is a plateau that falls a few metres over hundreds,
+  // and its lifts top out where the face starts to fall.
+  const double brow = best - M::real::brow::share * (best - mean);
+  const double ridge_z = summit_z;
+  for (int j = 1; ridge_z + j * kFaceCell <= M::real::brow::most; j++) {
+    const double z = ridge_z + j * kFaceCell;
+    if (face_mean(g, cx - reach, cx + reach, z, z) < brow) break;
+    summit_z = z;
+  }
+  const double real_peak = face_extreme(g, cx - reach, cx + reach, summit_z - 60, summit_z + 120);
+  const double side = real_peak >= cx ? 1 : -1;
+  const auto keep = [cx](double x, Band band, double s) {
+    const double d = num::min(band.max, num::max(band.min, (x - cx) * s));
+    return cx + d * s;
+  };
+  const double peak_x = keep(real_peak, scale_band(M::peak::across, wide), side);
+  const double o0 = side > 0 ? cx - reach : cx;
+  const double o1 = side > 0 ? cx : cx + reach;
+  const double shoulder_x = keep(face_extreme(g, o0, o1, summit_z - 60, summit_z + 120),
+                                 scale_band(M::shoulder::across, wide), -side);
+  // The valley at its lowest point, in the dealt band.
+  const double village_x = keep(face_extreme(g, o0, o1, base_z - 60, size, true),
+                                scale_band(M::village::across, wide), -side);
+  // The face's own profile: its mean height across the playable face, a row at a time, over its
+  // floor. Below the ridge it never climbs, so a valley floor whose far side rises is laid level
+  // rather than as the foot of the next slope; below the base row it is the valley floor, level,
+  // however the real valley goes on falling. The face's floor is that level.
+  constexpr int n = kFaceN;
+  auto face = std::make_shared<PlanFace>();
+  face->grid = std::move(grid);
+  std::vector<double>& rows = face->rows;
+  rows.resize(size_t(n));
+  for (size_t r = 0; r < size_t(n); r++) {
+    const double z = double(r) * kFaceCell;
+    rows[r] = face_mean(g, cx - reach, cx + reach, z, z) - mean;
+    if (z > summit_z && r > 0) rows[r] = num::min(rows[r], rows[r - 1]);
+  }
+  const int base = std::min(n - 1, static_cast<int>(num::round(base_z / kFaceCell)));
+  const double level = rows[size_t(base)];
+  for (size_t r = 0; r < size_t(n); r++) rows[r] = int(r) > base ? 0 : rows[r] - level;
+  face->floor = mean + level;
+  return FaceRead{summit_z, side, peak_x, shoulder_x, village_x, std::move(face)};
+}
+
 }  // namespace
 
-TerrainPlan plan_massif(ge::core::Rng& rng, const Region& region) {
+TerrainPlan plan_massif(ge::core::Rng& rng, const Region& region,
+                        const std::shared_ptr<const RealFace>& face, int attempt) {
   namespace M = RR::massif;
   namespace F = R::face;
   namespace Q = RR::massif::relief;
@@ -278,19 +376,29 @@ TerrainPlan plan_massif(ge::core::Rng& rng, const Region& region) {
   plan.seeds.crests = seed();
   plan.seeds.headwalls = seed();
   const BenchCut bench{bench_u, bench_width, bench_depth};
+  // A REAL FACE: every draw above is made all the same, so the stream the rest of the ski area
+  // is dealt off runs on as it would; what the face stands in for is then read off it. Where the
+  // real peak, shoulder and valley stand is kept for the first `real::placed` attempts; a face
+  // whose stations will not take them is given the dealt ones after that, its relief laid over
+  // them all the same.
+  const std::optional<FaceRead> real =
+      face ? std::optional<FaceRead>(read_face(face, size, summit_z, base_z, wide)) : std::nullopt;
+  const FaceRead* placed = real && attempt < RR::massif::real::placed ? &*real : nullptr;
   auto massif = std::make_shared<Massif>(Massif{
-      side,
-      peak_x,
+      placed ? placed->side : side,
+      placed ? placed->peak_x : peak_x,
       peak_spread,
-      shoulder_x,
+      placed ? placed->shoulder_x : shoulder_x,
       shoulder_share,
       steep_spread,
       bench_u,
       bench_width,
       bench_depth,
-      bench_x,
+      // The bench (and the gondola's top on it) between the village and the peak, wherever a
+      // real face stands them.
+      placed ? placed->village_x + (placed->peak_x - placed->village_x) * bench_toward : bench_x,
       bench_spread,
-      village_x,
+      placed ? placed->village_x : village_x,
       {tabulate(M::gentle_profile, nullptr), tabulate(M::steep_profile, nullptr),
        tabulate(M::gentle_profile, &bench), tabulate(M::steep_profile, &bench)},
       0,
@@ -316,6 +424,24 @@ TerrainPlan plan_massif(ge::core::Rng& rng, const Region& region) {
   plan.rollers = F::rollers::amplitude * K.rollers * Q::rollers;
   plan.bowls = std::move(bowls);
   plan.headwalls = std::move(headwalls);
+  if (real) {
+    // A REAL FACE is laid 1:1: the map's height is the real one less the face's floor, so the
+    // floor's real altitude is the map's nought, the tree line is the region's in metres over
+    // the sea, and the vertical is the real peak's over the floor. Its side ridges, crests,
+    // bowls and headwalls are its own, and the hills and spurs are laid only under the scale the
+    // model sees.
+    plan.summit_z = real->summit_z;
+    plan.vertical = face_height(*face, massif->peak_x, real->summit_z) - real->face->floor;
+    plan.altitude = real->face->floor;
+    plan.tree_line = dealt_line;
+    plan.flank = 0;
+    plan.crests = 0;
+    plan.hills = hills * RR::massif::real::folds;
+    plan.ridges = ridges * RR::massif::real::folds;
+    plan.bowls.clear();
+    plan.headwalls.clear();
+    plan.face = real->face;
+  }
   plan.profile = &massif->tables[0];
   plan.region = &region;
   plan.grade = &kUngraded;

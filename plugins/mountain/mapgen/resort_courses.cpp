@@ -36,7 +36,9 @@ constexpr double kFacingHour = 12.5;
 
 StageResult resort_woods(ResortAttempt& a) {
   const double base_y = sample_field(a.ground, a.village.x, a.village.z);
-  const double line_y = base_y + (a.plan.tree_line - a.plan.altitude);
+  // On a real face the floor's real height is the map's nought (massif.hpp).
+  const double line_y = a.plan.face ? a.plan.tree_line - a.plan.altitude
+                                    : base_y + (a.plan.tree_line - a.plan.altitude);
   const WoodsRow& row = woods_row(a.region->id);
   std::vector<const SummitRamp*> ramps;
   for (const auto& [lift, off] : a.ramps) {
@@ -72,6 +74,7 @@ StageResult resort_woods(ResortAttempt& a) {
   cliffs.insert(cliffs.end(), a.cliffs.begin(), a.cliffs.end());
   const Track no_track{};
   a.trees = grow_forest(a.rng, a.plan, a.ground, no_track, kickers, cliffs, line_y, &options);
+  if (a.plan.face) thin_trees(a.trees, size_t(resort_rules::massif::real::trees));
   return std::nullopt;
 }
 

@@ -1,0 +1,24 @@
+// Tests: {{snake}}. Say what contract these cases hold and which file states it (skill:
+// sim-system).
+//
+// ge:summary Tests: {{snake}} (say what they hold)
+// ge:keywords test {{snake}}
+// ge:skill sim-system
+// ge:test tests/{{snake}}_test.cpp
+#include <string>
+
+#include "check.hpp"
+#include "sim/game.hpp"
+
+using namespace {{ident}}::sim;
+
+TEST({{snake}}_a_run_is_a_pure_function_of_its_seed) {
+  GameState a = create_game(38), b = create_game(38);
+  for (int k = 0; k < 600; k++) {
+    step(a, Input{1.0});
+    step(b, Input{1.0});
+  }
+  CHECK_MSG(digest(a) == digest(b),
+            "two runs of seed 38 differ after 600 steps: the step reads something besides its "
+            "state and input; skill: sim-system");
+}
