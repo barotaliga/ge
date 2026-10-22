@@ -20,7 +20,8 @@
 // - A missed gate is taken again: the bot asks for the reset.
 // - ON THE FREE RIDE (`plan_free`) the line is the chain of runs from the head of his run down to
 //   a foot (`run_chain`, free.hpp), every kicker within a run's width of it planned for at its
-//   nearest point; at the foot it brakes to a stop.
+//   nearest point; at the foot it brakes to a stop. On a line laid to a lift (`to_lift`) it skis on
+//   past the foot to the line's end, and a lift that has him is left to carry him.
 //
 // ge:summary The bot: a speed plan off the skier's limits, pure pursuit down the piste
 // ge:keywords bot pilot ai plan_bot bot_controls pure-pursuit lookahead speed-plan curvature
@@ -29,6 +30,7 @@
 // ge:test tests/fall_line_sim_test.cpp
 #pragma once
 
+#include <cmath>
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -70,12 +72,19 @@ struct BotPlan {
   // half-room a lane has about it; both empty on a piste whose gates all stand on the line.
   std::vector<double> line;
   std::vector<double> room;
+  // A line laid to a lift's load zone (outing.hpp): skied on past a run's foot, slowing to its end.
+  bool to_lift = false;
 };
 
 BotPlan plan_bot(const ge::mountain::mapgen::Level& level, const ge::skier::SkiSpec& spec);
 // The free ride's plan: from the head of `run` down to a foot.
 BotPlan plan_free(const ge::mountain::mapgen::Level& level, int32_t run,
                   const ge::skier::SkiSpec& spec);
+
+// The free ride's plan along any line the bot is to ski (an outing's legs, outing.hpp), held
+// under `slow` m/s from `slow_from` m along it.
+BotPlan plan_line(const ge::mountain::mapgen::Level& level, ge::mountain::mapgen::Track line,
+                  const ge::skier::SkiSpec& spec, double slow_from = INFINITY, double slow = 0);
 
 // What the bot does this step as racer `i`, riding as his `Rider`.
 Controls bot_controls(const GameState& state, int32_t i, const BotPlan& plan);
