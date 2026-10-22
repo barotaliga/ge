@@ -74,6 +74,12 @@ TEST(the_parser_matches_commands_and_refuses_what_the_catalog_does_not_allow) {
   CHECK(flag_value(lab, "kind") == "scenario" && has_flag(lab, "json"));
   CHECK(!check_args(lab).has_value());
 
+  const Args diff = parse({"lab", "diff", "world", "--run", "--psnr=40,30", "--", "--views=vista"});
+  CHECK(diff.command && diff.command->name == "lab diff");
+  CHECK(diff.words.size() == 1 && diff.words[0] == "world" && has_flag(diff, "run"));
+  CHECK(flag_value(diff, "psnr") == "40,30" && diff.passthrough.size() == 1);
+  CHECK(!check_args(diff).has_value());
+  CHECK(check_args(parse({"lab", "diff"})).has_value());  // which lab
   const Args pass = parse({"lab", "run", "--smoke", "--", "--seeds=7", "x"});
   CHECK(pass.command && pass.command->name == "lab");
   CHECK(pass.passthrough.size() == 2 && pass.passthrough[0] == "--seeds=7");
