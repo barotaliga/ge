@@ -245,6 +245,7 @@ LevelAnalysis analyze_course(const mapgen::Level& level) {
   // R13 — the start line; R15, R19 — the day and the weather.
   check_start_line(level, add);
   check_day(level, add);
+  check_park(level, add);
 
   // R16 — one run.
   if (level.laps != R::race::laps) add("R16", Severity::error, str(level.laps) + " runs");

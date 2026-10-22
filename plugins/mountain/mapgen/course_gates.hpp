@@ -27,10 +27,12 @@
 namespace ge::mountain::mapgen {
 
 // R11, R24, R28 — the gates down `track`, a course of colour `grade` carrying `kickers` and
-// `drops` (each with its arc down it), off the hash `salt`.
+// `drops` (each with its arc down it), off the hash `salt`. A `park` (R20) down it is kept clear
+// as a drop is: no gate within `trick::gate_before` m before a ramp's foot nor `trick::gate_after`
+// m past a run-out.
 std::vector<Checkpoint> course_gates(const Track& track, std::span<const Cliff> drops,
                                      std::span<const Kicker> kickers, PisteGrade grade,
-                                     uint32_t salt);
+                                     uint32_t salt, std::span<const Kicker> park = {});
 
 // A share in [0, 1) off a seed and an index, for a pick that draws nothing from any stream.
 double hash_pick(uint32_t seed, int i);

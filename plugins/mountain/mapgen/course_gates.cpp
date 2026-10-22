@@ -87,14 +87,19 @@ double hash_pick(uint32_t seed, int i) {
 
 std::vector<Checkpoint> course_gates(const Track& track, std::span<const Cliff> drops,
                                      std::span<const Kicker> kickers, PisteGrade grade,
-                                     uint32_t salt) {
+                                     uint32_t salt, std::span<const Kicker> park) {
   const double length = track.length;
   std::vector<Zone> zones;
-  zones.reserve(drops.size());
+  zones.reserve(drops.size() + park.size());
   for (const Cliff& d : drops) {
     const double s = d.s.value_or(0);
     zones.push_back(
         {s - d.shelf - rules::drop::gate_clear, s + d.face + d.landing + rules::drop::gate_clear});
+  }
+  for (const Kicker& k : park) {
+    const double s = k.s.value_or(0);
+    zones.push_back(
+        {s - k.ramp - rules::trick::gate_before, s + k.landing + rules::trick::gate_after});
   }
   const std::vector<double> arcs = gate_arcs_down(length, zones);
   const auto pick = [&](int k, int j) {
