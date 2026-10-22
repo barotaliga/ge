@@ -1,0 +1,184 @@
+// GPU-DRIVEN INSTANCE FAMILIES (docs/rendering.md § GPU-driven instances): everything that is
+// drawn many times (trees, rocks, carriers, figures, poles) is an instance of a mesh in a
+// family, culled, LOD-picked and drawn by the GPU. The CPU never walks a family's instances in
+// a frame; it writes the instances that moved (`set_instances`) and nothing else.
+//
+// - A FAMILY holds a table of meshes, each with up to kMaxLods levels of detail (each LOD a
+//   packed mesh, render/mesh.hpp, in one shared vertex buffer, its vertices pulled by index), a
+//   table of materials (linear albedo; an instance's material plus a vertex's part picks one),
+//   and the instances as streams in one storage buffer (structure of arrays): the position and
+//   material, the rotation, the scale and mesh, and the last frame's position and rotation (the
+//   motion vectors of what moves).
+// - A BUCKET is one (mesh, LOD) pair in one phase, one indirect draw. The cull appends each
+//   visible instance to its bucket's compacted list and counts it into the draw's arguments.
+//   A draw tells its bucket to the vertex stage through its base vertex (bucket << 20), since a
+//   portable indirect draw has no first instance: every LOD's vertices are indexed from 0.
+// - TWO-PHASE CULLING against the depth pyramid (render/hiz.hpp). The EARLY phase (before the
+//   depth prepass) tests each instance's bounding sphere against the frustum and against LAST
+//   frame's pyramid, reprojected through the last frame's camera; what that hides it marks for
+//   the LATE phase, which runs after this frame's prepass and pyramid and draws the ones this
+//   frame shows after all. So a fast turn never leaves a hole for a frame. After a cut (no last
+//   frame) the early phase culls by the frustum alone.
+// - THE LOD is picked from the sphere's radius on screen in pixels: a LOD is drawn while that is
+//   at least its `min_px` (the LODs finest first); under kMinPixels nothing is. Within kLodBand
+//   of a threshold both LODs are drawn and each keeps a dithered share of the pixels, in the
+//   depth prepass only (its fragment discards; the colour pass tests `equal` and so shades only
+//   the pixels the prepass kept), so a LOD change never pops. `pick_lod` is the CPU twin.
+//
+// The passes, in a frame's order: `encode_instances_cull` early, `encode_instances_depth` early
+// (after the ground's prepass), the pyramid, the cull late, the depth late, then the colour pass
+// (`encode_instances`, both phases' lists, `equal`). Every family in a span shares each pass.
+// Group 1 of the draws is the light (`instance_light_group`: the ground's own shadow from the
+// terrain's horizon maps), group 2 the family. Shaders: instances.wgsl, instances_cull.wgsl.
+//
+// ge:summary GPU-driven instance families: meshes and LODs, two-phase Hi-Z culling, indirect
+// draws
+// ge:keywords render instances instance-family gpu-driven two-phase-culling occlusion-culling
+// ge:keywords hi-z lod lod-band dither cross-fade bucket indirect-draw base-vertex compaction
+// ge:keywords vertex-pulling soa streams materials pick_lod create_family set_instances
+// ge:keywords encode_instances_cull encode_instances_depth encode_instances instance-stats
+// ge:skill render
+// ge:test tests/render_instances_test.cpp
+#pragma once
+
+#include <cstdint>
+#include <span>
+#include <string>
+#include <vector>
+
+#include "gpu/device.hpp"
+#include "gpu/pipeline.hpp"
+#include "render/frame.hpp"
+#include "render/hiz.hpp"
+#include "render/mesh.hpp"
+#include "render/terrain.hpp"
+
+namespace ge::render {
+
+inline constexpr int kMaxLods = 4;           // a mesh's levels of detail
+inline constexpr uint32_t kMaxBuckets = 64;  // a family's (mesh, LOD) pairs
+inline constexpr float kLodBand = 0.15f;     // the cross-fade's half width, a share of a threshold
+inline constexpr float kMinPixels = 0.35f;   // the radius on screen under which nothing is drawn
+inline constexpr uint32_t kMaxInstances = 1u << 23;  // a list entry's index bits
+
+// A level of detail: its mesh, and the radius on screen (px) down to which it is drawn. The
+// last LOD's is ignored (it is drawn down to kMinPixels).
+struct LodSource {
+  MeshData mesh;
+  float min_px = 0;
+};
+struct MeshSource {
+  std::vector<LodSource> lods;  // finest first, at most kMaxLods
+};
+
+// An instance as the CPU writes it: a mesh-space point p lands at position + rotate(rotation,
+// p * scale). Rotation is a unit quaternion (x, y, z, w), body to world (engine/core/quat.hpp).
+struct Instance {
+  double position[3] = {0, 0, 0};
+  float rotation[4] = {0, 0, 0, 1};
+  float scale[3] = {1, 1, 1};
+  uint32_t mesh = 0;
+  uint32_t material = 0;  // a vertex of part k takes material + k
+};
+
+// The LOD for a sphere `radius_px` px on screen across `lods` thresholds (finest first): `lod`,
+// and inside a band `other` (the next coarser) with `share` the finer one's part of the pixels.
+// `lod` is -1 under kMinPixels.
+struct LodPick {
+  int lod = -1;
+  int other = -1;
+  float share = 1;
+};
+LodPick pick_lod(const float* min_px, int lods, float radius_px);
+
+// What a family's cull did in a frame (instances, each counted once).
+struct InstanceStats {
+  uint32_t early = 0;     // drawn by the early phase
+  uint32_t late = 0;      // hidden by the last frame's pyramid, shown by this one's
+  uint32_t frustum = 0;   // outside the frustum
+  uint32_t small = 0;     // under kMinPixels
+  uint32_t occluded = 0;  // hidden by the last frame's pyramid
+  uint32_t hidden = 0;    // and by this frame's: not drawn
+};
+
+// The pipelines and layouts every family shares (added to the manifest once).
+struct InstancePipelines {
+  wgpu::BindGroupLayout cull_layout, draw_layout, light_layout;
+  uint32_t p_early = 0, p_late = 0, p_depth = 0, p_draw = 0;
+  uint32_t p_count_equal = 0, p_count_greater = 0;  // the overdraw probe's, when asked for
+};
+void create_instance_pipelines(gpu::Device& device, gpu::PipelineSet& pipelines,
+                               InstancePipelines& ip, const wgpu::BindGroupLayout& frame,
+                               bool overdraw_probe = false);
+// Group 1 of the draws: the ground's own shadow, read from the terrain's horizon maps.
+wgpu::BindGroup instance_light_group(gpu::Device& device, const InstancePipelines& ip,
+                                     const Terrain& terrain);
+
+struct InstanceFamily {
+  std::string label;
+  uint32_t capacity = 0, count = 0;
+  uint32_t lod_count = 0;
+  wgpu::Buffer vertices, indices, meshes, lods, materials, instances, lists, args, state, params;
+  wgpu::BindGroup cull_group, draw_group;
+  std::vector<uint32_t> args_reset;  // the draws' arguments with no instances, and zero stats
+  std::vector<float> streams;        // the CPU's copy of the instance streams
+  std::vector<float> lod_px;         // each LOD's min_px
+  bool moved_since_cut = false;      // false: the next write's last frame is the write itself
+  // instances_cull.wgsl's `FamilyParams`, filled by prepare.
+  struct Params {
+    uint32_t info[4];  // count, LODs, capacity, occlusion on
+    float cull[4];     // px a unit of tan on screen, kMinPixels, kLodBand, 0
+  } staged{};
+};
+
+// A family of `capacity` instances (≤ kMaxInstances) of `meshes` (≤ kMaxBuckets LODs in all)
+// lit by `materials` (linear rgb). Its cull needs the pyramid: `bind_family_hiz` after it is
+// made (and again after a resize).
+void create_family(gpu::Device& device, const InstancePipelines& ip, InstanceFamily& family,
+                   std::string_view label, std::span<const MeshSource> meshes,
+                   std::span<const float> materials_rgb, uint32_t capacity);
+void bind_family_hiz(gpu::Device& device, const InstancePipelines& ip, InstanceFamily& family,
+                     const Hiz& hiz);
+
+// Write instances [first, first + n): this frame's place, and the last frame's from the place
+// written before (or this one, the first time and after `cut_family`). Grows `count` to cover.
+void set_instances(gpu::Device& device, InstanceFamily& family, uint32_t first,
+                   std::span<const Instance> instances);
+void set_instance_count(InstanceFamily& family, uint32_t count);
+// The camera cut: the next write moves nothing since the last frame.
+void cut_family(InstanceFamily& family);
+
+// The family's parameters for this frame (the screen's scale for the LOD, whether the last
+// frame's pyramid may cull) and its draws' arguments reset.
+void prepare_family(gpu::Device& device, InstanceFamily& family, const FrameView& view,
+                    uint32_t render_height, bool occlusion);
+
+// The cull ("instances.cull", or "instances.cull.late" for the late phase) over every family.
+void encode_instances_cull(std::span<InstanceFamily* const> families, const InstancePipelines& ip,
+                           const gpu::PipelineSet& pipelines, FrameRecorder& rec,
+                           wgpu::CommandEncoder& encoder, const wgpu::BindGroup& frame, bool late);
+// The depth prepass of one phase's lists ("instances.depth" / "instances.depth.late"), over the
+// frame's depth (loaded).
+void encode_instances_depth(std::span<InstanceFamily* const> families, const InstancePipelines& ip,
+                            const gpu::PipelineSet& pipelines, FrameRecorder& rec,
+                            wgpu::CommandEncoder& encoder, const FrameTargets& targets,
+                            const wgpu::BindGroup& frame, const wgpu::BindGroup& light, bool late);
+// The colour pass ("instances"): both phases' lists into the HDR and motion targets (loaded),
+// where the depth is `equal`.
+void encode_instances(std::span<InstanceFamily* const> families, const InstancePipelines& ip,
+                      const gpu::PipelineSet& pipelines, FrameRecorder& rec,
+                      wgpu::CommandEncoder& encoder, const FrameTargets& targets,
+                      const wgpu::BindGroup& frame, const wgpu::BindGroup& light);
+// The overdraw probe (labs; needs create_instance_pipelines' overdraw_probe): every fragment of
+// both phases' lists that passes the depth test adds one to `count` (loaded), as
+// render/terrain.hpp's probe does.
+void encode_instances_overdraw(std::span<InstanceFamily* const> families,
+                               const InstancePipelines& ip, const gpu::PipelineSet& pipelines,
+                               wgpu::CommandEncoder& encoder, const FrameTargets& targets,
+                               const wgpu::BindGroup& frame, const wgpu::BindGroup& light,
+                               const wgpu::TextureView& count, bool after_prepass);
+
+// Labs and tests (blocks): what the family's last cull did.
+InstanceStats read_instance_stats(gpu::Device& device, const InstanceFamily& family);
+
+}  // namespace ge::render

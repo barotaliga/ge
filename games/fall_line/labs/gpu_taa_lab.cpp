@@ -172,7 +172,7 @@ void run(ge::lab::Lab& lab) {
     }
     view.frame = static_cast<uint64_t>(i);
     view.time_s = i / 60.0;
-    fall_line::app::draw(*device, *frame, view, target.view);
+    fall_line::app::draw(*device, *frame, view, {}, target.view);
   }
   const ge::gpu::Image moving = ge::gpu::read_now(*device, target);
 
@@ -181,7 +181,7 @@ void run(ge::lab::Lab& lab) {
     fall_line::app::cut(*frame);
     for (int i = 0; i < count; ++i) {
       view.frame = static_cast<uint64_t>(i);
-      fall_line::app::draw(*device, *frame, view, target.view);
+      fall_line::app::draw(*device, *frame, view, {}, target.view);
     }
     return ge::gpu::read_now(*device, target);
   };

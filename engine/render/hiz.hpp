@@ -2,7 +2,7 @@
 // of R32F, each texel the FARTHEST depth under it (reversed-z: the minimum). A box whose nearest
 // depth is farther than the pyramid's texel over its screen rectangle is hidden behind what the
 // prepass drew, so a cull can drop it after reading one texel at the mip its size picks. The
-// instanced draws cull against it (M7d); the terrain is its first writer.
+// instance families cull against it (render/instances.hpp); the terrain is its first writer.
 //
 // THE MIPS: mip 0 is half the render size (rounding down, at least one texel), each next halves
 // the last, down to 1x1. A texel covers every texel of the level below that overlaps it, so an
