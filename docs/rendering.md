@@ -748,6 +748,12 @@ contract (scenes, captions, sheets). The renderer's half is:
   buffer (TAA, clouds) at a cut, and a capture renders a fixed number of settle frames
   first. The same scene, settings and frame count give the same picture on the same
   driver.
+- **Distance with every capture.** `read_distance` (`render/frame.hpp`) reads the frame's
+  depth back and unprojects each pixel to how far from the eye it lies (`depth_distance` in
+  `render/view.hpp`: the near plane's point through the pixel, scaled by 1 / depth; infinity
+  for the sky). A lab hands it with the shot, and the picture diff (`engine/lab/diff.hpp`,
+  `docs/labs.md` § The picture diff) judges a change band by band, so far scenery made cheaper
+  is held to a looser floor than what is at the skis.
 - **Per-pass stats with every capture**: GPU ms, draws, instances and triangles, so a
   lab sheet can show what a picture costs beside the picture.
 - **Golden captures on the software adapter.** The development container and CI's

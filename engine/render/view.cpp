@@ -8,6 +8,7 @@
 #include "render/view.hpp"
 
 #include <cmath>
+#include <limits>
 
 namespace ge::render {
 
@@ -140,6 +141,15 @@ CameraMatrices camera_matrices(const FrameView& view, double aspect) {
     }
   }
   return c;
+}
+
+double depth_distance(const CameraMatrices& m, double ndc_x, double ndc_y, float depth) {
+  if (!(depth > 0)) return std::numeric_limits<double>::infinity();
+  const float clip[4] = {static_cast<float>(ndc_x), static_cast<float>(ndc_y), 1.0f, 1.0f};
+  float p[4];
+  transform(m.inv_view_proj, clip, p);
+  const double x = p[0] / p[3], y = p[1] / p[3], z = p[2] / p[3];
+  return std::sqrt(x * x + y * y + z * z) / depth;
 }
 
 }  // namespace ge::render

@@ -37,6 +37,7 @@
 #include <cstring>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "fall_line/app/frame.hpp"
@@ -356,6 +357,10 @@ void run(ge::lab::Lab& lab) {
     for (const auto& racers : sc.laid) fall_line::app::track(*frame, {racers});
     const ge::gpu::Image img = still(sc);
     frame->recorder.wait(*device);
+    // How far away each pixel is, off this still's depth, for a diff (`--compare`).
+    ge::lab::DistanceMap distance{static_cast<int>(frame->targets.width),
+                                  static_cast<int>(frame->targets.height),
+                                  ge::render::read_distance(*device, frame->targets, sc.view)};
     const ge::render::InstanceStats trees = ge::render::read_instance_stats(*device, frame->forest);
     const ge::render::InstanceStats figures =
         ge::render::read_instance_stats(*device, frame->figures);
@@ -417,7 +422,7 @@ void run(ge::lab::Lab& lab) {
                "Check engine/gpu/target.cpp's Readback. Skill: gpu.");
       continue;
     }
-    lab.shot(shot_of(sc), picture, Det::measured);
+    lab.shot(shot_of(sc), picture, Det::measured, std::move(distance));
   }
   lab.note(costs);
   lab.metric("overdraw-faults", overdraw_faults, "count");

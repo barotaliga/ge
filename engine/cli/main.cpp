@@ -166,6 +166,18 @@ Outcome run(const Args& a) {
   if (name == "build") return run_build(build_options(a));
   if (name == "test") return run_test(build_options(a), flag_value(a, "filter"));
   if (name == "check") return run_check(build_options(a));
+  if (name == "lab diff") {
+    LabDiffOptions diff;
+    diff.id = a.words[0];
+    if (const std::string against = flag_value(a, "against"); !against.empty()) {
+      diff.against = against;
+    }
+    diff.run = has_flag(a, "run");
+    diff.bands = flag_value(a, "bands");
+    diff.psnr = flag_value(a, "psnr");
+    diff.passthrough = a.passthrough;
+    return run_lab_diff(build_options(a), diff);
+  }
   if (name == "precheck") {
     const std::string preset = flag_value(a, "preset");
     return run_precheck(build_options(a), preset.empty()
