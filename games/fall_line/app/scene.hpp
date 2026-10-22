@@ -1,16 +1,16 @@
 // FALL LINE'S THINGS ON THE MOUNTAIN, as instance families (render/instances.hpp): the FOREST,
 // every tree of the map placed once at load, and the FIGURES, every racer's pieces
-// (skier/app/figure.hpp) placed every frame from the run. Both are placeholders until the world
-// is drawn (docs/goals.md M8: the forest's own shapes and snow, the skinned figure): a faceted
-// spruce cone, a bare broadleaf crown and a snag's trunk; a figure of boxes, cylinders and a
-// ball, each racer in his own jacket.
+// (skier/app/figure.hpp) placed every frame from the run. The trees are the mountain's own
+// (mountain/app/trees.hpp: five forms, four variants a form, three LODs, the snow on the boughs,
+// every kind in its colours); the figure is a placeholder of boxes, cylinders and a ball until
+// the skinned figure lands (docs/goals.md M8e), each racer in his own jacket.
 //
 // The meshes are unit shapes: a tree is 1 m tall with a crown 1 m in radius, scaled by its own
 // height and crown; a figure's box and ball are 1 m across and its cylinder 1 m across and tall,
 // scaled by each piece's size.
 //
 // ge:summary Fall Line's forest and figures as instance families: meshes, materials, placement
-// ge:keywords fall-line scene forest trees figures racers placeholder instances materials
+// ge:keywords fall-line scene forest trees figures racers instances materials
 // ge:keywords forest_meshes figure_meshes tree_instances figure_instances jacket
 // ge:skill render
 #pragma once
