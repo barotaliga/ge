@@ -53,6 +53,8 @@ std::vector<std::string> wrap(const std::string& text, size_t cols) {
   return lines;
 }
 
+}  // namespace
+
 // THE CAPTION BAND: the picture with its words under it — the title, the caption, what to look
 // for, and the inputs it was made under.
 Picture framed(const Shot& shot, const Picture& picture) {
@@ -82,8 +84,6 @@ Picture framed(const Shot& shot, const Picture& picture) {
   }
   return out;
 }
-
-}  // namespace
 
 std::string_view kind_name(LabKind kind) {
   switch (kind) {

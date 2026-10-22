@@ -253,6 +253,7 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
   | `ge replay <log>` | the log played back; a digest it misses is a determinism break |
   | `ge state <log> --step=N` | everything that decides the next step, after N steps |
   | `ge diverge <a> <b>` | the first input and the first step two runs part, and the fields that differ |
+  | `ge shot <log> --step=N --view=V` | a still of the run at step N: the game's view drawn on the CPU raster, framed with its caption, the seed, the options, the step and the digest (`runs/<game>-<seed>-<view>-<step>.png`); without a log, the pilot's run of `--seed`. Fall Line's views: `near` (the piste 160 m round the player, the field on it) and `map` (the whole map) |
 
   The protocol is stated once in `engine/play/session.hpp`. The session opens with `hello`
   (the game, the seed and options, the step rate, the axes, the ops); then:

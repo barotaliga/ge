@@ -1,8 +1,8 @@
-// ge play, sim, replay, state and diverge (play.hpp): the play executable run and its JSON
+// ge play, sim, replay, state, diverge and shot (play.hpp): the play executable run and its JSON
 // answer turned into an outcome.
 //
 // ge:summary The play commands: build, run the play executable, its JSON answer as an outcome
-// ge:keywords cli ge play sim replay state diverge play_answer play_exe
+// ge:keywords cli ge play sim replay state diverge shot play_answer play_exe
 // ge:skill agent-interface
 // ge:test tests/cli_play_test.cpp
 #include "cli/play.hpp"
@@ -187,6 +187,19 @@ Outcome play_answer(const BuildOptions& o, const std::string& command, int code,
     out.summary = state == "-1" ? "the runs never part in their common steps"
                                 : "the runs part after step " + state;
     if (state != "-1") out.next = "ge state <log> --step=" + state + " for either side";
+  } else if (command == "shot") {
+    const std::string png = rel_path(o.repo, fs::path(text_of(m, "png")));
+    out.written.push_back(png);
+    std::string views;
+    for (int i = 0; m.contains("views." + std::to_string(i) + ".name"); i++) {
+      const std::string k = "views." + std::to_string(i) + ".";
+      views += "  " + text_of(m, k + "name") + ": " + text_of(m, k + "help") + "\n";
+    }
+    out.text = "  " + text_of(m, "caption") + "\n  views:\n" + views;
+    out.summary = "the " + text_of(m, "view") + " view after " + text_of(m, "step") +
+                  " steps (digest " + text_of(m, "digest") + "): " + png;
+    out.next = "open " + png + "; ge state <log> --step=" + text_of(m, "step") +
+               " gives the numbers behind it";
   }
   return out;
 }
@@ -225,6 +238,18 @@ Outcome run_state(const BuildOptions& o, const std::string& log, const std::stri
 
 Outcome run_diverge(const BuildOptions& o, const std::string& a, const std::string& b) {
   return run_exe(o, "diverge", " diverge \"" + absolute(a) + "\" \"" + absolute(b) + "\"");
+}
+
+Outcome run_shot(const BuildOptions& o, const std::string& log, const std::string& seed,
+                 const std::string& step, const std::string& view,
+                 const std::vector<std::string>& options) {
+  std::string args = " shot --out=" + quoted_path(o.repo / "runs");
+  if (!log.empty()) args += " \"" + absolute(log) + "\"";
+  if (log.empty() && !seed.empty()) args += " \"--seed=" + seed + "\"";
+  if (!step.empty()) args += " \"--step=" + step + "\"";
+  if (!view.empty()) args += " \"--view=" + view + "\"";
+  for (const std::string& w : options) args += " \"" + w + "\"";
+  return run_exe(o, "shot", args);
 }
 
 }  // namespace ge::cli

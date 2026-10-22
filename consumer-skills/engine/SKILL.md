@@ -63,10 +63,11 @@ An engine skill (one listed in the `ge:skills` block of `AGENTS.md`) is rewritte
 1. Read the release notes (`CHANGELOG.md` in the engine) between the pinned version and the new
    one. While the engine is on `0.x`, a minor release may break the API.
 2. Run the labs you care about with `--tag=before` on the old pin.
-3. Set `GE_ENGINE_VERSION` to the new release, and `GE_ENGINE_SHA256` to the `-src.tar.gz` line
-   of its `SHA256SUMS`.
-4. `ge build` (it fetches the new release and builds its `ge`), then `ge skills sync` (the new
-   release's skills).
+3. Run the NEW release's ge (its release download, or `make ge` in an engine checkout of that
+   release): `<new ge> upgrade --engine-sha256=<the -src.tar.gz line of its SHA256SUMS>`. It
+   rewrites `cmake/engine.cmake`, syncs the new release's skills and runs `ge doctor`; it never
+   moves a repo back to an older release.
+4. `ge build` (it fetches the new release and builds its `ge`; from here plain `ge` is that one).
 5. `ge check`, and every lab again with `--compare=before`. A digest that moved is a behaviour
    the release changed: find it in the notes before you accept it.
 6. One commit: the pin, the synced skills, any fixes, and the lab comparison in the PR.

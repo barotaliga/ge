@@ -1,11 +1,11 @@
-// How `ge sim`, `ge replay`, `ge state` and `ge diverge` read the play executable's answer back
-// (engine/cli/play.hpp): each JSON answer becomes the outcome's result with a short text, an
-// error answer becomes a finding with its paths relative to the repo, a replay that misses its
-// digest is an error, and a missing answer names the log. Running them for real on a scaffolded
+// How `ge sim`, `ge replay`, `ge state`, `ge diverge` and `ge shot` read the play executable's
+// answer back (engine/cli/play.hpp): each JSON answer becomes the outcome's result with a short
+// text, an error answer becomes a finding with its paths relative to the repo, a replay that misses
+// its digest is an error, and a missing answer names the log. Running them for real on a scaffolded
 // repo is the packaging workflow's `scaffold` job.
 //
 // ge:summary Tests: the play executable's JSON answers read back as ge outcomes and findings
-// ge:keywords test cli ge play sim replay state diverge play_answer outcome
+// ge:keywords test cli ge play sim replay state diverge shot play_answer outcome
 // ge:skill agent-interface testing
 // ge:test tests/cli_play_test.cpp
 #include <string>
@@ -88,4 +88,16 @@ TEST(an_error_answer_becomes_a_finding_relative_to_the_repo) {
   const Outcome none = play_answer(repo(), "sim", 134, "Segmentation fault\n");
   CHECK(none.findings.size() == 1 && has(none.findings[0].what, "no JSON answer (exit 134)") &&
         has(none.findings[0].where, "ge-play.log"));
+}
+
+TEST(a_shot_answer_names_its_png_and_the_views) {
+  const std::string png = (repo().repo / "runs" / "g-38-map-60.png").string();
+  const Outcome o = play_answer(repo(), "shot", 0,
+                                "{\"png\":" + json_str(png) +
+                                    ",\"view\":\"map\",\"step\":60,\"digest\":\"00000000000000ff\","
+                                    "\"caption\":\"the field\",\"width\":8,\"height\":8,"
+                                    "\"views\":[{\"name\":\"map\",\"help\":\"from above\"}]}");
+  CHECK(exit_of(o) == 0 && o.written.size() == 1 && o.written[0] == "runs/g-38-map-60.png");
+  CHECK_MSG(has(o.summary, "the map view after 60 steps (digest 00000000000000ff)"), o.summary);
+  CHECK(has(o.text, "the field") && has(o.text, "map: from above"));
 }

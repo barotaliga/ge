@@ -8,6 +8,7 @@
 
 #include "core/num.hpp"
 #include "core/num_text.hpp"
+#include "lab/lab.hpp"
 #include "play/json_read.hpp"
 
 namespace ge::play {
@@ -239,6 +240,52 @@ std::optional<Played> replay(const GameSpec& spec, const InputLog& log, std::str
   }
   for (int64_t i = 0; i < log.steps(); i++) s.step(log.at(i));
   return played_of(s);
+}
+
+std::optional<Still> shot_at(const GameSpec& spec, const InputLog& log, int64_t step,
+                             std::string_view view, std::string& error) {
+  if (spec.views.empty()) {
+    error = std::string(spec.name) + " lists no views";
+    return std::nullopt;
+  }
+  const View* chosen = view.empty() ? &spec.views[0] : nullptr;
+  std::string names;
+  for (const View& v : spec.views) {
+    if (v.name == view) chosen = &v;
+    names += std::string(names.empty() ? "" : ", ") + v.name;
+  }
+  if (!chosen) {
+    error = "no view `" + std::string(view) + "`; the views are " + names;
+    return std::nullopt;
+  }
+  if (step < 0 || step > log.steps()) {
+    error =
+        "step " + std::to_string(step) + " is outside the log's 0.." + std::to_string(log.steps());
+    return std::nullopt;
+  }
+  Setup setup;
+  if (!setup_of(spec, log, setup, error)) return std::nullopt;
+  Session s(spec, setup);
+  if (!s.ok()) {
+    error = s.error();
+    return std::nullopt;
+  }
+  for (int64_t i = 0; i < step; i++) s.step(log.at(i));
+  Still out;
+  out.view = chosen->name;
+  out.step = step;
+  out.digest = s.run().digest();
+  lab::Picture raw;
+  if (!s.run().shoot(chosen->name, raw, out.caption, error)) return std::nullopt;
+  lab::Shot words;
+  words.title = std::string(spec.name) + " " + chosen->name + " at step " + std::to_string(step);
+  words.caption = out.caption;
+  words.inputs.emplace_back("seed", core::num::to_string(setup.seed));
+  for (const auto& [k, v] : setup.options) words.inputs.emplace_back(k, v);
+  words.inputs.emplace_back("t", core::num::to_fixed(static_cast<double>(step) / spec.hz, 2) + "s");
+  words.inputs.emplace_back("digest", hex64(out.digest));
+  out.picture = lab::framed(words, raw);
+  return out;
 }
 
 std::optional<std::string> state_at(const GameSpec& spec, const InputLog& log, int64_t step,
