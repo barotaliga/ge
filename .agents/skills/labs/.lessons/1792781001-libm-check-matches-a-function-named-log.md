@@ -10,3 +10,7 @@ namespace, so a function of our own named `log` reads as a call to the platform'
 The log channel's writer is `output::log_on` for that reason. Name a function in `engine/core`,
 `engine/lab`, `engine/audio`, a plugin's simulation or any `labs/` directory so it is not one
 of the transcendentals' names, or the check fails on CI.
+
+It matches inside a string too: a chart label written `"log10(1 + jolt)"` failed CI's
+`libm-check` once `make fmt` had joined it onto the line the check reads. Spell a log scale
+in words in labels ("jolt (m/s^3, log scale)").
