@@ -25,15 +25,17 @@ constexpr uint32_t kGroup = 64;  // particles_sim.wgsl's workgroup size
 struct Params {
   float step[4];
   uint32_t info[4];
+  float air[4];
 };
 
 }  // namespace
 
-void step_particle(Particle& p, float dt) {
+void step_particle(Particle& p, float dt, const float air[3]) {
   p.v[1] -= static_cast<float>(kGravity) * p.fall * dt;
   const float keep = std::exp(-p.drag * dt);
   for (int k = 0; k < 3; ++k) {
-    p.v[k] *= keep;
+    const float a = air ? air[k] : 0.0f;
+    p.v[k] = a + (p.v[k] - a) * keep;
     p.p[k] += p.v[k] * dt;
   }
   p.age += dt;
@@ -127,7 +129,8 @@ void clear_particles(gpu::Device& device, Particles& ps) {
   device.queue.WriteBuffer(ps.slots, 0, dead.data(), dead.size() * sizeof(Particle));
 }
 
-void prepare_particles(gpu::Device& device, Particles& ps, double dt, double near_m) {
+void prepare_particles(gpu::Device& device, Particles& ps, double dt, double near_m,
+                       const double* air) {
   const uint32_t cap = ps.settings.capacity;
   // More births than slots: only the last `cap` live to be seen.
   size_t first = ps.births.size() > cap ? ps.births.size() - cap : 0;
@@ -148,6 +151,7 @@ void prepare_particles(gpu::Device& device, Particles& ps, double dt, double nea
   p.step[1] = static_cast<float>(near_m);
   p.step[2] = ps.settings.soft_m;
   p.info[0] = cap;
+  for (int k = 0; k < 3; ++k) p.air[k] = air ? static_cast<float>(air[k]) : 0.0f;
   device.queue.WriteBuffer(ps.params, 0, &p, sizeof p);
 }
 
