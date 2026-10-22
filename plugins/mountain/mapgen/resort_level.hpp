@@ -16,6 +16,8 @@
 #pragma once
 
 #include <cstddef>
+#include <optional>
+#include <string>
 
 #include "mountain/mapgen/resort_build.hpp"
 #include "mountain/mapgen/types.hpp"
@@ -29,5 +31,13 @@ Level resort_base(ResortAttempt& a, int laps);
 // Stand course `index` of `a` up on `level` (its base): the track, the gates, the start line, the
 // kickers, cliffs and drifts, the day, the mountain's figures, the grade and `resort->course`.
 void set_course(Level& level, const ResortAttempt& a, size_t index);
+
+// R20 — course `index` of `a` stood up on `level` (its base) with the TERRAIN PARK laid down it:
+// the park planned first, clear of the course's own kickers, drops and drifts, each run-out far
+// enough from the next ramp for a gate or two to stand between; then the gates set round it
+// (`course_gates` with the park), and any kicker they could not be set round dropped, until they
+// stand; then the park stamped into the ground. Why no park stands (the course is then set
+// without one), or nothing.
+std::optional<std::string> set_parked_course(Level& level, const ResortAttempt& a, size_t index);
 
 }  // namespace ge::mountain::mapgen

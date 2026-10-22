@@ -1,5 +1,5 @@
 // R4, R9 — THE KICKERS: crests shaped so a skier at speed leaves the snow (the park's built
-// landings, R20, arrive with M4c).
+// kickers, R20, are park.hpp's).
 //
 // A kicker is a profile along the way a skier crosses it: a RAMP rising `height` over `ramp`
 // m as t² (steepest right at the lip, so it hands the skier upward speed at the one moment it

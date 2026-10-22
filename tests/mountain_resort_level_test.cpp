@@ -11,7 +11,6 @@
 //     turned to (R15); asking for a course by id races that course on the same snow, and asking
 //     for a colour races the nearest colour the area has (R28).
 //   * THE DEALT COLOUR: `deal_grade` keeps its odds over a thousand seeds.
-//   * THE VERSIONS: a version that lays the ski routes (9, 10) is refused by name.
 //
 // A debug build (sanitizers) holds the first row; a release build holds them all, and the courses
 // asked for by id and by colour.
@@ -237,19 +236,4 @@ TEST(the_dealt_colour_keeps_its_odds) {
              ", its odds ", std::to_string(mg::rules::grade::odds[g])}));
   }
   CHECK(mg::deal_grade(38) == mg::deal_grade(38));
-}
-
-TEST(the_versions_that_lay_routes_are_refused_by_name) {
-  for (const int version : {9, 10}) {
-    mg::GenerateOptions opts;
-    opts.version = version;
-    bool refused = false;
-    try {
-      mg::generate_level(38, opts);
-    } catch (const mg::GenerateError& e) {
-      refused = std::string(e.what()).find("M4c") != std::string::npos;
-    }
-    CHECK_MSG(refused, cat({"version ", std::to_string(version),
-                            " was not refused naming the milestone that builds it"}));
-  }
 }

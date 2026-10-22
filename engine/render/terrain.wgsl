@@ -2,7 +2,8 @@
 // vertex index and placed by its instance's level and tile; the odd vertices morphed onto the
 // coarser grid toward the level's edge, the vertices a finer level covers sunk under it; lit by
 // the sun past the ground's own horizon and the sky through the shared functions of frame.wgsl,
-// and seen through the haze.
+// and seen through the haze. Drawn twice: depth only first (`terrain.depth`), then shaded where
+// the depth is `equal`, so every visible pixel is shaded once; it writes its motion beside it.
 #include "render/wgsl/frame.wgsl"
 #include "render/wgsl/terrain_common.wgsl"
 
@@ -18,28 +19,10 @@ const kMorphEnd = 0.95;
 @group(1) @binding(5) var horizon0: texture_2d<f32>;
 @group(1) @binding(6) var horizon1: texture_2d<f32>;
 
-// How much of the sun reaches world (x, z) past the ground's own horizon (render/horizon.hpp):
-// each of the two maps either side of the sun's bearing gives a soft step where the sun's
-// elevation crosses the horizon, blended by where the sun lies between their bearings.
-fn horizon_light(xz: vec2f) -> f32 {
-  if (params.horizon.w == 0.0) {
-    return 1.0;
-  }
-  let maxc = vec2f(params.horizon_size.xy) - 1.0;
-  let g = mirror_grid((xz - params.horizon_grid.xy) / params.horizon_grid.z, maxc);
-  let uv = (g + 0.5) / vec2f(params.horizon_size.xy);
-  let a = textureSampleLevel(horizon0, linear_clamp, uv, 0.0).r;
-  let b = textureSampleLevel(horizon1, linear_clamp, uv, 0.0).r;
-  let odd = params.horizon.y > 0.5;
-  let lo = select(a, b, odd);
-  let hi = select(b, a, odd);
-  let sun_tan = frame.sun.y / max(length(frame.sun.xz), 1e-4);
-  let w = params.horizon.z;
-  return mix(smoothstep(-w, w, sun_tan - lo), smoothstep(-w, w, sun_tan - hi), params.horizon.x);
-}
-
 struct VertexOut {
-  @builtin(position) position: vec4f,
+  // Invariant: the depth prepass and the colour pass run this same vertex code, and the colour
+  // pass's `equal` test needs the very same depth bits from both.
+  @invariant @builtin(position) position: vec4f,
   @location(0) rel: vec3f,  // camera-relative world position, m
   @location(1) xz: vec2f,   // world plan position, m
 }
@@ -78,8 +61,13 @@ fn vs_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) iid: u32) -
   return out;
 }
 
+struct FragmentOut {
+  @location(0) colour: vec4f,
+  @location(1) motion: vec4f,  // rg: the screen motion (uv), b: reactive (0: a solid surface)
+}
+
 @fragment
-fn fs_main(in: VertexOut) -> @location(0) vec4f {
+fn fs_main(in: VertexOut) -> FragmentOut {
   let maxc = grid_max(params);
   let g = (in.xz - params.field.xy) / params.field.z;
   let uv = (mirror_grid(g, maxc) + 0.5) / vec2f(params.field_size.xy);
@@ -87,7 +75,17 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
   let n = normalize(textureSampleLevel(normals, linear_clamp, uv, 0.0).xyz * vec3f(flip.x, 1.0, flip.y));
   let a = textureSampleLevel(albedo, linear_clamp, uv, 0.0).rgb;
   let y = in.rel.y + frame.eye.y;
-  let sun = sun_light(y) * max(dot(n, frame.sun.xyz), 0.0) * horizon_light(in.xz);
+  let sun = sun_light(y) * max(dot(n, frame.sun.xyz), 0.0) * ground_shadow(params, horizon0, horizon1, linear_clamp, frame.sun.xyz, in.xz);
   let c = a / PI * (sun + sky_irradiance(n));
-  return vec4f(haze(c, in.position.xy * frame.size.zw, length(in.rel)), 1.0);
+  var out: FragmentOut;
+  out.colour = vec4f(haze(c, in.position.xy * frame.size.zw, length(in.rel)), 1.0);
+  out.motion = vec4f(screen_motion(frame, vec4f(in.rel, 1.0), in.position.xy), 0.0, 0.0);
+  return out;
+}
+
+// The overdraw probe (labs only): one per fragment that passes the depth test, summed by
+// additive blending.
+@fragment
+fn fs_count() -> @location(0) vec4f {
+  return vec4f(1.0, 0.0, 0.0, 0.0);
 }

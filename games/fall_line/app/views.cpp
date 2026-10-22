@@ -5,6 +5,7 @@
 // ge:skill render
 #include "fall_line/app/views.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 
@@ -99,6 +100,19 @@ bool make_view(const Level& level, std::string_view name, ge::render::FrameView&
     return false;
   }
   return true;
+}
+
+void chase_view(const Level& level, const ge::skier::SkierState& s, ge::render::FrameView& v,
+                double back, double up) {
+  const double flat = std::hypot(s.vx, s.vz);
+  const double way = flat > 1.0 ? std::atan2(s.vx, s.vz) : s.heading;
+  const double ex = s.x - back * std::sin(way), ez = s.z - back * std::cos(way);
+  v.eye[0] = ex;
+  v.eye[2] = ez;
+  v.eye[1] = std::max(s.y + up, level.ground_at(ex, ez) + 1.2);
+  const double tx = s.x - ex, tz = s.z - ez, ty = s.y + 1.0 - v.eye[1];
+  v.heading = std::atan2(tx, tz);
+  v.pitch = std::atan2(ty, std::hypot(tx, tz));
 }
 
 }  // namespace fall_line::app

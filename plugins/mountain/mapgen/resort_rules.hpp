@@ -3,11 +3,12 @@
 // lanes, the hub, the wind tunnels and the courses. Each
 // group's comment says what its numbers mean.
 //
-// Not here yet: the real faces' numbers (docs/goals.md M4d) and the ski routes' (R42, M4c).
+// Not here yet: the real faces' numbers (docs/goals.md M4d).
 // Held by tests/mountain_resort_build_test.cpp (every ski area is built off these numbers).
 //
 // ge:summary The resort rule book's numbers (R25-R30) as constexpr namespaces
 // ge:keywords resort-rules tree-line-massif massif lift network piste road hub tunnel course
+// ge:keywords ski-route orange-route wild-route route-jump r42
 // ge:skill mountain
 // ge:test tests/mountain_resort_build_test.cpp
 #pragma once
@@ -269,6 +270,81 @@ inline constexpr Band share{0.55, 0.9};
 inline constexpr double radius = 45;
 }  // namespace gates
 }  // namespace course
+
+// R42 — THE SKI ROUTES (ski_routes.hpp): the ORANGE runs past black, found on the mountain as it
+// lies. How many a map marks at most (each off a top of its own), `count`; the squares the face
+// is searched over, `cell` m on a side; how far from a top station's middle a route leaves its
+// pad, `rim` m, at `bearings` bearings round it; the most its steepest colour window may fall,
+// `steepest` m per m (48°: an expert couloir, never a face only a rope skis); the pitch past
+// which the ground is a CLIFF, `cliff` m per m (52°), read over `pitch_window` m along the line
+// and over `baseline` m down the fall line; the least clear ground between the line and a
+// trunk's bark, `open` m; how near a lift's line it may come, `lift` m; how near another run's
+// corridor it may run, `clear` m, and for how far, `beside` m, before it ends on one; how far
+// inside the map's edge it keeps, `edge` m; its length and least vertical; how far apart two
+// routes keep, `apart` m, past their first `lead` m; the line's smoothing passes and its
+// stations' spacing; the marked corridor's width and its stakes' spacing down both edges.
+namespace route {
+inline constexpr Band count{0, 2};
+inline constexpr double cell = 10;
+inline constexpr double rim = 30;
+inline constexpr int bearings = 24;
+inline constexpr double steepest = 1.1;
+inline constexpr double cliff = 1.3;
+inline constexpr double pitch_window = 20;
+inline constexpr double baseline = 10;
+inline constexpr double open = 1.5;
+inline constexpr double lift = 16;
+inline constexpr double clear = 14;
+inline constexpr double beside = 60;
+inline constexpr double edge = 60;
+inline constexpr Band length{400, 3000};
+inline constexpr double vertical = 250;
+inline constexpr double lead = 120;
+inline constexpr double apart = 60;
+inline constexpr int smooth = 4;
+inline constexpr double station = 4;
+inline constexpr double width = 14;
+inline constexpr double every = 15;
+
+// THE WILD LINE (v10): what the search is drawn to and what is laid down the line it finds. A
+// step's cost as a share of its length through the WOODS (a square with a trunk within `near` m
+// of its middle), each metre a trunk must be felled for as `fell` metres more; along an EDGE
+// (beside ground past the cliff's pitch, or on a cliff's shelf within `shelf` m of its edge),
+// `edge`; the extra share a step straight down the fall line costs, `fall`; a DROP (a step two
+// squares long over ground past the cliff's pitch, falling no more than `drop` m) at `huck` of
+// its length, and the most a route carries, `drops`; the corridor's width through the woods;
+// the line's smoothing passes, fewer so a turn stays tight.
+namespace wild {
+inline constexpr double woods = 0.5;
+inline constexpr double near = 9;
+inline constexpr double fell = 3;
+inline constexpr double edge = 0.45;
+inline constexpr double shelf = 18;
+inline constexpr double fall = 0.7;
+inline constexpr double drop = 16;
+inline constexpr double huck = 0.7;
+inline constexpr int drops = 3;
+inline constexpr double width = 8;
+inline constexpr int smooth = 2;
+// THE JUMPS stood on the line's rolls: how many, the lip over the ground, THE GAP dug past the
+// lip (its length down the line, longer the higher the lip, and its depth), the ramp, the
+// landing and the width across, m; the least the ground steepens past the lip, m per m; the
+// least arc between two, and how far from the line's ends and its drops they keep, m.
+namespace jump {
+inline constexpr Band count{1, 3};
+inline constexpr Band height{3, 4.5};
+inline constexpr Band gap{5, 9};
+inline constexpr double dig = 2.5;
+inline constexpr double ramp = 14;
+inline constexpr double landing = 24;
+inline constexpr double width = 7;
+inline constexpr double roll = 0.04;
+inline constexpr double spacing = 110;
+inline constexpr double ends = 90;
+inline constexpr double clear = 40;
+}  // namespace jump
+}  // namespace wild
+}  // namespace route
 
 }  // namespace resort_rules
 

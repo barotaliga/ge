@@ -1,0 +1,5 @@
+# seed version region, then its tricks map and its park (mountain_park_test)
+38 v1 alpine attempt=0 course=- length=3092 park=lmhlmhlm lips=1464-2770 gates=27 digest=8c279f4b
+1 v1 maritime attempt=0 course=- length=3260 park=lmlmhllllml lips=1494-3052 gates=28 digest=a4cfda0d
+3 v1 fell attempt=0 course=- length=3172 park=llmhlllmhlm lips=174-2718 gates=27 digest=1f7759cd
+38 v8 alpine attempt=0 course=8 length=4299 park=lmhlmhlmhl lips=1858-4117 gates=47 digest=414f7d09

@@ -260,18 +260,22 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 | `slalom` | picture | plugin:mountain | `plugins/mountain/mapgen/slalom.hpp` (a slalom set over a map, both runs, straightened and from above) | M4b4b (now) |
 | `speed-events` | picture | plugin:mountain | `plugins/mountain/mapgen/speed_events.hpp` (the downhill, super-G and giant slalom set over a map, straightened and from above) | M4b4c (now) |
 | `speed-ski` | picture | plugin:mountain | `plugins/mountain/mapgen/speed_ski.hpp` (a speed-skiing track cut down a map's face, its profile from the side and the map from above) | M4b4d (now) |
+| `ski-cross` | picture | plugin:mountain | `plugins/mountain/mapgen/ski_cross.hpp` (a ski-cross course built over a map: close up, its profile with the mean fall taken out, the map from above) | M4b4e (now) |
+| `park` | picture | plugin:mountain | `plugins/mountain/mapgen/park.hpp` (the terrain park on a tricks map: close up, its profile with the mean fall taken out, the map from above; `--version=1,8`) | M4b5 (now) |
 | `resort` | picture | plugin:mountain | `plugins/mountain/mapgen/resort_build.hpp` (the ski area, its courses) | M4b3d (now) |
 | `junctions` | picture | plugin:mountain | `plugins/mountain/mapgen/network_stamp.cpp` (where runs meet) | M4b3d (now) |
-| `routes`, `skijump-hills` | picture | plugin:mountain | the routes, the jump hills | M4c |
+| `routes` | picture | plugin:mountain | `plugins/mountain/mapgen/ski_routes.hpp`, `route_features.hpp` (the ski routes on a ski area: the area with every route in orange, each route close up with its drops and jumps, each from the side with its pitch against a black's ceiling and a route's; `--version=9,10`) | M4c1 (now) |
+| `skijump-hills` | picture | plugin:mountain | the jump hills | M4c2 |
 | `real-faces` | picture | plugin:mountain | the real faces | M4d |
 | `sim` | drive | game:fall_line | `games/fall_line/sim` (the step, the course, the bot, the field) | M5b–M5c (now) |
 | `ride` | scenario | plugin:skier | `plugins/skier` (`step_skier`, the snow, the limits) | M5a (now) |
 | `play` | drive | game:fall_line | `games/fall_line/sim/play` (an agent over stdio) | M5c (now) |
 | `gpu-capture` | picture | engine | `engine/gpu` (the headless capture) | M6 (now) |
 | `frame-pace` | bench | engine | the platform's frame loop | M6 (now) |
-| `world` | picture | game:fall_line | Fall Line's frame from named views of a seed (`games/fall_line/labs/gpu_world_lab.cpp`) | M7a (now) |
+| `world` | picture | game:fall_line | Fall Line's frame from named views of a seed, TAA-U on or off at a render scale, the shimmer, the overdraw probe, a run's moments from the chase camera with the field (`--moments`, `--rivals`) and the cull check (every view redrawn with occlusion culling off, `cull-faults` must be 0) (`games/fall_line/labs/gpu_world_lab.cpp`) | M7a, M7d1 (now) |
+| `taa` | picture | game:fall_line | TAA-U on a moving camera against the converged still: ghosting, aliasing, stills repeat (`games/fall_line/labs/gpu_taa_lab.cpp`) | M7c (now) |
 | `shadows` | picture | game:fall_line | the horizon maps over a day from above, and the bake counter of a sun sweep (`games/fall_line/labs/gpu_shadows_lab.cpp`) | M7b (now) |
-| `profile` | bench | game:fall_line | a frame's CPU and GPU cost | M7d |
+| `profile` | bench | game:fall_line | a frame's CPU and GPU cost | M7d3 |
 | `forest`, `snow`, `trails`, `spray`, `skis`, `skier` | picture | game:fall_line | the world drawn | M8 |
 | `synth` | sim | engine | `engine/audio` (every voice the synth can play, metered, pictured and written as WAV; the render's cost) | M9a (now) |
 | `audition` | sim | game:fall_line | Fall Line's bank, the skier's beds at seven moments and the bot's whole run, metered, pictured and written as WAV | M9b (now) |

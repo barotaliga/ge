@@ -273,8 +273,11 @@ LevelAnalysis analyze_level(const mapgen::Level& level) {
             " m");
   }
 
-  // R9 — the kickers on the piste (no park's: every one is a crest).
-  const auto& crests = track_kickers;
+  // R9 — the kickers on the piste (not the park's: every one of these is a crest).
+  std::vector<const Kicker*> crests;
+  for (const Kicker* k : track_kickers) {
+    if (!k->trick) crests.push_back(k);
+  }
   if (!within_band(double(crests.size()), G.kickers.on)) {
     add("R9", Severity::error,
         str(double(crests.size())) + " kicker(s) on the piste (band " + band_text(G.kickers.on) +
@@ -487,6 +490,7 @@ LevelAnalysis analyze_level(const mapgen::Level& level) {
 
   // R15 — the day; R19 — the weather.
   check_day(level, add);
+  check_park(level, add);
 
   // R16 — one run.
   if (level.laps != R::race::laps) add("R16", Severity::error, str(level.laps) + " runs");

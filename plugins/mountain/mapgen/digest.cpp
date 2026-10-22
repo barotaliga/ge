@@ -128,6 +128,25 @@ std::string level_digest(const Level& level) {
       f.word(c.id);
       f.mix(c.length);
     }
+    // R42 — the ski routes, read only where a map has one, so a map from before them keeps its
+    // digest.
+    for (const SkiRoute& r : area.routes) {
+      f.word(r.id);
+      f.word(r.from);
+      f.word(r.into.run);
+      f.mix(r.length);
+      f.mix(r.steepest);
+      f.mix(double(r.points.size()));
+      for (size_t i = 0; i < r.points.size(); i += kTrackStride) {
+        f.mix(r.points[i].x);
+        f.mix(r.points[i].z);
+        f.mix(r.points[i].y);
+      }
+      for (const SkiRoute::Drop& d : r.drops) {
+        f.mix(d.s);
+        f.mix(d.height);
+      }
+    }
   }
   if (level.race) {
     const RaceCourse& race = *level.race;
@@ -139,6 +158,10 @@ std::string level_digest(const Level& level) {
       if (c.pole) f.word(*c.pole == PoleGate::open ? "open" : "closed");
       if (c.panels) {
         f.word("panels");
+        f.mix(c.turn);
+      }
+      if (c.flags) {
+        f.word("flags");
         f.mix(c.turn);
       }
     }
@@ -158,6 +181,17 @@ std::string level_digest(const Level& level) {
       f.word("nets");
       f.mix(race.nets->from);
       f.mix(race.nets->to);
+    }
+    for (const RaceCourse::Feature& x : race.features) {
+      f.word(cross_feature_name(x.kind));
+      f.mix(x.from);
+      f.mix(x.to);
+      f.mix(x.height);
+    }
+    if (race.stretch) {
+      f.word("stretch");
+      f.mix(race.stretch->from);
+      f.mix(race.stretch->to);
     }
     for (const RaceCourse::LinePoint& p : race.line) {
       f.mix(p.s);

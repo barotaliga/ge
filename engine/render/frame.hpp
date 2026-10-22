@@ -3,9 +3,13 @@
 // - `FrameUniforms`: the per-frame block (camera, sun, size, time, frustum), the C++ twin of
 //   `struct Frame` in render/wgsl/frame_types.wgsl. Change both together; `static_assert`s
 //   below hold the size.
-// - THE NAMED TARGETS of a frame (`FrameTargets`): `hdr` (linear light, RGBA16F) and `depth`
-//   (reversed-z Depth32Float), at the render size. The output (`final`) is the caller's: an
+// - THE NAMED TARGETS of a frame (`FrameTargets`): `hdr` (linear light, RGBA16F), `depth`
+//   (reversed-z Depth32Float) and `motion` (RGBA16F: rg the screen motion since the last frame
+//   in uv, b the reactive mask), at the render size. The output (`final`) is the caller's: an
 //   offscreen target or the surface's texture.
+// - THE TEMPORAL HALF: `FrameHistory` carries the last frame's unjittered camera, so the block
+//   holds this frame's sub-pixel jitter and the previous camera every motion vector is measured
+//   against (render/taa.hpp).
 // - THE PASS TABLE: a game lists its passes in order as `PassRow`s, each naming the targets it
 //   reads and writes. `check_pass_table` says what is wrong with an order (a read before any
 //   write) with no GPU, so a test holds the game's table. Dawn places the barriers; the table is
@@ -39,26 +43,42 @@ namespace ge::render {
 
 // render/wgsl/frame_types.wgsl's `struct Frame`, field for field.
 struct FrameUniforms {
-  float view_proj[16];      // camera-relative world -> clip
-  float inv_view_proj[16];  // clip -> camera-relative world
-  float eye[4];             // world xyz (m); w: the eye's altitude over the sea, km
-  float sun[4];             // unit direction toward the sun; w: its illuminance
-  float size[4];            // render width, height, 1/width, 1/height
-  float time[4];            // seconds, frame number, 0, 0
-  float world[4];           // x: y = 0's altitude over the sea, km
-  float planes[6][4];       // the frustum (view.hpp's five), the sixth all zero
+  float view_proj[16];       // camera-relative world -> clip, jittered
+  float inv_view_proj[16];   // clip -> camera-relative world, jittered
+  float prev_view_proj[16];  // the last frame's camera-relative world -> clip, unjittered
+  float eye[4];              // world xyz (m); w: the eye's altitude over the sea, km
+  float sun[4];              // unit direction toward the sun; w: its illuminance
+  float size[4];             // render width, height, 1/width, 1/height
+  float time[4];             // seconds, frame number, 0, 0
+  float world[4];            // x: y = 0's altitude over the sea, km
+  float planes[6][4];        // the frustum (view.hpp's five), the sixth all zero
+  float eye_delta[4];        // this eye minus the last frame's, m
+  float jitter[4];           // the sub-pixel offset: render pixels (x right, y down), then uv
 };
-static_assert(sizeof(FrameUniforms) == 64 * 2 + 16 * 5 + 16 * 6, "match frame_types.wgsl");
+static_assert(sizeof(FrameUniforms) == 64 * 3 + 16 * 5 + 16 * 6 + 16 * 2, "match frame_types.wgsl");
 
-void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint32_t height);
+// The last frame's unjittered camera. Invalid on the first frame and after a cut, when the
+// "previous" camera is this one (no motion).
+struct FrameHistory {
+  bool valid = false;
+  Mat4 view_proj{};
+  double eye[3] = {0, 0, 0};
+};
+
+// The block for `view` at width x height. With `history`, the previous camera comes from it and
+// it is advanced to this frame's; `jitter_px` shifts the projection by a sub-pixel offset (render
+// pixels, x right, y down) the motion vectors and the TAA undo.
+void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint32_t height,
+                   FrameHistory* history = nullptr, const double* jitter_px = nullptr);
 
 inline constexpr wgpu::TextureFormat kHdrFormat = wgpu::TextureFormat::RGBA16Float;
 inline constexpr wgpu::TextureFormat kDepthFormat = wgpu::TextureFormat::Depth32Float;
+inline constexpr wgpu::TextureFormat kMotionFormat = wgpu::TextureFormat::RGBA16Float;
 
 struct FrameTargets {
   uint32_t width = 0, height = 0;
-  wgpu::Texture hdr, depth;
-  wgpu::TextureView hdr_view, depth_view;
+  wgpu::Texture hdr, depth, motion;
+  wgpu::TextureView hdr_view, depth_view, motion_view;
 };
 FrameTargets create_targets(gpu::Device& device, std::string_view label, uint32_t width,
                             uint32_t height);
@@ -78,7 +98,7 @@ struct PassRow {
 // agent-actionable line per fault.
 std::string check_pass_table(std::span<const PassRow> rows, std::string_view inputs);
 
-inline constexpr int kMaxPasses = 16;
+inline constexpr int kMaxPasses = 24;
 
 struct PassStat {
   std::string_view name;
@@ -130,6 +150,8 @@ enum class Slot : uint8_t {
   texture_3d,    // a filterable float 3D texture
   store_2d,      // a write-only RGBA16F 2D storage texture
   store_3d,      // a write-only RGBA16F 3D storage texture
+  depth,         // a depth texture (textureLoad only)
+  store_r32,     // a write-only R32F 2D storage texture
 };
 
 wgpu::BindGroupLayout make_layout(gpu::Device& device, std::string_view label,
@@ -153,6 +175,12 @@ wgpu::BindGroup make_group(gpu::Device& device, std::string_view label,
 wgpu::Texture make_texture(gpu::Device& device, std::string_view label, uint32_t width,
                            uint32_t height, uint32_t depth, wgpu::TextureFormat format,
                            wgpu::TextureUsage usage, uint32_t mips = 1);
+
+// Labs and tests (blocks): channel 0 of one mip of a texture, row-major, as floats. `format` is
+// the texture's: R32Float, Depth32Float (the depth aspect), R16Float or RGBA16Float.
+std::vector<float> read_red(gpu::Device& device, const wgpu::Texture& texture, uint32_t mip,
+                            uint32_t width, uint32_t height, wgpu::TextureFormat format);
+float half_to_float(uint16_t h);
 
 // A buffer of `size` bytes with `usage` (CopyDst added), labelled.
 wgpu::Buffer make_buffer(gpu::Device& device, std::string_view label, uint64_t size,

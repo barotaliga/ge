@@ -22,7 +22,9 @@ namespace ge::mountain::labs {
 
 // The flags a map lab takes beside its own: `version` and `region`.
 inline const ge::lab::LabFlag kVersionFlag{
-    "version", "1", "generator versions, comma-separated: 1 the single piste, 8 the ski area"};
+    "version", "1",
+    "generator versions, comma-separated: 1 the single piste, 8 the ski area, 9 and 10 with its "
+    "routes"};
 inline const ge::lab::LabFlag kRegionFlag{"region", "alpine",
                                           "snow country: alpine, fell, continental, maritime"};
 
@@ -35,11 +37,12 @@ std::vector<int> map_versions(const ge::lab::Lab& lab);
 // The map for `seed` at `version` under the lab's --region; nothing (and a lab.fail naming the
 // seed and the generator's own words) when it cannot be built. Without a version, the first
 // --version names; a ski area (version 8) raced down the course `course` names, else one of
-// `grade`, where either is asked.
+// `grade`, where either is asked; built for a tricks run (the terrain park, R20) when `tricks`.
 std::optional<mapgen::Level> build_map(ge::lab::Lab& lab, double seed,
                                        std::optional<int> version = std::nullopt,
                                        std::optional<mapgen::PisteGrade> grade = std::nullopt,
-                                       std::optional<std::string> course = std::nullopt);
+                                       std::optional<std::string> course = std::nullopt,
+                                       bool tricks = false);
 
 // A map's name in a lab's metrics, tables and shots: `seed-38`, or `seed-38-v8` past version 1.
 std::string map_id(double seed, int version);
