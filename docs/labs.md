@@ -95,6 +95,7 @@ make lab LAB=level ARGS=--tag=before          # keep this run as previews/level@
 make lab LAB=level ARGS=--compare=before      # every metric beside the kept run's
 make labs-smoke                               # every lab at its smoke flags, twice, digests checked
 make labs-digests                             # rewrite tests/labs_digests.txt (a reviewed change)
+make ge ARGS="digest level --write"           # rewrite one lab's row only; no --write: just check it
 build/debug/labs --json                       # the list as one JSON array (what `ge lab` reads)
 make lab LAB=trace ARGS="--log=course=debug"  # any lab: the log spec's lines in previews/<id>/log.txt
 ```
@@ -168,7 +169,10 @@ fails when it is off. Three checks use it:
   `--shard=I/N`) run it on every CI row, so a lab whose
   output differs between compilers fails on the row that differs.
 - A lab that has to move (its drawing changed, or the code it runs changed on purpose)
-  rewrites the baseline with `make labs-digests`, and the PR says why.
+  rewrites its row of the baseline with `ge digest <id> --write` (`make ge ARGS=...` here; the
+  runner's `--write-digests` on one lab or a shard keeps the other rows), and the PR says why.
+  A game repo keeps the same baseline once `ge digest --write` writes it, and its
+  `labs_smoke` case checks it from then on.
 
 That is why lab code follows the simulation's rules even though it is tooling: no `<cmath>`
 transcendental (`make libm-check` scans `engine/lab`; use `core/libm`), integer pixels from
@@ -308,13 +312,14 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 | `anim` | scenario | plugin:skier | `engine/lab/anim.hpp` over the skier's figure (`plugins/skier/app/figure.hpp`) ridden through a ride scenario: filmstrips from the side, behind and above, onion skins with the hands' and tips' paths, the joints' angles, a jolt heatmap, `motion.tsv`, the faults found (pop, snap, angle snap, stretch, clip), and a copy with a pop, a stretch and a clip planted, each of which must be found | M14b (now) |
 | `gpu-capture` | picture | engine | `engine/gpu` (the headless capture) | M6 (now) |
 | `frame-pace` | bench | engine | the platform's frame loop | M6 (now) |
-| `world` | picture | game:fall_line | Fall Line's frame from named views of a seed, TAA-U on or off at a render scale, the shimmer, the overdraw probe, a run's moments from the chase camera with the field (`--moments`, `--rivals`) the cull check (every view redrawn with occlusion culling off, `cull-faults` must be 0), the `wood` view (the trees' shadows on sunlit snow) and the sun's cascades over the whole run (`cascade-redraws.near` and `.far`, deterministic, with no device) (`games/fall_line/labs/gpu_world_lab.cpp`) | M7a, M7d1, M7d2 (now) |
+| `world` | picture | game:fall_line | Fall Line's frame from named views of a seed, TAA-U on or off at a render scale, the shimmer, the overdraw probe, a run's moments from the chase camera with the field (`--moments`, `--rivals`), the racers' tracks laid over the run before each moment (`--trails=0`: none), the cull check (every view redrawn with occlusion culling off, `cull-faults` must be 0), the `wood` view (the trees' shadows on sunlit snow) and the sun's cascades over the whole run (`cascade-redraws.near` and `.far`, deterministic, with no device) (`games/fall_line/labs/gpu_world_lab.cpp`) | M7a, M7d1, M7d2 (now) |
 | `taa` | picture | game:fall_line | TAA-U on a moving camera against the converged still: ghosting, aliasing, stills repeat (`games/fall_line/labs/gpu_taa_lab.cpp`) | M7c (now) |
 | `shadows` | picture | game:fall_line | the horizon maps over a day from above, and the bake counter of a sun sweep (`games/fall_line/labs/gpu_shadows_lab.cpp`) | M7b (now) |
 | `profile` | bench | game:fall_line | Fall Line's frame over a stretch of the bot's run from the chase camera: every pass's GPU ms (median, p95, worst), the CPU ms encoding it, its draws and dispatches; the renderer's CPU half against `--cpu-budget`; where a frame's CPU goes by part (the prepare's timing zones, each pass's encoding, the simulation's steps between frames by their zones); `frames.tsv`, one row a frame (`games/fall_line/labs/gpu_profile_lab.cpp`; `ge profile --render` runs a game's) | M7d3, M12b (now) |
 | `snow` | picture | game:fall_line | The snow's material up close (`plugins/mountain/app/snow.wgsl` in Fall Line's frame): the `corduroy`, `powder` and `glitter` views at each `--hours` hour, each PLAIN (the material's gains at nought: the albedo lit) and SNOW, with the ground's mean luma, its detail and its glints beside each (`games/fall_line/labs/gpu_snow_lab.cpp`) | M8a (now) |
+| `trails` | picture | game:fall_line | The tracks (`plugins/skier/app/tracks.hpp`'s prints in `plugins/mountain/app/trails.hpp`'s maps, read by the snow's material) over a bot's run with `--rivals`: the TURN (the deepest edge) and the STRAIGHT (the flattest) looked down on, each groove's depth and width read back from the fine map across the skier's line beside the CPU's prints (the outside groove must be the deeper through the turn), and the RIVAL place (a racer within 4 m of a line another laid a second or more before), whose track must be in the fine map (`games/fall_line/labs/gpu_trails_lab.cpp`) | M8b (now) |
 | `models` | picture | engine | `engine/assets` (an authored model at rest from behind and from the right, shaded with its edges and skeleton; each clip as a filmstrip, an onion skin of every frame's bones, and its joints' angles from rest and angular acceleration graphed over time; its counts, its weights' check and each clip's largest angle and acceleration; `--model=<file.glb>` for any model, the test model through a .glb by default) | M8e1 (now) |
-| `forest`, `trails`, `spray`, `skis`, `skier` | picture | game:fall_line | the world drawn | M8b–M8e2 |
+| `forest`, `spray`, `skis`, `skier` | picture | game:fall_line | the world drawn | M8c–M8e2 |
 | `synth` | sim | engine | `engine/audio` (every voice the synth can play, metered, pictured and written as WAV; the render's cost) | M9a (now) |
 | `audition` | sim | game:fall_line | Fall Line's bank, the skier's beds at seven moments and the bot's whole run, metered, pictured and written as WAV | M9b (now) |
 | `screenshots` | picture | game:fall_line | the HUD and the cards at 1280x720, 390x844, 844x390 | M10 |

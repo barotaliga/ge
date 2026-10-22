@@ -8,6 +8,9 @@
 //   instances.cull       -> instances.early (the forest and the figures: the frustum, the last
 //                           frame's pyramid)
 //   terrain.horizon      -> terrain.horizon (the bakes due)
+//   trails.fine          -> trails.fine (the tracks laid since the last frame, or the whole
+//                           window redrawn from the history when it moved)
+//   trails.coarse        -> trails.coarse (the tracks laid since the last frame)
 //   shadows.cull         -> shadows.lists (the casters of the maps drawn this frame)
 //   shadows.near         -> shadows.maps (the near cascade: the forest, when due)
 //   shadows.far          -> shadows.maps (the far cascade, when due)
@@ -18,7 +21,7 @@
 //   instances.cull.late  -> instances.late (what the last frame's pyramid hid, against this one)
 //   instances.depth.late -> depth
 //   terrain              -> hdr motion (shaded where the depth is equal, in the snow's material;
-//                           reads shadows.maps)
+//                           reads shadows.maps and the trail maps)
 //   instances            -> hdr motion (both lists, where the depth is equal)
 //   sky                  -> hdr motion (behind depth)
 //   taa                  -> taa.history (at the output's size; with FrameOptions::taa)
@@ -30,7 +33,8 @@
 // reads the HDR target.
 //
 // The frame reads the game only through a FrameView (views.hpp), the map it was made for, and a
-// FrameScene: the racers' skiers this frame, drawn as figures (scene.hpp). Every pipeline is made
+// FrameScene: the racers' skiers this frame, drawn as figures (scene.hpp) and laying their tracks
+// (`track`: skier/app/tracks.hpp's prints into the trail maps). Every pipeline is made
 // in `create_frame` (the manifest), and the device's load ends there: a pipeline made after it is
 // an error.
 //
@@ -45,10 +49,12 @@
 #include <memory>
 #include <span>
 #include <string>
+#include <vector>
 
 #include "gpu/device.hpp"
 #include "gpu/pipeline.hpp"
 #include "mountain/app/snow.hpp"
+#include "mountain/app/trails.hpp"
 #include "mountain/mapgen/types.hpp"
 #include "render/bloom.hpp"
 #include "render/frame.hpp"
@@ -59,6 +65,7 @@
 #include "render/sky.hpp"
 #include "render/taa.hpp"
 #include "render/terrain.hpp"
+#include "skier/app/tracks.hpp"
 #include "skier/skier.hpp"
 
 namespace fall_line::app {
@@ -71,6 +78,8 @@ struct FrameOptions {
   uint32_t shadow_size = 2048;  // the sun's shadow maps' texels a side
   double bloom = 0.04;          // the share of the bloom's glow in the picture; 0: none
   bool snow = true;             // the snow's material (mountain/app/snow.hpp); off: the albedo lit
+  bool trails = true;           // the tracks (mountain/app/trails.hpp); drawn only with the snow
+  ge::mountain::app::TrailOptions trail_maps;  // their sizes
 };
 
 // What of the run a frame draws, besides the map: the racers, the player's first.
@@ -92,6 +101,10 @@ struct GameFrame {
   ge::render::Sky sky;
   ge::render::Terrain terrain;
   ge::mountain::app::SnowMaterial snow;
+  ge::mountain::app::Trails trails;
+  bool tracks = false;                    // the trails are made (FrameOptions::snow and ::trails)
+  std::vector<ge::skier::TrackPen> pens;  // each racer's, by his place in the scene
+  std::vector<ge::mountain::app::TrailStamp> laid;
   ge::render::Hiz hiz;
   ge::render::Taa taa;
   ge::render::Bloom bloom;
@@ -121,8 +134,17 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
 // New targets for outputs of width x height (a resized window); the history starts over.
 void resize(ge::gpu::Device& device, GameFrame& frame, uint32_t width, uint32_t height);
 
-// The camera cut: the next frame keeps nothing of the last (no motion, no history).
+// The camera cut: the next frame keeps nothing of the last (no motion, no history). The tracks
+// stay: they are the run's, not the camera's.
 void cut(GameFrame& frame);
+
+// Lay the scene's racers' tracks from where each was at the last call (or the last draw, which
+// lays them too) to where they are now. A lab that steps a run between frames calls it every few
+// steps so a turn is laid as a curve.
+void track(GameFrame& frame, const FrameScene& scene);
+
+// Forget every track (a new run on the same map).
+void forget_tracks(GameFrame& frame);
 
 // Encode and submit one frame of `view` and `scene` into `output` (a view of a texture of the
 // output format at the output's size). `view.frame` indexes the jitter. The stats' GPU times

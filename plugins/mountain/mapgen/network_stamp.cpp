@@ -213,53 +213,57 @@ void stamp_run(const WalkedRun& run, ge::core::Heightfield& ground, ge::core::He
   float* g = ground.data.data();
   float* p = packed.data.data();
   const PastJunction past(run, onto);
-  for (long r = r0; r <= r1; r++) {
-    for (long c = c0; c <= c1; c++) {
-      const size_t o = size_t(r - r0) * size_t(bw) + size_t(c - c0);
-      const double d = dist[o];
-      if (!(d <= reach_max)) continue;
-      const size_t go = size_t(r) * size_t(cols) + size_t(c);
-      const size_t i = size_t(near[o]);
-      const double t = along[o];
-      const double hw = (pts[i].width + (pts[i + 1].width - pts[i].width) * t) / 2;
-      // The crust keeps off a run by its edge (R21), read as a race piste's distance from its
-      // line whatever this run's width.
-      const double edge = d - hw + T::width.max / 2;
-      if (edge < shared.dist[go]) shared.dist[go] = float(edge);
-      const double x = double(c) * cell;
-      const double z = double(r) * cell;
-      if (past(i, x, z)) {
-        near[o] = -1;
-        continue;
+  // Every cell is levelled off its own answer and its own heights alone, so the rows are
+  // levelled side by side too.
+  ge::core::parallel_bands(size_t(r1 - r0 + 1), [&](size_t lo, size_t hi) {
+    for (long r = r0 + long(lo); r < r0 + long(hi); r++) {
+      for (long c = c0; c <= c1; c++) {
+        const size_t o = size_t(r - r0) * size_t(bw) + size_t(c - c0);
+        const double d = dist[o];
+        if (!(d <= reach_max)) continue;
+        const size_t go = size_t(r) * size_t(cols) + size_t(c);
+        const size_t i = size_t(near[o]);
+        const double t = along[o];
+        const double hw = (pts[i].width + (pts[i + 1].width - pts[i].width) * t) / 2;
+        // The crust keeps off a run by its edge (R21), read as a race piste's distance from its
+        // line whatever this run's width.
+        const double edge = d - hw + T::width.max / 2;
+        if (edge < shared.dist[go]) shared.dist[go] = float(edge);
+        const double x = double(c) * cell;
+        const double z = double(r) * cell;
+        if (past(i, x, z)) {
+          near[o] = -1;
+          continue;
+        }
+        const double pk0 = d <= hw ? 1 : 1 - smoothstep(hw, hw + T::shoulder_packed, d);
+        if (shared.core[go] == kCore) {
+          // Another run's surface: its levelling and windrow are its own, but the groomer runs
+          // on across the seam between the two.
+          if (pk0 > p[go]) p[go] = float(pk0);
+          continue;
+        }
+        const double toe = hw + T::shoulder_flat;
+        const double flat = toe + rules::berm::width;
+        // Another run's windrow is levelled only by this one's own corridor (a junction opens
+        // it), never by the bank behind it.
+        if (shared.core[go] == kBenchCell && d > flat) continue;
+        const double delta = level_at(t < 0.5 ? i : i + 1, x, z, hw) - g[go];
+        const double bank =
+            std::min(T::bank_max, std::max(T::bank_min, std::abs(delta) / T::bank_slope));
+        const double w = d <= flat ? 1 : 1 - smoothstep(flat, flat + bank, d);
+        double y = g[go] + w * delta;
+        const double s = pts[i].s + (pts[i + 1].s - pts[i].s) * t;
+        if (d > toe && d < flat) y += berm_profile(berm_crest(s), d - toe);
+        g[go] = float(y);
+        double pk = pk0;
+        if (pk > 0 && !drifts.empty()) {
+          const double wd = drift_at(drifts, s);
+          if (wd > 0) pk *= 1 - (1 - rules::drift::packed) * wd;
+        }
+        if (pk > p[go]) p[go] = float(pk);
       }
-      const double pk0 = d <= hw ? 1 : 1 - smoothstep(hw, hw + T::shoulder_packed, d);
-      if (shared.core[go] == kCore) {
-        // Another run's surface: its levelling and windrow are its own, but the groomer runs
-        // on across the seam between the two.
-        if (pk0 > p[go]) p[go] = float(pk0);
-        continue;
-      }
-      const double toe = hw + T::shoulder_flat;
-      const double flat = toe + rules::berm::width;
-      // Another run's windrow is levelled only by this one's own corridor (a junction opens
-      // it), never by the bank behind it.
-      if (shared.core[go] == kBenchCell && d > flat) continue;
-      const double delta = level_at(t < 0.5 ? i : i + 1, x, z, hw) - g[go];
-      const double bank =
-          std::min(T::bank_max, std::max(T::bank_min, std::abs(delta) / T::bank_slope));
-      const double w = d <= flat ? 1 : 1 - smoothstep(flat, flat + bank, d);
-      double y = g[go] + w * delta;
-      const double s = pts[i].s + (pts[i + 1].s - pts[i].s) * t;
-      if (d > toe && d < flat) y += berm_profile(berm_crest(s), d - toe);
-      g[go] = float(y);
-      double pk = pk0;
-      if (pk > 0 && !drifts.empty()) {
-        const double wd = drift_at(drifts, s);
-        if (wd > 0) pk *= 1 - (1 - rules::drift::packed) * wd;
-      }
-      if (pk > p[go]) p[go] = float(pk);
     }
-  }
+  });
   if (run.spec.kind == RunKind::road) return;
   for (long r = r0; r <= r1; r++) {
     for (long c = c0; c <= c1; c++) {

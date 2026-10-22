@@ -39,6 +39,11 @@ inline double round(double x) {
 // modulo 2^32 into [-2^31, 2^31).
 inline int32_t to_int32(double x) {
   if (x >= -2147483648.0 && x < 2147483648.0) return static_cast<int32_t>(x);  // fast path
+  // Within int64's range the truncation is exact as an int64, and its low 32 bits are the
+  // wrap: the same word as the remainder below, without the library call a hash pays for.
+  if (x >= -9223372036854775808.0 && x < 9223372036854775808.0) {
+    return static_cast<int32_t>(static_cast<uint32_t>(static_cast<int64_t>(x)));
+  }
   if (!std::isfinite(x)) return 0;
   double m = std::fmod(std::trunc(x), 4294967296.0);  // exact
   if (m < 0) m += 4294967296.0;                       // exact: |m| < 2^32
@@ -80,6 +85,11 @@ inline double min(double a, double b, double c, Rest... rest) {
 inline double sign(double x) { return x > 0 ? 1.0 : x < 0 ? -1.0 : x; }
 
 // The remainder of a / b: the exact remainder with the sign of a (fmod), NaN for b == 0.
-inline double mod(double a, double b) { return std::fmod(a, b); }
+// A dividend already smaller than the divisor is its own remainder (fmod returns it as it is,
+// -0 included), so that case, the common one for an angle, skips the library call.
+inline double mod(double a, double b) {
+  if (std::fabs(a) < std::fabs(b)) return a;
+  return std::fmod(a, b);
+}
 
 }  // namespace ge::core::num

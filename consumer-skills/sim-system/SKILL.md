@@ -33,7 +33,11 @@ writes it, so everything that can be tested headless is tested headless.
 3. Add the state, the create, the step call. No allocation in the step: reserve at create.
 4. Keep the replay test green: two runs of the same seed and inputs have the same `digest`.
    Fold the new state into `digest`.
-5. Give it a lab when it has anything to look at or measure (skill: `labs`).
+5. Hold its numbers where they matter in a golden table, `tests/golden/<topic>.txt`: the test
+   compares with it, and with `GE_GOLDEN_WRITE` set it writes the file instead (a `#` line of
+   column names first). `ge golden write <topic>_test` writes and holds it; when a change moves
+   it on purpose, `ge golden diff` shows each column that moved, for the PR.
+6. Give it a lab when it has anything to look at or measure (skill: `labs`).
 
 ## Determinism
 
