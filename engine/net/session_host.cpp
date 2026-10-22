@@ -19,8 +19,6 @@ namespace {
 
 using namespace session_wire;
 
-constexpr size_t kOut = kMaxMessage;
-
 int team_cap(const SessionConfig& c) {
   if (c.team_count <= 0) return 0;
   return c.team_size > 0 ? c.team_size : (c.max_players + c.team_count - 1) / c.team_count;
