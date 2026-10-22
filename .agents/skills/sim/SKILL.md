@@ -44,8 +44,10 @@ seed. The skier on the snow is `plugins/skier` (the `skier` skill).
    tricks stay behind the developer switch, kept and not grown.
 5. The wanted level (M15a, done): the hunt's state and rules, scripted pursuers in the `wanted`
    lab until the army's pilots (M15c–M15e) write them.
-6. Next: the lifts (M13a2): the carriers on the rope, boarding, the ride, the top; the bot's
-   outing. Then the free ride's other systems, a row each (M13+).
+6. The lifts (M13a2, done): the carriers off `plugins/mountain/lifts`, boarding in the load
+   zone, the ride, let go at the top (`lift_ride.hpp`); the bot's outing (`outing.hpp`).
+7. Next: the army on foot (M15c), which rides the lifts; then the free ride's other systems, a
+   row each (M13+).
 
 ## Rules
 
@@ -68,7 +70,12 @@ seed. The skier on the snow is `plugins/skier` (the `skier` skill).
   `docs/labs.md` § An agent at the controls. An observation carries only what a player could
   know. A new op or field changes both and `tests/fall_line_play_test.cpp`.
 - No allocation in `step`: the racers are sized at create, the events reserved, a free ride's
-  `skied` reserved for every run and every run's nearest-point index built at create.
+  `skied` reserved for every run and every run's nearest-point index built at create, and its
+  lifts planned at create (`GameState::lifts`).
+- **A lift that has him carries him** (`lift_ride.hpp`): his skis, the run under them and the
+  run's own resets wait while he is on it, and the bot's hands are off. The carriers are the
+  mountain plugin's (`plugins/mountain/lifts/lift_loop.hpp`), a pure function of the clock;
+  the ride stores only which carrier has him, never where it is.
 - **A race's digest reads nothing of the free ride**: `state_hash` mixes `FreeRide` only when
   the mode is `free`, and a race never steps it, so a free-ride change moves only
   `tests/golden/fall_line_free.txt` and the `free` lab. Run `make lab LAB=free ARGS=--seeds=1,2,3,4,5,6,7,8,38`
@@ -92,7 +99,18 @@ the grid and adds the field table (every racer's pace, lane, place and shoulders
 `free` (drive, `games/fall_line/labs/free_lab.cpp`): the bot on the free ride down every piste
 of each seed's ski area (`--seeds=38` by default, `--most=N` the first N), from its head to a
 foot: the runs table and the ski area with every line drawn. A piste not skied to a foot fails
-the lab.
+the lab. `--outings=N` (1 by default) rides the bot's outing from the first N pistes with a lift
+at their foot (`simulate_outing`): the outings table (the lift, the run after it, the wait, the
+ride) and his line, white while a lift carries him. An outing not ridden through fails the lab;
+`tests/golden/fall_line_outing.txt` holds seed 38's (`GE_GOLDEN_WRITE=1
+build/release/tests/fall_line_lift_ride_test`).
+
+`lift-ride` (drive, `games/fall_line/labs/lift_ride_lab.cpp`): every lift of each seed ridden
+from its load zone to its top through the real `step`: the wait, the ride, the slowest and
+fastest he is carried, the biggest carried step and the let-go's distance from its point. A lift
+that keeps him, a carried step over 0.5 m or a let-go off its point fails the lab. Run it, with
+the `free` lab's outings, before and after a change to `lift_ride.cpp`, `outing.cpp` or the lift
+loop.
 
 `wanted` (scenario, `games/fall_line/labs/wanted_lab.cpp`): the hunt on seed 38 against scripted
 pursuers (`shadow`, `posts`, `arrest`), the hunt table, each line coloured by the stars, and the

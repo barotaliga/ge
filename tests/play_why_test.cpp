@@ -91,6 +91,7 @@ bool has(const std::string& s, const std::string& part) {
 int play(std::vector<std::string> words, std::string& out, const std::string& in = "") {
   words.insert(words.begin(), "play");
   std::vector<char*> argv;
+  argv.reserve(words.size());
   for (std::string& w : words) argv.push_back(w.data());
   std::istringstream input(in);
   std::ostringstream output;
@@ -105,8 +106,10 @@ TEST(the_traced_replay_keeps_the_logs_digest_and_the_pilot_agrees_with_its_own_l
   std::string error;
   const auto p = gp::pilot_run(kToy, setup(), error);
   CHECK(p.has_value());
+  if (!p) return;
   const auto w = gp::why_replay(kToy, p->log, 0, error);
   CHECK_MSG(w.has_value(), error);
+  if (!w) return;
   CHECK(w->digest == p->digest && w->steps == p->steps);
   CHECK(w->asked_pilot && w->agrees.size() == static_cast<size_t>(p->steps));
   for (const uint8_t a : w->agrees) CHECK(a == 1);
@@ -121,19 +124,25 @@ TEST(on_another_players_log_it_says_where_the_pilot_would_have_played_otherwise)
   std::string error;
   auto p = gp::pilot_run(kToy, setup(), error);
   CHECK(p.has_value());
+  if (!p) return;
   gp::InputLog log = p->log;
   // Hold the push two steps longer than the pilot did.
   log.runs.insert(log.runs.begin() + 1, gp::InputRun{2, {1}});
   log.digest.reset();
   const auto w = gp::why_replay(kToy, log, 0, error);
   CHECK(w.has_value());
+  if (!w) return;
   CHECK(w->agrees[11] == 1 && w->agrees[12] == 0);
 }
 
 TEST(the_timeline_is_one_row_a_step_with_the_choice_its_margin_and_its_facts) {
   std::string error;
   const auto p = gp::pilot_run(kToy, setup(), error);
+  CHECK_MSG(p.has_value(), error);
+  if (!p) return;
   const auto w = gp::why_replay(kToy, p->log, 0, error);
+  CHECK_MSG(w.has_value(), error);
+  if (!w) return;
   const ge::lab::Series s = gp::why_timeline(w->why, 0, kToy.hz);
   CHECK(s.rows() == static_cast<size_t>(p->steps));
   const ge::lab::Column* choice = s.find("throttle");
@@ -151,7 +160,11 @@ TEST(the_timeline_is_one_row_a_step_with_the_choice_its_margin_and_its_facts) {
 TEST(the_flips_are_the_changes_of_mind_and_the_close_calls_under_a_margin) {
   std::string error;
   const auto p = gp::pilot_run(kToy, setup(), error);
+  CHECK_MSG(p.has_value(), error);
+  if (!p) return;
   const auto w = gp::why_replay(kToy, p->log, 0, error);
+  CHECK_MSG(w.has_value(), error);
+  if (!w) return;
   const auto flips = gp::why_flips(w->why, 0, 0);
   CHECK(flips.size() == 1);
   CHECK(flips[0].step == 12 && std::string(flips[0].from) == "push" &&
@@ -196,6 +209,7 @@ TEST(a_game_whose_bots_record_nothing_is_refused_with_a_next_step) {
   std::string error;
   const auto p = gp::pilot_run(kToy, setup("0"), error);
   CHECK(p.has_value());
+  if (!p) return;
   CHECK(!gp::why_replay(kToy, p->log, 0, error) && has(error, "record no decisions"));
   gp::Session s(kToy, setup("0"));
   CHECK(has(s.handle("{\"op\":\"why\"}"), "\"next\""));

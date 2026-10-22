@@ -54,6 +54,22 @@ constexpr FlagSpec kLabFlags[] = {
     kEngine,
     kRepo};
 
+constexpr FlagSpec kLabDiffFlags[] = {
+    kPreset,
+    {"against", "<name>", "the kept run to diff against (default before: --tag=before)"},
+    {"run", "", "run the lab first (its own flags after --), then diff; else diff its last run"},
+    {"bands", "<m,m,...>", "the distance bands' edges (default 25,100,400)"},
+    {"psnr", "<dB,dB,...>",
+     "each band's floor, nearest first and the sky last (default "
+     "40,36,32,28,28)"},
+    kEngine,
+    kRepo};
+constexpr FlagSpec kPrecheckFlags[] = {
+    {"preset", "<debug|release>", "only this preset (default: both, as CI runs them)"},
+    kEngine,
+    kRepo};
+constexpr FlagSpec kCiFlags[] = {
+    {"log", "<file>", "read this saved job log instead of asking GitHub"}, kRepo};
 constexpr FlagSpec kDigestFlags[] = {
     {"write", "", "rewrite the lab's row of tests/labs_digests.txt (every row with no lab)"},
     kPreset,
@@ -181,6 +197,14 @@ const CommandSpec kCommands[] = {
     {"check", "", 0, 0, "build",
      "the whole gate in one call: format, doctor, build, tests and labs", kBuildFlags,
      "ge check --json", "commit"},
+    {"precheck", "", 0, 0, "build",
+     "what CI runs, here, before the push: ge check, then the pilot's seeds and their replays, "
+     "on each preset",
+     kPrecheckFlags, "ge precheck --preset=release", "commit"},
+    {"ci", "[<pr>]", 0, 1, "build",
+     "a pull request's state: whether it conflicts with its base, and each failed job's log "
+     "read back as findings (through gh, or a saved log)",
+     kCiFlags, "ge ci 12", "commit"},
     {"digest", "[<lab>]", 0, 1, "build",
      "a lab (or every lab) at its smoke flags, twice: each digest beside the committed baseline; "
      "--write moves only that lab's row",
@@ -197,6 +221,10 @@ const CommandSpec kCommands[] = {
      "list the labs, or run one: its metrics, tables, captioned pictures and digest; its own "
      "flags go after --",
      kLabFlags, "ge lab run --json -- --seeds=1,2", "labs"},
+    {"lab diff", "<id>", 1, 1, "see",
+     "diff every picture of a lab's last run against a kept run: PSNR, SSIM and the share "
+     "changed per distance band, each band held to its floor, a four-panel sheet a shot",
+     kLabDiffFlags, "ge lab diff world --run -- --views=start,vista", "labs"},
     {"graph", "<file>...", 1, -1, "see",
      "chart series or spans files (a trace, a bench, a profile) to PNG and SVG; several files "
      "overlay; every outlier comes back as a note",
@@ -365,11 +393,12 @@ std::optional<std::string> check_args(const Args& a) {
            (c.args.empty() ? std::string("no arguments") : std::string(c.args)) + ", got " +
            std::to_string(n) + " word(s)";
   }
-  static constexpr std::string_view kPassing[] = {"lab",   "play",    "sim", "shot",
-                                                  "bench", "profile", "mem", "leaks"};
+  static constexpr std::string_view kPassing[] = {"lab",   "lab diff", "play", "sim",  "shot",
+                                                  "bench", "profile",  "mem",  "leaks"};
   if (!a.passthrough.empty() &&
       std::find(std::begin(kPassing), std::end(kPassing), c.name) == std::end(kPassing)) {
-    return "only ge lab, play, sim, shot, bench, profile, mem and leaks pass words after --";
+    return "only ge lab, lab diff, play, sim, shot, bench, profile, mem and leaks pass words after "
+           "--";
   }
   return std::nullopt;
 }

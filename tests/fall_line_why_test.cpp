@@ -45,6 +45,7 @@ TEST(the_bots_decisions_traced_move_no_digest_and_say_what_the_controls_did) {
   std::string error;
   const auto w = gp::why_replay(fs::kGame, log, ge::ai::Why::kEvery, error);
   CHECK_MSG(w.has_value(), error);
+  if (!w) return;
   CHECK(log.digest && w->digest == *log.digest);
   CHECK(w->asked_pilot);
   for (const uint8_t a : w->agrees) CHECK(a == 1);

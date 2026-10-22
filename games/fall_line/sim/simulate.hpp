@@ -5,11 +5,13 @@
 // controls are taped, because the rivals' are a pure function of the run. It is what the `sim` lab
 // prints a row of, what the tests hold golden, and, with a tape handed in, a replay: a run is a
 // pure function of its map and its controls, so the tape played back gives the same digest.
-// `simulate_free` is the bot on the free ride, from the head of a run until he reaches a foot.
+// `simulate_free` is the bot on the free ride, from the head of a run until he reaches a foot;
+// `simulate_outing` the bot's outing, down a run, up the lift at its foot and down another.
 //
 // ge:summary The headless run: simulate a pilot over a map, the RunReport, the tape, replay
 // ge:keywords simulate sim run-report report digest tape replay headless time-limit trace
 // ge:keywords simulate_on replay_tape rivals field field-row place simulate_free free-ride
+// ge:keywords simulate_outing outing lifts
 // ge:skill sim
 // ge:test tests/fall_line_sim_test.cpp
 #pragma once
@@ -60,9 +62,12 @@ struct RunReport {
   double top_speed = 0;   // m/s
   double mean_speed = 0;  // m/s, the piste's length over the time (finished runs)
   double max_landing_g = 0;
-  int32_t place = 1;    // the player's, at the run's end
-  double distance = 0;  // m skied (the free ride's odometer; 0 in a race)
-  int32_t runs = 0;     // runs skied (the free ride's)
+  int32_t place = 1;     // the player's, at the run's end
+  double distance = 0;   // m skied (the free ride's odometer; 0 in a race)
+  int32_t runs = 0;      // runs skied (the free ride's)
+  int32_t lifts = 0;     // lifts ridden to the top (the free ride's)
+  double lift_wait = 0;  // s waiting in load zones for a carrier
+  double lift_ride = 0;  // s carried up lifts
   int64_t steps = 0;
   uint64_t digest = 0;  // FNV-1a over every step's state
   ge::racing::ControlTape tape;
@@ -73,6 +78,7 @@ struct RunReport {
 struct LinePoint {
   double x, z, speed;
   bool on_snow, down;
+  bool lifted;  // a lift has him
 };
 
 // THE ONE STEP every pilot drives through (the bot in `simulate`, a tape in `replay_tape`, an
@@ -82,7 +88,8 @@ class Driver {
  public:
   Driver(std::shared_ptr<const ge::mountain::mapgen::Level> level, int32_t rivals);
   // A run already created (a race, or a free ride, whose bot skis his run's chain).
-  explicit Driver(GameState state);
+  // `lifts`: on the free ride, the lifts he is to ride before a foot ends the run.
+  explicit Driver(GameState state, int32_t lifts = 0);
   void step(Controls player);
   // Every racer home (on the free ride, the player at a foot): nothing is left to drive.
   bool over() const;
@@ -102,6 +109,10 @@ class Driver {
   std::vector<Controls> controls_;
   std::vector<int32_t> shoulders_;
   ge::ai::Why* why_ = nullptr;
+  int32_t lifts_ = 0;
+  double boarded_at_ = 0;
+  double lift_wait_ = 0;
+  double lift_ride_ = 0;
   uint64_t hash_ = 0xcbf29ce484222325ull;
   double top_speed_ = 0;
   int32_t flights_ = 0;
@@ -118,6 +129,12 @@ RunReport simulate_on(std::shared_ptr<const ge::mountain::mapgen::Level> level, 
 RunReport simulate_free(std::shared_ptr<const ge::mountain::mapgen::Level> level, double seed,
                         int32_t run, const SimOptions& opts,
                         std::vector<std::vector<LinePoint>>* lines = nullptr);
+// The bot's outing on `level` from the head of run `run` (outing.hpp): down to its foot, up the
+// lift there and down another run to a foot; `lines`, when given, gets his line. Not finished
+// where the run has no lift at its foot.
+RunReport simulate_outing(std::shared_ptr<const ge::mountain::mapgen::Level> level, double seed,
+                          int32_t run, const SimOptions& opts,
+                          std::vector<std::vector<LinePoint>>* lines = nullptr);
 // `tape` played back on `level` with `rivals` bots beside it: the same run, step for step (its
 // digest is the report's).
 RunReport replay_tape(std::shared_ptr<const ge::mountain::mapgen::Level> level, double seed,

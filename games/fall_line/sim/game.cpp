@@ -15,6 +15,7 @@
 #include "fall_line/sim/course.hpp"
 #include "fall_line/sim/field.hpp"
 #include "fall_line/sim/free.hpp"
+#include "fall_line/sim/lift_ride.hpp"
 #include "fall_line/sim/wanted.hpp"
 #include "mountain/mapgen/generate.hpp"
 #include "prof/zones.hpp"
@@ -42,7 +43,8 @@ void log_step(const GameState& state) {
   for (const GameEvent& e : state.events) {
     const bool course = e.kind == EventKind::gate || e.kind == EventKind::missed ||
                         e.kind == EventKind::finish || e.kind == EventKind::reset ||
-                        e.kind == EventKind::onto || e.kind == EventKind::arrived;
+                        e.kind == EventKind::onto || e.kind == EventKind::arrived ||
+                        e.kind == EventKind::boarded || e.kind == EventKind::unloaded;
     const out::Channel ch = e.kind == EventKind::shoulder ? kField
                             : e.kind == EventKind::wanted ? kWanted
                             : course                      ? kCourse
@@ -86,6 +88,12 @@ void log_step(const GameState& state) {
         break;
       case EventKind::arrived:
         line += " at the foot of run " + std::to_string(e.gate) + " in " + f(e.value, 3) + " s";
+        break;
+      case EventKind::boarded:
+        line += " lift " + std::to_string(e.gate);
+        break;
+      case EventKind::unloaded:
+        line += " at the top of lift " + std::to_string(e.gate) + " after " + f(e.value, 1) + " s";
         break;
     }
     line += " at x " + f(s.x, 1) + " z " + f(s.z, 1) + ", " + f(s.speed * 3.6, 1) + " km/h";
@@ -139,6 +147,10 @@ const char* event_name(EventKind kind) {
       return "onto";
     case EventKind::arrived:
       return "arrived";
+    case EventKind::boarded:
+      return "boarded";
+    case EventKind::unloaded:
+      return "unloaded";
   }
   return "?";
 }
@@ -185,6 +197,11 @@ void step(GameState& state, std::span<const Controls> controls) {
     const Controls c =
         static_cast<size_t>(i) < controls.size() ? controls[static_cast<size_t>(i)] : Controls{};
     if (c.reset && !p.finished) reset(state, i);
+    // A lift that has him carries him: his skis, his run and the run's resets wait.
+    if (state.mode == Mode::free && on_lift(state, i)) {
+      step_lift(state, i);
+      continue;
+    }
     sk::SkierInput in = c.ski;
     if (p.finished) in = sk::SkierInput{0, 0, 1, false};
     const double x0 = r.skier.x;
@@ -197,6 +214,7 @@ void step(GameState& state, std::span<const Controls> controls) {
     if (state.mode == Mode::free) {
       GE_ZONE("free");
       step_free(state, i, x0, z0);
+      board_lift(state, i);
     } else {
       GE_ZONE("course");
       step_course(state, i, x0, z0);
@@ -259,6 +277,11 @@ uint64_t state_hash(const GameState& state, uint64_t h) {
     mix(f.distance);
     mix(f.arrived ? 1 : 0);
     mix(f.arrived_at);
+    mix(static_cast<double>(f.lift.phase));
+    mix(f.lift.lift);
+    mix(f.lift.carrier);
+    mix(f.lift.since);
+    mix(f.lift.ridden);
   }
   return wanted_hash(state.wanted, h);
 }

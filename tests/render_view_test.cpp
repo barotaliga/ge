@@ -1,12 +1,15 @@
 // engine/render/view.hpp: the camera's matrices put what is ahead in the middle of the frame,
 // what is to the right on the right and what is above at the top; depth is reversed (1 at the
 // near plane, falling toward 0 with distance); the inverse undoes the product; the frustum's
-// planes keep what is in view and refuse what is behind or beside.
+// planes keep what is in view and refuse what is behind or beside; a depth read back unprojects
+// to how far the point it came from is.
 //
 // ge:summary Tests for the camera: projection sides, reversed depth, inverse, frustum planes
 // ge:keywords test render camera view projection reverse-z frustum inverse heading
+// ge:keywords depth_distance
 // ge:skill render testing
 #include <cmath>
+#include <limits>
 
 #include "check.hpp"
 #include "render/view.hpp"
@@ -95,4 +98,24 @@ TEST(frustum_planes_keep_what_is_in_view) {
   CHECK(!inside(c, 200, 0, 50));  // far to the right
   CHECK(!inside(c, 0, 0, 0.05));  // before the near plane
   CHECK(inside(c, 0, 0, 1e5));    // no far plane
+}
+
+TEST(a_depth_unprojects_to_its_distance) {
+  FrameView v;
+  v.heading = 0.4;
+  v.pitch = -0.2;
+  const auto c = camera_matrices(v, 16.0 / 9.0);
+  // Points ahead and off to the side, near and far: each one's depth gives back its distance.
+  const double points[][3] = {{0.5, -1.0, 6.0}, {-30.0, -12.0, 200.0}, {400.0, 80.0, 2500.0}};
+  for (const auto& p : points) {
+    const float in[4] = {static_cast<float>(p[0]), static_cast<float>(p[1]),
+                         static_cast<float>(p[2]), 1};
+    float out[4];
+    ge::render::transform(c.view_proj, in, out);
+    const double d =
+        ge::render::depth_distance(c, out[0] / out[3], out[1] / out[3], out[2] / out[3]);
+    const double want = std::sqrt(p[0] * p[0] + p[1] * p[1] + p[2] * p[2]);
+    CHECK(std::fabs(d - want) < want * 1e-4);
+  }
+  CHECK(ge::render::depth_distance(c, 0, 0, 0.0f) == std::numeric_limits<double>::infinity());
 }

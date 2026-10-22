@@ -106,7 +106,10 @@ void run(gl::Lab& lab) {
                           fixed(static_cast<double>(tuck) * pct, 1),
                           fixed(static_cast<double>(glide) * pct, 1), std::to_string(flips),
                           fixed(per_min, 1), std::to_string(close), std::to_string(resets)});
-    const std::string key = k + "." + who + ".";
+    std::string key = k;
+    key += ".";
+    key += who;
+    key += ".";
     lab.metric(key + "brake-share", static_cast<double>(brake) * pct, "%");
     lab.metric(key + "tuck-share", static_cast<double>(tuck) * pct, "%");
     lab.metric(key + "speed-flips-per-min", per_min, "count");
