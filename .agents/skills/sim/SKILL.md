@@ -1,6 +1,6 @@
 ---
 name: sim
-description: "Use for games/fall_line/sim (Fall Line's own simulation): create_game and the 120 Hz step's order, the modes, the course, the field, the bot, the headless sim CLI, and engine/loop's run clock. The mountain generator is the mountain skill's."
+description: "Use for games/fall_line/sim (Fall Line's own simulation): create_game and the 120 Hz step's order, the modes, the free ride, the course, the field, the bot, the headless sim CLI, and engine/loop's run clock. The mountain generator is the mountain skill's."
 ---
 
 # The Fall Line simulation
@@ -22,10 +22,11 @@ tests):
 | `state.hpp` | `GameState` (the map, the trees' index, the pair, the racers, this step's events, the clock), `Racer`, `Rider` (a bot's pace and lane), `Progress`, `Controls`, the events; `kHz` = 120 |
 | `game.hpp/.cpp` | `race_map(seed)` (v1, the single piste), `create_game`, `create_game_on`, `step` (THE ORDER of a step, stated once in the header), `state_hash` |
 | `course.hpp/.cpp` | The gates in order, a miss, the finish's clock inside its step, the reset (`reset_racer`), `bearing_to_next` |
+| `free.hpp/.cpp` | THE FREE RIDE (`Mode::free`): `free_map` (the ski area), `run_tracks` (its runs as lines, each index built at create), `create_free_ride` (the player alone at a run's head), `step_free` (the metres, the run under the skis, `onto`, the foot's `arrived`), `reset_free` (down the run he was last on), `run_chain` (a run and every run it flows into, to a foot) |
 | `controls.hpp` | The control tape's schema (steer, tuck, brake, flags) and `snap_controls` |
-| `bot.hpp/.cpp` | `plan_bot` (the speed plan off `skier/limits.hpp`, and on a course whose slalom gates stand off the line the weave through them) and `bot_controls` (pure pursuit of the racer's lane about the weave, brake over the plan at his pace, tuck under it) |
+| `bot.hpp/.cpp` | `plan_bot` and `plan_free` (the line a plan is laid on, `BotPlan::track`: the course's piste, or a run's chain on the free ride; the speed plan off `skier/limits.hpp`, and on a course whose slalom gates stand off the line the weave through them) and `bot_controls` (pure pursuit of the racer's lane about the weave, brake over the plan at his pace, tuck under it) |
 | `field.hpp/.cpp` | The rivals: `deal_field` (each rival's pace off a stream of the map's seed, his lane off his grid slot), `meet_racers` (skier against skier: the shoulder), `standings` and `place_of` (off `plugins/racing`) |
-| `simulate.hpp/.cpp` | `Driver` (THE ONE STEP every pilot drives: snapped, taped, the rivals' bots, `step`, hashed), `simulate`, `simulate_on`, `replay_tape`, the `RunReport` and its `FieldRow`s |
+| `simulate.hpp/.cpp` | `Driver` (THE ONE STEP every pilot drives: snapped, taped, the rivals' bots, `step`, hashed), `simulate`, `simulate_on`, `simulate_free`, `replay_tape`, the `RunReport` and its `FieldRow`s |
 | `wanted.hpp/.cpp`, `wanted_state.hpp`, `wanted_rules.hpp` | THE WANTED LEVEL: `raise_heat` (the offence hook), `step_wanted` (the look, the climb, the search running out), `sees_quarry` and `through_woods` (the sight line), `under_cover`, `arrest_quarry`, `roster_of`, `ground_wave`; the state `GameState::wanted` (inactive and unhashed until raised); every number in `wanted_rules.hpp` |
 | `play.hpp/.cpp` | `PlaySession`: an agent at the controls over JSON lines (`hello`, `observe`, `act`, `tape`, `end`); THE PROTOCOL is stated once in its header |
 
@@ -38,10 +39,13 @@ seed. The skier on the snow is `plugins/skier` (the `skier` skill).
 2. The run: the state, the course, the step, the bot, `simulate` and the `sim` lab (M5b, done).
 3. The field and an agent at the controls: rivals on one grid, skier against skier, the
    standings off `plugins/racing`, and the `play` lab over stdio (M5c, done).
-4. The wanted level (M15a, done): the hunt's state and rules, scripted pursuers in the `wanted`
+4. The free ride's run (M13a1, done): a run's mode, the run under the skis, the foot, the
+   reset, the bot down a run's chain. The game opens PLAY on the free ride; its races and
+   tricks stay behind the developer switch, kept and not grown.
+5. The wanted level (M15a, done): the hunt's state and rules, scripted pursuers in the `wanted`
    lab until the army's pilots (M15c–M15e) write them.
-5. Next: the modes and their rules (the race formats) arrive with the app's cards (M10); the
-   ski area's maps (M4b) are raced once `race_map` is asked for v8 and up.
+6. Next: the lifts (M13a2): the carriers on the rope, boarding, the ride, the top; the bot's
+   outing. Then the free ride's other systems, a row each (M13+).
 
 ## Rules
 
@@ -60,7 +64,14 @@ seed. The skier on the snow is `plugins/skier` (the `skier` skill).
 - **The play protocol is stated once**, in `play.hpp`'s header, and mirrored in
   `docs/labs.md` § An agent at the controls. An observation carries only what a player could
   know. A new op or field changes both and `tests/fall_line_play_test.cpp`.
-- No allocation in `step`: the racers are sized at create and the events reserved.
+- No allocation in `step`: the racers are sized at create, the events reserved, a free ride's
+  `skied` reserved for every run and every run's nearest-point index built at create.
+- **A race's digest reads nothing of the free ride**: `state_hash` mixes `FreeRide` only when
+  the mode is `free`, and a race never steps it, so a free-ride change moves only
+  `tests/golden/fall_line_free.txt` and the `free` lab. Run `make lab LAB=free ARGS=--seeds=1,2,3,4,5,6,7,8,38`
+  before and after any change to the free ride, the bot or the skier, and rewrite that golden
+  with `GE_GOLDEN_WRITE=1 build/release/tests/fall_line_free_test`. The test and the lab are
+  pinned to generator v10, so a new generator version moves neither.
 - Nothing in a step draws a random number: the field's only draws (the rivals' paces) are
   made once, in `deal_field`, off a stream of the map's seed. The renderer and the app never
   write `GameState`.
@@ -74,6 +85,11 @@ seed. The skier on the snow is `plugins/skier` (the `skier` skill).
 reference seeds by default), the run report table and each run's line drawn on its map; a seed
 not finished fails the lab. It is Fall Line's headless sim CLI; `--rivals=3` puts a field on
 the grid and adds the field table (every racer's pace, lane, place and shoulders).
+
+`free` (drive, `games/fall_line/labs/free_lab.cpp`): the bot on the free ride down every piste
+of each seed's ski area (`--seeds=38` by default, `--most=N` the first N), from its head to a
+foot: the runs table and the ski area with every line drawn. A piste not skied to a foot fails
+the lab.
 
 `wanted` (scenario, `games/fall_line/labs/wanted_lab.cpp`): the hunt on seed 38 against scripted
 pursuers (`shadow`, `posts`, `arrest`), the hunt table, each line coloured by the stars, and the

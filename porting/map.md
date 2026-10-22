@@ -33,6 +33,8 @@ the row when the file moves.
 | `engine/core/solar.cpp` | `oss-game-framework/src/core/solar.ts` |  |
 | `engine/core/solar.hpp` | `oss-game-framework/src/core/solar.ts` | sunAt moonAt daylightWindow sunOnDate moonOnDate hourOfElevation |
 | `engine/loop/run_clock.hpp` | `oss-game-framework/src/loop/run-clock.ts` | createRunClock MAX_FRAME_SECONDS |
+| `games/fall_line/sim/free.cpp` | `game5/engine/game/skied.ts`, `course.ts` | runUnder noteRun noteSkied leftRunPoint skiedResetPoint freeSpawn |
+| `games/fall_line/sim/free.hpp` | `game5/engine/game/skied.ts`, `course.ts` | runUnder noteRun noteSkied leftRunPoint skiedResetPoint freeSpawn |
 | `games/fall_line/sim/wanted.cpp` | `game5/engine/game/wanted.ts` | raiseHeat setWanted arrestSkier seesQuarry throughWoods underCover stepWanted groundWave wavesSent |
 | `games/fall_line/sim/wanted.hpp` | `game5/engine/game/wanted.ts` | quarryOf raiseHeat setWanted arrestSkier arrestedOf survivedOf rosterOf groundWave wavesSent seesQuarry throughWoods underCover stepWanted |
 | `games/fall_line/sim/wanted_rules.hpp` | `game5/engine/game/defs/wanted.ts` | WANTED WantedRoster WaveMix GroundWaves PursuerKind WantedCause |
