@@ -23,12 +23,6 @@ namespace {
 constexpr int kLineCap = 1000;
 constexpr int kTagLines = 60;  // a file's ge: block sits in its first 60 lines
 
-// Build output, dependencies and pictures: never the repo's own text.
-bool skipped_dir(const std::string& name) {
-  return name == ".git" || name.starts_with("build") || name == "_deps" || name == "previews" ||
-         name == ".cache" || name == "stage" || name == "node_modules";
-}
-
 struct RepoFiles {
   std::vector<fs::path> sources;  // .cpp .hpp .h
   std::vector<fs::path> cmake;    // CMakeLists.txt, *.cmake

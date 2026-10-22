@@ -25,7 +25,9 @@ writes it, so everything that can be tested headless is tested headless.
 
 ## Adding a system
 
-1. Find whether the engine or a plugin already models it (skill: `engine`).
+1. Find whether the engine or a plugin already models it: `ge find <words>` (skill: `engine`).
+   `ge add system <name>` writes a working system and its replay test to start from
+   (`sim/<name>.hpp`, `.cpp`, `tests/sim_<name>_test.cpp`); its header says how to wire it in.
 2. Write the test first, in `tests/sim_<system>_test.cpp`: stage the state, script the inputs
    step by step, and check the outcome. Check bits where bits matter (`CHECK_BITS`).
 3. Add the state, the create, the step call. No allocation in the step: reserve at create.
@@ -36,7 +38,7 @@ writes it, so everything that can be tested headless is tested headless.
 ## Determinism
 
 The rules are the engine's (skill: `engine`, § Determinism): `ge::core` linked, transcendentals
-from `core/libm/libm.hpp`, randomness from the state's `Rng`, no clock. `make agents-check`
+from `core/libm/libm.hpp`, randomness from the state's `Rng`, no clock. `ge doctor`
 fails `sim/` on a `<cmath>` transcendental, `std::chrono`, `time(`, `rand(` or `<random>`.
 
 A run that does not replay is found by bisecting the steps: compare the two runs' digests

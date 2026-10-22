@@ -14,6 +14,7 @@
 // ge:summary A game repo's skills: parsing, lessons, the lock, ge skills sync and ge lessons
 // ge:keywords cli ge skills sync consumer-skills lock lessons fragments front-matter
 // ge:keywords skill-reflection agents-md routing sync_skills check_skills print_lessons
+// ge:keywords skills_for plugin-skills
 // ge:skill agent-interface
 // ge:test tests/cli_skills_test.cpp
 #pragma once
@@ -22,6 +23,7 @@
 #include <ostream>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "cli/finding.hpp"
@@ -36,6 +38,7 @@ inline constexpr std::string_view kBlockEnd = "<!-- ge:skills:end -->";
 struct SkillDoc {
   std::string name;
   std::string description;
+  std::string plugin;  // a plugin's skill (front matter `plugin: <name>`): synced only when linked
 };
 
 // A SKILL.md's front matter, or nothing when it has none.
@@ -47,6 +50,9 @@ struct ConsumerSkill {
   std::string_view text;
 };
 std::vector<ConsumerSkill> consumer_skills();
+// The ones this repo gets: every skill but a plugin's whose plugin the repo does not link, by
+// itself or through a plugin it links (`ge use <plugin>` links one and syncs its skill).
+std::vector<ConsumerSkill> skills_for(const fs::path& repo);
 
 // One lesson fragment, parsed. `errors` are format errors (the fragment fails the check).
 struct Lesson {
@@ -86,6 +92,12 @@ struct SyncResult {
   std::vector<Finding> findings;
 };
 SyncResult sync_skills(const fs::path& repo, bool force);
+
+// One skill's lessons, oldest first, narrowed to those whose scope overlaps `scope` when given.
+std::vector<Lesson> lessons_of(const fs::path& repo, std::string_view skill,
+                               std::string_view scope);
+// Every skill directory and its lesson count.
+std::vector<std::pair<std::string, int>> lesson_inventory(const fs::path& repo);
 
 // `ge lessons`: with no skill, the inventory (every skill and its lesson count); with one, its
 // lessons in full, oldest first, narrowed to those whose scope overlaps `scope` when given.

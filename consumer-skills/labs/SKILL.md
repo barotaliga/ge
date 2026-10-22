@@ -13,21 +13,24 @@ The contract and the runner are the engine's (`lab/lab.hpp`, `lab/runner.hpp`, t
 ## Running
 
 ```sh
-make labs                                  # the list: id, kind, owner, skill, question
-make lab LAB=run                           # one lab, its default flags
-make lab LAB=run ARGS=--help               # its flags
-make lab LAB=run ARGS=--tag=before         # write to previews/run@before/
-make lab LAB=run ARGS=--compare=before     # every metric beside the tagged run's
+ge lab                                 # the list (--json: id, kind, owner, skill, question, flags)
+ge lab run                             # one lab, its default flags
+ge lab run -- --help                   # its own flags; they go after --
+ge lab run -- --seeds=7                # one lab with its own flags
+ge lab run --tag=before                # write to previews/run@before/
+ge lab run --compare=before            # every metric beside the tagged run's
+ge lab run --json                      # the same, its report.json inside the answer
 ```
 
 A lab writes `previews/<id>/`: `report.json` and `metrics.tsv` for an agent, `index.md` (the
 contact sheet), and one PNG per picture with its caption burned in. Read `index.md` first, then
-open the pictures it names. `make test` runs every lab at its smoke flags twice in one process:
+open the pictures it names. `ge test` runs every lab at its smoke flags twice in one process:
 a digest that differs between the two runs is a determinism break.
 
 ## Writing one
 
-One file, `labs/<id>_lab.cpp`, registering a `LabSpec` with `GE_LAB(spec)`:
+`ge add lab <name> --kind=sim|scenario|picture|bench` writes a working one of that kind to
+start from; make it answer your question. By hand, it is one file, `labs/<id>_lab.cpp`, registering a `LabSpec` with `GE_LAB(spec)`:
 
 - `id` (the command-line name), `kind` (`sim`, `scenario`, `picture`, `drive`, `bench`),
   `owner` (`game:<name>`), `subject` (the files it measures), `skill` (how to read it),
