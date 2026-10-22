@@ -94,7 +94,12 @@ jobs:
           "$G" add lab wind-cost --kind=bench
           "$G" add test wind
           git add -A
-          "$G" check --engine="$GITHUB_WORKSPACE"
+          # CI's gates, as the new repo's own ci.yml runs them: ge check, the pilot, the replays.
+          "$G" precheck --preset=debug --engine="$GITHUB_WORKSPACE"
+          # A failed job's log, saved, read back as the finding it names.
+          printf '2026-10-22T13:44:37.0Z ge check: error: src/a.cpp is not formatted\n' > "$RUNNER_TEMP/job.log"
+          "$G" ci --log="$RUNNER_TEMP/job.log" --json > "$RUNNER_TEMP/ci.json" || true
+          grep -q 'is not formatted' "$RUNNER_TEMP/ci.json"
           # Played: the pilot's runs, each replayed to its digest, the protocol scripted, a state
           # read, and a log changed at one line found where it parts.
           E=--engine="$GITHUB_WORKSPACE"

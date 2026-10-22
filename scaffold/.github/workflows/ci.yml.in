@@ -1,5 +1,7 @@
-# Every push and pull request: `ge check` (the format, the agent guidance and the rules, the build
-# and every test and lab), with the sanitizers and without. The pinned release's ge is built first.
+# Every push and pull request: `ge precheck` (`ge check`: the format, the agent guidance and the
+# rules, the build and every test and lab; then the pilot over three seeds, each run's input log
+# replayed to its digest), with the sanitizers and without. The pinned release's ge is built first.
+# Run `ge precheck` before a push and this job is green by construction; `ge ci` reads it when not.
 name: ci
 
 on:
@@ -26,7 +28,4 @@ jobs:
       - uses: actions/checkout@v5
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ninja-build clang-format
       - run: make ge-build PRESET=${{ matrix.preset }}
-      - run: build/${{ matrix.preset }}/ge check --preset=${{ matrix.preset }}
-      # The pilot plays three seeds and each run's input log is played back to its digest.
-      - run: build/${{ matrix.preset }}/ge sim --seeds=1,2,3 --preset=${{ matrix.preset }}
-      - run: for f in runs/*.inputs; do build/${{ matrix.preset }}/ge replay "$f" --preset=${{ matrix.preset }} || exit 1; done
+      - run: build/${{ matrix.preset }}/ge precheck --preset=${{ matrix.preset }}
