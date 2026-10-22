@@ -7,7 +7,10 @@
 #                (engine/audio; deterministic, no platform)
 #   ge_lab       the lab framework (engine/lab: the contract, the runner, the raster, the PNG,
 #                the series files and the charts)
-#   ge_play      the play contract (engine/play: GameSpec and Run, the session, the input log)
+#   ge_play      the play contract (engine/play: GameSpec and Run, the session, the input log,
+#                the bench)
+#   ge_prof      the profiler (engine/prof: timing zones, allocation counts, the resident set);
+#                ge_prof_alloc the counting operator new an executable links to count allocations
 #   ge_cli, ge   the ge command line (engine/cli: ge new, ge skills sync, ge doctor, ge lessons;
 #                cmake/Cli.cmake)
 #   fall_line_sim  Fall Line's simulation (games/fall_line: create_game, step, the bot)
@@ -23,9 +26,9 @@
 #   ge_isa       the instruction-set baseline (x86-64: AVX2), linked by ge_core and
 #                published as ge::isa
 #   ge_flags     warnings, -Werror, sanitizers: this tree only, never published
-# ge_core, ge_fp, ge_isa, ge_lab, ge_play and every plugin target are installed and published
-# as ge::core, ge::fp, ge::isa, ge::lab, ge::play and ge::<plugin>, and the ge executable is
-# installed to bin/
+# ge_core, ge_fp, ge_isa, ge_lab, ge_play, ge_prof, ge_prof_alloc and every plugin target are
+# installed and published as ge::core, ge::fp, ge::isa, ge::lab, ge::play, ge::prof,
+# ge::prof_alloc and ge::<plugin>, and the ge executable is installed to bin/
 # (cmake/Packaging.cmake, docs/publishing.md).
 cmake_minimum_required(VERSION 3.25)
 project(gameengine2 LANGUAGES CXX)
@@ -148,12 +151,24 @@ add_library(ge_lab STATIC engine/lab/lab.cpp engine/lab/report.cpp engine/lab/ru
   engine/lab/anim.cpp)
 target_link_libraries(ge_lab PUBLIC ge_core ge_audio)
 
+# The profiler (engine/prof): the timing zones any code opens with GE_ZONE, the allocation
+# counts and the resident set. The counting operator new is its own target, ge_prof_alloc: an
+# executable that links it counts every allocation (the play executable does).
+add_library(ge_prof STATIC engine/prof/zones.cpp engine/prof/memory.cpp)
+target_link_libraries(ge_prof PUBLIC ge_core)
+if(WIN32)
+  target_link_libraries(ge_prof PRIVATE psapi)
+endif()
+add_library(ge_prof_alloc STATIC engine/prof/alloc_hook.cpp)
+target_link_libraries(ge_prof_alloc PUBLIC ge_prof)
+
 # The play contract (engine/play: a game's spec and Run, the session and its line protocol, the
-# input log, replay and diverge, the `play` executable's main), published as ge::play so a game's
-# `play` target is driven by `ge play`, `ge sim`, `ge replay`, `ge state` and `ge diverge`.
+# input log, replay and diverge, the bench, the `play` executable's main), published as ge::play
+# so a game's `play` target is driven by `ge play`, `ge sim`, `ge replay`, `ge state`,
+# `ge diverge`, `ge bench`, `ge profile` and `ge mem`.
 add_library(ge_play STATIC engine/play/inputs.cpp engine/play/json_read.cpp
-  engine/play/session.cpp engine/play/main.cpp)
-target_link_libraries(ge_play PUBLIC ge_core)
+  engine/play/session.cpp engine/play/bench.cpp engine/play/main.cpp)
+target_link_libraries(ge_play PUBLIC ge_core ge_prof ge_prof_alloc)
 
 # The ge command line (engine/cli, cmake/Cli.cmake): built here too when a game pulls the engine
 # in, so the game runs the ge of the engine it pins.

@@ -34,13 +34,6 @@ std::string answer_line(const std::string& output) {
   return last;
 }
 
-std::string text_of(const play::FlatJson& m, const std::string& key) {
-  const auto it = m.find(key);
-  if (it == m.end()) return "";
-  return it->second.kind == play::JsonValue::Kind::string ? it->second.text
-                                                          : play::json_text(it->second);
-}
-
 Outcome run_exe(const BuildOptions& o, const std::string& command, const std::string& args) {
   Outcome out;
   if (!build_into(o, out)) return out;
@@ -53,19 +46,16 @@ Outcome run_exe(const BuildOptions& o, const std::string& command, const std::st
 
 }  // namespace
 
-fs::path play_exe(const BuildOptions& o) {
-  fs::path exe = o.repo / "build" / o.preset / "play";
-#ifdef _WIN32
-  exe += ".exe";
-#endif
-  return exe;
+std::string text_of(const play::FlatJson& m, const std::string& key) {
+  const auto it = m.find(key);
+  if (it == m.end()) return "";
+  return it->second.kind == play::JsonValue::Kind::string ? it->second.text
+                                                          : play::json_text(it->second);
 }
 
-Outcome play_answer(const BuildOptions& o, const std::string& command, int code,
-                    const std::string& output) {
-  Outcome out;
-  const std::string line = answer_line(output);
-  play::FlatJson m;
+bool read_answer(const BuildOptions& o, int code, const std::string& output, play::FlatJson& m,
+                 std::string& line, Outcome& out) {
+  line = answer_line(output);
   std::string why;
   if (line.empty() || !play::read_flat(line, m, why, true)) {
     out.findings.push_back(
@@ -73,7 +63,7 @@ Outcome play_answer(const BuildOptions& o, const std::string& command, int code,
          "the play executable gave no JSON answer (exit " + std::to_string(code) + ")",
          rel_path(o.repo, build_log(o, "ge-play")),
          "read the log; a game without a play target needs one (skill: play-test)"});
-    return out;
+    return false;
   }
   if (m.contains("error")) {
     // The executable names the absolute paths ge handed it; the agent reads them from the repo.
@@ -102,8 +92,35 @@ Outcome play_answer(const BuildOptions& o, const std::string& command, int code,
                             fs::path(in_repo(text_of(m, "where"))).generic_string(),
                             text_of(m, "next")});
     if (code == 2) out.exit = 2;
-    return out;
+    return false;
   }
+  return true;
+}
+
+bool play_command(const BuildOptions& o, const std::string& args, play::FlatJson& m,
+                  std::string& line, Outcome& out) {
+  if (!build_into(o, out)) return false;
+  const fs::path log = build_log(o, "ge-play");
+  std::error_code ec;
+  fs::remove(log, ec);
+  const Logged r = run_to_log(quoted_path(play_exe(o)) + args, log);
+  return read_answer(o, r.code, r.output, m, line, out);
+}
+
+fs::path play_exe(const BuildOptions& o) {
+  fs::path exe = o.repo / "build" / o.preset / "play";
+#ifdef _WIN32
+  exe += ".exe";
+#endif
+  return exe;
+}
+
+Outcome play_answer(const BuildOptions& o, const std::string& command, int code,
+                    const std::string& output) {
+  Outcome out;
+  play::FlatJson m;
+  std::string line;
+  if (!read_answer(o, code, output, m, line, out)) return out;
   out.result = line;
   if (command == "sim") {
     std::string text;
