@@ -268,10 +268,22 @@ uint32_t sub_seed(double seed, int attempt) {
 }
 
 void Level::normal_at(double x, double z, Vec3& out) const {
-  double g[3];
-  ge::core::sample_field_gradient(ground, x, z, g);
-  const double nx = -g[1];
-  const double nz = -g[2];
+  double nx = 0;
+  double nz = 0;
+  double along = 0;
+  if (venue && venue->covers(x, z, along)) {
+    // A venue's own surface, by central differences a few centimetres apart (its profile is
+    // drawn every few centimetres); it does not change across its line.
+    constexpr double kE = 0.05;
+    const double ga = (venue->height_at(along + kE) - venue->height_at(along - kE)) / (2 * kE);
+    nx = -ga * venue->fx;
+    nz = -ga * venue->fz;
+  } else {
+    double g[3];
+    ge::core::sample_field_gradient(ground, x, z, g);
+    nx = -g[1];
+    nz = -g[2];
+  }
   const double inv = 1 / std::sqrt(nx * nx + 1 + nz * nz);
   out.x = nx * inv;
   out.y = inv;
