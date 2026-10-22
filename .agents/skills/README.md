@@ -37,6 +37,7 @@ router's Skills table and the directories against each other.
 | `debug` | Log channels and dumps, series traces, the outlier rule, the chart kit, `ge graph` |
 | `perf` | Budgets, measuring, the proofs a speed-up owes, the levers |
 | `agent-interface` | Diagnostics as prompts, consumer skills, the `ge` CLI |
+| `bots` | What a bot decides: `engine/ai`, the decision record, `ge why`, making a bot more human |
 | `plugins` | Engine, plugin or game: where code lives, adding a plugin, moving code between homes |
 
 ## Plugins

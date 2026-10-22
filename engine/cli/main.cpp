@@ -184,6 +184,18 @@ Outcome run(const Args& a) {
   if (name == "replay") return run_replay(build_options(a), a.words[0]);
   if (name == "state") return run_state(build_options(a), a.words[0], flag_value(a, "step"));
   if (name == "diverge") return run_diverge(build_options(a), a.words[0], a.words[1]);
+  if (name == "why") {
+    WhyOptions w;
+    w.log = a.words[0];
+    w.agent = flag_value(a, "agent");
+    w.step = flag_value(a, "step");
+    w.around = flag_value(a, "around");
+    w.decision = flag_value(a, "decision");
+    w.close = flag_value(a, "close");
+    w.flips = has_flag(a, "flips");
+    w.timeline = has_flag(a, "timeline");
+    return run_why(build_options(a), w);
+  }
   if (name == "shot") {
     return run_shot(build_options(a), a.words.empty() ? "" : a.words[0], flag_value(a, "seed"),
                     flag_value(a, "step"), flag_value(a, "view"), a.passthrough);

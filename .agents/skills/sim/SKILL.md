@@ -57,6 +57,9 @@ seed. The skier on the snow is `plugins/skier` (the `skier` skill).
   the field), and put both tables in the PR (`make sim ARGS=--rivals=3` for the field's).
 - **The bot plans on the skier's limits** (`skier/limits.hpp`), never on a ceiling of its own;
   its own numbers are `bot::` constants in `bot.hpp`, each with its unit.
+- **The bot records why** (`mode`, `line`, `speed`) on the `ge::ai::Why*` it is handed, and
+  decides the same without it (the `bots` skill): a new choice in it records its options too.
+  `make lab LAB=why` and `ge why <log>` read them; `tests/fall_line_why_test.cpp` holds them.
 - **Every pilot drives through `Driver::step`** (the bot, a tape, an agent): the player's
   controls are snapped onto the tape's grid before `step` sees them, so a tape played back
   (with the same number of rivals) is the run again. Only the player is taped: a rival's

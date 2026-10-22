@@ -43,7 +43,9 @@ void Driver::step(Controls player) {
   {
     GE_ZONE("bot");
     for (size_t i = 1; i < controls_.size(); i++) {
-      controls_[i] = bot_controls(state_, static_cast<int32_t>(i), plan_);
+      const auto at = static_cast<int32_t>(i);
+      controls_[i] =
+          bot_controls(state_, at, plan_, why_ ? why_->follow(at, state_.steps) : nullptr);
     }
   }
   fall_line::sim::step(state_, controls_);

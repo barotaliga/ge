@@ -153,12 +153,20 @@ class FallLineRun final : public ge::play::Run {
   }
 
   bool pilot(std::span<double> out) override {
-    const Controls c = bot_controls(driver_.state(), 0, driver_.plan());
+    const GameState& st = driver_.state();
+    const Controls c =
+        bot_controls(st, 0, driver_.plan(), why_ ? why_->follow(0, st.steps) : nullptr);
     out[0] = c.ski.steer;
     out[1] = c.ski.tuck;
     out[2] = c.ski.brake;
     out[3] = c.ski.jump ? 1 : 0;
     out[4] = c.reset ? 1 : 0;
+    return true;
+  }
+
+  bool trace(ge::ai::Why* why) override {
+    why_ = why;
+    driver_.set_why(why);
     return true;
   }
 
@@ -225,6 +233,7 @@ class FallLineRun final : public ge::play::Run {
   }
 
   Driver driver_;
+  ge::ai::Why* why_ = nullptr;
   double seed_;
   std::vector<GameEvent> backlog_;
   int32_t dropped_ = 0;

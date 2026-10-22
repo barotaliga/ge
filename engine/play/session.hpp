@@ -12,6 +12,8 @@
 //   `press` axis is taken on the first step only. Past the end it answers an error.
 // - `{"op":"pilot","steps":n}` lets the game's own pilot play n steps (an agent hands over and
 //   takes back), then answers the observation.
+// - `{"op":"why"}` answers what the game's pilot would do now and why, without stepping: the
+//   input it would send (snapped) and its decision records (ai/why.hpp), as agent 0.
 // - `{"op":"state"}` answers everything that decides the next step (the game's `state`).
 // - `{"op":"inputs"}` answers the input log so far, as its text.
 // - `{"op":"end"}` answers the report, the steps and the digest, and ends the session.
@@ -25,6 +27,7 @@
 // ge:summary The play session over a Run: the line protocol, the pilot, replay, state, diverge
 // ge:keywords play session protocol observe act pilot state inputs end replay diverge divergence
 // ge:keywords pilot_run state_at first-difference field-diff hello shot_at still view caption
+// ge:keywords why why_now
 // ge:skill agent-interface
 // ge:test tests/play_session_test.cpp
 #pragma once
@@ -72,6 +75,7 @@ class Session {
 
  private:
   std::string observation(std::string_view op);
+  std::string why_now();
 
   const GameSpec& spec_;
   Setup setup_;

@@ -88,6 +88,8 @@ class Driver {
   bool over() const;
   const GameState& state() const { return state_; }
   const BotPlan& plan() const { return plan_; }
+  // The rivals' bots record their decisions into `why` (null: stop), each as his racer index.
+  void set_why(ge::ai::Why* why) { why_ = why; }
   uint64_t digest() const { return hash_; }
   ge::racing::ControlTape tape() const { return recorder_.seal(); }
   // The run so far, as the sim lab's table prints it.
@@ -99,6 +101,7 @@ class Driver {
   ge::racing::TapeRecorder recorder_;
   std::vector<Controls> controls_;
   std::vector<int32_t> shoulders_;
+  ge::ai::Why* why_ = nullptr;
   uint64_t hash_ = 0xcbf29ce484222325ull;
   double top_speed_ = 0;
   int32_t flights_ = 0;

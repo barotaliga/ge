@@ -144,19 +144,29 @@ BotPlan plan_free(const mg::Level& level, int32_t run, const sk::SkiSpec& spec) 
   return plan;
 }
 
-Controls bot_controls(const GameState& state, int32_t i, const BotPlan& plan) {
+Controls bot_controls(const GameState& state, int32_t i, const BotPlan& plan, ge::ai::Why* why) {
   const Racer& r = state.racers[static_cast<size_t>(i)];
   const sk::SkierState& s = r.skier;
   Controls c;
+  if (why) {
+    why->decide("mode");
+    why->fact("speed", s.speed);
+  }
   if (r.free.arrived) {
+    if (why) why->choose("stop", "arrived");
     c.ski.brake = 1;
     return c;
   }
-  if (r.progress.finished || s.down) return c;
+  if (r.progress.finished || s.down) {
+    if (why) why->choose("coast", r.progress.finished ? "finished" : "down");
+    return c;
+  }
   if (r.progress.missed) {
+    if (why) why->choose("reset", "missed_gate");
     c.reset = true;
     return c;
   }
+  if (why) why->choose("ride", "on_course");
   const mg::Track& track = *plan.track;
   const mg::TrackHit hit = mg::nearest_track_point(track, s.x, s.z);
   const double v = s.speed;
@@ -183,6 +193,23 @@ Controls bot_controls(const GameState& state, int32_t i, const BotPlan& plan) {
   const double edge = sk::edge_for_curvature(state.spec, curvature);
   const double most = sk::edge_most(state.spec, v, s.tuck);
   if (s.on_snow) c.ski.steer = num::sign(alpha) * num::min(1.0, most > 0 ? edge / most : 1.0);
+  if (why) {
+    why->decide("line");
+    why->fact("s_m", hit.s);
+    why->fact("off_line_m", hit.distance);
+    why->fact("look_m", look);
+    why->fact("lane_m", lane);
+    why->fact("bearing_rad", alpha);
+    why->fact("curvature", curvature);
+    why->fact("edge", edge);
+    why->fact("edge_most", most);
+    why->fact("steer", c.ski.steer);
+    why->choose(!s.on_snow  ? "airborne"
+                : alpha > 0 ? "right"
+                : alpha < 0 ? "left"
+                            : "straight",
+                "pursuit");
+  }
   // The speed: the plan's least over the stretch ahead, at his pace.
   const auto& pts = track.points;
   const size_t from = static_cast<size_t>(hit.index);
@@ -192,10 +219,36 @@ Controls bot_controls(const GameState& state, int32_t i, const BotPlan& plan) {
     cap = num::min(cap, plan.speed[k]);
   }
   cap *= r.rider.pace;
+  const double turning = c.ski.steer < 0 ? -c.ski.steer : c.ski.steer;
   if (v > cap + 0.5) {
     c.ski.brake = core::clamp((v - cap) / 4, 0.2, 1);
-  } else if (v < cap - 1 && (c.ski.steer < 0 ? -c.ski.steer : c.ski.steer) < 0.35) {
+  } else if (v < cap - 1 && turning < 0.35) {
     c.ski.tuck = 1;
+  }
+  if (why) {
+    // Each option scored by how far his speed is past its threshold: the one over zero is the
+    // one taken (the thresholds never overlap), the glide the zero they are measured from.
+    why->decide("speed");
+    why->fact("speed", v);
+    why->fact("cap", cap);
+    why->fact("plan_here", plan.speed[from] * r.rider.pace);
+    why->fact("pace", r.rider.pace);
+    why->fact("turning", turning);
+    why->option("brake", v - cap - 0.5);
+    why->term("over_plan", v - cap);
+    why->term("deadband", -0.5);
+    why->option("tuck", cap - 1 - v);
+    why->term("under_plan", cap - v);
+    why->term("deadband", -1);
+    if (turning >= 0.35) why->bar("turning");
+    why->option("glide", 0);
+    why->choose(c.ski.brake > 0  ? "brake"
+                : c.ski.tuck > 0 ? "tuck"
+                                 : "glide",
+                c.ski.brake > 0                  ? "over_plan"
+                : c.ski.tuck > 0                 ? "under_plan"
+                : turning >= 0.35 && v < cap - 1 ? "turning"
+                                                 : "near_plan");
   }
   return c;
 }

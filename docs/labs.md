@@ -257,6 +257,7 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
   | `ge replay <log>` | the log played back; a digest it misses is a determinism break |
   | `ge state <log> --step=N` | everything that decides the next step, after N steps |
   | `ge diverge <a> <b>` | the first input and the first step two runs part, and the fields that differ |
+  | `ge why <log> --step=N [--around=K] [--flips] [--timeline]` | why a bot did it: the log replayed with the decision trace on (`engine/play/why.hpp`), agent N's decisions round the step (what it saw, the options it weighed with their scores and terms, the choice and its margin); on a log a person or an agent played, what the pilot would have done instead and the first step it would have played otherwise; `--flips` every change of mind; `--timeline` a series file for `ge graph` (skill: bots) |
   | `ge shot <log> --step=N --view=V` | a still of the run at step N: the game's view drawn on the CPU raster, framed with its caption, the seed, the options, the step and the digest (`runs/<game>-<seed>-<view>-<step>.png`); without a log, the pilot's run of `--seed`. Fall Line's views: `near` (the piste 160 m round the player, the field on it) and `map` (the whole map) |
 
   The protocol is stated once in `engine/play/session.hpp`. The session opens with `hello`
@@ -267,6 +268,7 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
   | `{"op":"observe"}` | the step and the clock, and the game's observation. Fall Line's: where he is, his heading, speed and edge, on the snow or in the air, down or not; the gate owed, its bearing off his heading (+ right) and its distance; where he stands on the piste (`piste_lateral`, `piste_width`, `piste_heading`, `piste_bend` over the next 30 m); finished and the finish time; his place in the field; his events since the last answer |
   | `{"op":"act","input":{"<axis>":v,...},"steps":n}` | the observation after n steps (1 to 1200) with that input held; an absent axis is 0, a `press` axis (`reset`) is taken on the first step |
   | `{"op":"pilot","steps":n}` | the game's own pilot plays n steps, then the observation: an agent hands over and takes back |
+  | `{"op":"why"}` | what the pilot would do now and why, without stepping: the input it would send and its decision records (`engine/ai/why.hpp`), so an agent can ask before it hands over |
   | `{"op":"state"}` | the game's whole state now, every field to the bit |
   | `{"op":"inputs"}` | the input log so far, as its text: the run as a replay |
   | `{"op":"end"}` | the run's report, steps and digest; the session ends |
@@ -307,6 +309,7 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 | `ride` | scenario | plugin:skier | `plugins/skier` (`step_skier`, the snow, the limits) | M5a (now) |
 | `play` | drive | game:fall_line | `games/fall_line/sim/play` on `engine/play` (an agent over stdio, the bot through the protocol, its input log replayed) | M5c, M12b (now) |
 | `trace` | drive | game:fall_line | the player's skier step by step down one seed with the bot: `trace.tsv` (a series file), the speed, the sideways load and the edge and lean charted against the clock with gates, flights and spikes; `--log=` for the same run's events (docs/debugging.md) | M14a (now) |
+| `why` | drive | game:fall_line | `games/fall_line/sim/bot`'s decisions (`engine/ai/why`): the pilot and a field of three down one seed with every bot traced and the same run untraced beside it (the digests must agree), per racer the share of steps it braked, tucked and glided, its changes of mind a minute and its close calls; the player's speed against the plan's cap with every change of mind marked, and the margin of each speed call; `why-0.tsv` for `ge graph` | M16a (now) |
 | `wanted` | scenario | game:fall_line | `games/fall_line/sim/wanted` (the wanted level on seed 38 against scripted pursuers: the hunt table of the stars reached and when, the share seen, the searches, how it ended; each scenario's line by the stars; the sight sheds of a soldier at the start gate and a helicopter over the middle: open, hidden by the ground, by the woods, out of range) | M15a (now) |
 | `anim` | scenario | plugin:skier | `engine/lab/anim.hpp` over the skier's figure (`plugins/skier/app/figure.hpp`) ridden through a ride scenario: filmstrips from the side, behind and above, onion skins with the hands' and tips' paths, the joints' angles, a jolt heatmap, `motion.tsv`, the faults found (pop, snap, angle snap, stretch, clip), and a copy with a pop, a stretch and a clip planted, each of which must be found | M14b (now) |
 | `gpu-capture` | picture | engine | `engine/gpu` (the headless capture) | M6 (now) |

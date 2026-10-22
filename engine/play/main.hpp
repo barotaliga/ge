@@ -15,6 +15,10 @@
 //   play shot [<log> | --seed=S] [--step=N] [--view=V]      a still of the run at step N (the end
 //             [--<option>=V] [--out=DIR]                    by default): the view framed with its
 //                                                           caption band, a PNG in DIR
+//   play why <log> [--agent=N] [--step=S] [--around=K]       why a bot did it (why.hpp): agent N's
+//            [--decision=D] [--flips] [--close=X]           decisions at steps S-K..S+K; --flips
+//            [--timeline] [--out=DIR]                       every change of choice (and margins
+//                                                           under X); --timeline its series in DIR
 //
 // Every command but the protocol prints exactly one JSON object on one line. A problem prints
 // `{"error":...,"where":...,"next":...}`; the exit code is 0 done, 1 a problem (a replay that
@@ -23,7 +27,7 @@
 // ge:summary The play executable's main: protocol, describe, sim, replay, state, diverge, bench
 // ge:summary and shot
 // ge:keywords play main executable command-line describe sim replay state diverge bench
-// ge:keywords play_main
+// ge:keywords play_main why
 // ge:skill agent-interface
 // ge:test tests/play_session_test.cpp
 #pragma once

@@ -1,5 +1,5 @@
-// ge play, sim, replay, state, diverge and shot (play.hpp): the play executable run and its JSON
-// answer turned into an outcome.
+// ge play, sim, replay, state, diverge, shot and why (play.hpp): the play executable run and its
+// JSON answer turned into an outcome.
 //
 // ge:summary The play commands: build, run the play executable, its JSON answer as an outcome
 // ge:keywords cli ge play sim replay state diverge shot play_answer play_exe
@@ -187,6 +187,25 @@ Outcome play_answer(const BuildOptions& o, const std::string& command, int code,
     out.summary = state == "-1" ? "the runs never part in their common steps"
                                 : "the runs part after step " + state;
     if (state != "-1") out.next = "ge state <log> --step=" + state + " for either side";
+  } else if (command == "why") {
+    out.text = text_of(m, "text");
+    if (const std::string t = text_of(m, "timeline"); !t.empty()) {
+      out.written.push_back(rel_path(o.repo, fs::path(t)));
+    }
+    const std::string agent = text_of(m, "agent");
+    out.summary = text_of(m, "recorded") + " decisions recorded over " + text_of(m, "steps") +
+                  " steps; agent " + agent + "'s from step " + text_of(m, "from") + " to " +
+                  text_of(m, "to") + " above";
+    if (text_of(m, "pilot_asked") == "true" && text_of(m, "first_disagree") != "-1") {
+      out.summary += "; the pilot would have played otherwise from step " +
+                     text_of(m, "first_disagree") + " (" + text_of(m, "pilot_agrees") + " of " +
+                     text_of(m, "steps") + " steps agree)";
+    }
+    out.next = text_of(m, "timeline").empty()
+                   ? "ge why <log> --agent=" + agent +
+                         " --flips for every change of choice; "
+                         "--timeline for a series ge graph charts"
+                   : "ge graph " + rel_path(o.repo, fs::path(text_of(m, "timeline")));
   } else if (command == "shot") {
     const std::string png = rel_path(o.repo, fs::path(text_of(m, "png")));
     out.written.push_back(png);
@@ -238,6 +257,21 @@ Outcome run_state(const BuildOptions& o, const std::string& log, const std::stri
 
 Outcome run_diverge(const BuildOptions& o, const std::string& a, const std::string& b) {
   return run_exe(o, "diverge", " diverge \"" + absolute(a) + "\" \"" + absolute(b) + "\"");
+}
+
+Outcome run_why(const BuildOptions& o, const WhyOptions& w) {
+  std::string args = " why --out=" + quoted_path(o.repo / "runs") + " \"" + absolute(w.log) + "\"";
+  const std::pair<const char*, const std::string*> flags[] = {{"agent", &w.agent},
+                                                              {"step", &w.step},
+                                                              {"around", &w.around},
+                                                              {"close", &w.close},
+                                                              {"decision", &w.decision}};
+  for (const auto& [name, value] : flags) {
+    if (!value->empty()) args += std::string(" \"--") + name + "=" + *value + "\"";
+  }
+  if (w.flips) args += " --flips";
+  if (w.timeline) args += " --timeline";
+  return run_exe(o, "why", args);
 }
 
 Outcome run_shot(const BuildOptions& o, const std::string& log, const std::string& seed,

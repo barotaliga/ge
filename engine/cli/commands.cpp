@@ -102,6 +102,18 @@ constexpr FlagSpec kLeakFlags[] = {
     kRepo};
 constexpr FlagSpec kStateFlags[] = {
     {"step", "<n>", "after this many steps (default: the log's end)"}, kPreset, kEngine, kRepo};
+constexpr FlagSpec kWhyFlags[] = {
+    {"agent", "<n>",
+     "the bot to explain: 0 the player's pilot, then the game's others (default 0)"},
+    {"step", "<n>", "the step to explain (default: the log's last)"},
+    {"around", "<k>", "and the k steps either side of it (default 0)"},
+    {"decision", "<name>", "only this decision (default: every one)"},
+    {"flips", "", "every step the bot changed its mind over the whole run"},
+    {"close", "<x>", "with --flips, also the close calls: margins under x"},
+    {"timeline", "", "write its decisions as a series file in runs/ for ge graph"},
+    kPreset,
+    kEngine,
+    kRepo};
 constexpr FlagSpec kShotFlags[] = {
     {"seed", "<n>", "without a log: the pilot plays this seed first (default 1)"},
     {"step", "<n>", "after this many steps (default: the run's end)"},
@@ -210,6 +222,11 @@ const CommandSpec kCommands[] = {
      "where two runs part: the first input that differs, the first step after which the states "
      "differ, and the fields that do",
      kBuildFlags, "ge diverge runs/a.inputs runs/b.inputs", "play-test"},
+    {"why", "<log>", 1, 1, "play",
+     "why a bot did what it did: its decisions round a step replayed from the log (what it saw, "
+     "the options it weighed and their scores, the one it took and by what margin); --flips for "
+     "every change of mind, --timeline for a chart",
+     kWhyFlags, "ge why runs/fall_line-38.inputs --step=1200 --around=6", "play-test"},
     {"bench", "", 0, 0, "measure",
      "each step's time against its budget (median, p95, p99, worst), steps a second and the "
      "run's open, over the pilot's runs replayed; --tag and --compare for a before and after",
