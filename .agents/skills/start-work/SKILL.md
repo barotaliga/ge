@@ -52,7 +52,8 @@ make labs                                                        # the labs of y
 Run the subject's labs now with `--tag=before`, so the PR can show `--compare=before` (the
 `labs` skill).
 
-`docs/index.md` lists every file with its summary; `porting/map.md` says which reference
+`make index` writes `docs/index.md`, every file with its summary (gitignored, so run it in your
+checkout); `porting/map.md` says which reference
 modules are already ported. Read the lessons of each skill you loaded before the first edit (the
 `skill-reflection` skill, OPEN).
 

@@ -169,7 +169,8 @@ void run(ge::lab::Lab& lab) {
   if (asked.find("large") != std::string::npos) hills.push_back(mg::JumpHill::large);
   if (asked.find("normal") != std::string::npos) hills.push_back(mg::JumpHill::normal);
   if (hills.empty()) {
-    lab.fail("--hill=" + asked + " names no hill", "Ask for --hill=large, normal or large,normal.");
+    lab.fail("--hill=" + asked + " names no hill",
+             "next: ask for --hill=large, normal or large,normal.");
     return;
   }
   std::vector<std::vector<std::string>> rows;

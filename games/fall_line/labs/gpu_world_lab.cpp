@@ -168,7 +168,7 @@ void run(ge::lab::Lab& lab) {
   if (width <= 0 || height <= 0 || width > 4096 || height > 4096 || settle < 1 ||
       options.scale < 0.25 || options.scale > 1) {
     lab.fail("--width and --height must be 1..4096, --settle at least 1 and --scale 0.25..1",
-             "Pass a size such as --width=640 --height=360 --scale=1.");
+             "next: pass a size such as --width=640 --height=360 --scale=1.");
     return;
   }
   const double scale = options.taa ? options.scale : 1.0;
@@ -207,7 +207,7 @@ void run(ge::lab::Lab& lab) {
     fall_line::app::day_view(level, hour, sc.view);
     if (!fall_line::app::make_view(level, name, sc.view)) {
       lab.fail("no view named '" + name + "'",
-               "Pick from games/fall_line/app/views.hpp (or --views=all).");
+               "next: pick from games/fall_line/app/views.hpp (or --views=all).");
       continue;
     }
     scenes.push_back(std::move(sc));

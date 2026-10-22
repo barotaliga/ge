@@ -1,0 +1,66 @@
+// THE TEST HARNESS: no dependency, one header. A test file is a list of TEST(name) blocks; CHECK
+// records a failure and carries on, so one run names every broken case. Each tests/<x>_test.cpp
+// is its own executable and CTest case (CMakeLists.txt); exit code 1 on any failure.
+//
+// ge:summary The test harness: TEST blocks, CHECK, CHECK_MSG, CHECK_BITS
+// ge:keywords test harness check check-bits assert
+// ge:skill sim-system
+#pragma once
+
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <string>
+
+namespace test {
+
+struct Case {
+  const char* name;
+  void (*fn)();
+  Case* next;
+};
+
+inline Case*& cases() {
+  static Case* head = nullptr;
+  return head;
+}
+inline int& failures() {
+  static int n = 0;
+  return n;
+}
+
+struct Register {
+  Case node;
+  Register(const char* name, void (*fn)()) : node{name, fn, cases()} { cases() = &node; }
+};
+
+inline void fail(const char* file, int line, const std::string& what) {
+  ++failures();
+  std::fprintf(stderr, "%s:%d: FAIL %s\n", file, line, what.c_str());
+}
+
+inline uint64_t bits(double v) {
+  uint64_t u;
+  std::memcpy(&u, &v, sizeof u);
+  return u;
+}
+
+}  // namespace test
+
+#define TEST_CAT2(a, b) a##b
+#define TEST_CAT(a, b) TEST_CAT2(a, b)
+#define TEST(name)                                                             \
+  static void TEST_CAT(test_, name)();                                         \
+  static ::test::Register TEST_CAT(reg_, name)(#name, &TEST_CAT(test_, name)); \
+  static void TEST_CAT(test_, name)()
+
+#define CHECK(cond) ((cond) ? (void)0 : ::test::fail(__FILE__, __LINE__, "CHECK(" #cond ")"))
+
+// CHECK with the failure said in words: what failed, and what to read next.
+#define CHECK_MSG(cond, msg) ((cond) ? (void)0 : ::test::fail(__FILE__, __LINE__, (msg)))
+
+// Bit equality of two doubles: the determinism contract is bits, not closeness.
+#define CHECK_BITS(got, want)                \
+  ((::test::bits(got) == ::test::bits(want)) \
+       ? (void)0                             \
+       : ::test::fail(__FILE__, __LINE__, "CHECK_BITS(" #got ", " #want ")"))

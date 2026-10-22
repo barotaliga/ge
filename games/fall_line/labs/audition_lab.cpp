@@ -58,7 +58,7 @@ void bank(ge::lab::Lab& lab) {
     const std::string id(def.id);
     if (def.description.empty()) {
       lab.fail(id + " has no sentence",
-               "Every bank sound says what it should feel like: write its "
+               "next: every bank sound says what it should feel like; write its "
                "description in games/fall_line/sound/bank.cpp.");
     }
     Synth s;

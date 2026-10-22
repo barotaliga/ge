@@ -227,7 +227,7 @@ void run(ge::lab::Lab& lab) {
       const std::string id = ge::mountain::labs::map_id(seed, version);
       if (!map.resort) {
         lab.fail(id + ": the map is no ski area, so it carries no routes",
-                 "Ask for --version=9 (the straight routes) or 10 (the wild ones).");
+                 "next: ask for --version=9 (the straight routes) or 10 (the wild ones).");
         continue;
       }
       size_t errors = 0;

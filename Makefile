@@ -5,7 +5,7 @@ PRESET ?= debug
 SOURCES := $(shell git ls-files --cached --others --exclude-standard '*.cpp' '*.hpp' 2>/dev/null)
 
 .PHONY: build test fmt fmt-check lint agents-check index find lessons labs lab sim play labs-smoke \
-	labs-digests libm-check release-check shaders-check clean
+	labs-digests libm-check release-check shaders-check ge clean
 
 build:
 	cmake --preset $(PRESET)
@@ -62,7 +62,7 @@ labs-smoke: build
 labs-digests: build
 	$(LABS) --all --smoke --quiet --write-digests=tests/labs_digests.txt
 
-# Discovery (AGENTS.md § Finding things). `index` rewrites docs/index.md from every file's ge:
+# Discovery (AGENTS.md § Finding things). `index` writes docs/index.md (gitignored) from every file's ge:
 # tags; `find` searches the files, the skills and their lessons: make find Q="noise heightfield".
 # `lessons` reads the skills' lessons: make lessons ARGS="port --scope=engine/core".
 index:
@@ -73,6 +73,12 @@ find:
 
 lessons:
 	node tools/skill-lessons.mjs $(ARGS)
+
+# The ge command line (engine/cli, skill: agent-interface), the tool game repos run:
+#   make ge ARGS="new ../snow-racer"     scaffold a game repo against this engine's version
+# A game repo runs its own (`make agents-check` there is `ge doctor`).
+ge: build
+	build/$(PRESET)/ge $(ARGS)
 
 # The porting working area's targets (make golden, make golden-libm), while it exists.
 -include porting/porting.mk

@@ -1,0 +1,52 @@
+# The everyday commands. CMake is the build; this file only names its calls.
+# PRESET=debug (default: sanitizers on) or PRESET=release.
+PRESET ?= debug
+SOURCES := $(shell git ls-files --cached --others --exclude-standard '*.cpp' '*.hpp' 2>/dev/null)
+GE = build/$(PRESET)/ge
+
+.PHONY: build test fmt fmt-check ge-build agents-check skills lessons ge labs lab clean
+
+build:
+	cmake --preset $(PRESET)
+	cmake --build --preset $(PRESET)
+
+test: build
+	ctest --preset $(PRESET)
+
+fmt:
+	$(if $(SOURCES),clang-format -i $(SOURCES))
+
+fmt-check:
+	$(if $(SOURCES),clang-format --dry-run --Werror $(SOURCES))
+
+# The engine's command line, built from the release cmake/engine.cmake pins (skill: engine):
+#   make agents-check        ge doctor: guidance, skills, the pin, build flags, sources
+#   make skills              ge skills sync: the engine's skills, to the pinned release
+#   make lessons ARGS=labs   ge lessons: a skill's lessons (ARGS="labs --scope=sim/")
+#   make ge ARGS="..."       any other ge command
+# ge's build log goes to stderr, so stdout carries ge's findings alone.
+ge-build:
+	@cmake --preset $(PRESET) >&2
+	@cmake --build --preset $(PRESET) --target ge >&2
+
+agents-check: ge-build
+	$(GE) doctor
+
+skills: ge-build
+	$(GE) skills sync $(ARGS)
+
+lessons: ge-build
+	@$(GE) lessons $(ARGS)
+
+ge: ge-build
+	$(GE) $(ARGS)
+
+# The labs (skill: labs). `labs` lists them; `lab` runs one: make lab LAB=run ARGS="--seeds=7".
+labs: build
+	build/$(PRESET)/labs
+
+lab: build
+	build/$(PRESET)/labs $(LAB) $(ARGS)
+
+clean:
+	rm -rf build
