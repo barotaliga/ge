@@ -11,6 +11,7 @@
 // ge:keywords game-state state racer progress controls events event-kind gate missed finish
 // ge:keywords reset wipeout landing takeoff field clock wanted mode free-ride onto arrived skied
 // ge:keywords lift-ride lift-phase boarded unloaded sled free-sled sled-mode sled-phase machine
+// ge:keywords army ways
 // ge:skill sim
 // ge:test tests/fall_line_sim_test.cpp
 #pragma once
@@ -26,6 +27,7 @@
 #include "skier/trees.hpp"
 #include "snowmobile/sled.hpp"
 
+#include "fall_line/sim/army_state.hpp"
 #include "fall_line/sim/wanted_state.hpp"
 
 namespace fall_line::sim {
@@ -62,6 +64,7 @@ enum class EventKind : uint8_t {
   boarded,   // a free ride came into a lift's load zone (`gate` the lift's index)
   unloaded,  // a lift let him go at its top (`gate` the lift, `value` the ride's time, s)
   sled,      // the snowmobile (`gate` its SledPhase, `value` its speed, m/s; sled_ride.hpp)
+  army,      // the army on foot moved (`gate` its ArmyChange, `value` how many men)
 };
 
 const char* event_name(EventKind kind);
@@ -160,9 +163,12 @@ struct GameState {
   ge::skier::SkiSpec spec;
   std::vector<Racer> racers;      // the player's first; sized at create
   std::vector<GameEvent> events;  // this step's, cleared at its start
-  WantedState wanted;             // the hunt for the player (wanted.hpp); inactive until raised
-  FreeSled sled;                  // the free ride's snowmobile (sled_ride.hpp); none in a race
-  double t = 0;                   // s since the start
+  // The ways a ground wave climbs (army.hpp's `army_ways`), built at create.
+  std::shared_ptr<const std::vector<ge::mountain::mapgen::Track>> ways;
+  WantedState wanted;  // the hunt for the player (wanted.hpp); inactive until raised
+  ArmyState army;      // the army on foot after him (army.hpp); inactive until sent
+  FreeSled sled;       // the free ride's snowmobile (sled_ride.hpp); none in a race
+  double t = 0;        // s since the start
   int64_t steps = 0;
 
   ge::skier::World world() const { return ge::skier::World{level.get(), &trees}; }

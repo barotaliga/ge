@@ -2,6 +2,7 @@
 //
 // ge:summary create_game, step and state_hash's bodies
 // ge:keywords game create_game step state_hash log channel course skier field log_step wanted
+// ge:keywords army
 // ge:skill sim
 // ge:test tests/fall_line_sim_test.cpp
 #include "fall_line/sim/game.hpp"
@@ -12,6 +13,8 @@
 #include "core/num_text.hpp"
 #include "core/output.hpp"
 
+#include "fall_line/sim/army.hpp"
+#include "fall_line/sim/army_rules.hpp"
 #include "fall_line/sim/course.hpp"
 #include "fall_line/sim/field.hpp"
 #include "fall_line/sim/free.hpp"
@@ -40,6 +43,7 @@ void log_step(const GameState& state) {
   static const out::Channel kSkier = out::channel("skier");
   static const out::Channel kField = out::channel("field");
   static const out::Channel kWanted = out::channel("wanted");
+  static const out::Channel kArmy = out::channel("army");
   const auto f = [](double v, int d) { return ge::core::num::to_fixed(v, d); };
   for (const GameEvent& e : state.events) {
     const bool course =
@@ -48,6 +52,7 @@ void log_step(const GameState& state) {
         e.kind == EventKind::boarded || e.kind == EventKind::unloaded || e.kind == EventKind::sled;
     const out::Channel ch = e.kind == EventKind::shoulder ? kField
                             : e.kind == EventKind::wanted ? kWanted
+                            : e.kind == EventKind::army   ? kArmy
                             : course                      ? kCourse
                                                           : kSkier;
     if (!out::enabled(ch, out::Level::debug)) continue;
@@ -98,6 +103,10 @@ void log_step(const GameState& state) {
         break;
       case EventKind::sled:
         line += " " + std::string(sled_phase_name(static_cast<SledPhase>(e.gate)));
+        break;
+      case EventKind::army:
+        line += " " + std::string(army_change_name(army_change(e))) + ", " + f(e.value, 0) +
+                " men, " + std::to_string(state.army.soldiers.size()) + " out";
         break;
     }
     line += " at x " + f(s.x, 1) + " z " + f(s.z, 1) + ", " + f(s.speed * 3.6, 1) + " km/h";
@@ -158,6 +167,8 @@ const char* event_name(EventKind kind) {
       return "unloaded";
     case EventKind::sled:
       return "sled";
+    case EventKind::army:
+      return "army";
   }
   return "?";
 }
@@ -183,6 +194,8 @@ GameState create_game_on(std::shared_ptr<const mg::Level> level, int32_t racers)
   state.racers.resize(static_cast<size_t>(racers > most ? most : racers < 1 ? 1 : racers));
   state.events.reserve(kEventsReserve);
   state.wanted.pursuers.reserve(wanted::kMaxPursuers);
+  state.army.soldiers.reserve(army::kMostSoldiers);
+  state.ways = army_ways(*state.level);
   const std::vector<Rider> field =
       deal_field(*state.level, static_cast<int32_t>(state.racers.size()));
   for (int32_t i = 0; i < static_cast<int32_t>(state.racers.size()); i++) {
@@ -254,6 +267,10 @@ void step(GameState& state, std::span<const Controls> controls) {
     meet_racers(state);
   }
   {
+    GE_ZONE("army");
+    step_army(state);
+  }
+  {
     GE_ZONE("wanted");
     step_wanted(state);
   }
@@ -310,7 +327,7 @@ uint64_t state_hash(const GameState& state, uint64_t h) {
     mix(m.still);
     mix(m.asleep ? 1 : 0);
   }
-  return wanted_hash(state.wanted, h);
+  return army_hash(state.army, wanted_hash(state.wanted, h));
 }
 
 }  // namespace fall_line::sim

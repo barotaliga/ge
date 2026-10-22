@@ -211,6 +211,16 @@ Outcome run(const Args& a) {
     return run_shot(build_options(a), a.words.empty() ? "" : a.words[0], flag_value(a, "seed"),
                     flag_value(a, "step"), flag_value(a, "view"), a.passthrough);
   }
+  if (name == "record") {
+    // Every frame is drawn on the CPU: the release build draws them many times faster.
+    std::vector<std::string> args;
+    for (const auto& [k, v] : a.flags) {
+      if (k != "preset" && k != "engine" && k != "repo" && k != "json")
+        args.push_back(std::string("--").append(k).append("=").append(v));
+    }
+    return run_record(build_options(a, "release"), a.words.empty() ? "" : a.words[0], args,
+                      a.passthrough);
+  }
   if (name == "bench" || name == "profile" || name == "mem" || name == "leaks") {
     PerfOptions p;
     p.seeds = flag_value(a, "seeds");
