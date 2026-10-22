@@ -92,6 +92,7 @@ struct ResortAttempt {
   // 6. the mountain's own features clear of the runs, the crust, the hub and its wind tunnels
   std::vector<Kicker> off_kickers;
   std::vector<Cliff> cliffs;
+  std::vector<Kicker> route_kickers;  // R42, the wild routes' jumps (`O1…`), laid on the base map
   std::optional<ge::core::Heightfield> crust;
   HubPlan hub{};
   std::vector<WindTunnel> tunnels;

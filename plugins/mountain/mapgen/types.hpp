@@ -175,6 +175,7 @@ struct Kicker {
   std::optional<double> s;  // the lip's arc down the piste (on-piste kickers only), m
   std::optional<TrickSize> trick = std::nullopt;
   std::optional<KickerShape> shape = std::nullopt;
+  std::optional<std::string> route = std::nullopt;  // the ski route it jumps on (R42, `O1…`)
 };
 
 // A cliff a skier drops off (R22), or a DROP across the piste (R24, `on_track`). `x, z` is the
@@ -314,9 +315,36 @@ struct Lift {
   std::vector<SummitRamp> ramps;
 };
 
+// R42 — A SKI ROUTE (ski_routes.hpp, `SR1…`): an ORANGE run marked down the mountain as it lies
+// and never groomed. Its line off a top station's rim (arc from the rim, `width` the marked
+// corridor), the lift it leaves the top of, the run it comes down onto and at what arc of that
+// one, and its steepest colour window, m per m. A WILD line (v10) also names each DROP it goes
+// over (its arc at the top and how far it falls) and the metres of it through the woods and
+// along an edge.
+struct SkiRoute {
+  struct Into {
+    std::string run;
+    double s;
+  };
+  struct Drop {
+    double s;
+    double height;
+  };
+  std::string id;
+  std::vector<TrackPoint> points;
+  double length;
+  std::string from;
+  Into into;
+  double steepest;
+  bool wild = false;
+  std::vector<Drop> drops;
+  double woods = 0;
+  double edge = 0;
+};
+
 // R25–R30 — THE SKI AREA a course's map is raced down: every run, lift and course (the courses
 // the analysis let stand), which course `Level::track` is, the village, the line down the map
-// from which the valley floor lies (`floor_z`), the hub and its wind tunnels.
+// from which the valley floor lies (`floor_z`), the hub and its wind tunnels, and its ski routes.
 struct ResortMap {
   std::vector<Run> runs;
   std::vector<Lift> lifts;
@@ -326,6 +354,7 @@ struct ResortMap {
   double floor_z;
   Hub hub;
   std::vector<WindTunnel> tunnels;
+  std::vector<SkiRoute> routes;  // R42, from v9; none before
 };
 
 // R31–R36 — the race disciplines a course is set over a built map in (discipline_rules.hpp).

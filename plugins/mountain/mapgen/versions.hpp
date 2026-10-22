@@ -1,9 +1,10 @@
 // WHICH GENERATOR BUILT A MAP: every version the generator can still be asked for, oldest
 // first, each with the ways it differs from the current rules (this table carries only the
-// traits). This tree builds v1 (`single_piste`) and v8 (the ski area); the versions that lay the
-// ski routes (v9, v10) arrive with docs/goals.md M4c, and `generate_level` refuses them by name
-// until then. Bits: tests/mountain_generate_test.cpp builds the golden maps at version 1, and
-// tests/mountain_resort_level_test.cpp at version 8.
+// traits). v1 is the single piste (`single_piste`), v8 the ski area, v9 the ski area with its
+// ski routes (R42) the shortest line down (`straight_routes`), v10 with them wild. Bits:
+// tests/mountain_generate_test.cpp builds the golden maps at version 1,
+// tests/mountain_resort_level_test.cpp at version 8, tests/mountain_ski_routes_test.cpp at 9
+// and 10.
 //
 // ge:summary Which generator built a map: the versions and their traits
 // ge:keywords versions

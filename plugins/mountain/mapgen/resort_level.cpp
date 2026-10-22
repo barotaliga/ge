@@ -177,6 +177,7 @@ void set_course(Level& level, const ResortAttempt& a, size_t index) {
   level.kickers = std::move(on_course);
   level.kickers.insert(level.kickers.end(), others.begin(), others.end());
   level.kickers.insert(level.kickers.end(), a.off_kickers.begin(), a.off_kickers.end());
+  level.kickers.insert(level.kickers.end(), a.route_kickers.begin(), a.route_kickers.end());
   level.cliffs = std::move(drops);
   level.cliffs.insert(level.cliffs.end(), cliffs.begin(), cliffs.end());
   level.cliffs.insert(level.cliffs.end(), a.cliffs.begin(), a.cliffs.end());

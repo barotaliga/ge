@@ -20,7 +20,7 @@ namespace ge::mountain::analysis {
 // R1, R5, R7, R8, R10–R13, R15–R17, R19, R28 — the course `level.track` is, as a race runs it.
 LevelAnalysis analyze_course(const mapgen::Level& level);
 
-// R14, R25–R30 — the area round the course; one error if the level publishes none.
+// R14, R25–R30, R42 — the area round the course; one error if the level publishes none.
 LevelAnalysis analyze_resort(const mapgen::Level& level);
 
 }  // namespace ge::mountain::analysis
