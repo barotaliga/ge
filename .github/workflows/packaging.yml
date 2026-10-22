@@ -102,6 +102,6 @@ jobs:
           "$G" replay runs/snow_racer-1.inputs "$E"
           printf '{"op":"observe"}\n{"op":"act","input":{"steer":1},"steps":60}\n{"op":"end"}\n' | "$G" play --seed=1 "$E" | grep -q '"op":"end"'
           "$G" state runs/snow_racer-1.inputs --step=60 "$E"
-          sed -e '/^digest/d' -e '9s/.*/1 1/' runs/snow_racer-1.inputs > runs/edited.inputs
+          sed -e '/^digest/d' -e '/^steps/d' -e '9s/.*/1 1/' runs/snow_racer-1.inputs > runs/edited.inputs
           "$G" diverge runs/snow_racer-1.inputs runs/edited.inputs "$E" --json | grep -q '"same":false'
 
