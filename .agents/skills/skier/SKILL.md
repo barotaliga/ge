@@ -22,7 +22,7 @@ game rides it, so the modes, the course's rules, the bot and the field stay in t
 | `skier/scenarios.hpp/.cpp` | The ride scenarios (one table for the tests and the lab) and `run_scenario` |
 
 Its app half, `plugins/skier/app/` (`ge_skier_app`, no GPU), is the skier as seen and heard:
-`figure.hpp` (the placeholder figure), the beds (`wind_bed.hpp`, `snow_bed.hpp`, `ride_bed.hpp`,
+`rig.hpp` (the skeleton the skier model is built on), `rig_pose.hpp` (the POSER: `RigPoser` places every rig joint from a `SkierState` each frame, the lean through two lags so its rate never steps, each ski rolled about its widest edge line so it never cuts the snow, the legs and arms by two-bone IK with the pelvis lowered by a smooth maximum of the legs, the pole tips trailing at a fixed height; `bind_rig` and `rig_locals` turn a pose into the model's locals), `figure.hpp` (the placeholder figure), the beds (`wind_bed.hpp`, `snow_bed.hpp`, `ride_bed.hpp`,
 the `audio` skill) and `tracks.hpp`: the PRINTS a skier's skis lay each frame, two capsules a
 stance apart from the pen (where they last touched) to where they touch now; the outside ski of a
 turn deeper by `ski_load`, a carve narrower, a skid as wide as the ski's footprint across the
@@ -64,8 +64,10 @@ the hardest sideways load and the tightest path, flights and landings, the stop,
 with one picture each: the line from above coloured by what he was doing, and his speed.
 `make lab LAB=ride ARGS=--scenario=kicker` runs one. The `labs` skill owns how to read it.
 
-`anim` (scenario): the figure (`app/figure.hpp`) ridden through a scenario and recorded every
-step as a pose track in its own frame (`figure_frame`, `figure_joint_positions`): filmstrips,
+`anim` (scenario): the skier ridden through a scenario and recorded every step as a pose track:
+`--figure=model` (the default) the poser's rig (`app/rig_pose.hpp`), with the run baked onto the
+skier model as a clip (`skier-run.glb`, for the `models` lab), `--figure=pieces` the placeholder
+figure (`app/figure.hpp`) in its own frame (`figure_frame`, `figure_joint_positions`): filmstrips,
 onion skins, joint angles, a jolt heatmap and the faults it shows (the `debug` skill reads it).
 A change to how the figure is posed runs it before and after.
 

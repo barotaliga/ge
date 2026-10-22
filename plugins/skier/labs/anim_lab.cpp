@@ -1,6 +1,6 @@
-// LAB `anim`: the skier's figure (app/figure.hpp) ridden through a scenario (scenarios.hpp) and
-// recorded every step as a pose track (engine/lab/anim.hpp), then judged the ways an animation is
-// judged: filmstrips from the side, behind and above (the pieces' wireframe under the bones), the
+// LAB `anim`: the skier's figure ridden through a scenario (scenarios.hpp) and recorded every
+// step as a pose track (engine/lab/anim.hpp), then judged the ways an animation is judged:
+// filmstrips from the side, behind and above (the limbs' boxes under the bones), the
 // frames laid over one another with the hands' and the tips' paths, the joints' angles and every
 // joint's jolt over time, and the five faults (pop, snap, angle snap, stretch, clip) as findings.
 //
@@ -8,6 +8,11 @@
 // fails if any of the three is not found where it was put: the measures are held to finding what
 // they exist to find. The real track's findings are reported, never failed on: they are what a
 // change to the figure is read against (`--tag=before`, then `--compare=before`).
+//
+// THE FIGURE (`--figure`): `model`, the skier model's rig posed by app/rig_pose.hpp (what the
+// game draws), or `pieces`, the placeholder's rigid pieces (app/figure.hpp). With the model, the
+// run is also baked into the model as a 60 Hz clip and attached as skier-run.glb, for the
+// `models` lab to show skinned.
 //
 // ge:summary Lab: the skier figure recorded as a pose track, filmstrips, onion skins, faults
 // ge:keywords lab anim animation figure skier filmstrip onion-skin wireframe joints bones jolt
@@ -20,12 +25,15 @@
 #include <string>
 #include <vector>
 
+#include "assets/gltf.hpp"
+#include "assets/gltf_write.hpp"
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "core/num.hpp"
 #include "lab/anim.hpp"
 #include "lab/lab.hpp"
 #include "skier/app/figure.hpp"
+#include "skier/app/rig_pose.hpp"
 #include "skier/scenarios.hpp"
 #include "skier/skis.hpp"
 #include "skier/trees.hpp"
@@ -38,6 +46,7 @@ using ge::core::Quat;
 using ge::core::Vec3;
 
 constexpr double kHz = 120;
+constexpr const char* kModelPath = "plugins/skier/assets/skier/skier.glb";
 
 size_t joint_index(const gl::Rig& rig, const char* name) {
   for (size_t j = 0; j < rig.joints.size(); j++) {
@@ -59,14 +68,43 @@ gl::Rig figure_rig() {
   return rig;
 }
 
+gl::Rig model_rig() {
+  gl::Rig rig;
+  for (const sk::RigJoint& j : sk::rig_joints()) {
+    rig.joints.emplace_back(j.name);
+    // The root and the pelvis are joined by no bone: the pelvis rises and sinks with the tuck.
+    rig.parent.push_back(j.parent <= 0 ? -1 : j.parent);
+    const std::string name = j.name;
+    rig.side.push_back(name.ends_with("_l") ? -1 : name.ends_with("_r") ? 1 : 0);
+  }
+  for (const char* end : {"wrist_l", "wrist_r", "pole_tip_l", "pole_tip_r", "ski_tip_l"}) {
+    rig.ends.push_back(static_cast<int>(joint_index(rig, end)));
+  }
+  return rig;
+}
+
+// The rotation carrying +y onto the unit direction d.
+Quat up_onto(Vec3 d) {
+  if (1 + d.y < 1e-9) return Quat{1, 0, 0, 0};
+  Quat q{d.z, 0, -d.x, 1 + d.y};
+  return ge::core::normalize(q);
+}
+
+// The model's run as a clip at kClipRateHz, from every other 120 Hz step's locals.
+struct Bake {
+  const ge::assets::Model* model = nullptr;
+  sk::RigBinding binding;
+  ge::assets::Clip clip;
+};
+
 // The scenario ridden at 120 Hz, the figure posed and recorded every step.
-gl::PoseTrack record(const sk::Scenario& sc, double seconds) {
+gl::PoseTrack record(const sk::Scenario& sc, double seconds, bool model, Bake* bake) {
   const ge::mountain::mapgen::Level level = sk::scenario_level(sc);
   const sk::TreeIndex trees = sk::build_tree_index(level);
   const sk::World world{&level, &trees};
   const sk::SkiSpec spec = sk::kReferenceSkis;
   gl::PoseTrack track;
-  track.rig = figure_rig();
+  track.rig = model ? model_rig() : figure_rig();
   track.dt = 1 / kHz;
   track.has_floor = true;  // the skis' base: the snow, in the figure's frame
   sk::SkierState s = sk::stand_skier(world, sc.x, sc.z, sc.heading, sc.speed, sc.lift);
@@ -74,8 +112,36 @@ gl::PoseTrack record(const sk::Scenario& sc, double seconds) {
   std::array<sk::PiecePose, sk::kFigurePieces> pieces{};
   std::array<Vec3, sk::kFigureJoints> joints{};
   std::vector<gl::WireSeg> wire;
+  sk::RigPoser poser;
+  sk::RigPose pose{};
+  std::vector<ge::assets::Trs> local(bake && bake->model ? bake->model->joints.size() : 0);
   const auto steps = static_cast<int64_t>(ge::core::num::round(seconds * kHz));
   for (int64_t i = 0; i < steps; i++) {
+    if (model) {
+      poser.pose(s, track.dt, pose);
+      wire.clear();
+      const auto& rig = sk::rig_joints();
+      for (size_t j = 0; j < rig.size(); j++) {
+        const int parent = track.rig.parent[j];
+        if (parent < 0) continue;
+        const Vec3 a = pose.at[static_cast<size_t>(parent)], b = pose.at[j];
+        const Vec3 d{b.x - a.x, b.y - a.y, b.z - a.z};
+        const double len = std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
+        if (len < 1e-6) continue;
+        const double r = std::fmax(rig[static_cast<size_t>(parent)].radius, 0.01);
+        const double size[3] = {2 * r, len, 2 * r};
+        gl::add_box_wire(wire, Vec3{(a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2},
+                         up_onto(Vec3{d.x / len, d.y / len, d.z / len}), size);
+      }
+      track.add_frame(pose.at, wire);
+      if (bake && bake->model && i % 2 == 0) {
+        sk::rig_locals(*bake->model, bake->binding, pose, local);
+        bake->clip.samples.insert(bake->clip.samples.end(), local.begin(), local.end());
+        bake->clip.frames++;
+      }
+      sk::step_skier(s, sc.input(static_cast<double>(i) / kHz, s), world, spec, track.dt, ev);
+      continue;
+    }
     sk::pose_figure(s, world, pieces);
     const sk::FigureFrame frame = sk::figure_frame(s, world);
     sk::figure_joint_positions(pieces, frame, joints);
@@ -112,7 +178,9 @@ void shoot(gl::Lab& lab, const std::string& id, const std::string& title, const 
             title,
             caption,
             look_for,
-            {{"scenario", lab.arg("scenario")}, {"seconds", lab.arg("seconds")}}},
+            {{"scenario", lab.arg("scenario")},
+             {"seconds", lab.arg("seconds")},
+             {"figure", lab.arg("figure")}}},
            pic);
 }
 
@@ -133,7 +201,41 @@ void run(gl::Lab& lab) {
     return;
   }
   const double seconds = lab.arg_num("seconds") > 0 ? lab.arg_num("seconds") : sc->seconds;
-  gl::PoseTrack track = record(*sc, seconds);
+  const std::string figure = lab.arg("figure");
+  if (figure != "model" && figure != "pieces") {
+    lab.fail("--figure=" + figure + " is neither model nor pieces",
+             "Run `make lab LAB=anim ARGS=--figure=model` (the skier model) or `--figure=pieces`.");
+    return;
+  }
+  const bool model = figure == "model";
+  Bake bake;
+  ge::assets::LoadResult loaded;
+  if (model) {
+    loaded = ge::assets::load_gltf_file(kModelPath);
+    if (!loaded.ok) {
+      lab.fail("the skier model did not load: " + loaded.error,
+               "Run the lab from the repository's root, or rebuild the model with `make ge "
+               "ARGS=\"asset build skier\"` (skill: assets).");
+      return;
+    }
+    bake.model = &loaded.model;
+    bake.binding = sk::bind_rig(loaded.model);
+    bake.clip.name = "run";
+    if (!bake.binding.complete) {
+      lab.fail("the skier model lacks some of the rig's joints (app/rig.hpp)",
+               "Rebuild it with `make ge ARGS=\"asset build skier\"` (skill: assets).");
+      return;
+    }
+  }
+  gl::PoseTrack track = record(*sc, seconds, model, model ? &bake : nullptr);
+  if (model) {
+    ge::assets::Model run = loaded.model;
+    run.clips = {bake.clip};
+    lab.attach("skier-run.glb", ge::assets::write_glb(run));
+    lab.note(
+        "the run baked into the skier model as a 60 Hz clip: skier-run.glb; look at it "
+        "skinned with `make lab LAB=models ARGS=--model=<this lab's dir>/skier-run.glb`");
+  }
   const size_t nf = track.frames();
   if (nf < 64) {
     lab.fail("the track has " + std::to_string(nf) + " frames, the views need 64",
@@ -166,7 +268,7 @@ void run(gl::Lab& lab) {
     spec.rings = &found;
     shoot(lab, "strip-" + name, "FIGURE FROM " + name + ", 16 FRAMES", gl::filmstrip(track, spec),
           "The skier's figure at 16 frames spread over the run, seen from " + name +
-              ", the pieces' boxes in grey under the bones (left blue, right orange, the spine "
+              ", the limbs' boxes in grey under the bones (left blue, right orange, the spine "
               "ink), one scale for every panel; the green line is the snow.",
           "Limbs that keep their length, the poles above the snow, no joint ringed red.");
   }
@@ -210,7 +312,8 @@ void run(gl::Lab& lab) {
   // pushed through the snow.
   gl::PoseTrack bad = track;
   const size_t pop = nf / 4, stretch = nf / 2, clip = 3 * nf / 4;
-  const size_t hand = joint_index(rig, "hand_r"), hip = joint_index(rig, "hip_l"),
+  const char* hand_name = model ? "wrist_r" : "hand_r";
+  const size_t hand = joint_index(rig, hand_name), hip = joint_index(rig, "hip_l"),
                knee = joint_index(rig, "knee_l"), tip = joint_index(rig, "pole_tip_l");
   bad.at(pop, hand).x += 0.06;
   for (size_t f = stretch; f < stretch + 30 && f < nf; f++) {
@@ -221,7 +324,7 @@ void run(gl::Lab& lab) {
   }
   for (size_t f = clip; f < clip + 40 && f < nf; f++) bad.at(f, tip).y -= 0.15 * bump(f, clip, 40);
   const std::vector<gl::AnimFinding> bad_found = gl::anim_findings(bad, gl::measure_motion(bad));
-  const Planted planted[] = {{"pop", "hand_r", pop, pop + 1},
+  const Planted planted[] = {{"pop", hand_name, pop, pop + 1},
                              {"stretch", "knee_l", stretch, stretch + 30},
                              {"clip", "pole_tip_l", clip, clip + 40}};
   std::vector<gl::AnimFinding> hits;
@@ -260,13 +363,14 @@ const gl::LabSpec kSpec{
     "anim",
     gl::LabKind::scenario,
     "plugin:skier",
-    "engine/lab/anim.hpp, plugins/skier/app/figure.hpp",
+    "engine/lab/anim.hpp, plugins/skier/app/rig_pose.hpp, plugins/skier/app/figure.hpp",
     "debug",
     "Does the skier's figure move without pops, snaps, stretched bones or poles through the "
     "snow, and do the measures find each fault planted in a copy?",
     {
         {"scenario", "turns", "the ride scenario the figure is recorded through (scenarios.cpp)"},
         {"seconds", "0", "how much of it, s (0: the scenario's own length)"},
+        {"figure", "model", "model (the skier model's rig, posed) or pieces (the placeholder)"},
     },
     "--seconds=4",
     run,
