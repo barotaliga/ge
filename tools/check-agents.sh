@@ -6,7 +6,7 @@
 #   - every skill is routed from AGENTS.md and listed in .agents/skills/README.md,
 #     and nothing is routed that does not exist;
 #   - no source file passes the 1000-line cap;
-#   - every source file carries its ge: tag block and docs/index.md is fresh
+#   - every source file carries its ge: tag block (docs/index.md is written)
 #     (tools/agents-index.mjs), and every lesson fragment is well formed
 #     (tools/skill-lessons.mjs);
 #   - every plugin keeps the plugin contract (tools/check-plugins.mjs).

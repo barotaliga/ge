@@ -62,7 +62,7 @@ labs-smoke: build
 labs-digests: build
 	$(LABS) --all --smoke --quiet --write-digests=tests/labs_digests.txt
 
-# Discovery (AGENTS.md § Finding things). `index` rewrites docs/index.md from every file's ge:
+# Discovery (AGENTS.md § Finding things). `index` writes docs/index.md (gitignored) from every file's ge:
 # tags; `find` searches the files, the skills and their lessons: make find Q="noise heightfield".
 # `lessons` reads the skills' lessons: make lessons ARGS="port --scope=engine/core".
 index:

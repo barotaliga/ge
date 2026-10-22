@@ -30,7 +30,7 @@ updates that row's Status in its PR.
 | [`docs/goals.md`](docs/goals.md) | The long-term goals (G1–G9), the non-goals and the milestone roadmap |
 | [`docs/architecture.md`](docs/architecture.md) | The layers and their dependency direction, the frame, the code conventions, diagnostics, the determinism contract and the build |
 | [`docs/labs.md`](docs/labs.md) | The labs: the contract every subsystem, plugin and game plugs into, the kinds (sim, scenario, picture, drive, bench), captions, digests, and the labs each milestone lands |
-| [`docs/index.md`](docs/index.md) | GENERATED from the code's `ge:` tags: every file's one-line summary, owning skill and test; keyword to files |
+| `docs/index.md` | GENERATED from the code's `ge:` tags by `make index` (and `make agents-check`) in every checkout, never committed: every file's one-line summary, owning skill and test; keyword to files |
 | [`docs/rendering.md`](docs/rendering.md) | The GPU backend (Dawn), the frame's pass table, every rendering technique and why, budgets, lab hooks, and what was considered and not taken |
 | [`docs/publishing.md`](docs/publishing.md) | What a release is (GitHub Releases + GitHub Packages), how a game consumes it, changeset fragments, cutting a release, the credentials |
 
@@ -134,8 +134,8 @@ make sim SEEDS=38 # the bot down a seed: the run report table and its line on th
 make sim ARGS=--rivals=3  # the same with a field of four: the field table, every line drawn
 make play         # an agent at the controls: the play protocol on stdio (games/fall_line/sim/play.hpp)
 make labs-smoke   # every lab at its smoke flags, twice, digests against tests/labs_digests.txt
-make agents-check # symlinks, skills ↔ this router, the 1000-line cap, ge: tags, docs/index.md fresh, lesson fragments
-make index        # regenerate docs/index.md from every file's ge: tags
+make agents-check # symlinks, skills ↔ this router, the 1000-line cap, ge: tags (writing docs/index.md), lesson fragments
+make index        # write docs/index.md from every file's ge: tags (gitignored: never committed)
 make find Q="noise sample_field"  # files, skills, lessons and the porting map matching any word
 make lessons ARGS="port --scope=engine/core"   # read a skill's lessons, filtered (no ARGS: the inventory)
 make ge ARGS="new ../snow-racer"  # the ge command line: scaffold a game repo on this engine version
@@ -203,8 +203,9 @@ Agents find code by grep, so the tree is built to be grepped:
   reference identifier still finds the engine file while porting lasts). `grep -rn "ge:keywords.*<word>"` is the
   same search for files alone. A search that misses is fixed by adding the word you tried to
   the right file's `ge:keywords` (`skill-reflection`, question 6).
-- **[`docs/index.md`](docs/index.md)** is generated from the tags by `make index`; commit it
-  with the change. On a merge conflict there, take either side and rerun `make index`.
+- **`docs/index.md`** is generated from the tags by `make index` (and by `make agents-check`) in
+  your own checkout. It is gitignored, so it is never committed and never conflicts: run
+  `make index` to read it, or `make find` to search without it.
 - **One name, everywhere**: a module `engine/loop/run_clock.hpp` has its test
   `tests/loop_run_clock_test.cpp` and its golden `tests/golden/loop_run_clock.txt`; a plugin's
   test is `tests/<plugin>_<file>_test.cpp`. Names are `snake_case`.
