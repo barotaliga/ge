@@ -54,6 +54,19 @@ constexpr FlagSpec kLabFlags[] = {
     kEngine,
     kRepo};
 
+constexpr FlagSpec kDigestFlags[] = {
+    {"write", "", "rewrite the lab's row of tests/labs_digests.txt (every row with no lab)"},
+    kPreset,
+    kEngine,
+    kRepo};
+constexpr FlagSpec kGoldenDiffFlags[] = {
+    {"base", "<ref>", "the git ref to compare with (default HEAD)"}, kRepo};
+constexpr FlagSpec kGoldenWriteFlags[] = {
+    {"preset", "<debug|release>",
+     "the CMake preset (default release: a golden's full run is the release build's)"},
+    kEngine,
+    kRepo};
+
 constexpr FlagSpec kPlayFlags[] = {
     {"seed", "<n>", "the run's seed (default 1)"}, kPreset, kEngine, kRepo};
 constexpr FlagSpec kSimFlags[] = {
@@ -156,6 +169,18 @@ const CommandSpec kCommands[] = {
     {"check", "", 0, 0, "build",
      "the whole gate in one call: format, doctor, build, tests and labs", kBuildFlags,
      "ge check --json", "commit"},
+    {"digest", "[<lab>]", 0, 1, "build",
+     "a lab (or every lab) at its smoke flags, twice: each digest beside the committed baseline; "
+     "--write moves only that lab's row",
+     kDigestFlags, "ge digest wind-sweep --write", "labs"},
+    {"golden diff", "[<golden|test>...]", 0, -1, "build",
+     "each golden file against git's --base: the rows that changed and, column by column, what "
+     "moved in them",
+     kGoldenDiffFlags, "ge golden diff sim_game_test --base=origin/main", "sim-system"},
+    {"golden write", "<test>", 1, 1, "build",
+     "rewrite a test's golden files (the test run with GE_GOLDEN_WRITE=1), hold them, and show "
+     "what moved",
+     kGoldenWriteFlags, "ge golden write sim_wind_test", "sim-system"},
     {"lab", "[<id>]", 0, 1, "see",
      "list the labs, or run one: its metrics, tables, captioned pictures and digest; its own "
      "flags go after --",

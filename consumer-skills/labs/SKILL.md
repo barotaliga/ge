@@ -46,7 +46,10 @@ sees only that picture.
 
 **Digests.** Metrics, tables and pictures feed the lab's digest unless marked
 `Det::measured` (wall-clock times, anything that differs run to run). The digest is what makes a
-lab a determinism test for free.
+lab a determinism test for free. `ge digest --write` commits every lab's digest to
+`tests/labs_digests.txt`; from then on `ge test` fails a lab whose digest is not its row there,
+so an output that moves is a change someone meant. `ge digest <id>` checks one lab against it;
+`ge digest <id> --write` moves that lab's row alone (a new lab's row too).
 
 **Failures** are prompts: `lab.fail("seed 7 finished in 0 steps", "run tests/sim_game_test.cpp;
 skill: sim-system")`. The run carries on so every failure is named, and the runner exits 1.
@@ -58,4 +61,4 @@ lines, discs, text), `lab/runner.hpp` (every flag).
 
 A change in a lab's subject runs the lab before (`--tag=before`, on the old code) and after
 (`--compare=before`), and the PR carries the comparison and the pictures that moved. A digest
-that moved on purpose says why.
+that moved on purpose is rewritten with `ge digest <id> --write`, and the PR says why.
