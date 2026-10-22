@@ -109,6 +109,18 @@ one game's: which maps a game races, its modes and its strings stay in the game.
   their line is the map's tree line. Every lean is a pure function of the hints and draws nothing,
   so the stream runs on as without them; the walk's last `via::last` tries drop the steering.
 
+## The lifts run (`mountain/lifts`, M13a2)
+
+`plugins/mountain/lifts/lift_loop.hpp` (`ge::mountain::lifts`, built into `ge_mountain`) is how
+any game on the ski area finds a lift's carriers: `plan_lift` once a lift (`lift_plans` once a
+map), then `carrier_at(plan, k, t)` and `carrier_place`, a pure function of the clock that is
+never stepped and never stored, so a run, a replay and a picture agree. A detachable (a chair,
+a gondola) slows its carriers through its terminals on a clock tabled every `kClockStep` m of
+loop, so they are spaced evenly in TIME and bunch in the stations. The load zone's middle, the
+gauge and where a rider is let go are the generator's (`lift_look`, `let_go_of` in
+`mapgen/lift_line.hpp`), read and never restated. `tests/mountain_lift_loop_test.cpp` holds it on
+three hand-built lifts; the game's ride over it is the `sim` skill's (`lift-ride` lab).
+
 ## The mountain as drawn (`mountain/app`, M8)
 
 `plugins/mountain/app/` (`ge_mountain_app`, namespace `ge::mountain::app`, built only with the

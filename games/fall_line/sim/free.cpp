@@ -131,6 +131,8 @@ GameState create_free_ride(std::shared_ptr<const mg::Level> level, int32_t start
   state.level = std::move(level);
   state.mode = Mode::free;
   state.runs = run_tracks(*state.level);
+  state.lifts = std::make_shared<const std::vector<ge::mountain::lifts::LiftPlan>>(
+      ge::mountain::lifts::lift_plans(*state.level));
   state.trees = sk::build_tree_index(*state.level);
   state.spec = sk::kReferenceSkis;
   state.racers.resize(1);
@@ -189,6 +191,8 @@ void step_free(GameState& state, int32_t i, double x0, double z0) {
 void reset_free(GameState& state, int32_t i) {
   Racer& r = state.racers[static_cast<size_t>(i)];
   FreeRide& f = r.free;
+  f.lift.phase = LiftPhase::none;
+  f.lift.carrier = -1;
   if (f.last >= 0) {
     stand_on(state, i, f.last, f.last_s + kResetPast);
   } else {

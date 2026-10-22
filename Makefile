@@ -5,7 +5,7 @@ PRESET ?= debug
 SOURCES := $(shell git ls-files --cached --others --exclude-standard '*.cpp' '*.hpp' 2>/dev/null)
 
 .PHONY: build test fmt fmt-check lint agents-check index find lessons labs lab sim play labs-smoke \
-	labs-digests libm-check release-check shaders-check ge clean
+	labs-digests libm-check release-check shaders-check precheck ge clean
 
 build:
 	cmake --preset $(PRESET)
@@ -35,6 +35,11 @@ shaders-check:
 
 agents-check:
 	tools/check-agents.sh
+
+# Before every push: CI's cheap gates in order, stopping at the first red one (format, agents,
+# libm, fragments, build, lint and the tests the change reaches since BASE, default origin/main).
+precheck:
+	tools/precheck.sh build/$(PRESET) $(PRESET) $(or $(BASE),origin/main)
 
 libm-check:
 	tools/check-libm.sh

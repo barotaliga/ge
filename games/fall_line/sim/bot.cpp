@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <utility>
 
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
@@ -55,7 +56,8 @@ void weave_through_gates(const mg::Level& level, BotPlan& plan) {
 
 // THE PLAN along `plan.track`: the course's gates woven through in a race, the kickers on the
 // course's piste by their arc in a race and by their nearest point on the free ride's line.
-void lay_plan(const mg::Level& level, const sk::SkiSpec& spec, bool race, BotPlan& plan) {
+void lay_plan(const mg::Level& level, const sk::SkiSpec& spec, bool race, BotPlan& plan,
+              double slow_from = INFINITY, double slow = 0) {
   const auto& pts = plan.track->points;
   const size_t n = pts.size();
   plan.curvature.assign(n, 0);
@@ -114,6 +116,9 @@ void lay_plan(const mg::Level& level, const sk::SkiSpec& spec, bool race, BotPla
       }
     }
   }
+  for (size_t i = 0; i < n; i++) {
+    if (pts[i].s >= slow_from) plan.speed[i] = num::min(plan.speed[i], slow);
+  }
   // Carried back up the piste so every slowing is braked for in time.
   const double g = sk::tuning::kGravity;
   for (size_t i = n - 1; i-- > 0;) {
@@ -138,9 +143,14 @@ BotPlan plan_bot(const mg::Level& level, const sk::SkiSpec& spec) {
 }
 
 BotPlan plan_free(const mg::Level& level, int32_t run, const sk::SkiSpec& spec) {
+  return plan_line(level, run_chain(level, run), spec);
+}
+
+BotPlan plan_line(const mg::Level& level, mg::Track line, const sk::SkiSpec& spec, double slow_from,
+                  double slow) {
   BotPlan plan;
-  plan.track = std::make_shared<const mg::Track>(run_chain(level, run));
-  lay_plan(level, spec, false, plan);
+  plan.track = std::make_shared<const mg::Track>(std::move(line));
+  lay_plan(level, spec, false, plan, slow_from, slow);
   return plan;
 }
 
@@ -148,7 +158,8 @@ Controls bot_controls(const GameState& state, int32_t i, const BotPlan& plan) {
   const Racer& r = state.racers[static_cast<size_t>(i)];
   const sk::SkierState& s = r.skier;
   Controls c;
-  if (r.free.arrived) {
+  if (r.free.lift.phase != LiftPhase::none) return c;
+  if (r.free.arrived && !plan.to_lift) {
     c.ski.brake = 1;
     return c;
   }
