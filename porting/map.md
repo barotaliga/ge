@@ -45,6 +45,10 @@ the row when the file moves.
 | `games/fall_line/sim/free.hpp` | `game5/engine/game/skied.ts`, `course.ts` | runUnder noteRun noteSkied leftRunPoint skiedResetPoint freeSpawn |
 | `games/fall_line/sim/lift_ride.cpp` | `game5/engine/game/lift-ride.ts`, `lift-board.ts` | stepLiftRide stepChairWait carrierPassing letGo setOff (the boarding ring, the queue, the gondola's platform, the hands, the swing and the skip not carried) |
 | `games/fall_line/sim/lift_ride.hpp` | `game5/engine/game/lift-ride.ts`, `lift-board.ts` | stepLiftRide stepChairWait letGo |
+| `games/fall_line/sim/sled_outing.cpp` | `game5/engine/sim/bot.ts`, `game5/engine/game/sled-pilot.ts` | the bot on the boards (sledPilot to an aim); the outing up a run and down on skis is the engine's own |
+| `games/fall_line/sim/sled_outing.hpp` | `game5/engine/sim/bot.ts` | the bot on the boards |
+| `games/fall_line/sim/sled_ride.cpp` | `game5/engine/game/sled.ts`, `sled-pad.ts` | stepSled board hop throwOff leave remount mount hold letGo sledWithin sledControls parkedAt freshSled sledSpotOf findSpot clearAt leanOver (the fire, the wreck, the stolen machines, the rocks, the posts, the grace and the log buck not carried) |
+| `games/fall_line/sim/sled_ride.hpp` | `game5/engine/game/sled.ts`, `sled-pad.ts`, `sled-state.ts`, `defs/sled.ts` | stepSled sledWithin sledControls SledMode SledPhaseEvent SLED.pad SLED.board SLED.hop SLED.idleFor |
 | `games/fall_line/sim/wanted.cpp` | `game5/engine/game/wanted.ts` | raiseHeat setWanted arrestSkier seesQuarry throughWoods underCover stepWanted groundWave wavesSent |
 | `games/fall_line/sim/wanted.hpp` | `game5/engine/game/wanted.ts` | quarryOf raiseHeat setWanted arrestSkier arrestedOf survivedOf rosterOf groundWave wavesSent seesQuarry throughWoods underCover stepWanted |
 | `games/fall_line/sim/wanted_rules.hpp` | `game5/engine/game/defs/wanted.ts` | WANTED WantedRoster WaveMix GroundWaves PursuerKind WantedCause |
