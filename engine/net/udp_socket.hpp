@@ -1,8 +1,8 @@
-// THE OS'S UDP SOCKETS (BSD sockets on macOS, Linux, iOS and Android; Winsock on Windows), the
-// only file that includes them. Non-blocking: a receive with nothing waiting returns at once, so
-// a node polls it once a frame. IPv4 and IPv6 (a socket is bound to one family). Also the OS's
-// entropy, which a real game seeds its node's salts and secret from (the simulated network
-// seeds them from a lab's seed instead).
+// THE OS'S UDP SOCKETS (BSD sockets on macOS, Linux, iOS and Android; Winsock on Windows), over
+// the socket shim in os_socket.hpp (the only header that includes the OS's). Non-blocking: a
+// receive with nothing waiting returns at once, so a node polls it once a frame. IPv4 and IPv6 (a
+// socket is bound to one family). Also the OS's entropy, which a real game seeds its node's salts
+// and secret from (the simulated network seeds them from a lab's seed instead).
 //
 // ge:summary The OS's non-blocking UDP sockets (POSIX and Winsock), IPv4 and IPv6; OS entropy
 // ge:keywords net udp socket sockets bsd-sockets winsock bind sendto recvfrom non-blocking

@@ -196,7 +196,9 @@ constexpr FlagSpec kNetSimFlags[] = {
     {"presets", "<a,b>",
      "the link conditions, one session each (default every preset; none: a "
      "perfect link)"},
-    {"mix", "<racing|action|rpg|world|lockstep>", "the traffic's shape (default racing)"},
+    {"mix", "<racing|action|rpg|world|lockstep|download>", "the traffic's shape (default racing)"},
+    {"transport", "<udp|tcp>", "datagrams, or every link a stream (default udp)"},
+    {"budget", "<kbit/s>", "cap what every connection sends (default none)"},
     {"link", "<k=v,...>",
      "override conditions on every preset: latency, jitter (ms), loss, duplicate, reorder "
      "(shares or %), burst, reorder-ms, bandwidth (kbit/s), queue (ms)"},

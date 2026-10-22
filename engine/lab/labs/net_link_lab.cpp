@@ -6,11 +6,15 @@
 // the host sent and received a second, and how many messages were sent again. The round trip and
 // the loss are charted over the run, the reliable latencies drawn as boxes, and one preset's whole
 // session is attached as a pcap (`<preset>.pcap`) with its first packets decoded in the notes.
+// `--transport=tcp` makes every link a stream (nothing lost, a drop a resend's wait late, the
+// packets behind it waiting); a mix with a bulk (`--mix=download`) adds a table of the big
+// messages, each sent in pieces and checked whole; `--budget` caps what every connection sends.
 // Everything runs on a virtual clock off one seed, so the lab is a determinism test too.
 //
 // ge:summary Lab: fake traffic over each network preset: delivery, RTT, loss, latency, bandwidth
 // ge:keywords lab net network link latency rtt ping loss packet-loss jitter bandwidth resend
-// ge:keywords fake-traffic preset pcap capture chart reliable traffic-mix
+// ge:keywords fake-traffic preset pcap capture chart reliable traffic-mix tcp stream big-message
+// ge:keywords fragmentation bulk download budget
 // ge:skill net labs
 // ge:test tests/net_traffic_test.cpp
 #include <cmath>
@@ -97,6 +101,17 @@ void run(gl::Lab& lab) {
       false,
       false};
   std::vector<gl::Sample> event_latency;
+  gl::LabTable bulk_table{"big messages (the bulk), sent in pieces, each joined whole",
+                          {"preset", "sent", "whole", "late", "broken", "order", "refused",
+                           "p50 ms", "p95 ms", "max ms"},
+                          {}};
+  const std::string transport = lab.arg("transport");
+  if (transport != "udp" && transport != "tcp") {
+    lab.fail("unknown transport '" + transport + "'",
+             "Pass --transport=udp (datagrams) or --transport=tcp (every link a stream); "
+             "skill: net.");
+    return;
+  }
 
   for (const std::string& name : presets) {
     gn::TrafficPlan plan;
@@ -108,10 +123,12 @@ void run(gl::Lab& lab) {
     }
     if (!gn::traffic_mix(lab.arg("mix"), plan.mix)) {
       lab.fail("unknown traffic mix '" + lab.arg("mix") + "'",
-               "Pick from racing, action, rpg, world, lockstep (engine/net/traffic.cpp); "
-               "skill: net.");
+               "Pick from racing, action, rpg, world, lockstep, download "
+               "(engine/net/traffic.cpp); skill: net.");
       return;
     }
+    plan.conditions.stream = transport == "tcp";
+    plan.budget_kbps = lab.arg_num("budget");
     plan.clients = static_cast<int>(lab.arg_num("clients"));
     plan.seconds = lab.arg_num("seconds");
     plan.drain_seconds = lab.arg_num("drain");
@@ -180,6 +197,25 @@ void run(gl::Lab& lab) {
                "Read the reliable channel in engine/net/connection.cpp (resends, the held window), "
                "then run tests/net_connection_test.cpp; skill: net.");
     }
+    if (plan.mix.bulk_hz > 0) {
+      const gl::Summary b = gl::summarize(r.bulk.latency_ms);
+      bulk_table.rows.push_back(
+          {name, std::to_string(r.bulk.sent), std::to_string(r.bulk.delivered),
+           std::to_string(r.bulk.sent - r.bulk.delivered), std::to_string(r.bulk_broken),
+           r.bulk.out_of_order ? "bad" : "ok", std::to_string(r.bulk.refused), fmt(b.p50, 1),
+           fmt(b.p95, 1), fmt(b.max, 1)});
+      lab.metric(k + "bulk-delivered", static_cast<double>(r.bulk.delivered), "count");
+      lab.metric(k + "bulk-p50-ms", b.p50, "ms");
+      // Late is the link's capacity (still in flight when the run ends); broken or out of order
+      // is a bug in the pieces.
+      if (r.bulk_broken || r.bulk.out_of_order || r.bulk.duplicated) {
+        lab.fail(name + ": " + std::to_string(r.bulk_broken) + " big messages arrived broken, " +
+                     std::to_string(r.bulk.out_of_order + r.bulk.duplicated) +
+                     " out of order or twice",
+                 "Read the pieces' sending and joining in engine/net/connection.cpp (BIG "
+                 "MESSAGES), then run tests/net_connection_test.cpp; skill: net.");
+      }
+    }
     if (plan.capture) {
       lab.attach(name + ".pcap", r.capture.bytes);
       std::vector<gn::CapturedDatagram> back;
@@ -200,6 +236,15 @@ void run(gl::Lab& lab) {
     }
   }
   lab.table(std::move(table));
+  if (!bulk_table.rows.empty()) {
+    lab.table(std::move(bulk_table));
+    lab.note(
+        "The bulk: each big message is sent in pieces of one packet, at most 8 packets a peer a "
+        "flush, behind the inputs, the events and the snapshots. 'whole' arrived joined and "
+        "checked byte for byte; 'late' were still in flight when the run ended (the link's "
+        "capacity, not a fault); 'broken' or a bad order is a fault. 'refused' counts the ticks a "
+        "message waited for room in the reliable window.");
+  }
   lab.note(
       "rtt is the host's smoothed round trip at the end of the sending, averaged over its peers; "
       "'want' is the model's range: a node reads its socket once a tick, so each way is the "
@@ -241,7 +286,9 @@ const gl::LabSpec kSpec{
     {
         {"presets", "lan,broadband,wifi,mobile,bad,awful", "condition presets, comma-separated"},
         {"clients", "8", "clients connecting to the host (at most the host's 32)"},
-        {"mix", "racing", "the traffic's shape: racing, action, rpg, world, lockstep"},
+        {"mix", "racing", "the traffic's shape: racing, action, rpg, world, lockstep, download"},
+        {"transport", "udp", "udp (datagrams) or tcp (every link a stream)"},
+        {"budget", "0", "every connection's send budget, kbit/s (0: none)"},
         {"seconds", "10", "how long everyone sends"},
         {"drain", "4", "seconds after, for the reliable messages to finish"},
         {"tick-hz", "60", "how often every node updates and flushes"},

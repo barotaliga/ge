@@ -26,6 +26,9 @@ cfg.channels.count = 3;
 cfg.channels.delivery[0] = net::Delivery::sequenced;   // inputs: the newest wins
 cfg.channels.delivery[1] = net::Delivery::unreliable;  // snapshots
 cfg.channels.delivery[2] = net::Delivery::reliable;    // events and chat: once, in order
+cfg.channels.largest[2] = 64 * 1024;                   // and messages up to 64 KB, in pieces
+cfg.channels.priority[0] = 2;                          // inputs first when room is short
+cfg.channels.budget_kbps = 256;                        // each connection's most, kbit/s (0: none)
 cfg.seed = net::os_entropy();                    // a test passes a fixed seed instead
 
 net::Transport t;
@@ -46,9 +49,14 @@ net::node_flush(node, now_us);
 ```
 
 A client calls `node_connect(node, host_address, now_us)` and waits for `connected` or
-`connect_failed` (full, closed, timed out). A message is at most `net::kMaxMessage` bytes. A
-reliable channel refuses a message when 128 are already unacknowledged, so check `node_send`'s
-answer.
+`connect_failed` (full, closed, timed out). A message is at most `net::kMaxMessage` bytes, or
+the channel's `largest` on a reliable channel (up to 64 KB, sent in pieces and delivered whole).
+A reliable channel refuses a message when its pieces do not fit beside the ones still
+unacknowledged (128 at most), so check `node_send`'s answer and try again next frame.
+
+**TCP.** For a stream instead of datagrams (a turn-based game, a network that blocks UDP), open
+the transport with `net::open_tcp_host_transport(t, bind, &err)` on the host and
+`net::open_tcp_client_transport(t, host_address, &err)` on a client; the node code is the same.
 
 ## Test it on bad links
 
@@ -59,6 +67,7 @@ net::SimNetwork sim = net::make_sim_network(seed, conditions);   // net/sim_netw
 net::LinkConditions bad;
 net::conditions_preset("bad", bad);       // lan, broadband, wifi, mobile, bad, awful
 net::sim_set_link(sim, 0, 3, bad);       // node 0 to node 3 only; sim_set_path sets both ways
+// bad.stream = true: the link behaves as TCP (nothing lost; a drop arrives a resend late)
 net::open_sim_transport(t, sim, net::sim_address(1, 1));
 // each tick: sim_advance(sim, now_us), then every node's update and flush
 ```
@@ -83,7 +92,7 @@ session in a golden.
   - It also writes a series file and charts of kbps, rtt and loss over time; read them with
     `ge graph`.
   - A warning means a link lost more than 5%.
-- **`ge net sim [--presets=wifi,bad] [--mix=action] [--link=latency=80,loss=3%] [--capture=FILE]`**:
+- **`ge net sim [--presets=wifi,bad] [--mix=action|download] [--link=latency=80,loss=3%] [--transport=tcp] [--budget=256] [--capture=FILE]`**:
   fake clients and a host, with no game.
   - It prints delivery, round trip, loss, bandwidth and a digest per session.
   - Use it to see what a link does before blaming the game, and to reproduce a player's link
