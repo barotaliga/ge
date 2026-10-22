@@ -31,7 +31,7 @@ set(GE_INSTALL_CMAKEDIR "${CMAKE_INSTALL_LIBDIR}/cmake/gameengine2")
 
 # target -> export name (consumers see ge::<export name>)
 set(GE_EXPORTED_TARGETS ge_fp fp ge_isa isa ge_core core ge_audio audio ge_assets assets ge_ai ai
-  ge_lab lab ge_prof prof ge_prof_alloc prof_alloc ge_play play)
+  ge_net net ge_lab lab ge_prof prof ge_prof_alloc prof_alloc ge_play play)
 # Every plugin is published as ge::<plugin> (cmake/Plugins.cmake collects them), and its
 # presentation half as ge::<plugin>_app when every engine target it links is published here
 # (APP audio is; render, gpu and platform are not yet, below).

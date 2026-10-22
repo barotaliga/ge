@@ -38,6 +38,7 @@ router's Skills table and the directories against each other.
 | `perf` | Budgets, measuring, the proofs a speed-up owes, the levers |
 | `agent-interface` | Diagnostics as prompts, consumer skills, the `ge` CLI |
 | `bots` | What a bot decides: `engine/ai`, the decision record, `ge why`, making a bot more human |
+| `net` | Multiplayer networking: sockets, the simulated network, captures, the wire, channels, nodes, fake traffic |
 | `plugins` | Engine, plugin or game: where code lives, adding a plugin, moving code between homes |
 
 ## Plugins
@@ -50,3 +51,4 @@ One skill per plugin, named after it (`docs/architecture.md` § Plugins).
 | `mountain` | `plugins/mountain`: the generated ski mountain, its generator and its rule book |
 | `skier` | `plugins/skier`: the skier on the snow, its limits, the hand-built maps and the ride scenarios |
 | `snowmobile` | `plugins/snowmobile`: the snowmobile on the snow, what throws its rider, the bot's hands on it and the sled scenarios |
+| `helicopter` | `plugins/helicopter`: the helicopter in the air and on the snow, the downwash, the bot's hands on it and the heli scenarios |

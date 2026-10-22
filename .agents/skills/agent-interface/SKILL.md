@@ -100,7 +100,7 @@ example and consumer skill); the parser, `ge help` and `ge help --json` all read
 
 The skills a game repo needs, written for a game repo (its paths, its `make` targets, the
 engine as a dependency), never for this one: `ge` (the command line and its loop), `play-test` (the play contract,
-`ge play` and its siblings),
+`ge play` and its siblings), `multiplayer` (`ge::net`, the simulated network and `ge net`),
 `start-work`, `write-code`, `engine` (the pin, determinism, upgrading, reporting an engine
 bug), `sim-system`, `labs`, `skill-reflection` and `commit`, plus one per plugin (`racing`,
 `mountain`, `skier`) with `plugin:` front matter.
