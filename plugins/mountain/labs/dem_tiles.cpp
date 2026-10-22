@@ -18,6 +18,7 @@
 #include <span>
 
 #include "lab/inflate.hpp"
+#include "mountain/labs/fetch.hpp"
 
 namespace ge::mountain::labs {
 
@@ -142,42 +143,18 @@ bool Dem::kept(const std::string& name) const {
 
 bool Dem::fetch(const std::string& name, std::string& error) {
   if (kept(name)) return true;
-  fs::create_directories(cache_);
   const std::string key = "Copernicus_DSM_COG_10_" + name + "_DEM";
   const std::string url = std::string(kBucket) + "/" + key + "/" + key + ".tif";
-  const fs::path part = fs::path(cache_) / (name + ".part");
-  // Double quotes, which both a POSIX shell and the Windows command line read as one word.
-  const std::string cmd =
-      "curl -sS -o \"" + part.string() + "\" -w \"%{http_code}\" \"" + url + "\"";
-#ifdef _WIN32
-  FILE* p = _popen(cmd.c_str(), "r");
-#else
-  FILE* p = popen(cmd.c_str(), "r");
-#endif
-  if (!p) {
-    error = "could not run curl";
-    return false;
-  }
-  char code[8] = {};
-  const size_t got = std::fread(code, 1, 3, p);
-#ifdef _WIN32
-  const int status = _pclose(p);
-#else
-  const int status = pclose(p);
-#endif
-  const std::string http(code, got);
+  const std::string http = fetch_to(url, (fs::path(cache_) / (name + ".tif")).string());
   if (http == "404" || http == "403") {
     // A tile over open sea is not published.
-    fs::remove(part);
     const std::ofstream sea(fs::path(cache_) / (name + ".none"));
     return true;
   }
-  if (status != 0 || http != "200") {
-    fs::remove(part);
-    error = url + ": HTTP " + http;
+  if (http != "200") {
+    error = url + ": HTTP " + (http.empty() ? std::string("none (is curl installed?)") : http);
     return false;
   }
-  fs::rename(part, fs::path(cache_) / (name + ".tif"));
   return true;
 }
 
