@@ -238,7 +238,8 @@ the frame block's `prev_view_proj` and `eye_delta` (`FrameHistory`, `frame_types
 `terrain.cull`, `instances.cull` (phase one, reading the last frame's pyramid),
 `terrain.horizon`, `terrain.depth`, `instances.depth`, `hiz`, `instances.cull.late`,
 `instances.depth.late`, `terrain`, `instances` (both phases' lists, tested `equal`), `sky`,
-`taa`, `bloom` (M7d3), `post`. The late phase's depth lands before the colour pass, so it is still shaded
+`taa`, `bloom` (M7d3), `post`; M8e2 adds `skinning` straight after `sky.tables`, writing
+`figures.posed`, which every pass that reads the figures' family reads. The late phase's depth lands before the colour pass, so it is still shaded
 once; the late phase's draws are not in this frame's pyramid, which only makes the next
 frame's phase one keep a little more.
 
@@ -370,10 +371,17 @@ figure, the machines). They come in as **glTF 2.0** and nothing else.
 **As built (M8e1).** The loader, posing, the CPU reference and the `skinning` pass, held to
 each other within one 16-bit step on the software adapter (`tests/render_skinning_test.cpp`),
 and the `models` lab. **M8g** added `ge asset` and the first built model, the skier on the
-reference skis (`plugins/skier/assets/skier/`), and **M8e2** its poser (`plugins/skier/app/rig_pose.hpp`: the rig posed from a `SkierState`, then `rig_locals` for the model, ready for the palette and the `skinning` pass). Still to come with the figure drawn in the world (M8e2): last frame's
-skinned positions for the motion vectors (a family's motion is its instance's, so a limb that
-swings gets none of its own and TAA may smear it), the crowd skinned in the vertex stage from
-per-instance palettes, and the skis and the skier as models.
+reference skis (`plugins/skier/assets/skier/`), and **M8e2** its poser (`plugins/skier/app/rig_pose.hpp`: the rig posed from a `SkierState`, then `rig_locals` for the model, ready for the palette and the `skinning` pass) and the model drawn in Fall Line's frame:
+the committed `skier.glb` is compiled into the game as bytes (`cmake/EmbedBinary.cmake`), the
+figures' family holds one skinned mesh a racer packed into the poser's fixed reach
+(`pose_reach`, held by `tests/skier_rig_pose_test.cpp` over the ride scenarios), each racer's
+poser keeps its lags between frames (`FrameScene::dt`; `settle` for a still or a jump), his
+palette is written before the frame is encoded and the `skinning` pass runs straight after the
+sky's tables, so every view that reads the family (the culls, the prepass, the colour pass, the
+figures' shadow atlas) reads the posed mesh. Still to come (M8e2): last frame's skinned
+positions for the motion vectors (a family's motion is its instance's, so a limb that swings
+gets none of its own and TAA may smear it) and the crowd skinned in the vertex stage from
+per-instance palettes.
 
 ## Terrain
 
@@ -640,13 +648,14 @@ Linear light is used throughout, and the conversion happens here, once.
   drawn at lower detail and in larger numbers, are skinned in the vertex shader from
   their instance's palette.
 
-**As built (M7d1).** Until skinning lands (M8) a skier is a **placeholder figure**
-(`plugins/skier/app/figure.hpp`): 17 rigid pieces (skis, boots, shins, thighs, pelvis,
-torso, arms, head, poles), each a unit box, cylinder or ball scaled to its size and posed
-every frame from the `SkierState` (the skis on the snow's normal rolled by the edge, the
-body rolled by the lean, the tuck folding the legs and the torso). Fall Line draws every
-racer's pieces as one instance family (`games/fall_line/app/scene.hpp`), a jacket colour a
-racer, written each frame; a cut writes them fresh so no motion is carried across it.
+**As built (M7d1, then M8e2).** Fall Line draws every racer as the skier model
+(`plugins/skier/assets/skier/`), one skinned mesh a racer in one instance family
+(`games/fall_line/app/scene.hpp`), posed every frame from his `SkierState` by
+`plugins/skier/app/rig_pose.hpp` and placed at his figure frame (`skier/app/figure.hpp`'s
+`figure_frame`), a jacket colour a racer; a cut writes the instances fresh and settles every
+poser, so no motion is carried across it. The **placeholder figure** (`figure.hpp`'s 17 rigid
+pieces, each a unit box, cylinder or ball posed from the `SkierState`) is no longer drawn; it
+stays as the `anim` lab's comparison.
 
 ## Shaders
 

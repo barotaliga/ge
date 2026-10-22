@@ -24,27 +24,28 @@ namespace r = ge::render;
 // The pass table: the order `draw` runs, and what each pass reads and writes.
 constexpr r::PassRow kPassTable[] = {
     {"sky.tables", "", "sky.view sky.aerial sky.light"},
+    {"skinning", "", "figures.posed"},
     {"terrain.cull", "terrain.pyramid", "terrain.tiles terrain.indirect"},
-    {"instances.cull", "instances hiz.last", "instances.early"},
+    {"instances.cull", "instances figures.posed hiz.last", "instances.early"},
     {"terrain.horizon", "terrain.height", "terrain.horizon"},
     {"trails.fine", "", "trails.fine"},
     {"trails.coarse", "", "trails.coarse"},
     {"shadows.cull", "instances", "shadows.lists"},
     {"shadows.near", "instances shadows.lists", "shadows.maps"},
     {"shadows.far", "instances shadows.lists", "shadows.maps"},
-    {"shadows.figures", "instances shadows.lists", "shadows.maps"},
+    {"shadows.figures", "instances figures.posed shadows.lists", "shadows.maps"},
     {"terrain.depth", "terrain.tiles terrain.indirect terrain.height", "depth"},
-    {"instances.depth", "instances instances.early", "depth"},
+    {"instances.depth", "instances figures.posed instances.early", "depth"},
     {"hiz", "depth", "hiz"},
     {"instances.cull.late", "instances hiz", "instances.late"},
-    {"instances.depth.late", "instances instances.late", "depth"},
+    {"instances.depth.late", "instances figures.posed instances.late", "depth"},
     {"terrain",
      "terrain.tiles terrain.indirect terrain.height terrain.horizon shadows.maps sky.aerial "
      "sky.light snow.ground trails.fine trails.coarse depth",
      "hdr motion"},
     {"instances",
-     "instances instances.early instances.late terrain.horizon shadows.maps sky.aerial sky.light "
-     "depth",
+     "instances figures.posed instances.early instances.late terrain.horizon shadows.maps "
+     "sky.aerial sky.light depth",
      "hdr motion"},
     {"sky", "sky.view depth", "hdr motion"},
     {"taa", "hdr motion depth taa.history sky.light", "taa.history"},
@@ -52,7 +53,8 @@ constexpr r::PassRow kPassTable[] = {
     {"post", "taa.history bloom sky.light", "final"},
 };
 // What is made at load rather than by a pass (the instances' meshes and streams: the figures'
-// are written before the frame is encoded), and what is the last frame's (the TAA history, the
+// placements and palettes are written before the frame is encoded, their vertices by the skinning
+// pass), and what is the last frame's (the TAA history, the
 // depth pyramid the early cull reads).
 constexpr std::string_view kLoadInputs =
     "terrain.height terrain.pyramid terrain.albedo snow.ground instances taa.history hiz.last";
@@ -97,8 +99,23 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
     ge::core::output::error(faults);
     return nullptr;
   }
+  const ge::assets::LoadResult& skier = skier_model();
+  if (!skier.ok) {
+    ge::core::output::error(
+        "fall_line: the skier model compiled into the game does not load: " + skier.error +
+        "; rebuild it (`ge asset build skier`) and commit the .glb (skill: assets)");
+    return nullptr;
+  }
   auto f = std::make_unique<GameFrame>();
   f->options = options;
+  f->skier = &skier.model;
+  f->binding = ge::skier::bind_rig(skier.model);
+  if (!f->binding.complete) {
+    ge::core::output::error(
+        "fall_line: the skier model lacks a rig joint (skier/app/rig.hpp's names); rebuild it "
+        "(`ge asset build skier`) and check its builder's joint names (skill: assets)");
+    return nullptr;
+  }
   f->uniforms = r::make_buffer(device, "frame.uniforms", sizeof(r::FrameUniforms),
                                wgpu::BufferUsage::Uniform);
   f->frame_layout = r::frame_layout(device);
@@ -138,6 +155,7 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
   post.bloom = options.bloom;
   r::create_post(device, f->pipelines, f->post, f->frame_layout, output, post);
   r::set_grade(device, f->post, bake_grade());
+  r::create_skin_pipelines(device, f->pipelines, f->skinning);
   if (!f->pipelines.finish(device)) return nullptr;
   ge::gpu::end_load(device);
   f->frame_group = r::frame_group(device, f->frame_layout, f->uniforms, f->sky);
@@ -146,9 +164,20 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
   r::create_family(device, f->instancing, f->forest, "forest", forest_meshes(), forest_materials(),
                    static_cast<uint32_t>(std::max<size_t>(trees.size(), 1)));
   r::set_instances(device, f->forest, 0, trees);
-  r::create_family(device, f->instancing, f->figures, "figures", figure_meshes(),
-                   figure_materials(), kMaxFigures * ge::skier::kFigurePieces);
-  f->staged_figures.resize(size_t{kMaxFigures} * ge::skier::kFigurePieces);
+  const ge::assets::Model& model = *f->skier;
+  r::create_family(device, f->instancing, f->figures, "figures", figure_meshes(model),
+                   figure_materials(model), kMaxFigures);
+  f->materials_per_racer = static_cast<uint32_t>(model.materials.size());
+  const auto joints = static_cast<uint32_t>(model.joints.size());
+  for (int k = 0; k < kMaxFigures; ++k) {
+    r::create_skin(device, f->skinning, f->skins[k], f->figures, static_cast<uint32_t>(k), 0,
+                   model.meshes[0], ge::skier::pose_reach(), joints);
+    f->skin_list[k] = &f->skins[k];
+  }
+  f->locals.resize(joints);
+  f->globals.resize(joints);
+  f->palette.resize(joints);
+  f->staged_figures.resize(kMaxFigures);
   f->instance_light = r::instance_light_group(device, f->instancing, f->terrain);
   // The forest casts into the cascades (two caster slots), the figures into the atlas (one).
   r::ShadowSettings shadows;
@@ -172,6 +201,7 @@ void cut(GameFrame& f) {
   f.history.valid = false;
   r::reset_taa(f.taa);
   r::cut_family(f.figures);
+  for (ge::skier::RigPoser& p : f.posers) p = {};
 }
 
 void track(GameFrame& f, const FrameScene& scene) {
@@ -234,15 +264,19 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& view, const
   {
     GE_ZONE("frame.figures");
     for (size_t k = 0; k < racers; ++k) {
-      figure_instances(
-          scene.skiers[k], *f.level, static_cast<int>(k),
-          std::span<r::Instance, ge::skier::kFigurePieces>(
-              f.staged_figures.data() + k * ge::skier::kFigurePieces, ge::skier::kFigurePieces));
+      // Settled: a fresh poser keeps no lag of the last frame.
+      if (scene.settle) f.posers[k] = {};
+      f.posers[k].pose(scene.skiers[k], scene.dt, f.rig_pose);
+      ge::skier::rig_locals(*f.skier, f.binding, f.rig_pose, f.locals);
+      ge::assets::pose_globals(*f.skier, f.locals, f.globals);
+      ge::assets::skin_palette(*f.skier, f.globals, f.palette);
+      r::set_palette(device, f.skins[k], f.palette);
+      f.staged_figures[k] =
+          figure_instance(scene.skiers[k], *f.level, static_cast<int>(k), f.materials_per_racer);
     }
-    r::set_instances(
-        device, f.figures, 0,
-        std::span<const r::Instance>(f.staged_figures.data(), racers * ge::skier::kFigurePieces));
-    r::set_instance_count(f.figures, static_cast<uint32_t>(racers * ge::skier::kFigurePieces));
+    r::set_instances(device, f.figures, 0,
+                     std::span<const r::Instance>(f.staged_figures.data(), racers));
+    r::set_instance_count(f.figures, static_cast<uint32_t>(racers));
   }
   {
     GE_ZONE("frame.instances");
@@ -266,6 +300,9 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& view, const
   GE_ZONE("frame.encode");
   wgpu::CommandEncoder encoder = device.device.CreateCommandEncoder();
   r::encode_sky_tables(f.sky, f.pipelines, f.recorder, encoder);
+  // Only the racers drawn this frame are posed.
+  r::encode_skinning(std::span<r::Skin* const>(f.skin_list.data(), racers), f.skinning, f.pipelines,
+                     f.recorder, encoder);
   const std::span<r::InstanceFamily* const> families(f.families);
   r::encode_terrain_cull(f.terrain, f.pipelines, f.recorder, encoder, f.frame_group);
   r::encode_instances_cull(families, f.instancing, f.pipelines, f.recorder, encoder, f.frame_group,
