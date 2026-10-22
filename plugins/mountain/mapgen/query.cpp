@@ -6,6 +6,7 @@
 // ge:test tests/mountain_generate_test.cpp
 #include "mountain/mapgen/query.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <memory>
@@ -16,7 +17,6 @@
 namespace ge::mountain::mapgen {
 
 namespace num = ge::core::num;
-using ge::core::cell_key;
 
 namespace {
 
@@ -28,20 +28,52 @@ constexpr double kCell = 24;
 // How many rings a query walks before it gives up on the hash and walks the whole piste.
 constexpr int kMaxRings = 90;
 
+// A segment's cells: its bounding box's columns and rows.
+struct SegCells {
+  int32_t c0, c1, r0, r1;
+};
+
+SegCells seg_cells(const TrackPoint& a, const TrackPoint& b) {
+  return {static_cast<int32_t>(std::floor(num::min(a.x, b.x) / kCell)),
+          static_cast<int32_t>(std::floor(num::max(a.x, b.x) / kCell)),
+          static_cast<int32_t>(std::floor(num::min(a.z, b.z) / kCell)),
+          static_cast<int32_t>(std::floor(num::max(a.z, b.z) / kCell))};
+}
+
+// Two passes over the segments: count each cell's, then place them, in index order.
 const TrackIndex& index_of(const Track& track) {
   if (track.index) return *track.index;
   auto index = std::make_shared<TrackIndex>();
   const auto& points = track.points;
   const size_t n = points.size();
-  for (size_t i = 0; i + 1 < n; i++) {
-    const TrackPoint& a = points[i];
-    const TrackPoint& b = points[i + 1];
-    const auto c0 = static_cast<int32_t>(std::floor(num::min(a.x, b.x) / kCell));
-    const auto c1 = static_cast<int32_t>(std::floor(num::max(a.x, b.x) / kCell));
-    const auto r0 = static_cast<int32_t>(std::floor(num::min(a.z, b.z) / kCell));
-    const auto r1 = static_cast<int32_t>(std::floor(num::max(a.z, b.z) / kCell));
-    for (int32_t c = c0; c <= c1; c++) {
-      for (int32_t r = r0; r <= r1; r++) index->cells[cell_key(c, r)].push_back(int32_t(i));
+  if (n >= 2) {
+    SegCells box = seg_cells(points[0], points[1]);
+    for (size_t i = 1; i + 1 < n; i++) {
+      const SegCells s = seg_cells(points[i], points[i + 1]);
+      box = {std::min(box.c0, s.c0), std::max(box.c1, s.c1), std::min(box.r0, s.r0),
+             std::max(box.r1, s.r1)};
+    }
+    index->c0 = box.c0;
+    index->r0 = box.r0;
+    index->cols = box.c1 - box.c0 + 1;
+    index->rows = box.r1 - box.r0 + 1;
+    const auto cols = size_t(index->cols);
+    std::vector<int32_t>& start = index->start;
+    start.assign(cols * size_t(index->rows) + 1, 0);
+    const auto each_cell = [&](size_t i, auto&& fn) {
+      const SegCells s = seg_cells(points[i], points[i + 1]);
+      for (int32_t c = s.c0; c <= s.c1; c++) {
+        for (int32_t r = s.r0; r <= s.r1; r++) {
+          fn(size_t(r - box.r0) * cols + size_t(c - box.c0));
+        }
+      }
+    };
+    for (size_t i = 0; i + 1 < n; i++) each_cell(i, [&](size_t k) { start[k + 1]++; });
+    for (size_t k = 1; k < start.size(); k++) start[k] += start[k - 1];
+    index->segs.resize(size_t(start.back()));
+    std::vector<int32_t> fill(start.begin(), start.end() - 1);
+    for (size_t i = 0; i + 1 < n; i++) {
+      each_cell(i, [&](size_t k) { index->segs[size_t(fill[k]++)] = int32_t(i); });
     }
   }
   track.index = std::move(index);
@@ -83,21 +115,36 @@ void try_segment(const std::vector<TrackPoint>& points, size_t i, double x, doub
 void nearest_within(const Track& track, double x, double z, double within, TrackHit& hit) {
   const auto& points = track.points;
   hit.distance = kInf;
-  const auto& cells = index_of(track).cells;
+  const TrackIndex& index = index_of(track);
   const auto qc = static_cast<int32_t>(std::floor(x / kCell));
   const auto qr = static_cast<int32_t>(std::floor(z / kCell));
   const int rings = within == kInf
                         ? kMaxRings
                         : static_cast<int>(num::min(kMaxRings, std::ceil(within / kCell) + 1));
+  // The box in cells relative to the query's cell; cells outside it are empty, so each ring is
+  // walked only where it crosses the box, in the same column-then-row order as the whole ring.
+  const int bc0 = index.c0 - qc;
+  const int bc1 = index.c0 + index.cols - 1 - qc;
+  const int br0 = index.r0 - qr;
+  const int br1 = index.r0 + index.rows - 1 - qr;
+  const auto cell = [&](int dc, int dr) {
+    const size_t k = size_t(dr - br0) * size_t(index.cols) + size_t(dc - bc0);
+    for (int32_t j = index.start[k]; j < index.start[k + 1]; j++) {
+      try_segment(points, size_t(index.segs[size_t(j)]), x, z, hit);
+    }
+  };
   for (int ring = 0; ring <= rings; ring++) {
-    for (int dc = -ring; dc <= ring; dc++) {
-      const bool edge = dc == -ring || dc == ring;
-      for (int dr = -ring; dr <= ring; dr += edge ? 1 : 2 * ring) {
-        const auto it = cells.find(cell_key(qc + dc, qr + dr));
-        if (it != cells.end()) {
-          for (const int32_t i : it->second) try_segment(points, size_t(i), x, z, hit);
+    if (index.cols > 0) {
+      const int dc_lo = std::max(-ring, bc0);
+      const int dc_hi = std::min(ring, bc1);
+      for (int dc = dc_lo; dc <= dc_hi; dc++) {
+        if (dc == -ring || dc == ring) {
+          const int dr_hi = std::min(ring, br1);
+          for (int dr = std::max(-ring, br0); dr <= dr_hi; dr++) cell(dc, dr);
+        } else {
+          if (-ring >= br0 && -ring <= br1) cell(dc, -ring);
+          if (ring >= br0 && ring <= br1) cell(dc, ring);
         }
-        if (ring == 0) break;
       }
     }
     // Every segment in the next ring out is at least `ring` whole cells away.
