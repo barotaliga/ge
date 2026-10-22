@@ -79,9 +79,9 @@ TEST(an_error_answer_becomes_a_finding_relative_to_the_repo) {
                   "warning from the game's stderr\n{\"error\":" + json_str("cannot read " + path) +
                       ",\"where\":" + json_str(path) + ",\"next\":\"pass an input log\"}");
   CHECK(o.findings.size() == 1);
-  CHECK_MSG(
-      o.findings[0].what == "cannot read runs/x.inputs" && o.findings[0].where == "runs/x.inputs",
-      o.findings[0].what + " | " + o.findings[0].where);
+  CHECK_MSG(fs::path(o.findings[0].what).generic_string() == "cannot read runs/x.inputs" &&
+                o.findings[0].where == "runs/x.inputs",
+            o.findings[0].what + " | " + o.findings[0].where);
   const Outcome usage =
       play_answer(repo(), "sim", 2, "{\"error\":\"x\",\"where\":\"y\",\"next\":\"z\"}");
   CHECK(exit_of(usage) == 2);

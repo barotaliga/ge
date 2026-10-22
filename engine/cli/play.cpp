@@ -99,7 +99,8 @@ Outcome play_answer(const BuildOptions& o, const std::string& command, int code,
       return s;
     };
     out.findings.push_back({Severity::error, in_repo(text_of(m, "error")),
-                            in_repo(text_of(m, "where")), text_of(m, "next")});
+                            fs::path(in_repo(text_of(m, "where"))).generic_string(),
+                            text_of(m, "next")});
     if (code == 2) out.exit = 2;
     return out;
   }
