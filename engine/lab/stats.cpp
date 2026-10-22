@@ -14,6 +14,7 @@ namespace ge::lab {
 namespace {
 
 constexpr double kSpikeFloor = 0.01;
+constexpr double kSpikeRelative = 1e-6;
 
 std::vector<double> finite(const std::vector<double>& values) {
   std::vector<double> out;
@@ -117,11 +118,14 @@ std::vector<size_t> spikes(const std::vector<double>& values, size_t window, dou
     dev[i] = values[i] - median(near);
   }
   // A spike stands out of the series' own spread too: a step of 1% of its p1..p99 range is the
-  // least a deviation can be measured against.
+  // least a deviation can be measured against, and a millionth of its size the least of all, so
+  // a flat series' rounding (an angle that never moves, read to 1e-13) is not a spike.
   std::vector<double> sorted = finite(values);
+  if (sorted.empty()) return {};
   std::sort(sorted.begin(), sorted.end());
   const double spread = quantile_sorted(sorted, 0.99) - quantile_sorted(sorted, 0.01);
-  return robust_flags(dev, z, spread * kSpikeFloor);
+  const double size = std::max(std::fabs(sorted.front()), std::fabs(sorted.back()));
+  return robust_flags(dev, z, std::max(spread * kSpikeFloor, size * kSpikeRelative));
 }
 
 }  // namespace ge::lab
