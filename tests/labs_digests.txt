@@ -10,6 +10,7 @@ mapgen-cost 3baf51b6907817f3
 noise 3d3a828834f144cb
 park d53bc7b207dfab4a
 play 1cc3e19bd8dced06
+profile 05a464004723898b
 real-faces b53c6303e783fd1b
 real-maps 0c0da35edd4b151e
 resort f82a1fca6fb6ba42

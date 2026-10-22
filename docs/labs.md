@@ -282,7 +282,7 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 | `world` | picture | game:fall_line | Fall Line's frame from named views of a seed, TAA-U on or off at a render scale, the shimmer, the overdraw probe, a run's moments from the chase camera with the field (`--moments`, `--rivals`) the cull check (every view redrawn with occlusion culling off, `cull-faults` must be 0), the `wood` view (the trees' shadows on sunlit snow) and the sun's cascades over the whole run (`cascade-redraws.near` and `.far`, deterministic, with no device) (`games/fall_line/labs/gpu_world_lab.cpp`) | M7a, M7d1, M7d2 (now) |
 | `taa` | picture | game:fall_line | TAA-U on a moving camera against the converged still: ghosting, aliasing, stills repeat (`games/fall_line/labs/gpu_taa_lab.cpp`) | M7c (now) |
 | `shadows` | picture | game:fall_line | the horizon maps over a day from above, and the bake counter of a sun sweep (`games/fall_line/labs/gpu_shadows_lab.cpp`) | M7b (now) |
-| `profile` | bench | game:fall_line | a frame's CPU and GPU cost | M7d3 |
+| `profile` | bench | game:fall_line | Fall Line's frame over a stretch of the bot's run from the chase camera: every pass's GPU ms (median, p95, worst), its draws and dispatches, and the renderer's CPU half against `--cpu-budget` (`games/fall_line/labs/gpu_profile_lab.cpp`) | M7d3 (now) |
 | `forest`, `snow`, `trails`, `spray`, `skis`, `skier` | picture | game:fall_line | the world drawn | M8 |
 | `synth` | sim | engine | `engine/audio` (every voice the synth can play, metered, pictured and written as WAV; the render's cost) | M9a (now) |
 | `audition` | sim | game:fall_line | Fall Line's bank, the skier's beds at seven moments and the bot's whole run, metered, pictured and written as WAV | M9b (now) |
