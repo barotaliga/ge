@@ -25,8 +25,8 @@
 #   ge_isa       the instruction-set baseline (x86-64: AVX2), linked by ge_core and
 #                published as ge::isa
 #   ge_flags     warnings, -Werror, sanitizers: this tree only, never published
-# ge_core, ge_fp, ge_isa, ge_lab, ge_play and every plugin target are installed and published
-# as ge::core, ge::fp, ge::isa, ge::lab, ge::play and ge::<plugin>, and the ge executable is
+# ge_core, ge_fp, ge_isa, ge_assets, ge_lab, ge_play and every plugin target are installed and published
+# as ge::core, ge::fp, ge::isa, ge::assets, ge::lab, ge::play and ge::<plugin>, and the ge executable is
 # installed to bin/
 # (cmake/Packaging.cmake, docs/publishing.md).
 cmake_minimum_required(VERSION 3.25)
