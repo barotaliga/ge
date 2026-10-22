@@ -25,6 +25,8 @@
 #include "fall_line/sim/free.hpp"
 #include "fall_line/sim/outing.hpp"
 #include "fall_line/sim/simulate.hpp"
+#include "fall_line/sim/sled_outing.hpp"
+#include "fall_line/sim/sled_ride.hpp"
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
 #include "mountain/labs/level_map.hpp"
@@ -106,6 +108,13 @@ void run(ge::lab::Lab& lab) {
                                  {"seed", "run", "lift", "then", "foot", "time s", "wait s",
                                   "ride s", "wipeouts", "resets", "runs on", "skied m", "digest"},
                                  {}};
+  const bool sled = lab.arg_num("sled") > 0;
+  ge::lab::LabTable sled_table{"sled",
+                               {"seed", "run", "colour", "climbed m", "on it s", "taken", "foot",
+                                "time s", "wipeouts", "resets", "skied m", "digest"},
+                               {}};
+  int sleds_done = 0;
+  int sleds_ridden = 0;
   int arrived = 0;
   int ridden = 0;
   int outings_done = 0;
@@ -206,6 +215,37 @@ void run(ge::lab::Lab& lab) {
         if (!lines.empty()) outing_lines.push_back(std::move(lines[0]));
       }
     }
+    std::vector<std::vector<fs::LinePoint>> sled_lines;
+    if (sled) {
+      sleds_ridden++;
+      const fs::RunReport rep =
+          fs::simulate_sled_outing(level, seed, outing_opts, pictures ? &sled_lines : nullptr);
+      const fs::SledSpot spot = fs::sled_spot(*level, ge::mountain::lifts::lift_plans(*level),
+                                              ge::skier::build_tree_index(*level));
+      const int32_t climb = fs::sled_climb_run(*level, spot);
+      const std::string id = climb >= 0 ? runs[static_cast<size_t>(climb)].id : "-";
+      const std::string key = k + ".sled";
+      if (rep.finished) {
+        sleds_done++;
+      } else {
+        lab.fail(key + ": the bot's outing on the snowmobile up run " + id +
+                     " did not end at a foot (taken " + std::to_string(rep.sled_rides) +
+                     " times, climbed " + fixed(rep.climbed, 0) + " m in " + fixed(rep.time, 1) +
+                     " s)",
+                 "Look at previews/free/" + k +
+                     "-sled.png for where his line stops, then read "
+                     "games/fall_line/sim/sled_outing.cpp and sled_ride.cpp (skill: sim).");
+      }
+      lab.metric(key + ".time", rep.time, "s");
+      lab.metric(key + ".climbed", rep.climbed, "m");
+      lab.metric(key + ".on-it", rep.sled_time, "s");
+      sled_table.rows.push_back(
+          {fixed(seed, 0), id,
+           climb >= 0 ? grade_word(runs[static_cast<size_t>(climb)].grade) : "-",
+           fixed(rep.climbed, 0), fixed(rep.sled_time, 1), std::to_string(rep.sled_rides),
+           rep.finished ? "yes" : "NO", fixed(rep.time, 2), std::to_string(rep.wipeouts),
+           std::to_string(rep.resets), fixed(rep.distance, 0), hex(rep.digest)});
+    }
     if (!pictures) continue;
     constexpr int kPx = 1024;
     const double px = kPx / level->size;
@@ -224,7 +264,8 @@ void run(ge::lab::Lab& lab) {
       for (size_t i = 1; i < line.size(); i++) {
         const auto& a = line[i - 1];
         const auto& b = line[i];
-        const Rgba c = b.lifted    ? Rgba{255, 255, 255}
+        const Rgba c = b.sled      ? Rgba{255, 220, 0}
+                       : b.lifted  ? Rgba{255, 255, 255}
                        : b.down    ? Rgba{230, 0, 200}
                        : b.on_snow ? Rgba{0, 200, 230}
                                    : Rgba{255, 160, 0};
@@ -242,6 +283,24 @@ void run(ge::lab::Lab& lab) {
                 "top down the ramp and the next run to a foot; orange in the air, magenta down.",
                 "each cyan line ends at a lift's bottom station, a white line runs straight up "
                 "the lift, and a cyan line leaves its top down a run to a foot",
+                {{"seed", fixed(seed, 0)},
+                 {"version", std::to_string(level->version)},
+                 {"skis", "reference"},
+                 {"pilot", "bot"}}},
+               pic);
+    }
+    if (!sled_lines.empty()) {
+      ge::lab::Picture pic = base();
+      for (const auto& line : sled_lines) draw(pic, line);
+      lab.shot({k + "-sled",
+                "SEED " + fixed(seed, 0) + "'S SNOWMOBILE: UP A RUN ON IT, DOWN ON SKIS",
+                "The ski area from above (+x right, +z down) with every run's line in its colour, "
+                "and over them the bot's line on the snowmobile's outing: yellow on the machine "
+                "from its spot beside the village up a run to near its head, then cyan on his "
+                "skis from where he hopped off down the run to its foot; orange in the air, "
+                "magenta down.",
+                "a yellow line leaves the village and climbs a run, and a cyan line comes back "
+                "down the same run from where the yellow one ends",
                 {{"seed", fixed(seed, 0)},
                  {"version", std::to_string(level->version)},
                  {"skis", "reference"},
@@ -272,6 +331,11 @@ void run(ge::lab::Lab& lab) {
   lab.metric("outings-done", outings_done, "count");
   lab.table(std::move(table));
   if (outings > 0) lab.table(std::move(outing_table));
+  if (sled) {
+    lab.metric("sled-outings", sleds_ridden, "count");
+    lab.metric("sled-outings-done", sleds_done, "count");
+    lab.table(std::move(sled_table));
+  }
 }
 
 const ge::lab::LabSpec kSpec{
@@ -291,7 +355,8 @@ const ge::lab::LabSpec kSpec{
         {"limit", "600", "a run's time limit, s"},
         {"outings", "1",
          "the most outings ridden a seed, from the pistes with a lift at their foot"},
-        {"outing-limit", "1800", "an outing's time limit, s"},
+        {"outing-limit", "1800", "an outing's time limit, s (and the snowmobile's)"},
+        {"sled", "1", "1: the bot's outing on the snowmobile a seed; 0: none"},
         {"no-pictures", "", "skip the map pictures", true},
     },
     "--seeds=38 --most=3",

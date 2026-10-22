@@ -108,6 +108,7 @@ void run_sound_step(RunSound& sound, ge::audio::Synth& synth, const sim::GameSta
       case EventKind::arrived:
       case EventKind::boarded:  // the lift is heard from its own bed, when it has one
       case EventKind::unloaded:
+      case EventKind::sled:  // the snowmobile's sound comes with its own bed
         break;
     }
   }

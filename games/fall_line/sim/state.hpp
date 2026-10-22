@@ -10,7 +10,7 @@
 // ge:summary The state of a run: GameState, Racer, Progress, Controls, the events
 // ge:keywords game-state state racer progress controls events event-kind gate missed finish
 // ge:keywords reset wipeout landing takeoff field clock wanted mode free-ride onto arrived skied
-// ge:keywords lift-ride lift-phase boarded unloaded
+// ge:keywords lift-ride lift-phase boarded unloaded sled free-sled sled-mode sled-phase machine
 // ge:skill sim
 // ge:test tests/fall_line_sim_test.cpp
 #pragma once
@@ -24,6 +24,7 @@
 #include "skier/skier.hpp"
 #include "skier/skis.hpp"
 #include "skier/trees.hpp"
+#include "snowmobile/sled.hpp"
 
 #include "fall_line/sim/wanted_state.hpp"
 
@@ -34,11 +35,15 @@ namespace fall_line::sim {
 inline constexpr double kHz = 120;
 inline constexpr double kDt = 1 / kHz;
 
-// What a racer is asked this step: the skis' controls, and the reset (stand me back on the
-// piste past the last gate I took).
+// What a racer is asked this step: the skis' controls, the reset (stand me back on the piste
+// past the last gate I took), his weight fore and aft (-1 forward .. 1 back: on the free ride's
+// snowmobile, the climber's stance; nothing on skis) and THE MACHINE PRESS (on the free ride:
+// take the snowmobile stood beside it, or hop off it; sled_ride.hpp).
 struct Controls {
   ge::skier::SkierInput ski;
   bool reset = false;
+  double lean = 0;
+  bool machine = false;
 };
 
 enum class EventKind : uint8_t {
@@ -56,6 +61,7 @@ enum class EventKind : uint8_t {
   arrived,   // a free ride reached a run's foot (`gate` the run, `value` the clock, s)
   boarded,   // a free ride came into a lift's load zone (`gate` the lift's index)
   unloaded,  // a lift let him go at its top (`gate` the lift, `value` the ride's time, s)
+  sled,      // the snowmobile (`gate` its SledPhase, `value` its speed, m/s; sled_ride.hpp)
 };
 
 const char* event_name(EventKind kind);
@@ -117,6 +123,24 @@ struct FreeRide {
   OnLift lift;                 // the lift that has him, and the lifts ridden
 };
 
+// THE FREE RIDE'S SNOWMOBILE (sled_ride.hpp): the machine's body (snowmobile/sled.hpp), what it
+// is doing, whether the player is on its boards and whether he was thrown off it, the seconds in
+// this mode, and how many times it has been taken.
+enum class SledMode : uint8_t { parked, ridden, down };
+// What a `sled` event says: taken, hopped off, the rider thrown, stood back on its belt.
+enum class SledPhase : uint8_t { board, hop, crash, right };
+struct FreeSled {
+  bool present = false;  // every free ride on a map has one; a race none
+  ge::snowmobile::SledState body;
+  SledMode mode = SledMode::parked;
+  bool rider = false;
+  bool thrown = false;
+  double t = 0;         // s in this mode
+  int32_t taken = 0;    // times boarded this run
+  double still = 0;     // s at rest with nobody on it
+  bool asleep = false;  // at rest on its parking brake, not stepped until something wakes it
+};
+
 struct Racer {
   ge::skier::SkierState skier;
   Progress progress;
@@ -137,6 +161,7 @@ struct GameState {
   std::vector<Racer> racers;      // the player's first; sized at create
   std::vector<GameEvent> events;  // this step's, cleared at its start
   WantedState wanted;             // the hunt for the player (wanted.hpp); inactive until raised
+  FreeSled sled;                  // the free ride's snowmobile (sled_ride.hpp); none in a race
   double t = 0;                   // s since the start
   int64_t steps = 0;
 

@@ -4,11 +4,13 @@
 // is skied on IS the figure the tape writes down, and a tape played back is the run again.
 //
 // The axes, in the stored tape's order: `steer` (signed), `tuck` (lever), `brake` (lever),
-// `flags` (bit 0 the jump held, bit 1 the reset). Renaming or reordering one is a format change.
+// `flags` (bit 0 the jump held, bit 1 the reset, bit 2 the machine press), `lean` (signed: the
+// rider's weight on the snowmobile). Renaming or reordering one is a format change; an axis is
+// only ever added at the end.
 //
 // ge:summary The control tape's schema and snap_controls: the run's controls on the tape's grid
 // ge:keywords controls tape schema snap snap_controls ghost replay steer tuck brake jump
-// ge:keywords reset flags controls_to_axes controls_from_axes
+// ge:keywords reset flags machine lean controls_to_axes controls_from_axes
 // ge:skill sim racing
 // ge:test tests/fall_line_sim_test.cpp
 #pragma once
@@ -21,22 +23,25 @@
 
 namespace fall_line::sim {
 
-inline constexpr std::array<ge::racing::TapeAxis, 4> kTapeAxes{{
+inline constexpr size_t kTapeAxisCount = 5;
+inline constexpr std::array<ge::racing::TapeAxis, kTapeAxisCount> kTapeAxes{{
     {"steer", ge::racing::AxisKind::Signed},
     {"tuck", ge::racing::AxisKind::Lever},
     {"brake", ge::racing::AxisKind::Lever},
     {"flags", ge::racing::AxisKind::Flags},
+    {"lean", ge::racing::AxisKind::Signed},
 }};
 inline constexpr ge::racing::TapeSchema kTapeSchema{kTapeAxes};
 
-inline void controls_to_axes(const Controls& c, std::span<double, 4> out) {
+inline void controls_to_axes(const Controls& c, std::span<double, kTapeAxisCount> out) {
   out[0] = ge::racing::snap_axis(c.ski.steer, ge::racing::AxisKind::Signed);
   out[1] = ge::racing::snap_axis(c.ski.tuck, ge::racing::AxisKind::Lever);
   out[2] = ge::racing::snap_axis(c.ski.brake, ge::racing::AxisKind::Lever);
-  out[3] = (c.ski.jump ? 1 : 0) + (c.reset ? 2 : 0);
+  out[3] = (c.ski.jump ? 1 : 0) + (c.reset ? 2 : 0) + (c.machine ? 4 : 0);
+  out[4] = ge::racing::snap_axis(c.lean, ge::racing::AxisKind::Signed);
 }
 
-inline Controls controls_from_axes(std::span<const double, 4> a) {
+inline Controls controls_from_axes(std::span<const double, kTapeAxisCount> a) {
   Controls c;
   c.ski.steer = a[0];
   c.ski.tuck = a[1];
@@ -44,12 +49,14 @@ inline Controls controls_from_axes(std::span<const double, 4> a) {
   const int flags = static_cast<int>(a[3]);
   c.ski.jump = (flags & 1) != 0;
   c.reset = (flags & 2) != 0;
+  c.machine = (flags & 4) != 0;
+  c.lean = a[4];
   return c;
 }
 
 // `c` with every axis on the tape's grid.
 inline Controls snap_controls(const Controls& c) {
-  std::array<double, 4> a{};
+  std::array<double, kTapeAxisCount> a{};
   controls_to_axes(c, a);
   return controls_from_axes(a);
 }

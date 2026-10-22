@@ -16,6 +16,7 @@
 #include "fall_line/sim/field.hpp"
 #include "fall_line/sim/free.hpp"
 #include "fall_line/sim/lift_ride.hpp"
+#include "fall_line/sim/sled_ride.hpp"
 #include "fall_line/sim/wanted.hpp"
 #include "mountain/mapgen/generate.hpp"
 #include "prof/zones.hpp"
@@ -41,10 +42,10 @@ void log_step(const GameState& state) {
   static const out::Channel kWanted = out::channel("wanted");
   const auto f = [](double v, int d) { return ge::core::num::to_fixed(v, d); };
   for (const GameEvent& e : state.events) {
-    const bool course = e.kind == EventKind::gate || e.kind == EventKind::missed ||
-                        e.kind == EventKind::finish || e.kind == EventKind::reset ||
-                        e.kind == EventKind::onto || e.kind == EventKind::arrived ||
-                        e.kind == EventKind::boarded || e.kind == EventKind::unloaded;
+    const bool course =
+        e.kind == EventKind::gate || e.kind == EventKind::missed || e.kind == EventKind::finish ||
+        e.kind == EventKind::reset || e.kind == EventKind::onto || e.kind == EventKind::arrived ||
+        e.kind == EventKind::boarded || e.kind == EventKind::unloaded || e.kind == EventKind::sled;
     const out::Channel ch = e.kind == EventKind::shoulder ? kField
                             : e.kind == EventKind::wanted ? kWanted
                             : course                      ? kCourse
@@ -95,6 +96,9 @@ void log_step(const GameState& state) {
       case EventKind::unloaded:
         line += " at the top of lift " + std::to_string(e.gate) + " after " + f(e.value, 1) + " s";
         break;
+      case EventKind::sled:
+        line += " " + std::string(sled_phase_name(static_cast<SledPhase>(e.gate)));
+        break;
     }
     line += " at x " + f(s.x, 1) + " z " + f(s.z, 1) + ", " + f(s.speed * 3.6, 1) + " km/h";
     out::log_on(ch, out::Level::debug, line);
@@ -110,10 +114,11 @@ void log_step(const GameState& state) {
   }
 }
 
-// The reset the run's mode makes.
+// The reset the run's mode makes: on the free ride, the machine he rides or was thrown off stood
+// back on its belt with him on it (sled_ride.hpp), else his run's.
 void reset(GameState& state, int32_t i) {
   if (state.mode == Mode::free) {
-    reset_free(state, i);
+    if (!remount_sled(state, i)) reset_free(state, i);
   } else {
     reset_racer(state, i);
   }
@@ -151,6 +156,8 @@ const char* event_name(EventKind kind) {
       return "boarded";
     case EventKind::unloaded:
       return "unloaded";
+    case EventKind::sled:
+      return "sled";
   }
   return "?";
 }
@@ -201,6 +208,12 @@ void step(GameState& state, std::span<const Controls> controls) {
     if (state.mode == Mode::free && on_lift(state, i)) {
       step_lift(state, i);
       continue;
+    }
+    // On the snowmobile's boards the step is the machine's: his skis, his run and the run's
+    // resets wait.
+    if (state.mode == Mode::free) {
+      GE_ZONE("sled");
+      if (step_sled_ride(state, i, c)) continue;
     }
     sk::SkierInput in = c.ski;
     if (p.finished) in = sk::SkierInput{0, 0, 1, false};
@@ -285,6 +298,17 @@ uint64_t state_hash(const GameState& state, uint64_t h) {
     mix(f.lift.carrier);
     mix(f.lift.since);
     mix(f.lift.ridden);
+  }
+  if (state.sled.present) {
+    const FreeSled& m = state.sled;
+    h = ge::snowmobile::sled_hash(m.body, h);
+    mix(static_cast<double>(m.mode));
+    mix(m.rider ? 1 : 0);
+    mix(m.thrown ? 1 : 0);
+    mix(m.t);
+    mix(m.taken);
+    mix(m.still);
+    mix(m.asleep ? 1 : 0);
   }
   return wanted_hash(state.wanted, h);
 }

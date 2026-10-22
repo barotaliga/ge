@@ -14,6 +14,8 @@
 #include "fall_line/sim/free.hpp"
 #include "fall_line/sim/game.hpp"
 #include "fall_line/sim/outing.hpp"
+#include "fall_line/sim/sled_outing.hpp"
+#include "fall_line/sim/sled_ride.hpp"
 #include "prof/zones.hpp"
 
 namespace fall_line::sim {
@@ -24,7 +26,7 @@ namespace num = ge::core::num;
 Driver::Driver(std::shared_ptr<const mg::Level> level, int32_t rivals)
     : Driver(create_game_on(std::move(level), 1 + (rivals < 0 ? 0 : rivals))) {}
 
-Driver::Driver(GameState state, int32_t lifts)
+Driver::Driver(GameState state, int32_t lifts, int32_t sled_rides)
     : state_(std::move(state)),
       plan_(state_.mode == Mode::free
                 ? plan_free(*state_.level, state_.racers[0].free.start, state_.spec)
@@ -32,10 +34,12 @@ Driver::Driver(GameState state, int32_t lifts)
       recorder_(kTapeSchema),
       controls_(state_.racers.size()),
       shoulders_(state_.racers.size(), 0),
-      lifts_(lifts) {}
+      lifts_(lifts),
+      sled_rides_(sled_rides),
+      y0_(state_.racers[0].skier.y) {}
 
 void Driver::step(Controls player) {
-  std::array<double, 4> axes{};
+  std::array<double, kTapeAxisCount> axes{};
   controls_to_axes(player, axes);
   {
     GE_ZONE("tape");
@@ -54,6 +58,8 @@ void Driver::step(Controls player) {
     hash_ = state_hash(state_, hash_);
   }
   top_speed_ = num::max(top_speed_, state_.racers[0].skier.speed);
+  climbed_ = num::max(climbed_, state_.racers[0].skier.y - y0_);
+  if (on_sled(state_, 0)) sled_time_ += kDt;
   for (const GameEvent& e : state_.events) {
     if (e.kind == EventKind::shoulder) {
       shoulders_[static_cast<size_t>(e.racer)]++;
@@ -75,7 +81,8 @@ void Driver::step(Controls player) {
 bool Driver::over() const {
   if (state_.mode == Mode::free) {
     const FreeRide& f = state_.racers[0].free;
-    return f.arrived && f.lift.ridden >= lifts_;
+    return f.arrived && f.lift.ridden >= lifts_ && state_.sled.taken >= sled_rides_ &&
+           !on_sled(state_, 0);
   }
   for (const Racer& r : state_.racers) {
     if (!r.progress.finished) return false;
@@ -112,6 +119,9 @@ RunReport Driver::report(double seed) const {
     rep.lifts = f.lift.ridden;
     rep.lift_wait = lift_wait_;
     rep.lift_ride = lift_ride_;
+    rep.sled_rides = state_.sled.taken;
+    rep.sled_time = sled_time_;
+    rep.climbed = climbed_;
     rep.mean_speed = rep.time > 0 ? f.distance / rep.time : 0;
   }
   for (size_t i = 0; i < state_.racers.size(); i++) {
@@ -141,7 +151,8 @@ RunReport drive(Driver d, double seed, double max_seconds, Pilot&& pilot,
         const Racer& r = d.state().racers[i];
         if (r.progress.finished) continue;
         (*lines)[i].push_back(LinePoint{r.skier.x, r.skier.z, r.skier.speed, r.skier.on_snow,
-                                        r.skier.down, r.free.lift.phase != LiftPhase::none});
+                                        r.skier.down, r.free.lift.phase != LiftPhase::none,
+                                        on_sled(d.state(), static_cast<int32_t>(i))});
       }
     }
     d.step(pilot(d));
@@ -180,10 +191,23 @@ RunReport simulate_outing(std::shared_ptr<const mg::Level> level, double seed, i
       [&pilot](const Driver& d) { return pilot(d.state(), 0); }, lines);
 }
 
+RunReport simulate_sled_outing(std::shared_ptr<const mg::Level> level, double seed,
+                               const SimOptions& opts, std::vector<std::vector<LinePoint>>* lines) {
+  GameState state = create_free_ride(std::move(level), 0);
+  stand_by_sled(state, 0);
+  const SledSpot spot{state.sled.body.x, state.sled.body.z, state.sled.body.heading};
+  const int32_t run = sled_climb_run(*state.level, spot);
+  if (run < 0) return Driver(std::move(state), 0, 1).report(seed);
+  const SledOutingPilot pilot(state, run);
+  return drive(
+      Driver(std::move(state), 0, 1), seed, opts.max_seconds,
+      [&pilot](const Driver& d) { return pilot(d.state(), 0); }, lines);
+}
+
 RunReport replay_tape(std::shared_ptr<const mg::Level> level, double seed,
                       const ge::racing::ControlTape& tape, int32_t rivals) {
   const ge::racing::TapeReader reader(tape, kTapeSchema);
-  std::array<double, 4> axes{};
+  std::array<double, kTapeAxisCount> axes{};
   return drive(
       Driver(std::move(level), rivals), seed, static_cast<double>(tape.steps) / kHz,
       [&](const Driver& d) {
