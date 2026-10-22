@@ -9,7 +9,9 @@
 //    events become the run's; then the run's own resets (down `kDownReset` s, stuck
 //    `kStuckReset` s).
 // 3. Skier against skier (`meet_racers`, field.hpp), the field in pair order.
-// 4. The clock advances.
+// 4. The wanted level (`step_wanted`, wanted.hpp): the look, the climb, the search running out;
+//    nothing on a run that never raised the heat.
+// 5. The clock advances.
 //
 // The only draws are the field's, made once when the run is created (`deal_field`, off a stream
 // of the map's seed); `step` draws nothing, so a run is a pure function of its map and controls.
@@ -47,7 +49,8 @@ GameState create_game_on(std::shared_ptr<const ge::mountain::mapgen::Level> leve
 // ONE STEP. `controls` holds one entry per racer, in field order.
 void step(GameState& state, std::span<const Controls> controls);
 
-// FNV-1a 64 over every racer's skier and progress and the clock, folded into `h`.
+// FNV-1a 64 over every racer's skier and progress, the hunt (once raised) and the clock, folded
+// into `h`.
 uint64_t state_hash(const GameState& state, uint64_t h);
 
 }  // namespace fall_line::sim

@@ -26,6 +26,7 @@ tests):
 | `bot.hpp/.cpp` | `plan_bot` (the speed plan off `skier/limits.hpp`, and on a course whose slalom gates stand off the line the weave through them) and `bot_controls` (pure pursuit of the racer's lane about the weave, brake over the plan at his pace, tuck under it) |
 | `field.hpp/.cpp` | The rivals: `deal_field` (each rival's pace off a stream of the map's seed, his lane off his grid slot), `meet_racers` (skier against skier: the shoulder), `standings` and `place_of` (off `plugins/racing`) |
 | `simulate.hpp/.cpp` | `Driver` (THE ONE STEP every pilot drives: snapped, taped, the rivals' bots, `step`, hashed), `simulate`, `simulate_on`, `replay_tape`, the `RunReport` and its `FieldRow`s |
+| `wanted.hpp/.cpp`, `wanted_state.hpp`, `wanted_rules.hpp` | THE WANTED LEVEL: `raise_heat` (the offence hook), `step_wanted` (the look, the climb, the search running out), `sees_quarry` and `through_woods` (the sight line), `under_cover`, `arrest_quarry`, `roster_of`, `ground_wave`; the state `GameState::wanted` (inactive and unhashed until raised); every number in `wanted_rules.hpp` |
 | `play.hpp/.cpp` | `PlaySession`: an agent at the controls over JSON lines (`hello`, `observe`, `act`, `tape`, `end`); THE PROTOCOL is stated once in its header |
 
 The generator is `plugins/mountain` (the `mountain` skill); a map is a pure function of its
@@ -37,7 +38,9 @@ seed. The skier on the snow is `plugins/skier` (the `skier` skill).
 2. The run: the state, the course, the step, the bot, `simulate` and the `sim` lab (M5b, done).
 3. The field and an agent at the controls: rivals on one grid, skier against skier, the
    standings off `plugins/racing`, and the `play` lab over stdio (M5c, done).
-4. Next: the modes and their rules (the race formats) arrive with the app's cards (M10); the
+4. The wanted level (M15a, done): the hunt's state and rules, scripted pursuers in the `wanted`
+   lab until the army's pilots (M15c–M15e) write them.
+5. Next: the modes and their rules (the race formats) arrive with the app's cards (M10); the
    ski area's maps (M4b) are raced once `race_map` is asked for v8 and up.
 
 ## Rules
@@ -71,6 +74,12 @@ seed. The skier on the snow is `plugins/skier` (the `skier` skill).
 reference seeds by default), the run report table and each run's line drawn on its map; a seed
 not finished fails the lab. It is Fall Line's headless sim CLI; `--rivals=3` puts a field on
 the grid and adds the field table (every racer's pace, lane, place and shoulders).
+
+`wanted` (scenario, `games/fall_line/labs/wanted_lab.cpp`): the hunt on seed 38 against scripted
+pursuers (`shadow`, `posts`, `arrest`), the hunt table, each line coloured by the stars, and the
+sight sheds of a soldier and a helicopter. A change to `wanted.cpp` or its numbers moves
+`tests/golden/fall_line_wanted.txt` (`GE_GOLDEN_WRITE=1 build/release/tests/fall_line_wanted_test`)
+and this lab's digest: put its hunt table before and after in the PR.
 
 `play` (drive, `games/fall_line/labs/play_lab.cpp`): an agent at the controls.
 `build/debug/labs play --quiet --stdio --seed=38 --rivals=3` puts the protocol on stdio;

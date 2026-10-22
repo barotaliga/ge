@@ -1,6 +1,6 @@
 ---
 name: debug
-description: "Use to find out WHY the engine or a game behaves as it does, and for the debugging tools themselves: the log channels and the log spec (core/output), log dumps from labs (--log), per-step series traces and spans files (engine/lab/series.hpp), the statistics that call a value an outlier or a spike (stats.hpp), the chart kit (plot.hpp, chart.hpp: line, scatter, histogram, box, heatmap, flame timeline, PNG and SVG), ge graph, and the charts and trace labs. Load it before adding a printf, a one-off dump or a chart of your own."
+description: "Use to find out WHY the engine or a game behaves as it does, and for the debugging tools themselves: the log channels and the log spec (core/output), log dumps from labs (--log), per-step series traces and spans files (engine/lab/series.hpp), the statistics that call a value an outlier or a spike (stats.hpp), the chart kit (plot.hpp, chart.hpp: line, scatter, histogram, box, heatmap, flame timeline, PNG and SVG), ge graph, the animation views (anim.hpp: a figure's pose track, filmstrips, onion skins, joint angles, jolt, pops, snaps, stretch and clips), and the charts, trace and anim labs. Load it before adding a printf, a one-off dump or a chart of your own."
 ---
 
 # Debugging: logs, traces and charts
@@ -58,11 +58,27 @@ engine gives every run three forms, each with one owner, and `docs/debugging.md`
 
 - A SPIKE (line charts) is a value out of line with its rolling-median neighbours by a robust z
   over 3.5, the scale floored at 1% of the series' p1..p99 range so a smooth 120 Hz signal flags
-  nothing. An OUTLIER (sets) is the same against the whole set's median and MAD.
+  nothing, and at a millionth of its largest value so a flat series' rounding flags nothing. An OUTLIER (sets) is the same against the whole set's median and MAD.
 - Findings come strongest first and at most 60 are ringed: a noisy signal rings its worst, and
   "thousands of spikes" means a noisy signal, not thousands of bugs.
 - Tune the rule in `stats.cpp` only, and rerun `make lab LAB=charts`: its planted outliers must
   each be ringed exactly once.
+
+## Animations (anim.hpp)
+
+- A figure is judged on a POSE TRACK: its joints every frame in its OWN frame (x right, y up, z
+  forward, the ground at `floor`), never the world's, so the track is the animation and not the
+  figure travelling. The figure hands out its joints and its frame (the skier's:
+  `figure_frame`, `figure_joints`, `figure_joint_positions` in `plugins/skier/app/figure.hpp`).
+- Record EVERY step, not every tenth: a pop is one frame.
+- The faults are `pop`, `snap`, `angle-snap`, `stretch` and `clip` (`docs/debugging.md` has the
+  table). Tune the limits in `AnimLimits`, the rule in `anim.cpp`, and rerun `make lab LAB=anim`:
+  its planted pop, stretch and clip must each be found.
+- A figure's lab plants the same three faults in a COPY of its track and fails when one is
+  missed; the real track's findings are reported, never failed on, and read before and after a
+  change (`--tag=before`, `--compare=before`).
+- Look at the filmstrips first (the frame), then the onion skin (the paths), then the charts (the
+  numbers): a finding's frame is in its sentence and ringed in the strip.
 
 ## The labs
 
@@ -70,6 +86,7 @@ engine gives every run three forms, each with one owner, and `docs/debugging.md`
 | --- | --- |
 | `charts` | Does every chart form draw, read, and ring exactly the outliers planted in its data? |
 | `trace` | What did the player's skier do, step by step, down one seed, and where did it jump? |
+| `anim` | Does the skier's figure move without pops, snaps, stretched bones or poles through the snow, and are planted faults found? |
 
 `make lab LAB=trace ARGS="--seed=38 --log=course=debug,skier=debug"` is the first thing to run
 for any question about a run: the charts say where, the log says what happened there.

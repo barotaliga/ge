@@ -34,6 +34,7 @@
 
 #include "core/heightfield.hpp"
 #include "core/prng.hpp"
+#include "mountain/mapgen/real_hints.hpp"
 #include "mountain/mapgen/regions.hpp"
 #include "mountain/mapgen/terrain.hpp"
 
@@ -61,9 +62,12 @@ struct Massif {
 };
 
 // R25 — deal the resort's mountain off the attempt's stream, in `region` (R21), laid off `face`
-// where one is given (the attempt's number decides whether the real peak is kept).
+// where one is given (the attempt's number decides whether the real peak is kept), its woods and
+// tree line off the face's `hints`, and the real lifts and pistes handed on to be leant on where
+// `lean` and the attempt allow.
 TerrainPlan plan_massif(ge::core::Rng& rng, const Region& region,
-                        const std::shared_ptr<const RealFace>& face = nullptr, int attempt = 0);
+                        const std::shared_ptr<const RealFace>& face = nullptr, int attempt = 0,
+                        const std::shared_ptr<const RealHints>& hints = nullptr, bool lean = true);
 
 // Bake the massif onto the map's grid (R1), row by row.
 ge::core::Heightfield bake_massif(const TerrainPlan& plan);

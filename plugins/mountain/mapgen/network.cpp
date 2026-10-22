@@ -267,6 +267,8 @@ std::variant<WalkedRun, std::string> walk_run(ge::core::Rng& rng, const TerrainP
     const double v = ge::core::value_noise(p.s, 0, T::width_scale, width_seed);
     double wide = W.min + (W.max - W.min) * smoothstep(0.15, 0.85, v);
     if (road) return wide;
+    const double real = spec.width_at ? spec.width_at(p.x, p.z) : 0;
+    if (real > 0) wide = num::max(W.min, num::min(W.max, real));
     const double y = sample_field(ground, p.x, p.z);
     wide = num::min(RR::piste::most,
                     wide * (1 + RR::piste::open * smoothstep(line_y - 60, line_y + 60, y)));
@@ -448,8 +450,18 @@ std::variant<WalkedRun, std::string> walk_run(ge::core::Rng& rng, const TerrainP
       }
       // Away from a run it may not merge into.
       if (repel.until > s) bend += repel.side * kRepelTurn;
-      // THE CENTRE: the bearing to the target, then the fall line below it.
-      const PlanPoint& aim = spec.target;
+      // THE CENTRE: the bearing to the target, then the fall line below it; a real piste's next
+      // bend ahead first, where the run follows one (R25).
+      std::optional<PlanPoint> steer = spec.follow ? spec.follow(x, z) : std::nullopt;
+      if (!steer) {
+        for (const PlanPoint& q : spec.via) {
+          if (q.z > z + 40) {
+            steer = q;
+            break;
+          }
+        }
+      }
+      const PlanPoint aim = steer.value_or(spec.target);
       const double tz = num::max(aim.z, z + 60);
       const double level = road ? 0 : smoothstep(spec.target.z - 120, spec.target.z, z);
       const double off = road ? RR::road::swing : N::centre;

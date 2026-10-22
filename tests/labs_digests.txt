@@ -1,5 +1,6 @@
 # lab digests at their smoke flags: labs --all --smoke --write-digests
 analyze 47aeb41752f58f41
+anim bffad50e67b78f6e
 audition d47fda4a9cb22fbb
 charts 77f2319a5ea24272
 cli-loop 5d2f9a6cd5ca441e
@@ -13,7 +14,8 @@ park d53bc7b207dfab4a
 play 17921f96f672b343
 profile 05a464004723898b
 real-faces b53c6303e783fd1b
-real-maps 0c0da35edd4b151e
+real-hints eb15bbe4ffd14810
+real-maps 2dceaf5b64e32976
 resort f82a1fca6fb6ba42
 ride f7dc714b2493f95a
 routes 739cf0534473b4f8
@@ -29,4 +31,5 @@ speed-ski 55c4cfa78de28f7e
 synth 39e6460e5c8a8c8e
 taa 01ee5d58d90a05ce
 trace 95f71886b7e7c98a
+wanted 13141137a9a2233f
 world 59572dd4a51a1bae
