@@ -46,6 +46,7 @@ ge asset build [<name>]          # a model built in headless Blender off the gam
 ge check                         # the whole gate: format, doctor, build, tests
 ge precheck [--preset=<p>]       # what CI runs, both presets: ge check, the pilot, the replays
 ge ci [<pr>] [--log=<file>]      # a red CI job's log as findings (through gh; --log: a saved one)
+ge ci <pr> --merge               # squash-merge once every check passed and it merges cleanly
 ```
 
 Around it: `ge new <dir>` scaffolds a game repo (`--game=racer` starts it as a racer: a car

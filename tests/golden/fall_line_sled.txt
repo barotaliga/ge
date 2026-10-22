@@ -1,0 +1,2 @@
+# finished taken time-bits climbed-bits distance-bits digest (fall_line_sled_test, seed 38 at v10, the reference skis)
+1 1 4078437777777777 407a8ecfbcc8738b 40a2d52bb3bb7beb 8d44d942a0059192

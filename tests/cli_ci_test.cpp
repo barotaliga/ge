@@ -2,8 +2,9 @@
 // GitHub's prefixes on each line, read back as findings: ge's own error lines first, then a
 // compiler's and the tests' lines, then the log's last words.
 //
-// ge:summary Test: ge ci's job log as findings, through GitHub's tab and timestamp prefixes
+// ge:summary Test: ge ci's job log as findings, and why a green pull request is blocked
 // ge:keywords test cli ci log findings gh timestamp ci_log_findings last-words
+// ge:keywords blocked_findings ruleset
 // ge:skill testing agent-interface
 #include <string>
 
@@ -75,4 +76,23 @@ TEST(a_log_naming_no_cause_reports_its_last_words) {
 
   const auto empty = ci_log_findings(kRepo, "", "");
   CHECK(empty.size() == 1 && has(empty[0].what, "names no cause"));
+}
+
+TEST(a_blocked_merge_names_the_required_check_that_never_passed) {
+  const std::string rules =
+      R"j([{"type":"deletion"},{"type":"required_status_checks","parameters":{)j"
+      R"j("strict_required_status_checks_policy":false,"required_status_checks":[)j"
+      R"j({"context":"lint","integration_id":1},{"context":"package (windows-x64)"}]}},)j"
+      R"j({"type":"pull_request","parameters":{"required_approving_review_count":0}}])j";
+  const auto f = blocked_findings("main", rules, {"lint", "fmt"});
+  CHECK(f.size() == 1 && f[0].severity == Severity::error);
+  CHECK(has(f[0].what, "\"package (windows-x64)\", which never passed"));
+  CHECK(has(f[0].next, "removes it from the ruleset"));
+
+  const std::string review_rule =
+      R"j([{"type":"pull_request","parameters":{"required_approving_review_count":1}}])j";
+  const auto review = blocked_findings("main", review_rule, {});
+  CHECK(review.size() == 1 && has(review[0].what, "require 1 approving review"));
+  CHECK(has(blocked_findings("main", "", {})[0].what, "could not be read"));
+  CHECK(has(blocked_findings("main", "[]", {})[0].what, "rules do not name"));
 }

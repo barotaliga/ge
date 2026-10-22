@@ -10,7 +10,10 @@
 //    lift_ride.hpp); then the skier's events become the run's; then the run's own resets (down
 //    `kDownReset` s, stuck `kStuckReset` s; on the free ride stuck only while he pushes), each the
 //    mode's. On the free ride a lift that has him steps him instead (`step_lift`), and nothing
-//    else of his is stepped.
+//    else of his is stepped; then the snowmobile (`step_sled_ride`, sled_ride.hpp): taken on the
+//    machine press, or stepped parked, or ridden, in which case it steps him in place of his skis
+//    and nothing else of his is stepped. On the free ride the run's reset stands the machine he
+//    rides or was thrown off back on its belt with him on it.
 // 3. Skier against skier (`meet_racers`, field.hpp), the field in pair order.
 // 4. The army on foot (`step_army`, army.hpp): the lifts' squads and the ground waves sent, every
 //    soldier moved, the arrest, and each one written into the hunt's pursuers; nothing on a run
