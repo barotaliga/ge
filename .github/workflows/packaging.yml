@@ -153,6 +153,8 @@ jobs:
           test -s tests/labs_digests.txt
           "$G" digest look "$E" --json | grep -q '"state":"same"'
           "$G" test --filter=labs_smoke "$E"
+          # A filter builds only its tests' targets: laps_test alone, then run.
+          "$G" test --filter=laps "$E" --json | grep -q '"failed":0'
           mkdir -p tests/golden
           printf '# lap time-bits\n1 4059000000000000\n2 405a000000000000\n' > tests/golden/laps.txt
           "$G" golden diff --json | grep -q '"rows_changed":2'
