@@ -126,6 +126,7 @@ target_link_libraries(ge_audio PUBLIC ge_core)
 # platform; render/skinning.hpp skins on the GPU.
 include(cmake/Cgltf.cmake)
 file(GLOB GE_ASSETS_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/assets/*.cpp)
+list(FILTER GE_ASSETS_SOURCES EXCLUDE REGEX "/engine/assets/main\\.cpp$")
 add_library(ge_assets STATIC ${GE_ASSETS_SOURCES})
 target_link_libraries(ge_assets PUBLIC ge_core)
 target_include_directories(ge_assets SYSTEM PRIVATE ${GE_CGLTF_INCLUDE})
@@ -250,6 +251,16 @@ if(PROJECT_IS_TOP_LEVEL)
   add_executable(labs engine/lab/main.cpp ${GE_LAB_SOURCES})
   target_link_libraries(labs PRIVATE ge_lab ge_play ge_core ge_audio ge_assets ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
     ${GE_LAB_EXTRA})
+
+  # The `assets` executable (engine/assets/tool.hpp): the built assets listed, checked and stamped,
+  # and the game data their builders are fed. A data set registers itself from a static
+  # initializer in an `assets/<name>/data.cpp` beside its builder, so, as with the labs, those
+  # files are compiled into the executable, which links every plugin and game.
+  file(GLOB_RECURSE GE_ASSET_DATA_SOURCES CONFIGURE_DEPENDS
+    ${CMAKE_CURRENT_SOURCE_DIR}/plugins/*/assets/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/games/*/assets/*.cpp)
+  add_executable(assets engine/assets/main.cpp ${GE_ASSET_DATA_SOURCES})
+  target_link_libraries(assets PRIVATE ge_assets ge_core ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS})
 
   enable_testing()
   add_subdirectory(tests)

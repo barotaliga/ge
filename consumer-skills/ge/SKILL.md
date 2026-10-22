@@ -44,6 +44,7 @@ ge bench [--tag=before | --compare=before]   # each step's time against its budg
 ge profile [--render]            # where the step's (and the frame's) time goes, zone by zone
 ge mem | ge leaks                # what the run allocates; what it never frees
 ge graph <file>... [--kind=<k>]  # chart traces, benches, profiles: PNG + SVG, outliers as notes
+ge asset build [<name>]          # a model built in headless Blender off the game's data (skill: assets)
 ge check                         # the whole gate: format, doctor, build, tests
 ge precheck [--preset=<p>]       # what CI runs, both presets: ge check, the pilot, the replays
 ge ci [<pr>] [--log=<file>]      # a red CI job's log as findings (through gh; --log: a saved one)

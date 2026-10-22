@@ -10,7 +10,7 @@
 // ge:summary The ge executable: parses the command line against the catalog and runs each command
 // ge:keywords cli ge main command-line usage dispatch help version new find explain use add
 // ge:keywords build test check precheck ci digest golden lab graph shot upgrade doctor skills
-// ge:keywords lessons json bench profile mem leaks
+// ge:keywords lessons json bench profile mem leaks asset blender
 // ge:skill agent-interface
 // ge:test tests/cli_commands_test.cpp
 #include <algorithm>
@@ -19,6 +19,7 @@
 #include <string>
 
 #include "cli/add.hpp"
+#include "cli/asset.hpp"
 #include "cli/build.hpp"
 #include "cli/ci.hpp"
 #include "cli/commands.hpp"
@@ -252,6 +253,15 @@ Outcome run(const Args& a) {
     if (name == "bench") return run_bench(b, p);
     if (name == "profile") return run_profile(b, p);
     return run_mem(b, p);
+  }
+  if (name == "asset list") return run_asset_list(build_options(a));
+  if (name == "asset check") return run_asset_check(build_options(a));
+  if (name == "asset build") {
+    AssetOptions as;
+    as.names = a.words;
+    as.force = has_flag(a, "force");
+    as.blender = flag_value(a, "blender");
+    return run_asset_build(build_options(a), as);
   }
   if (name == "graph") {
     GraphOptions g;
