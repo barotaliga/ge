@@ -110,6 +110,7 @@ void run_sound_step(RunSound& sound, ge::audio::Synth& synth, const sim::GameSta
       case EventKind::unloaded:
       case EventKind::sled:  // the snowmobile's sound comes with its own bed
       case EventKind::army:  // the army is heard from its men, when they have a voice
+      case EventKind::heli:  // the helicopter's sound comes with its own bed
         break;
     }
   }
