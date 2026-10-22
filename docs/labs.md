@@ -45,7 +45,7 @@ its words) and `fail` (what failed and the next action, in the
 | `scenario` | One staged situation, such as a skier placed at a moment on a synthetic slope with a scripted input, measured exactly. | `ride` |
 | `picture` | A captioned picture of a subject. It is drawn on the CPU raster now, and from M7 it is a GPU frame read back. | `level`, `noise` |
 | `drive` | A pilot plays the game, either the bot or an agent over stdio. The run is the report, and the control tape is the replay. | `sim`, `play` |
-| `bench` | What something costs. Its wall-clock metrics are `measured`, which means they are printed and compared but never put in the digest. | `mapgen-cost` |
+| `bench` | What something costs. Its wall-clock metrics are `measured`, which means they are printed and compared but never put in the digest. A game's step needs no lab of its own: `ge bench`, `ge profile` and `ge mem` time the pilot's run through the play contract, zone by zone (`engine/play/bench.hpp`). | `mapgen-cost` |
 
 ### Where labs live, and how they register
 
@@ -297,7 +297,7 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 | `world` | picture | game:fall_line | Fall Line's frame from named views of a seed, TAA-U on or off at a render scale, the shimmer, the overdraw probe, a run's moments from the chase camera with the field (`--moments`, `--rivals`) the cull check (every view redrawn with occlusion culling off, `cull-faults` must be 0), the `wood` view (the trees' shadows on sunlit snow) and the sun's cascades over the whole run (`cascade-redraws.near` and `.far`, deterministic, with no device) (`games/fall_line/labs/gpu_world_lab.cpp`) | M7a, M7d1, M7d2 (now) |
 | `taa` | picture | game:fall_line | TAA-U on a moving camera against the converged still: ghosting, aliasing, stills repeat (`games/fall_line/labs/gpu_taa_lab.cpp`) | M7c (now) |
 | `shadows` | picture | game:fall_line | the horizon maps over a day from above, and the bake counter of a sun sweep (`games/fall_line/labs/gpu_shadows_lab.cpp`) | M7b (now) |
-| `profile` | bench | game:fall_line | Fall Line's frame over a stretch of the bot's run from the chase camera: every pass's GPU ms (median, p95, worst), its draws and dispatches, and the renderer's CPU half against `--cpu-budget` (`games/fall_line/labs/gpu_profile_lab.cpp`) | M7d3 (now) |
+| `profile` | bench | game:fall_line | Fall Line's frame over a stretch of the bot's run from the chase camera: every pass's GPU ms (median, p95, worst), the CPU ms encoding it, its draws and dispatches; the renderer's CPU half against `--cpu-budget`; where a frame's CPU goes by part (the prepare's timing zones, each pass's encoding, the simulation's steps between frames by their zones); `frames.tsv`, one row a frame (`games/fall_line/labs/gpu_profile_lab.cpp`; `ge profile --render` runs a game's) | M7d3, M12b (now) |
 | `snow` | picture | game:fall_line | The snow's material up close (`plugins/mountain/app/snow.wgsl` in Fall Line's frame): the `corduroy`, `powder` and `glitter` views at each `--hours` hour, each PLAIN (the material's gains at nought: the albedo lit) and SNOW, with the ground's mean luma, its detail and its glints beside each (`games/fall_line/labs/gpu_snow_lab.cpp`) | M8a (now) |
 | `forest`, `trails`, `spray`, `skis`, `skier` | picture | game:fall_line | the world drawn | M8b–M8e |
 | `synth` | sim | engine | `engine/audio` (every voice the synth can play, metered, pictured and written as WAV; the render's cost) | M9a (now) |

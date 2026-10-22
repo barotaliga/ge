@@ -12,6 +12,7 @@
 #include "fall_line/sim/controls.hpp"
 #include "fall_line/sim/field.hpp"
 #include "fall_line/sim/game.hpp"
+#include "prof/zones.hpp"
 
 namespace fall_line::sim {
 
@@ -28,13 +29,22 @@ Driver::Driver(std::shared_ptr<const mg::Level> level, int32_t rivals)
 void Driver::step(Controls player) {
   std::array<double, 4> axes{};
   controls_to_axes(player, axes);
-  recorder_.record(axes);
+  {
+    GE_ZONE("tape");
+    recorder_.record(axes);
+  }
   controls_[0] = controls_from_axes(axes);
-  for (size_t i = 1; i < controls_.size(); i++) {
-    controls_[i] = bot_controls(state_, static_cast<int32_t>(i), plan_);
+  {
+    GE_ZONE("bot");
+    for (size_t i = 1; i < controls_.size(); i++) {
+      controls_[i] = bot_controls(state_, static_cast<int32_t>(i), plan_);
+    }
   }
   fall_line::sim::step(state_, controls_);
-  hash_ = state_hash(state_, hash_);
+  {
+    GE_ZONE("hash");
+    hash_ = state_hash(state_, hash_);
+  }
   top_speed_ = num::max(top_speed_, state_.racers[0].skier.speed);
   for (const GameEvent& e : state_.events) {
     if (e.kind == EventKind::shoulder) {

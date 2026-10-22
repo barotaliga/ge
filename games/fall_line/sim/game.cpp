@@ -11,6 +11,7 @@
 #include "fall_line/sim/course.hpp"
 #include "fall_line/sim/field.hpp"
 #include "mountain/mapgen/generate.hpp"
+#include "prof/zones.hpp"
 #include "skier/skier.hpp"
 
 namespace fall_line::sim {
@@ -87,8 +88,14 @@ void step(GameState& state, std::span<const Controls> controls) {
     const double x0 = r.skier.x;
     const double z0 = r.skier.z;
     sk::SkierEvents ev;
-    sk::step_skier(r.skier, in, world, state.spec, kDt, ev);
-    step_course(state, i, x0, z0);
+    {
+      GE_ZONE("skier");
+      sk::step_skier(r.skier, in, world, state.spec, kDt, ev);
+    }
+    {
+      GE_ZONE("course");
+      step_course(state, i, x0, z0);
+    }
     if (ev.took_off) state.events.push_back(GameEvent{EventKind::takeoff, i, p.next, 0});
     if (ev.landed) state.events.push_back(GameEvent{EventKind::landing, i, p.next, ev.landing_g});
     if (ev.glanced) state.events.push_back(GameEvent{EventKind::glance, i, ev.tree, 0});
@@ -103,7 +110,10 @@ void step(GameState& state, std::span<const Controls> controls) {
       reset_racer(state, i);
     }
   }
-  meet_racers(state);
+  {
+    GE_ZONE("meet");
+    meet_racers(state);
+  }
   state.steps++;
   state.t = static_cast<double>(state.steps) * kDt;
 }

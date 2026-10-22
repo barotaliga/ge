@@ -25,10 +25,24 @@ The engine exists to be fast (G2). Speed is proven by measurement.
 
 ## Measuring
 
-- CPU: `release` preset, the bench executable's median of N runs (N ≥ 20), on an idle
+- **A game's step**: `ge bench`, `ge profile`, `ge mem` and `ge leaks` (`engine/cli/perf.hpp`
+  over the play executable's `play bench`, `engine/play/bench.hpp`): the pilot plays a seed once,
+  its log is replayed `--repeats` times with every zone recording, and a step's time is its
+  median over the repeats. `--tag=before`, then `--compare=before`, for the PR. The release
+  preset is their default; a debug build's sanitizers multiply every time.
+- **Zones** (`engine/prof/zones.hpp`): `GE_ZONE("name")` at the top of a scope, one per system
+  in `step` (Fall Line: `bot`, `skier`, `course`, `meet`, `tape`, `hash`), per heavy part of a
+  run's open (`mapgen`, `mapgen.attempt`, `mapgen.analyze`) and per part of a frame's prepare
+  (`frame.sky`, `frame.terrain`, `frame.figures`, `frame.instances`, `frame.shadows`). Never in
+  an inner loop: a bench keeps 24 entries a step. Off, a zone is one relaxed atomic load.
+- **Allocations**: an executable that links `ge::prof_alloc` (the play executable does, through
+  `ge::play`) counts every `operator new`; `ge mem` names the zone a step allocates in after the
+  first second. `ge leaks` runs the pilot under the debug build's LeakSanitizer (or valgrind).
+- **The frame**: the game's `profile` lab: GPU and CPU ms per pass, the prepare's zones and the
+  simulation's between frames, and `frames.tsv` a frame (`ge profile --render`, `make lab
+  LAB=profile`).
+- An engine module's own cost: a `bench` lab (below), median of N runs (N ≥ 20), on an idle
   machine, back to back before and after.
-- Profiles: Tracy behind `GE_TRACY=ON` (added in M5). Zones per system in `step` and
-  per pass in `prepare`.
 - While porting, `porting/subsystems.md` § perf says how to time the reference on the
   same machine.
 
@@ -37,8 +51,9 @@ The engine exists to be fast (G2). Speed is proven by measurement.
 1. **Same bits.** Every golden test is still green. An optimisation that changes a
    digest is a bug, not a trade-off.
 2. **Before and after**, same machine, same build type, with the numbers in the PR.
-3. **No allocation added** to a step or a frame. In debug, an allocation counter
-   test asserts zero during `step`.
+3. **No allocation added** to a step or a frame: `ge mem` (or `play bench`'s
+   `allocs.steps_allocating`) is 0 after the warm-up, or the PR says which zone still
+   allocates and why.
 
 ## Levers, in the order to try them
 

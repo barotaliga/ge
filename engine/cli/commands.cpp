@@ -54,6 +54,35 @@ constexpr FlagSpec kPlayFlags[] = {
     {"seed", "<n>", "the run's seed (default 1)"}, kPreset, kEngine, kRepo};
 constexpr FlagSpec kSimFlags[] = {
     {"seeds", "<a,b,...>", "the seeds the pilot runs (default 1)"}, kPreset, kEngine, kRepo};
+constexpr FlagSpec kFast{
+    "preset", "<debug|release>",
+    "the CMake preset (default release: a sanitizer's time is not the game's)"};
+constexpr FlagSpec kSteps{"steps", "<n>", "only the first this many steps of each run"};
+constexpr FlagSpec kBenchFlags[] = {
+    {"seeds", "<a,b,...>", "the seeds the pilot plays (default 1)"},
+    {"repeats", "<n>", "times each run is replayed and timed (default 5)"},
+    kSteps,
+    {"tag", "<name>", "keep the answer as runs/bench@<name>.json for a later --compare"},
+    {"compare", "<name>", "set every number beside the run tagged <name>; 10% slower warns"},
+    kFast,
+    kEngine,
+    kRepo};
+constexpr FlagSpec kProfileFlags[] = {
+    {"seeds", "<a,b,...>", "the seeds the pilot plays (default 1)"},
+    {"repeats", "<n>", "times each run is replayed and timed (default 5)"},
+    kSteps,
+    {"render", "", "also run the game's `profile` lab: CPU and GPU ms per render pass"},
+    kFast,
+    kEngine,
+    kRepo};
+constexpr FlagSpec kMemFlags[] = {
+    {"seeds", "<a,b,...>", "the seeds the pilot plays (default 1)"}, kSteps, kFast, kEngine, kRepo};
+constexpr FlagSpec kLeakFlags[] = {
+    {"seeds", "<a,b,...>", "the seeds the pilot plays (default 1)"},
+    {"valgrind", "", "run under valgrind's memcheck instead of the sanitizers"},
+    {"preset", "<debug|release>", "the CMake preset (default debug: its sanitizers find leaks)"},
+    kEngine,
+    kRepo};
 constexpr FlagSpec kStateFlags[] = {
     {"step", "<n>", "after this many steps (default: the log's end)"}, kPreset, kEngine, kRepo};
 
@@ -129,6 +158,22 @@ const CommandSpec kCommands[] = {
      "where two runs part: the first input that differs, the first step after which the states "
      "differ, and the fields that do",
      kBuildFlags, "ge diverge runs/a.inputs runs/b.inputs", "play-test"},
+    {"bench", "", 0, 0, "measure",
+     "each step's time against its budget (median, p95, p99, worst), steps a second and the "
+     "run's open, over the pilot's runs replayed; --tag and --compare for a before and after",
+     kBenchFlags, "ge bench --tag=before -- --rivals=3", "perf"},
+    {"profile", "", 0, 0, "measure",
+     "where the step's time goes: each timing zone's calls, time and share, the time in no zone, "
+     "the slowest steps; a timeline round the slowest; --render adds the frame's passes",
+     kProfileFlags, "ge profile --seeds=38 --render", "perf"},
+    {"mem", "", 0, 0, "measure",
+     "what the run allocates: opening it, each step, the steps after the first second that "
+     "still allocate and the zone they do it in; the peak resident set",
+     kMemFlags, "ge mem --seeds=38", "perf"},
+    {"leaks", "", 0, 0, "measure",
+     "the pilot's run under the leak checker (the debug build's sanitizers, or valgrind); each "
+     "block never freed a finding at its first frame in the repo",
+     kLeakFlags, "ge leaks --seeds=38", "perf"},
     {"doctor", "", 0, 0, "maintain",
      "the repo against the engine's rules: guidance, skills, the pin, flags, sources, messages",
      kRepoOnly, "ge doctor", "ge"},
@@ -247,8 +292,11 @@ std::optional<std::string> check_args(const Args& a) {
            (c.args.empty() ? std::string("no arguments") : std::string(c.args)) + ", got " +
            std::to_string(n) + " word(s)";
   }
-  if (!a.passthrough.empty() && c.name != "lab" && c.name != "play" && c.name != "sim") {
-    return "only ge lab, ge play and ge sim pass words after --";
+  static constexpr std::string_view kPassing[] = {"lab",     "play", "sim",  "bench",
+                                                  "profile", "mem",  "leaks"};
+  if (!a.passthrough.empty() &&
+      std::find(std::begin(kPassing), std::end(kPassing), c.name) == std::end(kPassing)) {
+    return "only ge lab, play, sim, bench, profile, mem and leaks pass words after --";
   }
   return std::nullopt;
 }
