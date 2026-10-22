@@ -30,7 +30,7 @@ updates that row's Status in its PR.
 | [`docs/goals.md`](docs/goals.md) | The long-term goals (G1–G9), the non-goals and the milestone roadmap |
 | [`docs/architecture.md`](docs/architecture.md) | The layers and their dependency direction, the frame, the code conventions, diagnostics, the determinism contract and the build |
 | [`docs/labs.md`](docs/labs.md) | The labs: the contract every subsystem, plugin and game plugs into, the kinds (sim, scenario, picture, drive, bench), captions, digests, and the labs each milestone lands |
-| [`docs/index.md`](docs/index.md) | GENERATED from the code's `ge:` tags: every file's one-line summary, owning skill and test; keyword to files |
+| `docs/index.md` | GENERATED from the code's `ge:` tags by `make index` (and `make agents-check`) in every checkout, never committed: every file's one-line summary, owning skill and test; keyword to files |
 | [`docs/rendering.md`](docs/rendering.md) | The GPU backend (Dawn), the frame's pass table, every rendering technique and why, budgets, lab hooks, and what was considered and not taken |
 | [`docs/publishing.md`](docs/publishing.md) | What a release is (GitHub Releases + GitHub Packages), how a game consumes it, changeset fragments, cutting a release, the credentials |
 
@@ -134,10 +134,11 @@ make sim SEEDS=38 # the bot down a seed: the run report table and its line on th
 make sim ARGS=--rivals=3  # the same with a field of four: the field table, every line drawn
 make play         # an agent at the controls: the play protocol on stdio (games/fall_line/sim/play.hpp)
 make labs-smoke   # every lab at its smoke flags, twice, digests against tests/labs_digests.txt
-make agents-check # symlinks, skills ↔ this router, the 1000-line cap, ge: tags, docs/index.md fresh, lesson fragments
-make index        # regenerate docs/index.md from every file's ge: tags
+make agents-check # symlinks, skills ↔ this router, the 1000-line cap, ge: tags (writing docs/index.md), lesson fragments
+make index        # write docs/index.md from every file's ge: tags (gitignored: never committed)
 make find Q="noise sample_field"  # files, skills, lessons and the porting map matching any word
 make lessons ARGS="port --scope=engine/core"   # read a skill's lessons, filtered (no ARGS: the inventory)
+make ge ARGS="new ../snow-racer"  # the ge command line: scaffold a game repo on this engine version
 make golden       # regenerate the golden tables (working area: porting/porting.mk, porting/README.md)
 make golden-libm  # the golden tables that reach a transcendental (same place)
 make libm-check   # no <cmath> transcendental in simulation code
@@ -168,7 +169,10 @@ and Windows. Releases are dispatched, never hand-made (`release` skill,
 | --- | --- | --- |
 | `engine/core/` | The deterministic pool: `prng.hpp` (mulberry32), `math.hpp` (hypot family, clamp, smoothstep), `libm/` (every transcendental the simulation calls, with the same bits on every platform; vendored, with `LICENSE.md`), `num.hpp` (the simulation's number semantics: rounding, integer wrap, NaN-aware max/min, sign, remainder), `num_text.hpp` (numbers as text, for diagnostic lines), `noise.hpp` (hash2, value noise, the cached field), `heightfield.hpp` (the baked grid and its bilinear reads), `quat.hpp` (orientation; the Euler sign flip), `solar.hpp` (the sun and the moon, by geometry and on a real date), `output.hpp` (the one diagnostic channel; module state) | `determinism` |
 | `engine/loop/` | `run_clock.hpp`: the fixed-step accumulator between the display's frames and the 120 Hz step | `sim` |
-| `engine/lab/` | The lab contract and runner: `lab.hpp` (`LabSpec`, `GE_LAB`, the `Lab` context: metrics, tables, captioned shots, attached files, failures, the digest), `sound.hpp` (a rendered sound metered, pictured and attached as WAV), `runner.hpp` (the `labs` command line: list, run, tag, compare, smoke, repeat, digest baseline), `report.hpp` (report.json, metrics.tsv, the contact sheet), `raster.hpp` (the CPU picture and 5x7 font), `png.hpp`; `labs/` holds the engine's own labs | `labs` |
+| `engine/lab/` | The lab contract and runner: `lab.hpp` (`LabSpec`, `GE_LAB`, the `Lab` context: metrics, tables, captioned shots, attached files, failures, the digest), `sound.hpp` (a rendered sound metered, pictured and attached as WAV), `runner.hpp` (the `labs` command line: list, run, tag, compare, smoke, repeat, digest baseline), `report.hpp` (report.json, metrics.tsv, the contact sheet), `raster.hpp` (the CPU picture and 5x7 font), `png.hpp`; `labs/` holds the engine's own labs. Published as `ge::lab`, so a game's labs use the same contract | `labs` |
+| `engine/cli/` | The `ge` command line for game repos (`cmake/Cli.cmake`): `scaffold.hpp` (`ge new`), `skills.hpp` (`ge skills sync`, the lock, `ge lessons`), `doctor.hpp` (`ge doctor`: a game repo held to the engine's rules), `diagnostic.hpp` (the diagnostics convention as a check: `tests/cli_diagnostics_test.cpp` holds the whole tree to it), `finding.hpp` (what, where, next), `embedded.hpp` (what ge carries) | `agent-interface` |
+| `consumer-skills/` | The skills a game repo gets from `ge new` and `ge skills sync`, one `<name>/SKILL.md` each, compiled into `ge`; written for a game repo, never for this one | `agent-interface` |
+| `scaffold/` | The game repo `ge new` writes: every file with a `.in` suffix and `{{name}}`-style placeholders, compiled into `ge` | `agent-interface` |
 | `*/labs/` | Labs beside their subject, compiled into the one `labs` executable: `engine/lab/labs/`, `plugins/<name>/labs/`, `games/<name>/labs/` | `labs` |
 | `engine/platform/` | SDL3 (`cmake/SDL.cmake`, `GE_PLATFORM`): `window.hpp` (the window, its native handles, the input snapshot, the frame clock), `audio.hpp` (the output stream, pulled on SDL's audio thread; SDL's `dummy` driver headless); gamepad, touch and files as their milestones need them. The only place SDL is included | `platform` |
 | `engine/gpu/` | The native GPU device over Dawn's prebuilt release (`cmake/Dawn.cmake`, `GE_GPU`): `device.hpp` (adapter, feature tiers, error lines), `pipeline.hpp` (shaders, the manifest and its creation counter), `surface.hpp`, `target.hpp` (offscreen targets, readback), `timer.hpp` (GPU ms per pass), `test_scene.hpp`; WGSL embedded by `cmake/Wgsl.cmake`. The only place webgpu.h is included | `gpu` |
@@ -205,8 +209,9 @@ Agents find code by grep, so the tree is built to be grepped:
   reference identifier still finds the engine file while porting lasts). `grep -rn "ge:keywords.*<word>"` is the
   same search for files alone. A search that misses is fixed by adding the word you tried to
   the right file's `ge:keywords` (`skill-reflection`, question 6).
-- **[`docs/index.md`](docs/index.md)** is generated from the tags by `make index`; commit it
-  with the change. On a merge conflict there, take either side and rerun `make index`.
+- **`docs/index.md`** is generated from the tags by `make index` (and by `make agents-check`) in
+  your own checkout. It is gitignored, so it is never committed and never conflicts: run
+  `make index` to read it, or `make find` to search without it.
 - **One name, everywhere**: a module `engine/loop/run_clock.hpp` has its test
   `tests/loop_run_clock_test.cpp` and its golden `tests/golden/loop_run_clock.txt`; a plugin's
   test is `tests/<plugin>_<file>_test.cpp`. Names are `snake_case`.

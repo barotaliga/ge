@@ -1,0 +1,21 @@
+// Runs every TEST registered in a test executable, one line per test. Exit 0 all passed, 1 any
+// failed.
+//
+// ge:summary Runs every TEST registered in a test executable
+// ge:keywords test runner main ctest
+// ge:skill sim-system
+#include <cstdio>
+
+#include "check.hpp"
+
+int main() {
+  int ran = 0;
+  for (test::Case* c = test::cases(); c; c = c->next) {
+    const int before = test::failures();
+    c->fn();
+    ++ran;
+    std::printf("%s %s\n", test::failures() == before ? "ok  " : "FAIL", c->name);
+  }
+  std::printf("%d tests, %d failures\n", ran, test::failures());
+  return test::failures() == 0 ? 0 : 1;
+}

@@ -5,6 +5,7 @@ file(GLOB GE_TEST_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/*_test.c
 # (tests/<plugin>_*_test.cpp) need no wiring either.
 get_property(GE_PLUGIN_TARGETS GLOBAL PROPERTY GE_PLUGIN_TARGETS)
 get_property(GE_GAME_TARGETS GLOBAL PROPERTY GE_GAME_TARGETS)
+# tests/cli_*_test.cpp need GE_CLI and link ge_cli (the ge command line).
 # tests/gpu_*_test.cpp need GE_GPU and link ge_gpu (tests/render_*_test.cpp link ge_render);
 # tests/platform_*_test.cpp need GE_PLATFORM and GE_GPU (a window is only worth opening to present to). Either kind exits 77 (CTest's
 # SKIP) when the machine cannot run it (no adapter, no display), except where the environment
@@ -13,6 +14,7 @@ get_property(GE_GAME_TARGETS GLOBAL PROPERTY GE_GAME_TARGETS)
 foreach(src ${GE_TEST_SOURCES})
   get_filename_component(name ${src} NAME_WE)
   set(extra)
+  set(cli)
   if(name MATCHES "^gpu_")
     if(NOT GE_GPU)
       continue()
@@ -23,6 +25,11 @@ foreach(src ${GE_TEST_SOURCES})
       continue()
     endif()
     set(extra ge_render)
+  elseif(name MATCHES "^cli_")
+    if(NOT GE_CLI)
+      continue()
+    endif()
+    set(cli ge_cli)
   elseif(name MATCHES "^platform_")
     if(NOT GE_PLATFORM OR NOT GE_GPU)
       continue()
@@ -31,9 +38,14 @@ foreach(src ${GE_TEST_SOURCES})
   endif()
   add_executable(${name} ${src} main.cpp)
   target_link_libraries(${name} PRIVATE ge_core ge_audio ge_lab ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
-    ${extra})
+    ${extra} ${cli})
   target_compile_definitions(${name} PRIVATE GE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
   add_test(NAME ${name} COMMAND ${name})
+  if(cli)
+    # A machine that cannot make symlinks (Windows without Developer Mode) cannot hold a game
+    # repo's guidance; the scaffold's tests skip there.
+    set_tests_properties(${name} PROPERTIES SKIP_RETURN_CODE 77)
+  endif()
   if(extra)
     # The software driver's worker threads keep allocations past exit, which the leak check
     # would report as ours; every other test keeps it.

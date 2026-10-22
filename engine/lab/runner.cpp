@@ -263,7 +263,7 @@ int run_labs(int argc, const char* const* argv) {
       if (r == 0) {
         first = lab.digest();
         if (!write_report(lab, dir, error)) {
-          lab.fail(error, "Fix the path or pass --out=DIR.");
+          lab.fail(error, "next: fix the path, or rerun with --out=DIR.");
           error.clear();
         }
         if (!quiet) std::printf("%s", format_report(lab, dir).c_str());

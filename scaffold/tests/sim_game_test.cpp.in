@@ -1,0 +1,37 @@
+// The simulation's contract: a run replays to the same bits from its seed and inputs, seeds
+// differ, and the step's clock is the step count (sim/game.hpp; skill: sim-system).
+//
+// ge:summary Tests: a run replays bit for bit, seeds differ, the step count is the clock
+// ge:keywords test sim determinism replay digest seed step
+// ge:skill sim-system
+// ge:test tests/sim_game_test.cpp
+#include "check.hpp"
+#include "sim/game.hpp"
+
+using namespace {{ident}}::sim;
+
+namespace {
+
+GameState run(uint32_t seed, int steps) {
+  GameState s = create_game(seed);
+  for (int k = 0; k < steps; k++) step(s, Input{k % 240 < 120 ? 1.0 : -1.0});
+  return s;
+}
+
+}  // namespace
+
+TEST(a_run_replays_bit_for_bit) {
+  const GameState a = run(38, 1200);
+  const GameState b = run(38, 1200);
+  CHECK(digest(a) == digest(b));
+  CHECK_BITS(a.x_m, b.x_m);
+}
+
+TEST(seeds_differ) { CHECK(digest(run(1, 600)) != digest(run(2, 600))); }
+
+TEST(the_step_count_is_the_clock) {
+  const GameState s = run(7, 360);
+  CHECK_MSG(s.steps == 360,
+            "steps " + std::to_string(s.steps) +
+                ", want 360: step() must advance the clock once; skill: sim-system");
+}

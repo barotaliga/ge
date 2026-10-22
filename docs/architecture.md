@@ -199,6 +199,12 @@ ge: golden: core_math_test row 1834: hypot3 got 0x41fc7f55b85cfc98 want 0x41fc7f
 channel every such line goes through; the host attaches the sink that prints it, and core
 itself does no I/O. Tests print in the same shape through `tests/check.hpp`.
 
+The convention is held by a test: `engine/cli/diagnostic.hpp` finds every `output::error` and
+`output::warn`, `GE_ASSERT`, lab `fail` and CMake `message(FATAL_ERROR|WARNING ...)` and requires
+its text to say what failed in three words or more and to carry a next-action marker (`next:`,
+`skill:`, `make `, `run `, `rerun`, `see `, `docs/`). `tests/cli_diagnostics_test.cpp` holds the
+whole tree to it, and `ge doctor` holds a game repo to it (the `agent-interface` skill).
+
 ## Determinism contract
 
 - Only `core/libm` provides transcendentals to simulation code. `<cmath>`'s `sin`, `exp`,
@@ -231,6 +237,7 @@ itself does no I/O. Tests print in the same shape through `tests/check.hpp`.
 | Audio | Our own DSP graph on SDL3 audio: every sound is synthesized, so no middleware |
 | UI | Our own immediate-mode 2D layer + SDF text; Dear ImGui for dev tools |
 | Assets | cgltf for the modelled skis; everything else generated in code or baked to embedded blobs |
+| Built venues on a map | A venue whose features are finer than the 2 m grid (a ski jump's edge, its landing radius) answers `Level::ground_at` and `normal_at` off an ANALYTIC profile inside its width (`Level::venue`, one null check on the hot path), with the grid cut beneath it so a reader of the raw grid never sees ground above the surface |
 | Tests | Our own header harness, CTest, golden tables |
 | Build/CI | CMake + Ninja + presets; GitHub Actions on Linux x64/arm64 (GCC, Clang), macOS, Windows |
 

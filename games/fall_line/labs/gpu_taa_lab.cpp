@@ -90,7 +90,7 @@ void run(ge::lab::Lab& lab) {
   if (width <= 0 || height <= 0 || width > 4096 || height > 4096 || frames < 1 ||
       options.scale < 0.25 || options.scale > 1) {
     lab.fail("--width and --height must be 1..4096, --frames at least 1 and --scale 0.25..1",
-             "Pass --width=320 --height=180 --frames=24 --scale=1.");
+             "next: pass --width=320 --height=180 --frames=24 --scale=1.");
     return;
   }
   const int phases = ge::render::taa_phases(options.scale);
@@ -103,7 +103,7 @@ void run(ge::lab::Lab& lab) {
   ge::render::FrameView start;
   fall_line::app::day_view(level, -1, start);
   if (!fall_line::app::make_view(level, name, start)) {
-    lab.fail("no view named '" + name + "'", "Pick from games/fall_line/app/views.hpp.");
+    lab.fail("no view named '" + name + "'", "next: pick from games/fall_line/app/views.hpp.");
     return;
   }
   const std::string seed_s = std::to_string(static_cast<long long>(seed));

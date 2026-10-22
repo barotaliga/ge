@@ -148,7 +148,7 @@ std::optional<mg::Level> course_for(ge::lab::Lab& lab, const mg::Level& plain,
   if (discipline == "super-g") return mg::set_super_g(*map);
   if (discipline == "giant-slalom") return mg::set_giant_slalom(*map, run);
   lab.fail("--disciplines names " + discipline + ", which is not a speed event",
-           "Use downhill, super-g or giant-slalom.");
+           "next: pass downhill, super-g or giant-slalom.");
   return std::nullopt;
 }
 

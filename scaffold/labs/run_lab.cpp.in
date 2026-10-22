@@ -1,0 +1,75 @@
+// LAB `run`: the simulation stepped headless over seeds with no input, LOOKED AT. One table (each
+// seed's end position and digest), one metric a seed, and one captioned picture of every seed's
+// path across the field over time. Its digest makes it a determinism test: CI runs it twice
+// (skill: labs).
+//
+// ge:summary Lab: the simulation over seeds with no input; each run's drift, digest and path
+// ge:keywords lab run sim seeds drift digest picture path
+// ge:skill labs sim-system
+// ge:test tests/sim_game_test.cpp
+#include <cstdio>
+#include <string>
+
+#include "lab/lab.hpp"
+#include "sim/game.hpp"
+
+namespace {
+
+using namespace {{ident}}::sim;
+
+constexpr int kW = 320, kH = 160;
+constexpr double kMetresPerPx = 0.01;
+
+void run(ge::lab::Lab& lab) {
+  const int steps = static_cast<int>(lab.arg_num("steps"));
+  ge::lab::LabTable table{"runs", {"seed", "x (m)", "digest"}, {}};
+  auto pic = ge::lab::create_picture(kW, kH, {16, 20, 28});
+  ge::lab::draw_line(pic, 0, kH / 2.0, kW, kH / 2.0, {90, 90, 110});
+  for (const double seed_value : lab.arg_nums("seeds")) {
+    const auto seed = static_cast<uint32_t>(seed_value);
+    GameState s = create_game(seed);
+    double px = 0, py = kH / 2.0;
+    for (int k = 0; k < steps; k++) {
+      step(s, Input{});
+      const double x = (k + 1) * double(kW) / steps;
+      const double y = kH / 2.0 - s.x_m / kMetresPerPx;
+      ge::lab::draw_line(pic, px, py, x, y, {120, 200, 255});
+      px = x;
+      py = y;
+    }
+    char hex[17];
+    std::snprintf(hex, sizeof hex, "%016llx", static_cast<unsigned long long>(digest(s)));
+    table.rows.push_back({std::to_string(seed), std::to_string(s.x_m), hex});
+    lab.metric("seed-" + std::to_string(seed) + ".x", s.x_m, "m");
+    if (!(s.x_m > -100 && s.x_m < 100)) {
+      lab.fail("seed " + std::to_string(seed) + " drifted to " + std::to_string(s.x_m) + " m",
+               "the drag should hold the body near the middle: run tests/sim_game_test.cpp; "
+               "skill: sim-system");
+    }
+  }
+  lab.table(table);
+  lab.shot({"paths",
+            "EVERY SEED'S PATH",
+            "Each seed's x over the run, left to right; the grey line is x = 0.",
+            "every path wanders near the grey line and none runs off the picture",
+            {{"seeds", lab.arg("seeds")}, {"steps", lab.arg("steps")}}},
+           pic);
+}
+
+const ge::lab::LabSpec kSpec{
+    "run",
+    ge::lab::LabKind::sim,
+    "game:{{name}}",
+    "sim/game.cpp",
+    "labs",
+    "Where does each seed's run drift with no input, and does it replay to the same digest?",
+    {
+        {"seeds", "1,2,3,38", "the seeds to run, comma-separated"},
+        {"steps", "1200", "steps a run (120 a second)"},
+    },
+    "--steps=240",
+    run,
+};
+GE_LAB(kSpec);
+
+}  // namespace
