@@ -28,6 +28,7 @@ tests):
 | `field.hpp/.cpp` | The rivals: `deal_field` (each rival's pace off a stream of the map's seed, his lane off his grid slot), `meet_racers` (skier against skier: the shoulder), `standings` and `place_of` (off `plugins/racing`) |
 | `simulate.hpp/.cpp` | `Driver` (THE ONE STEP every pilot drives: snapped, taped, the rivals' bots, `step`, hashed), `simulate`, `simulate_on`, `simulate_free`, `replay_tape`, the `RunReport` and its `FieldRow`s |
 | `wanted.hpp/.cpp`, `wanted_state.hpp`, `wanted_rules.hpp` | THE WANTED LEVEL: `raise_heat` (the offence hook), `step_wanted` (the look, the climb, the search running out), `sees_quarry` and `through_woods` (the sight line), `under_cover`, `arrest_quarry`, `roster_of`, `ground_wave`; the state `GameState::wanted` (inactive and unhashed until raised); every number in `wanted_rules.hpp` |
+| `army.hpp/.cpp`, `army_state.hpp`, `army_rules.hpp`, `army_troop.hpp/.cpp` | THE ARMY ON FOOT: `step_army` (the lifts' squads by `lift_for`, the ground waves up `GameState::ways` from `army_ways`, the chase, the hold, the arrest, the men sent home, every soldier written into the hunt's pursuers), `go_toward` / `stop_here` / `watch_progress` (a soldier's way over the snow); the state `GameState::army` (inactive and unhashed until a hunt reaches a star); every number in `army_rules.hpp` |
 | `play.hpp/.cpp` | `PlaySession`: an agent at the controls over JSON lines (`hello`, `observe`, `act`, `tape`, `end`); THE PROTOCOL is stated once in its header |
 
 The generator is `plugins/mountain` (the `mountain` skill); a map is a pure function of its
@@ -46,8 +47,10 @@ seed. The skier on the snow is `plugins/skier` (the `skier` skill).
    lab until the army's pilots (M15c–M15e) write them.
 6. The lifts (M13a2, done): the carriers off `plugins/mountain/lifts`, boarding in the load
    zone, the ride, let go at the top (`lift_ride.hpp`); the bot's outing (`outing.hpp`).
-7. Next: the army on foot (M15c), which rides the lifts; then the free ride's other systems, a
-   row each (M13+).
+7. The army on foot (M15c, done): the troop model, the lifts' squads, the ground waves' column,
+   the chase, the stand-off and the arrest; the `army` lab.
+8. Next: the free ride's other systems, a row each (M13+), and the army rows that wait on them
+   (M15b gunfire, M15d ground machines, M15e the air).
 
 ## Rules
 
@@ -123,7 +126,15 @@ loop.
 pursuers (`shadow`, `posts`, `arrest`), the hunt table, each line coloured by the stars, and the
 sight sheds of a soldier and a helicopter. A change to `wanted.cpp` or its numbers moves
 `tests/golden/fall_line_wanted.txt` (`GE_GOLDEN_WRITE=1 build/release/tests/fall_line_wanted_test`)
-and this lab's digest: put its hunt table before and after in the PR.
+and this lab's digest: put its hunt table before and after in the PR. The army joins every hunt
+that reaches a star, so a change to the army moves this golden too.
+
+`army` (scenario, `games/fall_line/labs/army_lab.cpp`): the army on foot on seed 38 (v10) after a
+man stood still (`valley`, `slope`, `arrest`): the army table and every soldier's path. A man
+still caught at the end, a lifted squad never let off or an arrest that never comes fails it. A
+change to `army*.cpp` or its numbers moves `tests/golden/fall_line_army.txt`
+(`GE_GOLDEN_WRITE=1 build/release/tests/fall_line_army_test`), `fall_line_wanted.txt` and both
+labs' digests: put the army table before and after in the PR.
 
 `play` (drive, `games/fall_line/labs/play_lab.cpp`): an agent at the controls.
 `build/debug/labs play --quiet --stdio --seed=38 --rivals=3` puts the protocol on stdio;

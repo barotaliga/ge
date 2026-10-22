@@ -5,7 +5,8 @@
 //   play [--stdio] [--seed=S] [--<option>=V] [--inputs=F]   the line protocol on stdin/stdout;
 //                                                           --inputs writes the log at the end
 //   play describe                                           the game: axes, options, step rate
-//   play sim [--seeds=A,B] [--<option>=V] [--out=DIR]       the pilot over each seed; logs in DIR
+//   play sim [--seeds=A,B] [--human] [--<option>=V]         the pilot over each seed; logs in DIR;
+//            [--out=DIR]                                    --human: how human each run looks
 //   play replay <log>                                       the log played back to its digest
 //   play state <log> [--step=N]                             the state after N steps (default all)
 //   play diverge <log-a> <log-b>                            the first step two runs part
@@ -19,15 +20,21 @@
 //            [--decision=D] [--flips] [--close=X]           decisions at steps S-K..S+K; --flips
 //            [--timeline] [--out=DIR]                       every change of choice (and margins
 //                                                           under X); --timeline its series in DIR
+//   play record [<log> | --seed=S] [--view=V]               the run as a video (record.hpp): the
+//               [--from=N|Ns] [--to=N|Ns] [--fps=30]        view at each frame of --fps, the run
+//               [--speed=1] [--size=WxH] [--format=mp4]     at --speed, encoded by ffmpeg (mp4,
+//               [--codec=C] [--crf=N | --bitrate=4M]        webm, gif; png writes the frames) and
+//               [--encoder-preset=P] [--thumbs=24]          a contact sheet of --thumbs stills,
+//               [--band=0] [--<option>=V] [--out=DIR]       each with its time and step, in DIR
 //
 // Every command but the protocol prints exactly one JSON object on one line. A problem prints
 // `{"error":...,"where":...,"next":...}`; the exit code is 0 done, 1 a problem (a replay that
 // misses its digest, two runs that diverge), 2 a usage error.
 //
 // ge:summary The play executable's main: protocol, describe, sim, replay, state, diverge, bench
-// ge:summary and shot
+// ge:summary shot, record and why
 // ge:keywords play main executable command-line describe sim replay state diverge bench
-// ge:keywords play_main why
+// ge:keywords play_main why human record video
 // ge:skill agent-interface
 // ge:test tests/play_session_test.cpp
 #pragma once

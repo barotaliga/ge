@@ -213,4 +213,30 @@ void blit(Picture& dst, const Picture& src, int x, int y) {
   }
 }
 
+Picture resized(const Picture& src, int width, int height) {
+  Picture out;
+  out.width = std::max(width, 0);
+  out.height = std::max(height, 0);
+  out.rgba.assign(static_cast<size_t>(out.width) * out.height * 4, 0);
+  if (src.width <= 0 || src.height <= 0) return out;
+  const int64_t sw = src.width, sh = src.height, dw = out.width, dh = out.height;
+  for (int64_t dy = 0; dy < dh; dy++) {
+    const int64_t y0 = dy * sh / dh, y1 = std::max(y0 + 1, (dy + 1) * sh / dh);
+    for (int64_t dx = 0; dx < dw; dx++) {
+      const int64_t x0 = dx * sw / dw, x1 = std::max(x0 + 1, (dx + 1) * sw / dw);
+      uint64_t sum[4] = {0, 0, 0, 0};
+      for (int64_t y = y0; y < y1; y++) {
+        const uint8_t* row = &src.rgba[static_cast<size_t>(y * sw + x0) * 4];
+        for (int64_t x = x0; x < x1; x++, row += 4) {
+          for (int c = 0; c < 4; c++) sum[c] += row[c];
+        }
+      }
+      const uint64_t n = static_cast<uint64_t>((y1 - y0) * (x1 - x0));
+      uint8_t* d = &out.rgba[static_cast<size_t>(dy * dw + dx) * 4];
+      for (int c = 0; c < 4; c++) d[c] = static_cast<uint8_t>((sum[c] + n / 2) / n);
+    }
+  }
+  return out;
+}
+
 }  // namespace ge::lab

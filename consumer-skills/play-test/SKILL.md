@@ -1,6 +1,6 @@
 ---
 name: play-test
-description: "Use to test this game by PLAYING it without a screen: the play contract a game fills (play/game.cpp: its axes, options, observe, state, report, pilot), ge play's line protocol, ge sim's pilot runs, the input log, ge replay to a digest, ge state at a step, ge diverge to find the step two runs part, ge shot for a captioned still of any step, and ge why for why a bot did what it did. Load it to add an axis or an option, to make a replay hold, or to chase a determinism break."
+description: "Use to test this game by PLAYING it without a screen: the play contract a game fills (play/game.cpp: its axes, options, observe, state, report, pilot), ge play's line protocol, ge sim's pilot runs, the input log, ge replay to a digest, ge state at a step, ge diverge to find the step two runs part, ge shot for a captioned still of any step, ge record for the run as a video and a contact sheet, and ge why for why a bot did what it did and ge sim --human for how human it looks. Load it to add an axis or an option, to make a replay hold, or to chase a determinism break."
 ---
 
 # Play-testing the game
@@ -53,12 +53,23 @@ ge state runs/<game>-1.inputs --step=600   # the whole state after 600 steps
 ge diverge runs/a.inputs runs/b.inputs     # where two runs part, and which fields differ
 ge shot runs/<game>-1.inputs --step=600 --view=<v>   # a captioned still at that step, a PNG
 ge shot --seed=1 --view=<v>                # the pilot's run of seed 1, at its end
+ge record runs/<game>-1.inputs --view=<v> --to=30s   # the run as an MP4 and a contact sheet
 ```
 
 **LOOK at a run.** `ge shot` replays the log to the step and draws the view, framed with its
 caption, the seed, the options, the step and the digest; open the PNG it names. Shoot the step
 `ge diverge` names on both logs to see two runs part, and a step a lab or a bench flags to see
 what happened there. `ge shot` with no `--view` draws the first and lists the others.
+
+**WATCH a run.** `ge record` plays the log back and draws the view at every frame (`--fps`, 30
+by default), the run at `--speed` (2 twice as fast, 0.25 slow motion) from `--from` to `--to`
+(a step, or seconds with an `s`), each frame with its time, step and view burned in. ffmpeg
+encodes it: `--format=mp4` (H.264, the default), `webm` (VP9) or `gif`; `--size=WxH`, `--crf`
+(lower is better and larger) or `--bitrate=4M`, `--encoder-preset` (H.264's speed against size).
+`--format=png` keeps the frames as PNGs and needs no ffmpeg. Beside it the CONTACT SHEET: a grid
+of `--thumbs` stills, each labelled with its time and step, the run at a glance; read it first,
+then watch the stretch it points at. It builds the release preset, since every frame is drawn on
+the CPU.
 
 **The protocol** (`ge play`): the session opens with `hello` (the axes, the options, the ops).
 Then send one object a line: `{"op":"observe"}`; `{"op":"act","input":{"<axis>":v},"steps":n}`

@@ -53,6 +53,9 @@ Outcome run_diverge(const BuildOptions& o, const std::string& a, const std::stri
 Outcome run_shot(const BuildOptions& o, const std::string& log, const std::string& seed,
                  const std::string& step, const std::string& view,
                  const std::vector<std::string>& options);
+// `ge record`: the play executable's `record` with `flags` ("--name=value") and the game's options.
+Outcome run_record(const BuildOptions& o, const std::string& log,
+                   const std::vector<std::string>& flags, const std::vector<std::string>& options);
 
 // `ge why`: the log replayed with the decision trace on (engine/play/why.hpp).
 struct WhyOptions {

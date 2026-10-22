@@ -53,4 +53,8 @@ int text_width(std::string_view text, int scale = 1);
 // `src` pasted with its top-left at (x, y), clipped to `dst`.
 void blit(Picture& dst, const Picture& src, int x, int y);
 
+// `src` drawn at `width` x `height`: each pixel the mean of the source pixels under it (the
+// nearest one when it grows), in integers, so the bytes are the same on every row.
+Picture resized(const Picture& src, int width, int height);
+
 }  // namespace ge::lab
