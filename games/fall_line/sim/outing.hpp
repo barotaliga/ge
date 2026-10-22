@@ -18,7 +18,7 @@
 //
 // ge:summary The bot's outing: a piste to its foot, the lift there, another run off its top
 // ge:keywords outing outing_from to_lift_line from_top_line outing-pilot lift-at-foot walk
-// ge:keywords line-up ramp next-run day
+// ge:keywords line-up ramp next-run day line-layer
 // ge:skill sim
 // ge:test tests/fall_line_lift_ride_test.cpp
 #pragma once
@@ -45,6 +45,21 @@ inline constexpr double kWalkSpeed = 3;
 // The width of a line laid across the snow off any run, m.
 inline constexpr double kWalkWidth = 8;
 }  // namespace outing
+
+// Lays a line through points on the snow: every `kEvery` m between them, its arc, its height on
+// the ground and its heading; a point under half a step from the last is dropped.
+class LineLayer {
+ public:
+  static constexpr double kEvery = 2;
+  explicit LineLayer(const ge::mountain::mapgen::Level& level) : level_(level) {}
+  void to(double x, double z, double width);
+  ge::mountain::mapgen::Track done();
+
+ private:
+  void push(double x, double z, double s, double width);
+  const ge::mountain::mapgen::Level& level_;
+  ge::mountain::mapgen::Track t_;
+};
 
 struct Outing {
   int32_t first = -1;  // the run he starts at the head of

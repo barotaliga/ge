@@ -15,15 +15,21 @@
 //   play shot [<log> | --seed=S] [--step=N] [--view=V]      a still of the run at step N (the end
 //             [--<option>=V] [--out=DIR]                    by default): the view framed with its
 //                                                           caption band, a PNG in DIR
+//   play record [<log> | --seed=S] [--view=V]               the run as a video (record.hpp): the
+//               [--from=N|Ns] [--to=N|Ns] [--fps=30]        view at each frame of --fps, the run
+//               [--speed=1] [--size=WxH] [--format=mp4]     at --speed, encoded by ffmpeg (mp4,
+//               [--codec=C] [--crf=N | --bitrate=4M]        webm, gif; png writes the frames) and
+//               [--encoder-preset=P] [--thumbs=24]          a contact sheet of --thumbs stills,
+//               [--band=0] [--<option>=V] [--out=DIR]       each with its time and step, in DIR
 //
 // Every command but the protocol prints exactly one JSON object on one line. A problem prints
 // `{"error":...,"where":...,"next":...}`; the exit code is 0 done, 1 a problem (a replay that
 // misses its digest, two runs that diverge), 2 a usage error.
 //
 // ge:summary The play executable's main: protocol, describe, sim, replay, state, diverge, bench
-// ge:summary and shot
+// ge:summary shot and record
 // ge:keywords play main executable command-line describe sim replay state diverge bench
-// ge:keywords play_main
+// ge:keywords play_main record video
 // ge:skill agent-interface
 // ge:test tests/play_session_test.cpp
 #pragma once

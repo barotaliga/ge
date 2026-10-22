@@ -184,8 +184,8 @@ Outcome run(const Args& a) {
                                               : std::vector<std::string>{preset});
   }
   if (name == "ci") {
-    return run_ci(fs::absolute(repo_of(a)), a.words.empty() ? "" : a.words[0],
-                  flag_value(a, "log"));
+    return run_ci(fs::absolute(repo_of(a)), a.words.empty() ? "" : a.words[0], flag_value(a, "log"),
+                  has_flag(a, "merge"));
   }
   if (name == "digest") {
     return run_digest(build_options(a), a.words.empty() ? "" : a.words[0], has_flag(a, "write"));
@@ -210,6 +210,16 @@ Outcome run(const Args& a) {
   if (name == "shot") {
     return run_shot(build_options(a), a.words.empty() ? "" : a.words[0], flag_value(a, "seed"),
                     flag_value(a, "step"), flag_value(a, "view"), a.passthrough);
+  }
+  if (name == "record") {
+    // Every frame is drawn on the CPU: the release build draws them many times faster.
+    std::vector<std::string> args;
+    for (const auto& [k, v] : a.flags) {
+      if (k != "preset" && k != "engine" && k != "repo" && k != "json")
+        args.push_back(std::string("--").append(k).append("=").append(v));
+    }
+    return run_record(build_options(a, "release"), a.words.empty() ? "" : a.words[0], args,
+                      a.passthrough);
   }
   if (name == "bench" || name == "profile" || name == "mem" || name == "leaks") {
     PerfOptions p;

@@ -69,7 +69,9 @@ constexpr FlagSpec kPrecheckFlags[] = {
     kEngine,
     kRepo};
 constexpr FlagSpec kCiFlags[] = {
-    {"log", "<file>", "read this saved job log instead of asking GitHub"}, kRepo};
+    {"log", "<file>", "read this saved job log instead of asking GitHub"},
+    {"merge", "", "squash-merge the pull request when every check passed and it merges cleanly"},
+    kRepo};
 constexpr FlagSpec kDigestFlags[] = {
     {"write", "", "rewrite the lab's row of tests/labs_digests.txt (every row with no lab)"},
     kPreset,
@@ -123,6 +125,27 @@ constexpr FlagSpec kShotFlags[] = {
     {"step", "<n>", "after this many steps (default: the run's end)"},
     {"view", "<name>", "which picture (default: the game's first; ge shot lists them)"},
     kPreset,
+    kEngine,
+    kRepo};
+constexpr FlagSpec kRecordFlags[] = {
+    {"seed", "<n>", "without a log: the pilot plays this seed first (default 1)"},
+    {"view", "<name>", "which picture (default: the game's first; ge shot lists them)"},
+    {"from", "<step|Ns>", "the first frame: a step, or seconds with an s (default 0)"},
+    {"to", "<step|Ns>", "the last frame (default: the run's end)"},
+    {"fps", "<n>", "frames a second of video (default 30)"},
+    {"speed", "<x>", "the run's pace on screen: 2 twice as fast, 0.25 slow motion (default 1)"},
+    {"size", "<WxH>", "the frame size (default: the view's own)"},
+    {"format", "<mp4|webm|gif|png>", "H.264 MP4, VP9 WebM, a GIF, or PNG frames (default mp4)"},
+    {"codec", "<name>", "an ffmpeg encoder in place of the format's own (libx264, libvpx-vp9)"},
+    {"crf", "<n>", "quality: lower is better and larger (default 23 for mp4, 32 for webm)"},
+    {"bitrate", "<rate>", "a bit rate such as 4M in place of --crf"},
+    {"encoder-preset", "<name>",
+     "H.264's speed against size: ultrafast .. veryslow (default medium)"},
+    {"thumbs", "<n>", "the contact sheet's stills, 0 for none (default 24)"},
+    {"columns", "<n>", "the contact sheet's columns (default 6)"},
+    {"band", "<0|1>", "the time, step and view burned into each frame (default 1)"},
+    {"preset", "<debug|release>",
+     "the build to record with (default release: a frame is drawn on the CPU)"},
     kEngine,
     kRepo};
 constexpr FlagSpec kGraphFlags[] = {
@@ -191,7 +214,7 @@ const CommandSpec kCommands[] = {
      kPrecheckFlags, "ge precheck --preset=release", "commit"},
     {"ci", "[<pr>]", 0, 1, "build",
      "a pull request's state: whether it conflicts with its base, and each failed job's log "
-     "read back as findings (through gh, or a saved log)",
+     "read back as findings (through gh, or a saved log); --merge squash-merges it once green",
      kCiFlags, "ge ci 12", "commit"},
     {"digest", "[<lab>]", 0, 1, "build",
      "a lab (or every lab) at its smoke flags, twice: each digest beside the committed baseline; "
@@ -221,6 +244,12 @@ const CommandSpec kCommands[] = {
      "a still of a run at a step, drawn headless and captioned (seed, options, step, digest): "
      "a log played to --step, or the pilot's run of --seed; the game's options go after --",
      kShotFlags, "ge shot runs/fall_line-38.inputs --step=1200 --view=near", "play-test"},
+    {"record", "[<log>]", 0, 1, "see",
+     "a run as a video and a contact sheet: a log (or the pilot's run of --seed) played back, a "
+     "view drawn at each frame, encoded by ffmpeg (mp4, webm, gif) or kept as PNG frames, and a "
+     "grid of stills each with its time and step; the game's options go after --",
+     kRecordFlags, "ge record runs/fall_line-38.inputs --view=near --to=30s --size=720x720",
+     "play-test"},
     {"play", "", 0, 0, "play",
      "play the game over the line protocol on this terminal (observe, act, pilot, state, "
      "inputs, end); the game's options go after --",
@@ -376,11 +405,12 @@ std::optional<std::string> check_args(const Args& a) {
            (c.args.empty() ? std::string("no arguments") : std::string(c.args)) + ", got " +
            std::to_string(n) + " word(s)";
   }
-  static constexpr std::string_view kPassing[] = {"lab",   "lab diff", "play", "sim",  "shot",
-                                                  "bench", "profile",  "mem",  "leaks"};
+  static constexpr std::string_view kPassing[] = {"lab",    "lab diff", "play",    "sim", "shot",
+                                                  "record", "bench",    "profile", "mem", "leaks"};
   if (!a.passthrough.empty() &&
       std::find(std::begin(kPassing), std::end(kPassing), c.name) == std::end(kPassing)) {
-    return "only ge lab, lab diff, play, sim, shot, bench, profile, mem and leaks pass words after "
+    return "only ge lab, lab diff, play, sim, shot, record, bench, profile, mem and leaks pass "
+           "words after "
            "--";
   }
   return std::nullopt;

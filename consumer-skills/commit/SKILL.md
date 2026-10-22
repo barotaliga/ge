@@ -45,5 +45,7 @@ The title is a conventional subject. The body holds:
 CI is the gate. After the push, check the PR every 15 minutes until it is merged: `ge ci <pr>`
 says whether it still merges with its base (a conflict is an error finding: merge the base,
 resolve, `ge precheck`, push) and reads each red job's log back as findings (fix the cause, `ge
-precheck`, push). Never skip or weaken a test to get
-green.
+precheck`, push). A pull request blocked with every check green comes back with why (a
+required check that never ran, a review). Once green and clean, `ge ci <pr> --merge`
+squash-merges it at the head the checks ran on (or arm GitHub's auto-merge right after the push,
+when the repo requires its checks). Never skip or weaken a test to get green.

@@ -187,6 +187,24 @@ Outcome play_answer(const BuildOptions& o, const std::string& command, int code,
     out.summary = state == "-1" ? "the runs never part in their common steps"
                                 : "the runs part after step " + state;
     if (state != "-1") out.next = "ge state <log> --step=" + state + " for either side";
+  } else if (command == "record") {
+    const bool frames = m.contains("frames_dir");
+    const std::string video =
+        rel_path(o.repo, fs::path(text_of(m, frames ? "frames_dir" : "video")));
+    const std::string sheet =
+        text_of(m, "sheet").empty() ? "" : rel_path(o.repo, fs::path(text_of(m, "sheet")));
+    out.written.push_back(video);
+    if (!sheet.empty()) out.written.push_back(sheet);
+    out.text = "  " + text_of(m, "view") + " view, " + text_of(m, "width") + "x" +
+               text_of(m, "height") + ", " + text_of(m, "frames") + " frames at " +
+               text_of(m, "fps") + " fps (" + text_of(m, "seconds") + " s at speed " +
+               text_of(m, "speed") + "), steps " + text_of(m, "from") + ".." + text_of(m, "to") +
+               ", digest " + text_of(m, "digest") + "\n";
+    out.summary = (frames ? "the frames are in " : "the run as a video: ") + video +
+                  (sheet.empty() ? "" : "; the contact sheet: " + sheet);
+    out.next = sheet.empty()
+                   ? "open " + video
+                   : "open " + sheet + " for the run at a glance, " + video + " to watch it";
   } else if (command == "shot") {
     const std::string png = rel_path(o.repo, fs::path(text_of(m, "png")));
     out.written.push_back(png);
@@ -250,6 +268,17 @@ Outcome run_shot(const BuildOptions& o, const std::string& log, const std::strin
   if (!view.empty()) args += " \"--view=" + view + "\"";
   for (const std::string& w : options) args += " \"" + w + "\"";
   return run_exe(o, "shot", args);
+}
+
+Outcome run_record(const BuildOptions& o, const std::string& log,
+                   const std::vector<std::string>& flags, const std::vector<std::string>& options) {
+  std::string args = " record --out=" + quoted_path(o.repo / "runs");
+  if (!log.empty()) args += " \"" + absolute(log) + "\"";
+  for (const std::string& w : flags) {
+    if (w.rfind("--out=", 0) != 0) args += " \"" + w + "\"";
+  }
+  for (const std::string& w : options) args += " \"" + w + "\"";
+  return run_exe(o, "record", args);
 }
 
 }  // namespace ge::cli

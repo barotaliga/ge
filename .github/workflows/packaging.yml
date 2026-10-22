@@ -135,6 +135,14 @@ jobs:
           # A captioned still, headless: from the log at a step, and from the pilot's run.
           "$G" shot runs/kart_racer-38.inputs --step=1200 --view=car "$E"
           test -s runs/kart_racer-38-car-1200.png
+          # The run recorded: PNG frames and the contact sheet (no encoder needed), then an MP4
+          # where the runner has ffmpeg.
+          "$G" record runs/kart_racer-38.inputs --view=car --to=4s --fps=10 --format=png --preset=debug "$E"
+          test -s runs/kart_racer-38-car-sheet.png
+          if command -v ffmpeg > /dev/null; then
+            "$G" record runs/kart_racer-38.inputs --view=car --to=4s --fps=10 --size=320x240 --preset=debug "$E"
+            test -s runs/kart_racer-38-car.mp4
+          fi
           "$G" shot --seed=38 --view=track "$E" --json | grep -q '"view":"track"'
           # One input changed: diverge names the first step that differs.
           sed -e '/^digest/d' -e '/^steps/d' -e '9s/.*/1 1 0 0/' runs/kart_racer-38.inputs > runs/edited.inputs
