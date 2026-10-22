@@ -230,29 +230,44 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 - **Every drive is recorded on the control tape** (`plugins/racing/tape.hpp`, the format a
   ghost and a replay use). A drive's seed, options and tape reproduce it exactly, so any
   run (a bot's, an agent's, a player's) becomes a repro or a scenario.
-- **An agent at the controls**: `labs play --quiet --stdio` runs a game under a line protocol,
-  with one JSON object a line in each direction, so an agent can playtest without a screen
-  (`--seed`, `--rivals`; the runner's `--quiet` keeps stdout to the protocol). The session
-  opens with a `hello` line (the seed, the field, the gates, the piste's length, the step rate,
-  the ops). The protocol is stated once in `games/fall_line/sim/play.hpp`:
+- **An agent at the controls**: every game is played the same way, through the engine's
+  play contract (`engine/play/game.hpp`). A game names its axes (the whole input: Fall Line's
+  `steer`, `tuck`, `brake`, `jump`, `reset`) and options (`rivals`, `version`) and opens a
+  `Run` (step, over, digest, observe, state, report, pilot). The engine's session
+  (`engine/play/session.hpp`) snaps every input onto its axis's grid, records it on the INPUT
+  LOG (`engine/play/inputs.hpp`: plain text, one line per run of held steps) and steps the run,
+  so a run played by an agent, by the game's pilot or from a log is written down the same way
+  and replays to the same digest. The game's `play` executable (`build/<preset>/play`) carries
+  it, and `ge` drives it:
+
+  | Command | What |
+  | --- | --- |
+  | `ge play --seed=38 -- --rivals=3` | the line protocol on the terminal (below) |
+  | `ge sim --seeds=38,7` | the game's pilot over each seed: report, digest, `runs/<game>-<seed>.inputs` |
+  | `ge replay <log>` | the log played back; a digest it misses is a determinism break |
+  | `ge state <log> --step=N` | everything that decides the next step, after N steps |
+  | `ge diverge <a> <b>` | the first input and the first step two runs part, and the fields that differ |
+
+  The protocol is stated once in `engine/play/session.hpp`. The session opens with `hello`
+  (the game, the seed and options, the step rate, the axes, the ops); then:
 
   | Agent sends | Engine answers |
   | --- | --- |
-  | `{"op":"observe"}` | the clock and step; where he is, his heading, speed and edge, on the snow or in the air, down or not; the gate owed, its bearing off his heading (+ right) and its distance; where he stands on the piste (`piste_lateral`, `piste_width`, `piste_heading`, `piste_bend` over the next 30 m); finished and the finish time; his place in the field; his events since the last answer |
-  | `{"op":"act","input":{"steer":s,"tuck":t,"brake":b,"jump":j,"reset":r},"steps":n}` | the observation after n steps (1 to 1200) with that input held; every input key is optional, and `reset` is taken on the first step |
-  | `{"op":"shot","view":"chase"}` (M7) | the path of a captioned picture of that view now |
-  | `{"op":"tape"}` | the tape so far, one base64 stream per axis: the run as a replay |
-  | `{"op":"end"}` | the drive's report and digest; the session ends |
+  | `{"op":"observe"}` | the step and the clock, and the game's observation. Fall Line's: where he is, his heading, speed and edge, on the snow or in the air, down or not; the gate owed, its bearing off his heading (+ right) and its distance; where he stands on the piste (`piste_lateral`, `piste_width`, `piste_heading`, `piste_bend` over the next 30 m); finished and the finish time; his place in the field; his events since the last answer |
+  | `{"op":"act","input":{"<axis>":v,...},"steps":n}` | the observation after n steps (1 to 1200) with that input held; an absent axis is 0, a `press` axis (`reset`) is taken on the first step |
+  | `{"op":"pilot","steps":n}` | the game's own pilot plays n steps, then the observation: an agent hands over and takes back |
+  | `{"op":"state"}` | the game's whole state now, every field to the bit |
+  | `{"op":"inputs"}` | the input log so far, as its text: the run as a replay |
+  | `{"op":"end"}` | the run's report, steps and digest; the session ends |
 
   A line the session cannot use answers `{"op":"error","error":...,"next":...}`: what was wrong
-  and what to send instead. Numbers are fixed-point text to three decimals. The session drives
-  the same step as the bot (`Driver`), so an agent's tape played back with the same rivals is
-  its run again, and an agent that sends the bot's moves rides the bot's run to the bit
-  (`tests/fall_line_play_test.cpp`). Without `--stdio`, the `play` lab has the bot play through
-  the protocol's text and checks exactly that; `--script=<file>` plays a file's lines.
-  Two agents (or an agent and the bot) racing one map is two pilots on one grid. The
-  protocol carries only what a player could know, so an agent's playtest is a player's
-  run.
+  and what to send instead. An agent that sends the bot's moves rides the bot's run to the bit,
+  the pilot's run IS the bot's, and an agent's log played back is its run again
+  (`tests/fall_line_play_test.cpp`). The `play` lab runs the same session: `--stdio` for the
+  protocol, `--script=<file>` to play a file's lines, and with neither the bot plays through
+  the protocol's text and its log is replayed to the digest. Two logs one input apart
+  `ge diverge` at exactly that step, naming the fields that differ (the skier's yaw rate first).
+  The protocol carries only what a player could know, so an agent's playtest is a player's run.
 
 ## The labs
 
@@ -275,7 +290,7 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 | `real-faces` | picture | plugin:mountain | `plugins/mountain/mapgen/real_face.hpp`, `real_face_crops.hpp`, the generated `real_faces/` (every face decoded and measured: its floor, top, drop and the share of it falling down the map, as a table; a sheet of every face shaded; a face alone with its mean profile; `--bake` reads each face off the 30 m elevation model beside the tree's, `--fetch` downloads the tiles, `--write` writes the faces and the index) | M4d1 |
 | `sim` | drive | game:fall_line | `games/fall_line/sim` (the step, the course, the bot, the field) | M5b–M5c (now) |
 | `ride` | scenario | plugin:skier | `plugins/skier` (`step_skier`, the snow, the limits) | M5a (now) |
-| `play` | drive | game:fall_line | `games/fall_line/sim/play` (an agent over stdio) | M5c (now) |
+| `play` | drive | game:fall_line | `games/fall_line/sim/play` on `engine/play` (an agent over stdio, the bot through the protocol, its input log replayed) | M5c, M12b (now) |
 | `gpu-capture` | picture | engine | `engine/gpu` (the headless capture) | M6 (now) |
 | `frame-pace` | bench | engine | the platform's frame loop | M6 (now) |
 | `world` | picture | game:fall_line | Fall Line's frame from named views of a seed, TAA-U on or off at a render scale, the shimmer, the overdraw probe, a run's moments from the chase camera with the field (`--moments`, `--rivals`) the cull check (every view redrawn with occlusion culling off, `cull-faults` must be 0), the `wood` view (the trees' shadows on sunlit snow) and the sun's cascades over the whole run (`cascade-redraws.near` and `.far`, deterministic, with no device) (`games/fall_line/labs/gpu_world_lab.cpp`) | M7a, M7d1, M7d2 (now) |
