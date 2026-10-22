@@ -220,7 +220,9 @@ TEST(the_bench_times_every_step_of_the_pilots_run_and_folds_its_zones) {
   CHECK(b->step_us.size() == static_cast<size_t>(b->steps) && b->dropped_spans == 0);
   CHECK(b->zones.size() == 1 && b->zones[0].name == "toy.move" && b->zones[0].calls_per_step == 1);
   CHECK(b->warmup_steps == 60 && b->steps_allocating == 0 && b->first_allocating == -1);
-  CHECK(!b->slowest.empty() && b->slowest[0].zone == "toy.move");
+  // The toy's one zone is the only one a slow step can name, but on a coarse clock its time in that
+  // step can read 0 and the step then names none: which of the two is the timer's, not the code's.
+  CHECK(!b->slowest.empty() && (b->slowest[0].zone == "toy.move" || b->slowest[0].zone.empty()));
   CHECK(has(b->series, "step\tstep_us\tallocs\ttoy.move_us\n0\t"));
   CHECK(has(b->spans, "name\tdepth\tstart_ns\tdur_ns\ntoy.move\t0\t"));
   // Only the first steps of the log, and the digest is not the log's to check then.
