@@ -7,6 +7,8 @@
 // ge:test tests/cli_play_test.cpp
 #include "cli/play.hpp"
 
+#include <algorithm>
+
 #include "cli/json.hpp"
 #include "play/json_read.hpp"
 
@@ -84,6 +86,9 @@ Outcome play_answer(const BuildOptions& o, const std::string& command, int code,
       roots.push_back((p / "").string());
       roots.push_back((p / "").generic_string());
     }
+    // Longest first: on macOS the canonical /private/var/... holds the given /var/... in it.
+    std::ranges::sort(
+        roots, [](const std::string& a, const std::string& b) { return a.size() > b.size(); });
     auto in_repo = [&](std::string s) {
       for (const std::string& root : roots) {
         for (size_t at = s.find(root); !root.empty() && at != std::string::npos;
