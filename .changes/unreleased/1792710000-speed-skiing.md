@@ -1,6 +1,0 @@
----
-type: Added
-title: A speed-skiing track cut down a built map's face (R34) and the speed-ski lab
----
-
-`mapgen::set_speed_ski(level, run)` cuts a speed-skiing track straight down a built map's face. The line is searched over every column of the face and a few bearings either side of the fall line. Each line is graded to a profile that never rises, with its crests and knees rounded and held within a few metres of the ground. Every start on it is skied by a point mass with the top class's numbers. The track whose final comes through the 100 m timing zone nearest the speed the map deals, inside 180–240 km/h, wins, provided its run-out stops the racer before the map ends. The track becomes the map's `track`: its ground is graded and groomed, its 25 m safety margin and finish enclosure are cleared, and it keeps clear of the lift stations. Its two runs are the qualification, from a start lowered until it gives 12 km/h less, and the final, from the top. `speed_ski_aim` gives the zone speed a run was set for and `speed_ski_lines` the braking line and the finish enclosure. `analysis::analyze_race` holds the track to R34, and the `speed-ski` lab draws its profile from the side and the map from above.

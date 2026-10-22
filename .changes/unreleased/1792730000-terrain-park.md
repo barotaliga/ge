@@ -1,6 +1,0 @@
----
-type: Added
-title: The terrain park on a tricks map (R20) and the park lab
----
-
-`GenerateOptions::tricks` builds a map for a tricks run: the seed's mountain with a terrain park laid down the line it is raced on. The park is a ladder of groomed kickers in three sizes (a 1 m lip for a grab, a 2 m lip for a flip and a 3.2 m lip for a flip with a spin), laid in turn from 120 m past the start gate to 120 m short of the finish, 20 m of piste apart, each where the line barely turns and falls no steeper than 22 %. Every kicker is built against the horizontal past its lip: a level deck, a landing slope dug under the piste and a run-out back up to the line. The gates keep off every kicker, with a run-in falling at least the lip's height from the gate before each ramp. On the single piste the park is planned inside the attempt, so the drifts keep off it; on a ski area it is planned down the chosen course (or the first other course that carries one) and the course's gates are set round it. An attempt with no park that stands is refused for the next one. Park kickers carry their size (`Kicker::trick`) and their built shape (`Kicker::shape`), are named `T1…`, and are held by `analysis::check_park`. A map built without tricks is unchanged. The `park` lab draws the park close up, from the side and on the map.
