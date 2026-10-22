@@ -86,18 +86,31 @@ fn inside(r: TrailRect, p: vec2f) -> f32 {
   return smoothstep(0.0, 0.06, min(min(uv.x, uv.y), min(1.0 - uv.x, 1.0 - uv.y)));
 }
 
+// Where a pixel spans more than a coarse texel the slope a groove makes averages out under it,
+// so it fades out by two, and past that the track is its depth and pressed share alone: one
+// tap of the coarse map instead of five (or ten in the fine window's rim).
 fn track_at(p: vec2f, foot: f32) -> Track {
+  let keep = 1.0 - smoothstep(0.25 * coarse_rect.texel, 0.5 * coarse_rect.texel, foot);
+  if (keep <= 0.0) {
+    let c = trail_texel(trail_coarse, coarse_rect, p);
+    return Track(c.x, c.y, c.z, vec2f(0.0));
+  }
   let w = inside(fine_rect, p);
+  var t: Track;
   if (w >= 1.0) {
-    return trail_of(trail_fine, fine_rect, p, foot);
+    t = trail_of(trail_fine, fine_rect, p, foot);
+  } else {
+    let coarse = trail_of(trail_coarse, coarse_rect, p, foot);
+    if (w <= 0.0) {
+      t = coarse;
+    } else {
+      let fine = trail_of(trail_fine, fine_rect, p, foot);
+      t = Track(mix(coarse.depth, fine.depth, w), mix(coarse.berm, fine.berm, w),
+                mix(coarse.pressed, fine.pressed, w), mix(coarse.slope, fine.slope, w));
+    }
   }
-  let coarse = trail_of(trail_coarse, coarse_rect, p, foot);
-  if (w <= 0.0) {
-    return coarse;
-  }
-  let fine = trail_of(trail_fine, fine_rect, p, foot);
-  return Track(mix(coarse.depth, fine.depth, w), mix(coarse.berm, fine.berm, w),
-               mix(coarse.pressed, fine.pressed, w), mix(coarse.slope, fine.slope, w));
+  t.slope *= keep;
+  return t;
 }
 
 fn hash3(p0: vec3f) -> vec3f {

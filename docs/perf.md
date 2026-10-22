@@ -43,3 +43,20 @@ instructions that take tens of cycles, so its cost shows only in wall time. A sa
 the two builds back to back, three times over, are how the rows above were measured: the
 container's timings wander by ±5% from one run to the next.
 
+## The frame on the GPU
+
+Measured with `make lab LAB=profile PRESET=release ARGS="--frames=30 --tag=before"`, then
+`--compare=before` (seed 38, the chase camera, three rivals), the median GPU ms of each pass on
+the container's software adapter (llvmpipe): proportions, not a real GPU's times. Every row is
+held by the picture diff (`labs world --compare=before`, and `trails`, `snow`, `shadows`): the
+bands it reports and how far each moved.
+
+What the terrain's colour pass spends, each term taken out alone (65 ms in all): the sun's
+shadow 10 ms (the figures' tiles 6 of it), the tracks 6, the ridges' horizon 6, the micro-relief
+3, the haze 2.
+
+| Change | terrain (ms) | The look | Where |
+| --- | --- | --- | --- |
+| The figures' shadow tiles: a point's clip in the atlas taken once and moved per tile by an offset worked on the CPU (the view is affine), and a point outside every tile's reach skips them all | 65.2 → 62.9 | every view the same to the bit | `render/shadows.cpp`, `wgsl/sun_shadow.wgsl` |
+| The tracks: past a quarter of a coarse texel a pixel the groove's slope fades out, gone by a half, and the track is one tap of the coarse map (was five, or ten in the fine window's rim) | 62.9 → 62.0 | one pixel of one view a level apart; every band at or near 100 dB | `mountain/app/snow.wgsl` |
+| Both | 65.2 → 62.0 (−5%) | | |
