@@ -5,12 +5,13 @@
 //
 // The axes, in the stored tape's order: `steer` (signed), `tuck` (lever), `brake` (lever),
 // `flags` (bit 0 the jump held, bit 1 the reset, bit 2 the machine press), `lean` (signed: the
-// rider's weight on the snowmobile). Renaming or reordering one is a format change; an axis is
-// only ever added at the end.
+// rider's weight on the snowmobile, the helicopter's cyclic fore and aft), `lever` (the
+// helicopter's collective), `pedal` (signed: its pedals). Renaming or reordering one is a format
+// change; an axis is only ever added at the end.
 //
 // ge:summary The control tape's schema and snap_controls: the run's controls on the tape's grid
 // ge:keywords controls tape schema snap snap_controls ghost replay steer tuck brake jump
-// ge:keywords reset flags machine lean controls_to_axes controls_from_axes
+// ge:keywords reset flags machine lean lever pedal controls_to_axes controls_from_axes
 // ge:skill sim racing
 // ge:test tests/fall_line_sim_test.cpp
 #pragma once
@@ -23,13 +24,15 @@
 
 namespace fall_line::sim {
 
-inline constexpr size_t kTapeAxisCount = 5;
+inline constexpr size_t kTapeAxisCount = 7;
 inline constexpr std::array<ge::racing::TapeAxis, kTapeAxisCount> kTapeAxes{{
     {"steer", ge::racing::AxisKind::Signed},
     {"tuck", ge::racing::AxisKind::Lever},
     {"brake", ge::racing::AxisKind::Lever},
     {"flags", ge::racing::AxisKind::Flags},
     {"lean", ge::racing::AxisKind::Signed},
+    {"lever", ge::racing::AxisKind::Lever},
+    {"pedal", ge::racing::AxisKind::Signed},
 }};
 inline constexpr ge::racing::TapeSchema kTapeSchema{kTapeAxes};
 
@@ -39,6 +42,8 @@ inline void controls_to_axes(const Controls& c, std::span<double, kTapeAxisCount
   out[2] = ge::racing::snap_axis(c.ski.brake, ge::racing::AxisKind::Lever);
   out[3] = (c.ski.jump ? 1 : 0) + (c.reset ? 2 : 0) + (c.machine ? 4 : 0);
   out[4] = ge::racing::snap_axis(c.lean, ge::racing::AxisKind::Signed);
+  out[5] = ge::racing::snap_axis(c.lever, ge::racing::AxisKind::Lever);
+  out[6] = ge::racing::snap_axis(c.pedal, ge::racing::AxisKind::Signed);
 }
 
 inline Controls controls_from_axes(std::span<const double, kTapeAxisCount> a) {
@@ -51,6 +56,8 @@ inline Controls controls_from_axes(std::span<const double, kTapeAxisCount> a) {
   c.reset = (flags & 2) != 0;
   c.machine = (flags & 4) != 0;
   c.lean = a[4];
+  c.lever = a[5];
+  c.pedal = a[6];
   return c;
 }
 

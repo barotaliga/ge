@@ -661,6 +661,22 @@ reactive channel so TAA does not smear it. What fills the pool is the game's: Fa
 throws each racer's spray (`plugins/skier/app/spray.hpp`) over the time between two frames'
 `time_s`. On the software adapter the pass pair costs about 0.6 + 0.13 ms (the `profile`
 lab), the flight of all 16384 slots the larger half.
+
+**As built (M8d2).** The drag pulls a particle toward the AIR, not still air: the frame hands the
+pool the map's wind at the view's time (`plugins/mountain/air/air.hpp`), so a powder cloud (the
+spray's big thin puffs, hanging three to five seconds) drifts off downwind. THE FALLING SNOW is
+`engine/render/snowfall.hpp`: 24576 flakes in a 36 m cube centred on the eye, no births and no
+deaths. `snowfall.sim` moves each at the wind plus its own fall (0.6 to 1.4 m/s by its index)
+and a flutter on its phase, and wraps its offset from the eye back into the cube, so the eye
+always stands in a full fall however fast it moves. `snowfall` draws the first `fall` share of
+them (the air's fall at the view's time: a flurry a scatter, a storm the whole box) as streaks
+over a 1/60 s shutter, at least a pixel and a half wide (a far flake widened and thinned as much,
+so it keeps its light and does not shimmer), thinned by the root of the streak's length, faded
+toward the cube's faces and at the lens, lit by the sun past the horizon and the sky, hazed and
+softened against the depth. When nothing falls the pass is an empty compute pass under its name
+(an empty render pass still loads and stores its targets). The flakes are lit as the day is: under
+a clear sky that is a sunny fall; the overcast sky and the fog a snowing day brings (`air::Fall`'s
+visual range) are M8f's.
 - **Skinning** uses bone palettes in a storage buffer. A figure drawn in more than one
   view (the player in the main view, the sun's cascade and the shadow atlas) is skinned
   once by a compute pass into a vertex buffer that every view reads. Crowd members,

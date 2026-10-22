@@ -18,6 +18,7 @@ struct Particle {
 struct ParticleParams {
   step: vec4f,  // x: this frame's step, s; y: the near plane, m; z: the soft depth, m
   info: vec4u,  // x: slots
+  air: vec4f,   // xyz: the air's velocity, m/s, which a particle's drag pulls it toward
 }
 
 const kGravity = 9.81;

@@ -13,6 +13,7 @@
 #include "core/output.hpp"
 #include "fall_line/app/look.hpp"
 #include "fall_line/app/scene.hpp"
+#include "mountain/air/air.hpp"
 #include "prof/zones.hpp"
 
 namespace fall_line::app {
@@ -31,6 +32,7 @@ constexpr r::PassRow kPassTable[] = {
     {"trails.fine", "", "trails.fine"},
     {"trails.coarse", "", "trails.coarse"},
     {"particles.sim", "terrain.height", "particles"},
+    {"snowfall.sim", "", "snowfall"},
     {"shadows.cull", "instances", "shadows.lists"},
     {"shadows.near", "instances shadows.lists", "shadows.maps"},
     {"shadows.far", "instances shadows.lists", "shadows.maps"},
@@ -51,6 +53,7 @@ constexpr r::PassRow kPassTable[] = {
     {"sky", "sky.view depth", "hdr motion"},
     {"particles", "particles terrain.horizon shadows.maps sky.aerial sky.light depth",
      "hdr motion"},
+    {"snowfall", "snowfall terrain.horizon sky.aerial sky.light depth", "hdr motion"},
     {"taa", "hdr motion depth taa.history sky.light", "taa.history"},
     {"bloom", "taa.history", "bloom"},
     {"post", "taa.history bloom sky.light", "final"},
@@ -75,6 +78,7 @@ void make_targets(ge::gpu::Device& device, GameFrame& f, uint32_t w, uint32_t h)
   for (r::InstanceFamily* family : f.families)
     r::bind_family_hiz(device, f.instancing, *family, f.hiz);
   r::bind_particle_targets(device, f.particles, f.targets);
+  r::bind_snowfall_targets(device, f.snowfall, f.targets);
   // The post pass (and the bloom) read TAA's two histories, or the HDR target for both.
   wgpu::TextureView inputs[2] = {f.targets.hdr_view, f.targets.hdr_view};
   if (f.options.taa) {
@@ -176,6 +180,8 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
   r::create_terrain(device, f->pipelines, f->terrain, source, f->frame_layout);
   r::create_particles(device, f->pipelines, f->particles, f->frame_layout, f->terrain,
                       options.particles);
+  r::create_snowfall(device, f->pipelines, f->snowfall, f->frame_layout, f->terrain,
+                     options.flakes);
   r::create_hiz_pipelines(device, f->pipelines, f->hiz);
   r::create_instance_pipelines(device, f->pipelines, f->instancing, f->frame_layout,
                                options.overdraw_probe);
@@ -314,7 +320,20 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& view, const
     f.spray_time = view.time_s;
     f.spray_placed = true;
     throw_spray(f, scene, dt);
-    r::prepare_particles(device, f.particles, dt, view.near_m);
+    // The map's air at this moment: the wind carries the spray and the flakes.
+    const ge::mountain::air::Wind wind = ge::mountain::air::wind_at(*f.level, view.time_s);
+    const double air[3] = {wind.x, 0.0, wind.z};
+    r::prepare_particles(device, f.particles, dt, view.near_m, air);
+    r::SnowfallFrame at;
+    for (int k = 0; k < 3; ++k) {
+      at.eye[k] = view.eye[k];
+      at.wind[k] = air[k];
+    }
+    at.fall = f.options.snowfall ? ge::mountain::air::fall_at(*f.level, view.time_s).fall : 0.0;
+    at.dt = dt;
+    at.time = view.time_s;
+    at.near_m = view.near_m;
+    r::prepare_snowfall(device, f.snowfall, at);
   }
   const size_t racers = std::min<size_t>(scene.skiers.size(), kMaxFigures);
   {
@@ -372,6 +391,7 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& view, const
     f.recorder.compute(encoder, "trails.coarse").End();
   }
   r::encode_particles_sim(f.particles, f.pipelines, f.recorder, encoder);
+  r::encode_snowfall_sim(f.snowfall, f.pipelines, f.recorder, encoder);
   r::encode_sun_shadows(f.shadows, still, moving, f.instancing, f.pipelines, f.recorder, encoder);
   r::encode_terrain_depth(f.terrain, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
   r::encode_instances_depth(families, f.instancing, f.pipelines, f.recorder, encoder, f.targets,
@@ -386,6 +406,7 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& view, const
                       f.frame_group, f.instance_light);
   r::encode_sky(f.sky, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
   r::encode_particles(f.particles, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
+  r::encode_snowfall(f.snowfall, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
   if (f.options.taa) {
     r::encode_taa(device, f.taa, f.pipelines, f.recorder, encoder, f.frame_group);
   }

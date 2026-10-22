@@ -1,9 +1,9 @@
 // plugins/skier/app/spray.hpp: what a skier throws. The first frame throws nothing (the pen is
 // placed); a straight run on a flat ski on the piste throws nothing; a skid throws a sheet the way
 // the skis slide and a brake one on ahead of him; a carve throws a curl out of the turn off the
-// outside ski's tail; loose snow throws fines that drift; a landing after a flight bursts, bigger
-// the harder he came down; a skier down throws snow all round him; and the same frames thrown again
-// throw the same spray.
+// outside ski's tail; loose snow throws fines that drift and a cloud that hangs; a landing after a
+// flight bursts, bigger the harder he came down; a skier down throws snow all round him; and the
+// same frames thrown again throw the same spray.
 //
 // ge:summary Tests for the spray: nothing straight, the skid's sheet, the carve's curl, powder
 // fines, the landing's burst, the body down, the pen's determinism
@@ -191,4 +191,22 @@ TEST(a_brake_scrapes_a_sheet_on_ahead_of_him) {
     ge::skier::spray_grains(s, kDt, pen, out);
   }
   CHECK(out.empty());
+}
+
+TEST(deep_powder_raises_a_cloud_that_hangs) {
+  const std::vector<SprayGrain> g = throw_for(at(14, 0, 0), 120, ge::skier::spray_pen(10));
+  int puffs = 0;
+  for (const SprayGrain& x : g) {
+    if (x.size > 0.7) {
+      ++puffs;
+      CHECK(x.life >= 3);
+      CHECK(x.fall < 0.05);
+      CHECK(x.opacity <= 0.1);
+    }
+  }
+  CHECK(puffs > 20);
+  // None on the piste.
+  for (const SprayGrain& x : throw_for(at(14, 0.5, 1), 120, ge::skier::spray_pen(10))) {
+    CHECK(x.size < 0.7);
+  }
 }
