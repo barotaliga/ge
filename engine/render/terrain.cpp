@@ -207,10 +207,16 @@ void create_terrain(gpu::Device& device, gpu::PipelineSet& pipelines, Terrain& t
 
   // One vertex stage for every terrain pipeline (the prepass, the colour pass and the probe),
   // so the depths they compute are the same bits.
-  const wgpu::ShaderModule draw = gpu::create_shader(device, wgsl::terrain, "terrain");
+  const wgpu::ShaderModule draw = gpu::create_shader(
+      device, source.shader.empty() ? wgsl::terrain : source.shader, source.shader_label);
   t.shadows = no_sun_shadows(device);
+  t.has_material = source.material != nullptr;
   const wgpu::PipelineLayout draw_layout =
-      make_pipeline_layout(device, "terrain.draw", {frame, t.layout, sun_shadow_layout(device)});
+      t.has_material
+          ? make_pipeline_layout(device, "terrain.draw",
+                                 {frame, t.layout, sun_shadow_layout(device), source.material})
+          : make_pipeline_layout(device, "terrain.draw",
+                                 {frame, t.layout, sun_shadow_layout(device)});
   wgpu::ConstantEntry tile{};
   tile.key = "kTile";
   tile.value = kTileQuads;
@@ -321,6 +327,8 @@ void encode_terrain_horizon(Terrain& t, const gpu::PipelineSet& pipelines, Frame
 
 void bind_terrain_shadows(Terrain& t, const wgpu::BindGroup& shadows) { t.shadows = shadows; }
 
+void bind_terrain_material(Terrain& t, const wgpu::BindGroup& material) { t.material = material; }
+
 namespace {
 
 void draw_tiles(const Terrain& t, wgpu::RenderPassEncoder& pass, uint32_t pipeline_id,
@@ -329,6 +337,7 @@ void draw_tiles(const Terrain& t, wgpu::RenderPassEncoder& pass, uint32_t pipeli
   pass.SetBindGroup(0, frame);
   pass.SetBindGroup(1, t.group);
   pass.SetBindGroup(2, t.shadows);
+  if (t.has_material) pass.SetBindGroup(3, t.material);
   pass.SetIndexBuffer(t.indices, wgpu::IndexFormat::Uint16);
   pass.DrawIndexedIndirect(t.indirect, 0);
 }

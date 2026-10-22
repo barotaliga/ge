@@ -36,7 +36,7 @@ constexpr r::PassRow kPassTable[] = {
     {"instances.depth.late", "instances instances.late", "depth"},
     {"terrain",
      "terrain.tiles terrain.indirect terrain.height terrain.horizon shadows.maps sky.aerial "
-     "sky.light depth",
+     "sky.light snow.ground depth",
      "hdr motion"},
     {"instances",
      "instances instances.early instances.late terrain.horizon shadows.maps sky.aerial sky.light "
@@ -44,13 +44,14 @@ constexpr r::PassRow kPassTable[] = {
      "hdr motion"},
     {"sky", "sky.view depth", "hdr motion"},
     {"taa", "hdr motion depth taa.history sky.light", "taa.history"},
-    {"post", "taa.history sky.light", "final"},
+    {"bloom", "taa.history", "bloom"},
+    {"post", "taa.history bloom sky.light", "final"},
 };
 // What is made at load rather than by a pass (the instances' meshes and streams: the figures'
 // are written before the frame is encoded), and what is the last frame's (the TAA history, the
 // depth pyramid the early cull reads).
 constexpr std::string_view kLoadInputs =
-    "terrain.height terrain.pyramid terrain.albedo instances taa.history hiz.last";
+    "terrain.height terrain.pyramid terrain.albedo snow.ground instances taa.history hiz.last";
 
 constexpr int kPasses = static_cast<int>(std::size(kPassTable));
 
@@ -64,13 +65,17 @@ void make_targets(ge::gpu::Device& device, GameFrame& f, uint32_t w, uint32_t h)
   r::create_hiz_targets(device, f.hiz, f.targets);
   for (r::InstanceFamily* family : f.families)
     r::bind_family_hiz(device, f.instancing, *family, f.hiz);
+  // The post pass (and the bloom) read TAA's two histories, or the HDR target for both.
+  wgpu::TextureView inputs[2] = {f.targets.hdr_view, f.targets.hdr_view};
   if (f.options.taa) {
     r::create_taa_targets(device, f.taa, f.targets, w, h);
-    for (int k = 0; k < 2; ++k) {
-      f.post_groups[k] = r::post_group(device, f.post, f.taa.history_views[k]);
-    }
-  } else {
-    f.post_groups[0] = f.post_groups[1] = r::post_group(device, f.post, f.targets.hdr_view);
+    inputs[0] = f.taa.history_views[0];
+    inputs[1] = f.taa.history_views[1];
+  }
+  const bool glow = f.options.bloom > 0;
+  if (glow) r::create_bloom_targets(device, f.bloom, w, h, inputs);
+  for (int k = 0; k < 2; ++k) {
+    f.post_groups[k] = r::post_group(device, f.post, inputs[k], glow ? f.bloom.view : nullptr);
   }
   f.history.valid = false;
 }
@@ -101,6 +106,12 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
   source.base_spacing = 1.0;
   source.levels = 8;
   source.overdraw_probe = options.overdraw_probe;
+  if (options.snow) {
+    ge::mountain::app::create_snow(device, f->snow, level);
+    source.shader = ge::mountain::app::snow_shader();
+    source.shader_label = "snow";
+    source.material = f->snow.layout;
+  }
   r::create_terrain(device, f->pipelines, f->terrain, source, f->frame_layout);
   r::create_hiz_pipelines(device, f->pipelines, f->hiz);
   r::create_instance_pipelines(device, f->pipelines, f->instancing, f->frame_layout,
@@ -110,7 +121,15 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
     taa.scale = options.scale;
     r::create_taa(device, f->pipelines, f->taa, f->frame_layout, taa);
   }
-  r::create_post(device, f->pipelines, f->post, f->frame_layout, output);
+  if (options.bloom > 0) {
+    r::BloomSettings bloom;
+    bloom.strength = options.bloom;
+    r::create_bloom_pipelines(device, f->pipelines, f->bloom, bloom);
+  }
+  r::PostSettings post;
+  post.bloom = options.bloom;
+  r::create_post(device, f->pipelines, f->post, f->frame_layout, output, post);
+  r::set_grade(device, f->post, bake_grade());
   if (!f->pipelines.finish(device)) return nullptr;
   ge::gpu::end_load(device);
   f->frame_group = r::frame_group(device, f->frame_layout, f->uniforms, f->sky);
@@ -130,6 +149,7 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
   r::create_family_casters(device, f->instancing, f->forest, r::kCascades);
   r::create_family_casters(device, f->instancing, f->figures, 1);
   r::bind_terrain_shadows(f->terrain, f->shadows.group);
+  if (options.snow) r::bind_terrain_material(f->terrain, f->snow.group);
   r::bind_instance_shadows(f->instancing, f->shadows.group);
   make_targets(device, *f, width, height);
   f->recorder.init(device, "frame.timer", kPasses);
@@ -207,8 +227,15 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& view, const
   if (f.options.taa) {
     r::encode_taa(device, f.taa, f.pipelines, f.recorder, encoder, f.frame_group);
   }
-  r::encode_post(f.post, f.pipelines, f.recorder, encoder, f.frame_group,
-                 f.post_groups[f.options.taa ? f.taa.written : 0], output);
+  const int input = f.options.taa ? f.taa.written : 0;
+  if (f.options.bloom > 0) {
+    r::encode_bloom(f.bloom, f.pipelines, f.recorder, encoder, input);
+  } else {
+    // The pass table's row runs empty, so every later pass keeps its timing row.
+    f.recorder.compute(encoder, "bloom").End();
+  }
+  r::encode_post(f.post, f.pipelines, f.recorder, encoder, f.frame_group, f.post_groups[input],
+                 output);
   f.recorder.end_frame(encoder);
   wgpu::CommandBuffer commands = encoder.Finish();
   f.recorder.stats.cpu_ms =

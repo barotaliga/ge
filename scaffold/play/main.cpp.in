@@ -1,0 +1,10 @@
+// The `play` executable's entry point: the game registered on the engine's play contract
+// (play/game.cpp), and the engine's play command line as its main. `ge play`, `ge sim`,
+// `ge replay`, `ge state` and `ge diverge` build and run it (skill: play-test).
+//
+// ge:summary The play executable's main: hands the command line to the engine's play_main
+// ge:keywords play main executable play_main
+// ge:skill play-test
+#include "play/main.hpp"
+
+int main(int argc, char** argv) { return ge::play::play_main(argc, argv); }

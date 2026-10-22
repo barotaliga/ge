@@ -1,7 +1,8 @@
 # lab digests at their smoke flags: labs --all --smoke --write-digests
 analyze 47aeb41752f58f41
 audition d47fda4a9cb22fbb
-cli-loop 03b6ac4f93244f7c
+charts 77f2319a5ea24272
+cli-loop 5d2f9a6cd5ca441e
 frame-pace c5058023a52812c3
 gpu-capture 8b5d5e3b7be5a4fc
 junctions 036999ca677e12e6
@@ -9,7 +10,8 @@ level 4fbff3da7a82c4aa
 mapgen-cost 3baf51b6907817f3
 noise 3d3a828834f144cb
 park d53bc7b207dfab4a
-play 1cc3e19bd8dced06
+play 17921f96f672b343
+profile 05a464004723898b
 real-faces b53c6303e783fd1b
 real-hints eb15bbe4ffd14810
 real-maps 2dceaf5b64e32976
@@ -22,8 +24,10 @@ sim a9c6d0f6bb29ce2a
 ski-cross fbe386cdba062259
 skijump-hills 3fa0eff35ac0f70a
 slalom 2adb7c679ec93adf
+snow 3f444a51a1e8a91c
 speed-events 2e575d7a0184d4b2
 speed-ski 55c4cfa78de28f7e
 synth 39e6460e5c8a8c8e
 taa 01ee5d58d90a05ce
+trace 95f71886b7e7c98a
 world 59572dd4a51a1bae

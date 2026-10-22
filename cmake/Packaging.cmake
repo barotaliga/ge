@@ -5,6 +5,7 @@
 #   find_package(gameengine2 0.1 REQUIRED)
 #   target_link_libraries(game PRIVATE ge::core ge::audio ge::racing)   # ge::fp comes with them
 #   target_link_libraries(labs PRIVATE ge::lab)                         # a game's labs (docs/labs.md)
+#   target_link_libraries(play PRIVATE ge::play)                       # its play target (ge play)
 #
 # The ge executable (cmake/Cli.cmake) installs to bin/ beside the libraries; it is a tool, not
 # a target a game links.
@@ -29,11 +30,11 @@ set(GE_INSTALL_INCLUDEDIR "${CMAKE_INSTALL_INCLUDEDIR}/gameengine2")
 set(GE_INSTALL_CMAKEDIR "${CMAKE_INSTALL_LIBDIR}/cmake/gameengine2")
 
 # target -> export name (consumers see ge::<export name>)
-set(GE_EXPORTED_TARGETS ge_fp fp ge_core core ge_audio audio ge_lab lab)
+set(GE_EXPORTED_TARGETS ge_fp fp ge_core core ge_audio audio ge_lab lab ge_play play)
 # Every plugin is published as ge::<plugin> (cmake/Plugins.cmake collects them), and its
 # presentation half as ge::<plugin>_app when every engine target it links is published here
 # (APP audio is; render, gpu and platform are not yet, below).
-set(GE_PUBLISHED_MODULES core audio lab)
+set(GE_PUBLISHED_MODULES core audio lab play)
 get_property(_ge_plugins GLOBAL PROPERTY GE_PLUGIN_TARGETS)
 foreach(_target IN LISTS _ge_plugins)
   get_property(_app_modules TARGET ${_target} PROPERTY GE_APP_MODULES)
@@ -44,6 +45,18 @@ foreach(_target IN LISTS _ge_plugins)
   endif()
   string(REGEX REPLACE "^ge_" "" _name ${_target})
   list(APPEND GE_EXPORTED_TARGETS ${_target} ${_name})
+  list(APPEND _ge_published_apps ${_name})
+endforeach()
+
+# A presentation half that is not published (or not built) installs no headers: they include
+# engine modules the package does not carry (gpu/, render/).
+set(_ge_app_excludes "")
+file(GLOB _ge_plugin_dirs LIST_DIRECTORIES true "${PROJECT_SOURCE_DIR}/plugins/*")
+foreach(_dir IN LISTS _ge_plugin_dirs)
+  get_filename_component(_name ${_dir} NAME)
+  if(IS_DIRECTORY "${_dir}/app" AND NOT "${_name}_app" IN_LIST _ge_published_apps)
+    list(APPEND _ge_app_excludes REGEX "/plugins/${_name}/app$" EXCLUDE)
+  endif()
 endforeach()
 
 set(_ge_targets "")
@@ -73,12 +86,11 @@ install(DIRECTORY "${PROJECT_SOURCE_DIR}/engine/"
 
 # A plugin's headers install beside the engine's (a plugin's name never equals an engine
 # directory), so "racing/tape.hpp" is spelled the same in-tree and installed. Labs are not
-# published; a presentation half's headers install with it (a half that is not published, above,
-# is never linked, so its headers are inert).
+# published; a presentation half's headers install only when the half is published (above).
 install(DIRECTORY "${PROJECT_SOURCE_DIR}/plugins/"
   DESTINATION ${GE_INSTALL_INCLUDEDIR}
   FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h" PATTERN "*.inl"
-  PATTERN "labs" EXCLUDE)
+  PATTERN "labs" EXCLUDE ${_ge_app_excludes})
 
 install(EXPORT gameengine2Targets
   NAMESPACE ge::

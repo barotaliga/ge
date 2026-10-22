@@ -1,0 +1,79 @@
+// THE GAME ON THE PLAY CONTRACT: what an agent plays through `ge play` and the pilot plays
+// through `ge sim`. The spec names the axes (the whole input: here the steer), the options a run
+// is opened with, and the Run wraps the simulation: one step on the snapped axes, what a player
+// sees, everything that decides the next step, the report and the game's own pilot. Grow it with
+// the game: a new input is an axis, a new setting an option (skill: play-test).
+//
+// ge:summary The game on the play contract: its axes, options, observe, state, report and pilot
+// ge:keywords play contract game spec run axes options observe state report pilot ge_game
+// ge:skill play-test
+// ge:test tests/sim_game_test.cpp
+#include <array>
+#include <memory>
+#include <span>
+#include <string>
+
+#include "core/math.hpp"
+#include "core/num.hpp"
+#include "core/num_text.hpp"
+#include "play/game.hpp"
+#include "sim/game.hpp"
+
+namespace {
+
+namespace num = ge::core::num;
+
+class Run final : public ge::play::Run {
+ public:
+  explicit Run(uint32_t seed) : state_({{ident}}::sim::create_game(seed)) {}
+
+  void step(std::span<const double> input) override {
+    {{ident}}::sim::step(state_, {{ident}}::sim::Input{input[0]});
+  }
+  bool over() const override { return false; }  // the demo runs to the spec's longest run
+  uint64_t digest() const override { return {{ident}}::sim::digest(state_); }
+  std::string observe() override {
+    return "{\"x\":" + num::to_fixed(state_.x_m, 3) + ",\"vx\":" + num::to_fixed(state_.vx_mps, 3) +
+           "}";
+  }
+  std::string state() const override {
+    return "{\"steps\":" + std::to_string(state_.steps) +
+           ",\"rng\":" + std::to_string(state_.rng.a) + ",\"x_m\":" + num::to_string(state_.x_m) +
+           ",\"vx_mps\":" + num::to_string(state_.vx_mps) + "}";
+  }
+  std::string report() const override { return "{\"x\":" + num::to_fixed(state_.x_m, 3) + "}"; }
+  // The pilot steers the body back to the middle.
+  bool pilot(std::span<double> input) override {
+    input[0] = ge::core::clamp(-(state_.x_m + state_.vx_mps), -1, 1);
+    return true;
+  }
+
+ private:
+  {{ident}}::sim::GameState state_;
+};
+
+std::unique_ptr<ge::play::Run> open(const ge::play::Setup& setup, std::string& error) {
+  if (setup.seed < 0 || setup.seed != num::round(setup.seed)) {
+    error = "the seed must be a whole number, 0 or more";
+    return nullptr;
+  }
+  return std::make_unique<Run>(static_cast<uint32_t>(setup.seed));
+}
+
+constexpr std::array<ge::play::Axis, 1> kAxes{{
+    {"steer", ge::play::AxisKind::signed_unit, "-1 left .. 1 right"},
+}};
+
+const ge::play::GameSpec kGame{
+    "{{ident}}",
+    "{{name}}: the demo body pushed by the steer and a seeded gust",
+    {{ident}}::sim::kStepHz,
+    30,
+    kAxes,
+    {},
+    open,
+};
+
+}  // namespace
+
+GE_GAME(kGame);

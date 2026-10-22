@@ -165,6 +165,7 @@ void run(ge::lab::Lab& lab) {
   options.taa = lab.arg_num("taa") != 0;
   options.scale = lab.arg_num("scale");
   options.overdraw_probe = true;
+  options.snow = lab.arg_num("snow") != 0;
   if (width <= 0 || height <= 0 || width > 4096 || height > 4096 || settle < 1 ||
       options.scale < 0.25 || options.scale > 1) {
     lab.fail("--width and --height must be 1..4096, --settle at least 1 and --scale 0.25..1",
@@ -453,6 +454,7 @@ const ge::lab::LabSpec kSpec{
         {"settle", "8", "frames drawn after each view's cut before the capture"},
         {"taa", "1", "TAA-U on (1) or off (0)"},
         {"scale", "1", "the render size over the picture's, with TAA (0.25..1)"},
+        {"snow", "1", "the snow's material (1) or the albedo lit (0)"},
         {"moments", "3,15,30",
          "seconds of the bot's run to shoot from the chase camera, comma-"
          "separated (empty: none)"},
