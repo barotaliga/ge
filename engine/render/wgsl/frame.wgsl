@@ -54,3 +54,16 @@ fn sky_luminance(d: vec3f) -> vec3f {
   let uv = skyview_uv(r, d.y, azimuth_cos(d, frame.sun.xyz));
   return textureSampleLevel(sky_view_lut, linear_clamp, uv, 0.0).rgb * frame.sun.w;
 }
+
+// What a white surface lit by the sun and the sky maps to before the tone curve.
+const kWhiteKey = 0.78;
+
+// THE EXPOSURE: the scale that maps a white Lambertian surface under this sun and sky to
+// kWhiteKey, read off the sky's light (never a histogram, so it never pumps). The post pass
+// applies it; TAA-U weighs its samples in the light it gives.
+fn exposure() -> f32 {
+  let sun = sky_light.sun_at_eye.rgb * frame.sun.w * max(frame.sun.y, 0.0);
+  let sky = sky_light.irradiance_up.rgb * frame.sun.w;
+  let white = dot((sun + sky) / PI, vec3f(0.2126, 0.7152, 0.0722));
+  return kWhiteKey / max(white, 1e-4);
+}

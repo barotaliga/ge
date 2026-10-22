@@ -9,7 +9,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstring>
 
 #include "render/horizon.wgsl.hpp"
 
@@ -34,19 +33,6 @@ double field_at(const core::Heightfield& f, double x, double z) {
   const double gx = mirror((x - f.origin_x) / f.cell, f.cols - 1);
   const double gz = mirror((z - f.origin_z) / f.cell, f.rows - 1);
   return sample_field(f, f.origin_x + gx * f.cell, f.origin_z + gz * f.cell);
-}
-
-float half_to_float(uint16_t h) {
-  const uint32_t sign = (h >> 15) & 1u, exp = (h >> 10) & 0x1fu, man = h & 0x3ffu;
-  float v;
-  if (exp == 0) {
-    v = std::ldexp(static_cast<float>(man), -24);
-  } else if (exp == 31) {
-    v = man ? std::nanf("") : INFINITY;
-  } else {
-    v = std::ldexp(static_cast<float>(man | 0x400u), static_cast<int>(exp) - 25);
-  }
-  return sign ? -v : v;
 }
 
 }  // namespace
@@ -174,40 +160,8 @@ double horizon_tan(const core::Heightfield& field, double x, double z, double be
 }
 
 std::vector<float> read_horizon(gpu::Device& device, const Horizon& h, int slot) {
-  const uint32_t w = static_cast<uint32_t>(h.width), ht = static_cast<uint32_t>(h.height);
-  const uint32_t row = (w * 8 + 255) / 256 * 256;
-  wgpu::BufferDescriptor bd{};
-  bd.label = "terrain.horizon.readback";
-  bd.size = uint64_t{row} * ht;
-  bd.usage = wgpu::BufferUsage::MapRead | wgpu::BufferUsage::CopyDst;
-  wgpu::Buffer buffer = device.device.CreateBuffer(&bd);
-  wgpu::TexelCopyTextureInfo src{};
-  src.texture = h.maps[slot & 1];
-  wgpu::TexelCopyBufferInfo dst{};
-  dst.buffer = buffer;
-  dst.layout.bytesPerRow = row;
-  dst.layout.rowsPerImage = ht;
-  const wgpu::Extent3D size{w, ht, 1};
-  wgpu::CommandEncoder encoder = device.device.CreateCommandEncoder();
-  encoder.CopyTextureToBuffer(&src, &dst, &size);
-  wgpu::CommandBuffer commands = encoder.Finish();
-  device.queue.Submit(1, &commands);
-  gpu::wait(device,
-            buffer.MapAsync(wgpu::MapMode::Read, 0, bd.size, wgpu::CallbackMode::WaitAnyOnly,
-                            [](wgpu::MapAsyncStatus, wgpu::StringView) {}));
-  std::vector<float> out(size_t{w} * ht);
-  if (const void* p = buffer.GetConstMappedRange(0, bd.size)) {
-    const auto* bytes = static_cast<const uint8_t*>(p);
-    for (uint32_t y = 0; y < ht; ++y) {
-      for (uint32_t x = 0; x < w; ++x) {
-        uint16_t v;
-        std::memcpy(&v, bytes + size_t{y} * row + size_t{x} * 8, 2);
-        out[size_t{y} * w + x] = half_to_float(v);
-      }
-    }
-  }
-  buffer.Unmap();
-  return out;
+  return read_red(device, h.maps[slot & 1], 0, static_cast<uint32_t>(h.width),
+                  static_cast<uint32_t>(h.height), wgpu::TextureFormat::RGBA16Float);
 }
 
 }  // namespace ge::render
