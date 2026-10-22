@@ -189,7 +189,6 @@ TEST(the_bot_rides_it_up_a_run_on_seed_38_and_skis_down_to_a_foot_and_keeps_its_
   const auto level = std::make_shared<const mg::Level>(fs::free_map(kSeed, kVersion));
   fs::SimOptions opts;
   opts.max_seconds = 1800;
-  if (std::getenv("EXP")) fs::simulate_free(level, kSeed, 0, {});
   const fs::RunReport r = fs::simulate_sled_outing(level, kSeed, opts);
   CHECK_MSG(r.finished && r.sled_rides == 1,
             "the bot's outing on the snowmobile did not end at a foot; run `make lab LAB=free` "
