@@ -282,7 +282,8 @@ std::vector<Finding> leak_findings(const BuildOptions& o, const std::string& rep
       R"(#\d+ 0x[0-9a-f]+ in (.+?) (/[^ :]+|[A-Za-z]:[^ :]+):(\d+))");
   static const std::regex kVgHead(
       R"(([\d,]+) bytes in ([\d,]+) blocks are (definitely|possibly) lost)");
-  static const std::regex kVgFrame(R"((?:at|by) 0x[0-9A-F]+: (.+?) \(([^():]+):(\d+)\))");
+  static const std::regex kVgFrame(
+      R"((?:at|by) 0x[0-9A-F]+: (.+?) \(((?:[A-Za-z]:)?[^():]+):(\d+)\))");
   std::string what, where, fn;
   bool open = false;
   auto flush = [&] {
