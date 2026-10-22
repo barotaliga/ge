@@ -10,7 +10,7 @@
 #   ge_lab       the lab framework (engine/lab: the contract, the runner, the raster, the PNG,
 #                the series files and the charts)
 #   ge_play      the play contract (engine/play: GameSpec and Run, the session, the input log,
-#                the bench)
+#                the bench, the stills `ge shot` draws)
 #   ge_prof      the profiler (engine/prof: timing zones, allocation counts, the resident set);
 #                ge_prof_alloc the counting operator new an executable links to count allocations
 #   ge_cli, ge   the ge command line (engine/cli: ge new, ge skills sync, ge doctor, ge lessons;
@@ -176,12 +176,12 @@ add_library(ge_prof_alloc STATIC engine/prof/alloc_hook.cpp)
 target_link_libraries(ge_prof_alloc PUBLIC ge_prof)
 
 # The play contract (engine/play: a game's spec and Run, the session and its line protocol, the
-# input log, replay and diverge, the bench, the `play` executable's main), published as ge::play
-# so a game's `play` target is driven by `ge play`, `ge sim`, `ge replay`, `ge state`,
-# `ge diverge`, `ge bench`, `ge profile` and `ge mem`.
+# input log, replay and diverge, the bench, the stills, the `play` executable's main), published
+# as ge::play so a game's `play` target is driven by `ge play`, `ge sim`, `ge replay`, `ge state`,
+# `ge diverge`, `ge shot`, `ge bench`, `ge profile` and `ge mem`.
 add_library(ge_play STATIC engine/play/inputs.cpp engine/play/json_read.cpp
   engine/play/session.cpp engine/play/bench.cpp engine/play/main.cpp)
-target_link_libraries(ge_play PUBLIC ge_core ge_prof ge_prof_alloc)
+target_link_libraries(ge_play PUBLIC ge_core ge_lab ge_prof ge_prof_alloc)
 
 # The ge command line (engine/cli, cmake/Cli.cmake): built here too when a game pulls the engine
 # in, so the game runs the ge of the engine it pins.

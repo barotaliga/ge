@@ -213,7 +213,7 @@ void run(ge::lab::Lab& lab) {
   const ge::gpu::Target target = ge::gpu::create_target(
       *device, "snow.final", static_cast<uint32_t>(width), static_cast<uint32_t>(height));
   const ge::mountain::app::SnowLook tuned;
-  const ge::mountain::app::SnowLook none{0, 0, 0, 0, 0, 0};
+  const ge::mountain::app::SnowLook none{0, 0, 0, 0, 0, 0, 0};
   for (Scene& sc : scenes) {
     ge::mountain::app::set_snow_look(*device, frame->snow, sc.snow ? tuned : none);
     fall_line::app::cut(*frame);

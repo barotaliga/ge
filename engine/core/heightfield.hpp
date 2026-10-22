@@ -17,6 +17,8 @@
 
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
+#include <cstring>
 #include <limits>
 #include <vector>
 
@@ -49,9 +51,24 @@ struct FieldCell {
   bool ok;
 };
 
+// 1 / cell when the pitch is a power of two (its inverse is then exact, and a product by it is
+// the quotient's bits, rounded once from the same real value), else 0. Read off the bits, so
+// the samplers pay no division for it.
+inline double exact_inverse(double cell) {
+  uint64_t bits = 0;
+  std::memcpy(&bits, &cell, sizeof bits);
+  const uint64_t exponent = bits >> 52;  // the sign bit too: a negative pitch is no power
+  if ((bits & 0x000FFFFFFFFFFFFFull) != 0 || exponent == 0 || exponent > 2045) return 0;
+  const uint64_t inverse = (2046 - exponent) << 52;
+  double out = 0;
+  std::memcpy(&out, &inverse, sizeof out);
+  return out;
+}
+
 inline FieldCell field_cell(const Heightfield& f, double x, double z) {
-  const double fx = (x - f.origin_x) / f.cell;
-  const double fz = (z - f.origin_z) / f.cell;
+  const double inv = exact_inverse(f.cell);
+  const double fx = inv != 0 ? (x - f.origin_x) * inv : (x - f.origin_x) / f.cell;
+  const double fz = inv != 0 ? (z - f.origin_z) * inv : (z - f.origin_z) / f.cell;
   const double max_c = f.cols - 1;
   const double max_r = f.rows - 1;
   const double cx = fx <= 0 ? 0.0 : fx >= max_c ? max_c : fx;

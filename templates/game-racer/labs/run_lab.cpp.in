@@ -1,0 +1,80 @@
+// LAB `run`: the autopilot raced over seeds, LOOKED AT. One table (each seed's laps, time and
+// digest), one metric a seed, and one captioned picture of the first seed's loop with the car's
+// line round it. Its digest makes it a determinism test: CI runs it twice (skill: labs).
+//
+// ge:summary Lab: the autopilot over seeds; each race's laps, time, digest and line round the loop
+// ge:keywords lab run sim seeds laps time digest picture line racer autopilot
+// ge:skill labs sim-system
+// ge:test tests/sim_game_test.cpp
+#include <cstdio>
+#include <string>
+
+#include "lab/lab.hpp"
+#include "sim/game.hpp"
+
+namespace {
+
+using namespace {{ident}}::sim;
+
+constexpr int kPx = 320;
+constexpr double kPxPerM = kPx / 200.0;  // the loop's 200 m square
+
+double sx(double x) { return kPx / 2.0 + x * kPxPerM; }
+
+void run(ge::lab::Lab& lab) {
+  const int steps = static_cast<int>(lab.arg_num("steps"));
+  ge::lab::LabTable table{"races", {"seed", "laps", "time (s)", "digest"}, {}};
+  auto pic = ge::lab::create_picture(kPx, kPx, {70, 110, 70});
+  bool first = true;
+  for (const double seed_value : lab.arg_nums("seeds")) {
+    const auto seed = static_cast<uint32_t>(seed_value);
+    GameState s = create_game(seed);
+    if (first) {
+      for (const Gate& g : s.gates) {
+        ge::lab::draw_ring(pic, sx(g.x_m), sx(g.z_m), kGateRadius * kPxPerM, {235, 235, 235});
+      }
+    }
+    for (int k = 0; k < steps && !finished(s); k++) {
+      const double x0 = s.x_m, z0 = s.z_m;
+      step(s, autopilot(s));
+      if (first) ge::lab::draw_line(pic, sx(x0), sx(z0), sx(s.x_m), sx(s.z_m), {220, 30, 30});
+    }
+    first = false;
+    const double time = finished(s) ? static_cast<double>(s.finish_step) / kStepHz : -1;
+    char hex[17];
+    std::snprintf(hex, sizeof hex, "%016llx", static_cast<unsigned long long>(digest(s)));
+    table.rows.push_back({std::to_string(seed), std::to_string(s.laps), std::to_string(time), hex});
+    lab.metric("seed-" + std::to_string(seed) + ".laps", s.laps, "laps");
+    if (s.laps == 0 && s.next_gate == 1) {
+      lab.fail(
+          "seed " + std::to_string(seed) + " took no gate in " + std::to_string(steps) + " steps",
+          "the autopilot should reach gate 1 in seconds: run tests/sim_game_test.cpp; "
+          "skill: sim-system");
+    }
+  }
+  lab.table(table);
+  lab.shot({"line",
+            "THE FIRST SEED'S LINE",
+            "The first seed's loop of gates (white rings) and the car's line round it (red).",
+            "the red line passes through every ring in order and stays on the picture",
+            {{"seeds", lab.arg("seeds")}, {"steps", lab.arg("steps")}}},
+           pic);
+}
+
+const ge::lab::LabSpec kSpec{
+    "run",
+    ge::lab::LabKind::sim,
+    "game:{{name}}",
+    "sim/game.cpp",
+    "labs",
+    "Does the autopilot finish each seed's race, and does it replay to the same digest?",
+    {
+        {"seeds", "1,2,3,38", "the seeds to race, comma-separated"},
+        {"steps", "14400", "the most steps a race (120 a second)"},
+    },
+    "--steps=1200",
+    run,
+};
+GE_LAB(kSpec);
+
+}  // namespace

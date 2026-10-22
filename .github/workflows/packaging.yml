@@ -112,3 +112,36 @@ jobs:
           "$G" profile --seeds=1 --repeats=1 "$E"
           "$G" mem --seeds=1 --steps=600 "$E"
           "$G" leaks --seeds=1 "$E"
+
+      - name: a racer from ge new plays a seed, replays it, shoots it, finds where two runs part, holds its bits
+        run: |
+          G="$GITHUB_WORKSPACE/build/ge"
+          E=--engine="$GITHUB_WORKSPACE"
+          "$G" new "$RUNNER_TEMP/kart-racer" --game=racer
+          cd "$RUNNER_TEMP/kart-racer"
+          git init -q
+          "$G" add lab look --kind=picture
+          "$G" add test laps
+          git add -A
+          "$G" check "$E"
+          "$G" sim --seeds=38 "$E" --json | grep -q '"over":true'
+          "$G" replay runs/kart_racer-38.inputs "$E"
+          printf '{"op":"act","input":{"steer":0.5,"throttle":1},"steps":240}\n{"op":"end"}\n' | "$G" play --seed=38 "$E" | grep -q '"op":"end"'
+          # A captioned still, headless: from the log at a step, and from the pilot's run.
+          "$G" shot runs/kart_racer-38.inputs --step=1200 --view=car "$E"
+          test -s runs/kart_racer-38-car-1200.png
+          "$G" shot --seed=38 --view=track "$E" --json | grep -q '"view":"track"'
+          # One input changed: diverge names the first step that differs.
+          sed -e '/^digest/d' -e '/^steps/d' -e '9s/.*/1 1 0 0/' runs/kart_racer-38.inputs > runs/edited.inputs
+          "$G" diverge runs/kart_racer-38.inputs runs/edited.inputs "$E" --json | grep -q '"same":false'
+          # The recorded bits: every lab's digest committed and held by ge test, one lab checked
+          # alone; a golden file's rows diffed column by column; a test with no golden written.
+          "$G" digest --write "$E"
+          test -s tests/labs_digests.txt
+          "$G" digest look "$E" --json | grep -q '"state":"same"'
+          "$G" test --filter=labs_smoke "$E"
+          mkdir -p tests/golden
+          printf '# lap time-bits\n1 4059000000000000\n2 405a000000000000\n' > tests/golden/laps.txt
+          "$G" golden diff --json | grep -q '"rows_changed":2'
+          "$G" golden diff tests/golden/laps.txt --json | grep -q '"column":"time-bits"'
+          "$G" golden write laps_test --preset=debug "$E" --json | grep -q 'does not write its golden'

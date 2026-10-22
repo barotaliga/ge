@@ -109,6 +109,10 @@ struct Shot {
   std::vector<std::pair<std::string, std::string>> inputs;  // seed, version, flags in force
 };
 
+// `picture` with its shot's words burned into a caption band under it: the title, the caption,
+// what to look for and the inputs. Every lab shot is written so, and so is `ge shot`'s still.
+Picture framed(const Shot& shot, const Picture& picture);
+
 // THE CONTEXT a lab runs in: its flags, and the sinks for what it found.
 class Lab {
  public:

@@ -14,6 +14,7 @@
 //   labs --all --smoke --check-digests=F   ... and each digest against the baseline file F
 //   labs --all --smoke --shard=2/4         ... only every 4th lab from the 2nd (CTest's slices)
 //   labs --all --smoke --write-digests=F   rewrite the baseline (a reviewed change)
+//   labs <id> --smoke --write-digests=F    rewrite only that lab's row (`ge digest <id> --write`)
 //
 // Exit 0 when every lab ran clean, 1 when a lab failed or a digest moved, 2 on a usage error.
 //

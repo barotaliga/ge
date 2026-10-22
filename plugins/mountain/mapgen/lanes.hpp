@@ -50,7 +50,7 @@ struct LaneAsk {
 
 // R27 — the route a lane from (x0, z0) is laid along to the cheapest join on a piste `may` joins,
 // or to `ask.goal`; the way `side` sends it (+1 toward +x) preferred. None where no route keeps a
-// lane's pitch.
+// lane's pitch. `may` and `ask.keep_off` are pure readings, asked from several threads at once.
 std::optional<LaneRoute> route_lane(const ge::core::Heightfield& ground, const NetIndex& net,
                                     double x0, double z0, double side,
                                     const std::function<bool(int run)>& may,

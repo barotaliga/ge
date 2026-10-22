@@ -18,12 +18,13 @@
 // - Anything else answers `{"op":"error","error":...,"next":...}`.
 // Every answer is one line and carries the op it answers.
 //
-// THE BATCH RUNS (`ge sim`, `ge replay`, `ge state`, `ge diverge`): the pilot from the start to
-// the end, a log played back, a run's state at a step, and the first step two logs part.
+// THE BATCH RUNS (`ge sim`, `ge replay`, `ge state`, `ge diverge`, `ge shot`): the pilot from
+// the start to the end, a log played back, a run's state at a step, the first step two logs part,
+// and a still of a run at a step.
 //
 // ge:summary The play session over a Run: the line protocol, the pilot, replay, state, diverge
 // ge:keywords play session protocol observe act pilot state inputs end replay diverge divergence
-// ge:keywords pilot_run state_at first-difference field-diff hello
+// ge:keywords pilot_run state_at first-difference field-diff hello shot_at still view caption
 // ge:skill agent-interface
 // ge:test tests/play_session_test.cpp
 #pragma once
@@ -125,6 +126,20 @@ struct Divergence {
 // the runs differ, with the fields of `state` that differ there.
 std::optional<Divergence> diverge(const GameSpec& spec, const InputLog& a, const InputLog& b,
                                   std::string& error);
+
+// A still of a run: `view` after `step` steps, framed with its caption band (lab.hpp's
+// `framed`: the title, the game's caption, the seed, the options, the step and the digest).
+struct Still {
+  lab::Picture picture;
+  std::string view;
+  std::string caption;  // the game's own line
+  int64_t step = 0;
+  uint64_t digest = 0;  // the run's digest at `step`
+};
+
+// `log` played to `step` and its view `view` drawn ("" the spec's first view).
+std::optional<Still> shot_at(const GameSpec& spec, const InputLog& log, int64_t step,
+                             std::string_view view, std::string& error);
 
 // A JSON string: quotes and backslashes escaped, newlines as \n, other control bytes dropped.
 std::string quote(std::string_view s);

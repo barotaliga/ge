@@ -1,17 +1,17 @@
 // LAB `cli-loop`: the ge command line as an agent meets it, measured. It scaffolds a game repo in
 // a scratch directory and runs the loop's commands that need no compiler (help, help --json,
-// new, add system, add lab, add test, use, doctor, find, explain) through the same code the ge
-// executable runs, printing each answer as text the way an agent reads it. For each command it
-// reports the answer's lines and bytes and how long it took, and it fails a command whose text
-// answer outgrows its budget: an agent pays for every line ge prints. Only the catalog's shape
-// (its commands and flags) is in the digest: the answers carry the version, name paths and read
-// the engine's tags, which releases and changes move, so they are measured (printed and compared
-// with --compare, never hashed).
-// Building and testing a scaffolded repo for real is the packaging workflow's `scaffold` job.
+// new, add system, add lab, add test, use, doctor, find, explain, golden diff) through the same
+// code the ge executable runs, printing each answer as text the way an agent reads it. For each
+// command it reports the answer's lines and bytes and how long it took, and it fails a command
+// whose text answer outgrows its budget: an agent pays for every line ge prints. Only the catalog's
+// shape (its commands and flags) is in the digest: the answers carry the version, name paths and
+// read the engine's tags, which releases and changes move, so they are measured (printed and
+// compared with --compare, never hashed). Building and testing a scaffolded repo for real is the
+// packaging workflow's `scaffold` job.
 //
 // ge:summary Lab: the ge commands of an agent's loop run on a scaffolded repo; answer sizes, times
 // ge:keywords lab cli ge loop output-size budget agent tokens help json new add use doctor find
-// ge:keywords explain bench
+// ge:keywords explain golden-diff bench
 // ge:skill agent-interface labs
 // ge:test tests/cli_commands_test.cpp
 #include <chrono>
@@ -22,6 +22,8 @@
 #include "cli/add.hpp"
 #include "cli/commands.hpp"
 #include "cli/doctor.hpp"
+#include "cli/finding.hpp"
+#include "cli/golden.hpp"
 #include "cli/index.hpp"
 #include "cli/outcome.hpp"
 #include "cli/scaffold.hpp"
@@ -135,6 +137,16 @@ void run(ge::lab::Lab& lab) {
          Det::measured);
   record("explain", "ge explain",
          timed("ge explain", [&] { return run_explain(repo, "", "make_rng"); }), 30, Det::measured);
+  // A golden file of 40 rows, every one new to git: the answer shows a few rows and counts the
+  // rest, whatever the file's size.
+  std::string golden = "# seed time-bits digest\n";
+  for (int i = 0; i < 40; i++) golden += std::to_string(i) + " 405e000000000000 0123456789abcdef\n";
+  std::string error;
+  write_text(repo / "tests/golden/wind.txt", golden, error);
+  record("golden-diff", "ge golden diff",
+         timed("ge golden diff",
+               [&] { return run_golden_diff(repo, {"tests/golden/wind.txt"}, "HEAD"); }),
+         30, Det::measured);
   fs::remove_all(dir, ec);
 }
 

@@ -1,6 +1,6 @@
 // THE `play` EXECUTABLE: a game's play target is its GE_GAME file, its simulation and a `main`
-// that calls `play_main`. `ge play`, `ge sim`, `ge replay`, `ge state`, `ge diverge`, `ge bench`,
-// `ge profile` and `ge mem` build it and run it; it can be run by hand too:
+// that calls `play_main`. `ge play`, `ge sim`, `ge replay`, `ge state`, `ge diverge`, `ge shot`,
+// `ge bench`, `ge profile` and `ge mem` build it and run it; it can be run by hand too:
 //
 //   play [--stdio] [--seed=S] [--<option>=V] [--inputs=F]   the line protocol on stdin/stdout;
 //                                                           --inputs writes the log at the end
@@ -12,12 +12,16 @@
 //   play bench [--seeds=A,B | <log>...] [--repeats=5]       each step timed, per zone, with its
 //              [--steps=N] [--<option>=V] [--out=DIR]       allocations (bench.hpp); the series
 //                                                           and spans files in DIR
+//   play shot [<log> | --seed=S] [--step=N] [--view=V]      a still of the run at step N (the end
+//             [--<option>=V] [--out=DIR]                    by default): the view framed with its
+//                                                           caption band, a PNG in DIR
 //
 // Every command but the protocol prints exactly one JSON object on one line. A problem prints
 // `{"error":...,"where":...,"next":...}`; the exit code is 0 done, 1 a problem (a replay that
 // misses its digest, two runs that diverge), 2 a usage error.
 //
-// ge:summary The play executable's main: the protocol, describe, sim, replay, state, diverge, bench
+// ge:summary The play executable's main: protocol, describe, sim, replay, state, diverge, bench
+// ge:summary and shot
 // ge:keywords play main executable command-line describe sim replay state diverge bench
 // ge:keywords play_main
 // ge:skill agent-interface

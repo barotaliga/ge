@@ -1,0 +1,126 @@
+// The definitions behind game.hpp: the loop of gates laid off the seed, the car's drive, turn and
+// grip, taking the gates and closing the laps, the autopilot and the digest (skill: sim-system).
+//
+// ge:summary The racer's step: gates off the seed, the car's drive and grip, the laps, the pilot
+// ge:keywords sim step gates laps grip drag turn autopilot digest fnv
+// ge:skill sim-system
+// ge:test tests/sim_game_test.cpp
+#include "sim/game.hpp"
+
+#include <algorithm>
+#include <cmath>
+
+#include "core/libm/libm.hpp"
+#include "core/math.hpp"
+
+namespace {{ident}}::sim {
+
+namespace {
+
+namespace libm = ge::core::libm;
+
+constexpr double kRadius = 60;        // m: the loop's mean radius
+constexpr double kRadiusSpread = 18;  // m: each gate's own, either way
+constexpr double kEngine = 9;         // m/s² at full throttle
+constexpr double kBrake = 18;         // m/s² at full brake
+constexpr double kDrag = 0.012;       // 1/m: the air, times speed²
+constexpr double kRoll = 0.4;         // m/s²: the tyres, while moving
+constexpr double kTurn = 1.4;         // rad/s at full steer, once the car rolls
+constexpr double kGrip = 11;          // m/s²: the most sideways the tyres hold
+
+void mix(uint64_t& h, const void* bytes, size_t n) {
+  const auto* p = static_cast<const unsigned char*>(bytes);
+  for (size_t i = 0; i < n; i++) {
+    h ^= p[i];
+    h *= 0x100000001b3ull;
+  }
+}
+
+}  // namespace
+
+GameState create_game(uint32_t seed) {
+  GameState s;
+  s.seed = seed;
+  s.rng = ge::core::make_rng(seed);
+  // Clockwise from above round the loop's centre, each gate at a radius of its own.
+  for (int i = 0; i < kGates; i++) {
+    const double a = ge::core::kTau * i / kGates;
+    const double r = kRadius + ge::core::range(s.rng, -kRadiusSpread, kRadiusSpread);
+    s.gates[static_cast<size_t>(i)] = {r * libm::sin(a), r * libm::cos(a)};
+  }
+  // On the start gate, facing the first.
+  const Gate& g0 = s.gates[0];
+  const Gate& g1 = s.gates[1];
+  s.x_m = g0.x_m;
+  s.z_m = g0.z_m;
+  s.heading = libm::atan2(g1.x_m - g0.x_m, g1.z_m - g0.z_m);
+  return s;
+}
+
+void step(GameState& s, const Input& in) {
+  const double steer = ge::core::clamp(in.steer, -1, 1);
+  const double throttle = ge::core::clamp(in.throttle, 0, 1);
+  const double brake = ge::core::clamp(in.brake, 0, 1);
+  if (finished(s)) {
+    s.speed_mps = 0;
+  } else {
+    double accel = throttle * kEngine - kDrag * s.speed_mps * s.speed_mps;
+    if (s.speed_mps > 0) accel -= kRoll + brake * kBrake;
+    s.speed_mps = ge::core::clamp(s.speed_mps + accel * kDt, 0, 1e3);
+  }
+  // The turn: the wheel's rate, eased in from a standstill, never past what the grip holds.
+  double rate = steer * kTurn * ge::core::clamp(s.speed_mps / 4, 0, 1);
+  if (s.speed_mps > 0) rate = ge::core::clamp(rate, -kGrip / s.speed_mps, kGrip / s.speed_mps);
+  s.heading = ge::core::angle_diff(0, s.heading + rate * kDt);
+  s.vx_mps = s.speed_mps * libm::sin(s.heading);
+  s.vz_mps = s.speed_mps * libm::cos(s.heading);
+  s.x_m += s.vx_mps * kDt;
+  s.z_m += s.vz_mps * kDt;
+  s.steps++;
+  if (finished(s)) return;
+  const Gate& g = s.gates[static_cast<size_t>(s.next_gate)];
+  if (ge::core::hypot(g.x_m - s.x_m, g.z_m - s.z_m) < kGateRadius) {
+    if (s.next_gate == 0) {
+      s.laps++;
+      if (s.laps == kLaps) s.finish_step = s.steps;
+    }
+    s.next_gate = (s.next_gate + 1) % kGates;
+  }
+}
+
+bool finished(const GameState& s) { return s.finish_step >= 0; }
+
+Input autopilot(const GameState& s) {
+  const Gate& g = s.gates[static_cast<size_t>(s.next_gate)];
+  const double dx = g.x_m - s.x_m, dz = g.z_m - s.z_m;
+  const double off = ge::core::angle_diff(s.heading, libm::atan2(dx, dz));
+  // The arc that meets the gate from here has radius d / (2 sin |off|); the speed that arc
+  // allows is the lower of what the wheel turns (v = R * rate) and what the grip holds
+  // (v = sqrt(grip * R)), with a margin.
+  const double sin_off = std::abs(libm::sin(off));
+  const double radius = sin_off > 1e-6 ? ge::core::hypot(dx, dz) / (2 * sin_off) : 1e6;
+  const double want = 0.85 * std::min(radius * kTurn, std::sqrt(kGrip * radius));
+  Input in;
+  in.steer = ge::core::clamp(off * 3, -1, 1);
+  in.throttle = s.speed_mps < want ? 1 : 0;
+  in.brake = s.speed_mps > want + 2 ? 1 : 0;
+  return in;
+}
+
+uint64_t digest(const GameState& s) {
+  uint64_t h = 0xcbf29ce484222325ull;
+  mix(h, &s.seed, sizeof s.seed);
+  mix(h, &s.steps, sizeof s.steps);
+  mix(h, &s.rng.a, sizeof s.rng.a);
+  for (const Gate& g : s.gates) {
+    mix(h, &g.x_m, sizeof g.x_m);
+    mix(h, &g.z_m, sizeof g.z_m);
+  }
+  for (const double* v : {&s.x_m, &s.z_m, &s.heading, &s.speed_mps}) mix(h, v, sizeof *v);
+  mix(h, &s.next_gate, sizeof s.next_gate);
+  mix(h, &s.laps, sizeof s.laps);
+  mix(h, &s.finish_step, sizeof s.finish_step);
+  return h;
+}
+
+}  // namespace {{ident}}::sim

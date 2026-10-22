@@ -26,8 +26,12 @@ constexpr FlagSpec kDryRun{"dry-run", "", "say what would be written, write noth
 constexpr FlagSpec kNewFlags[] = {
     {"name", "<kebab>", "the game's name (default: the directory's)"},
     {"engine-sha256", "<hex>", "the release's -src.tar.gz checksum, pinned with it"},
+    {"game", "<demo|racer>",
+     "the game it starts as: demo (a body on a field) or racer (a car round a loop of gates)"},
 };
 constexpr FlagSpec kRepoOnly[] = {kRepo};
+constexpr FlagSpec kUpgradeFlags[] = {
+    {"engine-sha256", "<hex>", "the new release's -src.tar.gz checksum, pinned with it"}, kRepo};
 constexpr FlagSpec kSyncFlags[] = {{"force", "", "rewrite engine skills edited by hand"}, kRepo};
 constexpr FlagSpec kLessonsFlags[] = {
     {"scope", "<path>", "only lessons whose scope overlaps this path"}, kRepo};
@@ -47,6 +51,19 @@ constexpr FlagSpec kLabFlags[] = {
     {"smoke", "", "run at the lab's smoke flags"},
     {"tag", "<name>", "keep this run under previews/<id>@<name>/ for a later --compare"},
     {"compare", "<name>", "set every metric beside the run tagged <name>"},
+    kEngine,
+    kRepo};
+
+constexpr FlagSpec kDigestFlags[] = {
+    {"write", "", "rewrite the lab's row of tests/labs_digests.txt (every row with no lab)"},
+    kPreset,
+    kEngine,
+    kRepo};
+constexpr FlagSpec kGoldenDiffFlags[] = {
+    {"base", "<ref>", "the git ref to compare with (default HEAD)"}, kRepo};
+constexpr FlagSpec kGoldenWriteFlags[] = {
+    {"preset", "<debug|release>",
+     "the CMake preset (default release: a golden's full run is the release build's)"},
     kEngine,
     kRepo};
 
@@ -92,6 +109,13 @@ constexpr FlagSpec kAssetBuildFlags[] = {
     kRepo};
 constexpr FlagSpec kStateFlags[] = {
     {"step", "<n>", "after this many steps (default: the log's end)"}, kPreset, kEngine, kRepo};
+constexpr FlagSpec kShotFlags[] = {
+    {"seed", "<n>", "without a log: the pilot plays this seed first (default 1)"},
+    {"step", "<n>", "after this many steps (default: the run's end)"},
+    {"view", "<name>", "which picture (default: the game's first; ge shot lists them)"},
+    kPreset,
+    kEngine,
+    kRepo};
 constexpr FlagSpec kGraphFlags[] = {
     {"kind", "<auto|line|scatter|hist|box|heat|spans>",
      "the chart (default auto: spans for a spans file, line for the rest)"},
@@ -132,7 +156,7 @@ const CommandSpec kCommands[] = {
      "ge lessons labs --scope=sim/", "skill-reflection"},
     {"new", "<dir>", 1, 1, "create",
      "a game repo against this engine release: the simulation, a lab, a test, the skills",
-     kNewFlags, "ge new snow-racer", "ge"},
+     kNewFlags, "ge new snow-racer --game=racer", "ge"},
     {"use", "<plugin>", 1, 1, "create",
      "link one of the engine's plugins into the game and install its skill", kRepoOnly,
      "ge use racing", "engine"},
@@ -152,6 +176,18 @@ const CommandSpec kCommands[] = {
     {"check", "", 0, 0, "build",
      "the whole gate in one call: format, doctor, build, tests and labs", kBuildFlags,
      "ge check --json", "commit"},
+    {"digest", "[<lab>]", 0, 1, "build",
+     "a lab (or every lab) at its smoke flags, twice: each digest beside the committed baseline; "
+     "--write moves only that lab's row",
+     kDigestFlags, "ge digest wind-sweep --write", "labs"},
+    {"golden diff", "[<golden|test>...]", 0, -1, "build",
+     "each golden file against git's --base: the rows that changed and, column by column, what "
+     "moved in them",
+     kGoldenDiffFlags, "ge golden diff sim_game_test --base=origin/main", "sim-system"},
+    {"golden write", "<test>", 1, 1, "build",
+     "rewrite a test's golden files (the test run with GE_GOLDEN_WRITE=1), hold them, and show "
+     "what moved",
+     kGoldenWriteFlags, "ge golden write sim_wind_test", "sim-system"},
     {"lab", "[<id>]", 0, 1, "see",
      "list the labs, or run one: its metrics, tables, captioned pictures and digest; its own "
      "flags go after --",
@@ -160,6 +196,10 @@ const CommandSpec kCommands[] = {
      "chart series or spans files (a trace, a bench, a profile) to PNG and SVG; several files "
      "overlay; every outlier comes back as a note",
      kGraphFlags, "ge graph runs/before.tsv runs/after.tsv --columns=step_ms", "debug"},
+    {"shot", "[<log>]", 0, 1, "see",
+     "a still of a run at a step, drawn headless and captioned (seed, options, step, digest): "
+     "a log played to --step, or the pilot's run of --seed; the game's options go after --",
+     kShotFlags, "ge shot runs/fall_line-38.inputs --step=1200 --view=near", "play-test"},
     {"play", "", 0, 0, "play",
      "play the game over the line protocol on this terminal (observe, act, pilot, state, "
      "inputs, end); the game's options go after --",
@@ -210,6 +250,10 @@ const CommandSpec kCommands[] = {
      kRepoOnly, "ge doctor", "ge"},
     {"skills sync", "", 0, 0, "maintain", "the engine's skills, rewritten to this engine release",
      kSyncFlags, "ge skills sync", "engine"},
+    {"upgrade", "", 0, 0, "maintain",
+     "move the repo onto this ge's engine release: the pin rewritten, the skills synced, the repo "
+     "doctored; run it with the new release's ge",
+     kUpgradeFlags, "ge upgrade --engine-sha256=<hex>", "engine"},
 };
 
 constexpr FlagSpec kGlobal[] = {
@@ -323,11 +367,11 @@ std::optional<std::string> check_args(const Args& a) {
            (c.args.empty() ? std::string("no arguments") : std::string(c.args)) + ", got " +
            std::to_string(n) + " word(s)";
   }
-  static constexpr std::string_view kPassing[] = {"lab",     "play", "sim",  "bench",
-                                                  "profile", "mem",  "leaks"};
+  static constexpr std::string_view kPassing[] = {"lab",   "play",    "sim", "shot",
+                                                  "bench", "profile", "mem", "leaks"};
   if (!a.passthrough.empty() &&
       std::find(std::begin(kPassing), std::end(kPassing), c.name) == std::end(kPassing)) {
-    return "only ge lab, play, sim, bench, profile, mem and leaks pass words after --";
+    return "only ge lab, play, sim, shot, bench, profile, mem and leaks pass words after --";
   }
   return std::nullopt;
 }

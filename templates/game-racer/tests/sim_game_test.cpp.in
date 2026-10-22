@@ -1,0 +1,47 @@
+// The simulation's contract: a run replays to the same bits from its seed and inputs, seeds lay
+// different loops, the step's clock is the step count, and the autopilot finishes the race
+// (sim/game.hpp; skill: sim-system).
+//
+// ge:summary Tests: replays bit for bit, seeds differ, the step is the clock, the pilot finishes
+// ge:keywords test sim determinism replay digest seed step racer laps autopilot
+// ge:skill sim-system
+// ge:test tests/sim_game_test.cpp
+#include "check.hpp"
+#include "sim/game.hpp"
+
+using namespace {{ident}}::sim;
+
+namespace {
+
+GameState run(uint32_t seed, int steps) {
+  GameState s = create_game(seed);
+  for (int k = 0; k < steps; k++) step(s, autopilot(s));
+  return s;
+}
+
+}  // namespace
+
+TEST(a_run_replays_bit_for_bit) {
+  const GameState a = run(38, 1200);
+  const GameState b = run(38, 1200);
+  CHECK(digest(a) == digest(b));
+  CHECK_BITS(a.x_m, b.x_m);
+}
+
+TEST(seeds_differ) { CHECK(digest(run(1, 600)) != digest(run(2, 600))); }
+
+TEST(the_step_count_is_the_clock) {
+  const GameState s = run(7, 360);
+  CHECK_MSG(s.steps == 360,
+            "steps " + std::to_string(s.steps) +
+                ", want 360: step() must advance the clock once; skill: sim-system");
+}
+
+TEST(the_autopilot_finishes_every_seed) {
+  for (const uint32_t seed : {1u, 2u, 3u, 38u}) {
+    const GameState s = run(seed, 120 * 120);
+    CHECK_MSG(finished(s), "seed " + std::to_string(seed) + " ended on lap " +
+                               std::to_string(s.laps) + ", gate " + std::to_string(s.next_gate) +
+                               ": the pilot or the grip lost the loop; skill: sim-system");
+  }
+}

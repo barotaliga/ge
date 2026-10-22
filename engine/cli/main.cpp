@@ -9,8 +9,8 @@
 //
 // ge:summary The ge executable: parses the command line against the catalog and runs each command
 // ge:keywords cli ge main command-line usage dispatch help version new find explain use add
-// ge:keywords build test check lab graph doctor skills lessons json bench profile mem leaks
-// ge:keywords asset blender
+// ge:keywords build test check digest golden lab graph shot upgrade doctor skills lessons json
+// ge:keywords bench profile mem leaks asset blender
 // ge:skill agent-interface
 // ge:test tests/cli_commands_test.cpp
 #include <algorithm>
@@ -24,6 +24,7 @@
 #include "cli/commands.hpp"
 #include "cli/doctor.hpp"
 #include "cli/embedded.hpp"
+#include "cli/golden.hpp"
 #include "cli/graph.hpp"
 #include "cli/index.hpp"
 #include "cli/json.hpp"
@@ -32,6 +33,7 @@
 #include "cli/play.hpp"
 #include "cli/scaffold.hpp"
 #include "cli/skills.hpp"
+#include "cli/upgrade.hpp"
 
 namespace {
 
@@ -71,11 +73,15 @@ Outcome cmd_help(const Args& a) {
 }
 
 Outcome cmd_new(const Args& a) {
-  const NewResult r = new_game({a.words[0], flag_value(a, "name"), flag_value(a, "engine-sha256")});
+  NewOptions n{a.words[0], flag_value(a, "name"), flag_value(a, "engine-sha256")};
+  if (const std::string game = flag_value(a, "game"); !game.empty()) n.game = game;
+  const NewResult r = new_game(n);
   Outcome o;
   o.findings = r.findings;
   o.written = r.written;
-  o.result = json_obj({{"dir", json_str(a.words[0])}, {"engine", json_str(engine_version())}});
+  o.result = json_obj({{"dir", json_str(a.words[0])},
+                       {"game", json_str(n.game)},
+                       {"engine", json_str(engine_version())}});
   o.summary = "scaffolded " + a.words[0] + " against engine " + std::string(engine_version()) +
               "; its AGENTS.md is the router";
   o.next = "cd " + a.words[0] + " && git init && ge check";
@@ -138,6 +144,20 @@ Outcome run(const Args& a) {
   if (name == "lessons") return cmd_lessons(a);
   if (name == "new") return cmd_new(a);
   if (name == "use") return run_use(repo_of(a), a.words[0]);
+  if (name == "upgrade") {
+    const UpgradeResult r = upgrade(repo_of(a), flag_value(a, "engine-sha256"));
+    Outcome o;
+    o.findings = r.findings;
+    o.written = r.written;
+    o.result = json_obj({{"from", json_str(r.from)}, {"to", json_str(r.to)}});
+    o.summary = r.from == r.to ? "the repo already pins engine " + r.to + "; its skills match it"
+                               : "moved the pin from engine " + r.from + " to " + r.to +
+                                     " and synced its skills";
+    o.next = "read the release notes (" + std::string(kEngineRepo) +
+             "/releases), then ge check "
+             "and every lab with --compare=before (skill: engine, its Upgrade steps)";
+    return o;
+  }
   if (name.starts_with("add ")) {
     return run_add(repo_of(a), name.substr(4), a.words[0], flag_value(a, "kind"),
                    has_flag(a, "dry-run"));
@@ -145,6 +165,13 @@ Outcome run(const Args& a) {
   if (name == "build") return run_build(build_options(a));
   if (name == "test") return run_test(build_options(a), flag_value(a, "filter"));
   if (name == "check") return run_check(build_options(a));
+  if (name == "digest") {
+    return run_digest(build_options(a), a.words.empty() ? "" : a.words[0], has_flag(a, "write"));
+  }
+  if (name == "golden diff") {
+    return run_golden_diff(fs::absolute(repo_of(a)), a.words, flag_value(a, "base", "HEAD"));
+  }
+  if (name == "golden write") return run_golden_write(build_options(a, "release"), a.words[0]);
   if (name == "lab") {
     LabOptions lab;
     lab.id = a.words.empty() ? "" : a.words[0];
@@ -158,6 +185,10 @@ Outcome run(const Args& a) {
   if (name == "replay") return run_replay(build_options(a), a.words[0]);
   if (name == "state") return run_state(build_options(a), a.words[0], flag_value(a, "step"));
   if (name == "diverge") return run_diverge(build_options(a), a.words[0], a.words[1]);
+  if (name == "shot") {
+    return run_shot(build_options(a), a.words.empty() ? "" : a.words[0], flag_value(a, "seed"),
+                    flag_value(a, "step"), flag_value(a, "view"), a.passthrough);
+  }
   if (name == "bench" || name == "profile" || name == "mem" || name == "leaks") {
     PerfOptions p;
     p.seeds = flag_value(a, "seeds");
@@ -224,7 +255,10 @@ Outcome run(const Args& a) {
 // builds (build/<preset>/ge), so the rules and the skills are always the pinned release's. The
 // pinned ge's version matches the pin, so it never hands on again. -1: run here.
 int hand_to_pinned(const Args& a, int argc, char** argv) {
-  if (a.command && (a.command->name == "new" || a.command->name == "help")) return -1;
+  if (a.command &&
+      (a.command->name == "new" || a.command->name == "help" || a.command->name == "upgrade")) {
+    return -1;
+  }
   const fs::path repo = repo_of(a);
   const auto pin = read_pin(repo);
   if (!pin || pin->version == engine_version()) return -1;
