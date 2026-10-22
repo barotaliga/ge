@@ -83,6 +83,13 @@ constexpr FlagSpec kLeakFlags[] = {
     {"preset", "<debug|release>", "the CMake preset (default debug: its sanitizers find leaks)"},
     kEngine,
     kRepo};
+constexpr FlagSpec kAssetBuildFlags[] = {
+    {"blender", "<cmd>",
+     "the Blender, or a Python with bpy (default: GE_BLENDER, `blender`, a python3 with bpy)"},
+    {"force", "", "with no names, rebuild every asset, fresh or not"},
+    kPreset,
+    kEngine,
+    kRepo};
 constexpr FlagSpec kStateFlags[] = {
     {"step", "<n>", "after this many steps (default: the log's end)"}, kPreset, kEngine, kRepo};
 constexpr FlagSpec kGraphFlags[] = {
@@ -186,6 +193,18 @@ const CommandSpec kCommands[] = {
      "the pilot's run under the leak checker (the debug build's sanitizers, or valgrind); each "
      "block never freed a finding at its first frame in the repo",
      kLeakFlags, "ge leaks --seeds=38", "perf"},
+    {"asset list", "", 0, 0, "see",
+     "the repo's built assets (each assets/<name>/asset.txt): the model, its size against its "
+     "budget, and whether it is fresh against its sources",
+     kBuildFlags, "ge asset list --json", "assets"},
+    {"asset build", "[<name>...]", 0, -1, "create",
+     "build models in headless Blender from their Python builders and the game's data, then "
+     "stamp and check each one; no names builds every stale one",
+     kAssetBuildFlags, "ge asset build skier", "assets"},
+    {"asset check", "", 0, 0, "build",
+     "every committed model against its stamp (older than its sources?) and its size budget, "
+     "and loaded; each problem a finding",
+     kBuildFlags, "ge asset check", "assets"},
     {"doctor", "", 0, 0, "maintain",
      "the repo against the engine's rules: guidance, skills, the pin, flags, sources, messages",
      kRepoOnly, "ge doctor", "ge"},

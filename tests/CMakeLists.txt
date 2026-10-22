@@ -75,6 +75,10 @@ foreach(src ${GE_TEST_SOURCES})
   endif()
 endforeach()
 
+# Every committed model against its stamp and its size budget, and loaded (engine/assets/
+# manifest.hpp): a model older than its sources or over its budget fails here.
+add_test(NAME assets_check COMMAND assets check --root=${PROJECT_SOURCE_DIR})
+
 # Every lab at its smoke flags, twice in one process (a digest that moves between the two runs
 # is a determinism break), and each digest against the committed baseline, which the same code
 # must reproduce on every compiler row (docs/labs.md § Digests; `make labs-digests` rewrites it).

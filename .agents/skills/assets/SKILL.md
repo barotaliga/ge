@@ -1,6 +1,6 @@
 ---
 name: assets
-description: "Use for engine/assets in gameengine2 and anything that brings an authored model into a game: the glTF 2.0 loader (cgltf, cmake/Cgltf.cmake), the Model it fills (skinned meshes, the skeleton, materials, baked clips), the engine's frame and the mirror from glTF's, posing and the bone palette, CPU skinning and the reach box, GPU skinning into an instance family (render/skinning.hpp), the `models` lab (bind, filmstrips, onion skins, joint-angle graphs), exporting from Blender, and a model's size in the repository."
+description: "Use for engine/assets in gameengine2 and anything that brings an authored model into a game: the glTF 2.0 loader (cgltf, cmake/Cgltf.cmake), the Model it fills (skinned meshes, the skeleton, materials, baked clips), the engine's frame and the mirror from glTF's, posing and the bone palette, CPU skinning and the reach box, GPU skinning into an instance family (render/skinning.hpp), the `models` lab (bind, filmstrips, onion skins, joint-angle graphs), building a model in headless Blender with `ge asset` (the manifest, the builder and ge_asset.py, GE_ASSET_DATA, the stamp, the size budget, the assets_check test), and a model's size in the repository."
 ---
 
 # Assets
@@ -68,25 +68,55 @@ What comes back, and how to read it:
   A spike is a pop or a jolt at that time.
 - The metrics: weights that do not sum to 1 and influences naming no joint fail the lab.
 
-## Exporting from Blender
+## Building a model: `ge asset`
 
-The builders that make the game's models in Blender, and the `ge asset` command that drives it
-headless, are their own roadmap row (`docs/goals.md`, M8g). Until then, the export rules a model
-must meet:
+A model the game ships is BUILT, never hand-exported: a Blender Python builder makes it off the
+game's own data, `ge asset build` runs it headless, and the `.glb` is committed beside a stamp
+(`engine/assets/manifest.hpp` states the rules; `plugins/skier/assets/skier/` is the worked
+example).
 
-- Apply the object transforms. Triangulate. Export normals for smooth shading; a mesh exported
-  without normals is made faceted.
-- At most four influences a vertex, normalised. One rest pose for every skin.
-- **Bake the action at 60 frames a second** (the scene's frame rate, or the exporter's sampling
-  rate). A clip sampled at 24 is a run of straight lines, and the 60 Hz bake turns every kink
-  into an acceleration spike in the lab's graph.
-- glb, base colour factors, no textures.
+```
+<home>/assets/<name>/
+  asset.txt     builder: build.py / data: <set> / source: <file> / budget-kib: <n>
+  build.py      imports ge_asset (engine/assets/blender/ge_asset.py, compiled into ge)
+  data.cpp      GE_ASSET_DATA({"<set>", "<what>", make}): the game's numbers as JSON
+  <name>.glb    the model, as built
+  <name>.stamp  the hash of the builder, every source and the data; the Blender that built it
+```
+
+```sh
+make ge ARGS="asset list"                 # every asset, its weight against its budget, fresh?
+GE_BLENDER=python3.13 PYTHONPATH=~/.cache/bpy make ge ARGS="asset build skier"
+make ge ARGS="asset check"                # what the assets_check test checks
+make lab LAB=models ARGS="--model=plugins/skier/assets/skier/skier.glb"   # then LOOK
+```
+
+- **The data is the point.** A builder reads every number it shares with the code (a skeleton's
+  joints, a ski's length and sidecut) from its data set, never a copy typed into the script, so
+  a change in the code makes the model stale and `assets_check` fails until it is rebuilt. The
+  skier's skeleton is `plugins/skier/app/rig.hpp`; `tests/skier_rig_test.cpp` holds the built
+  model's joints to it.
+- **Blender in the container** is the bpy module: `python3.13 -m pip install --target
+  ~/.cache/bpy bpy==5.2.2` (about 1 GB, 20 s), then `GE_BLENDER=python3.13
+  PYTHONPATH=~/.cache/bpy`. In the bpy module `bmesh` exists only after `import bpy`.
+- **Work in the engine's frame.** `ge_asset.to_blender` turns (x right, y up, z forward) into
+  Blender's (the front toward -y, the right toward -x), and the export and the loader turn it
+  back, so the model faces heading 0. Set the weights yourself (`MeshBuilder`'s `{joint:
+  weight}` a vertex) rather than Blender's automatic ones: the same data then gives the same
+  bytes, which is what makes a rebuild with no change a no-op in git.
+- **Bones from joints.** `ge_asset.armature` puts a bone at every joint, its tail at the first
+  child, so the loaded model has one joint a bone by the game's names, plus one for the
+  armature object and one for the mesh node.
+- The export rules still hold for anything authored: normals for smooth shading, at most four
+  influences a vertex, one rest pose a skin, an action baked at **60 frames a second** (24 shows
+  as a row of kinks in the lab), glb with base colour factors and no textures.
 
 ## A model's size in the repository
 
-A `.glb` does not diff, so every re-export adds a whole copy to the history. Commit only the
-game-budget LODs (never a `.blend`, a render or a source-detail mesh), re-export only when the
-model's sources change, and hold every model to a size budget in a test (the M8g row lands it).
+A `.glb` does not diff, so every rebuild adds a whole copy to the history. Commit only the
+game-budget LODs (never a `.blend`, a render or a source-detail mesh), rebuild only when the
+stamp says the sources moved (`ge asset build` with no names builds only the stale), and keep
+every model under its manifest's `budget-kib`; raising a budget is a decision the PR states.
 
 ## Where to look
 
@@ -97,6 +127,11 @@ model's sources change, and hold every model to a size budget in a test (the M8g
 | `engine/assets/gltf_write.hpp` | A Model written as a .glb, for the tests and the labs |
 | `engine/assets/pose.hpp` | Clip sampling, the palette, CPU skinning, the reach, the turn from rest |
 | `engine/assets/test_model.hpp` | The test model: a skinned limb, a rigid fin, two clips |
+| `engine/assets/manifest.hpp` | A built asset: the manifest, the stamp, the budget, the check |
+| `engine/assets/data.hpp` | `GE_ASSET_DATA`: the game data a builder is fed |
+| `engine/assets/tool.hpp` | The `assets` executable: list, data, check, stamp |
+| `engine/assets/blender/ge_asset.py` | The builders' library: start, the frame, bones, meshes, export |
+| `engine/cli/asset.hpp` | `ge asset list`, `build`, `check`: finding Blender, the run, the stamp |
 | `engine/render/skinning.hpp` | The GPU pass, the family LOD, the CPU twin |
 | `engine/lab/labs/assets_models_lab.cpp` | The `models` lab |
 | `cmake/Cgltf.cmake` | The cgltf pin |
