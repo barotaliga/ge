@@ -23,7 +23,7 @@ fast chase camera close to the ground. Per frame, at the top of its picture ladd
 | Vegetation | 30–40 thousand instanced trees in a few shapes, three levels of detail plus impostor cards | The CPU cost of choosing and sending instances, and the shadow pass that draws them all again |
 | Props and buildings | Lifts and their moving carriers, a village, gates, fences: hundreds of instanced meshes | Draw submission; per-instance culling, not per-mesh |
 | Figures | The player, a few rivals, and up to a few hundred people in a crowd, all skinned | Skinning once and drawing many times (main view and shadows) |
-| Snow marks | Trail and deformation maps stamped from the simulation's contacts every frame | Render-to-texture or compute writes, in a window that follows the camera |
+| Snow marks | Trail maps stamped from the skiers' prints every frame | Render-to-texture with max blending, a fine window that follows the camera redrawn from the stamps' history, and a coarse map over the whole mountain |
 | Particles | Tens of thousands of spray, snowfall and cloud particles | Overdraw of soft transparent quads; simulated on the GPU |
 | Sky | A physical atmosphere, a raymarched cloud volume, a night sky, aerial perspective on every material | Lookup tables computed on the GPU; a temporal cloud buffer |
 | Light | One sun or moon, the sky's light, at most a handful of point lamps at night | No need for a many-light pipeline |
@@ -392,10 +392,33 @@ where its facet lines the sun up with the eye, written to the reactive mask so T
 On the software adapter at 1280x720 the snow costs the terrain pass about 17 % over the plain
 albedo (the `profile` lab's `--snow=0`).
 
-Snow marks are two **toroidal textures** that follow the camera: the trail map (where
-the snow was cut and packed) and the deformation field (how high the snow stands).
-A compute pass stamps each contact as a capsule into them, and wraps the addressing
-instead of copying the texture as the window moves.
+**As built (M8b): the snow marks.** Every skier's skis lay two capsules a frame
+(`plugins/skier/app/tracks.hpp`: a stance apart, the outside ski of a turn the deeper, a carve
+narrower, a skid wider and shallower, a scuff on the piste and a hand's furrow in loose snow),
+kept in two RGBA8 maps in `plugins/mountain/app/trails.hpp`: a coarse one over the whole map
+(about 1.5 m a texel) and a fine window round the camera (96 m at 4.7 cm a texel). Each texel holds
+the groove's depth and the berm's height, each as the root of its share of the channel's full
+scale (so a centimetre's scuff keeps some 25 levels), and the pressed floor. A render pass draws
+each capsule as an instanced quad with **max blending**: a groove ridden twice is as deep as the
+deeper, and overlapping stamps in one draw cannot race, which a compute pass writing a texture
+could not promise without atomics. Narrower than a texel, a stamp is widened and scaled by its
+coverage, so the coarse map holds a faint line. The window is not toroidal: when the camera leaves
+its middle half it is **redrawn from the stamps' history**, kept on the CPU and filed in 32 m
+buckets (a frame's worst CPU cost, 1.7 ms on a window move in `profile`), so a track laid outside
+the window comes back as sharp as it was cut. The snow's material reads the fine map inside the
+window and the coarse beyond (blended over the window's rim): the slope of berm less depth, taken
+across the larger of a texel and the pixel's footprint, bent into the normal (a groove narrower
+than a pixel fades rather than shimmers); the sky's light dimmed in a deep trough; the pressed
+floor smooth, with no grain, glitter or comb; and no berm inside a groove (the ring round one
+stamp's end crosses the next stamp's groove). A pass with nothing to stamp opens an empty compute
+pass under its name rather than loading and storing its map. Fall Line's table runs the two,
+`trails.fine` then `trails.coarse`, after `terrain.horizon`; the colour pass reads both. On the software adapter at 1280x720
+the tracks cost the terrain pass about 6 % and the two stamp passes about 0.5 ms each (the
+`profile` lab's `--trails=0`).
+
+The deformation field (the snow standing higher and lower than the ground, moving the vertices)
+is not built: the grooves are light, not geometry, and a furrow's silhouette is the case that
+would need it.
 
 ## Lighting and shadows
 
@@ -678,7 +701,7 @@ contract (scenes, captions, sheets). The renderer's half is:
 - **Offscreen frames.** A frame can render into an offscreen target of a given size,
   with no window and no surface, so a lab or a test runs headless.
 - **Named targets.** Every target in the pass table has a name (`final`, `depth`,
-  `motion`, `shadow.atlas`, `sky.view`, `snow.trail`, …). `capture(name)` reads one back
+  `motion`, `shadow.atlas`, `sky.view`, `trails.fine`, …). `capture(name)` reads one back
   to the CPU after the frame, and a debug view can show any of them on screen.
 - **Repeatable pictures.** The renderer reads time only from the `FrameView`, never a
   clock. TAA's jitter is indexed by frame number. `reset_history()` drops every temporal
@@ -699,7 +722,7 @@ contract (scenes, captions, sheets). The renderer's half is:
 | --- | --- |
 | `engine/gpu/` | The `webgpu.h` wrapper: the device and its feature tiers, RAII handles, the pipeline manifest and creation counter, timestamp queries, staging uploads, readback. The only directory that includes `webgpu.h` |
 | `engine/render/` | Mechanisms any game could use: the pass table and named targets, the frame's stats, GPU-driven instance families and their culling, the depth pyramid, the heightfield clipmap renderer, the horizon map, cascaded shadows and the shadow atlas, the sky tables and aerial perspective, the cloud volume, TAA-U, post, compute particles, skinning, and the shared WGSL library |
-| `plugins/<name>/app/` | A plugin's presentation half, shared by every game that links the plugin: `mountain/app` holds the snow material, the trail and deformation maps and their stamping, and the procedural tree shapes; `skier/app` holds the figure and the spray emitters (`docs/architecture.md` § Plugins) |
+| `plugins/<name>/app/` | A plugin's presentation half, shared by every game that links the plugin: `mountain/app` holds the snow material, the trail maps and their stamping, and the procedural tree shapes; `skier/app` holds the figure, the tracks' prints and the spray emitters (`docs/architecture.md` § Plugins) |
 | `games/fall_line/app/` | The game's own: its pass table, its quality ladder's values, its grade, and whatever draws only this game has |
 
 A piece goes in `engine/render` only if it carries no genre's words. A heightfield, an

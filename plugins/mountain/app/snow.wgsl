@@ -16,16 +16,89 @@
 //   140 m), marked reactive so TAA does not smear it; the GLARE, the sun scattered forward off
 //   the snow, broad on powder and gathered into a harder streak on the polished piste; the
 //   sky's light on the bent normal.
+// - THE TRACKS (group 3, the trail maps of trails.hpp): every groove and berm a skier has left,
+//   bent into the normal as a slope taken across the pixel's own footprint (so a groove narrower
+//   than a pixel fades instead of shimmering), the sky's light dimmed in a deep trough, and the
+//   pressed floor of a track smooth: no grain, no glitter, no comb. The fine window where it
+//   reaches, the coarse map beyond, blended over the window's outer rim.
 
 #include "render/wgsl/terrain_draw.wgsl"
 
 struct SnowParams {
   look: vec4f,   // glitter, corduroy, relief, wrap (each a gain; 1 is the tuned look)
-  look2: vec4f,  // glare, lanes, 0, 0
+  look2: vec4f,  // glare, lanes, tracks, 0
+}
+
+struct TrailRect {
+  x0: f32,
+  z0: f32,
+  span: f32,
+  texel: f32,
 }
 
 @group(3) @binding(0) var<uniform> snow: SnowParams;
 @group(3) @binding(1) var snow_ground: texture_2d<f32>;
+@group(3) @binding(2) var trail_fine: texture_2d<f32>;
+@group(3) @binding(3) var trail_coarse: texture_2d<f32>;
+@group(3) @binding(4) var<uniform> fine_rect: TrailRect;
+@group(3) @binding(5) var<uniform> coarse_rect: TrailRect;
+
+const kTrailDepth = 1.0;  // trails.hpp's kTrailDepth
+const kTrailBerm = 0.15;  // kTrailBerm
+
+// What the tracks leave at a point: the groove's depth and the berm's height (m), the pressed
+// share, and the surface's slope (dh/dx, dh/dz) they make.
+struct Track {
+  depth: f32,
+  berm: f32,
+  pressed: f32,
+  slope: vec2f,
+}
+
+// A berm stands only beside a groove, never in one: the ring round a stamp's end crosses the next
+// stamp's groove, and the maps keep the two channels' maxima apart.
+fn trail_texel(map: texture_2d<f32>, r: TrailRect, p: vec2f) -> vec3f {
+  let v = textureSampleLevel(map, linear_clamp, (p - vec2f(r.x0, r.z0)) / r.span, 0.0);
+  let depth = v.r * v.r * kTrailDepth;
+  return vec3f(depth, v.g * v.g * kTrailBerm * (1.0 - smoothstep(0.0, 0.004, depth)), v.b);
+}
+
+// One map at p: the centre, and the slope across the larger of a texel and the pixel's footprint.
+fn trail_of(map: texture_2d<f32>, r: TrailRect, p: vec2f, foot: f32) -> Track {
+  let c = trail_texel(map, r, p);
+  let e = max(r.texel, foot);
+  let xp = trail_texel(map, r, p + vec2f(e, 0.0));
+  let xm = trail_texel(map, r, p - vec2f(e, 0.0));
+  let zp = trail_texel(map, r, p + vec2f(0.0, e));
+  let zm = trail_texel(map, r, p - vec2f(0.0, e));
+  let h = vec4f(xp.y - xp.x, xm.y - xm.x, zp.y - zp.x, zm.y - zm.x);
+  var slope = vec2f(h.x - h.y, h.z - h.w) / (2.0 * e);
+  let steep = length(slope);
+  if (steep > 1.5) {
+    slope *= 1.5 / steep;
+  }
+  return Track(c.x, c.y, c.z, slope);
+}
+
+// How far inside a map's square p lies: 1 inside, falling to 0 over the outer 6 % of the span.
+fn inside(r: TrailRect, p: vec2f) -> f32 {
+  let uv = (p - vec2f(r.x0, r.z0)) / r.span;
+  return smoothstep(0.0, 0.06, min(min(uv.x, uv.y), min(1.0 - uv.x, 1.0 - uv.y)));
+}
+
+fn track_at(p: vec2f, foot: f32) -> Track {
+  let w = inside(fine_rect, p);
+  if (w >= 1.0) {
+    return trail_of(trail_fine, fine_rect, p, foot);
+  }
+  let coarse = trail_of(trail_coarse, coarse_rect, p, foot);
+  if (w <= 0.0) {
+    return coarse;
+  }
+  let fine = trail_of(trail_fine, fine_rect, p, foot);
+  return Track(mix(coarse.depth, fine.depth, w), mix(coarse.berm, fine.berm, w),
+               mix(coarse.pressed, fine.pressed, w), mix(coarse.slope, fine.slope, w));
+}
 
 fn hash3(p0: vec3f) -> vec3f {
   var p = fract(p0 * vec3f(0.1031, 0.1030, 0.0973));
@@ -100,11 +173,16 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   let rock = gm.g;
   let dir = gm.ba * 2.0 - 1.0;
   let along = clamp(length(dir), 0.0, 1.0);
-  let loose = (1.0 - 0.85 * packed) * (1.0 - rock);
   let p = g.xz;
   // m a pixel at this point (derivatives taken here, in uniform control flow).
   let dp = fwidth(p);
   let foot = max(dp.x, dp.y);
+  // The tracks: a track's floor is pressed smooth, so the loose snow's grain and glitter and the
+  // groomer's comb give way under it.
+  let tk = snow.look2.z;
+  let track = track_at(p, foot);
+  let pressed = track.pressed * tk;
+  let loose = (1.0 - 0.85 * packed) * (1.0 - rock) * (1.0 - 0.8 * pressed);
   let world = g.rel + frame.eye.xyz;
 
   // THE MICRO-RELIEF, as a slope.
@@ -117,12 +195,13 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   // Rock: a coarse, broken face.
   grad += (relief(p, 0.5, 0.6, foot, 17.0) + relief(p, 2.3, 0.08, foot, 5.0)) * rock;
   grad *= gain;
+  grad += track.slope * tk;
 
   // THE CORDUROY and THE LANES, across the piste's way.
   var shade = 1.0;
   let th = 0.5 * atan2(dir.y, dir.x);
   let across = vec2f(cos(th), -sin(th));
-  let on = packed * smoothstep(0.05, 0.5, along) * (1.0 - rock);
+  let on = packed * smoothstep(0.05, 0.5, along) * (1.0 - rock) * (1.0 - 0.7 * pressed);
   if (on > 0.01) {
     // The comb: 14 cm a rib, faded once a pixel spans a third of one; worn in patches a few
     // metres long and chipped a hand across.
@@ -147,7 +226,9 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   let v = -g.rel / max(g.dist, 1e-3);
   let ndl = dot(n, l);
   let albedo = g.albedo * shade;
-  var c = albedo / PI * (g.sun * max(ndl, 0.0) + sky_irradiance(n));
+  // A deep trough sees less of the sky.
+  let cavity = 1.0 - 0.4 * smoothstep(0.0, 0.25, track.depth * tk);
+  var c = albedo / PI * (g.sun * max(ndl, 0.0) + sky_irradiance(n) * cavity);
   // The wrap: what the terminator gains, the blue of light through a few centimetres of ice.
   let wrap = max(0.0, (ndl + 0.45) / 1.45) - max(ndl, 0.0);
   c += albedo / PI * g.sun * wrap * vec3f(0.55, 0.78, 1.0) * 0.9 * snow.look.w * (1.0 - rock);

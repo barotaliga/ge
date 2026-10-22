@@ -109,6 +109,21 @@ it moves the ground the simulation skis on; every term is light.
   on rock), the corduroy (14 cm a rib, worn in patches) and the lanes (5.2 m a swath) across the
   piste's way, the wrap's blue terminator, the glare (forward scatter, harder on the piste) and
   the glitter (one crystal at most a cell, a point, written to the reactive mask).
+- THE TRAIL MAP (`trails.hpp`, `trails.wgsl`, M8b): every track laid this run. A coarse RGBA8 map
+  over the whole map and a fine window round the camera; each texel the groove's depth and the
+  berm's height as roots of their channels' full scale, and the pressed floor. A stamp is a
+  capsule (the prints are `skier/app/tracks.hpp`'s, the `skier` skill) drawn as an instanced quad
+  with MAX blending, so stamps never race and a groove ridden twice keeps the deeper. The window
+  moves when the camera leaves its middle half and is REDRAWN from the stamps' history (filed in
+  32 m buckets by their centres), never copied: a track laid out of the window comes back sharp.
+  The game converts its prints to `TrailStamp`s and hands them over (`add_trail_stamps`); each
+  frame `prepare_trails` (the window, the uploads; an overflow past `capacity` drawn in command
+  buffers of its own) and `encode_trails` (two passes that always open: an empty compute pass
+  when there is nothing to stamp). The snow's material reads both maps (`create_snow`'s `trails`;
+  without one it binds a clear texel): the slope of berm less depth across the larger of a texel
+  and the pixel's footprint, the trough's shade, the pressed floor smooth, and no berm inside a
+  groove. Judge it with the `trails` lab (the outside groove deeper through a turn, read back from
+  the map; a racer's track still there when another comes down it) and the `world` lab's moments.
 - EVERY TERM FADES BY THE PIXEL'S FOOTPRINT (`foot`, m a pixel, from `fwidth` taken once at the
   top of `fs_main`, in uniform control flow), never by distance alone: a term whose wavelength a
   pixel spans a quarter of is aliasing, at any resolution and field of view.

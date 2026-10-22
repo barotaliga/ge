@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <iterator>
 
 #include "core/output.hpp"
@@ -25,6 +26,8 @@ constexpr r::PassRow kPassTable[] = {
     {"terrain.cull", "terrain.pyramid", "terrain.tiles terrain.indirect"},
     {"instances.cull", "instances hiz.last", "instances.early"},
     {"terrain.horizon", "terrain.height", "terrain.horizon"},
+    {"trails.fine", "", "trails.fine"},
+    {"trails.coarse", "", "trails.coarse"},
     {"shadows.cull", "instances", "shadows.lists"},
     {"shadows.near", "instances shadows.lists", "shadows.maps"},
     {"shadows.far", "instances shadows.lists", "shadows.maps"},
@@ -36,7 +39,7 @@ constexpr r::PassRow kPassTable[] = {
     {"instances.depth.late", "instances instances.late", "depth"},
     {"terrain",
      "terrain.tiles terrain.indirect terrain.height terrain.horizon shadows.maps sky.aerial "
-     "sky.light snow.ground depth",
+     "sky.light snow.ground trails.fine trails.coarse depth",
      "hdr motion"},
     {"instances",
      "instances instances.early instances.late terrain.horizon shadows.maps sky.aerial sky.light "
@@ -106,8 +109,12 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
   source.base_spacing = 1.0;
   source.levels = 8;
   source.overdraw_probe = options.overdraw_probe;
+  f->tracks = options.snow && options.trails;
+  if (f->tracks) {
+    ge::mountain::app::create_trails(device, f->pipelines, f->trails, level, options.trail_maps);
+  }
   if (options.snow) {
-    ge::mountain::app::create_snow(device, f->snow, level);
+    ge::mountain::app::create_snow(device, f->snow, level, {}, f->tracks ? &f->trails : nullptr);
     source.shader = ge::mountain::app::snow_shader();
     source.shader_label = "snow";
     source.material = f->snow.layout;
@@ -166,6 +173,31 @@ void cut(GameFrame& f) {
   r::cut_family(f.figures);
 }
 
+void track(GameFrame& f, const FrameScene& scene) {
+  if (!f.tracks) return;
+  if (f.pens.size() < scene.skiers.size()) f.pens.resize(scene.skiers.size());
+  f.laid.clear();
+  for (size_t k = 0; k < scene.skiers.size(); ++k) {
+    ge::skier::SkiPrint prints[2]{};
+    const int n =
+        ge::skier::ski_prints(scene.skiers[k], ge::skier::kReferenceSkis, f.pens[k], prints);
+    for (int i = 0; i < n; ++i) {
+      const ge::skier::SkiPrint& p = prints[i];
+      f.laid.push_back({static_cast<float>(p.ax), static_cast<float>(p.az),
+                        static_cast<float>(p.bx), static_cast<float>(p.bz),
+                        static_cast<float>(p.half_width), static_cast<float>(p.depth),
+                        static_cast<float>(p.berm), static_cast<float>(p.wall)});
+    }
+  }
+  ge::mountain::app::add_trail_stamps(f.trails, f.laid);
+}
+
+void forget_tracks(GameFrame& f) {
+  if (!f.tracks) return;
+  ge::mountain::app::clear_trails(f.trails);
+  f.pens.clear();
+}
+
 void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& view, const FrameScene& scene,
           const wgpu::TextureView& output) {
   const auto start = std::chrono::steady_clock::now();
@@ -180,6 +212,15 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& view, const
   device.queue.WriteBuffer(f.uniforms, 0, &f.staged, sizeof f.staged);
   r::prepare_sky(f.sky, view);
   r::prepare_terrain(device, f.terrain, view);
+  if (f.tracks) {
+    track(f, scene);
+    // The fine window is kept round the ground a quarter of its span ahead of the eye, where the
+    // camera looks.
+    const double ahead = f.options.trail_maps.fine_span / 4;
+    ge::mountain::app::prepare_trails(device, f.pipelines, f.trails,
+                                      view.eye[0] + ahead * std::sin(view.heading),
+                                      view.eye[2] + ahead * std::cos(view.heading));
+  }
   const size_t racers = std::min<size_t>(scene.skiers.size(), kMaxFigures);
   for (size_t k = 0; k < racers; ++k) {
     figure_instances(
@@ -211,6 +252,13 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& view, const
   r::encode_instances_cull(families, f.instancing, f.pipelines, f.recorder, encoder, f.frame_group,
                            false);
   r::encode_terrain_horizon(f.terrain, f.pipelines, f.recorder, encoder);
+  if (f.tracks) {
+    ge::mountain::app::encode_trails(f.trails, f.pipelines, f.recorder, encoder);
+  } else {
+    // The pass table's rows run empty, so every later pass keeps its timing row.
+    f.recorder.compute(encoder, "trails.fine").End();
+    f.recorder.compute(encoder, "trails.coarse").End();
+  }
   r::encode_sun_shadows(f.shadows, still, moving, f.instancing, f.pipelines, f.recorder, encoder);
   r::encode_terrain_depth(f.terrain, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
   r::encode_instances_depth(families, f.instancing, f.pipelines, f.recorder, encoder, f.targets,

@@ -2,8 +2,9 @@
 // (render/terrain.hpp's `TerrainSource::shader`, over render/wgsl/terrain_draw.wgsl), and the map
 // it reads. The game keeps its colours (the albedo it hands the terrain: snow, the packed piste,
 // rock); this is what the snow DOES to the light: the micro-relief and the groomer's corduroy
-// bent into the normal, the wrap's blue terminator, the glitter, the glare. snow.wgsl states
-// every term. Nothing here moves the ground the simulation skis on.
+// bent into the normal, the wrap's blue terminator, the glitter, the glare, and the tracks the
+// skiers have left (the trail maps of trails.hpp). snow.wgsl states every term. Nothing here moves
+// the ground the simulation skis on.
 //
 // THE GROUND MAP (`bake_snow_ground`): one RGBA8 texel a heightfield sample, rows along z:
 //   r  the packed share 0..1 (the map's R10 field)
@@ -14,7 +15,7 @@
 // ge:summary The snow's material over the terrain draw: corduroy, relief, wrap, glitter, glare
 // ge:keywords snow snow-material snow-look corduroy groomed piste lanes micro-relief glitter
 // ge:keywords glints crystal wrap-lighting terminator glare sheen rock-share ground-map
-// ge:keywords bake_snow_ground create_snow snow_shader rock_share snowlook
+// ge:keywords bake_snow_ground create_snow snow_shader rock_share snowlook tracks trail-maps
 // ge:skill mountain render
 // ge:test tests/mountain_snow_test.cpp
 #pragma once
@@ -24,6 +25,7 @@
 #include <vector>
 
 #include "gpu/device.hpp"
+#include "mountain/app/trails.hpp"
 #include "mountain/mapgen/types.hpp"
 
 namespace ge::mountain::app {
@@ -36,7 +38,7 @@ std::vector<uint8_t> bake_snow_ground(const mapgen::Level& level);
 
 // The material's gains, each 1 for the tuned look and 0 for none of it.
 struct SnowLook {
-  float glitter = 1, corduroy = 1, relief = 1, wrap = 1, glare = 1, lanes = 1;
+  float glitter = 1, corduroy = 1, relief = 1, wrap = 1, glare = 1, lanes = 1, tracks = 1;
 };
 
 struct SnowMaterial {
@@ -44,11 +46,14 @@ struct SnowMaterial {
   wgpu::BindGroup group;         // bind_terrain_material
   wgpu::Texture ground;
   wgpu::Buffer params;
+  wgpu::Texture no_trail;    // without trail maps: a clear texel for both
+  wgpu::Buffer no_rects[2];  // and rects that lie nowhere
 };
 
-// The material for `level`: its ground map uploaded, its gains, its layout and group.
+// The material for `level`: its ground map uploaded, its gains, its layout and group, reading
+// `trails`' maps (none: no tracks).
 void create_snow(gpu::Device& device, SnowMaterial& snow, const mapgen::Level& level,
-                 const SnowLook& look = {});
+                 const SnowLook& look = {}, const Trails* trails = nullptr);
 // The gains changed (labs).
 void set_snow_look(gpu::Device& device, SnowMaterial& snow, const SnowLook& look);
 

@@ -21,6 +21,15 @@ game rides it, so the modes, the course's rules, the bot and the field stay in t
 | `skier/synthetic.hpp/.cpp` | The hand-built maps: `synthetic_slope()`, `flat_strip(pitch, packed)` |
 | `skier/scenarios.hpp/.cpp` | The ride scenarios (one table for the tests and the lab) and `run_scenario` |
 
+Its app half, `plugins/skier/app/` (`ge_skier_app`, no GPU), is the skier as seen and heard:
+`figure.hpp` (the placeholder figure), the beds (`wind_bed.hpp`, `snow_bed.hpp`, `ride_bed.hpp`,
+the `audio` skill) and `tracks.hpp`: the PRINTS a skier's skis lay each frame, two capsules a
+stance apart from the pen (where they last touched) to where they touch now; the outside ski of a
+turn deeper by `ski_load`, a carve narrower, a skid as wide as the ski's footprint across the
+travel and shallower with a berm, a scuff on the piste and a hand's furrow in loose snow; none in
+the air, none for a reset, one wide gouge for a body down. The game hands them to its trail map
+(`mountain/app/trails.hpp`, the `mountain` skill); the `trails` lab measures the two together.
+
 ## The model in one paragraph
 
 A body of `SkiSpec::mass`, integrated semi-implicitly at the caller's step. On the snow a
