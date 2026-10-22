@@ -8,9 +8,8 @@ description: "Use to end every gameengine2 work session: run the gates, write a 
 ## 1. Gates (cheapest first)
 
 ```sh
-make index          # docs/index.md from the ge: tags (the `write-code` skill)
 make fmt            # then: git diff, to see what it changed
-make agents-check   # structure, ge: tags, index fresh, lesson fragments
+make agents-check   # structure, ge: tags (writes docs/index.md), lesson fragments
 make test           # debug preset, with ASan + UBSan
 make test PRESET=release
 ```

@@ -52,7 +52,7 @@ source is written, commented and tagged as if it had been written here first:
 
 Agents find code by grep. Every source file (`engine/`, `plugins/`, `games/`, `tests/`, `tools/`) ends its
 leading comment with a block of `ge:` lines, which `make index` turns into
-[`docs/index.md`](../../../docs/index.md) and `make agents-check` holds:
+`docs/index.md` (generated in each checkout, never committed) and `make agents-check` holds:
 
 ```cpp
 // THE SEEDED STREAM. Every random draw in a simulation ... (the prose header)
@@ -75,8 +75,8 @@ leading comment with a block of `ge:` lines, which `make index` turns into
 - A tag line stays within 100 columns (clang-format reflows a longer comment, and the wrapped
   half loses its `ge:` prefix). Wrap by repeating the tag: repeated tags' values are joined.
 - Keywords name what the file HAS, not what it skipped.
-- After adding a file or changing a tag, run `make index` and commit `docs/index.md`. On a
-  merge conflict in `docs/index.md`, take either side and run `make index` again.
+- `docs/index.md` is gitignored: `make index` (or `make agents-check`) rewrites it in your
+  checkout after a tag changes, and nothing commits it.
 - A `.cpp` beside its `.hpp` carries its own block; its summary says what the definitions add
   (the module state, the codec) rather than repeating the header's.
 
@@ -111,7 +111,7 @@ code now makes obvious.
 2. Make the change.
 3. Build and run only the affected test executables:
    `cmake --build build/debug && ./build/debug/tests/<topic>_test`.
-4. Before committing: `make index`, `make fmt`, `make test`, `make agents-check` (the
+4. Before committing: `make fmt`, `make test`, `make agents-check` (the
    `commit` skill).
 
 `make lint` (clang-tidy's bug-finding checks, in parallel) runs in CI. `make lint
