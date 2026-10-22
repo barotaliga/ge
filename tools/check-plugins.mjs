@@ -85,12 +85,14 @@ for (const [name, decl] of plugins) {
   for (const f of files(`plugins/${name}`)) {
     if (/\.(cpp|hpp|h)$/.test(f)) {
       // A plugin's labs/ is built into the `labs` executable, not the plugin (docs/labs.md), so
-      // it may also include the lab framework.
+      // it may also include the lab framework; its assets/ (a model's data set, engine/assets/
+      // data.hpp) into the `assets` executable, so it may include the assets library.
       const isLab = f.startsWith(`plugins/${name}/labs/`);
+      const isAsset = f.startsWith(`plugins/${name}/assets/`);
       const isApp = f.startsWith(`plugins/${name}/app/`);
-      const may = isApp || isLab ? appAllowed : allowed;
+      const may = isApp || isLab || isAsset ? appAllowed : allowed;
       for (const root of includes(f)) {
-        if (!may.has(root) && !(isLab && root === "lab")) {
+        if (!may.has(root) && !(isLab && root === "lab") && !(isAsset && root === "assets")) {
           err(`${f} includes "${root}/...", which plugins/${name} does not declare. Add it to ENGINE, ` +
             `PLUGINS or (for app/) APP in plugins/${name}/CMakeLists.txt if the dependency is right; a plugin never ` +
             `includes a game (skill: plugins).`);
