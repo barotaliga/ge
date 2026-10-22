@@ -142,7 +142,8 @@ fs::Spot spot_of(const fs::GameState& st, Scene scene) {
   const fs::ArmyState& a = st.army;
   const double fx = lm::sin(a.pad_heading);
   const double fz = lm::cos(a.pad_heading);
-  for (double r = kOpenM; r < kOpenM + 400; r += 10) {
+  for (int32_t i = 0; i < 40; ++i) {
+    const double r = kOpenM + 10.0 * i;
     for (const double side : {0.0, 60.0, -60.0, 120.0, -120.0}) {
       const double x = a.pad_x + fx * r + fz * side;
       const double z = a.pad_z + fz * r - fx * side;

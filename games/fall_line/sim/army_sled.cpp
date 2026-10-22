@@ -40,7 +40,7 @@ using namespace army_sled;
 // Steps between a machine's looks and between its choices of way (each on its own step of them,
 // by its id).
 constexpr int64_t kLookSteps = static_cast<int64_t>(wanted::kLookEveryS * kHz);
-constexpr int64_t kDecideSteps = static_cast<int64_t>(kDecideS * kHz + 0.5);
+const int64_t kDecideSteps = num::to_int32(num::round(kDecideS * kHz));
 // A machine's crew off it are a squad numbered past this.
 constexpr int32_t kSledSquad = 20000;
 

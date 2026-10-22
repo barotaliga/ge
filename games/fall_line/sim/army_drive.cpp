@@ -10,6 +10,7 @@
 
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
+#include "core/num.hpp"
 
 namespace fall_line::sim {
 
@@ -18,6 +19,7 @@ namespace {
 namespace mg = ge::mountain::mapgen;
 namespace sk = ge::skier;
 namespace lm = ge::core::libm;
+namespace num = ge::core::num;
 using ge::core::angle_diff;
 
 // How many trunks stand within `r` m (past their radius) of (x, z).
@@ -60,7 +62,7 @@ WayCost way_cost(const mg::Level& level, const sk::TreeIndex& trees, double x0, 
                  double heading, double want, double keep, const DriveRead& read) {
   const double fx = lm::sin(heading);
   const double fz = lm::cos(heading);
-  const auto n = static_cast<int32_t>(read.look / read.step + 0.5);
+  const auto n = num::to_int32(num::round(read.look / read.step));
   double g0 = level.ground_at(x0, z0);
   double reach = read.look;
   double trees_on = 0;
