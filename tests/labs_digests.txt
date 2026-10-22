@@ -1,5 +1,6 @@
 # lab digests at their smoke flags: labs --all --smoke --write-digests
 analyze 47aeb41752f58f41
+audition d47fda4a9cb22fbb
 frame-pace c5058023a52812c3
 gpu-capture 8b5d5e3b7be5a4fc
 junctions 036999ca677e12e6

@@ -5,17 +5,19 @@
 #
 #   ge_add_plugin(mountain ENGINE core PLUGINS racing)
 #
-# which builds every .cpp under the directory (labs/ excepted; app/ refused until it is split
-# into its own target) into the target ge_<name>, puts
-# plugins/ on its include path (so its headers are spelled "<name>/<file>.hpp"), and links the
+# which builds every .cpp under the directory (labs/ and app/ excepted) into the target ge_<name>,
+# puts plugins/ on its include path (so its headers are spelled "<name>/<file>.hpp"), and links the
 # engine targets it names (ENGINE core -> ge_core) and the plugins it names (PLUGINS racing ->
-# ge_racing). Those two lists are the plugin's whole dependency contract: tools/check-plugins.mjs
-# (make agents-check) fails an #include outside them, a cycle, and a name that is not one
+# ge_racing). A plugin with a presentation half (plugins/<name>/app/: the sounds and looks a genre
+# shares) adds a third list, APP audio, naming the engine targets that half needs beyond the
+# simulation's; app/ is built into ge_<name>_app, which links ge_<name> and those, so the
+# simulation target never links a renderer or a synth. Those lists are the plugin's whole
+# dependency contract: tools/check-plugins.mjs (make agents-check) fails an #include outside them, a cycle, and a name that is not one
 # lower-case word or that shadows an engine directory.
 include_guard(GLOBAL)
 
 function(ge_add_plugin name)
-  cmake_parse_arguments(PARSE_ARGV 1 arg "" "" "ENGINE;PLUGINS")
+  cmake_parse_arguments(PARSE_ARGV 1 arg "" "" "ENGINE;PLUGINS;APP")
   get_filename_component(dir_name "${CMAKE_CURRENT_SOURCE_DIR}" NAME)
   if(NOT name STREQUAL dir_name)
     message(FATAL_ERROR "ge_add_plugin(${name}) is called from plugins/${dir_name}/. A plugin's "
@@ -28,17 +30,18 @@ function(ge_add_plugin name)
   endif()
   if(arg_UNPARSED_ARGUMENTS)
     message(FATAL_ERROR "ge_add_plugin(${name}): unknown arguments ${arg_UNPARSED_ARGUMENTS}; "
-      "the only lists are ENGINE <module>... and PLUGINS <plugin>... (skill: plugins).")
+      "the only lists are ENGINE <module>..., PLUGINS <plugin>... and APP <module>... (skill: plugins).")
   endif()
 
   file(GLOB_RECURSE sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
   list(FILTER sources EXCLUDE REGEX "/labs/")
   set(app_sources ${sources})
   list(FILTER app_sources INCLUDE REGEX "/plugins/${name}/app/")
-  if(app_sources)
-    message(FATAL_ERROR "plugins/${name}/app/ has sources. A plugin's presentation half gets its "
-      "own target (ge_${name}_app) so the simulation target never links a renderer: add that "
-      "split to cmake/Plugins.cmake first (skill: plugins, § Add a plugin).")
+  list(FILTER sources EXCLUDE REGEX "/plugins/${name}/app/")
+  if(app_sources AND NOT arg_APP)
+    message(FATAL_ERROR "plugins/${name}/app/ has sources but ge_add_plugin(${name}) has no APP "
+      "list. Name the engine targets the presentation half links (APP audio) so it is built into "
+      "ge_${name}_app (skill: plugins, § Add a plugin).")
   endif()
   set(target ge_${name})
   if(sources)
@@ -58,4 +61,15 @@ function(ge_add_plugin name)
     target_link_libraries(${target} ${scope} ge_${plugin})
   endforeach()
   set_property(GLOBAL APPEND PROPERTY GE_PLUGIN_TARGETS ${target})
+
+  if(app_sources)
+    add_library(${target}_app STATIC ${app_sources})
+    target_link_libraries(${target}_app PUBLIC ${target})
+    foreach(module IN LISTS arg_APP)
+      target_link_libraries(${target}_app PUBLIC ge_${module})
+    endforeach()
+    # The package publishes it when everything it links is published (cmake/Packaging.cmake).
+    set_property(TARGET ${target}_app PROPERTY GE_APP_MODULES ${arg_APP})
+    set_property(GLOBAL APPEND PROPERTY GE_PLUGIN_TARGETS ${target}_app)
+  endif()
 endfunction()

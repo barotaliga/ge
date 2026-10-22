@@ -33,6 +33,12 @@ the row when the file moves.
 | `engine/core/solar.cpp` | `oss-game-framework/src/core/solar.ts` |  |
 | `engine/core/solar.hpp` | `oss-game-framework/src/core/solar.ts` | sunAt moonAt daylightWindow sunOnDate moonOnDate hourOfElevation |
 | `engine/loop/run_clock.hpp` | `oss-game-framework/src/loop/run-clock.ts` | createRunClock MAX_FRAME_SECONDS |
+| `games/fall_line/sound/bank.cpp` | `game5/pwa/src/game/audio/bank.ts` | RUN_BANK |
+| `games/fall_line/sound/bank.hpp` | `game5/pwa/src/game/audio/bank.ts` | RUN_BANK |
+| `games/fall_line/sound/listener.hpp` | `game5/pwa/src/game/audio/listener.ts` | Listener LISTENERS listenerFor |
+| `games/fall_line/sound/mix.hpp` | `game5/pwa/src/game/settings.ts`, `audio/bus.ts` | mixOf setAudioVolumes |
+| `games/fall_line/sound/route.cpp` | `game5/pwa/src/game/audio/route.ts` | soundForEvent soundsForStep |
+| `games/fall_line/sound/route.hpp` | `game5/pwa/src/game/audio/route.ts` | soundForEvent soundsForStep |
 | `plugins/mountain/analysis/cliffs.cpp` | `game5/engine/analysis/cliffs.ts` | checkCliffs checkDrops |
 | `plugins/mountain/analysis/cliffs.hpp` | `game5/engine/analysis/cliffs.ts` | checkCliffs checkDrops |
 | `plugins/mountain/analysis/course.cpp` | `game5/engine/analysis/index.ts` | analyzeLevel (a resort's course, `network: false`; the engine's own checks) |
@@ -153,6 +159,12 @@ the row when the file moves.
 | `plugins/racing/standings.hpp` | `oss-game-framework/src/racing/standings.ts` | legProgress fieldOrder placeAmong |
 | `plugins/racing/tape.cpp` | `oss-game-framework/src/racing/tape.ts` | encodeStream decodeStream |
 | `plugins/racing/tape.hpp` | `oss-game-framework/src/racing/tape.ts` | snapAxis ControlTape |
+| `plugins/skier/app/ride_bed.cpp` | `game5/pwa/src/game/audio/ride-bed.ts` | createRideBed |
+| `plugins/skier/app/ride_bed.hpp` | `game5/pwa/src/game/audio/ride-bed.ts` | RideBed createRideBed |
+| `plugins/skier/app/snow_bed.cpp` | `game5/pwa/src/game/audio/snow-voice.ts` | skiVoiceOf snowTargets |
+| `plugins/skier/app/snow_bed.hpp` | `game5/pwa/src/game/audio/snow-voice.ts` | SkiVoice SnowVoice SnowMix SnowLayer SNOW_LAYERS SNOW_GLIDE snowTargets |
+| `plugins/skier/app/wind_bed.cpp` | `game5/pwa/src/game/audio/wind-voice.ts` | windTargets WIND_FULL WIND_TOP |
+| `plugins/skier/app/wind_bed.hpp` | `game5/pwa/src/game/audio/wind-voice.ts` | WindVoice WindMix WindLayer WIND_LAYERS WIND_GLIDE windTargets |
 | `tests/mountain_generate_test.cpp` |  | generateLevel levelDigest analyzeLevel |
 | `tests/mountain_slalom_test.cpp` | `game5/tests/slalom_test.ts` | the slalom course (R31) |
 | `tests/mountain_speed_events_test.cpp` | `game5/tests/downhill_test.ts` | the speed events' courses (also super_g_test.ts, giant_slalom_test.ts) |

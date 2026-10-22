@@ -75,5 +75,24 @@ after (`perf` skill).
 - **`synth`** (`engine/lab/labs/audio_synth_lab.cpp`): every wave, colour, sweep, drive, the pair
   and vibrato, the echo, two steered layers and the limiter under a stack, each metered,
   pictured and written as WAV, with failures for the checks a listener would make; the bench.
-- **`audition`** (M9b, `games/fall_line/labs/`): every sound in Fall Line's bank and every bed
-  preset, metered the same way.
+- **`audition`** (`games/fall_line/labs/audition_lab.cpp`, `--scene=all|bank|beds|run`): every
+  sound in Fall Line's bank, each held to the bank's band (its loudest between -40 and -16
+  dBFS) and to its sentence; the skier's beds at seven moments (stand, cruise, tuck, carve,
+  skid, powder, air), with failures for the order a listener hears (the tuck over the cruise,
+  the powder darker than the groomer, the skid brighter than the powder, silence at rest); and
+  the bot's whole run on a seed through the route, under the limiter with no dropped call.
+
+## Fall Line's sound (where each piece is)
+
+- **The beds** (`plugins/skier/app/`): `wind_bed` (rush, roar, whistle, flutter, buffet off the
+  air, the tuck and a crosswind), `snow_bed` (hiss, powder hush, edge tear, chatter, skid rasp
+  off the packed share, the edge, the skid and the pair), `ride_bed` (the skier's state turned
+  into both voices and steered on two racks). Pure functions of the moment; the rack steers.
+- **The game's** (`games/fall_line/sound/`, the `fall_line_sound` target, no GPU): `bank` (every
+  one-shot as data), `route` (racer 0's events to the bank per step, the bed per frame),
+  `listener` (one row per camera seat), `mix` (the faders folded into the two buses).
+- **THE AIR HEARD is the skier's own way** until the sim carries a weather wind: the wind voice
+  follows his speed on a quarter second.
+- **Events are per step** (the state's list is cleared every step), so `run_sound_step` runs
+  after every step and `run_sound_frame` once a frame; a layer stopped fades in 0.02 s and is
+  freed after 0.15 s, so a test counts layers only after that much render.

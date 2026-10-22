@@ -273,5 +273,5 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 | `profile` | bench | game:fall_line | a frame's CPU and GPU cost | M7d |
 | `forest`, `snow`, `trails`, `spray`, `skis`, `skier` | picture | game:fall_line | the world drawn | M8 |
 | `synth` | sim | engine | `engine/audio` (every voice the synth can play, metered, pictured and written as WAV; the render's cost) | M9a (now) |
-| `audition` | sim | game:fall_line | Fall Line's bank and the skier's beds, metered | M9b |
+| `audition` | sim | game:fall_line | Fall Line's bank, the skier's beds at seven moments and the bot's whole run, metered, pictured and written as WAV | M9b (now) |
 | `screenshots` | picture | game:fall_line | the HUD and the cards at 1280x720, 390x844, 844x390 | M10 |
