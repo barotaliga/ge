@@ -264,7 +264,8 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 | `park` | picture | plugin:mountain | `plugins/mountain/mapgen/park.hpp` (the terrain park on a tricks map: close up, its profile with the mean fall taken out, the map from above; `--version=1,8`) | M4b5 (now) |
 | `resort` | picture | plugin:mountain | `plugins/mountain/mapgen/resort_build.hpp` (the ski area, its courses) | M4b3d (now) |
 | `junctions` | picture | plugin:mountain | `plugins/mountain/mapgen/network_stamp.cpp` (where runs meet) | M4b3d (now) |
-| `routes`, `skijump-hills` | picture | plugin:mountain | the routes, the jump hills | M4c |
+| `routes` | picture | plugin:mountain | `plugins/mountain/mapgen/ski_routes.hpp`, `route_features.hpp` (the ski routes on a ski area: the area with every route in orange, each route close up with its drops and jumps, each from the side with its pitch against a black's ceiling and a route's; `--version=9,10`) | M4c1 (now) |
+| `skijump-hills` | picture | plugin:mountain | the jump hills | M4c2 |
 | `real-faces` | picture | plugin:mountain | the real faces | M4d |
 | `sim` | drive | game:fall_line | `games/fall_line/sim` (the step, the course, the bot, the field) | M5b–M5c (now) |
 | `ride` | scenario | plugin:skier | `plugins/skier` (`step_skier`, the snow, the limits) | M5a (now) |

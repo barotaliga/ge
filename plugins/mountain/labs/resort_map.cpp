@@ -22,8 +22,8 @@ using ge::lab::Rgba;
 
 namespace {
 
-// The generator version the ski area is built by in this tree (the routes of v9 and on wait for
-// docs/goals.md M4c).
+// The generator version the ski area is built by here: its stages, before any ski route (R42) is
+// laid on it (the `routes` lab draws those).
 constexpr int kAreaVersion = 8;
 
 constexpr Rgba kRoad{110, 110, 110};

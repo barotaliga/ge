@@ -22,7 +22,9 @@ namespace ge::mountain::labs {
 
 // The flags a map lab takes beside its own: `version` and `region`.
 inline const ge::lab::LabFlag kVersionFlag{
-    "version", "1", "generator versions, comma-separated: 1 the single piste, 8 the ski area"};
+    "version", "1",
+    "generator versions, comma-separated: 1 the single piste, 8 the ski area, 9 and 10 with its "
+    "routes"};
 inline const ge::lab::LabFlag kRegionFlag{"region", "alpine",
                                           "snow country: alpine, fell, continental, maritime"};
 

@@ -14,6 +14,7 @@
 #include "core/math.hpp"
 #include "core/num.hpp"
 #include "mountain/analysis/resort.hpp"
+#include "mountain/analysis/routes.hpp"
 #include "mountain/mapgen/access_build.hpp"
 #include "mountain/mapgen/hub.hpp"
 #include "mountain/mapgen/query.hpp"
@@ -245,6 +246,9 @@ LevelAnalysis analyze_resort(const mapgen::Level& level) {
   }
   if (on_lifts > 0) add("R26", Severity::error, str(on_lifts) + " tree(s) stand on a lift's line");
   if (above > 0) add("R14", Severity::error, str(above) + " tree(s) stand above the tree line");
+
+  // R42 — the ski routes.
+  check_routes(level, add);
 
   for (const Finding& f : out.findings) out.ok = out.ok && f.severity != Severity::error;
   return out;

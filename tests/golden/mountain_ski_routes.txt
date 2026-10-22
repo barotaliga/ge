@@ -1,0 +1,5 @@
+# seed version, then its ski area's routes (mountain_ski_routes_test)
+5 v10 attempt=0 course=7 SR1=C1>9:956m/603m/89%/d0/j3 SR2=C3>12:2104m/351m/81%/d1/j3 digest=1a67fdeb
+38 v10 attempt=0 course=1 SR1=C1>7:2996m/875m/81%/d0/j3 digest=f95ffdba
+38 v9 attempt=0 course=1 SR1=C1>8:1112m/855m/94%/d0/j0 digest=6789e7dd
+5 v9 attempt=0 course=7 SR1=C1>9:904m/715m/99%/d0/j0 digest=60cca94d
