@@ -212,26 +212,61 @@ double choose_heading(const ge::core::Heightfield& ground, double x, double z, d
       libm::atan2(-(sample_field(ground, x + w, z) - sample_field(ground, x - w, z)),
                   -(sample_field(ground, x, z + w) - sample_field(ground, x, z - w)));
   std::vector<Heading> other;
-  for (const auto& [h, fx, fz] : headings_for(swing, other)) {
+  const std::vector<Heading>& headings = headings_for(swing, other);
+  // A heading's turn alone: its least cost, since every other term adds to it and none is negative.
+  const auto turn_of = [&](const Heading& c) {
+    return std::abs(angle_diff(c.h, want)) * 0.35 + std::abs(angle_diff(c.h, current)) * 0.25;
+  };
+  const auto cost_of = [&](const Heading& c, double turn) {
     double over = 0;
     double under = 0;
     double fall_sum = 0;
     for (const double L : kLookAhead) {
-      const double fall = (y0 - sample_field(ground, x + fx * L, z + fz * L)) / L;
+      const double fall = (y0 - sample_field(ground, x + c.fx * L, z + c.fz * L)) / L;
       over = num::max(over, fall - cap);
       under = num::max(under, least - fall);
       fall_sum += fall;
     }
     double cost = num::max(0.0, over) * 40 + num::max(0.0, under) * 40;
     if (aim) cost += std::abs(fall_sum / 3 - *aim) * 12;
-    cost += std::abs(angle_diff(h, want)) * 0.35 + std::abs(angle_diff(h, current)) * 0.25;
+    cost += turn;
     if (side != 0) {
-      const double off = angle_diff(down, h);
+      const double off = angle_diff(down, c.h);
       if (std::abs(off) > 0.12 && num::sign(off) != side) cost += kZigzagSide;
     }
-    if (cost < best_cost) {
+    return cost;
+  };
+  // The cheapest, the first of equals in the table's order. The heading that turns least is
+  // weighed first, so that a heading whose turn alone costs more than the best so far is never
+  // read off the ground: the same choice, from fewer samples.
+  size_t first = 0;
+  double first_turn = kInf;
+  for (size_t i = 0; i < headings.size(); i++) {
+    const double turn = turn_of(headings[i]);
+    if (turn < first_turn) {
+      first_turn = turn;
+      first = i;
+    }
+  }
+  size_t best_at = headings.size();
+  if (first < headings.size()) {
+    best_cost = cost_of(headings[first], first_turn);
+    if (best_cost < kInf) {
+      best = headings[first].h;
+      best_at = first;
+    } else {
+      best_cost = kInf;
+    }
+  }
+  for (size_t i = 0; i < headings.size(); i++) {
+    if (i == first) continue;
+    const double turn = turn_of(headings[i]);
+    if (turn > best_cost || (turn == best_cost && i > best_at)) continue;
+    const double cost = cost_of(headings[i], turn);
+    if (cost < best_cost || (cost == best_cost && i < best_at && best_at < headings.size())) {
       best_cost = cost;
-      best = h;
+      best = headings[i].h;
+      best_at = i;
     }
   }
   return best;

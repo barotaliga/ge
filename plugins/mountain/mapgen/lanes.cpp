@@ -15,6 +15,7 @@
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "core/num.hpp"
+#include "core/parallel.hpp"
 #include "mountain/mapgen/network.hpp"
 #include "mountain/mapgen/resort_rules.hpp"
 #include "mountain/mapgen/rules.hpp"
@@ -234,26 +235,29 @@ std::optional<LaneRoute> route_lane(const ge::core::Heightfield& ground, const N
   std::vector<uint8_t> at_top(n), laned(n), at_goal(n);
   std::vector<int> on_run(n, -1);
   const Raster nearest = nearest_raster(net, left, z0, cols, rows + 1);
-  for (int r = 0; r <= rows; r++) {
-    for (int c = 0; c < cols; c++) {
-      const double x = x_at(c);
-      const double z = z_at(r);
-      const size_t o = size_t(r) * size_t(cols) + size_t(c);
-      h[o] = sample_field(ground, x, z);
-      const double gx = (sample_field(ground, x + 6, z) - sample_field(ground, x - 6, z)) / 12;
-      const double gz = (sample_field(ground, x, z + 6) - sample_field(ground, x, z - 6)) / 12;
-      steep[o] = hypot(gx, gz);
-      const double d = nearest.dist[o];
-      const double near = clearance(RR::road::width.max, nearest.width[o]) + kMargin;
-      beside[o] = d < near ? 1 - d / near : 0;
-      run_heading[o] = nearest.heading[o];
-      at_top[o] = hypot(x - x0, z - z0) < kTopFree ? 1 : 0;
-      const int r0 = nearest.run[o];
-      if (d < kOnLine && may(r0) && joinable(net, r0, nearest.arc[o])) on_run[o] = r0;
-      if (ask.goal && hypot(x - ask.goal->x, z - ask.goal->z) < kGoalReach) at_goal[o] = 1;
-      if (ask.keep_off && ask.keep_off(x, z)) laned[o] = 1;
+  // Every cell is a pure reading of its own place, so the rows are read side by side.
+  ge::core::parallel_bands(size_t(rows) + 1, [&](size_t band0, size_t band1) {
+    for (int r = int(band0); r < int(band1); r++) {
+      for (int c = 0; c < cols; c++) {
+        const double x = x_at(c);
+        const double z = z_at(r);
+        const size_t o = size_t(r) * size_t(cols) + size_t(c);
+        h[o] = sample_field(ground, x, z);
+        const double gx = (sample_field(ground, x + 6, z) - sample_field(ground, x - 6, z)) / 12;
+        const double gz = (sample_field(ground, x, z + 6) - sample_field(ground, x, z - 6)) / 12;
+        steep[o] = hypot(gx, gz);
+        const double d = nearest.dist[o];
+        const double near = clearance(RR::road::width.max, nearest.width[o]) + kMargin;
+        beside[o] = d < near ? 1 - d / near : 0;
+        run_heading[o] = nearest.heading[o];
+        at_top[o] = hypot(x - x0, z - z0) < kTopFree ? 1 : 0;
+        const int r0 = nearest.run[o];
+        if (d < kOnLine && may(r0) && joinable(net, r0, nearest.arc[o])) on_run[o] = r0;
+        if (ask.goal && hypot(x - ask.goal->x, z - ask.goal->z) < kGoalReach) at_goal[o] = 1;
+        if (ask.keep_off && ask.keep_off(x, z)) laned[o] = 1;
+      }
     }
-  }
+  });
   // THE LANES LAID BEFORE: a lane never crosses or runs beside another (R27).
   const int reach_lane = static_cast<int>(
       std::ceil((clearance(RR::road::width.max, RR::road::width.max) + kMargin) / kCell));
