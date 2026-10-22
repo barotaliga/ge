@@ -146,6 +146,12 @@ make release-check # the changeset fragments valid + tools/release.py's tests; p
 make shaders-check # every embedded WGSL shader compiled by Tint offline (needs GE_GPU)
 ```
 
+**A cloud session starts the build itself.** `.claude/settings.json`'s SessionStart hook runs
+`tools/session-start.sh`, which installs CI's Linux packages the container lacks and runs `make
+build` (the debug preset, reusing `build/debug/`) in the background while you read. Before you
+rely on the build, `tools/session-start.sh --wait` blocks until it is done and exits with its
+result; the output is `build/session-start.log`, the one-line state `build/session-start.status`.
+
 CI (`.github/workflows/ci.yml`) runs fmt-check, agents-check, libm-check, lint and shaders-check, plus build and
 test on Linux x64 (GCC debug+ASan, GCC release, Clang release), Linux arm64 (GCC),
 macOS (Apple Clang) and Windows (MSVC). A golden failure on one row points at that
