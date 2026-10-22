@@ -95,7 +95,12 @@ make lab LAB=level ARGS=--tag=before          # keep this run as previews/level@
 make lab LAB=level ARGS=--compare=before      # every metric beside the kept run's
 make labs-smoke                               # every lab at its smoke flags, twice, digests checked
 make labs-digests                             # rewrite tests/labs_digests.txt (a reviewed change)
+build/debug/labs --json                       # the list as one JSON array (what `ge lab` reads)
 ```
+
+In a game repo, `ge lab` is the way in: `ge lab` lists, `ge lab <id> --tag=before` and
+`--compare=before` run one, and with `--json` the lab's whole `report.json` is the answer's
+`result`.
 
 The binary is `build/<preset>/labs` (`PRESET=release` for anything timed). An unknown flag
 exits 2, a failed lab exits 1, and a clean run exits 0, because a measurement that ignores
@@ -280,3 +285,4 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 | `synth` | sim | engine | `engine/audio` (every voice the synth can play, metered, pictured and written as WAV; the render's cost) | M9a (now) |
 | `audition` | sim | game:fall_line | Fall Line's bank, the skier's beds at seven moments and the bot's whole run, metered, pictured and written as WAV | M9b (now) |
 | `screenshots` | picture | game:fall_line | the HUD and the cards at 1280x720, 390x844, 844x390 | M10 |
+| `cli-loop` | bench | engine | `engine/cli` (the `ge` commands of an agent's loop run on a scaffolded repo: each answer's lines, bytes and time, failed over its line budget; the catalog's shape is the digest) | M12a (now) |

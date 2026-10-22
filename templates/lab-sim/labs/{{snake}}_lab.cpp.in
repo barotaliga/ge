@@ -1,0 +1,47 @@
+// LAB `{{kebab}}` (sim): the game run headless over seeds, measured. One table (a row a seed),
+// one metric a seed, and the digest that makes it a determinism test: CI runs it twice. Say what
+// question it answers and change what it measures (skill: labs).
+//
+// ge:summary Lab {{kebab}}: the game over seeds, a row and a metric a seed (say what it measures)
+// ge:keywords lab sim {{kebab}} seeds table metric digest
+// ge:skill labs
+#include <cstdio>
+#include <string>
+
+#include "lab/lab.hpp"
+#include "sim/game.hpp"
+
+namespace {
+
+using namespace {{ident}}::sim;
+
+void run(ge::lab::Lab& lab) {
+  const int steps = static_cast<int>(lab.arg_num("steps"));
+  ge::lab::LabTable table{"runs", {"seed", "x (m)", "speed (m/s)"}, {}};
+  for (const double seed_value : lab.arg_nums("seeds")) {
+    const auto seed = static_cast<uint32_t>(seed_value);
+    GameState s = create_game(seed);
+    for (int k = 0; k < steps; k++) step(s, Input{});
+    table.rows.push_back({std::to_string(seed), std::to_string(s.x_m), std::to_string(s.vx_mps)});
+    lab.metric("seed-" + std::to_string(seed) + ".x", s.x_m, "m");
+  }
+  lab.table(table);
+}
+
+const ge::lab::LabSpec kSpec{
+    "{{kebab}}",
+    ge::lab::LabKind::sim,
+    "game:{{name}}",
+    "sim/game.cpp",
+    "labs",
+    "Where does each seed's run end up? (rewrite: the one question this lab answers)",
+    {
+        {"seeds", "1,2,3,38", "the seeds to run, comma-separated"},
+        {"steps", "1200", "steps a run (120 a second)"},
+    },
+    "--steps=240",
+    run,
+};
+GE_LAB(kSpec);
+
+}  // namespace

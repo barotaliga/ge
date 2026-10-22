@@ -1,0 +1,39 @@
+// The {{snake}} system's contract: a run replays to the same bits from its seed, and the level
+// stays in its band (sim/{{snake}}.hpp; skill: sim-system).
+//
+// ge:summary Tests: the {{snake}} system replays bit for bit and stays in its band
+// ge:keywords test sim system {{snake}} determinism replay
+// ge:skill sim-system
+// ge:test tests/sim_{{snake}}_test.cpp
+#include <string>
+
+#include "check.hpp"
+#include "sim/game.hpp"
+#include "sim/{{snake}}.hpp"
+
+using namespace {{ident}}::sim;
+
+namespace {
+
+{{Type}}State run(uint32_t seed, int steps) {
+  {{Type}}State s;
+  ge::core::Rng rng = ge::core::make_rng(seed);
+  for (int k = 0; k < steps; k++) step_{{snake}}(s, rng, kDt);
+  return s;
+}
+
+}  // namespace
+
+TEST({{snake}}_replays_bit_for_bit) {
+  const {{Type}}State a = run(38, 1200);
+  const {{Type}}State b = run(38, 1200);
+  CHECK(digest_{{snake}}(a) == digest_{{snake}}(b));
+  CHECK_BITS(a.level, b.level);
+}
+
+TEST({{snake}}_stays_in_its_band) {
+  const {{Type}}State s = run(7, 2400);
+  CHECK_MSG(s.level > -1 && s.level < 1,
+            "level " + std::to_string(s.level) +
+                " after 20 s, want inside (-1, 1): the spring should hold it; skill: sim-system");
+}
