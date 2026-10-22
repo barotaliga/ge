@@ -45,10 +45,10 @@ Outcome run_sim(const BuildOptions& o, const std::string& seeds,
 Outcome run_replay(const BuildOptions& o, const std::string& log);
 Outcome run_state(const BuildOptions& o, const std::string& log, const std::string& step);
 Outcome run_diverge(const BuildOptions& o, const std::string& a, const std::string& b);
-// `log` empty: the pilot's run of `seed` (with `options`, the words after --).
-Outcome run_shot(const BuildOptions& o, const std::string& log, const std::string& seed,
-                 const std::string& step, const std::string& view,
-                 const std::vector<std::string>& options);
+// `ge shot`: the play executable's `shot` with `flags` ("--name=value": --seed, --step, --view,
+// --gpu, --mode, --size) and the game's options; `log` empty: the pilot's run of --seed.
+Outcome run_shot(const BuildOptions& o, const std::string& log,
+                 const std::vector<std::string>& flags, const std::vector<std::string>& options);
 // `ge record`: the play executable's `record` with `flags` ("--name=value") and the game's options.
 Outcome run_record(const BuildOptions& o, const std::string& log,
                    const std::vector<std::string>& flags, const std::vector<std::string>& options);

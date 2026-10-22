@@ -54,6 +54,7 @@ ge diverge runs/a.inputs runs/b.inputs     # where two runs part, and which fiel
 ge shot runs/<game>-1.inputs --step=600 --view=<v>   # a captioned still at that step, a PNG
 ge shot --seed=1 --view=<v>                # the pilot's run of seed 1, at its end
 ge record runs/<game>-1.inputs --view=<v> --to=30s   # the run as an MP4 and a contact sheet
+ge record runs/<game>-1.inputs --gpu --mode=wireframe   # the same through the GPU renderer
 ```
 
 **LOOK at a run.** `ge shot` replays the log to the step and draws the view, framed with its
@@ -70,6 +71,15 @@ encodes it: `--format=mp4` (H.264, the default), `webm` (VP9) or `gif`; `--size=
 of `--thumbs` stills, each labelled with its time and step, the run at a glance; read it first,
 then watch the stretch it points at. It builds the release preset, since every frame is drawn on
 the CPU.
+
+**WATCH it as the game draws it.** A game built with the GPU registers a renderer beside its
+spec (`GE_RENDERER(spec)`: a `RendererSpec` of views, MODES and `open`, and a `Renderer` whose
+`draw` pictures a `Run` as it stands). `--gpu` on `ge shot` or `ge record` draws through it, and
+`--mode` picks how: the lit picture, the meshes' edges (`wireframe`), the depth, or the lit
+picture with the game's marks over it (`overlay`); `ge shot --gpu` lists the views and
+`play describe` the modes. One renderer draws a whole recording: the first frame is a cut and
+every frame after is drawn on from the last, as the game's own window would. Without an adapter
+the command says so and names the driver to install.
 
 **The protocol** (`ge play`): the session opens with `hello` (the axes, the options, the ops).
 Then send one object a line: `{"op":"observe"}`; `{"op":"act","input":{"<axis>":v},"steps":n}`

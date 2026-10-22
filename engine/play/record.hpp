@@ -3,7 +3,10 @@
 // time, step and view, encoded as a video by ffmpeg (H.264 MP4, VP9 WebM or a GIF) or written as
 // PNG frames, and a CONTACT SHEET beside it: the run at a glance, a grid of thumbnails each
 // labelled with its time and step. A frame is the game's own CPU picture (game.hpp's views), so a
-// recording needs no GPU, no window and reproduces from the log like everything else.
+// recording needs no GPU, no window and reproduces from the log like everything else; with `gpu`
+// it is the game's renderer's picture of a view in one of its modes (lit, wireframe, depth,
+// overlay: game.hpp § THE GPU'S PICTURES), the renderer opened once and handed every frame in
+// order.
 //
 // THE FRAME CLOCK: frame k shows the run at step `from + round(k * speed * hz / fps)`, while that
 // is at most `to`: `speed` 2 plays the run at twice its pace, 0.25 in slow motion. The video
@@ -15,6 +18,7 @@
 // ge:summary A run recorded: a view drawn at a frame rate, encoded by ffmpeg, and a contact sheet
 // ge:keywords record video recording mp4 webm gif h264 vp9 ffmpeg encode frames frame-rate speed
 // ge:keywords contact-sheet thumbnails timestamps resolution crf bitrate frame_steps
+// ge:keywords gpu-recording record-gpu mode lit wireframe depth overlay
 // ge:skill agent-interface
 // ge:test tests/play_record_test.cpp
 #pragma once
@@ -59,7 +63,9 @@ std::vector<int64_t> frame_steps(double hz, int64_t from, int64_t to, double fps
 std::string clock_text(int64_t step, double hz);
 
 struct RecordOptions {
-  std::string view;  // "" the spec's first view
+  std::string view;  // "" the spec's first view (the renderer's, with gpu)
+  bool gpu = false;  // the renderer's pictures in place of the game's CPU views
+  std::string mode;  // with gpu: "" the renderer's first mode
   int64_t from = 0;
   int64_t to = -1;  // < 0: the log's end
   double fps = 30;
@@ -75,7 +81,7 @@ struct RecordOptions {
 };
 
 struct Recording {
-  std::string view;
+  std::string view;  // the lens's name: "map", or "chase/depth" with gpu
   int width = 0, height = 0;
   int64_t frames = 0;
   int64_t from = 0, to = 0;

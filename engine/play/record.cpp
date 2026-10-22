@@ -182,18 +182,8 @@ std::optional<Recording> record(const GameSpec& spec, const InputLog& log, const
     error = "ffmpeg is not installed, and a " + opt.encoding.format + " needs it";
     return std::nullopt;
   }
-  if (spec.views.empty()) {
-    error = std::string(spec.name) + " lists no views";
-    return std::nullopt;
-  }
-  const View* chosen = opt.view.empty() ? &spec.views[0] : nullptr;
-  std::string names;
-  for (const View& v : spec.views) {
-    if (v.name == opt.view) chosen = &v;
-    names += std::string(names.empty() ? "" : ", ") + v.name;
-  }
-  if (!chosen) {
-    error = "no view `" + opt.view + "`; the views are " + names;
+  Lens lens;
+  if (!open_lens(spec, LensAsk{opt.view, opt.gpu, opt.mode, opt.width, opt.height}, lens, error)) {
     return std::nullopt;
   }
   const int64_t to = opt.to < 0 ? log.steps() : std::min(opt.to, log.steps());
@@ -220,7 +210,7 @@ std::optional<Recording> record(const GameSpec& spec, const InputLog& log, const
   std::vector<std::pair<lab::Picture, std::string>> thumbs;
 
   Recording rec;
-  rec.view = chosen->name;
+  rec.view = lens.name();
   rec.from = steps.front();
   rec.to = steps.back();
   rec.frames = n;
@@ -233,7 +223,7 @@ std::optional<Recording> record(const GameSpec& spec, const InputLog& log, const
     while (at < steps[static_cast<size_t>(k)]) s.step(log.at(at++));
     lab::Picture raw;
     std::string caption;
-    if (!s.run().shoot(chosen->name, raw, caption, error)) break;
+    if (!shoot_lens(lens, s.run(), raw, caption, error)) break;
     if (k == 0) {
       rec.width = opt.width > 0 ? opt.width : raw.width;
       rec.height = opt.height > 0 ? opt.height : raw.height;
@@ -255,7 +245,7 @@ std::optional<Recording> record(const GameSpec& spec, const InputLog& log, const
     }
     if (opt.band)
       burn_band(frame,
-                std::string(when).append("  ").append(chosen->name).append("  ").append(caption));
+                std::string(when).append("  ").append(rec.view).append("  ").append(caption));
     if (video && !pipe) {
       rec.encoder = ffmpeg_command(opt.encoding, rec.width, rec.height, opt.fps, opt.video,
                                    opt.log.empty() ? opt.video + ".log" : opt.log);
@@ -284,7 +274,7 @@ std::optional<Recording> record(const GameSpec& spec, const InputLog& log, const
   }
   if (!error.empty()) return std::nullopt;
   if (!opt.sheet.empty()) {
-    const std::string title = std::string(spec.name) + " " + chosen->name + "  seed " +
+    const std::string title = std::string(spec.name) + " " + rec.view + "  seed " +
                               core::num::to_string(setup.seed) + "  " +
                               clock_text(rec.from, spec.hz) + " to " + clock_text(rec.to, spec.hz) +
                               "  digest " + hex64(rec.digest);

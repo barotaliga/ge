@@ -25,6 +25,7 @@
 // ge:summary The play session over a Run: the line protocol, the pilot, replay, state, diverge
 // ge:keywords play session protocol observe act pilot state inputs end replay diverge divergence
 // ge:keywords pilot_run state_at first-difference field-diff hello shot_at still view caption
+// ge:keywords lens lens-ask open_lens shoot_lens gpu-view mode
 // ge:skill agent-interface
 // ge:test tests/play_session_test.cpp
 #pragma once
@@ -137,9 +138,39 @@ struct Still {
   uint64_t digest = 0;  // the run's digest at `step`
 };
 
+// WHAT DRAWS A VIEW: a Lens is the game's own CPU view (Run::shoot), or with `gpu` the registered
+// renderer's view in one of its modes (game.hpp § THE GPU'S PICTURES), opened once for a shot or
+// a whole recording, so the renderer's frame carries from one picture to the next.
+struct LensAsk {
+  std::string view;  // "" the first view
+  bool gpu = false;
+  std::string mode;           // gpu only: "" the renderer's first mode
+  int width = 0, height = 0;  // gpu only: 0 the renderer's own size
+};
+
+struct Lens {
+  const View* view = nullptr;
+  const View* mode = nullptr;          // gpu only
+  std::unique_ptr<Renderer> renderer;  // null: the game's CPU view
+  int width = 0, height = 0;           // gpu only: the picture's size
+  int64_t drawn = 0;                   // pictures taken; the first is a cut
+  // "map" for a CPU view, "chase/depth" for a GPU one: how a file and a band name it.
+  std::string name() const;
+};
+
+// The lens `ask` names for `spec`, or false with `error` naming the views (and modes) there are.
+bool open_lens(const GameSpec& spec, const LensAsk& ask, Lens& out, std::string& error);
+// `run` as it stands, through `lens`.
+bool shoot_lens(Lens& lens, Run& run, lab::Picture& out, std::string& caption, std::string& error);
+// The lens's views (and modes) as JSON array bodies, for a command's answer.
+std::string lens_views_json(const GameSpec& spec, bool gpu);
+
 // `log` played to `step` and its view `view` drawn ("" the spec's first view).
 std::optional<Still> shot_at(const GameSpec& spec, const InputLog& log, int64_t step,
                              std::string_view view, std::string& error);
+// The same through the lens `ask` names (a GPU view with --gpu).
+std::optional<Still> shot_at(const GameSpec& spec, const InputLog& log, int64_t step,
+                             const LensAsk& ask, std::string& error);
 
 // A JSON string: quotes and backslashes escaped, newlines as \n, other control bytes dropped.
 std::string quote(std::string_view s);

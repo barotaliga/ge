@@ -167,6 +167,7 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
   source.base_spacing = 1.0;
   source.levels = 8;
   source.overdraw_probe = options.overdraw_probe;
+  source.wire_probe = options.wire_probe;
   f->tracks = options.snow && options.trails;
   if (f->tracks) {
     ge::mountain::app::create_trails(device, f->pipelines, f->trails, level, options.trail_maps);
@@ -184,7 +185,7 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
                      options.flakes);
   r::create_hiz_pipelines(device, f->pipelines, f->hiz);
   r::create_instance_pipelines(device, f->pipelines, f->instancing, f->frame_layout,
-                               options.overdraw_probe);
+                               options.overdraw_probe, options.wire_probe);
   if (options.taa) {
     r::TaaSettings taa;
     taa.scale = options.scale;
@@ -425,6 +426,15 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& view, const
       std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
   device.queue.Submit(1, &commands);
   f.recorder.after_submit(device);
+}
+
+void draw_wire(ge::gpu::Device& device, GameFrame& f, const wgpu::TextureView& colour) {
+  wgpu::CommandEncoder encoder = device.device.CreateCommandEncoder();
+  r::encode_terrain_wire(f.terrain, f.pipelines, encoder, f.targets, f.frame_group, colour, true);
+  r::encode_instances_wire(f.families, f.instancing, f.pipelines, encoder, f.targets, f.frame_group,
+                           f.instance_light, colour);
+  wgpu::CommandBuffer commands = encoder.Finish();
+  device.queue.Submit(1, &commands);
 }
 
 }  // namespace fall_line::app
