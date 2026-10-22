@@ -203,7 +203,11 @@ Outcome run(const Args& a) {
     lab.passthrough = a.passthrough;
     return run_lab(build_options(a), lab);
   }
-  if (name == "sim") return run_sim(build_options(a), flag_value(a, "seeds"), a.passthrough);
+  if (name == "sim") {
+    std::vector<std::string> options = a.passthrough;
+    if (has_flag(a, "human")) options.emplace_back("--human");
+    return run_sim(build_options(a), flag_value(a, "seeds"), options);
+  }
   if (name == "replay") return run_replay(build_options(a), a.words[0]);
   if (name == "state") return run_state(build_options(a), a.words[0], flag_value(a, "step"));
   if (name == "diverge") return run_diverge(build_options(a), a.words[0], a.words[1]);

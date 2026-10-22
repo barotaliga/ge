@@ -86,7 +86,13 @@ constexpr FlagSpec kGoldenWriteFlags[] = {
 constexpr FlagSpec kPlayFlags[] = {
     {"seed", "<n>", "the run's seed (default 1)"}, kPreset, kEngine, kRepo};
 constexpr FlagSpec kSimFlags[] = {
-    {"seeds", "<a,b,...>", "the seeds the pilot runs (default 1)"}, kPreset, kEngine, kRepo};
+    {"seeds", "<a,b,...>", "the seeds the pilot runs (default 1)"},
+    {"human", "",
+     "measure how human each run's controls and decisions look, and warn on every metric "
+     "outside a person's band (skill: bots)"},
+    kPreset,
+    kEngine,
+    kRepo};
 constexpr FlagSpec kFast{
     "preset", "<debug|release>",
     "the CMake preset (default release: a sanitizer's time is not the game's)"};
@@ -238,7 +244,8 @@ const CommandSpec kCommands[] = {
      "inputs, end); the game's options go after --",
      kPlayFlags, "ge play --seed=38 -- --rivals=3", "play-test"},
     {"sim", "", 0, 0, "play",
-     "the game's pilot over each seed: each run's report and digest, its input log in runs/",
+     "the game's pilot over each seed: each run's report and digest, its input log in runs/; "
+     "--human measures how human it looks; the game's options go after --",
      kSimFlags, "ge sim --seeds=38,7", "play-test"},
     {"replay", "<log>", 1, 1, "play",
      "an input log played back; a digest it misses is a determinism break", kBuildFlags,

@@ -18,6 +18,7 @@
 #include "core/num_text.hpp"
 #include "lab/png.hpp"
 #include "play/bench.hpp"
+#include "play/human.hpp"
 #include "play/session.hpp"
 #include "play/why.hpp"
 #include "prof/memory.hpp"
@@ -178,7 +179,7 @@ int sim(const GameSpec& spec, const Line& l, std::ostream& out) {
   for (const double seed : seeds) {
     Setup setup;
     std::string error;
-    if (!make_setup(spec, seed, options_of(l, {"seeds", "out"}), setup, error)) {
+    if (!make_setup(spec, seed, options_of(l, {"seeds", "out", "human"}), setup, error)) {
       return problem(out, 2, error, "the command line", "play describe lists the options");
     }
     const auto p = pilot_run(spec, setup, error);
@@ -188,8 +189,14 @@ int sim(const GameSpec& spec, const Line& l, std::ostream& out) {
     std::ofstream f(file, std::ios::binary);
     f << to_text(p->log);
     if (!f) return problem(out, 1, "cannot write " + file.string(), file.string(), "check --out");
+    std::string human;
+    if (l.flags.count("human")) {
+      const auto w = why_replay(spec, p->log, 0, error);
+      if (!w) return problem(out, 1, error, file.string(), "--human needs a game whose Run traces");
+      human = ",\"human\":" + human_json(human_report(spec, p->log, w->why));
+    }
     runs += std::string(runs.empty() ? "" : ",") + "{\"seed\":" + core::num::to_string(seed) +
-            ",\"inputs\":" + quote(file.generic_string()) + "," + played_json(*p) + "}";
+            ",\"inputs\":" + quote(file.generic_string()) + "," + played_json(*p) + human + "}";
   }
   out << "{\"game\":" << quote(spec.name) << ",\"runs\":[" << runs << "]}\n";
   return 0;

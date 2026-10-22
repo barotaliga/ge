@@ -32,6 +32,7 @@ ge digest [<lab>] [--write]      # a lab's digest beside tests/labs_digests.txt;
 ge golden diff [<test>] [--base=<ref>]   # what moved in each golden file, column by column
 ge golden write <test>           # a test's goldens rewritten (GE_GOLDEN_WRITE=1), held, diffed
 ge sim [--seeds=1,2]             # the game's pilot plays each seed; input logs in runs/
+ge sim --human                   # ... and how human each run looks, warned where a person's band is left
 ge play [--seed=1]               # you at the controls: one JSON line each way
 ge replay <log>                  # a run played back to its digest
 ge state <log> [--step=N]        # everything that decides the next step

@@ -154,7 +154,8 @@ BotPlan plan_line(const mg::Level& level, mg::Track line, const sk::SkiSpec& spe
   return plan;
 }
 
-Controls bot_controls(const GameState& state, int32_t i, const BotPlan& plan, ge::ai::Why* why) {
+Controls bot_controls(const GameState& state, int32_t i, const BotPlan& plan, ge::ai::Why* why,
+                      double lead_s) {
   const Racer& r = state.racers[static_cast<size_t>(i)];
   const sk::SkierState& s = r.skier;
   Controls c;
@@ -184,9 +185,10 @@ Controls bot_controls(const GameState& state, int32_t i, const BotPlan& plan, ge
   const mg::Track& track = *plan.track;
   const mg::TrackHit hit = mg::nearest_track_point(track, s.x, s.z);
   const double v = s.speed;
-  // The line: pursue his lane a look ahead down the piste.
+  // The line: pursue his lane a look ahead down the piste; further with late hands.
   const double look =
-      core::clamp(bot::kLookTime * v + bot::kLookLeast, bot::kLookLeast, bot::kLookMost);
+      core::clamp(bot::kLookTime * v + bot::kLookLeast, bot::kLookLeast, bot::kLookMost) +
+      (lead_s > 0 ? bot::kLeadLook * lead_s * num::max(v, bot::kLeadLeast) : 0);
   const mg::TrackPoint aim = mg::track_point_at(track, hit.s + look);
   // His lane: held right of the centreline (or of the weave through the gates, inside their
   // panels), never nearer the piste's edge than `kLaneMargin`.

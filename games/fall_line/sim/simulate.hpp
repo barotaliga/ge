@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "fall_line/sim/bot.hpp"
+#include "fall_line/sim/hands.hpp"
 #include "fall_line/sim/state.hpp"
 #include "mountain/mapgen/types.hpp"
 #include "racing/tape.hpp"
@@ -29,9 +30,10 @@
 namespace fall_line::sim {
 
 struct SimOptions {
-  double max_seconds = 600;    // the run's time limit
-  std::optional<int> version;  // the generator's
-  int32_t rivals = 0;          // bots on the grid beside the player
+  double max_seconds = 600;                 // the run's time limit
+  std::optional<int> version;               // the generator's
+  int32_t rivals = 0;                       // bots on the grid beside the player
+  HandsProfile hands = HandsProfile::none;  // every bot's hands, the player's and the rivals'
 };
 
 // One racer's run in a field, in field order (the player first).
@@ -97,6 +99,11 @@ class Driver {
   const BotPlan& plan() const { return plan_; }
   // The rivals' bots record their decisions into `why` (null: stop), each as his racer index.
   void set_why(ge::ai::Why* why) { why_ = why; }
+  // The rivals press through hands of `profile` (hands.hpp), each off his own stream on `seed`'s
+  // map. Set before the first step.
+  void set_hands(HandsProfile profile, double seed);
+  // What each racer pressed on the last step (the player first): the humanness lab reads it.
+  const std::vector<Controls>& controls() const { return controls_; }
   uint64_t digest() const { return hash_; }
   ge::racing::ControlTape tape() const { return recorder_.seal(); }
   // The run so far, as the sim lab's table prints it.
@@ -109,6 +116,7 @@ class Driver {
   std::vector<Controls> controls_;
   std::vector<int32_t> shoulders_;
   ge::ai::Why* why_ = nullptr;
+  std::vector<BotHands> hands_;  // the rivals', by racer index (the player's is the pilot's)
   int32_t lifts_ = 0;
   double boarded_at_ = 0;
   double lift_wait_ = 0;

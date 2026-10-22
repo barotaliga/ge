@@ -47,12 +47,17 @@ std::string flag(bool b) { return b ? "true" : "false"; }
 
 class FallLineRun final : public ge::play::Run {
  public:
-  FallLineRun(std::shared_ptr<const mg::Level> level, double seed, int32_t rivals)
-      : driver_(std::move(level), rivals), seed_(seed) {
+  FallLineRun(std::shared_ptr<const mg::Level> level, double seed, int32_t rivals,
+              HandsProfile hands)
+      : driver_(std::move(level), rivals), hands_(hands, hands_seed(seed, 0)), seed_(seed) {
+    driver_.set_hands(hands, seed);
     backlog_.reserve(kMostEvents);
   }
 
   void step(std::span<const double> in) override {
+    // The pilot's hands move on only with a step taken: asking it (the `why` op) works on a copy.
+    if (asked_at_ == driver_.state().steps) hands_ = asked_;
+    asked_at_ = -1;
     Controls c;
     c.ski.steer = in[0];
     c.ski.tuck = in[1];
@@ -154,8 +159,10 @@ class FallLineRun final : public ge::play::Run {
 
   bool pilot(std::span<double> out) override {
     const GameState& st = driver_.state();
-    const Controls c =
-        bot_controls(st, 0, driver_.plan(), why_ ? why_->follow(0, st.steps) : nullptr);
+    ge::ai::Why* why = why_ ? why_->follow(0, st.steps) : nullptr;
+    asked_ = hands_;
+    asked_at_ = st.steps;
+    const Controls c = asked_.press(bot_controls(st, 0, driver_.plan(), why, asked_.lead()), why);
     out[0] = c.ski.steer;
     out[1] = c.ski.tuck;
     out[2] = c.ski.brake;
@@ -233,6 +240,8 @@ class FallLineRun final : public ge::play::Run {
   }
 
   Driver driver_;
+  BotHands hands_, asked_;  // the pilot's hands, and as they are once the asked step is taken
+  int64_t asked_at_ = -1;
   ge::ai::Why* why_ = nullptr;
   double seed_;
   std::vector<GameEvent> backlog_;
@@ -242,6 +251,12 @@ class FallLineRun final : public ge::play::Run {
 std::unique_ptr<ge::play::Run> open_run(const ge::play::Setup& setup, std::string& error) {
   const double rivals = setup.number("rivals");
   const double version = setup.number("version");
+  const auto given = setup.options.find("hands");
+  const auto hands = hands_profile(given == setup.options.end() ? "none" : given->second);
+  if (!hands) {
+    error = "hands must be `none` or `human` (fall_line/sim/hands.hpp)";
+    return nullptr;
+  }
   if (rivals < 0 || rivals > 7 || rivals != num::round(rivals)) {
     error = "rivals must be a whole number from 0 to 7";
     return nullptr;
@@ -258,8 +273,8 @@ std::unique_ptr<ge::play::Run> open_run(const ge::play::Setup& setup, std::strin
       last_version = version;
     }
     std::shared_ptr<const mg::Level> level = last;
-    return std::make_unique<FallLineRun>(std::move(level), setup.seed,
-                                         static_cast<int32_t>(rivals));
+    return std::make_unique<FallLineRun>(std::move(level), setup.seed, static_cast<int32_t>(rivals),
+                                         *hands);
   } catch (const mg::GenerateError& e) {
     error = "seed " + exact(setup.seed) + " built no map: " + e.what() +
             "; pick another seed, or run `make lab LAB=analyze ARGS=--seeds=" + exact(setup.seed) +
@@ -281,9 +296,12 @@ constexpr std::array<ge::play::View, 2> kViews{{
     {"map", "the whole map from above: the face, the woods, the piste, the gates, the field"},
 }};
 
-constexpr std::array<ge::play::Option, 2> kOptions{{
+constexpr std::array<ge::play::Option, 3> kOptions{{
     {"rivals", "0", "bots on the grid beside the player (0..7)"},
     {"version", "1", "the generator's version the race map is built by"},
+    {"hands", "none",
+     "every bot's hands: none (as decided) or human (a person's reaction, "
+     "slew and wander)"},
 }};
 
 }  // namespace

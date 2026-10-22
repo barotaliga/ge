@@ -10,6 +10,7 @@
 #include <algorithm>
 
 #include "cli/json.hpp"
+#include "core/num_text.hpp"
 #include "play/json_read.hpp"
 
 namespace ge::cli {
@@ -42,6 +43,13 @@ Outcome run_exe(const BuildOptions& o, const std::string& command, const std::st
   fs::remove(log, ec);
   const Logged r = run_to_log(quoted_path(play_exe(o)) + args, log);
   return play_answer(o, command, r.code, r.output);
+}
+
+// A metric of `m` to three places, or "-" when it is not a number.
+std::string metric(const play::FlatJson& m, const std::string& key) {
+  const auto it = m.find(key);
+  if (it == m.end() || it->second.kind != play::JsonValue::Kind::number) return "-";
+  return core::num::to_fixed(it->second.number, 3);
 }
 
 }  // namespace
@@ -133,6 +141,27 @@ Outcome play_answer(const BuildOptions& o, const std::string& command, int code,
       text += text_of(m, k + "over") == "true" ? "over" : "stopped at the longest run";
       text += " after " + text_of(m, k + "steps") + " steps, digest " + text_of(m, k + "digest");
       text += ", " + log + "\n";
+      const std::string h = k + "human.";
+      for (int a = 0; m.contains(h + "axes." + std::to_string(a) + ".name"); a++) {
+        const std::string ax = h + "axes." + std::to_string(a) + ".";
+        text += "    " + text_of(m, ax + "name") + ": saturated " + metric(m, ax + "saturated") +
+                ", jumps " + metric(m, ax + "jumps") + ", reversals/min " +
+                metric(m, ax + "reversals_min") + ", hold " + metric(m, ax + "hold_s") +
+                " s, lag " + metric(m, ax + "lag_s") + " s\n";
+      }
+      for (int d = 0; m.contains(h + "decisions." + std::to_string(d) + ".name"); d++) {
+        const std::string de = h + "decisions." + std::to_string(d) + ".";
+        text += "    decision " + text_of(m, de + "name") + ": flips/min " +
+                metric(m, de + "flips_min") + ", close share " + metric(m, de + "close_share") +
+                ", variety " + metric(m, de + "variety") + "\n";
+      }
+      for (int f = 0; m.contains(h + "out_of_band." + std::to_string(f)); f++) {
+        out.findings.push_back(
+            {Severity::warn,
+             "seed " + text_of(m, k + "seed") + ": " +
+                 text_of(m, h + "out_of_band." + std::to_string(f)) + " (a person's band)",
+             log, "see why it does that: ge why " + log + " --flips (skill: bots)"});
+      }
     }
     out.text = text;
     out.summary = "the pilot's runs above; each input log replays to its digest";

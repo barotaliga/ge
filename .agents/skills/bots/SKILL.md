@@ -69,16 +69,61 @@ is what it did. On a log a person or an agent played it is what the bot WOULD ha
 answer names the first step it would have played otherwise (`first_disagree`): the quickest way
 to see where a bot and a person part.
 
+## The hands: how a decision becomes controls
+
+A person does not press what they decide. `ai::Hands` (`engine/ai/hands.hpp`) turns what a bot
+WANTS into what it PRESSES, per axis (`ai::AxisHands`), in this order: a reaction delay (a fixed
+ring, up to 0.8 s), a slow wander off what was meant (faded near an end and near rest, so a hand
+let go or pressed to a stop sits still), a damped spring (`settle_s`, `damping`: under 1
+overshoots a quick move), a slew limit (travel a second), the reach (`lo`, `hi`). A button is
+`pass`. Everything is fixed-size and copies cheaply, its noise off its own `core::Rng` stream.
+
+- **The bot records its intent before its hands**: `ai::record_intent(why, names, wanted)`
+  writes a decision called `hands`, one fact an axis by the axis's name. The humanness report
+  measures the lag against it.
+- **A game names its profiles** (Fall Line: `games/fall_line/sim/hands.hpp`, `none` and
+  `human`; `--hands=` on the play contract, `SimOptions::hands` in the sim). The default profile
+  presses what the bot wants, so no digest moves until a run asks for hands.
+- **A pilot asked off the step works on a COPY of its hands** (`ge why` asks the pilot at every
+  step, the protocol's `pilot` op asks without stepping): pilot() presses on a copy, and the
+  step commits it only when it was asked at that step. Otherwise asking moves the run.
+- **Late hands need a bot that looks further ahead.** The bot steers from where it will be when
+  its hands catch up (`BotHands::lead()`, Fall Line's `bot_controls(..., lead_s)`): without it a
+  0.2 s delay turns a pursuit into a limit cycle from one end of the stick to the other.
+
+## How human it looks
+
+`ai::axis_humanness` and `ai::decision_humanness` (`engine/ai/human.hpp`) measure a run;
+`kHumanBands` holds each metric to a person's band, every band with the assumption it rests on.
+`check_axis` / `check_decision` list what is outside as `OutOfBand`.
+
+| Metric | What it is | A person's band |
+| --- | --- | --- |
+| `saturated` | the share of the steps in use spent at an end of the travel | a stick 0..0.35 |
+| `jumps` | steps that cross more than half the travel at once | 0..0.01 |
+| `reversals_min` | changes of direction a minute (0.05 hysteresis) | 0..120 |
+| `hold_s` | how long a stick sits part-way (a time-weighted median) | a stick 0.05..3 s |
+| `lag_s` | the delay at which the pressed best follows the wanted (`hands`) | 0.15..0.4 s |
+| `flips_min` | a decision's changes of mind a minute | 0..20 |
+
+`ge sim --human` (the play executable's `sim --human`, `engine/play/human.hpp`) prints them for
+every run and warns on each one out of band; it reads a person's log the same way (the wanted is
+then what the bot would have meant there). A signed axis is a stick, a lever a trigger, a button
+is left out. Fall Line's `humanness` lab sweeps seeds with a field of four, every profile side by
+side, and charts the steer meant against pressed.
+
 ## The loop: a bot that behaves more like a person
 
-1. Run the bot's labs with `--tag=before` (Fall Line: `make sim`, `make lab LAB=free`).
+1. Run the bot's labs with `--tag=before` (Fall Line: `make sim`, `make lab LAB=free`,
+   `make lab LAB=humanness`), and `ge sim --human` on the seed.
 2. Find a robotic moment: a flagged metric, a line too perfect, a stop too late. `ge why --flips`
    on that seed lists where the bot changed its mind; `--timeline` and `ge graph` show the facts
    it chose on round there.
 3. Read the decision at that step (`ge why --step=S --around=12`): which term settled it, how
    close the call was.
-4. Change the bot (its decisions) or, once M16b lands, its hands (how a decision becomes
-   controls: a reaction delay, a slew, a little noise), never both in one round.
+4. Change the bot (its decisions) or its hands (how a decision becomes controls: the delay,
+   the spring, the slew, the wander), never both in one round. An axis out of band is the
+   hands'; a decision flipping is the bot's.
 5. Run with `--compare=before`, `ge graph` both timelines on one chart, put both in the PR.
 
 ## What lives where
@@ -87,7 +132,8 @@ to see where a bot and a person part.
 | --- | --- | --- |
 | The decision record and its forms | `engine/ai/why.hpp` | built (M16a) |
 | `ge why`'s engine half: replay with the trace, timeline, flips | `engine/play/why.hpp`, `play why` in `main.cpp`, `ge why` in `engine/cli/play.cpp` | built (M16a) |
-| Humanness metrics off an input log, the hands | `engine/ai/human.hpp`, `hands.hpp`, the `humanness` lab | M16b |
+| The hands, the humanness metrics and bands | `engine/ai/hands.hpp`, `human.hpp` | built (M16b) |
+| The report off a log, `ge sim --human` | `engine/play/human.hpp`, `sim --human` in `main.cpp`, `ge sim` in `engine/cli/play.cpp` | built (M16b) |
 | A skier's pilot (pure pursuit, the speed plan on the limits) | `plugins/skier/pilot.hpp` | M16c |
 | Paths (one heap, grid and graph search), thinking on a schedule | `engine/ai/path.hpp`, `think.hpp` | M16d, with the free ride's lifts |
 | Sight and memory, steering, choosing (utility, state machines) | `engine/ai/sight.hpp`, `memory.hpp`, `steer.hpp`, `choose.hpp` | M16e, with the army on foot |

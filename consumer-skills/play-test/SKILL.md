@@ -82,6 +82,15 @@ changed its mind (`--close=x` adds the close calls); `--timeline` writes the dec
 series file for `ge graph`. A bot records with `if (why) why->fact(...)`: off is a null pointer,
 and it must decide exactly the same traced and untraced (`ge why` replays to the log's digest).
 
+**HOW HUMAN IT LOOKS.** `ge sim --human` adds, per run, each axis's metrics (a signed axis read
+as a stick, a lever as a trigger: the share at an end, jumps, reversals a minute, how long it is
+held part-way, the lag behind what the bot meant) and each decision's changes of mind a minute,
+with a warning for every value outside a person's band (the engine's `ai/human.hpp`). The lag
+needs the bot to record what it meant before its hands (`ai::record_intent`, the engine's
+`ai/hands.hpp`, which also turns a decision into late, settling, slewed presses). A pilot that
+holds hands must press on a copy in `pilot()` and commit it in `step()` only when it was asked
+at that step, or `ge why` (which asks at every step) moves the run.
+
 ## Chasing a determinism break
 
 1. `ge replay` reports a digest that differs from the recorded one, or a test's golden moved.

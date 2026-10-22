@@ -186,7 +186,8 @@ target_link_libraries(ge_ai PUBLIC ge_core)
 # as ge::play so a game's `play` target is driven by `ge play`, `ge sim`, `ge replay`, `ge state`,
 # `ge diverge`, `ge shot`, `ge bench`, `ge profile` and `ge mem`.
 add_library(ge_play STATIC engine/play/inputs.cpp engine/play/json_read.cpp
-  engine/play/session.cpp engine/play/bench.cpp engine/play/why.cpp engine/play/main.cpp)
+  engine/play/session.cpp engine/play/bench.cpp engine/play/why.cpp engine/play/human.cpp
+  engine/play/main.cpp)
 target_link_libraries(ge_play PUBLIC ge_core ge_ai ge_lab ge_prof ge_prof_alloc)
 
 # The ge command line (engine/cli, cmake/Cli.cmake): built here too when a game pulls the engine
