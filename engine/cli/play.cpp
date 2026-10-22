@@ -75,11 +75,21 @@ Outcome play_answer(const BuildOptions& o, const std::string& command, int code,
   }
   if (m.contains("error")) {
     // The executable names the absolute paths ge handed it; the agent reads them from the repo.
+    // The repo is stripped as given and as canonical, in native and generic spelling (on
+    // Windows those differ in separators and in short against long directory names).
+    std::error_code ec;
+    const fs::path canonical = fs::weakly_canonical(o.repo, ec);
+    std::vector<std::string> roots;
+    for (const fs::path& p : {o.repo, canonical}) {
+      roots.push_back((p / "").string());
+      roots.push_back((p / "").generic_string());
+    }
     auto in_repo = [&](std::string s) {
-      std::error_code ec;
-      const std::string root = fs::weakly_canonical(o.repo, ec).string() + "/";
-      for (size_t at = s.find(root); at != std::string::npos; at = s.find(root)) {
-        s.erase(at, root.size());
+      for (const std::string& root : roots) {
+        for (size_t at = s.find(root); !root.empty() && at != std::string::npos;
+             at = s.find(root)) {
+          s.erase(at, root.size());
+        }
       }
       return s;
     };

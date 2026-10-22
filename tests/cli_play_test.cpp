@@ -11,6 +11,7 @@
 #include <string>
 
 #include "check.hpp"
+#include "cli/json.hpp"
 #include "cli/play.hpp"
 
 using namespace ge::cli;
@@ -31,10 +32,11 @@ bool has(const std::string& s, const std::string& part) {
 
 TEST(a_sim_answer_lists_each_run_and_points_at_its_replay) {
   const std::string inputs = (repo().repo / "runs" / "g-38.inputs").string();
-  const Outcome o = play_answer(repo(), "sim", 0,
-                                "{\"game\":\"g\",\"runs\":[{\"seed\":38,\"inputs\":\"" + inputs +
-                                    "\",\"steps\":10,\"over\":true,\"digest\":\"00000000000000ff\","
-                                    "\"report\":{\"x\":1}}]}\n");
+  const Outcome o =
+      play_answer(repo(), "sim", 0,
+                  "{\"game\":\"g\",\"runs\":[{\"seed\":38,\"inputs\":" + json_str(inputs) +
+                      ",\"steps\":10,\"over\":true,\"digest\":\"00000000000000ff\","
+                      "\"report\":{\"x\":1}}]}\n");
   CHECK(exit_of(o) == 0 && has(o.result, "\"runs\":["));
   CHECK_MSG(has(o.text, "seed 38: over after 10 steps, digest 00000000000000ff, runs/g-38.inputs"),
             o.text);
@@ -74,8 +76,8 @@ TEST(an_error_answer_becomes_a_finding_relative_to_the_repo) {
   const std::string path = (fs::weakly_canonical(repo().repo) / "runs" / "x.inputs").string();
   const Outcome o =
       play_answer(repo(), "replay", 1,
-                  "warning from the game's stderr\n{\"error\":\"cannot read " + path +
-                      "\",\"where\":\"" + path + "\",\"next\":\"pass an input log\"}");
+                  "warning from the game's stderr\n{\"error\":" + json_str("cannot read " + path) +
+                      ",\"where\":" + json_str(path) + ",\"next\":\"pass an input log\"}");
   CHECK(o.findings.size() == 1);
   CHECK_MSG(
       o.findings[0].what == "cannot read runs/x.inputs" && o.findings[0].where == "runs/x.inputs",
