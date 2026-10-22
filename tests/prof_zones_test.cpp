@@ -21,8 +21,10 @@ namespace {
 
 void inner() {
   GE_ZONE("test.inner");
-  auto keep = std::make_unique<int>(7);
-  CHECK(*keep == 7);
+  // A call of the allocation function itself: an optimiser may drop a new-expression whose
+  // block it can see is never used, but not this.
+  void* block = ::operator new(16);
+  ::operator delete(block);
 }
 
 void outer() {
