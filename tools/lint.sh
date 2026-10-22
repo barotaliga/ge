@@ -9,8 +9,11 @@
 #                                      changed header (HeaderFilterRegex reports a header's
 #                                      findings through the files that include it)
 #
-# A change to the lint's own inputs (.clang-tidy, this script, the build's CMake) lints
-# everything, since any file's findings can move. JOBS=N sets the parallelism (default: cores).
+# A change to the lint's own rules (.clang-tidy, this script) lints everything, since any file's
+# findings can move. A change to the build's CMake does not: it most often adds a source, which
+# the change lists anyway, and a full lint on a pull request takes longer than main takes to
+# move on. Every push to main still lints every file, which catches what a flag change moves.
+# JOBS=N sets the parallelism (default: cores).
 #
 # ge:summary Runs clang-tidy in parallel over every .cpp, or what a change reaches (make lint)
 # ge:keywords ci lint clang-tidy changed-files parallel header-dependencies
@@ -35,7 +38,7 @@ if [[ -n "$base" ]]; then
     full=0
     for f in "${changed[@]}"; do
       case "$f" in
-        .clang-tidy | tools/lint.sh | CMakeLists.txt | CMakePresets.json | cmake/* | */CMakeLists.txt) full=1 ;;
+        .clang-tidy | tools/lint.sh) full=1 ;;
       esac
     done
     if (( ! full )); then
@@ -55,7 +58,7 @@ if [[ -n "$base" ]]; then
       done
       echo "lint: ${#files[@]} of ${#all[@]} files reach a change since $base."
     else
-      echo "lint: the lint's own inputs changed since $base; linting all ${#all[@]} files."
+      echo "lint: the lint's own rules changed since $base; linting all ${#all[@]} files."
     fi
   fi
 fi
