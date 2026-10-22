@@ -146,15 +146,25 @@ bool Dem::fetch(const std::string& name, std::string& error) {
   const std::string key = "Copernicus_DSM_COG_10_" + name + "_DEM";
   const std::string url = std::string(kBucket) + "/" + key + "/" + key + ".tif";
   const fs::path part = fs::path(cache_) / (name + ".part");
-  const std::string cmd = "curl -sS -o '" + part.string() + "' -w '%{http_code}' '" + url + "'";
+  // Double quotes, which both a POSIX shell and the Windows command line read as one word.
+  const std::string cmd =
+      "curl -sS -o \"" + part.string() + "\" -w \"%{http_code}\" \"" + url + "\"";
+#ifdef _WIN32
+  FILE* p = _popen(cmd.c_str(), "r");
+#else
   FILE* p = popen(cmd.c_str(), "r");
+#endif
   if (!p) {
     error = "could not run curl";
     return false;
   }
   char code[8] = {};
   const size_t got = std::fread(code, 1, 3, p);
+#ifdef _WIN32
+  const int status = _pclose(p);
+#else
   const int status = pclose(p);
+#endif
   const std::string http(code, got);
   if (http == "404" || http == "403") {
     // A tile over open sea is not published.
