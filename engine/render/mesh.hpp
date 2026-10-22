@@ -55,6 +55,8 @@ struct PackedMesh {
   std::vector<uint32_t> indices;
 };
 PackedMesh pack_mesh(const MeshData& m);
+// Packed into a given box (positions outside it are clamped to its walls).
+PackedMesh pack_mesh(const MeshData& m, const float box_min[3], const float box_size[3]);
 // The vertex `i` of a packed mesh as the shaders decode it.
 void unpack_vertex(const PackedMesh& p, uint32_t i, float pos[3], float normal[3], uint32_t* part);
 

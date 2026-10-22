@@ -1,0 +1,158 @@
+// THE GAME ON THE PLAY CONTRACT: what an agent plays through `ge play` and the pilot plays
+// through `ge sim`. The spec names the axes (the whole input: the steer, the throttle and the
+// brake), the options a run is opened with, and the Run wraps the simulation: one step on the
+// snapped axes, what a driver sees, everything that decides the next step, the report, the
+// game's own pilot and the views `ge shot` draws. Grow it with the game: a new input is an axis,
+// a new setting an option, a new picture a view (skill: play-test).
+//
+// ge:summary The racer on the play contract: its axes, observe, state, report, pilot and views
+// ge:keywords play contract game spec run axes options observe state report pilot ge_game shoot
+// ge:keywords racer track car gates laps views
+// ge:skill play-test
+// ge:test tests/sim_game_test.cpp
+#include <array>
+#include <memory>
+#include <span>
+#include <string>
+#include <string_view>
+
+#include "core/libm/libm.hpp"
+#include "core/math.hpp"
+#include "core/num.hpp"
+#include "core/num_text.hpp"
+#include "lab/raster.hpp"
+#include "play/game.hpp"
+#include "sim/game.hpp"
+
+namespace {
+
+namespace num = ge::core::num;
+namespace libm = ge::core::libm;
+namespace sim = {{ident}}::sim;
+
+std::string fixed(double v) { return num::to_fixed(v, 3); }
+
+class Run final : public ge::play::Run {
+ public:
+  explicit Run(uint32_t seed) : state_(sim::create_game(seed)) {}
+
+  void step(std::span<const double> input) override {
+    sim::step(state_, sim::Input{input[0], input[1], input[2]});
+  }
+  bool over() const override { return sim::finished(state_); }
+  uint64_t digest() const override { return sim::digest(state_); }
+  std::string observe() override {
+    const sim::Gate& g = state_.gates[static_cast<size_t>(state_.next_gate)];
+    const double bearing = libm::atan2(g.x_m - state_.x_m, g.z_m - state_.z_m);
+    return "{\"x\":" + fixed(state_.x_m) + ",\"z\":" + fixed(state_.z_m) +
+           ",\"heading\":" + fixed(state_.heading) + ",\"speed\":" + fixed(state_.speed_mps) +
+           ",\"gate\":" + std::to_string(state_.next_gate) +
+           ",\"gate_bearing\":" + fixed(ge::core::angle_diff(state_.heading, bearing)) +
+           ",\"gate_distance\":" + fixed(ge::core::hypot(g.x_m - state_.x_m, g.z_m - state_.z_m)) +
+           ",\"lap\":" + std::to_string(state_.laps) + ",\"laps\":" + std::to_string(sim::kLaps) +
+           ",\"finished\":" + (sim::finished(state_) ? "true" : "false") + "}";
+  }
+  std::string state() const override {
+    return "{\"steps\":" + std::to_string(state_.steps) +
+           ",\"rng\":" + std::to_string(state_.rng.a) + ",\"x_m\":" + num::to_string(state_.x_m) +
+           ",\"z_m\":" + num::to_string(state_.z_m) +
+           ",\"heading\":" + num::to_string(state_.heading) +
+           ",\"speed_mps\":" + num::to_string(state_.speed_mps) +
+           ",\"next_gate\":" + std::to_string(state_.next_gate) +
+           ",\"laps\":" + std::to_string(state_.laps) +
+           ",\"finish_step\":" + std::to_string(state_.finish_step) + "}";
+  }
+  std::string report() const override {
+    const double t = static_cast<double>(state_.finish_step) / sim::kStepHz;
+    return "{\"finished\":" + std::string(sim::finished(state_) ? "true" : "false") +
+           ",\"time\":" + (sim::finished(state_) ? num::to_fixed(t, 3) : "null") +
+           ",\"laps\":" + std::to_string(state_.laps) + "}";
+  }
+  bool pilot(std::span<double> input) override {
+    const sim::Input in = sim::autopilot(state_);
+    input[0] = in.steer;
+    input[1] = in.throttle;
+    input[2] = in.brake;
+    return true;
+  }
+  // `ge shot`'s views: the whole loop, or the 50 m round the car; +x right, +z down.
+  bool shoot(std::string_view view, ge::lab::Picture& out, std::string& caption,
+             std::string& error) override {
+    const bool car = view == "car";
+    if (!car && view != "track") {
+      error = "no view `" + std::string(view) + "`";
+      return false;
+    }
+    constexpr int kPx = 400;
+    const double metres = car ? 50 : 200;
+    const double cx = car ? state_.x_m : 0, cz = car ? state_.z_m : 0;
+    const double k = kPx / metres;
+    const auto sx = [&](double x) { return (x - cx) * k + kPx / 2.0; };
+    const auto sz = [&](double z) { return (z - cz) * k + kPx / 2.0; };
+    out = ge::lab::create_picture(kPx, kPx, {70, 110, 70});
+    for (int i = 0; i < sim::kGates; i++) {
+      const sim::Gate& a = state_.gates[static_cast<size_t>(i)];
+      const sim::Gate& b = state_.gates[static_cast<size_t>((i + 1) % sim::kGates)];
+      ge::lab::draw_line(out, sx(a.x_m), sz(a.z_m), sx(b.x_m), sz(b.z_m), {90, 90, 96},
+                         2 * sim::kGateRadius * k);
+    }
+    for (int i = 0; i < sim::kGates; i++) {
+      const sim::Gate& g = state_.gates[static_cast<size_t>(i)];
+      const bool next = i == state_.next_gate;
+      const ge::lab::Rgba c = next ? ge::lab::Rgba{255, 210, 40} : ge::lab::Rgba{235, 235, 235};
+      ge::lab::draw_ring(out, sx(g.x_m), sz(g.z_m), sim::kGateRadius * k, c);
+      ge::lab::draw_text(out, sx(g.x_m) + sim::kGateRadius * k + 3, sz(g.z_m) - 3,
+                         i == 0 ? "START" : std::to_string(i), c);
+    }
+    const double px = sx(state_.x_m), pz = sz(state_.z_m);
+    const double len = car ? 30 : 14;
+    ge::lab::draw_line(out, px, pz, px + libm::sin(state_.heading) * len,
+                       pz + libm::cos(state_.heading) * len, {220, 30, 30}, 2);
+    ge::lab::fill_disc(out, px, pz, car ? 7 : 4, {220, 30, 30});
+    caption =
+        std::string(car ? "The 50 m round the car" : "The whole loop") + " at " +
+        num::to_fixed(static_cast<double>(state_.steps) / sim::kStepHz, 1) + " s: lap " +
+        std::to_string(state_.laps) + " of " + std::to_string(sim::kLaps) + ", " +
+        (sim::finished(state_) ? "finished" : "next gate " + std::to_string(state_.next_gate)) +
+        ", " + num::to_fixed(state_.speed_mps * 3.6, 1) +
+        " km/h. The car is red with its heading, the next gate yellow.";
+    return true;
+  }
+
+ private:
+  sim::GameState state_;
+};
+
+std::unique_ptr<ge::play::Run> open(const ge::play::Setup& setup, std::string& error) {
+  if (setup.seed < 0 || setup.seed != num::round(setup.seed)) {
+    error = "the seed must be a whole number, 0 or more";
+    return nullptr;
+  }
+  return std::make_unique<Run>(static_cast<uint32_t>(setup.seed));
+}
+
+constexpr std::array<ge::play::Axis, 3> kAxes{{
+    {"steer", ge::play::AxisKind::signed_unit, "-1 left .. 1 right"},
+    {"throttle", ge::play::AxisKind::lever, "0 .. 1 the engine"},
+    {"brake", ge::play::AxisKind::lever, "0 .. 1 the brakes"},
+}};
+
+constexpr std::array<ge::play::View, 2> kViews{{
+    {"track", "the whole loop from above: the gates, the next one yellow, the car red"},
+    {"car", "the 50 m round the car from above"},
+}};
+
+const ge::play::GameSpec kGame{
+    .name = "{{ident}}",
+    .summary = "a car round a loop of gates the seed lays out, two laps",
+    .hz = sim::kStepHz,
+    .most_seconds = 120,
+    .axes = kAxes,
+    .options = {},
+    .open = open,
+    .views = kViews,
+};
+
+}  // namespace
+
+GE_GAME(kGame);

@@ -26,8 +26,12 @@ constexpr FlagSpec kDryRun{"dry-run", "", "say what would be written, write noth
 constexpr FlagSpec kNewFlags[] = {
     {"name", "<kebab>", "the game's name (default: the directory's)"},
     {"engine-sha256", "<hex>", "the release's -src.tar.gz checksum, pinned with it"},
+    {"game", "<demo|racer>",
+     "the game it starts as: demo (a body on a field) or racer (a car round a loop of gates)"},
 };
 constexpr FlagSpec kRepoOnly[] = {kRepo};
+constexpr FlagSpec kUpgradeFlags[] = {
+    {"engine-sha256", "<hex>", "the new release's -src.tar.gz checksum, pinned with it"}, kRepo};
 constexpr FlagSpec kSyncFlags[] = {{"force", "", "rewrite engine skills edited by hand"}, kRepo};
 constexpr FlagSpec kLessonsFlags[] = {
     {"scope", "<path>", "only lessons whose scope overlaps this path"}, kRepo};
@@ -54,8 +58,44 @@ constexpr FlagSpec kPlayFlags[] = {
     {"seed", "<n>", "the run's seed (default 1)"}, kPreset, kEngine, kRepo};
 constexpr FlagSpec kSimFlags[] = {
     {"seeds", "<a,b,...>", "the seeds the pilot runs (default 1)"}, kPreset, kEngine, kRepo};
+constexpr FlagSpec kFast{
+    "preset", "<debug|release>",
+    "the CMake preset (default release: a sanitizer's time is not the game's)"};
+constexpr FlagSpec kSteps{"steps", "<n>", "only the first this many steps of each run"};
+constexpr FlagSpec kBenchFlags[] = {
+    {"seeds", "<a,b,...>", "the seeds the pilot plays (default 1)"},
+    {"repeats", "<n>", "times each run is replayed and timed (default 5)"},
+    kSteps,
+    {"tag", "<name>", "keep the answer as runs/bench@<name>.json for a later --compare"},
+    {"compare", "<name>", "set every number beside the run tagged <name>; 10% slower warns"},
+    kFast,
+    kEngine,
+    kRepo};
+constexpr FlagSpec kProfileFlags[] = {
+    {"seeds", "<a,b,...>", "the seeds the pilot plays (default 1)"},
+    {"repeats", "<n>", "times each run is replayed and timed (default 5)"},
+    kSteps,
+    {"render", "", "also run the game's `profile` lab: CPU and GPU ms per render pass"},
+    kFast,
+    kEngine,
+    kRepo};
+constexpr FlagSpec kMemFlags[] = {
+    {"seeds", "<a,b,...>", "the seeds the pilot plays (default 1)"}, kSteps, kFast, kEngine, kRepo};
+constexpr FlagSpec kLeakFlags[] = {
+    {"seeds", "<a,b,...>", "the seeds the pilot plays (default 1)"},
+    {"valgrind", "", "run under valgrind's memcheck instead of the sanitizers"},
+    {"preset", "<debug|release>", "the CMake preset (default debug: its sanitizers find leaks)"},
+    kEngine,
+    kRepo};
 constexpr FlagSpec kStateFlags[] = {
     {"step", "<n>", "after this many steps (default: the log's end)"}, kPreset, kEngine, kRepo};
+constexpr FlagSpec kShotFlags[] = {
+    {"seed", "<n>", "without a log: the pilot plays this seed first (default 1)"},
+    {"step", "<n>", "after this many steps (default: the run's end)"},
+    {"view", "<name>", "which picture (default: the game's first; ge shot lists them)"},
+    kPreset,
+    kEngine,
+    kRepo};
 constexpr FlagSpec kGraphFlags[] = {
     {"kind", "<auto|line|scatter|hist|box|heat|spans>",
      "the chart (default auto: spans for a spans file, line for the rest)"},
@@ -96,7 +136,7 @@ const CommandSpec kCommands[] = {
      "ge lessons labs --scope=sim/", "skill-reflection"},
     {"new", "<dir>", 1, 1, "create",
      "a game repo against this engine release: the simulation, a lab, a test, the skills",
-     kNewFlags, "ge new snow-racer", "ge"},
+     kNewFlags, "ge new snow-racer --game=racer", "ge"},
     {"use", "<plugin>", 1, 1, "create",
      "link one of the engine's plugins into the game and install its skill", kRepoOnly,
      "ge use racing", "engine"},
@@ -124,6 +164,10 @@ const CommandSpec kCommands[] = {
      "chart series or spans files (a trace, a bench, a profile) to PNG and SVG; several files "
      "overlay; every outlier comes back as a note",
      kGraphFlags, "ge graph runs/before.tsv runs/after.tsv --columns=step_ms", "debug"},
+    {"shot", "[<log>]", 0, 1, "see",
+     "a still of a run at a step, drawn headless and captioned (seed, options, step, digest): "
+     "a log played to --step, or the pilot's run of --seed; the game's options go after --",
+     kShotFlags, "ge shot runs/fall_line-38.inputs --step=1200 --view=near", "play-test"},
     {"play", "", 0, 0, "play",
      "play the game over the line protocol on this terminal (observe, act, pilot, state, "
      "inputs, end); the game's options go after --",
@@ -141,11 +185,31 @@ const CommandSpec kCommands[] = {
      "where two runs part: the first input that differs, the first step after which the states "
      "differ, and the fields that do",
      kBuildFlags, "ge diverge runs/a.inputs runs/b.inputs", "play-test"},
+    {"bench", "", 0, 0, "measure",
+     "each step's time against its budget (median, p95, p99, worst), steps a second and the "
+     "run's open, over the pilot's runs replayed; --tag and --compare for a before and after",
+     kBenchFlags, "ge bench --tag=before -- --rivals=3", "perf"},
+    {"profile", "", 0, 0, "measure",
+     "where the step's time goes: each timing zone's calls, time and share, the time in no zone, "
+     "the slowest steps; a timeline round the slowest; --render adds the frame's passes",
+     kProfileFlags, "ge profile --seeds=38 --render", "perf"},
+    {"mem", "", 0, 0, "measure",
+     "what the run allocates: opening it, each step, the steps after the first second that "
+     "still allocate and the zone they do it in; the peak resident set",
+     kMemFlags, "ge mem --seeds=38", "perf"},
+    {"leaks", "", 0, 0, "measure",
+     "the pilot's run under the leak checker (the debug build's sanitizers, or valgrind); each "
+     "block never freed a finding at its first frame in the repo",
+     kLeakFlags, "ge leaks --seeds=38", "perf"},
     {"doctor", "", 0, 0, "maintain",
      "the repo against the engine's rules: guidance, skills, the pin, flags, sources, messages",
      kRepoOnly, "ge doctor", "ge"},
     {"skills sync", "", 0, 0, "maintain", "the engine's skills, rewritten to this engine release",
      kSyncFlags, "ge skills sync", "engine"},
+    {"upgrade", "", 0, 0, "maintain",
+     "move the repo onto this ge's engine release: the pin rewritten, the skills synced, the repo "
+     "doctored; run it with the new release's ge",
+     kUpgradeFlags, "ge upgrade --engine-sha256=<hex>", "engine"},
 };
 
 constexpr FlagSpec kGlobal[] = {
@@ -259,8 +323,11 @@ std::optional<std::string> check_args(const Args& a) {
            (c.args.empty() ? std::string("no arguments") : std::string(c.args)) + ", got " +
            std::to_string(n) + " word(s)";
   }
-  if (!a.passthrough.empty() && c.name != "lab" && c.name != "play" && c.name != "sim") {
-    return "only ge lab, ge play and ge sim pass words after --";
+  static constexpr std::string_view kPassing[] = {"lab",   "play",    "sim", "shot",
+                                                  "bench", "profile", "mem", "leaks"};
+  if (!a.passthrough.empty() &&
+      std::find(std::begin(kPassing), std::end(kPassing), c.name) == std::end(kPassing)) {
+    return "only ge lab, play, sim, shot, bench, profile, mem and leaks pass words after --";
   }
   return std::nullopt;
 }

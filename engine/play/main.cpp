@@ -1,7 +1,7 @@
 // The `play` command line (main.hpp).
 //
 // ge:summary play_main: parses the play command line and prints each command's JSON answer
-// ge:keywords play main command-line describe sim replay state diverge json
+// ge:keywords play main command-line describe sim replay state diverge bench shot png json
 // ge:skill agent-interface
 // ge:test tests/play_session_test.cpp
 #include "play/main.hpp"
@@ -15,7 +15,10 @@
 #include <vector>
 
 #include "core/num_text.hpp"
+#include "lab/png.hpp"
+#include "play/bench.hpp"
 #include "play/session.hpp"
+#include "prof/memory.hpp"
 
 namespace ge::play {
 
@@ -53,6 +56,15 @@ bool read_log(const std::string& path, InputLog& log, std::string& error) {
   return true;
 }
 
+std::string views_json(const GameSpec& spec) {
+  std::string out;
+  for (const View& v : spec.views) {
+    out += std::string(out.empty() ? "" : ",") + "{\"name\":" + quote(v.name) +
+           ",\"help\":" + quote(v.help) + "}";
+  }
+  return out;
+}
+
 std::string describe(const GameSpec& spec) {
   using core::num::to_string;
   std::string axes;
@@ -71,7 +83,8 @@ std::string describe(const GameSpec& spec) {
   }
   return "{\"game\":" + quote(spec.name) + ",\"summary\":" + quote(spec.summary) +
          ",\"hz\":" + to_string(spec.hz) + ",\"most_seconds\":" + to_string(spec.most_seconds) +
-         ",\"axes\":[" + axes + "],\"options\":[" + options + "]}";
+         ",\"axes\":[" + axes + "],\"options\":[" + options + "],\"views\":[" + views_json(spec) +
+         "]}";
 }
 
 std::string played_json(const Played& p) {
@@ -128,8 +141,8 @@ int protocol(const GameSpec& spec, const Line& l, std::istream& in, std::ostream
   return 0;
 }
 
-int sim(const GameSpec& spec, const Line& l, std::ostream& out) {
-  std::vector<double> seeds;
+// --seeds=A,B as numbers (1 when absent); false with `bad` the word that is not one.
+bool seeds_of(const Line& l, std::vector<double>& seeds, std::string& bad) {
   const auto it = l.flags.find("seeds");
   std::stringstream list(it == l.flags.end() ? "1" : it->second);
   std::string word;
@@ -137,10 +150,20 @@ int sim(const GameSpec& spec, const Line& l, std::ostream& out) {
     char* end = nullptr;
     const double v = std::strtod(word.c_str(), &end);
     if (word.empty() || end != word.c_str() + word.size()) {
-      return problem(out, 2, "--seeds holds `" + word + "`, not a number", "the command line",
-                     "pass --seeds=38,7");
+      bad = word;
+      return false;
     }
     seeds.push_back(v);
+  }
+  return true;
+}
+
+int sim(const GameSpec& spec, const Line& l, std::ostream& out) {
+  std::vector<double> seeds;
+  std::string bad;
+  if (!seeds_of(l, seeds, bad)) {
+    return problem(out, 2, "--seeds holds `" + bad + "`, not a number", "the command line",
+                   "pass --seeds=38,7");
   }
   const auto out_it = l.flags.find("out");
   const fs::path dir = out_it == l.flags.end() ? fs::path("runs") : fs::path(out_it->second);
@@ -233,9 +256,176 @@ int diverge_cmd(const GameSpec& spec, const Line& l, std::ostream& out) {
   return d->same ? 0 : 1;
 }
 
+// `shot`: a log played to --step (its end by default), or the pilot's run of --seed, and the
+// view drawn, framed and written as a PNG.
+int shot_cmd(const GameSpec& spec, const Line& l, std::ostream& out) {
+  if (l.words.size() > 1) {
+    return problem(out, 2, "shot takes at most one input log", "the command line",
+                   "play shot runs/x.inputs --step=600 --view=map");
+  }
+  InputLog log;
+  std::string error;
+  if (l.words.size() == 1) {
+    if (!read_log(l.words[0], log, error))
+      return problem(out, 1, error, l.words[0], "pass an input log");
+  } else {
+    double seed = 0;
+    if (!number_flag(l, "seed", 1, seed)) {
+      return problem(out, 2, "--seed is not a number", "the command line", "pass --seed=38");
+    }
+    Setup setup;
+    if (!make_setup(spec, seed, options_of(l, {"seed", "step", "view", "out"}), setup, error)) {
+      return problem(out, 2, error, "the command line", "play describe lists the options");
+    }
+    auto p = pilot_run(spec, setup, error);
+    if (!p) return problem(out, 1, error, "seed " + core::num::to_string(seed), "fix the game");
+    log = std::move(p->log);
+  }
+  double step = 0;
+  if (!number_flag(l, "step", static_cast<double>(log.steps()), step)) {
+    return problem(out, 2, "--step is not a number", "the command line", "pass --step=600");
+  }
+  const auto view_it = l.flags.find("view");
+  const std::string view = view_it == l.flags.end() ? "" : view_it->second;
+  const auto still = shot_at(spec, log, static_cast<int64_t>(step), view, error);
+  if (!still) {
+    return problem(out, 1, error, l.words.empty() ? "the pilot's run" : l.words[0],
+                   "play describe lists the views; pass a --step inside the log");
+  }
+  const auto out_it = l.flags.find("out");
+  const fs::path dir = out_it == l.flags.end() ? fs::path("runs") : fs::path(out_it->second);
+  std::error_code ec;
+  fs::create_directories(dir, ec);
+  const fs::path file = dir / (std::string(spec.name) + "-" + core::num::to_string(log.seed) + "-" +
+                               still->view + "-" + std::to_string(still->step) + ".png");
+  if (!lab::write_png(file.string(), still->picture)) {
+    return problem(out, 1, "cannot write " + file.generic_string(), file.generic_string(),
+                   "check --out");
+  }
+  out << "{\"png\":" << quote(file.generic_string()) << ",\"view\":" << quote(still->view)
+      << ",\"step\":" << still->step << ",\"digest\":" << quote(hex64(still->digest))
+      << ",\"caption\":" << quote(still->caption) << ",\"width\":" << still->picture.width
+      << ",\"height\":" << still->picture.height << ",\"views\":[" << views_json(spec) << "]}\n";
+  return 0;
+}
+
+std::string fixed(double v, int places) { return core::num::to_fixed(v, places); }
+
+std::string bench_json(const GameSpec& spec, double seed, const BenchRun& b,
+                       const std::string& series, const std::string& spans) {
+  std::vector<double> us(b.step_us);
+  double total = 0;
+  for (const double v : us) total += v;
+  const double median = quantile(us, 0.5);
+  std::string zones;
+  for (const ZoneCost& z : b.zones) {
+    zones += std::string(zones.empty() ? "" : ",") + "{\"name\":" + quote(z.name) +
+             ",\"calls_per_step\":" + fixed(z.calls_per_step, 3) +
+             ",\"excl_us_per_step\":" + fixed(z.excl_us_per_step, 3) +
+             ",\"incl_us_per_step\":" + fixed(z.incl_us_per_step, 3) +
+             ",\"share\":" + fixed(z.share, 4) + ",\"allocs\":" + std::to_string(z.allocs) + "}";
+  }
+  std::string slow;
+  for (const SlowStep& s : b.slowest) {
+    slow += std::string(slow.empty() ? "" : ",") + "{\"step\":" + std::to_string(s.step) +
+            ",\"us\":" + fixed(s.us, 3) + ",\"zone\":" + quote(s.zone) + "}";
+  }
+  std::string open_zones;
+  for (const OpenZone& z : b.open_zones) {
+    open_zones += std::string(open_zones.empty() ? "" : ",") + "{\"name\":" + quote(z.name) +
+                  ",\"calls\":" + std::to_string(z.calls) + ",\"excl_ms\":" + fixed(z.excl_ms, 3) +
+                  ",\"incl_ms\":" + fixed(z.incl_ms, 3) + "}";
+  }
+  int64_t allocs = 0;
+  for (const int64_t a : b.step_allocs) allocs += a;
+  const double budget = 1e6 / spec.hz;
+  return "{\"seed\":" + core::num::to_string(seed) + ",\"steps\":" + std::to_string(b.steps) +
+         ",\"digest\":" + quote(hex64(b.digest)) +
+         ",\"same_digest\":" + (b.same_digest ? "true" : "false") +
+         ",\"open_ms\":" + fixed(b.open_ms, 3) +
+         ",\"open_allocs\":" + std::to_string(b.open_allocs) + ",\"open_zones\":[" + open_zones +
+         "],\"step_us\":{\"median\":" + fixed(median, 3) +
+         ",\"mean\":" + fixed(us.empty() ? 0 : total / static_cast<double>(us.size()), 3) +
+         ",\"p95\":" + fixed(quantile(us, 0.95), 3) + ",\"p99\":" + fixed(quantile(us, 0.99), 3) +
+         ",\"max\":" + fixed(quantile(us, 1.0), 3) + ",\"total_ms\":" + fixed(total / 1e3, 3) +
+         "},\"budget_us\":" + fixed(budget, 3) + ",\"budget_share\":" + fixed(median / budget, 4) +
+         ",\"steps_per_s\":" +
+         fixed(total > 0 ? static_cast<double>(b.steps) * 1e6 / total : 0, 1) + ",\"zones\":[" +
+         zones + "],\"untracked_share\":" + fixed(b.untracked_share, 4) +
+         ",\"dropped_spans\":" + std::to_string(b.dropped_spans) + ",\"slowest\":[" + slow +
+         "],\"allocs\":{\"total\":" + std::to_string(allocs) +
+         ",\"warmup_steps\":" + std::to_string(b.warmup_steps) +
+         ",\"steps_allocating\":" + std::to_string(b.steps_allocating) +
+         ",\"first_allocating\":" + std::to_string(b.first_allocating) +
+         ",\"zone\":" + quote(b.alloc_zone) + "},\"series\":" + quote(series) +
+         ",\"spans\":" + quote(spans) + "}";
+}
+
+// `bench`: the pilot plays each seed (or the logs named are read), then each log is benched.
+int bench_cmd(const GameSpec& spec, const Line& l, std::ostream& out) {
+  BenchOptions o;
+  double v = 0;
+  if (!number_flag(l, "repeats", o.repeats, v) || v < 1 || v > 1000) {
+    return problem(out, 2, "--repeats must be 1..1000", "the command line", "pass --repeats=5");
+  }
+  o.repeats = static_cast<int>(v);
+  if (!number_flag(l, "steps", -1, v)) {
+    return problem(out, 2, "--steps is not a number", "the command line", "pass --steps=1200");
+  }
+  o.most_steps = static_cast<int64_t>(v);
+  const auto out_it = l.flags.find("out");
+  const fs::path dir = out_it == l.flags.end() ? fs::path("runs") : fs::path(out_it->second);
+  std::error_code ec;
+  fs::create_directories(dir, ec);
+  // What to bench: the logs named, or the pilot's run of each seed.
+  std::vector<InputLog> logs;
+  std::string error;
+  if (!l.words.empty()) {
+    for (const std::string& path : l.words) {
+      InputLog log;
+      if (!read_log(path, log, error)) return problem(out, 1, error, path, "pass an input log");
+      logs.push_back(std::move(log));
+    }
+  } else {
+    std::vector<double> seeds;
+    std::string bad;
+    if (!seeds_of(l, seeds, bad)) {
+      return problem(out, 2, "--seeds holds `" + bad + "`, not a number", "the command line",
+                     "pass --seeds=38,7");
+    }
+    for (const double seed : seeds) {
+      Setup setup;
+      if (!make_setup(spec, seed, options_of(l, {"seeds", "out", "repeats", "steps"}), setup,
+                      error)) {
+        return problem(out, 2, error, "the command line", "play describe lists the options");
+      }
+      auto p = pilot_run(spec, setup, error);
+      if (!p) return problem(out, 1, error, "seed " + core::num::to_string(seed), "fix the game");
+      logs.push_back(std::move(p->log));
+    }
+  }
+  std::string runs;
+  for (const InputLog& log : logs) {
+    const auto b = bench(spec, log, o, error);
+    if (!b) return problem(out, 1, error, "seed " + core::num::to_string(log.seed), "fix the game");
+    const std::string stem = std::string(spec.name) + "-" + core::num::to_string(log.seed);
+    const fs::path series = dir / (stem + ".bench.tsv");
+    const fs::path spans = dir / (stem + ".spans.tsv");
+    std::ofstream(series, std::ios::binary) << b->series;
+    std::ofstream(spans, std::ios::binary) << b->spans;
+    runs += std::string(runs.empty() ? "" : ",") +
+            bench_json(spec, log.seed, *b, series.generic_string(), spans.generic_string());
+  }
+  const prof::Allocations a = prof::allocations();
+  out << "{\"game\":" << quote(spec.name) << ",\"hz\":" << core::num::to_string(spec.hz)
+      << ",\"repeats\":" << o.repeats << ",\"counting\":" << (a.counting ? "true" : "false")
+      << ",\"peak_rss_bytes\":" << prof::peak_rss_bytes() << ",\"runs\":[" << runs << "]}\n";
+  return 0;
+}
 }  // namespace
 
 int play_main(int argc, char** argv, std::istream& in, std::ostream& out) {
+  prof::count_allocations();
   const GameSpec* spec = registered_game();
   if (!spec) {
     return problem(out, 1, "no game is registered in this executable", "the play target",
@@ -263,8 +453,11 @@ int play_main(int argc, char** argv, std::istream& in, std::ostream& out) {
   if (l.op == "replay") return replay_cmd(*spec, l, out);
   if (l.op == "state") return state_cmd(*spec, l, out);
   if (l.op == "diverge") return diverge_cmd(*spec, l, out);
+  if (l.op == "bench") return bench_cmd(*spec, l, out);
+  if (l.op == "shot") return shot_cmd(*spec, l, out);
   return problem(out, 2, "unknown command `" + l.op + "`", "the command line",
-                 "run describe, sim, replay, state or diverge, or no command for the protocol");
+                 "run describe, sim, replay, state, diverge, bench or shot, or no command for the "
+                 "protocol");
 }
 
 int play_main(int argc, char** argv) {

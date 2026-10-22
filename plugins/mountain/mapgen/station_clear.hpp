@@ -67,6 +67,8 @@ bool stands_level(const std::function<double(double x, double z)>& height, LiftK
 // R26 — every lift's bottom station (and a drag, re-laid) stood clear of the runs where it stands
 // on one, each the nearest way that leaves `ok` true. The lift that fits nowhere, or none. Moves
 // the lifts in place.
+// `g`'s readings are called from several threads at once, so each must be a pure reading that
+// keeps nothing between calls; `ok` is called on this thread alone.
 std::optional<std::string> clear_stations(
     const StationGround& g, std::vector<LiftPlan>& lifts,
     const std::function<bool(std::span<const LiftPlan> lifts)>& ok);

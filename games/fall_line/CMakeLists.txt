@@ -4,7 +4,7 @@
 file(GLOB_RECURSE FALL_LINE_SIM_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/sim/*.cpp)
 add_library(fall_line_sim STATIC ${FALL_LINE_SIM_SOURCES})
 target_include_directories(fall_line_sim PUBLIC ${PROJECT_SOURCE_DIR}/games)
-target_link_libraries(fall_line_sim PUBLIC ge_core ge_play ge_racing ge_mountain ge_skier)
+target_link_libraries(fall_line_sim PUBLIC ge_core ge_prof ge_play ge_racing ge_mountain ge_skier)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS fall_line_sim)
 
 # Its `play` executable (play/): the game on the play contract, which `ge play`, `ge sim`,
@@ -29,7 +29,7 @@ if(GE_GPU)
   list(FILTER FALL_LINE_APP_SOURCES EXCLUDE REGEX "/app/main\\.cpp$")
   add_library(fall_line_app STATIC ${FALL_LINE_APP_SOURCES})
   target_include_directories(fall_line_app PUBLIC ${PROJECT_SOURCE_DIR}/games)
-  target_link_libraries(fall_line_app PUBLIC ge_render ge_mountain_app ge_skier_app)
+  target_link_libraries(fall_line_app PUBLIC ge_render ge_prof ge_mountain_app ge_skier_app)
   set_property(GLOBAL APPEND PROPERTY GE_GAME_APPS fall_line_app)
 endif()
 if(GE_PLATFORM AND GE_GPU)

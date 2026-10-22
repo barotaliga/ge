@@ -76,7 +76,16 @@ void run(ge::lab::Lab& lab) {
   lab.metric("catalog.flags", flags, "count");
   Outcome help;
   help.text = help_text(nullptr);
-  record("help", "ge help", timed("ge help", [&] { return help; }), 40, Det::measured);
+  // One line a command, a blank and a heading a stage, three lines before and two after: a
+  // command that wraps or a stage that grows a preamble goes over.
+  int stages = 0;
+  std::string_view stage;
+  for (const CommandSpec& c : commands()) {
+    if (c.stage != stage) stages++;
+    stage = c.stage;
+  }
+  const int help_lines = static_cast<int>(commands().size()) + 2 * stages + 5;
+  record("help", "ge help", timed("ge help", [&] { return help; }), help_lines, Det::measured);
   Outcome help_json_answer;
   help_json_answer.result = help_json(nullptr);
   std::ostringstream json;

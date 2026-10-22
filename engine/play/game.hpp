@@ -11,12 +11,17 @@
 // (`snap_axis`), so the figure a run is stepped on is the figure the input log writes down, and a
 // log played back is the run again. A `pilot` and an agent are snapped the same way.
 //
+// THE VIEWS are what `ge shot` can picture: each a name the spec lists, drawn by the Run on the
+// CPU (lab/raster.hpp) at the step the run has reached, so a still needs no GPU and no window and
+// reproduces from the input log like the rest of the run. A game with a renderer can still draw a
+// view on the CPU (a map from above, a chart of the field); the GPU's pictures are its labs'.
+//
 // A game registers its spec with `GE_GAME(spec)` in one file of its `play` executable, whose
 // `main` is `ge::play::play_main` (main.hpp). One executable holds one game.
 //
 // ge:summary The play contract: GameSpec, the axes, Run (step, observe, state, digest, pilot)
 // ge:keywords play contract game spec run axis axes option setup pilot bot observe state digest
-// ge:keywords snap_axis ge_game register
+// ge:keywords snap_axis ge_game register view views shoot shot picture caption
 // ge:skill agent-interface
 // ge:test tests/play_session_test.cpp
 #pragma once
@@ -26,6 +31,9 @@
 #include <memory>
 #include <span>
 #include <string>
+#include <string_view>
+
+#include "lab/raster.hpp"
 
 namespace ge::play {
 
@@ -52,6 +60,12 @@ struct Option {
   const char* name;
   const char* fallback;  // its value when none is given
   const char* help;
+};
+
+// A picture `ge shot` can take, as `--view=<name>`.
+struct View {
+  const char* name;  // snake_case
+  const char* help;  // what it shows, a phrase
 };
 
 // What a run is opened with: the seed and every option (each one present, its fallback filled).
@@ -87,6 +101,16 @@ class Run {
     (void)input;
     return false;
   }
+  // The still `view` (one the spec lists) of the run as it stands: drawn into `out` on the CPU,
+  // with `caption` one line saying what it shows and when. False with `error` saying why not.
+  virtual bool shoot(std::string_view view, lab::Picture& out, std::string& caption,
+                     std::string& error) {
+    (void)view;
+    (void)out;
+    (void)caption;
+    error = "this game draws no views";
+    return false;
+  }
 };
 
 struct GameSpec {
@@ -98,6 +122,8 @@ struct GameSpec {
   std::span<const Option> options;
   // A new run, or null with `error` saying why (an option it cannot use).
   std::unique_ptr<Run> (*open)(const Setup& setup, std::string& error);
+  // What `ge shot` can picture, the first the default; empty when the game draws none.
+  std::span<const View> views = {};
 };
 
 // `v` on its axis's grid: clamped to the axis's range and rounded to its step (toggles to 0 or

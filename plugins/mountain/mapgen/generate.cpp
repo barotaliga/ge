@@ -43,6 +43,7 @@
 #include "mountain/mapgen/track.hpp"
 #include "mountain/mapgen/versions.hpp"
 #include "mountain/mapgen/weather.hpp"
+#include "prof/zones.hpp"
 
 namespace ge::mountain::mapgen {
 
@@ -300,6 +301,7 @@ void Level::normal_at(double x, double z, Vec3& out) const {
 }
 
 Level generate_level(double seed, const GenerateOptions& opts) {
+  GE_ZONE("mapgen");
   // R25 — a real face: its heights decoded once, its region the map's, and more attempts (its
   // later ones give the dealt peak, valley and stations back).
   std::shared_ptr<const RealFace> face;
@@ -330,6 +332,7 @@ Level generate_level(double seed, const GenerateOptions& opts) {
       opts.only ? (*opts.only >= 0 && *opts.only < attempts ? *opts.only + 1 : 0) : attempts;
   if (!traits.single_piste) {
     for (int a = first; a < end; a++) {
+      GE_ZONE("mapgen.attempt");
       Level level;
       if (const auto why = attempt_resort(seed, a, laps, traits.version, region, opts, name, face,
                                           hints, level)) {
@@ -346,13 +349,17 @@ Level generate_level(double seed, const GenerateOptions& opts) {
                         " attempts — " + join(reasons, "; "));
   }
   for (int a = first; a < end; a++) {
+    GE_ZONE("mapgen.attempt");
     auto built = attempt_level(seed, a, laps, traits.version, region, grade, opts.tricks);
     if (auto* why = std::get_if<std::string>(&built)) {
       reasons.push_back("#" + std::to_string(a) + ": " + *why);
       continue;
     }
     Level& level = std::get<Level>(built);
-    const analysis::LevelAnalysis checked = analysis::analyze_level(level);
+    const analysis::LevelAnalysis checked = [&] {
+      GE_ZONE("mapgen.analyze");
+      return analysis::analyze_level(level);
+    }();
     if (checked.ok) {
       if (!reasons.empty()) {
         ge::core::output::debug(name + ": accepted attempt " + std::to_string(a) + " after " +

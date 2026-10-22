@@ -1,8 +1,8 @@
-// ge play, sim, replay, state and diverge (play.hpp): the play executable run and its JSON
+// ge play, sim, replay, state, diverge and shot (play.hpp): the play executable run and its JSON
 // answer turned into an outcome.
 //
 // ge:summary The play commands: build, run the play executable, its JSON answer as an outcome
-// ge:keywords cli ge play sim replay state diverge play_answer play_exe
+// ge:keywords cli ge play sim replay state diverge shot play_answer play_exe
 // ge:skill agent-interface
 // ge:test tests/cli_play_test.cpp
 #include "cli/play.hpp"
@@ -34,13 +34,6 @@ std::string answer_line(const std::string& output) {
   return last;
 }
 
-std::string text_of(const play::FlatJson& m, const std::string& key) {
-  const auto it = m.find(key);
-  if (it == m.end()) return "";
-  return it->second.kind == play::JsonValue::Kind::string ? it->second.text
-                                                          : play::json_text(it->second);
-}
-
 Outcome run_exe(const BuildOptions& o, const std::string& command, const std::string& args) {
   Outcome out;
   if (!build_into(o, out)) return out;
@@ -53,19 +46,16 @@ Outcome run_exe(const BuildOptions& o, const std::string& command, const std::st
 
 }  // namespace
 
-fs::path play_exe(const BuildOptions& o) {
-  fs::path exe = o.repo / "build" / o.preset / "play";
-#ifdef _WIN32
-  exe += ".exe";
-#endif
-  return exe;
+std::string text_of(const play::FlatJson& m, const std::string& key) {
+  const auto it = m.find(key);
+  if (it == m.end()) return "";
+  return it->second.kind == play::JsonValue::Kind::string ? it->second.text
+                                                          : play::json_text(it->second);
 }
 
-Outcome play_answer(const BuildOptions& o, const std::string& command, int code,
-                    const std::string& output) {
-  Outcome out;
-  const std::string line = answer_line(output);
-  play::FlatJson m;
+bool read_answer(const BuildOptions& o, int code, const std::string& output, play::FlatJson& m,
+                 std::string& line, Outcome& out) {
+  line = answer_line(output);
   std::string why;
   if (line.empty() || !play::read_flat(line, m, why, true)) {
     out.findings.push_back(
@@ -73,7 +63,7 @@ Outcome play_answer(const BuildOptions& o, const std::string& command, int code,
          "the play executable gave no JSON answer (exit " + std::to_string(code) + ")",
          rel_path(o.repo, build_log(o, "ge-play")),
          "read the log; a game without a play target needs one (skill: play-test)"});
-    return out;
+    return false;
   }
   if (m.contains("error")) {
     // The executable names the absolute paths ge handed it; the agent reads them from the repo.
@@ -102,8 +92,35 @@ Outcome play_answer(const BuildOptions& o, const std::string& command, int code,
                             fs::path(in_repo(text_of(m, "where"))).generic_string(),
                             text_of(m, "next")});
     if (code == 2) out.exit = 2;
-    return out;
+    return false;
   }
+  return true;
+}
+
+bool play_command(const BuildOptions& o, const std::string& args, play::FlatJson& m,
+                  std::string& line, Outcome& out) {
+  if (!build_into(o, out)) return false;
+  const fs::path log = build_log(o, "ge-play");
+  std::error_code ec;
+  fs::remove(log, ec);
+  const Logged r = run_to_log(quoted_path(play_exe(o)) + args, log);
+  return read_answer(o, r.code, r.output, m, line, out);
+}
+
+fs::path play_exe(const BuildOptions& o) {
+  fs::path exe = o.repo / "build" / o.preset / "play";
+#ifdef _WIN32
+  exe += ".exe";
+#endif
+  return exe;
+}
+
+Outcome play_answer(const BuildOptions& o, const std::string& command, int code,
+                    const std::string& output) {
+  Outcome out;
+  play::FlatJson m;
+  std::string line;
+  if (!read_answer(o, code, output, m, line, out)) return out;
   out.result = line;
   if (command == "sim") {
     std::string text;
@@ -170,6 +187,19 @@ Outcome play_answer(const BuildOptions& o, const std::string& command, int code,
     out.summary = state == "-1" ? "the runs never part in their common steps"
                                 : "the runs part after step " + state;
     if (state != "-1") out.next = "ge state <log> --step=" + state + " for either side";
+  } else if (command == "shot") {
+    const std::string png = rel_path(o.repo, fs::path(text_of(m, "png")));
+    out.written.push_back(png);
+    std::string views;
+    for (int i = 0; m.contains("views." + std::to_string(i) + ".name"); i++) {
+      const std::string k = "views." + std::to_string(i) + ".";
+      views += "  " + text_of(m, k + "name") + ": " + text_of(m, k + "help") + "\n";
+    }
+    out.text = "  " + text_of(m, "caption") + "\n  views:\n" + views;
+    out.summary = "the " + text_of(m, "view") + " view after " + text_of(m, "step") +
+                  " steps (digest " + text_of(m, "digest") + "): " + png;
+    out.next = "open " + png + "; ge state <log> --step=" + text_of(m, "step") +
+               " gives the numbers behind it";
   }
   return out;
 }
@@ -208,6 +238,18 @@ Outcome run_state(const BuildOptions& o, const std::string& log, const std::stri
 
 Outcome run_diverge(const BuildOptions& o, const std::string& a, const std::string& b) {
   return run_exe(o, "diverge", " diverge \"" + absolute(a) + "\" \"" + absolute(b) + "\"");
+}
+
+Outcome run_shot(const BuildOptions& o, const std::string& log, const std::string& seed,
+                 const std::string& step, const std::string& view,
+                 const std::vector<std::string>& options) {
+  std::string args = " shot --out=" + quoted_path(o.repo / "runs");
+  if (!log.empty()) args += " \"" + absolute(log) + "\"";
+  if (log.empty() && !seed.empty()) args += " \"--seed=" + seed + "\"";
+  if (!step.empty()) args += " \"--step=" + step + "\"";
+  if (!view.empty()) args += " \"--view=" + view + "\"";
+  for (const std::string& w : options) args += " \"" + w + "\"";
+  return run_exe(o, "shot", args);
 }
 
 }  // namespace ge::cli
