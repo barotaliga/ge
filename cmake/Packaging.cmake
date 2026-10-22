@@ -44,6 +44,18 @@ foreach(_target IN LISTS _ge_plugins)
   endif()
   string(REGEX REPLACE "^ge_" "" _name ${_target})
   list(APPEND GE_EXPORTED_TARGETS ${_target} ${_name})
+  list(APPEND _ge_published_apps ${_name})
+endforeach()
+
+# A presentation half that is not published (or not built) installs no headers: they include
+# engine modules the package does not carry (gpu/, render/).
+set(_ge_app_excludes "")
+file(GLOB _ge_plugin_dirs LIST_DIRECTORIES true "${PROJECT_SOURCE_DIR}/plugins/*")
+foreach(_dir IN LISTS _ge_plugin_dirs)
+  get_filename_component(_name ${_dir} NAME)
+  if(IS_DIRECTORY "${_dir}/app" AND NOT "${_name}_app" IN_LIST _ge_published_apps)
+    list(APPEND _ge_app_excludes REGEX "/plugins/${_name}/app$" EXCLUDE)
+  endif()
 endforeach()
 
 set(_ge_targets "")
@@ -73,12 +85,11 @@ install(DIRECTORY "${PROJECT_SOURCE_DIR}/engine/"
 
 # A plugin's headers install beside the engine's (a plugin's name never equals an engine
 # directory), so "racing/tape.hpp" is spelled the same in-tree and installed. Labs are not
-# published; a presentation half's headers install with it (a half that is not published, above,
-# is never linked, so its headers are inert).
+# published; a presentation half's headers install only when the half is published (above).
 install(DIRECTORY "${PROJECT_SOURCE_DIR}/plugins/"
   DESTINATION ${GE_INSTALL_INCLUDEDIR}
   FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h" PATTERN "*.inl"
-  PATTERN "labs" EXCLUDE)
+  PATTERN "labs" EXCLUDE ${_ge_app_excludes})
 
 install(EXPORT gameengine2Targets
   NAMESPACE ge::

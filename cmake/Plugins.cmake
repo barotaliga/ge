@@ -11,7 +11,10 @@
 # ge_racing). A plugin with a presentation half (plugins/<name>/app/: the sounds and looks a genre
 # shares) adds a third list, APP audio, naming the engine targets that half needs beyond the
 # simulation's; app/ is built into ge_<name>_app, which links ge_<name> and those, so the
-# simulation target never links a renderer or a synth. Those lists are the plugin's whole
+# simulation target never links a renderer or a synth. A half whose APP list names an engine
+# target this build does not make (APP render with GE_GPU=OFF) is not built, and nothing that
+# links it is either; a half's shaders are embedded beside the call, under
+# `if(TARGET ge_<name>_app)`: ge_embed_wgsl(ge_<name>_app app/<file>.wgsl). Those lists are the plugin's whole
 # dependency contract: tools/check-plugins.mjs (make agents-check) fails an #include outside them, a cycle, and a name that is not one
 # lower-case word or that shadows an engine directory.
 include_guard(GLOBAL)
@@ -62,7 +65,15 @@ function(ge_add_plugin name)
   endforeach()
   set_property(GLOBAL APPEND PROPERTY GE_PLUGIN_TARGETS ${target})
 
-  if(app_sources)
+  set(missing "")
+  foreach(module IN LISTS arg_APP)
+    if(NOT TARGET ge_${module})
+      list(APPEND missing ge_${module})
+    endif()
+  endforeach()
+  if(app_sources AND missing)
+    message(STATUS "plugin ${name}: ge_${name}_app is not built (${missing} not in this build)")
+  elseif(app_sources)
     add_library(${target}_app STATIC ${app_sources})
     target_link_libraries(${target}_app PUBLIC ${target})
     foreach(module IN LISTS arg_APP)
