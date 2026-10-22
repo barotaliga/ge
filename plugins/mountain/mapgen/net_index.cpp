@@ -19,13 +19,28 @@ int grid_side() {
 
 }  // namespace
 
-NetIndex::NetIndex() : side_(grid_side()), grid_(size_t(side_) * size_t(side_)) {}
+NetIndex::NetIndex()
+    : side_(grid_side()),
+      row_cols_(size_t(side_)),
+      col_rows_(size_t(side_)),
+      grid_(size_t(side_) * size_t(side_)) {}
 
-std::vector<int>& NetIndex::slot(int c, int r) {
+std::vector<NetIndex::Span>& NetIndex::slot(int c, int r) {
   const int gc = c + kGridMargin;
   const int gr = r + kGridMargin;
-  if (gc >= 0 && gc < side_ && gr >= 0 && gr < side_)
+  if (gc >= 0 && gc < side_ && gr >= 0 && gr < side_) {
+    const auto widen = [](Range& range, int v) {
+      if (range.lo > range.hi) {
+        range = {v, v};
+      } else {
+        range.lo = std::min(range.lo, v), range.hi = std::max(range.hi, v);
+      }
+    };
+    widen(row_cols_[size_t(gr)], c);
+    widen(col_rows_[size_t(gc)], r);
     return grid_[size_t(gr) * size_t(side_) + size_t(gc)];
+  }
+  outside_ = true;
   return cells_[ge::core::cell_key(c, r)];
 }
 
@@ -47,8 +62,22 @@ int NetIndex::add(const std::vector<TrackPoint>& points, int rank, int into, dou
     const int c1 = static_cast<int>(std::floor(std::max(a.x, b.x) / kCell));
     const int r0 = static_cast<int>(std::floor(std::min(a.z, b.z) / kCell));
     const int r1 = static_cast<int>(std::floor(std::max(a.z, b.z) / kCell));
+    const double x0 = std::min(a.x, b.x);
+    const double x1 = std::max(a.x, b.x);
+    const double z0 = std::min(a.z, b.z);
+    const double z1 = std::max(a.z, b.z);
     for (int c = c0; c <= c1; c++) {
-      for (int r = r0; r <= r1; r++) slot(c, r).push_back(g);
+      for (int r = r0; r <= r1; r++) {
+        std::vector<Span>& list = slot(c, r);
+        if (!list.empty() && list.back().g1 == g && list.back().g1 - list.back().g0 < kSpan) {
+          Span& sp = list.back();
+          sp.g1 = g + 1;
+          sp.x0 = std::min(sp.x0, x0), sp.x1 = std::max(sp.x1, x1);
+          sp.z0 = std::min(sp.z0, z0), sp.z1 = std::max(sp.z1, z1);
+        } else {
+          list.push_back({g, g + 1, x0, z0, x1, z1});
+        }
+      }
     }
     if (c0_ > c1_) {
       c0_ = c0, c1_ = c1, r0_ = r0, r1_ = r1;

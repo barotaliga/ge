@@ -56,11 +56,13 @@ StageResult resort_access(ResortAttempt& a) {
   const double base_z = a.plan.base_z;
   DragGround pressed;
   pressed.height = height;
+  // Its own answer a call: the stations' readings run on several threads at once.
   pressed.piste = [&](double x, double z) {
+    NetHit near;
     a.net.nearest(
         x, z, kWidest,
-        [&](int r, double) { return a.built[size_t(r)].walked.spec.kind == RunKind::road; }, hit);
-    return PisteNear{hit.distance, hit.width, hit.heading};
+        [&](int r, double) { return a.built[size_t(r)].walked.spec.kind == RunKind::road; }, near);
+    return PisteNear{near.distance, near.width, near.heading};
   };
   pressed.floor = [base_z](PlanPoint p) { return p.z >= base_z - 1; };
   pressed.slack = a.face ? RR::massif::real::least::harder : 0;
@@ -82,7 +84,10 @@ StageResult resort_access(ResortAttempt& a) {
 
   // ── THE STATIONS BESIDE THE RUNS (R26) ──
   StationGround beside;
-  beside.on_run = [&](double x, double z, double pad) { return a.net.covers(x, z, pad, hit); };
+  beside.on_run = [&](double x, double z, double pad) {
+    NetHit on;
+    return a.net.covers(x, z, pad, on);
+  };
   beside.on_piste = [&](double x, double z, double pad) {
     const PisteNear near = pressed.piste(x, z);
     return near.distance < near.width / 2 + pad;

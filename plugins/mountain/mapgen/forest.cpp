@@ -6,14 +6,17 @@
 // ge:test tests/mountain_generate_test.cpp
 #include "mountain/mapgen/forest.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <unordered_map>
+#include <vector>
 
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "core/noise.hpp"
 #include "core/num.hpp"
+#include "core/parallel.hpp"
 #include "mountain/mapgen/cliffs.hpp"
 #include "mountain/mapgen/kickers.hpp"
 #include "mountain/mapgen/query.hpp"
@@ -31,6 +34,13 @@ using ge::core::kPi;
 using ge::core::sample_field;
 using ge::core::smoothstep;
 using ge::core::value_noise;
+
+namespace {
+
+// How many of the scan's rows are read side by side at a time.
+constexpr int kScanRows = 64;
+
+}  // namespace
 
 double tree_age(double grew, double x, double z, double seed) {
   namespace A = F::age;
@@ -116,9 +126,15 @@ std::vector<TreeDef> grow_forest(ge::core::Rng& rng, const TerrainPlan& plan,
     return false;
   };
   std::vector<TreeDef> trees;
-  TrackHit hit;
   const double reach = rules::track::width.max / 2 + F::corridor;
-  // Whether no tree may stand here at all; `y` is the ground's height.
+  // The piste's lookup is built on its first question, so it is asked one here, before the
+  // scan asks from several threads.
+  if (!resort && !piste.points.empty()) {
+    TrackHit first;
+    nearest_within(piste, 0, 0, reach, first);
+  }
+  // Whether no tree may stand here at all; `y` is the ground's height. A pure reading, asked
+  // from several threads at once.
   const auto refused = [&](double x, double z, double y) {
     if (y > line_y) return true;
     const ge::core::FieldSlope g = ge::core::field_gradient(ground, x, z);
@@ -126,6 +142,7 @@ std::vector<TreeDef> grow_forest(ge::core::Rng& rng, const TerrainPlan& plan,
     if (resort) {
       if (resort->clear(x, z)) return true;
     } else {
+      TrackHit hit;
       nearest_within(piste, x, z, reach, hit);
       if (hit.distance < piste.points[size_t(hit.index)].width / 2 + F::corridor) return true;
     }
@@ -219,36 +236,54 @@ std::vector<TreeDef> grow_forest(ge::core::Rng& rng, const TerrainPlan& plan,
     }
   }
 
-  // THE SCAN: a candidate a cell, four draws a cell whatever happens.
+  // THE SCAN: a candidate a cell, four draws a cell whatever happens. A band of rows at a time:
+  // its draws taken in order, then every cell's candidate read side by side (all of it pure),
+  // then the candidates kept stood in order, each asking the trees stood before it.
   const int cells = static_cast<int>(std::floor(plan.size / F::spacing));
-  for (int r = 0; r < cells; r++) {
-    for (int c = 0; c < cells; c++) {
-      const double jx = ge::core::next(rng);
-      const double jz = ge::core::next(rng);
-      const double keep = ge::core::next(rng);
-      const double size = ge::core::next(rng);
-      const double x = (c + 0.1 + jx * 0.8) * F::spacing;
-      const double z = (r + 0.1 + jz * 0.8) * F::spacing;
-      const Woods wc = woods_at(x, z);
-      const double y = sample_field(ground, x, z);
-      double woods = wc.woods;
-      double share = 0;
-      if (resort) {
-        // R14 on a resort: the woods by height, closed low down, thinning through the ecotone
-        // to the tree line.
-        const WoodsCover cover = resort->cover(y);
-        woods = wc.woods + (1 - wc.woods) * cover.close;
-        share = density * (meadow + (1 - meadow) * woods * wc.clear) * cover.keep;
-      } else {
-        share = density * (meadow + (1 - meadow) * wc.woods * wc.clear);
-        // The krummholz thins toward the line as well as stunting.
-        share *= 1 - 0.6 * smoothstep(stunt_y, line_y, y);
+  struct Spot {
+    double x, z, y, height;
+    bool kept;
+  };
+  const size_t width = size_t(cells > 0 ? cells : 0);
+  std::vector<double> draws;
+  std::vector<Spot> spots;
+  for (int r0 = 0; r0 < cells; r0 += kScanRows) {
+    const int r1 = std::min(cells, r0 + kScanRows);
+    const size_t count = size_t(r1 - r0) * width;
+    draws.resize(count * 4);
+    for (double& d : draws) d = ge::core::next(rng);
+    spots.assign(count, Spot{0, 0, 0, 0, false});
+    ge::core::parallel_bands(count, [&](size_t lo, size_t hi) {
+      for (size_t q = lo; q < hi; q++) {
+        const int r = r0 + int(q / width);
+        const int c = int(q % width);
+        const double jx = draws[q * 4];
+        const double jz = draws[q * 4 + 1];
+        const double keep = draws[q * 4 + 2];
+        const double size = draws[q * 4 + 3];
+        const double x = (c + 0.1 + jx * 0.8) * F::spacing;
+        const double z = (r + 0.1 + jz * 0.8) * F::spacing;
+        const Woods wc = woods_at(x, z);
+        const double y = sample_field(ground, x, z);
+        double woods = wc.woods;
+        double share = 0;
+        if (resort) {
+          // R14 on a resort: the woods by height, closed low down, thinning through the ecotone
+          // to the tree line.
+          const WoodsCover cover = resort->cover(y);
+          woods = wc.woods + (1 - wc.woods) * cover.close;
+          share = density * (meadow + (1 - meadow) * woods * wc.clear) * cover.keep;
+        } else {
+          share = density * (meadow + (1 - meadow) * wc.woods * wc.clear);
+          // The krummholz thins toward the line as well as stunting.
+          share *= 1 - 0.6 * smoothstep(stunt_y, line_y, y);
+        }
+        if (keep >= share || refused(x, z, y)) continue;
+        spots[q] = {x, z, y, height_of(woods, size, y), true};
       }
-      if (keep >= share) continue;
-      // Both refusals are pure, so the cheap one asks first.
-      if (crowded(x, z, -1)) continue;
-      if (refused(x, z, y)) continue;
-      stand(x, z, y, height_of(woods, size, y), -1, x, z);
+    });
+    for (const Spot& sp : spots) {
+      if (sp.kept && !crowded(sp.x, sp.z, -1)) stand(sp.x, sp.z, sp.y, sp.height, -1, sp.x, sp.z);
     }
   }
   return trees;
