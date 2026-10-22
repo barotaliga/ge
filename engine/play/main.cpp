@@ -6,6 +6,7 @@
 // ge:test tests/play_session_test.cpp
 #include "play/main.hpp"
 
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -17,6 +18,7 @@
 #include "core/num_text.hpp"
 #include "lab/png.hpp"
 #include "play/bench.hpp"
+#include "play/record.hpp"
 #include "play/session.hpp"
 #include "prof/memory.hpp"
 
@@ -309,6 +311,128 @@ int shot_cmd(const GameSpec& spec, const Line& l, std::ostream& out) {
   return 0;
 }
 
+// A step flag: a step, or seconds on the run's clock with an `s` ("12.5s").
+bool step_flag(const Line& l, const std::string& name, double hz, int64_t fallback, int64_t& out) {
+  const auto it = l.flags.find(name);
+  if (it == l.flags.end()) {
+    out = fallback;
+    return true;
+  }
+  std::string text = it->second;
+  const bool seconds = !text.empty() && text.back() == 's';
+  if (seconds) text.pop_back();
+  char* end = nullptr;
+  const double v = std::strtod(text.c_str(), &end);
+  if (text.empty() || end != text.c_str() + text.size() || v < 0) return false;
+  out = static_cast<int64_t>(std::llround(seconds ? v * hz : v));
+  return true;
+}
+
+// `record`: a log (or the pilot's run of --seed) played back and a view drawn at a frame rate,
+// encoded as a video by ffmpeg (or PNG frames), with a contact sheet beside it (record.hpp).
+int record_cmd(const GameSpec& spec, const Line& l, std::ostream& out) {
+  if (l.words.size() > 1) {
+    return problem(out, 2, "record takes at most one input log", "the command line",
+                   "play record runs/x.inputs --view=map --fps=30");
+  }
+  static const std::initializer_list<const char*> kOwn = {
+      "seed", "view",    "from",           "to",     "fps",     "speed", "size", "format", "codec",
+      "crf",  "bitrate", "encoder-preset", "thumbs", "columns", "band",  "out"};
+  InputLog log;
+  std::string error;
+  if (l.words.size() == 1) {
+    if (!read_log(l.words[0], log, error))
+      return problem(out, 1, error, l.words[0], "pass an input log");
+  } else {
+    double seed = 0;
+    if (!number_flag(l, "seed", 1, seed)) {
+      return problem(out, 2, "--seed is not a number", "the command line", "pass --seed=38");
+    }
+    Setup setup;
+    if (!make_setup(spec, seed, options_of(l, kOwn), setup, error)) {
+      return problem(out, 2, error, "the command line", "play describe lists the options");
+    }
+    auto p = pilot_run(spec, setup, error);
+    if (!p) return problem(out, 1, error, "seed " + core::num::to_string(seed), "fix the game");
+    log = std::move(p->log);
+  }
+  RecordOptions o;
+  double crf = -1, thumbs = 24, columns = 6;
+  if (!step_flag(l, "from", spec.hz, 0, o.from) || !step_flag(l, "to", spec.hz, -1, o.to)) {
+    return problem(out, 2, "--from and --to take a step or seconds (\"12.5s\")", "the command line",
+                   "pass --from=10s --to=40s");
+  }
+  if (!number_flag(l, "fps", 30, o.fps) || !number_flag(l, "speed", 1, o.speed) ||
+      !number_flag(l, "crf", -1, crf) || !number_flag(l, "thumbs", 24, thumbs) ||
+      !number_flag(l, "columns", 6, columns) || !(o.fps > 0) || !(o.speed > 0)) {
+    return problem(out, 2, "--fps, --speed, --crf, --thumbs or --columns is not a number over 0",
+                   "the command line", "pass --fps=30 --speed=1");
+  }
+  o.encoding.crf = static_cast<int>(crf);
+  o.thumbs = static_cast<int>(thumbs);
+  o.columns = static_cast<int>(columns);
+  if (const auto it = l.flags.find("size"); it != l.flags.end()) {
+    const size_t x = it->second.find('x');
+    char* e1 = nullptr;
+    char* e2 = nullptr;
+    const std::string w = it->second.substr(0, x),
+                      h = x == std::string::npos ? "" : it->second.substr(x + 1);
+    o.width = static_cast<int>(std::strtol(w.c_str(), &e1, 10));
+    o.height = static_cast<int>(std::strtol(h.c_str(), &e2, 10));
+    if (w.empty() || h.empty() || *e1 || *e2 || o.width <= 0 || o.height <= 0 || o.width > 7680 ||
+        o.height > 4320) {
+      return problem(out, 2, "--size is not WIDTHxHEIGHT (at most 7680x4320)", "the command line",
+                     "pass --size=1280x720");
+    }
+  }
+  auto text_flag = [&](const char* name, std::string& into) {
+    if (const auto it = l.flags.find(name); it != l.flags.end()) into = it->second;
+  };
+  text_flag("view", o.view);
+  text_flag("format", o.encoding.format);
+  text_flag("codec", o.encoding.codec);
+  text_flag("bitrate", o.encoding.bitrate);
+  text_flag("encoder-preset", o.encoding.preset);
+  if (const auto it = l.flags.find("band"); it != l.flags.end()) o.band = it->second != "0";
+  if (const std::string why = encoding_problem(o.encoding); !why.empty()) {
+    return problem(out, 2, why, "the command line", "pass --format=mp4 (or webm, gif, png)");
+  }
+  const auto out_it = l.flags.find("out");
+  const fs::path dir = out_it == l.flags.end() ? fs::path("runs") : fs::path(out_it->second);
+  std::error_code ec;
+  fs::create_directories(dir, ec);
+  const std::string view = o.view.empty() && !spec.views.empty() ? spec.views[0].name : o.view;
+  const std::string base =
+      std::string(spec.name) + "-" + core::num::to_string(log.seed) + "-" + view;
+  const std::string ext(extension_of(o.encoding));
+  o.video = (dir / (ext.empty() ? base + "-frames" : base + "." + ext)).generic_string();
+  o.log = (dir / (base + "-encode.log")).generic_string();
+  o.sheet = o.thumbs > 0 ? (dir / (base + "-sheet.png")).generic_string() : "";
+  fs::remove(o.log, ec);
+  const auto rec = record(spec, log, o, error);
+  if (!rec) {
+    return problem(
+        out, 1, error, l.words.empty() ? "the pilot's run" : l.words[0],
+        error.find("ffmpeg is not") != std::string::npos
+            ? "install ffmpeg, or pass --format=png for the frames and the sheet alone"
+        : error.find("ffmpeg") != std::string::npos
+            ? "read " + o.log + ", then fix --codec, --crf, --bitrate or --encoder-preset"
+            : "play describe lists the views; pass --from and --to inside the log");
+  }
+  out << "{\"" << (ext.empty() ? "frames_dir" : "video") << "\":" << quote(o.video)
+      << ",\"sheet\":" << quote(o.sheet) << ",\"format\":" << quote(o.encoding.format)
+      << ",\"view\":" << quote(rec->view) << ",\"width\":" << rec->width
+      << ",\"height\":" << rec->height << ",\"frames\":" << rec->frames
+      << ",\"fps\":" << core::num::to_string(o.fps)
+      << ",\"speed\":" << core::num::to_string(o.speed)
+      << ",\"seconds\":" << core::num::to_fixed(rec->seconds, 2) << ",\"from\":" << rec->from
+      << ",\"to\":" << rec->to << ",\"digest\":" << quote(hex64(rec->digest))
+      << ",\"encoder\":" << quote(rec->encoder)
+      << ",\"log\":" << quote(rec->encoder.empty() ? "" : o.log) << ",\"views\":["
+      << views_json(spec) << "]}\n";
+  return 0;
+}
+
 std::string fixed(double v, int places) { return core::num::to_fixed(v, places); }
 
 std::string bench_json(const GameSpec& spec, double seed, const BenchRun& b,
@@ -455,9 +579,10 @@ int play_main(int argc, char** argv, std::istream& in, std::ostream& out) {
   if (l.op == "diverge") return diverge_cmd(*spec, l, out);
   if (l.op == "bench") return bench_cmd(*spec, l, out);
   if (l.op == "shot") return shot_cmd(*spec, l, out);
+  if (l.op == "record") return record_cmd(*spec, l, out);
   return problem(out, 2, "unknown command `" + l.op + "`", "the command line",
-                 "run describe, sim, replay, state, diverge, bench or shot, or no command for the "
-                 "protocol");
+                 "run describe, sim, replay, state, diverge, bench, shot or record, or no command "
+                 "for the protocol");
 }
 
 int play_main(int argc, char** argv) {
