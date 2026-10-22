@@ -167,6 +167,32 @@ constexpr FlagSpec kGraphFlags[] = {
     {"title", "<text>", "a title before each chart's own"},
     {"log", "", "a log scale for the y axis (line and scatter)"}};
 
+constexpr FlagSpec kNetInspectFlags[] = {
+    {"peer", "<address>", "only the datagrams to or from it, as the lines print it (sim:3:1)"},
+    {"type", "<request|challenge|response|accept|deny|payload|disconnect>",
+     "only packets of this type"},
+    {"skip", "<n>", "skip the first n that match"},
+    {"limit", "<n>", "show at most n (default 200; 0: every one)"}};
+constexpr FlagSpec kNetStatsFlags[] = {
+    {"bucket", "<ms>", "the series' step (default 250)"},
+    {"out", "<dir>", "where the series and its charts go (default: <capture>-net/ beside it)"},
+    {"no-charts", "", "write the series file, draw no charts"}};
+constexpr FlagSpec kNetSimFlags[] = {
+    {"presets", "<a,b>",
+     "the link conditions, one session each (default every preset; none: a "
+     "perfect link)"},
+    {"mix", "<racing|action|rpg|world|lockstep>", "the traffic's shape (default racing)"},
+    {"link", "<k=v,...>",
+     "override conditions on every preset: latency, jitter (ms), loss, duplicate, reorder "
+     "(shares or %), burst, reorder-ms, bandwidth (kbit/s), queue (ms)"},
+    {"clients", "<n>", "fake clients (default 8)"},
+    {"max-peers", "<n>", "the host's slots, 1..32 (default 32); clients past it are denied"},
+    {"seconds", "<s>", "how long they send (default 10)"},
+    {"drain", "<s>", "then how long the links drain (default 4)"},
+    {"tick-hz", "<hz>", "how often every node updates (default 60)"},
+    {"seed", "<n>", "the network's and the nodes' seed (default 1)"},
+    {"capture", "<file.pcap>", "write the host's capture (one a preset, named after it)"}};
+
 const CommandSpec kCommands[] = {
     {"help",
      "[<command>]",
@@ -250,6 +276,15 @@ const CommandSpec kCommands[] = {
      "chart series or spans files (a trace, a bench, a profile) to PNG and SVG; several files "
      "overlay; every outlier comes back as a note",
      kGraphFlags, "ge graph runs/before.tsv runs/after.tsv --columns=step_ms", "debug"},
+    {"net inspect", "<pcap>", 1, 1, "see",
+     "a capture decoded datagram by datagram: time, addresses, packet type, sequence, acks, "
+     "each message's channel, id and size",
+     kNetInspectFlags, "ge net inspect runs/net.pcap --peer=sim:3:1 --type=payload", "multiplayer"},
+    {"net stats", "<pcap>", 1, 1, "see",
+     "a capture measured per connection from the capturing node: packets and kbps each way, "
+     "round trip, loss each way, duplicates, reorders, resends; kbps, rtt and loss over time "
+     "charted",
+     kNetStatsFlags, "ge net stats previews/net-link/bad.pcap", "multiplayer"},
     {"shot", "[<log>]", 0, 1, "see",
      "a still of a run at a step, drawn headless and captioned (seed, options, step, digest): "
      "a log played to --step, or the pilot's run of --seed; the game's options go after --",
@@ -277,6 +312,10 @@ const CommandSpec kCommands[] = {
      "where two runs part: the first input that differs, the first step after which the states "
      "differ, and the fields that do",
      kBuildFlags, "ge diverge runs/a.inputs runs/b.inputs", "play-test"},
+    {"net sim", "", 0, 0, "measure",
+     "fake-traffic clients and a host over chosen link conditions, no game needed: delivery, "
+     "round trip, loss, bandwidth and a digest a session; --capture for the pcap",
+     kNetSimFlags, "ge net sim --presets=wifi,bad --mix=action --clients=16", "multiplayer"},
     {"bench", "", 0, 0, "measure",
      "each step's time against its budget (median, p95, p99, worst), steps a second and the "
      "run's open, over the pilot's runs replayed; --tag and --compare for a before and after",
