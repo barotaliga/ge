@@ -10,23 +10,27 @@
 // Held by tests/mountain_generate_test.cpp (the forest and the analysis ask it).
 //
 // ge:summary Where on the piste a point is: nearest_track_point, its spatial hash, track_point_at
-// ge:keywords query spatial-hash
+// ge:keywords query spatial-hash dense-grid ring-walk
 // ge:skill mountain
 // ge:test tests/mountain_generate_test.cpp
 #pragma once
 
 #include <cstdint>
-#include <unordered_map>
 #include <vector>
 
 #include "mountain/mapgen/types.hpp"
 
 namespace ge::mountain::mapgen {
 
-// The segments (by starting station) whose bounding box touches each hash cell, in index
-// order. Looked up by key only, never iterated, so its order cannot reach a result.
+// The segments (by starting station) whose bounding box touches each 24 m cell, in index
+// order, on a dense grid over the cells the piste touches: cell (c, r) holds
+// `segs[start[k] .. start[k + 1])`, k = (r - r0) * cols + (c - c0). Every cell outside the box
+// is empty, so a ring walk reads only the part of a ring that crosses it.
 struct TrackIndex {
-  std::unordered_map<int64_t, std::vector<int32_t>> cells;
+  int32_t c0 = 0, r0 = 0;      // the box's first column and row
+  int32_t cols = 0, rows = 0;  // its size in cells; 0 for a piste with no segment
+  std::vector<int32_t> start;  // cols * rows + 1 offsets into `segs`
+  std::vector<int32_t> segs;
 };
 
 // WHERE ON THE PISTE IS THIS POINT NEAREST: the segment, the arc, the plan distance to the
