@@ -3,7 +3,7 @@
 // lanes, the hub, the wind tunnels and the courses. Each
 // group's comment says what its numbers mean.
 //
-// The real faces' bends are `massif::real` (R25, M4d); the real ski area's hints arrive with M4d3.
+// The real faces' bends and the reach of their hints are `massif::real` (R25, M4d).
 // Held by tests/mountain_resort_build_test.cpp (every ski area is built off these numbers).
 //
 // ge:summary The resort rule book's numbers (R25-R30) as constexpr namespaces
@@ -121,6 +121,54 @@ inline constexpr int placed = 8;
 // valley floor, and how far either side of the middle its floor and profile are read, m.
 inline constexpr Band floor{0.82, 0.98};
 inline constexpr double reach = 1300;
+// THE HINTS (real_hints.hpp): the attempts the real ski area's lifts and pistes are leant on
+// (within `placed`). A station is moved onto a real lift's end within `station_reach` m, at most
+// `station_rise` m up or down the face; a lift onto the real lift whose line passes each of its
+// ends within `lift_reach` m, its top moved at most `lift_rise` m up or down the face, a bottom on
+// the valley floor put on the real line carried down to it at most `lift_carry` m.
+inline constexpr int hinted = 8;
+namespace station {
+inline constexpr double reach = 450;
+inline constexpr double rise = 150;
+}  // namespace station
+namespace lift {
+inline constexpr double reach = 700;
+inline constexpr double rise = 300;
+inline constexpr double carry = 1600;
+}  // namespace lift
+// A run is steered through the bends of the real piste whose top is within `via::reach` m of its
+// start (one of its own colour `via::same` m nearer) and that falls `via::fall` of the way to its
+// target, a bend kept only `via::margin` m clear of the start's and the target's rows, on all but
+// the last `via::last` tries of its walk; a run following a real piste swings `via::swing` of its
+// own wave about it.
+namespace via {
+inline constexpr double reach = 350;
+inline constexpr double same = 120;
+inline constexpr double fall = 0.4;
+inline constexpr double margin = 60;
+inline constexpr double swing = 0.5;
+inline constexpr int last = 2;
+}  // namespace via
+// …steering, between the bends, for the nearest point on any real piste `follow::ahead` m down
+// the face and at most `follow::aside` m across (one of its own colour `follow::same` m nearer).
+namespace follow {
+inline constexpr Band ahead{80, 260};
+inline constexpr double aside = 260;
+inline constexpr double same = 80;
+}  // namespace follow
+// A piste slot laid ON a real piste (the one whose top is nearest within `along::reach` m and
+// that falls `along::fall` of the way to the slot's target; a real piste is often mapped in
+// pieces) takes its colour and steers for the point of its line `along::ahead` m further down the
+// face, at most `along::aside` m across (closer than `follow`, so the run keeps to that one
+// piste), and is as wide as the real piste's area is at its nearest bend within `width` m, held
+// to its colour's band.
+namespace along {
+inline constexpr double reach = 650;
+inline constexpr double fall = 0.25;
+inline constexpr Band ahead{40, 140};
+inline constexpr double aside = 160;
+}  // namespace along
+inline constexpr double width = 30;
 // What a real face holds a ski area to where a dealt massif's rule does not: at least `runs`
 // pistes; a top's pad level to `pad` m across its cut; a rope `rope` m into its clearance; a run
 // falling `fall` m per m at the least where R8 asks `track::min_grade` and cut or filled `cut` m
@@ -129,8 +177,9 @@ inline constexpr double reach = 1300;
 // to `harder` colours harder; a ramp off a top falling `ramp_glide` at the least and
 // `ramp_gentle` at the most down to a green's or a blue's run; a bottom station on ground falling
 // up to `level` m per m; the way to the peak's chair's queue rising `rise` m at the most; a
-// course's finish straight falling up to `finish` m per m; and a run climbing up to `climb` m per
-// m over R27's window.
+// course's finish straight falling up to `finish` m per m; a run climbing up to `climb` m per m
+// over R27's window; and a run billed the colour its real piste is signed where it measures
+// within `billed` colours of it (a real ski area signs a run by more than its steepest pitch).
 namespace least {
 inline constexpr int runs = 4;
 inline constexpr double pad = 0.6;
@@ -146,6 +195,7 @@ inline constexpr double level = 0.35;
 inline constexpr double rise = 1.2;
 inline constexpr double finish = 0.06;
 inline constexpr double climb = 0.04;
+inline constexpr int billed = 1;
 }  // namespace least
 }  // namespace real
 }  // namespace massif

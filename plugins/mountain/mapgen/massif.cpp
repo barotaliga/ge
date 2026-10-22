@@ -308,7 +308,8 @@ FaceRead read_face(std::shared_ptr<const RealFace> grid, double size, double dea
 }  // namespace
 
 TerrainPlan plan_massif(ge::core::Rng& rng, const Region& region,
-                        const std::shared_ptr<const RealFace>& face, int attempt) {
+                        const std::shared_ptr<const RealFace>& face, int attempt,
+                        const std::shared_ptr<const RealHints>& hints, bool lean) {
   namespace M = RR::massif;
   namespace F = R::face;
   namespace Q = RR::massif::relief;
@@ -432,7 +433,12 @@ TerrainPlan plan_massif(ge::core::Rng& rng, const Region& region,
     plan.summit_z = real->summit_z;
     plan.vertical = face_height(*face, massif->peak_x, real->summit_z) - real->face->floor;
     plan.altitude = real->face->floor;
-    plan.tree_line = dealt_line;
+    // The face's woods where its map draws any: its own tree line, and its cover by height.
+    if (hints) {
+      real->face->woods = face_woods(*face, *hints);
+      if (lean && attempt < RR::massif::real::hinted) real->face->hints = hints;
+    }
+    plan.tree_line = real->face->woods ? real->face->woods->line : dealt_line;
     plan.flank = 0;
     plan.crests = 0;
     plan.hills = hills * RR::massif::real::folds;

@@ -1,4 +1,5 @@
-// A dealt massif's plan: its stations, lifts and run slots (a real face's hints are M4d).
+// A massif's plan: its stations, lifts and run slots, leant onto a real face's hints where it
+// has them (real_lean.hpp).
 //
 // ge:summary The stations and lifts on the massif, and the run slots in walk order
 // ge:keywords resort plan-resort place-stations slots tilt tall-tilt tilted road-row
@@ -16,6 +17,7 @@
 #include "core/num.hpp"
 #include "mountain/mapgen/lift_chain.hpp"
 #include "mountain/mapgen/massif.hpp"
+#include "mountain/mapgen/real_lean.hpp"
 #include "mountain/mapgen/resort_rules.hpp"
 
 namespace ge::mountain::mapgen {
@@ -137,16 +139,15 @@ Placed place_stations(ge::core::Rng& rng, const TerrainPlan& plan) {
   const double span = plan.base_z - plan.summit_z;
   const auto at = [&](double u) { return plan.summit_z + span * u; };
   const double side = m.side;
-  const PlanPoint village{m.village_x, plan.base_z + 60};
-  const PlanPoint mid{m.bench_x, at(m.bench_u) - 20};
-  const PlanPoint peak{m.peak_x - side * 40, plan.summit_z + LR::below};
-  const PlanPoint shoulder{m.shoulder_x, plan.summit_z + LR::below + 10};
-  const PlanPoint shoulder_foot{(m.shoulder_x + m.village_x) / 2 - side * 60, plan.base_z + 40};
+  PlanPoint village{m.village_x, plan.base_z + 60};
+  PlanPoint mid{m.bench_x, at(m.bench_u) - 20};
+  PlanPoint peak{m.peak_x - side * 40, plan.summit_z + LR::below};
+  PlanPoint shoulder{m.shoulder_x, plan.summit_z + LR::below + 10};
+  PlanPoint shoulder_foot{(m.shoulder_x + m.village_x) / 2 - side * 60, plan.base_z + 40};
   // The nursery's top as far up from the floor as on the rule book's square.
   const double nursery_x = m.village_x - side * in_band(rng, LR::nursery::across);
   const double nursery_u = in_band(rng, LR::nursery::at);
-  const PlanPoint nursery{nursery_x,
-                          m.wide == 1 ? at(nursery_u) : at(1 - (1 - nursery_u) / m.wide)};
+  PlanPoint nursery{nursery_x, m.wide == 1 ? at(nursery_u) : at(1 - (1 - nursery_u) / m.wide)};
   const double outer_x = m.peak_x + side * in_band(rng, LR::outer::across) * m.wide;
   const double outer_u = in_band(rng, LR::outer::at);
   const bool room = std::abs(outer_x - size / 2) < plan.flank_band.inner - 220;
@@ -156,7 +157,29 @@ Placed place_stations(ge::core::Rng& rng, const TerrainPlan& plan) {
     outer = PlanPoint{outer_x, at(outer_u)};
     outer_foot = PlanPoint{outer_x - side * 80, plan.base_z + 40};
   }
-  const PlanPoint drag_bottom{nursery.x + side * 60, village.z - 10};
+  PlanPoint drag_bottom{nursery.x + side * 60, village.z - 10};
+  // A REAL FACE's lifts (real_lean.hpp): every station leant onto the nearest end of a real lift,
+  // the village's first (the gondola leaves it), each top as near the real one as it may move;
+  // after every draw, so the stream runs on as it would.
+  const RealHints* hints = plan.face ? plan.face->hints.get() : nullptr;
+  if (hints) {
+    HintsUsed used(*hints);
+    const auto ride = {HintLiftKind::gondola, HintLiftKind::chair};
+    const auto lean = [&](PlanPoint& bottom, PlanPoint& top,
+                          std::initializer_list<HintLiftKind> kinds) {
+      if (const std::optional<LeantLift> l =
+              lean_lift(*hints, used, bottom, top, kinds, true, false)) {
+        bottom = l->bottom;
+        top = l->top;
+      }
+    };
+    lean(village, mid, ride);
+    // Laid 1:1, a real top stands where the real one does, up or down the face as far as it may.
+    peak = lean_station(*hints, used, peak, true);
+    lean(shoulder_foot, shoulder, ride);
+    if (outer && outer_foot) lean(*outer_foot, *outer, ride);
+    lean(drag_bottom, nursery, {HintLiftKind::drag});
+  }
   Placed out{{side, village, mid, peak, shoulder, shoulder_foot, nursery, outer, outer_foot}, {}};
   const LiftPlan gondola{"G1", LiftKind::gondola, {village.x + side * 30, village.z}, mid};
   out.lifts.push_back(gondola);
@@ -185,6 +208,9 @@ ResortPlan plan_resort(ge::core::Rng& rng, const TerrainPlan& plan) {
     }
     return nullptr;
   };
+  const RealHints* hints = plan.face ? plan.face->hints.get() : nullptr;
+  HintsUsed pistes(hints ? *hints : RealHints{});
+  const HintWidth widths = hints ? piste_width(*hints) : nullptr;
   std::vector<RunSpec> specs;
   for (const Slot& slot : kSlots) {
     const PlanPoint* top = top_of(slot.from);
@@ -194,10 +220,19 @@ ResortPlan plan_resort(ge::core::Rng& rng, const TerrainPlan& plan) {
     const double x = top->x + slot.offset * st.side;
     const PlanPoint target = slot.target(st);
     const double toward = libm::atan2(target.x - x, num::max(200.0, target.z - top->z));
+    // A REAL FACE's pistes: a piste slot laid on the real piste leaving nearest its start takes
+    // that piste's colour and follows its line, the run's width its real one; with none near, it
+    // is steered through the bends of a real one of its own colour.
+    const bool hinted = hints && slot.kind == RunKind::piste;
+    const PlanPoint start{x, top->z};
+    const HintPiste* real = hinted ? piste_for(*hints, pistes, start, target) : nullptr;
+    const std::optional<PG> signed_as = real ? piste_grade_of(real->grade) : std::nullopt;
     // `plan.sea` is set on every massif (v8 on), so the tall tilt.
-    const PG aim = slot.kind == RunKind::road ? PG::green : tilted(slot, plan.region->id);
+    const PG aim = signed_as                    ? *signed_as
+                   : slot.kind == RunKind::road ? PG::green
+                                                : tilted(slot, plan.region->id);
     const GradeRow* row = slot.kind == RunKind::road ? &kRoadRow : &grade_row(aim);
-    specs.push_back(RunSpec{
+    RunSpec spec{
         std::to_string(specs.size() + 1),
         slot.from,
         slot.kind,
@@ -208,7 +243,32 @@ ResortPlan plan_resort(ge::core::Rng& rng, const TerrainPlan& plan) {
         target,
         slot.amplitude,
         slot.lean * st.side,
-    });
+    };
+    if (hinted) {
+      const double margin = RR::massif::real::via::margin;
+      if (real) {
+        for (size_t i = 1; i < real->points.size(); i++) {
+          const PlanPoint q = real->points[i];
+          if (q.z > top->z + margin && q.z < target.z - margin) spec.via.push_back(q);
+        }
+      } else {
+        spec.via = piste_via(*hints, pistes, start, target, aim);
+      }
+      HintSteer any = piste_ahead(*hints, aim);
+      if (real) {
+        spec.follow = [on = along_piste(*real), any = std::move(any)](double fx, double fz) {
+          std::optional<PlanPoint> p = on(fx, fz);
+          return p ? p : any(fx, fz);
+        };
+        spec.width_at = widths;
+        spec.signed_as = signed_as;
+      } else {
+        spec.follow = std::move(any);
+      }
+      // A run following a real piste swings less of its own.
+      spec.amplitude *= RR::massif::real::via::swing;
+    }
+    specs.push_back(std::move(spec));
   }
   // The pistes the gentlest first, each colour in slot order; the lanes last.
   const auto rank = [](const RunSpec& sp) {

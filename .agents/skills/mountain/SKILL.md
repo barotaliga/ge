@@ -91,6 +91,23 @@ one game's: which maps a game races, its modes and its strings stay in the game.
   dealt rule is (`grade_face`, `ramp_fit`, `ChainMost`, `place_start`'s `face`,
   `StationGround::level`, the drags' and access's `slack`, the analysis's `level.face`). A new
   bend is a number there and a branch beside the dealt rule's, never a second code path.
+- THE REAL FACES' HINTS (R25, M4d3): the real ski area on each face, off OpenStreetMap (ODbL;
+  the notice is in every generated file). `real_hints.hpp` holds a face's real lifts (chair,
+  gondola, drag; their ends on a 2 m grain), its pistes (signed colour, bends top first thinned to
+  6 m, the width of the piste's area at each) and its woods by height (eight bands of cover over
+  the face's heights and a tree line, or none where the map draws no forest), packed as zig-zag
+  varints in base64 (`packed.hpp`, shared with the faces' grids). They are GENERATED into
+  `real_hints/` by the `real-hints` lab's bake (`--bake --fetch --write`): the map API read with
+  `curl` (`labs/fetch.hpp`) into the gitignored `.cache/osm/`, a polite wait between calls, a
+  relation's missing members fetched whole (`labs/osm_data.hpp`). The generator LEANS on them on
+  the first `massif::real::hinted` attempts (`GenerateOptions::hints`, on by default):
+  `real_lean.hpp` moves the stations and lifts onto the real ones within reach, lays a piste
+  slot on the real piste leaving nearest its start (its colour, its line through `follow`, its
+  width through `width_at`) or steers it through a real piste's bends (`via`), and bills a run its
+  real piste's colour within `least::billed` of what it measures (the analysis holds the same).
+  The face's woods scale R14's curve by the real cover at each height (`resort_courses.cpp`), and
+  their line is the map's tree line. Every lean is a pure function of the hints and draws nothing,
+  so the stream runs on as without them; the walk's last `via::last` tries drop the steering.
 
 ## Order of work (docs/goals.md M4a to M4d)
 
@@ -129,7 +146,11 @@ close up and from the side, the routes' table) at `--version=9,10`; a change to 
 jumping hill runs `skijump-hills` (each hill's earth moved, tower and arena as a table, its
 profile at true scale from the side, the map) at `--version=1,9`; a change to the real faces' crops,
 their codec or their bake runs `real-faces` (the table of every face and the sheet; with `--bake`,
-the samples each bake moves against the tree's); a change to the face's massif or to any rule a
-real face bends runs `real-maps` over every face (`--faces=all`, about ten minutes on one core;
-split the faces over processes) before and after, and no face may stop building. The `labs` skill
+the samples each bake moves against the tree's); a change to the hints' codec or their bake runs
+`real-hints` (every face's lifts, pistes and woods as a table, a face named alone drawn over its
+heights; with `--bake`, each face's bytes against the tree's); a change to the face's massif or to any rule a
+real face bends or to how it leans on its hints runs `real-maps` over every face (`--faces=all`,
+about ten minutes on one core; split the faces over processes) before and after, and no face may
+stop building; its `off real m` column (and `--hints=0` beside it) says how near the runs lie to
+the real pistes. The `labs` skill
 owns how.
