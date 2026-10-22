@@ -16,7 +16,8 @@
 //
 // ge:summary The skier as rigid pieces posed from a SkierState: the placeholder figure
 // ge:keywords skier figure placeholder pose pieces skis boots legs torso head poles tuck lean
-// ge:keywords edge body-frame figure_pieces pose_figure figure-part
+// ge:keywords edge body-frame figure_pieces pose_figure figure-part figure_frame figure_joints
+// ge:keywords joint rig anim
 // ge:skill skier render
 // ge:test tests/skier_figure_test.cpp
 #pragma once
@@ -54,6 +55,29 @@ struct PiecePose {
 // Pose every piece for `s` on `world`'s snow.
 void pose_figure(const SkierState& s, const World& world,
                  std::array<PiecePose, kFigurePieces>& out);
+
+// THE FIGURE'S FRAME: the skis' base under the boots, turned by the heading and the snow (or the
+// flight's pitch) but not by the edge or the lean, so the snow is y = 0 in it: the frame an
+// animation of the figure is recorded and judged in (engine/lab/anim.hpp).
+struct FigureFrame {
+  core::Vec3 at;   // world, m
+  core::Quat rot;  // the frame to the world
+};
+FigureFrame figure_frame(const SkierState& s, const World& world);
+
+// THE JOINTS the posed pieces meet at, for an animation's pose track: each with the joint its
+// bone starts at (-1 for the waist, the root) and its side (-1 left, 0 centre, 1 right).
+struct FigureJoint {
+  const char* name;
+  int parent;
+  int side;
+};
+inline constexpr int kFigureJoints = 23;
+const std::array<FigureJoint, kFigureJoints>& figure_joints();
+
+// Every joint of `pieces` (posed by pose_figure) in `frame`, m.
+void figure_joint_positions(const std::array<PiecePose, kFigurePieces>& pieces,
+                            const FigureFrame& frame, std::array<core::Vec3, kFigureJoints>& out);
 
 // The pelvis's height over the skis' base, m, for a tuck of 0..1 (standing 0.99, folded 0.65).
 double figure_hip_height(double tuck);
