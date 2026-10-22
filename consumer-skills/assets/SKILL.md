@@ -1,0 +1,65 @@
+---
+name: assets
+description: "Use to add or change one of this game's MODELS (a rigged figure, a vehicle, a prop) built in headless Blender: the asset's directory and manifest (asset.txt), the builder script and the engine's ge_asset library it imports, the game data it is fed (GE_ASSET_DATA), ge asset build, list and check, the stamp that says what a model was built from, the size budget, and looking at the result with the models lab."
+---
+
+# Built assets
+
+Most of what this game draws is built in code. A MODEL is for the few rigged, detailed things
+where an authored mesh looks much better: it is made by a Python builder in headless Blender,
+off the game's own data, and the .glb is committed beside it. Nothing in the game runs Blender:
+the engine loads the .glb (`assets::load_gltf`).
+
+## An asset
+
+```
+<home>/assets/<name>/
+  asset.txt     builder: build.py / data: <set> / source: <file> / budget-kib: <n>
+  build.py      the builder (Blender Python)
+  data.cpp      GE_ASSET_DATA({"<set>", "<what it holds>", make}): the game's numbers as JSON
+  <name>.glb    the model, as built
+  <name>.stamp  the hash of every source it was built from, and the Blender that built it
+```
+
+`<home>` is wherever the code it belongs to lives. The data set is the point: a builder reads
+the game's numbers (a skeleton's joints, a vehicle's dimensions) from the data, never a copy
+typed into the script, so a change to the numbers makes the model stale and the `assets_check`
+test says so.
+
+## The builder
+
+```python
+import ge_asset
+data, out = ge_asset.start()                      # the data set and the output path
+rig = ge_asset.armature("rig", data["joints"])    # bones from the game's joints
+mesh = ge_asset.MeshBuilder()
+mesh.loft(rings, "jacket")                        # tubes, boxes, spheres in the GAME's frame
+mesh.finish("figure", rig, materials)
+ge_asset.export(out)
+```
+
+Work in the game's frame (x right, y up, z forward, metres); `ge_asset.to_blender` turns it into
+Blender's and the export and the loader turn it back, so the model faces heading 0. Set every
+vertex's weights yourself (at most four, normalised by the library) rather than relying on
+automatic weights, so the same data always gives the same model.
+
+## The commands
+
+```sh
+ge asset list                    # every asset, its size against its budget, fresh or not
+ge asset build <name>            # build, stamp and check one (no name: every stale one)
+ge asset check                   # what the assets_check test checks: stamps and budgets
+ge lab models -- --model=<home>/assets/<name>/<name>.glb   # LOOK at it: bind, skeleton, clips
+```
+
+Blender comes from `--blender=<cmd>`, `GE_BLENDER`, `blender` on the PATH, or a python3 that can
+`import bpy`. With no Blender, `pip install bpy` into a directory and point `GE_BLENDER` at the
+Python and `PYTHONPATH` at the directory (the finding gives the exact line).
+
+## The rules
+
+- Commit the .glb and its stamp together, always from `ge asset build`; never hand-edit either.
+- A model stays under its `budget-kib`. Over it, cut triangles or LODs in the builder; raising
+  the budget is a decision the PR states.
+- A .glb does not diff, so every rebuild adds a whole copy to the history: rebuild only when the
+  stamp says its sources moved.
