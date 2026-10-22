@@ -33,6 +33,8 @@ the row when the file moves.
 | `engine/core/solar.cpp` | `oss-game-framework/src/core/solar.ts` |  |
 | `engine/core/solar.hpp` | `oss-game-framework/src/core/solar.ts` | sunAt moonAt daylightWindow sunOnDate moonOnDate hourOfElevation |
 | `engine/loop/run_clock.hpp` | `oss-game-framework/src/loop/run-clock.ts` | createRunClock MAX_FRAME_SECONDS |
+| `games/fall_line/sim/free.cpp` | `game5/engine/game/skied.ts`, `course.ts` | runUnder noteRun noteSkied leftRunPoint skiedResetPoint freeSpawn |
+| `games/fall_line/sim/free.hpp` | `game5/engine/game/skied.ts`, `course.ts` | runUnder noteRun noteSkied leftRunPoint skiedResetPoint freeSpawn |
 | `games/fall_line/sound/bank.cpp` | `game5/pwa/src/game/audio/bank.ts` | RUN_BANK |
 | `games/fall_line/sound/bank.hpp` | `game5/pwa/src/game/audio/bank.ts` | RUN_BANK |
 | `games/fall_line/sound/listener.hpp` | `game5/pwa/src/game/audio/listener.ts` | Listener LISTENERS listenerFor |

@@ -12,6 +12,7 @@
 
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
+#include "fall_line/sim/free.hpp"
 #include "mountain/mapgen/query.hpp"
 #include "skier/limits.hpp"
 #include "skier/tuning.hpp"
@@ -52,16 +53,15 @@ void weave_through_gates(const mg::Level& level, BotPlan& plan) {
   }
 }
 
-}  // namespace
-
-BotPlan plan_bot(const mg::Level& level, const sk::SkiSpec& spec) {
-  const auto& pts = level.track.points;
+// THE PLAN along `plan.track`: the course's gates woven through in a race, the kickers on the
+// course's piste by their arc in a race and by their nearest point on the free ride's line.
+void lay_plan(const mg::Level& level, const sk::SkiSpec& spec, bool race, BotPlan& plan) {
+  const auto& pts = plan.track->points;
   const size_t n = pts.size();
-  BotPlan plan;
   plan.curvature.assign(n, 0);
   plan.speed.assign(n, 0);
-  if (n < 2) return plan;
-  weave_through_gates(level, plan);
+  if (n < 2) return;
+  if (race) weave_through_gates(level, plan);
   // The heading the bot travels at each point: the piste's, or the weave's where it has one.
   std::vector<double> heading(n);
   for (size_t i = 0; i < n; i++) heading[i] = pts[i].heading;
@@ -97,8 +97,17 @@ BotPlan plan_bot(const mg::Level& level, const sk::SkiSpec& spec) {
     plan.speed[i] = bot::kCornerShare * sk::carve_speed(spec, plan.curvature[i], packed);
   }
   for (const mg::Kicker& k : level.kickers) {
-    if (!k.on_track || !k.s.has_value()) continue;
-    const double lip = k.s.value();
+    double lip = 0;
+    if (race) {
+      if (!k.on_track || !k.s.has_value()) continue;
+      lip = k.s.value();
+    } else {
+      mg::TrackHit hit;
+      hit.distance = INFINITY;
+      mg::nearest_within(*plan.track, k.x, k.z, kRunLook, hit);
+      if (!(hit.distance <= pts[static_cast<size_t>(hit.index)].width / 2)) continue;
+      lip = hit.s;
+    }
     for (size_t i = 0; i < n; i++) {
       if (pts[i].s > lip - bot::kKickerReach && pts[i].s <= lip) {
         plan.speed[i] = num::min(plan.speed[i], bot::kKickerSpeed);
@@ -116,6 +125,22 @@ BotPlan plan_bot(const mg::Level& level, const sk::SkiSpec& spec) {
     const double reach = std::sqrt(plan.speed[i + 1] * plan.speed[i + 1] + 2 * decel * ds);
     plan.speed[i] = num::min(plan.speed[i], reach);
   }
+}
+
+}  // namespace
+
+BotPlan plan_bot(const mg::Level& level, const sk::SkiSpec& spec) {
+  BotPlan plan;
+  // The map's own piste, held without owning it: the plan lives no longer than the run's map.
+  plan.track = std::shared_ptr<const mg::Track>(std::shared_ptr<const mg::Track>{}, &level.track);
+  lay_plan(level, spec, true, plan);
+  return plan;
+}
+
+BotPlan plan_free(const mg::Level& level, int32_t run, const sk::SkiSpec& spec) {
+  BotPlan plan;
+  plan.track = std::make_shared<const mg::Track>(run_chain(level, run));
+  lay_plan(level, spec, false, plan);
   return plan;
 }
 
@@ -123,24 +148,28 @@ Controls bot_controls(const GameState& state, int32_t i, const BotPlan& plan) {
   const Racer& r = state.racers[static_cast<size_t>(i)];
   const sk::SkierState& s = r.skier;
   Controls c;
+  if (r.free.arrived) {
+    c.ski.brake = 1;
+    return c;
+  }
   if (r.progress.finished || s.down) return c;
   if (r.progress.missed) {
     c.reset = true;
     return c;
   }
-  const mg::Level& level = *state.level;
-  const mg::TrackHit hit = mg::nearest_track_point(level.track, s.x, s.z);
+  const mg::Track& track = *plan.track;
+  const mg::TrackHit hit = mg::nearest_track_point(track, s.x, s.z);
   const double v = s.speed;
   // The line: pursue his lane a look ahead down the piste.
   const double look =
       core::clamp(bot::kLookTime * v + bot::kLookLeast, bot::kLookLeast, bot::kLookMost);
-  const mg::TrackPoint aim = mg::track_point_at(level.track, hit.s + look);
+  const mg::TrackPoint aim = mg::track_point_at(track, hit.s + look);
   // His lane: held right of the centreline (or of the weave through the gates, inside their
   // panels), never nearer the piste's edge than `kLaneMargin`.
   const double room = num::max(0.0, aim.width / 2 - bot::kLaneMargin);
   double lane = core::clamp(r.rider.lane, -room, room);
   if (!plan.line.empty()) {
-    const auto& line = level.track.points;
+    const auto& line = track.points;
     const auto past = std::upper_bound(line.begin(), line.end(), aim.s,
                                        [](double at, const mg::TrackPoint& p) { return at < p.s; });
     const auto k = static_cast<size_t>(std::max<std::ptrdiff_t>(0, past - line.begin() - 1));
@@ -155,7 +184,7 @@ Controls bot_controls(const GameState& state, int32_t i, const BotPlan& plan) {
   const double most = sk::edge_most(state.spec, v, s.tuck);
   if (s.on_snow) c.ski.steer = num::sign(alpha) * num::min(1.0, most > 0 ? edge / most : 1.0);
   // The speed: the plan's least over the stretch ahead, at his pace.
-  const auto& pts = level.track.points;
+  const auto& pts = track.points;
   const size_t from = static_cast<size_t>(hit.index);
   const auto ahead = static_cast<size_t>((bot::kReadTime * v + bot::kReadLeast) / 2) + 1;
   double cap = plan.speed[from];

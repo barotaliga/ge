@@ -14,6 +14,7 @@
 
 #include "fall_line/sim/course.hpp"
 #include "fall_line/sim/field.hpp"
+#include "fall_line/sim/free.hpp"
 #include "mountain/mapgen/generate.hpp"
 #include "skier/skier.hpp"
 
@@ -36,7 +37,8 @@ void log_step(const GameState& state) {
   const auto f = [](double v, int d) { return ge::core::num::to_fixed(v, d); };
   for (const GameEvent& e : state.events) {
     const bool course = e.kind == EventKind::gate || e.kind == EventKind::missed ||
-                        e.kind == EventKind::finish || e.kind == EventKind::reset;
+                        e.kind == EventKind::finish || e.kind == EventKind::reset ||
+                        e.kind == EventKind::onto || e.kind == EventKind::arrived;
     const out::Channel ch = e.kind == EventKind::shoulder ? kField : course ? kCourse : kSkier;
     if (!out::enabled(ch, out::Level::debug)) continue;
     const sk::SkierState& s = state.racers[static_cast<size_t>(e.racer)].skier;
@@ -68,6 +70,12 @@ void log_step(const GameState& state) {
       case EventKind::takeoff:
         line += " owing gate " + std::to_string(e.gate);
         break;
+      case EventKind::onto:
+        line += " run " + std::to_string(e.gate);
+        break;
+      case EventKind::arrived:
+        line += " at the foot of run " + std::to_string(e.gate) + " in " + f(e.value, 3) + " s";
+        break;
     }
     line += " at x " + f(s.x, 1) + " z " + f(s.z, 1) + ", " + f(s.speed * 3.6, 1) + " km/h";
     out::log_on(ch, out::Level::debug, line);
@@ -80,6 +88,15 @@ void log_step(const GameState& state) {
                     f(s.speed * 3.6, 2) + " km/h edge " + f(s.edge, 3) + " tuck " + f(s.tuck, 2) +
                     " lean " + f(s.lean, 3) + " g_lat " + f(s.g_lat, 2) +
                     (s.on_snow ? "" : " air") + (s.down ? " down" : ""));
+  }
+}
+
+// The reset the run's mode makes.
+void reset(GameState& state, int32_t i) {
+  if (state.mode == Mode::free) {
+    reset_free(state, i);
+  } else {
+    reset_racer(state, i);
   }
 }
 
@@ -105,6 +122,10 @@ const char* event_name(EventKind kind) {
       return "reset";
     case EventKind::shoulder:
       return "shoulder";
+    case EventKind::onto:
+      return "onto";
+    case EventKind::arrived:
+      return "arrived";
   }
   return "?";
 }
@@ -149,14 +170,18 @@ void step(GameState& state, std::span<const Controls> controls) {
     Progress& p = r.progress;
     const Controls c =
         static_cast<size_t>(i) < controls.size() ? controls[static_cast<size_t>(i)] : Controls{};
-    if (c.reset && !p.finished) reset_racer(state, i);
+    if (c.reset && !p.finished) reset(state, i);
     sk::SkierInput in = c.ski;
     if (p.finished) in = sk::SkierInput{0, 0, 1, false};
     const double x0 = r.skier.x;
     const double z0 = r.skier.z;
     sk::SkierEvents ev;
     sk::step_skier(r.skier, in, world, state.spec, kDt, ev);
-    step_course(state, i, x0, z0);
+    if (state.mode == Mode::free) {
+      step_free(state, i, x0, z0);
+    } else {
+      step_course(state, i, x0, z0);
+    }
     if (ev.took_off) state.events.push_back(GameEvent{EventKind::takeoff, i, p.next, 0});
     if (ev.landed) state.events.push_back(GameEvent{EventKind::landing, i, p.next, ev.landing_g});
     if (ev.glanced) state.events.push_back(GameEvent{EventKind::glance, i, ev.tree, 0});
@@ -168,7 +193,7 @@ void step(GameState& state, std::span<const Controls> controls) {
     if (p.finished) continue;
     p.stuck = !r.skier.down && r.skier.speed < kStuckSpeed ? p.stuck + kDt : 0;
     if ((r.skier.down && r.skier.down_time > kDownReset) || p.stuck > kStuckReset) {
-      reset_racer(state, i);
+      reset(state, i);
     }
   }
   meet_racers(state);
@@ -198,6 +223,16 @@ uint64_t state_hash(const GameState& state, uint64_t h) {
     mix(p.wipeouts);
     mix(p.missed_gates);
     mix(p.stuck);
+    if (state.mode != Mode::free) continue;
+    const FreeRide& f = r.free;
+    mix(f.run);
+    mix(f.last);
+    mix(f.last_s);
+    mix(static_cast<double>(f.skied.size()));
+    for (const int32_t k : f.skied) mix(k);
+    mix(f.distance);
+    mix(f.arrived ? 1 : 0);
+    mix(f.arrived_at);
   }
   return h;
 }
