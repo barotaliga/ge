@@ -60,6 +60,18 @@ if [[ -n "$base" ]]; then
   fi
 fi
 
+# A file this build does not compile (the GPU's or the window's, in a build without them) has
+# no flags to lint it with: it is left to CI, whose lint build has every feature on.
+db="$build/compile_commands.json"
+kept=()
+for f in "${files[@]}"; do
+  if grep -qF -- "$PWD/$f\"" "$db"; then kept+=("$f"); fi
+done
+if (( ${#kept[@]} < ${#files[@]} )); then
+  echo "lint: $(( ${#files[@]} - ${#kept[@]} )) files are not in this build ($build); CI lints them."
+fi
+files=("${kept[@]}")
+
 (( ${#files[@]} )) || { echo "lint: nothing to lint."; exit 0; }
 echo "lint: clang-tidy over ${#files[@]} files, $jobs at a time."
 # xargs exits non-zero when any clang-tidy did. Its progress and "N warnings generated" lines
