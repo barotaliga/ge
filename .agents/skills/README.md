@@ -49,3 +49,4 @@ One skill per plugin, named after it (`docs/architecture.md` § Plugins).
 | `mountain` | `plugins/mountain`: the generated ski mountain, its generator and its rule book |
 | `skier` | `plugins/skier`: the skier on the snow, its limits, the hand-built maps and the ride scenarios |
 | `snowmobile` | `plugins/snowmobile`: the snowmobile on the snow, what throws its rider, the bot's hands on it and the sled scenarios |
+| `helicopter` | `plugins/helicopter`: the helicopter in the air and on the snow, the downwash, the bot's hands on it and the heli scenarios |
