@@ -237,6 +237,7 @@ whole tree to it, and `ge doctor` holds a game repo to it (the `agent-interface`
 | Audio | Our own DSP graph on SDL3 audio: every sound is synthesized, so no middleware |
 | UI | Our own immediate-mode 2D layer + SDF text; Dear ImGui for dev tools |
 | Assets | cgltf for the modelled skis; everything else generated in code or baked to embedded blobs |
+| Built venues on a map | A venue whose features are finer than the 2 m grid (a ski jump's edge, its landing radius) answers `Level::ground_at` and `normal_at` off an ANALYTIC profile inside its width (`Level::venue`, one null check on the hot path), with the grid cut beneath it so a reader of the raw grid never sees ground above the surface |
 | Tests | Our own header harness, CTest, golden tables |
 | Build/CI | CMake + Ninja + presets; GitHub Actions on Linux x64/arm64 (GCC, Clang), macOS, Windows |
 

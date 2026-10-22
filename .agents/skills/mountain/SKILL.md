@@ -60,6 +60,17 @@ one game's: which maps a game races, its modes and its strings stay in the game.
   (`check_routes`) and every other rule hold the map with them; the jumps ride on
   `ResortAttempt::route_kickers` into every course set. A map from v8 or before carries none,
   and the digest reads routes only where there are some.
+- A FREESTYLE VENUE BUILT ON A MAP (R37 onward, the rule book's numbers in `venue_rules.hpp`):
+  `straight_venue.hpp` searches a straight line of its own down the face where a profile designed
+  off the horizontal cuts and fills least (`find_line`) and grades the ground to it (`grade_venue`:
+  eased out, groomed, the woods and the arena cleared, lowered under a raised stretch). THE SKI
+  JUMPING HILL (R43, `ski_jump.hpp`): `ski_jump_profile` builds each hill (`JumpHill::large`,
+  `normal`) element by element from the construction norm's formulas over its row's free choices,
+  the same on every map; `set_ski_jump` sets it over a map as a new map whose `Level::ski_jump`
+  names it and keeps the map under it (`SkiJumpHill::base`). The hill is an ANALYTIC surface
+  (`Level::venue`): `ground_at` and `normal_at` answer off its profile inside its width (only the
+  deck up the raised in-run), and the grid under it is cut to it, never above it. Any course or
+  hill already on the map is set over the map under it (`original_of`).
 
 ## Order of work (docs/goals.md M4a to M4d)
 
@@ -94,4 +105,6 @@ jumps, nets and speed trap; `speed-ski`: the track's profile from the side and t
 above; `ski-cross`: the course close up, its profile with the mean fall taken out, the map). A
 change to the terrain park runs `park` (the park close up, its profile, the map) at
 `--version=1,8`; a change to the ski routes runs `routes` (the area with its routes, each route
-close up and from the side, the routes' table) at `--version=9,10`. The `labs` skill owns how.
+close up and from the side, the routes' table) at `--version=9,10`; a change to a venue or the ski
+jumping hill runs `skijump-hills` (each hill's earth moved, tower and arena as a table, its
+profile at true scale from the side, the map) at `--version=1,9`. The `labs` skill owns how.

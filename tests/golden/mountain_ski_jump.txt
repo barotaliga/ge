@@ -1,0 +1,5 @@
+# seed version hill, then the hill set over its map (mountain_ski_jump_test)
+38 v1 large line=2641.68,2327.51 heading=-6.00 vertical=131.45 gates=28 design=23 digest=63dfcf5e
+7 v1 normal line=2440.05,1126.13 heading=6.00 vertical=102.74 gates=23 design=21 digest=c23927c9
+38 v9 large line=327.47,1054.52 heading=-6.00 vertical=131.45 gates=28 design=23 digest=60a9ff1a
+5 v9 normal line=2646.67,1609.39 heading=-12.00 vertical=102.74 gates=23 design=21 digest=079c78a3
