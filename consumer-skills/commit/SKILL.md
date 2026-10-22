@@ -14,7 +14,7 @@ ship in the same commit as the work.
 
 ```sh
 ge check                   # format, ge doctor, the build, every test and lab (debug: sanitizers)
-ge check --preset=release
+ge precheck                # before the push: CI's gates in both presets (check, pilot, replays)
 ```
 
 Each finding says what, where and the next action; a format finding's next is the
@@ -42,5 +42,8 @@ The title is a conventional subject. The body holds:
   (`--tag=before`, `--compare=before`; skill: `labs`), with the pictures that moved. A digest
   that moved on purpose says why.
 
-CI is the gate: read a red job's log, fix the cause and push. Never skip or weaken a test to get
+CI is the gate. After the push, check the PR every 15 minutes until it is merged: `ge ci <pr>`
+says whether it still merges with its base (a conflict is an error finding: merge the base,
+resolve, `ge precheck`, push) and reads each red job's log back as findings (fix the cause, `ge
+precheck`, push). Never skip or weaken a test to get
 green.

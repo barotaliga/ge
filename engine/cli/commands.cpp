@@ -54,6 +54,12 @@ constexpr FlagSpec kLabFlags[] = {
     kEngine,
     kRepo};
 
+constexpr FlagSpec kPrecheckFlags[] = {
+    {"preset", "<debug|release>", "only this preset (default: both, as CI runs them)"},
+    kEngine,
+    kRepo};
+constexpr FlagSpec kCiFlags[] = {
+    {"log", "<file>", "read this saved job log instead of asking GitHub"}, kRepo};
 constexpr FlagSpec kDigestFlags[] = {
     {"write", "", "rewrite the lab's row of tests/labs_digests.txt (every row with no lab)"},
     kPreset,
@@ -169,6 +175,14 @@ const CommandSpec kCommands[] = {
     {"check", "", 0, 0, "build",
      "the whole gate in one call: format, doctor, build, tests and labs", kBuildFlags,
      "ge check --json", "commit"},
+    {"precheck", "", 0, 0, "build",
+     "what CI runs, here, before the push: ge check, then the pilot's seeds and their replays, "
+     "on each preset",
+     kPrecheckFlags, "ge precheck --preset=release", "commit"},
+    {"ci", "[<pr>]", 0, 1, "build",
+     "a pull request's state: whether it conflicts with its base, and each failed job's log "
+     "read back as findings (through gh, or a saved log)",
+     kCiFlags, "ge ci 12", "commit"},
     {"digest", "[<lab>]", 0, 1, "build",
      "a lab (or every lab) at its smoke flags, twice: each digest beside the committed baseline; "
      "--write moves only that lab's row",
