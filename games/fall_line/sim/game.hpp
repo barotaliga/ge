@@ -12,9 +12,12 @@
 //    mode's. On the free ride a lift that has him steps him instead (`step_lift`), and nothing
 //    else of his is stepped.
 // 3. Skier against skier (`meet_racers`, field.hpp), the field in pair order.
-// 4. The wanted level (`step_wanted`, wanted.hpp): the look, the climb, the search running out;
+// 4. The army on foot (`step_army`, army.hpp): the lifts' squads and the ground waves sent, every
+//    soldier moved, the arrest, and each one written into the hunt's pursuers; nothing on a run
+//    whose hunt never reached a star.
+// 5. The wanted level (`step_wanted`, wanted.hpp): the look, the climb, the search running out;
 //    nothing on a run that never raised the heat.
-// 5. The clock advances.
+// 6. The clock advances.
 //
 // The only draws are the field's, made once when the run is created (`deal_field`, off a stream
 // of the map's seed); `step` draws nothing, so a run is a pure function of its map and controls.
@@ -52,8 +55,8 @@ GameState create_game_on(std::shared_ptr<const ge::mountain::mapgen::Level> leve
 // ONE STEP. `controls` holds one entry per racer, in field order.
 void step(GameState& state, std::span<const Controls> controls);
 
-// FNV-1a 64 over every racer's skier and progress, the hunt (once raised) and the clock, folded
-// into `h`; on the free ride his free ride too (a race's digest reads none of it).
+// FNV-1a 64 over every racer's skier and progress, the hunt and the army (once raised) and the
+// clock, folded into `h`; on the free ride his free ride too (a race's digest reads none of it).
 uint64_t state_hash(const GameState& state, uint64_t h);
 
 }  // namespace fall_line::sim
