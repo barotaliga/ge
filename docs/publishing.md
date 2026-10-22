@@ -42,10 +42,12 @@ own `ge`, and passes its own `make test` and `make agents-check` (`ge doctor`) f
 (the `agent-interface` skill).
 
 The CMake package is `gameengine2`; its targets are `ge::core` (the
-deterministic pool, the libm and the run clock), `ge::lab` (the lab contract and runner a
-game's labs plug into), one `ge::<plugin>` per plugin
+deterministic pool, the libm and the run clock), `ge::audio` (the synth), `ge::lab` (the lab
+contract and runner a game's labs plug into), one `ge::<plugin>` per plugin
 (`ge::racing`: the control tape, records and standings; `ge::mountain`: the generated
-ski mountain; `docs/architecture.md` § Plugins) and `ge::fp` (the floating-point determinism flags, which `ge::core`
+ski mountain; `ge::skier`: the skier on the snow; `docs/architecture.md` § Plugins), a
+`ge::<plugin>_app` for a presentation half whose engine targets are all published
+(`ge::skier_app`: the skier's wind and snow beds, over `ge::audio`) and `ge::fp` (the floating-point determinism flags, which `ge::core`
 carries to the consumer so a game computes what the engine's tests did).
 
 **From source, pinned to a tag** (what a game in CI should do — no install

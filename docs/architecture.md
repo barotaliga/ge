@@ -101,8 +101,8 @@ first line is written (the `plugins` skill has the questions):
   ```
   plugins/<name>/CMakeLists.txt          ge_add_plugin(<name> ENGINE core PLUGINS racing)
   plugins/<name>/[<module>/]*.{hpp,cpp} the simulation half, a directory per module
-  plugins/<name>/app/                    the presentation half (refused by the build until the
-                                         first one splits it into ge_<name>_app, M7+)
+  plugins/<name>/app/                    the presentation half, built as ge_<name>_app when the
+                                         call names its APP list (ge_add_plugin(skier ... APP audio))
   plugins/<name>/labs/                   its labs, never compiled into ge_<name>
   .agents/skills/<name>/                 its skill and lessons
   tests/<name>_<topic>_test.cpp          its tests; goldens tests/golden/<name>_<topic>.txt
@@ -114,7 +114,10 @@ first line is written (the `plugins` skill has the questions):
 - **Build.** `cmake/Plugins.cmake` defines `ge_add_plugin`; the root `CMakeLists.txt` adds every
   `plugins/*/CMakeLists.txt` it finds, so there is no list to register in. Tests link every
   plugin. The plugin's targets carry the same FP flags as the core, through `ge_core`.
-- **Dependencies.** A plugin's `ENGINE` and `PLUGINS` lists are its whole dependency contract.
+- **Dependencies.** A plugin's `ENGINE` and `PLUGINS` lists are its whole dependency contract,
+  and its `APP` list names the engine targets only its `app/` half (and its labs) may reach
+  (`audio`, `render`): `ge_<name>_app` links `ge_<name>` plus those, and the simulation target
+  never sees them. An `app/` with sources and no `APP` list stops the configure.
   Games depend on plugins, plugins on the engine and on the plugins they declare, with no
   cycle; the engine never includes a plugin. `tools/check-plugins.mjs` (`make agents-check`)
   holds the includes to the lists; the compiler holds the rest, since a target only sees the

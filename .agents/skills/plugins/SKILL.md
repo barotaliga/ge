@@ -52,9 +52,11 @@ mechanism's (vehicle, checkpoint, track).
    links every plugin; nothing to wire.
 6. Labs: `plugins/<name>/labs/` (not compiled into `ge_<name>`), registered through the lab
    contract (`docs/labs.md`, the `labs` skill), with `owner = "plugin:<name>"`.
-7. A presentation half (draw passes, sound beds) goes in `plugins/<name>/app/`. The build refuses
-   sources there until the first one splits it into its own `ge_<name>_app` target, so the
-   simulation target never links a renderer.
+7. A presentation half (draw passes, sound beds) goes in `plugins/<name>/app/`, built as its own
+   `ge_<name>_app` target: name the engine targets it needs in the call's `APP` list
+   (`ge_add_plugin(skier ENGINE core PLUGINS mountain APP audio)`). The simulation target never
+   links them, and `tools/check-plugins.mjs` holds `app/` and `labs/` includes to `APP`. A game
+   links `ge_<name>_app` from its own presentation library (`fall_line_sound`).
 8. Add the plugin's row to AGENTS.md § Where things live, run `make index` and `make agents-check`.
 
 ## Move code between homes

@@ -1,10 +1,15 @@
-// FALL LINE'S APP: the window, the frame loop and the GPU, put together. Each frame: read the
-// input, hand the run clock the frame's wall time (engine/loop/run_clock.hpp: focus lost
-// pauses it), take the steps it grants (none yet: the simulation is M5), and draw the map's
-// frame (frame.hpp) from a named view (views.hpp) at vsync. Until the run exists the camera
-// stands still at that view.
+// FALL LINE'S APP: the window, the frame loop, the GPU and the sound, put together. Each frame:
+// read the input, hand the run clock the frame's wall time (engine/loop/run_clock.hpp: focus
+// lost pauses it), take the steps it grants (the bot skis the map's run, each step's events
+// routed to the bank: sound/route.hpp), steer the ride bed off the skier, and draw the map's
+// frame (frame.hpp) from a named view (views.hpp) at vsync. The camera still stands at that view;
+// following the skier comes with the run's camera.
 //
-//   fall_line [--frames=N] [--size=WxH] [--no-vsync] [--seed=N] [--view=NAME] [--hour=H]
+// THE SOUND: one synth, rendered on the audio device's thread (platform/audio.hpp) and fed from
+// this one through its ring. No device (a container, SDL_AUDIO_DRIVER=dummy failing) is not an
+// error: the app runs silent. Focus lost fades the buses out with the clock.
+//
+//   fall_line [--frames=N] [--size=WxH] [--no-vsync] [--seed=N] [--view=NAME] [--hour=H] [--mute]
 //
 // --frames quits after N presented frames and prints the frame pace (a smoke run under a
 // virtual display: xvfb-run -a build/release/games/fall_line/fall_line --frames=60).
@@ -12,20 +17,27 @@
 //
 // ge:summary Fall Line's app: the window, the frame loop on the run clock, the GPU frame
 // ge:keywords app main frame-loop window vsync present run-clock frame-pace fall-line
-// ge:skill platform gpu render
+// ge:skill platform gpu render audio
 #include <cstdio>
 #include <cstdlib>
+#include <memory>
 #include <string>
 #include <string_view>
 
+#include "audio/synth.hpp"
 #include "core/output.hpp"
 #include "fall_line/app/frame.hpp"
 #include "fall_line/app/views.hpp"
+#include "fall_line/sim/bot.hpp"
+#include "fall_line/sim/simulate.hpp"
+#include "fall_line/sound/mix.hpp"
+#include "fall_line/sound/route.hpp"
 #include "gpu/device.hpp"
 #include "gpu/pipeline.hpp"
 #include "gpu/surface.hpp"
 #include "loop/run_clock.hpp"
 #include "mountain/mapgen/generate.hpp"
+#include "platform/audio.hpp"
 #include "platform/window.hpp"
 
 namespace {
@@ -44,7 +56,16 @@ struct Args {
   double seed = 38;
   std::string view = "start";
   double hour = -1;  // the map's own
+  bool mute = false;
 };
+
+// The device's thread renders the synth; everything reaches it through the synth's ring.
+void pull(float* out, int frames, void* user) {
+  static_cast<ge::audio::Synth*>(user)->render(out, frames);
+}
+
+// How long the buses take to fade in or out, s.
+constexpr float kFaderGlide = 0.3f;
 
 bool parse(int argc, char** argv, Args& a) {
   for (int i = 1; i < argc; ++i) {
@@ -65,6 +86,8 @@ bool parse(int argc, char** argv, Args& a) {
       a.view = std::string(arg.substr(7));
     } else if (arg.rfind("--hour=", 0) == 0) {
       a.hour = std::strtod(argv[i] + 7, nullptr);
+    } else if (arg == "--mute") {
+      a.mute = true;
     } else {
       return false;
     }
@@ -80,7 +103,7 @@ int main(int argc, char** argv) {
   if (!parse(argc, argv, args)) {
     out::error(
         "fall_line: unknown flag. Usage: fall_line [--frames=N] [--size=WxH] [--no-vsync] "
-        "[--seed=N] [--view=start|piste|lookback|vista|aerial] [--hour=H]; "
+        "[--seed=N] [--view=start|piste|lookback|vista|aerial] [--hour=H] [--mute]; "
         "next: rerun with those flags only.");
     return 2;
   }
@@ -97,7 +120,9 @@ int main(int argc, char** argv) {
 
   ge::mountain::mapgen::GenerateOptions opts;
   opts.version = fall_line::app::kMapVersion;
-  const ge::mountain::mapgen::Level level = ge::mountain::mapgen::generate_level(args.seed, opts);
+  auto shared = std::make_shared<const ge::mountain::mapgen::Level>(
+      ge::mountain::mapgen::generate_level(args.seed, opts));
+  const ge::mountain::mapgen::Level& level = *shared;
   ge::render::FrameView view;
   fall_line::app::day_view(level, args.hour, view);
   if (!fall_line::app::make_view(level, args.view, view)) {
@@ -108,17 +133,43 @@ int main(int argc, char** argv) {
                                             static_cast<uint32_t>(h), surface.format());
   if (!frame) return 1;
 
+  // The run and its sound. The synth outlives the device that pulls it (declared first).
+  ge::audio::Synth synth;
+  fall_line::sim::Driver run(shared, 0);
+  fall_line::sound::RunSound sound = fall_line::sound::make_run_sound();
+  fall_line::sound::Faders faders;
+  faders.on = !args.mute;
+  fall_line::sound::apply_mix(synth, faders, 0);
+  std::unique_ptr<ge::platform::AudioOut> speaker;
+  if (!args.mute) {
+    speaker = ge::platform::open_audio({.rate = 48000, .pull = pull, .user = &synth});
+    if (!speaker) {
+      out::status("fall_line: no audio device; running silent.");
+    } else {
+      out::status(std::string("fall_line: audio on '") + speaker->driver() + "'");
+    }
+  }
+
   ge::loop::RunClock clock = ge::loop::create_run_clock(120);
   ge::platform::InputSnapshot input;
   uint64_t last = ge::platform::now_ns();
   const uint64_t first = last;
   long presented = 0;
   long steps = 0;
+  bool heard_out = false;
   while (args.frames == 0 || presented < args.frames) {
     ge::platform::poll_input(*window, input);
     if (input.quit || input.tapped(ge::platform::Key::escape)) break;
-    if (input.focus_lost) ge::loop::pause(clock);
-    if (input.focus_gained) ge::loop::resume(clock);
+    if (input.focus_lost) {
+      ge::loop::pause(clock);
+      fall_line::sound::Faders hush = faders;
+      hush.on = false;
+      fall_line::sound::apply_mix(synth, hush, kFaderGlide);
+    }
+    if (input.focus_gained) {
+      ge::loop::resume(clock);
+      fall_line::sound::apply_mix(synth, faders, kFaderGlide);
+    }
     if (input.resized) {
       surface.configure(*device, static_cast<uint32_t>(input.width_px),
                         static_cast<uint32_t>(input.height_px), args.vsync);
@@ -126,8 +177,21 @@ int main(int argc, char** argv) {
                              static_cast<uint32_t>(input.height_px));
     }
     const uint64_t now = ge::platform::now_ns();
-    steps += ge::loop::frame(clock, static_cast<double>(now - last) * 1e-9);
+    const double wall = static_cast<double>(now - last) * 1e-9;
+    const int granted = ge::loop::frame(clock, wall);
+    steps += granted;
     last = now;
+    for (int k = 0; k < granted && !run.over(); ++k) {
+      run.step(fall_line::sim::bot_controls(run.state(), 0, run.plan()));
+      fall_line::sound::run_sound_step(sound, synth, run.state());
+    }
+    if (run.over() && !heard_out) {
+      fall_line::sound::run_sound_silence(sound, synth);  // the finish rings on, the bed goes
+      heard_out = true;
+    } else if (granted > 0 && !run.over()) {
+      fall_line::sound::run_sound_frame(sound, synth, run.state(),
+                                        static_cast<float>(granted) / 120.0f);
+    }
 
     wgpu::TextureView target = surface.acquire(*device);
     if (!target) continue;
