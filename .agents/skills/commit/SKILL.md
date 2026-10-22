@@ -12,7 +12,14 @@ make fmt            # then: git diff, to see what it changed
 make agents-check   # structure, ge: tags (writes docs/index.md), lesson fragments
 make test           # debug preset, with ASan + UBSan
 make test PRESET=release
+make precheck       # last, before every push: CI's cheap gates as CI runs them (about 40 s warm)
 ```
+
+`make precheck` (`tools/precheck.sh`) stops at the first red gate: fmt-check, agents-check,
+libm-check, the fragments, the build, lint over what the change reaches since `origin/main`,
+and the tests it reaches (`cli_diagnostics_test`, each changed test, each changed file's
+`ge:test`). Those are the gates that cost the most CI rounds; run it after the last edit, every
+push.
 
 `make test` includes the `labs_smoke_*` slices: every lab, twice, against `tests/labs_digests.txt`.
 

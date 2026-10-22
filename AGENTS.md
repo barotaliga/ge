@@ -129,6 +129,9 @@ porting ends, and nothing outside it may depend on it except `make golden`.
   `docs/rendering.md` § Where it is developed). When a task needs the Mac, say so to the
   user and open a GitHub issue labelled `needs-mac` with the exact commands, what to look
   at and what to paste back. Never do that because the Mac would only be faster.
+- **`make precheck` BEFORE EVERY PUSH.** It runs, in about 40 seconds, the gates that cost
+  threads the most CI rounds (fmt-check, agents-check, libm-check, lint on the changed files,
+  `cli_diagnostics_test` and the tests the change reaches). A game repo's is `ge precheck`.
 - **Every work session ends with the `commit` skill.**
 
 ## Build and test
@@ -137,6 +140,7 @@ porting ends, and nothing outside it may depend on it except `make golden`.
 make build        # cmake --preset debug && cmake --build (PRESET=release for -O2, no sanitizers)
 make test         # build + ctest
 make fmt          # clang-format in place;  make fmt-check is what CI runs
+make precheck     # BEFORE EVERY PUSH: fmt, agents, libm, fragments, build, lint and the tests the change reaches (~40 s)
 make lint         # clang-tidy's bug-finding checks, in parallel (BASE=origin/main: only what the change reaches)
 make labs         # list the labs;  make lab LAB=level ARGS="--seeds=38" runs one
 make lab LAB=synth # every voice the synth can play, metered, pictured and written as WAV
