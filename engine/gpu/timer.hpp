@@ -3,6 +3,9 @@
 // `timestamp-query` tier the timer is inert: `writes` hands back nullptr, so a pass descriptor
 // takes no timestamps, and every reading is NaN (the frame's stats print "gpu ms: n/a").
 //
+// The readback's callback can run after the timer is gone (the device's teardown completes any
+// map still in flight), so it writes only into state it shares, never into the timer itself.
+//
 // Times from a software adapter say nothing about a real GPU: never make a performance
 // claim from them (perf skill).
 //
@@ -14,6 +17,7 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <string_view>
 #include <vector>
 
@@ -44,9 +48,13 @@ class PassTimer {
   wgpu::QuerySet queries_;
   wgpu::Buffer resolved_, readback_;
   std::vector<wgpu::PassTimestampWrites> writes_;
-  std::vector<double> ms_;
+  // What the readback's callback writes: shared with it, so it outlives the timer.
+  struct Readings {
+    std::vector<double> ms;
+    bool pending = false;
+  };
+  std::shared_ptr<Readings> readings_ = std::make_shared<Readings>();
   wgpu::Future future_{};
-  bool pending_ = false;
 };
 
 }  // namespace ge::gpu

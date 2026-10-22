@@ -215,6 +215,24 @@ The order, with what each stage is for:
    and the output encoding (§ Post).
 10. **UI:** the HUD and cards, at output resolution.
 
+**As built (M7c).** Fall Line's table runs `sky.tables`, `terrain.cull`, `terrain.horizon`,
+`terrain.depth`, `hiz`, `terrain`, `sky`, `taa`, `post`. The terrain draws twice from one
+vertex stage whose position is `@invariant`: depth only (`terrain.depth`, `greater`, writing),
+then shaded where the depth is `equal` with the depth read only (`terrain`), so a covered
+pixel's snow shader runs once. The `world` lab's overdraw probe (`encode_terrain_overdraw`)
+counts it: exactly 1 a covered pixel, but where two clipmap rings meet at the very same depth
+and both pass `equal` (a few pixels in ten thousand); with no prepass the same draw shades 1.0
+to 2.2 a pixel on seed 38's views, by how much of the mountain hides behind itself. The
+**Hi-Z pyramid** (`render/hiz.hpp`) reduces the prepass's depth to an `R32Float` mip chain from
+half the render size down to 1 × 1, each texel the farthest depth (reversed-z: the minimum)
+of every texel below it that overlaps it, so an odd edge is never dropped; it matches its CPU
+reference (`hiz_reduce`) texel for texel, and the instance families' second culling phase
+reads it (M7d). The colour pass and the sky write the **motion target** (`RGBA16Float` at
+the render size: rg the uv this pixel's surface moved since the last frame, unjittered; b the
+reactive mask, 0 for the ground and the sky until particles and glitter write it, M8) from
+the frame block's `prev_view_proj` and `eye_delta` (`FrameHistory`, `frame_types.wgsl`'s
+`screen_motion`); the sky's motion is the camera's turn alone.
+
 **No pipeline is created after load.** Every pipeline the game can use is listed in a
 manifest and created with `createRenderPipelineAsync` behind the loading card. The GPU
 layer counts pipeline creations, and after load a creation is an error that names the
@@ -402,6 +420,23 @@ the shimmer of thin branches and glitter, which no amount of MSAA fixes.
 The resolve is our own compact pass, written for this pass table. If it falls short of
 the look, the open FSR 2 algorithm (MIT licence) is the reference to port, measured
 against ours in the lab.
+
+**As built (M7c)** (`render/taa.hpp`): the jitter is the Halton (2, 3) cycle, centred, of
+8 points at full size and `ceil(8 / scale²)` (at most 32) below it, applied to the projection
+as a sub-pixel shift (`fill_uniforms`'s `jitter_px`). The resolve is one compute pass at the
+output's size. Each output pixel reconstructs the frame from the 3 × 3 render pixels nearest
+it, each weighed by a Gaussian of its sample's distance with the jitter undone and by the
+inverse of its exposed brightness (`frame.wgsl`'s `exposure`, now shared with post); it takes
+the motion at the nearest depth of the 3 × 3, samples the history Catmull-Rom (five bilinear
+taps) and clips it into the YCoCg box of mean ± 1.25 σ; it blends 10 % of the new frame,
+more where the reactive mask asks, all of it off the screen or after a reset, and while the
+history is young a plain running mean, so a still converges in one cycle. Two histories
+ping-pong; post reads the one written. On a cut the game calls `reset_taa` and drops its
+`FrameHistory` (`fall_line::app::cut`). The `taa` lab flies a camera and measures the moving
+frame against the converged still (on seed 38's vista at 40 m/s turning 20°/s: 0.45 levels
+mean, 0.9 % of pixels off by more than 8, thin lines along moving ridges) and a single
+jittered frame against it (0.78 levels, 2.3 %). At 50 % scale the `world` lab's views are
+hard to tell from full size by eye; what each scale costs on a real GPU waits for `profile`.
 
 **4× MSAA with no temporal pass** is the fallback for the lowest tier, where a phone's
 tile memory resolves MSAA almost for free.

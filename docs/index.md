@@ -78,12 +78,16 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | `engine/platform/window.hpp` | The window, its native handles, per-frame input snapshot and the frame clock | `platform` | `tests/platform_window_test.cpp` |
 | `engine/render/frame.cpp` | Frame uniforms, targets, the pass table's check and the binding helpers | `render` | `tests/render_frame_test.cpp` |
 | `engine/render/frame.hpp` | The frame's shared half: uniforms, named targets, the pass table and its stats | `render` `gpu` | `tests/render_frame_test.cpp` |
+| `engine/render/hiz.cpp` | The Hi-Z pyramid's resources, reduction pass, CPU reference and readbacks | `render` | `tests/render_draw_test.cpp` |
+| `engine/render/hiz.hpp` | The Hi-Z pyramid: the depth's farthest value per texel over a mip chain, and its | `render` | `tests/render_draw_test.cpp` |
 | `engine/render/horizon.cpp` | The horizon map's slots, bake decision, bake pass, CPU reference and readback | `render` | `tests/render_horizon_test.cpp` |
 | `engine/render/horizon.hpp` | The terrain's horizon map: bearing slots, the bake decision, the bake pass, the CPU | `render` | `tests/render_horizon_test.cpp` |
 | `engine/render/post.cpp` | The post pass's pipeline and draw | `render` | `tests/render_frame_test.cpp` |
 | `engine/render/post.hpp` | The post pass: exposure from the sky, tone curve, dither, output encoding | `render` | `tests/render_frame_test.cpp` |
 | `engine/render/sky.cpp` | The sky's tables, pipelines, rebuild decision and passes | `render` | `tests/render_sky_test.cpp` |
 | `engine/render/sky.hpp` | The sky: atmosphere tables by compute, aerial perspective, the sky pass, group 0 | `render` | `tests/render_sky_test.cpp` |
+| `engine/render/taa.cpp` | TAA-U's jitter sequence, history targets and resolve pass | `render` | `tests/render_draw_test.cpp` |
+| `engine/render/taa.hpp` | TAA-U: the jitter, the history, the resolve at the output size, the reset | `render` | `tests/render_draw_test.cpp` |
 | `engine/render/terrain.cpp` | The clipmap's level placement, pyramid bake, resources and passes | `render` | `tests/render_terrain_test.cpp` |
 | `engine/render/terrain.hpp` | The heightfield renderer: a GPU-culled geometry clipmap with morphed seams | `render` | `tests/render_terrain_test.cpp` |
 | `engine/render/view.cpp` | Camera matrices, the 4x4 inverse and the frustum planes | `render` | `tests/render_view_test.cpp` |
@@ -97,6 +101,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | `games/fall_line/app/views.hpp` | Fall Line's named camera views over a map and the map's day for the renderer | `render` |  |
 | `games/fall_line/labs/audition_lab.cpp` | Lab: Fall Line's bank, its ride bed's moments and a whole run, metered and as WAV | `audio` `labs` | `tests/fall_line_sound_test.cpp` |
 | `games/fall_line/labs/gpu_shadows_lab.cpp` | Lab: the horizon maps over a day, from above, and the bake counter of a sun sweep | `render` `labs` |  |
+| `games/fall_line/labs/gpu_taa_lab.cpp` | Lab: TAA-U on a moving camera against the converged still: ghosting, aliasing, | `render` `labs` |  |
 | `games/fall_line/labs/gpu_world_lab.cpp` | Lab: Fall Line's frame from named views of a seed, captured headless | `render` `labs` |  |
 | `games/fall_line/labs/play_lab.cpp` | Lab: an agent at the controls over stdio (observe, act, tape, end); the bot's check | `sim` `agent-interface` `labs` | `tests/fall_line_play_test.cpp` |
 | `games/fall_line/labs/sim_lab.cpp` | Lab: the bot over seeds, the run report table, its line on the map; the sim CLI | `sim` `labs` | `tests/fall_line_sim_test.cpp` |
@@ -311,7 +316,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | `tests/racing_records_test.cpp` | Golden test: racing/records, bit for bit | `testing` `racing` |  |
 | `tests/racing_standings_test.cpp` | Golden test: racing/standings, bit for bit | `testing` `racing` |  |
 | `tests/racing_tape_test.cpp` | Golden test: racing/tape and a stored ghost, byte for byte | `testing` `racing` |  |
-| `tests/render_draw_test.cpp` | Tests for the frame core on a device: sky, terrain cull and draw, post, offscreen | `render` `testing` |  |
+| `tests/render_draw_test.cpp` | Tests for the frame core on a device: sky, terrain, Hi-Z, TAA-U, post, offscreen | `render` `testing` |  |
 | `tests/render_frame_test.cpp` | Tests for the frame's shared half: the pass table's check, the uniforms, the stats | `render` `testing` |  |
 | `tests/render_horizon_test.cpp` | Tests for the horizon map: bearings, the march, the reference, the bake decision, | `render` `testing` |  |
 | `tests/render_sky_test.cpp` | Tests for the sky's rebuild decisions | `render` `testing` |  |
@@ -353,6 +358,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | air | `plugins/skier/skier.hpp` `plugins/skier/tuning.hpp` |
 | air-density | `plugins/skier/tuning.hpp` |
 | albedo | `engine/render/terrain.hpp` `games/fall_line/app/look.cpp` `games/fall_line/app/look.hpp` |
+| aliasing | `games/fall_line/labs/gpu_taa_lab.cpp` |
 | alpha | `engine/lab/labs/loop_run_clock_lab.cpp` `engine/loop/run_clock.hpp` |
 | alpine | `plugins/mountain/mapgen/regions.hpp` |
 | analysis | `plugins/mountain/analysis/cliffs.cpp` `plugins/mountain/analysis/cliffs.hpp` `plugins/mountain/analysis/course.cpp` `plugins/mountain/analysis/cross_course.cpp` `plugins/mountain/analysis/crossings.cpp` `plugins/mountain/analysis/crossings.hpp` `plugins/mountain/analysis/index.cpp` `plugins/mountain/analysis/index.hpp` `plugins/mountain/analysis/race.cpp` `plugins/mountain/analysis/race.hpp` `plugins/mountain/analysis/race_checks.hpp` `plugins/mountain/analysis/resort.cpp` `plugins/mountain/analysis/resort.hpp` `plugins/mountain/analysis/shared.cpp` `plugins/mountain/analysis/shared.hpp` `plugins/mountain/analysis/speed_race.cpp` `plugins/mountain/analysis/speed_track.cpp` |
@@ -459,6 +465,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | carve | `plugins/skier/labs/ride_lab.cpp` `plugins/skier/limits.hpp` `plugins/skier/scenarios.hpp` `plugins/skier/skier.hpp` `tests/skier_scenarios_test.cpp` |
 | carve_curvature | `plugins/skier/limits.hpp` |
 | cat-track | `plugins/mountain/mapgen/lanes.hpp` |
+| catmull-rom | `engine/render/taa.hpp` |
 | cbrt | `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/libm.hpp` |
 | cda | `plugins/skier/skis.hpp` |
 | ceiling | `plugins/skier/limits.hpp` |
@@ -555,9 +562,11 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | create_device | `engine/gpu/device.hpp` |
 | create_frame | `games/fall_line/app/frame.hpp` |
 | create_game | `games/fall_line/sim/game.cpp` `games/fall_line/sim/game.hpp` |
+| create_hiz | `engine/render/hiz.hpp` |
 | create_post | `engine/render/post.hpp` |
 | create_shader | `engine/gpu/pipeline.hpp` |
 | create_sky | `engine/render/sky.hpp` |
+| create_taa | `engine/render/taa.hpp` |
 | create_target | `engine/gpu/target.hpp` |
 | create_targets | `engine/render/frame.hpp` |
 | create_terrain | `engine/render/terrain.hpp` |
@@ -596,6 +605,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | delayed-gate | `plugins/mountain/mapgen/discipline_rules.hpp` `plugins/mountain/mapgen/slalom.hpp` |
 | depends | `tools/check-plugins.mjs` |
 | depth | `engine/render/frame.hpp` |
+| depth-pyramid | `engine/render/hiz.cpp` `engine/render/hiz.hpp` |
 | description | `engine/audio/sound.hpp` |
 | determinism | `engine/core/prng.hpp` `tests/audio_synth_test.cpp` `tests/mountain_resort_build_test.cpp` `tools/check-libm.sh` |
 | detune | `engine/audio/voice.hpp` |
@@ -657,9 +667,11 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | effects | `games/fall_line/sound/mix.hpp` |
 | elevation | `engine/core/solar.hpp` |
 | encode | `engine/audio/wav.cpp` `engine/audio/wav.hpp` `engine/lab/png.hpp` `engine/render/post.hpp` |
+| encode_hiz | `engine/render/hiz.hpp` |
 | encode_horizon | `engine/render/horizon.hpp` |
 | encode_post | `engine/render/post.hpp` |
 | encode_sky_tables | `engine/render/sky.hpp` |
+| encode_taa | `engine/render/taa.hpp` |
 | encode_terrain_cull | `engine/render/terrain.hpp` |
 | end | `games/fall_line/sim/play.cpp` `games/fall_line/sim/play.hpp` `tests/fall_line_play_test.cpp` |
 | end_load | `engine/gpu/device.hpp` `tests/gpu_device_test.cpp` |
@@ -687,7 +699,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | fader | `engine/audio/synth.hpp` |
 | faders | `games/fall_line/sound/mix.hpp` `tests/fall_line_sound_test.cpp` |
 | fair-heading | `plugins/mountain/mapgen/run_start.cpp` `plugins/mountain/mapgen/run_start.hpp` |
-| fall-line | `games/fall_line/app/frame.cpp` `games/fall_line/app/frame.hpp` `games/fall_line/app/look.cpp` `games/fall_line/app/look.hpp` `games/fall_line/app/main.cpp` `games/fall_line/app/views.cpp` `games/fall_line/app/views.hpp` `games/fall_line/labs/audition_lab.cpp` `games/fall_line/labs/gpu_shadows_lab.cpp` `games/fall_line/labs/gpu_world_lab.cpp` |
+| fall-line | `games/fall_line/app/frame.cpp` `games/fall_line/app/frame.hpp` `games/fall_line/app/look.cpp` `games/fall_line/app/look.hpp` `games/fall_line/app/main.cpp` `games/fall_line/app/views.cpp` `games/fall_line/app/views.hpp` `games/fall_line/labs/audition_lab.cpp` `games/fall_line/labs/gpu_shadows_lab.cpp` `games/fall_line/labs/gpu_taa_lab.cpp` `games/fall_line/labs/gpu_world_lab.cpp` |
 | far | `games/fall_line/sound/listener.hpp` |
 | fbm | `engine/core/noise.hpp` `plugins/mountain/mapgen/terrain.cpp` |
 | fdlibm | `engine/core/libm/fdlibm_arc.cpp` `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/fdlibm_internal.hpp` `engine/core/libm/fdlibm_trig.cpp` `engine/core/libm/libm.hpp` |
@@ -771,6 +783,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | geometry-clipmap | `engine/render/terrain.hpp` |
 | get-current-texture | `engine/gpu/surface.cpp` |
 | ghost | `games/fall_line/sim/controls.hpp` `plugins/racing/tape.cpp` `plugins/racing/tape.hpp` `tests/racing_tape_test.cpp` |
+| ghosting | `games/fall_line/labs/gpu_taa_lab.cpp` |
 | giant-slalom | `plugins/mountain/analysis/speed_race.cpp` `plugins/mountain/labs/speed_events_lab.cpp` `plugins/mountain/mapgen/discipline_rules.hpp` `plugins/mountain/mapgen/speed_course.hpp` `plugins/mountain/mapgen/speed_events.cpp` `plugins/mountain/mapgen/speed_events.hpp` `tests/mountain_speed_events_test.cpp` |
 | glibc | `engine/core/libm/pow.cpp` |
 | glide | `engine/audio/dsp.hpp` `engine/audio/synth.cpp` `plugins/mountain/mapgen/run_start.hpp` `tests/audio_dsp_test.cpp` `tests/audio_synth_test.cpp` |
@@ -808,6 +821,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | ground-colour | `games/fall_line/app/look.hpp` |
 | hairpin | `plugins/mountain/analysis/race.cpp` `plugins/mountain/analysis/race.hpp` `plugins/mountain/labs/slalom_lab.cpp` `plugins/mountain/mapgen/discipline_rules.hpp` `plugins/mountain/mapgen/slalom.cpp` `plugins/mountain/mapgen/slalom.hpp` |
 | half-float | `engine/render/horizon.cpp` |
+| halton | `engine/render/taa.cpp` `engine/render/taa.hpp` |
 | hand-built | `plugins/skier/synthetic.hpp` |
 | harness | `tests/check.hpp` |
 | harsh | `plugins/skier/tuning.hpp` |
@@ -829,6 +843,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | helmet | `games/fall_line/sound/listener.hpp` |
 | help | `engine/lab/runner.cpp` `engine/lab/runner.hpp` |
 | hex | `tests/golden.hpp` |
+| hi-z | `engine/render/hiz.cpp` `engine/render/hiz.hpp` |
 | hidpi | `engine/platform/window.hpp` |
 | high | `games/fall_line/sound/listener.hpp` |
 | high-word | `engine/core/libm/fdlibm_internal.hpp` |
@@ -836,7 +851,12 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | hillaire | `engine/render/sky.hpp` |
 | hillshade | `plugins/mountain/labs/level_map.cpp` `plugins/mountain/labs/level_map.hpp` `plugins/mountain/labs/resort_map.hpp` |
 | hiss | `plugins/skier/app/snow_bed.cpp` `plugins/skier/app/snow_bed.hpp` `tests/skier_ride_bed_test.cpp` |
+| history | `engine/render/taa.cpp` `engine/render/taa.hpp` |
+| history-reset | `games/fall_line/labs/gpu_taa_lab.cpp` |
 | hitch | `engine/lab/labs/loop_run_clock_lab.cpp` `engine/lab/labs/platform_frame_pace_lab.cpp` |
+| hiz | `engine/render/hiz.hpp` `tests/render_draw_test.cpp` |
+| hiz_mips | `engine/render/hiz.hpp` |
+| hiz_reduce | `engine/render/hiz.hpp` |
 | hockey-stop | `plugins/skier/scenarios.hpp` |
 | hold | `engine/audio/synth.cpp` `engine/audio/voice.hpp` |
 | home-of | `plugins/mountain/mapgen/access_build.cpp` |
@@ -877,7 +897,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | inverse | `engine/render/view.cpp` `engine/render/view.hpp` `tests/render_view_test.cpp` |
 | inverse-trig | `engine/core/libm/fdlibm_arc.cpp` |
 | irradiance | `engine/render/sky.hpp` |
-| jitter | `engine/lab/labs/loop_run_clock_lab.cpp` |
+| jitter | `engine/lab/labs/loop_run_clock_lab.cpp` `engine/render/taa.cpp` `engine/render/taa.hpp` `games/fall_line/labs/gpu_taa_lab.cpp` `tests/render_draw_test.cpp` |
 | joinable | `plugins/mountain/mapgen/lanes.cpp` `plugins/mountain/mapgen/lanes.hpp` |
 | json | `engine/lab/report.cpp` `engine/lab/report.hpp` `games/fall_line/sim/play.cpp` `games/fall_line/sim/play.hpp` `tests/fall_line_play_test.cpp` |
 | judder | `engine/lab/labs/loop_run_clock_lab.cpp` |
@@ -894,7 +914,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | kickers | `plugins/mountain/labs/level_lab.cpp` `plugins/mountain/labs/level_map.hpp` `plugins/mountain/mapgen/kickers.hpp` `plugins/mountain/mapgen/resort_graded.cpp` |
 | knee | `plugins/mountain/analysis/speed_track.cpp` `plugins/mountain/mapgen/speed_ski.hpp` |
 | krummholz | `plugins/mountain/mapgen/forest.hpp` |
-| lab | `engine/lab/lab.cpp` `engine/lab/lab.hpp` `engine/lab/labs/core_noise_lab.cpp` `engine/lab/labs/gpu_capture_lab.cpp` `engine/lab/labs/loop_run_clock_lab.cpp` `engine/lab/labs/platform_frame_pace_lab.cpp` `engine/lab/main.cpp` `engine/lab/report.cpp` `engine/lab/report.hpp` `engine/lab/runner.cpp` `engine/lab/runner.hpp` `engine/lab/sound.cpp` `engine/lab/sound.hpp` `games/fall_line/labs/audition_lab.cpp` `games/fall_line/labs/gpu_shadows_lab.cpp` `games/fall_line/labs/gpu_world_lab.cpp` `games/fall_line/labs/play_lab.cpp` `games/fall_line/labs/sim_lab.cpp` `plugins/mountain/labs/analyze_lab.cpp` `plugins/mountain/labs/junctions_lab.cpp` `plugins/mountain/labs/level_lab.cpp` `plugins/mountain/labs/level_map.cpp` `plugins/mountain/labs/level_map.hpp` `plugins/mountain/labs/mapgen_cost_lab.cpp` `plugins/mountain/labs/resort_lab.cpp` `plugins/mountain/labs/resort_map.cpp` `plugins/mountain/labs/resort_map.hpp` `plugins/mountain/labs/ski_cross_lab.cpp` `plugins/mountain/labs/slalom_lab.cpp` `plugins/mountain/labs/speed_events_lab.cpp` `plugins/mountain/labs/speed_ski_lab.cpp` `plugins/skier/labs/ride_lab.cpp` `tests/lab_raster_test.cpp` `tests/lab_runner_test.cpp` |
+| lab | `engine/lab/lab.cpp` `engine/lab/lab.hpp` `engine/lab/labs/core_noise_lab.cpp` `engine/lab/labs/gpu_capture_lab.cpp` `engine/lab/labs/loop_run_clock_lab.cpp` `engine/lab/labs/platform_frame_pace_lab.cpp` `engine/lab/main.cpp` `engine/lab/report.cpp` `engine/lab/report.hpp` `engine/lab/runner.cpp` `engine/lab/runner.hpp` `engine/lab/sound.cpp` `engine/lab/sound.hpp` `games/fall_line/labs/audition_lab.cpp` `games/fall_line/labs/gpu_shadows_lab.cpp` `games/fall_line/labs/gpu_taa_lab.cpp` `games/fall_line/labs/gpu_world_lab.cpp` `games/fall_line/labs/play_lab.cpp` `games/fall_line/labs/sim_lab.cpp` `plugins/mountain/labs/analyze_lab.cpp` `plugins/mountain/labs/junctions_lab.cpp` `plugins/mountain/labs/level_lab.cpp` `plugins/mountain/labs/level_map.cpp` `plugins/mountain/labs/level_map.hpp` `plugins/mountain/labs/mapgen_cost_lab.cpp` `plugins/mountain/labs/resort_lab.cpp` `plugins/mountain/labs/resort_map.cpp` `plugins/mountain/labs/resort_map.hpp` `plugins/mountain/labs/ski_cross_lab.cpp` `plugins/mountain/labs/slalom_lab.cpp` `plugins/mountain/labs/speed_events_lab.cpp` `plugins/mountain/labs/speed_ski_lab.cpp` `plugins/skier/labs/ride_lab.cpp` `tests/lab_raster_test.cpp` `tests/lab_runner_test.cpp` |
 | label | `engine/lab/raster.hpp` |
 | labs | `engine/lab/lab.hpp` `engine/lab/main.cpp` |
 | landing | `games/fall_line/sim/state.hpp` `games/fall_line/sound/bank.cpp` `games/fall_line/sound/bank.hpp` `games/fall_line/sound/route.cpp` `games/fall_line/sound/route.hpp` `plugins/mountain/analysis/cross_course.cpp` `plugins/skier/labs/ride_lab.cpp` `plugins/skier/skier.cpp` `plugins/skier/skier.hpp` `plugins/skier/tuning.hpp` |
@@ -1008,7 +1028,9 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | mid-run | `engine/gpu/pipeline.hpp` |
 | min | `engine/core/num.hpp` |
 | min-attack | `engine/audio/voice.hpp` |
+| min-depth | `engine/render/hiz.hpp` |
 | min-max-pyramid | `engine/render/terrain.hpp` `tests/render_terrain_test.cpp` |
+| mip-chain | `engine/render/hiz.hpp` |
 | mirror | `engine/render/horizon.cpp` |
 | miss | `games/fall_line/sim/course.hpp` |
 | missed | `games/fall_line/sim/course.hpp` `games/fall_line/sim/state.hpp` `games/fall_line/sound/bank.cpp` `games/fall_line/sound/bank.hpp` `tests/fall_line_sim_test.cpp` |
@@ -1022,9 +1044,11 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | moon | `engine/core/solar.cpp` `engine/core/solar.hpp` `tests/core_solar_test.cpp` |
 | morph | `engine/render/terrain.hpp` |
 | most-vertical-course | `plugins/mountain/mapgen/speed_events.hpp` |
+| motion-vectors | `engine/render/taa.hpp` `tests/render_draw_test.cpp` |
 | mountain | `plugins/mountain/mapgen/massif.hpp` `plugins/mountain/mapgen/resort_build.cpp` `plugins/mountain/mapgen/resort_build.hpp` `plugins/mountain/mapgen/terrain.hpp` |
 | mouse | `engine/platform/window.hpp` |
 | moves | `plugins/mountain/mapgen/lanes.cpp` |
+| moving-camera | `games/fall_line/labs/gpu_taa_lab.cpp` |
 | muffle | `games/fall_line/sound/listener.hpp` |
 | mulberry32 | `engine/core/prng.hpp` |
 | multiple-scattering | `engine/render/sky.hpp` |
@@ -1057,6 +1081,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | nursery | `plugins/mountain/mapgen/resort.hpp` |
 | observation | `games/fall_line/sim/play.cpp` `games/fall_line/sim/play.hpp` |
 | observe | `games/fall_line/sim/play.hpp` `tests/fall_line_play_test.cpp` |
+| occlusion-culling | `engine/render/hiz.hpp` |
 | octave-bands | `engine/audio/meter.hpp` |
 | octaves | `engine/core/noise.hpp` |
 | off-kickers | `plugins/mountain/mapgen/resort_features.cpp` `tests/mountain_resort_build_test.cpp` |
@@ -1081,6 +1106,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | outdated | `engine/gpu/surface.cpp` |
 | output | `engine/core/output.cpp` `engine/core/output.hpp` `engine/platform/audio.hpp` `engine/render/post.hpp` `tests/core_output_test.cpp` |
 | outside-hub | `plugins/mountain/mapgen/hub.cpp` `plugins/mountain/mapgen/hub.hpp` |
+| overdraw | `games/fall_line/labs/gpu_world_lab.cpp` `tests/render_draw_test.cpp` |
 | overlap | `plugins/skier/trees.hpp` |
 | override | `engine/render/post.cpp` |
 | pace | `games/fall_line/sim/field.hpp` `plugins/skier/app/ride_bed.cpp` `plugins/skier/app/ride_bed.hpp` |
@@ -1182,6 +1208,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | prepare_horizon | `engine/render/horizon.hpp` |
 | prepare_sky | `engine/render/sky.hpp` `tests/render_sky_test.cpp` |
 | prepare_terrain | `engine/render/terrain.hpp` |
+| prepass | `tests/render_draw_test.cpp` |
 | present | `engine/gpu/surface.hpp` `engine/lab/labs/platform_frame_pace_lab.cpp` `games/fall_line/app/main.cpp` `tests/platform_window_test.cpp` |
 | press | `plugins/mountain/mapgen/resort_graded.cpp` |
 | press-bed | `plugins/mountain/mapgen/hub.cpp` |
@@ -1238,9 +1265,12 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | rank | `plugins/mountain/mapgen/network.hpp` |
 | raster | `engine/lab/raster.cpp` `engine/lab/raster.hpp` `tests/lab_raster_test.cpp` |
 | reach | `plugins/mountain/mapgen/access_build.cpp` |
+| reactive | `engine/render/taa.hpp` |
+| read_depth | `engine/render/hiz.hpp` |
+| read_hiz | `engine/render/hiz.hpp` |
 | read_horizon | `engine/render/horizon.hpp` |
 | read_now | `engine/gpu/target.hpp` |
-| readback | `engine/gpu/target.cpp` `engine/gpu/target.hpp` `engine/lab/labs/gpu_capture_lab.cpp` `engine/render/horizon.cpp` `tests/gpu_capture_test.cpp` `tests/render_draw_test.cpp` |
+| readback | `engine/gpu/target.cpp` `engine/gpu/target.hpp` `engine/lab/labs/gpu_capture_lab.cpp` `engine/render/hiz.cpp` `engine/render/horizon.cpp` `tests/gpu_capture_test.cpp` `tests/render_draw_test.cpp` |
 | reader | `games/fall_line/sim/play.cpp` `plugins/racing/tape.hpp` `tests/golden.hpp` |
 | realtime | `engine/lab/labs/audio_synth_lab.cpp` |
 | rebuild | `engine/render/sky.cpp` `tests/render_sky_test.cpp` |
@@ -1250,6 +1280,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | recording | `plugins/racing/tape.hpp` |
 | records | `plugins/racing/records.hpp` `tests/racing_records_test.cpp` |
 | rect-off | `plugins/mountain/mapgen/lift_chain.cpp` |
+| reduction | `engine/render/hiz.cpp` |
 | reference | `tests/render_horizon_test.cpp` |
 | reference-skis | `plugins/skier/skis.hpp` |
 | refraction | `engine/core/solar.cpp` `engine/core/solar.hpp` |
@@ -1261,23 +1292,26 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | release | `tests/package/consumer/main.cpp` |
 | relevel-pads | `plugins/mountain/mapgen/station_pad.cpp` `plugins/mountain/mapgen/station_pad.hpp` |
 | relief | `plugins/mountain/labs/junctions_lab.cpp` |
-| render | `engine/audio/synth.cpp` `engine/audio/synth.hpp` `engine/render/frame.cpp` `engine/render/frame.hpp` `engine/render/horizon.cpp` `engine/render/horizon.hpp` `engine/render/post.cpp` `engine/render/post.hpp` `engine/render/sky.cpp` `engine/render/sky.hpp` `engine/render/terrain.cpp` `engine/render/terrain.hpp` `engine/render/view.cpp` `engine/render/view.hpp` `games/fall_line/app/frame.hpp` `tests/audio_synth_test.cpp` `tests/render_draw_test.cpp` `tests/render_frame_test.cpp` `tests/render_horizon_test.cpp` `tests/render_sky_test.cpp` `tests/render_terrain_test.cpp` `tests/render_view_test.cpp` |
+| render | `engine/audio/synth.cpp` `engine/audio/synth.hpp` `engine/render/frame.cpp` `engine/render/frame.hpp` `engine/render/hiz.cpp` `engine/render/hiz.hpp` `engine/render/horizon.cpp` `engine/render/horizon.hpp` `engine/render/post.cpp` `engine/render/post.hpp` `engine/render/sky.cpp` `engine/render/sky.hpp` `engine/render/taa.cpp` `engine/render/taa.hpp` `engine/render/terrain.cpp` `engine/render/terrain.hpp` `engine/render/view.cpp` `engine/render/view.hpp` `games/fall_line/app/frame.hpp` `tests/audio_synth_test.cpp` `tests/render_draw_test.cpp` `tests/render_frame_test.cpp` `tests/render_horizon_test.cpp` `tests/render_sky_test.cpp` `tests/render_terrain_test.cpp` `tests/render_view_test.cpp` |
 | render-pass | `engine/gpu/test_scene.cpp` |
 | render-pipeline | `engine/gpu/pipeline.hpp` |
+| render-scale | `engine/render/taa.hpp` `games/fall_line/labs/gpu_taa_lab.cpp` `games/fall_line/labs/gpu_world_lab.cpp` |
 | render-target | `engine/gpu/target.hpp` |
 | render-thread | `engine/audio/synth.hpp` |
 | repeat | `engine/lab/runner.cpp` `engine/lab/runner.hpp` `tests/lab_runner_test.cpp` |
 | replay | `games/fall_line/labs/play_lab.cpp` `games/fall_line/sim/controls.hpp` `games/fall_line/sim/simulate.hpp` `plugins/racing/tape.hpp` `tests/fall_line_field_test.cpp` `tests/fall_line_play_test.cpp` `tests/fall_line_sim_test.cpp` |
 | replay_tape | `games/fall_line/sim/simulate.cpp` `games/fall_line/sim/simulate.hpp` |
 | report | `engine/lab/report.cpp` `engine/lab/report.hpp` `games/fall_line/sim/simulate.hpp` `tests/lab_runner_test.cpp` |
+| reproject | `engine/render/taa.hpp` |
 | request-adapter | `engine/gpu/device.cpp` |
 | request-device | `engine/gpu/device.cpp` |
 | resample | `plugins/mountain/mapgen/courses.cpp` |
 | reset | `games/fall_line/sim/controls.hpp` `games/fall_line/sim/course.hpp` `games/fall_line/sim/state.hpp` `games/fall_line/sound/bank.cpp` `games/fall_line/sound/bank.hpp` `tests/fall_line_sim_test.cpp` |
 | reset_racer | `games/fall_line/sim/course.cpp` `games/fall_line/sim/course.hpp` |
+| reset_taa | `engine/render/taa.hpp` |
 | reset-pose | `games/fall_line/sim/course.hpp` |
 | resize | `engine/gpu/surface.hpp` `engine/platform/window.hpp` |
-| resolve | `engine/gpu/timer.hpp` |
+| resolve | `engine/gpu/timer.hpp` `engine/render/taa.cpp` |
 | resolve-query-set | `engine/gpu/timer.cpp` |
 | resonance | `engine/audio/dsp.hpp` |
 | resort | `plugins/mountain/analysis/resort.hpp` `plugins/mountain/labs/resort_lab.cpp` `plugins/mountain/labs/resort_map.cpp` `plugins/mountain/labs/resort_map.hpp` `plugins/mountain/mapgen/massif.hpp` `plugins/mountain/mapgen/resort.cpp` `plugins/mountain/mapgen/resort.hpp` `tests/mountain_resort_build_test.cpp` |
@@ -1294,6 +1328,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | resume | `engine/loop/run_clock.hpp` |
 | resume_audio | `engine/platform/audio.hpp` |
 | reverse-z | `engine/render/frame.hpp` `engine/render/view.cpp` `engine/render/view.hpp` `tests/render_view_test.cpp` |
+| reversed-z | `engine/render/hiz.hpp` |
 | rgba | `engine/lab/raster.hpp` |
 | rgba8 | `engine/gpu/target.hpp` |
 | ride | `plugins/skier/app/ride_bed.cpp` `plugins/skier/app/ride_bed.hpp` `plugins/skier/labs/ride_lab.cpp` `plugins/skier/scenarios.hpp` `tests/skier_ride_bed_test.cpp` `tests/skier_scenarios_test.cpp` |
@@ -1391,6 +1426,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | shaper_push | `engine/audio/voice.hpp` |
 | shaper_steepness | `engine/audio/voice.hpp` |
 | shave-crests | `plugins/mountain/mapgen/course_prep.hpp` |
+| shimmer | `games/fall_line/labs/gpu_world_lab.cpp` |
 | shortest | `engine/core/num_text.cpp` |
 | shot | `engine/lab/lab.cpp` `engine/lab/lab.hpp` |
 | shoulder | `games/fall_line/sim/field.hpp` `plugins/mountain/mapgen/massif.hpp` `tests/fall_line_field_test.cpp` |
@@ -1510,6 +1546,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | step_skier | `plugins/skier/skier.cpp` `plugins/skier/skier.hpp` |
 | step-down | `plugins/mountain/labs/ski_cross_lab.cpp` `plugins/mountain/mapgen/discipline_rules.hpp` `plugins/mountain/mapgen/ski_cross.cpp` `plugins/mountain/mapgen/ski_cross.hpp` `tests/mountain_ski_cross_test.cpp` |
 | stereo | `engine/audio/meter.hpp` |
+| stills-repeat | `games/fall_line/labs/gpu_taa_lab.cpp` |
 | stop | `plugins/skier/labs/ride_lab.cpp` `tests/skier_scenarios_test.cpp` |
 | stored-deflate | `engine/lab/png.cpp` |
 | stream | `engine/platform/audio.hpp` |
@@ -1546,6 +1583,12 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | synthetic | `plugins/skier/synthetic.cpp` `plugins/skier/synthetic.hpp` |
 | synthetic_slope | `plugins/skier/synthetic.hpp` |
 | t-bar | `plugins/mountain/mapgen/drags.hpp` |
+| taa | `engine/render/taa.cpp` `engine/render/taa.hpp` `games/fall_line/labs/gpu_taa_lab.cpp` `games/fall_line/labs/gpu_world_lab.cpp` `tests/render_draw_test.cpp` |
+| taa_jitter | `engine/render/taa.hpp` |
+| taa_output | `engine/render/taa.hpp` |
+| taa_phases | `engine/render/taa.hpp` |
+| taa_render_size | `engine/render/taa.hpp` |
+| taa-u | `engine/render/taa.hpp` `games/fall_line/labs/gpu_taa_lab.cpp` |
 | table | `engine/lab/lab.hpp` `plugins/skier/scenarios.cpp` |
 | tables | `engine/audio/dsp.cpp` `engine/render/sky.cpp` `tests/render_sky_test.cpp` |
 | tag | `engine/lab/runner.hpp` |
@@ -1559,6 +1602,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | target | `engine/gpu/target.hpp` |
 | targets | `engine/audio/rack.hpp` `engine/render/frame.cpp` `engine/render/frame.hpp` `plugins/skier/app/snow_bed.cpp` `plugins/skier/app/wind_bed.cpp` |
 | tau | `engine/core/math.hpp` |
+| temporal-anti-aliasing | `engine/render/taa.hpp` |
 | terminal | `plugins/skier/labs/ride_lab.cpp` `tests/skier_scenarios_test.cpp` |
 | terminal_speed | `plugins/skier/limits.hpp` |
 | terminal-speed | `plugins/skier/limits.hpp` |
@@ -1634,6 +1678,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | unload-rise | `plugins/mountain/mapgen/station_pad.cpp` |
 | unmap | `engine/gpu/target.cpp` |
 | upload | `engine/render/terrain.cpp` |
+| upscaling | `engine/render/taa.hpp` |
 | usage | `engine/lab/runner.cpp` `engine/lab/runner.hpp` |
 | v8 | `engine/core/libm/fdlibm_arc.cpp` `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/fdlibm_trig.cpp` |
 | validation | `engine/gpu/device.hpp` |
@@ -1641,6 +1686,7 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | valley-floor | `plugins/mountain/mapgen/hub.hpp` |
 | value_noise | `engine/lab/labs/core_noise_lab.cpp` |
 | value-noise | `engine/core/noise.hpp` `engine/lab/labs/core_noise_lab.cpp` |
+| variance-clip | `engine/render/taa.hpp` |
 | vec3 | `engine/core/quat.hpp` |
 | vendored | `engine/core/libm/fdlibm_arc.cpp` `engine/core/libm/fdlibm_exp_log.cpp` `engine/core/libm/fdlibm_internal.hpp` `engine/core/libm/fdlibm_trig.cpp` |
 | version | `plugins/mountain/labs/level_map.hpp` |
@@ -1704,5 +1750,6 @@ To search the files, the skills and their lessons at once: `make find Q="word wo
 | x11 | `engine/gpu/surface.hpp` `engine/platform/window.cpp` |
 | xvfb | `engine/lab/labs/platform_frame_pace_lab.cpp` `tests/platform_window_test.cpp` |
 | yaw | `engine/core/quat.hpp` `plugins/skier/skier.cpp` `plugins/skier/skier.hpp` |
+| ycocg | `engine/render/taa.hpp` |
 | zig-zag | `plugins/mountain/mapgen/network.hpp` |
 | zlib | `engine/lab/png.cpp` |

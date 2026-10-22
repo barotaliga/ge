@@ -5,15 +5,23 @@
 // picture: the tiles the terrain's GPU cull drew, every pass's GPU ms (measured: a software
 // adapter's times say nothing about a real GPU) and the frame's CPU half.
 //
-// What must hold on every row is deterministic (the views shot, the pass table, no pipeline
-// after load, no GPU error); pixels and timings are measured. Without an adapter it notes that
-// and draws placeholders, so the digest is the same on every row; GE_GPU_REQUIRE=1 fails instead.
-// Built only with GE_GPU.
+// The frame renders at --scale of the picture's size and TAA-U brings it up (--taa=0: no TAA, at
+// full size), each view a camera cut drawn --settle frames before the capture. Then, per view:
+// the SHIMMER (the mean change of a channel, in 8-bit levels, from one more frame of the still
+// camera: what the jitter leaves after the resolve) and the OVERDRAW probe (the fragments the
+// terrain shades per covered pixel with the depth prepass, which must be 1 but for coincident
+// surfaces, and without it, the cost the prepass saves).
+//
+// What must hold on every row is deterministic (the views shot, the pass table, the render size
+// and jitter cycle, no pipeline after load, no GPU error); pixels and timings are measured. Without
+// an adapter it notes that and draws placeholders, so the digest is the same on every row;
+// GE_GPU_REQUIRE=1 fails instead. Built only with GE_GPU.
 //
 // ge:summary Lab: Fall Line's frame from named views of a seed, captured headless
 // ge:keywords lab world picture screenshot views frame terrain sky post gpu-capture headless
-// ge:keywords tiles-drawn gpu-ms cpu-ms pass-table fall-line
+// ge:keywords tiles-drawn gpu-ms cpu-ms pass-table fall-line taa render-scale shimmer overdraw
 // ge:skill render labs
+#include <algorithm>
 #include <cctype>
 #include <cmath>
 #include <cstdio>
@@ -28,6 +36,7 @@
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
 #include "mountain/mapgen/generate.hpp"
+#include "render/taa.hpp"
 
 namespace {
 
@@ -85,6 +94,32 @@ uint32_t tiles_drawn(ge::gpu::Device& device, const wgpu::Buffer& indirect) {
   return count;
 }
 
+// The terrain's overdraw over the frame's last depth: the mean count over covered pixels after
+// the prepass (`equal`), then without it (`greater`, which rewrites the depth; the next view's
+// frames clear it). Blocks.
+void overdraw(ge::gpu::Device& device, fall_line::app::GameFrame& f, const wgpu::Texture& count,
+              const wgpu::TextureView& count_view, double* with, double* without) {
+  const auto& t = f.targets;
+  const std::vector<float> depth = ge::render::read_depth(device, t);
+  for (int pass = 0; pass < 2; ++pass) {
+    wgpu::CommandEncoder encoder = device.device.CreateCommandEncoder();
+    ge::render::encode_terrain_overdraw(f.terrain, f.pipelines, encoder, t, f.frame_group,
+                                        count_view, pass == 0);
+    wgpu::CommandBuffer commands = encoder.Finish();
+    device.queue.Submit(1, &commands);
+    const std::vector<float> n =
+        ge::render::read_red(device, count, 0, t.width, t.height, wgpu::TextureFormat::R16Float);
+    double sum = 0, covered = 0;
+    for (size_t i = 0; i < n.size(); ++i) {
+      if (depth[i] > 0) {
+        sum += n[i];
+        ++covered;
+      }
+    }
+    (pass == 0 ? *with : *without) = covered > 0 ? sum / covered : 0;
+  }
+}
+
 std::string fixed(double v, int places) {
   char b[32];
   std::snprintf(b, sizeof b, "%.*f", places, v);
@@ -97,11 +132,22 @@ void run(ge::lab::Lab& lab) {
   const int width = static_cast<int>(lab.arg_num("width"));
   const int height = static_cast<int>(lab.arg_num("height"));
   const int settle = static_cast<int>(lab.arg_num("settle"));
-  if (width <= 0 || height <= 0 || width > 4096 || height > 4096 || settle < 1) {
-    lab.fail("--width and --height must be 1..4096 and --settle at least 1",
-             "Pass a size such as --width=640 --height=360.");
+  fall_line::app::FrameOptions options;
+  options.taa = lab.arg_num("taa") != 0;
+  options.scale = lab.arg_num("scale");
+  options.overdraw_probe = true;
+  if (width <= 0 || height <= 0 || width > 4096 || height > 4096 || settle < 1 ||
+      options.scale < 0.25 || options.scale > 1) {
+    lab.fail("--width and --height must be 1..4096, --settle at least 1 and --scale 0.25..1",
+             "Pass a size such as --width=640 --height=360 --scale=1.");
     return;
   }
+  const double scale = options.taa ? options.scale : 1.0;
+  const uint32_t render_w = ge::render::taa_render_size(static_cast<uint32_t>(width), scale);
+  const uint32_t render_h = ge::render::taa_render_size(static_cast<uint32_t>(height), scale);
+  lab.metric("render-width", render_w, "px");
+  lab.metric("render-height", render_h, "px");
+  lab.metric("jitter-phases", options.taa ? ge::render::taa_phases(scale) : 0, "count");
   const std::vector<std::string> views = views_of(lab);
   const std::string faults = fall_line::app::pass_table_faults();
   lab.metric("pass-table-faults", faults.empty() ? 0 : 1, "count");
@@ -133,7 +179,9 @@ void run(ge::lab::Lab& lab) {
         {{"seed", seed_s},
          {"view", name},
          {"hour", hour_s},
-         {"size", std::to_string(width) + "x" + std::to_string(height)}}};
+         {"size", std::to_string(width) + "x" + std::to_string(height)},
+         {"render", std::to_string(render_w) + "x" + std::to_string(render_h) +
+                        (options.taa ? ", TAA-U" : ", no TAA")}}};
   };
 
   auto device = ge::gpu::create_device({.label = "world", .validation = 1});
@@ -148,7 +196,8 @@ void run(ge::lab::Lab& lab) {
       ge::lab::draw_text(none, 4, 4, "NO GPU ADAPTER", {230, 230, 230});
       lab.shot(shot_of(name), none, Det::measured);
     }
-    // The digest hashes in call order: the shots, then these two, as the device path does.
+    // The digest hashes in call order: the shots, then these, as the device path does.
+    lab.metric("overdraw-faults", 0, "count");
     lab.metric("gpu-errors", 0, "count");
     lab.metric("pipelines-after-load", 0, "count");
     return;
@@ -157,15 +206,20 @@ void run(ge::lab::Lab& lab) {
   lab.note("adapter: " + r.name + " / " + r.driver + " / " + r.backend +
            (r.software ? " (software)" : ""));
 
-  auto frame =
-      fall_line::app::create_frame(*device, level, static_cast<uint32_t>(width),
-                                   static_cast<uint32_t>(height), wgpu::TextureFormat::RGBA8Unorm);
+  auto frame = fall_line::app::create_frame(*device, level, static_cast<uint32_t>(width),
+                                            static_cast<uint32_t>(height),
+                                            wgpu::TextureFormat::RGBA8Unorm, options);
   if (!frame) {
     lab.fail("Fall Line's frame did not build", "Read the gpu: lines above. Skill: render.");
     return;
   }
   const ge::gpu::Target target = ge::gpu::create_target(
       *device, "world.final", static_cast<uint32_t>(width), static_cast<uint32_t>(height));
+  const wgpu::Texture count = ge::render::make_texture(
+      *device, "world.overdraw", render_w, render_h, 1, wgpu::TextureFormat::R16Float,
+      wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc);
+  const wgpu::TextureView count_view = count.CreateView();
+  int overdraw_faults = 0;
 
   // Tiles depend on the adapter's float rounding at the frustum's edge, so the per-view costs
   // are a note, not a table (a table's cells are hashed).
@@ -178,12 +232,33 @@ void run(ge::lab::Lab& lab) {
                "Pick from games/fall_line/app/views.hpp (or --views=all).");
       continue;
     }
+    fall_line::app::cut(*frame);
     for (int i = 0; i < settle; ++i) {
       view.frame = static_cast<uint64_t>(i);
       fall_line::app::draw(*device, *frame, view, target.view);
     }
     const ge::gpu::Image img = ge::gpu::read_now(*device, target);
     frame->recorder.wait(*device);
+    // One more frame of the still camera: what changes is the jitter's shimmer.
+    {
+      view.frame = static_cast<uint64_t>(settle);
+      fall_line::app::draw(*device, *frame, view, target.view);
+      const ge::gpu::Image next = ge::gpu::read_now(*device, target);
+      double diff = 0;
+      for (size_t i = 0; i < std::min(img.rgba.size(), next.rgba.size()); ++i) {
+        if (i % 4 != 3) diff += std::abs(int{img.rgba[i]} - int{next.rgba[i]});
+      }
+      lab.metric(name + ".shimmer", diff / (static_cast<double>(width) * height * 3), "levels",
+                 Det::measured);
+    }
+    double with = 0, without = 0;
+    overdraw(*device, *frame, count, count_view, &with, &without);
+    lab.metric(name + ".shaded-per-pixel", with, "count", Det::measured);
+    lab.metric(name + ".overdraw-without-prepass", without, "count", Det::measured);
+    // Over 1 only where two surfaces lie at the very same depth (two clipmap levels meeting at a
+    // ring's edge), which both pass `equal`: a few in ten thousand. Under 1 is a pixel the colour
+    // pass missed.
+    if (with != 0 && (with < 1.0 || with > 1.001)) ++overdraw_faults;
     const auto& stats = frame->recorder.stats;
     const uint32_t tiles = tiles_drawn(*device, frame->terrain.indirect);
     lab.metric(name + ".tiles", tiles, "count", Det::measured);
@@ -205,6 +280,14 @@ void run(ge::lab::Lab& lab) {
     lab.shot(shot_of(name), picture, Det::measured);
   }
   lab.note(costs);
+  lab.metric("overdraw-faults", overdraw_faults, "count");
+  if (overdraw_faults != 0) {
+    lab.fail(
+        "the colour pass missed covered pixels, or shaded them more than once, after the "
+        "depth prepass",
+        "The prepass and the colour pass must compute the same depth bits: check the "
+        "terrain's vertex stage (@invariant position, one module). Skill: render.");
+  }
   lab.metric("gpu-errors", device->errors.load(), "count");
   lab.metric("pipelines-after-load", device->pipelines_after_load, "count");
   if (device->errors.load() != 0) {
@@ -228,11 +311,13 @@ const ge::lab::LabSpec kSpec{
         {"seed", "38", "the map's seed"},
         {"views", "all", "the views to shoot, comma-separated (games/fall_line/app/views.hpp)"},
         {"hour", "-1", "the solar hour to light the map at; negative: the map's own"},
-        {"width", "640", "the render width, px"},
-        {"height", "360", "the render height, px"},
-        {"settle", "2", "frames drawn before each capture"},
+        {"width", "640", "the picture's width, px"},
+        {"height", "360", "the picture's height, px"},
+        {"settle", "8", "frames drawn after each view's cut before the capture"},
+        {"taa", "1", "TAA-U on (1) or off (0)"},
+        {"scale", "1", "the render size over the picture's, with TAA (0.25..1)"},
     },
-    "--views=start,vista --width=160 --height=90 --settle=1",
+    "--views=start,vista --width=160 --height=90 --settle=2",
     run,
 };
 GE_LAB(kSpec);

@@ -12,7 +12,7 @@
 namespace ge::gpu {
 
 bool PassTimer::init(Device& device, std::string_view label, uint32_t passes) {
-  ms_.assign(passes, std::numeric_limits<double>::quiet_NaN());
+  readings_->ms.assign(passes, std::numeric_limits<double>::quiet_NaN());
   if (!device.features.has(Feature::timestamp_query) || passes == 0) return false;
   const std::string name(label);
   wgpu::QuerySetDescriptor qd{};
@@ -41,41 +41,42 @@ const wgpu::PassTimestampWrites* PassTimer::writes(uint32_t i) const {
 }
 
 void PassTimer::resolve(wgpu::CommandEncoder& encoder) {
-  if (!active() || pending_) return;  // the last readings are still on their way: skip a frame
+  if (!active() || readings_->pending)
+    return;  // the last readings are still on their way: skip a frame
   const uint32_t count = static_cast<uint32_t>(writes_.size() * 2);
   encoder.ResolveQuerySet(queries_, 0, count, resolved_, 0);
   encoder.CopyBufferToBuffer(resolved_, 0, readback_, 0, uint64_t{count} * sizeof(uint64_t));
 }
 
 void PassTimer::request(Device&) {
-  if (!active() || pending_) return;
-  pending_ = true;
+  if (!active() || readings_->pending) return;
+  readings_->pending = true;
   future_ = readback_.MapAsync(
       wgpu::MapMode::Read, 0, readback_.GetSize(), wgpu::CallbackMode::AllowProcessEvents,
-      [this](wgpu::MapAsyncStatus status, wgpu::StringView) {
+      [r = readings_, buffer = readback_](wgpu::MapAsyncStatus status, wgpu::StringView) {
         if (status == wgpu::MapAsyncStatus::Success) {
-          const auto* t = static_cast<const uint64_t*>(readback_.GetConstMappedRange());
-          for (size_t i = 0; i < ms_.size(); ++i) {
-            ms_[i] = t[i * 2 + 1] >= t[i * 2] ? static_cast<double>(t[i * 2 + 1] - t[i * 2]) / 1e6
-                                              : std::numeric_limits<double>::quiet_NaN();
+          const auto* t = static_cast<const uint64_t*>(buffer.GetConstMappedRange());
+          for (size_t i = 0; i < r->ms.size(); ++i) {
+            r->ms[i] = t[i * 2 + 1] >= t[i * 2] ? static_cast<double>(t[i * 2 + 1] - t[i * 2]) / 1e6
+                                                : std::numeric_limits<double>::quiet_NaN();
           }
-          readback_.Unmap();
+          buffer.Unmap();
         }
-        pending_ = false;
+        r->pending = false;
       });
 }
 
 bool PassTimer::ready(Device& device) {
-  if (pending_) device.instance.ProcessEvents();
-  return !pending_;
+  if (readings_->pending) device.instance.ProcessEvents();
+  return !readings_->pending;
 }
 
 void PassTimer::wait(Device& device) {
-  if (pending_) gpu::wait(device, future_);
+  if (readings_->pending) gpu::wait(device, future_);
 }
 
 double PassTimer::ms(uint32_t i) const {
-  return i < ms_.size() ? ms_[i] : std::numeric_limits<double>::quiet_NaN();
+  return i < readings_->ms.size() ? readings_->ms[i] : std::numeric_limits<double>::quiet_NaN();
 }
 
 }  // namespace ge::gpu

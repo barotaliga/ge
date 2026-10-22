@@ -134,13 +134,14 @@ void create_sky(gpu::Device& device, gpu::PipelineSet& pipelines, Sky& sky,
 
   // The sky pass: a full-screen triangle at the far plane, tested `equal` against the depth.
   const wgpu::ShaderModule draw = gpu::create_shader(device, wgsl::sky, "sky");
-  wgpu::ColorTargetState colour{};
-  colour.format = kHdrFormat;
+  wgpu::ColorTargetState colours[2]{};
+  colours[0].format = kHdrFormat;
+  colours[1].format = kMotionFormat;
   wgpu::FragmentState fragment{};
   fragment.module = draw;
   fragment.entryPoint = "fs_main";
-  fragment.targetCount = 1;
-  fragment.targets = &colour;
+  fragment.targetCount = 2;
+  fragment.targets = colours;
   wgpu::DepthStencilState depth{};
   depth.format = kDepthFormat;
   depth.depthWriteEnabled = false;
@@ -208,16 +209,19 @@ void encode_sky_tables(Sky& sky, const gpu::PipelineSet& pipelines, FrameRecorde
 void encode_sky(const Sky& sky, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
                 wgpu::CommandEncoder& encoder, const FrameTargets& targets,
                 const wgpu::BindGroup& frame) {
-  wgpu::RenderPassColorAttachment colour{};
-  colour.view = targets.hdr_view;
-  colour.loadOp = wgpu::LoadOp::Load;
-  colour.storeOp = wgpu::StoreOp::Store;
+  wgpu::RenderPassColorAttachment colours[2]{};
+  colours[0].view = targets.hdr_view;
+  colours[1].view = targets.motion_view;
+  for (auto& c : colours) {
+    c.loadOp = wgpu::LoadOp::Load;
+    c.storeOp = wgpu::StoreOp::Store;
+  }
   wgpu::RenderPassDepthStencilAttachment depth{};
   depth.view = targets.depth_view;
   depth.depthReadOnly = true;
   wgpu::RenderPassDescriptor desc{};
-  desc.colorAttachmentCount = 1;
-  desc.colorAttachments = &colour;
+  desc.colorAttachmentCount = 2;
+  desc.colorAttachments = colours;
   desc.depthStencilAttachment = &depth;
   wgpu::RenderPassEncoder pass = rec.render(encoder, desc, "sky");
   pass.SetPipeline(pipelines.render(sky.p_draw));

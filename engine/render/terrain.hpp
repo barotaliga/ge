@@ -60,9 +60,10 @@ void clipmap_levels(double x, double z, double base_spacing, int levels, ClipLev
 struct TerrainSource {
   const core::Heightfield* height = nullptr;
   const std::vector<uint8_t>* albedo = nullptr;
-  double base_spacing = 1.0;  // level 0's quad, m
-  int levels = 7;             // ≤ kMaxLevels
-  HorizonSettings horizon;    // the ground's own shadow
+  double base_spacing = 1.0;    // level 0's quad, m
+  int levels = 7;               // ≤ kMaxLevels
+  HorizonSettings horizon;      // the ground's own shadow
+  bool overdraw_probe = false;  // labs: build the pipelines encode_terrain_overdraw draws with
 };
 
 struct Terrain {
@@ -75,7 +76,8 @@ struct Terrain {
   wgpu::Buffer params, tiles, indirect, indices;
   wgpu::BindGroupLayout layout, cull_layout, normals_layout;
   wgpu::BindGroup group, cull_group, normals_group;
-  uint32_t p_draw = 0, p_cull = 0, p_normals = 0;
+  uint32_t p_depth = 0, p_draw = 0, p_cull = 0, p_normals = 0;
+  uint32_t p_count_equal = 0, p_count_greater = 0;  // the overdraw probe's, when asked for
   bool normals_built = false;
   Horizon horizon;
   // terrain.wgsl's `TerrainParams`, filled by prepare.
@@ -102,10 +104,23 @@ void encode_terrain_cull(Terrain& terrain, const gpu::PipelineSet& pipelines, Fr
 // The horizon maps' bakes that are due ("terrain.horizon").
 void encode_terrain_horizon(Terrain& terrain, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
                             wgpu::CommandEncoder& encoder);
-// The draw ("terrain"): clears the HDR target and the depth, draws every visible tile.
+// The depth prepass ("terrain.depth"): clears the depth and writes every visible tile's.
+void encode_terrain_depth(const Terrain& terrain, const gpu::PipelineSet& pipelines,
+                          FrameRecorder& rec, wgpu::CommandEncoder& encoder,
+                          const FrameTargets& targets, const wgpu::BindGroup& frame);
+// The colour pass ("terrain"): clears the HDR and motion targets and shades the pixels whose
+// depth is `equal` to the prepass's, each once; the depth is read only.
 void encode_terrain(const Terrain& terrain, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
                     wgpu::CommandEncoder& encoder, const FrameTargets& targets,
                     const wgpu::BindGroup& frame);
+// The overdraw probe (labs; needs TerrainSource::overdraw_probe): every fragment that passes the
+// depth test adds one to `count` (an R16Float view at the render size). After the prepass it
+// tests `equal` against its depth (one a covered pixel); otherwise it clears the depth and
+// tests `greater` as a pass with no prepass would (the overdraw that saves).
+void encode_terrain_overdraw(const Terrain& terrain, const gpu::PipelineSet& pipelines,
+                             wgpu::CommandEncoder& encoder, const FrameTargets& targets,
+                             const wgpu::BindGroup& frame, const wgpu::TextureView& count,
+                             bool after_prepass);
 
 // The CPU's min/max pyramid of a heightfield: mip 0's texel i spans samples i and i + 1 (a
 // cell), each mip after halves the last (rounding down, as a texture's mips do; the last texel
