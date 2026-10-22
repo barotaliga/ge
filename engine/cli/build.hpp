@@ -43,6 +43,18 @@ struct LabOptions {
 };
 Outcome run_lab(const BuildOptions& o, const LabOptions& lab);
 
+// The build `ge build` runs, for a command that needs it first: false with its findings in `out`.
+bool build_into(const BuildOptions& o, Outcome& out);
+// build/<preset>/<name>.log
+fs::path build_log(const BuildOptions& o, std::string_view name);
+
+struct Logged {
+  int code;            // the exit code (-1 when it could not run)
+  std::string output;  // stdout and stderr together
+};
+// Runs a command with its output appended to `log` and handed back.
+Logged run_to_log(const std::string& command, const fs::path& log);
+
 // Runs a command with its output thrown away; its exit code (-1 when it could not run).
 int run_quiet(const std::string& command);
 // Runs a command on this process's own output; its exit code (-1 when it could not run).
