@@ -49,22 +49,23 @@ struct Controls {
 };
 
 enum class EventKind : uint8_t {
-  gate,      // a gate taken (`gate` its index; the start gate is 0)
-  missed,    // the owed gate skied past outside its width
-  finish,    // the finish line crossed (`value` the run's time, s)
-  takeoff,   // a flight began (it passed the skier's least flight)
-  landing,   // back on the snow (`value` the landing's load, g)
-  wipeout,   // went down (`gate` the skier's Wipeout as a number)
-  glance,    // brushed a trunk and kept going
-  reset,     // stood back on the piste (`gate` the gate owed)
-  shoulder,  // two racers met (`racer` and `gate` the two, `value` the closing speed)
-  wanted,    // the wanted level moved (`gate` the stars after, `value` its WantedChange)
-  onto,      // a free ride came onto a run (`gate` the run's index in the ski area)
-  arrived,   // a free ride reached a run's foot (`gate` the run, `value` the clock, s)
-  boarded,   // a free ride came into a lift's load zone (`gate` the lift's index)
-  unloaded,  // a lift let him go at its top (`gate` the lift, `value` the ride's time, s)
-  sled,      // the snowmobile (`gate` its SledPhase, `value` its speed, m/s; sled_ride.hpp)
-  army,      // the army on foot moved (`gate` its ArmyChange, `value` how many men)
+  gate,       // a gate taken (`gate` its index; the start gate is 0)
+  missed,     // the owed gate skied past outside its width
+  finish,     // the finish line crossed (`value` the run's time, s)
+  takeoff,    // a flight began (it passed the skier's least flight)
+  landing,    // back on the snow (`value` the landing's load, g)
+  wipeout,    // went down (`gate` the skier's Wipeout as a number)
+  glance,     // brushed a trunk and kept going
+  reset,      // stood back on the piste (`gate` the gate owed)
+  shoulder,   // two racers met (`racer` and `gate` the two, `value` the closing speed)
+  wanted,     // the wanted level moved (`gate` the stars after, `value` its WantedChange)
+  onto,       // a free ride came onto a run (`gate` the run's index in the ski area)
+  arrived,    // a free ride reached a run's foot (`gate` the run, `value` the clock, s)
+  boarded,    // a free ride came into a lift's load zone (`gate` the lift's index)
+  unloaded,   // a lift let him go at its top (`gate` the lift, `value` the ride's time, s)
+  sled,       // the snowmobile (`gate` its SledPhase, `value` its speed, m/s; sled_ride.hpp)
+  army,       // the army on foot moved (`gate` its ArmyChange, `value` how many men)
+  army_sled,  // an army snowmobile (`gate` its ArmySledChange, `value` its id; army_sled.hpp)
 };
 
 const char* event_name(EventKind kind);

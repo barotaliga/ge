@@ -1,0 +1,11 @@
+# each half minute: state digest, machines out, halted, empty (fall_line_army_sled_test, the seed 38 hunt at three stars for 150 s, then called off for 150 s)
+6ebfff5aace421c7 1 1 0
+210e281a0e56e390 1 1 0
+ca62a5dddb6d1447 3 1 0
+8ac14375adf6c9de 3 1 0
+3cf9c36c805d96fb 3 0 0
+9e6daea6a4d7805c 0 0 0
+d3b294becd8947c6 0 0 0
+33216768c1ebc3d7 0 0 0
+38042f1569923b99 0 0 0
+ade70810d6f1eab8 0 0 0

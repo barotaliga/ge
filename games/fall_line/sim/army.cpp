@@ -1,8 +1,8 @@
 // The army on foot (army.hpp).
 //
-// ge:summary army_ways, lift_for, step_army and army_hash's bodies: the squads, the waves, the
-// chase ge:keywords army step_army send_lift_squads send_waves climb_with_wave chase try_arrest
-// ge:keywords write_pursuers way_at army_hash
+// ge:summary army_ways, lift_for, step_army and army_hash's bodies: the squads, the waves, chase
+// ge:keywords army step_army send_lift_squads send_waves climb_with_wave chase try_arrest
+// ge:keywords write_pursuers way_at army_hash enlist_soldier
 // ge:skill sim
 // ge:test tests/fall_line_army_test.cpp
 #include "fall_line/sim/army.hpp"
@@ -16,6 +16,8 @@
 #include "core/num.hpp"
 
 #include "fall_line/sim/army_rules.hpp"
+#include "fall_line/sim/army_sled.hpp"
+#include "fall_line/sim/army_sled_rules.hpp"
 #include "fall_line/sim/army_troop.hpp"
 #include "fall_line/sim/free.hpp"
 #include "fall_line/sim/lift_ride.hpp"
@@ -49,42 +51,9 @@ TroopWorld troop_world(const GameState& state) {
 // Whether a man still counts: out on the map and not sent home.
 bool fit(const Soldier& s) { return s.mode != SoldierMode::gone; }
 
-// A SOLDIER PUT ON THE MAP at (x, z), facing `heading`, in `mode`: his id the army's next.
-Soldier& enlist(GameState& state, SoldierFrom from, int32_t squad, SoldierMode mode, double x,
-                double z, double heading) {
-  ArmyState& a = state.army;
-  Soldier s;
-  s.id = a.next_id++;
-  s.from = from;
-  s.mode = mode;
-  s.squad = squad;
-  s.x = x;
-  s.z = z;
-  s.y = state.level->ground_at(x, z);
-  s.heading = heading;
-  s.tx = x;
-  s.tz = z;
-  s.wx = x;
-  s.wz = z;
-  s.wt = state.t;
-  a.soldiers.push_back(s);
-  return a.soldiers.back();
-}
-
 // How many more men the army has room for.
 int32_t room(const ArmyState& a) {
   return static_cast<int32_t>(army::kMostSoldiers) - static_cast<int32_t>(a.soldiers.size());
-}
-
-// A POINT `s` m DOWN A WAY, and straight on past its foot along its last heading.
-mg::TrackPoint way_at(const mg::Track& way, double s) {
-  if (s <= way.length) return mg::track_point_at(way, s);
-  mg::TrackPoint p = way.points.back();
-  const double on = s - way.length;
-  p.x += lm::sin(p.heading) * on;
-  p.z += lm::cos(p.heading) * on;
-  p.s = s;
-  return p;
 }
 
 // ─── the lifts' squads ───────────────────────────────────────────────────────────────────────
@@ -123,7 +92,8 @@ void send_lift_squads(GameState& state, int32_t want, Spot q) {
   for (int32_t i = 0; i < n; i++) {
     // Put down at the lane's far end, a man's room apart; each goes to his place in the line.
     const ml::Place at = queue_spot(plan, army::kLaneM + i * army::kQueueM);
-    Soldier& s = enlist(state, SoldierFrom::lift, squad, SoldierMode::walk, at.x, at.z, at.heading);
+    Soldier& s =
+        enlist_soldier(state, SoldierFrom::lift, squad, SoldierMode::walk, at.x, at.z, at.heading);
     const ml::Place to = queue_spot(plan, i * army::kQueueM);
     s.lift = lift;
     s.tx = to.x;
@@ -196,6 +166,8 @@ void send_wave(GameState& state, int32_t stars) {
   ArmyState& a = state.army;
   const std::optional<WaveMix> mix = ground_wave(stars, a.waves);
   const int32_t wave = a.waves++;
+  // The snowmobiles it keeps out on top of the roster's (army_sled.hpp).
+  if (mix) a.wave_sleds = std::min(army_sled::kWaveSleds, mix->snowmobiles);
   if (!mix || !state.ways || state.ways->empty()) return;
   int32_t live = 0;
   for (const Soldier& s : a.soldiers) live += s.from == SoldierFrom::wave && fit(s) ? 1 : 0;
@@ -222,7 +194,7 @@ void send_wave(GameState& state, int32_t stars) {
   double s0 = s_hit + army::kDismountM;
   for (;;) {
     if (s0 - s_hit >= army::kDismountM + army::kHiddenM) break;
-    const mg::TrackPoint p = way_at(track, s0);
+    const mg::TrackPoint p = army_way_at(track, s0);
     if (hypot(p.x - q.x, p.z - q.z) >= army::kAwayM && !in_his_sight(state, p.x, p.z, q)) break;
     s0 += army::kSampleM;
   }
@@ -231,7 +203,7 @@ void send_wave(GameState& state, int32_t stars) {
   int32_t made = 0;
   for (int32_t r = 0; made < men; r++) {
     const double s = s0 + r * army::kRankM;
-    const mg::TrackPoint p = way_at(track, s);
+    const mg::TrackPoint p = army_way_at(track, s);
     const auto across = static_cast<int32_t>(
         clamp(std::floor((p.width - 2 * army::kMarginM) / army::kFileM) + 1, 1, army::kAbreast));
     const int32_t m = std::min(across, men - made);
@@ -244,7 +216,7 @@ void send_wave(GameState& state, int32_t stars) {
       const double back = (num::mod(j * 0.382, 1) - 0.5) * 1.5;
       const double x = p.x + rx * lane - lm::sin(up) * back;
       const double z = p.z + rz * lane - lm::cos(up) * back;
-      Soldier& man = enlist(state, SoldierFrom::wave, wave, SoldierMode::climb, x, z, up);
+      Soldier& man = enlist_soldier(state, SoldierFrom::wave, wave, SoldierMode::climb, x, z, up);
       man.way = way;
       man.s = s;
       man.s_end = s_hit;
@@ -281,7 +253,7 @@ bool climb_with_wave(GameState& state, Soldier& s, Spot to) {
   double tz = 0;
   for (;;) {
     if (s.s <= s.s_end) return true;
-    const mg::TrackPoint p = way_at(way, s.s);
+    const mg::TrackPoint p = army_way_at(way, s.s);
     const double up = p.heading + kPi;
     const double ux = lm::sin(up);
     const double uz = lm::cos(up);
@@ -375,6 +347,37 @@ void write_pursuers(GameState& state) {
 }
 
 }  // namespace
+
+mg::TrackPoint army_way_at(const mg::Track& way, double s) {
+  if (s <= way.length) return mg::track_point_at(way, s);
+  mg::TrackPoint p = way.points.back();
+  const double on = s - way.length;
+  p.x += lm::sin(p.heading) * on;
+  p.z += lm::cos(p.heading) * on;
+  p.s = s;
+  return p;
+}
+
+Soldier& enlist_soldier(GameState& state, SoldierFrom from, int32_t squad, SoldierMode mode,
+                        double x, double z, double heading) {
+  ArmyState& a = state.army;
+  Soldier s;
+  s.id = a.next_id++;
+  s.from = from;
+  s.mode = mode;
+  s.squad = squad;
+  s.x = x;
+  s.z = z;
+  s.y = state.level->ground_at(x, z);
+  s.heading = heading;
+  s.tx = x;
+  s.tz = z;
+  s.wx = x;
+  s.wz = z;
+  s.wt = state.t;
+  a.soldiers.push_back(s);
+  return a.soldiers.back();
+}
 
 std::shared_ptr<const std::vector<mg::Track>> army_ways(const mg::Level& level) {
   auto ways = std::make_shared<std::vector<mg::Track>>();
@@ -499,6 +502,7 @@ void step_army(GameState& state) {
     std::erase_if(a.soldiers, [](const Soldier& s) { return s.mode == SoldierMode::gone; });
     push(state, ArmyChange::home, home);
   }
+  step_army_sleds(state, on, q, roster.fire);
   write_pursuers(state);
 }
 
@@ -535,7 +539,7 @@ uint64_t army_hash(const ArmyState& a, uint64_t h) {
   mix(a.wave_at);
   mix(a.marched);
   mix(a.arrested_by);
-  return h;
+  return army_sleds_hash(a, h);
 }
 
 const char* soldier_mode_name(SoldierMode m) {

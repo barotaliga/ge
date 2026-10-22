@@ -109,7 +109,8 @@ void run_sound_step(RunSound& sound, ge::audio::Synth& synth, const sim::GameSta
       case EventKind::boarded:  // the lift is heard from its own bed, when it has one
       case EventKind::unloaded:
       case EventKind::sled:  // the snowmobile's sound comes with its own bed
-      case EventKind::army:  // the army is heard from its men, when they have a voice
+      case EventKind::army:
+      case EventKind::army_sled:  // the army is heard from its men, when they have a voice
         break;
     }
   }
