@@ -64,7 +64,9 @@ jobs:
         run: |
           ROOT=$(cygpath -m "$PWD" 2>/dev/null || pwd)  # a path CMake reads on Windows too
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DGE_PLATFORM=OFF -DGE_GPU=OFF
-          cmake --build build --config Release --parallel
+          # A bounded job count: an unbounded one under Make runs every source at once and the
+          # runner runs out of memory.
+          cmake --build build --config Release --parallel 4
           cmake --install build --config Release --prefix stage
           cmake -S tests/package/consumer -B build-consumer -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$ROOT/stage"
           cmake --build build-consumer --config Release
