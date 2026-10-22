@@ -1,11 +1,12 @@
 // THE TERRAIN'S DRAW (render/terrain.hpp): a tile of the clipmap, its vertices pulled from the
 // vertex index and placed by its instance's level and tile; the odd vertices morphed onto the
 // coarser grid toward the level's edge, the vertices a finer level covers sunk under it; lit by
-// the sun past the ground's own horizon and the sky through the shared functions of frame.wgsl,
+// the sun past the ground's own horizon and what stands in it (wgsl/sun_shadow.wgsl) and the sky through the shared functions of frame.wgsl,
 // and seen through the haze. Drawn twice: depth only first (`terrain.depth`), then shaded where
 // the depth is `equal`, so every visible pixel is shaded once; it writes its motion beside it.
 #include "render/wgsl/frame.wgsl"
 #include "render/wgsl/terrain_common.wgsl"
+#include "render/wgsl/sun_shadow.wgsl"
 
 override kTile: u32 = 32u;
 // The morph runs from params.info.w to this share of a level's half side.
@@ -18,6 +19,10 @@ const kMorphEnd = 0.95;
 @group(1) @binding(4) var<storage, read> tiles: array<u32>;
 @group(1) @binding(5) var horizon0: texture_2d<f32>;
 @group(1) @binding(6) var horizon1: texture_2d<f32>;
+
+@group(2) @binding(0) var<uniform> shadow: SunShadow;
+@group(2) @binding(1) var shadow_maps: texture_depth_2d_array;
+@group(2) @binding(2) var shadow_cmp: sampler_comparison;
 
 struct VertexOut {
   // Invariant: the depth prepass and the colour pass run this same vertex code, and the colour
@@ -75,7 +80,9 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   let n = normalize(textureSampleLevel(normals, linear_clamp, uv, 0.0).xyz * vec3f(flip.x, 1.0, flip.y));
   let a = textureSampleLevel(albedo, linear_clamp, uv, 0.0).rgb;
   let y = in.rel.y + frame.eye.y;
-  let sun = sun_light(y) * max(dot(n, frame.sun.xyz), 0.0) * ground_shadow(params, horizon0, horizon1, linear_clamp, frame.sun.xyz, in.xz);
+  let sun = sun_light(y) * max(dot(n, frame.sun.xyz), 0.0) *
+            ground_shadow(params, horizon0, horizon1, linear_clamp, frame.sun.xyz, in.xz) *
+            sun_shadow(shadow, shadow_maps, shadow_cmp, in.rel, n, in.position.xy, frame.time.y);
   let c = a / PI * (sun + sky_irradiance(n));
   var out: FragmentOut;
   out.colour = vec4f(haze(c, in.position.xy * frame.size.zw, length(in.rel)), 1.0);

@@ -14,7 +14,8 @@
 // terrain shades per covered pixel with the depth prepass, which must be 1 but for coincident
 // surfaces, and without it, the cost the prepass saves), both over the ground and the instances;
 // and the CULL check: the same still drawn again with the depth pyramid's culling off must be the
-// same picture, or the cull dropped something that shows.
+// same picture, or the cull dropped something that shows. And the sun's CASCADES over the whole
+// run, without a device: how many frames of the chase camera redraw the near and the far one.
 //
 // What must hold on every row is deterministic (the views shot, the pass table, the render size
 // and jitter cycle, no pipeline after load, no GPU error); pixels and timings are measured. Without
@@ -25,8 +26,10 @@
 // ge:keywords lab world picture screenshot views frame terrain sky post gpu-capture headless
 // ge:keywords tiles-drawn gpu-ms cpu-ms pass-table fall-line taa render-scale shimmer overdraw
 // ge:keywords instances forest figures run-moments chase-camera occlusion-culling cull-check
+// ge:keywords sun-shadow cascade-redraws shadow-cache
 // ge:skill render labs
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cmath>
 #include <cstdio>
@@ -45,6 +48,7 @@
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
 #include "mountain/mapgen/generate.hpp"
+#include "render/shadows.hpp"
 #include "render/taa.hpp"
 
 namespace {
@@ -229,6 +233,39 @@ void run(ge::lab::Lab& lab) {
     }
   }
   lab.metric("moments", static_cast<double>(moments.size()), "count");
+
+  // The sun's cascades over the whole run: the chase camera at 60 frames a second, each frame
+  // deciding (render/shadows.hpp `update_cascade`, the decision the frame makes) whether a cascade
+  // is drawn again. Deterministic and with no device: the counts are what the frame would draw.
+  {
+    fall_line::sim::Driver run(shared, 0);
+    const ge::render::ShadowSettings set;
+    std::array<ge::render::ShadowCascade, ge::render::kCascades> cascades{};
+    std::array<int, ge::render::kCascades> redraws{};
+    int frames = 0;
+    ge::render::FrameView v;
+    fall_line::app::day_view(level, hour, v);
+    double sun[3];
+    ge::render::sun_direction(v, sun);
+    while (!run.over()) {
+      fall_line::app::chase_view(level, run.state().racers[0].skier, v);
+      for (int c = 0; c < ge::render::kCascades; ++c) {
+        float m[16];
+        if (ge::render::update_cascade(set, c, sun, v.eye, cascades[static_cast<size_t>(c)], m)) {
+          ++redraws[static_cast<size_t>(c)];
+        }
+      }
+      ++frames;
+      for (int k = 0; k < 2 && !run.over(); ++k) {
+        run.step(fall_line::sim::bot_controls(run.state(), 0, run.plan()));
+      }
+    }
+    lab.metric("cascade-frames", frames, "count");
+    lab.metric("cascade-redraws.near", redraws[0], "count");
+    lab.metric("cascade-redraws.far", redraws[1], "count");
+    lab.metric("cascade-redraws-per-frame",
+               frames > 0 ? static_cast<double>(redraws[0] + redraws[1]) / frames : 0, "count");
+  }
 
   auto shot_of = [&](const Scene& sc) {
     std::string title = "SEED " + seed_s + ", " + sc.name;

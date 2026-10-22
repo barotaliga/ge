@@ -105,7 +105,7 @@ if(GE_GPU)
   target_link_libraries(ge_gpu PUBLIC ge_core dawn::webgpu_dawn)
   ge_embed_wgsl(ge_gpu engine/gpu/test_scene.wgsl)
   # The frame core (M7): the pass table's mechanisms, the sky, the terrain and its horizon
-  # map, the Hi-Z pyramid, TAA-U, post, the instance families and their meshes.
+  # map, the Hi-Z pyramid, TAA-U, post, the instance families and their meshes, the sun's shadows.
   file(GLOB GE_RENDER_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/render/*.cpp)
   add_library(ge_render STATIC ${GE_RENDER_SOURCES})
   target_link_libraries(ge_render PUBLIC ge_gpu)

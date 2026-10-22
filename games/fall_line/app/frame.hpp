@@ -8,12 +8,16 @@
 //   instances.cull       -> instances.early (the forest and the figures: the frustum, the last
 //                           frame's pyramid)
 //   terrain.horizon      -> terrain.horizon (the bakes due)
+//   shadows.cull         -> shadows.lists (the casters of the maps drawn this frame)
+//   shadows.near         -> shadows.maps (the near cascade: the forest, when due)
+//   shadows.far          -> shadows.maps (the far cascade, when due)
+//   shadows.figures      -> shadows.maps (the figures' atlas, every frame)
 //   terrain.depth        -> depth (the prepass)
 //   instances.depth      -> depth (the early lists' prepass)
 //   hiz                  -> hiz (the depth's pyramid)
 //   instances.cull.late  -> instances.late (what the last frame's pyramid hid, against this one)
 //   instances.depth.late -> depth
-//   terrain              -> hdr motion (shaded where the depth is equal)
+//   terrain              -> hdr motion (shaded where the depth is equal; reads shadows.maps)
 //   instances            -> hdr motion (both lists, where the depth is equal)
 //   sky                  -> hdr motion (behind depth)
 //   taa                  -> taa.history (at the output's size; with FrameOptions::taa)
@@ -34,6 +38,7 @@
 // ge:skill render
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <span>
@@ -46,6 +51,7 @@
 #include "render/hiz.hpp"
 #include "render/instances.hpp"
 #include "render/post.hpp"
+#include "render/shadows.hpp"
 #include "render/sky.hpp"
 #include "render/taa.hpp"
 #include "render/terrain.hpp"
@@ -58,6 +64,7 @@ struct FrameOptions {
   double scale = 1.0;           // the render size over the output's, with TAA
   bool overdraw_probe = false;  // labs: the terrain's and the instances' overdraw pipelines
   bool occlusion = true;        // cull the instances by the depth pyramid (off: the frustum only)
+  uint32_t shadow_size = 2048;  // the sun's shadow maps' texels a side
 };
 
 // What of the run a frame draws, besides the map: the racers, the player's first.
@@ -85,8 +92,10 @@ struct GameFrame {
   ge::render::InstanceFamily forest, figures;
   ge::render::InstanceFamily* families[2] = {&forest, &figures};
   wgpu::BindGroup instance_light;
+  ge::render::SunShadows shadows;
   const ge::mountain::mapgen::Level* level = nullptr;
   std::vector<ge::render::Instance> staged_figures;
+  std::vector<std::array<double, 3>> figure_centres;
   ge::render::FrameRecorder recorder;
   std::vector<uint8_t> albedo;
 };

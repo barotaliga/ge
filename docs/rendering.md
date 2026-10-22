@@ -247,6 +247,12 @@ layer counts pipeline creations, and after load a creation is an error that name
 pipeline and says to add it to the manifest. A missing entry fails the lab tests
 instead of causing a hitch in a run.
 
+**As built (M7d2).** The sun's shadows land between the horizon bake and the prepass:
+`shadows.cull` (the casters' cull into each map drawn this frame), then `shadows.near`,
+`shadows.far` and `shadows.figures`, each a depth-only pass into its layer of the shadow maps;
+the `terrain` and `instances` rows read `shadows.maps`. A cascade that is not due still opens its
+pass (read-only, nothing drawn), so the recorder's GPU times keep their order.
+
 ## GPU-driven instances
 
 Every repeated thing (trees, rocks, props, carriers, crowd members, gate poles) is an
@@ -403,6 +409,28 @@ Filtering is hardware comparison sampling with a small rotated Poisson kernel. A
 contact-hardening (PCSS-style) blocker search is a quality-ladder option for the
 figures' atlas only.
 
+**As built (M7d2)** (`render/shadows.hpp`, `wgsl/sun_shadow.wgsl`): the cascades and the
+atlas are three layers of one `Depth32Float` array (2048 a side in Fall Line): the near cascade
+(48 m round the eye), the far one (400 m), and the figures' atlas of 4 × 4 tiles (1.4 m round
+each figure, 128 texels across: about a centimetre a texel). Each map is an orthographic view
+along the sun, 2 km deep, with depth 1 toward the sun, cleared to 0 so nothing casts; casters
+draw with `greater`, and a receiver is lit where its depth is at least the map's. A cascade is
+redrawn (`update_cascade`, pure CPU) only when it was never drawn, the eye has drifted a quarter
+of its radius across the sun, or the sun has turned 0.25° (near) or 1° (far); its centre is
+snapped to its texels across the sun, so a redraw does not swim. Seed 38's whole run from the
+chase camera redraws the near cascade on 187 of 14,382 frames and the far one on 22 (the
+`world` lab's `cascade-redraws`). The casters are each family's own slots
+(`create_family_casters`): the forest's two (one a cascade) culled against the map's box with
+no depth pyramid, the figures' one culled once for every tile, each tile drawn under its own
+viewport and scissor. A receiver (the terrain and every instance) offsets its point 1.5 texels
+along its normal, adds a 5 cm bias and takes four rotated Poisson taps, each a hardware 2 × 2
+comparison (interleaved gradient noise, turned every frame for the TAA to average); the near
+cascade where the point falls inside it, else the far one, and the darkest of the figures'
+tiles. Under the horizon nothing is drawn or read. On the software adapter a cascade's redraw
+costs 2 to 30 ms (near) and 50 to 85 ms (far), which is why they are cached; the atlas costs
+under 3 ms. The `wood` view (`games/fall_line/app/views.cpp`) stands across the sun from the
+sunlit edge of a wood, where the trees' shadows lie on the snow.
+
 **As built (M7b)** (`render/horizon.hpp`): the horizon map. A turn is split into 180 bearings
 (2° each); the maps for the two bearings either side of the sun's sit in two `RGBA16Float`
 textures, each bearing in the slot of its index's parity, so a step of the sun into the next
@@ -420,8 +448,7 @@ nine minutes of the day; the `shadows` lab counts them). On the software adapter
 timings, and slicing a bake over frames if one shows as a hitch, wait for the `profile` lab
 (M7d3). Past the map's edge the ground is drawn mirrored and so are its maps: the shadows
 there fall at the mirrored bearing, which only the distant ground shows until the far
-ranges replace it (M8). The cascades and the figures' atlas have nothing to shade until the
-instances and the skier are drawn, so they land with them (M7d2).
+ranges replace it (M8).
 
 ## Sky, atmosphere and clouds
 

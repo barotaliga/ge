@@ -3,7 +3,10 @@
 // last frame exists) its box against the last frame's depth pyramid seen through the last
 // frame's camera; what that hides is marked for the LATE phase, which tests it against this
 // frame's pyramid. A visible instance is appended to its LOD's bucket (to two inside a LOD band)
-// and counted into that bucket's indirect draw.
+// and counted into that bucket's indirect draw. The SHADOW entry culls a shadow map's casters
+// (render/shadows.hpp) into a caster slot's lists: the map's box (its view's planes), the radius
+// in the map's texels (`fp.cull.x` texels a metre: an orthographic view has no distance), no
+// pyramid and no band.
 #include "render/wgsl/frame_types.wgsl"
 #include "render/wgsl/instances_common.wgsl"
 
@@ -104,7 +107,7 @@ fn place(i: u32, mesh: Mesh, px: f32, phase: u32) {
   let band = fp.cull.z;
   for (var j = 0u; j + 1u < n; j++) {
     let t = lods[first + j].box_min.w;
-    if (px >= t * (1.0 - band) && px <= t * (1.0 + band)) {
+    if (band > 0.0 && px >= t * (1.0 - band) && px <= t * (1.0 + band)) {
       let share = clamp((px - t * (1.0 - band)) / (2.0 * band * t), 0.0, 1.0);
       let q = u32(round(share * 127.0));
       append(base + first + j, i | kEntryBand | (q << 24u));
@@ -189,4 +192,27 @@ fn late(@builtin(global_invocation_id) id: vec3u) {
   }
   atomicAdd(&counters.stats[kStatLate], 1u);
   place(i, v.mesh, screen_px(v), 1u);
+}
+
+@compute @workgroup_size(64)
+fn shadow(@builtin(global_invocation_id) id: vec3u) {
+  let i = id.x;
+  if (i >= fp.info.x) {
+    return;
+  }
+  let v = seen(i);
+  for (var k = 0; k < 5; k++) {
+    let p = frame.planes[k];
+    if (dot(p.xyz, v.centre) + p.w < -v.radius) {
+      atomicAdd(&counters.stats[kStatFrustum], 1u);
+      return;
+    }
+  }
+  let px = v.radius * fp.cull.x;
+  if (px < fp.cull.y) {
+    atomicAdd(&counters.stats[kStatSmall], 1u);
+    return;
+  }
+  atomicAdd(&counters.stats[kStatEarly], 1u);
+  place(i, v.mesh, px, 0u);
 }

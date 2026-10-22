@@ -14,6 +14,7 @@
 #include "core/output.hpp"
 #include "render/instances.wgsl.hpp"
 #include "render/instances_cull.wgsl.hpp"
+#include "render/shadows.hpp"
 
 namespace ge::render {
 
@@ -50,19 +51,25 @@ wgpu::RenderPassDepthStencilAttachment depth_load(const FrameTargets& targets, b
   return depth;
 }
 
-// Bind a family and draw its buckets of one phase (or both): one indirect draw each.
-uint32_t draw_buckets(wgpu::RenderPassEncoder& pass, const InstanceFamily& f, int first_phase,
+// Bind a family's draw group and draw its buckets of one phase (or both) from `args`: one
+// indirect draw each.
+uint32_t draw_buckets(wgpu::RenderPassEncoder& pass, const InstanceFamily& f,
+                      const wgpu::BindGroup& group, const wgpu::Buffer& args, int first_phase,
                       int last_phase) {
-  pass.SetBindGroup(2, f.draw_group);
+  pass.SetBindGroup(2, group);
   pass.SetIndexBuffer(f.indices, wgpu::IndexFormat::Uint32);
   uint32_t draws = 0;
   for (int phase = first_phase; phase <= last_phase; ++phase) {
     for (uint32_t l = 0; l < f.lod_count; ++l) {
-      pass.DrawIndexedIndirect(f.args, uint64_t{phase * f.lod_count + l} * 20);
+      pass.DrawIndexedIndirect(args, uint64_t{phase * f.lod_count + l} * 20);
       ++draws;
     }
   }
   return draws;
+}
+uint32_t draw_buckets(wgpu::RenderPassEncoder& pass, const InstanceFamily& f, int first_phase,
+                      int last_phase) {
+  return draw_buckets(pass, f, f.draw_group, f.args, first_phase, last_phase);
 }
 
 }  // namespace
@@ -100,6 +107,9 @@ void create_instance_pipelines(gpu::Device& device, gpu::PipelineSet& pipelines,
                                vf);
   ip.light_layout =
       make_layout(device, "instances.light", {Slot::uniform, Slot::texture, Slot::texture}, vf);
+  ip.empty_layout = make_layout(device, "instances.empty", {}, vf);
+  ip.empty_group = make_group(device, "instances.empty", ip.empty_layout, {});
+  ip.shadows = no_sun_shadows(device);
 
   const wgpu::ShaderModule cull =
       gpu::create_shader(device, wgsl::instances_cull, "instances_cull");
@@ -112,12 +122,16 @@ void create_instance_pipelines(gpu::Device& device, gpu::PipelineSet& pipelines,
   cd.label = "instances.cull.late";
   cd.compute.entryPoint = "late";
   ip.p_late = pipelines.add_compute(device, cd);
+  cd.label = "instances.cull.shadow";
+  cd.compute.entryPoint = "shadow";
+  ip.p_shadow_cull = pipelines.add_compute(device, cd);
 
   // One vertex stage for every draw (the prepass, the colour pass and the probe), so the depths
   // they compute are the same bits.
   const wgpu::ShaderModule draw = gpu::create_shader(device, wgsl::instances, "instances");
   const wgpu::PipelineLayout layout =
-      make_pipeline_layout(device, "instances.draw", {frame, ip.light_layout, ip.draw_layout});
+      make_pipeline_layout(device, "instances.draw",
+                           {frame, ip.light_layout, ip.draw_layout, sun_shadow_layout(device)});
   auto pipeline = [&](const char* label, const char* entry,
                       std::initializer_list<wgpu::TextureFormat> targets, bool write_depth,
                       wgpu::CompareFunction compare, bool add) {
@@ -154,6 +168,24 @@ void create_instance_pipelines(gpu::Device& device, gpu::PipelineSet& pipelines,
     return pipelines.add_render(device, desc);
   };
   using CF = wgpu::CompareFunction;
+  {
+    // A shadow map's casters: the vertex stage alone, both faces (a map has no winding to
+    // trust), depth toward the sun kept (1 toward it).
+    wgpu::DepthStencilState depth{};
+    depth.format = kDepthFormat;
+    depth.depthWriteEnabled = true;
+    depth.depthCompare = CF::Greater;
+    wgpu::RenderPipelineDescriptor desc{};
+    desc.label = "instances.caster";
+    desc.layout =
+        make_pipeline_layout(device, "instances.caster", {frame, ip.empty_layout, ip.draw_layout});
+    desc.vertex.module = draw;
+    desc.vertex.entryPoint = "vs_main";
+    desc.primitive.topology = wgpu::PrimitiveTopology::TriangleList;
+    desc.primitive.cullMode = wgpu::CullMode::None;
+    desc.depthStencil = &depth;
+    ip.p_caster = pipelines.add_render(device, desc);
+  }
   ip.p_depth = pipeline("instances.depth", "fs_depth", {}, true, CF::Greater, false);
   ip.p_draw =
       pipeline("instances.draw", "fs_main", {kHdrFormat, kMotionFormat}, false, CF::Equal, false);
@@ -169,6 +201,10 @@ wgpu::BindGroup instance_light_group(gpu::Device& device, const InstancePipeline
                                      const Terrain& terrain) {
   return make_group(device, "instances.light", ip.light_layout,
                     {terrain.params, terrain.horizon.views[0], terrain.horizon.views[1]});
+}
+
+void bind_instance_shadows(InstancePipelines& ip, const wgpu::BindGroup& shadows) {
+  ip.shadows = shadows;
 }
 
 void create_family(gpu::Device& device, const InstancePipelines& ip, InstanceFamily& f,
@@ -278,11 +314,35 @@ void create_family(gpu::Device& device, const InstancePipelines& ip, InstanceFam
                             {f.params, f.vertices, f.lods, f.instances, f.lists, f.materials});
 }
 
+void create_family_casters(gpu::Device& device, const InstancePipelines& ip, InstanceFamily& f,
+                           int maps) {
+  f.casters.assign(static_cast<size_t>(std::max(maps, 0)), CasterSlot{});
+  for (size_t k = 0; k < f.casters.size(); ++k) {
+    CasterSlot& c = f.casters[k];
+    const std::string name = f.label + ".caster" + std::to_string(k);
+    c.params = make_buffer(device, name + ".params", sizeof(InstanceFamily::Params), BU::Uniform);
+    c.lists = make_buffer(
+        device, name + ".lists",
+        std::max<uint64_t>(uint64_t{std::max(f.lod_count, 1u)} * f.capacity * 4, 16), BU::Storage);
+    c.args = make_buffer(device, name + ".args", kCountersBytes,
+                         BU::Storage | BU::Indirect | BU::CopySrc);
+    c.draw_group = make_group(device, name + ".draw", ip.draw_layout,
+                              {c.params, f.vertices, f.lods, f.instances, c.lists, f.materials});
+  }
+}
+
 void bind_family_hiz(gpu::Device& device, const InstancePipelines& ip, InstanceFamily& f,
                      const Hiz& hiz) {
   f.cull_group =
       make_group(device, f.label + ".cull", ip.cull_layout,
                  {f.params, f.meshes, f.lods, f.instances, f.lists, f.args, f.state, hiz.view});
+  // A caster's cull reads no pyramid, but its layout is the cull's: the pyramid fills the slot.
+  for (size_t k = 0; k < f.casters.size(); ++k) {
+    CasterSlot& c = f.casters[k];
+    c.cull_group =
+        make_group(device, f.label + ".caster" + std::to_string(k) + ".cull", ip.cull_layout,
+                   {c.params, f.meshes, f.lods, f.instances, c.lists, c.args, f.state, hiz.view});
+  }
 }
 
 void set_instances(gpu::Device& device, InstanceFamily& f, uint32_t first,
@@ -344,6 +404,49 @@ void prepare_family(gpu::Device& device, InstanceFamily& f, const FrameView& vie
   device.queue.WriteBuffer(f.args, 0, f.args_reset.data(), f.args_reset.size() * 4);
 }
 
+void prepare_family_caster(gpu::Device& device, InstanceFamily& f, int slot, float texels_per_m) {
+  if (slot < 0 || static_cast<size_t>(slot) >= f.casters.size()) return;
+  CasterSlot& c = f.casters[static_cast<size_t>(slot)];
+  InstanceFamily::Params p{};
+  p.info[0] = f.count;
+  p.info[1] = std::max(f.lod_count, 1u);
+  p.info[2] = f.capacity;
+  p.info[3] = 0;
+  p.cull[0] = texels_per_m;
+  p.cull[1] = kMinPixels;
+  p.cull[2] = 0;  // no band: a map draws one LOD
+  p.cull[3] = 0;
+  device.queue.WriteBuffer(c.params, 0, &p, sizeof p);
+  device.queue.WriteBuffer(c.args, 0, f.args_reset.data(), f.args_reset.size() * 4);
+  c.culled = f.count > 0;
+}
+
+uint32_t cull_shadow(wgpu::ComputePassEncoder& pass, std::span<InstanceFamily* const> families,
+                     int slot) {
+  uint32_t dispatches = 0;
+  for (InstanceFamily* f : families) {
+    if (static_cast<size_t>(slot) >= f->casters.size()) continue;
+    const CasterSlot& c = f->casters[static_cast<size_t>(slot)];
+    if (!c.culled) continue;
+    pass.SetBindGroup(1, c.cull_group);
+    pass.DispatchWorkgroups((f->count + 63) / 64);
+    ++dispatches;
+  }
+  return dispatches;
+}
+
+uint32_t draw_casters(wgpu::RenderPassEncoder& pass, std::span<InstanceFamily* const> families,
+                      int slot) {
+  uint32_t draws = 0;
+  for (InstanceFamily* f : families) {
+    if (static_cast<size_t>(slot) >= f->casters.size()) continue;
+    const CasterSlot& c = f->casters[static_cast<size_t>(slot)];
+    if (!c.culled) continue;
+    draws += draw_buckets(pass, *f, c.draw_group, c.args, 0, 0);
+  }
+  return draws;
+}
+
 void encode_instances_cull(std::span<InstanceFamily* const> families, const InstancePipelines& ip,
                            const gpu::PipelineSet& pipelines, FrameRecorder& rec,
                            wgpu::CommandEncoder& encoder, const wgpu::BindGroup& frame, bool late) {
@@ -373,6 +476,7 @@ void encode_instances_depth(std::span<InstanceFamily* const> families, const Ins
   pass.SetPipeline(pipelines.render(ip.p_depth));
   pass.SetBindGroup(0, frame);
   pass.SetBindGroup(1, light);
+  pass.SetBindGroup(3, ip.shadows);
   for (InstanceFamily* f : families) {
     if (f->count == 0) continue;
     rec.current().draws += draw_buckets(pass, *f, late ? 1 : 0, late ? 1 : 0);
@@ -400,6 +504,7 @@ void encode_instances(std::span<InstanceFamily* const> families, const InstanceP
   pass.SetPipeline(pipelines.render(ip.p_draw));
   pass.SetBindGroup(0, frame);
   pass.SetBindGroup(1, light);
+  pass.SetBindGroup(3, ip.shadows);
   for (InstanceFamily* f : families) {
     if (f->count == 0) continue;
     rec.current().draws += draw_buckets(pass, *f, 0, 1);
@@ -426,13 +531,16 @@ void encode_instances_overdraw(std::span<InstanceFamily* const> families,
   pass.SetPipeline(pipelines.render(after_prepass ? ip.p_count_equal : ip.p_count_greater));
   pass.SetBindGroup(0, frame);
   pass.SetBindGroup(1, light);
+  pass.SetBindGroup(3, ip.shadows);
   for (InstanceFamily* f : families) {
     if (f->count != 0) draw_buckets(pass, *f, 0, 1);
   }
   pass.End();
 }
 
-InstanceStats read_instance_stats(gpu::Device& device, const InstanceFamily& f) {
+namespace {
+
+InstanceStats read_stats(gpu::Device& device, const wgpu::Buffer& buffer) {
   constexpr uint64_t kAt = uint64_t{kDrawSlots} * 20;
   constexpr uint64_t kBytes = kStats * 4;
   wgpu::BufferDescriptor desc{};
@@ -441,7 +549,7 @@ InstanceStats read_instance_stats(gpu::Device& device, const InstanceFamily& f) 
   desc.usage = BU::MapRead | BU::CopyDst;
   wgpu::Buffer rb = device.device.CreateBuffer(&desc);
   wgpu::CommandEncoder encoder = device.device.CreateCommandEncoder();
-  encoder.CopyBufferToBuffer(f.args, kAt, rb, 0, kBytes);
+  encoder.CopyBufferToBuffer(buffer, kAt, rb, 0, kBytes);
   wgpu::CommandBuffer commands = encoder.Finish();
   device.queue.Submit(1, &commands);
   uint32_t v[kStats] = {};
@@ -457,6 +565,17 @@ InstanceStats read_instance_stats(gpu::Device& device, const InstanceFamily& f) 
   s.occluded = v[4];
   s.hidden = v[5];
   return s;
+}
+
+}  // namespace
+
+InstanceStats read_instance_stats(gpu::Device& device, const InstanceFamily& f) {
+  return read_stats(device, f.args);
+}
+
+InstanceStats read_caster_stats(gpu::Device& device, const InstanceFamily& f, int slot) {
+  if (slot < 0 || static_cast<size_t>(slot) >= f.casters.size()) return {};
+  return read_stats(device, f.casters[static_cast<size_t>(slot)].args);
 }
 
 }  // namespace ge::render
