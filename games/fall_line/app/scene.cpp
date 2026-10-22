@@ -8,75 +8,16 @@
 #include <algorithm>
 #include <cmath>
 
+#include "mountain/app/trees.hpp"
+
 namespace fall_line::app {
 
 namespace {
 
 namespace r = ge::render;
-using ge::mountain::mapgen::TreeKind;
 
 // A LOD's switch, px of the sphere's radius on screen.
-constexpr float kTreeLodPx = 14.0f;
 constexpr float kFigureLodPx = 10.0f;
-
-// The forest's meshes and their first material (a vertex's part adds 0 for the trunk, 1 for the
-// crown).
-enum ForestMesh : uint8_t { kConifer, kBroadleaf, kSnag };
-constexpr uint32_t kForestMaterial[] = {0, 2, 4};
-
-r::MeshData conifer(bool fine) {
-  r::MeshData m;
-  if (fine) {
-    r::add_cylinder(m, -0.05f, 0.2f, 0.07f, 0.05f, 6, 0);
-    r::add_cylinder(m, 0.12f, 0.66f, 1.0f, 0.38f, 9, 1);
-    r::add_cylinder(m, 0.46f, 1.0f, 0.72f, 0.0f, 9, 1);
-  } else {
-    r::add_cylinder(m, 0.12f, 1.0f, 1.0f, 0.0f, 5, 1);
-  }
-  return m;
-}
-
-r::MeshData broadleaf(bool fine) {
-  r::MeshData m;
-  const float centre[3] = {0, 0.62f, 0}, radii[3] = {1.0f, 0.4f, 1.0f};
-  if (fine) {
-    r::add_cylinder(m, -0.05f, 0.5f, 0.08f, 0.05f, 6, 0);
-    r::add_ellipsoid(m, centre, radii, 4, 7, 1);
-  } else {
-    r::add_ellipsoid(m, centre, radii, 2, 4, 1);
-  }
-  return m;
-}
-
-r::MeshData snag(bool fine) {
-  r::MeshData m;
-  r::add_cylinder(m, -0.05f, 1.0f, 0.08f, 0.03f, fine ? 6 : 3, 0);
-  return m;
-}
-
-bool broadleaved(TreeKind k) {
-  switch (k) {
-    case TreeKind::birch:
-    case TreeKind::aspen:
-    case TreeKind::rowan:
-    case TreeKind::alder:
-    case TreeKind::willow:
-    case TreeKind::beech:
-    case TreeKind::maple:
-    case TreeKind::ash:
-      return true;
-    default:
-      return false;
-  }
-}
-
-// A turn about +y as a quaternion (x, y, z, w).
-void yaw(float angle, float out[4]) {
-  out[0] = 0;
-  out[1] = std::sin(angle * 0.5f);
-  out[2] = 0;
-  out[3] = std::cos(angle * 0.5f);
-}
 
 // The jackets, racer by racer (linear rgb): red, blue, yellow, green, then again.
 constexpr float kJackets[][3] = {
@@ -84,45 +25,17 @@ constexpr float kJackets[][3] = {
 
 }  // namespace
 
-std::vector<r::MeshSource> forest_meshes() {
-  std::vector<r::MeshSource> out(3);
-  out[kConifer].lods = {{conifer(true), kTreeLodPx}, {conifer(false), 0}};
-  out[kBroadleaf].lods = {{broadleaf(true), kTreeLodPx}, {broadleaf(false), 0}};
-  out[kSnag].lods = {{snag(true), kTreeLodPx}, {snag(false), 0}};
-  return out;
-}
+std::vector<r::MeshSource> forest_meshes() { return ge::mountain::app::tree_meshes(); }
 
-std::vector<float> forest_materials() {
-  return {
-      0.07f,  0.045f, 0.03f,   // 0: a conifer's trunk
-      0.05f,  0.085f, 0.06f,   // 1: its crown
-      0.12f,  0.11f,  0.095f,  // 2: a broadleaf's trunk
-      0.095f, 0.08f,  0.065f,  // 3: its bare crown
-      0.10f,  0.09f,  0.08f,   // 4: a snag
-  };
-}
+std::vector<float> forest_materials() { return ge::mountain::app::tree_materials(); }
 
 std::vector<r::Instance> tree_instances(const ge::mountain::mapgen::Level& level) {
   std::vector<r::Instance> out;
   out.reserve(level.trees.size());
   for (size_t i = 0; i < level.trees.size(); ++i) {
-    const auto& t = level.trees[i];
-    r::Instance in;
-    in.position[0] = t.x;
-    in.position[1] = t.y;
-    in.position[2] = t.z;
     // A turn of its own, so the faceted crowns do not all face one way.
-    yaw(static_cast<float>(std::fmod(static_cast<double>(i) * 2.399963, 6.283185)), in.rotation);
-    const uint32_t mesh = t.kind == TreeKind::snag ? kSnag
-                          : broadleaved(t.kind)    ? kBroadleaf
-                                                   : kConifer;
-    const float crown = mesh == kSnag ? static_cast<float>(t.radius / 0.08)
-                                      : static_cast<float>(std::max(t.crown, 0.3));
-    in.scale[0] = in.scale[2] = crown;
-    in.scale[1] = static_cast<float>(std::max(t.height, 0.5));
-    in.mesh = mesh;
-    in.material = kForestMaterial[mesh];
-    out.push_back(in);
+    const auto turn = static_cast<float>(std::fmod(static_cast<double>(i) * 2.399963, 6.283185));
+    out.push_back(ge::mountain::app::tree_instance(level.trees[i], turn));
   }
   return out;
 }
