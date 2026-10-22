@@ -48,8 +48,9 @@ picture's band says what it shows and what to look for, so check exactly that. T
 `bench` lab on `PRESET=release`, because a debug build times the sanitizers.
 
 **What a PR owes:** for a change in a lab's subject, the lab's output before and after (the
-`--compare` table, the diff table and the sheets of the pictures that moved) in the PR body, plus `make labs-smoke`
-green. If the change moves a lab's digest on purpose, run `make labs-digests`, commit
+`--compare` table, the diff table and the sheets of the pictures that moved) in the PR body, plus
+`make labs-smoke` green. If the change moves a lab's digest on purpose, run `make ge ARGS="digest <id> --write"`
+(that lab's row only; `make labs-digests` rewrites every row), commit
 `tests/labs_digests.txt`, and say in the PR which lab moved and why.
 
 ## Write one
@@ -75,7 +76,7 @@ green. If the change moves a lab's digest on purpose, run `make labs-digests`, c
    - `lab.fail(what, next action)` when the lab sees something wrong. Write it in the
      diagnostics shape: what failed, then the test to run or the skill to load.
 4. **Caption every picture** (below).
-5. **Run it**, look at its contact sheet, run `make labs-smoke`, then `make labs-digests`
+5. **Run it**, look at its contact sheet, run `make labs-smoke`, then `make ge ARGS="digest <id> --write"`
    for the new row, and `make index` (a lab file carries a `ge:` block like any source).
 6. Add its row to `docs/labs.md`'s table, and to its milestone's **Labs** cell in
    `docs/goals.md` if it is one a milestone owes.
@@ -101,7 +102,7 @@ result against `tests/labs_digests.txt`:
 - **Different digests between the two runs**: the lab or the code under it keeps state
   between runs or draws from an unseeded source. Load `determinism`.
 - **Same twice but not the baseline, on every row**: the output moved. If you meant it,
-  run `make labs-digests`. If you did not, run `--tag` on main and `--compare` on your
+  run `make ge ARGS="digest <id> --write"`. If you did not, run `--tag` on main and `--compare` on your
   branch to see which metric moved.
 - **Not the baseline on ONE row**: a compiler or platform difference reached the output.
   Treat it as a cross-platform determinism failure on that row (`determinism`).

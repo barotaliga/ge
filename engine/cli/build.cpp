@@ -254,8 +254,13 @@ std::vector<Finding> test_findings(const fs::path& repo, std::string_view output
       const std::string where = where_in(repo, m.str(1), m.str(2));
       out.push_back({Severity::error, m.str(3), where, "fix the code or the test at " + where});
     } else if (std::regex_match(line, m, kLabFail)) {
+      const bool baseline = m.str(2).find("the baseline") != std::string::npos ||
+                            m.str(2).find("not in ") != std::string::npos;
       out.push_back({Severity::error, m.str(2), "lab " + m.str(1),
-                     "run it alone: ge lab " + m.str(1) + " --smoke"});
+                     baseline ? "ge digest " + m.str(1) +
+                                    " checks it alone; if the move is meant, ge digest " +
+                                    m.str(1) + " --write and say why in the PR"
+                              : "run it alone: ge lab " + m.str(1) + " --smoke"});
     }
   }
   return out;

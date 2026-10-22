@@ -57,11 +57,14 @@ inline double hypot(double a, double b) {
   constexpr double inf = std::numeric_limits<double>::infinity();
   if (x == inf || y == inf) return inf;
   if (x != x || y != y) return std::numeric_limits<double>::quiet_NaN();
-  const double m = x > y ? x : y;
-  if (m == 0.0) return 0.0;
-  const double p = x / m;
-  const double q = y / m;
-  return std::sqrt(p * p + q * q) * m;
+  // The larger over itself is exactly 1, so only the smaller is divided: the same bits.
+  if (x > y) {
+    const double q = y / x;
+    return std::sqrt(1.0 + q * q) * x;
+  }
+  if (y == 0.0) return 0.0;
+  const double p = x / y;
+  return std::sqrt(p * p + 1.0) * y;
 }
 
 // hypot of three, by the same recipe: Kahan compensation carried into c.

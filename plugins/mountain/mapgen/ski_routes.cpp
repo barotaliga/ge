@@ -14,7 +14,9 @@
 #include <limits>
 #include <map>
 #include <string>
+#include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
@@ -217,19 +219,35 @@ constexpr double kSway = 0.4;
 // A line THREADED through the trunks round it: each station laid up to `kAcross` m across it, a
 // metre at most from the last, to stand as clear of the bark as it can (a Viterbi walk over the
 // offsets), the line's own middle and a steady line costing a little. Both ends stay pinned.
-std::vector<Plan> thread_trees(std::span<const TrackPoint> points, std::span<const TreeDef> trees) {
-  constexpr double kG = 8;
-  std::map<std::pair<int, int>, std::vector<size_t>> grid;
+// The trunks by `kTreeCell`-m square, each square's in the trees' order: filed once a map, and
+// read by every line threaded through them.
+constexpr double kTreeCell = 8;
+using TreeGrid = std::unordered_map<int64_t, std::vector<size_t>>;
+
+int64_t tree_square(int i, int j) {
+  return int64_t(uint64_t(uint32_t(i)) << 32 | uint64_t(uint32_t(j)));
+}
+
+TreeGrid tree_grid(std::span<const TreeDef> trees) {
+  TreeGrid grid;
   for (size_t t = 0; t < trees.size(); t++) {
-    grid[{int(std::floor(trees[t].x / kG)), int(std::floor(trees[t].z / kG))}].push_back(t);
+    grid[tree_square(int(std::floor(trees[t].x / kTreeCell)),
+                     int(std::floor(trees[t].z / kTreeCell)))]
+        .push_back(t);
   }
+  return grid;
+}
+
+std::vector<Plan> thread_trees(std::span<const TrackPoint> points, std::span<const TreeDef> trees,
+                               const TreeGrid& grid) {
+  constexpr double kG = kTreeCell;
   const auto bark = [&](double x, double z) {
     double cost = 0;
     const int i = int(std::floor(x / kG));
     const int j = int(std::floor(z / kG));
     for (int dj = -1; dj <= 1; dj++) {
       for (int di = -1; di <= 1; di++) {
-        const auto it = grid.find({i + di, j + dj});
+        const auto it = grid.find(tree_square(i + di, j + dj));
         if (it == grid.end()) continue;
         for (const size_t k : it->second) {
           const TreeDef& t = trees[k];
@@ -815,30 +833,36 @@ std::vector<SkiRoute> lay_ski_routes(const RouteGround& area, bool wild) {
     });
     if (apart) kept.push_back(f);
   }
-  std::vector<SkiRoute> out;
-  for (Found* f : kept) {
-    SkiRoute route = f->route;
-    if (wild) {
-      // A wild line THREADS the woods: laid across its corridor to stand clear of the trunks where
-      // it can, kept where it still holds.
-      const std::vector<Plan> raw = thread_trees(route.points, area.trees);
-      const std::vector<TrackPoint>& was = route.points;
-      std::vector<TrackPoint> points = stations_of(raw, 0);
-      on_snow(points, ground, [&](double x, double z) {
-        double width = was.front().width;
-        double d = kInf;
-        for (const TrackPoint& p : was) {
-          const double e = (p.x - x) * (p.x - x) + (p.z - z) * (p.z - z);
-          if (e < d) {
-            d = e;
-            width = p.width;
+  // A wild line THREADS the woods: laid across its corridor to stand clear of the trunks where
+  // it can, kept where it still holds. Each line is threaded on its own, so side by side.
+  std::vector<std::optional<Found>> threaded(kept.size());
+  if (wild) {
+    const TreeGrid grid = tree_grid(area.trees);
+    ge::core::parallel_bands(kept.size(), [&](size_t lo, size_t hi) {
+      for (size_t q = lo; q < hi; q++) {
+        const Found* f = kept[q];
+        const std::vector<Plan> raw = thread_trees(f->route.points, area.trees, grid);
+        const std::vector<TrackPoint>& was = f->route.points;
+        std::vector<TrackPoint> points = stations_of(raw, 0);
+        on_snow(points, ground, [&](double x, double z) {
+          double width = was.front().width;
+          double d = kInf;
+          for (const TrackPoint& p : was) {
+            const double e = (p.x - x) * (p.x - x) + (p.z - z) * (p.z - z);
+            if (e < d) {
+              d = e;
+              width = p.width;
+            }
           }
-        }
-        return width;
-      });
-      std::optional<Found> threaded = judge(std::move(points), f->steps, f->top, f->end);
-      if (threaded) route = std::move(threaded->route);
-    }
+          return width;
+        });
+        threaded[q] = judge(std::move(points), f->steps, f->top, f->end);
+      }
+    });
+  }
+  std::vector<SkiRoute> out;
+  for (size_t q = 0; q < kept.size(); q++) {
+    SkiRoute route = threaded[q] ? std::move(threaded[q]->route) : kept[q]->route;
     route.id = "SR" + std::to_string(out.size() + 1);
     out.push_back(std::move(route));
   }

@@ -96,6 +96,7 @@ make lab LAB=level ARGS=--compare=before      # every metric beside the kept run
 make lab LAB=world ARGS=--diff=before         # run nothing: the last run's pictures against the kept run's
 make labs-smoke                               # every lab at its smoke flags, twice, digests checked
 make labs-digests                             # rewrite tests/labs_digests.txt (a reviewed change)
+make ge ARGS="digest level --write"           # rewrite one lab's row only; no --write: just check it
 build/debug/labs --json                       # the list as one JSON array (what `ge lab` reads)
 make lab LAB=trace ARGS="--log=course=debug"  # any lab: the log spec's lines in previews/<id>/log.txt
 ```
@@ -200,7 +201,10 @@ fails when it is off. Three checks use it:
   `--shard=I/N`) run it on every CI row, so a lab whose
   output differs between compilers fails on the row that differs.
 - A lab that has to move (its drawing changed, or the code it runs changed on purpose)
-  rewrites the baseline with `make labs-digests`, and the PR says why.
+  rewrites its row of the baseline with `ge digest <id> --write` (`make ge ARGS=...` here; the
+  runner's `--write-digests` on one lab or a shard keeps the other rows), and the PR says why.
+  A game repo keeps the same baseline once `ge digest --write` writes it, and its
+  `labs_smoke` case checks it from then on.
 
 That is why lab code follows the simulation's rules even though it is tooling: no `<cmath>`
 transcendental (`make libm-check` scans `engine/lab`; use `core/libm`), integer pixels from
