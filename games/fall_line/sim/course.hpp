@@ -34,7 +34,8 @@ inline constexpr double kResetPast = 4;
 // The run's own resets: down this long after a wipeout, or going nowhere this long, s.
 inline constexpr double kDownReset = 1.5;
 inline constexpr double kStuckReset = 8;
-// Under this speed a racer on his skis is going nowhere, m/s.
+// Under this speed a racer on his skis is going nowhere, m/s (on the free ride, only while he
+// pushes: one standing still at a viewpoint is never moved).
 inline constexpr double kStuckSpeed = 0.5;
 
 // Whether a plan move from (x0, z0) to (x1, z1) crossed the gate's line in its facing direction:
