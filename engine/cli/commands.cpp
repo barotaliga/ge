@@ -69,7 +69,9 @@ constexpr FlagSpec kPrecheckFlags[] = {
     kEngine,
     kRepo};
 constexpr FlagSpec kCiFlags[] = {
-    {"log", "<file>", "read this saved job log instead of asking GitHub"}, kRepo};
+    {"log", "<file>", "read this saved job log instead of asking GitHub"},
+    {"merge", "", "squash-merge the pull request when every check passed and it merges cleanly"},
+    kRepo};
 constexpr FlagSpec kDigestFlags[] = {
     {"write", "", "rewrite the lab's row of tests/labs_digests.txt (every row with no lab)"},
     kPreset,
@@ -212,7 +214,7 @@ const CommandSpec kCommands[] = {
      kPrecheckFlags, "ge precheck --preset=release", "commit"},
     {"ci", "[<pr>]", 0, 1, "build",
      "a pull request's state: whether it conflicts with its base, and each failed job's log "
-     "read back as findings (through gh, or a saved log)",
+     "read back as findings (through gh, or a saved log); --merge squash-merges it once green",
      kCiFlags, "ge ci 12", "commit"},
     {"digest", "[<lab>]", 0, 1, "build",
      "a lab (or every lab) at its smoke flags, twice: each digest beside the committed baseline; "

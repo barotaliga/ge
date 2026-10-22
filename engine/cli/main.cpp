@@ -184,8 +184,8 @@ Outcome run(const Args& a) {
                                               : std::vector<std::string>{preset});
   }
   if (name == "ci") {
-    return run_ci(fs::absolute(repo_of(a)), a.words.empty() ? "" : a.words[0],
-                  flag_value(a, "log"));
+    return run_ci(fs::absolute(repo_of(a)), a.words.empty() ? "" : a.words[0], flag_value(a, "log"),
+                  has_flag(a, "merge"));
   }
   if (name == "digest") {
     return run_digest(build_options(a), a.words.empty() ? "" : a.words[0], has_flag(a, "write"));

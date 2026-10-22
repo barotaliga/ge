@@ -6,6 +6,7 @@
 // ge:test tests/cli_ci_test.cpp
 #include "cli/ci.hpp"
 
+#include <algorithm>
 #include <regex>
 
 #include "cli/json.hpp"
@@ -138,8 +139,72 @@ Outcome run_precheck(const BuildOptions& o, const std::vector<std::string>& pres
   return out;
 }
 
-Outcome run_ci(const fs::path& repo, const std::string& pr, const std::string& log_file) {
+std::vector<Finding> blocked_findings(const std::string& base, std::string_view rules,
+                                      const std::vector<std::string>& passed) {
+  std::vector<Finding> out;
+  play::FlatJson m;
+  std::string why;
+  const size_t open = rules.find('[');
+  if (open == std::string_view::npos ||
+      !play::read_flat("{\"rules\":" + std::string(rules.substr(open)) + "}", m, why, true)) {
+    out.push_back({Severity::error,
+                   "GitHub blocks the merge, and the rules on " + base + " could not be read", "",
+                   "open the pull request's page to see which rule blocks it"});
+    return out;
+  }
+  bool named = false;
+  for (int i = 0; m.contains("rules." + std::to_string(i) + ".type"); i++) {
+    const std::string k = "rules." + std::to_string(i) + ".";
+    const std::string type = text_of(m, k + "type");
+    if (type == "pull_request") {
+      const std::string n = text_of(m, k + "parameters.required_approving_review_count");
+      if (!n.empty() && n != "0") {
+        out.push_back({Severity::error,
+                       std::string("the rules on ")
+                           .append(base)
+                           .append(" require ")
+                           .append(n)
+                           .append(" approving review(s)"),
+                       "", "ask the repo's owner for a review; the checks have passed"});
+        named = true;
+      }
+      continue;
+    }
+    if (type != "required_status_checks") continue;
+    const std::string checks = k + "parameters.required_status_checks.";
+    for (int j = 0; m.contains(checks + std::to_string(j) + ".context"); j++) {
+      const std::string name = text_of(m, checks + std::to_string(j) + ".context");
+      if (std::find(passed.begin(), passed.end(), name) != passed.end()) continue;
+      out.push_back(
+          {Severity::error,
+           std::string("the rules on ")
+               .append(base)
+               .append(" require the check \"")
+               .append(name)
+               .append("\", which never passed on this head"),
+           "",
+           "if no workflow runs a check by that name on a pull request, the repo's owner removes "
+           "it from the ruleset (Settings, Rules); otherwise push to run it"});
+      named = true;
+    }
+  }
+  if (!named)
+    out.push_back({Severity::error, "GitHub blocks the merge for a reason its rules do not name",
+                   "",
+                   "open the pull request's page (an organisation's rule, or a conversation to "
+                   "resolve)"});
+  return out;
+}
+
+Outcome run_ci(const fs::path& repo, const std::string& pr, const std::string& log_file,
+               bool merge) {
   Outcome out;
+  if (merge && (pr.empty() || !log_file.empty())) {
+    out.findings.push_back(
+        {Severity::error, "--merge needs a pull request's number", "", "ge ci <pr> --merge"});
+    out.exit = 2;
+    return out;
+  }
   if (!log_file.empty()) {
     const auto text = read_text(fs::absolute(log_file));
     if (!text) {
@@ -184,7 +249,7 @@ Outcome run_ci(const fs::path& repo, const std::string& pr, const std::string& l
   }
   const std::string api = "repos/" + slug.str(1) + "/" + slug.str(2);
   // The commit the checks ran on: the pull request's head, or this checkout's.
-  std::string sha, mergeable;
+  std::string sha, mergeable, base;
   if (!pr.empty()) {
     // The head, then whether it merges: GitHub's mergeable (null while it is still working it
     // out), its mergeable_state ("dirty" is a conflict), open or closed, merged, and the base.
@@ -203,7 +268,7 @@ Outcome run_ci(const fs::path& repo, const std::string& pr, const std::string& l
                   "rerun; if it persists, open the pull request's page");
     sha = w[0];
     mergeable = w[2];
-    const std::string& base = w[5];
+    base = w[5];
     if (w[4] == "true") {
       out.findings.push_back({Severity::note, "pull request " + pr + " is merged", "",
                               "restart the branch from " + base + " for the next change"});
@@ -237,7 +302,7 @@ Outcome run_ci(const fs::path& repo, const std::string& pr, const std::string& l
     return fail("gh could not list the checks on " + sha + ": " + first_line(runs.output),
                 "push the branch (its checks run on the pushed commit), or `gh auth login`");
   }
-  std::vector<std::string> failed, pending, rows;
+  std::vector<std::string> failed, pending, passed, rows;
   int total = 0;
   for (int i = 0; m.contains("check_runs." + std::to_string(i) + ".id"); i++, total++) {
     const std::string k = "check_runs." + std::to_string(i) + ".";
@@ -253,6 +318,8 @@ Outcome run_ci(const fs::path& repo, const std::string& pr, const std::string& l
       pending.push_back(name);
       continue;
     }
+    if (conclusion == "success" || conclusion == "skipped" || conclusion == "neutral")
+      passed.push_back(name);
     if (conclusion != "failure" && conclusion != "timed_out") continue;
     failed.push_back(name);
     // A GitHub Actions check run's id is its job's id, so its log is one call away.
@@ -265,6 +332,12 @@ Outcome run_ci(const fs::path& repo, const std::string& pr, const std::string& l
       continue;
     }
     for (Finding& f : ci_log_findings(repo, name, job.output)) out.findings.push_back(std::move(f));
+  }
+  if (mergeable == "blocked" && failed.empty() && pending.empty()) {
+    // Why, off the base's rules (the token may not read them: then the page is the answer).
+    const Logged rules = run_to_log("gh api " + api + "/rules/branches/" + base, log);
+    for (Finding& f : blocked_findings(base, rules.code == 0 ? rules.output : "", passed))
+      out.findings.push_back(std::move(f));
   }
   if (!pending.empty()) {
     std::string names;
@@ -283,6 +356,38 @@ Outcome run_ci(const fs::path& repo, const std::string& pr, const std::string& l
                 : mergeable == "clean" ? "every check passed and it merges cleanly: merge it"
                                        : "every check passed";
   out.next = pending.empty() ? "" : "ge ci again in 15 minutes, until every check is green";
+  if (!merge) return out;
+  // --merge: squash only what was just read as ready (every check done, none failed, GitHub's
+  // state clean) and only at the head those checks ran on, so a push since is never merged.
+  const bool ready = total > 0 && failed.empty() && pending.empty() &&
+                     (mergeable == "clean" || mergeable == "has_hooks");
+  if (!ready) {
+    out.findings.push_back(
+        {Severity::note,
+         "not merged: " + std::string(!failed.empty()    ? "a check failed"
+                                      : !pending.empty() ? "checks still running"
+                                      : total == 0       ? "no checks ran"
+                                                         : "GitHub's merge state is " +
+                                                         (mergeable.empty() ? std::string("unknown")
+                                                                            : mergeable)),
+         "", "fix what the findings name, then ge ci " + pr + " --merge again"});
+    return out;
+  }
+  const Logged done = run_to_log("gh api -X PUT " + api + "/pulls/" + pr +
+                                     "/merge -f merge_method=squash -f sha=" + sha + " --jq .sha",
+                                 log);
+  if (done.code != 0) {
+    return fail("GitHub refused to merge pull request " + pr + ": " + first_line(done.output),
+                "ge ci " + pr + " to see why (a push since, or a rule on the base)");
+  }
+  const std::string merged = first_line(done.output);
+  out.text += "  merged: squashed as " + merged.substr(0, 12) + "\n";
+  out.result = json_obj({{"sha", json_str(sha)},
+                         {"mergeable", json_str(mergeable)},
+                         {"merged", json_str(merged)},
+                         {"checks", json_arr(rows)}});
+  out.summary = "pull request " + pr + " squash-merged";
+  out.next = "restart the branch from its base for the next change";
   return out;
 }
 
