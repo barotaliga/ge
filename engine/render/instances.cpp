@@ -23,7 +23,7 @@ using BU = wgpu::BufferUsage;
 
 constexpr uint32_t kStreams = 5;                  // instances_common.wgsl's streams
 constexpr uint32_t kDrawSlots = 2 * kMaxBuckets;  // instances_cull.wgsl's Counters.draws
-constexpr uint32_t kStats = 8;
+constexpr uint64_t kStats = 8;
 constexpr uint64_t kCountersBytes = uint64_t{kDrawSlots} * 20 + kStats * 4;
 constexpr uint32_t kBucketShift = 20;  // the base vertex's bucket bits
 

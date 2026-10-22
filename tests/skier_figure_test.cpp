@@ -8,7 +8,6 @@
 // ge:skill skier testing
 #include <array>
 #include <cmath>
-#include <cstring>
 
 #include "check.hpp"
 #include "skier/app/figure.hpp"
@@ -105,5 +104,13 @@ TEST(same_state_same_pose) {
   s.edge = 0.3;
   s.lean = 0.2;
   const Pose a = pose(s, st.world), b = pose(s, st.world);
-  CHECK(std::memcmp(a.data(), b.data(), sizeof(sk::PiecePose) * a.size()) == 0);
+  for (size_t k = 0; k < a.size(); ++k) {
+    const double av[] = {a[k].centre.x,   a[k].centre.y,   a[k].centre.z,   a[k].rotation.x,
+                         a[k].rotation.y, a[k].rotation.z, a[k].rotation.w, a[k].size[0],
+                         a[k].size[1],    a[k].size[2]};
+    const double bv[] = {b[k].centre.x,   b[k].centre.y,   b[k].centre.z,   b[k].rotation.x,
+                         b[k].rotation.y, b[k].rotation.z, b[k].rotation.w, b[k].size[0],
+                         b[k].size[1],    b[k].size[2]};
+    for (size_t i = 0; i < 10; ++i) CHECK_BITS(av[i], bv[i]);
+  }
 }

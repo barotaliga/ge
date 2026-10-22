@@ -23,7 +23,7 @@ int inward_faces(const r::MeshData& m, const float mid[3]) {
     for (int k = 0; k < 3; ++k) {
       for (int a = 0; a < 3; ++a) c[a] += m.positions[m.indices[t + k] * 3 + a] / 3.0f;
     }
-    const float* n = &m.normals[m.indices[t] * 3];
+    const float* n = &m.normals[size_t{m.indices[t]} * 3];
     float d = 0;
     for (int a = 0; a < 3; ++a) d += (c[a] - mid[a]) * n[a];
     if (!(d > 0)) ++bad;

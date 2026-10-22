@@ -21,7 +21,7 @@ constexpr float kFigureLodPx = 10.0f;
 
 // The forest's meshes and their first material (a vertex's part adds 0 for the trunk, 1 for the
 // crown).
-enum ForestMesh : uint32_t { kConifer, kBroadleaf, kSnag };
+enum ForestMesh : uint8_t { kConifer, kBroadleaf, kSnag };
 constexpr uint32_t kForestMaterial[] = {0, 2, 4};
 
 r::MeshData conifer(bool fine) {
