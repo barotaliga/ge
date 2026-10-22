@@ -59,6 +59,8 @@ engine/net/lockstep       turns, input delay, desync digests, rollback (M17g)
 engine/net/voice          Opus frames, the jitter buffer, voice routing (M17h)
 engine/net/session        lobby, teams, chat, private messages, the player list (M17d)
 engine/net/reach          UPnP, NAT-PMP/PCP, STUN, hole punching, relay, LAN discovery (M17e)
+engine/net/guard          input checks, interest, replay audits, cheat flags, reports (M17l)
+engine/net/stress         load, soak, chaos scripts, ramps to the breaking point, fuzzing (M17m)
         │
 engine/net  node          connections: handshake, keepalive, timeout, peers up to 32
             channel       unreliable, sequenced, reliable-ordered messages; acks; resends
@@ -151,6 +153,56 @@ as a remote client (its inputs up the link, the snapshots down), so the predicti
 corrections and the bot's own decisions (`ge::ai::Why` records, M16) are measured under each
 preset, headless and deterministic.
 
+## Anti-cheat (M17l)
+
+The engine's answer to cheating is that a client is never trusted with anything it could
+lie about, and every claim it does make is checked against what the deterministic step allows.
+It is built from the layers above, not bolted on:
+
+- **The server's word.** In a server game a client sends inputs and the host steps the world
+  (M17f); a client claims only what its game names (in the free ride, nothing but its controls).
+  A speed hack or a teleport on the client changes only its own prediction, which the next
+  snapshot corrects.
+- **Inputs checked on arrival.** Every axis in range and on the control tape's grid, at most one
+  input a step, none from a step the host has not reached, and a client sending faster than
+  its tick is rate-limited and then dropped (the flood guards of M17i).
+- **Nothing hidden is sent.** Interest management (M17f) decides what each client receives, so
+  a wall hack or a map hack has nothing to read: what a player must not see never leaves the
+  host.
+- **The same step everywhere.** In lockstep and peer games the step's digest is the check
+  (M17g): a peer whose state differs is out on the step it differs. Where peers own their own
+  bodies, a position or a speed beyond what the step can reach from the last one is refused.
+- **Replays as audits.** A score, a ghost or a record is accepted only after the server replays
+  its input tape and reaches the same digest, which is what the engine's determinism (G1)
+  buys: a forged score cannot also forge the run that would have earned it.
+- **Bot-likeness.** M16's humanness numbers (reaction times, input noise, the shape of a turn)
+  score how machine-like a player's inputs are; a flag goes for review, not an automatic ban.
+- **Integrity and identity.** Packets are sealed with AEAD under the connect token's keys
+  (M17i), so a forged or replayed packet is dropped; reports and bans are kept on the account
+  in `ge-service` (M17j), not on a machine id.
+
+Not in scope, by design: kernel drivers, scanning the player's machine, or obfuscation. They
+are an arms race the engine does not enter, and the checks above hold without them.
+
+## Pressure tests (M17m)
+
+The simulated network runs on virtual time, so an hour of play takes seconds and every run is
+seeded and replayable. `engine/net/stress` and `ge net stress` push it until something breaks:
+
+- **Load.** 32 peers in a session, many sessions in one host process, each on a traffic mix.
+- **Soak.** Hours of virtual play, held to memory and queues staying flat, sequence numbers
+  wrapping cleanly and every reliable message delivered.
+- **Chaos.** A script changes the links over time: a link that flaps, a partition and its
+  healing, the host lost mid-session, a NAT that rebinds a client's port, clock skew, a burst of
+  loss, the bandwidth collapsing. Each ends with every peer reconnected or cleanly timed out.
+- **Ramps.** One knob (latency, loss, peers, message rate, bandwidth) is raised step by step
+  until a bound breaks (delivery late, a queue growing, a peer timing out), and the report
+  names the value where it broke for each traffic mix.
+- **Fuzzing.** The packet parser is fed random and mutated datagrams under the sanitizers;
+  every one is refused or read, never a crash or an overread.
+- **Bots at scale.** A game's bots play as clients across many simulated servers, so the
+  game's own traffic is the load, not only fake traffic.
+
 ## The tools
 
 | Tool | Lands | Answers |
@@ -165,6 +217,10 @@ preset, headless and deterministic.
 | the `net-session` lab | M17d | 32 peers join a lobby, chat to all, to a team and privately, one is kicked, one reconnects |
 | the `voice` lab | M17h | A voice through each preset, metered against the clean one, the WAV attached |
 | the `accounts` lab | M17j | Sign-ups, logins (a wrong password refused, a brute force throttled), friend requests, presence and an invite, against the service on the simulated network |
+| the `cheats` lab | M17l | Each scripted cheat (speed hack, teleport, input flood, off-grid or future inputs, forged and replayed packets, fishing for hidden state, a planted desync, a forged score or ghost) caught or refused; honest bots under every preset raising no flag |
+| `ge net stress` and the `net-stress` lab | M17m | Load and soak runs, ramps that name each knob's breaking point for a traffic mix, the session's memory and queues over time, charted |
+| the `net-chaos` lab | M17m | Each chaos script over a session: who disconnected, who came back, what was lost and how late |
+| the `net-fuzz` lab | M17m | The parser against random and mutated datagrams: how many read, how many refused, none crashed |
 | the `net-play` lab | M17k | The game's bots as remote players under each preset: the corrections, the divergence, the bandwidth |
 
 ## Fall Line
