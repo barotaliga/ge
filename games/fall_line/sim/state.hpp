@@ -9,7 +9,7 @@
 //
 // ge:summary The state of a run: GameState, Racer, Progress, Controls, the events
 // ge:keywords game-state state racer progress controls events event-kind gate missed finish
-// ge:keywords reset wipeout landing takeoff field clock mode free-ride onto arrived skied
+// ge:keywords reset wipeout landing takeoff field clock wanted mode free-ride onto arrived skied
 // ge:skill sim
 // ge:test tests/fall_line_sim_test.cpp
 #pragma once
@@ -22,6 +22,8 @@
 #include "skier/skier.hpp"
 #include "skier/skis.hpp"
 #include "skier/trees.hpp"
+
+#include "fall_line/sim/wanted_state.hpp"
 
 namespace fall_line::sim {
 
@@ -47,6 +49,7 @@ enum class EventKind : uint8_t {
   glance,    // brushed a trunk and kept going
   reset,     // stood back on the piste (`gate` the gate owed)
   shoulder,  // two racers met (`racer` and `gate` the two, `value` the closing speed)
+  wanted,    // the wanted level moved (`gate` the stars after, `value` its WantedChange)
   onto,      // a free ride came onto a run (`gate` the run's index in the ski area)
   arrived,   // a free ride reached a run's foot (`gate` the run, `value` the clock, s)
 };
@@ -115,6 +118,7 @@ struct GameState {
   ge::skier::SkiSpec spec;
   std::vector<Racer> racers;      // the player's first; sized at create
   std::vector<GameEvent> events;  // this step's, cleared at its start
+  WantedState wanted;             // the hunt for the player (wanted.hpp); inactive until raised
   double t = 0;                   // s since the start
   int64_t steps = 0;
 

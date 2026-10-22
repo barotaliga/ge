@@ -1,7 +1,7 @@
 // The run's create and its step (game.hpp has the order).
 //
 // ge:summary create_game, step and state_hash's bodies
-// ge:keywords game create_game step state_hash log channel course skier field log_step
+// ge:keywords game create_game step state_hash log channel course skier field log_step wanted
 // ge:skill sim
 // ge:test tests/fall_line_sim_test.cpp
 #include "fall_line/sim/game.hpp"
@@ -15,6 +15,7 @@
 #include "fall_line/sim/course.hpp"
 #include "fall_line/sim/field.hpp"
 #include "fall_line/sim/free.hpp"
+#include "fall_line/sim/wanted.hpp"
 #include "mountain/mapgen/generate.hpp"
 #include "skier/skier.hpp"
 
@@ -26,20 +27,25 @@ namespace out = ge::core::output;
 
 namespace {
 
-// THE RUN'S LOG (docs/debugging.md): this step's events on three channels (`course`: gates,
+// THE RUN'S LOG (docs/debugging.md): this step's events on four channels (`course`: gates,
 // misses, the finish, resets; `skier`: flights, landings, wipeouts, glances; `field`: racers
-// meeting) at debug, and every racer's state each step on `skier` at trace. Off by default: a
-// dropped line costs a table read and formats nothing.
+// meeting; `wanted`: the stars, seen or searching, the arrest) at debug, and every racer's state
+// each step on `skier` at trace. Off by default: a dropped line costs a table read and formats
+// nothing.
 void log_step(const GameState& state) {
   static const out::Channel kCourse = out::channel("course");
   static const out::Channel kSkier = out::channel("skier");
   static const out::Channel kField = out::channel("field");
+  static const out::Channel kWanted = out::channel("wanted");
   const auto f = [](double v, int d) { return ge::core::num::to_fixed(v, d); };
   for (const GameEvent& e : state.events) {
     const bool course = e.kind == EventKind::gate || e.kind == EventKind::missed ||
                         e.kind == EventKind::finish || e.kind == EventKind::reset ||
                         e.kind == EventKind::onto || e.kind == EventKind::arrived;
-    const out::Channel ch = e.kind == EventKind::shoulder ? kField : course ? kCourse : kSkier;
+    const out::Channel ch = e.kind == EventKind::shoulder ? kField
+                            : e.kind == EventKind::wanted ? kWanted
+                            : course                      ? kCourse
+                                                          : kSkier;
     if (!out::enabled(ch, out::Level::debug)) continue;
     const sk::SkierState& s = state.racers[static_cast<size_t>(e.racer)].skier;
     std::string line = "racer " + std::to_string(e.racer) + " ";
@@ -69,6 +75,10 @@ void log_step(const GameState& state) {
         break;
       case EventKind::takeoff:
         line += " owing gate " + std::to_string(e.gate);
+        break;
+      case EventKind::wanted:
+        line += " " + std::string(wanted_change_name(wanted_change(e))) + ", " +
+                std::to_string(e.gate) + " stars";
         break;
       case EventKind::onto:
         line += " run " + std::to_string(e.gate);
@@ -122,6 +132,8 @@ const char* event_name(EventKind kind) {
       return "reset";
     case EventKind::shoulder:
       return "shoulder";
+    case EventKind::wanted:
+      return "wanted";
     case EventKind::onto:
       return "onto";
     case EventKind::arrived:
@@ -150,6 +162,7 @@ GameState create_game_on(std::shared_ptr<const mg::Level> level, int32_t racers)
   const int32_t most = slots < 1 ? 1 : slots;
   state.racers.resize(static_cast<size_t>(racers > most ? most : racers < 1 ? 1 : racers));
   state.events.reserve(kEventsReserve);
+  state.wanted.pursuers.reserve(wanted::kMaxPursuers);
   const std::vector<Rider> field =
       deal_field(*state.level, static_cast<int32_t>(state.racers.size()));
   for (int32_t i = 0; i < static_cast<int32_t>(state.racers.size()); i++) {
@@ -197,6 +210,7 @@ void step(GameState& state, std::span<const Controls> controls) {
     }
   }
   meet_racers(state);
+  step_wanted(state);
   log_step(state);
   state.steps++;
   state.t = static_cast<double>(state.steps) * kDt;
@@ -234,7 +248,7 @@ uint64_t state_hash(const GameState& state, uint64_t h) {
     mix(f.arrived ? 1 : 0);
     mix(f.arrived_at);
   }
-  return h;
+  return wanted_hash(state.wanted, h);
 }
 
 }  // namespace fall_line::sim
