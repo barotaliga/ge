@@ -32,6 +32,30 @@ TEST(num_semantics_match_golden) {
   }
 }
 
+// The shortcuts in to_int32 and mod give the long way's word and bits: the remainder by 2^32 of
+// a value past int32 but within int64, and fmod of a dividend already inside the divisor.
+TEST(num_shortcuts_match_the_long_way) {
+  namespace num = ge::core::num;
+  const auto wrap = [](double x) {
+    double m = std::fmod(std::trunc(x), 4294967296.0);
+    if (m < 0) m += 4294967296.0;
+    return static_cast<uint32_t>(m);
+  };
+  uint64_t h = 0x9e3779b97f4a7c15ull;
+  for (int i = 0; i < 20000; i++) {
+    h = h * 6364136223846793005ull + 1442695040888963407ull;
+    const double u = double(h >> 11) / 9007199254740992.0;  // [0, 1)
+    const double big = (u - 0.5) * std::ldexp(1.0, 2 + i % 62);
+    CHECK(static_cast<uint32_t>(num::to_int32(big)) == wrap(big));
+    const double b = (i % 2 ? 1 : -1) * (0.001 + u * 7);
+    const double a = (u - 0.5) * 2 * std::fabs(b) * (i % 3 ? 0.999 : 1.5);
+    CHECK_BITS_ANY_NAN(num::mod(a, b), std::fmod(a, b));
+  }
+  CHECK(num::to_int32(9223372036854775807.0) == static_cast<int32_t>(wrap(9223372036854775807.0)));
+  CHECK(num::to_int32(-9223372036854775808.0) == 0);
+  CHECK(std::signbit(num::mod(-0.0, 3.0)));
+}
+
 TEST(js_max_min_fold_left_to_right) {
   namespace num = ge::core::num;
   CHECK(num::max(1.0, 3.0, 2.0) == 3.0);
