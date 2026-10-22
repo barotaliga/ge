@@ -16,7 +16,8 @@ plugins/<name>           reusable by any game of one genre or world (§ Plugins)
         │                racing (tape, records, standings), mountain (mapgen, analysis),
         │                skier (the skier on the snow: step_skier, snow, limits),
         │                snowmobile (the machine on the snow: step_sled, the drive, the pilot),
-        │                helicopter (the machine in the air: step_heli, the wash, the pilot)
+        │                helicopter (the machine in the air: step_heli, the wash, the pilot),
+        │                paramotor (the speed wing a skier flies: step_para, the air, the pilot)
         ▼
 engine/render  engine/audio  engine/ui     generic draw passes, the synth, the 2D layer
         │             │          │

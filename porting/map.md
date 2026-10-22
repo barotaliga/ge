@@ -228,6 +228,13 @@ the row when the file moves.
 | `plugins/mountain/mapgen/versions.hpp` | `game5/engine/mapgen/versions.ts` | generatorTraits GENERATOR_VERSIONS CURRENT_GENERATOR_VERSION singlePiste |
 | `plugins/mountain/mapgen/weather.cpp` | `game5/engine/mapgen/weather.ts` | dealWeather windIn |
 | `plugins/mountain/mapgen/weather.hpp` | `game5/engine/mapgen/weather.ts` | dealWeather sunsetOf WEATHER_KINDS |
+| `plugins/paramotor/air.cpp` | `game5/engine/game/para-air.ts` | paraAirAt eddyUp levelWind |
+| `plugins/paramotor/air.hpp` | `game5/engine/game/para-air.ts` | paraAirAt ParaAir |
+| `plugins/paramotor/para.cpp` | `game5/engine/game/para.ts`, `canopy.ts` | stepPara dropPara readyPara (the wing's polar, folds and lines restated) |
+| `plugins/paramotor/para.hpp` | `game5/engine/game/para-state.ts`, `para.ts` | ParaState ParaControls |
+| `plugins/paramotor/pilot.cpp` | `game5/engine/game/para-pilot.ts` | paraPilot |
+| `plugins/paramotor/pilot.hpp` | `game5/engine/game/para-pilot.ts` | paraPilot ParaAim |
+| `plugins/paramotor/spec.hpp` | `game5/engine/game/defs/para.ts` | PARA |
 | `plugins/racing/records.hpp` | `oss-game-framework/src/racing/records.ts` | splitGap noteRecord |
 | `plugins/racing/standings.hpp` | `oss-game-framework/src/racing/standings.ts` | legProgress fieldOrder placeAmong |
 | `plugins/racing/tape.cpp` | `oss-game-framework/src/racing/tape.ts` | encodeStream decodeStream |
