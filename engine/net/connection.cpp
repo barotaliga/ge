@@ -1,6 +1,7 @@
-// A connection's payloads: writing a packet (the reliable messages due, then the loose ones),
-// reading one (placing its sequence, its acks, then its messages by channel), and the audit that
-// counts the lost packets and rolls the bandwidth window. The model is stated in connection.hpp.
+// A connection's payloads: writing a packet (priority by priority, the reliable messages due and
+// then the loose ones, within the budget), reading one (placing its sequence, its acks, then its
+// messages by channel, a big message's pieces joined), and the audit that counts the lost packets
+// and rolls the bandwidth window. The model is stated in connection.hpp.
 //
 // ge:summary A connection's packet writing, reading, acks, round trip, loss and channel delivery
 // ge:keywords net connection ack rtt loss resend reliable sequenced deliver audit bandwidth
@@ -21,6 +22,19 @@ double ms(int64_t us) { return static_cast<double>(us) / 1000.0; }
 double absd(double v) { return v < 0 ? -v : v; }
 
 uint16_t next_sequence(uint16_t s) { return s == 0xffff ? 1 : static_cast<uint16_t>(s + 1); }
+
+size_t largest_of(const ChannelConfig& ch, int channel) {
+  if (ch.delivery[channel] != Delivery::reliable || ch.largest[channel] <= kMaxMessage) {
+    return kMaxMessage;
+  }
+  return ch.largest[channel] < kMaxBigMessage ? ch.largest[channel] : kMaxBigMessage;
+}
+
+// The budget's bucket holds 50 ms of the rate, and two packets at least.
+double budget_burst(const ChannelConfig& ch) {
+  const double b = ch.budget_kbps / 8000.0 * 50000.0;
+  return b > 2.0 * kMaxPacket ? b : 2.0 * kMaxPacket;
+}
 
 void finalize(Connection& c, Connection::Sent& s, bool lost) {
   s.final = true;
@@ -56,14 +70,14 @@ void ack_one(Connection& c, uint16_t seq, bool newest, int64_t now_us) {
   }
 }
 
-// Whether a reliable id may be queued on `channel`: its oldest waiting id stays within the span.
-bool span_open(const Connection& c, int channel) {
+// Whether `pieces` reliable ids may be queued on `channel`: its oldest waiting id stays within the
+// span of the last of them.
+bool span_open(const Connection& c, int channel, int pieces) {
+  const auto last = static_cast<uint16_t>(c.next_id[channel] + pieces - 1);
   for (const Connection::Out& o : c.out) {
-    if (o.used && o.channel == channel && seq_diff(c.next_id[channel], o.id) >= kReliableSpan) {
-      return false;
-    }
+    if (o.used && o.channel == channel && seq_diff(last, o.id) >= kReliableSpan) return false;
   }
-  return true;
+  return pieces <= kReliableSpan;
 }
 
 // Every message of the payload parses and each channel's kind matches its id.
@@ -72,6 +86,7 @@ bool payload_valid(const Connection& c, Reader r) {
   while (read_message(r, m)) {
     if (m.channel >= c.channels.count) return false;
     if (m.has_id != (c.channels.delivery[m.channel] != Delivery::unreliable)) return false;
+    if (m.more && largest_of(c.channels, m.channel) <= kMaxMessage) return false;
   }
   return !r.bad;
 }
@@ -114,6 +129,31 @@ void deliver(Connection& c, MessageSink sink, int channel, const uint8_t* data, 
   sink.fn(sink.ctx, channel, data, size);
 }
 
+// A reliable message in its turn: delivered, or a big message's piece joined to the ones before.
+void deliver_piece(Connection& c, MessageSink sink, int ch, const uint8_t* data, size_t size,
+                   bool more) {
+  if (!more && c.assembly_size[ch] == 0 && !c.assembly_bad[ch]) {
+    deliver(c, sink, ch, data, size);
+    return;
+  }
+  if (!c.assembly_bad[ch] && c.assembly_size[ch] + size <= largest_of(c.channels, ch)) {
+    if (size) {
+      std::memcpy(c.assembly.data() + c.assembly_at[ch] + c.assembly_size[ch], data, size);
+    }
+    c.assembly_size[ch] += static_cast<uint32_t>(size);
+  } else {
+    c.assembly_bad[ch] = true;
+  }
+  if (more) return;
+  if (c.assembly_bad[ch]) {
+    c.stats.oversize++;
+  } else {
+    deliver(c, sink, ch, c.assembly.data() + c.assembly_at[ch], c.assembly_size[ch]);
+  }
+  c.assembly_size[ch] = 0;
+  c.assembly_bad[ch] = false;
+}
+
 void receive_reliable(Connection& c, MessageSink sink, const MessageView& m) {
   const int ch = m.channel;
   const int d = seq_diff(m.id, c.expect_id[ch]);
@@ -128,18 +168,19 @@ void receive_reliable(Connection& c, MessageSink sink, const MessageView& m) {
     }
     if (free_slot < 0) return;
     Connection::Held& h = c.held[free_slot];
-    h = {true, static_cast<uint8_t>(ch), m.id, static_cast<uint16_t>(m.size)};
+    h = {true, m.more, static_cast<uint8_t>(ch), m.id, static_cast<uint16_t>(m.size)};
     std::memcpy(c.held_bytes.data() + static_cast<size_t>(free_slot) * kMaxMessage, m.data, m.size);
     return;
   }
-  deliver(c, sink, ch, m.data, m.size);
+  deliver_piece(c, sink, ch, m.data, m.size, m.more);
   c.expect_id[ch]++;
   for (bool more = true; more;) {
     more = false;
     for (int i = 0; i < kReliableSpan; i++) {
       Connection::Held& h = c.held[i];
       if (h.used && h.channel == ch && h.id == c.expect_id[ch]) {
-        deliver(c, sink, ch, c.held_bytes.data() + static_cast<size_t>(i) * kMaxMessage, h.size);
+        deliver_piece(c, sink, ch, c.held_bytes.data() + static_cast<size_t>(i) * kMaxMessage,
+                      h.size, h.more);
         h.used = false;
         c.expect_id[ch]++;
         more = true;
@@ -173,6 +214,27 @@ void connection_init(Connection& c, const ChannelConfig& channels, uint64_t key,
   c.held_bytes.assign(static_cast<size_t>(kReliableSpan) * kMaxMessage, 0);
   c.loose.reserve(kLooseCapacity);
   c.loose_ends.reserve(256);
+  c.loose_chan.reserve(256);
+  c.loose_done.reserve(256);
+  size_t joined = 0;
+  for (int ch = 0; ch < channels.count; ch++) {
+    const size_t most = largest_of(channels, ch);
+    c.assembly_at[ch] = static_cast<uint32_t>(joined);
+    if (most > kMaxMessage) joined += most;
+    bool seen = false;
+    for (int k = 0; k < c.level_count; k++) seen = seen || c.levels[k] == channels.priority[ch];
+    if (!seen) c.levels[c.level_count++] = channels.priority[ch];
+  }
+  for (int a = 1; a < c.level_count; a++) {  // highest first
+    for (int b = a; b > 0 && c.levels[b] > c.levels[b - 1]; b--) {
+      const uint8_t t = c.levels[b];
+      c.levels[b] = c.levels[b - 1];
+      c.levels[b - 1] = t;
+    }
+  }
+  c.assembly.assign(joined, 0);
+  c.budget_bytes = budget_burst(channels);
+  c.budget_at_us = now_us;
   c.window_start_us = now_us;
 }
 
@@ -184,7 +246,9 @@ int64_t resend_timeout_us(const Connection& c) {
 }
 
 bool connection_queue(Connection& c, int channel, const uint8_t* data, size_t size) {
-  if (channel < 0 || channel >= c.channels.count || size > kMaxMessage) return false;
+  if (channel < 0 || channel >= c.channels.count || size > largest_of(c.channels, channel)) {
+    return false;
+  }
   const Delivery d = c.channels.delivery[channel];
   if (d != Delivery::reliable) {
     const bool has_id = d == Delivery::sequenced;
@@ -195,20 +259,32 @@ bool connection_queue(Connection& c, int channel, const uint8_t* data, size_t si
     write_message(w, static_cast<uint8_t>(channel), has_id, has_id ? c.next_id[channel]++ : 0, data,
                   size);
     c.loose_ends.push_back(static_cast<uint32_t>(c.loose.size()));
+    c.loose_chan.push_back(static_cast<uint8_t>(channel));
+    c.loose_done.push_back(0);
     c.stats.messages_sent++;
     return true;
   }
-  if (!span_open(c, channel)) return false;
-  for (int i = 0; i < kReliableInFlight; i++) {
-    Connection::Out& o = c.out[i];
-    if (o.used) continue;
-    o = {true, static_cast<uint8_t>(channel), c.next_id[channel]++, static_cast<uint16_t>(size),
-         -1};
-    if (size) std::memcpy(c.out_bytes.data() + static_cast<size_t>(i) * kMaxMessage, data, size);
-    c.stats.messages_sent++;
-    return true;
+  const int pieces =
+      size <= kMaxMessage ? 1 : static_cast<int>((size + kMaxMessage - 1) / kMaxMessage);
+  if (!span_open(c, channel, pieces)) return false;
+  int free = 0;
+  for (const Connection::Out& o : c.out) free += o.used ? 0 : 1;
+  if (free < pieces) return false;
+  int i = 0;
+  for (int k = 0; k < pieces; k++) {
+    while (c.out[i].used) i++;
+    const size_t at = static_cast<size_t>(k) * kMaxMessage;
+    const size_t n = size - at < kMaxMessage ? size - at : kMaxMessage;
+    c.out[i] = {true,
+                k + 1 < pieces,
+                static_cast<uint8_t>(channel),
+                c.next_id[channel]++,
+                static_cast<uint16_t>(n),
+                -1};
+    if (n) std::memcpy(c.out_bytes.data() + static_cast<size_t>(i) * kMaxMessage, data + at, n);
   }
-  return false;
+  c.stats.messages_sent++;
+  return true;
 }
 
 size_t connection_write(Connection& c, uint32_t protocol, uint8_t* out, int64_t now_us,
@@ -223,28 +299,50 @@ size_t connection_write(Connection& c, uint32_t protocol, uint8_t* out, int64_t 
   s.seq = seq;
   s.sent_us = now_us;
   bool any = false;
-  const int64_t rto = resend_timeout_us(c);
-  for (int i = 0; i < kReliableInFlight && s.reliable < kReliablePerPacket; i++) {
-    Connection::Out& o = c.out[i];
-    if (!o.used || (o.last_sent_us >= 0 && now_us - o.last_sent_us < rto)) continue;
-    if (w.size + message_wire_size(true, o.size) > kMaxPacket) continue;
-    write_message(w, o.channel, true, o.id,
-                  c.out_bytes.data() + static_cast<size_t>(i) * kMaxMessage, o.size);
-    if (o.last_sent_us >= 0) c.stats.resends++;
-    o.last_sent_us = now_us;
-    s.slots[s.reliable] = static_cast<uint8_t>(i);
-    s.chans[s.reliable] = o.channel;
-    s.ids[s.reliable] = o.id;
-    s.reliable++;
-    any = true;
+  bool starved = false;
+  if (c.channels.budget_kbps > 0) {
+    const double burst = budget_burst(c.channels);
+    if (now_us > c.budget_at_us) {
+      c.budget_bytes +=
+          static_cast<double>(now_us - c.budget_at_us) * c.channels.budget_kbps / 8000.0;
+      if (c.budget_bytes > burst) c.budget_bytes = burst;
+      c.budget_at_us = now_us;
+    }
+    starved = c.budget_bytes <= 0;
   }
-  while (c.loose_next < c.loose_ends.size()) {
-    const size_t start = c.loose_next ? c.loose_ends[c.loose_next - 1] : 0;
-    const size_t n = c.loose_ends[c.loose_next] - start;
-    if (w.size + n > kMaxPacket) break;
-    write_bytes(w, c.loose.data() + start, n);
-    c.loose_next++;
-    any = true;
+  const int64_t rto = resend_timeout_us(c);
+  for (int level = 0; level < c.level_count && !starved; level++) {
+    const uint8_t prio = c.levels[level];
+    for (int i = 0; i < kReliableInFlight && s.reliable < kReliablePerPacket; i++) {
+      Connection::Out& o = c.out[i];
+      if (!o.used || (o.last_sent_us >= 0 && now_us - o.last_sent_us < rto)) continue;
+      if (c.channels.priority[o.channel] != prio) continue;
+      if (w.size + message_wire_size(true, o.size) > kMaxPacket) continue;
+      write_message(w, o.channel, true, o.id,
+                    c.out_bytes.data() + static_cast<size_t>(i) * kMaxMessage, o.size, o.more);
+      if (o.last_sent_us >= 0) c.stats.resends++;
+      o.last_sent_us = now_us;
+      s.slots[s.reliable] = static_cast<uint8_t>(i);
+      s.chans[s.reliable] = o.channel;
+      s.ids[s.reliable] = o.id;
+      s.reliable++;
+      any = true;
+    }
+    for (size_t k = c.loose_first; k < c.loose_ends.size(); k++) {
+      if (c.loose_done[k] || c.channels.priority[c.loose_chan[k]] != prio) continue;
+      const size_t start = k ? c.loose_ends[k - 1] : 0;
+      const size_t n = c.loose_ends[k] - start;
+      if (w.size + n > kMaxPacket) break;
+      write_bytes(w, c.loose.data() + start, n);
+      c.loose_done[k] = 1;
+      any = true;
+    }
+    while (c.loose_first < c.loose_done.size() && c.loose_done[c.loose_first]) c.loose_first++;
+  }
+  if (starved) {
+    bool due = c.loose_first < c.loose_ends.size();
+    for (int i = 0; i < kReliableInFlight && !due; i++) due = c.out[i].used;
+    if (due) c.stats.budget_held++;
   }
   if (!any && !force && !c.ack_owed) return 0;
 
@@ -256,14 +354,19 @@ size_t connection_write(Connection& c, uint32_t protocol, uint8_t* out, int64_t 
   c.stats.packets_sent++;
   c.stats.bytes_sent += w.size;
   c.window_sent += w.size;
+  if (c.channels.budget_kbps > 0) c.budget_bytes -= static_cast<double>(w.size);
   return w.size;
 }
 
 void connection_end_flush(Connection& c) {
-  c.stats.dropped_unsent += c.loose_ends.size() - c.loose_next;
+  for (size_t k = c.loose_first; k < c.loose_done.size(); k++) {
+    c.stats.dropped_unsent += c.loose_done[k] ? 0 : 1;
+  }
   c.loose.clear();
   c.loose_ends.clear();
-  c.loose_next = 0;
+  c.loose_chan.clear();
+  c.loose_done.clear();
+  c.loose_first = 0;
 }
 
 bool connection_read(Connection& c, const PayloadHeader& h, Reader& r, int64_t now_us,

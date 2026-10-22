@@ -83,3 +83,34 @@ TEST(packet_payload_messages_round_trip) {
   CHECK(kMaxMessage + kPayloadHeader + message_wire_size(true, kMaxMessage) - kMaxMessage <=
         kMaxPacket);
 }
+
+TEST(packet_a_big_message_s_piece_carries_its_more_bit) {
+  uint8_t buf[kMaxPacket];
+  Writer w = make_writer(buf, sizeof buf);
+  write_payload_header(w, 9, {42, 3, 0, 0});
+  const uint8_t a[8] = {7}, b[4] = {8};
+  write_message(w, 2, true, 11, a, sizeof a, true);
+  write_message(w, 2, true, 12, b, sizeof b);
+  CHECK(describe_packet(buf, w.size) ==
+        "payload seq=3 ack=0 bits=00000000 2 msgs [ch2#11 8B+] "
+        "[ch2#12 4B]");
+  Reader r = make_reader(buf, w.size);
+  uint32_t p;
+  PacketType t;
+  PayloadHeader h;
+  read_packet_start(r, p, t);
+  read_payload_header(r, h);
+  MessageView m;
+  CHECK(read_message(r, m) && m.channel == 2 && m.more && m.id == 11);
+  CHECK(read_message(r, m) && m.channel == 2 && !m.more && m.id == 12);
+  // A piece without an id is malformed: only a reliable channel's messages come in pieces.
+  Writer w2 = make_writer(buf, sizeof buf);
+  write_payload_header(w2, 9, {42, 4, 0, 0});
+  write_u8(w2, 1 | kMessageMore);
+  write_varint(w2, 1);
+  write_u8(w2, 0);
+  Reader r2 = make_reader(buf, w2.size);
+  read_packet_start(r2, p, t);
+  read_payload_header(r2, h);
+  CHECK(!read_message(r2, m) && r2.bad);
+}
