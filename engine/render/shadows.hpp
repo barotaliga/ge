@@ -69,9 +69,10 @@ struct ShadowParams {
   float cascade[kCascades][16];
   float offset[kCascades][4];
   float atlas[16];
-  float tile[kMaxShadowFigures][4];
+  float tile[kMaxShadowFigures][4];  // the eye minus figure k's centre in the atlas's clip units
   float info[4];   // texels a side, tiles across, a cascade's depth bias (clip z), figures
   float texel[4];  // a texel's size (m): cascade 0, cascade 1, the atlas; a tile's depth bias
+  float reach[4];  // where some tile reaches, atlas clip x, y about the eye: min x, y, max x, y
 };
 
 // Where a cascade was last drawn from: CPU state, decided by `update_cascade`.

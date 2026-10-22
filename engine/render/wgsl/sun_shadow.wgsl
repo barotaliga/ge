@@ -10,11 +10,15 @@ struct SunShadow {
   cascade: array<mat4x4f, 2>,  // a point relative to the cascade's centre -> its clip
   offset: array<vec4f, 2>,     // the eye minus the cascade's centre, m; w: 1 when drawn
   atlas: mat4x4f,              // a point relative to a figure's centre -> its tile's clip
-  tile: array<vec4f, 16>,      // the eye minus figure k's centre, m; w: 1 when drawn
+  tile: array<vec4f, 16>,      // the eye minus figure k's centre in the atlas's clip units (the
+                               // view is affine: a point's clip in tile k is its clip about the
+                               // eye plus this); w: 1 when drawn
   info: vec4f,                 // x: texels across a map; y: tiles across the atlas; z: the
                                // receiver's depth bias in a cascade (clip z); w: the figures
   texel: vec4f,                // a texel's size, m: cascade 0, cascade 1, the atlas; w: the
                                // receiver's depth bias in a tile (clip z)
+  reach: vec4f,                // where some tile reaches, in the atlas's clip x, y about the eye:
+                               // min x, min y, max x, max y (a point outside it skips the tiles)
 }
 
 const kShadowTaps = array<vec2f, 4>(vec2f(-0.94, -0.34), vec2f(0.34, -0.94), vec2f(0.94, 0.34),
@@ -60,13 +64,20 @@ fn sun_shadow(s: SunShadow, maps: texture_depth_2d_array, cmp: sampler_compariso
   // Each figure's tile casts its figure (and whatever else stood in it) where it reaches.
   let tiles = max(s.info.y, 1.0);
   let figures = u32(s.info.w);
+  if (figures == 0u) {
+    return lit;
+  }
+  // The point in the atlas's view about the eye, once; each tile only moves it.
+  let base = (s.atlas * vec4f(rel + n * (1.5 * s.texel.z), 1.0)).xyz;
+  if (any(base.xy < s.reach.xy) || any(base.xy > s.reach.zw)) {
+    return lit;
+  }
   for (var k = 0u; k < figures; k++) {
     let t = s.tile[k];
     if (t.w == 0.0) {
       continue;
     }
-    let q = rel + t.xyz + n * (1.5 * s.texel.z);
-    let clip = s.atlas * vec4f(q, 1.0);
+    let clip = base + t.xyz;
     if (max(abs(clip.x), abs(clip.y)) >= 1.0 || clip.z <= 0.0 || clip.z >= 1.0) {
       continue;
     }
