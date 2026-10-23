@@ -13,6 +13,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # The merge queue: each queued PR is tested on top of the ones ahead of it before it lands.
+  merge_group:
 
 permissions:
   contents: read
@@ -120,9 +122,10 @@ jobs:
       - run: cmake --build --preset release
       - run: ctest --preset release
 
-  # clang-tidy's bug-finding checks (.clang-tidy), in parallel. On a pull request only the files
-  # the change can reach: each changed .cpp and each .cpp that includes a changed header
-  # (tools/lint.sh); a change to the lint's rules, and every push to main, lints them all.
+  # clang-tidy's bug-finding checks (.clang-tidy), in parallel. On a pull request or a queued
+  # merge only the files the change can reach: each changed .cpp and each .cpp that includes a
+  # changed header (tools/lint.sh); a change to the lint's rules, and every push to main, lints
+  # them all.
   lint:
     runs-on: ubuntu-24.04
     env:
@@ -152,8 +155,11 @@ jobs:
       - name: make lint (pull request; what the change reaches)
         if: github.event_name == 'pull_request'
         run: make lint PRESET=release BASE=origin/${{ github.base_ref }}
+      - name: make lint (merge queue; what the queued change reaches)
+        if: github.event_name == 'merge_group'
+        run: make lint PRESET=release BASE=${{ github.event.merge_group.base_sha }}
       - name: make lint (every file)
-        if: github.event_name != 'pull_request'
+        if: github.event_name == 'push'
         run: make lint PRESET=release
       # Every embedded WGSL shader through Tint, offline (no GPU needed).
       - run: make shaders-check PRESET=release

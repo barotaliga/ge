@@ -45,7 +45,10 @@ constexpr FlagSpec kAddLabFlags[] = {
     kDryRun};
 constexpr FlagSpec kBuildFlags[] = {kPreset, kEngine, kRepo};
 constexpr FlagSpec kTestFlags[] = {
-    kPreset, {"filter", "<regex>", "only the tests whose names match"}, kEngine, kRepo};
+    kPreset,
+    {"filter", "<regex>", "only the tests whose names match, and only their targets built"},
+    kEngine,
+    kRepo};
 constexpr FlagSpec kLabFlags[] = {
     kPreset,
     {"smoke", "", "run at the lab's smoke flags"},

@@ -142,6 +142,13 @@ TEST(digest_baseline) {
   CHECK_MSG(both.find("drift ") != std::string::npos && both.find("toy ") > both.find("drift "),
             both);
   CHECK(run({"toy", "--smoke", "--check-digests=" + base}) == 0);
+  // Rewriting every lab's row keeps the row of a lab this build does not register (a GPU lab
+  // on a GPU-less build).
+  std::ofstream(base, std::ios::app) << "gpu-only 0123456789abcdef\n";
+  run({"--all", "--smoke", "--write-digests=" + base});
+  const std::string every = slurp(base);
+  CHECK_MSG(every.find("gpu-only 0123456789abcdef") != std::string::npos, every);
+  CHECK(every.find("toy ") != std::string::npos);
 }
 
 TEST(a_measured_shot_keeps_its_pixels_out_of_the_digest) {
