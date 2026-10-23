@@ -6,8 +6,9 @@
 //
 // THE NIGHT (render/night.hpp's numbers in `frame.moon`, `frame.night`):
 // - the MOON's disc at its true size, its lit part by Lommel-Seeliger's law toward the real sun
-//   over its seas and the rest earthlit, dimmed and reddened by the air as the sun is, drawn as
-//   the eye adapted to it sees it (`as_seen`);
+//   over its real face (render/moon.hpp's albedo map, turned by core/moon.hpp's pole and prime
+//   meridian) and the rest earthlit, the Earth's shadow on it in an eclipse, dimmed and reddened
+//   by the air as the sun is, drawn as the eye adapted to it sees it (`as_seen`);
 // - the STARS on the celestial sphere, turned by the sidereal angle about the pole the latitude
 //   lifts: the REAL stars (render/stars.hpp: a bright-star catalogue's 9,096, each at its place,
 //   magnitude and colour, read off a cube map of 6 x 160 x 160 cells of up to three stars, the
@@ -22,11 +23,21 @@
 
 // The real stars' map (render/stars.hpp): kStarSlots layers of the cube's cells.
 @group(1) @binding(0) var star_map: texture_2d_array<f32>;
+// The moon's albedo map (render/moon.hpp): selenographic longitude -180..180 east along u,
+// latitude 90 N..90 S down v, its bytes over 255 times `frame.moon_shadow.w` the albedo against
+// the near side's mean; mipmapped.
+@group(1) @binding(1) var moon_map: texture_2d<f32>;
 
 // The sun's angular radius, rad.
 const kSunRadius = 0.00465;
 // The moon's colour (its dust is a little red), luminance 1.
 const kMoonTint = vec3f(1.04, 0.99, 0.93);
+// The moon's map's width (render/moon.hpp's kMoonMapWidth).
+const kMoonMapWidth = 1024.0;
+// The light the air bends into the Earth's umbra: its colour, luminance 1, and its share of full
+// sunlight at the axis (render/night.cpp's kUmbraLight; ten times it at the umbra's edge).
+const kUmbraTint = vec3f(2.24, 0.70, 0.36);
+const kUmbraLight = 1.0e-4;
 // The stars: cells along a cube face's edge and stars a cell, a magnitude-0 star's illuminance
 // outside the air (lx), the point's spread (pixels) and how many times the sky behind it a star
 // at the threshold is drawn.
@@ -212,23 +223,40 @@ fn galaxy(c: vec3f) -> vec3f {
   return vec3f(0.96, 0.98, 1.04) * (frame.night.x * 1.6 * band * dust);
 }
 
-// THE MOON AS SEEN: its lit surface is some thirty thousand times as bright as the moonlit snow
-// the eye has adapted to, which no display holds; the eye adapts to it locally and sees its seas.
-// Over a white face's luminance a brightness is drawn at that luminance times how many times
-// brighter it is to the power 0.15 (the lit surface some five times the snow's white under a full
-// moon, just short of the tone curve's white); under it, as it is (a moon by day, pale in the
-// blue).
-fn as_seen(l: f32, white: f32) -> f32 {
-  if (l <= white) {
-    return l;
-  }
-  return white * pow(l / white, 0.15);
+// THE MOON AS SEEN: its lit surface is hundreds to tens of thousands of times as bright as the
+// snow the eye has adapted to (the more so in the twilight and in the dark of an eclipse), which no
+// display holds; the eye sees it as a bright thing whatever its light. A brightness is drawn as
+// it is while it is a small share of what the picture shows as white (a moon by day, pale in the
+// blue), and eased toward kMoonTop of that white above it, so a full moon at midnight, a
+// crescent in the twilight and the sliver left in an eclipse all read bright, their seas and
+// shading multiplied on as they are.
+const kMoonTop = 0.45;
+
+fn as_seen(l: f32) -> f32 {
+  let top = kMoonTop / exposure();
+  let x = l / top;
+  return top * select(x * (1.0 - 0.5 * x), 1.0 - exp(-x), x > 1e-3);
 }
 
-// The moon's disc along `d`, through the air to the eye: its lit part toward the real sun by
-// Lommel-Seeliger's law over its seas (the dark plains, two fifths darker, on its face as it turns
-// with the sky about the pole), the rest earthlit.
-fn moon_disc(d: vec3f, r: f32) -> vec3f {
+// The light a point of the moon `s` rad from the Earth's shadow's axis gets against full
+// sunlight (render/night.hpp's `shadow_light`): the sun's share the Earth leaves it, white, and
+// the air's red light bent into the umbra.
+fn earth_shadow(s: f32) -> vec3f {
+  let umbra = frame.moon_pole.w;
+  let penumbra = frame.moon_prime.w;
+  if (penumbra <= 0.0 || s >= penumbra) {
+    return vec3f(1.0);
+  }
+  let t = clamp(2.0 * (s - umbra) / (penumbra - umbra) - 1.0, -1.0, 1.0);
+  let sun = 1.0 - (acos(t) - t * sqrt(1.0 - t * t)) / PI;
+  let red = kUmbraLight * pow(10.0, min(s, umbra) / umbra);
+  return vec3f(sun) + kUmbraTint * ((1.0 - sun) * red);
+}
+
+// The moon's disc along `d`, through the air to the eye, `px` rad a pixel: its lit part toward
+// the real sun by Lommel-Seeliger's law over its albedo map (read at the level the disc's size
+// asks), the rest earthlit, the Earth's shadow over both.
+fn moon_disc(d: vec3f, r: f32, px: f32) -> vec3f {
   let m = frame.moon.xyz;
   let rad = frame.moon_light.z;
   let c = dot(d, m);
@@ -241,26 +269,35 @@ fn moon_disc(d: vec3f, r: f32) -> vec3f {
   let n = q - m * mu;
   let mu0 = dot(n, frame.night_sun.xyz);
   let lit = select(0.0, 2.0 * mu0 / (mu0 + mu), mu0 > 0.0);
-  // The face: its up toward the celestial pole.
-  let pole = vec3f(0.0, sin(frame.night.w), cos(frame.night.w));
-  let up = normalize(pole - m * dot(pole, m) + vec3f(1e-6, 0.0, 0.0));
-  let right = cross(up, m);
-  let face = vec2f(dot(q, right), dot(q, up));
-  let seas = mottle(vec3f(face * 0.11, 0.37)) * 0.65 + mottle(vec3f(face * 0.27, 0.71)) * 0.35;
-  let albedo = mix(1.0, 0.6, smoothstep(0.48, 0.62, seas)) / 0.88;
+  // The face: the point's selenographic place on the map, at the level a pixel covers.
+  let lat = asin(clamp(dot(n, frame.moon_pole.xyz), -1.0, 1.0));
+  let lon = atan2(dot(n, frame.moon_east.xyz), dot(n, frame.moon_prime.xyz));
+  let uv = vec2f(lon / (2.0 * PI) + 0.5, 0.5 - lat / PI);
+  let texel = 2.0 * PI * rad / kMoonMapWidth;
+  let lod = max(log2(px / max(texel, 1e-12)), 0.0);
+  let albedo = textureSampleLevel(moon_map, linear_clamp, uv, lod).r * frame.moon_shadow.w;
   // A soft edge a twentieth of the radius wide against the stair of the pixels.
   let edge = 1.0 - smoothstep(0.95, 1.0, sqrt(rho2));
   let air = transmittance_to_top(transmittance_lut, linear_clamp, r, m.y);
-  // The lit surface's and the earthlit part's brightness as seen; their shape and seas as they
-  // are, so the seas keep their contrast however bright the moon.
+  // The lit surface's and the earthlit part's brightness as seen, at the disc's brightest point
+  // under the shadow; their shape, face and shadow as they are against it, so the seas keep
+  // their contrast however bright the moon.
   let through = dot(kMoonTint * air, kLuma);
-  let white = white_luminance();
-  // The earthlit part beside the lit one is seen as the eye sees a faint thing beside a bright
-  // one: its ratio to it to the power 0.35 (a crescent's ashen light a twenty-fifth of its lit
-  // limb, a quarter's a thirtieth).
-  let sunlit = as_seen(frame.moon_light.x * through, white);
-  let earthlit = sunlit * pow(frame.moon_light.y / max(frame.moon_light.x, 1e-30), 0.35);
-  return kMoonTint * air * ((sunlit * lit + earthlit) * albedo * edge / max(through, 1e-30));
+  let peak = max(frame.moon_east.w, 1e-9);
+  // A faint part beside a bright one is seen as the eye sees it: its ratio to it to the power
+  // 0.35 (a crescent's ashen light a twenty-fifth of its lit limb, a quarter's a thirtieth); the
+  // Earth's shadow to the power 0.5, so the umbra's red stays a deep thirtieth of the penumbra.
+  let sunlit = as_seen(frame.moon_light.x * peak * through);
+  // Never brighter than the earthshine is on its own: in twilight the lit part's compression
+  // would otherwise lift it with the sky.
+  let earthlit = min(as_seen(frame.moon_light.y * through),
+                     sunlit * pow(frame.moon_light.y / max(frame.moon_light.x * peak, 1e-30), 0.35));
+  // The shadow's light: its brightness as seen against the peak, its colour as it is.
+  let shadow = earth_shadow(length(d - frame.moon_shadow.xyz));
+  let level = max(dot(shadow, kLuma), 1e-30);
+  let shade = shadow / level * pow(level / peak, 0.5);
+  return kMoonTint * air * ((sunlit * lit * shade + earthlit) * albedo * edge /
+                            max(through, 1e-30));
 }
 
 @fragment
@@ -290,10 +327,10 @@ fn fs_main(in: VertexOut) -> FragmentOut {
     let air = transmittance_to_top(transmittance_lut, linear_clamp, r, d.y);
     let cel = celestial(d);
     let bg = dot(colour, kLuma);
-    colour += (stars(cel, bg, px) + galaxy(cel)) * air * clear + moon_disc(d, r) * clear;
+    colour += (stars(cel, bg, px) + galaxy(cel)) * air * clear + moon_disc(d, r, px) * clear;
   } else if (frame.moon_light.z > 0.0) {
     let r = kGroundRadius + max(frame.eye.w, 0.0);
-    colour += moon_disc(d, r) * (1.0 - frame.weather.y);
+    colour += moon_disc(d, r, px) * (1.0 - frame.weather.y);
   }
   // Seen through the fog's or the fall's veil.
   colour = veil_sky(h, colour);

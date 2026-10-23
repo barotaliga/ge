@@ -69,10 +69,14 @@ struct FrameUniforms {
   // over the cell (1/m); the wind's heading (cos, sin), the drift and the age in the noise's
   // tile (0..1); one over the stretch, the dome, the density (1/m), the shadow's optical depth.
   float clouds[kCloudLayers * 3][4];
-  float mist[4];  // the reach's mist: where it begins and where it closes, m (0: none), 0, 0
+  float moon_pole[4];    // the moon's north pole (world); w: the umbra's angular radius
+  float moon_prime[4];   // toward its 0 N 0 E; w: the penumbra's angular radius
+  float moon_east[4];    // toward its 0 N 90 E; w: the disc's brightest light under the shadow
+  float moon_shadow[4];  // toward the Earth's shadow's axis; w: the albedo map's scale
+  float mist[4];         // the reach's mist: where it begins and where it closes, m (0: none), 0, 0
 };
 static_assert(sizeof(FrameUniforms) ==
-                  64 * 3 + 16 * 5 + 16 * 6 + 16 * 9 + 16 * 3 * kCloudLayers + 16,
+                  64 * 3 + 16 * 5 + 16 * 6 + 16 * 9 + 16 * 3 * kCloudLayers + 16 * 5,
               "match frame_types.wgsl");
 
 // The last frame's unjittered camera. Invalid on the first frame and after a cut, when the

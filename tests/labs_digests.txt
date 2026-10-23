@@ -1,10 +1,14 @@
 # lab digests at their smoke flags: labs --all --smoke --write-digests
 analyze 47aeb41752f58f41
-anim 46ec0296ddd73853
+anim ef8d546cbda7d03f
 army 66396a5f4287214b
 army-flight 57fc57956ada1ce3
 army-sleds 821adaba95b0b813
 audition d47fda4a9cb22fbb
+camera-follow b1dbf6ae474cba78
+camera-rigs bd01263b4d16d23c
+camera-shake 3d1734df5bafe175
+camera-transitions 750b195eaca33076
 charts 77f2319a5ea24272
 cli-loop b8c99c684c50ba81
 crowd cf02cf9a7c917783
@@ -27,12 +31,13 @@ lift-ride a374f35eb85cc161
 mapgen-cost 3baf51b6907817f3
 model-views 0d0824a2168f6b14
 models bdc7f86743249676
+moon 26034a53f978b0b3
 move-strafe 69411462ef3f2545
 move-trace 223a9e049e1b0e94
 net-link 458927d87fc48ec1
 net-reach 4f1b6a129fc2c4fa
 net-session bbd55312ba5c97c6
-night 70027d61f5f37377
+night d1eb49047f39a0f5
 noise 3d3a828834f144cb
 para 3783412c31d34638
 parallel-cost c8eb921ab2c030ba
@@ -52,7 +57,7 @@ shadows 5b0d6051c10638b4
 sight 2c2aefbe619a6874
 sim a9c6d0f6bb29ce2a
 ski-cross fbe386cdba062259
-skier-views d6fb3d6e2a3c34fe
+skier-views 57f8a3b89b88b616
 skijump-hills 3fa0eff35ac0f70a
 slalom 2adb7c679ec93adf
 sled 30cd3df2c903518c

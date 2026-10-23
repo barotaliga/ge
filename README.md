@@ -129,4 +129,5 @@ has the details.
 
 [PolyForm Noncommercial 1.0.0](LICENSE): the source is open to read, use, change and share for
 any noncommercial purpose; commercial use is reserved to the copyright holder. Vendored code keeps
-its own licence beside it (`engine/core/libm/LICENSE.md`).
+its own licence beside it (`engine/core/libm/LICENSE.md`), and data baked into the engine is
+listed with its source and terms in [docs/rendering.md](docs/rendering.md) § Dependencies.

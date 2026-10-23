@@ -1,7 +1,7 @@
 // The night's numbers (render/night.hpp says what each one is and where it comes from).
 //
 // ge:summary The moon's light, disc and phase, the key light's choice and the dark sky's glow
-// ge:keywords render night moon phase-law surface-surge twilight key-light set_night
+// ge:keywords render night moon phase-law surface-surge twilight key-light set_night eclipse
 // ge:skill render
 // ge:test tests/render_night_test.cpp
 #include "render/night.hpp"
@@ -10,6 +10,8 @@
 #include <array>
 #include <cmath>
 #include <iterator>
+
+#include "render/moon.hpp"
 
 namespace ge::render {
 
@@ -58,7 +60,80 @@ std::array<double, kSurgeRows> surge_table() {
   return t;
 }
 
+// The umbra's light at its axis against full sunlight; ten times it at its edge.
+constexpr double kUmbraLight = 1.0e-4;
+
+void normalise(double v[3]) {
+  const double l = std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+  for (int k = 0; k < 3; ++k) v[k] /= l;
+}
+void cross(const double a[3], const double b[3], double out[3]) {
+  out[0] = a[1] * b[2] - a[2] * b[1];
+  out[1] = a[2] * b[0] - a[0] * b[2];
+  out[2] = a[0] * b[1] - a[1] * b[0];
+}
+double dot(const double a[3], const double b[3]) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+
 }  // namespace
+
+Moon moon_of(const core::MoonSky& sky) {
+  Moon m{sky.apparent_elevation, sky.azimuth, sky.lit, sky.distance_km};
+  const core::Vec3d* from[] = {&sky.pole, &sky.prime, &sky.east, &sky.shadow};
+  double* to[] = {m.pole, m.prime, m.east, m.shadow};
+  for (int i = 0; i < 4; ++i) {
+    to[i][0] = from[i]->x;
+    to[i][1] = from[i]->y;
+    to[i][2] = from[i]->z;
+  }
+  m.umbra = sky.umbra;
+  m.penumbra = sky.penumbra;
+  return m;
+}
+
+ShadowLight shadow_light(double s, double umbra, double penumbra) {
+  if (penumbra <= 0 || s >= penumbra) return {};
+  // Across the penumbra the Earth's limb crosses the sun's disc: t from -1 (all of it hidden) to
+  // 1 (none), the share left the circle's segment past the limb.
+  const double t = std::clamp(2 * (s - umbra) / (penumbra - umbra) - 1, -1.0, 1.0);
+  const double sun = 1 - (std::acos(t) - t * std::sqrt(1 - t * t)) / kPi;
+  const double red = kUmbraLight * std::pow(10.0, std::min(s, umbra) / umbra);
+  return {sun, (1 - sun) * red};
+}
+
+Eclipse eclipse_of(const double toward[3], double radius, const double shadow[3], double umbra,
+                   double penumbra) {
+  Eclipse e;
+  if (penumbra <= 0 || radius <= 0) return e;
+  const double centre = std::acos(std::clamp(dot(toward, shadow), -1.0, 1.0));
+  if (centre - radius >= penumbra) return e;
+  // Two directions across the disc, then a grid over it.
+  double a[3], b[3];
+  const double up[3] = {0, 1, 0}, side[3] = {1, 0, 0};
+  cross(toward, std::fabs(toward[1]) < 0.9 ? up : side, a);
+  normalise(a);
+  cross(toward, a, b);
+  constexpr int n = 24;
+  double sum = 0, peak = 0;
+  int count = 0;
+  for (int y = 0; y < n; ++y) {
+    for (int x = 0; x < n; ++x) {
+      const double u = (x + 0.5) / n * 2 - 1, v = (y + 0.5) / n * 2 - 1;
+      if (u * u + v * v >= 1) continue;
+      double d[3];
+      for (int k = 0; k < 3; ++k) d[k] = toward[k] + (a[k] * u + b[k] * v) * radius;
+      normalise(d);
+      const double s = std::acos(std::clamp(dot(d, shadow), -1.0, 1.0));
+      const ShadowLight sl = shadow_light(s, umbra, penumbra);
+      const double light = sl.sun + sl.air;
+      sum += light;
+      peak = std::max(peak, light);
+      ++count;
+    }
+  }
+  e.mean = sum / count;
+  e.peak = peak;
+  return e;
+}
 
 double phase_law(double i) {
   const double d = std::min(180.0, std::fabs(i) / kDeg);
@@ -126,6 +201,36 @@ void set_night(FrameView& view, const Moon& moon, double latitude_deg, double si
   n.moon_radius = r;
   n.moon_surface = disc * surface_surge(i);
   n.earthshine = disc * kEarthshine * (1 - std::clamp(moon.lit, 0.0, 1.0));
+  // The face: as placed, or the mean near side square to the eye, its pole toward the sky's.
+  double toward[3];
+  look_dir(moon.azimuth, moon.elevation, toward);
+  if (dot(moon.pole, moon.pole) > 0.5) {
+    for (int k = 0; k < 3; ++k) {
+      n.moon_pole[k] = moon.pole[k];
+      n.moon_prime[k] = moon.prime[k];
+      n.moon_east[k] = moon.east[k];
+    }
+  } else {
+    const core::Vec3d p = core::equatorial_to_world({0, 0, 1}, sidereal_deg, latitude_deg);
+    double pole[3] = {p.x, p.y, p.z};
+    const double along = dot(pole, toward);
+    for (int k = 0; k < 3; ++k) {
+      pole[k] -= toward[k] * along;
+      n.moon_prime[k] = -toward[k];
+    }
+    normalise(pole);
+    for (int k = 0; k < 3; ++k) n.moon_pole[k] = pole[k];
+    // East of the prime meridian seen from the eye: to the left of the pole's up, as the sky's
+    // east is (the world's axes are left-handed, so the cross product turns the other way).
+    cross(n.moon_prime, n.moon_pole, n.moon_east);
+  }
+  n.albedo_scale = moon_albedo_scale();
+  // The Earth's shadow on it.
+  for (int k = 0; k < 3; ++k) n.shadow[k] = moon.shadow[k];
+  n.umbra = moon.umbra;
+  n.penumbra = moon.penumbra;
+  const Eclipse eclipse = eclipse_of(toward, r, moon.shadow, moon.umbra, moon.penumbra);
+  n.eclipse_peak = eclipse.peak;
   n.sun_elevation = view.sun_elevation;
   n.sun_azimuth = view.sun_azimuth;
   n.sun_illuminance = view.sun_illuminance;
@@ -134,7 +239,7 @@ void set_night(FrameView& view, const Moon& moon, double latitude_deg, double si
   // By day the moon's light and its sky are nothing beside the day's: none of it is drawn but
   // its disc, pale in the blue.
   if (view.sun_elevation >= 0) return;
-  const double lux = moon_lux(i, moon.distance_km);
+  const double lux = moon_lux(i, moon.distance_km) * eclipse.mean;
   const double moonlight = moonlight_on_ground(lux, moon.elevation);
   n.moon_illuminance = lux / kSunLux;
   n.dark_sky = kDarkSkyCdm2 / kSunLux;

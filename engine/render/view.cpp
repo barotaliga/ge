@@ -108,8 +108,17 @@ CameraMatrices camera_matrices(const FrameView& view, double aspect) {
     r[0] /= rl;
     r[2] /= rl;
   }
-  const double u[3] = {f[1] * r[2] - f[2] * r[1], f[2] * r[0] - f[0] * r[2],
-                       f[0] * r[1] - f[1] * r[0]};
+  double u[3] = {f[1] * r[2] - f[2] * r[1], f[2] * r[0] - f[0] * r[2], f[0] * r[1] - f[1] * r[0]};
+  if (view.roll != 0) {
+    // Rolled right side down: the right swings down toward -up, the up toward +right. At a roll
+    // of exactly 0 nothing is touched, so no unrolled picture moves.
+    const double c = std::cos(view.roll), s = std::sin(view.roll);
+    for (int i = 0; i < 3; ++i) {
+      const double ri = r[i], ui = u[i];
+      r[i] = ri * c - ui * s;
+      u[i] = ui * c + ri * s;
+    }
+  }
   CameraMatrices c{};
   // Rows of the view rotation: right, up, -forward.
   for (int i = 0; i < 3; ++i) {
