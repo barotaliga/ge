@@ -385,8 +385,20 @@ there before writing the new one, and the colour pass reads it (`Lod::motion`) f
 vertex's last place, so a limb that swings between frames is not smeared by TAA; a cut, a still
 and a slot left undrawn settle the skin (`settle_skin`), so the next pose moves nothing. The
 `taa` lab's `--scenario=turns` chases the skier through his turns: the ghosting against the
-converged still falls from 0.45 to 0.35 levels (0.95% to 0.73% of the pixels off) with it. Still
-to come (M8e2): the crowd skinned in the vertex stage from per-instance palettes.
+converged still falls from 0.45 to 0.35 levels (0.95% to 0.73% of the pixels off) with it.
+
+**The crowd: palette families (M8e2).** Hundreds of figures of one mesh, each in a pose of its
+own, are not a skin each: a **palette family** (`create_family`'s `palette_joints`) holds every
+instance's palette in a storage buffer of its own, twice (this frame's half and the last
+frame's, swapped by each `set_palettes`, both written after a cut). Its LODs (`palette_source`)
+keep the bind pose packed into the reach box and, after the family's vertices, each vertex's
+four joints as bytes and four weights as 16-bit unorms (three words a vertex). The draw's
+vertex stage, shared by the prepass, the colour pass and every caster, poses each vertex by the
+linear blend of its instance's palette rows, and by the last frame's rows for its motion, so no
+pass runs and nothing is stored a figure: a palette costs 48 bytes a joint a frame to upload.
+`pose_palette` is the CPU twin, within 1e-4 m of `skin_mesh`; `tests/render_palette_test.cpp`
+draws two limbs in poses of their own as one palette family and through the `skinning` pass and
+finds the same depth on every pixel either covers.
 
 ## Terrain
 
@@ -720,7 +732,14 @@ a clear sky that is a sunny fall; under a lid they are lit as its flat grey (M8f
 `figure_frame`), a jacket colour a racer; a cut writes the instances fresh and settles every
 poser, so no motion is carried across it. The **placeholder figure** (`figure.hpp`'s 17 rigid
 pieces, each a unit box, cylinder or ball posed from the `SkierState`) is no longer drawn; it
-stays as the `anim` lab's comparison.
+stays as the `anim` lab's comparison. The free ride's **crowd** (`sim/crowd.hpp`) is the same
+model as one palette family (`scene.hpp`'s `crowd_meshes`, `crowd_instance`): an instance an
+amateur at his id, each posed by his own poser from the amateur read as a skier (`crowd_skier`:
+his place, heading, lean, crouch, down), sized by his body and in one of ten jackets; one on a
+lift's carrier or up a lift unseen is drawn at a scale of nought, which the cull drops. The crowd
+casts no shadow yet: the figures' atlas draws every moving figure into every tile, so it would
+cost the crowd times the tiles (next: a cull a tile). The `crowd-look` lab films a lift's queue,
+a busy run, a group and one of them down, each with the crowd and without.
 
 ## Shaders
 

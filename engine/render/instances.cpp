@@ -37,7 +37,7 @@ struct LodRow {
   float box_min[4];
   float box_size[4];
   uint32_t info[4];
-  uint32_t motion[4];  // the first word of the last frame's positions, 0: none
+  uint32_t motion[4];  // the first word of the last frame's positions, of its skin; 0: none
 };
 
 wgpu::RenderPassDepthStencilAttachment depth_load(const FrameTargets& targets, bool read_only) {
@@ -102,10 +102,11 @@ void create_instance_pipelines(gpu::Device& device, gpu::PipelineSet& pipelines,
                    Slot::storage, Slot::storage, Slot::storage, Slot::texture_raw},
                   wgpu::ShaderStage::Compute);
   const auto vf = wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment;
-  ip.draw_layout = make_layout(device, "instances.draw",
-                               {Slot::uniform, Slot::storage_read, Slot::storage_read,
-                                Slot::storage_read, Slot::storage_read, Slot::storage_read},
-                               vf);
+  ip.draw_layout =
+      make_layout(device, "instances.draw",
+                  {Slot::uniform, Slot::storage_read, Slot::storage_read, Slot::storage_read,
+                   Slot::storage_read, Slot::storage_read, Slot::storage_read},
+                  vf);
   ip.light_layout =
       make_layout(device, "instances.light", {Slot::uniform, Slot::texture, Slot::texture}, vf);
   ip.empty_layout = make_layout(device, "instances.empty", {}, vf);
@@ -234,7 +235,8 @@ void bind_instance_shadows(InstancePipelines& ip, const wgpu::BindGroup& shadows
 
 void create_family(gpu::Device& device, const InstancePipelines& ip, InstanceFamily& f,
                    std::string_view label, std::span<const MeshSource> meshes,
-                   std::span<const float> materials_rgb, uint32_t capacity) {
+                   std::span<const float> materials_rgb, uint32_t capacity,
+                   uint32_t palette_joints) {
   f.label = std::string(label);
   f.capacity = std::clamp(capacity, 1u, kMaxInstances);
   f.count = 0;
@@ -246,7 +248,8 @@ void create_family(gpu::Device& device, const InstancePipelines& ip, InstanceFam
   f.mesh_lod.clear();
   f.lod_vertex.clear();
   f.lod_last.clear();
-  std::vector<uint32_t> lod_vertices;  // each LOD's vertex count
+  std::vector<uint32_t> lod_vertices;                  // each LOD's vertex count
+  std::vector<const std::vector<uint32_t>*> lod_skin;  // each LOD's skin words (palette LODs)
   for (const MeshSource& m : meshes) {
     MeshRow row{};
     row.info[0] = static_cast<uint32_t>(lod_rows.size());
@@ -274,7 +277,10 @@ void create_family(gpu::Device& device, const InstancePipelines& ip, InstanceFam
       lr.info[1] = static_cast<uint32_t>(p.indices.size());
       lr.info[2] = static_cast<uint32_t>(words.size() / 3);
       f.lod_vertex.push_back(lr.info[2]);
-      f.lod_last.push_back(src.reach ? 1u : 0u);  // placed after every LOD's vertices, below
+      // Placed after every LOD's vertices, below: a skinned LOD's last positions, or a palette
+      // LOD's skin.
+      f.lod_last.push_back(src.reach && src.skin.empty() ? 1u : 0u);
+      lod_skin.push_back(src.skin.empty() ? nullptr : &src.skin);
       lod_vertices.push_back(static_cast<uint32_t>(p.words.size() / 3));
       lr.info[3] = static_cast<uint32_t>(mesh_rows.size());
       words.insert(words.end(), p.words.begin(), p.words.end());
@@ -334,6 +340,14 @@ void create_family(gpu::Device& device, const InstancePipelines& ip, InstanceFam
       words.insert(words.end(), {w0, w1 & 0xffffu});
     }
   }
+  // A palette LOD's skin after them: three words a vertex (instances.wgsl's `skinned`).
+  for (size_t l = 0; l < lod_rows.size(); ++l) {
+    if (!lod_skin[l] || palette_joints == 0) continue;
+    std::vector<uint32_t> skin = *lod_skin[l];
+    skin.resize(size_t{lod_vertices[l]} * 3, 0);
+    lod_rows[l].motion[1] = static_cast<uint32_t>(words.size());
+    words.insert(words.end(), skin.begin(), skin.end());
+  }
   if (words.empty()) words.assign(3, 0);
   if (indices.empty()) indices.assign(3, 0);
   if (mesh_rows.empty()) mesh_rows.push_back(MeshRow{});
@@ -364,6 +378,11 @@ void create_family(gpu::Device& device, const InstancePipelines& ip, InstanceFam
   f.params = buffer("params", sizeof(InstanceFamily::Params), BU::Uniform);
   f.streams.assign(size_t{kStreams} * f.capacity * 4, 0.0f);
   f.moved_since_cut = false;
+  f.palette_joints = palette_joints;
+  f.palette_half = 0;
+  f.palettes_settle = true;
+  f.palettes =
+      buffer("palettes", uint64_t{2} * f.capacity * palette_joints * 48, BU::Storage | BU::CopyDst);
 
   // The draws' arguments with no instances: bucket b of phase p draws its LOD's triangles from
   // base vertex b << 20, so the vertex stage knows the bucket.
@@ -398,8 +417,9 @@ void create_family(gpu::Device& device, const InstancePipelines& ip, InstanceFam
       a[4] = 0;
     }
   }
-  f.draw_group = make_group(device, f.label + ".draw", ip.draw_layout,
-                            {f.params, f.vertices, f.lods, f.instances, f.lists, f.materials});
+  f.draw_group =
+      make_group(device, f.label + ".draw", ip.draw_layout,
+                 {f.params, f.vertices, f.lods, f.instances, f.lists, f.materials, f.palettes});
 }
 
 void create_family_casters(gpu::Device& device, const InstancePipelines& ip, InstanceFamily& f,
@@ -414,8 +434,9 @@ void create_family_casters(gpu::Device& device, const InstancePipelines& ip, Ins
         std::max<uint64_t>(uint64_t{std::max(f.lod_count, 1u)} * f.capacity * 4, 16), BU::Storage);
     c.args = make_buffer(device, name + ".args", kCountersBytes,
                          BU::Storage | BU::Indirect | BU::CopySrc);
-    c.draw_group = make_group(device, name + ".draw", ip.draw_layout,
-                              {c.params, f.vertices, f.lods, f.instances, c.lists, f.materials});
+    c.draw_group =
+        make_group(device, name + ".draw", ip.draw_layout,
+                   {c.params, f.vertices, f.lods, f.instances, c.lists, f.materials, f.palettes});
   }
 }
 
@@ -475,7 +496,18 @@ void set_instance_count(InstanceFamily& f, uint32_t count) {
   f.count = std::min(count, f.capacity);
 }
 
-void cut_family(InstanceFamily& f) { f.moved_since_cut = false; }
+void cut_family(InstanceFamily& f) {
+  f.moved_since_cut = false;
+  f.palettes_settle = true;
+}
+
+void palette_rows(const InstanceFamily& f, uint32_t out[4]) {
+  const uint32_t half = f.capacity * f.palette_joints * 3;
+  out[0] = f.palette_joints;
+  out[1] = f.palette_half * half;
+  out[2] = (f.palette_half ^ 1u) * half;
+  out[3] = 0;
+}
 
 void prepare_family(gpu::Device& device, InstanceFamily& f, const FrameView& view,
                     uint32_t render_height, bool occlusion) {
@@ -488,6 +520,7 @@ void prepare_family(gpu::Device& device, InstanceFamily& f, const FrameView& vie
   f.staged.cull[1] = kMinPixels;
   f.staged.cull[2] = kLodBand;
   f.staged.cull[3] = 0;
+  palette_rows(f, f.staged.skin);
   device.queue.WriteBuffer(f.params, 0, &f.staged, sizeof f.staged);
   device.queue.WriteBuffer(f.args, 0, f.args_reset.data(), f.args_reset.size() * 4);
 }
@@ -504,6 +537,7 @@ void prepare_family_caster(gpu::Device& device, InstanceFamily& f, int slot, flo
   p.cull[1] = kMinPixels;
   p.cull[2] = 0;  // no band: a map draws one LOD
   p.cull[3] = 0;
+  palette_rows(f, p.skin);
   device.queue.WriteBuffer(c.params, 0, &p, sizeof p);
   device.queue.WriteBuffer(c.args, 0, f.args_reset.data(), f.args_reset.size() * 4);
   c.culled = f.count > 0;

@@ -3,7 +3,8 @@
 // its vertex pulled from the shared buffer and decoded. Lit by the sun past the ground's own
 // horizon and past what stands in the sun (wgsl/sun_shadow.wgsl), and the sky through
 // frame.wgsl's functions, seen through the haze, with its motion
-// from the last frame's place (and a skinned vertex's own last place in its mesh). Drawn twice from one `@invariant` vertex stage: depth only
+// from the last frame's place (and a skinned vertex's own last place in its mesh). A palette
+// LOD's vertex is posed here, by its instance's palette this frame and the last (`skinned`). Drawn twice from one `@invariant` vertex stage: depth only
 // (`fs_depth`, which keeps a LOD band's dithered share of the pixels), then shaded where the
 // depth is `equal` (`fs_main`, which never discards).
 #include "render/wgsl/frame.wgsl"
@@ -21,6 +22,7 @@
 @group(2) @binding(3) var<storage, read> streams: array<vec4f>;
 @group(2) @binding(4) var<storage, read> lists: array<u32>;
 @group(2) @binding(5) var<storage, read> materials: array<vec4f>;
+@group(2) @binding(6) var<storage, read> palettes: array<vec4f>;  // three rows a joint
 
 @group(3) @binding(0) var<uniform> shadow: SunShadow;
 @group(3) @binding(1) var shadow_maps: texture_depth_2d_array;
@@ -37,6 +39,37 @@ fn last_position(index: u32, lod: Lod, now: vec3f) -> vec3f {
   let w1 = vertices[at + 1u];
   let q = vec3f(f32(w0 & 0xffffu), f32(w0 >> 16u), f32(w1 & 0xffffu)) / 65535.0;
   return lod.box_min.xyz + q * lod.box_size.xyz;
+}
+
+// A palette LOD's vertex posed by its instance's palette (rows from `first`, three a joint): the
+// linear blend of its four joints, the weights as 16-bit unorms (render/skinning.hpp's
+// `palette_source`), its position and normal in mesh space.
+struct Posed {
+  position: vec3f,
+  normal: vec3f,
+}
+
+fn skinned(skin: u32, first: u32, p: vec3f, n: vec3f) -> Posed {
+  let joints = vertices[skin];
+  let w01 = vertices[skin + 1u];
+  let w23 = vertices[skin + 2u];
+  let w = vec4f(f32(w01 & 0xffffu), f32(w01 >> 16u), f32(w23 & 0xffffu), f32(w23 >> 16u));
+  let weights = w / max(w.x + w.y + w.z + w.w, 1.0);
+  let last = fp.skin.x - 1u;
+  var r0 = vec4f(0.0);
+  var r1 = vec4f(0.0);
+  var r2 = vec4f(0.0);
+  for (var k = 0u; k < 4u; k++) {
+    let j = first + min((joints >> (8u * k)) & 0xffu, last) * 3u;
+    r0 += weights[k] * palettes[j];
+    r1 += weights[k] * palettes[j + 1u];
+    r2 += weights[k] * palettes[j + 2u];
+  }
+  let h = vec4f(p, 1.0);
+  var out: Posed;
+  out.position = vec3f(dot(r0, h), dot(r1, h), dot(r2, h));
+  out.normal = vec3f(dot(r0.xyz, n), dot(r1.xyz, n), dot(r2.xyz, n));
+  return out;
 }
 
 struct VertexOut {
@@ -62,14 +95,25 @@ fn vs_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) iid: u32) -
   let s = streams[kStreamScale * cap + i];
   let lp = streams[kStreamLastPlace * cap + i];
   let lq = streams[kStreamLastRotation * cap + i];
-  let local = v.position * s.xyz;
-  let last_local = last_position(vid & 0xfffffu, lod, v.position) * s.xyz;
+  var position = v.position;
+  var normal = v.normal;
+  var last = last_position(vid & 0xfffffu, lod, v.position);
+  if (lod.motion.y != 0u) {
+    let skin = lod.motion.y + (vid & 0xfffffu) * 3u;
+    let rows = i * fp.skin.x * 3u;
+    let now = skinned(skin, fp.skin.y + rows, v.position, v.normal);
+    position = now.position;
+    normal = now.normal;
+    last = skinned(skin, fp.skin.z + rows, v.position, v.normal).position;
+  }
+  let local = position * s.xyz;
+  let last_local = last * s.xyz;
   var out: VertexOut;
   out.rel = p.xyz + quat_rotate(q, local) - frame.eye.xyz;
   out.last_rel = lp.xyz + quat_rotate(lq, last_local) - frame.eye.xyz;
   out.position = frame.view_proj * vec4f(out.rel, 1.0);
   // A normal under a scale by s is scaled by 1 / s.
-  out.normal = quat_rotate(q, normalize(v.normal / s.xyz));
+  out.normal = quat_rotate(q, normalize(normal / s.xyz));
   out.material = u32(p.w) + v.part;
   out.band = entry >> 23u;
   return out;

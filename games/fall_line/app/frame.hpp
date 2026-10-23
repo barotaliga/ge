@@ -6,8 +6,8 @@
 //   sky.tables           -> sky.transmittance sky.multiscatter sky.view sky.aerial sky.light
 //   skinning             -> figures.posed (every racer's skier model posed into his mesh)
 //   terrain.cull         -> terrain.tiles terrain.indirect (and terrain.normals, once)
-//   instances.cull       -> instances.early (the forest and the figures: the frustum, the last
-//                           frame's pyramid)
+//   instances.cull       -> instances.early (the forest, the figures and the crowd: the
+//                           frustum, the last frame's pyramid)
 //   terrain.horizon      -> terrain.horizon (the bakes due)
 //   trails.fine          -> trails.fine (the tracks laid since the last frame, or the whole
 //                           window redrawn from the history when it moved)
@@ -17,7 +17,7 @@
 //   shadows.cull         -> shadows.lists (the casters of the maps drawn this frame)
 //   shadows.near         -> shadows.maps (the near cascade: the forest, when due)
 //   shadows.far          -> shadows.maps (the far cascade, when due)
-//   shadows.figures      -> shadows.maps (the figures' atlas, every frame)
+//   shadows.figures      -> shadows.maps (the figures' atlas, every frame: the racers)
 //   terrain.depth        -> depth (the prepass)
 //   instances.depth      -> depth (the early lists' prepass)
 //   hiz                  -> hiz (the depth's pyramid)
@@ -111,6 +111,9 @@ struct FrameScene {
   std::span<const ge::skier::SkierState> skiers;
   double dt = 0;
   bool settle = true;
+  // The free ride's crowd (sim/crowd.hpp), by id: each drawn as the skier model in his own pose
+  // (scene.hpp's `crowd_instance`); empty, none.
+  std::span<const sim::Amateur> crowd = {};
 };
 
 struct GameFrame {
@@ -144,8 +147,8 @@ struct GameFrame {
   ge::render::Bloom bloom;
   ge::render::Post post;
   ge::render::InstancePipelines instancing;
-  ge::render::InstanceFamily forest, figures;
-  ge::render::InstanceFamily* families[2] = {&forest, &figures};
+  ge::render::InstanceFamily forest, figures, crowd;
+  ge::render::InstanceFamily* families[3] = {&forest, &figures, &crowd};
   wgpu::BindGroup instance_light;
   ge::render::SunShadows shadows;
   const ge::mountain::mapgen::Level* level = nullptr;
@@ -163,6 +166,10 @@ struct GameFrame {
   std::vector<ge::assets::Affine> globals, palette;
   std::vector<ge::render::Instance> staged_figures;
   std::vector<std::array<double, 3>> figure_centres;
+  // The crowd: a poser an amateur by id, every amateur's palette in a row, his instance.
+  std::vector<ge::skier::RigPoser> crowd_posers;
+  std::vector<ge::assets::Affine> crowd_palettes;
+  std::vector<ge::render::Instance> staged_crowd;
   ge::render::FrameRecorder recorder;
   std::vector<uint8_t> albedo;
 };

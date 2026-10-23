@@ -5,6 +5,7 @@
 struct FamilyParams {
   info: vec4u,  // count, LODs, capacity, occlusion on (1)
   cull: vec4f,  // px a unit of tan on screen, the least radius on screen (px), the LOD band
+  skin: vec4u,  // a palette family's: joints a palette, this frame's first row, the last frame's
 }
 
 struct Mesh {
@@ -16,7 +17,8 @@ struct Lod {
   box_min: vec4f,   // the packed positions' box; w: the least radius on screen it is drawn at
   box_size: vec4f,
   info: vec4u,      // first index, index count, first vertex, mesh
-  motion: vec4u,    // x: the first word of the last frame's positions (two a vertex), 0: none
+  motion: vec4u,    // x: the first word of the last frame's positions (two a vertex), 0: none;
+                    // y: of its skin (three a vertex, posed by the instance's palette), 0: none
 }
 
 // The instance streams, each `capacity` vec4s long, in this order.

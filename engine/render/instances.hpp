@@ -25,6 +25,10 @@
 //   depth prepass only (its fragment discards; the colour pass tests `equal` and so shades only
 //   the pixels the prepass kept), so a LOD change never pops. `pick_lod` is the CPU twin.
 //
+// - A PALETTE FAMILY (`create_family`'s `palette_joints`): every instance its own palette of
+//   joints (render/skinning.hpp's `set_palettes`), and LODs made by `palette_source` posed by it
+//   in the vertex stage, this frame's and the last's (a crowd: one mesh, a pose an instance).
+//
 // - CASTERS: a family that casts into the sun's shadow maps (render/shadows.hpp) has a CASTER
 //   SLOT a map it is drawn into (`create_family_casters`): lists and draws of its own, filled by
 //   the cull's `shadow` entry (the map's box, no pyramid, the LOD by the radius in the map's
@@ -45,7 +49,7 @@
 // ge:keywords vertex-pulling soa streams materials pick_lod create_family set_instances
 // ge:keywords encode_instances_cull encode_instances_depth encode_instances instance-stats
 // ge:keywords casters caster-slot shadow-cull create_family_casters draw_casters
-// ge:keywords wire-probe wireframe encode_instances_wire
+// ge:keywords wire-probe wireframe encode_instances_wire palette-family palettes
 // ge:skill render
 // ge:test tests/render_instances_test.cpp
 #pragma once
@@ -82,10 +86,15 @@ struct LodReach {
   std::array<float, 3> min;
   std::array<float, 3> size;
 };
+// A LOD skinned in the vertex stage from each instance's own palette (`skin`, three words a
+// vertex: its four joints as bytes, then its four weights as 16-bit unorms; render/skinning.hpp's
+// `palette_source`) keeps its bind pose packed into `reach` and no last positions: the draw poses
+// every vertex by its instance's palette this frame and the last (`InstanceFamily::palettes`).
 struct LodSource {
   MeshData mesh;
   float min_px = 0;
   std::optional<LodReach> reach = std::nullopt;
+  std::vector<uint32_t> skin = {};
 };
 struct MeshSource {
   std::vector<LodSource> lods;  // finest first, at most kMaxLods
@@ -165,19 +174,30 @@ struct InstanceFamily {
   std::vector<uint32_t> lod_last;    // each skinned LOD's last positions' first word, else 0
   std::vector<CasterSlot> casters;   // a shadow map's draws each (create_family_casters)
   bool moved_since_cut = false;      // false: the next write's last frame is the write itself
+  // A palette family's (`palette_joints` > 0): every instance's palette, `palette_joints` joints
+  // of three vec4 rows each, twice (this frame's half and the last frame's, swapped by each
+  // `set_palettes`); `palettes_settle`: the next write is its own last frame too.
+  uint32_t palette_joints = 0;
+  wgpu::Buffer palettes;
+  uint32_t palette_half = 0;
+  bool palettes_settle = true;
   // instances_cull.wgsl's `FamilyParams`, filled by prepare.
   struct Params {
     uint32_t info[4];  // count, LODs, capacity, occlusion on
     float cull[4];     // px a unit of tan on screen, kMinPixels, kLodBand, 0
+    uint32_t skin[4];  // joints a palette, this frame's first row, the last frame's, 0
   } staged{};
 };
 
 // A family of `capacity` instances (≤ kMaxInstances) of `meshes` (≤ kMaxBuckets LODs in all)
 // lit by `materials` (linear rgb). Its cull needs the pyramid: `bind_family_hiz` after it is
-// made (and again after a resize).
+// made (and again after a resize). `palette_joints` > 0 makes it a palette family: each instance
+// has a palette of that many joints (render/skinning.hpp's `set_palettes`), which its LODs made
+// by `palette_source` are posed by.
 void create_family(gpu::Device& device, const InstancePipelines& ip, InstanceFamily& family,
                    std::string_view label, std::span<const MeshSource> meshes,
-                   std::span<const float> materials_rgb, uint32_t capacity);
+                   std::span<const float> materials_rgb, uint32_t capacity,
+                   uint32_t palette_joints = 0);
 void bind_family_hiz(gpu::Device& device, const InstancePipelines& ip, InstanceFamily& family,
                      const Hiz& hiz);
 
@@ -190,8 +210,10 @@ void create_family_casters(gpu::Device& device, const InstancePipelines& ip, Ins
 void set_instances(gpu::Device& device, InstanceFamily& family, uint32_t first,
                    std::span<const Instance> instances);
 void set_instance_count(InstanceFamily& family, uint32_t count);
-// The camera cut: the next write moves nothing since the last frame.
+// The camera cut: the next write moves nothing since the last frame (nor the next palettes).
 void cut_family(InstanceFamily& family);
+// A palette family's rows for its parameters' `skin`: joints, this frame's first row, the last's.
+void palette_rows(const InstanceFamily& family, uint32_t out[4]);
 
 // The family's parameters for this frame (the screen's scale for the LOD, whether the last
 // frame's pyramid may cull) and its draws' arguments reset.

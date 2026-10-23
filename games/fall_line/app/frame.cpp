@@ -224,6 +224,8 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
   f->globals.resize(joints);
   f->palette.resize(joints);
   f->staged_figures.resize(kMaxFigures);
+  r::create_family(device, f->instancing, f->crowd, "crowd", crowd_meshes(model),
+                   crowd_materials(model), kMaxCrowd, joints);
   f->instance_light = r::instance_light_group(device, f->instancing, f->terrain);
   // The forest casts into the cascades (two caster slots), the figures into the atlas (one).
   r::ShadowSettings shadows;
@@ -248,7 +250,9 @@ void cut(GameFrame& f) {
   f.history.valid = false;
   r::reset_taa(f.taa);
   r::cut_family(f.figures);
+  r::cut_family(f.crowd);
   for (ge::skier::RigPoser& p : f.posers) p = {};
+  for (ge::skier::RigPoser& p : f.crowd_posers) p = {};
   for (r::Skin& s : f.skins) r::settle_skin(s);
 }
 
@@ -279,6 +283,37 @@ void forget_tracks(GameFrame& f) {
   ge::mountain::app::clear_trails(f.trails);
   f.pens.clear();
 }
+
+namespace {
+
+// Every amateur posed and placed: his poser's lags run on over the scene's `dt` (settled: none),
+// his palette into the crowd's rows at his id, his instance at his id.
+void pose_crowd(ge::gpu::Device& device, GameFrame& f, const FrameScene& scene) {
+  const size_t n = std::min<size_t>(scene.crowd.size(), kMaxCrowd);
+  const size_t joints = f.skier->joints.size();
+  if (f.crowd_posers.size() < n || scene.settle) f.crowd_posers.assign(n, {});
+  f.crowd_palettes.resize(n * joints);
+  f.staged_crowd.resize(n);
+  for (size_t i = 0; i < n; ++i) {
+    const sim::Amateur& a = scene.crowd[i];
+    f.staged_crowd[i] = crowd_instance(a, *f.level, f.materials_per_racer);
+    if (!crowd_drawn(a)) {
+      f.crowd_posers[i] = {};
+      continue;
+    }
+    f.crowd_posers[i].pose(crowd_skier(a), scene.dt, f.rig_pose);
+    ge::skier::rig_locals(*f.skier, f.binding, f.rig_pose, f.locals);
+    ge::assets::pose_globals(*f.skier, f.locals, f.globals);
+    ge::assets::skin_palette(*f.skier, f.globals,
+                             std::span<ge::assets::Affine>(&f.crowd_palettes[i * joints], joints));
+  }
+  if (scene.settle) r::cut_family(f.crowd);
+  r::set_instances(device, f.crowd, 0, f.staged_crowd);
+  r::set_instance_count(f.crowd, static_cast<uint32_t>(n));
+  r::set_palettes(device, f.crowd, f.crowd_palettes);
+}
+
+}  // namespace
 
 void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const FrameScene& scene,
           const wgpu::TextureView& output) {
@@ -364,13 +399,20 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
                      std::span<const r::Instance>(f.staged_figures.data(), racers));
     r::set_instance_count(f.figures, static_cast<uint32_t>(racers));
   }
+  if (!scene.crowd.empty()) {
+    GE_ZONE("frame.crowd");
+    pose_crowd(device, f, scene);
+  } else {
+    r::set_instance_count(f.crowd, 0);
+  }
   {
     GE_ZONE("frame.instances");
     for (r::InstanceFamily* family : f.families) {
       r::prepare_family(device, *family, view, f.targets.height, occlusion);
     }
   }
-  // Each figure's tile is centred a metre over its skis.
+  // Each figure's tile is centred a metre over its skis. The crowd casts none: the atlas draws
+  // every figure into every tile, so its cost would grow with the crowd times the tiles.
   f.figure_centres.resize(racers);
   for (size_t k = 0; k < racers; ++k) {
     const ge::skier::SkierState& s = scene.skiers[k];
