@@ -1,8 +1,8 @@
 ---
 title: Write a big set of describes from the struct's members, then read every one
 date: 2026-10-23
-scope: plugins/*, games/fall_line/sim/*_state.hpp, engine/ai
-concepts: [describe, hidden-friend, generate, members, skip, shared_ptr, pointer]
+scope: plugins/skier/skier.hpp, games/fall_line/sim/state.hpp, engine/ai/hands.hpp
+concepts: [describe, hidden-friend, generate, members, skip, shared-ptr, pointer]
 ---
 
 Fall Line's run holds about sixty state types. Their describes were written by a scratch script
