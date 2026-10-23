@@ -34,6 +34,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 ## The CI loop
 
 - precheck running every gate and printing each failure whole (done: no gate stops the run but the build, so every lint finding shows in one round)
+- precheck refusing two rows of one lab in `tests/labs_digests.txt` (done: the `digest rows` gate, which CI's labs-smoke would otherwise fail a round later)
 - `ge precheck` (done: the repo's CI gates in both presets) and `ge lint --like-ci` (CI's exact gates and file set)
 - `ge lint` (done: clang-tidy's bug-finding checks over what the change since `--base` reaches, the changed .cpp files and every .cpp including a changed header, or the files named, each finding at its line with its check's page; a few files in seconds)
 - a teleport detector for the labs (done: `engine/lab/teleport.hpp`, every step of a track that moves farther than its speed allows, reported under every scenario lab's `--trace`)

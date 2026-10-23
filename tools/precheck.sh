@@ -61,6 +61,16 @@ gate fmt-check make -s fmt-check || true
 gate agents-check make -s agents-check || true
 gate libm-check make -s libm-check || true
 gate release python3 tools/release.py check || true
+# A union merge can keep two rows of one lab in the digests' baseline; CI's labs-smoke refuses it.
+doubled_digests() {
+  local d
+  d=$(grep -v '^#' tests/labs_digests.txt | awk '{print $1}' | sort | uniq -d)
+  [[ -z "$d" ]] && return 0
+  echo "tests/labs_digests.txt holds more than one row for: $d. Keep the row this build writes" \
+    "(ge digest <lab>) and delete the other."
+  return 1
+}
+gate "digest rows" doubled_digests || true
 if ! gate build make -s build PRESET="$preset"; then
   echo "precheck: the build failed, so the lint, the tests and the digests could not run;" \
     "red: ${failed[*]}. Fix them, then make precheck again." >&2
