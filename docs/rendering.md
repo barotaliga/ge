@@ -713,7 +713,11 @@ read in 2026, longitude 0) by `core/moon.hpp` (M8f6):
   under half a degree, is not applied), with the galaxy's band;
 - THE EYE: under 14 lx on white the exposure adapts only partly (dark scenes stay dark), and
   the rods' share desaturates the picture toward a blue tint (`night_vision`, in post before
-  the exposure).
+  the exposure). The share is the scene's or the pixel's own, whichever is less, so a bright
+  star keeps its tint; the moon's disc, drawn far dimmer than it is but always bright enough
+  for the cones (an eclipse's umbra near 1 cd/m2), keeps its own colour: the sky pass gives the
+  sky in front of it to the rods and post leaves the disc's pixels alone (`on_moon`), so a full
+  moon is a warm white and an eclipsed one copper red over a blue-grey night.
 
 The `night` lab draws it on seed 38's vista: the snow's luma falls from 194 at three degrees
 under to 67 at fourteen, a full moon's snow is 71, a quarter's 28 and a new moon's 10, the
