@@ -21,13 +21,17 @@
 //   symmetric        a mapping per destination address; only that address may answer
 //
 // A mapping lives `mapping_us` after the last datagram out through it. A port forward
-// (`sim_nat_forward`, what UPnP or NAT-PMP asks a router for) lets anything in to one inside
-// address. What a NAT refuses is counted in `nat_dropped`.
+// (`sim_nat_forward`, what UPnP, NAT-PMP or PCP asks a router for: sim_router.hpp) lets anything
+// in to one inside address, and everything that address sends out leaves from the forwarded port,
+// whatever the kind, as a router's static mapping does. The router's own LAN face
+// (`NatConfig::gateway`) is reached from inside without crossing the NAT. What a NAT refuses is
+// counted in `nat_dropped`.
 //
 // ge:summary The simulated network: conditioned directed links on a virtual clock, seeded
 // ge:keywords net network simulated sim-network virtual-network fake link deliver datagram
 // ge:keywords virtual-clock deterministic headless partition broadcast nat full-cone
 // ge:keywords restricted-cone port-restricted symmetric-nat mapping filtering port-forward
+// ge:keywords gateway static-mapping
 // ge:skill net
 // ge:test tests/net_sim_network_test.cpp
 #pragma once
@@ -65,10 +69,14 @@ enum class NatKind : uint8_t { full_cone, restricted, port_restricted, symmetric
 const char* nat_kind_name(NatKind k);
 bool nat_kind(std::string_view name, NatKind& out);
 
+// No node: a NAT without a LAN face of its own.
+constexpr uint32_t kSimNoNode = 0xfffffffeu;
+
 struct NatConfig {
   NatKind kind = NatKind::port_restricted;
   uint32_t public_node = 0;       // the address the outside sees
   std::vector<uint32_t> inside;   // the nodes behind it
+  uint32_t gateway = kSimNoNode;  // the router's LAN face, reached from inside directly
   int64_t mapping_us = 30000000;  // a mapping's life after its last datagram out
   uint16_t first_port = 40000;    // the first public port it hands out
 };
@@ -141,6 +149,8 @@ int sim_add_nat(SimNetwork& net, const NatConfig& config);
 // Forward the NAT's `public_port` to `inside` until `until_us`; false when the port is mapped.
 bool sim_nat_forward(SimNetwork& net, int nat, const Address& inside, uint16_t public_port,
                      int64_t until_us);
+// Take a forward down; false when the port is not forwarded.
+bool sim_nat_unforward(SimNetwork& net, int nat, uint16_t public_port);
 // The NAT `node` sits behind, or -1.
 int sim_nat_of(const SimNetwork& net, uint32_t node);
 

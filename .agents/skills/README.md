@@ -28,6 +28,7 @@ router's Skills table and the directories against each other.
 | `release` | Changeset fragments, the installed package, cutting a release to GitHub Releases + Packages |
 | `sim` | Fall Line's headless simulation: mapgen, the step, the bot, the run clock |
 | `platform` | SDL3: window, input, gamepad, audio device, files, focus |
+| `move` | Character movement: the knobs and presets, the step, strafe jumping, steps, slopes, crouch, the trace a world answers, the `move-*` labs |
 | `input` | Input devices: keyboards, raw mice, gamepads, wheels and pedals, sticks, touch; actions, bindings, rebinding, feedback, the event log |
 | `gpu` | The native GPU device over Dawn: device, feature tiers, resources, the pipeline manifest, WGSL |
 | `render` | The pass table, a pass's two halves, the rules that keep a frame fast, captures and prices |
@@ -40,7 +41,7 @@ router's Skills table and the directories against each other.
 | `agent-interface` | Diagnostics as prompts, consumer skills, the `ge` CLI |
 | `bots` | What a bot decides: `engine/ai`, the decision record, `ge why`, making a bot more human |
 | `snow` | Snow over any ground: the column model, the cover and tiles, `press` and imprints, the snapshot, `ge snow`, the M29 plan |
-| `net` | Multiplayer networking: sockets, the simulated network, captures, the wire, channels, nodes, sessions and the lobby, LAN discovery, NAT traversal, fake traffic |
+| `net` | Multiplayer networking: sockets, the simulated network, captures, the wire, channels, nodes, sessions and the lobby, LAN discovery, NAT traversal, port mapping, fake traffic |
 | `plugins` | Engine, plugin or game: where code lives, adding a plugin, moving code between homes |
 
 ## Plugins
