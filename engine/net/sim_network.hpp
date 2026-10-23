@@ -10,15 +10,31 @@
 // datagram to `sim_broadcast(port)` is a LAN's broadcast: a copy to every socket bound on that
 // port but the sender's, each over its own link.
 //
+// NATS. A node may sit behind a simulated NAT (`sim_add_nat`), as a player at home does behind
+// their router: a datagram it sends past the NAT leaves from the NAT's public node on a port the
+// NAT maps it to, and a datagram arriving at that port reaches it only if the NAT's kind lets it
+// through (RFC 4787's mapping and filtering behaviours):
+//
+//   full_cone        one mapping per inside socket; anyone may send to it
+//   restricted       one mapping; only from a node the inside socket has sent to
+//   port_restricted  one mapping; only from an address (node and port) it has sent to
+//   symmetric        a mapping per destination address; only that address may answer
+//
+// A mapping lives `mapping_us` after the last datagram out through it. A port forward
+// (`sim_nat_forward`, what UPnP or NAT-PMP asks a router for) lets anything in to one inside
+// address. What a NAT refuses is counted in `nat_dropped`.
+//
 // ge:summary The simulated network: conditioned directed links on a virtual clock, seeded
 // ge:keywords net network simulated sim-network virtual-network fake link deliver datagram
-// ge:keywords virtual-clock deterministic headless partition broadcast
+// ge:keywords virtual-clock deterministic headless partition broadcast nat full-cone
+// ge:keywords restricted-cone port-restricted symmetric-nat mapping filtering port-forward
 // ge:skill net
 // ge:test tests/net_sim_network_test.cpp
 #pragma once
 
 #include <cstddef>
 #include <cstdint>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -42,6 +58,38 @@ struct Datagram {
 struct SimStats {
   uint64_t sent = 0, delivered = 0, lost = 0, queue_dropped = 0, duplicated = 0, unbound = 0;
   uint64_t bytes_sent = 0, bytes_delivered = 0;
+  uint64_t nat_dropped = 0;  // arrived at a NAT's public node and refused (NATS)
+};
+
+enum class NatKind : uint8_t { full_cone, restricted, port_restricted, symmetric };
+const char* nat_kind_name(NatKind k);
+bool nat_kind(std::string_view name, NatKind& out);
+
+struct NatConfig {
+  NatKind kind = NatKind::port_restricted;
+  uint32_t public_node = 0;       // the address the outside sees
+  std::vector<uint32_t> inside;   // the nodes behind it
+  int64_t mapping_us = 30000000;  // a mapping's life after its last datagram out
+  uint16_t first_port = 40000;    // the first public port it hands out
+};
+
+struct SimNat {
+  NatConfig config;
+  struct Mapping {
+    Address inside;
+    Address remote;  // symmetric: the one destination it was made for
+    uint16_t port = 0;
+    int64_t last_out_us = 0;
+    std::vector<Address> sent_to;  // the filter's memory
+  };
+  std::vector<Mapping> maps;
+  struct Forward {
+    uint16_t port = 0;
+    Address inside;
+    int64_t until_us = 0;
+  };
+  std::vector<Forward> forwards;
+  uint16_t next_port = 0;
 };
 
 struct SimNetwork {
@@ -69,6 +117,7 @@ struct SimNetwork {
     size_t head = 0;
   };
   std::vector<Socket> sockets;
+  std::vector<SimNat> nats;
   SimStats stats;
 };
 
@@ -86,6 +135,14 @@ void sim_unbind(SimNetwork& net, const Address& address);
 void sim_set_link(SimNetwork& net, uint32_t from_node, uint32_t to_node, const LinkConditions& c);
 void sim_set_path(SimNetwork& net, uint32_t a, uint32_t b, const LinkConditions& c);
 const LinkConditions& sim_link(const SimNetwork& net, uint32_t from_node, uint32_t to_node);
+
+// Put `config.inside` behind a NAT; its index.
+int sim_add_nat(SimNetwork& net, const NatConfig& config);
+// Forward the NAT's `public_port` to `inside` until `until_us`; false when the port is mapped.
+bool sim_nat_forward(SimNetwork& net, int nat, const Address& inside, uint16_t public_port,
+                     int64_t until_us);
+// The NAT `node` sits behind, or -1.
+int sim_nat_of(const SimNetwork& net, uint32_t node);
 
 // Put a datagram on the wire at the network's clock; its fate is decided now. False when it is
 // larger than kMaxDatagram (nothing is sent).
