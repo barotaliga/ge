@@ -14,7 +14,16 @@
 // THE VIEWS are what `ge shot` can picture: each a name the spec lists, drawn by the Run on the
 // CPU (lab/raster.hpp) at the step the run has reached, so a still needs no GPU and no window and
 // reproduces from the input log like the rest of the run. A game with a renderer can still draw a
-// view on the CPU (a map from above, a chart of the field); the GPU's pictures are its labs'.
+// view on the CPU (a map from above, a chart of the field).
+//
+// THE GPU'S PICTURES (`ge shot --gpu`, `ge record --gpu`): a play executable built with its
+// game's renderer also registers a `RendererSpec` (`GE_RENDERER(spec)`): the views the renderer
+// draws, its MODES (each a way of drawing the same view: lit, the meshes' edges, the depth, the
+// game's marks over the lit picture) and `open`, which makes the renderer once (a device, the
+// game's frame) for a whole shot or recording. `Renderer::draw` pictures a Run as it stands; the
+// renderer keeps what one frame hands the next (the tracks laid, the spray, the history), so a
+// recording hands it every frame in order and says when a frame is a cut. A build with no GPU
+// registers none, and `--gpu` says so.
 //
 // THE TRACE is what `ge why` reads: a Run whose bots write decision records (ai/why.hpp) says so
 // by accepting a recorder (`trace`), and the engine replays a log with it on (play/why.hpp).
@@ -25,6 +34,7 @@
 // ge:summary The play contract: GameSpec, the axes, Run (step, observe, state, digest, pilot)
 // ge:keywords play contract game spec run axis axes option setup pilot bot observe state digest
 // ge:keywords snap_axis ge_game register view views shoot shot picture caption trace why
+// ge:keywords renderer renderer-spec ge_renderer gpu mode modes lit wireframe depth overlay
 // ge:skill agent-interface
 // ge:test tests/play_session_test.cpp
 #pragma once
@@ -138,6 +148,33 @@ struct GameSpec {
   std::span<const View> views = {};
 };
 
+// What one GPU picture is asked for: a view and a mode the renderer lists, the picture's size,
+// and whether it is a cut (the first frame of a shot or a recording: nothing of a last frame is
+// kept).
+struct RenderShot {
+  std::string_view view;
+  std::string_view mode;
+  int width = 0, height = 0;
+  bool cut = true;
+};
+
+class Renderer {
+ public:
+  virtual ~Renderer() = default;
+  // `run` as it stands, drawn on the GPU as `shot` asks, into `out` (RGBA, shot.width x
+  // shot.height), with `caption` one line saying what it shows. False with `error` saying why.
+  virtual bool draw(const Run& run, const RenderShot& shot, lab::Picture& out, std::string& caption,
+                    std::string& error) = 0;
+};
+
+struct RendererSpec {
+  std::span<const View> views;  // the first the default
+  std::span<const View> modes;  // the first the default
+  int width, height;            // a picture's size when none is asked for
+  // The renderer, or null with `error` saying why (no adapter, a pipeline that failed).
+  std::unique_ptr<Renderer> (*open)(std::string& error);
+};
+
 // `v` on its axis's grid: clamped to the axis's range and rounded to its step (toggles to 0 or
 // 1). NaN reads as 0.
 double snap_axis(double v, AxisKind kind);
@@ -154,9 +191,19 @@ struct GameRegister {
   explicit GameRegister(const GameSpec& spec);
 };
 
+// The renderer registered in this executable, or null (a build with no GPU).
+const RendererSpec* registered_renderer();
+
+struct RendererRegister {
+  explicit RendererRegister(const RendererSpec& spec);
+};
+
 }  // namespace ge::play
 
 #define GE_GAME_CAT2(a, b) a##b
 #define GE_GAME_CAT(a, b) GE_GAME_CAT2(a, b)
 // Register `spec` (a GameSpec with static storage) as this executable's game.
 #define GE_GAME(spec) static ::ge::play::GameRegister GE_GAME_CAT(ge_game_reg_, __LINE__)(spec)
+// Register `spec` (a RendererSpec with static storage) as this executable's GPU renderer.
+#define GE_RENDERER(spec) \
+  static ::ge::play::RendererRegister GE_GAME_CAT(ge_renderer_reg_, __LINE__)(spec)

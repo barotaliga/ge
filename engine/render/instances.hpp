@@ -45,6 +45,7 @@
 // ge:keywords vertex-pulling soa streams materials pick_lod create_family set_instances
 // ge:keywords encode_instances_cull encode_instances_depth encode_instances instance-stats
 // ge:keywords casters caster-slot shadow-cull create_family_casters draw_casters
+// ge:keywords wire-probe wireframe encode_instances_wire
 // ge:skill render
 // ge:test tests/render_instances_test.cpp
 #pragma once
@@ -128,10 +129,12 @@ struct InstancePipelines {
   uint32_t p_early = 0, p_late = 0, p_depth = 0, p_draw = 0;
   uint32_t p_shadow_cull = 0, p_caster = 0;         // a shadow map's cull and depth draw
   uint32_t p_count_equal = 0, p_count_greater = 0;  // the overdraw probe's, when asked for
+  bool wire = false;                                // the wire probe's pipeline is made
+  uint32_t p_wire = 0;
 };
 void create_instance_pipelines(gpu::Device& device, gpu::PipelineSet& pipelines,
                                InstancePipelines& ip, const wgpu::BindGroupLayout& frame,
-                               bool overdraw_probe = false);
+                               bool overdraw_probe = false, bool wire_probe = false);
 // Group 1 of the draws: the ground's own shadow, read from the terrain's horizon maps.
 wgpu::BindGroup instance_light_group(gpu::Device& device, const InstancePipelines& ip,
                                      const Terrain& terrain);
@@ -150,6 +153,9 @@ struct InstanceFamily {
   uint32_t capacity = 0, count = 0;
   uint32_t lod_count = 0;
   wgpu::Buffer vertices, indices, meshes, lods, materials, instances, lists, args, state, params;
+  // The wire probe's (families made with InstancePipelines::wire): every triangle's three edges
+  // as lines, and their draws' arguments, whose instance counts are copied from `args`.
+  wgpu::Buffer wire_indices, wire_args;
   wgpu::BindGroup cull_group, draw_group;
   std::vector<uint32_t> args_reset;  // the draws' arguments with no instances, and zero stats
   std::vector<float> streams;        // the CPU's copy of the instance streams
@@ -220,6 +226,14 @@ void encode_instances_overdraw(std::span<InstanceFamily* const> families,
                                wgpu::CommandEncoder& encoder, const FrameTargets& targets,
                                const wgpu::BindGroup& frame, const wgpu::BindGroup& light,
                                const wgpu::TextureView& count, bool after_prepass);
+
+// The wire probe (labs; needs create_instance_pipelines' wire_probe): both phases' lists drawn as
+// their triangles' edges into `colour` (loaded) over the frame's depth (read only), each line a
+// hair nearer than its surface so the hidden ones stay hidden, as render/terrain.hpp's does.
+void encode_instances_wire(std::span<InstanceFamily* const> families, const InstancePipelines& ip,
+                           const gpu::PipelineSet& pipelines, wgpu::CommandEncoder& encoder,
+                           const FrameTargets& targets, const wgpu::BindGroup& frame,
+                           const wgpu::BindGroup& light, const wgpu::TextureView& colour);
 
 // One shadow map's casters: in a compute pass, `cull_shadow` dispatches slot `slot`'s cull of
 // every family (the map's view is group 0, set by the caller); in a depth pass of the map,

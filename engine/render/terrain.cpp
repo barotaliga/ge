@@ -161,6 +161,26 @@ void create_terrain(gpu::Device& device, gpu::PipelineSet& pipelines, Terrain& t
   }
   t.indices = make_buffer(device, "terrain.indices", idx.size() * 2, BU::Index);
   device.queue.WriteBuffer(t.indices, 0, idx.data(), idx.size() * 2);
+  t.wire = source.wire_probe;
+  if (t.wire) {
+    // The same quads' edges as lines: each quad's top, left and diagonal (the triangles' shared
+    // a-e), and the tile's last row's bottoms and last column's rights.
+    std::vector<uint16_t> lines;
+    for (uint16_t r = 0; r < kTileQuads; ++r) {
+      for (uint16_t c = 0; c < kTileQuads; ++c) {
+        const uint16_t a = static_cast<uint16_t>(r * n + c), b = static_cast<uint16_t>(a + 1);
+        const uint16_t d = static_cast<uint16_t>(a + n), e = static_cast<uint16_t>(d + 1);
+        for (uint16_t v : {a, b, a, d, a, e}) lines.push_back(v);
+        if (r + 1 == kTileQuads) lines.insert(lines.end(), {d, e});
+        if (c + 1 == kTileQuads) lines.insert(lines.end(), {b, e});
+      }
+    }
+    t.wire_indices = make_buffer(device, "terrain.wire.indices", lines.size() * 2, BU::Index);
+    device.queue.WriteBuffer(t.wire_indices, 0, lines.data(), lines.size() * 2);
+    t.wire_args = make_buffer(device, "terrain.wire.args", 20, BU::Indirect);
+    const uint32_t args[5] = {static_cast<uint32_t>(lines.size()), 0, 0, 0, 0};
+    device.queue.WriteBuffer(t.wire_args, 0, args, sizeof args);
+  }
   t.params = make_buffer(device, "terrain.params", sizeof(Terrain::Params), BU::Uniform);
   t.tiles =
       make_buffer(device, "terrain.tiles", uint64_t{kMaxLevels} * kTilesPerLevel * 4, BU::Storage);
@@ -222,7 +242,8 @@ void create_terrain(gpu::Device& device, gpu::PipelineSet& pipelines, Terrain& t
   tile.value = kTileQuads;
   auto pipeline = [&](const char* label, const char* entry,
                       std::initializer_list<wgpu::TextureFormat> targets, bool write_depth,
-                      wgpu::CompareFunction compare, bool add) {
+                      wgpu::CompareFunction compare, bool add,
+                      wgpu::PrimitiveTopology topology = wgpu::PrimitiveTopology::TriangleList) {
     wgpu::BlendState blend{};
     blend.color = {wgpu::BlendOperation::Add, wgpu::BlendFactor::One, wgpu::BlendFactor::One};
     blend.alpha = blend.color;
@@ -249,7 +270,7 @@ void create_terrain(gpu::Device& device, gpu::PipelineSet& pipelines, Terrain& t
     desc.vertex.entryPoint = "vs_main";
     desc.vertex.constantCount = 1;
     desc.vertex.constants = &tile;
-    desc.primitive.topology = wgpu::PrimitiveTopology::TriangleList;
+    desc.primitive.topology = topology;
     desc.primitive.cullMode = wgpu::CullMode::None;
     desc.depthStencil = &depth;
     desc.fragment = entry ? &fragment : nullptr;
@@ -264,6 +285,10 @@ void create_terrain(gpu::Device& device, gpu::PipelineSet& pipelines, Terrain& t
     t.p_count_equal = pipeline("terrain.count.equal", "fs_count", {r16}, false, CF::Equal, true);
     t.p_count_greater =
         pipeline("terrain.count.greater", "fs_count", {r16}, true, CF::Greater, true);
+  }
+  if (t.wire) {
+    t.p_wire = pipeline("terrain.wire", "fs_wire", {kWireFormat}, false, CF::GreaterEqual, false,
+                        wgpu::PrimitiveTopology::LineList);
   }
 
   // The grid's half of the params never moves; prepare fills the levels.
@@ -409,6 +434,35 @@ void encode_terrain_overdraw(const Terrain& t, const gpu::PipelineSet& pipelines
   desc.depthStencilAttachment = &depth;
   wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&desc);
   draw_tiles(t, pass, after_prepass ? t.p_count_equal : t.p_count_greater, pipelines, frame);
+  pass.End();
+}
+
+void encode_terrain_wire(const Terrain& t, const gpu::PipelineSet& pipelines,
+                         wgpu::CommandEncoder& encoder, const FrameTargets& targets,
+                         const wgpu::BindGroup& frame, const wgpu::TextureView& colour,
+                         bool clear) {
+  if (!t.wire) return;
+  // The tiles the cull kept this frame: its instance count into the lines' draw.
+  encoder.CopyBufferToBuffer(t.indirect, 4, t.wire_args, 4, 4);
+  wgpu::RenderPassColorAttachment c{};
+  c.view = colour;
+  c.loadOp = clear ? wgpu::LoadOp::Clear : wgpu::LoadOp::Load;
+  c.storeOp = wgpu::StoreOp::Store;
+  c.clearValue = {0, 0, 0, 1};
+  const wgpu::RenderPassDepthStencilAttachment depth = depth_attachment(targets, false);
+  wgpu::RenderPassDescriptor desc{};
+  desc.label = "terrain.wire";
+  desc.colorAttachmentCount = 1;
+  desc.colorAttachments = &c;
+  desc.depthStencilAttachment = &depth;
+  wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&desc);
+  pass.SetPipeline(pipelines.render(t.p_wire));
+  pass.SetBindGroup(0, frame);
+  pass.SetBindGroup(1, t.group);
+  pass.SetBindGroup(2, t.shadows);
+  if (t.has_material) pass.SetBindGroup(3, t.material);
+  pass.SetIndexBuffer(t.wire_indices, wgpu::IndexFormat::Uint16);
+  pass.DrawIndexedIndirect(t.wire_args, 0);
   pass.End();
 }
 
