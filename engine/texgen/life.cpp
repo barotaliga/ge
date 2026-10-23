@@ -20,7 +20,7 @@ namespace ge::texgen {
 namespace {
 
 int texels(const Surface& s, double share) {
-  return std::max(1, static_cast<int>(share * s.size + 0.5));
+  return std::max(1, static_cast<int>(std::floor(share * s.size + 0.5)));
 }
 
 // A mask's threshold from an amount: amount 0 covers nothing, 1 nearly everything.

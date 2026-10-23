@@ -341,6 +341,7 @@ std::string ref_text(const TextureRef& ref) {
 std::vector<double> resolve_params(const Recipe& recipe, const TextureRef& ref,
                                    std::vector<Diagnostic>& errors) {
   std::vector<double> out;
+  out.reserve(recipe.params.size());
   for (const Param& p : recipe.params) out.push_back(p.value);
   for (const auto& [k, v] : ref.params) {
     bool found = false;

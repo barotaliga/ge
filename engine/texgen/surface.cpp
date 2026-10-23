@@ -24,13 +24,15 @@ void box_pass(const std::vector<float>& in, std::vector<float>& out, int size, i
       const size_t stride = along_x ? 1 : static_cast<size_t>(size);
       for (int k = -r; k <= size + r; ++k) {
         const int w = k < 0 ? k + size : (k >= size ? k - size : k);
-        line[static_cast<size_t>(k + r)] = in[base + static_cast<size_t>(w) * stride];
+        const int j = k + r;
+        line[static_cast<size_t>(j)] = in[base + static_cast<size_t>(w) * stride];
       }
       double sum = 0;
       for (int k = 0; k <= 2 * r; ++k) sum += line[static_cast<size_t>(k)];
       for (int k = 0; k < size; ++k) {
         out[base + static_cast<size_t>(k) * stride] = static_cast<float>(sum * norm);
-        sum += line[static_cast<size_t>(k + 2 * r + 1)] - line[static_cast<size_t>(k)];
+        const int j = k + 2 * r + 1;
+        sum += line[static_cast<size_t>(j)] - line[static_cast<size_t>(k)];
       }
     }
   });

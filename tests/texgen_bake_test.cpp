@@ -122,9 +122,9 @@ TEST(the_disk_cache_writes_once_then_reuses) {
 TEST(the_preview_draws_tiles) {
   const tg::Maps m = tg::bake(library("bathroom_tiles", 32), {}).maps;
   const ge::lab::Picture p = tg::lit_preview(m, 64, 2);
-  CHECK(p.width == 64 && p.rgba.size() == 64u * 64 * 4);
+  CHECK(p.width == 64 && p.rgba.size() == size_t{64} * 64 * 4);
   // Two tiles across: the left half repeats as the right half.
-  CHECK(std::equal(p.rgba.begin(), p.rgba.begin() + 32 * 4, p.rgba.begin() + 32 * 4));
+  CHECK(std::equal(p.rgba.begin(), p.rgba.begin() + 128, p.rgba.begin() + 128));
 }
 
 TEST(library_digests_match_golden) {

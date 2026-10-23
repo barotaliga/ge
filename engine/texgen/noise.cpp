@@ -33,7 +33,7 @@ double value_octave(double u, double v, int period, uint32_t seed) {
 }
 
 double grad_dot(uint32_t cx, uint32_t cy, uint32_t seed, double dx, double dy) {
-  const uint32_t g = (hash_u32(cx, cy, seed) >> 13) & 7u;
+  const size_t g = (hash_u32(cx, cy, seed) >> 13) & 7u;
   return kGrad[g * 2] * dx + kGrad[g * 2 + 1] * dy;
 }
 

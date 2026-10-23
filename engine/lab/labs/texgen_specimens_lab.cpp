@@ -117,16 +117,25 @@ void run(lab::Lab& lab) {
       lab::blit(sheet, p, x, gap + label);
     }
     std::string tags;
-    for (const std::string& t : recipe.tags) tags += (tags.empty() ? "" : " ") + t;
+    for (const std::string& t : recipe.tags) {
+      if (!tags.empty()) tags += ' ';
+      tags += t;
+    }
+    std::string caption = "The recipe ";
+    caption += path;
+    caption += " baked at " + std::to_string(size) + " px (";
+    caption += std::to_string(recipe.layers.size()) + " layers, surface ";
+    caption += recipe.surface;
+    caption += ", " + core::num::to_string(recipe.scale_m) + " m a tile, tags ";
+    caption += tags;
+    caption +=
+        "). Lit by one light from the top left; then the maps: ORM is occlusion red, "
+        "roughness green, metal blue. Seam score ";
+    caption += core::num::to_fixed(seam, 2) + ".";
     lab.shot(
         {name,
          "TEXTURE " + name,
-         "The recipe " + path + " baked at " + std::to_string(size) + " px (" +
-             std::to_string(recipe.layers.size()) + " layers, surface " + recipe.surface + ", " +
-             core::num::to_string(recipe.scale_m) + " m a tile, tags " + tags +
-             "). Lit by one light from the top left; then the maps: ORM is occlusion red, "
-             "roughness green, metal blue. Seam score " +
-             core::num::to_fixed(seam, 2) + ".",
+         caption,
          "reads as its material lit; no line through the middle of LIT 2X2; joints and pits "
          "dark in ORM's red; the normal map's relief matches the height",
          {{"recipe", name}, {"size", std::to_string(size)}, {"seed", std::to_string(recipe.seed)}}},
