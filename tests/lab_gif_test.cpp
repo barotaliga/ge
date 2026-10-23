@@ -82,9 +82,10 @@ Decoded decode(const std::vector<uint8_t>& b) {
     prev = entry;
   }
   if (idx.size() != static_cast<size_t>(d.width) * d.height) return d;
-  for (const uint8_t k : idx)
-    d.rgb.push_back(static_cast<uint32_t>(b[table + k * 3]) << 16 | b[table + k * 3 + 1] << 8 |
-                    b[table + k * 3 + 2]);
+  for (const uint8_t k : idx) {
+    const size_t e = table + size_t{k} * 3;
+    d.rgb.push_back(static_cast<uint32_t>(b[e]) << 16 | b[e + 1] << 8 | b[e + 2]);
+  }
   d.ok = true;
   return d;
 }
