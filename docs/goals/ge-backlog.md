@@ -66,7 +66,6 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge lab <id> --sunlit` (a warning when a look's pixels sit in the horizon map's shadow, so a shadow change that moves no pixel is caught)
 - `ge lab scene <lab> <scene> --plan` (one scene's moment from above without running the whole lab)
 - `ge why --agent=1000..1003 --decision=landing` (the decision trace filtered by agent range and decision name)
-- `ge lab table <lab> --where col=value` (one slice of a lab's table)
 - `ge lab pick <lab> <shot> --pixel=x,y` (a picture's value at a pixel before the tonemap, the HDR colour and its depth)
 - `ge gpu dump <target> --frame=N --decode=<scheme>`
 - `ge asset inspect`
