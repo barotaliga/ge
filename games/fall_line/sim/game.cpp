@@ -56,7 +56,7 @@ void log_step(const GameState& state) {
         e.kind == EventKind::reset || e.kind == EventKind::onto || e.kind == EventKind::arrived ||
         e.kind == EventKind::boarded || e.kind == EventKind::unloaded ||
         e.kind == EventKind::sled || e.kind == EventKind::heli || e.kind == EventKind::para;
-    const out::Channel ch = e.kind == EventKind::shoulder || e.kind == EventKind::bump ? kField
+    const out::Channel ch = e.kind == EventKind::shoulder || e.kind == EventKind::bump    ? kField
                             : e.kind == EventKind::wanted                                 ? kWanted
                             : e.kind == EventKind::army || e.kind == EventKind::army_sled ? kArmy
                             : course                                                      ? kCourse
