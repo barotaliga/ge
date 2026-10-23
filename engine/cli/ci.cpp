@@ -397,7 +397,8 @@ Outcome run_ci(const fs::path& repo, const std::string& pr, const std::string& l
     if (queued.code != 0) {
       return fail("pull request " + pr +
                       " is green, its base merges only through a merge queue, and arming "
-                      "auto-merge failed: " + first_line(queued.output),
+                      "auto-merge failed: " +
+                      first_line(queued.output),
                   "gh pr merge " + pr + " -R " + repo_slug + " --auto --squash");
     }
     out.text += "  queued: the base merges through a merge queue; auto-merge armed\n";
