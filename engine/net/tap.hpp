@@ -36,7 +36,7 @@ struct Tap {
   uint64_t mirrored = 0, failed = 0;
 };
 
-// A tap sending to 127.0.0.1:`port` from a port of its own; false and `error` when the OS
+// A tap sending to 127.0.0.1:`port` from an ephemeral local port; false and `error` when the OS
 // refuses the socket.
 bool open_tap(Tap& tap, uint16_t port, std::string* error);
 void close_tap(Tap& tap);
