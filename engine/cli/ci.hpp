@@ -16,7 +16,8 @@
 //                                none of those match. --log reads a saved job log instead (one
 //                                downloaded by any other means), with no network. --merge
 //                                squash-merges the pull request when every check passed and it
-//                                merges cleanly, pinned to the head the checks ran on. A
+//                                merges cleanly, pinned to the head the checks ran on; on a
+//                                merge-queue base it arms auto-merge, and the queue merges. A
 //                                pull request GitHub blocks with every check green is answered
 //                                with why: the base's rules against the head's checks.
 //
@@ -40,6 +41,21 @@ namespace ge::cli {
 Outcome run_precheck(const BuildOptions& o, const std::vector<std::string>& presets);
 Outcome run_ci(const fs::path& repo, const std::string& pr, const std::string& log_file,
                bool merge = false);
+// `ge ci <pr> --wait[=<minutes>]`: run_ci once a minute until the pull request settles (a check
+// failed, it conflicts, or every check finished), at most `minutes`; with `merge`, the settled
+// green answer is then merged as --merge would. One blocking call where an agent would schedule
+// check-ins: run it in the background and act on the answer when it exits.
+Outcome run_ci_wait(const fs::path& repo, const std::string& pr, bool merge, int minutes);
+// The summary run_ci gives while checks are still running.
+inline constexpr std::string_view kCiPending = "nothing has failed yet";
+// Whether a ge ci answer is final: an error, or no check still running.
+bool ci_settled(const Outcome& o);
+// The owner/name a moved repository's web page redirects to, off `curl -sI`'s headers ("" when
+// they carry no GitHub Location).
+std::string moved_to_of(std::string_view headers);
+// Whether GitHub refused a direct merge because the base merges only through a merge queue
+// (the refusal's text, any case).
+bool merge_queue_refusal(std::string_view output);
 
 // Why GitHub blocks a pull request whose checks all passed, off the base's rules (`gh api
 // repos/<o>/<r>/rules/branches/<base>`, a JSON array; "" when they could not be read): each
