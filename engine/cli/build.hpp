@@ -6,7 +6,8 @@
 // A clean run answers in one line, so the output an agent reads stays small.
 //
 //   ge build   cmake --preset <p> [-DFETCHCONTENT_SOURCE_DIR_GAMEENGINE2=<engine>], cmake --build
-//   ge test    the build, then ctest --preset <p> [-R <filter>] (the tests and the labs' smoke)
+//   ge test    the build, then ctest --preset <p> [-R <filter>] (the tests and the labs' smoke);
+//              --affected: only the tests the change since --base reaches, only their targets built
 //   ge check   format (clang-format --dry-run), ge doctor, the build, the tests: the whole gate
 //   ge lab     the build, then build/<p>/labs: the list as JSON, or one lab with its report.json
 //   ge lab diff  the lab's pictures against a kept run's, per distance band (diff.json)
@@ -33,7 +34,10 @@ struct BuildOptions {
 };
 
 Outcome run_build(const BuildOptions& o);
-Outcome run_test(const BuildOptions& o, const std::string& filter);
+// With `affected` (a git ref), only the tests the change since it reaches (cli/reach.hpp).
+// `list` with `affected`: name them and run nothing.
+Outcome run_test(const BuildOptions& o, const std::string& filter, const std::string& affected = "",
+                 bool list = false);
 Outcome run_check(const BuildOptions& o);
 
 struct LabOptions {

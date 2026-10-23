@@ -1,0 +1,3 @@
+Status: done
+
+AVX2 baseline, threaded bakes, the routes search's kept step costs; the piste's dense lookup grid and both lookups' ring walks clamped to the occupied cells; then the routes' stale heap entries skipped, the network index's spans, and the pure readings (the routes' searches and lines, a drag's places, the woods' scan, a run's stamping) on threads: a ski area 2.91 s to 0.93 s, under a second on every seed of 38, 7 and 1, a single piste 0.54 s to 0.22 s, in the 4-core container, the slower machine; every digest unchanged; then the remainder and the 32-bit wrap without their library calls, `hypot` dividing once, the heading choice passing over headings that cannot win, and more pure passes on threads: a ski area 0.95 s to 0.79 s side by side

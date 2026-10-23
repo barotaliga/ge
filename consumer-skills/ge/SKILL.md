@@ -27,6 +27,7 @@ ge add test <name>               # a test file on the harness
 ge use <plugin>                  # link racing, mountain or skier, and install its skill
 ge build                         # compiler and CMake errors come back as findings
 ge test [--filter=<regex>]       # every test and lab smoke; each failure a finding
+ge test --affected [--base=<ref>] [--list]  # only the tests the change reaches (the include graph)
 ge lab <id> [--tag=before | --compare=before] [-- <its flags>]   # measure and LOOK
 ge digest [<lab>] [--write]      # a lab's digest beside tests/labs_digests.txt; --write moves its row
 ge digest --diff                 # every lab, printing only the digests off the baseline
