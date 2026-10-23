@@ -21,13 +21,25 @@ Player::Player(const play::GameSpec& spec, play::InputLog log, const KeepPolicy&
     error_ = "the keep policy: " + error_;
     return;
   }
-  if (!play::setup_of(spec, log_, setup_, error_)) return;
+  open_log();
+}
+
+Player::Player(const play::GameSpec& spec, play::InputLog log, Keeper keeper)
+    : spec_(&spec), log_(std::move(log)), keeper_(std::move(keeper)) {
+  open_log();
+}
+
+void Player::open_log() {
+  if (!play::setup_of(*spec_, log_, setup_, error_)) return;
   ends_.reserve(log_.runs.size());
   for (const play::InputRun& r : log_.runs) {
     length_ += r.count;
     ends_.push_back(length_);
   }
-  run_ = spec.open(setup_, error_);
+  int64_t first = -1;
+  const play::Run* copy = keeper_.at_or_before(0, &first);
+  if (copy && first == 0) run_ = copy->clone();
+  if (!run_) run_ = spec_->open(setup_, error_);
   if (run_) keeper_.offer(*run_, 0);
 }
 

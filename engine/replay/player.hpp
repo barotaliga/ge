@@ -22,6 +22,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "play/game.hpp"
@@ -35,6 +36,11 @@ class Player {
   // `log` must fit `spec` (its game and axes) and open; `ok()` says whether it did, `error` why
   // not. `policy` must have no `policy_problem` at the spec's step rate.
   Player(const play::GameSpec& spec, play::InputLog log, const KeepPolicy& policy = {});
+  // THE INSTANT REPLAY (live.hpp): the live run's own keeper adopted, its copies sought from, so
+  // nothing is played again that a copy already holds. The run starts as a clone of the copy at
+  // step 0 when there is one (no map built again), else opens from the setup. `keeper` must have
+  // been made at the spec's step rate and from runs of this log.
+  Player(const play::GameSpec& spec, play::InputLog log, Keeper keeper);
   bool ok() const { return run_ != nullptr; }
   const std::string& error() const { return error_; }
 
@@ -46,6 +52,9 @@ class Player {
   const play::Run& run() const { return *run_; }
   play::Run& run() { return *run_; }
   const Keeper& keeper() const { return keeper_; }
+  // The keeper handed back (to the live run it was adopted from), with the copies this player
+  // took on the way; the player keeps none and must not be advanced again.
+  Keeper release_keeper() { return std::move(keeper_); }
 
   // The run is to stand at `step` (held inside 0..length).
   void seek(int64_t step);
@@ -65,6 +74,7 @@ class Player {
   // The run started over from the nearest copy at or before the target, or from the setup.
   void restart();
   void step_once();
+  void open_log();
 
   const play::GameSpec* spec_;
   play::InputLog log_;

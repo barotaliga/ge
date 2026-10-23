@@ -155,6 +155,10 @@ struct GameSpec {
   std::unique_ptr<Run> (*open)(const Setup& setup, std::string& error);
   // What `ge shot` can picture, the first the default; empty when the game draws none.
   std::span<const View> views = {};
+  // THE BEHAVIOUR'S VERSION: raised by a change that moves what a log plays to (a step, a rule, a
+  // tuning), so a replay file recorded by another version is refused rather than played as a
+  // different run (replay/file.hpp).
+  int32_t version = 1;
 };
 
 // What one GPU picture is asked for: a view and a mode the renderer lists, the picture's size,

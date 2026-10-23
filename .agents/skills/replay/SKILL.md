@@ -1,6 +1,6 @@
 ---
 name: replay
-description: "Use for engine/replay in gameengine2 and anything that watches a run again: a game's Run::clone (the keyframe), the keeper and its thinning policy, the replay player's seek in a step budget, the transport (play, pause, speeds, skip, frame step); later the replay file and its marks, the instant replay, the director, spectating by inputs and the video export (docs/replays.md, rows M23a-M23h)."
+description: "Use for engine/replay in gameengine2 and anything that watches a run again: a game's Run::clone (the keyframe), the keeper and its thinning policy, the replay player's seek in a step budget, the transport (play, pause, speeds, skip, frame step), the replay file with its marks, clip and game version, the replay index, the live recorder and the instant replay; later the director, spectating by inputs and the video export (docs/replays.md, rows M23a-M23h)."
 ---
 
 # Replays
@@ -15,6 +15,12 @@ stepped again through the game's own `Run`, never a recording of positions or pi
 | `replay/keep.hpp/.cpp` | The keyframes: `Run::clone`s taken every `every_s`, thinned by age band on fixed multiples; the nearest copy at or before a step |
 | `replay/player.hpp/.cpp` | The player: the log opened from its setup and stepped off its keyframes to any step, in a budget of steps a frame |
 | `replay/transport.hpp/.cpp` | The transport: play, pause (the end pauses), four speeds, skip, frame step, seek; pure state over the step count |
+| `replay/file.hpp/.cpp` | The replay file (`*.ge-replay`): the input log with marks, a clip, the game's version, the date; its text, `plays_on`, save and load |
+| `replay/index.hpp/.cpp` | The index: a directory's replay files as list rows for a menu's browser, a broken file a problem line |
+| `replay/live.hpp/.cpp` | The live run: a session that keeps keyframes and marks; the instant replay lent the live keeper and handed back |
+
+`tests/replay_walker.hpp` is the toy game the replay tests share (a walker on its own seeded
+stream, its log and the straight digest).
 
 ## Rules
 
@@ -36,3 +42,9 @@ stepped again through the game's own `Run`, never a recording of positions or pi
 - **What a keyframe costs is measured, not guessed**: the `replay` lab's `clone-bytes` (the
   counting allocator), `clone-ms` and `worst-seek-steps`. A game whose clone grows past a few
   hundred kilobytes shares more of what its steps never write.
+- **The instant replay lends the keeper, never copies it.** `Live::watch` moves the live
+  keeper into a `Player` (which starts from its copy at step 0, so no run is opened again) and
+  `resume` moves it back; the live run is never stepped by the replay. The `replay-file` lab
+  checks every step of every instant replay and the live run's digest after it.
+- **A change that moves what a log plays to raises `GameSpec::version`.** The file carries it and
+  `plays_on` refuses another, naming both; the `replay-file` lab's `refused` holds the wording.

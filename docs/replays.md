@@ -23,9 +23,9 @@ is a few bytes a second, plus the moments worth marking. Everything else follows
 | A live stream to a video service | The live frames and the live mix, encoded and sent over RTMP | M23e |
 | Spectating | The input log streamed over `engine/net` with a delay; each viewer steps the run itself | M23f |
 
-A replay therefore costs nothing to keep: a ten-minute run at 120 Hz with five axes held in runs
-is a few kilobytes. What it costs is CPU time to watch: a seek is a step-for-step replay from the
-nearest copy of the run.
+A replay therefore costs little to keep: a ten-minute run at 120 Hz is a few kilobytes of held
+keys, or a megabyte or two of text for hands that move every step (§ What a file weighs). What it
+costs is CPU time to watch: a seek is a step-for-step replay from the nearest copy of the run.
 
 ## Keyframes and the seek (M23a)
 
@@ -58,17 +58,41 @@ frame's seconds and reads back the step the picture should show; the player gets
 
 ## The replay file and the instant replay (M23b)
 
-The file is the input log with marks: `mark <step> <kind> <weight>` lines the game writes as moments
-happen (a flight, a crash, a pass, the finish), an `in` and `out` for a clip, and the engine's
-and the game's versions. A replay recorded by another version is refused with a diagnostic that
-names both versions, because a change of behaviour changes every digest (G1); a game that wants
-old replays to keep playing pins the old behaviour the way the generator pins a map's version.
-The replay index (one line a file: the game, the seed, the length, the marks' kinds, the date)
-is what a menu's replay browser lists (the menus are M22's).
+THE FILE (`engine/replay/file.hpp`, `*.ge-replay`) is the input log with what a player keeps beside
+it, as text: a `ge-replay 1` line, the game's behaviour version, when it was recorded (the app's
+text: the engine reads no clock), a clip's `in` and `out` when it is one, a `mark <step> <kind>
+<weight>` line for every moment the game filed (a flight, a crash, a pass, the finish; the kind is
+the game's word, the weight what a director ranks by), then `inputs` and the log itself. A clip is
+cut by marking: the whole log stays, so a clip can be widened again.
 
-The INSTANT REPLAY is the live run's own keeper: the run keeps keyframes as it is played
-(dense near the present), so "watch the last ten seconds" is a seek on a clone with the log so far,
-and the live run is set aside untouched and handed back when the replay is left.
+THE VERSION is the game's (`GameSpec::version`), raised by a change that moves what a log plays to.
+A replay recorded by another version is refused (`plays_on`) with a diagnostic that names both,
+because a change of behaviour changes every digest (G1) and the file would play a different run; a
+game that wants old replays to keep playing pins the old behaviour as a trait, the way the
+generator pins a map's version. The engine's own version is not in the file: what the engine does
+to a run is held bit for bit by the goldens, and a game's version moves with any engine change
+that moves its digests.
+
+THE INDEX (`engine/replay/index.hpp`) is a directory's replay files as list rows: the game and its
+version, the seed, the length, how many marks and of which kinds, the clip and the date. A file
+that does not read is a problem line naming it, never a silently missing row. It is what a menu's
+replay browser lists (the menus are M22's).
+
+THE INSTANT REPLAY (`engine/replay/live.hpp`): the live run is a `Live`, a play session that
+keeps keyframes as it goes and the marks the game files (back-dated where the game only knows a
+moment later: a flight at its take-off). "Watch the last ten seconds" hands a player the log so far
+and the live keeper itself, moved, not copied; the player starts from the keeper's copy of the run
+as opened (no map built again) and seeks back from the copy nearest the mark, which the keeper's
+dense near band puts within `every_s` of it. The live run is set aside untouched, and `resume`
+takes the keeper back with any copies the replay took. A live run that steps on while a replay is
+out takes no copies until the keeper is home: a later seek costs more steps, never a wrong frame.
+
+WHAT A FILE WEIGHS: the log is run-length text, so it is as small as the hands are still. Held keys
+run for many steps a line; an analogue stick moved every step is a line a step, about 20 bytes, so
+the bot's hands on Fall Line write 95 to 150 KB a minute (the `replay-file` lab's
+`bytes-per-minute`). That is still nothing beside a video, and the racing tape
+(`plugins/racing/tape.hpp`) is the packed form where size matters (a ghost kept per record, a
+stream to spectators, M23f).
 
 ## The director (M23c)
 
