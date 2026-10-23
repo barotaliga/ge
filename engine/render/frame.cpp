@@ -98,6 +98,8 @@ void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint
   u.night[3] = static_cast<float>(n.latitude);
   // THE CLOUD (render/clouds.hpp).
   cloud_rows(view.clouds, u.cloud_info, u.clouds);
+  // The scene's own light the eye adapts to, in the frame's light (FrameView::adapt_cd).
+  u.cloud_info[1] = static_cast<float>(view.adapt_cd / kSunLux * pre);
 }
 
 FrameTargets create_targets(gpu::Device& device, std::string_view label, uint32_t width,
