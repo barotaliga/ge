@@ -11,9 +11,17 @@ build:
 	cmake --preset $(PRESET)
 	cmake --build --preset $(PRESET)
 
-# Every test case in parallel, one per core (CTEST_PARALLEL_LEVEL overrides).
-test: build
-	ctest --preset $(PRESET) -j $${CTEST_PARALLEL_LEVEL:-$$(nproc 2>/dev/null || sysctl -n hw.ncpu)}
+# Every test case in parallel, one per core (CTEST_PARALLEL_LEVEL overrides). T=<regex> runs only
+# the tests it names and builds only their targets (each test is its own executable).
+T ?=
+test:
+	cmake --preset $(PRESET)
+	@if [ -n "$(T)" ]; then \
+	  targets=$$(ctest --preset $(PRESET) -N -R "$(T)" | sed -n 's/^ *Test *#[0-9]*: *//p' | sed 's/^labs_smoke.*/labs/' | sort -u); \
+	  [ -n "$$targets" ] || { echo "make test: no test matches T=$(T); ctest --preset $(PRESET) -N lists them." >&2; exit 1; }; \
+	  cmake --build --preset $(PRESET) --target $$targets; \
+	else cmake --build --preset $(PRESET); fi
+	ctest --preset $(PRESET) $(if $(T),-R "$(T)") -j $${CTEST_PARALLEL_LEVEL:-$$(nproc 2>/dev/null || sysctl -n hw.ncpu)}
 
 fmt:
 	clang-format -i $(SOURCES)

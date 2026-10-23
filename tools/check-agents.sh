@@ -49,6 +49,12 @@ while read -r name; do
   [[ -d ".agents/skills/$name" ]] || err "AGENTS.md routes '$name' but .agents/skills/$name does not exist"
 done < <(sed -n '/^## Skills/,/^## /p' AGENTS.md | grep -o '^| `[a-z0-9-]*`' | tr -d '|` ')
 
+# AGENTS.md's "Where things live" rows stay short and name directories, not files, so parallel
+# pull requests do not all edit them: a file's entry is its own ge:summary.
+while read -r row; do
+  err "AGENTS.md's Where things live row is ${#row} characters (cap 240): say what the directory is for, not its files (their ge:summary is their entry): ${row:0:60}..."
+done < <(sed -n '/^## Where things live/,/^### /p' AGENTS.md | grep '^| `' | awk 'length > 240')
+
 while read -r f; do
   n=$(wc -l < "$f")
   if (( n > 1000 )) && ! grep -q 'agents:allow-large-file' "$f"; then
