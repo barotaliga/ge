@@ -2,7 +2,7 @@
 //
 // ge:summary The paramotor's step: the hands, the engine, the wing on its lines, the fold, the hang
 // ge:keywords paramotor para step_para ready_para drop_para polar lines swing fold hang collapse
-// ge:keywords crown edge-wind para_hash
+// ge:keywords crown edge-wind para_hash acro dive loop tangle
 // ge:skill paramotor
 // ge:test tests/paramotor_scenarios_test.cpp
 #include "paramotor/para.hpp"
@@ -13,6 +13,7 @@
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "core/num.hpp"
+#include "paramotor/acro.hpp"
 #include "paramotor/spec.hpp"
 
 namespace ge::paramotor {
@@ -178,7 +179,9 @@ void hold_overhead(ParaState& p, const skier::SkierState& s) {
 
 // A FOLD: the leading edge pushed under its angle tucks, all of it or the tip pushed under alone,
 // and the wing refills by itself, the faster with the brakes pumped; one fold at a time, the
-// deeper taking over. Only once he flies: on the snow the pilot holds it up.
+// deeper taking over. Only once he flies (on the snow the pilot holds it up), and never while the
+// lines are pulled past `acro::kLoaded` g (a wing flung round him hard is held full by the pull);
+// his hands on the risers hold its angle off (`reflex_of`).
 void fold_in(ParaState& p, double alpha, double alpha_l, double alpha_r, double v, double dt,
              ParaEvents& ev) {
   namespace F = spec::fold;
@@ -187,20 +190,20 @@ void fold_in(ParaState& p, double alpha, double alpha_l, double alpha_r, double 
     p.fold = num::max(0.0, p.fold - rate * dt / F::kRefill);
     if (p.fold < 0.02) p.fold = 0;
   }
-  if (!p.flying) return;
+  if (!p.flying || loaded(p) > 0) return;
   const double deepest = num::min(alpha, num::min(alpha_l, alpha_r));
-  if (deepest >= F::kAlpha) return;
-  const double depth =
-      core::clamp(F::kLeast + (F::kAlpha - deepest) * F::kDeep, F::kLeast, F::kMost);
+  const double under = F::kAlpha - reflex_of(p, p.controls.bar);
+  if (deepest >= under) return;
+  const double depth = core::clamp(F::kLeast + (under - deepest) * F::kDeep, F::kLeast, F::kMost);
   if (depth <= p.fold) return;
   if (p.fold == 0) ev.folded = true;
   p.fold = depth;
   // A frontal when the middle went under; else the side that did.
-  p.fold_side = alpha < F::kAlpha ? 0 : (alpha_l < alpha_r ? -1 : 1);
+  p.fold_side = alpha < under ? 0 : (alpha_l < alpha_r ? -1 : 1);
 }
 
-// THE WING ON ITS LINES for one step: the air on it, the turn, the swing damped, its weight, the
-// lines pulled tight on both bodies.
+// THE WING ON ITS LINES for one step: the air on it, the risers (`acro.hpp`), the turn, the swing
+// damped, its weight, the lines pulled tight on both bodies; the swing counted and the slack read.
 void fly(ParaState& p, Body& pilot, const ParaWorld& w, double m, double dt, ParaEvents& ev) {
   namespace P = spec::polar;
   namespace B = spec::brakes;
@@ -210,26 +213,30 @@ void fly(ParaState& p, Body& pilot, const ParaWorld& w, double m, double dt, Par
   Body wing = wing_of(p);
   const Vec3 u = line_dir(wing, pilot);
   const ParaAir air = read_air(p, w);
-  const Vec3 a{wing.vx - air.x, wing.vy - air.y, wing.vz - air.z};
+  // The pilot's own air, and the rears' bite and hold off its speed: a wing held in its pitch flies
+  // his path, the air through it his.
+  const Vec3 ca{pilot.vx - air.x, pilot.vy - air.y, pilot.vz - air.z};
+  const double vc = core::hypot3(ca.x, ca.y, ca.z);
+  bite_rears(p, c.bar, vc);
+  const double held = held_share(p, c.bar, vc);
+  const Vec3 a{wing.vx - air.x + (ca.x - wing.vx + air.x) * held,
+               wing.vy - air.y + (ca.y - wing.vy + air.y) * held,
+               wing.vz - air.z + (ca.z - wing.vz + air.z) * held};
   const double v = core::hypot3(a.x, a.y, a.z);
   const double down = a.x * u.x + a.y * u.y + a.z * u.z;
   // Its way: the air square to the lines (the canopy noses into the flow), else where it last
-  // pointed.
-  Vec3 fw{a.x - down * u.x, a.y - down * u.y, a.z - down * u.z};
-  const double fl = core::hypot3(fw.x, fw.y, fw.z);
-  if (fl > 0.5) {
-    fw = Vec3{fw.x / fl, fw.y / fl, fw.z / fl};
-  } else {
-    const double k = p.way.x * u.x + p.way.y * u.y + p.way.z * u.z;
-    fw = Vec3{p.way.x - k * u.x, p.way.y - k * u.y, p.way.z - k * u.z};
-    const double kl = num::max(1e-6, core::hypot3(fw.x, fw.y, fw.z));
-    fw = Vec3{fw.x / kl, fw.y / kl, fw.z / kl};
+  // pointed; met by the air from behind it is flying backwards, and collapses whole.
+  Vec3 fw;
+  if (kept_way(a, down, u, p.way, fw) && p.flying) {
+    if (p.fold == 0) ev.folded = true;
+    p.fold = 1;
+    p.fold_side = 0;
   }
   // THE POLAR: the angle of attack off the trim, the brakes and the risers.
   const double bar = c.bar >= 0 ? c.bar * spec::bar::kAccelerator : -c.bar * spec::bar::kTrimmers;
-  const double rig = spec::kRig + B::kRig * c.brake + bar;
+  const double rig = spec::kRig + B::kRig * c.brake + bar + riser_rig(p, c.bar);
   const double alpha = rig + lm::atan2(-down, num::max(1e-3, a.x * fw.x + a.y * fw.y + a.z * fw.z));
-  const double stall = P::kStall - B::kStall * c.brake;
+  const double stall = P::kStall - B::kStall * c.brake + held_of(p, c.bar);
   p.stalled = alpha > stall;
   // THE TIPS: the eddies across the span meet each tip at its own angle.
   const Vec3 r0{u.y * fw.z - u.z * fw.y, u.z * fw.x - u.x * fw.z, u.x * fw.y - u.y * fw.x};
@@ -248,12 +255,35 @@ void fly(ParaState& p, Body& pilot, const ParaWorld& w, double m, double dt, Par
   const double base =
       core::clamp(P::kSlope * (alpha - P::kZero) + B::kLift * c.brake, 0.0, P::kMost);
   const double lift = (p.stalled ? P::kStalled : base) * folded;
+  // The rears' lift (`riser_lift`): the wing held in its pitch by the rigging and its path bent,
+  // so it bends the pair's path, put on the pilot at the speed he carries.
+  const double rears =
+      p.stalled ? 0 : (core::clamp(base + riser_lift(p, c.bar), 0.0, P::kMost) - base) * folded;
   const double drag = P::kDrag0 + P::kInduced * lift * lift + B::kDrag * c.brake * c.brake +
                       T::kDrag * std::fabs(c.steer) + F::kDrag * p.fold +
                       (p.stalled ? P::kStallDrag : 0);
   const double qs = 0.5 * spec::kAirDensity * v * v * spec::wing::kArea;
+  // The rears' lift bends the pair's path as one: shared by their masses, so the lines between them
+  // carry none of it; and the rears hold the wing over him through it. What they put on him he
+  // feels (`felt`, N).
+  Vec3 b{0, 0, 0};
+  double felt = 0;
+  if (rears > 0) {
+    const Vec3 af =
+        lift_drag(ca, vc, u, 0.5 * spec::kAirDensity * vc * vc * spec::wing::kArea, rears, 0);
+    const double share = spec::wing::kMass / (spec::wing::kMass + m);
+    b = Vec3{af.x * share, af.y * share, af.z * share};
+    pilot.vx += (af.x - b.x) / m * dt;
+    pilot.vy += (af.y - b.y) / m * dt;
+    pilot.vz += (af.z - b.z) / m * dt;
+    felt = core::hypot3(af.x - b.x, af.y - b.y, af.z - b.z);
+  }
+  Vec3 pv{pilot.vx, pilot.vy, pilot.vz};
+  const Vec3 hp = hold_pitch(p, Vec3{pilot.x, pilot.y, pilot.z}, pv, held, ca, u, m, dt);
+  pilot.vx = pv.x, pilot.vy = pv.y, pilot.vz = pv.z;
+  felt -= hp.x * u.x + hp.y * u.y + hp.z * u.z;
   const Vec3 ld = lift_drag(a, v, u, qs, lift, drag);
-  double fx = ld.x, fy = ld.y, fz = ld.z;
+  double fx = ld.x + b.x + hp.x, fy = ld.y + b.y + hp.y, fz = ld.z + b.z + hp.z;
   // THE TURN: toward the toggle pulled and the weight shifted, and the engine's torque, along the
   // canopy's right; righted by its arc as it banks; rolled by the tips' difference and dragged
   // round toward a folded side.
@@ -283,8 +313,22 @@ void fly(ParaState& p, Body& pilot, const ParaWorld& w, double m, double dt, Par
   wing.y += wing.vy * dt;
   wing.z += wing.vz * dt;
   p.tension = pull_lines(wing, pilot, m, dt);
+  read_load(p, p.tension + num::max(0.0, felt), m, dt);
   put_wing(p, wing);
   p.way = fw;
+  // THE SWING counted, a whole turn round him a loop; and the lines gone slack with the wing level
+  // with him or below: he falls into it.
+  if (p.flying) {
+    const Vec3 un = line_dir(wing, pilot);
+    if (count_swing(p, un)) ev.looped = true;
+    const double apart = core::hypot3(wing.x - pilot.x, wing.y - pilot.y, wing.z - pilot.z);
+    if (fallen_in(p, p.tension, m, un, apart, dt)) {
+      p.mode = ParaMode::tangled;
+      p.t = 0;
+      p.controls = ParaControls{};
+      ev.tangled = true;
+    }
+  }
   // What it is drawn by: its heading, its bank over him, its pitch.
   p.heading = lm::atan2(fw.x, fw.z);
   const double hx = lm::cos(p.heading);
@@ -355,6 +399,8 @@ const char* para_mode_name(ParaMode m) {
       return "flown";
     case ParaMode::dropped:
       return "dropped";
+    case ParaMode::tangled:
+      return "tangled";
   }
   return "?";
 }
@@ -417,6 +463,20 @@ void step_para(ParaState& p, skier::SkierState& s, const ParaControls& in, const
     return;
   }
   const double m = pilot_mass(spec);
+  // FALLEN INTO HIS WING (`acro.hpp`): falling tangled in it, the motor run down, until the press
+  // cuts it away or the snow stops him (a meeting hard enough to wipe him out is the skier's own,
+  // and cuts it at the next step).
+  if (p.mode == ParaMode::tangled) {
+    p.rpm *= lm::exp(-dt / E::kSpinDown);
+    if (p.rpm < 30) p.rpm = 0;
+    p.thrust = 0;
+    spin(p, dt);
+    step_tangled(p, s, world, m, dt);
+    p.agl = num::max(0.0, s.y - level.ground_at(s.x, s.z));
+    p.climb = s.vy;
+    if (s.on_snow) drop_para(p, s, ParaCut::ground, events);
+    return;
+  }
   // THE HANDS: the controls follow them; near the map's edge aloft, the toggles turned toward its
   // middle by how deep into the band the wing is.
   ParaControls want{core::clamp(in.throttle, 0.0, 1.0), core::clamp(in.brake, 0.0, 1.0),
@@ -540,6 +600,14 @@ uint64_t para_hash(const ParaState& p, uint64_t h) {
                          p.climb,
                          p.t,
                          p.air_time,
+                         p.swing,
+                         p.slack,
+                         p.rears,
+                         p.g,
+                         p.hold.x,
+                         p.hold.y,
+                         p.hold.z,
+                         p.hold_at,
                          p.canopy.x,
                          p.canopy.y,
                          p.canopy.z,
@@ -550,6 +618,7 @@ uint64_t para_hash(const ParaState& p, uint64_t h) {
   }
   fold(static_cast<double>(p.mode));
   fold(static_cast<double>(p.flights));
+  fold(static_cast<double>(p.loops));
   fold(static_cast<double>(p.cut));
   fold(p.stalled ? 1 : 0);
   fold(p.flying ? 1 : 0);
