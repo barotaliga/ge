@@ -20,14 +20,21 @@
 // - THE SHADOW on the ground (`frame.wgsl`'s `cloud_shadow`, which every lit surface's
 //   `sun_light` reads): each layer's column where the beam toward the key light crosses its
 //   middle, taken off the light as exp(-column * the layer's shadow depth).
-// - THE PASS ("clouds", after the sky): a full-screen triangle that marches each pixel's ray up
-//   to what the depth target holds, and lays the cloud over the HDR target premultiplied (its
-//   light added, what is behind kept by its transmittance). With no layer it runs empty.
+// - THE PASSES ("clouds.march" and "clouds", after the sky): at a QUARTER of the pixels, a
+//   full-screen triangle over a half-size target marches each two by two's ray to the farthest of
+//   its depths (a ridge's edge keeps the cloud behind it), keeping the distance it marched to;
+//   then each pixel of the frame takes the four half-size pixels round it, weighted by the
+//   bilinear footprint and by how near each one's distance is to its own, and a pixel none of
+//   them matches (the near side of an edge) is marched itself. At EVERY pixel (`Clouds::quarter`
+//   false), "clouds" marches each pixel and "clouds.march" runs empty. Either way the cloud is
+//   laid over the HDR target premultiplied (its light added, what is behind kept by its
+//   transmittance); with no layer both run empty.
 //
 // ge:summary The cloud's layers marched and laid over the frame, their noise and their shadow
 // ge:keywords render clouds cloud-layer heap sheet cumulus cirrus raymarch cloud-shadow
 // ge:keywords cloud-noise value-noise fbm cover cut quantile powder beer drift cloud_rows
-// ge:keywords cloud_cut cloud_column encode_clouds
+// ge:keywords cloud_cut cloud_column encode_clouds quarter-resolution half-resolution upsample
+// ge:keywords depth-aware-upsample bilateral
 // ge:skill render
 // ge:test tests/render_clouds_test.cpp
 #pragma once
@@ -68,16 +75,21 @@ struct CloudNoise {
 CloudNoise create_cloud_noise(gpu::Device& device);
 
 struct CloudPass {
-  wgpu::BindGroupLayout layout;
-  wgpu::BindGroup group;
-  uint32_t p_draw = 0;
+  wgpu::BindGroupLayout layout, up_layout;
+  wgpu::BindGroup group, up_group;
+  // The half-size targets: the cloud (RGBA16F) and the distance each pixel marched to (R32F).
+  wgpu::Texture quarter, quarter_dist;
+  wgpu::TextureView quarter_view, quarter_dist_view;
+  uint32_t quarter_width = 0, quarter_height = 0;
+  uint32_t p_draw = 0, p_march = 0, p_upsample = 0;
 };
 // The pass's pipeline (into an HDR target), added to the manifest.
 void create_clouds(gpu::Device& device, gpu::PipelineSet& pipelines, CloudPass& clouds,
                    const wgpu::BindGroupLayout& frame);
-// Its group over the frame's depth (again when the targets are made again).
+// Its half-size targets and its groups over the frame's depth (again when the targets are made
+// again).
 void bind_cloud_targets(gpu::Device& device, CloudPass& clouds, const FrameTargets& targets);
-// The pass ("clouds"): empty when `view` has no layer.
+// The passes ("clouds.march", then "clouds"): empty when `view` has no layer.
 void encode_clouds(const CloudPass& clouds, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
                    wgpu::CommandEncoder& encoder, const FrameTargets& targets,
                    const wgpu::BindGroup& frame, const FrameView& view);
