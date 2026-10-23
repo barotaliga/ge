@@ -138,6 +138,18 @@ add_library(ge_assets STATIC ${GE_ASSETS_SOURCES})
 target_link_libraries(ge_assets PUBLIC ge_core)
 target_include_directories(ge_assets SYSTEM PRIVATE ${GE_CGLTF_INCLUDE})
 
+# The 2D layer (engine/ui, the `ui` skill): paints, the draw list, images, fonts over
+# stb_truetype with the built-in family compiled in (cmake/Ui.cmake), the CPU raster, backdrops,
+# and menus as a model and a view. No GPU and no platform: the labs picture it headless, and the
+# GPU pass (M22b) draws the same draw list.
+include(cmake/Ui.cmake)
+file(GLOB GE_UI_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/ui/*.cpp)
+add_library(ge_ui STATIC ${GE_UI_SOURCES})
+target_link_libraries(ge_ui PUBLIC ge_core)
+target_include_directories(ge_ui SYSTEM PRIVATE ${GE_STB_INCLUDE})
+ge_embed_binary(ge_ui ge_ui_font_semibold "${GE_FONTS_DIR}/BarlowCondensed-SemiBold.ttf")
+ge_embed_binary(ge_ui ge_ui_font_medium "${GE_FONTS_DIR}/BarlowCondensed-Medium.ttf")
+
 # The platform and the GPU (M6). Each is optional (GE_PLATFORM, GE_GPU) and nothing else
 # depends on them: the simulation, the plugins and their tests build without either.
 include(cmake/Dawn.cmake)
@@ -292,7 +304,7 @@ if(PROJECT_IS_TOP_LEVEL)
   get_property(GE_PLUGIN_TARGETS GLOBAL PROPERTY GE_PLUGIN_TARGETS)
   get_property(GE_GAME_TARGETS GLOBAL PROPERTY GE_GAME_TARGETS)
   add_executable(labs engine/lab/main.cpp ${GE_LAB_SOURCES})
-  target_link_libraries(labs PRIVATE ge_lab ge_play ge_core ge_audio ge_assets ge_net ge_input ge_move ge_camera ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
+  target_link_libraries(labs PRIVATE ge_lab ge_play ge_core ge_audio ge_assets ge_net ge_input ge_move ge_camera ge_ui ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
     ${GE_LAB_EXTRA})
 
   # The `assets` executable (engine/assets/tool.hpp): the built assets listed, checked and stamped,

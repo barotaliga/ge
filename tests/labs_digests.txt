@@ -29,6 +29,7 @@ ladder 5b4cf4552f7e2cbd
 level 4fbff3da7a82c4aa
 lift-ride a374f35eb85cc161
 mapgen-cost 3baf51b6907817f3
+menu 1c01d0b767f484fc
 model-views 0d0824a2168f6b14
 models bdc7f86743249676
 move-strafe 69411462ef3f2545
