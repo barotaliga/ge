@@ -52,7 +52,7 @@ The other flags:
 - `kUserInfo`: rides in the user info a client sends the server (`name`).
 
 A server's stuffed text may run only the commands marked as safe to stuff (`echo`, `set`,
-`wait`, `say`, `say_team`) and set only the server's cvars. It never touches a player's files,
+`wait`, `say`, `say_team`, `say_prox`) and set only the server's cvars. It never touches a player's files,
 binds or archived cvars.
 
 `cvarlist` prints the flags as letters: `A` archive, `U` user info, `S` server info, `V` server,
@@ -106,7 +106,9 @@ latched value set during startup is applied once it is over.
   shift). A key held with modifiers runs its modified bind if it has one, else its own.
 - **Modes**: `game` (the default), `console`, `menu` and `demo` each keep their own table.
 - **Buttons.** A bind that starts with `+` runs that command when the key goes down and the same
-  command with `-` when it comes up: `bind space +jump`. Any other bind runs on the press.
+  command with `-` when it comes up: `bind space +jump`, or `bind v +voice_prox` to talk to the
+  players near you while the key is held. Any other bind runs on the press. A game registers
+  its held actions as buttons (`Console::add_button`).
 
 The backquote key (under the tilde) is bound to `toggleconsole` in the game and console modes
 by default.
@@ -169,13 +171,14 @@ by default.
 | `clear` | Empties the scrollback. |
 | `say <text>` | A chat line to everyone. |
 | `say_team <text>` | A chat line to your team. |
+| `say_prox <text>` | A chat line to the players near you (the game decides how near). |
 | `whisper <nick> <text>` | A chat line to one player. |
 
 ## The drop-down console
 
 The backquote key (under the tilde) slides the console down from the top of the screen over the
 game. It holds everything that happened, each line coloured by its kind: the console's own
-output, the commands typed (after `]`), chat to everyone, to the team and whispers, the server's
+output, the commands typed (after `]`), chat to everyone, to the team, to the players nearby and whispers, the server's
 messages and the game's events. Closed, the newest few lines show at the top of the screen for
 a few seconds (the notify lines).
 

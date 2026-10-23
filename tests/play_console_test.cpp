@@ -31,8 +31,8 @@ const gp::GameSpec kToy{"toy", "a toy", 60, 10, {}, {}, nullptr, {}, toy_cvars};
 
 gp::FlatJson answer(int (*cmd)(const gp::GameSpec&, const std::vector<std::string>&,
                                const std::map<std::string, std::string>&, std::ostream&),
-                    std::vector<std::string> words, std::map<std::string, std::string> flags,
-                    int& code) {
+                    const std::vector<std::string>& words,
+                    const std::map<std::string, std::string>& flags, int& code) {
   std::ostringstream out;
   code = cmd(kToy, words, flags, out);
   gp::FlatJson m;

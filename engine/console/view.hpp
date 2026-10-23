@@ -13,8 +13,10 @@
 //     sets it), and a command while it is 0 (single player: there is nobody to chat to).
 //
 // CHAT goes out through the game's `Chat` sender (net/session.hpp's chat in a multiplayer game);
-// with none set, a line is shown locally as said. `say`, `say_team` and `whisper <nick>` are
-// commands like any other, so a bind or an alias can chat (`bind f1 "say_team need help"`).
+// with none set, a line is shown locally as said. `say`, `say_team`, `say_prox` (to the players
+// near you: the game decides how near) and `whisper <nick>` are commands like any other, so a
+// bind or an alias can chat (`bind f1 "say_team need help"`). A held key's `+` command (a
+// game's `+voice_prox`, talking while it is down) is the console's button (`add_button`).
 //
 // THE VIEW HOLDS NO PIXELS: it is the model a renderer draws (the 2D layer's text pass in the
 // app, the CPU raster in the `console` lab), so it is tested and pictured headless. Its cvars:
@@ -23,10 +25,9 @@
 //
 // ge:summary The drop-down console: scrollback by kind, the input line, history, / commands, chat
 // ge:keywords console view drop-down tilde backquote toggleconsole scrollback history input-line
-// ge:keywords chat say say_team whisper message server event notify completion tab con_height
-// ge:keywords con_chat con_speed con_lines slash-command
-// ge:skill console
-// ge:test tests/console_view_test.cpp
+// ge:keywords chat say say_team say_prox proximity whisper message server event notify completion
+// tab con_height ge:keywords con_chat con_speed con_lines slash-command ge:skill console ge:test
+// tests/console_view_test.cpp
 #pragma once
 
 #include <cstdint>
@@ -47,6 +48,7 @@ enum class LineKind : uint8_t {
   chat,     // said to everyone
   team,     // said to the team
   whisper,  // said to one player, or by one to this one
+  nearby,   // said to the players near the speaker
   server,   // the server's message (a player joined, the map changes)
   event,    // the game's (a gate missed, a record, a crash)
 };
@@ -60,7 +62,7 @@ struct ViewLine {
 };
 
 // Where a chat line goes.
-enum class ChatTo : uint8_t { all, team, one };
+enum class ChatTo : uint8_t { all, team, one, nearby };
 
 // Sends a chat line: `to` is the nick for ChatTo::one. True when it went (a game with a network
 // prints it when the server echoes it back); false prints the reason.
@@ -85,7 +87,7 @@ enum class EditKey : uint8_t {
 
 class ConsoleView {
  public:
-  // Registers the view's cvars and commands on `c` (toggleconsole, clear, say, say_team,
+  // Registers the view's cvars and commands on `c` (toggleconsole, clear, say, say_team, say_prox,
   // whisper, echo_event) and takes `c`'s printing into the scrollback.
   explicit ConsoleView(Console& c);
 

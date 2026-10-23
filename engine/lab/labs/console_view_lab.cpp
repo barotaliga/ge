@@ -36,6 +36,8 @@ Rgba colour(con::LineKind k) {
       return {110, 210, 255};
     case con::LineKind::whisper:
       return {240, 140, 240};
+    case con::LineKind::nearby:
+      return {200, 230, 160};
     case con::LineKind::server:
       return {250, 220, 90};
     case con::LineKind::event:
@@ -119,6 +121,7 @@ void play_session(con::Console& c, con::ConsoleView& v) {
   line(con::LineKind::team, "(Bo): powder under the cliffs, go left");
   line(con::LineKind::whisper, "[from Ada]: race you down");
   c.execute("whisper Ada you are on");
+  c.execute("say_prox wait for me at the cornice");
   line(con::LineKind::event, "gate 12 missed: +2 s");
   v.type("/r_bloom 0.1");
   v.key(con::EditKey::enter);
@@ -156,7 +159,8 @@ void run(ge::lab::Lab& lab) {
   lab.shot({"down", "THE CONSOLE DOWN",
             "The tilde pressed: the console covers con_height of the screen over the game, its "
             "scrollback above the input line, which holds a half-typed /sv_ma.",
-            "server lines yellow, chat green, team cyan, whispers magenta, events orange, typed "
+            "server lines yellow, chat green, team cyan, nearby pale green, whispers magenta, "
+            "events orange, typed "
             "commands white after ], output grey; the newest line just over the input line",
             inputs},
            down);
@@ -185,9 +189,9 @@ void run(ge::lab::Lab& lab) {
             "two lines at the top left over a dark band, nothing else of the console", inputs},
            closed);
 
-  int counts[7] = {};
+  int counts[8] = {};
   for (const con::ViewLine& l : v.lines()) ++counts[static_cast<int>(l.kind)];
-  for (int k = 0; k < 7; ++k)
+  for (int k = 0; k < 8; ++k)
     lab.metric("lines." + std::string(con::line_kind_name(static_cast<con::LineKind>(k))),
                counts[k], "lines");
   if (counts[static_cast<int>(con::LineKind::whisper)] != 2) {

@@ -45,7 +45,7 @@
 
 namespace ge::console {
 
-enum CvarFlag : uint32_t {
+enum CvarFlag : uint8_t {
   kArchive = 1u << 0,     // a player's setting: cfg_save writes it (`seta`)
   kUserInfo = 1u << 1,    // sent to the server in the client's user info
   kServerInfo = 1u << 2,  // sent to every client in the server info

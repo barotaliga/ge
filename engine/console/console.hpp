@@ -75,7 +75,7 @@ struct Args {
 
 using CommandFn = std::function<void(Console&, const Args&)>;
 
-enum CommandFlag : uint32_t {
+enum CommandFlag : uint8_t {
   kNoExpand = 1u << 0,   // its words are not $-expanded before it runs (alias, bind, if)
   kStuffable = 1u << 1,  // a server may stuff it into a client
 };

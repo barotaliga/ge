@@ -25,6 +25,8 @@ std::string_view line_kind_name(LineKind k) {
       return "team";
     case LineKind::whisper:
       return "whisper";
+    case LineKind::nearby:
+      return "nearby";
     case LineKind::server:
       return "server";
     case LineKind::event:
@@ -100,6 +102,9 @@ ConsoleView::ConsoleView(Console& c) : c_(c) {
   c.add_command(
       "say_team", "say_team <text>: a chat line to your team",
       [this](Console&, const Args& a) { say(ChatTo::team, "", a.rest(0)); }, kStuffable);
+  c.add_command(
+      "say_prox", "say_prox <text>: a chat line to the players near you",
+      [this](Console&, const Args& a) { say(ChatTo::nearby, "", a.rest(0)); }, kStuffable);
   c.add_command("whisper", "whisper <nick> <text>: a chat line to one player",
                 [this](Console& con, const Args& a) {
                   if (a.size() < 3) {
@@ -287,6 +292,9 @@ void ConsoleView::say(ChatTo to, std::string_view nick, std::string_view text) {
       break;
     case ChatTo::team:
       add(LineKind::team, "(" + me + "): " + std::string(text));
+      break;
+    case ChatTo::nearby:
+      add(LineKind::nearby, "{" + me + "}: " + std::string(text));
       break;
     case ChatTo::one:
       add(LineKind::whisper, "[to " + std::string(nick) + "]: " + std::string(text));

@@ -57,9 +57,33 @@ TEST(chat_goes_through_the_games_sender) {
     return true;
   });
   c.execute("say hi there; say_team \"go left\"; whisper bob see you; whisper bob");
-  CHECK(sent.size() == 3);
+  c.execute("say_prox over here");
+  CHECK(sent.size() == 4);
   CHECK(sent[0] == "0||hi there" && sent[1] == "1||go left" && sent[2] == "2|bob|see you");
+  CHECK(sent[3] == "3||over here");
   CHECK(c.problems().size() == 1);  // the whisper without a text
+}
+
+// A game's held key: `+voice_prox` talks to the players near you while the key is down.
+TEST(a_held_key_is_a_button) {
+  Console c;
+  ConsoleView v(c);
+  const Button& talk = c.add_button("voice_prox", "+voice_prox: talk to the players near you");
+  c.execute("bind v +voice_prox");
+  c.key("v", true);
+  c.run();
+  CHECK(talk.down());
+  c.key("v", false);
+  c.run();
+  CHECK(!talk.down());
+}
+
+TEST(say_prox_shown_locally) {
+  Console c;
+  ConsoleView v(c);
+  c.execute("name ada; say_prox over here");
+  CHECK(!v.lines().empty() && v.lines().back().kind == LineKind::nearby);
+  CHECK(v.lines().back().text == "{ada}: over here");
 }
 
 TEST(editing_history_and_completion) {
