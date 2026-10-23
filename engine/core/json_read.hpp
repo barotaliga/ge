@@ -4,9 +4,10 @@
 // refused unless asked for, and then read as `path.0`, `path.1`, ... (a state may list its
 // racers). Numbers are read with the C locale's strtod. Never on a hot path.
 //
-// ge:summary A JSON object read flat into dotted paths: the play protocol's, diverge's and
-// Discord's reader ge:keywords json read parse flat dotted path protocol line value object ge:skill
-// agent-interface services ge:test tests/play_session_test.cpp tests/services_discord_test.cpp
+// ge:summary A JSON object read flat into dotted paths: the protocol's, diverge's, Discord's
+// ge:keywords json read parse flat dotted path protocol line value object
+// ge:skill agent-interface services
+// ge:test tests/play_session_test.cpp tests/services_discord_test.cpp
 #pragma once
 
 #include <cstdint>
