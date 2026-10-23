@@ -6,7 +6,7 @@ army-flight 57fc57956ada1ce3
 army-sleds 821adaba95b0b813
 audition d47fda4a9cb22fbb
 charts 77f2319a5ea24272
-cli-loop e5d5a706c97e5680
+cli-loop 48ea37d7017c7d98
 crowd cf02cf9a7c917783
 crowd-look 194a06db20f2ebb2
 forest f1881cb20efe0144
@@ -22,6 +22,7 @@ lift-ride a374f35eb85cc161
 mapgen-cost 3baf51b6907817f3
 models bdc7f86743249676
 net-link 458927d87fc48ec1
+net-session bbd55312ba5c97c6
 night 96eae061892d9dd3
 noise 3d3a828834f144cb
 para 3783412c31d34638

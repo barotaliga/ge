@@ -110,7 +110,7 @@ In a game repo, `ge lab` is the way in: `ge lab` lists, `ge lab <id> --tag=befor
 `--compare=before` run one, and with `--json` the lab's whole `report.json` is the answer's
 `result`. `ge lab diff <id>` diffs the pictures (below), every band under its floor a finding.
 
-### The sweep: one constant at several values
+### The sweep: one constant or one flag at several values
 
 `ge lab sweep <id> --set=<name>=<a>,<b>,... [--in=<file>] [--metrics=<word,...>] -- <lab flags>`
 runs a lab with one constant of the code at each value, every metric side by side
@@ -126,6 +126,16 @@ Three values of a paramotor constant over one scenario take about 20 s in debug.
 
 ```sh
 ge lab sweep para --set=launch::kFlight=0.4,0.6,0.9 --metrics=launch -- --scenario=launch
+```
+
+`--flag=<flag>=<a>,<b>,...` sweeps one of the lab's own flags instead of a constant: the labs are
+built once and the lab runs with `--<flag>=<value>` at each value, tagged
+`sweep-<flag>-<value>`, the same table side by side. Nothing is rewritten, so it is the way to
+take a picture lab over the hours of a day or a sim over its step rate. `--set` and `--flag`
+together are refused: one thing at a time.
+
+```sh
+ge lab sweep para --flag=hz=60,120 --metrics=launch -- --scenario=launch
 ```
 
 ### The picture diff: did the look move, and how near the player?
@@ -283,6 +293,12 @@ each)`), so the plugin needs nothing of the lab kit; the lab writes and draws th
 `engine/lab/series_charts.hpp`, the same helper the `trace` lab draws a seed's run with. It is
 the scenario's before and after at the scale of a step: `--trace --tag=before`, change the code,
 `--trace --compare=before`, then `ge graph` both files.
+
+Under `--trace` each scenario also reports its **teleports** (`engine/lab/teleport.hpp`): every
+step where the actor moved farther than its speed carries it over the step (with a slack of 1.5
+and 5 cm), as `<id>.teleports` and a note a jump naming its step, its time and the two distances.
+A lab that follows anything that moves gets the same check from `find_teleports` and
+`report_teleports`, which can fail the lab when its subject must never jump.
 
 ```sh
 make lab LAB=para ARGS="--scenario=launch --trace"   # previews/para/launch.trace.tsv and its charts

@@ -83,6 +83,14 @@ const LinkConditions& sim_link(const SimNetwork& net, uint32_t from_node, uint32
 bool sim_send(SimNetwork& net, const Address& from, const Address& to, const uint8_t* data,
               size_t size) {
   if (size > kMaxDatagram) return false;
+  if (sim_node(to) == kSimBroadcast) {
+    // Every socket on the port but the sender's; the list cannot change while it is walked.
+    for (size_t i = 0; i < net.sockets.size(); i++) {
+      const Address at = net.sockets[i].address;
+      if (at.port == to.port && at != from) sim_send(net, from, at, data, size);
+    }
+    return true;
+  }
   auto it = net.links.find(link_key(sim_node(from), sim_node(to)));
   if (it == net.links.end()) {
     it = net.links

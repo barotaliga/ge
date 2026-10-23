@@ -1,14 +1,16 @@
 // `ge lab sweep`'s parts that need no build (engine/cli/sweep.hpp): a constant's one-line
 // constexpr definition found by its bare or qualified name, its initializer rewritten with the
-// rest of the file untouched, and the runs' metrics laid side by side with the current value
-// starred.
+// rest of the file untouched, the runs' metrics laid side by side with the current value
+// starred, and a --flag sweep's refusals (malformed, or beside --set).
 //
 // ge:summary Test: ge lab sweep's constant search, its rewrite and the metrics table
-// ge:keywords test cli lab sweep constant constexpr find_constants with_value sweep_table
+// ge:keywords test cli lab sweep constant constexpr find_constants with_value flag-sweep
 // ge:skill testing agent-interface
+#include <filesystem>
 #include <string>
 
 #include "check.hpp"
+#include "cli/build.hpp"
 #include "cli/sweep.hpp"
 
 using namespace ge::cli;
@@ -82,4 +84,16 @@ TEST(the_table_lays_the_runs_side_by_side) {
   const std::string some = sweep_table(runs, "0.7", {"speed"});
   CHECK(some.find("launch.sink") == std::string::npos);
   CHECK(some.find("launch.top-speed") != std::string::npos);
+}
+
+TEST(a_flag_sweep_is_refused_before_any_build_when_malformed_or_beside_set) {
+  const BuildOptions o{std::filesystem::temp_directory_path() / "ge-sweep-test-none", "debug", ""};
+  SweepOptions both{"para", "kFlight=0.5", "hz=60,120", "", "", {}};
+  const Outcome a = run_lab_sweep(o, both);
+  CHECK(a.exit == 2);
+  CHECK(!a.findings.empty() && a.findings[0].what.find("--set and --flag") != std::string::npos);
+  SweepOptions bare{"para", "", "hz", "", "", {}};  // no values
+  const Outcome b = run_lab_sweep(o, bare);
+  CHECK(b.exit == 2);
+  CHECK(!b.findings.empty() && b.findings[0].what.find("--flag wants") != std::string::npos);
 }

@@ -138,4 +138,11 @@ inline void v6_only(Handle h, const sockaddr_storage& sa) {
   setsockopt(h, IPPROTO_IPV6, IPV6_V6ONLY, reinterpret_cast<const char*>(&only), sizeof only);
 }
 
+// Let an IPv4 datagram socket send to a broadcast address (a LAN's discovery probe).
+inline void allow_broadcast(Handle h, const sockaddr_storage& sa) {
+  if (sa.ss_family != AF_INET) return;
+  int on = 1;
+  setsockopt(h, SOL_SOCKET, SO_BROADCAST, reinterpret_cast<const char*>(&on), sizeof on);
+}
+
 }  // namespace ge::net::os

@@ -20,6 +20,7 @@
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
 #include "lab/series_charts.hpp"
+#include "lab/teleport.hpp"
 
 namespace {
 
@@ -110,11 +111,13 @@ struct StepTrace {
        "thrust_share", "lever", "cyclic_pitch", "cyclic_roll", "pedal", "grounded"});
   std::vector<ge::lab::Mark> marks;
   std::vector<ge::lab::Band> bands;
+  std::vector<ge::lab::TrackSample> track;
   double flight_from = -1;
 
   void step(const hc::HeliStep& st) {
     const hc::HeliState& h = st.heli;
     const hc::HeliControls& c = st.controls;
+    track.push_back({st.t, h.x, h.y, h.z, ge::core::hypot3(h.vx, h.vy, h.vz)});
     ge::lab::add_row(
         s, {st.t, h.y - st.ground, ge::core::hypot3(h.vx, h.vy, h.vz) * 3.6, h.vy, h.roll * kDeg,
             h.pitch * kDeg, h.disc.pitch * kDeg, h.disc.roll * kDeg, h.yaw_rate * kDeg, h.spool,
@@ -160,6 +163,7 @@ void chart_trace(ge::lab::Lab& lab, const hc::HeliScenario& sc, StepTrace& tr, d
       tr.bands,
       "Grey lines are the run's events (lift-off, landing, crash), grey bands the skids off the "
       "snow."};
+  ge::lab::report_teleports(lab, k, ge::lab::find_teleports(tr.track));
   ge::lab::chart_series(
       lab, tr.s, out,
       {{"height",
