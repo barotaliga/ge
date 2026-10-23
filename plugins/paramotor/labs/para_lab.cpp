@@ -3,11 +3,13 @@
 // and sink, the climb, the banked turn, the stall and the surge, the bot down the fall line and
 // onto a spot, ridge lift, the lee's folds, a crown, the drop, and the acro (the dive, the
 // swing-up, the loop, the tangle and its cut-away). One picture a scenario: the line
-// from above, and the height over the snow and the speed under it.
+// from above, and the height over the snow and the speed under it. With --trace, every step as a
+// series (`<id>.trace.tsv`, for `ge graph`) and charts of it (series_charts.hpp).
 //
 // ge:summary Lab: the paramotor scenarios run and measured; the line, the height and speed drawn
 // ge:keywords lab para paramotor scenario launch glide sink climb turn stall surge land ridge
-// ge:keywords lee fold crown drop trace acro dive swing-up loop tangle
+// ge:keywords lee fold crown drop trace acro dive swing-up loop tangle per-step series charts
+// ge:keywords trace-flag
 // ge:skill paramotor labs
 // ge:test tests/paramotor_scenarios_test.cpp
 #include <string>
@@ -17,6 +19,7 @@
 #include "core/num_text.hpp"
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
+#include "lab/series_charts.hpp"
 #include "paramotor/scenarios.hpp"
 
 namespace {
@@ -106,9 +109,107 @@ Picture draw_run(const pm::ParaScenario& sc, const ge::mountain::mapgen::Level& 
   return p;
 }
 
+// The run step by step under --trace: every step's height, speeds, angles, controls, lines and
+// fold as a series, its events marked and its flights shaded, drawn as charts.
+struct StepTrace {
+  ge::lab::Series s =
+      ge::lab::make_series({"t_s", "agl", "speed", "airspeed", "vy", "bank", "alpha", "fold",
+                            "tension", "throttle", "brake", "steer", "bar", "flying"});
+  std::vector<ge::lab::Mark> marks;
+  std::vector<ge::lab::Band> bands;
+  double flight_from = -1;
+
+  void step(const pm::ParaStep& st) {
+    const pm::ParaState& w = st.wing;
+    const pm::ParaControls& c = st.controls;
+    ge::lab::add_row(s, {st.t, st.skier.y - st.ground, st.skier.speed * 3.6, w.airspeed * 3.6,
+                         st.skier.vy, w.bank * kDeg, w.alpha * kDeg, w.fold, w.tension / 1000,
+                         c.throttle, c.brake, c.steer, c.bar, w.flying ? 1.0 : 0.0});
+    const pm::ParaEvents& e = st.events;
+    if (e.launched) marks.push_back({st.t, "LAUNCH"});
+    if (e.took_off) marks.push_back({st.t, "TAKE-OFF"});
+    if (e.touched) marks.push_back({st.t, "TOUCH"});
+    if (e.folded) marks.push_back({st.t, "FOLD"});
+    if (e.cut != pm::ParaCut::none) {
+      marks.push_back({st.t, std::string("CUT ") + pm::para_cut_name(e.cut)});
+    }
+    if (w.flying && flight_from < 0) flight_from = st.t;
+    if (!w.flying && flight_from >= 0) {
+      bands.push_back({flight_from, st.t, "AIR"});
+      flight_from = -1;
+    }
+  }
+};
+
+void chart_trace(ge::lab::Lab& lab, const pm::ParaScenario& sc, StepTrace& tr, double hz) {
+  if (tr.flight_from >= 0) tr.bands.push_back({tr.flight_from, sc.seconds, "AIR"});
+  tr.s.set("title", std::string("the paramotor scenario ") + sc.id + ", step by step");
+  tr.s.set("x", "t_s");
+  for (const auto& [col, unit] :
+       std::vector<std::pair<std::string, std::string>>{{"t_s", "s"},
+                                                        {"agl", "m"},
+                                                        {"speed", "km/h"},
+                                                        {"airspeed", "km/h"},
+                                                        {"vy", "m/s"},
+                                                        {"bank", "deg"},
+                                                        {"alpha", "deg"},
+                                                        {"tension", "kN"}}) {
+    tr.s.set("unit." + col, unit);
+  }
+  const std::string k = sc.id;
+  const ge::lab::SeriesCharts out{
+      k + ".",
+      k,
+      k + ", " + fixed(sc.seconds, 1) + " s at " + fixed(hz, 0) + " Hz",
+      {{"scenario", k}, {"hz", fixed(hz, 0)}, {"trace", "yes"}},
+      tr.marks,
+      tr.bands,
+      "Grey lines are the run's events (launch, take-off, touch, fold, cut), grey bands the "
+      "wing flying."};
+  ge::lab::chart_series(
+      lab, tr.s, out,
+      {{"height",
+        "HEIGHT OVER THE SNOW, " + k,
+        "agl (m)",
+        {"agl"},
+        "The skis' height over the snow under them, every step.",
+        "zero until take-off, then the flight's shape; a touch drops it to zero"},
+       {"speed",
+        "SPEED AND AIRSPEED, " + k,
+        "km/h",
+        {"speed", "airspeed"},
+        "The pilot's speed over the plan (vertical included) and the air through the wing.",
+        "the two lines part by the wind; airspeed holds near trim in a steady glide"},
+       {"climb",
+        "CLIMB, " + k,
+        "vy (m/s)",
+        {"vy"},
+        "The pilot's vertical speed, + up.",
+        "steady sink in a glide, climb under throttle, one spike at most at a landing"},
+       {"angles",
+        "BANK AND ANGLE OF ATTACK, " + k,
+        "angle (deg)",
+        {"bank", "alpha"},
+        "The wing's bank (+ right side down) and its angle of attack.",
+        "bank follows the toggles smoothly; alpha climbs toward the stall only under deep brake"},
+       {"controls",
+        "THE HANDS, " + k,
+        "control (-1..1)",
+        {"throttle", "brake", "steer", "bar"},
+        "The controls the scripted hand or the bot held each step.",
+        "the script's steps where the scenario says; the bot's hands without one-step chatter"},
+       {"lines",
+        "LINES AND FOLD, " + k,
+        "kN, share",
+        {"tension", "fold"},
+        "The pull on the lines (kN) and a fold's depth (0..1).",
+        "the lines go slack only at a fold or on the snow; a fold opens and closes again"}});
+}
+
 void run(ge::lab::Lab& lab) {
   const std::string want = lab.arg("scenario");
   const double hz = lab.arg_num("hz");
+  const bool trace = lab.arg_bool("trace");
   ge::lab::LabTable table{
       "scenarios",
       {"scenario",  "launch s",  "take-off s", "top km/h",  "metres",     "climbed m",
@@ -121,7 +222,11 @@ void run(ge::lab::Lab& lab) {
     if (want != "all" && want != sc.id) continue;
     ran++;
     const auto level = pm::para_scenario_level(sc);
-    const pm::ParaRun r = pm::run_para_scenario(sc, hz);
+    StepTrace tr;
+    const pm::ParaRun r =
+        trace ? pm::run_para_scenario(sc, hz, [&](const pm::ParaStep& st) { tr.step(st); })
+              : pm::run_para_scenario(sc, hz);
+    if (trace) chart_trace(lab, sc, tr, hz);
     const std::string k = sc.id;
     lab.metric(k + ".top-speed", r.top_speed * 3.6, "km/h");
     lab.metric(k + ".distance", r.distance, "m");
@@ -196,6 +301,7 @@ const ge::lab::LabSpec kSpec{
     {
         {"scenario", "all", "one scenario's id (plugins/paramotor/scenarios.cpp), or all"},
         {"hz", "120", "steps a second"},
+        {"trace", "", "also write each scenario's every step (<id>.trace.tsv) and chart it", true},
     },
     "--scenario=all",
     run,

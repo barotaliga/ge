@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <span>
 #include <string_view>
 #include <vector>
@@ -79,7 +80,18 @@ struct ScenarioRun {
   double death_time = -1;
 };
 
-// Run `sc` on `spec` at `hz` steps a second.
-ScenarioRun run_scenario(const Scenario& sc, const SkiSpec& spec, double hz = 120);
+// One step of a run, as it stands after the step: what a per-step trace reads.
+struct ScenarioStep {
+  double t;  // s, the step's end
+  const SkierState& skier;
+  const SkierInput& input;
+  const SkierEvents& events;
+  double ground;  // m, the untouched surface under him
+};
+
+// Run `sc` on `spec` at `hz` steps a second, `each` called after every step when given (the ride
+// lab's --trace).
+ScenarioRun run_scenario(const Scenario& sc, const SkiSpec& spec, double hz = 120,
+                         const std::function<void(const ScenarioStep&)>& each = {});
 
 }  // namespace ge::skier

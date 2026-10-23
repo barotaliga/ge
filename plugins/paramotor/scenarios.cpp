@@ -318,7 +318,8 @@ mg::Level para_scenario_level(const ParaScenario& sc) {
   return sc.stage == ParaStage::slope ? skier::synthetic_slope() : skier::flat_strip(sc.pitch, 1);
 }
 
-ParaRun run_para_scenario(const ParaScenario& sc, double hz) {
+ParaRun run_para_scenario(const ParaScenario& sc, double hz,
+                          const std::function<void(const ParaStep&)>& each) {
   const mg::Level level = para_scenario_level(sc);
   const skier::TreeIndex trees = skier::build_tree_index(level);
   const ParaAirField field = make_air_field(level.seed);
@@ -373,6 +374,7 @@ ParaRun run_para_scenario(const ParaScenario& sc, double hz) {
     skier::step_skier(s, in, sw, spec, dt, se);
     step_para(p, s, c, world, spec, dt, pe);
     digest = para_hash(p, skier::skier_hash(s, digest));
+    if (each) each(ParaStep{t + dt, p, s, c, pe, level.ground_at(s.x, s.z)});
     if (pe.launched && run.launch < 0) run.launch = t + dt;
     if (pe.took_off && run.take_off < 0) run.take_off = t + dt;
     if (pe.folded) run.folds++;

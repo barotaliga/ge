@@ -22,6 +22,7 @@
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
 #include "lab/series.hpp"
+#include "lab/series_charts.hpp"
 #include "mountain/mapgen/generate.hpp"
 
 namespace {
@@ -87,47 +88,43 @@ void run(gl::Lab& lab) {
     lab.note(k + ": traced the first " + fixed(rep.time, 1) + " s (" + std::to_string(rep.gates) +
              " of " + std::to_string(rep.gate_count) + " gates); --limit=600 traces the whole run");
   }
-  const std::string text = gl::write_series(s);
-  lab.attach("trace.tsv", std::vector<uint8_t>(text.begin(), text.end()));
   lab.metric(k + ".steps", static_cast<double>(s.rows()), "steps");
   lab.metric(k + ".time", rep.time, "s");
   lab.metric(k + ".flights", static_cast<double>(flights.size()), "count");
 
-  const std::vector<std::pair<std::string, std::string>> inputs{
-      {"seed", fixed(seed, 0)}, {"version", "1"}, {"pilot", "bot"}, {"skis", "reference"}};
-  const auto& t = s.find("t_s")->num;
   const std::string sub = "seed " + fixed(seed, 0) + ", the bot, " + fixed(rep.time, 1) + " s, " +
                           std::to_string(rep.gates) + "/" + std::to_string(rep.gate_count) +
                           " gates";
-  const auto chart = [&](const std::string& id, const std::string& title,
-                         const std::vector<std::string>& columns, const std::string& y_label,
-                         const std::string& caption, const std::string& look_for) {
-    gl::LineChart lc;
-    lc.frame = {title, sub, "t (s)", y_label};
-    for (const std::string& c : columns) lc.traces.push_back({c, t, s.find(c)->num});
-    lc.marks = gates;
-    lc.bands = flights;
-    const gl::Chart ch = gl::line_chart(lc);
-    const std::string svg = gl::to_svg(ch.plot);
-    lab.attach(id + ".svg", std::vector<uint8_t>(svg.begin(), svg.end()));
-    lab.metric(k + "." + id + ".spikes", static_cast<double>(ch.findings.size()), "count");
-    lab.note(gl::chart_text(ch, 8));
-    lab.shot({id, title,
-              caption + " Grey lines are gates (G<n>), grey bands flights, red rings "
-                        "spikes (a step out of line with its neighbours).",
-              look_for, inputs},
-             gl::to_picture(ch.plot));
-  };
-  chart("speed", "SPEED DOWN SEED " + fixed(seed, 0), {"speed"}, "speed (km/h)",
+  const gl::SeriesCharts out{
+      "",
+      k,
+      sub,
+      {{"seed", fixed(seed, 0)}, {"version", "1"}, {"pilot", "bot"}, {"skis", "reference"}},
+      gates,
+      flights,
+      "Grey lines are gates (G<n>), grey bands flights."};
+  const std::string at = " DOWN SEED " + fixed(seed, 0);
+  gl::chart_series(
+      lab, s, out,
+      {{"speed",
+        "SPEED" + at,
+        "speed (km/h)",
+        {"speed"},
         "The skier's speed, vertical included, every step of the run.",
-        "speed builds off the start and dips into each gate's turn; no ring outside a landing");
-  chart("load", "SIDEWAYS LOAD DOWN SEED " + fixed(seed, 0), {"g_lat"}, "g_lat (g)",
-        "The sideways load the snow put on the skier, + to his right: each turn is a swing to one "
-        "side.",
-        "a swing a turn, alternating sides; rings only at landings or a caught edge");
-  chart("edge", "EDGE AND LEAN DOWN SEED " + fixed(seed, 0), {"edge", "lean"}, "angle (deg)",
+        "speed builds off the start and dips into each gate's turn; no ring outside a landing"},
+       {"load",
+        "SIDEWAYS LOAD" + at,
+        "g_lat (g)",
+        {"g_lat"},
+        "The sideways load the snow put on the skier, + to his right: each turn is a swing to "
+        "one side.",
+        "a swing a turn, alternating sides; rings only at landings or a caught edge"},
+       {"edge",
+        "EDGE AND LEAN" + at,
+        "angle (deg)",
+        {"edge", "lean"},
         "The skis' edge and the body's lean into the turn, + right, in degrees.",
-        "lean follows edge through every turn; no one-step jumps (a ring is a snap)");
+        "lean follows edge through every turn; no one-step jumps (a ring is a snap)"}});
 }
 
 const gl::LabSpec kSpec{
