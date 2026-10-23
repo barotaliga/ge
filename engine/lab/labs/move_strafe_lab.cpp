@@ -115,14 +115,16 @@ void run(gl::Lab& lab) {
                "m/s");
   }
   speed.rules = {classic.max_speed / classic.unit};
-  shoot(lab, "classic-speed", gl::line_chart(speed),
-        "The arena rows' plan speed over a run: forward alone and forward with jump pressed on "
-        "every landing, the view held straight (classic row); the strafe jumper turning the view "
-        "to the best angle on the classic row, and on the strafe_arena row with forward and a "
-        "strafe and with the strafe alone. The dashed line is the run speed.",
-        "the run and the straight hops level off at the dashed line; every strafe jumper climbs "
-        "past it, the classic one slowest and the strafe-only one fastest; no line drops (each "
-        "jump is taken on the first step on the ground, before friction)");
+  shoot(
+      lab, "classic-speed", gl::line_chart(speed),
+      "The arena rows' plan speed over a run: forward alone and forward with jump pressed on "
+      "every landing, the view held straight (classic row); the strafe jumper turning the view "
+      "to the best angle on the classic row, and on the strafe_arena row with forward and a "
+      "strafe and with the strafe alone. The run is drawn to 1.5 s, where it lets go.",
+      "the run and the straight hops level off at the run speed (10 m/s, under the hops' line); "
+      "every strafe jumper climbs past it, the classic one slowest and strafe_arena's forward and "
+      "strafe fastest; no line drops (each "
+      "jump is taken on the first step on the ground, before friction)");
 
   // 2. Every preset's strafe jumper, as a share of its own run speed.
   gl::LineChart rows;
