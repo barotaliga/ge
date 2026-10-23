@@ -5,7 +5,8 @@
 //   play [--stdio] [--seed=S] [--<option>=V] [--inputs=F]   the line protocol on stdin/stdout;
 //                                                           --inputs writes the log at the end
 //   play describe                                           the game: axes, options, step rate
-//   play sim [--seeds=A,B] [--<option>=V] [--out=DIR]       the pilot over each seed; logs in DIR
+//   play sim [--seeds=A,B] [--human] [--<option>=V]         the pilot over each seed; logs in DIR;
+//            [--out=DIR]                                    --human: how human each run looks
 //   play replay <log>                                       the log played back to its digest
 //   play state <log> [--step=N]                             the state after N steps (default all)
 //   play diverge <log-a> <log-b>                            the first step two runs part
@@ -15,6 +16,10 @@
 //   play shot [<log> | --seed=S] [--step=N] [--view=V]      a still of the run at step N (the end
 //             [--<option>=V] [--out=DIR]                    by default): the view framed with its
 //                                                           caption band, a PNG in DIR
+//   play why <log> [--agent=N] [--step=S] [--around=K]       why a bot did it (why.hpp): agent N's
+//            [--decision=D] [--flips] [--close=X]           decisions at steps S-K..S+K; --flips
+//            [--timeline] [--out=DIR]                       every change of choice (and margins
+//                                                           under X); --timeline its series in DIR
 //   play record [<log> | --seed=S] [--view=V]               the run as a video (record.hpp): the
 //               [--from=N|Ns] [--to=N|Ns] [--fps=30]        view at each frame of --fps, the run
 //               [--speed=1] [--size=WxH] [--format=mp4]     at --speed, encoded by ffmpeg (mp4,
@@ -27,9 +32,9 @@
 // misses its digest, two runs that diverge), 2 a usage error.
 //
 // ge:summary The play executable's main: protocol, describe, sim, replay, state, diverge, bench
-// ge:summary shot and record
+// ge:summary shot, record and why
 // ge:keywords play main executable command-line describe sim replay state diverge bench
-// ge:keywords play_main record video
+// ge:keywords play_main why human record video
 // ge:skill agent-interface
 // ge:test tests/play_session_test.cpp
 #pragma once
