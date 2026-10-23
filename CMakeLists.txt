@@ -10,7 +10,7 @@
 #   ge_net       the network: links, the simulated network, captures, connections, nodes
 #                (engine/net; docs/networking.md)
 #   ge_lab       the lab framework (engine/lab: the contract, the runner, the raster, the PNG,
-#                the series files and the charts)
+#                the series files, the charts and the model views)
 #   ge_ai        the bots' layer (engine/ai: the decision record `ge why` reads)
 #   ge_play      the play contract (engine/play: GameSpec and Run, the session, the input log,
 #                the bench, the stills `ge shot` draws)
@@ -178,8 +178,9 @@ endif()
 add_library(ge_lab STATIC engine/lab/lab.cpp engine/lab/report.cpp engine/lab/runner.cpp
   engine/lab/raster.cpp engine/lab/png.cpp engine/lab/diff.cpp engine/lab/inflate.cpp engine/lab/sound.cpp
   engine/lab/series.cpp engine/lab/stats.cpp engine/lab/plot.cpp engine/lab/chart.cpp
-  engine/lab/anim.cpp engine/lab/series_charts.cpp engine/lab/teleport.cpp)
-target_link_libraries(ge_lab PUBLIC ge_core ge_audio)
+  engine/lab/anim.cpp engine/lab/series_charts.cpp engine/lab/teleport.cpp
+  engine/lab/model_view.cpp engine/lab/model_compare.cpp engine/lab/model_sheets.cpp)
+target_link_libraries(ge_lab PUBLIC ge_core ge_audio ge_assets)
 
 # The profiler (engine/prof): the timing zones any code opens with GE_ZONE, the allocation
 # counts and the resident set. The counting operator new is its own target, ge_prof_alloc: an
