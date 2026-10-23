@@ -218,6 +218,7 @@ characters.
 | `engine/prof/` | The profiler (`ge::prof`): zones, allocation counts and the counting allocator, the peak resident set; feeds no digest | `perf` |
 | `engine/ai/` | The bots' layer (`ge::ai`): the decision record `ge why` reads, the hands that look human, paths, thinking on a schedule, sight and memory, steering, choosing | `bots` |
 | `engine/wind/` | The wind (`ge::wind`): a pure function of place and time over a field (mean, gusts, veer, the log-law profile, shelter, local sources); a world's wind is one field of it | `water` |
+| `engine/water/` | The water (`ge::water`): bodies (lake, ocean, river, volume) and the one `sample` query, the sea a wind grows over a fetch, the waves the simulation reads | `water` |
 | `engine/cli/` | The `ge` command line for game repos (`cmake/Cli.cmake`): the command catalog, the answer shape and findings, and one file per command group | `agent-interface` |
 | `consumer-skills/` | The skills a game repo gets from `ge new` and `ge skills sync`, compiled into `ge`; written for a game repo, never for this one | `agent-interface` |
 | `scaffold/` | The game repo `ge new` writes, as `.in` files with placeholders, compiled into `ge` | `agent-interface` |

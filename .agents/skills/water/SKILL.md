@@ -19,7 +19,11 @@ for anything the simulation reads, `render` for a pass, `audio` for a voice, `la
 | The wind: the field, gusts, veer, the profile, shelter | `engine/wind/field.hpp` | `wind` | `tests/wind_field_test.cpp` (golden) |
 | Local wind sources: jet, whirl, blast | `engine/wind/sources.hpp` | `wind` | `tests/wind_sources_test.cpp` |
 | A world's wind as a field (the mountain's) | `plugins/mountain/air/air.hpp` (`field_of`) | `wind`, `snowfall` | `tests/mountain_air_test.cpp` (golden) |
-| Bodies, waves, floating, swimming, colour, flow, drawn, sound | the rows M24b–M24l | the doc's § Labs | as each row lands |
+| The sea a wind grows: growth laws, spectrum, depth, spread, dispersion | `engine/water/spectrum.hpp` | `waves` | `tests/water_spectrum_test.cpp` |
+| The simulation tier's waves: the components laid, the surface, breaking | `engine/water/waves.hpp` | `waves` | `tests/water_waves_test.cpp` (golden) |
+| The fetch over a body's outline | `engine/water/fetch.hpp` | `fetch` | `tests/water_fetch_test.cpp` |
+| Bodies (lake, ocean, river, volume) and the one `sample` query | `engine/water/world.hpp` | `fetch` | `tests/water_world_test.cpp` (golden) |
+| Floating, swimming, colour, flow, drawn, sound | the rows M24c–M24l | the doc's § Labs | as each row lands |
 
 ## The rules
 
@@ -39,15 +43,27 @@ for anything the simulation reads, `render` for a pass, `audio` for a voice, `la
 - **Per-game numbers live in the game or its plugin.** The engine gives a mechanism and a
   default; a preset (the classic swim, the clothed skier) is the game's.
 - **Adding water or wind to a game is one call.** If it takes more, the API is what to fix.
+- **Everything asks `water::sample`.** The physics, a swimmer, the sound and the renderer read
+  the one query (or the GPU's restatement of `surface_at`, held to it by a lab), so they cannot
+  disagree about where the surface is. A second walk over the bodies is a bug.
+- **The laid band must carry the sea.** Each component carries its own slice's energy, so the
+  laid Hs is the asked one less only the band's tails; a change to `lay` keeps the `waves` lab's
+  "Hs laid" column within a few per cent of "Hs asked" and its series within 8 %.
+- **A plan view drops the components shorter than a few pixels** (the picture's own tier):
+  drawn, they alias into stripes that are not on the water.
 
 ## Checking a change
 
 ```sh
-make test T='wind_|mountain_air'            # the wind's tests and the mountain's golden
+make test T='wind_|mountain_air|water_'     # the wind's and the water's tests, the mountain's golden
 make lab LAB=wind ARGS=--tag=before          # before the change
 make lab LAB=wind ARGS=--compare=before      # after: the gusts' intensity, the profile, the plan
+make lab LAB=waves ARGS=--tag=before         # the same for the waves (and LAB=fetch for a lake)
 ```
 
 Read the `wind` lab's table: the measured intensity sits within a few per cent of the asked
 (1 / ln(10 / z0) for the ground), every profile crosses 1 at 10 m, and the plan's wood and its
-lee are calm while the arrows bend at their edges.
+lee are calm while the arrows bend at their edges. Read the `waves` lab's tables: the band laid
+keeps nearly all of the asked Hs, the series measures it within a few per cent, and the
+surfaces show short-crested bands across the wind with no single stripe. The `fetch` lab's lee
+must be rougher than its windward shore.

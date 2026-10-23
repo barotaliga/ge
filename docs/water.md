@@ -71,7 +71,7 @@ sway, the sound of wind, and every machine that flies.
 
 ## Bodies of water and the one query (`engine/water`, M24b)
 
-A `WaterWorld` holds the water a game has laid down. **Every question anything asks of water
+A `water::World` holds the water a game has laid down. **Every question anything asks of water
 goes through one query**, so the physics, the swimmer, the sound and the renderer can never
 disagree about where the surface is:
 
@@ -114,8 +114,10 @@ the grid takes over.
   (the effective fetch), so a long lake rough at its lee shore and calm at its windward one, and
   a pond grows ripples, not swell.
 - **The simulation tier** (CPU, deterministic, `core/libm` only): the spectrum's energetic
-  part laid as 16–32 components, cut into equal-energy slices (they crowd onto the peak,
-  so the peak is a wave train, not one sine beating against an octave-off neighbour) and their
+  part laid as 16–32 components, cut into slices of equal weight, the energy times
+  1 + (ω/ωp)² (they crowd onto the peak, so the peak is a wave train, not one sine beating
+  against an octave-off neighbour, and the tail keeps enough short waves that no single one
+  stripes the surface; each carries its own slice's energy, so Hs is exact) and their
   directions drawn through the spread by stratified inverse transform. Each component is a
   linear wave with its second-order (Stokes) correction, η = a·sin φ − ½·k·a²·cos 2φ, which
   gives the sharp crest and flat trough and keeps the height a function of the undisplaced
@@ -366,11 +368,11 @@ a damped room) with bubbles.
 ## Adding water is one call (M24k)
 
 ```cpp
-water::WaterWorld world;
-water::add_lake(world, shore_outline, /*level*/ 412.0, water::look("nordic-clear"));
-water::add_river(world, centreline, widths, /*discharge m³/s*/ 6.0, water::look("glacial"));
+water::World world(wind_field);                               // the air the waves grow from
+water::add_lake(world, shore_outline, /*level*/ 412.0, {.look = "nordic-clear"});
+water::add_river(world, centreline, /*discharge m³/s*/ 6.0, {.look = "glacial"});
 // each step:   water::step(world, wind, dt);       (flow regions and floats only)
-// any query:   water::sample(world, p, t);
+// any query:   water::sample(world, x, y, z, t);
 // each frame:  render::WaterPass reads the world;  audio reads the same world
 ```
 
