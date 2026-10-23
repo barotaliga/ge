@@ -29,6 +29,7 @@ ge build                         # compiler and CMake errors come back as findin
 ge test [--filter=<regex>]       # every test and lab smoke; each failure a finding
 ge lab <id> [--tag=before | --compare=before] [-- <its flags>]   # measure and LOOK
 ge digest [<lab>] [--write]      # a lab's digest beside tests/labs_digests.txt; --write moves its row
+ge digest --diff                 # every lab, printing only the digests off the baseline
 ge golden diff [<test>] [--base=<ref>]   # what moved in each golden file, column by column
 ge golden write <test>           # a test's goldens rewritten (GE_GOLDEN_WRITE=1), held, diffed
 ge sim [--seeds=1,2]             # the game's pilot plays each seed; input logs in runs/

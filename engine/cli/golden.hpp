@@ -7,7 +7,9 @@
 //                                 beside tests/labs_digests.txt's row. --write rewrites that row
 //                                 only (every row with no lab), creating the file if it is not
 //                                 there. A repo with a baseline has its labs held to it by
-//                                 `ge test` (the labs_smoke case).
+//                                 `ge test` (the labs_smoke case). --diff prints only the labs
+//                                 whose digest is off the baseline (or not in it), and writes
+//                                 nothing: after a change, the labs it moved in one command.
 //   ge golden diff [<golden|test>...] [--base=<ref>]
 //                                 each golden file against git's <ref> (default HEAD): the rows
 //                                 that changed and, column by column, what moved in them; with
@@ -38,12 +40,16 @@ namespace ge::cli {
 
 inline constexpr std::string_view kDigestBaseline = "tests/labs_digests.txt";
 
-Outcome run_digest(const BuildOptions& o, const std::string& lab, bool write);
+Outcome run_digest(const BuildOptions& o, const std::string& lab, bool write,
+                   bool only_moved = false);
 Outcome run_golden_diff(const fs::path& repo, const std::vector<std::string>& targets,
                         const std::string& base);
 Outcome run_golden_write(const BuildOptions& o, const std::string& test);
 
-// One golden file's two versions compared, row by row (rows match by their place).
+// One golden file's two versions compared, row by row. Rows match by their place, unless the
+// count changed and every row's first word is a unique key on both sides most rows share (a seed,
+// a scenario's id): then they match by that key, so a row inserted mid-table is one row added and
+// the rows after it are not shown as moved.
 struct GoldenCell {
   std::string column;  // the header's name, or "column N" (from 1)
   std::string before, after;
@@ -51,12 +57,14 @@ struct GoldenCell {
 struct GoldenRow {
   size_t row = 0;                 // from 1, among the data rows
   std::string key;                // the row's first word (a seed, a name), before the change
+  std::string change;             // "" moved; "added" or "gone" (rows matched by key)
   std::vector<GoldenCell> cells;  // only the words that moved; a word added or gone is "-"
 };
 struct GoldenDiff {
   std::string file;
   size_t rows_before = 0, rows_after = 0;
   bool header_changed = false;
+  bool by_key = false;          // the rows matched by their first word, not their place
   std::vector<GoldenRow> rows;  // the rows that changed, in order
   // Each column that moved and the number of rows it moved in, in the columns' order.
   std::vector<std::pair<std::string, int>> moved;

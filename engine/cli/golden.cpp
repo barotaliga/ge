@@ -153,23 +153,51 @@ GoldenDiff diff_golden(std::string_view file, std::string_view before, std::stri
   std::vector<std::string> names = named.header;
   if (named.rows.empty() || names.size() != named.rows[0].size()) names.clear();
   std::map<size_t, int> moved;  // column → rows it moved in
-  const size_t rows = std::max(a.rows.size(), b.rows.size());
-  for (size_t r = 0; r < rows; r++) {
-    static const std::vector<std::string> kNone;
-    const auto& wa = r < a.rows.size() ? a.rows[r] : kNone;
-    const auto& wb = r < b.rows.size() ? b.rows[r] : kNone;
-    if (wa == wb) continue;
+  static const std::vector<std::string> kNone;
+  // One pair of rows (`r` from 1, in the after table, or the before table for a row gone).
+  const auto compare = [&](size_t r, const std::vector<std::string>& wa,
+                           const std::vector<std::string>& wb, std::string change) {
+    if (wa == wb) return;
     GoldenRow row;
-    row.row = r + 1;
+    row.row = r;
     row.key = !wa.empty() ? wa[0] : wb[0];
+    row.change = std::move(change);
     for (size_t c = 0; c < std::max(wa.size(), wb.size()); c++) {
       const std::string x = c < wa.size() ? wa[c] : "-";
       const std::string y = c < wb.size() ? wb[c] : "-";
       if (x == y) continue;
       row.cells.push_back({column_name(names, c), x, y});
-      moved[c]++;
+      if (row.change.empty()) moved[c]++;
     }
     d.rows.push_back(std::move(row));
+  };
+  // Keys: each row's first word, when every row has one and none repeats on either side.
+  const auto keys_of = [](const Table& t, std::map<std::string, size_t>& at) {
+    for (size_t r = 0; r < t.rows.size(); r++) {
+      if (t.rows[r].empty() || !at.emplace(t.rows[r][0], r).second) return false;
+    }
+    return true;
+  };
+  std::map<std::string, size_t> ka, kb;
+  size_t shared = 0;
+  if (a.rows.size() != b.rows.size() && keys_of(a, ka) && keys_of(b, kb)) {
+    for (const auto& [k, r] : kb) shared += ka.count(k);
+    d.by_key = shared * 2 >= std::min(a.rows.size(), b.rows.size()) && shared > 0;
+  }
+  if (d.by_key) {
+    for (size_t r = 0; r < b.rows.size(); r++) {
+      const auto it = ka.find(b.rows[r][0]);
+      compare(r + 1, it == ka.end() ? kNone : a.rows[it->second], b.rows[r],
+              it == ka.end() ? "added" : "");
+    }
+    for (size_t r = 0; r < a.rows.size(); r++) {
+      if (!kb.count(a.rows[r][0])) compare(r + 1, a.rows[r], kNone, "gone");
+    }
+  } else {
+    for (size_t r = 0; r < std::max(a.rows.size(), b.rows.size()); r++) {
+      compare(r + 1, r < a.rows.size() ? a.rows[r] : kNone, r < b.rows.size() ? b.rows[r] : kNone,
+              "");
+    }
   }
   for (const auto& [c, n] : moved) d.moved.emplace_back(column_name(names, c), n);
   return d;
@@ -183,6 +211,7 @@ std::string format_golden_diff(const GoldenDiff& d, size_t most_rows) {
            " after)";
   }
   if (d.header_changed) out += "; the header changed";
+  if (d.by_key) out += "; rows matched by their first word";
   out += "\n";
   for (const auto& [name, n] : d.moved) {
     out += "  " + name + " moved in " + std::to_string(n) + (n == 1 ? " row\n" : " rows\n");
@@ -190,6 +219,10 @@ std::string format_golden_diff(const GoldenDiff& d, size_t most_rows) {
   for (size_t i = 0; i < std::min(most_rows, d.rows.size()); i++) {
     const GoldenRow& r = d.rows[i];
     out += "  row " + std::to_string(r.row) + " (" + r.key + "):";
+    if (!r.change.empty()) {
+      out += " " + r.change + "\n";
+      continue;
+    }
     for (size_t k = 0; k < r.cells.size(); k++) {
       const GoldenCell& c = r.cells[k];
       out += std::string(k ? ";" : "") + " " + c.column + " " + shown(c.before, c.column) + " -> " +
@@ -224,6 +257,7 @@ std::string golden_diff_json(const GoldenDiff& d, size_t most_rows) {
     }
     rows.push_back(json_obj({{"row", json_num(static_cast<long long>(r.row))},
                              {"key", json_str(r.key)},
+                             {"change", json_str(r.change.empty() ? "moved" : r.change)},
                              {"cells", json_arr(cells)}}));
   }
   return json_obj({{"file", json_str(d.file)},
@@ -231,6 +265,7 @@ std::string golden_diff_json(const GoldenDiff& d, size_t most_rows) {
                    {"rows_before", json_num(static_cast<long long>(d.rows_before))},
                    {"rows_after", json_num(static_cast<long long>(d.rows_after))},
                    {"header_changed", json_bool(d.header_changed)},
+                   {"by_key", json_bool(d.by_key)},
                    {"moved", json_arr(moved)},
                    {"rows", json_arr(rows)}});
 }
@@ -382,8 +417,14 @@ Outcome run_golden_write(const BuildOptions& o, const std::string& test_arg) {
   return out;
 }
 
-Outcome run_digest(const BuildOptions& o, const std::string& lab, bool write) {
+Outcome run_digest(const BuildOptions& o, const std::string& lab, bool write, bool only_moved) {
   Outcome out;
+  if (write && only_moved) {
+    out.findings.push_back({Severity::error, "--write and --diff together", "the flags",
+                            "--diff shows what moved and writes nothing; run it, then --write"});
+    out.exit = 2;
+    return out;
+  }
   if (!build_into(o, out)) return out;
   const fs::path baseline = o.repo / kDigestBaseline;
   const std::string rel(kDigestBaseline);
@@ -451,7 +492,9 @@ Outcome run_digest(const BuildOptions& o, const std::string& lab, bool write) {
   }
   static const std::regex kDigest("\"digest\": \"([0-9a-f]{16})\"");
   std::vector<std::string> rows;
+  std::vector<std::string> moved_ids;
   int moved = 0;
+  size_t ran = 0;
   for (const std::string& id : ids) {
     const std::string report = read_text(previews / id / "report.json").value_or("");
     std::smatch m;
@@ -464,7 +507,10 @@ Outcome run_digest(const BuildOptions& o, const std::string& lab, bool write) {
                               : before == digest ? "same"
                               : write            ? "moved from " + before
                                                  : "baseline says " + before;
+    ran++;
     if (!before.empty() && before != digest) moved++;
+    if (before != digest) moved_ids.push_back(id);
+    if (only_moved && before == digest) continue;
     out.text.append(id).append("  ").append(digest).append("  ").append(state).append("\n");
     rows.push_back(json_obj({{"lab", json_str(id)},
                              {"digest", json_str(digest)},
@@ -480,6 +526,17 @@ Outcome run_digest(const BuildOptions& o, const std::string& lab, bool write) {
   out.result = json_obj({{"baseline", json_str(rel)},
                          {"labs", json_arr(rows)},
                          {"log", json_str(rel_path(o.repo, log))}});
+  if (only_moved) {
+    std::string names;
+    for (const std::string& id : moved_ids) names += (names.empty() ? "" : ", ") + id;
+    out.summary = moved_ids.empty() ? "every one of " + std::to_string(ran) + " labs matches " + rel
+                                    : std::to_string(moved_ids.size()) + " of " +
+                                          std::to_string(ran) + " labs off " + rel + ": " + names;
+    out.next = moved_ids.empty() ? ""
+                                 : "a move you meant: ge digest <lab> --write, and say why in "
+                                   "the PR; one you did not: ge lab <lab> --compare=<tag>";
+    return out;
+  }
   out.summary = write ? (out.written.empty()
                              ? rel + " already holds these digests"
                              : "rewrote " + rel + " for " + (lab.empty() ? "every lab" : lab) +
