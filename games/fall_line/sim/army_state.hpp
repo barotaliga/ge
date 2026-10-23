@@ -78,6 +78,10 @@ struct Soldier {
   // THE WATCH ON HIS PROGRESS (army_troop.hpp, ai/steer.hpp): where he was at the window's start
   // and when, how many windows in a row he barely moved, the side he steps off to and until when.
   ge::ai::Progress progress;
+  // HIS FIRE (gunfire.hpp): the bursts fired this hold, and the clock before which he does not
+  // stop to fire again.
+  int32_t bursts = 0;
+  double rest = 0;
 };
 
 // What one of the army's snowmobiles is doing (army_sled.hpp):
@@ -114,6 +118,7 @@ struct ArmySled {
   // dug out.
   ge::ai::Progress progress;
   int32_t dug = 0;
+  int32_t bursts = 0;  // the gunner's bursts this halt (gunfire.hpp)
 };
 
 // What one of the army's helicopters is doing (army_heli.hpp):
@@ -206,6 +211,9 @@ struct ArmyState {
   // THE SOLDIERS BY PLACE, built each step before they move (ai/steer.hpp): who keeps apart from
   // whom. Scratch: never hashed.
   ge::ai::Neighbours near;
+  // Whether its men fire (gunfire.hpp). A lab or a test staging the army's moves without the
+  // gunfire turns it off; the game never does.
+  bool fire = true;
 };
 
 }  // namespace fall_line::sim

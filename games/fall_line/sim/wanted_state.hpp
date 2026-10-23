@@ -28,13 +28,14 @@ struct Pursuer {
   double x = 0, y = 0, z = 0;
 };
 
-// How a hunt ended: still running, the stars lost (`escaped`), or taken in where the army does
-// not shoot to kill (`arrested`).
-enum class WantedEnd : uint8_t { running, escaped, arrested };
+// How a hunt ended: still running, the stars lost (`escaped`), taken in where the army does not
+// shoot to kill (`arrested`), or dead of his wounds where it does (`killed`).
+enum class WantedEnd : uint8_t { running, escaped, arrested, killed };
 
 // What a wanted event says (`EventKind::wanted`): a star gained or set down by hand, the stars
-// dropped after a search ran out, a pursuer catching sight of him again, losing it, or the arrest.
-enum class WantedChange : uint8_t { raised, lowered, lost, seen, searching, arrested };
+// dropped after a search ran out, a pursuer catching sight of him again, losing it, the arrest, or
+// his death.
+enum class WantedChange : uint8_t { raised, lowered, lost, seen, searching, arrested, killed };
 
 struct WantedState {
   bool active = false;  // raised at least once this run: only then is any of it hashed

@@ -23,6 +23,7 @@
 #include "fall_line/sim/crowd.hpp"
 #include "fall_line/sim/field.hpp"
 #include "fall_line/sim/free.hpp"
+#include "fall_line/sim/gunfire.hpp"
 #include "fall_line/sim/heli_ride.hpp"
 #include "fall_line/sim/lift_ride.hpp"
 #include "fall_line/sim/para_ride.hpp"
@@ -61,7 +62,7 @@ void log_step(const GameState& state) {
     const out::Channel ch = e.kind == EventKind::shoulder || e.kind == EventKind::bump ? kField
                             : e.kind == EventKind::wanted                              ? kWanted
                             : e.kind == EventKind::army || e.kind == EventKind::army_sled ||
-                                    e.kind == EventKind::army_heli
+                                    e.kind == EventKind::army_heli || e.kind == EventKind::gunfire
                                 ? kArmy
                             : course ? kCourse
                                      : kSkier;
@@ -137,6 +138,15 @@ void log_step(const GameState& state) {
                 army_heli_change_name(static_cast<ArmyHeliChange>(e.gate)) + ", " +
                 std::to_string(state.army.helis.size()) + " out";
         break;
+      case EventKind::gunfire: {
+        const GunfirePhase ph = gunfire_phase(e);
+        line += std::string(" gunfire ") + gunfire_phase_name(ph);
+        if (ph == GunfirePhase::hit) {
+          line += std::string(" ") + ge::skier::part_name(gunfire_part(e)) + " " + f(e.value, 0) +
+                  " J, ISS " + std::to_string(ge::skier::severity_of(state.racers.front().body));
+        }
+        break;
+      }
     }
     line += " at x " + f(s.x, 1) + " z " + f(s.z, 1) + ", " + f(s.speed * 3.6, 1) + " km/h";
     out::log_on(ch, out::Level::debug, line);
@@ -212,6 +222,8 @@ const char* event_name(EventKind kind) {
       return "army-sled";
     case EventKind::army_heli:
       return "army-heli";
+    case EventKind::gunfire:
+      return "gunfire";
   }
   return "?";
 }
@@ -331,6 +343,10 @@ void step(GameState& state, std::span<const Controls> controls) {
     step_army(state);
   }
   {
+    GE_ZONE("gunfire");
+    step_gunfire(state);
+  }
+  {
     GE_ZONE("wanted");
     step_wanted(state);
   }
@@ -401,7 +417,7 @@ uint64_t state_hash(const GameState& state, uint64_t h) {
     mix(state.para.starts);
   }
   if (state.crowd.active) h = crowd_hash(state.crowd, h);
-  return army_hash(state.army, wanted_hash(state.wanted, h));
+  return gunfire_hash(state.gunfire, army_hash(state.army, wanted_hash(state.wanted, h)));
 }
 
 }  // namespace fall_line::sim

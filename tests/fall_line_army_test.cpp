@@ -231,6 +231,7 @@ TEST(a_run_never_hunted_sends_nobody_and_hashes_no_army) {
   fs::GameState state = fs::create_game_on(strip(), 1);
   // Staged: the army on foot alone: its helicopters are fall_line_army_heli_test's.
   state.army.send_helis = false;
+  state.army.fire = false;
   const uint64_t h0 = fs::state_hash(state, 1469598103934665603ull);
   fs::GameState other = state;
   other.army.waves = 7;  // unhashed while inactive
@@ -243,6 +244,7 @@ TEST(a_run_never_hunted_sends_nobody_and_hashes_no_army) {
 TEST(a_wave_forms_up_out_of_his_sight_down_the_piste_and_climbs_to_its_stand_off) {
   fs::GameState state = fs::create_game_on(strip(), 1);
   state.army.send_helis = false;
+  state.army.fire = false;
   fs::set_wanted(state, 4);
   const fs::Spot q = fs::quarry_of(state);
   // Four stars send their first wave after `first_s`: its men on foot, all of them.
@@ -282,6 +284,7 @@ TEST(a_wave_forms_up_out_of_his_sight_down_the_piste_and_climbs_to_its_stand_off
 TEST(where_they_do_not_shoot_to_kill_they_run_him_down_and_arrest_him) {
   fs::GameState state = fs::create_game_on(strip(), 1);
   state.army.send_helis = false;
+  state.army.fire = false;
   state.wanted.lethal = false;
   fs::set_wanted(state, 4);
   std::vector<fs::GameEvent> events;
@@ -302,6 +305,7 @@ TEST(where_they_do_not_shoot_to_kill_they_run_him_down_and_arrest_him) {
 TEST(the_hunt_over_the_men_far_from_him_are_sent_home_and_the_rest_stand) {
   fs::GameState state = fs::create_game_on(strip(), 1);
   state.army.send_helis = false;
+  state.army.fire = false;
   fs::set_wanted(state, 4);
   stand(state, fs::wanted::kWaves[4].first_s + 1, 4);
   const auto out = static_cast<int>(state.army.soldiers.size());
@@ -350,6 +354,7 @@ const Seed38Hunt& seed38_hunt() {
     Seed38Hunt h;
     fs::GameState state = fs::create_free_ride(seed38(), 0);
     state.army.send_helis = false;
+    state.army.fire = false;
     const auto& p = (*state.lifts)[0];
     state.racers[0].skier =
         sk::stand_skier(state.world(), p.bottom.x - p.dz * 40, p.bottom.z + p.dx * 40, 0, 0);
