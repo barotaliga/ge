@@ -20,6 +20,7 @@ are always the pinned release's.
 
 ```sh
 ge find <words>                  # what exists: this repo's and the engine's files, skills, lessons
+ge goals free [<row>] --fetch    # the roadmap numbers main and every branch already use, and the next free one
 ge explain <file|name>           # one of them: its header comment, declaration, skill, test
 ge add system <name>             # sim/<name>.hpp, .cpp and its replay test, to start from
 ge add lab <name> --kind=<k>     # a lab (sim, scenario, picture, bench), in the smoke pass
