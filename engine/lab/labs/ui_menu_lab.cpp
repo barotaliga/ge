@@ -14,9 +14,9 @@
 // ge:keywords scene viewport portrait landscape phone desktop focus glide ui screenshot
 // ge:skill ui labs
 // ge:test tests/ui_menu_test.cpp
+#include <charconv>
 #include <chrono>
 #include <cmath>
-#include <cstdio>
 #include <string>
 #include <utility>
 #include <vector>
@@ -206,7 +206,11 @@ void run(ge::lab::Lab& lab) {
       const size_t comma = std::min(list.find(',', at), list.size());
       const std::string one = list.substr(at, comma - at);
       int w = 0, h = 0;
-      if (std::sscanf(one.c_str(), "%dx%d", &w, &h) == 2 && w > 0 && h > 0)
+      const char* end = one.data() + one.size();
+      const auto [wx, we] = std::from_chars(one.data(), end, w);
+      const bool by = we == std::errc{} && wx != end && *wx == 'x';
+      const auto [hx, he] = by ? std::from_chars(wx + 1, end, h) : std::from_chars_result{};
+      if (by && he == std::errc{} && hx == end && w > 0 && h > 0)
         viewports.push_back({w, h, h > w ? "portrait" : "landscape"});
       at = comma + 1;
     }
