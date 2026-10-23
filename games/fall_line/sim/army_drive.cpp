@@ -8,6 +8,7 @@
 
 #include <cmath>
 
+#include "ai/steer.hpp"
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "core/num.hpp"
@@ -92,17 +93,12 @@ WayCost way_cost(const mg::Level& level, const sk::TreeIndex& trees, double x0, 
 
 WayChoice choose_way(const mg::Level& level, const sk::TreeIndex& trees, double x, double z,
                      double held, double want, const DriveRead& read) {
-  WayCost best = way_cost(level, trees, x, z, held, want, held, read);
-  double way = held;
-  for (int32_t k = -read.fan; k <= read.fan; k++) {
-    const double h = want + read.spread * k / read.fan;
-    const WayCost c = way_cost(level, trees, x, z, h, want, held, read);
-    if (c.cost < best.cost) {
-      best = c;
-      way = h;
-    }
-  }
-  return {lm::atan2(lm::sin(way), lm::cos(way)), best.trees > 0, best.cost, best.reach};
+  const auto best = ge::ai::pick_heading(
+      held, want, ge::ai::Fan{read.fan, read.spread},
+      [&](double h) { return way_cost(level, trees, x, z, h, want, held, read); });
+  const double way = best.heading;
+  return {lm::atan2(lm::sin(way), lm::cos(way)), best.costed.trees > 0, best.costed.cost,
+          best.costed.reach};
 }
 
 }  // namespace fall_line::sim

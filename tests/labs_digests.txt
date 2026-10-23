@@ -18,10 +18,14 @@ gunfire 00ecbaf362018c86
 heli edc6a93febc6f52d
 humanness a486ef984a6511d7
 injuries 594a6c11dc263f37
+input-ffb 565464637bf28b86
+input-session dcb313b33f4ddf37
+input-shape e2284bbd066830af
 junctions 036999ca677e12e6
 level 4fbff3da7a82c4aa
 lift-ride a374f35eb85cc161
 mapgen-cost 3baf51b6907817f3
+model-views 0d0824a2168f6b14
 models bdc7f86743249676
 net-link 458927d87fc48ec1
 net-reach ec8c6d787871dd07
@@ -42,8 +46,10 @@ ride e7b71a5977a27c65
 routes 739cf0534473b4f8
 run-clock 81607c7ac1161166
 shadows 5b0d6051c10638b4
+sight 2c2aefbe619a6874
 sim a9c6d0f6bb29ce2a
 ski-cross fbe386cdba062259
+skier-views d6fb3d6e2a3c34fe
 skijump-hills 3fa0eff35ac0f70a
 slalom 2adb7c679ec93adf
 sled 30cd3df2c903518c
@@ -52,6 +58,7 @@ snowfall 4bc8eb3fda4edade
 speed-events 2e575d7a0184d4b2
 speed-ski 55c4cfa78de28f7e
 spray 7479b5a25c39b195
+steer 1a0cad67ccb0869e
 stars 9cdfe902087f03b7
 synth 39e6460e5c8a8c8e
 taa 01ee5d58d90a05ce

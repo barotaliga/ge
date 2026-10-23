@@ -1,6 +1,6 @@
 ---
 name: assets
-description: "Use for engine/assets in gameengine2 and anything that brings an authored model into a game: the glTF 2.0 loader (cgltf, cmake/Cgltf.cmake), the Model it fills (skinned meshes, the skeleton, materials, baked clips), the engine's frame and the mirror from glTF's, posing and the bone palette, CPU skinning and the reach box, GPU skinning into an instance family (render/skinning.hpp), the `models` lab (bind, filmstrips, onion skins, joint-angle graphs), building a model in headless Blender with `ge asset` (the manifest, the builder and ge_asset.py, GE_ASSET_DATA, the stamp, the size budget, the assets_check test), and a model's size in the repository."
+description: "Use for engine/assets in gameengine2 and anything that brings an authored model into a game: the glTF 2.0 loader (cgltf, cmake/Cgltf.cmake), the Model it fills (skinned meshes, the skeleton, materials, baked clips), the engine's frame and the mirror from glTF's, posing and the bone palette, CPU skinning and the reach box, GPU skinning into an instance family (render/skinning.hpp), the `models` lab (bind, filmstrips, onion skins, joint-angle graphs), the `model-views` and `skier-views` labs (turntable, axes with a ruler, topology, close-ups, LODs at their sizes) and reference sheets (photographs, kept temporary, cropped beside the model posed and turned to match), building a model in headless Blender with `ge asset` (the manifest, the builder and ge_asset.py, GE_ASSET_DATA, the stamp, the size budget, the assets_check test), and a model's size in the repository."
 ---
 
 # Assets
@@ -68,6 +68,62 @@ What comes back, and how to read it:
   A spike is a pop or a jolt at that time.
 - The metrics: weights that do not sum to 1 and influences naming no joint fail the lab.
 
+## Looking at a model like a modeller: `model-views`, `skier-views`
+
+The `models` lab checks a model's motion. These look at its FORM, on the sheets of
+`engine/lab/model_sheets.hpp` over the CPU model view (`engine/lab/model_view.hpp`: perspective
+or orthographic, z-buffered, lit, wired, boned, supersampled; the same pixels on every row).
+
+```sh
+make lab LAB=model-views ARGS=--asset=skier            # a built asset by name
+make lab LAB=model-views ARGS="--model=x.glb --detail=head,wrist_l"
+make lab LAB=skier-views                               # the skier as the game poses it
+```
+
+- `turntable`: eight azimuths in perspective (az 0 is the front, from +z; 90 its right, +x).
+  Holes, missing faces, a part floating off the body.
+- `axes`: orthographic from the front, the right, the back and above against a ruler (a tick
+  every 10 cm). Proportions: a figure's height, a ski's length, left against right.
+- `topology`: every edge, then the skeleton with every joint named. Triangles should be spent
+  where the silhouette bends, and every joint should sit inside the mesh where it bends it.
+- `details`: close-ups, two sides each, of the skeleton's ends and every joint whose own skin is
+  3 to 35 cm round. A joint skinned to a bigger part (a ski's tip, a pole's basket) gets the
+  15 cm round it. Pick your own with `--detail=a,b`.
+- `lods`: every level of detail (meshes named `<name>.lod<N>` or `<name>_lod<N>`) with its
+  triangles, then each drawn 96, 48, 24 and 12 px tall and scaled up. A level is good enough where
+  its pixels are the same as the level above's at the size it is used.
+- `clip-<name>`: a clip's frames from front right and from the right.
+- `skier-views` adds the game's STANCES (stand, carve-left, carve-right, tuck, air, down) from
+  four sides, the carve all the way round and close up. To film the game's motion, bake a run with
+  `make lab LAB=anim` (it writes `skier-run.glb` into its previews) and pass that to
+  `model-views --model=`.
+
+## Reference sheets: the model beside photographs
+
+Both labs take `--refs=<file>`. Each row of the sheet holds a photograph of the real thing,
+cropped, on the left. On the right is the model, posed and turned to be seen as the photograph
+sees it. The reference file's keys are in `engine/lab/model_compare.hpp`. The loop:
+
+1. **Find photographs** of the subject from the angles that matter (a carve from the front and
+   the side, a tuck from the side). Prefer freely licensed ones; Wikimedia Commons' API lists a
+   file's licence (`prop=imageinfo&iiprop=url|extmetadata`).
+2. **Keep them TEMPORARY.** Download into a scratch directory outside the tree. A photograph, and
+   a sheet that holds one, is never committed, attached to a PR or published. Only the numbers
+   and the changes it led to go in the tree. The `refs` shot is `measured`, so it is outside the
+   digest.
+3. **Convert** to an 8-bit PNG (`convert photo.jpg PNG32:photo.png`) and read the crop off the
+   picture: `crop=x,y,w,h` round the subject, with a little snow under the skis.
+4. **Find the camera.** Judge where the photographer stood relative to the subject's heading:
+   az 0 is in front of it, 90 its right, 270 its left. Sweep with `az=a..b:step` (up to 12
+   panels), with `el` a few degrees for a camera on the snow. Use `fov` near 30 for a long
+   lens and wider for a close one. Keep the panel whose skis and shoulders line up with the
+   photograph's.
+5. **Pose it the same.** Use a lab's pose names: `rest` or `<clip>@<s>` in `model-views`;
+   a stance plus changes such as `carve-left,lean:-0.9,edge:-1.0,tuck:0.5` in `skier-views`.
+   Put several rows on one sheet, one for each photograph.
+6. **Judge** what differs: proportions, silhouette, the stance's angles, the gear. Then change
+   the MODEL (its builder) or the POSER, never the camera, to close the gap, and run again.
+
 ## Building a model: `ge asset`
 
 A model the game ships is BUILT, never hand-exported: a Blender Python builder makes it off the
@@ -134,4 +190,8 @@ every model under its manifest's `budget-kib`; raising a budget is a decision th
 | `engine/cli/asset.hpp` | `ge asset list`, `build`, `check`: finding Blender, the run, the stamp |
 | `engine/render/skinning.hpp` | The GPU pass, the family LOD, the CPU twin |
 | `engine/lab/labs/assets_models_lab.cpp` | The `models` lab |
+| `engine/lab/model_view.hpp`, `model_sheets.hpp` | The CPU model view and the sheets every model lab shows |
+| `engine/lab/model_compare.hpp` | Reference sheets: the file's keys, photographs beside the model |
+| `engine/lab/labs/assets_model_views_lab.cpp` | The `model-views` lab |
+| `plugins/skier/labs/skier_views_lab.cpp` | The `skier-views` lab: the game's stances |
 | `cmake/Cgltf.cmake` | The cgltf pin |

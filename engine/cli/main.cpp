@@ -214,8 +214,7 @@ Outcome run(const Args& a) {
     return run_lint(build_options(a), l);
   }
   if (name == "digest") {
-    return run_digest(build_options(a), a.words.empty() ? "" : a.words[0], has_flag(a, "write"),
-                      has_flag(a, "diff"));
+    return run_digest(build_options(a), a.words, has_flag(a, "write"), has_flag(a, "diff"));
   }
   if (name == "golden diff") {
     return run_golden_diff(fs::absolute(repo_of(a)), a.words, flag_value(a, "base", "HEAD"));

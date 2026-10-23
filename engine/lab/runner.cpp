@@ -275,6 +275,16 @@ int run_labs(int argc, const char* const* argv) {
     std::fprintf(stderr, "labs: %s\n", error.c_str());
     return 2;
   }
+  // One lab a run: a second name would be ignored, and a digest written for one lab only.
+  if (positional.size() > 1) {
+    std::string names;
+    for (const std::string& w : positional) names.append(names.empty() ? "" : " ").append(w);
+    std::fprintf(stderr,
+                 "labs: one lab a run, got %zu words (%s). Run each lab on its own (labs %s "
+                 "...), or every lab with --all.\n",
+                 positional.size(), names.c_str(), positional[0].c_str());
+    return 2;
+  }
   const bool all = get(runner, "all") == "1";
   if (!spec && !all) {
     if (get(runner, "json") == "1") {
