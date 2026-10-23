@@ -99,6 +99,7 @@ struct FrameOptions {
   bool spray = true;            // the racers' spray (skier/app/spray.hpp) thrown into the particles
   ge::render::ParticleSettings particles;
   bool snowfall = true;  // the falling snow, when the map's sky snows
+  bool weather = true;   // the map's sky in the picture (mountain/app/weather_look.hpp): off, clear
   ge::render::SnowfallSettings flakes;
   ge::mountain::app::TrailOptions trail_maps;  // their sizes
 };
