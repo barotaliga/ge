@@ -106,6 +106,7 @@ Hunt run_scene(const std::shared_ptr<const mg::Level>& level, Scene scene, doubl
   fs::GameState st = fs::create_free_ride(level, 0);
   // Staged: the army on foot alone: its helicopters are the army-flight lab's.
   st.army.send_helis = false;
+  st.army.fire = false;
   Hunt h;
   h.stars = scene == Scene::slope ? 4 : 3;
   const fs::Spot at = spot_of(st, scene);

@@ -80,6 +80,10 @@ struct Soldier {
   int32_t slow = 0;
   int32_t side = 1;
   double until = 0;
+  // HIS FIRE (gunfire.hpp): the bursts fired this hold, and the clock before which he does not
+  // stop to fire again.
+  int32_t bursts = 0;
+  double rest = 0;
 };
 
 // What one of the army's snowmobiles is doing (army_sled.hpp):
@@ -118,6 +122,7 @@ struct ArmySled {
   int32_t side = 1;
   double until = 0;
   int32_t dug = 0;
+  int32_t bursts = 0;  // the gunner's bursts this halt (gunfire.hpp)
 };
 
 // What one of the army's helicopters is doing (army_heli.hpp):
@@ -207,6 +212,9 @@ struct ArmyState {
   // Whether the hunt sends its helicopters. A lab or a test staging the army's other arms on
   // their own turns it off; the game never does.
   bool send_helis = true;
+  // Whether its men fire (gunfire.hpp). A lab or a test staging the army's moves without the
+  // gunfire turns it off; the game never does.
+  bool fire = true;
 };
 
 }  // namespace fall_line::sim
