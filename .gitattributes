@@ -3,3 +3,6 @@
 # leave two rows for it, which the labs' digest check fails by name until `ge digest <lab>
 # --write` keeps one.
 tests/labs_digests.txt merge=union
+
+# The `ge` backlog is one wish a line: threads adding wishes side by side merge cleanly.
+docs/goals/ge-backlog.md merge=union
