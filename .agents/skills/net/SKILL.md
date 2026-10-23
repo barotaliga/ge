@@ -1,6 +1,6 @@
 ---
 name: net
-description: "Use for engine/net in gameengine2: multiplayer networking. Addresses, the wire, UDP and TCP sockets, the simulated network (stream links too) and its conditions, pcap captures, the packet format, connections (acks, round trip, loss, unreliable/sequenced/reliable channels, big messages in pieces, priorities, the send budget), nodes (host, client, peer; up to 32), sessions (the lobby: seats, teams, chat, kick, start, reconnect by token), LAN discovery, NATs (the simulated kinds, STUN, the rendezvous, hole punching, the relay), opening a port on the router (PCP, NAT-PMP, UPnP IGD, the simulated router), fake-traffic sessions, the net-link, net-session and net-reach labs; and the M17 plan (lobby, chat, NAT, replication, lockstep, voice, accounts)."
+description: "Use for engine/net in gameengine2: multiplayer networking. Addresses, the wire, UDP and TCP sockets, the simulated network (stream links too) and its conditions, pcap captures, the packet format, connections (acks, round trip, loss, unreliable/sequenced/reliable channels, big messages in pieces, priorities, the send budget), nodes (host, client, peer; up to 32), sessions (the lobby: seats, teams, chat, kick, start, reconnect by token), LAN discovery, NATs (the simulated kinds, STUN, the rendezvous, hole punching, the relay), opening a port on the router (PCP, NAT-PMP, UPnP IGD, the simulated router), replication (quantized snapshots and deltas, interest, the byte budget, prediction and reconciliation, interpolation, lag compensation by rewind), fake-traffic sessions, the net-link, net-session, net-reach and net-replicate labs; and the M17 plan (lobby, chat, NAT, replication, lockstep, voice, accounts)."
 ---
 
 # Networking
@@ -33,6 +33,7 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
 | `net/reach.hpp` | The two ends on the node's socket: the host registers and punches, the client joins, connects, follows a punch's port (`node_retarget`), falls back on the relay; `reach_wire.hpp` the messages (not installed) |
 | `net/portmap.hpp` | Opening a port on the router: PCP, then NAT-PMP, then UPnP IGD on a socket of its own; the lease renewed at half its life, closed with a lease of 0; `portmap_wire.hpp` the three protocols' messages (not installed) |
 | `net/sim_router.hpp` | The simulated router: PCP, NAT-PMP, SSDP and UPnP's SOAP answered on a NAT's LAN face (`NatConfig::gateway`), each grant a forward on the NAT |
+| `net/replicate.hpp` | Replication, the server's word: the schema's quantized fields, per-client deltas against the acked snapshot, interest, the budget, redundant inputs, prediction and smoothing, interpolation, `replicate_rewind`; `replicate_server.cpp` and `replicate_client.cpp` its halves, `replicate_wire.hpp` the messages and the bit packing (not installed) |
 | `net/traffic.hpp` | Fake traffic: a whole session over the simulated network, measured end to end |
 
 ## Rules
@@ -75,6 +76,12 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
   permanent-only quirk) lives in `sim_router.cpp`. A forwarded socket's datagrams leave from the
   forwarded port (`map_out`), as a real router's static mapping does: a host answering from
   another port would never be reached by its forward.
+- **Replication's state lives on the grid.** The server quantizes every entity after each tick
+  and each `replicate_set`, and the client's prediction does the same after each step; that is
+  why a lossless link corrects nothing (`net_replicate_test` holds it to zero). A field added
+  without bits enough for its step makes every prediction wrong by a quantum. A snapshot's row
+  priority is the age of the client's copy in the BASELINE, never a counter reset when a row is
+  sent: acks lag, so snapshots chain on two or three baselines at once.
 
 ## Labs and tests
 
@@ -96,6 +103,10 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
   behind each kind; the connect times as a heatmap; then a symmetric host's router speaking each
   of PCP, NAT-PMP and UPnP: the time to map, the fallbacks, the renewals of a 20 s lease over a
   minute, a client behind another symmetric NAT let straight in, the close.
+- `make lab LAB=net-replicate` (`--presets=lan,wifi,bad --clients=32 --npcs=64`; `--budget=600`,
+  `--radius=150`): a replicated world under each preset: each client's bandwidth, corrections a
+  minute and the worst, snapshots dropped, rows starved, inputs repeated, and how far the
+  server's rewind lands from what each client drew; bandwidth charted, rewind gaps boxed.
 - `ge net` (`build/debug/ge net ...`; `engine/cli/net.hpp`): `inspect <pcap>` decodes every
   datagram, `stats <pcap>` measures each connection from the capturing node (rtt, loss each way,
   dups, reorders, resends) and charts its kbps, rtt and loss, `sim` runs the same sessions as the
@@ -111,6 +122,8 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
   layout; `net_reach_test` every pair of kinds, an unknown session and a missing relay;
   `net_portmap_test` each protocol's map, renewal and close on the simulated router, the
   fallbacks, the permanent-only and refused cases, a forwarded symmetric host reached directly,
-  the RFC layouts, and NAT-PMP and UPnP over real loopback sockets.
+  the RFC layouts, and NAT-PMP and UPnP over real loopback sockets; `net_replicate_test` no
+  correction on a lossless link, corrections that land under loss, deltas against whole
+  snapshots, interest, a budget's starvation, a rewind against the drawn, and the bits replayed.
 - Before and after a change here: `make lab LAB=net-link ARGS=--tag=before`, then
   `--compare=before`, both in the PR.

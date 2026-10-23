@@ -1,6 +1,6 @@
 ---
 name: multiplayer
-description: "Use when this game talks over a network: the engine's ge::net (a node for a host, a client or a peer of up to 32, its channels, its events), a lobby (players by seat, teams, chat, kick, start, reconnect by token, LAN discovery), reaching a host behind a home router (STUN, a rendezvous server, hole punching, the relay), testing a session on the simulated network under bad links, capturing a live node's traffic, and the ge net tools that read it (ge net inspect, ge net stats, ge net sim)."
+description: "Use when this game talks over a network: the engine's ge::net (a node for a host, a client or a peer of up to 32, its channels, its events), a lobby (players by seat, teams, chat, kick, start, reconnect by token, LAN discovery), reaching a host behind a home router (STUN, a rendezvous server, hole punching, the relay, opening a port), replicating a world from a server (snapshots, prediction, interpolation, interest, lag compensation), testing a session on the simulated network under bad links, capturing a live node's traffic, and the ge net tools that read it (ge net inspect, ge net stats, ge net sim)."
 ---
 
 # Multiplayer on ge::net
@@ -134,6 +134,34 @@ if (pm.state == net::PortmapState::mapped) net::reach_host_forward(rh, pm.extern
 
 It renews the lease itself. Test it against `SimRouter` (`net/sim_router.hpp`): give the NAT a
 `gateway` node and choose what the router speaks.
+
+## Replicating a world: the server's word
+
+`net/replicate.hpp` sends each client snapshots of what it may see and lets it predict its own
+entity. Name the fields and the step; the server and the client call the same step:
+
+```cpp
+net::Schema sc;
+sc.fields = 3;
+sc.spec[0] = {-256, 256, 20, false};   // x: 20 bits over 512 m
+sc.spec[1] = {-256, 256, 20, false};   // z
+sc.spec[2] = {0, 6.283185307179586, 12, true};  // heading: wraps
+sc.input_size = 3;                     // bytes a tick's input carries
+sc.step = my_step;                     // deterministic: void(void* ctx, double* state, const uint8_t* input)
+net::ReplicateConfig rc;               // channel 0 snapshots, 1 inputs, both unreliable
+// server, each tick after node_update:
+net::replicate_server_receive(server); /* the game's own moves: replicate_set */ net::replicate_server_tick(server);
+// client, each tick after node_update:
+net::replicate_client_receive(client); net::replicate_client_input(client, input);
+net::replicate_client_predicted(client, own);              // the own entity, smoothed
+net::replicate_client_sample(client, id, other);           // anyone else, interpolated
+```
+
+Spawn a player's entity with `replicate_spawn(server, peer, values)` when its peer connects. A
+hit is judged with `replicate_rewind(server, id, client_view_tick, out)`. Set
+`interest_radius` (with `interest_x`, `interest_z`) for an open world and `snapshot_budget` to cap
+a client's bandwidth. Run it on the simulated network under every preset and count
+`client.stats.corrections`: with no loss it must be zero.
 
 ## Test it on bad links
 
