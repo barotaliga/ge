@@ -30,12 +30,12 @@ set(GE_INSTALL_INCLUDEDIR "${CMAKE_INSTALL_INCLUDEDIR}/gameengine2")
 set(GE_INSTALL_CMAKEDIR "${CMAKE_INSTALL_LIBDIR}/cmake/gameengine2")
 
 # target -> export name (consumers see ge::<export name>)
-set(GE_EXPORTED_TARGETS ge_fp fp ge_isa isa ge_core core ge_audio audio ge_assets assets ge_ai ai
+set(GE_EXPORTED_TARGETS ge_fp fp ge_isa isa ge_core core ge_audio audio ge_assets assets ge_ui ui ge_ai ai
   ge_net net ge_input input ge_move move ge_camera camera ge_services services ge_lab lab ge_prof prof ge_prof_alloc prof_alloc ge_play play)
 # Every plugin is published as ge::<plugin> (cmake/Plugins.cmake collects them), and its
 # presentation half as ge::<plugin>_app when every engine target it links is published here
 # (APP audio is; render, gpu and platform are not yet, below).
-set(GE_PUBLISHED_MODULES core audio assets ai input move camera lab prof play)
+set(GE_PUBLISHED_MODULES core audio assets ui ai input move camera lab prof play)
 get_property(_ge_plugins GLOBAL PROPERTY GE_PLUGIN_TARGETS)
 foreach(_target IN LISTS _ge_plugins)
   get_property(_app_modules TARGET ${_target} PROPERTY GE_APP_MODULES)
@@ -122,5 +122,7 @@ install(FILES
   "${PROJECT_BINARY_DIR}/gameengine2ConfigVersion.cmake"
   DESTINATION ${GE_INSTALL_CMAKEDIR})
 
+# The built-in UI font is compiled into ge::ui; its licence travels with the package.
+install(FILES "${PROJECT_SOURCE_DIR}/engine/ui/fonts/OFL.txt" DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/gameengine2 RENAME FONT-OFL.txt)
 install(FILES "${PROJECT_SOURCE_DIR}/LICENSE" "${PROJECT_SOURCE_DIR}/CHANGELOG.md"
   DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/gameengine2 OPTIONAL)
