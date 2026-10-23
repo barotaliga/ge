@@ -28,6 +28,7 @@ router's Skills table and the directories against each other.
 | `release` | Changeset fragments, the installed package, cutting a release to GitHub Releases + Packages |
 | `sim` | Fall Line's headless simulation: mapgen, the step, the bot, the run clock |
 | `platform` | SDL3: window, input, gamepad, audio device, files, focus |
+| `move` | Character movement: the knobs and presets, the step, strafe jumping, steps, slopes, crouch, the trace a world answers, the `move-*` labs |
 | `input` | Input devices: keyboards, raw mice, gamepads, wheels and pedals, sticks, touch; actions, bindings, rebinding, feedback, the event log |
 | `gpu` | The native GPU device over Dawn: device, feature tiers, resources, the pipeline manifest, WGSL |
 | `render` | The pass table, a pass's two halves, the rules that keep a frame fast, captures and prices |
