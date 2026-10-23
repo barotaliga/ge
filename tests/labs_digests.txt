@@ -10,9 +10,8 @@ camera-rigs bd01263b4d16d23c
 camera-shake 3d1734df5bafe175
 camera-transitions 750b195eaca33076
 charts 77f2319a5ea24272
-cli-loop 3906d633415f65ef
+cli-loop 4f0f3633df172c0f
 console 29c50e9ed9fe631e
-cli-loop b8c99c684c50ba81
 crowd cf02cf9a7c917783
 crowd-look 194a06db20f2ebb2
 forest f1881cb20efe0144
