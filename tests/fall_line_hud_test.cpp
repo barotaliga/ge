@@ -74,6 +74,7 @@ TEST(a_hunt_shows_its_stars_and_its_timer) {
   fs::set_wanted(st, 3);
   const fh::HudSnapshot s = fh::snapshot(st, fh::HudRun{});
   CHECK(s.wanted.has_value());
+  if (!s.wanted) return;
   CHECK(s.wanted->stars == 3 && s.wanted->of == 5);
   CHECK(s.wanted->ended == fs::WantedEnd::running);
 }

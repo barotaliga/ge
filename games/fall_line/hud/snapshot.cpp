@@ -24,8 +24,10 @@ namespace mg = ge::mountain::mapgen;
 constexpr double kKmh = 3.6;
 
 const mg::Run* run_at(const sim::GameState& state, int32_t index) {
-  if (index < 0 || !state.level || !state.level->resort) return nullptr;
-  const auto& runs = state.level->resort->runs;
+  if (index < 0 || !state.level) return nullptr;
+  const auto& resort = state.level->resort;
+  if (!resort) return nullptr;
+  const auto& runs = resort->runs;
   return static_cast<size_t>(index) < runs.size() ? &runs[static_cast<size_t>(index)] : nullptr;
 }
 

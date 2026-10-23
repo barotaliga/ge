@@ -22,7 +22,7 @@ bool near(float a, float b, float eps = 1e-3f) { return std::fabs(a - b) <= eps;
 double inked(const ui::Image& img, uint8_t bg_r) {
   size_t n = 0;
   for (size_t i = 0; i < img.rgba.size(); i += 4) n += img.rgba[i] != bg_r;
-  return static_cast<double>(n) / static_cast<double>(img.rgba.size() / 4);
+  return static_cast<double>(n) / (static_cast<double>(img.rgba.size()) / 4);
 }
 
 }  // namespace

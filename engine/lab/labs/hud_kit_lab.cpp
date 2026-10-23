@@ -212,7 +212,7 @@ void run(ge::lab::Lab& lab) {
     const std::vector<Placed> placed = draw_it(dl, f);
     for (const std::string& p : layout_problems(f, placed)) {
       problems++;
-      lab.fail(id + ": " + p,
+      lab.fail(std::string(id).append(": ").append(p),
                "move or shrink the box in engine/lab/labs/hud_kit_lab.cpp, or fix the widget's "
                "measure in engine/hud/hud.cpp; rerun `make lab LAB=hud-kit`. Skill: ui.");
     }

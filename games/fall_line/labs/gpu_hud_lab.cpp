@@ -301,7 +301,7 @@ void run(ge::lab::Lab& lab) {
       const std::vector<gh::Placed> placed = fh::draw_hud(dl, f, style, m.snap, m.run);
       for (const std::string& p : gh::layout_problems(f, placed)) {
         ++problems;
-        lab.fail(m.id + " at " + size + ": " + p,
+        lab.fail(std::string(m.id).append(" at ").append(size).append(": ").append(p),
                  "move or shrink the box in games/fall_line/hud/view.cpp, or shorten its words in "
                  "words.hpp; rerun `make lab LAB=hud`. Skill: ui.");
       }
