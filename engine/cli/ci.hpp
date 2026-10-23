@@ -49,6 +49,9 @@ Outcome run_ci_wait(const fs::path& repo, const std::string& pr, bool merge, int
 inline constexpr std::string_view kCiPending = "nothing has failed yet";
 // Whether a ge ci answer is final: an error, or no check still running.
 bool ci_settled(const Outcome& o);
+// Whether GitHub refused a direct merge because the base merges only through a merge queue
+// (the refusal's text, any case).
+bool merge_queue_refusal(std::string_view output);
 
 // Why GitHub blocks a pull request whose checks all passed, off the base's rules (`gh api
 // repos/<o>/<r>/rules/branches/<base>`, a JSON array; "" when they could not be read): each

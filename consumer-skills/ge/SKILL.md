@@ -57,7 +57,7 @@ ge check                         # the whole gate: format, doctor, build, tests
 ge lint [--base=<ref>] [<file>...]  # clang-tidy's bug-finding checks over what the change reaches
 ge precheck [--preset=<p>]       # what CI runs, both presets: ge check, the pilot, the replays
 ge ci [<pr>] [--log=<file>]      # a red CI job's log as findings (through gh; --log: a saved one)
-ge ci <pr> --merge               # squash-merge once every check passed and it merges cleanly
+ge ci <pr> --merge               # squash-merge once every check passed and it merges cleanly (a merge-queue base says to arm auto-merge instead)
 ge ci <pr> --wait [--merge]      # block (in the background) until it settles: green, red or conflicted
 ```
 

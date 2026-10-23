@@ -110,6 +110,12 @@ TEST(a_moved_repository_is_named_with_the_remote_to_set) {
   CHECK(f.next.starts_with("set the origin remote"));
 }
 
+TEST(a_direct_merge_refused_for_a_merge_queue_is_told_apart) {
+  CHECK(merge_queue_refusal("gh: Changes must be made through the merge queue (HTTP 405)"));
+  CHECK(merge_queue_refusal("Repository rule violations found: Merge Queue required"));
+  CHECK(!merge_queue_refusal("gh: Head branch was modified. Review and try the merge again."));
+}
+
 TEST(a_ci_answer_settles_on_an_error_or_when_nothing_runs) {
   Outcome running;
   running.summary = std::string(kCiPending);

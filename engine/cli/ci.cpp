@@ -389,6 +389,12 @@ Outcome run_ci(const fs::path& repo, const std::string& pr, const std::string& l
   const Logged done = run_to_log("gh api -X PUT " + api + "/pulls/" + pr +
                                      "/merge -f merge_method=squash -f sha=" + sha + " --jq .sha",
                                  log);
+  if (done.code != 0 && merge_queue_refusal(done.output)) {
+    return fail("pull request " + pr + " is green, but its base merges only through a merge queue",
+                "gh pr merge " + pr +
+                    " --auto --squash (it joins the queue), never ge ci --merge "
+                    "on this repository");
+  }
   if (done.code != 0) {
     return fail("GitHub refused to merge pull request " + pr + ": " + first_line(done.output),
                 "ge ci " + pr + " to see why (a push since, or a rule on the base)");
@@ -419,6 +425,12 @@ bool moved_repo_finding(std::string_view error, const std::string& slug,
                  : "set the origin remote to the repository's new address (git remote set-url "
                    "origin https://github.com/<owner>/<repo>), then ge ci"};
   return true;
+}
+
+bool merge_queue_refusal(std::string_view output) {
+  std::string text(output);
+  for (char& c : text) c = (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c;
+  return text.find("merge queue") != std::string::npos;
 }
 
 bool ci_settled(const Outcome& o) {
