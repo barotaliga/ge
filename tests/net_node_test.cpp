@@ -173,7 +173,7 @@ TEST(node_fake_conditions_on_a_transport_delay_and_drop_its_sends) {
   transport_fake(client->t, &fake, c, 9);
   int64_t now = 0;
   const int peer = node_connect(client->n, sim_address(0, 1), now);
-  now = step(net, {host.get(), client.get()}, now, 3000);
+  step(net, {host.get(), client.get()}, now, 3000);
   CHECK(peer_connected(client->n, peer));
   // The round trip the client measures carries the fake 80 ms its sends wait (and the ticks).
   const double rtt = client->n.peers[static_cast<size_t>(peer)].conn.stats.rtt_ms;

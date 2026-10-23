@@ -128,7 +128,8 @@ ReplicateTrial run_replicate_trial(const ReplicateTrialConfig& k) {
     node_update(*host_n, now);
     for (const Event& e : host_n->events) {
       if (e.type != EventType::connected) continue;
-      const double v[kFields] = {(e.peer % 8) * 20.0 - 70, (e.peer / 8) * 20.0 - 30, 0, 100};
+      const int col = e.peer % 8, row = e.peer / 8;  // eight abreast, 20 m apart
+      const double v[kFields] = {col * 20.0 - 70, row * 20.0 - 30, 0, 100};
       replicate_spawn(*server, e.peer, v);
     }
     replicate_server_receive(*server);

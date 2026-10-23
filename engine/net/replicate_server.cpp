@@ -61,8 +61,8 @@ bool visible(const ReplicateServer& s, int client, int index) {
   const int own = c.entity == kNoEntity ? -1 : index_of(s, c.entity);
   if (own < 0) return true;
   const int n = s.schema.fields;
-  const double* a = &s.state[static_cast<size_t>(own * n)];
-  const double* b = &s.state[static_cast<size_t>(index * n)];
+  const double* a = &s.state[static_cast<size_t>(own) * static_cast<size_t>(n)];
+  const double* b = &s.state[static_cast<size_t>(index) * static_cast<size_t>(n)];
   const double dx = a[k.interest_x] - b[k.interest_x], dz = a[k.interest_z] - b[k.interest_z];
   return dx * dx + dz * dz <= k.interest_radius * k.interest_radius;
 }
@@ -132,7 +132,7 @@ void send_snapshot(ReplicateServer& s, int client, uint8_t* buffer, size_t budge
     Row now;
     now.id = s.ids[static_cast<size_t>(i)];
     now.fresh = s.tick;
-    quantize_row(schema, &s.state[static_cast<size_t>(i * nf)], now.q);
+    quantize_row(schema, &s.state[static_cast<size_t>(i) * static_cast<size_t>(nf)], now.q);
     const Row* was = base ? find_row(*base, now.id) : nullptr;
     if (was) {
       uint32_t mask = 0;
@@ -147,7 +147,7 @@ void send_snapshot(ReplicateServer& s, int client, uint8_t* buffer, size_t budge
         out.rows.push_back(now);
         continue;
       }
-      if (!room(static_cast<size_t>(18 + nf + bits))) {
+      if (!room(size_t{18} + static_cast<size_t>(nf) + static_cast<size_t>(bits))) {
         out.rows.push_back(*was);  // left as the client has it, growing staler
         s.stats.starved++;
         continue;
@@ -159,7 +159,7 @@ void send_snapshot(ReplicateServer& s, int client, uint8_t* buffer, size_t budge
         if (mask & (1u << f)) put_bits(w, now.q[f], schema.spec[f].bits);
       }
     } else {
-      if (!room(static_cast<size_t>(18 + all_bits))) {
+      if (!room(size_t{18} + static_cast<size_t>(all_bits))) {
         s.stats.starved++;
         continue;
       }
@@ -311,14 +311,14 @@ uint16_t replicate_spawn(ReplicateServer& s, int owner, const double* values) {
 void replicate_set(ReplicateServer& s, uint16_t id, const double* values) {
   const int i = index_of(s, id);
   if (i < 0) return;
-  double* v = &s.state[static_cast<size_t>(i * s.schema.fields)];
+  double* v = &s.state[static_cast<size_t>(i) * static_cast<size_t>(s.schema.fields)];
   std::memcpy(v, values, sizeof(double) * static_cast<size_t>(s.schema.fields));
   normalize(s.schema, v);
 }
 
 const double* replicate_get(const ReplicateServer& s, uint16_t id) {
   const int i = index_of(s, id);
-  return i < 0 ? nullptr : &s.state[static_cast<size_t>(i * s.schema.fields)];
+  return i < 0 ? nullptr : &s.state[static_cast<size_t>(i) * static_cast<size_t>(s.schema.fields)];
 }
 
 void replicate_despawn(ReplicateServer& s, uint16_t id) {
@@ -380,7 +380,7 @@ void replicate_server_tick(ReplicateServer& s) {
     } else {
       continue;  // nothing from it yet: it stands still
     }
-    double* v = &s.state[static_cast<size_t>(i * nf)];
+    double* v = &s.state[static_cast<size_t>(i) * static_cast<size_t>(nf)];
     s.schema.step(s.schema.ctx, v, c.last);
     normalize(s.schema, v);
   }

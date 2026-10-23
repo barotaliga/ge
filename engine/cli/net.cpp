@@ -652,9 +652,11 @@ Outcome run_net_sweep(const NetSweepOptions& opts) {
         if (knob == "interp") k.replicate.interp_ticks = static_cast<int>(v);
         if (knob == "backup") k.replicate.redundancy = std::max(1, static_cast<int>(v));
         if (knob == "tick-hz") k.replicate.tick_hz = std::max(1, static_cast<int>(v));
-      } else if (const std::string bad = apply_link(knob + "=" + value, k.link); !bad.empty()) {
-        return failed("--knob=" + knob + ": " + bad, "the command line",
-                      std::string("pick a knob: ") + kKnobs, 2);
+      } else if (const std::string bad =
+                     apply_link(std::string(knob).append("=").append(value), k.link);
+                 !bad.empty()) {
+        return failed(std::string("--knob=").append(knob).append(": ").append(bad),
+                      "the command line", std::string("pick a knob: ") + kKnobs, 2);
       }
       const net::ReplicateTrial r = net::run_replicate_trial(k);
       std::vector<double> gaps = r.gaps;
@@ -686,9 +688,14 @@ Outcome run_net_sweep(const NetSweepOptions& opts) {
                                   {"digest", json_str(hex(r.hash, 16))}}));
       if (r.owned != k.clients) {
         o.findings.push_back({Severity::error,
-                              name + " at " + knob + "=" + value + ": " +
-                                  std::to_string(k.clients - r.owned) +
-                                  " clients never heard of their own entity",
+                              std::string(name)
+                                  .append(" at ")
+                                  .append(knob)
+                                  .append("=")
+                                  .append(value)
+                                  .append(": ")
+                                  .append(std::to_string(k.clients - r.owned))
+                                  .append(" clients never heard of their own entity"),
                               "engine/net/replicate_server.cpp",
                               "the link starves the session: loosen it, or read send_snapshot "
                               "(skill: net)"});

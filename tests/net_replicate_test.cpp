@@ -388,7 +388,7 @@ TEST(replicate_a_client_asks_its_rates_and_the_server_caps_them) {
   run(*w, 300);
   const ReplicateStats b = w->server.stats;
   // 300 ticks at 20 a second is 100 snapshots a client.
-  CHECK(b.snapshots - a.snapshots == 8 * 100);
+  CHECK(b.snapshots - a.snapshots == 800u);
   CHECK(b.bytes - a.bytes <= (b.snapshots - a.snapshots) * 200);
   CHECK(replicate_send_interval(w->server, 0) == 3);
   CHECK(replicate_snapshot_budget(w->server, 0) == 200);
