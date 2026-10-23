@@ -6,14 +6,16 @@
 // deterministic.
 //
 // PRICING (`--price`) times the frame on this machine's adapter: seed --seed's map under a
-// flurry (the dearest sky: heaps under a sheet, and the fall), the bot's run from the chase camera
-// --from seconds in, --frames frames a picture after --warm unmeasured, each picture --rounds times
-// in turn keeping its least median (a software adapter shares the machine). It draws the top
+// flurry (the dearest sky: heaps under a sheet, and the fall), the bot's run --from seconds in,
+// seen from the named --view (`start`, its pitch raised --lift degrees so the broken sky fills
+// the top of the frame and every row has something to draw; `chase` the camera behind him),
+// --frames frames a picture after --warm unmeasured, each picture --rounds times in turn keeping
+// its least median (a software adapter shares the machine). It draws the top
 // picture, every row lowered alone to each of its stops, and every row at its cheapest (the floor),
 // and prints each stop's cost over its row's cheapest (the median GPU frame with the row at the
 // stop less the row at its bottom, the rest at the top; a stop measured cheaper than the one under
-// it is set level, the noise), and the lines to paste into ladder.cpp's table. It shoots the chase
-// view at every preset. Times are measured, and a software adapter's say nothing of a GPU's.
+// it is set level, the noise), and the lines to paste into ladder.cpp's table. It shoots the view
+// at every preset. Times are measured, and a software adapter's say nothing of a GPU's.
 // Built only with GE_GPU.
 //
 // ge:summary Lab: Fall Line's quality ladder checked, its fit swept, and every stop priced
@@ -140,6 +142,10 @@ void price(ge::lab::Lab& lab) {
   const double from = lab.arg_num("from");
   const double fall = lab.arg_num("fall");
   const int rounds = std::max(1, static_cast<int>(lab.arg_num("rounds")));
+  const std::string view_name = lab.arg("view");
+  const double lift = lab.arg_num("lift");
+  const bool chase = view_name == "chase";
+  const std::string camera = chase ? "The chase camera" : "The `" + view_name + "` view";
   auto device = ge::gpu::create_device({.label = "ladder", .validation = 0});
   if (!device) {
     lab.fail("no GPU device to price the ladder on",
@@ -157,6 +163,12 @@ void price(ge::lab::Lab& lab) {
   built.weather.snowfall = fall;
   const auto shared = std::make_shared<const mg::Level>(std::move(built));
   const mg::Level& level = *shared;
+  if (gr::FrameView probe; !chase && !fa::make_view(level, view_name, probe)) {
+    lab.fail("no view named '" + view_name + "'",
+             "next: pass --view=chase, or a name from games/fall_line/app/views.hpp (start, piste, "
+             "vista).");
+    return;
+  }
   const ge::gpu::Target target = ge::gpu::create_target(
       *device, "ladder.final", static_cast<uint32_t>(width), static_cast<uint32_t>(height));
 
@@ -184,8 +196,12 @@ void price(ge::lab::Lab& lab) {
     fa::day_view(level, -1, view);
     fa::cut(*frame);
     std::vector<double> totals;
+    if (!chase) {
+      fa::make_view(level, view_name, view);
+      view.pitch += lift * 3.14159265358979 / 180;
+    }
     for (size_t k = 0; k < moments.size(); ++k) {
-      fa::chase_view(level, moments[k][0], view);
+      if (chase) fa::chase_view(level, moments[k][0], view);
       view.frame = k;
       view.time_s = times[k];
       fa::draw(*device, *frame, view, {moments[k], 2.0 / 120.0, k == 0}, target.view);
@@ -201,8 +217,8 @@ void price(ge::lab::Lab& lab) {
     if (!shot.empty()) {
       lab.shot({shot,
                 "PRESET " + shot + ", SEED " + fixed(seed, 0) + " UNDER A FLURRY",
-                "The chase camera down seed " + fixed(seed, 0) + "'s run under a flurry at the " +
-                    shot + " preset: " + pick_text(pick) + ".",
+                camera + " on seed " + fixed(seed, 0) + "'s run under a flurry at the " + shot +
+                    " preset: " + pick_text(pick) + ".",
                 "the same moment at every preset: softer pixels, coarser shadows and fewer "
                 "flakes lower down, never a missing skier, tree or track",
                 {{"preset", shot}, {"width", std::to_string(width)}}},
@@ -296,6 +312,8 @@ const ge::lab::LabSpec kSpec{
         {"rounds", "3", "times every picture is timed in turn, keeping its least (with --price)"},
         {"from", "10", "seconds into the bot's run (with --price)"},
         {"fall", "0.6", "the flurry's fall, 0..1 (with --price)"},
+        {"view", "start", "the camera: chase, or a named view of app/views.hpp (with --price)"},
+        {"lift", "15", "degrees added to a named view's pitch, to show more sky (with --price)"},
     },
     "",
     run,
