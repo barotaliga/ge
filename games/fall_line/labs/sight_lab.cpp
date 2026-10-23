@@ -44,8 +44,6 @@ std::string fixed(double v, int d) { return ge::core::num::to_fixed(v, d); }
 
 // What a point's answer is, and its colour.
 enum class Answer : uint8_t { heard, seen, range, ground, woods };
-constexpr std::array<const char*, 5> kNames{"heard", "seen", "out of range", "behind the ground",
-                                            "through the woods"};
 constexpr std::array<gl::Rgba, 5> kColours{gl::Rgba{255, 255, 255}, gl::Rgba{40, 220, 60},
                                            gl::Rgba{0, 0, 0, 0}, gl::Rgba{200, 40, 40},
                                            gl::Rgba{30, 90, 200}};
