@@ -18,6 +18,7 @@
 #include <utility>
 #include <vector>
 
+#include "ai/path.hpp"
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "core/num.hpp"
@@ -54,55 +55,6 @@ bool is_drop(int di, int dj) {
   const int aj = dj < 0 ? -dj : dj;
   return std::max(ai, aj) == 2 && (di == 0 || dj == 0 || (ai == 2 && aj == 2));
 }
-
-// A binary heap of squares by cost; equal keys leave in the order the sift puts them, which is
-// a pure function of the pushes. `pop` hands back the key the square left with.
-class Heap {
- public:
-  [[nodiscard]] bool empty() const { return ids_.empty(); }
-  void push(int id, double key) {
-    size_t i = ids_.size();
-    ids_.push_back(id);
-    keys_.push_back(key);
-    while (i > 0) {
-      const size_t p = (i - 1) >> 1;
-      if (keys_[p] <= key) break;
-      ids_[i] = ids_[p];
-      keys_[i] = keys_[p];
-      i = p;
-    }
-    ids_[i] = id;
-    keys_[i] = key;
-  }
-  int pop(double& left_at) {
-    const int top = ids_[0];
-    left_at = keys_[0];
-    const int id = ids_.back();
-    const double key = keys_.back();
-    ids_.pop_back();
-    keys_.pop_back();
-    const size_t n = ids_.size();
-    if (n > 0) {
-      size_t i = 0;
-      for (;;) {
-        const size_t l = 2 * i + 1;
-        if (l >= n) break;
-        const size_t c = l + 1 < n && keys_[l + 1] < keys_[l] ? l + 1 : l;
-        if (keys_[c] >= key) break;
-        ids_[i] = ids_[c];
-        keys_[i] = keys_[c];
-        i = c;
-      }
-      ids_[i] = id;
-      keys_[i] = key;
-    }
-    return top;
-  }
-
- private:
-  std::vector<int> ids_;
-  std::vector<double> keys_;
-};
 
 struct Plan {
   double x;
@@ -576,12 +528,10 @@ std::vector<SkiRoute> lay_ski_routes(const RouteGround& area, bool wild) {
 
   // The two searches read the grids above and write only their own, so they run side by side.
   // FROM THE TOPS: the cheapest way down to every square, and its top.
-  std::vector<double> from_cost(N, kInf);
-  std::vector<int> from_prev(N, -1);
+  ge::ai::Search from(N);
   std::vector<int> from_top(N, -1);
   std::vector<uint8_t> dropped_in(N, 0);
   const auto from_tops = [&] {
-    Heap heap;
     for (size_t li = 0; li < area.lifts.size(); li++) {
       const Lift& lift = area.lifts[li];
       if (lift.kind == LiftKind::drag) continue;
@@ -591,20 +541,16 @@ std::vector<SkiRoute> lay_ski_routes(const RouteGround& area, bool wild) {
         const double z = lift.top.z + libm::cos(a) * K::rim;
         const int k = square(x, z);
         if (k < 0 || k >= big_n || !open[size_t(k)] || run_of[size_t(k)] >= 0 ||
-            from_cost[size_t(k)] == 0) {
+            from.cost(k) == 0) {
           continue;
         }
-        from_cost[size_t(k)] = 0;
+        from.seed(k);
         from_top[size_t(k)] = int(li);
-        heap.push(k, 0);
       }
     }
-    while (!heap.empty()) {
-      double key = 0;
-      const int a = heap.pop(key);
-      // A square left again at a dearer cost than it was reached at since: every step from it was
-      // weighed at that cheaper cost already, and none of them is cheaper now.
-      if (key > from_cost[size_t(a)]) continue;
+    // A square left again at a dearer cost than it was reached at since is skipped by the search:
+    // every step from it was weighed at that cheaper cost already, and none of them is cheaper now.
+    from.run_all([&](int a) {
       const int i = a % n;
       const int j = a / n;
       for (size_t m = 0; m < moves; m++) {
@@ -621,35 +567,26 @@ std::vector<SkiRoute> lay_ski_routes(const RouteGround& area, bool wild) {
         const int mid = (j + dj / 2) * n + (i + di / 2);
         if (drop && run_of[size_t(mid)] >= 0) continue;
         if (!drop && !downhill(a, c, len)) continue;
-        const double cost =
-            from_cost[size_t(a)] + (drop ? len * W::huck : cost_of(a, c, di, dj, len, m));
-        if (cost >= from_cost[size_t(c)]) continue;
+        const double cost = from.cost(a) + (drop ? len * W::huck : cost_of(a, c, di, dj, len, m));
+        if (!from.improves(c, cost)) continue;
         if (drop ? !drop_over(a, c, mid) : !step(a, m)) continue;
-        from_cost[size_t(c)] = cost;
-        from_prev[size_t(c)] = a;
+        from.reach(c, cost, a);
         from_top[size_t(c)] = from_top[size_t(a)];
         dropped_in[size_t(c)] = drop ? 1 : 0;
-        heap.push(c, cost);
       }
-    }
+    });
   };
 
   // TO THE RUNS: the cheapest way down onto a run from every square, read backwards from every
   // square of a run's corridor.
-  std::vector<double> to_cost(N, kInf);
-  std::vector<int> to_next(N, -1);
+  ge::ai::Search to(N);
   std::vector<uint8_t> drops_out(N, 0);
   const auto to_runs = [&] {
-    Heap heap;
     for (int k = 0; k < big_n; k++) {
       if (run_of[size_t(k)] < 0) continue;
-      to_cost[size_t(k)] = 0;
-      heap.push(k, 0);
+      to.seed(k);
     }
-    while (!heap.empty()) {
-      double key = 0;
-      const int c = heap.pop(key);
-      if (key > to_cost[size_t(c)]) continue;
+    to.run_all([&](int c) {
       const int i = c % n;
       const int j = c / n;
       for (size_t m = 0; m < moves; m++) {
@@ -664,16 +601,13 @@ std::vector<SkiRoute> lay_ski_routes(const RouteGround& area, bool wild) {
         const bool drop = drops_move[m];
         const int mid = (jj + dj / 2) * n + (ii + di / 2);
         if (!drop && !downhill(a, c, len)) continue;
-        const double cost =
-            to_cost[size_t(c)] + (drop ? len * W::huck : cost_of(a, c, di, dj, len, m));
-        if (cost >= to_cost[size_t(a)]) continue;
+        const double cost = to.cost(c) + (drop ? len * W::huck : cost_of(a, c, di, dj, len, m));
+        if (!to.improves(a, cost)) continue;
         if (drop ? !drop_over(a, c, mid) : !step(a, m)) continue;
-        to_cost[size_t(a)] = cost;
-        to_next[size_t(a)] = c;
+        to.reach(a, cost, c);
         drops_out[size_t(a)] = drop ? 1 : 0;
-        heap.push(a, cost);
       }
-    }
+    });
   };
   ge::core::parallel_bands(2, [&](size_t lo, size_t hi) {
     for (size_t k = lo; k < hi; k++) k == 0 ? from_tops() : to_runs();
@@ -684,7 +618,7 @@ std::vector<SkiRoute> lay_ski_routes(const RouteGround& area, bool wild) {
   const double half = rules::track::colour_window / 2;
   std::vector<int> steep;
   for (int k = 0; k < big_n; k++) {
-    if (from_cost[size_t(k)] == kInf || to_cost[size_t(k)] == kInf) continue;
+    if (!from.reached(k) || !to.reached(k)) continue;
     const double x = cx(k);
     const double z = cz(k);
     const auto [gx, gz] = fall_at(x, z);
@@ -767,16 +701,16 @@ std::vector<SkiRoute> lay_ski_routes(const RouteGround& area, bool wild) {
   const auto through = [&](int k) -> std::optional<Found> {
     std::vector<int> cells;
     std::vector<std::pair<int, int>> dropped;
-    for (int a = k; a >= 0; a = from_prev[size_t(a)]) {
+    for (int a = k; a >= 0; a = from.prev(a)) {
       cells.push_back(a);
-      if (dropped_in[size_t(a)] && from_prev[size_t(a)] >= 0) {
-        dropped.emplace_back(from_prev[size_t(a)], a);
+      if (dropped_in[size_t(a)] && from.prev(a) >= 0) {
+        dropped.emplace_back(from.prev(a), a);
       }
     }
     std::reverse(cells.begin(), cells.end());
-    for (int c = k; to_next[size_t(c)] >= 0; c = to_next[size_t(c)]) {
-      cells.push_back(to_next[size_t(c)]);
-      if (drops_out[size_t(c)]) dropped.emplace_back(c, to_next[size_t(c)]);
+    for (int c = k; to.prev(c) >= 0; c = to.prev(c)) {
+      cells.push_back(to.prev(c));
+      if (drops_out[size_t(c)]) dropped.emplace_back(c, to.prev(c));
     }
     const int end = cells.back();
     if (run_of[size_t(end)] < 0) return std::nullopt;
