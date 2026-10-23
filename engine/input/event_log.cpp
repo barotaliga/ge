@@ -151,10 +151,10 @@ bool read_events(std::string_view src, EventLog& log, std::string& error) {
   std::map<DeviceId, DeviceInfo> infos;
   bool header = false;
   log.frames.clear();
-  for (const auto& [n, line] : text::lines(src)) {
+  for (const auto& [line_no, line] : text::lines(src)) {
     const auto w = text::split_words(line);
     if (w.empty()) continue;
-    const auto fail = [&, n = n](const std::string& what) {
+    const auto fail = [&, n = line_no](const std::string& what) {
       error = "events line " + std::to_string(n) + ": " + what +
               "; the format is in engine/input/event_log.hpp (skill: input)";
       return false;

@@ -15,7 +15,12 @@ namespace ge::input {
 
 namespace {
 
-constexpr std::pair<uint16_t, std::string_view> kKeyNames[] = {
+struct KeyName {
+  uint16_t usage;
+  std::string_view name;
+};
+
+constexpr KeyName kKeyNames[] = {
     {4, "a"},
     {5, "b"},
     {6, "c"},

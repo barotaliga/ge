@@ -202,10 +202,10 @@ std::string write_bindings(const ActionMap& map) {
 bool read_bindings(std::string_view src, ActionMap& map, std::string& error) {
   std::vector<Context> contexts;
   bool header = false;
-  for (const auto& [n, line] : text::lines(src)) {
+  for (const auto& [line_no, line] : text::lines(src)) {
     const auto w = text::split_words(line);
     if (w.empty()) continue;
-    const auto fail = [&, n = n](const std::string& what) {
+    const auto fail = [&, n = line_no](const std::string& what) {
       error = "bindings line " + std::to_string(n) + ": " + what +
               "; the format is in engine/input/bindings_text.hpp (skill: input)";
       return false;

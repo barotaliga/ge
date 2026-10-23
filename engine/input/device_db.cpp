@@ -112,10 +112,10 @@ std::string write_db(const DeviceDb& db) {
 bool read_db(std::string_view src, DeviceDb& db, std::string& error) {
   DeviceRow* row = nullptr;
   bool header = false;
-  for (const auto& [n, line] : text::lines(src)) {
+  for (const auto& [line_no, line] : text::lines(src)) {
     const auto w = text::split_words(line);
     if (w.empty()) continue;
-    const auto fail = [&, n = n](const std::string& what) {
+    const auto fail = [&, n = line_no](const std::string& what) {
       error = "devices line " + std::to_string(n) + ": " + what +
               "; the format is in engine/input/device_db.hpp (skill: input)";
       return false;
