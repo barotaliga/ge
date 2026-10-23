@@ -5,7 +5,7 @@
 # caches. A change that touches only prose (docs, skills, lessons, root Markdown, changeset
 # fragments) runs the gates alone. A pull request labelled `full-ci` runs the whole matrix.
 #
-# The ruleset requires ONE check, `required` (the last job): it passes when every job either
+# The ruleset requires ONE check, `Required` (the last job's name; checks match by case): it passes when every job either
 # passed or was skipped by the rules above, so a skipped row never leaves a required check
 # pending. A determinism break shows as a parity test failing on ONE row of the matrix: that
 # row's compiler or libm is the suspect.
@@ -231,6 +231,7 @@ jobs:
 
   # The one check the ruleset requires: every job above passed, or was skipped by the rules.
   required:
+    name: Required
     needs: [gates, test, windows, lint, packaging]
     if: always()
     runs-on: ubuntu-24.04

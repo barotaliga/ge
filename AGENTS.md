@@ -198,7 +198,7 @@ release), Linux arm64 (GCC), macOS (Apple Clang), Windows (MSVC), and `packaging
 installed package building a consumer on Linux, macOS and Windows, and `ge new` growing a repo).
 A change to prose alone (docs, skills, lessons, root Markdown, fragments) runs the gates only;
 the label `full-ci` runs everything on a pull request. The ruleset requires one check,
-`required`, which passes when every job passed or was skipped by those rules. A golden failure
+`Required`, which passes when every job passed or was skipped by those rules. A golden failure
 on one row points at that row's compiler or libm. The Linux x64 rows install Mesa's lavapipe and
 run the tests under a virtual X display with `GE_GPU_REQUIRE=1`, so the GPU and window tests run
 there and a skip fails; elsewhere they run when the runner has an adapter and skip (CTest's exit
