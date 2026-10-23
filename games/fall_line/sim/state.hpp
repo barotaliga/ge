@@ -180,8 +180,8 @@ struct FreeHeli {
 // body (paramotor/para.hpp), the air's eddies dealt off the map's seed, where the ride begins
 // and how many times it has.
 // What a `para` event says: the wing let fly, off the snow, touched down, a fold, the rig come off
-// him (let go, the wing down on the snow, in a crown, or he went down under it), and the ride
-// begun again on the summit.
+// him (let go, the wing down on the snow, in a crown, or he went down under it), the ride begun
+// again on the summit, a loop flown, and a fall into his own wing (`paramotor/acro.hpp`).
 enum class ParaPhase : uint8_t {
   launch,
   take_off,
@@ -191,7 +191,9 @@ enum class ParaPhase : uint8_t {
   ground,
   crown,
   rider,
-  restart
+  restart,
+  loop,
+  tangle
 };
 struct FreePara {
   bool present = false;  // a free ride begun under it (create_para_ride); none otherwise

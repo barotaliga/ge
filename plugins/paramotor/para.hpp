@@ -5,9 +5,10 @@
 //
 // THE RIDE: READY, the wing held inflated over him (`ready_para`) until he has skied off fast
 // enough for the air to fly it; FLOWN, the wing on its lines over him, in the air or skiing under
-// it on the snow (speed riding); DROPPED, the canopy and the motor let go (`drop_para`, or cut
-// away: the wing brought down onto the snow or into a crown, or the skier wiped out) and falling
-// free of him, lying where they come down.
+// it on the snow (speed riding); TANGLED, fallen into his own wing out of a swing he threw
+// (`acro.hpp`), falling in the bundle until he cuts it away or meets the snow; DROPPED, the canopy
+// and the motor let go (`drop_para`, or cut away: the wing brought down onto the snow or into a
+// crown, or the skier wiped out) and falling free of him, lying where they come down.
 //
 // THE STEP (`step_para`), after the skier's own step (`skier::step_skier` keeps the snow, his
 // drag and the landing; in the air the caller hands it no input, `para_hangs`):
@@ -25,6 +26,9 @@
 // 5. THE PILOT HUNG: turned to the wing's heading and banked under it aloft; stood up near the
 //    snow with his skis turned to his way to land square.
 // 6. THE WING BROUGHT DOWN onto the snow or into a crown: cut away.
+// 7. THE ACRO (`acro.hpp`): the bar forward pitches the wing into a dive, back at a dive's speed
+//    the rears bend the pair's path up and round in a LOOP; a wing met by the air from behind
+//    collapses whole, and lines gone slack at the top of a swing tangle him in it.
 //
 // Nothing here draws a random number or allocates; `para_hash` is the trajectory's digest.
 //
@@ -32,6 +36,7 @@
 // ge:keywords paramotor para wing canopy lines polar stall surge brakes toggles speed-bar
 // ge:keywords throttle engine thrust launch takeoff landing speed-riding fold collapse crown
 // ge:keywords drop cut-away step_para ready_para drop_para para_hangs para_hash pilot-mass
+// ge:keywords acro dive swing-up loop tumble slack tangle tangled
 // ge:skill paramotor
 // ge:test tests/paramotor_scenarios_test.cpp
 #pragma once
@@ -60,7 +65,7 @@ struct ParaControls {
 };
 
 // What the rig is doing (the header's THE RIDE).
-enum class ParaMode : uint8_t { ready, flown, dropped };
+enum class ParaMode : uint8_t { ready, flown, dropped, tangled };
 
 const char* para_mode_name(ParaMode m);
 
@@ -97,15 +102,26 @@ struct ParaState {
   double tension = 0;       // the pull on the lines, N (0 slack)
   core::Vec3 way{0, 0, 1};  // the way its leading edge points, square to the lines, unit
   ParaControls controls;    // as they stand after the hands' lag
-  double rpm = 0;           // the engine's
-  double thrust = 0;        // N, this step
-  double prop = 0;          // the propeller's turn, rad, wrapped
-  bool flying = false;      // the skis off the snow under the wing past `launch::kFlight` s
-  double agl = 0;           // the skis' height over the snow, m
-  double climb = 0;         // m/s
-  double t = 0;             // s in this mode
-  double air_time = 0;      // s off the snow this flight
-  int32_t flights = 0;      // the take-offs flown
+  // THE ACRO (`acro.hpp`): the lines' turn about the pitch axis, unwrapped, rad (forward over
+  // him positive), and the whole turns of it flown (LOOPS); the s the lines have hung slack with
+  // the wing low; how hard the rears bite, 0..1; the pull he hangs on, g; and where the rears held
+  // the wing last step (`hold_at` the mode's clock then, s; -1 none).
+  double swing = 0;
+  int32_t loops = 0;
+  double slack = 0;
+  double rears = 0;
+  double g = 1;
+  core::Vec3 hold{0, 0, 0};
+  double hold_at = -1;
+  double rpm = 0;       // the engine's
+  double thrust = 0;    // N, this step
+  double prop = 0;      // the propeller's turn, rad, wrapped
+  bool flying = false;  // the skis off the snow under the wing past `launch::kFlight` s
+  double agl = 0;       // the skis' height over the snow, m
+  double climb = 0;     // m/s
+  double t = 0;         // s in this mode
+  double air_time = 0;  // s off the snow this flight
+  int32_t flights = 0;  // the take-offs flown
   ParaCut cut = ParaCut::none;
   ParaPiece canopy;  // once dropped: the canopy, falling free
   ParaPiece motor;   // ...and the motor
@@ -117,6 +133,8 @@ struct ParaEvents {
   bool took_off = false;        // the skis off the snow and the pilot hung in the harness
   bool touched = false;         // the skis back on the snow under the flying wing
   bool folded = false;          // a fold began
+  bool looped = false;          // the lines swung a whole turn round him
+  bool tangled = false;         // he fell into his wing
   ParaCut cut = ParaCut::none;  // the rig came off this step
 };
 
@@ -138,9 +156,11 @@ double pilot_mass(const skier::SkiSpec& spec);
 // at idle.
 ParaState ready_para(const skier::SkierState& s);
 
-// Whether the skier hangs in the harness this step: his skis do nothing and the caller hands
-// `step_skier` no input.
-inline bool para_hangs(const ParaState& p) { return p.mode == ParaMode::flown && p.flying; }
+// Whether the skier hangs in the harness (or falls tangled in the wing) this step: his skis do
+// nothing and the caller hands `step_skier` no input.
+inline bool para_hangs(const ParaState& p) {
+  return (p.mode == ParaMode::flown && p.flying) || p.mode == ParaMode::tangled;
+}
 
 // Whether the rig is on him.
 inline bool para_rigged(const ParaState& p) { return p.mode != ParaMode::dropped; }

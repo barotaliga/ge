@@ -44,6 +44,8 @@ void say_all(GameState& state, int32_t i, const pm::ParaEvents& ev) {
   if (ev.took_off) say(state, i, ParaPhase::take_off);
   if (ev.touched) say(state, i, ParaPhase::touch);
   if (ev.folded) say(state, i, ParaPhase::fold);
+  if (ev.looped) say(state, i, ParaPhase::loop);
+  if (ev.tangled) say(state, i, ParaPhase::tangle);
   if (ev.cut != pm::ParaCut::none) say(state, i, cut_phase(ev.cut));
 }
 
@@ -145,6 +147,10 @@ const char* para_phase_name(ParaPhase p) {
       return "rider";
     case ParaPhase::restart:
       return "restart";
+    case ParaPhase::loop:
+      return "loop";
+    case ParaPhase::tangle:
+      return "tangle";
   }
   return "?";
 }
