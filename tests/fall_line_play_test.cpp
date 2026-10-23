@@ -16,9 +16,12 @@
 #include "core/num_text.hpp"
 #include "fall_line/sim/bot.hpp"
 #include "fall_line/sim/game.hpp"
+#include "fall_line/sim/moments.hpp"
 #include "fall_line/sim/play.hpp"
 #include "fall_line/sim/simulate.hpp"
 #include "play/session.hpp"
+#include "replay/director.hpp"
+#include "replay/live.hpp"
 #include "replay/player.hpp"
 
 namespace {
@@ -193,4 +196,38 @@ TEST(a_replay_sought_anywhere_is_the_run_played_straight_there) {
                   " is not the run played there: a part of FallLineRun the clone misses");
   }
   CHECK(p.stats().restores > 0);
+}
+
+TEST(a_flight_is_marked_at_its_take_off_and_cut_from_before_its_lip) {
+  // Seed 38's first kicker is flown about 39 s into the race.
+  gp::Setup st = setup(0);
+  st.options["hands"] = "human";
+  ge::replay::Live live(fs::kGame, st);
+  CHECK_MSG(live.ok(), live.error());
+  if (!live.ok()) return;
+  fs::Moments moments;
+  std::vector<double> input(fs::kGame.axes.size(), 0);
+  int64_t took_off = -1;
+  while (!live.done() && live.steps() < int64_t{45} * 120) {
+    live.run().pilot(input);
+    live.step(input);
+    const fs::GameState* s = fs::state_of(live.run());
+    if (!s) break;
+    for (const fs::GameEvent& e : s->events) {
+      if (e.racer == 0 && e.kind == fs::EventKind::takeoff && took_off < 0) took_off = live.steps();
+    }
+    moments.file(*s, live);
+  }
+  CHECK(took_off > 0);
+  const ge::replay::Mark* flight = nullptr;
+  for (const ge::replay::Mark& m : live.marks()) {
+    if (m.kind == "flight") flight = &m;
+  }
+  CHECK(flight != nullptr);
+  if (!flight) return;
+  CHECK(flight->step == took_off && flight->weight > 1);
+  const ge::replay::Cut cut = ge::replay::plan_cut(
+      live.marks(), fs::shot_rules(), fs::director_policy(), fs::kGame.hz, live.steps());
+  CHECK(!cut.shots.empty() && cut.shots[0].kind == "flight" && cut.shots[0].from < took_off &&
+        cut.shots[0].rate < 1);
 }

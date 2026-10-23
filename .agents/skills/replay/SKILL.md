@@ -1,6 +1,6 @@
 ---
 name: replay
-description: "Use for engine/replay in gameengine2 and anything that watches a run again: a game's Run::clone (the keyframe), the keeper and its thinning policy, the replay player's seek in a step budget, the transport (play, pause, speeds, skip, frame step), the replay file with its marks, clip and game version, the replay index, the live recorder and the instant replay; later the director, spectating by inputs and the video export (docs/replays.md, rows M23a-M23h)."
+description: "Use for engine/replay in gameengine2 and anything that watches a run again: a game's Run::clone (the keyframe), the keeper and its thinning policy, the replay player's seek in a step budget, the transport (play, pause, speeds, skip, frame step), the replay file with its marks, clip and game version, the replay index, the live recorder and the instant replay, the director and its highlight reel; later spectating by inputs and the video export (docs/replays.md, rows M23a-M23h)."
 ---
 
 # Replays
@@ -17,6 +17,7 @@ stepped again through the game's own `Run`, never a recording of positions or pi
 | `replay/transport.hpp/.cpp` | The transport: play, pause (the end pauses), four speeds, skip, frame step, seek; pure state over the step count |
 | `replay/file.hpp/.cpp` | The replay file (`*.ge-replay`): the input log with marks, a clip, the game's version, the date; its text, `plays_on`, save and load |
 | `replay/index.hpp/.cpp` | The index: a directory's replay files as list rows for a menu's browser, a broken file a problem line |
+| `replay/director.hpp/.cpp` | The director: marks ranked and spaced into a cut of shots by the game's `ShotRule`s; the reel's clock over the shots at their rates |
 | `replay/live.hpp/.cpp` | The live run: a session that keeps keyframes and marks; the instant replay lent the live keeper and handed back |
 
 `tests/replay_walker.hpp` is the toy game the replay tests share (a walker on its own seeded
@@ -48,3 +49,9 @@ stream, its log and the straight digest).
   checks every step of every instant replay and the live run's digest after it.
 - **A change that moves what a log plays to raises `GameSpec::version`.** The file carries it and
   `plays_on` refuses another, naming both; the `replay-file` lab's `refused` holds the wording.
+- **The director is the engine's, the moments are the game's.** `plan_cut` knows no kind: a
+  game hands it marks and a `ShotRule` a kind (lead, hold, rate, scale, lens). Fall Line's are in
+  `games/fall_line/sim/moments.hpp`; a change there or in `plan_cut` runs `make lab
+  LAB=replay-cut` before and after: every flight cut and opening before its lip, no spacing fault,
+  `mismatches` 0. A reel is played off the live keeper (`Live::watch`), never a fresh player that
+  would step the whole race again at its first cut.

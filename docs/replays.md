@@ -99,10 +99,26 @@ stream to spectators, M23f).
 A live camera cannot cut to the lens beside a kicker BEFORE the jump; a replay's can, because the
 run has already happened. The game files moments as they happen, back-dated (a flight's mark is at
 its take-off, known only at the landing), and the director (`engine/replay/director.hpp`) ranks and
-spaces them into a cut list: which moment holds the frame and at what time rate (slow motion is
-fewer steps a frame and nothing else). The engine owns the ranking, the spacing and the clock;
-the game owns its moments' kinds, their weights and its lenses (Fall Line's chase, side, front,
-aerial and the long lens by a kicker).
+spaces them into a CUT: the shots, each a stretch of the run round one mark, with its lens and its
+time rate (slow motion is fewer steps a frame and nothing else).
+
+THE GAME'S HALF is a `ShotRule` a kind of mark: how far before the mark the shot opens (a flight
+opens on the run-in, before the lip), how long it holds after, its rate, what the kind's weight is
+scaled by beside the others, and the lens (a name only the game's renderer reads). Fall Line's
+(`games/fall_line/sim/moments.hpp`): a flight from 2.5 s before its take-off to 3 s after at half
+speed through the long lens beside the kicker, worth its air time and its landing's load; a
+wipeout at half speed from behind; a shoulder with a rival (a brush under 2 m/s is not one) from
+the front; a missed gate; the finish from above.
+
+THE ENGINE'S HALF is the choice, a pure function of the marks, the rules and the policy: the best
+mark first, each shot kept at least `spacing_s` of run from every other, the reel held to
+`most_s` of run and `most_shots`; a mark inside a shot already cut is COVERED, one refused is
+DROPPED, one of a kind with no rule is UNRULED, and all three are listed so a lab says why a moment
+is missing. THE REEL CLOCK (`reel_at`) plays the shots one after another, each at its rate, and
+says for the reel's seconds which shot is up and which run step it shows; between shots the player
+seeks. A reel is played off the live run's own keyframes (the instant replay's player), so a cut
+seeks from a copy the race already took: seed 38's 27 s reel holds 2 frames at one cut, where a
+fresh player, stepping the race again from its start, held 42 (the `replay-cut` lab).
 
 ## Video with sound (M23d)
 
