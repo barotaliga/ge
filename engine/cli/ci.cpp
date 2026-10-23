@@ -263,6 +263,9 @@ Outcome run_ci(const fs::path& repo, const std::string& pr, const std::string& l
       const std::string from = slug.str(1) + "/" + slug.str(2);
       std::string to = first_line(run_to_log("gh api " + api + " --jq .full_name", log).output);
       if (to.find('/') == std::string::npos || to.find(' ') != std::string::npos) to.clear();
+      // The API's redirect names the repository by number only; the web page's names it.
+      if (to.empty())
+        to = moved_to_of(run_to_log("curl -sI https://github.com/" + from, log).output);
       Finding moved;
       if (moved_repo_finding(head.output, from, to, moved)) {
         out.findings.push_back(moved);
@@ -437,6 +440,19 @@ bool moved_repo_finding(std::string_view error, const std::string& slug,
                  : "set the origin remote to the repository's new address (git remote set-url "
                    "origin https://github.com/<owner>/<repo>), then ge ci"};
   return true;
+}
+
+std::string moved_to_of(std::string_view headers) {
+  for (std::string_view line : split_lines(headers)) {
+    if (line.size() < 9) continue;
+    std::string key(line.substr(0, 9));
+    for (char& c : key) c = (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c;
+    if (key != "location:") continue;
+    static const std::regex kTo(R"(github\.com/([^/\s]+/[^/\s]+?)/?\r?$)");
+    std::match_results<std::string_view::const_iterator> m;
+    if (std::regex_search(line.begin(), line.end(), m, kTo)) return m.str(1);
+  }
+  return "";
 }
 
 bool merge_queue_refusal(std::string_view output) {

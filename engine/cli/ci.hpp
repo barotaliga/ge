@@ -50,6 +50,9 @@ Outcome run_ci_wait(const fs::path& repo, const std::string& pr, bool merge, int
 inline constexpr std::string_view kCiPending = "nothing has failed yet";
 // Whether a ge ci answer is final: an error, or no check still running.
 bool ci_settled(const Outcome& o);
+// The owner/name a moved repository's web page redirects to, off `curl -sI`'s headers ("" when
+// they carry no GitHub Location).
+std::string moved_to_of(std::string_view headers);
 // Whether GitHub refused a direct merge because the base merges only through a merge queue
 // (the refusal's text, any case).
 bool merge_queue_refusal(std::string_view output);

@@ -126,3 +126,9 @@ TEST(a_ci_answer_settles_on_an_error_or_when_nothing_runs) {
   green.summary = "every check passed";
   CHECK(ci_settled(green));
 }
+
+TEST(a_moved_repository_s_new_name_is_read_off_its_web_redirect) {
+  CHECK(moved_to_of("HTTP/1.1 200 Connection Established\r\n\r\nHTTP/1.1 301 Moved "
+                    "Permanently\r\nLocation: https://github.com/c/d\r\n") == "c/d");
+  CHECK(moved_to_of("HTTP/2 200\r\ncontent-type: text/html\r\n").empty());
+}
