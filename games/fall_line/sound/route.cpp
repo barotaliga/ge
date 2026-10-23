@@ -104,6 +104,7 @@ void run_sound_step(RunSound& sound, ge::audio::Synth& synth, const sim::GameSta
         break;
       case EventKind::takeoff:  // the wind's rush coming up is the take-off
       case EventKind::shoulder:
+      case EventKind::bump:
       case EventKind::wanted:  // the hunt's sounds come with its pursuers
       case EventKind::onto:    // the free ride's bookkeeping, not heard
       case EventKind::arrived:

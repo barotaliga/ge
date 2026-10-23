@@ -15,15 +15,18 @@
 //    and nothing else of his is stepped. On the free ride the run's reset stands the machine he
 //    rides or was thrown off back on its belt with him on it.
 // 3. Skier against skier (`meet_racers`, field.hpp), the field in pair order.
-// 4. The army on foot (`step_army`, army.hpp): the lifts' squads and the ground waves sent, every
+// 4. On a free ride dealt a crowd (`deal_crowd`, crowd.hpp): the crowd stepped (`step_crowd`)
+//    and every racer against it (`meet_crowd`).
+// 5. The army on foot (`step_army`, army.hpp): the lifts' squads and the ground waves sent, every
 //    soldier moved, the arrest, and each one written into the hunt's pursuers; nothing on a run
 //    whose hunt never reached a star.
-// 5. The wanted level (`step_wanted`, wanted.hpp): the look, the climb, the search running out;
+// 6. The wanted level (`step_wanted`, wanted.hpp): the look, the climb, the search running out;
 //    nothing on a run that never raised the heat.
-// 6. The clock advances.
+// 7. The clock advances.
 //
 // The only draws are the field's, made once when the run is created (`deal_field`, off a stream
-// of the map's seed); `step` draws nothing, so a run is a pure function of its map and controls.
+// of the map's seed), and a crowd's, off its own stream of the map's seed (`CrowdState::rng`);
+// nothing else in `step` draws, so a run is a pure function of its map, its crowd and controls.
 //
 // ge:summary A run: create_game on a map or a seed, step in its stated order, the state's digest
 // ge:keywords game create_game step order run digest state_hash game-options racers
