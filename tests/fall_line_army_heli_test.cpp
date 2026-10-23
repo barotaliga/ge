@@ -119,6 +119,8 @@ struct Hunt {
 Hunt hunt_on(const std::shared_ptr<const mg::Level>& level, int32_t stars, double hunted,
              double after, ge::ai::Why* why = nullptr) {
   fs::GameState st = fs::create_game_on(level, 1);
+  // Staged: the machines and their men without the gunfire (fall_line_gunfire_test's).
+  st.army.fire = false;
   st.why = why;
   Hunt h;
   st.racers[0].skier = sk::stand_skier(st.world(), kMid, kMid, 0, 0);
@@ -288,6 +290,7 @@ TEST(a_scripted_hunt_on_seed_38_keeps_its_golden) {
   // every arm sent; then the hunt is called off for 150 s. Each half minute: the digest, the
   // machines out, the men they put down out, and the landings so far.
   fs::GameState st = fs::create_free_ride(seed38(), 0);
+  st.army.fire = false;  // staged without the gunfire
   const double fx = lm::sin(st.army.pad_heading);
   const double fz = lm::cos(st.army.pad_heading);
   const double x = st.army.pad_x + fx * 400;

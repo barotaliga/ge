@@ -38,7 +38,7 @@ wgpu::BindGroupLayout frame_layout(gpu::Device& device) {
   return make_layout(
       device, "render.frame",
       {Slot::uniform, Slot::sampler, Slot::texture, Slot::texture, Slot::texture, Slot::texture_3d,
-       Slot::storage_read, Slot::texture},
+       Slot::storage_read, Slot::texture, Slot::texture_3d, Slot::sampler},
       wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment | wgpu::ShaderStage::Compute);
 }
 
@@ -69,6 +69,7 @@ void create_sky(gpu::Device& device, gpu::PipelineSet& pipelines, Sky& sky,
   sd.magFilter = sd.minFilter = wgpu::FilterMode::Linear;
   sd.mipmapFilter = wgpu::MipmapFilterMode::Linear;
   sky.sampler = device.device.CreateSampler(&sd);
+  sky.cloud = create_cloud_noise(device);
 
   const auto cs = wgpu::ShaderStage::Compute;
   sky.in_layout = make_layout(device, "sky.in",
@@ -157,7 +158,11 @@ void create_sky(gpu::Device& device, gpu::PipelineSet& pipelines, Sky& sky,
   depth.depthCompare = wgpu::CompareFunction::Equal;
   wgpu::RenderPipelineDescriptor desc{};
   desc.label = "sky.draw";
-  desc.layout = make_pipeline_layout(device, "sky.draw", {frame});
+  sky.stars = create_star_texture(device);
+  sky.star_layout =
+      make_layout(device, "sky.stars", {Slot::texture_array}, wgpu::ShaderStage::Fragment);
+  sky.star_group = make_group(device, "sky.stars", sky.star_layout, {sky.stars.view});
+  desc.layout = make_pipeline_layout(device, "sky.draw", {frame, sky.star_layout});
   desc.vertex.module = draw;
   desc.vertex.entryPoint = "vs_main";
   desc.primitive.topology = wgpu::PrimitiveTopology::TriangleList;
@@ -168,9 +173,10 @@ void create_sky(gpu::Device& device, gpu::PipelineSet& pipelines, Sky& sky,
 
 wgpu::BindGroup frame_group(gpu::Device& device, const wgpu::BindGroupLayout& layout,
                             const wgpu::Buffer& uniforms, const Sky& sky) {
-  return make_group(device, "render.frame", layout,
-                    {uniforms, sky.sampler, sky.transmittance_view, sky.multiscatter_view,
-                     sky.sky_view_view, sky.aerial_view, sky.light, sky.moon_view_view});
+  return make_group(
+      device, "render.frame", layout,
+      {uniforms, sky.sampler, sky.transmittance_view, sky.multiscatter_view, sky.sky_view_view,
+       sky.aerial_view, sky.light, sky.moon_view_view, sky.cloud.view, sky.cloud.sampler});
 }
 
 void prepare_sky(Sky& sky, const FrameView& view) {
@@ -255,6 +261,7 @@ void encode_sky(const Sky& sky, const gpu::PipelineSet& pipelines, FrameRecorder
   wgpu::RenderPassEncoder pass = rec.render(encoder, desc, "sky");
   pass.SetPipeline(pipelines.render(sky.p_draw));
   pass.SetBindGroup(0, frame);
+  pass.SetBindGroup(1, sky.star_group);
   pass.Draw(3);
   ++rec.current().draws;
   pass.End();

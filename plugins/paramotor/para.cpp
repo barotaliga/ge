@@ -211,7 +211,12 @@ void fly(ParaState& p, Body& pilot, const ParaWorld& w, double m, double dt, Par
   namespace T = spec::turn;
   const ParaControls& c = p.controls;
   Body wing = wing_of(p);
-  const Vec3 u = line_dir(wing, pilot);
+  // The lines as they stand at the step's end: the pilot has already moved this step (his skis'
+  // step comes first), so the wing is carried on with him at its own speed before the lines are
+  // read; read against where it stood, they would lean back by his speed times the step.
+  const Vec3 u = line_dir(Body{wing.x + wing.vx * dt, wing.y + wing.vy * dt, wing.z + wing.vz * dt,
+                               wing.vx, wing.vy, wing.vz},
+                          pilot);
   const ParaAir air = read_air(p, w);
   // The pilot's own air, and the rears' bite and hold off its speed: a wing held in its pitch flies
   // his path, the air through it his.

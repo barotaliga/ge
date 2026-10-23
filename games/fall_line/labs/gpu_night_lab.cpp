@@ -33,6 +33,7 @@
 #include <string>
 #include <vector>
 
+#include "core/libm/libm.hpp"
 #include "core/solar.hpp"
 #include "fall_line/app/frame.hpp"
 #include "fall_line/app/views.hpp"
@@ -73,7 +74,48 @@ std::string fixed(double v, int places) {
 
 // Where a shot looks from the view's eye: as the view looks (down over the snow), toward the
 // sun under the horizon (the dusk's glow), at the moon through a long lens, or up into the south.
-enum class Aim : std::uint8_t { view, sun, moon, up };
+enum class Aim : std::uint8_t { view, sun, moon, up, figure };
+
+// THE FIGURES a real sky is checked by (render/stars.hpp): a pattern's middle on the celestial
+// sphere (right ascension, h; declination, degrees). The `figure` shot looks at the highest.
+struct Figure {
+  const char* name;
+  double ra_h, dec_deg;
+};
+constexpr Figure kFigures[] = {
+    {"the hunter's belt and shoulders", 5.6, 1.0},
+    {"the plough", 12.2, 56.0},
+    {"the southern cross", 12.45, -60.0},
+    {"the summer triangle", 19.5, 30.0},
+};
+
+// Where a figure stands in a view's sky: the heading and elevation it lies at (rad), off the
+// sky's turn (the sidereal angle and the latitude, as render/sky.wgsl's `celestial` reads them).
+void figure_at(const ge::render::Night& n, const Figure& f, double& heading, double& elevation) {
+  namespace lm = ge::core::libm;
+  const double ra = f.ra_h / 12 * 3.14159265358979323846, dec = f.dec_deg * kDeg;
+  const double hour = n.sidereal - ra;
+  const double ch = lm::cos(dec) * lm::cos(hour), sd = lm::sin(dec);
+  const double sl = lm::sin(n.latitude), cl = lm::cos(n.latitude);
+  const double x = -lm::cos(dec) * lm::sin(hour), y = sd * sl + ch * cl, z = sd * cl - ch * sl;
+  heading = lm::atan2(x, z);
+  elevation = lm::asin(std::clamp(y, -1.0, 1.0));
+}
+
+// The figure highest in a view's sky.
+size_t highest_figure(const ge::render::Night& n) {
+  size_t best = 0;
+  double top = -10;
+  for (size_t i = 0; i < std::size(kFigures); ++i) {
+    double h = 0, e = 0;
+    figure_at(n, kFigures[i], h, e);
+    if (e > top) {
+      top = e;
+      best = i;
+    }
+  }
+  return best;
+}
 
 // One shot: the map's day of the year and the solar hour (past 24: the small hours after).
 struct Night {
@@ -230,6 +272,8 @@ void run(ge::lab::Lab& lab) {
   nights.push_back({"new-sky", none, 24.0, Aim::up,
                     "a sky full of stars, brighter and fewer toward the horizon, and the galaxy's "
                     "band"});
+  nights.push_back({"new-figure", none, 24.0, Aim::figure,
+                    "the real stars: the figure the caption names, as a sky chart draws it"});
 
   std::vector<mg::Level> levels;
   for (const Night& n : nights) {
@@ -263,6 +307,9 @@ void run(ge::lab::Lab& lab) {
       v.heading = n.moon_azimuth;
       v.pitch = n.moon_elevation;
       v.fov_y = 5 * kDeg;
+    } else if (nights[i].aim == Aim::figure) {
+      figure_at(n, kFigures[highest_figure(n)], v.heading, v.pitch);
+      v.fov_y = 40 * kDeg;
     }
     return v;
   };
@@ -277,7 +324,10 @@ void run(ge::lab::Lab& lab) {
         fixed(n.hour, 2) + " h: the sun " + fixed(-sun / kDeg, 1) + " degrees under, the moon " +
         fixed(v.night.moon_elevation / kDeg, 1) + " degrees up and " +
         fixed(levels.size() ? ge::mountain::app::moon_of(levels[i], n.hour).lit * 100 : 0, 0) +
-        " % lit; the key light the " + (v.night.moon_key ? "moon" : "sun") + ".";
+        " % lit; the key light the " + (v.night.moon_key ? "moon" : "sun") + "." +
+        (n.aim == Aim::figure
+             ? std::string(" Looking at ") + kFigures[highest_figure(v.night)].name + "."
+             : std::string());
     return ge::lab::Shot{n.id,
                          title,
                          caption,

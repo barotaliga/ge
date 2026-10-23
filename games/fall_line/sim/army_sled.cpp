@@ -17,6 +17,7 @@
 #include "fall_line/sim/army_drive.hpp"
 #include "fall_line/sim/army_rules.hpp"
 #include "fall_line/sim/army_sled_rules.hpp"
+#include "fall_line/sim/gunfire.hpp"
 #include "fall_line/sim/lift_ride.hpp"
 #include "fall_line/sim/sled_ride.hpp"
 #include "mountain/mapgen/query.hpp"
@@ -360,19 +361,39 @@ void chase(GameState& state, ArmySled& m, Spot q, FireRule fire) {
   }
 }
 
-// THE HALT: stopped side-on to him, the gunner on him; then on again.
-void halt(GameState& state, ArmySled& m, Spot q) {
+// THE HALT: stopped side-on to him, the gunner on him and firing a few bursts once settled
+// (gunfire.hpp); then on again.
+void halt(GameState& state, ArmySled& m, Spot q, FireRule fire) {
   const WantedState& w = state.wanted;
   const bool sees = looks(state, m, q, true);
   const sm::SledState& b = m.body;
   drive(state, m, halt_on(m, lm::atan2(q.x - b.x, q.z - b.z) - kSide), true);
   const bool lost = !sees && state.t - m.saw > kLostS;
-  if (m.t > kHoldS || lost || w.ended != WantedEnd::running) {
+  const int32_t gun = kGunBase + m.id;
+  if (m.t > kHoldS || lost || m.bursts >= kHaltBursts || w.ended != WantedEnd::running) {
     m.mode = ArmySledMode::drive;
     m.t = 0;
+    m.bursts = 0;
     m.next = state.t + kMoveS + kMoveSpreadS * num::mod(m.id * 0.618, 1);
     rest(state, m);
+    disarm_gun(state, gun);
+    return;
   }
+  if (!state.army.fire || m.t < kSettleS || b.speed > kStill || !sees) return;
+  const double fx = lm::sin(b.heading);
+  const double fz = lm::cos(b.heading);
+  const double x = b.x + fz * kMuzzleRightM + fx * kMuzzleAheadM;
+  const double y = b.y + kMuzzleUpM;
+  const double z = b.z - fx * kMuzzleRightM + fz * kMuzzleAheadM;
+  Gun* g = arm_gun(state, gun, WeaponKind::lmg, x, y, z);
+  if (g == nullptr) return;
+  g->x = x;
+  g->y = y;
+  g->z = z;
+  g->vx = b.vx;
+  g->vy = b.vy;
+  g->vz = b.vz;
+  if (fire_at(state, *g, AimTarget{}, fire)) m.bursts++;
 }
 
 // HOME: back to the village it came from, and gone there.
@@ -449,7 +470,7 @@ void step_army_sleds(GameState& state, bool on, Spot q, FireRule fire) {
         }
         break;
       case ArmySledMode::halt:
-        halt(state, m, q);
+        halt(state, m, q, fire);
         break;
       case ArmySledMode::leave:
         home(state, m);
@@ -473,6 +494,9 @@ void step_army_sleds(GameState& state, bool on, Spot q, FireRule fire) {
     if (m.mode != ArmySledMode::empty) continue;
     m.mode = ArmySledMode::gone;
     empty--;
+  }
+  for (const ArmySled& m : a.sleds) {
+    if (m.mode == ArmySledMode::gone) disarm_gun(state, kGunBase + m.id);
   }
   std::erase_if(a.sleds, [](const ArmySled& m) { return m.mode == ArmySledMode::gone; });
   write_crews(state);
