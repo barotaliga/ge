@@ -35,6 +35,8 @@ updates that row's status file (`docs/goals/<row>.md`) in its PR.
 | [`docs/rendering.md`](docs/rendering.md) | The GPU backend (Dawn), the frame's pass table, every rendering technique and why, budgets, lab hooks, and what was considered and not taken |
 | [`docs/perf.md`](docs/perf.md) | The performance ledger: every speed-up, before and after, and how it was measured |
 | [`docs/input.md`](docs/input.md) | Input devices: the layers, the model, actions and bindings, raw mouse, wheels and force feedback, gamepads, touch, players, recording, the labs and the decisions |
+| [`docs/camera.md`](docs/camera.md) | The camera: the pose, the followers, the subject, the rigs (first person, boom, mounted, orbit, planted, free), the modifiers, the world's queries, the transitions, the stack, the cvars, the labs and the research |
+| [`docs/movement.md`](docs/movement.md) | Character movement for any genre: the knobs and presets, the step's model (friction, the acceleration rule and strafe jumping, jumps, steps, slopes, crouch, slide), the world's trace, cvars, what a camera reads, water, the labs |
 | [`docs/networking.md`](docs/networking.md) | Multiplayer: what each kind of game asks of the network, the layers of `engine/net`, the decisions, the wire format, the simulated network, the tools, and Fall Line's pilot (M17) |
 | [`docs/publishing.md`](docs/publishing.md) | What a release is (GitHub Releases + GitHub Packages), how a game consumes it, changeset fragments, cutting a release, the credentials |
 | [`docs/shooters-edge.md`](docs/shooters-edge.md) | The second game, Shooter's Edge (M18, after Fall Line): the compatibility contract, the clean room, the homes, the protocols, the labs and the `ge` commands it needs |
@@ -118,6 +120,11 @@ porting ends, and nothing outside it may depend on it except `make golden`.
   get there.
 - **WHEN A TASK IS DONE, NAME THE NEXT STEP.** Update the roadmap row's status file
   (`docs/goals/<row>.md`), then name the next open milestone row as the follow-up.
+- **SHOW THE WORK IN PICTURES.** Every progress report and every finished PR comes with
+  pictures: a lab's screenshots, before and after side by side, a chart of the numbers, a
+  diagram of a design, or a table of measurements drawn as an image. Nearly all work can be
+  shown this way; the labs exist to make that cheap (`labs` skill). Put the pictures on one
+  page linked from the report and the PR, never as loose attachments.
 - **SAY WHAT `ge` LACKED.** `ge` is the agent's whole interface (G6), so it grows from what
   agents miss. When a task would have been easier with a `ge` command or flag that does not
   exist (to build, debug, inspect, measure or optimise), say so in the PR description under
@@ -137,7 +144,7 @@ porting ends, and nothing outside it may depend on it except `make golden`.
 - **`make precheck` BEFORE EVERY PUSH.** It runs, in about 40 seconds, the gates that cost
   threads the most CI rounds (fmt-check, agents-check, libm-check, lint on the changed files,
   `cli_diagnostics_test`, the tests the change reaches and the smoke digests of the labs it
-  reaches, `tools/labs-reached.sh`). A game repo's is `ge precheck`.
+  reaches, `ge digest --affected`). A game repo's is `ge precheck`.
   Run it in the background when it is long (a tool's background mode re-invokes you when it
   exits); never poll it in a loop.
 - **AFTER PUSHING A PR, CHECK IT EVERY 15 MINUTES UNTIL IT IS MERGED.** Each check-in looks at
@@ -230,6 +237,7 @@ characters.
 | `*/labs/` | Labs beside their subject, compiled into the one `labs` executable | `labs` |
 | `engine/console/` | The console (`ge::console`, `docs/console.md`): cvars and their tiers, the console language, aliases, binds, cfg files, the drop-down console's model | `console` |
 | `engine/net/` | Multiplayer networking (`ge::net`, `docs/networking.md`): addresses, the wire, UDP and TCP sockets, the links, the simulated network, sessions, LAN discovery; the only place socket headers are included | `net` |
+| `engine/move/` | Character movement (`ge::move`, `docs/movement.md`): the knobs and presets, the step over a trace callback, the box world, the strafer, the scenarios | `move` |
 | `engine/input/` | Input devices (`ge::input`, `docs/input.md`): the device model, events, state, dead zones, actions and bindings, rebinding, wheels' roles, touch, players, feedback, the event log, simulated devices | `input` |
 | `engine/platform/` | SDL3 (`GE_PLATFORM`): the window, input, the frame clock, the audio device; the only place SDL is included | `platform` |
 | `engine/gpu/` | The native GPU device over Dawn (`GE_GPU`): adapters and tiers, pipelines and the manifest, surfaces, targets, timers; the only place webgpu.h is included | `gpu` |
@@ -335,6 +343,7 @@ and the directories agree.
 | `paramotor` | `plugins/paramotor`: the powered speed wing a skier flies (`step_para`, the wing on its lines, the engine, the fold, the cut-away), the air it flies in, the bot's hands on it, the para scenarios |
 | `sim` | `games/fall_line/sim`: `create_game`, the step, the bot, the headless sim CLI, the run clock |
 | `platform` | `engine/platform`: SDL3, the window, input, the gamepad, the audio device, files |
+| `move` | `engine/move`: a moving character's knobs, presets and step (ground and air acceleration, friction, jumps, strafe jumping, steps, slopes, crouch, slide, flight), the trace a world answers, the box world, the strafer, the scenarios, the `move-*` labs; the M28 rows |
 | `input` | `engine/input`: keyboards, raw mice, gamepads, joysticks, wheels and pedals, touch; actions, contexts, the bindings file, rebinding, the device database, players and hot-plug, rumble and force feedback, the event log, the simulated backend; `play/devices`; the M19 rows |
 | `gpu` | `engine/gpu`: the native GPU device over Dawn (Dawn's `webgpu.h`), feature tiers, buffers, pipelines and the manifest, WGSL and `make shaders-check` |
 | `render` | A draw pass, the pass table, GPU-driven instances, shadows, sky, TAA-U, post, lab captures, extraction from `GameState` |
@@ -347,4 +356,4 @@ and the directories agree.
 | `agent-interface` | Diagnostics wording, consumer skills, the `ge` CLI (M12) |
 | `bots` | Anything a bot decides: `engine/ai`, the decision record every bot writes, `Run::trace`, `ge why`, making a bot more human, paths and thinking on a schedule (M16) |
 | `console` | `engine/console`: a setting (cvar) added or named, its tier, cfg files and the console language, aliases, scripting, binds, the drop-down console, `ge cvar` and `ge cfg`, the `console` lab (M21) |
-| `net` | `engine/net`: multiplayer networking: sockets, the simulated network and its conditions, captures, the wire format, connections and channels, nodes up to 32, sessions (lobby, teams, chat, kick, reconnect), LAN discovery, NAT traversal (STUN, the rendezvous, hole punching, the relay), fake traffic, the `net-link`, `net-session` and `net-reach` labs; the M17 plan |
+| `net` | `engine/net`: multiplayer networking: sockets, the simulated network and its conditions, captures, the wire format, connections and channels, nodes up to 32, sessions (lobby, teams, chat, kick, reconnect), LAN discovery, NAT traversal (STUN, the rendezvous, hole punching, the relay, a port opened by PCP, NAT-PMP or UPnP), fake traffic, the `net-link`, `net-session` and `net-reach` labs; the M17 plan |

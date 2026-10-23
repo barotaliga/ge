@@ -106,6 +106,24 @@ void reach_from_deps(const fs::path& repo, std::string_view deps,
       }
     }
   }
+  // Each object on its own: the same two ways in, now that the reached libraries are known.
+  std::set<std::string> dirs;
+  for (const auto& [dir, targets] : owners) {
+    for (const std::string& t : targets) {
+      if (r.targets.count(t)) dirs.insert(dir);
+    }
+  }
+  for (const Object& o : objects) {
+    if (o.target.empty()) continue;
+    for (size_t k = 0; k < o.deps.size(); k++) {
+      const std::string& d = o.deps[k];
+      const bool header = k > 0 && (d.ends_with(".hpp") || d.ends_with(".h"));
+      if (r.changed.count(d) || (header && dirs.count(dir_of(d)))) {
+        r.objects.insert(o.source);
+        break;
+      }
+    }
+  }
 }
 
 bool change_reach(const fs::path& repo, const fs::path& build, const std::string& base,

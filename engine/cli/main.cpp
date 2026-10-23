@@ -26,6 +26,7 @@
 #include "cli/cvar.hpp"
 #include "cli/doctor.hpp"
 #include "cli/embedded.hpp"
+#include "cli/goals.hpp"
 #include "cli/golden.hpp"
 #include "cli/graph.hpp"
 #include "cli/index.hpp"
@@ -147,6 +148,11 @@ Outcome run(const Args& a) {
   }
   if (name == "explain") return run_explain(repo_of(a), flag_value(a, "engine"), a.words[0]);
   if (name == "lessons") return cmd_lessons(a);
+  if (name == "goals free") {
+    const std::string base = flag_value(a, "base");
+    return run_goals_free(fs::absolute(repo_of(a)), a.words.empty() ? "" : a.words[0],
+                          base.empty() ? "origin/main" : base, has_flag(a, "fetch"));
+  }
   if (name == "new") return cmd_new(a);
   if (name == "use") return run_use(repo_of(a), a.words[0]);
   if (name == "upgrade") {
@@ -214,7 +220,14 @@ Outcome run(const Args& a) {
     return run_lint(build_options(a), l);
   }
   if (name == "digest") {
-    return run_digest(build_options(a), a.words, has_flag(a, "write"), has_flag(a, "diff"));
+    DigestOptions d;
+    d.labs = a.words;
+    d.write = has_flag(a, "write");
+    d.diff = has_flag(a, "diff");
+    d.affected = has_flag(a, "affected");
+    d.list = has_flag(a, "list");
+    d.base = flag_value(a, "base", "origin/main");
+    return run_digest(build_options(a), d);
   }
   if (name == "golden diff") {
     return run_golden_diff(fs::absolute(repo_of(a)), a.words, flag_value(a, "base", "HEAD"));

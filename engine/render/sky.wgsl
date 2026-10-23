@@ -293,6 +293,8 @@ fn fs_main(in: VertexOut) -> FragmentOut {
     let r = kGroundRadius + max(frame.eye.w, 0.0);
     colour += moon_disc(d, r) * (1.0 - frame.weather.y);
   }
+  // Seen through the fog's or the fall's veil.
+  colour = veil_sky(d, colour);
   var out: FragmentOut;
   out.colour = vec4f(min(colour, vec3f(60000.0)), 1.0);
   out.motion = vec4f(screen_motion(frame, vec4f(d, 0.0), in.position.xy), 0.0, 0.0);
