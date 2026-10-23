@@ -106,6 +106,22 @@ TEST(full_throttle_off_the_face_lets_the_wing_fly_and_lifts_him_off) {
   CHECK(r.climbed > 5 && r.cut == pm::ParaCut::none);
 }
 
+// The step rate is the integrator's, not the flight's: the launch at 60 and at 240 steps a second
+// tops out within a km/h and climbs within a metre of the 120 Hz run.
+TEST(the_launch_flies_the_same_at_any_step_rate) {
+  const pm::ParaScenario& sc = *pm::find_para_scenario("launch");
+  const pm::ParaRun mid = pm::run_para_scenario(sc, 120);
+  for (double hz : {60.0, 240.0}) {
+    const pm::ParaRun r = pm::run_para_scenario(sc, hz);
+    CHECK_MSG(
+        std::fabs(r.top_speed - mid.top_speed) * 3.6 < 1 && std::fabs(r.climbed - mid.climbed) < 1,
+        "at " + std::to_string(hz) + " Hz the launch topped " + std::to_string(r.top_speed * 3.6) +
+            " km/h and climbed " + std::to_string(r.climbed) + " m; at 120 Hz " +
+            std::to_string(mid.top_speed * 3.6) + " km/h and " + std::to_string(mid.climbed) +
+            " m" + look("launch"));
+  }
+}
+
 TEST(the_wing_trims_near_55_km_h_and_glides_near_4) {
   const pm::ParaRun r = fly("glide");
   CHECK_MSG(

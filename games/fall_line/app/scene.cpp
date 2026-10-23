@@ -156,4 +156,40 @@ r::Instance crowd_instance(const sim::Amateur& a, const ge::mountain::mapgen::Le
   return in;
 }
 
+void shadow_centres(std::span<const ge::skier::SkierState> racers,
+                    std::span<const sim::Amateur> crowd, const double eye[3], int most,
+                    std::vector<std::array<double, 3>>& out) {
+  out.clear();
+  const size_t cap = static_cast<size_t>(std::max(most, 0));
+  for (const ge::skier::SkierState& s : racers) {
+    if (out.size() == cap) return;
+    out.push_back({s.x, s.y + 1.0, s.z});
+  }
+  // The nearest drawn amateurs, kept sorted by an insertion into a short list (no allocation).
+  constexpr size_t kMost = 64;
+  const size_t want = std::min(cap - out.size(), kMost);
+  std::array<double, kMost> near_d{};
+  std::array<size_t, kMost> near_i{};
+  size_t kept = 0;
+  for (size_t i = 0; i < crowd.size() && want > 0; ++i) {
+    const sim::Amateur& a = crowd[i];
+    if (!crowd_drawn(a)) continue;
+    const double dx = a.x - eye[0], dy = a.y - eye[1], dz = a.z - eye[2];
+    const double d = dx * dx + dy * dy + dz * dz;
+    if (kept == want && d >= near_d[kept - 1]) continue;
+    size_t at = kept < want ? kept++ : kept - 1;
+    while (at > 0 && near_d[at - 1] > d) {
+      near_d[at] = near_d[at - 1];
+      near_i[at] = near_i[at - 1];
+      --at;
+    }
+    near_d[at] = d;
+    near_i[at] = i;
+  }
+  for (size_t k = 0; k < kept; ++k) {
+    const sim::Amateur& a = crowd[near_i[k]];
+    out.push_back({a.x, a.y + 1.0, a.z});
+  }
+}
+
 }  // namespace fall_line::app

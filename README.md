@@ -124,3 +124,9 @@ has the details.
 - [docs/rendering.md](docs/rendering.md): the GPU backend and every rendering technique
 - [docs/labs.md](docs/labs.md): the lab contract and how to run labs
 - [docs/publishing.md](docs/publishing.md): releases and how a game consumes one
+
+## License
+
+[PolyForm Noncommercial 1.0.0](LICENSE): the source is open to read, use, change and share for
+any noncommercial purpose; commercial use is reserved to the copyright holder. Vendored code keeps
+its own licence beside it (`engine/core/libm/LICENSE.md`).
