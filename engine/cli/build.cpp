@@ -111,12 +111,44 @@ bool configure(const BuildOptions& o, const fs::path& log, Outcome& out) {
   return false;
 }
 
-bool build_step(const BuildOptions& o, Outcome& out) {
+// The tests `filter` picks, by name, once the preset is configured ("" when none or ctest fails).
+std::vector<std::string> tests_matching(const BuildOptions& o, const std::string& filter,
+                                        const fs::path& log) {
+  static const std::regex kTest(R"(^\s*Test\s+#\d+: (\S+))");
+  const Ran r = run_logged("ctest --preset " + o.preset + " -N -R \"" + filter + "\"", log);
+  std::vector<std::string> names;
+  if (r.code != 0) return names;
+  for (const auto view : split_lines(r.output)) {
+    const std::string line(view);
+    std::smatch m;
+    if (std::regex_search(line, m, kTest)) names.push_back(m.str(1));
+  }
+  return names;
+}
+
+// Configure and build. With `filter`, only the targets of the tests it picks (a test is its own
+// executable, the smoke pass the labs executable), and the whole tree when a target is unknown.
+bool build_step(const BuildOptions& o, Outcome& out, const std::string& filter = "") {
   const fs::path log = log_path(o, "ge-build");
   std::error_code ec;
   fs::remove(log, ec);
   if (!configure(o, log, out)) return false;
-  const Ran r = run_logged("cmake --build --preset " + o.preset, log);
+  std::string targets;
+  if (!filter.empty()) {
+    for (const std::string& t : tests_matching(o, filter, log))
+      targets.append(" ").append(t == "labs_smoke" || t.starts_with("labs_smoke_") ? "labs" : t);
+  }
+  Ran r{0, ""};
+  if (!targets.empty()) {
+    r = run_logged("cmake --build --preset " + o.preset + " --target" + targets, log);
+    // A test named for no target of its own: build everything as before.
+    const bool unknown =
+        r.code != 0 && (r.output.find("unknown target") != std::string::npos ||
+                        r.output.find("No rule to make target") != std::string::npos ||
+                        r.output.find("MSB1009") != std::string::npos);
+    if (unknown) targets.clear();
+  }
+  if (targets.empty()) r = run_logged("cmake --build --preset " + o.preset, log);
   if (r.code == 0) return true;
   out.findings = compiler_findings(o.repo, r.output, kMostFindings);
   if (out.findings.empty()) {
@@ -278,7 +310,7 @@ Outcome run_build(const BuildOptions& o) {
 
 Outcome run_test(const BuildOptions& o, const std::string& filter) {
   Outcome out;
-  if (!build_step(o, out)) return out;
+  if (!build_step(o, out, filter)) return out;
   const fs::path log = log_path(o, "ge-test");
   std::error_code ec;
   fs::remove(log, ec);

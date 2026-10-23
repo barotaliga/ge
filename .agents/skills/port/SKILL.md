@@ -46,8 +46,8 @@ no reference names in the file, its comments, its tags, its test or its commit (
    structs, closures into a struct plus free functions, and maps into
    insertion-ordered storage.
 7. **Run** `make test` on both presets. Every row must be bit-exact.
-8. **Update** `AGENTS.md`'s "Where things live" row and the milestone Status in
-   `docs/goals.md`, and run `make index`.
+8. **Update** the milestone Status in `docs/goals.md` and run `make index`. `AGENTS.md`'s "Where
+   things live" row changes only for a new directory: a file's entry is its own `ge:summary`.
 
 ## Rules
 
