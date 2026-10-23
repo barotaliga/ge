@@ -3,13 +3,17 @@
 // command for the one thing that moved, and reviewing it is a table of what moved, not a wall of
 // hex.
 //
-//   ge digest [<lab>] [--write]   the lab (or every lab) at its smoke flags, twice; each digest
-//                                 beside tests/labs_digests.txt's row. --write rewrites that row
-//                                 only (every row with no lab), creating the file if it is not
-//                                 there. A repo with a baseline has its labs held to it by
-//                                 `ge test` (the labs_smoke case). --diff prints only the labs
-//                                 whose digest is off the baseline (or not in it), and writes
-//                                 nothing: after a change, the labs it moved in one command.
+//   ge digest [<lab>...] [--write] the labs named (or every lab) at their smoke flags, twice; each
+//                                 digest beside tests/labs_digests.txt's row. --write rewrites
+//                                 those rows only (every row with no lab), creating the file if
+//                                 it is not there. --affected takes the labs the change since
+//                                 --base reaches instead (cli/reach.hpp, each lab by its own
+//                                 source's object; a moved baseline row reaches its lab, a build
+//                                 file every lab), and --list names them and runs nothing. A repo
+//                                 with a baseline has its labs held to it by `ge test` (the
+//                                 labs_smoke case). --diff prints only the labs whose digest is off
+//                                 the baseline (or not in it), and writes nothing: after a change,
+//                                 the labs it moved in one command.
 //   ge golden diff [<golden|test>...] [--base=<ref>]
 //                                 each golden file against git's <ref> (default HEAD): the rows
 //                                 that changed and, column by column, what moved in them; with
@@ -29,19 +33,36 @@
 // ge:test tests/cli_golden_test.cpp
 #pragma once
 
+#include <map>
+#include <set>
 #include <string>
 #include <string_view>
 #include <vector>
 
 #include "cli/build.hpp"
 #include "cli/outcome.hpp"
+#include "cli/reach.hpp"
 
 namespace ge::cli {
 
 inline constexpr std::string_view kDigestBaseline = "tests/labs_digests.txt";
 
-Outcome run_digest(const BuildOptions& o, const std::vector<std::string>& labs, bool write,
-                   bool only_moved = false);
+struct DigestOptions {
+  std::vector<std::string> labs;  // none: every lab
+  bool write = false, diff = false;
+  bool affected = false, list = false;  // the labs the change since `base` reaches
+  std::string base = "origin/main";
+};
+Outcome run_digest(const BuildOptions& o, const DigestOptions& d);
+
+// The labs a change reaches, in id order: each lab whose own source object `r.objects` holds,
+// each lab with a row in `moved` (the baseline's rows the change rewrote), and every lab when a
+// build file changed. `sources` is each registered lab's repository-relative source file.
+std::vector<std::string> labs_reached(const Reach& r,
+                                      const std::map<std::string, std::string>& sources,
+                                      const std::set<std::string>& moved);
+// The lab ids whose rows a unified diff of the baseline adds or removes ("+<id> <16 hex>").
+std::set<std::string> moved_digest_rows(std::string_view diff);
 Outcome run_golden_diff(const fs::path& repo, const std::vector<std::string>& targets,
                         const std::string& base);
 Outcome run_golden_write(const BuildOptions& o, const std::string& test);

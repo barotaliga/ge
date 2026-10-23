@@ -91,6 +91,9 @@ constexpr FlagSpec kCiFlags[] = {
 constexpr FlagSpec kDigestFlags[] = {
     {"write", "", "rewrite the lab's row of tests/labs_digests.txt (every row with no lab)"},
     {"diff", "", "print only the labs whose digest is off the baseline; write nothing"},
+    {"affected", "", "the labs the change since --base reaches, each by its own source's object"},
+    {"base", "<ref>", "with --affected: the change since this ref (default origin/main)"},
+    {"list", "", "with --affected: name the labs it picks and run nothing"},
     kPreset,
     kEngine,
     kRepo};

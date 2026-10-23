@@ -417,9 +417,45 @@ Outcome run_golden_write(const BuildOptions& o, const std::string& test_arg) {
   return out;
 }
 
-Outcome run_digest(const BuildOptions& o, const std::vector<std::string>& labs, bool write,
-                   bool only_moved) {
+std::vector<std::string> labs_reached(const Reach& r,
+                                      const std::map<std::string, std::string>& sources,
+                                      const std::set<std::string>& moved) {
+  const bool all = std::any_of(r.changed.begin(), r.changed.end(),
+                               [](const std::string& f) { return build_file(f); });
+  std::vector<std::string> out;
+  for (const auto& [id, source] : sources) {
+    if (all || moved.count(id) || (!source.empty() && r.objects.count(source))) out.push_back(id);
+  }
+  return out;
+}
+
+std::set<std::string> moved_digest_rows(std::string_view diff) {
+  static const std::regex kRow(R"(^[-+]([a-z0-9-]+) [0-9a-f]{16}$)");
+  std::set<std::string> out;
+  for (const std::string_view view : split_lines(diff)) {
+    const std::string line(view);
+    std::smatch m;
+    if (std::regex_match(line, m, kRow)) out.insert(m.str(1));
+  }
+  return out;
+}
+
+Outcome run_digest(const BuildOptions& o, const DigestOptions& d) {
   Outcome out;
+  const bool write = d.write, only_moved = d.diff;
+  std::vector<std::string> labs = d.labs;
+  if (d.affected && !labs.empty()) {
+    out.findings.push_back({Severity::error, "--affected and lab names together", "the flags",
+                            "--affected picks the labs itself; drop the names, or --affected"});
+    out.exit = 2;
+    return out;
+  }
+  if (d.list && !d.affected) {
+    out.findings.push_back({Severity::error, "--list without --affected", "the flags",
+                            "--list names the labs --affected picks: ge digest --affected --list"});
+    out.exit = 2;
+    return out;
+  }
   if (write && only_moved) {
     out.findings.push_back({Severity::error, "--write and --diff together", "the flags",
                             "--diff shows what moved and writes nothing; run it, then --write"});
@@ -445,6 +481,50 @@ Outcome run_digest(const BuildOptions& o, const std::vector<std::string>& labs, 
   const fs::path previews = o.repo / "previews";
   const fs::path log = build_log(o, "ge-digest");
   fs::remove(log, ec);
+  if (d.affected) {
+    const fs::path build = o.repo / "build" / o.preset;
+    Reach reach;
+    std::set<std::string> moved_rows;
+    std::map<std::string, std::string> sources;
+    static const std::regex kLab(R"re("id":"([^"]+)"[^{}]*?"source":"([^"]*)")re");
+    const std::string listing = run_to_log(quoted(exe) + " --json", log).output;
+    for (auto it = std::sregex_iterator(listing.begin(), listing.end(), kLab);
+         it != std::sregex_iterator(); ++it) {
+      const std::string file = (*it)[2].str();
+      const fs::path p =
+          fs::weakly_canonical(fs::path(file).is_absolute() ? fs::path(file) : build / file, ec);
+      const fs::path in_repo = p.lexically_relative(fs::weakly_canonical(o.repo, ec));
+      sources[(*it)[1].str()] = file.empty() ? "" : in_repo.generic_string();
+    }
+    if (!change_reach(o.repo, build, d.base, log, reach)) {
+      out.findings.push_back({Severity::warn, "no merge base with " + d.base + "; took every lab",
+                              "",
+                              "fetch it (`git fetch origin main`), or name the base: "
+                              "ge digest --affected --base=<ref>"});
+      for (const auto& [id, source] : sources) labs.push_back(id);
+    } else {
+      if (reach.changed.count(rel)) {
+        const std::string git =
+            "git -C " + quoted(o.repo) + " diff --merge-base " + d.base + " -- " + rel;
+        moved_rows = moved_digest_rows(run_to_log(git, log).output);
+      }
+      labs = labs_reached(reach, sources, moved_rows);
+    }
+    if (d.list) {
+      for (const std::string& id : labs) out.text.append(id).append("\n");
+      std::vector<std::string> names;
+      names.reserve(labs.size());
+      for (const std::string& id : labs) names.push_back(json_str(id));
+      out.result = json_obj({{"base", json_str(d.base)}, {"labs", json_arr(names)}});
+      out.summary = std::to_string(labs.size()) + " of " + std::to_string(sources.size()) +
+                    " labs reached by the change since " + d.base;
+      return out;
+    }
+    if (labs.empty()) {
+      out.summary = "no lab is reached by the change since " + d.base;
+      return out;
+    }
+  }
   // One run of the labs executable a lab (it takes one name, or --all), all into one log.
   std::string flags = " --smoke --repeat=2 --quiet --out=" + quoted(previews);
   if (write) {
