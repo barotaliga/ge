@@ -2,7 +2,7 @@
 title: The labs' 5x7 font draws no braces, so a console line built with them shows blanks
 date: 2026-10-23
 scope: engine/console/view.cpp, engine/lab/labs/console_view_lab.cpp
-concepts: [console, lab-font, glyphs, nearby, say_prox, picture]
+concepts: [console, lab-font, glyphs, nearby, say-prox, picture]
 ---
 
 The `console` lab draws text with the lab raster's 5x7 font, which has no `{` or `}`: a
