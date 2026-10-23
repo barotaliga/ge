@@ -74,7 +74,7 @@ std::string activity_json(const Activity& a);
 // A string as a JSON string literal, quotes included.
 std::string json_quote(std::string_view s);
 
-enum class DiscordOp : uint32_t { handshake = 0, frame = 1, close = 2, ping = 3, pong = 4 };
+enum class DiscordOp : uint8_t { handshake = 0, frame = 1, close = 2, ping = 3, pong = 4 };
 std::string discord_frame(DiscordOp op, std::string_view json);
 enum class FrameRead : uint8_t { none, whole, bad };
 // Take the next whole frame off the front of `buffer`: `none` until one is whole, `bad` (and the

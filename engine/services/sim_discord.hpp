@@ -44,10 +44,10 @@ class SimDiscord {
   bool running() const;
   // A friend presses "Ask to Join" on the player's activity: delivered when the activity has a
   // join secret and the game subscribed, else ignored as Discord would.
-  void ask_to_join(UserId friend_id, std::string name);
+  void ask_to_join(UserId friend_id, const std::string& name);
   // The player presses "Join" on a friend's activity (or accepts their invite): the game gets
   // ACTIVITY_JOIN with the friend's secret.
-  void join(std::string secret);
+  void join(const std::string& secret);
   // The client pings the game; the game owes a pong.
   void ping();
 

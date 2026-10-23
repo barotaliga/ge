@@ -283,7 +283,7 @@ void SimDiscord::tick(int64_t now_us) { state_->now_us = now_us; }
 
 bool SimDiscord::running() const { return state_->running; }
 
-void SimDiscord::ask_to_join(UserId friend_id, std::string name) {
+void SimDiscord::ask_to_join(UserId friend_id, const std::string& name) {
   State& s = *state_;
   if (!s.greeted || !s.sub_request || !s.shown_join) {
     s.log("friend " + name + " cannot ask to join (no join secret shown, or no subscription)");
@@ -297,7 +297,7 @@ void SimDiscord::ask_to_join(UserId friend_id, std::string name) {
                                "\"evt\":\"ACTIVITY_JOIN_REQUEST\",\"nonce\":null}");
 }
 
-void SimDiscord::join(std::string secret) {
+void SimDiscord::join(const std::string& secret) {
   State& s = *state_;
   if (!s.greeted || !s.sub_join) {
     s.log("join pressed with no game subscribed");
