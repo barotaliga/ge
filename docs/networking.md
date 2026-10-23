@@ -59,7 +59,8 @@ engine/net/lockstep       turns, input delay, desync digests, rollback (M17g)
 engine/net/voice          Opus frames, the jitter buffer, voice routing (M17h)
 engine/net/session        lobby, teams, chat, private messages, the player list, kicks,
                           reconnecting by token; discovery: finding a game on the LAN (M17d)
-engine/net/reach          UPnP, NAT-PMP/PCP, STUN, hole punching, relay (M17e)
+engine/net/reach          STUN, the rendezvous, hole punching, the relay (M17e1);
+                          UPnP, NAT-PMP/PCP (M17e2)
 engine/net/guard          input checks, interest, replay audits, cheat flags, reports (M17l)
 engine/net/stress         load, soak, chaos scripts, ramps to the breaking point, fuzzing (M17m)
         │
@@ -162,6 +163,29 @@ game's discovery port; each host listening answers with an advert (its session's
 maximum, phase, name). Over UDP the probe goes to a broadcast address; on the simulated network
 to `sim_broadcast(port)`, which reaches every socket bound on that port.
 
+## Reaching a host (M17e1)
+
+Most players sit behind a home router's NAT, which lets a datagram in only on a mapping one of
+its own made going out. Three pieces get a client to a host anyway:
+
+| Piece | What it does |
+| --- | --- |
+| STUN (`stun.hpp`) | A 20-byte Binding request; the answer's XOR-MAPPED-ADDRESS is where the server saw it come from: the node's public face. The rendezvous answers it on its own port, and so does any public STUN server |
+| The rendezvous (`rendezvous.hpp`) | A small public server. A host registers its session every `register_us` (the server learns its public address and says so); a client joins by the session's id, and the server sends each the other's public address with the client's nonce and a relay port with its key. Every ask is padded to the biggest answer, so the server never amplifies a flood |
+| Reach (`reach.hpp`) | The two ends, on the node's own socket (its `keep_foreign` hands them the rendezvous's datagrams). The host punches: datagrams carrying the nonce to the client's public address, which open its own NAT to it, and it binds the relay. The client connects its node to the host's public address; a punch with its nonce from another port (a symmetric NAT's port for this pair) moves the connect there (`node_retarget`). After `direct_us` without an accept it binds the relay and connects through it |
+
+Which path a pair takes follows from RFC 4787's behaviours, and the simulated NATs
+(`sim_add_nat`) have them all: a full cone lets anyone in on a mapping; a restricted NAT only a
+node the inside has sent to; a port-restricted NAT only that node's port; a symmetric NAT makes
+a mapping per destination and lets only that destination answer. A hole opens unless one side is
+symmetric and the other port-restricted or symmetric: the symmetric side's port for the pair is
+one the other side never sent to. Those pairs go through the relay, which forwards between the
+two addresses that bound it with the key and nothing else. A port forward
+(`sim_nat_forward`) is what M17e2's UPnP and NAT-PMP will ask a router for.
+
+The `net-reach` lab runs all 25 pairs of the five kinds (none and the four) under each preset:
+direct pairs connect in a few round trips, relayed ones a little over `direct_us`.
+
 ## The simulated network (M17a)
 
 `SimNetwork` is a network of nodes with simulated addresses, on a virtual clock in
@@ -183,6 +207,11 @@ Every fate (dropped, delayed, duplicated) is drawn from the network's seeded str
 order the packets were sent, so the same seed and the same sends give the same deliveries, and
 a session over it is a golden. Named presets (`lan`, `broadband`, `wifi`, `mobile`, `bad`,
 `awful`) are the conditions the labs sweep.
+
+**NATs** (`sim_add_nat`): a node can sit behind a NAT of any RFC 4787 kind, its datagrams leaving
+from the NAT's public node on a mapped port and arriving only through the NAT's filter; a mapping
+lives `mapping_us` after its last datagram out, and a port forward lets anyone in to one inside
+address. What a NAT refuses is counted in `nat_dropped`.
 
 **Fake traffic** is a node that sends a mix of messages at a rate (`TrafficMix`: so many bytes on
 so many channels so often), so a link can be loaded to its edge and the numbers read.
@@ -255,6 +284,7 @@ seeded and replayable. `engine/net/stress` and `ge net stress` push it until som
 | `net-link --transport=tcp`, `--mix=download`, `--budget` | M17c | The same sessions with every link a stream (what head-of-line blocking does to the round trip and the resends), a 64 KB message to every client every two seconds checked whole byte for byte, and every connection held to a send budget; `ge net sim` takes the same flags |
 | a live node's capture | M17b | A game points its transport at a `Capture` with a size limit and saves it (`save_capture`) when a session ends or the player asks; the tools read it like a lab's |
 | the `net-session` lab | M17d | A 32-player lobby on a dedicated host under each preset: everyone joins and picks a team, chats to all, to the team and to one player, one floods; the leader kicks one (whose return is refused), another is cut for six seconds and comes back to its seat, then the settings, the start and the return. The table checks every chat copy delivered, every player list the host's, the kick, the ban and the seat kept; the seats are charted and the pings drawn as boxes |
+| the `net-reach` lab | M17e1 | Every pair of NAT kinds (none, full cone, restricted, port-restricted, symmetric) under each preset: the path each pair took (direct or relayed, against the one RFC 4787 predicts), how long it took, a reliable message each way; STUN from behind each kind; the connect times as a heatmap |
 | the `voice` lab | M17h | A voice through each preset, metered against the clean one, the WAV attached |
 | the `accounts` lab | M17j | Sign-ups, logins (a wrong password refused, a brute force throttled), friend requests, presence and an invite, against the service on the simulated network |
 | the `cheats` lab | M17l | Each scripted cheat (speed hack, teleport, input flood, off-grid or future inputs, forged and replayed packets, fishing for hidden state, a planted desync, a forged score or ghost) caught or refused; honest bots under every preset raising no flag |

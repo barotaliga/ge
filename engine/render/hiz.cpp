@@ -98,18 +98,20 @@ void create_hiz_targets(gpu::Device& device, Hiz& hiz, const FrameTargets& targe
 
 void encode_hiz(const Hiz& hiz, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
                 wgpu::CommandEncoder& encoder) {
-  wgpu::ComputePassEncoder pass = rec.compute(encoder, "hiz");
-  PassStat& stat = rec.current();
+  // A pass a mip: each mip reads the one before, and a pass boundary is the one barrier every
+  // backend keeps between a storage write and the next read (a high mip read before it was
+  // written holds the last frame's depth, and the late cull drops what shows: #101).
   uint32_t w = hiz.width, h = hiz.height;
   for (int m = 0; m < hiz.mips; ++m) {
+    wgpu::ComputePassEncoder pass = rec.compute_part(encoder, "hiz", m, hiz.mips);
     pass.SetPipeline(pipelines.compute(m == 0 ? hiz.p_first : hiz.p_next));
     pass.SetBindGroup(m == 0 ? 0 : 1, hiz.groups[m]);
     pass.DispatchWorkgroups((w + 7) / 8, (h + 7) / 8);
-    ++stat.dispatches;
+    ++rec.current().dispatches;
+    pass.End();
     w = std::max(w / 2, 1u);
     h = std::max(h / 2, 1u);
   }
-  pass.End();
 }
 
 std::vector<std::vector<float>> hiz_reduce(const std::vector<float>& depth, uint32_t width,
