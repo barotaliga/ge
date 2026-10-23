@@ -24,8 +24,8 @@ with `include/gameengine2/` (the headers, laid out as `engine/` is),
 (the command line game repos are scaffolded and checked with).
 Every archive has a signed build-provenance attestation.
 
-- **GitHub Release:** `https://github.com/niclaslindstedt/gameengine2/releases/tag/vX.Y.Z`
-- **GitHub Packages:** `ghcr.io/niclaslindstedt/gameengine2:X.Y.Z` (and `:latest`), an
+- **GitHub Release:** `https://github.com/barotaliga/ge/releases/tag/vX.Y.Z`
+- **GitHub Packages:** `ghcr.io/barotaliga/ge:X.Y.Z` (and `:latest`), an
   OCI artifact (`application/vnd.gameengine2.release.v1`) whose layers are the files above.
 
 ## Consuming a release
@@ -57,7 +57,7 @@ step, no credentials, the repository is public):
 ```cmake
 include(FetchContent)
 FetchContent_Declare(gameengine2
-  URL https://github.com/niclaslindstedt/gameengine2/releases/download/vX.Y.Z/gameengine2-X.Y.Z-src.tar.gz
+  URL https://github.com/barotaliga/ge/releases/download/vX.Y.Z/gameengine2-X.Y.Z-src.tar.gz
   URL_HASH SHA256=<the line for -src.tar.gz in SHA256SUMS>)
 FetchContent_MakeAvailable(gameengine2)
 target_link_libraries(game PRIVATE ge::core)
@@ -66,9 +66,9 @@ target_link_libraries(game PRIVATE ge::core)
 **From an installed package:**
 
 ```sh
-gh release download vX.Y.Z -R niclaslindstedt/gameengine2 -p '*-linux-x64.tar.gz' -p SHA256SUMS
+gh release download vX.Y.Z -R barotaliga/ge -p '*-linux-x64.tar.gz' -p SHA256SUMS
 sha256sum --check --ignore-missing SHA256SUMS
-gh attestation verify gameengine2-X.Y.Z-linux-x64.tar.gz -R niclaslindstedt/gameengine2
+gh attestation verify gameengine2-X.Y.Z-linux-x64.tar.gz -R barotaliga/ge
 tar -xzf gameengine2-X.Y.Z-linux-x64.tar.gz
 cmake -S . -B build -DCMAKE_PREFIX_PATH="$PWD/gameengine2-X.Y.Z-linux-x64"
 ```
@@ -81,7 +81,7 @@ target_link_libraries(game PRIVATE ge::core)
 **From GitHub Packages** (same files, any OCI client):
 
 ```sh
-oras pull ghcr.io/niclaslindstedt/gameengine2:X.Y.Z
+oras pull ghcr.io/barotaliga/ge:X.Y.Z
 ```
 
 The packages hold Release builds only. With MSVC, a Debug game cannot link a
@@ -153,7 +153,7 @@ interpolated into a `run:` script, never printed).
 
 A release needs no secret today. To add `RELEASE_TOKEN`, a maintainer enters
 it under *Settings ▸ Secrets and variables ▸ Actions ▸ New repository
-secret*, or runs `gh secret set RELEASE_TOKEN -R niclaslindstedt/gameengine2`
+secret*, or runs `gh secret set RELEASE_TOKEN -R barotaliga/ge`
 and pastes the value at the prompt (never as an argument, which lands in
 shell history).
 
