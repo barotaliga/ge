@@ -13,10 +13,15 @@
 //   the pedal); within `kDropNear` m of the head, slower than `kDropSlow` m/s and lower than
 //   `kDropHigh` m, the press again; off it, the bot's own line down the run's chain (bot.hpp).
 //
+// WHY (ai/why.hpp), when handed a recorder: the `outing` decision (board, fly, drop or ski down,
+// with the distance to the head, the speed and the skids' height it read), then the helicopter
+// pilot's own `way` and `height` while it flies, or the skier bot's while he skis.
+//
 // The pilot remembers nothing; every decision is read off the state.
 //
 // ge:summary The bot's outing on the helicopter: to the highest run's head, dropped, ski down
 // ge:keywords heli-outing helicopter outing drop hover heli_drop_run heli-outing-pilot ski-down
+// ge:keywords why decision trace
 // ge:skill sim helicopter
 // ge:test tests/fall_line_heli_test.cpp
 #pragma once
@@ -55,7 +60,7 @@ Controls heli_as_controls(const ge::helicopter::HeliControls& h);
 class HeliOutingPilot {
  public:
   HeliOutingPilot(const GameState& state, int32_t run);
-  Controls operator()(const GameState& state, int32_t i) const;
+  Controls operator()(const GameState& state, int32_t i, ge::ai::Why* why = nullptr) const;
   int32_t run() const { return run_; }
 
  private:

@@ -241,9 +241,13 @@ RunReport simulate_heli_outing(std::shared_ptr<const mg::Level> level, double se
   const int32_t run = heli_drop_run(*state.level);
   if (run < 0) return Driver(std::move(state), 0, 0, 1).report(seed);
   const HeliOutingPilot pilot(state, run);
+  ge::ai::Why* why = opts.why;
   return drive(
       Driver(std::move(state), 0, 0, 1), seed, opts.max_seconds,
-      [&pilot](const Driver& d) { return pilot(d.state(), 0); }, lines);
+      [&pilot, why](const Driver& d) {
+        return pilot(d.state(), 0, why ? why->follow(0, d.state().steps) : nullptr);
+      },
+      lines);
 }
 
 RunReport simulate_para_outing(std::shared_ptr<const mg::Level> level, double seed,

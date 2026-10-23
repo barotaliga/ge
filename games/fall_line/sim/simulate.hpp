@@ -34,6 +34,9 @@ struct SimOptions {
   std::optional<int> version;               // the generator's
   int32_t rivals = 0;                       // bots on the grid beside the player
   HandsProfile hands = HandsProfile::none;  // every bot's hands, the player's and the rivals'
+  // The player's pilot records its decisions here (agent 0, by step) on the machines' outings
+  // (`simulate_heli_outing`); null records nothing and decides the same.
+  ge::ai::Why* why = nullptr;
 };
 
 // One racer's run in a field, in field order (the player first).

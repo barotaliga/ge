@@ -23,6 +23,7 @@
 #include <string>
 #include <vector>
 
+#include "ai/why.hpp"
 #include "check.hpp"
 #include "fall_line/sim/controls.hpp"
 #include "fall_line/sim/free.hpp"
@@ -251,6 +252,23 @@ TEST(the_bot_flies_to_the_highest_run_on_seed_38_and_skis_down_and_keeps_its_gol
   const fs::RunReport again = fs::simulate_heli_outing(level, kSeed, opts);
   CHECK_MSG(again.digest == r.digest, "the helicopter's outing is not a pure function of its map");
 #endif
+  // Traced, it flies the same and says why: it dropped him over the head, and its pilot slowed
+  // for the aim on the way there.
+  ge::ai::Why why;
+  fs::SimOptions traced = opts;
+  traced.why = &why;
+  const fs::RunReport seen = fs::simulate_heli_outing(level, kSeed, traced);
+  CHECK_MSG(seen.digest == r.digest,
+            "the helicopter's outing flew otherwise with its decisions recorded; read "
+            "heli_outing.cpp and pilot.cpp for a branch on `why` (skill: bots)");
+  bool dropped = false, stopped = false;
+  for (const ge::ai::Decision& d : why.decisions()) {
+    dropped = dropped || (std::string(d.name) == "outing" && std::string(d.chosen) == "drop");
+    stopped = stopped || (std::string(d.name) == "way" && std::string(d.chosen) == "stop_at_aim");
+  }
+  CHECK_MSG(dropped && stopped,
+            "the traced outing did not record its drop and its stop at the "
+            "aim; read heli_outing.cpp's `outing` decision (skill: bots)");
   if (write) {
     std::ofstream out(ge::test::root_path(kGolden));
     out << "# finished taken time-bits climbed-bits distance-bits digest "

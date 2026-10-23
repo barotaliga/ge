@@ -36,7 +36,12 @@ Controls bot_controls(const GameState& s, int32_t i, const BotPlan& plan, ge::ai
 
 - **Off is a null pointer, and recording decides nothing.** Compute the choice first, record
   it after; never branch on whether a trace is on. A game's test replays a field traced and
-  untraced and holds the digest equal (`tests/fall_line_why_test.cpp`).
+  untraced and holds the digest equal (`tests/fall_line_why_test.cpp`; a machine's pilot the
+  same, `tests/helicopter_scenarios_test.cpp` and `tests/fall_line_heli_test.cpp`).
+- **A plugin's pilot takes `ai::Why*` last, defaulted to null**, and its game passes
+  `why->follow(agent, step)` down from its own decision: the helicopter's `heli_pilot` records
+  `way` (the four speed limits, the slowest chosen) and `height` (landed, settle, climb, sink or
+  hold), and Fall Line's heli outing its `outing` (board, fly, drop, ski down) above them.
 - **Names are string literals** (the record keeps the pointer), snake_case, stable across steps:
   `ge why --flips` compares choices by name, and the timeline makes a column of each fact.
 - **Score options so the best one wins.** Where the bot's rule is a chain of ifs, score each
