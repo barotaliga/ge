@@ -124,9 +124,9 @@ void SimStore::resume(UserId user) {
   Event e;
   e.kind = EventKind::resumed;
   e.total = static_cast<int32_t>((p->now_us - p->asleep_at_us) / 1000000);
-  impl_->queue(*p, std::move(e), p->now_us);
   impl_->journal.push_back("          store " + p->name + " woke after " + std::to_string(e.total) +
                            " s");
+  impl_->queue(*p, std::move(e), p->now_us);
 }
 
 bool SimStore::remote_join(UserId host, UserId friend_id, RemoteDevice device) {
