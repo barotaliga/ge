@@ -7,6 +7,8 @@
 // layers above (their shadow at the layer), through its own cloud toward the light (four reads
 // at growing steps: Beer's law and a slower lobe for the light scattered on), and the sky's and
 // the snow's light from above and below; far cloud is hazed and melts into the sky behind it.
+// Marched for every pixel (`fs_main`), or at a quarter of them (`fs_march` into a half-size target)
+// and laid over the frame by a depth-aware upsample (`fs_upsample`).
 #include "render/wgsl/frame.wgsl"
 
 @group(1) @binding(0) var scene_depth: texture_depth_2d;
@@ -19,6 +21,12 @@ const kSheetSteps = 10;
 const kMaxMarch = 30000.0;
 const kFadeNear = 25000.0;
 const kFadeFar = 55000.0;
+// The sky's distance (a ray that meets nothing), and the upsample's depth test: how sharply a
+// half-size pixel's weight falls with its distance's miss (a share of the nearer), and the miss
+// past which no half-size pixel stands for this one.
+const kSky = 1e9;
+const kDepthSharp = 40.0;
+const kDepthMiss = 0.1;
 // The detail's scale (cells of the column a detail cell), and how deep it eats the edge.
 const kDetailScale = 4.0;
 const kErode = 0.6;
@@ -175,18 +183,12 @@ fn march(i: i32, d: vec3f, t0: f32, t1: f32, j: f32) -> LayerLook {
   return out;
 }
 
-@fragment
-fn fs_main(in: VertexOut) -> @location(0) vec4f {
+// A pixel's cloud: its ray (at `uv`) marched through every layer to the scene at depth `z`,
+// the dither's pixel `px`. Its light premultiplied, and 1 - its transmittance.
+fn cloud_at(uv: vec2f, px: vec2f, z: f32) -> vec4f {
   let n = i32(frame.cloud_info.x);
-  let d = view_ray(frame, in.uv);
-  // How far the ray goes before the scene: reversed-z, 0 is the sky at infinity.
-  let z = textureLoad(scene_depth, vec2i(in.position.xy), 0);
-  var scene = 1e9;
-  if (z > 0.0) {
-    let ndc = vec2f(in.uv.x * 2.0 - 1.0, 1.0 - in.uv.y * 2.0);
-    let q = frame.inv_view_proj * vec4f(ndc, z, 1.0);
-    scene = length(q.xyz / q.w);
-  }
+  let d = view_ray(frame, uv);
+  let scene = scene_dist(uv, z);
   // Each layer's span along the ray.
   var t0 = array<f32, 3>(0.0, 0.0, 0.0);
   var t1 = array<f32, 3>(0.0, 0.0, 0.0);
@@ -208,7 +210,7 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
     t0[i] = a;
     t1[i] = min(min(b, scene), a + kMaxMarch);
   }
-  let j = dither(in.position.xy);
+  let j = dither(px);
   var light = vec3f(0.0);
   var through = 1.0;
   var done = array<bool, 3>(false, false, false);
@@ -231,7 +233,7 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
     }
     // Seen through the air to where its light comes from, and lost into the sky far off.
     let fade = 1.0 - smoothstep(kFadeNear, kFadeFar, look.dist);
-    let hazed = haze(look.light / alpha, in.uv, look.dist) * alpha;
+    let hazed = haze(look.light / alpha, uv, look.dist) * alpha;
     light += through * fade * hazed;
     through *= 1.0 - fade * alpha;
     if (through < 0.01) {
@@ -239,4 +241,77 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
     }
   }
   return vec4f(light, 1.0 - through);
+}
+
+// How far the ray at `uv` goes before the scene at depth `z` (reversed-z: 0 is the sky).
+fn scene_dist(uv: vec2f, z: f32) -> f32 {
+  if (z <= 0.0) {
+    return kSky;
+  }
+  let ndc = vec2f(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0);
+  let q = frame.inv_view_proj * vec4f(ndc, z, 1.0);
+  return length(q.xyz / q.w);
+}
+
+// THE FULL PICTURE: every pixel marched (the top of the ladder, and the reference).
+@fragment
+fn fs_main(in: VertexOut) -> @location(0) vec4f {
+  return cloud_at(in.uv, in.position.xy, textureLoad(scene_depth, vec2i(in.position.xy), 0));
+}
+
+// THE QUARTER PICTURE, its march: a pixel of the half-size target for each two by two of the
+// frame's, marched to the FARTHEST of the four's depths, so a ridge's edge keeps the cloud behind
+// it; the distance it marched to beside it for the upsample.
+struct MarchOut {
+  @location(0) cloud: vec4f,
+  @location(1) dist: f32,
+}
+
+@fragment
+fn fs_march(in: VertexOut) -> MarchOut {
+  let size = vec2i(textureDimensions(scene_depth)) - 1;
+  let base = vec2i(in.position.xy) * 2;
+  var z = 1.0;
+  for (var k = 0; k < 4; k++) {
+    z = min(z, textureLoad(scene_depth, min(base + vec2i(k & 1, k >> 1), size), 0));
+  }
+  var out: MarchOut;
+  out.cloud = cloud_at(in.uv, in.position.xy, z);
+  out.dist = scene_dist(in.uv, z);
+  return out;
+}
+
+// THE QUARTER PICTURE, laid over the frame: each pixel takes the four half-size pixels round it,
+// each weighted by its share of the bilinear footprint and by how near the distance it marched to
+// is to this pixel's own; a pixel none of the four matches (the near side of an edge) is marched
+// itself.
+@group(1) @binding(1) var quarter: texture_2d<f32>;
+@group(1) @binding(2) var quarter_dist: texture_2d<f32>;
+
+@fragment
+fn fs_upsample(in: VertexOut) -> @location(0) vec4f {
+  let z = textureLoad(scene_depth, vec2i(in.position.xy), 0);
+  let own = scene_dist(in.uv, z);
+  let size = vec2i(textureDimensions(quarter)) - 1;
+  let f = in.position.xy * 0.5 - 0.5;
+  let i0 = vec2i(floor(f));
+  let w = fract(f);
+  var sum = vec4f(0.0);
+  var weight = 0.0;
+  var best = 1e9;
+  for (var k = 0; k < 4; k++) {
+    let o = vec2i(k & 1, k >> 1);
+    let q = clamp(i0 + o, vec2i(0), size);
+    let bw = select(1.0 - w.x, w.x, o.x == 1) * select(1.0 - w.y, w.y, o.y == 1);
+    let qd = textureLoad(quarter_dist, q, 0).r;
+    let miss = abs(qd - own) / max(min(qd, own), 1.0);
+    best = min(best, miss);
+    let dw = bw * exp(-miss * kDepthSharp) + 1e-5 * bw;
+    sum += textureLoad(quarter, q, 0) * dw;
+    weight += dw;
+  }
+  if (best > kDepthMiss) {
+    return cloud_at(in.uv, in.position.xy, z);
+  }
+  return sum / max(weight, 1e-6);
 }
