@@ -37,6 +37,7 @@ struct LodRow {
   float box_min[4];
   float box_size[4];
   uint32_t info[4];
+  uint32_t motion[4];  // the first word of the last frame's positions, 0: none
 };
 
 wgpu::RenderPassDepthStencilAttachment depth_load(const FrameTargets& targets, bool read_only) {
@@ -219,6 +220,8 @@ void create_family(gpu::Device& device, const InstancePipelines& ip, InstanceFam
   f.lod_px.clear();
   f.mesh_lod.clear();
   f.lod_vertex.clear();
+  f.lod_last.clear();
+  std::vector<uint32_t> lod_vertices;  // each LOD's vertex count
   for (const MeshSource& m : meshes) {
     MeshRow row{};
     row.info[0] = static_cast<uint32_t>(lod_rows.size());
@@ -246,6 +249,8 @@ void create_family(gpu::Device& device, const InstancePipelines& ip, InstanceFam
       lr.info[1] = static_cast<uint32_t>(p.indices.size());
       lr.info[2] = static_cast<uint32_t>(words.size() / 3);
       f.lod_vertex.push_back(lr.info[2]);
+      f.lod_last.push_back(src.reach ? 1u : 0u);  // placed after every LOD's vertices, below
+      lod_vertices.push_back(static_cast<uint32_t>(p.words.size() / 3));
       lr.info[3] = static_cast<uint32_t>(mesh_rows.size());
       words.insert(words.end(), p.words.begin(), p.words.end());
       indices.insert(indices.end(), p.indices.begin(), p.indices.end());
@@ -283,6 +288,19 @@ void create_family(gpu::Device& device, const InstancePipelines& ip, InstanceFam
                         " LODs in all; the rest are not drawn; next: split it into two families.");
   }
   f.lod_count = static_cast<uint32_t>(lod_rows.size());
+  // A skinned LOD keeps its vertices' last frame's positions after every LOD's vertices, two words
+  // a vertex (the packed position's words, the second's part bits cleared), the bind's to start:
+  // the skinning pass writes them (render/skinning.hpp).
+  for (size_t l = 0; l < lod_rows.size(); ++l) {
+    if (!f.lod_last[l]) continue;
+    const uint32_t first = lod_rows[l].info[2];
+    f.lod_last[l] = static_cast<uint32_t>(words.size());
+    lod_rows[l].motion[0] = f.lod_last[l];
+    for (uint32_t v = 0; v < lod_vertices[l]; ++v) {
+      const uint32_t w0 = words[size_t{first + v} * 3], w1 = words[size_t{first + v} * 3 + 1];
+      words.insert(words.end(), {w0, w1 & 0xffffu});
+    }
+  }
   if (words.empty()) words.assign(3, 0);
   if (indices.empty()) indices.assign(3, 0);
   if (mesh_rows.empty()) mesh_rows.push_back(MeshRow{});
