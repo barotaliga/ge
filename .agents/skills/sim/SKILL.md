@@ -29,6 +29,7 @@ tests):
 | `simulate.hpp/.cpp` | `Driver` (THE ONE STEP every pilot drives: snapped, taped, the rivals' bots, `step`, hashed), `simulate`, `simulate_on`, `simulate_free`, `replay_tape`, the `RunReport` and its `FieldRow`s |
 | `wanted.hpp/.cpp`, `wanted_state.hpp`, `wanted_rules.hpp` | THE WANTED LEVEL: `raise_heat` (the offence hook), `step_wanted` (the look, the climb, the search running out), `sees_quarry` and `through_woods` (the sight line), `under_cover`, `arrest_quarry`, `roster_of`, `ground_wave`; the state `GameState::wanted` (inactive and unhashed until raised); every number in `wanted_rules.hpp` |
 | `army.hpp/.cpp`, `army_state.hpp`, `army_rules.hpp`, `army_troop.hpp/.cpp` | THE ARMY ON FOOT: `step_army` (the lifts' squads by `lift_for`, the ground waves up `GameState::ways` from `army_ways`, the chase, the hold, the arrest, the men sent home, every soldier written into the hunt's pursuers), `go_toward` / `stop_here` / `watch_progress` (a soldier's way over the snow); the state `GameState::army` (inactive and unhashed until a hunt reaches a star); every number in `army_rules.hpp` |
+| `army_sled.hpp/.cpp`, `army_sled_rules.hpp`, `army_drive.hpp/.cpp` | THE ARMY'S SNOWMOBILES: `step_army_sleds` (called from `step_army` after the men: the call from beside the snowmobile spot, `sled_pad`, the chase up the runs and at him, the short halt, the stand-off, the crew off to take him in, righted, dug out, waiting below a face, home), each on the free ride's own `step_sled` and `sled_pilot`; `choose_way` / `way_cost` / `tunnel_within` (the snow read ahead, for every army machine); every number in `army_sled_rules.hpp` |
 | `play.hpp/.cpp` | `PlaySession`: an agent at the controls over JSON lines (`hello`, `observe`, `act`, `tape`, `end`); THE PROTOCOL is stated once in its header |
 
 The generator is `plugins/mountain` (the `mountain` skill); a map is a pure function of its
@@ -49,8 +50,10 @@ seed. The skier on the snow is `plugins/skier` (the `skier` skill).
    zone, the ride, let go at the top (`lift_ride.hpp`); the bot's outing (`outing.hpp`).
 7. The army on foot (M15c, done): the troop model, the lifts' squads, the ground waves' column,
    the chase, the stand-off and the arrest; the `army` lab.
-8. Next: the free ride's other systems, a row each (M13+), and the army rows that wait on them
-   (M15b gunfire, M15d ground machines, M15e the air).
+8. The army's snowmobiles (M15d1, done): the call, the drive, the short halt, the arrest; the
+   `army-sleds` lab.
+9. Next: the free ride's other systems, a row each (M13+), and the army rows that wait on them
+   (M15b gunfire, M15d2 his answer to the machines, M15d3 the heavier machines, M15e the air).
 
 ## Rules
 
@@ -135,6 +138,15 @@ still caught at the end, a lifted squad never let off or an arrest that never co
 change to `army*.cpp` or its numbers moves `tests/golden/fall_line_army.txt`
 (`GE_GOLDEN_WRITE=1 build/release/tests/fall_line_army_test`), `fall_line_wanted.txt` and both
 labs' digests: put the army table before and after in the PR.
+
+`army-sleds` (scenario, `games/fall_line/labs/army_sled_lab.cpp`): the army's snowmobiles on seed
+38 (v10) after a man stood still (`open`, `run`, `face`, `arrest`): the sleds table and every
+machine's path. A machine still caught at the end, no halt where he is within reach, or an arrest
+that never comes fails it. A change to `army_sled*.cpp`, `army_drive.cpp` or their numbers moves
+`tests/golden/fall_line_army_sled.txt` (`GE_GOLDEN_WRITE=1
+build/release/tests/fall_line_army_sled_test`), `fall_line_army.txt`, `fall_line_wanted.txt` and
+the `army` and `army-sleds` digests: put the sleds table before and after in the PR. A race's map
+has no snowmobile spot, so a race sends no machines.
 
 `play` (drive, `games/fall_line/labs/play_lab.cpp`): an agent at the controls.
 `build/debug/labs play --quiet --stdio --seed=38 --rivals=3` puts the protocol on stdio;

@@ -27,7 +27,8 @@
 //
 // ge:summary The army on foot: lift squads, ground waves in a column, the chase, hold and arrest
 // ge:keywords army soldier troops step_army lift_for army_ways lift-squad ground-wave column
-// ge:keywords chase hold arrest stand-off sent-home army_hash pursuers way-down
+// ge:keywords chase hold arrest stand-off sent-home army_hash pursuers way-down army_way_at
+// ge:keywords enlist_soldier
 // ge:skill sim
 // ge:test tests/fall_line_army_test.cpp
 #pragma once
@@ -49,11 +50,20 @@ namespace fall_line::sim {
 std::shared_ptr<const std::vector<ge::mountain::mapgen::Track>> army_ways(
     const ge::mountain::mapgen::Level& level);
 
+// A POINT `s` m DOWN A WAY, and straight on past its foot along its last heading.
+ge::mountain::mapgen::TrackPoint army_way_at(const ge::mountain::mapgen::Track& way, double s);
+
 // THE LIFT a squad takes to come down at a man standing at `q`: the one whose top is nearest him
 // and `army::kAboveM` over him, or with none so high the one whose top is highest; -1 with none.
 int32_t lift_for(const GameState& state, Spot q);
 
-// THE ARMY'S STEP (the header says what it does).
+// A SOLDIER PUT ON THE MAP at (x, z), facing `heading`, in `mode`: his id the army's next. The
+// caller keeps within `army::kMostSoldiers`.
+Soldier& enlist_soldier(GameState& state, SoldierFrom from, int32_t squad, SoldierMode mode,
+                        double x, double z, double heading);
+
+// THE ARMY'S STEP (the header says what it does), and the snowmobiles' after the men
+// (army_sled.hpp).
 void step_army(GameState& state);
 
 // FNV-1a 64 over the army, folded into `h`; nothing while it is inactive.
