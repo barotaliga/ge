@@ -47,6 +47,8 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge goals next` / `ge goals free-rows` (the next open roadmap row with its dependencies, and which rows open pull requests already claim; the second done: `ge goals free [<row>] [--fetch]`, the rows main and every remote branch hold and the next free number or letter)
 - `ge ci <pr> --wait` (block until the checks finish or the PR conflicts, then answer as `ge ci` does: one call where a thread now schedules check-ins every 15 minutes)
 - `ge lab sweep <id> --set=<const>=a,b,c` (done: one constexpr rewritten to each value, the labs rebuilt and run, every metric side by side, the source put back; next, a scenario row's own numbers, such as a scripted hand's timings, swept the same way, and `--draws=N` over a range `a..b`, a Monte Carlo of one constant with each metric's spread; and a range form, `--set=<const>=a..b/n`, charting each metric against the knob)
+- `ge ci <pr> --wait` (block until the checks finish or the PR conflicts, then answer as `ge ci` does: one call where a thread now schedules check-ins every 15 minutes)
+- `ge lab sweep <id> --set=<const>=a,b,c` (done: one constexpr rewritten to each value, the labs rebuilt and run, every metric side by side, the source put back; next, a scenario row's own numbers, such as a scripted hand's timings, swept the same way, and `--draws=N` over a range `a..b`, a Monte Carlo of one constant with each metric's spread)
 - `ge lab sweep <id> --flag=<flag>=a,b,c` (done: one of the lab's own flags at each value, the labs built once, the same table; the hours of a day over a picture lab)
 - `ge lab --split=N`
 - `ge job run\|status\|log` (a long run in the background)
