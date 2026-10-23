@@ -5,7 +5,8 @@
 // friends and the ghost fetched back, the record book written to the cloud and refused past the
 // quota, presence shown to a friend who joins by it, an invite accepted, the overlay opened, the
 // screenshot key hooked, a connection cut and restored, a commit staged to fail, and a workshop
-// outfit made, found by a query, subscribed to, downloaded and updated on every subscriber. It
+// outfit made, found by a query, subscribed to, downloaded and updated on every subscriber, and a
+// handheld's on-screen keyboard, timeline mark and sleep, and remote play to a friend. It
 // answers whether a game written against the interface gets every answer it is owed, in order, and
 // how long each kind of answer takes at the store's latency (`--latency-ms`, `--jitter-ms`). The
 // store's journal and every event are tabled; everything runs on a virtual clock off one seed,
@@ -14,6 +15,7 @@
 // ge:summary Lab: a game's use of the platform services by four players on the simulated store
 // ge:keywords lab services store sim achievement stat board ghost blob cloud presence invite
 // ge:keywords join overlay screenshot offline latency journal workshop item subscribe
+// ge:keywords handheld on-screen-keyboard suspend timeline remote-play
 // ge:skill services labs
 // ge:test tests/services_sim_store_test.cpp
 #include <algorithm>
@@ -93,7 +95,7 @@ void run(gl::Lab& lab) {
     asked[{who, r}] = {now, who};
   };
 
-  const int64_t end_us = 12000000;
+  const int64_t end_us = 14000000;
   for (int64_t now = 0; now <= end_us; now += kFrame) {
     const int frame = static_cast<int>(now / kFrame);
     // The script, by frame: each player's runs end at its own times.
@@ -167,6 +169,28 @@ void run(gl::Lab& lab) {
       draft.change_note = "darker red";
       ask("dee", dee.submit_item(suit, draft, outfit(2)), now);
     }
+    // The handheld: cy names a ghost on the on-screen keyboard, marks the timeline, sleeps a
+    // second; ana streams the game to bo over remote play.
+    gs::Backend& cy = *players[2].backend;
+    if (frame == 640) {
+      gs::Environment handheld;
+      handheld.handheld = true;
+      store.set_environment(players[2].id, handheld);
+      if (cy.show_keyboard(gs::KeyboardMode::single_line, "Name this ghost", "", 24) !=
+          gs::Result::ok)
+        lab.fail("services: the handheld's keyboard was refused",
+                 "next: check extras_keyboard; skill: services");
+    }
+    if (frame == 650) store.type_text(players[2].id, "Fast Friday");
+    if (frame == 660) {
+      cy.timeline_mode(gs::TimelineMode::playing);
+      cy.timeline_mark({"steam_crown", "Personal best", "seed 38", 100, -20, 20});
+    }
+    if (frame == 700) store.suspend(players[2].id);
+    if (frame == 760) store.resume(players[2].id);
+    if (frame == 720) ana.invite_remote_play(players[1].id);
+    if (frame == 730) store.remote_join(players[0].id, players[1].id, gs::RemoteDevice::tv);
+    if (frame == 800) store.remote_leave(players[0].id, players[1].id);
 
     for (Player& p : players) {
       std::vector<gs::Event> out;
@@ -196,6 +220,7 @@ void run(gl::Lab& lab) {
                   (e.kind == gs::EventKind::item_subscribed ? "" : " v" + std::to_string(e.total));
         if (e.kind == gs::EventKind::item_installed && p.name == "ana")
           p.backend->item_read(e.item, "outfit.bin", worn);
+        if (e.kind == gs::EventKind::resumed) what += std::to_string(e.total) + " s asleep";
         if (e.kind == gs::EventKind::blob_downloaded) {
           what = std::to_string(e.bytes.size()) + " B";
           fetched_ghost = e.bytes;
@@ -235,6 +260,14 @@ void run(gl::Lab& lab) {
   owed("items_queried", 3);
   owed("item_subscribed", 2);
   owed("item_installed", 4);  // ana's and bo's machines, the suit's two versions each
+  owed("text_entered", 1);
+  owed("suspended", 1);
+  owed("resumed", 1);
+  owed("remote_player_joined", 1);
+  owed("remote_player_left", 1);
+  if (store.timeline(players[2].id).size() != 1)
+    lab.fail("services: cy's timeline mark was not kept",
+             "next: check extras_timeline_mark; skill: services");
   if (worn.size() != 40000 || worn[0] != 2)
     lab.fail("services: ana's machine does not wear the suit's second version",
              "next: check workshop_land and send_down; skill: services");

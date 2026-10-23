@@ -82,6 +82,16 @@ std::string_view event_name(EventKind k) {
       return "item_subscribed";
     case EventKind::item_installed:
       return "item_installed";
+    case EventKind::text_entered:
+      return "text_entered";
+    case EventKind::suspended:
+      return "suspended";
+    case EventKind::resumed:
+      return "resumed";
+    case EventKind::remote_player_joined:
+      return "remote_player_joined";
+    case EventKind::remote_player_left:
+      return "remote_player_left";
   }
   return "?";
 }
@@ -125,7 +135,7 @@ const SimItem* SimStore::Impl::find_item(ItemId id) const {
 }
 
 Result SimStore::Impl::server_result(SimPlayer& p) {
-  if (!p.online) return Result::offline;
+  if (!p.online || p.asleep) return Result::offline;
   const Result staged = p.fail_next;
   p.fail_next = Result::ok;
   return staged;
@@ -572,6 +582,17 @@ class SimBackend final : public Backend {
   Result item_read(ItemId item, std::string_view name, std::vector<uint8_t>& out) const override {
     return workshop_read(me(), item, name, out);
   }
+
+  Result show_keyboard(KeyboardMode mode, std::string_view prompt, std::string_view initial,
+                       uint32_t max_chars) override {
+    return extras_keyboard(s_, me(), mode, prompt, initial, max_chars);
+  }
+  Result timeline_mark(const TimelineMark& mark) override {
+    return extras_timeline_mark(s_, me(), mark);
+  }
+  Result timeline_mode(TimelineMode mode) override { return extras_timeline_mode(s_, me(), mode); }
+  Result invite_remote_play(UserId user) override { return extras_invite_remote(s_, me(), user); }
+  void remote_players(std::vector<RemotePlayer>& out) const override { out = me().remote; }
 
  private:
   SimPlayer& me() { return *s_.find(user_); }

@@ -22,6 +22,7 @@
 // ge:keywords services sim simulated store fake mock backend virtual-clock latency jitter
 // ge:keywords fail_next set_online offline-store open_offline save load journal friends invite
 // ge:keywords accept_invite join_friend press_screenshot_key grant licence quota
+// ge:keywords type_text dismiss_keyboard suspend resume remote_join timeline
 // ge:skill services
 // ge:test tests/services_sim_store_test.cpp tests/services_offline_test.cpp
 #pragma once
@@ -75,6 +76,19 @@ class SimStore {
   // no invite, or the friend shows no "connect".
   bool accept_invite(UserId user, UserId inviter);
   bool join_friend(UserId user, UserId friend_id);
+  // The player finishes the on-screen keyboard: types `text` and submits it, or dismisses it
+  // (a `text_entered` event either way). False when no keyboard is open or the text is longer
+  // than its limit.
+  bool type_text(UserId user, const std::string& text);
+  bool dismiss_keyboard(UserId user);
+  // The machine sleeps and wakes: `suspended`, then `resumed` with the seconds asleep (the
+  // player's clock keeps running; a sleeping player's server calls answer `offline`).
+  void suspend(UserId user);
+  void resume(UserId user);
+  // `friend_id` accepts the player's remote play invite, or leaves: remote_player_joined /
+  // remote_player_left to the host. False with no invite (or not in the game).
+  bool remote_join(UserId host, UserId friend_id, RemoteDevice device);
+  bool remote_leave(UserId host, UserId friend_id);
 
   // A backend for one player. Several may be open at once, one per player; each must not
   // outlive the store.
@@ -83,6 +97,7 @@ class SimStore {
   // What the store kept, for a test or a lab to read.
   std::vector<UserId> users() const;
   int screenshots(UserId user) const;  // filed by add_screenshot or the store's own capture
+  std::vector<TimelineMark> timeline(UserId user) const;  // the marks the player's game made
   const std::vector<std::string>& journal() const;
 
   // The whole store to and from a directory (a text file and the cloud files and blobs beside
