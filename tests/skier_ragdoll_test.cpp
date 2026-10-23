@@ -1,6 +1,6 @@
 // THE THROWN BODY, HELD: the bones keep their lengths, the joints and the muscles give the body no
-// energy and no push of its own, a fall at speed tumbles and comes to lie still, and the body is
-// a pure function of its throw.
+// energy and no push of its own, a fall at speed tumbles and comes to lie still, a body down on
+// the snow never springs back up off it, and the body is a pure function of its throw.
 //
 // ge:summary Test: the thrown body's bones, energy, momentum, tumble, rest and determinism
 // ge:keywords test ragdoll thrown throw tumble lie still bones energy momentum determinism
@@ -118,6 +118,20 @@ TEST(a_fall_at_speed_tumbles_and_comes_to_lie_still) {
               k + ": lay still after " + std::to_string(r.lie_time) + " s");
     CHECK_MSG(r.thrown_top < 2.5, k + ": thrown " + std::to_string(r.thrown_top) + " m high");
     CHECK_MSG(r.thrown < 20, k + ": thrown " + std::to_string(r.thrown) + " m");
+  }
+}
+
+// Once his trunk has been on the snow a moment, the joints pressing a point back into the snow
+// and the snow putting it back must never pump the body up off it.
+TEST(a_body_down_on_the_snow_never_springs_back_up) {
+  for (const sk::Scenario& sc : sk::scenarios()) {
+    double highest = 0;
+    sk::run_scenario(sc, sk::kReferenceSkis, 120, [&](const sk::ScenarioStep& st) {
+      const sk::Ragdoll& b = st.skier.thrown;
+      if (b.active && b.down > 0.3 && b.y - st.ground > highest) highest = b.y - st.ground;
+    });
+    CHECK_MSG(highest < 0.5, std::string(sc.id) + ": his centre rose " + std::to_string(highest) +
+                                 " m over the snow after he was down");
   }
 }
 
