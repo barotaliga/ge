@@ -248,6 +248,7 @@ void cut(GameFrame& f) {
   r::reset_taa(f.taa);
   r::cut_family(f.figures);
   for (ge::skier::RigPoser& p : f.posers) p = {};
+  for (r::Skin& s : f.skins) r::settle_skin(s);
 }
 
 void track(GameFrame& f, const FrameScene& scene) {
@@ -340,8 +341,11 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& view, const
   {
     GE_ZONE("frame.figures");
     for (size_t k = 0; k < racers; ++k) {
-      // Settled: a fresh poser keeps no lag of the last frame.
-      if (scene.settle) f.posers[k] = {};
+      // Settled: a fresh poser keeps no lag of the last frame, and the skin no motion.
+      if (scene.settle) {
+        f.posers[k] = {};
+        r::settle_skin(f.skins[k]);
+      }
       f.posers[k].pose(scene.skiers[k], scene.dt, f.rig_pose);
       ge::skier::rig_locals(*f.skier, f.binding, f.rig_pose, f.locals);
       ge::assets::pose_globals(*f.skier, f.locals, f.globals);
@@ -350,6 +354,8 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& view, const
       f.staged_figures[k] =
           figure_instance(scene.skiers[k], *f.level, static_cast<int>(k), f.materials_per_racer);
     }
+    // A slot drawn again after a gap starts settled.
+    for (size_t k = racers; k < f.skins.size(); ++k) r::settle_skin(f.skins[k]);
     r::set_instances(device, f.figures, 0,
                      std::span<const r::Instance>(f.staged_figures.data(), racers));
     r::set_instance_count(f.figures, static_cast<uint32_t>(racers));

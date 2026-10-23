@@ -378,10 +378,15 @@ figures' family holds one skinned mesh a racer packed into the poser's fixed rea
 poser keeps its lags between frames (`FrameScene::dt`; `settle` for a still or a jump), his
 palette is written before the frame is encoded and the `skinning` pass runs straight after the
 sky's tables, so every view that reads the family (the culls, the prepass, the colour pass, the
-figures' shadow atlas) reads the posed mesh. Still to come (M8e2): last frame's skinned
-positions for the motion vectors (a family's motion is its instance's, so a limb that swings
-gets none of its own and TAA may smear it) and the crowd skinned in the vertex stage from
-per-instance palettes.
+figures' shadow atlas) reads the posed mesh. Each skinned vertex carries its own **motion**:
+the family keeps a skinned LOD's last frame's positions after its vertices (two words a
+vertex, `lod_last`; the bind's to start), the `skinning` pass copies the position it replaces
+there before writing the new one, and the colour pass reads it (`Lod::motion`) for the
+vertex's last place, so a limb that swings between frames is not smeared by TAA; a cut, a still
+and a slot left undrawn settle the skin (`settle_skin`), so the next pose moves nothing. The
+`taa` lab's `--scenario=turns` chases the skier through his turns: the ghosting against the
+converged still falls from 0.45 to 0.35 levels (0.95% to 0.73% of the pixels off) with it. Still
+to come (M8e2): the crowd skinned in the vertex stage from per-instance palettes.
 
 ## Terrain
 
