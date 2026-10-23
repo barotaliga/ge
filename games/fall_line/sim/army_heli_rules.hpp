@@ -21,7 +21,8 @@
 //
 // ge:summary The army's helicopters' numbers: the call, the flight, the pylon turn, the landing
 // ge:keywords army helicopter army-heli rules cruise pylon-turn orbit echelon search landing
-// ge:keywords fast-rope dismount leapfrog section overwatch separation leave
+// ge:keywords fast-rope dismount leapfrog section overwatch separation leave door-gun pintle
+// ge:keywords crab arc traverse lay
 // ge:skill sim
 // ge:test tests/fall_line_army_heli_test.cpp
 #pragma once
@@ -177,6 +178,33 @@ inline constexpr double kEyeM = 2;
 inline constexpr int32_t kPursuerBase = 900;
 // Its decisions are recorded (`GameState::why`) as agent `kAgentBase` + its id.
 inline constexpr int32_t kAgentBase = 1000;
+
+// THE DOOR GUNS (army_door.hpp): a general-purpose machine gun on a pintle at each doorway's
+// forward edge, manned by the roster's `gunners` (two to a hunting machine, the inward door first).
+// The pintle's pivot stands `kPivotOutM` out from the middle, `kPivotUpM` over the skid datum and
+// `kPivotAheadM` fore of it; the rounds leave `kMuzzleM` out along the barrel. The gun swings
+// `kArc` rad either side of square out of the door (its stops keep it off the airframe), lifts
+// `kElevate` rad and depresses `kDepress` rad; the gunner lays it at `kTraverse` rad/s and fires
+// once it is laid within `kLaid` rad, resting it at `kRestPitch` rad (square out) while it does
+// not bear. A door slides open within `kOpenM` m of him and is fired through once `kDoorsOpen`
+// open. Gun ids `kGunBase` + 2 x the machine's id + 0 for the right door, 1 for the left.
+inline constexpr double kPivotOutM = 1.3;
+inline constexpr double kPivotUpM = 1.62;
+inline constexpr double kPivotAheadM = 1.22;
+inline constexpr double kMuzzleM = 0.86;
+inline constexpr double kArc = 1.2;
+inline constexpr double kElevate = 0.3;
+inline constexpr double kDepress = 1.05;
+inline constexpr double kTraverse = 2.5;
+inline constexpr double kLaid = 0.05;
+inline constexpr double kRestPitch = -0.35;
+inline constexpr double kOpenM = 1400;
+inline constexpr double kDoorsOpen = 0.9;
+inline constexpr int32_t kGunBase = 30000;
+// SIDE-ON FOR THE GUNS: flown in echelon with its doors manned, the nose is crabbed this far away
+// from him, rad, to bring him from ahead of the door toward its beam (the pylon turn has him
+// square out of the inward door already).
+inline constexpr double kCrab = 0.35;
 
 // The most machines out at once (the roster's top row).
 inline constexpr size_t kMostHelis = 4;
