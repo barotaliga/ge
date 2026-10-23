@@ -96,6 +96,33 @@ constexpr Sky kSkies[] = {
 };
 
 // The picture's luma (0..255) over its rows from `y0` to `y1`: the mean and the spread.
+// The share of two by two blocks whose mean luma differs between `a` and `b` by more than
+// `levels`: the quarter's own resolution, so detail finer than its pixels is not counted and
+// what is left is what it gets wrong (a halo at an edge, a cloud where there is none).
+double luma_misses(const ge::lab::Picture& a, const ge::lab::Picture& b, double levels) {
+  const auto luma = [](const ge::lab::Picture& p, int x, int y) {
+    const size_t i =
+        (static_cast<size_t>(y) * static_cast<size_t>(p.width) + static_cast<size_t>(x)) * 4;
+    return 0.2126 * p.rgba[i] + 0.7152 * p.rgba[i + 1] + 0.0722 * p.rgba[i + 2];
+  };
+  size_t miss = 0, n = 0;
+  for (int y = 0; y + 1 < a.height; y += 2) {
+    for (int x = 0; x + 1 < a.width; x += 2) {
+      double d = 0;
+      for (int k = 0; k < 4; ++k)
+        d += luma(a, x + (k & 1), y + (k >> 1)) - luma(b, x + (k & 1), y + (k >> 1));
+      if (std::abs(d / 4) > levels) ++miss;
+      ++n;
+    }
+  }
+  return n ? static_cast<double>(miss) / static_cast<double>(n) : 0;
+}
+
+// The most of a picture the cloud at a quarter of the pixels may miss every pixel's by, and the
+// picture's width from which that is held.
+constexpr double kQuarterMisses = 0.01;
+constexpr int kQuarterHeldFrom = 640;
+
 void luma_stats(const ge::lab::Picture& p, int y0, int y1, double& mean, double& spread) {
   double sum = 0, sq = 0;
   int n = 0;
@@ -283,17 +310,27 @@ void run(ge::lab::Lab& lab) {
     ge::render::FrameView view;
     fall_line::app::make_view(level, view_name, view);
     view.pitch += lift * 3.14159265358979 / 180;
-    for (int n = 0; n < frames; ++n) {
-      view.frame = static_cast<uint64_t>(n);
-      view.time_s = at - static_cast<double>(frames - 1 - n) / 60;
-      fall_line::app::draw(*device, *frame, view, {}, target.view);
-    }
+    auto draw_frames = [&] {
+      for (int n = 0; n < frames; ++n) {
+        view.frame = static_cast<uint64_t>(n);
+        view.time_s = at - static_cast<double>(frames - 1 - n) / 60;
+        fall_line::app::draw(*device, *frame, view, {}, target.view);
+      }
+    };
+    // The cloud marched at every pixel first (the reference the quarter is held to), then at a
+    // quarter of them, the picture shot.
+    frame->options.cloud_quarter = false;
+    draw_frames();
+    const ge::lab::Picture full{width, height, ge::gpu::read_now(*device, target).rgba};
+    frame->options.cloud_quarter = true;
+    fall_line::app::cut(*frame);
+    draw_frames();
     // What the last frame's cloud cost the GPU (NaN without timestamps).
     frame->recorder.wait(*device);
     double cloud_ms = 0;
     for (int p = 0; p < frame->recorder.stats.count; ++p) {
       const auto& pass = frame->recorder.stats.passes[static_cast<size_t>(p)];
-      if (pass.name == "clouds") cloud_ms = pass.gpu_ms;
+      if (pass.name == "clouds" || pass.name == "clouds.march") cloud_ms += pass.gpu_ms;
     }
     const ge::gpu::Image img = ge::gpu::read_now(*device, target);
     const ge::lab::Picture pic{width, height, img.rgba};
@@ -308,6 +345,20 @@ void run(ge::lab::Lab& lab) {
     lab.metric(k + ".contrast", spread[i], "level", Det::measured);
     lab.metric(k + ".far-contrast", top_spread, "level", Det::measured);
     lab.metric(k + ".clouds-ms", cloud_ms, "ms", Det::measured);
+    // The quarter's picture against every pixel's: the share of its own pixels more than 8 levels
+    // of luma apart.
+    const double misses = luma_misses(pic, full, 8);
+    lab.metric(k + ".quarter-misses", misses, "share", Det::measured);
+    // Held only on a picture a player sees: at a smoke run's size every cloud is finer than the
+    // quarter's pixels.
+    if (width >= kQuarterHeldFrom && misses > kQuarterMisses) {
+      lab.fail(k +
+                   ": the cloud at a quarter of the pixels misses every pixel's by more than 8 "
+                   "levels on " +
+                   fixed(misses * 100, 2) + " % of its two by two blocks",
+               "Check fs_march and fs_upsample in engine/render/clouds.wgsl (kDepthSharp, "
+               "kDepthMiss). Skill: render.");
+    }
   }
   errors += device->errors.load();
   late += device->pipelines_after_load;

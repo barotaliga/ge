@@ -52,7 +52,8 @@ constexpr r::PassRow kPassTable[] = {
      "sky.aerial sky.light depth",
      "hdr motion"},
     {"sky", "sky.view sky.moon_view depth", "hdr motion"},
-    {"clouds", "depth sky.aerial sky.light", "hdr"},
+    {"clouds.march", "depth sky.aerial sky.light", "clouds.quarter"},
+    {"clouds", "depth clouds.quarter sky.aerial sky.light", "hdr"},
     {"particles", "particles terrain.horizon shadows.maps sky.aerial sky.light depth",
      "hdr motion"},
     {"snowfall", "snowfall terrain.horizon sky.aerial sky.light depth", "hdr motion"},
@@ -329,6 +330,7 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
     ge::mountain::app::sky_at(*f.level, view.time_s, view.weather, view.clouds,
                               f.options.clouds > 0);
     view.clouds.steps = f.options.clouds;
+    view.clouds.quarter = f.options.cloud_quarter;
   }
   const auto start = std::chrono::steady_clock::now();
   f.recorder.begin_frame(device);
