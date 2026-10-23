@@ -31,7 +31,7 @@ ge build                         # compiler and CMake errors come back as findin
 ge test [--filter=<regex>]       # every test and lab smoke; each failure a finding
 ge test --affected [--base=<ref>] [--list]  # only the tests the change reaches (the include graph)
 ge lab <id> [--tag=before | --compare=before] [-- <its flags>]   # measure and LOOK
-ge lab publish <id> [--before=before]   # the run on one self-contained page for the report and the PR
+ge lab publish <id>... [--before=before]   # the run (or several labs') on one self-contained page for the report and the PR
 ge digest [<lab>...] [--write]   # the labs' digests beside tests/labs_digests.txt; --write moves their rows
 ge digest --affected [--list]    # only the labs the change since --base reaches
 ge digest --diff                 # every lab, printing only the digests off the baseline

@@ -141,12 +141,14 @@ std::string html_escape(std::string_view text) {
   return out;
 }
 
-std::string publish_html(const Page& page, size_t max_rows) {
-  const bool paired = !page.before_tag.empty();
+namespace {
+
+// The document's head and its styles, opening <main>.
+std::string page_head(const std::string& title) {
   std::string h;
   h += "<!doctype html>\n<meta charset=\"utf-8\">\n"
        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n";
-  h.append("<title>").append(html_escape(page.lab)).append(" lab run</title>\n");
+  h.append("<title>").append(html_escape(title)).append("</title>\n");
   h += R"(<style>
 :root{--bg:#f6f7f8;--fg:#1d2226;--muted:#5e6970;--line:#d7dde1;--panel:#ffffff;--up:#2f7d4f;--down:#b0453a;
 --body:system-ui,-apple-system,"Segoe UI",sans-serif;--mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
@@ -173,6 +175,13 @@ td.up{color:var(--up)}td.down{color:var(--down)}
 </style>
 <main>
 )";
+  return h;
+}
+
+// One lab's run: its header, pictures, metrics, tables and notes.
+std::string page_body(const Page& page, size_t max_rows) {
+  const bool paired = !page.before_tag.empty();
+  std::string h;
   h.append("<header style=\"display:grid;gap:8px\"><h1>Lab <code>")
       .append(html_escape(page.lab))
       .append("</code></h1>");
@@ -276,35 +285,60 @@ td.up{color:var(--up)}td.down{color:var(--down)}
     for (const std::string& n : page.notes) h.append("<p>").append(html_escape(n)).append("</p>");
     h += "</section>\n";
   }
+  return h;
+}
+
+}  // namespace
+
+std::string publish_html(const std::vector<Page>& pages, size_t max_rows) {
+  std::string h = page_head(pages.size() == 1 ? pages[0].lab + " lab run" : "Lab runs");
+  for (size_t i = 0; i < pages.size(); ++i) {
+    if (i > 0) h += "<hr style=\"width:100%;border:0;border-top:3px solid var(--line)\">\n";
+    h += page_body(pages[i], max_rows);
+  }
   h += "</main>\n";
   return h;
 }
 
-Outcome run_lab_publish(const fs::path& repo, const PublishOptions& o) {
-  Outcome out;
-  const fs::path dir = repo / "previews" / o.id;
+std::string publish_html(const Page& page, size_t max_rows) {
+  return publish_html(std::vector<Page>{page}, max_rows);
+}
+
+namespace {
+
+// One lab's run (and its kept run) read into `page`; false, with the finding in `out`, when the
+// run or the kept run is missing.
+bool read_page(const fs::path& repo, const std::string& id, const PublishOptions& o, Page& page,
+               int& unreadable, Outcome& out) {
+  const fs::path dir = repo / "previews" / id;
   play::FlatJson run;
   std::string error;
   if (!read_report(dir, run, error)) {
-    out.findings.push_back({Severity::error, "no run of lab " + o.id + " to publish: " + error,
-                            dir.string(), "run it first: ge lab " + o.id});
-    return out;
+    out.findings.push_back({Severity::error, "no run of lab " + id + " to publish: " + error,
+                            dir.string(), "run it first: ge lab " + id});
+    return false;
   }
   play::FlatJson kept;
-  const fs::path kept_dir = repo / "previews" / (o.id + "@" + o.before);
-  if (!o.before.empty() && !read_report(kept_dir, kept, error)) {
-    out.findings.push_back({Severity::error, "no kept run " + o.before + " of lab " + o.id,
+  const fs::path kept_dir = repo / "previews" / (id + "@" + o.before);
+  bool paired = !o.before.empty();
+  if (paired && !read_report(kept_dir, kept, error)) {
+    // One lab without its kept run is a mistake; one of several is shown alone, and said so.
+    const bool alone = o.ids.size() > 1;
+    out.findings.push_back({alone ? Severity::warn : Severity::error,
+                            "no kept run " + o.before + " of lab " + id +
+                                (alone ? std::string(": shown without one") : std::string()),
                             kept_dir.string(),
-                            "keep one first: ge lab " + o.id + " --tag=" + o.before +
+                            "keep one first: ge lab " + id + " --tag=" + o.before +
                                 " (before the change), then publish with --before=" + o.before});
-    return out;
+    if (!alone) return false;
+    paired = false;
+    kept.clear();
   }
 
-  Page page;
-  page.lab = o.id;
+  page.lab = id;
   page.kind = at(run, "kind");
   page.question = at(run, "question");
-  page.before_tag = o.before;
+  page.before_tag = paired ? o.before : "";
   for (const auto& [k, v] : run) {
     if (k.rfind("inputs.", 0) == 0) page.inputs.emplace_back(k.substr(7), v.text);
   }
@@ -314,7 +348,6 @@ Outcome run_lab_publish(const fs::path& repo, const PublishOptions& o) {
     const std::string p = "shots." + std::to_string(i) + ".";
     kept_file[at(kept, p + "id")] = p;
   }
-  int unreadable = 0;
   for (int i = 0; has(run, "shots." + std::to_string(i) + ".id"); ++i) {
     const std::string p = "shots." + std::to_string(i) + ".";
     PageShot s;
@@ -364,7 +397,28 @@ Outcome run_lab_publish(const fs::path& repo, const PublishOptions& o) {
   for (int i = 0; has(run, "notes." + std::to_string(i)); ++i)
     page.notes.push_back(at(run, "notes." + std::to_string(i)));
 
-  const std::string html = publish_html(page);
+  return true;
+}
+
+}  // namespace
+
+Outcome run_lab_publish(const fs::path& repo, const PublishOptions& o) {
+  Outcome out;
+  std::vector<Page> pages;
+  int unreadable = 0;
+  size_t shots = 0, metrics = 0, tables = 0;
+  for (const std::string& id : o.ids) {
+    Page page;
+    if (!read_page(repo, id, o, page, unreadable, out)) return out;
+    shots += page.shots.size();
+    metrics += page.metrics.size();
+    tables += page.tables.size();
+    pages.push_back(std::move(page));
+  }
+  std::string error;
+  const std::string name = o.ids.size() == 1 ? o.ids[0] : "the labs";
+  const fs::path dir = o.ids.size() == 1 ? repo / "previews" / o.ids[0] : repo / "previews";
+  const std::string html = publish_html(pages);
   const fs::path file = o.out.empty() ? dir / "publish.html" : fs::path(o.out);
   if (!write_text(file, html, error)) {
     out.findings.push_back({Severity::error, "could not write the page: " + error, file.string(),
@@ -374,7 +428,7 @@ Outcome run_lab_publish(const fs::path& repo, const PublishOptions& o) {
   if (unreadable > 0)
     out.findings.push_back({Severity::warn,
                             std::to_string(unreadable) + " of the run's pictures could not be read",
-                            dir.string(), "rerun the lab: ge lab " + o.id});
+                            dir.string(), "rerun the lab, then publish again"});
   const double mb = static_cast<double>(html.size()) / (1u << 20);
   char size[32];
   std::snprintf(size, sizeof size, "%.1f MB", mb);
@@ -386,15 +440,15 @@ Outcome run_lab_publish(const fs::path& repo, const PublishOptions& o) {
          "shrink it: --width=" + std::to_string(o.width / 2) +
              ", or run the lab with fewer shots"});
   out.text.append("  page: ").append(file.string()).append("  (").append(size).append(")\n");
-  out.text.append("  pictures: ").append(std::to_string(page.shots.size()));
+  out.text.append("  pictures: ").append(std::to_string(shots));
   if (!o.before.empty()) out.text.append(", each beside the kept run ").append(o.before);
-  out.text.append("\n  metrics: ").append(std::to_string(page.metrics.size()));
-  out.text.append(", tables: ").append(std::to_string(page.tables.size())).append("\n");
+  out.text.append("\n  metrics: ").append(std::to_string(metrics));
+  out.text.append(", tables: ").append(std::to_string(tables)).append("\n");
   out.result = json_obj({{"page", json_str(file.string())},
                          {"bytes", json_num(static_cast<long long>(html.size()))},
-                         {"shots", json_num(static_cast<long long>(page.shots.size()))},
+                         {"shots", json_num(static_cast<long long>(shots))},
                          {"before", json_str(o.before)}});
-  out.summary = "lab " + o.id + " on one page, " + size;
+  out.summary = name + " on one page, " + size;
   out.next = "publish " + file.string() +
              " as it is (an Artifact page), and link it from the report and the PR";
   return out;

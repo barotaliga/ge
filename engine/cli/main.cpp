@@ -200,7 +200,7 @@ Outcome run(const Args& a) {
   }
   if (name == "lab publish") {
     PublishOptions p;
-    p.id = a.words[0];
+    p.ids = a.words;
     p.before = flag_value(a, "before");
     p.out = flag_value(a, "out");
     if (const std::string w = flag_value(a, "width"); !w.empty()) {

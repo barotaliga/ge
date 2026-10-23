@@ -1,4 +1,4 @@
-// `ge lab publish <id> [--before=<tag>] [--width=<px>] [--out=<file>]`: a lab's last run as ONE
+// `ge lab publish <id>... [--before=<tag>] [--width=<px>] [--out=<file>]`: a lab's last run as ONE
 // self-contained HTML page for a report or a pull request. Every picture is shrunk to the width
 // (720 by default), cut to 256 colours and inlined as a GIF (lab/gif.hpp), with its title, caption
 // and what to look for under it; then the metrics, the tables and the notes. With --before, the
@@ -9,6 +9,7 @@
 //
 //   ge lab publish level
 //   ge lab publish world --before=before --width=560
+//   ge lab publish water lake --before=before    several labs on one page (previews/publish.html)
 //
 // ge:summary ge lab publish: a lab's run on one self-contained page, before beside after, to share
 // ge:keywords cli ge lab publish page html review report pull-request pictures gif inline
@@ -30,10 +31,10 @@ namespace ge::cli {
 namespace fs = std::filesystem;
 
 struct PublishOptions {
-  std::string id;
-  std::string before;  // a kept run's tag, or ""
-  int width = 720;     // the pictures' width on the page
-  std::string out;     // the page's path; "" for previews/<id>/publish.html
+  std::vector<std::string> ids;  // one lab, or several on one page
+  std::string before;            // a kept run's tag, or ""
+  int width = 720;               // the pictures' width on the page
+  std::string out;               // the page's path; "" for previews/<id>/publish.html
 };
 
 // What the page shows, read off a run's report.json (and the kept run's).
@@ -63,6 +64,8 @@ std::string base64(std::string_view bytes);
 std::string html_escape(std::string_view text);
 // The page as HTML; a table longer than `max_rows` shows its first rows and says how many more.
 std::string publish_html(const Page& page, size_t max_rows = 60);
+// Several labs' runs on one page, one after another.
+std::string publish_html(const std::vector<Page>& pages, size_t max_rows = 60);
 
 Outcome run_lab_publish(const fs::path& repo, const PublishOptions& o);
 

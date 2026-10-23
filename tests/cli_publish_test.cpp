@@ -76,3 +76,13 @@ TEST(a_long_table_is_cut_and_says_how_much_more) {
   CHECK(has(page, "<td>2</td>") && !has(page, "<td>3</td>"));
   CHECK(has(page, "2 more rows in the run's report.json."));
 }
+
+TEST(several_labs_share_one_page_one_after_another) {
+  Page a = sample();
+  Page b = sample();
+  b.lab = "para";
+  const std::string page = publish_html(std::vector<Page>{a, b});
+  CHECK(has(page, "<title>Lab runs</title>"));
+  CHECK(has(page, "<code>level</code>") && has(page, "<code>para</code>"));
+  CHECK(page.find("<code>level</code>") < page.find("<code>para</code>"));
+}

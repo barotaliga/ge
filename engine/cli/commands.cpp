@@ -364,9 +364,9 @@ const CommandSpec kCommands[] = {
      "diff every picture of a lab's last run against a kept run: PSNR, SSIM and the share "
      "changed per distance band, each band held to its floor, a four-panel sheet a shot",
      kLabDiffFlags, "ge lab diff world --run -- --views=start,vista", "labs"},
-    {"lab publish", "<id>", 1, 1, "see",
-     "a lab's last run on one self-contained page to share: every picture shrunk and inlined, "
-     "captions, metrics and tables; --before puts a kept run beside it",
+    {"lab publish", "<id>...", 1, -1, "see",
+     "a lab's last run (or several labs') on one self-contained page to share: every picture "
+     "shrunk and inlined, captions, metrics and tables; --before puts a kept run beside it",
      kLabPublishFlags, "ge lab publish world --before=before", "labs"},
     {"graph", "<file>...", 1, -1, "see",
      "chart series or spans files (a trace, a bench, a profile) to PNG and SVG; several files "
