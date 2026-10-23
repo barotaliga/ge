@@ -12,7 +12,7 @@ name: release
 #            push; GitHub Release with the packages, the source, SHA256SUMS
 #            and build provenance
 #   mirror   the release's files to GitHub Packages as an OCI artifact
-#            (ghcr.yml: ghcr.io/<owner>/gameengine2:X.Y.Z and :latest)
+#            (ghcr.yml: ghcr.io/<owner>/<repo>:X.Y.Z and :latest)
 #
 # Nothing is tagged until every platform's package is built and tested, and
 # the push is refused if main moved since the plan, so a run that fails

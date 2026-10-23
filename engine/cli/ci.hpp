@@ -50,6 +50,12 @@ std::vector<Finding> blocked_findings(const std::string& base, std::string_view 
 // A CI job's log read back as findings, each `where` prefixed "<job>: " when `job` is not empty.
 // A line may carry GitHub's prefixes (`gh run view --log-failed`'s "job<TAB>step<TAB>" and the
 // timestamp before each line); they are dropped first.
+// The finding for a gh call that failed because the repository moved (GitHub answers the old
+// name with a redirect to `repositories/<id>/...`, which a proxy may refuse): `moved_to` is the
+// owner/repo GitHub now names it ("" when that was not found), `slug` the remote's. False when
+// `error` is not a moved repository's.
+bool moved_repo_finding(std::string_view error, const std::string& slug,
+                        const std::string& moved_to, Finding& out);
 std::vector<Finding> ci_log_findings(const fs::path& repo, std::string_view job,
                                      std::string_view log);
 
