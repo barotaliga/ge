@@ -6,13 +6,14 @@ army-flight 57fc57956ada1ce3
 army-sleds 821adaba95b0b813
 audition d47fda4a9cb22fbb
 charts 77f2319a5ea24272
-cli-loop ced27c68ea095a21
+cli-loop fbce3839457723cf
 crowd cf02cf9a7c917783
 crowd-look 194a06db20f2ebb2
 forest f1881cb20efe0144
 frame-pace c5058023a52812c3
 free 2b3f2cf5100bf9b4
 gpu-capture 8b5d5e3b7be5a4fc
+gpu-load d0f81d39aa78ab53
 gunfire 00ecbaf362018c86
 heli edc6a93febc6f52d
 humanness a486ef984a6511d7
@@ -24,6 +25,7 @@ junctions 036999ca677e12e6
 ladder d6c83528a908cb3c
 level 4fbff3da7a82c4aa
 lift-ride a374f35eb85cc161
+load 0257cf6ad193e740
 mapgen-cost 3baf51b6907817f3
 model-views 0d0824a2168f6b14
 models bdc7f86743249676
