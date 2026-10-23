@@ -457,7 +457,7 @@ Outcome run_digest(const BuildOptions& o, const std::vector<std::string>& labs, 
   if (runs.empty()) runs.emplace_back("--all");
   Logged r{0, ""};
   for (const std::string& run : runs) {
-    const Logged one = run_to_log(quoted(exe) + " " + run + flags, log);
+    const Logged one = run_to_log(quoted(exe).append(" ").append(run).append(flags), log);
     r.output += one.output;
     if (one.code == 2) {
       out.findings.push_back({Severity::error, "the labs refused the run: " + last_line(one.output),
