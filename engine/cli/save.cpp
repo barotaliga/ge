@@ -154,11 +154,11 @@ Outcome run_save_game(const BuildOptions& o, const Args& a, const std::string& s
       rows.push_back({text_of(m, k + "step"), text_of(m, k + "bytes"), text_of(m, k + "save_ms"),
                       text_of(m, k + "load_ms"), parted == "-1" ? "-" : parted});
       if (parted != "-1") {
+        std::string what = "the run saved at step " + text_of(m, k + "step");
+        what += " and loaded parts from the run never saved at step ";
+        what += parted;
         out.findings.push_back(
-            {Severity::error,
-             "the run saved at step " + text_of(m, k + "step") +
-                 " and loaded parts from the run never saved at step " + parted,
-             a.words[0],
+            {Severity::error, what, a.words[0],
              "a field the step writes is missing from a describe: ge save write the log at both "
              "steps and ge save diff them against a fresh save (skill: save)"});
       }
