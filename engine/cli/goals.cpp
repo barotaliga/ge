@@ -23,6 +23,14 @@ namespace {
 
 std::string quoted(const fs::path& p) { return "\"" + p.string() + "\""; }
 
+// The pieces joined in one buffer.
+template <class... Piece>
+std::string cat(const Piece&... piece) {
+  std::string out;
+  (out.append(piece), ...);
+  return out;
+}
+
 std::string first_line(std::string_view text) {
   return std::string(text.substr(0, text.find('\n')));
 }
@@ -345,10 +353,10 @@ Outcome run_goals_claim(const fs::path& repo, const std::string& title, const st
     if (!write_text(reserved, with_reserved_row(before, key, title), error))
       return fail("could not write " + reserved.string() + ": " + error,
                   "check the tree is writable");
-    const std::string msg = "docs(goals): reserve " + key + " for " + title;
+    const std::string msg = cat("docs(goals): reserve ", key, " for ", title);
     if (!commit_reserved(repo, msg, log))
       return fail("git commit of the claim failed", "read the log, then ge goals claim again");
-    const Logged pushed = run_to_log(git + "push --quiet origin HEAD:refs/heads/" + branch, log);
+    const Logged pushed = run_to_log(cat(git, "push --quiet origin HEAD:refs/heads/", branch), log);
     if (pushed.code != 0)
       return fail("the claim's push was refused: " + first_line(pushed.output),
                   "bring the branch up to date (git pull --rebase origin " + branch +
@@ -361,8 +369,8 @@ Outcome run_goals_claim(const fs::path& repo, const std::string& title, const st
     std::vector<Claimant> claimants;
     const auto ct = [&](const std::string& ref) {
       const std::string t = std::string(
-          trim(first_line(run_to_log(git + "log --reverse --format=%ct \"-G^\\| " + key +
-                                         " \\|\" " + ref + " -- docs/goals.md docs/goals/",
+          trim(first_line(run_to_log(cat(git, "log --reverse --format=%ct \"-G^\\| ", key,
+                                         " \\|\" ", ref, " -- docs/goals.md docs/goals/"),
                                      log)
                               .output)));
       return t.empty() ? 0LL : std::stoll(t);
@@ -377,21 +385,21 @@ Outcome run_goals_claim(const fs::path& repo, const std::string& title, const st
     }
     const Claimant& won = claimants[claim_winner(claimants)];
     if (won.ref == mine) {
-      out.text += "  claimed: " + key + "  " + title + "\n  pushed: " + mine + "\n";
+      out.text += cat("  claimed: ", key, "  ", title, "\n  pushed: ", mine, "\n");
       out.result = json_obj({{"row", json_str(key)},
                              {"title", json_str(title)},
                              {"branch", json_str(mine)},
                              {"attempts", std::to_string(attempt + 1)}});
-      out.summary = key + " is yours (" + title + ")";
-      out.next = "add " + key + " to docs/goals.md with its status file docs/goals/" + key +
-                 ".md, and drop its line from docs/goals/reserved.md in the same pull request";
+      out.summary = cat(key, " is yours (", title, ")");
+      out.next = cat("add ", key, " to docs/goals.md with its status file docs/goals/", key,
+                     ".md, and drop its line from docs/goals/reserved.md in the same pull request");
       return out;
     }
     out.text += "  " + key + " lost to " + won.ref + ", which claimed it first; trying the next\n";
     std::string ignored;
     write_text(reserved, without_reserved_row(read_text(reserved).value_or(""), key), ignored);
     commit_reserved(repo, "docs(goals): give up " + key + ", claimed first on " + won.ref, log);
-    run_to_log(git + "push --quiet origin HEAD:refs/heads/" + branch, log);
+    run_to_log(cat(git, "push --quiet origin HEAD:refs/heads/", branch), log);
   }
   return fail("three rows in a row were claimed first by other branches",
               "ge goals free --fetch to see who holds what, then ge goals claim again");
