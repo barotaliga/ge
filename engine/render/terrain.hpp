@@ -9,6 +9,8 @@
 // - ONE MESH: a tile of kTileQuads x kTileQuads quads, its vertices pulled from the vertex index
 //   (no vertex buffer); a level is 4 x 4 tiles and every visible tile is an instance of one
 //   indexed draw.
+// - THE REACH: a view with a reach (FrameView::reach_m) draws only the levels it needs to cover
+//   it (`clipmap_levels_to`), so a nearer reach is fewer tiles the same frame.
 // - CULLED ON THE GPU: a compute pass tests every tile's box (its height range from a min/max
 //   pyramid baked at load) against the frustum and appends the visible ones to the instance list
 //   behind the draw's indirect arguments. The CPU never walks the tiles.
@@ -32,6 +34,7 @@
 // ge:keywords render terrain heightfield clipmap geometry-clipmap tile morph seam sink lod
 // ge:keywords gpu-culling indirect-draw min-max-pyramid normals albedo vertex-pulling
 // ge:keywords wire-probe wireframe encode_terrain_wire
+// ge:keywords clipmap_reach clipmap_levels_to draw-distance reach
 // ge:keywords clipmap_levels create_terrain prepare_terrain encode_terrain_cull draw_terrain
 // ge:keywords ground-material terrain-material material-shader bind_terrain_material ground_at
 // ge:skill render
@@ -63,6 +66,12 @@ struct ClipLevel {
 // The levels round the eye at (x, z): level i's spacing is base * 2^i, its square
 // kLevelTiles * kTileQuads quads a side centred on the eye snapped to 2 * spacing.
 void clipmap_levels(double x, double z, double base_spacing, int levels, ClipLevel* out);
+// How far `levels` levels draw the ground round the eye in every direction, m: the outer level's
+// half side less the eye's snap.
+double clipmap_reach(double base_spacing, int levels);
+// The fewest of `levels` levels that draw the ground to `reach_m` (FrameView::reach_m) round the
+// eye; all of them when the reach is 0 or past theirs.
+int clipmap_levels_to(double reach_m, double base_spacing, int levels);
 
 // What a game hands the renderer: the heights, and the albedo (sRGB-encoded RGBA8, one texel a
 // sample, rows along z) over the same grid.

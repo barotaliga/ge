@@ -23,6 +23,7 @@ struct Frame {
   night: vec4f,            // the dark sky's zenith luminance, its light, the sidereal angle, latitude
   cloud_info: vec4f,       // x: the cloud's layers drawn; y: the share of the march's steps
   clouds: array<vec4f, 9>, // three a layer (render/clouds.hpp's `cloud_rows`)
+  mist: vec4f,             // the reach's mist: where it begins and where it closes, m (0: none)
 }
 
 // THE MOTION a surface at camera-relative `rel` (w = 1; w = 0 for a direction at infinity) made

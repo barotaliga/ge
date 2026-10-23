@@ -7,7 +7,8 @@
 //   sun's maps' texels), SNOW (the snow's material, or the albedo lit), TRAILS (the trail maps'
 //   texels, or none), SPRAY (thrown or not), SNOWFALL (the flakes round the eye), CLOUDS (the
 //   march's share of its steps at a quarter of the pixels, every pixel at the top, or no layer:
-//   the sky's mean cloud) and BLOOM.
+//   the sky's mean cloud), BLOOM and DISTANCE (how far the ground and what stands on it are
+//   drawn, closed into the sky by a mist; the whole ground, unmisted, at the top).
 // - CHEAPEST FIRST: every row's stops run from its cheapest, so a stop's index is its rung.
 // - RESOLUTION IS GIVEN UP FIRST: the pixels' softness before anything in the picture.
 // - THE PRICES are `kPrices`' reference machine's, filled by the `ladder` lab (`labs ladder
@@ -40,6 +41,7 @@ enum class PictureRow : uint8_t {
   snowfall,
   clouds,
   bloom,
+  distance,
   count
 };
 inline constexpr int kPictureRows = static_cast<int>(PictureRow::count);
