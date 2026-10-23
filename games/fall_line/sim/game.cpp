@@ -22,6 +22,7 @@
 #include "fall_line/sim/free.hpp"
 #include "fall_line/sim/heli_ride.hpp"
 #include "fall_line/sim/lift_ride.hpp"
+#include "fall_line/sim/para_ride.hpp"
 #include "fall_line/sim/sled_ride.hpp"
 #include "fall_line/sim/wanted.hpp"
 #include "mountain/mapgen/generate.hpp"
@@ -49,11 +50,11 @@ void log_step(const GameState& state) {
   static const out::Channel kArmy = out::channel("army");
   const auto f = [](double v, int d) { return ge::core::num::to_fixed(v, d); };
   for (const GameEvent& e : state.events) {
-    const bool course = e.kind == EventKind::gate || e.kind == EventKind::missed ||
-                        e.kind == EventKind::finish || e.kind == EventKind::reset ||
-                        e.kind == EventKind::onto || e.kind == EventKind::arrived ||
-                        e.kind == EventKind::boarded || e.kind == EventKind::unloaded ||
-                        e.kind == EventKind::sled || e.kind == EventKind::heli;
+    const bool course =
+        e.kind == EventKind::gate || e.kind == EventKind::missed || e.kind == EventKind::finish ||
+        e.kind == EventKind::reset || e.kind == EventKind::onto || e.kind == EventKind::arrived ||
+        e.kind == EventKind::boarded || e.kind == EventKind::unloaded ||
+        e.kind == EventKind::sled || e.kind == EventKind::heli || e.kind == EventKind::para;
     const out::Channel ch = e.kind == EventKind::shoulder                                 ? kField
                             : e.kind == EventKind::wanted                                 ? kWanted
                             : e.kind == EventKind::army || e.kind == EventKind::army_sled ? kArmy
@@ -111,6 +112,9 @@ void log_step(const GameState& state) {
       case EventKind::heli:
         line += " " + std::string(heli_phase_name(static_cast<HeliPhase>(e.gate)));
         break;
+      case EventKind::para:
+        line += " " + std::string(para_phase_name(static_cast<ParaPhase>(e.gate)));
+        break;
       case EventKind::army:
         line += " " + std::string(army_change_name(army_change(e))) + ", " + f(e.value, 0) +
                 " men, " + std::to_string(state.army.soldiers.size()) + " out";
@@ -135,12 +139,15 @@ void log_step(const GameState& state) {
   }
 }
 
-// The reset the run's mode makes: on the free ride, the helicopter he is on or crashed in started
+// The reset the run's mode makes: on the free ride, the paramotor's rig on him begun again on the
+// summit (para_ride.hpp), the helicopter he is on or crashed in started
 // again from its pad with him on it (heli_ride.hpp), the snowmobile he rides or was thrown off
 // stood back on its belt with him on it (sled_ride.hpp), else his run's.
 void reset(GameState& state, int32_t i) {
   if (state.mode == Mode::free) {
-    if (!restart_heli(state, i) && !remount_sled(state, i)) reset_free(state, i);
+    if (!restart_para(state, i) && !restart_heli(state, i) && !remount_sled(state, i)) {
+      reset_free(state, i);
+    }
   } else {
     reset_racer(state, i);
   }
@@ -184,6 +191,8 @@ const char* event_name(EventKind kind) {
       return "army";
     case EventKind::heli:
       return "heli";
+    case EventKind::para:
+      return "para";
     case EventKind::army_sled:
       return "army-sled";
   }
@@ -240,6 +249,8 @@ void step(GameState& state, std::span<const Controls> controls) {
       step_lift(state, i);
       continue;
     }
+    // Under the paramotor's wing the machine press lets the rig go, and is not read again.
+    if (state.mode == Mode::free) para_press(state, i, c);
     // On the helicopter's skid or the snowmobile's boards the step is the machine's: his skis,
     // his run and the run's resets wait. A press the helicopter spends is not read again.
     if (state.mode == Mode::free) {
@@ -250,7 +261,7 @@ void step(GameState& state, std::span<const Controls> controls) {
       GE_ZONE("sled");
       if (step_sled_ride(state, i, c)) continue;
     }
-    sk::SkierInput in = c.ski;
+    sk::SkierInput in = para_held(state, i, c.ski);
     if (p.finished) in = sk::SkierInput{0, 0, 1, false};
     const double x0 = r.skier.x;
     const double z0 = r.skier.z;
@@ -258,6 +269,10 @@ void step(GameState& state, std::span<const Controls> controls) {
     {
       GE_ZONE("skier");
       sk::step_skier(r.skier, in, world, state.spec, kDt, ev);
+    }
+    if (state.mode == Mode::free) {
+      GE_ZONE("para");
+      step_para_ride(state, i, c);
     }
     if (state.mode == Mode::free) {
       GE_ZONE("free");
@@ -357,6 +372,10 @@ uint64_t state_hash(const GameState& state, uint64_t h) {
     mix(m.aboard ? 1 : 0);
     mix(m.t);
     mix(m.taken);
+  }
+  if (state.para.present) {
+    h = ge::paramotor::para_hash(state.para.body, h);
+    mix(state.para.starts);
   }
   return army_hash(state.army, wanted_hash(state.wanted, h));
 }

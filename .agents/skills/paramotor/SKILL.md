@@ -12,7 +12,10 @@ the air he hangs under the wing. It depends on the core, on `mountain` (the `Lev
 and on `skier` (the skier, his step, the trunks' index and the hand-built maps):
 `ge_add_plugin(paramotor ENGINE core PLUGINS mountain skier)`. It never learns which game flies
 it: where the ride begins, the press that drops the rig, the restart and the wind it is handed are
-the game's.
+the game's (Fall Line's free ride: `games/fall_line/sim/para_ride.hpp`, begun on the highest run's
+head, the press, the held skis, the restart; and `para_outing.hpp`, the bot's outing off the
+summit onto a gentle stretch of a run and down on skis, both held by
+`tests/fall_line_para_test.cpp` and the `free` lab's `--para` table; the `sim` skill owns them).
 
 | File | What |
 | --- | --- |

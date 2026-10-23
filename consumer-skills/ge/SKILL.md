@@ -40,6 +40,7 @@ ge diverge <log-a> <log-b>       # where two runs part, field by field (skill: p
 ge shot [<log>] [--step=N] [--view=<v>]   # a captioned still of any step, drawn headless
 ge why <log> [--step=N] [--flips]  # why a bot did it: what it saw, weighed and chose (play-test)
 ge record [<log>] [--view=<v>] [--to=30s]  # the run as a video (mp4, webm, gif) and a contact sheet
+ge record --gpu --mode=<lit|wireframe|depth|overlay>  # the same through the game's GPU renderer
 ge bench [--tag=before | --compare=before]   # each step's time against its budget (skill: perf)
 ge profile [--render]            # where the step's (and the frame's) time goes, zone by zone
 ge mem | ge leaks                # what the run allocates; what it never frees

@@ -55,6 +55,10 @@ the row when the file moves.
 | `games/fall_line/sim/heli_ride.hpp` | `game5/engine/game/heli.ts`, `heli-pad.ts`, `heli-state.ts`, `defs/heli.ts` | stepHeli heliWithin heliDown HeliPhaseEvent HELI.pad HELI.board HELI.drop HELI.home HELI.crash |
 | `games/fall_line/sim/lift_ride.cpp` | `game5/engine/game/lift-ride.ts`, `lift-board.ts` | stepLiftRide stepChairWait carrierPassing letGo setOff (the boarding ring, the queue, the gondola's platform, the hands, the swing and the skip not carried) |
 | `games/fall_line/sim/lift_ride.hpp` | `game5/engine/game/lift-ride.ts`, `lift-board.ts` | stepLiftRide stepChairWait letGo |
+| `games/fall_line/sim/para_outing.cpp` | `game5/engine/game/para-pilot.ts`, `game5/engine/sim/bot.ts` | paraPilot (the outing's stretch, spiral and final are the engine's own) |
+| `games/fall_line/sim/para_outing.hpp` | `game5/engine/game/para-pilot.ts` | paraPilot |
+| `games/fall_line/sim/para_ride.cpp` | `game5/engine/game/para.ts`, `step.ts` | paraStartOf freshPara startPara paraControls paraHeld paraPress (the free ride's para option) |
+| `games/fall_line/sim/para_ride.hpp` | `game5/engine/game/para.ts` | paraStartOf startPara paraRigged paraHeld paraPress |
 | `games/fall_line/sim/sled_outing.cpp` | `game5/engine/sim/bot.ts`, `game5/engine/game/sled-pilot.ts` | the bot on the boards (sledPilot to an aim); the outing up a run and down on skis is the engine's own |
 | `games/fall_line/sim/sled_outing.hpp` | `game5/engine/sim/bot.ts` | the bot on the boards |
 | `games/fall_line/sim/sled_ride.cpp` | `game5/engine/game/sled.ts`, `sled-pad.ts` | stepSled board hop throwOff leave remount mount hold letGo sledWithin sledControls parkedAt freshSled sledSpotOf findSpot clearAt leanOver (the fire, the wreck, the stolen machines, the rocks, the posts, the grace and the log buck not carried) |

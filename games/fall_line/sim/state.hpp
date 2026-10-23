@@ -11,7 +11,8 @@
 // ge:keywords game-state state racer progress controls events event-kind gate missed finish
 // ge:keywords reset wipeout landing takeoff field clock wanted mode free-ride onto arrived skied
 // ge:keywords lift-ride lift-phase boarded unloaded sled free-sled sled-mode sled-phase machine
-// ge:keywords army ways heli free-heli heli-mode heli-phase lever pedal
+// ge:keywords army ways heli free-heli heli-mode heli-phase lever pedal para free-para
+// ge:keywords para-phase paramotor
 // ge:skill sim
 // ge:test tests/fall_line_sim_test.cpp
 #pragma once
@@ -23,6 +24,8 @@
 #include "helicopter/heli.hpp"
 #include "mountain/lifts/lift_loop.hpp"
 #include "mountain/mapgen/types.hpp"
+#include "paramotor/air.hpp"
+#include "paramotor/para.hpp"
 #include "skier/skier.hpp"
 #include "skier/skis.hpp"
 #include "skier/trees.hpp"
@@ -40,9 +43,11 @@ inline constexpr double kDt = 1 / kHz;
 
 // What a racer is asked this step: the skis' controls, the reset (stand me back on the piste
 // past the last gate I took), his weight fore and aft (-1 forward .. 1 back: on the free ride's
-// snowmobile, the climber's stance; on its helicopter, the cyclic fore and aft; nothing on skis),
+// snowmobile, the climber's stance; on its helicopter, the cyclic fore and aft; under the
+// paramotor's wing, the speed bar's opposite: forward is the bar pushed; nothing on skis),
 // THE MACHINE PRESS (on the free ride: take the snowmobile or the helicopter stood beside it, or
-// get off it; sled_ride.hpp, heli_ride.hpp), and the helicopter's own two: the collective
+// get off it; under the paramotor's wing: let the rig go; sled_ride.hpp, heli_ride.hpp,
+// para_ride.hpp), and the helicopter's own two: the collective
 // `lever` (0 down .. 1 up) and the `pedal` (-1 left .. 1 right). On the helicopter the steer is
 // the cyclic side to side.
 struct Controls {
@@ -72,6 +77,7 @@ enum class EventKind : uint8_t {
   sled,       // the snowmobile (`gate` its SledPhase, `value` its speed, m/s; sled_ride.hpp)
   army,       // the army on foot moved (`gate` its ArmyChange, `value` how many men)
   heli,       // the helicopter (`gate` its HeliPhase, `value` its speed, m/s; heli_ride.hpp)
+  para,       // the paramotor (`gate` its ParaPhase, `value` his speed, m/s; para_ride.hpp)
   army_sled,  // an army snowmobile (`gate` its ArmySledChange, `value` its id; army_sled.hpp)
 };
 
@@ -171,6 +177,31 @@ struct FreeHeli {
   int32_t taken = 0;                   // times boarded this run
 };
 
+// THE FREE RIDE'S PARAMOTOR (para_ride.hpp): a free ride begun under it on the summit. The rig's
+// body (paramotor/para.hpp), the air's eddies dealt off the map's seed, where the ride begins
+// and how many times it has.
+// What a `para` event says: the wing let fly, off the snow, touched down, a fold, the rig come off
+// him (let go, the wing down on the snow, in a crown, or he went down under it), and the ride
+// begun again on the summit.
+enum class ParaPhase : uint8_t {
+  launch,
+  take_off,
+  touch,
+  fold,
+  drop,
+  ground,
+  crown,
+  rider,
+  restart
+};
+struct FreePara {
+  bool present = false;  // a free ride begun under it (create_para_ride); none otherwise
+  ge::paramotor::ParaState body;
+  ge::paramotor::ParaAirField field;
+  double start_x = 0, start_z = 0, start_heading = 0;
+  int32_t starts = 0;  // times the ride was begun on the summit
+};
+
 struct Racer {
   ge::skier::SkierState skier;
   Progress progress;
@@ -196,6 +227,7 @@ struct GameState {
   ArmyState army;      // the army on foot after him (army.hpp); inactive until sent
   FreeSled sled;       // the free ride's snowmobile (sled_ride.hpp); none in a race
   FreeHeli heli;       // the free ride's helicopter (heli_ride.hpp); none in a race
+  FreePara para;       // the free ride's paramotor (para_ride.hpp); only a ride begun under it
   double t = 0;        // s since the start
   int64_t steps = 0;
 
