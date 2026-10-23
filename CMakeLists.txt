@@ -15,6 +15,7 @@
 #   ge_move      character movement (engine/move: the knobs, the step, the box world, scenarios)
 #   ge_camera    the camera (engine/camera: poses, followers, rigs, shake, transitions, the stack)
 #   ge_charset   the bitmap fonts (engine/charset: the atlases, the builder, layers, looks)
+#   ge_hud       the HUD kit (engine/hud: anchors, readouts, meters, pips, banners, the feed)
 #   ge_play      the play contract (engine/play: GameSpec and Run, the session, the input log,
 #                the bench, the stills `ge shot` draws)
 #   ge_prof      the profiler (engine/prof: timing zones, allocation counts, the resident set);
@@ -34,7 +35,7 @@
 #   ge_isa       the instruction-set baseline (x86-64: AVX2), linked by ge_core and
 #                published as ge::isa
 #   ge_flags     warnings, -Werror, sanitizers: this tree only, never published
-# ge_core, ge_fp, ge_isa, ge_assets, ge_ai, ge_move, ge_camera, ge_charset, ge_net, ge_lab, ge_play, ge_prof,
+# ge_core, ge_fp, ge_isa, ge_assets, ge_ai, ge_move, ge_camera, ge_charset, ge_hud, ge_net, ge_lab, ge_play, ge_prof,
 # ge_prof_alloc and every plugin target are installed and published as ge::core, ge::fp, ge::isa,
 # ge::assets, ge::ai, ge::move, ge::camera, ge::net, ge::lab, ge::play, ge::prof, ge::prof_alloc and
 # ge::<plugin>, and the ge executable is installed to bin/
@@ -203,6 +204,13 @@ file(GLOB GE_CHARSET_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engin
 add_library(ge_charset STATIC ${GE_CHARSET_SOURCES})
 target_link_libraries(ge_charset PUBLIC ge_core)
 
+# The HUD kit (engine/hud): any game's overlay over its running picture, as widgets over the 2D
+# layer's draw list, in TrueType or bitmap type: the frame and anchors, readouts, meters, pips,
+# banners, the feed and the layout check. No GPU: the CPU raster draws it in the labs.
+file(GLOB GE_HUD_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/hud/*.cpp)
+add_library(ge_hud STATIC ${GE_HUD_SOURCES})
+target_link_libraries(ge_hud PUBLIC ge_ui ge_charset)
+
 # Character movement (engine/move, docs/movement.md): the knobs and presets, one step of a moving
 # body over a trace callback, the box world, the strafer and the scenarios. Deterministic, no
 # platform; a game binds the knobs to its console and answers the trace with its own world.
@@ -311,7 +319,7 @@ if(PROJECT_IS_TOP_LEVEL)
   get_property(GE_PLUGIN_TARGETS GLOBAL PROPERTY GE_PLUGIN_TARGETS)
   get_property(GE_GAME_TARGETS GLOBAL PROPERTY GE_GAME_TARGETS)
   add_executable(labs engine/lab/main.cpp ${GE_LAB_SOURCES})
-  target_link_libraries(labs PRIVATE ge_lab ge_play ge_core ge_audio ge_assets ge_net ge_input ge_move ge_camera ge_ui ge_charset ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
+  target_link_libraries(labs PRIVATE ge_lab ge_play ge_core ge_audio ge_assets ge_net ge_input ge_move ge_camera ge_ui ge_charset ge_hud ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
     ${GE_LAB_EXTRA})
 
   # The `assets` executable (engine/assets/tool.hpp): the built assets listed, checked and stamped,

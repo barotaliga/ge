@@ -21,6 +21,8 @@ free 2b3f2cf5100bf9b4
 gpu-capture 8b5d5e3b7be5a4fc
 gunfire ee9f1112b1344bfb
 heli edc6a93febc6f52d
+hud 6129ad11d0595da1
+hud-kit d8befd69c39128cb
 humanness a486ef984a6511d7
 injuries 594a6c11dc263f37
 input-ffb 565464637bf28b86
