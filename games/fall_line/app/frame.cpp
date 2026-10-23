@@ -25,7 +25,7 @@ namespace r = ge::render;
 
 // The pass table: the order `draw` runs, and what each pass reads and writes.
 constexpr r::PassRow kPassTable[] = {
-    {"sky.tables", "", "sky.view sky.aerial sky.light"},
+    {"sky.tables", "", "sky.view sky.moon_view sky.aerial sky.light"},
     {"skinning", "", "figures.posed"},
     {"terrain.cull", "terrain.pyramid", "terrain.tiles terrain.indirect"},
     {"instances.cull", "instances figures.posed hiz.last", "instances.early"},
@@ -51,7 +51,7 @@ constexpr r::PassRow kPassTable[] = {
      "instances figures.posed instances.early instances.late terrain.horizon shadows.maps "
      "sky.aerial sky.light depth",
      "hdr motion"},
-    {"sky", "sky.view depth", "hdr motion"},
+    {"sky", "sky.view sky.moon_view depth", "hdr motion"},
     {"particles", "particles terrain.horizon shadows.maps sky.aerial sky.light depth",
      "hdr motion"},
     {"snowfall", "snowfall terrain.horizon sky.aerial sky.light depth", "hdr motion"},

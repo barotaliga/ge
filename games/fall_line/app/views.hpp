@@ -3,8 +3,9 @@
 // view is a camera rig over the generated map; a moment of a run is seen from the CHASE camera
 // (`chase_view`), behind and over the skier along his way.
 //
-// THE DAY: `day_view` puts the map's own sun (its hour, day of the year and latitude, R15) and
-// its altitude into a FrameView; every view starts from it.
+// THE DAY: `day_view` puts the map's own sun (its hour, day of the year and latitude, R15), its
+// moon and stars on its date (mountain/app/night_look.hpp) and its altitude into a FrameView;
+// every view starts from it.
 //
 // ge:summary Fall Line's named camera views over a map and the map's day for the renderer
 // ge:keywords fall-line views named-views camera-rig start piste vista lookback aerial sun day
@@ -34,7 +35,7 @@ std::span<const std::string_view> view_names();
 bool make_view(const ge::mountain::mapgen::Level& level, std::string_view name,
                ge::render::FrameView& out);
 
-// The map's sun and altitude, at `hour` (the map's own start hour when negative).
+// The map's sun, moon and altitude, at `hour` (the map's own start hour when negative).
 void day_view(const ge::mountain::mapgen::Level& level, double hour, ge::render::FrameView& out);
 
 // The chase camera on `skier`: `back` m behind him along his way (his heading when he is nearly

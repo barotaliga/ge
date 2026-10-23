@@ -87,6 +87,14 @@ void sun_direction(const FrameView& view, double out[3]) {
   look_dir(view.sun_azimuth, view.sun_elevation, out);
 }
 
+void real_sun_direction(const FrameView& view, double out[3]) {
+  if (view.night.moon_key) {
+    look_dir(view.night.sun_azimuth, view.night.sun_elevation, out);
+  } else {
+    sun_direction(view, out);
+  }
+}
+
 CameraMatrices camera_matrices(const FrameView& view, double aspect) {
   double f[3];
   look_dir(view.heading, view.pitch, f);

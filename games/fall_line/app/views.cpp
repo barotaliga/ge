@@ -10,6 +10,7 @@
 #include <cmath>
 
 #include "core/solar.hpp"
+#include "mountain/app/night_look.hpp"
 #include "mountain/mapgen/sun.hpp"
 
 namespace fall_line::app {
@@ -189,6 +190,7 @@ void day_view(const Level& level, double hour, ge::render::FrameView& v) {
   v.altitude_m = -level.mountain.sea;
   v.fov_y = 55 * kDeg;
   v.near_m = 0.1;
+  ge::mountain::app::night_look(level, h, v);
 }
 
 bool make_view(const Level& level, std::string_view name, ge::render::FrameView& v) {

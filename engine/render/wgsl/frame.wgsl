@@ -11,6 +11,16 @@
 // surface becomes that grey's (`sky_irradiance`), with no direction but up: the flat light; the
 // air under it scatters its grey, not the sun's (`haze`); and a fog or a fall closes everything
 // into the sky behind it at its visual range.
+//
+// THE NIGHT (`frame.moon`, `frame.night`: render/night.hpp) enters here too: the dark sky's own
+// glow on the dome and its light on the ground, and the EYE, which adapts to a night only part
+// of the way (`exposure`: 0.6 decades of gain a decade of light under 14 lx on white), so a
+// full moon's snow reads a fifth as bright as the noon's and a moonless night's an eighth of that,
+// and loses its colour (`night_vision`) into the rods' blue grey as the light falls under 3 lx.
+// At night the sky is TWO skies, the twilight's (the sun's own table) and the moon's (its own
+// table at the moon's height, lit by its light), summed wherever the sky's light is read; the
+// KEY LIGHT (`frame.sun`, the one direct light) is the moon once the sun is gone, and the haze
+// is the brighter sky's light scattered, the other's added as the sky behind it.
 #include "render/wgsl/frame_types.wgsl"
 #include "render/wgsl/atmosphere.wgsl"
 
@@ -22,10 +32,13 @@
 @group(0) @binding(5) var aerial_volume: texture_3d<f32>;
 
 struct SkyLight {
-  irradiance_up: vec4f,  // the sky's irradiance on an up-facing surface, per unit sun
+  irradiance_up: vec4f,  // the sun's sky's irradiance on an up-facing surface, per unit sun
   sun_at_eye: vec4f,     // the sun's transmittance to the eye
+  moon_up: vec4f,        // the moon's sky's, per unit of its light (zero by day)
+  moon_at_eye: vec4f,    // the moon's transmittance to the eye
 }
 @group(0) @binding(6) var<storage, read> sky_light: SkyLight;
+@group(0) @binding(7) var moon_view_lut: texture_2d<f32>;
 
 // A world height (m) as a radius from the planet's centre, km.
 fn radius_at(world_y: f32) -> f32 {
@@ -41,11 +54,24 @@ fn sun_light(world_y: f32) -> vec3f {
 
 const kLuma = vec3f(0.2126, 0.7152, 0.0722);
 
+// The key light's transmittance to the eye: the sun's, or the moon's when it is the key.
+fn key_at_eye() -> vec3f {
+  if (frame.moon_light.w > 0.5) {
+    return sky_light.moon_at_eye.rgb;
+  }
+  return sky_light.sun_at_eye.rgb;
+}
+
+// The clear sky's irradiance on an up-facing surface: the sun's sky and, at night, the moon's.
+fn clear_sky_up() -> vec3f {
+  return sky_light.irradiance_up.rgb * frame.night_sun.w + sky_light.moon_up.rgb * frame.moon.w;
+}
+
 // THE DECK'S GREY at the horizon: the clear day's light on a level face (the sun's and the
 // sky's) over pi, as the luminance of a white face under it, times the deck's tint and light.
 fn deck_horizon() -> vec3f {
-  let sun = sky_light.sun_at_eye.rgb * frame.sun.w * max(frame.sun.y, 0.0);
-  let sky = sky_light.irradiance_up.rgb * frame.sun.w;
+  let sun = key_at_eye() * frame.sun.w * max(frame.sun.y, 0.0);
+  let sky = clear_sky_up();
   return frame.deck.rgb * (dot(sun + sky, kLuma) / PI);
 }
 
@@ -69,25 +95,61 @@ fn deck_luminance(d: vec3f) -> vec3f {
 // a surface that faces the ground), with the ground's bounce for the half that faces down. Under
 // a deck, the deck's: pi times its grey, the overhead share weighed as a level face sees it.
 fn sky_irradiance(n: vec3f) -> vec3f {
-  let clear = sky_light.irradiance_up.rgb * frame.sun.w;
+  let clear = clear_sky_up();
   let h = deck_horizon();
   let deck = PI * h * mix(1.0, deck_zenith_share(), 0.8);
-  let up = mix(clear, deck, frame.weather.y);
-  let sun = sky_light.sun_at_eye.rgb * frame.sun.w * frame.weather.x * max(frame.sun.y, 0.0);
+  let up = mix(clear, deck, frame.weather.y) + dark_light();
+  let sun = key_at_eye() * frame.sun.w * frame.weather.x * max(frame.sun.y, 0.0);
   let ground = (sun + up) * kGroundAlbedo;
   return up * (0.5 + 0.5 * n.y) + ground * (0.5 - 0.5 * n.y) * 0.5;
 }
 
-// The sky's luminance along a camera-relative direction: the sky-view table's, under the deck's
-// share of the dome its grey.
-fn sky_luminance(d: vec3f) -> vec3f {
-  let r = kGroundRadius + max(frame.eye.w, 0.0);
-  let uv = skyview_uv(r, d.y, azimuth_cos(d, frame.sun.xyz));
-  let clear = textureSampleLevel(sky_view_lut, linear_clamp, uv, 0.0).rgb * frame.sun.w;
-  if (frame.weather.y <= 0.0) {
-    return clear;
+// THE DARK SKY's glow (the airglow, the zodiacal light and the stars too faint to see one by
+// one), a little green: its luminance along `d`, brighter toward the horizon as the glowing
+// layer 90 km up is seen edge on (van Rhijn's law, held to three times the zenith's by the air
+// it shines through), hidden by the deck's share.
+const kDarkTint = vec3f(0.92, 1.03, 0.98);
+
+fn dark_sky(d: vec3f) -> vec3f {
+  if (frame.night.x <= 0.0) {
+    return vec3f(0.0);
   }
-  return mix(clear, deck_luminance(d), frame.weather.y);
+  let z = clamp(d.y, 0.0, 1.0);
+  let edge = min(inverseSqrt(max(1.0 - 0.9724 * (1.0 - z * z), 1e-4)), 3.0);
+  return kDarkTint * (frame.night.x * edge * (1.0 - frame.weather.y));
+}
+
+// The dark sky's light on a level face, through what the deck lets down of it, and the moon's
+// direct light while the sun is still the key, spread from above.
+fn dark_light() -> vec3f {
+  return kDarkTint * (frame.night.y * (1.0 - 0.7 * frame.weather.y)) +
+         vec3f(frame.world.z * frame.weather.x);
+}
+
+// The sun's sky and the moon's along a camera-relative direction, clear.
+fn sun_sky(d: vec3f) -> vec3f {
+  let r = kGroundRadius + max(frame.eye.w, 0.0);
+  let uv = skyview_uv(r, d.y, azimuth_cos(d, frame.night_sun.xyz));
+  return textureSampleLevel(sky_view_lut, linear_clamp, uv, 0.0).rgb * frame.night_sun.w;
+}
+
+fn moon_sky(d: vec3f) -> vec3f {
+  let r = kGroundRadius + max(frame.eye.w, 0.0);
+  let uv = skyview_uv(r, d.y, azimuth_cos(d, frame.moon.xyz));
+  return textureSampleLevel(moon_view_lut, linear_clamp, uv, 0.0).rgb * frame.moon.w;
+}
+
+// The sky's luminance along a camera-relative direction: the sky-view tables' (the sun's, and
+// the moon's at night), under the deck's share of the dome its grey, and the dark sky's glow.
+fn sky_luminance(d: vec3f) -> vec3f {
+  var clear = sun_sky(d);
+  if (frame.moon.w > 0.0) {
+    clear += moon_sky(d);
+  }
+  if (frame.weather.y <= 0.0) {
+    return clear + dark_sky(d);
+  }
+  return mix(clear, deck_luminance(d), frame.weather.y) + dark_sky(d);
 }
 
 // THE HAZE: a surface's colour seen through `dist_m` of air at screen `uv` (0..1): its colour
@@ -101,7 +163,15 @@ fn haze(colour: vec3f, uv: vec2f, dist_m: f32) -> vec3f {
   let v = textureSampleLevel(aerial_volume, linear_clamp, vec3f(uv, w), 0.0);
   // Nearer than the first slice: fade from no air to the first slice's.
   let k = clamp(s * kAerialSize.z, 0.0, 1.0);
-  let inscatter = mix(v.rgb * frame.sun.w, (1.0 - v.a) * deck_horizon(), frame.weather.y);
+  // The volume is the light of the haze's sky (the sun's, or the moon's once its sky outshines
+  // the twilight's); the other sky's is the air's veil over the sky behind it.
+  var air = v.rgb * select(frame.night_sun.w, frame.moon.w, frame.world.w > 0.5);
+  if (frame.moon.w > 0.0) {
+    var b = view_ray(frame, uv);
+    b = normalize(vec3f(b.x, max(b.y, 0.01), b.z));
+    air += (1.0 - v.a) * select(moon_sky(b), sun_sky(b), frame.world.w > 0.5);
+  }
+  let inscatter = mix(air, (1.0 - v.a) * deck_horizon(), frame.weather.y);
   var c = colour * mix(1.0, v.a, k) + inscatter * k;
   if (frame.weather.z > 0.0) {
     // What is behind it is the sky toward its horizon; looking down, the horizon's.
@@ -118,12 +188,51 @@ fn haze(colour: vec3f, uv: vec2f, dist_m: f32) -> vec3f {
 const kWhiteKey = 0.78;
 const kDeckKey = 0.6;
 
+// One unit of light is the sun's illuminance outside the air, lx (render/night.hpp's kSunLux);
+// the frame stores light at the pre-exposure's scale (`frame.world.y`), so an absolute reading
+// divides it out.
+const kSunLux = 128000.0;
+// THE EYE AT NIGHT: under this light on white, lx, it no longer adapts all the way but makes up
+// kAdaptGain decades of gain a decade darker; and the light on white no night is darker than
+// (an overcast night with no moon), lx.
+const kAdaptLux = 14.0;
+const kAdaptGain = 0.6;
+const kDarkestLux = 1e-4;
+
+// A white Lambertian face's luminance under the key light and the sky, the sun's units.
+fn white_luminance() -> f32 {
+  let sun = key_at_eye() * frame.sun.w * frame.weather.x * max(frame.sun.y, 0.0);
+  let sky = sky_irradiance(vec3f(0.0, 1.0, 0.0));
+  return max(dot((sun + sky) / PI, kLuma), kDarkestLux * frame.world.y / (PI * kSunLux));
+}
+
 // THE EXPOSURE: the scale that maps a white Lambertian surface under this sun and sky to
-// kWhiteKey, read off the sky's light (never a histogram, so it never pumps). The post pass
+// kWhiteKey, read off the sky's light (never a histogram, so it never pumps); under kAdaptLux
+// on white, the eye's partial adaptation leaves the night darker than the day. The post pass
 // applies it; TAA-U weighs its samples in the light it gives.
 fn exposure() -> f32 {
-  let sun = sky_light.sun_at_eye.rgb * frame.sun.w * frame.weather.x * max(frame.sun.y, 0.0);
-  let sky = sky_irradiance(vec3f(0.0, 1.0, 0.0));
-  let white = dot((sun + sky) / PI, kLuma);
-  return mix(kWhiteKey, kDeckKey, frame.weather.y) / max(white, 1e-4);
+  let white = white_luminance();
+  var e = mix(kWhiteKey, kDeckKey, frame.weather.y) / white;
+  let lux = white * PI * kSunLux / frame.world.y;
+  if (lux < kAdaptLux) {
+    e *= pow(lux / kAdaptLux, 1.0 - kAdaptGain);
+  }
+  return e;
+}
+
+// THE RODS' SHARE of the eye's seeing: 0 over 3 lx on white (the cones), 1 under 0.01 lx.
+fn rod_share() -> f32 {
+  let lux = white_luminance() * PI * kSunLux / frame.world.y;
+  return clamp((0.5 - log2(lux) * 0.30103) / 2.5, 0.0, 1.0);
+}
+
+// NIGHT VISION: a colour as the rods see it, its luminance in a blue grey, by their share.
+const kRodTint = vec3f(0.78, 0.93, 1.32);
+
+fn night_vision(c: vec3f) -> vec3f {
+  let s = rod_share();
+  if (s <= 0.0) {
+    return c;
+  }
+  return mix(c, kRodTint * dot(c, kLuma), 0.85 * s);
 }
