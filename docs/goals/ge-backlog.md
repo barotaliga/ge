@@ -73,6 +73,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge lab refs` (a reference photo fetched to a temp directory, never committed, JPEG turned to PNG, a refs row written; the model-views lab reads only 8-bit PNG)
 - `ge lab view <glb>` (the model-views lab on any model, in one command)
 - `ge lab table <lab> --where col=value` (one slice of a lab's table, a weapon at one range, read without re-running the lab or opening the whole report)
+- `ge lab <id> --show` (the run's pictures shown inline beside its metrics: an unmoved digest can hide a visual bug)
 
 ## Measuring
 
@@ -106,7 +107,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge demo info|frames|shot|diff` (the classic demo formats decoded, a frame pictured, two demos diffed to their first difference)
 - `ge net inspect --protocol=<name>` (pluggable protocol decoders over a capture: `--protocol=classic`)
 - `ge pmove <scenario>` (movement trajectories as tables or charts against a recording)
-- `ge console <target> "<cmd>"` (console commands and cvars on a headless server or client)
+- `ge console <target> "<cmd>"` and `--pid=<p>` (console commands and cvars on a headless server or client, or a running game, the output read back)
 - the play contract's gaps in `engine/play`: an angle axis kind on a finer grid (16-bit angles), a step whose length the input sets (a usercmd's msec), several players a Run
 
 ## Networking (M17)
