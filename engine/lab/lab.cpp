@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include <map>
 
 namespace ge::lab {
 
@@ -19,6 +20,11 @@ namespace {
 std::vector<const LabSpec*>& registry() {
   static std::vector<const LabSpec*> labs;
   return labs;
+}
+
+std::map<std::string, const char*>& sources() {
+  static std::map<std::string, const char*> files;
+  return files;
 }
 
 const Rgba kBand{24, 26, 32};
@@ -101,7 +107,8 @@ std::string_view kind_name(LabKind kind) {
   return "?";
 }
 
-LabRegister::LabRegister(const LabSpec& spec) {
+LabRegister::LabRegister(const LabSpec& spec, const char* source) {
+  sources()[spec.id] = source;
   auto& labs = registry();
   const auto at = std::lower_bound(labs.begin(), labs.end(), &spec,
                                    [](auto* a, auto* b) { return std::strcmp(a->id, b->id) < 0; });
@@ -109,6 +116,11 @@ LabRegister::LabRegister(const LabSpec& spec) {
 }
 
 const std::vector<const LabSpec*>& registered_labs() { return registry(); }
+
+const char* lab_source(std::string_view id) {
+  const auto it = sources().find(std::string(id));
+  return it == sources().end() ? "" : it->second;
+}
 
 const LabSpec* find_lab(std::string_view id) {
   for (const LabSpec* spec : registry()) {

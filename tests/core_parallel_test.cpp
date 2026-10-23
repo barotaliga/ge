@@ -1,14 +1,17 @@
 // engine/core/parallel.hpp: the bands cover every index once, in order, and a bake gives the
-// same bits on any number of workers.
+// same bits on any number of workers; the pool takes calls back to back, a call from inside a
+// band, and calls from two threads at once.
 //
-// ge:summary Test: core/parallel's bands and a bake's bits across worker counts
-// ge:keywords test parallel threads workers bands
+// ge:summary Test: core/parallel's bands, a bake's bits across worker counts, the pool's reentry
+// ge:keywords test parallel threads workers bands pool nested concurrent
 // ge:skill testing
 #include "core/parallel.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <mutex>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -76,4 +79,47 @@ TEST(parallel_default_workers_is_in_range) {
   const size_t w = ge::core::default_workers();
   CHECK(w >= 1);
   CHECK(w <= ge::core::kMaxWorkers);
+}
+
+// Thousands of small calls back to back: each sees every index once.
+TEST(parallel_back_to_back_calls_each_cover_the_range) {
+  std::vector<uint32_t> hits(64, 0);
+  for (int call = 0; call < 5000; call++) {
+    parallel_bands(hits.size(), 8, [&](size_t b, size_t e) {
+      for (size_t i = b; i < e; i++) hits[i]++;
+    });
+  }
+  for (const uint32_t h : hits) CHECK(h == 5000);
+}
+
+// A band that calls parallel_bands again: the inner call runs on the band's thread, whole.
+TEST(parallel_call_from_inside_a_band_covers_the_range) {
+  constexpr size_t kOuter = 16, kInner = 100;
+  std::vector<std::atomic<uint32_t>> hits(kOuter * kInner);
+  parallel_bands(kOuter, 8, [&](size_t b, size_t e) {
+    for (size_t o = b; o < e; o++) {
+      parallel_bands(kInner, 4, [&](size_t ib, size_t ie) {
+        for (size_t i = ib; i < ie; i++) hits[o * kInner + i]++;
+      });
+    }
+  });
+  for (const auto& h : hits) CHECK(h.load() == 1);
+}
+
+// Two threads baking at once: one owns the pool, the other runs its bands itself; both bakes
+// are the one-worker bits.
+TEST(parallel_bakes_from_two_threads_at_once_are_the_same_bits) {
+  const std::vector<double> one = bake(1);
+  std::vector<double> a, b;
+  std::thread other([&] {
+    for (int k = 0; k < 20; k++) b = bake(8);
+  });
+  for (int k = 0; k < 20; k++) a = bake(8);
+  other.join();
+  CHECK(a.size() == one.size());
+  CHECK(b.size() == one.size());
+  for (size_t i = 0; i < one.size(); i++) {
+    CHECK_BITS(a[i], one[i]);
+    CHECK_BITS(b[i], one[i]);
+  }
 }

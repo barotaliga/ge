@@ -71,15 +71,18 @@ struct LabSpec {
 // Every registered lab, in id order.
 const std::vector<const LabSpec*>& registered_labs();
 const LabSpec* find_lab(std::string_view id);
+// The source file a lab was registered from (the compiler's __FILE__, so most often absolute), or
+// "" for a lab registered without one. `ge digest --affected` maps a change to its labs by it.
+const char* lab_source(std::string_view id);
 
 struct LabRegister {
-  explicit LabRegister(const LabSpec& spec);
+  explicit LabRegister(const LabSpec& spec, const char* source = "");
 };
 
 #define GE_LAB_CAT2(a, b) a##b
 #define GE_LAB_CAT(a, b) GE_LAB_CAT2(a, b)
 // Register `spec` (a LabSpec with static storage) with the runner.
-#define GE_LAB(spec) static ::ge::lab::LabRegister GE_LAB_CAT(ge_lab_reg_, __LINE__)(spec)
+#define GE_LAB(spec) static ::ge::lab::LabRegister GE_LAB_CAT(ge_lab_reg_, __LINE__)(spec, __FILE__)
 
 // Whether a number belongs to the digest. Wall-clock times and anything else that differs run
 // to run are `measured`: printed and compared, never hashed.
