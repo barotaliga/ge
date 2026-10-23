@@ -1,8 +1,12 @@
-# QuakeWorld: the working notes
+# Shooter's Edge: the working notes
 
 **A WORKING AREA**, like the rest of `porting/`: deleted when the port ends. The design is
-`docs/quakeworld.md`; this directory holds what only matters while the game is being built: the
-survey of existing implementations, and the specifications the building sessions read.
+`docs/shooters-edge.md`; this directory holds what only matters while the game is being built:
+the survey of existing implementations, and the specifications the building sessions read.
+
+Shooter's Edge is compatible with QuakeWorld: its file formats, its QuakeC and its protocol. This
+working area is the only place in the tree that names them; everywhere else they are "the
+classic game", "QC" and "the classic protocol", and `make agents-check` holds it.
 
 | File | What |
 | --- | --- |
@@ -17,7 +21,7 @@ the extensions), `movement.md` (the measured movement model), `demos.md` (QWD an
 ## The rules for a note
 
 The implementations surveyed here are GPL. A note is how their behaviour reaches this tree
-without their code (`docs/quakeworld.md` § Licensing and the clean room):
+without their code (`docs/shooters-edge.md` § Licensing and the clean room):
 
 - **Facts, in our words.** Byte layouts, numbers, message orders, measured curves, what a
   command does. Never a quotation of source, never a function transcribed into prose step by

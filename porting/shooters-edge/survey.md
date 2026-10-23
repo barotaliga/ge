@@ -1,6 +1,9 @@
 # Survey: today's QuakeWorld implementations
 
-Research for `docs/quakeworld.md` § Modern features, written 2026-10-23. Read for ideas, never
+Shooter's Edge (`docs/shooters-edge.md`) is compatible with QuakeWorld; this note names what the
+rest of the tree only calls "the classic game".
+
+Research for `docs/shooters-edge.md` § Modern features, written 2026-10-23. Read for ideas, never
 for code: every project below is GPL (README.md, the rules).
 
 ## The projects
@@ -16,7 +19,7 @@ for code: every project below is GPL (README.md, the rules).
 
 ## Decisions taken from the survey
 
-- **Extensions in tiers** (`docs/quakeworld.md` § The network): first the ones a public server
+- **Extensions in tiers** (`docs/shooters-edge.md` § The network): first the ones a public server
   negotiates today (float coordinates, transparency, more entities, larger lists, MVD flags),
   then the QuakeC extensions mods ask for most, then client-side QuakeC.
 - **Our own QuakeC compiler**, because the existing compilers are GPL and the labs need

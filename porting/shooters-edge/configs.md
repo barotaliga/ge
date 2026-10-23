@@ -1,7 +1,7 @@
 # The console language, specified
 
 A specification in our words of the console language players' configs use, the classic core
-and what today's clients added (README.md, the rules). `docs/quakeworld.md` § Configs lists the
+and what today's clients added (README.md, the rules). `docs/shooters-edge.md` § Configs lists the
 features; this note grows the exact behaviour of each, with a fixture per feature, when M18k
 starts. Each section below is a heading to fill, with the facts and where each came from.
 

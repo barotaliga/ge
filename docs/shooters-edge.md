@@ -1,33 +1,33 @@
-# QuakeWorld
+# Shooter's Edge
 
-The plan for the engine's second game: a QuakeWorld rewritten in modern C++ on this engine,
-compatible with the mods, maps and servers that exist for it. It starts once Fall Line is on the
+The plan for the engine's second game: **Shooter's Edge**, a fast multiplayer arena shooter in
+modern C++ on this engine, compatible with the mods, maps, servers and clients of the classic
+multiplayer shooter whose formats and protocol it speaks. It starts once Fall Line is on the
 engine (`docs/goals.md` M18 follows M10–M13 and M17k). Until a row lands, this page is the plan;
 change it in the same PR that changes the plan.
 
-The game's working name in the tree is `quakeworld` (`games/quakeworld/`). The name "Quake" is a
-trademark of its owner, so before anything ships (a release, a store listing, a window title) the
-game takes a name of its own and calls itself QuakeWorld-compatible, which names the protocol and
-the formats it reads and nothing more (§ Licensing and the clean room).
+The game lives in `games/shooters_edge/`. Outside the `porting/` working area nothing names the
+game it is compatible with or its implementations: the formats are named by their file
+extensions and versions, the language its mods are written in is QC, and the wire format is the
+classic protocol (version 28). `make agents-check` holds it.
 
 ## What it is
 
-- **Functionality, never code.** The game does what QuakeWorld does (the movement a player's
-  hands know, the QuakeC a mod runs, the packets a server sends), written fresh in this engine's
+- **Functionality, never code.** The game does what the classic game does (the movement a player's
+  hands know, the QC a mod runs, the packets a server sends), written fresh in this engine's
   C++ from the file formats, the protocol and the language's reference, and from measured
   behaviour. No existing implementation's source is copied, translated or paraphrased
   (§ Licensing and the clean room).
 - **Compatible where it counts.** Existing content runs unchanged: pak and pk3 archives, a game
-  directory per mod, BSP maps, the model, sprite, texture and sound formats, `progs.dat` and
-  `qwprogs.dat` QuakeC bytecode, config files, and recorded demos. Our client joins the servers
+  directory per mod, BSP maps, the model, sprite, texture and sound formats, QC bytecode (the multiplayer and single-player `progs`), config files, and recorded demos. Our client joins the servers
   people run today and their clients join ours (§ The network).
 - **Better where it can be.** Everything the engine already does well applies: a modern GPU
   frame over Dawn, the synth's mixer, deterministic simulation with labs and goldens, the bots'
   decision records, the `ge` CLI. The modern features players expect from today's clients are
   in the plan (§ Modern features), not bolted on later.
 - **Reusable first.** Anything a first-person shooter, or any game on the same map format, would
-  use goes in `engine/` or a plugin; only what makes QuakeWorld itself stays in
-  `games/quakeworld/` (§ Where the code goes).
+  use goes in `engine/` or a plugin; only what makes Shooter's Edge itself stays in
+  `games/shooters_edge/` (§ Where the code goes).
 - **A test of the `ge` CLI.** The port is also the proof that `ge` is complete enough for an
   agent to build a second, very different game with it. Every command the port finds missing is
   added to `ge` when it is found (§ The `ge` tooling it needs).
@@ -44,17 +44,17 @@ by a lab or a test over free content (§ Content and test data).
 | Models | MDL (vertex-animated, frame groups, skin groups, 8-bit packed vertices and normals from a fixed table), SPR (sprites with orientation types) | Every frame and skin a mod names; the player model's colours (top and bottom) remapped at draw time; frame interpolation as a modern client does it |
 | Images | The 256-colour palette, the colour map (light levels to palette), LMP pictures, WAD2 (the 2D graphics: the status bar, the font) | Drawn as the classic game draws them, and also as true colour (§ The picture) |
 | Sound | WAV (8 and 16 bit PCM, mono, any rate, the loop cue) | Played at their own rates, looped where the cue says, spatialized, with ambient sounds by leaf |
-| Game logic | QuakeC bytecode: `qwprogs.dat` (multiplayer) and `progs.dat` (the single-player game) | Every opcode, the entity field layout the progs declares, the globals, the string table, the builtins by number, the server's entry points (`StartFrame`, `PlayerPreThink`, `ClientConnect`…), the engine-side fields the server reads (`origin`, `velocity`, `movetype`, `solid`, `effects`, `modelindex`…) |
+| Game logic | QC bytecode: the multiplayer `progs` and the single-player one | Every opcode, the entity field layout the progs declares, the globals, the string table, the builtins by number, the server's entry points (`StartFrame`, `PlayerPreThink`, `ClientConnect`…), the engine-side fields the server reads (`origin`, `velocity`, `movetype`, `solid`, `effects`, `modelindex`…) |
 | Extended logic | The extension builtins and fields modern servers and clients share, asked for by name (`checkextension`) | The common set first (§ Modern features), each one a row of a table the VM answers from |
 | Config and console | `.cfg` scripts, `exec`, `alias`, `bind`, cvars with server- and user-info, `wait`; the advanced scripting today's clients added (§ Configs) | A player's existing config runs, however advanced; a server's `server.cfg` runs; a cvar the game does not know is kept and written back, never an error |
-| Demos | QWD (one client's view), MVD (every player, written by the server) | Played back, seeked, and written; an MVD from another server plays here |
-| The network | The QuakeWorld protocol (version 28) and its common extensions | § The network |
+| Demos | Client demos (one client's view), MVD (every player, written by the server) | Played back, seeked, and written; an MVD from another server plays here |
+| The network | The classic protocol (version 28) and its common extensions | § The network |
 
 ## Configs
 
 Players carry configs that grew for years in today's clients, and a competitive player will not
 rewrite theirs. `engine/console` therefore runs the console language at its full modern extent,
-specified in our own words in `porting/quakeworld/configs.md` and held by a corpus of config
+specified in our own words in `porting/shooters-edge/configs.md` and held by a corpus of config
 fixtures we write (`tests/golden/console_*.txt`):
 
 - **The classic core**: `exec`, `alias`, `bind` and `unbind` (with the `+`/`-` pairs a held key
@@ -79,18 +79,21 @@ fixtures we write (`tests/golden/console_*.txt`):
 
 ## Licensing and the clean room
 
-**The engine.** gameengine2 is public but carries no `LICENSE` file at its root yet
-(`cmake/Packaging.cmake` already installs one when it exists), so its terms are unstated. That
-choice is the owner's; this plan works under any of them, because it copies no code.
+**The engine.** gameengine2 is under the PolyForm Noncommercial License 1.0.0 (`LICENSE`): open to
+read, change and share for noncommercial use, with commercial use reserved to its copyright
+holder. That is exactly why no GPL code may enter it: the GPL forbids adding restrictions such as
+"noncommercial only", so a derived work of GPL code could not carry this licence. A clean-room
+rewrite is not a derived work: copyright protects code, not functionality, file formats or
+protocols, and reimplementing them for compatibility is lawful.
 
 **The existing implementations.** The original game's source, the community clients and servers
 and their mods are released under the GNU GPL. Copying, translating or closely paraphrasing any
-of it would make this tree a derived work bound by the GPL. The plan avoids that by building
+of it would make this tree a derived work bound by the GPL, which this tree's licence cannot be. The plan avoids that by building
 from specifications, not source:
 
 1. **The specification is written in our own words.** Every format, message and behaviour the
-   game needs is described in a working note under `porting/quakeworld/` before it is built:
-   from the public descriptions of the file formats and the protocol, the QuakeC language's
+   game needs is described in a working note under `porting/shooters-edge/` before it is built:
+   from the public descriptions of the file formats and the protocol, the QC language's
    reference, and measurements of running programs. A note states facts (a lump's offset, a
    message's bytes, a builtin's number and what it returns, a measured acceleration curve);
    it never quotes source.
@@ -104,30 +107,33 @@ from specifications, not source:
    server or client as a separate program, never linked and never committed (fetched and built
    in the lab's own cache), feeds it scripted inputs, and records what comes out: positions,
    velocities, packets. Those recordings are facts about a program's output, and our code is
-   held to them by a lab with a tolerance (`qw-parity`). Running a GPL program as a tool is not
+   held to them by a lab with a tolerance (`se-parity`). Running a GPL program as a tool is not
    distributing it.
-4. **Nothing GPL enters the tree.** No source, no patch, no compiled `progs.dat` built from
-   GPL QuakeC, no shader or table copied out of one. Tables a format defines (the packed vertex
+4. **Nothing GPL enters the tree.** No source, no patch, no compiled `progs` built from
+   GPL QC, no shader or table copied out of one. Tables a format defines (the packed vertex
    normals, the default palette's role) are data the format specifies; where a table's values
    come only from GPL code, the note derives or measures them instead, and says how.
 
-**Content.** The original game's data (the `id1` pak files) is not redistributable. The game
-never ships or fetches it; a player points the game at their own copy. Tests and labs run on
+**Mods.** A mod a player loads keeps its own licence, GPL included: the VM executes its bytecode as
+data, which makes neither work a derivative of the other. The game never bundles a GPL mod.
+
+**Content.** The classic game's own data is not redistributable. The game never ships or
+fetches it; a player points the game at their own copy. Tests and labs run on
 free content (§ Content and test data).
 
 ## Content and test data
 
-- **Free game data**: LibreQuake (BSD-3-Clause), a complete replacement for the original data
-  (maps, models, textures, sounds), fetched at a pinned release into the labs' cache and
+- **Free game data**: a BSD-3-Clause replacement for the classic game's data (maps, models,
+  textures, sounds; named in `porting/shooters-edge/survey.md`), fetched at a pinned release into the labs' cache and
   checked by hash, never committed. Its maps and models are the labs' reference scenes.
-- **Free QuakeC**: the labs need a `qwprogs.dat` that is not GPL. The plan is our own QuakeC
+- **Free QC**: the labs need a multiplayer `progs` that is not GPL. The plan is our own QC
   compiler (`ge qc`, M18d), written from the language reference, and a small deathmatch mod of
-  our own in QuakeC, so every server test runs on bytecode built in the tree. Until then the
+  our own in QC, so every server test runs on bytecode built in the tree. Until then the
   VM's tests run bytecode written by a tiny assembler in the tests.
 - **Fixtures of our own**: the tests write their own tiny archives, maps (a box, two rooms and a
   door, a ramp, water) and models with writers in the test support code, so a unit test needs
   no download.
-- **A player's own data**: the client reads `id1` and any mod from a directory the player
+- **A player's own data**: the client reads the base game directory and any mod from a directory the player
   chooses; nothing in a test depends on it.
 
 ## Where the code goes
@@ -143,30 +149,30 @@ Decided with the `plugins` skill's questions; dependencies run game → plugin �
 | `engine/console` (new) | Cvars (typed, flags: archived, server info, user info, cheat, latched), commands, aliases with arguments, binds in modes, `exec` of scripts, the command buffer and `wait`, `$cvar` expansion, conditionals and arithmetic, triggers, `cfg_save`, completion (§ Configs) | A console is generic: Fall Line's developer page can use it, and a mod's config needs it |
 | `engine/ui` | Bitmap fonts from a sheet, 2D pictures from palette images, the scaled HUD, a drop-down console's text view | The 2D layer M10 builds, given the pieces a classic HUD draws |
 | `engine/render` | A static-geometry pass with lightmap atlases and animated light styles, vertex-animated (morph) meshes with frame interpolation, sprites, a palette-and-colour-map look as a post option, dynamic point lights, scrolling and warped materials, sky layers and boxes, portal-free PVS culling as a visibility input to the existing instance culling | Each is a mechanism; the BSP specifics that feed it are the `brush` plugin's |
-| `engine/net` | The replication layer (M17f) used by the native protocol; a QuakeWorld-compatible channel needs only the sockets, the simulated network and the capture | The native protocol is the engine's own; the compatible one is the game's |
+| `engine/net` | The replication layer (M17f) used by the native protocol; a channel on the classic protocol needs only the sockets, the simulated network and the capture | The native protocol is the engine's own; the compatible one is the game's |
 | `engine/play` | The play contract grown for a first-person game: an angle axis kind on the protocol's grid, a step whose length the input sets (a usercmd's milliseconds), several players a run | Any first-person game an agent plays through `ge` |
 | `plugins/brush` (new) | The brush world: BSP29 and BSP2 loading, the PVS and PHS, clip hulls and the trace through them, brush models, the entity lump's parser, the lightmap and texture data with animation sequences; `app/`: feeding the world pass | Any game on this map format (single-player, multiplayer, a mod's own game) |
 | `plugins/shooter` (new) | The first-person shooter's movement model (ground and air acceleration, friction, stepping, ducking, water, jumping, the strafe and bunny-hop behaviour players rely on), prediction's contract with a server, hitscan and projectile helpers over a trace callback, the view's bob and roll, the bot's aim and movement hands on M16 | Any FPS on the engine, whatever its map format |
-| `plugins/quakec` (new) | The QuakeC VM: the progs loader and checker, the interpreter, entity and global memory, strings, the builtin table a game fills, errors with a QuakeC stack trace, the profiler, the extension registry; the compiler's front end for `ge qc` | Any game that runs QuakeC (the single-player game, QuakeWorld, a mod's standalone game) |
-| `games/quakeworld/` | The server (its frame, the QuakeWorld builtins, the clients), the client (prediction, interpolation, the HUD, menus, the console's commands), the protocol (native and compatible), demos, its labs, its play contract, the dedicated server executable | What makes QuakeWorld QuakeWorld |
+| `plugins/progs` (new) | The QC VM: the progs loader and checker, the interpreter, entity and global memory, strings, the builtin table a game fills, errors with a QC stack trace, the profiler, the extension registry; the compiler's front end for `ge qc` | Any game that runs QC bytecode (a single-player game, a multiplayer one, a mod's standalone game) |
+| `games/shooters_edge/` | The server (its frame, the multiplayer builtins, the clients), the client (prediction, interpolation, the HUD, menus, the console's commands), the protocol (native and compatible), demos, its labs, its play contract, the dedicated server executable | What makes Shooter's Edge Shooter's Edge |
 
-**The one exception to C++ only.** QuakeC is executed, never written into the engine: the VM
+**The one exception to C++ only.** QC is executed, never written into the engine: the VM
 runs existing mods' bytecode for compatibility, and the engine, the plugins and the game stay
-C++. The tree's own QuakeC is limited to the test mod the labs run (`games/quakeworld/qc/`).
+C++. The tree's own QC is limited to the test mod the labs run (`games/shooters_edge/qc/`).
 AGENTS.md and the non-goals in `docs/goals.md` state this exception when M18 starts.
 
 ## What the engine has, and what it lacks
 
 | Need | The engine today | Gap, and the row that closes it |
 | --- | --- | --- |
-| Fixed-step simulation, deterministic | `loop/run_clock` at 120 Hz; `core/libm`; goldens; labs as determinism tests | The server's frame runs on the run clock at its own rate (77 Hz, the classic tick); each player's move runs on its usercmd's milliseconds, as the protocol defines it. QuakeC floats are 32-bit and its math builtins call `core/libm`, so a server replays to the bit from its input log (M18c, M18f) |
+| Fixed-step simulation, deterministic | `loop/run_clock` at 120 Hz; `core/libm`; goldens; labs as determinism tests | The server's frame runs on the run clock at its own rate (77 Hz, the classic tick); each player's move runs on its usercmd's milliseconds, as the protocol defines it. QC floats are 32-bit and its math builtins call `core/libm`, so a server replays to the bit from its input log (M18c, M18f) |
 | Files and archives | Embedded blobs; the labs' inflater | `engine/vfs`, inflate shipped (M18a) |
 | A map format with visibility and collision | A heightfield world (`plugins/mountain`) | `plugins/brush` (M18b) |
-| Scripting for mods | None, by design | `plugins/quakec`, the stated exception (M18c, M18d) |
+| Scripting for mods | None, by design | `plugins/progs`, the stated exception (M18c, M18d) |
 | Player movement and weapons | A skier and machines, each its own plugin | `plugins/shooter` (M18e) |
 | A server with many clients | `engine/net` links, channels, sessions, NAT, the simulated network, captures | The server's frame and clients (M18f); the compatible protocol (M18g); the native one on M17f's replication (M18h) |
-| Client prediction and interpolation | Planned in M17f | M17f lands the generic layer; QuakeWorld's own prediction over `plugins/shooter` (M18h) |
-| Demos | The input log (`play/inputs`), recordings (`ge record`) | QWD and MVD read and written, seek by snapshot (M18h) |
+| Client prediction and interpolation | Planned in M17f | M17f lands the generic layer; the game's own prediction over `plugins/shooter` (M18h) |
+| Demos | The input log (`play/inputs`), recordings (`ge record`) | Client demos and MVD read and written, seek by snapshot (M18h) |
 | Rendering | Dawn, the pass table, instances with Hi-Z culling, shadows, TAA-U, bloom, post, skinning; lavapipe in the container | The static-geometry pass with lightmaps and light styles, morph meshes, sprites, sky layers, warps, the classic look, dynamic lights, PVS culling (M18i) |
 | Sound | The synth, the meter, WAV writing | Sampled voices, spatial sound, ambient sounds by leaf (M18j) |
 | Input | Keyboard, pointer, focus | Captured mouse with raw deltas, every key, the wheel, binds, text input (M18k) |
@@ -179,8 +185,8 @@ AGENTS.md and the non-goals in `docs/goals.md` state this exception when M18 sta
 
 The two protocols the owner chose: both.
 
-**The compatible protocol** (`games/quakeworld/net/qw_*`) speaks QuakeWorld's protocol version
-28 and the extensions today's servers and clients negotiate, over `engine/net`'s UDP sockets,
+**The compatible protocol** (`games/shooters_edge/net/classic_*`) speaks the classic protocol,
+version 28, and the extensions today's servers and clients negotiate, over `engine/net`'s UDP sockets,
 simulated network and pcap capture (but not its packet format, channels or handshake, which are
 the engine's own):
 
@@ -205,11 +211,11 @@ the engine's own):
 our server when both ends are ours: the M17 handshake and AEAD (M17i), the snapshot ring and
 deltas with interest (M17f), prediction of the local player and of projectiles, lag
 compensation by rewind, voice (M17h), the session layer's lobby and chat (M17d), and NAT
-traversal (M17e). Gameplay is identical under both: the server's frame and QuakeC do not know
+traversal (M17e). Gameplay is identical under both: the server's frame and QC do not know
 which protocol a client speaks, and one server serves both kinds of client at once.
 
 **Held by labs on the simulated network**: a compatible client and our server, our client and
-a compatible server, under every condition preset; and, in `qw-interop`, our client against an
+a compatible server, under every condition preset; and, in `se-interop`, our client against an
 existing server program and an existing client against ours, run as black boxes on loopback
 (§ Licensing and the clean room, step 3).
 
@@ -241,7 +247,7 @@ every pass, and judged by captioned screenshots:
 
 Today's community clients and servers added much since the original release. Grouped by what a
 player of today expects, then what makes it better, then what can wait. The research behind the
-list is in `porting/quakeworld/survey.md`.
+list is in `porting/shooters-edge/survey.md`.
 
 | Tier | Feature | Row |
 | --- | --- | --- |
@@ -259,9 +265,9 @@ list is in `porting/quakeworld/survey.md`.
 | Better | Voice chat on the native protocol (M17h) | M18l |
 | Better | Skeletal models (IQM, glTF) beside MDL, on the engine's skinning | M18l |
 | Better | A data-driven particle system for mods (effects named in a script) | M18l |
-| Better | The common QuakeC extension builtins and fields (string handling, tracing, the extra entity fields), registered by name | M18c, M18l |
-| Later | Client-side QuakeC (a mod drawing its own HUD and predicting its own entities) | M18m |
-| Later | Single-player `progs.dat` campaigns and co-op | M18m |
+| Better | The common QC extension builtins and fields (string handling, tracing, the extra entity fields), registered by name | M18c, M18l |
+| Later | Client-side QC (a mod drawing its own HUD and predicting its own entities) | M18m |
+| Later | Single-player campaigns and co-op on the single-player `progs` | M18m |
 | Later | Splitscreen; touch controls for phones and tablets | M18m |
 
 ## Labs
@@ -272,15 +278,15 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | --- | --- | --- |
 | `pak` | sim | Archives mounted in order, every file's winner, lookup cost; digest of the file table |
 | `bsp` | picture | A map from above: leaves, the PVS of a point, hulls, entities; lump sizes and limits |
-| `qc` | sim | A progs run: per-function time and calls, builtins hit, errors with QuakeC stack traces |
+| `qc` | sim | A progs run: per-function time and calls, builtins hit, errors with QC stack traces |
 | `pmove` | scenario | Scripted movement on fixture maps: ground acceleration, air control, strafe jumping, bunny hopping, stairs, ramps, water; trajectories charted |
-| `qw-parity` | scenario | The same scripted inputs through our movement and an existing server's, measured against each other within a tolerance (needs the reference program; skipped with a reason when its cache is absent) |
-| `qw-server` | drive | Eight bots deathmatch on a free map for a minute: frags, items, the server's frame cost, its digest |
-| `qw-net` | sim | Compatible and native clients on the simulated network under every preset: bandwidth, prediction errors, corrections |
-| `qw-interop` | drive | Our client and server against existing programs on loopback (cache-gated like `qw-parity`) |
-| `qw-world` | picture | Named views of free maps in both looks, with captions |
-| `qw-audio` | sim | Sounds of a scripted fight rendered, metered and written as WAV |
-| `qw-demo` | sim | A demo played back, seeked and re-recorded; the digest of its frames |
+| `se-parity` | scenario | The same scripted inputs through our movement and an existing server's, measured against each other within a tolerance (needs the reference program; skipped with a reason when its cache is absent) |
+| `se-server` | drive | Eight bots deathmatch on a free map for a minute: frags, items, the server's frame cost, its digest |
+| `se-net` | sim | Compatible and native clients on the simulated network under every preset: bandwidth, prediction errors, corrections |
+| `se-interop` | drive | Our client and server against existing programs on loopback (cache-gated like `se-parity`) |
+| `se-world` | picture | Named views of free maps in both looks, with captions |
+| `se-audio` | sim | Sounds of a scripted fight rendered, metered and written as WAV |
+| `se-demo` | sim | A demo played back, seeked and re-recorded; the digest of its frames |
 
 ## The `ge` tooling it needs
 
@@ -292,11 +298,11 @@ during the work is added when it is found and recorded in `docs/goals/ge-backlog
 | --- | --- |
 | `ge pak ls/cat/extract/build <archive or dir>` | What a search path holds, which archive wins a file, a file's bytes; a fixture pack built from a directory |
 | `ge bsp info/ents/shot <map>` | A map's lumps and limits, its entity lump as text, a top-down picture of leaves, PVS from a point and hulls, all on the CPU |
-| `ge qc build/disasm/run/trace/profile` | Compile QuakeC, disassemble a progs, run a function headless, trace a step's QuakeC calls with arguments and results, time every function |
+| `ge qc build/disasm/run/trace/profile` | Compile QC, disassemble a progs, run a function headless, trace a step's QC calls with arguments and results, time every function |
 | `ge qc diff <progs-a> <progs-b>` | Which functions and fields changed between two builds of a mod |
 | `ge server --map=<m> --bots=<n> --for=<s>` | A headless dedicated server running bots, its input log and digest, for `ge replay`, `ge state` and `ge diverge` |
 | `ge demo info/frames/shot/diff <demo>` | A demo decoded to text frame by frame, a frame pictured, two demos compared to their first difference |
-| `ge net inspect --protocol=qw <pcap>` | A capture decoded as QuakeWorld messages (the net channel, every server and client message, the deltas) |
+| `ge net inspect --protocol=classic <pcap>` | A capture decoded as the classic protocol's messages (the net channel, every server and client message, the deltas) |
 | `ge pmove <scenario>` | A movement scenario's trajectory as a table and a chart, against the parity recording when one exists |
 | `ge console <server> "<command>"` | A command or cvar run in a headless server or client, its output returned |
 | `ge play` with angle axes | An agent at the controls of a first-person game: look angles on the protocol's grid, the usercmd's milliseconds, several players a run |
@@ -304,7 +310,7 @@ during the work is added when it is found and recorded in `docs/goals/ge-backlog
 ## Rows
 
 The roadmap rows are in `docs/goals.md` (M18 and its lettered rows), after Fall Line. The order:
-content (M18a) and the map (M18b) first, then QuakeC (M18c, M18d), movement (M18e), the server
+content (M18a) and the map (M18b) first, then QC (M18c, M18d), movement (M18e), the server
 with bots (M18f), the compatible protocol (M18g), the client (M18h), the picture (M18i), sound
 (M18j), input and the 2D layer (M18k), the modern features that need all of it (M18l) and what
 can wait (M18m).
