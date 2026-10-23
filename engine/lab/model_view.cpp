@@ -356,7 +356,8 @@ void draw_shape(Picture& pic, int x0, int y0, int w, int h, const ViewCam& cam, 
     for (int ch = 0; ch < 3; ++ch) {
       const double base = rgb ? rgb[ch] : 0.6;
       const double sky = ch == 2 ? 0.30 : 0.24;
-      lit[v * 3 + size_t(ch)] = static_cast<float>(base * (0.95 * k + sky * f + 0.22));
+      lit[v * 3 + size_t(ch)] =
+          static_cast<float>(st.baked ? base : base * (0.95 * k + sky * f + 0.22));
     }
   }
   struct Tri {

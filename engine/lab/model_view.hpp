@@ -79,6 +79,8 @@ struct ViewStyle {
   bool wire = false;
   bool bones = false;
   bool labels = false;  // the joints' names beside the bones
+  bool baked = false;   // every vertex at its material's own colour: light baked into it (a map's
+                        // lightmaps), no key, fill or ambient over it
   bool floor = true;    // a grid on the box's floor, a line a metre
   Rgba background{24, 26, 32};
   Rgba edge{255, 255, 255, 70};

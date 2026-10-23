@@ -2,7 +2,7 @@
 
 The level formats the engine reads (`docs/goals.md` M32): its own **room format** (`plugins/rooms`),
 where a level is a few plain shapes and every room carries the seed its surfaces grow from, and
-the **classic BSP families** that existing content comes in (`plugins/brush`, M32b with M18b).
+the **classic BSP families** that existing content comes in (`plugins/brush`, M32b).
 
 ## The room format
 
@@ -111,6 +111,46 @@ rubble, stalactites, liquids).
 
 ## The classic BSP families
 
-M32b (with M18b's loading half): version 29 and BSP2, version 38 and version 46, read lump by
-lump into one view (faces as triangles, texture names, lightmaps, entities, visibility), each
-refused with a reason when damaged, pictured by the `bsp` lab on fixture maps our own writers make.
+`plugins/brush` (M32b) reads maps of the classic BSP families into **one view** (`map.hpp`), so
+whatever draws, traces or reasons about a map asks the same questions of any of them:
+
+| Family | Told by | What differs |
+| --- | --- | --- |
+| 29 | the first word is 29 | fifteen lumps; 16-bit indices; one byte a luxel; miptex with names and sizes; leaf `i > 0` is cluster `i − 1`; three clip hulls |
+| BSP2 | the magic `BSP2` | the 29 lumps with node, leaf, face, clipnode, marksurface and edge indices widened to 32 bits and node and leaf bounds as floats (the early `2PSB` form is refused, naming the fix) |
+| 38 | `IBSP`, version 38 | nineteen lumps; a texinfo names its texture (its pixels are in other files); RGB luxels; leaves name their cluster and area; the visibility starts with per-cluster offsets |
+| 46 | `IBSP`, version 46 | seventeen lumps; vertices carry their own texture and lightmap coordinates; faces are polygons, meshes, curved patches or billboards; shaders by name; 128 × 128 lightmap pages; uncompressed cluster rows |
+
+The view, stated once in `plugins/brush/map.hpp`:
+
+- **Surfaces**: triangles over the map's vertices, counter-clockwise seen from the side they
+  face (each family's own winding is checked against its plane or normals and turned when it
+  disagrees), with a texture, a lightmap and a kind (planar, patch, mesh, liquid, sky).
+- **Coordinates** are the file's (map units, z up); `to_engine` turns them into the engine's frame
+  in metres at 1/40 m a unit.
+- **Lightmaps**: three bytes a luxel in one buffer; a 29 map's grey luxels are repeated three
+  times there, so a `.lit` file (`read_lit`) replaces them in place. Each vertex's `lm` is 0..1
+  across its surface's lightmap: a face's own in 29 and 38 (one luxel every 16 texels, its size
+  `ceil(max / 16) − floor(min / 16) + 1` each way), a page in 46.
+- **The tree**: planes, nodes (`child >= 0` a node, `< 0` the leaf `−(c + 1)`), leaves with their
+  contents, cluster and bounds; `leaf_at` walks it. A 46 leaf stores no contents: solid there is a
+  leaf with no cluster.
+- **Visibility**: one row a cluster, decompressed (a non-zero byte is eight bits; a zero and a
+  count stand for that many zero bytes); `cluster_sees` asks it.
+- **Entities**: the lump parsed into `{ "key" "value" ... }` blocks.
+
+**Refused, never overrun.** A reader checks every lump against the file and its record size
+before it reads it, and every index it keeps against what it points into (planes, nodes, leaves,
+edges, vertices, textures, lightmaps, visibility offsets, a patch's grid, a model's surfaces); a
+damaged file is refused naming the lump or record and what to do next. A patch's tessellation is
+bounded, so a hostile file cannot ask for unbounded memory. `tests/brush_fuzz_test.cpp` mutates
+the fixtures thousands of ways on every run and holds every mutant to that.
+
+**Fixtures of our own.** No map anyone else made is in the tree: `write.hpp` compiles a few
+axis-aligned rooms and point lights into a map of any family (every room's inside faces less its
+doorways, an axis-aligned tree, visibility two doorways deep, a luxel per 16 texels lit by the
+room's own lights, and in 46 a curved patch), the same bytes on every platform. The `bsp` lab draws
+each (or any map given with `--map`).
+
+Left to M18b: the clip hulls' trace (they are read and checked), the PHS, the BSPX lumps, animated
+texture sequences, and `ge bsp`.
