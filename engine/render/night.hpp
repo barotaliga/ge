@@ -11,7 +11,14 @@
 //   part by Lommel-Seeliger's law (a dusty body's disc is nearly flat at full, brightest at the
 //   bright limb in a crescent), scaled so the whole disc gives the phase law's light
 //   (`surface_surge`). The dark part is earthlit: a ten-thousandth of the lit surface's
-//   brightness under a full Earth (a new moon), less as the Earth wanes.
+//   brightness under a full Earth (a new moon), less as the Earth wanes. Its FACE is the real
+//   one (render/moon.hpp's albedo map, turned as core/moon.hpp's pole and prime meridian say).
+// - THE EARTH'S SHADOW. A point of the disc in the penumbra sees the share of the sun the Earth
+//   leaves uncovered (a circle's segment across the penumbra's width); in the umbra only the
+//   air's refracted red light, a ten-thousandth of full sunlight at the axis, ten times that at
+//   the umbra's edge (an eclipse of middling darkness). The moon's light on the ground is the
+//   disc's mean of it (`eclipse_of`); the disc is drawn as the eye sees a faint part beside a
+//   bright one, against its brightest point.
 // - TWO SKIES. At night the sky is the twilight's (the sun's own sky table) and the moon's (a
 //   second table at the moon's height, lit by its light) at once, so the dusk's glow fades on
 //   its own as the moon's sky comes up under it.
@@ -28,10 +35,12 @@
 // ge:keywords render night moon moonlight phase-law opposition-surge lommel-seeliger earthshine
 // ge:keywords key-light twilight dark-sky airglow sidereal stars set_night moon_lux phase_law
 // ge:keywords surface_surge twilight_lux moon_radius night-sky two-skies moon-sky pre_exposure
+// ge:keywords eclipse umbra penumbra earth-shadow shadow_light eclipse_of lunar-eclipse moon-face
 // ge:skill render
 // ge:test tests/render_night_test.cpp
 #pragma once
 
+#include "core/moon.hpp"
 #include "render/view.hpp"
 
 namespace ge::render {
@@ -79,7 +88,38 @@ struct Moon {
   double azimuth;      // world heading
   double lit;          // share of the disc lit, 0..1
   double distance_km;  // from the eye
+  // Its face (core/moon.hpp's world vectors): its north pole, 0 N 0 E and 0 N 90 E. All zero:
+  // the mean near side square to the eye, its pole toward the celestial pole.
+  double pole[3] = {0, 0, 0};
+  double prime[3] = {0, 0, 0};
+  double east[3] = {0, 0, 0};
+  // The Earth's shadow: toward its axis at the moon's distance, its umbra's and penumbra's
+  // angular radii (rad; 0: no shadow).
+  double shadow[3] = {0, 0, 0};
+  double umbra = 0;
+  double penumbra = 0;
 };
+
+// The moon as core/moon.hpp places it, as set_night takes it.
+Moon moon_of(const core::MoonSky& sky);
+
+// The light a point of the moon `s` rad from the shadow's axis gets, against full sunlight: the
+// sun's share the Earth leaves it (white; 1 outside the penumbra) and the air's red light bent
+// into the shadow (render/sky.wgsl's kUmbraTint, luminance 1). Their sum is its luminance.
+struct ShadowLight {
+  double sun = 1;
+  double air = 0;
+};
+ShadowLight shadow_light(double s, double umbra, double penumbra);
+
+// The disc's mean light and its brightest point's under the shadow, each against full
+// sunlight: the moon toward `toward` at angular radius `radius`, the shadow as `Moon` holds it.
+struct Eclipse {
+  double mean = 1;
+  double peak = 1;
+};
+Eclipse eclipse_of(const double toward[3], double radius, const double shadow[3], double umbra,
+                   double penumbra);
 
 // Fill `view.night` from `moon` (the sun already placed in `view`), the latitude (degrees) and
 // the local sidereal angle (degrees, core/solar.hpp's sidereal_time plus the longitude), and make

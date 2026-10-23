@@ -6,10 +6,9 @@
 //   same sky: the same declination, the same phase of the moon. 2026 is a year near the moon's
 //   major standstill, when its path swings furthest north and south, so a winter's full moon
 //   rides highest.
-// - THE MOON is the dated one (core/solar.hpp's moon_on_date: its real orbit, its place from the
-//   surface), at longitude 0 (a generated map has no longitude), its distance off the same orbit
-//   with the Earth's radius taken off toward a moon overhead (a moon overhead is nearer than one
-//   on the horizon).
+// - THE MOON is the dated one (core/moon.hpp's moon_on_date: its real orbit, its place, distance
+//   and face seen from the surface, the Earth's shadow), at longitude 0 (a generated map has no
+//   longitude).
 //
 // ge:summary The map's moon and stars on its date at an hour, laid into a frame's night
 // ge:keywords night moon stars date sky-year night_look moonlight phase sidereal
@@ -17,6 +16,7 @@
 // ge:test tests/mountain_night_look_test.cpp
 #pragma once
 
+#include "core/moon.hpp"
 #include "mountain/mapgen/types.hpp"
 #include "render/view.hpp"
 
@@ -29,6 +29,7 @@ inline constexpr double kSkyYear = 2026;
 struct MapMoon {
   double elevation, azimuth, lit, distance_km;
   double sidereal_deg;  // the local sidereal angle, degrees
+  core::MoonSky sky;    // all of it
 };
 MapMoon moon_of(const mapgen::Level& level, double hour);
 

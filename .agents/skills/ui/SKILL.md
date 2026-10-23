@@ -79,8 +79,6 @@ is the design; this skill is how to work in it.
 - Every new code, font or look must stay ASCII, monospaced, and our own drawing. Never trace or
   embed outside font data.
 
-## Fall Line's UI (`games/fall_line/app/ui/`)
-
 ## Rules
 
 - **Every word the player reads** comes from the game's strings table; a menu item's `text` and
@@ -116,7 +114,7 @@ camera, the REPRO line). It is never on a release path.
 - `hud` (M10a, `gpu_` so built with GE_GPU): Fall Line's HUD over the game's own frame on the
   software adapter, the free ride's moments (cruising, in the air, hunted, the most news) and a
   staged moment with every widget up, at the three viewports. Any layout problem fails it.
-- M10c lands `screenshots`: every card at the three viewports.
-`charsets` (every atlas, a specimen of each font in use) and `charset-looks` (the layers,
-every look, a mock game screen) are M27a's. M10 lands `screenshots`: the HUD and every card at 1280x720, 390x844 and 844x390, each
-captioned with its state and what to look for (overlap, clipping, legibility).
+- `charsets` (every atlas, a specimen of each font in use) and `charset-looks` (the layers, every
+  look, a mock game screen) are M27a's.
+- M10c lands `screenshots`: every card at 1280x720, 390x844 and 844x390, each captioned with its
+  state and what to look for (overlap, clipping, legibility).

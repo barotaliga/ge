@@ -28,6 +28,7 @@
 #include "gpu/pipeline.hpp"
 #include "render/clouds.hpp"
 #include "render/frame.hpp"
+#include "render/moon.hpp"
 #include "render/stars.hpp"
 
 namespace ge::render {
@@ -51,6 +52,7 @@ struct Sky {
   wgpu::Buffer light;  // frame.wgsl's SkyLight
   wgpu::Sampler sampler;
   StarTexture stars;  // the real stars' map (render/stars.hpp), the sky pass's group 1
+  MoonTexture moon;   // the moon's albedo map (render/moon.hpp), beside it
   wgpu::BindGroupLayout star_layout;
   wgpu::BindGroup star_group;
   CloudNoise cloud;  // the cloud's noise, bound beside the tables (frame.wgsl's 8 and 9)
