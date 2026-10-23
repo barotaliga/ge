@@ -8,16 +8,21 @@
 //   `--stars`.
 // - THE HUNT: on a real ski area, he stands on open snow up the mountain from the village, the
 //   army's every arm sent at `--hunt-stars` and firing through the real `step`, where the army
-//   shoots to kill (`open`) and where it does not (`spared`). Per scenario: the rounds the soldiers
-//   and the snowmobiles' gunners fired, the rounds into him, his injury severity score, and when
-//   the hunt ended and how.
+//   shoots to kill (`open`) and where it does not (`spared`). Per scenario: the rounds the
+//   soldiers, the snowmobiles' gunners and the helicopters' door gunners fired, the rounds into
+//   him, his injury severity score, and when the hunt ended and how.
+// - THE DOORS: the same hunt at one, two and three stars, the rules of fire `hold`, `warn` and
+//   `aim`: the door gunners' rounds, every arm's rounds, the rounds into him, and the hunt's end;
+//   and a picture each (`doors-<rules>.png`), the machines' paths round him and every door round
+//   from its muzzle, coloured by the door it left.
 //
 // A gun that never hits a still man at 100 m under aimed fire, warning fire that ever strikes him,
-// or a hunt that shoots to kill and fires nothing is a failure (exit 1).
+// a hunt that shoots to kill and fires nothing, a door gunner firing under `hold` or never under
+// `aim` is a failure (exit 1).
 //
 // ge:summary Lab: the army's guns: hits by weapon, range and rules, and a seed-38 hunt's fire
 // ge:keywords lab gunfire rifle lmg door-gun range hit-share warning-fire aimed-fire wound iss
-// ge:keywords killed hunt snap
+// ge:keywords killed hunt snap door-gunner doors
 // ge:skill sim labs
 // ge:test tests/fall_line_gunfire_test.cpp
 #include <array>
@@ -30,11 +35,13 @@
 #include "core/num.hpp"
 #include "core/num_text.hpp"
 #include "fall_line/sim/army.hpp"
+#include "fall_line/sim/army_heli_rules.hpp"
 #include "fall_line/sim/free.hpp"
 #include "fall_line/sim/game.hpp"
 #include "fall_line/sim/gunfire.hpp"
 #include "fall_line/sim/wanted.hpp"
 #include "lab/lab.hpp"
+#include "lab/raster.hpp"
 #include "mountain/mapgen/generate.hpp"
 #include "skier/anatomy.hpp"
 #include "skier/body.hpp"
@@ -47,6 +54,8 @@ namespace fs = fall_line::sim;
 namespace mg = ge::mountain::mapgen;
 namespace sk = ge::skier;
 namespace lm = ge::core::libm;
+namespace ah = fall_line::sim::army_heli;
+using ge::lab::Rgba;
 
 std::string fixed(double v, int d) { return ge::core::num::to_fixed(v, d); }
 
@@ -108,16 +117,98 @@ Range range_fire(const std::shared_ptr<const mg::Level>& strip, fs::WeaponKind w
   return r;
 }
 
+// What THE DOORS' pictures draw: each machine's path, and each door round from the muzzle it left
+// to where it was last seen, with the door it came from.
+struct DoorRound {
+  fs::Spot from, to;
+  bool inward = false;
+  bool warn = false;
+  bool seen = false;  // a door round (the list is by round id, every gun's)
+};
+struct Trace {
+  fs::Spot q;
+  std::vector<std::vector<fs::Spot>> paths;  // by machine id
+  std::vector<DoorRound> rounds;
+};
+
 struct Hunt {
   int32_t rifle = 0;
   int32_t lmg = 0;
+  int32_t door = 0;
   int32_t hits = 0;
   int32_t iss = 0;
   double ended = -1;
   fs::WantedEnd how = fs::WantedEnd::running;
 };
 
-Hunt hunt(const std::shared_ptr<const mg::Level>& level, int32_t stars, bool lethal, double limit) {
+void trace_step(const fs::GameState& st, Trace& tr) {
+  if (st.steps % static_cast<int64_t>(fs::kHz / 4) == 0) {
+    for (const fs::ArmyHeli& m : st.army.helis) {
+      if (tr.paths.size() <= static_cast<size_t>(m.id)) tr.paths.resize(m.id + 1);
+      tr.paths[static_cast<size_t>(m.id)].push_back(fs::Spot{m.x, 0, m.z});
+    }
+  }
+  for (const fs::Round& r : st.gunfire.rounds) {
+    if (r.weapon != fs::WeaponKind::door_gun) continue;
+    const int32_t k = r.gun - ah::kGunBase;
+    // A round met for the first time: where it left from, and which door that was.
+    if (tr.rounds.size() <= static_cast<size_t>(r.id)) tr.rounds.resize(r.id + 1);
+    DoorRound& d = tr.rounds[static_cast<size_t>(r.id)];
+    if (r.age <= fs::kDt * 1.5) {
+      d.from = fs::Spot{r.x, 0, r.z};
+      d.seen = true;
+      d.warn = r.warn;
+      for (const fs::ArmyHeli& m : st.army.helis) {
+        if (m.id == k / 2) d.inward = (k % 2 == 0) == (m.dir > 0);
+      }
+    }
+    d.to = fs::Spot{r.x, 0, r.z};
+  }
+}
+
+// THE DOORS' PICTURE: `half` m either side of him, from above (+x right, +z down).
+constexpr double kHalfM = 700;
+constexpr Rgba kPathColours[] = {{0, 140, 220}, {120, 60, 200}, {0, 150, 90}, {150, 110, 0}};
+
+ge::lab::Picture draw_doors(const Trace& tr, int px) {
+  ge::lab::Picture pic = ge::lab::create_picture(px, px, Rgba{236, 240, 246});
+  const double k = px / (2 * kHalfM);
+  const auto at = [&tr, k](const fs::Spot& s, double& u, double& v) {
+    u = (s.x - tr.q.x + kHalfM) * k;
+    v = (s.z - tr.q.z + kHalfM) * k;
+  };
+  for (const double r : {100.0, ah::kOrbitM, 400.0, 600.0}) {
+    ge::lab::draw_ring(pic, kHalfM * k, kHalfM * k, r * k, Rgba{200, 206, 216});
+  }
+  ge::lab::draw_ring(pic, kHalfM * k, kHalfM * k, ah::kOrbitM * k, Rgba{150, 160, 176});
+  for (size_t i = 0; i < tr.paths.size(); i++) {
+    const Rgba c = kPathColours[i % std::size(kPathColours)];
+    for (size_t j = 1; j < tr.paths[i].size(); j++) {
+      double u0, v0, u1, v1;
+      at(tr.paths[i][j - 1], u0, v0);
+      at(tr.paths[i][j], u1, v1);
+      ge::lab::draw_line(pic, u0, v0, u1, v1, c, 1);
+    }
+  }
+  for (const DoorRound& d : tr.rounds) {
+    if (!d.seen) continue;
+    double u0, v0, u1, v1;
+    at(d.from, u0, v0);
+    at(d.to, u1, v1);
+    ge::lab::draw_line(pic, u0, v0, u1, v1, d.warn ? Rgba{230, 180, 40} : Rgba{220, 50, 40}, 1);
+  }
+  for (const DoorRound& d : tr.rounds) {
+    if (!d.seen) continue;
+    double u, v;
+    at(d.from, u, v);
+    ge::lab::fill_disc(pic, u, v, 2.5, d.inward ? Rgba{0, 170, 60} : Rgba{255, 120, 0});
+  }
+  ge::lab::fill_disc(pic, kHalfM * k, kHalfM * k, 5, Rgba{255, 0, 255});
+  return pic;
+}
+
+Hunt hunt(const std::shared_ptr<const mg::Level>& level, int32_t stars, bool lethal, double limit,
+          Trace* trace = nullptr) {
   fs::GameState st = fs::create_free_ride(level, 0);
   st.wanted.lethal = lethal;
   const double fx = lm::sin(st.army.pad_heading);
@@ -128,6 +219,7 @@ Hunt hunt(const std::shared_ptr<const mg::Level>& level, int32_t stars, bool let
   fs::set_wanted(st, stars);
   const fs::Controls none{};
   Hunt h;
+  if (trace != nullptr) trace->q = fs::Spot{x, 0, z};
   for (int64_t i = 0; i < std::llround(limit * fs::kHz); i++) {
     fs::WantedState& w = st.wanted;
     if (w.ended != fs::WantedEnd::running) {
@@ -144,7 +236,9 @@ Hunt hunt(const std::shared_ptr<const mg::Level>& level, int32_t stars, bool let
       }
       h.rifle += e.value == static_cast<double>(fs::WeaponKind::rifle) ? 1 : 0;
       h.lmg += e.value == static_cast<double>(fs::WeaponKind::lmg) ? 1 : 0;
+      h.door += e.value == static_cast<double>(fs::WeaponKind::door_gun) ? 1 : 0;
     }
+    if (trace != nullptr) trace_step(st, *trace);
   }
   h.hits = st.gunfire.hits;
   h.iss = sk::severity_of(st.racers[0].body);
@@ -159,6 +253,8 @@ void run(ge::lab::Lab& lab) {
   const double limit = lab.arg_num("limit");
   const double seed = lab.arg_num("seed");
   const auto version = static_cast<int>(lab.arg_num("version"));
+  const int px = static_cast<int>(lab.arg_num("px"));
+  const bool pictures = !lab.arg_bool("no-pictures");
   const auto strip = std::make_shared<const mg::Level>(sk::flat_strip(0, 1));
 
   ge::lab::LabTable range{"range",
@@ -226,23 +322,24 @@ void run(ge::lab::Lab& lab) {
              "Pass a --version that builds a ski area (10 or later; skill: mountain).");
     return;
   }
-  ge::lab::LabTable table{
-      "hunt",
-      {"scenario", "stars", "rifle rounds", "lmg rounds", "hits", "iss", "ended s", "how"},
-      {}};
+  ge::lab::LabTable table{"hunt",
+                          {"scenario", "stars", "rifle rounds", "lmg rounds", "door rounds", "hits",
+                           "iss", "ended s", "how"},
+                          {}};
   for (const bool lethal : {true, false}) {
     const std::string id = lethal ? "open" : "spared";
     const Hunt h = hunt(level, hunt_stars, lethal, limit);
-    table.rows.push_back({id, std::to_string(hunt_stars), std::to_string(h.rifle),
-                          std::to_string(h.lmg), std::to_string(h.hits), std::to_string(h.iss),
-                          h.ended >= 0 ? fixed(h.ended, 2) : std::string("-"),
-                          fs::wanted_end_name(h.how)});
+    table.rows.push_back(
+        {id, std::to_string(hunt_stars), std::to_string(h.rifle), std::to_string(h.lmg),
+         std::to_string(h.door), std::to_string(h.hits), std::to_string(h.iss),
+         h.ended >= 0 ? fixed(h.ended, 2) : std::string("-"), fs::wanted_end_name(h.how)});
     lab.metric(id + ".rifle", h.rifle, "rounds");
     lab.metric(id + ".lmg", h.lmg, "rounds");
+    lab.metric(id + ".door", h.door, "rounds");
     lab.metric(id + ".hits", h.hits, "rounds");
     lab.metric(id + ".iss", h.iss, "iss");
     lab.metric(id + ".ended", h.ended, "s");
-    if (lethal && h.rifle + h.lmg == 0) {
+    if (lethal && h.rifle + h.lmg + h.door == 0) {
       lab.fail("open: the army shot to kill and fired nothing in " + fixed(limit, 0) + " s",
                "Read hold in games/fall_line/sim/army.cpp and halt in army_sled.cpp (skill: sim).");
     }
@@ -252,6 +349,64 @@ void run(ge::lab::Lab& lab) {
     }
   }
   lab.table(std::move(table));
+
+  // THE DOOR GUNNERS at each rule of fire: one star (`hold`), two (`warn`), three (`aim`).
+  ge::lab::LabTable doors{
+      "doors",
+      {"stars", "rules", "door rounds", "all rounds", "hits", "iss", "ended s", "how"},
+      {}};
+  for (int32_t s = 1; s <= 3; s++) {
+    Trace tr;
+    const Hunt h = hunt(level, s, true, limit, pictures ? &tr : nullptr);
+    const fs::FireRule rules = fs::roster_of(s).fire;
+    const std::string rn = rules == fs::FireRule::aim    ? "aim"
+                           : rules == fs::FireRule::warn ? "warn"
+                                                         : "hold";
+    doors.rows.push_back(
+        {std::to_string(s), rn, std::to_string(h.door), std::to_string(h.rifle + h.lmg + h.door),
+         std::to_string(h.hits), std::to_string(h.iss),
+         h.ended >= 0 ? fixed(h.ended, 2) : std::string("-"), fs::wanted_end_name(h.how)});
+    lab.metric("doors." + rn + ".rounds", h.door, "rounds");
+    lab.metric("doors." + rn + ".hits", h.hits, "rounds");
+    if (rules == fs::FireRule::hold && h.door > 0) {
+      lab.fail("doors.hold: the door gunners fired " + std::to_string(h.door) +
+                   " rounds under the hold rules",
+               "Read doors_manned in games/fall_line/sim/army_door.cpp (skill: sim).");
+    }
+    if (rules == fs::FireRule::warn && h.hits > 0) {
+      lab.fail("doors.warn: a round struck him under warning fire",
+               "Read rules_of and fly_round in games/fall_line/sim/gunfire.cpp (skill: sim).");
+    }
+    if (rules == fs::FireRule::aim && h.door == 0) {
+      lab.fail("doors.aim: the door gunners never fired in " + fixed(limit, 0) + " s",
+               "Read step_army_doors's arc and sight in games/fall_line/sim/army_door.cpp "
+               "(skill: sim).");
+    }
+    if (!pictures) continue;
+    int32_t inward = 0;
+    for (const DoorRound& d : tr.rounds) inward += d.seen && d.inward ? 1 : 0;
+    lab.shot(
+        {"doors-" + rn,
+         "SEED " + fixed(seed, 0) + " DOOR GUNNERS: " + std::to_string(s) + " STARS (" + rn + ")",
+         "1.4 km square round him (magenta dot) from above, +x right, +z down; grey rings at "
+         "100, 220 (the pylon turn), 400 and 600 m. Each army helicopter's path, a colour a "
+         "machine. Every door-gun round as a line from its muzzle to where it was last "
+         "seen (red aimed, amber warning) and a dot at the muzzle: green from the door "
+         "the machine turns toward, orange from the other. " +
+             std::to_string(h.door) + " door rounds, " + std::to_string(inward) +
+             " from the inward door, " + std::to_string(h.hits) + " into him.",
+         rules == fs::FireRule::hold ? "paths and no rounds at all: the doors stay shut under hold"
+         : rules == fs::FireRule::warn
+             ? "amber lines that stop short of or wide of the magenta dot, never on it"
+             : "red lines from the 220 m ring onto the magenta dot, green dots on the ring",
+         {{"seed", fixed(seed, 0)},
+          {"version", fixed(version, 0)},
+          {"stars", std::to_string(s)},
+          {"rules", rn},
+          {"limit s", fixed(limit, 0)}}},
+        draw_doors(tr, px));
+  }
+  lab.table(std::move(doors));
 }
 
 const ge::lab::LabSpec kSpec{
@@ -272,8 +427,10 @@ const ge::lab::LabSpec kSpec{
         {"limit", "150", "the hunt's time limit, s"},
         {"seed", "38", "the map's seed"},
         {"version", "10", "the generator's version (a ski area: 10 or later)"},
+        {"px", "640", "the doors' pictures' size, px"},
+        {"no-pictures", "", "skip the pictures", true},
     },
-    "--bursts=8 --limit=90",
+    "--bursts=8 --limit=90 --px=256",
     run,
 };
 GE_LAB(kSpec);

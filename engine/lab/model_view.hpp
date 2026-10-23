@@ -47,8 +47,9 @@ struct Shape {
   std::vector<assets::Affine> bones;  // every joint's global, for the skeleton
 };
 
-// The meshes `meshes` (indices into model.meshes; empty: every mesh) posed by `global` (every
-// joint's global transform: `assets::pose_globals`).
+// The meshes `meshes` (indices into model.meshes; empty: every mesh at the finest level of
+// detail, `meshes_at_lod(lod_groups(model), 0)`) posed by `global` (every joint's global
+// transform: `assets::pose_globals`).
 Shape shape_of(const assets::Model& model, std::span<const assets::Affine> global,
                std::span<const int> meshes = {});
 // The model at rest, or clip `clip` at `t_s`.

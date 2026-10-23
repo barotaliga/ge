@@ -19,6 +19,7 @@
 #include "core/num.hpp"
 
 #include "fall_line/sim/army.hpp"
+#include "fall_line/sim/army_door.hpp"
 #include "fall_line/sim/army_heli_rules.hpp"
 #include "fall_line/sim/army_land.hpp"
 #include "fall_line/sim/army_rules.hpp"
@@ -231,7 +232,8 @@ Want hunt_want(const GameState& state, const ArmyHeli& h, Spot q, ge::ai::Why* w
   s.most = kCruise + (kDash - kCruise) * k;
   if (k > 0.5) {
     s.has_face = true;
-    s.face = lm::atan2(ux, uz);
+    // Its doors manned, crabbed side-on to him so the inward door has the line.
+    s.face = lm::atan2(ux, uz) - (doors_manned(state, h) ? h.dir * kCrab : 0);
   }
   return s;
 }
@@ -672,6 +674,7 @@ void step_army_helis(GameState& state, bool on, Spot q) {
     }
   }
   if (on && state.steps % kAskSteps == 0) ask_landings(state, soldiers, q);
+  step_army_doors(state, q);
   std::erase_if(a.helis, [](const ArmyHeli& h) { return h.mode == ArmyHeliMode::gone; });
   // ON THEIR WAY: the search does not run out before the first machine has reached it.
   if (on && !w.seen) {
