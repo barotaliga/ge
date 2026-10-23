@@ -6,7 +6,7 @@ army-flight 57fc57956ada1ce3
 army-sleds 821adaba95b0b813
 audition d47fda4a9cb22fbb
 charts 77f2319a5ea24272
-cli-loop b3b117da13354c38
+cli-loop ced27c68ea095a21
 crowd cf02cf9a7c917783
 crowd-look 194a06db20f2ebb2
 fetch 6938ae41f6759c43
@@ -41,6 +41,7 @@ net-session bbd55312ba5c97c6
 night 70027d61f5f37377
 noise 3d3a828834f144cb
 para 3783412c31d34638
+parallel-cost c8eb921ab2c030ba
 park d53bc7b207dfab4a
 path 110d60b3391ee093
 play 8c742a9739dd3504
