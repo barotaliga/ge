@@ -299,19 +299,54 @@ fn exposure() -> f32 {
   return e;
 }
 
-// THE RODS' SHARE of the eye's seeing: 0 over 3 lx on white (the cones), 1 under 0.01 lx.
-fn rod_share() -> f32 {
-  let lux = white_luminance() * PI * kSunLux / frame.world.y;
+// THE RODS' SHARE of the eye's seeing at `luminance` (a radiance in white_luminance's units, so
+// the light on a white face is white_luminance()): 0 over 3 lx on white (the cones), 1 under
+// 0.01 lx.
+fn rods_at(luminance: f32) -> f32 {
+  let lux = max(luminance, 1e-30) * PI * kSunLux / frame.world.y;
   return clamp((0.5 - log2(lux) * 0.30103) / 2.5, 0.0, 1.0);
 }
 
-// NIGHT VISION: a colour as the rods see it, its luminance in a blue grey, by their share.
+fn rod_share() -> f32 {
+  return rods_at(white_luminance());
+}
+
+// The share of the pixel looking along `d` that the moon's disc covers, seen through the
+// weather's deck and fog: 1 inside, 0 outside, over the soft edge render/sky.wgsl draws it with.
+// It reads no depth, so a ridge or a cloud layer in front of the disc counts as the disc; a
+// ridge there is a dark silhouette and a cloud there is lit by the moon itself, so neither
+// shows it.
+fn on_moon(d: vec3f) -> f32 {
+  let rad = frame.moon_light.z;
+  let c = dot(d, frame.moon.xyz);
+  if (rad <= 0.0 || c <= 0.0) {
+    return 0.0;
+  }
+  let clear = (1.0 - frame.weather.y) * exp(-frame.weather.z * 10000.0);
+  return (1.0 - smoothstep(0.95, 1.0, sqrt(max(1.0 - c * c, 0.0)) / sin(rad))) * clear;
+}
+
+// NIGHT VISION: a colour as the rods see it, its luminance in a blue grey, by their share. A part
+// of the picture bright enough for the cones keeps its colour however dark the scene round it:
+// the share is the scene's or the pixel's own, whichever is less, so a bright star keeps its
+// tint over a blue-grey night. The moon's disc (`d` the pixel's view ray) is drawn far dimmer
+// than it is, as the eye sees it against the scene, but its true brightness is always the
+// cones' (even an eclipse's umbra is near 1 cd/m2), so it keeps its colour: a full moon its warm
+// white, an eclipse its copper red.
 const kRodTint = vec3f(0.78, 0.93, 1.32);
 
-fn night_vision(c: vec3f) -> vec3f {
+fn rods(c: vec3f) -> vec3f {
   let s = rod_share();
   if (s <= 0.0) {
     return c;
   }
-  return mix(c, kRodTint * dot(c, kLuma), 0.85 * s);
+  let l = dot(c, kLuma);
+  return mix(c, kRodTint * l, 0.85 * min(s, rods_at(l)));
 }
+
+// The post pass's: over the moon's disc the sky pass has already given the sky in front of it
+// to the rods (render/sky.wgsl), so the disc's pixels are left as they are.
+fn night_vision(c: vec3f, d: vec3f) -> vec3f {
+  return mix(rods(c), c, on_moon(d));
+}
+
