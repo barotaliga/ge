@@ -37,6 +37,7 @@ updates that row's status file (`docs/goals/<row>.md`) in its PR.
 | [`docs/input.md`](docs/input.md) | Input devices: the layers, the model, actions and bindings, raw mouse, wheels and force feedback, gamepads, touch, players, recording, the labs and the decisions |
 | [`docs/networking.md`](docs/networking.md) | Multiplayer: what each kind of game asks of the network, the layers of `engine/net`, the decisions, the wire format, the simulated network, the tools, and Fall Line's pilot (M17) |
 | [`docs/publishing.md`](docs/publishing.md) | What a release is (GitHub Releases + GitHub Packages), how a game consumes it, changeset fragments, cutting a release, the credentials |
+| [`docs/saves.md`](docs/saves.md) | Saves: a save is the state, never the inputs; the file and its chunks, the state described once, the run saved and loaded, slots and the store, pictures, characters carried to another world, cloud saves, the content cache (M25) |
 | [`docs/shooters-edge.md`](docs/shooters-edge.md) | The second game, Shooter's Edge (M18, after Fall Line): the compatibility contract, the clean room, the homes, the protocols, the labs and the `ge` commands it needs |
 
 **The working area.** `porting/` holds everything that only matters while modules are
