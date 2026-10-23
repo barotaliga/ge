@@ -38,8 +38,8 @@ how a game consumes it, which credentials exist).
 1. `main` is green and `python3 tools/release.py bump` prints the version you
    expect. No fragments → nothing to release; stop.
 2. Prove it first: dispatch with `dry_run: true`. GitHub MCP:
-   `actions_run_trigger` `{method: "run_workflow", owner: "niclaslindstedt",
-   repo: "gameengine2", workflow_id: "release.yml", ref: "main",
+   `actions_run_trigger` `{method: "run_workflow", owner: "barotaliga",
+   repo: "ge", workflow_id: "release.yml", ref: "main",
    inputs: {bump: "auto", dry_run: "true"}}`.
 3. Green → dispatch again with `dry_run: "false"`.
 4. Verify: `get_latest_release` shows `vX.Y.Z` with 3 platform archives, the
