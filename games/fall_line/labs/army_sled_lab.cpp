@@ -210,7 +210,7 @@ Hunt run_scene(const std::shared_ptr<const mg::Level>& level, Scene scene, doubl
     }
     if (h.arrested_at >= 0 && st.t > h.arrested_at + 5) break;
   }
-  for (const fs::ArmySled& m : st.army.sleds) h.caught += m.slow >= 2 ? 1 : 0;
+  for (const fs::ArmySled& m : st.army.sleds) h.caught += m.progress.slow >= 2 ? 1 : 0;
   h.last = st.army.sleds;
   return h;
 }
@@ -295,7 +295,7 @@ void run(ge::lab::Lab& lab) {
     for (const fs::ArmySled& m : h.last) {
       const Rgba c = m.mode == fs::ArmySledMode::halt    ? Rgba{0, 0, 0}
                      : m.mode == fs::ArmySledMode::empty ? Rgba{255, 255, 255}
-                     : m.slow >= 2                       ? Rgba{255, 0, 0}
+                     : m.progress.slow >= 2              ? Rgba{255, 0, 0}
                                                          : Rgba{255, 255, 0};
       ge::lab::fill_disc(pic, m.body.x * k, m.body.z * k, 3, c);
     }

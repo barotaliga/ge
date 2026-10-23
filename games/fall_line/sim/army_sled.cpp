@@ -105,9 +105,9 @@ void call(GameState& state, int32_t want) {
     m.home_x = pad.x;
     m.home_z = pad.z;
     m.way = pad.heading;
-    m.wx = pad.x;
-    m.wz = pad.z;
-    m.side = m.id % 2 == 0 ? 1 : -1;
+    m.progress.x = pad.x;
+    m.progress.z = pad.z;
+    m.progress.side = m.id % 2 == 0 ? 1 : -1;
     a.sleds.push_back(m);
     a.sleds_called++;
     waiting++;
@@ -124,9 +124,9 @@ void set_off(GameState& state, ArmySled& m, Spot q) {
   b.running = true;
   m.mode = ArmySledMode::drive;
   m.t = 0;
-  m.wx = b.x;
-  m.wz = b.z;
-  m.wt = state.t;
+  m.progress.x = b.x;
+  m.progress.z = b.z;
+  m.progress.t = state.t;
   m.next = state.t + kFirstHaltS;
   say(state, ArmySledChange::out, m);
 }
@@ -230,26 +230,17 @@ void steer(GameState& state, ArmySled& m, double want, double grade) {
         way_cost(*state.level, state.trees, b.x, b.z, want, want, m.way, kRead).reach < kBlockedM;
   }
   // Swung off to a side, it holds that side a while.
-  if (state.t < m.until) m.way = want + m.side * kDetourRad;
+  if (ge::ai::detouring(m.progress, state.t)) m.way = want + m.progress.side * kDetourRad;
 }
 
 // NOT GETTING STUCK: progress checked a window at a time; a swing off to a side, then dug out and
 // stood on open snow facing `want`.
 void watch(GameState& state, ArmySled& m, double want) {
-  if (state.t - m.wt < kWindowS) return;
   sm::SledState& b = m.body;
-  const double moved = hypot(b.x - m.wx, b.z - m.wz);
-  m.wx = b.x;
-  m.wz = b.z;
-  m.wt = state.t;
-  if (moved >= kLeastM) {
-    m.slow = 0;
-    return;
-  }
-  m.slow++;
-  if (m.slow == 1) {
-    m.side = -m.side;
-    m.until = state.t + kDetourS;
+  if (!ge::ai::caught(m.progress, b.x, b.z, state.t, kWindowS, kLeastM)) return;
+  if (m.progress.slow == 1) {
+    m.progress.side = -m.progress.side;
+    m.progress.until = state.t + kDetourS;
     return;
   }
   // DUG OUT: back along the way it came, on the first open snow found.
@@ -269,16 +260,13 @@ void watch(GameState& state, ArmySled& m, double want) {
   b.running = true;
   m.way = want;
   m.dug++;
-  m.until = state.t + kDetourS;
+  m.progress.until = state.t + kDetourS;
   say(state, ArmySledChange::dug, m);
 }
 
 // Stood off him on purpose, or halted: not stuck; the watch starts its window again from here.
 void rest(const GameState& state, ArmySled& m) {
-  m.wt = state.t;
-  m.wx = m.body.x;
-  m.wz = m.body.z;
-  m.slow = 0;
+  ge::ai::restart(m.progress, m.body.x, m.body.z, state.t);
 }
 
 // ─── the crew off it ─────────────────────────────────────────────────────────────────────────
@@ -310,7 +298,7 @@ void chase(GameState& state, ArmySled& m, Spot q, FireRule fire) {
   const bool sees = looks(state, m, q, true);
   const Spot v = quarry_way(state);
   const Spot to = sees || w.seen ? Spot{q.x + v.x * kLeadS, q.y, q.z + v.z * kLeadS}
-                                 : Spot{w.last_x, w.last_y, w.last_z};
+                                 : Spot{w.last.x, w.last.y, w.last.z};
   const double d = hypot(q.x - b.x, q.z - b.z);
   const double toward = lm::atan2(to.x - b.x, to.z - b.z);
   const sk::SkierState& c = state.racers[0].skier;
@@ -499,7 +487,7 @@ uint64_t army_sleds_hash(const ArmyState& a, uint64_t h) {
     mix(m.way_end);
     mix(m.next);
     mix(m.saw);
-    mix(m.slow);
+    mix(m.progress.slow);
     mix(m.dug);
     h = sm::sled_hash(m.body, h);
   }

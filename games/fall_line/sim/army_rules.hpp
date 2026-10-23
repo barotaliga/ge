@@ -57,6 +57,10 @@ inline constexpr double kGravity = 9.81;
 inline constexpr double kSolidM = 1.2;
 inline constexpr double kAheadM = 9;
 inline constexpr double kApartM = 2.5;
+// How far a man on the snow moves in one step at most, m: his pace over a step, and a trunk he
+// skis into pushing him out of it. The step's grid of the soldiers (army_troop.hpp) is built with
+// this much slack past `kApartM`, so its cells hold every man he keeps apart from.
+inline constexpr double kNearSlackM = 4;
 inline constexpr double kEdgeM = 8;
 
 // NOT GETTING STUCK: his progress checked every `kWindowS`; under `kLeastM` in one and he steps
@@ -119,5 +123,8 @@ inline constexpr double kArrestSpeed = 3;
 // pursuer id a soldier is (the wanted level's sight test keys them by it).
 inline constexpr size_t kMostSoldiers = 96;
 inline constexpr int32_t kPursuerBase = 2000;
+// The army's call, which lift a squad goes up (`lift_for`), is recorded as this agent; each
+// soldier's own decisions as `kPursuerBase` + his id.
+inline constexpr int32_t kCallAgent = kPursuerBase - 1;
 
 }  // namespace fall_line::sim::army

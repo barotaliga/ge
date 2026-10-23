@@ -218,9 +218,9 @@ TEST(a_man_caught_steps_off_to_a_side_and_the_other_side_the_next_time) {
   s.id = 4;
   CHECK(fs::watch_progress(s, 0, true) == 0);
   CHECK(fs::watch_progress(s, ar::kWindowS, true) == 1);
-  CHECK(s.side == 1 && s.until == ar::kWindowS + ar::kDetourS);
+  CHECK(s.progress.side == 1 && s.progress.until == ar::kWindowS + ar::kDetourS);
   CHECK(fs::watch_progress(s, 2 * ar::kWindowS, true) == 2);
-  CHECK(s.side == -1);
+  CHECK(s.progress.side == -1);
   s.x = 10;
   CHECK(fs::watch_progress(s, 3 * ar::kWindowS, true) == 0);
   // Not meant to be moving: never caught.
@@ -275,7 +275,7 @@ TEST(a_wave_forms_up_out_of_his_sight_down_the_piste_and_climbs_to_its_stand_off
   CHECK(nearest(state) < before - 100);
   CHECK(nearest(state) > ar::kStandOffM - 20);
   CHECK(count(state, fs::SoldierMode::hold) == static_cast<int>(state.army.soldiers.size()));
-  for (const fs::Soldier& s : state.army.soldiers) CHECK(s.slow < 2);
+  for (const fs::Soldier& s : state.army.soldiers) CHECK(s.progress.slow < 2);
   CHECK(state.wanted.ended == fs::WantedEnd::running);
 }
 

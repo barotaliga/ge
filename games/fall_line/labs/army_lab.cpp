@@ -137,7 +137,8 @@ Hunt run_scene(const std::shared_ptr<const mg::Level>& level, Scene scene, doubl
     }
     const auto out = static_cast<int32_t>(st.army.soldiers.size());
     h.most = out > h.most ? out : h.most;
-    for (const fs::Soldier& s : st.army.soldiers) h.worst = s.slow > h.worst ? s.slow : h.worst;
+    for (const fs::Soldier& s : st.army.soldiers)
+      h.worst = s.progress.slow > h.worst ? s.progress.slow : h.worst;
     if (st.steps % static_cast<int64_t>(fs::kHz) == 0) {
       for (const fs::Soldier& s : st.army.soldiers) {
         const auto id = static_cast<size_t>(s.id);
@@ -155,7 +156,7 @@ Hunt run_scene(const std::shared_ptr<const mg::Level>& level, Scene scene, doubl
   h.nearest = 1e9;
   for (const fs::Soldier& s : st.army.soldiers) {
     h.holding += s.mode == fs::SoldierMode::hold ? 1 : 0;
-    h.caught += s.slow >= 2 ? 1 : 0;
+    h.caught += s.progress.slow >= 2 ? 1 : 0;
     const double d = hypot(s.x - h.q.x, s.z - h.q.z);
     h.nearest = d < h.nearest ? d : h.nearest;
   }
@@ -237,7 +238,7 @@ void run(ge::lab::Lab& lab) {
     for (const fs::Soldier& s : h.last) {
       const Rgba c = s.mode == fs::SoldierMode::hold     ? Rgba{0, 0, 0}
                      : s.mode == fs::SoldierMode::arrest ? Rgba{255, 255, 255}
-                     : s.slow >= 2                       ? Rgba{255, 0, 0}
+                     : s.progress.slow >= 2              ? Rgba{255, 0, 0}
                                                          : Rgba{255, 255, 0};
       ge::lab::fill_disc(pic, s.x * k, s.z * k, 2, c);
     }

@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstring>
 
+#include "ai/choose.hpp"
 #include "ai/think.hpp"
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
@@ -47,7 +48,8 @@ void push(GameState& state, ArmyChange c, double men) {
 }
 
 TroopWorld troop_world(const GameState& state) {
-  return TroopWorld{state.level.get(), &state.trees, state.army.soldiers, state.t, kDt};
+  return TroopWorld{state.level.get(), &state.trees, state.army.soldiers,
+                    state.t,           kDt,          &state.army.near};
 }
 
 // Whether a man still counts: out on the map and not sent home.
@@ -86,7 +88,8 @@ void send_lift_squads(GameState& state, int32_t want, Spot q) {
   }
   if (state.t < a.lift_due) return;
   a.lift_due = state.t + army::kEveryS;
-  const int32_t lift = lift_for(state, q);
+  ge::ai::Why* why = state.why ? state.why->follow(army::kCallAgent, state.steps) : nullptr;
+  const int32_t lift = lift_for(state, q, why);
   if (lift < 0) return;
   const ml::LiftPlan& plan = (*state.lifts)[static_cast<size_t>(lift)];
   const int32_t squad = a.lift_squads++;
@@ -128,11 +131,10 @@ void ride(GameState& state, Soldier& s) {
   s.speed = 0;
   s.lift = -1;
   s.carrier = -1;
-  s.mode = SoldierMode::chase;
-  s.t = 0;
-  s.wx = s.x;
-  s.wz = s.z;
-  s.wt = state.t;
+  enter_mode(state, s, SoldierMode::chase, "let off at the top");
+  s.progress.x = s.x;
+  s.progress.z = s.z;
+  s.progress.t = state.t;
   push(state, ArmyChange::off, 1);
 }
 
@@ -148,8 +150,7 @@ void wait_at_lift(GameState& state, Soldier& s) {
     taken += o.mode == SoldierMode::ride && o.lift == s.lift && o.carrier == k ? 1 : 0;
   }
   if (taken >= seats_of(plan)) return;
-  s.mode = SoldierMode::ride;
-  s.t = 0;
+  enter_mode(state, s, SoldierMode::ride, "a seat free");
   s.carrier = k;
   s.seat = taken;
 }
@@ -251,24 +252,26 @@ bool climb_with_wave(GameState& state, Soldier& s, Spot to) {
   const mg::Track& way = (*state.ways)[static_cast<size_t>(s.way)];
   const double d = hypot(to.x - s.x, to.z - s.z);
   if ((s.sees && d < army::kStandOffM + army::kHoldBandM) || d < army::kEngageM) return true;
-  double tx = 0;
-  double tz = 0;
-  for (;;) {
-    if (s.s <= s.s_end) return true;
-    const mg::TrackPoint p = army_way_at(way, s.s);
+  // His mark: a point on his file a little up the way ahead of him (ai/steer.hpp), the way walked
+  // back down its arc to where it leaves the column.
+  ge::ai::LinePoint mark;
+  const auto on_file = [&](double at) {
+    const mg::TrackPoint p = army_way_at(way, at);
     const double up = p.heading + kPi;
-    const double ux = lm::sin(up);
-    const double uz = lm::cos(up);
     const double half = num::max(0.0, p.width / 2 - army::kMarginM);
     const double lane = clamp(s.lane, -half, half);
-    tx = p.x + lm::cos(up) * lane;
-    tz = p.z - lm::sin(up) * lane;
-    const double past = (s.x - tx) * ux + (s.z - tz) * uz;
-    if (hypot(tx - s.x, tz - s.z) > army::kReachM && past < 0) break;
-    s.s -= army::kSampleM;
+    return ge::ai::LinePoint{p.x + lm::cos(up) * lane, p.z - lm::sin(up) * lane, lm::sin(up),
+                             lm::cos(up)};
+  };
+  if (!ge::ai::pursue_along(s.s, s.s_end, -army::kSampleM, army::kReachM, s.x, s.z, on_file,
+                            mark)) {
+    return true;
   }
+  const double tx = mark.x;
+  const double tz = mark.z;
   // Caught on something (a side-step running out): a point further on.
-  if (s.slow >= 2 && s.until > state.t && s.until - state.t < kDt * 1.5) s.s -= army::kSampleM;
+  if (s.progress.slow >= 2 && s.progress.until > state.t && s.progress.until - state.t < kDt * 1.5)
+    s.s -= army::kSampleM;
   go_toward(troop_world(state), s, tx, tz, army::kPace, -1);
   return false;
 }
@@ -286,8 +289,7 @@ bool slow_or_down(const GameState& state) {
 bool try_arrest(GameState& state, Soldier& s, Spot q) {
   if (on_lift(state, 0) || hypot(q.x - s.x, q.z - s.z) > wanted::kArrestReachM) return false;
   if (!slow_or_down(state) || !arrest_quarry(state)) return false;
-  s.mode = SoldierMode::arrest;
-  s.t = 0;
+  enter_mode(state, s, SoldierMode::arrest, "within reach, slow or down");
   state.army.arrested_by = s.id;
   push(state, ArmyChange::arrest, 1);
   return true;
@@ -297,15 +299,14 @@ bool try_arrest(GameState& state, Soldier& s, Spot q) {
 // where they shoot to kill. Returns whether he means to be moving.
 bool chase(GameState& state, Soldier& s, Spot q, FireRule fire) {
   const WantedState& w = state.wanted;
-  const Spot to = w.seen ? q : Spot{w.last_x, w.last_y, w.last_z};
+  const Spot to = w.seen ? q : Spot{w.last.x, w.last.y, w.last.z};
   const double d = hypot(to.x - s.x, to.z - s.z);
   const TroopWorld tw = troop_world(state);
   const double off = hypot(q.x - s.x, q.z - s.z);
   const bool in_range =
-      off < army::kStandOffM || (off < army::kStandOffM + army::kHoldBandM && s.slow >= 1);
+      off < army::kStandOffM || (off < army::kStandOffM + army::kHoldBandM && s.progress.slow >= 1);
   if (w.lethal && fire != FireRule::hold && s.sees && in_range) {
-    s.mode = SoldierMode::hold;
-    s.t = 0;
+    enter_mode(state, s, SoldierMode::hold, "in sight and in range");
     stop_here(tw, s);
     return false;
   }
@@ -324,8 +325,7 @@ bool chase(GameState& state, Soldier& s, Spot q, FireRule fire) {
 void hold(GameState& state, Soldier& s, Spot q) {
   stop_here(troop_world(state), s);
   if (!s.sees || hypot(q.x - s.x, q.z - s.z) > army::kStandOffM + army::kHoldBandM * 1.5) {
-    s.mode = SoldierMode::chase;
-    s.t = 0;
+    enter_mode(state, s, SoldierMode::chase, "out of sight or range");
     return;
   }
   s.heading = lm::atan2(q.x - s.x, q.z - s.z);
@@ -374,11 +374,17 @@ Soldier& enlist_soldier(GameState& state, SoldierFrom from, int32_t squad, Soldi
   s.heading = heading;
   s.tx = x;
   s.tz = z;
-  s.wx = x;
-  s.wz = z;
-  s.wt = state.t;
+  s.progress.x = x;
+  s.progress.z = z;
+  s.progress.t = state.t;
   a.soldiers.push_back(s);
   return a.soldiers.back();
+}
+
+void enter_mode(GameState& state, Soldier& s, SoldierMode next, const char* because) {
+  ge::ai::Why* why =
+      state.why ? state.why->follow(army::kPursuerBase + s.id, state.steps) : nullptr;
+  ge::ai::enter(s.mode, s.t, next, why, soldier_mode_name, because);
 }
 
 std::shared_ptr<const std::vector<mg::Track>> army_ways(const mg::Level& level) {
@@ -399,20 +405,22 @@ std::shared_ptr<const std::vector<mg::Track>> army_ways(const mg::Level& level) 
   return ways;
 }
 
-int32_t lift_for(const GameState& state, Spot q) {
+int32_t lift_for(const GameState& state, Spot q, ge::ai::Why* why) {
   if (!state.lifts) return -1;
-  int32_t best = -1;
-  double cost = 0;
-  for (size_t i = 0; i < state.lifts->size(); i++) {
-    const mg::PlanPoint top = (*state.lifts)[i].top;
-    const double ty = state.level->ground_at(top.x, top.z);
-    const double c = hypot(top.x - q.x, top.z - q.z) + (ty < q.y + army::kAboveM ? 5000 - ty : 0);
-    if (best < 0 || c < cost) {
-      cost = c;
-      best = static_cast<int32_t>(i);
-    }
+  if (why) {
+    why->decide("lift");
+    why->fact("his_x", q.x);
+    why->fact("his_z", q.z);
   }
-  return best;
+  // Each lift's cost: how far its top is from him, and far dearer when it does not stand over him.
+  const auto score = [&](int32_t i) {
+    const mg::PlanPoint top = (*state.lifts)[static_cast<size_t>(i)].top;
+    const double ty = state.level->ground_at(top.x, top.z);
+    return -(hypot(top.x - q.x, top.z - q.z) + (ty < q.y + army::kAboveM ? 5000 - ty : 0));
+  };
+  return ge::ai::pick_best(
+      static_cast<int32_t>(state.lifts->size()), score, why, "lift", [](int32_t) { return "lift"; },
+      "its top nearest over him");
 }
 
 void step_army(GameState& state) {
@@ -430,9 +438,10 @@ void step_army(GameState& state) {
     a.lift_called = false;
   }
   const bool arrested = w.ended == WantedEnd::arrested;
-  const Spot last{w.last_x, w.last_y, w.last_z};
+  const Spot last{w.last.x, w.last.y, w.last.z};
   const int64_t steps = state.steps;
   int32_t home = 0;
+  build_near(a.near, a.soldiers);
   for (Soldier& s : a.soldiers) {
     s.t += kDt;
     // THE LOOK, every `kLookEveryS`, each man on his own step of it (ai/think.hpp).
@@ -447,8 +456,7 @@ void step_army(GameState& state) {
         go_toward(tw, s, s.tx, s.tz, army::kSkate * 1.3, 0.2);
         moving = hypot(s.tx - s.x, s.tz - s.z) > 2;
         if (hypot(s.tx - s.x, s.tz - s.z) < 0.6) {
-          s.mode = SoldierMode::wait;
-          s.t = 0;
+          enter_mode(state, s, SoldierMode::wait, "at the load line");
         }
         break;
       case SoldierMode::wait:
@@ -461,8 +469,7 @@ void step_army(GameState& state) {
         if (!on) {
           stop_here(tw, s);
         } else if (climb_with_wave(state, s, w.seen ? q : last)) {
-          s.mode = SoldierMode::chase;
-          s.t = 0;
+          enter_mode(state, s, SoldierMode::chase, "left the column");
         } else {
           moving = true;
         }
@@ -535,7 +542,7 @@ uint64_t army_hash(const ArmyState& a, uint64_t h) {
     mix(s.sees ? 1 : 0);
     mix(s.carrier);
     mix(s.s);
-    mix(s.slow);
+    mix(s.progress.slow);
   }
   mix(a.next_id);
   mix(a.lift_called ? 1 : 0);

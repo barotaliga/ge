@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstring>
 
+#include "ai/sight.hpp"
 #include "core/math.hpp"
 
 namespace fall_line::sim {
@@ -34,9 +35,7 @@ void begin_hunt(GameState& state) {
   w.seen = false;
   w.unseen = 0;
   w.fix = 0;
-  w.last_x = q.x;
-  w.last_y = q.y;
-  w.last_z = q.z;
+  ge::ai::see(w.last, q.x, q.y, q.z, state.t);
   w.look = 0;
   w.since = state.t;
   w.stopped = 0;
@@ -77,9 +76,7 @@ void spotted(GameState& state) {
   w.fix = wanted::kFixS;
   w.unseen = 0;
   w.look = 0;
-  w.last_x = q.x;
-  w.last_y = q.y;
-  w.last_z = q.z;
+  ge::ai::see(w.last, q.x, q.y, q.z, state.t);
   if (!w.seen) {
     w.seen = true;
     push(state, WantedChange::seen, w.stars);
@@ -200,25 +197,19 @@ int32_t waves_sent(const WantedState& w, double t) {
 
 bool sees_quarry(const mg::Level& level, const sk::TreeIndex& trees, const Pursuer& p, Spot q,
                  bool cover) {
-  const Spot chest{q.x, q.y + wanted::kChestM, q.z};
-  const double dx = chest.x - p.x;
-  const double dy = chest.y - p.y;
-  const double dz = chest.z - p.z;
-  const double d = std::sqrt(dx * dx + dy * dy + dz * dz);
-  if (d <= wanted::kCloseM) return true;
-  if (d > wanted::kSightM[static_cast<size_t>(p.kind)]) return false;
+  const ge::ai::Point3 eye{p.x, p.y, p.z};
+  const ge::ai::Point3 chest{q.x, q.y + wanted::kChestM, q.z};
+  const ge::ai::SightSpec spec{wanted::kSightM[static_cast<size_t>(p.kind)], wanted::kCloseM,
+                               wanted::kLineStepM, wanted::kLineClearM};
   const bool low = looks_from_snow(p.kind);
-  if (cover && !low && d > wanted::kCoverNearM) return false;
-  const double run = std::sqrt(dx * dx + dz * dz);
-  const auto n = static_cast<int32_t>(std::floor(run / wanted::kLineStepM));
-  for (int32_t i = 1; i < n; i++) {
-    const double k = static_cast<double>(i) / n;
-    if (level.ground_at(p.x + dx * k, p.z + dz * k) + wanted::kLineClearM > p.y + dy * k) {
-      return false;
-    }
-  }
-  // From the air a man under the trees is seen between them: the woods hide nothing from aloft.
-  return !(low && through_woods(level, trees, Spot{p.x, p.y, p.z}, chest));
+  // From the air a man under the trees is seen between them, unless he is under cover: the woods
+  // hide nothing from aloft.
+  return ge::ai::sees(
+      eye, chest, spec, [&](double x, double z) { return level.ground_at(x, z); },
+      [&](double d) {
+        if (!low) return cover && d > wanted::kCoverNearM;
+        return through_woods(level, trees, Spot{p.x, p.y, p.z}, Spot{chest.x, chest.y, chest.z});
+      });
 }
 
 bool through_woods(const mg::Level& level, const sk::TreeIndex& trees, Spot a, Spot b) {
@@ -274,9 +265,7 @@ void step_wanted(GameState& state) {
     }
     if (seen) {
       const Spot q = quarry_of(state);
-      w.last_x = q.x;
-      w.last_y = q.y;
-      w.last_z = q.z;
+      ge::ai::see(w.last, q.x, q.y, q.z, state.t);
     }
   }
   w.unseen = w.seen ? 0 : w.unseen + kDt;
@@ -363,9 +352,9 @@ uint64_t wanted_hash(const WantedState& w, uint64_t h) {
   mix(w.seen ? 1 : 0);
   mix(w.unseen);
   mix(w.fix);
-  mix(w.last_x);
-  mix(w.last_y);
-  mix(w.last_z);
+  mix(w.last.x);
+  mix(w.last.y);
+  mix(w.last.z);
   mix(w.look);
   mix(w.lethal ? 1 : 0);
   mix(w.since);
