@@ -81,6 +81,12 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   contexts, the bindings file and rebinding, the device database, touch controls, local players,
   rumble and force feedback as pure functions, a simulated backend and the event log. It depends
   on `engine/core` only; the OS's devices reach it through `engine/platform`'s backend.
+- **`engine/texgen`**: procedural textures (`ge::texgen`, M31; `docs/textures.md` is the design):
+  a recipe an agent writes as text (`.tex`), its layers painted over float planes (colour,
+  height, roughness, metal, glow) in order, the maps derived off them, and the bake cached on
+  disk as PNG under a key of everything its bytes depend on, so a variant is baked once. Pure
+  functions of the recipe and the texture reference, deterministic to the bit; no platform, no
+  GPU. Links `ge_lab` for the PNG writer.
 - **`engine/move`**: character movement (`ge::move`, M28; `docs/movement.md` is the design): the
   knobs of a moving body and their names, preset rows (an arena shooter's, a platformer's, a
   walker's), one step over a swept-box trace callback the game answers with its own world, a box
