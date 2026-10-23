@@ -36,7 +36,7 @@ Picture topology_sheet(const assets::Model& model, const Shape& shape, double fl
 
 // The joints to look at close: `names` (comma-separated joint names; unknown ones are named in
 // `missing`), or by default the skeleton's ends, then the joints whose own skin is small (3 to
-// 35 cm round), one side of a mirrored pair, at most `most`.
+// 35 cm round), one side of a mirrored pair, never a mesh's own node, at most `most`.
 std::vector<int> detail_joints(const assets::Model& model, const std::string& names, int most,
                                std::string* missing);
 // What a close-up of `joint` frames: its own skin when that is small, else the 15 cm round the
