@@ -16,7 +16,8 @@
 //                                none of those match. --log reads a saved job log instead (one
 //                                downloaded by any other means), with no network. --merge
 //                                squash-merges the pull request when every check passed and it
-//                                merges cleanly, pinned to the head the checks ran on. A
+//                                merges cleanly, pinned to the head the checks ran on; on a
+//                                merge-queue base it arms auto-merge, and the queue merges. A
 //                                pull request GitHub blocks with every check green is answered
 //                                with why: the base's rules against the head's checks.
 //

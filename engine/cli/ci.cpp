@@ -390,10 +390,21 @@ Outcome run_ci(const fs::path& repo, const std::string& pr, const std::string& l
                                      "/merge -f merge_method=squash -f sha=" + sha + " --jq .sha",
                                  log);
   if (done.code != 0 && merge_queue_refusal(done.output)) {
-    return fail("pull request " + pr + " is green, but its base merges only through a merge queue",
-                "gh pr merge " + pr +
-                    " --auto --squash (it joins the queue), never ge ci --merge "
-                    "on this repository");
+    // A queue base takes a pull request only through auto-merge: arm it, and the queue merges it.
+    const std::string repo_slug = slug.str(1) + "/" + slug.str(2);
+    const Logged queued =
+        run_to_log("gh pr merge " + pr + " -R " + repo_slug + " --auto --squash", log);
+    if (queued.code != 0) {
+      return fail("pull request " + pr +
+                      " is green, its base merges only through a merge queue, and arming "
+                      "auto-merge failed: " + first_line(queued.output),
+                  "gh pr merge " + pr + " -R " + repo_slug + " --auto --squash");
+    }
+    out.text += "  queued: the base merges through a merge queue; auto-merge armed\n";
+    out.result = json_obj({{"sha", json_str(sha)}, {"queued", "true"}});
+    out.summary = "pull request " + pr + " joined the merge queue";
+    out.next = "ge ci " + pr + " --wait: the queue runs the full matrix, then merges it";
+    return out;
   }
   if (done.code != 0) {
     return fail("GitHub refused to merge pull request " + pr + ": " + first_line(done.output),
