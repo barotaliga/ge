@@ -128,3 +128,8 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 ## Store services
 
 - `ge services check` (a game's achievements and stats catalog checked: ids unique, every stat an achievement reads defined; later diffed against a store's exported partner config)
+
+## Input devices
+
+- `ge input replay <events-log> --bindings=<file>` (each action's value frame by frame, from a recorded event log under a binding set)
+- `ge input bindings check <file>` (a bindings file parsed against the game's actions: conflicts and unbound actions listed)
