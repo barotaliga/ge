@@ -40,7 +40,7 @@ namespace ge::cli {
 
 inline constexpr std::string_view kDigestBaseline = "tests/labs_digests.txt";
 
-Outcome run_digest(const BuildOptions& o, const std::string& lab, bool write,
+Outcome run_digest(const BuildOptions& o, const std::vector<std::string>& labs, bool write,
                    bool only_moved = false);
 Outcome run_golden_diff(const fs::path& repo, const std::vector<std::string>& targets,
                         const std::string& base);
