@@ -1,7 +1,7 @@
 name: ghcr
 
 # Mirrors one GitHub Release to GitHub Packages as an OCI artifact
-# (ghcr.io/<owner>/gameengine2:X.Y.Z, and :latest when asked). The release's
+# (ghcr.io/<owner>/<repo>:X.Y.Z, and :latest when asked). The release's
 # own files are the source: every archive and SHA256SUMS, downloaded from the
 # release, pushed unchanged. Called by release.yml after it publishes, and
 # dispatchable by hand or by an agent with a tag (`tag: v0.1.0`) to mirror a
