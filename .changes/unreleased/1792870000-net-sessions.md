@@ -1,0 +1,6 @@
+---
+type: Added
+title: Sessions in the network: the lobby, teams, chat, kick and reconnect, and LAN discovery
+---
+
+`net/session.hpp` runs a game's lobby on one reliable channel of a node. The host's process seats each player by seat (not by peer slot), keeps the roster and the leader (the host's own player on a listen server, otherwise the first seated), fills teams evenly and refuses a move into a full one, starts and returns to the lobby on the leader's word (with everyone ready, when asked), and holds the game's own settings bytes. It relays chat to everyone, to a team or to one player, with control bytes stripped, a length cap and a per-player rate limit. It kicks and bans for the session, sends everyone's ping each second, and keeps a dropped player's seat for a while so the client comes back to it with its token. Every refusal says what was asked and why. `net/discovery.hpp` finds games on the LAN: a broadcast probe on a fixed port answered by each host's advert, never bigger than the probe. The simulated network delivers broadcasts (`sim_broadcast`), and UDP sockets may send them. The new `net-session` lab fills a 32-player lobby on a dedicated host under each network preset and puts it through joins, teams, three chat scopes, a flood, a kick and its ban, a six-second drop and the return to the seat, settings, start and return.

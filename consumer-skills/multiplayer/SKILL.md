@@ -1,6 +1,6 @@
 ---
 name: multiplayer
-description: "Use when this game talks over a network: the engine's ge::net (a node for a host, a client or a peer of up to 32, its channels, its events), testing a session on the simulated network under bad links, capturing a live node's traffic, and the ge net tools that read it (ge net inspect, ge net stats, ge net sim)."
+description: "Use when this game talks over a network: the engine's ge::net (a node for a host, a client or a peer of up to 32, its channels, its events), a lobby (players by seat, teams, chat, kick, start, reconnect by token, LAN discovery), testing a session on the simulated network under bad links, capturing a live node's traffic, and the ge net tools that read it (ge net inspect, ge net stats, ge net sim)."
 ---
 
 # Multiplayer on ge::net
@@ -57,6 +57,44 @@ unacknowledged (128 at most), so check `node_send`'s answer and try again next f
 **TCP.** For a stream instead of datagrams (a turn-based game, a network that blocks UDP), open
 the transport with `net::open_tcp_host_transport(t, bind, &err)` on the host and
 `net::open_tcp_client_transport(t, host_address, &err)` on a client; the node code is the same.
+
+## A lobby: sessions
+
+`net/session.hpp` runs a lobby on one reliable channel of the node's (give it its own; the game
+skips that channel when it reads the node's events). The host's process is the authority; a
+client asks and mirrors.
+
+```cpp
+#include "net/session.hpp"
+net::SessionConfig sc;
+sc.channel = 2;              // reliable, the session's alone
+sc.max_players = 8;          // seats, 1..32
+sc.team_count = 2;           // 0: no teams
+sc.host_plays = false;       // true: a listen server, the host is seat 0 and leads
+sc.seed = net::os_entropy(); // the tokens
+net::SessionHost host;
+net::session_host_init(host, sc, node, now_us);
+// each frame, after node_update:
+net::session_host_update(host, now_us);
+for (const net::SessionEvent& e : host.events) { /* joined, left (e.why), chat, ... */ }
+
+net::SessionClient client;                       // on a client's node
+net::session_client_init(client, node, 2);
+net::session_client_join(client, host_address, "name", saved_token, now_us);  // 0: new
+// each frame, after node_update:
+net::session_client_update(client, now_us);
+// client.players[] is the player list (name, team, ready, leader, ping_ms); client.me is
+// this player's seat; client.token brings it back to the seat after a crash or a drop.
+net::session_client_chat(client, net::ChatScope::team, net::kNoPlayer, text, size);
+```
+
+Asks (`session_client_ready`, `_team`, `_chat`, `_kick`, `_start`, `_return`, `_settings`) come
+back as events; a `refused` event names the ask and why (`why_name`). The game's own lobby
+settings (map, mode) are its bytes in `session_client_settings`, kept and sent by the host.
+`net/discovery.hpp` finds hosts on the LAN: the host answers probes on a fixed port
+(`lan_answer` with `advert_of(host, ...)`), a client broadcasts `lan_probe` and reads
+`lan_collect`. Run a session's script on the simulated network in a test, as the engine's
+`net-session` lab does, and keep a hash of every end's events.
 
 ## Test it on bad links
 

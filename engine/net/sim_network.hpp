@@ -6,11 +6,13 @@
 // headless: the labs, the tests and `ge net sim` run whole sessions of up to 32 peers through
 // it in a fraction of real time.
 //
-// A datagram to an address nobody has bound is dropped and counted, as a real network would.
+// A datagram to an address nobody has bound is dropped and counted, as a real network would. A
+// datagram to `sim_broadcast(port)` is a LAN's broadcast: a copy to every socket bound on that
+// port but the sender's, each over its own link.
 //
 // ge:summary The simulated network: conditioned directed links on a virtual clock, seeded
 // ge:keywords net network simulated sim-network virtual-network fake link deliver datagram
-// ge:keywords virtual-clock deterministic headless partition
+// ge:keywords virtual-clock deterministic headless partition broadcast
 // ge:skill net
 // ge:test tests/net_sim_network_test.cpp
 #pragma once
@@ -69,6 +71,10 @@ struct SimNetwork {
   std::vector<Socket> sockets;
   SimStats stats;
 };
+
+// The simulated network's broadcast node: a datagram to it reaches every socket on its port.
+constexpr uint32_t kSimBroadcast = 0xffffffffu;
+inline Address sim_broadcast(uint16_t port) { return sim_address(kSimBroadcast, port); }
 
 SimNetwork make_sim_network(uint32_t seed, const LinkConditions& defaults);
 
