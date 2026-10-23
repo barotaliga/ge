@@ -13,6 +13,8 @@
 // - a packet that would wait in the queue past `queue_ms` is dropped at the tail (congestion);
 // - `duplicate` delivers a second copy just after the first; `reorder` holds a packet back
 //   `reorder_ms` so the ones behind it overtake it.
+// - a drop pattern (`drop_every`, `drop_run`) loses the same packets of every period, drawing
+//   nothing: "every other packet" is an experiment, not a weather.
 // - a STREAM link (`stream`: TCP, or a network that only lets a stream through) loses nothing,
 //   doubles nothing and keeps the order: a packet the line drops arrives a resend timeout later
 //   (`stream_resend_ms`: three latencies and two jitters, 200 ms at least), every packet behind
@@ -50,6 +52,10 @@ struct LinkConditions {
   double bandwidth_kbps = 0;  // the link's rate, kbit/s (0: unlimited)
   double queue_ms = 250;      // the longest a packet may queue before it is dropped
   bool stream = false;        // a stream: in order, nothing lost, a drop a resend's wait late
+  // A drop PATTERN beside the random loss, for experiments: of every `drop_every` packets on the
+  // link, the last `drop_run` are lost (drop_every 2: every other one). 0: none.
+  int drop_every = 0;
+  int drop_run = 1;
 };
 
 // What `decide` keeps between packets on one directed link.
@@ -57,6 +63,7 @@ struct LinkState {
   bool bad = false;            // the loss chain's state
   int64_t busy_until_us = 0;   // when the link has clocked out every packet before
   int64_t last_arrive_us = 0;  // the latest arrival of an in-order packet
+  uint64_t sent = 0;           // packets decided on this link, for the drop pattern
 };
 
 // Bytes of IPv4 and UDP header a datagram carries on the wire: counted against the bandwidth.

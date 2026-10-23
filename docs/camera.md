@@ -284,6 +284,29 @@ to_frame_view(p, frame_view);
 A director (a broadcast, a replay's film camera, an impact camera) is a game's function that
 calls `set_rung` with a planted rig's row and an edit; the stack has no notion of a TV.
 
+### Fall Line's ladder (`games/fall_line/camera`)
+
+Fall Line's run is seen through six rungs, each a row of an engine rig, in the order its camera
+key (C) walks them: `tips` and `helmet` (mounted), `chase`, `far` and `high` (booms, the reference
+ladder's rows) and `orbit` (the menu's drone, off the key). Per frame, `frame_camera` does the
+game's part around `update`:
+
+- **The subject** is the skier: the skis' base under the boots, the figure's frame (the snow's
+  normal on the snow, the flight's pitch in the air) rolled by his lean, the packed share as the
+  surface (the boom's tremor is harder on the groomer). A landing and a reset are read off two
+  frames' states, so a frame that took several steps misses neither.
+- **The worn eyes** are set off the figure each frame: the helmet's in front of the head (the tuck
+  folds it down), the tips' a hand over the snow ahead of the boots, raised by the skis' sink.
+- **The world** answers the ground, the trunks (`obstacles`: a boom is pushed off them) and the
+  gates' posts (`clear`: a boom pulls in for them).
+- **The hand-overs**: inertialized between two booms, blended in the skier's frame to and from a
+  worn lens (0.6 s; 1 s to and from the orbit). While a lens passes through his head its near
+  plane is pushed past it, and no lens goes under 0.15 m over the snow.
+
+The `camera-world` lab follows a run on every rung at once and pictures them at the run's
+moments; the woods are the open problem (M26g): the crowns between a boom and a skier in a dense
+wood fill the picture until the forest's draw fades them.
+
 ## Settings and cvars
 
 Every number a player may change is a cvar (`engine/console`, `docs/console.md`), bound to the
@@ -316,7 +339,7 @@ binding; every row inside the engine is in metres, seconds and radians.
 | `camera-rigs` | What does each rig do through each scripted subject (walk, run, strafe, jump, long fall, stairs, crouch, a skid turn, a cliff drop, a teleport)? | eye, angles and fov over time as charts; the subject's path and the eye's from the side and from above; the subject's place in the frame; jerk; ground and obstacle clearance; `gl::find_teleports` on the eye |
 | `camera-transitions` | Is every edit continuous where it should be and instant where it should be? | each edit between each pair of rigs while the subject moves fast: the eye's speed and the look's rate across the switch, the overshoot, the floor; filmstrips |
 | `camera-shake` | Does a shake have the shape and the size it should, and does comfort take it away? | trauma envelopes, the per-axis motion and its frequency content, at comfort 1, 0.5 and 0 |
-| `camera-world` (Fall Line, GPU) | What does each rung of Fall Line's ladder SHOW at the named moments of a run? | each rung's picture over seed 38 at the spawn, a carve, a jump, a landing, the trees; a transition as a strip |
+| `camera-world` (Fall Line, GPU) | What does each rung of Fall Line's ladder SHOW at the named moments of a run, and does any lens stand inside a trunk or the snow? | each rung's picture over seed 38 at the start, the hardest carve, the biggest jump, its landing, the closest pass to the trees and a straight run through the densest wood; the camera key's hand-overs as strips; every lens's least height over the snow and least gap to bark over the whole run |
 | `se-view` (Shooter's Edge) | Does the first-person view bob, roll and kick as the classic look does? | the eye and the angles through a scripted run, against the formulas at the classic configs' values |
 
 ## Research
