@@ -29,7 +29,7 @@ constexpr double kG = 9.81;
 }  // namespace
 
 HeliControls heli_pilot(const HeliState& h, const HeliWorld& world, const HeliLoad& load,
-                        const HeliAim& aim) {
+                        const HeliAim& aim, ai::Why* why) {
   const mg::Level& level = *world.level;
   const double dx = aim.x - h.x;
   const double dz = aim.z - h.z;
@@ -59,8 +59,25 @@ HeliControls heli_pilot(const HeliState& h, const HeliWorld& world, const HeliLo
   // proportion to the distance, so the hover settles rather than hunting across the spot.
   const double reach = aim.land ? 0.0 : 4.0;
   const double left = num::max(0.0, d - reach);
-  const double speed = num::min(num::min(P::kCruise, rise_most),
-                                num::min(std::sqrt(2 * P::kBrake * left), 0.4 * left));
+  const double stop = std::sqrt(2 * P::kBrake * left);
+  const double closing = 0.4 * left;
+  const double speed = num::min(num::min(P::kCruise, rise_most), num::min(stop, closing));
+  if (why) {
+    // What holds the speed down: the slowest limit wins, scored as how slow it asks.
+    why->decide("way");
+    why->fact("distance_m", d);
+    why->fact("flat_ms", flat);
+    why->fact("speed_ms", speed);
+    why->option("cruise", -P::kCruise);
+    why->option("clear_ahead", -rise_most);
+    why->option("stop_at_aim", -stop);
+    why->option("closing", -closing);
+    why->choose(speed == P::kCruise  ? "cruise"
+                : speed == rise_most ? "clear_ahead"
+                : speed == stop      ? "stop_at_aim"
+                                     : "closing",
+                "slowest_limit");
+  }
   const double vxw = d > 0.5 ? dx / d * speed : 0.0;
   const double vzw = d > 0.5 ? dz / d * speed : 0.0;
   // THE PEDALS: the nose the way it is going (or held, at the hover).
@@ -72,10 +89,22 @@ HeliControls heli_pilot(const HeliState& h, const HeliWorld& world, const HeliLo
   const double over = h.y - level.ground_at(h.x, h.z);
   const double sink_most = flat > 15 ? P::kSink : P::kSinkSlow;
   double climb = core::clamp(0.4 * (ground + aim.height - h.y), -sink_most, P::kClimb);
-  if (aim.land && d < 5 && flat < 2.5) {
-    climb = -core::clamp(over * 0.25, P::kSettle, P::kSinkSlow);
-    if (h.grounded) return HeliControls{};
+  const bool settle = aim.land && d < 5 && flat < 2.5;
+  if (settle) climb = -core::clamp(over * 0.25, P::kSettle, P::kSinkSlow);
+  if (why) {
+    why->decide("height");
+    why->fact("over_m", over);
+    why->fact("ground_ahead_m", ground);
+    why->fact("height_m", aim.height);
+    why->fact("climb_ms", climb);
+    why->choose(settle && h.grounded ? "landed"
+                : settle             ? "settle"
+                : climb > 0.5        ? "climb"
+                : climb < -0.5       ? "sink"
+                                     : "hold",
+                settle ? "over_the_aim" : "snow_ahead");
   }
+  if (settle && h.grounded) return HeliControls{};
   return heli_hands(h, world, load, vxw, vzw, turn, climb);
 }
 

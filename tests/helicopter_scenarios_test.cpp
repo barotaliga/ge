@@ -20,6 +20,7 @@
 #include <fstream>
 #include <string>
 
+#include "ai/why.hpp"
 #include "check.hpp"
 #include "core/math.hpp"
 #include "golden.hpp"
@@ -209,4 +210,28 @@ TEST(the_wash_blows_out_along_the_snow_under_a_low_hover_and_is_gone_high_up) {
   h.y += 100;
   const ge::core::Vec3 high = hc::wash_at(level, h, 2012, level.ground_at(2012, 2000) + 0.2, 2000);
   CHECK(high.x == 0 && high.z == 0);
+}
+
+TEST(the_bot_flies_the_same_traced_and_says_why_it_slowed_and_settled) {
+  // Recording decides nothing: every bot-flown scenario keeps its digest with a trace on.
+  for (const hc::HeliScenario& sc : hc::heli_scenarios()) {
+    if (sc.hand) continue;
+    ge::ai::Why why;
+    const hc::HeliRun traced = hc::run_heli_scenario(sc, 120, &why);
+    CHECK_MSG(traced.digest == hc::run_heli_scenario(sc).digest,
+              std::string(sc.id) +
+                  " flew otherwise with its decisions recorded; read "
+                  "plugins/helicopter/pilot.cpp (skill: bots)");
+  }
+  // The landing: the way slows to stop at the aim, and the height settles onto it.
+  ge::ai::Why why;
+  hc::run_heli_scenario(*hc::find_heli_scenario("land"), 120, &why);
+  bool stopped = false, settled = false;
+  for (const ge::ai::Decision& d : why.decisions()) {
+    stopped = stopped || (std::string(d.name) == "way" && std::string(d.chosen) == "stop_at_aim");
+    settled = settled || (std::string(d.name) == "height" && std::string(d.chosen) == "settle");
+  }
+  CHECK_MSG(stopped && settled,
+            "the landing's record never slowed to stop at the aim or settled "
+            "onto it; read plugins/helicopter/pilot.cpp (skill: bots)");
 }

@@ -82,7 +82,8 @@ struct HeliRun {
   uint64_t digest = 0;    // FNV-1a over every step's state
 };
 
-// Run `sc` at `hz` steps a second. The run stops at a crash.
-HeliRun run_heli_scenario(const HeliScenario& sc, double hz = 120);
+// Run `sc` at `hz` steps a second, the bot's decisions recorded on `why` (agent 0, by step)
+// when given. The run stops at a crash.
+HeliRun run_heli_scenario(const HeliScenario& sc, double hz = 120, ai::Why* why = nullptr);
 
 }  // namespace ge::helicopter

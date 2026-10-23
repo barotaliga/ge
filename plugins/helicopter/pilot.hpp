@@ -9,13 +9,21 @@
 // can give (`thrust_most`); the way it is going, the heading, the pedals against the torque and
 // the fin's weathervane.
 //
+// WHY IT FLIES SO (ai/why.hpp), when it is handed a recorder: the `way` decision (what holds its
+// speed down: the cruise, the climb to clear what is ahead, the stop at the aim or the closing on
+// it, each scored by how slow it asks so the slowest wins and the margin is how near the next
+// one is), then the `height` decision (climbing to the snow ahead, sinking to it, holding, or
+// settling onto the aim), with what it read: the distance, the snow ahead, the speed and climb
+// wanted. Recording decides nothing.
+//
 // ge:summary The bot's hands on the helicopter: fly to an aim at a height, and land there
 // ge:keywords helicopter pilot bot heli_pilot aim hover cruise climb land cascade cyclic
-// ge:keywords collective pedals terrain-following
+// ge:keywords collective pedals terrain-following why decision trace
 // ge:skill helicopter
 // ge:test tests/helicopter_scenarios_test.cpp
 #pragma once
 
+#include "ai/why.hpp"
 #include "helicopter/heli.hpp"
 
 namespace ge::helicopter {
@@ -31,9 +39,9 @@ struct HeliAim {
   double face = 0;
 };
 
-// The bot's controls this step, flying `h` to `aim`.
+// The bot's controls this step, flying `h` to `aim`; its decisions recorded on `why` when given.
 HeliControls heli_pilot(const HeliState& h, const HeliWorld& world, const HeliLoad& load,
-                        const HeliAim& aim);
+                        const HeliAim& aim, ai::Why* why = nullptr);
 
 // THE HANDS: the four controls that fly the machine at the velocity (`vx`, `vz`) over the snow,
 // turning at `turn` rad/s and climbing at `climb` m/s.
