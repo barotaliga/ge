@@ -304,7 +304,9 @@ fn moon_disc(d: vec3f, r: f32, px: f32) -> vec3f {
 fn fs_main(in: VertexOut) -> FragmentOut {
   let d = view_ray(frame, in.uv);
   let px = max(length(dpdx(d)), length(dpdy(d)));
-  var colour = sky_luminance(d);
+  // Under the horizon while there is a reach, the horizon's sky (frame.wgsl's `mist_dir`).
+  let h = mist_dir(d);
+  var colour = sky_luminance(h);
   // The disc: the sun's light over its solid angle, darkened toward the limb, and only where
   // the planet does not hide it; behind a deck it is lost in the deck's grey. It is the real
   // sun's, whichever light is the key.
@@ -331,7 +333,7 @@ fn fs_main(in: VertexOut) -> FragmentOut {
     colour += moon_disc(d, r, px) * (1.0 - frame.weather.y);
   }
   // Seen through the fog's or the fall's veil.
-  colour = veil_sky(d, colour);
+  colour = veil_sky(h, colour);
   var out: FragmentOut;
   out.colour = vec4f(min(colour, vec3f(60000.0)), 1.0);
   out.motion = vec4f(screen_motion(frame, vec4f(d, 0.0), in.position.xy), 0.0, 0.0);

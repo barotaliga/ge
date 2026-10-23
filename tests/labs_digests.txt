@@ -26,7 +26,7 @@ input-ffb 565464637bf28b86
 input-session dcb313b33f4ddf37
 input-shape e2284bbd066830af
 junctions 036999ca677e12e6
-ladder 5b4cf4552f7e2cbd
+ladder 0f825d8252af2675
 level 4fbff3da7a82c4aa
 lift-ride a374f35eb85cc161
 mapgen-cost 3baf51b6907817f3

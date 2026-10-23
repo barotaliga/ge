@@ -89,6 +89,10 @@
 
 namespace fall_line::app {
 
+// The ground's clipmap: level 0's quad, m, and its levels (render/terrain.hpp): 8 km round the eye.
+inline constexpr double kGroundSpacing = 1.0;
+inline constexpr int kGroundLevels = 8;
+
 struct FrameOptions {
   bool taa = true;
   double scale = 1.0;           // the render size over the output's, with TAA
@@ -106,6 +110,7 @@ struct FrameOptions {
       true;  // the map's sky and cloud in the picture (mountain/app/cloud_field.hpp): off, clear
   double clouds = 1.0;        // the share of the cloud march's steps (0.25..1); 0: no layer drawn
   bool cloud_quarter = true;  // the cloud marched at a quarter of the pixels (false: every one)
+  double reach_m = 0;  // how far the picture draws, misted (render/view.hpp); 0: the whole ground
   ge::render::SnowfallSettings flakes;
   ge::mountain::app::TrailOptions trail_maps;  // their sizes
 };

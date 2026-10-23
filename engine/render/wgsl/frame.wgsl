@@ -234,12 +234,40 @@ fn veil_sky(d: vec3f, colour: vec3f) -> vec3f {
   return mix(veil_luminance(), colour, exp(-frame.weather.z * path));
 }
 
+// THE REACH'S MIST (FrameView::reach_m): what the sky pass draws along `d` (camera-relative,
+// unit) while there is a reach, the sky with a direction under the horizon drawn as the
+// horizon's, so a surface the mist has closed is the sky behind it and the ground past the reach
+// is never missed: the far land lost in a bright haze, never a dark sea under it.
+fn mist_dir(d: vec3f) -> vec3f {
+  if (frame.mist.y <= 0.0 || d.y >= 0.0) {
+    return d;
+  }
+  return normalize(vec3f(d.x, 1e-4, d.z));
+}
+
+fn mist_sky(d: vec3f) -> vec3f {
+  let h = mist_dir(d);
+  return veil_sky(h, sky_luminance(h));
+}
+
 // THE HAZE: a surface's colour seen through `dist_m` of air at screen `uv` (0..1): its colour
 // times the air's transmittance plus the light the air scatters in, from the aerial-perspective
 // volume (under a deck, the deck's grey in its place); then a fog or a fall closing it into its
-// grey veil, so a surface at the visual range keeps 2 % of its contrast against it. Every world
-// material calls this, and none has its own fog.
+// grey veil, so a surface at the visual range keeps 2 % of its contrast against it; then the
+// reach's mist closing it into the sky behind it. Every world material calls this, and none has
+// its own fog.
 fn haze(colour: vec3f, uv: vec2f, dist_m: f32) -> vec3f {
+  let c = haze_air(colour, uv, dist_m);
+  if (frame.mist.y <= 0.0) {
+    return c;
+  }
+  let t = clamp((dist_m - frame.mist.x) / (frame.mist.y - frame.mist.x), 0.0, 1.0);
+  return mix(c, mist_sky(view_ray(frame, uv)), t * t * (3.0 - 2.0 * t));
+}
+
+// The haze without the reach's mist: the air and the weather alone (the cloud's, which is the
+// sky's own and never misted).
+fn haze_air(colour: vec3f, uv: vec2f, dist_m: f32) -> vec3f {
   let s = sqrt(clamp(dist_m * 1e-3 / kAerialRangeKm, 0.0, 1.0));
   let w = max(s - 0.5 / kAerialSize.z, 0.5 / kAerialSize.z);
   let v = textureSampleLevel(aerial_volume, linear_clamp, vec3f(uv, w), 0.0);
