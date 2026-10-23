@@ -44,7 +44,7 @@ and which milestone row it serves.
 Push with `git push -u origin <branch>`. The PR title is a conventional subject (PRs are
 squash-merged). The body contains:
 
-- **Milestone**: the `docs/goals.md` row, and the Status change made in this PR.
+- **Milestone**: the `docs/goals.md` row, and the change made to its status file (`docs/goals/<row>.md`) in this PR.
 - **What**: the change, in a few lines.
 - **Evidence**: the golden tests added (rows × functions, all bit-exact), and the labs of
   the subject run before and after (the `--compare` table and the captioned pictures that
