@@ -92,3 +92,15 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge doctor --tools` / `ge env` (which tools, versions and drivers a gate needs, and which are missing)
 
 (`ge shot` is M12b's; `ge anim` is M14b's.)
+
+## Shooter's Edge (M18, docs/shooters-edge.md § The `ge` tooling it needs)
+
+- `ge pak ls/cat/extract/build` (a search path's files, which archive wins one, a fixture pack built from a directory)
+- `ge bsp info/ents/shot` (a map's lumps and limits, its entity lump, a CPU picture of leaves, the PVS from a point and the hulls)
+- `ge qc build/disasm/run/trace/profile/diff` (our QC compiler; a progs disassembled, run, traced a step at a time, timed by function, diffed against another build)
+- `ge server --map --bots --for` (a headless dedicated server with bots, writing an input log for `ge replay`, `ge state` and `ge diverge`)
+- `ge demo info/frames/shot/diff` (a client or MVD demo decoded frame by frame, a frame pictured, two demos to their first difference)
+- `ge net inspect --protocol=<name>` (pluggable decoders, so a capture of the classic protocol reads as its messages)
+- `ge pmove <scenario>` (a movement scenario's trajectory as a table and a chart, against its parity recording)
+- `ge console <target> "<command>"` (a console command or cvar run in a headless server or client, its output returned)
+- `ge play` for first-person games (an angle axis on the protocol's grid, a step whose length the input sets, several players a run)

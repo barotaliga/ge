@@ -159,7 +159,7 @@ Decided with the `plugins` skill's questions; dependencies run game â†’ plugin â
 **The one exception to C++ only.** QC is executed, never written into the engine: the VM
 runs existing mods' bytecode for compatibility, and the engine, the plugins and the game stay
 C++. The tree's own QC is limited to the test mod the labs run (`games/shooters_edge/qc/`).
-AGENTS.md and the non-goals in `docs/goals.md` state this exception when M18 starts.
+AGENTS.md and the non-goals in `docs/goals.md` state this exception.
 
 ## What the engine has, and what it lacks
 
