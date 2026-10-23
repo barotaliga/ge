@@ -93,6 +93,7 @@ void on_server(Rendezvous& rv, const Address& from, const uint8_t* data, size_t 
   Writer w = make_writer(out, kMaxSize);
   if (kind == kRegister) {
     const uint64_t id = read_u64(r);
+    const uint16_t forwarded = read_u16(r);  // the padding's zero when the host has none
     if (r.bad) {
       rv.stats.refused++;
       return;
@@ -107,6 +108,7 @@ void on_server(Rendezvous& rv, const Address& from, const uint8_t* data, size_t 
       return;
     }
     s->host = from;  // a host whose mapping moved registers from its new address
+    if (forwarded) s->host.port = forwarded;  // its router forwards this port to it (portmap.hpp)
     s->last_us = now_us;
     write_start(w, kRegistered);
     write_address(w, from);

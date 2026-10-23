@@ -164,7 +164,8 @@ double cloud_column(const CloudLayer& l, double x, double z) {
 void cloud_rows(const Clouds& clouds, float info[4], float rows[][4]) {
   const int n = std::clamp(clouds.count, 0, kCloudLayers);
   info[0] = static_cast<float>(n);
-  info[1] = info[2] = info[3] = 0;
+  info[1] = static_cast<float>(std::clamp(clouds.steps, 0.25, 1.0));
+  info[2] = info[3] = 0;
   for (int i = 0; i < kCloudLayers * 3; ++i) rows[i][0] = rows[i][1] = rows[i][2] = rows[i][3] = 0;
   for (int i = 0; i < n; ++i) {
     const CloudLayer& l = clouds.layers[i];

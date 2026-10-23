@@ -117,6 +117,24 @@ the server's relay where they do not; either way it is an ordinary peer of the n
 `stun_request` / `stun_read_answer` ask any STUN server for the public address. Test it with
 `sim_add_nat` (full cone, restricted, port-restricted, symmetric) on the simulated network.
 
+A host whose router will open a port for it is reached straight by everyone. Ask with
+`net/portmap.hpp` on a second socket (PCP, then NAT-PMP, then UPnP IGD), and register the port
+it gets with the rendezvous:
+
+```cpp
+net::PortmapConfig pc;
+pc.gateway = router_address;          // the LAN's gateway, port 5351 (PCP and NAT-PMP)
+pc.local = this_machine;              // as the router sees it
+pc.internal_port = game_port;         // the node's socket
+net::Portmap pm; net::portmap_init(pm, pc, second_transport);
+net::portmap_start(pm, now_us);                                    // then portmap_update
+if (pm.state == net::PortmapState::mapped) net::reach_host_forward(rh, pm.external.port, now_us);
+// done: portmap_close(pm, now_us), updated until pm.state is closed
+```
+
+It renews the lease itself. Test it against `SimRouter` (`net/sim_router.hpp`): give the NAT a
+`gateway` node and choose what the router speaks.
+
 ## Test it on bad links
 
 Use the simulated network in tests and labs, never sleeps or real sockets:
