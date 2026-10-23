@@ -12,6 +12,7 @@
 #include <cmath>
 #include <cstring>
 
+#include "ai/choose.hpp"
 #include "ai/why.hpp"
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
@@ -182,7 +183,7 @@ void circle_way(const ArmyHeli& h, double cx, double cz, double cvx, double cvz,
 Want hunt_want(const GameState& state, const ArmyHeli& h, Spot q, ge::ai::Why* why) {
   const WantedState& w = state.wanted;
   const bool seen = w.seen;
-  const Spot c = seen ? q : Spot{w.last_x, w.last_y, w.last_z};
+  const Spot c = seen ? q : Spot{w.last.x, w.last.y, w.last.z};
   const Spot qv = seen ? quarry_velocity(state) : Spot{};
   const double r =
       seen ? kOrbitM : kSearchShare * kSearchRadiusM[static_cast<size_t>(clamp(w.stars, 0, 5))];
@@ -531,7 +532,7 @@ void ask_landings(GameState& state, int32_t want, Spot q) {
     if (watch == nullptr || (watch->tasked && !h.tasked)) watch = &h;
   }
   if (up < 2) watch = nullptr;
-  const Spot last{w.last_x, w.last_y, w.last_z};
+  const Spot last{w.last.x, w.last.y, w.last.z};
   for (ArmyHeli& h : a.helis) {
     if (h.mode != ArmyHeliMode::hunt || h.tasked || !h.on || &h == watch) continue;
     ge::ai::Why* why = state.why ? state.why->follow(kAgentBase + h.id, state.steps) : nullptr;
@@ -572,8 +573,8 @@ void ask_landings(GameState& state, int32_t want, Spot q) {
         avoid[avoids++] = LandAvoid{spot->x, spot->z, kAvoidM};
         for (Soldier& s : a.soldiers) {
           if (s.from != SoldierFrom::heli || s.squad != h.id || !fit(s)) continue;
-          s.mode = SoldierMode::board;
-          s.t = 0;
+          // Not a record of its own: the machine's "pick" decision is open (ai/why.hpp).
+          ge::ai::enter(s.mode, s.t, SoldierMode::board, nullptr, soldier_mode_name, "");
         }
         if (why) why->choose("pick", "squad left behind");
         continue;
@@ -651,7 +652,7 @@ void step_army_helis(GameState& state, bool on, Spot q) {
         fly(state, h, hunt_want(state, h, q, why));
         const double reach =
             num::max(kSearchRadiusM[static_cast<size_t>(clamp(w.stars, 0, 5))], 2 * kOrbitM);
-        if (hypot(h.x - w.last_x, h.z - w.last_z) < reach) h.on = true;
+        if (hypot(h.x - w.last.x, h.z - w.last.z) < reach) h.on = true;
         break;
       }
       case ArmyHeliMode::land:
@@ -698,8 +699,7 @@ bool step_heli_soldier(GameState& state, Soldier& s) {
       s.y = num::max(ground, s.y - kSlide * kDt);
       s.speed = 0;
       if (s.y <= ground) {
-        s.mode = SoldierMode::out;
-        s.t = 0;
+        enter_mode(state, s, SoldierMode::out, "on the snow");
       }
       return false;
     }
@@ -708,8 +708,7 @@ bool step_heli_soldier(GameState& state, Soldier& s) {
       const bool held =
           h != nullptr && (h->mode == ArmyHeliMode::set || h->mode == ArmyHeliMode::rope);
       if (!held && knelt(s)) {
-        s.mode = SoldierMode::chase;
-        s.t = 0;
+        enter_mode(state, s, SoldierMode::chase, "his machine has lifted");
         return false;
       }
       if (knelt(s)) {
@@ -726,8 +725,7 @@ bool step_heli_soldier(GameState& state, Soldier& s) {
     }
     case SoldierMode::board: {
       if (h == nullptr || !h->tasked || h->task.drop || h->task.done) {
-        s.mode = SoldierMode::chase;
-        s.t = 0;
+        enter_mode(state, s, SoldierMode::chase, "his machine is not coming");
         return false;
       }
       if (h->mode != ArmyHeliMode::set) {

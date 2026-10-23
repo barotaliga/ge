@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "ai/steer.hpp"
 #include "snowmobile/sled.hpp"
 
 namespace fall_line::sim {
@@ -75,12 +76,9 @@ struct Soldier {
   double s = 0;
   double s_end = 0;
   double lane = 0;
-  // THE WATCH ON HIS PROGRESS (army_troop.hpp): where he was at the window's start and when, how
-  // many windows in a row he barely moved, the side he steps off to and until when.
-  double wx = 0, wz = 0, wt = 0;
-  int32_t slow = 0;
-  int32_t side = 1;
-  double until = 0;
+  // THE WATCH ON HIS PROGRESS (army_troop.hpp, ai/steer.hpp): where he was at the window's start
+  // and when, how many windows in a row he barely moved, the side he steps off to and until when.
+  ge::ai::Progress progress;
   // HIS FIRE (gunfire.hpp): the bursts fired this hold, and the clock before which he does not
   // stop to fire again.
   int32_t bursts = 0;
@@ -117,11 +115,9 @@ struct ArmySled {
   double next = 0;                // the clock before which it does not halt again, s
   double saw = -1e9;              // the clock its crew last saw him, s
   // NOT GETTING STUCK: where it was at the window's start and when, how many windows in a row it
-  // barely moved, the side it swings off to and until when, and how often it was dug out.
-  double wx = 0, wz = 0, wt = 0;
-  int32_t slow = 0;
-  int32_t side = 1;
-  double until = 0;
+  // barely moved, the side it swings off to and until when (ai/steer.hpp), and how often it was
+  // dug out.
+  ge::ai::Progress progress;
   int32_t dug = 0;
   int32_t bursts = 0;  // the gunner's bursts this halt (gunfire.hpp)
 };
@@ -218,6 +214,9 @@ struct ArmyState {
   // Whether the hunt sends its helicopters. A lab or a test staging the army's other arms on
   // their own turns it off; the game never does.
   bool send_helis = true;
+  // THE SOLDIERS BY PLACE, built each step before they move (ai/steer.hpp): who keeps apart from
+  // whom. Scratch: never hashed.
+  ge::ai::Neighbours near;
   // Whether its men fire (gunfire.hpp). A lab or a test staging the army's moves without the
   // gunfire turns it off; the game never does.
   bool fire = true;
