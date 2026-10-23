@@ -34,6 +34,7 @@ updates that row's status file (`docs/goals/<row>.md`) in its PR.
 | `docs/index.md` | GENERATED from the code's `ge:` tags by `make index` (and `make agents-check`) in every checkout, never committed: every file's one-line summary, owning skill and test; keyword to files |
 | [`docs/rendering.md`](docs/rendering.md) | The GPU backend (Dawn), the frame's pass table, every rendering technique and why, budgets, lab hooks, and what was considered and not taken |
 | [`docs/perf.md`](docs/perf.md) | The performance ledger: every speed-up, before and after, and how it was measured |
+| [`docs/input.md`](docs/input.md) | Input devices: the layers, the model, actions and bindings, raw mouse, wheels and force feedback, gamepads, touch, players, recording, the labs and the decisions |
 | [`docs/networking.md`](docs/networking.md) | Multiplayer: what each kind of game asks of the network, the layers of `engine/net`, the decisions, the wire format, the simulated network, the tools, and Fall Line's pilot (M17) |
 | [`docs/publishing.md`](docs/publishing.md) | What a release is (GitHub Releases + GitHub Packages), how a game consumes it, changeset fragments, cutting a release, the credentials |
 
@@ -219,6 +220,7 @@ characters.
 | `*/assets/<name>/` | Built models (`ge asset`): the manifest, the Blender builder, the committed .glb and its data | `assets` |
 | `*/labs/` | Labs beside their subject, compiled into the one `labs` executable | `labs` |
 | `engine/net/` | Multiplayer networking (`ge::net`, `docs/networking.md`): addresses, the wire, UDP and TCP sockets, the links, the simulated network, sessions, LAN discovery; the only place socket headers are included | `net` |
+| `engine/input/` | Input devices (`ge::input`, `docs/input.md`): the device model, events, state, dead zones, actions and bindings, rebinding, wheels' roles, touch, players, feedback, the event log, simulated devices | `input` |
 | `engine/platform/` | SDL3 (`GE_PLATFORM`): the window, input, the frame clock, the audio device; the only place SDL is included | `platform` |
 | `engine/gpu/` | The native GPU device over Dawn (`GE_GPU`): adapters and tiers, pipelines and the manifest, surfaces, targets, timers; the only place webgpu.h is included | `gpu` |
 | `engine/render/` | Generic rendering mechanisms (`docs/rendering.md`): the frame and its pass table, sky, terrain, shadows, Hi-Z, TAA-U, bloom, post, meshes, instances, skinning; WGSL beside each | `render` |
@@ -322,6 +324,7 @@ and the directories agree.
 | `paramotor` | `plugins/paramotor`: the powered speed wing a skier flies (`step_para`, the wing on its lines, the engine, the fold, the cut-away), the air it flies in, the bot's hands on it, the para scenarios |
 | `sim` | `games/fall_line/sim`: `create_game`, the step, the bot, the headless sim CLI, the run clock |
 | `platform` | `engine/platform`: SDL3, the window, input, the gamepad, the audio device, files |
+| `input` | `engine/input`: keyboards, raw mice, gamepads, joysticks, wheels and pedals, touch; actions, contexts, the bindings file, rebinding, the device database, players and hot-plug, rumble and force feedback, the event log, the simulated backend; `play/devices`; the M19 rows |
 | `gpu` | `engine/gpu`: the native GPU device over Dawn (Dawn's `webgpu.h`), feature tiers, buffers, pipelines and the manifest, WGSL and `make shaders-check` |
 | `render` | A draw pass, the pass table, GPU-driven instances, shadows, sky, TAA-U, post, lab captures, extraction from `GameState` |
 | `assets` | `engine/assets`: an authored model (glTF), posing and skinning, the `models` lab, exporting from Blender |
