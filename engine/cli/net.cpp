@@ -8,8 +8,10 @@
 #include "cli/net.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
+#include <thread>
 
 #include "cli/graph.hpp"
 #include "cli/json.hpp"
@@ -19,7 +21,10 @@
 #include "net/capture.hpp"
 #include "net/conditions.hpp"
 #include "net/packet.hpp"
+#include "net/replicate_trial.hpp"
+#include "net/tap.hpp"
 #include "net/traffic.hpp"
+#include "net/udp_socket.hpp"
 
 namespace ge::cli {
 
@@ -114,9 +119,14 @@ std::string apply_link(const std::string& spec, net::LinkConditions& c) {
       c.bandwidth_kbps = v;
     } else if (key == "queue") {
       c.queue_ms = v;
+    } else if (key == "drop-every" || key == "drop-run") {
+      if (v != static_cast<double>(static_cast<int>(v)) || v > 1000)
+        return "\"" + item + "\" needs a whole number of packets up to 1000";
+      (key == "drop-every" ? c.drop_every : c.drop_run) = static_cast<int>(v);
     } else {
       return "no link key \"" + key +
-             "\" (latency, jitter, loss, burst, duplicate, reorder, reorder-ms, bandwidth, queue)";
+             "\" (latency, jitter, loss, burst, duplicate, reorder, reorder-ms, bandwidth, queue, "
+             "drop-every, drop-run)";
     }
     if ((key == "loss" || key == "duplicate" || key == "reorder") && share >= 1) {
       return "\"" + item + "\" is a share: give it under 1, or as a percent (loss=2%)";
@@ -492,6 +502,237 @@ Outcome run_net_sim(const NetSimOptions& opts) {
   return o;
 }
 
+Outcome run_net_watch(const NetWatchOptions& opts) {
+  if (opts.port < 1 || opts.port > 65535 || opts.seconds < 0 || !(opts.every > 0) ||
+      (opts.seconds == 0 && opts.frames <= 0)) {
+    return failed("the watch is out of range", "the command line",
+                  "use --port=1..65535, --every above 0, and --seconds or --frames to end it", 2);
+  }
+  net::UdpSocket sock;
+  std::string error;
+  if (!net::udp_open(sock, net::loopback_v4(static_cast<uint16_t>(opts.port)), &error)) {
+    return failed("cannot listen on 127.0.0.1:" + std::to_string(opts.port) + ": " + error,
+                  "the command line",
+                  "another watch holds the port: stop it, or pass --port and open the game's tap "
+                  "on the same one",
+                  1);
+  }
+  std::vector<net::CapturedDatagram> all;
+  size_t window_start = 0;
+  uint8_t buffer[65536];
+  const auto start = std::chrono::steady_clock::now();
+  auto next_line = start + std::chrono::duration<double>(opts.every);
+  const auto elapsed = [&] {
+    return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+  };
+  while ((opts.seconds == 0 || elapsed() < opts.seconds) &&
+         (opts.frames <= 0 || static_cast<long long>(all.size()) < opts.frames)) {
+    net::Address from;
+    const int n = net::udp_receive(sock, buffer, sizeof buffer, from);
+    if (n >= 0) {
+      net::CapturedDatagram d;
+      if (net::read_tap_frame(buffer, static_cast<size_t>(n), d)) all.push_back(std::move(d));
+      continue;
+    }
+    if (std::chrono::steady_clock::now() >= next_line) {
+      next_line += std::chrono::duration<double>(opts.every);
+      const std::vector<net::CapturedDatagram> window(all.begin() + static_cast<long>(window_start),
+                                                      all.end());
+      window_start = all.size();
+      const net::CaptureAnalysis a = net::analyze_capture(window, opts.every);
+      std::string line =
+          "  " + fixed(elapsed(), 1) + " s: " + std::to_string(window.size()) + " datagrams\n";
+      for (const net::ConnectionStats& c : a.connections) {
+        const net::DirectionStats& out = a.local_known ? net::sent_by(c, a.local) : c.ab;
+        const net::DirectionStats& in = a.local_known ? net::received_by(c, a.local) : c.ba;
+        line += "    " + net::to_string(in.from) + "  out " + std::to_string(out.packets) +
+                " pkts " + fixed(static_cast<double>(out.bytes) * 8 / 1000 / opts.every, 1) +
+                " kbps, in " + std::to_string(in.packets) + " pkts " +
+                fixed(static_cast<double>(in.bytes) * 8 / 1000 / opts.every, 1) + " kbps, rtt " +
+                fixed(net::percentile_of(out.ack_delay_ms, 50), 1) + " ms, loss " + pct(out.loss) +
+                " / " + pct(in.loss) + "\n";
+      }
+      std::fputs(line.c_str(), stderr);
+      continue;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  net::udp_close(sock);
+  if (all.empty()) {
+    return failed("nothing arrived on 127.0.0.1:" + std::to_string(opts.port) + " in " +
+                      fixed(elapsed(), 1) + " s",
+                  "the command line",
+                  "open the game's tap on this port (net::open_tap, then transport.tap: "
+                  "net/tap.hpp) and play while ge net watch runs",
+                  1);
+  }
+  net::Capture cap = net::make_capture();
+  for (const net::CapturedDatagram& d : all)
+    net::capture_datagram(cap, d.at_us, d.from, d.to, d.data.data(), d.data.size());
+  fs::path path(opts.save);
+  std::error_code ec;
+  if (path.has_parent_path()) fs::create_directories(path.parent_path(), ec);
+  if (!net::save_capture(cap, path.string(), &error)) {
+    return failed(error, path.string(), "pass a writable path with --save=FILE", 1);
+  }
+  NetStatsOptions st;
+  st.file = path.string();
+  st.charts = false;
+  Outcome o = run_net_stats(st);
+  o.text = "  watched 127.0.0.1:" + std::to_string(opts.port) + " for " + fixed(elapsed(), 1) +
+           " s: " + std::to_string(all.size()) + " datagrams, saved to " + path.string() + "\n" +
+           o.text;
+  o.written.insert(o.written.begin(), path.string());
+  o.next =
+      "ge net inspect " + path.string() + ", or ge net stats " + path.string() + " for the charts";
+  return o;
+}
+
+Outcome run_net_sweep(const NetSweepOptions& opts) {
+  static const char* kKnobs =
+      "update-rate, cmd-rate, rate, interp, backup, tick-hz, or a link key (latency, jitter, "
+      "loss, burst, reorder, bandwidth, drop-every, drop-run)";
+  if (opts.knob.empty() || opts.values.empty()) {
+    return failed("--knob and --values are needed", "the command line",
+                  "rerun with e.g. --knob=update-rate --values=10,20,30,60 (knobs: " +
+                      std::string(kKnobs) + ")",
+                  2);
+  }
+  if (opts.clients < 1 || opts.clients > 32 || opts.npcs < 0 || opts.npcs > 512 ||
+      !(opts.seconds >= 2) || opts.tick_hz < 1) {
+    return failed("the world is out of range", "the command line",
+                  "use --clients=1..32, --npcs=0..512, --seconds of 2 or more, --tick-hz above 0",
+                  2);
+  }
+  std::vector<std::string> presets = opts.presets;
+  if (presets.empty()) presets = {"wifi"};
+  Outcome o;
+  std::vector<std::vector<std::string>> rows{{opts.knob, "preset", "down kbit/s", "up kbit/s",
+                                              "view ms", "corr/min", "worst m", "dropped",
+                                              "starved", "repeated", "rewind p95 m", "digest"}};
+  std::vector<std::string> results;
+  struct Point {
+    std::string preset, value;
+    double cost, corr, view;
+  };
+  std::vector<Point> points;
+  for (const std::string& name : presets) {
+    for (const std::string& value : opts.values) {
+      net::ReplicateTrialConfig k;
+      k.clients = opts.clients;
+      k.npcs = opts.npcs;
+      k.seconds = opts.seconds;
+      k.seed = opts.seed;
+      k.replicate.tick_hz = opts.tick_hz;
+      k.replicate.update_rate = opts.update_rate;
+      k.replicate.cmd_rate = opts.cmd_rate;
+      k.replicate.rate = static_cast<uint32_t>(opts.rate);
+      k.replicate.interp_ticks = opts.interp;
+      k.replicate.redundancy = opts.backup;
+      if (name != "none" && !net::conditions_preset(name, k.link)) {
+        return failed("no preset \"" + name + "\"", "the command line",
+                      "rerun with --presets=none,lan,broadband,wifi,mobile,bad,awful", 2);
+      }
+      if (const std::string bad = apply_link(opts.link, k.link); !bad.empty()) {
+        return failed("--link: " + bad, "the command line",
+                      "rerun with --link=latency=40,jitter=10,loss=2%", 2);
+      }
+      double v = 0;
+      const bool numeric = parse_double(value, v) && v >= 0;
+      const std::string& knob = opts.knob;
+      if (knob == "update-rate" || knob == "cmd-rate" || knob == "rate" || knob == "interp" ||
+          knob == "backup" || knob == "tick-hz") {
+        if (!numeric) {
+          return failed("--values: \"" + value + "\" is not a number of 0 or more",
+                        "the command line", "rerun with --values=10,20,30", 2);
+        }
+        if (knob == "update-rate") k.replicate.update_rate = static_cast<int>(v);
+        if (knob == "cmd-rate") k.replicate.cmd_rate = static_cast<int>(v);
+        if (knob == "rate") k.replicate.rate = static_cast<uint32_t>(v);
+        if (knob == "interp") k.replicate.interp_ticks = static_cast<int>(v);
+        if (knob == "backup") k.replicate.redundancy = std::max(1, static_cast<int>(v));
+        if (knob == "tick-hz") k.replicate.tick_hz = std::max(1, static_cast<int>(v));
+      } else if (const std::string bad = apply_link(knob + "=" + value, k.link); !bad.empty()) {
+        return failed("--knob=" + knob + ": " + bad, "the command line",
+                      std::string("pick a knob: ") + kKnobs, 2);
+      }
+      const net::ReplicateTrial r = net::run_replicate_trial(k);
+      std::vector<double> gaps = r.gaps;
+      const double p95 = net::percentile_of(gaps, 95);
+      const double dropped = r.decoded + r.dropped ? static_cast<double>(r.dropped) /
+                                                         static_cast<double>(r.decoded + r.dropped)
+                                                   : 0;
+      const double repeated = r.inputs + r.repeated ? static_cast<double>(r.repeated) /
+                                                          static_cast<double>(r.inputs + r.repeated)
+                                                    : 0;
+      rows.push_back({value, name, fixed(r.wire_down_kbps, 1), fixed(r.wire_up_kbps, 1),
+                      fixed(r.view_delay_ms, 0), fixed(r.corrections_per_min, 1),
+                      fixed(r.worst_correction, 2), pct(dropped), std::to_string(r.starved),
+                      pct(repeated), fixed(p95, 3), hex(r.hash, 16)});
+      points.push_back(
+          {name, value, r.wire_down_kbps + r.wire_up_kbps, r.corrections_per_min, r.view_delay_ms});
+      results.push_back(json_obj({{"value", json_str(value)},
+                                  {"preset", json_str(name)},
+                                  {"down_kbps", num(r.wire_down_kbps)},
+                                  {"up_kbps", num(r.wire_up_kbps)},
+                                  {"view_delay_ms", num(r.view_delay_ms)},
+                                  {"corrections_per_min", num(r.corrections_per_min)},
+                                  {"worst_correction_m", num(r.worst_correction)},
+                                  {"dropped", num(dropped)},
+                                  {"starved", json_num(static_cast<long long>(r.starved))},
+                                  {"repeated", num(repeated)},
+                                  {"rewind_p95_m", num(p95)},
+                                  {"owned", json_num(r.owned)},
+                                  {"digest", json_str(hex(r.hash, 16))}}));
+      if (r.owned != k.clients) {
+        o.findings.push_back({Severity::error,
+                              name + " at " + knob + "=" + value + ": " +
+                                  std::to_string(k.clients - r.owned) +
+                                  " clients never heard of their own entity",
+                              "engine/net/replicate_server.cpp",
+                              "the link starves the session: loosen it, or read send_snapshot "
+                              "(skill: net)"});
+      }
+    }
+  }
+  // The knee, a preset at a time: the cheapest value whose corrections and view delay are within
+  // a tenth (or a correction a minute, or 10 ms) of the best any value reached.
+  std::string knees;
+  for (const std::string& name : presets) {
+    double best_corr = 1e300, best_view = 1e300;
+    for (const Point& p : points) {
+      if (p.preset != name) continue;
+      best_corr = std::min(best_corr, p.corr);
+      best_view = std::min(best_view, p.view);
+    }
+    const Point* knee = nullptr;
+    for (const Point& p : points) {
+      if (p.preset != name) continue;
+      if (p.corr > std::max(best_corr * 1.1, best_corr + 1)) continue;
+      if (p.view > std::max(best_view * 1.1, best_view + 10)) continue;
+      if (!knee || p.cost < knee->cost) knee = &p;
+    }
+    if (knee) {
+      knees += "  " + name + ": " + opts.knob + "=" + knee->value + " is the cheapest (" +
+               fixed(knee->cost, 1) + " kbit/s both ways) within reach of the best corrections (" +
+               fixed(best_corr, 1) + "/min) and view delay (" + fixed(best_view, 0) + " ms)\n";
+    }
+  }
+  o.text = "  " + std::to_string(opts.clients) + " clients and " + std::to_string(opts.npcs) +
+           " server movers, " + core::num::to_string(opts.seconds) + " s at " +
+           std::to_string(opts.tick_hz) + " Hz, seed " + std::to_string(opts.seed) + "\n" +
+           table(rows) + knees +
+           "  down and up: every packet a client received and sent, headers and keepalives "
+           "too; view: how far behind the server the others are drawn; corr/min: snapshots "
+           "that moved a client's prediction; dropped: snapshots it could not decode; "
+           "starved: rows a rate left out; repeated: server ticks that reused an input; "
+           "rewind: the server's rewind against what the client drew\n";
+  o.result = json_obj({{"knob", json_str(opts.knob)}, {"runs", json_arr(results)}});
+  o.summary = std::to_string(points.size()) + " trials run";
+  o.next = "ge net sweep --knob=" + opts.knob + " --presets=wifi,bad,awful (the same values)";
+  return o;
+}
+
 Outcome run_net(const Args& a) {
   const std::string name(a.command->name);
   const auto number = [&](const char* flag, double fallback, double& out) {
@@ -525,6 +766,43 @@ Outcome run_net(const Args& a) {
     n.out = flag_value(a, "out");
     n.charts = !has_flag(a, "no-charts");
     return run_net_stats(n);
+  }
+  if (name == "net watch") {
+    NetWatchOptions n;
+    if (!number("port", 27950, x)) return bad("port");
+    n.port = static_cast<int>(x);
+    if (!number("seconds", 10, n.seconds)) return bad("seconds");
+    if (!number("every", 1, n.every)) return bad("every");
+    if (!number("frames", 0, x)) return bad("frames");
+    n.frames = static_cast<long long>(x);
+    n.save = flag_value(a, "save", "runs/net-watch.pcap");
+    return run_net_watch(n);
+  }
+  if (name == "net sweep") {
+    NetSweepOptions n;
+    n.knob = flag_value(a, "knob");
+    n.values = split_commas(flag_value(a, "values"));
+    n.presets = split_commas(flag_value(a, "presets"));
+    n.link = flag_value(a, "link");
+    if (!number("clients", 16, x)) return bad("clients");
+    n.clients = static_cast<int>(x);
+    if (!number("npcs", 32, x)) return bad("npcs");
+    n.npcs = static_cast<int>(x);
+    if (!number("seconds", 10, n.seconds)) return bad("seconds");
+    if (!number("tick-hz", 60, x)) return bad("tick-hz");
+    n.tick_hz = static_cast<int>(x);
+    if (!number("update-rate", 0, x) || x < 0) return bad("update-rate");
+    n.update_rate = static_cast<int>(x);
+    if (!number("cmd-rate", 0, x) || x < 0) return bad("cmd-rate");
+    n.cmd_rate = static_cast<int>(x);
+    if (!number("rate", 0, n.rate) || n.rate < 0) return bad("rate");
+    if (!number("interp", 6, x) || x < 0) return bad("interp");
+    n.interp = static_cast<int>(x);
+    if (!number("backup", 4, x) || x < 1) return bad("backup");
+    n.backup = static_cast<int>(x);
+    if (!number("seed", 1, x) || x < 0) return bad("seed");
+    n.seed = static_cast<unsigned>(x);
+    return run_net_sweep(n);
   }
   NetSimOptions n;
   n.presets = split_commas(flag_value(a, "presets"));

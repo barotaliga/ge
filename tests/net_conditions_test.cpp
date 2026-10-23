@@ -128,3 +128,21 @@ TEST(conditions_a_stream_loses_nothing_and_keeps_the_order) {
   CHECK_MSG(late > 1000, std::to_string(late) + " arrivals waited for a resend");
   CHECK(stream_resend_ms(c) == 200);
 }
+
+TEST(conditions_a_drop_pattern_loses_the_same_packets_of_every_period) {
+  LinkConditions c;
+  c.latency_ms = 10;
+  c.drop_every = 3;
+  c.drop_run = 1;
+  LinkState s;
+  ge::core::Rng rng = ge::core::make_rng(5);
+  std::string seen;
+  for (int i = 0; i < 9; i++) seen += decide(c, s, rng, i * 1000, 100).copies ? '+' : '-';
+  CHECK(seen == "++-++-++-");
+  c.drop_every = 2;  // every other one
+  LinkState s2;
+  seen.clear();
+  for (int i = 0; i < 6; i++) seen += decide(c, s2, rng, i * 1000, 100).copies ? '+' : '-';
+  CHECK(seen == "+-+-+-");
+  CHECK(describe_conditions(c).find("1 of every 2 dropped") != std::string::npos);
+}

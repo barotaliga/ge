@@ -34,6 +34,8 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
 | `net/portmap.hpp` | Opening a port on the router: PCP, then NAT-PMP, then UPnP IGD on a socket of its own; the lease renewed at half its life, closed with a lease of 0; `portmap_wire.hpp` the three protocols' messages (not installed) |
 | `net/sim_router.hpp` | The simulated router: PCP, NAT-PMP, SSDP and UPnP's SOAP answered on a NAT's LAN face (`NatConfig::gateway`), each grant a forward on the NAT |
 | `net/replicate.hpp` | Replication, the server's word: the schema's quantized fields, per-client deltas against the acked snapshot, interest, the budget, redundant inputs, prediction and smoothing, interpolation, `replicate_rewind`; `replicate_server.cpp` and `replicate_client.cpp` its halves, `replicate_wire.hpp` the messages and the bit packing (not installed) |
+| `net/replicate_trial.hpp` | One measured replicated world (clients, a crowd, rewinds) over a link: what the `net-replicate` lab and `ge net sweep` run |
+| `net/tap.hpp` | The live tap: a running node's datagrams mirrored as pcap records to a loopback port for `ge net watch` |
 | `net/traffic.hpp` | Fake traffic: a whole session over the simulated network, measured end to end |
 
 ## Rules
@@ -76,6 +78,10 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
   permanent-only quirk) lives in `sim_router.cpp`. A forwarded socket's datagrams leave from the
   forwarded port (`map_out`), as a real router's static mapping does: a host answering from
   another port would never be reached by its forward.
+- **Fake conditions and the tap sit in the transport,** below the node: a fake drop is a datagram
+  that never left (the tap and the capture see only what really went), and a held one leaves on
+  the next send or receive. Neither may allocate per datagram: the pool is sized in
+  `transport_fake`.
 - **Replication's state lives on the grid.** The server quantizes every entity after each tick
   and each `replicate_set`, and the client's prediction does the same after each step; that is
   why a lossless link corrects nothing (`net_replicate_test` holds it to zero). A field added
@@ -107,6 +113,9 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
   `--radius=150`): a replicated world under each preset: each client's bandwidth, corrections a
   minute and the worst, snapshots dropped, rows starved, inputs repeated, and how far the
   server's rewind lands from what each client drew; bandwidth charted, rewind gaps boxed.
+- `ge net sweep --knob=update-rate --values=10,20,30,60 --presets=wifi,bad`: the replication
+  trial once a value; reach for it before arguing about a rate. `ge net watch --port=27950`: a
+  running node's tap, live; a game opens one with `open_tap` and `transport.tap`.
 - `ge net` (`build/debug/ge net ...`; `engine/cli/net.hpp`): `inspect <pcap>` decodes every
   datagram, `stats <pcap>` measures each connection from the capturing node (rtt, loss each way,
   dups, reorders, resends) and charts its kbps, rtt and loss, `sim` runs the same sessions as the

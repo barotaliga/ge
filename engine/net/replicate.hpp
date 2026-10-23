@@ -94,6 +94,15 @@ struct ReplicateConfig {
   int interp_ticks = 6;        // how far behind the newest snapshot others are drawn
   double smoothing = 0.85;     // a correction's error left after each tick
   size_t snapshot_budget = 0;  // bytes a snapshot may take (0: the largest message)
+  // THE RATES, the client's to ask and the server's to cap (a game exposes them as settings).
+  // A client's ask rides on its inputs; the server sends it a snapshot every
+  // max(send_every, tick_hz / update_rate) ticks, each within rate / its snapshots a second.
+  int tick_hz = 60;         // the step's rate, which turns the rates into ticks
+  int update_rate = 0;      // client: snapshots a second it asks for (0: every send_every)
+  int cmd_rate = 0;         // client: input messages a second it sends (0: one a tick)
+  uint32_t rate = 0;        // client: snapshot bytes a second it takes (0: no cap)
+  int max_update_rate = 0;  // server: the most snapshots a second anyone is sent (0: no cap)
+  uint32_t max_rate = 0;    // server: the most snapshot bytes a second anyone is sent (0: none)
 };
 
 struct ReplicateStats {
@@ -132,6 +141,9 @@ struct ReplicateClientSlot {
   uint32_t repeats = 0;   // ticks that stepped the last input again, not yet set off
   uint8_t last[kMaxInputSize] = {};
   uint32_t view_tick = 0;        // the tick it said it was drawing (x256)
+  uint32_t rate = 0;             // the bytes a second it asked for (0: no cap)
+  int update_rate = 0;           // the snapshots a second it asked for (0: the server's)
+  uint32_t last_sent = 0;        // the tick of the last snapshot sent it
   std::vector<double> priority;  // per entity index: its place in the last snapshot's order
 };
 
@@ -160,6 +172,9 @@ uint16_t replicate_spawn(ReplicateServer& s, int owner, const double* values);
 void replicate_set(ReplicateServer& s, uint16_t id, const double* values);
 const double* replicate_get(const ReplicateServer& s, uint16_t id);
 void replicate_despawn(ReplicateServer& s, uint16_t id);
+// The ticks between snapshots and the bytes each may take, for a client's asked rates.
+int replicate_send_interval(const ReplicateServer& s, int client);
+size_t replicate_snapshot_budget(const ReplicateServer& s, int client);
 // Read the clients' inputs and acks out of the node's events; a peer gone frees its slot.
 void replicate_server_receive(ReplicateServer& s);
 // Step every owned entity by its client's next input, record the tick, send what is due.
@@ -183,6 +198,7 @@ struct ReplicateClient {
   double error[kMaxFields] = {};  // a correction still being smoothed away
   double last_error = 0;          // the size of the last correction (the schema's units)
   uint32_t local_tick = 0;        // ticks since the newest snapshot arrived
+  int unsent = 0;                 // inputs made since the last input message (cmd_rate)
   bool predicting = false;        // `predicted` holds a reconciled state to step on from
   std::vector<Row> scratch;       // a snapshot being decoded
   ReplicateStats stats;

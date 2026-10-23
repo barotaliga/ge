@@ -158,6 +158,7 @@ void replicate_client_init(ReplicateClient& c, const Schema& schema, const Repli
   c.schema = schema;
   c.config = config;
   if (c.config.ring < 2) c.config.ring = 2;
+  if (c.config.tick_hz < 1) c.config.tick_hz = 1;
   c.node = &node;
   c.server = server_peer;
   c.ring.resize(static_cast<size_t>(c.config.ring));
@@ -184,13 +185,26 @@ void replicate_client_input(ReplicateClient& c, const uint8_t* input) {
   c.local_tick++;
   if (c.predicting) step_own(c, c.predicted, input);
   for (int f = 0; f < c.schema.fields; f++) c.error[f] *= c.config.smoothing;
-  uint8_t out[1 + 4 + 4 + 4 + 1 + 255 * kMaxInputSize];
-  const uint32_t count =
-      std::min<uint32_t>(c.seq, static_cast<uint32_t>(std::max(1, c.config.redundancy)));
+  // cmd_rate: a message every tick_hz / cmd_rate ticks, carrying every input since the last one
+  // and `redundancy` before them.
+  c.unsent++;
+  const int every =
+      c.config.cmd_rate > 0
+          ? std::max(1, (c.config.tick_hz + c.config.cmd_rate - 1) / c.config.cmd_rate)
+          : 1;
+  if (c.unsent < every) return;
+  const auto room = static_cast<uint32_t>(
+      std::min<size_t>(255, (kMaxMessage - kInputHeader) / std::max<size_t>(1, n)));
+  const auto want = static_cast<uint32_t>(std::max(1, c.config.redundancy) + c.unsent - 1);
+  const uint32_t count = std::min({c.seq, want, room, kInputRing});
+  c.unsent = 0;
+  uint8_t out[kMaxMessage];
   Writer w = make_writer(out, sizeof out);
   write_u8(w, kInput);
   write_u32(w, c.has_snapshot ? c.newest : 0);
   write_u32(w, replicate_client_render_tick(c));
+  write_u32(w, c.config.rate);
+  write_u16(w, static_cast<uint16_t>(std::clamp(c.config.update_rate, 0, 65535)));
   write_u32(w, c.seq);
   write_u8(w, static_cast<uint8_t>(count));
   for (uint32_t s = c.seq - count + 1; s <= c.seq; s++)

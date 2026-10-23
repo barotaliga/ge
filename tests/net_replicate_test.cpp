@@ -373,3 +373,33 @@ TEST(replicate_replays_to_the_bit) {
     for (int f = 0; f < kFields; f++) CHECK_BITS(va[f], vb[f]);
   }
 }
+
+TEST(replicate_a_client_asks_its_rates_and_the_server_caps_them) {
+  LinkConditions link;
+  link.latency_ms = 30;
+  ReplicateConfig config;
+  config.update_rate = 20;  // a snapshot every 3 ticks at 60 Hz
+  config.cmd_rate = 20;     // an input message every 3 ticks
+  config.rate = 4000;       // 200 bytes a snapshot
+  auto w = make_world(8, link, config);
+  w->spread = 3;
+  run(*w, 300);
+  const ReplicateStats a = w->server.stats;
+  run(*w, 300);
+  const ReplicateStats b = w->server.stats;
+  // 300 ticks at 20 a second is 100 snapshots a client.
+  CHECK(b.snapshots - a.snapshots == 8 * 100);
+  CHECK(b.bytes - a.bytes <= (b.snapshots - a.snapshots) * 200);
+  CHECK(replicate_send_interval(w->server, 0) == 3);
+  CHECK(replicate_snapshot_budget(w->server, 0) == 200);
+  for (const auto& c : w->clients) {
+    CHECK(c->stats.corrections == 0);  // three inputs a message, none lost, none repeated
+    CHECK(c->stats.dropped == 0);
+  }
+  CHECK(w->server.stats.repeated == 0);
+  // The server's caps win over a greedy ask.
+  w->server.config.max_update_rate = 10;
+  w->server.config.max_rate = 1000;
+  CHECK(replicate_send_interval(w->server, 0) == 6);
+  CHECK(replicate_snapshot_budget(w->server, 0) == 100);
+}

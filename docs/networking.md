@@ -243,6 +243,43 @@ corrected; over the `bad` preset (90 ms, 5% loss in bursts) a prediction is corr
 a second, by a few metres at worst after a long burst; the server's rewinds land on what the
 client drew (a median gap of zero).
 
+## Rates and live tools (M17f2)
+
+A client asks for its own rates and the server caps them, as the settings a player tunes in a cfg
+(the console's names in brackets):
+
+| Setting | Side | What it does |
+| --- | --- | --- |
+| `ReplicateConfig::rate` (`rate`) | client | snapshot bytes a second it takes; each snapshot gets rate / its snapshots a second, at least 64 bytes, the stalest rows first |
+| `update_rate` (`cl_updaterate`) | client | snapshots a second it asks for; sent every max(`send_every`, tick_hz / update_rate) ticks |
+| `cmd_rate` (`cl_cmdrate`) | client | input messages a second; each carries every input since the last and `redundancy` before them |
+| `redundancy` (`cl_cmdbackup`) | client | inputs repeated in every message |
+| `interp_ticks` (`cl_interp`) | client | how far behind the newest snapshot others are drawn |
+| `max_rate`, `max_update_rate` (`sv_maxrate`) | server | the most any client is sent, whatever it asks |
+| `tick_hz` (`sv_fps`) | both | the step's rate, which turns the rates into ticks |
+
+The client's ask rides on every input message (`rate` u32 and `update_rate` u16), so a change
+takes effect on the next one. Finding the right numbers is an experiment, and three tools run it:
+
+- **`ge net sweep`** runs a replicated world (`replicate_trial.hpp`: clients steering movers, a
+  crowd the server moves, prediction, interpolation and rewinds, the same world the
+  `net-replicate` lab measures) once a value of one knob: a rate, `interp`, `backup`, the tick, or
+  any link condition. It tables the bytes each way on the wire, the view delay, the corrections,
+  the snapshots lost and the rewind gaps, and names the cheapest value within reach of the best
+  corrections and delay, a preset at a time.
+- **Drop patterns** (`LinkConditions::drop_every`, `drop_run`; `--link=drop-every=2` on `ge net
+  sim` and `ge net sweep`) lose the same packets of every period, drawing nothing: "every other
+  packet" as an experiment rather than a weather.
+- **Fake conditions on a live transport** (`transport_fake`, `FakeLink`) put a real game's sends
+  through the same fates (delay, jitter, loss, a pattern), held in a fixed pool and sent on the
+  transport's next send or receive: a LAN game plays as a bad link would (`net_fakelag`,
+  `net_fakeloss`, `net_fakejitter`, behind `sv_cheats`).
+- **The live tap** (`tap.hpp`) mirrors every datagram a running node sends and receives, as one
+  pcap record behind a mark, to a loopback port; **`ge net watch`** listens there and prints each
+  connection's packets, kbps, round trip and loss every second, then saves what it saw and
+  measures it as `ge net stats` does. Nothing in the game stops or changes: the tap costs a
+  loopback send a datagram.
+
 ## The simulated network (M17a)
 
 `SimNetwork` is a network of nodes with simulated addresses, on a virtual clock in
@@ -343,6 +380,9 @@ seeded and replayable. `engine/net/stress` and `ge net stress` push it until som
 | the `net-session` lab | M17d | A 32-player lobby on a dedicated host under each preset: everyone joins and picks a team, chats to all, to the team and to one player, one floods; the leader kicks one (whose return is refused), another is cut for six seconds and comes back to its seat, then the settings, the start and the return. The table checks every chat copy delivered, every player list the host's, the kick, the ban and the seat kept; the seats are charted and the pings drawn as boxes |
 | the `net-reach` lab | M17e1, M17e2 | Every pair of NAT kinds (none, full cone, restricted, port-restricted, symmetric) under each preset: the path each pair took (direct or relayed, against the one RFC 4787 predicts), how long it took, a reliable message each way; STUN from behind each kind; the connect times as a heatmap; a router speaking each of PCP, NAT-PMP and UPnP opening, renewing and closing a port that lets a client straight in |
 | the `net-replicate` lab | M17f | 32 clients each steering a mover and a crowd the game moves, under each preset: the bytes each client is sent a second, how often and how far a prediction is corrected, the snapshots lost or left without a baseline, the rows a budget starved, the inputs repeated, and how far the server's rewind lands from what each client drew; the bandwidth charted over the run, the rewind gaps as boxes |
+| `ge net sweep` | M17f2 | A replicated world run once a value of one knob (a rate, the interpolation, the input backup, the tick, a link condition, a drop pattern): bytes each way, view delay, corrections, dropped snapshots, starved rows, rewind gaps, and the cheapest value within reach of the best |
+| the live tap and `ge net watch` | M17f2 | A RUNNING game's or server's datagrams mirrored to a loopback port: each connection every second, then saved as a capture and measured as `ge net stats` does |
+| fake conditions (`transport_fake`) | M17f2 | A live game's sends delayed, jittered and dropped (or dropped in a pattern) as a bad link would, for playing an experiment by hand |
 | the `voice` lab | M17h | A voice through each preset, metered against the clean one, the WAV attached |
 | the `accounts` lab | M17j | Sign-ups, logins (a wrong password refused, a brute force throttled), friend requests, presence and an invite, against the service on the simulated network |
 | the `cheats` lab | M17l | Each scripted cheat (speed hack, teleport, input flood, off-grid or future inputs, forged and replayed packets, fishing for hidden state, a planted desync, a forged score or ghost) caught or refused; honest bots under every preset raising no flag |

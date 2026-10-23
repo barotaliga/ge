@@ -163,6 +163,17 @@ hit is judged with `replicate_rewind(server, id, client_view_tick, out)`. Set
 a client's bandwidth. Run it on the simulated network under every preset and count
 `client.stats.corrections`: with no loss it must be zero.
 
+## Tune the rates, and watch a live game
+
+A client's `rate`, `update_rate`, `cmd_rate`, `redundancy` and `interp_ticks` and the server's
+`max_rate`, `max_update_rate` and `tick_hz` are `ReplicateConfig` fields (the console's `rate`,
+`cl_updaterate`, `cl_cmdrate`, `cl_cmdbackup`, `cl_interp`, `sv_maxrate`, `sv_fps`). Pick them
+with `ge net sweep --knob=update-rate --values=10,20,30,60 --presets=wifi,bad`, which names the
+cheapest value within reach of the best. To see a running game or server's packets, open a tap
+on its transport (`net::Tap tap; net::open_tap(tap, 27950, &err); transport.tap = &tap;`) and run
+`ge net watch --port=27950`. To play it over a bad link on a LAN, `net::transport_fake(transport,
+&fake, conditions, seed)`.
+
 ## Test it on bad links
 
 Use the simulated network in tests and labs, never sleeps or real sockets:

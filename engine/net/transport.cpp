@@ -6,6 +6,9 @@
 // ge:test tests/net_node_test.cpp
 #include "net/transport.hpp"
 
+#include "net/tap.hpp"
+
+#include <cstring>
 #include <utility>
 
 namespace ge::net {
@@ -114,8 +117,9 @@ void close_transport(Transport& t) {
   t.local = Address{};
 }
 
-bool transport_send(Transport& t, const Address& to, const uint8_t* data, size_t size,
-                    int64_t now_us) {
+namespace {
+
+bool send_now(Transport& t, const Address& to, const uint8_t* data, size_t size, int64_t now_us) {
   bool ok = false;
   switch (t.kind) {
     case TransportKind::udp:
@@ -135,11 +139,78 @@ bool transport_send(Transport& t, const Address& to, const uint8_t* data, size_t
     return false;
   }
   if (t.capture) capture_datagram(*t.capture, now_us, t.local, to, data, size);
+  if (t.tap) tap_datagram(*t.tap, now_us, t.local, to, data, size);
+  return true;
+}
+
+}  // namespace
+
+void transport_fake(Transport& t, FakeLink* fake, const LinkConditions& c, uint64_t seed,
+                    size_t pool) {
+  t.fake = fake;
+  if (!fake) return;
+  fake->conditions = c;
+  fake->state = LinkState{};
+  fake->rng = core::make_rng(static_cast<uint32_t>(seed ^ (seed >> 32)));
+  fake->held.resize(pool);
+  fake->waiting.clear();
+  fake->waiting.reserve(pool);
+  fake->free.clear();
+  for (size_t i = pool; i-- > 0;) fake->free.push_back(static_cast<int>(i));
+}
+
+void transport_pump(Transport& t, int64_t now_us) {
+  FakeLink* f = t.fake;
+  if (!f || f->waiting.empty()) return;
+  size_t keep = 0;
+  for (size_t i = 0; i < f->waiting.size(); i++) {
+    const int k = f->waiting[i];
+    FakeLink::Held& h = f->held[static_cast<size_t>(k)];
+    if (h.at_us <= now_us) {
+      send_now(t, h.to, h.data, h.size, now_us);
+      f->free.push_back(k);
+    } else {
+      f->waiting[keep++] = k;
+    }
+  }
+  f->waiting.resize(keep);
+}
+
+bool transport_send(Transport& t, const Address& to, const uint8_t* data, size_t size,
+                    int64_t now_us) {
+  FakeLink* f = t.fake;
+  if (!f) return send_now(t, to, data, size, now_us);
+  transport_pump(t, now_us);
+  const Fate fate = decide(f->conditions, f->state, f->rng, now_us, size);
+  if (fate.copies == 0) {
+    f->lost++;  // as the line would: the sender never knows
+    return true;
+  }
+  for (int c = 0; c < fate.copies; c++) {
+    if (fate.arrive_us[c] <= now_us) {
+      send_now(t, to, data, size, now_us);
+      continue;
+    }
+    if (f->free.empty() || size > kMaxDatagram) {
+      f->overflow++;
+      continue;
+    }
+    const int k = f->free.back();
+    f->free.pop_back();
+    FakeLink::Held& h = f->held[static_cast<size_t>(k)];
+    h.at_us = fate.arrive_us[c];
+    h.to = to;
+    h.size = static_cast<uint32_t>(size);
+    std::memcpy(h.data, data, size);
+    f->waiting.push_back(k);
+    f->delayed++;
+  }
   return true;
 }
 
 int transport_receive(Transport& t, uint8_t* buffer, size_t capacity, Address& from,
                       int64_t now_us) {
+  transport_pump(t, now_us);
   int n = -1;
   switch (t.kind) {
     case TransportKind::udp:
@@ -154,6 +225,7 @@ int transport_receive(Transport& t, uint8_t* buffer, size_t capacity, Address& f
     case TransportKind::none:
       break;
   }
+  if (n >= 0 && t.tap) tap_datagram(*t.tap, now_us, from, t.local, buffer, static_cast<size_t>(n));
   if (n >= 0 && t.capture) {
     capture_datagram(*t.capture, now_us, from, t.local, buffer, static_cast<size_t>(n));
   }

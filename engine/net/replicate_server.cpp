@@ -19,7 +19,7 @@ namespace {
 
 using namespace replicate_wire;
 
-constexpr size_t kMaxQueued = 8;  // inputs a client may have waiting; older ones are dropped
+constexpr size_t kMaxQueued = 32;  // inputs a client may have waiting; older ones are dropped
 
 double levels(const FieldSpec& f) {
   return f.bits >= 32 ? 4294967295.0 : static_cast<double>((uint64_t{1} << f.bits) - 1);
@@ -186,7 +186,9 @@ void on_input(ReplicateServer& s, int client, const uint8_t* data, size_t size) 
   ReplicateClientSlot& c = s.clients[static_cast<size_t>(client)];
   Reader r = make_reader(data, size);
   if (read_u8(r) != kInput) return;
-  const uint32_t ack = read_u32(r), view = read_u32(r), newest = read_u32(r);
+  const uint32_t ack = read_u32(r), view = read_u32(r), rate = read_u32(r);
+  const uint16_t update_rate = read_u16(r);
+  const uint32_t newest = read_u32(r);
   const uint8_t count = read_u8(r);
   const auto n = static_cast<size_t>(s.schema.input_size);
   if (r.bad || remaining(r) != count * n || count == 0 || newest < count) return;
@@ -196,6 +198,8 @@ void on_input(ReplicateServer& s, int client, const uint8_t* data, size_t size) 
     c.has_ack = true;
   }
   c.view_tick = view;
+  c.rate = rate;
+  c.update_rate = update_rate;
   const uint8_t* inputs = data + r.at;
   for (uint32_t k = 0; k < count; k++) {
     const uint32_t seq = newest - count + 1 + k;
@@ -261,6 +265,7 @@ void replicate_server_init(ReplicateServer& s, const Schema& schema, const Repli
   s.config = config;
   if (s.config.ring < 2) s.config.ring = 2;
   if (s.config.send_every < 1) s.config.send_every = 1;
+  if (s.config.tick_hz < 1) s.config.tick_hz = 1;
   s.node = &node;
   const auto n = static_cast<size_t>(config.max_entities);
   const auto ring = static_cast<size_t>(s.config.ring);
@@ -390,13 +395,39 @@ void replicate_server_tick(ReplicateServer& s) {
       quantize_row(s.schema, &s.state[i * static_cast<size_t>(nf)],
                    &s.history[(slot * ents + i) * static_cast<size_t>(nf)]);
   }
-  if (s.tick % static_cast<uint32_t>(s.config.send_every) != 0) return;
   uint8_t buffer[kMaxMessage];
-  size_t budget = s.config.snapshot_budget ? s.config.snapshot_budget : kMaxMessage;
-  if (budget > kMaxMessage) budget = kMaxMessage;
   for (int p = 0; p < kMaxPeers && p < static_cast<int>(s.node->peers.size()); p++) {
-    if (peer_connected(*s.node, p)) send_snapshot(s, p, buffer, budget);
+    if (!peer_connected(*s.node, p)) continue;
+    ReplicateClientSlot& c = s.clients[static_cast<size_t>(p)];
+    if (s.tick - c.last_sent < static_cast<uint32_t>(replicate_send_interval(s, p))) continue;
+    c.last_sent = s.tick;
+    send_snapshot(s, p, buffer, replicate_snapshot_budget(s, p));
   }
+}
+
+int replicate_send_interval(const ReplicateServer& s, int client) {
+  const ReplicateConfig& k = s.config;
+  const ReplicateClientSlot& c = s.clients[static_cast<size_t>(client)];
+  int asked = c.update_rate;
+  if (k.max_update_rate > 0 && (asked <= 0 || asked > k.max_update_rate)) asked = k.max_update_rate;
+  int interval = k.send_every;
+  if (asked > 0) interval = std::max(interval, (k.tick_hz + asked - 1) / asked);
+  return interval;
+}
+
+size_t replicate_snapshot_budget(const ReplicateServer& s, int client) {
+  const ReplicateConfig& k = s.config;
+  const ReplicateClientSlot& c = s.clients[static_cast<size_t>(client)];
+  size_t budget = k.snapshot_budget ? std::min(k.snapshot_budget, kMaxMessage) : kMaxMessage;
+  uint32_t rate = c.rate;
+  if (k.max_rate > 0 && (rate == 0 || rate > k.max_rate)) rate = k.max_rate;
+  if (rate > 0 && k.tick_hz > 0) {
+    const auto per = static_cast<size_t>(uint64_t{rate} *
+                                         static_cast<uint64_t>(replicate_send_interval(s, client)) /
+                                         static_cast<uint64_t>(k.tick_hz));
+    budget = std::min(budget, std::max(per, kSnapshotFloor));
+  }
+  return budget;
 }
 
 bool replicate_rewind(const ReplicateServer& s, uint16_t id, uint32_t tick_x256, double* out) {
