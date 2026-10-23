@@ -824,7 +824,15 @@ lift's carrier or up a lift unseen is drawn at a scale of nought, which the cull
 amateurs nearest the eye cast into the figures' atlas, a tile each after the racers'; each tile
 culls the crowd by its own box, so the atlas costs the figures near the tiles, not the crowd
 times the tiles (on the software adapter, 2 ms of `shadows.figures` with one racer, 12 ms with
-fifteen amateurs; drawing every figure into every tile had cost 385 ms). The `crowd-look` lab
+fifteen amateurs; drawing every figure into every tile had cost 385 ms). The crowd draws the
+model at three **levels of detail** (`scene.hpp`'s `skier_lods`: the meshes `skier`,
+`skier.lod1` and `skier.lod2` the builder makes off the same rig, 1808, 698 and 344 triangles)
+by its radius on screen (`kSkierLodPx`: LOD 0 down to 40 px, LOD 1 to 16 px), the heights the
+`model-views` lab's `lods` sheet shows each level keeping its silhouette at; the far crowd's
+vertex stage, the most of its cost, fell from about 22 ms to 9 ms of `instances` on the software
+adapter (crowd-look, three runs each, the medians). An atlas tile's casters pick their LOD at a
+quarter of the tile's texels a metre (`ShadowSettings::figure_lod_share`), since a shadow needs
+the silhouette, not the folds. The `crowd-look` lab
 films a lift's queue, a busy run, a group and one of them down at `--hour` (11: the sun on the
 runs), each with the crowd and without.
 
