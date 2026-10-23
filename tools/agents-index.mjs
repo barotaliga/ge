@@ -50,6 +50,7 @@ const LEGACY = [
   [/\btype[s]cript\b/i, "the reference's language"],
   [/\b\w+\.t[s]\b/, "a reference source file"],
   [/\bport(?:ed)? o[f]\b|\bported fro[m]\b/i, "a port's provenance"],
+  [/\bqua[k]e|\bq[w]d?\b/i, "the classic game Shooter's Edge is compatible with"],
 ];
 const ENGINE_TERMS = `Say it in the engine's own terms; a reference belongs in porting/ ` +
   `(${PORTING_MAP} for a file's reference).`;

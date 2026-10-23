@@ -26,6 +26,7 @@
 #include "mountain/mapgen/types.hpp"
 #include "paramotor/air.hpp"
 #include "paramotor/para.hpp"
+#include "skier/body.hpp"
 #include "skier/skier.hpp"
 #include "skier/skis.hpp"
 #include "skier/trees.hpp"
@@ -34,6 +35,7 @@
 #include "ai/why.hpp"
 #include "fall_line/sim/army_state.hpp"
 #include "fall_line/sim/crowd_state.hpp"
+#include "fall_line/sim/gunfire_state.hpp"
 #include "fall_line/sim/wanted_state.hpp"
 
 namespace fall_line::sim {
@@ -83,6 +85,7 @@ enum class EventKind : uint8_t {
   army_sled,  // an army snowmobile (`gate` its ArmySledChange, `value` its id; army_sled.hpp)
   bump,       // a racer met one of the crowd (`gate` the amateur's id, `value` the closing speed)
   army_heli,  // an army helicopter (`gate` its ArmyHeliChange, `value` its id; army_heli.hpp)
+  gunfire,    // a round fired, into him, into the snow or a trunk, or past him (gunfire.hpp)
 };
 
 const char* event_name(EventKind kind);
@@ -213,6 +216,8 @@ struct Racer {
   Progress progress;
   Rider rider;
   FreeRide free;
+  // THE BODY (skier/body.hpp): what the hunt's rounds have done to him (gunfire.hpp).
+  ge::skier::BodyState body;
 };
 
 struct GameState {
@@ -229,13 +234,14 @@ struct GameState {
   std::vector<GameEvent> events;  // this step's, cleared at its start
   // The ways a ground wave climbs (army.hpp's `army_ways`), built at create.
   std::shared_ptr<const std::vector<ge::mountain::mapgen::Track>> ways;
-  WantedState wanted;  // the hunt for the player (wanted.hpp); inactive until raised
-  ArmyState army;      // the army on foot after him (army.hpp); inactive until sent
-  FreeSled sled;       // the free ride's snowmobile (sled_ride.hpp); none in a race
-  FreeHeli heli;       // the free ride's helicopter (heli_ride.hpp); none in a race
-  FreePara para;       // the free ride's paramotor (para_ride.hpp); only a ride begun under it
-  CrowdState crowd;    // the amateurs on the ski area (crowd.hpp); inactive until dealt
-  double t = 0;        // s since the start
+  WantedState wanted;    // the hunt for the player (wanted.hpp); inactive until raised
+  ArmyState army;        // the army on foot after him (army.hpp); inactive until sent
+  GunfireState gunfire;  // the army's guns and their rounds (gunfire.hpp); inactive until armed
+  FreeSled sled;         // the free ride's snowmobile (sled_ride.hpp); none in a race
+  FreeHeli heli;         // the free ride's helicopter (heli_ride.hpp); none in a race
+  FreePara para;         // the free ride's paramotor (para_ride.hpp); only a ride begun under it
+  CrowdState crowd;      // the amateurs on the ski area (crowd.hpp); inactive until dealt
+  double t = 0;          // s since the start
   int64_t steps = 0;
   // WHERE THE GAME'S OWN AGENTS RECORD WHY (ai/why.hpp): the army's machines write their decisions
   // here while a trace is on (`ge why`); null in a normal run. Observed, never hashed, and nothing

@@ -240,8 +240,8 @@ void prepare_sun_shadows(gpu::Device& device, SunShadows& s, const FrameView& vi
     s.staged.offset[c][3] = k.drawn ? 1.0f : 0.0f;
   }
 
-  // The figures' tiles: one view along the sun, moved to each figure; every plane open (a tile's
-  // viewport keeps it to its own square).
+  // The figures' tiles: one view along the sun, moved to each figure, each culling its own casters
+  // by its own box (a caster slot a tile), so a figure is drawn only into the tiles it can shade.
   s.figures =
       sun[1] > 0 ? static_cast<int>(std::min<size_t>(figures.size(), kMaxShadowFigures)) : 0;
   const uint32_t tile_texels = n / kTilesAcross;
@@ -249,8 +249,8 @@ void prepare_sun_shadows(gpu::Device& device, SunShadows& s, const FrameView& vi
   float atlas[16];
   shadow_view(sun, set.figure_radius, set.figure_depth, basis, atlas);
   std::memcpy(s.staged.atlas, atlas, sizeof atlas);
-  float open[5][4] = {};
-  for (auto& p : open) p[3] = 1e9f;
+  float planes[5][4];
+  box_planes(basis, set.figure_radius, set.figure_depth, planes);
   // Tile k covers clip x, y in [-1, 1] about its figure, so [-1 - t, 1 - t] about the eye.
   float reach[4] = {1e9f, 1e9f, -1e9f, -1e9f};
   for (int k = 0; k < kMaxShadowFigures; ++k) {
@@ -272,16 +272,18 @@ void prepare_sun_shadows(gpu::Device& device, SunShadows& s, const FrameView& vi
       reach[2 + i] = std::max(reach[2 + i], 1 - t[i]);
     }
     FrameUniforms u;
-    fill_map_view(u, view, at.data(), atlas, open, tile_texels);
+    fill_map_view(u, view, at.data(), atlas, planes, tile_texels);
     device.queue.WriteBuffer(
         s.view_uniforms[static_cast<size_t>(kCascades) + static_cast<size_t>(k)], 0, &u, sizeof u);
   }
   for (InstanceFamily* f : moving) {
-    if (s.figures > 0) {
-      prepare_family_caster(device, *f, 0,
-                            static_cast<float>(tile_texels / (2 * set.figure_radius)));
-    } else if (!f->casters.empty()) {
-      f->casters[0].culled = false;
+    for (int k = 0; k < static_cast<int>(f->casters.size()); ++k) {
+      if (k < s.figures) {
+        prepare_family_caster(device, *f, k,
+                              static_cast<float>(tile_texels / (2 * set.figure_radius)));
+      } else {
+        f->casters[static_cast<size_t>(k)].culled = false;
+      }
     }
   }
   s.staged.texel[2] = static_cast<float>(2 * set.figure_radius / tile_texels);
@@ -307,9 +309,9 @@ void encode_sun_shadows(SunShadows& s, std::span<InstanceFamily* const> still,
       pass.SetBindGroup(0, s.view_groups[static_cast<size_t>(c)]);
       stat.dispatches += cull_shadow(pass, still, c);
     }
-    if (s.figures > 0) {
-      pass.SetBindGroup(0, s.view_groups[kCascades]);
-      stat.dispatches += cull_shadow(pass, moving, 0);
+    for (int k = 0; k < s.figures; ++k) {
+      pass.SetBindGroup(0, s.view_groups[static_cast<size_t>(kCascades) + static_cast<size_t>(k)]);
+      stat.dispatches += cull_shadow(pass, moving, k);
     }
     pass.End();
   }
@@ -349,7 +351,7 @@ void encode_sun_shadows(SunShadows& s, std::span<InstanceFamily* const> still,
           pass.SetScissorRect(x, y, tile, tile);
           pass.SetBindGroup(0,
                             s.view_groups[static_cast<size_t>(kCascades) + static_cast<size_t>(k)]);
-          stat.draws += draw_casters(pass, moving, 0);
+          stat.draws += draw_casters(pass, moving, k);
         }
       }
     }

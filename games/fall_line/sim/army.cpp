@@ -22,6 +22,7 @@
 #include "fall_line/sim/army_sled_rules.hpp"
 #include "fall_line/sim/army_troop.hpp"
 #include "fall_line/sim/free.hpp"
+#include "fall_line/sim/gunfire.hpp"
 #include "fall_line/sim/lift_ride.hpp"
 #include "mountain/lifts/lift_loop.hpp"
 #include "mountain/mapgen/lift_line.hpp"
@@ -303,7 +304,7 @@ bool chase(GameState& state, Soldier& s, Spot q, FireRule fire) {
   const double off = hypot(q.x - s.x, q.z - s.z);
   const bool in_range =
       off < army::kStandOffM || (off < army::kStandOffM + army::kHoldBandM && s.slow >= 1);
-  if (w.lethal && fire != FireRule::hold && s.sees && in_range) {
+  if (w.lethal && fire != FireRule::hold && s.sees && in_range && state.t >= s.rest) {
     s.mode = SoldierMode::hold;
     s.t = 0;
     stop_here(tw, s);
@@ -319,16 +320,39 @@ bool chase(GameState& state, Soldier& s, Spot q, FireRule fire) {
   return !(beside && d < 1.5);
 }
 
-// HOLDING with him in sight: stood, his rifle on him; back to the chase once he is out of sight
-// or out of range.
-void hold(GameState& state, Soldier& s, Spot q) {
+// HOLDING with him in sight: stood, his rifle on him, settled and firing a few bursts
+// (gunfire.hpp); back to the chase once he is out of sight or out of range, or his bursts are
+// fired.
+void hold(GameState& state, Soldier& s, Spot q, FireRule fire) {
   stop_here(troop_world(state), s);
+  const int32_t gun = army::kGunBase + s.id;
   if (!s.sees || hypot(q.x - s.x, q.z - s.z) > army::kStandOffM + army::kHoldBandM * 1.5) {
     s.mode = SoldierMode::chase;
     s.t = 0;
+    s.bursts = 0;
+    disarm_gun(state, gun);
     return;
   }
   s.heading = lm::atan2(q.x - s.x, q.z - s.z);
+  if (!state.army.fire) return;
+  if (s.t > army::kFireS || s.bursts >= army::kBursts) {
+    s.mode = SoldierMode::chase;
+    s.t = 0;
+    s.bursts = 0;
+    s.rest = state.t + army::kMoveS + army::kMoveSpreadS * num::mod(s.id * 0.618, 1);
+    disarm_gun(state, gun);
+    return;
+  }
+  if (s.t < army::kSettleS) return;
+  const double fx = lm::sin(s.heading);
+  const double fz = lm::cos(s.heading);
+  Gun* g = arm_gun(state, gun, WeaponKind::rifle, s.x, s.y, s.z);
+  if (g == nullptr) return;
+  g->x = s.x + fx * army::kMuzzleOutM;
+  g->y = s.y + army::kMuzzleM;
+  g->z = s.z + fz * army::kMuzzleOutM;
+  g->vx = g->vy = g->vz = 0;
+  if (fire_at(state, *g, AimTarget{}, fire)) s.bursts++;
 }
 
 // WRITE THE SOLDIERS into the wanted level's pursuers: every man on the map who can look (not
@@ -476,7 +500,7 @@ void step_army(GameState& state) {
         break;
       case SoldierMode::hold:
         if (on) {
-          hold(state, s, q);
+          hold(state, s, q, roster.fire);
         } else {
           stop_here(tw, s);
         }
@@ -505,7 +529,10 @@ void step_army(GameState& state) {
       home++;
     }
   }
-  // Gone home, or aboard a helicopter.
+  // Gone home, or aboard a helicopter: their guns put away.
+  for (const Soldier& s : a.soldiers) {
+    if (s.mode == SoldierMode::gone) disarm_gun(state, army::kGunBase + s.id);
+  }
   std::erase_if(a.soldiers, [](const Soldier& s) { return s.mode == SoldierMode::gone; });
   if (home > 0) push(state, ArmyChange::home, home);
   step_army_sleds(state, on, q, roster.fire);

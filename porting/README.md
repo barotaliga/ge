@@ -14,6 +14,7 @@ golden`, which regenerates the committed tables in `tests/golden/`.
 | `research.md` | What game5 needed in engine terms, the libm measurement, how established engines solve each part |
 | `subsystems.md` | Per skill: which reference modules a subsystem reproduces and how to compare against them |
 | `sibling-games.md` | What game2–game4 imply for the plugin boundaries |
+| `shooters-edge/` | Shooter's Edge's working notes (the game compatible with QuakeWorld): the survey of existing implementations, the clean-room rules, the specifications the building sessions read (`docs/shooters-edge.md` is the design) |
 | `milestones.md` | The porting notes behind docs/goals.md's rows (what was skipped, the speed against the reference) |
 | `parity/` | The golden generators: Node scripts that run the reference and write `tests/golden/` |
 | `porting.mk` | `make golden` and `make golden-libm` (included by the root Makefile while this directory exists) |

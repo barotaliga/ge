@@ -14,7 +14,7 @@
 #include "fall_line/app/look.hpp"
 #include "fall_line/app/scene.hpp"
 #include "mountain/air/air.hpp"
-#include "mountain/app/weather_look.hpp"
+#include "mountain/app/cloud_field.hpp"
 #include "prof/zones.hpp"
 
 namespace fall_line::app {
@@ -52,6 +52,7 @@ constexpr r::PassRow kPassTable[] = {
      "sky.aerial sky.light depth",
      "hdr motion"},
     {"sky", "sky.view sky.moon_view depth", "hdr motion"},
+    {"clouds", "depth sky.aerial sky.light", "hdr"},
     {"particles", "particles terrain.horizon shadows.maps sky.aerial sky.light depth",
      "hdr motion"},
     {"snowfall", "snowfall terrain.horizon sky.aerial sky.light depth", "hdr motion"},
@@ -80,6 +81,7 @@ void make_targets(ge::gpu::Device& device, GameFrame& f, uint32_t w, uint32_t h)
     r::bind_family_hiz(device, f.instancing, *family, f.hiz);
   r::bind_particle_targets(device, f.particles, f.targets);
   r::bind_snowfall_targets(device, f.snowfall, f.targets);
+  r::bind_cloud_targets(device, f.clouds, f.targets);
   // The post pass (and the bloom) read TAA's two histories, or the HDR target for both.
   wgpu::TextureView inputs[2] = {f.targets.hdr_view, f.targets.hdr_view};
   if (f.options.taa) {
@@ -184,6 +186,7 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
                       options.particles);
   r::create_snowfall(device, f->pipelines, f->snowfall, f->frame_layout, f->terrain,
                      options.flakes);
+  r::create_clouds(device, f->pipelines, f->clouds, f->frame_layout);
   r::create_hiz_pipelines(device, f->pipelines, f->hiz);
   r::create_instance_pipelines(device, f->pipelines, f->instancing, f->frame_layout,
                                options.overdraw_probe, options.wire_probe);
@@ -227,12 +230,14 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
   r::create_family(device, f->instancing, f->crowd, "crowd", crowd_meshes(model),
                    crowd_materials(model), kMaxCrowd, joints);
   f->instance_light = r::instance_light_group(device, f->instancing, f->terrain);
-  // The forest casts into the cascades (two caster slots), the figures into the atlas (one).
+  // The forest casts into the cascades (two caster slots), the figures and the crowd into the
+  // atlas (a slot a tile).
   r::ShadowSettings shadows;
   shadows.size = options.shadow_size;
   r::create_sun_shadows(device, f->shadows, shadows, f->frame_layout, f->sky);
   r::create_family_casters(device, f->instancing, f->forest, r::kCascades);
-  r::create_family_casters(device, f->instancing, f->figures, 1);
+  r::create_family_casters(device, f->instancing, f->figures, r::kMaxShadowFigures);
+  r::create_family_casters(device, f->instancing, f->crowd, r::kMaxShadowFigures);
   r::bind_terrain_shadows(f->terrain, f->shadows.group);
   if (options.snow) r::bind_terrain_material(f->terrain, f->snow.group);
   r::bind_instance_shadows(f->instancing, f->shadows.group);
@@ -320,7 +325,8 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   GE_ZONE("frame");
   // The map's sky at the view's moment: the cloud, the deck and the fog it is seen under.
   r::FrameView view = seen;
-  if (f.options.weather) view.weather = ge::mountain::app::weather_at(*f.level, view.time_s);
+  if (f.options.weather)
+    ge::mountain::app::sky_at(*f.level, view.time_s, view.weather, view.clouds);
   const auto start = std::chrono::steady_clock::now();
   f.recorder.begin_frame(device);
   // Prepare: every decision of the frame, and the uploads.
@@ -411,15 +417,12 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
       r::prepare_family(device, *family, view, f.targets.height, occlusion);
     }
   }
-  // Each figure's tile is centred a metre over its skis. The crowd casts none: the atlas draws
-  // every figure into every tile, so its cost would grow with the crowd times the tiles.
-  f.figure_centres.resize(racers);
-  for (size_t k = 0; k < racers; ++k) {
-    const ge::skier::SkierState& s = scene.skiers[k];
-    f.figure_centres[k] = {s.x, s.y + 1.0, s.z};
-  }
+  // The atlas's tiles: the racers', then the nearest amateurs'. Each tile culls the figures and
+  // the crowd by its own box, so an amateur is drawn only into the tiles he can shade.
+  shadow_centres(std::span<const ge::skier::SkierState>(scene.skiers.data(), racers), scene.crowd,
+                 view.eye, r::kMaxShadowFigures, f.figure_centres);
   r::InstanceFamily* still[] = {&f.forest};
-  r::InstanceFamily* moving[] = {&f.figures};
+  r::InstanceFamily* moving[] = {&f.figures, &f.crowd};
   {
     GE_ZONE("frame.shadows");
     r::prepare_sun_shadows(device, f.shadows, view, f.figure_centres, still, moving);
@@ -458,6 +461,7 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   r::encode_instances(families, f.instancing, f.pipelines, f.recorder, encoder, f.targets,
                       f.frame_group, f.instance_light);
   r::encode_sky(f.sky, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
+  r::encode_clouds(f.clouds, f.pipelines, f.recorder, encoder, f.targets, f.frame_group, view);
   r::encode_particles(f.particles, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
   r::encode_snowfall(f.snowfall, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
   if (f.options.taa) {
