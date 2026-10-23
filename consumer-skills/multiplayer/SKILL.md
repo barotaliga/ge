@@ -1,6 +1,6 @@
 ---
 name: multiplayer
-description: "Use when this game talks over a network: the engine's ge::net (a node for a host, a client or a peer of up to 32, its channels, its events), a lobby (players by seat, teams, chat, kick, start, reconnect by token, LAN discovery), testing a session on the simulated network under bad links, capturing a live node's traffic, and the ge net tools that read it (ge net inspect, ge net stats, ge net sim)."
+description: "Use when this game talks over a network: the engine's ge::net (a node for a host, a client or a peer of up to 32, its channels, its events), a lobby (players by seat, teams, chat, kick, start, reconnect by token, LAN discovery), reaching a host behind a home router (STUN, a rendezvous server, hole punching, the relay), testing a session on the simulated network under bad links, capturing a live node's traffic, and the ge net tools that read it (ge net inspect, ge net stats, ge net sim)."
 ---
 
 # Multiplayer on ge::net
@@ -95,6 +95,27 @@ settings (map, mode) are its bytes in `session_client_settings`, kept and sent b
 (`lan_answer` with `advert_of(host, ...)`), a client broadcasts `lan_probe` and reads
 `lan_collect`. Run a session's script on the simulated network in a test, as the engine's
 `net-session` lab does, and keep a hash of every end's events.
+
+## Reaching a host behind a router
+
+Players at home sit behind NATs. Run a `net::Rendezvous` on a public machine (its own UDP
+transport; `rendezvous_update` every tick), set `NodeConfig::keep_foreign` on both nodes, and
+drive `net/reach.hpp` after each `node_update`:
+
+```cpp
+net::ReachConfig rc;
+rc.rendezvous = server_address;
+rc.session = session_id;                       // the game's id for this host's session
+net::ReachHost rh;  net::reach_host_init(rh, rc, host_node);      // then reach_host_update
+net::ReachClient c; net::reach_client_init(c, rc, client_node);
+net::reach_client_start(c, now_us);                                // then reach_client_update
+// c.state: connected (c.path direct or relay, c.peer the host) or failed (c.why)
+```
+
+The client connects straight through a punched hole where the two NATs allow one and through
+the server's relay where they do not; either way it is an ordinary peer of the node after.
+`stun_request` / `stun_read_answer` ask any STUN server for the public address. Test it with
+`sim_add_nat` (full cone, restricted, port-restricted, symmetric) on the simulated network.
 
 ## Test it on bad links
 

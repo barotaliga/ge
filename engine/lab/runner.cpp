@@ -227,6 +227,26 @@ std::map<std::string, std::string> read_digests(const std::string& path) {
   return out;
 }
 
+// The ids the baseline holds more than one row for: a union merge (.gitattributes) keeps both
+// sides' rows when two branches moved the same lab's digest.
+std::vector<std::string> doubled_digests(const std::string& path) {
+  std::map<std::string, int> rows;
+  std::ifstream f(path);
+  std::string line;
+  while (std::getline(f, line)) {
+    if (line.empty() || line[0] == '#') continue;
+    std::istringstream row(line);
+    std::string id;
+    row >> id;
+    rows[id]++;
+  }
+  std::vector<std::string> out;
+  for (const auto& [id, n] : rows) {
+    if (n > 1) out.push_back(id);
+  }
+  return out;
+}
+
 }  // namespace
 
 int run_labs(int argc, const char* const* argv) {
@@ -329,6 +349,17 @@ int run_labs(int argc, const char* const* argv) {
     labs = std::move(slice);
   }
   const auto baseline = check.empty() ? std::map<std::string, std::string>{} : read_digests(check);
+  if (!check.empty()) {
+    const std::vector<std::string> doubled = doubled_digests(check);
+    for (const std::string& id : doubled) {
+      std::fprintf(stderr,
+                   "labs: %s holds two rows for %s: a merge kept both branches' digests. Run the "
+                   "lab and keep the one it makes: ge digest %s --write (labs %s --smoke "
+                   "--write-digests=%s).\n",
+                   check.c_str(), id.c_str(), id.c_str(), id.c_str(), check.c_str());
+    }
+    if (!doubled.empty()) return 1;
+  }
   if (!check.empty() && baseline.empty()) {
     std::fprintf(stderr, "labs: %s holds no digests; write one with --write-digests=%s.\n",
                  check.c_str(), check.c_str());

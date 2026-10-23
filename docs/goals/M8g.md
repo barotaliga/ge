@@ -1,0 +1,3 @@
+Status: done
+
+`ge asset list`, `build` and `check` over an `assets` executable that holds the game's data sets (`GE_ASSET_DATA`) and checks every model; `engine/assets/manifest.hpp`'s manifest, stamp and budget; the builders' library `ge_asset.py` compiled into `ge`; the first asset, the skier on the reference skis with his poles, built off the rig in `plugins/skier/app/rig.hpp` by Blender 5.2.2 as the bpy module on the Linux container: 1,808 triangles, 102 KiB of a 384 KiB budget, the same bytes on a rebuild; the `assets_check` test fails a model older than its builder, a source or its data, a missing one and one over budget

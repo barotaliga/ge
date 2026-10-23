@@ -37,7 +37,143 @@ uint32_t take_slot(SimNetwork& net) {
   return static_cast<uint32_t>(net.store.size() - 1);
 }
 
+bool has(const std::vector<uint32_t>& nodes, uint32_t n) {
+  return std::find(nodes.begin(), nodes.end(), n) != nodes.end();
+}
+
+bool alive(const SimNat& nat, const SimNat::Mapping& m, int64_t now_us) {
+  return now_us - m.last_out_us <= nat.config.mapping_us;
+}
+
+bool port_taken(const SimNat& nat, uint16_t port, int64_t now_us) {
+  for (const SimNat::Mapping& m : nat.maps) {
+    if (m.port == port && alive(nat, m, now_us)) return true;
+  }
+  for (const SimNat::Forward& f : nat.forwards) {
+    if (f.port == port && f.until_us > now_us) return true;
+  }
+  return false;
+}
+
+// The public address `from` leaves by toward `to`, the mapping made or refreshed.
+Address map_out(SimNat& nat, const Address& from, const Address& to, int64_t now_us) {
+  const bool symmetric = nat.config.kind == NatKind::symmetric;
+  SimNat::Mapping* m = nullptr;
+  for (SimNat::Mapping& k : nat.maps) {
+    if (k.inside == from && (!symmetric || k.remote == to) && alive(nat, k, now_us)) {
+      m = &k;
+      break;
+    }
+  }
+  if (!m) {
+    // Drop the dead ones first, so the list stays as long as the live mappings.
+    nat.maps.erase(std::remove_if(nat.maps.begin(), nat.maps.end(),
+                                  [&](const SimNat::Mapping& k) { return !alive(nat, k, now_us); }),
+                   nat.maps.end());
+    SimNat::Mapping fresh;
+    fresh.inside = from;
+    fresh.remote = to;
+    do {
+      fresh.port = nat.next_port++;
+      if (nat.next_port < nat.config.first_port) nat.next_port = nat.config.first_port;
+    } while (port_taken(nat, fresh.port, now_us));
+    nat.maps.push_back(fresh);
+    m = &nat.maps.back();
+  }
+  m->last_out_us = now_us;
+  if (std::find(m->sent_to.begin(), m->sent_to.end(), to) == m->sent_to.end())
+    m->sent_to.push_back(to);
+  return sim_address(nat.config.public_node, m->port);
+}
+
+// Where a datagram from `from` to the NAT's public port goes inside, or none (refused).
+bool map_in(const SimNat& nat, const Address& from, uint16_t port, int64_t now_us, Address& to) {
+  for (const SimNat::Forward& f : nat.forwards) {
+    if (f.port == port && f.until_us > now_us) {
+      to = f.inside;
+      return true;
+    }
+  }
+  for (const SimNat::Mapping& m : nat.maps) {
+    if (m.port != port || !alive(nat, m, now_us)) continue;
+    bool pass = false;
+    switch (nat.config.kind) {
+      case NatKind::full_cone:
+        pass = true;
+        break;
+      case NatKind::restricted:
+        for (const Address& a : m.sent_to) pass |= sim_node(a) == sim_node(from);
+        break;
+      case NatKind::port_restricted:
+        for (const Address& a : m.sent_to) pass |= a == from;
+        break;
+      case NatKind::symmetric:
+        pass = m.remote == from;
+        break;
+    }
+    if (!pass) return false;
+    to = m.inside;
+    return true;
+  }
+  return false;
+}
+
 }  // namespace
+
+const char* nat_kind_name(NatKind k) {
+  switch (k) {
+    case NatKind::full_cone:
+      return "full-cone";
+    case NatKind::restricted:
+      return "restricted";
+    case NatKind::port_restricted:
+      return "port-restricted";
+    case NatKind::symmetric:
+      return "symmetric";
+  }
+  return "?";
+}
+
+bool nat_kind(std::string_view name, NatKind& out) {
+  for (NatKind k :
+       {NatKind::full_cone, NatKind::restricted, NatKind::port_restricted, NatKind::symmetric}) {
+    if (name == nat_kind_name(k)) {
+      out = k;
+      return true;
+    }
+  }
+  return false;
+}
+
+int sim_add_nat(SimNetwork& net, const NatConfig& config) {
+  SimNat nat;
+  nat.config = config;
+  nat.next_port = config.first_port;
+  net.nats.push_back(std::move(nat));
+  return static_cast<int>(net.nats.size()) - 1;
+}
+
+bool sim_nat_forward(SimNetwork& net, int nat, const Address& inside, uint16_t public_port,
+                     int64_t until_us) {
+  if (nat < 0 || nat >= static_cast<int>(net.nats.size())) return false;
+  SimNat& n = net.nats[static_cast<size_t>(nat)];
+  for (SimNat::Forward& f : n.forwards) {
+    if (f.port == public_port && f.inside == inside) {
+      f.until_us = until_us;
+      return true;
+    }
+  }
+  if (port_taken(n, public_port, net.now_us)) return false;
+  n.forwards.push_back({public_port, inside, until_us});
+  return true;
+}
+
+int sim_nat_of(const SimNetwork& net, uint32_t node) {
+  for (size_t i = 0; i < net.nats.size(); i++) {
+    if (has(net.nats[i].config.inside, node)) return static_cast<int>(i);
+  }
+  return -1;
+}
 
 SimNetwork make_sim_network(uint32_t seed, const LinkConditions& defaults) {
   SimNetwork net;
@@ -91,6 +227,14 @@ bool sim_send(SimNetwork& net, const Address& from, const Address& to, const uin
     }
     return true;
   }
+  // Behind a NAT and leaving it: the datagram goes out from the NAT's public address. The link
+  // is still the inside node's own.
+  Address source = from;
+  if (!net.nats.empty()) {
+    const int n = sim_nat_of(net, sim_node(from));
+    if (n >= 0 && !has(net.nats[static_cast<size_t>(n)].config.inside, sim_node(to)))
+      source = map_out(net.nats[static_cast<size_t>(n)], from, to, net.now_us);
+  }
   auto it = net.links.find(link_key(sim_node(from), sim_node(to)));
   if (it == net.links.end()) {
     it = net.links
@@ -108,7 +252,7 @@ bool sim_send(SimNetwork& net, const Address& from, const Address& to, const uin
   for (int c = 0; c < f.copies; c++) {
     const uint32_t slot = take_slot(net);
     Datagram& d = net.store[slot];
-    d.from = from;
+    d.from = source;
     d.to = to;
     d.at_us = f.arrive_us[c];
     d.size = static_cast<uint16_t>(size);
@@ -125,7 +269,25 @@ void sim_advance(SimNetwork& net, int64_t now_us) {
     std::pop_heap(net.heap.begin(), net.heap.end(), later);
     const SimNetwork::Pending p = net.heap.back();
     net.heap.pop_back();
-    SimNetwork::Socket* s = find_socket(net, net.store[p.slot].to);
+    Datagram& d = net.store[p.slot];
+    // Arriving at a NAT's public node: through to the inside, or refused.
+    bool refused = false;
+    for (const SimNat& nat : net.nats) {
+      if (sim_node(d.to) != nat.config.public_node) continue;
+      Address inside;
+      if (map_in(nat, d.from, d.to.port, net.now_us, inside)) {
+        d.to = inside;
+      } else {
+        refused = true;
+      }
+      break;
+    }
+    if (refused) {
+      net.stats.nat_dropped++;
+      net.free_slots.push_back(p.slot);
+      continue;
+    }
+    SimNetwork::Socket* s = find_socket(net, d.to);
     if (!s) {
       net.stats.unbound++;
       net.free_slots.push_back(p.slot);

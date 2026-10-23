@@ -1,8 +1,9 @@
 // engine/net/sim_network.hpp: delivery in (arrival, send order), unbound addresses counted, the
-// clock never goes back, and the same seed is the same deliveries.
+// clock never goes back, and the same seed is the same deliveries; each NAT kind's mapping and
+// filter, a symmetric NAT's port per destination, a mapping's expiry and a port forward.
 //
-// ge:summary Test: the simulated network's delivery order, binding and determinism
-// ge:keywords test net sim-network deliver order unbound determinism
+// ge:summary Test: the simulated network's delivery order, binding, determinism and NATs
+// ge:keywords test net sim-network deliver order unbound determinism nat full-cone symmetric
 // ge:skill net testing
 #include "net/sim_network.hpp"
 
@@ -77,4 +78,115 @@ TEST(sim_network_is_the_seed_s) {
   };
   CHECK(run(7) == run(7));
   CHECK(run(7) != run(8));
+}
+
+namespace {
+
+// A behind NAT (public node 10), B and C outside. A sends to B; then B from its own port, B from
+// another port and C each send to A's public port: which of the three gets through.
+struct NatSeen {
+  Address b_saw;  // where A's datagram reached B from
+  bool from_b = false, from_b_other_port = false, from_c = false;
+  uint64_t dropped = 0;
+};
+
+NatSeen nat_seen(NatKind kind) {
+  SimNetwork net = make_sim_network(1, {});
+  NatConfig nc;
+  nc.kind = kind;
+  nc.public_node = 10;
+  nc.inside = {1};
+  sim_add_nat(net, nc);
+  const Address a = sim_address(1, 5), b = sim_address(2, 5), b2 = sim_address(2, 6),
+                c = sim_address(3, 5);
+  sim_bind(net, a);
+  sim_bind(net, b);
+  sim_bind(net, b2);
+  sim_bind(net, c);
+  const uint8_t m[1] = {1};
+  sim_send(net, a, b, m, 1);
+  sim_advance(net, 1000);
+  NatSeen seen;
+  Datagram d;
+  if (sim_receive(net, b, d)) seen.b_saw = d.from;
+  const auto reaches = [&](const Address& from, uint8_t tag) {
+    const uint8_t x[1] = {tag};
+    sim_send(net, from, seen.b_saw, x, 1);
+    sim_advance(net, net.now_us + 1000);
+    bool got = false;
+    while (sim_receive(net, a, d)) got |= d.data[0] == tag;
+    return got;
+  };
+  seen.from_b = reaches(b, 2);
+  seen.from_b_other_port = reaches(b2, 3);
+  seen.from_c = reaches(c, 4);
+  seen.dropped = net.stats.nat_dropped;
+  return seen;
+}
+
+}  // namespace
+
+TEST(sim_network_nats_map_and_filter_by_kind) {
+  const NatSeen full = nat_seen(NatKind::full_cone);
+  CHECK(full.b_saw == sim_address(10, 40000));
+  CHECK(full.from_b && full.from_b_other_port && full.from_c && full.dropped == 0);
+  const NatSeen restricted = nat_seen(NatKind::restricted);
+  CHECK(restricted.from_b && restricted.from_b_other_port && !restricted.from_c);
+  CHECK(restricted.dropped == 1);
+  const NatSeen port = nat_seen(NatKind::port_restricted);
+  CHECK(port.from_b && !port.from_b_other_port && !port.from_c && port.dropped == 2);
+  const NatSeen symmetric = nat_seen(NatKind::symmetric);
+  CHECK(symmetric.from_b && !symmetric.from_b_other_port && !symmetric.from_c);
+  NatKind k{};
+  CHECK(nat_kind("port-restricted", k) && k == NatKind::port_restricted);
+  CHECK(!nat_kind("open", k));
+}
+
+TEST(sim_network_symmetric_nat_maps_each_destination_apart) {
+  SimNetwork net = make_sim_network(1, {});
+  NatConfig nc;
+  nc.kind = NatKind::symmetric;
+  nc.public_node = 10;
+  nc.inside = {1};
+  sim_add_nat(net, nc);
+  const Address a = sim_address(1, 5), b = sim_address(2, 5), c = sim_address(3, 5);
+  sim_bind(net, a);
+  sim_bind(net, b);
+  sim_bind(net, c);
+  const uint8_t m[1] = {1};
+  sim_send(net, a, b, m, 1);
+  sim_send(net, a, c, m, 1);
+  sim_advance(net, 1000);
+  Datagram db, dc;
+  CHECK(sim_receive(net, b, db) && sim_receive(net, c, dc));
+  CHECK(sim_node(db.from) == 10 && sim_node(dc.from) == 10 && db.from.port != dc.from.port);
+  CHECK(sim_nat_of(net, 1) == 0 && sim_nat_of(net, 2) == -1);
+}
+
+TEST(sim_network_nat_mappings_expire_and_forwards_let_anyone_in) {
+  SimNetwork net = make_sim_network(1, {});
+  NatConfig nc;
+  nc.kind = NatKind::full_cone;
+  nc.public_node = 10;
+  nc.inside = {1};
+  nc.mapping_us = 1000000;
+  const int nat = sim_add_nat(net, nc);
+  const Address a = sim_address(1, 5), b = sim_address(2, 5);
+  sim_bind(net, a);
+  sim_bind(net, b);
+  const uint8_t m[1] = {1};
+  sim_send(net, a, b, m, 1);
+  sim_advance(net, 1000);
+  Datagram d;
+  CHECK(sim_receive(net, b, d));
+  const Address mapped = d.from;
+  sim_advance(net, 2000000);  // the mapping is idle past its life
+  sim_send(net, b, mapped, m, 1);
+  sim_advance(net, 2001000);
+  CHECK(!sim_receive(net, a, d) && net.stats.nat_dropped == 1);
+  // A port forward (what UPnP asks a router for) lets anything in to one inside address.
+  CHECK(sim_nat_forward(net, nat, a, 7777, 9000000));
+  sim_send(net, b, sim_address(10, 7777), m, 1);
+  sim_advance(net, 2002000);
+  CHECK(sim_receive(net, a, d) && d.from == b);
 }
