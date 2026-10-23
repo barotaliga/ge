@@ -124,3 +124,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge pmove <scenario>` (a movement scenario's trajectory as a table and a chart, against its parity recording)
 - `ge console <target> "<command>"` (a console command or cvar run in a headless server or client, its output returned)
 - `ge play` for first-person games (an angle axis on the protocol's grid, a step whose length the input sets, several players a run)
+
+## Store services
+
+- `ge services check` (a game's achievements and stats catalog checked: ids unique, every stat an achievement reads defined; later diffed against a store's exported partner config)
