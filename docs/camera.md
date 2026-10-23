@@ -301,11 +301,15 @@ game's part around `update`:
   gates' posts (`clear`: a boom pulls in for them).
 - **The hand-overs**: inertialized between two booms, blended in the skier's frame to and from a
   worn lens (0.6 s; 1 s to and from the orbit). While a lens passes through his head its near
-  plane is pushed past it, and no lens goes under 0.15 m over the snow.
+  plane is pushed past it, and no lens goes under 0.15 m over the snow or nearer than 0.12 m to
+  a trunk's bark (a wiped-out skier is thrown into the tree he met, and a worn lens with him).
+- **The woods seen through** (M26g): the frame is handed the point the rung frames on him
+  (`framed_point`: his middle, lower when he is down), and the forest's draw keeps only a
+  dithered share of every tree whose crown holds the lens or crosses the line to that point
+  (`docs/rendering.md` § Seeing through). A view of the mountain hands none.
 
 The `camera-world` lab follows a run on every rung at once and pictures them at the run's
-moments; the woods are the open problem (M26g): the crowns between a boom and a skier in a dense
-wood fill the picture until the forest's draw fades them.
+moments and through the densest wood, and measures how much of him each outside lens sees.
 
 ## Settings and cvars
 
@@ -339,7 +343,7 @@ binding; every row inside the engine is in metres, seconds and radians.
 | `camera-rigs` | What does each rig do through each scripted subject (walk, run, strafe, jump, long fall, stairs, crouch, a skid turn, a cliff drop, a teleport)? | eye, angles and fov over time as charts; the subject's path and the eye's from the side and from above; the subject's place in the frame; jerk; ground and obstacle clearance; `gl::find_teleports` on the eye |
 | `camera-transitions` | Is every edit continuous where it should be and instant where it should be? | each edit between each pair of rigs while the subject moves fast: the eye's speed and the look's rate across the switch, the overshoot, the floor; filmstrips |
 | `camera-shake` | Does a shake have the shape and the size it should, and does comfort take it away? | trauma envelopes, the per-axis motion and its frequency content, at comfort 1, 0.5 and 0 |
-| `camera-world` (Fall Line, GPU) | What does each rung of Fall Line's ladder SHOW at the named moments of a run, and does any lens stand inside a trunk or the snow? | each rung's picture over seed 38 at the start, the hardest carve, the biggest jump, its landing, the closest pass to the trees and a straight run through the densest wood; the camera key's hand-overs as strips; every lens's least height over the snow and least gap to bark over the whole run |
+| `camera-world` (Fall Line, GPU) | What does each rung of Fall Line's ladder SHOW at the named moments of a run, and does any lens stand inside a trunk or the snow? | each rung's picture over seed 38 at the start, the hardest carve, the biggest jump, its landing, the closest pass to the trees and a straight run through the densest wood; the camera key's hand-overs as strips; every lens's least height over the snow and least gap to bark over the whole run; in the woods the trees each lens sees through, and on every sheet the share of him each outside lens sees (`--see-through=0`: the trees drawn whole, the before) |
 | `se-view` (Shooter's Edge) | Does the first-person view bob, roll and kick as the classic look does? | the eye and the angles through a scripted run, against the formulas at the classic configs' values |
 
 ## Research

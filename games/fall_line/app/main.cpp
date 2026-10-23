@@ -22,9 +22,11 @@
 // ge:keywords app main frame-loop window vsync present run-clock frame-pace fall-line
 // ge:keywords camera-key camera-ladder
 // ge:skill platform gpu render audio
+#include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -219,6 +221,7 @@ int main(int argc, char** argv) {
     view.frame = static_cast<uint64_t>(presented);
     skiers.clear();
     for (const auto& racer : run.state().racers) skiers.push_back(racer.skier);
+    std::optional<std::array<double, 3>> subject;
     if (follow && !skiers.empty()) {
       if (input.tapped(ge::platform::Key::c)) {
         fall_line::camera::change_rung(
@@ -227,11 +230,14 @@ int main(int argc, char** argv) {
       const double dt = presented == 0 ? 1.0 / 60 : view.time_s - last_frame_s;
       ge::camera::to_frame_view(
           fall_line::camera::frame_camera(camera, skiers[0], skier_world, camera_world, dt), view);
+      const ge::camera::Vec3 p = fall_line::camera::framed_point(skiers[0]);
+      subject = std::array<double, 3>{p.x, p.y, p.z};
     }
     last_frame_s = view.time_s;
     // The figures' lags run over the steps this frame took; the first frame starts them settled.
-    fall_line::app::draw(*device, *frame, view,
-                         {skiers, static_cast<double>(granted) / 120.0, presented == 0}, target);
+    fall_line::app::draw(
+        *device, *frame, view,
+        {skiers, static_cast<double>(granted) / 120.0, presented == 0, {}, subject}, target);
     surface.present();
     ++presented;
   }
