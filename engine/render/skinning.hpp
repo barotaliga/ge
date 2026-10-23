@@ -8,8 +8,13 @@
 //   packed into its REACH box, assets/pose.hpp's `reach_box`); `create_skin` then ties a `Skin`
 //   to that LOD's vertices in the family. A family's mesh is one pose: every instance of it is
 //   drawn in it, so each figure that moves on its own is a mesh of its own (the player and the
-//   rivals: a handful). A crowd skinned in the vertex stage from per-instance palettes is a
-//   later row (docs/goals.md M8e2).
+//   rivals: a handful).
+// - THE CROWD: many figures of one mesh, each in a pose of its own, are a PALETTE FAMILY
+//   instead (render/instances.hpp, `create_family`'s `palette_joints`): `palette_source` makes
+//   the LOD (the bind pose packed into the reach box, each vertex's joints and weights after
+//   it) and `set_palettes` writes every instance's palette a frame; the draw's vertex stage poses
+//   each vertex by its instance's palette, and by the last frame's for its motion, so no pass
+//   runs and no vertex is stored a figure. `pose_packed` is its CPU twin.
 // - THE PALETTE (assets/pose.hpp's `skin_palette`, three vec4 rows a joint) is written by
 //   `set_palette` when the pose changes; `encode_skinning` runs the pass ("skinning", one
 //   dispatch a skin) before the frame's culls.
@@ -25,6 +30,7 @@
 // ge:summary GPU skinning: a compute pass poses a skinned mesh into an instance family's vertices
 // ge:keywords render skinning skinned-mesh compute bone-palette set_palette encode_skinning
 // ge:keywords create_skin skinned_source skin_packed reach-box linear-blend-skinning figure
+// ge:keywords palette-family palette_source set_palettes pose_palette crowd vertex-skinning
 // ge:skill render assets
 // ge:test tests/render_skinning_test.cpp
 #pragma once
@@ -72,6 +78,17 @@ void set_palette(gpu::Device& device, Skin& skin, std::span<const assets::Affine
 // The next pose carries no motion from the last (a camera cut, a still, a slot given to another).
 void settle_skin(Skin& skin);
 
+// A palette family's LOD for `mesh` (render/instances.hpp): its bind pose packed into `reach`,
+// and each vertex's four joints and weights (three words), posed in the vertex stage.
+LodSource palette_source(const assets::Mesh& mesh, const assets::Box& reach, float min_px = 0);
+
+// A palette family's poses this frame: `palettes` holds `family.palette_joints` joints for each
+// instance from 0 (instance i's from row i * joints), every instance the family draws, every
+// frame it moves. The last frame's are the ones written before (or these, the first time and
+// after `cut_family`). A frame that writes none keeps the last frame's poses and their motion.
+void set_palettes(gpu::Device& device, InstanceFamily& family,
+                  std::span<const assets::Affine> palettes);
+
 // The pass ("skinning"): every skin's vertices posed into its family. Before the culls.
 void encode_skinning(std::span<Skin* const> skins, const SkinPipelines& sp,
                      const gpu::PipelineSet& pipelines, FrameRecorder& rec,
@@ -84,6 +101,11 @@ std::vector<uint32_t> read_family_vertices(gpu::Device& device, const InstanceFa
 // Labs and tests (blocks): the last frame's positions of `skin`'s vertices, two words each.
 std::vector<uint32_t> read_skin_last(gpu::Device& device, const InstanceFamily& family,
                                      const Skin& skin);
+
+// The CPU twin of a palette LOD's vertex stage: `mesh` posed by `palette` in mesh space, with its
+// weights as `palette_source` quantises them; positions and normals, three floats a vertex.
+void pose_palette(const assets::Mesh& mesh, std::span<const assets::Affine> palette,
+                  std::vector<float>& positions, std::vector<float>& normals);
 
 // The CPU twin: `mesh` skinned by `palette` and packed into `reach`, three words a vertex.
 std::vector<uint32_t> skin_packed(const assets::Mesh& mesh, std::span<const assets::Affine> palette,

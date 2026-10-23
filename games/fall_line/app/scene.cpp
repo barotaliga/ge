@@ -27,6 +27,17 @@ namespace r = ge::render;
 constexpr float kJackets[][3] = {
     {0.55f, 0.04f, 0.03f}, {0.03f, 0.12f, 0.50f}, {0.60f, 0.42f, 0.02f}, {0.04f, 0.30f, 0.06f}};
 
+// The crowd's jackets (linear rgb): bright and dark, as a ski area wears them.
+constexpr float kCrowdJackets[][3] = {
+    {0.55f, 0.04f, 0.03f},  {0.03f, 0.12f, 0.50f}, {0.60f, 0.42f, 0.02f}, {0.04f, 0.30f, 0.06f},
+    {0.02f, 0.02f, 0.025f}, {0.45f, 0.45f, 0.47f}, {0.50f, 0.08f, 0.30f}, {0.02f, 0.30f, 0.36f},
+    {0.70f, 0.22f, 0.02f},  {0.10f, 0.05f, 0.25f}};
+constexpr uint32_t kJacketCount = sizeof kCrowdJackets / sizeof kCrowdJackets[0];
+
+// Each body's height over the model's (the model is a grown man's), by sim/crowd_rules.hpp's
+// bodies: man, woman, teen, child, old man, old woman, freerider, retro.
+constexpr float kBodyScale[] = {1.0f, 0.94f, 0.92f, 0.68f, 0.97f, 0.91f, 1.02f, 0.98f};
+
 }  // namespace
 
 std::vector<r::MeshSource> forest_meshes() { return ge::mountain::app::tree_meshes(); }
@@ -85,6 +96,63 @@ r::Instance figure_instance(const ge::skier::SkierState& skier,
   const auto k = static_cast<uint32_t>(racer % kMaxFigures);
   in.mesh = k;
   in.material = k * materials_per_racer;
+  return in;
+}
+
+std::vector<r::MeshSource> crowd_meshes(const ge::assets::Model& model) {
+  std::vector<r::MeshSource> out(1);
+  out[0].lods = {r::palette_source(model.meshes[0], ge::skier::pose_reach())};
+  return out;
+}
+
+std::vector<float> crowd_materials(const ge::assets::Model& model) {
+  std::vector<float> out;
+  for (const auto& jacket : kCrowdJackets) {
+    for (const ge::assets::Material& m : model.materials) {
+      const float* rgb = m.name == "jacket" ? jacket : m.rgb;
+      out.insert(out.end(), {rgb[0], rgb[1], rgb[2]});
+    }
+  }
+  return out;
+}
+
+ge::skier::SkierState crowd_skier(const sim::Amateur& a) {
+  ge::skier::SkierState s;
+  s.x = a.x;
+  s.y = a.y;
+  s.z = a.z;
+  s.vx = a.vx;
+  s.vz = a.vz;
+  s.heading = a.heading;
+  s.lean = a.lean;
+  s.edge = a.lean;
+  s.tuck = a.crouch;
+  s.speed = std::sqrt(a.vx * a.vx + a.vz * a.vz);
+  s.on_snow = true;
+  s.down = a.mode == sim::AmateurMode::down && !a.rising;
+  return s;
+}
+
+bool crowd_drawn(const sim::Amateur& a) {
+  return a.mode != sim::AmateurMode::ride && a.mode != sim::AmateurMode::unseen;
+}
+
+r::Instance crowd_instance(const sim::Amateur& a, const ge::mountain::mapgen::Level& level,
+                           uint32_t materials_per_jacket) {
+  const ge::skier::FigureFrame f =
+      ge::skier::figure_frame(crowd_skier(a), ge::skier::World{&level, nullptr});
+  r::Instance in;
+  in.position[0] = f.at.x;
+  in.position[1] = f.at.y;
+  in.position[2] = f.at.z;
+  in.rotation[0] = static_cast<float>(f.rot.x);
+  in.rotation[1] = static_cast<float>(f.rot.y);
+  in.rotation[2] = static_cast<float>(f.rot.z);
+  in.rotation[3] = static_cast<float>(f.rot.w);
+  const float k = crowd_drawn(a) ? kBodyScale[static_cast<size_t>(a.body) % 8] : 0.0f;
+  in.scale[0] = in.scale[1] = in.scale[2] = k;
+  // A jacket by his id, so a group is not all one colour.
+  in.material = (static_cast<uint32_t>(a.id) * 7u % kJacketCount) * materials_per_jacket;
   return in;
 }
 

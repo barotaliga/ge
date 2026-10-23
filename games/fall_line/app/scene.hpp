@@ -11,10 +11,16 @@
 // The instance stands the mesh in the world at the skier's figure frame (skier/app/figure.hpp:
 // the snow under him, his heading); each racer wears the model's colours in his own jacket.
 //
+// THE CROWD (the free ride's amateurs, sim/crowd.hpp) is the same model as a palette family
+// (render/skinning.hpp): one mesh, an instance an amateur at his id, each posed by a palette of
+// its own from his place and pose (`crowd_skier`: the amateur as a skier the poser reads), sized
+// by his body and wearing one of the crowd's jackets. One on a lift's carrier or up a lift
+// unseen is not drawn (a scale of nought: the cull's sphere is too small for any pixel).
+//
 // ge:summary Fall Line's forest and skinned skiers as instance families
 // ge:keywords fall-line scene forest trees figures racers instances materials skinned
 // ge:keywords skier-model forest_meshes figure_meshes tree_instances figure_instance skier_model
-// ge:keywords jacket placement
+// ge:keywords jacket placement crowd amateurs crowd_meshes crowd_instance crowd_skier
 // ge:skill render
 #pragma once
 
@@ -25,6 +31,7 @@
 
 #include "assets/gltf.hpp"
 #include "assets/model.hpp"
+#include "fall_line/sim/crowd_state.hpp"
 #include "mountain/mapgen/types.hpp"
 #include "render/instances.hpp"
 #include "skier/skier.hpp"
@@ -53,5 +60,24 @@ std::vector<float> figure_materials(const ge::assets::Model& model);
 ge::render::Instance figure_instance(const ge::skier::SkierState& skier,
                                      const ge::mountain::mapgen::Level& level, int racer,
                                      uint32_t materials_per_racer);
+
+// The most amateurs the crowd's family holds (sim/crowd_rules.hpp's most).
+inline constexpr int kMaxCrowd = sim::crowd::kMost;
+
+// The crowd's one mesh: the model's first at bind in the poser's reach, posed by each amateur's
+// palette (render/skinning.hpp's `palette_source`).
+std::vector<ge::render::MeshSource> crowd_meshes(const ge::assets::Model& model);
+// The crowd's jackets, each the model's materials with the jacket its own: jacket k's are
+// k * model.materials.size() on.
+std::vector<float> crowd_materials(const ge::assets::Model& model);
+// The amateur as a skier the poser and the figure frame read: where he is, his heading and
+// velocity, his lean (the skis' edge with it), his crouch as the tuck, down when he is.
+ge::skier::SkierState crowd_skier(const sim::Amateur& a);
+// Whether he is drawn: on the snow (skiing, stopped, down, in a queue, skating off a top).
+bool crowd_drawn(const sim::Amateur& a);
+// His instance: at his figure frame on `level`'s snow, sized by his body, in his jacket; a scale
+// of nought when he is not drawn.
+ge::render::Instance crowd_instance(const sim::Amateur& a, const ge::mountain::mapgen::Level& level,
+                                    uint32_t materials_per_jacket);
 
 }  // namespace fall_line::app
