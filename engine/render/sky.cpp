@@ -8,6 +8,7 @@
 #include "render/sky.hpp"
 
 #include <cmath>
+#include <cstring>
 
 #include "render/sky.wgsl.hpp"
 #include "render/sky_tables.wgsl.hpp"
@@ -37,7 +38,7 @@ wgpu::BindGroupLayout frame_layout(gpu::Device& device) {
   return make_layout(
       device, "render.frame",
       {Slot::uniform, Slot::sampler, Slot::texture, Slot::texture, Slot::texture, Slot::texture_3d,
-       Slot::storage_read},
+       Slot::storage_read, Slot::texture},
       wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment | wgpu::ShaderStage::Compute);
 }
 
@@ -50,15 +51,17 @@ void create_sky(gpu::Device& device, gpu::PipelineSet& pipelines, Sky& sky,
   sky.multiscatter =
       make_texture(device, "sky.multiscatter", kMultiscatterW, kMultiscatterH, 1, f16, table);
   sky.sky_view = make_texture(device, "sky.view", kSkyViewW, kSkyViewH, 1, f16, table);
+  sky.moon_view = make_texture(device, "sky.moon_view", kSkyViewW, kSkyViewH, 1, f16, table);
   sky.aerial = make_texture(device, "sky.aerial", kAerialW, kAerialH, kAerialD, f16, table);
   sky.blank = make_texture(device, "sky.blank", 1, 1, 1, f16, TU::TextureBinding);
   sky.transmittance_view = sky.transmittance.CreateView();
   sky.multiscatter_view = sky.multiscatter.CreateView();
   sky.sky_view_view = sky.sky_view.CreateView();
+  sky.moon_view_view = sky.moon_view.CreateView();
   sky.aerial_view = sky.aerial.CreateView();
   sky.blank_view = sky.blank.CreateView();
   sky.light =
-      make_buffer(device, "sky.light", 32, wgpu::BufferUsage::Storage | wgpu::BufferUsage::CopySrc);
+      make_buffer(device, "sky.light", 64, wgpu::BufferUsage::Storage | wgpu::BufferUsage::CopySrc);
 
   wgpu::SamplerDescriptor sd{};
   sd.label = "render.linear_clamp";
@@ -102,6 +105,8 @@ void create_sky(gpu::Device& device, gpu::PipelineSet& pipelines, Sky& sky,
   sky.p_sky_view = add_table(device, pipelines, tables, l2, "sky_view", "sky.view");
   sky.p_aerial = add_table(device, pipelines, tables, l3, "aerial", "sky.aerial");
   sky.p_light = add_table(device, pipelines, tables, lb, "sky_light_main", "sky.light");
+  sky.p_moon_view = add_table(device, pipelines, tables, l2, "sky_view_moon", "sky.moon_view");
+  sky.p_moon_light = add_table(device, pipelines, tables, lb, "sky_light_moon", "sky.moon_light");
 
   auto in = [&](const char* label, const wgpu::TextureView& a, const wgpu::TextureView& b) {
     return make_group(device, label, sky.in_layout, {uniforms, sky.sampler, a, b});
@@ -131,6 +136,10 @@ void create_sky(gpu::Device& device, gpu::PipelineSet& pipelines, Sky& sky,
   sky.g_aerial[1] = out("sky.aerial.out", sky.out_3d, 1, sky.aerial_view, nullptr);
   sky.g_light[0] = in("sky.light.in", sky.sky_view_view, sky.transmittance_view);
   sky.g_light[1] = out("sky.light.out", sky.out_buffer, 2, nullptr, sky.light);
+  sky.g_moon_view[0] = in("sky.moon_view.in", sky.transmittance_view, sky.multiscatter_view);
+  sky.g_moon_view[1] = out("sky.moon_view.out", sky.out_2d, 0, sky.moon_view_view, nullptr);
+  sky.g_moon_light[0] = in("sky.moon_light.in", sky.moon_view_view, sky.transmittance_view);
+  sky.g_moon_light[1] = out("sky.moon_light.out", sky.out_buffer, 2, nullptr, sky.light);
 
   // The sky pass: a full-screen triangle at the far plane, tested `equal` against the depth.
   const wgpu::ShaderModule draw = gpu::create_shader(device, wgsl::sky, "sky");
@@ -161,12 +170,12 @@ wgpu::BindGroup frame_group(gpu::Device& device, const wgpu::BindGroupLayout& la
                             const wgpu::Buffer& uniforms, const Sky& sky) {
   return make_group(device, "render.frame", layout,
                     {uniforms, sky.sampler, sky.transmittance_view, sky.multiscatter_view,
-                     sky.sky_view_view, sky.aerial_view, sky.light});
+                     sky.sky_view_view, sky.aerial_view, sky.light, sky.moon_view_view});
 }
 
 void prepare_sky(Sky& sky, const FrameView& view) {
   double sun[3];
-  sun_direction(view, sun);
+  real_sun_direction(view, sun);
   sky.build_tables = !sky.built;
   const double turn =
       sun[0] * sky.built_sun[0] + sun[1] * sky.built_sun[1] + sun[2] * sky.built_sun[2];
@@ -175,6 +184,21 @@ void prepare_sky(Sky& sky, const FrameView& view) {
   if (sky.build_view) {
     for (int i = 0; i < 3; ++i) sky.built_sun[i] = sun[i];
     sky.built_eye_m = view.eye[1];
+  }
+  // The moon's sky, only while its light is set (at night).
+  sky.build_moon = false;
+  if (view.night.moon_illuminance > 0) {
+    double moon[3];
+    look_dir(view.night.moon_azimuth, view.night.moon_elevation, moon);
+    const double moon_turn =
+        moon[0] * sky.built_moon[0] + moon[1] * sky.built_moon[1] + moon[2] * sky.built_moon[2];
+    sky.build_moon = !sky.moon_built || moon_turn < kSunTurnCos ||
+                     std::fabs(view.eye[1] - sky.built_moon_eye_m) > kEyeMove;
+    if (sky.build_moon) {
+      for (int i = 0; i < 3; ++i) sky.built_moon[i] = moon[i];
+      sky.built_moon_eye_m = view.eye[1];
+      sky.moon_built = true;
+    }
   }
   sky.built = true;
 }
@@ -200,10 +224,15 @@ void encode_sky_tables(Sky& sky, const gpu::PipelineSet& pipelines, FrameRecorde
     run(sky.p_sky_view, sky.g_sky_view, groups(kSkyViewW, 8), groups(kSkyViewH, 8));
     run(sky.p_light, sky.g_light, 1, 1);
   }
+  if (sky.build_moon) {
+    run(sky.p_moon_view, sky.g_moon_view, groups(kSkyViewW, 8), groups(kSkyViewH, 8));
+    run(sky.p_moon_light, sky.g_moon_light, 1, 1);
+  }
   run(sky.p_aerial, sky.g_aerial, groups(kAerialW, 8), groups(kAerialH, 8));
   pass.End();
   sky.build_tables = false;
   sky.build_view = false;
+  sky.build_moon = false;
 }
 
 void encode_sky(const Sky& sky, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
@@ -229,6 +258,33 @@ void encode_sky(const Sky& sky, const gpu::PipelineSet& pipelines, FrameRecorder
   pass.Draw(3);
   ++rec.current().draws;
   pass.End();
+}
+
+SkyLightReading read_sky_light(gpu::Device& device, const Sky& sky) {
+  wgpu::BufferDescriptor bd{};
+  bd.label = "sky.light.readback";
+  bd.size = 64;
+  bd.usage = wgpu::BufferUsage::MapRead | wgpu::BufferUsage::CopyDst;
+  wgpu::Buffer rb = device.device.CreateBuffer(&bd);
+  wgpu::CommandEncoder encoder = device.device.CreateCommandEncoder();
+  encoder.CopyBufferToBuffer(sky.light, 0, rb, 0, 64);
+  wgpu::CommandBuffer commands = encoder.Finish();
+  device.queue.Submit(1, &commands);
+  gpu::wait(device, rb.MapAsync(wgpu::MapMode::Read, 0, 64, wgpu::CallbackMode::WaitAnyOnly,
+                                [](wgpu::MapAsyncStatus, wgpu::StringView) {}));
+  SkyLightReading out{};
+  if (const void* p = rb.GetConstMappedRange(0, 64)) {
+    float f[16];
+    std::memcpy(f, p, sizeof f);
+    for (int i = 0; i < 3; ++i) {
+      out.irradiance_up[i] = f[i];
+      out.sun_at_eye[i] = f[4 + i];
+      out.moon_up[i] = f[8 + i];
+      out.moon_at_eye[i] = f[12 + i];
+    }
+  }
+  rb.Unmap();
+  return out;
 }
 
 }  // namespace ge::render

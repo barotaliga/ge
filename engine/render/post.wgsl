@@ -1,7 +1,8 @@
 // THE POST PASS (render/post.hpp; docs/rendering.md § Post): the HDR frame to the display, in
-// one full-screen pass: the bloom's glow mixed in, the exposure from the sky's brightness (never
-// a histogram, so it never pumps), the tone curve, the colour grade's table, a dither against
-// banding and the output's encoding. Linear light ends here.
+// one full-screen pass: the bloom's glow mixed in, the night's loss of colour (frame.wgsl's
+// night_vision), the exposure from the sky's brightness (never a histogram, so it never pumps),
+// the tone curve, the colour grade's table, a dither against banding and the output's encoding.
+// Linear light ends here.
 #include "render/wgsl/frame.wgsl"
 #include "gpu/wgsl/colour.wgsl"
 
@@ -68,6 +69,7 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
     let b = textureSampleLevel(bloom, lin, uv, 0.0);
     c = mix(c, b.rgb / max(b.a, 1.0), kBloom);
   }
+  c = night_vision(c);
   let t = clamp(tone(c * exposure()), vec3f(0.0), vec3f(1.0));
   var o = graded(linear_to_srgb(t));
   if (!kEncodeSrgb) {

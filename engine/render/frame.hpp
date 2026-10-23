@@ -50,17 +50,22 @@ struct FrameUniforms {
   float inv_view_proj[16];   // clip -> camera-relative world, jittered
   float prev_view_proj[16];  // the last frame's camera-relative world -> clip, unjittered
   float eye[4];              // world xyz (m); w: the eye's altitude over the sea, km
-  float sun[4];              // unit direction toward the sun; w: its illuminance
+  float sun[4];              // unit direction toward the key light; w: its illuminance, pre-exposed
   float size[4];             // render width, height, 1/width, 1/height
   float time[4];             // seconds, frame number, 0, 0
-  float world[4];            // x: y = 0's altitude over the sea, km
-  float planes[6][4];        // the frustum (view.hpp's five), the sixth all zero
-  float eye_delta[4];        // this eye minus the last frame's, m
-  float jitter[4];           // the sub-pixel offset: render pixels (x right, y down), then uv
-  float weather[4];  // the sun's pass, the deck's cover, the fog's extinction (1/m), the hidden
-  float deck[4];     // the deck's tint times its light, its grey overhead over the horizon's
+  float world[4];       // y = 0's altitude over the sea (km), the pre-exposure, the moon's direct
+                        // light while the sun keys, 1 when the haze is the moon's
+  float planes[6][4];   // the frustum (view.hpp's five), the sixth all zero
+  float eye_delta[4];   // this eye minus the last frame's, m
+  float jitter[4];      // the sub-pixel offset: render pixels (x right, y down), then uv
+  float weather[4];     // the sun's pass, the deck's cover, the fog's extinction (1/m), the hidden
+  float deck[4];        // the deck's tint times its light, its grey overhead over the horizon's
+  float moon[4];        // unit direction toward the moon; w: its illuminance, pre-exposed
+  float moon_light[4];  // lit surface's, earthlit part's luminance; angular radius; 1 if the key
+  float night_sun[4];   // unit direction toward the real sun; w: its illuminance, pre-exposed
+  float night[4];       // the dark sky's zenith luminance, its light, the sidereal angle, latitude
 };
-static_assert(sizeof(FrameUniforms) == 64 * 3 + 16 * 5 + 16 * 6 + 16 * 4, "match frame_types.wgsl");
+static_assert(sizeof(FrameUniforms) == 64 * 3 + 16 * 5 + 16 * 6 + 16 * 8, "match frame_types.wgsl");
 
 // The last frame's unjittered camera. Invalid on the first frame and after a cut, when the
 // "previous" camera is this one (no motion).

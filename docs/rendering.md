@@ -593,7 +593,43 @@ are in these numbers is `plugins/mountain/app/weather_look.hpp`, and Fall Line's
 map's sky at the view's time (`FrameOptions::weather`). The `weather` lab draws all eight: from
 seed 38's piste the clear day's picture spreads 37 levels of luma, an overcast's 15, a snow's 3
 and a storm's 2. The cloud volume itself (heaps and a veil drawn, each place's own share of the
-sun) and the night sky are M8f2.
+sun) is M8f3.
+
+**The night in the picture (M8f2).** A frame's `Night` (`render/view.hpp`, filled by
+`render/night.hpp`'s `set_night` once the game has placed the sun) carries the moon and the dark
+sky; `plugins/mountain/app/night_look.hpp` places the map's moon on its date (a day of the year
+read in 2026, longitude 0):
+
+- ONE UNIT OF LIGHT is the sun's illuminance outside the air (128 000 lx), and a night is a
+  millionth of a day, under a half-float's smallest step. The frame stores its light through a
+  PRE-EXPOSURE (`pre_exposure`: the estimated light on a white face brought to about a quarter
+  of a unit, in `world.y`), 1 whenever the sun is up so a day's bits never move; the exposure
+  divides it back out, and the eye's adaptation and a star's light read through it;
+- the moon's light follows the phase law (a half moon a tenth of a full one) and the square of
+  its distance; its disc is drawn at its true size by Lommel-Seeliger's law, scaled to that
+  light (`surface_surge`), with procedural seas and an earthlit dark part, its brightness
+  compressed above white so the seas keep their contrast;
+- THE KEY LIGHT, the one direct light that casts shadows, is the sun until three degrees under
+  the horizon, then the moon when it is up (`FrameView::sun_*` become the moon's; the real sun
+  stays in `night_sun`). The sky is TWO tables at once: the sun's own sky view and a second at
+  the moon's height lit by its light (`moon_view_lut`, built only at night when the moon turns
+  or the eye moves), summed in `sky_luminance` and the sky's light, so the dusk's glow fades
+  under the moon's sky and the handover moves the picture by a thousandth. The aerial volume is
+  built for the brighter of the two skies and the other is laid over as a veil; while the sun
+  still keys, the moon's direct light is spread from above (`world.z`);
+- the dark sky's own glow (2e-4 cd/m2 at the zenith, brighter toward the horizon) lights the
+  snow without a moon; the stars are cube cells with a magnitude each, drawn down to the
+  limiting magnitude the sky's brightness leaves (none in the day, thousands on a moonless
+  night, few under a full moon), turned by the sidereal angle about the pole at the map's
+  latitude, with the galaxy's band;
+- THE EYE: under 14 lx on white the exposure adapts only partly (dark scenes stay dark), and
+  the rods' share desaturates the picture toward a blue tint (`night_vision`, in post before
+  the exposure).
+
+The `night` lab draws it on seed 38's vista: the snow's luma falls from 194 at three degrees
+under to 67 at fourteen, a full moon's snow is 71, a quarter's 28 and a new moon's 10, the
+handover moves the snow by 0.1 %, a moonless sky draws 319 star pixels, and the sky tables'
+twilight matches `twilight_lux` within 1 % down to twelve degrees under.
 
 ## Anti-aliasing and resolution
 

@@ -7,15 +7,20 @@ struct Frame {
   inv_view_proj: mat4x4f,  // clip -> camera-relative world, jittered
   prev_view_proj: mat4x4f, // the last frame's camera-relative world -> clip, unjittered
   eye: vec4f,              // world xyz (m); w: the eye's altitude over the sea, km
-  sun: vec4f,              // unit direction toward the sun; w: its illuminance
+  sun: vec4f,              // unit direction toward the key light; w: its illuminance, pre-exposed
   size: vec4f,             // render width, height, 1/width, 1/height
   time: vec4f,             // seconds, frame number
-  world: vec4f,            // x: y = 0's altitude over the sea, km
+  world: vec4f,            // y = 0's altitude over the sea (km), the pre-exposure (light's stored
+                           // scale), the moon's direct light while the sun keys, 1: the haze is the moon's
   planes: array<vec4f, 6>, // the frustum: left, right, bottom, top, near (and one zero)
   eye_delta: vec4f,        // this eye minus the last frame's, m
   jitter: vec4f,           // the sub-pixel offset: render pixels (x right, y down), then uv
   weather: vec4f,          // the sun's pass, the deck's cover, the fog's extinction (1/m), the hidden
   deck: vec4f,             // rgb: the deck's tint times its light; w: its grey overhead over the horizon's
+  moon: vec4f,             // unit direction toward the moon; w: its illuminance, pre-exposed
+  moon_light: vec4f,       // the lit surface's luminance, the earthlit part's, the angular radius, 1 if the key
+  night_sun: vec4f,        // unit direction toward the real sun; w: its illuminance, pre-exposed
+  night: vec4f,            // the dark sky's zenith luminance, its light, the sidereal angle, latitude
 }
 
 // THE MOTION a surface at camera-relative `rel` (w = 1; w = 0 for a direction at infinity) made

@@ -14,7 +14,11 @@
 // Matrices are column-major float, as WGSL reads a mat4x4f from a buffer.
 //
 // The sun is a world direction (toward it), with its elevation and azimuth (a world heading),
-// as engine/core/solar.hpp gives them.
+// as engine/core/solar.hpp gives them. It is the KEY LIGHT: the one that lights the sky's tables,
+// casts the shadows and keys the exposure. At night it is the moon once the moon outshines the
+// twilight (`Night::moon_key`, decided by render/night.hpp), and one unit of `sun_illuminance`
+// is always the sun's illuminance outside the air (render/night.hpp's `kSunLux`), so the eye's
+// adaptation can read how dark a night is.
 //
 // THE WEATHER in the picture is `FrameView::weather` (`Weather`): how much of the sun's direct
 // light the cloud lets through, how much of the dome a grey deck covers (its grey spread from
@@ -27,7 +31,7 @@
 // ge:keywords render frame-view camera view projection reverse-z infinite-far camera-relative
 // ge:keywords frustum planes heading pitch fov mat4 inverse sun-direction camera_matrices
 // ge:keywords look_dir sun_direction depth_distance distance-from-depth unproject weather
-// ge:keywords overcast deck cloud-cover sun-pass visibility fog flat-light
+// ge:keywords overcast deck cloud-cover sun-pass visibility fog flat-light night moon key-light
 // ge:skill render
 // ge:test tests/render_view_test.cpp
 #pragma once
@@ -61,6 +65,40 @@ struct Weather {
   double deck_zenith = 0.6;
 };
 
+// THE NIGHT a frame is seen under (render/night.hpp fills it from where the moon is). The
+// default is none: no moon, no stars, no dark sky's glow.
+struct Night {
+  // The moon: where it stands (rad, a world heading), its illuminance outside the air (the sun's
+  // units; 0 while the sun is up, when its light and its sky are nothing beside the day's), its
+  // angular radius (0: not drawn), the lit surface's luminance outside the air in the sun's units
+  // per steradian (the disc's scale: the phase law shared out over the lit part,
+  // render/night.hpp), and the earthlit part's.
+  double moon_elevation = -1.0;
+  double moon_azimuth = 0;
+  double moon_illuminance = 0;
+  double moon_radius = 0;
+  double moon_surface = 0;
+  double earthshine = 0;
+  // Whether the KEY LIGHT is the moon: FrameView's sun_* then stand for the moon, and these for
+  // the real sun (the moon's bright limb faces it; its sky is drawn beside the moon's).
+  bool moon_key = false;
+  double sun_elevation = 0;
+  double sun_azimuth = 0;
+  double sun_illuminance = 1.0;
+  // Whether the air's haze is the moon's light scattered (its sky outshines the twilight's).
+  bool moon_haze = false;
+  // The dark sky (the airglow and the stars too faint to see one by one): its zenith's luminance
+  // and the light it gives a level face, the sun's units.
+  double dark_sky = 0;
+  double dark_light = 0;
+  // The moon's direct light on a level face while the sun is the key under the horizon, the
+  // sun's units, spread from above (only the key casts shadows).
+  double other_light = 0;
+  // The stars' sphere: the local sidereal angle and the latitude, rad.
+  double sidereal = 0;
+  double latitude = 0;
+};
+
 struct FrameView {
   // The eye, world metres, and where it looks.
   double eye[3] = {0, 0, 0};
@@ -75,14 +113,17 @@ struct FrameView {
   // The world's y = 0 over the sea, m: where the atmosphere starts.
   double altitude_m = 0;
   Weather weather{};   // the cloud and the fog; the default is a clear sky
+  Night night{};       // the moon, the stars and the dark sky's glow; the default is none
   double time_s = 0;   // the frame's time (the renderer reads no clock)
   uint64_t frame = 0;  // the frame's number (TAA's jitter is indexed by it)
 };
 
 // The unit direction a heading and pitch look along.
 void look_dir(double heading, double pitch, double out[3]);
-// The unit direction toward the sun.
+// The unit direction toward the sun: the KEY light's (the moon's when `night.moon_key`).
 void sun_direction(const FrameView& view, double out[3]);
+// The unit direction toward the real sun, whichever is the key.
+void real_sun_direction(const FrameView& view, double out[3]);
 
 struct CameraMatrices {
   Mat4 view;           // camera-relative world -> view (a rotation)

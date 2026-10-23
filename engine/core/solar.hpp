@@ -14,6 +14,7 @@
 //
 // ge:summary Where the sun and the moon are: elevation, azimuth, daylight windows, dates
 // ge:keywords solar sun moon elevation azimuth daylight sunrise sunset julian-day refraction
+// ge:keywords sidereal-time sidereal_time stars
 // ge:skill determinism
 // ge:test tests/core_solar_test.cpp
 #pragma once
@@ -84,6 +85,10 @@ struct SolarCoordinates {
   double obliquity;         // corrected for nutation, degrees
 };
 SolarCoordinates solar_coordinates(double jd);
+
+// Greenwich mean sidereal time at `jd`, degrees 0..360: how far the stars have turned past the
+// meridian at longitude 0 (a place's own is this plus its longitude east).
+double sidereal_time(double jd);
 
 // How far the air lifts an image at a true elevation (rad), rad.
 double refraction(double elevation);
