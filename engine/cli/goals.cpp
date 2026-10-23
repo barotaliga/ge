@@ -219,7 +219,9 @@ Outcome run_goals_free(const fs::path& repo, const std::string& row, const std::
   for (const auto& [id, who] : claims) {
     const std::string key = "M" + std::to_string(id.first) + id.second;
     for (const auto& [where, title] : who) {
-      out.text += "  " + key + "  " + where + (title.empty() ? "" : "  " + title) + "\n";
+      out.text.append("  ").append(key).append("  ").append(where);
+      if (!title.empty()) out.text.append("  ").append(title);
+      out.text += '\n';
       rows_json.push_back(json_obj(
           {{"row", json_str(key)}, {"where", json_str(where)}, {"title", json_str(title)}}));
     }
