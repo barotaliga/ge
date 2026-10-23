@@ -14,6 +14,8 @@ on:
   pull_request:
   push:
     branches: [main]
+  # The merge queue runs these too, so a required check here has a result on the queued merge.
+  merge_group:
 
 permissions:
   contents: read
