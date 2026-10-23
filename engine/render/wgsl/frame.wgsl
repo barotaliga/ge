@@ -39,15 +39,73 @@ struct SkyLight {
 }
 @group(0) @binding(6) var<storage, read> sky_light: SkyLight;
 @group(0) @binding(7) var moon_view_lut: texture_2d<f32>;
+// The cloud's noise (render/clouds.hpp: 64^3, 0..1) and its wrapping sampler.
+@group(0) @binding(8) var cloud_noise: texture_3d<f32>;
+@group(0) @binding(9) var linear_repeat: sampler;
 
 // A world height (m) as a radius from the planet's centre, km.
 fn radius_at(world_y: f32) -> f32 {
   return kGroundRadius + max(frame.world.x + world_y * 1e-3, 0.0);
 }
 
-// The sun's light reaching a point at `world_y` (m): illuminance times the transmittance, times
-// what the cloud lets through.
-fn sun_light(world_y: f32) -> vec3f {
+// THE CLOUD'S LAYERS (render/clouds.hpp): layer `i`'s three rows of `frame.clouds`.
+struct CloudRows {
+  shape: vec4f,  // base, top (world m), the noise's cut, one over the cell (1/m)
+  wind: vec4f,   // the heading (cos, sin), the drift and the age in the noise's tile
+  look: vec4f,   // one over the stretch, the dome (1 a heap), the density (1/m), the shadow's depth
+}
+
+fn cloud_layer(i: i32) -> CloudRows {
+  return CloudRows(frame.clouds[i * 3], frame.clouds[i * 3 + 1], frame.clouds[i * 3 + 2]);
+}
+
+// render/clouds.hpp's kCloudTileCells: the noise's base lattice across its tile.
+const kCloudTileCells = 8.0;
+
+// The noise's tile coordinates of the world point (x, z) for a layer: across the wind, along it
+// (stretched, carried by the drift), and its age.
+fn cloud_uvw(l: CloudRows, xz: vec2f) -> vec3f {
+  let across = xz.x * l.wind.x - xz.y * l.wind.y;
+  let along = xz.x * l.wind.y + xz.y * l.wind.x;
+  let s = l.shape.w / kCloudTileCells;
+  return vec3f(across * s, along * s * l.look.x - l.wind.z, l.wind.w);
+}
+
+// How full a layer's column is over `xz`, 0..1 (render/clouds.hpp's `cloud_column`): where the
+// noise passes the cut, how far past it.
+fn cloud_column(l: CloudRows, xz: vec2f) -> f32 {
+  let n = textureSampleLevel(cloud_noise, linear_repeat, cloud_uvw(l, xz), 0.0).r;
+  return clamp((n - l.shape.z) / max(1.0 - l.shape.z, 1e-3), 0.0, 1.0);
+}
+
+// THE CLOUD'S SHADOW at a world point: each layer whose middle is above it, read where the beam
+// toward the key light crosses that middle, takes exp(-column * its depth) off the light.
+fn cloud_shadow(p: vec3f) -> f32 {
+  let n = i32(frame.cloud_info.x);
+  if (n == 0 || frame.sun.y < 0.02) {
+    return 1.0;
+  }
+  var tau = 0.0;
+  for (var i = 0; i < n; i++) {
+    let l = cloud_layer(i);
+    let mid = 0.5 * (l.shape.x + l.shape.y);
+    if (mid > p.y) {
+      let at = p.xz + frame.sun.xz * ((mid - p.y) / frame.sun.y);
+      tau += cloud_column(l, at) * l.look.w;
+    }
+  }
+  return exp(-tau);
+}
+
+// The sun's light reaching a point at `world_y` (m) over the world's `xz`: illuminance times the
+// transmittance, times what the cloud lets through (the deck's mean share, and each layer's
+// shadow there).
+fn sun_light(world_y: f32, xz: vec2f) -> vec3f {
+  return sun_light_open(world_y) * cloud_shadow(vec3f(xz.x, world_y, xz.y));
+}
+
+// The same before any layer's shadow: the light on the cloud itself, which marches its own.
+fn sun_light_open(world_y: f32) -> vec3f {
   return frame.sun.w * frame.weather.x *
          transmittance_to_top(transmittance_lut, linear_clamp, radius_at(world_y), frame.sun.y);
 }
