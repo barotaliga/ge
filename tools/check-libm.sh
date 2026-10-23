@@ -4,8 +4,8 @@
 # between glibc, Apple and MSVC. It calls ge::core::libm (engine/core/libm/libm.hpp), whose
 # bits are the same everywhere. Exact functions (sqrt, fabs, floor, ceil, trunc, fmod) are fine.
 #
-# Simulation code: engine/core (except engine/core/libm itself), engine/loop, engine/ai, engine/move, engine/camera, engine/texgen
-# (its poses feed lab digests and goldens), every plugin
+# Simulation code: engine/core (except engine/core/libm itself), engine/loop, engine/ai, engine/move, engine/camera
+# (its poses feed lab digests and goldens), engine/texgen (its bakes are goldens), every plugin
 # (except a plugin's app/ directory, its presentation half), games/*/sim, and engine/lab and
 # every labs/ directory, whose pictures and digests must match on every CI row, and engine/audio,
 # whose rendered buffers are goldens and lab digests, and engine/net, whose simulated sessions are
