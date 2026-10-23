@@ -1,9 +1,10 @@
 // engine/render/frame.hpp: the pass table's check names a read before its write and a pass
 // listed twice and passes a good order; the frame block is filled from a FrameView (the sun's
-// direction, the eye's altitude, the size); the stats sum their passes.
+// direction, the eye's altitude, the size, the weather); the stats sum their passes.
 //
 // ge:summary Tests for the frame's shared half: the pass table's check, the uniforms, the stats
 // ge:keywords test render pass-table check_pass_table uniforms fill_uniforms frame-stats
+// ge:keywords weather fog deck
 // ge:skill render testing
 #include <cmath>
 #include <string>
@@ -73,6 +74,26 @@ TEST(uniforms_carry_the_view) {
   CHECK(u.size[0] == 640 && u.size[1] == 360 && std::fabs(u.size[2] - 1.0f / 640) < 1e-9f);
   CHECK(u.time[0] == 2.5f && u.time[1] == 7.0f);
   for (float p : u.planes[5]) CHECK(p == 0);
+}
+
+TEST(uniforms_carry_the_weather) {
+  ge::render::FrameView v;
+  ge::render::FrameUniforms u;
+  // The default is a clear sky: the sun whole, no deck, no fog.
+  ge::render::fill_uniforms(u, v, 64, 36);
+  CHECK(u.weather[0] == 1.0f && u.weather[1] == 0.0f && u.weather[2] == 0.0f);
+  CHECK(u.weather[3] == 0.0f);
+  v.weather.sun_pass = 0.25;
+  v.weather.cover = 2;  // out of range: held to 1
+  v.weather.visibility_m = 391.2;
+  v.weather.hidden = 0.5;
+  v.weather.deck_light = 2;
+  v.weather.deck_zenith = 0.6;
+  ge::render::fill_uniforms(u, v, 64, 36);
+  CHECK(u.weather[0] == 0.25f && u.weather[1] == 1.0f && u.weather[3] == 0.5f);
+  // A visual range V is an extinction of 3.912 / V.
+  CHECK(std::fabs(u.weather[2] - 0.01f) < 1e-7f);
+  CHECK(std::fabs(u.deck[0] - 2 * 0.86f) < 1e-6f && std::fabs(u.deck[3] - 0.6f) < 1e-7f);
 }
 
 // The pixel a camera-relative point lands on under a block's (column-major) view_proj.

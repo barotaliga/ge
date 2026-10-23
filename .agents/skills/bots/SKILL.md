@@ -141,7 +141,7 @@ side, and charts the steer meant against pressed.
 | The hands, the humanness metrics and bands | `engine/ai/hands.hpp`, `human.hpp` | built (M16b) |
 | The report off a log, `ge sim --human` | `engine/play/human.hpp`, `sim --human` in `main.cpp`, `ge sim` in `engine/cli/play.cpp` | built (M16b) |
 | A skier's pilot (pure pursuit, the speed plan on the limits) | `plugins/skier/pilot.hpp` | built (M16c) |
-| Paths (one heap, grid and graph search), thinking on a schedule | `engine/ai/path.hpp`, `think.hpp` | M16d, with the free ride's lifts |
+| Paths (one heap, grid and graph search), thinking on a schedule | `engine/ai/path.hpp`, `think.hpp` | built (M16d) |
 | Sight and memory, steering, choosing (utility, state machines) | `engine/ai/sight.hpp`, `memory.hpp`, `steer.hpp`, `choose.hpp` | M16e, with the army on foot |
 
 A piece lands with its first user, never before (G4). A bot a game writes before its piece exists

@@ -110,6 +110,24 @@ In a game repo, `ge lab` is the way in: `ge lab` lists, `ge lab <id> --tag=befor
 `--compare=before` run one, and with `--json` the lab's whole `report.json` is the answer's
 `result`. `ge lab diff <id>` diffs the pictures (below), every band under its floor a finding.
 
+### The sweep: one constant at several values
+
+`ge lab sweep <id> --set=<name>=<a>,<b>,... [--in=<file>] [--metrics=<word,...>] -- <lab flags>`
+runs a lab with one constant of the code at each value, every metric side by side
+(`engine/cli/sweep.hpp`). The constant is a `constexpr` defined on one line (a spec's or a
+tuning table's, `inline constexpr double kFlight = 0.6;`), named bare (`kFlight`) or qualified
+(`launch::kFlight`, which keeps only files that open those namespaces); `--in` names its file
+when the name is in several. For each value the initializer is rewritten in place, only the
+`labs` target is rebuilt (the files that include it recompile) and the lab runs with
+`--tag=sweep-<name>-<value>`, so every run's pictures stay for `ge lab diff`. The file is put
+back after the last run and the labs rebuilt on what it holds; a sweep killed half way leaves
+its text under `build/<preset>/ge-sweep/backup.txt`, and the next sweep puts it back first.
+Three values of a paramotor constant over one scenario take about 20 s in debug.
+
+```sh
+ge lab sweep para --set=launch::kFlight=0.4,0.6,0.9 --metrics=launch -- --scenario=launch
+```
+
 ### The picture diff: did the look move, and how near the player?
 
 `--compare=<tag>` diffs every picture of the run against the same picture of the kept run, and
@@ -351,8 +369,10 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 | `trace` | drive | game:fall_line | the player's skier step by step down one seed with the bot: `trace.tsv` (a series file), the speed, the sideways load and the edge and lean charted against the clock with gates, flights and spikes; `--log=` for the same run's events (docs/debugging.md) | M14a (now) |
 | `why` | drive | game:fall_line | `games/fall_line/sim/bot`'s decisions (`engine/ai/why`): the pilot and a field of three down one seed with every bot traced and the same run untraced beside it (the digests must agree), per racer the share of steps it braked, tucked and glided, its changes of mind a minute and its close calls; the player's speed against the plan's cap with every change of mind marked, and the margin of each speed call; `why-0.tsv` for `ge graph` | M16a (now) |
 | `humanness` | drive | game:fall_line | `games/fall_line/sim/hands` on `engine/ai/hands` and `engine/ai/human` (each hand profile, `none` and `human`, over seeds 38, 7 and 101 with a field of four: every racer's axes (saturation, jumps, reversals, hold, lag) and decisions (changes of mind) against a person's bands, every value out of band listed with the assumption it breaks, whether each racer finished, its time and resets; the player's steer meant against pressed, charted; `player-<profile>.tsv` for `ge graph`) | M16b (now) |
+| `path` | sim | game:fall_line | `engine/ai/path` and the outing's graph search (`games/fall_line/sim/outing`): one seed's walk on foot across its ski area from the first lift's bottom to the last lift's top on 8 m cells (each step its length and 6 m more a metre climbed or dropped, barred over a rise of 0.7), by Dijkstra and by A* (held to one cost, the cells each expanded beside it), string-pulled to its fewest clear legs and drawn on the map; every run's outing (the lift and the next run the graph search chose) | M16d (now) |
 | `wanted` | scenario | game:fall_line | `games/fall_line/sim/wanted` (the wanted level on seed 38 against scripted pursuers: the hunt table of the stars reached and when, the share seen, the searches, how it ended; each scenario's line by the stars; the sight sheds of a soldier at the start gate and a helicopter over the middle: open, hidden by the ground, by the woods, out of range) | M15a (now) |
 | `army` | scenario | game:fall_line | `games/fall_line/sim/army` (the army on foot on seed 38, the man stood still while the stars are pinned: `valley`, `slope` and `arrest`; the army table of the lifted men sent and let off, the waves' men, the most out, how many hold him, the nearest, the men caught and when he was arrested; every soldier's path over the map) | M15c (now) |
+| `army-sleds` | scenario | game:fall_line | `games/fall_line/sim/army_sled` (the army's snowmobiles on seed 38, the man stood still while the stars are pinned: `open`, `run`, `face` and `arrest`; the sleds table of the machines called, the most out, the short halts, the times dug out and righted, the nearest, when they came in range, the crews off, the arrest and whose; every machine's path over the map) | M15d1 (now) |
 | `anim` | scenario | plugin:skier | `engine/lab/anim.hpp` over the skier's figure (`plugins/skier/app/figure.hpp`) ridden through a ride scenario: filmstrips from the side, behind and above, onion skins with the hands' and tips' paths, the joints' angles, a jolt heatmap, `motion.tsv`, the faults found (pop, snap, angle snap, stretch, clip), and a copy with a pop, a stretch and a clip planted, each of which must be found | M14b (now) |
 | `gpu-capture` | picture | engine | `engine/gpu` (the headless capture) | M6 (now) |
 | `frame-pace` | bench | engine | the platform's frame loop | M6 (now) |
@@ -367,6 +387,7 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 | `forest` | picture | plugin:mountain | The trees as drawn (`plugins/mountain/app/trees.hpp`): every form's four variants at full, mid and far on one sheet, standing as an instance stretches them and lit from behind the shoulder, every kind in its colours on another; the triangles a mesh against each LOD's budget (450, 160, 60; over one fails), the share of its faces carrying snow (`plugins/mountain/labs/gpu_forest_lab.cpp`) | M8c (now) |
 | `spray` | picture | game:fall_line | What the skis throw (`plugins/skier/app/spray.hpp`), flown and drawn by the engine's particles (`engine/render/particles.hpp`) in Fall Line's frame: four ride scenarios (`carve-hard`, `hockey-stop`, `kicker` a fifth of a second after landing, `powder-turns` in a 6 m/s crosswind, its cloud drifting off) drawn frame by frame from their start, each from the chase camera and from the side; the grains the arithmetic threw (none fails) and the live particles at the shot (`games/fall_line/labs/gpu_spray_lab.cpp`) | M8d1 (now) |
 | `snowfall` | picture | game:fall_line | The falling snow (`engine/render/snowfall.hpp`) on the map's wind (`plugins/mountain/air/air.hpp`) in Fall Line's frame: a seed's map under a flurry, a steady snow and a storm in turn, from a named view, drawn frame by frame up to the shot; the fall, the visual range, the wind and the flakes drawn at the shot (a snowing sky that draws none fails), the passes' GPU ms (`games/fall_line/labs/gpu_snowfall_lab.cpp`) | M8d2 (now) |
+| `weather` | picture | game:fall_line | The mountain's skies in the picture (`plugins/mountain/app/weather_look.hpp` over `render/view.hpp`'s `Weather` and `wgsl/frame.wgsl`): a seed's map under each of the eight weather kinds in turn, from a named view; the look's numbers (the sun's pass, the deck's cover, the visual range, the deck hidden) and the picture's luma and contrast, whole and in its upper half (an overcast no flatter than the clear day fails, and a fog's far half no flatter than the clear day's) (`games/fall_line/labs/gpu_weather_lab.cpp`) | M8f1 (now) |
 | `skis`, `skier` | picture | game:fall_line | the world drawn | M8e–M8e2 |
 | `synth` | sim | engine | `engine/audio` (every voice the synth can play, metered, pictured and written as WAV; the render's cost) | M9a (now) |
 | `audition` | sim | game:fall_line | Fall Line's bank, the skier's beds at seven moments and the bot's whole run, metered, pictured and written as WAV | M9b (now) |

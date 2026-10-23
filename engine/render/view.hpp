@@ -16,10 +16,18 @@
 // The sun is a world direction (toward it), with its elevation and azimuth (a world heading),
 // as engine/core/solar.hpp gives them.
 //
+// THE WEATHER in the picture is `FrameView::weather` (`Weather`): how much of the sun's direct
+// light the cloud lets through, how much of the dome a grey deck covers (its grey spread from
+// the light the clear day would put on the ground, so it follows the hour and the night), and
+// the visual range of a fog or a fall, which closes every surface into the sky behind it. The
+// default is a clear sky: nothing changes. What a world's weather kinds mean in these numbers is
+// the world's (plugins/mountain/app/weather_look.hpp); wgsl/frame.wgsl reads them.
+//
 // ge:summary The FrameView a game extracts each frame, and its camera matrices and frustum
 // ge:keywords render frame-view camera view projection reverse-z infinite-far camera-relative
 // ge:keywords frustum planes heading pitch fov mat4 inverse sun-direction camera_matrices
-// ge:keywords look_dir sun_direction depth_distance distance-from-depth unproject
+// ge:keywords look_dir sun_direction depth_distance distance-from-depth unproject weather
+// ge:keywords overcast deck cloud-cover sun-pass visibility fog flat-light
 // ge:skill render
 // ge:test tests/render_view_test.cpp
 #pragma once
@@ -39,6 +47,20 @@ Mat4 inverse(const Mat4& a);
 // a * (x, y, z, w)
 void transform(const Mat4& a, const float in[4], float out[4]);
 
+// The weather a frame is seen under. The default changes nothing: a clear sky.
+struct Weather {
+  double sun_pass = 1.0;    // the share of the sun's direct light the cloud lets through, 0..1
+  double cover = 0.0;       // the share of the dome the deck covers: 0 clear .. 1 a lid
+  double visibility_m = 0;  // the visual range of a fog or a fall, m; 0: the clear air's alone
+  double hidden = 0.0;      // 0..1: how much of the deck overhead the snow in the air hides
+  // The deck: its tint (luminance 1), how much of the clear day's light on the ground it spreads
+  // as its own (an overcast spreads more than the sun lit, a storm's half), and its grey
+  // overhead as a share of its grey at the horizon (a deck is darker overhead).
+  double deck_tint[3] = {0.86, 0.9, 0.98};
+  double deck_light = 1.0;
+  double deck_zenith = 0.6;
+};
+
 struct FrameView {
   // The eye, world metres, and where it looks.
   double eye[3] = {0, 0, 0};
@@ -52,6 +74,7 @@ struct FrameView {
   double sun_illuminance = 1.0;  // relative; the sky and every light scale with it
   // The world's y = 0 over the sea, m: where the atmosphere starts.
   double altitude_m = 0;
+  Weather weather{};   // the cloud and the fog; the default is a clear sky
   double time_s = 0;   // the frame's time (the renderer reads no clock)
   uint64_t frame = 0;  // the frame's number (TAA's jitter is indexed by it)
 };

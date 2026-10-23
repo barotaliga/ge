@@ -127,13 +127,15 @@ std::vector<std::string> tests_matching(const BuildOptions& o, const std::string
 }
 
 // Configure and build. With `filter`, only the targets of the tests it picks (a test is its own
-// executable, the smoke pass the labs executable), and the whole tree when a target is unknown.
-bool build_step(const BuildOptions& o, Outcome& out, const std::string& filter = "") {
+// executable, the smoke pass the labs executable); with `only`, those targets (space-separated);
+// the whole tree when neither names one or a target is unknown.
+bool build_step(const BuildOptions& o, Outcome& out, const std::string& filter = "",
+                const std::string& only = "") {
   const fs::path log = log_path(o, "ge-build");
   std::error_code ec;
   fs::remove(log, ec);
   if (!configure(o, log, out)) return false;
-  std::string targets;
+  std::string targets = only.empty() ? "" : " " + only;
   if (!filter.empty()) {
     for (const std::string& t : tests_matching(o, filter, log))
       targets.append(" ").append(t == "labs_smoke" || t.starts_with("labs_smoke_") ? "labs" : t);
@@ -186,6 +188,10 @@ Logged run_to_log(const std::string& command, const fs::path& log) {
 }
 
 bool build_into(const BuildOptions& o, Outcome& out) { return build_step(o, out); }
+
+bool build_targets(const BuildOptions& o, Outcome& out, const std::string& targets) {
+  return build_step(o, out, "", targets);
+}
 
 fs::path build_log(const BuildOptions& o, std::string_view name) { return log_path(o, name); }
 

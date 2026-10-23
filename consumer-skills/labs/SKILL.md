@@ -22,6 +22,9 @@ ge lab run --compare=before            # every metric beside the tagged run's, e
 ge lab diff run                        # the last run's pictures against previews/run@before/:
                                        # PSNR and SSIM per distance band, each under its floor a finding
 ge lab diff run --run -- --seeds=7     # run it first, then diff
+ge lab sweep run --set=kGrip=0.8,1,1.2 -- --seeds=7
+                                       # one constexpr at each value, rebuilt and run, metrics
+                                       # side by side; the source put back after
 ge lab run --json                      # the same, its report.json inside the answer
 ```
 

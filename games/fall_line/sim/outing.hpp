@@ -1,9 +1,13 @@
 // THE BOT'S OUTING on the free ride: down a piste to its foot, up the lift at that foot and down
 // another run off its top. What a skier's day is made of, and what proves the lifts carry him.
 //
-// - THE OUTING (`outing_from`): the run he starts at the head of, the lift whose bottom station is
-//   nearest the foot of its chain (within `kLiftReach`), and the run he skis off that lift's top:
-//   the first of its ramps' runs that is not the one he came down, else the first.
+// - THE OUTING (`outing_from`): the run he starts at the head of, a lift and the run he skis off
+//   its top, the cheapest on a graph search (`ai/path.hpp`) over the runs and the lifts: from his
+//   run's foot across the snow to every lift whose bottom station is within `kLiftReach` (its
+//   cost the walk, m), and off its top onto every run its ramps lead to, the first listed
+//   preferred and the way back down the run he came down dearer by `kBackDown`. So it is the
+//   lift nearest the foot and the first of its runs not the one he came down, unless that lift
+//   leads only back down it and another in reach leads elsewhere.
 // - THE WAY TO THE LIFT (`to_lift_line`): the run's chain to its foot, then across the snow to a
 //   point `kLineUp` m short of the load zone on the line up, and on up the line through the zone's
 //   middle, held under `kWalkSpeed` past the foot so he comes into the zone slow enough to be
@@ -44,6 +48,12 @@ inline constexpr double kRunOn = 8;
 inline constexpr double kWalkSpeed = 3;
 // The width of a line laid across the snow off any run, m.
 inline constexpr double kWalkWidth = 8;
+// What an outing's search adds for each ramp listed before a run's off a lift's top, m (the first
+// listed preferred, never enough to choose a farther lift), and for skiing back down the run he
+// came down rather than another, m (a lift that has only that is taken when no other in reach
+// does better by `kBackDown`).
+inline constexpr double kRampRank = 1e-6;
+inline constexpr double kBackDown = kLiftReach;
 }  // namespace outing
 
 // Lays a line through points on the snow: every `kEvery` m between them, its arc, its height on

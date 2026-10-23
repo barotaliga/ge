@@ -211,7 +211,7 @@ characters.
 | `engine/lab/` | The lab contract and runner (`ge::lab`): metrics, tables, captioned shots, digests, reports, the CPU raster and PNG, picture diffs, series, stats, charts, pose tracks; `labs/` the engine's own labs | `labs`, `debug` |
 | `engine/play/` | The play contract (`ge::play`): a game's spec and run, the recorded session and its protocol, input logs, shots, recordings, the bench, and the `play` executable's command line | `agent-interface` |
 | `engine/prof/` | The profiler (`ge::prof`): zones, allocation counts and the counting allocator, the peak resident set; feeds no digest | `perf` |
-| `engine/ai/` | The bots' layer (`ge::ai`): the decision record every bot writes where it chooses, read back by `ge why`, and the hands that make a bot look human | `bots` |
+| `engine/ai/` | The bots' layer (`ge::ai`): the decision record every bot writes, read back by `ge why`, the hands that make a bot look human, the one cheapest-path search (graph and grid), thinking on a schedule | `bots` |
 | `engine/cli/` | The `ge` command line for game repos (`cmake/Cli.cmake`): the command catalog, the answer shape and findings, and one file per command group | `agent-interface` |
 | `consumer-skills/` | The skills a game repo gets from `ge new` and `ge skills sync`, compiled into `ge`; written for a game repo, never for this one | `agent-interface` |
 | `scaffold/` | The game repo `ge new` writes, as `.in` files with placeholders, compiled into `ge` | `agent-interface` |
@@ -230,7 +230,7 @@ characters.
 | `plugins/mountain/mapgen/` | The world generator (`ge::mountain::mapgen`): the piste and the ski area by stage, the rule books, the real faces and hints, the digest; `picture/` the map on the CPU | `mountain` |
 | `plugins/mountain/lifts/` | The lifts run (`ge::mountain::lifts`): every carrier round its loop as a pure function of the clock | `mountain` |
 | `plugins/mountain/air/` | The air at run time (`ge::mountain::air`): the wind's gusts and veer, the fall's squalls and the visual range, as pure functions of the map and the clock | `mountain` |
-| `plugins/mountain/app/` | The mountain as drawn (`ge_mountain_app`, with the GPU): the snow's material, the trail map, the trees | `mountain`, `render` |
+| `plugins/mountain/app/` | The mountain as drawn (`ge_mountain_app`, with the GPU): the snow's material, the trail map, the trees, the weather's look | `mountain`, `render` |
 | `plugins/mountain/analysis/` | The rule book re-checked on a finished map (`ge::mountain::analysis`) | `mountain` |
 | `plugins/skier/` | The skier on the snow (`ge::skier`): the step, the snow, the limits, the skis and tuning, the trees, the body and its injuries, the hand-built maps, the ride scenarios | `skier` |
 | `plugins/skier/app/` | The skier as seen and heard (`ge_skier_app`): the rig and figure, the wind and snow beds, the tracks | `skier`, `audio` |
@@ -331,5 +331,5 @@ and the directories agree.
 | `debug` | Finding out why a run behaves as it does: log channels and `--log` dumps, series traces and spans, the outlier rule, the charts (PNG + SVG), `ge graph` |
 | `perf` | Any optimisation, a benchmark, a profile, a cost claim |
 | `agent-interface` | Diagnostics wording, consumer skills, the `ge` CLI (M12) |
-| `bots` | Anything a bot decides: `engine/ai`, the decision record every bot writes, `Run::trace`, `ge why`, making a bot more human (M16) |
+| `bots` | Anything a bot decides: `engine/ai`, the decision record every bot writes, `Run::trace`, `ge why`, making a bot more human, paths and thinking on a schedule (M16) |
 | `net` | `engine/net`: multiplayer networking: sockets, the simulated network and its conditions, captures, the wire format, connections and channels, nodes up to 32, fake traffic, the `net-link` lab; the M17 plan |
