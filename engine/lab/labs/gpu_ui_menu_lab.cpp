@@ -83,6 +83,7 @@ void run(ge::lab::Lab& lab) {
   const MenuStyle st = front_style();
 
   std::vector<Page> pages;
+  pages.reserve(scenes.backdrops.size() + viewports.size() * 2);
   const Viewport& main = viewports.front();
   for (const Backdrop& b : scenes.backdrops) {
     pages.push_back({"door-" + std::string(b.id), "FRONT DOOR OVER " + std::string(b.id) + ", GPU",
@@ -207,7 +208,7 @@ void run(ge::lab::Lab& lab) {
               "the same picture as the `menu` lab's shot of this page: every word sharp, the "
               "slabs' corners round, the gradients smooth",
               {size, {"backdrop", p.backdrop->id}, {"page", p.page}}},
-             std::move(pic), Det::measured);
+             pic, Det::measured);
     lab.shot({p.id + "-diff",
               p.title + ", OFF THE RASTER",
               "Where the GPU's picture of " + p.id +
@@ -216,7 +217,7 @@ void run(ge::lab::Lab& lab) {
                   std::to_string(kDiffGain) + " (worst " + std::to_string(page_worst) + " levels).",
               "black or nearly so: faint dots on edges and in gradients (the dither) only",
               {size}},
-             std::move(diff), Det::measured);
+             diff, Det::measured);
   }
 
   lab.metric("pages", static_cast<double>(pages.size()), "count");
