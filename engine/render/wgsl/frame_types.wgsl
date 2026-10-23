@@ -21,7 +21,7 @@ struct Frame {
   moon_light: vec4f,       // the lit surface's luminance, the earthlit part's, the angular radius, 1 if the key
   night_sun: vec4f,        // unit direction toward the real sun; w: its illuminance, pre-exposed
   night: vec4f,            // the dark sky's zenith luminance, its light, the sidereal angle, latitude
-  cloud_info: vec4f,       // x: the cloud's layers drawn
+  cloud_info: vec4f,       // x: the cloud's layers drawn; y: the share of the march's steps
   clouds: array<vec4f, 9>, // three a layer (render/clouds.hpp's `cloud_rows`)
 }
 

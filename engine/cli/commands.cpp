@@ -91,6 +91,9 @@ constexpr FlagSpec kCiFlags[] = {
 constexpr FlagSpec kDigestFlags[] = {
     {"write", "", "rewrite the lab's row of tests/labs_digests.txt (every row with no lab)"},
     {"diff", "", "print only the labs whose digest is off the baseline; write nothing"},
+    {"affected", "", "the labs the change since --base reaches, each by its own source's object"},
+    {"base", "<ref>", "with --affected: the change since this ref (default origin/main)"},
+    {"list", "", "with --affected: name the labs it picks and run nothing"},
     kPreset,
     kEngine,
     kRepo};
@@ -99,6 +102,10 @@ constexpr FlagSpec kLintFlags[] = {
     {"all", "", "lint every .cpp"},
     kPreset,
     kEngine,
+    kRepo};
+constexpr FlagSpec kGoalsFlags[] = {
+    {"base", "<ref>", "the roadmap rows are already taken on (default origin/main)"},
+    {"fetch", "", "git fetch origin first, so every branch is current"},
     kRepo};
 constexpr FlagSpec kGoldenDiffFlags[] = {
     {"base", "<ref>", "the git ref to compare with (default HEAD)"}, kRepo};
@@ -296,6 +303,10 @@ const CommandSpec kCommands[] = {
     {"lessons", "[<skill>]", 0, 1, "learn",
      "the skills' lessons: the inventory, or one skill's in full", kLessonsFlags,
      "ge lessons labs --scope=sim/", "skill-reflection"},
+    {"goals free", "[<row>]", 0, 1, "learn",
+     "the roadmap rows taken on the base and on every remote branch, and the next free number "
+     "(or, for a row such as M17, the next free letter under it)",
+     kGoalsFlags, "ge goals free --fetch", "commit"},
     {"new", "<dir>", 1, 1, "create",
      "a game repo against this engine release: the simulation, a lab, a test, the skills",
      kNewFlags, "ge new snow-racer --game=racer", "ge"},

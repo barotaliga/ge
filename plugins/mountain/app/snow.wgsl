@@ -224,13 +224,17 @@ fn fs_main(in: VertexOut) -> FragmentOut {
     let chip = noise(p * 2.6 + 5.0);
     let k = on * aa * mix(0.3, 1.0, worn) * mix(0.55, 1.0, chip) * snow.look.y;
     grad += across * cos(phase) * 0.14 * k * 0.5;
-    // The lanes: a swath 5.2 m wide each, a shade of its own, a low seam between two.
-    let lane = dot(p, across) / 5.2;
-    let seam = 1.0 - smoothstep(0.0, 0.035, abs(fract(lane) - 0.5));
+    // The lanes: a swath 5.2 m wide each, a shade of its own. Where two passes meet the tiller's
+    // edge leaves a low berm, a centimetre or two of snow a hand wide, never a groove: the
+    // driver overlaps the last pass, so the seam wanders a little and is lost in stretches.
+    let lane = (dot(p, across) + (noise(p * 0.03 + 2.0) - 0.5) * 0.8) / 5.2;
+    let u = fract(lane) - 0.5;
+    let seam = 1.0 - smoothstep(0.0, 0.02, abs(u));
+    let kept = smoothstep(0.35, 0.65, noise(p * 0.06 + 23.0));
     let laa = 1.0 - smoothstep(0.3, 0.8, foot / 5.2 * 12.0);
     let kl = on * snow.look2.y;
-    grad += across * sign(fract(lane) - 0.5) * seam * 0.08 * kl * laa;
-    shade += ((hash1(vec2f(floor(lane), 7.0)) * 2.0 - 1.0) * 0.025 - seam * laa * 0.02) * kl;
+    grad -= across * sign(u) * seam * kept * 0.04 * kl * laa;
+    shade += (hash1(vec2f(floor(lane), 7.0)) * 2.0 - 1.0) * 0.025 * kl;
   }
   let n = normalize(g.n - vec3f(grad.x, 0.0, grad.y));
 

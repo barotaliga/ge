@@ -120,9 +120,9 @@ render::Clouds cloud_field(const mapgen::Level& level, double t) {
   return cloud_layers_for(level.weather, level.seed, level.mountain.base.y, level.sun.latitude, t);
 }
 
-void sky_at(const mapgen::Level& level, double t, render::Weather& weather,
-            render::Clouds& clouds) {
-  clouds = cloud_field(level, t);
+void sky_at(const mapgen::Level& level, double t, render::Weather& weather, render::Clouds& clouds,
+            bool layers) {
+  clouds = layers ? cloud_field(level, t) : render::Clouds{};
   weather = weather_look(level.weather, air::fall_at(level, t), clouds.count > 0);
 }
 

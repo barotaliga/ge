@@ -11,7 +11,8 @@
 
 @group(1) @binding(0) var scene_depth: texture_depth_2d;
 
-// The primary steps a heap and a sheet take through their slab, the farthest a ray marches in
+// The primary steps a heap and a sheet take through their slab at the top of the quality ladder
+// (`cloud_info.y` takes a share of them, never under four), the farthest a ray marches in
 // one layer (m), and where far cloud starts and ends melting into the sky (m).
 const kHeapSteps = 28;
 const kSheetSteps = 10;
@@ -114,7 +115,8 @@ fn march(i: i32, d: vec3f, t0: f32, t1: f32, j: f32) -> LayerLook {
   let l = cloud_layer(i);
   let eye = frame.eye.xyz;
   let thick = l.shape.y - l.shape.x;
-  let steps = select(kSheetSteps, kHeapSteps, l.look.y > 0.5);
+  let full = select(kSheetSteps, kHeapSteps, l.look.y > 0.5);
+  let steps = max(4, i32(round(f32(full) * frame.cloud_info.y)));
   let dt = (t1 - t0) / f32(steps);
   let L = frame.sun.xyz;
   let c = dot(d, L);
