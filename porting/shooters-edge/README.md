@@ -12,11 +12,14 @@ classic game", "QC" and "the classic protocol", and `make agents-check` holds it
 | --- | --- |
 | `README.md` | This page: the clean-room rules for these notes |
 | `survey.md` | What today's community clients and servers do, their licences, and which features the plan takes |
-| `configs.md` | The console language at its modern extent, as a specification in our words |
+| `configs.md` | The console language at its modern extent, as a specification in our words (`engine/console` is built from it) |
+| `formats.md` | The file formats: pak, pk3, the search order, BSP29 lump by lump, BSP2, MDL, SPR, WAD2, LMP, WAV |
+| `progs.md` | QuakeC bytecode: the file, the records, the globals, every opcode; the engine-side fields and the builtins to fill with M18c |
+| `movement.md` | The player's movement: the server's settings and the model, as starting values for `se-parity` |
+| `protocol.md` | The classic protocol, version 28: connectionless packets, the net channel, the messages to fill with M18g |
 
-More notes land with their rows: `formats.md` (archives, BSP, MDL, SPR, WAD2, LMP, WAV),
-`quakec.md` (the bytecode, the field layout, the builtins by number), `protocol.md` (version 28,
-the extensions), `movement.md` (the measured movement model), `demos.md` (QWD and MVD).
+Still to come with its row: `demos.md` (QWD and MVD, M18h). Every fact marked `verify` is
+checked by a lab before code depends on it.
 
 ## The rules for a note
 

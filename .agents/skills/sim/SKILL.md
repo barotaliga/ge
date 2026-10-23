@@ -19,7 +19,7 @@ tests):
 
 | File | What |
 | --- | --- |
-| `state.hpp` | `GameState` (the map, the trees' index, the pair, the racers, this step's events, the clock), `Racer`, `Rider` (a bot's pace and lane), `Progress`, `Controls`, the events; `kHz` = 120 |
+| `state.hpp` | `GameState` (the map, the trees' index, the pair, the racers, this step's events, the clock, the INJURIES switch `injuries`), `Racer` (his skis, progress, rider, free ride and `body`, stepped by `step_body` after his skis with the switch on (off, only once the hunt's rounds hurt him mortally), mended at a reset), `Rider` (a bot's pace and lane), `Progress`, `Controls`, the events; `kHz` = 120 |
 | `game.hpp/.cpp` | `race_map(seed)` (v1, the single piste), `create_game`, `create_game_on`, `step` (THE ORDER of a step, stated once in the header), `state_hash` |
 | `course.hpp/.cpp` | The gates in order, a miss, the finish's clock inside its step, the reset (`reset_racer`), `bearing_to_next` |
 | `free.hpp/.cpp` | THE FREE RIDE (`Mode::free`): `free_map` (the ski area), `run_tracks` (its runs as lines, each index built at create), `create_free_ride` (the player alone at a run's head), `step_free` (the metres, the run under the skis, `onto`, the foot's `arrived`), `reset_free` (down the run he was last on), `run_chain` (a run and every run it flows into, to a foot) |
@@ -183,8 +183,8 @@ lethal hunt that fires nothing, door fire under `hold` or none under `aim` fails
 `tests/golden/fall_line_army_door.txt` (`fall_line_army_door_test`) and the `gunfire` digest: put both tables before and
 after in the PR. The army's older labs and tests (`army`, `army-sleds`, `army-flight`, `wanted`)
 stage their arms with `ArmyState::fire` off, so the gunfire moves none of them. A round's wounds
-are judged on `Racer::body`, and until the free ride steps every body, `step_gunfire` runs death's
-course (`step_body` with no blows) for a man its rounds hurt mortally.
+are judged on `Racer::body` (`judge_body`); death's course is the game step's, which steps a
+mortally hurt body (with no blows when the INJURIES switch is off) like every other.
 
 `play` (drive, `games/fall_line/labs/play_lab.cpp`): an agent at the controls.
 `build/debug/labs play --quiet --stdio --seed=38 --rivals=3` puts the protocol on stdio;
