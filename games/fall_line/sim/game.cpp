@@ -10,6 +10,7 @@
 #include <cstring>
 #include <string>
 
+#include "core/num.hpp"
 #include "core/num_text.hpp"
 #include "core/output.hpp"
 
@@ -31,6 +32,7 @@
 #include "fall_line/sim/wanted.hpp"
 #include "mountain/mapgen/generate.hpp"
 #include "prof/zones.hpp"
+#include "skier/body.hpp"
 #include "skier/skier.hpp"
 
 namespace fall_line::sim {
@@ -147,6 +149,12 @@ void log_step(const GameState& state) {
         }
         break;
       }
+      case EventKind::hurt:
+        line += " " + std::to_string(e.gate) + " injuries, severity " + f(e.value, 0);
+        break;
+      case EventKind::died:
+        line += " at severity " + f(e.value, 0);
+        break;
     }
     line += " at x " + f(s.x, 1) + " z " + f(s.z, 1) + ", " + f(s.speed * 3.6, 1) + " km/h";
     out::log_on(ch, out::Level::debug, line);
@@ -162,11 +170,19 @@ void log_step(const GameState& state) {
   }
 }
 
+// The seed a racer's body draws its risks off (body.hpp hashes it with the step): the map's and
+// his place in the field, so two racers met by the same blow are hurt apart.
+uint32_t body_seed(const GameState& state, int32_t i) {
+  return ge::core::num::to_uint32(state.level->seed * 1000) ^
+         (0x9e3779b9u * static_cast<uint32_t>(i + 1));
+}
+
 // The reset the run's mode makes: on the free ride, the paramotor's rig on him begun again on the
 // summit (para_ride.hpp), the helicopter he is on or crashed in started
 // again from its pad with him on it (heli_ride.hpp), the snowmobile he rides or was thrown off
 // stood back on its belt with him on it (sled_ride.hpp), else his run's.
 void reset(GameState& state, int32_t i) {
+  if (state.injuries) sk::mend_body(state.racers[static_cast<size_t>(i)].body);
   if (state.mode == Mode::free) {
     if (!restart_para(state, i) && !restart_heli(state, i) && !remount_sled(state, i)) {
       reset_free(state, i);
@@ -224,6 +240,10 @@ const char* event_name(EventKind kind) {
       return "army-heli";
     case EventKind::gunfire:
       return "gunfire";
+    case EventKind::hurt:
+      return "hurt";
+    case EventKind::died:
+      return "died";
   }
   return "?";
 }
@@ -273,6 +293,10 @@ void step(GameState& state, std::span<const Controls> controls) {
     Progress& p = r.progress;
     Controls c =
         static_cast<size_t>(i) < controls.size() ? controls[static_cast<size_t>(i)] : Controls{};
+    // Mortally hurt (by a blow under the INJURIES switch, or by the hunt's rounds) he is not stood
+    // back up, and dead his run is over: he lies where he fell.
+    const bool doomed = r.body.mortal >= 0;
+    if (doomed) c = Controls{};
     if (c.reset && !p.finished) reset(state, i);
     // A lift that has him carries him: his skis, his run and the run's resets wait.
     if (state.mode == Mode::free && on_lift(state, i)) {
@@ -300,6 +324,18 @@ void step(GameState& state, std::span<const Controls> controls) {
       GE_ZONE("skier");
       sk::step_skier(r.skier, in, world, state.spec, kDt, ev);
     }
+    // THE BODY after the skis: every racer's under the INJURIES switch, his skis' blows judged on
+    // it; off, only a body the hunt's rounds have hurt mortally, to run death's course.
+    if (state.injuries || doomed) {
+      GE_ZONE("body");
+      sk::BodyEvents bev;
+      const sk::BodyClock clock{state.t + kDt, kDt, state.steps, body_seed(state, i)};
+      sk::step_body(r.body, r.skier, state.injuries ? ev : sk::SkierEvents{}, world, state.spec,
+                    clock, bev);
+      const auto iss = static_cast<double>(sk::severity_of(r.body));
+      if (bev.taken > 0) state.events.push_back(GameEvent{EventKind::hurt, i, bev.taken, iss});
+      if (bev.died) state.events.push_back(GameEvent{EventKind::died, i, 0, iss});
+    }
     if (state.mode == Mode::free) {
       GE_ZONE("para");
       step_para_ride(state, i, c);
@@ -320,7 +356,7 @@ void step(GameState& state, std::span<const Controls> controls) {
       state.events.push_back(
           GameEvent{EventKind::wipeout, i, static_cast<int32_t>(ev.cause), r.skier.speed});
     }
-    if (p.finished) continue;
+    if (p.finished || r.body.mortal >= 0) continue;
     // Going nowhere while asking to go. A race's racer always is; on the free ride a skier
     // standing still to look at the view has his poles still, and is left there.
     const bool asks = state.mode != Mode::free || in.tuck > 0;
@@ -367,6 +403,7 @@ uint64_t state_hash(const GameState& state, uint64_t h) {
   mix(state.t);
   for (const Racer& r : state.racers) {
     h = sk::skier_hash(r.skier, h);
+    if (state.injuries) h = sk::body_hash(r.body, h);
     const Progress& p = r.progress;
     mix(p.next);
     mix(p.missed ? 1 : 0);

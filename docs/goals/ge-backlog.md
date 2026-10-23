@@ -9,6 +9,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 ## Digests and goldens (done)
 
 - `ge digest <lab> [--write]` (one lab's baseline, not the whole smoke run)
+- `ge digest <a> <b> --write` (done: several labs' rows checked or rewritten in one call; the labs executable refuses a second name rather than running only the first)
 - `ge golden diff` (which columns of a golden's rows moved) and `ge golden write`
 - `ge digest --diff` (done: every lab's digest against the baseline in one command, nothing written, only the labs that moved printed)
 - `ge golden diff` pairing rows by their key when the count changes (done: a row inserted mid-table is one row added)
@@ -71,6 +72,8 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge asset inspect`
 - `ge net portmap [--protocol=pcp|natpmp|upnp]` (ask the real home router this machine sits behind to open a port and print each step's answer, then close it: the check the simulated router cannot make)
 - `ge net reach --nat=<kind>,<kind>` (one host and client pair through the simulated NATs, the path each attempt took and why, without the whole `net-reach` lab)
+- `ge lab refs` (a reference photo fetched to a temp directory, never committed, JPEG turned to PNG, a refs row written; the model-views lab reads only 8-bit PNG)
+- `ge lab view <glb>` (the model-views lab on any model, in one command)
 - `ge lab table <lab> --where col=value` (one slice of a lab's table, a weapon at one range, read without re-running the lab or opening the whole report)
 
 ## Measuring
@@ -96,6 +99,22 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 
 (`ge shot` is M12b's; `ge anim` is M14b's.)
 
+## Shooter's Edge, the FPS port (M18: the ge tooling it needs)
+
+- `ge pak ls|cat|extract|build` (search paths, which archive wins a file, fixture packs: pak, pk3, .pk3dir)
+- `ge bsp info|ents|shot` (lumps and limits, the entity lump as text, a top-down CPU picture of the leaves, the PVS from a point, the hulls)
+- `ge progs build|disasm|run|trace|profile|diff` (the engine's own compiler for the game's VM language, and the `progs` VM inspected)
+- `ge server --map --bots --for` (a headless dedicated server with bots, its input log written for replay, `ge state` and diverge)
+- `ge demo info|frames|shot|diff` (the classic demo formats decoded, a frame pictured, two demos diffed to their first difference)
+- `ge net inspect --protocol=<name>` (pluggable protocol decoders over a capture: `--protocol=classic`)
+- `ge pmove <scenario>` (movement trajectories as tables or charts against a recording)
+- `ge console <target> "<cmd>"` (console commands and cvars on a headless server or client)
+- the play contract's gaps in `engine/play`: an angle axis kind on a finer grid (16-bit angles), a step whose length the input sets (a usercmd's msec), several players a Run
+
+## Networking (M17)
+
+- `ge net portmap open|renew|close` (a real port mapping from the command line, the OS's gateway and LAN address found: a real-router check on the Mac in one line)
+- `ge net reach --host --client --preset --forward` (one pair of peers' reach timeline)
 ## Shooter's Edge (M18, docs/shooters-edge.md § The `ge` tooling it needs)
 
 - `ge pak ls/cat/extract/build` (a search path's files, which archive wins one, a fixture pack built from a directory)
