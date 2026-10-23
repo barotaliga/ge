@@ -12,7 +12,7 @@
 // ge:keywords reset wipeout landing takeoff field clock wanted mode free-ride onto arrived skied
 // ge:keywords lift-ride lift-phase boarded unloaded sled free-sled sled-mode sled-phase machine
 // ge:keywords army ways heli free-heli heli-mode heli-phase lever pedal para free-para
-// ge:keywords para-phase paramotor
+// ge:keywords para-phase paramotor crowd bump
 // ge:skill sim
 // ge:test tests/fall_line_sim_test.cpp
 #pragma once
@@ -32,6 +32,7 @@
 #include "snowmobile/sled.hpp"
 
 #include "fall_line/sim/army_state.hpp"
+#include "fall_line/sim/crowd_state.hpp"
 #include "fall_line/sim/wanted_state.hpp"
 
 namespace fall_line::sim {
@@ -78,6 +79,7 @@ enum class EventKind : uint8_t {
   army,      // the army on foot moved (`gate` its ArmyChange, `value` how many men)
   heli,      // the helicopter (`gate` its HeliPhase, `value` its speed, m/s; heli_ride.hpp)
   para,      // the paramotor (`gate` its ParaPhase, `value` his speed, m/s; para_ride.hpp)
+  bump,      // a racer met one of the crowd (`gate` the amateur's id, `value` the closing speed)
 };
 
 const char* event_name(EventKind kind);
@@ -227,6 +229,7 @@ struct GameState {
   FreeSled sled;       // the free ride's snowmobile (sled_ride.hpp); none in a race
   FreeHeli heli;       // the free ride's helicopter (heli_ride.hpp); none in a race
   FreePara para;       // the free ride's paramotor (para_ride.hpp); only a ride begun under it
+  CrowdState crowd;    // the amateurs on the ski area (crowd.hpp); inactive until dealt
   double t = 0;        // s since the start
   int64_t steps = 0;
 
