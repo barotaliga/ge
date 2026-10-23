@@ -1,0 +1,3 @@
+Status: done
+
+seed 38 with three rivals, 20 s at 60 frames a second, 4,750 prints: through the deepest turn (24 degrees at 14.2 m/s, in loose snow) the outside groove read back 168 mm deep against the inside's 103 mm, on the flattest straight 78 and 78 mm; a racer coming down another's line laid 1.35 s before finds it 11.9 mm deep in the fine map, redrawn from the history; `profile` at 1280x720 on the software adapter: the terrain pass 61.3 ms without the tracks and 65.2 with them (+6 %), the two stamp passes 0.5 ms each, the CPU half's median 0.25 to 0.27 ms, its worst 1.7 ms on a frame that moves the window
