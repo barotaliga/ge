@@ -51,7 +51,9 @@ Glow glow_of(double kelvin, double emissivity) {
   Glow g;
   if (kelvin <= 0) return g;
   double x = 0, y = 0, z = 0;
-  for (double nm = 380; nm <= 780; nm += kGlowStepNm) {
+  const int steps = static_cast<int>((780 - 380) / kGlowStepNm);
+  for (int i = 0; i <= steps; ++i) {
+    const double nm = 380 + i * kGlowStepNm;
     const double l = planck(nm, kelvin) * kGlowStepNm;
     x += l * xbar(nm);
     y += l * ybar(nm);

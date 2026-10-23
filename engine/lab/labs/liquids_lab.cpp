@@ -15,6 +15,7 @@
 #include <string>
 #include <vector>
 
+#include "core/libm/libm.hpp"
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
 #include "water/harm.hpp"
@@ -70,7 +71,7 @@ void wind(gl::Lab& lab) {
       for (int i = 0; i <= 80; ++i) {
         const double lg = -1.5 + 2.8 * i / 80.0;
         tr.x.push_back(lg);
-        tr.y.push_back(keep_at(std::pow(10.0, lg)));
+        tr.y.push_back(keep_at(ge::core::libm::pow(10.0, lg)));
       }
       line.traces.push_back(tr);
     }

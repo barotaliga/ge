@@ -81,7 +81,7 @@ TEST(the_eye_is_keyed_to_a_looks_brightest_part) {
 
 TEST(the_bodys_uniform_is_laid_out_in_vec4s) {
   CHECK(sizeof(r::LiquidGpuBody) % 16 == 0);
-  CHECK(sizeof(r::LiquidGpuBody) == (13 + r::kGlowEntries) * 16);
+  CHECK(sizeof(r::LiquidGpuBody) == size_t{13 + r::kGlowEntries} * 16);
 }
 
 TEST(a_lava_pool_glows_at_night) {

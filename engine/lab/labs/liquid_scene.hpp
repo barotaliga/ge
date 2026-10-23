@@ -17,6 +17,7 @@
 
 #include "core/heightfield.hpp"
 #include "core/libm/libm.hpp"
+#include "core/math.hpp"
 #include "gpu/device.hpp"
 #include "gpu/pipeline.hpp"
 #include "gpu/target.hpp"
@@ -52,7 +53,7 @@ inline float pit_ground(double x, double z) {
   // Stones on the bed.
   for (int i = 0; i < 5; ++i) {
     const double sx = kPitX - 12 + 6 * i, sz = kPitZ + (i % 2 ? 4 : -5);
-    const double r = std::hypot(x - sx, z - sz);
+    const double r = ge::core::hypot(x - sx, z - sz);
     if (r < 2.2) h = std::max(h, kBed + 2.2 * std::sqrt(1 - (r / 2.2) * (r / 2.2)));
   }
   return static_cast<float>(h);

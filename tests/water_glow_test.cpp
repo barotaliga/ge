@@ -19,7 +19,8 @@ namespace gw = ge::water;
 
 TEST(the_glow_brightens_steeply_and_yellows) {
   double last = 0, last_ratio = 0;
-  for (double c = 500; c <= 1300; c += 100) {
+  for (int i = 0; i <= 8; ++i) {
+    const double c = 500 + 100 * i;
     const gw::Glow g = gw::glow_of(c + 273.15);
     CHECK(g.luminance > last * 2);  // more than doubling every 100 degrees in this span
     last = g.luminance;
