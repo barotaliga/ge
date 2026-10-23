@@ -91,6 +91,9 @@ void play_feedback(Devices& devices, const input::Feedback& feedback,
 // The pointer's motion as raw counts with the pointer hidden and held (a first-person look), or
 // the pointer back. Off by default.
 void set_relative_mouse(Window& window, bool on);
+// Whether relative mode is in force now. The OS can hold it back until the window has the focus,
+// and until then the motion is the pointer's (accelerated, not flagged raw).
+bool relative_mouse(const Window& window);
 // Text events (a console, a name field; on a phone, the on-screen keyboard). Off by default.
 void set_text_input(Window& window, bool on);
 

@@ -168,6 +168,10 @@ void set_relative_mouse(Window& window, bool on) {
   SDL_SetWindowRelativeMouseMode(window.impl_->window, on);
 }
 
+bool relative_mouse(const Window& window) {
+  return SDL_GetWindowRelativeMouseMode(window.impl_->window);
+}
+
 void set_text_input(Window& window, bool on) {
   if (on) {
     SDL_StartTextInput(window.impl_->window);
