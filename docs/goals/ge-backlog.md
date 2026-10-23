@@ -92,6 +92,8 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge build --flags`
 - `ge spans <lab>` (a lab's spans file read back as a table)
 - `ge sanitize thread <tests>` (a ThreadSanitizer build of the tests that run threads)
+- `ge lab time <id> [--smoke]` (a lab's sections timed, and its smoke run, so a lab that slows CI is found by name)
+- `ge bench --preset=release <lab>` (only the labs target built in release, for a lab's release-build cost without a whole release build)
 
 ## Hygiene
 
