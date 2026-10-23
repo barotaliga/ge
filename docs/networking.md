@@ -57,8 +57,9 @@ engine/net/replicate      snapshots and deltas, prediction, interpolation, inter
 engine/net/lockstep       turns, input delay, desync digests, rollback (M17g)
         │
 engine/net/voice          Opus frames, the jitter buffer, voice routing (M17h)
-engine/net/session        lobby, teams, chat, private messages, the player list (M17d)
-engine/net/reach          UPnP, NAT-PMP/PCP, STUN, hole punching, relay, LAN discovery (M17e)
+engine/net/session        lobby, teams, chat, private messages, the player list, kicks,
+                          reconnecting by token; discovery: finding a game on the LAN (M17d)
+engine/net/reach          UPnP, NAT-PMP/PCP, STUN, hole punching, relay (M17e)
 engine/net/guard          input checks, interest, replay audits, cheat flags, reports (M17l)
 engine/net/stress         load, soak, chaos scripts, ramps to the breaking point, fuzzing (M17m)
         │
@@ -102,6 +103,9 @@ the wire) would be a plugin's.
 | Encryption | AEAD over every payload with keys from a connect token a matchmaker signs (M17i); off until then | A LAN game and the labs need none; an internet game does. Keys come from the environment or GitHub secrets, never the tree |
 | Capture format | pcap (libpcap's format) with IPv4/UDP headers made up for simulated addresses | Every packet tool opens it, and `ge net` decodes our protocol inside it |
 | Accounts | Our own service executable, self-hosted, over the same transport (reliable channel over TCP or UDP); passwords stored only as Argon2id hashes; a login returns a signed session token a game host checks without asking the service | One account and one friends list across every store and desktop; testable headless in the container against the simulated network |
+| Sessions | A layer over a node's reliable channel (`session.hpp`): the host's process seats players and holds every rule, a client asks and mirrors; a player is a SEAT, not a peer slot, with a 64-bit token to come back to it | A dropped player keeps their seat, name, team and readiness for `reconnect_us`, and the roster survives a new peer slot; the host being the one authority is what makes the rules (rate limits, team caps, kicks) hold, and what an anti-cheat later trusts (M17l) |
+| Who leads | The host's own player on a listen server; otherwise the first seated, then the longest-seated present player | A dedicated server has no player of its own, and a lobby still needs someone to pick the map and start |
+| LAN discovery | Its own UDP socket on a port the game fixes: a broadcast probe (64 bytes), each host's advert (never bigger than the probe) | A node's port need not be known in advance, a probe never reaches a node, and discovery cannot amplify traffic at a third party |
 | Voice codec | Opus (BSD-licensed), 48 kHz like the synth, 20 ms frames, in-band FEC | The standard for voice at 16–32 kbit/s; loss concealment built in |
 | NAT | UPnP IGD and NAT-PMP/PCP to open a port, STUN to learn the public address, hole punching through a rendezvous, a relay last | No hosted service: the rendezvous and the relay are executables built from this tree that a game's owner runs (G5: GitHub hosts only code and releases) |
 
@@ -129,6 +133,34 @@ keepalive. `describe_packet` decodes any packet into one line for the tools.
 The round-trip time is smoothed as TCP does (RFC 6298: SRTT and RTTVAR, gains 1/8 and 1/4) off
 each acked packet's send time; loss is the share of the packets sent over the last window that
 were never acked once they were older than a round trip and its spread.
+
+## Sessions (M17d)
+
+A session runs on one reliable channel the game gives it (`SessionConfig::channel`); the game
+reads the node's events after the session and skips that channel. Its messages are stated once
+in `engine/net/session_wire.hpp`: a client's `hello` (its token, its name), `ready`, `team`,
+`chat`, `kick`, `start`, `back` and `settings`, and the host's `welcome` (the seat, the token,
+the lobby's size, the phase), `player` (a seat's state and why it is sent: joined, rejoined,
+away, changed, or a snapshot for a new client), `gone`, `pings`, `chat`, `settings`, `phase`,
+`kicked` and `refused` (what was asked, and why not).
+
+| Rule | What the host does |
+| --- | --- |
+| Seats | A hello without a token takes the lowest free seat and a fresh token; one with a token comes back to its seat. A full lobby, a started game (unless `join_in_progress`) and a banned token or address are refused, and the peer is let go once the refusal is acked |
+| Away | A peer that times out leaves its seat away (unready) for `reconnect_us`, then frees it; a peer that disconnects frees it at once |
+| Teams | `team_count` teams of at most `team_size`; a new player joins the smallest; a move into a full team, or once the game has started, is refused |
+| Start and return | Only the leader; start needs `min_players` present and, with `need_ready`, everyone ready; return makes everyone unready |
+| Chat | Control bytes become spaces; a line is cut at `chat_max` bytes on a UTF-8 boundary; each player's bucket holds `chat_burst` lines and gains one every `chat_refill_us`; a team line reaches the team, a direct line its target, and every line comes back to its sender |
+| Kick | Only the leader, never the host's own player; the kicked player is told, the seat freed at once, and the token and the address refused for the rest of the session |
+| Pings | Every `roster_us` the host sends each seat's round trip as it measures it |
+
+A client whose host times out tries again every `retry_us` with its token until `reconnect_us`
+has passed, then reports the session `lost`.
+
+**Discovery** (`discovery.hpp`): a client broadcasts a probe (the protocol, a nonce) to the
+game's discovery port; each host listening answers with an advert (its session's port, seated,
+maximum, phase, name). Over UDP the probe goes to a broadcast address; on the simulated network
+to `sim_broadcast(port)`, which reaches every socket bound on that port.
 
 ## The simulated network (M17a)
 
@@ -222,7 +254,7 @@ seeded and replayable. `engine/net/stress` and `ge net stress` push it until som
 | traffic mixes (`traffic.hpp`) | M17b | The fake traffic shaped like a kind of game: racing, action (fast inputs, big snapshots), rpg, world (a busy shared world), lockstep (inputs and turns, no snapshots); `--mix` on the lab and on `ge net sim` |
 | `net-link --transport=tcp`, `--mix=download`, `--budget` | M17c | The same sessions with every link a stream (what head-of-line blocking does to the round trip and the resends), a 64 KB message to every client every two seconds checked whole byte for byte, and every connection held to a send budget; `ge net sim` takes the same flags |
 | a live node's capture | M17b | A game points its transport at a `Capture` with a size limit and saves it (`save_capture`) when a session ends or the player asks; the tools read it like a lab's |
-| the `net-session` lab | M17d | 32 peers join a lobby, chat to all, to a team and privately, one is kicked, one reconnects |
+| the `net-session` lab | M17d | A 32-player lobby on a dedicated host under each preset: everyone joins and picks a team, chats to all, to the team and to one player, one floods; the leader kicks one (whose return is refused), another is cut for six seconds and comes back to its seat, then the settings, the start and the return. The table checks every chat copy delivered, every player list the host's, the kick, the ban and the seat kept; the seats are charted and the pings drawn as boxes |
 | the `voice` lab | M17h | A voice through each preset, metered against the clean one, the WAV attached |
 | the `accounts` lab | M17j | Sign-ups, logins (a wrong password refused, a brute force throttled), friend requests, presence and an invite, against the service on the simulated network |
 | the `cheats` lab | M17l | Each scripted cheat (speed hack, teleport, input flood, off-grid or future inputs, forged and replayed packets, fishing for hidden state, a planted desync, a forged score or ghost) caught or refused; honest bots under every preset raising no flag |

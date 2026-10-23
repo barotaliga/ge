@@ -1,6 +1,6 @@
 ---
 name: net
-description: "Use for engine/net in gameengine2: multiplayer networking. Addresses, the wire, UDP and TCP sockets, the simulated network (stream links too) and its conditions, pcap captures, the packet format, connections (acks, round trip, loss, unreliable/sequenced/reliable channels, big messages in pieces, priorities, the send budget), nodes (host, client, peer; up to 32), fake-traffic sessions, the net-link lab; and the M17 plan (lobby, chat, NAT, replication, lockstep, voice, accounts)."
+description: "Use for engine/net in gameengine2: multiplayer networking. Addresses, the wire, UDP and TCP sockets, the simulated network (stream links too) and its conditions, pcap captures, the packet format, connections (acks, round trip, loss, unreliable/sequenced/reliable channels, big messages in pieces, priorities, the send budget), nodes (host, client, peer; up to 32), sessions (the lobby: seats, teams, chat, kick, start, reconnect by token), LAN discovery, fake-traffic sessions, the net-link and net-session labs; and the M17 plan (lobby, chat, NAT, replication, lockstep, voice, accounts)."
 ---
 
 # Networking
@@ -25,6 +25,9 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
 | `net/packet.hpp` | THE WIRE FORMAT, stated once: packet types, the payload header, messages, `describe_packet` |
 | `net/connection.hpp` | One connection: sequences, acks, RTT (RFC 6298), loss, the three channel kinds, big messages in pieces (`largest`), `priority`, `budget_kbps`, `LinkStats` |
 | `net/node.hpp` | Host, client or peer: the challenge handshake, up to 32 peers, timeouts, events, flush |
+| `net/session.hpp` | Sessions: the lobby on a node's reliable channel; `SessionHost` seats players and holds the rules, `SessionClient` asks and mirrors |
+| `net/session_wire.hpp` | The session's messages, stated once for both sides (not installed) |
+| `net/discovery.hpp` | LAN discovery: a broadcast probe on a fixed port, each host's advert, the hosts found |
 | `net/traffic.hpp` | Fake traffic: a whole session over the simulated network, measured end to end |
 
 ## Rules
@@ -49,6 +52,15 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
   next update: the `net-link` lab's `want` column states the model. Poll faster (or update
   before and after the step) to shrink it, never subtract it in the stats.
 
+- **A session's rules are the host's.** A client only asks; every rule (seats, team caps, the
+  chat bucket, the leader, kicks and bans) is decided in `session_host.cpp` and answered with
+  `refused` and why. Add a rule there and its `SessionWhy`, never in the client.
+- **A player is a seat, not a peer.** Code that keys anything per player uses the seat
+  (`session_seat_of_peer`); a reconnect gives the same seat a new peer slot.
+- **A script acts as the leader the links chose.** On a dedicated server the first SEATED
+  player leads, and jitter decides who that is: a lab or test asks the clients' mirrors who
+  leads (`players[me].leader`) rather than assuming the first to join.
+
 ## Labs and tests
 
 - `make lab LAB=net-link` (`--presets=bad,awful --clients=32 --seconds=30`; `--transport=tcp`
@@ -58,6 +70,11 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
   reliable events delivered and in order, latencies, delivery of snapshots and inputs, the host's
   bandwidth, resends), the round trip and loss charts, the reliable latency boxes, and one
   preset's session as `previews/net-link/<preset>.pcap` (opens in any packet tool).
+- `make lab LAB=net-session` (`--presets=bad,awful --clients=32`): a dedicated host's lobby
+  filled and scripted under each preset (joins, teams, three chat scopes and a flood, a kick and
+  its ban, a six-second cut and the return to the seat, settings, start, return); the table
+  checks every chat copy, every roster, the kick, the ban and the seat, the seats are charted
+  and the pings boxed.
 - `ge net` (`build/debug/ge net ...`; `engine/cli/net.hpp`): `inspect <pcap>` decodes every
   datagram, `stats <pcap>` measures each connection from the capturing node (rtt, loss each way,
   dups, reorders, resends) and charts its kbps, rtt and loss, `sim` runs the same sessions as the
@@ -67,6 +84,7 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
 - Tests: `tests/net_*_test.cpp`, `tests/cli_net_test.cpp`. `net_tcp_socket_test` runs frames
   and two nodes (a 64 KB message) over real loopback TCP. `net_traffic_test` holds the guarantees under every preset;
   `net_connection_test` holds the stream's rules on a scripted wire; `net_node_test` the
-  handshake, the 32-peer limit, denial and timeouts.
+  handshake, the 32-peer limit, denial and timeouts; `net_session_test` every session rule;
+  `net_discovery_test` probes and adverts on the simulated network and real loopback UDP.
 - Before and after a change here: `make lab LAB=net-link ARGS=--tag=before`, then
   `--compare=before`, both in the PR.
