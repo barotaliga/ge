@@ -28,6 +28,8 @@ for anything the simulation reads, `render` for a pass, `audio` for a voice, `la
 | The dressed skier's swim preset | `plugins/skier/swim.hpp` | `skier-swim` | `tests/skier_swim_test.cpp` |
 | The colour from what is in the water: spectral IOPs, the shallows, the veil, visibility, the looks | `engine/water/optics.hpp` | `water-colour` | `tests/water_optics_test.cpp` (golden) |
 | Flowing water: the HLL scheme, the quanta, sources, drains, open edges, falls, the tiers | `engine/water/flow.hpp` | `flow`, `water-lod`, `water-cost` | `tests/water_flow_test.cpp` (golden) |
+| The surface drawn: rings, the waves kept per vertex and pixel, the mirror, the glitter | `engine/render/water.hpp`, `water.wgsl` | `gpu-water`, `lake` | `tests/render_water_test.cpp` |
+| Water in Fall Line's frame (`add_water`) | `games/fall_line/app/frame.hpp` | `lake` | `create_frame`'s pass-table check |
 | Drawn, sound | the rows M24g–M24l | the doc's § Labs | as each row lands |
 
 ## The rules

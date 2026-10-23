@@ -210,11 +210,15 @@ The order, with what each stage is for:
 6. **Sky and clouds:** the sky behind the depth buffer; the cloud volume over it (as built
    at the render resolution, resolved by TAA; at a quarter of the pixels, reprojected from
    last frame, once the quality ladder has the stop: § Sky).
-7. **Transparent:** particles and glows, softened against the depth buffer.
-8. **Temporal resolve:** anti-aliasing and upscaling to the output size (§ Anti-aliasing).
-9. **Post:** one compute pass for exposure, bloom, the colour grade, tone mapping, dither
+7. **Water** (`render/water.hpp`, `docs/water.md` § Drawn): the opaque frame's colour and
+   depth copied (`water.copy`), then every body drawn over it (`water`), reading the copies
+   for what lies under it and what it mirrors, testing and writing the depth, so what follows
+   sits in front of or behind it; both rows run empty with no water in view.
+8. **Transparent:** particles and glows, softened against the depth buffer.
+9. **Temporal resolve:** anti-aliasing and upscaling to the output size (§ Anti-aliasing).
+10. **Post:** one compute pass for exposure, bloom, the colour grade, tone mapping, dither
    and the output encoding (§ Post).
-10. **UI:** the HUD and cards, at output resolution.
+11. **UI:** the HUD and cards, at output resolution.
 
 **As built (M7c).** Fall Line's table runs `sky.tables`, `terrain.cull`, `terrain.horizon`,
 `terrain.depth`, `hiz`, `terrain`, `sky`, `taa`, `post`. The terrain draws twice from one

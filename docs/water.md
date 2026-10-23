@@ -314,6 +314,36 @@ The checks (`tests/water_flow_test.cpp`, the `flow` lab), measured:
 
 ## Drawn (`engine/render/water*`, M24g–M24i)
 
+**Built (M24g, `engine/render/water.hpp`).** Two passes after the opaque scene, the sky and the
+cloud, before the particles and TAA-U: `water.copy` copies the frame's colour and depth (the
+water reads what lies behind it), and `water` draws every body, testing and writing the depth.
+With no body shown both rows run empty. What it draws:
+
+- **Geometry**: `WaterDraw::levels` nested squares of 64 quads round the eye, each snapped to
+  twice its spacing and morphed into the next at its seam, the last level's rim pushed out to
+  the horizon, every vertex clamped into the body's box; a lake's shore is where the ground
+  stands over the water, feathered over its last 15 cm of depth.
+- **Waves**: the simulation's own components in the same second-order formula, so the drawn
+  crest is the one a float rides (the `gpu-water` lab reads it back: 0.8133 m drawn against
+  0.8139 m simulated). A vertex keeps a component at least four of its level's spacings long;
+  a pixel sums the slopes of every component (the simulation's, then 32 detail components from
+  the band's top to 4 cm off the same spectrum, `detail_waves`) at least four pixels long.
+- **The light**: Fresnel (Schlick, 2 %) between the mirror and the water seen into. The mirror
+  is the opaque scene along the reflected ray, marched in screen space through the depth copy
+  (a march that leaves a side goes on along the edge's column), else the sky's own model. The
+  water seen into is the scene behind, bent by the normal, dimmed over the view's path and the
+  light's way down to the bed by the body's optics, over the light the water itself sends
+  back. The sun's glitter is Beckmann over every slope the pixel cannot resolve (the components
+  it dropped, the spectrum's tail past the detail band, a calm surface's own ripples), so the
+  far water glints as a broad path and never shimmers. A body's own glow (lava) is added.
+- **In a game**: Fall Line's frame owns one `Water` and takes bodies by `add_water`; the `lake`
+  lab digs a tarn into a seed's map to show it until the generator lays lakes (M24l).
+
+Not built yet (M24g2): the GPU detail FFT and its cascades, foam, caustics, the shore's wet band,
+rain, the lake shore mesh and the channel's and flow region's own geometry, the reflections over
+the Hi-Z pyramid with a probe behind them, and the stops on the quality ladder. The plan for all
+of it follows.
+
 The water is a pass in the frame's table after the opaque geometry (it reads the scene's
 colour and depth) and before TAA-U. All of it runs on GPU-less Linux on the software adapter,
 so every view is a lab picture.
@@ -455,7 +485,8 @@ never read back by the simulation.
 | `swim` | scenario | M24d | Every preset side by side: the classic's scripted trajectories, the idle sink, the jump out; the clothed skier's sink over minutes, the cold's stages; the default swimmer |
 | `water-colour` | picture | M24e | Every look's swatches over depth and bed, in sun and shade, from above and below; visibility per look |
 | `flow` | picture | M24f | Dam break against the analytic solution, a basin emptying through a breach against Torricelli, a river to steady state, a waterfall's sheet; depth filmstrips; the volume held |
-| `gpu-water` | picture | M24g, M24i | Named views: the calm mirror, a windy lake, the sea at several Beaufort forces, surf on a beach, a river, a waterfall, sunset glitter, night, rain; the distance-band diff |
+| `gpu-water` | picture | M24g, M24g2, M24i | Named views: the calm mirror, a windy lake, the sea at several Beaufort forces, surf on a beach, a river, a waterfall, sunset glitter, night, rain; the distance-band diff |
+| `lake` | picture | M24g, M24l | Fall Line's own frame with a tarn on a seed: from the shore, from over it, into the sun, in a fresh wind, at the day's end |
 | `gpu-underwater` | picture | M24h | Every look's view round a scene under water, Snell's window, the caustics, the waterline split |
 | `water-lod` | picture | M24f, M24g | The tiers round an actor and round the camera as maps; a flow region coarsened and refined with its volume held; the picture diff per distance band across a slow fly-out (no band pops); the cost against distance |
 | `water-audition` | sound | M24j | Every water voice, metered and written as WAV |
