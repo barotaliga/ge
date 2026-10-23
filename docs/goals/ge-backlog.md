@@ -69,6 +69,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge lab pick <lab> <shot> --pixel=x,y` (a picture's value at a pixel before the tonemap, the HDR colour and its depth)
 - `ge gpu dump <target> --frame=N --decode=<scheme>`
 - `ge asset inspect`
+- `ge lab table <lab> --where col=value` (one slice of a lab's table, a weapon at one range, read without re-running the lab or opening the whole report)
 
 ## Measuring
 
