@@ -70,8 +70,8 @@ std::optional<HourWindow> daylight_window(double latitude, double min_elevation,
 // declination swinging from the sun's at new to the opposite at full. No orbital tilt.
 MoonPlace moon_at(double hour, double latitude, double sun_declination, double age);
 
-// ── On a real date: NOAA's solar series (after Meeus), Bennett's refraction near the horizon,
-//    Schlyter's low-precision moon. ──
+// ── On a real date: NOAA's solar series (after Meeus), Bennett's refraction near the horizon.
+//    The moon on a real date is core/moon.hpp's. ──
 
 // The Julian day at 0h UT of a Gregorian civil date.
 double julian_day(double year, double month, double day);
@@ -118,25 +118,5 @@ std::optional<double> hour_of_sun_on_date(double elevation, bool rising, double 
 // or 24 on the day a midnight sun begins or ends.
 std::optional<HourWindow> sun_window_on_date(double latitude, double longitude, double jd0,
                                              double min_elevation = kSunrise);
-
-struct MoonOrbit {
-  double longitude;        // geocentric ecliptic, degrees
-  double latitude;         // geocentric ecliptic, degrees
-  double distance;         // Earth radii
-  double right_ascension;  // degrees
-  double declination;      // degrees
-};
-MoonOrbit lunar_coordinates(double jd);
-
-struct DatedMoonPlace {
-  double elevation;  // seen from the surface (parallax off, no refraction), rad
-  double azimuth;
-  bool rising;
-  double hour;
-  double lit;          // 0 .. 1
-  double age;          // days past new, off its elongation
-  double declination;  // degrees
-};
-DatedMoonPlace moon_on_date(double hour, double latitude, double longitude, double jd0);
 
 }  // namespace ge::core

@@ -17,6 +17,7 @@ game rides it, so the modes, the course's rules, the bot and the field stay in t
 | `skier/skis.hpp` | `SkiSpec` and `kReferenceSkis`, the pair every shared number was tuned on |
 | `skier/tuning.hpp` | Every shared number, with its unit |
 | `skier/trees.hpp/.cpp` | The trunks on a grid once a map: `build_tree_index`, `tree_overlap` |
+| `skier/ragdoll.hpp/.cpp` | THE THROWN BODY: thirteen Verlet points (`Point`, `point_mass`, `point_radius`), `throw_body`, `throw_of` (by an `Over` row), `step_ragdoll` (the muscles, the air, gravity, the joints and the bones, the snow, the trunks; each point's `impact` on the snow and `struck` on a trunk this step), `ragdoll_hash`. `step_skier` throws it the step he goes down (`over_of` the cause's row) and steps it while he is down. Its test: `tests/skier_ragdoll_test.cpp` |
 | `skier/synthetic.hpp/.cpp` | The hand-built maps: `synthetic_slope()`, `flat_strip(pitch, packed)` |
 | `skier/scenarios.hpp/.cpp` | The ride scenarios (one table for the tests and the labs) and `run_scenario`, which steps the body after every step |
 | `skier/anatomy.hpp/.cpp` | THE BODY'S CATALOG (M13e1): the twenty parts, the bones and the organs, the mechanisms, the 98 injuries of the skis and the 32 penetrating wounds of a round (M15b) with their AIS and even-chance doses, and every number of the body (`injury::`), each with its research |
@@ -69,7 +70,9 @@ is the support met again, its load `1 + v_n^2 / (2 stroke g)`. There is no mode.
 
 `ride` (scenario): every scenario run and measured (top speed against the terminal, distance,
 the hardest sideways load and the tightest path, flights and landings, the stop, the wipeout),
-with one picture each: the line from above coloured by what he was doing, and his speed.
+with one picture each: the line from above coloured by what he was doing, and his speed. Its
+`thrown` table is every wipeout's thrown body: the tumble, how far and how high it went, and
+when it lay still; a body that never lies still for a second fails the lab.
 `make lab LAB=ride ARGS=--scenario=kicker` runs one. The `labs` skill owns how to read it.
 
 `injuries` (scenario): every scenario's body (its injuries by part, the ISS, when he was
