@@ -165,7 +165,11 @@ void build_wall(const Level& level, size_t r, size_t w, const std::vector<Openin
       bool hole = false;
       for (const Rect& h : holes) hole |= uc > h.u0 && uc < h.u1 && vc > h.v0 && vc < h.v1;
       if (hole) continue;
-      e.quad(vertex(a, b), vertex(a + 1, b), vertex(a + 1, b + 1), vertex(a, b + 1), f.n);
+      // The corners are made in order: a call's arguments are evaluated in an order the language
+      // leaves open, and `vertex` appends.
+      const uint32_t q0 = vertex(a, b), q1 = vertex(a + 1, b), q2 = vertex(a + 1, b + 1);
+      const uint32_t q3 = vertex(a, b + 1);
+      e.quad(q0, q1, q2, q3, f.n);
     }
   }
   if (rock) smooth_normals(e.m, first_vertex, first_index);
@@ -221,7 +225,9 @@ void build_cap(const Level& level, size_t r, int side, const std::vector<float>&
           dist[(k + 1) * nx + i + 1] >= 0) {
         continue;
       }
-      e.quad(vertex(i, k), vertex(i + 1, k), vertex(i + 1, k + 1), vertex(i, k + 1), n);
+      const uint32_t q0 = vertex(i, k), q1 = vertex(i + 1, k), q2 = vertex(i + 1, k + 1);
+      const uint32_t q3 = vertex(i, k + 1);  // in order, as in build_wall
+      e.quad(q0, q1, q2, q3, n);
     }
   }
   smooth_normals(e.m, first_vertex, first_index);
@@ -413,7 +419,11 @@ void build_prism(const Level& level, size_t r, const std::vector<Opening>& open,
       e.tri(base + tris[t], base + tris[t + 1], base + tris[t + 2], n3);
     }
   }
-  const std::vector<float> fx(x.begin(), x.end()), fz(z.begin(), z.end());
+  std::vector<float> fx(n), fz(n);
+  for (size_t i = 0; i < n; ++i) {
+    fx[i] = float(x[i]);
+    fz[i] = float(z[i]);
+  }
   for (int side = 0; side < 2; ++side) build_cap(level, r, side, fx, fz, e);
   for (size_t w = 0; w < n; ++w) build_wall(level, r, w, open, e);
 }
