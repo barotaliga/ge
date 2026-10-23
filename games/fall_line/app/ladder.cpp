@@ -18,9 +18,10 @@ namespace r = ge::render;
 // What each stop sets, by row, cheapest first.
 constexpr double kScale[] = {0.5, 0.67, 0.83, 1.0};
 constexpr uint32_t kShadowSize[] = {1024, 2048, 4096};
-constexpr uint32_t kTrailSize[] = {0, 1024, 2048};  // 0: no trails
-constexpr uint32_t kFlakes[] = {0, 8192, 24576};    // 0: no falling snow
-constexpr double kCloudSteps[] = {0, 0.5, 1.0};     // 0: no layer
+constexpr uint32_t kTrailSize[] = {0, 1024, 2048};    // 0: no trails
+constexpr uint32_t kFlakes[] = {0, 8192, 24576};      // 0: no falling snow
+constexpr double kCloudSteps[] = {0, 0.5, 1.0, 1.0};  // 0: no layer
+constexpr bool kCloudQuarter[] = {true, true, true, false};
 constexpr double kBloom[] = {0, 0.04};
 
 // THE PRICE TABLE: ms a frame over the row's cheapest stop on the reference machine, from
@@ -36,27 +37,29 @@ constexpr double kBloom[] = {0, 0.04};
 //   sharper groove.
 // SPRAY: what a turn throws, the most alive thing at the skis.
 // SNOWFALL: on a snowing day the flakes are the weather near the eye; the low stop keeps a third.
-// CLOUDS: a broken sky's layers; the low stop marches half the steps, a slightly blockier cloud;
-//   off, the sky keeps its mean cloud and loses its shapes and shadows.
+// CLOUDS: a broken sky's layers, marched at a quarter of the pixels and upsampled; the low stop
+//   marches half the steps, a slightly blockier cloud; the top marches every pixel, the
+//   reference, a hair sharper at a ridge's edge; off, the sky keeps its mean cloud and loses its
+//   shapes and shadows.
 // BLOOM: the sun's glow off the snow and the lamps, small.
 //
 // Measured on the software adapter in the cloud container (lavapipe, 1280x720, seed 38 under a
-// flurry, the chase camera, the least median of three rounds): its ratios are a CPU raster's, not
-// a GPU's, and the reference machine's (`needs-mac`) replace them. From the chase camera most of
-// the screen is snow near the skis, so the cloud march's half steps and the finer trails and
-// flakes measured no cheaper than their top stops; a stop that measured cheaper than the one under
-// it is set level with it.
-constexpr PriceTable kTable{"lavapipe (software), 1280x720", 1280, 720, 82.90};
+// flurry, the `start` view raised 15 degrees so the broken sky fills its top half, the least
+// median of three rounds): its ratios are a CPU raster's, not a GPU's, and the reference
+// machine's (`needs-mac`) replace them. A stop that measured cheaper than the one under it is set
+// level with it (the low flakes).
+constexpr PriceTable kTable{"lavapipe (software), 1280x720", 1280, 720, 71.57};
 
 constexpr r::LadderStop kResolution[] = {
-    {"half", 0, 0}, {"two-thirds", 19.92, 3}, {"five-sixths", 36.44, 5}, {"full", 57.48, 6}};
-constexpr r::LadderStop kShadows[] = {{"1024", 0, 0}, {"2048", 1.25, 5}, {"4096", 11.14, 7}};
-constexpr r::LadderStop kSnow[] = {{"plain", 0, 0}, {"material", 11.40, 60}};
-constexpr r::LadderStop kTrails[] = {{"off", 0, 0}, {"low", 9.57, 30}, {"high", 9.57, 36}};
-constexpr r::LadderStop kSpray[] = {{"off", 0, 0}, {"on", 0, 20}};
-constexpr r::LadderStop kSnowfall[] = {{"off", 0, 0}, {"low", 1.77, 10}, {"high", 1.77, 14}};
-constexpr r::LadderStop kClouds[] = {{"off", 0, 0}, {"low", 23.99, 12}, {"high", 23.99, 15}};
-constexpr r::LadderStop kBloomStops[] = {{"off", 0, 0}, {"on", 18.87, 4}};
+    {"half", 0, 0}, {"two-thirds", 30.87, 3}, {"five-sixths", 48.23, 5}, {"full", 80.41, 6}};
+constexpr r::LadderStop kShadows[] = {{"1024", 0, 0}, {"2048", 1.77, 5}, {"4096", 13.83, 7}};
+constexpr r::LadderStop kSnow[] = {{"plain", 0, 0}, {"material", 15.07, 60}};
+constexpr r::LadderStop kTrails[] = {{"off", 0, 0}, {"low", 5.31, 30}, {"high", 8.06, 36}};
+constexpr r::LadderStop kSpray[] = {{"off", 0, 0}, {"on", 1.44, 20}};
+constexpr r::LadderStop kSnowfall[] = {{"off", 0, 0}, {"low", 0, 10}, {"high", 3.93, 14}};
+constexpr r::LadderStop kClouds[] = {
+    {"off", 0, 0}, {"low", 27.59, 12}, {"high", 35.59, 15}, {"full", 72.09, 16}};
+constexpr r::LadderStop kBloomStops[] = {{"off", 0, 0}, {"on", 17.30, 4}};
 
 const std::array<r::LadderRow, kPictureRows> kRows = {{
     {"resolution", kResolution, 1},
@@ -89,6 +92,7 @@ FrameOptions apply_picture(const r::LadderPick& pick, FrameOptions o) {
   o.snowfall = flakes > 0;
   if (flakes > 0) o.flakes.flakes = flakes;
   o.clouds = kCloudSteps[at(PictureRow::clouds)];
+  o.cloud_quarter = kCloudQuarter[at(PictureRow::clouds)];
   o.bloom = kBloom[at(PictureRow::bloom)];
   return o;
 }
