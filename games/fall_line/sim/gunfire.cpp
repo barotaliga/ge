@@ -358,12 +358,6 @@ void step_gunfire(GameState& state) {
     sk::BodyEvents out;
     sk::judge_body(body, doses, me.skier.down, clock, out);
   }
-  // DEATH'S COURSE once a round has hurt him mortally: down, and dead once he has lain still. (The
-  // body's own step runs it for every racer once the free ride steps the body.)
-  if (body.mortal >= 0 && body.dead < 0) {
-    sk::BodyEvents out;
-    sk::step_body(body, me.skier, sk::SkierEvents{}, state.world(), state.spec, clock, out);
-  }
 }
 
 double flight_time(const GunDef& def, double d) {
