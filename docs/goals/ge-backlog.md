@@ -72,6 +72,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge asset inspect`
 - `ge lab refs` (a reference photo fetched to a temp directory, never committed, JPEG turned to PNG, a refs row written; the model-views lab reads only 8-bit PNG)
 - `ge lab view <glb>` (the model-views lab on any model, in one command)
+- `ge lab table <lab> --where col=value` (one slice of a lab's table, a weapon at one range, read without re-running the lab or opening the whole report)
 
 ## Measuring
 

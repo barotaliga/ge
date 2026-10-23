@@ -263,6 +263,12 @@ bool under_cover(const GameState& state) {
 void step_wanted(GameState& state) {
   WantedState& w = state.wanted;
   if (!w.active || w.ended != WantedEnd::running || w.stars == 0) return;
+  // DEAD of his wounds: the hunt is over.
+  if (state.racers.front().body.dead >= 0) {
+    end_hunt(state, WantedEnd::killed);
+    push(state, WantedChange::killed, w.stars);
+    return;
+  }
   w.fix = w.fix > kDt ? w.fix - kDt : 0;
   w.look -= kDt;
   if (w.look <= 0) {
@@ -308,6 +314,8 @@ const char* wanted_change_name(WantedChange c) {
       return "searching";
     case WantedChange::arrested:
       return "arrested";
+    case WantedChange::killed:
+      return "killed";
   }
   return "?";
 }
@@ -344,6 +352,8 @@ const char* wanted_end_name(WantedEnd e) {
       return "escaped";
     case WantedEnd::arrested:
       return "arrested";
+    case WantedEnd::killed:
+      return "killed";
   }
   return "?";
 }

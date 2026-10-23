@@ -101,6 +101,15 @@ inline constexpr double kHoldS = 8;
 inline constexpr double kMoveS = 6;
 inline constexpr double kMoveSpreadS = 5;
 inline constexpr double kLostS = 1.5;
+// THE GUN on the pillion (gunfire.hpp): the gunner's light machine gun at his shoulder, the
+// muzzle `kMuzzleRightM` right, `kMuzzleUpM` up and `kMuzzleAheadM` forward of the machine's
+// centre of gravity; once settled and the machine still, he fires up to `kHaltBursts` bursts. His
+// gun is `kGunBase` + the machine's id.
+inline constexpr double kMuzzleRightM = 0.32;
+inline constexpr double kMuzzleUpM = 0.85;
+inline constexpr double kMuzzleAheadM = 0.3;
+inline constexpr int32_t kHaltBursts = 3;
+inline constexpr int32_t kGunBase = 20000;
 // The first halt waits this long after it leaves the village, s.
 inline constexpr double kFirstHaltS = 4;
 

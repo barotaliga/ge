@@ -55,8 +55,12 @@ constexpr double kFogThin = 1174, kFogThick = 8;
 
 }  // namespace
 
-render::Weather weather_look(const mapgen::Weather& weather, const air::Fall& fall) {
-  const Kind k = kind_of(weather.kind);
+render::Weather weather_look(const mapgen::Weather& weather, const air::Fall& fall, bool layers) {
+  Kind k = kind_of(weather.kind);
+  if (layers && k.cover < 1) {
+    k.cover = 0;
+    k.pass = 1;
+  }
   const double f = std::clamp(fall.fall, 0.0, 1.0);
   const double fog = weather.kind == WeatherKind::fog ? std::clamp(weather.fog, 0.0, 1.0) : 0.0;
   render::Weather w;
