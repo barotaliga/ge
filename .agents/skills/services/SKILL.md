@@ -17,6 +17,7 @@ M20a–M20h.
 | `services/sim_store.hpp` | The simulated store (players, latency, staged failures, the client's actions, the journal) and `open_offline` |
 | `services/sim_store_state.hpp` | The simulated store's state, shared by its two `.cpp` files; not installed |
 | `services/sim_store_io.cpp` | Saving and loading a store to a directory; the offline store |
+| `services/sim_store_workshop.cpp` | The simulated store's workshop: items, queries, subscriptions, downloads timed by size, updates to every subscriber |
 | `services/discord.hpp` | Discord beside the store: the `Activity` and its limits, the frames, the `Discord` client (found with backoff, paced updates, asks and joins as events) |
 | `services/discord_link.cpp` | The link over the OS's local pipe (`net/local_pipe.hpp`) and where a Discord app listens (`GE_DISCORD_IPC` overrides) |
 | `services/sim_discord.hpp` | The simulated Discord app: the same frames, Discord's limits and rate limit, the player's and friends' actions, a journal |
@@ -54,7 +55,8 @@ M20a–M20h.
 
 1. Declare it on `Backend` in the right group of `backend.hpp`, with its contract (what it
    returns, which event answers it, the store's limits) in the comment.
-2. Implement it on the simulated store (`sim_store.cpp`): enforce the limits a store enforces,
+2. Implement it on the simulated store (`sim_store.cpp`, or a `sim_store_<group>.cpp` of free
+   functions over `SimStore::Impl` when a group is large): enforce the limits a store enforces,
    queue its answer with `answer_time()`, write it to the journal. Persist it in
    `sim_store_io.cpp` if the store keeps it between sessions.
 3. Test it in `tests/services_sim_store_test.cpp` (and the offline round trip when it is kept).

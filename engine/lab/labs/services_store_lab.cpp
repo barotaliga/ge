@@ -4,15 +4,16 @@
 // with a ghost riding on each, the board downloaded globally, around a player and among
 // friends and the ghost fetched back, the record book written to the cloud and refused past the
 // quota, presence shown to a friend who joins by it, an invite accepted, the overlay opened, the
-// screenshot key hooked, a connection cut and restored, and a commit staged to fail. It answers
-// whether a game written against the interface gets every answer it is owed, in order, and how
-// long each kind of answer takes at the store's latency (`--latency-ms`, `--jitter-ms`). The
+// screenshot key hooked, a connection cut and restored, a commit staged to fail, and a workshop
+// outfit made, found by a query, subscribed to, downloaded and updated on every subscriber. It
+// answers whether a game written against the interface gets every answer it is owed, in order, and
+// how long each kind of answer takes at the store's latency (`--latency-ms`, `--jitter-ms`). The
 // store's journal and every event are tabled; everything runs on a virtual clock off one seed,
 // so the lab is a determinism test too.
 //
 // ge:summary Lab: a game's use of the platform services by four players on the simulated store
 // ge:keywords lab services store sim achievement stat board ghost blob cloud presence invite
-// ge:keywords join overlay screenshot offline latency journal
+// ge:keywords join overlay screenshot offline latency journal workshop item subscribe
 // ge:skill services labs
 // ge:test tests/services_sim_store_test.cpp
 #include <algorithm>
@@ -86,6 +87,8 @@ void run(gl::Lab& lab) {
   std::map<std::string, int> counts;
   std::vector<uint8_t> fetched_ghost;
   gs::BlobId best_blob = 0;
+  gs::ItemId suit = 0;
+  std::vector<uint8_t> worn;  // the suit's file as ana's machine last had it
   const auto ask = [&](const std::string& who, gs::RequestId r, int64_t now) {
     asked[{who, r}] = {now, who};
   };
@@ -140,6 +143,30 @@ void run(gl::Lab& lab) {
       ask("bo", bo.download_scores("DOWNHILL_TIME", gs::BoardRange::friends, 0, 0), now);
     }
     if (frame == 600 && best_blob != 0) ask("bo", bo.download_blob(best_blob), now);
+    // The workshop: dee makes an outfit, ana and bo find it and subscribe, dee updates it.
+    gs::Backend& dee = *players[3].backend;
+    const auto outfit = [](uint8_t fill) {
+      return std::vector<gs::ItemFile>{{"outfit.bin", std::vector<uint8_t>(40000, fill)},
+                                       {"preview.png", std::vector<uint8_t>(2000, 1)}};
+    };
+    gs::ItemDraft draft;
+    draft.title = "Red race suit";
+    draft.tags = {"outfit"};
+    if (frame == 610) ask("dee", dee.submit_item(0, draft, outfit(1)), now);
+    if (frame == 630) {
+      gs::ItemQuery newest, outfits;
+      outfits.tag = "outfit";
+      outfits.order = gs::ItemOrder::most_subscribed;
+      ask("ana", ana.query_items(newest), now);
+      ask("bo", bo.query_items(outfits), now);
+      gs::ItemQuery maps;
+      maps.tag = "map";
+      ask("cy", players[2].backend->query_items(maps), now);
+    }
+    if (frame == 680 && suit != 0) {
+      draft.change_note = "darker red";
+      ask("dee", dee.submit_item(suit, draft, outfit(2)), now);
+    }
 
     for (Player& p : players) {
       std::vector<gs::Event> out;
@@ -157,6 +184,18 @@ void run(gl::Lab& lab) {
             what += " " + std::to_string(en.rank) + "." + en.name;
           if (!e.entries.empty() && e.entries[0].rank == 1) best_blob = e.entries[0].blob;
         }
+        if (e.kind == gs::EventKind::item_submitted && e.result == gs::Result::ok) suit = e.item;
+        if (e.kind == gs::EventKind::items_queried) {
+          what += std::to_string(e.items.size()) + "/" + std::to_string(e.total);
+          if (!e.items.empty() && p.name != "cy")
+            ask(p.name, p.backend->subscribe_item(e.items[0].id, true), now);
+        }
+        if (e.kind == gs::EventKind::item_submitted || e.kind == gs::EventKind::item_subscribed ||
+            e.kind == gs::EventKind::item_installed)
+          what += "item " + std::to_string(e.item) +
+                  (e.kind == gs::EventKind::item_subscribed ? "" : " v" + std::to_string(e.total));
+        if (e.kind == gs::EventKind::item_installed && p.name == "ana")
+          p.backend->item_read(e.item, "outfit.bin", worn);
         if (e.kind == gs::EventKind::blob_downloaded) {
           what = std::to_string(e.bytes.size()) + " B";
           fetched_ghost = e.bytes;
@@ -192,6 +231,13 @@ void run(gl::Lab& lab) {
   owed("overlay_hidden", 1);
   owed("connection_lost", 1);
   owed("connection_restored", 1);
+  owed("item_submitted", 2);
+  owed("items_queried", 3);
+  owed("item_subscribed", 2);
+  owed("item_installed", 4);  // ana's and bo's machines, the suit's two versions each
+  if (worn.size() != 40000 || worn[0] != 2)
+    lab.fail("services: ana's machine does not wear the suit's second version",
+             "next: check workshop_land and send_down; skill: services");
   if (fetched_ghost.empty())
     lab.fail("services: the best entry's ghost never came back",
              "next: check upload_score's blob; skill: services");

@@ -40,8 +40,10 @@ struct SimConfig {
   int64_t latency_us = 50000;  // a server round trip
   int64_t jitter_us = 0;       // up to this much more, drawn per answer off `seed`
   uint32_t seed = 1;
-  uint64_t cloud_quota_bytes = 100ull << 20;  // per player
-  int64_t overlay_us = 2000000;               // how long an opened overlay stays open
+  uint64_t cloud_quota_bytes = 100ull << 20;    // per player
+  int64_t overlay_us = 2000000;                 // how long an opened overlay stays open
+  uint64_t item_max_bytes = 100ull << 20;       // a workshop item's files, at most
+  uint64_t download_bytes_per_s = 10ull << 20;  // how fast an item reaches a player's machine
   std::string save_dir;  // when set, the store is saved there after every committed change
 };
 
