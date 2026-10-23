@@ -321,14 +321,15 @@ Outcome run_why(const BuildOptions& o, const WhyOptions& w) {
   return run_exe(o, "why", args);
 }
 
-Outcome run_shot(const BuildOptions& o, const std::string& log, const std::string& seed,
-                 const std::string& step, const std::string& view,
-                 const std::vector<std::string>& options) {
+Outcome run_shot(const BuildOptions& o, const std::string& log,
+                 const std::vector<std::string>& flags, const std::vector<std::string>& options) {
   std::string args = " shot --out=" + quoted_path(o.repo / "runs");
   if (!log.empty()) args += " \"" + absolute(log) + "\"";
-  if (log.empty() && !seed.empty()) args += " \"--seed=" + seed + "\"";
-  if (!step.empty()) args += " \"--step=" + step + "\"";
-  if (!view.empty()) args += " \"--view=" + view + "\"";
+  for (const std::string& w : flags) {
+    if (w.rfind("--out=", 0) != 0 && (log.empty() || w.rfind("--seed=", 0) != 0)) {
+      args += " \"" + w + "\"";
+    }
+  }
   for (const std::string& w : options) args += " \"" + w + "\"";
   return run_exe(o, "shot", args);
 }

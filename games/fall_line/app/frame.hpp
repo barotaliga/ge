@@ -50,7 +50,7 @@
 //
 // ge:summary Fall Line's frame: its pass table over engine/render and the GPU half it owns
 // ge:keywords fall-line frame pass-table game-frame create_frame draw pass_table_faults
-// ge:keywords render offscreen surface stats
+// ge:keywords render offscreen surface stats draw_wire wire-probe wireframe
 // ge:skill render
 #pragma once
 
@@ -90,6 +90,7 @@ struct FrameOptions {
   bool taa = true;
   double scale = 1.0;           // the render size over the output's, with TAA
   bool overdraw_probe = false;  // labs: the terrain's and the instances' overdraw pipelines
+  bool wire_probe = false;      // labs and recordings: the terrain's and the instances' wireframes
   bool occlusion = true;        // cull the instances by the depth pyramid (off: the frustum only)
   uint32_t shadow_size = 2048;  // the sun's shadow maps' texels a side
   double bloom = 0.04;          // the share of the bloom's glow in the picture; 0: none
@@ -195,5 +196,10 @@ void forget_tracks(GameFrame& frame);
 // arrive a frame or more later.
 void draw(ge::gpu::Device& device, GameFrame& frame, const ge::render::FrameView& view,
           const FrameScene& scene, const wgpu::TextureView& output);
+
+// The last drawn frame's meshes as lines (needs FrameOptions::wire_probe): the ground's tiles
+// banded by distance and the trees and figures in one warm colour, over black, into `colour` (a
+// kWireFormat view at the render size), hidden lines hidden by the frame's depth.
+void draw_wire(ge::gpu::Device& device, GameFrame& frame, const wgpu::TextureView& colour);
 
 }  // namespace fall_line::app

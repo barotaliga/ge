@@ -77,6 +77,9 @@ void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint
 inline constexpr wgpu::TextureFormat kHdrFormat = wgpu::TextureFormat::RGBA16Float;
 inline constexpr wgpu::TextureFormat kDepthFormat = wgpu::TextureFormat::Depth32Float;
 inline constexpr wgpu::TextureFormat kMotionFormat = wgpu::TextureFormat::RGBA16Float;
+// The wire probes' target (render/terrain.hpp, render/instances.hpp): display colours, read back
+// as they are.
+inline constexpr wgpu::TextureFormat kWireFormat = wgpu::TextureFormat::RGBA8Unorm;
 
 struct FrameTargets {
   uint32_t width = 0, height = 0;

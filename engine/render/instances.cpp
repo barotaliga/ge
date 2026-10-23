@@ -94,7 +94,7 @@ LodPick pick_lod(const float* min_px, int lods, float px) {
 
 void create_instance_pipelines(gpu::Device& device, gpu::PipelineSet& pipelines,
                                InstancePipelines& ip, const wgpu::BindGroupLayout& frame,
-                               bool overdraw_probe) {
+                               bool overdraw_probe, bool wire_probe) {
   ip.cull_layout =
       make_layout(device, "instances.cull",
                   {Slot::uniform, Slot::storage_read, Slot::storage_read, Slot::storage_read,
@@ -195,6 +195,30 @@ void create_instance_pipelines(gpu::Device& device, gpu::PipelineSet& pipelines,
     ip.p_count_greater =
         pipeline("instances.count.greater", "fs_count", {r16}, true, CF::Greater, true);
   }
+  ip.wire = wire_probe;
+  if (wire_probe) {
+    // Lines over the frame's depth: no faces to cull, tested against the depth the frame left.
+    wgpu::ColorTargetState c{};
+    c.format = kWireFormat;
+    wgpu::FragmentState fragment{};
+    fragment.module = draw;
+    fragment.entryPoint = "fs_wire";
+    fragment.targetCount = 1;
+    fragment.targets = &c;
+    wgpu::DepthStencilState depth{};
+    depth.format = kDepthFormat;
+    depth.depthWriteEnabled = false;
+    depth.depthCompare = CF::GreaterEqual;
+    wgpu::RenderPipelineDescriptor desc{};
+    desc.label = "instances.wire";
+    desc.layout = layout;
+    desc.vertex.module = draw;
+    desc.vertex.entryPoint = "vs_main";
+    desc.primitive.topology = wgpu::PrimitiveTopology::LineList;
+    desc.depthStencil = &depth;
+    desc.fragment = &fragment;
+    ip.p_wire = pipelines.add_render(device, desc);
+  }
 }
 
 wgpu::BindGroup instance_light_group(gpu::Device& device, const InstancePipelines& ip,
@@ -213,7 +237,8 @@ void create_family(gpu::Device& device, const InstancePipelines& ip, InstanceFam
   f.label = std::string(label);
   f.capacity = std::clamp(capacity, 1u, kMaxInstances);
   f.count = 0;
-  std::vector<uint32_t> words, indices;
+  std::vector<uint32_t> words, indices, wire;
+  std::vector<uint32_t> wire_first, wire_count;  // each LOD's lines in `wire`
   std::vector<MeshRow> mesh_rows;
   std::vector<LodRow> lod_rows;
   f.lod_px.clear();
@@ -249,6 +274,14 @@ void create_family(gpu::Device& device, const InstancePipelines& ip, InstanceFam
       lr.info[3] = static_cast<uint32_t>(mesh_rows.size());
       words.insert(words.end(), p.words.begin(), p.words.end());
       indices.insert(indices.end(), p.indices.begin(), p.indices.end());
+      if (ip.wire) {
+        wire_first.push_back(static_cast<uint32_t>(wire.size()));
+        for (size_t k = 0; k + 2 < p.indices.size(); k += 3) {
+          const uint32_t a = p.indices[k], b = p.indices[k + 1], c = p.indices[k + 2];
+          for (uint32_t v : {a, b, b, c, c, a}) wire.push_back(v);
+        }
+        wire_count.push_back(static_cast<uint32_t>(wire.size()) - wire_first.back());
+      }
       lod_rows.push_back(lr);
       f.lod_px.push_back(lr.box_min[3]);
       // The mesh's sphere holds every LOD's.
@@ -317,6 +350,25 @@ void create_family(gpu::Device& device, const InstancePipelines& ip, InstanceFam
   // The draws' arguments with no instances: bucket b of phase p draws its LOD's triangles from
   // base vertex b << 20, so the vertex stage knows the bucket.
   f.args_reset.assign(kCountersBytes / 4, 0);
+  if (ip.wire) {
+    // The lines' draws: bucket b's from the same base vertex as its triangles'; the instance
+    // counts are copied in from `args` before each wire draw.
+    if (wire.empty()) wire.assign(2, 0);
+    f.wire_indices = buffer("wire.indices", wire.size() * 4, BU::Index);
+    device.queue.WriteBuffer(f.wire_indices, 0, wire.data(), wire.size() * 4);
+    std::vector<uint32_t> wire_args(kCountersBytes / 4, 0);
+    for (uint32_t phase = 0; phase < 2; ++phase) {
+      for (uint32_t l = 0; l < f.lod_count; ++l) {
+        const uint32_t b = phase * f.lod_count + l;
+        uint32_t* a = &wire_args[size_t{b} * 5];
+        a[0] = wire_count[l];
+        a[2] = wire_first[l];
+        a[3] = b << kBucketShift;
+      }
+    }
+    f.wire_args = buffer("wire.args", kCountersBytes, BU::Indirect);
+    device.queue.WriteBuffer(f.wire_args, 0, wire_args.data(), wire_args.size() * 4);
+  }
   for (uint32_t phase = 0; phase < 2; ++phase) {
     for (uint32_t l = 0; l < f.lod_count; ++l) {
       const uint32_t b = phase * f.lod_count + l;
@@ -552,6 +604,44 @@ void encode_instances_overdraw(std::span<InstanceFamily* const> families,
   pass.SetBindGroup(3, ip.shadows);
   for (InstanceFamily* f : families) {
     if (f->count != 0) draw_buckets(pass, *f, 0, 1);
+  }
+  pass.End();
+}
+
+void encode_instances_wire(std::span<InstanceFamily* const> families, const InstancePipelines& ip,
+                           const gpu::PipelineSet& pipelines, wgpu::CommandEncoder& encoder,
+                           const FrameTargets& targets, const wgpu::BindGroup& frame,
+                           const wgpu::BindGroup& light, const wgpu::TextureView& colour) {
+  if (!ip.wire) return;
+  // This frame's instance counts into the lines' draws.
+  for (InstanceFamily* f : families) {
+    if (f->count == 0 || !f->wire_args) continue;
+    for (uint32_t b = 0; b < 2 * f->lod_count; ++b) {
+      encoder.CopyBufferToBuffer(f->args, uint64_t{b} * 20 + 4, f->wire_args, uint64_t{b} * 20 + 4,
+                                 4);
+    }
+  }
+  wgpu::RenderPassColorAttachment c{};
+  c.view = colour;
+  c.loadOp = wgpu::LoadOp::Load;
+  c.storeOp = wgpu::StoreOp::Store;
+  const wgpu::RenderPassDepthStencilAttachment depth = depth_load(targets, true);
+  wgpu::RenderPassDescriptor desc{};
+  desc.label = "instances.wire";
+  desc.colorAttachmentCount = 1;
+  desc.colorAttachments = &c;
+  desc.depthStencilAttachment = &depth;
+  wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&desc);
+  pass.SetPipeline(pipelines.render(ip.p_wire));
+  pass.SetBindGroup(0, frame);
+  pass.SetBindGroup(1, light);
+  pass.SetBindGroup(3, ip.shadows);
+  for (InstanceFamily* f : families) {
+    if (f->count == 0 || !f->wire_args) continue;
+    pass.SetBindGroup(2, f->draw_group);
+    pass.SetIndexBuffer(f->wire_indices, wgpu::IndexFormat::Uint32);
+    for (uint32_t b = 0; b < 2 * f->lod_count; ++b)
+      pass.DrawIndexedIndirect(f->wire_args, uint64_t{b} * 20);
   }
   pass.End();
 }
