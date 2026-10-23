@@ -103,7 +103,8 @@ set(GE_LIBM_VENDORED
   engine/core/libm/fdlibm_arc.cpp
   engine/core/libm/fdlibm_exp_log.cpp)
 add_library(ge_core STATIC ${GE_LIBM_VENDORED} engine/core/libm/pow.cpp
-  engine/core/solar.cpp engine/core/output.cpp engine/core/num_text.cpp)
+  engine/core/solar.cpp engine/core/output.cpp engine/core/num_text.cpp
+  engine/core/json_read.cpp)
 target_include_directories(ge_core PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/engine>)
 target_compile_features(ge_core PUBLIC cxx_std_20)
 target_link_libraries(ge_core PUBLIC ge_fp ge_isa Threads::Threads)
@@ -178,11 +179,12 @@ endif()
 
 # The platform services (engine/services, docs/services.md): the one interface a game uses for a
 # store's achievements, stats, leaderboards, cloud files, presence, friends, overlay, ownership and
-# screenshots, and the simulated and offline stores behind it. No platform, no SDK: a store's own
-# backend (engine/steam, docs/goals.md M20b) is built beside it only when its SDK is supplied.
+# screenshots, and the simulated and offline stores behind it; Discord's presence beside it over
+# the Discord app's local pipe (ge_net). No platform, no SDK: a store's own backend (engine/steam,
+# docs/goals.md M20b) is built beside it only when its SDK is supplied.
 file(GLOB GE_SERVICES_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/services/*.cpp)
 add_library(ge_services STATIC ${GE_SERVICES_SOURCES})
-target_link_libraries(ge_services PUBLIC ge_core)
+target_link_libraries(ge_services PUBLIC ge_core ge_net)
 
 # The lab framework (engine/lab: the contract, the runner, the raster, the PNG), published as
 # ge::lab so a game's labs plug into the same contract as the engine's (docs/labs.md).
@@ -213,7 +215,7 @@ target_link_libraries(ge_ai PUBLIC ge_core)
 # input log, replay and diverge, the bench, the stills, the `play` executable's main), published
 # as ge::play so a game's `play` target is driven by `ge play`, `ge sim`, `ge replay`, `ge state`,
 # `ge diverge`, `ge shot`, `ge bench`, `ge profile` and `ge mem`.
-add_library(ge_play STATIC engine/play/inputs.cpp engine/play/json_read.cpp
+add_library(ge_play STATIC engine/play/inputs.cpp
   engine/play/session.cpp engine/play/bench.cpp engine/play/record.cpp engine/play/why.cpp
   engine/play/human.cpp engine/play/main.cpp)
 target_link_libraries(ge_play PUBLIC ge_core ge_ai ge_lab ge_prof ge_prof_alloc)

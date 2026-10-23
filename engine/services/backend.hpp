@@ -131,7 +131,10 @@ enum class EventKind : uint8_t {
   presence_changed,      // a friend's rich presence changed (user)
   screenshot_requested,  // the store's screenshot key, when the game hooks it
   connection_lost,       // the store went offline
-  connection_restored,   // and came back
+  connection_restored,   // and came back (a presence service: found, the first time too)
+  join_asked,            // a friend asked to join the player's game (user, text: their name);
+                         // answer it (Discord::answer_join)
+  call_refused,          // a service refused a call it had taken (id: the call, text: why)
 };
 std::string_view event_name(EventKind k);
 
@@ -142,7 +145,7 @@ struct Event {
   Result result = Result::ok;
   UserId user = 0;
   std::string id;    // an achievement's or a board's id
-  std::string text;  // a connect string
+  std::string text;  // a connect string, a join secret, a name or a refusal's reason
   int32_t score = 0;
   int32_t rank = 0;
   int32_t previous_rank = 0;

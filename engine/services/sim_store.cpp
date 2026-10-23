@@ -70,6 +70,10 @@ std::string_view event_name(EventKind k) {
       return "connection_lost";
     case EventKind::connection_restored:
       return "connection_restored";
+    case EventKind::join_asked:
+      return "join_asked";
+    case EventKind::call_refused:
+      return "call_refused";
   }
   return "?";
 }
