@@ -40,6 +40,8 @@ the row when the file moves.
 | `games/fall_line/labs/lift_ride_lab.cpp` | `game5/scripts/lift-ride-preview.mjs` | the lift ride shown (here measured as a table, every lift ridden from its load zone to its top) |
 | `games/fall_line/sim/army.cpp` | `game5/engine/game/army-ground.ts`, `army-lift.ts`, `army-wave.ts` | stepGround chase tryArrest writeTroops sendLiftSquads stepLiftTroops liftFor wayDown sendWave sendWaves retireWaves climbWithWave (the landings, the fire, the cover ring and the men on foot not carried) |
 | `games/fall_line/sim/army.hpp` | `game5/engine/game/army-ground.ts`, `army-lift.ts`, `army-wave.ts` | stepGround liftFor wayDown armyTroops |
+| `games/fall_line/sim/army_door.cpp` | `game5/engine/game/army.ts` | gunId man fight (the door guns; the gunners as pursuers not carried, the crab in echelon added) |
+| `games/fall_line/sim/army_door.hpp` | `game5/engine/game/army.ts` | man fight |
 | `games/fall_line/sim/army_drive.cpp` | `game5/engine/game/army-drive.ts` | wayCost chooseWay tunnelWithin |
 | `games/fall_line/sim/army_drive.hpp` | `game5/engine/game/army-drive.ts` | DriveRead TerrainRead wayCost chooseWay tunnelWithin |
 | `games/fall_line/sim/army_heli.cpp` | `game5/engine/game/army.ts`, `army-ground.ts` | stepArmy call arrive circleWay huntWant homeWant fly settle levelOut slideDoors writePursuers askLandings workLanding (the guns, the ram, the fall and the wreck not carried) |
@@ -283,6 +285,7 @@ the row when the file moves.
 | `plugins/snowmobile/sled.cpp` | `game5/engine/game/sled.ts` | sledSolids sledBounds judgeLanding standSled riderFrame |
 | `plugins/snowmobile/sled.hpp` | `game5/engine/game/sled-state.ts`, `sled.ts` | SledState SledControls SledContact standSled |
 | `plugins/snowmobile/spec.hpp` | `game5/engine/game/defs/sled.ts` | SLED SLED_PROBES sledMass sledInertia SledProbe SledSuspension |
+| `tests/fall_line_army_door_test.cpp` | `game5/tests/army_test.ts` | the door guns by the rules of fire |
 | `tests/mountain_generate_test.cpp` |  | generateLevel levelDigest analyzeLevel |
 | `tests/mountain_park_test.cpp` | `game5/engine/mapgen/trick-field.ts` | the terrain park (R20) |
 | `tests/mountain_real_face_test.cpp` | `game5/tests/real_faces_test.ts` | every face decodes to a mountain over its floor; a face builds a clean map |
