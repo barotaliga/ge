@@ -40,6 +40,15 @@ namespace ge::cli {
 Outcome run_precheck(const BuildOptions& o, const std::vector<std::string>& presets);
 Outcome run_ci(const fs::path& repo, const std::string& pr, const std::string& log_file,
                bool merge = false);
+// `ge ci <pr> --wait[=<minutes>]`: run_ci once a minute until the pull request settles (a check
+// failed, it conflicts, or every check finished), at most `minutes`; with `merge`, the settled
+// green answer is then merged as --merge would. One blocking call where an agent would schedule
+// check-ins: run it in the background and act on the answer when it exits.
+Outcome run_ci_wait(const fs::path& repo, const std::string& pr, bool merge, int minutes);
+// The summary run_ci gives while checks are still running.
+inline constexpr std::string_view kCiPending = "nothing has failed yet";
+// Whether a ge ci answer is final: an error, or no check still running.
+bool ci_settled(const Outcome& o);
 
 // Why GitHub blocks a pull request whose checks all passed, off the base's rules (`gh api
 // repos/<o>/<r>/rules/branches/<base>`, a JSON array; "" when they could not be read): each

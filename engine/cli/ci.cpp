@@ -7,7 +7,9 @@
 #include "cli/ci.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <regex>
+#include <thread>
 
 #include "cli/json.hpp"
 #include "cli/play.hpp"
@@ -361,10 +363,12 @@ Outcome run_ci(const fs::path& repo, const std::string& pr, const std::string& l
   if (!mergeable.empty()) out.text += "  mergeable: " + mergeable + "\n";
   out.result = json_obj(
       {{"sha", json_str(sha)}, {"mergeable", json_str(mergeable)}, {"checks", json_arr(rows)}});
-  out.summary = !pending.empty()       ? "nothing has failed yet"
+  out.summary = !pending.empty()       ? std::string(kCiPending)
                 : mergeable == "clean" ? "every check passed and it merges cleanly: merge it"
                                        : "every check passed";
-  out.next = pending.empty() ? "" : "ge ci again in 15 minutes, until every check is green";
+  out.next = pending.empty() ? ""
+                             : "ge ci again in 15 minutes, until every check is green (or "
+                               "ge ci <pr> --wait)";
   if (!merge) return out;
   // --merge: squash only what was just read as ready (every check done, none failed, GitHub's
   // state clean) and only at the head those checks ran on, so a push since is never merged.
@@ -415,6 +419,27 @@ bool moved_repo_finding(std::string_view error, const std::string& slug,
                  : "set the origin remote to the repository's new address (git remote set-url "
                    "origin https://github.com/<owner>/<repo>), then ge ci"};
   return true;
+}
+
+bool ci_settled(const Outcome& o) {
+  return count_of(o.findings, Severity::error) > 0 || o.summary != kCiPending;
+}
+
+Outcome run_ci_wait(const fs::path& repo, const std::string& pr, bool merge, int minutes) {
+  const auto until = std::chrono::steady_clock::now() + std::chrono::minutes(minutes);
+  for (;;) {
+    // Read without merging while checks run: --merge acts once, on the settled answer.
+    Outcome o = run_ci(repo, pr, "", false);
+    if (ci_settled(o))
+      return merge && count_of(o.findings, Severity::error) == 0 ? run_ci(repo, pr, "", true) : o;
+    if (std::chrono::steady_clock::now() >= until) {
+      o.findings.push_back({Severity::note,
+                            "still running after " + std::to_string(minutes) + " minutes", "",
+                            "ge ci " + pr + " --wait again, or --wait=<minutes> for longer"});
+      return o;
+    }
+    std::this_thread::sleep_for(std::chrono::seconds(60));
+  }
 }
 
 }  // namespace ge::cli

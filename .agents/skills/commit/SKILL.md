@@ -66,5 +66,7 @@ only the gates, lint and the GCC debug row; the queue runs the whole matrix (Win
 arm64, packaging) on the tree that lands, and a row only the queue ran ejects the PR with that
 row's log: fix it, push, and it queues again. Label a PR `full-ci` to run the whole matrix
 before queueing a risky change (a compiler-sensitive one, a build change). A direct merge is
-refused, so `ge ci <pr> --merge` is for a repository without a queue. Then
+refused, so `ge ci <pr> --merge` is for a repository without a queue. `ge ci <pr> --wait`, run in
+the background, is the check-in as one call: it returns when a check fails, the PR conflicts,
+or every check is green. Then
 name the next step to the user.

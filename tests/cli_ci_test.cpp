@@ -109,3 +109,14 @@ TEST(a_moved_repository_is_named_with_the_remote_to_set) {
   CHECK(moved_repo_finding("HTTP 301: Moved Permanently", "a/b", "", f));
   CHECK(f.next.starts_with("set the origin remote"));
 }
+
+TEST(a_ci_answer_settles_on_an_error_or_when_nothing_runs) {
+  Outcome running;
+  running.summary = std::string(kCiPending);
+  CHECK(!ci_settled(running));
+  running.findings.push_back({Severity::error, "pull request 9 conflicts with main", "", ""});
+  CHECK(ci_settled(running));
+  Outcome green;
+  green.summary = "every check passed";
+  CHECK(ci_settled(green));
+}
