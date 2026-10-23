@@ -10,7 +10,7 @@
 #   ge_net       the network: links, the simulated network, captures, connections, nodes
 #                (engine/net; docs/networking.md)
 #   ge_lab       the lab framework (engine/lab: the contract, the runner, the raster, the PNG,
-#                the series files and the charts)
+#                the series files, the charts and the model views)
 #   ge_ai        the bots' layer (engine/ai: the decision record `ge why` reads)
 #   ge_play      the play contract (engine/play: GameSpec and Run, the session, the input log,
 #                the bench, the stills `ge shot` draws)
@@ -186,13 +186,22 @@ if(WIN32)
   target_link_libraries(ge_net PRIVATE ws2_32)
 endif()
 
+# Input devices (engine/input, docs/input.md): the device model, the events and the state they
+# fold into, dead zones, actions and bindings, rebinding, the device database, touch controls,
+# players, feedback and force-feedback effects, the event log and the simulated backend. No
+# platform: engine/platform's backend feeds it events, and the simulated one runs anywhere.
+file(GLOB GE_INPUT_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/input/*.cpp)
+add_library(ge_input STATIC ${GE_INPUT_SOURCES})
+target_link_libraries(ge_input PUBLIC ge_core)
+
 # The lab framework (engine/lab: the contract, the runner, the raster, the PNG), published as
 # ge::lab so a game's labs plug into the same contract as the engine's (docs/labs.md).
 add_library(ge_lab STATIC engine/lab/lab.cpp engine/lab/report.cpp engine/lab/runner.cpp
   engine/lab/raster.cpp engine/lab/png.cpp engine/lab/diff.cpp engine/lab/inflate.cpp engine/lab/sound.cpp
   engine/lab/series.cpp engine/lab/stats.cpp engine/lab/plot.cpp engine/lab/chart.cpp
-  engine/lab/anim.cpp engine/lab/series_charts.cpp engine/lab/teleport.cpp)
-target_link_libraries(ge_lab PUBLIC ge_core ge_audio)
+  engine/lab/anim.cpp engine/lab/series_charts.cpp engine/lab/teleport.cpp
+  engine/lab/model_view.cpp engine/lab/model_compare.cpp engine/lab/model_sheets.cpp)
+target_link_libraries(ge_lab PUBLIC ge_core ge_audio ge_assets)
 
 # The profiler (engine/prof): the timing zones any code opens with GE_ZONE, the allocation
 # counts and the resident set. The counting operator new is its own target, ge_prof_alloc: an
@@ -217,8 +226,8 @@ target_link_libraries(ge_ai PUBLIC ge_core)
 # `ge diverge`, `ge shot`, `ge bench`, `ge profile` and `ge mem`.
 add_library(ge_play STATIC engine/play/inputs.cpp engine/play/json_read.cpp
   engine/play/session.cpp engine/play/bench.cpp engine/play/record.cpp engine/play/why.cpp
-  engine/play/human.cpp engine/play/main.cpp)
-target_link_libraries(ge_play PUBLIC ge_core ge_ai ge_lab ge_prof ge_prof_alloc)
+  engine/play/human.cpp engine/play/devices.cpp engine/play/main.cpp)
+target_link_libraries(ge_play PUBLIC ge_core ge_ai ge_input ge_lab ge_prof ge_prof_alloc)
 
 # The ge command line (engine/cli, cmake/Cli.cmake): built here too when a game pulls the engine
 # in, so the game runs the ge of the engine it pins.
@@ -278,7 +287,7 @@ if(PROJECT_IS_TOP_LEVEL)
   get_property(GE_PLUGIN_TARGETS GLOBAL PROPERTY GE_PLUGIN_TARGETS)
   get_property(GE_GAME_TARGETS GLOBAL PROPERTY GE_GAME_TARGETS)
   add_executable(labs engine/lab/main.cpp ${GE_LAB_SOURCES})
-  target_link_libraries(labs PRIVATE ge_lab ge_play ge_core ge_audio ge_assets ge_net ge_ui ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
+  target_link_libraries(labs PRIVATE ge_lab ge_play ge_core ge_audio ge_assets ge_net ge_input ge_ui ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
     ${GE_LAB_EXTRA})
 
   # The `assets` executable (engine/assets/tool.hpp): the built assets listed, checked and stamped,

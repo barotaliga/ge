@@ -45,7 +45,7 @@ double way_toward(const TroopWorld& w, const Soldier& s, double tx, double tz) {
   const mg::Level& level = *w.level;
   double want = lm::atan2(tx - s.x, tz - s.z);
   // A side-step out of where he is caught.
-  if (s.until > w.t) want += s.side * kPi / 2;
+  if (ge::ai::detouring(s.progress, w.t)) want += s.progress.side * kPi / 2;
   const FallLine f = fall_line(level, s.x, s.z);
   const double off_up = angle_diff(f.up, want);
   const double along = f.tan * lm::cos(off_up);
@@ -78,22 +78,21 @@ double way_toward(const TroopWorld& w, const Soldier& s, double tx, double tz) {
     push += (side >= 0 ? -1 : 1) * k;
   });
   want += clamp(push, -1.2, 1.2);
-  // ...and off the other soldiers beside him.
-  double ax = 0;
-  double az = 0;
+  // ...and off the other soldiers beside him: those near him in the step's grid when it has one
+  // (in the same order as all of them, so the same push to the bit), all of them when not.
+  ge::ai::Away away;
   const double apart = army::kApartM;
-  for (const Soldier& o : w.all) {
-    const double dx = s.x - o.x;
-    const double dz = s.z - o.z;
-    // The square first: a column of eighty men is eighty of these a man.
-    if (dx >= apart || dx <= -apart || dz >= apart || dz <= -apart) continue;
-    if (o.id == s.id || o.mode == SoldierMode::ride || o.mode == SoldierMode::gone) continue;
-    const double d = hypot(dx, dz);
-    if (d < apart && d > 0.01) {
-      ax += dx / d * (apart - d);
-      az += dz / d * (apart - d);
-    }
+  const auto from = [&](const Soldier& o) {
+    if (o.id == s.id || o.mode == SoldierMode::ride || o.mode == SoldierMode::gone) return;
+    ge::ai::add_apart(away, s.x - o.x, s.z - o.z, apart);
+  };
+  if (w.near && w.near->size() == static_cast<int32_t>(w.all.size())) {
+    w.near->for_each_near(s.x, s.z, [&](int32_t i) { from(w.all[static_cast<size_t>(i)]); });
+  } else {
+    for (const Soldier& o : w.all) from(o);
   }
+  const double ax = away.x;
+  const double az = away.z;
   if (ax != 0 || az != 0) want = lm::atan2(lm::sin(want) + ax, lm::cos(want) + az);
   return want;
 }
@@ -126,6 +125,17 @@ void move(const TroopWorld& w, Soldier& s) {
 }
 
 }  // namespace
+
+void build_near(ge::ai::Neighbours& near, std::span<const Soldier> all) {
+  near.build(
+      static_cast<int32_t>(all.size()), army::kApartM + army::kNearSlackM,
+      [&](int32_t i) { return all[static_cast<size_t>(i)]; },
+      [&](int32_t i) {
+        const SoldierMode m = all[static_cast<size_t>(i)].mode;
+        return m == SoldierMode::ride || m == SoldierMode::out || m == SoldierMode::rope ||
+               m == SoldierMode::board;
+      });
+}
 
 double slope_along(const mg::Level& level, double x, double z, double heading) {
   mg::Vec3 n{};
@@ -168,26 +178,16 @@ void stop_here(const TroopWorld& w, Soldier& s) {
 }
 
 int32_t watch_progress(Soldier& s, double t, bool moving) {
+  ge::ai::Progress& p = s.progress;
   if (!moving) {
-    s.wx = s.x;
-    s.wz = s.z;
-    s.wt = t;
-    s.slow = 0;
+    ge::ai::restart(p, s.x, s.z, t);
     return 0;
   }
-  if (t - s.wt < army::kWindowS) return s.slow;
-  const double moved = hypot(s.x - s.wx, s.z - s.wz);
-  s.wx = s.x;
-  s.wz = s.z;
-  s.wt = t;
-  if (moved < army::kLeastM) {
-    s.slow++;
-    s.side = s.slow % 2 == 1 ? (s.id % 2 == 0 ? 1 : -1) : -s.side;
-    s.until = t + army::kDetourS;
-  } else {
-    s.slow = 0;
+  if (ge::ai::caught(p, s.x, s.z, t, army::kWindowS, army::kLeastM)) {
+    p.side = p.slow % 2 == 1 ? (s.id % 2 == 0 ? 1 : -1) : -p.side;
+    p.until = t + army::kDetourS;
   }
-  return s.slow;
+  return p.slow;
 }
 
 }  // namespace fall_line::sim

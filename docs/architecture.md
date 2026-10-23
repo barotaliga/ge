@@ -76,6 +76,11 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   packet format, connections with their channels, and nodes of up to 32 peers. It depends on
   `engine/core` only and reads no clock: the caller passes the time and the seeds, so a session
   over the simulated network is deterministic and every net lab is a determinism test.
+- **`engine/input`**: the input layer (`ge::input`, M19; `docs/input.md` is the design): one
+  32-byte event for every device, the state a frame reads, dead zones and ramps, action maps in
+  contexts, the bindings file and rebinding, the device database, touch controls, local players,
+  rumble and force feedback as pure functions, a simulated backend and the event log. It depends
+  on `engine/core` only; the OS's devices reach it through `engine/platform`'s backend.
 - **`engine/ui`**: the immediate-mode 2D layer (M22): paints (colours, linear and radial
   gradients), a draw list of rounded boxes (a paint, an image, a border, a feather) and text runs
   under clips, fonts over stb_truetype with a built-in family compiled in, a CPU raster (the labs'
