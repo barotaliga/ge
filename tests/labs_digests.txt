@@ -6,8 +6,7 @@ army-flight 57fc57956ada1ce3
 army-sleds 821adaba95b0b813
 audition d47fda4a9cb22fbb
 charts 77f2319a5ea24272
-cli-loop a7096c36d1712e7d
-cli-loop ced27c68ea095a21
+cli-loop bcf684cd015a4d94
 crowd cf02cf9a7c917783
 crowd-look 194a06db20f2ebb2
 forest f1881cb20efe0144
