@@ -58,6 +58,8 @@ Outcome run_lab_diff(const BuildOptions& o, const LabDiffOptions& diff);
 
 // The build `ge build` runs, for a command that needs it first: false with its findings in `out`.
 bool build_into(const BuildOptions& o, Outcome& out);
+// The same, building only `targets` (space-separated; the whole tree when one is unknown).
+bool build_targets(const BuildOptions& o, Outcome& out, const std::string& targets);
 // build/<preset>/<name>.log
 fs::path build_log(const BuildOptions& o, std::string_view name);
 
