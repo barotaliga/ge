@@ -1,0 +1,23 @@
+# scenario body-digest iss [mortal|dead] part:injury... (skier_body_test, reference skis, 120 Hz)
+tuck-schuss 3209bc6185d9d9b5 iss=0
+tall-schuss 3209bc6185d9d9b5 iss=0
+powder-schuss 3209bc6185d9d9b5 iss=0
+carve 3209bc6185d9d9b5 iss=0
+carve-hard 3209bc6185d9d9b5 iss=0
+hockey-stop 3209bc6185d9d9b5 iss=0
+stand-still 3209bc6185d9d9b5 iss=0
+skate-flat 3209bc6185d9d9b5 iss=0
+turns 3209bc6185d9d9b5 iss=0
+powder-turns 3209bc6185d9d9b5 iss=0
+kicker 3399d3591eed8dad iss=1 back:back_strain
+kicker-pop 47e220166d56c5a4 iss=4 back:compressed_vertebra
+pop f941f4859aba6bc0 iss=0
+rollers 3209bc6185d9d9b5 iss=0
+tree 2a2de529f9f419ee iss=66 dead head:brain_injury neck:broken_neck chest:torn_aorta abdomen:lacerated pelvis:torn_bladder
+drop 6c34c75b19ccb216 iss=0
+drop-harsh 88e492761d992cd7 iss=5 back:compressed_vertebra neck:whiplash
+tree-slow 0141f16798886f3f iss=9 chest:broken_ribs pelvis:cracked_pelvis head:head_bump shoulder_r:bruised_shoulder
+tree-fast 907d29d90f61b992 iss=75 dead head:brain_injury chest:crushed_chest pelvis:crushed_pelvis abdomen:lacerated neck:neck_fracture
+tree-side a8c1ec2db260063b iss=1 shoulder_l:bruised_shoulder
+drop-across 7ee951e311566a6b iss=4 knee_l:torn_acl_twist
+drop-high 9c4da992abaf7e1a iss=43 dead back:spinal_cord chest:bruised_lung_fall abdomen:torn_spleen_fall shin_l:pilon_fracture knee_l:torn_acl knee_r:torn_acl foot_l:broken_heel foot_r:broken_heel neck:whiplash

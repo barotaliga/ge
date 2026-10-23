@@ -8,6 +8,7 @@
 #include "render/skinning.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstring>
 #include <string>
@@ -84,6 +85,57 @@ LodSource skinned_source(const assets::Mesh& mesh, const assets::Box& reach, flo
   }
   src.reach = box;
   return src;
+}
+
+namespace {
+
+// A weight as palette_source stores it: a 16-bit unorm.
+uint32_t weight16(float w) {
+  return static_cast<uint32_t>(std::lround(std::clamp(w, 0.0f, 1.0f) * 65535.0f));
+}
+
+}  // namespace
+
+LodSource palette_source(const assets::Mesh& mesh, const assets::Box& reach, float min_px) {
+  LodSource src = skinned_source(mesh, reach, min_px);
+  const uint32_t n = mesh.vertex_count();
+  src.skin.assign(size_t{n} * 3, 0);
+  for (uint32_t v = 0; v < n; ++v) {
+    uint32_t* w = &src.skin[size_t{v} * 3];
+    for (int k = 0; k < 4; ++k) w[0] |= uint32_t{mesh.joints[size_t{v} * 4 + k]} << (8 * k);
+    const float* wt = &mesh.weights[size_t{v} * 4];
+    w[1] = weight16(wt[0]) | (weight16(wt[1]) << 16);
+    w[2] = weight16(wt[2]) | (weight16(wt[3]) << 16);
+  }
+  return src;
+}
+
+void set_palettes(gpu::Device& device, InstanceFamily& family,
+                  std::span<const assets::Affine> palettes) {
+  const uint32_t joints = family.palette_joints;
+  if (!joints || !family.palettes) return;
+  const size_t n = std::min<size_t>(palettes.size(), size_t{family.capacity} * joints);
+  if (n == 0) return;
+  family.palette_half ^= 1u;
+  const uint64_t half = uint64_t{family.capacity} * joints * 48;
+  // An Affine is three rows of four floats: the rows as the shader reads them.
+  static_assert(sizeof(assets::Affine) == 48);
+  device.queue.WriteBuffer(family.palettes, family.palette_half * half, palettes.data(), n * 48);
+  if (family.palettes_settle) {
+    device.queue.WriteBuffer(family.palettes, (family.palette_half ^ 1u) * half, palettes.data(),
+                             n * 48);
+    family.palettes_settle = false;
+  }
+  // The rows the draws read, in the family's parameters and every caster slot's.
+  uint32_t rows[4];
+  palette_rows(family, rows);
+  const uint64_t at = offsetof(InstanceFamily::Params, skin);
+  family.staged.skin[0] = rows[0];
+  family.staged.skin[1] = rows[1];
+  family.staged.skin[2] = rows[2];
+  device.queue.WriteBuffer(family.params, at, rows, sizeof rows);
+  for (const CasterSlot& c : family.casters)
+    device.queue.WriteBuffer(c.params, at, rows, sizeof rows);
 }
 
 void create_skin(gpu::Device& device, const SkinPipelines& sp, Skin& skin,
@@ -170,6 +222,36 @@ std::vector<uint32_t> read_skin_last(gpu::Device& device, const InstanceFamily& 
                                      const Skin& skin) {
   if (!skin.last) return {};
   return read_words(device, family.vertices, uint64_t{skin.last} * 4, uint64_t{skin.vertices} * 8);
+}
+
+void pose_palette(const assets::Mesh& mesh, std::span<const assets::Affine> palette,
+                  std::vector<float>& positions, std::vector<float>& normals) {
+  const uint32_t n = mesh.vertex_count();
+  positions.assign(size_t{n} * 3, 0.0f);
+  normals.assign(size_t{n} * 3, 0.0f);
+  if (palette.empty()) return;
+  const size_t last = palette.size() - 1;
+  for (uint32_t v = 0; v < n; ++v) {
+    float w[4];
+    float sum = 0;
+    for (int k = 0; k < 4; ++k) {
+      w[k] = static_cast<float>(weight16(mesh.weights[size_t{v} * 4 + k]));
+      sum += w[k];
+    }
+    float r[12] = {};
+    for (int k = 0; k < 4; ++k) {
+      const size_t j = std::min<size_t>(mesh.joints[size_t{v} * 4 + k], last);
+      const float wk = w[k] / std::max(sum, 1.0f);
+      for (int c = 0; c < 12; ++c) r[c] += wk * palette[j].m[c];
+    }
+    const float* p = &mesh.positions[size_t{v} * 3];
+    const float* q = &mesh.normals[size_t{v} * 3];
+    for (size_t row = 0; row < 3; ++row) {
+      const float* m = r + row * 4;
+      positions[size_t{v} * 3 + row] = m[0] * p[0] + m[1] * p[1] + m[2] * p[2] + m[3];
+      normals[size_t{v} * 3 + row] = m[0] * q[0] + m[1] * q[1] + m[2] * q[2];
+    }
+  }
 }
 
 std::vector<uint32_t> skin_packed(const assets::Mesh& mesh, std::span<const assets::Affine> palette,

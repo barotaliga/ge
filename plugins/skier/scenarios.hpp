@@ -10,7 +10,7 @@
 //
 // ge:summary The ride scenarios: staged moments with scripted inputs, run and measured
 // ge:keywords scenario scenarios ride staged moment scripted input run_scenario trace
-// ge:keywords schuss carve hockey-stop skate kicker tree drop turns rollers measure
+// ge:keywords schuss carve hockey-stop skate kicker tree drop turns rollers measure injuries
 // ge:skill skier labs
 // ge:test tests/skier_scenarios_test.cpp
 #pragma once
@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "mountain/mapgen/types.hpp"
+#include "skier/body.hpp"
 #include "skier/skier.hpp"
 #include "skier/skis.hpp"
 
@@ -73,6 +74,10 @@ struct ScenarioRun {
   Wipeout cause = Wipeout::none;
   int32_t glances = 0;
   uint64_t digest = 0;  // FNV-1a over every step's state
+  BodyState body;       // what his body took (`body.hpp`), stepped after every step
+  uint64_t body_digest = 0;
+  double mortal_time = -1;  // s he was mortally hurt, -1 never
+  double death_time = -1;
 };
 
 // One step of a run, as it stands after the step: what a per-step trace reads.

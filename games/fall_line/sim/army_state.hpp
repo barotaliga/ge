@@ -4,9 +4,10 @@
 //
 // A run whose hunt never sent a soldier leaves it inactive, hashes none of it and moves no digest.
 //
-// ge:summary The army as a run holds it: ArmyState, Soldier, ArmySled, their modes and changes
+// ge:summary The army as a run holds it: ArmyState, Soldier, ArmySled, ArmyHeli, modes, changes
 // ge:keywords army army-state soldier soldier-mode soldier-from squad wave lift-squad troops
-// ge:keywords army-change army-sled army-sled-mode army-sled-change
+// ge:keywords army-change army-sled army-sled-mode army-sled-change army-heli army-heli-mode
+// ge:keywords army-heli-change land-task
 // ge:skill sim
 // ge:test tests/fall_line_army_test.cpp
 #pragma once
@@ -18,9 +19,9 @@
 
 namespace fall_line::sim {
 
-// Where a soldier came from: a squad up the lifts, a ground wave up from the valley, or off one of
-// the army's snowmobiles.
-enum class SoldierFrom : uint8_t { lift, wave, sled };
+// Where a soldier came from: a squad up the lifts, a ground wave up from the valley, off one of
+// the army's snowmobiles, or put down by one of its helicopters.
+enum class SoldierFrom : uint8_t { lift, wave, sled, heli };
 
 // What he is doing:
 // - `walk` up the lane to the lift's load line; `wait` there for a carrier; `ride` it up;
@@ -28,8 +29,23 @@ enum class SoldierFrom : uint8_t { lift, wave, sled };
 // - `chase` after the man (or to where he was last seen);
 // - `hold` with him in sight and in range, where the army shoots to kill;
 // - `arrest` kneeling over him, where it does not;
-// - `gone` sent home: taken off the map at the end of the step.
-enum class SoldierMode : uint8_t { walk, wait, ride, climb, chase, hold, arrest, gone };
+// - `out` off a landed helicopter: run out to his side and knelt facing out until it has lifted;
+// - `rope` sliding down a hovering helicopter's fast rope;
+// - `board` skiing to a helicopter come to pick his squad up;
+// - `gone` sent home or aboard: taken off the map at the end of the step.
+enum class SoldierMode : uint8_t {
+  walk,
+  wait,
+  ride,
+  climb,
+  chase,
+  hold,
+  arrest,
+  out,
+  rope,
+  board,
+  gone
+};
 
 // What an army event says (`EventKind::army`: its `gate` the change, its `value` how many men): a
 // lift's squad put down, a wave formed up, soldiers let off at a lift's top, the arrest, men sent
@@ -40,7 +56,7 @@ struct Soldier {
   int32_t id = 0;  // the army's own, in the order sent; his pursuer id is `army::kPursuerBase` + it
   SoldierFrom from = SoldierFrom::lift;
   SoldierMode mode = SoldierMode::walk;
-  int32_t squad = 0;           // the lift squad's or the wave's number
+  int32_t squad = 0;           // the lift squad's, the wave's, or the machine's id
   double t = 0;                // s in this mode
   double x = 0, y = 0, z = 0;  // his feet, world frame, m
   double heading = 0;          // rad
@@ -104,6 +120,56 @@ struct ArmySled {
   int32_t dug = 0;
 };
 
+// What one of the army's helicopters is doing (army_heli.hpp):
+// - `due` called, not yet on the map (it comes in at `ArmyHeli::due`);
+// - `hunt` after him: round him, off his tail, or combing where he was last seen;
+// - `land` flying in to a landing's spot and down onto it (or to the hover over it);
+// - `set` on the snow, its doors open; `rope` hovering, the men sliding down;
+// - `rise` climbing straight back off it to the hunt;
+// - `leave` flying out over the map's edge, the hunt over;
+// - `gone` out over the edge: dropped at the end of the step.
+enum class ArmyHeliMode : uint8_t { due, hunt, land, set, rope, rise, leave, gone };
+
+// What an army helicopter's event says (`EventKind::army_heli`: its `gate` the change, its
+// `value` the machine's id): called, in over the edge, on the snow or at the rope's hover, back
+// off it, turned for home, gone.
+enum class ArmyHeliChange : uint8_t { called, arrived, landed, lifted, leaving, gone };
+
+// A LANDING asked of a machine: to put men DOWN near him (`drop`) or PICK UP a squad left behind,
+// at a spot on the snow (m, the skid datum's place), set down on it facing `heading` (rad) or
+// (`rope`) hovered over it while the men come down a fast rope. `count` men to put down, `put`
+// out so far, the clock the last of them was clear (-1 not yet); `done` once it is over, and
+// the machine lifts off.
+struct LandTask {
+  bool drop = true;
+  double x = 0, y = 0, z = 0;
+  double heading = 0;
+  bool rope = false;
+  int32_t count = 0;
+  int32_t put = 0;
+  double clear = -1;
+  bool done = false;
+};
+
+struct ArmyHeli {
+  int32_t id = 0;  // the army's own, in the order called; pursuer `army_heli::kPursuerBase` + it
+  ArmyHeliMode mode = ArmyHeliMode::due;
+  double due = 0;                 // the clock it comes in at, s
+  double t = 0;                   // s in this mode
+  double bearing = 0;             // from the map's middle, the way it comes in on, rad
+  double x = 0, y = 0, z = 0;     // the skid datum, world frame, m
+  double vx = 0, vy = 0, vz = 0;  // m/s
+  double ax = 0, az = 0;          // the acceleration it pulls, m/s^2 (smoothed: the bank follows)
+  double heading = 0, pitch = 0, roll = 0;  // rad, the engine's sign conventions
+  double yaw_rate = 0;                      // rad/s
+  bool on = false;     // it has reached the hunt: within the search's circle of where he was seen
+  int32_t dir = 1;     // the way round its circle: 1 clockwise from above (the right door inward)
+  double doors = 0;    // how far the sliding doors stand open, 0..1
+  int32_t aboard = 0;  // men aboard to put down
+  bool tasked = false;
+  LandTask task;
+};
+
 struct ArmyState {
   bool active = false;  // a soldier was sent this run: only then is any of it hashed
   // THE SOLDIERS OUT, reserved for `army::kMostSoldiers` at create, so a step never allocates.
@@ -128,6 +194,19 @@ struct ArmyState {
   int32_t sleds_called = 0;
   int32_t wave_sleds = 0;
   double pad_x = 0, pad_z = 0, pad_heading = 0;
+  // THE HELICOPTERS OUT, reserved for `army_heli::kMostHelis` at create; the next one's id, how
+  // many were called this run (each one's bearing either side of the first's), the bearing from
+  // the map's middle the army comes in from (toward him when the first is called), and the men
+  // they put down and picked up again.
+  std::vector<ArmyHeli> helis;
+  int32_t next_heli = 0;
+  int32_t helis_called = 0;
+  double from = 0;
+  int32_t dropped = 0;
+  int32_t picked = 0;
+  // Whether the hunt sends its helicopters. A lab or a test staging the army's other arms on
+  // their own turns it off; the game never does.
+  bool send_helis = true;
 };
 
 }  // namespace fall_line::sim

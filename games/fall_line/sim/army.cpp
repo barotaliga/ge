@@ -16,6 +16,7 @@
 #include "core/math.hpp"
 #include "core/num.hpp"
 
+#include "fall_line/sim/army_heli.hpp"
 #include "fall_line/sim/army_rules.hpp"
 #include "fall_line/sim/army_sled.hpp"
 #include "fall_line/sim/army_sled_rules.hpp"
@@ -484,6 +485,11 @@ void step_army(GameState& state) {
         stop_here(tw, s);
         s.heading = lm::atan2(q.x - s.x, q.z - s.z);
         break;
+      case SoldierMode::out:
+      case SoldierMode::rope:
+      case SoldierMode::board:
+        moving = step_heli_soldier(state, s);
+        break;
       case SoldierMode::gone:
         break;
     }
@@ -499,11 +505,11 @@ void step_army(GameState& state) {
       home++;
     }
   }
-  if (home > 0) {
-    std::erase_if(a.soldiers, [](const Soldier& s) { return s.mode == SoldierMode::gone; });
-    push(state, ArmyChange::home, home);
-  }
+  // Gone home, or aboard a helicopter.
+  std::erase_if(a.soldiers, [](const Soldier& s) { return s.mode == SoldierMode::gone; });
+  if (home > 0) push(state, ArmyChange::home, home);
   step_army_sleds(state, on, q, roster.fire);
+  step_army_helis(state, on, q);
   write_pursuers(state);
 }
 
@@ -540,7 +546,7 @@ uint64_t army_hash(const ArmyState& a, uint64_t h) {
   mix(a.wave_at);
   mix(a.marched);
   mix(a.arrested_by);
-  return army_sleds_hash(a, h);
+  return army_helis_hash(a, army_sleds_hash(a, h));
 }
 
 const char* soldier_mode_name(SoldierMode m) {
@@ -559,6 +565,12 @@ const char* soldier_mode_name(SoldierMode m) {
       return "hold";
     case SoldierMode::arrest:
       return "arrest";
+    case SoldierMode::out:
+      return "out";
+    case SoldierMode::rope:
+      return "rope";
+    case SoldierMode::board:
+      return "board";
     case SoldierMode::gone:
       return "gone";
   }

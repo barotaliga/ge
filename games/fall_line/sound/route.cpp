@@ -57,6 +57,7 @@ void wipeout(ge::audio::Synth& synth, int32_t cause, const Listener& ear) {
       play(synth, kWipeoutNose, ear);
       return;
     case ge::skier::Wipeout::across:
+    case ge::skier::Wipeout::hurt:
     case ge::skier::Wipeout::none:
       play(synth, kWipeoutCatch, ear);
       return;
@@ -114,6 +115,7 @@ void run_sound_step(RunSound& sound, ge::audio::Synth& synth, const sim::GameSta
       case EventKind::heli:  // the helicopter's sound comes with its own bed
       case EventKind::para:  // the paramotor's sound comes with its own bed
       case EventKind::army_sled:
+      case EventKind::army_heli:
         break;
     }
   }

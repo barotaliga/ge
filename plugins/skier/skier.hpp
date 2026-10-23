@@ -60,7 +60,8 @@ struct SkierInput {
   bool jump = false;  // held to load the legs, let go to spring
 };
 
-enum class Wipeout : uint8_t { none, tree, landing, across };
+// `hurt`: mortally hurt on his skis (`body.hpp`), he goes down.
+enum class Wipeout : uint8_t { none, tree, landing, across, hurt };
 
 const char* wipeout_name(Wipeout w);
 
@@ -92,9 +93,11 @@ struct SkierEvents {
   bool wiped_out = false;  // went down this step (`cause` says why)
   bool glanced = false;    // brushed a trunk and kept going
   Wipeout cause = Wipeout::none;
-  double landing_g = 0;  // the landing's load, g
-  double flight_s = 0;   // how long the landing's flight lasted, s
-  int32_t tree = -1;     // the trunk met, if any
+  double landing_g = 0;    // the landing's load, g
+  double flight_s = 0;     // how long the landing's flight lasted, s
+  double landing_off = 0;  // rad the skis were off his way over the snow as they landed (0..pi/2)
+  int32_t tree = -1;       // the trunk met, if any
+  double closing = 0;      // m/s he was closing on that trunk as he met it
 };
 
 // What the skier skis on: the map's ground, snow and trees, and the trees' index.
@@ -106,6 +109,9 @@ struct World {
 // ONE STEP of `dt` seconds. Allocates nothing.
 void step_skier(SkierState& s, const SkierInput& in, const World& world, const SkiSpec& spec,
                 double dt, SkierEvents& events);
+
+// PUT HIM DOWN for `cause`, as a wipeout does: sliding on his body, the controls dead.
+void put_down(SkierState& s, Wipeout cause);
 
 // Stand a skier on the snow at (x, z) facing `heading`, moving `speed` m/s along it, at rest in
 // every other respect, his skis at the sink his speed asks for. `lift` m stands him that far

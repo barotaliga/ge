@@ -33,6 +33,7 @@ the row when the file moves.
 | `engine/core/solar.cpp` | `oss-game-framework/src/core/solar.ts` |  |
 | `engine/core/solar.hpp` | `oss-game-framework/src/core/solar.ts` | sunAt moonAt daylightWindow sunOnDate moonOnDate hourOfElevation |
 | `engine/loop/run_clock.hpp` | `oss-game-framework/src/loop/run-clock.ts` | createRunClock MAX_FRAME_SECONDS |
+| `games/fall_line/labs/army_flight_lab.cpp` | `game5/scripts/army-flight.mjs` | the army's helicopters shown (here measured: the helicopters table and every machine's path, per scenario) |
 | `games/fall_line/labs/army_lab.cpp` | `game5/scripts/army-ground.mjs` | the ground army shown (here measured: the army table and every soldier's path, per scenario) |
 | `games/fall_line/labs/army_sled_lab.cpp` | `game5/scripts/army-ground.mjs` | the army's snowmobiles shown (here measured: the sleds table and every machine's path, per scenario) |
 | `games/fall_line/labs/lift_ride_lab.cpp` | `game5/scripts/lift-ride-preview.mjs` | the lift ride shown (here measured as a table, every lift ridden from its load zone to its top) |
@@ -40,6 +41,11 @@ the row when the file moves.
 | `games/fall_line/sim/army.hpp` | `game5/engine/game/army-ground.ts`, `army-lift.ts`, `army-wave.ts` | stepGround liftFor wayDown armyTroops |
 | `games/fall_line/sim/army_drive.cpp` | `game5/engine/game/army-drive.ts` | wayCost chooseWay tunnelWithin |
 | `games/fall_line/sim/army_drive.hpp` | `game5/engine/game/army-drive.ts` | DriveRead TerrainRead wayCost chooseWay tunnelWithin |
+| `games/fall_line/sim/army_heli.cpp` | `game5/engine/game/army.ts`, `army-ground.ts` | stepArmy call arrive circleWay huntWant homeWant fly settle levelOut slideDoors writePursuers askLandings workLanding (the guns, the ram, the fall and the wreck not carried) |
+| `games/fall_line/sim/army_heli.hpp` | `game5/engine/game/army.ts` | stepArmy landing armyHelis |
+| `games/fall_line/sim/army_heli_rules.hpp` | `game5/engine/game/defs/army.ts`, `defs/army-heli.ts`, `defs/army-ground.ts` | ARMY ARMY_HELI ARMY_GROUND (the landing, the rope, the approach, the dismount, the leapfrog) |
+| `games/fall_line/sim/army_land.cpp` | `game5/engine/game/army-land.ts`, `army.ts` | landingSpot armyFloor ropeHover |
+| `games/fall_line/sim/army_land.hpp` | `game5/engine/game/army-land.ts` | LandSpot landingSpot |
 | `games/fall_line/sim/army_rules.hpp` | `game5/engine/game/defs/army-ground.ts`, `defs/army-wave.ts` | ARMY_GROUND ARMY_WAVE |
 | `games/fall_line/sim/army_sled.cpp` | `game5/engine/game/army-sled.ts` | stepArmySleds sledPad setOff chase halt home dismount watch writeCrews |
 | `games/fall_line/sim/army_sled.hpp` | `game5/engine/game/army-sled.ts` | stepArmySleds sledPad crewed |
@@ -251,12 +257,16 @@ the row when the file moves.
 | `plugins/racing/standings.hpp` | `oss-game-framework/src/racing/standings.ts` | legProgress fieldOrder placeAmong |
 | `plugins/racing/tape.cpp` | `oss-game-framework/src/racing/tape.ts` | encodeStream decodeStream |
 | `plugins/racing/tape.hpp` | `oss-game-framework/src/racing/tape.ts` | snapAxis ControlTape |
+| `plugins/skier/anatomy.cpp` | `game5/engine/game/defs/anatomy.ts` | BODY_PARTS INJURIES (the blunt, load, drawer, twist and bend rows) |
+| `plugins/skier/anatomy.hpp` | `game5/engine/game/defs/anatomy.ts` | BodyPart Mechanism Facing InjuryDef BONE_KINDS ORGAN_KINDS INJURY |
 | `plugins/skier/app/ride_bed.cpp` | `game5/pwa/src/game/audio/ride-bed.ts` | createRideBed |
 | `plugins/skier/app/ride_bed.hpp` | `game5/pwa/src/game/audio/ride-bed.ts` | RideBed createRideBed |
 | `plugins/skier/app/snow_bed.cpp` | `game5/pwa/src/game/audio/snow-voice.ts` | skiVoiceOf snowTargets |
 | `plugins/skier/app/snow_bed.hpp` | `game5/pwa/src/game/audio/snow-voice.ts` | SkiVoice SnowVoice SnowMix SnowLayer SNOW_LAYERS SNOW_GLIDE snowTargets |
 | `plugins/skier/app/wind_bed.cpp` | `game5/pwa/src/game/audio/wind-voice.ts` | windTargets WIND_FULL WIND_TOP |
 | `plugins/skier/app/wind_bed.hpp` | `game5/pwa/src/game/audio/wind-voice.ts` | WindVoice WindMix WindLayer WIND_LAYERS WIND_GLIDE windTargets |
+| `plugins/skier/body.cpp` | `game5/engine/game/body.ts`, `game5/engine/game/body-bones.ts`, `game5/engine/game/gore.ts` | blowOf riskOf energyOver trunkOnSkis landing fall judge struckOn sideOf severityOf diesOf mortality |
+| `plugins/skier/body.hpp` | `game5/engine/game/body.ts`, `game5/engine/game/state.ts` | BodyState Injury Impact stepBody mendBody |
 | `plugins/snowmobile/body.cpp` | `game5/engine/game/sled-body.ts` | rideSled hullContacts landingPitch deriveSled sledLockAt |
 | `plugins/snowmobile/body.hpp` | `game5/engine/game/sled-body.ts` | rideSled SledStepReport deriveSled |
 | `plugins/snowmobile/drive.cpp` | `game5/engine/game/sled-drive.ts` | powerShare rpmAtTop maxDriveForce driveForce rpmGoal stepBelt stepRpm |

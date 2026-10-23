@@ -232,7 +232,7 @@ characters.
 | `plugins/mountain/air/` | The air at run time (`ge::mountain::air`): the wind's gusts and veer, the fall's squalls and the visual range, as pure functions of the map and the clock | `mountain` |
 | `plugins/mountain/app/` | The mountain as drawn (`ge_mountain_app`, with the GPU): the snow's material, the trail map, the trees, the weather's look | `mountain`, `render` |
 | `plugins/mountain/analysis/` | The rule book re-checked on a finished map (`ge::mountain::analysis`) | `mountain` |
-| `plugins/skier/` | The skier on the snow (`ge::skier`): the step, the snow, the limits, the skis and tuning, the trees, the hand-built maps, the ride scenarios | `skier` |
+| `plugins/skier/` | The skier on the snow (`ge::skier`): the step, the snow, the limits, the skis and tuning, the trees, the body and its injuries, the hand-built maps, the ride scenarios | `skier` |
 | `plugins/skier/app/` | The skier as seen and heard (`ge_skier_app`): the rig and figure, the wind and snow beds, the tracks | `skier`, `audio` |
 | `plugins/snowmobile/` | The snowmobile on the snow (`ge::snowmobile`): the spec, the step, the body, the drive, the bot's hands, the scenarios | `snowmobile` |
 | `plugins/helicopter/` | The helicopter in the air and on the snow (`ge::helicopter`): the spec, the step, the bot's hands, the downwash, the scenarios | `helicopter` |
@@ -316,7 +316,7 @@ and the directories agree.
 | `plugins` | Deciding where code lives (engine, plugin or game), adding a plugin, moving code between homes |
 | `racing` | `plugins/racing`: the control tape, the record book's policy, the standings |
 | `mountain` | `plugins/mountain`: the generated ski mountain (mapgen, analysis, `level_digest`) |
-| `skier` | `plugins/skier`: the skier on the snow (`step_skier`, the snow, the limits), the hand-built maps, the ride scenarios |
+| `skier` | `plugins/skier`: the skier on the snow (`step_skier`, the snow, the limits), the body and its injuries, the hand-built maps, the ride scenarios |
 | `snowmobile` | `plugins/snowmobile`: the snowmobile on the snow (`step_sled`, the body, the drive), what throws its rider, the bot's hands on it, the sled scenarios |
 | `helicopter` | `plugins/helicopter`: the helicopter (`step_heli`, the rotor, the disc, the landing, the strikes), the downwash, the bot's hands on it, the heli scenarios |
 | `paramotor` | `plugins/paramotor`: the powered speed wing a skier flies (`step_para`, the wing on its lines, the engine, the fold, the cut-away), the air it flies in, the bot's hands on it, the para scenarios |
