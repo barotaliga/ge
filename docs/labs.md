@@ -233,6 +233,9 @@ fails when it is off. Three checks use it:
   runner's `--write-digests` on one lab or a shard keeps the other rows), and the PR says why.
   A game repo keeps the same baseline once `ge digest --write` writes it, and its
   `labs_smoke` case checks it from then on.
+- The baseline merges with git's union driver (`.gitattributes`): two branches that add or move
+  different labs' rows merge cleanly. Two branches that move the same lab's row leave two rows
+  for it, and `--check-digests` fails naming the lab until `ge digest <id> --write` keeps one.
 - After a change, `ge digest --diff` runs every lab at its smoke flags and prints only the labs
   whose digest is off the baseline (or not in it), writing nothing: the list of rows the PR has
   to explain or fix, in one command (about 14 minutes for every lab in the debug build; name a
