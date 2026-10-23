@@ -18,6 +18,7 @@ heli edc6a93febc6f52d
 humanness a486ef984a6511d7
 injuries 594a6c11dc263f37
 junctions 036999ca677e12e6
+ladder d6c83528a908cb3c
 level 4fbff3da7a82c4aa
 lift-ride a374f35eb85cc161
 mapgen-cost 3baf51b6907817f3
