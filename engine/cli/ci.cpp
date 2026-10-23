@@ -257,9 +257,18 @@ Outcome run_ci(const fs::path& repo, const std::string& pr, const std::string& l
                                        " --jq .head.sha,.mergeable,.mergeable_state,.state,"
                                        ".merged,.base.ref",
                                    log);
-    if (head.code != 0)
+    if (head.code != 0) {
+      const std::string from = slug.str(1) + "/" + slug.str(2);
+      std::string to = first_line(run_to_log("gh api " + api + " --jq .full_name", log).output);
+      if (to.find('/') == std::string::npos || to.find(' ') != std::string::npos) to.clear();
+      Finding moved;
+      if (moved_repo_finding(head.output, from, to, moved)) {
+        out.findings.push_back(moved);
+        return out;
+      }
       return fail("gh could not read pull request " + pr + ": " + first_line(head.output),
                   "check the number, or `gh auth login`");
+    }
     std::vector<std::string> w;
     // One line a field; gh prints a null as an empty line.
     for (std::string_view l : split_lines(head.output)) w.emplace_back(bare(l));
@@ -389,6 +398,23 @@ Outcome run_ci(const fs::path& repo, const std::string& pr, const std::string& l
   out.summary = "pull request " + pr + " squash-merged";
   out.next = "restart the branch from its base for the next change";
   return out;
+}
+
+bool moved_repo_finding(std::string_view error, const std::string& slug,
+                        const std::string& moved_to, Finding& out) {
+  const bool redirected = error.find("repositories/") != std::string_view::npos ||
+                          error.find("Moved Permanently") != std::string_view::npos ||
+                          error.find("HTTP 301") != std::string_view::npos;
+  const bool renamed = !moved_to.empty() && moved_to != slug;
+  if (!redirected && !renamed) return false;
+  out = {Severity::error,
+         "the repository " + slug + " has moved" + (renamed ? " to " + moved_to : std::string()) +
+             ", and its old address answers with a redirect",
+         "the origin remote",
+         renamed ? "git remote set-url origin https://github.com/" + moved_to + ", then ge ci"
+                 : "set the origin remote to the repository's new address (git remote set-url "
+                   "origin https://github.com/<owner>/<repo>), then ge ci"};
+  return true;
 }
 
 }  // namespace ge::cli

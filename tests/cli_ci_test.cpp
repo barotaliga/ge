@@ -96,3 +96,16 @@ TEST(a_blocked_merge_names_the_required_check_that_never_passed) {
   CHECK(has(blocked_findings("main", "", {})[0].what, "could not be read"));
   CHECK(has(blocked_findings("main", "[]", {})[0].what, "rules do not name"));
 }
+
+TEST(a_moved_repository_is_named_with_the_remote_to_set) {
+  Finding f;
+  CHECK(moved_repo_finding("gh: Not Found (HTTP 404)\n", "a/b", "", f) == false);
+  CHECK(moved_repo_finding("error: GET https://api.github.com/repositories/12/pulls/3: 403\n",
+                           "a/b", "c/d", f));
+  CHECK(f.what ==
+        "the repository a/b has moved to c/d, and its old address answers with a "
+        "redirect");
+  CHECK(f.next == "git remote set-url origin https://github.com/c/d, then ge ci");
+  CHECK(moved_repo_finding("HTTP 301: Moved Permanently", "a/b", "", f));
+  CHECK(f.next.starts_with("set the origin remote"));
+}
