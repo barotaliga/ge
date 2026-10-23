@@ -280,6 +280,7 @@ Outcome run(const Args& a) {
   }
   if (name.starts_with("net ")) return run_net(a);
   if (name == "save inspect") return run_save(a);
+  if (name.rfind("save ", 0) == 0) return run_save_game(build_options(a), a, name.substr(5));
   if (name == "asset list") return run_asset_list(build_options(a));
   if (name == "asset check") return run_asset_check(build_options(a));
   if (name == "asset build") {

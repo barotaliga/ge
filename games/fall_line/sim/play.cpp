@@ -39,13 +39,6 @@ namespace core = ge::core;
 namespace num = ge::core::num;
 using ge::play::quote;
 
-// The chunks a run saves (docs/saves.md § The run saved): the Driver (the state, the plan, the
-// tape, the tallies) and the pilot's own (its hands, what the agent has not yet been told).
-constexpr uint32_t kDriverTag = ge::save::tag("DRVR");
-constexpr uint16_t kDriverVersion = 1;
-constexpr uint32_t kPilotTag = ge::save::tag("PILT");
-constexpr uint16_t kPilotVersion = 1;
-
 // A still's side in pixels, and the near view's side in metres.
 constexpr int kShotPx = 512;
 constexpr double kNearMetres = 160;

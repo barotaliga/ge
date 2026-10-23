@@ -23,6 +23,9 @@ struct PlayChunk {
   }
 };
 
+// How far a run is played before a save is loaded into it in the check.
+constexpr int64_t kDirtySteps = 360;
+
 double ms_since(std::chrono::steady_clock::time_point t0) {
   return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
 }
@@ -54,13 +57,12 @@ bool save_run(const GameSpec& spec, const Setup& setup, const Run& run, int64_t 
   return w.finish(&error);
 }
 
-std::unique_ptr<Run> load_run(const GameSpec& spec, std::span<const uint8_t> bytes, int64_t& step,
-                              std::string& error, std::string_view name) {
-  save::FileReader r;
-  if (!r.open(bytes, name, spec.name)) {
-    error = r.problem();
-    return nullptr;
-  }
+namespace {
+
+// The save's setup and step read, and `run` (open on that setup, or null to open one here) loaded
+// from it.
+std::unique_ptr<Run> load_into(const GameSpec& spec, save::FileReader& r, std::unique_ptr<Run> run,
+                               int64_t& step, std::string& error, std::string_view name) {
   std::string why;
   const auto header = parse_inputs(r.meta().setup, why);
   Setup setup;
@@ -73,17 +75,29 @@ std::unique_ptr<Run> load_run(const GameSpec& spec, std::span<const uint8_t> byt
     error = r.problem();
     return nullptr;
   }
-  std::unique_ptr<Run> run = spec.open(setup, why);
+  if (!run) run = spec.open(setup, why);
   if (!run) {
     error = std::string(name) + ": the game does not open its setup: " + why;
     return nullptr;
   }
   if (!run->load(r, why)) {
-    error = why;
+    error = std::string(name) + ": " + why;
     return nullptr;
   }
   step = play.step;
   return run;
+}
+
+}  // namespace
+
+std::unique_ptr<Run> load_run(const GameSpec& spec, std::span<const uint8_t> bytes, int64_t& step,
+                              std::string& error, std::string_view name) {
+  save::FileReader r;
+  if (!r.open(bytes, name, spec.name)) {
+    error = r.problem();
+    return nullptr;
+  }
+  return load_into(spec, r, nullptr, step, error, name);
 }
 
 std::vector<SavedAt> check_saves(const GameSpec& spec, const InputLog& log,
@@ -128,13 +142,21 @@ std::vector<SavedAt> check_saves(const GameSpec& spec, const InputLog& log,
         s.chunks.emplace_back(save::tag_name(c.tag) + "#" + std::to_string(c.instance), c.stored);
     const auto t0 = std::chrono::steady_clock::now();
     int64_t step = 0;
-    std::unique_ptr<Run> loaded = load_run(spec, files[k], step, error);
+    if (!load_run(spec, files[k], step, error)) return {};
     s.load_ms = ms_since(t0);
-    if (!loaded) return {};
     const auto t1 = std::chrono::steady_clock::now();
-    std::string ignored;
-    (void)spec.open(setup, ignored);
+    std::unique_ptr<Run> loaded = spec.open(setup, error);
     s.open_ms = ms_since(t1);
+    if (!loaded) return {};
+    // Loaded into a run already played on (not a fresh one), so a field left out of a describe
+    // keeps a value of its own instead of happening to start as the save's.
+    for (int64_t i = 0; i < kDirtySteps && i < n; i++) step_on(spec, *loaded, log, i, in);
+    if (!r.open(files[k])) {
+      error = r.problem();
+      return {};
+    }
+    loaded = load_into(spec, r, std::move(loaded), step, error, "save");
+    if (!loaded) return {};
     for (int64_t i = step;; i++) {
       if (loaded->digest() != digests[static_cast<size_t>(i)]) {
         s.parted = i;

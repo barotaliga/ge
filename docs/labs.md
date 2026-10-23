@@ -382,6 +382,7 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 | `charts` | picture | engine | `engine/lab/chart.hpp`, `plot.hpp`, `stats.hpp`, `series.hpp` (every chart form over seeded data with outliers planted at known places, each as a PNG and an SVG; a series file written and read back) | M14a (now) |
 | `run-clock` | sim | engine | `engine/loop/run_clock.hpp` | M2 (now) |
 | `save-file` | sim | engine | `engine/save/file.hpp`, `engine/save/io.hpp` (the round trip, every cut and flipped byte refused, chunk versions, write, open, read and peek speeds) | M25a (now) |
+| `save-run` | sim | game:fall_line | `games/fall_line/sim/play.cpp`'s `Run::save`/`load` over every described state (race, free ride with the crowd and a lift, snowmobile, helicopter, paramotor saved every 10 s, each loaded into a run already played on and stepped beside the run never saved; save and load times, bytes by part, the map's build) | M25b (now) |
 | `level` | picture | plugin:mountain | `plugins/mountain/mapgen` (`--version=1,8`: the single piste, a ski area's race map) | M4a, M4b4a (now) |
 | `analyze` | sim | plugin:mountain | `plugins/mountain/analysis` (a race map's course and area at `--version=8`) | M4a, M4b4a (now) |
 | `mapgen-cost` | bench | plugin:mountain | `plugins/mountain/mapgen` | M4a (now) |

@@ -13,13 +13,15 @@
 // ge:summary The run saved and loaded through the play contract, and the check against the run
 // ge:summary never saved
 // ge:keywords play save load save_run load_run check_saves saved-run digest setup meta step
-// ge:keywords mismatch round-trip
+// ge:keywords mismatch round-trip save-command play-save write diff
 // ge:skill save agent-interface
 // ge:test tests/play_saves_test.cpp
 #pragma once
 
 #include <cstdint>
+#include <map>
 #include <memory>
+#include <ostream>
 #include <span>
 #include <string>
 #include <string_view>
@@ -45,11 +47,11 @@ std::unique_ptr<Run> load_run(const GameSpec& spec, std::span<const uint8_t> byt
                               std::string& error, std::string_view name = "save");
 
 struct SavedAt {
-  int64_t step = 0;     // saved after this many steps
-  size_t bytes = 0;     // the file's size
-  double save_ms = 0;   // `save_run` (measured)
-  double load_ms = 0;   // `load_run`, the setup's rebuild included (measured)
-  double open_ms = 0;   // of which opening the run on the setup (measured)
+  int64_t step = 0;    // saved after this many steps
+  size_t bytes = 0;    // the file's size
+  double save_ms = 0;  // `save_run` (measured)
+  double load_ms = 0;  // `load_run`, the setup's rebuild included (measured)
+  double open_ms = 0;  // of which opening the run on the setup (measured)
   // The first step whose digest differs from the run never saved, or the log's last step when
   // only the two runs' saves at the end differ; -1: none.
   int64_t parted = -1;
@@ -60,5 +62,10 @@ struct SavedAt {
 // beside it. Empty with `error` when the log does not open or the game keeps no saves.
 std::vector<SavedAt> check_saves(const GameSpec& spec, const InputLog& log,
                                  std::span<const int64_t> at, std::string& error);
+
+// `play save <write|load|check|diff> ...` (save_cmd.cpp): `words` the command's words after
+// `save`'s own (the subcommand first), `flags` its --flags; prints one JSON line, returns the exit.
+int save_command(const GameSpec& spec, const std::vector<std::string>& words,
+                 const std::map<std::string, std::string>& flags, std::ostream& out);
 
 }  // namespace ge::play

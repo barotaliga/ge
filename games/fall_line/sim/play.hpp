@@ -15,10 +15,13 @@
 //   (app/play_render.hpp), which draws a run the play contract steps.
 // - `trace`: the bot's decisions (bot.hpp), the player's pilot as agent 0 and each rival as his
 //   racer index, for `ge why`.
+// - `save` / `load` (docs/saves.md § The run saved): the run as two chunks, `DRVR` (the Driver:
+//   the state, the bot's plan, the tape, the tallies) and `PILT` (the pilot's hands and the
+//   events the agent has not been told yet). The map is not saved: the setup rebuilds it.
 //
 // ge:summary Fall Line on the play contract: its axes, options, observation, state, report, pilot
 // ge:keywords play agent observe observation state report pilot axes options game-spec run
-// ge:keywords fall_line_game open_run state_of trace why
+// ge:keywords fall_line_game open_run state_of trace why save load drvr pilt
 // ge:skill sim agent-interface
 // ge:test tests/fall_line_play_test.cpp
 #pragma once
@@ -26,6 +29,7 @@
 #include <cstddef>
 
 #include "play/game.hpp"
+#include "save/file.hpp"
 
 namespace fall_line::sim {
 
@@ -35,6 +39,12 @@ struct GameState;
 inline constexpr size_t kMostEvents = 256;
 // How far down the piste the observation's `piste_bend` looks, m.
 inline constexpr double kBendAhead = 30;
+
+// The chunks a saved run is written as, each with the newest version this build reads.
+inline constexpr uint32_t kDriverTag = ge::save::tag("DRVR");
+inline constexpr uint16_t kDriverVersion = 1;
+inline constexpr uint32_t kPilotTag = ge::save::tag("PILT");
+inline constexpr uint16_t kPilotVersion = 1;
 
 // The game's spec: `GE_GAME(fall_line::sim::kGame)` in the play executable registers it.
 extern const ge::play::GameSpec kGame;
