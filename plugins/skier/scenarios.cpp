@@ -83,7 +83,8 @@ mountain::mapgen::Level scenario_level(const Scenario& sc) {
   return sc.stage == Stage::slope ? synthetic_slope() : flat_strip(sc.pitch, sc.packed);
 }
 
-ScenarioRun run_scenario(const Scenario& sc, const SkiSpec& spec, double hz) {
+ScenarioRun run_scenario(const Scenario& sc, const SkiSpec& spec, double hz,
+                         const std::function<void(const ScenarioStep&)>& each) {
   const mountain::mapgen::Level level = scenario_level(sc);
   const TreeIndex trees = build_tree_index(level);
   const World world{&level, &trees};
@@ -104,8 +105,10 @@ ScenarioRun run_scenario(const Scenario& sc, const SkiSpec& spec, double hz) {
     }
     const double x0 = s.x;
     const double z0 = s.z;
-    step_skier(s, sc.input(t, s), world, spec, dt, ev);
+    const SkierInput in = sc.input(t, s);
+    step_skier(s, in, world, spec, dt, ev);
     h = skier_hash(s, h);
+    if (each) each(ScenarioStep{t + dt, s, in, ev, level.ground_at(s.x, s.z)});
     const double now = t + dt;
     run.distance += core::hypot(s.x - x0, s.z - z0);
     run.top_speed = core::num::max(run.top_speed, s.speed);

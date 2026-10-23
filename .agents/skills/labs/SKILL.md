@@ -49,6 +49,13 @@ the labs and runs the lab at each value, prints every metric side by side and pu
 back (`docs/labs.md` § The sweep). Put the value you pick in the code and run the
 before-and-after as usual.
 
+**Seeing a scenario step by step**: add `--trace` to a scenario lab (`ride`, `sled`, `heli`,
+`para`). Each scenario writes `<id>.trace.tsv` and charts of it with its events marked, so a
+snap, a chatter or an event at the wrong moment is a ring or a grey line you can point at, and
+`ge graph` lays a before's and an after's file on one chart. A new scenario lab gets it by
+giving its runner an optional per-step callback and drawing through
+`engine/lab/series_charts.hpp` (`para_lab.cpp` is the pattern).
+
 Then read `previews/<id>/index.md` (the contact sheet) and open the pictures it lists. Each
 picture's band says what it shows and what to look for, so check exactly that. Time a
 `bench` lab on `PRESET=release`, because a debug build times the sanitizers.
