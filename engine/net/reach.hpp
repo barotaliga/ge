@@ -12,6 +12,8 @@
 // node straight to the host's public address. A punch carrying its nonce from another address
 // (the host's NAT gave that pair its own port) moves the connect there. A connect not
 // accepted within `direct_us` moves to the relay: the client binds it and connects through it.
+// A host whose router forwards it a port (portmap.hpp, `reach_host_forward`) is introduced by
+// that port, which lets every client straight in.
 // The outcome is `connected` with its path, direct or relay, or `failed` with why.
 //
 //   host:   reach_host_init(h, config, node)     every frame, after node_update: reach_host_update
@@ -22,7 +24,7 @@
 //
 // ge:summary Reaching a host through NATs: register, join, punch, the relay fallback, the path
 // ge:keywords net reach nat-traversal hole-punching punch rendezvous relay fallback direct path
-// ge:keywords peer-reflexive connect join register public-address turn ice
+// ge:keywords peer-reflexive connect join register public-address turn ice port-forward
 // ge:skill net
 // ge:test tests/net_reach_test.cpp
 #pragma once
@@ -73,6 +75,7 @@ struct ReachHost {
   Address public_address;  // as the server saw it
   int64_t last_register_us = 0, last_ask_us = 0;
   bool asked = false;
+  uint16_t forwarded_port = 0;  // the public port its router forwards to it, 0: none
   std::vector<Introduced> introduced;
   ReachStats stats;
 };
@@ -102,6 +105,9 @@ struct ReachClient {
 
 void reach_host_init(ReachHost& h, const ReachConfig& config, Node& node);
 void reach_host_update(ReachHost& h, int64_t now_us);
+// The host's router now forwards `port` to its socket (portmap.hpp; 0: no longer): it registers
+// again with it, and clients are introduced to that port, reached straight whatever their NAT.
+void reach_host_forward(ReachHost& h, uint16_t port, int64_t now_us);
 
 void reach_client_init(ReachClient& c, const ReachConfig& config, Node& node);
 // Ask the server for the session's host; the reach starts now.

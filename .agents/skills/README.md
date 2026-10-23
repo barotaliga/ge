@@ -28,6 +28,7 @@ router's Skills table and the directories against each other.
 | `release` | Changeset fragments, the installed package, cutting a release to GitHub Releases + Packages |
 | `sim` | Fall Line's headless simulation: mapgen, the step, the bot, the run clock |
 | `platform` | SDL3: window, input, gamepad, audio device, files, focus |
+| `move` | Character movement: the knobs and presets, the step, strafe jumping, steps, slopes, crouch, the trace a world answers, the `move-*` labs |
 | `input` | Input devices: keyboards, raw mice, gamepads, wheels and pedals, sticks, touch; actions, bindings, rebinding, feedback, the event log |
 | `gpu` | The native GPU device over Dawn: device, feature tiers, resources, the pipeline manifest, WGSL |
 | `render` | The pass table, a pass's two halves, the rules that keep a frame fast, captures and prices |
@@ -39,7 +40,7 @@ router's Skills table and the directories against each other.
 | `perf` | Budgets, measuring, the proofs a speed-up owes, the levers |
 | `agent-interface` | Diagnostics as prompts, consumer skills, the `ge` CLI |
 | `bots` | What a bot decides: `engine/ai`, the decision record, `ge why`, making a bot more human |
-| `net` | Multiplayer networking: sockets, the simulated network, captures, the wire, channels, nodes, sessions and the lobby, LAN discovery, NAT traversal, fake traffic |
+| `net` | Multiplayer networking: sockets, the simulated network, captures, the wire, channels, nodes, sessions and the lobby, LAN discovery, NAT traversal, port mapping, fake traffic |
 | `services` | Platform services: achievements, stats, leaderboards, cloud, presence, friends, overlay, DLC and screenshots behind one interface; the simulated and offline stores; Steam's backend |
 | `plugins` | Engine, plugin or game: where code lives, adding a plugin, moving code between homes |
 
