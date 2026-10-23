@@ -2,7 +2,7 @@
 title: A state change made between steps has its event wiped by the next step; read it at once
 date: 2026-10-23
 scope: games/fall_line/labs/gpu_hud_lab.cpp
-concepts: [hud, news, events, set_wanted, lab, step]
+concepts: [hud, news, events, set-wanted, lab, step]
 ---
 
 The `hud` lab raised the wanted level with `set_wanted` between two steps, and the news never
