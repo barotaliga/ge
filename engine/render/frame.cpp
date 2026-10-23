@@ -13,6 +13,7 @@
 #include <cstring>
 #include <vector>
 
+#include "render/clouds.hpp"
 #include "render/night.hpp"
 
 namespace ge::render {
@@ -95,6 +96,8 @@ void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint
   u.night[1] = static_cast<float>(n.dark_light * pre);
   u.night[2] = static_cast<float>(n.sidereal);
   u.night[3] = static_cast<float>(n.latitude);
+  // THE CLOUD (render/clouds.hpp).
+  cloud_rows(view.clouds, u.cloud_info, u.clouds);
 }
 
 FrameTargets create_targets(gpu::Device& device, std::string_view label, uint32_t width,

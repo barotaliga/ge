@@ -64,8 +64,14 @@ struct FrameUniforms {
   float moon_light[4];  // lit surface's, earthlit part's luminance; angular radius; 1 if the key
   float night_sun[4];   // unit direction toward the real sun; w: its illuminance, pre-exposed
   float night[4];       // the dark sky's zenith luminance, its light, the sidereal angle, latitude
+  float cloud_info[4];  // the cloud's layers drawn, 0, 0, 0
+  // Three a layer (render/clouds.hpp's `cloud_rows`): base, top (world m), the noise's cut, one
+  // over the cell (1/m); the wind's heading (cos, sin), the drift and the age in the noise's
+  // tile (0..1); one over the stretch, the dome, the density (1/m), the shadow's optical depth.
+  float clouds[kCloudLayers * 3][4];
 };
-static_assert(sizeof(FrameUniforms) == 64 * 3 + 16 * 5 + 16 * 6 + 16 * 8, "match frame_types.wgsl");
+static_assert(sizeof(FrameUniforms) == 64 * 3 + 16 * 5 + 16 * 6 + 16 * 9 + 16 * 3 * kCloudLayers,
+              "match frame_types.wgsl");
 
 // The last frame's unjittered camera. Invalid on the first frame and after a cut, when the
 // "previous" camera is this one (no motion).

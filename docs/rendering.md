@@ -207,8 +207,9 @@ The order, with what each stage is for:
    snow shader runs exactly once, whatever the draw order. This is the direct answer to
    the ground's fragment cost, and it lets the ground's shader drop `discard`, which
    tile-based GPUs pay for across a whole draw.
-6. **Sky and clouds:** the sky behind the depth buffer; the cloud volume at a quarter of
-   the pixels, reprojected from last frame (§ Sky).
+6. **Sky and clouds:** the sky behind the depth buffer; the cloud volume over it (as built
+   at the render resolution, resolved by TAA; at a quarter of the pixels, reprojected from
+   last frame, once the quality ladder has the stop: § Sky).
 7. **Transparent:** particles and glows, softened against the depth buffer.
 8. **Temporal resolve:** anti-aliasing and upscaling to the output size (§ Anti-aliasing).
 9. **Post:** one compute pass for exposure, bloom, the colour grade, tone mapping, dither
@@ -604,8 +605,48 @@ A clear `Weather` (the default) changes no bit of the picture. What the mountain
 are in these numbers is `plugins/mountain/app/weather_look.hpp`, and Fall Line's frame reads the
 map's sky at the view's time (`FrameOptions::weather`). The `weather` lab draws all eight: from
 seed 38's piste the clear day's picture spreads 37 levels of luma, an overcast's 15, a snow's 3
-and a storm's 2. The cloud volume itself (heaps and a veil drawn, each place's own share of the
-sun) is M8f3.
+and a storm's 2. The cloud volume itself is M8f3 (below).
+
+**The cloud in the picture (M8f3).** A frame is seen under up to three cloud layers
+(`render/view.hpp`'s `Clouds`, in the frame block as `cloud_info` and `clouds`), drawn by
+`render/clouds.hpp`:
+
+- THE SHAPE is one tileable noise, a 64³ value-noise fbm made on the CPU (the same bytes on
+  every machine; the frame's group 0 binds it with a repeating sampler beside the sky's tables).
+  A layer reads it flat at its cell's scale for its COLUMN, the third axis its age, and stands
+  where the noise passes the cut its cover sets: `cloud_cut` is the noise's own quantile, so the
+  cover is a true share of the sky (the `weather` lab measures fair's dealt 0.29 as 0.28). Within
+  its slab a HEAP grows from a flat base to a top the fuller the column the taller, a SHEET
+  thickens about its middle, and two more reads at a quarter and an eighth of the cell eat its
+  edge, harder toward the top.
+- THE WIND carries each layer along its heading (the drift, kept within the noise's tile in
+  double) and its shape changes as it goes (the age).
+- THE LIGHT on a point of cloud is the key light through the air to its height, through the
+  layers above (their shadow at its middle) and through its own cloud toward the light (four
+  reads at growing steps): Beer's law for the light that has not scattered, and for the light
+  scattered on (forward, so it dies at the reduced extinction σ(1 − g), g ≈ 0.85) one wide lobe
+  standing for its many orders, so a thick heap is as bright as snow in the light; a powder term
+  darkens a thin edge seen with the light behind the eye; the sky's light from above and the
+  snow's from below. Far cloud is hazed at its mean distance and melts into the sky from 25 to
+  55 km.
+- THE SHADOW on everything lit (`cloud_shadow` in `wgsl/frame.wgsl`, read by `sun_light(y, xz)`)
+  is each layer's column where the beam toward the key light crosses its middle, taking
+  exp(−column × the layer's shadow depth) off the light: each place its own share of the sun.
+- THE PASS ("clouds", after the sky) is a full-screen triangle at the render resolution marching
+  each pixel's ray, nearest layer first, up to what the depth target holds (28 steps through a
+  heap, 10 through a sheet, a new offset every frame for TAA to resolve), laid over the HDR
+  target premultiplied. With no layer it is an empty pass. The quarter-resolution march with
+  reprojection (§ Sky, atmosphere and clouds) is a stop for the quality ladder (M8f4): on
+  lavapipe at 1280 × 720 the full march costs 49 to 68 ms against an empty pass's 0.1, a CPU
+  raster's number that only says the march is the frame's heaviest pass when the sky is broken.
+
+What the mountain's broken skies stand is `plugins/mountain/app/cloud_field.hpp`: FAIR heaps at
+1.5 to 2 km over the valley floor and a few ice streaks at 8 km, FLURRIES' taller heaps under a
+rippled sheet at 4 km, a HIGH sky's streaks over a veil; every band dealt off the map's seed,
+the layers carried at a quarter of the wind aloft (the map's mean wind grown and turned with
+height) and living their kind's life. Where they are drawn a broken sky's mean cloud
+(`weather_look`'s pass and cover) is given back, since the layers cast their own shadows; a
+lid keeps its deck.
 
 **The night in the picture (M8f2).** A frame's `Night` (`render/view.hpp`, filled by
 `render/night.hpp`'s `set_night` once the game has placed the sun) carries the moon and the dark

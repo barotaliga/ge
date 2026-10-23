@@ -27,11 +27,17 @@
 // default is a clear sky: nothing changes. What a world's weather kinds mean in these numbers is
 // the world's (plugins/mountain/app/weather_look.hpp); wgsl/frame.wgsl reads them.
 //
+// THE CLOUD a frame is seen under is `FrameView::clouds` (`Clouds`): up to three layers, each a
+// slab of the air (its base and its top, world metres) where a tileable noise passes the cut its
+// cover sets, carried by the wind and changing its shape as it goes. render/clouds.hpp draws it
+// and casts its shadow, each place its own share of the sun. The default is none.
+//
 // ge:summary The FrameView a game extracts each frame, and its camera matrices and frustum
 // ge:keywords render frame-view camera view projection reverse-z infinite-far camera-relative
 // ge:keywords frustum planes heading pitch fov mat4 inverse sun-direction camera_matrices
 // ge:keywords look_dir sun_direction depth_distance distance-from-depth unproject weather
 // ge:keywords overcast deck cloud-cover sun-pass visibility fog flat-light night moon key-light
+// ge:keywords cloud-layer clouds heap sheet
 // ge:skill render
 // ge:test tests/render_view_test.cpp
 #pragma once
@@ -63,6 +69,27 @@ struct Weather {
   double deck_tint[3] = {0.86, 0.9, 0.98};
   double deck_light = 1.0;
   double deck_zenith = 0.6;
+};
+
+// ONE LAYER OF CLOUD (render/clouds.hpp): a slab of the air where the noise passes its cover's
+// cut; within it a HEAP's top grows into the cell from a flat base, a SHEET thickens about its
+// middle.
+struct CloudLayer {
+  double base_m = 0, top_m = 0;  // world heights of its base and its top, m
+  double cover = 0;              // the share of the sky it covers, 0..1
+  double cell_m = 1500;          // one cell's span across the wind, m
+  double stretch = 1;            // how far a cell is drawn out along the wind
+  double heading = 0;            // the heading the wind carries it toward, rad
+  double drift_m = 0;            // how far the wind has carried it, m
+  double evolve = 0;             // the shape's age in cell lives (the noise's third axis)
+  double dome = 1;               // 1 a heap, 0 a sheet
+  double density = 0.02;         // the extinction inside a full cell, 1/m
+  double shadow_tau = 0;         // the optical depth a full column takes off the sun below
+};
+inline constexpr int kCloudLayers = 3;
+struct Clouds {
+  int count = 0;
+  CloudLayer layers[kCloudLayers];
 };
 
 // THE NIGHT a frame is seen under (render/night.hpp fills it from where the moon is). The
@@ -114,6 +141,7 @@ struct FrameView {
   double altitude_m = 0;
   Weather weather{};   // the cloud and the fog; the default is a clear sky
   Night night{};       // the moon, the stars and the dark sky's glow; the default is none
+  Clouds clouds{};     // the cloud's layers; the default is none
   double time_s = 0;   // the frame's time (the renderer reads no clock)
   uint64_t frame = 0;  // the frame's number (TAA's jitter is indexed by it)
 };

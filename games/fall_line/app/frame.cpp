@@ -14,7 +14,7 @@
 #include "fall_line/app/look.hpp"
 #include "fall_line/app/scene.hpp"
 #include "mountain/air/air.hpp"
-#include "mountain/app/weather_look.hpp"
+#include "mountain/app/cloud_field.hpp"
 #include "prof/zones.hpp"
 
 namespace fall_line::app {
@@ -52,6 +52,7 @@ constexpr r::PassRow kPassTable[] = {
      "sky.aerial sky.light depth",
      "hdr motion"},
     {"sky", "sky.view sky.moon_view depth", "hdr motion"},
+    {"clouds", "depth sky.aerial sky.light", "hdr"},
     {"particles", "particles terrain.horizon shadows.maps sky.aerial sky.light depth",
      "hdr motion"},
     {"snowfall", "snowfall terrain.horizon sky.aerial sky.light depth", "hdr motion"},
@@ -80,6 +81,7 @@ void make_targets(ge::gpu::Device& device, GameFrame& f, uint32_t w, uint32_t h)
     r::bind_family_hiz(device, f.instancing, *family, f.hiz);
   r::bind_particle_targets(device, f.particles, f.targets);
   r::bind_snowfall_targets(device, f.snowfall, f.targets);
+  r::bind_cloud_targets(device, f.clouds, f.targets);
   // The post pass (and the bloom) read TAA's two histories, or the HDR target for both.
   wgpu::TextureView inputs[2] = {f.targets.hdr_view, f.targets.hdr_view};
   if (f.options.taa) {
@@ -184,6 +186,7 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
                       options.particles);
   r::create_snowfall(device, f->pipelines, f->snowfall, f->frame_layout, f->terrain,
                      options.flakes);
+  r::create_clouds(device, f->pipelines, f->clouds, f->frame_layout);
   r::create_hiz_pipelines(device, f->pipelines, f->hiz);
   r::create_instance_pipelines(device, f->pipelines, f->instancing, f->frame_layout,
                                options.overdraw_probe, options.wire_probe);
@@ -320,7 +323,8 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   GE_ZONE("frame");
   // The map's sky at the view's moment: the cloud, the deck and the fog it is seen under.
   r::FrameView view = seen;
-  if (f.options.weather) view.weather = ge::mountain::app::weather_at(*f.level, view.time_s);
+  if (f.options.weather)
+    ge::mountain::app::sky_at(*f.level, view.time_s, view.weather, view.clouds);
   const auto start = std::chrono::steady_clock::now();
   f.recorder.begin_frame(device);
   // Prepare: every decision of the frame, and the uploads.
@@ -458,6 +462,7 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   r::encode_instances(families, f.instancing, f.pipelines, f.recorder, encoder, f.targets,
                       f.frame_group, f.instance_light);
   r::encode_sky(f.sky, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
+  r::encode_clouds(f.clouds, f.pipelines, f.recorder, encoder, f.targets, f.frame_group, view);
   r::encode_particles(f.particles, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
   r::encode_snowfall(f.snowfall, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
   if (f.options.taa) {
