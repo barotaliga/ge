@@ -87,6 +87,14 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   contexts, the bindings file and rebinding, the device database, touch controls, local players,
   rumble and force feedback as pure functions, a simulated backend and the event log. It depends
   on `engine/core` only; the OS's devices reach it through `engine/platform`'s backend.
+- **`engine/ui`**: the immediate-mode 2D layer (M22): paints (colours, linear and radial
+  gradients), a draw list of rounded boxes (a paint, an image, a border, a feather) and text runs
+  under clips, fonts over stb_truetype with a built-in family compiled in, a CPU raster (the labs'
+  pictures and the GPU pass's reference), backdrops (`Background`: a colour, a gradient, a drifting
+  picture, the live scene, scrims and vignettes) and menus as a model (pages, items, focus, events)
+  with a responsive view. It depends on `engine/core` only and holds no GPU: the draw list is data,
+  and the 2D pass in `engine/render` (M22b) draws the same commands. A menu never calls the game;
+  it hands back events, so the game's state stays the game's and a menu replays from its inputs.
 - **`engine/move`**: character movement (`ge::move`, M28; `docs/movement.md` is the design): the
   knobs of a moving body and their names, preset rows (an arena shooter's, a platformer's, a
   walker's), one step over a swept-box trace callback the game answers with its own world, a box
