@@ -53,7 +53,6 @@ real-hints eb15bbe4ffd14810
 real-maps 2dceaf5b64e32976
 record 4a94db34c7a30d69
 resort f82a1fca6fb6ba42
-ride e7b71a5977a27c65
 rooms 2cfb9254b2970dbe
 ride f9daa13afe749e0e
 routes 739cf0534473b4f8
