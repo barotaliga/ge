@@ -29,7 +29,7 @@ ge build                         # compiler and CMake errors come back as findin
 ge test [--filter=<regex>]       # every test and lab smoke; each failure a finding
 ge test --affected [--base=<ref>] [--list]  # only the tests the change reaches (the include graph)
 ge lab <id> [--tag=before | --compare=before] [-- <its flags>]   # measure and LOOK
-ge digest [<lab>] [--write]      # a lab's digest beside tests/labs_digests.txt; --write moves its row
+ge digest [<lab>...] [--write]   # the labs' digests beside tests/labs_digests.txt; --write moves their rows
 ge digest --diff                 # every lab, printing only the digests off the baseline
 ge golden diff [<test>] [--base=<ref>]   # what moved in each golden file, column by column
 ge golden write <test>           # a test's goldens rewritten (GE_GOLDEN_WRITE=1), held, diffed

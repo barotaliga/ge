@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "ai/memory.hpp"
 #include "fall_line/sim/wanted_rules.hpp"
 
 namespace fall_line::sim {
@@ -43,8 +44,8 @@ struct WantedState {
   bool seen = false;    // a pursuer has him in sight or the fix holds: the stars solid
   double unseen = 0;    // s out of every pursuer's sight, this search
   double fix = 0;       // s left of the fix the last offence gave them
-  double last_x = 0, last_y = 0, last_z = 0;  // where he was last seen, m: the search's centre
-  double look = 0;                            // s to the next look
+  ge::ai::Memory last;  // where and when he was last seen: the search's centre
+  double look = 0;      // s to the next look
   // Whether the army shoots to kill; false (the injuries switch off) and they chase him down and
   // arrest him instead. Kept across hunts in one run.
   bool lethal = true;

@@ -142,7 +142,7 @@ side, and charts the steer meant against pressed.
 | The report off a log, `ge sim --human` | `engine/play/human.hpp`, `sim --human` in `main.cpp`, `ge sim` in `engine/cli/play.cpp` | built (M16b) |
 | A skier's pilot (pure pursuit, the speed plan on the limits) | `plugins/skier/pilot.hpp` | built (M16c) |
 | Paths (one heap, grid and graph search), thinking on a schedule | `engine/ai/path.hpp`, `think.hpp` | built (M16d) |
-| Sight and memory, steering, choosing (utility, state machines) | `engine/ai/sight.hpp`, `memory.hpp`, `steer.hpp`, `choose.hpp` | M16e, with the army on foot |
+| Sight and memory, steering (pursuit along a line, a fan of headings, separation over a grid, the stuck check), choosing (a utility selector, a flat state machine, both decision records) | `engine/ai/sight.hpp`, `memory.hpp`, `steer.hpp`, `choose.hpp` | built (M16e) |
 
 A piece lands with its first user, never before (G4). A bot a game writes before its piece exists
 still records its decisions, and moves onto the piece when it lands.
