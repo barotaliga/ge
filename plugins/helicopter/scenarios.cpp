@@ -293,8 +293,9 @@ HeliRun run_heli_scenario(const HeliScenario& sc, double hz, ai::Why* why,
       run.crash = ev.crash;
       run.crash_time = t + dt;
       run.crash_fall = ev.fall;
-      break;
     }
+    // A wreck is run until it lies on the snow, then the run ends.
+    if (h.crashed != HeliCrash::none && h.grounded) break;
   }
   run.end = h;
   run.digest = digest;

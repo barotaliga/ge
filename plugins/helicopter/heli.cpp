@@ -95,7 +95,9 @@ bool landed_hard(const mg::Level& level, const HeliState& h, double sink, double
          lie.slope > spec::crash::kSlope;
 }
 
-// THE CRASH: down where it struck, its rotor stopped; how hard, reported.
+// THE CRASH: its rotor stopped where it struck; struck in the air (a crown, the rotor's tips) it
+// falls the rest of the way as a wreck (`step_heli`), never put on the snow in one step; how
+// hard, reported.
 void crash(HeliState& h, const mg::Level& level, HeliCrash kind, HeliEvents& ev) {
   const double speed = core::hypot3(h.vx, h.vy, h.vz);
   // How fast it was coming down when the snow stopped it: struck on a crown or by the rotor's
@@ -109,11 +111,15 @@ void crash(HeliState& h, const mg::Level& level, HeliCrash kind, HeliEvents& ev)
   ev.fall = sink;
   ev.stop = core::unrotate(heli_quat(h), Vec3{0, -sink, 0});
   h.crashed = kind;
-  h.vx = h.vy = h.vz = 0;
+  h.vx = h.vz = 0;
+  h.vy = -down;
   h.yaw_rate = h.pitch_rate = h.roll_rate = 0;
   h.disc.pitch_rate = h.disc.roll_rate = 0;
-  h.y = ground;
-  h.grounded = true;
+  h.grounded = fall <= 0;
+  if (h.grounded) {
+    h.y = ground;
+    h.vy = 0;
+  }
   h.spool = 0;
   h.thrust = 0;
   h.collective = 0;
@@ -350,7 +356,19 @@ double thrust_most(double along, double vc, double over, double through) {
 void step_heli(HeliState& h, const HeliControls& in, const HeliLoad& load, double spool_to,
                const HeliWorld& world, double dt, HeliEvents& ev) {
   ev = HeliEvents{};
-  if (h.crashed != HeliCrash::none) return;
+  if (h.crashed != HeliCrash::none) {
+    // THE WRECK falls to the snow under it and lies there.
+    if (h.grounded) return;
+    h.vy -= kG * dt;
+    h.y += h.vy * dt;
+    const double ground = world.level->ground_at(h.x, h.z);
+    if (h.y <= ground) {
+      h.y = ground;
+      h.vy = 0;
+      h.grounded = true;
+    }
+    return;
+  }
   h.spool = core::clamp(h.spool + num::sign(spool_to - h.spool) * F::kSpool * dt, 0.0, 1.0);
   h.controls = in;
   if (!fly(h, in, load, world, dt, ev)) return;

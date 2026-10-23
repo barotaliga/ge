@@ -42,8 +42,9 @@ tested every step. Near the map's edge an air band turns it back toward the midd
   outside `HeliState`. `heli_hash` is the trajectory's digest.
 - **The wind is the caller's.** `HeliWorld::air_x/air_z` is the air it flies through; the plugin
   models no weather.
-- **A crash is reported, never handled.** `HeliEvents::crash` says why; the machine is left where
-  it came down and the game owns the wreck, the fire and the people.
+- **A crash is reported, never handled.** `HeliEvents::crash` says why; a machine struck in the
+  air keeps its descent and falls to the snow as a wreck (never snapped there: the position
+  only moves by its velocity), and the game owns the wreck, the fire and the people.
 - **Test on the hand-built maps.** A new situation is a row in `scenarios.cpp`'s table: a golden
   row and, if it has one right answer, an expectation in `tests/helicopter_scenarios_test.cpp`.
 - **A model change moves the golden on purpose**: `make lab LAB=heli ARGS=--tag=before`, change,

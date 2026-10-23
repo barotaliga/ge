@@ -235,3 +235,32 @@ TEST(the_bot_flies_the_same_traced_and_says_why_it_slowed_and_settled) {
             "the landing's record never slowed to stop at the aim or settled "
             "onto it; read plugins/helicopter/pilot.cpp (skill: bots)");
 }
+
+TEST(a_wreck_struck_in_the_air_falls_to_the_snow_and_never_jumps) {
+  // Struck on the crown 8 m up, the airframe falls the rest of the way: no step moves it more
+  // than its speed allows (a margin for gravity over the step), and it ends on the snow.
+  const hc::HeliScenario* sc = hc::find_heli_scenario("tree");
+  CHECK(sc != nullptr);
+  double px = 0, py = 0, pz = 0, last_speed = 0, worst = 0;
+  bool first = true;
+  double rest = -1;
+  const double dt = 1.0 / 120;
+  hc::run_heli_scenario(*sc, 120, nullptr, [&](const hc::HeliStep& st) {
+    const auto& h = st.heli;
+    const double speed = std::sqrt(h.vx * h.vx + h.vy * h.vy + h.vz * h.vz);
+    if (!first) {
+      const double moved =
+          std::sqrt((h.x - px) * (h.x - px) + (h.y - py) * (h.y - py) + (h.z - pz) * (h.z - pz));
+      const double allowed = (std::max(speed, last_speed) + 10 * dt) * dt + 0.01;
+      worst = std::max(worst, moved / allowed);
+    }
+    first = false;
+    px = h.x, py = h.y, pz = h.z, last_speed = speed;
+    if (h.crashed != hc::HeliCrash::none && h.grounded && rest < 0) rest = st.t;
+    if (h.crashed != hc::HeliCrash::none) CHECK(h.y >= st.ground - 1e-9);
+  });
+  CHECK_MSG(worst <= 1, "the airframe jumped " + std::to_string(worst) +
+                            " times what its speed allows in one step; a crash or a strike set "
+                            "its place without its velocity (plugins/helicopter/heli.cpp)");
+  CHECK_MSG(rest > 0, "the wreck never came to rest on the snow");
+}
