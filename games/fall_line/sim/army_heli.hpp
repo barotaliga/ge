@@ -34,7 +34,7 @@
 // - Every machine out is written into the wanted level's pursuers (`kPursuerBase` + its id), so its
 //   crew's eyes keep the stars up.
 //
-// The door guns (their aim and their fire) are gunfire's, a later row. `step_army` steps the
+// The door guns are manned and fired by army_door.hpp, through gunfire. `step_army` steps the
 // machines after the men and their snowmobiles. Nothing here draws a random number or allocates in
 // a step (a machine's way round its circle is its id's own), and `ArmyState::helis` stays empty on
 // every run whose hunt never reached a star.
