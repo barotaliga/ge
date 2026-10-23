@@ -226,7 +226,7 @@ mg::Level heli_scenario_level(const HeliScenario& sc) {
   return sc.stage == HeliStage::slope ? skier::synthetic_slope() : skier::flat_strip(sc.pitch, 1);
 }
 
-HeliRun run_heli_scenario(const HeliScenario& sc, double hz) {
+HeliRun run_heli_scenario(const HeliScenario& sc, double hz, ai::Why* why) {
   const mg::Level level = heli_scenario_level(sc);
   const skier::TreeIndex trees = skier::build_tree_index(level);
   const HeliWorld world{&level, &trees};
@@ -259,7 +259,9 @@ HeliRun run_heli_scenario(const HeliScenario& sc, double hz) {
                                      core::hypot3(h.vx, h.vy, h.vz), h.vy, h.roll, h.disc.pitch,
                                      h.collective, h.grounded});
     }
-    const HeliControls in = sc.hand ? sc.hand(t, h) : heli_pilot(h, world, load, sc.aim);
+    const HeliControls in =
+        sc.hand ? sc.hand(t, h)
+                : heli_pilot(h, world, load, sc.aim, why ? why->follow(0, i) : nullptr);
     step_heli(h, in, load, 1, world, dt, ev);
     digest = heli_hash(h, digest);
     run.top_speed = num::max(run.top_speed, core::hypot3(h.vx, h.vy, h.vz));
