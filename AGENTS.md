@@ -332,4 +332,4 @@ and the directories agree.
 | `perf` | Any optimisation, a benchmark, a profile, a cost claim |
 | `agent-interface` | Diagnostics wording, consumer skills, the `ge` CLI (M12) |
 | `bots` | Anything a bot decides: `engine/ai`, the decision record every bot writes, `Run::trace`, `ge why`, making a bot more human, paths and thinking on a schedule (M16) |
-| `net` | `engine/net`: multiplayer networking: sockets, the simulated network and its conditions, captures, the wire format, connections and channels, nodes up to 32, sessions (lobby, teams, chat, kick, reconnect), LAN discovery, NAT traversal (STUN, the rendezvous, hole punching, the relay), fake traffic, the `net-link`, `net-session` and `net-reach` labs; the M17 plan |
+| `net` | `engine/net`: multiplayer networking: sockets, the simulated network and its conditions, captures, the wire format, connections and channels, nodes up to 32, sessions (lobby, teams, chat, kick, reconnect), LAN discovery, NAT traversal (STUN, the rendezvous, hole punching, the relay, a port opened by PCP, NAT-PMP or UPnP), fake traffic, the `net-link`, `net-session` and `net-reach` labs; the M17 plan |

@@ -1,6 +1,6 @@
 ---
 name: net
-description: "Use for engine/net in gameengine2: multiplayer networking. Addresses, the wire, UDP and TCP sockets, the simulated network (stream links too) and its conditions, pcap captures, the packet format, connections (acks, round trip, loss, unreliable/sequenced/reliable channels, big messages in pieces, priorities, the send budget), nodes (host, client, peer; up to 32), sessions (the lobby: seats, teams, chat, kick, start, reconnect by token), LAN discovery, NATs (the simulated kinds, STUN, the rendezvous, hole punching, the relay), fake-traffic sessions, the net-link, net-session and net-reach labs; and the M17 plan (lobby, chat, NAT, replication, lockstep, voice, accounts)."
+description: "Use for engine/net in gameengine2: multiplayer networking. Addresses, the wire, UDP and TCP sockets, the simulated network (stream links too) and its conditions, pcap captures, the packet format, connections (acks, round trip, loss, unreliable/sequenced/reliable channels, big messages in pieces, priorities, the send budget), nodes (host, client, peer; up to 32), sessions (the lobby: seats, teams, chat, kick, start, reconnect by token), LAN discovery, NATs (the simulated kinds, STUN, the rendezvous, hole punching, the relay), opening a port on the router (PCP, NAT-PMP, UPnP IGD, the simulated router), fake-traffic sessions, the net-link, net-session and net-reach labs; and the M17 plan (lobby, chat, NAT, replication, lockstep, voice, accounts)."
 ---
 
 # Networking
@@ -31,6 +31,8 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
 | `net/stun.hpp` | STUN's Binding request and answer: the public address a NAT gave a socket |
 | `net/rendezvous.hpp` | The public server: sessions registered, a client introduced to its host with a nonce and a relay port, STUN answered, relays forwarding |
 | `net/reach.hpp` | The two ends on the node's socket: the host registers and punches, the client joins, connects, follows a punch's port (`node_retarget`), falls back on the relay; `reach_wire.hpp` the messages (not installed) |
+| `net/portmap.hpp` | Opening a port on the router: PCP, then NAT-PMP, then UPnP IGD on a socket of its own; the lease renewed at half its life, closed with a lease of 0; `portmap_wire.hpp` the three protocols' messages (not installed) |
+| `net/sim_router.hpp` | The simulated router: PCP, NAT-PMP, SSDP and UPnP's SOAP answered on a NAT's LAN face (`NatConfig::gateway`), each grant a forward on the NAT |
 | `net/traffic.hpp` | Fake traffic: a whole session over the simulated network, measured end to end |
 
 ## Rules
@@ -68,6 +70,11 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
   path a pair should take follows from RFC 4787 (a hole opens unless one side is symmetric and
   the other port-restricted or symmetric), and the `net-reach` lab and `net_reach_test` hold every
   pair to it. The rendezvous never answers bigger than it was asked: pad every new ask.
+- **A router's protocols are stated once, in `portmap_wire.hpp`,** for the client and the
+  simulated router alike; a router's behaviour (what it speaks, the lease cap, a taken port, the
+  permanent-only quirk) lives in `sim_router.cpp`. A forwarded socket's datagrams leave from the
+  forwarded port (`map_out`), as a real router's static mapping does: a host answering from
+  another port would never be reached by its forward.
 
 ## Labs and tests
 
@@ -86,7 +93,9 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
 - `make lab LAB=net-reach` (`--presets=lan,wifi,bad`): every pair of NAT kinds (none, full cone,
   restricted, port-restricted, symmetric) reaching a host through the rendezvous: the path each
   took against the one predicted, its connect time, a reliable message each way; STUN from
-  behind each kind; the connect times as a heatmap.
+  behind each kind; the connect times as a heatmap; then a symmetric host's router speaking each
+  of PCP, NAT-PMP and UPnP: the time to map, the fallbacks, the renewals of a 20 s lease over a
+  minute, a client behind another symmetric NAT let straight in, the close.
 - `ge net` (`build/debug/ge net ...`; `engine/cli/net.hpp`): `inspect <pcap>` decodes every
   datagram, `stats <pcap>` measures each connection from the capturing node (rtt, loss each way,
   dups, reorders, resends) and charts its kbps, rtt and loss, `sim` runs the same sessions as the
@@ -99,6 +108,9 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
   handshake, the 32-peer limit, denial and timeouts; `net_session_test` every session rule;
   `net_discovery_test` probes and adverts on the simulated network and real loopback UDP;
   `net_sim_network_test` each NAT kind's filter, expiry and forwards; `net_stun_test` the RFC's
-  layout; `net_reach_test` every pair of kinds, an unknown session and a missing relay.
+  layout; `net_reach_test` every pair of kinds, an unknown session and a missing relay;
+  `net_portmap_test` each protocol's map, renewal and close on the simulated router, the
+  fallbacks, the permanent-only and refused cases, a forwarded symmetric host reached directly,
+  the RFC layouts, and NAT-PMP and UPnP over real loopback sockets.
 - Before and after a change here: `make lab LAB=net-link ARGS=--tag=before`, then
   `--compare=before`, both in the PR.
