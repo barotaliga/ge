@@ -294,7 +294,8 @@ std::string list_json() {
     j += "{\"id\":" + json_str(s->id) + ",\"kind\":" + json_str(std::string(kind_name(s->kind))) +
          ",\"owner\":" + json_str(s->owner) + ",\"subject\":" + json_str(s->subject) +
          ",\"skill\":" + json_str(s->skill) + ",\"question\":" + json_str(s->question) +
-         ",\"smoke\":" + json_str(s->smoke) + ",\"flags\":[";
+         ",\"smoke\":" + json_str(s->smoke) + ",\"source\":" + json_str(lab_source(s->id)) +
+         ",\"flags\":[";
     for (size_t i = 0; i < s->flags.size(); i++) {
       const LabFlag& f = s->flags[i];
       j += (i ? "," : "") + std::string("{\"name\":") + json_str(f.name) +

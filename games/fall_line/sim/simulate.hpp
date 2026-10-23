@@ -37,6 +37,9 @@ struct SimOptions {
   // The player's pilot records its decisions here (agent 0, by step) on the machines' outings
   // (`simulate_heli_outing`); null records nothing and decides the same.
   ge::ai::Why* why = nullptr;
+  // THE INJURIES SWITCH (`GameState::injuries`) on the free ride's runs (`simulate_free`): the
+  // player's body stepped after his skis, hurt and killed by his blows.
+  bool injuries = false;
 };
 
 // One racer's run in a field, in field order (the player first).
@@ -80,6 +83,12 @@ struct RunReport {
   int32_t para_flights = 0;  // take-offs flown under the free ride's paramotor
   double para_time = 0;      // s hung in its harness
   double climbed = 0;        // m, the most the player rose over where he started
+  // THE BODY (read only with the INJURIES switch on): the injuries he took, his severity score at
+  // the run's end, his hardest blow, g, and when he died, s (-1 alive; his run ends there).
+  int32_t injuries = 0;
+  int32_t iss = 0;
+  double peak_g = 0;
+  double died = -1;
   int64_t steps = 0;
   uint64_t digest = 0;  // FNV-1a over every step's state
   ge::racing::ControlTape tape;
