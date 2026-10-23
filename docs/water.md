@@ -267,20 +267,29 @@ derived visibility leaves it:
 enough for most of a map. A **flow region** is simulated: the shallow-water equations on a
 uniform grid over a bed, for water that has somewhere new to go.
 
-- **The scheme**: the flux (virtual pipe) form: each cell's depth and the flux through its four
-  faces, accelerated by the difference in surface height across each face, limited so no cell
-  drains below empty, the depths updated from the net flux. It conserves the mass exactly,
-  handles dry cells and wetting fronts, and is cheap enough for 512² cells on the CPU at the
-  fixed step, split into rows across threads with every row reading only the previous state, so
-  the result is the same bits on any thread count. Sub-steps keep the CFL condition
-  (Δt ≤ Δx / (|u| + √(g·h))).
+- **The scheme**: a finite-volume Godunov scheme: each face's flux of mass and momentum by the
+  HLL Riemann solver over the hydrostatic reconstruction (each side's depth taken over the
+  face's higher bed, with the matching pressure correction), so still water over any bed stays
+  still to rounding, wet fronts run onto dry cells at their characteristic speed, and the
+  momentum is carried with the water (a front is not held at √(g·h)). Manning's friction and a
+  game's own loss term act implicitly. Sub-steps keep the CFL condition at 0.4
+  (Δt ≤ 0.4 Δx / (|u| + √(g·h))).
+- **Exact mass**: a cell's water is an integer count of quanta (10⁻⁹ m³); each face's flux
+  becomes quanta, a cell's outflow is scaled down to what it holds, and the same quanta leave one
+  cell and enter the next, so nothing is made or lost in any pass. The books (start + added −
+  drained = now) balance to the quantum in every lab and test.
+- **Threads**: the passes run on bands of rows (`core::parallel_bands`); each pass reads only
+  the state the previous pass finished, so one thread and eight give the same bits
+  (`FlowSpec::workers`).
 - **The bed** is a height per cell, from a heightfield or a brush world rasterised to column
   heights; walls are bed raised to their top. **Breaking a wall is lowering its cells**: the
   water behind it pours through, the basin empties at the rate its head allows, and the flood
   spreads over whatever is downhill. A lake or a volume woken into a region starts from its
   level over the bed.
-- **Sources and sinks**: springs, inflows with a discharge, drains, outflows at the region's
-  edge, rain.
+- **Sources and sinks**: springs and inflows with a discharge (`Source`), drains with a hole's
+  area and discharge coefficient emptying by Torricelli's law (`Drain`), and edges left open
+  (`FlowSpec::open`, a bitmask of the four sides) that let the water out of the region; every
+  other edge is a wall.
 - **Waterfalls**: where the flow leaves a lip (the bed dropping much more than the depth, at
   speed), the water leaves the grid as a sheet on a ballistic path from the lip's velocity and
   re-enters where the path lands, after its time in the air, so the mass is held across the
@@ -291,10 +300,17 @@ uniform grid over a bed, for water that has somewhere new to go.
   no flooded overhang; a building's floors are separate regions joined by sources and sinks
   where water falls through a stair or a hole.
 
-The checks: a dam break against Ritter's analytic solution for a dry bed; a basin emptying
-through an orifice against Torricelli's law (the outflow ∝ √head); a steady river's
-discharge in equals its discharge out; the total volume constant to the bit when there are no
-sources or sinks.
+The checks (`tests/water_flow_test.cpp`, the `flow` lab), measured:
+
+| Check | Law | Measured |
+| --- | --- | --- |
+| Dam break on a dry bed | Ritter's analytic solution | 0.015 m rms at 5 s, 0.011 at 10 s, 0.005 at 20 s; the front's thin tip at 206 m against 225 m at 20 s (a first-order scheme smears the tip) |
+| A tank's drain | Torricelli, Q = Cd A √(2 g h) | within 1% at every head |
+| A breach in a basin's wall | the weir, Q = C b H^1.5 | the power 1.49, the coefficient 0.78 of the broad-crested weir's |
+| A river over a 6 m cliff | the sheet's ballistic arc | 2.00 m³/s in, 2.00 m³/s carried by the sheets, landing 13.75 m out (1.75 m beyond the lip) |
+| Still water over a rough bed | at rest | speeds under 10⁻⁶ m/s after 10 s |
+| The books | start + added − drained = now | to the quantum, through springs, drains, open edges, falls and tier changes |
+| Threads | one against eight | the same bits |
 
 ## Drawn (`engine/render/water*`, M24g–M24i)
 
@@ -378,11 +394,17 @@ the one rule that keeps the game deterministic decides **what the distance is me
 | **Far** (beyond about 400 m) | A settled flow region **sleeps** (its state held, costing nothing until an actor or a breach wakes it); a channel's steady profile stands in for a far stretch of simulated river; nothing else | Only the long components as geometry; every shorter wave folded into the lighting (the filtered slope variance), so the far water glints right and never shimmers; the sky's reflection, no SSR |
 | **Horizon** | Nothing | The sea drawn analytically to the horizon in the sky pass's terms, matching the far rings' colour at their rim |
 
-**Changing tier never pops and never loses water.** A flow region coarsened merges cells by
-their volume and is refined by spreading each coarse cell's volume over its fine cells along
-the surface's slope, so the mass is held to the bit and the surface moves by less than the
-coarse cell's own error; tiers overlap by a band and a cell changes tier only past it
-(hysteresis), so an actor on a boundary does not flicker it. A sleeping float wakes exactly on
+**Changing tier never pops and never loses water.** A flow region coarsened merges each 2×2
+block of cells by summing its quanta and averaging its bed and momentum; each coarse face keeps
+the crest of the finer faces along it, so a wall thinner than a coarse cell still holds its
+water. Refined, each coarse cell's water is levelled over its four finer beds (lowest first)
+to the quantum. The finest bed is always kept, so at a coarse tier `flow_at` stands the coarse
+surface over the true bed (a rock inside a coarse cell stays dry). Measured in `water-lod`, a
+flood changed tier six times in 12 s holds its water to the quantum, and the surface moves by
+a median of 1–3 cm (95th percentile 2–16 cm); the largest jumps, up to 2.5 m, are on the cells
+beside a 6 m wall, the relief a coarse cell cannot see. `tier_for(flow, actors, near, mid,
+band)` picks a region's tier from the nearest actor, moving each edge out by `band` while the
+region is inside it (hysteresis), so an actor wobbling on a boundary does not flicker it. A sleeping float wakes exactly on
 the analytic surface it slept on. On the picture's side each cascade and each effect is faded
 by distance over its band rather than switched, and the `water-lod` lab's per-distance-band
 picture diff holds it.

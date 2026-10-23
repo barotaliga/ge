@@ -21,7 +21,9 @@
 // section's mean speed in the middle falling to nothing at the banks), with a ripple of its own. A
 // VOLUME is a set of convex hulls, each a list of planes, its surface the hull's top over a point:
 // a brush world's water, slime and lava, or any boxed water; a volume carries no waves
-// (`Body::waves` may be laid by hand).
+// (`Body::waves` may be laid by hand). A FLOW region (flow.hpp) is water simulated on a grid: a
+// wall broken, a basin emptying, a flood; `step_flows` steps every region and `sample` reads its
+// surface and current where its cells are wet.
 //
 // THE LOOK. A body's colour is what is in its water (optics.hpp): `Stuff::look` names a row of
 // `water::looks()`, or `Stuff::water` states the game's own constituents; `Body::optics` is
@@ -34,7 +36,7 @@
 // ge:summary Bodies of water (lake, ocean, channel, volume) and the one sample query
 // ge:keywords water world body lake ocean river channel stream volume brush hull add_lake
 // ge:keywords add_ocean add_river add_volume sample surface depth bed current density look
-// ge:keywords optics colour
+// ge:keywords optics colour add_flow step_flows
 // ge:skill water
 // ge:test tests/water_world_test.cpp
 #pragma once
@@ -46,13 +48,14 @@
 #include <vector>
 
 #include "water/fetch.hpp"
+#include "water/flow.hpp"
 #include "water/optics.hpp"
 #include "water/waves.hpp"
 #include "wind/field.hpp"
 
 namespace ge::water {
 
-enum class Kind : uint8_t { lake, ocean, channel, volume };
+enum class Kind : uint8_t { lake, ocean, channel, volume, flow };
 
 // The bed's height under a point, m (world y).
 struct Bed {
@@ -95,6 +98,7 @@ struct Body {
   std::vector<ChannelPoint> channel;  // a channel's centreline
   double discharge = 0;               // a channel's, m^3/s
   std::vector<Hull> hulls;            // a volume's
+  int flow = -1;                      // a flow region's index in `World::flows`
   Optics optics;                      // its colour, from its look (optics.hpp)
   Waves waves;                        // the sea laid on it
   FetchGrid fetch;                    // a lake's fetch per point
@@ -107,8 +111,9 @@ struct World {
   explicit World(const wind::Field& field) : wind(field) {}
   wind::Field wind;  // the air the waves grow from (its mean only)
   std::vector<Body> bodies;
-  uint32_t seed = 1;  // the waves' phases and directions, with the body's index
-  Lay lay;            // how every body's band is laid
+  std::vector<Flow> flows;  // the flow regions (flow.hpp), stepped by `step_flows`
+  uint32_t seed = 1;        // the waves' phases and directions, with the body's index
+  Lay lay;                  // how every body's band is laid
 };
 
 int add_lake(World& world, std::span<const Point> shore, double level, Stuff stuff = {},
@@ -118,6 +123,10 @@ int add_ocean(World& world, double level, Stuff stuff = {.look = "adriatic", .de
 int add_river(World& world, std::span<const ChannelPoint> centreline, double discharge,
               Stuff stuff = {.look = "glacial"}, Bed bed = {});
 int add_volume(World& world, std::span<const Hull> hulls, Stuff stuff = {});
+// A flow region (flow.hpp) laid as a body: its water is what `sample` returns where it is wet.
+int add_flow(World& world, Flow flow, Stuff stuff = {});
+// Every flow region one step of `dt` s.
+void step_flows(World& world, double dt);
 
 // WHAT THE WATER IS at a point and a moment.
 struct Sample {

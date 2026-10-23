@@ -181,6 +181,31 @@ bool sample_volume(const Body& body, double x, double y, double z, Sample& out) 
   return false;
 }
 
+bool sample_flow(const World& world, const Body& body, double x, double y, double z, Sample& out) {
+  const Flow& flow = world.flows[static_cast<size_t>(body.flow)];
+  const FlowSample s = flow_at(flow, x, z);
+  if (!s.inside || s.depth <= 0) return false;
+  // The surface's slope across a cell, for the normal.
+  const double d = flow.spec.cell;
+  const FlowSample e = flow_at(flow, x + d, z), w = flow_at(flow, x - d, z);
+  const FlowSample n = flow_at(flow, x, z + d), so = flow_at(flow, x, z - d);
+  const double dx = e.depth > 0 && w.depth > 0 ? (e.surface - w.surface) / (2 * d) : 0;
+  const double dz = n.depth > 0 && so.depth > 0 ? (n.surface - so.surface) / (2 * d) : 0;
+  const double len = std::sqrt(dx * dx + 1 + dz * dz);
+  out.surface = s.surface;
+  out.nx = -dx / len;
+  out.ny = 1 / len;
+  out.nz = -dz / len;
+  out.vx = s.vx;
+  out.vy = 0;
+  out.vz = s.vz;
+  out.depth = s.surface - y;
+  out.bed = s.bed;
+  out.density = body.stuff.density;
+  out.temperature = body.stuff.temperature;
+  return true;
+}
+
 void box_of(Body& body, double x0, double z0, double x1, double z1) {
   body.box[0] = x0;
   body.box[1] = z0;
@@ -287,6 +312,22 @@ int add_volume(World& world, std::span<const Hull> hulls, Stuff stuff) {
   return static_cast<int>(world.bodies.size()) - 1;
 }
 
+int add_flow(World& world, Flow flow, Stuff stuff) {
+  Body body;
+  body.kind = Kind::flow;
+  dress(body, std::move(stuff));
+  box_of(body, flow.spec.x0, flow.spec.z0, flow.spec.x0 + flow.spec.nx * flow.spec.cell,
+         flow.spec.z0 + flow.spec.nz * flow.spec.cell);
+  body.flow = static_cast<int>(world.flows.size());
+  world.flows.push_back(std::move(flow));
+  world.bodies.push_back(std::move(body));
+  return static_cast<int>(world.bodies.size()) - 1;
+}
+
+void step_flows(World& world, double dt) {
+  for (Flow& flow : world.flows) step_flow(flow, dt);
+}
+
 Sample sample(const World& world, double x, double y, double z, double t) {
   // The body the point is under the surface of wins; else the nearest surface below the point.
   Sample best;
@@ -307,6 +348,9 @@ Sample sample(const World& world, double x, double y, double z, double t) {
         break;
       case Kind::volume:
         hit = sample_volume(body, x, y, z, s);
+        break;
+      case Kind::flow:
+        hit = sample_flow(world, body, x, y, z, s);
         break;
     }
     if (!hit) continue;

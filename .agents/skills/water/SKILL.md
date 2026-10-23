@@ -27,7 +27,8 @@ for anything the simulation reads, `render` for a pass, `audio` for a voice, `la
 | Swimming: immersion, the kinematic and body regimes, clothes, cold, breath, the water jump | `engine/water/swim.hpp` | `swim` | `tests/water_swim_test.cpp` (golden) |
 | The dressed skier's swim preset | `plugins/skier/swim.hpp` | `skier-swim` | `tests/skier_swim_test.cpp` |
 | The colour from what is in the water: spectral IOPs, the shallows, the veil, visibility, the looks | `engine/water/optics.hpp` | `water-colour` | `tests/water_optics_test.cpp` (golden) |
-| Flow, drawn, sound | the rows M24f–M24l | the doc's § Labs | as each row lands |
+| Flowing water: the HLL scheme, the quanta, sources, drains, open edges, falls, the tiers | `engine/water/flow.hpp` | `flow`, `water-lod`, `water-cost` | `tests/water_flow_test.cpp` (golden) |
+| Drawn, sound | the rows M24g–M24l | the doc's § Labs | as each row lands |
 
 ## The rules
 
@@ -64,6 +65,15 @@ for anything the simulation reads, `render` for a pass, `audio` for a voice, `la
 - **A swimmer's test or lab skips the plunge.** Dropped in, any swimmer goes under for a
   second and bobs; "when his eyes go under" means after that (the `skier-swim` lab measures
   when they go under for good), or every number reads the plunge.
+- **Flowing water is counted in quanta.** A pass may move water only as whole quanta that leave
+  one cell and enter another (or the books' `added` and `drained`); a double added to a depth
+  anywhere is water made or lost. The `flow` lab's books and `water-lod`'s tier changes fail
+  on one quantum missing.
+- **A coarse tier keeps the walls.** A thin wall averaged into a coarse cell's bed lets a lake
+  through it while no one is near; the coarse faces' crests (`FlowGrid::sx`, `sz`) hold it. A
+  change to `coarsen` keeps `water-lod`'s three floods the same water in the same shape.
+- **A waterfall's first trickle lands at the foot.** The sheet's reach grows with the
+  discharge; check the landing on a sheet worth the name, never on the first quanta over the lip.
 - **A plan view drops the components shorter than a few pixels** (the picture's own tier):
   drawn, they alias into stripes that are not on the water.
 
