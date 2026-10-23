@@ -211,7 +211,7 @@ characters.
 | `engine/lab/` | The lab contract and runner (`ge::lab`): metrics, tables, captioned shots, digests, reports, the CPU raster and PNG, picture diffs, series, stats, charts, pose tracks; `labs/` the engine's own labs | `labs`, `debug` |
 | `engine/play/` | The play contract (`ge::play`): a game's spec and run, the recorded session and its protocol, input logs, shots, recordings, the bench, and the `play` executable's command line | `agent-interface` |
 | `engine/prof/` | The profiler (`ge::prof`): zones, allocation counts and the counting allocator, the peak resident set; feeds no digest | `perf` |
-| `engine/ai/` | The bots' layer (`ge::ai`): the decision record every bot writes where it chooses, read back by `ge why`, and the hands that make a bot look human | `bots` |
+| `engine/ai/` | The bots' layer (`ge::ai`): the decision record every bot writes where it chooses, read back by `ge why`, the hands that make a bot look human, the one cheapest-path search (graph and grid) and thinking on a schedule | `bots` |
 | `engine/cli/` | The `ge` command line for game repos (`cmake/Cli.cmake`): the command catalog, the answer shape and findings, and one file per command group | `agent-interface` |
 | `consumer-skills/` | The skills a game repo gets from `ge new` and `ge skills sync`, compiled into `ge`; written for a game repo, never for this one | `agent-interface` |
 | `scaffold/` | The game repo `ge new` writes, as `.in` files with placeholders, compiled into `ge` | `agent-interface` |
@@ -331,5 +331,5 @@ and the directories agree.
 | `debug` | Finding out why a run behaves as it does: log channels and `--log` dumps, series traces and spans, the outlier rule, the charts (PNG + SVG), `ge graph` |
 | `perf` | Any optimisation, a benchmark, a profile, a cost claim |
 | `agent-interface` | Diagnostics wording, consumer skills, the `ge` CLI (M12) |
-| `bots` | Anything a bot decides: `engine/ai`, the decision record every bot writes, `Run::trace`, `ge why`, making a bot more human (M16) |
+| `bots` | Anything a bot decides: `engine/ai`, the decision record every bot writes, `Run::trace`, `ge why`, making a bot more human, paths and thinking on a schedule (M16) |
 | `net` | `engine/net`: multiplayer networking: sockets, the simulated network and its conditions, captures, the wire format, connections and channels, nodes up to 32, fake traffic, the `net-link` lab; the M17 plan |

@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstring>
 
+#include "ai/think.hpp"
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "core/num.hpp"
@@ -430,8 +431,8 @@ void step_army(GameState& state) {
   int32_t home = 0;
   for (Soldier& s : a.soldiers) {
     s.t += kDt;
-    // THE LOOK, every `kLookEveryS`, each man on his own step of it.
-    if (s.mode != SoldierMode::ride && (steps + s.id) % kLookSteps == 0) {
+    // THE LOOK, every `kLookEveryS`, each man on his own step of it (ai/think.hpp).
+    if (s.mode != SoldierMode::ride && ge::ai::thinks(steps, s.id, kLookSteps)) {
       const Pursuer p{0, PursuerKind::soldier, s.x, s.y + army::kEyeM, s.z};
       s.sees = on && sees_quarry(*state.level, state.trees, p, q, false);
     }

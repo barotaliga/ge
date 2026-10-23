@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstddef>
 
+#include "ai/path.hpp"
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "fall_line/sim/free.hpp"
@@ -66,22 +67,47 @@ Outing outing_from(const mg::Level& level, const std::vector<ml::LiftPlan>& lift
   const mg::Track chain = run_chain(level, first);
   if (chain.points.empty()) return o;
   const mg::TrackPoint foot = chain.points.back();
-  double best = outing::kLiftReach;
-  for (const ml::LiftPlan& p : lifts) {
-    const double d = core::hypot(p.bottom.x - foot.x, p.bottom.z - foot.z);
-    const auto& ramps = level.resort->lifts[static_cast<size_t>(p.lift)].ramps;
-    if (d < best && !ramps.empty()) {
-      best = d;
-      o.lift = p.lift;
+  // THE GRAPH: a node for every run, then one for every lift (`runs + p`, by its plan's index),
+  // and last his own run again, come back to off a lift.
+  const auto runs = static_cast<int32_t>(level.resort->runs.size());
+  const auto again = runs + static_cast<int32_t>(lifts.size());
+  ge::ai::Search search(static_cast<size_t>(again) + 1);
+  search.seed(first);
+  const auto expand = [&](int32_t node) {
+    if (node == first) {
+      // From his run's foot, across the snow to every lift with a way off its top in reach.
+      for (size_t p = 0; p < lifts.size(); p++) {
+        const ml::LiftPlan& plan = lifts[p];
+        const double d = core::hypot(plan.bottom.x - foot.x, plan.bottom.z - foot.z);
+        const auto& ramps = level.resort->lifts[static_cast<size_t>(plan.lift)].ramps;
+        const auto lift = runs + static_cast<int32_t>(p);
+        if (d < outing::kLiftReach && !ramps.empty() && search.improves(lift, d)) {
+          search.reach(lift, d, node);
+        }
+      }
+      return;
     }
-  }
-  if (o.lift < 0) return o;
-  for (const mg::SummitRamp& r : level.resort->lifts[static_cast<size_t>(o.lift)].ramps) {
-    const int32_t k = run_index(level, r.run);
-    if (k < 0) continue;
-    if (o.next < 0 || (o.next == first && k != first)) o.next = k;
-  }
-  if (o.next < 0) o.lift = -1;
+    if (node < runs) return;
+    // From a lift's top, onto every run off its ramps: the first ramp's dearest by nothing, the
+    // way back down the run he came down by `kBackDown`.
+    const ml::LiftPlan& plan = lifts[static_cast<size_t>(node - runs)];
+    double rank = 0;
+    for (const mg::SummitRamp& r : level.resort->lifts[static_cast<size_t>(plan.lift)].ramps) {
+      const int32_t k = run_index(level, r.run);
+      if (k < 0) continue;
+      const double cost =
+          search.cost(node) + rank * outing::kRampRank + (k == first ? outing::kBackDown : 0);
+      rank++;
+      const int32_t to = k == first ? again : k;
+      if (search.improves(to, cost)) search.reach(to, cost, node);
+    }
+  };
+  // Done at the first run reached off a lift: the cheapest outing.
+  const int32_t to = search.run(
+      expand, [&](int32_t node) { return node == again || (node < runs && node != first); });
+  if (to < 0) return o;
+  o.next = to == again ? first : to;
+  o.lift = lifts[static_cast<size_t>(search.prev(to) - runs)].lift;
   return o;
 }
 
