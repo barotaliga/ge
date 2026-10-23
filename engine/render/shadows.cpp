@@ -279,8 +279,9 @@ void prepare_sun_shadows(gpu::Device& device, SunShadows& s, const FrameView& vi
   for (InstanceFamily* f : moving) {
     for (int k = 0; k < static_cast<int>(f->casters.size()); ++k) {
       if (k < s.figures) {
-        prepare_family_caster(device, *f, k,
-                              static_cast<float>(tile_texels / (2 * set.figure_radius)));
+        prepare_family_caster(
+            device, *f, k,
+            static_cast<float>(set.figure_lod_share * tile_texels / (2 * set.figure_radius)));
       } else {
         f->casters[static_cast<size_t>(k)].culled = false;
       }
