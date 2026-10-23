@@ -97,7 +97,11 @@ TEST(string_pulling_keeps_the_corners_a_wall_needs_and_drops_the_rest) {
     double x, z;
   };
   std::vector<P> pts;
-  for (const int32_t k : p.cells) pts.push_back({k % 20 + 0.5, k / 20 + 0.5});
+  pts.reserve(p.cells.size());
+  for (const int32_t k : p.cells) {
+    const int32_t row = k / 20;
+    pts.push_back({k % 20 + 0.5, row + 0.5});
+  }
   // Clear where the straight leg never passes a wall cell (sampled every 0.1 m).
   const auto clear = [&](size_t a, size_t b) {
     const double d = std::hypot(pts[b].x - pts[a].x, pts[b].z - pts[a].z);

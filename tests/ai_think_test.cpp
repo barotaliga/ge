@@ -36,7 +36,8 @@ TEST(the_steps_between_thoughts_rise_with_the_distance_from_the_player) {
   CHECK(ai::every_at(s, 150) == 7);
   CHECK(ai::every_at(s, 250) == 12 && ai::every_at(s, 1e6) == 12);
   int64_t last = 0;
-  for (double d = 0; d < 300; d += 10) {
+  for (int i = 0; i < 30; i++) {
+    const double d = 10.0 * i;
     CHECK(ai::every_at(s, d) >= last);
     last = ai::every_at(s, d);
   }

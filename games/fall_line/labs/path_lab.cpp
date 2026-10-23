@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "ai/path.hpp"
+#include "core/math.hpp"
 #include "core/num_text.hpp"
 #include "fall_line/sim/free.hpp"
 #include "fall_line/sim/outing.hpp"
@@ -60,12 +61,18 @@ void run(gl::Lab& lab) {
                  " --refusals` (skill: mountain).");
     return;
   }
-  if (!level->resort || level->resort->lifts.empty()) {
+  const std::optional<mg::ResortMap>& has_resort = level->resort;
+  if (!has_resort.has_value()) {
+    lab.fail(k + ": the map has no ski area to walk across",
+             "Pick a seed whose ski area has lifts: `make lab LAB=free` lists them (skill: sim).");
+    return;
+  }
+  const mg::ResortMap& resort = *has_resort;
+  if (resort.lifts.empty()) {
     lab.fail(k + ": the map has no lifts to walk between",
              "Pick a seed whose ski area has lifts: `make lab LAB=free` lists them (skill: sim).");
     return;
   }
-  const mg::ResortMap& resort = *level->resort;
 
   // THE WALK: the first lift's bottom station to the last lift's top.
   const ai::Grid grid{static_cast<int32_t>(level->size / kCell),
@@ -76,7 +83,8 @@ void run(gl::Lab& lab) {
     return j * grid.cols + i;
   };
   const auto centre = [&](int32_t c) {
-    return Pt{(c % grid.cols + 0.5) * kCell, (c / grid.cols + 0.5) * kCell};
+    const int32_t row = c / grid.cols;
+    return Pt{(c % grid.cols + 0.5) * kCell, (row + 0.5) * kCell};
   };
   const auto height = [&](int32_t c) {
     const Pt p = centre(c);
@@ -108,10 +116,11 @@ void run(gl::Lab& lab) {
              "any step's cost over its length (skill: bots).");
   }
   std::vector<Pt> pts;
+  pts.reserve(astar.cells.size());
   for (const int32_t c : astar.cells) pts.push_back(centre(c));
   // A leg is clear where every 4 m of it stays under the steepest a person walks.
   const auto clear = [&](size_t a, size_t b) {
-    const double d = std::hypot(pts[b].x - pts[a].x, pts[b].z - pts[a].z);
+    const double d = ge::core::hypot(pts[b].x - pts[a].x, pts[b].z - pts[a].z);
     const int n = static_cast<int>(d / 4) + 1;
     double y = level->ground_at(pts[a].x, pts[a].z);
     for (int i = 1; i <= n; i++) {
@@ -126,7 +135,7 @@ void run(gl::Lab& lab) {
   const std::vector<Pt> pulled = ai::string_pull<Pt>(std::span<const Pt>(pts), clear);
   double walked = 0;
   for (size_t i = 1; i < pulled.size(); i++) {
-    walked += std::hypot(pulled[i].x - pulled[i - 1].x, pulled[i].z - pulled[i - 1].z);
+    walked += ge::core::hypot(pulled[i].x - pulled[i - 1].x, pulled[i].z - pulled[i - 1].z);
   }
   lab.metric(k + ".walk-cost", astar.cost, "m");
   lab.metric(k + ".walk-cells", static_cast<double>(astar.cells.size()), "count");
