@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <span>
 #include <string_view>
 #include <vector>
@@ -82,7 +83,17 @@ struct SledRun {
 // The rider every scenario carries, kg: the skier's reference body in his kit.
 double scenario_rider();
 
-// Run `sc` at `hz` steps a second. The run stops at the first throw (the rider is off).
-SledRun run_sled_scenario(const SledScenario& sc, double hz = 120);
+// One step of a run, as it stands after the step: what a per-step trace reads.
+struct SledStep {
+  double t;  // s, the step's end
+  const SledState& sled;
+  const SledControls& controls;
+  const SledEvents& events;
+};
+
+// Run `sc` at `hz` steps a second, `each` called after every step when given (the sled lab's
+// --trace). The run stops at the first throw (the rider is off).
+SledRun run_sled_scenario(const SledScenario& sc, double hz = 120,
+                          const std::function<void(const SledStep&)>& each = {});
 
 }  // namespace ge::snowmobile

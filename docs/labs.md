@@ -269,6 +269,21 @@ A scenario lab is a table of these (one `LabSpec`, with `--scenario=<id>` choosi
 rows (`plugins/skier/scenarios.cpp`) back the physics tests
 (`tests/skier_scenarios_test.cpp`), so a scenario is written once and is both a test and a lab.
 
+**Step by step, `--trace`.** Every scenario lab (`ride`, `sled`, `heli`, `para`) takes `--trace`:
+each scenario it runs also writes its every step as a series file, `<id>.trace.tsv` (the state,
+the controls and the events: `ge graph` reads it, and two runs' files chart on one graph), and
+draws it as captioned charts (`<id>.<chart>.png` and `.svg`: the height, the speeds, the angles,
+the controls), its events marked as grey lines and its flights shaded, spikes ringed. The
+runner hands each step to the lab through an optional callback (`run_para_scenario(sc, hz,
+each)`), so the plugin needs nothing of the lab kit; the lab writes and draws through
+`engine/lab/series_charts.hpp`, the same helper the `trace` lab draws a seed's run with. It is
+the scenario's before and after at the scale of a step: `--trace --tag=before`, change the code,
+`--trace --compare=before`, then `ge graph` both files.
+
+```sh
+make lab LAB=para ARGS="--scenario=launch --trace"   # previews/para/launch.trace.tsv and its charts
+```
+
 ## Drive labs: the bot, the rivals and agents at the controls (M5)
 
 A **pilot** is anything that turns what a skier can see into a `SkierInput`, one step at a
@@ -368,6 +383,7 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 | `trace` | drive | game:fall_line | the player's skier step by step down one seed with the bot: `trace.tsv` (a series file), the speed, the sideways load and the edge and lean charted against the clock with gates, flights and spikes; `--log=` for the same run's events (docs/debugging.md) | M14a (now) |
 | `why` | drive | game:fall_line | `games/fall_line/sim/bot`'s decisions (`engine/ai/why`): the pilot and a field of three down one seed with every bot traced and the same run untraced beside it (the digests must agree), per racer the share of steps it braked, tucked and glided, its changes of mind a minute and its close calls; the player's speed against the plan's cap with every change of mind marked, and the margin of each speed call; `why-0.tsv` for `ge graph` | M16a (now) |
 | `humanness` | drive | game:fall_line | `games/fall_line/sim/hands` on `engine/ai/hands` and `engine/ai/human` (each hand profile, `none` and `human`, over seeds 38, 7 and 101 with a field of four: every racer's axes (saturation, jumps, reversals, hold, lag) and decisions (changes of mind) against a person's bands, every value out of band listed with the assumption it breaks, whether each racer finished, its time and resets; the player's steer meant against pressed, charted; `player-<profile>.tsv` for `ge graph`) | M16b (now) |
+| `path` | sim | game:fall_line | `engine/ai/path` and the outing's graph search (`games/fall_line/sim/outing`): one seed's walk on foot across its ski area from the first lift's bottom to the last lift's top on 8 m cells (each step its length and 6 m more a metre climbed or dropped, barred over a rise of 0.7), by Dijkstra and by A* (held to one cost, the cells each expanded beside it), string-pulled to its fewest clear legs and drawn on the map; every run's outing (the lift and the next run the graph search chose) | M16d (now) |
 | `wanted` | scenario | game:fall_line | `games/fall_line/sim/wanted` (the wanted level on seed 38 against scripted pursuers: the hunt table of the stars reached and when, the share seen, the searches, how it ended; each scenario's line by the stars; the sight sheds of a soldier at the start gate and a helicopter over the middle: open, hidden by the ground, by the woods, out of range) | M15a (now) |
 | `army` | scenario | game:fall_line | `games/fall_line/sim/army` (the army on foot on seed 38, the man stood still while the stars are pinned: `valley`, `slope` and `arrest`; the army table of the lifted men sent and let off, the waves' men, the most out, how many hold him, the nearest, the men caught and when he was arrested; every soldier's path over the map) | M15c (now) |
 | `army-sleds` | scenario | game:fall_line | `games/fall_line/sim/army_sled` (the army's snowmobiles on seed 38, the man stood still while the stars are pinned: `open`, `run`, `face` and `arrest`; the sleds table of the machines called, the most out, the short halts, the times dug out and righted, the nearest, when they came in range, the crews off, the arrest and whose; every machine's path over the map) | M15d1 (now) |

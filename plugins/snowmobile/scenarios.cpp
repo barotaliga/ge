@@ -294,7 +294,8 @@ mg::Level sled_scenario_level(const SledScenario& sc) {
 
 double scenario_rider() { return skier::kReferenceSkis.mass; }
 
-SledRun run_sled_scenario(const SledScenario& sc, double hz) {
+SledRun run_sled_scenario(const SledScenario& sc, double hz,
+                          const std::function<void(const SledStep&)>& each) {
   const mg::Level level = sled_scenario_level(sc);
   const skier::TreeIndex trees = skier::build_tree_index(level);
   const SledWorld world{&level, &trees};
@@ -331,6 +332,7 @@ SledRun run_sled_scenario(const SledScenario& sc, double hz) {
     const SledControls in = sc.hand ? sc.hand(t, s) : sled_pilot(s, world, sc.aim);
     step_sled(s, in, rider, sc.ridden, world, dt, ev);
     h = sled_hash(s, h);
+    if (each) each(SledStep{t + dt, s, in, ev});
     run.top_speed = num::max(run.top_speed, s.speed);
     const double step = core::hypot(s.x - px, s.z - pz);
     run.distance += step;
