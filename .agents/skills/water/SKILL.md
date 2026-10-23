@@ -26,7 +26,8 @@ for anything the simulation reads, `render` for a pass, `audio` for a voice, `la
 | Floating: probes, buoyancy, drag, slam, added mass, planing, splashes | `engine/water/float.hpp` | `float` | `tests/water_float_test.cpp` (golden) |
 | Swimming: immersion, the kinematic and body regimes, clothes, cold, breath, the water jump | `engine/water/swim.hpp` | `swim` | `tests/water_swim_test.cpp` (golden) |
 | The dressed skier's swim preset | `plugins/skier/swim.hpp` | `skier-swim` | `tests/skier_swim_test.cpp` |
-| Colour, flow, drawn, sound | the rows M24e–M24l | the doc's § Labs | as each row lands |
+| The colour from what is in the water: spectral IOPs, the shallows, the veil, visibility, the looks | `engine/water/optics.hpp` | `water-colour` | `tests/water_optics_test.cpp` (golden) |
+| Flow, drawn, sound | the rows M24f–M24l | the doc's § Labs | as each row lands |
 
 ## The rules
 
@@ -56,6 +57,10 @@ for anything the simulation reads, `render` for a pass, `audio` for a voice, `la
   wets; taking it into the acceleration without its Lagrangian term (1/2 v d(ma)/dt, as
   `step_floater` does) makes a heaving box gain a few per cent of energy a minute. The `float`
   lab's energy chart is the check.
+- **A look is constituents, never colours.** Retune a look by what is in its water (the humus,
+  the plankton, the sediment, the bed), and keep its derived visibility inside the field band
+  its row carries; the `water-colour` lab fails one that leaves it. A colour picked by hand is
+  the renderer's art override, never a look.
 - **A swimmer's test or lab skips the plunge.** Dropped in, any swimmer goes under for a
   second and bobs; "when his eyes go under" means after that (the `skier-swim` lab measures
   when they go under for good), or every number reads the plunge.

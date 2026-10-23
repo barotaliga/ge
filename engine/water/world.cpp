@@ -12,6 +12,7 @@
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "core/num.hpp"
+#include "core/output.hpp"
 
 namespace ge::water {
 
@@ -189,11 +190,28 @@ void box_of(Body& body, double x0, double z0, double x1, double z1) {
 
 }  // namespace
 
+namespace {
+
+// The body's stuff and the optics its look gives.
+void dress(Body& body, Stuff stuff) {
+  const Constituents* named = stuff.water ? &*stuff.water : find_look(stuff.look);
+  if (!named) {
+    core::output::warn("water: the look \"" + stuff.look +
+                       "\" is not a named look, so the body is drawn as nordic-clear. next: name "
+                       "one of water::looks() or set Stuff::water (skill: water)");
+    named = find_look("nordic-clear");
+  }
+  body.optics = optics(*named);
+  body.stuff = std::move(stuff);
+}
+
+}  // namespace
+
 int add_lake(World& world, std::span<const Point> shore, double level, Stuff stuff, Bed bed,
              double depth) {
   Body body;
   body.kind = Kind::lake;
-  body.stuff = std::move(stuff);
+  dress(body, std::move(stuff));
   body.level = level;
   body.depth = depth;
   body.bed = bed;
@@ -218,7 +236,7 @@ int add_lake(World& world, std::span<const Point> shore, double level, Stuff stu
 int add_ocean(World& world, double level, Stuff stuff, Bed bed, double fetch) {
   Body body;
   body.kind = Kind::ocean;
-  body.stuff = std::move(stuff);
+  dress(body, std::move(stuff));
   body.level = level;
   body.depth = kOceanDepth;
   body.bed = bed;
@@ -233,7 +251,7 @@ int add_river(World& world, std::span<const ChannelPoint> centreline, double dis
               Bed bed) {
   Body body;
   body.kind = Kind::channel;
-  body.stuff = std::move(stuff);
+  dress(body, std::move(stuff));
   body.bed = bed;
   body.discharge = discharge;
   body.channel.assign(centreline.begin(), centreline.end());
@@ -263,7 +281,7 @@ int add_river(World& world, std::span<const ChannelPoint> centreline, double dis
 int add_volume(World& world, std::span<const Hull> hulls, Stuff stuff) {
   Body body;
   body.kind = Kind::volume;
-  body.stuff = std::move(stuff);
+  dress(body, std::move(stuff));
   body.hulls.assign(hulls.begin(), hulls.end());
   world.bodies.push_back(std::move(body));
   return static_cast<int>(world.bodies.size()) - 1;

@@ -23,6 +23,10 @@
 // a brush world's water, slime and lava, or any boxed water; a volume carries no waves
 // (`Body::waves` may be laid by hand).
 //
+// THE LOOK. A body's colour is what is in its water (optics.hpp): `Stuff::look` names a row of
+// `water::looks()`, or `Stuff::water` states the game's own constituents; `Body::optics` is
+// derived once when the body is laid, and the renderer reads it by the sample's body index.
+//
 // THE BED. A body may be handed the bed's height (`Bed`, a function and its context); with none,
 // a lake and a channel are their `depth` deep and an ocean is deep. The bed sets the depth a
 // sample reports and shallows the waves (their height held under 0.78 of the depth).
@@ -30,16 +34,19 @@
 // ge:summary Bodies of water (lake, ocean, channel, volume) and the one sample query
 // ge:keywords water world body lake ocean river channel stream volume brush hull add_lake
 // ge:keywords add_ocean add_river add_volume sample surface depth bed current density look
+// ge:keywords optics colour
 // ge:skill water
 // ge:test tests/water_world_test.cpp
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
 
 #include "water/fetch.hpp"
+#include "water/optics.hpp"
 #include "water/waves.hpp"
 #include "wind/field.hpp"
 
@@ -69,12 +76,13 @@ struct Hull {
   std::vector<Plane> planes;
 };
 
-// What a body is made of and how it looks (the optics are M24e's; here a name and the numbers
-// the physics needs).
+// What a body is made of: its look (a name among `water::looks()`, or the constituents of the
+// game's own in `water`, which win), and the numbers the physics needs.
 struct Stuff {
   std::string look = "nordic-clear";
   double density = 1000;    // kg/m^3 (1025 sea water)
   double temperature = 10;  // degrees C
+  std::optional<Constituents> water{};
 };
 
 struct Body {
@@ -87,6 +95,7 @@ struct Body {
   std::vector<ChannelPoint> channel;  // a channel's centreline
   double discharge = 0;               // a channel's, m^3/s
   std::vector<Hull> hulls;            // a volume's
+  Optics optics;                      // its colour, from its look (optics.hpp)
   Waves waves;                        // the sea laid on it
   FetchGrid fetch;                    // a lake's fetch per point
   double fetch_ref = 0;               // the fetch its waves were laid for, m

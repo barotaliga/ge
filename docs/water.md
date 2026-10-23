@@ -223,11 +223,18 @@ apart.
 | The bed | What shallow water shows through it: white sand gives turquoise | Albedo and the depth it lies at |
 | Bubbles | White in surf and below a waterfall | From the foam and the flow |
 
-Per colour band the absorption a and the scattering b give the extinction c = a + b, the
-single-scattering albedo and a strongly forward phase function (Henyey–Greenstein, g ≈ 0.9 for
-particles). The water-leaving colour over a bed at a depth comes from a two-flow shallow-water
-reflectance model (the deep water's own colour blended to the bed's by exp(−2·K·depth)), and the
-visibility under water from c (a target vanishes at about 4.6 / c).
+Everything is computed spectrally, every 10 nm from 400 to 700 nm, and only then made a colour
+(the CIE 1931 observer under daylight, in linear sRGB). The absorption a, the scattering b and
+the backscattering bb are the sums of the parts above, with c = a + b, and a strongly forward
+phase function (Henyey–Greenstein, g ≈ 0.9) for the particles. Daylight dims under the surface
+by the diffuse attenuation Kd (from a and bb, the sun 30° up). The water-leaving colour over a
+bed at a depth comes from a semi-analytic shallow-water reflectance model: the deep water's own
+reflectance, set by u = bb / (a + bb), blended to the bed's albedo as the light's two paths
+through the depth attenuate. Under water a view looks through a veil of the water's own
+upwelling colour, a target fading into it as exp(−c·d), and a black target is lost at 4.8 / c
+(c weighted by the eye's photopic response). The renderer reads `water::Optics`: each
+coefficient averaged over a red, a green and a blue band, the deep colour, the veil, the bed and
+the visibility. A body's optics are derived once, when it is laid.
 
 Presets, each a row of constituents (not of colours): `"nordic-brown"` (a forest lake rich in
 dissolved organic matter, a_g(440) of several per metre: amber shallows, black depths),
@@ -235,8 +242,24 @@ dissolved organic matter, a_g(440) of several per metre: amber shallows, black d
 `"adriatic"` (an oligotrophic sea, clear and deep blue), `"tropical-shallows"` (low everything
 over white carbonate sand: turquoise), `"glacial"` (rock flour: milky turquoise),
 `"algal-pond"`, `"muddy-river"`, `"pool"`, and the brush world's `"slime"` and `"lava"` (lava is
-not water: an emissive look on the same body kind, whose damage is the game's). A game may add
-rows; a tint override exists for art direction but is never the default.
+not water: an emissive look on the same body kind, whose damage is the game's). A game states its
+own water as a `water::Constituents` on the body's `Stuff::water`. Each named look carries the
+band of visibility such water has in the field, and the `water-colour` lab fails a look whose
+derived visibility leaves it:
+
+| Look | Visibility (m) | Field band (m) |
+| --- | --- | --- |
+| `nordic-brown` | 1.58 | 0.5–3 |
+| `nordic-clear` | 8.6 | 5–15 |
+| `baltic` | 2.58 | 1.5–6 |
+| `adriatic` | 23.3 | 15–40 |
+| `tropical-shallows` | 21.9 | 15–40 |
+| `glacial` | 2.75 | 1–5 |
+| `algal-pond` | 0.45 | 0.2–1 |
+| `muddy-river` | 0.12 | 0.05–0.3 |
+| `pool` | 41.4 | 25–80 |
+| `slime` | 0.13 | 0.02–0.3 |
+| `lava` | 0.05 | 0–0.1 |
 
 ## Flowing water (`engine/water/flow`, M24f)
 
