@@ -9,6 +9,8 @@
 #                (engine/assets; cmake/Cgltf.cmake)
 #   ge_net       the network: links, the simulated network, captures, connections, nodes
 #                (engine/net; docs/networking.md)
+#   ge_services  the platform services: a store's achievements, stats, boards, cloud, friends
+#                behind one interface, and the simulated and offline stores (engine/services)
 #   ge_lab       the lab framework (engine/lab: the contract, the runner, the raster, the PNG,
 #                the series files and the charts)
 #   ge_ai        the bots' layer (engine/ai: the decision record `ge why` reads)
@@ -31,9 +33,9 @@
 #   ge_isa       the instruction-set baseline (x86-64: AVX2), linked by ge_core and
 #                published as ge::isa
 #   ge_flags     warnings, -Werror, sanitizers: this tree only, never published
-# ge_core, ge_fp, ge_isa, ge_assets, ge_ai, ge_net, ge_lab, ge_play, ge_prof, ge_prof_alloc and
+# ge_core, ge_fp, ge_isa, ge_assets, ge_ai, ge_net, ge_services, ge_lab, ge_play, ge_prof, ge_prof_alloc and
 # every plugin target are installed and published as ge::core, ge::fp, ge::isa, ge::assets, ge::ai,
-# ge::net, ge::lab, ge::play, ge::prof, ge::prof_alloc and ge::<plugin>, and the ge executable is
+# ge::net, ge::services, ge::lab, ge::play, ge::prof, ge::prof_alloc and ge::<plugin>, and the ge executable is
 # installed to bin/
 # (cmake/Packaging.cmake, docs/publishing.md).
 cmake_minimum_required(VERSION 3.25)
@@ -173,6 +175,14 @@ if(WIN32)
   target_link_libraries(ge_net PRIVATE ws2_32)
 endif()
 
+# The platform services (engine/services, docs/services.md): the one interface a game uses for a
+# store's achievements, stats, leaderboards, cloud files, presence, friends, overlay, ownership and
+# screenshots, and the simulated and offline stores behind it. No platform, no SDK: a store's own
+# backend (engine/steam, docs/goals.md M20b) is built beside it only when its SDK is supplied.
+file(GLOB GE_SERVICES_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/services/*.cpp)
+add_library(ge_services STATIC ${GE_SERVICES_SOURCES})
+target_link_libraries(ge_services PUBLIC ge_core)
+
 # The lab framework (engine/lab: the contract, the runner, the raster, the PNG), published as
 # ge::lab so a game's labs plug into the same contract as the engine's (docs/labs.md).
 add_library(ge_lab STATIC engine/lab/lab.cpp engine/lab/report.cpp engine/lab/runner.cpp
@@ -265,7 +275,7 @@ if(PROJECT_IS_TOP_LEVEL)
   get_property(GE_PLUGIN_TARGETS GLOBAL PROPERTY GE_PLUGIN_TARGETS)
   get_property(GE_GAME_TARGETS GLOBAL PROPERTY GE_GAME_TARGETS)
   add_executable(labs engine/lab/main.cpp ${GE_LAB_SOURCES})
-  target_link_libraries(labs PRIVATE ge_lab ge_play ge_core ge_audio ge_assets ge_net ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
+  target_link_libraries(labs PRIVATE ge_lab ge_play ge_core ge_audio ge_assets ge_net ge_services ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
     ${GE_LAB_EXTRA})
 
   # The `assets` executable (engine/assets/tool.hpp): the built assets listed, checked and stamped,
