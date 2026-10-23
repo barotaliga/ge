@@ -18,6 +18,7 @@
 #include "core/num_text.hpp"
 #include "lab/png.hpp"
 #include "play/bench.hpp"
+#include "play/console_cmds.hpp"
 #include "play/human.hpp"
 #include "play/record.hpp"
 #include "play/session.hpp"
@@ -724,10 +725,11 @@ int play_main(int argc, char** argv, std::istream& in, std::ostream& out) {
   if (l.op == "shot") return shot_cmd(*spec, l, out);
   if (l.op == "why") return why_cmd(*spec, l, out);
   if (l.op == "record") return record_cmd(*spec, l, out);
+  if (l.op == "cvar") return cvar_cmd(*spec, l.words, l.flags, out);
+  if (l.op == "cfg") return cfg_cmd(*spec, l.words, l.flags, out);
   return problem(out, 2, "unknown command `" + l.op + "`", "the command line",
-                 "run describe, sim, replay, state, diverge, bench, shot, record or why, or no "
-                 "command "
-                 "for the protocol");
+                 "run describe, sim, replay, state, diverge, bench, shot, record, why, cvar or "
+                 "cfg, or no command for the protocol");
 }
 
 int play_main(int argc, char** argv) {

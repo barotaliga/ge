@@ -1,6 +1,6 @@
 ---
 name: ge
-description: "Use whenever you build, test, play, run, grow or check this game: ge is the one command line for all of it (find, explain, new, use, add, build, test, check, precheck, ci, digest, golden, lab, graph, net, shot, record, play, sim, replay, state, diverge, why, bench, profile, mem, leaks, doctor, upgrade, skills, lessons). Its commands, the --json answer every one gives, where each piece it writes goes, and the loop to work in."
+description: "Use whenever you build, test, play, run, grow or check this game: ge is the one command line for all of it (find, explain, new, use, add, build, test, check, precheck, ci, digest, golden, lab, graph, net, cvar, cfg, shot, record, play, sim, replay, state, diverge, why, bench, profile, mem, leaks, doctor, upgrade, skills, lessons). Its commands, the --json answer every one gives, where each piece it writes goes, and the loop to work in."
 ---
 
 # ge, the game's command line
@@ -50,6 +50,10 @@ ge graph <file>... [--kind=<k>]  # chart traces, benches, profiles: PNG + SVG, o
 ge net inspect <pcap>            # a network capture, datagram by datagram (skill: multiplayer)
 ge net stats <pcap>              # per connection: kbps, round trip, loss, resends; charted
 ge net sim [--presets=wifi,bad]  # fake clients and a host over bad links, no game needed
+ge cvar ls [<prefix>]            # the game's settings: value, default, range, flags, help
+ge cvar get <name>...            # the named ones (an unknown name: the nearest known)
+ge cfg check <file>... [--server]   # a cfg's problems at file:line, and names nothing reads
+ge cfg exec <file>... [--cmd=...]   # what a cfg changed and printed; ge cfg dump: a cfg to start from
 ge asset build [<name>]          # a model built in headless Blender off the game's data (skill: assets)
 ge check                         # the whole gate: format, doctor, build, tests
 ge lint [--base=<ref>] [<file>...]  # clang-tidy's bug-finding checks over what the change reaches

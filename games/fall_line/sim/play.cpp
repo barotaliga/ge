@@ -8,6 +8,8 @@
 // ge:test tests/fall_line_play_test.cpp
 #include "fall_line/sim/play.hpp"
 
+#include "fall_line/cfg/cvars.hpp"
+
 #include <array>
 #include <cmath>
 #include <memory>
@@ -388,10 +390,15 @@ const GameState* state_of(const ge::play::Run& run) {
 }
 
 const ge::play::GameSpec kGame{
-    "fall_line", "a downhill race through the gates of a generated mountain, the field beside you",
-    kHz,         600,
-    kAxes,       kOptions,
-    open_run,    kViews,
+    "fall_line",
+    "a downhill race through the gates of a generated mountain, the field beside you",
+    kHz,
+    600,
+    kAxes,
+    kOptions,
+    open_run,
+    kViews,
+    cfg::register_cvars,
 };
 
 }  // namespace fall_line::sim

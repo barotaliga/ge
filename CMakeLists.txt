@@ -9,6 +9,8 @@
 #                (engine/assets; cmake/Cgltf.cmake)
 #   ge_net       the network: links, the simulated network, captures, connections, nodes
 #                (engine/net; docs/networking.md)
+#   ge_console   the console: cvars, the command buffer, aliases, binds, cfg files (engine/console;
+#                docs/console.md)
 #   ge_lab       the lab framework (engine/lab: the contract, the runner, the raster, the PNG,
 #                the series files and the charts)
 #   ge_ai        the bots' layer (engine/ai: the decision record `ge why` reads)
@@ -31,9 +33,9 @@
 #   ge_isa       the instruction-set baseline (x86-64: AVX2), linked by ge_core and
 #                published as ge::isa
 #   ge_flags     warnings, -Werror, sanitizers: this tree only, never published
-# ge_core, ge_fp, ge_isa, ge_assets, ge_ai, ge_net, ge_lab, ge_play, ge_prof, ge_prof_alloc and
+# ge_core, ge_fp, ge_isa, ge_assets, ge_ai, ge_net, ge_console, ge_lab, ge_play, ge_prof, ge_prof_alloc and
 # every plugin target are installed and published as ge::core, ge::fp, ge::isa, ge::assets, ge::ai,
-# ge::net, ge::lab, ge::play, ge::prof, ge::prof_alloc and ge::<plugin>, and the ge executable is
+# ge::net, ge::console, ge::lab, ge::play, ge::prof, ge::prof_alloc and ge::<plugin>, and the ge executable is
 # installed to bin/
 # (cmake/Packaging.cmake, docs/publishing.md).
 cmake_minimum_required(VERSION 3.25)
@@ -173,6 +175,12 @@ if(WIN32)
   target_link_libraries(ge_net PRIVATE ws2_32)
 endif()
 
+# The console (engine/console, docs/console.md): cvars and their tiers, the command buffer, aliases,
+# scripting, binds and cfg files. No platform and no clock: a frame is one `run`.
+file(GLOB GE_CONSOLE_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/console/*.cpp)
+add_library(ge_console STATIC ${GE_CONSOLE_SOURCES})
+target_link_libraries(ge_console PUBLIC ge_core)
+
 # The lab framework (engine/lab: the contract, the runner, the raster, the PNG), published as
 # ge::lab so a game's labs plug into the same contract as the engine's (docs/labs.md).
 add_library(ge_lab STATIC engine/lab/lab.cpp engine/lab/report.cpp engine/lab/runner.cpp
@@ -204,8 +212,8 @@ target_link_libraries(ge_ai PUBLIC ge_core)
 # `ge diverge`, `ge shot`, `ge bench`, `ge profile` and `ge mem`.
 add_library(ge_play STATIC engine/play/inputs.cpp engine/play/json_read.cpp
   engine/play/session.cpp engine/play/bench.cpp engine/play/record.cpp engine/play/why.cpp
-  engine/play/human.cpp engine/play/main.cpp)
-target_link_libraries(ge_play PUBLIC ge_core ge_ai ge_lab ge_prof ge_prof_alloc)
+  engine/play/human.cpp engine/play/console_cmds.cpp engine/play/main.cpp)
+target_link_libraries(ge_play PUBLIC ge_core ge_ai ge_console ge_lab ge_prof ge_prof_alloc)
 
 # The ge command line (engine/cli, cmake/Cli.cmake): built here too when a game pulls the engine
 # in, so the game runs the ge of the engine it pins.

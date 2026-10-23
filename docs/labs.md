@@ -434,4 +434,5 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 | `synth` | sim | engine | `engine/audio` (every voice the synth can play, metered, pictured and written as WAV; the render's cost) | M9a (now) |
 | `audition` | sim | game:fall_line | Fall Line's bank, the skier's beds at seven moments and the bot's whole run, metered, pictured and written as WAV | M9b (now) |
 | `screenshots` | picture | game:fall_line | the HUD and the cards at 1280x720, 390x844, 844x390 | M10 |
+| `console` | picture | engine | `engine/console/view.hpp` (the drop-down console drawn on the CPU from its model: down, sliding and closed with the notify lines, every kind of line coloured; the lines by kind and the slide's frames) (`engine/lab/labs/console_view_lab.cpp`) | M21a (now) |
 | `cli-loop` | bench | engine | `engine/cli` (the `ge` commands of an agent's loop run on a scaffolded repo: each answer's lines, bytes and time, failed over its line budget; the catalog's shape is the digest) | M12a (now) |
