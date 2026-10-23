@@ -36,6 +36,7 @@ Driver::Driver(GameState state, int32_t lifts, int32_t sled_rides, int32_t heli_
       recorder_(kTapeSchema),
       controls_(state_.racers.size()),
       shoulders_(state_.racers.size(), 0),
+      hands_(state_.racers.size()),
       lifts_(lifts),
       sled_rides_(sled_rides),
       heli_rides_(heli_rides),
@@ -52,7 +53,10 @@ void Driver::step(Controls player) {
   {
     GE_ZONE("bot");
     for (size_t i = 1; i < controls_.size(); i++) {
-      controls_[i] = bot_controls(state_, static_cast<int32_t>(i), plan_);
+      const auto at = static_cast<int32_t>(i);
+      ge::ai::Why* why = why_ ? why_->follow(at, state_.steps) : nullptr;
+      const Controls wanted = bot_controls(state_, at, plan_, why, hands_[i].lead());
+      controls_[i] = hands_[i].press(wanted, why);
     }
   }
   fall_line::sim::step(state_, controls_);
@@ -79,6 +83,12 @@ void Driver::step(Controls player) {
       flights_++;
       max_landing_g_ = num::max(max_landing_g_, e.value);
     }
+  }
+}
+
+void Driver::set_hands(HandsProfile profile, double seed) {
+  for (size_t i = 0; i < hands_.size(); i++) {
+    hands_[i] = BotHands(profile, hands_seed(seed, static_cast<int32_t>(i)));
   }
 }
 
@@ -175,9 +185,15 @@ RunReport simulate(double seed, const SimOptions& opts) {
 
 RunReport simulate_on(std::shared_ptr<const mg::Level> level, double seed, const SimOptions& opts,
                       std::vector<std::vector<LinePoint>>* lines) {
+  Driver d(std::move(level), opts.rivals);
+  d.set_hands(opts.hands, seed);
+  BotHands hands(opts.hands, hands_seed(seed, 0));
   return drive(
-      Driver(std::move(level), opts.rivals), seed, opts.max_seconds,
-      [](const Driver& d) { return bot_controls(d.state(), 0, d.plan()); }, lines);
+      std::move(d), seed, opts.max_seconds,
+      [&hands](const Driver& dr) {
+        return hands.press(bot_controls(dr.state(), 0, dr.plan(), nullptr, hands.lead()), nullptr);
+      },
+      lines);
 }
 
 RunReport simulate_free(std::shared_ptr<const mg::Level> level, double seed, int32_t run,
