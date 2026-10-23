@@ -20,6 +20,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge bench ab --base=<ref>` (or `--ab <binA> <binB>`: two builds interleaved N times with statistics, since a container's timings wander by about 5%) and `ge compare <ref>` (both builds, one table)
 - `ge bench --ab=<option>` (one frame option against another in the same build, interleaved rounds, the least median kept: a quality ladder priced without a bespoke loop)
 - `ge profile --compare` (per zone and per pass, GPU and CPU deltas, outliers flagged)
+- `ge lab bench <lab> --runs=N --base=main` (each metric's median and spread over N runs, this tree beside the base)
 - `ge digest <lab> --why` (which table row and which columns moved when a digest did)
 - `ge lab diff` for a lab's tables and `--stash`
 - `ge lab sheet <lab> --grid=2x2 [shots]` (shots on one image) and `--watch`
@@ -32,7 +33,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge lint` (done: clang-tidy's bug-finding checks over what the change since `--base` reaches, the changed .cpp files and every .cpp including a changed header, or the files named, each finding at its line with its check's page; a few files in seconds)
 - a teleport detector for the labs (done: `engine/lab/teleport.hpp`, every step of a track that moves farther than its speed allows, reported under every scenario lab's `--trace`)
 - `ge test --affected` (done: the tests the change since `--base` reaches through the include graph, a target reached when its objects include a changed file or a header in a reached library's directory; only their targets built, `--list` names them; precheck takes its tests from it)
-- precheck's lab digests following the same reach (done: `ge digest --affected [--list]`, each lab by its own source's object, so a plugin change reaches the game's labs through the game library including its headers; `tools/labs-reached.sh` retired)
+- precheck's lab digests following the same reach (done: `ge digest --affected [--list]`, each lab by its own source's object, so a plugin change reaches the game's labs through the game library including its headers; `tools/labs-reached.sh` retired; a changed committed asset reaches the labs under its plugin or game and those naming it)
 - the labs' digest baseline merging without conflicts (done: `merge=union`, a lab's doubled row failed by name)
 - `docs/goals.md` merging without conflicts (done: each row's status in `docs/goals/<row>.md`, this backlog one wish a line, union-merged, held by `tools/check-goals.mjs`)
 - `ge ci <pr>` (done: each failed job's log as findings, over `gh api`; `--merge` squash-merges a green, clean one at its head, and a green PR GitHub blocks is answered with the required check or review it waits on)
@@ -42,6 +43,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `labs --all --write-digests` keeping the rows of labs the build does not register (done)
 - `ge ci run --row=macos -- <cmd> --repeat=N` (a command on one CI row through a dispatched workflow, no temporary workflow step committed: a Metal flake hunt, the needs-mac bench)
 - `ge ci <pr> --rebase-digests` (after merging the base, the digests both sides moved rewritten and named)
+- `ge goals next` / `ge goals free-rows` (the next open roadmap row with its dependencies, and which rows open pull requests already claim)
 - `ge ci <pr> --wait` (block until the checks finish or the PR conflicts, then answer as `ge ci` does: one call where a thread now schedules check-ins every 15 minutes)
 - `ge lab sweep <id> --set=<const>=a,b,c` (done: one constexpr rewritten to each value, the labs rebuilt and run, every metric side by side, the source put back; next, a scenario row's own numbers, such as a scripted hand's timings, swept the same way, and `--draws=N` over a range `a..b`, a Monte Carlo of one constant with each metric's spread)
 - `ge lab sweep <id> --flag=<flag>=a,b,c` (done: one of the lab's own flags at each value, the labs built once, the same table; the hours of a day over a picture lab)
@@ -75,6 +77,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge lab view <glb>` (the model-views lab on any model, in one command)
 - `ge lab table <lab> --where col=value` (one slice of a lab's table, a weapon at one range, read without re-running the lab or opening the whole report)
 - `ge lab <id> --show` (the run's pictures shown inline beside its metrics: an unmoved digest can hide a visual bug)
+- `ge lab pixels <lab> <shot> --line=x0,y0,x1,y1 | --histogram` (a picture's values along a line or its colour histogram, for banding and colour checks without decoding the PNG)
 
 ## Measuring
 

@@ -429,6 +429,30 @@ std::vector<std::string> labs_reached(const Reach& r,
   return out;
 }
 
+std::vector<AssetChange> asset_changes(const std::set<std::string>& changed) {
+  static const std::regex kAsset(R"(^(.*)/assets/([^/]+)/[^/]+$)");
+  std::vector<AssetChange> out;
+  for (const std::string& f : changed) {
+    std::smatch m;
+    if (!std::regex_match(f, m, kAsset)) continue;
+    // Sources are seen through the include graph; a builder runs offline and is not read.
+    if (f.ends_with(".cpp") || f.ends_with(".hpp") || f.ends_with(".py")) continue;
+    AssetChange a{m.str(1), m.str(2)};
+    if (std::find_if(out.begin(), out.end(), [&](const AssetChange& b) {
+          return b.root == a.root && b.name == a.name;
+        }) == out.end()) {
+      out.push_back(std::move(a));
+    }
+  }
+  return out;
+}
+
+bool reads_asset(const std::string& source, std::string_view text, const AssetChange& a) {
+  return source.starts_with(a.root + "/") ||
+         text.find("assets/" + a.name + "/") != std::string_view::npos ||
+         text.find(a.name + ".glb") != std::string_view::npos;
+}
+
 std::set<std::string> moved_digest_rows(std::string_view diff) {
   static const std::regex kRow(R"(^[-+]([a-z0-9-]+) [0-9a-f]{16}$)");
   std::set<std::string> out;
@@ -509,6 +533,22 @@ Outcome run_digest(const BuildOptions& o, const DigestOptions& d) {
         moved_rows = moved_digest_rows(run_to_log(git, log).output);
       }
       labs = labs_reached(reach, sources, moved_rows);
+      // A committed asset is read at run time, by path, so no include names it: a lab is
+      // reached through one when it lives under the asset's plugin or game, or names it.
+      const auto assets = asset_changes(reach.changed);
+      for (const auto& [id, source] : sources) {
+        if (assets.empty() || source.empty() ||
+            std::find(labs.begin(), labs.end(), id) != labs.end()) {
+          continue;
+        }
+        const std::string text = read_text(o.repo / source).value_or("");
+        for (const AssetChange& a : assets) {
+          if (!reads_asset(source, text, a)) continue;
+          labs.push_back(id);
+          break;
+        }
+      }
+      std::sort(labs.begin(), labs.end());
     }
     if (d.list) {
       for (const std::string& id : labs) out.text.append(id).append("\n");

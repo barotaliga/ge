@@ -124,3 +124,13 @@ TEST(a_baseline_diff_names_the_rows_it_moved) {
       "+ski-cross 2222222222222222\n";
   CHECK((moved_digest_rows(diff) == std::set<std::string>{"glide", "ski-cross"}));
 }
+
+TEST(a_changed_asset_reaches_the_labs_that_read_it_by_path) {
+  const auto a =
+      asset_changes({"plugins/skier/assets/skier/skier.glb", "plugins/skier/assets/skier/build.py",
+                     "plugins/skier/assets/skier/data.cpp", "engine/core/math.hpp"});
+  CHECK(a.size() == 1 && a[0].root == "plugins/skier" && a[0].name == "skier");
+  CHECK(reads_asset("plugins/skier/labs/anim_lab.cpp", "", a[0]));
+  CHECK(reads_asset("games/g/labs/views_lab.cpp", "load(\"skier.glb\")", a[0]));
+  CHECK(!reads_asset("games/g/labs/sled_lab.cpp", "#include \"sled.hpp\"", a[0]));
+}

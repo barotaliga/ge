@@ -61,6 +61,15 @@ Outcome run_digest(const BuildOptions& o, const DigestOptions& d);
 std::vector<std::string> labs_reached(const Reach& r,
                                       const std::map<std::string, std::string>& sources,
                                       const std::set<std::string>& moved);
+// A changed committed asset (`<root>/assets/<name>/<file>`, not its sources or its builder): a
+// lab reads it at run time by path, which no include records.
+struct AssetChange {
+  std::string root, name;  // "plugins/skier", "skier"
+};
+std::vector<AssetChange> asset_changes(const std::set<std::string>& changed);
+// Whether the lab at `source` (its text `text`) reads `a`: it lives under the asset's root, or
+// its text names `assets/<name>/` or `<name>.glb`.
+bool reads_asset(const std::string& source, std::string_view text, const AssetChange& a);
 // The lab ids whose rows a unified diff of the baseline adds or removes ("+<id> <16 hex>").
 std::set<std::string> moved_digest_rows(std::string_view diff);
 Outcome run_golden_diff(const fs::path& repo, const std::vector<std::string>& targets,
