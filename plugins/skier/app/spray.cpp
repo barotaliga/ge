@@ -1,6 +1,6 @@
 // The spray's four sources and the landing's burst.
 //
-// ge:summary The spray's sources: the skid's and brake's sheet, carve, powder, landing, body
+// ge:summary The spray's sources: skid and brake sheets, carve, powder and its cloud, landing
 // ge:keywords skier spray skid brake scrape carve powder landing burst grains rates
 // ge:skill skier render
 // ge:test tests/skier_spray_test.cpp
@@ -175,6 +175,25 @@ int spray_grains(const SkierState& s, double dt, SprayPen& pen, std::vector<Spra
       g.vx = 0.35 * s.vx + range(r, -0.6, 0.6);
       g.vz = 0.35 * s.vz + range(r, -0.6, 0.6);
       g.vy = range(r, 0.6, 1.8);
+      out.push_back(g);
+    }
+    // THE SNOW CLOUD: big thin puffs over the fines, hanging for seconds.
+    n = due(pen.owed[4], kCloudRate * loose * loose * pace, dt);
+    for (int i = 0; i < n && room(); ++i) {
+      SprayGrain g{};
+      const double back = range(r, 0.3, 1.5);
+      place(g, s, dt, next(r), -f.fx * back + range(r, -0.4, 0.4),
+            -f.fz * back + range(r, -0.4, 0.4), range(r, 0.3, 0.9));
+      g.vx = 0.25 * s.vx + range(r, -0.4, 0.4);
+      g.vz = 0.25 * s.vz + range(r, -0.4, 0.4);
+      g.vy = range(r, 0.3, 1.0);
+      g.life = range(r, 3.0, 5.0);
+      g.size = range(r, 0.8, 2.0);
+      g.drag = 0.8;
+      g.fall = 0.02;
+      g.streak = 0;
+      g.albedo = 0.95;
+      g.opacity = range(r, 0.05, 0.1);
       out.push_back(g);
     }
   }

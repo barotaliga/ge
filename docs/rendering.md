@@ -378,10 +378,15 @@ figures' family holds one skinned mesh a racer packed into the poser's fixed rea
 poser keeps its lags between frames (`FrameScene::dt`; `settle` for a still or a jump), his
 palette is written before the frame is encoded and the `skinning` pass runs straight after the
 sky's tables, so every view that reads the family (the culls, the prepass, the colour pass, the
-figures' shadow atlas) reads the posed mesh. Still to come (M8e2): last frame's skinned
-positions for the motion vectors (a family's motion is its instance's, so a limb that swings
-gets none of its own and TAA may smear it) and the crowd skinned in the vertex stage from
-per-instance palettes.
+figures' shadow atlas) reads the posed mesh. Each skinned vertex carries its own **motion**:
+the family keeps a skinned LOD's last frame's positions after its vertices (two words a
+vertex, `lod_last`; the bind's to start), the `skinning` pass copies the position it replaces
+there before writing the new one, and the colour pass reads it (`Lod::motion`) for the
+vertex's last place, so a limb that swings between frames is not smeared by TAA; a cut, a still
+and a slot left undrawn settle the skin (`settle_skin`), so the next pose moves nothing. The
+`taa` lab's `--scenario=turns` chases the skier through his turns: the ghosting against the
+converged still falls from 0.45 to 0.35 levels (0.95% to 0.73% of the pixels off) with it. Still
+to come (M8e2): the crowd skinned in the vertex stage from per-instance palettes.
 
 ## Terrain
 
@@ -564,6 +569,32 @@ of the sun's illuminance (`FrameView::sun_illuminance` scales them all). The sky
 full-screen triangle at the far plane tested `equal`, with the sun's disc. `frame.wgsl`
 holds the one copy of the haze, the sun's light at a point and the sky's irradiance.
 
+**The weather in the picture (M8f1).** A frame is seen under a `Weather` (`render/view.hpp`,
+in the frame block as `weather` and `deck`), and `wgsl/frame.wgsl` is the one place it acts, so
+the ground, the trees, the figures, the particles, the flakes and the sky all see the same day:
+
+- the cloud takes its share off the sun's direct light (`sun_light`), so the sun's shadows, the
+  snow's glare and the particles' forward lobe fade with it; the glitter, the sun's disc in a
+  crystal, goes faster (the pass squared);
+- a DECK covers its share of the dome (`sky_luminance`): its grey at the horizon is the clear
+  day's light on a level face over pi (so it follows the hour and the night) times the deck's
+  tint and light, darker overhead, a pale patch where the sun is behind it; the sun's disc is
+  lost behind it;
+- the sky's light on a surface becomes the deck's (`sky_irradiance`: pi times its grey, the
+  overhead share weighed as a level face sees it), with no direction but up: THE FLAT LIGHT;
+- the air under a deck scatters the deck's grey, not the sun's (`haze`), and a FOG or a FALL
+  closes every surface into the sky behind it at its visual range V (`exp(-3.912 d / V)`: 2 % of
+  a black target's contrast left at V); looking down, into the horizon's;
+- the exposure keys a white face under a deck to 0.6 rather than 0.78, so a grey day's snow is a
+  light grey, not a white-out.
+
+A clear `Weather` (the default) changes no bit of the picture. What the mountain's eight skies
+are in these numbers is `plugins/mountain/app/weather_look.hpp`, and Fall Line's frame reads the
+map's sky at the view's time (`FrameOptions::weather`). The `weather` lab draws all eight: from
+seed 38's piste the clear day's picture spreads 37 levels of luma, an overcast's 15, a snow's 3
+and a storm's 2. The cloud volume itself (heaps and a veil drawn, each place's own share of the
+sun) and the night sky are M8f2.
+
 ## Anti-aliasing and resolution
 
 **Temporal anti-aliasing with upscaling (TAA-U)** is the default. Each frame's
@@ -661,6 +692,21 @@ reactive channel so TAA does not smear it. What fills the pool is the game's: Fa
 throws each racer's spray (`plugins/skier/app/spray.hpp`) over the time between two frames'
 `time_s`. On the software adapter the pass pair costs about 0.6 + 0.13 ms (the `profile`
 lab), the flight of all 16384 slots the larger half.
+
+**As built (M8d2).** The drag pulls a particle toward the AIR, not still air: the frame hands the
+pool the map's wind at the view's time (`plugins/mountain/air/air.hpp`), so a powder cloud (the
+spray's big thin puffs, hanging three to five seconds) drifts off downwind. THE FALLING SNOW is
+`engine/render/snowfall.hpp`: 24576 flakes in a 36 m cube centred on the eye, no births and no
+deaths. `snowfall.sim` moves each at the wind plus its own fall (0.6 to 1.4 m/s by its index)
+and a flutter on its phase, and wraps its offset from the eye back into the cube, so the eye
+always stands in a full fall however fast it moves. `snowfall` draws the first `fall` share of
+them (the air's fall at the view's time: a flurry a scatter, a storm the whole box) as streaks
+over a 1/60 s shutter, at least a pixel and a half wide (a far flake widened and thinned as much,
+so it keeps its light and does not shimmer), thinned by the root of the streak's length, faded
+toward the cube's faces and at the lens, lit by the sun past the horizon and the sky, hazed and
+softened against the depth. When nothing falls the pass is an empty compute pass under its name
+(an empty render pass still loads and stores its targets). The flakes are lit as the day is: under
+a clear sky that is a sunny fall; under a lid they are lit as its flat grey (M8f1, above).
 - **Skinning** uses bone palettes in a storage buffer. A figure drawn in more than one
   view (the player in the main view, the sun's cascade and the shadow atlas) is skinned
   once by a compute pass into a vertex buffer that every view reads. Crowd members,
@@ -783,6 +829,15 @@ contract (scenes, captions, sheets). The renderer's half is:
   for the sky). A lab hands it with the shot, and the picture diff (`engine/lab/diff.hpp`,
   `docs/labs.md` § The picture diff) judges a change band by band, so far scenery made cheaper
   is held to a looser floor than what is at the skis.
+- **The wire probe.** With `TerrainSource::wire_probe` and `create_instance_pipelines`'
+  `wire_probe`, the terrain and every instance family also get a line-list pipeline over the
+  same vertex stage and line index buffers made once: `encode_terrain_wire` and
+  `encode_instances_wire` draw the last frame's culled tiles and lists as their triangles'
+  edges into a `kWireFormat` target, their instance counts copied from the cull's indirect
+  arguments, tested against the frame's depth (read only) with each fragment's depth pushed a
+  hair nearer (`frag_depth`: line topologies take no depth bias), so the ground hides what is
+  behind it. The ground is banded by distance in doublings from 32 m, so the clipmap's rings
+  show; the instances are one colour. It is what `ge shot --gpu --mode=wireframe` draws.
 - **Per-pass stats with every capture**: GPU ms, draws, instances and triangles, so a
   lab sheet can show what a picture costs beside the picture.
 - **Golden captures on the software adapter.** The development container and CI's

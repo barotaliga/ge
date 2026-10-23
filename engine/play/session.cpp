@@ -107,7 +107,7 @@ std::string Session::hello() const {
          ",\"options\":{" + options + "},\"hz\":" + to_string(spec_.hz) +
          ",\"most_steps\":" + std::to_string(most_steps_) + ",\"axes\":[" + axes +
          "],\"most_hold\":" + std::to_string(kMostHold) +
-         ",\"ops\":[\"observe\",\"act\",\"pilot\",\"state\",\"inputs\",\"end\"]}";
+         ",\"ops\":[\"observe\",\"act\",\"pilot\",\"why\",\"state\",\"inputs\",\"end\"]}";
 }
 
 std::string Session::observation(std::string_view op) {
@@ -116,6 +116,31 @@ std::string Session::observation(std::string_view op) {
                          ",\"t\":" + to_fixed(static_cast<double>(steps_) / spec_.hz, 3) +
                          ",\"done\":" + (done() ? "true" : "false"),
                      run_->observe());
+}
+
+std::string Session::why_now() {
+  ai::Why why(0);
+  if (!run_->trace(&why)) {
+    return error_line(std::string(spec_.name) + "'s bots record no decisions",
+                      "trace the game's Run (play/game.hpp), or send pilot");
+  }
+  std::vector<double> input(spec_.axes.size(), 0);
+  const bool has = run_->pilot(input);
+  run_->trace(nullptr);
+  if (!has) {
+    return error_line("the game " + std::string(spec_.name) + " has no pilot",
+                      "send act with your own input");
+  }
+  std::string axes, decisions;
+  for (size_t i = 0; i < input.size(); i++) {
+    axes += std::string(axes.empty() ? "" : ",") + quote(spec_.axes[i].name) + ":" +
+            core::num::to_string(snap_axis(input[i], spec_.axes[i].kind));
+  }
+  for (const ai::Decision& d : why.decisions()) {
+    decisions += std::string(decisions.empty() ? "" : ",") + ai::decision_json(why, d);
+  }
+  return "{\"op\":\"why\",\"step\":" + std::to_string(steps_) + ",\"pilot\":{" + axes +
+         "},\"decisions\":[" + decisions + "]}";
 }
 
 std::string Session::handle(std::string_view line) {
@@ -144,9 +169,10 @@ std::string Session::handle(std::string_view line) {
                            ",\"digest\":" + quote(hex64(run_->digest())),
                        run_->report());
   }
+  if (op == "why") return why_now();
   if (op != "act" && op != "pilot") {
     return error_line("unknown op \"" + op + "\"",
-                      "send observe, act, pilot, state, inputs or end");
+                      "send observe, act, pilot, why, state, inputs or end");
   }
   if (done())
     return error_line("the run is over; there is nothing to act on", "send {\"op\":\"end\"}");
@@ -242,27 +268,107 @@ std::optional<Played> replay(const GameSpec& spec, const InputLog& log, std::str
   return played_of(s);
 }
 
-std::optional<Still> shot_at(const GameSpec& spec, const InputLog& log, int64_t step,
-                             std::string_view view, std::string& error) {
-  if (spec.views.empty()) {
-    error = std::string(spec.name) + " lists no views";
-    return std::nullopt;
+namespace {
+
+// The entry of `list` named `name` ("" the first), or null with `error` listing them.
+const View* pick_view(std::span<const View> list, std::string_view name, const char* what,
+                      std::string& error) {
+  if (list.empty()) {
+    error = std::string("there are no ") + what;
+    return nullptr;
   }
-  const View* chosen = view.empty() ? &spec.views[0] : nullptr;
+  const View* chosen = name.empty() ? &list[0] : nullptr;
   std::string names;
-  for (const View& v : spec.views) {
-    if (v.name == view) chosen = &v;
+  for (const View& v : list) {
+    if (v.name == name) chosen = &v;
     names += std::string(names.empty() ? "" : ", ") + v.name;
   }
-  if (!chosen) {
-    error = "no view `" + std::string(view) + "`; the views are " + names;
-    return std::nullopt;
+  if (!chosen)
+    error = "no " + std::string(what).substr(0, std::string(what).size() - 1) + " `" +
+            std::string(name) + "`; the " + what + " are " + names;
+  return chosen;
+}
+
+std::string list_json(std::span<const View> list) {
+  std::string out;
+  for (const View& v : list) {
+    out += std::string(out.empty() ? "" : ",") + "{\"name\":" + quote(v.name) +
+           ",\"help\":" + quote(v.help) + "}";
   }
+  return out;
+}
+
+}  // namespace
+
+std::string Lens::name() const {
+  if (!view) return "";
+  return renderer && mode ? std::string(view->name) + "/" + mode->name : std::string(view->name);
+}
+
+bool open_lens(const GameSpec& spec, const LensAsk& ask, Lens& out, std::string& error) {
+  out = Lens{};
+  if (!ask.gpu) {
+    if (spec.views.empty()) {
+      error = std::string(spec.name) + " lists no views";
+      return false;
+    }
+    out.view = pick_view(spec.views, ask.view, "views", error);
+    return out.view != nullptr;
+  }
+  const RendererSpec* r = registered_renderer();
+  if (!r) {
+    error = std::string(spec.name) +
+            "'s play executable has no GPU renderer (it was built without the GPU)";
+    return false;
+  }
+  out.view = pick_view(r->views, ask.view, "views", error);
+  if (!out.view) return false;
+  out.mode = pick_view(r->modes, ask.mode, "modes", error);
+  if (!out.mode) return false;
+  out.width = ask.width > 0 ? ask.width : r->width;
+  out.height = ask.height > 0 ? ask.height : r->height;
+  out.renderer = r->open(error);
+  if (!out.renderer && error.empty()) error = "the renderer did not open";
+  return out.renderer != nullptr;
+}
+
+bool shoot_lens(Lens& lens, Run& run, lab::Picture& out, std::string& caption, std::string& error) {
+  if (!lens.view) {
+    error = "the lens is not open";
+    return false;
+  }
+  const bool ok = lens.renderer
+                      ? lens.renderer->draw(run,
+                                            RenderShot{lens.view->name, lens.mode->name, lens.width,
+                                                       lens.height, lens.drawn == 0},
+                                            out, caption, error)
+                      : run.shoot(lens.view->name, out, caption, error);
+  if (ok) ++lens.drawn;
+  return ok;
+}
+
+std::string lens_views_json(const GameSpec& spec, bool gpu) {
+  const RendererSpec* r = registered_renderer();
+  if (!gpu) return list_json(spec.views);
+  return r ? list_json(r->views) : "";
+}
+
+std::optional<Still> shot_at(const GameSpec& spec, const InputLog& log, int64_t step,
+                             std::string_view view, std::string& error) {
+  LensAsk ask;
+  ask.view = std::string(view);
+  return shot_at(spec, log, step, ask, error);
+}
+
+std::optional<Still> shot_at(const GameSpec& spec, const InputLog& log, int64_t step,
+                             const LensAsk& ask, std::string& error) {
   if (step < 0 || step > log.steps()) {
     error =
         "step " + std::to_string(step) + " is outside the log's 0.." + std::to_string(log.steps());
     return std::nullopt;
   }
+  Lens lens;
+  if (!open_lens(spec, ask, lens, error)) return std::nullopt;
   Setup setup;
   if (!setup_of(spec, log, setup, error)) return std::nullopt;
   Session s(spec, setup);
@@ -272,13 +378,13 @@ std::optional<Still> shot_at(const GameSpec& spec, const InputLog& log, int64_t 
   }
   for (int64_t i = 0; i < step; i++) s.step(log.at(i));
   Still out;
-  out.view = chosen->name;
+  out.view = lens.name();
   out.step = step;
   out.digest = s.run().digest();
   lab::Picture raw;
-  if (!s.run().shoot(chosen->name, raw, out.caption, error)) return std::nullopt;
+  if (!shoot_lens(lens, s.run(), raw, out.caption, error)) return std::nullopt;
   lab::Shot words;
-  words.title = std::string(spec.name) + " " + chosen->name + " at step " + std::to_string(step);
+  words.title = std::string(spec.name) + " " + out.view + " at step " + std::to_string(step);
   words.caption = out.caption;
   words.inputs.emplace_back("seed", core::num::to_string(setup.seed));
   for (const auto& [k, v] : setup.options) words.inputs.emplace_back(k, v);

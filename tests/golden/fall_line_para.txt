@@ -1,0 +1,2 @@
+# finished flights time-bits hung-bits distance-bits digest (fall_line_para_test, seed 38 at v10, the reference skis)
+1 1 407b559999999999 4076231111110639 407fcf2f3f657cda efdab1b139e612c8

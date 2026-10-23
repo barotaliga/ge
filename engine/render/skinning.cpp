@@ -8,6 +8,7 @@
 #include "render/skinning.hpp"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstring>
 #include <string>
 
@@ -34,7 +35,29 @@ struct Params {
   uint32_t info[4];
   float box_min[4];
   float box_size[4];
+  uint32_t motion[4];
 };
+
+// `bytes` of `buffer` from `offset`, read back (blocks).
+std::vector<uint32_t> read_words(gpu::Device& device, const wgpu::Buffer& buffer, uint64_t offset,
+                                 uint64_t bytes) {
+  std::vector<uint32_t> words(bytes / 4, 0);
+  if (!bytes) return words;
+  wgpu::BufferDescriptor desc{};
+  desc.label = "skinning.readback";
+  desc.size = bytes;
+  desc.usage = BU::MapRead | BU::CopyDst;
+  wgpu::Buffer rb = device.device.CreateBuffer(&desc);
+  wgpu::CommandEncoder encoder = device.device.CreateCommandEncoder();
+  encoder.CopyBufferToBuffer(buffer, offset, rb, 0, bytes);
+  wgpu::CommandBuffer commands = encoder.Finish();
+  device.queue.Submit(1, &commands);
+  gpu::wait(device, rb.MapAsync(wgpu::MapMode::Read, 0, bytes, wgpu::CallbackMode::WaitAnyOnly,
+                                [](wgpu::MapAsyncStatus, wgpu::StringView) {}));
+  if (const void* p = rb.GetConstMappedRange(0, bytes)) std::memcpy(words.data(), p, bytes);
+  rb.Unmap();
+  return words;
+}
 
 }  // namespace
 
@@ -98,6 +121,10 @@ void create_skin(gpu::Device& device, const SkinPipelines& sp, Skin& skin,
   p.info[0] = skin.vertices;
   p.info[1] = family.lod_vertex[global_lod];
   p.info[2] = skin.joints;
+  skin.last = global_lod < family.lod_last.size() ? family.lod_last[global_lod] : 0;
+  skin.settle = true;
+  p.motion[0] = skin.last;
+  p.motion[1] = 1;
   for (int k = 0; k < 3; ++k) {
     p.box_min[k] = reach.min[k];
     p.box_size[k] = std::max(reach.max[k] - reach.min[k], 1e-6f);
@@ -112,7 +139,12 @@ void set_palette(gpu::Device& device, Skin& skin, std::span<const assets::Affine
   const size_t n = std::min<size_t>(palette.size(), skin.joints);
   for (size_t j = 0; j < n; ++j) std::memcpy(&skin.rows[j * 12], palette[j].m, 48);
   device.queue.WriteBuffer(skin.palette, 0, skin.rows.data(), n * 48);
+  const uint32_t motion[4] = {skin.last, skin.settle ? 1u : 0u, 0, 0};
+  device.queue.WriteBuffer(skin.params, offsetof(Params, motion), motion, sizeof motion);
+  skin.settle = false;
 }
+
+void settle_skin(Skin& skin) { skin.settle = true; }
 
 void encode_skinning(std::span<Skin* const> skins, const SkinPipelines& sp,
                      const gpu::PipelineSet& pipelines, FrameRecorder& rec,
@@ -131,23 +163,13 @@ void encode_skinning(std::span<Skin* const> skins, const SkinPipelines& sp,
 
 std::vector<uint32_t> read_family_vertices(gpu::Device& device, const InstanceFamily& family,
                                            uint32_t first, uint32_t count) {
-  const uint64_t bytes = uint64_t{count} * 12;
-  std::vector<uint32_t> words(size_t{count} * 3, 0);
-  if (!count) return words;
-  wgpu::BufferDescriptor desc{};
-  desc.label = "skinning.readback";
-  desc.size = bytes;
-  desc.usage = BU::MapRead | BU::CopyDst;
-  wgpu::Buffer rb = device.device.CreateBuffer(&desc);
-  wgpu::CommandEncoder encoder = device.device.CreateCommandEncoder();
-  encoder.CopyBufferToBuffer(family.vertices, uint64_t{first} * 12, rb, 0, bytes);
-  wgpu::CommandBuffer commands = encoder.Finish();
-  device.queue.Submit(1, &commands);
-  gpu::wait(device, rb.MapAsync(wgpu::MapMode::Read, 0, bytes, wgpu::CallbackMode::WaitAnyOnly,
-                                [](wgpu::MapAsyncStatus, wgpu::StringView) {}));
-  if (const void* p = rb.GetConstMappedRange(0, bytes)) std::memcpy(words.data(), p, bytes);
-  rb.Unmap();
-  return words;
+  return read_words(device, family.vertices, uint64_t{first} * 12, uint64_t{count} * 12);
+}
+
+std::vector<uint32_t> read_skin_last(gpu::Device& device, const InstanceFamily& family,
+                                     const Skin& skin) {
+  if (!skin.last) return {};
+  return read_words(device, family.vertices, uint64_t{skin.last} * 4, uint64_t{skin.vertices} * 8);
 }
 
 std::vector<uint32_t> skin_packed(const assets::Mesh& mesh, std::span<const assets::Affine> palette,

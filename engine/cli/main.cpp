@@ -35,6 +35,7 @@
 #include "cli/play.hpp"
 #include "cli/scaffold.hpp"
 #include "cli/skills.hpp"
+#include "cli/sweep.hpp"
 #include "cli/upgrade.hpp"
 
 namespace {
@@ -167,6 +168,15 @@ Outcome run(const Args& a) {
   if (name == "build") return run_build(build_options(a));
   if (name == "test") return run_test(build_options(a), flag_value(a, "filter"));
   if (name == "check") return run_check(build_options(a));
+  if (name == "lab sweep") {
+    SweepOptions sweep;
+    sweep.id = a.words[0];
+    sweep.set = flag_value(a, "set");
+    sweep.in = flag_value(a, "in");
+    sweep.metrics = flag_value(a, "metrics");
+    sweep.passthrough = a.passthrough;
+    return run_lab_sweep(build_options(a), sweep);
+  }
   if (name == "lab diff") {
     LabDiffOptions diff;
     diff.id = a.words[0];
@@ -205,21 +215,36 @@ Outcome run(const Args& a) {
     lab.passthrough = a.passthrough;
     return run_lab(build_options(a), lab);
   }
-  if (name == "sim") return run_sim(build_options(a), flag_value(a, "seeds"), a.passthrough);
+  if (name == "sim") {
+    std::vector<std::string> options = a.passthrough;
+    if (has_flag(a, "human")) options.emplace_back("--human");
+    return run_sim(build_options(a), flag_value(a, "seeds"), options);
+  }
   if (name == "replay") return run_replay(build_options(a), a.words[0]);
   if (name == "state") return run_state(build_options(a), a.words[0], flag_value(a, "step"));
   if (name == "diverge") return run_diverge(build_options(a), a.words[0], a.words[1]);
-  if (name == "shot") {
-    return run_shot(build_options(a), a.words.empty() ? "" : a.words[0], flag_value(a, "seed"),
-                    flag_value(a, "step"), flag_value(a, "view"), a.passthrough);
+  if (name == "why") {
+    WhyOptions w;
+    w.log = a.words[0];
+    w.agent = flag_value(a, "agent");
+    w.step = flag_value(a, "step");
+    w.around = flag_value(a, "around");
+    w.decision = flag_value(a, "decision");
+    w.close = flag_value(a, "close");
+    w.flips = has_flag(a, "flips");
+    w.timeline = has_flag(a, "timeline");
+    return run_why(build_options(a), w);
   }
-  if (name == "record") {
-    // Every frame is drawn on the CPU: the release build draws them many times faster.
+  if (name == "shot" || name == "record") {
     std::vector<std::string> args;
     for (const auto& [k, v] : a.flags) {
       if (k != "preset" && k != "engine" && k != "repo" && k != "json")
         args.push_back(std::string("--").append(k).append("=").append(v));
     }
+    if (name == "shot") {
+      return run_shot(build_options(a), a.words.empty() ? "" : a.words[0], args, a.passthrough);
+    }
+    // A CPU view draws every frame on the CPU: the release build draws them many times faster.
     return run_record(build_options(a, "release"), a.words.empty() ? "" : a.words[0], args,
                       a.passthrough);
   }

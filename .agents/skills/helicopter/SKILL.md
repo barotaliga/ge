@@ -10,14 +10,16 @@ helicopter on a generated (or hand-built) mountain. It depends on the core, on `
 `Level` it flies over and lands on) and on `skier` (the trunks' index and the hand-built maps):
 `ge_add_plugin(helicopter ENGINE core PLUGINS mountain skier)`. It never learns which game flies
 it: where the machine stands, the press that takes a rider on and off, what a crash does to the
-people in it, the wreck and the restart are the game's (Fall Line's free ride is M13c2 in
-`docs/goals.md`).
+people in it, the wreck and the restart are the game's (Fall Line's free ride:
+`games/fall_line/sim/heli_ride.hpp`, the pad, the press, the drop, flown home, the wreck; and
+`heli_outing.hpp`, the bot's outing on it, both held by `tests/fall_line_heli_test.cpp` and the
+`free` lab's `--heli` table; the `sim` skill owns them).
 
 | File | What |
 | --- | --- |
 | `helicopter/spec.hpp` | Every number with its unit: the class, the rotor and the tail rotor, the body's strike points, the skids, the power, the blades, the drag, the flight's gains, the bot's, the crash, the map's edge, the wash |
 | `helicopter/heli.hpp/.cpp` | THE STEP, its order stated in the header: `HeliState`, `HeliControls`, `HeliEvents`, `HeliWorld`, `HeliLoad`, `thrust_most`, `step_heli` (the spool, the lever's lag, the flight, the skids, the strikes), `stand_heli`, `heli_turned_back` (the edge's air), `heli_hash` |
-| `helicopter/pilot.hpp/.cpp` | The bot's hands: `heli_pilot` to a `HeliAim` (the way, the height over the snow ahead, the landing's settle), `heli_hands` (a wanted velocity, turn and climb as the four controls) |
+| `helicopter/pilot.hpp/.cpp` | The bot's hands: `heli_pilot` to a `HeliAim` (the way, slowed for a rise ahead it cannot climb at speed and for the sink down to the aim; the height over the snow it will be over in the next seconds; the landing's settle; with an `ai::Why*` it records `way` and `height`), `heli_hands` (a wanted velocity, turn and climb as the four controls) |
 | `helicopter/wash.hpp/.cpp` | The downwash: the column under the disc and the wall jet along the snow (`wash_at`) for a game's snow, spray and people |
 | `helicopter/scenarios.hpp/.cpp` | The heli scenarios (one table for the tests and the lab) and `run_heli_scenario` |
 

@@ -14,6 +14,8 @@ struct Frame {
   planes: array<vec4f, 6>, // the frustum: left, right, bottom, top, near (and one zero)
   eye_delta: vec4f,        // this eye minus the last frame's, m
   jitter: vec4f,           // the sub-pixel offset: render pixels (x right, y down), then uv
+  weather: vec4f,          // the sun's pass, the deck's cover, the fog's extinction (1/m), the hidden
+  deck: vec4f,             // rgb: the deck's tint times its light; w: its grey overhead over the horizon's
 }
 
 // THE MOTION a surface at camera-relative `rel` (w = 1; w = 0 for a direction at infinity) made

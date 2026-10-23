@@ -10,14 +10,18 @@
 #   6. lint          clang-tidy over what the change since BASE (default origin/main) reaches
 #   7. tests         cli_diagnostics_test (every message held to the diagnostics convention),
 #                    each changed test, and the test every changed file's ge:test tag names
+#   8. digests       each lab the change reaches (tools/labs-reached.sh) at its smoke flags,
+#                    against tests/labs_digests.txt: a digest the change moved is caught here,
+#                    not by CI's labs_smoke a round later
 #
-# It is not the whole of CI: the other compilers, the labs' smoke pass and the GPU rows still run
-# there. A game repo has `ge precheck` instead (engine/cli/ci.hpp).
+# It is not the whole of CI: the other compilers, the labs it does not reach and the GPU rows
+# still run there. A game repo has `ge precheck` instead (engine/cli/ci.hpp).
 #
 #   tools/precheck.sh BUILD_DIR PRESET [BASE_REF]
 #
-# ge:summary CI's cheap gates on the engine tree before a push: format, agents, libm, lint, tests
+# ge:summary CI's cheap gates before a push: format, agents, libm, lint, tests, the reached labs
 # ge:keywords ci precheck gates fmt-check agents-check libm-check lint changed-files affected-tests
+# ge:keywords reached-labs digests
 # ge:skill commit
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -65,4 +69,17 @@ mapfile -t tests < <(printf '%s\n' "${tests[@]}" | sort -u)
 regex="^($(IFS='|'; echo "${tests[*]}"))\$"
 gate "tests (${#tests[@]})" ctest --test-dir "$build" -R "$regex" -j "$(nproc 2>/dev/null || sysctl -n hw.ncpu)" \
   --output-on-failure
+
+# The labs the change reaches, each against its committed digest, side by side. As in CTest's
+# labs_smoke (tests/CMakeLists.txt), the leak check is off: the software GPU driver's worker
+# threads keep allocations past exit, which LeakSanitizer would report as the lab's.
+labs_digests() {
+  printf '%s\n' "$@" | ASAN_OPTIONS="${ASAN_OPTIONS:+$ASAN_OPTIONS:}detect_leaks=0" \
+    xargs -P "$(nproc 2>/dev/null || sysctl -n hw.ncpu)" -I{} \
+    "$build/labs" {} --smoke --quiet --check-digests=tests/labs_digests.txt
+}
+mapfile -t labs < <(tools/labs-reached.sh "$build" "$base")
+if ((${#labs[@]})); then
+  gate "digests (${labs[*]})" labs_digests "${labs[@]}"
+fi
 echo "precheck: CI's cheap gates pass ($((SECONDS - start)) s); push, and CI runs the rest."

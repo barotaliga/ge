@@ -13,6 +13,7 @@
 //                           window redrawn from the history when it moved)
 //   trails.coarse        -> trails.coarse (the tracks laid since the last frame)
 //   particles.sim        -> particles (the spray thrown since the last frame, flown a frame)
+//   snowfall.sim         -> snowfall (the flakes round the eye, carried a frame on the wind)
 //   shadows.cull         -> shadows.lists (the casters of the maps drawn this frame)
 //   shadows.near         -> shadows.maps (the near cascade: the forest, when due)
 //   shadows.far          -> shadows.maps (the far cascade, when due)
@@ -27,6 +28,7 @@
 //   instances            -> hdr motion (both lists, where the depth is equal)
 //   sky                  -> hdr motion (behind depth)
 //   particles            -> hdr motion (the spray, over the picture; the motion's reactive b)
+//   snowfall             -> hdr motion (the falling snow round the eye, as the particles)
 //   taa                  -> taa.history (at the output's size; with FrameOptions::taa)
 //   bloom                -> bloom (the glow's mip chain, from what post reads)
 //   post                 -> final (the bloom mixed in, the grade's table: look.hpp's)
@@ -41,13 +43,14 @@
 // (`track`: skier/app/tracks.hpp's prints into the trail maps) and throwing their spray
 // (skier/app/spray.hpp's grains into the particle pool, render/particles.hpp, over the time between
 // two frames' `FrameView::time_s`: a frame at the same time throws nothing and holds the spray
-// still). Every pipeline is made
-// in `create_frame` (the manifest), and the device's load ends there: a pipeline made after it is
-// an error.
+// still). The air is the map's at the view's time (mountain/air/air.hpp): its wind carries the
+// spray and the falling snow, and its fall says how much of the snow is drawn. Every pipeline is
+// made in `create_frame` (the manifest), and the device's load ends there: a pipeline made after it
+// is an error.
 //
 // ge:summary Fall Line's frame: its pass table over engine/render and the GPU half it owns
 // ge:keywords fall-line frame pass-table game-frame create_frame draw pass_table_faults
-// ge:keywords render offscreen surface stats
+// ge:keywords render offscreen surface stats draw_wire wire-probe wireframe
 // ge:skill render
 #pragma once
 
@@ -73,6 +76,7 @@
 #include "render/shadows.hpp"
 #include "render/skinning.hpp"
 #include "render/sky.hpp"
+#include "render/snowfall.hpp"
 #include "render/taa.hpp"
 #include "render/terrain.hpp"
 #include "skier/app/rig_pose.hpp"
@@ -86,6 +90,7 @@ struct FrameOptions {
   bool taa = true;
   double scale = 1.0;           // the render size over the output's, with TAA
   bool overdraw_probe = false;  // labs: the terrain's and the instances' overdraw pipelines
+  bool wire_probe = false;      // labs and recordings: the terrain's and the instances' wireframes
   bool occlusion = true;        // cull the instances by the depth pyramid (off: the frustum only)
   uint32_t shadow_size = 2048;  // the sun's shadow maps' texels a side
   double bloom = 0.04;          // the share of the bloom's glow in the picture; 0: none
@@ -93,6 +98,9 @@ struct FrameOptions {
   bool trails = true;           // the tracks (mountain/app/trails.hpp); drawn only with the snow
   bool spray = true;            // the racers' spray (skier/app/spray.hpp) thrown into the particles
   ge::render::ParticleSettings particles;
+  bool snowfall = true;  // the falling snow, when the map's sky snows
+  bool weather = true;   // the map's sky in the picture (mountain/app/weather_look.hpp): off, clear
+  ge::render::SnowfallSettings flakes;
   ge::mountain::app::TrailOptions trail_maps;  // their sizes
 };
 
@@ -124,6 +132,7 @@ struct GameFrame {
   std::vector<ge::skier::TrackPen> pens;  // each racer's, by his place in the scene
   std::vector<ge::mountain::app::TrailStamp> laid;
   ge::render::Particles particles;
+  ge::render::Snowfall snowfall;
   std::vector<ge::skier::SprayPen> spray_pens;  // each racer's, by his place in the scene
   std::vector<ge::skier::SprayGrain> thrown;
   std::vector<ge::render::Particle> births;
@@ -188,5 +197,10 @@ void forget_tracks(GameFrame& frame);
 // arrive a frame or more later.
 void draw(ge::gpu::Device& device, GameFrame& frame, const ge::render::FrameView& view,
           const FrameScene& scene, const wgpu::TextureView& output);
+
+// The last drawn frame's meshes as lines (needs FrameOptions::wire_probe): the ground's tiles
+// banded by distance and the trees and figures in one warm colour, over black, into `colour` (a
+// kWireFormat view at the render size), hidden lines hidden by the frame's depth.
+void draw_wire(ge::gpu::Device& device, GameFrame& frame, const wgpu::TextureView& colour);
 
 }  // namespace fall_line::app

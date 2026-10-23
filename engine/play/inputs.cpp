@@ -21,6 +21,11 @@ const GameSpec*& slot() {
   return spec;
 }
 
+const RendererSpec*& renderer_slot() {
+  static const RendererSpec* spec = nullptr;
+  return spec;
+}
+
 bool read_number(std::string_view word, double& out) {
   const std::string s(word);
   if (s.empty()) return false;
@@ -80,6 +85,10 @@ bool make_setup(const GameSpec& spec, double seed, const std::map<std::string, s
 const GameSpec* registered_game() { return slot(); }
 
 GameRegister::GameRegister(const GameSpec& spec) { slot() = &spec; }
+
+const RendererSpec* registered_renderer() { return renderer_slot(); }
+
+RendererRegister::RendererRegister(const RendererSpec& spec) { renderer_slot() = &spec; }
 
 int64_t InputLog::steps() const {
   int64_t n = 0;

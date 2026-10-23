@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <span>
 #include <string_view>
 #include <vector>
@@ -82,7 +83,19 @@ struct HeliRun {
   uint64_t digest = 0;    // FNV-1a over every step's state
 };
 
-// Run `sc` at `hz` steps a second. The run stops at a crash.
-HeliRun run_heli_scenario(const HeliScenario& sc, double hz = 120);
+// One step of a run, as it stands after the step: what a per-step trace reads.
+struct HeliStep {
+  double t;  // s, the step's end
+  const HeliState& heli;
+  const HeliControls& controls;
+  const HeliEvents& events;
+  double ground;  // m, the snow under the skid datum
+};
+
+// Run `sc` at `hz` steps a second, the bot's decisions recorded on `why` (agent 0, by step)
+// when given, and `each` called after every step when given (the heli lab's --trace). The run
+// stops at a crash.
+HeliRun run_heli_scenario(const HeliScenario& sc, double hz = 120, ai::Why* why = nullptr,
+                          const std::function<void(const HeliStep&)>& each = {});
 
 }  // namespace ge::helicopter

@@ -11,6 +11,7 @@
 #                (engine/net; docs/networking.md)
 #   ge_lab       the lab framework (engine/lab: the contract, the runner, the raster, the PNG,
 #                the series files and the charts)
+#   ge_ai        the bots' layer (engine/ai: the decision record `ge why` reads)
 #   ge_play      the play contract (engine/play: GameSpec and Run, the session, the input log,
 #                the bench, the stills `ge shot` draws)
 #   ge_prof      the profiler (engine/prof: timing zones, allocation counts, the resident set);
@@ -30,9 +31,10 @@
 #   ge_isa       the instruction-set baseline (x86-64: AVX2), linked by ge_core and
 #                published as ge::isa
 #   ge_flags     warnings, -Werror, sanitizers: this tree only, never published
-# ge_core, ge_fp, ge_isa, ge_assets, ge_net, ge_lab, ge_play, ge_prof, ge_prof_alloc and every plugin target are
-# installed and published as ge::core, ge::fp, ge::isa, ge::assets, ge::net, ge::lab, ge::play, ge::prof,
-# ge::prof_alloc and ge::<plugin>, and the ge executable is installed to bin/
+# ge_core, ge_fp, ge_isa, ge_assets, ge_ai, ge_net, ge_lab, ge_play, ge_prof, ge_prof_alloc and
+# every plugin target are installed and published as ge::core, ge::fp, ge::isa, ge::assets, ge::ai,
+# ge::net, ge::lab, ge::play, ge::prof, ge::prof_alloc and ge::<plugin>, and the ge executable is
+# installed to bin/
 # (cmake/Packaging.cmake, docs/publishing.md).
 cmake_minimum_required(VERSION 3.25)
 project(gameengine2 LANGUAGES CXX)
@@ -157,7 +159,7 @@ if(GE_GPU)
     engine/render/terrain.wgsl engine/render/terrain_cull.wgsl engine/render/terrain_normals.wgsl
     engine/render/horizon.wgsl engine/render/hiz.wgsl engine/render/taa.wgsl engine/render/post.wgsl
     engine/render/instances.wgsl engine/render/instances_cull.wgsl engine/render/bloom.wgsl
-    engine/render/skinning.wgsl engine/render/particles.wgsl engine/render/particles_sim.wgsl)
+    engine/render/skinning.wgsl engine/render/particles.wgsl engine/render/particles_sim.wgsl engine/render/snowfall.wgsl engine/render/snowfall_sim.wgsl)
 endif()
 
 # The network (engine/net, docs/networking.md): addresses, the wire, the OS's UDP and TCP sockets
@@ -176,7 +178,7 @@ endif()
 add_library(ge_lab STATIC engine/lab/lab.cpp engine/lab/report.cpp engine/lab/runner.cpp
   engine/lab/raster.cpp engine/lab/png.cpp engine/lab/diff.cpp engine/lab/inflate.cpp engine/lab/sound.cpp
   engine/lab/series.cpp engine/lab/stats.cpp engine/lab/plot.cpp engine/lab/chart.cpp
-  engine/lab/anim.cpp)
+  engine/lab/anim.cpp engine/lab/series_charts.cpp)
 target_link_libraries(ge_lab PUBLIC ge_core ge_audio)
 
 # The profiler (engine/prof): the timing zones any code opens with GE_ZONE, the allocation
@@ -190,13 +192,20 @@ endif()
 add_library(ge_prof_alloc STATIC engine/prof/alloc_hook.cpp)
 target_link_libraries(ge_prof_alloc PUBLIC ge_prof)
 
+# The bots' layer (engine/ai): the decision record a bot writes and `ge why` reads back, and
+# the pieces bots share. Deterministic, no platform; published as ge::ai.
+file(GLOB GE_AI_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/ai/*.cpp)
+add_library(ge_ai STATIC ${GE_AI_SOURCES})
+target_link_libraries(ge_ai PUBLIC ge_core)
+
 # The play contract (engine/play: a game's spec and Run, the session and its line protocol, the
 # input log, replay and diverge, the bench, the stills, the `play` executable's main), published
 # as ge::play so a game's `play` target is driven by `ge play`, `ge sim`, `ge replay`, `ge state`,
 # `ge diverge`, `ge shot`, `ge bench`, `ge profile` and `ge mem`.
 add_library(ge_play STATIC engine/play/inputs.cpp engine/play/json_read.cpp
-  engine/play/session.cpp engine/play/bench.cpp engine/play/record.cpp engine/play/main.cpp)
-target_link_libraries(ge_play PUBLIC ge_core ge_lab ge_prof ge_prof_alloc)
+  engine/play/session.cpp engine/play/bench.cpp engine/play/record.cpp engine/play/why.cpp
+  engine/play/human.cpp engine/play/main.cpp)
+target_link_libraries(ge_play PUBLIC ge_core ge_ai ge_lab ge_prof ge_prof_alloc)
 
 # The ge command line (engine/cli, cmake/Cli.cmake): built here too when a game pulls the engine
 # in, so the game runs the ge of the engine it pins.

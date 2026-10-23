@@ -34,17 +34,31 @@ the row when the file moves.
 | `engine/core/solar.hpp` | `oss-game-framework/src/core/solar.ts` | sunAt moonAt daylightWindow sunOnDate moonOnDate hourOfElevation |
 | `engine/loop/run_clock.hpp` | `oss-game-framework/src/loop/run-clock.ts` | createRunClock MAX_FRAME_SECONDS |
 | `games/fall_line/labs/army_lab.cpp` | `game5/scripts/army-ground.mjs` | the ground army shown (here measured: the army table and every soldier's path, per scenario) |
+| `games/fall_line/labs/army_sled_lab.cpp` | `game5/scripts/army-ground.mjs` | the army's snowmobiles shown (here measured: the sleds table and every machine's path, per scenario) |
 | `games/fall_line/labs/lift_ride_lab.cpp` | `game5/scripts/lift-ride-preview.mjs` | the lift ride shown (here measured as a table, every lift ridden from its load zone to its top) |
 | `games/fall_line/sim/army.cpp` | `game5/engine/game/army-ground.ts`, `army-lift.ts`, `army-wave.ts` | stepGround chase tryArrest writeTroops sendLiftSquads stepLiftTroops liftFor wayDown sendWave sendWaves retireWaves climbWithWave (the landings, the fire, the cover ring and the men on foot not carried) |
 | `games/fall_line/sim/army.hpp` | `game5/engine/game/army-ground.ts`, `army-lift.ts`, `army-wave.ts` | stepGround liftFor wayDown armyTroops |
+| `games/fall_line/sim/army_drive.cpp` | `game5/engine/game/army-drive.ts` | wayCost chooseWay tunnelWithin |
+| `games/fall_line/sim/army_drive.hpp` | `game5/engine/game/army-drive.ts` | DriveRead TerrainRead wayCost chooseWay tunnelWithin |
 | `games/fall_line/sim/army_rules.hpp` | `game5/engine/game/defs/army-ground.ts`, `defs/army-wave.ts` | ARMY_GROUND ARMY_WAVE |
+| `games/fall_line/sim/army_sled.cpp` | `game5/engine/game/army-sled.ts` | stepArmySleds sledPad setOff chase halt home dismount watch writeCrews |
+| `games/fall_line/sim/army_sled.hpp` | `game5/engine/game/army-sled.ts` | stepArmySleds sledPad crewed |
+| `games/fall_line/sim/army_sled_rules.hpp` | `game5/engine/game/defs/army-sled.ts` | ARMY_SLED |
 | `games/fall_line/sim/army_state.hpp` | `game5/engine/game/army-state.ts` | Soldier ArmyState |
 | `games/fall_line/sim/army_troop.cpp` | `game5/engine/game/army-troop.ts` | goToward stopHere watchProgress slopeAlong wayToward |
 | `games/fall_line/sim/army_troop.hpp` | `game5/engine/game/army-troop.ts` | goToward stopHere watchProgress slopeAlong |
 | `games/fall_line/sim/free.cpp` | `game5/engine/game/skied.ts`, `course.ts` | runUnder noteRun noteSkied leftRunPoint skiedResetPoint freeSpawn |
 | `games/fall_line/sim/free.hpp` | `game5/engine/game/skied.ts`, `course.ts` | runUnder noteRun noteSkied leftRunPoint skiedResetPoint freeSpawn |
+| `games/fall_line/sim/heli_outing.cpp` | `game5/engine/sim/bot.ts`, `game5/engine/game/heli-pilot.ts` | the bot on the skid (pilotControls to an aim); the outing to a run's head and down on skis |
+| `games/fall_line/sim/heli_outing.hpp` | `game5/engine/sim/bot.ts` | the bot on the skid |
+| `games/fall_line/sim/heli_ride.cpp` | `game5/engine/game/heli.ts`, `heli-pad.ts` | stepHeli controlsFor crash park hold release drop heliWithin board startAgain openSpotNear leanOver clearAt summitward |
+| `games/fall_line/sim/heli_ride.hpp` | `game5/engine/game/heli.ts`, `heli-pad.ts`, `heli-state.ts`, `defs/heli.ts` | stepHeli heliWithin heliDown HeliPhaseEvent HELI.pad HELI.board HELI.drop HELI.home HELI.crash |
 | `games/fall_line/sim/lift_ride.cpp` | `game5/engine/game/lift-ride.ts`, `lift-board.ts` | stepLiftRide stepChairWait carrierPassing letGo setOff (the boarding ring, the queue, the gondola's platform, the hands, the swing and the skip not carried) |
 | `games/fall_line/sim/lift_ride.hpp` | `game5/engine/game/lift-ride.ts`, `lift-board.ts` | stepLiftRide stepChairWait letGo |
+| `games/fall_line/sim/para_outing.cpp` | `game5/engine/game/para-pilot.ts`, `game5/engine/sim/bot.ts` | paraPilot (the outing's stretch, spiral and final are the engine's own) |
+| `games/fall_line/sim/para_outing.hpp` | `game5/engine/game/para-pilot.ts` | paraPilot |
+| `games/fall_line/sim/para_ride.cpp` | `game5/engine/game/para.ts`, `step.ts` | paraStartOf freshPara startPara paraControls paraHeld paraPress (the free ride's para option) |
+| `games/fall_line/sim/para_ride.hpp` | `game5/engine/game/para.ts` | paraStartOf startPara paraRigged paraHeld paraPress |
 | `games/fall_line/sim/sled_outing.cpp` | `game5/engine/sim/bot.ts`, `game5/engine/game/sled-pilot.ts` | the bot on the boards (sledPilot to an aim); the outing up a run and down on skis is the engine's own |
 | `games/fall_line/sim/sled_outing.hpp` | `game5/engine/sim/bot.ts` | the bot on the boards |
 | `games/fall_line/sim/sled_ride.cpp` | `game5/engine/game/sled.ts`, `sled-pad.ts` | stepSled board hop throwOff leave remount mount hold letGo sledWithin sledControls parkedAt freshSled sledSpotOf findSpot clearAt leanOver (the fire, the wreck, the stolen machines, the rocks, the posts, the grace and the log buck not carried) |
@@ -224,6 +238,15 @@ the row when the file moves.
 | `plugins/mountain/mapgen/versions.hpp` | `game5/engine/mapgen/versions.ts` | generatorTraits GENERATOR_VERSIONS CURRENT_GENERATOR_VERSION singlePiste |
 | `plugins/mountain/mapgen/weather.cpp` | `game5/engine/mapgen/weather.ts` | dealWeather windIn |
 | `plugins/mountain/mapgen/weather.hpp` | `game5/engine/mapgen/weather.ts` | dealWeather sunsetOf WEATHER_KINDS |
+| `plugins/paramotor/acro.cpp` | `game5/engine/game/para-acro.ts`, `para.ts` | keptWay riserRig riserLift biteRears reflexOf heldOf heldShare holdPitch countSwing fallenIn readLoad stepTangled (hangOnLines left to the renderer) |
+| `plugins/paramotor/acro.hpp` | `game5/engine/game/para-acro.ts`, `defs/para.ts` | PARA.acro |
+| `plugins/paramotor/air.cpp` | `game5/engine/game/para-air.ts` | paraAirAt eddyUp levelWind |
+| `plugins/paramotor/air.hpp` | `game5/engine/game/para-air.ts` | paraAirAt ParaAir |
+| `plugins/paramotor/para.cpp` | `game5/engine/game/para.ts`, `canopy.ts` | stepPara dropPara readyPara (the wing's polar, folds and lines restated) |
+| `plugins/paramotor/para.hpp` | `game5/engine/game/para-state.ts`, `para.ts` | ParaState ParaControls |
+| `plugins/paramotor/pilot.cpp` | `game5/engine/game/para-pilot.ts` | paraPilot |
+| `plugins/paramotor/pilot.hpp` | `game5/engine/game/para-pilot.ts` | paraPilot ParaAim |
+| `plugins/paramotor/spec.hpp` | `game5/engine/game/defs/para.ts` | PARA |
 | `plugins/racing/records.hpp` | `oss-game-framework/src/racing/records.ts` | splitGap noteRecord |
 | `plugins/racing/standings.hpp` | `oss-game-framework/src/racing/standings.ts` | legProgress fieldOrder placeAmong |
 | `plugins/racing/tape.cpp` | `oss-game-framework/src/racing/tape.ts` | encodeStream decodeStream |

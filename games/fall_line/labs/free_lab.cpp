@@ -12,9 +12,21 @@
 // and the ride up, the runs and metres skied, the digest; his line drawn over the map, white
 // where a lift carries him. An outing not ridden through is a failure.
 //
+// THE SLED and THE HELI tables (`--sled`, `--heli`): the bot's outing on the snowmobile (up a run
+// on it, down on his skis) and on the helicopter (flown from its pad to the head of the highest
+// run, dropped there, down on his skis), the metres climbed, the time on the machine, whether he
+// reached a foot; his line drawn yellow on the snowmobile, red on the helicopter.
+//
+// THE PARA table (`--para`): the bot's outing begun under the paramotor on the summit (off the
+// highest head on full throttle, flown straight to a gentle stretch of the run he began on,
+// spiralled down over it, landed and down the rest on his skis): the run, the stretch, the time
+// hung in the harness, the landing's load, whether he reached a foot; his line drawn blue while
+// he hangs.
+//
 // ge:summary Lab: the bot on the free ride down every piste of a seed, the runs table, its lines
 // ge:keywords lab free free-ride simulate_free bot runs foot arrived chain distance odometer
-// ge:keywords outings simulate_outing lift wait ride
+// ge:keywords outings simulate_outing lift wait ride sled heli helicopter simulate_heli_outing
+// ge:keywords para paramotor simulate_para_outing
 // ge:skill sim labs
 // ge:test tests/fall_line_free_test.cpp
 #include <memory>
@@ -23,7 +35,10 @@
 
 #include "core/num_text.hpp"
 #include "fall_line/sim/free.hpp"
+#include "fall_line/sim/heli_outing.hpp"
 #include "fall_line/sim/outing.hpp"
+#include "fall_line/sim/para_outing.hpp"
+#include "fall_line/sim/para_ride.hpp"
 #include "fall_line/sim/simulate.hpp"
 #include "fall_line/sim/sled_outing.hpp"
 #include "fall_line/sim/sled_ride.hpp"
@@ -114,6 +129,21 @@ void run(ge::lab::Lab& lab) {
                                 "time s", "wipeouts", "resets", "skied m", "digest"},
                                {}};
   int sleds_done = 0;
+  const bool heli = lab.arg_num("heli") > 0;
+  ge::lab::LabTable heli_table{"heli",
+                               {"seed", "run", "colour", "climbed m", "on it s", "taken", "foot",
+                                "time s", "wipeouts", "resets", "skied m", "digest"},
+                               {}};
+  int helis_done = 0;
+  int helis_flown = 0;
+  const bool para = lab.arg_num("para") > 0;
+  ge::lab::LabTable para_table{
+      "para",
+      {"seed", "run", "colour", "stretch m", "hung s", "flights", "landing g", "foot", "time s",
+       "wipeouts", "resets", "skied m", "digest"},
+      {}};
+  int paras_done = 0;
+  int paras_flown = 0;
   int sleds_ridden = 0;
   int arrived = 0;
   int ridden = 0;
@@ -255,6 +285,87 @@ void run(ge::lab::Lab& lab) {
            rep.finished ? "yes" : "NO", fixed(rep.time, 2), std::to_string(rep.wipeouts),
            std::to_string(rep.resets), fixed(rep.distance, 0), hex(rep.digest)});
     }
+    std::vector<std::vector<fs::LinePoint>> heli_lines;
+    if (heli) {
+      helis_flown++;
+      const fs::RunReport rep =
+          fs::simulate_heli_outing(level, seed, outing_opts, pictures ? &heli_lines : nullptr);
+      const int32_t drop = fs::heli_drop_run(*level);
+      const std::string id = drop >= 0 ? runs[static_cast<size_t>(drop)].id : "-";
+      const std::string key = k + ".heli";
+      if (rep.finished) {
+        helis_done++;
+      } else {
+        std::string what = key;
+        what += ": the bot's outing on the helicopter to run ";
+        what += id;
+        what += " did not end at a foot (taken ";
+        what += std::to_string(rep.heli_rides);
+        what += " times, climbed ";
+        what += fixed(rep.climbed, 0);
+        what += " m in ";
+        what += fixed(rep.time, 1);
+        what += " s)";
+        std::string next = "Look at previews/free/";
+        next += k;
+        next +=
+            "-heli.png for where his line stops, then read "
+            "games/fall_line/sim/heli_outing.cpp and heli_ride.cpp (skill: sim).";
+        lab.fail(what, next);
+      }
+      lab.metric(key + ".time", rep.time, "s");
+      lab.metric(key + ".climbed", rep.climbed, "m");
+      lab.metric(key + ".on-it", rep.heli_time, "s");
+      heli_table.rows.push_back(
+          {fixed(seed, 0), id, drop >= 0 ? grade_word(runs[static_cast<size_t>(drop)].grade) : "-",
+           fixed(rep.climbed, 0), fixed(rep.heli_time, 1), std::to_string(rep.heli_rides),
+           rep.finished ? "yes" : "NO", fixed(rep.time, 2), std::to_string(rep.wipeouts),
+           std::to_string(rep.resets), fixed(rep.distance, 0), hex(rep.digest)});
+    }
+    std::vector<std::vector<fs::LinePoint>> para_lines;
+    if (para) {
+      paras_flown++;
+      const fs::RunReport rep =
+          fs::simulate_para_outing(level, seed, outing_opts, pictures ? &para_lines : nullptr);
+      const fs::GameState begun = fs::create_para_ride(level);
+      const int32_t start = begun.racers[0].free.start;
+      const fs::ParaLanding land = fs::para_landing(*level, start);
+      const std::string id =
+          start < static_cast<int32_t>(runs.size()) ? runs[static_cast<size_t>(start)].id : "-";
+      const std::string key = k + ".para";
+      if (rep.finished) {
+        paras_done++;
+      } else {
+        std::string what = key;
+        what += ": the bot's outing under the paramotor off the head of run ";
+        what += id;
+        what += " did not end at a foot (";
+        what += std::to_string(rep.para_flights);
+        what += " flights, ";
+        what += fixed(rep.para_time, 1);
+        what += " s hung, ";
+        what += fixed(rep.time, 1);
+        what += " s in all)";
+        std::string next = "Look at previews/free/";
+        next += k;
+        next +=
+            "-para.png for where his line stops, then read "
+            "games/fall_line/sim/para_outing.cpp and para_ride.cpp (skill: sim).";
+        lab.fail(what, next);
+      }
+      lab.metric(key + ".time", rep.time, "s");
+      lab.metric(key + ".hung", rep.para_time, "s");
+      lab.metric(key + ".landing-g", rep.max_landing_g, "g");
+      para_table.rows.push_back(
+          {fixed(seed, 0), id,
+           start < static_cast<int32_t>(runs.size())
+               ? grade_word(runs[static_cast<size_t>(start)].grade)
+               : "-",
+           fixed(land.s, 0) + "-" + fixed(land.end, 0), fixed(rep.para_time, 1),
+           std::to_string(rep.para_flights), fixed(rep.max_landing_g, 2),
+           rep.finished ? "yes" : "NO", fixed(rep.time, 2), std::to_string(rep.wipeouts),
+           std::to_string(rep.resets), fixed(rep.distance, 0), hex(rep.digest)});
+    }
     if (!pictures) continue;
     constexpr int kPx = 1024;
     const double px = kPx / level->size;
@@ -273,7 +384,9 @@ void run(ge::lab::Lab& lab) {
       for (size_t i = 1; i < line.size(); i++) {
         const auto& a = line[i - 1];
         const auto& b = line[i];
-        const Rgba c = b.sled      ? Rgba{255, 220, 0}
+        const Rgba c = b.para      ? Rgba{40, 80, 255}
+                       : b.heli    ? Rgba{230, 30, 30}
+                       : b.sled    ? Rgba{255, 220, 0}
                        : b.lifted  ? Rgba{255, 255, 255}
                        : b.down    ? Rgba{230, 0, 200}
                        : b.on_snow ? Rgba{0, 200, 230}
@@ -316,6 +429,43 @@ void run(ge::lab::Lab& lab) {
                  {"pilot", "bot"}}},
                pic);
     }
+    if (!heli_lines.empty()) {
+      ge::lab::Picture pic = base();
+      for (const auto& line : heli_lines) draw(pic, line);
+      lab.shot({k + "-heli",
+                "SEED " + fixed(seed, 0) + "'S HELICOPTER: FLOWN TO A RUN'S HEAD, DOWN ON SKIS",
+                "The ski area from above (+x right, +z down) with every run's line in its colour, "
+                "and over them the bot's line on the helicopter's outing: red on its skid from "
+                "the pad beside the village to the head of the highest run, then cyan on his "
+                "skis from where it dropped him down the run to a foot; orange in the air, "
+                "magenta down.",
+                "a red line leaves the village and ends at a run's head, and a cyan line comes "
+                "down from there along the coloured runs to a foot",
+                {{"seed", fixed(seed, 0)},
+                 {"version", std::to_string(level->version)},
+                 {"skis", "reference"},
+                 {"pilot", "bot"}}},
+               pic);
+    }
+    if (!para_lines.empty()) {
+      ge::lab::Picture pic = base();
+      for (const auto& line : para_lines) draw(pic, line);
+      lab.shot({k + "-para",
+                "SEED " + fixed(seed, 0) + "'S PARAMOTOR: OFF THE SUMMIT, LANDED, DOWN ON SKIS",
+                "The ski area from above (+x right, +z down) with every run's line in its colour, "
+                "and over them the bot's line under the paramotor: cyan a few metres from the "
+                "highest run's head on the snow, blue hung in the harness straight down the "
+                "mountain and spiralling over a gentle stretch of the run he began on, then cyan "
+                "on his skis "
+                "from where he landed down the run to a foot; orange in the air, magenta down.",
+                "a blue line leaves the highest run's head, coils over a stretch of that run's "
+                "chain, and a cyan line goes on down the coloured runs from there to a foot",
+                {{"seed", fixed(seed, 0)},
+                 {"version", std::to_string(level->version)},
+                 {"skis", "reference"},
+                 {"pilot", "bot"}}},
+               pic);
+    }
     ge::lab::Picture pic = base();
     for (const auto& line : drawn) draw(pic, line);
     lab.shot({k,
@@ -345,6 +495,16 @@ void run(ge::lab::Lab& lab) {
     lab.metric("sled-outings-done", sleds_done, "count");
     lab.table(std::move(sled_table));
   }
+  if (heli) {
+    lab.metric("heli-outings", helis_flown, "count");
+    lab.metric("heli-outings-done", helis_done, "count");
+    lab.table(std::move(heli_table));
+  }
+  if (para) {
+    lab.metric("para-outings", paras_flown, "count");
+    lab.metric("para-outings-done", paras_done, "count");
+    lab.table(std::move(para_table));
+  }
 }
 
 const ge::lab::LabSpec kSpec{
@@ -352,11 +512,14 @@ const ge::lab::LabSpec kSpec{
     ge::lab::LabKind::drive,
     "game:fall_line",
     "games/fall_line/sim (create_free_ride, step_free, plan_free, simulate_free, the lift ride "
-    "and the outing: simulate_outing)",
+    "and the outing: simulate_outing; the machines: simulate_sled_outing, simulate_heli_outing, "
+    "simulate_para_outing)",
     "sim",
     "Does the bot on the free ride ski every piste of each seed's ski area from its head to a "
     "foot, how fast, and with what on the way (wipeouts, resets)? And does it ride an outing: "
-    "down a piste, up the lift at its foot and down another run to a foot?",
+    "down a piste, up the lift at its foot and down another run to a foot? Up the mountain on "
+    "the snowmobile and on the helicopter, and down from where each leaves him? Off the summit "
+    "under the paramotor, down onto a run and on down it?",
     {
         {"seeds", "38", "seeds, comma-separated"},
         {"version", "10", "the generator's version (8 or later; 0 the current rules)"},
@@ -364,8 +527,10 @@ const ge::lab::LabSpec kSpec{
         {"limit", "600", "a run's time limit, s"},
         {"outings", "1",
          "the most outings ridden a seed, from the pistes with a lift at their foot"},
-        {"outing-limit", "1800", "an outing's time limit, s (and the snowmobile's)"},
+        {"outing-limit", "1800", "an outing's time limit, s (and the machines')"},
         {"sled", "1", "1: the bot's outing on the snowmobile a seed; 0: none"},
+        {"heli", "1", "1: the bot's outing on the helicopter a seed; 0: none"},
+        {"para", "1", "1: the bot's outing under the paramotor a seed; 0: none"},
         {"no-pictures", "", "skip the map pictures", true},
     },
     "--seeds=38 --most=3",

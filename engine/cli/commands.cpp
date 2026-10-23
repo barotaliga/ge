@@ -45,12 +45,24 @@ constexpr FlagSpec kAddLabFlags[] = {
     kDryRun};
 constexpr FlagSpec kBuildFlags[] = {kPreset, kEngine, kRepo};
 constexpr FlagSpec kTestFlags[] = {
-    kPreset, {"filter", "<regex>", "only the tests whose names match"}, kEngine, kRepo};
+    kPreset,
+    {"filter", "<regex>", "only the tests whose names match, and only their targets built"},
+    kEngine,
+    kRepo};
 constexpr FlagSpec kLabFlags[] = {
     kPreset,
     {"smoke", "", "run at the lab's smoke flags"},
     {"tag", "<name>", "keep this run under previews/<id>@<name>/ for a later --compare"},
     {"compare", "<name>", "set every metric beside the run tagged <name>"},
+    kEngine,
+    kRepo};
+
+constexpr FlagSpec kLabSweepFlags[] = {
+    kPreset,
+    {"set", "<name>=<a>,<b>,...",
+     "the constexpr constant to sweep (kSlope, or spec::kSlope) and the values it takes"},
+    {"in", "<file>", "the source file it is defined in, when its name is in several"},
+    {"metrics", "<word,...>", "list only the metrics whose keys hold one of these words"},
     kEngine,
     kRepo};
 
@@ -88,7 +100,13 @@ constexpr FlagSpec kGoldenWriteFlags[] = {
 constexpr FlagSpec kPlayFlags[] = {
     {"seed", "<n>", "the run's seed (default 1)"}, kPreset, kEngine, kRepo};
 constexpr FlagSpec kSimFlags[] = {
-    {"seeds", "<a,b,...>", "the seeds the pilot runs (default 1)"}, kPreset, kEngine, kRepo};
+    {"seeds", "<a,b,...>", "the seeds the pilot runs (default 1)"},
+    {"human", "",
+     "measure how human each run's controls and decisions look, and warn on every metric "
+     "outside a person's band (skill: bots)"},
+    kPreset,
+    kEngine,
+    kRepo};
 constexpr FlagSpec kFast{
     "preset", "<debug|release>",
     "the CMake preset (default release: a sanitizer's time is not the game's)"};
@@ -127,16 +145,35 @@ constexpr FlagSpec kAssetBuildFlags[] = {
     kRepo};
 constexpr FlagSpec kStateFlags[] = {
     {"step", "<n>", "after this many steps (default: the log's end)"}, kPreset, kEngine, kRepo};
+constexpr FlagSpec kWhyFlags[] = {
+    {"agent", "<n>",
+     "the bot to explain: 0 the player's pilot, then the game's others (default 0)"},
+    {"step", "<n>", "the step to explain (default: the log's last)"},
+    {"around", "<k>", "and the k steps either side of it (default 0)"},
+    {"decision", "<name>", "only this decision (default: every one)"},
+    {"flips", "", "every step the bot changed its mind over the whole run"},
+    {"close", "<x>", "with --flips, also the close calls: margins under x"},
+    {"timeline", "", "write its decisions as a series file in runs/ for ge graph"},
+    kPreset,
+    kEngine,
+    kRepo};
 constexpr FlagSpec kShotFlags[] = {
     {"seed", "<n>", "without a log: the pilot plays this seed first (default 1)"},
     {"step", "<n>", "after this many steps (default: the run's end)"},
     {"view", "<name>", "which picture (default: the game's first; ge shot lists them)"},
+    {"gpu", "", "the game's renderer draws the view on the GPU (ge shot --gpu lists its views)"},
+    {"mode", "<lit|wireframe|depth|overlay>",
+     "with --gpu: how the view is drawn (default: the renderer's first, lit)"},
+    {"size", "<WxH>", "with --gpu: the picture's size (default: the renderer's own)"},
     kPreset,
     kEngine,
     kRepo};
 constexpr FlagSpec kRecordFlags[] = {
     {"seed", "<n>", "without a log: the pilot plays this seed first (default 1)"},
     {"view", "<name>", "which picture (default: the game's first; ge shot lists them)"},
+    {"gpu", "", "the game's renderer draws the view on the GPU (ge shot --gpu lists its views)"},
+    {"mode", "<lit|wireframe|depth|overlay>",
+     "with --gpu: how the view is drawn (default: the renderer's first, lit)"},
     {"from", "<step|Ns>", "the first frame: a step, or seconds with an s (default 0)"},
     {"to", "<step|Ns>", "the last frame (default: the run's end)"},
     {"fps", "<n>", "frames a second of video (default 30)"},
@@ -267,6 +304,10 @@ const CommandSpec kCommands[] = {
      "list the labs, or run one: its metrics, tables, captioned pictures and digest; its own "
      "flags go after --",
      kLabFlags, "ge lab run --json -- --seeds=1,2", "labs"},
+    {"lab sweep", "<id>", 1, 1, "see",
+     "one constexpr constant of the code rewritten to each value, the labs rebuilt and the lab "
+     "run at each, every metric side by side; the source is put back after",
+     kLabSweepFlags, "ge lab sweep para --set=kFlight=0.5,0.7,0.9 -- --scenario=launch", "labs"},
     {"lab diff", "<id>", 1, 1, "see",
      "diff every picture of a lab's last run against a kept run: PSNR, SSIM and the share "
      "changed per distance band, each band held to its floor, a four-panel sheet a shot",
@@ -299,7 +340,8 @@ const CommandSpec kCommands[] = {
      "inputs, end); the game's options go after --",
      kPlayFlags, "ge play --seed=38 -- --rivals=3", "play-test"},
     {"sim", "", 0, 0, "play",
-     "the game's pilot over each seed: each run's report and digest, its input log in runs/",
+     "the game's pilot over each seed: each run's report and digest, its input log in runs/; "
+     "--human measures how human it looks; the game's options go after --",
      kSimFlags, "ge sim --seeds=38,7", "play-test"},
     {"replay", "<log>", 1, 1, "play",
      "an input log played back; a digest it misses is a determinism break", kBuildFlags,
@@ -311,6 +353,11 @@ const CommandSpec kCommands[] = {
      "where two runs part: the first input that differs, the first step after which the states "
      "differ, and the fields that do",
      kBuildFlags, "ge diverge runs/a.inputs runs/b.inputs", "play-test"},
+    {"why", "<log>", 1, 1, "play",
+     "why a bot did what it did: its decisions round a step replayed from the log (what it saw, "
+     "the options it weighed and their scores, the one it took and by what margin); --flips for "
+     "every change of mind, --timeline for a chart",
+     kWhyFlags, "ge why runs/fall_line-38.inputs --step=1200 --around=6", "play-test"},
     {"net sim", "", 0, 0, "measure",
      "fake-traffic clients and a host over chosen link conditions, no game needed: delivery, "
      "round trip, loss, bandwidth and a digest a session; --capture for the pcap",
@@ -465,13 +512,13 @@ std::optional<std::string> check_args(const Args& a) {
            (c.args.empty() ? std::string("no arguments") : std::string(c.args)) + ", got " +
            std::to_string(n) + " word(s)";
   }
-  static constexpr std::string_view kPassing[] = {"lab",    "lab diff", "play",    "sim", "shot",
-                                                  "record", "bench",    "profile", "mem", "leaks"};
+  static constexpr std::string_view kPassing[] = {"lab",     "lab diff", "lab sweep", "play",
+                                                  "sim",     "shot",     "record",    "bench",
+                                                  "profile", "mem",      "leaks"};
   if (!a.passthrough.empty() &&
       std::find(std::begin(kPassing), std::end(kPassing), c.name) == std::end(kPassing)) {
-    return "only ge lab, lab diff, play, sim, shot, record, bench, profile, mem and leaks pass "
-           "words after "
-           "--";
+    return "only ge lab, lab diff, lab sweep, play, sim, shot, record, bench, profile, mem and "
+           "leaks pass words after --";
   }
   return std::nullopt;
 }

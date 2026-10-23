@@ -1,7 +1,7 @@
 // The `play` command line (main.hpp).
 //
 // ge:summary play_main: parses the play command line and prints each command's JSON answer
-// ge:keywords play main command-line describe sim replay state diverge bench shot png json
+// ge:keywords play main command-line describe sim replay state diverge bench shot png json why
 // ge:skill agent-interface
 // ge:test tests/play_session_test.cpp
 #include "play/main.hpp"
@@ -18,8 +18,10 @@
 #include "core/num_text.hpp"
 #include "lab/png.hpp"
 #include "play/bench.hpp"
+#include "play/human.hpp"
 #include "play/record.hpp"
 #include "play/session.hpp"
+#include "play/why.hpp"
 #include "prof/memory.hpp"
 
 namespace ge::play {
@@ -27,6 +29,9 @@ namespace ge::play {
 namespace {
 
 namespace fs = std::filesystem;
+
+// The most flips `why --flips` lists; the rest are counted.
+constexpr size_t kMostFlips = 200;
 
 struct Line {
   std::string op;
@@ -67,6 +72,23 @@ std::string views_json(const GameSpec& spec) {
   return out;
 }
 
+// The renderer's views and modes (`--gpu`), or null when the executable has none.
+std::string gpu_json() {
+  const RendererSpec* r = registered_renderer();
+  if (!r) return "null";
+  auto list = [](std::span<const View> vs) {
+    std::string out;
+    for (const View& v : vs) {
+      out += std::string(out.empty() ? "" : ",") + "{\"name\":" + quote(v.name) +
+             ",\"help\":" + quote(v.help) + "}";
+    }
+    return out;
+  };
+  return "{\"views\":[" + list(r->views) + "],\"modes\":[" + list(r->modes) +
+         "],\"width\":" + std::to_string(r->width) + ",\"height\":" + std::to_string(r->height) +
+         "}";
+}
+
 std::string describe(const GameSpec& spec) {
   using core::num::to_string;
   std::string axes;
@@ -86,7 +108,7 @@ std::string describe(const GameSpec& spec) {
   return "{\"game\":" + quote(spec.name) + ",\"summary\":" + quote(spec.summary) +
          ",\"hz\":" + to_string(spec.hz) + ",\"most_seconds\":" + to_string(spec.most_seconds) +
          ",\"axes\":[" + axes + "],\"options\":[" + options + "],\"views\":[" + views_json(spec) +
-         "]}";
+         "],\"gpu\":" + gpu_json() + "}";
 }
 
 std::string played_json(const Played& p) {
@@ -175,7 +197,7 @@ int sim(const GameSpec& spec, const Line& l, std::ostream& out) {
   for (const double seed : seeds) {
     Setup setup;
     std::string error;
-    if (!make_setup(spec, seed, options_of(l, {"seeds", "out"}), setup, error)) {
+    if (!make_setup(spec, seed, options_of(l, {"seeds", "out", "human"}), setup, error)) {
       return problem(out, 2, error, "the command line", "play describe lists the options");
     }
     const auto p = pilot_run(spec, setup, error);
@@ -185,8 +207,14 @@ int sim(const GameSpec& spec, const Line& l, std::ostream& out) {
     std::ofstream f(file, std::ios::binary);
     f << to_text(p->log);
     if (!f) return problem(out, 1, "cannot write " + file.string(), file.string(), "check --out");
+    std::string human;
+    if (l.flags.count("human")) {
+      const auto w = why_replay(spec, p->log, 0, error);
+      if (!w) return problem(out, 1, error, file.string(), "--human needs a game whose Run traces");
+      human = ",\"human\":" + human_json(human_report(spec, p->log, w->why));
+    }
     runs += std::string(runs.empty() ? "" : ",") + "{\"seed\":" + core::num::to_string(seed) +
-            ",\"inputs\":" + quote(file.generic_string()) + "," + played_json(*p) + "}";
+            ",\"inputs\":" + quote(file.generic_string()) + "," + played_json(*p) + human + "}";
   }
   out << "{\"game\":" << quote(spec.name) << ",\"runs\":[" << runs << "]}\n";
   return 0;
@@ -258,6 +286,118 @@ int diverge_cmd(const GameSpec& spec, const Line& l, std::ostream& out) {
   return d->same ? 0 : 1;
 }
 
+// --size=WIDTHxHEIGHT into `w` and `h` (left alone without the flag); false when it does not read.
+bool size_flag(const Line& l, int& w, int& h) {
+  const auto it = l.flags.find("size");
+  if (it == l.flags.end()) return true;
+  const size_t x = it->second.find('x');
+  char* e1 = nullptr;
+  char* e2 = nullptr;
+  const std::string ws = it->second.substr(0, x),
+                    hs = x == std::string::npos ? "" : it->second.substr(x + 1);
+  w = static_cast<int>(std::strtol(ws.c_str(), &e1, 10));
+  h = static_cast<int>(std::strtol(hs.c_str(), &e2, 10));
+  return !ws.empty() && !hs.empty() && !*e1 && !*e2 && w > 0 && h > 0 && w <= 7680 && h <= 4320;
+}
+
+// The lens the flags ask for: --view, and --gpu with --mode and --size.
+LensAsk lens_ask_of(const Line& l) {
+  LensAsk ask;
+  if (const auto it = l.flags.find("view"); it != l.flags.end()) ask.view = it->second;
+  if (const auto it = l.flags.find("gpu"); it != l.flags.end()) ask.gpu = it->second != "0";
+  if (const auto it = l.flags.find("mode"); it != l.flags.end()) ask.mode = it->second;
+  return ask;
+}
+
+// A lens's name as a file names it: "map", or "chase-depth" with --gpu (the defaults filled).
+std::string lens_file_name(const GameSpec& spec, const LensAsk& ask) {
+  if (!ask.gpu) {
+    return ask.view.empty() && !spec.views.empty() ? spec.views[0].name : ask.view;
+  }
+  const RendererSpec* r = registered_renderer();
+  std::string view = ask.view, mode = ask.mode;
+  if (r && view.empty() && !r->views.empty()) view = r->views[0].name;
+  if (r && mode.empty() && !r->modes.empty()) mode = r->modes[0].name;
+  return view + "-" + mode;
+}
+
+// `why`: a log replayed with the decision trace on; one agent's decisions round a step, with
+// --flips the changes of choice over the whole run, with --timeline its series file in --out.
+int why_cmd(const GameSpec& spec, const Line& l, std::ostream& out) {
+  if (l.words.size() != 1) {
+    return problem(out, 2, "why takes one input log", "the command line",
+                   "play why runs/x.inputs --agent=0 --step=600");
+  }
+  InputLog log;
+  std::string error;
+  if (!read_log(l.words[0], log, error))
+    return problem(out, 1, error, l.words[0], "pass an input log");
+  double agent = 0, step = 0, around = 0, close = 0;
+  const double last = static_cast<double>(log.steps() > 0 ? log.steps() - 1 : 0);
+  if (!number_flag(l, "agent", 0, agent) || !number_flag(l, "step", last, step) ||
+      !number_flag(l, "around", 0, around) || !number_flag(l, "close", 0, close) || agent < 0 ||
+      around < 0) {
+    return problem(out, 2, "--agent, --step, --around and --close take numbers, none negative",
+                   "the command line", "pass --agent=0 --step=600 --around=12");
+  }
+  const auto w = why_replay(spec, log, static_cast<int32_t>(agent), error);
+  if (!w) return problem(out, 1, error, l.words[0], "trace the game's Run (play/game.hpp)");
+  const auto it = l.flags.find("decision");
+  const std::string name = it == l.flags.end() ? "" : it->second;
+  const auto from = static_cast<int64_t>(step - around);
+  const auto to = static_cast<int64_t>(step + around);
+  std::string decisions, text;
+  for (const ai::Decision* d : decisions_between(w->why, from, to, name)) {
+    decisions += std::string(decisions.empty() ? "" : ",") + ai::decision_json(w->why, *d);
+    text += ai::decision_text(w->why, *d);
+  }
+  int64_t agree = 0, first_disagree = -1;
+  for (size_t i = 0; i < w->agrees.size(); i++) {
+    agree += w->agrees[i];
+    if (!w->agrees[i] && first_disagree < 0) first_disagree = static_cast<int64_t>(i);
+  }
+  std::ostringstream o;
+  o << "{\"inputs\":" << quote(l.words[0]) << ",\"agent\":" << static_cast<int32_t>(agent)
+    << ",\"steps\":" << w->steps << ",\"digest\":" << quote(hex64(w->digest))
+    << ",\"recorded\":" << w->why.decisions().size()
+    << ",\"pilot_asked\":" << (w->asked_pilot ? "true" : "false") << ",\"pilot_agrees\":" << agree
+    << ",\"first_disagree\":" << first_disagree << ",\"from\":" << from << ",\"to\":" << to
+    << ",\"decisions\":[" << decisions << "]";
+  if (l.flags.count("flips")) {
+    const std::vector<Flip> flips = why_flips(w->why, static_cast<int32_t>(agent), close);
+    std::string rows;
+    for (size_t i = 0; i < flips.size() && i < kMostFlips; i++) {
+      const Flip& f = flips[i];
+      text +=
+          "step " + std::to_string(f.step) + " " + f.decision + ": " +
+          (f.from == std::string_view(f.to) ? std::string("close call on ") + f.to
+                                            : std::string(*f.from ? f.from : "-") + " -> " + f.to) +
+          (std::isfinite(f.margin) ? " by " + core::num::to_string(f.margin) : "") + "\n";
+      rows += std::string(rows.empty() ? "" : ",") + "{\"step\":" + std::to_string(f.step) +
+              ",\"decision\":" + quote(f.decision) + ",\"from\":" + quote(f.from) +
+              ",\"to\":" + quote(f.to) + ",\"margin\":" +
+              (std::isfinite(f.margin) ? core::num::to_string(f.margin) : std::string("null")) +
+              "}";
+    }
+    o << ",\"flips\":[" << rows
+      << "],\"more_flips\":" << (flips.size() > kMostFlips ? flips.size() - kMostFlips : 0);
+  }
+  if (l.flags.count("timeline")) {
+    const auto out_it = l.flags.find("out");
+    const fs::path dir = out_it == l.flags.end() ? fs::path("runs") : fs::path(out_it->second);
+    std::error_code ec;
+    fs::create_directories(dir, ec);
+    const fs::path file = dir / (fs::path(l.words[0]).stem().string() + "-why-" +
+                                 std::to_string(static_cast<int32_t>(agent)) + ".tsv");
+    std::ofstream f(file, std::ios::binary);
+    f << lab::write_series(why_timeline(w->why, static_cast<int32_t>(agent), spec.hz));
+    if (!f) return problem(out, 1, "cannot write " + file.string(), file.string(), "check --out");
+    o << ",\"timeline\":" << quote(file.generic_string());
+  }
+  out << o.str() << ",\"text\":" << quote(text) << "}\n";
+  return 0;
+}
+
 // `shot`: a log played to --step (its end by default), or the pilot's run of --seed, and the
 // view drawn, framed and written as a PNG.
 int shot_cmd(const GameSpec& spec, const Line& l, std::ostream& out) {
@@ -276,7 +416,9 @@ int shot_cmd(const GameSpec& spec, const Line& l, std::ostream& out) {
       return problem(out, 2, "--seed is not a number", "the command line", "pass --seed=38");
     }
     Setup setup;
-    if (!make_setup(spec, seed, options_of(l, {"seed", "step", "view", "out"}), setup, error)) {
+    if (!make_setup(spec, seed,
+                    options_of(l, {"seed", "step", "view", "out", "gpu", "mode", "size"}), setup,
+                    error)) {
       return problem(out, 2, error, "the command line", "play describe lists the options");
     }
     auto p = pilot_run(spec, setup, error);
@@ -287,19 +429,25 @@ int shot_cmd(const GameSpec& spec, const Line& l, std::ostream& out) {
   if (!number_flag(l, "step", static_cast<double>(log.steps()), step)) {
     return problem(out, 2, "--step is not a number", "the command line", "pass --step=600");
   }
-  const auto view_it = l.flags.find("view");
-  const std::string view = view_it == l.flags.end() ? "" : view_it->second;
-  const auto still = shot_at(spec, log, static_cast<int64_t>(step), view, error);
+  LensAsk ask = lens_ask_of(l);
+  if (!size_flag(l, ask.width, ask.height)) {
+    return problem(out, 2, "--size is not WIDTHxHEIGHT (at most 7680x4320)", "the command line",
+                   "pass --size=1280x720");
+  }
+  const auto still = shot_at(spec, log, static_cast<int64_t>(step), ask, error);
   if (!still) {
     return problem(out, 1, error, l.words.empty() ? "the pilot's run" : l.words[0],
-                   "play describe lists the views; pass a --step inside the log");
+                   ask.gpu ? "play describe lists the gpu views and modes; pass a --step inside "
+                             "the log"
+                           : "play describe lists the views; pass a --step inside the log");
   }
   const auto out_it = l.flags.find("out");
   const fs::path dir = out_it == l.flags.end() ? fs::path("runs") : fs::path(out_it->second);
   std::error_code ec;
   fs::create_directories(dir, ec);
-  const fs::path file = dir / (std::string(spec.name) + "-" + core::num::to_string(log.seed) + "-" +
-                               still->view + "-" + std::to_string(still->step) + ".png");
+  const fs::path file =
+      dir / (std::string(spec.name) + "-" + core::num::to_string(log.seed) + "-" +
+             lens_file_name(spec, ask) + "-" + std::to_string(still->step) + ".png");
   if (!lab::write_png(file.string(), still->picture)) {
     return problem(out, 1, "cannot write " + file.generic_string(), file.generic_string(),
                    "check --out");
@@ -307,7 +455,8 @@ int shot_cmd(const GameSpec& spec, const Line& l, std::ostream& out) {
   out << "{\"png\":" << quote(file.generic_string()) << ",\"view\":" << quote(still->view)
       << ",\"step\":" << still->step << ",\"digest\":" << quote(hex64(still->digest))
       << ",\"caption\":" << quote(still->caption) << ",\"width\":" << still->picture.width
-      << ",\"height\":" << still->picture.height << ",\"views\":[" << views_json(spec) << "]}\n";
+      << ",\"height\":" << still->picture.height << ",\"gpu\":" << (ask.gpu ? "true" : "false")
+      << ",\"views\":[" << lens_views_json(spec, ask.gpu) << "]}\n";
   return 0;
 }
 
@@ -337,7 +486,7 @@ int record_cmd(const GameSpec& spec, const Line& l, std::ostream& out) {
   }
   static const std::initializer_list<const char*> kOwn = {
       "seed", "view",    "from",           "to",     "fps",     "speed", "size", "format", "codec",
-      "crf",  "bitrate", "encoder-preset", "thumbs", "columns", "band",  "out"};
+      "crf",  "bitrate", "encoder-preset", "thumbs", "columns", "band",  "out",  "gpu",    "mode"};
   InputLog log;
   std::string error;
   if (l.words.size() == 1) {
@@ -371,20 +520,13 @@ int record_cmd(const GameSpec& spec, const Line& l, std::ostream& out) {
   o.encoding.crf = static_cast<int>(crf);
   o.thumbs = static_cast<int>(thumbs);
   o.columns = static_cast<int>(columns);
-  if (const auto it = l.flags.find("size"); it != l.flags.end()) {
-    const size_t x = it->second.find('x');
-    char* e1 = nullptr;
-    char* e2 = nullptr;
-    const std::string w = it->second.substr(0, x),
-                      h = x == std::string::npos ? "" : it->second.substr(x + 1);
-    o.width = static_cast<int>(std::strtol(w.c_str(), &e1, 10));
-    o.height = static_cast<int>(std::strtol(h.c_str(), &e2, 10));
-    if (w.empty() || h.empty() || *e1 || *e2 || o.width <= 0 || o.height <= 0 || o.width > 7680 ||
-        o.height > 4320) {
-      return problem(out, 2, "--size is not WIDTHxHEIGHT (at most 7680x4320)", "the command line",
-                     "pass --size=1280x720");
-    }
+  if (!size_flag(l, o.width, o.height)) {
+    return problem(out, 2, "--size is not WIDTHxHEIGHT (at most 7680x4320)", "the command line",
+                   "pass --size=1280x720");
   }
+  const LensAsk ask = lens_ask_of(l);
+  o.gpu = ask.gpu;
+  o.mode = ask.mode;
   auto text_flag = [&](const char* name, std::string& into) {
     if (const auto it = l.flags.find(name); it != l.flags.end()) into = it->second;
   };
@@ -401,9 +543,8 @@ int record_cmd(const GameSpec& spec, const Line& l, std::ostream& out) {
   const fs::path dir = out_it == l.flags.end() ? fs::path("runs") : fs::path(out_it->second);
   std::error_code ec;
   fs::create_directories(dir, ec);
-  const std::string view = o.view.empty() && !spec.views.empty() ? spec.views[0].name : o.view;
-  const std::string base =
-      std::string(spec.name) + "-" + core::num::to_string(log.seed) + "-" + view;
+  const std::string base = std::string(spec.name) + "-" + core::num::to_string(log.seed) + "-" +
+                           lens_file_name(spec, ask);
   const std::string ext(extension_of(o.encoding));
   o.video = (dir / (ext.empty() ? base + "-frames" : base + "." + ext)).generic_string();
   o.log = (dir / (base + "-encode.log")).generic_string();
@@ -417,7 +558,8 @@ int record_cmd(const GameSpec& spec, const Line& l, std::ostream& out) {
             ? "install ffmpeg, or pass --format=png for the frames and the sheet alone"
         : error.find("ffmpeg") != std::string::npos
             ? "read " + o.log + ", then fix --codec, --crf, --bitrate or --encoder-preset"
-            : "play describe lists the views; pass --from and --to inside the log");
+        : o.gpu ? "play describe lists the gpu views and modes; pass --from and --to inside the log"
+                : "play describe lists the views; pass --from and --to inside the log");
   }
   out << "{\"" << (ext.empty() ? "frames_dir" : "video") << "\":" << quote(o.video)
       << ",\"sheet\":" << quote(o.sheet) << ",\"format\":" << quote(o.encoding.format)
@@ -428,8 +570,9 @@ int record_cmd(const GameSpec& spec, const Line& l, std::ostream& out) {
       << ",\"seconds\":" << core::num::to_fixed(rec->seconds, 2) << ",\"from\":" << rec->from
       << ",\"to\":" << rec->to << ",\"digest\":" << quote(hex64(rec->digest))
       << ",\"encoder\":" << quote(rec->encoder)
-      << ",\"log\":" << quote(rec->encoder.empty() ? "" : o.log) << ",\"views\":["
-      << views_json(spec) << "]}\n";
+      << ",\"log\":" << quote(rec->encoder.empty() ? "" : o.log)
+      << ",\"gpu\":" << (o.gpu ? "true" : "false") << ",\"views\":[" << lens_views_json(spec, o.gpu)
+      << "]}\n";
   return 0;
 }
 
@@ -579,9 +722,11 @@ int play_main(int argc, char** argv, std::istream& in, std::ostream& out) {
   if (l.op == "diverge") return diverge_cmd(*spec, l, out);
   if (l.op == "bench") return bench_cmd(*spec, l, out);
   if (l.op == "shot") return shot_cmd(*spec, l, out);
+  if (l.op == "why") return why_cmd(*spec, l, out);
   if (l.op == "record") return record_cmd(*spec, l, out);
   return problem(out, 2, "unknown command `" + l.op + "`", "the command line",
-                 "run describe, sim, replay, state, diverge, bench, shot or record, or no command "
+                 "run describe, sim, replay, state, diverge, bench, shot, record or why, or no "
+                 "command "
                  "for the protocol");
 }
 

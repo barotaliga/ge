@@ -4,10 +4,11 @@
 // circle full lock settles on, the most it rolled, the flights and the landings, the trunks, and
 // whether and why the rider was thrown. One picture a scenario: the line from above over the
 // snow (groomed white, powder blue, the trunk green), and the speed and the belt's sink under it.
+// With --trace, every step as a series (`<id>.trace.tsv`, for `ge graph`) and charts of it.
 //
 // ge:summary Lab: the snowmobile scenarios run and measured; the line, speed and sink drawn
 // ge:keywords lab sled snowmobile scenario top-speed sink float slip climb high-mark stall
-// ge:keywords turn radius roll flight landing thrown trace
+// ge:keywords turn radius roll flight landing thrown trace per-step series charts trace-flag
 // ge:skill snowmobile labs
 // ge:test tests/snowmobile_scenarios_test.cpp
 #include <string>
@@ -16,6 +17,7 @@
 #include "core/num_text.hpp"
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
+#include "lab/series_charts.hpp"
 #include "snowmobile/scenarios.hpp"
 
 namespace {
@@ -100,9 +102,112 @@ Picture draw_run(const sm::SledScenario& sc, const ge::mountain::mapgen::Level& 
   return p;
 }
 
+// The run step by step under --trace: every step's speeds, the belt's sink and slip, the engine,
+// the attitude and the controls as a series, its flights, landings, trunks and throw marked.
+struct StepTrace {
+  static constexpr double kDeg = 180 / ge::core::kPi;
+  ge::lab::Series s =
+      ge::lab::make_series({"t_s", "speed", "way", "vy", "sink", "slip", "rpm", "roll", "pitch",
+                            "ski_angle", "throttle", "brake", "steer", "lean", "airborne"});
+  std::vector<ge::lab::Mark> marks;
+  std::vector<ge::lab::Band> bands;
+  double flight_from = -1;
+
+  void step(const sm::SledStep& st) {
+    const sm::SledState& m = st.sled;
+    const sm::SledControls& c = st.controls;
+    double sink = 0;
+    for (const double v : m.sinks) sink += v;
+    ge::lab::add_row(
+        s, {st.t, m.speed * 3.6, m.way * 3.6, m.vy, sink / static_cast<double>(m.sinks.size()),
+            m.slip, m.rpm, m.roll * kDeg, m.pitch * kDeg, m.ski_angle * kDeg, c.throttle, c.brake,
+            c.steer, c.lean, m.airborne ? 1.0 : 0.0});
+    const sm::SledEvents& e = st.events;
+    if (e.took_off) marks.push_back({st.t, "TAKE-OFF"});
+    if (e.landed) marks.push_back({st.t, "LAND"});
+    if (e.hit > 0) marks.push_back({st.t, "TRUNK"});
+    if (e.thrown != sm::Thrown::none) {
+      marks.push_back({st.t, std::string("THROWN ") + sm::thrown_name(e.thrown)});
+    }
+    if (m.airborne && flight_from < 0) flight_from = st.t;
+    if (!m.airborne && flight_from >= 0) {
+      bands.push_back({flight_from, st.t, "AIR"});
+      flight_from = -1;
+    }
+  }
+};
+
+void chart_trace(ge::lab::Lab& lab, const sm::SledScenario& sc, StepTrace& tr, double hz) {
+  const double end = tr.s.rows() > 0 ? tr.s.find("t_s")->num.back() : 0;
+  if (tr.flight_from >= 0) tr.bands.push_back({tr.flight_from, end, "AIR"});
+  tr.s.set("title", std::string("the snowmobile scenario ") + sc.id + ", step by step");
+  tr.s.set("x", "t_s");
+  for (const auto& [col, unit] :
+       std::vector<std::pair<std::string, std::string>>{{"t_s", "s"},
+                                                        {"speed", "km/h"},
+                                                        {"way", "km/h"},
+                                                        {"vy", "m/s"},
+                                                        {"sink", "m"},
+                                                        {"slip", "m/s"},
+                                                        {"roll", "deg"},
+                                                        {"pitch", "deg"},
+                                                        {"ski_angle", "deg"}}) {
+    tr.s.set("unit." + col, unit);
+  }
+  const std::string k = sc.id;
+  const ge::lab::SeriesCharts out{
+      k + ".",
+      k,
+      k + ", " + fixed(end, 1) + " s at " + fixed(hz, 0) + " Hz",
+      {{"scenario", k}, {"hz", fixed(hz, 0)}, {"trace", "yes"}},
+      tr.marks,
+      tr.bands,
+      "Grey lines are the run's events (take-off, landing, a trunk, the throw), grey bands "
+      "flights."};
+  ge::lab::chart_series(
+      lab, tr.s, out,
+      {{"speed",
+        "SPEED AND WAY, " + k,
+        "km/h",
+        {"speed", "way"},
+        "The machine's speed (vertical included) and its way along its nose.",
+        "the two lines part only in a slide; smooth but at a landing or a trunk"},
+       {"sink",
+        "THE BELT'S SINK, " + k,
+        "sink (m)",
+        {"sink"},
+        "The belt's mean sink into the snow over its probes.",
+        "deep at rest in powder, rising as it planes; a ring only at a landing"},
+       {"slip",
+        "THE BELT'S SLIP, " + k,
+        "slip (m/s)",
+        {"slip"},
+        "The belt's mean slip over the snow.",
+        "a burst off the line or on a climb, then settling"},
+       {"engine",
+        "THE ENGINE, " + k,
+        "rpm",
+        {"rpm"},
+        "The engine's revolutions a minute.",
+        "rises with the throttle and holds; no one-step jumps"},
+       {"attitude",
+        "ATTITUDE, " + k,
+        "angle (deg)",
+        {"roll", "pitch", "ski_angle"},
+        "The machine's roll and pitch and the skis' turn off the nose.",
+        "the roll follows the steer and the rider's lean; no oscillation that grows"},
+       {"controls",
+        "THE HANDS, " + k,
+        "control (-1..1)",
+        {"throttle", "brake", "steer", "lean"},
+        "The controls the scripted hand or the bot held each step.",
+        "the script's steps where the scenario says; the bot's hands without one-step chatter"}});
+}
+
 void run(ge::lab::Lab& lab) {
   const std::string want = lab.arg("scenario");
   const double hz = lab.arg_num("hz");
+  const bool trace = lab.arg_bool("trace");
   ge::lab::LabTable table{
       "scenarios",
       {"scenario", "top km/h", "end km/h", "metres", "climbed m", "sink m", "slip m/s", "roll deg",
@@ -113,7 +218,11 @@ void run(ge::lab::Lab& lab) {
     if (want != "all" && want != sc.id) continue;
     ran++;
     const auto level = sm::sled_scenario_level(sc);
-    const sm::SledRun r = sm::run_sled_scenario(sc, hz);
+    StepTrace tr;
+    const sm::SledRun r =
+        trace ? sm::run_sled_scenario(sc, hz, [&](const sm::SledStep& st) { tr.step(st); })
+              : sm::run_sled_scenario(sc, hz);
+    if (trace) chart_trace(lab, sc, tr, hz);
     const std::string k = sc.id;
     lab.metric(k + ".top-speed", r.top_speed * 3.6, "km/h");
     lab.metric(k + ".end-speed", r.end.speed * 3.6, "km/h");
@@ -164,6 +273,7 @@ const ge::lab::LabSpec kSpec{
     {
         {"scenario", "all", "one scenario's id (plugins/snowmobile/scenarios.cpp), or all"},
         {"hz", "120", "steps a second"},
+        {"trace", "", "also write each scenario's every step (<id>.trace.tsv) and chart it", true},
     },
     "--scenario=all",
     run,

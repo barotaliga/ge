@@ -1,6 +1,6 @@
 ---
 name: play-test
-description: "Use to test this game by PLAYING it without a screen: the play contract a game fills (play/game.cpp: its axes, options, observe, state, report, pilot), ge play's line protocol, ge sim's pilot runs, the input log, ge replay to a digest, ge state at a step, ge diverge to find the step two runs part, ge shot for a captioned still of any step, and ge record for the run as a video and a contact sheet. Load it to add an axis or an option, to make a replay hold, or to chase a determinism break."
+description: "Use to test this game by PLAYING it without a screen: the play contract a game fills (play/game.cpp: its axes, options, observe, state, report, pilot), ge play's line protocol, ge sim's pilot runs, the input log, ge replay to a digest, ge state at a step, ge diverge to find the step two runs part, ge shot for a captioned still of any step, ge record for the run as a video and a contact sheet, and ge why for why a bot did what it did and ge sim --human for how human it looks. Load it to add an axis or an option, to make a replay hold, or to chase a determinism break."
 ---
 
 # Play-testing the game
@@ -54,6 +54,7 @@ ge diverge runs/a.inputs runs/b.inputs     # where two runs part, and which fiel
 ge shot runs/<game>-1.inputs --step=600 --view=<v>   # a captioned still at that step, a PNG
 ge shot --seed=1 --view=<v>                # the pilot's run of seed 1, at its end
 ge record runs/<game>-1.inputs --view=<v> --to=30s   # the run as an MP4 and a contact sheet
+ge record runs/<game>-1.inputs --gpu --mode=wireframe   # the same through the GPU renderer
 ```
 
 **LOOK at a run.** `ge shot` replays the log to the step and draws the view, framed with its
@@ -71,16 +72,45 @@ of `--thumbs` stills, each labelled with its time and step, the run at a glance;
 then watch the stretch it points at. It builds the release preset, since every frame is drawn on
 the CPU.
 
+**WATCH it as the game draws it.** A game built with the GPU registers a renderer beside its
+spec (`GE_RENDERER(spec)`: a `RendererSpec` of views, MODES and `open`, and a `Renderer` whose
+`draw` pictures a `Run` as it stands). `--gpu` on `ge shot` or `ge record` draws through it, and
+`--mode` picks how: the lit picture, the meshes' edges (`wireframe`), the depth, or the lit
+picture with the game's marks over it (`overlay`); `ge shot --gpu` lists the views and
+`play describe` the modes. One renderer draws a whole recording: the first frame is a cut and
+every frame after is drawn on from the last, as the game's own window would. Without an adapter
+the command says so and names the driver to install.
+
 **The protocol** (`ge play`): the session opens with `hello` (the axes, the options, the ops).
 Then send one object a line: `{"op":"observe"}`; `{"op":"act","input":{"<axis>":v},"steps":n}`
 (holds the input n steps, answers the observation after them); `{"op":"pilot","steps":n}` (the
-game's pilot plays n steps); `{"op":"state"}`; `{"op":"inputs"}` (the log so far); `{"op":"end"}`
+game's pilot plays n steps); `{"op":"why"}` (what the pilot would do now and its decisions, without
+stepping); `{"op":"state"}`; `{"op":"inputs"}` (the log so far); `{"op":"end"}`
 (the report and the digest). A bad line answers `{"op":"error","error":...,"next":...}`.
 Script a session by piping lines in: `printf '{"op":"observe"}\n' | ge play --seed=1`.
 
 **The input log** is plain text: a header (`game`, `seed`, `option`, `hz`, `axes`, `steps`,
 `digest`), then one line per run of held steps, `<count> <value per axis>`. Edit it by hand to ask
 "what if": copy a log, change one line, drop the `digest` line, and `ge diverge` the two.
+
+**WHY A BOT DID IT.** A game whose Run accepts a decision trace (`Run::trace`, the engine's
+`ai/why.hpp`) has every bot decision explained from a log: `ge why <log> --step=N --around=K`
+replays it and prints agent 0's decisions (the game's pilot; `--agent=` the game's other bots)
+round step N: what it saw, the options it weighed with their scores and terms, the one it took
+and by what margin. On a log you or a person played, it is what the pilot WOULD have done, and
+the summary names the first step it would have played otherwise. `--flips` lists every step it
+changed its mind (`--close=x` adds the close calls); `--timeline` writes the decisions as a
+series file for `ge graph`. A bot records with `if (why) why->fact(...)`: off is a null pointer,
+and it must decide exactly the same traced and untraced (`ge why` replays to the log's digest).
+
+**HOW HUMAN IT LOOKS.** `ge sim --human` adds, per run, each axis's metrics (a signed axis read
+as a stick, a lever as a trigger: the share at an end, jumps, reversals a minute, how long it is
+held part-way, the lag behind what the bot meant) and each decision's changes of mind a minute,
+with a warning for every value outside a person's band (the engine's `ai/human.hpp`). The lag
+needs the bot to record what it meant before its hands (`ai::record_intent`, the engine's
+`ai/hands.hpp`, which also turns a decision into late, settling, slewed presses). A pilot that
+holds hands must press on a copy in `pilot()` and commit it in `step()` only when it was asked
+at that step, or `ge why` (which asks at every step) moves the run.
 
 ## Chasing a determinism break
 

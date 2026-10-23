@@ -3,7 +3,7 @@
 // its vertex pulled from the shared buffer and decoded. Lit by the sun past the ground's own
 // horizon and past what stands in the sun (wgsl/sun_shadow.wgsl), and the sky through
 // frame.wgsl's functions, seen through the haze, with its motion
-// from the last frame's place. Drawn twice from one `@invariant` vertex stage: depth only
+// from the last frame's place (and a skinned vertex's own last place in its mesh). Drawn twice from one `@invariant` vertex stage: depth only
 // (`fs_depth`, which keeps a LOD band's dithered share of the pixels), then shaded where the
 // depth is `equal` (`fs_main`, which never discards).
 #include "render/wgsl/frame.wgsl"
@@ -25,6 +25,19 @@
 @group(3) @binding(0) var<uniform> shadow: SunShadow;
 @group(3) @binding(1) var shadow_maps: texture_depth_2d_array;
 @group(3) @binding(2) var shadow_cmp: sampler_comparison;
+
+// The last frame's mesh-space position of vertex `index` of `lod`, from the two words a vertex
+// the skinning pass keeps (render/skinning.hpp); a LOD that keeps none moves with its instance.
+fn last_position(index: u32, lod: Lod, now: vec3f) -> vec3f {
+  if (lod.motion.x == 0u) {
+    return now;
+  }
+  let at = lod.motion.x + index * 2u;
+  let w0 = vertices[at];
+  let w1 = vertices[at + 1u];
+  let q = vec3f(f32(w0 & 0xffffu), f32(w0 >> 16u), f32(w1 & 0xffffu)) / 65535.0;
+  return lod.box_min.xyz + q * lod.box_size.xyz;
+}
 
 struct VertexOut {
   @invariant @builtin(position) position: vec4f,
@@ -50,9 +63,10 @@ fn vs_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) iid: u32) -
   let lp = streams[kStreamLastPlace * cap + i];
   let lq = streams[kStreamLastRotation * cap + i];
   let local = v.position * s.xyz;
+  let last_local = last_position(vid & 0xfffffu, lod, v.position) * s.xyz;
   var out: VertexOut;
   out.rel = p.xyz + quat_rotate(q, local) - frame.eye.xyz;
-  out.last_rel = lp.xyz + quat_rotate(lq, local) - frame.eye.xyz;
+  out.last_rel = lp.xyz + quat_rotate(lq, last_local) - frame.eye.xyz;
   out.position = frame.view_proj * vec4f(out.rel, 1.0);
   // A normal under a scale by s is scaled by 1 / s.
   out.normal = quat_rotate(q, normalize(v.normal / s.xyz));
@@ -115,4 +129,23 @@ fn fs_count(in: VertexOut) -> @location(0) vec4f {
     discard;
   }
   return vec4f(1.0, 0.0, 0.0, 0.0);
+}
+
+// The wire probe (labs only): the triangles' edges as lines, a hair nearer than the surface under
+// them (reversed-z: a larger depth is nearer), in one warm colour so the trees and the figures
+// stand apart from the ground's distance bands.
+struct WireOut {
+  @location(0) colour: vec4f,
+  @builtin(frag_depth) depth: f32,
+}
+
+@fragment
+fn fs_wire(in: VertexOut) -> WireOut {
+  if (!band_keeps(in.band, in.position.xy)) {
+    discard;
+  }
+  var out: WireOut;
+  out.colour = vec4f(1.0, 0.62, 0.2, 1.0);
+  out.depth = in.position.z * 1.002;
+  return out;
 }

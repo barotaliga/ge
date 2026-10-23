@@ -1,5 +1,5 @@
 // PLAYING, REPLAYING AND INSPECTING THROUGH ge: `ge play`, `ge sim`, `ge replay`, `ge state`,
-// `ge diverge` and `ge shot` build the game's `play` executable (the play contract,
+// `ge diverge`, `ge shot` and `ge why` build the game's `play` executable (the play contract,
 // engine/play/game.hpp) and run it, so an agent tests a game by playing it, without a screen:
 //
 //   ge play [--seed=S] [-- --<option>=V]   the line protocol on this terminal (engine/play/
@@ -13,12 +13,16 @@
 //   ge shot [<log>] [--step=N] [--view=V]  a still of the run at step N, drawn on the CPU and
 //                                          captioned, written to runs/; without a log, the pilot's
 //                                          run of --seed
+//   ge why <log> [--agent=N] [--step=S]    why a bot did it: its decisions round step S (what it
+//          [--around=K] [--flips]          saw, the options and their scores, the choice); every
+//          [--timeline]                    change of choice; its decision series in runs/
 //
 // The play executable answers each with one JSON line, which becomes the outcome's `result`; a
 // problem it reports (`{"error","where","next"}`) becomes a finding.
 //
-// ge:summary ge play, sim, replay, state, diverge and shot: the play executable run as findings
+// ge:summary ge play, sim, replay, state, diverge, shot and why: the play executable as findings
 // ge:keywords cli ge play sim replay state diverge shot still input-log protocol run_play run_sim
+// ge:keywords why run_why decisions
 // ge:skill agent-interface
 // ge:test tests/cli_play_test.cpp
 #pragma once
@@ -45,13 +49,20 @@ Outcome run_sim(const BuildOptions& o, const std::string& seeds,
 Outcome run_replay(const BuildOptions& o, const std::string& log);
 Outcome run_state(const BuildOptions& o, const std::string& log, const std::string& step);
 Outcome run_diverge(const BuildOptions& o, const std::string& a, const std::string& b);
-// `log` empty: the pilot's run of `seed` (with `options`, the words after --).
-Outcome run_shot(const BuildOptions& o, const std::string& log, const std::string& seed,
-                 const std::string& step, const std::string& view,
-                 const std::vector<std::string>& options);
+// `ge shot`: the play executable's `shot` with `flags` ("--name=value": --seed, --step, --view,
+// --gpu, --mode, --size) and the game's options; `log` empty: the pilot's run of --seed.
+Outcome run_shot(const BuildOptions& o, const std::string& log,
+                 const std::vector<std::string>& flags, const std::vector<std::string>& options);
 // `ge record`: the play executable's `record` with `flags` ("--name=value") and the game's options.
 Outcome run_record(const BuildOptions& o, const std::string& log,
                    const std::vector<std::string>& flags, const std::vector<std::string>& options);
+
+// `ge why`: the log replayed with the decision trace on (engine/play/why.hpp).
+struct WhyOptions {
+  std::string log, agent, step, around, decision, close;
+  bool flips = false, timeline = false;
+};
+Outcome run_why(const BuildOptions& o, const WhyOptions& w);
 
 // The play executable's JSON answer read into an outcome (exposed for the tests): `output` what
 // it printed, `code` its exit code.

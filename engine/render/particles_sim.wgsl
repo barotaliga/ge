@@ -1,5 +1,5 @@
 // THE PARTICLES' FLIGHT (render/particles.hpp): one thread a slot of the ring. A live particle
-// falls by its share of gravity, drags toward the still air, moves and ages; at the ground (the
+// falls by its share of gravity, drags toward the air (the game's wind), moves and ages; at the ground (the
 // terrain's heights) a grain is gone and a fine one comes to rest on the snow. `fly` is
 // step_particle's twin in particles.cpp.
 #include "render/wgsl/terrain_common.wgsl"
@@ -10,10 +10,10 @@
 @group(0) @binding(2) var<uniform> ground: TerrainParams;
 @group(0) @binding(3) var heights: texture_2d<f32>;
 
-fn fly(q: Particle, dt: f32) -> Particle {
+fn fly(q: Particle, dt: f32, air: vec3f) -> Particle {
   var p = q;
   p.v.y -= kGravity * p.fall * dt;
-  p.v *= exp(-p.drag * dt);
+  p.v = air + (p.v - air) * exp(-p.drag * dt);
   p.p += p.v * dt;
   p.age += dt;
   return p;
@@ -29,7 +29,7 @@ fn sim(@builtin(global_invocation_id) id: vec3u) {
   if (p.age >= p.life || pp.step.x <= 0.0) {
     return;
   }
-  p = fly(p, pp.step.x);
+  p = fly(p, pp.step.x, pp.air.xyz);
   let h = field_height(heights, ground, p.p.xz);
   // Under the snow and falling: it has come down on it. (One under it and rising is still coming
   // up out of the snow it was thrown from: a ski sinks into soft snow.)

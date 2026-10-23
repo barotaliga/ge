@@ -3,11 +3,12 @@
 // climb at full lever, the hover's drift, the cruise, the landing and how hard, the crash and why
 // (a lever dropped, a face too steep, a crown, the rotor's tips), the disc over the top, the
 // height kept over the snow, and the fuselage hung toward a rider. One picture a scenario: the
-// line from above, and the height over the snow and the speed under it.
+// line from above, and the height over the snow and the speed under it. With --trace, every step
+// as a series (`<id>.trace.tsv`, for `ge graph`) and charts of it (series_charts.hpp).
 //
 // ge:summary Lab: the helicopter scenarios run and measured; the line, the height and speed drawn
 // ge:keywords lab heli helicopter scenario lift-off torque climb hover cruise land crash loop
-// ge:keywords terrain rider trace
+// ge:keywords terrain rider trace per-step series charts trace-flag
 // ge:skill helicopter labs
 // ge:test tests/helicopter_scenarios_test.cpp
 #include <string>
@@ -18,6 +19,7 @@
 #include "helicopter/scenarios.hpp"
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
+#include "lab/series_charts.hpp"
 
 namespace {
 
@@ -100,9 +102,114 @@ Picture draw_run(const hc::HeliScenario& sc, const ge::mountain::mapgen::Level& 
   return p;
 }
 
+// The run step by step under --trace: every step's height, speeds, attitude, disc, rotor and
+// controls as a series, its lift-offs, landings and crash marked and its flights shaded.
+struct StepTrace {
+  ge::lab::Series s = ge::lab::make_series(
+      {"t_s", "agl", "speed", "vy", "roll", "pitch", "disc_pitch", "disc_roll", "yaw_rate", "spool",
+       "thrust_share", "lever", "cyclic_pitch", "cyclic_roll", "pedal", "grounded"});
+  std::vector<ge::lab::Mark> marks;
+  std::vector<ge::lab::Band> bands;
+  double flight_from = -1;
+
+  void step(const hc::HeliStep& st) {
+    const hc::HeliState& h = st.heli;
+    const hc::HeliControls& c = st.controls;
+    ge::lab::add_row(
+        s, {st.t, h.y - st.ground, ge::core::hypot3(h.vx, h.vy, h.vz) * 3.6, h.vy, h.roll * kDeg,
+            h.pitch * kDeg, h.disc.pitch * kDeg, h.disc.roll * kDeg, h.yaw_rate * kDeg, h.spool,
+            h.collective, c.collective, c.pitch, c.roll, c.pedal, h.grounded ? 1.0 : 0.0});
+    const hc::HeliEvents& e = st.events;
+    if (e.lifted) marks.push_back({st.t, "LIFT"});
+    if (e.landed) marks.push_back({st.t, "LAND"});
+    if (e.crash != hc::HeliCrash::none) {
+      marks.push_back({st.t, std::string("CRASH ") + hc::heli_crash_name(e.crash)});
+    }
+    if (!h.grounded && flight_from < 0) flight_from = st.t;
+    if (h.grounded && flight_from >= 0) {
+      bands.push_back({flight_from, st.t, "AIR"});
+      flight_from = -1;
+    }
+  }
+};
+
+void chart_trace(ge::lab::Lab& lab, const hc::HeliScenario& sc, StepTrace& tr, double hz) {
+  const double end = tr.s.rows() > 0 ? tr.s.find("t_s")->num.back() : 0;
+  if (tr.flight_from >= 0) tr.bands.push_back({tr.flight_from, end, "AIR"});
+  tr.s.set("title", std::string("the helicopter scenario ") + sc.id + ", step by step");
+  tr.s.set("x", "t_s");
+  for (const auto& [col, unit] :
+       std::vector<std::pair<std::string, std::string>>{{"t_s", "s"},
+                                                        {"agl", "m"},
+                                                        {"speed", "km/h"},
+                                                        {"vy", "m/s"},
+                                                        {"roll", "deg"},
+                                                        {"pitch", "deg"},
+                                                        {"disc_pitch", "deg"},
+                                                        {"disc_roll", "deg"},
+                                                        {"yaw_rate", "deg/s"}}) {
+    tr.s.set("unit." + col, unit);
+  }
+  const std::string k = sc.id;
+  const ge::lab::SeriesCharts out{
+      k + ".",
+      k,
+      k + ", " + fixed(end, 1) + " s at " + fixed(hz, 0) + " Hz",
+      {{"scenario", k}, {"hz", fixed(hz, 0)}, {"trace", "yes"}},
+      tr.marks,
+      tr.bands,
+      "Grey lines are the run's events (lift-off, landing, crash), grey bands the skids off the "
+      "snow."};
+  ge::lab::chart_series(
+      lab, tr.s, out,
+      {{"height",
+        "HEIGHT OVER THE SNOW, " + k,
+        "agl (m)",
+        {"agl"},
+        "The skids' height over the snow under them, every step.",
+        "zero on the snow, the climb and the hover's hold as the scenario says"},
+       {"speed",
+        "SPEED, " + k,
+        "speed (km/h)",
+        {"speed"},
+        "The airframe's speed, vertical included.",
+        "smooth through the run; a ring at a crash"},
+       {"climb",
+        "CLIMB, " + k,
+        "vy (m/s)",
+        {"vy"},
+        "The vertical speed, + up.",
+        "the climb under the lever, near zero in a hover, a dip into each landing"},
+       {"attitude",
+        "ATTITUDE AND DISC, " + k,
+        "angle (deg)",
+        {"roll", "pitch", "disc_pitch", "disc_roll"},
+        "The fuselage's roll and pitch and the rotor disc's pitch and roll.",
+        "the disc leads and the fuselage follows; no one-step snaps"},
+       {"yaw",
+        "YAW RATE, " + k,
+        "yaw rate (deg/s)",
+        {"yaw_rate"},
+        "How fast the airframe turns about its mast, + clockwise from above.",
+        "the torque's turn at lift-off held by the pedal; no oscillation that grows"},
+       {"rotor",
+        "ROTOR, " + k,
+        "share (0..1)",
+        {"spool", "thrust_share"},
+        "The rotor's share of its full rpm and the thrust's share of what it could give.",
+        "spool rises to one and holds; the thrust follows the lever"},
+       {"controls",
+        "THE HANDS, " + k,
+        "control (-1..1)",
+        {"lever", "cyclic_pitch", "cyclic_roll", "pedal"},
+        "The collective lever, the cyclic and the pedals the scripted hand or the bot held.",
+        "the script's steps where the scenario says; the bot's hands without one-step chatter"}});
+}
+
 void run(ge::lab::Lab& lab) {
   const std::string want = lab.arg("scenario");
   const double hz = lab.arg_num("hz");
+  const bool trace = lab.arg_bool("trace");
   ge::lab::LabTable table{"scenarios",
                           {"scenario", "top km/h", "metres", "climbed m", "climb m/s", "lift-off s",
                            "turned deg", "roll deg", "disc deg", "landings", "landing m/s", "crash",
@@ -113,7 +220,11 @@ void run(ge::lab::Lab& lab) {
     if (want != "all" && want != sc.id) continue;
     ran++;
     const auto level = hc::heli_scenario_level(sc);
-    const hc::HeliRun r = hc::run_heli_scenario(sc, hz);
+    StepTrace tr;
+    const hc::HeliRun r =
+        trace ? hc::run_heli_scenario(sc, hz, nullptr, [&](const hc::HeliStep& st) { tr.step(st); })
+              : hc::run_heli_scenario(sc, hz);
+    if (trace) chart_trace(lab, sc, tr, hz);
     const std::string k = sc.id;
     const double end_agl = r.end.y - level.ground_at(r.end.x, r.end.z);
     lab.metric(k + ".top-speed", r.top_speed * 3.6, "km/h");
@@ -166,6 +277,7 @@ const ge::lab::LabSpec kSpec{
     {
         {"scenario", "all", "one scenario's id (plugins/helicopter/scenarios.cpp), or all"},
         {"hz", "120", "steps a second"},
+        {"trace", "", "also write each scenario's every step (<id>.trace.tsv) and chart it", true},
     },
     "--scenario=all",
     run,

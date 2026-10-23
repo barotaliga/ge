@@ -1,5 +1,5 @@
-// ge play, sim, replay, state, diverge and shot (play.hpp): the play executable run and its JSON
-// answer turned into an outcome.
+// ge play, sim, replay, state, diverge, shot and why (play.hpp): the play executable run and its
+// JSON answer turned into an outcome.
 //
 // ge:summary The play commands: build, run the play executable, its JSON answer as an outcome
 // ge:keywords cli ge play sim replay state diverge shot play_answer play_exe
@@ -10,6 +10,7 @@
 #include <algorithm>
 
 #include "cli/json.hpp"
+#include "core/num_text.hpp"
 #include "play/json_read.hpp"
 
 namespace ge::cli {
@@ -42,6 +43,13 @@ Outcome run_exe(const BuildOptions& o, const std::string& command, const std::st
   fs::remove(log, ec);
   const Logged r = run_to_log(quoted_path(play_exe(o)) + args, log);
   return play_answer(o, command, r.code, r.output);
+}
+
+// A metric of `m` to three places, or "-" when it is not a number.
+std::string metric(const play::FlatJson& m, const std::string& key) {
+  const auto it = m.find(key);
+  if (it == m.end() || it->second.kind != play::JsonValue::Kind::number) return "-";
+  return core::num::to_fixed(it->second.number, 3);
 }
 
 }  // namespace
@@ -133,6 +141,27 @@ Outcome play_answer(const BuildOptions& o, const std::string& command, int code,
       text += text_of(m, k + "over") == "true" ? "over" : "stopped at the longest run";
       text += " after " + text_of(m, k + "steps") + " steps, digest " + text_of(m, k + "digest");
       text += ", " + log + "\n";
+      const std::string h = k + "human.";
+      for (int a = 0; m.contains(h + "axes." + std::to_string(a) + ".name"); a++) {
+        const std::string ax = h + "axes." + std::to_string(a) + ".";
+        text += "    " + text_of(m, ax + "name") + ": saturated " + metric(m, ax + "saturated") +
+                ", jumps " + metric(m, ax + "jumps") + ", reversals/min " +
+                metric(m, ax + "reversals_min") + ", hold " + metric(m, ax + "hold_s") +
+                " s, lag " + metric(m, ax + "lag_s") + " s\n";
+      }
+      for (int d = 0; m.contains(h + "decisions." + std::to_string(d) + ".name"); d++) {
+        const std::string de = h + "decisions." + std::to_string(d) + ".";
+        text += "    decision " + text_of(m, de + "name") + ": flips/min " +
+                metric(m, de + "flips_min") + ", close share " + metric(m, de + "close_share") +
+                ", variety " + metric(m, de + "variety") + "\n";
+      }
+      for (int f = 0; m.contains(h + "out_of_band." + std::to_string(f)); f++) {
+        out.findings.push_back(
+            {Severity::warn,
+             "seed " + text_of(m, k + "seed") + ": " +
+                 text_of(m, h + "out_of_band." + std::to_string(f)) + " (a person's band)",
+             log, "see why it does that: ge why " + log + " --flips (skill: bots)"});
+      }
     }
     out.text = text;
     out.summary = "the pilot's runs above; each input log replays to its digest";
@@ -187,6 +216,25 @@ Outcome play_answer(const BuildOptions& o, const std::string& command, int code,
     out.summary = state == "-1" ? "the runs never part in their common steps"
                                 : "the runs part after step " + state;
     if (state != "-1") out.next = "ge state <log> --step=" + state + " for either side";
+  } else if (command == "why") {
+    out.text = text_of(m, "text");
+    if (const std::string t = text_of(m, "timeline"); !t.empty()) {
+      out.written.push_back(rel_path(o.repo, fs::path(t)));
+    }
+    const std::string agent = text_of(m, "agent");
+    out.summary = text_of(m, "recorded") + " decisions recorded over " + text_of(m, "steps") +
+                  " steps; agent " + agent + "'s from step " + text_of(m, "from") + " to " +
+                  text_of(m, "to") + " above";
+    if (text_of(m, "pilot_asked") == "true" && text_of(m, "first_disagree") != "-1") {
+      out.summary += "; the pilot would have played otherwise from step " +
+                     text_of(m, "first_disagree") + " (" + text_of(m, "pilot_agrees") + " of " +
+                     text_of(m, "steps") + " steps agree)";
+    }
+    out.next = text_of(m, "timeline").empty()
+                   ? "ge why <log> --agent=" + agent +
+                         " --flips for every change of choice; "
+                         "--timeline for a series ge graph charts"
+                   : "ge graph " + rel_path(o.repo, fs::path(text_of(m, "timeline")));
   } else if (command == "record") {
     const bool frames = m.contains("frames_dir");
     const std::string video =
@@ -258,14 +306,30 @@ Outcome run_diverge(const BuildOptions& o, const std::string& a, const std::stri
   return run_exe(o, "diverge", " diverge \"" + absolute(a) + "\" \"" + absolute(b) + "\"");
 }
 
-Outcome run_shot(const BuildOptions& o, const std::string& log, const std::string& seed,
-                 const std::string& step, const std::string& view,
-                 const std::vector<std::string>& options) {
+Outcome run_why(const BuildOptions& o, const WhyOptions& w) {
+  std::string args = " why --out=" + quoted_path(o.repo / "runs") + " \"" + absolute(w.log) + "\"";
+  const std::pair<const char*, const std::string*> flags[] = {{"agent", &w.agent},
+                                                              {"step", &w.step},
+                                                              {"around", &w.around},
+                                                              {"close", &w.close},
+                                                              {"decision", &w.decision}};
+  for (const auto& [name, value] : flags) {
+    if (!value->empty()) args += std::string(" \"--") + name + "=" + *value + "\"";
+  }
+  if (w.flips) args += " --flips";
+  if (w.timeline) args += " --timeline";
+  return run_exe(o, "why", args);
+}
+
+Outcome run_shot(const BuildOptions& o, const std::string& log,
+                 const std::vector<std::string>& flags, const std::vector<std::string>& options) {
   std::string args = " shot --out=" + quoted_path(o.repo / "runs");
   if (!log.empty()) args += " \"" + absolute(log) + "\"";
-  if (log.empty() && !seed.empty()) args += " \"--seed=" + seed + "\"";
-  if (!step.empty()) args += " \"--step=" + step + "\"";
-  if (!view.empty()) args += " \"--view=" + view + "\"";
+  for (const std::string& w : flags) {
+    if (w.rfind("--out=", 0) != 0 && (log.empty() || w.rfind("--seed=", 0) != 0)) {
+      args += " \"" + w + "\"";
+    }
+  }
   for (const std::string& w : options) args += " \"" + w + "\"";
   return run_exe(o, "shot", args);
 }

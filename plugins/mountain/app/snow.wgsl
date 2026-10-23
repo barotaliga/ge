@@ -263,7 +263,9 @@ fn fs_main(in: VertexOut) -> FragmentOut {
              (1.0 - smoothstep(15.0, 45.0, g.dist));
     glint += glints(world, 2.5, 450.0, 0.35, n, h, 31.0, foot) * smoothstep(8.0, 25.0, g.dist) *
              (1.0 - smoothstep(50.0, 140.0, g.dist));
-    glint *= loose * snow.look.x;
+    // A glint is the sun's disc in a crystal: through cloud the disc spreads and the glint goes
+    // before the light does.
+    glint *= loose * snow.look.x * frame.weather.x;
     c += g.sun * glint * 400.0 / PI;
   }
   return ground_out(in, c, clamp(glint * 4.0, 0.0, 1.0));

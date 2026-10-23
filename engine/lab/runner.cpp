@@ -336,11 +336,23 @@ int run_labs(int argc, const char* const* argv) {
   }
 
   int failed = 0;
-  // --write-digests over every lab rewrites the file; over one lab or a shard it rewrites only
-  // those rows and keeps the rest, so one lab's baseline moves without running the others.
+  // --write-digests rewrites the rows of the labs it runs and keeps every other row, so one lab's
+  // baseline moves without running the others. Over every lab, the rows it keeps are the labs
+  // this build does not register (a GPU-less build has no GPU labs), each named.
   const bool every = all && get(runner, "shard").empty();
   std::map<std::string, std::string> digests =
-      write.empty() || every ? std::map<std::string, std::string>{} : read_digests(write);
+      write.empty() ? std::map<std::string, std::string>{} : read_digests(write);
+  if (every) {
+    for (const auto& [id, hex] : digests) {
+      bool ran = false;
+      for (const LabSpec* s : labs) ran = ran || id == s->id;
+      if (ran) continue;
+      std::fprintf(stderr,
+                   "labs: kept %s's digest row: this build registers no such lab (a GPU lab on a "
+                   "GPU-less build). A lab deleted from the tree: delete its row from %s.\n",
+                   id.c_str(), write.c_str());
+    }
+  }
   for (const LabSpec* s : labs) {
     const Args args = lab_args(*s, smoke, typed, error);
     if (!error.empty()) {

@@ -14,9 +14,10 @@ games/fall_line/sim      the game itself, headless: create_game, the step's orde
         ▼
 plugins/<name>           reusable by any game of one genre or world (§ Plugins):
         │                racing (tape, records, standings), mountain (mapgen, analysis),
-        │                skier (the skier on the snow: step_skier, snow, limits),
+        │                skier (the skier on the snow: step_skier, snow, limits, the pilot),
         │                snowmobile (the machine on the snow: step_sled, the drive, the pilot),
-        │                helicopter (the machine in the air: step_heli, the wash, the pilot)
+        │                helicopter (the machine in the air: step_heli, the wash, the pilot),
+        │                paramotor (the speed wing a skier flies: step_para, the air, the pilot)
         ▼
 engine/render  engine/audio  engine/ui     generic draw passes, the synth, the 2D layer
         │             │          │
@@ -83,12 +84,22 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   Fall Line's own looks, then its HUD and cards, and its sound beds.
 - **`engine/play`**: the play contract (`ge::play`): what a game fills in so it can be played,
   replayed and inspected without a screen (its axes, its options, a `Run`: step, over, digest,
-  observe, state, report, pilot), and everything the engine does with it once for every game:
+  observe, state, report, pilot, trace), and everything the engine does with it once for every
+  game:
   the session that snaps, records and steps every input, the line protocol, the plain-text
   input log, replay, the state at a step, the divergence search, the bench (the pilot's run
   replayed and timed step by step and zone by zone, with its allocations: `ge bench`,
-  `ge profile`, `ge mem`), and the `play` executable's main. It depends on `engine/core` and
-  `engine/prof`; a game's `play` target links it and `ge` runs it.
+  `ge profile`, `ge mem`), a log replayed with the decision trace on (`ge why`), and the `play`
+  executable's main. It depends on `engine/core`, `engine/ai` and `engine/prof`; a game's
+  `play` target links it and `ge` runs it.
+- **`engine/ai`**: the bots' layer (`ge::ai`): the DECISION RECORD every bot writes where it
+  chooses (`why.hpp`: the facts it read, the options it weighed with their scores and the named
+  terms of each, the choice and its margin over the next best), held to one rule: off is a null
+  pointer and recording decides nothing, so a run is the same traced and untraced and `ge why`
+  rebuilds the records by replaying a log instead of keeping them. The pieces bots share (the
+  hands, thinking on a schedule, sight and memory, paths, steering, choosing) land here, each
+  with its first user (`docs/goals.md` § M16). It depends on `engine/core` alone and is
+  simulation code: deterministic, no platform, no `<cmath>` transcendental.
 - **`engine/prof`**: the profiler (`ge::prof`): timing zones (`GE_ZONE("name")`, one relaxed
   load when no recording runs; a span with its depth, time and allocations when one does), their
   totals (a zone's own time and its children's), the counting `operator new` an executable

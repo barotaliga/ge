@@ -57,8 +57,10 @@ struct FrameUniforms {
   float planes[6][4];        // the frustum (view.hpp's five), the sixth all zero
   float eye_delta[4];        // this eye minus the last frame's, m
   float jitter[4];           // the sub-pixel offset: render pixels (x right, y down), then uv
+  float weather[4];  // the sun's pass, the deck's cover, the fog's extinction (1/m), the hidden
+  float deck[4];     // the deck's tint times its light, its grey overhead over the horizon's
 };
-static_assert(sizeof(FrameUniforms) == 64 * 3 + 16 * 5 + 16 * 6 + 16 * 2, "match frame_types.wgsl");
+static_assert(sizeof(FrameUniforms) == 64 * 3 + 16 * 5 + 16 * 6 + 16 * 4, "match frame_types.wgsl");
 
 // The last frame's unjittered camera. Invalid on the first frame and after a cut, when the
 // "previous" camera is this one (no motion).
@@ -77,6 +79,9 @@ void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint
 inline constexpr wgpu::TextureFormat kHdrFormat = wgpu::TextureFormat::RGBA16Float;
 inline constexpr wgpu::TextureFormat kDepthFormat = wgpu::TextureFormat::Depth32Float;
 inline constexpr wgpu::TextureFormat kMotionFormat = wgpu::TextureFormat::RGBA16Float;
+// The wire probes' target (render/terrain.hpp, render/instances.hpp): display colours, read back
+// as they are.
+inline constexpr wgpu::TextureFormat kWireFormat = wgpu::TextureFormat::RGBA8Unorm;
 
 struct FrameTargets {
   uint32_t width = 0, height = 0;
@@ -101,7 +106,7 @@ struct PassRow {
 // agent-actionable line per fault.
 std::string check_pass_table(std::span<const PassRow> rows, std::string_view inputs);
 
-inline constexpr int kMaxPasses = 24;
+inline constexpr int kMaxPasses = 32;
 
 struct PassStat {
   std::string_view name;

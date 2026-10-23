@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "fall_line/sim/bot.hpp"
+#include "fall_line/sim/hands.hpp"
 #include "fall_line/sim/state.hpp"
 #include "mountain/mapgen/types.hpp"
 #include "racing/tape.hpp"
@@ -29,9 +30,13 @@
 namespace fall_line::sim {
 
 struct SimOptions {
-  double max_seconds = 600;    // the run's time limit
-  std::optional<int> version;  // the generator's
-  int32_t rivals = 0;          // bots on the grid beside the player
+  double max_seconds = 600;                 // the run's time limit
+  std::optional<int> version;               // the generator's
+  int32_t rivals = 0;                       // bots on the grid beside the player
+  HandsProfile hands = HandsProfile::none;  // every bot's hands, the player's and the rivals'
+  // The player's pilot records its decisions here (agent 0, by step) on the machines' outings
+  // (`simulate_heli_outing`); null records nothing and decides the same.
+  ge::ai::Why* why = nullptr;
 };
 
 // One racer's run in a field, in field order (the player first).
@@ -62,15 +67,19 @@ struct RunReport {
   double top_speed = 0;   // m/s
   double mean_speed = 0;  // m/s, the piste's length over the time (finished runs)
   double max_landing_g = 0;
-  int32_t place = 1;       // the player's, at the run's end
-  double distance = 0;     // m skied (the free ride's odometer; 0 in a race)
-  int32_t runs = 0;        // runs skied (the free ride's)
-  int32_t lifts = 0;       // lifts ridden to the top (the free ride's)
-  double lift_wait = 0;    // s waiting in load zones for a carrier
-  double lift_ride = 0;    // s carried up lifts
-  int32_t sled_rides = 0;  // times the free ride's snowmobile was taken
-  double sled_time = 0;    // s on its boards
-  double climbed = 0;      // m, the most the player rose over where he started
+  int32_t place = 1;         // the player's, at the run's end
+  double distance = 0;       // m skied (the free ride's odometer; 0 in a race)
+  int32_t runs = 0;          // runs skied (the free ride's)
+  int32_t lifts = 0;         // lifts ridden to the top (the free ride's)
+  double lift_wait = 0;      // s waiting in load zones for a carrier
+  double lift_ride = 0;      // s carried up lifts
+  int32_t sled_rides = 0;    // times the free ride's snowmobile was taken
+  double sled_time = 0;      // s on its boards
+  int32_t heli_rides = 0;    // times the free ride's helicopter was taken
+  double heli_time = 0;      // s sat on its skid
+  int32_t para_flights = 0;  // take-offs flown under the free ride's paramotor
+  double para_time = 0;      // s hung in its harness
+  double climbed = 0;        // m, the most the player rose over where he started
   int64_t steps = 0;
   uint64_t digest = 0;  // FNV-1a over every step's state
   ge::racing::ControlTape tape;
@@ -83,6 +92,8 @@ struct LinePoint {
   bool on_snow, down;
   bool lifted;  // a lift has him
   bool sled;    // on the snowmobile's boards
+  bool heli;    // on the helicopter's skid
+  bool para;    // hung under the paramotor's wing
 };
 
 // THE ONE STEP every pilot drives through (the bot in `simulate`, a tape in `replay_tape`, an
@@ -93,13 +104,23 @@ class Driver {
   Driver(std::shared_ptr<const ge::mountain::mapgen::Level> level, int32_t rivals);
   // A run already created (a race, or a free ride, whose bot skis his run's chain).
   // `lifts`: on the free ride, the lifts he is to ride before a foot ends the run; `sled_rides`
-  // the times he is to have taken the snowmobile (and got off it) before one does.
-  explicit Driver(GameState state, int32_t lifts = 0, int32_t sled_rides = 0);
+  // the times he is to have taken the snowmobile (and got off it) before one does, `heli_rides`
+  // the helicopter. A ride begun under the paramotor ends only once he has flown it and the rig
+  // is off him.
+  explicit Driver(GameState state, int32_t lifts = 0, int32_t sled_rides = 0,
+                  int32_t heli_rides = 0);
   void step(Controls player);
   // Every racer home (on the free ride, the player at a foot): nothing is left to drive.
   bool over() const;
   const GameState& state() const { return state_; }
   const BotPlan& plan() const { return plan_; }
+  // The rivals' bots record their decisions into `why` (null: stop), each as his racer index.
+  void set_why(ge::ai::Why* why) { why_ = why; }
+  // The rivals press through hands of `profile` (hands.hpp), each off his own stream on `seed`'s
+  // map. Set before the first step.
+  void set_hands(HandsProfile profile, double seed);
+  // What each racer pressed on the last step (the player first): the humanness lab reads it.
+  const std::vector<Controls>& controls() const { return controls_; }
   uint64_t digest() const { return hash_; }
   ge::racing::ControlTape tape() const { return recorder_.seal(); }
   // The run so far, as the sim lab's table prints it.
@@ -111,9 +132,14 @@ class Driver {
   ge::racing::TapeRecorder recorder_;
   std::vector<Controls> controls_;
   std::vector<int32_t> shoulders_;
+  ge::ai::Why* why_ = nullptr;
+  std::vector<BotHands> hands_;  // the rivals', by racer index (the player's is the pilot's)
   int32_t lifts_ = 0;
   int32_t sled_rides_ = 0;
   double sled_time_ = 0;
+  int32_t heli_rides_ = 0;
+  double heli_time_ = 0;
+  double para_time_ = 0;
   double y0_ = 0;
   double climbed_ = 0;
   double boarded_at_ = 0;
@@ -146,6 +172,16 @@ RunReport simulate_outing(std::shared_ptr<const ge::mountain::mapgen::Level> lev
 // The bot's outing on the free ride's snowmobile (sled_outing.hpp): from beside it, up the run
 // `sled_climb_run` picks, and down it on his skis to a foot.
 RunReport simulate_sled_outing(std::shared_ptr<const ge::mountain::mapgen::Level> level,
+                               double seed, const SimOptions& opts,
+                               std::vector<std::vector<LinePoint>>* lines = nullptr);
+// The bot's outing on the free ride's helicopter (heli_outing.hpp): from beside its pad, flown to
+// the head of the run `heli_drop_run` picks, dropped there and down it on his skis to a foot.
+RunReport simulate_heli_outing(std::shared_ptr<const ge::mountain::mapgen::Level> level,
+                               double seed, const SimOptions& opts,
+                               std::vector<std::vector<LinePoint>>* lines = nullptr);
+// The bot's outing under the free ride's paramotor (para_outing.hpp): begun on the summit, flown
+// to a gentle stretch of the run he began on, landed there and down the rest on his skis.
+RunReport simulate_para_outing(std::shared_ptr<const ge::mountain::mapgen::Level> level,
                                double seed, const SimOptions& opts,
                                std::vector<std::vector<LinePoint>>* lines = nullptr);
 RunReport replay_tape(std::shared_ptr<const ge::mountain::mapgen::Level> level, double seed,

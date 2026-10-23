@@ -13,7 +13,11 @@
 #include "fall_line/sim/field.hpp"
 #include "fall_line/sim/free.hpp"
 #include "fall_line/sim/game.hpp"
+#include "fall_line/sim/heli_outing.hpp"
+#include "fall_line/sim/heli_ride.hpp"
 #include "fall_line/sim/outing.hpp"
+#include "fall_line/sim/para_outing.hpp"
+#include "fall_line/sim/para_ride.hpp"
 #include "fall_line/sim/sled_outing.hpp"
 #include "fall_line/sim/sled_ride.hpp"
 #include "prof/zones.hpp"
@@ -26,7 +30,7 @@ namespace num = ge::core::num;
 Driver::Driver(std::shared_ptr<const mg::Level> level, int32_t rivals)
     : Driver(create_game_on(std::move(level), 1 + (rivals < 0 ? 0 : rivals))) {}
 
-Driver::Driver(GameState state, int32_t lifts, int32_t sled_rides)
+Driver::Driver(GameState state, int32_t lifts, int32_t sled_rides, int32_t heli_rides)
     : state_(std::move(state)),
       plan_(state_.mode == Mode::free
                 ? plan_free(*state_.level, state_.racers[0].free.start, state_.spec)
@@ -34,8 +38,10 @@ Driver::Driver(GameState state, int32_t lifts, int32_t sled_rides)
       recorder_(kTapeSchema),
       controls_(state_.racers.size()),
       shoulders_(state_.racers.size(), 0),
+      hands_(state_.racers.size()),
       lifts_(lifts),
       sled_rides_(sled_rides),
+      heli_rides_(heli_rides),
       y0_(state_.racers[0].skier.y) {}
 
 void Driver::step(Controls player) {
@@ -49,7 +55,10 @@ void Driver::step(Controls player) {
   {
     GE_ZONE("bot");
     for (size_t i = 1; i < controls_.size(); i++) {
-      controls_[i] = bot_controls(state_, static_cast<int32_t>(i), plan_);
+      const auto at = static_cast<int32_t>(i);
+      ge::ai::Why* why = why_ ? why_->follow(at, state_.steps) : nullptr;
+      const Controls wanted = bot_controls(state_, at, plan_, why, hands_[i].lead());
+      controls_[i] = hands_[i].press(wanted, why);
     }
   }
   fall_line::sim::step(state_, controls_);
@@ -60,6 +69,8 @@ void Driver::step(Controls player) {
   top_speed_ = num::max(top_speed_, state_.racers[0].skier.speed);
   climbed_ = num::max(climbed_, state_.racers[0].skier.y - y0_);
   if (on_sled(state_, 0)) sled_time_ += kDt;
+  if (on_heli(state_, 0)) heli_time_ += kDt;
+  if (hung_in_para(state_, 0)) para_time_ += kDt;
   for (const GameEvent& e : state_.events) {
     if (e.kind == EventKind::shoulder) {
       shoulders_[static_cast<size_t>(e.racer)]++;
@@ -78,11 +89,18 @@ void Driver::step(Controls player) {
   }
 }
 
+void Driver::set_hands(HandsProfile profile, double seed) {
+  for (size_t i = 0; i < hands_.size(); i++) {
+    hands_[i] = BotHands(profile, hands_seed(seed, static_cast<int32_t>(i)));
+  }
+}
+
 bool Driver::over() const {
   if (state_.mode == Mode::free) {
     const FreeRide& f = state_.racers[0].free;
     return f.arrived && f.lift.ridden >= lifts_ && state_.sled.taken >= sled_rides_ &&
-           !on_sled(state_, 0);
+           !on_sled(state_, 0) && state_.heli.taken >= heli_rides_ && !on_heli(state_, 0) &&
+           (!state_.para.present || (state_.para.body.flights > 0 && !under_para(state_, 0)));
   }
   for (const Racer& r : state_.racers) {
     if (!r.progress.finished) return false;
@@ -121,6 +139,10 @@ RunReport Driver::report(double seed) const {
     rep.lift_ride = lift_ride_;
     rep.sled_rides = state_.sled.taken;
     rep.sled_time = sled_time_;
+    rep.heli_rides = state_.heli.taken;
+    rep.heli_time = heli_time_;
+    rep.para_flights = state_.para.present ? state_.para.body.flights : 0;
+    rep.para_time = para_time_;
     rep.climbed = climbed_;
     rep.mean_speed = rep.time > 0 ? f.distance / rep.time : 0;
   }
@@ -152,7 +174,9 @@ RunReport drive(Driver d, double seed, double max_seconds, Pilot&& pilot,
         if (r.progress.finished) continue;
         (*lines)[i].push_back(LinePoint{r.skier.x, r.skier.z, r.skier.speed, r.skier.on_snow,
                                         r.skier.down, r.free.lift.phase != LiftPhase::none,
-                                        on_sled(d.state(), static_cast<int32_t>(i))});
+                                        on_sled(d.state(), static_cast<int32_t>(i)),
+                                        on_heli(d.state(), static_cast<int32_t>(i)),
+                                        hung_in_para(d.state(), static_cast<int32_t>(i))});
       }
     }
     d.step(pilot(d));
@@ -168,9 +192,15 @@ RunReport simulate(double seed, const SimOptions& opts) {
 
 RunReport simulate_on(std::shared_ptr<const mg::Level> level, double seed, const SimOptions& opts,
                       std::vector<std::vector<LinePoint>>* lines) {
+  Driver d(std::move(level), opts.rivals);
+  d.set_hands(opts.hands, seed);
+  BotHands hands(opts.hands, hands_seed(seed, 0));
   return drive(
-      Driver(std::move(level), opts.rivals), seed, opts.max_seconds,
-      [](const Driver& d) { return bot_controls(d.state(), 0, d.plan()); }, lines);
+      std::move(d), seed, opts.max_seconds,
+      [&hands](const Driver& dr) {
+        return hands.press(bot_controls(dr.state(), 0, dr.plan(), nullptr, hands.lead()), nullptr);
+      },
+      lines);
 }
 
 RunReport simulate_free(std::shared_ptr<const mg::Level> level, double seed, int32_t run,
@@ -201,6 +231,31 @@ RunReport simulate_sled_outing(std::shared_ptr<const mg::Level> level, double se
   const SledOutingPilot pilot(state, run);
   return drive(
       Driver(std::move(state), 0, 1), seed, opts.max_seconds,
+      [&pilot](const Driver& d) { return pilot(d.state(), 0); }, lines);
+}
+
+RunReport simulate_heli_outing(std::shared_ptr<const mg::Level> level, double seed,
+                               const SimOptions& opts, std::vector<std::vector<LinePoint>>* lines) {
+  GameState state = create_free_ride(std::move(level), 0);
+  stand_by_heli(state, 0);
+  const int32_t run = heli_drop_run(*state.level);
+  if (run < 0) return Driver(std::move(state), 0, 0, 1).report(seed);
+  const HeliOutingPilot pilot(state, run);
+  ge::ai::Why* why = opts.why;
+  return drive(
+      Driver(std::move(state), 0, 0, 1), seed, opts.max_seconds,
+      [&pilot, why](const Driver& d) {
+        return pilot(d.state(), 0, why ? why->follow(0, d.state().steps) : nullptr);
+      },
+      lines);
+}
+
+RunReport simulate_para_outing(std::shared_ptr<const mg::Level> level, double seed,
+                               const SimOptions& opts, std::vector<std::vector<LinePoint>>* lines) {
+  GameState state = create_para_ride(std::move(level));
+  const ParaOutingPilot pilot(state);
+  return drive(
+      Driver(std::move(state)), seed, opts.max_seconds,
       [&pilot](const Driver& d) { return pilot(d.state(), 0); }, lines);
 }
 
