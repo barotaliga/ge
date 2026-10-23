@@ -9,6 +9,7 @@
 // ge:skill console labs
 // ge:test tests/console_view_test.cpp
 #include <algorithm>
+#include <cmath>
 #include <string>
 
 #include "console/view.hpp"
@@ -76,11 +77,11 @@ void draw(Picture& p, const con::ConsoleView& v) {
     const int rows = std::max(1, (cover - kRow - 2 * kMargin) / kRow);
     // The background: con_bgtop to con_bgbottom down the panel at con_bgalpha (no image here).
     const con::Background bg = v.background();
-    const auto a = static_cast<uint8_t>(bg.alpha * 255 + 0.5);
+    const auto a = static_cast<uint8_t>(std::lround(bg.alpha * 255));
     for (int y = 0; y < cover; ++y) {
       const double t = cover > 1 ? static_cast<double>(y) / (cover - 1) : 0;
       auto mix = [t](uint8_t top, uint8_t bottom) {
-        return static_cast<uint8_t>(top + (bottom - top) * t + 0.5);
+        return static_cast<uint8_t>(std::lround(top + (bottom - top) * t));
       };
       ge::lab::fill_rect(
           p, 0, y, w, 1,

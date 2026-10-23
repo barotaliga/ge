@@ -132,6 +132,10 @@ TEST(numbers_as_text) {
   CHECK(parse_number(" +2.5 ", x) && x == 2.5);
   CHECK(!parse_number("2.5x", x));
   CHECK(!parse_number("", x));
+  CHECK(!parse_number("inf", x) && !parse_number("nan", x) && !parse_number("0x10", x));
+  CHECK(!parse_number("1e999", x) && !parse_number(".", x) && !parse_number("1e", x));
+  CHECK(parse_number("-1.5e-3", x) && x == -0.0015);
+  CHECK(parse_number("0.1", x) && x == 0.1);  // correctly rounded: the same double as the literal
   CHECK(number_text(3) == "3");
   CHECK(number_text(-0.0) == "0");
   CHECK(number_text(0.1) == "0.1");

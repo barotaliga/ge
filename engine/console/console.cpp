@@ -379,7 +379,7 @@ std::vector<std::string> Console::complete(std::string_view prefix) const {
 
 namespace {
 
-size_t distance(std::string_view a, std::string_view b) {
+size_t edit_distance(std::string_view a, std::string_view b) {
   std::vector<size_t> row(b.size() + 1);
   for (size_t j = 0; j <= b.size(); ++j) row[j] = j;
   for (size_t i = 1; i <= a.size(); ++i) {
@@ -402,7 +402,7 @@ std::string Console::suggest(std::string_view name) const {
   size_t best_d = 3;
   for (const std::string& c : complete("")) {
     if (c == n) continue;
-    const size_t d = distance(n, c);
+    const size_t d = edit_distance(n, c);
     if (d < best_d) {
       best_d = d;
       best = c;

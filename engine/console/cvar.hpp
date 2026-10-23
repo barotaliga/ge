@@ -23,9 +23,10 @@
 // own struct each frame with no lookup and no dependency on the console. `revision` counts the
 // changes, for a reader that re-derives something only when its input moved.
 //
-// DETERMINISM: a value is text first; its number is read with `std::from_chars` (exact, the same
-// on every platform) and a number written back as text with `core::num::to_string` (shortest
-// round trip), so a cfg sets the same bits everywhere.
+// DETERMINISM: a value is text first; its number is read as plain decimal with `strtod` (correctly
+// rounded by every platform's C library, in the C locale the engine never leaves) and a number
+// written back as text with `core::num::to_string` (shortest round trip), so a cfg sets the
+// same bits everywhere.
 //
 // ge:summary Console variables: named, typed, flagged settings, owned or bound to a struct field
 // ge:keywords cvar cvars console-variable setting settings config cfg flag archive server-info
@@ -175,8 +176,8 @@ class Cvars {
 
 // A valid cvar or command name: 1–63 characters of [a-z0-9_+.-], no leading digit.
 bool valid_name(std::string_view name);
-// `s` read as a number with std::from_chars (a leading '+' allowed, surrounding blanks ignored);
-// false when it is not wholly one.
+// `s` read as a plain decimal number (a leading '+' allowed, surrounding blanks ignored; no hex,
+// inf or nan); false when it is not wholly one.
 bool parse_number(std::string_view s, double& out);
 // A number as a cvar writes it: an integer without a point, else the shortest round trip.
 std::string number_text(double x);

@@ -8,8 +8,8 @@
 #include "console/cvar.hpp"
 
 #include <algorithm>
-#include <charconv>
 #include <cmath>
+#include <cstdlib>
 
 #include "core/num_text.hpp"
 
@@ -38,9 +38,24 @@ bool parse_number(std::string_view s, double& out) {
   while (!s.empty() && (s.back() == ' ' || s.back() == '\t')) s.remove_suffix(1);
   if (!s.empty() && s.front() == '+') s.remove_prefix(1);
   if (s.empty()) return false;
-  double v = 0;
-  const auto [end, ec] = std::from_chars(s.data(), s.data() + s.size(), v);
-  if (ec != std::errc() || end != s.data() + s.size()) return false;
+  // Plain decimal only ("1", "-0.5", "2e3"): no hex, inf or nan. strtod rounds correctly on every
+  // platform's C library, and the engine never changes the C locale, so the point is always '.'.
+  // (Floating-point from_chars is missing from some standard libraries.)
+  bool digit = false;
+  for (size_t i = 0; i < s.size(); ++i) {
+    const char c = s[i];
+    if (c >= '0' && c <= '9') {
+      digit = true;
+      continue;
+    }
+    const bool sign = (c == '-' || c == '+') && (i == 0 || s[i - 1] == 'e' || s[i - 1] == 'E');
+    if (!sign && c != '.' && c != 'e' && c != 'E') return false;
+  }
+  if (!digit) return false;
+  const std::string text(s);
+  char* end = nullptr;
+  const double v = std::strtod(text.c_str(), &end);
+  if (end != text.c_str() + text.size() || !std::isfinite(v)) return false;
   out = v;
   return true;
 }
