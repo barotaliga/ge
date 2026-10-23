@@ -51,11 +51,19 @@ webgpu only by `ge_gpu`.
 
 ## CI (`.github/workflows/ci.yml`)
 
-Jobs: `fmt` (clang-format), `agents` (`tools/check-agents.sh`), `lint` (clang-tidy),
-`test` (Linux x64 GCC debug, GCC release and Clang release; Linux arm64 GCC; macOS
-Clang), and `windows` (MSVC). `fail-fast: false`, so one row's golden failure shows
-alongside the others.
+Jobs: `gates` (clang-format, `tools/check-agents.sh`, libm, release-check, the changeset rule,
+and the decision what else runs), `lint` (clang-tidy), `test` (Linux x64 GCC debug, GCC release
+and Clang release; Linux arm64 GCC; macOS Clang), `windows` (MSVC), `packaging`
+(`packaging.yml`, called), and `required`, the ONE check the ruleset requires. `fail-fast:
+false`, so one row's golden failure shows alongside the others.
 
+- **Tiered, because runners are scarce**: a pull request runs `gates`, `lint` and the GCC
+  debug row; the merge queue runs every row, `windows` and `packaging`; a push to main builds
+  the five cached rows only (to save their caches). A change to prose alone runs `gates` only.
+  `full-ci` on a pull request runs everything. `required` passes when every job passed or was
+  skipped by the rules, so a skipped row never leaves a check pending: a new job joins its
+  `needs:`, never the ruleset. A failure only the queue sees ejects the pull request from the
+  queue; fix it, push, and auto-merge queues it again.
 - **Kept fast**: ctest runs four cases at
   once (`CTEST_PARALLEL_LEVEL`; `make test` uses every core), the labs' smoke pass is eight
   CTest cases (`labs_smoke_1`..`_8`, `labs --all --smoke --shard=I/N`) and the slow cases carry
@@ -63,8 +71,8 @@ alongside the others.
   every run and saved only from main (a pull request never writes the cache). On a pull
   request `lint` checks only what the change reaches (`tools/lint.sh BUILD BASE`: each changed
   `.cpp`, and each `.cpp` whose object includes a changed header, read off Ninja's deps); a
-  change to `.clang-tidy`, `tools/lint.sh` or the CMake lints everything, and so does every
-  push to main. A new slow test: give it a `COST`; never cut a row to save time without
+  change to `.clang-tidy`, `tools/lint.sh` or the CMake lints everything (main is never linted
+  again after the queue). A new slow test: give it a `COST`; never cut a row to save time without
   saying what it covered and where that coverage went.
 
 - **Public repo**: workflows use `permissions:` scoped to the minimum (`contents: read`
