@@ -9,8 +9,8 @@
 // dome (`sky_luminance`), its light the clear day's on the ground over pi times what the deck
 // lets down, darker overhead, a pale patch where the sun is behind it, and the sky's light on a
 // surface becomes that grey's (`sky_irradiance`), with no direction but up: the flat light; the
-// air under it scatters its grey, not the sun's (`haze`); and a fog or a fall closes everything
-// into the sky behind it at its visual range.
+// air under it scatters its grey, not the sun's (`haze`); and a fog or a fall closes everything,
+// the sky too, into its grey veil at its visual range (`veil_luminance`, `veil_sky`).
 //
 // THE NIGHT (`frame.moon`, `frame.night`: render/night.hpp) enters here too: the dark sky's own
 // glow on the dome and its light on the ground, and the EYE, which adapts to a night only part
@@ -210,11 +210,35 @@ fn sky_luminance(d: vec3f) -> vec3f {
   return mix(clear, deck_luminance(d), frame.weather.y) + dark_sky(d);
 }
 
+// THE VEIL: the light a fog's droplets or a fall's flakes scatter toward the eye where they are
+// thick enough to hide what is behind them. They are far larger than light's wavelengths, so
+// they scatter every colour alike: the veil is grey, a white face's light under this sun and sky
+// a little dimmed (kVeilAlbedo), never the blue of the clear air beyond. The sky is seen through
+// a slab of it kVeilDepth deep over the eye, so looking up through a thick fall the blue is lost
+// too, and toward the horizon (kVeilReach) all of it.
+const kVeilAlbedo = 0.85;
+const kVeilDepth = 800.0;
+const kVeilReach = 20000.0;
+
+fn veil_luminance() -> vec3f {
+  return vec3f(white_luminance() * kVeilAlbedo);
+}
+
+// What of the sky along `d` (camera-relative, unit) the fog or the fall leaves: its colour
+// through the slab, the veil for the rest.
+fn veil_sky(d: vec3f, colour: vec3f) -> vec3f {
+  if (frame.weather.z <= 0.0) {
+    return colour;
+  }
+  let path = min(kVeilDepth / max(d.y, 1e-3), kVeilReach);
+  return mix(veil_luminance(), colour, exp(-frame.weather.z * path));
+}
+
 // THE HAZE: a surface's colour seen through `dist_m` of air at screen `uv` (0..1): its colour
 // times the air's transmittance plus the light the air scatters in, from the aerial-perspective
-// volume (under a deck, the deck's grey in its place); then a fog or a fall closing it into the
-// sky behind it, so a surface at the visual range keeps 2 % of its contrast against the sky.
-// Every world material calls this, and none has its own fog.
+// volume (under a deck, the deck's grey in its place); then a fog or a fall closing it into its
+// grey veil, so a surface at the visual range keeps 2 % of its contrast against it. Every world
+// material calls this, and none has its own fog.
 fn haze(colour: vec3f, uv: vec2f, dist_m: f32) -> vec3f {
   let s = sqrt(clamp(dist_m * 1e-3 / kAerialRangeKm, 0.0, 1.0));
   let w = max(s - 0.5 / kAerialSize.z, 0.5 / kAerialSize.z);
@@ -232,10 +256,7 @@ fn haze(colour: vec3f, uv: vec2f, dist_m: f32) -> vec3f {
   let inscatter = mix(air, (1.0 - v.a) * deck_horizon(), frame.weather.y);
   var c = colour * mix(1.0, v.a, k) + inscatter * k;
   if (frame.weather.z > 0.0) {
-    // What is behind it is the sky toward its horizon; looking down, the horizon's.
-    var d = view_ray(frame, uv);
-    d = normalize(vec3f(d.x, max(d.y, 0.01), d.z));
-    c = mix(sky_luminance(d), c, exp(-frame.weather.z * dist_m));
+    c = mix(veil_luminance(), c, exp(-frame.weather.z * dist_m));
   }
   return c;
 }
@@ -262,7 +283,7 @@ fn white_luminance() -> f32 {
   let sun = key_at_eye() * frame.sun.w * frame.weather.x * max(frame.sun.y, 0.0);
   let sky = sky_irradiance(vec3f(0.0, 1.0, 0.0));
   // The scene's own lights (a lava lake at night) key it when they outshine the sky.
-  return max(max(dot((sun + sky) / PI, kLuma), frame.cloud_info.y),
+  return max(max(dot((sun + sky) / PI, kLuma), frame.cloud_info.z),
              kDarkestLux * frame.world.y / (PI * kSunLux));
 }
 

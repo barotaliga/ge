@@ -4,6 +4,22 @@ Every speed-up lands a row here: what changed, the cost before and after, and ho
 measured. The budgets and the proofs a speed-up owes are the `perf` skill's. A row's numbers
 are wall time on the machine named, so compare rows on one machine only.
 
+## Threaded bakes
+
+Measured with `make lab LAB=parallel-cost PRESET=release` (a five-point stencil over square
+grids, the median of 15 batches a point), the median of three runs of each build alternated, in
+the 4-core Linux x86-64 container. Every grid's output hash the same on every worker count, and
+every level digest unchanged.
+
+| Change | Empty call, 8 workers | 64² grid, 8 workers | 256² grid, 8 workers | 1024² grid, 8 workers | Ski area (v10) | Where |
+| --- | --- | --- | --- | --- | --- | --- |
+| `parallel_bands` on a persistent pool (the caller and up to 7 workers, started once, each taking the next band; a short spin between calls, then sleep) instead of a thread a band each call | 357 µs → 1.4 µs | 368 µs → 3.6 µs (1 worker: 6.4 µs) | 436 µs → 39 µs (1 worker: 99 µs) | 1269 µs → 765 µs | 1312 ms → 1232 ms (−6%, A/B three times) | `engine/core/parallel.hpp`, `parallel.cpp` |
+
+Before, a call started and joined a thread a band: about 60 µs a thread here, so on any grid
+under about 512² rows eight workers lost to one. A grid of 16² (0.4 µs on one thread) still
+loses on a pool (2.6 µs: a wake-up costs more than the work), so a caller that bakes grids that
+small passes `workers = 1`.
+
 ## Map generation
 
 Measured with `make lab LAB=mapgen-cost PRESET=release ARGS="--seeds=38,7,1 --reps=5
@@ -60,3 +76,21 @@ shadow 10 ms (the figures' tiles 6 of it), the tracks 6, the ridges' horizon 6, 
 | The figures' shadow tiles: a point's clip in the atlas taken once and moved per tile by an offset worked on the CPU (the view is affine), and a point outside every tile's reach skips them all | 65.2 → 62.9 | every view the same to the bit | `render/shadows.cpp`, `wgsl/sun_shadow.wgsl` |
 | The tracks: past a quarter of a coarse texel a pixel the groove's slope fades out, gone by a half, and the track is one tap of the coarse map (was five, or ten in the fine window's rim) | 62.9 → 62.0 | one pixel of one view a level apart; every band at or near 100 dB | `mountain/app/snow.wgsl` |
 | Both | 65.2 → 62.0 (−5%) | | |
+
+## The flow step on threads
+
+`water::step_flow` splits its rows over `core::parallel_bands`. On the persistent pool a call
+costs a wake-up, and under 64² cells (a small region, or a large one at a coarse tier) that
+wake-up costs about as much as the rows it splits or more, so such a grid now runs on the caller
+alone; the bits are the same either way, and 64² and up are unchanged. `water-cost`, release
+build, ms a 1/60 s step with 8 workers asked (the one-thread time beside it):
+
+| Grid as stepped | 8 asked, before | 8 asked, after | 1 thread |
+| --- | --- | --- | --- |
+| 32² (32² at tier 0) | 0.064 | 0.079 | 0.080 |
+| 16² (32² at tier 1) | 0.0126 | 0.0100 | 0.0113 |
+| 8² (32² at tier 2) | 0.0036 | 0.0017 | 0.0017 |
+| 16² (64² at tier 2) | 0.0074 | 0.0050 | 0.0059 |
+
+At the smallest grids the pool doubled the step; at 32² it was a wash within the container's
+noise (±5%, and wider at these sizes). Where: `engine/water/flow.cpp`.

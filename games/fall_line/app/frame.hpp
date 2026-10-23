@@ -110,6 +110,7 @@ struct FrameOptions {
   bool snowfall = true;  // the falling snow, when the map's sky snows
   bool weather =
       true;  // the map's sky and cloud in the picture (mountain/app/cloud_field.hpp): off, clear
+  double clouds = 1.0;  // the share of the cloud march's steps (0.25..1); 0: no layer drawn
   ge::render::SnowfallSettings flakes;
   ge::mountain::app::TrailOptions trail_maps;  // their sizes
 };

@@ -339,7 +339,10 @@ void substeps(Flow& f, double dt) {
   fc.lz.assign(fc.z.size(), 0);
   fc.scale.assign(static_cast<size_t>(cells), 1);
   f.falls.clear();
-  const size_t workers = f.spec.workers > 1 ? static_cast<size_t>(f.spec.workers) : 1;
+  // Under 64^2 cells at this tier a wake-up of the pool costs more than the rows it splits
+  // (water-cost's table), so a small grid runs on the caller alone: the same bits either way.
+  const bool small = static_cast<long>(g.nx) * g.nz < 64L * 64L;
+  const size_t workers = f.spec.workers > 1 && !small ? static_cast<size_t>(f.spec.workers) : 1;
   const size_t rows = static_cast<size_t>(g.nz);
   for (int sub = 0; sub < n; ++sub) {
     for (Flow::Packet& p : f.air) {

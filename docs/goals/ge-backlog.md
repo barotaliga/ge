@@ -17,9 +17,11 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 
 ## Before and after across refs
 
-- `ge bench ab --base=<ref>` (or `--ab <binA> <binB>`: two builds interleaved N times with statistics, since a container's timings wander by about 5%) and `ge compare <ref>` (both builds, one table)
+- `ge bench ab --base=<ref>` (or `--ab <binA> <binB>`: two builds interleaved N times with statistics, since a container's timings wander by about 5%; for a bench lab too: `ge ab <lab> --before=<binary> --runs=3`, the median of each metric) and `ge compare <ref>` (both builds, one table)
+- `ge bench --ab=<option>` (one frame option against another in the same build, interleaved rounds, the least median kept: a quality ladder priced without a bespoke loop)
 - `ge profile --compare` (per zone and per pass, GPU and CPU deltas, outliers flagged)
-- `ge digest <lab> --why` (which table row and which columns moved when a digest did)
+- `ge lab bench <lab> --runs=N --base=main` (each metric's median and spread over N runs, this tree beside the base)
+- `ge digest <lab> --why` (which table row and which columns moved when a digest did; for a lab that hashes the command catalog or another input, name that input: "cli-loop moved because a command or flag was added")
 - `ge lab diff` for a lab's tables and `--stash`
 - `ge lab sheet <lab> --grid=2x2 [shots]` (shots on one image) and `--watch`
 - `ge profile --pass=<name>` (one pass's median and p95, before and after) and `--cost <shader-term>`
@@ -31,8 +33,9 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge lint` (done: clang-tidy's bug-finding checks over what the change since `--base` reaches, the changed .cpp files and every .cpp including a changed header, or the files named, each finding at its line with its check's page; a few files in seconds)
 - a teleport detector for the labs (done: `engine/lab/teleport.hpp`, every step of a track that moves farther than its speed allows, reported under every scenario lab's `--trace`)
 - `ge test --affected` (done: the tests the change since `--base` reaches through the include graph, a target reached when its objects include a changed file or a header in a reached library's directory; only their targets built, `--list` names them; precheck takes its tests from it)
-- `tools/labs-reached.sh` following the same reach (a plugin change reaches the game's labs through the game library including its headers)
+- precheck's lab digests following the same reach (done: `ge digest --affected [--list]`, each lab by its own source's object, so a plugin change reaches the game's labs through the game library including its headers; `tools/labs-reached.sh` retired; a changed committed asset reaches the labs under its plugin or game and those naming it)
 - the labs' digest baseline merging without conflicts (done: `merge=union`, a lab's doubled row failed by name)
+- `ge digest --dedupe` (the duplicate rows a union merge leaves in the baseline dropped, keeping the row the current build writes)
 - `docs/goals.md` merging without conflicts (done: each row's status in `docs/goals/<row>.md`, this backlog one wish a line, union-merged, held by `tools/check-goals.mjs`)
 - `ge ci <pr>` (done: each failed job's log as findings, over `gh api`; `--merge` squash-merges a green, clean one at its head, and a green PR GitHub blocks is answered with the required check or review it waits on)
 - `ge test --filter` building only the matching tests' targets (done, and `make test T=<regex>` in the engine)
@@ -41,7 +44,9 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `labs --all --write-digests` keeping the rows of labs the build does not register (done)
 - `ge ci run --row=macos -- <cmd> --repeat=N` (a command on one CI row through a dispatched workflow, no temporary workflow step committed: a Metal flake hunt, the needs-mac bench)
 - `ge ci <pr> --rebase-digests` (after merging the base, the digests both sides moved rewritten and named)
-- `ge lab sweep <id> --set=<const>=a,b,c` (done: one constexpr rewritten to each value, the labs rebuilt and run, every metric side by side, the source put back; next, a scenario row's own numbers, such as a scripted hand's timings, swept the same way, and `--draws=N` over a range `a..b`, a Monte Carlo of one constant with each metric's spread)
+- `ge goals next` / `ge goals free-rows` (the next open roadmap row with its dependencies, and which rows open pull requests already claim; the second done: `ge goals free [<row>] [--fetch]`, the rows main and every remote branch hold and the next free number or letter)
+- `ge ci <pr> --wait` (block until the checks finish or the PR conflicts, then answer as `ge ci` does: one call where a thread now schedules check-ins every 15 minutes)
+- `ge lab sweep <id> --set=<const>=a,b,c` (done: one constexpr rewritten to each value, the labs rebuilt and run, every metric side by side, the source put back; next, a scenario row's own numbers, such as a scripted hand's timings, swept the same way, and `--draws=N` over a range `a..b`, a Monte Carlo of one constant with each metric's spread; and a range form, `--set=<const>=a..b/n`, charting each metric against the knob)
 - `ge lab sweep <id> --flag=<flag>=a,b,c` (done: one of the lab's own flags at each value, the labs built once, the same table; the hours of a day over a picture lab)
 - `ge lab --split=N`
 - `ge job run\|status\|log` (a long run in the background)
@@ -66,7 +71,6 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge lab <id> --sunlit` (a warning when a look's pixels sit in the horizon map's shadow, so a shadow change that moves no pixel is caught)
 - `ge lab scene <lab> <scene> --plan` (one scene's moment from above without running the whole lab)
 - `ge why --agent=1000..1003 --decision=landing` (the decision trace filtered by agent range and decision name)
-- `ge lab table <lab> --where col=value` (one slice of a lab's table)
 - `ge lab pick <lab> <shot> --pixel=x,y` (a picture's value at a pixel before the tonemap, the HDR colour and its depth)
 - `ge gpu dump <target> --frame=N --decode=<scheme>`
 - `ge asset inspect`
@@ -75,6 +79,10 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge lab refs` (a reference photo fetched to a temp directory, never committed, JPEG turned to PNG, a refs row written; the model-views lab reads only 8-bit PNG)
 - `ge lab view <glb>` (the model-views lab on any model, in one command)
 - `ge lab table <lab> --where col=value` (one slice of a lab's table, a weapon at one range, read without re-running the lab or opening the whole report)
+- `ge lab <id> --show` (the run's pictures shown inline beside its metrics: an unmoved digest can hide a visual bug)
+- `ge lab pixels <lab> <shot> --line=x0,y0,x1,y1 | --histogram` (a picture's values along a line or its colour histogram, for banding and colour checks without decoding the PNG)
+- `ge lab strip <scenario>` (a side-view stick filmstrip of a body over time, frame by frame, without a hand-written dumper and image script)
+- `ge lab trace-points <scenario> --stage` (each point of a body's velocity after every solver stage, for finding an energy pump without instrumenting a copy of the solver; generalizes to `ge trace --actor=<id> --fields=<a,b>`, and to `ge trace-view <lab> <scenario> --around=<step>`: the steps round one as a table of position, velocity, grounded and events)
 
 ## Measuring
 
@@ -86,6 +94,10 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge build --flags`
 - `ge spans <lab>` (a lab's spans file read back as a table)
 - `ge sanitize thread <tests>` (a ThreadSanitizer build of the tests that run threads)
+- `ge lab time <id> [--smoke]` (a lab's sections timed, and its smoke run, so a lab that slows CI is found by name)
+- `ge bench --preset=release <lab>` (only the labs target built in release, for a lab's release-build cost without a whole release build)
+- a bench lab warns when the machine is loaded (load average over the cores: a concurrent ctest made thread starts look ten times slower)
+- `ge tsan <test>` (one test and its sources built with ThreadSanitizer, without a whole sanitizer preset)
 
 ## Hygiene
 
@@ -108,7 +120,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge demo info|frames|shot|diff` (the classic demo formats decoded, a frame pictured, two demos diffed to their first difference)
 - `ge net inspect --protocol=<name>` (pluggable protocol decoders over a capture: `--protocol=classic`)
 - `ge pmove <scenario>` (movement trajectories as tables or charts against a recording)
-- `ge console <target> "<cmd>"` (console commands and cvars on a headless server or client)
+- `ge console <target> "<cmd>"` and `--pid=<p>` (console commands and cvars on a headless server or client, or a running game, the output read back)
 - the play contract's gaps in `engine/play`: an angle axis kind on a finer grid (16-bit angles), a step whose length the input sets (a usercmd's msec), several players a Run
 
 ## Networking (M17)
@@ -126,3 +138,12 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge pmove <scenario>` (a movement scenario's trajectory as a table and a chart, against its parity recording)
 - `ge console <target> "<command>"` (a console command or cvar run in a headless server or client, its output returned)
 - `ge play` for first-person games (an angle axis on the protocol's grid, a step whose length the input sets, several players a run)
+
+## Store services
+
+- `ge services check` (a game's achievements and stats catalog checked: ids unique, every stat an achievement reads defined; later diffed against a store's exported partner config)
+
+## Input devices
+
+- `ge input replay <events-log> --bindings=<file>` (each action's value frame by frame, from a recorded event log under a binding set)
+- `ge input bindings check <file>` (a bindings file parsed against the game's actions: conflicts and unbound actions listed)
