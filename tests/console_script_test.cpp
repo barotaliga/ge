@@ -85,13 +85,26 @@ std::vector<std::string> run_fixture(const Fixture& f) {
   return c.output();
 }
 
+// Whether an environment variable is set (MSVC deprecates std::getenv in favour of its own).
+bool env_set(const char* name) {
+#ifdef _MSC_VER
+  char* v = nullptr;
+  size_t n = 0;
+  const bool set = _dupenv_s(&v, &n, name) == 0 && v != nullptr;
+  std::free(v);
+  return set;
+#else
+  return std::getenv(name) != nullptr;
+#endif
+}
+
 }  // namespace
 
 TEST(fixtures) {
   const std::string path = ge::test::root_path("tests/golden/console_script.txt");
   std::vector<Fixture> fixtures = read_fixtures(path);
   CHECK_MSG(!fixtures.empty(), "no fixtures read from " + path + ": check the file is there");
-  if (std::getenv("GE_GOLDEN_WRITE") != nullptr) {
+  if (env_set("GE_GOLDEN_WRITE")) {
     std::ostringstream out;
     for (Fixture& f : fixtures) {
       out << "=== " << f.name << "\n" << f.cfg << "---\n";
