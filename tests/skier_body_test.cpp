@@ -79,7 +79,7 @@ bool has(const sk::BodyState& b, sk::Part part, const char* name) {
 
 TEST(the_catalog_names_every_part_and_each_ladder_is_whole) {
   const auto cat = sk::injuries_catalog();
-  CHECK(cat.size() == 98);
+  CHECK(cat.size() == 130);
   std::vector<int> per(sk::kBases, 0);
   for (size_t k = 0; k < cat.size(); k++) {
     const sk::InjuryDef& d = cat[k];
