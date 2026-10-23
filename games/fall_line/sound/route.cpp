@@ -57,6 +57,7 @@ void wipeout(ge::audio::Synth& synth, int32_t cause, const Listener& ear) {
       play(synth, kWipeoutNose, ear);
       return;
     case ge::skier::Wipeout::across:
+    case ge::skier::Wipeout::hurt:
     case ge::skier::Wipeout::none:
       play(synth, kWipeoutCatch, ear);
       return;

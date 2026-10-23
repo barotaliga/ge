@@ -1,7 +1,6 @@
 ---
 name: skier
-description: "Use for plugins/skier in gameengine2: the skier on the snow any skiing game links. The snow under a pair of skis (sink, base friction, plough, grip, brake), what a skier can do (limits: edge, carve curvature, corner and terminal speed), one step of the skier (step_skier: the contact impulse, the carve and the pivot, the tuck and the push, the jump, flight, landing, trunks, wipeout), the hand-built maps and the ride scenarios, and the `ride` lab."
----
+description: "Use for plugins/skier in gameengine2: the skier on the snow any skiing game links. The snow under a pair of skis (sink, base friction, plough, grip, brake), what a skier can do (limits: edge, carve curvature, corner and terminal speed), one step of the skier (step_skier: the contact impulse, the carve and the pivot, the tuck and the push, the jump, flight, landing, trunks, wipeout), XX---
 
 # The skier plugin
 
@@ -19,7 +18,9 @@ game rides it, so the modes, the course's rules, the bot and the field stay in t
 | `skier/tuning.hpp` | Every shared number, with its unit |
 | `skier/trees.hpp/.cpp` | The trunks on a grid once a map: `build_tree_index`, `tree_overlap` |
 | `skier/synthetic.hpp/.cpp` | The hand-built maps: `synthetic_slope()`, `flat_strip(pitch, packed)` |
-| `skier/scenarios.hpp/.cpp` | The ride scenarios (one table for the tests and the lab) and `run_scenario` |
+| `skier/scenarios.hpp/.cpp` | The ride scenarios (one table for the tests and the labs) and `run_scenario`, which steps the body after every step |
+| `skier/anatomy.hpp/.cpp` | THE BODY'S CATALOG (M13e1): the twenty parts, the bones and the organs, the mechanisms, the 98 injuries with their AIS and even-chance doses, and every number of the body (`injury::`), each with its research |
+| `skier/body.hpp/.cpp` | THE BODY: `blow_of`, `risk_of`, `Doses` and `judge_body` (the ladders read worst first off a hash of the step, never the Rng), `step_body` (a trunk on the skis, a landing, a landing across), `severity_of` (the ISS), `dies_of`, death, `mend_body`, `body_hash`. Its test: `tests/skier_body_test.cpp` |
 | `skier/pilot.hpp/.cpp` | THE SKIER'S PILOT every bot on skis flies (M16c): `lay_pilot_plan` (the curvature along the game's line and an offset line, the speed off `carve_speed` eased to every lip, carried back so each slowing is braked for) and `skier_pilot` (pure pursuit of a `PilotRider`'s lane, further by late hands' lead; the brake over the plan at his pace, the tuck under it), its `line` and `speed` decisions on an `ai::Why` (the `bots` skill). Its test: `tests/skier_pilot_test.cpp` on the slope |
 
 Its app half, `plugins/skier/app/` (`ge_skier_app`, no GPU), is the skier as seen and heard:
@@ -53,6 +54,11 @@ is the support met again, its load `1 + v_n^2 / (2 stroke g)`. There is no mode.
   pass with it deleted. A new situation is a row in `scenarios.cpp`'s table: it is a test (its
   golden row and, if it has one right answer, an expectation in
   `tests/skier_scenarios_test.cpp`) and a lab run at once.
+- **The body is judged, never drawn from the Rng.** Its risk draws hash the step, the part and the
+  seed, so stepping it moves no other digest; a doses source (a trunk, a landing, a round)
+  fills `Doses` from what a step already measured and calls `judge_body`, never re-measuring.
+  A catalog or body change rewrites `tests/golden/skier_body.txt` and runs the `injuries` lab
+  before and after.
 - **A model change moves the golden on purpose**: run `make lab LAB=ride ARGS=--tag=before`
   first, change, run `--compare=before`, rewrite `tests/golden/skier_scenarios.txt` with
   `GE_GOLDEN_WRITE=1 build/debug/tests/skier_scenarios_test`, and put the compare table and
@@ -65,6 +71,11 @@ the hardest sideways load and the tightest path, flights and landings, the stop,
 with one picture each: the line from above coloured by what he was doing, and his speed.
 `make lab LAB=ride ARGS=--scenario=kicker` runs one. The `labs` skill owns how to read it.
 
+`injuries` (scenario): every scenario's body (its injuries by part, the ISS, when he was
+mortally hurt and when he died) and the body's curves over 400 draws: a trunk met head-on and
+beside him by closing speed, a landing by its load, as the share hurt, the mean ISS and the
+share killed; pictures: every scenario's parts shaded by their worst AIS, and the curves.
+
 `anim` (scenario): the skier ridden through a scenario and recorded every step as a pose track:
 `--figure=model` (the default) the poser's rig (`app/rig_pose.hpp`), with the run baked onto the
 skier model as a clip (`skier-run.glb`, for the `models` lab), `--figure=pieces` the placeholder
@@ -75,5 +86,6 @@ A change to how the figure is posed runs it before and after.
 ## Still to come
 
 What the game does not ask for yet stays out (G4): the catalog of pairs, the wind, crust and
-ice, the poles and the legs as stations, the tricks, the ragdoll and the body. Each lands with
-the milestone row that needs it.
+ice, the poles and the legs as stations, the tricks, and the ragdoll (the body thrown, whose
+points' blows on the snow and the trunks the body will judge). Each lands with the milestone
+row that needs it.

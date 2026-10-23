@@ -15,6 +15,8 @@ namespace ge::skier {
 namespace {
 
 constexpr double kDeg = core::kPi / 180;
+// The seed the body's risk draws hash in every scenario.
+constexpr uint32_t kBodySeed = 1;
 constexpr double kMid = kStripSize / 2;
 
 SkierInput tuck(double, const SkierState&) { return SkierInput{0, 1, 0, false}; }
@@ -30,6 +32,9 @@ SkierInput pop_at_lip(double, const SkierState& s) {
   return SkierInput{0, 0, 0, s.z < slope::kKickerLip - 0.6};
 }
 SkierInput pop_now(double t, const SkierState&) { return SkierInput{0, 0, 0, t < 0.8}; }
+SkierInput spin_off(double t, const SkierState& s) {
+  return SkierInput{!s.on_snow && t < 0.6 ? 1.0 : 0.0, 0, 0, false};
+}
 
 constexpr Scenario kScenarios[] = {
     {"tuck-schuss", "a full tuck down a 20 deg groomer from rest: the top speed meets the terminal",
@@ -66,6 +71,16 @@ constexpr Scenario kScenarios[] = {
      kMid, 400, 0, 10, 2, 3, false, tall},
     {"drop-harsh", "dropped 7 m onto the flat at 10 m/s: the legs fold, a wipeout", Stage::strip, 0,
      1, kMid, 400, 0, 10, 7, 4, false, tall},
+    {"tree-slow", "straight at the lone tree from 6 m short of it at 6 m/s: bruised, not broken",
+     Stage::slope, 0, 0, slope::kTreeX, 254, 0, 6, 0, 4, false, tall},
+    {"tree-fast", "straight at the lone tree at 20 m/s: the skis stop on it and he goes on into it",
+     Stage::slope, 0, 0, slope::kTreeX, 200, 0, 20, 0, 12, false, tall},
+    {"tree-side", "past the lone tree at 15 m/s, half a metre off its axis: his side meets it",
+     Stage::slope, 0, 0, slope::kTreeX + 0.5, 200, 0, 15, 0, 8, false, tall},
+    {"drop-across", "dropped 3 m at 10 m/s, spun right in the air: landed across, a ski catches",
+     Stage::strip, 0, 1, kMid, 400, 0, 10, 3, 4, false, spin_off},
+    {"drop-high", "dropped 12 m onto the flat at 10 m/s: the legs and the spine break",
+     Stage::strip, 0, 1, kMid, 400, 0, 10, 12, 10, false, tall},
 };
 
 }  // namespace
@@ -96,6 +111,7 @@ ScenarioRun run_scenario(const Scenario& sc, const SkiSpec& spec, double hz,
   run.top_speed = s.speed;
   uint64_t h = 0xcbf29ce484222325ull;
   SkierEvents ev;
+  BodyEvents bev;
   for (int64_t i = 0; i < steps; i++) {
     const double t = static_cast<double>(i) * dt;
     if (i % every == 0) {
@@ -107,9 +123,12 @@ ScenarioRun run_scenario(const Scenario& sc, const SkiSpec& spec, double hz,
     const double z0 = s.z;
     const SkierInput in = sc.input(t, s);
     step_skier(s, in, world, spec, dt, ev);
-    h = skier_hash(s, h);
-    if (each) each(ScenarioStep{t + dt, s, in, ev, level.ground_at(s.x, s.z)});
     const double now = t + dt;
+    step_body(run.body, s, ev, world, spec, BodyClock{now, dt, i, kBodySeed}, bev);
+    h = skier_hash(s, h);
+    if (each) each(ScenarioStep{now, s, in, ev, level.ground_at(s.x, s.z)});
+    if (bev.mortal) run.mortal_time = now;
+    if (bev.died) run.death_time = now;
     run.distance += core::hypot(s.x - x0, s.z - z0);
     run.top_speed = core::num::max(run.top_speed, s.speed);
     const double g_lat = s.g_lat < 0 ? -s.g_lat : s.g_lat;
@@ -133,6 +152,7 @@ ScenarioRun run_scenario(const Scenario& sc, const SkiSpec& spec, double hz,
   }
   run.end = s;
   run.digest = h;
+  run.body_digest = body_hash(run.body, 0xcbf29ce484222325ull);
   return run;
 }
 
