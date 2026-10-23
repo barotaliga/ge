@@ -18,6 +18,7 @@
 #include "fall_line/sim/army_sled.hpp"
 #include "fall_line/sim/army_sled_rules.hpp"
 #include "fall_line/sim/course.hpp"
+#include "fall_line/sim/crowd.hpp"
 #include "fall_line/sim/field.hpp"
 #include "fall_line/sim/free.hpp"
 #include "fall_line/sim/heli_ride.hpp"
@@ -55,7 +56,7 @@ void log_step(const GameState& state) {
         e.kind == EventKind::reset || e.kind == EventKind::onto || e.kind == EventKind::arrived ||
         e.kind == EventKind::boarded || e.kind == EventKind::unloaded ||
         e.kind == EventKind::sled || e.kind == EventKind::heli || e.kind == EventKind::para;
-    const out::Channel ch = e.kind == EventKind::shoulder                                 ? kField
+    const out::Channel ch = e.kind == EventKind::shoulder || e.kind == EventKind::bump    ? kField
                             : e.kind == EventKind::wanted                                 ? kWanted
                             : e.kind == EventKind::army || e.kind == EventKind::army_sled ? kArmy
                             : course                                                      ? kCourse
@@ -89,6 +90,9 @@ void log_step(const GameState& state) {
         break;
       case EventKind::takeoff:
         line += " owing gate " + std::to_string(e.gate);
+        break;
+      case EventKind::bump:
+        line += " into amateur " + std::to_string(e.gate) + " closing at " + f(e.value, 2) + " m/s";
         break;
       case EventKind::wanted:
         line += " " + std::string(wanted_change_name(wanted_change(e))) + ", " +
@@ -193,6 +197,8 @@ const char* event_name(EventKind kind) {
       return "heli";
     case EventKind::para:
       return "para";
+    case EventKind::bump:
+      return "bump";
     case EventKind::army_sled:
       return "army-sled";
   }
@@ -303,6 +309,11 @@ void step(GameState& state, std::span<const Controls> controls) {
     GE_ZONE("meet");
     meet_racers(state);
   }
+  if (state.crowd.active) {
+    GE_ZONE("crowd");
+    step_crowd(state);
+    meet_crowd(state);
+  }
   {
     GE_ZONE("army");
     step_army(state);
@@ -377,6 +388,7 @@ uint64_t state_hash(const GameState& state, uint64_t h) {
     h = ge::paramotor::para_hash(state.para.body, h);
     mix(state.para.starts);
   }
+  if (state.crowd.active) h = crowd_hash(state.crowd, h);
   return army_hash(state.army, wanted_hash(state.wanted, h));
 }
 
