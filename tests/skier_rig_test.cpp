@@ -5,13 +5,15 @@
 //     length apart and the boot `kMountBack` behind the middle; the outline is the waist under
 //     the boot and widens to the tips.
 //   * THE MODEL: plugins/skier/assets/skier/skier.glb loads, has every rig joint by name at its
-//     bind position to a tenth of a millimetre, every weight sums to one, and its skis' base
-//     lies on the snow: the model and the code agree on the skeleton.
+//     bind position to a tenth of a millimetre, and each of its three levels of detail has every
+//     weight summing to one, its skis' base on the snow and fewer triangles than the level
+//     before: the model and the code agree on the skeleton.
 //
 // ge:summary Tests for the skier's rig and the skier model built on it
 // ge:keywords test skier rig skeleton bind mirror model glb joints weights skis
 // ge:skill skier assets testing
 #include <cmath>
+#include <cstdint>
 #include <string>
 
 #include "assets/gltf.hpp"
@@ -76,16 +78,26 @@ TEST(the_skier_model_is_built_on_the_rig) {
     CHECK_MSG(err < 1e-4, std::string(j.name) + " sits " + std::to_string(err) +
                               " m off the rig's bind; next: ge asset build skier");
   }
-  CHECK(m.meshes.size() == 1);
-  const a::Mesh& mesh = m.meshes[0];
-  float lowest = 1e9f;  // under the skis' front halves (nothing else reaches past the boots)
-  for (size_t v = 0; v < mesh.vertex_count(); v++) {
-    float sum = 0;
-    for (size_t k = 0; k < a::kJointsPerVertex; k++)
-      sum += mesh.weights[v * a::kJointsPerVertex + k];
-    CHECK_MSG(std::abs(sum - 1) < 1e-3f, "a vertex's weights sum to " + std::to_string(sum));
-    if (mesh.positions[v * 3 + 2] > 0.3f) lowest = std::min(lowest, mesh.positions[v * 3 + 1]);
+  // The figure and its two coarser levels of detail (build.py's LEVELS), finest first, each
+  // skinned and standing on the snow, each coarser than the last.
+  CHECK(m.meshes.size() == 3);
+  size_t last_triangles = SIZE_MAX;
+  for (const a::Mesh& mesh : m.meshes) {
+    float lowest = 1e9f;  // under the skis' front halves (nothing else reaches past the boots)
+    for (size_t v = 0; v < mesh.vertex_count(); v++) {
+      float sum = 0;
+      for (size_t k = 0; k < a::kJointsPerVertex; k++)
+        sum += mesh.weights[v * a::kJointsPerVertex + k];
+      CHECK_MSG(std::abs(sum - 1) < 1e-3f,
+                mesh.name + ": a vertex's weights sum to " + std::to_string(sum));
+      if (mesh.positions[v * 3 + 2] > 0.3f) lowest = std::min(lowest, mesh.positions[v * 3 + 1]);
+    }
+    CHECK_MSG(std::abs(lowest) < 1e-4f, mesh.name + ": the skis' base lies " +
+                                            std::to_string(lowest) + " m off the snow at bind");
+    CHECK_MSG(mesh.indices.size() / 3 < last_triangles,
+              mesh.name + " is no coarser than the level before it; next: build.py's LEVELS");
+    last_triangles = mesh.indices.size() / 3;
   }
-  CHECK_MSG(std::abs(lowest) < 1e-4f,
-            "the skis' base lies " + std::to_string(lowest) + " m off the snow at bind");
+  CHECK(m.meshes[0].name == "skier" && m.meshes[1].name == "skier.lod1" &&
+        m.meshes[2].name == "skier.lod2");
 }

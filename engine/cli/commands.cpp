@@ -15,6 +15,14 @@ namespace ge::cli {
 
 namespace {
 
+// A flag's value as help prints it: "=<dir>", "[=<minutes>]" for an optional one ("[<minutes>]"),
+// or nothing for a switch.
+std::string flag_value_text(std::string_view value) {
+  if (value.empty()) return "";
+  if (value[0] == '[') return "[=" + std::string(value.substr(1));
+  return "=" + std::string(value);
+}
+
 constexpr FlagSpec kRepo{"repo", "<dir>", "the game repo (default: the current directory)"};
 constexpr FlagSpec kEngine{"engine", "<dir>",
                            "the engine's source tree (default: the pinned release's, once "
@@ -87,6 +95,8 @@ constexpr FlagSpec kPrecheckFlags[] = {
 constexpr FlagSpec kCiFlags[] = {
     {"log", "<file>", "read this saved job log instead of asking GitHub"},
     {"merge", "", "squash-merge the pull request when every check passed and it merges cleanly"},
+    {"wait", "[<minutes>]",
+     "block until the checks finish, one fails or it conflicts (at most 60 minutes), then answer"},
     kRepo};
 constexpr FlagSpec kDigestFlags[] = {
     {"write", "", "rewrite the lab's row of tests/labs_digests.txt (every row with no lab)"},
@@ -464,8 +474,7 @@ std::string usage_line(const CommandSpec& c) {
   std::string line = "ge " + std::string(c.name);
   if (!c.args.empty()) line += " " + std::string(c.args);
   for (const FlagSpec& f : c.flags) {
-    line +=
-        " [--" + std::string(f.name) + (f.value.empty() ? "" : "=" + std::string(f.value)) + "]";
+    line += " [--" + std::string(f.name) + flag_value_text(f.value) + "]";
   }
   return line;
 }
@@ -540,7 +549,7 @@ std::optional<std::string> check_args(const Args& a) {
       return why;
     }
     if (f->value.empty() && !value.empty()) return "--" + name + " is a switch and takes no value";
-    if (!f->value.empty() && value.empty()) {
+    if (!f->value.empty() && f->value[0] != '[' && value.empty()) {
       std::string why = "--" + name + " needs a value: --";
       why += name;
       why += '=';
@@ -581,8 +590,8 @@ std::string help_text(const CommandSpec* one) {
   if (one) {
     std::string out = usage_line(*one) + "\n  " + std::string(one->summary) + "\n";
     for (const FlagSpec& f : one->flags) {
-      out += "  --" + std::string(f.name) + (f.value.empty() ? "" : "=" + std::string(f.value)) +
-             "  " + std::string(f.help) + "\n";
+      out += "  --" + std::string(f.name) + flag_value_text(f.value) + "  " + std::string(f.help) +
+             "\n";
     }
     out += "  --json  the answer as one JSON object\n  example: " + std::string(one->example) +
            "\n  skill: " + std::string(one->skill) + "\n";
