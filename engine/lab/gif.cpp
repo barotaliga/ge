@@ -1,8 +1,8 @@
-// The shrink's box filter, the palette (exact, or the commonest five-bit buckets) and the GIF's
+// The shrink's box filter, the palette (exact, or a median cut of five-bit buckets) and the GIF's
 // LZW stream.
 //
 // ge:summary The GIF writer: the box-filter shrink, the 256-colour palette, the LZW codes
-// ge:keywords gif lzw palette popularity bucket nearest box-filter sub-block clear-code
+// ge:keywords gif lzw palette median-cut bucket box-filter sub-block clear-code
 // ge:skill labs
 // ge:test tests/lab_gif_test.cpp
 #include "lab/gif.hpp"
@@ -56,7 +56,6 @@ Indexed index_colours(const Picture& p) {
     return out;
   }
 
-  // The commonest five-bit buckets, each the mean of its pixels.
   constexpr size_t kBuckets = 1u << 15;
   std::vector<uint32_t> count(kBuckets, 0);
   std::vector<std::array<uint64_t, 3>> sum(kBuckets, {0, 0, 0});
@@ -67,44 +66,78 @@ Indexed index_colours(const Picture& p) {
     sum[b][1] += (rgb[i] >> 8) & 255;
     sum[b][2] += rgb[i] & 255;
   }
-  std::vector<uint32_t> order;
+  // Median cut over the buckets used: the box with the most pixels times its widest side is
+  // split at the pixel-weighted median of that side, until there are 256 or none can be split.
+  const auto coord = [](uint32_t b, int axis) {
+    return static_cast<int>((b >> (10 - 5 * axis)) & 31);
+  };
+  std::vector<std::vector<uint32_t>> boxes(1);
   for (uint32_t b = 0; b < kBuckets; ++b) {
-    if (count[b] > 0) order.push_back(b);
+    if (count[b] > 0) boxes[0].push_back(b);
   }
-  const size_t keep = std::min<size_t>(256, order.size());
-  std::partial_sort(order.begin(), order.begin() + static_cast<std::ptrdiff_t>(keep), order.end(),
-                    [&](uint32_t a, uint32_t b) {
-                      return count[a] > count[b] || (count[a] == count[b] && a < b);
-                    });
-  order.resize(keep);
-  for (const uint32_t b : order) {
-    const auto mean = [&](int c) { return static_cast<uint32_t>(sum[b][c] / count[b]); };
+  const auto widest = [&](const std::vector<uint32_t>& box, int& axis) {
+    int best = -1;
+    for (int a = 0; a < 3; ++a) {
+      int lo = 31, hi = 0;
+      for (const uint32_t b : box) {
+        lo = std::min(lo, coord(b, a));
+        hi = std::max(hi, coord(b, a));
+      }
+      if (hi - lo > best) {
+        best = hi - lo;
+        axis = a;
+      }
+    }
+    return best;
+  };
+  while (boxes.size() < 256) {
+    size_t pick = boxes.size();
+    uint64_t pick_score = 0;
+    int pick_axis = 0;
+    for (size_t k = 0; k < boxes.size(); ++k) {
+      if (boxes[k].size() < 2) continue;
+      int axis = 0;
+      const int side = widest(boxes[k], axis);
+      uint64_t pixels = 0;
+      for (const uint32_t b : boxes[k]) pixels += count[b];
+      const uint64_t score = pixels * static_cast<uint64_t>(side + 1);
+      if (pick == boxes.size() || score > pick_score) {
+        pick = k;
+        pick_score = score;
+        pick_axis = axis;
+      }
+    }
+    if (pick == boxes.size()) break;
+    std::vector<uint32_t>& box = boxes[pick];
+    std::sort(box.begin(), box.end(), [&](uint32_t a, uint32_t b) {
+      return coord(a, pick_axis) < coord(b, pick_axis) ||
+             (coord(a, pick_axis) == coord(b, pick_axis) && a < b);
+    });
+    uint64_t total = 0, run = 0;
+    for (const uint32_t b : box) total += count[b];
+    size_t cut = 1;
+    for (; cut < box.size() - 1; ++cut) {
+      run += count[box[cut - 1]];
+      if (run * 2 >= total) break;
+    }
+    std::vector<uint32_t> upper(box.begin() + static_cast<std::ptrdiff_t>(cut), box.end());
+    box.resize(cut);
+    boxes.push_back(std::move(upper));
+  }
+  // Each box's colour is the mean of its pixels, and every bucket in it takes that entry.
+  std::vector<uint8_t> entry_of(kBuckets, 0);
+  for (size_t k = 0; k < boxes.size(); ++k) {
+    std::array<uint64_t, 3> c{0, 0, 0};
+    uint64_t pixels = 0;
+    for (const uint32_t b : boxes[k]) {
+      for (int a = 0; a < 3; ++a) c[a] += sum[b][a];
+      pixels += count[b];
+      entry_of[b] = static_cast<uint8_t>(k);
+    }
+    const auto mean = [&](int a) { return static_cast<uint32_t>((c[a] + pixels / 2) / pixels); };
     out.palette.push_back((mean(0) << 16) | (mean(1) << 8) | mean(2));
   }
-  // Every bucket a picture uses, to its nearest entry.
-  std::vector<int> nearest(kBuckets, -1);
-  for (size_t i = 0; i < n; ++i) {
-    const uint32_t b = bucket_of(rgb[i]);
-    if (nearest[b] < 0) {
-      const int r = static_cast<int>((b >> 10) << 3 | 4),
-                g = static_cast<int>(((b >> 5) & 31) << 3 | 4),
-                bl = static_cast<int>((b & 31) << 3 | 4);
-      int best = 0;
-      long best_d = -1;
-      for (size_t k = 0; k < out.palette.size(); ++k) {
-        const int dr = r - static_cast<int>((out.palette[k] >> 16) & 255);
-        const int dg = g - static_cast<int>((out.palette[k] >> 8) & 255);
-        const int db = bl - static_cast<int>(out.palette[k] & 255);
-        const long d = 2L * dr * dr + 4L * dg * dg + 3L * db * db;
-        if (best_d < 0 || d < best_d) {
-          best_d = d;
-          best = static_cast<int>(k);
-        }
-      }
-      nearest[b] = best;
-    }
-    out.pixels[i] = static_cast<uint8_t>(nearest[b]);
-  }
+  for (size_t i = 0; i < n; ++i) out.pixels[i] = entry_of[bucket_of(rgb[i])];
   return out;
 }
 

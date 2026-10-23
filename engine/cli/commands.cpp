@@ -78,6 +78,12 @@ constexpr FlagSpec kLabSweepFlags[] = {
     kEngine,
     kRepo};
 
+constexpr FlagSpec kLabPublishFlags[] = {
+    {"before", "<tag>",
+     "a kept run (ge lab <id> --tag=<tag>) shown beside this one, metric by metric"},
+    {"width", "<px>", "the pictures' width on the page (default 720)"},
+    {"out", "<file>", "where the page goes (default previews/<id>/publish.html)"},
+    kRepo};
 constexpr FlagSpec kLabDiffFlags[] = {
     kPreset,
     {"against", "<name>", "the kept run to diff against (default before: --tag=before)"},
@@ -358,6 +364,10 @@ const CommandSpec kCommands[] = {
      "diff every picture of a lab's last run against a kept run: PSNR, SSIM and the share "
      "changed per distance band, each band held to its floor, a four-panel sheet a shot",
      kLabDiffFlags, "ge lab diff world --run -- --views=start,vista", "labs"},
+    {"lab publish", "<id>", 1, 1, "see",
+     "a lab's last run on one self-contained page to share: every picture shrunk and inlined, "
+     "captions, metrics and tables; --before puts a kept run beside it",
+     kLabPublishFlags, "ge lab publish world --before=before", "labs"},
     {"graph", "<file>...", 1, -1, "see",
      "chart series or spans files (a trace, a bench, a profile) to PNG and SVG; several files "
      "overlay; every outlier comes back as a note",

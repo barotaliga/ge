@@ -5,8 +5,9 @@
 // or less, and every colour a picture uses up to 256 is kept exactly.
 //
 // THE PALETTE: a picture of 256 colours or fewer keeps them all. Past that, the colours are
-// counted at five bits a channel, the 256 commonest buckets become the palette (each the mean of
-// the pixels in it), and every pixel takes the nearest entry. Alpha is laid over white.
+// counted at five bits a channel and the buckets cut into 256 boxes (a median cut: the box with
+// the most pixels across the widest span is halved by pixel count along that span), each box's
+// colour the mean of its pixels. Alpha is laid over white.
 //
 // ge:summary A lab picture shrunk, cut to 256 colours and written as a GIF for a review page
 // ge:keywords gif lzw palette quantize quantise shrink downscale box-filter encode web picture

@@ -36,6 +36,7 @@
 #include "cli/outcome.hpp"
 #include "cli/perf.hpp"
 #include "cli/play.hpp"
+#include "cli/publish.hpp"
 #include "cli/scaffold.hpp"
 #include "cli/skills.hpp"
 #include "cli/sweep.hpp"
@@ -196,6 +197,20 @@ Outcome run(const Args& a) {
     sweep.metrics = flag_value(a, "metrics");
     sweep.passthrough = a.passthrough;
     return run_lab_sweep(build_options(a), sweep);
+  }
+  if (name == "lab publish") {
+    PublishOptions p;
+    p.id = a.words[0];
+    p.before = flag_value(a, "before");
+    p.out = flag_value(a, "out");
+    if (const std::string w = flag_value(a, "width"); !w.empty()) {
+      if (w.find_first_not_of("0123456789") != std::string::npos || w.size() > 5 ||
+          std::stoi(w) < 16)
+        return usage_error("--width takes a whole number of pixels, 16 or more",
+                           "rerun with --width=720");
+      p.width = std::stoi(w);
+    }
+    return run_lab_publish(fs::absolute(repo_of(a)), p);
   }
   if (name == "lab diff") {
     LabDiffOptions diff;
