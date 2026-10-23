@@ -98,6 +98,17 @@ void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint
   u.night[3] = static_cast<float>(n.latitude);
   // THE CLOUD (render/clouds.hpp).
   cloud_rows(view.clouds, u.cloud_info, u.clouds);
+  // THE MOON'S FACE AND THE EARTH'S SHADOW ON IT (render/night.hpp).
+  for (int i = 0; i < 3; ++i) {
+    u.moon_pole[i] = static_cast<float>(n.moon_pole[i]);
+    u.moon_prime[i] = static_cast<float>(n.moon_prime[i]);
+    u.moon_east[i] = static_cast<float>(n.moon_east[i]);
+    u.moon_shadow[i] = static_cast<float>(n.shadow[i]);
+  }
+  u.moon_pole[3] = static_cast<float>(n.umbra);
+  u.moon_prime[3] = static_cast<float>(n.penumbra);
+  u.moon_east[3] = static_cast<float>(n.eclipse_peak);
+  u.moon_shadow[3] = static_cast<float>(n.albedo_scale);
 }
 
 FrameTargets create_targets(gpu::Device& device, std::string_view label, uint32_t width,

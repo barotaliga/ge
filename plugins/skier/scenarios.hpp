@@ -76,6 +76,14 @@ struct ScenarioRun {
   uint64_t digest = 0;  // FNV-1a over every step's state
   BodyState body;       // what his body took (`body.hpp`), stepped after every step
   uint64_t body_digest = 0;
+  // THE THROWN BODY after the wipeout (`ragdoll.hpp`): how far its spine turned, rad; how far
+  // its centre of mass went from where he went down, m (over the plan); the highest that centre
+  // rose over the snow, m; and the time from the wipeout until it had lain still a second, s
+  // (-1 never).
+  double tumble = 0;
+  double thrown = 0;
+  double thrown_top = 0;
+  double lie_time = -1;
   double mortal_time = -1;  // s he was mortally hurt, -1 never
   double death_time = -1;
 };

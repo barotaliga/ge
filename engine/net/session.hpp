@@ -21,10 +21,11 @@
 //   player is not ready when `need_ready`), and back to `lobby` when the leader returns (every
 //   player unready again). A new player joins a game in progress only when `join_in_progress`;
 //   a returning one always may.
-// - CHAT to everyone, to the sender's team, or to one player (DIRECT). The host strips control
-//   bytes, caps a line at `chat_max` bytes, and holds each player to a token bucket (`chat_burst`
-//   lines, one more every `chat_refill_us`); a line refused is answered with why. A direct line
-//   reaches only its target.
+// - CHAT to everyone, to the sender's team, to one player (DIRECT) or to the players NEAR the
+//   sender in the game (proximity chat, whom `hears` says can hear them: the game knows where
+//   everyone is and how far a voice carries). The host strips control bytes, caps a line at
+//   `chat_max` bytes, and holds each player to a token bucket (`chat_burst` lines, one more every
+//   `chat_refill_us`); a line refused is answered with why. A direct line reaches only its target.
 // - KICK. The leader removes a player: the host tells them why, drops their peer once the word is
 //   acked (or `linger_us` has passed), and refuses their token and their address for the rest of
 //   the session.
@@ -43,6 +44,7 @@
 // ge:summary Sessions: the lobby, players by seat, teams, chat, kick, start, reconnect by token
 // ge:keywords net session lobby player roster seat team ready leader host-player dedicated-server
 // ge:keywords listen-server chat private-message direct-message whisper team-chat rate-limit
+// ge:keywords proximity-chat nearby say-prox earshot
 // ge:keywords kick ban start return phase settings reconnect token away ping player-list
 // ge:keywords join-in-progress multiplayer
 // ge:skill net
@@ -63,6 +65,10 @@ constexpr size_t kMaxName = 24;  // bytes of a player's name
 constexpr int kNoPlayer = -1;
 constexpr int kNoTeam = -1;
 
+// Whether seat `listener` hears seat `speaker` in the game (proximity chat). The game's: it knows
+// where both are and how far a voice carries (its own range setting).
+using HearsFn = bool (*)(void* ctx, int speaker, int listener);
+
 struct SessionConfig {
   int channel = 0;  // a RELIABLE channel of the node's ChannelConfig, the session's alone
   int max_players = kMaxPlayers;
@@ -81,11 +87,13 @@ struct SessionConfig {
   int chat_burst = 5;                  // lines a player may send at once
   int64_t chat_refill_us = 1000000;    // one more line this often
   size_t settings_max = 1024;
+  HearsFn hears = nullptr;  // proximity chat's earshot (null: this session has none)
+  void* hears_ctx = nullptr;
   uint64_t seed = 0;  // the tokens' stream (a real host passes os_entropy())
 };
 
 enum class SessionPhase : uint8_t { lobby, playing };
-enum class ChatScope : uint8_t { all, team, direct };
+enum class ChatScope : uint8_t { all, team, direct, nearby };
 
 // Why the host refused or removed something.
 enum class SessionWhy : uint8_t {
@@ -105,6 +113,7 @@ enum class SessionWhy : uint8_t {
   left,         // said goodbye (the peer disconnected)
   timed_out,    // away past reconnect_us
   wrong_phase,  // start while playing, return in the lobby, teams moved in a game
+  no_nearby,    // proximity chat in a session whose game gave no earshot (SessionConfig::hears)
 };
 const char* why_name(SessionWhy w);
 

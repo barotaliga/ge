@@ -257,7 +257,8 @@ constexpr FlagSpec kNetSimFlags[] = {
     {"budget", "<kbit/s>", "cap what every connection sends (default none)"},
     {"link", "<k=v,...>",
      "override conditions on every preset: latency, jitter (ms), loss, duplicate, reorder "
-     "(shares or %), burst, reorder-ms, bandwidth (kbit/s), queue (ms)"},
+     "(shares or %), burst, reorder-ms, bandwidth (kbit/s), queue (ms), drop-every and "
+     "drop-run (a pattern: drop-every=2 loses every other packet)"},
     {"clients", "<n>", "fake clients (default 8)"},
     {"max-peers", "<n>", "the host's slots, 1..32 (default 32); clients past it are denied"},
     {"seconds", "<s>", "how long they send (default 10)"},
@@ -265,6 +266,32 @@ constexpr FlagSpec kNetSimFlags[] = {
     {"tick-hz", "<hz>", "how often every node updates (default 60)"},
     {"seed", "<n>", "the network's and the nodes' seed (default 1)"},
     {"capture", "<file.pcap>", "write the host's capture (one a preset, named after it)"}};
+
+constexpr FlagSpec kNetWatchFlags[] = {
+    {"port", "<n>", "the loopback port the game's tap sends to (default 27950)"},
+    {"seconds", "<s>", "how long to watch (default 10; 0: until --frames)"},
+    {"every", "<s>", "a live line a connection on stderr this often (default 1)"},
+    {"frames", "<n>", "stop after this many datagrams (default no limit)"},
+    {"save", "<file.pcap>", "where what was seen is saved (default runs/net-watch.pcap)"}};
+
+constexpr FlagSpec kNetSweepFlags[] = {
+    {"knob", "<name>",
+     "what to sweep: update-rate, cmd-rate, rate (bytes/s), interp (ticks), backup (inputs "
+     "repeated), tick-hz, or a link key (latency, jitter, loss, burst, reorder, bandwidth, "
+     "drop-every, drop-run)"},
+    {"values", "<a,b,...>", "the knob's values, one trial each (a share may be a percent)"},
+    {"presets", "<a,b>", "the link conditions (default wifi; none: a perfect link)"},
+    {"link", "<k=v,...>", "override conditions on every preset (as ge net sim)"},
+    {"clients", "<n>", "clients, each steering its own mover, 1..32 (default 16)"},
+    {"npcs", "<n>", "movers the server moves (default 32)"},
+    {"seconds", "<s>", "how long each trial runs (default 10)"},
+    {"tick-hz", "<hz>", "the server's and clients' tick (default 60)"},
+    {"update-rate", "<n>", "snapshots a second each client asks for (default every other tick)"},
+    {"cmd-rate", "<n>", "input messages a second each client sends (default one a tick)"},
+    {"rate", "<bytes/s>", "snapshot bytes a second each client takes (default no cap)"},
+    {"interp", "<ticks>", "how far behind the newest snapshot others are drawn (default 6)"},
+    {"backup", "<n>", "inputs repeated in every input message (default 4)"},
+    {"seed", "<n>", "the network's, the hands' and the crowd's seed (default 1)"}};
 
 const CommandSpec kCommands[] = {
     {"help",
@@ -408,6 +435,17 @@ const CommandSpec kCommands[] = {
      "fake-traffic clients and a host over chosen link conditions, no game needed: delivery, "
      "round trip, loss, bandwidth and a digest a session; --capture for the pcap",
      kNetSimFlags, "ge net sim --presets=wifi,bad --mix=action --clients=16", "multiplayer"},
+    {"net watch", "", 0, 0, "see",
+     "a running game's or server's datagrams from its live tap (net/tap.hpp) on a loopback "
+     "port: each connection's packets, kbps, round trip and loss every second, then the whole "
+     "watch saved as a capture and measured as ge net stats measures it",
+     kNetWatchFlags, "ge net watch --port=27950 --seconds=30", "multiplayer"},
+    {"net sweep", "", 0, 0, "measure",
+     "a replicated world run once a value of one knob (a rate, the interpolation, a link "
+     "condition or a drop pattern): bandwidth each way, view delay, corrections, rewind gaps, "
+     "and the cheapest value within reach of the best",
+     kNetSweepFlags, "ge net sweep --knob=update-rate --values=10,20,30,60 --presets=wifi,bad",
+     "multiplayer"},
     {"bench", "", 0, 0, "measure",
      "each step's time against its budget (median, p95, p99, worst), steps a second and the "
      "run's open, over the pilot's runs replayed; --tag and --compare for a before and after",
