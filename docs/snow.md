@@ -93,10 +93,14 @@ the GPU unchanged:
 | Field | Type | Unit |
 | --- | --- | --- |
 | depth | uint16 | mm of snow over the ground (65 m at most) |
-| density | uint16 | 0.1 kg/m³ |
+| mass | uint16 | 0.05 kg/m² of snow over the ground (3.2 t/m² at most); the density is mass over depth |
 | kind | uint8 | the named snow |
-| flags | uint8 | groomed (the corduroy drawn), pressed floor, crust broken |
-| age | uint16 | minutes since the cell last changed (settling and filling read it) |
+| flags | uint8 | touched (changed by a press), pressed floor, berm |
+| minute | uint16 | minutes since the cell last changed (settling and filling read it) |
+
+The column keeps its MASS rather than its density so that compaction is exact: a press moves
+whole units of mass from cell to cell and never rounds any away, and `mass + spilled ==
+mass_in` holds to the unit on every layer (snow pushed off the region is counted as spilled).
 
 8 bytes a cell, 32 KB a fine tile. A **coarse layer** beside the fine tiles keeps the same
 fields at 16× the cell (1.6 m by default): the worn snow far from anyone who looks closely (§
@@ -130,6 +134,28 @@ record, so the picture, the sound and the physics can never disagree about where
 `press` allocates nothing in steady state (tiles come from a pool the layer reserves), visits
 only the cells under the shape's box, and is deterministic for a given order of calls: the
 game presses in its step order.
+
+**As built (M29a).** `engine/snow/layer.hpp` (the layer, the cover, the tiles, `sample`),
+`press.hpp` (the shapes and `press`), `kinds.hpp` (the named snows), `reference.hpp` (a typical
+carving and skidding ski, a boot, a tyre, a snowmobile's track and a fallen body, with their
+loads) and `snapshot.hpp` (`save` / `load`, the `GESNOW1` format). The details settled there:
+
+- The sink a press reaches is measured from the UNTOUCHED cover, never from the column as it
+  stands, so a second pass of the same contact changes nothing and a deeper one only deepens.
+- With no `sink` given, the density the snow is packed to is the starting law of § Contact,
+  `reach_density`: 350 kg/m³ at 10 kPa and 60 kg/m³ more for every e-fold of pressure, capped
+  by the kind's own cap. M29b replaces it with the measured laws.
+- The thrown share is laid as a berm in a ring round the outline (0.9 of the half width out,
+  never less than 1.5 cells), heaped at the edge and falling away; the units are dealt out in a
+  fixed order, so the berm is the same bits everywhere.
+- An outline narrower than three quarters of a cell is widened to it, with its pressure kept,
+  so a carving ski's edge never slips between the samples.
+- The coarse layer moved to M29d with the tiers that need it.
+
+Measured by the `snow-field` lab: a 64 m layer crossed by a skier, a walker, a car, a snowmobile
+and a fall allocates 19 tiles of 121 (608 KB), and a press costs about 11 µs in a release build (230 µs under the debug build's sanitizers).
+`ge snow show <file.snow>` and `ge snow column <file.snow> --at=x,z` read a saved layer without
+the game.
 
 ## Contact (`engine/snow/contact`, M29b)
 

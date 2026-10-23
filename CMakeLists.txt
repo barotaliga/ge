@@ -12,6 +12,7 @@
 #   ge_lab       the lab framework (engine/lab: the contract, the runner, the raster, the PNG,
 #                the series files, the charts and the model views)
 #   ge_ai        the bots' layer (engine/ai: the decision record `ge why` reads)
+#   ge_snow      snow (engine/snow: the layer over any ground, press, the snapshot; docs/snow.md)
 #   ge_play      the play contract (engine/play: GameSpec and Run, the session, the input log,
 #                the bench, the stills `ge shot` draws)
 #   ge_prof      the profiler (engine/prof: timing zones, allocation counts, the resident set);
@@ -182,6 +183,12 @@ file(GLOB GE_INPUT_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/
 add_library(ge_input STATIC ${GE_INPUT_SOURCES})
 target_link_libraries(ge_input PUBLIC ge_core)
 
+# Snow (engine/snow, docs/snow.md): a layer of snow over any ground, its sparse fixed-point tiles,
+# the one sample query, press and the imprint record, the snapshot. Deterministic, no platform.
+file(GLOB GE_SNOW_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/snow/*.cpp)
+add_library(ge_snow STATIC ${GE_SNOW_SOURCES})
+target_link_libraries(ge_snow PUBLIC ge_core)
+
 # The lab framework (engine/lab: the contract, the runner, the raster, the PNG), published as
 # ge::lab so a game's labs plug into the same contract as the engine's (docs/labs.md).
 add_library(ge_lab STATIC engine/lab/lab.cpp engine/lab/report.cpp engine/lab/runner.cpp
@@ -275,7 +282,7 @@ if(PROJECT_IS_TOP_LEVEL)
   get_property(GE_PLUGIN_TARGETS GLOBAL PROPERTY GE_PLUGIN_TARGETS)
   get_property(GE_GAME_TARGETS GLOBAL PROPERTY GE_GAME_TARGETS)
   add_executable(labs engine/lab/main.cpp ${GE_LAB_SOURCES})
-  target_link_libraries(labs PRIVATE ge_lab ge_play ge_core ge_audio ge_assets ge_net ge_input ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
+  target_link_libraries(labs PRIVATE ge_lab ge_play ge_core ge_audio ge_assets ge_net ge_input ge_snow ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
     ${GE_LAB_EXTRA})
 
   # The `assets` executable (engine/assets/tool.hpp): the built assets listed, checked and stamped,

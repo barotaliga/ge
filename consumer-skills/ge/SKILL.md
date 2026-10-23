@@ -50,6 +50,8 @@ ge graph <file>... [--kind=<k>]  # chart traces, benches, profiles: PNG + SVG, o
 ge net inspect <pcap>            # a network capture, datagram by datagram (skill: multiplayer)
 ge net stats <pcap>              # per connection: kbps, round trip, loss, resends; charted
 ge net sim [--presets=wifi,bad]  # fake clients and a host over bad links, no game needed
+ge snow show <file.snow>         # a saved snow layer: tiles, pressed samples, mass, maps (skill: snow)
+ge snow column <file.snow> --at=x,z  # the snow's column at a point
 ge asset build [<name>]          # a model built in headless Blender off the game's data (skill: assets)
 ge check                         # the whole gate: format, doctor, build, tests
 ge lint [--base=<ref>] [<file>...]  # clang-tidy's bug-finding checks over what the change reaches

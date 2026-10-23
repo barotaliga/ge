@@ -81,6 +81,11 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   contexts, the bindings file and rebinding, the device database, touch controls, local players,
   rumble and force feedback as pure functions, a simulated backend and the event log. It depends
   on `engine/core` only; the OS's devices reach it through `engine/platform`'s backend.
+- **`engine/snow`**: a layer of snow over any ground (`ge::snow`, M29; `docs/snow.md` is the
+  design): the analytic cover read exactly where nothing has crossed, sparse fixed-point tiles
+  of columns (depth and mass) where something has, `sample`, `press` with its mass conserved to
+  the unit and the berm it throws, the imprint records the picture and the sound read, and the
+  snapshot. It depends on `engine/core` only and draws nothing from a clock or an RNG.
 - **`engine/ui`**: the immediate-mode 2D layer (rects, images, SDF text), plus Dear
   ImGui behind `GE_DEV_UI`.
 - **`games/fall_line/app`**: Fall Line's presentation, the `fall_line_app` library (which
