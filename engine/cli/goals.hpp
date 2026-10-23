@@ -7,9 +7,10 @@
 //   ge goals free M17      the same for one milestone's rows: the letters taken under M17 on the
 //                          base and on every branch, and the next free letter
 //
-// A row is a line of `docs/goals.md`'s tables that opens `| M<n><suffix> |`, or a status file
-// `docs/goals/M<n><suffix>.md`. The remote branches are read as they were last fetched (--fetch
-// fetches them first).
+// A row is a line of `docs/goals.md`'s tables that opens `| M<n><suffix> |`, a status file
+// `docs/goals/M<n><suffix>.md`, or a line of the same shape in `docs/goals/reserved.md`: a row
+// promised to a piece of work before any branch carries it. The remote branches are read as they
+// were last fetched (--fetch fetches them first).
 //
 // ge:summary ge goals free: the roadmap numbers taken on main and every branch, and the next free
 // ge:keywords cli ge goals roadmap milestone row next-free number claimed branches pull-request

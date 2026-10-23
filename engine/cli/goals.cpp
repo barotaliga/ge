@@ -72,6 +72,10 @@ std::vector<GoalRow> rows_at(const fs::path& repo, const std::string& ref, const
   const std::string git = "git -C " + quoted(repo) + " ";
   const Logged md = run_to_log(git + "show \"" + ref + ":docs/goals.md\"", log);
   if (md.code == 0) rows = goal_rows(md.output);
+  const Logged held = run_to_log(git + "show \"" + ref + ":docs/goals/reserved.md\"", log);
+  if (held.code == 0) {
+    for (GoalRow& r : goal_rows(held.output)) rows.push_back(std::move(r));
+  }
   const Logged files = run_to_log(git + "ls-tree --name-only \"" + ref + "\" docs/goals/", log);
   if (files.code == 0) {
     for (std::string_view line : split_lines(files.output)) {
@@ -87,6 +91,9 @@ std::vector<GoalRow> rows_at(const fs::path& repo, const std::string& ref, const
 std::vector<GoalRow> rows_here(const fs::path& repo) {
   std::vector<GoalRow> rows;
   if (const auto md = read_text(repo / "docs" / "goals.md")) rows = goal_rows(*md);
+  if (const auto held = read_text(repo / "docs" / "goals" / "reserved.md")) {
+    for (GoalRow& r : goal_rows(*held)) rows.push_back(std::move(r));
+  }
   std::error_code ec;
   for (const auto& e : fs::directory_iterator(repo / "docs" / "goals", ec)) {
     const GoalRow r = goal_row_of_file(e.path().filename().string());
@@ -158,14 +165,15 @@ Outcome run_goals_free(const fs::path& repo, const std::string& row, const std::
     number = r.number;
   }
   if (fetch && run_to_log(git + "fetch --quiet origin", log).code != 0) {
-    out.findings.push_back({Severity::warn, "git fetch origin failed; the branches are as last fetched",
+    out.findings.push_back({Severity::warn,
+                            "git fetch origin failed; the branches are as last fetched",
                             log.string(), "check the remote: git remote -v"});
   }
   std::vector<Source> sources;
   sources.push_back({base, rows_at(repo, base, log)});
   if (sources[0].rows.empty()) {
-    out.findings.push_back({Severity::error, "no roadmap rows at " + base,
-                            "docs/goals.md", "fetch it (git fetch origin), or name --base"});
+    out.findings.push_back({Severity::error, "no roadmap rows at " + base, "docs/goals.md",
+                            "fetch it (git fetch origin), or name --base"});
     return out;
   }
   const Logged refs =
@@ -212,16 +220,15 @@ Outcome run_goals_free(const fs::path& repo, const std::string& row, const std::
     const std::string key = "M" + std::to_string(id.first) + id.second;
     for (const auto& [where, title] : who) {
       out.text += "  " + key + "  " + where + (title.empty() ? "" : "  " + title) + "\n";
-      rows_json.push_back(json_obj({{"row", json_str(key)},
-                                    {"where", json_str(where)},
-                                    {"title", json_str(title)}}));
+      rows_json.push_back(json_obj(
+          {{"row", json_str(key)}, {"where", json_str(where)}, {"title", json_str(title)}}));
     }
   }
   out.text += "  next free: " + next + "\n";
-  out.result = json_obj({{"base", json_str(base)},
-                         {"claimed", json_arr(rows_json)},
-                         {"next", json_str(next)}});
-  out.summary = next + " is free (" + std::to_string(claims.size()) + " rows held on branches only)";
+  out.result = json_obj(
+      {{"base", json_str(base)}, {"claimed", json_arr(rows_json)}, {"next", json_str(next)}});
+  out.summary =
+      next + " is free (" + std::to_string(claims.size()) + " rows held on branches only)";
   out.next = "add the row to docs/goals.md as " + next + " and its status file docs/goals/" + next +
              ".md in the first commit, so the next reader sees it taken";
   return out;
