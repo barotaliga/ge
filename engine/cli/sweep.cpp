@@ -233,14 +233,19 @@ Outcome sweep_flag(const BuildOptions& o, const SweepOptions& s) {
   std::vector<std::string> run_json;
   for (const std::string& v : values) {
     const std::string tag = "sweep-" + tag_part(name) + "-" + tag_part(v);
-    std::string cmd = "\"" + exe.string() + "\" " + s.id + " --out=\"" + previews.string() +
-                      "\" --quiet --tag=" + tag + " \"--" + name + "=" + v + "\"";
+    std::string cmd = "\"" + exe.string() + "\" " + s.id + " --out=\"" + previews.string();
+    cmd.append("\" --quiet --tag=").append(tag).append(" \"--").append(name).append("=").append(v);
+    cmd += "\"";
     for (const std::string& w : s.passthrough) cmd += " \"" + w + "\"";
     const Logged r = run_to_log(cmd, log);
     const fs::path dir = previews / (s.id + "@" + tag);
     if (r.code == 2) {
       out.findings.push_back({Severity::error,
-                              "the lab refused --" + name + "=" + v + " or its other flags",
+                              std::string("the lab refused --")
+                                  .append(name)
+                                  .append("=")
+                                  .append(v)
+                                  .append(" or its other flags"),
                               rel_path(o.repo, log), "ge lab " + s.id + " -- --help lists them"});
       out.exit = 2;
       return out;

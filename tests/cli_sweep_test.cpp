@@ -4,8 +4,8 @@
 // starred, and a --flag sweep's refusals (malformed, or beside --set).
 //
 // ge:summary Test: ge lab sweep's constant search, its rewrite and the metrics table
-// ge:keywords test cli lab sweep constant constexpr find_constants with_value sweep_table
-// flag-sweep ge:skill testing agent-interface
+// ge:keywords test cli lab sweep constant constexpr find_constants with_value flag-sweep
+// ge:skill testing agent-interface
 #include <filesystem>
 #include <string>
 
