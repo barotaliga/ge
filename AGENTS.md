@@ -119,6 +119,11 @@ porting ends, and nothing outside it may depend on it except `make golden`.
   get there.
 - **WHEN A TASK IS DONE, NAME THE NEXT STEP.** Update the roadmap row's status file
   (`docs/goals/<row>.md`), then name the next open milestone row as the follow-up.
+- **SHOW THE WORK IN PICTURES.** Every progress report and every finished PR comes with
+  pictures: a lab's screenshots, before and after side by side, a chart of the numbers, a
+  diagram of a design, or a table of measurements drawn as an image. Nearly all work can be
+  shown this way; the labs exist to make that cheap (`labs` skill). Put the pictures on one
+  page linked from the report and the PR, never as loose attachments.
 - **SAY WHAT `ge` LACKED.** `ge` is the agent's whole interface (G6), so it grows from what
   agents miss. When a task would have been easier with a `ge` command or flag that does not
   exist (to build, debug, inspect, measure or optimise), say so in the PR description under
@@ -138,7 +143,7 @@ porting ends, and nothing outside it may depend on it except `make golden`.
 - **`make precheck` BEFORE EVERY PUSH.** It runs, in about 40 seconds, the gates that cost
   threads the most CI rounds (fmt-check, agents-check, libm-check, lint on the changed files,
   `cli_diagnostics_test`, the tests the change reaches and the smoke digests of the labs it
-  reaches, `tools/labs-reached.sh`). A game repo's is `ge precheck`.
+  reaches, `ge digest --affected`). A game repo's is `ge precheck`.
   Run it in the background when it is long (a tool's background mode re-invokes you when it
   exits); never poll it in a loop.
 - **AFTER PUSHING A PR, CHECK IT EVERY 15 MINUTES UNTIL IT IS MERGED.** Each check-in looks at

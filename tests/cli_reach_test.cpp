@@ -21,7 +21,7 @@ namespace {
 
 const fs::path kRepo = "/src/game";
 
-// Four libraries, the labs executable compiling in the lab's directory, and three tests.
+// Four libraries, the labs executable (its main and two labs), and three tests.
 const std::string kDeps =
     "CMakeFiles/ge_core.dir/engine/core/math.cpp.o: #deps 2, deps mtime 1 (VALID)\n"
     "    /src/game/engine/core/math.cpp\n"
@@ -45,6 +45,14 @@ const std::string kDeps =
     "    /src/game/engine/lab/main.cpp\n"
     "    /src/game/engine/lab/raster.hpp\n"
     "    /src/game/games/g/sim/outing.hpp\n"
+    "\n"
+    "CMakeFiles/labs.dir/games/g/labs/glide_lab.cpp.o: #deps 2, deps mtime 1 (VALID)\n"
+    "    /src/game/games/g/labs/glide_lab.cpp\n"
+    "    /src/game/games/g/sim/outing.hpp\n"
+    "\n"
+    "CMakeFiles/labs.dir/engine/lab/labs/grid_lab.cpp.o: #deps 2, deps mtime 1 (VALID)\n"
+    "    /src/game/engine/lab/labs/grid_lab.cpp\n"
+    "    /src/game/engine/lab/raster.hpp\n"
     "\n"
     "tests/CMakeFiles/g_outing_test.dir/g_outing_test.cpp.o: #deps 3, deps mtime 1 (VALID)\n"
     "    /src/game/tests/g_outing_test.cpp\n"
@@ -96,6 +104,17 @@ TEST(a_shared_header_reaches_everything_including_it) {
   CHECK(r.targets.count("core_math_test") && r.targets.count("g_outing_test"));
   CHECK(!r.targets.count("lab_raster_test"));
   CHECK(r.sources.count("engine/core/math.cpp") && r.sources.count("plugins/wing/acro.cpp"));
+}
+
+TEST(each_object_is_reached_on_its_own_inside_one_executable) {
+  // The plugin reaches the game library, so the lab including the game's header; the lab that
+  // includes only the raster's does not move.
+  const Reach r = reach_of({"plugins/wing/acro.cpp"});
+  CHECK(r.objects.count("games/g/labs/glide_lab.cpp") && r.objects.count("plugins/wing/acro.cpp"));
+  CHECK(!r.objects.count("engine/lab/labs/grid_lab.cpp"));
+  // A lab's own source reaches that lab alone.
+  const Reach own = reach_of({"engine/lab/labs/grid_lab.cpp"});
+  CHECK((own.objects == std::set<std::string>{"engine/lab/labs/grid_lab.cpp"}));
 }
 
 TEST(the_libraries_are_read_off_ninjas_target_list) {
