@@ -108,6 +108,7 @@ void hold(GameState& state, int32_t i) {
   c.down = false;
   c.down_time = 0;
   c.cause = sk::Wipeout::none;
+  c.thrown.active = false;
 }
 
 // On the boards, the skis racked: the machine his, the engine started.
@@ -181,9 +182,7 @@ void throw_off(GameState& state, int32_t i, const core::Vec3& v0, sm::Thrown why
   r.skier.vy = v0.y;
   r.skier.vz = v0.z;
   r.skier.speed = core::hypot3(v0.x, v0.y, v0.z);
-  r.skier.down = true;
-  r.skier.down_time = 0;
-  r.skier.cause = why == sm::Thrown::tree ? sk::Wipeout::tree : sk::Wipeout::landing;
+  sk::put_down(r.skier, why == sm::Thrown::tree ? sk::Wipeout::tree : sk::Wipeout::landing);
   r.progress.wipeouts++;
   state.events.push_back(
       GameEvent{EventKind::wipeout, i, static_cast<int32_t>(r.skier.cause), r.skier.speed});

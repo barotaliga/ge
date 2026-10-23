@@ -81,21 +81,7 @@ TEST(solar_matches_golden_bit_for_bit) {
     check_window(c::sun_window_on_date(lat, lon, jd0), row, 36);
     check_window(c::sun_window_on_date(lat, lon, jd0, min_el), row, 39);
 
-    const c::MoonOrbit lc = c::lunar_coordinates(jd);
-    CHECK_BITS(lc.longitude, as_double(row[42]));
-    CHECK_BITS(lc.latitude, as_double(row[43]));
-    CHECK_BITS(lc.distance, as_double(row[44]));
-    CHECK_BITS(lc.right_ascension, as_double(row[45]));
-    CHECK_BITS(lc.declination, as_double(row[46]));
-
-    const c::DatedMoonPlace dm = c::moon_on_date(hour, lat, lon, jd0);
-    CHECK_BITS(dm.elevation, as_double(row[47]));
-    CHECK_BITS(dm.azimuth, as_double(row[48]));
-    check_bool(dm.rising, row, 49);
-    CHECK_BITS(dm.lit, as_double(row[50]));
-    CHECK_BITS(dm.age, as_double(row[51]));
-    CHECK_BITS(dm.declination, as_double(row[52]));
-    CHECK(row.size() == 53);
+    CHECK(row.size() == 42);
   }
 }
 

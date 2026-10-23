@@ -159,9 +159,11 @@ void create_sky(gpu::Device& device, gpu::PipelineSet& pipelines, Sky& sky,
   wgpu::RenderPipelineDescriptor desc{};
   desc.label = "sky.draw";
   sky.stars = create_star_texture(device);
-  sky.star_layout =
-      make_layout(device, "sky.stars", {Slot::texture_array}, wgpu::ShaderStage::Fragment);
-  sky.star_group = make_group(device, "sky.stars", sky.star_layout, {sky.stars.view});
+  sky.moon = create_moon_texture(device);
+  sky.star_layout = make_layout(device, "sky.stars", {Slot::texture_array, Slot::texture},
+                                wgpu::ShaderStage::Fragment);
+  sky.star_group =
+      make_group(device, "sky.stars", sky.star_layout, {sky.stars.view, sky.moon.view});
   desc.layout = make_pipeline_layout(device, "sky.draw", {frame, sky.star_layout});
   desc.vertex.module = draw;
   desc.vertex.entryPoint = "vs_main";
