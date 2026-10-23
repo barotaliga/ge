@@ -19,6 +19,7 @@
 
 #include "check.hpp"
 #include "golden.hpp"
+#include "snow/contact.hpp"
 #include "snow/layer.hpp"
 #include "snow/press.hpp"
 #include "snow/reference.hpp"
@@ -82,21 +83,24 @@ TEST(every_reference_contact_on_every_snow_keeps_the_mass_to_the_unit) {
   }
 }
 
-TEST(a_boot_packs_powder_to_the_density_its_pressure_reaches) {
+TEST(a_boot_post_holes_powder_to_the_density_its_pressure_reaches) {
   sn::SnowWorld world;
   sn::Layer& layer = sn::add_layer(world, flat(0.5, 0));
   const sn::Imprint boot = sn::reference_contact(2).imprint;
   const sn::Pressed p = sn::press(layer, boot, 0);
-  const double rho = sn::reach_density(p.pressure, 600);
   CHECK(p.pressure > 25e3 && p.pressure < 35e3);  // 785 N on a 30 x 11 cm sole
-  CHECK(rho > 400 && rho < 430);
+  // Bekker's sink for the sole's 11 cm width passes what 50 cm of 70 kg/m3 can compact: the boot
+  // post-holes until the snow under it is packed to what its pressure reaches.
+  const double z = sn::column_sink(sn::Kind::powder, 0.5, 70, 0.11, p.pressure);
+  CHECK(sn::bekker_sink(sn::contact_row(sn::Kind::powder), 0.11, p.pressure) > 0.5);
+  CHECK(z == sn::sink_cap(0.5, 70, p.pressure, 600));
+  CHECK(z > 0.38 && z < 0.45);
   const sn::Column c = sn::sample(layer, 0, 0);
   CHECK(c.touched);
-  // 50 cm of 70 kg/m3 packed to rho stands 0.5 * 70 / rho high: the rest is the print's depth.
-  CHECK(std::abs(c.depth - 0.5 * 70 / rho) < 0.002);
-  CHECK(std::abs(c.density - rho) < 3);
-  CHECK(std::abs(p.sink - (0.5 - 0.5 * 70 / rho)) < 0.002);
-  CHECK(c.packed > 0.8);
+  CHECK(std::abs(c.depth - (0.5 - z)) < 0.002);
+  // The mass stays (a boot throws none): the print's floor is as much denser as it is lower.
+  CHECK(std::abs(c.density - 0.5 * 70 / (0.5 - z)) < 3);
+  CHECK(std::abs(p.sink - z) < 0.002);
 }
 
 TEST(a_sink_is_pressed_to_exactly) {

@@ -142,9 +142,10 @@ loads) and `snapshot.hpp` (`save` / `load`, the `GESNOW1` format). The details s
 
 - The sink a press reaches is measured from the UNTOUCHED cover, never from the column as it
   stands, so a second pass of the same contact changes nothing and a deeper one only deepens.
-- With no `sink` given, the density the snow is packed to is the starting law of § Contact,
-  `reach_density`: 350 kg/m³ at 10 kPa and 60 kg/m³ more for every e-fold of pressure, capped
-  by the kind's own cap. M29b replaces it with the measured laws.
+- With no `sink` given, the sink is the contact laws' (§ Contact, M29b): Bekker's sink for the
+  outline's narrower side, capped by what the column can compact before it reaches
+  `reach_density` (350 kg/m³ at 10 kPa and 60 kg/m³ more for every e-fold of pressure, no
+  denser than the kind's own cap).
 - The thrown share is laid as a berm in a ring round the outline (0.9 of the half width out,
   never less than 1.5 cells), heaped at the edge and falling away; the units are dealt out in a
   fixed order, so the berm is the same bits everywhere.
@@ -181,6 +182,17 @@ contact, so a ski, a tread, a tyre and a boot are configurations, not separate m
 
 The skier's and the snowmobile's tuned numbers stay theirs; M29j states them through these
 laws and holds every race digest while it does.
+
+**As built (M29b).** `engine/snow/contact.hpp`: one `ContactRow` a kind (`contact_row`) and the
+laws over it: `bekker_sink` / `bekker_pressure`, `sink_cap` and `column_sink` (the one `press`
+reads), `compaction_resistance`, `bulldozing_resistance` (Rankine's passive pressure over the
+front plus the momentum of the snow swept), `shear_strength`, `shear_at` and `tread_traction`
+(Janosi–Hanamoto averaged along the contact), `glide_friction`, `tyre_friction` and
+`planing_sink`. Settled snow's row is the published set for natural snow cover; every other row
+is fitted to the sink a 10 kPa plate 10 cm wide reaches in it (powder 58 cm, so a standing ski
+sinks 27 cm and a boot post-holes to the cap; groomed 1 cm; ice half a millimetre). Ice holds a
+track by friction alone. A game with better numbers passes its own row. The `snow-contact` lab
+charts all of it for every kind.
 
 ## Time (`engine/snow/time`, M29c)
 

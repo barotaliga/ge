@@ -16,6 +16,7 @@ columns.
 | `snow/layer.hpp` | A layer: its region, its ground (any height function baked by `bake_ground`), its cover (what lies there untouched), the tiles of what changed, and `sample` | `ge explain snow/layer.hpp` |
 | `snow/press.hpp` | `press`: an imprint (capsule, disc, box, ellipse; a load or a sink; how much is thrown aside) and what it left | `ge explain press` |
 | `snow/reference.hpp` | A typical ski, boot, tyre, tread and body, with the numbers they are pressed with | `ge explain reference_contact` |
+| `snow/contact.hpp` | The contact laws for any machine: sink (Bekker), compaction and bulldozing drag, traction against slip, glide and tyre friction, planing; one row of numbers a kind | `ge explain column_sink` |
 | `snow/kinds.hpp` | The named snows (powder, settled, wind-packed, groomed, spring, crust, machine, ice) | `ge explain kind_row` |
 | `snow/snapshot.hpp` | `save` and `load`: a layer's tiles as bytes, for a save game or a late joiner | `ge explain save` |
 

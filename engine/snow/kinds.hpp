@@ -4,8 +4,8 @@
 // partly packed and a groomed piste reads packed whatever its exact density; and no press packs a
 // kind past its cap (ice is the densest snow gets).
 //
-// The rows are starting values from the snow classification's density classes; M29b's contact
-// laws (Bekker's moduli, cohesion and friction) are added to these rows when they are built.
+// The rows are starting values from the snow classification's density classes; each kind's
+// contact numbers (Bekker's moduli, cohesion and friction, glide) are its row in contact.hpp.
 //
 // ge:summary The named snows and their loose, packed and cap densities; the packed share
 // ge:keywords snow kinds powder settled wind-packed groomed spring crust machine ice density

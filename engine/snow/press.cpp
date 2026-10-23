@@ -1,7 +1,7 @@
 // press: a contact's imprint in a snow layer (press.hpp).
 //
 // ge:summary press's implementation: targets under the outline, mass kept, the berm laid
-// ge:keywords snow press imprint berm compaction shape_u shape_area reach_density
+// ge:keywords snow press imprint berm compaction shape_u shape_area reach_density column_sink
 // ge:skill snow
 // ge:test tests/snow_press_test.cpp
 #include "snow/press.hpp"
@@ -12,12 +12,13 @@
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "core/num.hpp"
+#include "snow/contact.hpp"
 
 namespace ge::snow {
 
 namespace {
 
-// THE STARTING LAW: 350 kg/m3 at 10 kPa, 60 kg/m3 more each e-fold of pressure.
+// THE DENSITY A PRESSURE PACKS SNOW TO: 350 kg/m3 at 10 kPa, 60 kg/m3 more each e-fold.
 constexpr double kReachAt = 350;   // kg/m3
 constexpr double kReachPa = 1e4;   // Pa
 constexpr double kReachPerE = 60;  // kg/m3
@@ -178,6 +179,8 @@ Pressed press(Layer& layer, const Imprint& imp, double t) {
     reach = kBermFewest * pitch / g.half_width;
   const double kg = kMassUnit * pitch * pitch;  // a mass unit of one sample, kg
   const double sh = core::libm::sin(g.heading), ch = core::libm::cos(g.heading);
+  // Bekker's width is the true outline's narrower side, not the widened one's.
+  const double b = bearing_width(s.half_width, s.kind == ShapeKind::capsule ? 0 : s.half_length);
   const uint16_t minute = minute_of(t);
 
   // THE OUTLINE: every sample brought down to its target, the thrown mass summed.
@@ -197,8 +200,7 @@ Pressed press(Layer& layer, const Imprint& imp, double t) {
       if (by_sink) {
         target = cov.depth - imp.sink * ease;
       } else {
-        const double rho = reach_density(out.pressure * ease, kind_row(cov.kind).cap);
-        target = rho > cov.density ? cov.depth * cov.density / rho : cov.depth;
+        target = cov.depth - column_sink(cov.kind, cov.depth, cov.density, b, out.pressure * ease);
       }
       if (target < 0) target = 0;
       const auto target_mm = static_cast<uint16_t>(core::num::round(target * 1000));
@@ -233,7 +235,7 @@ Pressed press(Layer& layer, const Imprint& imp, double t) {
       kind = cell->kind;
       out.samples++;
       const double sunk = cov.depth - target_mm * 0.001;
-      if (u <= 0.5 && sunk > out.sink) out.sink = sunk;
+      if (sunk > out.sink) out.sink = sunk;
     }
   }
   out.thrown = static_cast<double>(thrown) * kg;

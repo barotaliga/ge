@@ -13,6 +13,7 @@ and the plan (rows M29a–M29l); this skill is how to work on it.
 | --- | --- |
 | `snow/kinds.hpp` | The named snows, their loose, packed and cap densities, the packed share |
 | `snow/layer.hpp/.cpp` | The layer: region, ground, cover, tiles of fixed-point cells, `sample`, `cell_for`, `mass_units` |
+| `snow/contact.hpp/.cpp` | The contact laws: a `ContactRow` a kind, Bekker's sink and its cap (`column_sink`), compaction and bulldozing, Mohr–Coulomb and Janosi traction, glide and tyre friction, planing |
 | `snow/press.hpp/.cpp` | `press`: targets from a sink or a pressure, mass kept, the berm, the imprint record |
 | `snow/reference.hpp` | The reference contacts (a carving and a skidding ski, a boot, a tyre, a tread, a body), `place` |
 | `snow/snapshot.hpp/.cpp` | `save`, `load`, `read_info`, `load_bare` (the format in the header) |
@@ -39,9 +40,13 @@ and the plan (rows M29a–M29l); this skill is how to work on it.
 - **Golden**: `tests/golden/snow_press.txt` (`GE_GOLDEN_WRITE=1 build/<preset>/tests/snow_press_test`
   rewrites it). A move is a behaviour change: say why in the PR with the `snow-press` table
   before and after.
-- **Labs**: `snow-press` (every contact on three snows: cross-sections, plans, the table) and
+- **Labs**: `snow-press` (every contact on three snows: cross-sections, plans, the table),
+  `snow-contact` (the laws charted for every kind: sink, traction, glide, drag) and
   `snow-field` (a patch crossed by everything: relief, density, tiles, the press's cost). Run
   them with `--tag=before` and `--compare=before` around any change here.
-- **What is next** is `docs/snow.md`'s rows: M29b replaces the starting pressure law
-  (`reach_density`) with the contact laws, M29c adds time, M29d folds stale tiles into a coarse
-  layer under a budget.
+- **A row is a fit, not a fact.** Settled snow's contact row is the published set; the rest are
+  fitted to one stated sink each (its comment). Moving a row moves `tests/golden/snow_contact.txt`
+  and the press golden: say what it was fitted to and put the `snow-contact` table before and
+  after in the PR.
+- **What is next** is `docs/snow.md`'s rows: M29c adds time, M29d folds stale tiles into a
+  coarse layer under a budget.

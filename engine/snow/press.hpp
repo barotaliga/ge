@@ -5,9 +5,10 @@
 // - THE TARGET: under every sample the outline covers, the depth the snow is pressed down to,
 //   measured from the UNTOUCHED cover there. Either the caller says how far its bottom stands
 //   under the untouched surface (`sink`: a physics that has its own law, the skier's planing),
-//   or the layer works it out from the pressure (`load` over `area`): the snow is compacted to
-//   the density that pressure reaches (`reach_density`), so the column stands as much lower as
-//   its mass is denser. Across the outline the target eases as 1 - u^wall (u: 0 on the axis, 1 at
+//   or the layer works it out from the pressure (`load` over `area`) with the contact laws
+//   (contact.hpp, `column_sink`): Bekker's sink for the outline's width, capped by what the
+//   column can compact before it reaches the density that pressure packs snow to
+//   (`reach_density`). Across the outline the target eases as 1 - u^wall (u: 0 on the axis, 1 at
 //   the edge), a round groove at wall 2, a square one at 10.
 // - MASS IS KEPT. A column above its target comes down to it. Of the snow cut away, the share
 //   `side_push` is THROWN ASIDE (a skid's band, a plough's bow wave, a tyre's spoil) and the rest
@@ -27,9 +28,8 @@
 // A press visits only the samples under its outline's box, and allocates only a tile it is the
 // first to touch (and a record past the reserve, never: they are dropped and counted).
 //
-// The pressure law here is the starting one (docs/snow.md § Contact): the density reached rises
-// with the log of the pressure, about 350 kg/m3 under a boot's 10 kPa, 480 under a tyre's 100;
-// M29b replaces it with the contact laws and holds this file's golden while it does.
+// The density a pressure packs snow to rises with the log of the pressure, about 350 kg/m3 under
+// a boot's 10 kPa and 480 under a tyre's 100; it is the cap on Bekker's sink, never the sink.
 //
 // ge:summary press: a contact's imprint in a snow layer, mass kept, the berm thrown, a record
 // ge:keywords snow press imprint footprint groove rut trench crater berm compaction mass-kept
@@ -75,11 +75,11 @@ struct Imprint {
 // roll press, a slide and a plough push, a dig throws all of it.
 double default_side_push(Motion m);
 
-// The density kg/m3 a pressure `pa` Pa compacts snow to (no denser than `cap`): the starting law.
+// The density kg/m3 a pressure `pa` Pa compacts snow to (no denser than `cap`).
 double reach_density(double pa, double cap);
 
 struct Pressed {
-  double sink = 0;       // m the target stands under the untouched surface on the axis
+  double sink = 0;       // m the deepest sample pressed stands under the untouched surface
   double pressure = 0;   // Pa
   double compacted = 0;  // kg pressed into the columns that stayed (each sample a cell square)
   double thrown = 0;     // kg thrown aside
