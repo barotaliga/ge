@@ -56,6 +56,11 @@ snap, a chatter or an event at the wrong moment is a ring or a grey line you can
 giving its runner an optional per-step callback and drawing through
 `engine/lab/series_charts.hpp` (`para_lab.cpp` is the pattern).
 
+**Anything that moves can jump.** A lab that follows an actor hands its track to
+`gl::find_teleports` (`engine/lab/teleport.hpp`) and reports it with `gl::report_teleports`
+(fail on it when the subject must never jump): a position set without its velocity, at a handoff
+or a respawn, is a row with its step and time instead of a hand-written metric.
+
 Then read `previews/<id>/index.md` (the contact sheet) and open the pictures it lists. Each
 picture's band says what it shows and what to look for, so check exactly that. Time a
 `bench` lab on `PRESET=release`, because a debug build times the sanitizers.

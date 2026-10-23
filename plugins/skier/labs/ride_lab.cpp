@@ -19,6 +19,7 @@
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
 #include "lab/series_charts.hpp"
+#include "lab/teleport.hpp"
 #include "skier/limits.hpp"
 #include "skier/scenarios.hpp"
 #include "skier/skis.hpp"
@@ -109,11 +110,13 @@ struct StepTrace {
                                             "tuck_in", "brake_in", "jump_in", "on_snow", "down"});
   std::vector<ge::lab::Mark> marks;
   std::vector<ge::lab::Band> bands;
+  std::vector<ge::lab::TrackSample> track;
   double flight_from = -1;
 
   void step(const sk::ScenarioStep& st) {
     const sk::SkierState& k = st.skier;
     const sk::SkierInput& in = st.input;
+    track.push_back({st.t, k.x, k.y, k.z, k.speed});
     ge::lab::add_row(
         s, {st.t, k.speed * 3.6, k.vy, k.y - (st.ground - k.sink), k.sink, k.packed, k.edge * kDeg,
             k.lean * kDeg, k.yaw_rate * kDeg, k.g_lat, k.tuck, in.steer, in.tuck, in.brake,
@@ -158,6 +161,7 @@ void chart_trace(ge::lab::Lab& lab, const sk::Scenario& sc, StepTrace& tr, doubl
       tr.bands,
       "Grey lines are the run's events (take-off, landing, a glance, the wipeout), grey bands "
       "flights."};
+  ge::lab::report_teleports(lab, k, ge::lab::find_teleports(tr.track));
   ge::lab::chart_series(
       lab, tr.s, out,
       {{"speed",

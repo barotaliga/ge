@@ -284,6 +284,12 @@ each)`), so the plugin needs nothing of the lab kit; the lab writes and draws th
 the scenario's before and after at the scale of a step: `--trace --tag=before`, change the code,
 `--trace --compare=before`, then `ge graph` both files.
 
+Under `--trace` each scenario also reports its **teleports** (`engine/lab/teleport.hpp`): every
+step where the actor moved farther than its speed carries it over the step (with a slack of 1.5
+and 5 cm), as `<id>.teleports` and a note a jump naming its step, its time and the two distances.
+A lab that follows anything that moves gets the same check from `find_teleports` and
+`report_teleports`, which can fail the lab when its subject must never jump.
+
 ```sh
 make lab LAB=para ARGS="--scenario=launch --trace"   # previews/para/launch.trace.tsv and its charts
 ```
