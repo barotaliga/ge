@@ -67,7 +67,10 @@ The engine exists to be fast (G2). Speed is proven by measurement.
 2. Memory: SoA for hot arrays, contiguous storage, no pointer chasing, reserve up
    front.
 3. Parallelism: only where the result does not depend on scheduling (per-pass
-   `prepare`, independent rows of a bake: `core::parallel_bands`). Never inside `step`.
+   `prepare`, independent rows of a bake: `core::parallel_bands`, on a persistent pool, so a
+   call costs microseconds; a grid that bakes in under about 5 µs on one thread still loses,
+   so pass `workers = 1` there, and `make lab LAB=parallel-cost` says where the line is).
+   Never inside `step`.
 4. SIMD: only with operations that are exact (add, mul, sqrt, compares, with no FMA). The
    x86 build already targets AVX2 (`ge_isa`, the `build` skill), so the compiler vectorises
    plain loops first; intrinsics only where a profile still points after that.

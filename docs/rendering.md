@@ -598,8 +598,12 @@ the ground, the trees, the figures, the particles, the flakes and the sky all se
 - the sky's light on a surface becomes the deck's (`sky_irradiance`: pi times its grey, the
   overhead share weighed as a level face sees it), with no direction but up: THE FLAT LIGHT;
 - the air under a deck scatters the deck's grey, not the sun's (`haze`), and a FOG or a FALL
-  closes every surface into the sky behind it at its visual range V (`exp(-3.912 d / V)`: 2 % of
-  a black target's contrast left at V); looking down, into the horizon's;
+  closes every surface into its VEIL at its visual range V (`exp(-3.912 d / V)`: 2 % of a black
+  target's contrast left at V). Droplets and flakes are far larger than light's wavelengths and
+  scatter every colour alike, so the veil is grey: a white face's light under the sun and sky,
+  dimmed to 0.85 (`veil_luminance`), never the clear air's blue. The sky is seen through a slab of
+  it 800 m deep over the eye (`veil_sky`), so through a thick fall the blue overhead is lost too,
+  and toward the horizon all of it;
 - the exposure keys a white face under a deck to 0.6 rather than 0.78, so a grey day's snow is a
   light grey, not a white-out.
 
@@ -637,8 +641,9 @@ and a storm's 2. The cloud volume itself is M8f3 (below).
 - THE PASS ("clouds", after the sky) is a full-screen triangle at the render resolution marching
   each pixel's ray, nearest layer first, up to what the depth target holds (28 steps through a
   heap, 10 through a sheet, a new offset every frame for TAA to resolve), laid over the HDR
-  target premultiplied. With no layer it is an empty pass. The quarter-resolution march with
-  reprojection (§ Sky, atmosphere and clouds) is a stop for the quality ladder (M8f4): on
+  target premultiplied. With no layer it is an empty pass. The quality ladder takes a share of
+  the steps (`Clouds::steps`, never under four) or draws no layer at all (§ The quality ladder);
+  the quarter-resolution march with reprojection (§ Sky, atmosphere and clouds) is still to come: on
   lavapipe at 1280 × 720 the full march costs 49 to 68 ms against an empty pass's 0.1, a CPU
   raster's number that only says the march is the frame's heaviest pass when the sky is broken.
 
@@ -844,12 +849,37 @@ runs), each with the crowd and without.
 
 ## The quality ladder
 
-The game's settings rows (resolution scale, terrain reach, shadows, vegetation detail,
-particles, clouds, anti-aliasing) are one data table in the app. Each row's stops map to
-pass parameters and pipeline `override` constants, never to code paths. An automatic
-preset measures a few frames per pass with timestamp queries and chooses the stops
-that fit the display's budget. Each stop's price comes from a measured table that the
-benchmark lab fills.
+The picture's settings are one table of ROWS in the game (Fall Line's:
+`games/fall_line/app/ladder.hpp`), each a ladder of STOPS, cheapest first. A stop maps to the
+frame's parameters (`FrameOptions`: the render scale, the shadow maps' size, the trail maps'
+texels, the flakes, the cloud march's share of its steps), never to a code path. Each row is its
+own bill, because a machine can be short of pixels and rich in passes, or the other way round.
+
+- **The price table.** Every stop carries a COST, the ms it adds to a frame over its row's
+  cheapest on the table's reference machine, and a WORTH, what it adds to the look on one
+  0–100 scale for every row (a judgement, argued beside the row in `ladder.cpp`). The `ladder`
+  lab's `--price` fills the costs: the top picture, every row lowered alone to each of its stops,
+  and the floor (every row at its cheapest), each timed from the chase camera under a flurry
+  (the dearest sky: heaps under a sheet, and the fall). On a software adapter each picture is
+  timed in rounds, keeping its least median.
+- **The fit** (`render/ladder.hpp`, generic). `fit_ladder` takes the picture of most worth whose
+  cost fits the budget over the floor: a knapsack with a choice in each row, solved exactly in
+  hundredths of a millisecond. A greedy walk would hide a dear stop that matters behind a cheap
+  one that does not, and could hand a slower machine more of the look than a faster one. A row
+  marked to go first (Fall Line's RESOLUTION, since a softer picture loses nothing in it) steps
+  down before any other row loses a stop.
+- **One machine is the reference scaled.** `machine_scale` reads a machine as the reference made
+  faster or slower: its timed frame at the picture it drew, over what the table says that
+  picture costs. The automatic preset (`auto_picture`) fits, applies, times again and fits again,
+  so the second reading is of the neighbourhood the answer lies in.
+- **The presets** (low, medium, high, top) are fixed picks a player can choose by name; the
+  automatic preset is the fit at the display's budget.
+
+The table's costs today are the software adapter's (lavapipe at 1280 × 720), whose ratios are a
+CPU raster's: the reference machine's prices (the Mac, § Where it is developed) replace them.
+What the ladder does not have yet: a terrain reach row (it needs the mist that hides a shorter
+view), the cloud's quarter-resolution march with reprojection, and changing a stop without
+making the frame again.
 
 ## Measurement
 

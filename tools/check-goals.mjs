@@ -5,7 +5,8 @@
 //   - every row of the milestone table has docs/goals/<row>.md, and every such file a row;
 //   - the file's first line is `Status: done`, `Status: in progress` or `Status: open`;
 //   - the row's Status cell is exactly `[<word>](goals/<row>.md)` with the file's word.
-// docs/goals/ge-backlog.md (the `ge` wishes, one a line) belongs to no row.
+// docs/goals/ge-backlog.md (the `ge` wishes, one a line) and docs/goals/reserved.md (rows promised
+// before any branch carries them, read by `ge goals free`) belong to no row.
 //
 // ge:summary Checks the roadmap: each milestone row's status file exists and agrees with the table
 // ge:keywords goals roadmap milestones status check table status-file
@@ -15,7 +16,7 @@ import { join } from "node:path";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 const WORDS = ["done", "in progress", "open"];
-const FREE = new Set(["ge-backlog.md"]);
+const FREE = new Set(["ge-backlog.md", "reserved.md"]);
 const errors = [];
 const err = (msg) => errors.push(msg);
 
