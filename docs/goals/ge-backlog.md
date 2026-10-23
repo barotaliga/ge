@@ -18,6 +18,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 ## Before and after across refs
 
 - `ge bench ab --base=<ref>` (or `--ab <binA> <binB>`: two builds interleaved N times with statistics, since a container's timings wander by about 5%) and `ge compare <ref>` (both builds, one table)
+- `ge bench --ab=<option>` (one frame option against another in the same build, interleaved rounds, the least median kept: a quality ladder priced without a bespoke loop)
 - `ge profile --compare` (per zone and per pass, GPU and CPU deltas, outliers flagged)
 - `ge digest <lab> --why` (which table row and which columns moved when a digest did)
 - `ge lab diff` for a lab's tables and `--stash`
