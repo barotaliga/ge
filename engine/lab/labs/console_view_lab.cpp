@@ -74,7 +74,18 @@ void draw(Picture& p, const con::ConsoleView& v) {
   const int cover = static_cast<int>(v.cover() * p.height);
   if (cover > 0) {
     const int rows = std::max(1, (cover - kRow - 2 * kMargin) / kRow);
-    ge::lab::fill_rect(p, 0, 0, w, cover, {16, 20, 28, 215});
+    // The background: con_bgtop to con_bgbottom down the panel at con_bgalpha (no image here).
+    const con::Background bg = v.background();
+    const auto a = static_cast<uint8_t>(bg.alpha * 255 + 0.5);
+    for (int y = 0; y < cover; ++y) {
+      const double t = cover > 1 ? static_cast<double>(y) / (cover - 1) : 0;
+      auto mix = [t](uint8_t top, uint8_t bottom) {
+        return static_cast<uint8_t>(top + (bottom - top) * t + 0.5);
+      };
+      ge::lab::fill_rect(
+          p, 0, y, w, 1,
+          {mix(bg.top.r, bg.bottom.r), mix(bg.top.g, bg.bottom.g), mix(bg.top.b, bg.bottom.b), a});
+    }
     ge::lab::fill_rect(p, 0, cover - 2, w, 2, {250, 220, 90});
     const auto page = v.page(rows);
     // The newest line sits just over the input line; the page grows up from it.
@@ -108,7 +119,7 @@ void play_session(con::Console& c, con::ConsoleView& v) {
                  .help = "the share of the glow round bright light"});
   c.cvars().add(
       {.name = "sv_maxclients", .fallback = "16", .flags = con::kServer | con::kServerInfo});
-  c.execute("name Niclas; con_chat 1");
+  c.execute("name Niclas; con_chat 1; con_bgtop 22304a; con_bgbottom 0a0d14; con_bgalpha 0.88");
   auto line = [&](con::LineKind k, const char* text) {
     v.frame(0.5);
     v.add(k, text);
@@ -155,10 +166,12 @@ void run(ge::lab::Lab& lab) {
   const std::vector<std::pair<std::string, std::string>> inputs = {
       {"size", std::to_string(w) + "x" + std::to_string(h)},
       {"con_height", "0.5"},
-      {"con_speed", "3"}};
+      {"con_speed", "3"},
+      {"con_bg", "22304a to 0a0d14 at 0.88"}};
   lab.shot({"down", "THE CONSOLE DOWN",
-            "The tilde pressed: the console covers con_height of the screen over the game, its "
-            "scrollback above the input line, which holds a half-typed /sv_ma.",
+            "The tilde pressed: the console covers con_height of the screen over the game on a "
+            "gradient from con_bgtop to con_bgbottom, its scrollback above the input line, which "
+            "holds a half-typed /sv_ma.",
             "server lines yellow, chat green, team cyan, nearby pale green, whispers magenta, "
             "events orange, typed "
             "commands white after ], output grey; the newest line just over the input line",

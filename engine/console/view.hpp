@@ -21,12 +21,15 @@
 // THE VIEW HOLDS NO PIXELS: it is the model a renderer draws (the 2D layer's text pass in the
 // app, the CPU raster in the `console` lab), so it is tested and pictured headless. Its cvars:
 // con_height (the share of the screen it covers), con_speed (screens a second it slides),
-// con_lines (the scrollback kept), con_notifylines, con_notifytime, con_chat.
+// con_lines (the scrollback kept), con_notifylines, con_notifytime, con_chat, and what the panel
+// is drawn on: con_bgtop and con_bgbottom (a gradient's colours, "rrggbb"), con_bgalpha and
+// con_bgimage (a picture over the gradient).
 //
 // ge:summary The drop-down console: scrollback by kind, the input line, history, / commands, chat
 // ge:keywords console view drop-down tilde backquote toggleconsole scrollback history input-line
 // ge:keywords chat say say_team say_prox proximity whisper message server event notify
 // ge:keywords completion tab con_height con_chat con_speed con_lines slash-command
+// ge:keywords background gradient colour con_bgtop con_bgbottom con_bgalpha con_bgimage
 // ge:skill console
 // ge:test tests/console_view_test.cpp
 #pragma once
@@ -68,6 +71,25 @@ enum class ChatTo : uint8_t { all, team, one, nearby };
 // Sends a chat line: `to` is the nick for ChatTo::one. True when it went (a game with a network
 // prints it when the server echoes it back); false prints the reason.
 using ChatSender = std::function<bool(ChatTo to, std::string_view nick, std::string_view text)>;
+
+// A colour, 0..255 a channel.
+struct Rgb {
+  uint8_t r = 0, g = 0, b = 0;
+  bool operator==(const Rgb&) const = default;
+};
+
+// "rrggbb" or "#rrggbb" (case free) as a colour; false when it is not one.
+bool parse_rgb(std::string_view text, Rgb& out);
+
+// What the panel is drawn on: a vertical gradient from `top` to `bottom` (the same colour: a flat
+// fill) at `alpha`, under `image` when one is named (a file the game's assets hold; the gradient
+// shows where it is transparent and while it loads). From con_bgtop, con_bgbottom, con_bgalpha
+// and con_bgimage; a colour cvar that is not a colour draws its default.
+struct Background {
+  Rgb top{16, 20, 28}, bottom{16, 20, 28};
+  double alpha = 0.85;
+  std::string image;
+};
 
 // The keys the input line answers, besides typed text.
 enum class EditKey : uint8_t {
@@ -120,6 +142,9 @@ class ConsoleView {
   size_t cursor() const { return cursor_; }
   const std::vector<std::string>& history() const { return history_; }
 
+  // What the panel is drawn on (the con_bg* cvars).
+  Background background() const;
+
   // The game's chat; none: a line is shown as said by `name`.
   void set_chat(ChatSender send) { chat_ = std::move(send); }
 
@@ -142,6 +167,8 @@ class ConsoleView {
   int32_t keep_ = 1024, notify_lines_ = 4;
   double notify_time_ = 4;
   bool chat_default_ = false;
+  std::string bg_top_ = "10141c", bg_bottom_ = "10141c", bg_image_;
+  double bg_alpha_ = 0.85;
   ChatSender chat_;
 };
 

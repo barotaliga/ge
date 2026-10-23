@@ -79,6 +79,31 @@ ConsoleView::ConsoleView(Console& c) : c_(c) {
           .help = "1: a line typed without a / is said to everyone (a multiplayer game sets it)",
           .kind = CvarKind::boolean},
          &chat_default_);
+  v.bind({.name = "con_bgtop",
+          .fallback = "10141c",
+          .flags = kArchive,
+          .help = "the panel's colour at its top, rrggbb",
+          .kind = CvarKind::text},
+         &bg_top_);
+  v.bind({.name = "con_bgbottom",
+          .fallback = "10141c",
+          .flags = kArchive,
+          .help = "the panel's colour at its bottom, rrggbb (con_bgtop's: a flat fill)",
+          .kind = CvarKind::text},
+         &bg_bottom_);
+  v.bind({.name = "con_bgalpha",
+          .fallback = "0.85",
+          .flags = kArchive,
+          .help = "how much of the game the panel hides, 0 (none) to 1 (all)",
+          .min = 0,
+          .max = 1},
+         &bg_alpha_);
+  v.bind({.name = "con_bgimage",
+          .fallback = "",
+          .flags = kArchive,
+          .help = "a picture drawn over the gradient, a path in the game's files (\"\": none)",
+          .kind = CvarKind::text},
+         &bg_image_);
   if (v.find("name") == nullptr) {
     v.add({.name = "name",
            .fallback = "player",
@@ -113,6 +138,32 @@ ConsoleView::ConsoleView(Console& c) : c_(c) {
                   }
                   say(ChatTo::one, a[1], a.rest(1));
                 });
+}
+
+bool parse_rgb(std::string_view text, Rgb& out) {
+  if (!text.empty() && text[0] == '#') text.remove_prefix(1);
+  if (text.size() != 6) return false;
+  uint8_t ch[3] = {};
+  for (int i = 0; i < 6; ++i) {
+    const char x = text[static_cast<size_t>(i)];
+    int d = -1;
+    if (x >= '0' && x <= '9') d = x - '0';
+    if (x >= 'a' && x <= 'f') d = x - 'a' + 10;
+    if (x >= 'A' && x <= 'F') d = x - 'A' + 10;
+    if (d < 0) return false;
+    ch[i / 2] = static_cast<uint8_t>(ch[i / 2] * 16 + d);
+  }
+  out = {ch[0], ch[1], ch[2]};
+  return true;
+}
+
+Background ConsoleView::background() const {
+  Background b;
+  parse_rgb(bg_top_, b.top);
+  parse_rgb(bg_bottom_, b.bottom);
+  b.alpha = bg_alpha_;
+  b.image = bg_image_;
+  return b;
 }
 
 double ConsoleView::cover() const { return drop_ * height_; }

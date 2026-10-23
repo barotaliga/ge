@@ -86,6 +86,22 @@ TEST(say_prox_shown_locally) {
   CHECK(v.lines().back().text == "(near) ada: over here");
 }
 
+// The panel's background: a flat colour by default, a gradient and an image from cfg lines.
+TEST(background_from_cvars) {
+  Console c;
+  ConsoleView v(c);
+  Background b = v.background();
+  CHECK(b.top == b.bottom && b.image.empty());
+  c.execute("con_bgtop #203048; con_bgbottom 0a0c10; con_bgalpha 0.6; con_bgimage gfx/conback.png");
+  b = v.background();
+  CHECK(b.top == (Rgb{0x20, 0x30, 0x48}) && b.bottom == (Rgb{0x0a, 0x0c, 0x10}));
+  CHECK(b.alpha == 0.6 && b.image == "gfx/conback.png");
+  c.execute("con_bgbottom blue");  // not a colour: the default
+  CHECK(v.background().bottom == (Rgb{0x10, 0x14, 0x1c}));
+  Rgb x;
+  CHECK(!parse_rgb("12345", x) && !parse_rgb("gg0000", x) && parse_rgb("#FFffFF", x));
+}
+
 TEST(editing_history_and_completion) {
   Console c;
   ConsoleView v(c);

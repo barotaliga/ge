@@ -200,6 +200,10 @@ Its cvars:
 | `con_notifylines` | 4 | the newest lines shown at the top while it is closed (0: none) |
 | `con_notifytime` | 4 | how long a notify line stays, s |
 | `con_chat` | 0 | 1: a line typed without a `/` is said to everyone |
+| `con_bgtop` | 10141c | the panel's colour at its top, `rrggbb` |
+| `con_bgbottom` | 10141c | the panel's colour at its bottom (the same as the top: a flat fill) |
+| `con_bgalpha` | 0.85 | how much of the game the panel hides, 0 to 1 |
+| `con_bgimage` | (none) | a picture drawn over the gradient, a path in the game's files |
 
 The view (`engine/console/view.hpp`) is a model that holds no pixels: the app's 2D layer draws
 it, and the `console` lab draws it on the CPU (`make lab LAB=console`).
