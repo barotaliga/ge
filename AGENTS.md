@@ -37,6 +37,7 @@ updates that row's status file (`docs/goals/<row>.md`) in its PR.
 | [`docs/input.md`](docs/input.md) | Input devices: the layers, the model, actions and bindings, raw mouse, wheels and force feedback, gamepads, touch, players, recording, the labs and the decisions |
 | [`docs/camera.md`](docs/camera.md) | The camera: the pose, the followers, the subject, the rigs (first person, boom, mounted, orbit, planted, free), the modifiers, the world's queries, the transitions, the stack, the cvars, the labs and the research |
 | [`docs/movement.md`](docs/movement.md) | Character movement for any genre: the knobs and presets, the step's model (friction, the acceleration rule and strafe jumping, jumps, steps, slopes, crouch, slide), the world's trace, cvars, what a camera reads, water, the labs |
+| [`docs/levels.md`](docs/levels.md) | The level formats: the engine's own room format (rooms in a few bytes, surfaces and caves grown from each room's seed, the text form an agent writes) and the classic BSP families |
 | [`docs/networking.md`](docs/networking.md) | Multiplayer: what each kind of game asks of the network, the layers of `engine/net`, the decisions, the wire format, the simulated network, the tools, and Fall Line's pilot (M17) |
 | [`docs/publishing.md`](docs/publishing.md) | What a release is (GitHub Releases + GitHub Packages), how a game consumes it, changeset fragments, cutting a release, the credentials |
 | [`docs/shooters-edge.md`](docs/shooters-edge.md) | The second game, Shooter's Edge (M18, after Fall Line): the compatibility contract, the clean room, the homes, the protocols, the labs and the `ge` commands it needs |
@@ -256,6 +257,7 @@ characters.
 | `plugins/snowmobile/` | The snowmobile on the snow (`ge::snowmobile`): the spec, the step, the body, the drive, the bot's hands, the scenarios | `snowmobile` |
 | `plugins/helicopter/` | The helicopter in the air and on the snow (`ge::helicopter`): the spec, the step, the bot's hands, the downwash, the scenarios | `helicopter` |
 | `plugins/paramotor/` | The powered speed wing a skier flies (`ge::paramotor`): the spec, the wing on its lines, the engine, the acro, the bot's hands, the scenarios | `paramotor` |
+| `plugins/rooms/` | The engine's own level format (`ge::rooms`, `docs/levels.md`): rooms, openings and solids in a few bytes, the .gelv bytes and text form, rooms grown from seeds | `rooms` |
 | `games/fall_line/sim/` | Fall Line's own simulation (`fall_line_sim`): the state, the step, the course, the free ride and lifts, the bot and the field, the headless run, the hunt, the play contract | `sim` |
 | `games/fall_line/sound/` | Fall Line's sound (`fall_line_sound`, no GPU): the bank, the route, the listener, the mix | `audio`, `sim` |
 | `games/fall_line/labs/` | Fall Line's labs, the headless ones and the GPU's | `sim`, `labs`, `audio` |
@@ -339,6 +341,7 @@ and the directories agree.
 | `snowmobile` | `plugins/snowmobile`: the snowmobile on the snow (`step_sled`, the body, the drive), what throws its rider, the bot's hands on it, the sled scenarios |
 | `helicopter` | `plugins/helicopter`: the helicopter (`step_heli`, the rotor, the disc, the landing, the strikes), the downwash, the bot's hands on it, the heli scenarios |
 | `paramotor` | `plugins/paramotor`: the powered speed wing a skier flies (`step_para`, the wing on its lines, the engine, the fold, the cut-away), the air it flies in, the bot's hands on it, the para scenarios |
+| `rooms` | `plugins/rooms`: the engine's own level format (rooms, openings, solids, materials with a texture reference and a relief), its bytes (.gelv) and text form, growing rooms from their seeds (rock, crag, stones, ashlar, tiles, planks, corrugated, dents; caves by surface nets), the `rooms` lab |
 | `sim` | `games/fall_line/sim`: `create_game`, the step, the bot, the headless sim CLI, the run clock |
 | `platform` | `engine/platform`: SDL3, the window, input, the gamepad, the audio device, files |
 | `move` | `engine/move`: a moving character's knobs, presets and step (ground and air acceleration, friction, jumps, strafe jumping, steps, slopes, crouch, slide, flight), the trace a world answers, the box world, the strafer, the scenarios, the `move-*` labs; the M28 rows |

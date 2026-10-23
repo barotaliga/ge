@@ -342,7 +342,8 @@ void draw_shape(Picture& pic, int x0, int y0, int w, int h, const ViewCam& cam, 
   }
 
   // Each vertex lit: a key over the right shoulder from the front, a cool fill, an ambient.
-  const double key[3] = {0.45, 0.75, 0.48}, fill_l[3] = {-0.6, 0.2, -0.5};
+  const double* key = st.key;
+  const double fill_l[3] = {-0.6, 0.2, -0.5};
   const size_t n = s.part.size();
   std::vector<double> sx(n), sy(n), si(n);
   std::vector<uint8_t> seen(n);
