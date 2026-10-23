@@ -25,13 +25,14 @@ uint64_t draw64(core::Rng& rng) {
 }
 
 // An ask to the server, padded to the biggest answer (rendezvous.hpp: no amplification).
-void ask(Node& node, const Address& to, Kind kind, uint64_t a, uint64_t b, bool two,
-         int64_t now_us) {
+void ask(Node& node, const Address& to, Kind kind, uint64_t a, uint64_t b, bool two, int64_t now_us,
+         uint16_t port = 0) {
   uint8_t out[kMaxSize];
   Writer w = make_writer(out, sizeof out);
   write_start(w, kind);
   write_u64(w, a);
   if (two) write_u64(w, b);
+  if (port) write_u16(w, port);
   write_pad_to(w, kMaxSize);
   transport_send(*node.transport, to, out, w.size, now_us);
 }
@@ -183,7 +184,7 @@ void reach_host_update(ReachHost& h, int64_t now_us) {
   }
   const bool due = !h.registered || now_us - h.last_register_us >= h.config.register_us;
   if (due && now_us - h.last_ask_us >= h.config.ask_us) {
-    ask(node, h.config.rendezvous, kRegister, h.config.session, 0, false, now_us);
+    ask(node, h.config.rendezvous, kRegister, h.config.session, 0, false, now_us, h.forwarded_port);
     h.last_ask_us = now_us;
     h.stats.asks++;
   }
@@ -207,6 +208,15 @@ void reach_host_update(ReachHost& h, int64_t now_us) {
     h.introduced[kept++] = in;
   }
   h.introduced.resize(kept);
+}
+
+void reach_host_forward(ReachHost& h, uint16_t port, int64_t now_us) {
+  if (h.forwarded_port == port) return;
+  h.forwarded_port = port;
+  // Registered again at once, so the server introduces clients by the forwarded port from now.
+  h.registered = false;
+  h.last_ask_us = kLongAgo;
+  (void)now_us;
 }
 
 void reach_client_init(ReachClient& c, const ReachConfig& config, Node& node) {
