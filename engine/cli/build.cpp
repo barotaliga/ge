@@ -11,9 +11,11 @@
 #include <cstdlib>
 #include <regex>
 #include <system_error>
+#include <thread>
 
 #include "cli/doctor.hpp"
 #include "cli/json.hpp"
+#include "cli/reach.hpp"
 
 #ifndef _WIN32
 #include <sys/wait.h>
@@ -314,14 +316,68 @@ Outcome run_build(const BuildOptions& o) {
   return out;
 }
 
-Outcome run_test(const BuildOptions& o, const std::string& filter) {
+Outcome run_test(const BuildOptions& o, const std::string& filter, const std::string& affected,
+                 bool list) {
   Outcome out;
-  if (!build_step(o, out, filter)) return out;
+  std::string pick = filter;
+  std::vector<std::string> picked;
+  size_t of = 0;
+  if (!affected.empty()) {
+    if (!filter.empty()) {
+      out.findings.push_back({Severity::error, "--affected and --filter together", "",
+                              "pick the tests one way: what the change reaches (--affected) or "
+                              "by name (--filter=<regex>)"});
+      out.exit = 2;
+      return out;
+    }
+    const fs::path log = log_path(o, "ge-build");
+    if (!configure(o, log, out)) return out;
+    const fs::path build = o.repo / "build" / o.preset;
+    const std::vector<std::string> tests = tests_matching(o, ".", log);
+    of = tests.size();
+    Reach reach;
+    if (!change_reach(o.repo, build, affected, log, reach)) {
+      out.findings.push_back({Severity::warn, "no merge base with " + affected + "; ran every test",
+                              "",
+                              "fetch it (`git fetch origin main`, or depth 0 in a shallow "
+                              "clone), or name the base: `ge test --affected --base=<ref>`"});
+    } else {
+      picked = pick_affected(tests, reach.targets, reach.changed);
+      if (picked.empty()) {
+        out.result =
+            json_obj({{"preset", json_str(o.preset)},
+                      {"total", json_num(0)},
+                      {"failed", json_num(0)},
+                      {"changed", json_num(static_cast<long long>(reach.changed.size()))}});
+        out.summary = "no test is reached by the " + std::to_string(reach.changed.size()) +
+                      " file(s) changed since " + affected;
+        out.next = "ge test runs them all";
+        return out;
+      }
+      if (list) {
+        std::vector<std::string> names;
+        names.reserve(picked.size());
+        for (const std::string& t : picked) names.push_back(json_str(t));
+        out.result = json_obj({{"base", json_str(affected)}, {"tests", json_arr(names)}});
+        std::string text;
+        for (const std::string& t : picked) text.append(t).append("\n");
+        out.summary = std::to_string(picked.size()) + " of " + std::to_string(of) +
+                      " test(s) reached by the change since " + affected + ":\n" + text;
+        out.next = "ge test --affected runs them";
+        return out;
+      }
+      pick = "^(";
+      for (size_t k = 0; k < picked.size(); k++) pick.append(k ? "|" : "").append(picked[k]);
+      pick += ")$";
+    }
+  }
+  if (!build_step(o, out, pick)) return out;
   const fs::path log = log_path(o, "ge-test");
   std::error_code ec;
   fs::remove(log, ec);
-  std::string cmd = "ctest --preset " + o.preset;
-  if (!filter.empty()) cmd += " -R \"" + filter + "\"";
+  std::string cmd = "ctest --preset " + o.preset + " -j " +
+                    std::to_string(std::max(1u, std::thread::hardware_concurrency()));
+  if (!pick.empty()) cmd += " -R \"" + pick + "\"";
   const Ran r = run_logged(cmd, log);
   static const std::regex kTotals(R"((\d+)% tests passed, (\d+) tests? failed out of (\d+))");
   std::smatch m;
@@ -342,6 +398,10 @@ Outcome run_test(const BuildOptions& o, const std::string& filter) {
                          {"failed", json_num(failed)},
                          {"log", json_str(rel_path(o.repo, log))}});
   out.summary = std::to_string(total) + " test(s) passed";
+  if (!picked.empty()) {
+    out.summary = std::to_string(total) + " of " + std::to_string(of) +
+                  " test(s), those the change since " + affected + " reaches, passed";
+  }
   out.next = "ge check";
   return out;
 }

@@ -252,9 +252,25 @@ int node_connect(Node& node, const Address& to, int64_t now_us) {
   return slot;
 }
 
+bool node_retarget(Node& node, int peer, const Address& to, int64_t now_us) {
+  if (peer < 0 || peer >= static_cast<int>(node.peers.size())) return false;
+  Peer& p = node.peers[peer];
+  if (!p.outgoing || (p.state != PeerState::requesting && p.state != PeerState::responding))
+    return false;
+  p.state = PeerState::requesting;
+  p.address = to;
+  p.cookie = 0;
+  p.started_us = now_us;
+  p.last_try_us = now_us;
+  send_handshake(node, p, PacketType::request, {p.salt, 0, 0, 0, 0}, now_us);
+  return true;
+}
+
 void node_update(Node& node, int64_t now_us) {
   node.events.clear();
   node.event_bytes.clear();
+  node.foreign.clear();
+  node.foreign_bytes.clear();
   Address from;
   while (true) {
     const int n = transport_receive(*node.transport, node.buffer, sizeof node.buffer, from, now_us);
@@ -264,6 +280,11 @@ void node_update(Node& node, int64_t now_us) {
     PacketType type{};
     if (!read_packet_start(r, protocol, type) || protocol != node.config.protocol) {
       node.stats.foreign++;
+      if (node.config.keep_foreign) {
+        node.foreign.push_back(
+            {from, static_cast<uint32_t>(node.foreign_bytes.size()), static_cast<uint32_t>(n)});
+        node.foreign_bytes.insert(node.foreign_bytes.end(), node.buffer, node.buffer + n);
+      }
       continue;
     }
     if (type != PacketType::payload) {

@@ -23,7 +23,7 @@ is **Fall Line**, a downhill skiing game, which stays in the tree as the demo ga
 `plugins/<name>/` for any game of that kind to link, and only Fall Line's own is in
 `games/fall_line/` ([`docs/architecture.md`](docs/architecture.md) § Plugins). **The goal spec and the roadmap are
 [`docs/goals.md`](docs/goals.md).** Every task serves one of its milestone rows and
-updates that row's Status in its PR.
+updates that row's status file (`docs/goals/<row>.md`) in its PR.
 
 | Doc | What it holds |
 | --- | --- |
@@ -112,14 +112,14 @@ porting ends, and nothing outside it may depend on it except `make golden`.
 - **GREEN, THEN MERGE** (G7). CI must pass on every row. A PR you open is yours to drive
   to green, and you merge it (squash) once it is green. Never skip or weaken a test to
   get there.
-- **WHEN A TASK IS DONE, NAME THE NEXT STEP.** Update the roadmap row in
-  `docs/goals.md`, then name the next open milestone row as the follow-up.
+- **WHEN A TASK IS DONE, NAME THE NEXT STEP.** Update the roadmap row's status file
+  (`docs/goals/<row>.md`), then name the next open milestone row as the follow-up.
 - **SAY WHAT `ge` LACKED.** `ge` is the agent's whole interface (G6), so it grows from what
   agents miss. When a task would have been easier with a `ge` command or flag that does not
   exist (to build, debug, inspect, measure or optimise), say so in the PR description under
   **ge wishlist** and to whoever directs the work: the command, what it would answer, and the
   steps it would have saved. Check `ge help` and the open rows in `docs/goals.md` first, and
-  add a wish that recurs to the `ge` backlog row there.
+  add a wish that recurs to `docs/goals/ge-backlog.md`, one line under its group.
 - **SKILLS LEARN.** Read each loaded skill's lessons before the first edit, and before the
   commit record what the session learned, fix what the skill got wrong, and promote what
   is always true (the `skill-reflection` skill). Lessons ship in the same PR as the work.
@@ -332,4 +332,4 @@ and the directories agree.
 | `perf` | Any optimisation, a benchmark, a profile, a cost claim |
 | `agent-interface` | Diagnostics wording, consumer skills, the `ge` CLI (M12) |
 | `bots` | Anything a bot decides: `engine/ai`, the decision record every bot writes, `Run::trace`, `ge why`, making a bot more human, paths and thinking on a schedule (M16) |
-| `net` | `engine/net`: multiplayer networking: sockets, the simulated network and its conditions, captures, the wire format, connections and channels, nodes up to 32, sessions (lobby, teams, chat, kick, reconnect), LAN discovery, fake traffic, the `net-link` and `net-session` labs; the M17 plan |
+| `net` | `engine/net`: multiplayer networking: sockets, the simulated network and its conditions, captures, the wire format, connections and channels, nodes up to 32, sessions (lobby, teams, chat, kick, reconnect), LAN discovery, NAT traversal (STUN, the rendezvous, hole punching, the relay), fake traffic, the `net-link`, `net-session` and `net-reach` labs; the M17 plan |

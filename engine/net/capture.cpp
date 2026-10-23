@@ -32,27 +32,17 @@ void put32le(std::vector<uint8_t>& b, uint32_t v) {
 // The IP bytes a capture writes for an address: a simulated node in 198.18.0.0/15.
 void ip_of(const Address& a, uint8_t out[16]) {
   if (a.family == Family::sim) {
-    const uint32_t n = sim_node(a);
-    out[0] = 198;
-    out[1] = static_cast<uint8_t>(18 + ((n >> 16) & 1));
-    out[2] = static_cast<uint8_t>(n >> 8);
-    out[3] = static_cast<uint8_t>(n);
+    sim_to_ipv4(a, out);
     return;
   }
   for (int i = 0; i < 16; i++) out[i] = a.bytes[i];
 }
 
 Address address_of(const uint8_t* ip, bool v6, uint16_t port) {
+  if (!v6) return ipv4_or_sim(ip, port);
   Address a;
-  if (v6) {
-    a.family = Family::ipv6;
-    for (int i = 0; i < 16; i++) a.bytes[i] = ip[i];
-  } else if (ip[0] == 198 && (ip[1] & 0xfe) == 18) {
-    a = sim_address(static_cast<uint32_t>((ip[1] & 1) << 16 | ip[2] << 8 | ip[3]), 0);
-  } else {
-    a.family = Family::ipv4;
-    for (int i = 0; i < 4; i++) a.bytes[i] = ip[i];
-  }
+  a.family = Family::ipv6;
+  for (int i = 0; i < 16; i++) a.bytes[i] = ip[i];
   a.port = port;
   return a;
 }

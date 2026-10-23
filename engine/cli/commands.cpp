@@ -47,6 +47,9 @@ constexpr FlagSpec kBuildFlags[] = {kPreset, kEngine, kRepo};
 constexpr FlagSpec kTestFlags[] = {
     kPreset,
     {"filter", "<regex>", "only the tests whose names match, and only their targets built"},
+    {"affected", "", "only the tests the change since --base reaches, and only their targets"},
+    {"base", "<ref>", "with --affected, the ref the change is since (default origin/main)"},
+    {"list", "", "with --affected, name the tests and run nothing"},
     kEngine,
     kRepo};
 constexpr FlagSpec kLabFlags[] = {

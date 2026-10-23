@@ -167,7 +167,11 @@ Outcome run(const Args& a) {
                    has_flag(a, "dry-run"));
   }
   if (name == "build") return run_build(build_options(a));
-  if (name == "test") return run_test(build_options(a), flag_value(a, "filter"));
+  if (name == "test") {
+    const std::string base = has_flag(a, "base") ? flag_value(a, "base") : "origin/main";
+    return run_test(build_options(a), flag_value(a, "filter"), has_flag(a, "affected") ? base : "",
+                    has_flag(a, "list"));
+  }
   if (name == "check") return run_check(build_options(a));
   if (name == "lab sweep") {
     SweepOptions sweep;

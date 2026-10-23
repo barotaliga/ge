@@ -33,6 +33,11 @@ Address loopback_v4(uint16_t port);
 // A node of the simulated network: `node` is its index there, `port` its socket on it.
 Address sim_address(uint32_t node, uint16_t port);
 uint32_t sim_node(const Address& a);
+// A simulated node written as IPv4, in 198.18.0.0/15 (the benchmarking range, never routed): how
+// a capture and a STUN answer carry it. Nodes 0 to 2^17 - 1.
+void sim_to_ipv4(const Address& a, uint8_t out[4]);
+// The reverse: an IPv4 in that range is the simulated node, any other an IPv4 address.
+Address ipv4_or_sim(const uint8_t ip[4], uint16_t port);
 
 // "1.2.3.4:5", "[::1]:5", "sim:3:5"; false when the text is none of them.
 bool parse_address(std::string_view text, Address& out);

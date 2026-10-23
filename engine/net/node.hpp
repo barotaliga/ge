@@ -52,6 +52,9 @@ struct NodeConfig {
   int64_t connect_timeout_us = 5000000;  // a connect not accepted by then fails
   int64_t retry_us = 100000;             // a request or a response sent again
   uint64_t seed = 0;                     // the salts' and the secret's stream
+  // Keep the datagrams that are not this protocol's (a rendezvous's or a STUN server's answer on
+  // the node's own socket, reach.hpp) in `foreign` for the caller instead of only counting them.
+  bool keep_foreign = false;
 };
 
 enum class EventType : uint8_t { connected, disconnected, message, connect_failed };
@@ -95,6 +98,12 @@ struct NodeStats {
   uint64_t denied = 0;       // requests turned away (full or closed)
 };
 
+// A datagram on the node's socket that was not its protocol's (NodeConfig::keep_foreign).
+struct Foreign {
+  Address from;
+  uint32_t offset, size;  // its bytes in `foreign_bytes`
+};
+
 struct Node {
   NodeConfig config;
   Transport* transport = nullptr;
@@ -104,6 +113,8 @@ struct Node {
   std::vector<Peer> peers;
   std::vector<Event> events;
   std::vector<uint8_t> event_bytes;
+  std::vector<Foreign> foreign;  // this update's, when keep_foreign
+  std::vector<uint8_t> foreign_bytes;
   NodeStats stats;
   uint8_t buffer[kMaxDatagram];
 };
@@ -112,6 +123,10 @@ struct Node {
 void node_init(Node& node, const NodeConfig& config, Transport& transport);
 // Start connecting to `to`: the peer's slot, or -1 when every slot is taken.
 int node_connect(Node& node, const Address& to, int64_t now_us);
+// Point a peer still connecting at another address and start its handshake over there, its
+// timeout with it: where a NAT's other port answered from, or a relay (reach.hpp). False when the
+// peer is not an outgoing one still connecting.
+bool node_retarget(Node& node, int peer, const Address& to, int64_t now_us);
 void node_update(Node& node, int64_t now_us);
 // Queue a message to a connected peer; false when it is not connected or the channel refused it
 // (too big, a reliable window full: connection.hpp).

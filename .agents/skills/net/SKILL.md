@@ -1,6 +1,6 @@
 ---
 name: net
-description: "Use for engine/net in gameengine2: multiplayer networking. Addresses, the wire, UDP and TCP sockets, the simulated network (stream links too) and its conditions, pcap captures, the packet format, connections (acks, round trip, loss, unreliable/sequenced/reliable channels, big messages in pieces, priorities, the send budget), nodes (host, client, peer; up to 32), sessions (the lobby: seats, teams, chat, kick, start, reconnect by token), LAN discovery, fake-traffic sessions, the net-link and net-session labs; and the M17 plan (lobby, chat, NAT, replication, lockstep, voice, accounts)."
+description: "Use for engine/net in gameengine2: multiplayer networking. Addresses, the wire, UDP and TCP sockets, the simulated network (stream links too) and its conditions, pcap captures, the packet format, connections (acks, round trip, loss, unreliable/sequenced/reliable channels, big messages in pieces, priorities, the send budget), nodes (host, client, peer; up to 32), sessions (the lobby: seats, teams, chat, kick, start, reconnect by token), LAN discovery, NATs (the simulated kinds, STUN, the rendezvous, hole punching, the relay), fake-traffic sessions, the net-link, net-session and net-reach labs; and the M17 plan (lobby, chat, NAT, replication, lockstep, voice, accounts)."
 ---
 
 # Networking
@@ -28,6 +28,9 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
 | `net/session.hpp` | Sessions: the lobby on a node's reliable channel; `SessionHost` seats players and holds the rules, `SessionClient` asks and mirrors |
 | `net/session_wire.hpp` | The session's messages, stated once for both sides (not installed) |
 | `net/discovery.hpp` | LAN discovery: a broadcast probe on a fixed port, each host's advert, the hosts found |
+| `net/stun.hpp` | STUN's Binding request and answer: the public address a NAT gave a socket |
+| `net/rendezvous.hpp` | The public server: sessions registered, a client introduced to its host with a nonce and a relay port, STUN answered, relays forwarding |
+| `net/reach.hpp` | The two ends on the node's socket: the host registers and punches, the client joins, connects, follows a punch's port (`node_retarget`), falls back on the relay; `reach_wire.hpp` the messages (not installed) |
 | `net/traffic.hpp` | Fake traffic: a whole session over the simulated network, measured end to end |
 
 ## Rules
@@ -60,6 +63,11 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
 - **A script acts as the leader the links chose.** On a dedicated server the first SEATED
   player leads, and jitter decides who that is: a lab or test asks the clients' mirrors who
   leads (`players[me].leader`) rather than assuming the first to join.
+- **A NAT is the simulated network's, a path is reach's.** NAT behaviour (mapping, filtering,
+  expiry, forwards) lives in `sim_network.cpp`'s `map_out` / `map_in` and nowhere else; which
+  path a pair should take follows from RFC 4787 (a hole opens unless one side is symmetric and
+  the other port-restricted or symmetric), and the `net-reach` lab and `net_reach_test` hold every
+  pair to it. The rendezvous never answers bigger than it was asked: pad every new ask.
 
 ## Labs and tests
 
@@ -75,6 +83,10 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
   its ban, a six-second cut and the return to the seat, settings, start, return); the table
   checks every chat copy, every roster, the kick, the ban and the seat, the seats are charted
   and the pings boxed.
+- `make lab LAB=net-reach` (`--presets=lan,wifi,bad`): every pair of NAT kinds (none, full cone,
+  restricted, port-restricted, symmetric) reaching a host through the rendezvous: the path each
+  took against the one predicted, its connect time, a reliable message each way; STUN from
+  behind each kind; the connect times as a heatmap.
 - `ge net` (`build/debug/ge net ...`; `engine/cli/net.hpp`): `inspect <pcap>` decodes every
   datagram, `stats <pcap>` measures each connection from the capturing node (rtt, loss each way,
   dups, reorders, resends) and charts its kbps, rtt and loss, `sim` runs the same sessions as the
@@ -85,6 +97,8 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
   and two nodes (a 64 KB message) over real loopback TCP. `net_traffic_test` holds the guarantees under every preset;
   `net_connection_test` holds the stream's rules on a scripted wire; `net_node_test` the
   handshake, the 32-peer limit, denial and timeouts; `net_session_test` every session rule;
-  `net_discovery_test` probes and adverts on the simulated network and real loopback UDP.
+  `net_discovery_test` probes and adverts on the simulated network and real loopback UDP;
+  `net_sim_network_test` each NAT kind's filter, expiry and forwards; `net_stun_test` the RFC's
+  layout; `net_reach_test` every pair of kinds, an unknown session and a missing relay.
 - Before and after a change here: `make lab LAB=net-link ARGS=--tag=before`, then
   `--compare=before`, both in the PR.
