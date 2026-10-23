@@ -9,7 +9,7 @@
 // achievements, boards and cloud files and adds a `Discord` for its profile line. Both deliver
 // through the same `Event`, and `poll` is the same one pump (once a frame, main thread, the
 // frame's time). Discord's friends, lobbies, voice and account linking need its Social SDK and
-// are a separate row (docs/services.md § Discord, docs/goals.md M20j).
+// come later in the same row (docs/services.md § Discord, docs/goals.md M23g).
 //
 // THE SHAPE. `set_activity` checks the activity against Discord's limits at once (`invalid`)
 // and keeps it; `poll` sends the latest one when the client is ready, paced to one every 4 s so
