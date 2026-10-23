@@ -37,7 +37,7 @@
 // ge:keywords frustum planes heading pitch fov mat4 inverse sun-direction camera_matrices
 // ge:keywords look_dir sun_direction depth_distance distance-from-depth unproject weather
 // ge:keywords overcast deck cloud-cover sun-pass visibility fog flat-light night moon key-light
-// ge:keywords cloud-layer clouds heap sheet
+// ge:keywords cloud-layer clouds heap sheet roll horizon-tilt
 // ge:skill render
 // ge:test tests/render_view_test.cpp
 #pragma once
@@ -108,6 +108,19 @@ struct Night {
   double moon_radius = 0;
   double moon_surface = 0;
   double earthshine = 0;
+  // Its face (world unit vectors: its north pole, 0 N 0 E, 0 N 90 E) and the albedo map's scale
+  // (render/moon.hpp: the map's byte over 255 times it is the albedo against the near side's
+  // mean).
+  double moon_pole[3] = {0, 1, 0};
+  double moon_prime[3] = {0, 0, -1};
+  double moon_east[3] = {1, 0, 0};
+  double albedo_scale = 1;
+  // The Earth's shadow on it (render/night.hpp): toward its axis, the umbra's and penumbra's
+  // angular radii (rad; 0: none), and the disc's brightest point's light against full sunlight.
+  double shadow[3] = {0, 0, 1};
+  double umbra = 0;
+  double penumbra = 0;
+  double eclipse_peak = 1;
   // Whether the KEY LIGHT is the moon: FrameView's sun_* then stand for the moon, and these for
   // the real sun (the moon's bright limb faces it; its sky is drawn beside the moon's).
   bool moon_key = false;
@@ -133,6 +146,7 @@ struct FrameView {
   double eye[3] = {0, 0, 0};
   double heading = 0;   // rad, the world's convention
   double pitch = 0;     // rad, positive up
+  double roll = 0;      // rad, right side down positive (engine/camera's pose); 0 changes nothing
   double fov_y = 1.0;   // vertical field of view, rad
   double near_m = 0.1;  // the near plane, m
   // The sun: elevation over the horizon (rad) and azimuth (a world heading).

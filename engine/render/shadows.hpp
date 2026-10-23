@@ -64,7 +64,10 @@ struct ShadowSettings {
   double far_turn_deg = 1.0;    // and the far one
   double figure_radius = 1.4;   // m, half a figure's tile's side
   double figure_depth = 300;    // m, half a tile's depth along the sun
-  double bias_m = 0.05;         // the receiver's depth bias, m along the sun
+  // The share of a tile's texels a metre its casters pick their LOD by: a shadow needs the
+  // figure's silhouette, not its folds, so a figure filling a tile is drawn at a coarser level.
+  double figure_lod_share = 0.25;
+  double bias_m = 0.05;  // the receiver's depth bias, m along the sun
 };
 
 // wgsl/sun_shadow.wgsl's `SunShadow`, field for field.

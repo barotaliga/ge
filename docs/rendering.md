@@ -668,17 +668,31 @@ lid keeps its deck.
 **The night in the picture (M8f2).** A frame's `Night` (`render/view.hpp`, filled by
 `render/night.hpp`'s `set_night` once the game has placed the sun) carries the moon and the dark
 sky; `plugins/mountain/app/night_look.hpp` places the map's moon on its date (a day of the year
-read in 2026, longitude 0):
+read in 2026, longitude 0) by `core/moon.hpp` (M8f6):
 
 - ONE UNIT OF LIGHT is the sun's illuminance outside the air (128 000 lx), and a night is a
   millionth of a day, under a half-float's smallest step. The frame stores its light through a
   PRE-EXPOSURE (`pre_exposure`: the estimated light on a white face brought to about a quarter
   of a unit, in `world.y`), 1 whenever the sun is up so a day's bits never move; the exposure
   divides it back out, and the eye's adaptation and a star's light read through it;
+- THE MOON'S PLACE (M8f6, `core/moon.hpp`) is a truncated lunar theory (sixty terms in
+  longitude and distance, sixty in latitude), the time's step from the universal hour, the
+  nutation, the apparent sidereal time, the parallax of a place on the surface and the
+  refraction: within 0.007 degrees of a reference ephemeris from 1990 to 2049. It gives the
+  phase, the libration and the axis's tilt (the IAU's pole and prime meridian precessed to the
+  date) and the Earth's shadow (its axis and the umbra's and penumbra's radii at the moon);
 - the moon's light follows the phase law (a half moon a tenth of a full one) and the square of
   its distance; its disc is drawn at its true size by Lommel-Seeliger's law, scaled to that
-  light (`surface_surge`), with procedural seas and an earthlit dark part, its brightness
-  compressed above white so the seas keep their contrast;
+  light (`surface_surge`), over THE REAL FACE (`render/moon.hpp`: a public-domain orbiter
+  mosaic's albedo, 1024 x 512 with its mips, read at the level the disc's size asks), turned by
+  the face's pole and prime meridian, with an earthlit dark part; a faint part beside a bright
+  one is drawn as the eye sees it (the earthshine's ratio to the lit limb to the power 0.35,
+  never above the earthshine alone), so a day moon is a pale disc in the blue and a twilight
+  crescent shows its ashen light;
+- AN ECLIPSE: the Earth's shadow on the disc, the penumbra by the share of the sun's disc it
+  leaves and the umbra the air's refracted red (a thousandth of the sun's light at its edge, a
+  ten-thousandth on its axis), its contrast against the disc's brightest point to the power
+  0.5; the moonlight on the snow is dimmed by the disc's mean (`eclipse_of`, on the CPU);
 - THE KEY LIGHT, the one direct light that casts shadows, is the sun until three degrees under
   the horizon, then the moon when it is up (`FrameView::sun_*` become the moon's; the real sun
   stays in `night_sun`). The sky is TWO tables at once: the sun's own sky view and a second at
@@ -839,7 +853,15 @@ lift's carrier or up a lift unseen is drawn at a scale of nought, which the cull
 amateurs nearest the eye cast into the figures' atlas, a tile each after the racers'; each tile
 culls the crowd by its own box, so the atlas costs the figures near the tiles, not the crowd
 times the tiles (on the software adapter, 2 ms of `shadows.figures` with one racer, 12 ms with
-fifteen amateurs; drawing every figure into every tile had cost 385 ms). The `crowd-look` lab
+fifteen amateurs; drawing every figure into every tile had cost 385 ms). The crowd draws the
+model at three **levels of detail** (`scene.hpp`'s `skier_lods`: the meshes `skier`,
+`skier.lod1` and `skier.lod2` the builder makes off the same rig, 1808, 698 and 344 triangles)
+by its radius on screen (`kSkierLodPx`: LOD 0 down to 40 px, LOD 1 to 16 px), the heights the
+`model-views` lab's `lods` sheet shows each level keeping its silhouette at; the far crowd's
+vertex stage, the most of its cost, fell from about 22 ms to 9 ms of `instances` on the software
+adapter (crowd-look, three runs each, the medians). An atlas tile's casters pick their LOD at a
+quarter of the tile's texels a metre (`ShadowSettings::figure_lod_share`), since a shadow needs
+the silhouette, not the folds. The `crowd-look` lab
 films a lift's queue, a busy run, a group and one of them down at `--hour` (11: the sun on the
 runs), each with the crowd and without.
 
@@ -1017,6 +1039,12 @@ Each library is added in the milestone that first needs it, pinned to a tag.
 | SDL3 | zlib | The window and the surface (already the platform layer) | M6 |
 | cgltf | MIT | Loading authored glTF models (`cmake/Cgltf.cmake`: one header, pinned by commit and SHA-256) | M8e1 |
 | Dear ImGui | MIT | The developer UI, behind `GE_DEV_UI` | M10 |
+
+Data baked into the engine as generated tables:
+
+| Data | Licence | For | Milestone |
+| --- | --- | --- | --- |
+| The lunar orbiter's wide-angle camera colour mosaic, as NASA's Scientific Visualization Studio publishes it in its CGI Moon Kit (<https://svs.gsfc.nasa.gov/4720>) | Public domain; credit NASA's Scientific Visualization Studio | The moon's albedo (`engine/render/moon_data.cpp`) | M8f6 |
 
 Considered and not taken now: meshoptimizer (added if an authored mesh needs LOD
 simplification or vertex-cache ordering that the procedural builders cannot do

@@ -30,6 +30,7 @@ router's Skills table and the directories against each other.
 | `platform` | SDL3: window, input, gamepad, audio device, files, focus |
 | `move` | Character movement: the knobs and presets, the step, strafe jumping, steps, slopes, crouch, the trace a world answers, the `move-*` labs |
 | `input` | Input devices: keyboards, raw mice, gamepads, wheels and pedals, sticks, touch; actions, bindings, rebinding, feedback, the event log |
+| `camera` | The camera: poses, followers, the rigs (first person, boom, mounted, orbit, planted, free), shake and comfort, transitions, the stack, the camera labs |
 | `gpu` | The native GPU device over Dawn: device, feature tiers, resources, the pipeline manifest, WGSL |
 | `render` | The pass table, a pass's two halves, the rules that keep a frame fast, captures and prices |
 | `assets` | Authored models: the glTF loader, posing and skinning, the `models` lab, Blender exports |
@@ -40,7 +41,7 @@ router's Skills table and the directories against each other.
 | `perf` | Budgets, measuring, the proofs a speed-up owes, the levers |
 | `agent-interface` | Diagnostics as prompts, consumer skills, the `ge` CLI |
 | `bots` | What a bot decides: `engine/ai`, the decision record, `ge why`, making a bot more human |
-| `net` | Multiplayer networking: sockets, the simulated network, captures, the wire, channels, nodes, sessions and the lobby, LAN discovery, NAT traversal, port mapping, fake traffic |
+| `net` | Multiplayer networking: sockets, the simulated network, captures, the wire, channels, nodes, sessions and the lobby, LAN discovery, NAT traversal, port mapping, replication, fake traffic |
 | `plugins` | Engine, plugin or game: where code lives, adding a plugin, moving code between homes |
 
 ## Plugins
