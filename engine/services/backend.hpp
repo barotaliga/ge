@@ -27,6 +27,7 @@
 // ge:keywords ghost cloud cloud-save remote-storage quota rich-presence presence friends invite
 // ge:keywords join overlay dlc ownership screenshot deck big-picture event poll request callback
 // ge:keywords workshop ugc item mod subscribe install query_items submit_item
+// ge:keywords on-screen-keyboard suspend resume timeline remote-play
 // ge:skill services
 // ge:test tests/services_sim_store_test.cpp
 #pragma once
@@ -153,6 +154,32 @@ struct ItemInfo {
   uint32_t installed = 0;   // the version on the player's machine, 0 none
 };
 
+// THE HANDHELD AND THE EXTRAS. The store's on-screen keyboard, for a player with no keyboard
+// (a handheld, the big-picture mode): the text typed arrives as `text_entered`.
+enum class KeyboardMode : uint8_t { single_line, multiple_lines, email, numeric };
+
+// What the game is doing, for the store's recording timeline (its background colour there).
+enum class TimelineMode : uint8_t { menus, loading, playing, staging };
+
+// A moment marked on the store's recording timeline: an icon (one of the store's or the game's
+// own), a title and a description, how much it matters (0 to 1000), when it began relative to
+// now (seconds, back up to 600) and how long it lasted (0: an instant, up to 600).
+struct TimelineMark {
+  std::string icon, title, description;
+  uint32_t priority = 0;
+  double start_offset_s = 0;
+  double duration_s = 0;
+};
+
+// The device a remote player streams the game to.
+enum class RemoteDevice : uint8_t { computer, phone, tablet, tv };
+
+struct RemotePlayer {
+  UserId user = 0;
+  std::string name;
+  RemoteDevice device = RemoteDevice::computer;
+};
+
 // A page of the store's overlay. `store` opens the given app's store page (the game's when 0);
 // `url` opens a web page in the overlay's browser.
 enum class OverlayPage : uint8_t {
@@ -187,6 +214,11 @@ enum class EventKind : uint8_t {
   item_submitted,        // submit_item answered (item: its id, total: its version)
   item_subscribed,       // subscribe_item answered (item, changed: now subscribed)
   item_installed,        // an item's version landed on the machine (item, total: the version)
+  text_entered,          // the on-screen keyboard closed (changed: submitted; text: the text)
+  suspended,             // the machine is going to sleep: save now, the clock stops
+  resumed,               // it woke (total: seconds asleep)
+  remote_player_joined,  // a friend joined over the store's remote play (user, text: name)
+  remote_player_left,    // and left (user)
 };
 std::string_view event_name(EventKind k);
 
@@ -292,6 +324,19 @@ class Backend {
   virtual void subscribed_items(std::vector<ItemInfo>& out) const = 0;
   virtual Result item_files(ItemId item, std::vector<CloudFile>& out) const = 0;
   virtual Result item_read(ItemId item, std::string_view name, std::vector<uint8_t>& out) const = 0;
+
+  // ---- the handheld and the extras. `show_keyboard` opens the store's on-screen keyboard
+  // (`unsupported` where the player has a keyboard: not a handheld, not the big-picture mode;
+  // `invalid` while one is open, for a prompt over 256 bytes or `max_chars` outside 1 to 1024);
+  // `text_entered` answers. The timeline marks the game's moments on the store's recording.
+  // Remote play streams the game to a friend, whose input arrives as another player's devices
+  // (`engine/input`); `invite_remote_play` asks a friend, `remote_players` lists who is in.
+  virtual Result show_keyboard(KeyboardMode mode, std::string_view prompt, std::string_view initial,
+                               uint32_t max_chars) = 0;
+  virtual Result timeline_mark(const TimelineMark& mark) = 0;
+  virtual Result timeline_mode(TimelineMode mode) = 0;
+  virtual Result invite_remote_play(UserId user) = 0;
+  virtual void remote_players(std::vector<RemotePlayer>& out) const = 0;
 };
 
 }  // namespace ge::services

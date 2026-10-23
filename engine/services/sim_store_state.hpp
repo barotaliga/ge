@@ -76,6 +76,13 @@ struct SimPlayer {
   std::vector<ItemId> subscriptions;
   std::map<ItemId, SimInstall> installs;  // what is on the player's machine
   std::vector<SimDownload> downloads;     // in flight
+  uint32_t keyboard_max = 0;              // the open keyboard's limit, 0 when none is open
+  bool asleep = false;
+  int64_t asleep_at_us = 0;
+  std::vector<TimelineMark> timeline;  // every mark, as the game made it
+  TimelineMode mode = TimelineMode::menus;
+  std::vector<UserId> remote_invited;
+  std::vector<RemotePlayer> remote;  // in the player's game now
 };
 
 struct SimEntry {
@@ -132,6 +139,13 @@ Result workshop_read(const SimPlayer& p, ItemId item, std::string_view name,
                      std::vector<uint8_t>& out);
 // Put every download due by the player's time on their machine.
 void workshop_land(SimPlayer& p);
+
+// The handheld and the extras on the simulated store (sim_store_extras.cpp).
+Result extras_keyboard(SimStore::Impl& s, SimPlayer& p, KeyboardMode mode, std::string_view prompt,
+                       std::string_view initial, uint32_t max_chars);
+Result extras_timeline_mark(SimStore::Impl& s, SimPlayer& p, const TimelineMark& mark);
+Result extras_timeline_mode(SimStore::Impl& s, SimPlayer& p, TimelineMode mode);
+Result extras_invite_remote(SimStore::Impl& s, SimPlayer& p, UserId user);
 
 // The store to and from a directory (sim_store_io.cpp).
 bool save_store(const SimStore::Impl& s, const std::string& dir, std::string* error);

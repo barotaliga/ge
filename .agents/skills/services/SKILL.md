@@ -18,6 +18,7 @@ M20a–M20h.
 | `services/sim_store_state.hpp` | The simulated store's state, shared by its two `.cpp` files; not installed |
 | `services/sim_store_io.cpp` | Saving and loading a store to a directory; the offline store |
 | `services/sim_store_workshop.cpp` | The simulated store's workshop: items, queries, subscriptions, downloads timed by size, updates to every subscriber |
+| `services/sim_store_extras.cpp` | The simulated store's extras: the on-screen keyboard, sleep and wake, the timeline, remote play |
 | `services/discord.hpp` | Discord beside the store: the `Activity` and its limits, the frames, the `Discord` client (found with backoff, paced updates, asks and joins as events) |
 | `services/discord_link.cpp` | The link over the OS's local pipe (`net/local_pipe.hpp`) and where a Discord app listens (`GE_DISCORD_IPC` overrides) |
 | `services/sim_discord.hpp` | The simulated Discord app: the same frames, Discord's limits and rate limit, the player's and friends' actions, a journal |

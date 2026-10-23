@@ -92,6 +92,7 @@ any store (its progress kept on disk), and headless in a test, with no change.
 | Ownership | `owns`, `installed` | |
 | Screenshots | `add_screenshot`, `hook_screenshots` | `screenshot_requested` |
 | The workshop | `query_items` (newest or most subscribed, a tag, an author, the player's subscriptions, 50 a page), `submit_item` (a new item or the author's next version: title, description, tags, who sees it, a change note, its files), `subscribe_item`, `subscribed_items`, `item_files`, `item_read` | `items_queried`, `item_submitted`, `item_subscribed`, `item_installed` |
+| The handheld and the extras | `show_keyboard` (the store's on-screen keyboard, only where the player has no keyboard: a handheld or the big-picture mode), `timeline_mark` and `timeline_mode` (the game's moments on the store's recording), `invite_remote_play`, `remote_players` | `text_entered`, `suspended`, `resumed` (the seconds asleep), `remote_player_joined`, `remote_player_left` |
 
 **The workshop** is content players make for the game (maps, outfits, mods). The store keeps
 each item's latest version; a subscriber's machine downloads it after the answer, at the store's
@@ -131,7 +132,7 @@ code that includes Steamworks' headers.
 | `ISteamGameServer` | A dedicated server listed and authenticated by Steam | M20c |
 | `ISteamUGC` (`CreateQueryAllUGCRequest`/`CreateQueryUserUGCRequest`, `AddRequiredTag`, `SendQueryUGCRequest`; `CreateItem`, `StartItemUpdate`, `SetItemTitle`/`Description`/`Tags`/`Visibility`/`Content`, `SubmitItemUpdate`; `SubscribeItem`/`UnsubscribeItem`, `GetSubscribedItems`, `GetItemInstallInfo`, `ItemInstalled_t`) | `query_items`, `submit_item` (`item` 0 creates first), `subscribe_item`, `subscribed_items`; `item_files` and `item_read` over the install folder; `item_installed` from `ItemInstalled_t` | M20d (the interface and the simulated store), M20b (Steam's side) |
 | `ISteamInput` (action sets, digital and analog actions, origins and glyphs, rumble, the configurator) | A backend of `engine/input` (M19): its actions and action sets are the engine's action maps, its glyphs the prompts the HUD draws | M20e |
-| `ISteamUtils::ShowFloatingGamepadTextInput`, the Deck's suspend and resume, `ISteamTimeline` (events and game modes on the recording timeline), `ISteamRemotePlay` | The handheld and the extras: the on-screen keyboard, the game's moments marked on Steam's recording, playing together remotely | M20f |
+| `ISteamUtils::ShowFloatingGamepadTextInput`, the Deck's suspend and resume, `ISteamTimeline` (events and game modes on the recording timeline), `ISteamRemotePlay` | `show_keyboard` and `text_entered` (`FloatingGamepadTextInputDismissed_t`); `suspended` and `resumed`; `timeline_mark` (`AddTimelineEvent`), `timeline_mode` (`SetTimelineGameMode`); `invite_remote_play` (`BSendRemotePlayTogetherInvite`), `remote_players` and their events (`SteamRemotePlaySessionConnected_t`/`Disconnected_t`) | M20f (the interface and the simulated store), M20b (Steam's side) |
 | `ISteamInventory`, `ISteamMicroTxn`, `ISteamHTMLSurface`, `ISteamMusic`, `ISteamParentalSettings`, `ISteamVideo` | Not planned: no game on the engine sells items or plays the player's music; a row is added when one does | none |
 
 Other stores fit the same interface: Game Center on iOS, iPadOS and the Mac App Store, and
