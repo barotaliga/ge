@@ -55,6 +55,23 @@ void put_down(SkierState& s, Wipeout cause) {
   s.cause = cause;
   s.down_time = 0;
   s.jump_held = 0;
+  s.thrown.active = false;
+}
+
+Over over_of(Wipeout cause) {
+  switch (cause) {
+    case Wipeout::tree:  // the trunk stops the skis and he goes on over them, away from it
+      return Over{1, 0.25, 1.8};
+    case Wipeout::landing:  // the legs could not hold it: sat down back and to a side
+      return Over{-0.45, 0.8, 0.2};
+    case Wipeout::across:  // the edge bites and stops the slide: flung over it
+      return Over{1, 0.2, 1.2};
+    case Wipeout::hurt:  // mortally hurt on his feet: he crumples onto a side
+      return Over{0.1, 1, 0};
+    case Wipeout::none:
+      break;
+  }
+  return Over{0.1, 1, 0.3};
 }
 
 namespace {
@@ -175,6 +192,47 @@ void meet_edge(SkierState& s, double size) {
   }
 }
 
+// THROW HIM off his skis, going at (vx, vy, vz): over onto the side away from the trunk that
+// threw him, or otherwise the side he was leaning toward.
+void throw_down(SkierState& s, const World& world, int32_t tree, double vx, double vy, double vz,
+                double dt) {
+  const double flat = core::hypot(vx, vz);
+  const double heading = flat > 1 ? core::libm::atan2(vx, vz) : s.heading;
+  double side = s.lean >= 0 ? 1 : -1;
+  if (tree >= 0) {
+    const auto& t = world.level->trees[static_cast<size_t>(tree)];
+    const double across =
+        (t.x - s.x) * core::libm::cos(heading) - (t.z - s.z) * core::libm::sin(heading);
+    side = across > 0 ? -1 : 1;
+  }
+  s.thrown =
+      throw_of(s.x, s.y, s.z, heading, s.lean, vx, vy, vz, s.yaw_rate, side, over_of(s.cause), dt);
+}
+
+// A STEP OF THE THROWN BODY, the state following its centre of mass.
+void step_thrown(SkierState& s, const World& world, double dt) {
+  namespace rd = tuning::ragdoll;
+  Ragdoll& b = s.thrown;
+  step_ragdoll(b, *world.level, world.trees, dt);
+  s.x = b.x;
+  s.z = b.z;
+  s.vx = b.vx;
+  s.vy = b.vy;
+  s.vz = b.vz;
+  s.speed = core::hypot3(s.vx, s.vy, s.vz);
+  s.on_snow = b.touching;
+  s.packed = core::clamp(world.level->packed_at(s.x, s.z), 0, 1);
+  s.y = b.touching ? world.level->ground_at(s.x, s.z) - s.sink : b.y - rd::kStand;
+  if (core::hypot(s.vx, s.vz) > 0.5) s.heading = core::libm::atan2(s.vx, s.vz);
+  s.yaw_rate = 0;
+  s.edge = 0;
+  s.tuck = 0;
+  s.lean = 0;
+  s.g_lat = 0;
+  s.air_time = b.aloft;
+  s.down_time = b.still;
+}
+
 }  // namespace
 
 const char* wipeout_name(Wipeout w) {
@@ -203,6 +261,11 @@ void step_skier(SkierState& s, const SkierInput& in, const World& world, const S
   ev = SkierEvents{};
   const Level& level = *world.level;
   const double g = tuning::kGravity;
+  // Down and thrown, the step is the thrown body's.
+  if (s.down && s.thrown.active) {
+    step_thrown(s, world, dt);
+    return;
+  }
 
   // 1. The snow under him.
   s.packed = core::clamp(level.packed_at(s.x, s.z), 0, 1);
@@ -313,6 +376,9 @@ void step_skier(SkierState& s, const SkierInput& in, const World& world, const S
   s.lean += (balance - s.lean) * core::num::min(1.0, dt / st::kLeanLag);
 
   // 7. The move, the world's edge, the ground. 8. The trunks.
+  const double before_x = s.vx;
+  const double before_y = s.vy;
+  const double before_z = s.vz;
   s.x += s.vx * dt;
   s.y += s.vy * dt;
   s.z += s.vz * dt;
@@ -324,7 +390,14 @@ void step_skier(SkierState& s, const SkierInput& in, const World& world, const S
   if (s.down) {
     s.tuck = 0;
     s.edge = 0;
-    s.down_time = s.on_snow && s.speed < w::kStill ? s.down_time + dt : 0;
+    s.down_time = 0;
+    // Thrown at the velocity he had before the blow that threw him (a trunk's stop is the body's
+    // to meet), or at the one he has now when he was put down from outside.
+    if (ev.wiped_out) {
+      throw_down(s, world, ev.tree, before_x, before_y, before_z, dt);
+    } else {
+      throw_down(s, world, -1, s.vx, s.vy, s.vz, dt);
+    }
   }
 }
 
@@ -356,6 +429,7 @@ uint64_t skier_hash(const SkierState& s, uint64_t h) {
                          s.vz,        s.heading,  s.yaw_rate, s.edge,     s.tuck,
                          s.lean,      s.sink,     s.packed,   s.speed,    s.g_lat,
                          s.jump_held, s.air_time, s.air_peak, s.down_time};
+  h = ragdoll_hash(s.thrown, h);
   for (double v : nums) {
     uint64_t u;
     std::memcpy(&u, &v, sizeof u);

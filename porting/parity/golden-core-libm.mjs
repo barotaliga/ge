@@ -96,8 +96,8 @@ out("core_quat.txt", quat);
 //        refraction(el)  universalHourOf(jd0, hour, lon)
 //        sunOnDate(hour, lat, lon, jd0)[elevation azimuth rising trueElevation declination]
 //        sunWindowOnDate(lat, lon, jd0)[3]  sunWindowOnDate(lat, lon, jd0, minEl)[3]
-//        lunarCoordinates(jd0 + hour / 24)[longitude latitude distance rightAscension declination]
-//        moonOnDate(hour, lat, lon, jd0)[elevation azimuth rising lit age declination]
+// (The dated moon is the engine's own, core/moon.hpp, with its own golden; the reference's
+// low-precision one is not tabulated.)
 // Latitudes from the equator to the poles both sides (the polar day and night take the
 // window's null and whole-clock branches), hours past 24 and negative, both solstices.
 const sun = [];
@@ -120,8 +120,6 @@ for (let i = 0; i < 600; i++) {
   const moon = solar.moonAt(hour, lat, dec, age);
   const sc = solar.solarCoordinates(jd);
   const dated = solar.sunOnDate(hour, lat, lon, jd0);
-  const lc = solar.lunarCoordinates(jd);
-  const dm = solar.moonOnDate(hour, lat, lon, jd0);
   sun.push(
     [hour, lat, dec, age, year, doy, lon, minEl, el]
       .concat([at.elevation, at.azimuth, at.rising])
@@ -135,8 +133,6 @@ for (let i = 0; i < 600; i++) {
       .concat([dated.elevation, dated.azimuth, dated.rising, dated.trueElevation, dated.declination])
       .concat(win(solar.sunWindowOnDate(lat, lon, jd0)))
       .concat(win(solar.sunWindowOnDate(lat, lon, jd0, minEl)))
-      .concat([lc.longitude, lc.latitude, lc.distance, lc.rightAscension, lc.declination])
-      .concat([dm.elevation, dm.azimuth, dm.rising, dm.lit, dm.age, dm.declination])
       .map(hex)
       .join(" "),
   );
