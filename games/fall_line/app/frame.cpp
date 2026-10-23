@@ -227,12 +227,14 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
   r::create_family(device, f->instancing, f->crowd, "crowd", crowd_meshes(model),
                    crowd_materials(model), kMaxCrowd, joints);
   f->instance_light = r::instance_light_group(device, f->instancing, f->terrain);
-  // The forest casts into the cascades (two caster slots), the figures into the atlas (one).
+  // The forest casts into the cascades (two caster slots), the figures and the crowd into the
+  // atlas (a slot a tile).
   r::ShadowSettings shadows;
   shadows.size = options.shadow_size;
   r::create_sun_shadows(device, f->shadows, shadows, f->frame_layout, f->sky);
   r::create_family_casters(device, f->instancing, f->forest, r::kCascades);
-  r::create_family_casters(device, f->instancing, f->figures, 1);
+  r::create_family_casters(device, f->instancing, f->figures, r::kMaxShadowFigures);
+  r::create_family_casters(device, f->instancing, f->crowd, r::kMaxShadowFigures);
   r::bind_terrain_shadows(f->terrain, f->shadows.group);
   if (options.snow) r::bind_terrain_material(f->terrain, f->snow.group);
   r::bind_instance_shadows(f->instancing, f->shadows.group);
@@ -411,15 +413,12 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
       r::prepare_family(device, *family, view, f.targets.height, occlusion);
     }
   }
-  // Each figure's tile is centred a metre over its skis. The crowd casts none: the atlas draws
-  // every figure into every tile, so its cost would grow with the crowd times the tiles.
-  f.figure_centres.resize(racers);
-  for (size_t k = 0; k < racers; ++k) {
-    const ge::skier::SkierState& s = scene.skiers[k];
-    f.figure_centres[k] = {s.x, s.y + 1.0, s.z};
-  }
+  // The atlas's tiles: the racers', then the nearest amateurs'. Each tile culls the figures and
+  // the crowd by its own box, so an amateur is drawn only into the tiles he can shade.
+  shadow_centres(std::span<const ge::skier::SkierState>(scene.skiers.data(), racers), scene.crowd,
+                 view.eye, r::kMaxShadowFigures, f.figure_centres);
   r::InstanceFamily* still[] = {&f.forest};
-  r::InstanceFamily* moving[] = {&f.figures};
+  r::InstanceFamily* moving[] = {&f.figures, &f.crowd};
   {
     GE_ZONE("frame.shadows");
     r::prepare_sun_shadows(device, f.shadows, view, f.figure_centres, still, moving);

@@ -272,7 +272,7 @@ void run(ge::lab::Lab& lab) {
   std::vector<double> cpu[2], instances[2], shadows[2];
   for (const Look& l : kLooks) {
     r::FrameView v;
-    fall_line::app::day_view(*level, -1, v);
+    fall_line::app::day_view(*level, lab.arg_num("hour"), v);
     if (!aim(st, l.id, v)) {
       // A shot still, so the digest is the same whatever the moment shows.
       lab.note(std::string(l.id) + ": nothing to show at " + std::to_string(at) + " s");
@@ -328,6 +328,7 @@ const ge::lab::LabSpec kSpec{
         {"version", "10", "the generator version (the ski area's)"},
         {"count", "400", "how many amateurs are dealt"},
         {"at", "90", "s of the free ride run before the shots"},
+        {"hour", "11", "the sun's hour (-1: the map's own; 11 lights the runs on seed 38)"},
         {"frames", "12", "frames drawn into each shot at 60 a second"},
         {"px", "768", "the pictures' width (16:9)"},
     },
