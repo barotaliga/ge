@@ -417,7 +417,8 @@ Outcome run_golden_write(const BuildOptions& o, const std::string& test_arg) {
   return out;
 }
 
-Outcome run_digest(const BuildOptions& o, const std::string& lab, bool write, bool only_moved) {
+Outcome run_digest(const BuildOptions& o, const std::vector<std::string>& labs, bool write,
+                   bool only_moved) {
   Outcome out;
   if (write && only_moved) {
     out.findings.push_back({Severity::error, "--write and --diff together", "the flags",
@@ -444,20 +445,27 @@ Outcome run_digest(const BuildOptions& o, const std::string& lab, bool write, bo
   const fs::path previews = o.repo / "previews";
   const fs::path log = build_log(o, "ge-digest");
   fs::remove(log, ec);
-  std::string cmd = quoted(exe) + " " + (lab.empty() ? std::string("--all") : lab) +
-                    " --smoke --repeat=2 --quiet --out=" + quoted(previews);
+  // One run of the labs executable a lab (it takes one name, or --all), all into one log.
+  std::string flags = " --smoke --repeat=2 --quiet --out=" + quoted(previews);
   if (write) {
     fs::create_directories(baseline.parent_path(), ec);
-    cmd += " --write-digests=" + quoted(baseline);
+    flags += " --write-digests=" + quoted(baseline);
   } else if (had) {
-    cmd += " --check-digests=" + quoted(baseline);
+    flags += " --check-digests=" + quoted(baseline);
   }
-  const Logged r = run_to_log(cmd, log);
-  if (r.code == 2) {
-    out.findings.push_back({Severity::error, "the labs refused the run: " + last_line(r.output),
-                            rel_path(o.repo, log), "`ge lab` lists the labs; name one of them"});
-    out.exit = 2;
-    return out;
+  std::vector<std::string> runs = labs;
+  if (runs.empty()) runs.emplace_back("--all");
+  Logged r{0, ""};
+  for (const std::string& run : runs) {
+    const Logged one = run_to_log(quoted(exe) + " " + run + flags, log);
+    r.output += one.output;
+    if (one.code == 2) {
+      out.findings.push_back({Severity::error, "the labs refused the run: " + last_line(one.output),
+                              rel_path(o.repo, log), "`ge lab` lists the labs; name one of them"});
+      out.exit = 2;
+      return out;
+    }
+    if (one.code != 0) r.code = one.code;
   }
   // The runner's FAIL lines, each with its indented advice as the next step.
   const auto lines = lines_of(r.output);
@@ -479,7 +487,7 @@ Outcome run_digest(const BuildOptions& o, const std::string& lab, bool write, bo
   }
   // Each lab's digest from its report; the baseline's row beside it.
   std::vector<std::string> ids;
-  if (lab.empty()) {
+  if (labs.empty()) {
     static const std::regex kId("\"id\":\"([^\"]+)\"");
     const std::string listing = run_to_log(quoted(exe) + " --json", log).output;
     for (auto it = std::sregex_iterator(listing.begin(), listing.end(), kId);
@@ -488,7 +496,7 @@ Outcome run_digest(const BuildOptions& o, const std::string& lab, bool write, bo
     }
     std::sort(ids.begin(), ids.end());
   } else {
-    ids.push_back(lab);
+    ids = labs;
   }
   static const std::regex kDigest("\"digest\": \"([0-9a-f]{16})\"");
   std::vector<std::string> rows;
@@ -539,7 +547,13 @@ Outcome run_digest(const BuildOptions& o, const std::string& lab, bool write, bo
   }
   out.summary = write ? (out.written.empty()
                              ? rel + " already holds these digests"
-                             : "rewrote " + rel + " for " + (lab.empty() ? "every lab" : lab) +
+                             : "rewrote " + rel + " for " + (labs.empty() ? std::string("every lab") : [&] {
+                                     std::string names;
+                                     for (const std::string& l : labs) {
+                                       names += (names.empty() ? "" : ", ") + l;
+                                     }
+                                     return names;
+                                   }()) +
                                    (moved ? "; say why each moved in the PR" : ""))
                       : "the digests above, each beside " + rel;
   out.next = write ? "ge test" : "";
