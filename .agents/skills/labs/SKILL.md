@@ -46,8 +46,9 @@ bands at 100 dB. A GPU lab that guards a look hands its distance map with each s
 **Choosing a constant's value** is a sweep, not a string of edits and reruns: `make ge
 ARGS="lab sweep <id> --set=<kName>=a,b,c -- <lab flags>"` rewrites the one-line `constexpr`, rebuilds
 the labs and runs the lab at each value, prints every metric side by side and puts the source
-back (`docs/labs.md` § The sweep). Put the value you pick in the code and run the
-before-and-after as usual.
+back (`docs/labs.md` § The sweep); `--flag=<flag>=a,b,c` sweeps one of the lab's own flags
+the same way with no rebuild (the hours of a day, a step rate). Put the value you pick in the code
+and run the before-and-after as usual.
 
 **Seeing a scenario step by step**: add `--trace` to a scenario lab (`ride`, `sled`, `heli`,
 `para`). Each scenario writes `<id>.trace.tsv` and charts of it with its events marked, so a
@@ -55,6 +56,11 @@ snap, a chatter or an event at the wrong moment is a ring or a grey line you can
 `ge graph` lays a before's and an after's file on one chart. A new scenario lab gets it by
 giving its runner an optional per-step callback and drawing through
 `engine/lab/series_charts.hpp` (`para_lab.cpp` is the pattern).
+
+**Anything that moves can jump.** A lab that follows an actor hands its track to
+`gl::find_teleports` (`engine/lab/teleport.hpp`) and reports it with `gl::report_teleports`
+(fail on it when the subject must never jump): a position set without its velocity, at a handoff
+or a respawn, is a row with its step and time instead of a hand-written metric.
 
 Then read `previews/<id>/index.md` (the contact sheet) and open the pictures it lists. Each
 picture's band says what it shows and what to look for, so check exactly that. Time a
