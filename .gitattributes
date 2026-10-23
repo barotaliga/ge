@@ -1,0 +1,8 @@
+# tests/labs_digests.txt is one row per lab: two branches adding or moving different labs' rows
+# merge cleanly instead of conflicting on adjacent lines. Two branches moving the SAME lab's row
+# leave two rows for it, which the labs' digest check fails by name until `ge digest <lab>
+# --write` keeps one.
+tests/labs_digests.txt merge=union
+
+# The `ge` backlog is one wish a line: threads adding wishes side by side merge cleanly.
+docs/goals/ge-backlog.md merge=union

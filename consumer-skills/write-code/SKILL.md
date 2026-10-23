@@ -73,6 +73,7 @@ obvious.
 
 1. Write the test first when the behaviour is defined (skill: `sim-system`).
 2. Make the change.
-3. Build and run only what it touches: `ge test --filter=<x>` (failures come back as findings;
-   the full log is under `build/debug/`).
+3. Build and run only what it touches: `ge test --affected` (the tests the change since
+   origin/main reaches, through the include graph) or `ge test --filter=<x>` (failures come back
+   as findings; the full log is under `build/debug/`).
 4. Before committing: the `commit` skill's gates.
