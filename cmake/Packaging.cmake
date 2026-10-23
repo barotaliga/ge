@@ -84,7 +84,7 @@ install(DIRECTORY "${PROJECT_SOURCE_DIR}/engine/"
   FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h" PATTERN "*.inl"
   PATTERN "gpu" EXCLUDE PATTERN "platform" EXCLUDE PATTERN "render" EXCLUDE
   PATTERN "cli" EXCLUDE PATTERN "os_socket.hpp" EXCLUDE
-  PATTERN "session_wire.hpp" EXCLUDE)
+  PATTERN "session_wire.hpp" EXCLUDE PATTERN "reach_wire.hpp" EXCLUDE)
 
 # A plugin's headers install beside the engine's (a plugin's name never equals an engine
 # directory), so "racing/tape.hpp" is spelled the same in-tree and installed. Labs are not

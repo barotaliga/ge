@@ -54,7 +54,10 @@ gate release python3 tools/release.py check
 gate build make -s build PRESET="$preset"
 gate lint tools/lint.sh "$build" "$base"
 
-# The tests the change reaches: changed tests, and the ge:test of every changed file.
+# The tests the change reaches: changed tests, the ge:test of every changed file, and every test
+# whose target the change reaches through the include graph (`ge test --affected --list`: a plugin
+# change reaches the game's tests through the game library including its headers). The labs'
+# smoke slices are left to the digests below.
 merge_base="$(git merge-base "$base" HEAD 2>/dev/null || echo HEAD)"
 mapfile -t changed < <(git diff --name-only --diff-filter=d "$merge_base" --; git ls-files --others --exclude-standard)
 tests=(cli_diagnostics_test)
@@ -65,6 +68,9 @@ for f in "${changed[@]}"; do
     [[ "$t" == tests/*_test.cpp ]] && tests+=("$(basename "$t" .cpp)")
   done < <(sed -n 's/^.*ge:test \(tests\/[^ ]*_test\.cpp\).*$/\1/p' "$f" 2>/dev/null | head -5)
 done
+while read -r t; do
+  [[ "$t" =~ ^[a-z0-9_]+_test$ ]] && tests+=("$t")
+done < <("$build/ge" test --affected --list --preset="$preset" --base="$base" 2>/dev/null || true)
 mapfile -t tests < <(printf '%s\n' "${tests[@]}" | sort -u)
 regex="^($(IFS='|'; echo "${tests[*]}"))\$"
 gate "tests (${#tests[@]})" ctest --test-dir "$build" -R "$regex" -j "$(nproc 2>/dev/null || sysctl -n hw.ncpu)" \
