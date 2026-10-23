@@ -70,37 +70,40 @@ directory    at the end: for each chunk its tag, its instance, its version, its 
 ## Describing the state once
 
 A save written by one function and read by another drifts: a field added to one and not the
-other is the classic save bug. So a type's fields are described ONCE, by one template every
-direction walks:
+other is the classic save bug. So a type's fields are described ONCE, by one function template
+beside the type (`engine/save/io.hpp`), and both directions walk it:
 
 ```cpp
 template <class Io>
-void io(Io& io, Racer& r) {
-  io(r.skier);              // a nested described type
+void describe(Io& io, Racer& r) {
+  io(r.skier);                // a nested described type
   io(r.finished);
-  io(r.gates);              // a vector: its length, then its items
-  io.since(3, r.best, 0.0); // a field added in chunk version 3; older saves read the default
+  io(r.gates);                // a vector: its length, then its items
+  io.since(3, r.best, 0.0);   // a field added in chunk version 3; older saves read the default
+  io.until(5, old_lap);       // dropped in version 5: read from older chunks, never written
 }
 ```
 
-The same `io` is walked by the WRITER (to bytes), the READER (from bytes), the SIZER (the bytes
-a save will take, so the buffer is allocated once) and the HASHER (a digest of exactly what is
-saved, so a lab can say the state round-tripped). Arithmetic types and arrays of them, and
-structs a game marks as plain (no padding, no pointers: `std::has_unique_object_representations`),
-are copied in bulk with one `memcpy`; everything else field by field. Nothing is written by
-reflection or by name, so a save is as fast to read as the memory it fills.
+The WRITER appends the fields' bytes to a buffer and the READER fills the fields from bytes, so a
+field saved is a field loaded. A digest of exactly what is saved is the hash of the written
+bytes. Numbers, enums, and arrays and vectors of them are copied in bulk with one `memcpy`; so
+are structs a game marks `GE_SAVE_PLAIN(T)`, whose memory is exactly their described fields with
+no padding (`plain_problem<T>()` checks it). Everything else is walked field by field. Nothing is
+written by reflection or by name, so a save is as fast to read as the memory it fills. The
+reader never reads past its bytes: a cut, a length longer than what is left or a bool that is
+not 0 or 1 is its first problem, kept with the byte it happened at.
 
-**Versions.** Each chunk carries its own version, the game's `io` says from which version a
-field exists (`since`) and until which it was read (`until`, for a field removed), and a change
-too big for that registers an upgrade from one version of a chunk to the next. A chunk NEWER
+**Versions.** Each chunk carries its own version, the type's `describe` says from which version
+a field exists (`since`) and until which it was read (`until`, for a field removed), and a change
+too big for that branches on `io.version()`, the version of the chunk being read. A chunk NEWER
 than the build is refused with both versions named. Note what a version does NOT promise: a
 replay plays only on the behaviour it was recorded under, but a save loads under the new
 behaviour and simply plays on from there, which is what a player of a patched game expects.
 
 **References.** A pointer is never saved. What the setup rebuilds is shared and immutable (the
-map); what refers to another part of the state refers by index, and the game's `io` writes the
-index. The engine's describe helpers write vectors, strings, optionals, fixed arrays, enums and
-the `core::Rng` state, so a game writes only its own structs.
+map); what refers to another part of the state refers by index, and the type's `describe` writes the
+index. The engine walks vectors, strings, optionals, fixed arrays, pairs, enums and the
+`core::Rng` state itself, so a game describes only its own structs.
 
 ## The run saved (M25b)
 
@@ -119,7 +122,7 @@ ge save diff a.save b.save             # chunk by chunk, then field by field thr
 `ge bench` gains a `save` zone and a `load` zone, timed per call, so a save's cost is held in the
 performance ledger (`docs/perf.md`) like a step's. Fall Line's chunks are its own (`games/fall_line`);
 the state types of its plugins (the skier, the snowmobile, the helicopter, the paramotor) carry
-their `io` beside them in their plugins, so any game linking a plugin saves its state for free.
+their `describe` beside them in their plugins, so any game linking a plugin saves its state for free.
 
 **Targets** (on the container, release build, to be measured by the lab and moved into
 `docs/perf.md` when met): a whole Fall Line run saved to memory in under 1 ms; loaded, map
@@ -203,7 +206,7 @@ missing, stale or damaged, it is rebuilt from the setup and the save still loads
   written; a save is the same moment as bytes. A replay file may START from a save (a replay of
   the last hour of a long game needs no log of the first forty).
 - A late joiner to a spectated or networked run (M23f, M17f) needs a snapshot of the state; the
-  replication may walk the same `io` descriptions, so a type described for saves is described
+  replication may walk the same `describe` functions, so a type described for saves is described
   for the network.
 
 ## Labs
