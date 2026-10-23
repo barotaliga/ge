@@ -25,6 +25,9 @@
 // recording hands it every frame in order and says when a frame is a cut. A build with no GPU
 // registers none, and `--gpu` says so.
 //
+// THE KEYFRAME is a `clone` of the run (engine/replay): a replay seeks by cloning the nearest one
+// and stepping it on off the input log.
+//
 // THE TRACE is what `ge why` reads: a Run whose bots write decision records (ai/why.hpp) says so
 // by accepting a recorder (`trace`), and the engine replays a log with it on (play/why.hpp).
 //
@@ -34,6 +37,7 @@
 // ge:summary The play contract: GameSpec, the axes, Run (step, observe, state, digest, pilot)
 // ge:keywords play contract game spec run axis axes option setup pilot bot observe state digest
 // ge:keywords snap_axis ge_game register view views shoot shot picture caption trace why
+// ge:keywords clone keyframe copy
 // ge:keywords renderer renderer-spec ge_renderer gpu mode modes lit wireframe depth overlay
 // ge:skill agent-interface
 // ge:test tests/play_session_test.cpp
@@ -133,6 +137,11 @@ class Run {
     error = "this game draws no views";
     return false;
   }
+  // A KEYFRAME (engine/replay/keep.hpp): a deep copy of the run as it stands that steps on exactly
+  // as this one would, its digest included, sharing only what no step writes (the map). Null when
+  // the game keeps no copies: then a replay seeks back only by playing again from the start. The
+  // copy's decision trace is off whatever this run's is.
+  virtual std::unique_ptr<Run> clone() const { return nullptr; }
 };
 
 struct GameSpec {

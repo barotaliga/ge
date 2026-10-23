@@ -70,6 +70,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge gpu dump <target> --frame=N --decode=<scheme>`
 - `ge asset inspect`
 - `ge lab table <lab> --where col=value` (one slice of a lab's table, a weapon at one range, read without re-running the lab or opening the whole report)
+- `ge replay <log> --seek=<s>[,<s>...]` (any game's replay sought off its keyframes: each seek's digest against the straight run, the steps and ms it took, the keyframes' bytes; the `replay` lab's check for every game repo, so a game's `Run::clone` is proven without writing a lab)
 
 ## Measuring
 

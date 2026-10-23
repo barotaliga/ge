@@ -14,6 +14,8 @@
 #   ge_ai        the bots' layer (engine/ai: the decision record `ge why` reads)
 #   ge_play      the play contract (engine/play: GameSpec and Run, the session, the input log,
 #                the bench, the stills `ge shot` draws)
+#   ge_replay    replays (engine/replay: the keyframes, the player's seek, the transport;
+#                docs/replays.md)
 #   ge_prof      the profiler (engine/prof: timing zones, allocation counts, the resident set);
 #                ge_prof_alloc the counting operator new an executable links to count allocations
 #   ge_cli, ge   the ge command line (engine/cli: ge new, ge skills sync, ge doctor, ge lessons;
@@ -31,9 +33,10 @@
 #   ge_isa       the instruction-set baseline (x86-64: AVX2), linked by ge_core and
 #                published as ge::isa
 #   ge_flags     warnings, -Werror, sanitizers: this tree only, never published
-# ge_core, ge_fp, ge_isa, ge_assets, ge_ai, ge_net, ge_lab, ge_play, ge_prof, ge_prof_alloc and
-# every plugin target are installed and published as ge::core, ge::fp, ge::isa, ge::assets, ge::ai,
-# ge::net, ge::lab, ge::play, ge::prof, ge::prof_alloc and ge::<plugin>, and the ge executable is
+# ge_core, ge_fp, ge_isa, ge_assets, ge_ai, ge_net, ge_lab, ge_play, ge_replay, ge_prof,
+# ge_prof_alloc and every plugin target are installed and published as ge::core, ge::fp, ge::isa,
+# ge::assets, ge::ai, ge::net, ge::lab, ge::play, ge::replay, ge::prof, ge::prof_alloc and
+# ge::<plugin>, and the ge executable is
 # installed to bin/
 # (cmake/Packaging.cmake, docs/publishing.md).
 cmake_minimum_required(VERSION 3.25)
@@ -208,6 +211,13 @@ add_library(ge_play STATIC engine/play/inputs.cpp engine/play/json_read.cpp
   engine/play/human.cpp engine/play/main.cpp)
 target_link_libraries(ge_play PUBLIC ge_core ge_ai ge_lab ge_prof ge_prof_alloc)
 
+# Replays (engine/replay, docs/replays.md): the keyframes a seek starts from, the player that steps
+# a run off its input log to any step, the transport; over the play contract's Run. Published as
+# ge::replay.
+file(GLOB GE_REPLAY_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/replay/*.cpp)
+add_library(ge_replay STATIC ${GE_REPLAY_SOURCES})
+target_link_libraries(ge_replay PUBLIC ge_core ge_play)
+
 # The ge command line (engine/cli, cmake/Cli.cmake): built here too when a game pulls the engine
 # in, so the game runs the ge of the engine it pins.
 include(cmake/Cli.cmake)
@@ -266,7 +276,7 @@ if(PROJECT_IS_TOP_LEVEL)
   get_property(GE_PLUGIN_TARGETS GLOBAL PROPERTY GE_PLUGIN_TARGETS)
   get_property(GE_GAME_TARGETS GLOBAL PROPERTY GE_GAME_TARGETS)
   add_executable(labs engine/lab/main.cpp ${GE_LAB_SOURCES})
-  target_link_libraries(labs PRIVATE ge_lab ge_play ge_core ge_audio ge_assets ge_net ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
+  target_link_libraries(labs PRIVATE ge_lab ge_play ge_replay ge_core ge_audio ge_assets ge_net ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
     ${GE_LAB_EXTRA})
 
   # The `assets` executable (engine/assets/tool.hpp): the built assets listed, checked and stamped,

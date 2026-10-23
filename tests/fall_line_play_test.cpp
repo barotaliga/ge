@@ -1,7 +1,8 @@
 // AN AGENT AT THE CONTROLS OF FALL LINE, HELD (games/fall_line/sim/play.hpp on the engine's play
 // session): the protocol's answers to a scripted session, its refusals, an agent that sends the
 // bot's own moves riding the bot's own run to the bit, the pilot's run equal to the bot's, an
-// agent's input log played back to its digest, and two logs one input apart diverging there.
+// agent's input log played back to its digest, two logs one input apart diverging there, and a
+// replay sought back and forth landing on the run played straight there (the run's clone).
 //
 // ge:summary Test: Fall Line's play protocol, its errors, replay to the digest, diverge's step
 // ge:keywords test play agent protocol json observe act pilot inputs end replay digest diverge
@@ -9,6 +10,7 @@
 // ge:test tests/fall_line_play_test.cpp
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "check.hpp"
 #include "core/num_text.hpp"
@@ -17,6 +19,7 @@
 #include "fall_line/sim/play.hpp"
 #include "fall_line/sim/simulate.hpp"
 #include "play/session.hpp"
+#include "replay/player.hpp"
 
 namespace {
 
@@ -167,4 +170,27 @@ TEST(two_logs_one_input_apart_diverge_at_that_step) {
   CHECK_MSG(yaw, "the first differing state does not name the skier's yaw rate");
   const auto same = gp::diverge(fs::kGame, a, a, error);
   CHECK(same && same->same && same->state_step < 0 && same->input_step < 0);
+}
+
+TEST(a_replay_sought_anywhere_is_the_run_played_straight_there) {
+  gp::Setup st = setup(2);
+  st.options["hands"] = "human";
+  std::string error;
+  const auto played = gp::pilot_run(fs::kGame, st, error);
+  CHECK_MSG(played.has_value(), error);
+  if (!played) return;
+  ge::replay::Player p(fs::kGame, played->log);
+  CHECK_MSG(p.ok(), p.error());
+  const int64_t n = p.length();
+  for (const int64_t mark : std::vector<int64_t>{n, n / 2, n / 2 + 37, 601, n - 1, 0, n / 3}) {
+    p.seek(mark);
+    while (!p.advance(600)) {
+    }
+    auto straight = fs::kGame.open(st, error);
+    for (int64_t i = 0; i < mark; i++) straight->step(played->log.at(i));
+    CHECK_MSG(p.run().digest() == straight->digest() && p.run().state() == straight->state(),
+              "the replay sought to step " + std::to_string(mark) +
+                  " is not the run played there: a part of FallLineRun the clone misses");
+  }
+  CHECK(p.stats().restores > 0);
 }
