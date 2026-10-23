@@ -62,6 +62,7 @@ constexpr FlagSpec kLabSweepFlags[] = {
     {"set", "<name>=<a>,<b>,...",
      "the constexpr constant to sweep (kSlope, or spec::kSlope) and the values it takes"},
     {"in", "<file>", "the source file it is defined in, when its name is in several"},
+    {"flag", "<flag>=<a>,<b>,...", "sweep one of the lab's own flags instead (no rebuild)"},
     {"metrics", "<word,...>", "list only the metrics whose keys hold one of these words"},
     kEngine,
     kRepo};

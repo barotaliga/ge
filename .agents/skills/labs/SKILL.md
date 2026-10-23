@@ -46,8 +46,9 @@ bands at 100 dB. A GPU lab that guards a look hands its distance map with each s
 **Choosing a constant's value** is a sweep, not a string of edits and reruns: `make ge
 ARGS="lab sweep <id> --set=<kName>=a,b,c -- <lab flags>"` rewrites the one-line `constexpr`, rebuilds
 the labs and runs the lab at each value, prints every metric side by side and puts the source
-back (`docs/labs.md` § The sweep). Put the value you pick in the code and run the
-before-and-after as usual.
+back (`docs/labs.md` § The sweep); `--flag=<flag>=a,b,c` sweeps one of the lab's own flags
+the same way with no rebuild (the hours of a day, a step rate). Put the value you pick in the code
+and run the before-and-after as usual.
 
 **Seeing a scenario step by step**: add `--trace` to a scenario lab (`ride`, `sled`, `heli`,
 `para`). Each scenario writes `<id>.trace.tsv` and charts of it with its events marked, so a

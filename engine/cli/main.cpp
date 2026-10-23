@@ -173,6 +173,7 @@ Outcome run(const Args& a) {
     SweepOptions sweep;
     sweep.id = a.words[0];
     sweep.set = flag_value(a, "set");
+    sweep.flag = flag_value(a, "flag");
     sweep.in = flag_value(a, "in");
     sweep.metrics = flag_value(a, "metrics");
     sweep.passthrough = a.passthrough;
