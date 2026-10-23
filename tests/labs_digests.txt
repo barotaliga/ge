@@ -11,6 +11,7 @@ free 8a3427de7c2b5c91
 gpu-capture 8b5d5e3b7be5a4fc
 heli 57f63b6da08cbec2
 humanness a486ef984a6511d7
+injuries 594a6c11dc263f37
 junctions 036999ca677e12e6
 level 4fbff3da7a82c4aa
 lift-ride a374f35eb85cc161
@@ -27,7 +28,7 @@ real-hints eb15bbe4ffd14810
 real-maps 2dceaf5b64e32976
 record 4a94db34c7a30d69
 resort f82a1fca6fb6ba42
-ride f7dc714b2493f95a
+ride e7b71a5977a27c65
 routes 739cf0534473b4f8
 run-clock 81607c7ac1161166
 shadows 5b0d6051c10638b4

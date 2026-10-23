@@ -245,12 +245,16 @@ the row when the file moves.
 | `plugins/racing/standings.hpp` | `oss-game-framework/src/racing/standings.ts` | legProgress fieldOrder placeAmong |
 | `plugins/racing/tape.cpp` | `oss-game-framework/src/racing/tape.ts` | encodeStream decodeStream |
 | `plugins/racing/tape.hpp` | `oss-game-framework/src/racing/tape.ts` | snapAxis ControlTape |
+| `plugins/skier/anatomy.cpp` | `game5/engine/game/defs/anatomy.ts` | BODY_PARTS INJURIES (the blunt, load, drawer, twist and bend rows) |
+| `plugins/skier/anatomy.hpp` | `game5/engine/game/defs/anatomy.ts` | BodyPart Mechanism Facing InjuryDef BONE_KINDS ORGAN_KINDS INJURY |
 | `plugins/skier/app/ride_bed.cpp` | `game5/pwa/src/game/audio/ride-bed.ts` | createRideBed |
 | `plugins/skier/app/ride_bed.hpp` | `game5/pwa/src/game/audio/ride-bed.ts` | RideBed createRideBed |
 | `plugins/skier/app/snow_bed.cpp` | `game5/pwa/src/game/audio/snow-voice.ts` | skiVoiceOf snowTargets |
 | `plugins/skier/app/snow_bed.hpp` | `game5/pwa/src/game/audio/snow-voice.ts` | SkiVoice SnowVoice SnowMix SnowLayer SNOW_LAYERS SNOW_GLIDE snowTargets |
 | `plugins/skier/app/wind_bed.cpp` | `game5/pwa/src/game/audio/wind-voice.ts` | windTargets WIND_FULL WIND_TOP |
 | `plugins/skier/app/wind_bed.hpp` | `game5/pwa/src/game/audio/wind-voice.ts` | WindVoice WindMix WindLayer WIND_LAYERS WIND_GLIDE windTargets |
+| `plugins/skier/body.cpp` | `game5/engine/game/body.ts`, `game5/engine/game/body-bones.ts`, `game5/engine/game/gore.ts` | blowOf riskOf energyOver trunkOnSkis landing fall judge struckOn sideOf severityOf diesOf mortality |
+| `plugins/skier/body.hpp` | `game5/engine/game/body.ts`, `game5/engine/game/state.ts` | BodyState Injury Impact stepBody mendBody |
 | `plugins/snowmobile/body.cpp` | `game5/engine/game/sled-body.ts` | rideSled hullContacts landingPitch deriveSled sledLockAt |
 | `plugins/snowmobile/body.hpp` | `game5/engine/game/sled-body.ts` | rideSled SledStepReport deriveSled |
 | `plugins/snowmobile/drive.cpp` | `game5/engine/game/sled-drive.ts` | powerShare rpmAtTop maxDriveForce driveForce rpmGoal stepBelt stepRpm |

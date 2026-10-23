@@ -43,13 +43,21 @@ Vec3 right_of(const Vec3& n, const Vec3& a) {
 }
 
 void wipe_out(SkierState& s, SkierEvents& ev, Wipeout cause) {
+  put_down(s, cause);
+  ev.wiped_out = true;
+  ev.cause = cause;
+}
+
+}  // namespace
+
+void put_down(SkierState& s, Wipeout cause) {
   s.down = true;
   s.cause = cause;
   s.down_time = 0;
   s.jump_held = 0;
-  ev.wiped_out = true;
-  ev.cause = cause;
 }
+
+namespace {
 
 // THE GROUND after the move: back onto the support below it (a landing if he was flying), off it
 // when it falls away past the legs' reach. Returns nothing; writes the state and the events.
@@ -87,6 +95,7 @@ void meet_ground(SkierState& s, const Level& level, double dt, SkierEvents& ev) 
       off = off < 0 ? -off : off;
       if (off > core::kPi / 2) off = core::kPi - off;  // landed switch is landed
     }
+    ev.landing_off = off;
     if (load > a::kHarshG) {
       wipe_out(s, ev, Wipeout::landing);
     } else if (off > a::kAcross) {
@@ -135,6 +144,7 @@ void meet_trees(SkierState& s, const World& world, SkierEvents& ev) {
   s.vz += closing * nz;
   if (s.down) return;
   ev.tree = i;
+  ev.closing = closing;
   if (closing > w::kTreeSpeed) {
     // The trunk stops the body; what was going past it is mostly lost in the fall.
     s.vx *= 0.3;
@@ -177,6 +187,8 @@ const char* wipeout_name(Wipeout w) {
       return "landing";
     case Wipeout::across:
       return "across";
+    case Wipeout::hurt:
+      return "hurt";
   }
   return "none";
 }
