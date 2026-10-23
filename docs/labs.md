@@ -379,6 +379,7 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 | --- | --- | --- | --- | --- |
 | `noise` | picture | engine | `engine/core/noise.hpp` | M2 (now) |
 | `stars` | picture | engine | The real stars (`engine/render/stars.hpp`): the generated table decoded and the cube map the sky pass reads cut from it; the count brighter than each magnitude, the stars no cell holds, the brightest missing, and the whole sky charted by right ascension and declination, each star by its magnitude and colour (fewer than 4,000 or more than 6,000 to the sixth magnitude, over 30 dropped or a fourth-magnitude star missing fails); `--bake=<catalog> --write` regenerates `engine/render/star_data.cpp` off the catalogue's text (`engine/lab/labs/gpu_stars_lab.cpp`) | M8f5 (now) |
+| `menu` | picture | engine | `engine/ui` (a front door over every backdrop kind, both pages at 1280x720, 390x844 and 844x390, the highlight's glide, a page's fade and a picture's drift, drawn by the CPU raster; any layout problem, or a highlight slower than 15 frames to settle, fails) | M22a (now) |
 | `charts` | picture | engine | `engine/lab/chart.hpp`, `plot.hpp`, `stats.hpp`, `series.hpp` (every chart form over seeded data with outliers planted at known places, each as a PNG and an SVG; a series file written and read back) | M14a (now) |
 | `run-clock` | sim | engine | `engine/loop/run_clock.hpp` | M2 (now) |
 | `level` | picture | plugin:mountain | `plugins/mountain/mapgen` (`--version=1,8`: the single piste, a ski area's race map) | M4a, M4b4a (now) |

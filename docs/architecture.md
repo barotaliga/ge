@@ -76,8 +76,14 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   packet format, connections with their channels, and nodes of up to 32 peers. It depends on
   `engine/core` only and reads no clock: the caller passes the time and the seeds, so a session
   over the simulated network is deterministic and every net lab is a determinism test.
-- **`engine/ui`**: the immediate-mode 2D layer (rects, images, SDF text), plus Dear
-  ImGui behind `GE_DEV_UI`.
+- **`engine/ui`**: the immediate-mode 2D layer (M22): paints (colours, linear and radial
+  gradients), a draw list of rounded boxes (a paint, an image, a border, a feather) and text runs
+  under clips, fonts over stb_truetype with a built-in family compiled in, a CPU raster (the labs'
+  pictures and the GPU pass's reference), backdrops (`Background`: a colour, a gradient, a drifting
+  picture, the live scene, scrims and vignettes) and menus as a model (pages, items, focus, events)
+  with a responsive view. It depends on `engine/core` only and holds no GPU: the draw list is data,
+  and the 2D pass in `engine/render` (M22b) draws the same commands. A menu never calls the game;
+  it hands back events, so the game's state stays the game's and a menu replays from its inputs.
 - **`games/fall_line/app`**: Fall Line's presentation, the `fall_line_app` library (which
   the window and the game's GPU labs link): its pass table over `engine/render`, the
   `FrameView` it extracts (from named views now, from `GameState` once the run lands),
