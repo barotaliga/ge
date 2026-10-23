@@ -221,7 +221,7 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
   const auto joints = static_cast<uint32_t>(model.joints.size());
   for (int k = 0; k < kMaxFigures; ++k) {
     r::create_skin(device, f->skinning, f->skins[k], f->figures, static_cast<uint32_t>(k), 0,
-                   model.meshes[0], ge::skier::pose_reach(), joints);
+                   model.meshes[skier_lods(model)[0]], ge::skier::pose_reach(), joints);
     f->skin_list[k] = &f->skins[k];
   }
   f->locals.resize(joints);
