@@ -13,6 +13,8 @@
 #include <cstring>
 #include <vector>
 
+#include "render/night.hpp"
+
 namespace ge::render {
 
 void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint32_t height,
@@ -50,7 +52,9 @@ void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint
   double s[3];
   sun_direction(view, s);
   for (int i = 0; i < 3; ++i) u.sun[i] = static_cast<float>(s[i]);
-  u.sun[3] = static_cast<float>(view.sun_illuminance);
+  // Light is stored at the pre-exposure's scale (render/night.hpp): 1 by day.
+  const double pre = pre_exposure(view);
+  u.sun[3] = static_cast<float>(view.sun_illuminance * pre);
   u.size[0] = static_cast<float>(width);
   u.size[1] = static_cast<float>(height);
   u.size[2] = 1.0f / static_cast<float>(width);
@@ -69,6 +73,28 @@ void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint
   u.weather[3] = unit(w.hidden);
   for (int i = 0; i < 3; ++i) u.deck[i] = static_cast<float>(w.deck_tint[i] * w.deck_light);
   u.deck[3] = unit(w.deck_zenith);
+  // THE NIGHT (render/night.hpp): the pre-exposure, the moon's direct light while the sun keys,
+  // which sky the haze is; the moon, its light and disc; the real sun; the dark sky.
+  const Night& n = view.night;
+  u.world[1] = static_cast<float>(pre);
+  u.world[2] = static_cast<float>(n.other_light * pre);
+  u.world[3] = n.moon_haze ? 1.0f : 0.0f;
+  double d[3];
+  look_dir(n.moon_azimuth, n.moon_elevation, d);
+  for (int i = 0; i < 3; ++i) u.moon[i] = static_cast<float>(d[i]);
+  u.moon[3] = static_cast<float>(n.moon_illuminance * pre);
+  u.moon_light[0] = static_cast<float>(n.moon_surface * pre);
+  u.moon_light[1] = static_cast<float>(n.earthshine * pre);
+  u.moon_light[2] = static_cast<float>(n.moon_radius);
+  u.moon_light[3] = n.moon_key ? 1.0f : 0.0f;
+  real_sun_direction(view, d);
+  for (int i = 0; i < 3; ++i) u.night_sun[i] = static_cast<float>(d[i]);
+  u.night_sun[3] =
+      static_cast<float>((n.moon_key ? n.sun_illuminance : view.sun_illuminance) * pre);
+  u.night[0] = static_cast<float>(n.dark_sky * pre);
+  u.night[1] = static_cast<float>(n.dark_light * pre);
+  u.night[2] = static_cast<float>(n.sidereal);
+  u.night[3] = static_cast<float>(n.latitude);
 }
 
 FrameTargets create_targets(gpu::Device& device, std::string_view label, uint32_t width,

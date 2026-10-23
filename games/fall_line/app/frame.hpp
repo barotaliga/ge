@@ -3,7 +3,8 @@
 // they run, with the named targets each reads and writes; `draw` runs exactly that order, and
 // `pass_table_faults` holds the order to the engine's check.
 //
-//   sky.tables           -> sky.transmittance sky.multiscatter sky.view sky.aerial sky.light
+//   sky.tables           -> sky.transmittance sky.multiscatter sky.view sky.moon_view (at night)
+//                           sky.aerial sky.light
 //   skinning             -> figures.posed (every racer's skier model posed into his mesh)
 //   terrain.cull         -> terrain.tiles terrain.indirect (and terrain.normals, once)
 //   instances.cull       -> instances.early (the forest and the figures: the frustum, the last

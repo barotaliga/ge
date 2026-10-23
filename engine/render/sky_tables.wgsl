@@ -1,8 +1,9 @@
 // THE SKY'S TABLES, built by compute (render/sky.hpp; docs/rendering.md § Sky): the
 // transmittance and multiple-scattering tables once at load, the sky-view table when the sun or
-// the eye's height has moved past a threshold, the aerial-perspective volume every frame for the
-// camera, and the sky's light (the irradiance an up-facing surface gets from the sky, and the
-// sun's transmittance at the eye) after the sky-view table. Each entry point reads the tables
+// the eye's height has moved past a threshold (and at night the moon's, when the moon has), the
+// aerial-perspective volume every frame for the camera, and the sky's light (the irradiance an
+// up-facing surface gets from the sky, and the light's transmittance at the eye) after each
+// sky-view table. Each entry point reads the tables
 // before it through group 0 (`table_a`, `table_b`) and writes one output in group 1.
 #include "render/wgsl/frame_types.wgsl"
 #include "render/wgsl/atmosphere.wgsl"
@@ -16,8 +17,10 @@
 @group(1) @binding(1) var out_3d: texture_storage_3d<rgba16float, write>;
 
 struct SkyLight {
-  irradiance_up: vec4f,  // the sky's irradiance on an up-facing surface, per unit sun
+  irradiance_up: vec4f,  // the sun's sky's irradiance on an up-facing surface, per unit sun
   sun_at_eye: vec4f,     // the sun's transmittance to the eye
+  moon_up: vec4f,        // the moon's sky's, per unit of its light
+  moon_at_eye: vec4f,    // the moon's transmittance to the eye
 }
 @group(1) @binding(2) var<storage, read_write> sky_light: SkyLight;
 
@@ -107,9 +110,9 @@ fn multiscattering(@builtin(global_invocation_id) id: vec3u) {
   textureStore(out_2d, id.xy, vec4f(l2 / max(vec3f(1.0) - fms, vec3f(1e-3)), 1.0));
 }
 
-// The sky round the eye (table_a: transmittance, table_b: multiple scattering), 30 steps a ray.
-@compute @workgroup_size(8, 8)
-fn sky_view(@builtin(global_invocation_id) id: vec3u) {
+// The sky round the eye under a light at `mu_s` (the cosine of its zenith angle; table_a:
+// transmittance, table_b: multiple scattering), 30 steps a ray.
+fn sky_view_at(id: vec3u, mu_s: f32) {
   if (id.x >= u32(kSkyViewSize.x) || id.y >= u32(kSkyViewSize.y)) {
     return;
   }
@@ -118,13 +121,23 @@ fn sky_view(@builtin(global_invocation_id) id: vec3u) {
   let dir = skyview_dir(uv, r);
   let sin_z = sqrt(max(1.0 - dir.x * dir.x, 0.0));
   let sin_a = sqrt(max(1.0 - dir.y * dir.y, 0.0));
-  // The sun in the x-y plane at its own zenith angle; the view at its azimuth from it.
-  let mu_s = frame.sun.y;
+  // The light in the x-y plane at its own zenith angle; the view at its azimuth from it.
   let sun = vec3f(sqrt(max(1.0 - mu_s * mu_s, 0.0)), mu_s, 0.0);
   let d = vec3f(sin_z * dir.y, dir.x, sin_z * sin_a);
   let len = ray_length(r, dir.x);
   let s = integrate_scattering(vec3f(0.0, r, 0.0), d, sun, len, 30, table_a, table_b, lut_sampler);
   textureStore(out_2d, id.xy, vec4f(s.luminance, 1.0));
+}
+
+// The sun's sky (the real sun's, whichever light is the key) and the moon's.
+@compute @workgroup_size(8, 8)
+fn sky_view(@builtin(global_invocation_id) id: vec3u) {
+  sky_view_at(id, frame.night_sun.y);
+}
+
+@compute @workgroup_size(8, 8)
+fn sky_view_moon(@builtin(global_invocation_id) id: vec3u) {
+  sky_view_at(id, frame.moon.y);
 }
 
 // The aerial-perspective volume: for each of 32 x 32 columns over the screen, the light
@@ -139,7 +152,8 @@ fn aerial(@builtin(global_invocation_id) id: vec3u) {
   let uv = (vec2f(id.xy) + 0.5) / kAerialSize.xy;
   let d = view_ray(frame, uv);
   let o = vec3f(0.0, eye_radius(), 0.0);
-  let sun = frame.sun.xyz;
+  // The light the haze scatters: the sun's, or the moon's once its sky outshines the twilight's.
+  let sun = select(frame.night_sun.xyz, frame.moon.xyz, frame.world.w > 0.5);
   let c = dot(d, sun);
   let ph_r = rayleigh_phase(c);
   let ph_m = mie_phase(c);
@@ -170,12 +184,9 @@ fn aerial(@builtin(global_invocation_id) id: vec3u) {
   }
 }
 
-// The sky's light, once a frame after the sky view (table_a: the sky-view table, table_b:
-// transmittance): the cosine-weighted integral of the sky over the upper hemisphere.
-@compute @workgroup_size(1)
-fn sky_light_main() {
-  let r = eye_radius();
-  let sun = frame.sun.xyz;
+// The cosine-weighted integral over the upper hemisphere of a sky-view table under a light at
+// `toward`.
+fn irradiance_of(sky: texture_2d<f32>, r: f32, toward: vec3f) -> vec3f {
   var e = vec3f(0.0);
   let n_el = 8;
   let n_az = 16;
@@ -188,10 +199,27 @@ fn sky_light_main() {
     for (var b = 0; b < n_az; b++) {
       let phi = (f32(b) + 0.5) * d_az;
       let d = vec3f(sz * cos(phi), cz, sz * sin(phi));
-      let l = textureSampleLevel(table_a, lut_sampler, skyview_uv(r, cz, azimuth_cos(d, sun)), 0.0).rgb;
+      let l = textureSampleLevel(sky, lut_sampler, skyview_uv(r, cz, azimuth_cos(d, toward)), 0.0).rgb;
       e += l * cz * sz * d_el * d_az;
     }
   }
-  sky_light.irradiance_up = vec4f(e, 1.0);
+  return e;
+}
+
+// The sky's light, after its sky view (table_a: the sky-view table, table_b: transmittance):
+// the sun's and, at night, the moon's.
+@compute @workgroup_size(1)
+fn sky_light_main() {
+  let r = eye_radius();
+  let sun = frame.night_sun.xyz;
+  sky_light.irradiance_up = vec4f(irradiance_of(table_a, r, sun), 1.0);
   sky_light.sun_at_eye = vec4f(transmittance_to_top(table_b, lut_sampler, r, sun.y), 1.0);
+}
+
+@compute @workgroup_size(1)
+fn sky_light_moon() {
+  let r = eye_radius();
+  let moon = frame.moon.xyz;
+  sky_light.moon_up = vec4f(irradiance_of(table_a, r, moon), 1.0);
+  sky_light.moon_at_eye = vec4f(transmittance_to_top(table_b, lut_sampler, r, moon.y), 1.0);
 }

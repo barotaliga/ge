@@ -2,10 +2,11 @@
 // index of each input and output is spelled out below.
 //
 // ge:summary Golden test: core/solar, bit for bit
-// ge:keywords test golden solar sun moon
+// ge:keywords test golden solar sun moon sidereal-time
 // ge:skill testing
 #include "core/solar.hpp"
 
+#include <cmath>
 #include <optional>
 
 #include "golden.hpp"
@@ -96,4 +97,15 @@ TEST(solar_matches_golden_bit_for_bit) {
     CHECK_BITS(dm.declination, as_double(row[52]));
     CHECK(row.size() == 53);
   }
+}
+
+// The J2000 epoch's Greenwich sidereal time is 280.46061837 degrees, and a sidereal day (a
+// solar day less 3 min 56 s) brings it back round.
+TEST(sidereal_time_at_the_epoch_and_a_sidereal_day_on) {
+  namespace c = ge::core;
+  CHECK(std::fabs(c::sidereal_time(2451545.0) - 280.46061837) < 1e-9);
+  const double day = 0.99726957;
+  CHECK(std::fabs(c::sidereal_time(2451545.0 + day) - 280.46061837) < 1e-3);
+  const double later = c::sidereal_time(2451545.25);
+  CHECK(later >= 0 && later < 360);
 }

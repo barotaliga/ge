@@ -27,12 +27,6 @@ double cos_d(double x) { return libm::cos(x * kDeg); }
 double tan_d(double x) { return libm::tan(x * kDeg); }
 double wrap360(double x) { return num::mod(num::mod(x, 360.0) + 360.0, 360.0); }
 
-// Greenwich mean sidereal time at jd, degrees.
-double sidereal_time(double jd) {
-  const double t = (jd - 2451545.0) / 36525.0;
-  return wrap360(280.46061837 + 360.98564736629 * (jd - 2451545.0) + t * t * 0.000387933);
-}
-
 struct Horizontal {
   double elevation;
   double azimuth;
@@ -50,6 +44,11 @@ Horizontal horizontal_of(double declination, double hour_angle, double latitude)
 }
 
 }  // namespace
+
+double sidereal_time(double jd) {
+  const double t = (jd - 2451545.0) / 36525.0;
+  return wrap360(280.46061837 + 360.98564736629 * (jd - 2451545.0) + t * t * 0.000387933);
+}
 
 SunPlace sun_at(double hour, double latitude, double declination) {
   const double lat = latitude * kDeg;
