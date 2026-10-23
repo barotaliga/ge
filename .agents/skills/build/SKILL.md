@@ -54,13 +54,13 @@ webgpu only by `ge_gpu`.
 Jobs: `gates` (clang-format, `tools/check-agents.sh`, libm, release-check, the changeset rule,
 and the decision what else runs), `lint` (clang-tidy), `test` (Linux x64 GCC debug, GCC release
 and Clang release; Linux arm64 GCC; macOS Clang), `windows` (MSVC), `packaging`
-(`packaging.yml`, called), and `Required`, the ONE check the ruleset requires. `fail-fast:
+(`packaging.yml`, called), and `required`, the ONE check the ruleset requires. `fail-fast:
 false`, so one row's golden failure shows alongside the others.
 
 - **Tiered, because runners are scarce**: a pull request runs `gates`, `lint` and the GCC
   debug row; the merge queue runs every row, `windows` and `packaging`; a push to main builds
   the five cached rows only (to save their caches). A change to prose alone runs `gates` only.
-  `full-ci` on a pull request runs everything. `Required` passes when every job passed or was
+  `full-ci` on a pull request runs everything. `required` passes when every job passed or was
   skipped by the rules, so a skipped row never leaves a check pending: a new job joins its
   `needs:`, never the ruleset. A failure only the queue sees ejects the pull request from the
   queue; fix it, push, and auto-merge queues it again.
