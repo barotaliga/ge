@@ -58,7 +58,7 @@ void patch_point(const std::vector<std::array<float, 3>>& ctrl, int cols, double
   out[0] = out[1] = out[2] = 0;
   for (int j = 0; j < 3; ++j) {
     for (int i = 0; i < 3; ++i) {
-      const auto& q = ctrl[size_t(j * cols + 2 * p + i)];
+      const auto& q = ctrl[size_t(j) * size_t(cols) + size_t(2 * p + i)];
       for (int k = 0; k < 3; ++k) out[k] += bu[i] * bv[j] * q[size_t(k)];
     }
   }
@@ -145,8 +145,10 @@ bool write_v46(const Fixture& fx, const Compiled& c, Out* out, std::string* err)
     std::vector<std::array<float, 3>> ctrl;
     for (int j = 0; j < kRows; ++j) {
       for (int i = 0; i < kCols; ++i) {
-        const float x = float(rm.min[0] + (rm.max[0] - rm.min[0]) * i / (kCols - 1));
-        const float y = float(rm.min[1] + 32 + (rm.max[1] - rm.min[1] - 64) * j / (kRows - 1));
+        const float x =
+            float(rm.min[0]) + float(rm.max[0] - rm.min[0]) * float(i) / float(kCols - 1);
+        const float y =
+            float(rm.min[1] + 32) + float(rm.max[1] - rm.min[1] - 64) * float(j) / float(kRows - 1);
         const float z = float(rm.max[2] - (i % 2 ? 24 : 136));
         ctrl.push_back({x, y, z});
       }
@@ -164,7 +166,7 @@ bool write_v46(const Fixture& fx, const Compiled& c, Out* out, std::string* err)
     }
     for (int j = 0; j < kRows; ++j) {
       for (int i = 0; i < kCols; ++i) {
-        const auto& p = ctrl[size_t(j * kCols + i)];
+        const auto& p = ctrl[size_t(j) * kCols + size_t(i)];
         const float st[2] = {p[0] / 64.0f, p[1] / 64.0f};
         const float lm[2] = {
             float((at[0] + 0.5 + double(i) / (kCols - 1) * (size[0] - 1)) / kPage),

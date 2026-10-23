@@ -169,7 +169,7 @@ uint32_t add_polygon(Map* map, const Polys& p, int32_t first, int32_t count, con
   std::vector<uint32_t> poly;
   poly.reserve(size_t(count));
   for (int32_t e = 0; e < count; ++e) {
-    const int32_t se = p.surfedges[size_t(first + e)];
+    const int32_t se = p.surfedges[size_t(first) + size_t(e)];
     const uint32_t vi = se >= 0 ? p.edges[size_t(se)][0] : p.edges[size_t(-int64_t(se))][1];
     Vertex v;
     for (int k = 0; k < 3; ++k) {

@@ -63,7 +63,7 @@ const uint8_t* colour_of(const std::string& path) {
 
 ge::assets::Model palette_of(const br::Map& map) {
   ge::assets::Model m;
-  m.materials.resize(kSlots * kLevels);
+  m.materials.resize(size_t(kSlots) * kLevels);
   for (int slot = 0; slot < kSlots; ++slot) {
     const uint8_t* c = slot < int(map.textures.size()) ? colour_of(map.textures[size_t(slot)].name)
                                                        : colour_of(std::to_string(slot));
@@ -71,7 +71,7 @@ ge::assets::Model palette_of(const br::Map& map) {
       const double light = (l + 0.5) / kLevels * 1.6;
       for (int k = 0; k < 3; ++k) {
         const double v = std::min(1.0, c[k] / 255.0 * light);
-        m.materials[size_t(slot * kLevels + l)].rgb[k] = float(v * v);
+        m.materials[size_t(slot) * kLevels + size_t(l)].rgb[k] = float(v * v);
       }
     }
   }

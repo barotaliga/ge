@@ -20,7 +20,7 @@ namespace {
 using detail::Cursor;
 using detail::Lump;
 
-enum : size_t {
+enum : uint8_t {
   kEntities,
   kPlanes,
   kVertices,

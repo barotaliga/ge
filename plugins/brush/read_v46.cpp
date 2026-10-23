@@ -22,7 +22,7 @@ namespace {
 using detail::Cursor;
 using detail::Lump;
 
-enum : size_t {
+enum : uint8_t {
   kEntities,
   kShaders,
   kPlanes,
@@ -51,7 +51,7 @@ constexpr int32_t kLiquid = 0x8 | 0x10 | 0x20;  // lava, slime, water contents
 constexpr uint32_t kPage = 128, kPageBytes = 128 * 128 * 3;
 // A patch's tessellation is bounded so a hostile file cannot ask for unbounded memory.
 constexpr uint64_t kMaxVertices = 1u << 23;
-enum FaceType : int32_t { kPolygon = 1, kPatch = 2, kMesh = 3, kBillboard = 4 };
+enum FaceType : uint8_t { kPolygon = 1, kPatch = 2, kMesh = 3, kBillboard = 4 };
 
 // Turns a surface's triangles round when, summed, they face against its vertices' normals.
 void orient(Map* m, const Surface& s) {
@@ -92,7 +92,7 @@ void tessellate(Map* m, std::span<const Vertex> ctrl, int w, int h, int level) {
       double pos[3] = {}, st[2] = {}, lm[2] = {}, nrm[3] = {};
       for (int j = 0; j < 3; ++j) {
         for (int i = 0; i < 3; ++i) {
-          const Vertex& q = ctrl[size_t((2 * py + j) * w + 2 * px + i)];
+          const Vertex& q = ctrl[size_t(2 * py + j) * size_t(w) + size_t(2 * px + i)];
           const double k = bu[i] * bv[j];
           for (int a = 0; a < 3; ++a) pos[a] += k * q.pos[a], nrm[a] += k * q.nrm[a];
           for (int a = 0; a < 2; ++a) st[a] += k * q.st[a], lm[a] += k * q.lm[a];
@@ -253,7 +253,7 @@ bool read_v46(std::span<const uint8_t> file, Map* out, std::string* err, const R
                                 "the file is damaged: rebuild the map");
         }
         for (int32_t k = 0; k < n_meshverts; ++k) {
-          const int32_t mv = meshverts[size_t(meshvert + k)];
+          const int32_t mv = meshverts[size_t(meshvert) + size_t(k)];
           if (mv < 0 || mv >= n_vertexes) {
             return detail::refuse(err, f, where + " has a mesh vertex outside its own vertices",
                                   "the file is damaged: rebuild the map");
