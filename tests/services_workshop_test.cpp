@@ -153,7 +153,7 @@ TEST(each_player_sees_only_what_they_may_and_queries_sort_filter_and_page) {
   a->submit_item(0, draft("for friends", {"map"}, ItemVisibility::friends), f);
   a->submit_item(0, draft("just mine", {"map"}, ItemVisibility::author), f);
   poll(*a, 0);
-  const auto count = [&](Backend& who, ItemQuery q) {
+  const auto count = [&](Backend& who, const ItemQuery& q) {
     who.query_items(q);
     return poll(who, 0)[0].total;
   };
