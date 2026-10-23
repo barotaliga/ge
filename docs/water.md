@@ -181,8 +181,8 @@ The swimmer is sampled at three heights (feet, waist, eyes) into an **immersion 
     traps air that escapes over the first minutes. A dressed skier floats a little at first,
     his jacket holding air, then the suit soaks, the boots fill (a ski boot holds about a litre
     and a half) and his net buoyancy goes negative: **he sinks slowly** unless he swims, and
-    swimming is weak in a soaked suit (drag area up, stroke thrust down). Skis come off and
-    float on their own.
+    swimming is weak in a soaked suit (drag area up, stroke thrust down). The skis are the
+    game's to take off and float (a float of their own, M24c).
   - **The cold**: the water's temperature drives cold shock (the first minute: the gasp, no
     breath held, stroke control poor), then swim failure as the limbs cool (in water near 0 °C
     within about ten minutes of real swimming), then exhaustion; the game decides what each
@@ -195,6 +195,17 @@ The swimmer is sampled at three heights (feet, waist, eyes) into an **immersion 
 Presets: `water::default_swimmer()` (a person in a swimsuit in temperate water), the classic one
 in `plugins/shooter`, the clothed skier in `plugins/skier`. The swimmer emits the same splash
 events as a float, plus strokes and breaths for the sound.
+
+The body regime treats the swimmer as an upright column of his own height (eyes plus 12 cm),
+submerged by the share under the surface, with the lungs full while a breath is held, at their
+residual once it is gone and between at the surface. What it gives, measured by the `swim` and
+`skier-swim` labs: a swimmer in a swimsuit treads water with his eyes a few centimetres out;
+lying still, his breath runs out in about a minute (about 20 s in 2 °C water, the cold shock
+draining it three times faster) and he sinks at about 0.65 m/s. A dressed skier through the ice
+of 1 °C water floats on about 23 kg of trapped air, soaks about 9 kg into his clothes, has his
+eyes under for good after about two and a half minutes lying still (five and a half swimming
+up) and is metres down a minute after his breath is gone. Swim failure comes at
+`failure_time(T)`: ten minutes at 0 °C, about half an hour at 5, nearly two hours at 10.
 
 ## Colour (`engine/water/optics`, M24e)
 

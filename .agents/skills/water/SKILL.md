@@ -24,7 +24,9 @@ for anything the simulation reads, `render` for a pass, `audio` for a voice, `la
 | The fetch over a body's outline | `engine/water/fetch.hpp` | `fetch` | `tests/water_fetch_test.cpp` |
 | Bodies (lake, ocean, river, volume) and the one `sample` query | `engine/water/world.hpp` | `fetch` | `tests/water_world_test.cpp` (golden) |
 | Floating: probes, buoyancy, drag, slam, added mass, planing, splashes | `engine/water/float.hpp` | `float` | `tests/water_float_test.cpp` (golden) |
-| Swimming, colour, flow, drawn, sound | the rows M24d–M24l | the doc's § Labs | as each row lands |
+| Swimming: immersion, the kinematic and body regimes, clothes, cold, breath, the water jump | `engine/water/swim.hpp` | `swim` | `tests/water_swim_test.cpp` (golden) |
+| The dressed skier's swim preset | `plugins/skier/swim.hpp` | `skier-swim` | `tests/skier_swim_test.cpp` |
+| Colour, flow, drawn, sound | the rows M24e–M24l | the doc's § Labs | as each row lands |
 
 ## The rules
 
@@ -54,6 +56,9 @@ for anything the simulation reads, `render` for a pass, `audio` for a voice, `la
   wets; taking it into the acceleration without its Lagrangian term (1/2 v d(ma)/dt, as
   `step_floater` does) makes a heaving box gain a few per cent of energy a minute. The `float`
   lab's energy chart is the check.
+- **A swimmer's test or lab skips the plunge.** Dropped in, any swimmer goes under for a
+  second and bobs; "when his eyes go under" means after that (the `skier-swim` lab measures
+  when they go under for good), or every number reads the plunge.
 - **A plan view drops the components shorter than a few pixels** (the picture's own tier):
   drawn, they alias into stripes that are not on the water.
 

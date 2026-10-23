@@ -50,6 +50,7 @@ shadows 5b0d6051c10638b4
 sight 2c2aefbe619a6874
 sim a9c6d0f6bb29ce2a
 ski-cross fbe386cdba062259
+skier-swim aa7aa24c5ebdcc04
 skier-views d6fb3d6e2a3c34fe
 skijump-hills 3fa0eff35ac0f70a
 slalom 2adb7c679ec93adf
@@ -61,6 +62,7 @@ speed-ski 55c4cfa78de28f7e
 spray 7479b5a25c39b195
 stars 9cdfe902087f03b7
 steer 1a0cad67ccb0869e
+swim c6acad32e55847d9
 synth 39e6460e5c8a8c8e
 taa 01ee5d58d90a05ce
 trace cccfaac48bafaa60
