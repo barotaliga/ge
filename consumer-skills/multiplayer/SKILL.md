@@ -86,6 +86,9 @@ net::session_client_update(client, now_us);
 // client.players[] is the player list (name, team, ready, leader, ping_ms); client.me is
 // this player's seat; client.token brings it back to the seat after a crash or a drop.
 net::session_client_chat(client, net::ChatScope::team, net::kNoPlayer, text, size);
+// Proximity chat: the host asks the game who is in earshot (it knows where everyone is).
+// sc.hears = [](void* game, int speaker, int listener) { return in_earshot(game, speaker, listener); };
+net::session_client_chat(client, net::ChatScope::nearby, net::kNoPlayer, text, size);
 ```
 
 Asks (`session_client_ready`, `_team`, `_chat`, `_kick`, `_start`, `_return`, `_settings`) come

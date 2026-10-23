@@ -151,7 +151,7 @@ away, changed, or a snapshot for a new client), `gone`, `pings`, `chat`, `settin
 | Away | A peer that times out leaves its seat away (unready) for `reconnect_us`, then frees it; a peer that disconnects frees it at once |
 | Teams | `team_count` teams of at most `team_size`; a new player joins the smallest; a move into a full team, or once the game has started, is refused |
 | Start and return | Only the leader; start needs `min_players` present and, with `need_ready`, everyone ready; return makes everyone unready |
-| Chat | Control bytes become spaces; a line is cut at `chat_max` bytes on a UTF-8 boundary; each player's bucket holds `chat_burst` lines and gains one every `chat_refill_us`; a team line reaches the team, a direct line its target, and every line comes back to its sender |
+| Chat | Control bytes become spaces; a line is cut at `chat_max` bytes on a UTF-8 boundary; each player's bucket holds `chat_burst` lines and gains one every `chat_refill_us`; a team line reaches the team, a direct line its target, a nearby line (proximity chat) whoever the game's `SessionConfig::hears` says is in earshot of the sender (refused `no_nearby` in a session with none), and every line comes back to its sender |
 | Kick | Only the leader, never the host's own player; the kicked player is told, the seat freed at once, and the token and the address refused for the rest of the session |
 | Pings | Every `roster_us` the host sends each seat's round trip as it measures it |
 
