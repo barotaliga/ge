@@ -240,6 +240,7 @@ characters.
 | `engine/snow/` | Snow over any ground (`ge::snow`, `docs/snow.md`): the layer and its cover, sparse fixed-point tiles, `sample`, `press` and imprint records, reference contacts, the snapshot | `snow` |
 | `engine/move/` | Character movement (`ge::move`, `docs/movement.md`): the knobs and presets, the step over a trace callback, the box world, the strafer, the scenarios | `move` |
 | `engine/input/` | Input devices (`ge::input`, `docs/input.md`): the device model, events, state, dead zones, actions and bindings, rebinding, wheels' roles, touch, players, feedback, the event log, simulated devices | `input` |
+| `engine/camera/` | The camera (`ge::camera`, `docs/camera.md`): poses, followers, the rigs (first person, boom, mounted, orbit, planted, free), shake, transitions, the stack, the scripted subjects | `camera` |
 | `engine/platform/` | SDL3 (`GE_PLATFORM`): the window, input, the frame clock, the audio device; the only place SDL is included | `platform` |
 | `engine/gpu/` | The native GPU device over Dawn (`GE_GPU`): adapters and tiers, pipelines and the manifest, surfaces, targets, timers; the only place webgpu.h is included | `gpu` |
 | `engine/render/` | Generic rendering mechanisms (`docs/rendering.md`): the frame and its pass table, sky, terrain, shadows, Hi-Z, TAA-U, bloom, post, meshes, instances, skinning; WGSL beside each | `render` |
@@ -345,6 +346,7 @@ and the directories agree.
 | `platform` | `engine/platform`: SDL3, the window, input, the gamepad, the audio device, files |
 | `move` | `engine/move`: a moving character's knobs, presets and step (ground and air acceleration, friction, jumps, strafe jumping, steps, slopes, crouch, slide, flight), the trace a world answers, the box world, the strafer, the scenarios, the `move-*` labs; the M28 rows |
 | `input` | `engine/input`: keyboards, raw mice, gamepads, joysticks, wheels and pedals, touch; actions, contexts, the bindings file, rebinding, the device database, players and hot-plug, rumble and force feedback, the event log, the simulated backend; `play/devices`; the M19 rows |
+| `camera` | `engine/camera`: the pose and its roll, the followers, the subject and the world's queries, the rigs (first person with bob, roll and kick; the boom; the mounted head; orbit, planted, free), shake and comfort, cut, blend and inertialize, the camera stack, the scripted subjects and the camera labs; the M26 rows |
 | `gpu` | `engine/gpu`: the native GPU device over Dawn (Dawn's `webgpu.h`), feature tiers, buffers, pipelines and the manifest, WGSL and `make shaders-check` |
 | `render` | A draw pass, the pass table, GPU-driven instances, shadows, sky, TAA-U, post, lab captures, extraction from `GameState` |
 | `assets` | `engine/assets`: an authored model (glTF), posing and skinning, the `models` lab, exporting from Blender |

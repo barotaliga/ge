@@ -15,6 +15,7 @@
 // ge:skill agent-interface
 // ge:test tests/cli_commands_test.cpp
 #include <algorithm>
+#include <charconv>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -210,6 +211,19 @@ Outcome run(const Args& a) {
                                               : std::vector<std::string>{preset});
   }
   if (name == "ci") {
+    if (has_flag(a, "wait")) {
+      if (a.words.empty())
+        return usage_error("--wait needs a pull request's number", "ge ci <pr> --wait");
+      const std::string m = flag_value(a, "wait");
+      int minutes = 60;
+      if (!m.empty()) {
+        const auto [p, ec] = std::from_chars(m.data(), m.data() + m.size(), minutes);
+        if (ec != std::errc() || p != m.data() + m.size() || minutes < 1)
+          return usage_error("--wait=" + m + " is not a whole number of minutes",
+                             "ge ci <pr> --wait=60");
+      }
+      return run_ci_wait(fs::absolute(repo_of(a)), a.words[0], has_flag(a, "merge"), minutes);
+    }
     return run_ci(fs::absolute(repo_of(a)), a.words.empty() ? "" : a.words[0], flag_value(a, "log"),
                   has_flag(a, "merge"));
   }
