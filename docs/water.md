@@ -390,7 +390,7 @@ never read back by the simulation.
 
 | Lab | Kind | Row | What it shows |
 | --- | --- | --- | --- |
-| `wind` | picture | M24a | The gust series and its spectrum, the log profile over each ground, a sheltered field's plan with arrows, local sources; the mountain's wind against its own function, bit for bit |
+| `wind` | picture | M24a | The gust series for three grounds with the intensity asked and measured and the gust factor, the log profile over each ground, a sheltered field's plan with a downwash and a whirl, the sources' decay (the mountain's wind is held bit for bit by its golden) |
 | `waves` | picture | M24b | The spectrum for a sweep of winds and fetches against the growth laws, the components laid, the height series at a point (measured Hs and Tp against the asked ones), plan maps of the surface, the breaking shares |
 | `fetch` | picture | M24b | A body's fetch and its sea per point, for a lake, a fjord, a coast |
 | `float` | scenario | M24c | A box, a log, a ball, a hull and a sled skipping: immersion, heave and its period against theory, the drift on a current |

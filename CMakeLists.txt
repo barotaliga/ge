@@ -12,6 +12,7 @@
 #   ge_lab       the lab framework (engine/lab: the contract, the runner, the raster, the PNG,
 #                the series files, the charts and the model views)
 #   ge_ai        the bots' layer (engine/ai: the decision record `ge why` reads)
+#   ge_wind      the wind as a pure function of place and time (engine/wind; docs/water.md)
 #   ge_play      the play contract (engine/play: GameSpec and Run, the session, the input log,
 #                the bench, the stills `ge shot` draws)
 #   ge_prof      the profiler (engine/prof: timing zones, allocation counts, the resident set);
@@ -31,8 +32,8 @@
 #   ge_isa       the instruction-set baseline (x86-64: AVX2), linked by ge_core and
 #                published as ge::isa
 #   ge_flags     warnings, -Werror, sanitizers: this tree only, never published
-# ge_core, ge_fp, ge_isa, ge_assets, ge_ai, ge_net, ge_lab, ge_play, ge_prof, ge_prof_alloc and
-# every plugin target are installed and published as ge::core, ge::fp, ge::isa, ge::assets, ge::ai,
+# ge_core, ge_fp, ge_isa, ge_assets, ge_ai, ge_wind, ge_net, ge_lab, ge_play, ge_prof, ge_prof_alloc and
+# every plugin target are installed and published as ge::core, ge::fp, ge::isa, ge::assets, ge::ai, ge::wind,
 # ge::net, ge::lab, ge::play, ge::prof, ge::prof_alloc and ge::<plugin>, and the ge executable is
 # installed to bin/
 # (cmake/Packaging.cmake, docs/publishing.md).
@@ -208,6 +209,12 @@ file(GLOB GE_AI_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/ai/
 add_library(ge_ai STATIC ${GE_AI_SOURCES})
 target_link_libraries(ge_ai PUBLIC ge_core)
 
+# The wind (engine/wind): a pure function of place and time over a field built once, the
+# mountain's air one configuration of it (docs/water.md § Wind). Deterministic, no platform;
+# published as ge::wind.
+add_library(ge_wind STATIC engine/wind/field.cpp engine/wind/sources.cpp)
+target_link_libraries(ge_wind PUBLIC ge_core)
+
 # The play contract (engine/play: a game's spec and Run, the session and its line protocol, the
 # input log, replay and diverge, the bench, the stills, the `play` executable's main), published
 # as ge::play so a game's `play` target is driven by `ge play`, `ge sim`, `ge replay`, `ge state`,
@@ -275,7 +282,7 @@ if(PROJECT_IS_TOP_LEVEL)
   get_property(GE_PLUGIN_TARGETS GLOBAL PROPERTY GE_PLUGIN_TARGETS)
   get_property(GE_GAME_TARGETS GLOBAL PROPERTY GE_GAME_TARGETS)
   add_executable(labs engine/lab/main.cpp ${GE_LAB_SOURCES})
-  target_link_libraries(labs PRIVATE ge_lab ge_play ge_core ge_audio ge_assets ge_net ge_input ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
+  target_link_libraries(labs PRIVATE ge_lab ge_play ge_core ge_wind ge_audio ge_assets ge_net ge_input ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
     ${GE_LAB_EXTRA})
 
   # The `assets` executable (engine/assets/tool.hpp): the built assets listed, checked and stamped,
