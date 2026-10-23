@@ -26,7 +26,7 @@ tests):
 | `controls.hpp` | The control tape's schema (steer, tuck, brake, flags) and `snap_controls` |
 | `bot.hpp/.cpp` | `plan_bot` and `plan_free` (the line a plan is laid on, `BotPlan::track`: the course's piste, or a run's chain on the free ride; its kickers' lips, and on a course whose slalom gates stand off the line the weave through them; the speed plan is the skier's pilot's, `skier/pilot.hpp`) and `bot_controls` (the `mode` decision: a lift, the stop at the foot, a reset for a missed gate; then the skier's pilot flown as the racer's `Rider`) |
 | `field.hpp/.cpp` | The rivals: `deal_field` (each rival's pace off a stream of the map's seed, his lane off his grid slot), `meet_racers` (skier against skier: the shoulder), `standings` and `place_of` (off `plugins/racing`) |
-| `simulate.hpp/.cpp` | `Driver` (THE ONE STEP every pilot drives: snapped, taped, the rivals' bots, `step`, hashed), `simulate`, `simulate_on`, `simulate_free`, `replay_tape`, the `RunReport` and its `FieldRow`s |
+| `simulate.hpp/.cpp` | `Driver` (THE ONE STEP every pilot drives: snapped, taped, the rivals' bots, `step`, hashed), `simulate`, `simulate_on`, `simulate_free` (`SimOptions::injuries` the switch; a dead player ends the drive), `replay_tape`, the `RunReport` (the body's injuries, severity, hardest blow, time of death) and its `FieldRow`s |
 | `wanted.hpp/.cpp`, `wanted_state.hpp`, `wanted_rules.hpp` | THE WANTED LEVEL: `raise_heat` (the offence hook), `step_wanted` (the look, the climb, the search running out), `sees_quarry` and `through_woods` (the sight line), `under_cover`, `arrest_quarry`, `roster_of`, `ground_wave`; the state `GameState::wanted` (inactive and unhashed until raised); every number in `wanted_rules.hpp` |
 | `army.hpp/.cpp`, `army_state.hpp`, `army_rules.hpp`, `army_troop.hpp/.cpp` | THE ARMY ON FOOT: `step_army` (the lifts' squads by `lift_for`, the ground waves up `GameState::ways` from `army_ways`, the chase, the hold, the arrest, the men sent home, every soldier written into the hunt's pursuers), `go_toward` / `stop_here` / `watch_progress` (a soldier's way over the snow); the state `GameState::army` (inactive and unhashed until a hunt reaches a star); every number in `army_rules.hpp` |
 | `army_heli.hpp/.cpp`, `army_heli_rules.hpp`, `army_land.hpp/.cpp` | THE ARMY'S HELICOPTERS: `step_army_helis` (called from `step_army` after the snowmobiles: the call in over the map's edge, the flight as a point with a pilot's limits under `army_floor`, the pylon turn, the echelon, the search and its clock held until they reach it, the landings asked once a second and the overwatch, a section set down or slid down a fast rope, the leapfrog's pick-up, home), `step_heli_soldier` (a man `out`, on the `rope`, or going to `board`), `land_spot` (a flat clear place ahead of him, else a rope's); each machine's `station` and `landing` decisions on `GameState::why`; every number in `army_heli_rules.hpp` |
@@ -123,7 +123,10 @@ the lab. `--outings=N` (1 by default) rides the bot's outing from the first N pi
 at their foot (`simulate_outing`): the outings table (the lift, the run after it, the wait, the
 ride) and his line, white while a lift carries him. An outing not ridden through fails the lab;
 `tests/golden/fall_line_outing.txt` holds seed 38's (`GE_GOLDEN_WRITE=1
-build/release/tests/fall_line_lift_ride_test`).
+build/release/tests/fall_line_lift_ride_test`). `--injuries=1` (the default) skis every piste
+again with the INJURIES switch on (`SimOptions::injuries`): the body table (the foot or his
+death, the injuries, the severity score, the hardest blow, and whether the run is the one the
+switch off skied). A run he lived through that moved with the switch on fails the lab.
 
 `lift-ride` (drive, `games/fall_line/labs/lift_ride_lab.cpp`): every lift of each seed ridden
 from its load zone to its top through the real `step`: the wait, the ride, the slowest and
