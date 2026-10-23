@@ -144,11 +144,12 @@ porting ends, and nothing outside it may depend on it except `make golden`.
 - **AFTER PUSHING A PR, CHECK IT EVERY 15 MINUTES UNTIL IT IS MERGED.** Each check-in looks at
   the checks AND the merge state, since a branch left behind main is where threads get stuck:
   `build/<preset>/ge ci <pr>` answers both in one command. A conflict: merge `origin/main`,
-  resolve it, `make precheck`, push. A red check: fix it and push. Right after each push, arm
-  GitHub's squash auto-merge on the PR (it merges itself once the required checks pass); the
-  check-ins still catch conflicts, which auto-merge waits on forever. All green and mergeable
-  and not yet merged: `build/<preset>/ge ci <pr> --merge` squash-merges it, pinned to the head
-  the checks ran on. Schedule the check-ins; never sleep in a loop.
+  resolve it, `make precheck`, push. A red check: fix it and push. `main` merges only through
+  GitHub's merge queue: right after each push, arm squash auto-merge on the PR (`gh pr merge
+  <pr> --auto --squash`), which puts it in the queue once its pull-request checks pass; the
+  queue then runs the whole matrix on the tree that lands and squashes it, or ejects it with
+  the failing row named (fix, push, it re-queues). A direct merge is refused. The check-ins
+  still catch conflicts, which auto-merge waits on forever. Schedule the check-ins; never sleep in a loop.
 - **Every work session ends with the `commit` skill.**
 
 ## Build and test
@@ -190,15 +191,20 @@ build` (the debug preset, reusing `build/debug/`) in the background while you re
 rely on the build, `tools/session-start.sh --wait` blocks until it is done and exits with its
 result; the output is `build/session-start.log`, the one-line state `build/session-start.status`.
 
-CI (`.github/workflows/ci.yml`) runs fmt-check, agents-check, libm-check, lint and shaders-check, plus build and
-test on Linux x64 (GCC debug+ASan, GCC release, Clang release), Linux arm64 (GCC),
-macOS (Apple Clang) and Windows (MSVC). A golden failure on one row points at that
-row's compiler or libm. The Linux x64 rows install Mesa's lavapipe and run the tests under a
-virtual X display with `GE_GPU_REQUIRE=1`, so the GPU and window tests run there and a skip
-fails; elsewhere they run when the runner has an adapter and skip (CTest's exit 77) when not. `.github/workflows/packaging.yml` holds every PR to what a
-release needs: a `.changes/unreleased/` fragment for a shipped change (or the
-`no-changelog` label), and the installed package building a consumer on Linux, macOS
-and Windows. Releases are dispatched, never hand-made (`release` skill,
+CI (`.github/workflows/ci.yml`) is tiered, because the org's runners are a small shared pool. A pull
+request runs the gates (fmt-check, agents-check, libm-check, release-check, the changeset rule),
+lint and shaders-check, and ONE build-and-test row (Linux x64, GCC debug+ASan); the merge queue
+runs the whole matrix on the tree that lands: Linux x64 (GCC debug+ASan, GCC release, Clang
+release), Linux arm64 (GCC), macOS (Apple Clang), Windows (MSVC), and `packaging.yml` (the
+installed package building a consumer on Linux, macOS and Windows, and `ge new` growing a repo).
+A change to prose alone (docs, skills, lessons, root Markdown, fragments) runs the gates only;
+the label `full-ci` runs everything on a pull request. The ruleset requires one check,
+`required`, which passes when every job passed or was skipped by those rules. A golden failure
+on one row points at that row's compiler or libm. The Linux x64 rows install Mesa's lavapipe and
+run the tests under a virtual X display with `GE_GPU_REQUIRE=1`, so the GPU and window tests run
+there and a skip fails; elsewhere they run when the runner has an adapter and skip (CTest's exit
+77) when not. A shipped change carries a `.changes/unreleased/` fragment (or the `no-changelog`
+label). Releases are dispatched, never hand-made (`release` skill,
 [`docs/publishing.md`](docs/publishing.md)).
 
 ## Where things live
