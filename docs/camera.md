@@ -114,9 +114,11 @@ exponential ease:
   meets a step at once, 2 tracks a steady ramp with no lag, over 1 anticipates). A first-order
   ease moves fastest the instant the target jumps, which reads as a lens with no weight; a
   second-order one has to be accelerated into a move and settles out of it, which is what a
-  heavy head on a crane looks like. It is integrated semi-implicitly with the mass kept above
-  what the frame's `dt` can integrate stably, so a long frame on a slow device is a slower lens,
-  never an exploding one. Scalar, angle (the short way round, free to wind) and vector forms.
+  heavy head on a crane looks like. Each frame is solved exactly (the closed form of the
+  under-, critically and over-damped cases, the target held over the frame), so a long frame on
+  a slow device draws the path a short one would have, never a ringing or exploding one; the
+  `camera-follow` lab holds it, and a semi-implicit step with a clamped mass (the cheaper
+  choice) strayed by a fifth of a step at 30 Hz there. Scalar, angle (the short way round, free to wind) and vector forms.
 - **The critically damped spring by half-life**: one number, the time to halve the distance, for
   the readings that need no character (the arm letting back out after a pull-in).
 - **The dead band**: a follower may ignore its target within a band and chase only what leaves it
@@ -253,7 +255,11 @@ A change of view is an EDIT, and the three edits say different things:
   path keeps it out of the ground between a bumper and a boom over a brow, faded in and out.
 - **Inertialize**: only the NEW rig is framed. At the switch the offset between the old pose and
   the new (and its velocity) is recorded, and decays to zero on a quintic over `duration` that
-  starts with the offset's own velocity and ends at rest. Continuous in position and velocity,
+  starts with the offset's own velocity and ends at rest, on each axis of the subject's frame
+  and each angle on its own. Unlike the animation version, which keeps only the velocity along
+  the offset and drops one moving away, every component of the velocity is kept (one moving
+  away carries the offset out and back): the `camera-transitions` lab measured the dropped part
+  as a kick of up to 10 m/s at the switch. Continuous in position and velocity,
   half the cost of a blend, and it re-bases cleanly when a second change arrives mid-way. The
   default for a change of rung on the same subject.
 

@@ -37,7 +37,7 @@
 // ge:keywords frustum planes heading pitch fov mat4 inverse sun-direction camera_matrices
 // ge:keywords look_dir sun_direction depth_distance distance-from-depth unproject weather
 // ge:keywords overcast deck cloud-cover sun-pass visibility fog flat-light night moon key-light
-// ge:keywords cloud-layer clouds heap sheet
+// ge:keywords cloud-layer clouds heap sheet roll horizon-tilt
 // ge:skill render
 // ge:test tests/render_view_test.cpp
 #pragma once
@@ -132,6 +132,7 @@ struct FrameView {
   double eye[3] = {0, 0, 0};
   double heading = 0;   // rad, the world's convention
   double pitch = 0;     // rad, positive up
+  double roll = 0;      // rad, right side down positive (engine/camera's pose); 0 changes nothing
   double fov_y = 1.0;   // vertical field of view, rad
   double near_m = 0.1;  // the near plane, m
   // The sun: elevation over the horizon (rad) and azimuth (a world heading).
