@@ -169,7 +169,7 @@ AGENTS.md and the non-goals in `docs/goals.md` state this exception.
 | Files and archives | Embedded blobs; the labs' inflater | `engine/vfs`, inflate shipped (M18a) |
 | A map format with visibility and collision | A heightfield world (`plugins/mountain`) | `plugins/brush` (M18b) |
 | Scripting for mods | None, by design | `plugins/progs`, the stated exception (M18c, M18d) |
-| Player movement and weapons | A skier and machines, each its own plugin | `plugins/shooter` (M18e) |
+| Player movement and weapons | `engine/move` (M28): the mover for any genre, the classic arena row among its presets, strafe jumping charted (`docs/movement.md`) | The classic row checked against recordings, the clip hulls answering the mover's trace, the weapons: `plugins/shooter` (M18e) |
 | A server with many clients | `engine/net` links, channels, sessions, NAT, the simulated network, captures | The server's frame and clients (M18f); the compatible protocol (M18g); the native one on M17f's replication (M18h) |
 | Client prediction and interpolation | Planned in M17f | M17f lands the generic layer; the game's own prediction over `plugins/shooter` (M18h) |
 | Demos | The input log (`play/inputs`), recordings (`ge record`) | Client demos and MVD read and written, seek by snapshot (M18h) |

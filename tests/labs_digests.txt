@@ -26,6 +26,8 @@ lift-ride a374f35eb85cc161
 mapgen-cost 3baf51b6907817f3
 model-views 0d0824a2168f6b14
 models bdc7f86743249676
+move-strafe ad3590b6f70687f6
+move-trace 223a9e049e1b0e94
 net-link 458927d87fc48ec1
 net-reach ec8c6d787871dd07
 net-session bbd55312ba5c97c6
