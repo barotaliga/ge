@@ -8,16 +8,19 @@
 //   `--stars`.
 // - THE HUNT: on a real ski area, he stands on open snow up the mountain from the village, the
 //   army's every arm sent at `--hunt-stars` and firing through the real `step`, where the army
-//   shoots to kill (`open`) and where it does not (`spared`). Per scenario: the rounds the soldiers
-//   and the snowmobiles' gunners fired, the rounds into him, his injury severity score, and when
-//   the hunt ended and how.
+//   shoots to kill (`open`) and where it does not (`spared`). Per scenario: the rounds the
+//   soldiers, the snowmobiles' gunners and the helicopters' door gunners fired, the rounds into
+//   him, his injury severity score, and when the hunt ended and how.
+// - THE DOORS: the same hunt at one, two and three stars, the rules of fire `hold`, `warn` and
+//   `aim`: the door gunners' rounds, every arm's rounds, the rounds into him, and the hunt's end.
 //
 // A gun that never hits a still man at 100 m under aimed fire, warning fire that ever strikes him,
-// or a hunt that shoots to kill and fires nothing is a failure (exit 1).
+// a hunt that shoots to kill and fires nothing, a door gunner firing under `hold` or never under
+// `aim` is a failure (exit 1).
 //
 // ge:summary Lab: the army's guns: hits by weapon, range and rules, and a seed-38 hunt's fire
 // ge:keywords lab gunfire rifle lmg door-gun range hit-share warning-fire aimed-fire wound iss
-// ge:keywords killed hunt snap
+// ge:keywords killed hunt snap door-gunner doors
 // ge:skill sim labs
 // ge:test tests/fall_line_gunfire_test.cpp
 #include <array>
@@ -111,6 +114,7 @@ Range range_fire(const std::shared_ptr<const mg::Level>& strip, fs::WeaponKind w
 struct Hunt {
   int32_t rifle = 0;
   int32_t lmg = 0;
+  int32_t door = 0;
   int32_t hits = 0;
   int32_t iss = 0;
   double ended = -1;
@@ -144,6 +148,7 @@ Hunt hunt(const std::shared_ptr<const mg::Level>& level, int32_t stars, bool let
       }
       h.rifle += e.value == static_cast<double>(fs::WeaponKind::rifle) ? 1 : 0;
       h.lmg += e.value == static_cast<double>(fs::WeaponKind::lmg) ? 1 : 0;
+      h.door += e.value == static_cast<double>(fs::WeaponKind::door_gun) ? 1 : 0;
     }
   }
   h.hits = st.gunfire.hits;
@@ -226,23 +231,24 @@ void run(ge::lab::Lab& lab) {
              "Pass a --version that builds a ski area (10 or later; skill: mountain).");
     return;
   }
-  ge::lab::LabTable table{
-      "hunt",
-      {"scenario", "stars", "rifle rounds", "lmg rounds", "hits", "iss", "ended s", "how"},
-      {}};
+  ge::lab::LabTable table{"hunt",
+                          {"scenario", "stars", "rifle rounds", "lmg rounds", "door rounds", "hits",
+                           "iss", "ended s", "how"},
+                          {}};
   for (const bool lethal : {true, false}) {
     const std::string id = lethal ? "open" : "spared";
     const Hunt h = hunt(level, hunt_stars, lethal, limit);
-    table.rows.push_back({id, std::to_string(hunt_stars), std::to_string(h.rifle),
-                          std::to_string(h.lmg), std::to_string(h.hits), std::to_string(h.iss),
-                          h.ended >= 0 ? fixed(h.ended, 2) : std::string("-"),
-                          fs::wanted_end_name(h.how)});
+    table.rows.push_back(
+        {id, std::to_string(hunt_stars), std::to_string(h.rifle), std::to_string(h.lmg),
+         std::to_string(h.door), std::to_string(h.hits), std::to_string(h.iss),
+         h.ended >= 0 ? fixed(h.ended, 2) : std::string("-"), fs::wanted_end_name(h.how)});
     lab.metric(id + ".rifle", h.rifle, "rounds");
     lab.metric(id + ".lmg", h.lmg, "rounds");
+    lab.metric(id + ".door", h.door, "rounds");
     lab.metric(id + ".hits", h.hits, "rounds");
     lab.metric(id + ".iss", h.iss, "iss");
     lab.metric(id + ".ended", h.ended, "s");
-    if (lethal && h.rifle + h.lmg == 0) {
+    if (lethal && h.rifle + h.lmg + h.door == 0) {
       lab.fail("open: the army shot to kill and fired nothing in " + fixed(limit, 0) + " s",
                "Read hold in games/fall_line/sim/army.cpp and halt in army_sled.cpp (skill: sim).");
     }
@@ -252,6 +258,40 @@ void run(ge::lab::Lab& lab) {
     }
   }
   lab.table(std::move(table));
+
+  // THE DOOR GUNNERS at each rule of fire: one star (`hold`), two (`warn`), three (`aim`).
+  ge::lab::LabTable doors{
+      "doors",
+      {"stars", "rules", "door rounds", "all rounds", "hits", "iss", "ended s", "how"},
+      {}};
+  for (int32_t s = 1; s <= 3; s++) {
+    const Hunt h = hunt(level, s, true, limit);
+    const fs::FireRule rules = fs::roster_of(s).fire;
+    const std::string rn = rules == fs::FireRule::aim    ? "aim"
+                           : rules == fs::FireRule::warn ? "warn"
+                                                         : "hold";
+    doors.rows.push_back(
+        {std::to_string(s), rn, std::to_string(h.door), std::to_string(h.rifle + h.lmg + h.door),
+         std::to_string(h.hits), std::to_string(h.iss),
+         h.ended >= 0 ? fixed(h.ended, 2) : std::string("-"), fs::wanted_end_name(h.how)});
+    lab.metric("doors." + rn + ".rounds", h.door, "rounds");
+    lab.metric("doors." + rn + ".hits", h.hits, "rounds");
+    if (rules == fs::FireRule::hold && h.door > 0) {
+      lab.fail("doors.hold: the door gunners fired " + std::to_string(h.door) +
+                   " rounds under the hold rules",
+               "Read doors_manned in games/fall_line/sim/army_door.cpp (skill: sim).");
+    }
+    if (rules == fs::FireRule::warn && h.hits > 0) {
+      lab.fail("doors.warn: a round struck him under warning fire",
+               "Read rules_of and fly_round in games/fall_line/sim/gunfire.cpp (skill: sim).");
+    }
+    if (rules == fs::FireRule::aim && h.door == 0) {
+      lab.fail("doors.aim: the door gunners never fired in " + fixed(limit, 0) + " s",
+               "Read step_army_doors's arc and sight in games/fall_line/sim/army_door.cpp "
+               "(skill: sim).");
+    }
+  }
+  lab.table(std::move(doors));
 }
 
 const ge::lab::LabSpec kSpec{

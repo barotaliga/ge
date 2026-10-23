@@ -12,6 +12,7 @@
 // ge:test tests/fall_line_army_test.cpp
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <vector>
 
@@ -171,6 +172,11 @@ struct ArmyHeli {
   int32_t dir = 1;     // the way round its circle: 1 clockwise from above (the right door inward)
   double doors = 0;    // how far the sliding doors stand open, 0..1
   int32_t aboard = 0;  // men aboard to put down
+  // Each door gun's lay (the right door's, then the left's): its swing off square out of its door,
+  // forward positive, and its lift, rad (army_door.hpp). Not hashed: what it does shows in the
+  // gunfire's.
+  std::array<double, 2> lay_yaw{};
+  std::array<double, 2> lay_pitch{};
   bool tasked = false;
   LandTask task;
 };

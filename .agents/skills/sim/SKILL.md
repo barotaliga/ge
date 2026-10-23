@@ -30,6 +30,7 @@ tests):
 | `wanted.hpp/.cpp`, `wanted_state.hpp`, `wanted_rules.hpp` | THE WANTED LEVEL: `raise_heat` (the offence hook), `step_wanted` (the look, the climb, the search running out), `sees_quarry` and `through_woods` (the sight line), `under_cover`, `arrest_quarry`, `roster_of`, `ground_wave`; the state `GameState::wanted` (inactive and unhashed until raised); every number in `wanted_rules.hpp` |
 | `army.hpp/.cpp`, `army_state.hpp`, `army_rules.hpp`, `army_troop.hpp/.cpp` | THE ARMY ON FOOT: `step_army` (the lifts' squads by `lift_for`, the ground waves up `GameState::ways` from `army_ways`, the chase, the hold, the arrest, the men sent home, every soldier written into the hunt's pursuers), `go_toward` / `stop_here` / `watch_progress` (a soldier's way over the snow); the state `GameState::army` (inactive and unhashed until a hunt reaches a star); every number in `army_rules.hpp` |
 | `army_heli.hpp/.cpp`, `army_heli_rules.hpp`, `army_land.hpp/.cpp` | THE ARMY'S HELICOPTERS: `step_army_helis` (called from `step_army` after the snowmobiles: the call in over the map's edge, the flight as a point with a pilot's limits under `army_floor`, the pylon turn, the echelon, the search and its clock held until they reach it, the landings asked once a second and the overwatch, a section set down or slid down a fast rope, the leapfrog's pick-up, home), `step_heli_soldier` (a man `out`, on the `rope`, or going to `board`), `land_spot` (a flat clear place ahead of him, else a rope's); each machine's `station` and `landing` decisions on `GameState::why`; every number in `army_heli_rules.hpp` |
+| `army_door.hpp/.cpp` | THE DOOR GUNNERS (M15e2): `step_army_doors` (called at the end of `step_army_helis`: the roster's gunners two to each hunting machine, the inward door first; the doors slid open with him in sight; each manned gun laid onto him inside its arc at a man's pace and fired through `fire_at` once laid, its door open and he in sight and range), `gunners_of`, `doors_manned` (which the echelon reads to crab the machine side-on); every number in `army_heli_rules.hpp` |
 | `gunfire.hpp/.cpp`, `gunfire_state.hpp`, `gunfire_body.hpp/.cpp`, `weapons_rules.hpp` | THE GUNFIRE (M15b): `arm_gun`, `fire_at` (a burst aimed, led and held over, the hold drawn once a burst and widened by the stars, warning fire put down off him), `step_gunfire` (the rounds at the cyclic rate, flown under drag and gravity, struck into the snow, a trunk or his body; the wounds judged on `Racer::body`), `body_points`/`body_hit` (capsules round his stance); its own stream off the map's seed; every number in `weapons_rules.hpp` |
 | `army_sled.hpp/.cpp`, `army_sled_rules.hpp`, `army_drive.hpp/.cpp` | THE ARMY'S SNOWMOBILES: `step_army_sleds` (called from `step_army` after the men: the call from beside the snowmobile spot, `sled_pad`, the chase up the runs and at him, the short halt, the stand-off, the crew off to take him in, righted, dug out, waiting below a face, home), each on the free ride's own `step_sled` and `sled_pilot`; `choose_way` / `way_cost` / `tunnel_within` (the snow read ahead, for every army machine); every number in `army_sled_rules.hpp` |
 | `play.hpp/.cpp` | `PlaySession`: an agent at the controls over JSON lines (`hello`, `observe`, `act`, `tape`, `end`); THE PROTOCOL is stated once in its header |
@@ -58,8 +59,10 @@ seed. The skier on the snow is `plugins/skier` (the `skier` skill).
    the fast rope, the leapfrog, home; the `army-flight` lab.
 10. Gunfire and wounds (M15b, done): the guns, the bursts, the rounds' flight and strikes, the
    wounds judged on the body, death ending the hunt; the `gunfire` lab.
-11. Next: the free ride's other systems, a row each (M13+), and the army rows that wait on them
-   (M15d2 his answer to the machines, M15d3 the heavier machines, M15e2–M15e5 the rest of the
+11. The door gunners (M15e2, done): the roster's gunners on the hunting machines' door guns, laid
+   in their arcs and fired by the rules of fire; the `gunfire` lab's doors table.
+12. Next: the free ride's other systems, a row each (M13+), and the army rows that wait on them
+   (M15d2 his answer to the machines, M15d3 the heavier machines, M15e3–M15e5 the rest of the
    air).
 
 ## Rules
@@ -170,12 +173,14 @@ own arms with `ArmyState::send_helis` off, so the helicopters move none of them.
 `gunfire` (scenario, `games/fall_line/labs/gunfire_lab.cpp`): the army's guns. The range table
 fires each gun from each range at a man stood still and one crossing, under aimed and warning
 fire, the gunfire stepped on its own and the man healed every step; the hunt table runs seed 38
-(v10) at four stars through the real `step` where the army shoots to kill and where it does not.
-Warning fire that strikes him, aimed fire at 100 m that never does, or a lethal hunt that fires
-nothing fails it. A change to `gunfire*.cpp`, `weapons_rules.hpp`, the wounds' rows in
-`skier/anatomy.cpp`, or the soldiers' or the gunners' fire in `army.cpp` and `army_sled.cpp` moves
-`tests/golden/fall_line_gunfire.txt` (`GE_GOLDEN_WRITE=1
-build/release/tests/fall_line_gunfire_test`) and the `gunfire` digest: put both tables before and
+(v10) at four stars through the real `step` where the army shoots to kill and where it does not;
+the doors table runs the same hunt at one, two and three stars (`hold`, `warn`, `aim`) and counts
+the door gunners' rounds. Warning fire that strikes him, aimed fire at 100 m that never does, a
+lethal hunt that fires nothing, door fire under `hold` or none under `aim` fails it. A change to `gunfire*.cpp`, `weapons_rules.hpp`, the wounds' rows in
+`skier/anatomy.cpp`, or the soldiers', the snowmobile gunners' or the door gunners' fire in
+`army.cpp`, `army_sled.cpp` and `army_door.cpp` moves `tests/golden/fall_line_gunfire.txt`
+(`GE_GOLDEN_WRITE=1 build/release/tests/fall_line_gunfire_test`), the door gunners' own
+`tests/golden/fall_line_army_door.txt` (`fall_line_army_door_test`) and the `gunfire` digest: put both tables before and
 after in the PR. The army's older labs and tests (`army`, `army-sleds`, `army-flight`, `wanted`)
 stage their arms with `ArmyState::fire` off, so the gunfire moves none of them. A round's wounds
 are judged on `Racer::body`, and until the free ride steps every body, `step_gunfire` runs death's
