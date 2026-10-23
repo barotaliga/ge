@@ -25,6 +25,8 @@ ge lab diff run --run -- --seeds=7     # run it first, then diff
 ge lab sweep run --set=kGrip=0.8,1,1.2 -- --seeds=7
                                        # one constexpr at each value, rebuilt and run, metrics
                                        # side by side; the source put back after
+ge lab sweep run --flag=hour=8,12,17 -- --seeds=7
+                                       # one of the lab's own flags at each value, no rebuild
 ge lab run --json                      # the same, its report.json inside the answer
 ```
 

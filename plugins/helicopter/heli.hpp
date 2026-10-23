@@ -121,7 +121,7 @@ core::Vec3 heli_point(const HeliState& h, core::Vec3 p);
 double thrust_most(double along, double vc, double over, double through);
 
 // ONE STEP of `dt` s on `in`, carrying `load`, its rotor spooled toward `spool_to` (1 running,
-// 0 shut down). A crashed machine is not stepped. Allocates nothing.
+// 0 shut down). A crashed machine only falls to the snow as a wreck. Allocates nothing.
 void step_heli(HeliState& h, const HeliControls& in, const HeliLoad& load, double spool_to,
                const HeliWorld& world, double dt, HeliEvents& events);
 

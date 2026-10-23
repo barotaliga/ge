@@ -88,6 +88,15 @@ struct HeliPad {
   double heading = 0;
 };
 
+// THE GROUND'S STEEPEST LEAN over a circle of radius `r` round (x, z), rise over run.
+double pad_lean(const ge::mountain::mapgen::Level& level, double x, double z, double r);
+
+// WHETHER A MACHINE MAY STAND at (x, z): `room` m clear of every trunk, and that and the gaps
+// clear of every lift's line and bottom station and every tunnel's lane.
+bool pad_clear(const ge::mountain::mapgen::Level& level,
+               const std::vector<ge::mountain::lifts::LiftPlan>& lifts,
+               const ge::skier::TreeIndex& trees, double x, double z, double room);
+
 // THE PAD, kept clear of the circle `avoid_r` m round (avoid_x, avoid_z) as well (the snowmobile's
 // spot; a radius of 0 avoids nothing).
 HeliPad heli_pad(const ge::mountain::mapgen::Level& level,

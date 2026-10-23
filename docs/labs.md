@@ -110,7 +110,7 @@ In a game repo, `ge lab` is the way in: `ge lab` lists, `ge lab <id> --tag=befor
 `--compare=before` run one, and with `--json` the lab's whole `report.json` is the answer's
 `result`. `ge lab diff <id>` diffs the pictures (below), every band under its floor a finding.
 
-### The sweep: one constant at several values
+### The sweep: one constant or one flag at several values
 
 `ge lab sweep <id> --set=<name>=<a>,<b>,... [--in=<file>] [--metrics=<word,...>] -- <lab flags>`
 runs a lab with one constant of the code at each value, every metric side by side
@@ -126,6 +126,16 @@ Three values of a paramotor constant over one scenario take about 20 s in debug.
 
 ```sh
 ge lab sweep para --set=launch::kFlight=0.4,0.6,0.9 --metrics=launch -- --scenario=launch
+```
+
+`--flag=<flag>=<a>,<b>,...` sweeps one of the lab's own flags instead of a constant: the labs are
+built once and the lab runs with `--<flag>=<value>` at each value, tagged
+`sweep-<flag>-<value>`, the same table side by side. Nothing is rewritten, so it is the way to
+take a picture lab over the hours of a day or a sim over its step rate. `--set` and `--flag`
+together are refused: one thing at a time.
+
+```sh
+ge lab sweep para --flag=hz=60,120 --metrics=launch -- --scenario=launch
 ```
 
 ### The picture diff: did the look move, and how near the player?
@@ -284,6 +294,12 @@ each)`), so the plugin needs nothing of the lab kit; the lab writes and draws th
 the scenario's before and after at the scale of a step: `--trace --tag=before`, change the code,
 `--trace --compare=before`, then `ge graph` both files.
 
+Under `--trace` each scenario also reports its **teleports** (`engine/lab/teleport.hpp`): every
+step where the actor moved farther than its speed carries it over the step (with a slack of 1.5
+and 5 cm), as `<id>.teleports` and a note a jump naming its step, its time and the two distances.
+A lab that follows anything that moves gets the same check from `find_teleports` and
+`report_teleports`, which can fail the lab when its subject must never jump.
+
 ```sh
 make lab LAB=para ARGS="--scenario=launch --trace"   # previews/para/launch.trace.tsv and its charts
 ```
@@ -392,6 +408,7 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 | `wanted` | scenario | game:fall_line | `games/fall_line/sim/wanted` (the wanted level on seed 38 against scripted pursuers: the hunt table of the stars reached and when, the share seen, the searches, how it ended; each scenario's line by the stars; the sight sheds of a soldier at the start gate and a helicopter over the middle: open, hidden by the ground, by the woods, out of range) | M15a (now) |
 | `army` | scenario | game:fall_line | `games/fall_line/sim/army` (the army on foot on seed 38, the man stood still while the stars are pinned: `valley`, `slope` and `arrest`; the army table of the lifted men sent and let off, the waves' men, the most out, how many hold him, the nearest, the men caught and when he was arrested; every soldier's path over the map) | M15c (now) |
 | `army-sleds` | scenario | game:fall_line | `games/fall_line/sim/army_sled` (the army's snowmobiles on seed 38, the man stood still while the stars are pinned: `open`, `run`, `face` and `arrest`; the sleds table of the machines called, the most out, the short halts, the times dug out and righted, the nearest, when they came in range, the crews off, the arrest and whose; every machine's path over the map) | M15d1 (now) |
+| `army-flight` | scenario | game:fall_line | `games/fall_line/sim/army_heli` (the army's helicopters on seed 38, the stars pinned and the army's other arms on: `open`, `rope`, `leapfrog`, `hide` and `fast`; the helicopters table of the machines called, when the first came in, the circle flown round him, the landings and fast ropes, the men out and picked up, the men holding him, when the stars were lost, the machines gone home and the share of echelon; every machine's path, where it set down and where its men went) | M15e1 (now) |
 | `crowd` | scenario | game:fall_line | `games/fall_line/sim/crowd.hpp` and `crowd_lift.hpp` (the free ride's crowd on `--seed`, `--count` amateurs over `--limit` seconds, the player stood still: the runs table (colour, length, where each merges, the lift at its foot, the lifts it passes), the crowd table (how many ski, stop, are down, queue, ride, skate and are up a lift unseen), the kinds table (their mean speed, falls and stops a minute, the runs skied), the lifts table (the ride's time, the first carried up, the let off, the still queued); a step's time, measured; fails on a place that is not a number, a lift idle past its ride, anyone stuck 60 s or a jump over 1 m in a step; every amateur's line over the map) | M13f (now) |
 | `anim` | scenario | plugin:skier | `engine/lab/anim.hpp` over the skier's figure (`plugins/skier/app/figure.hpp`) ridden through a ride scenario: filmstrips from the side, behind and above, onion skins with the hands' and tips' paths, the joints' angles, a jolt heatmap, `motion.tsv`, the faults found (pop, snap, angle snap, stretch, clip), and a copy with a pop, a stretch and a clip planted, each of which must be found | M14b (now) |
 | `gpu-capture` | picture | engine | `engine/gpu` (the headless capture) | M6 (now) |

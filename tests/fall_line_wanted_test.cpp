@@ -109,6 +109,8 @@ bool near(double a, double b, double tol) { return a > b - tol && a < b + tol; }
 
 TEST(an_offence_raises_the_heat_by_its_worth_to_at_least_its_floor) {
   fs::GameState state = fs::create_game_on(strip(), 1);
+  // Staged: the scripted pursuers alone: the army's helicopters are fall_line_army_heli_test's.
+  state.army.send_helis = false;
   CHECK(!state.wanted.active);
   CHECK(fs::raise_heat(state, fs::WantedCause::stole_ambulance) == 1);
   CHECK(state.wanted.active);
@@ -134,6 +136,7 @@ TEST(an_offence_raises_the_heat_by_its_worth_to_at_least_its_floor) {
 
 TEST(seen_the_hunt_climbs_a_star_every_climb_and_never_searches) {
   fs::GameState state = fs::create_game_on(strip(), 1);
+  state.army.send_helis = false;
   fs::raise_heat(state, fs::WantedCause::stole_ambulance);
   const auto events = hunt(state, 40 + 50 + 1, overhead);
   CHECK(changes(events, fs::WantedChange::searching) == 0);
@@ -148,6 +151,7 @@ TEST(seen_the_hunt_climbs_a_star_every_climb_and_never_searches) {
 
 TEST(unseen_the_stars_flash_after_the_fix_and_drop_once_the_search_runs_out) {
   fs::GameState state = fs::create_game_on(strip(), 1);
+  state.army.send_helis = false;
   fs::raise_heat(state, fs::WantedCause::stole_ambulance);
   std::vector<fs::GameEvent> events = hunt(state, wd::kFixS + 1, nobody);
   CHECK(!state.wanted.seen);
@@ -169,6 +173,7 @@ TEST(unseen_the_stars_flash_after_the_fix_and_drop_once_the_search_runs_out) {
 
 TEST(a_hunt_escaped_begins_again_on_the_next_offence) {
   fs::GameState state = fs::create_game_on(strip(), 1);
+  state.army.send_helis = false;
   fs::raise_heat(state, fs::WantedCause::stole_police);
   hunt(state, 60, nobody);
   CHECK(state.wanted.ended == fs::WantedEnd::escaped);
@@ -214,9 +219,11 @@ TEST(three_crowns_hide_him_from_the_snow_but_not_from_the_air) {
 
 TEST(standing_under_a_crown_hides_him_from_the_air_beyond_its_reach) {
   fs::GameState open = fs::create_game_on(strip(), 1);
+  open.army.send_helis = false;
   CHECK(!fs::under_cover(open));
   const fs::Spot at = fs::quarry_of(open);
   fs::GameState state = fs::create_game_on(strip(0, {spruce(at.x + 0.6, at.z)}), 1);
+  state.army.send_helis = false;
   CHECK(fs::under_cover(state));
   const fs::Spot q = fs::quarry_of(state);
   // A crew 150 m over him cannot see through the boughs; nearer than the cover's reach they do.
@@ -235,6 +242,7 @@ TEST(standing_under_a_crown_hides_him_from_the_air_beyond_its_reach) {
 
 TEST(the_arrest_ends_the_hunt_only_where_the_army_does_not_shoot_to_kill) {
   fs::GameState state = fs::create_game_on(strip(), 1);
+  state.army.send_helis = false;
   CHECK(!fs::arrest_quarry(state));
   fs::raise_heat(state, fs::WantedCause::stole_ambulance);
   CHECK(!fs::arrest_quarry(state));
@@ -271,6 +279,7 @@ TEST(each_star_sends_its_roster_and_its_ground_waves_grow_to_their_caps) {
   }
   // Counted from the star: none before `first_s`, then one every `every_s`.
   fs::GameState state = fs::create_game_on(strip(), 1);
+  state.army.send_helis = false;
   fs::set_wanted(state, 3);
   CHECK(fs::waves_sent(state.wanted, 59) == 0);
   CHECK(fs::waves_sent(state.wanted, 60) == 1);
@@ -283,6 +292,7 @@ TEST(a_scripted_hunt_round_a_ridge_keeps_its_golden) {
   // 80 m behind a 60 m ridge: seen, then searching for a side, the stars climbing, for four
   // minutes.
   fs::GameState state = fs::create_game_on(strip(60), 1);
+  state.army.send_helis = false;
   fs::raise_heat(state, fs::WantedCause::stole_police);
   int64_t step = 0;
   const auto events = hunt(state, 240, [&step](fs::GameState& s) {

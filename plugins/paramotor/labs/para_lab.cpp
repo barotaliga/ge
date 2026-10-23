@@ -20,6 +20,7 @@
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
 #include "lab/series_charts.hpp"
+#include "lab/teleport.hpp"
 #include "paramotor/scenarios.hpp"
 
 namespace {
@@ -117,11 +118,13 @@ struct StepTrace {
                             "tension", "throttle", "brake", "steer", "bar", "flying"});
   std::vector<ge::lab::Mark> marks;
   std::vector<ge::lab::Band> bands;
+  std::vector<ge::lab::TrackSample> track;
   double flight_from = -1;
 
   void step(const pm::ParaStep& st) {
     const pm::ParaState& w = st.wing;
     const pm::ParaControls& c = st.controls;
+    track.push_back({st.t, st.skier.x, st.skier.y, st.skier.z, st.skier.speed});
     ge::lab::add_row(s, {st.t, st.skier.y - st.ground, st.skier.speed * 3.6, w.airspeed * 3.6,
                          st.skier.vy, w.bank * kDeg, w.alpha * kDeg, w.fold, w.tension / 1000,
                          c.throttle, c.brake, c.steer, c.bar, w.flying ? 1.0 : 0.0});
@@ -166,6 +169,7 @@ void chart_trace(ge::lab::Lab& lab, const pm::ParaScenario& sc, StepTrace& tr, d
       tr.bands,
       "Grey lines are the run's events (launch, take-off, touch, fold, cut), grey bands the "
       "wing flying."};
+  ge::lab::report_teleports(lab, k, ge::lab::find_teleports(tr.track));
   ge::lab::chart_series(
       lab, tr.s, out,
       {{"height",

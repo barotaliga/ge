@@ -12,6 +12,7 @@
 
 #include "core/math.hpp"
 #include "fall_line/sim/army.hpp"
+#include "fall_line/sim/army_heli_rules.hpp"
 #include "fall_line/sim/army_rules.hpp"
 #include "fall_line/sim/army_sled_rules.hpp"
 #include "fall_line/sim/course.hpp"
@@ -145,6 +146,7 @@ GameState create_free_ride(std::shared_ptr<const mg::Level> level, int32_t start
   state.wanted.pursuers.reserve(wanted::kMaxPursuers);
   state.army.soldiers.reserve(army::kMostSoldiers);
   state.army.sleds.reserve(army_sled::kMostSleds);
+  state.army.helis.reserve(army_heli::kMostHelis);
   state.ways = army_ways(*state.level);
   const auto n = static_cast<int32_t>(state.runs->size());
   FreeRide& f = state.racers[0].free;

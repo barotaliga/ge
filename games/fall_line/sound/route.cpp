@@ -115,6 +115,7 @@ void run_sound_step(RunSound& sound, ge::audio::Synth& synth, const sim::GameSta
       case EventKind::heli:  // the helicopter's sound comes with its own bed
       case EventKind::para:  // the paramotor's sound comes with its own bed
       case EventKind::army_sled:
+      case EventKind::army_heli:
         break;
     }
   }
