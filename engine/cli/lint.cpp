@@ -13,6 +13,7 @@
 #include <thread>
 
 #include "cli/json.hpp"
+#include "cli/reach.hpp"
 
 namespace ge::cli {
 
@@ -109,8 +110,8 @@ Outcome run_lint(const BuildOptions& o, const LintOptions& l) {
     files = all;
     scope = "every .cpp";
   } else {
-    const auto base = lines_from(git + "merge-base " + l.base + " HEAD", log);
-    if (base.empty()) {
+    Reach reach;
+    if (!change_reach(o.repo, build, l.base, log, reach)) {
       out.findings.push_back({Severity::warn,
                               "no merge base with " + l.base + "; linted every .cpp", "",
                               "fetch it (`git fetch origin main`, or depth 0 in a shallow "
@@ -118,28 +119,8 @@ Outcome run_lint(const BuildOptions& o, const LintOptions& l) {
       files = all;
       scope = "every .cpp";
     } else {
-      std::set<std::string> changed;
-      for (const std::string& f :
-           lines_from(git + "diff --name-only --diff-filter=d " + base[0], log)) {
-        changed.insert(f);
-      }
-      for (const std::string& f : lines_from(git + "ls-files --others --exclude-standard", log)) {
-        changed.insert(f);
-      }
-      // Ninja's deps: "<object>: #deps ..." then one indented path a line, the source first.
-      std::set<std::string> reached;
-      std::string source;
-      for (const std::string& line : lines_from("ninja -C " + quoted(build) + " -t deps", log)) {
-        if (!line.starts_with("    ")) {
-          source.clear();
-          continue;
-        }
-        const std::string dep = relative(o.repo, line.substr(4));
-        if (source.empty()) source = dep;
-        if (changed.count(dep)) reached.insert(source);
-      }
       for (const std::string& f : all) {
-        if (changed.count(f) || reached.count(f)) files.push_back(f);
+        if (reach.sources.count(f)) files.push_back(f);
       }
       scope = "what the change since " + l.base + " reaches";
     }
