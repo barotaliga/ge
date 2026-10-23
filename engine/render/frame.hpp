@@ -143,6 +143,11 @@ struct FrameRecorder {
   // Start a frame's stats (the GPU times are the last readings that came back).
   void begin_frame(gpu::Device& device);
   wgpu::ComputePassEncoder compute(wgpu::CommandEncoder& encoder, std::string_view name);
+  // Part `part` of `parts` compute passes timed and counted as ONE pass: the first opens the
+  // stat and its start time, the last its end. For a chain whose every step reads what the step
+  // before wrote, where a pass boundary is the barrier every backend keeps.
+  wgpu::ComputePassEncoder compute_part(wgpu::CommandEncoder& encoder, std::string_view name,
+                                        int part, int parts);
   wgpu::RenderPassEncoder render(wgpu::CommandEncoder& encoder, wgpu::RenderPassDescriptor desc,
                                  std::string_view name);
   // The pass opened last: count its draws and dispatches here.
