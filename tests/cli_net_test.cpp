@@ -6,14 +6,20 @@
 // ge:summary Test: ge net sim, inspect and stats on a capture; their usage errors
 // ge:keywords test cli net sim inspect stats pcap capture digest
 // ge:skill testing agent-interface net
+#include <chrono>
 #include <filesystem>
 #include <string>
+#include <thread>
+#include <vector>
 
 #include "check.hpp"
 #include "cli/finding.hpp"
 #include "cli/net.hpp"
+#include "net/capture.hpp"
 #include "net/conditions.hpp"
+#include "net/tap.hpp"
 #include "net/traffic.hpp"
+#include "net/udp_socket.hpp"
 
 namespace fs = std::filesystem;
 using namespace ge::cli;
@@ -124,4 +130,57 @@ TEST(net_usage_errors_say_what_to_pass) {
   NetStatsOptions st;
   st.file = in.file;
   CHECK(exit_of(run_net_stats(st)) == 1);
+}
+
+TEST(net_watch_reads_a_live_tap_and_measures_what_it_saw) {
+  const fs::path dir = scratch();
+  // What a live node would mirror: a short session's datagrams, replayed through a tap.
+  ge::net::TrafficPlan plan;
+  plan.clients = 2;
+  plan.seconds = 1;
+  plan.drain_seconds = 1;
+  plan.capture = true;
+  const ge::net::TrafficReport r = ge::net::run_traffic(plan);
+  std::vector<ge::net::CapturedDatagram> ds;
+  CHECK(ge::net::read_capture(r.capture.bytes.data(), r.capture.bytes.size(), ds, nullptr));
+  CHECK(ds.size() > 50);
+  ge::net::UdpSocket probe;
+  std::string err;
+  if (!ge::net::udp_open(probe, ge::net::loopback_v4(0), &err)) {
+    ge::test::skip("no loopback UDP socket here: " + err);
+    return;
+  }
+  const int port = probe.local.port;  // a free port, handed to the watch
+  ge::net::udp_close(probe);
+  std::thread sender([&] {
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    ge::net::Tap tap;
+    std::string e;
+    if (!ge::net::open_tap(tap, static_cast<uint16_t>(port), &e)) return;
+    for (const auto& d : ds) {
+      ge::net::tap_datagram(tap, d.at_us, d.from, d.to, d.data.data(), d.data.size());
+      std::this_thread::sleep_for(std::chrono::microseconds(200));
+    }
+    ge::net::close_tap(tap);
+  });
+  NetWatchOptions w;
+  w.port = port;
+  w.seconds = 20;
+  w.frames = static_cast<long long>(ds.size());
+  w.save = (dir / "watch.pcap").string();
+  const Outcome o = run_net_watch(w);
+  sender.join();
+  CHECK_MSG(exit_of(o) == 0, say(o));
+  std::vector<ge::net::CapturedDatagram> back;
+  CHECK(ge::net::load_capture(w.save, back, nullptr));
+  CHECK(back.size() == ds.size());
+  CHECK(o.text.find("watched 127.0.0.1:") != std::string::npos);
+  // Nobody tapping: the watch says so and how to open a tap.
+  NetWatchOptions idle;
+  idle.port = port;
+  idle.seconds = 0.3;
+  idle.save = (dir / "idle.pcap").string();
+  const Outcome none = run_net_watch(idle);
+  CHECK(exit_of(none) == 1);
+  CHECK(say(none).find("open_tap") != std::string::npos);
 }
