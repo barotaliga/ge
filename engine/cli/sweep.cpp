@@ -207,7 +207,90 @@ std::string sweep_table(const std::vector<SweepRun>& runs, const std::string& cu
   return out;
 }
 
+namespace {
+
+// `ge lab sweep --flag`: the lab built once and run at each value of one of its own flags.
+Outcome sweep_flag(const BuildOptions& o, const SweepOptions& s) {
+  Outcome out;
+  const size_t eq = s.flag.find('=');
+  const std::string name = eq == std::string::npos ? "" : s.flag.substr(0, eq);
+  const std::vector<std::string> values =
+      eq == std::string::npos ? std::vector<std::string>{} : split(s.flag.substr(eq + 1), ',');
+  if (name.empty() || values.empty()) {
+    out.findings.push_back({Severity::error,
+                            "--flag wants <flag>=<a>,<b>,..., got '" + s.flag + "'", "",
+                            "ge lab sweep " + s.id + " --flag=hour=17,18,19"});
+    out.exit = 2;
+    return out;
+  }
+  if (!build_targets(o, out, "labs")) return out;
+  const fs::path exe = o.repo / "build" / o.preset / "labs";
+  const fs::path previews = o.repo / "previews";
+  const fs::path log = build_log(o, "ge-lab-sweep");
+  std::error_code ec;
+  fs::remove(log, ec);
+  std::vector<SweepRun> runs;
+  std::vector<std::string> run_json;
+  for (const std::string& v : values) {
+    const std::string tag = "sweep-" + tag_part(name) + "-" + tag_part(v);
+    std::string cmd = "\"" + exe.string() + "\" " + s.id + " --out=\"" + previews.string();
+    cmd.append("\" --quiet --tag=").append(tag).append(" \"--").append(name).append("=").append(v);
+    cmd += "\"";
+    for (const std::string& w : s.passthrough) cmd += " \"" + w + "\"";
+    const Logged r = run_to_log(cmd, log);
+    const fs::path dir = previews / (s.id + "@" + tag);
+    if (r.code == 2) {
+      out.findings.push_back({Severity::error,
+                              std::string("the lab refused --")
+                                  .append(name)
+                                  .append("=")
+                                  .append(v)
+                                  .append(" or its other flags"),
+                              rel_path(o.repo, log), "ge lab " + s.id + " -- --help lists them"});
+      out.exit = 2;
+      return out;
+    }
+    if (r.code != 0) {
+      out.findings.push_back({Severity::warn,
+                              std::string(name)
+                                  .append(" = ")
+                                  .append(v)
+                                  .append(": the lab failed (exit ")
+                                  .append(std::to_string(r.code))
+                                  .append("); its metrics are what it measured"),
+                              rel_path(o.repo, dir / "report.json"),
+                              "read the report and the log"});
+    }
+    SweepRun run{v, {}};
+    const std::string metrics = read_text(dir / "metrics.tsv").value_or("");
+    for (const auto view : split_lines(metrics)) run.rows.emplace_back(view);
+    runs.push_back(std::move(run));
+    run_json.push_back(
+        json_obj({{"value", json_str(v)}, {"dir", json_str(rel_path(o.repo, dir))}}));
+  }
+  out.text =
+      "--" + name + " through lab " + s.id + "\n" + sweep_table(runs, "", split(s.metrics, ','));
+  out.result = json_obj({{"flag", json_str(name)},
+                         {"runs", json_arr(run_json)},
+                         {"log", json_str(rel_path(o.repo, log))}});
+  out.summary =
+      "swept --" + name + " over " + std::to_string(runs.size()) + " values through lab " + s.id;
+  out.next = "ge lab diff " + s.id + " --against=sweep-" + tag_part(name) +
+             "-<value> diffs a run's pictures against a swept one";
+  return out;
+}
+
+}  // namespace
+
 Outcome run_lab_sweep(const BuildOptions& o, const SweepOptions& s) {
+  if (!s.flag.empty() && !s.set.empty()) {
+    Outcome out;
+    out.findings.push_back({Severity::error, "--set and --flag together", "",
+                            "sweep one thing at a time: a constant (--set) or a flag (--flag)"});
+    out.exit = 2;
+    return out;
+  }
+  if (!s.flag.empty()) return sweep_flag(o, s);
   Outcome out;
   const size_t eq = s.set.find('=');
   const std::string name = eq == std::string::npos ? "" : s.set.substr(0, eq);

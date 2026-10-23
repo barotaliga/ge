@@ -7,7 +7,11 @@
 // file is put back after the last run, and the labs rebuilt on the value it holds. A sweep killed
 // half way leaves its backup under build/<preset>/ge-sweep/, and the next sweep puts it back first.
 //
+// With --flag=<name>=<a>,<b>,... it sweeps one of the lab's own flags instead (an hour, a seed, a
+// speed): nothing is rewritten or rebuilt, and the lab runs once a value with --<name>=<value>.
+//
 //   ge lab sweep para --set=kFlight=0.5,0.7,0.9 -- --scenario=launch
+//   ge lab sweep sky --flag=hour=17,17.5,18,18.5,19 --metrics=moon,twilight
 //   ge lab sweep ride --set=snow::kPlaneSpeed=4,6,8 --metrics=top-speed -- --scenario=schuss
 //
 // ge:summary ge lab sweep: one constant rewritten to each value, the lab rebuilt and run, metrics
@@ -28,6 +32,7 @@ namespace ge::cli {
 struct SweepOptions {
   std::string id;       // the lab
   std::string set;      // "<name>=<a>,<b>,...": the name bare (kSlope) or qualified (spec::kSlope)
+  std::string flag;     // "<flag>=<a>,<b>,...": one of the lab's own flags instead, no rebuild
   std::string in;       // the source file the constant is in, when its name is in several ("")
   std::string metrics;  // comma-separated words a listed metric's key holds one of ("": all)
   std::vector<std::string> passthrough;  // the lab's own flags

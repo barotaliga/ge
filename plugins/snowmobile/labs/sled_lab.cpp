@@ -18,6 +18,7 @@
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
 #include "lab/series_charts.hpp"
+#include "lab/teleport.hpp"
 #include "snowmobile/scenarios.hpp"
 
 namespace {
@@ -111,6 +112,7 @@ struct StepTrace {
                             "ski_angle", "throttle", "brake", "steer", "lean", "airborne"});
   std::vector<ge::lab::Mark> marks;
   std::vector<ge::lab::Band> bands;
+  std::vector<ge::lab::TrackSample> track;
   double flight_from = -1;
 
   void step(const sm::SledStep& st) {
@@ -118,6 +120,7 @@ struct StepTrace {
     const sm::SledControls& c = st.controls;
     double sink = 0;
     for (const double v : m.sinks) sink += v;
+    track.push_back({st.t, m.x, m.y, m.z, m.speed});
     ge::lab::add_row(
         s, {st.t, m.speed * 3.6, m.way * 3.6, m.vy, sink / static_cast<double>(m.sinks.size()),
             m.slip, m.rpm, m.roll * kDeg, m.pitch * kDeg, m.ski_angle * kDeg, c.throttle, c.brake,
@@ -164,6 +167,7 @@ void chart_trace(ge::lab::Lab& lab, const sm::SledScenario& sc, StepTrace& tr, d
       tr.bands,
       "Grey lines are the run's events (take-off, landing, a trunk, the throw), grey bands "
       "flights."};
+  ge::lab::report_teleports(lab, k, ge::lab::find_teleports(tr.track));
   ge::lab::chart_series(
       lab, tr.s, out,
       {{"speed",

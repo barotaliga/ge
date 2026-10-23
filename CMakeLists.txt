@@ -178,7 +178,7 @@ endif()
 add_library(ge_lab STATIC engine/lab/lab.cpp engine/lab/report.cpp engine/lab/runner.cpp
   engine/lab/raster.cpp engine/lab/png.cpp engine/lab/diff.cpp engine/lab/inflate.cpp engine/lab/sound.cpp
   engine/lab/series.cpp engine/lab/stats.cpp engine/lab/plot.cpp engine/lab/chart.cpp
-  engine/lab/anim.cpp engine/lab/series_charts.cpp)
+  engine/lab/anim.cpp engine/lab/series_charts.cpp engine/lab/teleport.cpp)
 target_link_libraries(ge_lab PUBLIC ge_core ge_audio)
 
 # The profiler (engine/prof): the timing zones any code opens with GE_ZONE, the allocation
