@@ -11,7 +11,8 @@
 //
 // ge:summary The paramotor scenarios: staged moments with scripted controls, run and measured
 // ge:keywords paramotor para scenario scenarios staged launch glide climb turn stall surge
-// ge:keywords flare land ridge-lift lee rough fold crown drop run_para_scenario
+// ge:keywords flare land ridge-lift lee rough fold crown drop run_para_scenario acro dive
+// ge:keywords swing-up loop tangle cut-tangle
 // ge:skill paramotor labs
 // ge:test tests/paramotor_scenarios_test.cpp
 #pragma once
@@ -76,10 +77,15 @@ struct ParaRun {
   bool stalled = false;  // stalled at some point
   int32_t folds = 0;
   double deepest_fold = 0;
-  int32_t touches = 0;     // the skis back on the snow under the wing
-  double landing_g = 0;    // the hardest landing's load, g
-  bool wiped_out = false;  // the skier went down
-  double closest = -1;     // m, the bot's nearest to its aim (-1 on a scripted hand)
+  int32_t touches = 0;      // the skis back on the snow under the wing
+  double landing_g = 0;     // the hardest landing's load, g
+  bool wiped_out = false;   // the skier went down
+  double closest = -1;      // m, the bot's nearest to its aim (-1 on a scripted hand)
+  int32_t loops = 0;        // whole turns the lines swung round him (acro.hpp)
+  double tangle = -1;       // s he fell into his wing, -1 never
+  double top_g = 0;         // the most he hung on the flying wing, g
+  double top_sink = 0;      // m/s, the pilot's fastest fall
+  double top_airspeed = 0;  // m/s, the flying wing's most
   ParaCut cut = ParaCut::none;
   double cut_time = -1;
   uint64_t digest = 0;  // FNV-1a over every step's wing and skier

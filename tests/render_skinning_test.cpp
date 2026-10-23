@@ -8,6 +8,9 @@
 //     as `create_family` packed it.
 //   * THE REACH: a skinned LOD's mesh sphere holds its reach box, so the cull keeps it in every
 //     pose.
+//   * THE MOTION: the pass keeps the position it replaces as the vertex's last frame's: after
+//     the first (settled) pass the last positions are its own, after each later one the pose
+//     before it, and after `settle_skin` its own again. A static LOD keeps none.
 //
 // ge:summary Tests for GPU skinning: the pass against its CPU twin, the slot, the reach
 // ge:keywords test render skinning gpu compute palette readback skin_packed reach lavapipe
@@ -87,13 +90,30 @@ TEST(skinning_pass_matches_its_cpu_twin_in_its_own_slot) {
   r::FrameRecorder rec;
   rec.init(d, "test.skinning", 2);
 
+  CHECK(family.lod_last.size() == 2 && family.lod_last[0] == 0 && family.lod_last[1] != 0);
+  CHECK(skin.last == family.lod_last[1]);
+  // Before any pass the last positions are the bind's, as the family packed it.
+  {
+    const std::vector<uint32_t> bind =
+        r::read_family_vertices(d, family, family.lod_vertex[1], mesh.vertex_count());
+    const std::vector<uint32_t> last = r::read_skin_last(d, family, skin);
+    bool same = last.size() == size_t{mesh.vertex_count()} * 2;
+    for (size_t v = 0; same && v < mesh.vertex_count(); ++v) {
+      same = last[v * 2] == bind[v * 3] && last[v * 2 + 1] == (bind[v * 3 + 1] & 0xffffu);
+    }
+    CHECK_MSG(same, "the last positions before any pass are not the bind's");
+  }
+
   std::vector<a::Trs> local(m.joints.size());
   std::vector<a::Affine> global(m.joints.size()), palette(m.joints.size());
   const struct {
-    int clip;
     double t;
-  } moments[3] = {{0, 0.5}, {0, 0.8}, {1, 0.3}};
+    int clip;
+    bool settle;
+  } moments[4] = {{0.5, 0, false}, {0.8, 0, false}, {0.3, 1, false}, {0.2, 0, true}};
+  std::vector<uint32_t> before;  // the last pass's positions
   for (const auto& moment : moments) {
+    if (moment.settle) r::settle_skin(skin);
     a::sample_clip(m, m.clips[static_cast<size_t>(moment.clip)], moment.t, false, local);
     a::pose_globals(m, local, global);
     a::skin_palette(m, global, palette);
@@ -122,6 +142,17 @@ TEST(skinning_pass_matches_its_cpu_twin_in_its_own_slot) {
     CHECK_MSG(pos <= 1, at + ": a position is " + std::to_string(pos) + " steps from the CPU's");
     CHECK_MSG(part == 0, at + ": a part differs from the bind's");
     CHECK_MSG(nrm <= 2, at + ": a normal is " + std::to_string(nrm) + " steps from the CPU's");
+
+    // The last frame's: the pose before (the first pass and a settled one: this pose).
+    const std::vector<uint32_t>& was = before.empty() || moment.settle ? got : before;
+    const std::vector<uint32_t> last = r::read_skin_last(d, family, skin);
+    bool kept = last.size() == size_t{mesh.vertex_count()} * 2;
+    for (size_t v = 0; kept && v < mesh.vertex_count(); ++v) {
+      kept = last[v * 2] == was[v * 3] && last[v * 2 + 1] == (was[v * 3 + 1] & 0xffffu);
+    }
+    CHECK_MSG(kept, at + ": the last positions are not the pose before (or, settled, this one)");
+    if (!before.empty() && !moment.settle) CHECK_MSG(before != got, at + ": the pose did not move");
+    before = got;
   }
 
   // The box is as create_family packed it.

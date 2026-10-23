@@ -2,7 +2,10 @@
 // frame. It flies the camera of a named view forward at --speed, turning at --turn, for --frames
 // frames at 60 a second, and photographs the last; then it cuts and draws that same camera still
 // for one jitter cycle (the converged reference) twice, and once more with no history (a single
-// jittered frame: the aliasing TAA-U removes).
+// jittered frame: the aliasing TAA-U removes). With --scenario it rides that ride scenario
+// (plugins/skier/scenarios.hpp) on its own map instead, two steps a frame, from the chase camera:
+// the skinned skier's limbs swing between frames, and their own motion vectors are what keeps
+// them sharp (render/skinning.hpp's last positions).
 //
 // GHOSTING is the moving frame against the converged still: the mean change of a channel, in
 // 8-bit levels, and the share of pixels off by more than 8 levels (history that clipping failed
@@ -35,6 +38,8 @@
 #include "lab/raster.hpp"
 #include "mountain/mapgen/generate.hpp"
 #include "render/taa.hpp"
+#include "skier/scenarios.hpp"
+#include "skier/trees.hpp"
 
 namespace {
 
@@ -97,28 +102,63 @@ void run(ge::lab::Lab& lab) {
   lab.metric("frames", frames, "count");
   lab.metric("jitter-phases", phases, "count");
 
+  const std::string& ride = lab.arg("scenario");
+  const ge::skier::Scenario* scenario = nullptr;
+  if (!ride.empty()) {
+    scenario = ge::skier::find_scenario(ride);
+    if (!scenario) {
+      lab.fail("no ride scenario `" + ride + "`",
+               "next: name a row of plugins/skier/scenarios.cpp (turns, carve-hard, kicker).");
+      return;
+    }
+  }
   ge::mountain::mapgen::GenerateOptions opts;
   opts.version = fall_line::app::kMapVersion;
-  const ge::mountain::mapgen::Level level = ge::mountain::mapgen::generate_level(seed, opts);
+  const ge::mountain::mapgen::Level level = scenario
+                                                ? ge::skier::scenario_level(*scenario)
+                                                : ge::mountain::mapgen::generate_level(seed, opts);
   ge::render::FrameView start;
-  fall_line::app::day_view(level, -1, start);
-  if (!fall_line::app::make_view(level, name, start)) {
+  // A hand-built map keeps no day of its own: the ride is lit at late morning.
+  fall_line::app::day_view(level, scenario ? 11.0 : -1.0, start);
+  if (!scenario && !fall_line::app::make_view(level, name, start)) {
     lab.fail("no view named '" + name + "'", "next: pick from games/fall_line/app/views.hpp.");
     return;
   }
+  // The ride: the skier stepped at 120 Hz, two steps a frame, the chase camera behind him.
+  const ge::skier::TreeIndex trees = ge::skier::build_tree_index(level);
+  const ge::skier::World world{&level, &trees};
+  ge::skier::SkierState skier;
+  if (scenario) {
+    skier = ge::skier::stand_skier(world, scenario->x, scenario->z, scenario->heading,
+                                   scenario->speed, scenario->lift);
+  }
+  double ride_t = 0;
+  auto ride_on = [&] {
+    for (int k = 0; k < 2; ++k) {
+      ge::skier::SkierEvents ev;
+      ge::skier::step_skier(skier, scenario->input(ride_t, skier), world, ge::skier::kReferenceSkis,
+                            1.0 / 120, ev);
+      ride_t += 1.0 / 120;
+    }
+  };
   const std::string seed_s = std::to_string(static_cast<long long>(seed));
-  const std::string motion = fixed(speed, 0) + " M/S, TURNING " + fixed(turn, 0) + " DEG/S";
+  const std::string motion = scenario
+                                 ? "THE `" + ride + "` RIDE"
+                                 : fixed(speed, 0) + " M/S, TURNING " + fixed(turn, 0) + " DEG/S";
   const std::vector<std::pair<std::string, std::string>> facts = {
       {"seed", seed_s},
       {"view", name},
       {"frames", std::to_string(frames)},
       {"scale", fixed(options.scale, 2)},
-      {"motion", fixed(speed, 1) + " m/s, " + fixed(turn, 1) + " deg/s"}};
+      {"motion", scenario ? "the " + ride + " ride, chased"
+                          : fixed(speed, 1) + " m/s, " + fixed(turn, 1) + " deg/s"}};
   const ge::lab::Shot shots[3] = {
       {"moving", "SEED " + seed_s + ", MOVING AT " + motion,
        "The last of " + std::to_string(frames) +
-           " frames of the camera flying forward and turning, resolved by TAA-U from its "
-           "history.",
+           (scenario ? " frames of the skier on the ride, chased, his limbs swinging between "
+                       "frames, resolved by TAA-U from its history."
+                     : " frames of the camera flying forward and turning, resolved by TAA-U "
+                       "from its history."),
        "no smear or trail behind ridges and edges as they move; no ghost of what was there a "
        "frame ago; as sharp as the still beside it; no shimmer on the far ridges",
        facts},
@@ -161,18 +201,22 @@ void run(ge::lab::Lab& lab) {
   const ge::gpu::Target target = ge::gpu::create_target(
       *device, "taa.final", static_cast<uint32_t>(width), static_cast<uint32_t>(height));
 
-  // The flight: forward along the heading, turning, 60 frames a second.
+  // The flight: forward along the heading, turning, 60 frames a second; or the ride, chased.
   ge::render::FrameView view = start;
   fall_line::app::cut(*frame);
+  const std::span<const ge::skier::SkierState> racers(&skier, scenario ? 1 : 0);
   for (int i = 0; i < frames; ++i) {
-    if (i > 0) {
+    if (scenario) {
+      if (i > 0) ride_on();
+      fall_line::app::chase_view(level, skier, view);
+    } else if (i > 0) {
       view.heading += turn * 3.14159265358979323846 / 180.0 / 60.0;
       view.eye[0] += ge::core::libm::sin(view.heading) * speed / 60.0;
       view.eye[2] += ge::core::libm::cos(view.heading) * speed / 60.0;
     }
     view.frame = static_cast<uint64_t>(i);
     view.time_s = i / 60.0;
-    fall_line::app::draw(*device, *frame, view, {}, target.view);
+    fall_line::app::draw(*device, *frame, view, {racers, 1.0 / 60, i == 0}, target.view);
   }
   const ge::gpu::Image moving = ge::gpu::read_now(*device, target);
 
@@ -181,7 +225,7 @@ void run(ge::lab::Lab& lab) {
     fall_line::app::cut(*frame);
     for (int i = 0; i < count; ++i) {
       view.frame = static_cast<uint64_t>(i);
-      fall_line::app::draw(*device, *frame, view, {}, target.view);
+      fall_line::app::draw(*device, *frame, view, {racers}, target.view);
     }
     return ge::gpu::read_now(*device, target);
   };
@@ -251,6 +295,7 @@ const ge::lab::LabSpec kSpec{
         {"frames", "24", "frames flown before the capture, at 60 a second"},
         {"speed", "40", "the camera's speed, m/s"},
         {"turn", "20", "the camera's turn rate, degrees a second"},
+        {"scenario", "", "a ride scenario to chase instead of the flight (e.g. turns)"},
     },
     "--width=160 --height=90 --frames=6",
     run,

@@ -176,6 +176,49 @@ TEST(the_drop_lets_the_rig_go_and_he_skis_on) {
   CHECK(r.end.canopy.down && r.end.motor.down && r.end.rpm == 0);
 }
 
+TEST(the_bar_forward_dives_steep_and_fast_and_the_wing_stays_open) {
+  const pm::ParaRun r = fly("dive");
+  CHECK_MSG(r.top_sink > 18 && r.top_airspeed * 3.6 > 85,
+            "the dive fell at most " + std::to_string(r.top_sink) + " m/s at " +
+                std::to_string(r.top_airspeed * 3.6) + " km/h" + look("dive"));
+  CHECK(r.folds == 0 && r.tangle < 0 && r.end.mode == pm::ParaMode::flown);
+}
+
+TEST(the_bar_back_from_a_cruise_only_climbs_and_never_tangles) {
+  const pm::ParaRun r = fly("swing-up");
+  CHECK_MSG(r.loops == 0 && r.tangle < 0 && r.end.mode == pm::ParaMode::flown,
+            std::to_string(r.loops) + " loops, a tangle at " + std::to_string(r.tangle) + " s" +
+                look("swing-up"));
+}
+
+TEST(a_big_dive_swung_up_goes_round_in_a_loop_and_flies_on) {
+  const pm::ParaRun r = fly("loop");
+  CHECK_MSG(r.loops == 1 && r.tangle < 0 && r.end.mode == pm::ParaMode::flown,
+            std::to_string(r.loops) + " loops, a tangle at " + std::to_string(r.tangle) + " s" +
+                look("loop"));
+  // A tumble's load: hard, not a fighter's.
+  CHECK_MSG(r.top_g > 5 && r.top_g < 12,
+            "the loop pulled " + std::to_string(r.top_g) + " g" + look("loop"));
+}
+
+TEST(swung_up_without_the_speed_to_go_over_he_falls_into_the_wing_until_the_snow) {
+  const pm::ParaRun r = fly("tangle");
+  CHECK_MSG(r.tangle > 0 && r.loops == 0, "the swing-up out of a short dive tangled at " +
+                                              std::to_string(r.tangle) + " s" + look("tangle"));
+  // He falls fast in the bundle, and the snow stops him: wiped out, the rig cut away.
+  CHECK(r.top_sink > 12);
+  CHECK_MSG(r.wiped_out && r.cut == pm::ParaCut::rider,
+            std::string("the tangle ended ") + pm::para_cut_name(r.cut) + look("tangle"));
+}
+
+TEST(the_release_cuts_the_tangled_wing_away) {
+  const pm::ParaRun r = fly("cut-tangle");
+  CHECK(r.tangle > 0 && r.tangle < 7);
+  CHECK_MSG(r.cut == pm::ParaCut::drop && r.end.mode == pm::ParaMode::dropped,
+            std::string("the release on the tangle ended ") + pm::para_cut_name(r.cut) +
+                look("cut-tangle"));
+}
+
 TEST(still_air_has_no_lift_and_no_eddies_and_a_wind_up_a_face_rises) {
   const auto level = ge::skier::flat_strip(ge::skier::slope::kPitch, 1);
   const pm::ParaAirField field = pm::make_air_field(level.seed);

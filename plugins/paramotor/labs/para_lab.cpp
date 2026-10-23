@@ -1,12 +1,13 @@
 // LAB `para`: the paramotor staged in exact situations (scenarios.hpp: a hand-built map, a moment,
 // a wind, a scripted hand or the bot's) and measured: the launch off the face, the glide's speed
 // and sink, the climb, the banked turn, the stall and the surge, the bot down the fall line and
-// onto a spot, ridge lift, the lee's folds, a crown, the drop. One picture a scenario: the line
+// onto a spot, ridge lift, the lee's folds, a crown, the drop, and the acro (the dive, the
+// swing-up, the loop, the tangle and its cut-away). One picture a scenario: the line
 // from above, and the height over the snow and the speed under it.
 //
 // ge:summary Lab: the paramotor scenarios run and measured; the line, the height and speed drawn
 // ge:keywords lab para paramotor scenario launch glide sink climb turn stall surge land ridge
-// ge:keywords lee fold crown drop trace
+// ge:keywords lee fold crown drop trace acro dive swing-up loop tangle
 // ge:skill paramotor labs
 // ge:test tests/paramotor_scenarios_test.cpp
 #include <string>
@@ -110,9 +111,10 @@ void run(ge::lab::Lab& lab) {
   const double hz = lab.arg_num("hz");
   ge::lab::LabTable table{
       "scenarios",
-      {"scenario", "launch s",  "take-off s", "top km/h",   "metres",  "climbed m", "climb m/s",
-       "air km/h", "sink m/s",  "bank deg",   "turned deg", "stalled", "folds",     "fold",
-       "touches",  "landing g", "wiped",      "cut",        "cut s",   "closest m"},
+      {"scenario",  "launch s",  "take-off s", "top km/h",  "metres",     "climbed m",
+       "climb m/s", "air km/h",  "sink m/s",   "bank deg",  "turned deg", "stalled",
+       "folds",     "fold",      "touches",    "landing g", "wiped",      "cut",
+       "cut s",     "closest m", "loops",      "top g",     "tangled s",  "top sink m/s"},
       {}};
   int ran = 0;
   for (const pm::ParaScenario& sc : pm::para_scenarios()) {
@@ -132,6 +134,9 @@ void run(ge::lab::Lab& lab) {
     lab.metric(k + ".folds", r.folds, "count");
     lab.metric(k + ".landing-g", r.landing_g, "g");
     if (r.closest >= 0) lab.metric(k + ".closest", r.closest, "m");
+    lab.metric(k + ".loops", r.loops, "count");
+    lab.metric(k + ".top-g", r.top_g, "g");
+    lab.metric(k + ".top-sink", r.top_sink, "m/s");
     table.rows.push_back({k,
                           fixed(r.launch, 2),
                           fixed(r.take_off, 2),
@@ -151,7 +156,11 @@ void run(ge::lab::Lab& lab) {
                           r.wiped_out ? "yes" : "no",
                           pm::para_cut_name(r.cut),
                           fixed(r.cut_time, 2),
-                          fixed(r.closest, 1)});
+                          fixed(r.closest, 1),
+                          std::to_string(r.loops),
+                          fixed(r.top_g, 2),
+                          fixed(r.tangle, 2),
+                          fixed(r.top_sink, 1)});
     lab.shot({k,
               "PARA " + k,
               std::string(sc.what) +
@@ -181,8 +190,9 @@ const ge::lab::LabSpec kSpec{
     "paramotor",
     "Staged in each exact situation, does the paramotor fly as a motorised speed wing does: the "
     "launch off a face, the glide's speed and sink, the climb, the banked turn, the stall and "
-    "the surge, the bot down the fall line and onto a spot, ridge lift, the lee's folds, a crown "
-    "and the drop?",
+    "the surge, the bot down the fall line and onto a spot, ridge lift, the lee's folds, a crown, "
+    "the drop, and the acro: the dive, the swing-up, the loop and the tangle out of a swing "
+    "without the speed for it?",
     {
         {"scenario", "all", "one scenario's id (plugins/paramotor/scenarios.cpp), or all"},
         {"hz", "120", "steps a second"},
