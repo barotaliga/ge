@@ -525,8 +525,10 @@ snapped to its texels across the sun, so a redraw does not swim. Seed 38's whole
 chase camera redraws the near cascade on 187 of 14,382 frames and the far one on 22 (the
 `world` lab's `cascade-redraws`). The casters are each family's own slots
 (`create_family_casters`): the forest's two (one a cascade) culled against the map's box with
-no depth pyramid, the figures' one culled once for every tile, each tile drawn under its own
-viewport and scissor. A receiver (the terrain and every instance) offsets its point 1.5 texels
+no depth pyramid, the figures' and the crowd's one a tile (sixteen), each culled against its own
+tile's box, so a figure is drawn only into the tiles it can shade, each tile under its own
+viewport and scissor. The tiles go to the racers first, then to the amateurs nearest the eye
+(`games/fall_line/app/scene.hpp`'s `shadow_centres`). A receiver (the terrain and every instance) offsets its point 1.5 texels
 along its normal, adds a 5 cm bias and takes four rotated Poisson taps, each a hardware 2 × 2
 comparison (interleaved gradient noise, turned every frame for the TAA to average); the near
 cascade where the point falls inside it, else the far one, and the darkest of the figures'
@@ -772,10 +774,13 @@ stays as the `anim` lab's comparison. The free ride's **crowd** (`sim/crowd.hpp`
 model as one palette family (`scene.hpp`'s `crowd_meshes`, `crowd_instance`): an instance an
 amateur at his id, each posed by his own poser from the amateur read as a skier (`crowd_skier`:
 his place, heading, lean, crouch, down), sized by his body and in one of ten jackets; one on a
-lift's carrier or up a lift unseen is drawn at a scale of nought, which the cull drops. The crowd
-casts no shadow yet: the figures' atlas draws every moving figure into every tile, so it would
-cost the crowd times the tiles (next: a cull a tile). The `crowd-look` lab films a lift's queue,
-a busy run, a group and one of them down, each with the crowd and without.
+lift's carrier or up a lift unseen is drawn at a scale of nought, which the cull drops. The
+amateurs nearest the eye cast into the figures' atlas, a tile each after the racers'; each tile
+culls the crowd by its own box, so the atlas costs the figures near the tiles, not the crowd
+times the tiles (on the software adapter, 2 ms of `shadows.figures` with one racer, 12 ms with
+fifteen amateurs; drawing every figure into every tile had cost 385 ms). The `crowd-look` lab
+films a lift's queue, a busy run, a group and one of them down at `--hour` (11: the sun on the
+runs), each with the crowd and without.
 
 ## Shaders
 

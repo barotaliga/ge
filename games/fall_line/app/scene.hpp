@@ -15,12 +15,14 @@
 // (render/skinning.hpp): one mesh, an instance an amateur at his id, each posed by a palette of
 // its own from his place and pose (`crowd_skier`: the amateur as a skier the poser reads), sized
 // by his body and wearing one of the crowd's jackets. One on a lift's carrier or up a lift
-// unseen is not drawn (a scale of nought: the cull's sphere is too small for any pixel).
+// unseen is not drawn (a scale of nought: the cull's sphere is too small for any pixel). The
+// atlas's tiles go to the racers, then to the amateurs nearest the eye (`shadow_centres`).
 //
 // ge:summary Fall Line's forest and skinned skiers as instance families
 // ge:keywords fall-line scene forest trees figures racers instances materials skinned
 // ge:keywords skier-model forest_meshes figure_meshes tree_instances figure_instance skier_model
 // ge:keywords jacket placement crowd amateurs crowd_meshes crowd_instance crowd_skier
+// ge:keywords shadow_centres shadow-tiles
 // ge:skill render
 #pragma once
 
@@ -79,5 +81,12 @@ bool crowd_drawn(const sim::Amateur& a);
 // of nought when he is not drawn.
 ge::render::Instance crowd_instance(const sim::Amateur& a, const ge::mountain::mapgen::Level& level,
                                     uint32_t materials_per_jacket);
+
+// The figures' shadow tiles (render/shadows.hpp's atlas), at most `most` of them into `out`, each
+// a metre over the feet: every racer's first, in order, then the drawn amateurs nearest `eye`,
+// nearest first. Allocates nothing past `out`'s first growth.
+void shadow_centres(std::span<const ge::skier::SkierState> racers,
+                    std::span<const sim::Amateur> crowd, const double eye[3], int most,
+                    std::vector<std::array<double, 3>>& out);
 
 }  // namespace fall_line::app

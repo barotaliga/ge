@@ -18,7 +18,8 @@
 //   shadows.cull         -> shadows.lists (the casters of the maps drawn this frame)
 //   shadows.near         -> shadows.maps (the near cascade: the forest, when due)
 //   shadows.far          -> shadows.maps (the far cascade, when due)
-//   shadows.figures      -> shadows.maps (the figures' atlas, every frame: the racers)
+//   shadows.figures      -> shadows.maps (the figures' atlas, every frame: the racers, the
+//                           nearest amateurs; each tile its own casters)
 //   terrain.depth        -> depth (the prepass)
 //   instances.depth      -> depth (the early lists' prepass)
 //   hiz                  -> hiz (the depth's pyramid)
