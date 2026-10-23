@@ -24,7 +24,8 @@ engine/input                the device model, events, the state, shapes, actions
         ▲
 backends                    feed it events and play its feedback:
   engine/platform (SDL3)    keyboards, raw mice, gamepads, joysticks, wheels, haptics, touch,
-                            on macOS, Linux, Windows, iOS, iPadOS and Android (M19b)
+                            on macOS, Linux and Windows (M19b; the phones with M11):
+                            platform/devices.hpp
   engine/input/sim          simulated devices on a virtual clock: tests and labs (M19a)
   an event log              a recorded session played back (M19a)
   Steam Input               a backend of its own, from the Steam integration work
@@ -134,9 +135,11 @@ saws, spring, damper, friction, inertia) with envelopes, delays and durations, a
 pure functions of time and the axis's position, speed and acceleration (`effect_force`,
 `force_at`, on `core::libm`). A racing game keeps a spring and a damper playing and updates
 their numbers with the car's self-aligning torque each step (`update_effect`), so the motor is
-never restarted. The backend uploads the effects to the device's driver (M19b), and the
-simulated wheel plays them on a rim with inertia and friction under a scripted hand, so a lab
-charts what the player would feel (`input-ffb`).
+never restarted. The platform's backend (`engine/platform/devices.hpp`) plays the sum as ONE
+constant force on the device, updated every frame from the wheel's steering axis (its position,
+and its speed and acceleration taken frame to frame), with the device's own autocentre switched
+off; the simulated wheel plays the same sum on a rim with inertia and friction under a scripted
+hand, so a lab charts what the player would feel (`input-ffb`).
 
 ## Gamepads: rumble, triggers, light, gyro, touchpad
 
@@ -162,6 +165,30 @@ same model plugged in again returns to him (`returned`) before anyone else may t
 several players on one screen, a device joins the first free player when a button on it is
 pressed, and a keyboard brings the mouse with it.
 
+## The platform backend
+
+`engine/platform/devices.hpp` (`open_devices`, over SDL3) is the backend a shipped game runs on.
+With a window, `poll_input(window, snapshot, devices, queue)` reads the window's events and every
+device's in one pump; with none, `pump_devices` does. It plugs one pooled keyboard and mouse,
+opens every gamepad SDL maps (positional buttons and axes, which are SDL's numbering; the family
+from the pad's type; gyro, accelerometer, touchpad and battery when present) and every other
+joystick by SDL's joystick type (wheel, flight stick, throttle, or plain joystick, with raw axes,
+buttons and hats), plugs a touch screen when it first reports a finger, and unplugs a device the
+moment SDL does: a pad plugged in again is a new device with a new id. A device's `key` is its
+USB ids (`vvvv:pppp`), so the device database's rows match the same wheel on every OS.
+`set_relative_mouse` captures the pointer for a first-person look (the motion is then raw counts,
+SDL's system scale off) and `set_text_input` turns text events on. `play_feedback` sends each
+frame's rumble, trigger rumble, light and player lights when they change (a held rumble is resent
+before SDL's duration runs out) and streams the force to a force-feedback device.
+
+**Headless**, SDL's virtual joystick driver plugs devices SDL treats as hardware
+(`attach_virtual`, then `virtual_axis`, `virtual_button`, `virtual_hat`, `virtual_sensor`,
+`virtual_touch`), and what feedback reached them is read back (`virtual_feedback`); `virtual_key`
+and `virtual_mouse_motion` push a key and a motion through SDL's own queue for a window's pump.
+`tests/platform_devices_test.cpp` and the `input-devices` lab run the whole path that way in the
+GPU-less container. Force feedback on a real wheel cannot be exercised there (SDL has no virtual
+haptic device); `haptic_level` is the part that can, and M19d measures real wheels.
+
 ## Recordable, replayable, testable
 
 There are two records, at two levels:
@@ -186,7 +213,7 @@ actions on every machine, and the labs' digests hold them.
 | `input-shape` | picture | Each dead zone's output against the push on a diagonal and near a cardinal; the response curves; the key ramps over time |
 | `input-session` | scenario | A scripted session on a simulated keyboard, mouse, pad, wheel with pedals and touch screen, read through a skier's, a shooter's and a racer's action maps at once; written as an event log, read back and replayed to the bit; two players joining and a pad unplugged and returned; rebinding a shooter's jump by pressing |
 | `input-ffb` | scenario | Force-feedback effects on the simulated rim under a hand: a spring and a damper bringing it back (the settle time and the overshoot), a spring ringing, a constant pull held straight, a road's rumble |
-| `input-devices` (M19b) | scenario | The SDL backend driven through SDL's own virtual joysticks and gamepads, headless: every event reaching the state, rumble and effects reaching the device |
+| `input-devices` | scenario | One script on a pad and a wheel played through SDL's own virtual devices (the platform's backend, headless) and through the simulated backend: a skier's and a racer's actions held to each other frame by frame (the largest gap per action, the 16-bit step); rumble, its end, the light and the player lights reaching the pad; the pad unplugged and plugged in again as a new device |
 
 ## Decisions
 
@@ -203,6 +230,10 @@ actions on every machine, and the labs' digests hold them.
   used device exists only to choose which prompts to draw.
 - **Rows, not guesses, for wheels.** Their axis layouts vary by model and by driver. A row is
   either shipped from a measured device or learned by the player, and is never invented.
-- **The force is a pure function.** Effects are evaluated in the engine, on our libm, so the
-  simulated wheel and the charts show what the device is asked to do. The backend uploads the
-  same effects to the driver, which runs them at the motor's own rate.
+- **The force is a pure function, streamed.** Effects are evaluated in the engine, on our libm,
+  so the simulated wheel, the charts and the real wheel all get the same force, and the backend
+  streams it as one constant effect the driver holds between updates. The cost is the update
+  rate: a spring evaluated at the frame rate (or the step's 120 Hz once a game updates it per
+  step, M19d) instead of the driver's own loop. Uploading the conditions (spring, damper,
+  friction, inertia) to the driver as SDL condition effects is the fallback if a measured wheel
+  shows a stiff spring notching or oscillating at that rate (M19d measures it on real wheels).

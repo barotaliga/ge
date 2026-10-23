@@ -224,7 +224,7 @@ characters.
 | `*/labs/` | Labs beside their subject, compiled into the one `labs` executable | `labs` |
 | `engine/net/` | Multiplayer networking (`ge::net`, `docs/networking.md`): addresses, the wire, UDP and TCP sockets, the links, the simulated network, sessions, LAN discovery; the only place socket headers are included | `net` |
 | `engine/input/` | Input devices (`ge::input`, `docs/input.md`): the device model, events, state, dead zones, actions and bindings, rebinding, wheels' roles, touch, players, feedback, the event log, simulated devices | `input` |
-| `engine/platform/` | SDL3 (`GE_PLATFORM`): the window, input, the frame clock, the audio device; the only place SDL is included | `platform` |
+| `engine/platform/` | SDL3 (`GE_PLATFORM`): the window, the input devices as `engine/input` events, the frame clock, the audio device; the only place SDL is included | `platform`, `input` |
 | `engine/gpu/` | The native GPU device over Dawn (`GE_GPU`): adapters and tiers, pipelines and the manifest, surfaces, targets, timers; the only place webgpu.h is included | `gpu` |
 | `engine/render/` | Generic rendering mechanisms (`docs/rendering.md`): the frame and its pass table, sky, terrain, shadows, Hi-Z, TAA-U, bloom, post, meshes, instances, skinning; WGSL beside each | `render` |
 | `engine/audio/` | The synth (`ge::audio`): the voice vocabulary, the DSP graph, sounds and racks, the meter, WAV; deterministic, no platform | `audio` |

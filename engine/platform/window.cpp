@@ -9,6 +9,8 @@
 
 #include <SDL3/SDL.h>
 
+#include "platform/devices_sdl.hpp"
+
 #include <string>
 
 #include "core/output.hpp"
@@ -95,11 +97,18 @@ void Window::pixel_size(int& width, int& height) const {
   if (!SDL_GetWindowSizeInPixels(impl_->window, &width, &height)) width = height = 0;
 }
 
-void poll_input(Window& window, InputSnapshot& in) {
+namespace {
+
+void pump(Window& window, InputSnapshot& in, Devices* devices, input::Queue* queue) {
   in.pressed.fill(false);
   in.quit = in.focus_lost = in.focus_gained = in.resized = false;
+  if (devices) {
+    devices_begin(*devices, *queue);
+    SDL_UpdateJoysticks();
+  }
   SDL_Event e;
   while (SDL_PollEvent(&e)) {
+    if (devices) devices_event(*devices, e, *queue);
     switch (e.type) {
       case SDL_EVENT_QUIT:
       case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
@@ -145,6 +154,26 @@ void poll_input(Window& window, InputSnapshot& in) {
     }
   }
   window.pixel_size(in.width_px, in.height_px);
+}
+
+}  // namespace
+
+void poll_input(Window& window, InputSnapshot& in) { pump(window, in, nullptr, nullptr); }
+
+void poll_input(Window& window, InputSnapshot& in, Devices& devices, input::Queue& queue) {
+  pump(window, in, &devices, &queue);
+}
+
+void set_relative_mouse(Window& window, bool on) {
+  SDL_SetWindowRelativeMouseMode(window.impl_->window, on);
+}
+
+void set_text_input(Window& window, bool on) {
+  if (on) {
+    SDL_StartTextInput(window.impl_->window);
+  } else {
+    SDL_StopTextInput(window.impl_->window);
+  }
 }
 
 uint64_t now_ns() { return SDL_GetTicksNS(); }
