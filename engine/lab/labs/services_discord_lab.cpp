@@ -60,7 +60,7 @@ void run(gl::Lab& lab) {
   int64_t stale_max = 0;
   const int64_t end_us = 90 * kSecond;
   for (int64_t now = 0; now <= end_us; now += kFrame) {
-    const int64_t frame = now / kFrame;
+    const int frame = static_cast<int>(now / kFrame);
     app.tick(now);
     if (frame == 4 * 60) app.set_running(true);
     const bool racing = now >= 10 * kSecond && now < 70 * kSecond;
