@@ -36,6 +36,7 @@ the row when the file moves.
 | `games/fall_line/labs/army_flight_lab.cpp` | `game5/scripts/army-flight.mjs` | the army's helicopters shown (here measured: the helicopters table and every machine's path, per scenario) |
 | `games/fall_line/labs/army_lab.cpp` | `game5/scripts/army-ground.mjs` | the ground army shown (here measured: the army table and every soldier's path, per scenario) |
 | `games/fall_line/labs/army_sled_lab.cpp` | `game5/scripts/army-ground.mjs` | the army's snowmobiles shown (here measured: the sleds table and every machine's path, per scenario) |
+| `games/fall_line/labs/gunfire_lab.cpp` | `game5/scripts/gunfire-table.mjs` | the gunfire's table (here the range table by weapon, range, rules and target, and a seed-38 hunt's fire) |
 | `games/fall_line/labs/lift_ride_lab.cpp` | `game5/scripts/lift-ride-preview.mjs` | the lift ride shown (here measured as a table, every lift ridden from its load zone to its top) |
 | `games/fall_line/sim/army.cpp` | `game5/engine/game/army-ground.ts`, `army-lift.ts`, `army-wave.ts` | stepGround chase tryArrest writeTroops sendLiftSquads stepLiftTroops liftFor wayDown sendWave sendWaves retireWaves climbWithWave (the landings, the fire, the cover ring and the men on foot not carried) |
 | `games/fall_line/sim/army.hpp` | `game5/engine/game/army-ground.ts`, `army-lift.ts`, `army-wave.ts` | stepGround liftFor wayDown armyTroops |
@@ -55,6 +56,11 @@ the row when the file moves.
 | `games/fall_line/sim/army_troop.hpp` | `game5/engine/game/army-troop.ts` | goToward stopHere watchProgress slopeAlong |
 | `games/fall_line/sim/free.cpp` | `game5/engine/game/skied.ts`, `course.ts` | runUnder noteRun noteSkied leftRunPoint skiedResetPoint freeSpawn |
 | `games/fall_line/sim/free.hpp` | `game5/engine/game/skied.ts`, `course.ts` | runUnder noteRun noteSkied leftRunPoint skiedResetPoint freeSpawn |
+| `games/fall_line/sim/gunfire.cpp` | `game5/engine/game/gunfire.ts` | gunDraw armGun disarmGun rulesOf gunReady fireAt flightTime speedAt energyAt aimPoint stepGunfire fireRound flyRound wound (the rockets and shells, the machines' damage, the cabin share and the player's own gun not carried) |
+| `games/fall_line/sim/gunfire.hpp` | `game5/engine/game/gunfire.ts` | armGun fireAt stepGunfire flightTime speedAt energyAt |
+| `games/fall_line/sim/gunfire_body.cpp` | `game5/engine/game/gunfire-body.ts` | bodyCentre capsuleHit BONES fromBehind bodyHit passDistance (the points off the standing stance here, not the thrown body's) |
+| `games/fall_line/sim/gunfire_body.hpp` | `game5/engine/game/gunfire-body.ts` | bodyHit passDistance |
+| `games/fall_line/sim/gunfire_state.hpp` | `game5/engine/game/gunfire-state.ts` | Gun Round GunfireState AimTarget FireRules |
 | `games/fall_line/sim/heli_outing.cpp` | `game5/engine/sim/bot.ts`, `game5/engine/game/heli-pilot.ts` | the bot on the skid (pilotControls to an aim); the outing to a run's head and down on skis |
 | `games/fall_line/sim/heli_outing.hpp` | `game5/engine/sim/bot.ts` | the bot on the skid |
 | `games/fall_line/sim/heli_ride.cpp` | `game5/engine/game/heli.ts`, `heli-pad.ts` | stepHeli controlsFor crash park hold release drop heliWithin board startAgain openSpotNear leanOver clearAt summitward |
@@ -73,6 +79,7 @@ the row when the file moves.
 | `games/fall_line/sim/wanted.hpp` | `game5/engine/game/wanted.ts` | quarryOf raiseHeat setWanted arrestSkier arrestedOf survivedOf rosterOf groundWave wavesSent seesQuarry throughWoods underCover stepWanted |
 | `games/fall_line/sim/wanted_rules.hpp` | `game5/engine/game/defs/wanted.ts` | WANTED WantedRoster WaveMix GroundWaves PursuerKind WantedCause |
 | `games/fall_line/sim/wanted_state.hpp` | `game5/engine/game/wanted-state.ts` | Pursuer WantedEnd WantedState WantedEvent |
+| `games/fall_line/sim/weapons_rules.hpp` | `game5/engine/game/defs/weapons.ts` | WEAPONS GUNFIRE (the guns: rifle, lmg, doorGun) |
 | `games/fall_line/sound/bank.cpp` | `game5/pwa/src/game/audio/bank.ts` | RUN_BANK |
 | `games/fall_line/sound/bank.hpp` | `game5/pwa/src/game/audio/bank.ts` | RUN_BANK |
 | `games/fall_line/sound/listener.hpp` | `game5/pwa/src/game/audio/listener.ts` | Listener LISTENERS listenerFor |

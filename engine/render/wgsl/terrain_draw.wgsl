@@ -101,7 +101,7 @@ fn ground_at(in: VertexOut) -> Ground {
   g.rel = in.rel;
   g.y = in.rel.y + frame.eye.y;
   g.dist = length(in.rel);
-  g.sun = sun_light(g.y) *
+  g.sun = sun_light(g.y, in.xz) *
           ground_shadow(params, horizon0, horizon1, linear_clamp, frame.sun.xyz, in.xz) *
           sun_shadow(shadow, shadow_maps, shadow_cmp, in.rel, g.n, in.position.xy, frame.time.y);
   return g;

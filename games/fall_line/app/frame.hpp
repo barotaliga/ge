@@ -18,7 +18,8 @@
 //   shadows.cull         -> shadows.lists (the casters of the maps drawn this frame)
 //   shadows.near         -> shadows.maps (the near cascade: the forest, when due)
 //   shadows.far          -> shadows.maps (the far cascade, when due)
-//   shadows.figures      -> shadows.maps (the figures' atlas, every frame: the racers)
+//   shadows.figures      -> shadows.maps (the figures' atlas, every frame: the racers, the
+//                           nearest amateurs; each tile its own casters)
 //   terrain.depth        -> depth (the prepass)
 //   instances.depth      -> depth (the early lists' prepass)
 //   hiz                  -> hiz (the depth's pyramid)
@@ -70,6 +71,7 @@
 #include "mountain/app/trails.hpp"
 #include "mountain/mapgen/types.hpp"
 #include "render/bloom.hpp"
+#include "render/clouds.hpp"
 #include "render/frame.hpp"
 #include "render/hiz.hpp"
 #include "render/instances.hpp"
@@ -101,7 +103,8 @@ struct FrameOptions {
   bool spray = true;            // the racers' spray (skier/app/spray.hpp) thrown into the particles
   ge::render::ParticleSettings particles;
   bool snowfall = true;  // the falling snow, when the map's sky snows
-  bool weather = true;   // the map's sky in the picture (mountain/app/weather_look.hpp): off, clear
+  bool weather =
+      true;  // the map's sky and cloud in the picture (mountain/app/cloud_field.hpp): off, clear
   ge::render::SnowfallSettings flakes;
   ge::mountain::app::TrailOptions trail_maps;  // their sizes
 };
@@ -141,6 +144,7 @@ struct GameFrame {
   std::vector<ge::mountain::app::TrailStamp> laid;
   ge::render::Particles particles;
   ge::render::Snowfall snowfall;
+  ge::render::CloudPass clouds;
   std::vector<ge::skier::SprayPen> spray_pens;  // each racer's, by his place in the scene
   std::vector<ge::skier::SprayGrain> thrown;
   std::vector<ge::render::Particle> births;

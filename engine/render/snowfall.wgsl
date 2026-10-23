@@ -93,7 +93,7 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   let y = in.rel.y + frame.eye.y;
   let xz = in.rel.xz + frame.eye.xz;
   let lit = ground_shadow(ground, horizon0, horizon1, linear_clamp, frame.sun.xyz, xz);
-  let c = 0.9 / PI * (sun_light(y) * lit + sky_irradiance(vec3f(0.0, 1.0, 0.0)));
+  let c = 0.9 / PI * (sun_light(y, xz) * lit + sky_irradiance(vec3f(0.0, 1.0, 0.0)));
   let hazed = haze(c, in.position.xy * frame.size.zw, length(in.rel));
   var out: FragmentOut;
   out.colour = vec4f(hazed * a, a);

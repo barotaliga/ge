@@ -1,14 +1,18 @@
-// LAB `weather`: the mountain's skies in the picture (plugins/mountain/app/weather_look.hpp over
-// render/view.hpp's `Weather`): a seed's map drawn under each of R19's eight kinds in turn, its
-// own weather replaced (a CLEAR day, FAIR heaps, a FLURRY, a HIGH veil, an OVERCAST, a steady
-// SNOW, a STORM and a valley FOG), from a named view, --frames frames at 60 a second up to --at
-// seconds into the run.
+// LAB `weather`: the mountain's skies in the picture (plugins/mountain/app/weather_look.hpp and
+// cloud_field.hpp over render/view.hpp's `Weather` and `Clouds`): a seed's map drawn under each of
+// R19's eight kinds in turn, its own weather replaced (a CLEAR day, FAIR heaps, a FLURRY, a HIGH
+// veil, an OVERCAST, a steady SNOW, a STORM and a valley FOG), from a named view, --frames frames
+// at 60 a second up to --at seconds into the run (--lift raises the view's pitch, degrees, to show
+// more of the sky).
 //
 // Beside each: the look's numbers (the sun's pass, the deck's cover, the visual range, the deck
-// overhead hidden: deterministic, pure functions of the map and the clock) and, measured off the
+// overhead hidden, the cloud's layers, the share of the sky its lowest layer covers and the share
+// of the sun its shadows leave the map, read off a grid over the map: deterministic, pure
+// functions of the map and the clock) and, measured off the
 // picture, its mean luma and its contrast (the luma's spread: the flat light is a small one).
-// The lab fails when a lid's picture is no flatter than the clear day's, or a fog's far half is
-// not closer to the sky than the clear day's. Without an adapter it notes that and draws
+// The lab fails when a lid's picture is no flatter than the clear day's, a fog's far half is
+// not closer to the sky than the clear day's, or a layer's measured cover is more than 0.1 off
+// the cover it was dealt. Without an adapter it notes that and draws
 // placeholders, so the digest is the same on every row; GE_GPU_REQUIRE=1 fails instead. Built
 // only with GE_GPU.
 //
@@ -26,6 +30,7 @@
 #include <string_view>
 #include <vector>
 
+#include "core/libm/libm.hpp"
 #include "fall_line/app/frame.hpp"
 #include "fall_line/app/views.hpp"
 #include "gpu/device.hpp"
@@ -33,8 +38,9 @@
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
 #include "mountain/air/air.hpp"
-#include "mountain/app/weather_look.hpp"
+#include "mountain/app/cloud_field.hpp"
 #include "mountain/mapgen/generate.hpp"
+#include "render/clouds.hpp"
 
 namespace {
 
@@ -71,11 +77,14 @@ struct Sky {
 constexpr Sky kSkies[] = {
     {"clear", mg::WeatherKind::clear, 0, 0,
      "a blue sky, the sun's shadows hard on the snow, the far ridges blue in the clear air"},
-    {"fair", mg::WeatherKind::fair, 0, 0, "the clear day with the blue a touch paler"},
+    {"fair", mg::WeatherKind::fair, 0, 0,
+     "white heaps with flat grey bases over a third of the blue, their shadows dark patches on "
+     "the snow, a few ice streaks high above"},
     {"flurries", mg::WeatherKind::flurries, 0.3, 0,
-     "a scatter of flakes, the far mountain softened into the sky some hundreds of metres off"},
+     "taller heaps and a rippled sheet over them, a scatter of flakes, the far mountain softened "
+     "into the sky some hundreds of metres off"},
     {"high", mg::WeatherKind::high, 0, 0,
-     "a milky blue sky, the sun's shadows softer and fainter than the clear day's"},
+     "ice streaks drawn out along the wind over a milky veil, the sun's shadows a little softer"},
     {"overcast", mg::WeatherKind::overcast, 0, 0,
      "a grey deck, darker overhead; flat light with no shadows; the far ridges grey"},
     {"snow", mg::WeatherKind::snow, 0.6, 0,
@@ -104,6 +113,47 @@ void luma_stats(const ge::lab::Picture& p, int y0, int y1, double& mean, double&
   spread = n ? std::sqrt(std::max(sq / n - mean * mean, 0.0)) : 0;
 }
 
+// The share of the sky under the lowest layer's cloud, over a 128 x 128 grid across two of the
+// noise's tiles (so the share is the sky's, not one map's few cells); and the share of the sun
+// every layer's shadow leaves the map (a 64 x 64 grid straight down, as frame.wgsl's
+// cloud_shadow with the sun overhead).
+void cloud_cover(const mg::Level& level, const ge::render::Clouds& clouds, double& cover,
+                 double& light) {
+  const ge::render::CloudLayer& low = clouds.layers[0];
+  const double span = 2 * ge::render::kCloudTileCells * low.cell_m * std::max(low.stretch, 1.0);
+  int under = 0;
+  for (int j = 0; j < 128; ++j) {
+    for (int i = 0; i < 128; ++i) {
+      if (ge::render::cloud_column(low, (i + 0.5) / 128 * span, (j + 0.5) / 128 * span) > 0)
+        ++under;
+    }
+  }
+  cover = under / (128.0 * 128.0);
+  double sum = 0;
+  for (int j = 0; j < 64; ++j) {
+    for (int i = 0; i < 64; ++i) {
+      const double x = (i + 0.5) / 64 * level.size, z = (j + 0.5) / 64 * level.size;
+      double tau = 0;
+      for (int k = 0; k < clouds.count; ++k)
+        tau += ge::render::cloud_column(clouds.layers[k], x, z) * clouds.layers[k].shadow_tau;
+      sum += ge::core::libm::exp(-tau);
+    }
+  }
+  light = sum / (64.0 * 64.0);
+}
+
+// The cloud's cover is a true share of the sky (deterministic: checked with or without a GPU).
+void check_cover(ge::lab::Lab& lab, const std::vector<double>& dealt,
+                 const std::vector<double>& covered) {
+  for (size_t i = 0; i < dealt.size(); ++i) {
+    if (dealt[i] > 0 && std::fabs(covered[i] - dealt[i]) > 0.1) {
+      lab.fail(std::string(kSkies[i].id) + "'s lowest layer covers " + fixed(covered[i], 2) +
+                   " of the map, dealt " + fixed(dealt[i], 2),
+               "Check cloud_cut and cloud_column in engine/render/clouds.cpp. Skill: render.");
+    }
+  }
+}
+
 void run(ge::lab::Lab& lab) {
   const double seed = lab.arg_num("seed");
   const std::string& view_name = lab.arg("view");
@@ -111,6 +161,11 @@ void run(ge::lab::Lab& lab) {
   const int frames = static_cast<int>(lab.arg_num("frames"));
   const int width = static_cast<int>(lab.arg_num("width"));
   const int height = static_cast<int>(lab.arg_num("height"));
+  const double lift = lab.arg_num("lift");
+  if (lift < -60 || lift > 60) {
+    lab.fail("--lift must be -60..60 degrees", "next: pass --lift=10.");
+    return;
+  }
   if (at < 0 || frames < 1 || frames > 600 || width <= 0 || height <= 1 || width > 4096 ||
       height > 4096) {
     lab.fail("--at must be 0 or more, --frames 1..600, --width 1..4096 and --height 2..4096",
@@ -131,30 +186,46 @@ void run(ge::lab::Lab& lab) {
   // THE SKIES: the map under each, and the look at the shot.
   std::vector<mg::Level> levels;
   levels.reserve(std::size(kSkies));
+  std::vector<double> dealt(std::size(kSkies), 0.0), covered(std::size(kSkies), 0.0);
   for (const Sky& sky : kSkies) {
     mg::Level l = base;
     l.weather.kind = sky.kind;
     l.weather.snowfall = sky.snowfall;
     l.weather.fog = sky.fog;
     levels.push_back(std::move(l));
-    const ge::render::Weather w = ge::mountain::app::weather_at(levels.back(), at);
+    ge::render::Weather w;
+    ge::render::Clouds c;
+    ge::mountain::app::sky_at(levels.back(), at, w, c);
     const std::string k = sky.id;
     lab.metric(k + ".sun-pass", w.sun_pass, "share");
     lab.metric(k + ".cover", w.cover, "share");
     lab.metric(k + ".visibility", w.visibility_m, "m");
     lab.metric(k + ".hidden", w.hidden, "share");
+    lab.metric(k + ".layers", c.count, "count");
+    if (c.count > 0) {
+      const size_t i = levels.size() - 1;
+      double light = 1;
+      cloud_cover(levels.back(), c, covered[i], light);
+      dealt[i] = c.layers[0].cover;
+      lab.metric(k + ".cloud-cover", covered[i], "share");
+      lab.metric(k + ".cloud-light", light, "share");
+    }
   }
+  check_cover(lab, dealt, covered);
 
   auto shot_of = [&](size_t i) {
     const Sky& sky = kSkies[i];
-    const ge::render::Weather w = ge::mountain::app::weather_at(levels[i], at);
+    ge::render::Weather w;
+    ge::render::Clouds c;
+    ge::mountain::app::sky_at(levels[i], at, w, c);
     std::string title = std::string(sky.id) + ", SEED " + seed_s + " " + view_name;
-    for (char& c : title) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    for (char& ch : title) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
     const std::string range =
         w.visibility_m > 0 ? fixed(w.visibility_m, 0) + " m visual range" : "the clear air's range";
     const std::string caption = "Seed " + seed_s + "'s `" + view_name + "` view under " + sky.id +
                                 " (sun " + fixed(w.sun_pass * 100, 0) + " % through, deck over " +
-                                fixed(w.cover * 100, 0) + " % of the sky, " + range + "), " +
+                                fixed(w.cover * 100, 0) + " % of the sky, " +
+                                std::to_string(c.count) + " cloud layers, " + range + "), " +
                                 std::to_string(frames) + " frames up to " + fixed(at, 1) + " s.";
     return ge::lab::Shot{sky.id,
                          title,
@@ -211,10 +282,18 @@ void run(ge::lab::Lab& lab) {
         *device, "weather.final", static_cast<uint32_t>(width), static_cast<uint32_t>(height));
     ge::render::FrameView view;
     fall_line::app::make_view(level, view_name, view);
+    view.pitch += lift * 3.14159265358979 / 180;
     for (int n = 0; n < frames; ++n) {
       view.frame = static_cast<uint64_t>(n);
       view.time_s = at - static_cast<double>(frames - 1 - n) / 60;
       fall_line::app::draw(*device, *frame, view, {}, target.view);
+    }
+    // What the last frame's cloud cost the GPU (NaN without timestamps).
+    frame->recorder.wait(*device);
+    double cloud_ms = 0;
+    for (int p = 0; p < frame->recorder.stats.count; ++p) {
+      const auto& pass = frame->recorder.stats.passes[static_cast<size_t>(p)];
+      if (pass.name == "clouds") cloud_ms = pass.gpu_ms;
     }
     const ge::gpu::Image img = ge::gpu::read_now(*device, target);
     const ge::lab::Picture pic{width, height, img.rgba};
@@ -228,6 +307,7 @@ void run(ge::lab::Lab& lab) {
     lab.metric(k + ".luma", mean, "level", Det::measured);
     lab.metric(k + ".contrast", spread[i], "level", Det::measured);
     lab.metric(k + ".far-contrast", top_spread, "level", Det::measured);
+    lab.metric(k + ".clouds-ms", cloud_ms, "ms", Det::measured);
   }
   errors += device->errors.load();
   late += device->pipelines_after_load;
@@ -260,11 +340,12 @@ const ge::lab::LabSpec kSpec{
     "weather",
     ge::lab::LabKind::picture,
     "game:fall_line",
-    "plugins/mountain/app/weather_look.hpp (the mountain's skies) over render/view.hpp's Weather "
-    "and engine/render/wgsl/frame.wgsl's light, sky and haze, in Fall Line's frame",
+    "plugins/mountain/app/weather_look.hpp and cloud_field.hpp (the mountain's skies) over "
+    "render/view.hpp's Weather and Clouds, engine/render/wgsl/frame.wgsl's light, sky and haze "
+    "and engine/render/clouds.hpp's layers, in Fall Line's frame",
     "render",
-    "Does each sky read as itself: the clear day's hard light, a lid's flat grey, the fall's and "
-    "the fog's closing view?",
+    "Does each sky read as itself: the clear day's hard light, a broken sky's heaps and streaks "
+    "and their shadows, a lid's flat grey, the fall's and the fog's closing view?",
     {
         {"seed", "38", "the map's seed"},
         {"view", "piste", "the named view to shoot from"},
@@ -272,6 +353,7 @@ const ge::lab::LabSpec kSpec{
         {"frames", "8", "frames drawn, at 60 a second, up to the shot"},
         {"width", "640", "the picture's width, px"},
         {"height", "360", "the picture's height, px"},
+        {"lift", "0", "degrees added to the view's pitch (up), to show more of the sky"},
     },
     "--frames=2 --width=160 --height=90",
     run,
