@@ -1,8 +1,9 @@
 // The drop-down console: the slide, the submit rule (/ commands, chat otherwise in a multiplayer
-// game), chat to all, a team and one player, editing, history, completion, scrollback, notify.
+// game), chat to all, a team and one player, editing, history, autocomplete, scrollback, notify.
 //
 // ge:summary Tests the drop-down console: slide, / commands, chat, editing, history, completion
 // ge:keywords test console view submit chat say whisper history completion scroll notify
+// ge:keywords autocomplete suggestion
 // ge:skill console testing
 #include "check.hpp"
 #include "console/view.hpp"
@@ -102,11 +103,10 @@ TEST(background_from_cvars) {
   CHECK(!parse_rgb("12345", x) && !parse_rgb("gg0000", x) && parse_rgb("#FFffFF", x));
 }
 
-TEST(editing_history_and_completion) {
+TEST(editing_and_history) {
   Console c;
   ConsoleView v(c);
   c.cvars().add({.name = "cl_interp", .fallback = "100"});
-  c.cvars().add({.name = "cl_cmdrate", .fallback = "60"});
   v.type("ecjo");
   v.key(EditKey::left);
   v.key(EditKey::backspace);
@@ -119,18 +119,85 @@ TEST(editing_history_and_completion) {
   v.key(EditKey::tab);
   CHECK(v.input() == "/cl_interp ");
   v.key(EditKey::enter);
-  v.type("cl_");
-  v.key(EditKey::tab);
-  CHECK(v.input() == "cl_");
-  v.key(EditKey::tab);  // a second Tab lists the matches
-  CHECK(v.lines().back().text.find("cl_cmdrate  cl_interp") != std::string::npos);
-  v.key(EditKey::up);
+  v.key(EditKey::up);  // an empty line: the arrows walk the history
   CHECK(v.input() == "/cl_interp ");
   v.key(EditKey::up);
   CHECK(v.input() == "echo one");
   v.key(EditKey::down);
   v.key(EditKey::down);
-  CHECK(v.input() == "cl_");
+  CHECK(v.input().empty());
+}
+
+// The list under the input line: every name the typed word starts, the most submitted first.
+TEST(suggestions_rank_by_use_then_length) {
+  Console c;
+  ConsoleView v(c);
+  c.cvars().add({.name = "sv_deathmatch", .fallback = "0"});
+  c.cvars().add({.name = "sv_demotxt", .fallback = "1"});
+  c.cvars().add({.name = "sv_delay", .fallback = "5"});
+  v.type("/sv_de");
+  std::vector<Suggestion> s = v.suggestions();
+  CHECK(s.size() == 3 && s[0].name == "sv_delay" && s[1].name == "sv_demotxt");
+  CHECK(s[0].kind == Suggestion::Kind::cvar && s[0].detail == "5");
+  CHECK(v.hint() == "lay");
+  v.key(EditKey::enter);  // nothing selected: the line runs as typed (and fails, unknown)
+  for (int i = 0; i < 2; ++i) {
+    v.type("/sv_deathmatch 1");
+    v.key(EditKey::enter);
+  }
+  c.run();
+  v.type("/sv_dea");
+  CHECK(v.hint() == "thmatch");
+  v.type("");
+  v.key(EditKey::backspace);
+  v.key(EditKey::backspace);  // "/sv_d": the most used one is still on top
+  s = v.suggestions();
+  CHECK(s.size() == 3 && s[0].name == "sv_deathmatch" && s[0].uses == 2);
+  v.key(EditKey::tab);
+  CHECK(v.input() == "/sv_deathmatch " && v.suggestions().empty());
+  c.execute("con_suggest 2");
+  v.key(EditKey::backspace);
+  CHECK(v.suggestions().size() == 1);  // the whole name still matches itself
+  v.type(" ");
+  CHECK(v.suggestions().empty());  // a blank after the word: no list
+  while (!v.input().empty()) v.key(EditKey::backspace);
+  v.type("/sv_d");
+  CHECK(v.suggestions().size() == 2);  // con_suggest caps the list
+}
+
+// Up and Down move through the list; Enter on a cvar waits for its value, on a command runs it.
+TEST(arrows_select_and_enter_takes_the_selection) {
+  Console c;
+  ConsoleView v(c);
+  c.cvars().add({.name = "r_bloom", .fallback = "0.04"});
+  c.cvars().add({.name = "r_taa", .fallback = "1"});
+  c.execute("alias r_go \"r_bloom 0.3\"");
+  v.type("/r_");
+  CHECK(v.selected() == -1 && v.suggestions().size() == 3);
+  v.key(EditKey::down);
+  v.key(EditKey::down);
+  CHECK(v.selected() == 1 && v.suggestions()[1].name == "r_taa");
+  CHECK(v.hint() == "taa");
+  v.key(EditKey::up);
+  v.key(EditKey::up);
+  CHECK(v.selected() == -1);
+  v.key(EditKey::up);  // past the top wraps to the bottom
+  CHECK(v.selected() == 2 && v.suggestions()[2].name == "r_bloom");
+  v.key(EditKey::enter);
+  CHECK(v.input() == "/r_bloom " && v.history().empty());  // waiting for the value
+  v.type("0");
+  v.key(EditKey::enter);
+  c.run();
+  CHECK(c.cvars().find("r_bloom")->number == 0);
+  v.type("/r_g");
+  v.key(EditKey::down);
+  CHECK(v.suggestions()[0].kind == Suggestion::Kind::alias);
+  v.key(EditKey::enter);  // an alias runs
+  c.run();
+  CHECK(c.cvars().find("r_bloom")->number == 0.3 && v.input().empty());
+  c.execute("con_chat 1");
+  v.type("r_");  // chat in a multiplayer game: no list without a /
+  CHECK(v.suggestions().empty());
 }
 
 TEST(scrollback_notify_and_triggers_on_game_lines) {

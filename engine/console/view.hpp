@@ -21,7 +21,8 @@
 // THE VIEW HOLDS NO PIXELS: it is the model a renderer draws (the 2D layer's text pass in the
 // app, the CPU raster in the `console` lab), so it is tested and pictured headless. Its cvars:
 // con_height (the share of the screen it covers), con_speed (screens a second it slides),
-// con_lines (the scrollback kept), con_notifylines, con_notifytime, con_chat, and what the panel
+// con_lines (the scrollback kept), con_notifylines, con_notifytime, con_chat, con_suggest (how
+// many suggestions the list under the input line holds), and what the panel
 // is drawn on: con_bgtop and con_bgbottom (a gradient's colours, "rrggbb"), con_bgalpha and
 // con_bgimage (a picture over the gradient).
 //
@@ -30,6 +31,7 @@
 // ge:keywords chat say say_team say_prox proximity whisper message server event notify
 // ge:keywords completion tab con_height con_chat con_speed con_lines slash-command
 // ge:keywords background gradient colour con_bgtop con_bgbottom con_bgalpha con_bgimage
+// ge:keywords autocomplete suggestion suggestions hint con_suggest
 // ge:skill console
 // ge:test tests/console_view_test.cpp
 #pragma once
@@ -37,6 +39,7 @@
 #include <cstdint>
 #include <deque>
 #include <functional>
+#include <map>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -91,6 +94,15 @@ struct Background {
   std::string image;
 };
 
+// One match for what is being typed, as the list under the input line shows it.
+struct Suggestion {
+  enum class Kind : uint8_t { cvar, command, alias };
+  std::string name;
+  Kind kind = Kind::command;
+  std::string detail;  // a cvar's value, a command's help, an alias's body
+  int uses = 0;        // how often it was submitted from this console
+};
+
 // The keys the input line answers, besides typed text.
 enum class EditKey : uint8_t {
   enter,
@@ -142,6 +154,16 @@ class ConsoleView {
   size_t cursor() const { return cursor_; }
   const std::vector<std::string>& history() const { return history_; }
 
+  // AUTOCOMPLETE. While the first word is typed (after a `/`, or bare when con_chat is 0), every
+  // command, cvar and alias it starts is a suggestion, the most submitted first (then the
+  // shortest, then by name), at most con_suggest of them. Up and Down move through them, Tab
+  // takes the selected one (the top one when none is), Enter on a cvar fills it in for a value
+  // and on a command runs it. `hint` is the rest of the name Tab would take, drawn after the
+  // cursor.
+  std::vector<Suggestion> suggestions() const;
+  int selected() const { return selected_; }
+  std::string hint() const;
+
   // What the panel is drawn on (the con_bg* cvars).
   Background background() const;
 
@@ -150,7 +172,8 @@ class ConsoleView {
 
  private:
   void submit();
-  void complete();
+  bool accept();             // the selected or top suggestion into the input line; false: none
+  std::string head() const;  // the first word being typed, or "" when no suggestion applies
   void say(ChatTo to, std::string_view nick, std::string_view text);
   Console& c_;
   std::deque<ViewLine> lines_;
@@ -161,7 +184,9 @@ class ConsoleView {
   std::string typed_;    // the line being typed while the history is walked
   int scroll_ = 0;
   bool open_ = false;
-  bool tabbed_ = false;  // the last key was Tab (a second one lists the matches)
+  int selected_ = -1;  // the suggestion Up and Down moved to; -1: none
+  int32_t suggest_ = 8;
+  std::map<std::string, int> uses_;  // submissions by command name
   double drop_ = 0, clock_ = 0;
   double height_ = 0.5, speed_ = 3;
   int32_t keep_ = 1024, notify_lines_ = 4;

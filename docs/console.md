@@ -182,9 +182,19 @@ output, the commands typed (after `]`), chat to everyone, to the team, to the pl
 messages and the game's events. Closed, the newest few lines show at the top of the screen for
 a few seconds (the notify lines).
 
-The input line edits in place (left, right, home, end, backspace, delete). Tab completes a
-command, alias or cvar name, and a second Tab lists every match. Up and Down walk the history;
-Page Up and Page Down scroll the lines. Enter submits it:
+The input line edits in place (left, right, home, end, backspace, delete). Page Up and Page
+Down scroll the lines. Up and Down walk the history while no list of suggestions is showing.
+
+**Autocomplete.** While the first word is typed (after a `/`, or bare while `con_chat` is 0),
+every command, alias and cvar it starts is listed under the input line: the one submitted most
+often from this console first, then the shortest, then by name, at most `con_suggest` of them.
+Each row shows a cvar's value after `=`, an alias's body after `:` or a command's help. The rest
+of the top name is drawn dim after the cursor, and Tab takes it: `/sv_dea` and Tab gives
+`/sv_deathmatch `, ready for `1`. Up and Down move through the list (the hint follows the
+selected row), Tab takes the selected one, and Enter on it fills in a cvar's name for its value
+or runs a command or an alias. A blank after the word ends the list.
+
+Enter submits the line:
 
 - a line starting with `/` is a command, with the `/` dropped: `/r_bloom 0`, `/say hi`;
 - any other line is a chat message to everyone while `con_chat` is 1 (a multiplayer game sets
@@ -200,6 +210,7 @@ Its cvars:
 | `con_notifylines` | 4 | the newest lines shown at the top while it is closed (0: none) |
 | `con_notifytime` | 4 | how long a notify line stays, s |
 | `con_chat` | 0 | 1: a line typed without a `/` is said to everyone |
+| `con_suggest` | 8 | the suggestions listed under the input line (0: none) |
 | `con_bgtop` | 10141c | the panel's colour at its top, `rrggbb` |
 | `con_bgbottom` | 10141c | the panel's colour at its bottom (the same as the top: a flat fill) |
 | `con_bgalpha` | 0.85 | how much of the game the panel hides, 0 to 1 |

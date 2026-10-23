@@ -79,6 +79,14 @@ ConsoleView::ConsoleView(Console& c) : c_(c) {
           .help = "1: a line typed without a / is said to everyone (a multiplayer game sets it)",
           .kind = CvarKind::boolean},
          &chat_default_);
+  v.bind({.name = "con_suggest",
+          .fallback = "8",
+          .flags = kArchive,
+          .help = "the suggestions listed under the input line while a command is typed (0: none)",
+          .kind = CvarKind::integer,
+          .min = 0,
+          .max = 32},
+         &suggest_);
   v.bind({.name = "con_bgtop",
           .fallback = "10141c",
           .flags = kArchive,
@@ -221,21 +229,30 @@ void ConsoleView::type(std::string_view text) {
     if (ch == '\n' || ch == '\r' || ch == '`') continue;  // the toggle key types nothing
     input_.insert(cursor_++, 1, ch);
   }
-  tabbed_ = false;
+  selected_ = -1;
 }
 
 void ConsoleView::key(EditKey k) {
-  const bool was_tab = tabbed_;
-  tabbed_ = false;
   switch (k) {
-    case EditKey::enter:
+    case EditKey::enter: {
+      // Enter on a selected cvar fills it in for its value; on anything else it runs it.
+      if (selected_ >= 0) {
+        const std::vector<Suggestion> s = suggestions();
+        const bool cvar = selected_ < static_cast<int>(s.size()) &&
+                          s[static_cast<size_t>(selected_)].kind == Suggestion::Kind::cvar;
+        accept();
+        if (cvar) break;
+      }
       submit();
       break;
+    }
     case EditKey::backspace:
       if (cursor_ > 0) input_.erase(--cursor_, 1);
+      selected_ = -1;
       break;
     case EditKey::del:
       if (cursor_ < input_.size()) input_.erase(cursor_, 1);
+      selected_ = -1;
       break;
     case EditKey::left:
       if (cursor_ > 0) --cursor_;
@@ -250,12 +267,19 @@ void ConsoleView::key(EditKey k) {
       cursor_ = input_.size();
       break;
     case EditKey::tab:
-      tabbed_ = was_tab;
-      complete();
-      tabbed_ = true;
+      accept();
       break;
     case EditKey::up:
     case EditKey::down: {
+      // Over a list of suggestions the arrows move through it; else they walk the history.
+      const int n = history_at_ < 0 ? static_cast<int>(suggestions().size()) : 0;
+      if (n > 0) {
+        if (k == EditKey::down)
+          selected_ = selected_ + 1 >= n ? -1 : selected_ + 1;
+        else
+          selected_ = selected_ < 0 ? n - 1 : selected_ - 1;
+        break;
+      }
       if (history_.empty()) break;
       if (history_at_ < 0) typed_ = input_;
       const int last = static_cast<int>(history_.size()) - 1;
@@ -285,12 +309,15 @@ void ConsoleView::submit() {
   input_.clear();
   cursor_ = 0;
   history_at_ = -1;
+  selected_ = -1;
   scroll_ = 0;
   if (line.find_first_not_of(" \t") == std::string::npos) return;
   if (history_.empty() || history_.back() != line) history_.push_back(line);
   const bool slash = line[0] == '/';
   if (slash || !chat_default_) {
     const std::string cmd = slash ? line.substr(1) : line;
+    const std::vector<std::string> words = tokenize(cmd);
+    if (!words.empty()) ++uses_[lower(words[0])];
     add(LineKind::command, "] " + cmd);
     c_.append(cmd, Source::local, {"console", 0});
     return;
@@ -298,32 +325,60 @@ void ConsoleView::submit() {
   say(ChatTo::all, "", line);
 }
 
-void ConsoleView::complete() {
-  // The word under completion is the command: the text before the first blank.
+std::string ConsoleView::head() const {
+  // Suggestions follow the command word: after a `/`, or bare when typed text is a command.
   const bool slash = !input_.empty() && input_[0] == '/';
-  const std::string head = input_.substr(slash ? 1 : 0);
-  if (head.find(' ') != std::string::npos) return;
-  const std::vector<std::string> all = c_.complete(head);
-  if (all.empty()) return;
-  if (all.size() == 1) {
-    input_ = (slash ? "/" : "") + all[0] + " ";
-    cursor_ = input_.size();
-    return;
+  if (!slash && chat_default_) return "";
+  std::string h = input_.substr(slash ? 1 : 0);
+  if (h.empty() || h.find_first_of(" \t;") != std::string::npos) return "";
+  return h;
+}
+
+std::vector<Suggestion> ConsoleView::suggestions() const {
+  std::vector<Suggestion> out;
+  const std::string h = head();
+  if (h.empty() || suggest_ <= 0) return out;
+  for (const std::string& name : c_.complete(h)) {
+    Suggestion s;
+    s.name = name;
+    const auto u = uses_.find(name);
+    s.uses = u == uses_.end() ? 0 : u->second;
+    if (const Cvar* v = c_.cvars().find(name)) {
+      s.kind = Suggestion::Kind::cvar;
+      s.detail = v->value;
+    } else if (const auto a = c_.aliases().find(name); a != c_.aliases().end()) {
+      s.kind = Suggestion::Kind::alias;
+      s.detail = a->second.body;
+    } else if (const auto m = c_.commands().find(name); m != c_.commands().end()) {
+      s.detail = m->second.help;
+    }
+    out.push_back(std::move(s));
   }
-  // The longest prefix every match shares; a second Tab lists them.
-  std::string common = all[0];
-  for (const std::string& m : all) {
-    size_t i = 0;
-    while (i < common.size() && i < m.size() && common[i] == m[i]) ++i;
-    common.resize(i);
-  }
-  input_ = (slash ? "/" : "") + common;
+  std::stable_sort(out.begin(), out.end(), [](const Suggestion& a, const Suggestion& b) {
+    if (a.uses != b.uses) return a.uses > b.uses;
+    if (a.name.size() != b.name.size()) return a.name.size() < b.name.size();
+    return a.name < b.name;
+  });
+  if (static_cast<int32_t>(out.size()) > suggest_) out.resize(static_cast<size_t>(suggest_));
+  return out;
+}
+
+std::string ConsoleView::hint() const {
+  const std::vector<Suggestion> s = suggestions();
+  if (s.empty()) return "";
+  const std::string& name = s[static_cast<size_t>(std::max(selected_, 0))].name;
+  const std::string h = lower(head());
+  return name.size() > h.size() ? name.substr(h.size()) : "";
+}
+
+bool ConsoleView::accept() {
+  const std::vector<Suggestion> s = suggestions();
+  if (s.empty()) return false;
+  const bool slash = input_[0] == '/';
+  input_ = (slash ? "/" : "") + s[static_cast<size_t>(std::max(selected_, 0))].name + " ";
   cursor_ = input_.size();
-  if (tabbed_) {
-    std::string list;
-    for (const std::string& m : all) list += (list.empty() ? "" : "  ") + m;
-    add(LineKind::output, list);
-  }
+  selected_ = -1;
+  return true;
 }
 
 void ConsoleView::say(ChatTo to, std::string_view nick, std::string_view text) {
