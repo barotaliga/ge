@@ -32,7 +32,7 @@ std::string range_text(const Cvar& v) {
   if (v.kind == CvarKind::text) return "text";
   if (v.kind == CvarKind::boolean) return "0 or 1";
   const bool lo = v.min > -1e308, hi = v.max < 1e308;
-  const std::string kind = v.kind == CvarKind::integer ? "a whole number" : "a number";
+  std::string kind = v.kind == CvarKind::integer ? "a whole number" : "a number";
   if (lo && hi) return kind + " " + number_text(v.min) + " to " + number_text(v.max);
   if (lo) return kind + " from " + number_text(v.min);
   if (hi) return kind + " up to " + number_text(v.max);
@@ -62,7 +62,7 @@ std::string Console::save_text() const {
     const BindMode mode = static_cast<BindMode>(m);
     const std::string flag = mode == BindMode::game ? "" : "-" + std::string(mode_name(mode)) + " ";
     for (const auto& [k, cmd] : binds_.table(mode))
-      out += "bind " + flag + quote(k) + " \"" + cmd + "\"\n";
+      out.append("bind ").append(flag).append(quote(k)).append(" \"").append(cmd).append("\"\n");
   }
   for (const auto& [n, a] : aliases_)
     if (!a.temp) out += "alias " + n + " \"" + a.body + "\"\n";

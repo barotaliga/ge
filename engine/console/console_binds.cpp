@@ -75,7 +75,7 @@ void register_bind_commands(Console& con) {
     if (i == 0) return;
     int n = 0;
     for (const auto& [k, cmd] : c.binds().table(mode)) {
-      c.print(k + " \"" + cmd + "\"");
+      c.print(std::string(k).append(" \"").append(cmd).append("\""));
       ++n;
     }
     c.print(std::to_string(n) + " binds (" + std::string(mode_name(mode)) + ")");
