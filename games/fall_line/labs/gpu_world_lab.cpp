@@ -168,10 +168,13 @@ void run(ge::lab::Lab& lab) {
   options.overdraw_probe = true;
   options.snow = lab.arg_num("snow") != 0;
   options.trails = lab.arg_num("trails") != 0;
+  options.reach_m = lab.arg_num("reach");
   if (width <= 0 || height <= 0 || width > 4096 || height > 4096 || settle < 1 ||
-      options.scale < 0.25 || options.scale > 1) {
-    lab.fail("--width and --height must be 1..4096, --settle at least 1 and --scale 0.25..1",
-             "next: pass a size such as --width=640 --height=360 --scale=1.");
+      options.scale < 0.25 || options.scale > 1 || options.reach_m < 0) {
+    lab.fail(
+        "--width and --height must be 1..4096, --settle at least 1, --scale 0.25..1 and "
+        "--reach at least 0",
+        "next: pass a size such as --width=640 --height=360 --scale=1 --reach=0.");
     return;
   }
   const double scale = options.taa ? options.scale : 1.0;
@@ -297,7 +300,8 @@ void run(ge::lab::Lab& lab) {
          {"hour", hour_s},
          {"size", std::to_string(width) + "x" + std::to_string(height)},
          {"render", std::to_string(render_w) + "x" + std::to_string(render_h) +
-                        (options.taa ? ", TAA-U" : ", no TAA")}}};
+                        (options.taa ? ", TAA-U" : ", no TAA")},
+         {"reach", options.reach_m > 0 ? fixed(options.reach_m, 0) + " m, misted" : "all"}}};
   };
 
   auto device = ge::gpu::create_device({.label = "world", .validation = 1});
@@ -470,6 +474,8 @@ const ge::lab::LabSpec kSpec{
         {"scale", "1", "the render size over the picture's, with TAA (0.25..1)"},
         {"snow", "1", "the snow's material (1) or the albedo lit (0)"},
         {"trails", "1", "the tracks (1) or none (0); drawn only with the snow's material"},
+        {"reach", "0",
+         "how far the picture draws, misted into the sky from half of it, m (0: all)"},
         {"moments", "3,15,30",
          "seconds of the bot's run to shoot from the chase camera, comma-"
          "separated (empty: none)"},

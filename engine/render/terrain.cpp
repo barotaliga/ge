@@ -47,6 +47,18 @@ void clipmap_levels(double x, double z, double base_spacing, int levels, ClipLev
   }
 }
 
+double clipmap_reach(double base_spacing, int levels) {
+  const double half_quads = kLevelTiles * kTileQuads / 2.0;
+  return (half_quads - 1) * base_spacing * std::ldexp(1.0, levels - 1);
+}
+
+int clipmap_levels_to(double reach_m, double base_spacing, int levels) {
+  if (reach_m <= 0) return levels;
+  int n = 1;
+  while (n < levels && clipmap_reach(base_spacing, n) < reach_m) ++n;
+  return n;
+}
+
 std::vector<float> min_max_pyramid(const core::Heightfield& field,
                                    std::vector<std::pair<int, int>>& sizes) {
   sizes.clear();
@@ -317,7 +329,8 @@ void prepare_terrain(gpu::Device& device, Terrain& t, const FrameView& view) {
     t.staged.levels[i][2] = static_cast<float>(levels[i].spacing);
     t.staged.levels[i][3] = 0;
   }
-  t.staged.info[0] = static_cast<float>(t.levels);
+  // The cull and the draw read the levels drawn; a level past them culls every tile.
+  t.staged.info[0] = static_cast<float>(clipmap_levels_to(view.reach_m, t.base_spacing, t.levels));
   prepare_horizon(&device, t.horizon, view);
   std::memcpy(t.staged.horizon, t.horizon.blend, sizeof t.staged.horizon);
   device.queue.WriteBuffer(t.params, 0, &t.staged, sizeof t.staged);
