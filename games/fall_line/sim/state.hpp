@@ -86,6 +86,8 @@ enum class EventKind : uint8_t {
   bump,       // a racer met one of the crowd (`gate` the amateur's id, `value` the closing speed)
   army_heli,  // an army helicopter (`gate` its ArmyHeliChange, `value` its id; army_heli.hpp)
   gunfire,    // a round fired, into him, into the snow or a trunk, or past him (gunfire.hpp)
+  hurt,       // injuries taken (`gate` how many this step, `value` the body's severity score after)
+  died,       // the body gave out (`value` its severity score); his run is over
 };
 
 const char* event_name(EventKind kind);
@@ -216,7 +218,9 @@ struct Racer {
   Progress progress;
   Rider rider;
   FreeRide free;
-  // THE BODY (skier/body.hpp): what the hunt's rounds have done to him (gunfire.hpp).
+  // THE BODY (skier/body.hpp): what his skis' blows and the hunt's rounds have done to him,
+  // stepped after his skis under the INJURIES switch (gunfire.hpp judges the rounds); mended at
+  // a reset. Dead (`body.mortal >= 0`), his run is over: he lies where he fell.
   ge::skier::BodyState body;
 };
 
@@ -241,7 +245,10 @@ struct GameState {
   FreeHeli heli;         // the free ride's helicopter (heli_ride.hpp); none in a race
   FreePara para;         // the free ride's paramotor (para_ride.hpp); only a ride begun under it
   CrowdState crowd;      // the amateurs on the ski area (crowd.hpp); inactive until dealt
-  double t = 0;          // s since the start
+  // THE INJURIES SWITCH: every racer's body stepped after his skis, blows hurting and killing.
+  // Off, the skis' blows never touch the bodies and no digest reads them.
+  bool injuries = false;
+  double t = 0;  // s since the start
   int64_t steps = 0;
   // WHERE THE GAME'S OWN AGENTS RECORD WHY (ai/why.hpp): the army's machines write their decisions
   // here while a trace is on (`ge why`); null in a normal run. Observed, never hashed, and nothing
