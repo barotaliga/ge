@@ -25,6 +25,11 @@
 // recording hands it every frame in order and says when a frame is a cut. A build with no GPU
 // registers none, and `--gpu` says so.
 //
+// THE SAVE (engine/save, docs/saves.md) is the run's state as chunks of a save file: `save` writes
+// them, `load` reads them into a run the engine has just opened on the same setup, and the run
+// loaded steps on exactly as the saved one would (play/saves.hpp holds every game to that). What
+// the setup rebuilds (a map, the indices over it) is never in a save.
+//
 // THE TRACE is what `ge why` reads: a Run whose bots write decision records (ai/why.hpp) says so
 // by accepting a recorder (`trace`), and the engine replays a log with it on (play/why.hpp).
 //
@@ -34,6 +39,7 @@
 // ge:summary The play contract: GameSpec, the axes, Run (step, observe, state, digest, pilot)
 // ge:keywords play contract game spec run axis axes option setup pilot bot observe state digest
 // ge:keywords snap_axis ge_game register view views shoot shot picture caption trace why
+// ge:keywords save load chunk
 // ge:keywords renderer renderer-spec ge_renderer gpu mode modes lit wireframe depth overlay
 // ge:skill agent-interface
 // ge:test tests/play_session_test.cpp
@@ -48,6 +54,7 @@
 
 #include "ai/why.hpp"
 #include "lab/raster.hpp"
+#include "save/file.hpp"
 
 namespace ge::play {
 
@@ -131,6 +138,19 @@ class Run {
     (void)out;
     (void)caption;
     error = "this game draws no views";
+    return false;
+  }
+  // THE SAVE: the run's state as the game's own chunks into `file` (the engine writes the meta and
+  // the step). False when the game keeps no saves.
+  virtual bool save(save::FileWriter& file) const {
+    (void)file;
+    return false;
+  }
+  // The game's chunks of `file` read into this run, just opened on the save's setup and never
+  // stepped. False with `error` (the reader's problem: the chunk and why) when one does not read.
+  virtual bool load(save::FileReader& file, std::string& error) {
+    (void)file;
+    error = "this game keeps no saves";
     return false;
   }
 };

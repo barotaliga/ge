@@ -27,6 +27,7 @@
 
 #include "core/heightfield.hpp"
 #include "mountain/mapgen/rules.hpp"
+#include "save/io.hpp"
 
 namespace ge::mountain::mapgen {
 
@@ -134,6 +135,15 @@ struct TrackPoint {
   double s;  // arc length from the start line, m
   double heading;
   double width;
+  template <class Io>
+  friend void describe(Io& io, TrackPoint& v) {
+    io(v.x);
+    io(v.z);
+    io(v.y);
+    io(v.s);
+    io(v.heading);
+    io(v.width);
+  }
 };
 
 struct Spawn {
@@ -554,6 +564,13 @@ struct Track {
   std::vector<TrackPoint> points;
   double length = 0;
   mutable std::shared_ptr<const TrackIndex> index;
+  // Saved as its points and length; the index is built again on its first query.
+  template <class Io>
+  friend void describe(Io& io, Track& v) {
+    io(v.points);
+    io(v.length);
+    if constexpr (Io::kReading) v.index.reset();
+  }
 };
 
 struct Level {
@@ -629,3 +646,4 @@ struct TrackHit {
 };
 
 }  // namespace ge::mountain::mapgen
+GE_SAVE_PLAIN(ge::mountain::mapgen::TrackPoint);

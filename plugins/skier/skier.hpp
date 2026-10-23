@@ -58,6 +58,13 @@ struct SkierInput {
   double tuck = 0;    // 0 tall .. 1 full tuck; at a crawl, the push
   double brake = 0;   // 0 .. 1 the skis pivoted across
   bool jump = false;  // held to load the legs, let go to spring
+  template <class Io>
+  friend void describe(Io& io, SkierInput& v) {
+    io(v.steer);
+    io(v.tuck);
+    io(v.brake);
+    io(v.jump);
+  }
 };
 
 // `hurt`: mortally hurt on his skis (`body.hpp`), he goes down.
@@ -84,6 +91,31 @@ struct SkierState {
   bool on_snow = true;
   bool down = false;  // wiped out: sliding on his body, the controls dead
   Wipeout cause = Wipeout::none;
+  template <class Io>
+  friend void describe(Io& io, SkierState& v) {
+    io(v.x);
+    io(v.y);
+    io(v.z);
+    io(v.vx);
+    io(v.vy);
+    io(v.vz);
+    io(v.heading);
+    io(v.yaw_rate);
+    io(v.edge);
+    io(v.tuck);
+    io(v.lean);
+    io(v.sink);
+    io(v.packed);
+    io(v.speed);
+    io(v.g_lat);
+    io(v.jump_held);
+    io(v.air_time);
+    io(v.air_peak);
+    io(v.down_time);
+    io(v.on_snow);
+    io(v.down);
+    io(v.cause);
+  }
 };
 
 // What one step did, for the game to turn into its events and for the labs to count.

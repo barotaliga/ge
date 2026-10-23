@@ -59,6 +59,15 @@ struct Injury {
   int8_t side = 0;
   double t = 0;
   double energy = 0;
+  template <class Io>
+  friend void describe(Io& io, Injury& v) {
+    io(v.part);
+    io(v.kind);
+    io(v.ais);
+    io(v.side);
+    io(v.t);
+    io(v.energy);
+  }
 };
 inline constexpr int32_t kMostInjuries = 64;
 
@@ -74,6 +83,15 @@ struct Impact {
   double age = 0;
   int32_t id = 0;  // 0: none yet
   bool fall = false;
+  template <class Io>
+  friend void describe(Io& io, Impact& v) {
+    io(v.g);
+    io(v.part);
+    io(v.from);
+    io(v.age);
+    io(v.id);
+    io(v.fall);
+  }
 };
 
 struct BodyState {
@@ -86,6 +104,18 @@ struct BodyState {
   int32_t blows = 0;
   double mortal = -1;  // s he was mortally hurt, -1 not
   double dead = -1;    // s he died, -1 alive
+  template <class Io>
+  friend void describe(Io& io, BodyState& v) {
+    io(v.worst);
+    io(v.injuries);
+    io(v.count);
+    io(v.impact);
+    io(v.peak);
+    io(v.fall_peak);
+    io(v.blows);
+    io(v.mortal);
+    io(v.dead);
+  }
 };
 
 // What one step of the body did: the injuries taken are `injuries[first .. first + taken)`.
