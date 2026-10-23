@@ -29,6 +29,7 @@
 #include "cli/graph.hpp"
 #include "cli/index.hpp"
 #include "cli/json.hpp"
+#include "cli/lint.hpp"
 #include "cli/net.hpp"
 #include "cli/outcome.hpp"
 #include "cli/perf.hpp"
@@ -198,6 +199,13 @@ Outcome run(const Args& a) {
   if (name == "ci") {
     return run_ci(fs::absolute(repo_of(a)), a.words.empty() ? "" : a.words[0], flag_value(a, "log"),
                   has_flag(a, "merge"));
+  }
+  if (name == "lint") {
+    LintOptions l;
+    l.files = a.words;
+    l.base = flag_value(a, "base", "origin/main");
+    l.all = has_flag(a, "all");
+    return run_lint(build_options(a), l);
   }
   if (name == "digest") {
     return run_digest(build_options(a), a.words.empty() ? "" : a.words[0], has_flag(a, "write"),

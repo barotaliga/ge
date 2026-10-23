@@ -90,6 +90,12 @@ constexpr FlagSpec kDigestFlags[] = {
     kPreset,
     kEngine,
     kRepo};
+constexpr FlagSpec kLintFlags[] = {
+    {"base", "<ref>", "lint what the change since this ref reaches (default origin/main)"},
+    {"all", "", "lint every .cpp"},
+    kPreset,
+    kEngine,
+    kRepo};
 constexpr FlagSpec kGoldenDiffFlags[] = {
     {"base", "<ref>", "the git ref to compare with (default HEAD)"}, kRepo};
 constexpr FlagSpec kGoldenWriteFlags[] = {
@@ -281,6 +287,10 @@ const CommandSpec kCommands[] = {
     {"check", "", 0, 0, "build",
      "the whole gate in one call: format, doctor, build, tests and labs", kBuildFlags,
      "ge check --json", "commit"},
+    {"lint", "[<file>...]", 0, -1, "build",
+     "clang-tidy's bug-finding checks over what the change since --base reaches (or the files "
+     "named, or --all), each finding at its file:line with its check",
+     kLintFlags, "ge lint --base=origin/main", "commit"},
     {"precheck", "", 0, 0, "build",
      "what CI runs, here, before the push: ge check, then the pilot's seeds and their replays, "
      "on each preset",
