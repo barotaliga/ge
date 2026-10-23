@@ -46,7 +46,7 @@ Indexed index_colours(const Picture& p) {
     if (exact.size() < 256 || exact.count(rgb[i])) {
       exact.emplace(rgb[i], static_cast<uint8_t>(exact.size()));
     } else {
-      exact.emplace(rgb[i], 0);  // a 257th: past exact
+      exact.emplace(rgb[i], uint8_t{0});  // a 257th: past exact
     }
   }
   if (exact.size() <= 256) {
