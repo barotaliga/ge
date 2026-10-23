@@ -70,7 +70,7 @@ constexpr Scenario kScenarios[] = {
     {"drop", "dropped 2 m onto the flat at 10 m/s: a firm landing, ridden away", Stage::strip, 0, 1,
      kMid, 400, 0, 10, 2, 3, false, tall},
     {"drop-harsh", "dropped 7 m onto the flat at 10 m/s: the legs fold, a wipeout", Stage::strip, 0,
-     1, kMid, 400, 0, 10, 7, 4, false, tall},
+     1, kMid, 400, 0, 10, 7, 8, false, tall},
     {"tree-slow", "straight at the lone tree from 6 m short of it at 6 m/s: bruised, not broken",
      Stage::slope, 0, 0, slope::kTreeX, 254, 0, 6, 0, 4, false, tall},
     {"tree-fast", "straight at the lone tree at 20 m/s: the skis stop on it and he goes on into it",
@@ -78,7 +78,7 @@ constexpr Scenario kScenarios[] = {
     {"tree-side", "past the lone tree at 15 m/s, half a metre off its axis: his side meets it",
      Stage::slope, 0, 0, slope::kTreeX + 0.5, 200, 0, 15, 0, 8, false, tall},
     {"drop-across", "dropped 3 m at 10 m/s, spun right in the air: landed across, a ski catches",
-     Stage::strip, 0, 1, kMid, 400, 0, 10, 3, 4, false, spin_off},
+     Stage::strip, 0, 1, kMid, 400, 0, 10, 3, 8, false, spin_off},
     {"drop-high", "dropped 12 m onto the flat at 10 m/s: the legs and the spine break",
      Stage::strip, 0, 1, kMid, 400, 0, 10, 12, 10, false, tall},
 };
@@ -112,6 +112,8 @@ ScenarioRun run_scenario(const Scenario& sc, const SkiSpec& spec, double hz,
   uint64_t h = 0xcbf29ce484222325ull;
   SkierEvents ev;
   BodyEvents bev;
+  double from_x = s.x;
+  double from_z = s.z;
   for (int64_t i = 0; i < steps; i++) {
     const double t = static_cast<double>(i) * dt;
     if (i % every == 0) {
@@ -147,6 +149,17 @@ ScenarioRun run_scenario(const Scenario& sc, const SkiSpec& spec, double hz,
     if (ev.wiped_out && run.cause == Wipeout::none) {
       run.cause = ev.cause;
       run.wipeout_time = now;
+      from_x = s.x;
+      from_z = s.z;
+    }
+    if (s.thrown.active) {
+      run.tumble = s.thrown.tumble;
+      run.thrown = core::hypot(s.thrown.x - from_x, s.thrown.z - from_z);
+      run.thrown_top =
+          core::num::max(run.thrown_top, s.thrown.y - level.ground_at(s.thrown.x, s.thrown.z));
+      if (run.lie_time < 0 && s.thrown.still >= 1 && run.wipeout_time >= 0) {
+        run.lie_time = now - run.wipeout_time;
+      }
     }
     if (run.stop_time < 0 && s.speed < 0.3 && (sc.speed > 0 || now > 1)) run.stop_time = now;
   }

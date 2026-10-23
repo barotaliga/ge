@@ -202,12 +202,10 @@ Shape shape_of(const a::Model& m, std::span<const a::Affine> global, std::span<c
     }
     for (uint32_t i : mesh.indices) s.idx.push_back(base + i);
   };
-  if (meshes.empty()) {
-    for (const a::Mesh& mesh : m.meshes) add(mesh);
-  } else {
-    for (int k : meshes) {
-      if (k >= 0 && static_cast<size_t>(k) < m.meshes.size()) add(m.meshes[static_cast<size_t>(k)]);
-    }
+  const std::vector<int> finest = meshes.empty() ? meshes_at_lod(lod_groups(m), 0)
+                                                 : std::vector<int>(meshes.begin(), meshes.end());
+  for (int k : finest) {
+    if (k >= 0 && static_cast<size_t>(k) < m.meshes.size()) add(m.meshes[static_cast<size_t>(k)]);
   }
   return s;
 }

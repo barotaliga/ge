@@ -114,9 +114,11 @@ exponential ease:
   meets a step at once, 2 tracks a steady ramp with no lag, over 1 anticipates). A first-order
   ease moves fastest the instant the target jumps, which reads as a lens with no weight; a
   second-order one has to be accelerated into a move and settles out of it, which is what a
-  heavy head on a crane looks like. It is integrated semi-implicitly with the mass kept above
-  what the frame's `dt` can integrate stably, so a long frame on a slow device is a slower lens,
-  never an exploding one. Scalar, angle (the short way round, free to wind) and vector forms.
+  heavy head on a crane looks like. Each frame is solved exactly (the closed form of the
+  under-, critically and over-damped cases, the target held over the frame), so a long frame on
+  a slow device draws the path a short one would have, never a ringing or exploding one; the
+  `camera-follow` lab holds it, and a semi-implicit step with a clamped mass (the cheaper
+  choice) strayed by a fifth of a step at 30 Hz there. Scalar, angle (the short way round, free to wind) and vector forms.
 - **The critically damped spring by half-life**: one number, the time to halve the distance, for
   the readings that need no character (the arm letting back out after a pull-in).
 - **The dead band**: a follower may ignore its target within a band and chase only what leaves it
@@ -253,7 +255,11 @@ A change of view is an EDIT, and the three edits say different things:
   path keeps it out of the ground between a bumper and a boom over a brow, faded in and out.
 - **Inertialize**: only the NEW rig is framed. At the switch the offset between the old pose and
   the new (and its velocity) is recorded, and decays to zero on a quintic over `duration` that
-  starts with the offset's own velocity and ends at rest. Continuous in position and velocity,
+  starts with the offset's own velocity and ends at rest, on each axis of the subject's frame
+  and each angle on its own. Unlike the animation version, which keeps only the velocity along
+  the offset and drops one moving away, every component of the velocity is kept (one moving
+  away carries the offset out and back): the `camera-transitions` lab measured the dropped part
+  as a kick of up to 10 m/s at the switch. Continuous in position and velocity,
   half the cost of a blend, and it re-bases cleanly when a second change arrives mid-way. The
   default for a change of rung on the same subject.
 
@@ -277,6 +283,29 @@ to_frame_view(p, frame_view);
 
 A director (a broadcast, a replay's film camera, an impact camera) is a game's function that
 calls `set_rung` with a planted rig's row and an edit; the stack has no notion of a TV.
+
+### Fall Line's ladder (`games/fall_line/camera`)
+
+Fall Line's run is seen through six rungs, each a row of an engine rig, in the order its camera
+key (C) walks them: `tips` and `helmet` (mounted), `chase`, `far` and `high` (booms, the reference
+ladder's rows) and `orbit` (the menu's drone, off the key). Per frame, `frame_camera` does the
+game's part around `update`:
+
+- **The subject** is the skier: the skis' base under the boots, the figure's frame (the snow's
+  normal on the snow, the flight's pitch in the air) rolled by his lean, the packed share as the
+  surface (the boom's tremor is harder on the groomer). A landing and a reset are read off two
+  frames' states, so a frame that took several steps misses neither.
+- **The worn eyes** are set off the figure each frame: the helmet's in front of the head (the tuck
+  folds it down), the tips' a hand over the snow ahead of the boots, raised by the skis' sink.
+- **The world** answers the ground, the trunks (`obstacles`: a boom is pushed off them) and the
+  gates' posts (`clear`: a boom pulls in for them).
+- **The hand-overs**: inertialized between two booms, blended in the skier's frame to and from a
+  worn lens (0.6 s; 1 s to and from the orbit). While a lens passes through his head its near
+  plane is pushed past it, and no lens goes under 0.15 m over the snow.
+
+The `camera-world` lab follows a run on every rung at once and pictures them at the run's
+moments; the woods are the open problem (M26g): the crowns between a boom and a skier in a dense
+wood fill the picture until the forest's draw fades them.
 
 ## Settings and cvars
 
@@ -310,7 +339,7 @@ binding; every row inside the engine is in metres, seconds and radians.
 | `camera-rigs` | What does each rig do through each scripted subject (walk, run, strafe, jump, long fall, stairs, crouch, a skid turn, a cliff drop, a teleport)? | eye, angles and fov over time as charts; the subject's path and the eye's from the side and from above; the subject's place in the frame; jerk; ground and obstacle clearance; `gl::find_teleports` on the eye |
 | `camera-transitions` | Is every edit continuous where it should be and instant where it should be? | each edit between each pair of rigs while the subject moves fast: the eye's speed and the look's rate across the switch, the overshoot, the floor; filmstrips |
 | `camera-shake` | Does a shake have the shape and the size it should, and does comfort take it away? | trauma envelopes, the per-axis motion and its frequency content, at comfort 1, 0.5 and 0 |
-| `camera-world` (Fall Line, GPU) | What does each rung of Fall Line's ladder SHOW at the named moments of a run? | each rung's picture over seed 38 at the spawn, a carve, a jump, a landing, the trees; a transition as a strip |
+| `camera-world` (Fall Line, GPU) | What does each rung of Fall Line's ladder SHOW at the named moments of a run, and does any lens stand inside a trunk or the snow? | each rung's picture over seed 38 at the start, the hardest carve, the biggest jump, its landing, the closest pass to the trees and a straight run through the densest wood; the camera key's hand-overs as strips; every lens's least height over the snow and least gap to bark over the whole run |
 | `se-view` (Shooter's Edge) | Does the first-person view bob, roll and kick as the classic look does? | the eye and the angles through a scripted run, against the formulas at the classic configs' values |
 
 ## Research

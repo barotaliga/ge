@@ -134,7 +134,7 @@ void on_message(SessionClient& c, const uint8_t* data, size_t size) {
       const int to = seat_of(read_u8(r));
       size_t n = 0;
       const uint8_t* text = read_text(r, kMaxMessage, n);
-      if (r.bad) break;
+      if (r.bad || static_cast<uint8_t>(scope) > static_cast<uint8_t>(ChatScope::nearby)) break;
       SessionEvent& e = push(c, SessionEventType::chat, from);
       e.scope = scope;
       e.other = to;
@@ -334,6 +334,8 @@ const char* why_name(SessionWhy w) {
       return "timed_out";
     case SessionWhy::wrong_phase:
       return "wrong_phase";
+    case SessionWhy::no_nearby:
+      return "no_nearby";
   }
   return "?";
 }
@@ -370,6 +372,8 @@ const char* scope_name(ChatScope s) {
       return "team";
     case ChatScope::direct:
       return "direct";
+    case ChatScope::nearby:
+      return "nearby";
   }
   return "?";
 }

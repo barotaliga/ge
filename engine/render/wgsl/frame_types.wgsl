@@ -23,6 +23,10 @@ struct Frame {
   night: vec4f,            // the dark sky's zenith luminance, its light, the sidereal angle, latitude
   cloud_info: vec4f,       // x: the cloud's layers drawn; y: the share of the march's steps
   clouds: array<vec4f, 9>, // three a layer (render/clouds.hpp's `cloud_rows`)
+  moon_pole: vec4f,        // the moon's north pole (world); w: the umbra's angular radius
+  moon_prime: vec4f,       // toward its 0 N 0 E; w: the penumbra's angular radius
+  moon_east: vec4f,        // toward its 0 N 90 E; w: the disc's brightest light under the shadow
+  moon_shadow: vec4f,      // toward the Earth's shadow's axis; w: the albedo map's scale
 }
 
 // THE MOTION a surface at camera-relative `rel` (w = 1; w = 0 for a direction at infinity) made
