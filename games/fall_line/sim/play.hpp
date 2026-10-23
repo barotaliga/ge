@@ -11,10 +11,12 @@
 //   place, and the events since the last observation (his own, and any shoulder he was in).
 // - `state`: every racer's skier and progress, to the bit, for `ge diverge`.
 // - `pilot`: the bot's controls for the player.
+// - `trace`: the bot's decisions (bot.hpp), the player's pilot as agent 0 and each rival as his
+//   racer index, for `ge why`.
 //
 // ge:summary Fall Line on the play contract: its axes, options, observation, state, report, pilot
 // ge:keywords play agent observe observation state report pilot axes options game-spec run
-// ge:keywords fall_line_game open_run
+// ge:keywords fall_line_game open_run trace why
 // ge:skill sim agent-interface
 // ge:test tests/fall_line_play_test.cpp
 #pragma once

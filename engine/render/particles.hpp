@@ -6,7 +6,8 @@
 //   (`emit_particles`) and `prepare_particles` writes them into the next slots, wrapping, so a
 //   pool that is full lets its oldest go first. A slot is dead once its age passes its life.
 // - THE FLIGHT ("particles.sim", one thread a slot): gravity scaled by the particle's `fall` (1 a
-//   grain, a tenth for the fines that drift), a drag of `drag` a second toward the still air, and
+//   grain, a tenth for the fines that drift), a drag of `drag` a second toward the air (the game's
+//   wind, so a powder cloud drifts off downwind), and
 //   the ground (the terrain's heights, render/terrain.hpp): a grain that comes down on the snow is
 //   gone, a fine one comes to rest on it and fades (one under the snow and rising is coming up out
 //   of it: a ski sinks into soft snow, and what it throws starts there). `step_particle` is its CPU
@@ -60,8 +61,9 @@ static_assert(sizeof(Particle) == 64, "match particles.wgsl's Particle");
 
 inline constexpr double kGravity = 9.81;  // m/s²
 
-// THE FLIGHT of one particle over `dt` s (no ground): the CPU twin of particles.wgsl's `fly`.
-void step_particle(Particle& p, float dt);
+// THE FLIGHT of one particle over `dt` s (no ground) in air moving at `air` m/s (null: still): the
+// CPU twin of particles_sim.wgsl's `fly`.
+void step_particle(Particle& p, float dt, const float air[3] = nullptr);
 
 struct ParticleSettings {
   uint32_t capacity = 16384;  // slots in the ring
@@ -97,8 +99,10 @@ void emit_particles(Particles& particles, std::span<const Particle> births);
 void clear_particles(gpu::Device& device, Particles& particles);
 
 // The frame's uploads: the births into their slots, and the step of `dt` s the sim takes (0 holds
-// every particle still, as on a paused frame). `near_m` is the camera's near plane.
-void prepare_particles(gpu::Device& device, Particles& particles, double dt, double near_m);
+// every particle still, as on a paused frame). `near_m` is the camera's near plane; `air` the air's
+// velocity, m/s, that every particle's drag pulls it toward (null: still air).
+void prepare_particles(gpu::Device& device, Particles& particles, double dt, double near_m,
+                       const double* air = nullptr);
 
 // The two passes: "particles.sim" (before any view is drawn) and "particles" (after the sky).
 void encode_particles_sim(const Particles& particles, const gpu::PipelineSet& pipelines,

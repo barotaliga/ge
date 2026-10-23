@@ -88,7 +88,13 @@ constexpr FlagSpec kGoldenWriteFlags[] = {
 constexpr FlagSpec kPlayFlags[] = {
     {"seed", "<n>", "the run's seed (default 1)"}, kPreset, kEngine, kRepo};
 constexpr FlagSpec kSimFlags[] = {
-    {"seeds", "<a,b,...>", "the seeds the pilot runs (default 1)"}, kPreset, kEngine, kRepo};
+    {"seeds", "<a,b,...>", "the seeds the pilot runs (default 1)"},
+    {"human", "",
+     "measure how human each run's controls and decisions look, and warn on every metric "
+     "outside a person's band (skill: bots)"},
+    kPreset,
+    kEngine,
+    kRepo};
 constexpr FlagSpec kFast{
     "preset", "<debug|release>",
     "the CMake preset (default release: a sanitizer's time is not the game's)"};
@@ -127,6 +133,18 @@ constexpr FlagSpec kAssetBuildFlags[] = {
     kRepo};
 constexpr FlagSpec kStateFlags[] = {
     {"step", "<n>", "after this many steps (default: the log's end)"}, kPreset, kEngine, kRepo};
+constexpr FlagSpec kWhyFlags[] = {
+    {"agent", "<n>",
+     "the bot to explain: 0 the player's pilot, then the game's others (default 0)"},
+    {"step", "<n>", "the step to explain (default: the log's last)"},
+    {"around", "<k>", "and the k steps either side of it (default 0)"},
+    {"decision", "<name>", "only this decision (default: every one)"},
+    {"flips", "", "every step the bot changed its mind over the whole run"},
+    {"close", "<x>", "with --flips, also the close calls: margins under x"},
+    {"timeline", "", "write its decisions as a series file in runs/ for ge graph"},
+    kPreset,
+    kEngine,
+    kRepo};
 constexpr FlagSpec kShotFlags[] = {
     {"seed", "<n>", "without a log: the pilot plays this seed first (default 1)"},
     {"step", "<n>", "after this many steps (default: the run's end)"},
@@ -299,7 +317,8 @@ const CommandSpec kCommands[] = {
      "inputs, end); the game's options go after --",
      kPlayFlags, "ge play --seed=38 -- --rivals=3", "play-test"},
     {"sim", "", 0, 0, "play",
-     "the game's pilot over each seed: each run's report and digest, its input log in runs/",
+     "the game's pilot over each seed: each run's report and digest, its input log in runs/; "
+     "--human measures how human it looks; the game's options go after --",
      kSimFlags, "ge sim --seeds=38,7", "play-test"},
     {"replay", "<log>", 1, 1, "play",
      "an input log played back; a digest it misses is a determinism break", kBuildFlags,
@@ -311,6 +330,11 @@ const CommandSpec kCommands[] = {
      "where two runs part: the first input that differs, the first step after which the states "
      "differ, and the fields that do",
      kBuildFlags, "ge diverge runs/a.inputs runs/b.inputs", "play-test"},
+    {"why", "<log>", 1, 1, "play",
+     "why a bot did what it did: its decisions round a step replayed from the log (what it saw, "
+     "the options it weighed and their scores, the one it took and by what margin); --flips for "
+     "every change of mind, --timeline for a chart",
+     kWhyFlags, "ge why runs/fall_line-38.inputs --step=1200 --around=6", "play-test"},
     {"net sim", "", 0, 0, "measure",
      "fake-traffic clients and a host over chosen link conditions, no game needed: delivery, "
      "round trip, loss, bandwidth and a digest a session; --capture for the pcap",

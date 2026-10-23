@@ -18,6 +18,10 @@
 //   the tuck under it on a straight (which at a crawl is the skater's push). The player's rider
 //   is pace 1 on the centreline: the plain bot.
 // - A missed gate is taken again: the bot asks for the reset.
+// - ITS DECISIONS, recorded when it is handed a `ge::ai::Why` (`ge why`): `mode` (ride, or why
+//   not: arrived, finished, down, missed), `line` (the aim, the lane, the bearing to it, the
+//   curvature and edge it asks, the steer) and `speed` (brake, tuck or glide, each scored by how
+//   far his speed is from the plan's: the tuck barred while he turns hard).
 // - ON THE FREE RIDE (`plan_free`) the line is the chain of runs from the head of his run down to
 //   a foot (`run_chain`, free.hpp), every kicker within a run's width of it planned for at its
 //   nearest point; at the foot it brakes to a stop. On a line laid to a lift (`to_lift`) it skis on
@@ -25,7 +29,7 @@
 //
 // ge:summary The bot: a speed plan off the skier's limits, pure pursuit down the piste
 // ge:keywords bot pilot ai plan_bot bot_controls pure-pursuit lookahead speed-plan curvature
-// ge:keywords corner kicker brake tuck rival plan_free free-ride chain
+// ge:keywords corner kicker brake tuck rival plan_free free-ride chain why decisions
 // ge:skill sim
 // ge:test tests/fall_line_sim_test.cpp
 #pragma once
@@ -35,6 +39,7 @@
 #include <memory>
 #include <vector>
 
+#include "ai/why.hpp"
 #include "fall_line/sim/state.hpp"
 #include "mountain/mapgen/types.hpp"
 #include "skier/skis.hpp"
@@ -55,6 +60,12 @@ inline constexpr double kBrakeLeast = 0.8;
 inline constexpr double kLookTime = 0.5;
 inline constexpr double kLookLeast = 7;
 inline constexpr double kLookMost = 30;
+// With late hands (`lead_s`), the look reaches `kLeadLook` times the way he covers while his hands
+// catch up further, at no less than `kLeadLeast` m/s: a pursuit aimed as close as an instant
+// hand's swings ever wider once its steer lands 0.2 s late (the `humanness` lab's first finding),
+// and a person who knows their hands are slow looks further down the hill.
+inline constexpr double kLeadLook = 6;
+inline constexpr double kLeadLeast = 8;
 // How far ahead it reads the plan's speed, s at his speed plus m.
 inline constexpr double kReadTime = 0.6;
 inline constexpr double kReadLeast = 4;
@@ -86,7 +97,11 @@ BotPlan plan_free(const ge::mountain::mapgen::Level& level, int32_t run,
 BotPlan plan_line(const ge::mountain::mapgen::Level& level, ge::mountain::mapgen::Track line,
                   const ge::skier::SkiSpec& spec, double slow_from = INFINITY, double slow = 0);
 
-// What the bot does this step as racer `i`, riding as his `Rider`.
-Controls bot_controls(const GameState& state, int32_t i, const BotPlan& plan);
+// What the bot does this step as racer `i`, riding as his `Rider`. With `why` (ai/why.hpp) it
+// records its decisions there; it decides the same with it or without. `lead_s`: how late its
+// hands press what it decides (hands.hpp's `BotHands::lead`); it steers from where it will be
+// then, as a person who knows their own reaction time looks further ahead.
+Controls bot_controls(const GameState& state, int32_t i, const BotPlan& plan,
+                      ge::ai::Why* why = nullptr, double lead_s = 0);
 
 }  // namespace fall_line::sim

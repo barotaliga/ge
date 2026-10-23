@@ -1,6 +1,6 @@
 ---
 name: play-test
-description: "Use to test this game by PLAYING it without a screen: the play contract a game fills (play/game.cpp: its axes, options, observe, state, report, pilot), ge play's line protocol, ge sim's pilot runs, the input log, ge replay to a digest, ge state at a step, ge diverge to find the step two runs part, ge shot for a captioned still of any step, and ge record for the run as a video and a contact sheet. Load it to add an axis or an option, to make a replay hold, or to chase a determinism break."
+description: "Use to test this game by PLAYING it without a screen: the play contract a game fills (play/game.cpp: its axes, options, observe, state, report, pilot), ge play's line protocol, ge sim's pilot runs, the input log, ge replay to a digest, ge state at a step, ge diverge to find the step two runs part, ge shot for a captioned still of any step, ge record for the run as a video and a contact sheet, and ge why for why a bot did what it did and ge sim --human for how human it looks. Load it to add an axis or an option, to make a replay hold, or to chase a determinism break."
 ---
 
 # Play-testing the game
@@ -74,13 +74,33 @@ the CPU.
 **The protocol** (`ge play`): the session opens with `hello` (the axes, the options, the ops).
 Then send one object a line: `{"op":"observe"}`; `{"op":"act","input":{"<axis>":v},"steps":n}`
 (holds the input n steps, answers the observation after them); `{"op":"pilot","steps":n}` (the
-game's pilot plays n steps); `{"op":"state"}`; `{"op":"inputs"}` (the log so far); `{"op":"end"}`
+game's pilot plays n steps); `{"op":"why"}` (what the pilot would do now and its decisions, without
+stepping); `{"op":"state"}`; `{"op":"inputs"}` (the log so far); `{"op":"end"}`
 (the report and the digest). A bad line answers `{"op":"error","error":...,"next":...}`.
 Script a session by piping lines in: `printf '{"op":"observe"}\n' | ge play --seed=1`.
 
 **The input log** is plain text: a header (`game`, `seed`, `option`, `hz`, `axes`, `steps`,
 `digest`), then one line per run of held steps, `<count> <value per axis>`. Edit it by hand to ask
 "what if": copy a log, change one line, drop the `digest` line, and `ge diverge` the two.
+
+**WHY A BOT DID IT.** A game whose Run accepts a decision trace (`Run::trace`, the engine's
+`ai/why.hpp`) has every bot decision explained from a log: `ge why <log> --step=N --around=K`
+replays it and prints agent 0's decisions (the game's pilot; `--agent=` the game's other bots)
+round step N: what it saw, the options it weighed with their scores and terms, the one it took
+and by what margin. On a log you or a person played, it is what the pilot WOULD have done, and
+the summary names the first step it would have played otherwise. `--flips` lists every step it
+changed its mind (`--close=x` adds the close calls); `--timeline` writes the decisions as a
+series file for `ge graph`. A bot records with `if (why) why->fact(...)`: off is a null pointer,
+and it must decide exactly the same traced and untraced (`ge why` replays to the log's digest).
+
+**HOW HUMAN IT LOOKS.** `ge sim --human` adds, per run, each axis's metrics (a signed axis read
+as a stick, a lever as a trigger: the share at an end, jumps, reversals a minute, how long it is
+held part-way, the lag behind what the bot meant) and each decision's changes of mind a minute,
+with a warning for every value outside a person's band (the engine's `ai/human.hpp`). The lag
+needs the bot to record what it meant before its hands (`ai::record_intent`, the engine's
+`ai/hands.hpp`, which also turns a decision into late, settling, slewed presses). A pilot that
+holds hands must press on a copy in `pilot()` and commit it in `step()` only when it was asked
+at that step, or `ge why` (which asks at every step) moves the run.
 
 ## Chasing a determinism break
 

@@ -127,6 +127,11 @@ an SVG, and the answer lists them in `written`, a summary of each series in `tex
   file and three charts (speed, sideways load, edge and lean) with gates, flights and spikes.
   `--log=course=debug,skier=debug` adds the same run's events by step.
 
+- `why` (Fall Line): every bot's DECISIONS down one seed (`engine/ai/why.hpp`): what each read,
+  weighed and chose, how often it changed its mind and how close its calls were, with the
+  player's as a series file. For one step of any logged run, `ge why <log> --step=N` (skill:
+  `bots`) replays it and prints the decisions there; `--timeline` writes them for `ge graph`.
+
 - `anim` (the skier plugin): the skier's figure ridden through a scenario and recorded as a pose
   track: filmstrips, onion skins, joint angles, a jolt heatmap and its faults; a copy with a pop,
   a stretch and a clip planted must have each found where it was put.
