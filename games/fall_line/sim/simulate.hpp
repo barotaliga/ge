@@ -114,8 +114,12 @@ class Driver {
   bool over() const;
   const GameState& state() const { return state_; }
   const BotPlan& plan() const { return plan_; }
-  // The rivals' bots record their decisions into `why` (null: stop), each as his racer index.
-  void set_why(ge::ai::Why* why) { why_ = why; }
+  // The rivals' bots record their decisions into `why` (null: stop), each as his racer index, and
+  // the game's own agents (the army's machines) as theirs (`GameState::why`).
+  void set_why(ge::ai::Why* why) {
+    why_ = why;
+    state_.why = why;
+  }
   // The rivals press through hands of `profile` (hands.hpp), each off his own stream on `seed`'s
   // map. Set before the first step.
   void set_hands(HandsProfile profile, double seed);

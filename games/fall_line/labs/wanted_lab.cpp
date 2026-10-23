@@ -79,6 +79,8 @@ struct HuntRun {
 HuntRun run_scene(const std::shared_ptr<const mg::Level>& level, Scene scene, fs::WantedCause cause,
                   double limit) {
   fs::GameState st = fs::create_game_on(level, 1);
+  // Staged: the scripted pursuers alone: the army's helicopters are the army-flight lab's.
+  st.army.send_helis = false;
   const fs::BotPlan plan = fs::plan_bot(*level, st.spec);
   st.wanted.lethal = scene != Scene::arrest;
   HuntRun out;

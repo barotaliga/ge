@@ -30,45 +30,6 @@ namespace num = ge::core::num;
 namespace lm = ge::core::libm;
 using namespace heli_ride;
 
-// The ground's steepest lean over a circle of radius `r`, rise over run.
-double lean_over(const mg::Level& level, double x, double z, double r) {
-  const double g = level.ground_at(x, z);
-  double most = 0;
-  for (int i = 0; i < 8; i++) {
-    const double a = static_cast<double>(i) / 8 * 2 * core::kPi;
-    most =
-        num::max(most, std::fabs(level.ground_at(x + lm::sin(a) * r, z + lm::cos(a) * r) - g) / r);
-  }
-  return most;
-}
-
-bool clear_at(const mg::Level& level, const std::vector<ml::LiftPlan>& lifts,
-              const sk::TreeIndex& trees, double x, double z) {
-  constexpr double room = kPadRadius;
-  bool tree = false;
-  sk::for_each_tree_near(trees, x, z, [&](int32_t i) {
-    const mg::TreeDef& t = level.trees[static_cast<size_t>(i)];
-    if (core::hypot(t.x - x, t.z - z) < room + t.radius) tree = true;
-  });
-  if (tree) return false;
-  for (const ml::LiftPlan& p : lifts) {
-    const double rx = x - p.bottom.x;
-    const double rz = z - p.bottom.z;
-    if (core::hypot(rx, rz) < kStationGap + room) return false;
-    const double u = rx * p.dx + rz * p.dz;
-    const double v = rx * p.dz - rz * p.dx;
-    if (u > -room && u < p.length + room && std::fabs(v) < kLineGap + room) return false;
-  }
-  if (level.resort) {
-    for (const mg::WindTunnel& t : level.resort->tunnels) {
-      for (const mg::WindTunnel::Point& q : t.points) {
-        if (core::hypot(q.x - x, q.z - z) < kTunnelGap + room + t.width / 2) return false;
-      }
-    }
-  }
-  return true;
-}
-
 // THE HEADING FROM (x, z) TO THE SUMMIT: a skier climbing on looks up at the mountain he is about
 // to fly. A map with no summit published is faced up its fall line (+z is down it).
 double summitward(const mg::Level& level, double x, double z) {
@@ -253,6 +214,43 @@ void fly(GameState& state, int32_t i, const Controls& c) {
 
 }  // namespace
 
+double pad_lean(const mg::Level& level, double x, double z, double r) {
+  const double g = level.ground_at(x, z);
+  double most = 0;
+  for (int i = 0; i < 8; i++) {
+    const double a = static_cast<double>(i) / 8 * 2 * core::kPi;
+    most =
+        num::max(most, std::fabs(level.ground_at(x + lm::sin(a) * r, z + lm::cos(a) * r) - g) / r);
+  }
+  return most;
+}
+
+bool pad_clear(const mg::Level& level, const std::vector<ml::LiftPlan>& lifts,
+               const sk::TreeIndex& trees, double x, double z, double room) {
+  bool tree = false;
+  sk::for_each_tree_near(trees, x, z, [&](int32_t i) {
+    const mg::TreeDef& t = level.trees[static_cast<size_t>(i)];
+    if (core::hypot(t.x - x, t.z - z) < room + t.radius) tree = true;
+  });
+  if (tree) return false;
+  for (const ml::LiftPlan& p : lifts) {
+    const double rx = x - p.bottom.x;
+    const double rz = z - p.bottom.z;
+    if (core::hypot(rx, rz) < kStationGap + room) return false;
+    const double u = rx * p.dx + rz * p.dz;
+    const double v = rx * p.dz - rz * p.dx;
+    if (u > -room && u < p.length + room && std::fabs(v) < kLineGap + room) return false;
+  }
+  if (level.resort) {
+    for (const mg::WindTunnel& t : level.resort->tunnels) {
+      for (const mg::WindTunnel::Point& q : t.points) {
+        if (core::hypot(q.x - x, q.z - z) < kTunnelGap + room + t.width / 2) return false;
+      }
+    }
+  }
+  return true;
+}
+
 HeliPad heli_pad(const mg::Level& level, const std::vector<ml::LiftPlan>& lifts,
                  const sk::TreeIndex& trees, double avoid_x, double avoid_z, double avoid_r) {
   const mg::TrackPoint& finish = level.track.points.back();
@@ -272,12 +270,12 @@ HeliPad heli_pad(const mg::Level& level, const std::vector<ml::LiftPlan>& lifts,
       if (std::fabs(x - half) > half - edge || std::fabs(z - half) > half - edge) continue;
       const double d = core::hypot(dx, dz);
       if (found && d >= best) continue;
-      const double lean = lean_over(level, x, z, kPadRadius);
+      const double lean = pad_lean(level, x, z, kPadRadius);
       if (lean > kPadSlope) continue;
       if (core::hypot(x - avoid_x, z - avoid_z) < avoid_r) continue;
       const double cost = d + lean * 600;
       if (found && cost >= best) continue;
-      if (!clear_at(level, lifts, trees, x, z)) continue;
+      if (!pad_clear(level, lifts, trees, x, z, kPadRadius)) continue;
       found = true;
       bx = x;
       bz = z;

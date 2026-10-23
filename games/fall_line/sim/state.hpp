@@ -31,6 +31,7 @@
 #include "skier/trees.hpp"
 #include "snowmobile/sled.hpp"
 
+#include "ai/why.hpp"
 #include "fall_line/sim/army_state.hpp"
 #include "fall_line/sim/wanted_state.hpp"
 
@@ -79,6 +80,7 @@ enum class EventKind : uint8_t {
   heli,       // the helicopter (`gate` its HeliPhase, `value` its speed, m/s; heli_ride.hpp)
   para,       // the paramotor (`gate` its ParaPhase, `value` his speed, m/s; para_ride.hpp)
   army_sled,  // an army snowmobile (`gate` its ArmySledChange, `value` its id; army_sled.hpp)
+  army_heli,  // an army helicopter (`gate` its ArmyHeliChange, `value` its id; army_heli.hpp)
 };
 
 const char* event_name(EventKind kind);
@@ -232,6 +234,10 @@ struct GameState {
   FreePara para;       // the free ride's paramotor (para_ride.hpp); only a ride begun under it
   double t = 0;        // s since the start
   int64_t steps = 0;
+  // WHERE THE GAME'S OWN AGENTS RECORD WHY (ai/why.hpp): the army's machines write their decisions
+  // here while a trace is on (`ge why`); null in a normal run. Observed, never hashed, and nothing
+  // decides by it.
+  ge::ai::Why* why = nullptr;
 
   ge::skier::World world() const { return ge::skier::World{level.get(), &trees}; }
 };
