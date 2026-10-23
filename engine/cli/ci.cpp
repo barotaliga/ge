@@ -7,7 +7,9 @@
 #include "cli/ci.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <regex>
+#include <thread>
 
 #include "cli/json.hpp"
 #include "cli/play.hpp"
@@ -261,6 +263,9 @@ Outcome run_ci(const fs::path& repo, const std::string& pr, const std::string& l
       const std::string from = slug.str(1) + "/" + slug.str(2);
       std::string to = first_line(run_to_log("gh api " + api + " --jq .full_name", log).output);
       if (to.find('/') == std::string::npos || to.find(' ') != std::string::npos) to.clear();
+      // The API's redirect names the repository by number only; the web page's names it.
+      if (to.empty())
+        to = moved_to_of(run_to_log("curl -sI https://github.com/" + from, log).output);
       Finding moved;
       if (moved_repo_finding(head.output, from, to, moved)) {
         out.findings.push_back(moved);
@@ -361,10 +366,12 @@ Outcome run_ci(const fs::path& repo, const std::string& pr, const std::string& l
   if (!mergeable.empty()) out.text += "  mergeable: " + mergeable + "\n";
   out.result = json_obj(
       {{"sha", json_str(sha)}, {"mergeable", json_str(mergeable)}, {"checks", json_arr(rows)}});
-  out.summary = !pending.empty()       ? "nothing has failed yet"
+  out.summary = !pending.empty()       ? std::string(kCiPending)
                 : mergeable == "clean" ? "every check passed and it merges cleanly: merge it"
                                        : "every check passed";
-  out.next = pending.empty() ? "" : "ge ci again in 15 minutes, until every check is green";
+  out.next = pending.empty() ? ""
+                             : "ge ci again in 15 minutes, until every check is green (or "
+                               "ge ci <pr> --wait)";
   if (!merge) return out;
   // --merge: squash only what was just read as ready (every check done, none failed, GitHub's
   // state clean) and only at the head those checks ran on, so a push since is never merged.
@@ -385,6 +392,24 @@ Outcome run_ci(const fs::path& repo, const std::string& pr, const std::string& l
   const Logged done = run_to_log("gh api -X PUT " + api + "/pulls/" + pr +
                                      "/merge -f merge_method=squash -f sha=" + sha + " --jq .sha",
                                  log);
+  if (done.code != 0 && merge_queue_refusal(done.output)) {
+    // A queue base takes a pull request only through auto-merge: arm it, and the queue merges it.
+    const std::string repo_slug = slug.str(1) + "/" + slug.str(2);
+    const Logged queued =
+        run_to_log("gh pr merge " + pr + " -R " + repo_slug + " --auto --squash", log);
+    if (queued.code != 0) {
+      return fail("pull request " + pr +
+                      " is green, its base merges only through a merge queue, and arming "
+                      "auto-merge failed: " +
+                      first_line(queued.output),
+                  "gh pr merge " + pr + " -R " + repo_slug + " --auto --squash");
+    }
+    out.text += "  queued: the base merges through a merge queue; auto-merge armed\n";
+    out.result = json_obj({{"sha", json_str(sha)}, {"queued", "true"}});
+    out.summary = "pull request " + pr + " joined the merge queue";
+    out.next = "ge ci " + pr + " --wait: the queue runs the full matrix, then merges it";
+    return out;
+  }
   if (done.code != 0) {
     return fail("GitHub refused to merge pull request " + pr + ": " + first_line(done.output),
                 "ge ci " + pr + " to see why (a push since, or a rule on the base)");
@@ -415,6 +440,46 @@ bool moved_repo_finding(std::string_view error, const std::string& slug,
                  : "set the origin remote to the repository's new address (git remote set-url "
                    "origin https://github.com/<owner>/<repo>), then ge ci"};
   return true;
+}
+
+std::string moved_to_of(std::string_view headers) {
+  for (std::string_view line : split_lines(headers)) {
+    if (line.size() < 9) continue;
+    std::string key(line.substr(0, 9));
+    for (char& c : key) c = (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c;
+    if (key != "location:") continue;
+    static const std::regex kTo(R"(github\.com/([^/\s]+/[^/\s]+?)/?\r?$)");
+    std::match_results<std::string_view::const_iterator> m;
+    if (std::regex_search(line.begin(), line.end(), m, kTo)) return m.str(1);
+  }
+  return "";
+}
+
+bool merge_queue_refusal(std::string_view output) {
+  std::string text(output);
+  for (char& c : text) c = (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c;
+  return text.find("merge queue") != std::string::npos;
+}
+
+bool ci_settled(const Outcome& o) {
+  return count_of(o.findings, Severity::error) > 0 || o.summary != kCiPending;
+}
+
+Outcome run_ci_wait(const fs::path& repo, const std::string& pr, bool merge, int minutes) {
+  const auto until = std::chrono::steady_clock::now() + std::chrono::minutes(minutes);
+  for (;;) {
+    // Read without merging while checks run: --merge acts once, on the settled answer.
+    Outcome o = run_ci(repo, pr, "", false);
+    if (ci_settled(o))
+      return merge && count_of(o.findings, Severity::error) == 0 ? run_ci(repo, pr, "", true) : o;
+    if (std::chrono::steady_clock::now() >= until) {
+      o.findings.push_back({Severity::note,
+                            "still running after " + std::to_string(minutes) + " minutes", "",
+                            "ge ci " + pr + " --wait again, or --wait=<minutes> for longer"});
+      return o;
+    }
+    std::this_thread::sleep_for(std::chrono::seconds(60));
+  }
 }
 
 }  // namespace ge::cli

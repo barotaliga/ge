@@ -1,7 +1,9 @@
 # The skier model's builder: the skier on the reference pair with his poles, rigged on the bones
 # of app/rig.hpp and skinned by hand-set weights, made off the `skier` data set (data.cpp) in
 # headless Blender by `ge asset build skier`. Low-poly on purpose: a few thousand triangles, one
-# mesh, one material a garment, read at chase range.
+# material a garment, read at chase range; and two coarser levels of detail for the far crowd
+# (`skier.lod1`, `skier.lod2`: fewer sides round each limb, fewer rings down it, the small
+# parts dropped), bound to the same rig, so a level change is the same figure in the same pose.
 #
 # Every limb is lofted round its bone at bind (each runs along -y; rig.hpp), its weights blended
 # across a joint over BLEND metres either side, half and half at the joint itself, so a bend
@@ -18,6 +20,32 @@ import math
 import ge_asset
 
 BLEND = 0.06  # m either side of a joint the skin is shared over
+
+# Each level of detail: its mesh's name, the share of a loft's sides kept (at least `min_sides`),
+# every n-th of a limb's rings kept (its ends always), the ski's stations, the helmet's rings and
+# sides, and whether the small parts (goggles, bindings, pole baskets) are drawn.
+LEVELS = (
+    {"name": "skier", "sides": 1.0, "min_sides": 3, "every": 1, "ski_steps": 36,
+     "helmet": (8, 12), "small": True},
+    {"name": "skier.lod1", "sides": 0.6, "min_sides": 4, "every": 2, "ski_steps": 8,
+     "helmet": (5, 8), "small": True},
+    {"name": "skier.lod2", "sides": 0.4, "min_sides": 3, "every": 3, "ski_steps": 4,
+     "helmet": (3, 5), "small": False},
+)
+LOD = LEVELS[0]  # the level being built
+
+
+def sides(n):
+    return max(LOD["min_sides"], round(n * LOD["sides"]))
+
+
+def thin(rings):
+    """Every n-th of `rings` at this level, its first and last always."""
+    step = LOD["every"]
+    kept = rings[::step]
+    if kept[-1] is not rings[-1]:
+        kept.append(rings[-1])
+    return kept
 
 COLOURS = {
     "jacket": (0.62, 0.05, 0.04),
@@ -73,13 +101,14 @@ def build_legs(mesh, joints):
             c = lerp(hip, ankle, max(0.0, min(1.0, t)))
             c[1] = y
             rings.append((c, r, r * 1.05, chain(y, bones)))
-        mesh.loft(rings, "pants")
+        mesh.loft(thin(rings), "pants", sides=sides(10))
         # The boot: its cuff round the shin, its shell over the foot, rigid on the ankle.
         w = {"ankle_" + side: 1.0}
         x = ankle[0]
         mesh.box((x, 0.21, -0.01), (0.12, 0.2, 0.17), "boot", w)
         mesh.box((x, 0.085, 0.02), (0.11, 0.09, 0.31), "boot", w)
-        mesh.box((x, 0.029, 0.0), (0.075, 0.022, 0.42), "binding", w)
+        if LOD["small"]:
+            mesh.box((x, 0.029, 0.0), (0.075, 0.022, 0.42), "binding", w)
 
 
 def ski_rocker(d, rocker_length, rise):
@@ -96,7 +125,7 @@ def build_skis(mesh, joints, skis):
     radius = skis["sidecut"]
     mount = skis["mount_back"]
     thick = skis["thickness"]
-    steps = 36
+    steps = LOD["ski_steps"]
     for side in ("l", "r"):
         x = at(joints, "ankle_" + side)[0]
         w = {"ankle_" + side: 1.0}
@@ -108,7 +137,7 @@ def build_skis(mesh, joints, skis):
             half = half_waist + from_waist * from_waist / (2 * radius)
             d = min(i, steps - i) * length / steps
             # The tip and the tail round off over their last few stations.
-            end = min(1.0, 0.45 + 0.55 * math.sqrt(min(1.0, d / 0.06)))
+            end = min(1.0, 0.45 + 0.55 * math.sqrt(min(1.0, d / 0.06))) if steps > 4 else 1.0
             base = ski_rocker(d, skis["rocker_length"], skis["rocker_rise"])
             rows.append([
                 mesh.vertex((x - half * end, base, z), w),
@@ -138,13 +167,17 @@ def build_torso(mesh, joints):
         return out
 
     # chain() walks a limb downward, so the torso is measured as depth below the top (-y).
-    mesh.loft(rings(((0.93, 0.16, 0.11), (1.0, 0.168, 0.115), (1.08, 0.165, 0.112))), "pants")
-    mesh.loft(rings(((1.03, 0.172, 0.122), (1.12, 0.16, 0.115), (1.22, 0.162, 0.118),
-                     (1.32, 0.178, 0.124), (1.42, 0.19, 0.125), (1.49, 0.165, 0.11),
-                     (1.53, 0.075, 0.072), (1.58, 0.06, 0.06))), "jacket", sides=12)
+    mesh.loft(thin(rings(((0.93, 0.16, 0.11), (1.0, 0.168, 0.115), (1.08, 0.165, 0.112)))),
+              "pants", sides=sides(10))
+    mesh.loft(thin(rings(((1.03, 0.172, 0.122), (1.12, 0.16, 0.115), (1.22, 0.162, 0.118),
+                          (1.32, 0.178, 0.124), (1.42, 0.19, 0.125), (1.49, 0.165, 0.11),
+                          (1.53, 0.075, 0.072), (1.58, 0.06, 0.06)))), "jacket", sides=sides(12))
     w = {"head": 1.0}
-    mesh.sphere((0.0, head[1] + 0.065, 0.005), 0.125, "helmet", w, squash=(0.92, 1.0, 1.05))
-    mesh.box((0.0, head[1] + 0.06, 0.105), (0.17, 0.065, 0.05), "goggle", w, smooth=True)
+    rings_, sides_ = LOD["helmet"]
+    mesh.sphere((0.0, head[1] + 0.065, 0.005), 0.125, "helmet", w, rings=rings_, sides=sides_,
+                squash=(0.92, 1.0, 1.05))
+    if LOD["small"]:
+        mesh.box((0.0, head[1] + 0.06, 0.105), (0.17, 0.065, 0.05), "goggle", w, smooth=True)
 
 
 def build_arms(mesh, joints):
@@ -162,7 +195,7 @@ def build_arms(mesh, joints):
             if y > shoulder[1]:
                 weights = {"chest": 0.5, "shoulder_" + side: 0.5}
             rings.append((c, r, r, weights))
-        mesh.loft(rings, "jacket", sides=8)
+        mesh.loft(thin(rings), "jacket", sides=sides(8))
         mesh.box((wrist[0], wrist[1] - 0.045, 0.0), (0.075, 0.11, 0.095), "glove",
                  {"wrist_" + side: 1.0}, smooth=True)
 
@@ -173,7 +206,9 @@ def build_poles(mesh, joints, poles):
         tip = at(joints, "pole_tip_" + side)
         w = {"pole_" + side: 1.0}
         top = (grip[0], grip[1] + 0.08, grip[2])
-        mesh.loft(((top, 0.011, 0.011, w), (tip, 0.006, 0.006, w)), "pole", sides=6)
+        mesh.loft(((top, 0.011, 0.011, w), (tip, 0.006, 0.006, w)), "pole", sides=sides(6))
+        if not LOD["small"]:
+            continue
         basket = (tip[0], tip[1] + 0.09, tip[2])
         mesh.loft(((basket, 0.045, 0.045, w), ((basket[0], basket[1] + 0.012, basket[2]), 0.045,
                                                 0.045, w)), "pole", sides=8)
@@ -184,13 +219,15 @@ def main():
     joints = data["joints"]
     rig = ge_asset.armature("skier_rig", joints)
     mats = {name: ge_asset.material(name, rgb) for name, rgb in COLOURS.items()}
-    mesh = ge_asset.MeshBuilder()
-    build_skis(mesh, joints, data["skis"])
-    build_legs(mesh, joints)
-    build_torso(mesh, joints)
-    build_arms(mesh, joints)
-    build_poles(mesh, joints, data["poles"])
-    mesh.finish("skier", rig, mats)
+    global LOD
+    for LOD in LEVELS:
+        mesh = ge_asset.MeshBuilder()
+        build_skis(mesh, joints, data["skis"])
+        build_legs(mesh, joints)
+        build_torso(mesh, joints)
+        build_arms(mesh, joints)
+        build_poles(mesh, joints, data["poles"])
+        mesh.finish(LOD["name"], rig, mats)
     ge_asset.export(out)
 
 

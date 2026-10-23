@@ -118,9 +118,10 @@ inline constexpr double kBodyReachM = 2.5;
 // THE HOLD AND THE PACE BY STARS: early in a hunt the men sent are told to bring him in. They fire
 // to pin him and stop him, from far off and on the move, so the shooter's hold is widened by
 // `kHoldByStars` and the pause between bursts drawn out by `kPaceByStars`, tightening as the
-// stars climb. Index: the stars (0 to 5).
+// stars climb. Warning fire (two stars) is paced like the first aimed fire: a burst to tell him,
+// then a pause to let him stop. Index: the stars (0 to 5).
 inline constexpr std::array<double, 6> kHoldByStars{1, 1, 1, 8, 4, 2};
-inline constexpr std::array<double, 6> kPaceByStars{1, 1, 1, 4, 2.5, 1.4};
+inline constexpr std::array<double, 6> kPaceByStars{1, 1, 4, 4, 2.5, 1.4};
 
 }  // namespace weapons
 
