@@ -52,21 +52,21 @@ std::string generated_file(const std::string& table, size_t count) {
       " stars, brightest first, six bytes\n"
       "// each, base64. Their places, magnitudes and colours are the Bright Star Catalogue's, 5th\n"
       "// revised edition (Hoffleit and Warren, 1991), as the astronomical data centres publish\n"
-      "// it free of restriction.\n"
+      "// it free of restriction. One literal a line, so no literal passes a compiler's length "
+      "limit.\n"
       "//\n"
       "// ge:summary The real stars' table (generated)\n"
       "// ge:keywords stars star-catalogue generated table\n"
       "// ge:skill render\n"
       "// ge:test tests/render_stars_test.cpp\n"
       "namespace ge::render {\n\n"
-      "extern const char* const kStarTable;\n"
-      "const char* const kStarTable =\n";
+      "extern const char* const kStarTable[];\n"
+      "const char* const kStarTable[] = {\n";
   constexpr size_t kLine = 92;
   for (size_t i = 0; i < table.size(); i += kLine) {
-    s += "    \"" + table.substr(i, kLine) + "\"";
-    s += i + kLine >= table.size() ? ";\n" : "\n";
+    s += "    \"" + table.substr(i, kLine) + "\",\n";
   }
-  s += "\n}  // namespace ge::render\n";
+  s += "    nullptr,\n};\n\n}  // namespace ge::render\n";
   return s;
 }
 

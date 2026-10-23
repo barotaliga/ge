@@ -15,7 +15,7 @@
 
 namespace ge::render {
 
-extern const char* const kStarTable;  // render/star_data.cpp: generated
+extern const char* const kStarTable[];  // render/star_data.cpp: generated, nullptr-ended
 
 namespace {
 
@@ -131,8 +131,10 @@ bool decode_stars(std::string_view base64, std::vector<Star>& out) {
 
 const std::vector<Star>& star_catalogue() {
   static const std::vector<Star> stars = [] {
+    std::string table;
+    for (const char* const* line = kStarTable; *line != nullptr; ++line) table += *line;
     std::vector<Star> s;
-    decode_stars(kStarTable, s);
+    decode_stars(table, s);
     return s;
   }();
   return stars;
