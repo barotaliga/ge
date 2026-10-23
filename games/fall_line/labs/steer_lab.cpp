@@ -11,6 +11,7 @@
 // ge:keywords pick_heading snowmobile army
 // ge:skill bots labs
 // ge:test tests/ai_steer_test.cpp
+#include <bit>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -163,7 +164,10 @@ void run(gl::Lab& lab) {
       const fs::Soldier& o = crowd[static_cast<size_t>(i)];
       if (o.id != s.id) ge::ai::add_apart(grid, s.x - o.x, s.z - o.z, fs::army::kApartM);
     });
-    differ += std::memcmp(&all, &grid, sizeof all) == 0 ? 0 : 1;
+    differ += (std::bit_cast<uint64_t>(all.x) == std::bit_cast<uint64_t>(grid.x) &&
+               std::bit_cast<uint64_t>(all.z) == std::bit_cast<uint64_t>(grid.z))
+                  ? 0
+                  : 1;
   }
   if (differ > 0) {
     lab.fail(k + ": " + std::to_string(differ) +

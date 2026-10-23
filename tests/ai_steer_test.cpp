@@ -7,6 +7,7 @@
 // ge:summary Tests: pursuit, the fan, the grid against the full pass, the stuck check, choosing
 // ge:keywords test ai steer pursuit fan neighbours separation grid stuck progress choose enter
 // ge:skill bots testing
+#include <bit>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -81,7 +82,8 @@ TEST(the_grid_visits_whom_the_full_pass_would_in_its_order_so_the_push_is_the_sa
       const P o = bots[static_cast<size_t>(i)];
       ai::add_apart(grid, b.x - o.x, b.z - o.z, kApart);
     });
-    CHECK(std::memcmp(&all, &grid, sizeof all) == 0);
+    CHECK(std::bit_cast<uint64_t>(all.x) == std::bit_cast<uint64_t>(grid.x) &&
+          std::bit_cast<uint64_t>(all.z) == std::bit_cast<uint64_t>(grid.z));
   }
   // Far fewer visits than the full pass's 300 a bot.
   CHECK(visits < 300 * 30);

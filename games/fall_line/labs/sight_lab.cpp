@@ -139,28 +139,35 @@ void run(gl::Lab& lab) {
     const int32_t in_range = count[0] + count[1] + count[3] + count[4];
     const double share = in_range > 0 ? static_cast<double>(count[0] + count[1]) / in_range : 0;
     const std::string e = eye.name;
-    lab.metric(k + "." + e + ".seen", count[1], "count");
-    lab.metric(k + "." + e + ".ground", count[3], "count");
-    lab.metric(k + "." + e + ".woods", count[4], "count");
-    lab.metric(k + "." + e + ".seen-share", share, "ratio");
+    const auto key = [&](const char* what) {
+      std::string out = k;
+      out += '.';
+      out += e;
+      out += what;
+      return out;
+    };
+    lab.metric(key(".seen"), count[1], "count");
+    lab.metric(key(".ground"), count[3], "count");
+    lab.metric(key(".woods"), count[4], "count");
+    lab.metric(key(".seen-share"), share, "ratio");
     table.rows.push_back({e, fixed(range, 0), std::to_string(count[0]), std::to_string(count[1]),
                           std::to_string(count[3]), std::to_string(count[4]),
                           fixed(100 * share, 1) + "%"});
-    lab.shot({k + "-" + e,
-              "SEED " + fixed(seed, 0) + ": WHAT A " + (low ? "SOLDIER" : "HELICOPTER'S CREW") +
-                  " SEES FROM LIFT " + resort->lifts.front().id + "'S TOP",
+    std::string shot = k;
+    shot += '-';
+    shot += e;
+    lab.shot({shot,
+              "SEED " + fixed(seed, 0) +
+                  (low ? ": WHAT A SOLDIER SEES FROM LIFT "
+                       : ": WHAT A HELICOPTER'S CREW SEES FROM LIFT ") +
+                  resort->lifts.front().id + "'S TOP",
               "The map round the top of lift " + resort->lifts.front().id +
-                  " (+x right, +z down), "
-                  "the pursuer at the yellow dot, " +
-                  fixed(eye.up, 1) +
-                  " m over the snow, his "
-                  "range the white ring (" +
-                  fixed(range, 0) + " m). A point every " + fixed(kCell, 0) +
+                  " (+x right, +z down), the pursuer at the yellow dot, " + fixed(eye.up, 1) +
+                  " m over the snow, his range the white ring (" + fixed(range, 0) +
+                  " m). A point every " + fixed(kCell, 0) +
                   " m, coloured by whether he would see a man standing there: green seen, white "
                   "heard (within " +
-                  fixed(wd::kCloseM, 0) +
-                  " m), red behind the ground, blue "
-                  "through the woods.",
+                  fixed(wd::kCloseM, 0) + " m), red behind the ground, blue through the woods.",
               low ? "red falls in the lee of every ridge and over the far side of the top; blue "
                     "fills the woods below the tree line; green runs down the open runs"
                   : "from aloft almost everything in range is green: the ground hides only what "
