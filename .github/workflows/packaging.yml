@@ -1,57 +1,20 @@
 name: packaging
 
-# Holds every pull request to what the release workflow will need, so a
-# dispatched release does not find out first (docs/publishing.md):
-#   release-tools  tools/release.py's tests, and every fragment valid
-#   changeset      a change to the engine's build or headers ships a
-#                  .changes/unreleased/ fragment, or carries `no-changelog`
+# Holds what the release workflow will need, so a dispatched release does not find out first
+# (docs/publishing.md). Called by ci.yml on a queued merge (and a pull request labelled
+# `full-ci`); tools/release.py's tests and the changeset rule run in ci.yml's gates.
 #   package        install the package and build a consumer against it,
 #                  on every platform a release ships
 #   scaffold       `ge new` writes a game repo and ge alone grows it (use, add
 #                  system, lab, test), passes `ge check` against this tree, and
 #                  plays it (sim, replay, play, state, diverge)
 on:
-  pull_request:
-  push:
-    branches: [main]
-  # The merge queue runs these too, so a required check here has a result on the queued merge.
-  merge_group:
+  workflow_call:
 
 permissions:
   contents: read
 
-concurrency:
-  group: packaging-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  release-tools:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - run: make release-check
-
-  changeset:
-    if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'no-changelog')
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - name: A shipped change carries a fragment
-        env:
-          BASE: ${{ github.event.pull_request.base.sha }}
-        run: |
-          CHANGED=$(git diff --name-only "$BASE"...HEAD)
-          SHIPPED=$(echo "$CHANGED" | grep -E '^(engine/|cmake/|consumer-skills/|scaffold/|templates/|CMakeLists\.txt$)' || true)
-          FRAGMENTS=$(git diff --name-only --diff-filter=A "$BASE"...HEAD -- '.changes/unreleased/*.md' | grep -v README.md || true)
-          if [ -n "$SHIPPED" ] && [ -z "$FRAGMENTS" ]; then
-            echo "::error::This PR changes what a release ships but adds no .changes/unreleased/ fragment."
-            echo "Add one (see .changes/unreleased/README.md), or label the PR no-changelog if no consumer can notice."
-            echo "$SHIPPED"
-            exit 1
-          fi
-
   package:
     strategy:
       fail-fast: false

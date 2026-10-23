@@ -1,18 +1,26 @@
-# Every push and pull request: format, the agent guidance's structure, then
-# build + test on each compiler and OS the engine promises to produce the
-# same bits on. A determinism break shows as a parity test failing on ONE
-# row of the matrix — that row's compiler or libm is the suspect.
+# Every push, pull request and queued merge. The org's runners are a small shared pool, so a
+# pull request runs the cheap gates and ONE build-and-test row; the merge queue runs the whole
+# matrix (every compiler and OS the engine promises the same bits on) and the packaging, on the
+# exact tree that lands; a push to main builds the cached rows only, to save their compiler
+# caches. A change that touches only prose (docs, skills, lessons, root Markdown, changeset
+# fragments) runs the gates alone. A pull request labelled `full-ci` runs the whole matrix.
+#
+# The ruleset requires ONE check, `required` (the last job): it passes when every job either
+# passed or was skipped by the rules above, so a skipped row never leaves a required check
+# pending. A determinism break shows as a parity test failing on ONE row of the matrix: that
+# row's compiler or libm is the suspect.
 #
 # Speed: every ctest runs its cases in parallel (CTEST_PARALLEL_LEVEL; the labs' smoke pass is
 # cut into slices for it), the Linux and macOS rows compile through ccache (restored on every
 # run, saved only from main so pull requests do not churn the cache), and on a pull request the
-# lint checks only what the change can reach (tools/lint.sh); main lints every file.
+# lint checks only what the change can reach (tools/lint.sh).
 name: ci
 
 on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
   # The merge queue: each queued PR is tested on top of the ones ahead of it before it lands.
   merge_group:
 
@@ -27,40 +35,91 @@ env:
   # Every runner has four cores (three on macOS); ctest runs that many cases at once.
   CTEST_PARALLEL_LEVEL: "4"
 
+# A new push to a pull request cancels its older run (a queued merge has a ref of its own).
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  fmt:
+  # The cheap gates, on every run, and the decision what else runs.
+  gates:
     runs-on: ubuntu-24.04
+    outputs:
+      code: ${{ steps.scope.outputs.code }}
+      full: ${{ steps.scope.outputs.full }}
+      rows: ${{ steps.scope.outputs.rows }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: What the change touches, and how much of the matrix runs
+        id: scope
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          QUEUE_BASE: ${{ github.event.merge_group.base_sha }}
+          PUSH_BASE: ${{ github.event.before }}
+          FULL_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') }}
+        run: |
+          case "$EVENT" in
+            pull_request) BASE="$PR_BASE" ;;
+            merge_group) BASE="$QUEUE_BASE" ;;
+            *) BASE="$PUSH_BASE" ;;
+          esac
+          # Prose only: nothing a build, a test or a package reads. consumer-skills/, scaffold/
+          # and templates/ are compiled into ge, so their Markdown is code.
+          PROSE='^(docs/|\.agents/|\.changes/|porting/.*\.md$|[^/]*\.md$|LICENSE$)'
+          if CHANGED=$(git diff --name-only "$BASE" HEAD 2> /dev/null); then
+            CODE=$(echo "$CHANGED" | grep -Evq "$PROSE" && echo true || echo false)
+          else
+            CODE=true  # no base to diff against (a new branch, a forced push): run everything
+          fi
+          FULL=false
+          if [ "$EVENT" = merge_group ] || [ "$FULL_LABEL" = true ]; then FULL=true; fi
+          ROW_DEBUG='{"os":"ubuntu-24.04","cxx":"g++","preset":"debug"}'
+          ROWS_REST='{"os":"ubuntu-24.04","cxx":"g++","preset":"release"},{"os":"ubuntu-24.04","cxx":"clang++","preset":"release"},{"os":"ubuntu-24.04-arm","cxx":"g++","preset":"release"},{"os":"macos-15","cxx":"clang++","preset":"release"}'
+          if [ "$FULL" = true ] || [ "$EVENT" = push ]; then
+            ROWS="[$ROW_DEBUG,$ROWS_REST]"
+          else
+            ROWS="[$ROW_DEBUG]"
+          fi
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          echo "full=$FULL" >> "$GITHUB_OUTPUT"
+          echo "rows=$ROWS" >> "$GITHUB_OUTPUT"
+          echo "event $EVENT, code $CODE, full $FULL, rows $ROWS"
       - run: make fmt-check
-
-  agents:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v5
       # tools/agents-index.mjs and tools/skill-lessons.mjs: plain Node, no npm install.
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - run: make agents-check
       - run: make libm-check
+      # tools/release.py's tests, and every fragment valid (docs/publishing.md).
+      - run: make release-check
+      - name: A shipped change carries a fragment
+        if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'no-changelog')
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          CHANGED=$(git diff --name-only "$BASE"...HEAD)
+          SHIPPED=$(echo "$CHANGED" | grep -E '^(engine/|cmake/|consumer-skills/|scaffold/|templates/|CMakeLists\.txt$)' || true)
+          FRAGMENTS=$(git diff --name-only --diff-filter=A "$BASE"...HEAD -- '.changes/unreleased/*.md' | grep -v README.md || true)
+          if [ -n "$SHIPPED" ] && [ -z "$FRAGMENTS" ]; then
+            echo "::error::This PR changes what a release ships but adds no .changes/unreleased/ fragment."
+            echo "Add one (see .changes/unreleased/README.md), or label the PR no-changelog if no consumer can notice."
+            echo "$SHIPPED"
+            exit 1
+          fi
 
   test:
     name: test (${{ matrix.os }}, ${{ matrix.cxx }}, ${{ matrix.preset }})
+    needs: gates
+    if: needs.gates.outputs.code == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - { os: ubuntu-24.04, cxx: g++, preset: debug }
-          - { os: ubuntu-24.04, cxx: g++, preset: release }
-          - { os: ubuntu-24.04, cxx: clang++, preset: release }
-          - { os: ubuntu-24.04-arm, cxx: g++, preset: release }
-          - { os: macos-15, cxx: clang++, preset: release }
+        include: ${{ fromJSON(needs.gates.outputs.rows) }}
     env:
       CXX: ${{ matrix.cxx }}
       CMAKE_C_COMPILER_LAUNCHER: ccache
@@ -110,6 +169,8 @@ jobs:
         run: ctest --preset ${{ matrix.preset }}
 
   windows:
+    needs: gates
+    if: needs.gates.outputs.code == 'true' && needs.gates.outputs.full == 'true'
     runs-on: windows-2025
     steps:
       - uses: actions/checkout@v5
@@ -122,11 +183,12 @@ jobs:
       - run: cmake --build --preset release
       - run: ctest --preset release
 
-  # clang-tidy's bug-finding checks (.clang-tidy), in parallel. On a pull request or a queued
-  # merge only the files the change can reach: each changed .cpp and each .cpp that includes a
-  # changed header (tools/lint.sh); a change to the lint's rules, and every push to main, lints
-  # them all.
+  # clang-tidy's bug-finding checks (.clang-tidy), in parallel, over the files the change can
+  # reach: each changed .cpp and each .cpp that includes a changed header (tools/lint.sh); a
+  # change to the lint's rules lints them all. The queue already linted what lands on main.
   lint:
+    needs: gates
+    if: needs.gates.outputs.code == 'true' && github.event_name != 'push'
     runs-on: ubuntu-24.04
     env:
       CXX: g++
@@ -158,8 +220,25 @@ jobs:
       - name: make lint (merge queue; what the queued change reaches)
         if: github.event_name == 'merge_group'
         run: make lint PRESET=release BASE=${{ github.event.merge_group.base_sha }}
-      - name: make lint (every file)
-        if: github.event_name == 'push'
-        run: make lint PRESET=release
       # Every embedded WGSL shader through Tint, offline (no GPU needed).
       - run: make shaders-check PRESET=release
+
+  # The installed package consumed on every platform, and ge growing a new repo: the queue's.
+  packaging:
+    needs: gates
+    if: needs.gates.outputs.code == 'true' && needs.gates.outputs.full == 'true'
+    uses: ./.github/workflows/packaging.yml
+
+  # The one check the ruleset requires: every job above passed, or was skipped by the rules.
+  required:
+    needs: [gates, test, windows, lint, packaging]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "results: $RESULTS"
+          for r in $RESULTS; do
+            case "$r" in success | skipped) ;; *) echo "::error::a job ended $r"; exit 1 ;; esac
+          done
