@@ -64,7 +64,7 @@ const ge::assets::LoadResult& skier_model() {
 std::vector<r::MeshSource> figure_meshes(const ge::assets::Model& model) {
   std::vector<r::MeshSource> out(kMaxFigures);
   for (r::MeshSource& m : out) {
-    m.lods = {r::skinned_source(model.meshes[0], ge::skier::pose_reach())};
+    m.lods = {r::skinned_source(model.meshes[skier_lods(model)[0]], ge::skier::pose_reach())};
   }
   return out;
 }
@@ -99,9 +99,25 @@ r::Instance figure_instance(const ge::skier::SkierState& skier,
   return in;
 }
 
+std::vector<uint32_t> skier_lods(const ge::assets::Model& model) {
+  std::vector<uint32_t> out;
+  for (const char* name : {"skier", "skier.lod1", "skier.lod2"}) {
+    for (size_t k = 0; k < model.meshes.size(); ++k) {
+      if (model.meshes[k].name == name) out.push_back(static_cast<uint32_t>(k));
+    }
+  }
+  if (out.empty()) out.push_back(0);
+  return out;
+}
+
 std::vector<r::MeshSource> crowd_meshes(const ge::assets::Model& model) {
   std::vector<r::MeshSource> out(1);
-  out[0].lods = {r::palette_source(model.meshes[0], ge::skier::pose_reach())};
+  const std::vector<uint32_t> lods = skier_lods(model);
+  for (size_t n = 0; n < lods.size(); ++n) {
+    r::LodSource lod = r::palette_source(model.meshes[lods[n]], ge::skier::pose_reach());
+    if (n < std::size(kSkierLodPx)) lod.min_px = kSkierLodPx[n];
+    out[0].lods.push_back(std::move(lod));
+  }
   return out;
 }
 
