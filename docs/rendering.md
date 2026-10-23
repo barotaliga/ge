@@ -638,14 +638,24 @@ and a storm's 2. The cloud volume itself is M8f3 (below).
 - THE SHADOW on everything lit (`cloud_shadow` in `wgsl/frame.wgsl`, read by `sun_light(y, xz)`)
   is each layer's column where the beam toward the key light crosses its middle, taking
   exp(−column × the layer's shadow depth) off the light: each place its own share of the sun.
-- THE PASS ("clouds", after the sky) is a full-screen triangle at the render resolution marching
-  each pixel's ray, nearest layer first, up to what the depth target holds (28 steps through a
-  heap, 10 through a sheet, a new offset every frame for TAA to resolve), laid over the HDR
-  target premultiplied. With no layer it is an empty pass. The quality ladder takes a share of
-  the steps (`Clouds::steps`, never under four) or draws no layer at all (§ The quality ladder);
-  the quarter-resolution march with reprojection (§ Sky, atmosphere and clouds) is still to come: on
-  lavapipe at 1280 × 720 the full march costs 49 to 68 ms against an empty pass's 0.1, a CPU
-  raster's number that only says the march is the frame's heaviest pass when the sky is broken.
+- THE PASSES ("clouds.march" and "clouds", after the sky) march each ray, nearest layer first,
+  up to what the depth target holds (28 steps through a heap, 10 through a sheet, a new offset
+  every frame for TAA to resolve), and lay the cloud over the HDR target premultiplied. By
+  default the march runs at A QUARTER OF THE PIXELS (`Clouds::quarter`): a full-screen triangle
+  over a half-size target marches each two by two's ray to the FARTHEST of its four depths, so
+  the cloud behind a ridge reaches the ridge's edge, and keeps the distance it marched to beside
+  it (R32F). Then each pixel of the frame takes the four half-size pixels round it, each weighted
+  by its share of the bilinear footprint and by exp(−40 × how far its distance misses the
+  pixel's own, as a share of the nearer); a pixel that none of the four matches within 10 %
+  (the near side of an edge) marches its own ray. Marching every pixel (the quality ladder's
+  top) draws "clouds" alone and leaves "clouds.march" empty; with no layer both are empty. The
+  ladder also takes a share of the steps (`Clouds::steps`, never under four) or draws no layer
+  at all (§ The quality ladder). The `weather` lab holds the quarter to every pixel's march:
+  under 1 % of the picture may differ by more than 8 levels of luma (`<sky>.quarter-misses`).
+  On lavapipe at 1280 × 720, from seed 38's start looking up into a flurry's sky, every pixel's
+  march costs 72 ms and the quarter's 36 (28 at half the steps): a CPU raster's numbers, where
+  a full-screen pass costs about 13 ms whatever it does, so a GPU's saving is nearer the
+  pixels' four to one. Not done: the march spread over frames with reprojection.
 
 What the mountain's broken skies stand is `plugins/mountain/app/cloud_field.hpp`: FAIR heaps at
 1.5 to 2 km over the valley floor and a few ice streaks at 8 km, FLURRIES' taller heaps under a
@@ -829,7 +839,15 @@ lift's carrier or up a lift unseen is drawn at a scale of nought, which the cull
 amateurs nearest the eye cast into the figures' atlas, a tile each after the racers'; each tile
 culls the crowd by its own box, so the atlas costs the figures near the tiles, not the crowd
 times the tiles (on the software adapter, 2 ms of `shadows.figures` with one racer, 12 ms with
-fifteen amateurs; drawing every figure into every tile had cost 385 ms). The `crowd-look` lab
+fifteen amateurs; drawing every figure into every tile had cost 385 ms). The crowd draws the
+model at three **levels of detail** (`scene.hpp`'s `skier_lods`: the meshes `skier`,
+`skier.lod1` and `skier.lod2` the builder makes off the same rig, 1808, 698 and 344 triangles)
+by its radius on screen (`kSkierLodPx`: LOD 0 down to 40 px, LOD 1 to 16 px), the heights the
+`model-views` lab's `lods` sheet shows each level keeping its silhouette at; the far crowd's
+vertex stage, the most of its cost, fell from about 22 ms to 9 ms of `instances` on the software
+adapter (crowd-look, three runs each, the medians). An atlas tile's casters pick their LOD at a
+quarter of the tile's texels a metre (`ShadowSettings::figure_lod_share`), since a shadow needs
+the silhouette, not the folds. The `crowd-look` lab
 films a lift's queue, a busy run, a group and one of them down at `--hour` (11: the sun on the
 runs), each with the crowd and without.
 
@@ -852,16 +870,19 @@ runs), each with the crowd and without.
 The picture's settings are one table of ROWS in the game (Fall Line's:
 `games/fall_line/app/ladder.hpp`), each a ladder of STOPS, cheapest first. A stop maps to the
 frame's parameters (`FrameOptions`: the render scale, the shadow maps' size, the trail maps'
-texels, the flakes, the cloud march's share of its steps), never to a code path. Each row is its
+texels, the flakes, the cloud march's share of its steps and whether it marches a quarter of the
+pixels), never to a code path of its own. Each row is its
 own bill, because a machine can be short of pixels and rich in passes, or the other way round.
 
 - **The price table.** Every stop carries a COST, the ms it adds to a frame over its row's
   cheapest on the table's reference machine, and a WORTH, what it adds to the look on one
   0–100 scale for every row (a judgement, argued beside the row in `ladder.cpp`). The `ladder`
   lab's `--price` fills the costs: the top picture, every row lowered alone to each of its stops,
-  and the floor (every row at its cheapest), each timed from the chase camera under a flurry
-  (the dearest sky: heaps under a sheet, and the fall). On a software adapter each picture is
-  timed in rounds, keeping its least median.
+  and the floor (every row at its cheapest), each timed under a flurry (the dearest sky: heaps
+  under a sheet, and the fall) from seed 38's start looking 15 degrees up, so the sky fills the
+  top of the frame and every row draws something (`--view=chase` times the camera behind him,
+  where the clouds' march is a sliver of the frame). On a software adapter each picture is timed
+  in rounds, keeping its least median.
 - **The fit** (`render/ladder.hpp`, generic). `fit_ladder` takes the picture of most worth whose
   cost fits the budget over the floor: a knapsack with a choice in each row, solved exactly in
   hundredths of a millisecond. A greedy walk would hide a dear stop that matters behind a cheap
@@ -878,7 +899,7 @@ own bill, because a machine can be short of pixels and rich in passes, or the ot
 The table's costs today are the software adapter's (lavapipe at 1280 × 720), whose ratios are a
 CPU raster's: the reference machine's prices (the Mac, § Where it is developed) replace them.
 What the ladder does not have yet: a terrain reach row (it needs the mist that hides a shorter
-view), the cloud's quarter-resolution march with reprojection, and changing a stop without
+view), the cloud's march spread over frames with reprojection, and changing a stop without
 making the frame again.
 
 ## Measurement
