@@ -54,6 +54,7 @@ void stage_body(Water::Slot& slot, const water::Body& body) {
   put(b.kd, o.kd);
   put(b.deep, o.deep);
   put(b.emission, o.emission);
+  put(slot.veil, o.veil);
 }
 
 void upload_waves(gpu::Device& device, Water::Slot& slot, const water::Body& body) {
@@ -242,9 +243,14 @@ void set_water_body(gpu::Device& device, Water& water, int index, const water::B
 }
 
 void prepare_water(gpu::Device& device, Water& water, const FrameView& view) {
+  water.eye_under = -1;
   for (Water::Slot& slot : water.bodies) {
     WaterGpuBody& b = slot.staged;
     slot.shown = !slot.hidden && view.eye[1] > b.info[0];
+    if (!slot.hidden && !slot.shown && view.eye[0] >= b.box[0] && view.eye[0] <= b.box[2] &&
+        view.eye[2] >= b.box[1] && view.eye[2] <= b.box[3] && water.eye_under < 0) {
+      water.eye_under = static_cast<int>(&slot - water.bodies.data());
+    }
     const int levels = static_cast<int>(b.grid[0]);
     const double half = kWaterGrid / 2.0;
     for (int i = 0; i < levels; ++i) {
@@ -263,9 +269,11 @@ void prepare_water(gpu::Device& device, Water& water, const FrameView& view) {
 void encode_water(const Water& water, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
                   wgpu::CommandEncoder& encoder, const FrameTargets& targets,
                   const wgpu::BindGroup& frame) {
-  // Nothing to draw: the rows run empty (no copy), so every later pass keeps its timing row.
-  if (std::none_of(water.bodies.begin(), water.bodies.end(),
-                   [](const Water::Slot& s) { return s.shown; })) {
+  // Nothing drawn and no eye under the water: the rows run empty (no copy), so every later pass
+  // keeps its timing row.
+  const bool drawn = std::any_of(water.bodies.begin(), water.bodies.end(),
+                                 [](const Water::Slot& s) { return s.shown; });
+  if (!drawn && water.eye_under < 0) {
     rec.compute(encoder, "water.copy").End();
     rec.compute(encoder, "water").End();
     return;

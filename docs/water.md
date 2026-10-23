@@ -382,7 +382,22 @@ never stretches), faster mid-stream; the waterfall's curtain along the sheet's p
 streaks running down it, mist and spray from the engine's particle pool, foam where it lands;
 splashes from the splash events; wakes.
 
-**Under water** (M24h): one `UnderwaterLook`, derived from the body's optics and open to
+**Built (M24h, `engine/render/underwater.hpp`).** When the eye is under a body's level and inside
+its box (`Water::eye_under`), the `water.under` pass redraws the frame from the water's copies:
+the scene fades by the body's beam attenuation into its veil (`Optics::veil`, lit by the day
+dimmed over the water above the eye), what stands under the surface lit by the day dimmed on its
+way down; the bare eye's blur by distance; a ray that meets the surface first sees the world above
+within Snell's window (48.6 degrees round straight up, measured 48.9 off the `gpu-underwater`
+lab's picture) and the water mirrored past it; the eye adapts to the dark (the picture lifted up to
+six times so the veil reaches `adapt`); the wobble and a flat tint. The four presets below are
+`underwater_look`'s; a game sets `Underwater::look` (Fall Line's frame owns one). The world above
+is seen through the window unbent: the screen holds only what the camera saw, and the low
+horizon a real window squeezes into its rim lies off it.
+
+Not built yet (M24h2): light shafts, caustics, suspended particles, the waterline split of a camera
+half in, the lens's drops on leaving the water.
+
+**Under water**, the plan: one `UnderwaterLook`, derived from the body's optics and open to
 every knob a game wants:
 
 | Knob | What it does |
@@ -486,8 +501,8 @@ never read back by the simulation.
 | `water-colour` | picture | M24e | Every look's swatches over depth and bed, in sun and shade, from above and below; visibility per look |
 | `flow` | picture | M24f | Dam break against the analytic solution, a basin emptying through a breach against Torricelli, a river to steady state, a waterfall's sheet; depth filmstrips; the volume held |
 | `gpu-water` | picture | M24g, M24g2, M24i | Named views: the calm mirror, a windy lake, the sea at several Beaufort forces, surf on a beach, a river, a waterfall, sunset glitter, night, rain; the distance-band diff |
-| `lake` | picture | M24g, M24l | Fall Line's own frame with a tarn on a seed: from the shore, from over it, into the sun, in a fresh wind, at the day's end |
-| `gpu-underwater` | picture | M24h | Every look's view round a scene under water, Snell's window, the caustics, the waterline split |
+| `lake` | picture | M24g, M24h, M24l | Fall Line's own frame with a tarn on a seed: from the shore, from over it, into the sun, in a fresh wind, at the day's end, under it and looking up from under it |
+| `gpu-underwater` | picture | M24h, M24h2 | Every look's view round a scene under water, the presets, Snell's window measured, a dive through the surface; then the caustics and the waterline split |
 | `water-lod` | picture | M24f, M24g | The tiers round an actor and round the camera as maps; a flow region coarsened and refined with its volume held; the picture diff per distance band across a slow fly-out (no band pops); the cost against distance |
 | `water-audition` | sound | M24j | Every water voice, metered and written as WAV |
 | `water-cost` | bench | M24f, M24g | The CPU's costs per step (sample, floats, the flow grid) and the GPU's per pass |

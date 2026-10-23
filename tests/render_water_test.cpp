@@ -19,6 +19,7 @@
 #include "render/post.hpp"
 #include "render/sky.hpp"
 #include "render/terrain.hpp"
+#include "render/underwater.hpp"
 #include "render/water.hpp"
 #include "water/world.hpp"
 #include "wind/field.hpp"
@@ -37,6 +38,20 @@ gw::World sea(double wind) {
 }
 
 }  // namespace
+
+TEST(the_underwater_presets_are_named_and_differ_where_they_should) {
+  r::UnderwaterLook open, mask, murky, classic, kept;
+  CHECK(r::underwater_look("eyes-open", open));
+  CHECK(r::underwater_look("mask", mask));
+  CHECK(r::underwater_look("murky", murky));
+  CHECK(r::underwater_look("classic", classic));
+  kept.fog = 7;
+  CHECK(!r::underwater_look("no-such-look", kept));
+  CHECK(kept.fog == 7);                                // an unknown name leaves it alone
+  CHECK(mask.blur < open.blur && mask.magnify > 1.3);  // a mask: sharp and a third larger
+  CHECK(murky.fog > open.fog);                         // murky: the view closes in
+  CHECK(classic.window == 0 && classic.tint_mix > 0);  // classic: no window, a flat tint
+}
 
 TEST(the_detail_band_carries_the_spectrum_past_the_simulations_waves) {
   double last = 0;

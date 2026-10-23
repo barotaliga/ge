@@ -1,7 +1,8 @@
 // LAB `lake`: water in Fall Line's own frame (render/water.hpp's passes in
 // games/fall_line/app/frame.cpp's table): a tarn laid on a seed's map, drawn with everything else
 // the game draws (the snow, the trails, the forest, the sky, the cloud, TAA-U, the bloom, the
-// grade), from the shore, from over it, into the sun, in a fresh wind and at the day's end.
+// grade), from the shore, from over it, into the sun, in a fresh wind, at the day's end, and
+// from under its surface (render/underwater.hpp).
 //
 // THE TARN is the lab's own until the generator lays lakes (docs/goals.md M24l): the flattest
 // open ground of the map's lower half, away from the piste, is dug into a bowl `--radius` m
@@ -37,6 +38,7 @@
 #include "lab/raster.hpp"
 #include "mountain/air/air.hpp"
 #include "mountain/mapgen/generate.hpp"
+#include "water/optics.hpp"
 #include "water/world.hpp"
 
 namespace {
@@ -171,7 +173,7 @@ double bed_height(const void* context, double x, double z) {
   return ground(*static_cast<const mg::Level*>(context), x, z);
 }
 
-gw::World tarn_world(const mg::Level& level, const Tarn& t, double wind) {
+gw::World tarn_world(const mg::Level& level, const Tarn& t, double wind, const std::string& look) {
   ge::wind::Field field = ge::mountain::air::field_of(level);
   if (wind >= 0) field.mean = wind;
   gw::World world(field);
@@ -180,7 +182,7 @@ gw::World tarn_world(const mg::Level& level, const Tarn& t, double wind) {
     const double a = 2 * kPi * i / 64;
     shore.push_back({t.x + t.radius * lm::cos(a), t.z + t.radius * lm::sin(a)});
   }
-  gw::add_lake(world, shore, t.level, {.look = "glacial", .temperature = 4}, {bed_height, &level});
+  gw::add_lake(world, shore, t.level, {.look = look, .temperature = 4}, {bed_height, &level});
   return world;
 }
 
@@ -198,9 +200,11 @@ double changed(const ge::lab::Picture& a, const ge::lab::Picture& b) {
 
 struct Shot {
   std::string id, title, caption, look_for;
-  double hour;       // the day's hour (negative: the map's own)
-  double wind;       // m/s (negative: the map's own)
-  int stand;         // 0 the shore facing the summit, 1 high over it, 2 the shore facing the sun
+  double hour;  // the day's hour (negative: the map's own)
+  double wind;  // m/s (negative: the map's own)
+  // 0 the shore facing the summit, 1 high over it, 2 the shore facing the sun, 3 under the
+  // surface off the near shore, 4 under the middle looking up.
+  int stand;
   double min_share;  // the water's least share of the picture
 };
 
@@ -210,6 +214,12 @@ void run(ge::lab::Lab& lab) {
   const int width = static_cast<int>(lab.arg_num("width"));
   const int height = static_cast<int>(lab.arg_num("height"));
   const int frames = static_cast<int>(lab.arg_num("frames"));
+  const std::string& look = lab.arg("look");
+  if (!gw::find_look(look)) {
+    lab.fail("no water look `" + look + "`",
+             "Pass --look= one of water/optics.hpp's looks (nordic-clear, glacial ...).");
+    return;
+  }
   if (radius < 20 || radius > 400 || width < 16 || height < 16 || width > 4096 || height > 4096 ||
       frames < 1 || frames > 120) {
     lab.fail("--radius must be 20..400 m, --width and --height 16..4096, --frames 1..120",
@@ -240,7 +250,7 @@ void run(ge::lab::Lab& lab) {
 
   const std::string seed_s = std::to_string(static_cast<long long>(seed));
   const std::string where = "a tarn " + fixed(2 * radius, 0) + " m across dug into seed " + seed_s +
-                            "'s lower slopes (glacial water, 4 C)";
+                            "'s lower slopes (" + look + " water, 4 C)";
   const std::vector<Shot> shots = {
       {"shore", "FROM THE SHORE",
        "From 1.7 m over the near shore of " + where +
@@ -269,6 +279,17 @@ void run(ge::lab::Lab& lab) {
        "the warm low light on the snow, the water darker and bluer, the mirror of the lit "
        "slopes",
        16.5, -1, 0, 0.1},
+      {"under", "UNDER THE SURFACE",
+       "From 2 m under the tarn's surface over the near shelf, looking out across "
+       "its dug bed.",
+       "the water's own colour closing in by its visibility, the shelving bed "
+       "fading into it, the surface's mirror overhead",
+       -1, -1, 3, 0.3},
+      {"under-up", "THE SURFACE FROM BELOW",
+       "From 2.5 m down in the middle of the tarn, looking up toward the far shore.",
+       "Snell's window: the sky and the snowy slopes seen through a bright circle, the "
+       "water mirrored past it",
+       -1, -1, 4, 0.3},
   };
 
   auto shot_of = [&](const Shot& s) {
@@ -328,7 +349,7 @@ void run(ge::lab::Lab& lab) {
   };
   for (const Shot& s : shots) {
     if (s.wind != wind_now) {
-      const gw::World world = tarn_world(level, tarn, s.wind);
+      const gw::World world = tarn_world(level, tarn, s.wind, look);
       if (body < 0) {
         body = fall_line::app::add_water(*device, *frame, world.bodies[0]);
       } else {
@@ -346,12 +367,24 @@ void run(ge::lab::Lab& lab) {
     } else if (s.stand == 2) {
       toward = v.sun_azimuth;
     }
+    if (s.stand == 3) {
+      back = tarn.radius * 0.6;
+    } else if (s.stand == 4) {
+      back = 0;
+    }
     const double ex = tarn.x - back * lm::sin(toward), ez = tarn.z - back * lm::cos(toward);
     v.eye[0] = ex;
     v.eye[2] = ez;
     v.eye[1] = std::max(ground(level, ex, ez), tarn.level) + over;
     v.heading = toward;
     v.pitch = s.stand == 1 ? -lm::atan2(v.eye[1] - tarn.level, back) * 0.75 : -0.06;
+    if (s.stand == 3) {
+      v.eye[1] = tarn.level - 2;
+      v.pitch = -0.1;
+    } else if (s.stand == 4) {
+      v.eye[1] = tarn.level - 2.5;
+      v.pitch = 1.0;
+    }
     const ge::lab::Picture pic = draw(v);
     frame->water.bodies[static_cast<size_t>(body)].hidden = true;
     const ge::lab::Picture dry = draw(v);
@@ -392,6 +425,7 @@ const ge::lab::LabSpec kSpec{
     {
         {"seed", "38", "the map's seed"},
         {"radius", "90", "the tarn's radius, m"},
+        {"look", "adriatic", "the water's look (water/optics.hpp): a clear tarn"},
         {"frames", "8", "frames drawn, at 60 a second, before each shot (TAA-U settles)"},
         {"width", "640", "the picture's width, px"},
         {"height", "360", "the picture's height, px"},

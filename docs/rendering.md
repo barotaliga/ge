@@ -213,7 +213,9 @@ The order, with what each stage is for:
 7. **Water** (`render/water.hpp`, `docs/water.md` § Drawn): the opaque frame's colour and
    depth copied (`water.copy`), then every body drawn over it (`water`), reading the copies
    for what lies under it and what it mirrors, testing and writing the depth, so what follows
-   sits in front of or behind it; both rows run empty with no water in view.
+   sits in front of or behind it; both rows run empty with no water in view. With the eye
+   under a body, `water.under` redraws the picture as seen through the water
+   (`render/underwater.hpp`).
 8. **Transparent:** particles and glows, softened against the depth buffer.
 9. **Temporal resolve:** anti-aliasing and upscaling to the output size (§ Anti-aliasing).
 10. **Post:** one compute pass for exposure, bloom, the colour grade, tone mapping, dither

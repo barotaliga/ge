@@ -162,7 +162,8 @@ if(GE_GPU)
     engine/render/horizon.wgsl engine/render/hiz.wgsl engine/render/taa.wgsl engine/render/post.wgsl
     engine/render/instances.wgsl engine/render/instances_cull.wgsl engine/render/bloom.wgsl
     engine/render/skinning.wgsl engine/render/particles.wgsl engine/render/particles_sim.wgsl engine/render/snowfall.wgsl engine/render/snowfall_sim.wgsl
-    engine/render/clouds.wgsl engine/render/water.wgsl engine/render/water_copy.wgsl)
+    engine/render/clouds.wgsl engine/render/water.wgsl engine/render/water_copy.wgsl
+    engine/render/underwater.wgsl)
 endif()
 
 # The network (engine/net, docs/networking.md): addresses, the wire, the OS's UDP and TCP sockets

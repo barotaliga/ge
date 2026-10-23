@@ -16,6 +16,7 @@ forest f1881cb20efe0144
 frame-pace c5058023a52812c3
 free 5c27ee681326fd32
 gpu-capture 8b5d5e3b7be5a4fc
+gpu-underwater eb4871f6a59d741e
 gpu-water f43c11858a5a6d30
 gunfire 00ecbaf362018c86
 heli edc6a93febc6f52d
@@ -25,7 +26,7 @@ input-ffb 565464637bf28b86
 input-session dcb313b33f4ddf37
 input-shape e2284bbd066830af
 junctions 036999ca677e12e6
-lake bdba0ddf86c59bce
+lake cd671548fc72e5d6
 level 4fbff3da7a82c4aa
 lift-ride a374f35eb85cc161
 mapgen-cost 3baf51b6907817f3

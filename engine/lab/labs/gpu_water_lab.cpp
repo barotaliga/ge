@@ -28,6 +28,7 @@
 #include "gpu/pipeline.hpp"
 #include "gpu/target.hpp"
 #include "lab/lab.hpp"
+#include "lab/labs/water_scene.hpp"
 #include "lab/raster.hpp"
 #include "render/frame.hpp"
 #include "render/post.hpp"
@@ -43,14 +44,14 @@ namespace gl = ge::lab;
 namespace gr = ge::render;
 namespace gw = ge::water;
 namespace lm = ge::core::libm;
+using ge::lab::water_scene::draw;
+using ge::lab::water_scene::fixed;
+using ge::lab::water_scene::make_scene;
+using ge::lab::water_scene::paste;
+using ge::lab::water_scene::Scene;
+using ge::lab::water_scene::view_at;
 using gl::Det;
 constexpr double kPi = 3.14159265358979323846;
-
-std::string fixed(double v, int digits) {
-  char b[32];
-  std::snprintf(b, sizeof b, "%.*f", digits, v);
-  return b;
-}
 
 // THE LAKE: a bowl 1 km across, its surface at 100 m, 25 m deep in the middle and the shore at
 // 320 m from it; the hills rising beyond.
@@ -66,117 +67,6 @@ constexpr double kBeach = 7600;
 float sea_ground(double x, double z) {
   const double rise = z < kBeach ? -40 : -40 + (z - kBeach) * 0.12;
   return static_cast<float>(rise + 1.5 * lm::sin(x / 29) * lm::cos(z / 41));
-}
-
-struct Ground {
-  ge::core::Heightfield field;
-  std::vector<uint8_t> albedo;
-};
-
-Ground make_ground(float (*height)(double, double), double level, double cell) {
-  Ground g;
-  g.field = ge::core::create_heightfield(0, 0, cell, 257, 257);
-  g.albedo.resize(size_t{257} * 257 * 4);
-  for (int r = 0; r < 257; ++r) {
-    for (int c = 0; c < 257; ++c) {
-      const size_t i = static_cast<size_t>(r) * 257 + static_cast<size_t>(c);
-      const float h = height(c * cell, r * cell);
-      g.field.data[i] = h;
-      // Sand to two metres over the water, grass above it.
-      const bool sand = h < level + 2;
-      const uint8_t px[4] = {static_cast<uint8_t>(sand ? 196 : 92),
-                             static_cast<uint8_t>(sand ? 182 : 118),
-                             static_cast<uint8_t>(sand ? 150 : 64), 255};
-      std::memcpy(&g.albedo[i * 4], px, 4);
-    }
-  }
-  return g;
-}
-
-struct Scene {
-  ge::gpu::PipelineSet pipelines;
-  gr::FrameTargets targets;
-  wgpu::Buffer uniforms;
-  gr::FrameUniforms staged{};
-  wgpu::BindGroupLayout layout;
-  wgpu::BindGroup frame, post_group;
-  gr::Sky sky;
-  gr::Terrain terrain;
-  gr::Water water;
-  gr::Post post;
-  gr::FrameRecorder rec;
-  Ground ground;
-  ge::gpu::Target out;
-  uint32_t w = 0, h = 0;
-};
-
-// A scene on a device of its own, so its pipelines are all made before that device's load ends.
-bool make_scene(ge::gpu::Device& d, Scene& s, float (*height)(double, double), double level,
-                double cell, uint32_t w, uint32_t h) {
-  s.w = w;
-  s.h = h;
-  s.ground = make_ground(height, level, cell);
-  s.targets = gr::create_targets(d, "gpu-water", w, h);
-  s.uniforms = gr::make_buffer(d, "gpu-water.uniforms", sizeof(gr::FrameUniforms),
-                               wgpu::BufferUsage::Uniform);
-  s.layout = gr::frame_layout(d);
-  gr::create_sky(d, s.pipelines, s.sky, s.uniforms, s.layout);
-  gr::TerrainSource src;
-  src.height = &s.ground.field;
-  src.albedo = &s.ground.albedo;
-  src.base_spacing = 1.0;
-  src.levels = 7;
-  gr::create_terrain(d, s.pipelines, s.terrain, src, s.layout);
-  gr::create_water(d, s.pipelines, s.water, s.layout);
-  gr::create_post(d, s.pipelines, s.post, s.layout, wgpu::TextureFormat::RGBA8Unorm);
-  if (!s.pipelines.finish(d)) return false;
-  ge::gpu::end_load(d);
-  s.frame = gr::frame_group(d, s.layout, s.uniforms, s.sky);
-  gr::create_water_targets(d, s.water, s.targets);
-  s.post_group = gr::post_group(d, s.post, s.targets.hdr_view);
-  s.rec.init(d, "gpu-water.timer", 9);
-  s.out = ge::gpu::create_target(d, "gpu-water.final", w, h);
-  return true;
-}
-
-gl::Picture draw(ge::gpu::Device& d, Scene& s, const gr::FrameView& v, bool water = true) {
-  s.rec.begin_frame(d);
-  gr::fill_uniforms(s.staged, v, s.targets.width, s.targets.height);
-  d.queue.WriteBuffer(s.uniforms, 0, &s.staged, sizeof s.staged);
-  gr::prepare_sky(s.sky, v);
-  gr::prepare_terrain(d, s.terrain, v);
-  gr::prepare_water(d, s.water, v);
-  wgpu::CommandEncoder e = d.device.CreateCommandEncoder();
-  gr::encode_sky_tables(s.sky, s.pipelines, s.rec, e);
-  gr::encode_terrain_cull(s.terrain, s.pipelines, s.rec, e, s.frame);
-  gr::encode_terrain_horizon(s.terrain, s.pipelines, s.rec, e);
-  gr::encode_terrain_depth(s.terrain, s.pipelines, s.rec, e, s.targets, s.frame);
-  gr::encode_terrain(s.terrain, s.pipelines, s.rec, e, s.targets, s.frame);
-  gr::encode_sky(s.sky, s.pipelines, s.rec, e, s.targets, s.frame);
-  if (water) gr::encode_water(s.water, s.pipelines, s.rec, e, s.targets, s.frame);
-  gr::encode_post(s.post, s.pipelines, s.rec, e, s.frame, s.post_group, s.out.view);
-  s.rec.end_frame(e);
-  wgpu::CommandBuffer c = e.Finish();
-  d.queue.Submit(1, &c);
-  s.rec.after_submit(d);
-  const ge::gpu::Image img = ge::gpu::read_now(d, s.out);
-  return gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba};
-}
-
-gr::FrameView view_at(double x, double y, double z, double heading, double pitch, double sun_el,
-                      double sun_az, double t) {
-  gr::FrameView v;
-  v.eye[0] = x;
-  v.eye[1] = y;
-  v.eye[2] = z;
-  v.heading = heading;
-  v.pitch = pitch;
-  v.fov_y = 0.9;
-  v.sun_elevation = sun_el;
-  v.sun_azimuth = sun_az;
-  v.altitude_m = 300;
-  v.time_s = t;
-  return v;
 }
 
 // A lake world under `wind` m/s from the west, in `look`.
@@ -213,16 +103,6 @@ double changed(const gl::Picture& a, const gl::Picture& b) {
     n += dmax > 6;
   }
   return static_cast<double>(n) * 4 / static_cast<double>(a.rgba.size());
-}
-
-void paste(gl::Picture& sheet, const gl::Picture& p, int ox, int oy) {
-  for (int y = 0; y < p.height; ++y) {
-    for (int x = 0; x < p.width; ++x) {
-      const size_t s = (static_cast<size_t>(y) * p.width + x) * 4;
-      const size_t t = (static_cast<size_t>(oy + y) * sheet.width + ox + x) * 4;
-      std::memcpy(&sheet.rgba[t], &p.rgba[s], 4);
-    }
-  }
 }
 
 // The height the GPU's vertex keeps: the components at least `shortest` m long, faded in to

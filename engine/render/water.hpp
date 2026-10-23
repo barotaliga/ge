@@ -88,10 +88,12 @@ struct Water {
     WaterDraw draw;
     wgpu::Buffer uniform, waves;
     wgpu::BindGroup group;
-    bool hidden = false;  // the caller's switch: not drawn (a lab's dry picture)
-    bool shown = true;    // this frame's: not hidden and seen from over its level
+    bool hidden = false;           // the caller's switch: not drawn (a lab's dry picture)
+    bool shown = true;             // this frame's: not hidden and seen from over its level
+    float veil[4] = {0, 0, 0, 0};  // the fog a view under it looks through (water::Optics)
   };
   std::vector<Slot> bodies;
+  int eye_under = -1;  // this frame's: the body the eye is under (render/underwater.hpp), or -1
 };
 
 // The pipelines into the manifest.
@@ -104,8 +106,8 @@ int add_water_body(gpu::Device& device, Water& water, const water::Body& body,
                    const WaterDraw& draw = {});
 // The body read again (a lake whose waves were laid again, a new look).
 void set_water_body(gpu::Device& device, Water& water, int index, const water::Body& body);
-// The levels round this frame's eye, uploaded; a body seen from under its level is skipped
-// (M24h draws it).
+// The levels round this frame's eye, uploaded; a body seen from under its level is not drawn:
+// the eye is under it (`Water::eye_under`, render/underwater.hpp's pass).
 void prepare_water(gpu::Device& device, Water& water, const FrameView& view);
 // "water.copy" and "water".
 void encode_water(const Water& water, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
