@@ -1,6 +1,6 @@
 ---
 name: assets
-description: "Use to add or change one of this game's MODELS (a rigged figure, a vehicle, a prop) built in headless Blender: the asset's directory and manifest (asset.txt), the builder script and the engine's ge_asset library it imports, the game data it is fed (GE_ASSET_DATA), ge asset build, list and check, the stamp that says what a model was built from, the size budget, and looking at the result with the models lab."
+description: "Use to add or change one of this game's MODELS (a rigged figure, a vehicle, a prop) built in headless Blender: the asset's directory and manifest (asset.txt), the builder script and the engine's ge_asset library it imports, the game data it is fed (GE_ASSET_DATA), ge asset build, list and check, the stamp that says what a model was built from, the size budget, and looking at the result with the models and model-views labs, beside reference photographs."
 ---
 
 # Built assets
@@ -50,7 +50,16 @@ ge asset list                    # every asset, its size against its budget, fre
 ge asset build <name>            # build, stamp and check one (no name: every stale one)
 ge asset check                   # what the assets_check test checks: stamps and budgets
 ge lab models -- --model=<home>/assets/<name>/<name>.glb   # LOOK at it: bind, skeleton, clips
+ge lab model-views -- --model=<home>/assets/<name>/<name>.glb   # turntable, ruler, close-ups, LODs
+ge lab model-views -- --model=<glb> --refs=<file>           # beside photographs of the real thing
 ```
+
+**Reference sheets** (`--refs`, keys in `lab/model_compare.hpp`) set each photograph, cropped, on
+the left of a row and the model on the right, posed and turned to match. `az=a..b:step` sweeps
+the angle until it lines up. Download the photographs to a scratch directory and convert them to
+PNG (`convert x.jpg PNG32:x.png`). Never commit, attach or publish a photograph or a sheet that
+holds one. Then change the builder, never the camera, until the model holds up beside them. A
+game's own lab poses the model its own way through `lab/model_sheets.hpp`.
 
 Blender comes from `--blender=<cmd>`, `GE_BLENDER`, `blender` on the PATH, or a python3 that can
 `import bpy`. With no Blender, `pip install bpy` into a directory and point `GE_BLENDER` at the
