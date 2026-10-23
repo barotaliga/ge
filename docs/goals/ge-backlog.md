@@ -21,7 +21,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge bench --ab=<option>` (one frame option against another in the same build, interleaved rounds, the least median kept: a quality ladder priced without a bespoke loop)
 - `ge profile --compare` (per zone and per pass, GPU and CPU deltas, outliers flagged)
 - `ge lab bench <lab> --runs=N --base=main` (each metric's median and spread over N runs, this tree beside the base)
-- `ge digest <lab> --why` (which table row and which columns moved when a digest did)
+- `ge digest <lab> --why` (which table row and which columns moved when a digest did; for a lab that hashes the command catalog or another input, name that input: "cli-loop moved because a command or flag was added")
 - `ge lab diff` for a lab's tables and `--stash`
 - `ge lab sheet <lab> --grid=2x2 [shots]` (shots on one image) and `--watch`
 - `ge profile --pass=<name>` (one pass's median and p95, before and after) and `--cost <shader-term>`
