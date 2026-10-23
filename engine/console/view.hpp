@@ -25,9 +25,10 @@
 //
 // ge:summary The drop-down console: scrollback by kind, the input line, history, / commands, chat
 // ge:keywords console view drop-down tilde backquote toggleconsole scrollback history input-line
-// ge:keywords chat say say_team say_prox proximity whisper message server event notify completion
-// tab con_height ge:keywords con_chat con_speed con_lines slash-command ge:skill console ge:test
-// tests/console_view_test.cpp
+// ge:keywords chat say say_team say_prox proximity whisper message server event notify
+// ge:keywords completion tab con_height con_chat con_speed con_lines slash-command
+// ge:skill console
+// ge:test tests/console_view_test.cpp
 #pragma once
 
 #include <cstdint>
