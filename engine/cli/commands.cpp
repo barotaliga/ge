@@ -117,6 +117,11 @@ constexpr FlagSpec kGoalsFlags[] = {
     {"base", "<ref>", "the roadmap rows are already taken on (default origin/main)"},
     {"fetch", "", "git fetch origin first, so every branch is current"},
     kRepo};
+constexpr FlagSpec kGoalsClaimFlags[] = {
+    {"under", "<row>",
+     "claim the next letter under this milestone (M17: M17e) instead of a number"},
+    {"base", "<ref>", "the roadmap rows are already taken on (default origin/main)"},
+    kRepo};
 constexpr FlagSpec kGoldenDiffFlags[] = {
     {"base", "<ref>", "the git ref to compare with (default HEAD)"}, kRepo};
 constexpr FlagSpec kGoldenWriteFlags[] = {
@@ -290,6 +295,10 @@ const CommandSpec kCommands[] = {
      "the roadmap rows taken on the base and on every remote branch, and the next free number "
      "(or, for a row such as M17, the next free letter under it)",
      kGoalsFlags, "ge goals free --fetch", "commit"},
+    {"goals claim", "<what>", 1, -1, "learn",
+     "the next free row reserved and pushed to this branch at once, then checked against every "
+     "branch: an earlier claim on the same row keeps it, and this one moves to the next",
+     kGoalsClaimFlags, "ge goals claim \"Lava and slime\"", "commit"},
     {"new", "<dir>", 1, 1, "create",
      "a game repo against this engine release: the simulation, a lab, a test, the skills",
      kNewFlags, "ge new snow-racer --game=racer", "ge"},

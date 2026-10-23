@@ -153,6 +153,13 @@ Outcome run(const Args& a) {
     return run_goals_free(fs::absolute(repo_of(a)), a.words.empty() ? "" : a.words[0],
                           base.empty() ? "origin/main" : base, has_flag(a, "fetch"));
   }
+  if (name == "goals claim") {
+    const std::string base = flag_value(a, "base");
+    std::string title;
+    for (const std::string& w : a.words) title += (title.empty() ? "" : " ") + w;
+    return run_goals_claim(fs::absolute(repo_of(a)), title, flag_value(a, "under"),
+                           base.empty() ? "origin/main" : base);
+  }
   if (name == "new") return cmd_new(a);
   if (name == "use") return run_use(repo_of(a), a.words[0]);
   if (name == "upgrade") {
