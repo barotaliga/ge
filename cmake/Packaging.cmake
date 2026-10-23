@@ -31,11 +31,11 @@ set(GE_INSTALL_CMAKEDIR "${CMAKE_INSTALL_LIBDIR}/cmake/gameengine2")
 
 # target -> export name (consumers see ge::<export name>)
 set(GE_EXPORTED_TARGETS ge_fp fp ge_isa isa ge_core core ge_audio audio ge_assets assets ge_ai ai
-  ge_net net ge_input input ge_lab lab ge_prof prof ge_prof_alloc prof_alloc ge_play play)
+  ge_net net ge_input input ge_charset charset ge_lab lab ge_prof prof ge_prof_alloc prof_alloc ge_play play)
 # Every plugin is published as ge::<plugin> (cmake/Plugins.cmake collects them), and its
 # presentation half as ge::<plugin>_app when every engine target it links is published here
 # (APP audio is; render, gpu and platform are not yet, below).
-set(GE_PUBLISHED_MODULES core audio assets ai input lab prof play)
+set(GE_PUBLISHED_MODULES core audio assets ai input charset lab prof play)
 get_property(_ge_plugins GLOBAL PROPERTY GE_PLUGIN_TARGETS)
 foreach(_target IN LISTS _ge_plugins)
   get_property(_app_modules TARGET ${_target} PROPERTY GE_APP_MODULES)
@@ -119,6 +119,11 @@ install(FILES
   "${PROJECT_BINARY_DIR}/gameengine2Config.cmake"
   "${PROJECT_BINARY_DIR}/gameengine2ConfigVersion.cmake"
   DESTINATION ${GE_INSTALL_CMAKEDIR})
+
+# The charsets' committed atlases and layers, for a game that loads the PNGs rather than
+# building them (engine/charset/charset.hpp's atlas_path, relative to this directory).
+install(DIRECTORY "${PROJECT_SOURCE_DIR}/engine/charset/atlases" "${PROJECT_SOURCE_DIR}/engine/charset/layers"
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/gameengine2/engine/charset)
 
 install(FILES "${PROJECT_SOURCE_DIR}/LICENSE" "${PROJECT_SOURCE_DIR}/CHANGELOG.md"
   DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/gameengine2 OPTIONAL)
