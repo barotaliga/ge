@@ -238,6 +238,8 @@ the row when the file moves.
 | `plugins/mountain/mapgen/versions.hpp` | `game5/engine/mapgen/versions.ts` | generatorTraits GENERATOR_VERSIONS CURRENT_GENERATOR_VERSION singlePiste |
 | `plugins/mountain/mapgen/weather.cpp` | `game5/engine/mapgen/weather.ts` | dealWeather windIn |
 | `plugins/mountain/mapgen/weather.hpp` | `game5/engine/mapgen/weather.ts` | dealWeather sunsetOf WEATHER_KINDS |
+| `plugins/paramotor/acro.cpp` | `game5/engine/game/para-acro.ts`, `para.ts` | keptWay riserRig riserLift biteRears reflexOf heldOf heldShare holdPitch countSwing fallenIn readLoad stepTangled (hangOnLines left to the renderer) |
+| `plugins/paramotor/acro.hpp` | `game5/engine/game/para-acro.ts`, `defs/para.ts` | PARA.acro |
 | `plugins/paramotor/air.cpp` | `game5/engine/game/para-air.ts` | paraAirAt eddyUp levelWind |
 | `plugins/paramotor/air.hpp` | `game5/engine/game/para-air.ts` | paraAirAt ParaAir |
 | `plugins/paramotor/para.cpp` | `game5/engine/game/para.ts`, `canopy.ts` | stepPara dropPara readyPara (the wing's polar, folds and lines restated) |

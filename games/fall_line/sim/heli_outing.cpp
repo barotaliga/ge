@@ -69,21 +69,39 @@ HeliOutingPilot::HeliOutingPilot(const GameState& state, int32_t run) : run_(run
   down_ = plan_line(level, run_chain(level, run), state.spec);
 }
 
-Controls HeliOutingPilot::operator()(const GameState& state, int32_t i) const {
+Controls HeliOutingPilot::operator()(const GameState& state, int32_t i, ge::ai::Why* why) const {
   const FreeHeli& m = state.heli;
   if (!m.rider) {
     if (m.taken == 0) {
+      if (why) {
+        why->decide("outing");
+        why->fact("taken", m.taken);
+        why->choose("board", "beside_it");
+      }
       Controls c;
       c.machine = true;
       return c;
     }
-    return bot_controls(state, i, down_);
+    if (why) {
+      why->decide("outing");
+      why->fact("taken", m.taken);
+      why->choose("ski_down", "dropped");
+    }
+    return bot_controls(state, i, down_, why);
   }
   const hc::HeliState& b = m.body;
   const double near = core::hypot(b.x - head_x_, b.z - head_z_);
   const double flat = core::hypot(b.vx, b.vz);
   const double over = b.y - state.level->ground_at(b.x, b.z);
-  if (near < kDropNear && flat < kDropSlow && over < kDropHigh) {
+  const bool drop = near < kDropNear && flat < kDropSlow && over < kDropHigh;
+  if (why) {
+    why->decide("outing");
+    why->fact("head_m", near);
+    why->fact("flat_ms", flat);
+    why->fact("skids_m", over);
+    why->choose(drop ? "drop" : "fly", drop ? "hovering_over_the_head" : "not_there_yet");
+  }
+  if (drop) {
     Controls c = heli_as_controls(m.flown);
     c.machine = true;
     return c;
@@ -93,7 +111,7 @@ Controls HeliOutingPilot::operator()(const GameState& state, int32_t i) const {
   aim.z = head_z_;
   aim.height = near < kApproach ? kDropOver : kCruiseOver;
   const hc::HeliLoad load{state.spec.mass, hc::kSeatX};
-  return heli_as_controls(hc::heli_pilot(b, heli_world(state), load, aim));
+  return heli_as_controls(hc::heli_pilot(b, heli_world(state), load, aim, why));
 }
 
 }  // namespace fall_line::sim

@@ -70,9 +70,12 @@ regex="^($(IFS='|'; echo "${tests[*]}"))\$"
 gate "tests (${#tests[@]})" ctest --test-dir "$build" -R "$regex" -j "$(nproc 2>/dev/null || sysctl -n hw.ncpu)" \
   --output-on-failure
 
-# The labs the change reaches, each against its committed digest, side by side.
+# The labs the change reaches, each against its committed digest, side by side. As in CTest's
+# labs_smoke (tests/CMakeLists.txt), the leak check is off: the software GPU driver's worker
+# threads keep allocations past exit, which LeakSanitizer would report as the lab's.
 labs_digests() {
-  printf '%s\n' "$@" | xargs -P "$(nproc 2>/dev/null || sysctl -n hw.ncpu)" -I{} \
+  printf '%s\n' "$@" | ASAN_OPTIONS="${ASAN_OPTIONS:+$ASAN_OPTIONS:}detect_leaks=0" \
+    xargs -P "$(nproc 2>/dev/null || sysctl -n hw.ncpu)" -I{} \
     "$build/labs" {} --smoke --quiet --check-digests=tests/labs_digests.txt
 }
 mapfile -t labs < <(tools/labs-reached.sh "$build" "$base")

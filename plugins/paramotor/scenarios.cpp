@@ -33,6 +33,16 @@ ParaControls full_throttle(double, const ParaState&) { return {1, 0, 0, 0}; }
 ParaControls right_turn(double, const ParaState&) { return {0.5, 0, 0.5, 0}; }
 // Both brakes held all the way down for 8 s, then let up: a stall, and the surge out of it.
 ParaControls stall(double t, const ParaState&) { return {0, t < 8 ? 1.0 : 0.0, 0, 0}; }
+// THE ACRO, the throttle shut: the bar all the way forward (a dive), all the way back (the rears),
+// or let go.
+ParaControls dive(double t, const ParaState&) { return {0, 0, 0, t < 4 ? 1.0 : 0.0}; }
+ParaControls swing_up(double t, const ParaState&) { return {0, 0, 0, t < 8 ? -1.0 : 0.0}; }
+ParaControls loop(double t, const ParaState&) {
+  return {0, 0, 0, t < 5 ? 1.0 : (t < 8 ? -1.0 : 0.0)};
+}
+ParaControls tangle(double t, const ParaState&) {
+  return {0, 0, 0, t < 2 ? 1.0 : (t < 6 ? -1.0 : 0.0)};
+}
 
 constexpr ParaScenario kScenarios[] = {
     {.id = "launch",
@@ -210,6 +220,87 @@ constexpr ParaScenario kScenarios[] = {
      .drop_at = 0.5,
      .hand = let_go,
      .aim = {}},
+    {.id = "dive",
+     .what = "400 m over the flat, the throttle shut and the bar held all the way forward for 4 s: "
+             "the wing pitches over into a dive, steep and past 85 km/h, and stays open",
+     .stage = ParaStage::strip,
+     .pitch = 0,
+     .x = kMid,
+     .z = 400,
+     .heading = 0,
+     .speed = 15,
+     .height = 400,
+     .wind_x = 0,
+     .wind_z = 0,
+     .seconds = 8,
+     .drop_at = -1,
+     .hand = dive,
+     .aim = {}},
+    {.id = "swing-up",
+     .what = "400 m over the flat at a cruise, the bar held all the way back for 8 s: without a "
+             "dive's speed the rears only slow and lift it; no loop and no tangle",
+     .stage = ParaStage::strip,
+     .pitch = 0,
+     .x = kMid,
+     .z = 400,
+     .heading = 0,
+     .speed = 15,
+     .height = 400,
+     .wind_x = 0,
+     .wind_z = 0,
+     .seconds = 12,
+     .drop_at = -1,
+     .hand = swing_up,
+     .aim = {}},
+    {.id = "loop",
+     .what = "400 m over the flat, a 5 s dive and then the bar all the way back for 3 s: the wing "
+             "swings up and round over him in a LOOP, pulling 5-12 g, and flies on once let go",
+     .stage = ParaStage::strip,
+     .pitch = 0,
+     .x = kMid,
+     .z = 400,
+     .heading = 0,
+     .speed = 15,
+     .height = 400,
+     .wind_x = 0,
+     .wind_z = 0,
+     .seconds = 14,
+     .drop_at = -1,
+     .hand = loop,
+     .aim = {}},
+    {.id = "tangle",
+     .what = "400 m over the flat, a 2 s dive and then the bar all the way back: without the "
+             "speed to go over, the lines go slack at the top and he FALLS INTO THE WING, and "
+             "falls tangled in it until the snow stops him",
+     .stage = ParaStage::strip,
+     .pitch = 0,
+     .x = kMid,
+     .z = 400,
+     .heading = 0,
+     .speed = 15,
+     .height = 400,
+     .wind_x = 0,
+     .wind_z = 0,
+     .seconds = 40,
+     .drop_at = -1,
+     .hand = tangle,
+     .aim = {}},
+    {.id = "cut-tangle",
+     .what = "the tangle, and the release pressed at 7 s: the bundle is cut away and falls free "
+             "of him",
+     .stage = ParaStage::strip,
+     .pitch = 0,
+     .x = kMid,
+     .z = 400,
+     .heading = 0,
+     .speed = 15,
+     .height = 400,
+     .wind_x = 0,
+     .wind_z = 0,
+     .seconds = 8,
+     .drop_at = 7,
+     .hand = tangle,
+     .aim = {}},
 };
 
 }  // namespace
@@ -285,6 +376,11 @@ ParaRun run_para_scenario(const ParaScenario& sc, double hz) {
     if (pe.launched && run.launch < 0) run.launch = t + dt;
     if (pe.took_off && run.take_off < 0) run.take_off = t + dt;
     if (pe.folded) run.folds++;
+    if (pe.looped) run.loops++;
+    if (pe.tangled && run.tangle < 0) run.tangle = t + dt;
+    if (p.mode == ParaMode::flown) run.top_g = num::max(run.top_g, p.g);
+    run.top_sink = num::max(run.top_sink, -s.vy);
+    if (p.mode == ParaMode::flown) run.top_airspeed = num::max(run.top_airspeed, p.airspeed);
     if (pe.touched) run.touches++;
     if (se.landed) run.landing_g = num::max(run.landing_g, se.landing_g);
     if (se.wiped_out) run.wiped_out = true;

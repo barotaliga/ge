@@ -16,9 +16,11 @@
 // - THE PACK is render/mesh.hpp's to the bit but for rounding a tie (the shader rounds half to
 //   even, the CPU half away from zero): `skin_packed` is the CPU twin the test holds the pass to,
 //   within one 16-bit step.
-// - What it does not carry yet: the motion of a vertex within the mesh. The family's motion
-//   vectors move with the instance, so a limb that swings between frames gets none of its own
-//   (TAA may smear it); the skinned figure's own row adds last frame's positions (M8e2).
+// - THE MOTION: before the pass writes a vertex it keeps the position it replaces as the
+//   vertex's last frame's (two words a vertex after the family's vertices, `lod_last` in
+//   render/instances.hpp), and the colour pass draws each vertex's motion from there, so a limb
+//   that swings between frames carries its own motion into TAA. `settle_skin` (a cut, a still,
+//   a new skier in the slot) makes the next pass's last frame its own pose: no motion.
 //
 // ge:summary GPU skinning: a compute pass poses a skinned mesh into an instance family's vertices
 // ge:keywords render skinning skinned-mesh compute bone-palette set_palette encode_skinning
@@ -51,6 +53,8 @@ LodSource skinned_source(const assets::Mesh& mesh, const assets::Box& reach, flo
 
 struct Skin {
   uint32_t vertices = 0, joints = 0;
+  uint32_t last = 0;   // the first word of its vertices' last positions in the family's buffer
+  bool settle = true;  // the next pass's last frame is its own pose (written by `set_palette`)
   wgpu::Buffer bind, palette, params;
   wgpu::BindGroup group;
   std::vector<float> rows;  // the palette as written: 12 floats a joint
@@ -62,8 +66,11 @@ void create_skin(gpu::Device& device, const SkinPipelines& sp, Skin& skin,
                  const InstanceFamily& family, uint32_t mesh_index, uint32_t lod,
                  const assets::Mesh& mesh, const assets::Box& reach, uint32_t joints);
 
-// This frame's palette (assets/pose.hpp's `skin_palette`).
+// This frame's palette (assets/pose.hpp's `skin_palette`), and whether the pass after it settles.
+// Call it every frame the skin is posed: a settle written stays until the next call.
 void set_palette(gpu::Device& device, Skin& skin, std::span<const assets::Affine> palette);
+// The next pose carries no motion from the last (a camera cut, a still, a slot given to another).
+void settle_skin(Skin& skin);
 
 // The pass ("skinning"): every skin's vertices posed into its family. Before the culls.
 void encode_skinning(std::span<Skin* const> skins, const SkinPipelines& sp,
@@ -73,6 +80,10 @@ void encode_skinning(std::span<Skin* const> skins, const SkinPipelines& sp,
 // Labs and tests (blocks): `count` packed vertices of `family` from vertex `first`.
 std::vector<uint32_t> read_family_vertices(gpu::Device& device, const InstanceFamily& family,
                                            uint32_t first, uint32_t count);
+
+// Labs and tests (blocks): the last frame's positions of `skin`'s vertices, two words each.
+std::vector<uint32_t> read_skin_last(gpu::Device& device, const InstanceFamily& family,
+                                     const Skin& skin);
 
 // The CPU twin: `mesh` skinned by `palette` and packed into `reach`, three words a vertex.
 std::vector<uint32_t> skin_packed(const assets::Mesh& mesh, std::span<const assets::Affine> palette,

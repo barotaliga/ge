@@ -16,6 +16,7 @@ struct Lod {
   box_min: vec4f,   // the packed positions' box; w: the least radius on screen it is drawn at
   box_size: vec4f,
   info: vec4u,      // first index, index count, first vertex, mesh
+  motion: vec4u,    // x: the first word of the last frame's positions (two a vertex), 0: none
 }
 
 // The instance streams, each `capacity` vec4s long, in this order.
