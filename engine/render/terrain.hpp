@@ -31,6 +31,7 @@
 // ge:summary The heightfield renderer: a GPU-culled geometry clipmap with morphed seams
 // ge:keywords render terrain heightfield clipmap geometry-clipmap tile morph seam sink lod
 // ge:keywords gpu-culling indirect-draw min-max-pyramid normals albedo vertex-pulling
+// ge:keywords wire-probe wireframe encode_terrain_wire
 // ge:keywords clipmap_levels create_terrain prepare_terrain encode_terrain_cull draw_terrain
 // ge:keywords ground-material terrain-material material-shader bind_terrain_material ground_at
 // ge:skill render
@@ -72,6 +73,7 @@ struct TerrainSource {
   int levels = 7;               // ≤ kMaxLevels
   HorizonSettings horizon;      // the ground's own shadow
   bool overdraw_probe = false;  // labs: build the pipelines encode_terrain_overdraw draws with
+  bool wire_probe = false;      // labs: build the pipeline and lines encode_terrain_wire draws with
   // The ground's material: a whole shader over render/wgsl/terrain_draw.wgsl defining `fs_main`
   // (empty: terrain.wgsl, the albedo lit), and the layout of its own group 3 (null: none; then
   // bind its group with bind_terrain_material before the first draw).
@@ -88,6 +90,7 @@ struct Terrain {
   int pyramid_mips = 0;
   wgpu::Texture height, normals, albedo, pyramid;
   wgpu::Buffer params, tiles, indirect, indices;
+  wgpu::Buffer wire_indices, wire_args;  // the wire probe's lines and draw (TerrainSource)
   wgpu::BindGroupLayout layout, cull_layout, normals_layout;
   wgpu::BindGroup group, cull_group, normals_group;
   wgpu::BindGroup shadows;   // group 2 of the draws: what stands in the sun (render/shadows.hpp)
@@ -95,6 +98,8 @@ struct Terrain {
   bool has_material = false;
   uint32_t p_depth = 0, p_draw = 0, p_cull = 0, p_normals = 0;
   uint32_t p_count_equal = 0, p_count_greater = 0;  // the overdraw probe's, when asked for
+  uint32_t p_wire = 0;                              // the wire probe's, when asked for
+  bool wire = false;
   bool normals_built = false;
   Horizon horizon;
   // terrain.wgsl's `TerrainParams`, filled by prepare.
@@ -143,6 +148,14 @@ void encode_terrain_overdraw(const Terrain& terrain, const gpu::PipelineSet& pip
                              wgpu::CommandEncoder& encoder, const FrameTargets& targets,
                              const wgpu::BindGroup& frame, const wgpu::TextureView& count,
                              bool after_prepass);
+// The wire probe (labs; needs TerrainSource::wire_probe): the tiles the cull kept drawn as their
+// triangles' edges into `colour` (a kWireFormat view at the render size, cleared to black when
+// `clear`), over the frame's depth (read only), each line a hair nearer than the ground it lies on
+// so the ground hides what is behind it; coloured by the distance from the eye in doublings from
+// 32 m, so the clipmap's rings show as bands.
+void encode_terrain_wire(const Terrain& terrain, const gpu::PipelineSet& pipelines,
+                         wgpu::CommandEncoder& encoder, const FrameTargets& targets,
+                         const wgpu::BindGroup& frame, const wgpu::TextureView& colour, bool clear);
 
 // The CPU's min/max pyramid of a heightfield: mip 0's texel i spans samples i and i + 1 (a
 // cell), each mip after halves the last (rounding down, as a texture's mips do; the last texel

@@ -4,7 +4,7 @@
 file(GLOB_RECURSE FALL_LINE_SIM_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/sim/*.cpp)
 add_library(fall_line_sim STATIC ${FALL_LINE_SIM_SOURCES})
 target_include_directories(fall_line_sim PUBLIC ${PROJECT_SOURCE_DIR}/games)
-target_link_libraries(fall_line_sim PUBLIC ge_core ge_prof ge_play ge_racing ge_mountain ge_skier ge_snowmobile ge_helicopter)
+target_link_libraries(fall_line_sim PUBLIC ge_core ge_prof ge_play ge_racing ge_mountain ge_skier ge_snowmobile ge_helicopter ge_paramotor)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS fall_line_sim)
 
 # Its `play` executable (play/): the game on the play contract, which `ge play`, `ge sim`,
@@ -29,11 +29,14 @@ if(GE_GPU)
   list(FILTER FALL_LINE_APP_SOURCES EXCLUDE REGEX "/app/main\\.cpp$")
   add_library(fall_line_app STATIC ${FALL_LINE_APP_SOURCES})
   target_include_directories(fall_line_app PUBLIC ${PROJECT_SOURCE_DIR}/games)
-  target_link_libraries(fall_line_app PUBLIC ge_render ge_prof ge_mountain_app ge_skier_app)
+  target_link_libraries(fall_line_app PUBLIC ge_render ge_prof ge_mountain_app ge_skier_app fall_line_sim)
   # The skier model the racers are drawn as (scene.hpp), compiled in: the game reads no file.
   ge_embed_binary(fall_line_app fall_line_skier_glb
     ${PROJECT_SOURCE_DIR}/plugins/skier/assets/skier/skier.glb)
   set_property(GLOBAL APPEND PROPERTY GE_GAME_APPS fall_line_app)
+  # The play executable draws the GPU's pictures too (`ge shot --gpu`, `ge record --gpu`).
+  target_link_libraries(play PRIVATE fall_line_app)
+  target_compile_definitions(play PRIVATE FALL_LINE_PLAY_GPU=1)
 endif()
 if(GE_PLATFORM AND GE_GPU)
   add_executable(fall_line app/main.cpp)

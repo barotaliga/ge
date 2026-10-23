@@ -156,6 +156,10 @@ TEST(a_run_records_as_frames_and_a_contact_sheet) {
   o.view = "side";
   CHECK(!gp::record(kToy, log, o, error) && has(error, "the views are line"));
   o.view = "";
+  o.gpu = true;  // this executable registers no renderer
+  CHECK(!gp::record(kToy, log, o, error) && has(error, "has no GPU renderer"));
+  o.gpu = false;
+  o.view = "";
   o.from = log.steps() + 1;
   o.to = log.steps() + 5;
   CHECK(!gp::record(kToy, log, o, error) && has(error, "no frame in steps"));

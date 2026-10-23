@@ -70,6 +70,7 @@ class FallLineRun final : public ge::play::Run {
   }
 
   bool over() const override { return driver_.over(); }
+  const GameState& game() const { return driver_.state(); }
   uint64_t digest() const override { return driver_.digest(); }
 
   std::string observe() override {
@@ -380,6 +381,11 @@ constexpr std::array<ge::play::Option, 3> kOptions{{
 }};
 
 }  // namespace
+
+const GameState* state_of(const ge::play::Run& run) {
+  const auto* r = dynamic_cast<const FallLineRun*>(&run);
+  return r ? &r->game() : nullptr;
+}
 
 const ge::play::GameSpec kGame{
     "fall_line", "a downhill race through the gates of a generated mountain, the field beside you",

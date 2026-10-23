@@ -116,3 +116,22 @@ fn fs_count(in: VertexOut) -> @location(0) vec4f {
   }
   return vec4f(1.0, 0.0, 0.0, 0.0);
 }
+
+// The wire probe (labs only): the triangles' edges as lines, a hair nearer than the surface under
+// them (reversed-z: a larger depth is nearer), in one warm colour so the trees and the figures
+// stand apart from the ground's distance bands.
+struct WireOut {
+  @location(0) colour: vec4f,
+  @builtin(frag_depth) depth: f32,
+}
+
+@fragment
+fn fs_wire(in: VertexOut) -> WireOut {
+  if (!band_keeps(in.band, in.position.xy)) {
+    discard;
+  }
+  var out: WireOut;
+  out.colour = vec4f(1.0, 0.62, 0.2, 1.0);
+  out.depth = in.position.z * 1.002;
+  return out;
+}

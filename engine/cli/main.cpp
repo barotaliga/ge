@@ -225,17 +225,16 @@ Outcome run(const Args& a) {
     w.timeline = has_flag(a, "timeline");
     return run_why(build_options(a), w);
   }
-  if (name == "shot") {
-    return run_shot(build_options(a), a.words.empty() ? "" : a.words[0], flag_value(a, "seed"),
-                    flag_value(a, "step"), flag_value(a, "view"), a.passthrough);
-  }
-  if (name == "record") {
-    // Every frame is drawn on the CPU: the release build draws them many times faster.
+  if (name == "shot" || name == "record") {
     std::vector<std::string> args;
     for (const auto& [k, v] : a.flags) {
       if (k != "preset" && k != "engine" && k != "repo" && k != "json")
         args.push_back(std::string("--").append(k).append("=").append(v));
     }
+    if (name == "shot") {
+      return run_shot(build_options(a), a.words.empty() ? "" : a.words[0], args, a.passthrough);
+    }
+    // A CPU view draws every frame on the CPU: the release build draws them many times faster.
     return run_record(build_options(a, "release"), a.words.empty() ? "" : a.words[0], args,
                       a.passthrough);
   }
