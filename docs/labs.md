@@ -223,6 +223,10 @@ fails when it is off. Three checks use it:
   runner's `--write-digests` on one lab or a shard keeps the other rows), and the PR says why.
   A game repo keeps the same baseline once `ge digest --write` writes it, and its
   `labs_smoke` case checks it from then on.
+- After a change, `ge digest --diff` runs every lab at its smoke flags and prints only the labs
+  whose digest is off the baseline (or not in it), writing nothing: the list of rows the PR has
+  to explain or fix, in one command (about 14 minutes for every lab in the debug build; name a
+  lab to run only it).
 
 That is why lab code follows the simulation's rules even though it is tooling: no `<cmath>`
 transcendental (`make libm-check` scans `engine/lab`; use `core/libm`), integer pixels from

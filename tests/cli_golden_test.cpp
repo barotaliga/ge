@@ -70,6 +70,31 @@ TEST(a_prose_header_names_no_column_and_rows_can_come_and_go) {
   CHECK(same.rows.empty() && same.moved.empty());
 }
 
+TEST(a_row_inserted_mid_table_is_one_row_added_not_every_row_after_it) {
+  const std::string before =
+      "# scenario top-speed sink\nlaunch 41 1.5\nglide 38 1.2\nturn 36 1.9\nland 20 0\n";
+  const std::string after =
+      "# scenario top-speed sink\nlaunch 41 1.5\ndive 60 9\nglide 38 1.2\nturn 36 2.0\n";
+  const GoldenDiff d = diff_golden("g.txt", before, after);
+  CHECK(!d.by_key);  // the same count: rows match by place
+  const std::string grown_after =
+      "# scenario top-speed sink\nlaunch 41 1.5\ndive 60 9\nglide 38 1.2\nturn 36 2.0\n"
+      "land 20 0\n";
+  const GoldenDiff g = diff_golden("g.txt", before, grown_after);
+  CHECK(g.by_key);
+  CHECK(g.rows.size() == 2);
+  CHECK(g.rows[0].key == "dive" && g.rows[0].change == "added" && g.rows[0].row == 2);
+  CHECK(g.rows[1].key == "turn" && g.rows[1].change.empty() && g.rows[1].cells.size() == 1);
+  CHECK(g.moved.size() == 1 && g.moved[0] == std::make_pair(std::string("sink"), 1));
+  const std::string text = format_golden_diff(g, 8);
+  CHECK_MSG(has(text, "rows matched by their first word") && has(text, "  row 2 (dive): added\n") &&
+                has(text, "  row 4 (turn): sink 1.9 -> 2.0\n"),
+            text);
+  const GoldenDiff shrunk = diff_golden("g.txt", grown_after, before);
+  CHECK(shrunk.by_key && shrunk.rows.size() == 2);
+  CHECK(shrunk.rows[1].key == "dive" && shrunk.rows[1].change == "gone");
+}
+
 TEST(a_tests_goldens_are_the_files_its_source_names) {
   const auto named = goldens_named_in(
       "constexpr const char* kGolden = \"tests/golden/fall_line_sim.txt\";\n"

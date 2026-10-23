@@ -86,6 +86,7 @@ constexpr FlagSpec kCiFlags[] = {
     kRepo};
 constexpr FlagSpec kDigestFlags[] = {
     {"write", "", "rewrite the lab's row of tests/labs_digests.txt (every row with no lab)"},
+    {"diff", "", "print only the labs whose digest is off the baseline; write nothing"},
     kPreset,
     kEngine,
     kRepo};
@@ -290,7 +291,7 @@ const CommandSpec kCommands[] = {
      kCiFlags, "ge ci 12", "commit"},
     {"digest", "[<lab>]", 0, 1, "build",
      "a lab (or every lab) at its smoke flags, twice: each digest beside the committed baseline; "
-     "--write moves only that lab's row",
+     "--write moves only that lab's row; --diff prints only the labs that moved",
      kDigestFlags, "ge digest wind-sweep --write", "labs"},
     {"golden diff", "[<golden|test>...]", 0, -1, "build",
      "each golden file against git's --base: the rows that changed and, column by column, what "
