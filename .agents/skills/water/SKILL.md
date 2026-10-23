@@ -23,7 +23,8 @@ for anything the simulation reads, `render` for a pass, `audio` for a voice, `la
 | The simulation tier's waves: the components laid, the surface, breaking | `engine/water/waves.hpp` | `waves` | `tests/water_waves_test.cpp` (golden) |
 | The fetch over a body's outline | `engine/water/fetch.hpp` | `fetch` | `tests/water_fetch_test.cpp` |
 | Bodies (lake, ocean, river, volume) and the one `sample` query | `engine/water/world.hpp` | `fetch` | `tests/water_world_test.cpp` (golden) |
-| Floating, swimming, colour, flow, drawn, sound | the rows M24c–M24l | the doc's § Labs | as each row lands |
+| Floating: probes, buoyancy, drag, slam, added mass, planing, splashes | `engine/water/float.hpp` | `float` | `tests/water_float_test.cpp` (golden) |
+| Swimming, colour, flow, drawn, sound | the rows M24d–M24l | the doc's § Labs | as each row lands |
 
 ## The rules
 
@@ -49,6 +50,10 @@ for anything the simulation reads, `render` for a pass, `audio` for a voice, `la
 - **The laid band must carry the sea.** Each component carries its own slice's energy, so the
   laid Hs is the asked one less only the band's tails; a change to `lay` keeps the `waves` lab's
   "Hs laid" column within a few per cent of "Hs asked" and its series within 8 %.
+- **A body that floats integrates the added mass's change too.** The added mass grows as a body
+  wets; taking it into the acceleration without its Lagrangian term (1/2 v d(ma)/dt, as
+  `step_floater` does) makes a heaving box gain a few per cent of energy a minute. The `float`
+  lab's energy chart is the check.
 - **A plan view drops the components shorter than a few pixels** (the picture's own tier):
   drawn, they alias into stripes that are not on the water.
 
