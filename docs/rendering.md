@@ -799,6 +799,15 @@ contract (scenes, captions, sheets). The renderer's half is:
   for the sky). A lab hands it with the shot, and the picture diff (`engine/lab/diff.hpp`,
   `docs/labs.md` § The picture diff) judges a change band by band, so far scenery made cheaper
   is held to a looser floor than what is at the skis.
+- **The wire probe.** With `TerrainSource::wire_probe` and `create_instance_pipelines`'
+  `wire_probe`, the terrain and every instance family also get a line-list pipeline over the
+  same vertex stage and line index buffers made once: `encode_terrain_wire` and
+  `encode_instances_wire` draw the last frame's culled tiles and lists as their triangles'
+  edges into a `kWireFormat` target, their instance counts copied from the cull's indirect
+  arguments, tested against the frame's depth (read only) with each fragment's depth pushed a
+  hair nearer (`frag_depth`: line topologies take no depth bias), so the ground hides what is
+  behind it. The ground is banded by distance in doublings from 32 m, so the clipmap's rings
+  show; the instances are one colour. It is what `ge shot --gpu --mode=wireframe` draws.
 - **Per-pass stats with every capture**: GPU ms, draws, instances and triangles, so a
   lab sheet can show what a picture costs beside the picture.
 - **Golden captures on the software adapter.** The development container and CI's

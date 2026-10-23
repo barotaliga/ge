@@ -122,3 +122,23 @@ fn ground_out(in: VertexOut, c: vec3f, reactive: f32) -> FragmentOut {
 fn fs_count() -> @location(0) vec4f {
   return vec4f(1.0, 0.0, 0.0, 0.0);
 }
+
+// The wire probe (labs only): a tile's edges as lines, a hair nearer than the ground under them
+// (reversed-z: a larger depth is nearer) so the ground hides the lines behind it, coloured by the
+// distance from the eye in doublings from 32 m (the clipmap's rings at 64, 128, 256 m ...): near
+// magenta, through blue and cyan to green, grey from 2 km.
+struct WireOut {
+  @location(0) colour: vec4f,
+  @builtin(frag_depth) depth: f32,
+}
+
+@fragment
+fn fs_wire(in: VertexOut) -> WireOut {
+  let band = clamp(log2(max(length(in.rel), 32.0) / 32.0), 0.0, 6.0) / 6.0;
+  var out: WireOut;
+  let k = clamp(vec3f(abs(band * 4.0 - 3.0) - 1.0, 2.0 - abs(band * 4.0 - 2.0),
+                      2.0 - abs(band * 4.0 - 1.0)), vec3f(0.0), vec3f(1.0));
+  out.colour = vec4f(mix(vec3f(0.25), vec3f(1.0), k), 1.0);
+  out.depth = in.position.z * 1.002;
+  return out;
+}

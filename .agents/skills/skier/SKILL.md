@@ -20,6 +20,7 @@ game rides it, so the modes, the course's rules, the bot and the field stay in t
 | `skier/trees.hpp/.cpp` | The trunks on a grid once a map: `build_tree_index`, `tree_overlap` |
 | `skier/synthetic.hpp/.cpp` | The hand-built maps: `synthetic_slope()`, `flat_strip(pitch, packed)` |
 | `skier/scenarios.hpp/.cpp` | The ride scenarios (one table for the tests and the lab) and `run_scenario` |
+| `skier/pilot.hpp/.cpp` | THE SKIER'S PILOT every bot on skis flies (M16c): `lay_pilot_plan` (the curvature along the game's line and an offset line, the speed off `carve_speed` eased to every lip, carried back so each slowing is braked for) and `skier_pilot` (pure pursuit of a `PilotRider`'s lane, further by late hands' lead; the brake over the plan at his pace, the tuck under it), its `line` and `speed` decisions on an `ai::Why` (the `bots` skill). Its test: `tests/skier_pilot_test.cpp` on the slope |
 
 Its app half, `plugins/skier/app/` (`ge_skier_app`, no GPU), is the skier as seen and heard:
 `rig.hpp` (the skeleton the skier model is built on), `rig_pose.hpp` (the POSER: `RigPoser` places every rig joint from a `SkierState` each frame, the lean through two lags so its rate never steps, each ski rolled about its widest edge line so it never cuts the snow, the legs and arms by two-bone IK with the pelvis lowered by a smooth maximum of the legs, the pole tips trailing at a fixed height; `bind_rig` and `rig_locals` turn a pose into the model's locals), `figure.hpp` (the placeholder figure), the beds (`wind_bed.hpp`, `snow_bed.hpp`, `ride_bed.hpp`,
@@ -43,7 +44,7 @@ is the support met again, its load `1 + v_n^2 / (2 stroke g)`. There is no mode.
 
 ## Rules
 
-- **State each answer once.** A pilot (the game's bot) plans on `limits.hpp`, never on a number
+- **State each answer once.** A pilot (`pilot.hpp`, or a game's own) plans on `limits.hpp`, never on a number
   of its own; the physics reads the same functions. A number that shapes the feel goes in
   `tuning.hpp` with its unit; a pair's own goes in `SkiSpec`.
 - **Deterministic.** `core/libm` for every transcendental, no allocation in `step_skier`, no
