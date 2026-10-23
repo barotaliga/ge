@@ -569,6 +569,32 @@ of the sun's illuminance (`FrameView::sun_illuminance` scales them all). The sky
 full-screen triangle at the far plane tested `equal`, with the sun's disc. `frame.wgsl`
 holds the one copy of the haze, the sun's light at a point and the sky's irradiance.
 
+**The weather in the picture (M8f1).** A frame is seen under a `Weather` (`render/view.hpp`,
+in the frame block as `weather` and `deck`), and `wgsl/frame.wgsl` is the one place it acts, so
+the ground, the trees, the figures, the particles, the flakes and the sky all see the same day:
+
+- the cloud takes its share off the sun's direct light (`sun_light`), so the sun's shadows, the
+  snow's glare and the particles' forward lobe fade with it; the glitter, the sun's disc in a
+  crystal, goes faster (the pass squared);
+- a DECK covers its share of the dome (`sky_luminance`): its grey at the horizon is the clear
+  day's light on a level face over pi (so it follows the hour and the night) times the deck's
+  tint and light, darker overhead, a pale patch where the sun is behind it; the sun's disc is
+  lost behind it;
+- the sky's light on a surface becomes the deck's (`sky_irradiance`: pi times its grey, the
+  overhead share weighed as a level face sees it), with no direction but up: THE FLAT LIGHT;
+- the air under a deck scatters the deck's grey, not the sun's (`haze`), and a FOG or a FALL
+  closes every surface into the sky behind it at its visual range V (`exp(-3.912 d / V)`: 2 % of
+  a black target's contrast left at V); looking down, into the horizon's;
+- the exposure keys a white face under a deck to 0.6 rather than 0.78, so a grey day's snow is a
+  light grey, not a white-out.
+
+A clear `Weather` (the default) changes no bit of the picture. What the mountain's eight skies
+are in these numbers is `plugins/mountain/app/weather_look.hpp`, and Fall Line's frame reads the
+map's sky at the view's time (`FrameOptions::weather`). The `weather` lab draws all eight: from
+seed 38's piste the clear day's picture spreads 37 levels of luma, an overcast's 15, a snow's 3
+and a storm's 2. The cloud volume itself (heaps and a veil drawn, each place's own share of the
+sun) and the night sky are M8f2.
+
 ## Anti-aliasing and resolution
 
 **Temporal anti-aliasing with upscaling (TAA-U)** is the default. Each frame's
@@ -680,8 +706,7 @@ so it keeps its light and does not shimmer), thinned by the root of the streak's
 toward the cube's faces and at the lens, lit by the sun past the horizon and the sky, hazed and
 softened against the depth. When nothing falls the pass is an empty compute pass under its name
 (an empty render pass still loads and stores its targets). The flakes are lit as the day is: under
-a clear sky that is a sunny fall; the overcast sky and the fog a snowing day brings (`air::Fall`'s
-visual range) are M8f's.
+a clear sky that is a sunny fall; under a lid they are lit as its flat grey (M8f1, above).
 - **Skinning** uses bone palettes in a storage buffer. A figure drawn in more than one
   view (the player in the main view, the sun's cascade and the shadow atlas) is skinned
   once by a compute pass into a vertex buffer that every view reads. Crowd members,

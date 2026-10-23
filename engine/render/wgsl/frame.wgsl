@@ -2,6 +2,15 @@
 // resources, bind group frequency), with the shading functions that read them. One copy of
 // each idea: the haze, the sun's light at a point and the sky's light are here and nowhere
 // else. render/sky.hpp's `frame_layout` is the C++ side of these bindings.
+//
+// THE WEATHER (`frame.weather`, `frame.deck`: render/view.hpp's `Weather`) enters here and
+// nowhere else, so every material, particle and the sky see the same day: the cloud takes its
+// share off the sun's direct light (`sun_light`); a DECK spreads a grey over its share of the
+// dome (`sky_luminance`), its light the clear day's on the ground over pi times what the deck
+// lets down, darker overhead, a pale patch where the sun is behind it, and the sky's light on a
+// surface becomes that grey's (`sky_irradiance`), with no direction but up: the flat light; the
+// air under it scatters its grey, not the sun's (`haze`); and a fog or a fall closes everything
+// into the sky behind it at its visual range.
 #include "render/wgsl/frame_types.wgsl"
 #include "render/wgsl/atmosphere.wgsl"
 
@@ -23,47 +32,98 @@ fn radius_at(world_y: f32) -> f32 {
   return kGroundRadius + max(frame.world.x + world_y * 1e-3, 0.0);
 }
 
-// The sun's light reaching a point at `world_y` (m): illuminance times the transmittance.
+// The sun's light reaching a point at `world_y` (m): illuminance times the transmittance, times
+// what the cloud lets through.
 fn sun_light(world_y: f32) -> vec3f {
-  return frame.sun.w * transmittance_to_top(transmittance_lut, linear_clamp, radius_at(world_y), frame.sun.y);
+  return frame.sun.w * frame.weather.x *
+         transmittance_to_top(transmittance_lut, linear_clamp, radius_at(world_y), frame.sun.y);
+}
+
+const kLuma = vec3f(0.2126, 0.7152, 0.0722);
+
+// THE DECK'S GREY at the horizon: the clear day's light on a level face (the sun's and the
+// sky's) over pi, as the luminance of a white face under it, times the deck's tint and light.
+fn deck_horizon() -> vec3f {
+  let sun = sky_light.sun_at_eye.rgb * frame.sun.w * max(frame.sun.y, 0.0);
+  let sky = sky_light.irradiance_up.rgb * frame.sun.w;
+  return frame.deck.rgb * (dot(sun + sky, kLuma) / PI);
+}
+
+// The deck's grey overhead over its grey at the horizon: its own darker grey, lost into the
+// horizon's grey as the snow in the air hides it.
+fn deck_zenith_share() -> f32 {
+  return mix(frame.deck.w, 1.0, frame.weather.w);
+}
+
+// The deck's luminance along a direction: the horizon's grey up to its grey overhead, and a pale
+// patch toward the sun behind it, as bright as the sun gets through.
+fn deck_luminance(d: vec3f) -> vec3f {
+  let h = deck_horizon();
+  let up = sqrt(clamp(d.y, 0.0, 1.0));
+  let toward = max(dot(d, frame.sun.xyz), 0.0);
+  let halo = 1.5 * frame.weather.x * pow(toward, 8.0) * smoothstep(-0.05, 0.1, frame.sun.y);
+  return h * (mix(1.0, deck_zenith_share(), up) + halo);
 }
 
 // The sky's irradiance on a surface of normal `n` (the up-facing integral, falling off toward
-// a surface that faces the ground), with the ground's bounce for the half that faces down.
+// a surface that faces the ground), with the ground's bounce for the half that faces down. Under
+// a deck, the deck's: pi times its grey, the overhead share weighed as a level face sees it.
 fn sky_irradiance(n: vec3f) -> vec3f {
-  let up = sky_light.irradiance_up.rgb * frame.sun.w;
-  let ground = (sky_light.sun_at_eye.rgb * frame.sun.w * max(frame.sun.y, 0.0) + up) * kGroundAlbedo;
+  let clear = sky_light.irradiance_up.rgb * frame.sun.w;
+  let h = deck_horizon();
+  let deck = PI * h * mix(1.0, deck_zenith_share(), 0.8);
+  let up = mix(clear, deck, frame.weather.y);
+  let sun = sky_light.sun_at_eye.rgb * frame.sun.w * frame.weather.x * max(frame.sun.y, 0.0);
+  let ground = (sun + up) * kGroundAlbedo;
   return up * (0.5 + 0.5 * n.y) + ground * (0.5 - 0.5 * n.y) * 0.5;
+}
+
+// The sky's luminance along a camera-relative direction: the sky-view table's, under the deck's
+// share of the dome its grey.
+fn sky_luminance(d: vec3f) -> vec3f {
+  let r = kGroundRadius + max(frame.eye.w, 0.0);
+  let uv = skyview_uv(r, d.y, azimuth_cos(d, frame.sun.xyz));
+  let clear = textureSampleLevel(sky_view_lut, linear_clamp, uv, 0.0).rgb * frame.sun.w;
+  if (frame.weather.y <= 0.0) {
+    return clear;
+  }
+  return mix(clear, deck_luminance(d), frame.weather.y);
 }
 
 // THE HAZE: a surface's colour seen through `dist_m` of air at screen `uv` (0..1): its colour
 // times the air's transmittance plus the light the air scatters in, from the aerial-perspective
-// volume. Every world material calls this, and none has its own fog.
+// volume (under a deck, the deck's grey in its place); then a fog or a fall closing it into the
+// sky behind it, so a surface at the visual range keeps 2 % of its contrast against the sky.
+// Every world material calls this, and none has its own fog.
 fn haze(colour: vec3f, uv: vec2f, dist_m: f32) -> vec3f {
   let s = sqrt(clamp(dist_m * 1e-3 / kAerialRangeKm, 0.0, 1.0));
   let w = max(s - 0.5 / kAerialSize.z, 0.5 / kAerialSize.z);
   let v = textureSampleLevel(aerial_volume, linear_clamp, vec3f(uv, w), 0.0);
   // Nearer than the first slice: fade from no air to the first slice's.
   let k = clamp(s * kAerialSize.z, 0.0, 1.0);
-  return colour * mix(1.0, v.a, k) + v.rgb * k * frame.sun.w;
+  let inscatter = mix(v.rgb * frame.sun.w, (1.0 - v.a) * deck_horizon(), frame.weather.y);
+  var c = colour * mix(1.0, v.a, k) + inscatter * k;
+  if (frame.weather.z > 0.0) {
+    // What is behind it is the sky toward its horizon; looking down, the horizon's.
+    var d = view_ray(frame, uv);
+    d = normalize(vec3f(d.x, max(d.y, 0.01), d.z));
+    c = mix(sky_luminance(d), c, exp(-frame.weather.z * dist_m));
+  }
+  return c;
 }
 
-// The sky's luminance along a camera-relative direction, from the sky-view table.
-fn sky_luminance(d: vec3f) -> vec3f {
-  let r = kGroundRadius + max(frame.eye.w, 0.0);
-  let uv = skyview_uv(r, d.y, azimuth_cos(d, frame.sun.xyz));
-  return textureSampleLevel(sky_view_lut, linear_clamp, uv, 0.0).rgb * frame.sun.w;
-}
-
-// What a white surface lit by the sun and the sky maps to before the tone curve.
+// What a white surface lit by the sun and the sky maps to before the tone curve; under a deck,
+// lower: a grey day's snow is a light grey, not the sunlit white, or the flat light reads as a
+// white-out where there is none.
 const kWhiteKey = 0.78;
+const kDeckKey = 0.6;
 
 // THE EXPOSURE: the scale that maps a white Lambertian surface under this sun and sky to
 // kWhiteKey, read off the sky's light (never a histogram, so it never pumps). The post pass
 // applies it; TAA-U weighs its samples in the light it gives.
 fn exposure() -> f32 {
-  let sun = sky_light.sun_at_eye.rgb * frame.sun.w * max(frame.sun.y, 0.0);
-  let sky = sky_light.irradiance_up.rgb * frame.sun.w;
-  let white = dot((sun + sky) / PI, vec3f(0.2126, 0.7152, 0.0722));
-  return kWhiteKey / max(white, 1e-4);
+  let sun = sky_light.sun_at_eye.rgb * frame.sun.w * frame.weather.x * max(frame.sun.y, 0.0);
+  let sky = sky_irradiance(vec3f(0.0, 1.0, 0.0));
+  let white = dot((sun + sky) / PI, kLuma);
+  return mix(kWhiteKey, kDeckKey, frame.weather.y) / max(white, 1e-4);
 }

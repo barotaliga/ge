@@ -258,6 +258,10 @@ void place_sled(GameState& state) {
   m = FreeSled{};
   m.present = true;
   m.body = sm::stand_sled(*state.level, spot.x, spot.z, spot.heading);
+  // The army's snowmobiles set off from beside it (army_sled.hpp).
+  state.army.pad_x = spot.x;
+  state.army.pad_z = spot.z;
+  state.army.pad_heading = spot.heading;
   const auto steps = static_cast<int>(num::round(kSettle * kHz));
   for (int k = 0; k < steps && !m.asleep; k++) step_parked(state);
   m.asleep = true;

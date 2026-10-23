@@ -144,6 +144,56 @@ inline constexpr double kShove = 2.5;
 inline constexpr double kLift = 0.8;
 }  // namespace dropped
 
+// THE ACRO (`acro.hpp`): the wing pitched round the pilot on the risers, and what goes wrong past
+// it.
+// - THE DIVE: the lean forward pulls the fronts down, `dive::kRig` rad of trim at a full lean, and
+//   holds `dive::kReflex` rad of the fold's angle off the leading edge (he feels it and keeps it
+//   open).
+// - THE SWING UP: the lean back pulls the rears, biting as hard as he is fast when he pulls (none
+//   at `swing::kFrom` m/s, all of it at `kFull`, kept until he lets the lean go): `kLift` more
+//   lift coefficient at a full lean, shared between the two bodies by mass and carrying no induced
+//   drag (the one liberty taken: without it a soft wing cannot close a loop), the wing held
+//   `kBack` rad behind square on the inside of his path by a spring (`kSpring`, N/m) and a damper
+//   (`kDamp`, N per m/s), its air blended toward his as hard as they hold, its stall raised
+//   `kHeld` rad and its fold's angle held `kReflex` rad off.
+// - A wing pulled past `kLoaded` g holds full whatever its angle. A wing met by the air from
+//   behind (`kBackflown`, the share of the air along its way, at more than `kBackSpeed` m/s)
+//   cannot fly backwards: it COLLAPSES whole.
+// - Out of a swing, THE LINES SLACK (their pull under `kSlack` of his weight) for `kSlackFor` s
+//   with the wing level with him or below (`kOver`, the lines' rise), or the two fallen within
+//   `kClose` of the lines' length of each other, and he FALLS INTO THE WING: TANGLED, the motor
+//   run down, the bundle's drag (`tangle::kDrag`, m2) on him and turning him round
+//   (`tangle::kSpin`, rad/s) until he cuts it away or meets the snow.
+// - The pull he hangs on is read in g, eased over `kGLag` s.
+namespace acro {
+namespace dive {
+inline constexpr double kRig = -0.5;
+inline constexpr double kReflex = 0.4;
+}  // namespace dive
+namespace swing {
+inline constexpr double kLift = 1.5;
+inline constexpr double kReflex = 0.4;
+inline constexpr double kHeld = 0.3;
+inline constexpr double kFrom = 10;
+inline constexpr double kFull = 24;
+inline constexpr double kSpring = 2500;
+inline constexpr double kDamp = 300;
+inline constexpr double kBack = 0.25;
+}  // namespace swing
+inline constexpr double kLoaded = 1.8;
+inline constexpr double kBackflown = -0.2;
+inline constexpr double kBackSpeed = 4;
+inline constexpr double kSlack = 0.25;
+inline constexpr double kSlackFor = 0.35;
+inline constexpr double kOver = 0.15;
+inline constexpr double kClose = 0.7;
+namespace tangle {
+inline constexpr double kDrag = 2.2;
+inline constexpr double kSpin = 0.9;
+}  // namespace tangle
+inline constexpr double kGLag = 0.15;
+}  // namespace acro
+
 // NEAR THE SNOW the pilot stands up out of the seat and his skis turn to his way over it, to
 // meet the snow square: from `kStand` m over it, fully by `kSquare` m. Aloft he turns to the
 // wing's heading over `kSwing` s.

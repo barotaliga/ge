@@ -1,14 +1,15 @@
 # lab digests at their smoke flags: labs --all --smoke --write-digests
 analyze 47aeb41752f58f41
 anim 46ec0296ddd73853
-army 1457c5929690588c
+army 66396a5f4287214b
+army-sleds 821adaba95b0b813
 audition d47fda4a9cb22fbb
 charts 77f2319a5ea24272
-cli-loop b8182e7757da9849
+cli-loop cfccc7062bc5b6e0
 crowd cf02cf9a7c917783
 forest f1881cb20efe0144
 frame-pace c5058023a52812c3
-free aac30cb485c0ab92
+free 8a3427de7c2b5c91
 gpu-capture 8b5d5e3b7be5a4fc
 heli 57f63b6da08cbec2
 humanness a486ef984a6511d7
@@ -19,8 +20,9 @@ mapgen-cost 3baf51b6907817f3
 models bdc7f86743249676
 net-link 458927d87fc48ec1
 noise 3d3a828834f144cb
-para 4cf84ac199be804e
+para 96c0113d2f73cd5c
 park d53bc7b207dfab4a
+path 110d60b3391ee093
 play 8c742a9739dd3504
 profile 589e45741a595806
 real-faces b53c6303e783fd1b
@@ -48,4 +50,5 @@ trace 95f71886b7e7c98a
 trails 1aaa468d0dbd81a0
 wanted 507dbbcbbbb4187e
 why eedccc4692a8953d
+weather 0e7fb0dc66149764
 world 59572dd4a51a1bae

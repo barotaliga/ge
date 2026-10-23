@@ -34,10 +34,16 @@ the row when the file moves.
 | `engine/core/solar.hpp` | `oss-game-framework/src/core/solar.ts` | sunAt moonAt daylightWindow sunOnDate moonOnDate hourOfElevation |
 | `engine/loop/run_clock.hpp` | `oss-game-framework/src/loop/run-clock.ts` | createRunClock MAX_FRAME_SECONDS |
 | `games/fall_line/labs/army_lab.cpp` | `game5/scripts/army-ground.mjs` | the ground army shown (here measured: the army table and every soldier's path, per scenario) |
+| `games/fall_line/labs/army_sled_lab.cpp` | `game5/scripts/army-ground.mjs` | the army's snowmobiles shown (here measured: the sleds table and every machine's path, per scenario) |
 | `games/fall_line/labs/lift_ride_lab.cpp` | `game5/scripts/lift-ride-preview.mjs` | the lift ride shown (here measured as a table, every lift ridden from its load zone to its top) |
 | `games/fall_line/sim/army.cpp` | `game5/engine/game/army-ground.ts`, `army-lift.ts`, `army-wave.ts` | stepGround chase tryArrest writeTroops sendLiftSquads stepLiftTroops liftFor wayDown sendWave sendWaves retireWaves climbWithWave (the landings, the fire, the cover ring and the men on foot not carried) |
 | `games/fall_line/sim/army.hpp` | `game5/engine/game/army-ground.ts`, `army-lift.ts`, `army-wave.ts` | stepGround liftFor wayDown armyTroops |
+| `games/fall_line/sim/army_drive.cpp` | `game5/engine/game/army-drive.ts` | wayCost chooseWay tunnelWithin |
+| `games/fall_line/sim/army_drive.hpp` | `game5/engine/game/army-drive.ts` | DriveRead TerrainRead wayCost chooseWay tunnelWithin |
 | `games/fall_line/sim/army_rules.hpp` | `game5/engine/game/defs/army-ground.ts`, `defs/army-wave.ts` | ARMY_GROUND ARMY_WAVE |
+| `games/fall_line/sim/army_sled.cpp` | `game5/engine/game/army-sled.ts` | stepArmySleds sledPad setOff chase halt home dismount watch writeCrews |
+| `games/fall_line/sim/army_sled.hpp` | `game5/engine/game/army-sled.ts` | stepArmySleds sledPad crewed |
+| `games/fall_line/sim/army_sled_rules.hpp` | `game5/engine/game/defs/army-sled.ts` | ARMY_SLED |
 | `games/fall_line/sim/army_state.hpp` | `game5/engine/game/army-state.ts` | Soldier ArmyState |
 | `games/fall_line/sim/army_troop.cpp` | `game5/engine/game/army-troop.ts` | goToward stopHere watchProgress slopeAlong wayToward |
 | `games/fall_line/sim/army_troop.hpp` | `game5/engine/game/army-troop.ts` | goToward stopHere watchProgress slopeAlong |
@@ -232,6 +238,8 @@ the row when the file moves.
 | `plugins/mountain/mapgen/versions.hpp` | `game5/engine/mapgen/versions.ts` | generatorTraits GENERATOR_VERSIONS CURRENT_GENERATOR_VERSION singlePiste |
 | `plugins/mountain/mapgen/weather.cpp` | `game5/engine/mapgen/weather.ts` | dealWeather windIn |
 | `plugins/mountain/mapgen/weather.hpp` | `game5/engine/mapgen/weather.ts` | dealWeather sunsetOf WEATHER_KINDS |
+| `plugins/paramotor/acro.cpp` | `game5/engine/game/para-acro.ts`, `para.ts` | keptWay riserRig riserLift biteRears reflexOf heldOf heldShare holdPitch countSwing fallenIn readLoad stepTangled (hangOnLines left to the renderer) |
+| `plugins/paramotor/acro.hpp` | `game5/engine/game/para-acro.ts`, `defs/para.ts` | PARA.acro |
 | `plugins/paramotor/air.cpp` | `game5/engine/game/para-air.ts` | paraAirAt eddyUp levelWind |
 | `plugins/paramotor/air.hpp` | `game5/engine/game/para-air.ts` | paraAirAt ParaAir |
 | `plugins/paramotor/para.cpp` | `game5/engine/game/para.ts`, `canopy.ts` | stepPara dropPara readyPara (the wing's polar, folds and lines restated) |

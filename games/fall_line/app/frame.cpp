@@ -14,6 +14,7 @@
 #include "fall_line/app/look.hpp"
 #include "fall_line/app/scene.hpp"
 #include "mountain/air/air.hpp"
+#include "mountain/app/weather_look.hpp"
 #include "prof/zones.hpp"
 
 namespace fall_line::app {
@@ -279,9 +280,12 @@ void forget_tracks(GameFrame& f) {
   f.pens.clear();
 }
 
-void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& view, const FrameScene& scene,
+void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const FrameScene& scene,
           const wgpu::TextureView& output) {
   GE_ZONE("frame");
+  // The map's sky at the view's moment: the cloud, the deck and the fog it is seen under.
+  r::FrameView view = seen;
+  if (f.options.weather) view.weather = ge::mountain::app::weather_at(*f.level, view.time_s);
   const auto start = std::chrono::steady_clock::now();
   f.recorder.begin_frame(device);
   // Prepare: every decision of the frame, and the uploads.

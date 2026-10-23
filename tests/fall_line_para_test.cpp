@@ -148,6 +148,32 @@ TEST(his_reset_under_the_rig_begins_the_ride_again_on_the_summit) {
   CHECK(std::hypot(s.x - at.x, s.z - at.z) < 0.5);
 }
 
+TEST(his_lean_flies_the_acro_and_a_swing_without_speed_tangles_him_until_the_press) {
+  fs::GameState state = flown(40);
+  CHECK_MSG(state.para.body.flying && state.para.body.agl > 60,
+            "40 s of full throttle off the summit left him " + std::to_string(state.para.body.agl) +
+                " m over the snow");
+  // The throttle shut, a glide; the lean forward is the bar forward, a dive; then back, without
+  // the speed to go over.
+  fs::Controls c;
+  std::vector<fs::GameEvent> seen = run_for(state, c, 4);
+  c.lean = -1;
+  const std::vector<fs::GameEvent> dive = run_for(state, c, 2);
+  seen.insert(seen.end(), dive.begin(), dive.end());
+  c.lean = 1;
+  const std::vector<fs::GameEvent> back = run_for(state, c, 4);
+  seen.insert(seen.end(), back.begin(), back.end());
+  CHECK_MSG(said(seen, fs::ParaPhase::tangle) && state.para.body.mode == pm::ParaMode::tangled,
+            "a short dive swung up did not tangle him; run `make lab LAB=para "
+            "ARGS=--scenario=tangle` (skill: paramotor)");
+  CHECK(fs::hung_in_para(state, 0) && !said(seen, fs::ParaPhase::loop));
+  // The press cuts the bundle away.
+  fs::Controls press;
+  press.machine = true;
+  CHECK(said(run_for(state, press, 1.0 / fs::kHz), fs::ParaPhase::drop));
+  CHECK(state.para.body.mode == pm::ParaMode::dropped);
+}
+
 TEST(the_tape_carries_the_speed_bar_on_the_lean) {
   fs::Controls c;
   c.lean = -0.6;
