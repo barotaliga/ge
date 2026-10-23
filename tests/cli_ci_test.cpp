@@ -109,3 +109,26 @@ TEST(a_moved_repository_is_named_with_the_remote_to_set) {
   CHECK(moved_repo_finding("HTTP 301: Moved Permanently", "a/b", "", f));
   CHECK(f.next.starts_with("set the origin remote"));
 }
+
+TEST(a_direct_merge_refused_for_a_merge_queue_is_told_apart) {
+  CHECK(merge_queue_refusal("gh: Changes must be made through the merge queue (HTTP 405)"));
+  CHECK(merge_queue_refusal("Repository rule violations found: Merge Queue required"));
+  CHECK(!merge_queue_refusal("gh: Head branch was modified. Review and try the merge again."));
+}
+
+TEST(a_ci_answer_settles_on_an_error_or_when_nothing_runs) {
+  Outcome running;
+  running.summary = std::string(kCiPending);
+  CHECK(!ci_settled(running));
+  running.findings.push_back({Severity::error, "pull request 9 conflicts with main", "", ""});
+  CHECK(ci_settled(running));
+  Outcome green;
+  green.summary = "every check passed";
+  CHECK(ci_settled(green));
+}
+
+TEST(a_moved_repository_s_new_name_is_read_off_its_web_redirect) {
+  CHECK(moved_to_of("HTTP/1.1 200 Connection Established\r\n\r\nHTTP/1.1 301 Moved "
+                    "Permanently\r\nLocation: https://github.com/c/d\r\n") == "c/d");
+  CHECK(moved_to_of("HTTP/2 200\r\ncontent-type: text/html\r\n").empty());
+}

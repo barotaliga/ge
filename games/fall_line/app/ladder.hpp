@@ -6,13 +6,14 @@
 //   each row is its own: RESOLUTION (the render size TAA-U brings up to the output), SHADOWS (the
 //   sun's maps' texels), SNOW (the snow's material, or the albedo lit), TRAILS (the trail maps'
 //   texels, or none), SPRAY (thrown or not), SNOWFALL (the flakes round the eye), CLOUDS (the
-//   march's share of its steps, or no layer: the sky's mean cloud) and BLOOM.
+//   march's share of its steps at a quarter of the pixels, every pixel at the top, or no layer:
+//   the sky's mean cloud) and BLOOM.
 // - CHEAPEST FIRST: every row's stops run from its cheapest, so a stop's index is its rung.
 // - RESOLUTION IS GIVEN UP FIRST: the pixels' softness before anything in the picture.
 // - THE PRICES are `kPrices`' reference machine's, filled by the `ladder` lab (`labs ladder
-//   --price`): each row lowered alone from the top picture, the frame timed from the chase
-//   camera down seed 38. The WORTHS are judgements on one 0-100 scale, argued beside each row in
-//   ladder.cpp.
+//   --price`): each row lowered alone from the top picture, the frame timed from seed 38's start
+//   under a flurry, looking up into its broken sky. The WORTHS are judgements on one 0-100 scale,
+//   argued beside each row in ladder.cpp.
 //
 // ge:summary Fall Line's quality ladder: its rows and stops on FrameOptions, prices, presets
 // ge:keywords fall-line quality-ladder picture preset auto-preset price-table frame-options

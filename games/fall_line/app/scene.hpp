@@ -66,8 +66,17 @@ ge::render::Instance figure_instance(const ge::skier::SkierState& skier,
 // The most amateurs the crowd's family holds (sim/crowd_rules.hpp's most).
 inline constexpr int kMaxCrowd = sim::crowd::kMost;
 
-// The crowd's one mesh: the model's first at bind in the poser's reach, posed by each amateur's
-// palette (render/skinning.hpp's `palette_source`).
+// The skier model's levels of detail, finest first: the mesh named `skier`, then `skier.lod1`,
+// `skier.lod2` (its builder's LEVELS), as indices into `model.meshes`; the first mesh alone when
+// the model has no such names.
+std::vector<uint32_t> skier_lods(const ge::assets::Model& model);
+// The radius on screen (px) down to which each of the skier's LODs is drawn, finest first; the
+// figure stands about 1.6 radii tall, so LOD 0 holds to about 65 px tall and LOD 1 to about 26,
+// the heights the model-views lab's `lods` sheet shows each level keeping its silhouette at.
+inline constexpr float kSkierLodPx[2] = {40.0f, 16.0f};
+
+// The crowd's one mesh at each of the skier's LODs, at bind in the poser's reach, posed by each
+// amateur's palette (render/skinning.hpp's `palette_source`).
 std::vector<ge::render::MeshSource> crowd_meshes(const ge::assets::Model& model);
 // The crowd's jackets, each the model's materials with the jacket its own: jacket k's are
 // k * model.materials.size() on.

@@ -209,60 +209,123 @@ CloudNoise create_cloud_noise(gpu::Device& device) {
   return c;
 }
 
-void create_clouds(gpu::Device& device, gpu::PipelineSet& pipelines, CloudPass& clouds,
-                   const wgpu::BindGroupLayout& frame) {
-  clouds.layout = make_layout(device, "clouds.depth", {Slot::depth}, wgpu::ShaderStage::Fragment);
-  const wgpu::ShaderModule draw = gpu::create_shader(device, wgsl::clouds, "clouds");
+namespace {
+
+// A full-screen pipeline of the cloud's shader: `entry` into `targets`, premultiplied over the
+// first target when `over`.
+uint32_t add_cloud_pipeline(gpu::Device& device, gpu::PipelineSet& pipelines,
+                            const wgpu::ShaderModule& module, std::string_view label,
+                            const char* entry, const wgpu::PipelineLayout& layout,
+                            std::initializer_list<wgpu::TextureFormat> formats, bool over) {
   // Premultiplied over what is there: the cloud's light added, the rest kept by its
   // transmittance.
-  wgpu::BlendState over{};
-  over.color = {wgpu::BlendOperation::Add, wgpu::BlendFactor::One,
-                wgpu::BlendFactor::OneMinusSrcAlpha};
-  over.alpha = over.color;
-  wgpu::ColorTargetState colour{};
-  colour.format = kHdrFormat;
-  colour.blend = &over;
+  wgpu::BlendState blend{};
+  blend.color = {wgpu::BlendOperation::Add, wgpu::BlendFactor::One,
+                 wgpu::BlendFactor::OneMinusSrcAlpha};
+  blend.alpha = blend.color;
+  std::array<wgpu::ColorTargetState, 2> colour{};
+  size_t n = 0;
+  for (wgpu::TextureFormat f : formats) {
+    colour[n].format = f;
+    if (over && n == 0) colour[n].blend = &blend;
+    ++n;
+  }
   wgpu::FragmentState fragment{};
-  fragment.module = draw;
-  fragment.entryPoint = "fs_main";
-  fragment.targetCount = 1;
-  fragment.targets = &colour;
+  fragment.module = module;
+  fragment.entryPoint = entry;
+  fragment.targetCount = n;
+  fragment.targets = colour.data();
   wgpu::RenderPipelineDescriptor desc{};
-  desc.label = "clouds.draw";
-  desc.layout = make_pipeline_layout(device, "clouds.draw", {frame, clouds.layout});
-  desc.vertex.module = draw;
+  desc.label = label;
+  desc.layout = layout;
+  desc.vertex.module = module;
   desc.vertex.entryPoint = "vs_main";
   desc.primitive.topology = wgpu::PrimitiveTopology::TriangleList;
   desc.fragment = &fragment;
-  clouds.p_draw = pipelines.add_render(device, desc);
+  return pipelines.add_render(device, desc);
+}
+
+// One full-screen triangle into `targets`, kept or cleared.
+void draw_full(FrameRecorder& rec, wgpu::CommandEncoder& encoder, std::string_view name,
+               std::initializer_list<wgpu::TextureView> targets, bool load,
+               const wgpu::RenderPipeline& pipeline, const wgpu::BindGroup& frame,
+               const wgpu::BindGroup& group) {
+  std::array<wgpu::RenderPassColorAttachment, 2> colour{};
+  size_t n = 0;
+  for (const wgpu::TextureView& v : targets) {
+    colour[n].view = v;
+    colour[n].loadOp = load ? wgpu::LoadOp::Load : wgpu::LoadOp::Clear;
+    colour[n].storeOp = wgpu::StoreOp::Store;
+    ++n;
+  }
+  wgpu::RenderPassDescriptor desc{};
+  desc.colorAttachmentCount = n;
+  desc.colorAttachments = colour.data();
+  wgpu::RenderPassEncoder pass = rec.render(encoder, desc, name);
+  pass.SetPipeline(pipeline);
+  pass.SetBindGroup(0, frame);
+  pass.SetBindGroup(1, group);
+  pass.Draw(3);
+  ++rec.current().draws;
+  pass.End();
+}
+
+}  // namespace
+
+void create_clouds(gpu::Device& device, gpu::PipelineSet& pipelines, CloudPass& clouds,
+                   const wgpu::BindGroupLayout& frame) {
+  clouds.layout = make_layout(device, "clouds.depth", {Slot::depth}, wgpu::ShaderStage::Fragment);
+  clouds.up_layout =
+      make_layout(device, "clouds.quarter", {Slot::depth, Slot::texture, Slot::texture_raw},
+                  wgpu::ShaderStage::Fragment);
+  const wgpu::ShaderModule draw = gpu::create_shader(device, wgsl::clouds, "clouds");
+  const wgpu::PipelineLayout full =
+      make_pipeline_layout(device, "clouds.draw", {frame, clouds.layout});
+  clouds.p_draw = add_cloud_pipeline(device, pipelines, draw, "clouds.draw", "fs_main", full,
+                                     {kHdrFormat}, true);
+  clouds.p_march = add_cloud_pipeline(device, pipelines, draw, "clouds.march", "fs_march", full,
+                                      {kHdrFormat, wgpu::TextureFormat::R32Float}, false);
+  clouds.p_upsample =
+      add_cloud_pipeline(device, pipelines, draw, "clouds.upsample", "fs_upsample",
+                         make_pipeline_layout(device, "clouds.upsample", {frame, clouds.up_layout}),
+                         {kHdrFormat}, true);
 }
 
 void bind_cloud_targets(gpu::Device& device, CloudPass& clouds, const FrameTargets& targets) {
+  clouds.quarter_width = std::max(1u, (targets.width + 1) / 2);
+  clouds.quarter_height = std::max(1u, (targets.height + 1) / 2);
+  const auto usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding;
+  clouds.quarter = make_texture(device, "clouds.quarter", clouds.quarter_width,
+                                clouds.quarter_height, 1, kHdrFormat, usage);
+  clouds.quarter_dist =
+      make_texture(device, "clouds.quarter_dist", clouds.quarter_width, clouds.quarter_height, 1,
+                   wgpu::TextureFormat::R32Float, usage);
+  clouds.quarter_view = clouds.quarter.CreateView();
+  clouds.quarter_dist_view = clouds.quarter_dist.CreateView();
   clouds.group = make_group(device, "clouds.depth", clouds.layout, {targets.depth_view});
+  clouds.up_group = make_group(device, "clouds.quarter", clouds.up_layout,
+                               {targets.depth_view, clouds.quarter_view, clouds.quarter_dist_view});
 }
 
 void encode_clouds(const CloudPass& clouds, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
                    wgpu::CommandEncoder& encoder, const FrameTargets& targets,
                    const wgpu::BindGroup& frame, const FrameView& view) {
+  // A pass with nothing to do: an empty compute pass keeps its row without loading and storing a
+  // target.
+  if (view.clouds.count <= 0 || !view.clouds.quarter) rec.compute(encoder, "clouds.march").End();
   if (view.clouds.count <= 0) {
-    // No layer: an empty compute pass keeps the row without loading and storing the target.
     rec.compute(encoder, "clouds").End();
     return;
   }
-  wgpu::RenderPassColorAttachment colour{};
-  colour.view = targets.hdr_view;
-  colour.loadOp = wgpu::LoadOp::Load;
-  colour.storeOp = wgpu::StoreOp::Store;
-  wgpu::RenderPassDescriptor desc{};
-  desc.colorAttachmentCount = 1;
-  desc.colorAttachments = &colour;
-  wgpu::RenderPassEncoder pass = rec.render(encoder, desc, "clouds");
-  pass.SetPipeline(pipelines.render(clouds.p_draw));
-  pass.SetBindGroup(0, frame);
-  pass.SetBindGroup(1, clouds.group);
-  pass.Draw(3);
-  ++rec.current().draws;
-  pass.End();
+  if (view.clouds.quarter) {
+    draw_full(rec, encoder, "clouds.march", {clouds.quarter_view, clouds.quarter_dist_view}, false,
+              pipelines.render(clouds.p_march), frame, clouds.group);
+    draw_full(rec, encoder, "clouds", {targets.hdr_view}, true, pipelines.render(clouds.p_upsample),
+              frame, clouds.up_group);
+  } else {
+    draw_full(rec, encoder, "clouds", {targets.hdr_view}, true, pipelines.render(clouds.p_draw),
+              frame, clouds.group);
+  }
 }
 
 }  // namespace ge::render

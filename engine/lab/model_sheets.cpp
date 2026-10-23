@@ -145,11 +145,17 @@ std::vector<int> detail_joints(const a::Model& m, const std::string& names, int 
     const int l = a::find_joint(m, n.substr(0, n.size() - 2) + "_l");
     return l >= 0 && std::find(out.begin(), out.end(), l) != out.end();
   };
+  // A mesh's own node is in the skeleton too (it hangs off the rig), but it is no part to look at.
+  auto is_mesh = [&](int j) {
+    const std::string& n = m.joints[static_cast<size_t>(j)].name;
+    return std::any_of(m.meshes.begin(), m.meshes.end(),
+                       [&](const a::Mesh& mesh) { return mesh.name == n; });
+  };
   for (int pass = 0; pass < 2; ++pass) {
     for (size_t j = 0; j < m.joints.size() && static_cast<int>(out.size()) < most; ++j) {
       const int c = static_cast<int>(j);
       if (std::find(out.begin(), out.end(), c) != out.end() || mirrored(c)) continue;
-      if (m.joints[j].parent < 0 || (pass == 0 && children[j] != 0)) continue;
+      if (m.joints[j].parent < 0 || (pass == 0 && children[j] != 0) || is_mesh(c)) continue;
       if (pass == 1) {
         float centre[3], radius = 0;
         if (!region_of(m, rest, c, 0, centre, &radius) || radius < 0.03f || radius > 0.35f) {
