@@ -35,6 +35,7 @@ updates that row's status file (`docs/goals/<row>.md`) in its PR.
 | [`docs/rendering.md`](docs/rendering.md) | The GPU backend (Dawn), the frame's pass table, every rendering technique and why, budgets, lab hooks, and what was considered and not taken |
 | [`docs/perf.md`](docs/perf.md) | The performance ledger: every speed-up, before and after, and how it was measured |
 | [`docs/input.md`](docs/input.md) | Input devices: the layers, the model, actions and bindings, raw mouse, wheels and force feedback, gamepads, touch, players, recording, the labs and the decisions |
+| [`docs/camera.md`](docs/camera.md) | The camera: the pose, the followers, the subject, the rigs (first person, boom, mounted, orbit, planted, free), the modifiers, the world's queries, the transitions, the stack, the cvars, the labs and the research |
 | [`docs/movement.md`](docs/movement.md) | Character movement for any genre: the knobs and presets, the step's model (friction, the acceleration rule and strafe jumping, jumps, steps, slopes, crouch, slide), the world's trace, cvars, what a camera reads, water, the labs |
 | [`docs/networking.md`](docs/networking.md) | Multiplayer: what each kind of game asks of the network, the layers of `engine/net`, the decisions, the wire format, the simulated network, the tools, and Fall Line's pilot (M17) |
 | [`docs/services.md`](docs/services.md) | Platform services: what a store gives a game behind one interface, the simulated and offline stores, Steam call by call, the SDK kept out of the tree (M20) |
@@ -120,6 +121,11 @@ porting ends, and nothing outside it may depend on it except `make golden`.
   get there.
 - **WHEN A TASK IS DONE, NAME THE NEXT STEP.** Update the roadmap row's status file
   (`docs/goals/<row>.md`), then name the next open milestone row as the follow-up.
+- **SHOW THE WORK IN PICTURES.** Every progress report and every finished PR comes with
+  pictures: a lab's screenshots, before and after side by side, a chart of the numbers, a
+  diagram of a design, or a table of measurements drawn as an image. Nearly all work can be
+  shown this way; the labs exist to make that cheap (`labs` skill). Put the pictures on one
+  page linked from the report and the PR, never as loose attachments.
 - **SAY WHAT `ge` LACKED.** `ge` is the agent's whole interface (G6), so it grows from what
   agents miss. When a task would have been easier with a `ge` command or flag that does not
   exist (to build, debug, inspect, measure or optimise), say so in the PR description under
@@ -139,7 +145,7 @@ porting ends, and nothing outside it may depend on it except `make golden`.
 - **`make precheck` BEFORE EVERY PUSH.** It runs, in about 40 seconds, the gates that cost
   threads the most CI rounds (fmt-check, agents-check, libm-check, lint on the changed files,
   `cli_diagnostics_test`, the tests the change reaches and the smoke digests of the labs it
-  reaches, `tools/labs-reached.sh`). A game repo's is `ge precheck`.
+  reaches, `ge digest --affected`). A game repo's is `ge precheck`.
   Run it in the background when it is long (a tool's background mode re-invokes you when it
   exits); never poll it in a loop.
 - **AFTER PUSHING A PR, CHECK IT EVERY 15 MINUTES UNTIL IT IS MERGED.** Each check-in looks at

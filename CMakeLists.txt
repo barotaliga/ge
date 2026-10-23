@@ -96,15 +96,15 @@ elseif(MSVC)
   endif()
 endif()
 
-# The deterministic pool. Mostly headers; libm, solar and output are compiled.
-# Threads: core/parallel.hpp runs a bake's independent rows side by side.
+# The deterministic pool. Mostly headers; libm, solar, output and the worker pool are compiled.
+# Threads: core/parallel.hpp runs a bake's independent rows side by side on a persistent pool.
 find_package(Threads REQUIRED)
 set(GE_LIBM_VENDORED
   engine/core/libm/fdlibm_trig.cpp
   engine/core/libm/fdlibm_arc.cpp
   engine/core/libm/fdlibm_exp_log.cpp)
 add_library(ge_core STATIC ${GE_LIBM_VENDORED} engine/core/libm/pow.cpp
-  engine/core/solar.cpp engine/core/output.cpp engine/core/num_text.cpp)
+  engine/core/solar.cpp engine/core/output.cpp engine/core/num_text.cpp engine/core/parallel.cpp)
 target_include_directories(ge_core PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/engine>)
 target_compile_features(ge_core PUBLIC cxx_std_20)
 target_link_libraries(ge_core PUBLIC ge_fp ge_isa Threads::Threads)
