@@ -6,8 +6,9 @@
 // the machine climbs, a drop steeper than it rides off, a wind tunnel's tube or the map's edge is
 // near. It costs for every metre it is stopped short, for every trunk near its line (a trunk
 // nearer counting more), for every radian off the way wanted and off the way held. A fan of
-// headings either side of the way wanted is weighed, and the cheapest is steered. The hub's WIND
-// TUNNELS are a wall to all of them: a tube on the snow no belt goes through.
+// headings either side of the way wanted is weighed, and the cheapest is steered
+// (`ai::pick_heading`). The hub's WIND TUNNELS are a wall to all of them: a tube on the snow no
+// belt goes through.
 //
 // Pure over the map: nothing here draws a random number or allocates.
 //

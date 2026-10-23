@@ -55,7 +55,12 @@ ge::mountain::mapgen::TrackPoint army_way_at(const ge::mountain::mapgen::Track& 
 
 // THE LIFT a squad takes to come down at a man standing at `q`: the one whose top is nearest him
 // and `army::kAboveM` over him, or with none so high the one whose top is highest; -1 with none.
-int32_t lift_for(const GameState& state, Spot q);
+// A choice over the lifts (ai/choose.hpp), recorded on `why` when it is not null.
+int32_t lift_for(const GameState& state, Spot q, ge::ai::Why* why = nullptr);
+
+// A SOLDIER ENTERS `next` from his mode (ai/choose.hpp): recorded as his decision (agent
+// `army::kPursuerBase` + his id) while a trace is on, his time in the mode back to 0.
+void enter_mode(GameState& state, Soldier& s, SoldierMode next, const char* because);
 
 // A SOLDIER PUT ON THE MAP at (x, z), facing `heading`, in `mode`: his id the army's next. The
 // caller keeps within `army::kMostSoldiers`.
