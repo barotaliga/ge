@@ -4,6 +4,22 @@ Every speed-up lands a row here: what changed, the cost before and after, and ho
 measured. The budgets and the proofs a speed-up owes are the `perf` skill's. A row's numbers
 are wall time on the machine named, so compare rows on one machine only.
 
+## Threaded bakes
+
+Measured with `make lab LAB=parallel-cost PRESET=release` (a five-point stencil over square
+grids, the median of 15 batches a point), the median of three runs of each build alternated, in
+the 4-core Linux x86-64 container. Every grid's output hash the same on every worker count, and
+every level digest unchanged.
+
+| Change | Empty call, 8 workers | 64² grid, 8 workers | 256² grid, 8 workers | 1024² grid, 8 workers | Ski area (v10) | Where |
+| --- | --- | --- | --- | --- | --- | --- |
+| `parallel_bands` on a persistent pool (the caller and up to 7 workers, started once, each taking the next band; a short spin between calls, then sleep) instead of a thread a band each call | 357 µs → 1.4 µs | 368 µs → 3.6 µs (1 worker: 6.4 µs) | 436 µs → 39 µs (1 worker: 99 µs) | 1269 µs → 765 µs | 1312 ms → 1232 ms (−6%, A/B three times) | `engine/core/parallel.hpp`, `parallel.cpp` |
+
+Before, a call started and joined a thread a band: about 60 µs a thread here, so on any grid
+under about 512² rows eight workers lost to one. A grid of 16² (0.4 µs on one thread) still
+loses on a pool (2.6 µs: a wake-up costs more than the work), so a caller that bakes grids that
+small passes `workers = 1`.
+
 ## Map generation
 
 Measured with `make lab LAB=mapgen-cost PRESET=release ARGS="--seeds=38,7,1 --reps=5

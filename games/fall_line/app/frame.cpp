@@ -325,8 +325,11 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   GE_ZONE("frame");
   // The map's sky at the view's moment: the cloud, the deck and the fog it is seen under.
   r::FrameView view = seen;
-  if (f.options.weather)
-    ge::mountain::app::sky_at(*f.level, view.time_s, view.weather, view.clouds);
+  if (f.options.weather) {
+    ge::mountain::app::sky_at(*f.level, view.time_s, view.weather, view.clouds,
+                              f.options.clouds > 0);
+    view.clouds.steps = f.options.clouds;
+  }
   const auto start = std::chrono::steady_clock::now();
   f.recorder.begin_frame(device);
   // Prepare: every decision of the frame, and the uploads.

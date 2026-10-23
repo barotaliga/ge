@@ -81,6 +81,11 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   contexts, the bindings file and rebinding, the device database, touch controls, local players,
   rumble and force feedback as pure functions, a simulated backend and the event log. It depends
   on `engine/core` only; the OS's devices reach it through `engine/platform`'s backend.
+- **`engine/move`**: character movement (`ge::move`, M28; `docs/movement.md` is the design): the
+  knobs of a moving body and their names, preset rows (an arena shooter's, a platformer's, a
+  walker's), one step over a swept-box trace callback the game answers with its own world, a box
+  world for labs and prototypes, the strafe jumper's best angle and the scenarios. It depends on
+  `engine/core` only and is a pure function of its inputs, so a run replays from its commands.
 - **`engine/ui`**: the immediate-mode 2D layer (rects, images, SDF text), plus Dear
   ImGui behind `GE_DEV_UI`.
 - **`engine/charset`**: the engine's bitmap fonts (`ge::charset`, M27; `docs/charsets.md`):

@@ -6,11 +6,13 @@
 // (direct where a hole can open, the relay where it cannot), and how long a player waits for it on
 // each preset; and it checks the server's STUN answer names a NAT's public face. The connect times
 // are drawn as a heatmap, a row a host kind and a column a client kind. Everything runs on a
-// virtual clock off one seed, so the lab is a determinism test too.
+// virtual clock off one seed, so the lab is a determinism test too. Then, under each preset, a
+// host's router speaking each port-mapping protocol (PCP, NAT-PMP, UPnP IGD: portmap.hpp) opens
+// its port, and a client behind a symmetric NAT reaches it directly by that forward.
 //
 // ge:summary Lab: every pair of NAT kinds reaching a host: direct or relayed, how long, each preset
 // ge:keywords lab net reach nat nat-traversal hole-punching relay rendezvous stun matrix preset
-// ge:keywords full-cone restricted port-restricted symmetric connect-time
+// ge:keywords full-cone restricted port-restricted symmetric connect-time portmap upnp nat-pmp pcp
 // ge:skill net labs
 // ge:test tests/net_reach_test.cpp
 #include <cmath>
@@ -21,8 +23,10 @@
 
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
+#include "net/portmap.hpp"
 #include "net/reach.hpp"
 #include "net/rendezvous.hpp"
+#include "net/sim_router.hpp"
 #include "net/stun.hpp"
 
 namespace {
@@ -178,6 +182,102 @@ bool stun_sees_public_face(int kind) {
   return kind == 0 ? mapped == gn::sim_address(1, 7000) : gn::sim_node(mapped) == 11;
 }
 
+// OPENING A PORT: a host behind a symmetric NAT whose router speaks only `proto` maps its port
+// (asking PCP, NAT-PMP and UPnP in turn), registers the forward with the rendezvous, and a client
+// behind another symmetric NAT (a pair that needs the relay without it) connects; the lease of
+// 20 s is renewed for a minute, then the mapping is closed.
+struct MapOutcome {
+  gn::PortmapState state = gn::PortmapState::idle;
+  gn::PortmapWhy why = gn::PortmapWhy::none;
+  gn::PortmapProto proto = gn::PortmapProto::none;
+  double map_ms = -1, connect_ms = -1;
+  gn::ReachPath path = gn::ReachPath::none;
+  uint64_t fallbacks = 0, renewals = 0;
+  bool held = false, closed = false;  // the forward held through the minute; gone after the close
+};
+
+MapOutcome map_and_reach(const gn::LinkConditions& link, gn::PortmapProto proto, uint32_t seed) {
+  gn::SimNetwork net = gn::make_sim_network(seed, link);
+  gn::Transport st;
+  gn::open_sim_transport(st, net, kServer);
+  gn::Rendezvous rv;
+  gn::RendezvousConfig rc;
+  rc.seed = seed;
+  gn::rendezvous_init(rv, rc, st);
+  gn::NatConfig hn;
+  hn.kind = gn::NatKind::symmetric;
+  hn.public_node = 11;
+  hn.inside = {1};
+  hn.gateway = 21;
+  gn::SimRouterConfig src;
+  src.nat = gn::sim_add_nat(net, hn);
+  src.protocols = gn::portmap_bit(proto);
+  gn::SimRouter router;
+  gn::sim_router_init(router, net, src, 0);
+  auto host = make_end(net, 1, 0, true, seed);  // its NAT is the router's, added above
+  auto client = make_end(net, 2, 1 + static_cast<int>(gn::NatKind::symmetric), false, seed);
+  gn::Transport mt;
+  gn::open_sim_transport(mt, net, gn::sim_address(1, 5350));
+  gn::PortmapConfig pc;
+  pc.gateway = gn::sim_address(21, 5351);
+  pc.internal_port = 7000;
+  pc.lifetime_s = 20;
+  pc.seed = seed;
+  gn::Portmap pm;
+  gn::portmap_init(pm, pc, mt);
+  gn::ReachConfig cfg;
+  cfg.rendezvous = kServer;
+  cfg.session = 42;
+  cfg.seed = uint64_t{seed} * 7 + 1;
+  gn::ReachHost h;
+  gn::reach_host_init(h, cfg, host->n);
+  gn::ReachClient c;
+  gn::reach_client_init(c, cfg, client->n);
+  gn::portmap_start(pm, 0);
+  MapOutcome o;
+  int64_t client_at = -1, end_at = -1;
+  bool held = true;
+  for (int64_t now = kTick; now <= 120000000; now += kTick) {
+    gn::sim_advance(net, now);
+    gn::sim_router_update(router, now);
+    gn::rendezvous_update(rv, now);
+    gn::node_update(host->n, now);
+    gn::node_update(client->n, now);
+    gn::portmap_update(pm, now);
+    if (pm.state == gn::PortmapState::mapped) {
+      gn::reach_host_forward(h, pm.external.port, now);
+      if (client_at < 0) client_at = now + 1000000;  // the forward registered by then
+      held &= gn::sim_router_forwards(router, now) == 1;
+    }
+    gn::reach_host_update(h, now);
+    if (now == client_at) gn::reach_client_start(c, now);
+    gn::reach_client_update(c, now);
+    gn::node_flush(host->n, now);
+    gn::node_flush(client->n, now);
+    if (pm.state == gn::PortmapState::failed) break;
+    if (end_at < 0 && client_at >= 0 && now >= client_at + 60000000) {
+      end_at = now;
+      o.held = held;
+      o.renewals = pm.stats.renewals;
+      gn::portmap_close(pm, now);
+    }
+    if (pm.state == gn::PortmapState::closed) {
+      o.closed = gn::sim_router_forwards(router, now) == 0;
+      break;
+    }
+  }
+  o.state = end_at >= 0 ? gn::PortmapState::mapped : pm.state;
+  o.why = pm.why;
+  o.proto = pm.proto;
+  if (pm.mapped_us > 0) o.map_ms = static_cast<double>(pm.mapped_us) / 1e3;
+  o.fallbacks = pm.stats.fallbacks;
+  o.path = c.path;
+  if (c.state == gn::ReachState::connected)
+    o.connect_ms = static_cast<double>(c.connected_us) / 1e3;
+  gn::rendezvous_close(rv);
+  return o;
+}
+
 std::string fmt(double v, int digits) {
   char b[32];
   std::snprintf(b, sizeof b, "%.*f", digits, v);
@@ -246,6 +346,44 @@ void run(gl::Lab& lab) {
                "Read the filters in map_in (engine/net/sim_network.cpp) and the punch and "
                "retarget in engine/net/reach.cpp; skill: net.");
   }
+  for (const std::string& name : split(lab.arg("presets"))) {
+    gn::LinkConditions link;
+    if (!gn::conditions_preset(name, link)) continue;  // failed above
+    gl::LabTable table{name + ": a symmetric host's router opening its port, by what it speaks",
+                       {"router speaks", "mapped by", "map (s)", "fallbacks", "renewals",
+                        "client path", "connect (s)", "held", "closed"},
+                       {}};
+    for (gn::PortmapProto p :
+         {gn::PortmapProto::pcp, gn::PortmapProto::natpmp, gn::PortmapProto::upnp}) {
+      const MapOutcome o = map_and_reach(link, p, seed * 37 + static_cast<uint32_t>(p));
+      const bool mapped = o.state == gn::PortmapState::mapped;
+      table.rows.push_back({gn::portmap_proto_name(p),
+                            mapped ? gn::portmap_proto_name(o.proto)
+                                   : std::string("FAIL ") + gn::portmap_why_name(o.why),
+                            mapped ? fmt(o.map_ms / 1e3, 2) : "-", std::to_string(o.fallbacks),
+                            std::to_string(o.renewals), gn::reach_path_name(o.path),
+                            o.connect_ms >= 0 ? fmt(o.connect_ms / 1e3, 2) : "-",
+                            o.held ? "yes" : "NO", o.closed ? "yes" : "NO"});
+      const std::string key = name + "-" + gn::portmap_proto_name(p);
+      lab.metric(key + "-map-ms", o.map_ms, "ms");
+      lab.metric(key + "-renewals", static_cast<double>(o.renewals), "count");
+      if (!mapped || o.proto != p || o.path != gn::ReachPath::direct || !o.held || !o.closed ||
+          o.renewals < 5)
+        lab.fail(key +
+                     ": the router's protocol did not map, renew, let a client straight in and "
+                     "close",
+                 "Run tests/net_portmap_test.cpp, then read engine/net/portmap.cpp and "
+                 "engine/net/sim_router.cpp; skill: net.");
+    }
+    lab.table(std::move(table));
+  }
+  lab.note(
+      "Opening a port: the host sits behind a symmetric NAT and the client behind another, a pair "
+      "the relay must carry without a forward. The host's router speaks the one protocol of its "
+      "row; the host asks PCP, then NAT-PMP, then UPnP, so a fallback is a protocol that timed out "
+      "(about 3.75 s each) or, for PCP on a NAT-PMP router, was answered with UNSUPP_VERSION at "
+      "once. The lease asked for is 20 s, renewed at half its life for a minute; then the mapping "
+      "is closed. The client's path is direct when the forward let it in.");
   gl::LabTable stun{"STUN from behind each NAT kind", {"kind", "public face"}, {}};
   for (int k = 0; k < kKinds; k++) {
     const bool ok = stun_sees_public_face(k);
@@ -289,10 +427,11 @@ const gl::LabSpec kSpec{
     "net-reach",
     gl::LabKind::sim,
     "engine",
-    "engine/net (rendezvous, reach, stun, the simulated NATs)",
+    "engine/net (rendezvous, reach, stun, portmap, the simulated NATs and router)",
     "net",
     "Behind every pair of home routers' NAT kinds, does a client reach its host, by a punched "
-    "hole where one can open and the relay where none can, and how long does it take?",
+    "hole where one can open and the relay where none can, and how long does it take? Does each "
+    "port-mapping protocol open, keep and close a forward that lets a client straight in?",
     {
         {"presets", "lan,wifi,bad", "condition presets, comma-separated"},
         {"seed", "1", "the network's, the nodes' and the relays' stream"},

@@ -220,4 +220,20 @@ int tcp_next_frame(TcpStream& s, uint8_t* buffer, size_t capacity) {
   return -1;
 }
 
+bool tcp_send_bytes(TcpStream& s, const uint8_t* data, size_t size) {
+  if (s.handle == -1 || s.closed) return false;
+  if (s.out.size() - s.out_head + size > kStreamBacklog) return false;
+  s.out.insert(s.out.end(), data, data + size);
+  tcp_pump(s);
+  return true;
+}
+
+size_t tcp_take_bytes(TcpStream& s, std::vector<uint8_t>& into) {
+  const size_t n = s.in.size() - s.in_head;
+  into.insert(into.end(), s.in.begin() + static_cast<std::ptrdiff_t>(s.in_head), s.in.end());
+  s.in.clear();
+  s.in_head = 0;
+  return n;
+}
+
 }  // namespace ge::net

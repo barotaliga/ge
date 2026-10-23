@@ -4,14 +4,15 @@
 // bytes and its port. None is bigger than the message that asked for it.
 //
 //   to the server                     from the server
-//   register  session u64             registered  public address
+//   register  session u64, port u16   registered  public address
 //   join      session u64, nonce u64  peer        address, nonce u64, relay address, key u64
 //                                     unknown     session u64
 //   to the relay's port               between the two ends
 //   bind      key u64, role           punch       nonce u64
 //
 // A join answers the client with the host's public address and the host with the client's, both
-// with the same nonce, relay port and key. STUN shares the server's port (stun.hpp).
+// with the same nonce, relay port and key. A register's port is the one the host's router forwards
+// to it (0, the padding's, when none: portmap.hpp). STUN shares the server's port (stun.hpp).
 //
 // ge:summary The rendezvous's messages: register, join, peer, punch, bind, encoded and read
 // ge:keywords net rendezvous reach wire register join peer punch relay bind nonce encode decode

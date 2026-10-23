@@ -57,6 +57,9 @@ bool port_taken(const SimNat& nat, uint16_t port, int64_t now_us) {
 
 // The public address `from` leaves by toward `to`, the mapping made or refreshed.
 Address map_out(SimNat& nat, const Address& from, const Address& to, int64_t now_us) {
+  for (const SimNat::Forward& f : nat.forwards) {
+    if (f.inside == from && f.until_us > now_us) return sim_address(nat.config.public_node, f.port);
+  }
   const bool symmetric = nat.config.kind == NatKind::symmetric;
   SimNat::Mapping* m = nullptr;
   for (SimNat::Mapping& k : nat.maps) {
@@ -168,6 +171,18 @@ bool sim_nat_forward(SimNetwork& net, int nat, const Address& inside, uint16_t p
   return true;
 }
 
+bool sim_nat_unforward(SimNetwork& net, int nat, uint16_t public_port) {
+  if (nat < 0 || nat >= static_cast<int>(net.nats.size())) return false;
+  auto& fs = net.nats[static_cast<size_t>(nat)].forwards;
+  for (size_t i = 0; i < fs.size(); i++) {
+    if (fs[i].port == public_port) {
+      fs.erase(fs.begin() + static_cast<std::ptrdiff_t>(i));
+      return true;
+    }
+  }
+  return false;
+}
+
 int sim_nat_of(const SimNetwork& net, uint32_t node) {
   for (size_t i = 0; i < net.nats.size(); i++) {
     if (has(net.nats[i].config.inside, node)) return static_cast<int>(i);
@@ -232,8 +247,11 @@ bool sim_send(SimNetwork& net, const Address& from, const Address& to, const uin
   Address source = from;
   if (!net.nats.empty()) {
     const int n = sim_nat_of(net, sim_node(from));
-    if (n >= 0 && !has(net.nats[static_cast<size_t>(n)].config.inside, sim_node(to)))
-      source = map_out(net.nats[static_cast<size_t>(n)], from, to, net.now_us);
+    if (n >= 0) {
+      SimNat& nat = net.nats[static_cast<size_t>(n)];
+      if (!has(nat.config.inside, sim_node(to)) && sim_node(to) != nat.config.gateway)
+        source = map_out(nat, from, to, net.now_us);
+    }
   }
   auto it = net.links.find(link_key(sim_node(from), sim_node(to)));
   if (it == net.links.end()) {

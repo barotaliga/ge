@@ -228,3 +228,27 @@ TEST(the_bot_rides_every_piste_of_seed_38_to_a_foot_and_keeps_its_golden) {
     for (const auto& r : got) out << r << "\n";
   }
 }
+
+TEST(with_the_injuries_switch_on_the_bot_skis_seed_38s_first_piste_unhurt_and_unchanged) {
+  const mg::Level& level = *seed38();
+  if (!level.resort) return;  // the golden test above says why
+  const auto& runs = level.resort->runs;
+  int32_t first = -1;
+  for (size_t i = 0; i < runs.size() && first < 0; i++) {
+    if (runs[i].kind == mg::RunKind::piste) first = static_cast<int32_t>(i);
+  }
+  CHECK(first >= 0);
+  const fs::RunReport off = fs::simulate_free(seed38(), kSeed, first, {});
+  fs::SimOptions on_opts;
+  on_opts.injuries = true;
+  const fs::RunReport on = fs::simulate_free(seed38(), kSeed, first, on_opts);
+  CHECK_MSG(on.finished && on.died < 0,
+            "with the INJURIES switch on the bot did not reach the foot alive; run `make lab "
+            "LAB=free` and read its body table (skill: sim)");
+  CHECK(on.injuries == 0 && on.iss == 0);
+  // His body never touches his skis until a mortal blow: the same run, a digest that reads it.
+  CHECK_BITS(on.time, off.time);
+  CHECK_BITS(on.distance, off.distance);
+  CHECK(on.digest != off.digest);
+  CHECK(off.injuries == 0 && off.died < 0);
+}

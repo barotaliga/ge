@@ -28,6 +28,10 @@ struct Reach {
   std::set<std::string> changed;  // repository-relative paths changed since the base
   std::set<std::string> sources;  // repository-relative .cpp files that compile a changed file
   std::set<std::string> targets;  // the build targets reached (CMake's names: ge_core, labs, ...)
+  // The .cpp files whose own object is reached: it includes a changed file, or a header in a
+  // directory a reached library compiles in. Finer than `targets` where one executable holds many
+  // subjects (each lab of the labs executable is reached on its own).
+  std::set<std::string> objects;
 };
 
 // The change since `base` in `repo`, its sources and objects off `build`'s deps. False when git
