@@ -60,7 +60,7 @@ engine/net/voice          Opus frames, the jitter buffer, voice routing (M17h)
 engine/net/session        lobby, teams, chat, private messages, the player list, kicks,
                           reconnecting by token; discovery: finding a game on the LAN (M17d)
 engine/net/reach          STUN, the rendezvous, hole punching, the relay (M17e1);
-                          UPnP, NAT-PMP/PCP (M17e2)
+engine/net/portmap        a port opened on the router: PCP, NAT-PMP, UPnP IGD (M17e2)
 engine/net/guard          input checks, interest, replay audits, cheat flags, reports (M17l)
 engine/net/stress         load, soak, chaos scripts, ramps to the breaking point, fuzzing (M17m)
         │
@@ -181,10 +181,41 @@ a mapping per destination and lets only that destination answer. A hole opens un
 symmetric and the other port-restricted or symmetric: the symmetric side's port for the pair is
 one the other side never sent to. Those pairs go through the relay, which forwards between the
 two addresses that bound it with the key and nothing else. A port forward
-(`sim_nat_forward`) is what M17e2's UPnP and NAT-PMP will ask a router for.
+(`sim_nat_forward`) is what a router opens when it is asked (below).
 
 The `net-reach` lab runs all 25 pairs of the five kinds (none and the four) under each preset:
 direct pairs connect in a few round trips, relayed ones a little over `direct_us`.
+
+## Opening a port (M17e2)
+
+A host whose router forwards it a port is reached straight, whatever either side's NAT: no punch
+and no relay. `portmap.hpp` asks the router for one on a socket of its own, trying three
+protocols in turn (`portmap_wire.hpp` holds their messages):
+
+| Protocol | How | |
+| --- | --- | --- |
+| PCP (RFC 6887) | A 60-byte MAP request to the gateway's port 5351, with a nonce and the client's own address | A NAT-PMP-only router answers it with version 0 and UNSUPP_VERSION, which moves the client on at once |
+| NAT-PMP (RFC 6886) | The external address and a UDP map, to the same port | |
+| UPnP IGD | SSDP's M-SEARCH to 239.255.255.250:1900; the router's description over HTTP; SOAP `AddPortMapping` and `GetExternalIPAddress` on its WANIPConnection service | A router that gives only permanent leases (error 725) is asked again with a lease of 0 |
+
+An unanswered ask is sent again after 250 ms, then doubling, four times, before the next protocol
+is tried. A mapping is renewed at half its lease, and a renewal keeps asking until the lease runs
+out (a burst of loss over a few sparse asks would otherwise cost a lease with half its life
+left). `portmap_close` takes it down with a lease of 0 (UPnP: `DeletePortMapping`). The host then
+tells the rendezvous (`reach_host_forward`): its register names the port, and clients are
+introduced by it. A router's forward is a static mapping: everything the forwarded socket sends
+leaves from that port, so the host's answers come from the address the client connected to.
+
+Over a real UDP socket UPnP's HTTP runs on a TCP stream (`tcp_send_bytes`); on the simulated
+network it is one datagram each way, asked again on a timeout as TCP would resend. The real
+gateway's address and the machine's own LAN address are the caller's (`PortmapConfig::gateway`,
+`local`). `SimRouter` (`sim_router.hpp`) is the router on the simulated network: it answers any
+mix of the three on its NAT's LAN face (`NatConfig::gateway`), cuts a lease to its
+`max_lifetime_s`, gives a taken port elsewhere (PCP, NAT-PMP) or refuses it (UPnP's 718), and
+only answers its own LAN. The tests also run NAT-PMP over real loopback UDP and UPnP over real
+loopback UDP and TCP. The `net-reach` lab's second table runs, under each preset, a host behind
+a symmetric NAT whose router speaks one protocol, and a client behind another symmetric NAT: it
+maps, renews a 20 s lease for a minute, lets the client straight in and closes.
 
 ## The simulated network (M17a)
 
@@ -284,7 +315,7 @@ seeded and replayable. `engine/net/stress` and `ge net stress` push it until som
 | `net-link --transport=tcp`, `--mix=download`, `--budget` | M17c | The same sessions with every link a stream (what head-of-line blocking does to the round trip and the resends), a 64 KB message to every client every two seconds checked whole byte for byte, and every connection held to a send budget; `ge net sim` takes the same flags |
 | a live node's capture | M17b | A game points its transport at a `Capture` with a size limit and saves it (`save_capture`) when a session ends or the player asks; the tools read it like a lab's |
 | the `net-session` lab | M17d | A 32-player lobby on a dedicated host under each preset: everyone joins and picks a team, chats to all, to the team and to one player, one floods; the leader kicks one (whose return is refused), another is cut for six seconds and comes back to its seat, then the settings, the start and the return. The table checks every chat copy delivered, every player list the host's, the kick, the ban and the seat kept; the seats are charted and the pings drawn as boxes |
-| the `net-reach` lab | M17e1 | Every pair of NAT kinds (none, full cone, restricted, port-restricted, symmetric) under each preset: the path each pair took (direct or relayed, against the one RFC 4787 predicts), how long it took, a reliable message each way; STUN from behind each kind; the connect times as a heatmap |
+| the `net-reach` lab | M17e1, M17e2 | Every pair of NAT kinds (none, full cone, restricted, port-restricted, symmetric) under each preset: the path each pair took (direct or relayed, against the one RFC 4787 predicts), how long it took, a reliable message each way; STUN from behind each kind; the connect times as a heatmap; a router speaking each of PCP, NAT-PMP and UPnP opening, renewing and closing a port that lets a client straight in |
 | the `voice` lab | M17h | A voice through each preset, metered against the clean one, the WAV attached |
 | the `accounts` lab | M17j | Sign-ups, logins (a wrong password refused, a brute force throttled), friend requests, presence and an invite, against the service on the simulated network |
 | the `cheats` lab | M17l | Each scripted cheat (speed hack, teleport, input flood, off-grid or future inputs, forged and replayed packets, fishing for hidden state, a planted desync, a forged score or ghost) caught or refused; honest bots under every preset raising no flag |

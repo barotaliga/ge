@@ -12,7 +12,8 @@ get_property(GE_GAME_TARGETS GLOBAL PROPERTY GE_GAME_TARGETS)
 # sets GE_GPU_REQUIRE=1 (CI's Linux x64 rows, with lavapipe and a virtual display): there a
 # skip is a failure.
 # A test that includes a plugin's presentation half ("<plugin>/app/...") is built only when that
-# half is (cmake/Plugins.cmake: mountain's needs the GPU).
+# half is (cmake/Plugins.cmake: mountain's needs the GPU); one that includes a game's
+# ("<game>/app/...") links the game's `<game>_app` and is built only when that is.
 # The runner every test executable shares, compiled once (and linted once) rather than per test.
 add_library(ge_test_main OBJECT main.cpp)
 target_link_libraries(ge_test_main PRIVATE ge_core)
@@ -53,8 +54,22 @@ foreach(src ${GE_TEST_SOURCES})
   if(missing_app)
     continue()
   endif()
+  # A test that includes a game's presentation half ("<game>/app/...") links it, and is built
+  # only when it is (with the GPU).
+  file(STRINGS ${src} game_app_includes REGEX "^#include \"[a-z0-9_]+/app/")
+  foreach(line IN LISTS game_app_includes)
+    string(REGEX REPLACE "^#include \"([a-z0-9_]+)/app/.*" "\\1" game "${line}")
+    if(TARGET ${game}_app)
+      list(APPEND extra ${game}_app)
+    elseif(NOT TARGET ge_${game}_app)
+      set(missing_app TRUE)
+    endif()
+  endforeach()
+  if(missing_app)
+    continue()
+  endif()
   add_executable(${name} ${src} $<TARGET_OBJECTS:ge_test_main>)
-  target_link_libraries(${name} PRIVATE ge_core ge_audio ge_assets ge_net ge_input ge_save ge_lab ge_play ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
+  target_link_libraries(${name} PRIVATE ge_core ge_audio ge_assets ge_net ge_input ge_move ge_save ge_lab ge_play ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
     ${extra} ${cli})
   target_compile_definitions(${name} PRIVATE GE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
   add_test(NAME ${name} COMMAND ${name})

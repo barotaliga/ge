@@ -1,5 +1,6 @@
 // THE RENDEZVOUS: the small public server two players behind home routers use to find each other.
-// A host REGISTERS its session (the server sees the public address its NAT gave it, and says so);
+// A host REGISTERS its session (the server sees the public address its NAT gave it, and says so;
+// a host whose router forwards it a port, portmap.hpp, names that port and is introduced by it);
 // a client JOINS by the session's id, and the server tells each the other's public address with
 // a nonce, so both can PUNCH: send to each other at once, each opening its own NAT to the other
 // (reach.hpp does it). Where no hole opens (a symmetric NAT against a port-restricted or

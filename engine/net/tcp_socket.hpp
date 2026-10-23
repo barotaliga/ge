@@ -7,7 +7,7 @@
 //
 // ge:summary The OS's non-blocking TCP sockets carrying length-framed datagrams; listen, connect
 // ge:keywords net tcp socket stream listen accept connect frame framing length-prefixed
-// ge:keywords nodelay non-blocking backlog head-of-line
+// ge:keywords nodelay non-blocking backlog head-of-line raw-bytes
 // ge:skill net
 // ge:test tests/net_tcp_socket_test.cpp
 #pragma once
@@ -60,5 +60,12 @@ void tcp_pump(TcpStream& s);
 // The next whole frame received: its size, or -1 when none is whole yet; a frame larger than
 // `capacity` is skipped.
 int tcp_next_frame(TcpStream& s, uint8_t* buffer, size_t capacity);
+
+// RAW BYTES, for a protocol that is not the engine's frames (a router's HTTP: portmap.hpp). Never
+// mixed with frames on one stream. Queue bytes as they are; false when the stream is closed or
+// its backlog is full.
+bool tcp_send_bytes(TcpStream& s, const uint8_t* data, size_t size);
+// Every byte received so far appended to `into`, the stream's buffer emptied; how many.
+size_t tcp_take_bytes(TcpStream& s, std::vector<uint8_t>& into);
 
 }  // namespace ge::net
