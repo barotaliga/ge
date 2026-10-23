@@ -92,9 +92,15 @@ bool parse_refs(const std::string& path, std::vector<RefRow>& rows, std::string*
         const std::filesystem::path p(v);
         r.ref = p.is_absolute() ? v : (dir / p).string();
       } else if (k == "crop") {
-        if (std::sscanf(v.c_str(), "%d,%d,%d,%d", &r.crop[0], &r.crop[1], &r.crop[2], &r.crop[3]) !=
-                4 ||
-            r.crop[2] <= 0 || r.crop[3] <= 0) {
+        const char* at = v.c_str();
+        int read = 0;
+        for (; read < 4; ++read) {
+          char* end = nullptr;
+          r.crop[read] = static_cast<int>(std::strtol(at, &end, 10));
+          if (end == at || (read < 3 && *end != ',') || (read == 3 && *end != '\0')) break;
+          at = end + 1;
+        }
+        if (read != 4 || r.crop[2] <= 0 || r.crop[3] <= 0) {
           *error = where + ": crop must be x,y,w,h in px with w and h above 0";
           return false;
         }
