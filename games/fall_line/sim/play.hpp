@@ -13,10 +13,12 @@
 // - `pilot`: the bot's controls for the player.
 // - `state_of`: the GameState behind a Run this spec opened, for the game's GPU renderer
 //   (app/play_render.hpp), which draws a run the play contract steps.
+// - `trace`: the bot's decisions (bot.hpp), the player's pilot as agent 0 and each rival as his
+//   racer index, for `ge why`.
 //
 // ge:summary Fall Line on the play contract: its axes, options, observation, state, report, pilot
 // ge:keywords play agent observe observation state report pilot axes options game-spec run
-// ge:keywords fall_line_game open_run state_of
+// ge:keywords fall_line_game open_run state_of trace why
 // ge:skill sim agent-interface
 // ge:test tests/fall_line_play_test.cpp
 #pragma once

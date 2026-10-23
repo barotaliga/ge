@@ -1,7 +1,7 @@
 // The `play` command line (main.hpp).
 //
 // ge:summary play_main: parses the play command line and prints each command's JSON answer
-// ge:keywords play main command-line describe sim replay state diverge bench shot png json
+// ge:keywords play main command-line describe sim replay state diverge bench shot png json why
 // ge:skill agent-interface
 // ge:test tests/play_session_test.cpp
 #include "play/main.hpp"
@@ -18,8 +18,10 @@
 #include "core/num_text.hpp"
 #include "lab/png.hpp"
 #include "play/bench.hpp"
+#include "play/human.hpp"
 #include "play/record.hpp"
 #include "play/session.hpp"
+#include "play/why.hpp"
 #include "prof/memory.hpp"
 
 namespace ge::play {
@@ -27,6 +29,9 @@ namespace ge::play {
 namespace {
 
 namespace fs = std::filesystem;
+
+// The most flips `why --flips` lists; the rest are counted.
+constexpr size_t kMostFlips = 200;
 
 struct Line {
   std::string op;
@@ -192,7 +197,7 @@ int sim(const GameSpec& spec, const Line& l, std::ostream& out) {
   for (const double seed : seeds) {
     Setup setup;
     std::string error;
-    if (!make_setup(spec, seed, options_of(l, {"seeds", "out"}), setup, error)) {
+    if (!make_setup(spec, seed, options_of(l, {"seeds", "out", "human"}), setup, error)) {
       return problem(out, 2, error, "the command line", "play describe lists the options");
     }
     const auto p = pilot_run(spec, setup, error);
@@ -202,8 +207,14 @@ int sim(const GameSpec& spec, const Line& l, std::ostream& out) {
     std::ofstream f(file, std::ios::binary);
     f << to_text(p->log);
     if (!f) return problem(out, 1, "cannot write " + file.string(), file.string(), "check --out");
+    std::string human;
+    if (l.flags.count("human")) {
+      const auto w = why_replay(spec, p->log, 0, error);
+      if (!w) return problem(out, 1, error, file.string(), "--human needs a game whose Run traces");
+      human = ",\"human\":" + human_json(human_report(spec, p->log, w->why));
+    }
     runs += std::string(runs.empty() ? "" : ",") + "{\"seed\":" + core::num::to_string(seed) +
-            ",\"inputs\":" + quote(file.generic_string()) + "," + played_json(*p) + "}";
+            ",\"inputs\":" + quote(file.generic_string()) + "," + played_json(*p) + human + "}";
   }
   out << "{\"game\":" << quote(spec.name) << ",\"runs\":[" << runs << "]}\n";
   return 0;
@@ -308,6 +319,83 @@ std::string lens_file_name(const GameSpec& spec, const LensAsk& ask) {
   if (r && view.empty() && !r->views.empty()) view = r->views[0].name;
   if (r && mode.empty() && !r->modes.empty()) mode = r->modes[0].name;
   return view + "-" + mode;
+}
+
+// `why`: a log replayed with the decision trace on; one agent's decisions round a step, with
+// --flips the changes of choice over the whole run, with --timeline its series file in --out.
+int why_cmd(const GameSpec& spec, const Line& l, std::ostream& out) {
+  if (l.words.size() != 1) {
+    return problem(out, 2, "why takes one input log", "the command line",
+                   "play why runs/x.inputs --agent=0 --step=600");
+  }
+  InputLog log;
+  std::string error;
+  if (!read_log(l.words[0], log, error))
+    return problem(out, 1, error, l.words[0], "pass an input log");
+  double agent = 0, step = 0, around = 0, close = 0;
+  const double last = static_cast<double>(log.steps() > 0 ? log.steps() - 1 : 0);
+  if (!number_flag(l, "agent", 0, agent) || !number_flag(l, "step", last, step) ||
+      !number_flag(l, "around", 0, around) || !number_flag(l, "close", 0, close) || agent < 0 ||
+      around < 0) {
+    return problem(out, 2, "--agent, --step, --around and --close take numbers, none negative",
+                   "the command line", "pass --agent=0 --step=600 --around=12");
+  }
+  const auto w = why_replay(spec, log, static_cast<int32_t>(agent), error);
+  if (!w) return problem(out, 1, error, l.words[0], "trace the game's Run (play/game.hpp)");
+  const auto it = l.flags.find("decision");
+  const std::string name = it == l.flags.end() ? "" : it->second;
+  const auto from = static_cast<int64_t>(step - around);
+  const auto to = static_cast<int64_t>(step + around);
+  std::string decisions, text;
+  for (const ai::Decision* d : decisions_between(w->why, from, to, name)) {
+    decisions += std::string(decisions.empty() ? "" : ",") + ai::decision_json(w->why, *d);
+    text += ai::decision_text(w->why, *d);
+  }
+  int64_t agree = 0, first_disagree = -1;
+  for (size_t i = 0; i < w->agrees.size(); i++) {
+    agree += w->agrees[i];
+    if (!w->agrees[i] && first_disagree < 0) first_disagree = static_cast<int64_t>(i);
+  }
+  std::ostringstream o;
+  o << "{\"inputs\":" << quote(l.words[0]) << ",\"agent\":" << static_cast<int32_t>(agent)
+    << ",\"steps\":" << w->steps << ",\"digest\":" << quote(hex64(w->digest))
+    << ",\"recorded\":" << w->why.decisions().size()
+    << ",\"pilot_asked\":" << (w->asked_pilot ? "true" : "false") << ",\"pilot_agrees\":" << agree
+    << ",\"first_disagree\":" << first_disagree << ",\"from\":" << from << ",\"to\":" << to
+    << ",\"decisions\":[" << decisions << "]";
+  if (l.flags.count("flips")) {
+    const std::vector<Flip> flips = why_flips(w->why, static_cast<int32_t>(agent), close);
+    std::string rows;
+    for (size_t i = 0; i < flips.size() && i < kMostFlips; i++) {
+      const Flip& f = flips[i];
+      text +=
+          "step " + std::to_string(f.step) + " " + f.decision + ": " +
+          (f.from == std::string_view(f.to) ? std::string("close call on ") + f.to
+                                            : std::string(*f.from ? f.from : "-") + " -> " + f.to) +
+          (std::isfinite(f.margin) ? " by " + core::num::to_string(f.margin) : "") + "\n";
+      rows += std::string(rows.empty() ? "" : ",") + "{\"step\":" + std::to_string(f.step) +
+              ",\"decision\":" + quote(f.decision) + ",\"from\":" + quote(f.from) +
+              ",\"to\":" + quote(f.to) + ",\"margin\":" +
+              (std::isfinite(f.margin) ? core::num::to_string(f.margin) : std::string("null")) +
+              "}";
+    }
+    o << ",\"flips\":[" << rows
+      << "],\"more_flips\":" << (flips.size() > kMostFlips ? flips.size() - kMostFlips : 0);
+  }
+  if (l.flags.count("timeline")) {
+    const auto out_it = l.flags.find("out");
+    const fs::path dir = out_it == l.flags.end() ? fs::path("runs") : fs::path(out_it->second);
+    std::error_code ec;
+    fs::create_directories(dir, ec);
+    const fs::path file = dir / (fs::path(l.words[0]).stem().string() + "-why-" +
+                                 std::to_string(static_cast<int32_t>(agent)) + ".tsv");
+    std::ofstream f(file, std::ios::binary);
+    f << lab::write_series(why_timeline(w->why, static_cast<int32_t>(agent), spec.hz));
+    if (!f) return problem(out, 1, "cannot write " + file.string(), file.string(), "check --out");
+    o << ",\"timeline\":" << quote(file.generic_string());
+  }
+  out << o.str() << ",\"text\":" << quote(text) << "}\n";
+  return 0;
 }
 
 // `shot`: a log played to --step (its end by default), or the pilot's run of --seed, and the
@@ -634,9 +722,11 @@ int play_main(int argc, char** argv, std::istream& in, std::ostream& out) {
   if (l.op == "diverge") return diverge_cmd(*spec, l, out);
   if (l.op == "bench") return bench_cmd(*spec, l, out);
   if (l.op == "shot") return shot_cmd(*spec, l, out);
+  if (l.op == "why") return why_cmd(*spec, l, out);
   if (l.op == "record") return record_cmd(*spec, l, out);
   return problem(out, 2, "unknown command `" + l.op + "`", "the command line",
-                 "run describe, sim, replay, state, diverge, bench, shot or record, or no command "
+                 "run describe, sim, replay, state, diverge, bench, shot, record or why, or no "
+                 "command "
                  "for the protocol");
 }
 

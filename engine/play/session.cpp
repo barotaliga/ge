@@ -107,7 +107,7 @@ std::string Session::hello() const {
          ",\"options\":{" + options + "},\"hz\":" + to_string(spec_.hz) +
          ",\"most_steps\":" + std::to_string(most_steps_) + ",\"axes\":[" + axes +
          "],\"most_hold\":" + std::to_string(kMostHold) +
-         ",\"ops\":[\"observe\",\"act\",\"pilot\",\"state\",\"inputs\",\"end\"]}";
+         ",\"ops\":[\"observe\",\"act\",\"pilot\",\"why\",\"state\",\"inputs\",\"end\"]}";
 }
 
 std::string Session::observation(std::string_view op) {
@@ -116,6 +116,31 @@ std::string Session::observation(std::string_view op) {
                          ",\"t\":" + to_fixed(static_cast<double>(steps_) / spec_.hz, 3) +
                          ",\"done\":" + (done() ? "true" : "false"),
                      run_->observe());
+}
+
+std::string Session::why_now() {
+  ai::Why why(0);
+  if (!run_->trace(&why)) {
+    return error_line(std::string(spec_.name) + "'s bots record no decisions",
+                      "trace the game's Run (play/game.hpp), or send pilot");
+  }
+  std::vector<double> input(spec_.axes.size(), 0);
+  const bool has = run_->pilot(input);
+  run_->trace(nullptr);
+  if (!has) {
+    return error_line("the game " + std::string(spec_.name) + " has no pilot",
+                      "send act with your own input");
+  }
+  std::string axes, decisions;
+  for (size_t i = 0; i < input.size(); i++) {
+    axes += std::string(axes.empty() ? "" : ",") + quote(spec_.axes[i].name) + ":" +
+            core::num::to_string(snap_axis(input[i], spec_.axes[i].kind));
+  }
+  for (const ai::Decision& d : why.decisions()) {
+    decisions += std::string(decisions.empty() ? "" : ",") + ai::decision_json(why, d);
+  }
+  return "{\"op\":\"why\",\"step\":" + std::to_string(steps_) + ",\"pilot\":{" + axes +
+         "},\"decisions\":[" + decisions + "]}";
 }
 
 std::string Session::handle(std::string_view line) {
@@ -144,9 +169,10 @@ std::string Session::handle(std::string_view line) {
                            ",\"digest\":" + quote(hex64(run_->digest())),
                        run_->report());
   }
+  if (op == "why") return why_now();
   if (op != "act" && op != "pilot") {
     return error_line("unknown op \"" + op + "\"",
-                      "send observe, act, pilot, state, inputs or end");
+                      "send observe, act, pilot, why, state, inputs or end");
   }
   if (done())
     return error_line("the run is over; there is nothing to act on", "send {\"op\":\"end\"}");

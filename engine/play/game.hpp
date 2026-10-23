@@ -25,12 +25,15 @@
 // recording hands it every frame in order and says when a frame is a cut. A build with no GPU
 // registers none, and `--gpu` says so.
 //
+// THE TRACE is what `ge why` reads: a Run whose bots write decision records (ai/why.hpp) says so
+// by accepting a recorder (`trace`), and the engine replays a log with it on (play/why.hpp).
+//
 // A game registers its spec with `GE_GAME(spec)` in one file of its `play` executable, whose
 // `main` is `ge::play::play_main` (main.hpp). One executable holds one game.
 //
 // ge:summary The play contract: GameSpec, the axes, Run (step, observe, state, digest, pilot)
 // ge:keywords play contract game spec run axis axes option setup pilot bot observe state digest
-// ge:keywords snap_axis ge_game register view views shoot shot picture caption
+// ge:keywords snap_axis ge_game register view views shoot shot picture caption trace why
 // ge:keywords renderer renderer-spec ge_renderer gpu mode modes lit wireframe depth overlay
 // ge:skill agent-interface
 // ge:test tests/play_session_test.cpp
@@ -43,6 +46,7 @@
 #include <string>
 #include <string_view>
 
+#include "ai/why.hpp"
 #include "lab/raster.hpp"
 
 namespace ge::play {
@@ -109,6 +113,14 @@ class Run {
   // game has none (then `ge sim` cannot run it).
   virtual bool pilot(std::span<double> input) {
     (void)input;
+    return false;
+  }
+  // THE DECISION TRACE (ai/why.hpp): from now on every bot of the run, its pilot among them,
+  // records its decisions into `why` (null: stop). Return false when the game's bots record
+  // none (then `ge why` cannot explain them). Recording must not change a decision: the run's
+  // digest is the same traced and untraced.
+  virtual bool trace(ai::Why* why) {
+    (void)why;
     return false;
   }
   // The still `view` (one the spec lists) of the run as it stands: drawn into `out` on the CPU,
