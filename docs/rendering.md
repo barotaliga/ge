@@ -671,10 +671,15 @@ read in 2026, longitude 0):
   built for the brighter of the two skies and the other is laid over as a veil; while the sun
   still keys, the moon's direct light is spread from above (`world.z`);
 - the dark sky's own glow (2e-4 cd/m2 at the zenith, brighter toward the horizon) lights the
-  snow without a moon; the stars are cube cells with a magnitude each, drawn down to the
-  limiting magnitude the sky's brightness leaves (none in the day, thousands on a moonless
-  night, few under a full moon), turned by the sidereal angle about the pole at the map's
-  latitude, with the galaxy's band;
+  snow without a moon; the stars are the REAL ones (M8f5, `render/stars.hpp`: a bright-star
+  catalogue's 9,096, each at its place, magnitude and B-V colour, baked into the engine as a
+  generated table and cut into a cube map of 6 × 160 × 160 cells of up to three stars, the sky
+  pass reading the pixel's cell and the eight round it; 19 stars of tight clusters are dropped,
+  none brighter than the fifth magnitude), drawn down to the limiting magnitude the sky's
+  brightness leaves (none in the day, thousands on a moonless night, few under a full moon),
+  turned by the sidereal angle about the pole at the map's latitude, so the constellations stand
+  where the map's place and hour put them (the catalogue's epoch's places: the precession since,
+  under half a degree, is not applied), with the galaxy's band;
 - THE EYE: under 14 lx on white the exposure adapts only partly (dark scenes stay dark), and
   the rods' share desaturates the picture toward a blue tint (`night_vision`, in post before
   the exposure).

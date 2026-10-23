@@ -28,6 +28,7 @@
 #include "gpu/pipeline.hpp"
 #include "render/clouds.hpp"
 #include "render/frame.hpp"
+#include "render/stars.hpp"
 
 namespace ge::render {
 
@@ -49,6 +50,9 @@ struct Sky {
       aerial_view, blank_view;
   wgpu::Buffer light;  // frame.wgsl's SkyLight
   wgpu::Sampler sampler;
+  StarTexture stars;  // the real stars' map (render/stars.hpp), the sky pass's group 1
+  wgpu::BindGroupLayout star_layout;
+  wgpu::BindGroup star_group;
   CloudNoise cloud;  // the cloud's noise, bound beside the tables (frame.wgsl's 8 and 9)
   wgpu::BindGroupLayout in_layout, out_2d, out_3d, out_buffer;
   uint32_t p_transmittance = 0, p_multiscatter = 0, p_sky_view = 0, p_aerial = 0, p_light = 0;

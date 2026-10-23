@@ -168,19 +168,20 @@ struct FrameRecorder {
 // ── Bind group layouts ──
 
 enum class Slot : uint8_t {
-  uniform,       // a uniform buffer
-  storage_read,  // a read-only storage buffer
-  storage,       // a read-write storage buffer
-  sampler,       // a filtering sampler
-  texture,       // a filterable float 2D texture
-  texture_raw,   // an unfilterable float 2D texture (textureLoad only: R32F, RG32F)
-  texture_3d,    // a filterable float 3D texture
-  store_2d,      // a write-only RGBA16F 2D storage texture
-  store_3d,      // a write-only RGBA16F 3D storage texture
-  depth,         // a depth texture (textureLoad only)
-  store_r32,     // a write-only R32F 2D storage texture
-  depth_array,   // a depth 2D-array texture (comparison sampling)
-  compare,       // a comparison sampler
+  uniform,        // a uniform buffer
+  storage_read,   // a read-only storage buffer
+  storage,        // a read-write storage buffer
+  sampler,        // a filtering sampler
+  texture,        // a filterable float 2D texture
+  texture_raw,    // an unfilterable float 2D texture (textureLoad only: R32F, RG32F)
+  texture_3d,     // a filterable float 3D texture
+  store_2d,       // a write-only RGBA16F 2D storage texture
+  store_3d,       // a write-only RGBA16F 3D storage texture
+  depth,          // a depth texture (textureLoad only)
+  store_r32,      // a write-only R32F 2D storage texture
+  depth_array,    // a depth 2D-array texture (comparison sampling)
+  compare,        // a comparison sampler
+  texture_array,  // a filterable float 2D-array texture
 };
 
 wgpu::BindGroupLayout make_layout(gpu::Device& device, std::string_view label,

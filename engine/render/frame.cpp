@@ -344,6 +344,10 @@ wgpu::BindGroupLayout make_layout(gpu::Device& device, std::string_view label,
       case Slot::compare:
         e.sampler.type = wgpu::SamplerBindingType::Comparison;
         break;
+      case Slot::texture_array:
+        e.texture.sampleType = wgpu::TextureSampleType::Float;
+        e.texture.viewDimension = wgpu::TextureViewDimension::e2DArray;
+        break;
     }
     entries.push_back(e);
   }

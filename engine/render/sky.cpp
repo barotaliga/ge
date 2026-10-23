@@ -158,7 +158,11 @@ void create_sky(gpu::Device& device, gpu::PipelineSet& pipelines, Sky& sky,
   depth.depthCompare = wgpu::CompareFunction::Equal;
   wgpu::RenderPipelineDescriptor desc{};
   desc.label = "sky.draw";
-  desc.layout = make_pipeline_layout(device, "sky.draw", {frame});
+  sky.stars = create_star_texture(device);
+  sky.star_layout =
+      make_layout(device, "sky.stars", {Slot::texture_array}, wgpu::ShaderStage::Fragment);
+  sky.star_group = make_group(device, "sky.stars", sky.star_layout, {sky.stars.view});
+  desc.layout = make_pipeline_layout(device, "sky.draw", {frame, sky.star_layout});
   desc.vertex.module = draw;
   desc.vertex.entryPoint = "vs_main";
   desc.primitive.topology = wgpu::PrimitiveTopology::TriangleList;
@@ -257,6 +261,7 @@ void encode_sky(const Sky& sky, const gpu::PipelineSet& pipelines, FrameRecorder
   wgpu::RenderPassEncoder pass = rec.render(encoder, desc, "sky");
   pass.SetPipeline(pipelines.render(sky.p_draw));
   pass.SetBindGroup(0, frame);
+  pass.SetBindGroup(1, sky.star_group);
   pass.Draw(3);
   ++rec.current().draws;
   pass.End();
