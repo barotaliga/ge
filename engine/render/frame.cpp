@@ -59,6 +59,16 @@ void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint
   u.time[1] = static_cast<float>(view.frame);
   u.world[0] = static_cast<float>(view.altitude_m * 1e-3);
   std::memcpy(u.planes, cam.planes, sizeof cam.planes);
+  // THE WEATHER: a visual range V closes the view as exp(-3.912 d / V) (the contrast a black
+  // target keeps against the sky at V is 2 %).
+  const Weather& w = view.weather;
+  const auto unit = [](double x) { return static_cast<float>(std::clamp(x, 0.0, 1.0)); };
+  u.weather[0] = unit(w.sun_pass);
+  u.weather[1] = unit(w.cover);
+  u.weather[2] = w.visibility_m > 0 ? static_cast<float>(3.912 / w.visibility_m) : 0.0f;
+  u.weather[3] = unit(w.hidden);
+  for (int i = 0; i < 3; ++i) u.deck[i] = static_cast<float>(w.deck_tint[i] * w.deck_light);
+  u.deck[3] = unit(w.deck_zenith);
 }
 
 FrameTargets create_targets(gpu::Device& device, std::string_view label, uint32_t width,

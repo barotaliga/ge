@@ -31,14 +31,14 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   let d = view_ray(frame, in.uv);
   var colour = sky_luminance(d);
   // The disc: the sun's light over its solid angle, darkened toward the limb, and only where
-  // the planet does not hide it.
+  // the planet does not hide it; behind a deck it is lost in the deck's grey.
   let c = dot(d, frame.sun.xyz);
   let edge = cos(kSunRadius);
   if (c > edge) {
     let x = sqrt(max(1.0 - c * c, 0.0)) / sin(kSunRadius);
     let limb = 1.0 - 0.6 * (1.0 - sqrt(max(1.0 - x * x, 0.0)));
     let disc = sun_light(frame.eye.y) / (PI * kSunRadius * kSunRadius);
-    colour += disc * limb;
+    colour += disc * limb * (1.0 - frame.weather.y);
   }
   var out: FragmentOut;
   out.colour = vec4f(min(colour, vec3f(60000.0)), 1.0);
