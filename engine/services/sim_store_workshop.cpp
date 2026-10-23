@@ -110,6 +110,7 @@ RequestId workshop_query(SimStore::Impl& s, SimPlayer& p, const ItemQuery& q) {
       hits.push_back(&item);
     }
     std::vector<ItemInfo> infos;
+    infos.reserve(hits.size());
     for (const SimItem* item : hits) infos.push_back(info_of(s, *item, p));
     std::stable_sort(infos.begin(), infos.end(), [&](const ItemInfo& a, const ItemInfo& b) {
       if (q.order == ItemOrder::most_subscribed && a.subscribers != b.subscribers)
