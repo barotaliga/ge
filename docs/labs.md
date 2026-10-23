@@ -110,6 +110,24 @@ In a game repo, `ge lab` is the way in: `ge lab` lists, `ge lab <id> --tag=befor
 `--compare=before` run one, and with `--json` the lab's whole `report.json` is the answer's
 `result`. `ge lab diff <id>` diffs the pictures (below), every band under its floor a finding.
 
+### The sweep: one constant at several values
+
+`ge lab sweep <id> --set=<name>=<a>,<b>,... [--in=<file>] [--metrics=<word,...>] -- <lab flags>`
+runs a lab with one constant of the code at each value, every metric side by side
+(`engine/cli/sweep.hpp`). The constant is a `constexpr` defined on one line (a spec's or a
+tuning table's, `inline constexpr double kFlight = 0.6;`), named bare (`kFlight`) or qualified
+(`launch::kFlight`, which keeps only files that open those namespaces); `--in` names its file
+when the name is in several. For each value the initializer is rewritten in place, only the
+`labs` target is rebuilt (the files that include it recompile) and the lab runs with
+`--tag=sweep-<name>-<value>`, so every run's pictures stay for `ge lab diff`. The file is put
+back after the last run and the labs rebuilt on what it holds; a sweep killed half way leaves
+its text under `build/<preset>/ge-sweep/backup.txt`, and the next sweep puts it back first.
+Three values of a paramotor constant over one scenario take about 20 s in debug.
+
+```sh
+ge lab sweep para --set=launch::kFlight=0.4,0.6,0.9 --metrics=launch -- --scenario=launch
+```
+
 ### The picture diff: did the look move, and how near the player?
 
 `--compare=<tag>` diffs every picture of the run against the same picture of the kept run, and

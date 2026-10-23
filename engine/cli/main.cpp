@@ -35,6 +35,7 @@
 #include "cli/play.hpp"
 #include "cli/scaffold.hpp"
 #include "cli/skills.hpp"
+#include "cli/sweep.hpp"
 #include "cli/upgrade.hpp"
 
 namespace {
@@ -167,6 +168,15 @@ Outcome run(const Args& a) {
   if (name == "build") return run_build(build_options(a));
   if (name == "test") return run_test(build_options(a), flag_value(a, "filter"));
   if (name == "check") return run_check(build_options(a));
+  if (name == "lab sweep") {
+    SweepOptions sweep;
+    sweep.id = a.words[0];
+    sweep.set = flag_value(a, "set");
+    sweep.in = flag_value(a, "in");
+    sweep.metrics = flag_value(a, "metrics");
+    sweep.passthrough = a.passthrough;
+    return run_lab_sweep(build_options(a), sweep);
+  }
   if (name == "lab diff") {
     LabDiffOptions diff;
     diff.id = a.words[0];

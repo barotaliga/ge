@@ -57,6 +57,15 @@ constexpr FlagSpec kLabFlags[] = {
     kEngine,
     kRepo};
 
+constexpr FlagSpec kLabSweepFlags[] = {
+    kPreset,
+    {"set", "<name>=<a>,<b>,...",
+     "the constexpr constant to sweep (kSlope, or spec::kSlope) and the values it takes"},
+    {"in", "<file>", "the source file it is defined in, when its name is in several"},
+    {"metrics", "<word,...>", "list only the metrics whose keys hold one of these words"},
+    kEngine,
+    kRepo};
+
 constexpr FlagSpec kLabDiffFlags[] = {
     kPreset,
     {"against", "<name>", "the kept run to diff against (default before: --tag=before)"},
@@ -295,6 +304,10 @@ const CommandSpec kCommands[] = {
      "list the labs, or run one: its metrics, tables, captioned pictures and digest; its own "
      "flags go after --",
      kLabFlags, "ge lab run --json -- --seeds=1,2", "labs"},
+    {"lab sweep", "<id>", 1, 1, "see",
+     "one constexpr constant of the code rewritten to each value, the labs rebuilt and the lab "
+     "run at each, every metric side by side; the source is put back after",
+     kLabSweepFlags, "ge lab sweep para --set=kFlight=0.5,0.7,0.9 -- --scenario=launch", "labs"},
     {"lab diff", "<id>", 1, 1, "see",
      "diff every picture of a lab's last run against a kept run: PSNR, SSIM and the share "
      "changed per distance band, each band held to its floor, a four-panel sheet a shot",
@@ -499,13 +512,13 @@ std::optional<std::string> check_args(const Args& a) {
            (c.args.empty() ? std::string("no arguments") : std::string(c.args)) + ", got " +
            std::to_string(n) + " word(s)";
   }
-  static constexpr std::string_view kPassing[] = {"lab",    "lab diff", "play",    "sim", "shot",
-                                                  "record", "bench",    "profile", "mem", "leaks"};
+  static constexpr std::string_view kPassing[] = {"lab",     "lab diff", "lab sweep", "play",
+                                                  "sim",     "shot",     "record",    "bench",
+                                                  "profile", "mem",      "leaks"};
   if (!a.passthrough.empty() &&
       std::find(std::begin(kPassing), std::end(kPassing), c.name) == std::end(kPassing)) {
-    return "only ge lab, lab diff, play, sim, shot, record, bench, profile, mem and leaks pass "
-           "words after "
-           "--";
+    return "only ge lab, lab diff, lab sweep, play, sim, shot, record, bench, profile, mem and "
+           "leaks pass words after --";
   }
   return std::nullopt;
 }
