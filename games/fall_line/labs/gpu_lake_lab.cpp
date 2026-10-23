@@ -217,7 +217,7 @@ void run(ge::lab::Lab& lab) {
   const std::string& look = lab.arg("look");
   if (!gw::find_look(look)) {
     lab.fail("no water look `" + look + "`",
-             "Pass --look= one of water/optics.hpp's looks (nordic-clear, glacial ...).");
+             "next: pass --look= one of water/optics.hpp's looks (adriatic, nordic-clear ...).");
     return;
   }
   if (radius < 20 || radius > 400 || width < 16 || height < 16 || width > 4096 || height > 4096 ||
