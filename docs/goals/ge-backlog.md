@@ -17,7 +17,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 
 ## Before and after across refs
 
-- `ge bench ab --base=<ref>` (or `--ab <binA> <binB>`: two builds interleaved N times with statistics, since a container's timings wander by about 5%) and `ge compare <ref>` (both builds, one table)
+- `ge bench ab --base=<ref>` (or `--ab <binA> <binB>`: two builds interleaved N times with statistics, since a container's timings wander by about 5%; for a bench lab too: `ge ab <lab> --before=<binary> --runs=3`, the median of each metric) and `ge compare <ref>` (both builds, one table)
 - `ge bench --ab=<option>` (one frame option against another in the same build, interleaved rounds, the least median kept: a quality ladder priced without a bespoke loop)
 - `ge profile --compare` (per zone and per pass, GPU and CPU deltas, outliers flagged)
 - `ge lab bench <lab> --runs=N --base=main` (each metric's median and spread over N runs, this tree beside the base)
@@ -94,6 +94,8 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge sanitize thread <tests>` (a ThreadSanitizer build of the tests that run threads)
 - `ge lab time <id> [--smoke]` (a lab's sections timed, and its smoke run, so a lab that slows CI is found by name)
 - `ge bench --preset=release <lab>` (only the labs target built in release, for a lab's release-build cost without a whole release build)
+- a bench lab warns when the machine is loaded (load average over the cores: a concurrent ctest made thread starts look ten times slower)
+- `ge tsan <test>` (one test and its sources built with ThreadSanitizer, without a whole sanitizer preset)
 
 ## Hygiene
 
