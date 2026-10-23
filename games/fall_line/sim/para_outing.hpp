@@ -45,12 +45,12 @@ inline constexpr double kStretch = 300;
 inline constexpr double kGentle = 0.14;
 inline constexpr double kGradeOver = 30;
 // The height he holds over the snow on the way, m; how near the stretch's head he spirals down,
-// m, with the toggle held how far; the height the final is flown from, m, and how far ahead
-// along the run it aims, m.
+// m, with the toggle held how far; the height the final is flown from, m (room to roll out of a
+// spiral that sinks near 13 m/s at its steepest), and how far ahead along the run it aims, m.
 inline constexpr double kHold = 60;
 inline constexpr double kOver = 110;
 inline constexpr double kSpiral = 0.5;
-inline constexpr double kFinal = 25;
+inline constexpr double kFinal = 40;
 inline constexpr double kLead = 120;
 // How far off the run's line, m, the final is still flown along it.
 inline constexpr double kBeside = 40;
