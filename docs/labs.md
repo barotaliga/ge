@@ -269,6 +269,21 @@ A scenario lab is a table of these (one `LabSpec`, with `--scenario=<id>` choosi
 rows (`plugins/skier/scenarios.cpp`) back the physics tests
 (`tests/skier_scenarios_test.cpp`), so a scenario is written once and is both a test and a lab.
 
+**Step by step, `--trace`.** Every scenario lab (`ride`, `sled`, `heli`, `para`) takes `--trace`:
+each scenario it runs also writes its every step as a series file, `<id>.trace.tsv` (the state,
+the controls and the events: `ge graph` reads it, and two runs' files chart on one graph), and
+draws it as captioned charts (`<id>.<chart>.png` and `.svg`: the height, the speeds, the angles,
+the controls), its events marked as grey lines and its flights shaded, spikes ringed. The
+runner hands each step to the lab through an optional callback (`run_para_scenario(sc, hz,
+each)`), so the plugin needs nothing of the lab kit; the lab writes and draws through
+`engine/lab/series_charts.hpp`, the same helper the `trace` lab draws a seed's run with. It is
+the scenario's before and after at the scale of a step: `--trace --tag=before`, change the code,
+`--trace --compare=before`, then `ge graph` both files.
+
+```sh
+make lab LAB=para ARGS="--scenario=launch --trace"   # previews/para/launch.trace.tsv and its charts
+```
+
 ## Drive labs: the bot, the rivals and agents at the controls (M5)
 
 A **pilot** is anything that turns what a skier can see into a `SkierInput`, one step at a

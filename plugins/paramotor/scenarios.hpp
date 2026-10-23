@@ -18,6 +18,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <span>
 #include <string_view>
 #include <vector>
@@ -91,7 +92,19 @@ struct ParaRun {
   uint64_t digest = 0;  // FNV-1a over every step's wing and skier
 };
 
-// Run `sc` at `hz` steps a second.
-ParaRun run_para_scenario(const ParaScenario& sc, double hz = 120);
+// One step of a run, as it stands after the step: what a per-step trace reads.
+struct ParaStep {
+  double t;  // s, the step's end
+  const ParaState& wing;
+  const skier::SkierState& skier;
+  const ParaControls& controls;
+  const ParaEvents& events;
+  double ground;  // m, the snow under the skier
+};
+
+// Run `sc` at `hz` steps a second; `each`, when given, is called after every step (the para lab's
+// --trace).
+ParaRun run_para_scenario(const ParaScenario& sc, double hz = 120,
+                          const std::function<void(const ParaStep&)>& each = {});
 
 }  // namespace ge::paramotor
