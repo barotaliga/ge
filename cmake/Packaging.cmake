@@ -31,11 +31,11 @@ set(GE_INSTALL_CMAKEDIR "${CMAKE_INSTALL_LIBDIR}/cmake/gameengine2")
 
 # target -> export name (consumers see ge::<export name>)
 set(GE_EXPORTED_TARGETS ge_fp fp ge_isa isa ge_core core ge_audio audio ge_assets assets ge_ai ai
-  ge_net net ge_input input ge_lab lab ge_prof prof ge_prof_alloc prof_alloc ge_play play)
+  ge_net net ge_input input ge_move move ge_lab lab ge_prof prof ge_prof_alloc prof_alloc ge_play play)
 # Every plugin is published as ge::<plugin> (cmake/Plugins.cmake collects them), and its
 # presentation half as ge::<plugin>_app when every engine target it links is published here
 # (APP audio is; render, gpu and platform are not yet, below).
-set(GE_PUBLISHED_MODULES core audio assets ai input lab prof play)
+set(GE_PUBLISHED_MODULES core audio assets ai input move lab prof play)
 get_property(_ge_plugins GLOBAL PROPERTY GE_PLUGIN_TARGETS)
 foreach(_target IN LISTS _ge_plugins)
   get_property(_app_modules TARGET ${_target} PROPERTY GE_APP_MODULES)
@@ -84,7 +84,7 @@ install(DIRECTORY "${PROJECT_SOURCE_DIR}/engine/"
   FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h" PATTERN "*.inl"
   PATTERN "gpu" EXCLUDE PATTERN "platform" EXCLUDE PATTERN "render" EXCLUDE
   PATTERN "cli" EXCLUDE PATTERN "os_socket.hpp" EXCLUDE
-  PATTERN "session_wire.hpp" EXCLUDE PATTERN "reach_wire.hpp" EXCLUDE)
+  PATTERN "session_wire.hpp" EXCLUDE PATTERN "reach_wire.hpp" EXCLUDE PATTERN "portmap_wire.hpp" EXCLUDE)
 
 # A plugin's headers install beside the engine's (a plugin's name never equals an engine
 # directory), so "racing/tape.hpp" is spelled the same in-tree and installed. Labs are not

@@ -1,20 +1,30 @@
 // INDEPENDENT ROWS SIDE BY SIDE. A bake whose every output (a grid row, a cell) is a pure
-// function of its index splits [0, count) into contiguous bands and runs each on its own
-// thread. The result is the same bits for any number of workers, because no output is written
-// by two bands and nothing is summed across them; the caller keeps that promise. Never inside
-// a simulation step: a step runs on one thread (the `perf` skill, § Levers).
+// function of its index splits [0, count) into contiguous bands and runs them on the calling
+// thread and a persistent pool of worker threads. The result is the same bits for any number of
+// workers and any schedule, because no output is written by two bands and nothing is summed
+// across them; the caller keeps that promise. Never inside a simulation step: a step runs on one
+// thread (the `perf` skill, § Levers).
 //
-// ge:summary Runs a bake's independent rows in contiguous bands on worker threads
+// THE POOL is started on the first call that has two bands or more, holds the machine's hardware
+// threads less one (the caller is the other), at most kMaxWorkers - 1, and lives until the
+// process exits. A call publishes its bands and every thread takes the next one left until none
+// is, so a call costs a wake-up, not a thread start. Between calls a worker spins briefly
+// (back-to-back calls, a bake's usual shape, find it awake), then sleeps. One call owns the pool
+// at a time: a call made while it is owned (a band calling parallel_bands, or another thread's
+// bake) runs its bands in order on its own thread, the same bits.
+//
+// ge:summary Runs a bake's independent rows in contiguous bands on a persistent worker pool
 // ge:keywords parallel threads workers bands rows bake parallel_bands default_workers
-// ge:keywords multithreading
+// ge:keywords multithreading thread-pool pool persistent dispatch overhead
 // ge:skill perf determinism
 // ge:test tests/core_parallel_test.cpp
 #pragma once
 
 #include <algorithm>
 #include <cstddef>
+#include <memory>
 #include <thread>
-#include <vector>
+#include <type_traits>
 
 namespace ge::core {
 
@@ -28,9 +38,24 @@ inline size_t default_workers() {
   return std::clamp<size_t>(n, 1, kMaxWorkers);
 }
 
-// body(begin, end) once per band, the bands covering [0, count) in order with no overlap:
-// band b is [count * b / bands, count * (b + 1) / bands). Band 0 runs on the calling thread.
-// Returns once every band is done.
+namespace detail {
+
+// One call's bands with its body behind a plain function pointer, so the pool is compiled once.
+struct BandJob {
+  void (*run)(void* body, size_t begin, size_t end);
+  void* body;
+  size_t count;
+  size_t bands;
+};
+
+// Every band of `job` once, on the calling thread and the pool's; returns when all are done.
+void run_bands(const BandJob& job);
+
+}  // namespace detail
+
+// body(begin, end) once per band, the bands covering [0, count) with no overlap: band b is
+// [count * b / bands, count * (b + 1) / bands), bands = min(workers, count). Which thread runs a
+// band, and in which order, is not fixed; body must not throw. Returns once every band is done.
 template <class Body>
 void parallel_bands(size_t count, size_t workers, Body&& body) {
   const size_t bands = std::min(std::max<size_t>(workers, 1), count);
@@ -38,14 +63,10 @@ void parallel_bands(size_t count, size_t workers, Body&& body) {
     if (count > 0) body(size_t{0}, count);
     return;
   }
-  std::vector<std::thread> pool;
-  pool.reserve(bands - 1);
-  for (size_t b = 1; b < bands; b++) {
-    pool.emplace_back(
-        [&body, count, bands, b] { body(count * b / bands, count * (b + 1) / bands); });
-  }
-  body(size_t{0}, count / bands);
-  for (std::thread& t : pool) t.join();
+  using B = std::remove_reference_t<Body>;
+  detail::run_bands({[](void* b, size_t lo, size_t hi) { (*static_cast<B*>(b))(lo, hi); },
+                     const_cast<void*>(static_cast<const void*>(std::addressof(body))), count,
+                     bands});
 }
 
 template <class Body>

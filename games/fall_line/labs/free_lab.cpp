@@ -12,6 +12,12 @@
 // and the ride up, the runs and metres skied, the digest; his line drawn over the map, white
 // where a lift carries him. An outing not ridden through is a failure.
 //
+// THE BODY table (`--injuries`, on by default): every piste of the runs table skied again with
+// the INJURIES switch on (`SimOptions::injuries`): whether he reached the foot or died on the
+// way, the injuries he took, his severity score at the foot, his hardest blow, and whether the
+// run is the one the switch off skied (the same time and metres: his skis are never touched by
+// his body until a mortal blow).
+//
 // THE SLED and THE HELI tables (`--sled`, `--heli`): the bot's outing on the snowmobile (up a run
 // on it, down on his skis) and on the helicopter (flown from its pad to the head of the highest
 // run, dropped there, down on his skis), the metres climbed, the time on the machine, whether he
@@ -26,7 +32,7 @@
 // ge:summary Lab: the bot on the free ride down every piste of a seed, the runs table, its lines
 // ge:keywords lab free free-ride simulate_free bot runs foot arrived chain distance odometer
 // ge:keywords outings simulate_outing lift wait ride sled heli helicopter simulate_heli_outing
-// ge:keywords para paramotor simulate_para_outing
+// ge:keywords para paramotor simulate_para_outing body injuries iss severity died
 // ge:skill sim labs
 // ge:test tests/fall_line_free_test.cpp
 #include <memory>
@@ -116,6 +122,15 @@ void run(ge::lab::Lab& lab) {
       {"seed", "run", "colour", "chain", "length m", "foot", "time s", "wipeouts", "resets",
        "runs on", "skied m", "top km/h", "mean km/h", "digest"},
       {}};
+  const bool injuries = lab.arg_num("injuries") > 0;
+  fs::SimOptions body_opts = opts;
+  body_opts.injuries = true;
+  ge::lab::LabTable body_table{"body",
+                               {"seed", "run", "foot", "time s", "wipeouts", "injuries", "ISS",
+                                "peak g", "died s", "as off", "digest"},
+                               {}};
+  int bodies_died = 0;
+  int bodies_hurt = 0;
   const auto outings = static_cast<size_t>(lab.arg_num("outings"));
   fs::SimOptions outing_opts;
   outing_opts.max_seconds = lab.arg_num("outing-limit");
@@ -199,6 +214,28 @@ void run(ge::lab::Lab& lab) {
            fixed(rep.distance, 0), fixed(rep.top_speed * 3.6, 1), fixed(rep.mean_speed * 3.6, 1),
            hex(rep.digest)});
       if (!lines.empty()) drawn.push_back(std::move(lines[0]));
+      if (injuries) {
+        const fs::RunReport b = fs::simulate_free(level, seed, static_cast<int32_t>(i), body_opts);
+        const bool died = b.died >= 0;
+        // Unhurt mortally, his skis ski the run the switch off skied.
+        const bool same = b.time == rep.time && b.distance == rep.distance;
+        if (died) bodies_died++;
+        if (b.injuries > 0) bodies_hurt++;
+        if (!died && !same) {
+          lab.fail(key + ": with the INJURIES switch on the bot's run moved (" + fixed(b.time, 2) +
+                       " s, " + fixed(b.distance, 0) + " m against " + fixed(rep.time, 2) + " s, " +
+                       fixed(rep.distance, 0) + " m) though he lived",
+                   "A body that is not mortally hurt must leave his skis alone: read the body's "
+                   "step in games/fall_line/sim/game.cpp (step, `doomed`) (skill: sim).");
+        }
+        lab.metric(key + ".injuries", b.injuries, "count");
+        lab.metric(key + ".iss", b.iss, "score");
+        body_table.rows.push_back(
+            {fixed(seed, 0), r.id, died ? "died" : (b.finished ? "yes" : "NO"), fixed(b.time, 2),
+             std::to_string(b.wipeouts), std::to_string(b.injuries), std::to_string(b.iss),
+             fixed(b.peak_g, 1), died ? fixed(b.died, 2) : "-", same ? "yes" : "no",
+             hex(b.digest)});
+      }
     }
     std::vector<std::vector<fs::LinePoint>> outing_lines;
     {
@@ -489,6 +526,11 @@ void run(ge::lab::Lab& lab) {
   lab.metric("outings", outings_ridden, "count");
   lab.metric("outings-done", outings_done, "count");
   lab.table(std::move(table));
+  if (injuries) {
+    lab.metric("bodies-hurt", bodies_hurt, "count");
+    lab.metric("bodies-died", bodies_died, "count");
+    lab.table(std::move(body_table));
+  }
   if (outings > 0) lab.table(std::move(outing_table));
   if (sled) {
     lab.metric("sled-outings", sleds_ridden, "count");
@@ -516,7 +558,8 @@ const ge::lab::LabSpec kSpec{
     "simulate_para_outing)",
     "sim",
     "Does the bot on the free ride ski every piste of each seed's ski area from its head to a "
-    "foot, how fast, and with what on the way (wipeouts, resets)? And does it ride an outing: "
+    "foot, how fast, and with what on the way (wipeouts, resets)? With the INJURIES switch on, "
+    "what does his body take on the way, and does any run kill him? And does it ride an outing: "
     "down a piste, up the lift at its foot and down another run to a foot? Up the mountain on "
     "the snowmobile and on the helicopter, and down from where each leaves him? Off the summit "
     "under the paramotor, down onto a run and on down it?",
@@ -525,6 +568,8 @@ const ge::lab::LabSpec kSpec{
         {"version", "10", "the generator's version (8 or later; 0 the current rules)"},
         {"most", "0", "the most pistes ridden a seed, in the map's order (0: every one)"},
         {"limit", "600", "a run's time limit, s"},
+        {"injuries", "1",
+         "1: every piste skied again with the INJURIES switch on, the body table; 0: not"},
         {"outings", "1",
          "the most outings ridden a seed, from the pistes with a lift at their foot"},
         {"outing-limit", "1800", "an outing's time limit, s (and the machines')"},

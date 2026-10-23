@@ -90,6 +90,7 @@ inline constexpr int kCloudLayers = 3;
 struct Clouds {
   int count = 0;
   CloudLayer layers[kCloudLayers];
+  double steps = 1;  // the share of the march's full steps taken (the quality ladder's), 0.25..1
 };
 
 // THE NIGHT a frame is seen under (render/night.hpp fills it from where the moon is). The

@@ -10,7 +10,7 @@
 #   6. lint          clang-tidy over what the change since BASE (default origin/main) reaches
 #   7. tests         cli_diagnostics_test (every message held to the diagnostics convention),
 #                    each changed test, and the test every changed file's ge:test tag names
-#   8. digests       each lab the change reaches (tools/labs-reached.sh) at its smoke flags,
+#   8. digests       each lab the change reaches (`ge digest --affected --list`) at its smoke flags,
 #                    against tests/labs_digests.txt: a digest the change moved is caught here,
 #                    not by CI's labs_smoke a round later
 #
@@ -84,7 +84,8 @@ labs_digests() {
     xargs -P "$(nproc 2>/dev/null || sysctl -n hw.ncpu)" -I{} \
     "$build/labs" {} --smoke --quiet --check-digests=tests/labs_digests.txt
 }
-mapfile -t labs < <(tools/labs-reached.sh "$build" "$base")
+mapfile -t labs < <("$build/ge" digest --affected --list --preset="$preset" --base="$base" 2>/dev/null |
+  grep -E '^[a-z0-9-]+$' || true)
 if ((${#labs[@]})); then
   gate "digests (${labs[*]})" labs_digests "${labs[@]}"
 fi

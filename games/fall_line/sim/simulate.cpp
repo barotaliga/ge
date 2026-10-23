@@ -21,6 +21,7 @@
 #include "fall_line/sim/sled_outing.hpp"
 #include "fall_line/sim/sled_ride.hpp"
 #include "prof/zones.hpp"
+#include "skier/body.hpp"
 
 namespace fall_line::sim {
 
@@ -98,12 +99,13 @@ void Driver::set_hands(HandsProfile profile, double seed) {
 bool Driver::over() const {
   if (state_.mode == Mode::free) {
     const FreeRide& f = state_.racers[0].free;
+    if (state_.racers[0].body.dead >= 0) return true;  // dead, his run is over
     return f.arrived && f.lift.ridden >= lifts_ && state_.sled.taken >= sled_rides_ &&
            !on_sled(state_, 0) && state_.heli.taken >= heli_rides_ && !on_heli(state_, 0) &&
            (!state_.para.present || (state_.para.body.flights > 0 && !under_para(state_, 0)));
   }
   for (const Racer& r : state_.racers) {
-    if (!r.progress.finished) return false;
+    if (!r.progress.finished && r.body.dead < 0) return false;
   }
   return true;
 }
@@ -127,9 +129,13 @@ RunReport Driver::report(double seed) const {
   rep.steps = state_.steps;
   rep.digest = hash_;
   rep.tape = recorder_.seal();
+  rep.injuries = me.body.count;
+  rep.iss = ge::skier::severity_of(me.body);
+  rep.peak_g = me.body.peak;
+  rep.died = me.body.dead;
   if (state_.mode == Mode::free) {
     const FreeRide& f = me.free;
-    rep.finished = over();
+    rep.finished = over() && me.body.dead < 0;
     rep.time = rep.finished ? f.arrived_at : state_.t;
     rep.gates = 0;
     rep.distance = f.distance;
@@ -205,8 +211,10 @@ RunReport simulate_on(std::shared_ptr<const mg::Level> level, double seed, const
 
 RunReport simulate_free(std::shared_ptr<const mg::Level> level, double seed, int32_t run,
                         const SimOptions& opts, std::vector<std::vector<LinePoint>>* lines) {
+  GameState state = create_free_ride(std::move(level), run);
+  state.injuries = opts.injuries;
   return drive(
-      Driver(create_free_ride(std::move(level), run)), seed, opts.max_seconds,
+      Driver(std::move(state)), seed, opts.max_seconds,
       [](const Driver& d) { return bot_controls(d.state(), 0, d.plan()); }, lines);
 }
 
