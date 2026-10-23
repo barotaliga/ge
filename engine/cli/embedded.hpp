@@ -27,6 +27,6 @@ std::span<const EmbeddedFile> embedded_files();
 std::string_view engine_version();
 
 // Where the engine lives: the release a scaffold fetches, the place a game reports an engine bug.
-inline constexpr std::string_view kEngineRepo = "https://github.com/niclaslindstedt/gameengine2";
+inline constexpr std::string_view kEngineRepo = "https://github.com/barotaliga/ge";
 
 }  // namespace ge::cli

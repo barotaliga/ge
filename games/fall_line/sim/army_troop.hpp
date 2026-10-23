@@ -30,14 +30,21 @@
 
 namespace fall_line::sim {
 
-// What a soldier's step reads: the map, its trunks, every soldier (to keep apart) and the clock.
+// What a soldier's step reads: the map, its trunks, every soldier (to keep apart), the clock, and
+// the step's grid of them by place (`near_reach`; null: every soldier is weighed).
 struct TroopWorld {
   const ge::mountain::mapgen::Level* level = nullptr;
   const ge::skier::TreeIndex* trees = nullptr;
   std::span<const Soldier> all;
   double t = 0;   // s, the clock at the step's start
   double dt = 0;  // s
+  const ge::ai::Neighbours* near = nullptr;
 };
+
+// THE STEP'S GRID of the soldiers by place, built before any of them moves: its cells their reach
+// to keep apart plus how far a man moves in a step at most (his pace, and a trunk pushing him out
+// of it); a man carried or put down by a machine may be anywhere, so every query visits him.
+void build_near(ge::ai::Neighbours& near, std::span<const Soldier> all);
 
 // The slope against a man going along `heading` at (x, z), as a tangent: positive up it.
 double slope_along(const ge::mountain::mapgen::Level& level, double x, double z, double heading);

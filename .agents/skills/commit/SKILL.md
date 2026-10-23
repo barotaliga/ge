@@ -59,7 +59,12 @@ merges (`build/<preset>/ge ci <pr>` answers both: a conflict is an error finding
 log comes back as findings). A conflict means merge `origin/main` into the branch, resolve it,
 `make precheck` and push; a red row means read its log, fix the cause and push. Never skip or
 weaken a test, and never push an empty commit to re-run CI. Right after each push, arm squash
-auto-merge on the PR (GitHub's `enable_pr_auto_merge`; it needs the base to require checks, and
-GitHub refuses it on a PR that could merge now). Once every job is green and it has not merged
-itself, `build/<preset>/ge ci <pr> --merge` squash-merges it at the head the checks ran on. Then
+auto-merge on the PR: `main` merges only through GitHub's merge queue, and auto-merge is how a
+PR joins it (`gh pr merge <pr> --auto --squash`; an agent tool that only "enables auto-merge"
+may not enqueue on a queue base, so read the PR's state back after arming). A pull request runs
+only the gates, lint and the GCC debug row; the queue runs the whole matrix (Windows, macOS,
+arm64, packaging) on the tree that lands, and a row only the queue ran ejects the PR with that
+row's log: fix it, push, and it queues again. Label a PR `full-ci` to run the whole matrix
+before queueing a risky change (a compiler-sensitive one, a build change). A direct merge is
+refused, so `ge ci <pr> --merge` is for a repository without a queue. Then
 name the next step to the user.

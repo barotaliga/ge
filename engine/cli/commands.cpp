@@ -303,10 +303,11 @@ const CommandSpec kCommands[] = {
      "a pull request's state: whether it conflicts with its base, and each failed job's log "
      "read back as findings (through gh, or a saved log); --merge squash-merges it once green",
      kCiFlags, "ge ci 12", "commit"},
-    {"digest", "[<lab>]", 0, 1, "build",
-     "a lab (or every lab) at its smoke flags, twice: each digest beside the committed baseline; "
-     "--write moves only that lab's row; --diff prints only the labs that moved",
-     kDigestFlags, "ge digest wind-sweep --write", "labs"},
+    {"digest", "[<lab>...]", 0, -1, "build",
+     "the labs named (or every lab) at their smoke flags, twice: each digest beside the "
+     "committed baseline; --write moves only those labs' rows; --diff prints only the labs "
+     "that moved",
+     kDigestFlags, "ge digest wind-sweep level --write", "labs"},
     {"golden diff", "[<golden|test>...]", 0, -1, "build",
      "each golden file against git's --base: the rows that changed and, column by column, what "
      "moved in them",
