@@ -1,10 +1,10 @@
 // engine/render/particles.hpp: the flight's CPU twin falls by its share of gravity and drags
-// toward the still air; on a device (the software adapter here and on CI) the "particles.sim"
-// pass flies a particle as the twin does, buries a grain that comes down on the ground, settles a
-// fine one on it, lets one rising out of the snow fly on, leaves a dead slot dead and holds every
-// particle still on a step of 0; births wrap the ring, the newest replacing the oldest; and the
-// draw puts a cloud of grains into the picture where they are and nowhere else, with no validation
-// error.
+// toward the air (still, or a wind); on a device (the software adapter here and on CI) the
+// "particles.sim" pass flies a particle as the twin does, buries a grain that comes down on the
+// ground, settles a fine one on it, lets one rising out of the snow fly on, leaves a dead slot dead
+// and holds every particle still on a step of 0; births wrap the ring, the newest replacing the
+// oldest; and the draw puts a cloud of grains into the picture where they are and nowhere else,
+// with no validation error.
 //
 // ge:summary Tests for GPU particles: the flight and its twin, the ground, the ring, the draw
 // ge:keywords test render particles step_particle ring births sim ground settle draw
@@ -158,6 +158,11 @@ TEST(the_twin_falls_by_its_share_of_gravity_and_drags) {
   r::step_particle(f, 0.5f);
   CHECK(near(f.v[1], -9.81 * 0.08 * 0.5 * std::exp(-1.6 * 0.5), 1e-5));
   CHECK(near(f.v[0], 0.4 * std::exp(-1.6 * 0.5), 1e-6));  // drag toward the still air
+  // In a wind the drag pulls toward the air's velocity instead: a fine drifts off downwind.
+  const float air[3] = {5, 0, 0};
+  r::Particle w = fine(0, 10, 0, 0);
+  for (int i = 0; i < 300; ++i) r::step_particle(w, 1.0f / 60, air);
+  CHECK(near(w.v[0], 5, 0.05));
 }
 
 TEST(the_sim_flies_as_the_twin_does) {

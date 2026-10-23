@@ -35,9 +35,10 @@ skijump-hills 3fa0eff35ac0f70a
 slalom 2adb7c679ec93adf
 sled 30cd3df2c903518c
 snow 3f444a51a1e8a91c
+snowfall 4bc8eb3fda4edade
 speed-events 2e575d7a0184d4b2
 speed-ski 55c4cfa78de28f7e
-spray 24ae0257b176a1b3
+spray 7479b5a25c39b195
 synth 39e6460e5c8a8c8e
 taa 01ee5d58d90a05ce
 trace 95f71886b7e7c98a
