@@ -38,6 +38,7 @@ updates that row's status file (`docs/goals/<row>.md`) in its PR.
 | [`docs/networking.md`](docs/networking.md) | Multiplayer: what each kind of game asks of the network, the layers of `engine/net`, the decisions, the wire format, the simulated network, the tools, and Fall Line's pilot (M17) |
 | [`docs/publishing.md`](docs/publishing.md) | What a release is (GitHub Releases + GitHub Packages), how a game consumes it, changeset fragments, cutting a release, the credentials |
 | [`docs/shooters-edge.md`](docs/shooters-edge.md) | The second game, Shooter's Edge (M18, after Fall Line): the compatibility contract, the clean room, the homes, the protocols, the labs and the `ge` commands it needs |
+| [`docs/water.md`](docs/water.md) | Water and wind (M24): the bodies and the one query, the waves the wind grows, floating, swimming tuned per game, flowing water, the colour from what is in the water, the surface and the view under it, the sound, and the labs |
 
 **The working area.** `porting/` holds everything that only matters while modules are
 being carried over from their reference sources: the porting guide (`porting/README.md`),
