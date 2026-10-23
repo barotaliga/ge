@@ -137,7 +137,7 @@ engine reaches the Discord client over its local IPC (a named pipe on Windows, a
 the temporary directory elsewhere: a handshake, then JSON frames with a length header), which needs
 no SDK: the activity (what, where, since when, the party's size), and the join and spectate
 secrets, which open a session lobby (M17d) or a spectator stream (M23f). It is a backend of
-`engine/services` (M20), beside the store's, so a game sets its presence once and every service
+`engine/services` (M20, built with those rows), beside the store's, so a game sets its presence once and every service
 that shows one shows it. Discord's Social SDK (friends, lobbies, voice through Discord) is
 proprietary, downloaded under Discord's terms and never committed; it is a later row only if a
 game needs more than presence. The game's Discord application id is an identifier read from the
