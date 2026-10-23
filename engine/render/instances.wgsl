@@ -159,7 +159,7 @@ fn fs_main(in: VertexOut, @builtin(front_facing) front: bool) -> FragmentOut {
   let lit = max(dot(n, frame.sun.xyz), 0.0) *
             ground_shadow(ground, horizon0, horizon1, linear_clamp, frame.sun.xyz, xz) *
             sun_shadow(shadow, shadow_maps, shadow_cmp, in.rel, n, in.position.xy, frame.time.y);
-  let c = a / PI * (sun_light(y) * lit + sky_irradiance(n));
+  let c = a / PI * (sun_light(y, xz) * lit + sky_irradiance(n));
   var out: FragmentOut;
   out.colour = vec4f(haze(c, in.position.xy * frame.size.zw, length(in.rel)), 1.0);
   out.motion = vec4f(screen_motion(frame, vec4f(in.last_rel, 1.0), in.position.xy), 0.0, 0.0);

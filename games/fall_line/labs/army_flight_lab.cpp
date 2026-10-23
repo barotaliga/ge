@@ -200,6 +200,8 @@ fs::Spot hide_spot(const fs::GameState& st) {
 
 Hunt run_scene(const std::shared_ptr<const mg::Level>& level, Scene scene, double limit) {
   fs::GameState st = fs::create_free_ride(level, 0);
+  // Staged: the machines and their men without the gunfire (the `gunfire` lab's).
+  st.army.fire = false;
   Hunt h;
   h.stars = scene == Scene::hide ? 2 : scene == Scene::fast ? 1 : 3;
   fs::Spot at = scene == Scene::rope   ? rope_spot(st)

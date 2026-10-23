@@ -111,6 +111,19 @@ inline constexpr double kStandOffM = 260;
 inline constexpr double kHoldBandM = 40;
 inline constexpr double kSearchedM = 15;
 
+// THE FIRE (gunfire.hpp): a man holding with him in sight settles `kSettleS` and fires his rifle up
+// to `kBursts` bursts or for `kFireS`, then moves on for `kMoveS` to `kMoveS` + `kMoveSpreadS`
+// before he stops to fire again. His muzzle stands `kMuzzleM` over his feet, `kMuzzleOutM` ahead
+// of him. His gun is `kGunBase` + his id.
+inline constexpr double kSettleS = 0.7;
+inline constexpr int32_t kBursts = 3;
+inline constexpr double kFireS = 6;
+inline constexpr double kMoveS = 5;
+inline constexpr double kMoveSpreadS = 4;
+inline constexpr double kMuzzleM = 1.45;
+inline constexpr double kMuzzleOutM = 0.6;
+inline constexpr int32_t kGunBase = 10000;
+
 // THE ARREST: a man within `wanted::kArrestReachM` takes him if he is slower than this, m/s, or
 // down.
 inline constexpr double kArrestSpeed = 3;

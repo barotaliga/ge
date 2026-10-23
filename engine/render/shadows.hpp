@@ -11,8 +11,10 @@
 //   matrix, so its shadows stay exactly where they were; `redraws` counts each one's.
 // - THE FIGURES' ATLAS (the third layer): one tile a figure (`figures` centres a frame, up to
 //   kMaxShadowFigures), each a view `figure_radius` m to a side round its figure, redrawn every
-//   frame from the `moving` families (the figures). A tile's view runs along the
-//   sun, so it holds the figure's whole shadow however long it falls.
+//   frame from the `moving` families (the figures, the crowd). A tile's view runs along the
+//   sun, so it holds the figure's whole shadow however long it falls. Each tile culls the moving
+//   casters by its own box into a caster slot of its own (slot k for tile k), so what is drawn
+//   into the atlas grows with the figures near a tile, not with the moving families' counts.
 //
 // A map's centre is snapped to its texels across the sun, so a redrawn cascade's texels land on
 // the old ones'. The receivers (the terrain, the instances) read `ShadowParams` and the array
@@ -27,6 +29,7 @@
 // ge:summary The sun's shadows: two cached cascades of what stands, a figures' atlas, one depth
 // array
 // ge:keywords render shadows sun-shadows cascades cached-cascades shadow-atlas figures casters
+// ge:keywords per-tile-cull crowd-shadows
 // ge:keywords depth-array comparison-sampler pcf orthographic texel-snap redraw-threshold
 // ge:keywords create_sun_shadows prepare_sun_shadows encode_sun_shadows shadow-params
 // ge:skill render
@@ -116,8 +119,8 @@ wgpu::BindGroupLayout sun_shadow_layout(gpu::Device& device);
 
 // Decide which cascades are due for `view`, place the figures' tiles round `figures` (world
 // centres, at most kMaxShadowFigures) and stage every block, with the casters' cull of the maps
-// drawn this frame (the `still` families' slots 0 and 1, `create_family_casters(.., 2)`; the
-// `moving` families' slot 0, `create_family_casters(.., 1)`).
+// drawn this frame (the `still` families' slots 0 and 1, `create_family_casters(.., kCascades)`;
+// the `moving` families' slot k for tile k, `create_family_casters(.., kMaxShadowFigures)`).
 void prepare_sun_shadows(gpu::Device& device, SunShadows& shadows, const FrameView& view,
                          std::span<const std::array<double, 3>> figures,
                          std::span<InstanceFamily* const> still,
@@ -126,7 +129,8 @@ void prepare_sun_shadows(gpu::Device& device, SunShadows& shadows, const FrameVi
 void reset_sun_shadows(SunShadows& shadows);
 
 // "shadows.cull", then "shadows.near", "shadows.far" and "shadows.figures": the due cascades'
-// casters (`still`) and the figures' (`moving`), culled and drawn into their layers.
+// casters (`still`) and the figures' (`moving`, each tile's own), culled and drawn into their
+// layers.
 void encode_sun_shadows(SunShadows& shadows, std::span<InstanceFamily* const> still,
                         std::span<InstanceFamily* const> moving, const InstancePipelines& ip,
                         const gpu::PipelineSet& pipelines, FrameRecorder& rec,

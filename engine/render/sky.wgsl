@@ -9,10 +9,10 @@
 //   over its seas and the rest earthlit, dimmed and reddened by the air as the sun is, drawn as
 //   the eye adapted to it sees it (`as_seen`);
 // - the STARS on the celestial sphere, turned by the sidereal angle about the pole the latitude
-//   lifts: one candidate a cell of a cube's 6 x 160 x 160, its magnitude drawn so as many cells
-//   hold a star brighter than m as the sky does (log10 N = 0.51 m + 0.9: 26 to the first
-//   magnitude, 9000 to the sixth), each seen only when brighter than the faintest star the eye
-//   finds against the sky behind it (the naked-eye threshold's fit to the sky's brightness: the
+//   lifts: the REAL stars (render/stars.hpp: a bright-star catalogue's 9,096, each at its place,
+//   magnitude and colour, read off a cube map of 6 x 160 x 160 cells of up to three stars, the
+//   pixel's cell and the eight round it), each seen only when brighter than the faintest star the
+//   eye finds against the sky behind it (the naked-eye threshold's fit to the sky's brightness: the
 //   sixth and a half magnitude under a dark sky, the fifth under a full moon, the first at the end
 //   of civil twilight); a point is drawn as the eye sees it, at least a few times the sky behind
 //   it at the threshold and brighter by its light above it;
@@ -20,15 +20,18 @@
 // all of it behind the deck's share and lost in a fog's or a fall's air.
 #include "render/wgsl/frame.wgsl"
 
+// The real stars' map (render/stars.hpp): kStarSlots layers of the cube's cells.
+@group(1) @binding(0) var star_map: texture_2d_array<f32>;
+
 // The sun's angular radius, rad.
 const kSunRadius = 0.00465;
 // The moon's colour (its dust is a little red), luminance 1.
 const kMoonTint = vec3f(1.04, 0.99, 0.93);
-// The stars: cells along a cube face's edge, the candidate count's fit, a magnitude-0 star's
-// illuminance outside the air (lx), the point's spread (pixels) and how many times the sky behind
-// it a star at the threshold is drawn.
-const kStarCells = 160.0;
-const kStarCount = 153600.0;
+// The stars: cells along a cube face's edge and stars a cell, a magnitude-0 star's illuminance
+// outside the air (lx), the point's spread (pixels) and how many times the sky behind it a star
+// at the threshold is drawn.
+const kStarCells = 160.0;  // render/stars.hpp's kStarCells and kStarSlots
+const kStarSlots = 3;
 const kStarZeroLux = 2.54e-6;
 const kStarSpread = 1.0;
 const kStarSeen = 6.0;
@@ -90,8 +93,53 @@ fn limiting_magnitude(l: f32) -> f32 {
   return 7.93 - 5.0 * log2(pow(10.0, 4.316 - b / 5.0) + 1.0) * 0.30103;
 }
 
-// The stars along celestial direction `c`, against a sky of luminance `bg` (the sun's units),
-// one pixel `px` rad across.
+// A star's colour by its B-V, luminance 1: the blue-white of a hot star (-0.3) to the orange of
+// a cool one (1.6).
+fn star_tint(bv: f32) -> vec3f {
+  let t = clamp((bv + 0.3) / 1.9, 0.0, 1.0);
+  let c = vec3f(0.72 + 0.53 * t, 0.86 + 0.12 * sin(t * PI), 1.3 - 0.62 * t);
+  return c / dot(c, kLuma);
+}
+
+// The point on the celestial sphere at a cube face's cell place `g` (cells, 0..kStarCells a side).
+fn cube_point(face: u32, sgn: f32, g: vec2f) -> vec3f {
+  let at = g / kStarCells * 2.0 - 1.0;
+  var p = vec3f(0.0);
+  p[face] = sgn;
+  if (face == 0u) {
+    p.y = at.x;
+    p.z = at.y;
+  } else if (face == 1u) {
+    p.x = at.x;
+    p.z = at.y;
+  } else {
+    p.x = at.x;
+    p.y = at.y;
+  }
+  return normalize(p);
+}
+
+// One star of the map, seen from celestial direction `c` a pixel `px` rad across, against a sky
+// of luminance `bg` whose faintest seen star is of magnitude `limit`.
+fn star_light(c: vec3f, p: vec3f, m: f32, bv: f32, bg: f32, px: f32, limit: f32) -> vec3f {
+  let off = length(c - p) / px;
+  if (off > 3.0 * kStarSpread) {
+    return vec3f(0.0);
+  }
+  // Its light, the sun's units, spread over its pixels; at the threshold at least kStarSeen
+  // times the sky behind it at its peak, and brighter by its light above the threshold.
+  let e = kStarZeroLux / kSunLux * frame.world.y * pow(10.0, -0.4 * m);
+  let solid = 2.0 * PI * kStarSpread * kStarSpread * px * px;
+  let seen = kStarSeen * bg * pow(10.0, 0.4 * (limit - m));
+  let peak = max(e / solid, seen);
+  let fade = 1.0 - smoothstep(limit - 0.3, limit + 0.5, m);
+  let spot = exp(-0.5 * off * off / (kStarSpread * kStarSpread));
+  return star_tint(bv) * (peak * fade * spot);
+}
+
+// THE REAL STARS along celestial direction `c` (render/stars.hpp's map: the cube's cells, up to
+// kStarSlots stars a cell), against a sky of luminance `bg` (the sun's units), one pixel `px` rad
+// across: the pixel's cell and the eight round it on its face.
 fn stars(c: vec3f, bg: f32, px: f32) -> vec3f {
   let limit = limiting_magnitude(bg * kSunLux / frame.world.y);
   if (limit < -1.0) {
@@ -108,43 +156,30 @@ fn stars(c: vec3f, bg: f32, px: f32) -> vec3f {
     face = 2u;
     uv = vec2f(c.x, c.y) / a.z;
   }
+  let sgn = select(1.0, -1.0, c[face] < 0.0);
   let axis = face + select(0u, 3u, c[face] < 0.0);
   let g = (uv * 0.5 + 0.5) * kStarCells;
-  let cell = min(floor(g), vec2f(kStarCells - 1.0));
-  let h = hash4(vec3u(vec2u(cell), axis));
-  let m = max((log2(max(h.x, 1e-9) * kStarCount) * 0.30103 - 0.9) / 0.51, -1.5);
-  if (m > limit + 0.5) {
-    return vec3f(0.0);
+  let cell = vec2i(min(floor(g), vec2f(kStarCells - 1.0)));
+  var light = vec3f(0.0);
+  for (var dy = -1; dy <= 1; dy++) {
+    for (var dx = -1; dx <= 1; dx++) {
+      let at = cell + vec2i(dx, dy);
+      if (any(at < vec2i(0)) || any(at >= vec2i(i32(kStarCells)))) {
+        continue;
+      }
+      let texel = vec2i(i32(axis) * i32(kStarCells) + at.x, at.y);
+      for (var slot = 0; slot < kStarSlots; slot++) {
+        let s = textureLoad(star_map, texel, slot, 0);
+        let m = s.z * 255.0 / 20.0 - 2.0;
+        if (m > limit + 0.5) {
+          continue;
+        }
+        let p = cube_point(face, sgn, vec2f(at) + s.xy);
+        light += star_light(c, p, m, s.w * 255.0 / 70.0 - 0.5, bg, px, limit);
+      }
+    }
   }
-  // The star's place in its cell, kept off the cell's edges, and how far off it this pixel is.
-  let at = (cell + 0.15 + 0.7 * h.yz) / kStarCells * 2.0 - 1.0;
-  var p = vec3f(0.0);
-  p[face] = sign(c[face]);
-  if (face == 0u) {
-    p.y = at.x;
-    p.z = at.y;
-  } else if (face == 1u) {
-    p.x = at.x;
-    p.z = at.y;
-  } else {
-    p.x = at.x;
-    p.y = at.y;
-  }
-  let off = length(c - normalize(p)) / px;
-  if (off > 3.0 * kStarSpread) {
-    return vec3f(0.0);
-  }
-  // Its light, the sun's units, spread over its pixels; at the threshold at least kStarSeen
-  // times the sky behind it at its peak, and brighter by its light above the threshold.
-  let e = kStarZeroLux / kSunLux * frame.world.y * pow(10.0, -0.4 * m);
-  let solid = 2.0 * PI * kStarSpread * kStarSpread * px * px;
-  let seen = kStarSeen * bg * pow(10.0, 0.4 * (limit - m));
-  let peak = max(e / solid, seen);
-  let fade = 1.0 - smoothstep(limit - 0.3, limit + 0.5, m);
-  let spot = exp(-0.5 * off * off / (kStarSpread * kStarSpread));
-  // Its colour, from the blue stars to the red, luminance about 1.
-  let tint = mix(vec3f(0.78, 0.9, 1.28), vec3f(1.2, 0.97, 0.72), h.w);
-  return tint * (peak * fade * spot);
+  return light;
 }
 
 // A cheap value noise on the celestial sphere, 0..1.

@@ -106,7 +106,7 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   // cloud of grains is lit through, not on one face: the sun's whole light round the lobe, as
   // bright as the snow it came off facing the sun.
   let lobe = mix(1.0, forward_lobe(dot(-to_eye, frame.sun.xyz), 0.6), 0.6);
-  let c = in.look.x / PI * (sun_light(y) * lit * lobe + sky_irradiance(vec3f(0.0, 1.0, 0.0)));
+  let c = in.look.x / PI * (sun_light(y, xz) * lit * lobe + sky_irradiance(vec3f(0.0, 1.0, 0.0)));
   let hazed = haze(c, in.position.xy * frame.size.zw, length(in.rel));
   var out: FragmentOut;
   out.colour = vec4f(hazed * a, a);

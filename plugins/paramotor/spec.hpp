@@ -60,8 +60,9 @@ inline constexpr double kMost = 2;
 }  // namespace polar
 
 // THE TRIM: the chord's angle to the plane square to the lines, rad, nose down negative; it sets
-// the angle of attack the wing settles at.
-inline constexpr double kRig = -0.05;
+// the angle of attack the wing settles at (a trim near 55 km/h and a glide near 4 at any step
+// rate).
+inline constexpr double kRig = -0.03;
 // THE BRAKES pull the trailing edge down: more trim, more lift and drag, and a stall sooner.
 namespace brakes {
 inline constexpr double kRig = 0.1;

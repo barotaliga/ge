@@ -37,6 +37,7 @@ updates that row's status file (`docs/goals/<row>.md`) in its PR.
 | [`docs/input.md`](docs/input.md) | Input devices: the layers, the model, actions and bindings, raw mouse, wheels and force feedback, gamepads, touch, players, recording, the labs and the decisions |
 | [`docs/networking.md`](docs/networking.md) | Multiplayer: what each kind of game asks of the network, the layers of `engine/net`, the decisions, the wire format, the simulated network, the tools, and Fall Line's pilot (M17) |
 | [`docs/publishing.md`](docs/publishing.md) | What a release is (GitHub Releases + GitHub Packages), how a game consumes it, changeset fragments, cutting a release, the credentials |
+| [`docs/shooters-edge.md`](docs/shooters-edge.md) | The second game, Shooter's Edge (M18, after Fall Line): the compatibility contract, the clean room, the homes, the protocols, the labs and the `ge` commands it needs |
 
 **The working area.** `porting/` holds everything that only matters while modules are
 being carried over from their reference sources: the porting guide (`porting/README.md`),
@@ -66,7 +67,9 @@ porting ends, and nothing outside it may depend on it except `make golden`.
   repository's structure and ship in no game, and Blender Python asset builders: offline
   sources of a model, run headless by `ge asset` (docs/goals.md M8g), whose output (a .glb)
   is committed and loaded by the engine in C++; they never run in a game, CI never needs
-  Blender, and no other scripting enters the tree. Nothing about the reference sources'
+  Blender, and no other scripting enters the tree. The one runtime exception is
+  Shooter's Edge's QC VM (`plugins/progs`, `docs/shooters-edge.md`), which executes existing mods'
+  bytecode for compatibility; the tree's own QC is limited to that game's test mod. Nothing about the reference sources'
   architecture (their layers, module split, file layout, state shape, names or data
   formats) is assumed to carry over: each design decision is made here, for this engine,
   and recorded in `docs/architecture.md`. Where a carried-over module keeps a behaviour (a

@@ -116,7 +116,7 @@ void make_scene(ge::gpu::Device& d, Scene& s) {
   r::create_family(d, s.ip, s.tower, "test.tower", meshes, materials, 4);
   r::create_family(d, s.ip, s.figure, "test.figure", meshes, materials, 4);
   r::create_family_casters(d, s.ip, s.tower, r::kCascades);
-  r::create_family_casters(d, s.ip, s.figure, 1);
+  r::create_family_casters(d, s.ip, s.figure, r::kMaxShadowFigures);
   r::bind_family_hiz(d, s.ip, s.tower, s.hiz);
   r::bind_family_hiz(d, s.ip, s.figure, s.hiz);
   s.light = r::instance_light_group(d, s.ip, s.terrain);
@@ -298,4 +298,31 @@ TEST(a_figure_casts_from_its_tile) {
   CHECK(s.shadows.figures == 1);
   CHECK(r::read_caster_stats(d, s.figure, 0).early == 1);
   CHECK(d.errors.load() == 0);
+}
+
+TEST(each_tile_culls_its_own_casters) {
+  auto device = ge::test::test_device();
+  if (!device) return;
+  ge::gpu::Device& d = *device;
+  Scene s;
+  make_scene(d, s);
+  const ge::gpu::Target out = ge::gpu::create_target(d, "test.final", kW, kH);
+  // Three figures: two side by side (each inside the other's tile) and one 20 m off.
+  const r::Instance bodies[] = {box_at(256, 0.9, 140, 0.6f, 1.8f, 0.6f),
+                                box_at(256.8, 0.9, 140, 0.6f, 1.8f, 0.6f),
+                                box_at(276, 0.9, 140, 0.6f, 1.8f, 0.6f)};
+  r::set_instances(d, s.figure, 0, bodies);
+  const std::array<double, 3> centres[] = {{256, 1.0, 140}, {276, 1.0, 140}};
+  const r::FrameView v = field_view();
+  const ge::gpu::Image with = draw(d, s, v, out, true, centres);
+  CHECK(s.shadows.figures == 2);
+  const r::InstanceStats near = r::read_caster_stats(d, s.figure, 0);
+  const r::InstanceStats far = r::read_caster_stats(d, s.figure, 1);
+  CHECK_MSG(near.early == 2, "tile 0 drew " + std::to_string(near.early));
+  CHECK_MSG(far.early == 1, "tile 1 drew " + std::to_string(far.early));
+  CHECK(near.frustum == 1 && far.frustum == 2);
+  // An unused tile's slot culls nothing this frame.
+  CHECK(!s.figure.casters[2].culled);
+  CHECK(d.errors.load() == 0);
+  (void)with;
 }
