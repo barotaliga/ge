@@ -294,7 +294,7 @@ void ConsoleView::say(ChatTo to, std::string_view nick, std::string_view text) {
       add(LineKind::team, "(" + me + "): " + std::string(text));
       break;
     case ChatTo::nearby:
-      add(LineKind::nearby, "{" + me + "}: " + std::string(text));
+      add(LineKind::nearby, "(near) " + me + ": " + std::string(text));
       break;
     case ChatTo::one:
       add(LineKind::whisper, "[to " + std::string(nick) + "]: " + std::string(text));

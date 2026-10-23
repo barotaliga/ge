@@ -83,7 +83,7 @@ TEST(say_prox_shown_locally) {
   ConsoleView v(c);
   c.execute("name ada; say_prox over here");
   CHECK(!v.lines().empty() && v.lines().back().kind == LineKind::nearby);
-  CHECK(v.lines().back().text == "{ada}: over here");
+  CHECK(v.lines().back().text == "(near) ada: over here");
 }
 
 TEST(editing_history_and_completion) {
