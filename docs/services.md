@@ -126,6 +126,61 @@ code that includes Steamworks' headers.
 Other stores fit the same interface: Game Center on iOS, iPadOS and the Mac App Store, and
 Google Play Games on Android (M20h, with the store builds of M11).
 
+## Discord
+
+Discord is not a store: it sells no game and keeps no achievements. What it gives a game is the
+player's profile line (rich presence: what they are playing, with a timer, art and a party),
+friends asking to join from that line, and the player joining a friend's game from Discord. So
+it is a presence service beside the store's `Backend`, not another backend: a game keeps its
+store for progress and adds a `services::Discord` for its profile line. Both deliver through the
+same `Event` and the same once-a-frame `poll`.
+
+**Two ways in, and which rows they are.**
+
+- **The client's local IPC (M20i, built).** The Discord app on the player's machine listens on a
+  local pipe, `discord-ipc-0` to `-9` (a Unix domain socket under `$XDG_RUNTIME_DIR`, `$TMPDIR`
+  or `/tmp`, and the Flatpak's and the Snap's folders; a named pipe on Windows). A game connects,
+  says which application it is (the application id from Discord's developer portal, which is
+  public), and speaks framed JSON: set the activity, subscribe to joins and asks, answer an ask.
+  No SDK, no library, no secret and no network: `engine/net/local_pipe.hpp` is the pipe,
+  `engine/services/discord.hpp` the protocol and the client. With no Discord running, the game
+  looks again with backoff (2 s doubling to a minute) and nothing else changes.
+- **The Social SDK (M20j, open).** Discord's friends list, lobbies, voice chat, direct messages
+  and account linking come through its Social SDK, a closed library under Discord's terms. It
+  follows Steam's rule exactly: never committed, supplied by path at build time
+  (`GE_DISCORD_SOCIAL_SDK`), on CI from the repository secret `DISCORD_SOCIAL_SDK_URL`, the
+  runtime library shipped beside the executable, and the lobbies reaching `engine/net` the way
+  Steam's do (M20c).
+
+| Discord | `services::Discord` |
+| --- | --- |
+| Handshake (`v: 1`, the client id); `READY` with the user | `poll` finds the app; `connection_restored` (id `discord`), `user()` |
+| `SET_ACTIVITY` (details, state, timestamps, assets, party, join secret) | `set_activity(Activity)`, checked by `check_activity`, sent paced by `poll`; `clear_activity()` |
+| `SUBSCRIBE ACTIVITY_JOIN` / `ACTIVITY_JOIN` | `join_requested` (text: the friend's join secret) |
+| `SUBSCRIBE ACTIVITY_JOIN_REQUEST` / `ACTIVITY_JOIN_REQUEST` | `join_asked` (user, text: their name) |
+| `SEND_ACTIVITY_JOIN_INVITE` / `CLOSE_ACTIVITY_REQUEST` | `answer_join(user, accept)` |
+| An `ERROR` event; a close (op 2) | `call_refused` (id: the command, text: Discord's message and code) |
+| The app quits (the pipe closes) | `connection_lost`; the activity is sent again when it returns |
+| Ping (op 3) | a pong, by `poll` |
+
+**The rate limit.** Discord takes five activity updates in 20 seconds. The client paces its
+updates to one every 4 seconds and always sends the newest, so a game may set its activity
+whenever anything changes: the updates in between are coalesced, the profile is never more than
+4 seconds behind, and no window ever holds a sixth update. The `discord` lab measured it: a run
+changing its line every half second showed a line at most 3.5 s old, against 15 s when the
+client sent five at once and waited out the window.
+
+**Limits checked before sending** (`check_activity`, `invalid`): every text empty or 2 to 128
+bytes, image keys up to 256, a party 1 ≤ size ≤ max, a join secret only with a party, timestamps
+in unix milliseconds that do not end before they start.
+
+**Testing.** `SimDiscord` is the Discord app in memory over the same frames: it answers the
+handshake, refuses a bad client id with a close, holds the activity to the limits above and
+refuses a sixth update in 20 seconds, and the player's and friends' actions (start, quit, ask to
+join, join, ping) are calls on it. `tests/services_discord_test.cpp` runs the client against it
+and over a real local pipe; `make lab LAB=discord` plays a session (the app starting late, a run,
+two asks, a join, a quit and return) and tables every event and every frame.
+
 ## The SDK, the secrets and the build
 
 - `GE_STEAM` (a CMake option, off by default) builds `engine/steam`. It needs
@@ -147,7 +202,8 @@ Google Play Games on Android (M20h, with the store builds of M11).
 
 - Every call is tested on the simulated store (`tests/services_sim_store_test.cpp`), the offline
   store's directory round trip (`tests/services_offline_test.cpp`) and the catalog's check
-  (`tests/services_catalog_test.cpp`).
+  (`tests/services_catalog_test.cpp`); Discord against the simulated Discord app and a real local
+  pipe (`tests/services_discord_test.cpp`).
 - The `services` lab plays a game's whole use of the services by four players on one script and
   tables every event, the store's journal and how long each kind of answer took
   (`make lab LAB=services ARGS="--latency-ms=200 --jitter-ms=100"`).
@@ -167,3 +223,5 @@ Google Play Games on Android (M20h, with the store builds of M11).
 | M20f | The handheld and the extras: the on-screen keyboard, suspend and resume, the timeline, Remote Play Together |
 | M20g | Fall Line on Steam: its catalog, its record book as boards with ghosts, its cloud save, its presence |
 | M20h | Game Center and Google Play Games (with M11) |
+| M20i | Discord's presence over the app's local IPC: the activity, asks to join, joins, the simulated Discord app, the `discord` lab |
+| M20j | Discord's Social SDK: friends, lobbies over `engine/net`, voice, account linking (behind the `DISCORD_SOCIAL_SDK_URL` secret) |
