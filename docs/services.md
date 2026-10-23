@@ -137,7 +137,7 @@ same `Event` and the same once-a-frame `poll`.
 
 **Two ways in, and which rows they are.**
 
-- **The client's local IPC (M20i, built).** The Discord app on the player's machine listens on a
+- **The client's local IPC (M23g, built).** The Discord app on the player's machine listens on a
   local pipe, `discord-ipc-0` to `-9` (a Unix domain socket under `$XDG_RUNTIME_DIR`, `$TMPDIR`
   or `/tmp`, and the Flatpak's and the Snap's folders; a named pipe on Windows). A game connects,
   says which application it is (the application id from Discord's developer portal, which is
@@ -145,7 +145,7 @@ same `Event` and the same once-a-frame `poll`.
   No SDK, no library, no secret and no network: `engine/net/local_pipe.hpp` is the pipe,
   `engine/services/discord.hpp` the protocol and the client. With no Discord running, the game
   looks again with backoff (2 s doubling to a minute) and nothing else changes.
-- **The Social SDK (M20j, open).** Discord's friends list, lobbies, voice chat, direct messages
+- **The Social SDK (M23g, open).** Discord's friends list, lobbies, voice chat, direct messages
   and account linking come through its Social SDK, a closed library under Discord's terms. It
   follows Steam's rule exactly: never committed, supplied by path at build time
   (`GE_DISCORD_SOCIAL_SDK`), on CI from the repository secret `DISCORD_SOCIAL_SDK_URL`, the
@@ -223,5 +223,3 @@ two asks, a join, a quit and return) and tables every event and every frame.
 | M20f | The handheld and the extras: the on-screen keyboard, suspend and resume, the timeline, Remote Play Together |
 | M20g | Fall Line on Steam: its catalog, its record book as boards with ghosts, its cloud save, its presence |
 | M20h | Game Center and Google Play Games (with M11) |
-| M20i | Discord's presence over the app's local IPC: the activity, asks to join, joins, the simulated Discord app, the `discord` lab |
-| M20j | Discord's Social SDK: friends, lobbies over `engine/net`, voice, account linking (behind the `DISCORD_SOCIAL_SDK_URL` secret) |

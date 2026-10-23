@@ -46,7 +46,7 @@ M20a–M20h.
 
 - **Discord is a presence service, not a store.** It sits beside the `Backend` (`Discord`), shares
   its `Event` and its once-a-frame poll, and reaches the Discord app over the local pipe with no
-  SDK. Its Social SDK (friends, lobbies, voice) follows the Steam SDK's rule (M20j). Let `poll`
+  SDK. Its Social SDK (friends, lobbies, voice) follows the Steam SDK's rule (M23g). Let `poll`
   pace the activity: call `set_activity` whenever the line changes and never throttle it in the
   game; a test against `SimDiscord` fails on a sixth update in 20 seconds.
 
