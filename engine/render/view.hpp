@@ -50,6 +50,8 @@
 
 #include <cstdint>
 
+#include "render/sky_style.hpp"
+
 namespace ge::render {
 
 // A column-major 4x4 matrix: element (row r, column c) is m[c * 4 + r].
@@ -172,6 +174,7 @@ struct FrameView {
   // the sky or this, whichever is brighter, so a lava lake at night reads as a photograph of it
   // would, not blown out against a dark sky. 0: the sky's light alone.
   double adapt_cd = 0;
+  SkyStyle style{};  // the kind of sky (render/sky_style.hpp); the default is the Earth's
   // THE REACH, m: how far the picture draws. Past half of it a mist closes every surface into
   // the sky behind it, all of it by the reach, and nothing farther is drawn; 0: no reach, no mist.
   double reach_m = 0;

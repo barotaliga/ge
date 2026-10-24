@@ -15,7 +15,7 @@ prefix comes the thing in one word, abbreviated when it is long: `r_shadowsize`,
 
 | Prefix | Owner | Examples |
 | --- | --- | --- |
-| `sv_` | the server's rules, decided for everyone | `sv_seed`, `sv_hour`, `sv_maxclients`, `sv_cheats` |
+| `sv_` | the server's rules, decided for everyone | `sv_seed`, `sv_hour`, `sv_weather`, `sv_maxclients`, `sv_cheats` |
 | `cl_` | the client: the camera, prediction, what it asks of the server | `cl_view`, `cl_fov`, `cl_updaterate` |
 | `r_` | the picture | `r_bloom`, `r_taa`, `r_scale`, `r_shadowsize` |
 | `s_` | the sound | `s_wind`, `s_effects`, `s_mute` |
@@ -216,8 +216,10 @@ Its cvars:
 | `con_bgalpha` | 0.85 | how much of the game the panel hides, 0 to 1 |
 | `con_bgimage` | (none) | a picture drawn over the gradient, a path in the game's files |
 
-The view (`engine/console/view.hpp`) is a model that holds no pixels: the app's 2D layer draws
-it, and the `console` lab draws it on the CPU (`make lab LAB=console`).
+The view (`engine/console/view.hpp`) is a model that holds no pixels. `ui::draw_console`
+(`engine/ui/console.hpp`) turns it into the 2D layer's draw list, which the game draws over its
+frame and the `console` lab draws on the CPU (`make lab LAB=console`). A game sets the look (the
+sizes, each kind's colour, the list's colours) in a `ConsoleStyle`.
 
 ## Tooling
 
