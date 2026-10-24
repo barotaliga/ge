@@ -6,8 +6,9 @@ surface stone
 scale   2
 tags    brick wall exterior low-colour
 
-layer bricks  rows=8 cols=4 color=#7a3420 vary=0.2 mortar=0.16 bevel=0.15 depth=0.5 mortar_color=#8a5a40
+layer bricks  rows=10 cols=4 color=#4e2414 vary=0.2 mortar=0.1 bevel=0.05 depth=0.25 mortar_color=#5a3a26
 layer noise   kind=perlin period=16 octaves=3 color=#000000 color2=#ffffff blend=overlay amount=0.35
 layer speckle size=1 contrast=0.25 cavity=0
-layer shade   strength=1.2 highlight=0.3 occlusion=0.4
+layer noise   kind=perlin period=3 octaves=3 color=#000000 color2=#ffffff blend=multiply amount=0.12
+layer shade   strength=0.7 highlight=0.15 occlusion=0.15
 layer palette color=#8a4a30 color2=#8a5a40 steps=16

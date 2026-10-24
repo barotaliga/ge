@@ -107,7 +107,9 @@ void paint_panels(Surface& s, const Args& a) {
   const int rows = a.i("rows"), cols = a.i("cols"), rivets = a.i("rivets");
   const double seam = a.n("seam") * 0.5, bevel = std::max(a.n("bevel"), 1.0 / s.size);
   const double depth = a.n("depth"), vary = a.n("vary"), rough = a.n("rough");
-  const double metal = a.n("metal"), rr = a.n("rivet_size");
+  const double metal = a.n("metal"), rr = a.n("rivet_size"), rh = a.n("rivet_height");
+  const std::string& sides = a.w("rivet_sides");
+  const bool on_x = sides != "y", on_y = sides != "x";
   const Rgb plate = a.c("color");
   const double aa = 1.0 / s.size;
   for_texels(s.size, [&](int x, int y, double u, double v) {
@@ -132,7 +134,8 @@ void paint_panels(Surface& s, const Args& a) {
       };
       const double dx1 = ex - inset, dy1 = along(py, wy);
       const double dx2 = along(px, wx), dy2 = ey - inset;
-      const double r2 = std::min(dx1 * dx1 + dy1 * dy1, dx2 * dx2 + dy2 * dy2);
+      const double r2 = std::min(on_x ? dx1 * dx1 + dy1 * dy1 : 1e9,
+                                 on_y ? dx2 * dx2 + dy2 * dy2 : 1e9);
       const double rd = std::sqrt(r2) / rr;
       rivet = rd < 1 ? std::sqrt(1 - rd * rd) : 0;
     }
@@ -141,7 +144,7 @@ void paint_panels(Surface& s, const Args& a) {
     Rgb c = varied(plate, vary, bx, by, a.seed);
     c = mix(scaled(plate, 0.35), c, in);
     set_colour(s, i, mix(c, scaled(plate, 1.1), rivet * 0.5));
-    s.plane[kHeight][i] = static_cast<float>(clamp01(0.5 + depth * (face - 0.5) + 0.12 * rivet));
+    s.plane[kHeight][i] = static_cast<float>(clamp01(0.5 + depth * (face - 0.5) + rh * rivet));
     s.plane[kRough][i] = static_cast<float>(lerp(0.9, rough, in) - 0.1 * rivet);
     s.plane[kMetal][i] = static_cast<float>(metal * in);
   });
@@ -216,14 +219,16 @@ void paint_studs(Surface& s, const Args& a) {
   const std::string& shape = a.w("shape");
   const bool coloured = a.given("color");
   const Rgb colour = a.c("color");
+  const double sx = static_cast<double>(std::max(rows, cols)) / cols;
+  const double sy = static_cast<double>(std::max(rows, cols)) / rows;
   const double aa = static_cast<double>(std::max(rows, cols)) / s.size;
   for_texels(s.size, [&](int x, int y, double u, double v) {
     const double gy = v * rows;
     const int row = static_cast<int>(std::floor(gy));
     const double gx = u * cols + offset * (row % 2);
     const int col = static_cast<int>(std::floor(gx));
-    // In cell units, centred: -0.5 .. 0.5 each way.
-    const double px = gx - col - 0.5, py = gy - row - 0.5;
+    // Centred in the cell, in units of its shorter side, so a stud is round in any cell.
+    const double px = (gx - col - 0.5) * sx, py = (gy - row - 0.5) * sy;
     double r = 0;  // 0 at the stud's middle, 1 at its rim
     if (shape == "diamond") {
       r = (std::fabs(px) + std::fabs(py)) / size;
@@ -252,29 +257,32 @@ void paint_studs(Surface& s, const Args& a) {
 
 void paint_scales(Surface& s, const Args& a) {
   const int rows = std::max(2, a.i("rows") + a.i("rows") % 2), cols = a.i("cols");
-  const double rim = std::max(a.n("rim"), 0.5 * rows / s.size), depth = a.n("depth");
+  const double rim = std::max(a.n("rim"), 1.0 * cols / s.size), depth = a.n("depth");
   const double vary = a.n("vary"), rough = a.n("rough");
   const bool up = a.w("dir") == "up";
   const Rgb colour = a.c("color");
   const bool rimmed = a.given("rim_color");
   const Rgb rim_colour = a.c("rim_color");
-  constexpr double kR = 0.75;  // a scale's radius, in cells: wide enough that the rows overlap
+  // Distances in scale widths: a row is `ry` of a width tall, so the discs stay round.
+  const double ry = static_cast<double>(cols) / rows;
+  constexpr double kR = 0.6;  // a scale's radius, in widths: just enough that the rows close up
+  const double reach = kR / ry;
   for_texels(s.size, [&](int x, int y, double u, double v) {
     const double gx = u * cols, gy = (up ? v : 1 - v) * rows;
     // The scale on top is the lowest row whose disc holds the texel: rows below lie over it.
     int hit_row = 0, hit_col = 0;
     double hit = -1;
-    for (int j = static_cast<int>(std::floor(gy + kR)); j >= static_cast<int>(std::floor(gy - kR)); --j) {
+    for (int j = static_cast<int>(std::floor(gy + reach)); j >= static_cast<int>(std::floor(gy - reach)); --j) {
       const double off = (j & 1) != 0 ? 0.5 : 0.0;
       const double ci = std::floor(gx - off + 0.5) + off;
+      // Within a row the nearest centre wins, so neighbours meet on the line between them.
       for (double c : {ci - 1, ci, ci + 1}) {
-        const double dx = gx - c, dy = gy - j;
+        const double dx = gx - c, dy = (gy - j) * ry;
         const double d = kR - std::sqrt(dx * dx + dy * dy);
-        if (d > 0) {
+        if (d > hit) {
           hit = d;
           hit_row = j;
           hit_col = static_cast<int>(std::floor(c));
-          break;
         }
       }
       if (hit > 0) break;

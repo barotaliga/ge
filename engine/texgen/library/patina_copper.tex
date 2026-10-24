@@ -5,10 +5,10 @@ seed    5
 surface metal
 scale   1
 tags    metal copper wall old low-colour
-param   patina 0.45 0 1
+param   patina 0.75 0 1
 
-layer fill    color=#6a3424 height=0.5 rough=0.5 metal=0.9
-layer noise   kind=perlin period=3 octaves=5 color=#3a1e18 color2=#8a4a30 blend=mix amount=0.7
-layer noise   kind=turbulence period=4 octaves=4 color=#1e4a40 color2=#1e4a40 blend=mix amount=$patina lo=0.35 hi=0.6 invert=1
-layer speckle size=1 contrast=0.45 amount=0.08 color=#2e6a5a cavity=0
-layer palette color=#8a4a30 color2=#2e6a5a steps=16
+layer fill    color=#3a1c14 height=0.5 rough=0.5 metal=0.9
+layer noise   kind=perlin period=3 octaves=5 color=#1e100c color2=#4a2818 blend=mix amount=0.7
+layer noise   kind=edges period=5 octaves=2 warp=0.35 color=#808080 color2=#4aa48c blend=add amount=$patina lo=0 hi=0.3 invert=1
+layer speckle size=1 contrast=0.25 amount=0.03 color=#1e4a40 cavity=0
+layer palette color=#6a3824 color2=#1e4a40 steps=16
