@@ -213,6 +213,8 @@ gl::Picture overview(const ba::Scene& s, int size) {
       col = {150, 200, 255};
     else if (a.kind == ba::kWarp)
       col = {200, 80, 220};
+    else if (a.kind == ba::kTele)
+      col = {235, 235, 245};
     else
       col = {uint8_t(60 + 150 * t), uint8_t(60 + 150 * t), uint8_t(64 + 150 * t)};
     fill_tri(p, pa, pb, pc, col);
@@ -295,7 +297,8 @@ void back_off(const ge::brush::Map& m, double e[3], double heading, double most)
 }
 
 // The views a map gets by itself: from the start; over the largest pool of each liquid, from
-// above its largest surface along the longest open way; and up at its largest sky.
+// above its largest surface along the longest open way; before its largest teleporter; and up at
+// its largest sky.
 std::vector<View> auto_views(const ba::Scene& s, size_t map, const std::string& name) {
   std::vector<View> out;
   View start;
@@ -345,6 +348,39 @@ std::vector<View> auto_views(const ba::Scene& s, size_t map, const std::string& 
     back_off(s.map, v.eye, v.heading, 4);
     v.pitch = -0.32;
     out.push_back(v);
+  }
+  // A teleporter's panel, from in front of it: of the larger panels (both sides of each), the one
+  // with the most open room in front of it and nothing between.
+  double room = 0;
+  View tele;
+  for (const ba::Portal& p : s.portals) {
+    if (p.area < 0.5 * s.portals[0].area) break;
+    View v;
+    for (int k = 0; k < 3; ++k) v.eye[k] = p.centre[k] + 0.3 * p.normal[k];
+    if (p.height > 1.6) v.eye[1] = p.centre[1] - 0.5 * p.height + 1.6;
+    v.heading = ge::core::libm::atan2(-p.normal[0], -p.normal[2]);
+    if (!open_at(s.map, v.eye)) continue;
+    back_off(s.map, v.eye, v.heading, std::clamp(1.4 * std::max(p.width, p.height), 2.5, 7.0));
+    bool clear = true;
+    for (double f = 0; f <= 1.0 && clear; f += 0.05) {
+      const double q[3] = {v.eye[0] + f * (p.centre[0] + 0.1 * p.normal[0] - v.eye[0]),
+                           v.eye[1] + f * (p.centre[1] - v.eye[1]),
+                           v.eye[2] + f * (p.centre[2] + 0.1 * p.normal[2] - v.eye[2])};
+      clear = open_at(s.map, q);
+    }
+    const double d =
+        (v.eye[0] - p.centre[0]) * p.normal[0] + (v.eye[2] - p.centre[2]) * p.normal[2];
+    if (!clear || d <= room) continue;
+    room = d;
+    tele = v;
+  }
+  if (room > 0) {
+    tele.id = name + "-teleport";
+    tele.title = name + ": the teleporter";
+    tele.caption = "In front of a teleporter's panel, the one with the most room before it.";
+    tele.map = map;
+    tele.pitch = 0;
+    out.push_back(tele);
   }
   // The largest sky ceiling.
   double best = 0, c[3] = {0, 0, 0};
@@ -470,7 +506,8 @@ void run(gl::Lab& lab) {
     }
     const ba::Scene& s = m->scene;
     gl::LabTable table{names[i] + ": what the map holds", {"what", "count"}, {}};
-    const char* kinds[] = {"solid", "sky", "water", "slime", "lava", "hidden", "warped"};
+    const char* kinds[] = {"solid", "sky",    "water",  "slime",
+                           "lava",  "hidden", "warped", "teleport"};
     for (int k = 0; k < ba::kKinds; ++k) {
       table.rows.push_back({std::string(kinds[k]) + " triangles", std::to_string(s.counts[k])});
       lab.metric(names[i] + ".tris." + kinds[k], s.counts[k], "count");
@@ -645,6 +682,10 @@ void run(gl::Lab& lab) {
   if (!lab.arg("bounce").empty()) {
     for (Way& way : ways) way.o.bounce = lab.arg_num("bounce");
   }
+  for (Way& way : ways) {
+    way.o.crisp = lab.arg_bool("crisp");
+    way.o.portal_lights = lab.arg("portal-lights") != "0";
+  }
   // The sky types each view whose id holds --skies-on is drawn under too.
   std::vector<std::string> skies;
   {
@@ -812,6 +853,8 @@ const gl::LabSpec kSpec{
      {"tint", "", "the sky's tint for every map, r,g,b (none: each picked sky's)"},
      {"skies", "", "sky types to draw the sky views under too, comma separated (e.g. hell,toxic)"},
      {"skies-on", "sky", "the views --skies draws: those whose id holds this"},
+     {"crisp", "0", "v2's textures crisp, each texel a square (r_texfilter 0)"},
+     {"portal-lights", "1", "the teleporters light their rooms (0: not)"},
      {"ladder", "",
       "rungs to draw each view at too, comma separated: <minlight> or <minlight>@<brightness>"}},
     "--width=160",

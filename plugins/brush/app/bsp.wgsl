@@ -1,6 +1,8 @@
 // A CLASSIC BSP MAP DRAWN (plugins/brush/app/bsp_draw.hpp): its surfaces with their textures
-// (point-sampled from the atlas at the mip the pixel's footprint picks, wrapped inside each
-// texture's rectangle) and either the map's own LIGHTMAPS or REAL-TIME LIGHTS.
+// (from the atlas, wrapped inside each texture's rectangle: point-sampled at the mip the pixel's
+// footprint picks in the classic mode or v2's crisp one, else filtered by hand, bilinear between
+// texels, between two mips and with up to four taps along a slanted footprint, since an atlas
+// cannot wrap a sampler's filter) and either the map's own LIGHTMAPS or REAL-TIME LIGHTS.
 //
 // - MODE 0, CLASSIC: the textures times the lightmaps (a luxel of 128 is the texture as it is),
 //   the liquids drawn as their own warped textures, unlit, and the sky faces as two scrolling
@@ -28,7 +30,8 @@ struct Bsp {
   info2: vec4f,  // time s, the cube face's size, the ortho map's size, the brightness
   sky: vec4f,    // the classic sky texture's rectangle
   info3: vec4f,  // v2's soft floor of light (minlight), the baked light's share as bounce, the
-                 // sky's light (r_skylight: the sun's and the open sky's in the rooms)
+                 // sky's light (r_skylight: the sun's and the open sky's in the rooms), the
+                 // textures filtered (1) or crisp (0)
   ortho: array<Job, 2>,  // the sun's map and the zenith's
 };
 
@@ -63,6 +66,7 @@ const kWater = 2u;
 const kSlime = 3u;
 const kLava = 4u;
 const kWarp = 6u;
+const kTele = 7u;
 
 struct VsIn {
   @location(0) pos: vec3f,
@@ -104,6 +108,117 @@ fn texel(st: vec2f, rect: vec4f, lod: f32) -> vec4f {
   var t = floor(st / s);
   t = t - size * floor(t / size);
   return textureLoad(atlas, vec2i(floor(rect.xy / s) + t), i32(k));
+}
+
+// The texel at integer `t` of mip `k` of the texture at `rect`, wrapped.
+fn texel_at(t: vec2f, rect: vec4f, k: u32) -> vec4f {
+  let s = f32(1u << k);
+  let size = max(floor(rect.zw / s), vec2f(1.0));
+  let w = t - size * floor(t / size);
+  return textureLoad(atlas, vec2i(floor(rect.xy / s) + w), i32(k));
+}
+
+// `st` (texels of mip 0) at mip `k`, bilinear between its four nearest texels.
+fn bilinear(st: vec2f, rect: vec4f, k: u32) -> vec4f {
+  let p = st / f32(1u << k) - 0.5;
+  let i = floor(p);
+  let f = p - i;
+  let a = texel_at(i, rect, k);
+  let b = texel_at(i + vec2f(1.0, 0.0), rect, k);
+  let c = texel_at(i + vec2f(0.0, 1.0), rect, k);
+  let d = texel_at(i + vec2f(1.0, 1.0), rect, k);
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+// `st` filtered over the pixel's footprint (`dx`, `dy`: its texels along the screen's axes):
+// the mip by the footprint's minor axis over up to four taps along its major one, blended
+// between the two mips about it.
+fn filtered(st: vec2f, rect: vec4f, dx: vec2f, dy: vec2f) -> vec4f {
+  let lx = length(dx);
+  let ly = length(dy);
+  let major = select(dy, dx, lx > ly);
+  let big = max(lx, ly);
+  let small = max(min(lx, ly), 1e-6);
+  let taps = clamp(ceil(big / small), 1.0, 4.0);
+  let lod = clamp(log2(max(big / taps, 1e-6)), 0.0, 3.0);
+  let k0 = u32(floor(lod));
+  let k1 = min(k0 + 1u, 3u);
+  let fr = lod - floor(lod);
+  var sum = vec4f(0.0);
+  for (var i = 0; i < i32(taps); i++) {
+    let q = st + major * ((f32(i) + 0.5) / taps - 0.5);
+    sum += mix(bilinear(q, rect, k0), bilinear(q, rect, k1), fr);
+  }
+  return sum / taps;
+}
+
+// THE TELEPORT'S MAGIC LIQUID (v2): a black ink marbled with grey, flowing UP the panel; silver
+// threads climbing it in lanes; motes rising and twinkling; a pale shimmer where it is seen edge
+// on; the whole breathing slowly. Its own light, in a white face's units.
+fn t_hash(p: vec2f) -> f32 {
+  let q = fract(p * vec2f(0.1031, 0.1030));
+  let r = q + dot(q, q.yx + 33.33);
+  return fract((r.x + r.y) * r.x);
+}
+
+fn t_noise(p: vec2f) -> f32 {
+  let i = floor(p);
+  let f = fract(p);
+  let u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(t_hash(i), t_hash(i + vec2f(1.0, 0.0)), u.x),
+             mix(t_hash(i + vec2f(0.0, 1.0)), t_hash(i + vec2f(1.0, 1.0)), u.x), u.y);
+}
+
+fn t_fbm(p: vec2f) -> f32 {
+  var sum = 0.0;
+  var a = 0.5;
+  var q = p;
+  for (var i = 0; i < 5; i++) {
+    sum += a * t_noise(q);
+    q = mat2x2f(1.6, 1.2, -1.2, 1.6) * q;
+    a *= 0.5;
+  }
+  return sum;
+}
+
+fn teleport(world: vec3f, n: vec3f, eye_dir: vec3f, t: f32) -> vec3f {
+  // The panel's own axes, m: across it and up.
+  let across = normalize(vec3f(-n.z, 0.0, n.x) + vec3f(1e-4, 0.0, 0.0));
+  let p = vec2f(dot(world, across), world.y);
+  // The ink: black, smoke folded through it in thin grey wisps, warped twice and carried up.
+  let up = vec2f(0.0, -0.35 * t);
+  let w1 = vec2f(t_fbm(p * 1.1 + up), t_fbm(p * 1.1 + up + vec2f(5.2, 1.3)));
+  let w2 = vec2f(t_fbm(p * 1.9 + 2.4 * w1 + 1.3 * up + vec2f(1.7, 9.2) + 0.05 * t),
+                 t_fbm(p * 1.9 + 2.4 * w1 + 1.3 * up + vec2f(8.3, 2.8) - 0.05 * t));
+  let m = t_fbm(p * 2.6 + 3.0 * w2 + up);
+  let smoke = pow(max(1.0 - abs(2.0 * m - 1.0), 0.0), 9.0);
+  let fine = pow(max(1.0 - abs(2.0 * t_fbm(p * 6.0 + 4.0 * w2 + 2.0 * up) - 1.0), 0.0), 14.0);
+  var c = vec3f(0.003, 0.003, 0.005) + vec3f(0.025, 0.025, 0.03) * smoothstep(0.4, 0.8, w2.y);
+  c += vec3f(0.09, 0.09, 0.1) * smoke + vec3f(0.3, 0.31, 0.36) * fine * smoke;
+  // The threads: a liquid that runs UP the panel, a few lanes of it, each swaying and lit in
+  // drops that climb it, with a halo.
+  let lane_at = p.x * 5.0 + 0.6 * sin(1.3 * p.y + 0.7 * t) + 1.2 * (w1.x - 0.5);
+  let lane_id = floor(lane_at);
+  let live = step(0.55, t_hash(vec2f(lane_id, 7.0)));
+  let lane = abs(fract(lane_at) - 0.5);
+  let core = 1.0 - smoothstep(0.0, 0.025, lane);
+  let halo = exp(-lane * 22.0);
+  let speed = 1.2 + 1.4 * t_hash(vec2f(lane_id, 3.0));
+  let drops = smoothstep(0.5, 0.95, t_noise(vec2f(lane_id * 3.1, p.y * 1.6 - speed * t)));
+  let flow = live * (0.25 + 1.6 * drops);
+  c += vec3f(1.1, 1.12, 1.2) * core * flow + vec3f(0.14, 0.15, 0.19) * halo * flow;
+  // The motes: sparks in a few cells, rising and swaying, twinkling, each with a glow.
+  let cp = vec2f(p.x * 6.0 + 0.3 * sin(p.y * 2.0 + t), p.y * 6.0 - 1.8 * t);
+  let ci = floor(cp);
+  let h = t_hash(ci);
+  let at = vec2f(t_hash(ci + 17.0), t_hash(ci + 31.0)) * 0.6 + 0.2;
+  let r = length(fract(cp) - at);
+  let twinkle = pow(max(0.5 + 0.5 * sin(5.0 * t + 40.0 * h), 0.0), 3.0);
+  c += vec3f(1.0, 1.0, 1.1) * step(0.8, h) * (smoothstep(0.05, 0.0, r) * 3.0 + exp(-r * 18.0) * 0.4) *
+       twinkle;
+  // The rim, and the breath.
+  c += vec3f(0.3, 0.31, 0.4) * pow(max(1.0 - abs(dot(n, eye_dir)), 0.0), 3.0);
+  return c * (0.85 + 0.15 * sin(1.7 * t));
 }
 
 // V2's floor: no face darker than about `m`, a lit one nearly as it was (sqrt(e^2 + m^2)).
@@ -180,12 +295,14 @@ fn fs_main(in: VsOut) -> FsOut {
   let classic = bsp.info.x < 0.5;
   let t = bsp.info2.x;
   var st = in.st;
-  let warped = in.kind == kWater || in.kind == kSlime || in.kind == kLava || in.kind == kWarp;
+  let warped = in.kind == kWater || in.kind == kSlime || in.kind == kLava || in.kind == kWarp ||
+               in.kind == kTele;
   if (warped) {
     st = st + 8.0 * sin(st.yx * (6.2831853 / 128.0) + vec2f(t));
   }
-  let footprint = max(length(dpdx(st)), length(dpdy(st)));
-  let lod = log2(max(footprint, 1e-6));
+  let dx = dpdx(st);
+  let dy = dpdy(st);
+  let lod = log2(max(max(length(dx), length(dy)), 1e-6));
   // A lightmap's 1 (and a light in its units): a white face as the open day lights it, times the
   // brightness (the eye adapted to a dim room).
   let white = white_luminance() * bsp.info2.w;
@@ -201,9 +318,22 @@ fn fs_main(in: VsOut) -> FsOut {
     return out;
   }
 
-  let tx = texel(st, in.rect, lod);
+  if (in.kind == kTele && !classic) {
+    var nt = normalize(in.nrm);
+    if (dot(nt, eye_dir) > 0.0) {
+      nt = -nt;
+    }
+    out.colour = vec4f(teleport(in.world, nt, eye_dir, t) * white, 1.0);
+    return out;
+  }
+
+  var tx = texel(st, in.rect, lod);
+  if (!classic && bsp.info3.w > 0.5) {
+    tx = filtered(st, in.rect, dx, dy);
+  }
   let albedo = tx.rgb;
-  let glows = tx.a > 0.99;
+  // A glowing texel's share (alpha 1 a glowing one; filtering blends it with its neighbours).
+  let glow = smoothstep(0.1, 0.9, tx.a);
   if (warped) {
     out.colour = vec4f(albedo * white, 1.0);
     return out;
@@ -218,9 +348,7 @@ fn fs_main(in: VsOut) -> FsOut {
     if (!classic) {
       lit = floor_light(lit, bsp.info3.x);
     }
-    if (glows) {
-      lit = max(lit, vec3f(1.0));
-    }
+    lit = mix(lit, max(lit, vec3f(1.0)), glow);
     out.colour = vec4f(albedo * lit * white, 1.0);
     return out;
   }
@@ -271,9 +399,7 @@ fn fs_main(in: VsOut) -> FsOut {
   }
   let open = ortho_lit(bsp.ortho[1], 1, in.world + n * 0.3, 1.2);
   c += albedo / PI * sky_irradiance(n) * open * bsp.info3.z;
-  if (glows) {
-    c += albedo * white;
-  }
+  c += albedo * white * glow;
   out.colour = vec4f(c, 1.0);
   // A pixel whose light came out not a number (a degenerate face) or past a half float: black,
   // never a NaN for the bloom to spread over the frame.

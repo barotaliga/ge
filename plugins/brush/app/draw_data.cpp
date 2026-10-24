@@ -97,7 +97,8 @@ Kind liquid_kind(const std::string& name) {
   if (n.find("lava") != std::string::npos) return kLava;
   if (n.find("slime") != std::string::npos) return kSlime;
   if (n.find("water") != std::string::npos) return kWater;
-  return kWarp;  // another warped surface (a teleporter's): drawn as it is
+  if (n.find("tele") != std::string::npos) return kTele;
+  return kWarp;  // another warped surface: drawn as it is
 }
 
 double number(const std::string& s, double fallback) {
@@ -384,6 +385,7 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
     double level, box[4], area, centre[2];
   };
   std::vector<Top> tops;
+  std::vector<Portal> faces;  // the teleporters' faces, merged into panels below
   for (size_t si = 0; si < m.surfaces.size(); ++si) {
     const Surface& sf = m.surfaces[si];
     Kind kind = kSolid;
@@ -452,6 +454,29 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
       area += 0.5 * std::fabs(ux * vz - uz * vx);
     }
     s.counts[std::min<uint32_t>(kind, kKinds - 1)] += sf.count / 3;
+    if (kind == kTele && base < s.vertices.size()) {
+      // A teleporter's face: its box and the way it faces, level; panels merge after the loop.
+      const float* nv = s.vertices[base].nrm;
+      const double hl = std::sqrt(double(nv[0]) * nv[0] + double(nv[2]) * nv[2]);
+      if (hl > 0.5) {
+        Portal f;
+        f.normal[0] = nv[0] / hl;
+        f.normal[2] = nv[2] / hl;
+        f.normal[1] = 0;
+        double flo[3] = {1e30, 1e30, 1e30}, fhi[3] = {-1e30, -1e30, -1e30};
+        for (uint32_t v = base; v < uint32_t(s.vertices.size()); ++v)
+          for (int k = 0; k < 3; ++k) {
+            flo[k] = std::min(flo[k], double(s.vertices[v].pos[k]));
+            fhi[k] = std::max(fhi[k], double(s.vertices[v].pos[k]));
+          }
+        for (int k = 0; k < 3; ++k) f.centre[k] = 0.5 * (flo[k] + fhi[k]);
+        f.width =
+            std::abs(f.normal[2]) * (fhi[0] - flo[0]) + std::abs(f.normal[0]) * (fhi[2] - flo[2]);
+        f.height = fhi[1] - flo[1];
+        f.area = f.width * f.height;
+        faces.push_back(f);
+      }
+    }
     if ((kind == kWater || kind == kSlime || kind == kLava) && up && model_of[si] == 0) {
       double cx = 0, cz = 0;
       for (uint32_t v = base; v < uint32_t(s.vertices.size()); ++v) {
@@ -517,6 +542,52 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
   }
   std::sort(s.liquids.begin(), s.liquids.end(),
             [](const LiquidPatch& a, const LiquidPatch& b) { return a.area > b.area; });
+
+  // ── The teleporters' panels: faces facing one way, in one plane, touching or nearly ──
+  {
+    struct Box {
+      Portal p;
+      double lo[3], hi[3];
+    };
+    std::vector<Box> panels;
+    for (const Portal& f : faces) {
+      double lo[3], hi[3];
+      const double half[3] = {0.5 * f.width * std::abs(f.normal[2]), 0.5 * f.height,
+                              0.5 * f.width * std::abs(f.normal[0])};
+      for (int k = 0; k < 3; ++k) lo[k] = f.centre[k] - half[k], hi[k] = f.centre[k] + half[k];
+      Box* into = nullptr;
+      for (Box& b : panels) {
+        const double facing = b.p.normal[0] * f.normal[0] + b.p.normal[2] * f.normal[2];
+        const double plane = (f.centre[0] - b.p.centre[0]) * f.normal[0] +
+                             (f.centre[2] - b.p.centre[2]) * f.normal[2];
+        bool near = facing > 0.9 && std::abs(plane) < 0.3;
+        for (int k = 0; k < 3 && near; ++k) near = lo[k] < b.hi[k] + 0.5 && hi[k] > b.lo[k] - 0.5;
+        if (near) {
+          into = &b;
+          break;
+        }
+      }
+      if (!into) {
+        panels.push_back({f, {lo[0], lo[1], lo[2]}, {hi[0], hi[1], hi[2]}});
+        continue;
+      }
+      for (int k = 0; k < 3; ++k) {
+        into->lo[k] = std::min(into->lo[k], lo[k]);
+        into->hi[k] = std::max(into->hi[k], hi[k]);
+      }
+      into->p.area += f.area;
+    }
+    for (Box& b : panels) {
+      Portal& p = b.p;
+      for (int k = 0; k < 3; ++k) p.centre[k] = 0.5 * (b.lo[k] + b.hi[k]);
+      p.width =
+          std::abs(p.normal[2]) * (b.hi[0] - b.lo[0]) + std::abs(p.normal[0]) * (b.hi[2] - b.lo[2]);
+      p.height = b.hi[1] - b.lo[1];
+      s.portals.push_back(p);
+    }
+    std::sort(s.portals.begin(), s.portals.end(),
+              [](const Portal& a, const Portal& b) { return a.area > b.area; });
+  }
 
   // ── The lights and the start ──
   uint32_t n = 0;

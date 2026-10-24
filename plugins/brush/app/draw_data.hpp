@@ -40,9 +40,10 @@ enum Kind : uint32_t {
   kSlime = 3,
   kLava = 4,
   kHidden = 5,
-  kWarp = 6
+  kWarp = 6,
+  kTele = 7  // a teleporter's face (its texture named for one)
 };
-inline constexpr int kKinds = 7;
+inline constexpr int kKinds = 8;
 
 // One vertex: engine metres, the texture's texels, the lightmap atlas's uv, the normal, the
 // texture's rectangle in the atlas (mip 0 texels: x, y, w, h), its kind.
@@ -66,6 +67,15 @@ struct LiquidPatch {
   double area = 0;            // m^2 of the top surfaces in it
   double centre[2] = {0, 0};  // x, z of its largest top surface's middle, m
   double largest = 0;         // that surface's area, m^2
+};
+
+// A teleporter's face as one panel: its middle (engine metres), the way it faces (unit, level),
+// its width across and height (m). Faces of one panel lie within a metre and face one way.
+struct Portal {
+  double centre[3] = {0, 0, 0};
+  double normal[3] = {0, 0, 1};
+  double width = 0, height = 0;
+  double area = 0;  // m^2
 };
 
 // How a light entity's brightness moves (our own functions, picked by the entity's style number).
@@ -107,6 +117,7 @@ struct Scene {
   std::vector<DrawVertex> vertices;
   std::vector<uint32_t> indices;
   std::vector<LiquidPatch> liquids;
+  std::vector<Portal> portals;  // the teleporters' panels, largest first
   std::vector<PointLight> lights;
   double mins[3] = {0, 0, 0}, maxs[3] = {0, 0, 0};  // engine metres
   // Where the player starts: engine metres and a heading.

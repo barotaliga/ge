@@ -39,12 +39,16 @@ bool parse_mode(std::string_view word, Mode* out);
 struct Options {
   Mode mode = Mode::v2;  // the renderer for BSP maps; classic stays selectable (r_bspmode)
   Lighting lighting = Lighting::lights;
-  double ambient = 0.015;   // the light every face gets, the lightmaps' units
-  double brightness = 2.0;  // a lightmap's 1 against a white face under the open day
-  double strength = 1;      // the point lights' strength against the classic's
-  int shadowed = 32;        // the nearest lights that cast shadows
-  int most = 160;           // the lights a frame draws at most (the nearest)
-  bool lava_lights = true;  // the lava's glow lights the walls round it
+  double ambient = 0.015;     // the light every face gets, the lightmaps' units
+  double brightness = 2.0;    // a lightmap's 1 against a white face under the open day
+  double strength = 1;        // the point lights' strength against the classic's
+  int shadowed = 32;          // the nearest lights that cast shadows
+  int most = 160;             // the lights a frame draws at most (the nearest)
+  bool lava_lights = true;    // the lava's glow lights the walls round it
+  bool portal_lights = true;  // each teleporter's panel lights its room with a slow pulse
+  // r_texfilter: the map's textures filtered (between texels, between mip levels and along a
+  // surface seen at a slant) or CRISP, each texel a square as the classic look draws them.
+  bool crisp = false;
   // r_minlight: the light no face falls below, the lightmaps' units, as a soft floor
   // (sqrt(e^2 + m^2)): a dark room comes up to about `minlight`, a lit one keeps its light.
   double minlight = 0.3;
@@ -76,7 +80,7 @@ struct GpuBsp {
   float info[4];
   float info2[4];
   float sky[4];
-  float info3[4];  // the floor (minlight), the bounce, the sky's light (r_skylight)
+  float info3[4];  // the floor (minlight), the bounce, the sky's light, filtered (1) or crisp
   GpuJob ortho[2];
 };
 
@@ -103,8 +107,8 @@ struct BspDraw {
   std::vector<GpuJob> frame_jobs;  // the cube faces, then the two orthographic maps
   int shadowed = 0;
   Options options;
-  // The scene's lava lights (made once).
-  std::vector<PointLight> lava;
+  // The scene's lava lights and teleporters' lights (made once).
+  std::vector<PointLight> lava, portals;
 };
 
 void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& draw, const Scene& scene,
@@ -128,5 +132,8 @@ void encode_bsp_veil(const BspDraw& draw, const gpu::PipelineSet& pipelines,
 // pool's glow (physical, cd), just over the surface. `core_c` the melt's temperature, `cover` the
 // share crusted.
 std::vector<PointLight> lava_lights(const Scene& scene, double core_c = 1150, double cover = 0.75);
+// The lights the teleporters give off: one half a metre before each panel, a cool grey-white,
+// breathing slowly, its brightness by the panel's area.
+std::vector<PointLight> portal_lights(const Scene& scene);
 
 }  // namespace ge::brush::app

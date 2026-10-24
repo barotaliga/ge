@@ -137,6 +137,26 @@ std::vector<PointLight> lava_lights(const Scene& scene, double core_c, double co
   return out;
 }
 
+std::vector<PointLight> portal_lights(const Scene& scene) {
+  std::vector<PointLight> out;
+  uint32_t seed = 0x5eed7e1eu;
+  for (const Portal& p : scene.portals) {
+    PointLight l;
+    for (int k = 0; k < 3; ++k) l.pos[k] = p.centre[k] + 0.8 * p.normal[k];
+    // A classic light's value by the panel's size: a bright lamp's for a doorway's teleporter.
+    l.value = std::clamp(100 * p.area, 200.0, 450.0);
+    l.reach = 9;
+    l.colour[0] = 0.8;
+    l.colour[1] = 0.82;
+    l.colour[2] = 1.0;
+    l.flicker = Flicker::pulse;
+    l.seed = seed;
+    seed = seed * 1664525u + 1013904223u;
+    out.push_back(l);
+  }
+  return out;
+}
+
 void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, const Scene& scene,
                 const wgpu::BindGroupLayout& frame) {
   d.scene = &scene;
@@ -316,6 +336,7 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
     d.p_shadow = pipelines.add_render(device, desc);
   }
   d.lava = lava_lights(scene, 1150, 0.3);
+  d.portals = portal_lights(scene);
 }
 
 void create_bsp_targets(gpu::Device& device, BspDraw& d, const r::FrameTargets& targets) {
@@ -348,6 +369,9 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
     for (const PointLight& l : s.lights) consider(l);
     if (o.lava_lights) {
       for (const PointLight& l : d.lava) consider(l);
+    }
+    if (o.portal_lights) {
+      for (const PointLight& l : d.portals) consider(l);
     }
     std::sort(picks.begin(), picks.end(), [](const Pick& a, const Pick& b) { return a.d < b.d; });
     if (picks.size() > size_t(std::min(o.most, 512))) picks.resize(size_t(std::min(o.most, 512)));
@@ -409,7 +433,8 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   set4(d.staged.info, o.mode == Mode::v2 ? 1 : 0, o.lighting == Lighting::lights ? 1 : 0,
        double(d.frame_lights.size()), o.ambient);
   set4(d.staged.info2, view.time_s, kCubeSize, kOrthoSize, o.brightness);
-  set4(d.staged.info3, o.minlight, o.lighting == Lighting::lights ? o.bounce : 0, o.sky_light, 0);
+  set4(d.staged.info3, o.minlight, o.lighting == Lighting::lights ? o.bounce : 0, o.sky_light,
+       o.crisp ? 0 : 1);
   if (s.sky_texture < s.map.textures.size()) {
     // The sky texture's rectangle: any vertex of a sky face carries it.
     for (size_t k = 0; k < s.vertices.size(); ++k) {
@@ -487,7 +512,7 @@ void encode_bsp(const BspDraw& d, const gpu::PipelineSet& pipelines, r::FrameRec
     pass.SetBindGroup(1, d.group);
     pass.SetVertexBuffer(0, d.vertices);
     pass.SetIndexBuffer(d.indices, wgpu::IndexFormat::Uint32);
-    const Kind drawn[] = {kSolid, kSky, kWarp, kWater, kSlime, kLava};
+    const Kind drawn[] = {kSolid, kSky, kWarp, kTele, kWater, kSlime, kLava};
     for (Kind k : drawn) {
       if (v2 && (k == kWater || k == kSlime || k == kLava)) continue;
       if (d.range[k][1] == 0) continue;
