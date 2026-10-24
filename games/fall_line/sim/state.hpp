@@ -244,6 +244,7 @@ struct GameState {
   ArmyState army;        // the army on foot after him (army.hpp); inactive until sent
   GunfireState gunfire;  // the army's guns and their rounds (gunfire.hpp); inactive until armed
   FreeSled sled;         // the free ride's snowmobile (sled_ride.hpp); none in a race
+  FreeSled stolen;       // an army snowmobile he stole (sled_ride.hpp); none until he steals one
   FreeHeli heli;         // the free ride's helicopter (heli_ride.hpp); none in a race
   FreePara para;         // the free ride's paramotor (para_ride.hpp); only a ride begun under it
   CrowdState crowd;      // the amateurs on the ski area (crowd.hpp); inactive until dealt

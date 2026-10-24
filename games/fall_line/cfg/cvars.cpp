@@ -213,6 +213,34 @@ void add_cvars(con::Console& c, Settings& s) {
           .min = -1,
           .max = 1},
          &s.cover);
+  v.bind({.name = "sv_skytype",
+          .fallback = "earth",
+          .flags = kRun,
+          .help = "the kind of sky: earth dust alien hell void nebula violet ice ash toxic",
+          .kind = CvarKind::text},
+         &s.sky_type);
+  // The sky type's knobs (render/sky_style.hpp's SkyKnobs): -1 keeps the type's own.
+  const auto knob = [&](const char* name, const char* help, double max, double* field) {
+    v.bind({.name = name, .fallback = "-1", .flags = kRun, .help = help, .min = -1, .max = max},
+           field);
+  };
+  knob("sv_skyair", "the sky type's air, scaled: 0 none, 1 its own (-1: its own)", 4, &s.sky_air);
+  knob("sv_skydust", "the air's dust against the Earth's: 0 none (-1: the type's)", 200,
+       &s.sky_dust);
+  knob("sv_sunsize", "the sun's disc against the real one's (-1: the type's)", 10, &s.sun_size);
+  knob("sv_sun2", "a second sun's brightness against the sun's: 0 none (-1: the type's)", 2,
+       &s.sun2);
+  knob("sv_planet", "a planet's angular radius, degrees: 0 none (-1: the type's)", 60, &s.planet);
+  knob("sv_planetdir", "the planet's heading, degrees (-1: the type's)", 360, &s.planet_dir);
+  knob("sv_planetel", "the planet's elevation, degrees (-1: the type's)", 90, &s.planet_el);
+  knob("sv_ring", "the planet's ring's outer radius in its own: 0 none (-1: the type's)", 4,
+       &s.ring);
+  knob("sv_nebula", "a nebula's brightness against the snow's white: 0 none (-1: the type's)", 2,
+       &s.nebula);
+  knob("sv_skystars", "the share of the stars seen by day, 0 .. 1 (-1: the type's)", 1,
+       &s.sky_stars);
+  knob("sv_skyglow", "a fire's glow from under the horizon: 0 none (-1: the type's)", 4,
+       &s.sky_glow);
 
   v.bind({.name = "sv_lethal",
           .fallback = "1",
