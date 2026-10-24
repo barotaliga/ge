@@ -2,7 +2,7 @@
 title: A GPU test returns when test_device gives no device, even inside a helper
 date: 2026-10-24
 scope: tests/render_ui_pass_test.cpp, tests/gpu_support.hpp
-concepts: [gpu, skip, test_device, windows, merge-queue]
+concepts: [gpu, skip, test-device, windows, merge-queue]
 ---
 
 `ge::test::test_device()` only marks the test as skipped when no device can be made; it does
