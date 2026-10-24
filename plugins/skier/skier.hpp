@@ -27,7 +27,9 @@
 //    `kHarshG`, or landed across his way, it is a WIPEOUT. The snow falling away more than
 //    `kLeaveGap` from under him is a TAKE-OFF: a kicker's lip, a roller's crest or a cliff is a
 //    flight because the ground curved away faster than gravity could follow, never by a flag.
-// 8. THE TRUNKS (`trees.hpp`): met faster than `kTreeSpeed`, a wipeout; slower, a glance.
+// 8. THE TRUNKS (`trees.hpp`), met by his body or the skis ahead of it (their tips and halfway
+//    to them): faster than `kTreeSpeed`, a wipeout; slower, a glance, which on the tips turns the
+//    skis aside.
 //
 // THERE IS NO MODE: a launch, a landing and a fall are read off the same forces every step is
 // made of, and the events say so after the fact. A skier DOWN (wiped out) is THROWN off his skis

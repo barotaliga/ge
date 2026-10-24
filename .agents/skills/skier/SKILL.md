@@ -11,7 +11,7 @@ game rides it, so the modes, the course's rules, the bot and the field stay in t
 
 | File | What |
 | --- | --- |
-| `skier/skier.hpp/.cpp` | THE MODEL, its order stated once in the header: `SkierState`, `SkierInput`, `SkierEvents`, `World`, `step_skier`, `stand_skier`, `skier_hash` |
+| `skier/skier.hpp/.cpp` | THE MODEL, its order stated once in the header: `SkierState`, `SkierInput`, `SkierEvents`, `World`, `step_skier` (its trunks met by the body's circle and two along the skis ahead: `meet_trees`), `stand_skier`, `skier_hash` |
 | `skier/snow.hpp` | The snow under the skis by its packed share: `sink_target`, `base_friction`, `powder_drag`, `side_grip`, `brake_grip` |
 | `skier/limits.hpp` | What a skier can do: `edge_most`, `carve_curvature`, `edge_for_curvature`, `corner_speed`, `carve_speed`, `terminal_speed`, `top_speed` |
 | `skier/skis.hpp` | `SkiSpec` and `kReferenceSkis`, the pair every shared number was tuned on |
@@ -77,7 +77,7 @@ when it lay still; a body that never lies still for a second fails the lab.
 `injuries` (scenario): every scenario's body (its injuries by part, the ISS, when he was
 mortally hurt and when he died) and the body's curves over 400 draws: a trunk skied into
 head-on (the physics run once, the body thrown on into it, every draw judged off the same steps)
-and met beside him by closing speed, a landing by its load, as the share hurt, the mean ISS and the
+and across his whole line (13 lines from 0.6 m left of it to 0.6 m right, averaged), met beside him by closing speed, a landing by its load, as the share hurt, the mean ISS and the
 share killed; pictures: every scenario's parts shaded by their worst AIS, and the curves.
 
 `anim` (scenario): the skier ridden through a scenario and recorded every step as a pose track:
@@ -90,6 +90,5 @@ A change to how the figure is posed runs it before and after.
 ## Still to come
 
 What the game does not ask for yet stays out (G4): the catalog of pairs, the wind, crust and
-ice, the poles and the legs as stations, the tricks, and the skis meeting a trunk at their tips
-(today the body's circle meets it, so a body thrown at a trunk square ahead starts against it).
+ice, the poles and the legs as stations, and the tricks.
 Each lands with the milestone row that needs it.
