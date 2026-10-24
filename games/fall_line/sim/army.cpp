@@ -470,7 +470,8 @@ void step_army(GameState& state) {
     // THE LOOK, every `kLookEveryS`, each man on his own step of it (ai/think.hpp).
     if (s.mode != SoldierMode::ride && ge::ai::thinks(steps, s.id, kLookSteps)) {
       const Pursuer p{0, PursuerKind::soldier, s.x, s.y + army::kEyeM, s.z};
-      s.sees = on && sees_quarry(*state.level, state.trees, p, q, false);
+      s.sees =
+          on && s.mode != SoldierMode::down && sees_quarry(*state.level, state.trees, p, q, false);
     }
     const TroopWorld tw = troop_world(state);
     bool moving = false;
@@ -519,6 +520,11 @@ void step_army(GameState& state) {
       case SoldierMode::rope:
       case SoldierMode::board:
         moving = step_heli_soldier(state, s);
+        break;
+      case SoldierMode::down:
+        // KNOCKED OVER: lying where he fell, then up and after him again.
+        stop_here(tw, s);
+        if (s.t >= army::kDownS) enter_mode(state, s, SoldierMode::chase, "back on his feet");
         break;
       case SoldierMode::gone:
         break;
@@ -604,6 +610,8 @@ const char* soldier_mode_name(SoldierMode m) {
       return "rope";
     case SoldierMode::board:
       return "board";
+    case SoldierMode::down:
+      return "down";
     case SoldierMode::gone:
       return "gone";
   }
@@ -624,6 +632,8 @@ const char* army_change_name(ArmyChange c) {
       return "arrest";
     case ArmyChange::home:
       return "home";
+    case ArmyChange::run_down:
+      return "run_down";
   }
   return "?";
 }

@@ -58,13 +58,22 @@ never a skier or a gun. A game's actions and its default bindings file live in t
 2. The fold in `state.cpp`, the read in `actions.cpp` (`source_value`, and `is_digital` /
    `source_tapped` for a button-like source), the capture in `rebind.cpp`.
 3. A simulated driver in `sim.hpp`, so a test and the `input-session` lab can drive it.
-4. The backend's case in engine/platform (M19b).
+4. The platform backend's case in `engine/platform/devices.cpp` (`devices_event`: SDL's event to
+   ours; a device's description in `plug_pad` / `plug_joystick`), and a virtual driver for it
+   (`attach_virtual` and its setters) so `tests/platform_devices_test.cpp` and the
+   `input-devices` lab can drive it headless.
 
 ## Labs
 
 - **`input-shape`** (picture): every dead zone, curve and key ramp charted. Run it before and
   after any change to `shape.cpp` and read the curves: a step at the inner edge is radial's
   alone; the round zones keep the angle; sloped snaps near a cardinal and still reaches 1.
+- **`input-devices`** (scenario, needs the platform): one script through SDL's virtual devices
+  and through the simulated backend, held to each other frame by frame. Run it before and after
+  any change to `engine/platform/devices.cpp`; a frame that differs names its action in the gap
+  table, and a gap above the 16-bit step (3e-5) is a translation bug. A script value landing on
+  an axis-as-button's threshold exactly puts the two backends either side of it: move the
+  script, not the threshold.
 - **`input-session`** (scenario): keys, a mouse, a pad, a wheel with pedals and a touch screen
   through a skier's, a shooter's and a racer's maps; the event log replayed to the bit; players;
   rebinding. The moments table is the quickest read of what a change did to the actions.
