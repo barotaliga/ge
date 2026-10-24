@@ -62,7 +62,9 @@ seed. The skier on the snow is `plugins/skier` (the `skier` skill).
 11. The door gunners (M15e2, done): the roster's gunners on the hunting machines' door guns, laid
    in their arcs and fired by the rules of fire; the `gunfire` lab's doors table.
 12. The paramotor riflemen (M15e3, done): the free ride's wing flown by the army's hands round a
-   circle over him, the rifle, home; the `army-para` lab.
+   circle over him, the rifle, home; the `army-para` lab. The hunt's server cvars (`sv_lethal`,
+   `sv_armyfire`, `sv_helis`, `sv_paras`) reach a run through `apply_hunt` (`hunt_cfg.hpp`),
+   once before its first step; a new switch for the hunt is a field there and a cvar beside them.
 13. Next: the free ride's other systems, a row each (M13+), and the army rows that wait on them
    (M15d2 his answer to the machines, M15d3 the heavier machines, M15e4–M15e5 the rest of the
    air).
