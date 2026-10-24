@@ -8,11 +8,13 @@
 
 #include <cmath>
 #include <cstdint>
+#include <limits>
 
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "core/num.hpp"
 #include "snow/contact.hpp"
+#include "snow/time.hpp"
 
 namespace ge::snow {
 
@@ -33,11 +35,6 @@ double ipow(double v, int n) {
   double r = 1;
   for (int i = 0; i < n; i++) r *= v;
   return r;
-}
-
-uint16_t minute_of(double t) {
-  const double m = std::floor(t / 60);
-  return m <= 0 ? 0 : m >= 65535 ? 65535 : static_cast<uint16_t>(m);
 }
 
 // The outline's box, widened by `grow` of its half width, in samples clipped to the layer.
@@ -182,6 +179,13 @@ Pressed press(Layer& layer, const Imprint& imp, double t) {
   // Bekker's width is the true outline's narrower side, not the widened one's.
   const double b = bearing_width(s.half_width, s.kind == ShapeKind::capsule ? 0 : s.half_length);
   const uint16_t minute = minute_of(t);
+  // Over time (time.hpp): every cell is brought to the press's minute before it changes, the
+  // target read under the weathered cover, and a crust the weather froze bears a load under its
+  // `crust_load` (it sinks nothing) and breaks under a heavier one into the settled snow below.
+  const Weather* weather = layer.spec.weather;
+  Moment now = moment(layer, minute * 60.0);
+  double lid = std::numeric_limits<double>::infinity();
+  if (weather && !by_sink) lid = crust_load(*weather, minute * 60.0);
 
   // THE OUTLINE: every sample brought down to its target, the thrown mass summed.
   uint64_t thrown = 0;
@@ -195,23 +199,41 @@ Pressed press(Layer& layer, const Imprint& imp, double t) {
       const double u = u_in(g, sh, ch, x, z);
       if (u > 1) continue;
       const double ease = 1 - ipow(u, wall);
-      const CoverSample cov = cover_at(layer.spec.cover, x, z);
+      CoverSample cov = cover_at(layer.spec.cover, x, z);
+      if (weather) {
+        const Snowpack p = cover_now(now, c, r);
+        cov = {p.depth, p.depth > 0 ? p.mass / p.depth : 0.0, cov.packed, p.kind};
+      }
       double target;
       if (by_sink) {
         target = cov.depth - imp.sink * ease;
       } else {
-        target = cov.depth - column_sink(cov.kind, cov.depth, cov.density, b, out.pressure * ease);
+        Kind under = cov.kind;
+        if ((under == Kind::crust || under == Kind::ice) && lid < imp.load) {
+          under = Kind::settled;  // the lid broke
+          out.broke = true;
+        }
+        const bool borne = (cov.kind == Kind::crust || cov.kind == Kind::ice) &&
+                           under == cov.kind && lid < std::numeric_limits<double>::infinity();
+        target =
+            borne ? cov.depth
+                  : cov.depth - column_sink(under, cov.depth, cov.density, b, out.pressure * ease);
       }
       if (target < 0) target = 0;
       const auto target_mm = static_cast<uint16_t>(core::num::round(target * 1000));
       const Cell* seen = cell_at(layer, c, r);
-      if (seen && seen->depth_mm <= target_mm) continue;
-      if (!seen && core::num::round(cov.depth * 1000) <= target_mm) continue;
+      if (weather) {
+        if (core::num::round(column_now(now, c, r).depth * 1000) <= target_mm) continue;
+      } else {
+        if (seen && seen->depth_mm <= target_mm) continue;
+        if (!seen && core::num::round(cov.depth * 1000) <= target_mm) continue;
+      }
       Cell* cell = cell_for(layer, c, r);
       if (!cell) {
         out.refused++;
         continue;
       }
+      bring_to(layer, now, *cell, c, r);
       if (cell->depth_mm <= target_mm) continue;
       const double h = cell_depth(*cell);
       const double rho = cell_density(*cell);
@@ -230,7 +252,8 @@ Pressed press(Layer& layer, const Imprint& imp, double t) {
       compacted += cell->mass - thrown_here;
       cell->mass = static_cast<uint16_t>(cell->mass - thrown_here);
       cell->depth_mm = target_mm;
-      cell->flags = static_cast<uint8_t>((cell->flags | kTouched | kPressed) & ~kBerm);
+      cell->flags =
+          static_cast<uint8_t>((cell->flags | kTouched | kPressed) & ~(kBerm | kCorduroy));
       cell->minute = minute;
       kind = cell->kind;
       out.samples++;
@@ -265,6 +288,7 @@ Pressed press(Layer& layer, const Imprint& imp, double t) {
             out.refused++;
             continue;  // its share stays in `left` and spills
           }
+          bring_to(layer, now, *cell, c, r);
           if (cell->mass + share > kMaxMass) share = kMaxMass - cell->mass;
           if (share == 0) continue;
           left -= share;
@@ -285,7 +309,9 @@ Pressed press(Layer& layer, const Imprint& imp, double t) {
             const double u = u_in(g, sh, ch, sample_x(layer, c), sample_z(layer, r));
             if (u <= 1 || berm_weight(u, reach) <= 0) continue;
             Cell* cell = cell_for(layer, c, r);
-            if (!cell || cell->mass == kMaxMass) continue;
+            if (!cell) continue;
+            bring_to(layer, now, *cell, c, r);
+            if (cell->mass == kMaxMass) continue;
             cell->mass = static_cast<uint16_t>(cell->mass + 1);
             cell->flags = static_cast<uint8_t>(cell->flags | kTouched | kBerm);
             left--;

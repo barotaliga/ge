@@ -215,6 +215,42 @@ state:
 - **Wind drift** (with M24a's wind): snow lifted past the threshold friction velocity and laid
   in the lee, filling tracks and building drifts across a piste or a road.
 
+**As built (M29c).** `engine/snow/time.hpp`: a layer given a `Weather` (`LayerSpec::weather`)
+changes with the clock; a layer without one is exactly the static layer, bit for bit. The
+weather is three `Schedule`s over the game's seconds (piecewise linear: the fall in kg/m²/s, the
+air in °C, the wind's mean at 10 m) and a row of constants with stated defaults. What they do
+between two moments is read off their integrals (`spell`), never stepped:
+
+- **The cover** is read weathered from the layer's start, **a cell** from the minute it last
+  changed (`Cell::minute`), so a groove pressed in a storm holds only what fell since.
+- **Settling** relaxes the old snow's density toward 300 kg/m³ (450 once it has melted) with a
+  time constant of a day at −5 °C, e^(−0.08 ΔT) shorter when warmer; new snow settles over half
+  the interval it fell through. Mass is kept and the column sinks.
+- **Filling**: a hollow catches `fill` (2) times its share of the fall more, plus whatever the
+  wind drifts across it, until it is level. A 20 cm ski groove in a 5 cm/h storm is level in
+  about two hours.
+- **Drift**: the saltation flux `Q = 0.68 ρ_air u*t (u*² − u*t²) / (g u*)` with `u*` off the
+  log law over the snow's roughness, counted only while the air is below freezing; what crosses
+  a metre of hollow lands in it at 250 kg/m³. A road cut through 40 cm of powder drifts full in
+  about three hours at 10 m/s.
+- **Melt and refreeze**: 4 kg/m² a degree-day above freezing. Melting snow is spring snow; once
+  the air is below freezing again it is a crust, or ice where a press polished it.
+  `crust_load(weather, t)` is what the crust bears before it breaks, `6·10⁵ h²` N with its
+  thickness `h` growing as the root of the degree-hours of frost since the thaw (Stefan's law);
+  a press heavier than that breaks through into settled snow (`Pressed::broke`), a lighter one
+  leaves no mark. After a +4 °C day and ten hours at −5 °C the crust bears about 1100 N: a
+  standing boot, not a skier carving at 2 g. A crust the game laid itself, with no thaw in its
+  weather, keeps its row's sink.
+- **New snow over whatever lay there**: at least 5 cm of it makes the column powder again.
+
+`bring_to` writes a cell's weathered state into it before `press` or `groom` changes it, and
+counts the mass the weather added or took into `Layer::mass_in`, so the tiles plus what spilled
+are still what they were given. `groom(layer, swath, t)` levels every sample under the swath to
+the same mass (shared out to the unit), lays it at the groomed density (denser snow keeps its
+own) and sets `kCorduroy`, which the next press over the cell clears. `sample(layer, x, z, t)`
+is the column with the weather read in. Held by `tests/snow_time_test.cpp`; charted by the
+`snow-weather` lab.
+
 ## Level of detail: keep fine only what someone is close to
 
 A free ride's day lays tens of kilometres of tracks; a courtyard's match lays footprints over
@@ -309,7 +345,7 @@ digests on purpose, and the PR names each one; the races, which never ski a pres
 | `snow-press` | scenario | M29a | Every imprint (a ski carving and skidding, a boot, a tyre, a tread, a body) on every kind: cross-sections before and after, the column under it, the berm, mass held to the bit, a groove ridden twice |
 | `snow-field` | picture | M29a, M29d | A layer crossed by a skier, a sled, a car and a walker: plan maps of depth, density, drop and kind; the tiles allocated and their memory |
 | `snow-contact` | scenario | M29b | Sink against load and width for every kind against the Bekker curves; compaction density; traction against slip; a ski planing up with speed |
-| `snow-weather` | picture | M29c | Hours in minutes: a fall burying tracks, settling, a groomer's swath, a melt and a night's crust, a drift across a road; filmstrips and the columns over time |
+| `snow-weather` | scenario | M29c | Hours in minutes: a ski groove filling in storms of three strengths, a fall settling over days at three temperatures, a road drifting in under three winds, a night's crust against a boot and a carving skier, a churned slope before and after a groomer |
 | `snow-lod` | picture | M29d | The tiers round the focus actors; a tile folded and refined with its mass held; memory against time on a free-ride day |
 | `snow-cost` | bench | M29d, M29e | `press` and `sample` per call, a step's snow with a field of skiers, folding; the GPU's upload and passes |
 | `gpu-snow` | picture | M29e–M29g | Named views: grooves, ruts, a trench and footprints close up, displaced and not; snow as a sheet over a road and a yard; snow on a roof; the distance-band diff |

@@ -91,6 +91,7 @@ snow 3f444a51a1e8a91c
 snow-contact c39eba995c9962ca
 snow-field eb9df0a82901b26a
 snow-press f60252f878f863e2
+snow-weather e064191b64090918
 snowfall 4bc8eb3fda4edade
 speed-events 2e575d7a0184d4b2
 speed-ski 55c4cfa78de28f7e

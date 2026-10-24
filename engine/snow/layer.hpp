@@ -62,13 +62,16 @@ struct CoverSample {
   Kind kind;
 };
 
+struct Weather;  // time.hpp
+
 struct LayerSpec {
   Region region;
   Ground ground;
   Cover cover;
-  double cell = 0.1;            // m between samples
-  uint32_t max_tiles = 2048;    // fine tiles kept (32 KB each)
-  uint32_t max_records = 4096;  // imprint records kept between `clear_records`
+  const Weather* weather = nullptr;  // the snow over time (time.hpp); none: the layer is static
+  double cell = 0.1;                 // m between samples
+  uint32_t max_tiles = 2048;         // fine tiles kept (32 KB each)
+  uint32_t max_records = 4096;       // imprint records kept between `clear_records`
 };
 
 inline constexpr int kTileCells = 64;      // samples a tile side
@@ -77,9 +80,10 @@ inline constexpr uint16_t kMaxDepthMm = 65535;
 inline constexpr uint16_t kMaxMass = 65535;
 
 enum CellFlag : uint8_t {
-  kTouched = 1,  // changed by a press: the cell, not the cover, is the snow here
-  kPressed = 2,  // under a contact (its floor)
-  kBerm = 4,     // snow thrown here from beside it
+  kTouched = 1,   // changed by a press: the cell, not the cover, is the snow here
+  kPressed = 2,   // under a contact (its floor)
+  kBerm = 4,      // snow thrown here from beside it
+  kCorduroy = 8,  // groomed and not crossed since (time.hpp, `groom`)
 };
 
 struct Cell {
@@ -128,7 +132,7 @@ struct Layer {
   std::vector<int32_t> slots;        // the tile's index by tile_cols * tz + tx, -1 none
   std::vector<Tile> tiles;
   std::vector<ImprintRecord> records;
-  uint64_t mass_in = 0;          // mass units the allocated tiles held when filled
+  uint64_t mass_in = 0;          // mass units the tiles were given: their cover, and the weather
   uint64_t spilled = 0;          // mass units thrown past the region's edge or onto no tile
   uint32_t records_dropped = 0;  // past max_records
   uint32_t refused = 0;          // samples a press could not keep (no tile left)
