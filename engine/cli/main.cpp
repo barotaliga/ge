@@ -25,6 +25,7 @@
 #include "cli/build.hpp"
 #include "cli/ci.hpp"
 #include "cli/commands.hpp"
+#include "cli/cvar.hpp"
 #include "cli/doctor.hpp"
 #include "cli/embedded.hpp"
 #include "cli/goals.hpp"
@@ -265,6 +266,15 @@ Outcome run(const Args& a) {
   if (name == "replay") return run_replay(build_options(a), a.words[0]);
   if (name == "state") return run_state(build_options(a), a.words[0], flag_value(a, "step"));
   if (name == "diverge") return run_diverge(build_options(a), a.words[0], a.words[1]);
+  if (name.rfind("cvar ", 0) == 0 || name.rfind("cfg ", 0) == 0) {
+    ConsoleAsk ask;
+    ask.op = name.substr(name.find(' ') + 1);
+    ask.words = a.words;
+    ask.server = has_flag(a, "server");
+    ask.cmd = flag_value(a, "cmd");
+    ask.out = flag_value(a, "out");
+    return name[1] == 'v' ? run_cvar(build_options(a), ask) : run_cfg(build_options(a), ask);
+  }
   if (name == "why") {
     WhyOptions w;
     w.log = a.words[0];

@@ -729,14 +729,32 @@ void step_ragdoll(Ragdoll& b, const Level& level, const TreeIndex* trees, double
             b.struck[static_cast<size_t>(i)] = closing;
             b.struck_by[static_cast<size_t>(i)] = t;
           }
-          px(P, i, 0) = tree.x + dx / d * reach;
-          px(P, i, 2) = tree.z + dz / d * reach;
+          // Put back against it, a position corrected that carries no velocity, and its way into
+          // the trunk gone.
+          const double nx = dx / d;
+          const double nz = dz / d;
+          const double by = reach - d;
+          px(P, i, 0) += nx * by;
+          px(P, i, 2) += nz * by;
+          px(L, i, 0) += nx * by;
+          px(L, i, 2) += nz * by;
+          const double in = (cx(P, i, 0) - cx(L, i, 0)) * nx + (cx(P, i, 2) - cx(L, i, 2)) * nz;
+          if (in < 0) {
+            px(L, i, 0) += nx * in;
+            px(L, i, 2) += nz * in;
+          }
         });
       }
       const double h = hold[static_cast<size_t>(i)];
+      // Put back on the snow. The first pass's push is the step's fall onto it and holds the
+      // point where it lies (the pass along the snow below takes the way out of it); every later
+      // pass's undoes a joint's limit pressing the point back into the snow, a position corrected
+      // that carries no velocity, or the fight between them would pump the body up off the snow.
       if (cx(P, i, 1) < h) {
-        pushed[static_cast<size_t>(i)] += h - cx(P, i, 1);
+        const double by = h - cx(P, i, 1);
+        pushed[static_cast<size_t>(i)] += by;
         px(P, i, 1) = h;
+        if (k > 0) px(L, i, 1) += by;
       }
     }
   }
