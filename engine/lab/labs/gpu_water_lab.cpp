@@ -445,7 +445,8 @@ void run(gl::Lab& lab) {
     wind.mean = 3;
     gw::World world(wind);
     std::vector<gw::ChannelPoint> line;
-    for (double z = kCliff - 170; z <= kCliff - 28; z += 10) {
+    for (int i = 0; i <= 14; ++i) {
+      const double z = kCliff - 170 + 10.0 * i;
       line.push_back({kRiverX, z, falls_height(kRiverX, z) + 1.6, 10, 1.6});
     }
     gw::add_river(world, line, 6, {.look = "glacial"}, {falls_bed, nullptr});

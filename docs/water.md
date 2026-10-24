@@ -152,7 +152,7 @@ waves shorter than four times the spacing of the rings (half the hull's length a
 shorter ones would add up to the ridges of the line of sources rather than a hull's waves. Their
 sum opens into the V at Kelvin's angle: measured at 19.4° for a 4 m hull at 3 m/s (the `float`
 lab's wake table, held within 2° by `tests/water_wake_test.cpp`), narrowing past a length
-Froude number of about 0.6 (15.7° at 4 m/s, 13.3° at 5) as real hulls' wakes do. The rings live
+Froude number of about 0.6 (15.7° at 4 m/s, 13.2° at 5) as real hulls' wakes do. The rings live
 in `World::wakes`, each on its body, faded over the last third of their life; `sample` adds
 their height, slope and orbital velocity to a lake's or a sea's, so a float rides on them.
 

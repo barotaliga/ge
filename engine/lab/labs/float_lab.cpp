@@ -437,13 +437,16 @@ double arm_angle(const gw::Wakes& w, double speed, double t, double z, double& t
   double sx = 0, sy = 0, sxx = 0, sxy = 0;
   int n = 0;
   top = 0;
-  for (double m = 6; m <= 12; m += 2) {
+  for (int m = 6; m <= 12; m += 2) {
     const double d = m * lambda;
     double best = 0, at = 0;
-    for (double x = 0.2; x < 0.6 * d; x += lambda / 40) {
+    for (int i = 0; 0.2 + i * lambda / 40 < 0.6 * d; ++i) {
+      const double x = 0.2 + i * lambda / 40;
       double h = 0;
-      for (double dz = -lambda / 2; dz <= lambda / 2; dz += lambda / 6)
+      for (int j = -3; j <= 3; ++j) {
+        const double dz = j * lambda / 6;
         h = std::fmax(h, std::fabs(gw::wake_at(w, 0, x, z - d + dz, t).height));
+      }
       if (h > best) {
         best = h;
         at = x;
