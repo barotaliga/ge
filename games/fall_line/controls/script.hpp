@@ -14,14 +14,33 @@
 // tuck, the left the brake, south the jump (held), north the reset (a press: down on its step, up
 // on the next; two presses in a row are an up and a down in one frame).
 //
-// ge:summary A scripted session: an input log's axes held on a simulated pad, as a device event log
+// THE THUMBS' SESSION (`touch_session`): the same log played on a phone's screen through the
+// thumbs (thumbs.hpp). A thumb cannot say everything a pad can, so the session is the log as two
+// thumbs would ski it, and `want` is what each step should read back (snapped):
+//
+// - the edge thumb lands at the first step (its first step steers straight) and holds the steer
+//   across, inside its reach;
+// - the lever's thumb lands full (its landing step tucks fully) and holds the tuck, or the brake
+//   below it when the log brakes (a thumb that asks for both brakes);
+// - a jump is the TAP then the HOLD: the lever's thumb lifts a quarter second before it, taps,
+//   and lands loaded on the jump's first step, held to its last; it lifts on the step the jump
+//   springs (the lever reads nothing while it is off the glass) and lands again on the next. A
+//   jump with no room before it for the tap (the start, or another jump just before) is dropped;
+// - a reset is a tap of the reset button.
+//
+// Through `kExactTouchBindings` (no curve), every step reads back its `want` to the bit.
+//
+// ge:summary A scripted session: an input log's axes held on a simulated pad or on the thumbs
 // ge:keywords fall-line script scripted session event-log pad simulated exact-bindings pad_session
-// ge:keywords exact-pad-bindings bot-on-a-pad steps_due frame_time frame-times
+// ge:keywords exact-pad-bindings bot-on-a-pad steps_due frame_time frame-times touch_session
+// ge:keywords exact-touch-bindings thumbs-session bot-on-the-thumbs
 // ge:skill input
 // ge:test tests/fall_line_controls_test.cpp
 #pragma once
 
+#include <array>
 #include <cstdint>
+#include <vector>
 
 #include "input/event_log.hpp"
 #include "play/inputs.hpp"
@@ -29,6 +48,7 @@
 namespace fall_line::controls {
 
 extern const char* const kExactPadBindings;
+extern const char* const kExactTouchBindings;
 
 // The steps due by a scripted frame at `t_ns`: the step at 0 and one each 1/120 s after.
 inline int64_t steps_due(uint64_t t_ns) {
@@ -43,5 +63,14 @@ inline uint64_t frame_time(int64_t i) {
 
 // `log`'s steps (Fall Line's axes: steer, tuck, brake, jump, reset) as a pad's session.
 ge::input::EventLog pad_session(const ge::play::InputLog& log);
+
+struct TouchSession {
+  ge::input::EventLog events;
+  std::vector<std::array<double, 5>> want;  // each step's axes as the thumbs give them, snapped
+  int jumps = 0, dropped = 0;               // the log's jumps, and those with no room for a tap
+};
+
+// `log`'s steps as two thumbs on a screen of `aspect`.
+TouchSession touch_session(const ge::play::InputLog& log, float aspect);
 
 }  // namespace fall_line::controls

@@ -8,6 +8,7 @@
 // ge:keywords test fall-line controls bindings player-file rumble felt rebind by-hand session
 // ge:keywords event-log replay digest pad
 // ge:skill input sim testing
+#include <cmath>
 #include <filesystem>
 #include <string>
 
@@ -17,6 +18,7 @@
 #include "fall_line/controls/felt.hpp"
 #include "fall_line/controls/rebinding.hpp"
 #include "fall_line/controls/script.hpp"
+#include "fall_line/controls/thumbs.hpp"
 #include "fall_line/sim/play.hpp"
 #include "input/bindings_text.hpp"
 #include "input/names.hpp"
@@ -191,7 +193,7 @@ TEST(the_bots_run_held_on_a_pad_finishes_by_hand_and_its_log_replays_to_its_dige
   in::InputState held;
   for (const in::LoggedFrame& f : session.frames) {
     in::update(held, f.q);
-    fc::hand_frame(*hand, held, 1.0 / 120);
+    fc::hand_frame(*hand, held, 1.0 / 120, static_cast<double>(f.t_ns) * 1e-9);
     fc::hand_step(*hand, held, static_cast<double>(f.t_ns) * 1e-9);
   }
   CHECK_MSG(hand->run->over(), "the session finishes the race");
@@ -213,4 +215,97 @@ TEST(the_bots_run_held_on_a_pad_finishes_by_hand_and_its_log_replays_to_its_dige
   CHECK_MSG(read.digest.has_value() && replayed->digest == read.digest.value_or(0),
             "the written log replays to the digest it records");
   CHECK(replayed->over);
+}
+
+TEST(the_thumbs_steer_tuck_brake_and_jump_through_the_default_bindings) {
+  std::string error;
+  auto hand = fc::open_hand_run(kSeed, 0, fc::default_map(), error);
+  CHECK_MSG(hand != nullptr, error.c_str());
+  if (!hand) return;
+  fc::hand_screen(*hand, 2);
+  in::SimInput sim;
+  in::InputState s;
+  const auto screen = in::sim_plug(sim, in::sim_touch());
+  double t = 0;
+  const auto frame = [&] {
+    in::sim_advance(sim, 1.0 / 60);
+    t += 1.0 / 60;
+    in::sim_frame(sim, s);
+    fc::hand_frame(*hand, s, 1.0 / 60, t);
+  };
+  const auto value = [&](const char* action) {
+    return hand->values[static_cast<size_t>(hand->map.find_action(action))].x;
+  };
+  in::sim_touch(sim, screen, 1, in::TouchPhase::down, 0.25f, 0.6f);
+  in::sim_touch(sim, screen, 2, in::TouchPhase::down, 0.75f, 0.4f);
+  frame();
+  CHECK(value("steer") == 0 && value("tuck") == 1 && value("brake") == 0);
+  // The edge thumb half its reach right, shaped by the curve; the lever eased to half a tuck.
+  in::sim_touch(sim, screen, 1, in::TouchPhase::move, 0.25f + 0.5f * fc::kEdgeReach / 2, 0.6f);
+  in::sim_touch(sim, screen, 2, in::TouchPhase::move, 0.75f, 0.4f + 0.5f * fc::kLeverReach);
+  frame();
+  CHECK(std::fabs(value("steer") - std::pow(0.5, 1.15)) < 1e-4);
+  CHECK(std::fabs(value("tuck") - 0.5) < 1e-4 && value("brake") == 0);
+  // Past the standing point and the dead band: the brake, no tuck.
+  in::sim_touch(sim, screen, 2, in::TouchPhase::move, 0.75f,
+                0.4f + (1 + fc::kLeverDead + 0.5f) * fc::kLeverReach);
+  frame();
+  CHECK(value("tuck") == 0 && std::fabs(value("brake") - 0.5) < 1e-4);
+  // A tap then a hold on the lever: the jump loads while held (the long touch before is no tap).
+  for (int k = 0; k < 30; ++k) frame();
+  CHECK(!hand->values[static_cast<size_t>(hand->map.find_action("jump"))].held);
+  in::sim_touch(sim, screen, 2, in::TouchPhase::up, 0.75f, 0.7f);
+  frame();
+  in::sim_touch(sim, screen, 2, in::TouchPhase::down, 0.75f, 0.4f);
+  frame();
+  in::sim_touch(sim, screen, 2, in::TouchPhase::up, 0.75f, 0.4f);
+  frame();
+  in::sim_touch(sim, screen, 2, in::TouchPhase::down, 0.75f, 0.4f);
+  frame();
+  CHECK(hand->values[static_cast<size_t>(hand->map.find_action("jump"))].held);
+}
+
+TEST(the_bots_run_on_the_thumbs_reads_back_as_the_thumbs_give_it_and_finishes) {
+  pl::Setup setup;
+  std::string error;
+  CHECK(pl::make_setup(fs::kGame, kSeed, {}, setup, error));
+  const auto bot = pl::pilot_run(fs::kGame, setup, error);
+  CHECK_MSG(bot.has_value(), error.c_str());
+  if (!bot) return;
+  constexpr float kAspect = 19.5f / 9;  // a phone on its side
+  const fc::TouchSession thumbs = fc::touch_session(bot->log, kAspect);
+  CHECK(thumbs.want.size() == static_cast<size_t>(bot->steps));
+  in::EventLog session;
+  CHECK(in::read_events(in::write_events(thumbs.events), session, error));
+
+  in::ActionMap map = fc::default_map();
+  CHECK(in::read_bindings(fc::kExactTouchBindings, map, error));
+  auto hand = fc::open_hand_run(kSeed, 0, std::move(map), error);
+  CHECK_MSG(hand != nullptr, error.c_str());
+  if (!hand) return;
+  fc::hand_screen(*hand, kAspect);
+  in::InputState held;
+  int64_t differ = 0;
+  for (const in::LoggedFrame& f : session.frames) {
+    in::update(held, f.q);
+    const double now = static_cast<double>(f.t_ns) * 1e-9;
+    fc::hand_frame(*hand, held, 1.0 / 120, now);
+    const auto at = static_cast<size_t>(hand->steps);
+    fc::hand_step(*hand, held, now);
+    for (size_t k = 0; k < 5 && at < thumbs.want.size(); ++k) {
+      differ += hand->step_in[k] != thumbs.want[at][k] ? 1 : 0;
+    }
+  }
+  CHECK_MSG(differ == 0, "every step read back what the thumbs gave");
+  // The thumbs held where they last were, the run skis on to its end.
+  for (int64_t k = 0; fc::hand_playing(*hand) && k < 120 * 120; ++k) {
+    in::update(held, {});
+    fc::hand_frame(*hand, held, 1.0 / 120, 0);
+    fc::hand_step(*hand, held, 0);
+  }
+  CHECK_MSG(hand->run->over(), "the race on the thumbs finishes");
+  const pl::InputLog log = fc::hand_log(*hand);
+  const auto replayed = pl::replay(fs::kGame, log, error);
+  CHECK_MSG(replayed.has_value() && replayed->digest == log.digest.value_or(0),
+            "the thumbs' log replays to its digest");
 }

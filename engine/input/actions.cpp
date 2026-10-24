@@ -115,7 +115,7 @@ bool is_digital(const Source& src, const Sources& from) {
       return is_button(static_cast<Role>(src.code));
     case SourceKind::touch: {
       TouchKind k = TouchKind::button;
-      return touch_value(src, from, &k) && k == TouchKind::button;
+      return touch_value(src, from, &k) && touch_button(k);
     }
     default:
       return false;
@@ -190,7 +190,7 @@ float source_value(const Source& src, const InputState& s, const Sources& from,
       const TouchValue* v = touch_value(src, from, &k);
       if (!v) return 0;
       if (by) *by = s.touch_id;
-      if (k == TouchKind::button) return v->held ? 1.0f : 0.0f;
+      if (touch_button(k)) return v->held ? 1.0f : 0.0f;
       if (k == TouchKind::drag) return halved(v->dx, src.half);
       return halved(v->x, src.half);
     }
