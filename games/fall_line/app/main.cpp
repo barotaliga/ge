@@ -6,8 +6,8 @@
 // bank, sound/route.hpp, and to the pads' motors, controls/felt.hpp), steer the ride bed off the
 // skier, and draw the map's frame (frame.hpp) at vsync, the racers drawn where the run has them,
 // from the camera ladder on the player (games/fall_line/camera: the chase to start with, the
-// camera key walks tips, helmet, chase, far and high by its hand-overs; --view names the rung to
-// start on, or a still view of the map).
+// camera key walks tips, helmet, chase, far and high by its hand-overs, and on a machine its own
+// ladder: camera/machines.hpp; --view names the rung to start on, or a still view of the map).
 //
 // THE PLAYER: the keys (A D or the arrows, W tuck, S brake, SPACE jump, R reset, C camera), a pad
 // or a wheel, all at once, as the player's bindings file says (controls/bindings.hpp; the defaults
@@ -69,6 +69,7 @@
 #include "fall_line/app/frame.hpp"
 #include "fall_line/app/sky_type.hpp"
 #include "fall_line/app/views.hpp"
+#include "fall_line/camera/machines.hpp"
 #include "fall_line/camera/rungs.hpp"
 #include "fall_line/camera/subject.hpp"
 #include "fall_line/camera/world.hpp"
@@ -324,10 +325,11 @@ int main(int argc, char** argv) {
   std::vector<ge::skier::SkierState> skiers;
   skiers.reserve(fall_line::controls::hand_state(*hand).racers.size());
   bool heard_out = false;
-  // The run's camera: the ladder kept warm, walked by the camera key (camera/rungs.hpp).
+  // The run's camera: the ladder kept warm, walked by the camera key (camera/rungs.hpp), and
+  // each machine's own while he rides it (machines.hpp).
   const ge::skier::World skier_world = fall_line::controls::hand_state(*hand).world();
   const ge::camera::World camera_world = fall_line::camera::camera_world(skier_world);
-  fall_line::camera::RunCamera camera = fall_line::camera::make_skier_camera(rung, 1);
+  fall_line::camera::RideCamera camera = fall_line::camera::make_ride_camera(rung, 1);
   double last_frame_s = 0;
   while (args.frames == 0 || presented < args.frames) {
     // The frame's input: the window's and every device's events, or the session's next frame.
@@ -432,12 +434,14 @@ int main(int argc, char** argv) {
     std::optional<std::array<double, 3>> subject;
     if (follow && !skiers.empty()) {
       if (fall_line::controls::hand_pressed(*hand, "camera") && !rebinding.active) {
-        fall_line::camera::change_rung(
-            camera.cam, fall_line::camera::next_rung(fall_line::camera::rung_of(camera.cam)));
+        fall_line::camera::next_lens(camera);
       }
+      fall_line::camera::apply_ride_cvars(set.camera, camera);
       const double dt = presented == 0 ? 1.0 / 60 : view.time_s - last_frame_s;
       ge::camera::to_frame_view(
-          fall_line::camera::frame_camera(camera, skiers[0], skier_world, camera_world, dt), view);
+          fall_line::camera::frame_ride(camera, fall_line::controls::hand_state(*hand), skier_world,
+                                        camera_world, dt),
+          view);
       const ge::camera::Vec3 p = fall_line::camera::framed_point(skiers[0]);
       subject = std::array<double, 3>{p.x, p.y, p.z};
     }
