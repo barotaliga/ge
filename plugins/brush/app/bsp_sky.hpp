@@ -6,9 +6,10 @@
 // heaps' cover, and the type's air is tinted toward the texture's colour so the sky through the sky
 // faces reads as the map's.
 //
-// ge:summary Our sky picked by a classic map's sky texture: the type, the hour, the light, the
-// cloud ge:keywords bsp brush sky sky-type match pick_sky sky-texture hue dusk cover v2 ge:skill
-// brush render ge:test tests/brush_bsp_sky_test.cpp
+// ge:summary Our sky picked by a classic map's sky texture: its type, light, tint and cloud
+// ge:keywords bsp brush sky sky-type match pick_sky sky-texture hue dusk cover v2
+// ge:skill brush render
+// ge:test tests/brush_bsp_sky_test.cpp
 #pragma once
 
 #include <string>
