@@ -4,13 +4,13 @@
 # between glibc, Apple and MSVC. It calls ge::core::libm (engine/core/libm/libm.hpp), whose
 # bits are the same everywhere. Exact functions (sqrt, fabs, floor, ceil, trunc, fmod) are fine.
 #
-# Simulation code: engine/core (except engine/core/libm itself), engine/loop, engine/ai, engine/wind, engine/water, engine/move, engine/camera
-# (its poses feed lab digests and goldens), every plugin
-# (except a plugin's app/ directory, its presentation half), games/*/sim, and engine/lab and
-# every labs/ directory, whose pictures and digests must match on every CI row, and engine/audio,
-# whose rendered buffers are goldens and lab digests, and engine/net, whose simulated sessions are
-# goldens too, and engine/console, whose cvars set simulation values. Renderer and UI code may use <cmath>: they
-# feed no digest.
+# Simulation code: every engine module whose ge_module(...) call says SIMULATION
+# (engine/<module>/module.cmake, cmake/Modules.cmake: core and loop, ai, wind, water, move,
+# camera, whose poses feed lab digests and goldens, the lab framework, audio, whose rendered buffers
+# are goldens and lab digests, net, whose simulated sessions are goldens too, and console, whose
+# cvars set simulation values), except engine/core/libm itself; every plugin (except a plugin's app/ directory, its
+# presentation half), games/*/sim, and every labs/ directory, whose pictures and digests must match
+# on every CI row. Renderer and UI code may use <cmath>: they feed no digest.
 #
 # ge:summary Fails any <cmath> transcendental in simulation code (make libm-check)
 # ge:keywords ci check libm cmath transcendental determinism
@@ -34,8 +34,22 @@ want_ok=$'x.cpp:5:  double a = libm::sin(t);\nx.cpp:6:  // std::sin(x) would dif
 [[ "$(scan <<<"$want_bad" | wc -l)" -eq 4 ]] || { echo "check-libm: self-test failed to flag a banned call; fix BAD in $0" >&2; exit 2; }
 [[ -z "$(scan <<<"$want_ok")" ]] || { echo "check-libm: self-test flagged an allowed call; fix BAD in $0" >&2; exit 2; }
 
+# A SIMULATION module's directories: its DIRS, or its module.cmake's own directory.
+sim_dirs() {
+  local mc call d
+  for mc in engine/*/module.cmake; do
+    while read -r call; do
+      [[ "$call" == *SIMULATION* ]] || continue
+      if [[ "$call" == *DIRS* ]]; then
+        for d in $(sed -E 's/.*DIRS ([a-z0-9_ ]*).*/\1/' <<<"$call"); do echo "engine/$d"; done
+      else
+        dirname "$mc"
+      fi
+    done < <(sed 's/#.*//' "$mc" | grep -oE 'ge_module\([^)]*\)')
+  done
+}
 dirs=()
-for d in engine/core engine/loop engine/ai engine/wind engine/water engine/move engine/camera engine/audio engine/net engine/console engine/lab plugins games/*/sim games/*/labs; do [[ -d "$d" ]] && dirs+=("$d"); done
+for d in $(sim_dirs) plugins games/*/sim games/*/labs; do [[ -d "$d" ]] && dirs+=("$d"); done
 hits="$(git ls-files -- "${dirs[@]}" | grep -E '\.(cpp|hpp|h)$' | grep -v '^engine/core/libm/' | grep -v '^plugins/[^/]*/app/' \
   | xargs -r grep -nE "$FNS|hypot|__builtin_" /dev/null | scan)"
 if [[ -n "$hits" ]]; then

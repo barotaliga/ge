@@ -113,7 +113,9 @@ TEST(the_labs_a_change_reaches_are_its_objects_its_moved_rows_or_every_lab) {
   r.objects = {"plugins/wing/acro.cpp", "games/g/labs/glide_lab.cpp"};
   CHECK((labs_reached(r, sources, {}) == std::vector<std::string>{"glide"}));
   CHECK((labs_reached(r, sources, {"old"}) == std::vector<std::string>{"glide", "old"}));
-  r.changed.insert("plugins/wing/CMakeLists.txt");
+  r.changed.insert("plugins/wing/CMakeLists.txt");  // its own directory's: as before
+  CHECK((labs_reached(r, sources, {}) == std::vector<std::string>{"glide"}));
+  r.changed.insert("cmake/Modules.cmake");  // the tree's: every lab
   CHECK(labs_reached(r, sources, {}).size() == 3);
 }
 

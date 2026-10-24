@@ -136,7 +136,19 @@ TEST(the_tests_picked_take_the_smoke_slices_goldens_and_build_files) {
   CHECK(pick_affected(tests, {}, {"tests/labs_digests.txt"}).size() == 2);
   CHECK((pick_affected(tests, {}, {"tests/golden/core_math.txt"}) ==
          std::vector<std::string>{"core_math_test"}));
-  CHECK(pick_affected(tests, {}, {"plugins/wing/CMakeLists.txt"}) == tests);
+  CHECK(pick_affected(tests, {}, {"CMakeLists.txt"}) == tests);
+  CHECK(pick_affected(tests, {}, {"cmake/Plugins.cmake"}) == tests);
+  CHECK(pick_affected(tests, {}, {"plugins/wing/CMakeLists.txt"}).empty());
   CHECK(build_file("cmake/Plugins.cmake") && build_file("CMakePresets.json"));
   CHECK(!build_file("docs/cmake.md"));
+}
+
+TEST(a_modules_own_build_file_reaches_its_directory_not_the_tree) {
+  CHECK(build_scope("engine/net/module.cmake") == "engine/net");
+  CHECK(build_scope("plugins/wing/CMakeLists.txt") == "plugins/wing");
+  CHECK(build_scope("games/g/sim/CMakeLists.txt") == "games/g/sim");
+  CHECK(build_scope("CMakeLists.txt").empty() && build_scope("cmake/Modules.cmake").empty());
+  CHECK(build_scope("tests/CMakeLists.txt").empty() && build_scope("CMakePresets.json").empty());
+  CHECK(build_scope("engine/net/link.cpp").empty());
+  CHECK(global_build_file("tests/CMakeLists.txt") && !global_build_file("engine/net/module.cmake"));
 }

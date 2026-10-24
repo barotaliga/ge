@@ -138,6 +138,16 @@ bool change_reach(const fs::path& repo, const fs::path& build, const std::string
   for (const std::string& f : lines_from(git + "ls-files --others --exclude-standard", log)) {
     r.changed.insert(f);
   }
+  // A module's, a plugin's or a game's own build file reaches its directory's code, not the tree.
+  std::set<std::string> scopes;
+  for (const std::string& f : r.changed) {
+    if (const std::string dir = build_scope(f); !dir.empty()) scopes.insert(dir);
+  }
+  for (const std::string& dir : scopes) {
+    for (const std::string& f : lines_from(git + "ls-files -- " + in_quotes(dir), log)) {
+      if (f.ends_with(".cpp") || f.ends_with(".hpp") || f.ends_with(".h")) r.changed.insert(f);
+    }
+  }
   for (const std::string& f : r.changed) {
     if (f.ends_with(".cpp")) r.sources.insert(f);
   }
@@ -175,11 +185,24 @@ bool build_file(std::string_view path) {
   return name == "CMakeLists.txt" || name == "CMakePresets.json" || name.ends_with(".cmake");
 }
 
+std::string build_scope(std::string_view path) {
+  if (!build_file(path)) return "";
+  const size_t slash = path.rfind('/');
+  if (slash == std::string_view::npos) return "";
+  const std::string_view dir = path.substr(0, slash);
+  if (dir == "cmake" || dir.starts_with("cmake/") || dir == "tests") return "";
+  return std::string(dir);
+}
+
+bool global_build_file(std::string_view path) {
+  return build_file(path) && build_scope(path).empty();
+}
+
 std::vector<std::string> pick_affected(const std::vector<std::string>& tests,
                                        const std::set<std::string>& targets,
                                        const std::set<std::string>& changed) {
   for (const std::string& f : changed) {
-    if (build_file(f)) return tests;
+    if (global_build_file(f)) return tests;
   }
   const bool labs = targets.count("labs") > 0 || changed.count("tests/labs_digests.txt") > 0;
   std::vector<std::string> out;

@@ -311,6 +311,10 @@ Agents find code by grep, so the tree is built to be grepped:
 - **The plugin contract** (homes, layout, naming, dependencies, registration):
   `docs/architecture.md` § Plugins; built by `cmake/Plugins.cmake`, checked by
   `tools/check-plugins.mjs`.
+- **The engine's modules**: each `engine/<module>/module.cmake` builds its target and registers it
+  with one `ge_module(...)` call (`cmake/Modules.cmake`): published or not, its directories,
+  simulation code or not. The package, the tests, the labs and the checks read that; a new module
+  is a new directory and its row above, and edits no shared list.
 - **World conventions**: the plan is x/z with y up; heading 0 = +z,
   clockwise from above; pitch tips-up positive; roll right-side-down positive; `steer`
   and `edge` positive to the right. Stated in `engine/core/math.hpp`'s header.

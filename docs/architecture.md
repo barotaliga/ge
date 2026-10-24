@@ -328,7 +328,11 @@ whole tree to it, and `ge doctor` holds a game repo to it (the `agent-interface`
 
 ## Build
 
-CMake ≥ 3.25 + Ninja, `CMakePresets.json` (`debug` with ASan/UBSan, `release`).
+CMake ≥ 3.25 + Ninja, `CMakePresets.json` (`debug` with ASan/UBSan, `release`). Each engine
+module builds itself from `engine/<module>/module.cmake` and registers with one `ge_module(...)`
+call (`cmake/Modules.cmake`): whether it is published, which directories it holds, whether it is
+simulation code. The package, the tests, the labs and the checks read that registration rather
+than a list, so adding a module edits no shared file.
 Dependencies are pinned to a tag and a SHA-256, and each one is added in the milestone that
 needs it: SDL3 through `FetchContent` from its release archive (`cmake/SDL.cmake`), Dawn as its
 prebuilt GitHub release (`cmake/Dawn.cmake`; Tint comes in the same archive), later cgltf

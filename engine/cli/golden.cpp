@@ -421,7 +421,7 @@ std::vector<std::string> labs_reached(const Reach& r,
                                       const std::map<std::string, std::string>& sources,
                                       const std::set<std::string>& moved) {
   const bool all = std::any_of(r.changed.begin(), r.changed.end(),
-                               [](const std::string& f) { return build_file(f); });
+                               [](const std::string& f) { return global_build_file(f); });
   std::vector<std::string> out;
   for (const auto& [id, source] : sources) {
     if (all || moved.count(id) || (!source.empty() && r.objects.count(source))) out.push_back(id);
