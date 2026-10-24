@@ -157,7 +157,7 @@ void thumbs(gl::Lab& lab, double seed, const std::string& k, const BotRun& bot) 
   }
   if (!replayed || replayed->digest != log.digest.value_or(0)) {
     lab.fail("the thumbs' log does not replay to its digest" + (error.empty() ? "" : ": " + error),
-             "Run `ge replay` on the log (skill: agent-interface).");
+             "Run `ge replay` on thumbs.events' run (skill: agent-interface).");
   }
   lab.attach("thumbs.events", bytes(in::write_events(session.events)));
   const std::string sub = "seed " + fixed(seed, 0) + ", " + std::to_string(hand->steps) +
