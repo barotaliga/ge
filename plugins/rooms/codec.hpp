@@ -15,7 +15,7 @@
 //            entities u32                                                                   16
 //   material (each, after scale_dm) tex_w u16, tex_h u16, surface str                  4 + str
 //   projection s 4 f32, t 4 f32                                                             32
-//   face     n 3 f32, d f32, material u8, projection u16, hidden u8                         20
+//   face     n 3 f32, d f32, material u8, projection u16, flags u8 (1 hidden, 2 smooth)   20
 //   brush    group u16, contents u8, face count u8 (its faces follow the last brush's)       4
 //   group    name str
 //   entity   classname str, group u16, key count u8, then per key: key str, value str

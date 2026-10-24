@@ -175,7 +175,7 @@ std::vector<uint8_t> encode(const Level& level) {
       w.f32(f.d);
       w.u8(f.material);
       w.u16(f.projection);
-      w.u8(f.hidden ? 1 : 0);
+      w.u8(uint8_t((f.hidden ? 1 : 0) | (f.smooth ? 2 : 0)));
     }
     for (const Brush& b : level.brushes) {
       w.u16(b.group);
@@ -313,10 +313,13 @@ bool decode(std::span<const uint8_t> bytes, Level* out, std::string* error) {
     f.d = r.f32();
     f.material = r.u8();
     f.projection = r.u16();
-    const uint8_t hidden = r.u8();
-    if (hidden > 1)
-      return fail(r.at - 1, "a face's hidden flag is not 0 or 1", "the file is damaged");
-    f.hidden = hidden == 1;
+    const uint8_t flags = r.u8();
+    if (flags > 3) {
+      return fail(r.at - 1, "a face's flags hold an unknown bit (1 hidden, 2 smooth)",
+                  "the file is newer than this build");
+    }
+    f.hidden = (flags & 1) != 0;
+    f.smooth = (flags & 2) != 0;
     if (r.bad) break;
   }
   uint32_t first = 0;
@@ -326,7 +329,7 @@ bool decode(std::span<const uint8_t> bytes, Level* out, std::string* error) {
     b.faces = r.u8();
     b.first_face = first;
     first += b.faces;
-    if (uint8_t(b.contents) > uint8_t(Contents::clip)) {
+    if (uint8_t(b.contents) > uint8_t(Contents::trigger)) {
       return fail(r.at - 2, "unknown brush contents", "the file is newer than this build");
     }
   }

@@ -8,6 +8,7 @@
 #include "rooms/brush_build.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 #include "core/parallel.hpp"
@@ -19,6 +20,7 @@ namespace {
 constexpr double kOnM = 1e-4;  // a point this near a plane is on it
 constexpr double kCellM = 4;   // the bounds grid's cell
 constexpr double kSliverM2 = 1e-8;
+constexpr double kSmoothCos = 0.6;  // smooth neighbours under about 53 degrees apart blend
 
 struct Plane {
   double n[3], d;
@@ -85,14 +87,62 @@ bool removes(Contents by, Contents of) {
   return liquid && by == of;
 }
 
+// The smooth faces' corners shaded round: each takes the mean of the distinct face normals met at
+// its place (to a millimetre) within kSmoothCos of its own, so a faceted arch's steps blend and a
+// sharp corner stays sharp.
+void smooth_normals(BrushMesh& m, const std::vector<uint32_t>& smooth) {
+  struct At {
+    int64_t q[3];
+    uint32_t v;
+  };
+  std::vector<At> at;
+  at.reserve(smooth.size());
+  for (const uint32_t v : smooth) {
+    At a{};
+    for (size_t k = 0; k < 3; ++k) a.q[k] = std::llround(double(m.pos[size_t(v) * 3 + k]) * 1024.0);
+    a.v = v;
+    at.push_back(a);
+  }
+  const auto key_less = [](const At& a, const At& b) {
+    return std::lexicographical_compare(a.q, a.q + 3, b.q, b.q + 3);
+  };
+  std::sort(at.begin(), at.end(), [&](const At& a, const At& b) {
+    return key_less(a, b) || (!key_less(b, a) && a.v < b.v);
+  });
+  std::vector<float> out(m.nrm);
+  std::vector<std::array<float, 3>> seen;
+  for (size_t i = 0; i < at.size();) {
+    size_t j = i;
+    while (j < at.size() && !key_less(at[i], at[j])) ++j;
+    seen.clear();
+    for (size_t k = i; k < j; ++k) {
+      const float* n = &m.nrm[size_t(at[k].v) * 3];
+      const std::array<float, 3> nn{n[0], n[1], n[2]};
+      if (std::find(seen.begin(), seen.end(), nn) == seen.end()) seen.push_back(nn);
+    }
+    for (size_t k = i; k < j; ++k) {
+      const float* own = &m.nrm[size_t(at[k].v) * 3];
+      double sum[3] = {0, 0, 0};
+      for (const auto& n : seen) {
+        const double dot = double(own[0]) * n[0] + double(own[1]) * n[1] + double(own[2]) * n[2];
+        if (dot < kSmoothCos) continue;
+        for (size_t c = 0; c < 3; ++c) sum[c] += n[c];
+      }
+      const double len = std::sqrt(sum[0] * sum[0] + sum[1] * sum[1] + sum[2] * sum[2]);
+      for (size_t c = 0; c < 3; ++c) out[size_t(at[k].v) * 3 + c] = float(sum[c] / len);
+    }
+    i = j;
+  }
+  m.nrm.swap(out);
+}
+
 }  // namespace
 
-std::vector<Polygon> brush_polygons(const Level& level, size_t b) {
-  const Brush& br = level.brushes[b];
-  std::vector<Polygon> out;
+bool cell_polygons(std::span<const HalfSpace> planes, std::vector<std::vector<double>>* out) {
+  out->assign(planes.size(), {});
   std::vector<double> poly, next;
-  for (uint32_t f = br.first_face; f < br.first_face + br.faces; ++f) {
-    const Plane p = plane_of(level.faces[f]);
+  for (size_t f = 0; f < planes.size(); ++f) {
+    const Plane p{{planes[f].n[0], planes[f].n[1], planes[f].n[2]}, planes[f].d};
     // A square on the plane, counter-clockwise seen from the normal's side: u × v = n.
     const double ax = std::fabs(p.n[0]), ay = std::fabs(p.n[1]), az = std::fabs(p.n[2]);
     double a[3] = {0, 0, 0};
@@ -108,16 +158,36 @@ std::vector<Polygon> brush_polygons(const Level& level, size_t b) {
     for (const auto& [su, sv] : {std::pair{-1, -1}, {1, -1}, {1, 1}, {-1, 1}}) {
       for (int k = 0; k < 3; ++k) poly.push_back(c[k] + (su * u[k] + sv * v[k]) * kReachM);
     }
-    for (uint32_t g = br.first_face; g < br.first_face + br.faces && !poly.empty(); ++g) {
+    for (size_t g = 0; g < planes.size() && !poly.empty(); ++g) {
       if (g == f) continue;
-      split(poly, plane_of(level.faces[g]), &next, nullptr);
+      const Plane q{{planes[g].n[0], planes[g].n[1], planes[g].n[2]}, planes[g].d};
+      split(poly, q, &next, nullptr);
       poly.swap(next);
     }
     if (poly.empty() || area2(poly) < kSliverM2) continue;
     for (double x : poly) {
-      if (std::fabs(x) > kReachM / 2) return {};  // the planes do not close
+      if (std::fabs(x) > kReachM / 2) {
+        out->clear();
+        return false;  // the planes do not close
+      }
     }
-    out.push_back(Polygon{poly, f});
+    (*out)[f] = poly;
+  }
+  return true;
+}
+
+std::vector<Polygon> brush_polygons(const Level& level, size_t b) {
+  const Brush& br = level.brushes[b];
+  std::vector<HalfSpace> planes;
+  for (uint32_t f = br.first_face; f < br.first_face + br.faces; ++f) {
+    const Face& face = level.faces[f];
+    planes.push_back({{double(face.n[0]), double(face.n[1]), double(face.n[2])}, double(face.d)});
+  }
+  std::vector<std::vector<double>> polys;
+  std::vector<Polygon> out;
+  if (!cell_polygons(planes, &polys)) return out;
+  for (size_t i = 0; i < polys.size(); ++i) {
+    if (!polys[i].empty()) out.push_back(Polygon{std::move(polys[i]), br.first_face + uint32_t(i)});
   }
   return out;
 }
@@ -240,6 +310,7 @@ BrushMesh build_brushes(const Level& level, size_t workers) {
   });
 
   BrushMesh m;
+  std::vector<uint32_t> smooth;
   for (size_t b = 0; b < nb; ++b) {
     if (!box[b].ok && level.brushes[b].faces > 0) ++m.unbounded;
     const Brush& br = level.brushes[b];
@@ -261,11 +332,16 @@ BrushMesh build_brushes(const Level& level, size_t workers) {
         m.idx.insert(m.idx.end(), {base, base + uint32_t(i), base + uint32_t(i + 1)});
         m.material.push_back(f.material);
         m.contents.push_back(br.contents);
-        m.hidden.push_back(f.hidden || br.contents == Contents::clip ? 1 : 0);
+        m.hidden.push_back(
+            f.hidden || br.contents == Contents::clip || br.contents == Contents::trigger ? 1 : 0);
         m.brush.push_back(uint32_t(b));
+      }
+      if (f.smooth) {
+        for (size_t i = 0; i < n; ++i) smooth.push_back(base + uint32_t(i));
       }
     }
   }
+  smooth_normals(m, smooth);
   return m;
 }
 

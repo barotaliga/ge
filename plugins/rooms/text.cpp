@@ -89,7 +89,21 @@ bool floats(std::string_view s, float* out, size_t n) {
   return s.empty();
 }
 
-const char* const kContents[] = {"solid", "water", "slime", "lava", "sky", "clip"};
+const char* const kContents[] = {"solid", "water", "slime", "lava", "sky", "clip", "trigger"};
+
+// A face line's trailing words: `hidden`, `smooth`, each at most once.
+bool face_flags(const std::vector<std::string_view>& w, Face* f) {
+  for (size_t i = 6; i < w.size(); ++i) {
+    if (w[i] == "hidden" && !f->hidden) {
+      f->hidden = true;
+    } else if (w[i] == "smooth" && !f->smooth) {
+      f->smooth = true;
+    } else {
+      return false;
+    }
+  }
+  return true;
+}
 
 // The rest of `line` from word `w`, trailing blanks trimmed ("" when there is no such word).
 std::string rest_of(std::string_view line, const std::vector<std::string_view>& w, size_t i) {
@@ -305,9 +319,9 @@ bool parse(std::string_view text, Level* out, std::string* error) {
     } else if (kind == "brush") {
       Brush b;
       size_t c = 0;
-      while (w.size() >= 2 && c < 6 && w[1] != kContents[c]) ++c;
-      if (w.size() < 2 || w.size() > 3 || c == 6) {
-        return fail("write brush <solid|water|slime|lava|sky|clip> [group=<name>]");
+      while (w.size() >= 2 && c < 7 && w[1] != kContents[c]) ++c;
+      if (w.size() < 2 || w.size() > 3 || c == 7) {
+        return fail("write brush <solid|water|slime|lava|sky|clip|trigger> [group=<name>]");
       }
       b.contents = Contents(c);
       if (w.size() == 3) {
@@ -323,16 +337,15 @@ bool parse(std::string_view text, Level* out, std::string* error) {
       if (level.brushes.empty()) return fail("`face` before any `brush`; start the brush first");
       Face f;
       Projection p;
-      if (w.size() < 6 || w.size() > 7 || !floats(w[1], f.n, 3) || !floats(w[2], &f.d, 1) ||
+      if (w.size() < 6 || w.size() > 8 || !floats(w[1], f.n, 3) || !floats(w[2], &f.d, 1) ||
           !w[4].starts_with("s=") || !floats(w[4].substr(2), p.s, 4) || !w[5].starts_with("t=") ||
-          !floats(w[5].substr(2), p.t, 4) || (w.size() == 7 && w[6] != "hidden")) {
+          !floats(w[5].substr(2), p.t, 4) || !face_flags(w, &f)) {
         return fail(
             "write face <nx>,<ny>,<nz> <d> <material> s=<x>,<y>,<z>,<off> "
-            "t=<x>,<y>,<z>,<off> [hidden]");
+            "t=<x>,<y>,<z>,<off> [hidden] [smooth]");
       }
       if (!mat(w[3], &f.material)) return fail(problem);
       f.projection = projection_index(level, p);
-      f.hidden = w.size() == 7;
       Brush& b = level.brushes.back();
       if (b.faces == 255) return fail("a brush holds at most 255 faces; split it");
       ++b.faces;
@@ -432,7 +445,8 @@ std::string print(const Level& level) {
       s += "face " + f_of(f.n[0]) + "," + f_of(f.n[1]) + "," + f_of(f.n[2]) + " " + f_of(f.d) +
            " " + mname(f.material) + " s=" + f_of(p.s[0]) + "," + f_of(p.s[1]) + "," +
            f_of(p.s[2]) + "," + f_of(p.s[3]) + " t=" + f_of(p.t[0]) + "," + f_of(p.t[1]) + "," +
-           f_of(p.t[2]) + "," + f_of(p.t[3]) + (f.hidden ? " hidden" : "") + "\n";
+           f_of(p.t[2]) + "," + f_of(p.t[3]) + (f.hidden ? " hidden" : "") +
+           (f.smooth ? " smooth" : "") + "\n";
     }
   }
   for (const Entity& e : level.entities) {

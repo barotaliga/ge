@@ -193,12 +193,34 @@ texture sequences, and `ge bsp`.
 
 A classic map's STRUCTURE can be carried into the room format: where its solid space is, its
 faces' planes and how each texture is laid on them, its moving parts and its entities. Its
-TEXTURES cannot: they are someone else's pictures. The cloner (`rooms/from_bsp`, M32f) therefore
-resolves every texture to a procedural recipe (the texture generator's matching, M31) before it
-writes anything. It looks at the picture at convert time, from the user's own files, and keeps
-only the recipe reference. A texture with no match gets a neutral recipe, and the clone says
-which ones did. No pixel of a source map is ever written into a level, the tree or a lab's
-output that is kept.
+TEXTURES cannot: they are someone else's pictures. The cloner (`rooms/clone.hpp`, M32f) therefore
+takes every texture's place from a TEXTURE MAP an agent has approved, and never decides one
+itself. The loop has an agent in the middle:
+
+1. `labs bsp --pak=<pack> --map=<map> --textures-out=<dir>` writes the map's textures as PNGs
+   to a directory outside the tree, with `textures.txt` naming each.
+2. The texture matcher (`ge texture match <dir>`, M31) proposes a procedural recipe for each and
+   writes `<dir>/textures.texmap` with its scores and comparison pictures.
+3. The agent judges each match, turns the recipe's knobs, re-runs the matcher, and pins the lines
+   it approves (`# pin`; the matcher never rewrites a pinned line).
+4. `labs clone --pak=<pack> --map=<map> --texmap=<dir>` clones the map with that texture map.
+
+A texture the map does not name stops the clone, naming it, unless placeholders are asked for
+(drawn plain, and listed). The only thing read from a texture's pixels is its mean colour, the
+flat colour a far face is drawn in. No pixel of a source map is ever written into a level, the
+tree or a lab's output that is kept.
+
+The texture map is plain text, one line a texture:
+
+```
+texture <name in the map> <recipe reference...>     # brick_wall seed=3 tint=#8a5a40
+liquid <name> <water|slime|lava|teleport> [<recipe reference...>]
+sky <name> [<recipe reference...>]
+surface <name> <surface reference...>               # grass meadow height=0.6
+```
+
+A `#` starts a comment only at a line's start or after a space, so a recipe's `tint=#rrggbb`
+stays whole; a line of any other kind is the matcher's own and is passed over.
 
 ### What the format grows (M32e)
 
@@ -208,8 +230,9 @@ gains a second kind of geometry beside its rooms:
 - **Brushes**: a convex solid as a list of planes. Each face carries a material and a texture
   projection (two axes and offsets in the face's plane, so a texture lies exactly as it did).
   Brushes can stand alone or within a room.
-- **Contents**: what a brush is made of: solid, water, slime, lava, sky, or clip (stops a body,
-  never drawn). A liquid brush is a volume the water and liquid systems (M24, M30) take over.
+- **Contents**: what a brush is made of: solid, water, slime, lava, sky, clip (stops a body,
+  never drawn) or trigger (neither drawn nor met: a volume an entity acts on). A liquid brush
+  is a volume the water and liquid systems (M24, M30) take over.
 - **Brush groups**: brushes that move or act together. A door, a button or a trigger volume is a
   group, named by the entity that owns it.
 - **Entities**: a class and its key/value pairs, standing at a point or owning a brush group.
@@ -224,19 +247,25 @@ bits on every machine). The mover's world is built from the same faces.
 
 ### The clone (M32f)
 
-- **Solid space** comes from the map's tree: each path to a solid leaf bounds a convex cell,
-  and the cell becomes a brush. Cells that share a face and stay convex can be merged into
-  fewer, larger brushes (an option). Each visible face takes the plane and texture projection
-  of the map face it lies on.
-- **Brush models** (doors, buttons, platforms, triggers) become brush groups the same way,
-  each from its own tree.
-- **Liquids and sky**: water, slime and lava leaves become liquid brushes, and sky faces become
-  sky.
-- **Entities** are copied as they are. A brush entity's `model` becomes its group.
-- **Smoothing** (an option): a run of faces that approximates an arch, a column or a vault (each
-  face sharing a straight edge with the next, turning by a small, even angle) is replaced by a
-  curved surface through the same edges.
-- **Units**: map units become the format's units through `brush::to_engine` (z up becomes y up).
+- **Solid space** comes from the map's tree: each path to a solid leaf bounds a convex cell
+  (its planes, clamped to the model's bounds a unit out), and the cell becomes a brush. Each face
+  a drawn surface lies on takes that surface's texture and its projection, recovered from the
+  surface's largest triangle; a face no surface lies on (one buried in the map's outside) is
+  hidden. Merging cells into fewer, larger brushes is still to come.
+- **Brush models** (doors, buttons, platforms, trains) become brush groups (`model_<n>`) the
+  same way, each from its own tree; a `trigger_` entity's model becomes TRIGGER volumes, which
+  are neither drawn nor met.
+- **Liquids and sky**: water, slime and lava leaves become liquid brushes, and sky leaves sky.
+- **Entities** come across with their keys. A brush entity's `model` becomes its group,
+  `origin` is written in metres in the engine's frame, and `angle` becomes `heading` (degrees
+  clockwise from +z). Other keys keep the map's units for now; M32g reads them.
+- **Smoothing** (`--smooth=1`): every face is marked smooth, so neighbours less than about 53
+  degrees apart are shaded as one curve (a faceted arch looks round) and right angles stay sharp.
+  Replacing such a run of faces with curved geometry is still to come.
+- **Units**: map units become metres through `brush::to_engine` (z up becomes y up).
 
-The `rooms` lab draws each cloned map beside its original from the same eyes and measures how
-far the clone's surfaces lie from the original's. It then walks the clone from its start.
+The `clone` lab clones each map given (`--pak`, `--map`, `--texmap`) and draws it beside the
+original from the same eyes, then stands a body at every start in the clone's mover world. It
+reports the brushes, faces, hidden faces, groups, entities, bytes and times. `--write=<dir>`
+(outside the tree) keeps the clone as `.gelv` and `.gelv.txt`. Without a pack it clones the
+brush plugin's fixture, which is what `make labs-smoke` runs.

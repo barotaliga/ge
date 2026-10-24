@@ -13,6 +13,7 @@ camera-transitions 750b195eaca33076
 camera-world 663b2b2d72b24d8b
 charts 77f2319a5ea24272
 cli-loop 2a54afc4b75dac63
+clone 11dced82622fae3a
 console 29c50e9ed9fe631e
 crowd cf02cf9a7c917783
 crowd-look 194a06db20f2ebb2

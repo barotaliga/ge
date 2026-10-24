@@ -28,12 +28,14 @@
 // - A SOLID is a box standing in a room (a pillar, a step, a crate), room-relative, one material.
 // - A BRUSH is a convex solid given by its planes, for geometry no room describes (a classic map's
 //   solid space is brushes): each FACE a plane in absolute metres (`n·p = d`, `n` the outward unit
-//   normal, single floats as written), a material and a texture PROJECTION (texel coordinates
-//   `s = dot(s_axis, p) + s_off`, the same for t, p in metres), and `hidden` when it is never
-//   drawn but still stops a body. A brush is made of its CONTENTS: solid, water, slime, lava,
-//   sky (drawn as sky, solid to a body), clip (stops a body, never drawn). It belongs to the world
-//   or to a GROUP: brushes that move or act together (a door, a button, a trigger), named.
-//   Brushes are built into faces at load: build_brushes.hpp.
+//   normal, single floats as written), a material and a texture PROJECTION (texel coordinates `s =
+//   dot(s_axis, p) + s_off`, the same for t, p in metres), `hidden` when it is never drawn but
+//   still stops a body, and `smooth` when it is shaded round with its smooth neighbours (a faceted
+//   arch drawn as a curve). A brush is made of its CONTENTS: solid, water, slime, lava, sky (drawn
+//   as sky, solid to a body), clip (stops a body, never drawn), trigger (neither drawn nor met: a
+//   volume an entity acts on when a body enters it). It belongs to the world or to a GROUP: brushes
+//   that move or act together (a door, a button, a trigger), named. Brushes are built into faces at
+//   load: build_brushes.hpp.
 // - An ENTITY is a class and its key/value pairs, standing at a point (its `origin` key, metres)
 //   or owning a group. The format keeps them as data; a game's step gives the classes meaning.
 // - A material's SURFACE is a procedural surface drawn in place of its texture (tall grass, moss):
@@ -82,7 +84,15 @@ enum class Relief : uint8_t {
   dents = 8,
 };
 enum class Shape : uint8_t { prism = 0, cave = 1 };
-enum class Contents : uint8_t { solid = 0, water = 1, slime = 2, lava = 3, sky = 4, clip = 5 };
+enum class Contents : uint8_t {
+  solid = 0,
+  water = 1,
+  slime = 2,
+  lava = 3,
+  sky = 4,
+  clip = 5,
+  trigger = 6
+};
 
 struct Material {
   std::string name;     // what the level calls it ("stone", "plaster"); unique in a level
@@ -140,6 +150,7 @@ struct Face {
   uint8_t material = 0;
   uint16_t projection = 0;
   bool hidden = false;  // never drawn; still stops a body
+  bool smooth = false;  // shaded round with its smooth neighbours (brush_build.hpp)
 };
 
 struct Brush {

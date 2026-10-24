@@ -7,7 +7,8 @@ description: "Use for plugins/rooms in gameengine2: the engine's own level forma
 
 `plugins/rooms/` (`ge_rooms`, namespace `ge::rooms`) is the engine's own level format: a level is
 a few plain shapes and every room carries the seed its surfaces grow from. It depends on the
-engine's core, and on `engine/move` and `engine/ai` for a body walking it. The design is [`docs/levels.md`](../../../docs/levels.md); each file's header
+engine's core, on `engine/move` and `engine/ai` for a body walking it, and on the `brush` plugin
+for the classic maps it clones. The design is [`docs/levels.md`](../../../docs/levels.md); each file's header
 states its part once.
 
 | File | What |
@@ -24,7 +25,9 @@ states its part once.
 | `walk.hpp/.cpp` | The scripted walk: a tour of every room by its doorways, routed by sweeps; the drive |
 | `levels/halls.gelv.txt` | The sample level: every relief, two caves |
 | `levels/vault.gelv.txt` | The brush sample: slabs, a pillar, a pool, a door group and its entity, clip, sky, a grass surface |
+| `clone.hpp/.cpp` | A classic map cloned into a room level: the texture map, tree cells to brushes, entities |
 | `labs/rooms_lab.cpp` | The `rooms` lab |
+| `labs/clone_lab.cpp` | The `clone` lab: each map beside its clone, a body at every start |
 
 ## Writing a level
 

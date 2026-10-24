@@ -102,7 +102,7 @@ void validate_brushes(const Level& level, std::vector<std::string>& out) {
     if (b.group != kWorld && b.group >= level.groups.size()) {
       out.push_back(fmt("brush %zu: group %u out of range", k, unsigned(b.group)));
     }
-    if (uint8_t(b.contents) > uint8_t(Contents::clip)) {
+    if (uint8_t(b.contents) > uint8_t(Contents::trigger)) {
       out.push_back(fmt("brush %zu: unknown contents %u", k, unsigned(b.contents)));
     }
     if (b.faces < 4) {

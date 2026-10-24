@@ -21,6 +21,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <vector>
 
 #include "rooms/level.hpp"
@@ -31,7 +32,7 @@ inline constexpr double kReachM = 8192;  // a face polygon starts as a square th
 
 struct BrushMesh {
   std::vector<float> pos;         // xyz a vertex, world m
-  std::vector<float> nrm;         // xyz a vertex: the face's outward normal
+  std::vector<float> nrm;         // xyz a vertex: its face's outward normal (shaded round: smooth)
   std::vector<float> st;          // a vertex's texel coordinates (its face's projection)
   std::vector<uint32_t> idx;      // three a triangle, counter-clockwise seen from the normal's side
   std::vector<uint8_t> material;  // a triangle's
@@ -46,6 +47,17 @@ struct Polygon {
   std::vector<double> xyz;  // corners, counter-clockwise seen from the normal's side
   uint32_t face = 0;        // into Level::faces
 };
+
+// A half-space: the points with n·p <= d (n unit, metres).
+struct HalfSpace {
+  double n[3] = {0, 1, 0};
+  double d = 0;
+};
+
+// The convex cell the half-spaces bound: `(*out)[i]` the polygon plane i leaves on it (counter-
+// clockwise seen from its normal's side; empty when the plane does not touch the cell). False,
+// with `out` empty, when the planes do not close within `kReachM`.
+bool cell_polygons(std::span<const HalfSpace> planes, std::vector<std::vector<double>>* out);
 
 // Brush `b`'s own polygons, one a face its planes leave room for, before any other brush cuts
 // them. Empty when the brush does not close.

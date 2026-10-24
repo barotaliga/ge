@@ -11,8 +11,8 @@
 //   solid <room> <material> <min x> <min y> <min z> <max x> <max y> <max z>
 //   surface <material> <surface reference...>    (a procedural surface drawn in its place)
 //   group <name>
-//   brush <solid|water|slime|lava|sky|clip> [group=<name>]
-//   face <nx>,<ny>,<nz> <d> <material> s=<x>,<y>,<z>,<off> t=<x>,<y>,<z>,<off> [hidden]
+//   brush <solid|water|slime|lava|sky|clip|trigger> [group=<name>]
+//   face <nx>,<ny>,<nz> <d> <material> s=<x>,<y>,<z>,<off> t=<x>,<y>,<z>,<off> [hidden] [smooth]
 //   entity <class> [group=<name>]
 //   key <name> <value...>                         (the entity above's; the rest of the line)
 //
