@@ -314,7 +314,7 @@ core::Vec3 heli_seat(const hc::HeliState& h) {
 bool heli_within(const GameState& state, int32_t i) {
   const FreeHeli& m = state.heli;
   if (i != 0 || !m.present || m.rider || m.mode != HeliMode::parked) return false;
-  if (state.sled.present && (state.sled.rider || state.sled.thrown)) return false;
+  if (sled_holds(state, i)) return false;
   const Racer& r = state.racers[static_cast<size_t>(i)];
   const sk::SkierState& c = r.skier;
   if (c.down || r.free.lift.phase != LiftPhase::none) return false;
