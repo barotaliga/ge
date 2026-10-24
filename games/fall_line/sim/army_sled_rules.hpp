@@ -155,6 +155,19 @@ inline constexpr double kHomeSlowM = 60;
 inline constexpr int32_t kMostEmpty = 3;
 inline constexpr double kEmptyGoneM = 300;
 
+// HIM AGAINST A MACHINE (army_meet.hpp): the machine's plan is the capsule its trunks are held out
+// of (`snowmobile::spec::kHalfWidth` either side of its spine, `kLength` long), and the skier is
+// held out of it too, pushed apart by their masses, the closing speed traded back at
+// `kRestitution`, unless he is clear over it (`kHullTopM` over its CoG). Skied into at
+// `kKnockOffSpeed` m/s or more of his own (about 13 km/h: two men on a machine, the gunner turned
+// in his seat, are put over by a man and his skis at a run), a crewed machine's crew go over; a
+// closing speed of `kThrowSpeed` or more (a crewed machine near 500 kg is a wall at 18 km/h) puts
+// HIM down too, whichever of them did the driving.
+inline constexpr double kHullTopM = 1.1;
+inline constexpr double kRestitution = 0.2;
+inline constexpr double kKnockOffSpeed = 3.5;
+inline constexpr double kThrowSpeed = 5;
+
 // The most machines out at once (the roster's and the waves' together, with the empty ones), kept
 // in a reserve made at create so a step never allocates; and the most a wave keeps out on top of
 // the roster's.
