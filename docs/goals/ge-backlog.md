@@ -69,6 +69,8 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 ## Inspecting a run
 
 - `ge record` (done: a run as an MP4, WebM or GIF and a contact sheet of timestamped stills, its resolution, frame rate, speed, range and encoder quality; and `--gpu`, the game's registered renderer drawing each frame headless in a mode, Fall Line's `lit`, `wireframe`, `depth` and `overlay` from a chase camera, a high chase or the named views; `ge shot --gpu` the same still)
+- `ge export <replay> --from-mark=<kind>` (a clip cut straight off a replay file's marks, a crash or a jump, without finding its steps by hand)
+- the CPU views' `shoot` honouring `--size` (Fall Line's near view always draws 512 px, about 0.8 s a frame in debug, whatever size is asked)
 - `ge state --entities=<kind> --at=<t>`
 - `ge stage --put=skier --beside=<entity:id> --off=<m> --speed=<m/s>` (the player set down mid-run beside a live entity, at an offset and a speed, to stage a meeting without scripting a run up to it)
 - `ge sim --human --compare=<tag>` (the humanness report beside a kept run's, each metric's move)
