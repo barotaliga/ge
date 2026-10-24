@@ -313,8 +313,11 @@ void run(lab::Lab& lab) {
       from = to + 1;
       const ge::vfs::PakEntry* e = ge::vfs::pak_find(pak, name);
       if (e == nullptr) {
-        lab.fail("bsp: " + pak_path + " holds no " + name,
-                 "next: pass --map=<path inside the pack>, as `maps/<name>.bsp`; skill: vfs");
+        std::string what = "bsp: ";
+        what += pak_path;
+        what += " holds no ";
+        what += name;
+        lab.fail(what, "next: pass --map=<path inside the pack>, as `maps/<name>.bsp`; skill: vfs");
         return;
       }
       const auto b = ge::vfs::pak_file(pak_bytes, *e);

@@ -117,7 +117,7 @@ bool read_v29(std::span<const uint8_t> file, bool bsp2, Map* out, std::string* e
               "the file is damaged: rebuild the map");
         }
         if (pixels != 0) {
-          const auto from = r.b.begin() + std::ptrdiff_t(uint32_t(off) + pixels);
+          const auto from = r.b.begin() + std::ptrdiff_t(off) + std::ptrdiff_t(pixels);
           t.indexed.assign(from, from + std::ptrdiff_t(uint64_t(t.width) * t.height));
         }
       }

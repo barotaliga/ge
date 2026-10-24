@@ -235,7 +235,7 @@ size_t draw_textured(lab::Picture& p, int x0, int y0, int w, int h, const Map& m
       const double n = kSuper * kSuper;
       uint8_t out[3];
       for (int k = 0; k < 3; ++k) {
-        out[k] = uint8_t(255 * core::libm::pow(std::min(1.0, c[k] / n / 255), kGamma) + 0.5);
+        out[k] = uint8_t(std::lround(255 * core::libm::pow(std::min(1.0, c[k] / n / 255), kGamma)));
       }
       lab::set_pixel(p, x0 + x, y0 + y, lab::Rgba{out[0], out[1], out[2]});
     }

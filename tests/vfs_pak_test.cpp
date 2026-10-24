@@ -71,7 +71,7 @@ TEST(a_damaged_pack_is_refused_naming_the_damage) {
   put(b, 8, 65);
   CHECK(refused(b, "whole"));
   b = good;
-  const size_t dir = good.size() - 3 * 64;
+  const size_t dir = good.size() - size_t(3) * 64;
   put(b, dir + 56, uint32_t(good.size()));
   put(b, dir + 60, 1);
   CHECK(refused(b, "lies past the end"));
