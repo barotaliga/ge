@@ -87,6 +87,17 @@ TEST(references_parse_print_and_resolve) {
   CHECK(!bad.empty());
 }
 
+TEST(a_reference_carries_a_tint_and_a_spread) {
+  std::vector<tg::Diagnostic> errors;
+  const tg::TextureRef ref = tg::parse_ref("brick_wall spread=#1E1914 tint=#5e4734 seed=3", errors);
+  CHECK(errors.empty() && ref.tint && ref.spread);
+  CHECK((*ref.tint)[0] == 0x5e && (*ref.tint)[2] == 0x34 && (*ref.spread)[0] == 0x1e);
+  CHECK(tg::ref_text(ref) == "brick_wall seed=3 tint=#5e4734 spread=#1e1914");
+  std::vector<tg::Diagnostic> bad;
+  tg::parse_ref("brick_wall tint=0.5", bad);
+  CHECK(!bad.empty() && has(bad.back().message, "tint=#5e4734"));
+}
+
 TEST(layer_seeds_differ_by_place_and_room) {
   const tg::Recipe r = tg::parse_recipe("texture t\nlayer fill\n").recipe;
   const tg::TextureRef a{"t", 1, {}}, b{"t", 2, {}};

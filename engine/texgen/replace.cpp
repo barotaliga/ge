@@ -7,6 +7,7 @@
 #include "texgen/replace.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 #include "core/libm/libm.hpp"
@@ -151,19 +152,30 @@ Matcher make_matcher(const std::string& dir) {
   return m;
 }
 
-std::optional<Replacement> replace_texture(const Matcher& m, std::string_view name,
-                                           const lab::Picture& original,
-                                           std::span<const uint8_t> lights) {
+TextureMatch match_texture(const Matcher& m, std::string_view name, const lab::Picture& original) {
+  TextureMatch out;
+  if (name.starts_with('*')) {
+    out.kind = TextureKind::liquid;
+    std::string_view stem = name.substr(1);
+    while (!stem.empty() && stem.back() >= '0' && stem.back() <= '9') stem.remove_suffix(1);
+    while (!stem.empty() && stem.front() >= '0' && stem.front() <= '9') stem.remove_prefix(1);
+    out.liquid = std::string(stem);
+    return out;
+  }
+  if (name.starts_with("sky")) {
+    out.kind = TextureKind::sky;
+    return out;
+  }
   const int w = original.width, h = original.height;
-  if (w <= 0 || h <= 0 || m.entries.empty()) return std::nullopt;
-  if (name.starts_with('*') || name.starts_with("sky")) return std::nullopt;
-  // Matched on structure, then recoloured: the match ranks by likeness with the
-  // colour numbers left out of the look, so a brown brick still finds the brick recipe.
+  if (w <= 0 || h <= 0 || m.entries.empty()) return out;
+  // Matched on structure, then recoloured: the match ranks by likeness with the colour numbers
+  // left out of the look, since the tint and spread put the colour back.
   const Likeness want = likeness_of(original);
   const Matcher::Entry* best = nullptr;
   double best_d = 1e9;
   for (const Matcher::Entry& e : m.entries) {
-    Likeness a = want, b = e.likeness;
+    Likeness a = want;
+    const Likeness& b = e.likeness;
     a.look.brightness = b.look.brightness;
     a.look.saturation = b.look.saturation;
     a.look.warmth = b.look.warmth;
@@ -173,58 +185,103 @@ std::optional<Replacement> replace_texture(const Matcher& m, std::string_view na
       best = &e;
     }
   }
-  if (best == nullptr || best_d > m.max_distance) return std::nullopt;
-
-  Recipe r = best->recipe;
-  r.size = pow2_at_least(static_cast<uint32_t>(std::max(w, h)));
-  const Maps maps = bake(r, {r.name, name_seed(name), {}}).maps;
-  lab::Picture out = lab::resized(map_picture(maps, MapKind::albedo, r.size), w, h);
-
-  // Each channel's mean and spread moved onto the original's; the spread's ratio kept within
-  // a factor of two so a flat original does not flatten the bake to nothing.
+  // Each channel's mean and spread, as the bytes the reference carries.
   const size_t n = static_cast<size_t>(w) * h;
+  std::array<uint8_t, 3> tint{}, spread{};
   for (int c = 0; c < 3; ++c) {
-    double mo = 0, mb = 0, so = 0, sb = 0;
+    double mean = 0, var = 0;
+    for (size_t i = 0; i < n; ++i) mean += original.rgba[i * 4 + c];
+    mean /= static_cast<double>(n);
     for (size_t i = 0; i < n; ++i) {
-      mo += original.rgba[i * 4 + c];
-      mb += out.rgba[i * 4 + c];
+      const double d = original.rgba[i * 4 + c] - mean;
+      var += d * d;
     }
-    mo /= static_cast<double>(n);
-    mb /= static_cast<double>(n);
-    for (size_t i = 0; i < n; ++i) {
-      so += (original.rgba[i * 4 + c] - mo) * (original.rgba[i * 4 + c] - mo);
-      sb += (out.rgba[i * 4 + c] - mb) * (out.rgba[i * 4 + c] - mb);
-    }
-    so = std::sqrt(so / static_cast<double>(n));
-    sb = std::sqrt(sb / static_cast<double>(n));
-    const double k = std::clamp(sb > 1e-6 ? so / sb : 1.0, 0.5, 2.0);
-    for (size_t i = 0; i < n; ++i) {
-      const double v = mo + (out.rgba[i * 4 + c] - mb) * k;
-      out.rgba[i * 4 + c] = static_cast<uint8_t>(std::clamp(std::floor(v + 0.5), 0.0, 255.0));
-    }
+    tint[c] = static_cast<uint8_t>(std::clamp(std::floor(mean + 0.5), 0.0, 255.0));
+    spread[c] = static_cast<uint8_t>(
+        std::clamp(std::floor(std::sqrt(var / static_cast<double>(n)) + 0.5), 0.0, 255.0));
   }
+  out.ref.name = best->recipe.name;
+  out.ref.seed = name_seed(name);
+  out.ref.tint = tint;
+  out.ref.spread = spread;
+  out.text = ref_text(out.ref);
+  out.distance = best_d;
+  out.near = best_d <= m.max_distance;
+  return out;
+}
+
+TextureMatch match_rgb(const Matcher& m, std::string_view name, std::span<const uint8_t> rgb,
+                       uint32_t w, uint32_t h) {
+  const size_t n = static_cast<size_t>(w) * h;
+  if (rgb.size() < n * 3) return match_texture(m, name, {});
+  lab::Picture p = lab::create_picture(static_cast<int>(w), static_cast<int>(h), {0, 0, 0});
+  for (size_t i = 0; i < n; ++i)
+    for (int c = 0; c < 3; ++c) p.rgba[i * 4 + c] = rgb[i * 3 + c];
+  return match_texture(m, name, p);
+}
+
+namespace {
+
+lab::Picture from_indexed(uint32_t w, uint32_t h, std::span<const uint8_t> indexed,
+                          std::span<const uint8_t> palette) {
+  const size_t n = static_cast<size_t>(w) * h;
+  if (indexed.size() < n || palette.size() < 768) return {};
+  lab::Picture p = lab::create_picture(static_cast<int>(w), static_cast<int>(h), {0, 0, 0});
+  for (size_t i = 0; i < n; ++i)
+    for (int c = 0; c < 3; ++c) p.rgba[i * 4 + c] = palette[indexed[i] * 3u + c];
+  return p;
+}
+
+}  // namespace
+
+TextureMatch match_indexed(const Matcher& m, std::string_view name, uint32_t w, uint32_t h,
+                           std::span<const uint8_t> indexed, std::span<const uint8_t> palette) {
+  return match_texture(m, name, from_indexed(w, h, indexed, palette));
+}
+
+lab::Picture bake_match(const Matcher& m, const TextureMatch& match, int w, int h) {
+  for (const Matcher::Entry& e : m.entries) {
+    if (e.recipe.name != match.ref.name) continue;
+    Recipe r = e.recipe;
+    r.size = pow2_at_least(static_cast<uint32_t>(std::max(w, h)));
+    // Baked uncoloured, resized, then recoloured, so the tint and spread hold at the size drawn.
+    TextureRef plain = match.ref;
+    plain.tint.reset();
+    plain.spread.reset();
+    lab::Picture out =
+        lab::resized(map_picture(bake(r, plain).maps, MapKind::albedo, r.size), w, h);
+    recolour(out.rgba, match.ref.tint, match.ref.spread);
+    return out;
+  }
+  return lab::create_picture(w, h, {128, 128, 128});
+}
+
+std::optional<Replacement> replace_texture(const Matcher& m, std::string_view name,
+                                           const lab::Picture& original,
+                                           std::span<const uint8_t> lights) {
+  TextureMatch match = match_texture(m, name, original);
+  if (match.kind != TextureKind::surface || match.text.empty() || !match.near) return std::nullopt;
+  const int w = original.width, h = original.height;
+  lab::Picture out = bake_match(m, match, w, h);
+  const size_t n = static_cast<size_t>(w) * h;
   if (lights.size() == n) {
     for (size_t i = 0; i < n; ++i) {
       if (lights[i] == 0) continue;
-      for (int c = 0; c < 4; ++c) out.rgba[i * 4 + c] = original.rgba[i * 4 + c];
+      for (int c = 0; c < 3; ++c) out.rgba[i * 4 + c] = original.rgba[i * 4 + c];
     }
   }
   for (size_t i = 0; i < n; ++i) out.rgba[i * 4 + 3] = 255;
-  return Replacement{std::move(out), best->recipe.name, best_d};
+  return Replacement{std::move(out), std::move(match)};
 }
 
 std::optional<Replacement> replace_indexed(const Matcher& m, std::string_view name, uint32_t w,
                                            uint32_t h, std::span<const uint8_t> indexed,
                                            std::span<const uint8_t> palette, int first_bright) {
+  const lab::Picture p = from_indexed(w, h, indexed, palette);
+  if (p.width == 0) return std::nullopt;
   const size_t n = static_cast<size_t>(w) * h;
-  if (indexed.size() < n || palette.size() < 768) return std::nullopt;
-  lab::Picture p = lab::create_picture(static_cast<int>(w), static_cast<int>(h), {0, 0, 0});
   std::vector<uint8_t> lights(n, 0);
-  for (size_t i = 0; i < n; ++i) {
-    const size_t k = indexed[i];
-    for (int c = 0; c < 3; ++c) p.rgba[i * 4 + c] = palette[k * 3 + c];
-    lights[i] = static_cast<int>(k) >= first_bright ? 1 : 0;
-  }
+  for (size_t i = 0; i < n; ++i) lights[i] = indexed[i] >= first_bright ? 1 : 0;
   return replace_texture(m, name, p, lights);
 }
 

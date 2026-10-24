@@ -7,10 +7,11 @@
 // original's own lights (the texels the palette marks as full-bright) are kept where they were,
 // so a lamp still glows where the map put it.
 //
-// A texture keeps its own pixels (nothing is returned) when no recipe comes near enough, or when
-// its name marks it as something a renderer draws itself: a liquid (a leading '*') or a sky.
-// The match is a pure function of the texture and the library: the same pixels pick the same
-// recipe and bake the same replacement on every machine.
+// The match is also what a tool that converts another game's map writes in place of each
+// texture: a recipe reference (`match_texture`), never the pixels. A renderer drawing the map
+// keeps a texture's own pixels when no recipe comes near enough, or when its name marks it as
+// something drawn otherwise: a liquid (a leading '*') or a sky. The match is a pure function of
+// the texture and the library: the same pixels pick the same reference on every machine.
 //
 // ge:summary Replaces a level's painted texture with the most alike library recipe, recoloured
 // ge:keywords replace replacement similarity likeness match nearest recipe swap level-textures
@@ -63,23 +64,51 @@ struct Matcher {
 // not parse are left out.
 Matcher make_matcher(const std::string& dir);
 
-struct Replacement {
-  lab::Picture picture;  // w x h, RGBA8, alpha 255
-  std::string recipe;    // the recipe it was baked from
-  double distance = 0;   // how unalike the original and the recipe were
+// What a texture is, by its name: a surface the matcher replaces, or something a renderer draws
+// itself (a liquid, named with a leading '*'; a sky, named starting "sky").
+enum class TextureKind : uint8_t { surface, liquid, sky };
+
+// The recipe reference that stands in for a texture. Only a recipe's name, a seed made from the
+// texture's name and the original's mean colour and spread (`tint`, `spread`) leave the call:
+// nothing of its pixels, so a level written from it carries no one else's picture.
+struct TextureMatch {
+  TextureKind kind = TextureKind::surface;
+  TextureRef ref;    // the recipe, its seed, tint and spread (empty name off a surface)
+  std::string text;  // ref_text(ref): what a level stores (empty off a surface)
+  std::string
+      liquid;  // a liquid's stem, digits off: "*04water1" is "water" (empty unless kind is liquid)
+  double distance = 0;  // how unalike the texture and the recipe are; lower is nearer
+  bool near = false;    // distance within the matcher's max_distance
 };
 
-// The replacement for an RGB(A) texture named `name`; nothing when it keeps its own pixels.
-// `lights` (w x h, may be empty) marks the original's full-bright texels, kept as they were.
+// The match for an RGBA texture (alpha ignored). Every surface gets a recipe, near or not.
+TextureMatch match_texture(const Matcher& m, std::string_view name, const lab::Picture& original);
+// The same for packed RGB (w x h x 3 bytes).
+TextureMatch match_rgb(const Matcher& m, std::string_view name, std::span<const uint8_t> rgb,
+                       uint32_t w, uint32_t h);
+// The same for an indexed texture: `indexed` w x h palette indices, `palette` 768 bytes of RGB.
+TextureMatch match_indexed(const Matcher& m, std::string_view name, uint32_t w, uint32_t h,
+                           std::span<const uint8_t> indexed, std::span<const uint8_t> palette);
+
+struct Replacement {
+  lab::Picture picture;  // w x h, RGBA8, alpha 255
+  TextureMatch match;
+};
+
+// The replacement a renderer draws for an RGB(A) texture: its match baked at the texture's size;
+// nothing when it keeps its own pixels (not a surface, or no recipe near enough). `lights`
+// (w x h, may be empty) marks the original's full-bright texels, kept as they were.
 std::optional<Replacement> replace_texture(const Matcher& m, std::string_view name,
                                            const lab::Picture& original,
                                            std::span<const uint8_t> lights = {});
 
-// The same for an indexed texture: `indexed` w x h palette indices, `palette` 768 bytes of RGB.
-// Indices at or above `first_bright` are full-bright (256: none).
+// The same for an indexed texture. Indices at or above `first_bright` are full-bright (256: none).
 std::optional<Replacement> replace_indexed(const Matcher& m, std::string_view name, uint32_t w,
                                            uint32_t h, std::span<const uint8_t> indexed,
                                            std::span<const uint8_t> palette,
                                            int first_bright = 224);
+
+// The texture a match stands for, baked at w x h (the recipe at the next power of two, resized).
+lab::Picture bake_match(const Matcher& m, const TextureMatch& match, int w, int h);
 
 }  // namespace ge::texgen

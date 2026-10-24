@@ -5,6 +5,8 @@
 // recipe it picked and how unalike they were, a page of pairs at a time, plus a table. A texture
 // that keeps its own pixels (a liquid, a sky, nothing near enough) is drawn with KEPT beside it.
 //
+// Files are named after their textures, with "liq_" for a leading '*' and "anim_" for a '+'.
+//
 // With no --refs, the originals are the library's own recipes under seed 9, each tinted, so the
 // smoke run and its digest need nothing outside the tree and show the recolouring at work.
 //
@@ -53,6 +55,14 @@ std::vector<Original> library_originals(const texgen::Matcher& m) {
   return out;
 }
 
+// A texture's name from its file's: a file system cannot always hold '*' or '+', so a leading
+// "liq_" stands for a liquid's '*' and "anim_" for an animation's '+'.
+std::string texture_name(const std::string& stem) {
+  if (stem.starts_with("liq_")) return "*" + stem.substr(4);
+  if (stem.starts_with("anim_")) return "+" + stem.substr(5);
+  return stem;
+}
+
 std::string fixed(double v) { return core::num::to_fixed(v, 2); }
 
 void run(lab::Lab& lab) {
@@ -78,7 +88,9 @@ void run(lab::Lab& lab) {
     std::sort(paths.begin(), paths.end());
     for (const std::string& path : paths) {
       std::optional<lab::Picture> p = lab::read_png(path);
-      if (p) originals.push_back({std::filesystem::path(path).stem().string(), std::move(*p)});
+      if (p)
+        originals.push_back(
+            {texture_name(std::filesystem::path(path).stem().string()), std::move(*p)});
     }
     if (originals.empty()) {
       lab.fail("no PNGs in " + refs,
@@ -91,7 +103,9 @@ void run(lab::Lab& lab) {
   if (limit > 0 && static_cast<int>(originals.size()) > limit) originals.resize(limit);
 
   lab::LabTable table{
-      "REPLACEMENTS", {"texture", "size", "repeat x", "repeat y", "recipe", "distance"}, {}};
+      "REPLACEMENTS",
+      {"texture", "size", "repeat x", "repeat y", "recipe", "distance", "reference a level stores"},
+      {}};
   int replaced = 0, kept = 0;
   double total = 0;
   const int gap = 6, label = 12, cell_w = 2 * panel + 3 * gap, cell_h = panel + 2 * label + gap;
@@ -114,21 +128,29 @@ void run(lab::Lab& lab) {
       if (r) {
         lab::blit(sheet, lab::resized(r->picture, panel, std::min(panel, h)), x + panel + gap,
                   y + label);
-        pick = r->recipe;
+        pick = r->match.ref.name;
         ++replaced;
-        total += r->distance;
+        total += r->match.distance;
       } else {
         ++kept;
       }
       lab::draw_text(sheet, x + panel + gap, y, pick,
                      r ? lab::Rgba{200, 200, 160} : lab::Rgba{200, 120, 120});
       if (r)
-        lab::draw_text(sheet, x, y + label + panel + 2, "D " + fixed(r->distance), {160, 160, 160});
+        lab::draw_text(sheet, x, y + label + panel + 2, "D " + fixed(r->match.distance),
+                       {160, 160, 160});
       const texgen::Likeness l = texgen::likeness_of(o.picture);
+      // What a converter writes for it, near or not.
+      const texgen::TextureMatch m =
+          r ? r->match : texgen::match_texture(matcher, o.name, o.picture);
+      const std::string stored = m.kind == texgen::TextureKind::liquid ? "(liquid " + m.liquid + ")"
+                                 : m.kind == texgen::TextureKind::sky  ? "(sky)"
+                                                                       : m.text;
       table.rows.push_back(
           {o.name, std::to_string(o.picture.width) + "x" + std::to_string(o.picture.height),
            fixed(l.period_x) + " @" + fixed(l.repeat_x),
-           fixed(l.period_y) + " @" + fixed(l.repeat_y), pick, r ? fixed(r->distance) : "-"});
+           fixed(l.period_y) + " @" + fixed(l.repeat_y), pick, r ? fixed(r->match.distance) : "-",
+           stored});
     }
     const std::string id = "page" + std::to_string(page + 1);
     lab.shot({id,

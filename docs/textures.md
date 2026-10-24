@@ -103,8 +103,25 @@ their place, as an option (`replace.hpp`). For each texture:
 A name starting with `*` (a liquid) or `sky` is never replaced; a renderer draws those itself.
 `replace_indexed` takes a paletted texture and its 768-byte palette, and treats indices from 224
 up as full-bright. The match and the bake are pure functions of the texture and the library.
-The `texgen-replace` lab draws every texture beside its replacement, with the recipe picked and
-the distance.
+The `texgen-replace` lab draws every texture beside its replacement, with the recipe picked, the
+distance and the reference a level would store.
+
+### Converting a map: references, never pixels
+
+A tool that converts another game's map into ours may copy its structure but not its painted
+textures. It asks `match_texture` (or `match_rgb`, `match_indexed`) for each texture and writes
+the answer's `text`, a texture reference like any other:
+
+```
+red_bricks seed=2359537275 tint=#825540 spread=#281913
+```
+
+The seed is made from the texture's name (an animation's frames share it), and `tint` and
+`spread` are the original's mean colour and per-channel spread. That is all that leaves the
+call: a recipe's name and seven numbers. Every surface gets an answer even when no recipe is
+near (`near` says which). A liquid comes back as `TextureKind::liquid` with its stem (`*04water1`
+is `water`), and a sky as `TextureKind::sky`, for the converter to map to its own materials.
+Build the `Matcher` once per conversion.
 
 ## The noise kinds
 
@@ -119,8 +136,13 @@ across, and its test holds periodicity and the bits.
 ## Texture references: how a level names a texture
 
 ```
-<name> [seed=<u32>] [<param>=<number> ...]      e.g.  cave_rock seed=88123 wet=0.6 moss=0.2
+<name> [seed=<u32>] [<param>=<number> ...] [tint=#rrggbb] [spread=#rrggbb]
+                                                e.g.  cave_rock seed=88123 wet=0.6 moss=0.2
 ```
+
+`tint` and `spread` recolour the bake's albedo: each channel's mean moves onto the tint and its
+standard deviation onto the spread, within a factor of two of the bake's own. A converted map
+carries both (above); a hand-written level rarely needs them.
 
 A level stores one reference per surface or room. The reference's seed is mixed with the
 recipe's seed and each layer's place (`layer_seed`). So each room that names the same recipe
