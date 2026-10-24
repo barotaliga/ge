@@ -77,7 +77,7 @@ Decoded decode(const std::vector<uint8_t>& b) {
       std::vector<uint8_t> add = prev;
       add.push_back(entry[0]);
       dict.push_back(add);
-      if (dict.size() == (1u << size) && size < 12) ++size;
+      if (dict.size() == (size_t{1} << size) && size < 12) ++size;
     }
     prev = entry;
   }
