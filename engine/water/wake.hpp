@@ -68,11 +68,11 @@ struct Trail {
 // A hull `length` m long and `beam` m wide drawing `draught` m, at (x, z) moving at (vx, vz) m/s:
 // one ring every `interval` s carrying a share of the water it pushes aside meanwhile (beam x
 // draught x speed x interval, times `strength`; 0.3 stands a small boat's wake waves at the
-// steepness measured on real ones, slopes of about 0.1), set off over the hull's length. A ring keeps no wave
-// shorter than the hull (a hull makes few waves much shorter than itself: so a fast small hull's
-// wake looks narrower than Kelvin's angle, as measured on real ones), nor than four times the
-// track between two rings (a shorter one would not cancel between them, and the sum would alias
-// into ridges along the track). A hull at rest sets off nothing.
+// steepness measured on real ones, slopes of about 0.1), set off over the hull's length. A ring
+// keeps no wave shorter than the hull (a hull makes few waves much shorter than itself: so a fast
+// small hull's wake looks narrower than Kelvin's angle, as measured on real ones), nor than four
+// times the track between two rings (a shorter one would not cancel between them, and the sum would
+// alias into ridges along the track). A hull at rest sets off nothing.
 void wake_trail(Wakes& wakes, Trail& trail, int body, double x, double z, double vx, double vz,
                 double length, double beam, double draught, double t, double interval = 0.1,
                 double strength = 0.3);

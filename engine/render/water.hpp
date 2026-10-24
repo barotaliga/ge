@@ -99,6 +99,15 @@ struct Water {
     float veil[4] = {0, 0, 0, 0};  // the fog a view under it looks through (water::Optics)
   };
   std::vector<Slot> bodies;
+  // The moving water (render/water_stream.hpp): this frame's mesh and the bodies' optics.
+  struct Streams {
+    wgpu::BindGroupLayout layout;
+    uint32_t p_draw = 0;
+    wgpu::Buffer vertices, indices, optics;
+    uint64_t vertex_bytes = 0, index_bytes = 0;
+    uint32_t count = 0;  // indices
+    wgpu::BindGroup group;
+  } streams;
   int eye_under = -1;  // this frame's: the body the eye is under (render/underwater.hpp), or -1
 };
 
@@ -119,7 +128,7 @@ void set_water_wakes(gpu::Device& device, Water& water, int index, const water::
 // The levels round this frame's eye, uploaded; a body seen from under its level is not drawn:
 // the eye is under it (`Water::eye_under`, render/underwater.hpp's pass).
 void prepare_water(gpu::Device& device, Water& water, const FrameView& view);
-// "water.copy" and "water".
+// "water.copy" and "water" (the still bodies, then the moving water).
 void encode_water(const Water& water, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
                   wgpu::CommandEncoder& encoder, const FrameTargets& targets,
                   const wgpu::BindGroup& frame);

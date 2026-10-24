@@ -14,6 +14,8 @@
 #include "core/prng.hpp"
 #include "render/water.wgsl.hpp"
 #include "render/water_copy.wgsl.hpp"
+#include "render/water_stream.hpp"
+#include "render/water_stream.wgsl.hpp"
 #include "water/spectrum.hpp"
 
 namespace ge::render {
@@ -186,6 +188,45 @@ void create_water(gpu::Device& device, gpu::PipelineSet& pipelines, Water& water
     desc.fragment = &fragment;
     water.p_draw = pipelines.add_render(device, desc);
   }
+  {
+    Water::Streams& st = water.streams;
+    st.layout =
+        make_layout(device, "water.stream",
+                    {Slot::storage_read, Slot::storage_read, Slot::texture, Slot::texture_raw},
+                    wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment);
+    st.optics = make_buffer(device, "water.stream.optics", size_t{kStreamBodies} * 64,
+                            wgpu::BufferUsage::Storage);
+    st.vertex_bytes = 4096;
+    st.vertices =
+        make_buffer(device, "water.stream.vertices", st.vertex_bytes, wgpu::BufferUsage::Storage);
+    st.index_bytes = 4096;
+    st.indices =
+        make_buffer(device, "water.stream.indices", st.index_bytes, wgpu::BufferUsage::Index);
+    const wgpu::ShaderModule module =
+        gpu::create_shader(device, wgsl::water_stream, "water.stream");
+    wgpu::ColorTargetState colours[2] = {};
+    colours[0].format = kHdrFormat;
+    colours[1].format = kMotionFormat;
+    wgpu::FragmentState fragment{};
+    fragment.module = module;
+    fragment.entryPoint = "fs_main";
+    fragment.targetCount = 2;
+    fragment.targets = colours;
+    wgpu::DepthStencilState depth{};
+    depth.format = kDepthFormat;
+    depth.depthWriteEnabled = true;
+    depth.depthCompare = wgpu::CompareFunction::Greater;
+    wgpu::RenderPipelineDescriptor desc{};
+    desc.label = "water.stream";
+    desc.layout = make_pipeline_layout(device, "water.stream", {frame, st.layout});
+    desc.vertex.module = module;
+    desc.vertex.entryPoint = "vs_main";
+    desc.primitive.topology = wgpu::PrimitiveTopology::TriangleList;
+    desc.primitive.cullMode = wgpu::CullMode::None;
+    desc.depthStencil = &depth;
+    desc.fragment = &fragment;
+    st.p_draw = pipelines.add_render(device, desc);
+  }
   // The grid's indices: kWaterGrid^2 quads of two triangles over (kWaterGrid + 1)^2 vertices.
   std::vector<uint32_t> idx;
   idx.reserve(size_t{kWaterGrid} * kWaterGrid * 6);
@@ -211,6 +252,9 @@ void create_water_targets(gpu::Device& device, Water& water, const FrameTargets&
   water.scene_depth_view = water.scene_depth.CreateView();
   water.copy_group =
       make_group(device, "water.copy", water.copy_layout, {targets.hdr_view, targets.depth_view});
+  water.streams.group = make_group(device, "water.stream", water.streams.layout,
+                                   {water.streams.optics, water.streams.vertices,
+                                    water.scene_colour_view, water.scene_depth_view});
   for (Water::Slot& slot : water.bodies) {
     slot.group = make_group(
         device, "water", water.layout,
@@ -294,7 +338,8 @@ void encode_water(const Water& water, const gpu::PipelineSet& pipelines, FrameRe
   // Nothing drawn and no eye under the water: the rows run empty (no copy), so every later pass
   // keeps its timing row.
   const bool drawn = std::any_of(water.bodies.begin(), water.bodies.end(),
-                                 [](const Water::Slot& s) { return s.shown; });
+                                 [](const Water::Slot& s) { return s.shown; }) ||
+                     water.streams.count > 0;
   if (!drawn && water.eye_under < 0) {
     rec.compute(encoder, "water.copy").End();
     rec.compute(encoder, "water").End();
@@ -341,6 +386,13 @@ void encode_water(const Water& water, const gpu::PipelineSet& pipelines, FrameRe
     if (!slot.shown) continue;
     pass.SetBindGroup(1, slot.group);
     pass.DrawIndexed(kWaterGrid * kWaterGrid * 6, static_cast<uint32_t>(slot.staged.grid[0]));
+    ++rec.current().draws;
+  }
+  if (water.streams.count > 0) {
+    pass.SetPipeline(pipelines.render(water.streams.p_draw));
+    pass.SetBindGroup(1, water.streams.group);
+    pass.SetIndexBuffer(water.streams.indices, wgpu::IndexFormat::Uint32);
+    pass.DrawIndexed(water.streams.count);
     ++rec.current().draws;
   }
   pass.End();
