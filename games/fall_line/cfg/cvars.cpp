@@ -110,23 +110,10 @@ void add_cvars(con::Console& c, Settings& s) {
   v.bind({.name = "cl_view",
           .fallback = "chase",
           .flags = kPlayer,
-          .help = "the camera: chase, or a fixed rig (start piste lookback vista aerial)",
+          .help = "the camera: a rung (tips helmet chase far high orbit) or a still view (start "
+                  "piste lookback vista aerial)",
           .kind = CvarKind::text},
          &s.view);
-  v.bind({.name = "cl_chaseback",
-          .fallback = "5.5",
-          .flags = kPlayer,
-          .help = "how far the chase camera hangs behind the skier, m",
-          .min = 1,
-          .max = 30},
-         &s.chase_back);
-  v.bind({.name = "cl_chaseup",
-          .fallback = "2",
-          .flags = kPlayer,
-          .help = "how high the chase camera rides over the skier, m",
-          .min = 0,
-          .max = 20},
-         &s.chase_up);
 
   v.bind({.name = "volume",
           .fallback = "0.8",

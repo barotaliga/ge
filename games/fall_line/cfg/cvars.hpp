@@ -39,7 +39,6 @@ struct Settings {
   bool snow = true, trails = true, spray = true, snowfall = true, weather = true;
   // The camera.
   std::string view = "chase";
-  double chase_back = 5.5, chase_up = 2.0;
   // The sound: sound/mix.hpp's Faders.
   float volume = 0.8f, wind = 1, effects = 1;
   bool mute = false;

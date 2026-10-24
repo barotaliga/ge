@@ -16,7 +16,7 @@ prefix comes the thing in one word, abbreviated when it is long: `r_shadowsize`,
 | Prefix | Owner | Examples |
 | --- | --- | --- |
 | `sv_` | the server's rules, decided for everyone | `sv_seed`, `sv_hour`, `sv_maxclients`, `sv_cheats` |
-| `cl_` | the client: the camera, prediction, what it asks of the server | `cl_view`, `cl_chaseback`, `cl_updaterate` |
+| `cl_` | the client: the camera, prediction, what it asks of the server | `cl_view`, `cl_fov`, `cl_updaterate` |
 | `r_` | the picture | `r_bloom`, `r_taa`, `r_scale`, `r_shadowsize` |
 | `s_` | the sound | `s_wind`, `s_effects`, `s_mute` |
 | `vid_` | the window and the display | `vid_width`, `vid_height`, `vid_vsync` |
