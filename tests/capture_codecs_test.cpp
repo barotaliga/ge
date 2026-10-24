@@ -41,7 +41,7 @@ std::vector<uint8_t> moving(int k) {
   for (int y = 0; y < kH; y++) {
     for (int x = 0; x < kW; x++) {
       const bool square = x >= 10 + 2 * k && x < 30 + 2 * k && y >= 20 && y < 40;
-      p[static_cast<size_t>(y * kW + x)] =
+      p[static_cast<size_t>(y) * kW + static_cast<size_t>(x)] =
           static_cast<uint8_t>(square ? 230 : 16 + (x + y + 3 * k) % 200);
     }
   }

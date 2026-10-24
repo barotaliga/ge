@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstdlib>
 #include <cstring>
 
@@ -312,7 +313,7 @@ bool OpusEncoder::encode_one(std::vector<Packet>& out, std::string& error) {
   p.ms = next_ms();
   out.push_back(std::move(p));
   packets_++;
-  held_.erase(held_.begin(), held_.begin() + 2 * kOpusPacketSamples);
+  held_.erase(held_.begin(), held_.begin() + std::ptrdiff_t{2} * kOpusPacketSamples);
   return true;
 }
 
@@ -343,7 +344,7 @@ bool OpusEncoder::finish(std::vector<Packet>& out, std::string& error) {
 
 struct OpusDecoder::Impl {
   ::OpusDecoder* dec = nullptr;
-  std::vector<float> pcm = std::vector<float>(2 * 5760);
+  std::vector<float> pcm = std::vector<float>(size_t{2} * 5760);
   ~Impl() {
     if (dec) opus_decoder_destroy(dec);
   }
@@ -376,7 +377,7 @@ bool OpusDecoder::decode(std::span<const uint8_t> packet, std::vector<float>& ou
     error = std::string("the Opus decoder refused a packet: ") + opus_strerror(n);
     return false;
   }
-  out.insert(out.end(), impl_->pcm.begin(), impl_->pcm.begin() + 2 * n);
+  out.insert(out.end(), impl_->pcm.begin(), impl_->pcm.begin() + std::ptrdiff_t{2} * n);
   return true;
 }
 
