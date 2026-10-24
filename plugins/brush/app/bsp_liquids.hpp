@@ -24,9 +24,18 @@ struct LiquidRows {
   double depth = 2;                                          // m under the top the volume reaches
   double lava_cover = 0.3;  // the share of the lava crusted over (the classic's lava is molten)
   double lava_plate = 0.8;  // m: a crust plate's size
-  // The slime drawn murky (a dark green ooze, scummed, a faint glow) like the classic maps', not
-  // the toxic row's bright opaque green.
+  // The slime drawn murky and grimy (a dark green ooze, scummed, dirtied, things afloat, a faint
+  // glow) like the classic maps', not the toxic row's bright opaque green; false: the row's look.
   bool murky_slime = true;
+  struct Grime {
+    double murk = 1;       // how thick the ooze is to see into: 0 clearish, 1 murky, 2 opaque
+    double scum = 0.35;    // the share a scum covers
+    double grime = 0.8;    // 0..1: silt and rot mottled dark over it
+    double debris = 1.5;   // floating bits a square metre
+    double film = 300;     // nm: an oily sheen's thickness (0 none)
+    double bubbles = 1.5;  // bubbles a square metre a second
+    double glow = 0.4;     // its own green light, a share of the murky slime's
+  } slime_grime;
   double room = 0.3;  // the light of a room round a roofed pool, a share of a white face's by day
 };
 
@@ -45,6 +54,10 @@ double open_sky_of(const Map& map, const LiquidPatch& patch);
 LiquidWorld liquid_world(const Scene& scene, const LiquidRows& rows, double wind = 3,
                          double from = 4.7);
 // Every body into the pass that draws it.
+// The room's light round the roofed pools, floored like the walls (bsp_draw.hpp's `minlight`, in
+// the lightmaps' units, times the renderer's brightness): sqrt(room^2 + (minlight brightness)^2).
+void light_rooms(render::Water& water, render::Liquids& liquids, const LiquidRows& rows,
+                 double minlight, double brightness);
 void add_bsp_liquids(gpu::Device& device, render::Water& water, render::Liquids& liquids,
                      const LiquidWorld& world, const LiquidRows& rows);
 

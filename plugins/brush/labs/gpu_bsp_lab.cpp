@@ -15,6 +15,7 @@
 // ge:skill brush render labs
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <memory>
 #include <string>
 #include <vector>
@@ -52,6 +53,7 @@ struct MapState {
   gr::Water water;
   gr::Liquids liquids;
   ba::LiquidWorld world;
+  ba::LiquidRows rows;
 };
 
 struct Frame {
@@ -111,6 +113,7 @@ gl::Picture draw(ge::gpu::Device& d, Frame& f, MapState& m, const gr::FrameView&
   const bool v2 = o.mode == ba::Mode::v2;
   for (auto& b : m.water.bodies) b.hidden = !v2;
   for (auto& b : m.liquids.bodies) b.hidden = !v2;
+  ba::light_rooms(m.water, m.liquids, m.rows, o.minlight, o.brightness);
   gr::prepare_water(d, m.water, v);
   gr::prepare_liquid(d, m.liquids, v);
   wgpu::CommandEncoder e = d.device.CreateCommandEncoder();
@@ -526,8 +529,20 @@ void run(gl::Lab& lab) {
   gr::PostSettings ps;
   ps.bloom = 0.05;
   gr::create_post(d, f.pipelines, f.post, f.layout, wgpu::TextureFormat::RGBA8Unorm, ps);
-  const ba::LiquidRows rows;
+  ba::LiquidRows rows;
+  ba::LiquidRows::Grime& g = rows.slime_grime;
+  const auto knob = [&](const char* name, double* v) {
+    if (!lab.arg(name).empty()) *v = lab.arg_num(name);
+  };
+  knob("murk", &g.murk);
+  knob("scum", &g.scum);
+  knob("grime", &g.grime);
+  knob("debris", &g.debris);
+  knob("film", &g.film);
+  knob("bubbles", &g.bubbles);
+  knob("glow", &g.glow);
   for (auto& m : maps) {
+    m->rows = rows;
     ba::create_bsp(d, f.pipelines, m->bsp, m->scene, f.layout);
     gr::create_water(d, f.pipelines, m->water, f.layout);
     gr::create_liquid(d, f.pipelines, m->liquids, f.layout);
@@ -570,6 +585,39 @@ void run(gl::Lab& lab) {
   if (lab.arg_num("brightness") > 0) {
     for (Way& way : ways) way.o.brightness = lab.arg_num("brightness");
   }
+  if (!lab.arg("minlight").empty()) {
+    for (Way& way : ways) way.o.minlight = lab.arg_num("minlight");
+  }
+  if (!lab.arg("bounce").empty()) {
+    for (Way& way : ways) way.o.bounce = lab.arg_num("bounce");
+  }
+  // The ladder: v2 lit in real time with neither the floor nor the bounce, then at each floor.
+  std::vector<Way> ladder;
+  std::vector<std::string> labels;  // the ladder's labels, alive while the ladder is drawn
+  if (!lab.arg("ladder").empty()) {
+    Way off = ways[2];
+    off.o.minlight = 0;
+    off.o.bounce = 0;
+    labels.push_back("NO FLOOR, NO BOUNCE");
+    ladder.push_back(off);
+    std::string list = lab.arg("ladder");
+    size_t at = 0;
+    while (at <= list.size()) {
+      size_t end = list.find(',', at);
+      if (end == std::string::npos) end = list.size();
+      // A rung: "<minlight>" or "<minlight>@<brightness>".
+      Way w2 = ways[2];
+      const std::string item = list.substr(at, end - at);
+      const size_t sep = item.find('@');
+      w2.o.minlight = std::strtod(item.substr(0, sep).c_str(), nullptr);
+      if (sep != std::string::npos) w2.o.brightness = std::strtod(item.c_str() + sep + 1, nullptr);
+      labels.push_back("MINLIGHT " + ls::fixed(w2.o.minlight, 2) + ", BRIGHTNESS " +
+                       ls::fixed(w2.o.brightness, 1));
+      ladder.push_back(w2);
+      at = end + 1;
+    }
+    for (size_t i = 0; i < ladder.size(); ++i) ladder[i].label = labels[i].c_str();
+  }
   for (const View& v : views) {
     if (!lab.arg("only").empty() && v.id.find(lab.arg("only")) == std::string::npos) continue;
     gr::FrameView fv;
@@ -599,6 +647,25 @@ void run(gl::Lab& lab) {
                {"heading", ls::fixed(v.heading / kDeg, 0)},
                {"pitch", ls::fixed(v.pitch / kDeg, 0)}}},
              sheet, Det::measured);
+    if (!ladder.empty()) {
+      std::vector<gl::Picture> rungs;
+      for (const Way& way : ladder) rungs.push_back(draw(d, f, m, fv, way.o));
+      const int n = int(rungs.size());
+      gl::Picture row = gl::create_picture(int(w) * n + 10 * (n + 1), int(h) + 30, {250, 250, 248});
+      for (int i = 0; i < n; ++i) {
+        const int ox = 10 + i * (int(w) + 10);
+        gl::draw_text(row, ox, 6, ladder[size_t(i)].label, {24, 26, 32});
+        ls::paste(row, rungs[size_t(i)], ox, 20);
+      }
+      lab.shot({v.id + "-ladder",
+                v.title + ": the floor of light",
+                v.caption + " V2 lit in real time: first with neither the floor nor the bounce, "
+                            "then at each floor of light, the baked light bouncing at its share.",
+                "The dark corners come up while the lit walls and the lamps' pools keep their "
+                "light.",
+                {}},
+               row, Det::measured);
+    }
     // The lights a real-time frame drew and shadowed.
     lab.metric(v.id + ".lights", double(m.bsp.frame_lights.size()), "count", Det::measured);
     lab.metric(v.id + ".shadowed", double(m.bsp.shadowed), "count", Det::measured);
@@ -626,7 +693,18 @@ const gl::LabSpec kSpec{
      {"shadowed", "32", "the nearest lights that cast shadows"},
      {"most", "160", "the lights a frame draws at most"},
      {"only", "", "draw only the views whose id holds this"},
-     {"brightness", "1.6", "a lightmap's 1 against a white face under the open day"}},
+     {"brightness", "2.0", "a lightmap's 1 against a white face under the open day"},
+     {"minlight", "0.3", "v2's soft floor of light, the lightmaps' units (r_minlight)"},
+     {"bounce", "0.35", "the baked light's share added to the real-time lights (r_bounce)"},
+     {"murk", "1", "the slime's murk: 0 clearish, 1 murky, 2 opaque"},
+     {"scum", "0.35", "the share of the slime a scum covers"},
+     {"grime", "0.8", "the slime's grime, 0..1: silt and rot mottled over it"},
+     {"debris", "1.5", "bits afloat on the slime a square metre"},
+     {"film", "300", "the slime's oily sheen, nm (0 none)"},
+     {"bubbles", "1.5", "the slime's bubbles a square metre a second"},
+     {"glow", "0.4", "the slime's own green light, a share of the murky slime's"},
+     {"ladder", "",
+      "rungs to draw each view at too, comma separated: <minlight> or <minlight>@<brightness>"}},
     "--width=160",
     run};
 GE_LAB(kSpec);

@@ -6,6 +6,7 @@
 #include "brush/app/bsp_liquids.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 #include "water/liquids.hpp"
 
@@ -66,6 +67,17 @@ LiquidWorld liquid_world(const Scene& scene, const LiquidRows& rows, double wind
   return out;
 }
 
+void light_rooms(render::Water& water, render::Liquids& liquids, const LiquidRows& rows,
+                 double minlight, double brightness) {
+  const double m = minlight * brightness;
+  const auto room = static_cast<float>(std::sqrt(rows.room * rows.room + m * m));
+  for (render::Water::Slot& s : water.bodies) {
+    s.draw.room = room;
+    s.staged.emission[3] = room;
+  }
+  for (render::Liquids::Slot& s : liquids.bodies) s.staged.flow[3] = room;
+}
+
 void add_bsp_liquids(gpu::Device& device, render::Water& water, render::Liquids& liquids,
                      const LiquidWorld& lw, const LiquidRows& rows) {
   const water::World& world = lw.world;
@@ -79,15 +91,20 @@ void add_bsp_liquids(gpu::Device& device, render::Water& water, render::Liquids&
       here.open_sky = lw.open[i];
       if (lw.kinds[i] == kSlime && rows.murky_slime) {
         render::SlimeLook& sl = here.slime;
-        sl.absorb = {90, 22, 180};
-        sl.scatter = {40, 40, 40};
-        sl.rough = 0.2;
-        sl.scum = 0.2;
-        sl.scum_albedo = {0.14, 0.18, 0.07};
-        sl.bubbles = 2;
+        const LiquidRows::Grime& g = rows.slime_grime;
+        const double k = 0.5 + g.murk;
+        sl.absorb = {45 * k, 24 * k, 190 * k};
+        sl.scatter = {40 * k, 40 * k, 40 * k};
+        sl.rough = 0.2 + 0.25 * g.grime;
+        sl.scum = g.scum;
+        sl.scum_albedo = {0.09, 0.085, 0.035};
+        sl.bubbles = g.bubbles;
         sl.bubble_size = 0.05;
-        sl.glow = {2, 12, 1};
+        sl.glow = {2 * g.glow, 12 * g.glow, 1 * g.glow};
         sl.pulse = 0.2;
+        sl.film = g.film;
+        sl.grime = g.grime;
+        sl.debris = g.debris;
       }
       if (lw.kinds[i] == kLava) {
         here.lava.cover = rows.lava_cover;

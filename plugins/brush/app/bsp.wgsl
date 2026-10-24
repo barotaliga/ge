@@ -27,6 +27,7 @@ struct Bsp {
   info: vec4f,   // mode (0 classic, 1 v2), lighting (0 lightmaps, 1 lights), lights, ambient
   info2: vec4f,  // time s, the cube face's size, the ortho map's size, the brightness
   sky: vec4f,    // the classic sky texture's rectangle
+  info3: vec4f,  // v2's soft floor of light (minlight), the baked light's share as bounce
   ortho: array<Job, 2>,  // the sun's map and the zenith's
 };
 
@@ -102,6 +103,11 @@ fn texel(st: vec2f, rect: vec4f, lod: f32) -> vec4f {
   var t = floor(st / s);
   t = t - size * floor(t / size);
   return textureLoad(atlas, vec2i(floor(rect.xy / s) + t), i32(k));
+}
+
+// V2's floor: no face darker than about `m`, a lit one nearly as it was (sqrt(e^2 + m^2)).
+fn floor_light(e: vec3f, m: f32) -> vec3f {
+  return sqrt(e * e + vec3f(m * m));
 }
 
 fn lightmap(lm: vec2f) -> vec3f {
@@ -208,6 +214,9 @@ fn fs_main(in: VsOut) -> FsOut {
 
   if (classic || bsp.info.y < 0.5) {
     var lit = lightmap(in.lm);
+    if (!classic) {
+      lit = floor_light(lit, bsp.info3.x);
+    }
     if (glows) {
       lit = max(lit, vec3f(1.0));
     }
@@ -246,6 +255,9 @@ fn fs_main(in: VsOut) -> FsOut {
       e += l.colour.rgb * lit;
     }
   }
+  // The light bounced round the room: the map's baked light (its light probes) at a share.
+  e += lightmap(in.lm) * bsp.info3.y;
+  e = floor_light(e, bsp.info3.x);
   var c = albedo * e * white;
   // A physical light: illuminance (lx) on the face to its luminance in the frame's units.
   c += albedo * phys / PI * frame.world.y / kSunLux;

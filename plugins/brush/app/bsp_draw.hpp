@@ -40,11 +40,17 @@ struct Options {
   Mode mode = Mode::v2;
   Lighting lighting = Lighting::lights;
   double ambient = 0.015;   // the light every face gets, the lightmaps' units
-  double brightness = 1.6;  // a lightmap's 1 against a white face under the open day
+  double brightness = 2.0;  // a lightmap's 1 against a white face under the open day
   double strength = 1;      // the point lights' strength against the classic's
   int shadowed = 32;        // the nearest lights that cast shadows
   int most = 160;           // the lights a frame draws at most (the nearest)
   bool lava_lights = true;  // the lava's glow lights the walls round it
+  // r_minlight: the light no face falls below, the lightmaps' units, as a soft floor
+  // (sqrt(e^2 + m^2)): a dark room comes up to about `minlight`, a lit one keeps its light.
+  double minlight = 0.3;
+  // r_bounce: the share of the map's baked light added to the real-time lights as the light
+  // bounced round the room (the lightmaps as light probes: the room's own light, not flat grey).
+  double bounce = 0.35;
 };
 
 inline constexpr uint32_t kCubeSize = 256;    // a cube face's texels a side
@@ -65,6 +71,7 @@ struct GpuBsp {
   float info[4];
   float info2[4];
   float sky[4];
+  float info3[4];  // the floor (minlight), the bounce
   GpuJob ortho[2];
 };
 

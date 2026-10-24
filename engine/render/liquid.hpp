@@ -80,6 +80,8 @@ struct SlimeLook {
   double bubbles = 0;         // bubbles a square metre a second
   double bubble_size = 0.04;  // m: a bubble's radius when it bursts
   double pulse = 0;           // the glow's slow pulse, a share of it
+  double grime = 0;           // 0..1: silt and rot mottled dark over the pool (a sewer's)
+  double debris = 0;          // floating bits (twigs, leaves, clumps) a square metre
 };
 
 struct LiquidLook {
@@ -111,7 +113,7 @@ struct LiquidGpuBody {
   float scatter[4];  // slime S
   float glow[4];     // slime's own light, cd/m^2; w: the pulse
   float slime0[4];   // rough, film nm, scum, bubbles
-  float slime1[4];   // bubble_size, 0, 0, 0
+  float slime1[4];   // bubble_size, grime, debris, 0
   float scum[4];     // the scum's albedo
   float table[kGlowEntries][4];  // the glow table, cd/m^2 rgb (water/glow.hpp)
 };

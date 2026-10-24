@@ -384,6 +384,7 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   set4(d.staged.info, o.mode == Mode::v2 ? 1 : 0, o.lighting == Lighting::lights ? 1 : 0,
        double(d.frame_lights.size()), o.ambient);
   set4(d.staged.info2, view.time_s, kCubeSize, kOrthoSize, o.brightness);
+  set4(d.staged.info3, o.minlight, o.lighting == Lighting::lights ? o.bounce : 0, 0, 0);
   if (s.sky_texture < s.map.textures.size()) {
     // The sky texture's rectangle: any vertex of a sky face carries it.
     for (size_t k = 0; k < s.vertices.size(); ++k) {

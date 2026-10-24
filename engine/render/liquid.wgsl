@@ -33,7 +33,7 @@ struct LiquidBody {
   scatter: vec4f,
   glow: vec4f,
   slime0: vec4f,  // rough, film nm, scum, bubbles
-  slime1: vec4f,  // bubble size
+  slime1: vec4f,  // bubble size, grime, debris a m^2
   scum: vec4f,
   table: array<vec4f, 32>,
 }
@@ -80,6 +80,9 @@ fn vs_main(@builtin(vertex_index) vid: u32) -> VertexOut {
   out.xz = xz;
   return out;
 }
+
+// A grimy pool's dirt: silt and rot, a dark brown.
+const kGrimeAlbedo = vec3f(0.05, 0.04, 0.025);
 
 // HASHES AND NOISE.
 fn hash2(p: vec2i) -> vec2f {
@@ -406,11 +409,56 @@ fn fs_main(in: VertexOut) -> FragmentOut {
                    (sun * max(dot(n0, frame.sun.xyz), 0.0) + sky_irradiance(n0) * open_sky + room * PI) /
                    PI;
     into = mix(into, scum_lit, scum_share);
+    // The grime: silt and rot mottled over the whole pool, darker than the scum and matte.
+    var cover = scum_share;
+    let light_flat = (sun * max(dot(n0, frame.sun.xyz), 0.0) + sky_irradiance(n0) * open_sky +
+                      room * PI) / PI;
+    let grime = body.slime1.y;
+    if (grime > 0.0) {
+      let g = fbm(drift * 2.3 + vec2f(5.1, 7.7)) * 0.6 + fbm(drift * 11.0) * 0.4;
+      let dirt = grime * smoothstep(0.55 - 0.5 * grime, 0.85 - 0.3 * grime, g);
+      let grime_albedo = mix(kGrimeAlbedo, body.scum.rgb, 0.3 * g);
+      into = mix(into, grime_albedo * light_flat, dirt * 0.95);
+      cover = max(cover, dirt * 0.8);
+    }
+    // The debris: twigs, leaves and clumps afloat, drifting with the surface; `slime1.z` a square
+    // metre's, each in its own cell, turned and stretched by its hash, faded under a pixel.
+    let debris = body.slime1.z;
+    if (debris > 0.0) {
+      let cell = inverseSqrt(debris);
+      let q = drift / cell;
+      let k = vec2i(floor(q));
+      var fleck = 0.0;
+      var fleck_shade = 0.0;
+      for (var dy = -1; dy <= 1; dy++) {
+        for (var dx = -1; dx <= 1; dx++) {
+          let kk = k + vec2i(dx, dy);
+          let h = hash2(kk);
+          let h2 = hash2(kk + vec2i(71, 13));
+          let centre = (vec2f(kk) + h) * cell;
+          let ang = h2.x * 6.2831853;
+          let axis = vec2f(cos(ang), sin(ang));
+          let rel = drift - centre;
+          let size = cell * (0.05 + 0.12 * h2.y);
+          let along = dot(rel, axis) / size;
+          let across = dot(rel, vec2f(-axis.y, axis.x)) / (size * (0.18 + 0.6 * h.y));
+          let r2 = along * along + across * across;
+          let inside = 1.0 - smoothstep(0.7, 1.0, r2);
+          if (inside > fleck) {
+            fleck = inside;
+            fleck_shade = h2.y;
+          }
+        }
+      }
+      let debris_albedo = mix(vec3f(0.035, 0.03, 0.02), vec3f(0.16, 0.12, 0.06), fleck_shade);
+      into = mix(into, debris_albedo * light_flat, fleck);
+      cover = max(cover, fleck);
+    }
     // The glow: its own light, pulsing slowly, brighter in the bubbles.
     let pulse = 1.0 + body.glow.w * (sin(t * 0.7 + fbm(in.xz * 0.3) * 6.0) * 0.5 + 0.6 * dome);
-    into += body.glow.rgb * pulse * (1.0 - scum_share) * frame.world.y / kSunLuxCd;
+    into += body.glow.rgb * pulse * (1.0 - cover) * frame.world.y / kSunLuxCd;
     // The reflection: the sky's, tinted by the film's interference where an oily film lies.
-    let rough = mix(body.slime0.x, 0.8, scum_share);
+    let rough = mix(body.slime0.x, 0.8, cover);
     let r = reflect(-v, n);
     var mirror = mix(room, sky_luminance(normalize(vec3f(r.x, max(r.y, 0.01), r.z))), open_sky);
     var tint = vec3f(1.0);
@@ -418,16 +466,16 @@ fn fs_main(in: VertexOut) -> FragmentOut {
     if (body.slime0.y > 0.0) {
       // The oil lies in patches, a few hundred nm thick, its colours a sheen over the reflection.
       let d = body.slime0.y * (0.6 + 0.8 * fbm(drift * 0.35 + vec2f(t * 0.01, 0.0)));
-      let oily = smoothstep(0.42, 0.62, fbm(drift * 0.12 + vec2f(9.1, 3.3))) * (1.0 - scum_share);
+      let oily = smoothstep(0.42, 0.62, fbm(drift * 0.12 + vec2f(9.1, 3.3))) * (1.0 - cover);
       let film = film_tint(d, cos_v);
       tint = mix(vec3f(1.0), film, 0.55 * oily);
       tint_spec = mix(vec3f(1.0), film, 0.3 * oily);
     }
     let f = fresnel(cos_v, 0.03) * (1.0 - 0.8 * rough);
-    let spec = sun * ggx(n, v, frame.sun.xyz, max(rough, 0.03), 0.03) * (1.0 - scum_share);
+    let spec = sun * ggx(n, v, frame.sun.xyz, max(rough, 0.03), 0.03) * (1.0 - cover);
     // A bubble's wet skin is smoother than the pool's surface: a small sharp highlight.
-    let sparkle = sun * ggx(n, v, frame.sun.xyz, 0.05, 0.03) * dome * (1.0 - scum_share);
-    c = mix(into, mirror * tint, f * (1.0 - scum_share)) + (spec + sparkle) * tint_spec;
+    let sparkle = sun * ggx(n, v, frame.sun.xyz, 0.05, 0.03) * dome * (1.0 - cover);
+    c = mix(into, mirror * tint, f * (1.0 - cover)) + (spec + sparkle) * tint_spec;
   }
   c = mix(textureLoad(scene_colour, pixel, 0).rgb, c, feather);
   var out: FragmentOut;

@@ -118,7 +118,7 @@ void stage_body(Liquids::Slot& slot, const water::Body& body, const LiquidLook& 
   put(b.scatter, s.scatter);
   put(b.glow, s.glow, s.pulse);
   put(b.slime0, s.rough, s.film, s.scum, s.bubbles);
-  put(b.slime1, s.bubble_size, 0, 0, 0);
+  put(b.slime1, s.bubble_size, s.grime, s.debris, 0);
   put(b.scum, s.scum_albedo);
   const std::vector<water::Rgb> table = water::glow_table(kGlowLo, kGlowHi, kGlowEntries, 1.0);
   for (int i = 0; i < kGlowEntries; ++i) put(b.table[i], table[static_cast<size_t>(i)]);
