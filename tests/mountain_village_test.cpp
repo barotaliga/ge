@@ -38,8 +38,15 @@ constexpr const char* kGolden = "tests/golden/mountain_village.txt";
 constexpr int kVersion = 10;
 
 bool env_set(const char* name) {
-  const char* v = std::getenv(name);
-  return v != nullptr && *v != '\0' && std::string(v) != "0";
+#ifdef _MSC_VER
+  char* v = nullptr;
+  size_t n = 0;
+  const bool set = _dupenv_s(&v, &n, name) == 0 && v != nullptr;
+  std::free(v);
+  return set;
+#else
+  return std::getenv(name) != nullptr;
+#endif
 }
 
 // The ski area each seed builds, built once.
