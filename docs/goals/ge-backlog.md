@@ -61,7 +61,6 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge lab sweep <id> --set=<const>=a,b,c` (done: one constexpr rewritten to each value, the labs rebuilt and run, every metric side by side, the source put back; next, a scenario row's own numbers, such as a scripted hand's timings, swept the same way, and `--draws=N` over a range `a..b`, a Monte Carlo of one constant with each metric's spread; and a range form, `--set=<const>=a..b/n`, charting each metric against the knob)
 - `ge ci <pr> --wait` (block until the checks finish or the PR conflicts, then answer as `ge ci` does: one call where a thread now schedules check-ins every 15 minutes)
 - `ge ci <pr> --wait[=<minutes>]` (done: once a minute until a check fails, the PR conflicts or every check finished, at most an hour; with `--merge` the green answer is merged)
-- `ge lab sweep <id> --set=<const>=a,b,c` (done: one constexpr rewritten to each value, the labs rebuilt and run, every metric side by side, the source put back; next, a scenario row's own numbers, such as a scripted hand's timings, swept the same way, and `--draws=N` over a range `a..b`, a Monte Carlo of one constant with each metric's spread)
 - `ge lab sweep <id> --flag=<flag>=a,b,c` (done: one of the lab's own flags at each value, the labs built once, the same table; the hours of a day over a picture lab)
 - `ge lab --split=N`
 - `ge job run\|status\|log` (a long run in the background)
@@ -114,6 +113,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge bsp info|ents|shot <file>` (a classic BSP map's lumps and counts, its entities as a table, one view rendered, without the levels lab)
 - `ge bsp probe <pak> <map> [--at=<x,y,z>]` (a map's sky and liquid surfaces, each with its level, centre and area, and a point's leaf contents and column: camera views picked without putting the eye in a wall)
 - `ge texture show <recipe> [--ref=<photo>]` (one texture recipe baked and shown at its sizes and tilings, beside a reference photo when given, without the textures lab)
+- `ge texture match --sweep-seeds=<a..b> --only=<name>` (a pinned recipe tried at every seed in a range, each seed's measured evidence in one table: courses a tile, pieces a course, the line's direction, the colour mismatches; `ge lab sweep` reaches a lab's flags, not this command, so today it is a shell loop)
 
 ## Measuring
 
