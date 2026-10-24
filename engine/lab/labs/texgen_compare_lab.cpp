@@ -105,8 +105,8 @@ void run(lab::Lab& lab) {
     lab.metric(name + ".distance", dist, "count");
 
     const int gap = 8, label = 14;
-    lab::Picture sheet = lab::create_picture(3 * panel + 4 * gap, panel + label + 2 * gap + 12,
-                                             {24, 24, 26});
+    lab::Picture sheet =
+        lab::create_picture(3 * panel + 4 * gap, panel + label + 2 * gap + 12, {24, 24, 26});
     const char* titles[3] = {"REFERENCE", "OURS", "OURS LIT"};
     const lab::Picture shots[3] = {tiled(ref, panel), tiled(ours, panel),
                                    texgen::lit_preview(maps, panel, 2)};

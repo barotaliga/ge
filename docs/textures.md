@@ -79,6 +79,33 @@ The look in numbers (`look.hpp`): brightness, contrast, saturation, warmth, grai
 colours, and a distance between two looks. It is how far a recipe is from its reference in
 `texgen-compare`, and an agent's guide for which key to turn.
 
+## Replacing a level's painted textures
+
+A renderer that loads a map with hand-painted textures can offer to draw procedural ones in
+their place, as an option (`replace.hpp`). For each texture:
+
+1. **Measure it** (`likeness_of`): its look; which way its lines run (the share of texels with a
+   hard step across against down: bricks step down far more than across, planks the other way);
+   and how often its pattern repeats each way, the strongest peak of the luma's wrapped
+   autocorrelation as a share of the tile, with how strong it is.
+2. **Pick the nearest recipe** (`Matcher`, built once from a library with `make_matcher`, each
+   recipe measured off two seeds at 64 px). The ranking leaves the colour numbers out, since the
+   colour is put back in step 4, so a brown brick still finds the brick recipe. Nothing nearer
+   than `max_distance` (1.6): the texture keeps its own pixels.
+3. **Bake it** at the next power of two over the texture's size, under a seed of the texture's
+   name, and resize it to the texture's size. An animation's frames (`+0name`, `+1name`) share
+   one seed so they do not flicker between variants.
+4. **Recolour it**: each channel's mean and spread moved onto the original's, the spread's ratio
+   kept within a factor of two, so the room keeps its palette and brightness.
+5. **Keep its lights**: the texels the original marks as full-bright stay exactly as they were,
+   so a lamp still glows where the map put it.
+
+A name starting with `*` (a liquid) or `sky` is never replaced; a renderer draws those itself.
+`replace_indexed` takes a paletted texture and its 768-byte palette, and treats indices from 224
+up as full-bright. The match and the bake are pure functions of the texture and the library.
+The `texgen-replace` lab draws every texture beside its replacement, with the recipe picked and
+the distance.
+
 ## The noise kinds
 
 `value`, `perlin` (gradient), `cells` (the distance to the nearest point), `edges` (F2 - F1:
@@ -167,6 +194,7 @@ ge texture bake textures/brick_wall.tex --ref="seed=12 wear=0.8" [--size=256] [-
 | `texgen-noise` | Every noise kind at one octave, at five octaves, and at five octaves warped, two tiles across, with its range and a periodicity check |
 | `texgen-cost` | Each library recipe's bake time at 256, 512 and 1024 px, and each layer kind's cost |
 | `texgen-compare` | Each recipe beside the reference texture it is steered toward, kept outside the tree: both two tiles across at the nearest pixel, ours lit, and both looks in numbers with their distance |
+| `texgen-replace` | A level's textures, kept outside the tree, each beside the procedural replacement the likeness matcher picks, with the recipe, the distance and each texture's repeat; with no `--refs`, the library's own bakes tinted |
 
 The lit preview (`preview.hpp`) shades the maps on the CPU. It uses one light from the top
 left, ambient light scaled by the occlusion, a Blinn-Phong highlight sharpened by smoothness

@@ -1,8 +1,9 @@
 // The pattern painters: bricks and tiles in their joints, planks with grain and knots, metal
 // panels with seams and rivets, uneven dressed blocks (ashlar), a field of studs (domes,
-// diamond-plate bars, pyramids or holes) and overlapping scales. Each cuts its structure into the height (proud faces, sunken
-// joints, rounded edges) so the life layers after it find joints to fill and edges to wear,
-// and gives every piece its own colour off a hash of its place, so the tile still repeats.
+// diamond-plate bars, pyramids or holes) and overlapping scales. Each cuts its structure into the
+// height (proud faces, sunken joints, rounded edges) so the life layers after it find joints to
+// fill and edges to wear, and gives every piece its own colour off a hash of its place, so the tile
+// still repeats.
 //
 // ge:summary Pattern painters: bricks, tiles, planks, riveted panels, blocks, studs, scales
 // ge:keywords pattern bricks tiles mortar grout planks wood grain knots panels seams rivets
@@ -134,8 +135,8 @@ void paint_panels(Surface& s, const Args& a) {
       };
       const double dx1 = ex - inset, dy1 = along(py, wy);
       const double dx2 = along(px, wx), dy2 = ey - inset;
-      const double r2 = std::min(on_x ? dx1 * dx1 + dy1 * dy1 : 1e9,
-                                 on_y ? dx2 * dx2 + dy2 * dy2 : 1e9);
+      const double r2 =
+          std::min(on_x ? dx1 * dx1 + dy1 * dy1 : 1e9, on_y ? dx2 * dx2 + dy2 * dy2 : 1e9);
       const double rd = std::sqrt(r2) / rr;
       rivet = rd < 1 ? std::sqrt(1 - rd * rd) : 0;
     }
@@ -156,8 +157,8 @@ namespace {
 std::vector<double> cuts(int n, double vary, uint32_t a, uint32_t seed) {
   std::vector<double> b(static_cast<size_t>(n) + 1, 0.0);
   for (int k = 0; k < n; ++k)
-    b[static_cast<size_t>(k) + 1] =
-        b[static_cast<size_t>(k)] + 1 + vary * 1.6 * (hash01(a, static_cast<uint32_t>(k), seed) - 0.5);
+    b[static_cast<size_t>(k) + 1] = b[static_cast<size_t>(k)] + 1 +
+                                    vary * 1.6 * (hash01(a, static_cast<uint32_t>(k), seed) - 0.5);
   for (double& x : b) x /= b.back();
   return b;
 }
@@ -186,7 +187,8 @@ void paint_blocks(Surface& s, const Args& a) {
   for (int r = 0; r < rows; ++r) {
     const auto rr = static_cast<uint32_t>(r);
     const int n = std::max(
-        1, static_cast<int>(std::floor(cols + cols * vary_size * (hash01(rr, 1, a.seed + 2) - 0.5) + 0.5)));
+        1, static_cast<int>(
+               std::floor(cols + cols * vary_size * (hash01(rr, 1, a.seed + 2) - 0.5) + 0.5)));
     block[static_cast<size_t>(r)] = cuts(n, vary_size, rr + 1, a.seed + 3);
     shift[static_cast<size_t>(r)] = hash01(rr, 2, a.seed + 4);
   }
@@ -272,7 +274,8 @@ void paint_scales(Surface& s, const Args& a) {
     // The scale on top is the lowest row whose disc holds the texel: rows below lie over it.
     int hit_row = 0, hit_col = 0;
     double hit = -1;
-    for (int j = static_cast<int>(std::floor(gy + reach)); j >= static_cast<int>(std::floor(gy - reach)); --j) {
+    for (int j = static_cast<int>(std::floor(gy + reach));
+         j >= static_cast<int>(std::floor(gy - reach)); --j) {
       const double off = (j & 1) != 0 ? 0.5 : 0.0;
       const double ci = std::floor(gx - off + 0.5) + off;
       // Within a row the nearest centre wins, so neighbours meet on the line between them.
