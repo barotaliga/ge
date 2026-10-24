@@ -327,7 +327,11 @@ fn fs_main(in: VertexOut) -> FragmentOut {
     let air = transmittance_to_top(transmittance_lut, linear_clamp, r, d.y);
     let cel = celestial(d);
     let bg = dot(colour, kLuma);
-    colour += (stars(cel, bg, px) + galaxy(cel)) * air * clear + moon_disc(d, r, px) * clear;
+    // The disc hides the stars behind it; the post pass leaves its colour to the cones, so the
+    // sky in front of it is given to the rods here (frame.wgsl's night_vision).
+    let cover = on_moon(d);
+    colour += (stars(cel, bg, px) + galaxy(cel)) * air * clear * (1.0 - cover);
+    colour = mix(colour, rods(colour), cover) + moon_disc(d, r, px) * clear;
   } else if (frame.moon_light.z > 0.0) {
     let r = kGroundRadius + max(frame.eye.w, 0.0);
     colour += moon_disc(d, r, px) * (1.0 - frame.weather.y);

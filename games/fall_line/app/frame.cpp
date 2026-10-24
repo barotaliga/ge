@@ -440,6 +440,12 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   }
   {
     GE_ZONE("frame.instances");
+    r::SeeThrough see;
+    if (scene.subject) {
+      see.on = true;
+      for (int k = 0; k < 3; ++k) see.subject[k] = (*scene.subject)[static_cast<size_t>(k)];
+    }
+    r::set_see_through(f.forest, see);
     for (r::InstanceFamily* family : f.families) {
       r::prepare_family(device, *family, view, f.targets.height, occlusion);
     }
