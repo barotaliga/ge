@@ -145,6 +145,28 @@ riding out at the group speed with its crests at the phase speed, thinning as 1/
 the simulation tier, so a rider is lifted by another's wake, and the V opens at the Kelvin
 angle (about 19.5°) by itself.
 
+**Built (M24i, `engine/water/wake.hpp`).** A ring is the deep-water answer to an impulse at a
+point (the Cauchy–Poisson ring): at a distance r and a time τ after it, its local wave has
+k = gτ²/4r², so its waves run out at their group speed, the long ones first, and its height is
+the volume pushed aside times k/(√2 π r), times its source's spectrum exp(−k²b²/4) for a source
+b m across (a body makes few waves much shorter than itself). The formula is a far field, so a
+ring's first half turn of phase behind its front is faded in. `wake_trail` sets a ring off under
+a moving hull each time it has run a third of the shortest wave kept, which is an eighth of the
+transverse wave 2πU²/g: the DIVERGING waves run from two thirds of the transverse wave at the arms
+to ever shorter toward the track, so the floor decides how much of them is drawn, and rings a third
+of a wave apart are what keeps the sum from aliasing into ridges along the track (a slow hull sets
+off rings closer together than a fast one). Each ring carries the beam times the draught times
+the distance run, and its source is a tenth of the hull's length; `splash_ring` sets off one for
+a splash. Summed, the rings make Kelvin's pattern: transverse waves curving across the track and
+short diverging crests feathered outward along both arms (the `float` lab draws Kelvin's crest
+lines over the plan). The arms' outer edge, where the waves fall to half their highest, is at
+19.9° for a 4 m hull at 3 m/s (held within 2° by `tests/water_wake_test.cpp`), narrowing at higher
+Froude numbers (15.2° at 6 m/s), as wakes measured on real hulls do. A first version kept no wave
+shorter than half the hull: only the transverse waves survived, and the wake read as arcs across
+the track with nothing along its arms. The rings live in `World::wakes`, each on its body, faded
+over the last third of their life; `sample` adds their height, slope and orbital velocity to a
+lake's or a sea's, so a float rides on them.
+
 ## Floating (`engine/water/float`, M24c)
 
 A floating body is a set of **probes**: spheres (or boxes) with a volume each, fixed in the
@@ -385,6 +407,21 @@ never stretches), faster mid-stream; the waterfall's curtain along the sheet's p
 streaks running down it, mist and spray from the engine's particle pool, foam where it lands;
 splashes from the splash events; wakes.
 
+**Built (M24i, `engine/render/water_stream.hpp`).** The water pass draws a body's wake rings
+with its waves, each kept by the vertex and the pixel the way a wave is. After the still bodies
+it draws the moving water, built on the CPU each frame from the simulation: a channel's ribbon
+(nine vertices bank to bank every metre down its line, on the surface `sample` reports), a flow
+region's wet cells, and every falling sheet as a curtain along its ballistic path from the lip to
+where it lands. The surface's ripples are read through a flow map in two phases (1.6 s a cycle),
+rougher where the water runs faster; foam is lace cut to a share that rises where the water runs
+fast and shallow, where the flow is supercritical and round where a sheet lands. The curtain is
+aerated white with streaks running down it at the sheet's speed, lit as a face tipped up to the
+sky so it reads white with the sun behind it. `waterfall_spray` throws about 60 drops a second for
+every m³/s landing (six in ten a fine mist that drifts, the rest spray), and `splash_spray` a
+crown of drops for a splash, both into the particle pool (`render/particles.hpp`) off the
+caller's `core::Rng`. The still and the moving water share one light,
+`render/wgsl/water_light.wgsl`'s `shade_water`.
+
 **Built (M24h, `engine/render/underwater.hpp`).** When the eye is under a body's level and inside
 its box (`Water::eye_under`), the `water.under` pass redraws the frame from the water's copies:
 the scene fades by the body's beam attenuation into its veil (`Optics::veil`, lit by the day
@@ -499,11 +536,11 @@ never read back by the simulation.
 | `wind` | picture | M24a | The gust series for three grounds with the intensity asked and measured and the gust factor, the log profile over each ground, a sheltered field's plan with a downwash and a whirl, the sources' decay (the mountain's wind is held bit for bit by its golden) |
 | `waves` | picture | M24b | The spectrum for a sweep of winds and fetches against the growth laws, the components laid, the height series at a point (measured Hs and Tp against the asked ones), plan maps of the surface, the breaking shares |
 | `fetch` | picture | M24b | A body's fetch and its sea per point, for a lake, a fjord, a coast |
-| `float` | scenario | M24c | A box, a log, a ball, a hull and a sled skipping: immersion, heave and its period against theory, the drift on a current |
+| `float` | scenario | M24c, M24i | A box, a log, a ball, a hull and a sled skipping: immersion, heave and its period against theory, the drift on a current; a hull's wake in plan at two speeds with Kelvin's crest lines over it, and its arms' angle measured at four speeds |
 | `swim` | scenario | M24d | Every preset side by side: the classic's scripted trajectories, the idle sink, the jump out; the clothed skier's sink over minutes, the cold's stages; the default swimmer |
 | `water-colour` | picture | M24e | Every look's swatches over depth and bed, in sun and shade, from above and below; visibility per look |
 | `flow` | picture | M24f | Dam break against the analytic solution, a basin emptying through a breach against Torricelli, a river to steady state, a waterfall's sheet; depth filmstrips; the volume held |
-| `gpu-water` | picture | M24g, M24g2, M24i | Named views: the calm mirror, a windy lake, the sea at several Beaufort forces, surf on a beach, a river, a waterfall, sunset glitter, night, rain; the distance-band diff |
+| `gpu-water` | picture | M24g, M24g2, M24i | Named views: the calm mirror, a windy lake, the sea at several Beaufort forces, surf on a beach, a boat's wake from behind and from the side, crates dropped in, a river, a waterfall, sunset glitter, night, rain; the distance-band diff |
 | `lake` | picture | M24g, M24h, M24l | Fall Line's own frame with a tarn on a seed: from the shore, from over it, into the sun, in a fresh wind, at the day's end, under it and looking up from under it |
 | `gpu-underwater` | picture | M24h, M24h2 | Every look's view round a scene under water, the presets, Snell's window measured, a dive through the surface; then the caustics and the waterline split |
 | `water-lod` | picture | M24f, M24g | The tiers round an actor and round the camera as maps; a flow region coarsened and refined with its volume held; the picture diff per distance band across a slow fly-out (no band pops); the cost against distance |
