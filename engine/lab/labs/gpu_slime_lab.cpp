@@ -73,7 +73,10 @@ void run(gl::Lab& lab) {
       lab.fail("no GPU device, and GE_GPU_REQUIRE=1",
                "Install Mesa's Vulkan drivers (apt install mesa-vulkan-drivers). Skill: gpu.");
     }
+    // The same deterministic numbers as a run with pictures, so the digest is the same on every row.
     lab.note("No GPU adapter on this machine: no pictures.");
+    ls::placeholders(lab, {"looks", "close", "glow", "gel", "gale"});
+    ls::checked(lab, 0, 0);
     return;
   }
   std::vector<std::unique_ptr<ge::gpu::Device>> devices;

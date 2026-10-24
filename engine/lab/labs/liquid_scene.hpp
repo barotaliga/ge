@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <initializer_list>
 #include <string>
 #include <vector>
 
@@ -247,6 +248,18 @@ inline double changed(const gl::Picture& a, const gl::Picture& b) {
     n += dmax > 6;
   }
   return static_cast<double>(n) * 4 / static_cast<double>(a.rgba.size());
+}
+
+// A machine with no GPU adapter: a placeholder for each of the lab's shots, by the same ids in the
+// same order (a shot's id is in the digest even when its picture is measured), so the digest is
+// the same on every row.
+inline void placeholders(gl::Lab& lab, std::initializer_list<const char*> ids) {
+  for (const char* id : ids) {
+    gl::Picture none = gl::create_picture(160, 90, {40, 40, 48});
+    gl::draw_text(none, 4, 4, "NO GPU ADAPTER", {230, 230, 230});
+    lab.shot({id, "NO GPU ADAPTER", "This machine has no GPU adapter.", "nothing", {}}, none,
+             gl::Det::measured);
+  }
 }
 
 // GPU errors and pipelines made after the load, failed with the next action.

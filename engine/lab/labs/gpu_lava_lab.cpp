@@ -61,6 +61,19 @@ gl::Picture strip(const std::vector<gl::Picture>& pics, const std::vector<std::s
   return sheet;
 }
 
+// THE GLOW'S NUMBERS: the black body's luminance by temperature (no GPU needed).
+void glow_table(gl::Lab& lab) {
+  gl::LabTable table{
+      "A black body's glow (water/glow.hpp)", {"T (C)", "luminance (cd/m^2)", "r", "g", "b"}, {}};
+  for (const double c : {500.0, 600.0, 700.0, 800.0, 900.0, 1000.0, 1100.0, 1150.0, 1200.0}) {
+    const gw::Glow g = gw::glow_of(c + 273.15, 0.9);
+    table.rows.push_back({ls::fixed(c, 0), ls::fixed(g.luminance, 3), ls::fixed(g.colour.r, 3),
+                          ls::fixed(g.colour.g, 3), ls::fixed(g.colour.b, 3)});
+    lab.metric("glow." + ls::fixed(c, 0), g.luminance, "cd/m^2");
+  }
+  lab.table(table);
+}
+
 void run(gl::Lab& lab) {
   const uint32_t w = static_cast<uint32_t>(lab.arg_num("width"));
   const uint32_t h = w * 9 / 16;
@@ -70,7 +83,11 @@ void run(gl::Lab& lab) {
       lab.fail("no GPU device, and GE_GPU_REQUIRE=1",
                "Install Mesa's Vulkan drivers (apt install mesa-vulkan-drivers). Skill: gpu.");
     }
+    // The same deterministic numbers as a run with pictures, so the digest is the same on every row.
     lab.note("No GPU adapter on this machine: no pictures.");
+    ls::placeholders(lab, {"day", "dusk", "night", "cover", "close", "flow", "looks"});
+    glow_table(lab);
+    ls::checked(lab, 0, 0);
     return;
   }
   std::vector<std::unique_ptr<ge::gpu::Device>> devices;
@@ -233,18 +250,7 @@ void run(gl::Lab& lab) {
               {}},
              strip(pics, labels, 2), Det::measured);
   }
-  // THE GLOW'S NUMBERS: the black body's luminance by temperature.
-  {
-    gl::LabTable table{
-        "A black body's glow (water/glow.hpp)", {"T (C)", "luminance (cd/m^2)", "r", "g", "b"}, {}};
-    for (const double c : {500.0, 600.0, 700.0, 800.0, 900.0, 1000.0, 1100.0, 1150.0, 1200.0}) {
-      const gw::Glow g = gw::glow_of(c + 273.15, 0.9);
-      table.rows.push_back({ls::fixed(c, 0), ls::fixed(g.luminance, 3), ls::fixed(g.colour.r, 3),
-                            ls::fixed(g.colour.g, 3), ls::fixed(g.colour.b, 3)});
-      lab.metric("glow." + ls::fixed(c, 0), g.luminance, "cd/m^2");
-    }
-    lab.table(table);
-  }
+  glow_table(lab);
   int errors = 0, late = 0;
   for (const auto& dev : devices) {
     errors += static_cast<int>(dev->errors.load());
