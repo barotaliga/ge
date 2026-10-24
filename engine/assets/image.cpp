@@ -68,13 +68,14 @@ std::optional<Image> decode_png(std::span<const uint8_t> bytes) {
                  : colour == 0 ? 1
                  : colour == 3 ? 1
                                : 0;
-      const bool depth_ok = indexed ? (depth == 1 || depth == 2 || depth == 4 || depth == 8)
-                                    : depth == 8;
+      const bool depth_ok =
+          indexed ? (depth == 1 || depth == 2 || depth == 4 || depth == 8) : depth == 8;
       if (!depth_ok || channels == 0 || interlace != 0) return {};
     } else if (std::equal(type, type + 4, "PLTE")) {
       if (len % 3 != 0) return {};
       palette.clear();
-      for (uint32_t i = 0; i + 2 < len; i += 3) palette.insert(palette.end(), {data[i], data[i + 1], data[i + 2], 255});
+      for (uint32_t i = 0; i + 2 < len; i += 3)
+        palette.insert(palette.end(), {data[i], data[i + 1], data[i + 2], 255});
     } else if (std::equal(type, type + 4, "tRNS")) {
       if (indexed) {
         for (uint32_t i = 0; i < len && size_t{i} * 4 + 3 < palette.size(); ++i)
@@ -157,15 +158,13 @@ std::optional<Image> decode_png(std::span<const uint8_t> bytes) {
 const uint8_t* texel(const Image& image, float u, float v) {
   const float fu = u - std::floor(u), fv = v - std::floor(v);
   const int x = std::min(image.width - 1, static_cast<int>(fu * static_cast<float>(image.width)));
-  const int y =
-      std::min(image.height - 1, static_cast<int>(fv * static_cast<float>(image.height)));
+  const int y = std::min(image.height - 1, static_cast<int>(fv * static_cast<float>(image.height)));
   return &image.rgba[(size_t(y) * size_t(image.width) + size_t(x)) * 4];
 }
 
 float srgb_to_linear(uint8_t c) {
   const float s = static_cast<float>(c) / 255.0f;
-  return s <= 0.04045f ? s / 12.92f
-                       : static_cast<float>(core::libm::pow((s + 0.055) / 1.055, 2.4));
+  return s <= 0.04045f ? s / 12.92f : static_cast<float>(core::libm::pow((s + 0.055) / 1.055, 2.4));
 }
 
 }  // namespace ge::assets

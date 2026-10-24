@@ -9,8 +9,8 @@
 #include <string>
 #include <vector>
 
-#include "check.hpp"
 #include "assets/inflate.hpp"
+#include "check.hpp"
 #include "lab/png.hpp"
 #include "lab/raster.hpp"
 

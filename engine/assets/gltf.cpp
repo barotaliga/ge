@@ -329,7 +329,7 @@ struct Loader {
     int texcoord = 0;
     float xf[6] = {1, 0, 0, 0, 1, 0};
   };
-  std::map<cgltf_size, std::optional<Image>> images;      // decoded once an image
+  std::map<cgltf_size, std::optional<Image>> images;     // decoded once an image
   std::map<std::tuple<int, uint32_t>, int> baked_parts;  // (source part, sRGB colour) to part
 
   const Image* image_of(const cgltf_image* img) {
@@ -338,14 +338,16 @@ struct Loader {
     if (it != images.end()) return it->second ? &*it->second : nullptr;
     std::optional<Image> out;
     if (!img->buffer_view) {
-      note("a texture outside the file's buffers (a URI image) is skipped: its base colour factor "
-           "is used");
+      note(
+          "a texture outside the file's buffers (a URI image) is skipped: its base colour factor "
+          "is used");
     } else {
       const uint8_t* bytes = cgltf_buffer_view_data(img->buffer_view);
       out = bytes ? decode_png({bytes, img->buffer_view->size}) : std::nullopt;
       if (!out) {
-        note("a texture that is not an 8-bit PNG (a JPEG, a 16-bit or interlaced PNG) is "
-             "skipped: its base colour factor is used");
+        note(
+            "a texture that is not an 8-bit PNG (a JPEG, a 16-bit or interlaced PNG) is "
+            "skipped: its base colour factor is used");
       }
     }
     return images.emplace(i, std::move(out)).first->second ? &*images[i] : nullptr;
@@ -366,7 +368,7 @@ struct Loader {
       // KHR_texture_transform: scaled, then rotated, then offset.
       const auto c = static_cast<float>(core::libm::cos(x.rotation)),
                  s = static_cast<float>(core::libm::sin(x.rotation));
-      const float xf[6] = {c * x.scale[0], s * x.scale[1],  x.offset[0],
+      const float xf[6] = {c * x.scale[0],  s * x.scale[1], x.offset[0],
                            -s * x.scale[0], c * x.scale[1], x.offset[1]};
       std::copy(xf, xf + 6, t.xf);
     }
@@ -445,12 +447,12 @@ struct Loader {
         auto found = copies.find(key);
         if (found == copies.end()) {
           const uint32_t n = mesh.vertex_count();
-          mesh.positions.insert(mesh.positions.end(), {mesh.positions[size_t{v} * 3],
-                                                       mesh.positions[size_t{v} * 3 + 1],
-                                                       mesh.positions[size_t{v} * 3 + 2]});
-          mesh.normals.insert(mesh.normals.end(), {mesh.normals[size_t{v} * 3],
-                                                   mesh.normals[size_t{v} * 3 + 1],
-                                                   mesh.normals[size_t{v} * 3 + 2]});
+          mesh.positions.insert(mesh.positions.end(),
+                                {mesh.positions[size_t{v} * 3], mesh.positions[size_t{v} * 3 + 1],
+                                 mesh.positions[size_t{v} * 3 + 2]});
+          mesh.normals.insert(mesh.normals.end(),
+                              {mesh.normals[size_t{v} * 3], mesh.normals[size_t{v} * 3 + 1],
+                               mesh.normals[size_t{v} * 3 + 2]});
           for (int j = 0; j < kJointsPerVertex; ++j) {
             mesh.joints.push_back(mesh.joints[size_t{v} * 4 + static_cast<size_t>(j)]);
             mesh.weights.push_back(mesh.weights[size_t{v} * 4 + static_cast<size_t>(j)]);
