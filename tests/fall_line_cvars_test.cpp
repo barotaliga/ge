@@ -33,8 +33,11 @@ TEST(a_cfg_reaches_the_settings_after_the_latch) {
       "sv_seed 7; r_scale 9");
   CHECK(s.volume == 0.5f && s.view == "vista" && s.seed == 7);
   CHECK(s.bloom == 0.04 && s.width == 1280);  // latched: the frame and window are made once
+  c.execute("r_clouds 0.5");
+  CHECK(s.clouds == 1);
   c.cvars().apply_latched();
   CHECK(s.bloom == 0 && s.shadow_size == 4096 && s.width == 1920 && s.scale == 2);
+  CHECK(s.clouds == 0.5);
   CHECK(c.problems().empty());
 }
 
