@@ -70,6 +70,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 
 - `ge record` (done: a run as an MP4, WebM or GIF and a contact sheet of timestamped stills, its resolution, frame rate, speed, range and encoder quality; and `--gpu`, the game's registered renderer drawing each frame headless in a mode, Fall Line's `lit`, `wireframe`, `depth` and `overlay` from a chase camera, a high chase or the named views; `ge shot --gpu` the same still)
 - `ge state --entities=<kind> --at=<t>`
+- `ge stage --put=skier --beside=<entity:id> --off=<m> --speed=<m/s>` (the player set down mid-run beside a live entity, at an offset and a speed, to stage a meeting without scripting a run up to it)
 - `ge sim --human --compare=<tag>` (the humanness report beside a kept run's, each metric's move)
 - `ge sim find <seed> --when "<predicate>"`
 - `ge sim --stalls`
