@@ -42,6 +42,7 @@ router's Skills table and the directories against each other.
 | `agent-interface` | Diagnostics as prompts, consumer skills, the `ge` CLI |
 | `save` | Saves: the save file and its chunks, the state described once, versions, the save labs, `ge save` |
 | `bots` | What a bot decides: `engine/ai`, the decision record, `ge why`, making a bot more human |
+| `replay` | Watching a run again: a game's clone, the keyframes, the player's seek, the transport; later the replay file, the director, spectating and the video export |
 | `net` | Multiplayer networking: sockets, the simulated network, captures, the wire, channels, nodes, sessions and the lobby, LAN discovery, NAT traversal, port mapping, replication, fake traffic |
 | `plugins` | Engine, plugin or game: where code lives, adding a plugin, moving code between homes |
 

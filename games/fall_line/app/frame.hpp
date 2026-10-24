@@ -59,6 +59,7 @@
 #include <array>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
@@ -110,6 +111,7 @@ struct FrameOptions {
       true;  // the map's sky and cloud in the picture (mountain/app/cloud_field.hpp): off, clear
   double clouds = 1.0;        // the share of the cloud march's steps (0.25..1); 0: no layer drawn
   bool cloud_quarter = true;  // the cloud marched at a quarter of the pixels (false: every one)
+  bool cloud_spread = true;   // the quarter's march spread over four frames, the rest reprojected
   double reach_m = 0;  // how far the picture draws, misted (render/view.hpp); 0: the whole ground
   ge::render::SnowfallSettings flakes;
   ge::mountain::app::TrailOptions trail_maps;  // their sizes
@@ -125,6 +127,10 @@ struct FrameScene {
   // The free ride's crowd (sim/crowd.hpp), by id: each drawn as the skier model in his own pose
   // (scene.hpp's `crowd_instance`); empty, none.
   std::span<const sim::Amateur> crowd = {};
+  // The point the camera frames, world m (a rung's: camera/subject.hpp's `framed_point`): the
+  // trees between the eye and it are seen through (render/instances.hpp § Seeing through). None:
+  // every tree whole (a view of the mountain).
+  std::optional<std::array<double, 3>> subject = std::nullopt;
 };
 
 struct GameFrame {
