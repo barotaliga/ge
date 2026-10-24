@@ -179,6 +179,14 @@ class FallLineRun final : public ge::play::Run {
     return true;
   }
 
+  // The whole run copied: the driver (the state, the plan, the tape so far, the rivals' hands),
+  // the pilot's hands and the events not yet observed; the map and the runs' lines are shared.
+  std::unique_ptr<ge::play::Run> clone() const override {
+    auto copy = std::make_unique<FallLineRun>(*this);
+    copy->trace(nullptr);
+    return copy;
+  }
+
   bool shoot(std::string_view view, ge::lab::Picture& out, std::string& caption,
              std::string& error) override {
     const GameState& s = driver_.state();
