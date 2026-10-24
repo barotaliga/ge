@@ -100,6 +100,8 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge net portmap [--protocol=pcp|natpmp|upnp]` (ask the real home router this machine sits behind to open a port and print each step's answer, then close it: the check the simulated router cannot make)
 - `ge net reach --nat=<kind>,<kind>` (one host and client pair through the simulated NATs, the path each attempt took and why, without the whole `net-reach` lab)
 - `ge lab refs` (a reference photo fetched to a temp directory, never committed, JPEG turned to PNG, a refs row written; the model-views lab reads only 8-bit PNG)
+- `ge lab <lab> --pairs=<refs dir>` (each reference photo beside our shot of its view, one side-by-side sheet a pair, built straight from the refs rows; the texture thread's comparison sheets on the same machinery)
+- a reference round in one run: a per-tag list of `tag=cfg:view` the lab runs in one process, each tag under its own cfg and view, in place of a shell loop of runs
 - `ge lab view <glb>` (the model-views lab on any model, in one command)
 - `ge lab table <lab> --where col=value` (one slice of a lab's table, a weapon at one range, read without re-running the lab or opening the whole report)
 - `ge lab publish <id> [--before=<tag>]` (done: the run's pictures resized and quantized onto one self-contained HTML page, captions and metrics beside them, before and after side by side, ready to publish as the report's picture page: every thread now owes one, and the water rows each built it by hand; several labs on one page as `ge lab publish <a> <b>`, the cross-lab sheet the liquids rows asked for)
