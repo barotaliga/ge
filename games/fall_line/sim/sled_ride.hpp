@@ -25,12 +25,19 @@
 // - LEFT TO ITSELF the machine settles on its parking brake, stepped like any body until it is at
 //   rest, then ASLEEP: not stepped (its numbers do not move) until a rider takes it.
 //
-// Only the player (racer 0) rides it. Pure over the map and the state: draws nothing, and a step
+// - STOLEN: an army snowmobile left standing empty (army_sled.hpp) is taken the same way, the
+//   nearest machine the press reaches, and is his from then on (`GameState::stolen`): a
+//   `stole_snowmobile` offence (wanted.hpp) and an `army_sled` event, `stolen`. He rides, hops off
+//   and is thrown off it as off the free ride's own. Stealing another hands the one he left back
+//   to the army, standing empty where it is.
+//
+// Only the player (racer 0) rides one. Pure over the map and the state: draws nothing, and a step
 // allocates nothing.
 //
 // ge:summary The free ride's snowmobile: the spot, boarding, riding, hopping off, thrown, remount
 // ge:keywords sled snowmobile free-ride sled_spot place_sled step_sled_ride board hop crash
 // ge:keywords remount right machine-press parked ridden down asleep sled_controls rack
+// ge:keywords steal stolen army-sled ridden sled_holds
 // ge:skill sim snowmobile
 // ge:test tests/fall_line_sled_test.cpp
 #pragma once
@@ -110,9 +117,19 @@ bool step_sled_ride(GameState& state, int32_t i, const Controls& c);
 // Whether the machine press takes racer `i` on now.
 bool sled_within(const GameState& state, int32_t i);
 
-// Whether racer `i` is on the machine's boards.
+// The machine he is on the boards of: the free ride's own or the one he stole; none on his skis.
+FreeSled* ridden(GameState& state);
+const FreeSled* ridden(const GameState& state);
+
+// Whether racer `i` is on a machine's boards.
 inline bool on_sled(const GameState& state, int32_t i) {
-  return i == 0 && state.sled.present && state.sled.rider;
+  return i == 0 && state.sled.present && (state.sled.rider || state.stolen.rider);
+}
+
+// Whether racer `i` is on a machine or thrown off one its reset would put him back on.
+inline bool sled_holds(const GameState& state, int32_t i) {
+  return i == 0 && state.sled.present &&
+         (state.sled.rider || state.sled.thrown || state.stolen.rider || state.stolen.thrown);
 }
 
 // THE RUN'S DOWN RESET while the machine waits for him: racer `i`, thrown off it, put back on it

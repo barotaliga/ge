@@ -247,7 +247,7 @@ characters.
 | `engine/move/` | Character movement (`ge::move`, `docs/movement.md`): the knobs and presets, the step over a trace callback, the box world, the strafer, the scenarios | `move` |
 | `engine/input/` | Input devices (`ge::input`, `docs/input.md`): the device model, events, state, dead zones, actions and bindings, rebinding, wheels' roles, touch, players, feedback, the event log, simulated devices | `input` |
 | `engine/camera/` | The camera (`ge::camera`, `docs/camera.md`): poses, followers, the rigs (first person, boom, mounted, orbit, planted, free), shake, transitions, the stack, the scripted subjects | `camera` |
-| `engine/platform/` | SDL3 (`GE_PLATFORM`): the window, input, the frame clock, the audio device; the only place SDL is included | `platform` |
+| `engine/platform/` | SDL3 (`GE_PLATFORM`): the window, the input devices as `engine/input` events, the frame clock, the audio device; the only place SDL is included | `platform`, `input` |
 | `engine/gpu/` | The native GPU device over Dawn (`GE_GPU`): adapters and tiers, pipelines and the manifest, surfaces, targets, timers; the only place webgpu.h is included | `gpu` |
 | `engine/render/` | Generic rendering mechanisms (`docs/rendering.md`): the frame and its pass table, sky, terrain, shadows, Hi-Z, TAA-U, bloom, post, meshes, instances, skinning; WGSL beside each | `render` |
 | `engine/audio/` | The synth (`ge::audio`): the voice vocabulary, the DSP graph, sounds and racks, the meter, WAV; deterministic, no platform | `audio` |
