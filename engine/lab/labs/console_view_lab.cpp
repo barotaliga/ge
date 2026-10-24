@@ -1,10 +1,10 @@
 // LAB `console`: the drop-down console (engine/console/view.hpp) LOOKED AT, drawn on the CPU from
 // the same model the game's 2D layer will draw: a scripted session (a server's messages, chat to
 // all, the team and one player, a game event, commands typed and their output, a half-typed
-// line) pictured down, half-way through its slide and closed with the notify lines over the game,
-// then autocomplete: the list under the input line, a row selected, and Enter on a cvar waiting
-// for its value. Each kind of line has its colour. The metrics count the lines by kind and the
-// slide's frames.
+// line) drawn by the 2D layer (ui/console.hpp) and pictured down, half-way through its slide and
+// closed with the notify lines over the game, then autocomplete: the list under the input line, a
+// row selected, and Enter on a cvar waiting for its value. Each kind of line has its colour. The
+// metrics count the lines by kind and the slide's frames.
 //
 // ge:summary Lab: the drop-down console pictured down, sliding and closed, lines coloured by kind
 // ge:keywords lab console view drop-down picture scrollback chat notify slide tilde
@@ -18,38 +18,14 @@
 
 #include "console/view.hpp"
 #include "lab/lab.hpp"
+#include "ui/console.hpp"
+#include "ui/raster.hpp"
 
 namespace {
 
 namespace con = ge::console;
 using ge::lab::Picture;
 using ge::lab::Rgba;
-
-constexpr int kScale = 2;  // the 5x7 font at twice its size
-constexpr int kRow = ge::lab::kGlyphH * kScale + 4;
-constexpr int kMargin = 12;
-
-Rgba colour(con::LineKind k) {
-  switch (k) {
-    case con::LineKind::output:
-      return {200, 200, 200};
-    case con::LineKind::command:
-      return {255, 255, 255};
-    case con::LineKind::chat:
-      return {120, 230, 120};
-    case con::LineKind::team:
-      return {110, 210, 255};
-    case con::LineKind::whisper:
-      return {240, 140, 240};
-    case con::LineKind::nearby:
-      return {200, 230, 160};
-    case con::LineKind::server:
-      return {250, 220, 90};
-    case con::LineKind::event:
-      return {255, 160, 70};
-  }
-  return {200, 200, 200};
-}
 
 // A stand-in for the game behind: a sky over a snow slope with a few trees.
 Picture backdrop(int w, int h) {
@@ -72,90 +48,17 @@ Picture backdrop(int w, int h) {
   return p;
 }
 
-// The suggestions dropped under the input line, over the game: each name, then a cvar's value
-// (after =), an alias's body (after :) or a command's help, dim; the selected row lit.
-void draw_suggestions(Picture& p, const con::ConsoleView& v, int cover) {
-  const std::vector<con::Suggestion> list = v.suggestions();
-  if (list.empty()) return;
-  auto detail_of = [](const con::Suggestion& s) {
-    return s.kind == con::Suggestion::Kind::cvar    ? "= " + s.detail
-           : s.kind == con::Suggestion::Kind::alias ? ": " + s.detail
-                                                    : s.detail;
-  };
-  int name_w = 0, detail_w = 0;
-  for (const con::Suggestion& s : list) {
-    name_w = std::max(name_w, ge::lab::text_width(s.name, kScale));
-    detail_w = std::max(detail_w, ge::lab::text_width(detail_of(s), kScale));
-  }
-  const int x = kMargin + ge::lab::text_width("] /", kScale) - 6;
-  const int box_w = std::min(p.width - x - kMargin, name_w + detail_w + 42);
-  const int max_chars = (box_w - name_w - 36) / (ge::lab::kGlyphW * kScale);
-  int y = cover + 2;
-  ge::lab::fill_rect(p, x, y, box_w, static_cast<int>(list.size()) * kRow + 8, {16, 20, 28, 235});
-  y += 4;
-  for (size_t i = 0; i < list.size(); ++i) {
-    const con::Suggestion& s = list[i];
-    const bool lit = static_cast<int>(i) == v.selected();
-    if (lit) ge::lab::fill_rect(p, x, y - 2, box_w, kRow, {60, 80, 120});
-    ge::lab::draw_text(p, x + 6, y, s.name, lit ? Rgba{255, 255, 255} : Rgba{220, 225, 235},
-                       kScale);
-    std::string detail = detail_of(s);
-    if (static_cast<int>(detail.size()) > max_chars && max_chars > 3)
-      detail = detail.substr(0, static_cast<size_t>(max_chars - 3)) + "...";
-    ge::lab::draw_text(p, x + 6 + name_w + 24, y, detail, {130, 140, 160}, kScale);
-    y += kRow;
-  }
-}
-
-// The console over `p` as the view stands: the panel, its lines, the input line and its cursor;
-// closed, the notify lines.
+// The console over `p` as the view stands, drawn by the 2D layer (ui/console.hpp) through the
+// CPU raster: the same draw list the GPU pass draws in the game.
 void draw(Picture& p, const con::ConsoleView& v) {
-  const int w = p.width;
-  const int cover = static_cast<int>(v.cover() * p.height);
-  if (cover > 0) {
-    const int rows = std::max(1, (cover - kRow - 2 * kMargin) / kRow);
-    // The background: con_bgtop to con_bgbottom down the panel at con_bgalpha (no image here).
-    const con::Background bg = v.background();
-    const auto a = static_cast<uint8_t>(std::lround(bg.alpha * 255));
-    for (int y = 0; y < cover; ++y) {
-      const double t = cover > 1 ? static_cast<double>(y) / (cover - 1) : 0;
-      auto mix = [t](uint8_t top, uint8_t bottom) {
-        return static_cast<uint8_t>(std::lround(top + (bottom - top) * t));
-      };
-      ge::lab::fill_rect(
-          p, 0, y, w, 1,
-          {mix(bg.top.r, bg.bottom.r), mix(bg.top.g, bg.bottom.g), mix(bg.top.b, bg.bottom.b), a});
-    }
-    ge::lab::fill_rect(p, 0, cover - 2, w, 2, {250, 220, 90});
-    const auto page = v.page(rows);
-    // The newest line sits just over the input line; the page grows up from it.
-    int y = cover - kMargin - 2 * kRow - static_cast<int>(page.size() - 1) * kRow;
-    for (const con::ViewLine* l : page) {
-      ge::lab::draw_text(p, kMargin, y, l->text, colour(l->kind), kScale);
-      y += kRow;
-    }
-    const std::string shown = "] " + v.input();
-    const int iy = cover - kMargin - kRow;
-    ge::lab::draw_text(p, kMargin, iy, shown, {255, 255, 255}, kScale);
-    const int cx = kMargin + ge::lab::text_width("] " + v.input().substr(0, v.cursor()), kScale);
-    // The hint: the rest of the name Tab would take, dim after the typed text.
-    const std::string hint = v.hint();
-    if (!hint.empty()) {
-      ge::lab::draw_text(p, kMargin + ge::lab::text_width(shown, kScale), iy, hint, {120, 130, 150},
-                         kScale);
-    }
-    ge::lab::fill_rect(p, cx, iy - 1, 2 * kScale, ge::lab::kGlyphH * kScale, {255, 255, 255});
-    if (v.scroll() > 0) ge::lab::draw_text(p, w - 200, iy, "^ ^ ^ ^", {250, 220, 90}, kScale);
-    draw_suggestions(p, v, cover);
-    return;
-  }
-  int y = kMargin;
-  for (const con::ViewLine* l : v.notify()) {
-    ge::lab::fill_rect(p, kMargin - 4, y - 3, ge::lab::text_width(l->text, kScale) + 8, kRow,
-                       {16, 20, 28, 140});
-    ge::lab::draw_text(p, kMargin, y, l->text, colour(l->kind), kScale);
-    y += kRow;
-  }
+  ge::ui::Image img;
+  img.width = p.width, img.height = p.height;
+  img.rgba = std::move(p.rgba);
+  ge::ui::DrawList dl;
+  dl.begin(img.width, img.height);
+  ge::ui::draw_console(dl, v);
+  ge::ui::render(dl, img);
+  p.rgba = std::move(img.rgba);
 }
 
 // The scripted session: what a multiplayer evening's console holds.
