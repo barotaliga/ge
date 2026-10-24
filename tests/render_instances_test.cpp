@@ -4,11 +4,13 @@
 // a wall hides the boxes behind it, which the early phase culls by the last frame's pyramid while
 // the boxes beside it are drawn; when the camera rises over the wall the late phase draws the
 // boxes the last frame's pyramid hid; and every frame's picture is the same bits as the frame
-// drawn with no occlusion culling at all.
+// drawn with no occlusion culling at all; and seen through, a crown across the line from the eye
+// to the subject keeps only its floor's share of the pixels (the CPU twin, and the wall drawn).
 //
 // ge:summary Tests for instance families: the LOD pick, winding, the two-phase cull's counts
 // and its pictures against no culling
 // ge:keywords test render instances lod cull two-phase occlusion hi-z winding indirect
+// ge:keywords see-through
 // ge:skill render testing
 #include <cstring>
 #include <vector>
@@ -179,6 +181,40 @@ TEST(lod_pick_bands_its_thresholds) {
   CHECK(r::pick_lod(px, 3, r::kMinPixels * 0.5f).lod == -1);
 }
 
+TEST(see_through_fades_the_crowns_across_the_line_and_nothing_else) {
+  r::SeeThrough see;
+  see.subject[0] = 0;
+  see.subject[1] = 1;
+  see.subject[2] = 10;  // he stands 10 m ahead of the eye
+  const double eye[3] = {0, 3, 0};
+  // A tree of crown 1.5 m and height 8 m, its foot on the snow.
+  auto tree = [](double x, double z) {
+    r::Instance t;
+    t.position[0] = x;
+    t.position[2] = z;
+    t.scale[0] = t.scale[2] = 1.5f;
+    t.scale[1] = 8;
+    return t;
+  };
+  CHECK(r::see_through_keep(see, eye, tree(0, 5)) == 1.0f);  // off: whole
+  see.on = true;
+  CHECK(r::see_through_keep(see, eye, tree(0, 5)) == see.floor);    // on the line
+  CHECK(r::see_through_keep(see, eye, tree(0.5, 0)) == see.floor);  // the eye in its crown
+  CHECK(r::see_through_keep(see, eye, tree(5, 5)) == 1.0f);         // well off the line
+  CHECK(r::see_through_keep(see, eye, tree(0, -6)) == 1.0f);        // behind the eye
+  // Behind him, past the line's end, it stays whole.
+  CHECK(r::see_through_keep(see, eye, tree(0, 13)) == 1.0f);
+  // The ease: a crown half the width off the line keeps between the floor and all.
+  const float half = r::see_through_keep(see, eye, tree(1.5 + 0.5 * see.width_m, 5));
+  CHECK(half > see.floor + 0.2f && half < 0.9f);
+  // Lying across the line at its height (a quarter turn about -z: its axis along +x), it counts.
+  r::Instance lying = tree(-4, 5);
+  lying.position[1] = 2;
+  lying.rotation[2] = -0.70710678f;
+  lying.rotation[3] = 0.70710678f;
+  CHECK(r::see_through_keep(see, eye, lying) == see.floor);
+}
+
 TEST(instances_draw_their_front_faces) {
   auto device = ge::test::test_device();
   if (!device) return;
@@ -194,6 +230,35 @@ TEST(instances_draw_their_front_faces) {
   CHECK(std::fabs(at - near_face) < near_face * 1e-3f);
   CHECK(d.errors.load() == 0);
   CHECK(d.pipelines_after_load == 0);
+}
+
+TEST(a_wall_seen_through_keeps_its_floor_of_the_pixels) {
+  auto device = ge::test::test_device();
+  if (!device) return;
+  ge::gpu::Device& d = *device;
+  Scene s;
+  make_scene(d, s);
+  const ge::gpu::Target out = ge::gpu::create_target(d, "test.final", kW, kH);
+  // Through to a point 50 m ahead, past the wall: the wall's prepass keeps its floor's share.
+  r::SeeThrough see;
+  see.on = true;
+  see.subject[0] = 256;
+  see.subject[1] = 5;
+  see.subject[2] = 150;
+  r::set_see_through(s.boxes, see);
+  draw(d, s, ground_view(), out, false);
+  const std::vector<float> depth = r::read_depth(d, s.targets);
+  const float wall = static_cast<float>(ground_view().near_m / 29.5);
+  int on_wall = 0, asked = 0;
+  for (uint32_t y = kH / 2 - 8; y < kH / 2 + 8; ++y) {
+    for (uint32_t x = kW / 2 - 12; x < kW / 2 + 12; ++x) {
+      ++asked;
+      if (std::fabs(depth[y * kW + x] - wall) < wall * 1e-3f) ++on_wall;
+    }
+  }
+  const double share = static_cast<double>(on_wall) / asked;
+  CHECK(share > see.floor * 0.5 && share < see.floor * 2);
+  CHECK(d.errors.load() == 0);
 }
 
 TEST(early_phase_culls_what_the_last_frame_hid) {

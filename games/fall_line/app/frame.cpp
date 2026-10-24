@@ -52,7 +52,8 @@ constexpr r::PassRow kPassTable[] = {
      "sky.aerial sky.light depth",
      "hdr motion"},
     {"sky", "sky.view sky.moon_view depth", "hdr motion"},
-    {"clouds.march", "depth sky.aerial sky.light", "clouds.quarter"},
+    {"clouds.fresh", "depth sky.aerial sky.light", "clouds.fresh"},
+    {"clouds.march", "depth clouds.history clouds.fresh sky.aerial sky.light", "clouds.quarter"},
     {"clouds", "depth clouds.quarter sky.aerial sky.light", "hdr"},
     {"particles", "particles terrain.horizon shadows.maps sky.aerial sky.light depth",
      "hdr motion"},
@@ -63,10 +64,11 @@ constexpr r::PassRow kPassTable[] = {
 };
 // What is made at load rather than by a pass (the instances' meshes and streams: the figures'
 // placements and palettes are written before the frame is encoded, their vertices by the skinning
-// pass), and what is the last frame's (the TAA history, the
-// depth pyramid the early cull reads).
+// pass), and what is the last frame's (the TAA history, the depth pyramid the early cull reads,
+// the cloud's half-size picture the spread reprojects).
 constexpr std::string_view kLoadInputs =
-    "terrain.height terrain.pyramid terrain.albedo snow.ground instances taa.history hiz.last";
+    "terrain.height terrain.pyramid terrain.albedo snow.ground instances taa.history hiz.last "
+    "clouds.history";
 
 constexpr int kPasses = static_cast<int>(std::size(kPassTable));
 
@@ -183,8 +185,8 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
   r::TerrainSource source;
   source.height = &level.ground;
   source.albedo = &f->albedo;
-  source.base_spacing = 1.0;
-  source.levels = 8;
+  source.base_spacing = kGroundSpacing;
+  source.levels = kGroundLevels;
   source.overdraw_probe = options.overdraw_probe;
   source.wire_probe = options.wire_probe;
   f->tracks = options.snow && options.trails;
@@ -346,7 +348,9 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
                               f.options.clouds > 0);
     view.clouds.steps = f.options.clouds;
     view.clouds.quarter = f.options.cloud_quarter;
+    view.clouds.spread = f.options.cloud_spread;
   }
+  view.reach_m = f.options.reach_m;
   const auto start = std::chrono::steady_clock::now();
   f.recorder.begin_frame(device);
   // Prepare: every decision of the frame, and the uploads.
@@ -433,6 +437,12 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   }
   {
     GE_ZONE("frame.instances");
+    r::SeeThrough see;
+    if (scene.subject) {
+      see.on = true;
+      for (int k = 0; k < 3; ++k) see.subject[k] = (*scene.subject)[static_cast<size_t>(k)];
+    }
+    r::set_see_through(f.forest, see);
     for (r::InstanceFamily* family : f.families) {
       r::prepare_family(device, *family, view, f.targets.height, occlusion);
     }
@@ -481,7 +491,8 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   r::encode_instances(families, f.instancing, f.pipelines, f.recorder, encoder, f.targets,
                       f.frame_group, f.instance_light);
   r::encode_sky(f.sky, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
-  r::encode_clouds(f.clouds, f.pipelines, f.recorder, encoder, f.targets, f.frame_group, view);
+  r::encode_clouds(f.clouds, f.pipelines, f.recorder, encoder, f.targets, f.frame_group, view,
+                   f.staged);
   r::encode_particles(f.particles, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
   r::encode_snowfall(f.snowfall, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
   if (f.options.taa) {

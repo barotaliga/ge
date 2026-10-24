@@ -8,7 +8,9 @@
 // at growing steps: Beer's law and a slower lobe for the light scattered on), and the sky's and
 // the snow's light from above and below; far cloud is hazed and melts into the sky behind it.
 // Marched for every pixel (`fs_main`), or at a quarter of them (`fs_march` into a half-size target)
-// and laid over the frame by a depth-aware upsample (`fs_upsample`).
+// and laid over the frame by a depth-aware upsample (`fs_upsample`); spread over four frames
+// (`cloud_info.z`), a quarter of the half-size pixels march each frame and the rest are the last
+// frame's, reprojected.
 #include "render/wgsl/frame.wgsl"
 
 @group(1) @binding(0) var scene_depth: texture_depth_2d;
@@ -105,6 +107,10 @@ fn shadow_from(p: vec3f, skip: i32) -> f32 {
   return exp(-tau);
 }
 
+// The spread's history: how many frames a stamp counts before it wraps (`cloud_info.w` is this
+// frame's, 1..kStamps; 0 a target never written).
+const kStamps = 4096.0;
+
 // A pixel's own offset, 0..1, new each frame (interleaved gradient noise): TAA resolves it.
 fn dither(px: vec2f) -> f32 {
   let q = px + 5.588238 * f32(u32(frame.time.y) % 64u);
@@ -186,6 +192,16 @@ fn march(i: i32, d: vec3f, t0: f32, t1: f32, j: f32) -> LayerLook {
 // A pixel's cloud: its ray (at `uv`) marched through every layer to the scene at depth `z`,
 // the dither's pixel `px`. Its light premultiplied, and 1 - its transmittance.
 fn cloud_at(uv: vec2f, px: vec2f, z: f32) -> vec4f {
+  return cloud_look(uv, px, z).cloud;
+}
+
+// The cloud, and the mean distance its light comes from (0: no cloud on the ray).
+struct CloudLook {
+  cloud: vec4f,
+  dist: f32,
+}
+
+fn cloud_look(uv: vec2f, px: vec2f, z: f32) -> CloudLook {
   let n = i32(frame.cloud_info.x);
   let d = view_ray(frame, uv);
   let scene = scene_dist(uv, z);
@@ -213,6 +229,8 @@ fn cloud_at(uv: vec2f, px: vec2f, z: f32) -> vec4f {
   let j = dither(px);
   var light = vec3f(0.0);
   var through = 1.0;
+  var wdist = 0.0;
+  var weight = 0.0;
   var done = array<bool, 3>(false, false, false);
   for (var k = 0; k < n; k++) {
     // The nearest layer not yet marched.
@@ -233,14 +251,44 @@ fn cloud_at(uv: vec2f, px: vec2f, z: f32) -> vec4f {
     }
     // Seen through the air to where its light comes from, and lost into the sky far off.
     let fade = 1.0 - smoothstep(kFadeNear, kFadeFar, look.dist);
-    let hazed = haze(look.light / alpha, uv, look.dist) * alpha;
+    let hazed = haze_air(look.light / alpha, uv, look.dist) * alpha;
     light += through * fade * hazed;
+    wdist += through * alpha * look.dist;
+    weight += through * alpha;
     through *= 1.0 - fade * alpha;
     if (through < 0.01) {
       break;
     }
   }
-  return vec4f(light, 1.0 - through);
+  var out: CloudLook;
+  out.cloud = vec4f(light, 1.0 - through);
+  out.dist = select(0.0, wdist / max(weight, 1e-6), weight > 0.0);
+  return out;
+}
+
+// Where the ray `d` first crosses a layer's middle (m), or `far`: the spread's first guess of the
+// distance a pixel's cloud lies at.
+fn layer_guess(d: vec3f, far: f32) -> f32 {
+  let n = i32(frame.cloud_info.x);
+  var t = far;
+  for (var i = 0; i < n; i++) {
+    let l = cloud_layer(i);
+    let mid = (0.5 * (l.shape.x + l.shape.y) - frame.eye.y) / d.y;
+    if (abs(d.y) > 1e-5 && mid > 0.0) {
+      t = min(t, mid);
+    }
+  }
+  return t;
+}
+
+// The last frame's uv of the camera-relative point at `t` along `d` (a direction past kSky/2).
+fn prev_uv_of(d: vec3f, t: f32) -> vec2f {
+  var rel = vec4f(d, 0.0);
+  if (t < 0.5 * kSky) {
+    rel = vec4f(d * t, 1.0);
+  }
+  let prev = frame.prev_view_proj * (rel + vec4f(frame.eye_delta.xyz * rel.w, 0.0));
+  return vec2f(prev.x / prev.w * 0.5 + 0.5, 0.5 - prev.y / prev.w * 0.5);
 }
 
 // How far the ray at `uv` goes before the scene at depth `z` (reversed-z: 0 is the sky).
@@ -261,23 +309,148 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
 
 // THE QUARTER PICTURE, its march: a pixel of the half-size target for each two by two of the
 // frame's, marched to the FARTHEST of the four's depths, so a ridge's edge keeps the cloud behind
-// it; the distance it marched to beside it for the upsample.
+// it; beside it the distance it marched to (for the upsample), the distance its cloud lies at and
+// the frame's stamp (for the next frame's reprojection).
+//
+// SPREAD over four frames (`cloud_info.z`), one of each two by two of the half-size pixels marches
+// a frame, in turn, in a pass of its own over a target a quarter of the half-size one
+// (`fs_fresh`), so the pixels that march lie side by side and a GPU's lanes all march together
+// (marching one pixel in four within one pass costs as much as marching all four). Then the
+// half-size pass (`fs_march`) takes the fresh pixel where it is its turn, and elsewhere the last
+// frame's half-size picture where its cloud stood then (its distance guessed at the nearest
+// layer's middle, read back from the last frame and reprojected again, then read bilinear over
+// the taps that were written the frame before and marched to the same scene within kDepthMiss);
+// a pixel no tap stands for (off the screen, newly seen) marches after all.
+@group(1) @binding(1) var history: texture_2d<f32>;
+@group(1) @binding(2) var history_dist: texture_2d<f32>;
+@group(1) @binding(3) var fresh: texture_2d<f32>;
+@group(1) @binding(4) var fresh_dist: texture_2d<f32>;
+
+// The march's turn order over a two by two, a frame at a time: diagonals first.
+const kTurn = array<vec2i, 4>(vec2i(0, 0), vec2i(1, 1), vec2i(1, 0), vec2i(0, 1));
+// The share of the bilinear footprint the valid taps must hold for the history to stand.
+const kHistoryHeld = 0.5;
+
+fn turn_of() -> vec2i {
+  return kTurn[u32(frame.cloud_info.w) % 4u];
+}
+
+// The half-size pixel `q`'s depth: the farthest of its two by two, and its uv.
+fn quarter_depth(q: vec2i) -> f32 {
+  let size = vec2i(textureDimensions(scene_depth)) - 1;
+  var z = 1.0;
+  for (var k = 0; k < 4; k++) {
+    z = min(z, textureLoad(scene_depth, min(q * 2 + vec2i(k & 1, k >> 1), size), 0));
+  }
+  return z;
+}
+
+// The half-size pixel `q`'s centre in uv (as its own pass's full-screen triangle reads it).
+fn quarter_uv(q: vec2i) -> vec2f {
+  let half = (vec2i(textureDimensions(scene_depth)) + 1) / 2;
+  return (vec2f(q) + 0.5) / vec2f(half);
+}
+
+struct FreshOut {
+  @location(0) cloud: vec4f,
+  @location(1) dist: vec2f,
+}
+
+@fragment
+fn fs_fresh(in: VertexOut) -> FreshOut {
+  let q = vec2i(in.position.xy) * 2 + turn_of();
+  let z = quarter_depth(q);
+  let uv = quarter_uv(q);
+  let look = cloud_look(uv, vec2f(q) + 0.5, z);
+  var out: FreshOut;
+  out.cloud = look.cloud;
+  out.dist = vec2f(scene_dist(uv, z), look.dist);
+  return out;
+}
+
 struct MarchOut {
   @location(0) cloud: vec4f,
-  @location(1) dist: f32,
+  @location(1) dist: vec4f,
+}
+
+// The last frame's half-size picture at `uv`, bilinear over the taps written the frame before
+// that marched to a scene within kDepthMiss of `scene`: the cloud, the distance it lies at
+// (`dist.y`, 0 for none) and the share of the footprint those taps hold.
+struct Held {
+  cloud: vec4f,
+  dist: vec2f,
+  share: f32,
+}
+
+fn held_at(uv: vec2f, scene: f32) -> Held {
+  let hsize = vec2i(textureDimensions(history));
+  let last = select(frame.cloud_info.w - 1.0, kStamps, frame.cloud_info.w <= 1.0);
+  let f = uv * vec2f(hsize) - 0.5;
+  let i0 = vec2i(floor(f));
+  let w = fract(f);
+  var out: Held;
+  out.cloud = vec4f(0.0);
+  out.dist = vec2f(0.0);
+  out.share = 0.0;
+  var cloudy = 0.0;
+  for (var k = 0; k < 4; k++) {
+    let o = vec2i(k & 1, k >> 1);
+    let q = i0 + o;
+    if (any(q < vec2i(0)) || any(q >= hsize)) {
+      continue;
+    }
+    let h = textureLoad(history_dist, q, 0);
+    let miss = abs(h.x - scene) / max(min(h.x, scene), 1.0);
+    if (h.z != last || miss > kDepthMiss) {
+      continue;
+    }
+    let bw = select(1.0 - w.x, w.x, o.x == 1) * select(1.0 - w.y, w.y, o.y == 1);
+    out.cloud += textureLoad(history, q, 0) * bw;
+    out.share += bw;
+    if (h.y > 0.0) {
+      out.dist.y += h.y * bw;
+      cloudy += bw;
+    }
+  }
+  if (out.share > 0.0) {
+    out.cloud /= out.share;
+  }
+  out.dist.y = select(0.0, out.dist.y / max(cloudy, 1e-6), cloudy > 0.0);
+  return out;
 }
 
 @fragment
 fn fs_march(in: VertexOut) -> MarchOut {
-  let size = vec2i(textureDimensions(scene_depth)) - 1;
-  let base = vec2i(in.position.xy) * 2;
-  var z = 1.0;
-  for (var k = 0; k < 4; k++) {
-    z = min(z, textureLoad(scene_depth, min(base + vec2i(k & 1, k >> 1), size), 0));
-  }
+  let px = vec2i(in.position.xy);
+  let z = quarter_depth(px);
+  let scene = scene_dist(in.uv, z);
+  let stamp = frame.cloud_info.w;
   var out: MarchOut;
-  out.cloud = cloud_at(in.uv, in.position.xy, z);
-  out.dist = scene_dist(in.uv, z);
+  if (frame.cloud_info.z > 0.0) {
+    if (all((px & vec2i(1)) == turn_of())) {
+      let f = vec2i(in.position.xy) / 2;
+      out.cloud = textureLoad(fresh, f, 0);
+      out.dist = vec4f(textureLoad(fresh_dist, f, 0).xy, stamp, 0.0);
+      return out;
+    }
+    let d = view_ray(frame, in.uv);
+    var t = layer_guess(d, scene);
+    for (var r = 0; r < 2; r++) {
+      let held = held_at(prev_uv_of(d, t), scene);
+      if (held.share < kHistoryHeld) {
+        break;
+      }
+      if (r == 1 || held.dist.y <= 0.0) {
+        out.cloud = held.cloud;
+        out.dist = vec4f(scene, held.dist.y, stamp, 0.0);
+        return out;
+      }
+      t = min(held.dist.y, scene);
+    }
+  }
+  let look = cloud_look(in.uv, in.position.xy, z);
+  out.cloud = look.cloud;
+  out.dist = vec4f(scene, look.dist, stamp, 0.0);
   return out;
 }
 

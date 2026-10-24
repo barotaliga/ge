@@ -303,7 +303,7 @@ void on_message(SessionHost& h, int peer, const uint8_t* data, size_t size, int6
       const int to = seat_of(read_u8(r));
       size_t n = 0;
       const uint8_t* text = read_text(r, kMaxMessage, n);
-      if (r.bad || static_cast<uint8_t>(scope) > static_cast<uint8_t>(ChatScope::direct)) break;
+      if (r.bad || static_cast<uint8_t>(scope) > static_cast<uint8_t>(ChatScope::nearby)) break;
       answer(h, seat, SessionAsk::chat,
              session_host_chat(h, seat, scope, to, reinterpret_cast<const char*>(text), n, now_us));
       return;
@@ -547,6 +547,10 @@ SessionWhy session_host_chat(SessionHost& h, int from, ChatScope scope, int to, 
     h.stats.chat_refused++;
     return SessionWhy::no_player;
   }
+  if (scope == ChatScope::nearby && h.config.hears == nullptr) {
+    h.stats.chat_refused++;
+    return SessionWhy::no_nearby;
+  }
   // The bucket: refilled by the time since the last line, at most chat_burst.
   double& tokens = h.chat_tokens[from];
   if (h.config.chat_refill_us > 0) {
@@ -576,7 +580,8 @@ SessionWhy session_host_chat(SessionHost& h, int from, ChatScope scope, int to, 
     if (!p.used || h.seat_peer[s] < 0) continue;
     const bool reach = scope == ChatScope::all || s == from ||
                        (scope == ChatScope::team && p.team == sender.team) ||
-                       (scope == ChatScope::direct && s == to);
+                       (scope == ChatScope::direct && s == to) ||
+                       (scope == ChatScope::nearby && h.config.hears(h.config.hears_ctx, from, s));
     if (!reach) continue;
     send_seat(h, s, buf.data(), w.size);
     copies++;

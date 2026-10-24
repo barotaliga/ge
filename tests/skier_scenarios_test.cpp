@@ -2,7 +2,8 @@
 // its trajectory's digest and its key numbers held bit for bit by
 // tests/golden/skier_scenarios.txt, and each scenario that has one right answer held to it: the
 // schusses meet `terminal_speed`, the hard carve holds no more than the edge's grip, the stop
-// stops, the kicker flies, the trunk and the harsh drop wipe him out.
+// stops, the kicker flies, the trunk and the harsh drop wipe him out, a trunk dead ahead is met
+// at the tips and one met slowly at them turns the skis aside.
 //
 // A deliberate change to the model moves the golden: rewrite it with
 // `GE_GOLDEN_WRITE=1 build/<preset>/tests/skier_scenarios_test`, run the `ride` lab before and
@@ -22,6 +23,9 @@
 #include "skier/scenarios.hpp"
 #include "skier/skis.hpp"
 #include "skier/snow.hpp"
+#include "skier/synthetic.hpp"
+#include "skier/trees.hpp"
+#include "skier/tuning.hpp"
 
 namespace {
 
@@ -157,4 +161,58 @@ TEST(a_trunk_and_a_harsh_drop_wipe_him_out) {
   CHECK(ride("drop").cause == sk::Wipeout::none);
   const auto harsh = ride("drop-harsh");
   CHECK(harsh.cause == sk::Wipeout::landing && harsh.end.down && harsh.stop_time > 0);
+}
+
+namespace {
+
+// A packed flat with one trunk at its middle, and the skier skiing straight down +z at `v` m/s
+// from 3 m short of it, `across` m to its right, until he wipes out or `seconds` pass.
+struct AtATrunk {
+  sk::SkierState s;
+  sk::SkierEvents first;  // the first step's events that met the trunk
+  double trunk_z = 0;
+};
+AtATrunk ski_at_a_trunk(double v, double across, double seconds) {
+  ge::mountain::mapgen::Level level = sk::flat_strip(0, 1);
+  const double m = level.size / 2;
+  level.trees.push_back(ge::mountain::mapgen::TreeDef{m, m, level.ground_at(m, m), 18, 0.2, 60, 2.5,
+                                                      ge::mountain::mapgen::TreeKind::spruce, -1});
+  const sk::TreeIndex trees = sk::build_tree_index(level);
+  const sk::World world{&level, &trees};
+  AtATrunk out;
+  out.trunk_z = m;
+  out.s = sk::stand_skier(world, m + across, m - 3, 0, v);
+  bool met = false;
+  for (int64_t i = 0; i < static_cast<int64_t>(seconds * 120); i++) {
+    sk::SkierEvents ev;
+    sk::step_skier(out.s, sk::SkierInput{}, world, sk::kReferenceSkis, 1.0 / 120, ev);
+    if (!met && ev.tree >= 0) {
+      met = true;
+      out.first = ev;
+      if (ev.wiped_out) break;
+    }
+  }
+  return out;
+}
+
+}  // namespace
+
+TEST(a_trunk_dead_ahead_stops_the_tips_before_his_body_reaches_it) {
+  namespace w = sk::tuning::wipeout;
+  const AtATrunk r = ski_at_a_trunk(12, 0, 1);
+  CHECK(r.first.wiped_out && r.first.cause == sk::Wipeout::tree);
+  // Down at the trunk's front with the tips on it: his boots a ski's fore-length short of it.
+  const double short_of = r.trunk_z - r.s.z;
+  const double tips = sk::kReferenceSkis.length * w::kTipShare;
+  CHECK_MSG(short_of > tips && short_of < tips + w::kTipRadius + 0.2 + 0.05,
+            "the trunk met " + std::to_string(short_of) + " m ahead of his boots");
+}
+
+TEST(a_trunk_met_at_the_tips_slowly_turns_the_skis_aside) {
+  // Slow and a little to the trunk's right: his tips glance off it, and the skis turn away from
+  // it (to his right, a heading past 0) rather than his body meeting it square.
+  const AtATrunk r = ski_at_a_trunk(2.5, 0.25, 2);
+  CHECK(r.first.glanced && !r.first.wiped_out);
+  CHECK_MSG(r.s.heading > 0.05, "the skis turned to " + std::to_string(r.s.heading) + " rad");
+  CHECK(!r.s.down);
 }

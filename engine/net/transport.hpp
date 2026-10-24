@@ -20,8 +20,10 @@
 #include <string>
 #include <vector>
 
+#include "core/prng.hpp"
 #include "net/address.hpp"
 #include "net/capture.hpp"
+#include "net/conditions.hpp"
 #include "net/sim_network.hpp"
 #include "net/tcp_socket.hpp"
 #include "net/udp_socket.hpp"
@@ -33,6 +35,28 @@ enum class TransportKind : uint8_t { none, udp, sim, tcp };
 // The most streams a TCP host holds: every peer's, and room for the ones it will deny.
 constexpr size_t kMaxStreams = 64;
 
+struct Tap;  // tap.hpp
+
+// FAKE CONDITIONS on a live transport, for a developer's experiments on a real game: every
+// datagram it sends is put through `conditions` (conditions.hpp's fates: delay, jitter, loss,
+// a drop pattern) before it leaves, so a LAN game plays as a bad link would. Datagrams held for
+// their delay wait in a fixed pool and leave on the transport's next send or receive.
+struct FakeLink {
+  LinkConditions conditions;
+  LinkState state;
+  core::Rng rng{0};
+  struct Held {
+    int64_t at_us = 0;
+    Address to;
+    uint32_t size = 0;
+    uint8_t data[kMaxDatagram];
+  };
+  std::vector<Held> held;    // the pool, sized once
+  std::vector<int> waiting;  // indices into `held`, in the order they were held
+  std::vector<int> free;
+  uint64_t lost = 0, delayed = 0, overflow = 0;
+};
+
 struct Transport {
   TransportKind kind = TransportKind::none;
   Address local;
@@ -42,6 +66,8 @@ struct Transport {
   size_t next_stream = 0;          // where the next receive starts looking, round the streams
   SimNetwork* sim = nullptr;
   Capture* capture = nullptr;  // when set, every datagram in and out is written to it
+  Tap* tap = nullptr;          // when set, every datagram in and out is mirrored to it (tap.hpp)
+  FakeLink* fake = nullptr;    // when set, every send goes through its conditions first
   uint64_t send_failures = 0;
 };
 
@@ -53,6 +79,12 @@ bool open_udp_transport(Transport& t, const Address& bind, std::string* error);
 bool open_tcp_host_transport(Transport& t, const Address& bind, std::string* error);
 bool open_tcp_client_transport(Transport& t, const Address& host, std::string* error);
 void close_transport(Transport& t);
+// Fake conditions on `t`'s sends (null `fake` or default conditions: none); `pool` datagrams can
+// be held at once, the rest dropped (counted in `overflow`).
+void transport_fake(Transport& t, FakeLink* fake, const LinkConditions& c, uint64_t seed,
+                    size_t pool = 256);
+// Send what fake conditions held and is now due (a send and a receive do it too).
+void transport_pump(Transport& t, int64_t now_us);
 
 bool transport_send(Transport& t, const Address& to, const uint8_t* data, size_t size,
                     int64_t now_us);

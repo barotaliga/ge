@@ -1,6 +1,6 @@
 ---
 name: camera
-description: "Use for engine/camera in gameengine2 and anything about how a game is seen: the pose and the renderer's roll, the followers (second-order by frequency, damping and response; the half-life spring; the dead band), the subject a game fills and the world it queries, the rigs (first person with view height, step smoothing, bob, strafe roll, view kick, punch and landing dip; the boom with yaw follow, lift, incline, composition, the sense of speed, the fall look, pull-in and push-off; the mounted head on a neck; orbit, planted and free), trauma shake and comfort, transitions (cut, blend, inertialize) and warm rigs, the camera stack and its ladder, the scripted subjects, and the camera-follow, camera-rigs, camera-transitions and camera-shake labs; the M26 rows."
+description: "Use for engine/camera in gameengine2 and anything about how a game is seen: the pose and the renderer's roll, the followers (second-order by frequency, damping and response; the half-life spring; the dead band), the subject a game fills and the world it queries, the rigs (first person with view height, step smoothing, bob, strafe roll, view kick, punch and landing dip; the boom with yaw follow, lift, incline, composition, the sense of speed, the fall look, pull-in and push-off; the mounted head on a neck; orbit, planted and free), trauma shake and comfort, transitions (cut, blend, inertialize) and warm rigs, the camera stack and its ladder, the scripted subjects, and the camera-follow, camera-rigs, camera-transitions, camera-shake and camera-world labs; Fall Line's ladder (games/fall_line/camera); the M26 rows."
 ---
 
 # The camera
@@ -29,6 +29,7 @@ rigs and calls `update` once a display frame.
 | `camera/to_view.hpp` | A `Pose` into `render::FrameView` (header only; not installed) |
 | `camera/scenarios.hpp` | The scripted subjects the labs and the golden run every rig through |
 | `camera/ladders.hpp` | The reference ladder the labs use |
+| `games/fall_line/camera/` | A game's ladder on the engine: Fall Line's rungs and camera key (`rungs.hpp`), the skier as the subject with the worn eyes and the per-frame `frame_camera` (`subject.hpp`), the trunks and posts (`world.hpp`); its lab is `camera-world` (GPU) |
 
 ## Rules
 

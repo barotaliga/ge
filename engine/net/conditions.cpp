@@ -58,6 +58,11 @@ Fate decide(const LinkConditions& c, LinkState& s, core::Rng& rng, int64_t now_u
     s.bad = s.bad ? !(u_chain < r) : u_chain < p;
     lost = s.bad;
   }
+  if (c.drop_every > 0) {
+    const auto at = static_cast<int>(s.sent % static_cast<uint64_t>(c.drop_every));
+    if (at >= c.drop_every - c.drop_run) lost = true;
+  }
+  s.sent++;
 
   const int64_t start = s.busy_until_us > now_us ? s.busy_until_us : now_us;
   if (!c.stream && start - now_us > us(c.queue_ms)) {
@@ -129,6 +134,7 @@ std::string describe_conditions(const LinkConditions& c) {
   if (c.duplicate > 0 && !c.stream) add(", %g%% doubled", c.duplicate * 100);
   if (c.reorder > 0 && !c.stream) add(", %g%% held %g ms", c.reorder * 100, c.reorder_ms);
   if (c.bandwidth_kbps > 0) add(", %g kbit/s", c.bandwidth_kbps);
+  if (c.drop_every > 0) add(", %d of every %d dropped", c.drop_run, c.drop_every);
   if (c.stream) add("%s", ", as a stream");
   return b;
 }

@@ -1,6 +1,7 @@
 // LAB `injuries`: what the skier's body takes. Every ride scenario's body (the injuries by part
 // and name, the severity score, when he was mortally hurt and when he died), and the body's
-// curves swept over many runs' draws: a trunk met head-on and beside him by closing speed, and
+// curves swept over many runs' draws: a trunk skied into head-on (the body thrown on into it) and
+// met beside him by closing speed, and
 // a landing by its load, each as the share hurt, the mean severity and the share killed. Two
 // pictures: every scenario's parts shaded by their worst injury, and the sweeps' mean severity.
 //
@@ -21,6 +22,8 @@
 #include "skier/body.hpp"
 #include "skier/scenarios.hpp"
 #include "skier/skis.hpp"
+#include "skier/synthetic.hpp"
+#include "skier/trees.hpp"
 #include "skier/tuning.hpp"
 
 namespace {
@@ -46,16 +49,31 @@ struct Sweep {
   std::string most;
 };
 
-// The step's events and the trunk where they stand, judged over `kTrials` seeds.
-Sweep sweep(const sk::SkierEvents& ev, const sk::World& world) {
+// ONE MEETING, its physics run once: every step's skier and events, on its own map. The body
+// draws nothing the skier's step reads, so every seed's body is judged off the same steps.
+struct Tape {
+  ge::mountain::mapgen::Level level;
+  sk::TreeIndex trees;
+  std::vector<sk::SkierState> states;
+  std::vector<sk::SkierEvents> events;
+};
+
+// Tallied over `kTrials` seeds, the body judged over every step of `t`.
+Sweep sweep(const Tape& t) {
   Sweep out;
   std::vector<int32_t> taken(sk::injuries_catalog().size(), 0);
+  const sk::World world{&t.level, &t.trees};
+  constexpr double dt = 1.0 / 120;
   for (int32_t k = 0; k < kTrials; k++) {
     sk::BodyState b;
-    sk::SkierState s;  // at the origin, facing +z
     sk::BodyEvents be;
-    sk::step_body(b, s, ev, world, sk::kReferenceSkis,
-                  sk::BodyClock{0, 1.0 / 120, 0, static_cast<uint32_t>(k)}, be);
+    for (size_t i = 0; i < t.states.size(); i++) {
+      sk::SkierState s = t.states[i];
+      sk::step_body(b, s, t.events[i], world, sk::kReferenceSkis,
+                    sk::BodyClock{static_cast<double>(i + 1) * dt, dt, static_cast<int64_t>(i),
+                                  static_cast<uint32_t>(k)},
+                    be);
+    }
     out.hurt += b.count > 0 ? 1 : 0;
     out.iss += sk::severity_of(b);
     out.mortal += b.mortal >= 0 ? 1 : 0;
@@ -74,6 +92,65 @@ Sweep sweep(const sk::SkierEvents& ev, const sk::World& world) {
     }
   }
   return out;
+}
+
+// A packed flat with one trunk at its middle.
+Tape flat_with_a_trunk() {
+  Tape t;
+  t.level = sk::flat_strip(0, 1);
+  const double m = t.level.size / 2;
+  t.level.trees.push_back(ge::mountain::mapgen::TreeDef{
+      m, m, t.level.ground_at(m, m), 18, 0.2, 60, 2.5, ge::mountain::mapgen::TreeKind::spruce, -1});
+  t.trees = sk::build_tree_index(t.level);
+  return t;
+}
+
+// A TRUNK MET HEAD-ON at `v` m/s: skied straight into it from 2.5 m short, `across` m to its
+// right of the trunk's centre (0 dead on), the skis stopped on it or turned aside by it and the
+// body thrown on into it or past it, three seconds of it.
+Tape into_a_trunk(double v, double across = 0) {
+  Tape t = flat_with_a_trunk();
+  const sk::World world{&t.level, &t.trees};
+  const double m = t.level.size / 2;
+  sk::SkierState s = sk::stand_skier(world, m + across, m - 2.5, 0, v);
+  sk::SkierEvents ev;
+  for (int i = 0; i < 3 * 120; i++) {
+    sk::step_skier(s, sk::SkierInput{}, world, sk::kReferenceSkis, 1.0 / 120, ev);
+    t.states.push_back(s);
+    t.events.push_back(ev);
+  }
+  return t;
+}
+
+// A TRUNK IN HIS LINE: the head-on run swept across the trunk, his line from `kAcrossMost` m to
+// its left to as far to its right, every line's draws tallied together (the injury most taken is
+// the dead-on line's).
+constexpr double kAcrossMost = 0.6;
+constexpr int32_t kLines = 13;
+Sweep in_his_line(double v) {
+  Sweep out;
+  for (int32_t j = 0; j < kLines; j++) {
+    const double across = -kAcrossMost + 2 * kAcrossMost * j / (kLines - 1);
+    const Sweep a = sweep(into_a_trunk(v, across));
+    out.hurt += a.hurt / kLines;
+    out.iss += a.iss / kLines;
+    out.mortal += a.mortal / kLines;
+    if (j == kLines / 2) out.most = a.most;
+  }
+  return out;
+}
+
+// ONE STEP'S EVENTS with nothing thrown after them: the trunk beside him, or a landing (one step
+// more, for what a folded landing owes the trunk).
+Tape events_alone(const sk::SkierEvents& ev, double tree_x, double tree_z) {
+  Tape t;
+  t.level.trees.push_back(ge::mountain::mapgen::TreeDef{
+      tree_x, tree_z, 0, 18, 0.2, 60, 2.5, ge::mountain::mapgen::TreeKind::spruce, -1});
+  t.states.push_back(sk::SkierState{});  // at the origin, facing +z
+  t.events.push_back(ev);
+  t.states.push_back(sk::SkierState{});
+  t.events.push_back(sk::SkierEvents{});
+  return t;
 }
 
 // Every scenario a row, every part a column, each cell its worst injury's AIS.
@@ -149,19 +226,16 @@ void run(gl::Lab& lab) {
            draw_body(ids, bodies));
 
   // THE CURVES, over many runs' draws: a trunk by closing speed and a landing by its load.
-  ge::mountain::mapgen::Level level;
-  level.trees.push_back(ge::mountain::mapgen::TreeDef{0, 0, 0, 18, 0.2, 60, 2.5,
-                                                      ge::mountain::mapgen::TreeKind::spruce, -1});
-  const sk::World world{&level, nullptr};
   gl::LabTable trunk{"trunk",
-                     {"km/h", "head-on hurt", "head-on ISS", "head-on mortal", "most", "side hurt",
-                      "side ISS", "side mortal", "most"},
+                     {"km/h", "head-on hurt", "head-on ISS", "head-on mortal", "most", "line ISS",
+                      "line mortal", "side hurt", "side ISS", "side mortal", "most"},
                      {}};
   gl::LineChart lc;
   lc.frame = {"MEAN SEVERITY BY THE TRUNK'S CLOSING SPEED AND BY A LANDING'S LOAD",
               std::to_string(kTrials) + " draws a point, the reference skier",
               "closing speed (m/s) / landing load (g)", "mean ISS"};
-  gl::Trace head_on{"trunk head-on", {}, {}}, beside{"trunk beside him", {}, {}};
+  gl::Trace head_on{"trunk head-on", {}, {}}, line{"trunk in his line", {}, {}};
+  gl::Trace beside{"trunk beside him", {}, {}};
   gl::Trace landing_trace{"landing", {}, {}};
   for (int v = 2; v <= 24; v += 2) {
     sk::SkierEvents ev;
@@ -169,19 +243,19 @@ void run(gl::Lab& lab) {
     ev.closing = v;
     ev.wiped_out = v > sk::tuning::wipeout::kTreeSpeed;
     ev.cause = ev.wiped_out ? sk::Wipeout::tree : sk::Wipeout::none;
-    level.trees[0].x = 0;  // square ahead of his tips
-    level.trees[0].z = 0.55;
-    const Sweep a = sweep(ev, world);
-    level.trees[0].x = -0.55;  // beside him, on his left
-    level.trees[0].z = 0;
-    const Sweep b = sweep(ev, world);
+    const Sweep a = sweep(into_a_trunk(v));
+    const Sweep l = in_his_line(v);
+    const Sweep b = sweep(events_alone(ev, -0.55, 0));  // beside him, on his left
     const std::string kmh = fixed(v * 3.6, 0);
     lab.metric("trunk.head-on." + kmh + ".iss", a.iss, "score");
+    lab.metric("trunk.line." + kmh + ".iss", l.iss, "score");
     lab.metric("trunk.beside." + kmh + ".iss", b.iss, "score");
     trunk.rows.push_back({kmh, fixed(a.hurt, 2), fixed(a.iss, 1), fixed(a.mortal, 2),
-                          a.most.empty() ? "-" : a.most, fixed(b.hurt, 2), fixed(b.iss, 1),
-                          fixed(b.mortal, 2), b.most.empty() ? "-" : b.most});
+                          a.most.empty() ? "-" : a.most, fixed(l.iss, 1), fixed(l.mortal, 2),
+                          fixed(b.hurt, 2), fixed(b.iss, 1), fixed(b.mortal, 2),
+                          b.most.empty() ? "-" : b.most});
     head_on.x.push_back(v), head_on.y.push_back(a.iss);
+    line.x.push_back(v), line.y.push_back(l.iss);
     beside.x.push_back(v), beside.y.push_back(b.iss);
   }
   lab.table(std::move(trunk));
@@ -193,21 +267,23 @@ void run(gl::Lab& lab) {
     ev.flight_s = 1;
     ev.wiped_out = g > sk::tuning::air::kHarshG;
     ev.cause = ev.wiped_out ? sk::Wipeout::landing : sk::Wipeout::none;
-    const Sweep a = sweep(ev, world);
+    const Sweep a = sweep(events_alone(ev, 0, 100));
     lab.metric("landing." + std::to_string(g) + "g.iss", a.iss, "score");
     land.rows.push_back({std::to_string(g), fixed(a.hurt, 2), fixed(a.iss, 1), fixed(a.mortal, 2),
                          a.most.empty() ? "-" : a.most});
     landing_trace.x.push_back(g), landing_trace.y.push_back(a.iss);
   }
   lab.table(std::move(land));
-  lc.traces = {head_on, beside, landing_trace};
+  lc.traces = {head_on, line, beside, landing_trace};
   lc.rules = {16};  // major trauma
   lc.spikes = false;
   const gl::Chart ch = gl::line_chart(lc);
   lab.shot({"curves",
             "MEAN SEVERITY BY SPEED AND BY LOAD",
             "The mean injury severity score over " + std::to_string(kTrials) +
-                " draws: a trunk met square ahead of the tips and beside him on his left, by "
+                " draws: a trunk skied into square ahead of the tips (the body thrown on into it) "
+                "and met "
+                "beside him on his left, by "
                 "closing speed in m/s, and a landing by its load in g, on one x axis. The dashed "
                 "line is 16, major trauma.",
             "every curve rises with its dose and none falls back; a trunk head-on is worse than "
