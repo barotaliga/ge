@@ -84,20 +84,32 @@ Likeness likeness_of(const lab::Picture& p) {
   Likeness l;
   l.look = look_of(p);
   if (p.width <= 0 || p.height <= 0) return l;
+  // A step is against the picture's own contrast, so a near-black tile's joints count as much as
+  // a bright one's (a fixed step left a dark tile a handful of steps and a lean that was noise).
+  const double step = std::max(0.01, 0.8 * l.look.contrast);
   size_t across = 0, down = 0;
   for (int y = 0; y < p.height; ++y) {
     for (int x = 0; x < p.width; ++x) {
       const double c = luma_at(p, x, y);
-      if (std::fabs(c - luma_at(p, (x + 1) % p.width, y)) > 0.08) ++across;
-      if (std::fabs(c - luma_at(p, x, (y + 1) % p.height)) > 0.08) ++down;
+      if (std::fabs(c - luma_at(p, (x + 1) % p.width, y)) > step) ++across;
+      if (std::fabs(c - luma_at(p, x, (y + 1) % p.height)) > step) ++down;
     }
   }
   const double n = static_cast<double>(p.width) * p.height;
   l.across = static_cast<double>(across) / n;
   l.down = static_cast<double>(down) / n;
-  std::vector<double> luma(static_cast<size_t>(p.width) * p.height);
-  for (int y = 0; y < p.height; ++y)
-    for (int x = 0; x < p.width; ++x) luma[static_cast<size_t>(y) * p.width + x] = luma_at(p, x, y);
+  // The repeat off the luma softened by its 3x3 neighbourhood (wrapped): an ordered dither's
+  // 4-texel grid is grain, not the pattern, and must not stand in for the tile's period.
+  const int w = p.width, h = p.height;
+  std::vector<double> luma(static_cast<size_t>(w) * h);
+  for (int y = 0; y < h; ++y) {
+    for (int x = 0; x < w; ++x) {
+      double sum = 0;
+      for (int dy = -1; dy <= 1; ++dy)
+        for (int dx = -1; dx <= 1; ++dx) sum += luma_at(p, (x + dx + w) % w, (y + dy + h) % h);
+      luma[static_cast<size_t>(y) * w + x] = sum / 9;
+    }
+  }
   repeat_of(luma, p.width, p.height, true, &l.period_x, &l.repeat_x);
   repeat_of(luma, p.width, p.height, false, &l.period_y, &l.repeat_y);
   return l;

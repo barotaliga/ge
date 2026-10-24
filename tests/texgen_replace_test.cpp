@@ -178,3 +178,23 @@ TEST(packed_rgb_matches_as_rgba_does) {
   CHECK(tg::match_rgb(matcher(), "planks", rgb, 32, 32).text ==
         tg::match_texture(matcher(), "planks", original).text);
 }
+
+TEST(a_dark_dithered_tile_repeats_at_its_pattern_not_its_dither) {
+  // Four dark quadrants of two shades, under a 4-texel ordered dither: the period is the
+  // quadrants (half the tile), and the step count stays meaningful on a near-black tile.
+  lab::Picture p;
+  p.width = p.height = 64;
+  p.rgba.assign(64 * 64 * 4, 255);
+  constexpr int kBayer[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
+  for (int y = 0; y < 64; ++y) {
+    for (int x = 0; x < 64; ++x) {
+      const bool odd = ((x / 32) + (y / 32)) % 2 != 0;
+      const bool joint = x % 32 < 2 || y % 32 < 2;
+      const int v = (joint ? 6 : odd ? 30 : 22) + kBayer[y % 4][x % 4] / 3;
+      for (int c = 0; c < 3; ++c)
+        p.rgba[static_cast<size_t>(y * 64 + x) * 4 + c] = static_cast<uint8_t>(v);
+    }
+  }
+  const tg::Likeness l = tg::likeness_of(p);
+  CHECK(l.period_x == 0.5 && l.period_y == 0.5);
+}
