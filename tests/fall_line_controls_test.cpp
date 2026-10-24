@@ -298,7 +298,7 @@ TEST(the_bots_run_on_the_thumbs_reads_back_as_the_thumbs_give_it_and_finishes) {
   }
   CHECK_MSG(differ == 0, "every step read back what the thumbs gave");
   // The thumbs held where they last were, the run skis on to its end.
-  for (int64_t k = 0; fc::hand_playing(*hand) && k < 120 * 120; ++k) {
+  for (int64_t k = 0; fc::hand_playing(*hand) && k < int64_t{120} * 120; ++k) {
     in::update(held, {});
     fc::hand_frame(*hand, held, 1.0 / 120, 0);
     fc::hand_step(*hand, held, 0);
