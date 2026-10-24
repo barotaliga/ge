@@ -84,7 +84,7 @@ install(DIRECTORY "${PROJECT_SOURCE_DIR}/engine/"
   DESTINATION ${GE_INSTALL_INCLUDEDIR}
   FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h" PATTERN "*.inl"
   PATTERN "gpu" EXCLUDE PATTERN "platform" EXCLUDE PATTERN "render" EXCLUDE
-  PATTERN "cli" EXCLUDE PATTERN "os_socket.hpp" EXCLUDE
+  PATTERN "cli" EXCLUDE PATTERN "labs" EXCLUDE PATTERN "os_socket.hpp" EXCLUDE
   PATTERN "session_wire.hpp" EXCLUDE PATTERN "reach_wire.hpp" EXCLUDE PATTERN "portmap_wire.hpp" EXCLUDE
   PATTERN "replicate_wire.hpp" EXCLUDE PATTERN "to_view.hpp" EXCLUDE)
 
