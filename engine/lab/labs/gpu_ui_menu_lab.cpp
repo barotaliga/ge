@@ -148,7 +148,10 @@ void run(ge::lab::Lab& lab) {
     if (!gpu.device) {
       ge::lab::Picture none = ge::lab::create_picture(w, h, {40, 40, 48});
       ge::lab::draw_text(none, 4, 4, "NO GPU ADAPTER", {230, 230, 230});
+      // The same shot ids as a GPU's run, so the digest is the same on every row.
       lab.shot({p.id, p.title, p.caption, "a placeholder", {size}}, none, Det::measured);
+      lab.shot({p.id + "-diff", p.title + ", OFF THE RASTER", p.caption, "a placeholder", {size}},
+               none, Det::measured);
       continue;
     }
     Image cpu = make_image(w, h, hex(0x000000));
