@@ -27,6 +27,9 @@
 //               [--encoder-preset=P] [--thumbs=24]          is the engine's own, with the run's
 //               [--band=0] [--sound=0] [--<option>=V]       sound) and a contact sheet of --thumbs
 //               [--out=DIR]                                 stills, each with its time and step
+//   play cvar ls [<prefix>] | get <name>...                 the game's cvars (console_cmds.hpp)
+//   play cfg check|exec <file>... [--server] [--cmd=C]      cfg files run against them: problems,
+//   play cfg dump                                           what changed; every player setting
 //
 // Every command but the protocol prints exactly one JSON object on one line. A problem prints
 // `{"error":...,"where":...,"next":...}`; the exit code is 0 done, 1 a problem (a replay that
@@ -35,7 +38,7 @@
 // ge:summary The play executable's main: protocol, describe, sim, replay, state, diverge, bench
 // ge:summary shot, record and why
 // ge:keywords play main executable command-line describe sim replay state diverge bench
-// ge:keywords play_main why human record video
+// ge:keywords play_main why human record video cvar cfg
 // ge:skill agent-interface
 // ge:test tests/play_session_test.cpp
 #pragma once
