@@ -82,6 +82,8 @@ uint64_t map_digest(const Map& map) {
     mix(t.name.data(), t.name.size());
     mix_u(t.width);
     mix_u(t.height);
+    mix_u(t.indexed.size());
+    mix(t.indexed.data(), t.indexed.size());
   }
   for (const Lightmap& l : map.lightmaps) {
     mix_u(l.width);

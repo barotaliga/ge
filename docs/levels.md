@@ -173,5 +173,14 @@ doorways, an axis-aligned tree, visibility two doorways deep, a luxel per 16 tex
 room's own lights, and in 46 a curved patch), the same bytes on every platform. The `bsp` lab draws
 each (or any map given with `--map`).
 
+**Pictures.** A 29 or BSP2 map can carry its textures' pixels: `Texture::indexed` holds the
+full-size picture as palette indices (the palette itself is in the game's files, not the map). The
+`bsp` lab draws such a map textured: `labs bsp --pak=<pack> --map=maps/<a>.bsp,maps/<b>.bsp` reads
+the maps and `gfx/palette.lmp` out of a pack archive (`engine/vfs/pak.hpp`, the first slice of
+M18a), then draws each from its player start and three other starts. Each texel is lit by its
+lightmap, so a luxel of 128 shows the picture as painted. The palette's last 32 colours glow
+whatever the light, the sky is its two layers along the view, and trigger volumes are left out.
+Content read this way stays outside the tree.
+
 Left to M18b: the clip hulls' trace (they are read and checked), the PHS, the BSPX lumps, animated
 texture sequences, and `ge bsp`.

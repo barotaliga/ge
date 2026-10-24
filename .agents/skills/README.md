@@ -44,6 +44,7 @@ router's Skills table and the directories against each other.
 | `console` | Cvars and their tiers, cfg files, the console language, binds, the drop-down console, `ge cvar` and `ge cfg` |
 | `replay` | Watching a run again: a game's clone, the keyframes, the player's seek, the transport; later the replay file, the director, spectating and the video export |
 | `net` | Multiplayer networking: sockets, the simulated network, captures, the wire, channels, nodes, sessions and the lobby, LAN discovery, NAT traversal, port mapping, replication, fake traffic |
+| `vfs` | Content files: the pack archive's checked directory and its files as views; later search paths, zips and directories |
 | `plugins` | Engine, plugin or game: where code lives, adding a plugin, moving code between homes |
 
 ## Plugins

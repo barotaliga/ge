@@ -102,6 +102,9 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   walker's), one step over a swept-box trace callback the game answers with its own world, a box
   world for labs and prototypes, the strafe jumper's best angle and the scenarios. It depends on
   `engine/core` only and is a pure function of its inputs, so a run replays from its commands.
+- **`engine/vfs`**: content files (`ge::vfs`, M18a): the pack archive's directory checked whole
+  before anything is read, and each file handed out as a view into the archive. Search paths, zip
+  archives and directories come with the rest of M18a. It depends on `engine/core` only.
 - **`engine/ui`**: the immediate-mode 2D layer (rects, images, SDF text), plus Dear
   ImGui behind `GE_DEV_UI`.
 - **`games/fall_line/app`**: Fall Line's presentation, the `fall_line_app` library (which

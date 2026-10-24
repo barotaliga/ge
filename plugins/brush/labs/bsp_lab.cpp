@@ -15,6 +15,8 @@
 #include <cctype>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <iterator>
 #include <string>
@@ -27,6 +29,8 @@
 #include "lab/lab.hpp"
 #include "lab/model_view.hpp"
 #include "lab/raster.hpp"
+#include "textured_view.hpp"
+#include "vfs/pak.hpp"
 
 namespace {
 
@@ -239,9 +243,38 @@ double read_us(const std::vector<uint8_t>& bytes) {
   return best;
 }
 
+// Where to stand in a map to look at it: the player's start, then up to three other starts spread
+// through the entity list, each at eye height facing its `angle`.
+std::vector<std::pair<std::string, br::labs::TexturedEye>> eyes_of(const br::Map& map) {
+  std::vector<std::pair<std::string, br::labs::TexturedEye>> out;
+  std::vector<const br::Entity*> others;
+  const auto eye_at = [](const br::Entity& e) {
+    br::labs::TexturedEye eye;
+    double o[3] = {0, 0, 0};
+    std::sscanf(e.get("origin").c_str(), "%lf %lf %lf", &o[0], &o[1], &o[2]);
+    for (int k = 0; k < 3; ++k) eye.at[k] = o[k];
+    eye.at[2] += 22;  // the eye over a start's origin
+    eye.yaw_deg = std::atof(e.get("angle").c_str());
+    return eye;
+  };
+  for (const br::Entity& e : map.entities) {
+    const std::string& c = e.get("classname");
+    if (c == "info_player_start" && out.empty()) out.push_back({"THE START", eye_at(e)});
+    if (c == "info_player_deathmatch" || c == "info_player_coop") others.push_back(&e);
+  }
+  for (size_t i = 0; i < 3 && i < others.size(); ++i) {
+    const size_t at = others.size() <= 3 ? i : i * (others.size() - 1) / 2;
+    out.push_back({"START " + std::to_string(at + 1), eye_at(*others[at])});
+  }
+  return out;
+}
+
 void run(lab::Lab& lab) {
   const int px = int(lab.arg_num("px"));
   const std::string path = lab.arg("map");
+  const std::string pak_path = lab.arg("pak");
+  std::vector<uint8_t> pak_bytes, palette;
+  ge::vfs::Pak pak;
   std::vector<Loaded> maps;
   std::vector<std::string> names;
   if (path.empty()) {
@@ -256,6 +289,38 @@ void run(lab::Lab& lab) {
                  "next: fix plugins/brush/fixture.cpp; skill: brush");
         return;
       }
+      maps.push_back(std::move(l));
+    }
+  } else if (!pak_path.empty()) {
+    // Maps out of a pack archive: --map names one or more paths inside it, comma separated.
+    std::ifstream in(pak_path, std::ios::binary);
+    pak_bytes.assign(std::istreambuf_iterator<char>(in), {});
+    std::string error;
+    if (pak_bytes.empty() || !ge::vfs::read_pak(pak_bytes, &pak, &error)) {
+      lab.fail("bsp: cannot read the pack " + pak_path + (error.empty() ? "" : ": " + error),
+               "next: pass --pak=<file.pak>, a path from the repo root; skill: vfs");
+      return;
+    }
+    if (const ge::vfs::PakEntry* e = ge::vfs::pak_find(pak, "gfx/palette.lmp");
+        e != nullptr && e->size == 768) {
+      const auto b = ge::vfs::pak_file(pak_bytes, *e);
+      palette.assign(b.begin(), b.end());
+    }
+    size_t from = 0;
+    while (from <= path.size()) {
+      const size_t to = std::min(path.find(',', from), path.size());
+      const std::string name = path.substr(from, to - from);
+      from = to + 1;
+      const ge::vfs::PakEntry* e = ge::vfs::pak_find(pak, name);
+      if (e == nullptr) {
+        lab.fail("bsp: " + pak_path + " holds no " + name,
+                 "next: pass --map=<path inside the pack>, as `maps/<name>.bsp`; skill: vfs");
+        return;
+      }
+      const auto b = ge::vfs::pak_file(pak_bytes, *e);
+      Loaded l;
+      l.name = name;
+      l.bytes.assign(b.begin(), b.end());
       maps.push_back(std::move(l));
     }
   } else {
@@ -301,7 +366,12 @@ void run(lab::Lab& lab) {
                           std::to_string(m.lightmaps.size()), std::to_string(luxels),
                           std::to_string(m.leaves.size()), std::to_string(m.clusters),
                           std::to_string(m.entities.size()), std::to_string(m.patches)});
+    // A map given by name is keyed by its file name too, so two maps of one family keep apart.
     std::string key = br::family_name(m.family);
+    if (!path.empty()) {
+      const std::string file = l.name.substr(l.name.rfind('/') + 1);
+      key += "-" + file.substr(0, file.rfind('.'));
+    }
     for (char& c : key) c = char(std::tolower(uint8_t(c)));
     lab.metric("bytes-" + key, double(l.bytes.size()), "count");
     lab.metric("triangles-" + key, double(m.triangles()), "count");
@@ -366,6 +436,37 @@ void run(lab::Lab& lab) {
               "the vault's rippled patch overhead, and the side room looking back to its door.",
               "light falls off from each lamp; doorways are dark; walls meet without gaps", inputs},
              p);
+  }
+
+  // With a palette (a pack's gfx/palette.lmp), each 29 or BSP2 map seen textured from its starts.
+  if (!palette.empty()) {
+    for (const Loaded& l : maps) {
+      const br::Map& m = l.map;
+      if (m.family != br::Family::v29 && m.family != br::Family::bsp2) continue;
+      const auto eyes = eyes_of(m);
+      if (eyes.empty()) continue;
+      const int cw = px, ch = px * 5 / 8, cols = eyes.size() > 1 ? 2 : 1;
+      const int rows = int((eyes.size() + size_t(cols) - 1) / size_t(cols));
+      Picture p = lab::create_picture(cols * cw, rows * ch, kDark);
+      for (size_t i = 0; i < eyes.size(); ++i) {
+        const int x = int(i % size_t(cols)) * cw, y = int(i / size_t(cols)) * ch;
+        br::labs::draw_textured(p, x, y, cw, ch, m, palette, eyes[i].second);
+        label(p, x + 4, y + 4, eyes[i].first);
+      }
+      std::string id = l.name.substr(l.name.rfind('/') + 1);
+      id = "textured-" + id.substr(0, id.rfind('.'));
+      for (char& c : id) c = char(std::tolower(uint8_t(c)));
+      lab.shot({id,
+                "STANDING IN " + l.name,
+                "The map read out of the pack and drawn with its own pictures through the pack's "
+                "palette, lit by its lightmaps (a luxel of 128 is the picture as painted), the "
+                "sky's two layers along the view, trigger volumes left out: from the player's "
+                "start and up to three other starts, at eye height, facing each start's angle.",
+                "walls, floors and ceilings meet without gaps; light pools under the lamps; "
+                "no picture is smeared or offset across a face",
+                {{"pak", pak_path}, {"map", l.name}}},
+               p);
+    }
   }
 
   {
@@ -462,6 +563,9 @@ const lab::LabSpec kSpec{
     {
         {"map", "", "a map file to draw instead of the fixtures (any family)"},
         {"lit", "", "a .lit file for --map (29 and BSP2)"},
+        {"pak", "",
+         "a pack archive --map's paths are read from (comma separated); its "
+         "gfx/palette.lmp textures the views"},
         {"px", "480", "a panel's width, px"},
         {"patch-levels", "2,6,12", "46's patch tessellated at these levels"},
     },
