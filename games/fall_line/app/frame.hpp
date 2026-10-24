@@ -76,6 +76,7 @@
 #include "mountain/app/trails.hpp"
 #include "mountain/mapgen/types.hpp"
 #include "render/bloom.hpp"
+#include "render/cloud_kinds.hpp"
 #include "render/clouds.hpp"
 #include "render/frame.hpp"
 #include "render/hiz.hpp"
@@ -118,6 +119,10 @@ struct FrameOptions {
       true;  // the map's sky and cloud in the picture (mountain/app/cloud_field.hpp): off, clear
   double clouds = 1.0;  // the share of the cloud march's steps (0.25..1); 0: no layer drawn
   double cover = -1;  // a broken sky's cover, its lowest layer's (the others kept in step); -1 own
+  // The kinds of cloud drawn in place of the map's (sv_clouds, app/sky_type.hpp), lowest first;
+  // a count of -1 keeps the map's own.
+  const ge::render::CloudKind* cloud_kinds[ge::render::kCloudLayers] = {};
+  int cloud_count = -1;
   bool cloud_quarter = true;  // the cloud marched at a quarter of the pixels (false: every one)
   bool cloud_spread = true;   // the quarter's march spread over four frames, the rest reprojected
   double reach_m = 0;  // how far the picture draws, misted (render/view.hpp); 0: the whole ground
