@@ -1,6 +1,6 @@
 ---
 name: multiplayer
-description: "Use when this game talks over a network: the engine's ge::net (a node for a host, a client or a peer of up to 32, its channels, its events), a lobby (players by seat, teams, chat, kick, start, reconnect by token, LAN discovery), reaching a host behind a home router (STUN, a rendezvous server, hole punching, the relay), testing a session on the simulated network under bad links, capturing a live node's traffic, and the ge net tools that read it (ge net inspect, ge net stats, ge net sim)."
+description: "Use when this game talks over a network: the engine's ge::net (a node for a host, a client or a peer of up to 32, its channels, its events), a lobby (players by seat, teams, chat, kick, start, reconnect by token, LAN discovery), reaching a host behind a home router (STUN, a rendezvous server, hole punching, the relay, opening a port), replicating a world from a server (snapshots, prediction, interpolation, interest, lag compensation), testing a session on the simulated network under bad links, capturing a live node's traffic, and the ge net tools that read it (ge net inspect, ge net stats, ge net sim)."
 ---
 
 # Multiplayer on ge::net
@@ -86,6 +86,9 @@ net::session_client_update(client, now_us);
 // client.players[] is the player list (name, team, ready, leader, ping_ms); client.me is
 // this player's seat; client.token brings it back to the seat after a crash or a drop.
 net::session_client_chat(client, net::ChatScope::team, net::kNoPlayer, text, size);
+// Proximity chat: the host asks the game who is in earshot (it knows where everyone is).
+// sc.hears = [](void* game, int speaker, int listener) { return in_earshot(game, speaker, listener); };
+net::session_client_chat(client, net::ChatScope::nearby, net::kNoPlayer, text, size);
 ```
 
 Asks (`session_client_ready`, `_team`, `_chat`, `_kick`, `_start`, `_return`, `_settings`) come
@@ -134,6 +137,45 @@ if (pm.state == net::PortmapState::mapped) net::reach_host_forward(rh, pm.extern
 
 It renews the lease itself. Test it against `SimRouter` (`net/sim_router.hpp`): give the NAT a
 `gateway` node and choose what the router speaks.
+
+## Replicating a world: the server's word
+
+`net/replicate.hpp` sends each client snapshots of what it may see and lets it predict its own
+entity. Name the fields and the step; the server and the client call the same step:
+
+```cpp
+net::Schema sc;
+sc.fields = 3;
+sc.spec[0] = {-256, 256, 20, false};   // x: 20 bits over 512 m
+sc.spec[1] = {-256, 256, 20, false};   // z
+sc.spec[2] = {0, 6.283185307179586, 12, true};  // heading: wraps
+sc.input_size = 3;                     // bytes a tick's input carries
+sc.step = my_step;                     // deterministic: void(void* ctx, double* state, const uint8_t* input)
+net::ReplicateConfig rc;               // channel 0 snapshots, 1 inputs, both unreliable
+// server, each tick after node_update:
+net::replicate_server_receive(server); /* the game's own moves: replicate_set */ net::replicate_server_tick(server);
+// client, each tick after node_update:
+net::replicate_client_receive(client); net::replicate_client_input(client, input);
+net::replicate_client_predicted(client, own);              // the own entity, smoothed
+net::replicate_client_sample(client, id, other);           // anyone else, interpolated
+```
+
+Spawn a player's entity with `replicate_spawn(server, peer, values)` when its peer connects. A
+hit is judged with `replicate_rewind(server, id, client_view_tick, out)`. Set
+`interest_radius` (with `interest_x`, `interest_z`) for an open world and `snapshot_budget` to cap
+a client's bandwidth. Run it on the simulated network under every preset and count
+`client.stats.corrections`: with no loss it must be zero.
+
+## Tune the rates, and watch a live game
+
+A client's `rate`, `update_rate`, `cmd_rate`, `redundancy` and `interp_ticks` and the server's
+`max_rate`, `max_update_rate` and `tick_hz` are `ReplicateConfig` fields (the console's `rate`,
+`cl_updaterate`, `cl_cmdrate`, `cl_cmdbackup`, `cl_interp`, `sv_maxrate`, `sv_fps`). Pick them
+with `ge net sweep --knob=update-rate --values=10,20,30,60 --presets=wifi,bad`, which names the
+cheapest value within reach of the best. To see a running game or server's packets, open a tap
+on its transport (`net::Tap tap; net::open_tap(tap, 27950, &err); transport.tap = &tap;`) and run
+`ge net watch --port=27950`. To play it over a bad link on a LAN, `net::transport_fake(transport,
+&fake, conditions, seed)`.
 
 ## Test it on bad links
 

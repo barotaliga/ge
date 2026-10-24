@@ -234,12 +234,40 @@ fn veil_sky(d: vec3f, colour: vec3f) -> vec3f {
   return mix(veil_luminance(), colour, exp(-frame.weather.z * path));
 }
 
+// THE REACH'S MIST (FrameView::reach_m): what the sky pass draws along `d` (camera-relative,
+// unit) while there is a reach, the sky with a direction under the horizon drawn as the
+// horizon's, so a surface the mist has closed is the sky behind it and the ground past the reach
+// is never missed: the far land lost in a bright haze, never a dark sea under it.
+fn mist_dir(d: vec3f) -> vec3f {
+  if (frame.mist.y <= 0.0 || d.y >= 0.0) {
+    return d;
+  }
+  return normalize(vec3f(d.x, 1e-4, d.z));
+}
+
+fn mist_sky(d: vec3f) -> vec3f {
+  let h = mist_dir(d);
+  return veil_sky(h, sky_luminance(h));
+}
+
 // THE HAZE: a surface's colour seen through `dist_m` of air at screen `uv` (0..1): its colour
 // times the air's transmittance plus the light the air scatters in, from the aerial-perspective
 // volume (under a deck, the deck's grey in its place); then a fog or a fall closing it into its
-// grey veil, so a surface at the visual range keeps 2 % of its contrast against it. Every world
-// material calls this, and none has its own fog.
+// grey veil, so a surface at the visual range keeps 2 % of its contrast against it; then the
+// reach's mist closing it into the sky behind it. Every world material calls this, and none has
+// its own fog.
 fn haze(colour: vec3f, uv: vec2f, dist_m: f32) -> vec3f {
+  let c = haze_air(colour, uv, dist_m);
+  if (frame.mist.y <= 0.0) {
+    return c;
+  }
+  let t = clamp((dist_m - frame.mist.x) / (frame.mist.y - frame.mist.x), 0.0, 1.0);
+  return mix(c, mist_sky(view_ray(frame, uv)), t * t * (3.0 - 2.0 * t));
+}
+
+// The haze without the reach's mist: the air and the weather alone (the cloud's, which is the
+// sky's own and never misted).
+fn haze_air(colour: vec3f, uv: vec2f, dist_m: f32) -> vec3f {
   let s = sqrt(clamp(dist_m * 1e-3 / kAerialRangeKm, 0.0, 1.0));
   let w = max(s - 0.5 / kAerialSize.z, 0.5 / kAerialSize.z);
   let v = textureSampleLevel(aerial_volume, linear_clamp, vec3f(uv, w), 0.0);
@@ -299,19 +327,54 @@ fn exposure() -> f32 {
   return e;
 }
 
-// THE RODS' SHARE of the eye's seeing: 0 over 3 lx on white (the cones), 1 under 0.01 lx.
-fn rod_share() -> f32 {
-  let lux = white_luminance() * PI * kSunLux / frame.world.y;
+// THE RODS' SHARE of the eye's seeing at `luminance` (a radiance in white_luminance's units, so
+// the light on a white face is white_luminance()): 0 over 3 lx on white (the cones), 1 under
+// 0.01 lx.
+fn rods_at(luminance: f32) -> f32 {
+  let lux = max(luminance, 1e-30) * PI * kSunLux / frame.world.y;
   return clamp((0.5 - log2(lux) * 0.30103) / 2.5, 0.0, 1.0);
 }
 
-// NIGHT VISION: a colour as the rods see it, its luminance in a blue grey, by their share.
+fn rod_share() -> f32 {
+  return rods_at(white_luminance());
+}
+
+// The share of the pixel looking along `d` that the moon's disc covers, seen through the
+// weather's deck and fog: 1 inside, 0 outside, over the soft edge render/sky.wgsl draws it with.
+// It reads no depth, so a ridge or a cloud layer in front of the disc counts as the disc; a
+// ridge there is a dark silhouette and a cloud there is lit by the moon itself, so neither
+// shows it.
+fn on_moon(d: vec3f) -> f32 {
+  let rad = frame.moon_light.z;
+  let c = dot(d, frame.moon.xyz);
+  if (rad <= 0.0 || c <= 0.0) {
+    return 0.0;
+  }
+  let clear = (1.0 - frame.weather.y) * exp(-frame.weather.z * 10000.0);
+  return (1.0 - smoothstep(0.95, 1.0, sqrt(max(1.0 - c * c, 0.0)) / sin(rad))) * clear;
+}
+
+// NIGHT VISION: a colour as the rods see it, its luminance in a blue grey, by their share. A part
+// of the picture bright enough for the cones keeps its colour however dark the scene round it:
+// the share is the scene's or the pixel's own, whichever is less, so a bright star keeps its
+// tint over a blue-grey night. The moon's disc (`d` the pixel's view ray) is drawn far dimmer
+// than it is, as the eye sees it against the scene, but its true brightness is always the
+// cones' (even an eclipse's umbra is near 1 cd/m2), so it keeps its colour: a full moon its warm
+// white, an eclipse its copper red.
 const kRodTint = vec3f(0.78, 0.93, 1.32);
 
-fn night_vision(c: vec3f) -> vec3f {
+fn rods(c: vec3f) -> vec3f {
   let s = rod_share();
   if (s <= 0.0) {
     return c;
   }
-  return mix(c, kRodTint * dot(c, kLuma), 0.85 * s);
+  let l = dot(c, kLuma);
+  return mix(c, kRodTint * l, 0.85 * min(s, rods_at(l)));
 }
+
+// The post pass's: over the moon's disc the sky pass has already given the sky in front of it
+// to the rods (render/sky.wgsl), so the disc's pixels are left as they are.
+fn night_vision(c: vec3f, d: vec3f) -> vec3f {
+  return mix(rods(c), c, on_moon(d));
+}
+

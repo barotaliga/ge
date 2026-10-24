@@ -69,7 +69,7 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
     let b = textureSampleLevel(bloom, lin, uv, 0.0);
     c = mix(c, b.rgb / max(b.a, 1.0), kBloom);
   }
-  c = night_vision(c);
+  c = night_vision(c, view_ray(frame, in.position.xy / vec2f(textureDimensions(hdr))));
   let t = clamp(tone(c * exposure()), vec3f(0.0), vec3f(1.0));
   var o = graded(linear_to_srgb(t));
   if (!kEncodeSrgb) {
