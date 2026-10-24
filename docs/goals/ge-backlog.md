@@ -72,6 +72,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 ## Inspecting a run
 
 - plugin commands (next, after the module registry): a plugin's or a game's `tools/*.cpp` registering `GE_TOOL({group, verb, summary, args, flags, run})` into one `tools` executable the build makes, and `ge` forwarding a command it does not know to it, listed in `ge help` and answering with findings and `--json` like its own; first users `ge level textures <pak> <map> --out=<dir>` and `ge level clone <bsp> --texmap=<file>`, which today hide as lab flags
+- `ge lab why <lab> <metric>` (what drove a lab's metric: the scenario steps, series and inputs that moved it most, and against a kept run with `--compare=<tag>` where it parted)
 - `ge lab listen <lab> <id>` (a lab's WAVs transcoded to a small web format, Opus in Ogg, for its report page and `ge lab publish`, without ffmpeg by hand)
 - `ge record` (done: a run as an MP4, WebM or GIF and a contact sheet of timestamped stills, its resolution, frame rate, speed, range and encoder quality; and `--gpu`, the game's registered renderer drawing each frame headless in a mode, Fall Line's `lit`, `wireframe`, `depth` and `overlay` from a chase camera, a high chase or the named views; `ge shot --gpu` the same still)
 - `ge export <replay> --from-mark=<kind>` (a clip cut straight off a replay file's marks, a crash or a jump, without finding its steps by hand)
