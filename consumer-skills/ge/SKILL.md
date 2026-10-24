@@ -61,6 +61,7 @@ ge asset build [<name>]          # a model built in headless Blender off the gam
 ge sound match <ref> <dir>...    # free sounds ranked against a reference (skill: assets)
 ge sound import <file> <name>    # a free sound trimmed, loudness-matched, written as WAV
 ge sound split <file> <name>     # a recording of many sounds cut at its silences
+ge model import <file> <name>    # a free kit's model packed into one .glb, loaded and measured
 ge check                         # the whole gate: format, doctor, build, tests
 ge lint [--base=<ref>] [<file>...]  # clang-tidy's bug-finding checks over what the change reaches
 ge precheck [--preset=<p>]       # what CI runs, both presets: ge check, the pilot, the replays

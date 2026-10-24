@@ -258,6 +258,10 @@ constexpr FlagSpec kSoundSplitFlags[] = {
     {"threshold", "<dBFS>", "quieter than this is silence (default -50)"},
     {"rate", "<hz>", "the rate they are written at (default 22050)"}};
 
+constexpr FlagSpec kModelImportFlags[] = {
+    {"to", "<dir>", "the directory the model is written under (default models)"},
+    {"budget-kib", "<n>", "warn over this size (default 300)"}};
+
 constexpr FlagSpec kGraphFlags[] = {
     {"kind", "<auto|line|scatter|hist|box|heat|spans>",
      "the chart (default auto: spans for a spans file, line for the rest)"},
@@ -551,6 +555,12 @@ const CommandSpec kCommands[] = {
      "one recording of many sounds cut at its silences, each piece imported as import does to "
      "<to>/<name>_01.wav, _02 ...",
      kSoundSplitFlags, "ge sound split packs/footsteps.ogg player/step --gap=0.2", "assets"},
+    {"model import", "<source> <name>", 2, 2, "create",
+     "a free kit's model taken in under our name: its buffers and textures (files beside it or "
+     "data: URIs) packed into one <to>/<name>.glb, loaded by the engine's loader and measured",
+     kModelImportFlags,
+     "ge model import \"packs/kit/Models/GLB format/crate.glb\" pickup/shells --to=models",
+     "assets"},
 };
 
 constexpr FlagSpec kGlobal[] = {
