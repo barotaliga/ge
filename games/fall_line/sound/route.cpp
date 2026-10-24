@@ -134,6 +134,11 @@ void run_sound_frame(RunSound& sound, ge::audio::Synth& synth, const sim::GameSt
   ge::skier::ride_bed_update(sound.bed, synth, state.racers[0].skier, state.spec, dt, heard);
 }
 
+void play_menu(ge::audio::Synth& synth, std::string_view id) {
+  const ge::audio::SoundDef* def = ge::audio::find_sound(kBank, id);
+  if (def) ge::audio::play_def(synth, *def, {}, kBusEffects);
+}
+
 void run_sound_silence(RunSound& sound, ge::audio::Synth& synth) {
   ge::skier::ride_bed_silence(sound.bed, synth);
 }

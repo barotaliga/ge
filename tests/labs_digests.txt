@@ -4,7 +4,7 @@ anim ef8d546cbda7d03f
 army 66396a5f4287214b
 army-flight 57fc57956ada1ce3
 army-sleds 821adaba95b0b813
-audition d47fda4a9cb22fbb
+audition 4d8f2e28e5111292
 camera-follow b1dbf6ae474cba78
 camera-rigs bd01263b4d16d23c
 camera-shake 3d1734df5bafe175
@@ -17,6 +17,7 @@ crowd-look 194a06db20f2ebb2
 forest f1881cb20efe0144
 frame-pace c5058023a52812c3
 free 2b3f2cf5100bf9b4
+front-door 11eb11f32ed9b76b
 gpu-capture 8b5d5e3b7be5a4fc
 gunfire 281f630cc6213cee
 heli edc6a93febc6f52d

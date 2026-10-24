@@ -240,7 +240,7 @@ the frame block's `prev_view_proj` and `eye_delta` (`FrameHistory`, `frame_types
 `terrain.horizon`, `terrain.depth`, `instances.depth`, `hiz`, `instances.cull.late`,
 `instances.depth.late`, `terrain`, `instances` (both phases' lists, tested `equal`), `sky`,
 `taa`, `bloom` (M7d3), `post`; M8e2 adds `skinning` straight after `sky.tables`, writing
-`figures.posed`, which every pass that reads the figures' family reads. The late phase's depth lands before the colour pass, so it is still shaded
+`figures.posed`, which every pass that reads the figures' family reads. M22c adds `ui` after `post`: the 2D pass (§ The 2D pass) draws the frame's overlay, a menu or the HUD, over `final`, and an empty pass when there is none. The late phase's depth lands before the colour pass, so it is still shaded
 once; the late phase's draws are not in this frame's pyramid, which only makes the next
 frame's phase one keep a little more.
 
