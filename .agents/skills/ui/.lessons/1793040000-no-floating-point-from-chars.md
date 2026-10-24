@@ -2,7 +2,7 @@
 title: Floating-point from_chars does not build on Apple's standard library, so text numbers go through strtod
 date: 2026-10-24
 scope: engine/charset/design.cpp
-concepts: [charset, parse, from_chars, strtod, macos, portability]
+concepts: [charset, parse, from-chars, strtod, macos, portability]
 ---
 
 The design language's numbers were read with `std::from_chars(..., double&)`. That builds with
