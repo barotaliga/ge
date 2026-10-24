@@ -6,6 +6,9 @@ struct FamilyParams {
   info: vec4u,  // count, LODs, capacity, occlusion on (1)
   cull: vec4f,  // px a unit of tan on screen, the least radius on screen (px), the LOD band
   skin: vec4u,  // a palette family's: joints a palette, this frame's first row, the last frame's
+  see: vec4f,   // seen through (instances.hpp's SeeThrough): the subject, world xyz; the ease's
+                // width, m (0: off)
+  see_more: vec4f,  // the share an instance on the line keeps, the metres short of the subject
 }
 
 struct Mesh {

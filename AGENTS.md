@@ -39,6 +39,7 @@ updates that row's status file (`docs/goals/<row>.md`) in its PR.
 | [`docs/movement.md`](docs/movement.md) | Character movement for any genre: the knobs and presets, the step's model (friction, the acceleration rule and strafe jumping, jumps, steps, slopes, crouch, slide), the world's trace, cvars, what a camera reads, water, the labs |
 | [`docs/networking.md`](docs/networking.md) | Multiplayer: what each kind of game asks of the network, the layers of `engine/net`, the decisions, the wire format, the simulated network, the tools, and Fall Line's pilot (M17) |
 | [`docs/publishing.md`](docs/publishing.md) | What a release is (GitHub Releases + GitHub Packages), how a game consumes it, changeset fragments, cutting a release, the credentials |
+| [`docs/replays.md`](docs/replays.md) | Replays, recording and broadcasting: a run kept as its inputs, keyframes and the seek, the replay file, the director, video with sound, streaming to a video service, spectating by inputs, Discord presence (M23) |
 | [`docs/shooters-edge.md`](docs/shooters-edge.md) | The second game, Shooter's Edge (M18, after Fall Line): the compatibility contract, the clean room, the homes, the protocols, the labs and the `ge` commands it needs |
 
 **The working area.** `porting/` holds everything that only matters while modules are
@@ -236,6 +237,7 @@ characters.
 | `templates/` | What `ge add` writes (a system, a test, a lab of each kind) and the starting games of `ge new --game=<name>`, compiled into `ge` | `agent-interface` |
 | `*/assets/<name>/` | Built models (`ge asset`): the manifest, the Blender builder, the committed .glb and its data | `assets` |
 | `*/labs/` | Labs beside their subject, compiled into the one `labs` executable | `labs` |
+| `engine/replay/` | Replays (`ge::replay`, `docs/replays.md`): a run watched again off its input log, the keyframes a seek starts from (the game's `Run::clone`), the player's seek in a step budget, the transport | `replay` |
 | `engine/net/` | Multiplayer networking (`ge::net`, `docs/networking.md`): addresses, the wire, UDP and TCP sockets, links, the simulated network, sessions, LAN discovery, replication; the only place socket headers are included | `net` |
 | `engine/move/` | Character movement (`ge::move`, `docs/movement.md`): the knobs and presets, the step over a trace callback, the box world, the strafer, the scenarios | `move` |
 | `engine/input/` | Input devices (`ge::input`, `docs/input.md`): the device model, events, state, dead zones, actions and bindings, rebinding, wheels' roles, touch, players, feedback, the event log, simulated devices | `input` |
@@ -357,4 +359,5 @@ and the directories agree.
 | `perf` | Any optimisation, a benchmark, a profile, a cost claim |
 | `agent-interface` | Diagnostics wording, consumer skills, the `ge` CLI (M12) |
 | `bots` | Anything a bot decides: `engine/ai`, the decision record every bot writes, `Run::trace`, `ge why`, making a bot more human, paths and thinking on a schedule (M16) |
+| `replay` | `engine/replay`: watching a run again: a game's `Run::clone`, the keyframes and their thinning, the player's seek in a step budget, the transport; later the replay file, the instant replay, the director, spectating by inputs and the video export (M23) |
 | `net` | `engine/net`: multiplayer networking: sockets, the simulated network and its conditions, captures, the wire format, connections and channels, nodes up to 32, sessions (lobby, teams, chat, kick, reconnect), LAN discovery, NAT traversal (STUN, the rendezvous, hole punching, the relay, a port opened by PCP, NAT-PMP or UPnP), fake traffic, the `net-link`, `net-session` and `net-reach` labs; the M17 plan |
