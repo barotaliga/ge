@@ -2,6 +2,7 @@
 //
 // ge:summary The skier's body: the blows of a trunk and a landing, the ladders judged, death
 // ge:keywords body step_body judge_body trunk_on_skis landing ladder risk hash mortal
+// ge:keywords ragdoll_blows point_blow snow_give torso_of facing_of axial_of pay_owed
 // ge:skill skier
 // ge:test tests/skier_body_test.cpp
 #include "skier/body.hpp"
@@ -78,10 +79,9 @@ double blow_on(Part part, double v, double against, double share = 1) {
   return share * blow_of(v, I::kGive[static_cast<size_t>(base)] + against + helmet);
 }
 
-// A TRUNK MET ON THE SKIS at `v` m/s closing, standing at (tx, tz) of `radius` m; `wiped` when
-// it stopped him.
+// A TRUNK MET ON THE SKIS at `v` m/s closing, standing at (tx, tz) of `radius` m.
 void trunk_on_skis(Doses& d, const SkierState& s, const SkiSpec& spec, double v, double tx,
-                   double tz, double radius, bool wiped) {
+                   double tz, double radius) {
   const double dx = tx - s.x;
   const double dz = tz - s.z;
   const double fx = lm::sin(s.heading);
@@ -101,24 +101,14 @@ void trunk_on_skis(Doses& d, const SkierState& s, const SkiSpec& spec, double v,
     }
   };
   if (ahead) {
-    // The tips meet it and the skis stop: the shins levered over the boots, the knees wrenched.
+    // The tips meet it and the skis stop: the shins levered over the boots, the knees wrenched;
+    // the body goes on into it thrown (`ragdoll_blows`), or (slow enough) is jarred on its skis.
     for (int32_t s2 : {-1, 1}) {
       d.charge(sided(Base::shin, s2), Mech::bend, v);
       d.charge(sided(Base::knee, s2), Mech::twist, v * I::kNoseTwist);
     }
     top = v * v / (2 * I::kStop * tuning::kGravity);
     top_part = Part::pelvis;
-    if (wiped) {
-      // ...and he pitches on into it, on the side of his line it stands: a trunk is narrower
-      // than he is, so it meets one shoulder, and the hip under it after.
-      namespace F = I::front;
-      hit(sided(Base::shoulder, side), F::kShoulder, Facing::front);
-      hit(Part::chest, F::kChest, Facing::front);
-      hit(Part::head, F::kHead, Facing::front);
-      hit(Part::neck, F::kHead * I::kNeckShare, Facing::none);
-      hit(Part::pelvis, F::kPelvis, Facing::front);
-      hit(Part::abdomen, F::kAbdomen, Facing::front);
-    }
   } else {
     namespace S = I::side;
     const Facing face = side < 0 ? Facing::left : Facing::right;
@@ -133,9 +123,18 @@ void trunk_on_skis(Doses& d, const SkierState& s, const SkiSpec& spec, double v,
   d.offer(top, top_part, BlowFrom::tree);
 }
 
+// A LANDING'S LOAD ON THE TRUNK, the neck and the organs in it.
+void charge_trunk(Doses& d, const Owed& o) {
+  d.charge(Part::back, Mech::load, o.back);
+  d.charge(Part::chest, Mech::load, o.chest);
+  d.charge(Part::abdomen, Mech::load, o.abdomen);
+  d.strike(Part::neck, o.neck);
+}
+
 // A LANDING of load `g` after `flight` s, the skis `off` rad off his way; `folded` when the
 // legs gave under it.
-void landing(Doses& d, const SkiSpec& spec, double g, double flight, double off, bool folded) {
+void landing(Doses& d, Owed& owed, const SkiSpec& spec, double g, double flight, double off,
+             bool folded, double t) {
   const double crooked = core::clamp(off / I::kRolled, 0.0, 1.0);
   const double drawer = g * (I::kSquare + I::kCrooked * crooked);
   d.charge(Part::knee_l, Mech::drawer, drawer);
@@ -151,11 +150,14 @@ void landing(Doses& d, const SkiSpec& spec, double g, double flight, double off,
   d.charge(Part::pelvis, Mech::load, leg);
   if (folded) d.cap = kParts;
   if (flight >= I::kLandingAir) d.offer(g, Part::back, BlowFrom::landing);
-  // THE SPINE, THE ORGANS AND THE NECK stopped with him.
-  d.charge(Part::back, Mech::load, folded ? g * I::kFolded : g);
-  d.charge(Part::chest, Mech::load, g);
-  d.charge(Part::abdomen, Mech::load, g);
-  d.strike(Part::neck, (g - 1) * I::kNeck);
+  // THE SPINE, THE ORGANS AND THE NECK stopped with him: owed, when the legs folded under it,
+  // until his trunk is in the snow.
+  const Owed load{true, t, folded ? g * I::kFolded : g, g, g, (g - 1) * I::kNeck};
+  if (folded) {
+    owed = load;
+  } else {
+    charge_trunk(d, load);
+  }
 }
 
 // A LANDING ACROSS HIS WAY: the ski on the side he slides toward catches, its knee twisted at
@@ -169,6 +171,200 @@ void caught(Doses& d, const SkierState& s) {
   const int32_t side = off > 0 ? 1 : -1;
   d.charge(sided(Base::knee, side), Mech::twist, slide);
   d.charge(sided(Base::knee, -side), Mech::twist, slide * 0.5);
+}
+
+// THE SNOW'S GIVE at (x, z), m: the groomer's and loose snow's by the packed share there.
+double snow_give(const mountain::mapgen::Level& level, double x, double z) {
+  const double p = core::clamp(level.packed_at(x, z), 0.0, 1.0);
+  return p * I::kSnowPacked + (1 - p) * I::kSnowLoose;
+}
+
+// THE THROWN BODY'S FRAME: up its spine, across its hips to the right, and out of its chest.
+struct Torso {
+  double sx, sy, sz;  // spine
+  double rx, ry, rz;  // right
+  double cx, cy, cz;  // chest
+};
+
+double pt(const PointArray& p, int32_t i, int32_t a) {
+  return p[3 * static_cast<size_t>(i) + static_cast<size_t>(a)];
+}
+
+Torso torso_of(const PointArray& p) {
+  Torso t{};
+  double ux = (pt(p, kShoulderL, 0) + pt(p, kShoulderR, 0) - pt(p, kHipL, 0) - pt(p, kHipR, 0)) / 2;
+  double uy = (pt(p, kShoulderL, 1) + pt(p, kShoulderR, 1) - pt(p, kHipL, 1) - pt(p, kHipR, 1)) / 2;
+  double uz = (pt(p, kShoulderL, 2) + pt(p, kShoulderR, 2) - pt(p, kHipL, 2) - pt(p, kHipR, 2)) / 2;
+  double l = core::hypot3(ux, uy, uz);
+  if (l == 0) l = 1;
+  t.sx = ux / l;
+  t.sy = uy / l;
+  t.sz = uz / l;
+  const double hx = pt(p, kHipR, 0) - pt(p, kHipL, 0);
+  const double hy = pt(p, kHipR, 1) - pt(p, kHipL, 1);
+  const double hz = pt(p, kHipR, 2) - pt(p, kHipL, 2);
+  l = core::hypot3(hx, hy, hz);
+  if (l == 0) l = 1;
+  t.rx = hx / l;
+  t.ry = hy / l;
+  t.rz = hz / l;
+  // Out of the chest: right x up.
+  const double ox = t.ry * t.sz - t.rz * t.sy;
+  const double oy = t.rz * t.sx - t.rx * t.sz;
+  const double oz = t.rx * t.sy - t.ry * t.sx;
+  l = core::hypot3(ox, oy, oz);
+  if (l == 0) l = 1;
+  t.cx = ox / l;
+  t.cy = oy / l;
+  t.cz = oz / l;
+  return t;
+}
+
+// WHICH WAY HE MET a solid whose way out toward him is n: his front, his back or a side.
+Facing facing_of(const Torso& t, double nx, double ny, double nz) {
+  const double d = t.cx * nx + t.cy * ny + t.cz * nz;
+  if (d < -0.5) return Facing::front;
+  if (d > 0.5) return Facing::back;
+  return t.rx * nx + t.ry * ny + t.rz * nz > 0 ? Facing::left : Facing::right;
+}
+
+// How far a blow along n runs along his spine, 0..1: from the head down it (`head`, a dive) or up
+// it from the seat.
+double axial_of(const Torso& t, double nx, double ny, double nz, bool head) {
+  const double d = t.sx * nx + t.sy * ny + t.sz * nz;
+  return core::clamp(head ? -d : d, 0.0, 1.0);
+}
+
+// How far a blow along n on a foot runs up its leg, 0..1: the line from the foot to its hip.
+double leg_axial_of(const PointArray& p, int32_t foot, double nx, double ny, double nz) {
+  const int32_t hip = foot == kFootL ? kHipL : kHipR;
+  const double ux = pt(p, hip, 0) - pt(p, foot, 0);
+  const double uy = pt(p, hip, 1) - pt(p, foot, 1);
+  const double uz = pt(p, hip, 2) - pt(p, foot, 2);
+  double l = core::hypot3(ux, uy, uz);
+  if (l == 0) l = 1;
+  return core::clamp((ux * nx + uy * ny + uz * nz) / l, 0.0, 1.0);
+}
+
+// The outer side of a part on `side`: his left of a left one.
+constexpr Facing outside(int32_t side) { return side < 0 ? Facing::left : Facing::right; }
+
+// THE TRUNK'S SHARE of a blow on a shoulder or a hip, by which way he faces what he met: met flat
+// on a side, the flank itself meets it and more reaches the organs.
+void trunk_share(Doses& d, bool hip, double v, double against, Facing face) {
+  namespace S = I::share;
+  const double s = face == Facing::left || face == Facing::right ? S::kFlank : S::kTrunk;
+  if (hip) {
+    if (face == Facing::back) d.strike(Part::back, blow_on(Part::back, v, against, s), face);
+    d.strike(Part::abdomen, blow_on(Part::abdomen, v, against, s), face);
+  } else {
+    const Part part = face == Facing::back ? Part::back : Part::chest;
+    d.strike(part, blow_on(part, v, against, s), face);
+  }
+}
+
+// ONE POINT OF THE THROWN BODY meeting the snow or a trunk at `v` m/s, against a give of
+// `against` m, the solid's way out toward him n.
+void point_blow(Doses& d, const PointArray& p, const Torso& t, int32_t i, double v, double against,
+                double nx, double ny, double nz, BlowFrom from) {
+  namespace S = I::share;
+  const Facing face = facing_of(t, nx, ny, nz);
+  const bool left =
+      i == kHipL || i == kShoulderL || i == kKneeL || i == kFootL || i == kElbowL || i == kHandL;
+  const int32_t side = left ? -1 : 1;
+  Part part;
+  if (i == kHead) {
+    part = Part::head;
+    // The neck whipped by any blow on the head, and loaded by one down the spine (a dive): the
+    // head's stop, in its helmet, is what it is handed.
+    const double axial = axial_of(t, nx, ny, nz, true);
+    d.strike(Part::neck, blow_on(Part::head, v, against, I::kNeckShare + S::kNeckAxial * axial),
+             face);
+  } else if (i == kShoulderL || i == kShoulderR) {
+    part = sided(Base::shoulder, side);
+    trunk_share(d, false, v, against, face);
+  } else if (i == kHipL || i == kHipR) {
+    part = Part::pelvis;
+    trunk_share(d, true, v, against, face);
+    // Sat down on it, the trunk upright over the seat: the blow runs up the spine as a load.
+    const double axial = axial_of(t, nx, ny, nz, false);
+    if (axial > 0) {
+      d.charge(Part::back, Mech::load, blow_on(Part::pelvis, v, against) * I::kSeat * axial);
+    }
+  } else if (i == kKneeL || i == kKneeR) {
+    part = sided(Base::knee, side);
+    const Part thigh = sided(Base::thigh, side);
+    const Part shin = sided(Base::shin, side);
+    d.strike(thigh, blow_on(thigh, v, against, S::kKneeThigh));
+    d.strike(shin, blow_on(shin, v, against, S::kKneeShin));
+  } else if (i == kFootL || i == kFootR) {
+    part = sided(Base::foot, side);
+    const Part shin = sided(Base::shin, side);
+    d.strike(shin, blow_on(shin, v, against, S::kFootShin));
+    // Met sole first along a straight leg, the blow runs up it as a landing's does.
+    const double axial = leg_axial_of(p, i, nx, ny, nz);
+    if (axial > 0) {
+      const double leg = blow_on(part, v, against) * S::kLegAxial * axial;
+      for (Base b : {Base::foot, Base::shin, Base::knee, Base::thigh}) {
+        d.charge(sided(b, side), Mech::load, leg);
+      }
+      d.charge(Part::pelvis, Mech::load, leg);
+    }
+  } else if (i == kElbowL || i == kElbowR) {
+    part = sided(Base::arm, side);
+    // ...up the arm into the point of the shoulder.
+    const Part shoulder = sided(Base::shoulder, side);
+    d.strike(shoulder, blow_on(shoulder, v, against, S::kElbowShoulder), outside(side));
+  } else {
+    part = sided(Base::hand, side);
+    const Part arm = sided(Base::arm, side);
+    const Part shoulder = sided(Base::shoulder, side);
+    d.strike(arm, blow_on(arm, v, against, S::kHandArm));
+    d.strike(shoulder, blow_on(shoulder, v, against, S::kHandShoulder), outside(side));
+  }
+  const double g = blow_on(part, v, against);
+  d.strike(part, g, face);
+  // The meter bills the body's own blows (the head and the trunk), not a limb's whip.
+  if (i <= kHead) d.offer(g, part, from);
+}
+
+// THROWN: every point of his body that met the snow or a trunk this step.
+void ragdoll_blows(Doses& d, const Ragdoll& b, const World& world) {
+  const Torso t = torso_of(b.p);
+  const auto& level = *world.level;
+  for (int32_t i = 0; i < kPoints; i++) {
+    const double x = pt(b.p, i, 0);
+    const double z = pt(b.p, i, 2);
+    const double v = b.impact[static_cast<size_t>(i)];
+    if (v > I::kTouch) {
+      mountain::mapgen::Vec3 n{};
+      level.normal_at(x, z, n);
+      point_blow(d, b.p, t, i, v, snow_give(level, x, z), n.x, n.y, n.z, BlowFrom::snow);
+    }
+    const double c = b.struck[static_cast<size_t>(i)];
+    const int32_t k = b.struck_by[static_cast<size_t>(i)];
+    if (c > I::kTouch && k >= 0) {
+      // The trunk's way out toward him, from its centre.
+      const auto& tree = level.trees[static_cast<size_t>(k)];
+      const double dx = x - tree.x;
+      const double dz = z - tree.z;
+      double l = core::hypot(dx, dz);
+      if (l == 0) l = 1;
+      point_blow(d, b.p, t, i, c, I::kTrunk, dx / l, 0, dz / l, BlowFrom::tree);
+    }
+  }
+}
+
+// A LANDING'S LOAD OWED TO THE TRUNK paid the step his hips, shoulders or head meet the snow, or
+// `kOwedMost` s on wherever he is, with every part's injuries open to it as a landing's are.
+void pay_owed(Doses& d, Owed& o, const Ragdoll* b, double t) {
+  if (!o.owed) return;
+  bool met = t - o.t >= I::kOwedMost || b == nullptr;
+  for (int32_t i = 0; i <= kHead && !met; i++) met = b->impact[static_cast<size_t>(i)] > I::kTouch;
+  if (!met) return;
+  charge_trunk(d, o);
+  d.cap = kParts;
+  o.owed = false;
 }
 
 // Whether the blow on part `p` came from a side the injury `def` is done from.
@@ -281,6 +477,7 @@ void mend_body(BodyState& b) {
   b.count = 0;
   b.mortal = -1;
   b.dead = -1;
+  b.owed = Owed{};
 }
 
 void judge_body(BodyState& b, const Doses& d, bool down, const BodyClock& clock, BodyEvents& out) {
@@ -370,14 +567,18 @@ void step_body(BodyState& b, SkierState& s, const SkierEvents& ev, const World& 
   if (b.dead < 0) {
     if (ev.tree >= 0 && ev.closing > 0) {
       const auto& t = world.level->trees[static_cast<size_t>(ev.tree)];
-      const bool wiped = ev.wiped_out && ev.cause == Wipeout::tree;
-      trunk_on_skis(d, s, spec, ev.closing, t.x, t.z, t.radius, wiped);
+      trunk_on_skis(d, s, spec, ev.closing, t.x, t.z, t.radius);
     }
     if (ev.landed) {
       const bool folded = ev.wiped_out && ev.cause == Wipeout::landing;
-      landing(d, spec, ev.landing_g, ev.flight_s, ev.landing_off, folded);
+      landing(d, b.owed, spec, ev.landing_g, ev.flight_s, ev.landing_off, folded, clock.t);
     }
     if (ev.wiped_out && ev.cause == Wipeout::across) caught(d, s);
+    // Thrown, every point of him that met the snow or a trunk; stood back up with a load still
+    // owed (put on his skis from outside), it is paid now.
+    const bool thrown = s.down && s.thrown.active;
+    if (thrown) ragdoll_blows(d, s.thrown, world);
+    if (!ev.wiped_out) pay_owed(d, b.owed, thrown ? &s.thrown : nullptr, clock.t);
   }
   judge_body(b, d, s.down, clock, out);
   if (b.mortal < 0 || b.dead >= 0) return;
@@ -416,6 +617,7 @@ uint64_t body_hash(const BodyState& b, uint64_t h) {
   mix(static_cast<uint32_t>(b.blows), 4);
   mixd(b.mortal);
   mixd(b.dead);
+  if (b.owed.owed) mixd(b.owed.t);
   return h;
 }
 

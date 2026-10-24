@@ -182,6 +182,35 @@ inline constexpr double kFloor = 0.5;
 inline constexpr double kWeaken = 0.06;
 // What reaches a part beside the one struck: the head's blow whips the neck.
 inline constexpr double kNeckShare = 0.25;
+// THE SNOW'S GIVE where a part meets it, m: the groomer's and loose snow's, blended by the packed
+// share there (a body dropped into powder is stopped over five centimetres, on the groomer over
+// two).
+inline constexpr double kSnowPacked = 0.022;
+inline constexpr double kSnowLoose = 0.05;
+// A thrown body's point arriving into the snow slower than this is lying on it, not meeting it,
+// m/s; and the same for its closing speed on a trunk.
+inline constexpr double kTouch = 0.8;
+// WHAT REACHES A PART BESIDE THE POINT OF THE THROWN BODY THAT MET THE SNOW OR A TRUNK: a hand's
+// blow runs up the arm to the shoulder (the fall on an outstretched hand), an elbow's into the
+// point of the shoulder, a knee's into the thigh and the shin, a foot's into the shin, and a
+// shoulder's or a hip's into the trunk on the side it faces down (`kFlank` met flat on a side:
+// the lower ribs and the spleen or the liver under them).
+namespace share {
+inline constexpr double kHandArm = 0.5, kHandShoulder = 0.5, kElbowShoulder = 0.4, kKneeThigh = 0.5,
+                        kKneeShin = 0.4, kFootShin = 0.5, kTrunk = 0.6, kFlank = 0.9;
+// A head met first down the spine (a dive) loads the neck along it on top of the whip: the
+// diving injury's cervical fracture.
+inline constexpr double kNeckAxial = 0.35;
+// A sole met first along a straight leg loads the leg along it, in a landing's g: feet first into
+// a trunk at 40 km/h, the femur's even chance.
+inline constexpr double kLegAxial = 0.7;
+}  // namespace share
+// A SEAT met with the trunk upright over it: this share of the hips' blow runs up the spine as a
+// load, g (the seated fall's compression fracture); nothing from a fall on the side or the back.
+inline constexpr double kSeat = 0.18;
+// A landing the legs folded under owes the spine, the organs and the neck its load until his
+// trunk meets the snow, or this many s on at the latest.
+inline constexpr double kOwedMost = 0.2;
 // A TRUNK MET ON THE SKIS: square in front of them, within `kLane` m of his line past its
 // radius, the tips meet it and the skis stop over `kStop` m (the bindings' release and the
 // legs' fold): the shins levered, the knees twisted (`kNoseTwist` of the speed). Beside him it
