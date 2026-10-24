@@ -17,6 +17,7 @@
 #include "fall_line/sim/army.hpp"
 #include "fall_line/sim/army_heli.hpp"
 #include "fall_line/sim/army_heli_rules.hpp"
+#include "fall_line/sim/army_meet.hpp"
 #include "fall_line/sim/army_rules.hpp"
 #include "fall_line/sim/army_sled.hpp"
 #include "fall_line/sim/army_sled_rules.hpp"
@@ -377,6 +378,7 @@ void step(GameState& state, std::span<const Controls> controls) {
   {
     GE_ZONE("army");
     step_army(state);
+    meet_army(state);
   }
   {
     GE_ZONE("gunfire");
@@ -429,16 +431,16 @@ uint64_t state_hash(const GameState& state, uint64_t h) {
     mix(f.lift.since);
     mix(f.lift.ridden);
   }
-  if (state.sled.present) {
-    const FreeSled& m = state.sled;
-    h = ge::snowmobile::sled_hash(m.body, h);
-    mix(static_cast<double>(m.mode));
-    mix(m.rider ? 1 : 0);
-    mix(m.thrown ? 1 : 0);
-    mix(m.t);
-    mix(m.taken);
-    mix(m.still);
-    mix(m.asleep ? 1 : 0);
+  for (const FreeSled* m : {&state.sled, &state.stolen}) {
+    if (!m->present) continue;
+    h = ge::snowmobile::sled_hash(m->body, h);
+    mix(static_cast<double>(m->mode));
+    mix(m->rider ? 1 : 0);
+    mix(m->thrown ? 1 : 0);
+    mix(m->t);
+    mix(m->taken);
+    mix(m->still);
+    mix(m->asleep ? 1 : 0);
   }
   if (state.heli.present) {
     const FreeHeli& m = state.heli;

@@ -34,6 +34,8 @@ enum class SoldierFrom : uint8_t { lift, wave, sled, heli };
 // - `out` off a landed helicopter: run out to his side and knelt facing out until it has lifted;
 // - `rope` sliding down a hovering helicopter's fast rope;
 // - `board` skiing to a helicopter come to pick his squad up;
+// - `down` knocked over by the man he is after (off his machine, or run down on foot), lying
+//   until he gets up and goes after him again (army_meet.hpp);
 // - `gone` sent home or aboard: taken off the map at the end of the step.
 enum class SoldierMode : uint8_t {
   walk,
@@ -46,13 +48,14 @@ enum class SoldierMode : uint8_t {
   out,
   rope,
   board,
+  down,
   gone
 };
 
 // What an army event says (`EventKind::army`: its `gate` the change, its `value` how many men): a
 // lift's squad put down, a wave formed up, soldiers let off at a lift's top, the arrest, men sent
-// home.
-enum class ArmyChange : uint8_t { squad, wave, off, arrest, home };
+// home, a man run down by the man they are after.
+enum class ArmyChange : uint8_t { squad, wave, off, arrest, home, run_down };
 
 struct Soldier {
   int32_t id = 0;  // the army's own, in the order sent; his pursuer id is `army::kPursuerBase` + it
@@ -96,8 +99,19 @@ enum class ArmySledMode : uint8_t { due, drive, halt, leave, empty, gone };
 
 // What an army snowmobile's event says (`EventKind::army_sled`: its `gate` the change, its `value`
 // the machine's id): called, out of the village, halted, its crew off it to take him in, dug out,
-// stood back on its belt, home.
-enum class ArmySledChange : uint8_t { called, out, halt, dismount, dug, righted, gone };
+// stood back on its belt, home; its crew knocked off it by the man they are after, and the
+// machine stolen by him (army_meet.hpp, sled_ride.hpp).
+enum class ArmySledChange : uint8_t {
+  called,
+  out,
+  halt,
+  dismount,
+  dug,
+  righted,
+  gone,
+  knocked,
+  stolen
+};
 
 struct ArmySled {
   int32_t id =
