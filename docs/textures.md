@@ -89,9 +89,11 @@ their place, as an option (`replace.hpp`). For each texture:
    and how often its pattern repeats each way, the strongest peak of the luma's wrapped
    autocorrelation as a share of the tile, with how strong it is.
 2. **Pick the nearest recipe** (`Matcher`, built once from a library with `make_matcher`, each
-   recipe measured off two seeds at 64 px). The ranking leaves the colour numbers out, since the
-   colour is put back in step 4, so a brown brick still finds the brick recipe. Nothing nearer
-   than `max_distance` (1.6): the texture keeps its own pixels.
+   recipe measured off two seeds at 64 px). The structure ranks them first, with the colour
+   numbers left out since step 4 puts the colour back. Then the `refine` (6) nearest are baked
+   with the texture's seed and colours and measured whole, and the nearest of those wins, so a
+   recipe whose colours do not survive the recolouring falls behind. A renderer keeps the
+   texture's own pixels when nothing comes within `max_distance` (0.8).
 3. **Bake it** at the next power of two over the texture's size, under a seed of the texture's
    name, and resize it to the texture's size. An animation's frames (`+0name`, `+1name`) share
    one seed so they do not flicker between variants.

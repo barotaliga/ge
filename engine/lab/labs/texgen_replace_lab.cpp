@@ -55,14 +55,6 @@ std::vector<Original> library_originals(const texgen::Matcher& m) {
   return out;
 }
 
-// A texture's name from its file's: a file system cannot always hold '*' or '+', so a leading
-// "liq_" stands for a liquid's '*' and "anim_" for an animation's '+'.
-std::string texture_name(const std::string& stem) {
-  if (stem.starts_with("liq_")) return "*" + stem.substr(4);
-  if (stem.starts_with("anim_")) return "+" + stem.substr(5);
-  return stem;
-}
-
 std::string fixed(double v) { return core::num::to_fixed(v, 2); }
 
 void run(lab::Lab& lab) {
@@ -90,7 +82,7 @@ void run(lab::Lab& lab) {
       std::optional<lab::Picture> p = lab::read_png(path);
       if (p)
         originals.push_back(
-            {texture_name(std::filesystem::path(path).stem().string()), std::move(*p)});
+            {texgen::texture_name_of_file(std::filesystem::path(path).stem().string()), std::move(*p)});
     }
     if (originals.empty()) {
       lab.fail("no PNGs in " + refs,
@@ -184,7 +176,7 @@ const lab::LabSpec kSpec{
          "a directory of the level's textures as PNGs, outside the tree (empty: the "
          "library's own bakes, tinted)"},
         {"limit", "0", "at most this many textures (0: all)"},
-        {"max-distance", "1.6", "no recipe nearer than this: the texture keeps its pixels"},
+        {"max-distance", "0.8", "no recipe nearer than this: the texture keeps its pixels"},
         {"panel", "96", "each picture's side, px"},
         {"cols", "4", "pairs across a page"},
         {"per-page", "24", "pairs on a page"},

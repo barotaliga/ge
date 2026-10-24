@@ -152,6 +152,48 @@ Matcher make_matcher(const std::string& dir) {
   return m;
 }
 
+TextureRef colour_ref(std::string_view name, const lab::Picture& original) {
+  TextureRef ref;
+  ref.seed = name_seed(name);
+  const size_t n = static_cast<size_t>(original.width) * original.height;
+  if (n == 0) return ref;
+  std::array<uint8_t, 3> tint{}, spread{};
+  for (int c = 0; c < 3; ++c) {
+    double mean = 0, var = 0;
+    for (size_t i = 0; i < n; ++i) mean += original.rgba[i * 4 + c];
+    mean /= static_cast<double>(n);
+    for (size_t i = 0; i < n; ++i) {
+      const double d = original.rgba[i * 4 + c] - mean;
+      var += d * d;
+    }
+    tint[c] = static_cast<uint8_t>(std::clamp(std::floor(mean + 0.5), 0.0, 255.0));
+    spread[c] = static_cast<uint8_t>(
+        std::clamp(std::floor(std::sqrt(var / static_cast<double>(n)) + 0.5), 0.0, 255.0));
+  }
+  ref.tint = tint;
+  ref.spread = spread;
+  return ref;
+}
+
+std::vector<Candidate> nearest_refs(const Matcher& m, std::string_view name,
+                                    const lab::Picture& original, int n) {
+  // The structure's ranking first (cheap: no bake), then the `refine` nearest of it baked with
+  // the texture's seed and colours and measured whole: a recipe whose own colours do not survive
+  // the recolouring (a glow, a hue that clips) falls behind there.
+  std::vector<Candidate> rough = rank_recipes(m, original, std::max(n, m.refine));
+  const TextureRef base = colour_ref(name, original);
+  for (Candidate& c : rough) {
+    TextureRef ref = base;
+    ref.name = c.recipe;
+    std::vector<Diagnostic> errors;
+    c.distance = ref_distance(m, ref, original, errors);
+  }
+  std::stable_sort(rough.begin(), rough.end(),
+                   [](const Candidate& x, const Candidate& y) { return x.distance < y.distance; });
+  if (static_cast<int>(rough.size()) > n) rough.resize(static_cast<size_t>(std::max(0, n)));
+  return rough;
+}
+
 TextureMatch match_texture(const Matcher& m, std::string_view name, const lab::Picture& original) {
   TextureMatch out;
   if (name.starts_with('*')) {
@@ -168,45 +210,12 @@ TextureMatch match_texture(const Matcher& m, std::string_view name, const lab::P
   }
   const int w = original.width, h = original.height;
   if (w <= 0 || h <= 0 || m.entries.empty()) return out;
-  // Matched on structure, then recoloured: the match ranks by likeness with the colour numbers
-  // left out of the look, since the tint and spread put the colour back.
-  const Likeness want = likeness_of(original);
-  const Matcher::Entry* best = nullptr;
-  double best_d = 1e9;
-  for (const Matcher::Entry& e : m.entries) {
-    Likeness a = want;
-    const Likeness& b = e.likeness;
-    a.look.brightness = b.look.brightness;
-    a.look.saturation = b.look.saturation;
-    a.look.warmth = b.look.warmth;
-    const double d = likeness_distance(a, b);
-    if (d < best_d) {
-      best_d = d;
-      best = &e;
-    }
-  }
-  // Each channel's mean and spread, as the bytes the reference carries.
-  const size_t n = static_cast<size_t>(w) * h;
-  std::array<uint8_t, 3> tint{}, spread{};
-  for (int c = 0; c < 3; ++c) {
-    double mean = 0, var = 0;
-    for (size_t i = 0; i < n; ++i) mean += original.rgba[i * 4 + c];
-    mean /= static_cast<double>(n);
-    for (size_t i = 0; i < n; ++i) {
-      const double d = original.rgba[i * 4 + c] - mean;
-      var += d * d;
-    }
-    tint[c] = static_cast<uint8_t>(std::clamp(std::floor(mean + 0.5), 0.0, 255.0));
-    spread[c] = static_cast<uint8_t>(
-        std::clamp(std::floor(std::sqrt(var / static_cast<double>(n)) + 0.5), 0.0, 255.0));
-  }
-  out.ref.name = best->recipe.name;
-  out.ref.seed = name_seed(name);
-  out.ref.tint = tint;
-  out.ref.spread = spread;
+  out.ref = colour_ref(name, original);
+  const std::vector<Candidate> best = nearest_refs(m, name, original, 1);
+  out.ref.name = best[0].recipe;
   out.text = ref_text(out.ref);
-  out.distance = best_d;
-  out.near = best_d <= m.max_distance;
+  out.distance = best[0].distance;
+  out.near = out.distance <= m.max_distance;
   return out;
 }
 
@@ -239,21 +248,65 @@ TextureMatch match_indexed(const Matcher& m, std::string_view name, uint32_t w, 
   return match_texture(m, name, from_indexed(w, h, indexed, palette));
 }
 
-lab::Picture bake_match(const Matcher& m, const TextureMatch& match, int w, int h) {
+lab::Picture bake_ref(const Matcher& m, const TextureRef& ref, int w, int h,
+                      std::vector<Diagnostic>& errors) {
   for (const Matcher::Entry& e : m.entries) {
-    if (e.recipe.name != match.ref.name) continue;
+    if (e.recipe.name != ref.name) continue;
     Recipe r = e.recipe;
     r.size = pow2_at_least(static_cast<uint32_t>(std::max(w, h)));
     // Baked uncoloured, resized, then recoloured, so the tint and spread hold at the size drawn.
-    TextureRef plain = match.ref;
+    TextureRef plain = ref;
     plain.tint.reset();
     plain.spread.reset();
-    lab::Picture out =
-        lab::resized(map_picture(bake(r, plain).maps, MapKind::albedo, r.size), w, h);
-    recolour(out.rgba, match.ref.tint, match.ref.spread);
+    const BakeResult b = bake(r, plain);
+    if (!b.ok()) {
+      errors.insert(errors.end(), b.errors.begin(), b.errors.end());
+      return lab::create_picture(w, h, {128, 128, 128});
+    }
+    lab::Picture out = lab::resized(map_picture(b.maps, MapKind::albedo, r.size), w, h);
+    recolour(out.rgba, ref.tint, ref.spread);
     return out;
   }
+  std::string names;
+  for (const Matcher::Entry& e : m.entries) names += " " + e.recipe.name;
+  errors.push_back({0, "no recipe named `" + ref.name + "`; the library has:" + names});
   return lab::create_picture(w, h, {128, 128, 128});
+}
+
+lab::Picture bake_match(const Matcher& m, const TextureMatch& match, int w, int h) {
+  std::vector<Diagnostic> ignored;
+  return bake_ref(m, match.ref, w, h, ignored);
+}
+
+std::string texture_name_of_file(std::string_view stem) {
+  if (stem.starts_with("liq_")) return "*" + std::string(stem.substr(4));
+  if (stem.starts_with("anim_")) return "+" + std::string(stem.substr(5));
+  return std::string(stem);
+}
+
+std::vector<Candidate> rank_recipes(const Matcher& m, const lab::Picture& original, int n) {
+  std::vector<Candidate> out;
+  if (original.width <= 0 || original.height <= 0) return out;
+  const Likeness want = likeness_of(original);
+  for (const Matcher::Entry& e : m.entries) {
+    Likeness a = want;
+    a.look.brightness = e.likeness.look.brightness;
+    a.look.saturation = e.likeness.look.saturation;
+    a.look.warmth = e.likeness.look.warmth;
+    out.push_back({e.recipe.name, likeness_distance(a, e.likeness)});
+  }
+  std::stable_sort(out.begin(), out.end(),
+                   [](const Candidate& x, const Candidate& y) { return x.distance < y.distance; });
+  if (static_cast<int>(out.size()) > n) out.resize(static_cast<size_t>(std::max(0, n)));
+  return out;
+}
+
+double ref_distance(const Matcher& m, const TextureRef& ref, const lab::Picture& original,
+                    std::vector<Diagnostic>& errors) {
+  const size_t before = errors.size();
+  const lab::Picture baked = bake_ref(m, ref, original.width, original.height, errors);
+  if (errors.size() != before) return 1e9;
+  return likeness_distance(likeness_of(original), likeness_of(baked));
 }
 
 std::optional<Replacement> replace_texture(const Matcher& m, std::string_view name,

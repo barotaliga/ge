@@ -57,7 +57,8 @@ struct Matcher {
     Likeness likeness;
   };
   std::vector<Entry> entries;
-  double max_distance = 1.6;  // no recipe nearer than this: the texture keeps its own pixels
+  double max_distance = 0.8;  // no recipe nearer than this: a renderer keeps the texture's pixels
+  int refine = 6;             // the structure's nearest recipes baked and measured whole
 };
 
 // Every recipe in `dir`, each baked at 64 px under seeds 1 and 2 and measured. Recipes that do
@@ -110,5 +111,40 @@ std::optional<Replacement> replace_indexed(const Matcher& m, std::string_view na
 
 // The texture a match stands for, baked at w x h (the recipe at the next power of two, resized).
 lab::Picture bake_match(const Matcher& m, const TextureMatch& match, int w, int h);
+
+// A texture's name from its PNG's file name: a file system cannot always hold '*' or '+', so a
+// leading "liq_" stands for a liquid's '*' and "anim_" for an animation's '+'.
+std::string texture_name_of_file(std::string_view stem);
+
+// THE AGENT'S LOOP. A converter's matches are steered by an agent (`ge texture match`): it
+// reads each texture's nearest candidates and how far its current reference is, looks at the
+// bakes beside the original, and pins a recipe, a seed, params or another tint by hand.
+
+// A recipe the matcher could pick for a texture, and how unalike they are (colour left out).
+struct Candidate {
+  std::string recipe;
+  double distance = 0;
+};
+
+// The `n` nearest recipes for a texture by structure alone (no bake), nearest first.
+std::vector<Candidate> rank_recipes(const Matcher& m, const lab::Picture& original, int n);
+
+// The reference a texture's match starts from: the seed of its name, its tint and spread.
+TextureRef colour_ref(std::string_view name, const lab::Picture& original);
+
+// The `n` nearest recipes for a texture, measured whole (colour included) as `colour_ref` baked
+// with each: the structure's max(n, refine) nearest, re-ranked. What the match picks from.
+std::vector<Candidate> nearest_refs(const Matcher& m, std::string_view name,
+                                    const lab::Picture& original, int n);
+
+// Any reference (a recipe of the matcher's, its seed, params, tint and spread) baked at w x h.
+// Errors (an unknown recipe or param) go to `errors` and the picture is grey.
+lab::Picture bake_ref(const Matcher& m, const TextureRef& ref, int w, int h,
+                      std::vector<Diagnostic>& errors);
+
+// How unalike a texture and a reference's bake are, colour included: the number an agent
+// drives down by turning a reference's knobs. Under about 0.5 they read as the same surface.
+double ref_distance(const Matcher& m, const TextureRef& ref, const lab::Picture& original,
+                    std::vector<Diagnostic>& errors);
 
 }  // namespace ge::texgen
