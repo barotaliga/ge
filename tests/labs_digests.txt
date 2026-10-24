@@ -33,8 +33,8 @@ input-ffb 565464637bf28b86
 input-session dcb313b33f4ddf37
 input-shape e2284bbd066830af
 junctions 036999ca677e12e6
-lake cd671548fc72e5d6
 ladder 825b7f06d92b69d3
+lake cd671548fc72e5d6
 level 4fbff3da7a82c4aa
 lift-ride a374f35eb85cc161
 mapgen-cost 3baf51b6907817f3
@@ -64,8 +64,8 @@ replay e045aa28eafcab11
 replay-cut 1381f20bd27caa95
 replay-file b9f41fcd00bac8b3
 resort f82a1fca6fb6ba42
-rooms 6ed1089cfc42be31
 ride c3794669e029f0c9
+rooms c9c0d8aa3cc86a49
 routes 739cf0534473b4f8
 run-clock 81607c7ac1161166
 shadows 5b0d6051c10638b4

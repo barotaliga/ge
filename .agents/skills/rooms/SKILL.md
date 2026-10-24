@@ -12,7 +12,9 @@ states its part once.
 
 | File | What |
 | --- | --- |
-| `level.hpp/.cpp` | The model (units, rooms, materials, portals, solids), `validate`, `link` |
+| `level.hpp/.cpp` | The model (units, rooms, materials, portals, solids; brushes, faces, projections, groups, entities), `validate`, `link` |
+| `brushes.cpp` | The brush half's lookups (`group_index`, `projection_index`, `Entity::get`) and `validate_brushes` |
+| `brush_build.hpp/.cpp` | Brushes built into the faces that can be seen (CSG): `brush_polygons`, `build_brushes` |
 | `codec.hpp/.cpp` | The `.gelv` bytes: `encode`, `decode` with its refusals |
 | `text.hpp/.cpp` | The `.gelv.txt` text form: `parse`, `print` |
 | `relief.hpp/.cpp` | The reliefs a surface grows: heights and grid sizes |
@@ -21,6 +23,7 @@ states its part once.
 | `clip.hpp/.cpp` | The level as the mover's world: flat prisms, grown caves (`clip_world`), `room_at` |
 | `walk.hpp/.cpp` | The scripted walk: a tour of every room by its doorways, routed by sweeps; the drive |
 | `levels/halls.gelv.txt` | The sample level: every relief, two caves |
+| `levels/vault.gelv.txt` | The brush sample: slabs, a pillar, a pool, a door group and its entity, clip, sky, a grass surface |
 | `labs/rooms_lab.cpp` | The `rooms` lab |
 
 ## Writing a level

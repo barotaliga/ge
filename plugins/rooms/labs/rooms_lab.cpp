@@ -2,7 +2,8 @@
 // walls in their materials, openings, solids, names and seeds), the whole level grown and cut
 // away from above (the walls nearest the eye and every ceiling drop out, so each room is seen from
 // inside), every room on its own, every relief the format grows on a test room under a raking
-// light, a cave grown from four seeds side by side, views from inside, and the cave's mouth wired.
+// light, a cave grown from four seeds side by side, views from inside, the cave's mouth wired,
+// and the vault sample's brushes built by CSG.
 // The numbers: the level's bytes on disk against the triangles it grows, each room's triangles
 // and build time, and the whole level built on one thread and on every worker, held to the same
 // bits. CPU pictures, in the digest; times measured.
@@ -28,6 +29,7 @@
 #include "lab/model_view.hpp"
 #include "lab/raster.hpp"
 #include "move/spec.hpp"
+#include "rooms/brush_build.hpp"
 #include "rooms/build.hpp"
 #include "rooms/clip.hpp"
 #include "rooms/codec.hpp"
@@ -79,6 +81,32 @@ void add_mesh(lab::Shape& s, const rm::Mesh& m) {
   s.part.insert(s.part.end(), m.mat.begin(), m.mat.end());
   s.top.resize(s.part.size(), 0);
   for (uint32_t i : m.idx) s.idx.push_back(base + i);
+}
+
+// A brush mesh's drawn triangles as a shape, each its own three corners in its material; with
+// `below`, only the brushes whose faces all lie under that height (the roof left off).
+void add_brushes(lab::Shape& s, const rm::BrushMesh& m, double below = 1e30) {
+  std::vector<uint8_t> low;
+  if (below < 1e29) {
+    uint32_t most = 0;
+    for (uint32_t b : m.brush) most = std::max(most, b);
+    low.assign(size_t(most) + 1, 1);
+    for (size_t t = 0; t < m.triangles(); ++t) {
+      for (size_t k = 0; k < 3; ++k) {
+        if (m.pos[size_t(m.idx[t * 3 + k]) * 3 + 1] > below + 1e-3) low[m.brush[t]] = 0;
+      }
+    }
+  }
+  for (size_t t = 0; t < m.triangles(); ++t) {
+    if (m.hidden[t] || (!low.empty() && !low[m.brush[t]])) continue;
+    for (size_t k = 0; k < 3; ++k) {
+      const size_t v = size_t(m.idx[t * 3 + k]) * 3;
+      s.idx.push_back(uint32_t(s.part.size()));
+      for (size_t a = 0; a < 3; ++a) s.pos.push_back(m.pos[v + a]), s.nrm.push_back(m.nrm[v + a]);
+      s.part.push_back(m.material[t]);
+      s.top.push_back(0);
+    }
+  }
 }
 
 lab::ViewStyle style(bool wire = false) {
@@ -230,6 +258,48 @@ rm::Level relief_room(rm::Relief kind, uint32_t seed) {
   std::string err;
   rm::link(level, &err);
   return level;
+}
+
+// The brush half of the format: the vault sample's convex brushes built by CSG into the faces
+// that can be seen, from above with the roof left off, and from its player start.
+void vault_shots(lab::Lab& lab, int px) {
+  const std::string path = lab.arg("vault");
+  std::ifstream in(path);
+  std::stringstream text;
+  text << in.rdbuf();
+  rm::Level level;
+  std::string error;
+  if (!in || !rm::parse(text.str(), &level, &error)) {
+    lab.fail("rooms: cannot read the vault " + path + " " + error,
+             "next: pass --vault=<file.gelv.txt> from the repo root; see plugins/rooms/text.hpp");
+    return;
+  }
+  const rm::BrushMesh m = rm::build_brushes(level, ge::core::default_workers());
+  lab.metric("vault-brushes", double(level.brushes.size()), "count");
+  lab.metric("vault-triangles", double(m.triangles()), "count");
+  lab.metric("vault-bytes", double(rm::encode(level).size()), "count");
+  const auto model = model_of(level);
+  const std::vector<std::pair<std::string, std::string>> inputs{{"vault", path}};
+  const int w = px * 2, h = px * 4 / 3;
+  Picture p = lab::create_picture(w * 2, h, kDark);
+  lab::Shape low, all;
+  add_brushes(low, m, 3.0);
+  add_brushes(all, m);
+  lab::draw_shape(p, 0, 0, w, h, lab::orbit_cam(box_of(low), 210, 55, 30, 0.95, double(w) / h),
+                  model, low, style());
+  label(p, 4, 4, "FROM ABOVE, ROOF OFF");
+  lab::ViewCam cam;
+  cam.eye[0] = 1.5, cam.eye[1] = 1.62, cam.eye[2] = 1.0;
+  cam.target[0] = 7, cam.target[1] = 0.8, cam.target[2] = 4.5;
+  cam.fov_deg = 75;
+  lab::draw_shape(p, w, 0, w, h, cam, model, all, style());
+  label(p, w + 4, 4, "FROM THE PLAYER START");
+  lab.shot({"vault", "THE VAULT: BRUSHES BUILT BY CSG",
+            "The brush sample: slab walls, a grass floor, a pillar, a pool sunk to the floor, a "
+            "door that is its own group, a sky over half the roof. Faces buried in another brush "
+            "are gone; the floor under the water stays; the clip box is never drawn.",
+            "no face shows inside a wall; no gap where two brushes meet", inputs},
+           p);
 }
 
 void run(lab::Lab& lab) {
@@ -539,6 +609,7 @@ void run(lab::Lab& lab) {
                p);
     }
   }
+  vault_shots(lab, px);
 }
 
 const lab::LabSpec kSpec{
@@ -550,6 +621,7 @@ const lab::LabSpec kSpec{
     "What does a room level grow into from its few bytes and seeds, and how fast?",
     {
         {"level", "plugins/rooms/levels/halls.gelv.txt", "the level, as text (.gelv.txt)"},
+        {"vault", "plugins/rooms/levels/vault.gelv.txt", "the brush sample, as text"},
         {"px", "480", "a panel's width, px"},
         {"seeds", "88123,1,2,3", "the cave's seeds, side by side"},
         {"start", "5,0,4", "where the walk starts, world m (x, y, z), on a room's floor"},
