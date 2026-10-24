@@ -2,23 +2,28 @@
 // densities settled and drawn from the side at the draught each found; three boxes heaving after a
 // push with the period measured against theory; an undamped box's energy over a minute (it must
 // never grow); balls dropped from three heights with their depth, the force they meet and the
-// splash they report; a planing sled run onto a pond at four speeds; and buoys riding a sea beside
-// the surface at their own points.
+// splash they report; a planing sled run onto a pond at four speeds; buoys riding a sea beside
+// the surface at their own points; and the wakes (engine/water/wake.hpp): a hull's trail seen from
+// above with Kelvin's lines over it, and the angle its arms open at against its speed.
 //
-// ge:summary Lab: floating: draughts, heave, energy, drops, a skimming sled, buoys
+// ge:summary Lab: floating: draughts, heave, energy, drops, a skimming sled, buoys, wakes
 // ge:keywords lab water float buoyancy draught heave period energy slam splash planing skim buoy
+// ge:keywords wake kelvin ring trail froude
 // ge:skill water labs
 // ge:test tests/water_float_test.cpp
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <string>
 #include <vector>
 
+#include "core/libm/libm.hpp"
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
 #include "water/float.hpp"
+#include "water/wake.hpp"
 
 namespace {
 
@@ -408,6 +413,160 @@ void buoys(gl::Lab& lab) {
            p);
 }
 
+// A hull `length` m long run up +z at `speed` m/s until `reach` transverse wavelengths of wake
+// stand behind it; `t` and `z` where it ends.
+gw::Wakes hull_trail(double length, double speed, double reach, double& t, double& z) {
+  gw::Wakes w;
+  w.life = 80;
+  gw::Trail tr;
+  const double lambda = 2 * kPi * speed * speed / gw::kGravity;
+  const int steps = static_cast<int>((reach * lambda / speed + 10) / kDt);
+  for (int i = 0; i <= steps; ++i) {
+    t = i * kDt;
+    gw::wake_trail(w, tr, 0, 0, speed * t, 0, speed, length, 1, 0.3, t);
+  }
+  z = speed * t;
+  return w;
+}
+
+// The arm's angle (water_wake_test's measure): on lines across the wake 6 to 12 transverse
+// wavelengths behind, the wake's outer edge (where its waves fall to half the line's highest);
+// the straight line fitted through them. Also the highest wave met.
+double arm_angle(const gw::Wakes& w, double speed, double t, double z, double& top) {
+  const double lambda = 2 * kPi * speed * speed / gw::kGravity;
+  double sx = 0, sy = 0, sxx = 0, sxy = 0;
+  int n = 0;
+  top = 0;
+  for (int m = 6; m <= 12; m += 2) {
+    const double d = m * lambda;
+    std::vector<double> envelope;
+    double best = 0, at = 0;
+    for (int i = 0; 0.2 + i * lambda / 40 < 0.6 * d; ++i) {
+      const double x = 0.2 + i * lambda / 40;
+      double h = 0;
+      for (int j = -3; j <= 3; ++j) {
+        const double dz = j * lambda / 6;
+        h = std::fmax(h, std::fabs(gw::wake_at(w, 0, x, z - d + dz, t).height));
+      }
+      envelope.push_back(h);
+      best = std::fmax(best, h);
+    }
+    // The wake's outer edge: the last point out where the waves are still half the line's highest.
+    for (size_t i = 0; i < envelope.size(); ++i) {
+      if (envelope[i] >= 0.5 * best) at = 0.2 + static_cast<double>(i) * lambda / 40;
+    }
+    top = std::fmax(top, best);
+    sx += d;
+    sy += at;
+    sxx += d * d;
+    sxy += d * at;
+    ++n;
+  }
+  return gc::libm::atan((n * sxy - sx * sy) / (n * sxx - sx * sx)) * 180 / kPi;
+}
+
+std::vector<double> speeds(const std::string& list) {
+  std::vector<double> out;
+  size_t at = 0;
+  while (at < list.size()) {
+    size_t end = list.find(',', at);
+    if (end == std::string::npos) end = list.size();
+    out.push_back(std::strtod(list.substr(at, end - at).c_str(), nullptr));
+    at = end + 1;
+  }
+  return out;
+}
+
+void wakes(gl::Lab& lab) {
+  // The plan: a 4 m hull at 3 m/s and at 6 m/s from above, the hull at the top, the waves'
+  // height shaded, Kelvin's lines over each.
+  {
+    constexpr int kW = 300, kH = 330, kGap = 8;
+    constexpr double kPerM = 5.5;  // px a metre: 60 m of the trail
+    gl::Picture p = gl::create_picture(2 * kW + kGap, kH + 18, {236, 242, 248});
+    const double top = 8;
+    const double arm = gc::libm::tan(19.47 * kPi / 180);
+    int panel = 0;
+    for (const double speed : {3.0, 6.0}) {
+      double t = 0, z = 0;
+      const gw::Wakes w = hull_trail(4, speed, 16 * 9.0 / (speed * speed), t, z);
+      const int ox = panel * (kW + kGap);
+      const double cx = ox + kW / 2.0;
+      for (int py = 0; py < kH; ++py) {
+        for (int px = 0; px < kW; ++px) {
+          const double x = (px - kW / 2.0) / kPerM, back = (py - top) / kPerM;
+          const double h = gw::wake_at(w, 0, x, z - back, t).height;
+          const double v = gc::clamp(h / 0.08, -1, 1);
+          const auto ch = [&](double a, double b) {
+            return static_cast<uint8_t>(gc::clamp(a + (b - a) * (0.5 + 0.5 * v), 0, 255));
+          };
+          gl::set_pixel(p, ox + px, py, {ch(20, 235), ch(60, 245), ch(110, 255), 255});
+        }
+      }
+      for (const double side : {-1.0, 1.0}) {
+        gl::draw_line(p, cx, top, cx + side * arm * (kH - top), kH, {230, 120, 30}, 1);
+      }
+      // On the slow hull's side, Kelvin's crest lines (the stationary-phase construction: the
+      // n-th crest at n transverse waves behind on the track, bending back through the cusp on
+      // the arm into the diverging wave's crest), in red over the right half.
+      if (panel == 0) {
+        const double lambda = 2 * kPi * speed * speed / gw::kGravity;
+        for (int n = 1; n * lambda < (kH - top) / kPerM; ++n) {
+          for (int i = 0; i <= 400; ++i) {
+            const double th = 0.5 * kPi * i / 400;
+            const double c = gc::libm::cos(th), sn = gc::libm::sin(th);
+            const double across = n * lambda * c * c * sn, back = n * lambda * c * (2 - c * c);
+            const int px = static_cast<int>(cx + across * kPerM);
+            const int py = static_cast<int>(top + back * kPerM);
+            if (py < kH && px < ox + kW) gl::set_pixel(p, px, py, {200, 30, 40, 255});
+          }
+        }
+      }
+      gl::fill_disc(p, cx, top, 4, {230, 120, 30});
+      gl::draw_text(p, ox + 6, kH + 4, fixed(speed, 0) + " M/S", {24, 26, 32});
+      ++panel;
+    }
+    gl::draw_text(p, kW + kGap + 80, kH + 4, "ORANGE: 19.47 DEG (KELVIN)", {24, 26, 32});
+    lab.shot({"wake",
+              "A HULL'S WAKE FROM ABOVE",
+              "A 4 m hull at 3 m/s (left) and 6 m/s (right) on still water, from above, the hull "
+              "at the top: every ring it set off summed (engine/water/wake.hpp), the waves' "
+              "height shaded dark (troughs) to light (crests), 60 m of its trail; on the right "
+              "half of the left panel Kelvin's crest lines in red, the theory's pattern.",
+              "short diverging crests feathered outward along both arms, the arms' outer edge on "
+              "the orange lines; the crests following the red lines' shape; transverse waves "
+              "curving across the track between them, faint "
+              "at 6 m/s where the diverging waves rule; no ridges along the track",
+              {{"length", "4 m"}, {"speeds", "3, 6 m/s"}}},
+             p);
+  }
+  // The angle against the speed.
+  gl::LabTable table{"The arms' angle against the hull's speed (a 4 m hull)",
+                     {"speed m/s", "Froude", "transverse wave m", "arm angle deg", "top wave m"},
+                     {}};
+  for (const double speed : speeds(lab.arg("wake-speeds"))) {
+    double t = 0, z = 0, top = 0;
+    const gw::Wakes w = hull_trail(4, speed, 14, t, z);
+    const double angle = arm_angle(w, speed, t, z, top);
+    const double froude = speed / std::sqrt(gw::kGravity * 4);
+    table.rows.push_back({fixed(speed, 1), fixed(froude, 2),
+                          fixed(2 * kPi * speed * speed / gw::kGravity, 1), fixed(angle, 2),
+                          fixed(top, 3)});
+    lab.metric("wake.angle." + fixed(speed, 1), angle, "deg");
+    if (speed == 3.0 && std::fabs(angle - 19.47) > 2) {
+      lab.fail(
+          "a 4 m hull at 3 m/s leaves its arms at " + fixed(angle, 2) +
+              " degrees, not Kelvin's 19.47",
+          "Check the ring's phase and its shortest wave (engine/water/wake.cpp). Skill: water.");
+    }
+  }
+  lab.table(table);
+  lab.note(
+      "Past a Froude number of about 0.6 a hull is too short to damp its own short "
+      "diverging waves, and the arms' highest waves move in toward the track: the wake "
+      "looks narrower than Kelvin's angle, as measured on real hulls.");
+}
+
 void run(gl::Lab& lab) {
   draughts(lab);
   heave(lab);
@@ -415,6 +574,7 @@ void run(gl::Lab& lab) {
   drops(lab);
   skim(lab);
   buoys(lab);
+  wakes(lab);
 }
 
 const gl::LabSpec kSpec{
@@ -424,9 +584,11 @@ const gl::LabSpec kSpec{
     "engine/water/float.hpp",
     "water",
     "Does a body float at its density's draught, heave at the period theory gives without gaining "
-    "energy, meet the water hard when dropped, skim when fast, and ride the waves?",
-    {{"seconds", "20", "how long the heave chart runs"}},
-    "--seconds=8",
+    "energy, meet the water hard when dropped, skim when fast, ride the waves, and leave a "
+    "wake at Kelvin's angle?",
+    {{"seconds", "20", "how long the heave chart runs"},
+     {"wake-speeds", "3,4,5,6", "the hull speeds of the wake's table, m/s"}},
+    "--seconds=8 --wake-speeds=3",
     run};
 GE_LAB(kSpec);
 
