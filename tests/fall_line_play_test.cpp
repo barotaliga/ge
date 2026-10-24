@@ -1,7 +1,8 @@
 // AN AGENT AT THE CONTROLS OF FALL LINE, HELD (games/fall_line/sim/play.hpp on the engine's play
 // session): the protocol's answers to a scripted session, its refusals, an agent that sends the
 // bot's own moves riding the bot's own run to the bit, the pilot's run equal to the bot's, an
-// agent's input log played back to its digest, and two logs one input apart diverging there.
+// agent's input log played back to its digest, two logs one input apart diverging there, and a
+// replay sought back and forth landing on the run played straight there (the run's clone).
 //
 // ge:summary Test: Fall Line's play protocol, its errors, replay to the digest, diverge's step
 // ge:keywords test play agent protocol json observe act pilot inputs end replay digest diverge
@@ -9,14 +10,19 @@
 // ge:test tests/fall_line_play_test.cpp
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "check.hpp"
 #include "core/num_text.hpp"
 #include "fall_line/sim/bot.hpp"
 #include "fall_line/sim/game.hpp"
+#include "fall_line/sim/moments.hpp"
 #include "fall_line/sim/play.hpp"
 #include "fall_line/sim/simulate.hpp"
 #include "play/session.hpp"
+#include "replay/director.hpp"
+#include "replay/live.hpp"
+#include "replay/player.hpp"
 
 namespace {
 
@@ -167,4 +173,61 @@ TEST(two_logs_one_input_apart_diverge_at_that_step) {
   CHECK_MSG(yaw, "the first differing state does not name the skier's yaw rate");
   const auto same = gp::diverge(fs::kGame, a, a, error);
   CHECK(same && same->same && same->state_step < 0 && same->input_step < 0);
+}
+
+TEST(a_replay_sought_anywhere_is_the_run_played_straight_there) {
+  gp::Setup st = setup(2);
+  st.options["hands"] = "human";
+  std::string error;
+  const auto played = gp::pilot_run(fs::kGame, st, error);
+  CHECK_MSG(played.has_value(), error);
+  if (!played) return;
+  ge::replay::Player p(fs::kGame, played->log);
+  CHECK_MSG(p.ok(), p.error());
+  const int64_t n = p.length();
+  for (const int64_t mark : std::vector<int64_t>{n, n / 2, n / 2 + 37, 601, n - 1, 0, n / 3}) {
+    p.seek(mark);
+    while (!p.advance(600)) {
+    }
+    auto straight = fs::kGame.open(st, error);
+    for (int64_t i = 0; i < mark; i++) straight->step(played->log.at(i));
+    CHECK_MSG(p.run().digest() == straight->digest() && p.run().state() == straight->state(),
+              "the replay sought to step " + std::to_string(mark) +
+                  " is not the run played there: a part of FallLineRun the clone misses");
+  }
+  CHECK(p.stats().restores > 0);
+}
+
+TEST(a_flight_is_marked_at_its_take_off_and_cut_from_before_its_lip) {
+  // Seed 38's first kicker is flown about 39 s into the race.
+  gp::Setup st = setup(0);
+  st.options["hands"] = "human";
+  ge::replay::Live live(fs::kGame, st);
+  CHECK_MSG(live.ok(), live.error());
+  if (!live.ok()) return;
+  fs::Moments moments;
+  std::vector<double> input(fs::kGame.axes.size(), 0);
+  int64_t took_off = -1;
+  while (!live.done() && live.steps() < int64_t{45} * 120) {
+    live.run().pilot(input);
+    live.step(input);
+    const fs::GameState* s = fs::state_of(live.run());
+    if (!s) break;
+    for (const fs::GameEvent& e : s->events) {
+      if (e.racer == 0 && e.kind == fs::EventKind::takeoff && took_off < 0) took_off = live.steps();
+    }
+    moments.file(*s, live);
+  }
+  CHECK(took_off > 0);
+  const ge::replay::Mark* flight = nullptr;
+  for (const ge::replay::Mark& m : live.marks()) {
+    if (m.kind == "flight") flight = &m;
+  }
+  CHECK(flight != nullptr);
+  if (!flight) return;
+  CHECK(flight->step == took_off && flight->weight > 1);
+  const ge::replay::Cut cut = ge::replay::plan_cut(
+      live.marks(), fs::shot_rules(), fs::director_policy(), fs::kGame.hz, live.steps());
+  CHECK(!cut.shots.empty() && cut.shots[0].kind == "flight" && cut.shots[0].from < took_off &&
+        cut.shots[0].rate < 1);
 }

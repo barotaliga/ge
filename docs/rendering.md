@@ -207,14 +207,20 @@ The order, with what each stage is for:
    snow shader runs exactly once, whatever the draw order. This is the direct answer to
    the ground's fragment cost, and it lets the ground's shader drop `discard`, which
    tile-based GPUs pay for across a whole draw.
-6. **Sky and clouds:** the sky behind the depth buffer; the cloud volume over it (as built
-   at the render resolution, resolved by TAA; at a quarter of the pixels, reprojected from
-   last frame, once the quality ladder has the stop: § Sky).
-7. **Transparent:** particles and glows, softened against the depth buffer.
-8. **Temporal resolve:** anti-aliasing and upscaling to the output size (§ Anti-aliasing).
-9. **Post:** one compute pass for exposure, bloom, the colour grade, tone mapping, dither
+6. **Sky and clouds:** the sky behind the depth buffer; the cloud volume over it (marched at a
+   quarter of the pixels, a quarter of those each frame and the rest reprojected from the last,
+   then upsampled by depth and resolved by TAA: § Sky).
+7. **Water** (`render/water.hpp`, `docs/water.md` § Drawn): the opaque frame's colour and
+   depth copied (`water.copy`), then every body drawn over it (`water`), reading the copies
+   for what lies under it and what it mirrors, testing and writing the depth, so what follows
+   sits in front of or behind it; both rows run empty with no water in view. With the eye
+   under a body, `water.under` redraws the picture as seen through the water
+   (`render/underwater.hpp`).
+8. **Transparent:** particles and glows, softened against the depth buffer.
+9. **Temporal resolve:** anti-aliasing and upscaling to the output size (§ Anti-aliasing).
+10. **Post:** one compute pass for exposure, bloom, the colour grade, tone mapping, dither
    and the output encoding (§ Post).
-10. **UI:** the HUD and cards, at output resolution.
+11. **UI:** the HUD and cards, at output resolution.
 
 **As built (M7c).** Fall Line's table runs `sky.tables`, `terrain.cull`, `terrain.horizon`,
 `terrain.depth`, `hiz`, `terrain`, `sky`, `taa`, `post`. The terrain draws twice from one
@@ -320,6 +326,21 @@ off and counts the pixels that differ, which must be none (`cull-faults`);
 On seed 38 at 640 × 360 a run's moment draws about 3,000 trees of 21,000 and the pyramid
 hides about 9,000; the forest is twenty meshes (five forms, four variants each) at three LODs
 each (`plugins/mountain/app/trees.hpp`), 9 to 384 triangles a tree.
+
+**Seeing through (M26g)** (`set_see_through`, `SeeThrough`). A follow camera in a wood sees
+crowns, not its subject. A family may be told the point the camera frames; every upright
+instance whose crown holds the eye or crosses the line from the eye to that point (stopped
+0.6 m short of it, so a tree beside the subject and not before him stays whole) keeps only a
+dithered share of its pixels in the depth prepass, easing from all of them 1 m off the line
+to 15 % on it. An instance stands as its axis (its position up its rotated +y by its y
+scale) and its crown (the larger of its x and z scales), which is what a unit-sized upright
+mesh at its true size is. The share is computed per instance in the vertex stage (a branch
+on a uniform when the family is not seen through), uses the LOD band's dither, so in a band
+the two LODs together keep just that share, and moves smoothly with the line, so nothing
+pops; under TAA the screen door reads as a ghost of the tree. The shadow maps draw it whole,
+so its shadow stays on the snow. `see_through_keep` is the CPU twin; the `camera-world` lab
+measures how much of the skier each outside lens sees in the densest wood of seed 38: 80 to
+93 % of him, against 0 to 33 % with the trees drawn whole.
 
 ## Geometry and resources
 
@@ -584,6 +605,18 @@ of the sun's illuminance (`FrameView::sun_illuminance` scales them all). The sky
 full-screen triangle at the far plane tested `equal`, with the sun's disc. `frame.wgsl`
 holds the one copy of the haze, the sun's light at a point and the sky's irradiance.
 
+**Sky types (M8f7)** (`render/sky_style.hpp`, `FrameView::style`): a world that is not the Earth
+changes its AIR (scales on the Rayleigh scattering per channel, the dust's scattering,
+absorption per channel, asymmetry and scale height, and the ozone), which `medium_at` reads, so
+the tables are rebuilt in it and everything lit by the sky follows (the sky, the sun's colour,
+the sky's light, the haze, the cloud's light). Over the sky the pass draws what an air cannot:
+the sun's disc's size and tint, a second sun with a halo, a planet lit as a ball (its phase
+fixed by its offset from the sun, banded, a ring whose near half crosses it, dimming half the
+sky behind it), a nebula on the star sphere and the stars by day (both against the snow's
+white, not physical), and a glow from under the horizon. Ten named types (`sky_types`) a game
+picks by a word, knobs over them (`SkyKnobs`). The Earth's style is every scale 1 and every
+extra 0, so its picture is the same to the bit.
+
 **The weather in the picture (M8f1).** A frame is seen under a `Weather` (`render/view.hpp`,
 in the frame block as `weather` and `deck`), and `wgsl/frame.wgsl` is the one place it acts, so
 the ground, the trees, the figures, the particles, the flakes and the sky all see the same day:
@@ -655,7 +688,30 @@ and a storm's 2. The cloud volume itself is M8f3 (below).
   On lavapipe at 1280 × 720, from seed 38's start looking up into a flurry's sky, every pixel's
   march costs 72 ms and the quarter's 36 (28 at half the steps): a CPU raster's numbers, where
   a full-screen pass costs about 13 ms whatever it does, so a GPU's saving is nearer the
-  pixels' four to one. Not done: the march spread over frames with reprojection.
+  pixels' four to one.
+- THE MARCH SPREAD OVER FRAMES (`Clouds::spread`, on by default, and only with the last frame's
+  camera: `cloud_info.z`): each frame one of every two by two of the half-size pixels marches,
+  in turn over four frames, and the other three take the last frame's half-size picture. The
+  marching pixels have a pass of their own ("clouds.fresh", over a target a quarter of the
+  half-size one), because a GPU runs a group of neighbouring pixels as long as its slowest: one
+  marching pixel in every two by two of one pass makes every group march, and the first build,
+  which did that, timed no cheaper than the whole march. The half-size pass ("clouds.march")
+  then takes the fresh pixel where it is its turn, and elsewhere reprojects: its ray's point at
+  the distance its cloud lies at (first guessed at the nearest layer's middle, then read back
+  from the last frame and reprojected again) is carried through the last frame's camera, and
+  the last frame's picture there is read bilinear over the taps that were written the frame
+  before (a stamp, 1..4096, beside each) and marched to the same scene within 10 %; a pixel
+  those taps hold under half of (off the screen, newly seen past a ridge) marches after all.
+  The two half-size sets (RGBA16F cloud, RGBA32F distances and stamp) swap each frame. The
+  `weather` lab holds the spread to every pixel's march as it holds the quarter, with the view
+  swinging 30 degrees a second (`--turn=30`): at 1280 × 720 looking up into the sky, 0.2 % of
+  the fair sky's picture and 0.27 % of the flurry's differ by more than 8 levels (0.01 % and
+  0.27 % with the march whole every frame), the edges of the heaps and a pixel's dither. On
+  lavapipe the half-size march falls from 12 to 16 ms to 3.4 to 4.8 for the fresh pass and 4.8
+  to 5.6 for the half-size one, and the cloud's three passes from 22 to 26 ms to 17 to 19 (the
+  full-size upsample, about 8, is the same either way); on a GPU, whose pass has no such floor,
+  the march is nearer a quarter of its cost. In one ladder pricing run the clouds' high stop
+  fell from 63 % of every pixel's march to 42 %.
 
 What the mountain's broken skies stand is `plugins/mountain/app/cloud_field.hpp`: FAIR heaps at
 1.5 to 2 km over the valley floor and a few ice streaks at 8 km, FLURRIES' taller heaps under a
@@ -713,7 +769,11 @@ read in 2026, longitude 0) by `core/moon.hpp` (M8f6):
   under half a degree, is not applied), with the galaxy's band;
 - THE EYE: under 14 lx on white the exposure adapts only partly (dark scenes stay dark), and
   the rods' share desaturates the picture toward a blue tint (`night_vision`, in post before
-  the exposure).
+  the exposure). The share is the scene's or the pixel's own, whichever is less, so a bright
+  star keeps its tint; the moon's disc, drawn far dimmer than it is but always bright enough
+  for the cones (an eclipse's umbra near 1 cd/m2), keeps its own colour: the sky pass gives the
+  sky in front of it to the rods and post leaves the disc's pixels alone (`on_moon`), so a full
+  moon is a warm white and an eclipsed one copper red over a blue-grey night.
 
 The `night` lab draws it on seed 38's vista: the snow's luma falls from 194 at three degrees
 under to 67 at fourteen, a full moon's snow is 71, a quarter's 28 and a new moon's 10, the
@@ -884,8 +944,9 @@ runs), each with the crowd and without.
 The picture's settings are one table of ROWS in the game (Fall Line's:
 `games/fall_line/app/ladder.hpp`), each a ladder of STOPS, cheapest first. A stop maps to the
 frame's parameters (`FrameOptions`: the render scale, the shadow maps' size, the trail maps'
-texels, the flakes, the cloud march's share of its steps and whether it marches a quarter of the
-pixels), never to a code path of its own. Each row is its
+texels, the flakes, the cloud march's share of its steps, whether it marches a quarter of the
+pixels and whether that march is spread over frames, the picture's reach), never to a code path
+of its own. Each row is its
 own bill, because a machine can be short of pixels and rich in passes, or the other way round.
 
 - **The price table.** Every stop carries a COST, the ms it adds to a frame over its row's
@@ -912,9 +973,22 @@ own bill, because a machine can be short of pixels and rich in passes, or the ot
 
 The table's costs today are the software adapter's (lavapipe at 1280 × 720), whose ratios are a
 CPU raster's: the reference machine's prices (the Mac, § Where it is developed) replace them.
-What the ladder does not have yet: a terrain reach row (it needs the mist that hides a shorter
-view), the cloud's march spread over frames with reprojection, and changing a stop without
-making the frame again.
+- **The reach and its mist.** `FrameView::reach_m` is how far a picture draws. The ground's
+  clipmap draws only the levels that cover it (`clipmap_levels_to`: 1, 2 or 4 km round the eye
+  where all eight reach 8 km), the instances' cull drops every one past it (counted with the
+  frustum's), and the haze closes every surface but the cloud into the sky behind its pixel from
+  half the reach to all of it (`haze` in `wgsl/frame.wgsl`; the cloud's own colour goes through
+  `haze_air`, the air alone, since it is sky). While there is a reach the sky under the horizon is
+  drawn as the horizon's, so the land past it is lost in a bright haze, never seen as an edge or a
+  dark sea beyond it. Fall Line's DISTANCE row is priced where it is seen, from over the summit
+  on a clear day (`--view=vista --lift=0 --fall=0`): there the woods past 2 km are most of the
+  frame's cost on the software adapter.
+
+The table's costs today are the software adapter's (lavapipe at 1280 × 720), whose ratios are a
+CPU raster's: the reference machine's prices (the Mac, § Where it is developed) replace them.
+What the ladder does not have yet: the cloud's march spread over frames with reprojection, and
+changing a stop without making the frame again (the reach already can: it is a field of the
+view, not of the frame).
 
 ## Measurement
 

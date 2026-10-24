@@ -55,6 +55,23 @@ void put_down(SkierState& s, Wipeout cause) {
   s.cause = cause;
   s.down_time = 0;
   s.jump_held = 0;
+  s.thrown.active = false;
+}
+
+Over over_of(Wipeout cause) {
+  switch (cause) {
+    case Wipeout::tree:  // the trunk stops the skis and he goes on over them, away from it
+      return Over{1, 0.25, 1.8};
+    case Wipeout::landing:  // the legs could not hold it: sat down back and to a side
+      return Over{-0.45, 0.8, 0.2};
+    case Wipeout::across:  // the edge bites and stops the slide: flung over it
+      return Over{1, 0.2, 1.2};
+    case Wipeout::hurt:  // mortally hurt on his feet: he crumples onto a side
+      return Over{0.1, 1, 0};
+    case Wipeout::none:
+      break;
+  }
+  return Over{0.1, 1, 0.3};
 }
 
 namespace {
@@ -117,42 +134,66 @@ void meet_ground(SkierState& s, const Level& level, double dt, SkierEvents& ev) 
   if (!s.down && before < a::kFlightMin && s.air_time >= a::kFlightMin) ev.took_off = true;
 }
 
-// THE TRUNKS: pushed back out of any trunk he overlaps; met fast, a wipeout.
-void meet_trees(SkierState& s, const World& world, SkierEvents& ev) {
+// ONE CIRCLE OF HIM MEETING A TRUNK: the circle of `radius` at `ahead` m along his heading pushed
+// back out of the trunk it overlaps, and his way into it taken off; met fast, a wipeout; slower,
+// a glance, which turns the skis with his way when it was their tips that met it. False when the
+// circle meets nothing.
+bool meet_trunk(SkierState& s, const World& world, SkierEvents& ev, double ahead, double radius) {
   namespace w = tuning::wipeout;
   const Level& level = *world.level;
-  const int32_t i = tree_overlap(*world.trees, level, s.x, s.z, w::kBodyRadius);
-  if (i < 0) return;
+  const double fx = core::libm::sin(s.heading);
+  const double fz = core::libm::cos(s.heading);
+  const double cx = s.x + fx * ahead;
+  const double cz = s.z + fz * ahead;
+  const int32_t i = tree_overlap(*world.trees, level, cx, cz, radius);
+  if (i < 0) return false;
   const auto& t = level.trees[static_cast<size_t>(i)];
-  if (s.y > t.y + t.height) return;  // flying over its crown
-  double dx = s.x - t.x;
-  double dz = s.z - t.z;
+  if (s.y > t.y + t.height) return false;  // flying over its crown
+  double dx = cx - t.x;
+  double dz = cz - t.z;
   double d = core::hypot(dx, dz);
   if (d <= 1e-9) {
-    dx = -core::libm::sin(s.heading);
-    dz = -core::libm::cos(s.heading);
+    dx = -fx;
+    dz = -fz;
     d = 1;
   }
   const double nx = dx / d;
   const double nz = dz / d;
-  const double reach = t.radius + w::kBodyRadius;
-  s.x = t.x + nx * reach;
-  s.z = t.z + nz * reach;
+  const double reach = t.radius + radius;
+  s.x += nx * (reach - d);
+  s.z += nz * (reach - d);
   const double closing = -(s.vx * nx + s.vz * nz);
-  if (closing <= 0) return;
+  if (closing <= 0) return true;
   s.vx += closing * nx;
   s.vz += closing * nz;
-  if (s.down) return;
+  if (s.down) return true;
   ev.tree = i;
   ev.closing = closing;
   if (closing > w::kTreeSpeed) {
-    // The trunk stops the body; what was going past it is mostly lost in the fall.
+    // The trunk stops the body (or the skis, and he goes on over them); what was going past it
+    // is mostly lost in the fall.
     s.vx *= 0.3;
     s.vz *= 0.3;
     wipe_out(s, ev, Wipeout::tree);
   } else {
     ev.glanced = true;
+    // The tips turned aside: the skis follow the way the trunk left him.
+    if (ahead > 0 && core::hypot(s.vx, s.vz) > w::kTipTurnSpeed) {
+      s.heading = core::libm::atan2(s.vx, s.vz);
+    }
   }
+  return true;
+}
+
+// THE TRUNKS: his body's circle, then the circles along his skis ahead of the boots (the middle
+// of the fore-ski and its tip), each pushed back out of any trunk it overlaps.
+void meet_trees(SkierState& s, const World& world, const SkiSpec& spec, SkierEvents& ev) {
+  namespace w = tuning::wipeout;
+  if (meet_trunk(s, world, ev, 0, w::kBodyRadius)) return;
+  if (s.down) return;
+  const double tip = spec.length * w::kTipShare;
+  if (meet_trunk(s, world, ev, tip, w::kTipRadius)) return;
+  meet_trunk(s, world, ev, tip / 2, w::kTipRadius);
 }
 
 // The world's edge holds him inside it.
@@ -173,6 +214,47 @@ void meet_edge(SkierState& s, double size) {
     s.z = hi;
     if (s.vz > 0) s.vz = 0;
   }
+}
+
+// THROW HIM off his skis, going at (vx, vy, vz): over onto the side away from the trunk that
+// threw him, or otherwise the side he was leaning toward.
+void throw_down(SkierState& s, const World& world, int32_t tree, double vx, double vy, double vz,
+                double dt) {
+  const double flat = core::hypot(vx, vz);
+  const double heading = flat > 1 ? core::libm::atan2(vx, vz) : s.heading;
+  double side = s.lean >= 0 ? 1 : -1;
+  if (tree >= 0) {
+    const auto& t = world.level->trees[static_cast<size_t>(tree)];
+    const double across =
+        (t.x - s.x) * core::libm::cos(heading) - (t.z - s.z) * core::libm::sin(heading);
+    side = across > 0 ? -1 : 1;
+  }
+  s.thrown =
+      throw_of(s.x, s.y, s.z, heading, s.lean, vx, vy, vz, s.yaw_rate, side, over_of(s.cause), dt);
+}
+
+// A STEP OF THE THROWN BODY, the state following its centre of mass.
+void step_thrown(SkierState& s, const World& world, double dt) {
+  namespace rd = tuning::ragdoll;
+  Ragdoll& b = s.thrown;
+  step_ragdoll(b, *world.level, world.trees, dt);
+  s.x = b.x;
+  s.z = b.z;
+  s.vx = b.vx;
+  s.vy = b.vy;
+  s.vz = b.vz;
+  s.speed = core::hypot3(s.vx, s.vy, s.vz);
+  s.on_snow = b.touching;
+  s.packed = core::clamp(world.level->packed_at(s.x, s.z), 0, 1);
+  s.y = b.touching ? world.level->ground_at(s.x, s.z) - s.sink : b.y - rd::kStand;
+  if (core::hypot(s.vx, s.vz) > 0.5) s.heading = core::libm::atan2(s.vx, s.vz);
+  s.yaw_rate = 0;
+  s.edge = 0;
+  s.tuck = 0;
+  s.lean = 0;
+  s.g_lat = 0;
+  s.air_time = b.aloft;
+  s.down_time = b.still;
 }
 
 }  // namespace
@@ -203,6 +285,11 @@ void step_skier(SkierState& s, const SkierInput& in, const World& world, const S
   ev = SkierEvents{};
   const Level& level = *world.level;
   const double g = tuning::kGravity;
+  // Down and thrown, the step is the thrown body's.
+  if (s.down && s.thrown.active) {
+    step_thrown(s, world, dt);
+    return;
+  }
 
   // 1. The snow under him.
   s.packed = core::clamp(level.packed_at(s.x, s.z), 0, 1);
@@ -313,18 +400,28 @@ void step_skier(SkierState& s, const SkierInput& in, const World& world, const S
   s.lean += (balance - s.lean) * core::num::min(1.0, dt / st::kLeanLag);
 
   // 7. The move, the world's edge, the ground. 8. The trunks.
+  const double before_x = s.vx;
+  const double before_y = s.vy;
+  const double before_z = s.vz;
   s.x += s.vx * dt;
   s.y += s.vy * dt;
   s.z += s.vz * dt;
   meet_edge(s, level.size);
   meet_ground(s, level, dt, ev);
-  meet_trees(s, world, ev);
+  meet_trees(s, world, spec, ev);
 
   s.speed = core::hypot3(s.vx, s.vy, s.vz);
   if (s.down) {
     s.tuck = 0;
     s.edge = 0;
-    s.down_time = s.on_snow && s.speed < w::kStill ? s.down_time + dt : 0;
+    s.down_time = 0;
+    // Thrown at the velocity he had before the blow that threw him (a trunk's stop is the body's
+    // to meet), or at the one he has now when he was put down from outside.
+    if (ev.wiped_out) {
+      throw_down(s, world, ev.tree, before_x, before_y, before_z, dt);
+    } else {
+      throw_down(s, world, -1, s.vx, s.vy, s.vz, dt);
+    }
   }
 }
 
@@ -356,6 +453,7 @@ uint64_t skier_hash(const SkierState& s, uint64_t h) {
                          s.vz,        s.heading,  s.yaw_rate, s.edge,     s.tuck,
                          s.lean,      s.sink,     s.packed,   s.speed,    s.g_lat,
                          s.jump_held, s.air_time, s.air_peak, s.down_time};
+  h = ragdoll_hash(s.thrown, h);
   for (double v : nums) {
     uint64_t u;
     std::memcpy(&u, &v, sizeof u);

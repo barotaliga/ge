@@ -27,11 +27,15 @@
 //    `kHarshG`, or landed across his way, it is a WIPEOUT. The snow falling away more than
 //    `kLeaveGap` from under him is a TAKE-OFF: a kicker's lip, a roller's crest or a cliff is a
 //    flight because the ground curved away faster than gravity could follow, never by a flag.
-// 8. THE TRUNKS (`trees.hpp`): met faster than `kTreeSpeed`, a wipeout; slower, a glance.
+// 8. THE TRUNKS (`trees.hpp`), met by his body or the skis ahead of it (their tips and halfway
+//    to them): faster than `kTreeSpeed`, a wipeout; slower, a glance, which on the tips turns the
+//    skis aside.
 //
 // THERE IS NO MODE: a launch, a landing and a fall are read off the same forces every step is
-// made of, and the events say so after the fact. A skier DOWN (wiped out) slides on his body
-// until he is still; the game decides when to stand him up again.
+// made of, and the events say so after the fact. A skier DOWN (wiped out) is THROWN off his skis
+// (`ragdoll.hpp`): the step he goes down, his body is thrown from where he stood, over the way
+// what threw him sends a body over, and from then on each step is the thrown body's, the state
+// following its centre of mass, until the game stands him up again.
 //
 // Sign conventions (core/math.hpp): heading 0 = +z, clockwise from above; `steer` and `edge`
 // positive to the right; the skis' forward is (sin h, cos h) and their right (cos h, -sin h).
@@ -47,6 +51,7 @@
 #include <cstdint>
 
 #include "mountain/mapgen/types.hpp"
+#include "skier/ragdoll.hpp"
 #include "skier/skis.hpp"
 #include "skier/trees.hpp"
 
@@ -82,8 +87,9 @@ struct SkierState {
   double air_peak = 0;            // m, the most clearance over the snow this flight
   double down_time = 0;           // s lying still after a wipeout
   bool on_snow = true;
-  bool down = false;  // wiped out: sliding on his body, the controls dead
+  bool down = false;  // wiped out: off his skis, the controls dead
   Wipeout cause = Wipeout::none;
+  Ragdoll thrown;  // his body off the skis while he is down (`thrown.active` once thrown)
 };
 
 // What one step did, for the game to turn into its events and for the labs to count.
@@ -110,8 +116,12 @@ struct World {
 void step_skier(SkierState& s, const SkierInput& in, const World& world, const SkiSpec& spec,
                 double dt, SkierEvents& events);
 
-// PUT HIM DOWN for `cause`, as a wipeout does: sliding on his body, the controls dead.
+// PUT HIM DOWN for `cause`, as a wipeout does: the controls dead, and his body thrown off the skis
+// at the next step, at the velocity he has then.
 void put_down(SkierState& s, Wipeout cause);
+
+// How a wipeout of `cause` sends a body over (`Over`).
+Over over_of(Wipeout cause);
 
 // Stand a skier on the snow at (x, z) facing `heading`, moving `speed` m/s along it, at rest in
 // every other respect, his skis at the sink his speed asks for. `lift` m stands him that far

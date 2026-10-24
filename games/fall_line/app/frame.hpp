@@ -29,6 +29,10 @@
 //                           reads shadows.maps and the trail maps)
 //   instances            -> hdr motion (both lists, where the depth is equal)
 //   sky                  -> hdr motion (behind depth)
+//   clouds               -> hdr (the cloud's layers, behind depth)
+//   water.copy           -> water.scene (the opaque colour and depth the water reads through)
+//   water                -> hdr motion depth (every body of water added, render/water.hpp)
+//   water.under          -> hdr (the view under water, when the eye is under a body)
 //   particles            -> hdr motion (the spray, over the picture; the motion's reactive b)
 //   snowfall             -> hdr motion (the falling snow round the eye, as the particles)
 //   taa                  -> taa.history (at the output's size; with FrameOptions::taa)
@@ -52,18 +56,20 @@
 //
 // ge:summary Fall Line's frame: its pass table over engine/render and the GPU half it owns
 // ge:keywords fall-line frame pass-table game-frame create_frame draw pass_table_faults
-// ge:keywords render offscreen surface stats draw_wire wire-probe wireframe
+// ge:keywords render offscreen surface stats draw_wire wire-probe wireframe water add_water
 // ge:skill render
 #pragma once
 
 #include <array>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
 
 #include "fall_line/app/scene.hpp"
+#include "fall_line/cfg/cvars.hpp"
 #include "gpu/device.hpp"
 #include "gpu/pipeline.hpp"
 #include "mountain/app/snow.hpp"
@@ -82,12 +88,18 @@
 #include "render/snowfall.hpp"
 #include "render/taa.hpp"
 #include "render/terrain.hpp"
+#include "render/underwater.hpp"
+#include "render/water.hpp"
 #include "skier/app/rig_pose.hpp"
 #include "skier/app/spray.hpp"
 #include "skier/app/tracks.hpp"
 #include "skier/skier.hpp"
 
 namespace fall_line::app {
+
+// The ground's clipmap: level 0's quad, m, and its levels (render/terrain.hpp): 8 km round the eye.
+inline constexpr double kGroundSpacing = 1.0;
+inline constexpr int kGroundLevels = 8;
 
 struct FrameOptions {
   bool taa = true;
@@ -104,11 +116,18 @@ struct FrameOptions {
   bool snowfall = true;  // the falling snow, when the map's sky snows
   bool weather =
       true;  // the map's sky and cloud in the picture (mountain/app/cloud_field.hpp): off, clear
-  double clouds = 1.0;        // the share of the cloud march's steps (0.25..1); 0: no layer drawn
+  double clouds = 1.0;  // the share of the cloud march's steps (0.25..1); 0: no layer drawn
+  double cover = -1;  // a broken sky's cover, its lowest layer's (the others kept in step); -1 own
   bool cloud_quarter = true;  // the cloud marched at a quarter of the pixels (false: every one)
+  bool cloud_spread = true;   // the quarter's march spread over four frames, the rest reprojected
+  double reach_m = 0;  // how far the picture draws, misted (render/view.hpp); 0: the whole ground
   ge::render::SnowfallSettings flakes;
   ge::mountain::app::TrailOptions trail_maps;  // their sizes
 };
+
+// The options a player's cfg chose (the r_ cvars, cfg/cvars.hpp) and the server's sv_cover, the
+// rest at their defaults.
+FrameOptions frame_options(const cfg::Settings& s);
 
 // What of the run a frame draws, besides the map: the racers, the player's first. `settle` poses
 // every figure settled, keeping nothing of the last frame (a still, or a jump in the run); off, the
@@ -120,6 +139,10 @@ struct FrameScene {
   // The free ride's crowd (sim/crowd.hpp), by id: each drawn as the skier model in his own pose
   // (scene.hpp's `crowd_instance`); empty, none.
   std::span<const sim::Amateur> crowd = {};
+  // The point the camera frames, world m (a rung's: camera/subject.hpp's `framed_point`): the
+  // trees between the eye and it are seen through (render/instances.hpp § Seeing through). None:
+  // every tree whole (a view of the mountain).
+  std::optional<std::array<double, 3>> subject = std::nullopt;
 };
 
 struct GameFrame {
@@ -143,6 +166,8 @@ struct GameFrame {
   ge::render::Particles particles;
   ge::render::Snowfall snowfall;
   ge::render::CloudPass clouds;
+  ge::render::Water water;       // its bodies, `add_water`'s; none: the passes draw nothing
+  ge::render::Underwater under;  // the view when the eye is under a body (`under.look`)
   std::vector<ge::skier::SprayPen> spray_pens;  // each racer's, by his place in the scene
   std::vector<ge::skier::SprayGrain> thrown;
   std::vector<ge::render::Particle> births;
@@ -202,6 +227,12 @@ void cut(GameFrame& frame);
 // lays them too) to where they are now. A lab that steps a run between frames calls it every few
 // steps so a turn is laid as a curve.
 void track(GameFrame& frame, const FrameScene& scene);
+
+// A body of water drawn in the frame (water/world.hpp's: a lake on the map, its waves laid by
+// the wind); its index. `set_water` reads it again (its waves laid again, a new look).
+int add_water(ge::gpu::Device& device, GameFrame& frame, const ge::water::Body& body,
+              const ge::render::WaterDraw& draw = {});
+void set_water(ge::gpu::Device& device, GameFrame& frame, int index, const ge::water::Body& body);
 
 // Forget every track and all the spray (a new run on the same map).
 void forget_tracks(GameFrame& frame);

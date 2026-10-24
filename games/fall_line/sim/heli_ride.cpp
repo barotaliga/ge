@@ -84,6 +84,7 @@ void hold(GameState& state, int32_t i) {
   c.down = false;
   c.down_time = 0;
   c.cause = sk::Wipeout::none;
+  c.thrown.active = false;
 }
 
 // Sat on the skid: the machine his, the rotor spooling up.
@@ -150,9 +151,7 @@ void wreck(GameState& state, int32_t i, const hc::HeliEvents& ev) {
   if (!m.rider) return;
   Racer& r = state.racers[static_cast<size_t>(i)];
   release(state, i, kBlastOut, kBlastUp);
-  r.skier.down = true;
-  r.skier.down_time = 0;
-  r.skier.cause = sk::Wipeout::landing;
+  sk::put_down(r.skier, sk::Wipeout::landing);
   r.progress.wipeouts++;
   state.events.push_back(
       GameEvent{EventKind::wipeout, i, static_cast<int32_t>(r.skier.cause), r.skier.speed});
@@ -315,7 +314,7 @@ core::Vec3 heli_seat(const hc::HeliState& h) {
 bool heli_within(const GameState& state, int32_t i) {
   const FreeHeli& m = state.heli;
   if (i != 0 || !m.present || m.rider || m.mode != HeliMode::parked) return false;
-  if (state.sled.present && (state.sled.rider || state.sled.thrown)) return false;
+  if (sled_holds(state, i)) return false;
   const Racer& r = state.racers[static_cast<size_t>(i)];
   const sk::SkierState& c = r.skier;
   if (c.down || r.free.lift.phase != LiftPhase::none) return false;

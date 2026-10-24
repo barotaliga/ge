@@ -22,8 +22,9 @@ using ge::mountain::mapgen::Level;
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kDeg = kPi / 180.0;
 
-constexpr std::array<std::string_view, 9> kNames = {
-    "start", "piste", "lookback", "vista", "aerial", "wood", "corduroy", "powder", "glitter"};
+constexpr std::array<std::string_view, 10> kNames = {"start",   "piste", "lookback", "vista",
+                                                     "aerial",  "wood",  "corduroy", "powder",
+                                                     "glitter", "sky"};
 
 // The piste's station nearest arc `s`.
 const ge::mountain::mapgen::TrackPoint& station_at(const Level& level, double s) {
@@ -160,6 +161,8 @@ std::string_view view_caption(std::string_view name) {
   if (name == "piste") return "Halfway down the piste at a skier's eye height, looking down it.";
   if (name == "lookback") return "From the finish, looking back up the piste to the summit.";
   if (name == "vista") return "High over the summit, looking down the mountain to the valley.";
+  if (name == "sky")
+    return "From the start, looking up the sky beside the sun: the kind of sky (sv_skytype).";
   if (name == "aerial") return "From high over a corner of the map, the whole mountain.";
   if (name == "corduroy") {
     return "Close over the groomed piste in the sun, looking down it at the comb's ribs and the "
@@ -180,17 +183,21 @@ std::string_view view_caption(std::string_view name) {
   return "";
 }
 
-void day_view(const Level& level, double hour, ge::render::FrameView& v) {
+void sky_view(const Level& level, double hour, ge::render::FrameView& v) {
   const double h = hour < 0 ? level.sun.hour : hour;
   const ge::core::SunPlace sun = ge::core::sun_at(
       h, level.sun.latitude, ge::mountain::mapgen::declination_of(level.sun.day_of_year));
   v.sun_elevation = sun.elevation;
   v.sun_azimuth = sun.azimuth;
   v.sun_illuminance = 1.0;
+  ge::mountain::app::night_look(level, h, v);
+}
+
+void day_view(const Level& level, double hour, ge::render::FrameView& v) {
   v.altitude_m = -level.mountain.sea;
   v.fov_y = 55 * kDeg;
   v.near_m = 0.1;
-  ge::mountain::app::night_look(level, h, v);
+  sky_view(level, hour, v);
 }
 
 bool make_view(const Level& level, std::string_view name, ge::render::FrameView& v) {
@@ -212,6 +219,14 @@ bool make_view(const Level& level, std::string_view name, ge::render::FrameView&
     place(level, p.x, p.z, 2.0, v);
     v.heading = std::atan2(m.summit.x - p.x, m.summit.z - p.z);
     v.pitch = 4 * kDeg;
+  } else if (name == "sky") {
+    // Up the sky a little to the right of the sun, wide: where a sky type's second sun, planet
+    // and nebula stand (render/sky_style.hpp places them off the sun).
+    const auto& p = station_at(level, 0);
+    place(level, p.x, p.z, 4.0, v);
+    v.heading = v.sun_azimuth + 0.45;
+    v.pitch = 22 * kDeg;
+    v.fov_y = 70 * kDeg;
   } else if (name == "vista") {
     place(level, m.summit.x, m.summit.z, 0, v);
     v.eye[1] = m.summit.y + 150;

@@ -23,6 +23,7 @@ constexpr uint32_t kFlakes[] = {0, 8192, 24576};      // 0: no falling snow
 constexpr double kCloudSteps[] = {0, 0.5, 1.0, 1.0};  // 0: no layer
 constexpr bool kCloudQuarter[] = {true, true, true, false};
 constexpr double kBloom[] = {0, 0.04};
+constexpr int kReachLevels[] = {5, 6, 7, kGroundLevels};  // the ground's levels drawn
 
 // THE PRICE TABLE: ms a frame over the row's cheapest stop on the reference machine, from
 // `labs ladder --price` (each row lowered alone from the top picture). THE WORTHS, on one scale:
@@ -37,17 +38,25 @@ constexpr double kBloom[] = {0, 0.04};
 //   sharper groove.
 // SPRAY: what a turn throws, the most alive thing at the skis.
 // SNOWFALL: on a snowing day the flakes are the weather near the eye; the low stop keeps a third.
-// CLOUDS: a broken sky's layers, marched at a quarter of the pixels and upsampled; the low stop
+// CLOUDS: a broken sky's layers, marched at a quarter of the pixels (a quarter of those each
+//   frame, the rest reprojected from the last) and upsampled; the low stop
 //   marches half the steps, a slightly blockier cloud; the top marches every pixel, the
 //   reference, a hair sharper at a ridge's edge; off, the sky keeps its mean cloud and loses its
 //   shapes and shadows.
 // BLOOM: the sun's glow off the snow and the lamps, small.
+// DISTANCE: the ground drawn to 1, 2 or 4 km and misted into the sky from half of it, or the
+//   whole ground to the horizon; the near mountain is the run, the far one where it lies.
 //
 // Measured on the software adapter in the cloud container (lavapipe, 1280x720, seed 38 under a
 // flurry, the `start` view raised 15 degrees so the broken sky fills its top half, the least
 // median of three rounds): its ratios are a CPU raster's, not a GPU's, and the reference
 // machine's (`needs-mac`) replace them. A stop that measured cheaper than the one under it is set
-// level with it (the low flakes).
+// level with it (the low flakes). The DISTANCE row is priced where it is seen, from the `vista`
+// over the whole mountain on a clear day (`--view=vista --lift=0 --fall=0`): from the start the
+// far ground is behind the slope and costs nothing; from above, the woods past 2 km are most of it.
+// The cloud's high stop since its march was spread over frames: the full stop's price times the
+// high's share of it in one pricing run with the spread (24.84 of 59.38 ms; 32.70 of 51.84 with
+// the march whole every frame, `--spread=0`); the low stop's share did not move (0.40 either way).
 constexpr PriceTable kTable{"lavapipe (software), 1280x720", 1280, 720, 71.57};
 
 constexpr r::LadderStop kResolution[] = {
@@ -58,8 +67,10 @@ constexpr r::LadderStop kTrails[] = {{"off", 0, 0}, {"low", 5.31, 30}, {"high", 
 constexpr r::LadderStop kSpray[] = {{"off", 0, 0}, {"on", 1.44, 20}};
 constexpr r::LadderStop kSnowfall[] = {{"off", 0, 0}, {"low", 0, 10}, {"high", 3.93, 14}};
 constexpr r::LadderStop kClouds[] = {
-    {"off", 0, 0}, {"low", 27.59, 12}, {"high", 35.59, 15}, {"full", 72.09, 16}};
+    {"off", 0, 0}, {"low", 27.59, 12}, {"high", 30.16, 15}, {"full", 72.09, 16}};
 constexpr r::LadderStop kBloomStops[] = {{"off", 0, 0}, {"on", 17.30, 4}};
+constexpr r::LadderStop kDistance[] = {
+    {"1 km", 0, 0}, {"2 km", 85.98, 10}, {"4 km", 224.85, 18}, {"full", 237.31, 22}};
 
 const std::array<r::LadderRow, kPictureRows> kRows = {{
     {"resolution", kResolution, 1},
@@ -70,6 +81,7 @@ const std::array<r::LadderRow, kPictureRows> kRows = {{
     {"snowfall", kSnowfall},
     {"clouds", kClouds},
     {"bloom", kBloomStops},
+    {"distance", kDistance},
 }};
 
 }  // namespace
@@ -94,6 +106,8 @@ FrameOptions apply_picture(const r::LadderPick& pick, FrameOptions o) {
   o.clouds = kCloudSteps[at(PictureRow::clouds)];
   o.cloud_quarter = kCloudQuarter[at(PictureRow::clouds)];
   o.bloom = kBloom[at(PictureRow::bloom)];
+  const int levels = kReachLevels[at(PictureRow::distance)];
+  o.reach_m = levels < kGroundLevels ? r::clipmap_reach(kGroundSpacing, levels) : 0;
   return o;
 }
 
@@ -112,14 +126,14 @@ std::string_view preset_name(Preset p) {
 }
 
 r::LadderPick preset_pick(Preset p) {
-  // resolution, shadows, snow, trails, spray, snowfall, clouds, bloom
+  // resolution, shadows, snow, trails, spray, snowfall, clouds, bloom, distance
   switch (p) {
     case Preset::low:
-      return {0, 0, 1, 1, 1, 1, 0, 0};
+      return {0, 0, 1, 1, 1, 1, 0, 0, 1};
     case Preset::medium:
-      return {1, 1, 1, 1, 1, 1, 1, 1};
+      return {1, 1, 1, 1, 1, 1, 1, 1, 2};
     case Preset::high:
-      return {2, 1, 1, 2, 1, 2, 2, 1};
+      return {2, 1, 1, 2, 1, 2, 2, 1, 3};
     case Preset::top:
       break;
   }
