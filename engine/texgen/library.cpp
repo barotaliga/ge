@@ -29,7 +29,8 @@ std::vector<std::string> list_recipes(const std::string& dir) {
   std::vector<std::string> out;
   std::error_code ec;
   for (const auto& e : std::filesystem::directory_iterator(dir, ec)) {
-    if (e.is_regular_file() && e.path().extension() == ".tex") out.push_back(e.path().string());
+    if (e.is_regular_file() && e.path().extension() == ".tex")
+      out.push_back(e.path().generic_string());
   }
   std::sort(out.begin(), out.end());
   return out;

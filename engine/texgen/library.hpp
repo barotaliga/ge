@@ -22,7 +22,8 @@ inline constexpr const char* kLibraryDir = "engine/texgen/library";
 // `path` read and parsed; a file that cannot be read is one diagnostic saying so.
 ParseResult load_recipe(const std::string& path);
 
-// Every `*.tex` in `dir`, sorted by name; empty when the directory is missing.
+// Every `*.tex` in `dir`, sorted by name, written with `/` on every OS (a lab prints the path into
+// a digested caption); empty when the directory is missing.
 std::vector<std::string> list_recipes(const std::string& dir);
 
 }  // namespace ge::texgen
