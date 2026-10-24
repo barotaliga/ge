@@ -20,7 +20,8 @@
 #   ge_vfs       content files (engine/vfs: the pack archive; search paths and zips to come)
 #   ge_camera    the camera (engine/camera: poses, followers, rigs, shake, transitions, the stack)
 #   ge_play      the play contract (engine/play: GameSpec and Run, the session, the input log,
-#                the bench, the stills `ge shot` draws)
+#                the bench, the stills `ge shot` draws; engine/capture: the Matroska muxer and
+#                the export with sound)
 #   ge_replay    replays (engine/replay: the keyframes, the player's seek, the transport;
 #                docs/replays.md)
 #   ge_prof      the profiler (engine/prof: timing zones, allocation counts, the resident set);
@@ -184,6 +185,7 @@ if(GE_GPU)
     engine/render/instances.wgsl engine/render/instances_cull.wgsl engine/render/bloom.wgsl
     engine/render/skinning.wgsl engine/render/particles.wgsl engine/render/particles_sim.wgsl engine/render/snowfall.wgsl engine/render/snowfall_sim.wgsl
     engine/render/clouds.wgsl engine/render/water.wgsl engine/render/water_copy.wgsl
+    engine/render/water_stream.wgsl
     engine/render/underwater.wgsl)
 endif()
 
@@ -228,9 +230,10 @@ target_link_libraries(ge_vfs PUBLIC ge_core)
 # (first person, boom, mounted, orbit, planted, free), the shake, the transitions and the stack.
 # No GPU and no platform: a game hands it a subject and the world's queries and gets a pose back
 # (camera/to_view.hpp writes it into the renderer's FrameView).
+# Its cvars (camera/cvars.hpp) bind the player's settings on the console.
 file(GLOB GE_CAMERA_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/camera/*.cpp)
 add_library(ge_camera STATIC ${GE_CAMERA_SOURCES})
-target_link_libraries(ge_camera PUBLIC ge_core)
+target_link_libraries(ge_camera PUBLIC ge_core ge_console)
 
 # The lab framework (engine/lab: the contract, the runner, the raster, the PNG), published as
 # ge::lab so a game's labs plug into the same contract as the engine's (docs/labs.md).
@@ -273,10 +276,14 @@ target_link_libraries(ge_water PUBLIC ge_core ge_wind)
 # The play contract (engine/play: a game's spec and Run, the session and its line protocol, the
 # input log, replay and diverge, the bench, the stills, the `play` executable's main), published
 # as ge::play so a game's `play` target is driven by `ge play`, `ge sim`, `ge replay`, `ge state`,
-# `ge diverge`, `ge shot`, `ge bench`, `ge profile` and `ge mem`.
+# `ge diverge`, `ge shot`, `ge bench`, `ge profile` and `ge mem`. The capture (engine/capture:
+# the engine's Matroska muxer, I420, a run exported with its sound) is built into it, since a
+# recording (`ge record --format=mkv`) is its user.
+file(GLOB GE_CAPTURE_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/capture/*.cpp)
 add_library(ge_play STATIC engine/play/inputs.cpp engine/play/json_read.cpp
   engine/play/session.cpp engine/play/bench.cpp engine/play/record.cpp engine/play/why.cpp
-  engine/play/human.cpp engine/play/devices.cpp engine/play/console_cmds.cpp engine/play/main.cpp)
+  engine/play/human.cpp engine/play/devices.cpp engine/play/console_cmds.cpp engine/play/main.cpp
+  ${GE_CAPTURE_SOURCES})
 target_link_libraries(ge_play PUBLIC ge_core ge_ai ge_console ge_input ge_lab ge_prof ge_prof_alloc)
 
 # Replays (engine/replay, docs/replays.md): the keyframes a seek starts from, the player that steps
