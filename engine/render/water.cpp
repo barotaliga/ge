@@ -43,6 +43,7 @@ void stage_body(Water::Slot& slot, const water::Body& body) {
   b.grid[3] = static_cast<float>(slot.draw.rim);
   b.rough[1] = static_cast<float>(slot.draw.calm_mss);
   b.rough[2] = static_cast<float>(slot.draw.refraction);
+  b.rough[3] = static_cast<float>(slot.draw.open_sky);
   const water::Optics& o = body.optics;
   const auto put = [](float* out, const water::Rgb& c) {
     out[0] = static_cast<float>(c.r);
@@ -54,6 +55,7 @@ void stage_body(Water::Slot& slot, const water::Body& body) {
   put(b.kd, o.kd);
   put(b.deep, o.deep);
   put(b.emission, o.emission);
+  b.emission[3] = static_cast<float>(slot.draw.room);
   put(slot.veil, o.veil);
 }
 

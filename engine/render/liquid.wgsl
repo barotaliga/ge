@@ -323,7 +323,11 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   let dist = length(in.rel);
   let v = -in.rel / dist;
   let world_y = in.rel.y + frame.eye.y;
-  let sun = sun_light(world_y, in.xz) * step(0.0, frame.sun.y);
+  // A body under a roof sees the sky through `open` of its dome and the room's light, a share of
+  // a white face's, over the rest (flow.z, flow.w).
+  let open_sky = body.flow.z;
+  let room = vec3f(white_luminance() * body.flow.w);
+  let sun = sun_light(world_y, in.xz) * step(0.0, frame.sun.y) * open_sky;
   let pixel = vec2i(in.position.xy);
   let uv = in.position.xy * frame.size.zw;
   let depth_view = max(behind_distance(pixel, uv) - dist, 0.0);
@@ -340,10 +344,10 @@ fn fs_main(in: VertexOut) -> FragmentOut {
     let open = s.z;
     let rough = mix(body.lava2.y, body.lava2.z, open);
     let cos_v = max(dot(n, v), 1e-3);
-    let sky_d = sky_irradiance(n);
+    let sky_d = sky_irradiance(n) * open_sky + room * PI;
     let lit = body.crust.rgb * (sun * max(dot(n, frame.sun.xyz), 0.0) + sky_d) / PI;
     let r = reflect(-v, n);
-    let mirror = sky_luminance(normalize(vec3f(r.x, max(r.y, 0.01), r.z))) *
+    let mirror = mix(room, sky_luminance(normalize(vec3f(r.x, max(r.y, 0.01), r.z))), open_sky) *
                  fresnel(cos_v, 0.04) * (1.0 - rough) * (1.0 - rough);
     let spec = sun * ggx(n, v, frame.sun.xyz, rough, 0.04);
     c = lit * (1.0 - open) + mirror + spec + glow_at(s.x) * body.lava2.x;
@@ -386,7 +390,8 @@ fn fs_main(in: VertexOut) -> FragmentOut {
     let own = 1.0 + ks - sqrt(ks * ks + 2.0 * ks);
     let through = exp(-(K + S) * depth_view);
     let seen = textureLoad(scene_colour, pixel, 0).rgb;
-    let light = sun * max(frame.sun.y, 0.0) + sky_irradiance(vec3f(0.0, 1.0, 0.0));
+    let light = sun * max(frame.sun.y, 0.0) + sky_irradiance(vec3f(0.0, 1.0, 0.0)) * open_sky +
+                room * PI;
     let body_colour = own * (1.0 - through) * light / PI;
     var into = seen * through + body_colour;
     // A bubble's skin is thinner than the pool, so its dome is a little lighter, and darker where
@@ -397,7 +402,8 @@ fn fs_main(in: VertexOut) -> FragmentOut {
     let scum = body.slime0.z * smoothstep(1.0 - body.slime0.z - 0.05, 1.0 - body.slime0.z + 0.1,
                                           scum_field) / max(body.slime0.z, 1e-3);
     let scum_share = clamp(scum, 0.0, 1.0) * step(1e-3, body.slime0.z);
-    let scum_lit = body.scum.rgb * (sun * max(dot(n0, frame.sun.xyz), 0.0) + sky_irradiance(n0)) /
+    let scum_lit = body.scum.rgb *
+                   (sun * max(dot(n0, frame.sun.xyz), 0.0) + sky_irradiance(n0) * open_sky + room * PI) /
                    PI;
     into = mix(into, scum_lit, scum_share);
     // The glow: its own light, pulsing slowly, brighter in the bubbles.
@@ -406,7 +412,7 @@ fn fs_main(in: VertexOut) -> FragmentOut {
     // The reflection: the sky's, tinted by the film's interference where an oily film lies.
     let rough = mix(body.slime0.x, 0.8, scum_share);
     let r = reflect(-v, n);
-    var mirror = sky_luminance(normalize(vec3f(r.x, max(r.y, 0.01), r.z)));
+    var mirror = mix(room, sky_luminance(normalize(vec3f(r.x, max(r.y, 0.01), r.z))), open_sky);
     var tint = vec3f(1.0);
     var tint_spec = vec3f(1.0);
     if (body.slime0.y > 0.0) {

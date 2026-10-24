@@ -107,7 +107,7 @@ void stage_body(Liquids::Slot& slot, const water::Body& body, const LiquidLook& 
   LiquidGpuBody& b = slot.staged;
   put(b.info, body.level, look.kind == LiquidKind::lava ? 0 : 1, ripples, 0);
   for (int i = 0; i < 4; ++i) b.box[i] = static_cast<float>(body.box[i]);
-  put(b.flow, look.flow[0], look.flow[1], 0, 0);
+  put(b.flow, look.flow[0], look.flow[1], look.open_sky, look.room);
   const LavaLook& l = look.lava;
   put(b.lava0, l.core + kKelvin, l.crust_hot + kKelvin, l.crust_cold + kKelvin, l.cover);
   put(b.lava1, l.plate, l.crack, l.ropes, l.age_rate);

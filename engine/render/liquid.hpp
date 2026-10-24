@@ -87,6 +87,11 @@ struct LiquidLook {
   LavaLook lava;
   SlimeLook slime;
   double flow[2] = {0, 0};  // m/s: the surface's own motion (a channel's current, the drift)
+  // Under a roof (a cave's lava, a sewer's slime): the share of the dome the surface sees the sky
+  // through, and the room's own light round it, a share of a white face's luminance under the
+  // open day, over the rest.
+  double open_sky = 1;
+  double room = 0;
 };
 
 // The named looks: "lava", "lava-crusted", "slime", "slime-gel", "slime-mucus", "slime-sludge",
@@ -97,7 +102,7 @@ std::span<const std::string_view> liquid_look_names();
 struct LiquidGpuBody {
   float info[4];     // level, kind (0 lava, 1 slime), ripples, the eye's footprint scale
   float box[4];      // x0, z0, x1, z1
-  float flow[4];     // flow x, z (m/s), 0, 0
+  float flow[4];     // flow x, z (m/s), the open sky's share, the room's light
   float lava0[4];    // core K, crust_hot K, crust_cold K, cover
   float lava1[4];    // plate, crack, ropes, age_rate
   float lava2[4];    // emissivity, crust_rough, melt_rough, 0
