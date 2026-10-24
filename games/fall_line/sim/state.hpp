@@ -185,6 +185,7 @@ struct FreeHeli {
   double t = 0;                        // s in this mode
   ge::helicopter::HeliControls flown;  // the controls of the last step flown
   int32_t taken = 0;                   // times boarded this run
+  bool army = false;  // the army's machine he took (army_steal.hpp): no pilot to fly it home
 };
 
 // THE FREE RIDE'S PARAMOTOR (para_ride.hpp): a free ride begun under it on the summit. The rig's

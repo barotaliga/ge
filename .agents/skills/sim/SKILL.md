@@ -65,9 +65,12 @@ seed. The skier on the snow is `plugins/skier` (the `skier` skill).
    circle over him, the rifle, home; the `army-para` lab. The hunt's server cvars (`sv_lethal`,
    `sv_armyfire`, `sv_helis`, `sv_paras`) reach a run through `apply_hunt` (`hunt_cfg.hpp`),
    once before its first step; a new switch for the hunt is a field there and a cvar beside them.
-13. Next: the free ride's other systems, a row each (M13+), and the army rows that wait on them
-   (M15d2 his answer to the machines, M15d3 the heavier machines, M15e4–M15e5 the rest of the
-   air).
+13. An army helicopter taken or brought down (M15e5, done): taken at a set-down machine's pilot's
+   door (the free ride's helicopter becomes it, `FreeHeli::army`), rammed by his machine (theirs
+   falls spinning and lies as a wreck); `army_steal.hpp`, the `army-flight` lab's `steal` and
+   `ram`.
+14. Next: the free ride's other systems, a row each (M13+), and the army rows that wait on them
+   (M15d2 his answer to the machines, M15d3 the heavier machines, M15e4 the balloons).
 
 ## Rules
 
@@ -182,9 +185,11 @@ the pilot.
 seed 38 (v10) with the army's other arms on (`open`, `rope`, `leapfrog`, `hide`, `fast`): the
 helicopters table and every machine's path, where it set down and where its men went. A scenario
 that never sees what it stages (no section set down, no fast rope, no pick-up, no machine home,
-no echelon) fails it. A change to `army_heli*.cpp`, `army_land.cpp` or their numbers moves
+no echelon, no machine taken or rammed, nothing down on the snow) fails it. A change to
+`army_heli*.cpp`, `army_land.cpp`, `army_steal*` or their numbers moves
 `tests/golden/fall_line_army_heli.txt` (`GE_GOLDEN_WRITE=1
-build/release/tests/fall_line_army_heli_test`) and the `army-flight` digest: put the helicopters
+build/release/tests/fall_line_army_heli_test`), `fall_line_army_steal.txt` and the `army-flight`
+digest: put the helicopters
 table before and after in the PR. The `army`, `army-sleds` and `wanted` labs and tests stage their
 own arms with `ArmyState::send_helis` off, so the helicopters move none of them. A trace
 (`GameState::why`, set by `Driver::set_why`) records each machine's decisions as agent

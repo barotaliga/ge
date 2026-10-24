@@ -132,13 +132,24 @@ struct ArmySled {
 // - `set` on the snow, its doors open; `rope` hovering, the men sliding down;
 // - `rise` climbing straight back off it to the hunt;
 // - `leave` flying out over the map's edge, the hunt over;
-// - `gone` out over the edge: dropped at the end of the step.
-enum class ArmyHeliMode : uint8_t { due, hunt, land, set, rope, rise, leave, gone };
+// - `gone` out over the edge (or taken by him): dropped at the end of the step;
+// - `fall` rammed out of the sky, spinning down; `wreck` down on the snow (army_steal.hpp).
+enum class ArmyHeliMode : uint8_t { due, hunt, land, set, rope, rise, leave, gone, fall, wreck };
 
 // What an army helicopter's event says (`EventKind::army_heli`: its `gate` the change, its
 // `value` the machine's id): called, in over the edge, on the snow or at the rope's hover, back
-// off it, turned for home, gone.
-enum class ArmyHeliChange : uint8_t { called, arrived, landed, lifted, leaving, gone };
+// off it, turned for home, gone; taken by him off the snow, rammed, down on the snow.
+enum class ArmyHeliChange : uint8_t {
+  called,
+  arrived,
+  landed,
+  lifted,
+  leaving,
+  gone,
+  stolen,
+  rammed,
+  down
+};
 
 // A LANDING asked of a machine: to put men DOWN near him (`drop`) or PICK UP a squad left behind,
 // at a spot on the snow (m, the skid datum's place), set down on it facing `heading` (rad) or
@@ -241,6 +252,9 @@ struct ArmyState {
   double from = 0;
   int32_t dropped = 0;
   int32_t picked = 0;
+  // The machines he took off the snow and brought down this run (army_steal.hpp).
+  int32_t stolen = 0;
+  int32_t downed = 0;
   // Whether the hunt sends its helicopters. A lab or a test staging the army's other arms on
   // their own turns it off; the game never does.
   bool send_helis = true;
