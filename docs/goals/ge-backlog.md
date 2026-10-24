@@ -51,6 +51,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge digest --dedupe` (the duplicate rows a union merge leaves in the baseline dropped, keeping the row the current build writes)
 - `docs/goals.md` merging without conflicts (done: each row's status in `docs/goals/<row>.md`, this backlog one wish a line, union-merged, held by `tools/check-goals.mjs`)
 - `ge ci <pr>` (done: each failed job's log as findings, over `gh api`; `--merge` squash-merges a green, clean one at its head, and a green PR GitHub blocks is answered with the required check or review it waits on)
+- `ge ci <pr>` reading the merge queue: "in the queue since <t>" or "dequeued at <t>: <reason>" (a merge conflict with a batch-mate, a failed row), off the PR's timeline (`added_to_merge_queue`, `removed_from_merge_queue`), so a silent ejection is seen at the next check-in
 - `ge test --filter` building only the matching tests' targets (done, and `make test T=<regex>` in the engine)
 - lint that also covers the files whose compile command changed (`compile_commands.json` against the base)
 - precheck running the smoke digest of every lab the change reaches (done in the engine's `make precheck`; `ge precheck` already runs every lab)
