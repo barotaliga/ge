@@ -74,6 +74,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge state --entities=<kind> --at=<t>`
 - `ge stage --put=skier --beside=<entity:id> --off=<m> --speed=<m/s>` (the player set down mid-run beside a live entity, at an offset and a speed, to stage a meeting without scripting a run up to it)
 - `ge trace <test> --rows=<series> --every=<s>` (one actor's state, a pursuer's say, as a table every N seconds from a scripted test, without adding prints to the test)
+- `ge cvar ls --module=<module>` (an engine module's cvars, their defaults and ranges, without a game: today `ge cvar` reads only a game's play console)
 - `ge sim --human --compare=<tag>` (the humanness report beside a kept run's, each metric's move)
 - `ge sim find <seed> --when "<predicate>"`
 - `ge sim --stalls`
