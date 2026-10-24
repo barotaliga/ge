@@ -42,6 +42,7 @@
 #include "cli/scaffold.hpp"
 #include "cli/skills.hpp"
 #include "cli/sound.hpp"
+#include "cli/source.hpp"
 #include "cli/sweep.hpp"
 #include "cli/upgrade.hpp"
 
@@ -320,6 +321,7 @@ Outcome run(const Args& a) {
   if (name.starts_with("net ")) return run_net(a);
   if (name.starts_with("sound ")) return run_sound(a);
   if (name == "model import") return run_model(a);
+  if (name.starts_with("source ")) return run_source(a);
   if (name == "credits check") return run_credits_check(a.words.empty() ? "." : a.words[0]);
   if (name == "asset list") return run_asset_list(build_options(a));
   if (name == "asset check") return run_asset_check(build_options(a));

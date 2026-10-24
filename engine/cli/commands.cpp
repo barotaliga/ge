@@ -253,6 +253,13 @@ constexpr FlagSpec kModelImportFlags[] = {
     {"to", "<dir>", "the directory the model is written under (default models)"},
     {"budget-kib", "<n>", "warn over this size (default 300)"}};
 
+constexpr FlagSpec kSourceFlags[] = {
+    {"cache", "<dir>", "where packs are kept (default GE_ASSET_CACHE, else ~/.cache/ge/sources)"}};
+constexpr FlagSpec kSourceSearchFlags[] = {
+    {"kind", "<sound|model>", "only sounds or only models, where a source holds both"},
+    {"refresh", "", "read the source's listing again instead of the cached one"},
+    {"cache", "<dir>", "where packs are kept (default GE_ASSET_CACHE, else ~/.cache/ge/sources)"}};
+
 constexpr FlagSpec kGraphFlags[] = {
     {"kind", "<auto|line|scatter|hist|box|heat|spans>",
      "the chart (default auto: spans for a spans file, line for the rest)"},
@@ -547,6 +554,23 @@ const CommandSpec kCommands[] = {
      kModelImportFlags,
      "ge model import \"packs/kit/Models/GLB format/crate.glb\" pickup/shells --to=models",
      "assets"},
+    {"source list",
+     "",
+     0,
+     0,
+     "learn",
+     "the free sources ge searches and fetches from (Kenney, OpenGameArt's CC0 packs, Poly "
+     "Haven): what each holds, its licence, how a search reads it",
+     {},
+     "ge source list",
+     "assets"},
+    {"source search", "<source> <word>...", 2, -1, "see",
+     "a free source's packs whose names, titles or tags hold every word; --kind=sound or model",
+     kSourceSearchFlags, "ge source search kenney impact --kind=sound", "assets"},
+    {"source fetch", "<source>:<pack>", 1, 1, "create",
+     "a pack downloaded and unpacked into the cache (never the repository) with SOURCE.txt: "
+     "title, author, page and licence; a licence the repository cannot carry is refused",
+     kSourceFlags, "ge source fetch kenney:impact-sounds", "assets"},
     {"credits check",
      "[<dir>]",
      0,

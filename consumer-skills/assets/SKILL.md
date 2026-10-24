@@ -67,6 +67,12 @@ Python and `PYTHONPATH` at the directory (the finding gives the exact line).
 
 ## Free sounds and models
 
+Packs come from `ge source`: `ge source list` names the sources (Kenney, OpenGameArt's CC0
+packs, Poly Haven), `ge source search kenney impact --kind=sound` finds packs, and `ge source
+fetch kenney:impact-sounds` unpacks one into a cache outside the repository with a SOURCE.txt
+(title, author, page, licence) to credit it from; a licence the repository cannot carry is
+refused there.
+
 A sound someone else made free comes in through `ge sound`, never by hand:
 
 - `ge sound match <reference> <pack-dir>... --pool=door|slam` ranks every sound in the packs
