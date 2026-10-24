@@ -180,8 +180,24 @@ TEST(the_shapes_measure_their_outlines) {
   CHECK(std::abs(sn::shape_u(sn::ellipse(0, 0, ge::core::kPi / 2, 2, 1), 2, 0) - 1) < 1e-12);
 }
 
+namespace {
+
+bool env_set(const char* name) {
+#ifdef _MSC_VER
+  char* v = nullptr;
+  size_t n = 0;
+  const bool set = _dupenv_s(&v, &n, name) == 0 && v != nullptr;
+  std::free(v);
+  return set;
+#else
+  return std::getenv(name) != nullptr;
+#endif
+}
+
+}  // namespace
+
 TEST(a_track_of_every_contact_over_three_snows_keeps_its_golden) {
-  const bool write = std::getenv("GE_GOLDEN_WRITE") != nullptr;
+  const bool write = env_set("GE_GOLDEN_WRITE");
   const sn::LayerSpec snows[] = {flat(0.6, 0), flat(0.25, 0.5, sn::Kind::settled),
                                  flat(0.15, 1, sn::Kind::groomed)};
   std::vector<std::string> got;

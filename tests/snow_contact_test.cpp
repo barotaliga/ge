@@ -115,8 +115,24 @@ TEST(glide_is_least_near_minus_five_and_planing_lifts_a_fast_contact) {
   CHECK(std::fabs(sn::planing_sink(0.3, 15, 15) - 0.3 * std::exp(-1.0)) < 1e-12);
 }
 
+namespace {
+
+bool env_set(const char* name) {
+#ifdef _MSC_VER
+  char* v = nullptr;
+  size_t n = 0;
+  const bool set = _dupenv_s(&v, &n, name) == 0 && v != nullptr;
+  std::free(v);
+  return set;
+#else
+  return std::getenv(name) != nullptr;
+#endif
+}
+
+}  // namespace
+
 TEST(every_kinds_numbers_keep_their_golden) {
-  const bool write = std::getenv("GE_GOLDEN_WRITE") != nullptr;
+  const bool write = env_set("GE_GOLDEN_WRITE");
   std::vector<std::string> got;
   for (int k = 0; k < static_cast<int>(sn::Kind::count); k++) {
     const sn::Kind kind = kind_of(k);
