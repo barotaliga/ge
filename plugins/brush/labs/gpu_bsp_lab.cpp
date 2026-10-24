@@ -252,7 +252,8 @@ bool open_at(const ge::brush::Map& m, const double e[3]) {
 double open_run(const ge::brush::Map& m, const double e[3], double heading) {
   double d = 0;
   for (; d < 40; d += 0.4) {
-    const double p[3] = {e[0] + d * ge::core::libm::sin(heading), e[1], e[2] + d * ge::core::libm::cos(heading)};
+    const double p[3] = {e[0] + d * ge::core::libm::sin(heading), e[1],
+                         e[2] + d * ge::core::libm::cos(heading)};
     if (!open_at(m, p)) break;
   }
   return d;
@@ -271,7 +272,8 @@ double widest(const ge::brush::Map& m, const double e[3]) {
 // Back the eye off along the way it looks, up to `most` m, staying in the open.
 void back_off(const ge::brush::Map& m, double e[3], double heading, double most) {
   for (double d = 0.4; d <= most; d += 0.4) {
-    const double p[3] = {e[0] - 0.4 * ge::core::libm::sin(heading), e[1], e[2] - 0.4 * ge::core::libm::cos(heading)};
+    const double p[3] = {e[0] - 0.4 * ge::core::libm::sin(heading), e[1],
+                         e[2] - 0.4 * ge::core::libm::cos(heading)};
     if (!open_at(m, p)) return;
     for (int k = 0; k < 3; ++k) e[k] = p[k];
   }
