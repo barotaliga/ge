@@ -29,6 +29,8 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge profile --pass=<name>` (one pass's median and p95, before and after) and `--cost <shader-term>`
 - `ge lab <id> --at-ref=<git-ref>` (the "before" shot from a worktree build of that ref, without stashing, rebuilding and restoring this tree)
 - `ge bench --pass=<name>` (one pass timed alone over many draws: the software rasterizer's timestamps misattribute cost between passes)
+- `ge lab time <lab> --passes=<glob>` (each matching pass's GPU milliseconds, the median over N frames, from any GPU lab without a bench of its own)
+- `ge lab ab <lab> --flag=<flag>=a,b --rounds=N` (one lab run both ways, interleaved, each metric side by side with its spread: a quality knob priced in one call)
 - `ge lab diff <lab> --with=<flag>` (the same shots with and without one pass or option, the share of pixels it changes per distance band: the water labs each hand-roll it)
 - `ge lab diff <lab>` (built: every shot against the kept run, PSNR, SSIM and the share changed per distance band off the frame's depth, each band held to its floor, a four-panel sheet with the change heatmap and the bands' contours)
 
