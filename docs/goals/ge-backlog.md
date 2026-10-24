@@ -182,4 +182,5 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 ## Input devices
 
 - `ge input replay <events-log> --bindings=<file>` (each action's value frame by frame, from a recorded event log under a binding set)
+- `ge play --events=<session>` and `ge replay <session>` (a recorded device session played headless through the game's bindings into a run: the step's inputs and the run's digest, where `ge input replay` stops at the actions; `ge replay` today takes only an input log)
 - `ge input bindings check <file>` (a bindings file parsed against the game's actions: conflicts and unbound actions listed)
