@@ -20,13 +20,17 @@
 //   the trees and the mountain are mirrored where the screen holds them; the sky's own model
 //   where it does not.
 //
+// - THE WAKES: the rings a hull, a stroke or a splash set off (water/wake.hpp), summed by the
+//   vertex and the pixel in the simulation's formula, each faded as the picture's tiers fade a
+//   wave (`set_water_wakes`).
+//
 // Not yet (M24g2): foam, caustics, the shore's wet band, rain. Under the surface: M24h.
 //
 // ge:summary The water's surface drawn: the snapped rings, the waves, Fresnel, refraction, glitter
 // ge:keywords render water surface ocean lake rings clipmap snapped morph fresnel reflection
 // ge:keywords refraction ssr screen-space-reflection glitter beckmann slope-variance
 // ge:keywords detail-waves water-copy create_water add_water_body set_water_body
-// ge:keywords prepare_water encode_water detail_waves hidden
+// ge:keywords prepare_water encode_water detail_waves hidden wake rings set_water_wakes kelvin
 // ge:skill render water
 // ge:test tests/render_water_test.cpp
 #pragma once
@@ -46,6 +50,7 @@ inline constexpr uint32_t kWaterGrid = 64;    // a level's quads a side (water.w
 inline constexpr int kWaterLevels = 12;       // at most
 inline constexpr int kWaterDetailWaves = 32;  // the detail components
 inline constexpr int kWaterBodies = 8;        // bodies a Water draws
+inline constexpr int kWaterRings = 512;       // a body's wake rings drawn (the newest)
 
 // The detail band past the simulation's waves: components from the laid band's top frequency
 // to waves `shortest` m long, and the slope variance of the spectrum from there to `finest` m.
@@ -73,6 +78,7 @@ struct WaterGpuBody {
   float grid[4];
   float rough[4];
   float c[4], kd[4], deep[4], emission[4];
+  float wake[4];  // rings, their life (s), the shortest wave kept (m), 0
   float levels[kWaterLevels][4];
 };
 
@@ -86,7 +92,7 @@ struct Water {
   struct Slot {
     WaterGpuBody staged{};
     WaterDraw draw;
-    wgpu::Buffer uniform, waves;
+    wgpu::Buffer uniform, waves, rings;
     wgpu::BindGroup group;
     bool hidden = false;           // the caller's switch: not drawn (a lab's dry picture)
     bool shown = true;             // this frame's: not hidden and seen from over its level
@@ -106,6 +112,10 @@ int add_water_body(gpu::Device& device, Water& water, const water::Body& body,
                    const WaterDraw& draw = {});
 // The body read again (a lake whose waves were laid again, a new look).
 void set_water_body(gpu::Device& device, Water& water, int index, const water::Body& body);
+// The body's wake rings (water/wake.hpp: the rings of `body` in the world's `wakes`, the newest
+// kWaterRings of them), drawn as the simulation sums them; again whenever rings are set off.
+void set_water_wakes(gpu::Device& device, Water& water, int index, const water::Wakes& wakes,
+                     int body);
 // The levels round this frame's eye, uploaded; a body seen from under its level is not drawn:
 // the eye is under it (`Water::eye_under`, render/underwater.hpp's pass).
 void prepare_water(gpu::Device& device, Water& water, const FrameView& view);

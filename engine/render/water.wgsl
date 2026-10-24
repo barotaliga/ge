@@ -16,7 +16,8 @@
 // simulation keeps), each faded out as its wavelength falls under four pixels; the slope
 // variance a pixel cannot resolve (the faded components' and the spectrum's tail past the
 // detail band) becomes the sun's glitter's roughness, so far water glints as a broad path and
-// never shimmers.
+// never shimmers. The WAKES' rings (water/wake.hpp) are summed the same way, kept by the vertex
+// and the pixel as a wave is.
 //
 // THE LIGHT: Fresnel (Schlick at n = 1.333) between what the surface mirrors along the wave's
 // normal (the opaque scene, marched in screen space through the depth copy, where the screen
@@ -39,7 +40,15 @@ struct WaterBody {
   kd: vec4f,         // the daylight's diffuse attenuation, rgb (1/m)
   deep: vec4f,       // deep water's colour, pi Rrs, rgb
   emission: vec4f,   // a body's own glow, rgb (white = a white face in daylight)
+  wake: vec4f,       // rings, their life (s), the shortest wave kept (m), 0
   levels: array<vec4f, 12>,  // origin x, z, spacing, 0
+}
+
+// A wake's ring (water/wake.hpp): x, z, the moment it was set off, its volume; its source's
+// size, its own shortest wave, 0, 0.
+struct Ring {
+  at: vec4f,
+  more: vec4f,
 }
 
 // A wave: kx, kz, amplitude, angular frequency; phase, k, 0, 0.
@@ -52,6 +61,7 @@ struct Wave {
 @group(1) @binding(1) var<storage, read> waves: array<Wave>;  // the simulation's, then the detail
 @group(1) @binding(2) var scene_colour: texture_2d<f32>;
 @group(1) @binding(3) var scene_depth: texture_2d<f32>;      // R32F: the opaque depth
+@group(1) @binding(4) var<storage, read> rings: array<Ring>;  // the body's wake, newest first
 
 struct VertexOut {
   @builtin(position) position: vec4f,
@@ -79,6 +89,43 @@ fn height_at(xz: vec2f, t: f32, shortest: f32) -> f32 {
   return h;
 }
 
+const kGravity = 9.80665;
+
+// THE WAKES: every ring's far field (water/wake.cpp's `wake_at`), its waves shorter than
+// `shortest` m faded out (and their slopes' variance handed back in `lost`); the height and its
+// slope.
+fn wake_at(xz: vec2f, t: f32, shortest: f32) -> vec4f {
+  var out = vec4f(0.0);  // height, d/dx, d/dz, the slope variance dropped
+  let n = u32(body.wake.x);
+  let life = body.wake.y;
+  for (var i = 0u; i < n; i++) {
+    let r = rings[i];
+    let tau = t - r.at.z;
+    if (tau <= 0.0) {
+      continue;
+    }
+    let e = xz - r.at.xy;
+    let rs = sqrt(dot(e, e) + r.more.x * r.more.x);
+    let phase = kGravity * tau * tau / (4.0 * rs);
+    let k = phase / rs;
+    let lambda = 6.2831853 / k;
+    let lowest = max(body.wake.z, r.more.y);
+    let a = r.at.w * k / (1.4142136 * PI * rs) * smoothstep(lowest, 2.0 * lowest, lambda) *
+            (1.0 - smoothstep(life * 0.6666667, life, tau));
+    let keep = smoothstep(shortest, 2.0 * shortest, lambda);
+    out.w += (1.0 - keep) * 0.5 * (k * a) * (k * a);
+    if (keep <= 0.0) {
+      continue;
+    }
+    // The phase taken round in f32 from where it is still exact enough.
+    let p = phase - 6.2831853 * floor(phase / 6.2831853);
+    out.x += keep * a * cos(p);
+    out.y += keep * a * k * sin(p) * e.x / rs;
+    out.z += keep * a * k * sin(p) * e.y / rs;
+  }
+  return out;
+}
+
 @vertex
 fn vs_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) level: u32) -> VertexOut {
   let n = kGrid + 1u;
@@ -100,6 +147,7 @@ fn vs_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) level: u32)
   }
   xz = clamp(xz, body.box.xy, body.box.zw);
   var y = body.info.x + height_at(xz, frame.time.x, 4.0 * s);
+  y += wake_at(xz, frame.time.x, 4.0 * s).x;
   if (level > 0u) {
     let f = body.levels[level - 1u];
     let lo = f.xy + vec2f(0.25 * s);
@@ -230,6 +278,9 @@ fn fs_main(in: VertexOut) -> FragmentOut {
     let phi = dot(w.dir.xy, in.xz) - w.dir.w * t + w.more.x;
     slope += keep * (a * cos(phi) + k * a * a * sin(2.0 * phi)) * w.dir.xy;
   }
+  let wake = wake_at(in.xz, t, 2.0 * foot);
+  slope += wake.yz;
+  lost += wake.w;
   let n = normalize(vec3f(-slope.x, 1.0, -slope.y));
   let dist = length(in.rel);
   let v = -in.rel / dist;

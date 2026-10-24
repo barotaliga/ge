@@ -35,6 +35,7 @@
 #include "render/sky.hpp"
 #include "render/terrain.hpp"
 #include "render/water.hpp"
+#include "water/float.hpp"
 #include "water/world.hpp"
 #include "wind/field.hpp"
 
@@ -164,8 +165,8 @@ void run(gl::Lab& lab) {
                "Install Mesa's Vulkan drivers (apt install mesa-vulkan-drivers). Skill: gpu.");
     }
     placeholders(lab,
-                 {"lake-calm", "lake-fresh", "looks", "sea-light", "sea-fresh", "sea-gale",
-                  "sunset", "fly-out"},
+                 {"lake-calm", "lake-fresh", "wake", "rings", "looks", "sea-light", "sea-fresh",
+                  "sea-gale", "sunset", "fly-out"},
                  w, h);
     return;
   }
@@ -220,6 +221,56 @@ void run(gl::Lab& lab) {
     }
     lab.shot({c.id, c.title, c.caption, c.look_for, {{"wind", fixed(c.wind, 1) + " m/s"}}}, pic,
              Det::measured);
+  }
+
+  // THE WAKE: a 5 m boat across the calm lake at 5 m/s for 40 s, its rings summed as the
+  // simulation sums them (water/wake.hpp); then crates dropped by the shore, their rings.
+  {
+    gw::World world = lake_world(1.5, "nordic-clear");
+    gw::Trail trail;
+    const double x0 = kLakeX - 220, speed = 5;
+    double t = 0;
+    for (int i = 0; i <= 40 * 120; ++i) {
+      t = i / 120.0;
+      gw::wake_trail(world.wakes, trail, 0, x0 + speed * t, kLakeZ, speed, 0, 5, 2, 0.4, t);
+    }
+    gr::set_water_body(d, lake.water, 0, world.bodies[0]);
+    gr::set_water_wakes(d, lake.water, 0, world.wakes, 0);
+    const double bx = x0 + speed * t;
+    const gr::FrameView behind =
+        view_at(bx - 70, kLakeLevel + 7, kLakeZ - 12, 1.45, -0.12, 0.3, 1.3, t);
+    lab.shot({"wake",
+              "A BOAT'S WAKE ON THE CALM LAKE",
+              "A 5 m boat across the lake at 5 m/s under a light air after 40 s, seen from 7 m up "
+              "70 m behind it, looking along its track into a sun 17 degrees up: the rings it "
+              "set off every tenth of a second summed into its wake.",
+              "the arms spreading from the boat at about 19 degrees either side, their crests "
+              "breaking the calm mirror and catching the sun's glitter; the transverse waves "
+              "across the track between them; the water outside the arms still",
+              {{"speed", "5 m/s"}, {"wind", "1.5 m/s"}}},
+             draw(d, lake, behind), Det::measured);
+
+    gw::World drops = lake_world(0.5, "nordic-clear");
+    const double sx = kLakeX - 240, sz = kLakeZ - 110;
+    const double when[3] = {1.5, 3.5, 6.0};
+    for (int i = 0; i < 3; ++i) {
+      const gw::Splash crate{
+          .x = sx + 12.0 * i, .y = kLakeLevel, .z = sz + 9.0 * (i % 2), .speed = 7, .size = 0.6};
+      gw::splash_ring(drops.wakes, 0, crate, 8.0 - when[i]);
+    }
+    gr::set_water_body(d, lake.water, 0, drops.bodies[0]);
+    gr::set_water_wakes(d, lake.water, 0, drops.wakes, 0);
+    const gr::FrameView near = view_at(sx - 22, kLakeLevel + 7, sz - 18, 0.9, -0.3, 0.6, 2.2, 8.0);
+    lab.shot({"rings",
+              "THREE CRATES DROPPED IN",
+              "Three crates dropped into the still lake 1.5, 3.5 and 6 s ago, seen from 7 m up: "
+              "each splash one ring (water/float.hpp's splash_ring), its waves lengthening "
+              "outward and its front running on at their group speed.",
+              "three sets of rings of three sizes, the oldest the widest with the longest "
+              "waves outside and short ones within; the mirror ringed, not noise",
+              {{"wind", "0.5 m/s"}}},
+             draw(d, lake, near), Det::measured);
+    gr::set_water_wakes(d, lake.water, 0, gw::Wakes{}, 0);
   }
 
   // THE LOOKS: the shallows from above, a sandy shelf from 0 to 6 m deep.
