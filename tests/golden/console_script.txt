@@ -1,0 +1,198 @@
+=== set-and-print
+set mymod_speed 3
+echo speed $mymod_speed
+mymod_speed
+cl_fov 200
+cl_fov
+---
+speed 3
+"mymod_speed" is "3" (default "")
+"cl_fov" is "140" (default "90")
+
+=== if-numbers-and-text
+set a 2
+if $a == 2 then "echo two" else "echo not two"
+if $a > 10 then "echo big" else "echo small"
+set w "hello world"
+if lo isin $w then echo found
+if "$w" == "hello world" then echo same
+if $a then echo truthy
+set z 0
+if $z then echo never else echo falsy
+if $a ~ 2 then echo x
+if $a == 2 echo x
+---
+two
+small
+found
+same
+truthy
+falsy
+if: '~' is not a comparison (use == != < <= > >= isin or !isin)
+if needs `then` (write `if <a> <op> <b> then <commands> [else <commands>]`)
+
+=== set-calc
+set a 7
+set b 2
+set_calc s $a + $b
+set_calc d $a / $b
+set_calc m $a % $b
+set_calc p $a * $b
+set_calc g $a > $b
+echo $s $d $m $p $g
+set_calc len strlen "abcdef"
+set_calc sub substr "abcdef" 2 3
+set_calc at strstr "abcdef" cd
+set_calc no strstr "abcdef" zz
+set_calc i int 3.9
+echo $len $sub $at $no $i
+set_calc bad $a / 0
+set_calc nan $a + pear
+---
+9 3.5 1 14 1
+6 cde 2 -1 3
+set_calc: division by zero (check the divisor's cvar; bad is kept)
+set_calc: 'pear' is not a number (check the cvar expanded to a number)
+
+=== inc-dec-toggle-cycle
+inc n
+inc n 5
+dec n 2
+toggle t
+echo $n $t
+toggle t
+cycle cl_fov 90 100 110
+echo $cl_fov
+cycle cl_fov 90 100 110
+cycle cl_fov 90 100 110
+cycle cl_fov 90 100 110
+echo $cl_fov $t
+---
+4 1
+100
+100 0
+
+=== aliases
+alias greet "echo hi $1, you said $*"
+greet bob "one two"
+alias greet
+alias echo "x"
+alias +zoom "set cl_fov 30"
+alias -zoom "set cl_fov 90"
++zoom
+echo $cl_fov
+-zoom
+echo $cl_fov
+tempalias t "echo temp"
+t
+unalias t
+t
+---
+hi bob, you said bob one two
+greet : echo hi $1, you said $*
+'echo' is a command and cannot be an alias (pick another name)
+30
+90
+temp
+unknown command 't' (did you mean 'if'?)
+
+=== triggers
+alias on_frag "echo got one; inc frags"
+msg_trigger on_frag "fragged by you"
+game_say Alice was fragged by you
+game_say nothing here
+game_say Bob was fragged by you
+echo frags $frags
+msg_trigger
+msg_trigger_remove on_frag
+game_say Carl was fragged by you
+echo frags $frags
+---
+Alice was fragged by you
+got one
+nothing here
+Bob was fragged by you
+got one
+frags 2
+on_frag : "fragged by you"
+Carl was fragged by you
+frags 2
+
+=== escaping-and-quotes
+set price 5
+echo costs $$price, not $price
+echo "a;b" ; echo c
+echo ${price}0
+---
+costs $price, not 5
+a;b
+c
+50
+
+=== mistakes
+sett a 1
+set
+exec
+inc
+cycle x
+bind
+bind nokey x
+bind -nomode a x
+alias 9x y
+---
+unknown command 'sett' (did you mean 'set'?)
+set needs a name and a value (write `set <name> <value>`)
+exec needs a file (write `exec <name>.cfg`)
+inc needs a cvar (write `inc <name> [<by>]`)
+cycle needs a cvar and values (write `cycle <name> <v1> <v2>`)
+bind needs a key (write `bind <key>`; key names are in docs/console.md)
+'nokey' is not a key (use a key's name (a, f1, space, mouse1, mwheelup, pad_a, ctrl+s): docs/console.md)
+'-nomode' is not a bind mode (use -game, -console, -menu or -demo)
+'9x' is not an alias name (use 1-63 of a-z 0-9 _ + - . )
+
+=== cfg-save
+seta sensitivity 4
+set unsaved 1
+setinfo team red
+alias go "echo $cl_fov"
+tempalias gone "echo no"
+bind w +forward
+bind -menu escape togglemenu
+cl_fov 105
+cfg_save mine
+help cl_fov
+help nothing_like_it
+---
+[mine.cfg]
+  // written by cfg_save: every archived cvar, alias and bind
+  unbindall
+  bind w "+forward"
+  bind -menu escape "togglemenu"
+  alias go "echo $cl_fov"
+  seta cl_fov "105"
+  seta sensitivity "4"
+  setinfo team "red"
+wrote mine.cfg
+cl_fov "105" (default "90", a number 10 to 140, flags A.......)
+nothing is called 'nothing_like_it'
+
+=== cfg-load-reads-back
+seta cl_fov 120
+bind f1 "echo $cl_fov"
+cfg_save
+cl_fov 90
+unbindall
+cfg_load
+cl_fov
+bindlist
+---
+[config.cfg]
+  // written by cfg_save: every archived cvar, alias and bind
+  unbindall
+  bind f1 "echo $cl_fov"
+  seta cl_fov "120"
+wrote config.cfg
+"cl_fov" is "120" (default "90")
+f1 "echo $cl_fov"
+1 binds (game)
+
