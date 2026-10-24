@@ -85,7 +85,8 @@ Each part is optional, and a missing part falls back to the built-in look:
 
 `skin.cfg` holds the numbers a picture cannot carry: the nine-slice border, the needle's pivot,
 the value's colour and face. Images are PNGs in the game's data directory, loaded once, and
-drawn by the 2D layer as image boxes, tinted by the element's colour. The PNG decoder moves
+drawn by the 2D layer as image boxes, tinted by the element's colour; a frame is one box in the
+layer's nine-slice mode (M22d). The PNG decoder moves
 from `engine/lab` into the runtime for this. Later, a skin part may also be a procedural
 texture recipe (M31), baked once and cached like any other texture.
 
@@ -114,8 +115,10 @@ Drawing these needs four primitives the 2D layer lacks today: **lines** of a wid
 ends), **filled convex polygons** (a needle, an arrowhead, the minimap's chevron), **arcs**
 (the dial's band, a ring's segment) and **rotated image quads** (a skinned needle, the map's
 ground turned heading-up). Each is added to the CPU raster and the GPU pass together, with the
-CPU as the reference the GPU must match within a stated error. This touches `engine/ui`, so it
-is agreed with the menus' row (M22) first.
+CPU as the reference the GPU must match within a stated error. They land in the 2D layer as
+M22d: `line` and `polyline` (round caps), `arc` (a ring sector, an optional round end),
+`polygon` (convex, up to 16 points), and a `rotation` about a `pivot` on any box, which turns a
+skinned needle about its base and the minimap's ground about the player.
 
 ## The minimap
 
