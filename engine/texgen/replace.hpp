@@ -138,7 +138,10 @@ Evidence evidence_of(const lab::Picture& p);
 // lines, contrast 0.12, #825540".
 std::string evidence_text(const Evidence& e);
 // Each difference worth an argument, as a sentence an agent can act on; empty when none.
-std::vector<std::string> evidence_mismatches(const Evidence& original, const Evidence& ours);
+// `coursed` false (a plain surface, rock, metal: nothing laid in courses) leaves out the courses
+// and the pieces a course, which on such a surface count noise.
+std::vector<std::string> evidence_mismatches(const Evidence& original, const Evidence& ours,
+                                             bool coursed = true);
 
 // A texture's name from its PNG's file name: a file system cannot always hold '*' or '+', so a
 // leading "liq_" stands for a liquid's '*' and "anim_" for an animation's '+'.

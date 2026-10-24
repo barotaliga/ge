@@ -171,6 +171,13 @@ bool is_mark(const std::string& klass) {
   return klass == "logo" || klass == "trademark" || klass == "emblem";
 }
 
+// Whether the class lays its pieces in courses (an unnamed class might): the courses and pieces
+// counted on a plain, rock or metal surface are noise.
+bool is_coursed(const std::string& klass) {
+  return klass != "plain" && klass != "rock" && klass != "metal" && klass != "flagstones" &&
+         klass != "scales" && klass != "stripes" && klass != "plate";
+}
+
 // The class the candidates are drawn from: a mark's blanks, else the agent's own class.
 std::string search_class(const std::string& klass) { return is_mark(klass) ? "blank" : klass; }
 
@@ -390,7 +397,8 @@ Outcome run_texture_match(const std::filesystem::path& repo, const TextureMatchO
         texgen::likeness_distance(texgen::likeness_of(t.picture), texgen::likeness_of(ours));
     t.original = texgen::evidence_of(t.picture);
     t.ours = texgen::evidence_of(ours);
-    if (!is_mark(t.klass)) t.mismatches = texgen::evidence_mismatches(t.original, t.ours);
+    if (!is_mark(t.klass))
+      t.mismatches = texgen::evidence_mismatches(t.original, t.ours, is_coursed(t.klass));
     t.line->note = fixed2(t.distance);
     const std::string within = search_class(t.klass);
     t.candidates = texgen::nearest_refs(matcher, t.name, t.picture, top, within);

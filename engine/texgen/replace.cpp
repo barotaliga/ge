@@ -304,10 +304,19 @@ namespace {
 
 // Runs of `profile` (wrapped) `depth` standard deviations below its mean: the joints. Each run is
 // returned as its middle index; a profile with no clear dip returns none.
-std::vector<int> dips(const std::vector<double>& profile, double depth) {
-  const int n = static_cast<int>(profile.size());
+std::vector<int> dips(const std::vector<double>& raw, double depth) {
+  const int n = static_cast<int>(raw.size());
   std::vector<int> out;
   if (n < 4) return out;
+  // Against the profile's own running mean (wrapped, an eighth of it each side), so light
+  // falling across the tile does not hide the joints at its dark end.
+  const int r = std::max(2, n / 8);
+  std::vector<double> profile(static_cast<size_t>(n));
+  for (int i = 0; i < n; ++i) {
+    double sum = 0;
+    for (int k = -r; k <= r; ++k) sum += raw[static_cast<size_t>((i + k + n) % n)];
+    profile[static_cast<size_t>(i)] = raw[static_cast<size_t>(i)] - sum / (2 * r + 1);
+  }
   double mean = 0, var = 0;
   for (const double v : profile) mean += v;
   mean /= n;
@@ -387,10 +396,10 @@ Evidence evidence_of(const lab::Picture& p) {
   else
     e.lines = "mixed";
   // Courses: the rows where the mean luma dips. Pieces: in each course, the columns that dip.
+  // The raw luma: a whole row's mean has no grain left, and softening would smear a thin joint.
   std::vector<double> rows(static_cast<size_t>(h), 0.0);
   for (int y = 0; y < h; ++y)
-    for (int x = 0; x < w; ++x)
-      rows[static_cast<size_t>(y)] += soft[static_cast<size_t>(y) * w + x] / w;
+    for (int x = 0; x < w; ++x) rows[static_cast<size_t>(y)] += luma_at(p, x, y) / w;
   std::vector<int> joints = dips(rows, 0.8);
   if (joints.empty()) joints.push_back(0);
   e.courses = static_cast<int>(joints.size());
@@ -425,7 +434,7 @@ std::string evidence_text(const Evidence& e) {
   return out;
 }
 
-std::vector<std::string> evidence_mismatches(const Evidence& a, const Evidence& b) {
+std::vector<std::string> evidence_mismatches(const Evidence& a, const Evidence& b, bool coursed) {
   std::vector<std::string> out;
   auto axis = [&](const char* way, double pa, double pb) {
     if (pa > 0 && pb > 0) {
@@ -445,7 +454,7 @@ std::vector<std::string> evidence_mismatches(const Evidence& a, const Evidence& 
   };
   axis("across", a.per_tile_x, b.per_tile_x);
   axis("down", a.per_tile_y, b.per_tile_y);
-  if (a.courses != b.courses)
+  if (coursed && a.courses != b.courses)
     out.push_back("the original has " + std::to_string(a.courses) + " courses a tile, ours " +
                   std::to_string(b.courses) + " (turn rows)");
   auto mean_of = [](const std::vector<int>& v) {
@@ -454,7 +463,7 @@ std::vector<std::string> evidence_mismatches(const Evidence& a, const Evidence& 
     return v.empty() ? 0.0 : m / static_cast<double>(v.size());
   };
   const double ma = mean_of(a.pieces), mb = mean_of(b.pieces);
-  if (ma > 0 && mb > 0 && (ma / mb > 1.3 || mb / ma > 1.3))
+  if (coursed && ma > 0 && mb > 0 && (ma / mb > 1.3 || mb / ma > 1.3))
     out.push_back("the original has " + core::num::to_fixed(ma, 1) +
                   " pieces a course on average, ours " + core::num::to_fixed(mb, 1) +
                   " (turn cols)");

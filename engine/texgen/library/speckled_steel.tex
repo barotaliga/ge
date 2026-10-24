@@ -5,8 +5,10 @@ seed    12
 surface metal
 scale   1
 tags    metal wall dark low-colour
+param   rows 2 1 16
+param   cols 1 1 16
 
-layer panels  rows=2 cols=1 seam=0.02 bevel=0.01 color=#1c1a16 vary=0.05 rivets=0 depth=0.4 metal=0.8
+layer panels  rows=$rows cols=$cols seam=0.02 bevel=0.01 color=#1c1a16 vary=0.05 rivets=0 depth=0.4 metal=0.8
 layer speckle size=1 contrast=0.5 amount=0.25 color=#2c2c34 cavity=0
 layer speckle size=2 contrast=0.3 amount=0.08 color=#3e3618 cavity=0 height=0
 layer shade   strength=1.0 highlight=0.2 occlusion=0.5

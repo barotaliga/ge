@@ -5,8 +5,10 @@ seed    4
 surface stone
 scale   2
 tags    stone wall scales arches low-colour
+param   rows 4 1 16
+param   cols 2 1 16
 
-layer scales  rows=4 cols=2 dir=up rim=0.08 depth=0.6 color=#24302a vary=0.05 rim_color=#060807
+layer scales  rows=$rows cols=$cols dir=up rim=0.08 depth=0.6 color=#24302a vary=0.05 rim_color=#060807
 layer noise   kind=perlin period=8 octaves=4 color=#161e1a color2=#34403a blend=overlay amount=0.5
 layer speckle size=1 contrast=0.25 cavity=0
 layer shade   strength=1.8 highlight=0.3 occlusion=0.3

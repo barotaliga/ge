@@ -7,8 +7,10 @@ scale   2
 tags    panels metal wall industrial
 param   wear 0.4 0 1
 param   rust 0.2 0 1
+param   rows 2 1 16
+param   cols 2 1 16
 
-layer panels  rows=2 cols=2 color=#4f6a5a vary=0.05 metal=0 rough=0.5
+layer panels  rows=$rows cols=$cols color=#4f6a5a vary=0.05 metal=0 rough=0.5
 layer noise   kind=value period=32 octaves=4 amount=0.15 blend=overlay
 layer wear    amount=$wear color=#9aa0a6 metal=1 rough=-0.4
 layer scratches count=120 length=0.1 amount=0.4 color=#a8aeb4

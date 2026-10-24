@@ -6,8 +6,10 @@ seed    23
 surface stone
 scale   2
 tags    blocks stone wall masonry low-colour
+param   rows 2 1 16
+param   cols 1 1 16
 
-layer blocks  rows=2 cols=1 vary_size=0.9 mortar=0.03 bevel=0.4 depth=0.5 chip=0.4 color=#3a2e18 vary=0.08 mortar_color=#1a140a
+layer blocks  rows=$rows cols=$cols vary_size=0.9 mortar=0.03 bevel=0.4 depth=0.5 chip=0.4 color=#3a2e18 vary=0.08 mortar_color=#1a140a
 layer noise   kind=perlin period=6 octaves=5 color=#241c0e color2=#4e4024 blend=overlay amount=0.6 height=0.2
 layer speckle size=1 contrast=0.3 cavity=0
 layer shade   strength=1.0 soft=1 highlight=0.2 occlusion=0.4

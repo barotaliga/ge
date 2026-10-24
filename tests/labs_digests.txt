@@ -83,7 +83,7 @@ texgen-layers 1e2fb247a16d44e0
 texgen-noise 8005fe3f79165d24
 texgen-replace 5d0cac8db43d391e
 texgen-specimens d239ce2bb21a253c
-texgen-variants 7b90b55c76d17b3c
+texgen-variants a486abdbf381eefe
 trace cccfaac48bafaa60
 trails 1aaa468d0dbd81a0
 wanted 507dbbcbbbb4187e

@@ -6,11 +6,13 @@ surface metal
 scale   1
 tags    metal wall dark industrial low-colour
 param   grime 0.5 0 1
+param   rows 4 1 32
+param   cols 2 1 32
 
 layer fill    color=#16130f height=0.5 rough=0.6 metal=0.8
 layer noise   kind=perlin period=4 octaves=4 color=#0e0e12 color2=#2a2018 blend=mix amount=0.6
 layer speckle size=1 contrast=0.45 amount=0.1 color=#26263a cavity=0
-layer studs   rows=4 cols=2 shape=dome size=0.36 depth=0.35 color=#5a3e22 amount=0.9
+layer studs   rows=$rows cols=$cols shape=dome size=0.36 depth=0.35 color=#5a3e22 amount=0.9
 layer grime   amount=$grime
 layer shade   strength=1.2 highlight=0.3 occlusion=0.3
 layer palette color=#4a3c2c color2=#34344a color3=#a07848 steps=16

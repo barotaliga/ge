@@ -5,8 +5,10 @@ seed    8
 surface stone
 scale   2
 tags    bricks brick wall exterior low-colour
+param   rows 10 1 16
+param   cols 4 1 16
 
-layer bricks  rows=10 cols=4 color=#4e2414 vary=0.2 mortar=0.1 bevel=0.05 depth=0.25 mortar_color=#5a3a26
+layer bricks  rows=$rows cols=$cols color=#4e2414 vary=0.2 mortar=0.1 bevel=0.05 depth=0.25 mortar_color=#5a3a26
 layer noise   kind=perlin period=16 octaves=3 color=#000000 color2=#ffffff blend=overlay amount=0.35
 layer speckle size=1 contrast=0.25 cavity=0
 layer noise   kind=perlin period=3 octaves=3 color=#000000 color2=#ffffff blend=multiply amount=0.12
