@@ -33,6 +33,7 @@ tests):
 | `army_door.hpp/.cpp` | THE DOOR GUNNERS (M15e2): `step_army_doors` (called at the end of `step_army_helis`: the roster's gunners two to each hunting machine, the inward door first; the doors slid open with him in sight; each manned gun laid onto him inside its arc at a man's pace and fired through `fire_at` once laid, its door open and he in sight and range), `gunners_of`, `doors_manned` (which the echelon reads to crab the machine side-on); every number in `army_heli_rules.hpp` |
 | `gunfire.hpp/.cpp`, `gunfire_state.hpp`, `gunfire_body.hpp/.cpp`, `weapons_rules.hpp` | THE GUNFIRE (M15b): `arm_gun`, `fire_at` (a burst aimed, led and held over, the hold drawn once a burst and widened by the stars, warning fire put down off him), `step_gunfire` (the rounds at the cyclic rate, flown under drag and gravity, struck into the snow, a trunk or his body; the wounds judged on `Racer::body`), `body_points`/`body_hit` (capsules round his stance); its own stream off the map's seed; every number in `weapons_rules.hpp` |
 | `army_sled.hpp/.cpp`, `army_sled_rules.hpp`, `army_drive.hpp/.cpp` | THE ARMY'S SNOWMOBILES: `step_army_sleds` (called from `step_army` after the men: the call from beside the snowmobile spot, `sled_pad`, the chase up the runs and at him, the short halt, the stand-off, the crew off to take him in, righted, dug out, waiting below a face, home), each on the free ride's own `step_sled` and `sled_pilot`; `choose_way` / `way_cost` / `tunnel_within` (the snow read ahead, for every army machine); every number in `army_sled_rules.hpp` |
+| `army_meet.hpp/.cpp` | HIM AGAINST THE ARMY ON THE SNOW (M15d2): `meet_army` (called from `step` after `step_army`): each army snowmobile's hull he is held out of, its crew knocked off it (`knock_off`, the men lying in `SoldierMode::down`) and a soldier on foot run down, each a `hit_soldier` offence; thrown himself at a hard closing speed. The theft of an empty machine is `sled_ride.cpp`'s (`GameState::stolen`, `ridden`, `sled_holds`) |
 | `play.hpp/.cpp` | `PlaySession`: an agent at the controls over JSON lines (`hello`, `observe`, `act`, `tape`, `end`); THE PROTOCOL is stated once in its header |
 
 The generator is `plugins/mountain` (the `mountain` skill); a map is a pure function of its
@@ -54,7 +55,8 @@ seed. The skier on the snow is `plugins/skier` (the `skier` skill).
 7. The army on foot (M15c, done): the troop model, the lifts' squads, the ground waves' column,
    the chase, the stand-off and the arrest; the `army` lab.
 8. The army's snowmobiles (M15d1, done): the call, the drive, the short halt, the arrest; the
-   `army-sleds` lab.
+   `army-sleds` lab. His answer to them (M15d2, done): the hull, a crew knocked off, a man run
+   down, a machine stolen (`army_meet.hpp`, `GameState::stolen`).
 9. The army's helicopters (M15e1, done): the call, the pylon turn, the search, the landings and
    the fast rope, the leapfrog, home; the `army-flight` lab.
 10. Gunfire and wounds (M15b, done): the guns, the bursts, the rounds' flight and strikes, the
@@ -154,8 +156,12 @@ labs' digests: put the army table before and after in the PR.
 
 `army-sleds` (scenario, `games/fall_line/labs/army_sled_lab.cpp`): the army's snowmobiles on seed
 38 (v10) after a man stood still (`open`, `run`, `face`, `arrest`): the sleds table and every
-machine's path. A machine still caught at the end, no halt where he is within reach, or an arrest
-that never comes fails it. A change to `army_sled*.cpp`, `army_drive.cpp` or their numbers moves
+machine's path; and `answer`, his answer to them (a halted crew skied into and knocked off, the
+empty machine stolen and ridden off): the answer table and a close-up. A machine still caught at
+the end, no halt where he is within reach, an arrest that never comes, or an answer with no knock,
+no theft or no heat raised fails it. A change to `army_meet.cpp`, or to how `sled_ride.cpp` takes
+a machine, moves `tests/golden/fall_line_army_meet.txt` (`GE_GOLDEN_WRITE=1
+build/release/tests/fall_line_army_meet_test`). A change to `army_sled*.cpp`, `army_drive.cpp` or their numbers moves
 `tests/golden/fall_line_army_sled.txt` (`GE_GOLDEN_WRITE=1
 build/release/tests/fall_line_army_sled_test`), `fall_line_army.txt`, `fall_line_wanted.txt` and
 the `army` and `army-sleds` digests: put the sleds table before and after in the PR. A race's map

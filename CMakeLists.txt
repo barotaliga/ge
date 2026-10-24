@@ -16,7 +16,7 @@
 #   ge_ai        the bots' layer (engine/ai: the decision record `ge why` reads)
 #   ge_wind      the wind as a pure function of place and time (engine/wind; docs/water.md)
 #   ge_water     bodies of water, the waves a wind grows on them and the one query (engine/water)
-#   ge_move      character movement (engine/move: the knobs, the step, the box world, scenarios)
+#   ge_move      character movement (engine/move: the knobs and their cvars, the step, scenarios)
 #   ge_vfs       content files (engine/vfs: the pack archive; search paths and zips to come)
 #   ge_camera    the camera (engine/camera: poses, followers, rigs, shake, transitions, the stack)
 #   ge_play      the play contract (engine/play: GameSpec and Run, the session, the input log,
@@ -216,7 +216,7 @@ target_link_libraries(ge_input PUBLIC ge_core)
 # platform; a game binds the knobs to its console and answers the trace with its own world.
 file(GLOB GE_MOVE_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/move/*.cpp)
 add_library(ge_move STATIC ${GE_MOVE_SOURCES})
-target_link_libraries(ge_move PUBLIC ge_core)
+target_link_libraries(ge_move PUBLIC ge_core ge_console)
 
 # Content files (engine/vfs): the pack archive's checked directory and its files as views; the
 # rest of the virtual file system (search paths, zips, directories) lands with docs/goals.md M18a.

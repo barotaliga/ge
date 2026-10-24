@@ -46,6 +46,7 @@
 
 #include "console/console.hpp"
 #include "fall_line/app/frame.hpp"
+#include "fall_line/app/sky_type.hpp"
 #include "fall_line/app/views.hpp"
 #include "fall_line/cfg/cvars.hpp"
 #include "fall_line/sim/bot.hpp"
@@ -217,6 +218,11 @@ void run(ge::lab::Lab& lab) {
   if (const std::string problem = fall_line::sim::server_sky(cvars, built); !problem.empty()) {
     lab.fail("--cfg: " + problem, "Skill: console.");
   }
+  // The kind of sky (sv_skytype and its knobs, app/sky_type.hpp).
+  ge::render::SkyStyle style;
+  if (const std::string problem = fall_line::app::sky_style_of(cvars, style); !problem.empty()) {
+    lab.fail("--cfg: " + problem, "Skill: console.");
+  }
   const auto shared = std::make_shared<const ge::mountain::mapgen::Level>(std::move(built));
   const ge::mountain::mapgen::Level& level = *shared;
   const std::string seed_s = std::to_string(static_cast<long long>(seed));
@@ -235,6 +241,7 @@ void run(ge::lab::Lab& lab) {
   for (const std::string& name : views) {
     Scene sc{name, std::string(fall_line::app::view_caption(name)), {}, {}, {}};
     fall_line::app::day_view(level, hour, sc.view);
+    sc.view.style = style;
     if (!fall_line::app::make_view(level, name, sc.view)) {
       lab.fail("no view named '" + name + "'",
                "next: pick from games/fall_line/app/views.hpp (or --views=all).");
@@ -263,6 +270,7 @@ void run(ge::lab::Lab& lab) {
                    "each in his own jacket.";
       for (const auto& racer : run.state().racers) sc.skiers.push_back(racer.skier);
       fall_line::app::day_view(level, hour, sc.view);
+      sc.view.style = style;
       // The sky's clock moved on by sv_skyrate (cfg) over the run so far.
       if (cvars.sky_rate > 0) {
         fall_line::cfg::Settings at = cvars;
