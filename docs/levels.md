@@ -270,7 +270,9 @@ bits on every machine). The mover's world is built from the same faces.
 - **Units**: map units become metres through `brush::to_engine` (z up becomes y up).
 
 The `clone` lab clones each map given (`--pak`, `--map`, `--texmap`) and draws it beside the
-original from the same eyes, then stands a body at every start in the clone's mover world. It
-reports the cells, merges, brushes, faces, hidden faces, groups, entities, bytes and times. `--write=<dir>`
-(outside the tree) keeps the clone as `.gelv` and `.gelv.txt`. Without a pack it clones the
-brush plugin's fixture, which is what `make labs-smoke` runs.
+original from the same eyes. Then, at every start, it puts a body down on the original's floor
+there (the highest level face under its footprint) in the clone's mover world and checks that it
+stands on that floor. It reports the cells, merges, brushes, faces, hidden faces, groups,
+entities, bytes and times. `--write=<dir>` (outside the tree) keeps the clone as `.gelv` and
+`.gelv.txt`. Without a pack it clones the brush plugin's fixture, which is what `make
+labs-smoke` runs.

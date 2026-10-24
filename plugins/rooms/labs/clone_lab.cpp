@@ -4,7 +4,7 @@
 // drawn in its mean colour), the clone's brushes are built by CSG and drawn from the same eyes as
 // the original's textured view, and a body is stood at every start in the clone's mover world.
 // The numbers: cells, brushes, faces, unseen faces, groups, entities, the level's bytes, the clone
-// and build times, and how far each start stands from where the map put it.
+// and build times, and whether a body put down at each start stands on the original's floor there.
 //
 // Nothing a map holds is written into the tree: the pictures land in previews/, which is not
 // committed, and the clone is written out only with --write (a path outside the tree).
@@ -157,6 +157,37 @@ lab::ViewCam cam_of(const br::labs::TexturedEye& e) {
   return cam;
 }
 
+// The height of the original's highest floor under (x, z) at or below `y` (engine metres): the
+// near-level triangles of the world and its brush models (where the map put them) whose plan
+// covers the point. False when there is none.
+bool floor_below(const br::Map& map, double x, double y, double z, double* out) {
+  bool found = false;
+  for (const br::Surface& s : map.surfaces) {
+    for (uint32_t t = 0; t < s.count / 3; ++t) {
+      double p[3][3];
+      for (uint32_t k = 0; k < 3; ++k) {
+        br::to_engine(map.vertices[map.indices[s.first + t * 3 + k]].pos, p[k]);
+      }
+      const double ux = p[1][0] - p[0][0], uy = p[1][1] - p[0][1], uz = p[1][2] - p[0][2];
+      const double vx = p[2][0] - p[0][0], vy = p[2][1] - p[0][1], vz = p[2][2] - p[0][2];
+      const double ny = uz * vx - ux * vz;  // the normal's y, unnormalised
+      const double nx = uy * vz - uz * vy, nz = ux * vy - uy * vx;
+      const double len = std::sqrt(nx * nx + ny * ny + nz * nz);
+      if (len < 1e-12 || std::fabs(ny) < 0.7 * len) continue;
+      // Barycentric in the plan.
+      const double det = ux * vz - uz * vx;
+      if (std::fabs(det) < 1e-12) continue;
+      const double wx = x - p[0][0], wz = z - p[0][2];
+      const double a = (wx * vz - wz * vx) / det, b = (ux * wz - uz * wx) / det;
+      if (a < -1e-6 || b < -1e-6 || a + b > 1 + 1e-6) continue;
+      const double h = p[0][1] + a * uy + b * vy;
+      if (h > y + 1e-3) continue;  // the highest level face below is the floor, whichever way wound
+      if (!found || h > *out) *out = h, found = true;
+    }
+  }
+  return found;
+}
+
 struct Loaded {
   std::string name;
   std::vector<uint8_t> bytes;
@@ -293,11 +324,38 @@ void run(lab::Lab& lab) {
       double o[3] = {0, 0, 0};
       if (std::sscanf(e.get("origin").c_str(), "%lf %lf %lf", &o[0], &o[1], &o[2]) != 3) continue;
       ++starts;
-      // A start's origin is 24 units over the floor: its feet drop that far.
-      const ge::move::MoveState s = ge::move::stand_at(spec, world, {o[0], o[1] - 0.5, o[2]});
-      const double drop = o[1] - 24 * br::kUnitM - s.pos.y;
-      if (s.grounded && std::fabs(drop) < 0.1) ++stood;
-      worst = std::max(worst, std::fabs(drop));
+      // The original's floor under the start (a start is placed at any height over it), and a body
+      // put down on it in the clone: it stands on the same floor, or the clone lost it.
+      // The floor is the highest under the body's footprint (its centre and its four corners), so a
+      // start at a step's edge stands on the step.
+      const ge::move::Box box = ge::move::hull(spec, false);
+      double floor = 0;
+      bool any = false;
+      const double at[5][2] = {{o[0], o[2]},
+                               {o[0] + box.mins.x, o[2] + box.mins.z},
+                               {o[0] + box.mins.x, o[2] + box.maxs.z},
+                               {o[0] + box.maxs.x, o[2] + box.mins.z},
+                               {o[0] + box.maxs.x, o[2] + box.maxs.z}};
+      for (const auto& xz : at) {
+        double h = 0;
+        if (floor_below(l.map, xz[0], o[1], xz[1], &h) && (!any || h > floor))
+          floor = h, any = true;
+      }
+      if (!any) {
+        std::printf("  %s %s at %s: no floor under it in the original\n", stem.c_str(),
+                    e.classname.c_str(), e.get("origin").c_str());
+        continue;
+      }
+      const ge::move::MoveState s = ge::move::stand_at(spec, world, {o[0], floor + 0.3, o[2]});
+      const double off = s.pos.y - floor;
+      if (s.grounded && std::fabs(off) < 0.05) {
+        ++stood;
+      } else {
+        std::printf("  %s %s at %s: floor %.3f, stood %s at %.3f\n", stem.c_str(),
+                    e.classname.c_str(), e.get("origin").c_str(), floor,
+                    s.grounded ? "grounded" : "in the air", s.pos.y);
+      }
+      worst = std::max(worst, std::fabs(off));
     }
     lab.metric(stem + "-brushes", double(rep.brushes), "count");
     lab.metric(stem + "-merged", double(rep.merged), "count");
