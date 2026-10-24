@@ -3,13 +3,14 @@
 // keeps what can be seen (a floor under water) and drops what cannot (a wall's top under the
 // roof, the floor under a pillar, a pool's bottom on the floor), a brush that does not close is
 // left out, a body stands on the floor and is held out of a clip brush but sinks through water,
-// and the vault's faces build to the bits held in tests/golden/rooms_brush.txt.
+// touching brushes merge only where their union is convex (one contents, one look), and the
+// vault's faces build to the bits held in tests/golden/rooms_brush.txt.
 //
 // A deliberate change to the brush builder moves the golden: rewrite it with
 // `GE_GOLDEN_WRITE=1 build/<preset>/tests/rooms_brush_test` and say why in the PR.
 //
-// ge:summary Test: brushes, groups and entities in a room level: text, bytes, CSG, clip, golden
-// ge:keywords test rooms brush brushes csg entity group contents liquid clip vault golden
+// ge:summary Test: brushes, groups and entities in a room level: text, bytes, CSG, clip, merge
+// ge:keywords test rooms brush brushes csg entity group contents liquid clip vault golden merge
 // ge:skill rooms testing
 #include <cstdio>
 #include <cstdlib>
@@ -22,6 +23,7 @@
 #include "move/spec.hpp"
 #include "move/step.hpp"
 #include "rooms/brush_build.hpp"
+#include "rooms/brush_merge.hpp"
 #include "rooms/clip.hpp"
 #include "rooms/codec.hpp"
 #include "rooms/text.hpp"
@@ -80,6 +82,23 @@ bool covers(const rm::BrushMesh& m, uint32_t b, int ny, double y, double x, doub
     if (pos == 0 || neg == 0) return true;
   }
   return false;
+}
+
+// A box brush in the text form, from (x0, y0, z0) to (x1, y1, z1), every face `mat` (0 - x, not
+// -x, so no plane is written as -0, which reads back as a different float than it prints).
+std::string box(const char* contents, double x0, double y0, double z0, double x1, double y1,
+                double z1, const char* mat = "stone") {
+  char b[512];
+  std::snprintf(b, sizeof b,
+                "brush %s\n"
+                "face 1,0,0 %g %s s=0,32,0,0 t=0,0,32,0\n"
+                "face -1,0,0 %g %s s=0,32,0,0 t=0,0,32,0\n"
+                "face 0,1,0 %g %s s=32,0,0,0 t=0,0,32,0\n"
+                "face 0,-1,0 %g %s s=32,0,0,0 t=0,0,32,0\n"
+                "face 0,0,1 %g %s s=32,0,0,0 t=0,-32,0,0\n"
+                "face 0,0,-1 %g %s s=32,0,0,0 t=0,-32,0,0\n\n",
+                contents, x1, mat, 0.0 - x0, mat, y1, mat, 0.0 - y0, mat, z1, mat, 0.0 - z0, mat);
+  return b;
 }
 
 }  // namespace
@@ -188,6 +207,41 @@ TEST(a_body_stands_on_the_floor_is_kept_out_of_clip_and_sinks_through_water) {
   const mv::Box box{{-0.2, 0.1, -0.2}, {0.2, 0.5, 0.2}};
   const mv::Hit hit = world.sweep(box, {0.5, 0, 4.5}, {2.5, 0, 4.5});
   CHECK_MSG(hit.fraction < 1 && hit.end.x < 0.81, "reached x " + std::to_string(hit.end.x));
+}
+
+TEST(touching_brushes_whose_union_is_convex_merge_and_no_others) {
+  // A and B side by side make one box; C on A's top half-covers the merged box (a dent); D is
+  // water beside B; E touches B's far end in another material.
+  const std::string text = std::string(
+                               "material stone rgb=128,128,128 size=64,64\n"
+                               "material brick rgb=140,90,70 size=64,64\n"
+                               "material water rgb=60,90,120 size=64,64\n\n") +
+                           box("solid", 0, 0, 0, 1, 1, 1) + box("solid", 1, 0, 0, 2, 1, 1) +
+                           box("solid", 0, 1, 0, 1, 2, 1) + box("water", 0, 0, 1, 2, 1, 2) +
+                           box("solid", 2, 0, 0, 3, 1, 1, "brick");
+  rm::Level level;
+  std::string error;
+  CHECK_MSG(rm::parse(text, &level, &error), error);
+  CHECK(rm::merge_brushes(&level) == 1);
+  CHECK_MSG(rm::link(level, &error), error);
+  CHECK(rm::validate(level).empty());
+  CHECK(level.brushes.size() == 4);
+  CHECK(level.brushes[0].faces == 6);
+  // The merged box reaches x 2: its face on +x at 2.
+  bool far = false;
+  for (uint32_t f = 0; f < 6; ++f) {
+    const rm::Face& face = level.faces[level.brushes[0].first_face + f];
+    far = far || (face.n[0] == 1 && face.d == 2);
+  }
+  CHECK(far);
+  // Its top shows where C does not cover it, and the merge reads back from its text.
+  const rm::BrushMesh m = rm::build_brushes(level, 2);
+  CHECK(covers(m, 0, 1, 1, 1.5, 0.5));
+  CHECK(!covers(m, 0, 1, 1, 0.5, 0.5));
+  rm::Level again;
+  CHECK_MSG(rm::parse(rm::print(level), &again, &error), error);
+  CHECK(rm::encode(again) == rm::encode(level));
+  CHECK(rm::merge_brushes(&again) == 0);
 }
 
 TEST(the_vaults_faces_build_to_golden_bits) {

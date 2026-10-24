@@ -1,7 +1,9 @@
 // A CLASSIC MAP CLONED INTO A ROOM LEVEL: its structure carried over as brushes, its textures
 // replaced. The map's solid space is the leaves of its node tree; each solid, liquid or sky leaf is
 // a convex cell bounded by the planes on its path from the root, so each becomes one brush of its
-// contents. The brush models (doors, buttons, plats, trains, triggers) become groups of brushes the
+// contents. A subtree whose leaves all hold one contents is one cell (`merge`, on unless asked
+// off): the region its node bounds, since a split with the same contents on both sides carries no
+// face. The brush models (doors, buttons, plats, trains, triggers) become groups of brushes the
 // same way from their own trees (a `trigger_` entity's as trigger volumes), and the entities come
 // across with their keys, an entity's `model` key turned into its group. Version 29 and BSP2 maps;
 // 38 and 46 to come.
@@ -32,8 +34,8 @@
 // sharp; the geometry is the map's.
 //
 // ge:summary Clones a version 29 or BSP2 map into a room level: tree cells to brushes, texture map
-// ge:keywords clone cloner bsp convert brush cell leaf node-tree texture-map texmap recipe
-// ge:keywords placeholder entity origin angle heading model group liquid sky smooth arch
+// ge:keywords clone cloner bsp convert brush cell leaf node-tree merge subtree texture-map texmap
+// recipe ge:keywords placeholder entity origin angle heading model group liquid sky smooth arch
 // ge:skill rooms brush
 // ge:test tests/rooms_clone_test.cpp
 #pragma once
@@ -71,13 +73,15 @@ bool parse_texture_map(std::string_view text, TextureMap* out, std::string* erro
 struct CloneOptions {
   bool placeholders = false;         // an unmapped texture drawn plain instead of refused
   bool smooth = false;               // every face shaded round with its smooth neighbours
+  bool merge = true;                 // a subtree of one contents cloned as one brush
   std::span<const uint8_t> palette;  // 768 bytes: the textures' mean colours (else grey)
   size_t workers = 1;
 };
 
 struct CloneReport {
-  size_t cells = 0;     // solid, liquid and sky leaves met
-  size_t brushes = 0;   // cells kept as brushes
+  size_t cells = 0;     // solid, liquid and sky cells met (merged subtrees counted once)
+  size_t brushes = 0;   // brushes written
+  size_t merged = 0;    // pairs of brushes merged into one (`merge`)
   size_t open = 0;      // cells whose planes did not close (left out)
   size_t too_many = 0;  // cells of more than 255 planes (left out)
   size_t faces = 0;     // faces written

@@ -15,10 +15,12 @@
 #include <cstdlib>
 #include <cstring>
 #include <map>
+#include <span>
 #include <tuple>
 
 #include "core/parallel.hpp"
 #include "rooms/brush_build.hpp"
+#include "rooms/brush_merge.hpp"
 
 namespace ge::rooms {
 
@@ -124,17 +126,43 @@ bool contents_of(const br::Leaf& leaf, Contents* out) {
   }
 }
 
-void collect(const br::Map& map, int32_t child, uint32_t model, std::vector<Step>& path,
-             std::vector<Cell>& cells) {
+// What fills the subtree under `child`: a contents when every leaf under it holds that one
+// (-1 for none or a mix), memoised per node in `uniform` (-2 not yet known).
+int contents_under(const br::Map& map, int32_t child, std::vector<int>& uniform) {
+  if (child < 0) {
+    Contents c;
+    return contents_of(map.leaves[size_t(-(child + 1))], &c) ? int(c) : -1;
+  }
+  int& u = uniform[size_t(child)];
+  if (u != -2) return u;
+  const br::Node& n = map.nodes[size_t(child)];
+  const int a = contents_under(map, n.child[0], uniform);
+  const int b = contents_under(map, n.child[1], uniform);
+  u = a >= 0 && a == b ? a : -1;
+  return u;
+}
+
+// The cells under `child`. With `merge`, a subtree holding one contents throughout is one cell:
+// the region its node bounds, the splits inside it dropped, since no face lies on a plane with the
+// same contents on both sides.
+void collect(const br::Map& map, int32_t child, uint32_t model, bool merge,
+             std::vector<int>& uniform, std::vector<Step>& path, std::vector<Cell>& cells) {
   if (child < 0) {
     Contents c;
     if (contents_of(map.leaves[size_t(-(child + 1))], &c)) cells.push_back({path, model, c});
     return;
   }
+  if (merge) {
+    const int u = contents_under(map, child, uniform);
+    if (u >= 0) {
+      cells.push_back({path, model, Contents(u)});
+      return;
+    }
+  }
   const br::Node& n = map.nodes[size_t(child)];
   for (uint8_t side = 0; side < 2; ++side) {
     path.push_back({n.plane, side});
-    collect(map, n.child[side], model, path, cells);
+    collect(map, n.child[side], model, merge, uniform, path, cells);
     path.pop_back();
   }
 }
@@ -402,11 +430,12 @@ bool clone_map(const brush::Map& map, const TextureMap& textures, const CloneOpt
 
   // The cells: every model's tree walked from its head.
   std::vector<Cell> cells;
+  std::vector<int> uniform(map.nodes.size(), -2);
   std::vector<std::vector<HalfSpace>> clamps(map.models.size());
   for (size_t k = 0; k < map.models.size(); ++k) {
     const br::Model& md = map.models[k];
     std::vector<Step> path;
-    collect(map, md.head_node, uint32_t(k), path, cells);
+    collect(map, md.head_node, uint32_t(k), options.merge, uniform, path, cells);
     double lo[3], hi[3];
     const float mins[3] = {md.mins[0] - 1, md.mins[1] - 1, md.mins[2] - 1};
     const float maxs[3] = {md.maxs[0] + 1, md.maxs[1] + 1, md.maxs[2] + 1};
@@ -527,12 +556,13 @@ bool clone_map(const brush::Map& map, const TextureMap& textures, const CloneOpt
           f.hidden = false;
         }
       }
-      if (f.hidden) ++rep.unseen;
       level.faces.push_back(f);
     }
     brush.faces = uint8_t(used.size());
     level.brushes.push_back(brush);
   }
+  if (options.merge) rep.merged = merge_brushes(&level);
+  for (const Face& f : level.faces) rep.unseen += f.hidden;
   rep.brushes = level.brushes.size();
   rep.faces = level.faces.size();
 

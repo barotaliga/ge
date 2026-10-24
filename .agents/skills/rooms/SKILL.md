@@ -25,6 +25,7 @@ states its part once.
 | `walk.hpp/.cpp` | The scripted walk: a tour of every room by its doorways, routed by sweeps; the drive |
 | `levels/halls.gelv.txt` | The sample level: every relief, two caves |
 | `levels/vault.gelv.txt` | The brush sample: slabs, a pillar, a pool, a door group and its entity, clip, sky, a grass surface |
+| `brush_merge.hpp/.cpp` | Touching brushes merged where their union is convex (`merge_brushes`) |
 | `clone.hpp/.cpp` | A classic map cloned into a room level: the texture map, tree cells to brushes, entities |
 | `labs/rooms_lab.cpp` | The `rooms` lab |
 | `labs/clone_lab.cpp` | The `clone` lab: each map beside its clone, a body at every start |

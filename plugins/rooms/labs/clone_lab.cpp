@@ -169,6 +169,7 @@ void run(lab::Lab& lab) {
   const std::string pak_path = lab.arg("pak");
   const std::string texmap_path = lab.arg("texmap");
   const bool smooth = lab.arg("smooth") == "1";
+  const bool merge = lab.arg("merge") != "0";
   std::vector<uint8_t> pak_bytes, palette;
   std::vector<Loaded> maps;
   if (pak_path.empty()) {
@@ -216,10 +217,12 @@ void run(lab::Lab& lab) {
     }
   }
 
-  lab::LabTable table{"CLONED MAPS (leaves met, brushes kept, faces, unseen: no surface on them)",
-                      {"map", "cells", "brushes", "faces", "unseen", "open", "groups", "entities",
-                       "bytes", "placeholders", "starts stood"},
-                      {}};
+  lab::LabTable table{
+      "CLONED MAPS (cells met, merges, brushes kept, faces, unseen: no surface on "
+      "them)",
+      {"map", "cells", "merged", "brushes", "faces", "unseen", "open", "groups", "entities",
+       "bytes", "placeholders", "starts stood"},
+      {}};
   lab::LabTable times{"CLONE AND BUILD TIMES, ms (measured)", {"map", "clone", "build"}, {}};
   const size_t workers = ge::core::default_workers();
   for (Loaded& l : maps) {
@@ -234,6 +237,7 @@ void run(lab::Lab& lab) {
     rm::CloneOptions opt;
     opt.palette = palette;
     opt.smooth = smooth;
+    opt.merge = merge;
     opt.workers = workers;
     if (!texmap_path.empty()) {
       std::string file = texmap_path;
@@ -296,6 +300,7 @@ void run(lab::Lab& lab) {
       worst = std::max(worst, std::fabs(drop));
     }
     lab.metric(stem + "-brushes", double(rep.brushes), "count");
+    lab.metric(stem + "-merged", double(rep.merged), "count");
     lab.metric(stem + "-faces", double(rep.faces), "count");
     lab.metric(stem + "-unseen", double(rep.unseen), "count");
     lab.metric(stem + "-open", double(rep.open), "count");
@@ -303,11 +308,11 @@ void run(lab::Lab& lab) {
     lab.metric(stem + "-bytes", double(bytes.size()), "count");
     lab.metric(stem + "-starts-stood", double(stood), "count");
     lab.metric(stem + "-start-worst-m", worst, "m");
-    table.rows.push_back({l.name, std::to_string(rep.cells), std::to_string(rep.brushes),
-                          std::to_string(rep.faces), std::to_string(rep.unseen),
-                          std::to_string(rep.open), std::to_string(rep.groups),
-                          std::to_string(rep.entities), std::to_string(bytes.size()),
-                          std::to_string(rep.placeholders.size()),
+    table.rows.push_back({l.name, std::to_string(rep.cells), std::to_string(rep.merged),
+                          std::to_string(rep.brushes), std::to_string(rep.faces),
+                          std::to_string(rep.unseen), std::to_string(rep.open),
+                          std::to_string(rep.groups), std::to_string(rep.entities),
+                          std::to_string(bytes.size()), std::to_string(rep.placeholders.size()),
                           std::to_string(stood) + " of " + std::to_string(starts)});
     times.rows.push_back({l.name, fixed(clone_ms, 1), fixed(build_ms, 1)});
 
@@ -372,6 +377,7 @@ const lab::LabSpec kSpec{
          "(default: every texture a placeholder)"},
         {"placeholders", "0", "1: a texture the map does not name is drawn plain, not refused"},
         {"smooth", "0", "1: every face shaded round with its smooth neighbours"},
+        {"merge", "1", "0: every leaf its own brush (1: a subtree of one contents as one brush)"},
         {"write", "", "a directory OUTSIDE the tree the clones are written to (.gelv, .gelv.txt)"},
         {"px", "480", "a panel's width, px"},
     },

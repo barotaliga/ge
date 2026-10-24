@@ -251,7 +251,12 @@ bits on every machine). The mover's world is built from the same faces.
   (its planes, clamped to the model's bounds a unit out), and the cell becomes a brush. Each face
   a drawn surface lies on takes that surface's texture and its projection, recovered from the
   surface's largest triangle; a face no surface lies on (one buried in the map's outside) is
-  hidden. Merging cells into fewer, larger brushes is still to come.
+  hidden.
+- **Merging** (`--merge`, on by default): two brushes of one contents and group that touch face
+  to face become one when their union is convex and every plane they share looks the same
+  (`rooms::merge_brushes`, which any level can use). A tree's cells are mostly cut so that a pair
+  has a dent, so a cloned map loses 6 to 10 percent of its brushes this way; joining three or
+  more pieces at once is still to come.
 - **Brush models** (doors, buttons, platforms, trains) become brush groups (`model_<n>`) the
   same way, each from its own tree; a `trigger_` entity's model becomes TRIGGER volumes, which
   are neither drawn nor met.
@@ -266,6 +271,6 @@ bits on every machine). The mover's world is built from the same faces.
 
 The `clone` lab clones each map given (`--pak`, `--map`, `--texmap`) and draws it beside the
 original from the same eyes, then stands a body at every start in the clone's mover world. It
-reports the brushes, faces, hidden faces, groups, entities, bytes and times. `--write=<dir>`
+reports the cells, merges, brushes, faces, hidden faces, groups, entities, bytes and times. `--write=<dir>`
 (outside the tree) keeps the clone as `.gelv` and `.gelv.txt`. Without a pack it clones the
 brush plugin's fixture, which is what `make labs-smoke` runs.
