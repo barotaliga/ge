@@ -3,11 +3,12 @@
 // contract's own (sim/play.hpp's `kGame`), so a person's run is stepped, hashed and written down
 // exactly as an agent's is, and `ge replay` plays the input log it writes back to its digest.
 //
-// ONCE A FRAME, `hand_frame` reads the input state through the player's action map (bindings.hpp)
-// and latches the presses (play/devices.hpp). FOR EACH STEP the run clock grants, `hand_step` takes
-// one value per axis off the actions, snaps it onto its grid, steps the run on it, records it, and
-// plays what the step's events give the hands (felt.hpp). With `pilot` set, the game's bot fills
-// the axes instead (the window's --bot): the same loop, the same log.
+// ONCE A FRAME, `hand_frame` reads the screen's fingers as the thumbs (thumbs.hpp), the input
+// state through the player's action map (bindings.hpp), and latches the presses (play/devices.hpp).
+// FOR EACH STEP the run clock grants, `hand_step` takes one value per axis off the actions, snaps
+// it onto its grid, steps the run on it, records it, and plays what the step's events give the
+// hands (felt.hpp). With `pilot` set, the game's bot fills the axes instead (the window's --bot):
+// the same loop, the same log.
 //
 // ge:summary The run played by hand: the actions to the play contract's axes, step, log, rumble
 // ge:keywords fall-line by-hand person player human hand-run hand_frame hand_step hand_log
@@ -26,6 +27,7 @@
 #include "input/actions.hpp"
 #include "input/feedback.hpp"
 #include "input/state.hpp"
+#include "input/touch.hpp"
 #include "mountain/mapgen/types.hpp"
 #include "play/devices.hpp"
 #include "play/game.hpp"
@@ -44,6 +46,8 @@ struct HandRun {
   ge::input::ActionValues values;
   ge::play::DeviceAxes axes;
   ge::input::Feedback felt;
+  ge::input::TouchLayout thumbs;  // the screen's controls (thumbs.hpp)
+  ge::input::TouchFrame touch;
   std::vector<double> step_in;  // this step's axes, snapped
   int64_t steps = 0;
   int64_t most_steps = 0;  // the spec's longest run
@@ -61,8 +65,11 @@ std::unique_ptr<HandRun> open_hand_run(
 // The run's game state (for the renderer, the camera and the sound).
 const sim::GameState& hand_state(const HandRun& h);
 
-// Once a frame, before its steps: the state through the map over `dt_s`.
-void hand_frame(HandRun& h, const ge::input::InputState& s, double dt_s);
+// Once a frame, before its steps: the state through the thumbs and the map over `dt_s`; `now_s`
+// is the clock the thumbs' gestures read.
+void hand_frame(HandRun& h, const ge::input::InputState& s, double dt_s, double now_s);
+// The screen's shape (its width over its height), for the thumbs' reach.
+void hand_screen(HandRun& h, float aspect);
 // Whether the run has more to play: not over, and short of the longest run.
 bool hand_playing(const HandRun& h);
 // One fixed step (nothing once the run is no longer playing); `now_s` is the felt's clock.

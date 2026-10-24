@@ -7,13 +7,20 @@
 // axes the run was stepped on, and what the pad's motors were told (felt.hpp), and lists the
 // default bindings.
 //
-// It writes three files beside its report: `session.events` (the pad's session, which
-// `fall_line --events=<it>` plays in the window), `run.inputs` (the hand run's log, which
-// `ge replay <it>` plays back) and `bindings.txt` (the defaults the player's file starts from).
+// THEN THE THUMBS: the same log played as two thumbs on a phone's screen (thumbs.hpp,
+// script.hpp's `touch_session`). A thumb cannot say all a pad can (it brakes or tucks, never
+// both; a jump is a tap and a hold, so the tuck lifts before it), so every step must read back
+// what the thumbs gave, and the race on them must finish and replay; how far that run strays
+// from the bot's is measured, not failed.
+//
+// It writes four files beside its report: `session.events` (the pad's session, which
+// `fall_line --events=<it>` plays in the window), `thumbs.events` (the thumbs' session),
+// `run.inputs` (the hand run's log, which `ge replay <it>` plays back) and `bindings.txt` (the
+// defaults the player's file starts from).
 //
 // ge:summary Lab: the bot's run held on a pad and played by hand, its log replayed, charted, felt
 // ge:keywords lab by-hand person pad session event-log input-log replay digest rumble felt
-// ge:keywords bindings defaults fall-line window events
+// ge:keywords bindings defaults fall-line window events touch thumbs phone touch-session
 // ge:skill input labs
 // ge:test tests/fall_line_controls_test.cpp
 #include <algorithm>
@@ -27,6 +34,7 @@
 #include "fall_line/controls/by_hand.hpp"
 #include "fall_line/controls/felt.hpp"
 #include "fall_line/controls/script.hpp"
+#include "fall_line/controls/thumbs.hpp"
 #include "fall_line/sim/play.hpp"
 #include "fall_line/sim/state.hpp"
 #include "input/bindings_text.hpp"
@@ -73,6 +81,109 @@ std::optional<BotRun> bot_run(const pl::Setup& setup, int64_t most, std::string&
   return BotRun{rec.log(), run->digest(), run->over()};
 }
 
+// A phone held on its side.
+constexpr float kAspect = 19.5f / 9;
+
+// The bot's run on the thumbs: read back step by step, skied on to its end, replayed, charted.
+void thumbs(gl::Lab& lab, double seed, const std::string& k, const BotRun& bot) {
+  const fc::TouchSession session = fc::touch_session(bot.log, kAspect);
+  std::string error;
+  in::ActionMap map = fc::default_map();
+  in::read_bindings(fc::kExactTouchBindings, map, error);
+  auto hand = fc::open_hand_run(seed, 0, std::move(map), error);
+  if (!hand) {
+    lab.fail("the thumbs' hand run did not open: " + error,
+             "See games/fall_line/controls/by_hand.hpp.");
+    return;
+  }
+  fc::hand_screen(*hand, kAspect);
+  gl::Series s =
+      gl::make_series({"t_s", "bot_steer", "steer", "bot_tuck", "tuck", "brake", "jump"});
+  s.set("title", "seed " + fixed(seed, 0) + " on the thumbs: the bot's run on a phone's screen");
+  s.set("x", "t_s");
+  s.set("unit.t_s", "s");
+  in::InputState held;
+  int64_t differ = 0, off_bot = 0;
+  const auto row = [&](int64_t at) {
+    const bool logged = at < bot.log.steps();
+    const double bot_steer = logged ? bot.log.at(at)[0] : 0,
+                 bot_tuck = logged ? bot.log.at(at)[1] : 0;
+    gl::add_row(s, {fs::state_of(*hand->run)->t, bot_steer, hand->step_in[0], bot_tuck,
+                    hand->step_in[1], hand->step_in[2], hand->step_in[3]});
+  };
+  for (const in::LoggedFrame& f : session.events.frames) {
+    in::update(held, f.q);
+    const double now = static_cast<double>(f.t_ns) * 1e-9;
+    fc::hand_frame(*hand, held, 1.0 / 120, now);
+    const int64_t at = hand->steps;
+    fc::hand_step(*hand, held, now);
+    const auto& want = session.want[static_cast<size_t>(at)];
+    const auto b = bot.log.at(at);
+    bool d = false, o = false;
+    for (size_t i = 0; i < want.size(); ++i) {
+      d = d || hand->step_in[i] != want[i];
+      o = o || want[i] != b[i];
+    }
+    differ += d ? 1 : 0;
+    off_bot += o ? 1 : 0;
+    row(at);
+  }
+  // A finished bot's run: the thumbs held where they last were, skied on to the end.
+  const int64_t played = hand->steps;
+  while (bot.over && fc::hand_playing(*hand)) {
+    in::update(held, {});
+    fc::hand_frame(*hand, held, 1.0 / 120, 0);
+    const int64_t at = hand->steps;
+    fc::hand_step(*hand, held, 0);
+    row(at);
+  }
+  const pl::InputLog log = fc::hand_log(*hand);
+  const auto replayed = pl::replay(fs::kGame, log, error);
+  const std::string t = k + ".thumbs";
+  lab.metric(t + ".steps", static_cast<double>(hand->steps), "steps");
+  lab.metric(t + ".steps-after-the-session", static_cast<double>(hand->steps - played), "steps");
+  lab.metric(t + ".steps-off-the-thumbs", static_cast<double>(differ), "count");
+  lab.metric(t + ".steps-the-thumbs-change", static_cast<double>(off_bot), "count");
+  lab.metric(t + ".jumps", session.jumps, "count");
+  lab.metric(t + ".jumps-dropped", session.dropped, "count");
+  lab.metric(t + ".finished", hand->run->over() ? 1 : 0, "count");
+  if (differ != 0) {
+    lab.fail(std::to_string(differ) + " steps on the thumbs read back other axes than they gave",
+             "See games/fall_line/controls/thumbs.hpp and engine/input/touch.cpp.");
+  }
+  if (bot.over && !hand->run->over()) {
+    lab.fail("the race on the thumbs did not finish in " + std::to_string(hand->steps) + " steps",
+             "Chart it (thumbs.steer, thumbs.tuck) against the bot's; see controls/script.hpp.");
+  }
+  if (!replayed || replayed->digest != log.digest.value_or(0)) {
+    lab.fail("the thumbs' log does not replay to its digest" + (error.empty() ? "" : ": " + error),
+             "Run `ge replay` on the log (skill: agent-interface).");
+  }
+  lab.attach("thumbs.events", bytes(in::write_events(session.events)));
+  const std::string sub = "seed " + fixed(seed, 0) + ", " + std::to_string(hand->steps) +
+                          " steps on the thumbs, " + std::to_string(off_bot) +
+                          " steps where they ask other than the bot" +
+                          (hand->run->over() ? ", finished" : "");
+  const gl::SeriesCharts out{
+      "thumbs.", t,  sub, {{"seed", fixed(seed, 0)}, {"pilot", "the bot, on two thumbs"}},
+      {},        {}, ""};
+  gl::chart_series(lab, s, out,
+                   {{"steer",
+                     "THE EDGE THUMB AND THE BOT'S STEER, SEED " + fixed(seed, 0),
+                     "-1 left .. 1 right",
+                     {"bot_steer", "steer"},
+                     "The bot's steer and the steer the edge thumb gave, every step.",
+                     "the lines lie on each other but for the thumb's first step"},
+                    {"tuck",
+                     "THE TUCK LEVER: TUCK, BRAKE AND THE JUMP, SEED " + fixed(seed, 0),
+                     "0 .. 1",
+                     {"bot_tuck", "tuck", "brake", "jump"},
+                     "The bot's tuck, and the tuck, brake and jump the lever's thumb gave: one "
+                     "thumb tucks or brakes, and a jump is a tap then a hold, so the tuck lifts "
+                     "for a quarter second before it.",
+                     "the tuck on the bot's but where it brakes or jumps"}});
+}
+
 void run(gl::Lab& lab) {
   const double seed = lab.arg_num("seed");
   const auto most = static_cast<int64_t>(lab.arg_num("limit") * fs::kGame.hz);
@@ -114,10 +225,10 @@ void run(gl::Lab& lab) {
   int64_t differ = 0;
   for (const in::LoggedFrame& f : read.frames) {
     in::update(held, f.q);
-    fc::hand_frame(*hand, held, 1.0 / 120);
+    const double now = static_cast<double>(f.t_ns) * 1e-9;
+    fc::hand_frame(*hand, held, 1.0 / 120, now);
     const int64_t at = hand->steps;
     const int before = hand->pulses;
-    const double now = static_cast<double>(f.t_ns) * 1e-9;
     fc::hand_step(*hand, held, now);
     const auto want = script_log.at(at);
     for (size_t i = 0; i < want.size(); ++i) {
@@ -184,6 +295,7 @@ void run(gl::Lab& lab) {
     }
   }
   lab.table(binds);
+  thumbs(lab, seed, k, *bot);
 
   const std::string sub = "seed " + fixed(seed, 0) + ", " + std::to_string(hand->steps) +
                           " steps by hand, " + std::to_string(hand->pulses) + " pulses felt" +
@@ -226,7 +338,7 @@ const gl::LabSpec kSpec{
     "engine/play",
     "input",
     "Does a person's pad, read through Fall Line's bindings, ski exactly the run its axes say, "
-    "and is the run's log the run again?",
+    "is the run's log the run again, and does the same race finish on a phone's two thumbs?",
     {
         {"seed", "38", "the map's seed"},
         {"limit", "600", "the longest stretch held on the pad, s"},
