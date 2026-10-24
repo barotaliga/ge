@@ -1,6 +1,6 @@
 ---
 name: net
-description: "Use for engine/net in gameengine2: multiplayer networking. Addresses, the wire, UDP and TCP sockets, the simulated network (stream links too) and its conditions, pcap captures, the packet format, connections (acks, round trip, loss, unreliable/sequenced/reliable channels, big messages in pieces, priorities, the send budget), nodes (host, client, peer; up to 32), sessions (the lobby: seats, teams, chat, kick, start, reconnect by token), LAN discovery, NATs (the simulated kinds, STUN, the rendezvous, hole punching, the relay), opening a port on the router (PCP, NAT-PMP, UPnP IGD, the simulated router), replication (quantized snapshots and deltas, interest, the byte budget, prediction and reconciliation, interpolation, lag compensation by rewind), fake-traffic sessions, the net-link, net-session, net-reach and net-replicate labs; and the M17 plan (lobby, chat, NAT, replication, lockstep, voice, accounts)."
+description: "Use for engine/net in gameengine2: multiplayer networking. Addresses, the wire, UDP and TCP sockets, the simulated network (stream links too) and its conditions, pcap captures, the packet format, connections (acks, round trip, loss, unreliable/sequenced/reliable channels, big messages in pieces, priorities, the send budget), nodes (host, client, peer; up to 32), sessions (the lobby: seats, teams, chat, kick, start, reconnect by token), LAN discovery, NATs (the simulated kinds, STUN, the rendezvous, hole punching, the relay), opening a port on the router (PCP, NAT-PMP, UPnP IGD, the simulated router), replication (quantized snapshots and deltas, interest, the byte budget, prediction and reconciliation, interpolation, lag compensation by rewind), lockstep and rollback (turns, input delay, prediction and resimulation, step digests that name a desync), fake-traffic sessions, the net-link, net-session, net-reach, net-replicate and net-lockstep labs; and the M17 plan (lobby, chat, NAT, replication, lockstep, voice, accounts)."
 ---
 
 # Networking
@@ -35,6 +35,8 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
 | `net/sim_router.hpp` | The simulated router: PCP, NAT-PMP, SSDP and UPnP's SOAP answered on a NAT's LAN face (`NatConfig::gateway`), each grant a forward on the NAT |
 | `net/replicate.hpp` | Replication, the server's word: the schema's quantized fields, per-client deltas against the acked snapshot, interest, the budget, redundant inputs, prediction and smoothing, interpolation, `replicate_rewind`; `replicate_server.cpp` and `replicate_client.cpp` its halves, `replicate_wire.hpp` the messages and the bit packing (not installed) |
 | `net/replicate_trial.hpp` | One measured replicated world (clients, a crowd, rewinds) over a link: what the `net-replicate` lab and `ge net sweep` run |
+| `net/lockstep.hpp` | The same step everywhere: seats in a mesh, inputs in turns with a delay, lockstep's waits or rollback's prediction and resimulation, the inputs message with its acks, step digests compared to name a desync |
+| `net/lockstep_trial.hpp` | One measured lockstep session (a strategy game in turns, a fighting game with rollback, a desync planted) over a link: what the `net-lockstep` lab runs |
 | `net/tap.hpp` | The live tap: a running node's datagrams mirrored as pcap records to a loopback port for `ge net watch` |
 | `net/traffic.hpp` | Fake traffic: a whole session over the simulated network, measured end to end |
 
@@ -113,6 +115,10 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
   `--radius=150`): a replicated world under each preset: each client's bandwidth, corrections a
   minute and the worst, snapshots dropped, rows starved, inputs repeated, and how far the
   server's rewind lands from what each client drew; bandwidth charted, rewind gaps boxed.
+- `make lab LAB=net-lockstep` (`--presets=lan,wifi,bad --seats=4 --turn-steps=6 --delay=2`;
+  `--send-every=3`, `--max-rollback=8`, `--plant=600`): four strategy seats in turns and two
+  fighting seats with rollback under each preset: waits, an order's and a pad's latency, bytes,
+  rollbacks and their depth, agreement; a planted desync and the step it is named on.
 - `ge net sweep --knob=update-rate --values=10,20,30,60 --presets=wifi,bad`: the replication
   trial once a value; reach for it before arguing about a rate. `ge net watch --port=27950`: a
   running node's tap, live; a game opens one with `open_tap` and `transport.tap`.

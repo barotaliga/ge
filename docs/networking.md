@@ -280,6 +280,33 @@ takes effect on the next one. Finding the right numbers is an experiment, and th
   measures it as `ge net stats` does. Nothing in the game stops or changes: the tap costs a
   loopback send a datagram.
 
+## Lockstep and rollback (M17g)
+
+The model where only inputs cross the wire, for a strategy game (thousands of units, a few bytes
+of orders a second) and, with rollback, a fighting game or a two-player racer: `lockstep.hpp`
+over a node in a mesh (every seat connected to every other), one unreliable channel, and a game
+that gives its step, its digest and, for rollback, a save and a load of its state.
+
+| Piece | What it does | Why |
+| --- | --- | --- |
+| Seats and turns | Each player is a seat; a seat's input for a turn is whatever bytes the game gives it (orders appended with `lockstep_input`, or a pad's state set with `lockstep_set_input`), up to 128 | The engine names no unit or order: a turn's input is opaque bytes every peer hands the same step |
+| Input delay | The pending input is closed as the seat's input for turn T + `delay` when the peer starts turn T; the turns below the delay are empty for every seat | An order has `delay` turns to reach every peer before it is due, so on a good link nobody waits; a session starts without waiting |
+| Lockstep | A turn is `turn_steps` steps; a peer starts a turn only with every seat's input for it, or STALLS (`lockstep_waiting` names the seats) | Nothing is predicted and nothing undone: the strategy game's model, whatever its world's size |
+| Rollback | A step a turn; a missing input is predicted as the seat's newest; when the real one arrives and differs, the state is loaded from before that step and every step since run again; a peer more than `max_rollback` steps past the last step every input is in for stalls | The local player's input is felt after the delay alone (a step on every preset but the worst); the game keeps `max_rollback` + 1 states |
+| The message | Every send carries each of this seat's inputs some seat has not acked, how many turns of every seat's inputs this peer holds (the acks), and this seat's final step digests not yet acked; one message to every peer each `send_every` updates | One lost packet costs nothing; acks trim what is resent |
+| Digests | After every step whose inputs are all real, the game's digest is kept and sent; every peer compares each seat's with its own, step by step | A desync is named by the step it happened on (`lockstep_desync`), a round trip after it was stepped: the cheat check M17l builds on |
+
+Nothing reads a clock or draws randomness: the `net-lockstep` lab's hash says so. In that lab
+four strategy seats in turns of 6 steps (100 ms) with 2 turns of delay never wait on `lan`
+through `mobile` (an order is felt 233 ms after it is given at the median: the delay plus the
+rest of the turn it was given in), wait 2% of the time on `bad` and 36% on `awful`; two fighting
+seats with a step of delay feel their own pad a step later on every preset but `awful`, rolling
+back about 13 times a second, by 1 step on `broadband`, 3 on `mobile` and 6 on `bad`. A desync
+planted on one step of one seat is named on that very step on every preset, seen 17 ms after it
+was stepped on a LAN and 233 ms on `awful`. Sending a message every update costs about 90
+kbit/s a peer on a LAN, mostly headers; every third update cuts the inputs' bytes by a third and raises
+`bad`'s waits from 2% to 7% (`--send-every`).
+
 ## The simulated network (M17a)
 
 `SimNetwork` is a network of nodes with simulated addresses, on a virtual clock in
@@ -380,6 +407,7 @@ seeded and replayable. `engine/net/stress` and `ge net stress` push it until som
 | the `net-session` lab | M17d | A 32-player lobby on a dedicated host under each preset: everyone joins and picks a team, chats to all, to the team and to one player, one floods; the leader kicks one (whose return is refused), another is cut for six seconds and comes back to its seat, then the settings, the start and the return. The table checks every chat copy delivered, every player list the host's, the kick, the ban and the seat kept; the seats are charted and the pings drawn as boxes |
 | the `net-reach` lab | M17e1, M17e2 | Every pair of NAT kinds (none, full cone, restricted, port-restricted, symmetric) under each preset: the path each pair took (direct or relayed, against the one RFC 4787 predicts), how long it took, a reliable message each way; STUN from behind each kind; the connect times as a heatmap; a router speaking each of PCP, NAT-PMP and UPnP opening, renewing and closing a port that lets a client straight in |
 | the `net-replicate` lab | M17f | 32 clients each steering a mover and a crowd the game moves, under each preset: the bytes each client is sent a second, how often and how far a prediction is corrected, the snapshots lost or left without a baseline, the rows a budget starved, the inputs repeated, and how far the server's rewind lands from what each client drew; the bandwidth charted over the run, the rewind gaps as boxes |
+| the `net-lockstep` lab | M17g | Four strategy seats in lockstep turns and two fighting seats with rollback, under each preset: how often a peer waits, an order's and a pad's time to be felt, the bytes a peer sends, rollbacks a second and their depth, agreement; a desync planted on one step named on that step; progress charted, latencies and depths boxed |
 | `ge net sweep` | M17f2 | A replicated world run once a value of one knob (a rate, the interpolation, the input backup, the tick, a link condition, a drop pattern): bytes each way, view delay, corrections, dropped snapshots, starved rows, rewind gaps, and the cheapest value within reach of the best |
 | the live tap and `ge net watch` | M17f2 | A RUNNING game's or server's datagrams mirrored to a loopback port: each connection every second, then saved as a capture and measured as `ge net stats` does |
 | fake conditions (`transport_fake`) | M17f2 | A live game's sends delayed, jittered and dropped (or dropped in a pattern) as a bad link would, for playing an experiment by hand |

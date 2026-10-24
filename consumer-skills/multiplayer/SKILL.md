@@ -1,6 +1,6 @@
 ---
 name: multiplayer
-description: "Use when this game talks over a network: the engine's ge::net (a node for a host, a client or a peer of up to 32, its channels, its events), a lobby (players by seat, teams, chat, kick, start, reconnect by token, LAN discovery), reaching a host behind a home router (STUN, a rendezvous server, hole punching, the relay, opening a port), replicating a world from a server (snapshots, prediction, interpolation, interest, lag compensation), testing a session on the simulated network under bad links, capturing a live node's traffic, and the ge net tools that read it (ge net inspect, ge net stats, ge net sim)."
+description: "Use when this game talks over a network: the engine's ge::net (a node for a host, a client or a peer of up to 32, its channels, its events), a lobby (players by seat, teams, chat, kick, start, reconnect by token, LAN discovery), reaching a host behind a home router (STUN, a rendezvous server, hole punching, the relay, opening a port), replicating a world from a server (snapshots, prediction, interpolation, interest, lag compensation), lockstep and rollback (inputs only, turns, input delay, desync digests), testing a session on the simulated network under bad links, capturing a live node's traffic, and the ge net tools that read it (ge net inspect, ge net stats, ge net sim)."
 ---
 
 # Multiplayer on ge::net
@@ -165,6 +165,34 @@ hit is judged with `replicate_rewind(server, id, client_view_tick, out)`. Set
 `interest_radius` (with `interest_x`, `interest_z`) for an open world and `snapshot_budget` to cap
 a client's bandwidth. Run it on the simulated network under every preset and count
 `client.stats.corrections`: with no loss it must be zero.
+
+## Lockstep and rollback: the same step everywhere
+
+When every peer can run the whole world (a strategy game, a fighting game, a two-player race),
+send only inputs with `net/lockstep.hpp`. Connect every seat to every other (a mesh, one
+unreliable channel), and give the game's step and digest; rollback also needs save and load:
+
+```cpp
+net::LockstepGame g;
+g.step = my_step;      // void(void* ctx, uint32_t step, const uint8_t* const* inputs, const uint8_t* sizes)
+g.digest = my_digest;  // uint64_t(void* ctx): the whole state's hash after a step
+g.save = my_save;      // rollback: void(void* ctx, int slot), slots 0..max_rollback
+g.load = my_load;
+g.ctx = &world;
+net::LockstepConfig lc;   // mode lockstep: turn_steps 6, delay 2; rollback: turn_steps 1, delay 1
+lc.seats = 4;
+lc.seat = my_seat;
+net::lockstep_init(ls, lc, g, node);
+// each fixed step, after node_update:
+net::lockstep_receive(ls);
+net::lockstep_input(ls, order, n);          // orders, appended (rollback: lockstep_set_input, a pad)
+net::lockstep_update(ls);                   // runs the steps it may; a missing input waits
+if (ls.desync.found) { /* ls.desync.step: the first step two seats differ on */ }
+```
+
+Show "waiting for" with `lockstep_waiting(ls)` (a bit a seat). The step must be deterministic to
+the bit: no `<cmath>`, randomness only from the game's seeded stream. Measure a session's waits and
+latencies under every preset before choosing `delay` and `turn_steps`.
 
 ## Tune the rates, and watch a live game
 
