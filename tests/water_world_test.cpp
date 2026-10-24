@@ -17,7 +17,6 @@
 namespace {
 
 namespace gw = ge::water;
-constexpr double kPi = 3.141592653589793;
 
 ge::wind::Field breeze(double mean, double from) {
   ge::wind::Field f;

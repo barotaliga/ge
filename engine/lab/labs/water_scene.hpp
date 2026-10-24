@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -29,6 +30,20 @@ namespace ge::lab::water_scene {
 
 namespace gl = ge::lab;
 namespace gr = ge::render;
+
+// GE_GPU_REQUIRE=1: a missing adapter fails the lab (CI's GPU rows) rather than skipping it.
+inline bool gpu_required() {
+#ifdef _MSC_VER
+  char* v = nullptr;
+  size_t n = 0;
+  const bool on = _dupenv_s(&v, &n, "GE_GPU_REQUIRE") == 0 && v && std::strcmp(v, "1") == 0;
+  std::free(v);
+  return on;
+#else
+  const char* v = std::getenv("GE_GPU_REQUIRE");
+  return v && std::strcmp(v, "1") == 0;
+#endif
+}
 
 inline std::string fixed(double v, int digits) {
   char b[32];

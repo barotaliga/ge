@@ -40,6 +40,7 @@ namespace gw = ge::water;
 namespace lm = ge::core::libm;
 using ge::lab::water_scene::draw;
 using ge::lab::water_scene::fixed;
+using ge::lab::water_scene::gpu_required;
 using ge::lab::water_scene::make_scene;
 using ge::lab::water_scene::paste;
 using ge::lab::water_scene::Scene;
@@ -112,8 +113,7 @@ void run(gl::Lab& lab) {
   }
   auto device = ge::gpu::create_device({.label = "gpu-underwater", .validation = 1});
   if (!device) {
-    const char* req = std::getenv("GE_GPU_REQUIRE");
-    if (req && std::strcmp(req, "1") == 0) {
+    if (gpu_required()) {
       lab.fail("no GPU device, and GE_GPU_REQUIRE=1",
                "Install Mesa's Vulkan drivers (apt install mesa-vulkan-drivers). Skill: gpu.");
     }
