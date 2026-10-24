@@ -271,7 +271,7 @@ double widest(const ge::brush::Map& m, const double e[3]) {
 
 // Back the eye off along the way it looks, up to `most` m, staying in the open.
 void back_off(const ge::brush::Map& m, double e[3], double heading, double most) {
-  for (double d = 0.4; d <= most; d += 0.4) {
+  for (int step = 1; step * 0.4 <= most; ++step) {
     const double p[3] = {e[0] - 0.4 * ge::core::libm::sin(heading), e[1],
                          e[2] - 0.4 * ge::core::libm::cos(heading)};
     if (!open_at(m, p)) return;
@@ -444,7 +444,7 @@ void run(gl::Lab& lab) {
   if (palette.size() < 768) {
     palette.resize(768);
     for (int i = 0; i < 256; ++i)
-      for (int k = 0; k < 3; ++k) palette[size_t(i * 3 + k)] = uint8_t(i);
+      for (int k = 0; k < 3; ++k) palette[size_t(i) * 3 + size_t(k)] = uint8_t(i);
   }
   std::vector<std::unique_ptr<MapState>> maps;
   for (size_t i = 0; i < paths.size(); ++i) {
@@ -499,9 +499,11 @@ void run(gl::Lab& lab) {
     if (parse_view(spec, names, &v))
       views.push_back(v);
     else
-      lab.fail("--view=" + spec + " is not <map>:x,y,z,heading,pitch", "Name a map in --maps.");
+      lab.fail("--view=" + spec + " is not <map>:x,y,z,heading,pitch with the map in --maps",
+               "next: write it as e.g. --view=start:20,-1,30,180,-15 and name its map in --maps.");
   }
   std::vector<std::string> ids;
+  ids.reserve(views.size());
   for (const View& v : views) ids.push_back(v.id);
 
   auto device = ge::gpu::create_device({.label = "gpu-bsp", .validation = 1});
@@ -604,7 +606,7 @@ void run(gl::Lab& lab) {
     off.o.bounce = 0;
     labels.push_back("NO FLOOR, NO BOUNCE");
     ladder.push_back(off);
-    std::string list = lab.arg("ladder");
+    const std::string& list = lab.arg("ladder");
     size_t at = 0;
     while (at <= list.size()) {
       size_t end = list.find(',', at);
@@ -633,6 +635,7 @@ void run(gl::Lab& lab) {
     dress(fv, sun_el, sun_az, cover, t);
     MapState& m = *maps[v.map];
     std::vector<gl::Picture> pics;
+    pics.reserve(ways.size());
     for (const Way& way : ways) pics.push_back(draw(d, f, m, fv, way.o));
     gl::Picture sheet = gl::create_picture(int(w) * 3 + 40, int(h) + 30, {250, 250, 248});
     for (size_t i = 0; i < pics.size(); ++i) {
@@ -653,6 +656,7 @@ void run(gl::Lab& lab) {
              sheet, Det::measured);
     if (!ladder.empty()) {
       std::vector<gl::Picture> rungs;
+      rungs.reserve(ladder.size());
       for (const Way& way : ladder) rungs.push_back(draw(d, f, m, fv, way.o));
       const int n = int(rungs.size());
       gl::Picture row = gl::create_picture(int(w) * n + 10 * (n + 1), int(h) + 30, {250, 250, 248});
