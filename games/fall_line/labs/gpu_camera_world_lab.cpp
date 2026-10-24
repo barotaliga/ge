@@ -19,6 +19,12 @@
 // placeholders and every number above is still measured, so the digest is the same on every
 // row. Built only with GE_GPU.
 //
+// SEEING HIM THROUGH THE WOODS: every picture is drawn with the trees between the lens and him
+// seen through (render/instances.hpp § Seeing through; --see-through=0 draws them whole, the
+// before). Each woods moment counts the trees each lens sees through (the CPU twin), and each
+// sheet measures how much of him each outside lens SEES: points down his middle projected into
+// the picture, each seen when the nearest surface there is no more than half a metre before it.
+//
 // ge:summary Lab: every camera rung at a run's moments, and no lens inside a trunk or the snow
 // ge:keywords lab camera camera-world ladder rung tips helmet chase far high orbit hand-over
 // ge:keywords moments carve jump landing trees clearance trunk snow fall-line contact-sheet
@@ -38,6 +44,7 @@
 #include "camera/to_view.hpp"
 #include "core/libm/libm.hpp"
 #include "fall_line/app/frame.hpp"
+#include "fall_line/app/scene.hpp"
 #include "fall_line/app/views.hpp"
 #include "fall_line/camera/rungs.hpp"
 #include "fall_line/camera/subject.hpp"
@@ -49,6 +56,8 @@
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
 #include "mountain/mapgen/generate.hpp"
+#include "render/hiz.hpp"
+#include "render/instances.hpp"
 #include "skier/skier.hpp"
 #include "skier/trees.hpp"
 
@@ -144,6 +153,29 @@ int32_t densest(const ge::mountain::mapgen::Level& level) {
   return best;
 }
 
+// The trees lens `p` sees through to him in frame `f` (render/instances.hpp's CPU twin).
+int seen_through(const std::vector<ge::render::Instance>& trees, const Frame& f,
+                 const cam::Pose& p) {
+  ge::render::SeeThrough see;
+  see.on = true;
+  const cam::Vec3 at = fc::framed_point(f.skier);
+  see.subject[0] = at.x;
+  see.subject[1] = at.y;
+  see.subject[2] = at.z;
+  const double eye[3] = {p.eye.x, p.eye.y, p.eye.z};
+  int n = 0;
+  for (const auto& t : trees) {
+    if (std::fabs(t.position[0] - eye[0]) > 60 || std::fabs(t.position[2] - eye[2]) > 60) continue;
+    if (ge::render::see_through_keep(see, eye, t) < 1) ++n;
+  }
+  return n;
+}
+
+// The worn lenses look out from him: how much of him they see is not asked.
+bool outside(int rung) {
+  return rung != static_cast<int>(fc::Rung::tips) && rung != static_cast<int>(fc::Rung::helmet);
+}
+
 // A moment to shoot: its name, what it is, and the frame.
 struct Moment {
   std::string id, what;
@@ -158,6 +190,7 @@ void run(gl::Lab& lab) {
   const int width = static_cast<int>(lab.arg_num("width"));
   const int height = static_cast<int>(lab.arg_num("height"));
   const int settle = static_cast<int>(lab.arg_num("settle"));
+  const bool see_through = lab.arg_num("see-through") != 0;
   if (width < 32 || height < 18 || width > 1920 || height > 1080 || settle < 1) {
     lab.fail("--width and --height must be 32..1920 and 18..1080, --settle at least 1",
              "next: pass a size such as --width=320 --height=180.");
@@ -261,6 +294,15 @@ void run(gl::Lab& lab) {
     while (fell < woods.size() && !woods[fell].skier.down) ++fell;
     lab.metric("woods.down-at", fell < woods.size() ? woods[fell].t : -1, "s");
     woods_mid = fell / 2;
+    const std::vector<ge::render::Instance> trees = fall_line::app::tree_instances(level);
+    for (int i = 0; i < fc::kRungs; ++i) {
+      const std::string id(fc::rung_name(static_cast<fc::Rung>(i)));
+      const auto r = static_cast<size_t>(i);
+      lab.metric("woods." + id + ".seen-through",
+                 seen_through(trees, woods[woods_mid], woods[woods_mid].rung[r]), "count");
+      lab.metric("woods-trunk." + id + ".seen-through",
+                 seen_through(trees, woods[woods_frame], woods[woods_frame].rung[r]), "count");
+    }
   }
 
   // Every lens's worst over the run.
@@ -464,16 +506,63 @@ void run(gl::Lab& lab) {
     cam::to_frame_view(pose, v);
     v.time_s = f.t;
     fall_line::app::cut(*frame);
+    fall_line::app::FrameScene scene{std::span<const ge::skier::SkierState>(&f.skier, 1)};
+    if (see_through) {
+      const cam::Vec3 at = fc::framed_point(f.skier);
+      scene.subject = std::array<double, 3>{at.x, at.y, at.z};
+    }
     for (int i = 0; i < settle; ++i) {
       v.frame = static_cast<uint64_t>(i);
-      fall_line::app::draw(*device, *frame, v,
-                           {std::span<const ge::skier::SkierState>(&f.skier, 1)}, target.view);
+      fall_line::app::draw(*device, *frame, v, scene, target.view);
     }
     const ge::gpu::Image img = ge::gpu::read_now(*device, target);
     if (img.rgba.size() != static_cast<size_t>(width) * static_cast<size_t>(height) * 4) {
       return gl::create_picture(width, height, {255, 0, 255});
     }
     return gl::Picture{width, height, img.rgba};
+  };
+  // The share of the points down his middle the last picture shows (the nearest surface at each
+  // no more than half a metre before it), from the eye at `pose`.
+  auto seen_share = [&](const Frame& f, const cam::Pose& pose) {
+    const std::vector<float> depth = ge::render::read_depth(*device, frame->targets);
+    const auto rw = static_cast<int>(frame->targets.width),
+               rh = static_cast<int>(frame->targets.height);
+    if (depth.size() != static_cast<size_t>(rw) * static_cast<size_t>(rh)) return -1.0;
+    const float* m = frame->staged.view_proj;
+    auto depth_of = [&](double x, double y, double z, double& px, double& py) {
+      const double cx = m[0] * x + m[4] * y + m[8] * z + m[12];
+      const double cy = m[1] * x + m[5] * y + m[9] * z + m[13];
+      const double cz = m[2] * x + m[6] * y + m[10] * z + m[14];
+      const double cw = m[3] * x + m[7] * y + m[11] * z + m[15];
+      if (cw <= 1e-6) return -1.0;
+      px = (cx / cw * 0.5 + 0.5) * rw;
+      py = (0.5 - cy / cw * 0.5) * rh;
+      return cz / cw;
+    };
+    const cam::Vec3 mid = fc::framed_point(f.skier);
+    const cam::Vec3 fwd = cam::look_forward(pose.yaw, pose.pitch);
+    const double fl = std::sqrt(fwd.x * fwd.x + fwd.z * fwd.z);
+    const double rx = fl > 1e-6 ? fwd.z / fl : 1, rz = fl > 1e-6 ? -fwd.x / fl : 0;
+    int seen = 0, asked = 0;
+    for (int up = -2; up <= 2; ++up) {
+      for (int side = -1; side <= 1; ++side) {
+        const double h = f.skier.down ? 0.12 * up : 0.3 * up;
+        double x = mid.x + 0.2 * side * rx - pose.eye.x, y = mid.y + h - pose.eye.y,
+               z = mid.z + 0.2 * side * rz - pose.eye.z;
+        const double d = std::sqrt(x * x + y * y + z * z);
+        if (d < 0.6) continue;
+        double px = 0, py = 0;
+        const double k = (d - 0.5) / d;  // half a metre toward the eye
+        const double before = depth_of(x * k, y * k, z * k, px, py);
+        if (depth_of(x, y, z, px, py) < 0 || before < 0) continue;
+        if (px < 0 || py < 0 || px >= rw || py >= rh) continue;
+        ++asked;
+        const float at = depth[static_cast<size_t>(static_cast<int>(py)) * static_cast<size_t>(rw) +
+                               static_cast<size_t>(static_cast<int>(px))];
+        if (at <= before) ++seen;  // reversed-z: a larger depth is nearer
+      }
+    }
+    return asked ? static_cast<double>(seen) / asked : -1.0;
   };
   auto labelled = [&](gl::Picture& sheet, const gl::Picture& p, int col, int row,
                       const std::string& label) {
@@ -505,7 +594,12 @@ void run(gl::Lab& lab) {
     for (int i = 0; i < fc::kRungs; ++i) {
       std::string label(fc::rung_name(static_cast<fc::Rung>(i)));
       for (char& c : label) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-      labelled(sheet, picture(f, f.rung[static_cast<size_t>(i)]), i % 3, i / 3, label);
+      const cam::Pose& pose = f.rung[static_cast<size_t>(i)];
+      labelled(sheet, picture(f, pose), i % 3, i / 3, label);
+      if (outside(i)) {
+        lab.metric(m.id + "." + std::string(fc::rung_name(static_cast<fc::Rung>(i))) + ".seen",
+                   seen_share(f, pose), "share", Det::measured);
+      }
     }
     lab.shot(sheet_shot(m, f), sheet, Det::measured);
     ++shots;
@@ -547,6 +641,7 @@ const gl::LabSpec kSpec{
         {"width", "320", "each rung's picture's width, px"},
         {"height", "180", "each rung's picture's height, px"},
         {"settle", "6", "frames drawn after each picture's cut before the capture"},
+        {"see-through", "1", "the trees between a lens and him seen through; 0: drawn whole"},
     },
     "--seconds=16 --switch=4 --woods=3 --width=64 --height=36 --settle=1",
     run,

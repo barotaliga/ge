@@ -37,7 +37,8 @@ void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint
   u.jitter[1] = static_cast<float>(jy);
   u.jitter[2] = static_cast<float>(jx / width);
   u.jitter[3] = static_cast<float>(jy / height);
-  if (history && history->valid) {
+  const bool had_history = history && history->valid;
+  if (had_history) {
     std::memcpy(u.prev_view_proj, history->view_proj.m, sizeof u.prev_view_proj);
     for (int i = 0; i < 3; ++i) u.eye_delta[i] = static_cast<float>(view.eye[i] - history->eye[i]);
   } else {
@@ -98,8 +99,9 @@ void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint
   u.night[3] = static_cast<float>(n.latitude);
   // THE CLOUD (render/clouds.hpp).
   cloud_rows(view.clouds, u.cloud_info, u.clouds);
-  // The scene's own light the eye adapts to, in the frame's light (FrameView::adapt_cd).
-  u.cloud_info[2] = static_cast<float>(view.adapt_cd / kSunLux * pre);
+  // Spread over frames only with the last frame's camera to reproject by; the stamp is 1..4096.
+  u.cloud_info[2] = view.clouds.quarter && view.clouds.spread && had_history ? 1.0f : 0.0f;
+  u.cloud_info[3] = static_cast<float>(view.frame % kCloudStamps + 1);
   // THE MOON'S FACE AND THE EARTH'S SHADOW ON IT (render/night.hpp).
   for (int i = 0; i < 3; ++i) {
     u.moon_pole[i] = static_cast<float>(n.moon_pole[i]);
@@ -114,6 +116,8 @@ void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint
   // THE REACH: the mist closes every surface into the sky from half the reach to all of it.
   u.mist[0] = static_cast<float>(view.reach_m * kMistBegins);
   u.mist[1] = static_cast<float>(view.reach_m);
+  // The scene's own light the eye adapts to, in the frame's light (FrameView::adapt_cd).
+  u.mist[2] = static_cast<float>(view.adapt_cd / kSunLux * pre);
 }
 
 FrameTargets create_targets(gpu::Device& device, std::string_view label, uint32_t width,

@@ -38,7 +38,8 @@ constexpr int kReachLevels[] = {5, 6, 7, kGroundLevels};  // the ground's levels
 //   sharper groove.
 // SPRAY: what a turn throws, the most alive thing at the skis.
 // SNOWFALL: on a snowing day the flakes are the weather near the eye; the low stop keeps a third.
-// CLOUDS: a broken sky's layers, marched at a quarter of the pixels and upsampled; the low stop
+// CLOUDS: a broken sky's layers, marched at a quarter of the pixels (a quarter of those each
+//   frame, the rest reprojected from the last) and upsampled; the low stop
 //   marches half the steps, a slightly blockier cloud; the top marches every pixel, the
 //   reference, a hair sharper at a ridge's edge; off, the sky keeps its mean cloud and loses its
 //   shapes and shadows.
@@ -53,6 +54,9 @@ constexpr int kReachLevels[] = {5, 6, 7, kGroundLevels};  // the ground's levels
 // level with it (the low flakes). The DISTANCE row is priced where it is seen, from the `vista`
 // over the whole mountain on a clear day (`--view=vista --lift=0 --fall=0`): from the start the
 // far ground is behind the slope and costs nothing; from above, the woods past 2 km are most of it.
+// The cloud's high stop since its march was spread over frames: the full stop's price times the
+// high's share of it in one pricing run with the spread (24.84 of 59.38 ms; 32.70 of 51.84 with
+// the march whole every frame, `--spread=0`); the low stop's share did not move (0.40 either way).
 constexpr PriceTable kTable{"lavapipe (software), 1280x720", 1280, 720, 71.57};
 
 constexpr r::LadderStop kResolution[] = {
@@ -63,7 +67,7 @@ constexpr r::LadderStop kTrails[] = {{"off", 0, 0}, {"low", 5.31, 30}, {"high", 
 constexpr r::LadderStop kSpray[] = {{"off", 0, 0}, {"on", 1.44, 20}};
 constexpr r::LadderStop kSnowfall[] = {{"off", 0, 0}, {"low", 0, 10}, {"high", 3.93, 14}};
 constexpr r::LadderStop kClouds[] = {
-    {"off", 0, 0}, {"low", 27.59, 12}, {"high", 35.59, 15}, {"full", 72.09, 16}};
+    {"off", 0, 0}, {"low", 27.59, 12}, {"high", 30.16, 15}, {"full", 72.09, 16}};
 constexpr r::LadderStop kBloomStops[] = {{"off", 0, 0}, {"on", 17.30, 4}};
 constexpr r::LadderStop kDistance[] = {
     {"1 km", 0, 0}, {"2 km", 85.98, 10}, {"4 km", 224.85, 18}, {"full", 237.31, 22}};
