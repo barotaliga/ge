@@ -32,8 +32,8 @@ struct LiquidRows {
 
 struct LiquidWorld {
   water::World world;
-  std::vector<Kind> kinds;      // a body's: kWater, kSlime or kLava
-  std::vector<double> open;     // the share of its surface the sky is over (open_sky_of)
+  std::vector<Kind> kinds;   // a body's: kWater, kSlime or kLava
+  std::vector<double> open;  // the share of its surface the sky is over (open_sky_of)
 };
 
 // The share of the points over a pool's top from which straight up is the sky (a leaf of sky

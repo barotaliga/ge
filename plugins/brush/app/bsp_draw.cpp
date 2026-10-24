@@ -90,9 +90,12 @@ GpuJob ortho_job(const double dir[3], const double centre[3], double half, doubl
 }  // namespace
 
 bool parse_mode(std::string_view word, Mode* out) {
-  if (word == "classic") *out = Mode::classic;
-  else if (word == "v2") *out = Mode::v2;
-  else return false;
+  if (word == "classic")
+    *out = Mode::classic;
+  else if (word == "v2")
+    *out = Mode::v2;
+  else
+    return false;
   return true;
 }
 
@@ -179,18 +182,18 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
     d.compare = device.device.CreateSampler(&s);
   }
   d.uniform = r::make_buffer(device, "bsp.uniform", sizeof(GpuBsp), wgpu::BufferUsage::Uniform);
-  d.lights = r::make_buffer(device, "bsp.lights", sizeof(GpuLight) * 512,
-                            wgpu::BufferUsage::Storage);
+  d.lights =
+      r::make_buffer(device, "bsp.lights", sizeof(GpuLight) * 512, wgpu::BufferUsage::Storage);
   d.jobs = r::make_buffer(device, "bsp.jobs", sizeof(GpuJob) * (kMaxShadowed * 6 + 2),
                           wgpu::BufferUsage::Storage);
 
   using r::Slot;
   const auto both = wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment;
-  d.layout = r::make_layout(device, "bsp",
-                            {Slot::uniform, Slot::texture, Slot::texture, Slot::sampler,
-                             Slot::storage_read, Slot::depth_array, Slot::compare,
-                             Slot::depth_array},
-                            both);
+  d.layout =
+      r::make_layout(device, "bsp",
+                     {Slot::uniform, Slot::texture, Slot::texture, Slot::sampler,
+                      Slot::storage_read, Slot::depth_array, Slot::compare, Slot::depth_array},
+                     both);
   d.group = r::make_group(device, "bsp", d.layout,
                           {d.uniform, d.atlas.CreateView(), d.light.CreateView(), d.light_sampler,
                            d.lights, d.cubes_view, d.compare, d.orthos_view});
@@ -291,9 +294,9 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
 }
 
 void create_bsp_targets(gpu::Device& device, BspDraw& d, const r::FrameTargets& targets) {
-  d.mask = r::make_texture(device, "bsp.mask", targets.width, targets.height, 1,
-                           wgpu::TextureFormat::R8Unorm,
-                           wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding);
+  d.mask = r::make_texture(
+      device, "bsp.mask", targets.width, targets.height, 1, wgpu::TextureFormat::R8Unorm,
+      wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding);
   d.mask_view = d.mask.CreateView();
   d.fix_group = r::make_group(device, "bsp.sky", d.fix_layout, {d.mask_view});
 }
@@ -427,7 +430,8 @@ void encode_bsp(const BspDraw& d, const gpu::PipelineSet& pipelines, r::FrameRec
       if (sky) pass.DrawIndexed(d.range[kSky][1], 1, d.range[kSky][0], 0, job);
       pass.End();
     };
-    for (int k = 0; k < d.shadowed * 6; ++k) shadow_pass(d.cube_layers[size_t(k)], uint32_t(k), true);
+    for (int k = 0; k < d.shadowed * 6; ++k)
+      shadow_pass(d.cube_layers[size_t(k)], uint32_t(k), true);
     const uint32_t first_ortho = uint32_t(d.shadowed * 6);
     shadow_pass(d.ortho_layers[0], first_ortho, false);
     shadow_pass(d.ortho_layers[1], first_ortho + 1, false);

@@ -171,9 +171,8 @@ gl::Picture overview(const ba::Scene& s, int size) {
     const uint32_t kind = s.vertices[s.indices[i]].kind;
     return kind == ba::kWater || kind == ba::kSlime || kind == ba::kLava;
   };
-  std::sort(tris.begin(), tris.end(), [&](size_t a, size_t b) {
-    return wet(a) != wet(b) ? wet(b) : height(a) < height(b);
-  });
+  std::sort(tris.begin(), tris.end(),
+            [&](size_t a, size_t b) { return wet(a) != wet(b) ? wet(b) : height(a) < height(b); });
   const double ylo = s.mins[1], yhi = std::max(s.maxs[1], s.mins[1] + 1);
   for (size_t i : tris) {
     const ba::DrawVertex& a = s.vertices[s.indices[i]];
@@ -187,12 +186,18 @@ gl::Picture overview(const ba::Scene& s, int size) {
     to(c.pos[0], c.pos[2], pc);
     gl::Rgba col{0, 0, 0};
     const double t = std::clamp((a.pos[1] - ylo) / (yhi - ylo), 0.0, 1.0);
-    if (a.kind == ba::kWater) col = {60, 120, 210};
-    else if (a.kind == ba::kSlime) col = {90, 200, 60};
-    else if (a.kind == ba::kLava) col = {240, 90, 20};
-    else if (a.kind == ba::kSky) col = {150, 200, 255};
-    else if (a.kind == ba::kWarp) col = {200, 80, 220};
-    else col = {uint8_t(60 + 150 * t), uint8_t(60 + 150 * t), uint8_t(64 + 150 * t)};
+    if (a.kind == ba::kWater)
+      col = {60, 120, 210};
+    else if (a.kind == ba::kSlime)
+      col = {90, 200, 60};
+    else if (a.kind == ba::kLava)
+      col = {240, 90, 20};
+    else if (a.kind == ba::kSky)
+      col = {150, 200, 255};
+    else if (a.kind == ba::kWarp)
+      col = {200, 80, 220};
+    else
+      col = {uint8_t(60 + 150 * t), uint8_t(60 + 150 * t), uint8_t(64 + 150 * t)};
     fill_tri(p, pa, pb, pc, col);
   }
   for (double x = std::ceil(s.mins[0] / 10) * 10; x <= s.maxs[0]; x += 10) {
@@ -410,7 +415,8 @@ void run(gl::Lab& lab) {
   if (!lab.arg("pak").empty()) {
     std::string err;
     if (!ba::read_pack(lab.arg("pak"), &pack, &err)) {
-      lab.fail(err, "Pass --pak=<a pack file> holding maps/*.bsp and gfx/palette.lmp. Skill: brush.");
+      lab.fail(err,
+               "Pass --pak=<a pack file> holding maps/*.bsp and gfx/palette.lmp. Skill: brush.");
       return;
     }
     const auto pal = ba::pack_file(pack, "gfx/palette.lmp");
@@ -453,22 +459,27 @@ void run(gl::Lab& lab) {
     lab.metric(names[i] + ".bodies", double(s.liquids.size()), "count");
     lab.metric(names[i] + ".lights", double(s.lights.size()), "count");
     lab.table(table);
-    gl::LabTable bodies{names[i] + ": the liquids' bodies", {"kind", "level m", "box m", "area m^2"}, {}};
+    gl::LabTable bodies{
+        names[i] + ": the liquids' bodies", {"kind", "level m", "box m", "area m^2"}, {}};
     for (const ba::LiquidPatch& p : s.liquids) {
-      bodies.rows.push_back({p.kind == ba::kLava ? "lava" : p.kind == ba::kSlime ? "slime" : "water",
+      bodies.rows.push_back({p.kind == ba::kLava    ? "lava"
+                             : p.kind == ba::kSlime ? "slime"
+                                                    : "water",
                              ls::fixed(p.level, 2),
                              ls::fixed(p.box[0], 1) + "," + ls::fixed(p.box[1], 1) + " .. " +
                                  ls::fixed(p.box[2], 1) + "," + ls::fixed(p.box[3], 1),
                              ls::fixed(p.area, 1)});
     }
     lab.table(bodies);
-    lab.shot({names[i] + "-above", names[i] + " from above",
-              "The floors shaded by height, water blue, slime green, lava orange, the sky's "
-              "ceilings outlined in blue, lights dots (flames orange), the start a red ring. Metres on "
-              "the edges.",
-              "Where the liquids and the open sky are, to pick views by.",
-              {{"map", names[i]}}},
-             overview(s, 900), Det::deterministic);
+    lab.shot(
+        {names[i] + "-above",
+         names[i] + " from above",
+         "The floors shaded by height, water blue, slime green, lava orange, the sky's "
+         "ceilings outlined in blue, lights dots (flames orange), the start a red ring. Metres on "
+         "the edges.",
+         "Where the liquids and the open sky are, to pick views by.",
+         {{"map", names[i]}}},
+        overview(s, 900), Det::deterministic);
     maps.push_back(std::move(m));
   }
 
@@ -478,8 +489,10 @@ void run(gl::Lab& lab) {
   }
   for (const std::string& spec : split(lab.arg("view"), ';')) {
     View v;
-    if (parse_view(spec, names, &v)) views.push_back(v);
-    else lab.fail("--view=" + spec + " is not <map>:x,y,z,heading,pitch", "Name a map in --maps.");
+    if (parse_view(spec, names, &v))
+      views.push_back(v);
+    else
+      lab.fail("--view=" + spec + " is not <map>:x,y,z,heading,pitch", "Name a map in --maps.");
   }
   std::vector<std::string> ids;
   for (const View& v : views) ids.push_back(v.id);
@@ -502,8 +515,8 @@ void run(gl::Lab& lab) {
   f.w = w;
   f.h = h;
   f.targets = gr::create_targets(d, "gpu-bsp", w, h);
-  f.uniforms = gr::make_buffer(d, "gpu-bsp.uniforms", sizeof(gr::FrameUniforms),
-                               wgpu::BufferUsage::Uniform);
+  f.uniforms =
+      gr::make_buffer(d, "gpu-bsp.uniforms", sizeof(gr::FrameUniforms), wgpu::BufferUsage::Uniform);
   f.layout = gr::frame_layout(d);
   gr::create_sky(d, f.pipelines, f.sky, f.uniforms, f.layout);
   gr::create_clouds(d, f.pipelines, f.clouds, f.layout);
@@ -575,7 +588,8 @@ void run(gl::Lab& lab) {
       gl::draw_text(sheet, ox, 6, ways[i].label, {24, 26, 32});
       ls::paste(sheet, pics[i], ox, 20);
     }
-    lab.shot({v.id, v.title,
+    lab.shot({v.id,
+              v.title,
               v.caption + " Left: the classic look. Middle: v2 under our sky with our liquids, "
                           "lit by the lightmaps. Right: v2 lit in real time.",
               "The sky faces show our sky and clouds; the liquids are ours; the real-time lights "

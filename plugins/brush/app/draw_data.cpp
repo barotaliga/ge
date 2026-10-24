@@ -12,8 +12,8 @@
 #include <iterator>
 #include <numeric>
 
-#include "brush/bytes.hpp"
 #include "brush/app/draw_data.hpp"
+#include "brush/bytes.hpp"
 #include "brush/read.hpp"
 
 namespace ge::brush::app {
@@ -141,7 +141,8 @@ bool read_pack(const std::string& path, Pack* out, std::string* error) {
   const uint32_t dir = c.u32(), len = c.u32();
   if (magic != "PACK" || c.bad || dir > out->bytes.size() || len > out->bytes.size() - dir ||
       len % 64 != 0) {
-    return fail(error, path + " is not a pack file (no PACK header, or its directory lies outside it)");
+    return fail(error,
+                path + " is not a pack file (no PACK header, or its directory lies outside it)");
   }
   Cursor d{out->bytes};
   d.at = dir;
@@ -165,7 +166,9 @@ std::span<const uint8_t> pack_file(const Pack& pack, std::string_view name) {
   return {};
 }
 
-double heading_of(double angle_deg) { return 3.14159265358979 / 2 - angle_deg * 3.14159265358979 / 180; }
+double heading_of(double angle_deg) {
+  return 3.14159265358979 / 2 - angle_deg * 3.14159265358979 / 180;
+}
 
 double flicker_at(const PointLight& l, double t) {
   const double phase = double(l.seed % 1000) / 1000.0;
@@ -245,7 +248,8 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
               for (int c = 0; c < 4; ++c) {
                 int sum = 0;
                 for (uint32_t d = 0; d < 4; ++d)
-                  sum += rgba[i][k - 1][((size_t(2 * y + d / 2) * pw) + 2 * x + d % 2) * 4 + size_t(c)];
+                  sum += rgba[i][k - 1]
+                             [((size_t(2 * y + d / 2) * pw) + 2 * x + d % 2) * 4 + size_t(c)];
                 rgba[i][k][(size_t(y) * w + x) * 4 + size_t(c)] = uint8_t(sum / 4);
               }
         }
@@ -310,7 +314,8 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
           const uint32_t sx = std::clamp(x, 1u, l.width) - 1, sy = std::clamp(y, 1u, l.height) - 1;
           const size_t from = l.offset + (size_t(sy) * l.width + sx) * 3;
           const size_t to = ((size_t(lm_at[i].y + y) * s.light.width) + lm_at[i].x + x) * 4;
-          for (int k = 0; k < 3; ++k) level[to + k] = from + 2 < m.light_rgb.size() ? m.light_rgb[from + k] : 0;
+          for (int k = 0; k < 3; ++k)
+            level[to + k] = from + 2 < m.light_rgb.size() ? m.light_rgb[from + k] : 0;
           level[to + 3] = 255;
         }
       }
@@ -344,9 +349,12 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
   for (size_t si = 0; si < m.surfaces.size(); ++si) {
     const Surface& sf = m.surfaces[si];
     Kind kind = kSolid;
-    if (hidden[size_t(model_of[si])]) kind = kHidden;
-    else if (sf.kind == SurfaceKind::sky) kind = kSky;
-    else if (sf.kind == SurfaceKind::liquid) kind = liquid_kind(m.textures[sf.texture].name);
+    if (hidden[size_t(model_of[si])])
+      kind = kHidden;
+    else if (sf.kind == SurfaceKind::sky)
+      kind = kSky;
+    else if (sf.kind == SurfaceKind::liquid)
+      kind = liquid_kind(m.textures[sf.texture].name);
     const Placed& p = placed[sf.texture];
     const LmPlace* lp = sf.lightmap >= 0 ? &lm_at[size_t(sf.lightmap)] : nullptr;
     const Lightmap* lmap = sf.lightmap >= 0 ? &m.lightmaps[size_t(sf.lightmap)] : nullptr;
@@ -384,7 +392,8 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
       d.kind = kind;
       s.vertices.push_back(d);
       if (model_of[si] == 0) {
-        for (int k = 0; k < 3; ++k) s.mins[k] = std::min(s.mins[k], e[k]), s.maxs[k] = std::max(s.maxs[k], e[k]);
+        for (int k = 0; k < 3; ++k)
+          s.mins[k] = std::min(s.mins[k], e[k]), s.maxs[k] = std::max(s.maxs[k], e[k]);
       }
       box[0] = std::min(box[0], e[0]);
       box[1] = std::min(box[1], e[2]);
@@ -394,7 +403,8 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
       up = up && d.nrm[1] > 0.95f;
     }
     double area = 0;
-    for (uint32_t i = sf.first; i < sf.first + sf.count; ++i) s.indices.push_back(base + m.indices[i] - lo);
+    for (uint32_t i = sf.first; i < sf.first + sf.count; ++i)
+      s.indices.push_back(base + m.indices[i] - lo);
     for (uint32_t i = sf.first; i + 2 < sf.first + sf.count; i += 3) {
       const DrawVertex& a = s.vertices[base + m.indices[i] - lo];
       const DrawVertex& b = s.vertices[base + m.indices[i + 1] - lo];
@@ -491,11 +501,27 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
     l.flame = cls.find("torch") != std::string::npos || cls.find("flame") != std::string::npos;
     const int style = int(number(e.get("style"), 0));
     switch (style) {
-      case 2: case 5: case 11: l.flicker = Flicker::pulse; break;
-      case 4: case 9: l.flicker = Flicker::strobe; break;
-      case 10: l.flicker = Flicker::buzz; break;
-      case 1: case 3: case 6: case 7: case 8: l.flicker = Flicker::candle; break;
-      default: l.flicker = l.flame ? Flicker::candle : Flicker::steady;
+      case 2:
+      case 5:
+      case 11:
+        l.flicker = Flicker::pulse;
+        break;
+      case 4:
+      case 9:
+        l.flicker = Flicker::strobe;
+        break;
+      case 10:
+        l.flicker = Flicker::buzz;
+        break;
+      case 1:
+      case 3:
+      case 6:
+      case 7:
+      case 8:
+        l.flicker = Flicker::candle;
+        break;
+      default:
+        l.flicker = l.flame ? Flicker::candle : Flicker::steady;
     }
     // A flame's light is a fire's (about 1900 K), a lamp's a warm bulb's (2900 K), a tube's cool.
     const double* c = nullptr;

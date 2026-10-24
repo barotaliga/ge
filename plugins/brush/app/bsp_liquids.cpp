@@ -50,9 +50,9 @@ LiquidWorld liquid_world(const Scene& scene, const LiquidRows& rows, double wind
                                                           : rows.water);
     if (p.kind == kWater) stuff.look = rows.water_look;
     water::Hull h;
-    h.planes = {{0, 1, 0, p.level},       {0, -1, 0, -(p.level - rows.depth)},
-                {1, 0, 0, p.box[2]},      {-1, 0, 0, -p.box[0]},
-                {0, 0, 1, p.box[3]},      {0, 0, -1, -p.box[1]}};
+    h.planes = {{0, 1, 0, p.level},  {0, -1, 0, -(p.level - rows.depth)},
+                {1, 0, 0, p.box[2]}, {-1, 0, 0, -p.box[0]},
+                {0, 0, 1, p.box[3]}, {0, 0, -1, -p.box[1]}};
     const water::Hull hulls[1] = {h};
     const int i = water::add_volume(world, hulls, stuff);
     water::Body& b = world.bodies[size_t(i)];
@@ -94,7 +94,8 @@ void add_bsp_liquids(gpu::Device& device, render::Water& water, render::Liquids&
         here.lava.plate = rows.lava_plate;
       }
       here.room = rows.room;
-      render::add_liquid_body(device, liquids, b, here, world.wind.mean, world.wind.from + 3.14159265358979,
+      render::add_liquid_body(device, liquids, b, here, world.wind.mean,
+                              world.wind.from + 3.14159265358979,
                               std::max(b.box[2] - b.box[0], b.box[3] - b.box[1]));
     } else {
       render::WaterDraw draw;

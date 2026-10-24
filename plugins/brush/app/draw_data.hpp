@@ -33,7 +33,15 @@ bool read_pack(const std::string& path, Pack* out, std::string* error);
 std::span<const uint8_t> pack_file(const Pack& pack, std::string_view name);
 
 // What a surface is drawn as (the vertex's `kind`).
-enum Kind : uint32_t { kSolid = 0, kSky = 1, kWater = 2, kSlime = 3, kLava = 4, kHidden = 5, kWarp = 6 };
+enum Kind : uint32_t {
+  kSolid = 0,
+  kSky = 1,
+  kWater = 2,
+  kSlime = 3,
+  kLava = 4,
+  kHidden = 5,
+  kWarp = 6
+};
 inline constexpr int kKinds = 7;
 
 // One vertex: engine metres, the texture's texels, the lightmap atlas's uv, the normal, the
@@ -55,7 +63,7 @@ struct LiquidPatch {
   Kind kind = kWater;
   double level = 0;
   double box[4] = {0, 0, 0, 0};
-  double area = 0;  // m^2 of the top surfaces in it
+  double area = 0;            // m^2 of the top surfaces in it
   double centre[2] = {0, 0};  // x, z of its largest top surface's middle, m
   double largest = 0;         // that surface's area, m^2
 };
@@ -69,7 +77,7 @@ struct PointLight {
   double reach = 7.5;         // m: where its light ends (value / wait map units)
   double colour[3] = {1, 1, 1};
   Flicker flicker = Flicker::steady;
-  uint32_t seed = 0;  // the flicker's phase
+  uint32_t seed = 0;      // the flicker's phase
   bool flame = false;     // a torch or a flame (warmer)
   bool physical = false;  // `value` is a luminous intensity, cd (a glowing liquid's light)
 };
