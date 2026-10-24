@@ -38,10 +38,10 @@
 //   taa                  -> taa.history (at the output's size; with FrameOptions::taa)
 //   bloom                -> bloom (the glow's mip chain, from what post reads)
 //   post                 -> final (the bloom mixed in, the grade's table: look.hpp's)
+//   ui                   -> final (`draw`'s 2D overlay, a menu or the HUD: render/ui_pass.hpp)
 //
 // With TAA the frame renders at FrameOptions::scale of the output's size, jittered, and the
-// resolve brings it up to the output; without it, at the output's size, unjittered, and post
-// reads the HDR target.
+// resolve brings it up to it; without, at the output's size, unjittered, post reading the HDR.
 //
 // The frame reads the game only through a FrameView (views.hpp), the map it was made for, and a
 // FrameScene: the racers' skiers this frame, drawn as skinned skiers (scene.hpp: each racer's
@@ -89,12 +89,14 @@
 #include "render/sky.hpp"
 #include "render/taa.hpp"
 #include "render/terrain.hpp"
+#include "render/ui_pass.hpp"
 #include "render/underwater.hpp"
 #include "render/water.hpp"
 #include "skier/app/rig_pose.hpp"
 #include "skier/app/spray.hpp"
 #include "skier/app/tracks.hpp"
 #include "skier/skier.hpp"
+#include "ui/draw.hpp"
 #include "wind/precip.hpp"
 
 namespace fall_line::app {
@@ -190,6 +192,8 @@ struct GameFrame {
   ge::render::Taa taa;
   ge::render::Bloom bloom;
   ge::render::Post post;
+  ge::render::UiPass ui;        // the 2D layer drawn over the picture
+  ge::ui::DrawList no_overlay;  // the empty list a frame without one draws
   ge::render::InstancePipelines instancing;
   ge::render::InstanceFamily forest, figures, crowd;
   ge::render::InstanceFamily* families[3] = {&forest, &figures, &crowd};
@@ -250,10 +254,12 @@ void set_water(ge::gpu::Device& device, GameFrame& frame, int index, const ge::w
 void forget_tracks(GameFrame& frame);
 
 // Encode and submit one frame of `view` and `scene` into `output` (a view of a texture of the
-// output format at the output's size). `view.frame` indexes the jitter. The stats' GPU times
-// arrive a frame or more later.
+// output format at the output's size), with `overlay` (a 2D draw list at the output's size: a
+// menu, the HUD) drawn over the finished picture. `view.frame` indexes the jitter. The stats' GPU
+// times arrive a frame or more later.
 void draw(ge::gpu::Device& device, GameFrame& frame, const ge::render::FrameView& view,
-          const FrameScene& scene, const wgpu::TextureView& output);
+          const FrameScene& scene, const wgpu::TextureView& output,
+          const ge::ui::DrawList* overlay = nullptr);
 
 // The last drawn frame's meshes as lines (needs FrameOptions::wire_probe): the ground's tiles
 // banded by distance and the trees and figures in one warm colour, over black, into `colour` (a

@@ -20,13 +20,21 @@
 // the session steps the same run on any machine, and the window closes once the session is played
 // and the run is done; --record-events writes the session's own.
 //
+// THE SHELL (menus.hpp): the app opens on the front door over the live mountain (the game's bot
+// skis the run behind it, from the chase camera, again from the top once he is down); PLAY starts
+// the player's run, Escape on the run pauses it under the pause page, QUIT leaves. Arrows or W and
+// S move, A and D change, Enter or Space press, Escape goes back. OPTIONS sets the camera's view,
+// the sound and the master volume, starting from their cvars (cl_view, s_mute, volume). The
+// menus are drawn by the frame's 2D pass over the picture (frame.hpp's `ui` row). --play, a
+// scripted session or --bot starts on the run with no front door.
+//
 // THE SOUND: one synth, rendered on the audio device's thread (platform/audio.hpp) and fed from
 // this one through its ring. No device (a container, SDL_AUDIO_DRIVER=dummy failing) is not an
 // error: the app runs silent. Focus lost fades the buses out with the clock.
 //
 //   fall_line [--frames=N] [--size=WxH] [--no-vsync] [--seed=N] [--rivals=N] [--view=NAME]
 //             [--hour=H] [--mute] [--bot] [--bindings=PATH] [--inputs=PATH] [--events=PATH]
-//             [--record-events=PATH] [+<command> <args>...]
+//             [--record-events=PATH] [--play] [+<command> <args>...]
 //
 // THE SETTINGS are cvars (cfg/cvars.hpp): the console execs default.cfg, config.cfg and
 // autoexec.cfg from the current directory, then the command line's `+set r_bloom 0 +exec my.cfg`
@@ -42,11 +50,12 @@
 //
 // --frames quits after N presented frames and prints the frame pace (a smoke run under a
 // virtual display: xvfb-run -a build/release/games/fall_line/fall_line --frames=60).
-// Escape or closing the window quits.
+// Closing the window, or QUIT on the front door, quits.
 //
 // ge:summary Fall Line's app: the window, the frame loop on the run clock, the GPU frame
 // ge:keywords app main frame-loop window vsync present run-clock frame-pace fall-line
 // ge:keywords camera-key camera-ladder player by-hand bindings rebind rumble input-log events
+// ge:keywords front-door pause-page shell
 // ge:skill platform gpu render audio input
 #include <array>
 #include <cstdio>
@@ -67,6 +76,7 @@
 #include "core/num_text.hpp"
 #include "core/output.hpp"
 #include "fall_line/app/frame.hpp"
+#include "fall_line/app/menus.hpp"
 #include "fall_line/app/sky_type.hpp"
 #include "fall_line/app/views.hpp"
 #include "fall_line/camera/machines.hpp"
@@ -80,6 +90,7 @@
 #include "fall_line/controls/script.hpp"
 #include "fall_line/sim/sky.hpp"
 #include "fall_line/sim/state.hpp"
+#include "fall_line/sound/bank.hpp"
 #include "fall_line/sound/mix.hpp"
 #include "fall_line/sound/route.hpp"
 #include "gpu/device.hpp"
@@ -112,6 +123,7 @@ struct Args {
   std::string inputs;         // where the run's log goes ("" its place in the prefs directory)
   std::string events;         // a scripted session to play in place of the devices
   std::string record_events;  // where the session's device events go ("" nowhere)
+  bool play = false;          // straight onto the run, no front door
 };
 
 // The device's thread renders the synth; everything reaches it through the synth's ring.
@@ -121,6 +133,20 @@ void pull(float* out, int frames, void* user) {
 
 // How long the buses take to fade in or out, s.
 constexpr float kFaderGlide = 0.3f;
+
+// The menus' presses from the keyboard: arrows or W and S move, A and D change, Enter or Space
+// press, Escape goes back.
+ge::ui::MenuInput menu_input(const ge::platform::InputSnapshot& in) {
+  using ge::platform::Key;
+  ge::ui::MenuInput m;
+  m.up = in.tapped(Key::up) || in.tapped(Key::w);
+  m.down = in.tapped(Key::down) || in.tapped(Key::s);
+  m.left = in.tapped(Key::left) || in.tapped(Key::a);
+  m.right = in.tapped(Key::right) || in.tapped(Key::d);
+  m.accept = in.tapped(Key::enter) || in.tapped(Key::space);
+  m.back = in.tapped(Key::escape);
+  return m;
+}
 
 bool read_file(const std::string& path, std::string& text) {
   std::ifstream file(path, std::ios::binary);
@@ -175,6 +201,8 @@ bool parse(int argc, char** argv, Args& a) {
       a.events = std::string(arg.substr(9));
     } else if (arg.rfind("--record-events=", 0) == 0) {
       a.record_events = std::string(arg.substr(16));
+    } else if (arg == "--play") {
+      a.play = true;
     } else {
       return false;
     }
@@ -193,7 +221,7 @@ int main(int argc, char** argv) {
         "[--seed=N] [--rivals=N] "
         "[--view=tips|helmet|chase|far|high|orbit|start|piste|lookback|vista|aerial] "
         "[--hour=H] [--mute] [--bot] [--bindings=PATH] [--inputs=PATH] [--events=PATH] "
-        "[--record-events=PATH] [+<command> ...]; next: rerun with those flags only.");
+        "[--record-events=PATH] [--play] [+<command> ...]; next: rerun with those flags only.");
     return 2;
   }
   // The settings: the cfgs, the --flags, the command line, then every latched value applied.
@@ -264,7 +292,11 @@ int main(int argc, char** argv) {
       return 2;
     }
   }
-  const ge::mountain::mapgen::Level& level = *fall_line::controls::hand_state(*hand).level;
+  // The map outlives each run on it: a new run from the top (PLAY, or the bot's behind the front
+  // door) reopens on the same one.
+  const std::shared_ptr<const ge::mountain::mapgen::Level> level_ptr =
+      fall_line::controls::hand_state(*hand).level;
+  const ge::mountain::mapgen::Level& level = *level_ptr;
   ge::render::FrameView view;
   fall_line::app::day_view(level, set.hour, view);
   if (const std::string problem = fall_line::app::sky_style_of(set, view.style); !problem.empty())
@@ -283,6 +315,19 @@ int main(int argc, char** argv) {
                                             static_cast<uint32_t>(h), surface.format(),
                                             fall_line::app::frame_options(set));
   if (!frame) return 1;
+
+  // The shell (menus.hpp): the front door first, its bot skiing behind it, unless the run is
+  // asked for at once. The options start from their cvars.
+  fall_line::app::Shell shell = fall_line::app::make_shell(
+      {.rung = rung, .sound = !set.mute, .volume = static_cast<double>(set.volume) * 100},
+      "seed " + ge::core::num::to_string(set.seed));
+  if (args.play || args.bot || !script.frames.empty()) shell.mode = fall_line::app::Mode::run;
+  hand->pilot = args.bot || shell.mode == fall_line::app::Mode::front;
+  // Whether the run up is PLAY's, and the last one the player left for the front door: the log
+  // written at the end is the player's latest; the bot's runs behind the front door are not.
+  bool played = shell.mode == fall_line::app::Mode::run;
+  std::optional<ge::play::InputLog> left;
+  ge::ui::DrawList overlay;
 
   // The run's sound. The synth outlives the device that pulls it (declared first).
   ge::audio::Synth synth;
@@ -326,11 +371,36 @@ int main(int argc, char** argv) {
   std::vector<ge::skier::SkierState> skiers;
   skiers.reserve(fall_line::controls::hand_state(*hand).racers.size());
   bool heard_out = false;
+  bool fresh = true;  // the next frame starts the figures settled and cuts the camera
   // The run's camera: the ladder kept warm, walked by the camera key (camera/rungs.hpp), and
   // each machine's own while he rides it (machines.hpp).
-  const ge::skier::World skier_world = fall_line::controls::hand_state(*hand).world();
-  const ge::camera::World camera_world = fall_line::camera::camera_world(skier_world);
+  ge::skier::World skier_world = fall_line::controls::hand_state(*hand).world();
+  ge::camera::World camera_world = fall_line::camera::camera_world(skier_world);
   fall_line::camera::RideCamera camera = fall_line::camera::make_ride_camera(rung, 1);
+  // A new run from the top on the same map: PLAY's (the player's), or the bot's behind the front
+  // door once he is down.
+  auto new_run = [&](bool pilot) {
+    fall_line::sound::run_sound_silence(sound, synth);
+    std::unique_ptr<fall_line::controls::HandRun> next = fall_line::controls::open_hand_run(
+        set.seed, args.rivals, std::move(hand->map), error, level_ptr);
+    if (!next) {
+      out::error("fall_line: a new run on seed " + ge::core::num::to_string(set.seed) +
+                 " did not open: " + error + "; next: restart the app");
+      return false;
+    }
+    hand = std::move(next);
+    hand->pilot = pilot;
+    if (w > 0 && h > 0)
+      fall_line::controls::hand_screen(*hand, static_cast<float>(w) / static_cast<float>(h));
+    skier_world = fall_line::controls::hand_state(*hand).world();
+    camera_world = fall_line::camera::camera_world(skier_world);
+    camera = fall_line::camera::make_ride_camera(shell.settings.rung, 1);
+    fall_line::app::forget_tracks(*frame);
+    fall_line::app::cut(*frame);
+    heard_out = false;
+    fresh = true;
+    return true;
+  };
   double last_frame_s = 0;
   while (args.frames == 0 || presented < args.frames) {
     // The frame's input: the window's and every device's events, or the session's next frame.
@@ -362,7 +432,8 @@ int main(int argc, char** argv) {
     last = now;
     ge::input::update(held, queue);
     if (!args.record_events.empty()) session.add(frame_ns, queue);
-    if (input.quit || (input.tapped(ge::platform::Key::escape) && !rebinding.active)) break;
+    if (input.quit) break;
+    const bool paused = shell.mode == fall_line::app::Mode::pause;
     // A scripted session is a batch: the window closes once it is played and the run is done.
     if (!script.frames.empty() && scripted > script.frames.size() &&
         !fall_line::controls::hand_playing(*hand)) {
@@ -375,7 +446,7 @@ int main(int argc, char** argv) {
       fall_line::sound::apply_mix(synth, hush, kFaderGlide);
     }
     if (input.focus_gained && script.frames.empty()) {
-      ge::loop::resume(clock);
+      if (!paused && !rebinding.active) ge::loop::resume(clock);
       fall_line::sound::apply_mix(synth, faders, kFaderGlide);
     }
     if (input.resized) {
@@ -383,6 +454,7 @@ int main(int argc, char** argv) {
                         static_cast<uint32_t>(input.height_px), set.vsync);
       fall_line::app::resize(*device, *frame, static_cast<uint32_t>(input.width_px),
                              static_cast<uint32_t>(input.height_px));
+      w = input.width_px, h = input.height_px;
       if (input.height_px > 0) {
         fall_line::controls::hand_screen(
             *hand, static_cast<float>(input.width_px) / static_cast<float>(input.height_px));
@@ -405,10 +477,53 @@ int main(int argc, char** argv) {
         }
         ge::loop::resume(clock);
       }
-    } else if (fall_line::controls::hand_pressed(*hand, "rebind")) {
+    } else if (shell.mode == fall_line::app::Mode::run &&
+               fall_line::controls::hand_pressed(*hand, "rebind")) {
       fall_line::controls::begin_rebinding(rebinding, held, hand->map, said);
       out::status("fall_line: " + said);
       ge::loop::pause(clock);
+    }
+
+    // The shell: the menu up takes the presses (on the run, Escape pauses it); not while the
+    // rebinding walk asks for a key.
+    const fall_line::app::ShellStep asked =
+        rebinding.active ? fall_line::app::ShellStep{}
+                         : fall_line::app::step_shell(shell, menu_input(input));
+    if (asked.quit) break;
+    if (asked.play) {
+      if (!new_run(args.bot)) return 1;
+      played = true;
+    }
+    if (asked.pause) {
+      ge::loop::pause(clock);
+      fall_line::sound::run_sound_silence(sound, synth);
+    }
+    if (asked.resume) ge::loop::resume(clock);
+    if (asked.to_front) {
+      ge::loop::resume(clock);
+      left = fall_line::controls::hand_log(*hand);
+      if (!new_run(true)) return 1;
+      played = false;
+    }
+    if (asked.settings_changed) {
+      faders.on = shell.settings.sound;
+      faders.master = static_cast<float>(shell.settings.volume / 100);
+      fall_line::sound::apply_mix(synth, faders, kFaderGlide);
+      fall_line::camera::set_lens(camera, fall_line::controls::hand_state(*hand),
+                                  fall_line::camera::rung_name(shell.settings.rung));
+    }
+    switch (asked.cue) {
+      case fall_line::app::MenuCue::focus:
+        fall_line::sound::play_menu(synth, fall_line::sound::kMenuFocus);
+        break;
+      case fall_line::app::MenuCue::press:
+        fall_line::sound::play_menu(synth, fall_line::sound::kMenuPress);
+        break;
+      case fall_line::app::MenuCue::page:
+        fall_line::sound::play_menu(synth, fall_line::sound::kMenuPage);
+        break;
+      case fall_line::app::MenuCue::none:
+        break;
     }
 
     // The run clock grants a live frame its steps; a scripted frame's are due by its time.
@@ -427,6 +542,9 @@ int main(int argc, char** argv) {
     } else if (granted > 0 && playing) {
       fall_line::sound::run_sound_frame(sound, synth, state, static_cast<float>(granted) / 120.0f);
     }
+    // Behind the front door the bot skis the map again from the top once he is down.
+    if (shell.mode == fall_line::app::Mode::front && !playing && !new_run(true)) return 1;
+    const fall_line::sim::GameState& shown = fall_line::controls::hand_state(*hand);
 
     wgpu::TextureView target = surface.acquire(*device);
     if (!target) continue;
@@ -435,36 +553,48 @@ int main(int argc, char** argv) {
       fall_line::app::sky_view(level, fall_line::sim::sky_hour(set, level, view.time_s), view);
     view.frame = static_cast<uint64_t>(presented);
     skiers.clear();
-    for (const auto& racer : state.racers) skiers.push_back(racer.skier);
+    for (const auto& racer : shown.racers) skiers.push_back(racer.skier);
     std::optional<std::array<double, 3>> subject;
     if (follow && !skiers.empty()) {
-      if (fall_line::controls::hand_pressed(*hand, "camera") && !rebinding.active) {
+      if (shell.mode == fall_line::app::Mode::run &&
+          fall_line::controls::hand_pressed(*hand, "camera") && !rebinding.active) {
         fall_line::camera::next_lens(camera);
+        if (camera.ride == fall_line::camera::Ride::skis)
+          shell.settings.rung = fall_line::camera::rung_of(camera.skis.cam);
       }
       fall_line::camera::apply_ride_cvars(set.camera, camera);
-      const double dt = presented == 0 ? 1.0 / 60 : view.time_s - last_frame_s;
+      const double dt = fresh ? 1.0 / 60 : view.time_s - last_frame_s;
       ge::camera::to_frame_view(
-          fall_line::camera::frame_ride(camera, fall_line::controls::hand_state(*hand), skier_world,
-                                        camera_world, dt),
-          view);
+          fall_line::camera::frame_ride(camera, shown, skier_world, camera_world, dt), view);
       const ge::camera::Vec3 p = fall_line::camera::framed_point(skiers[0]);
       subject = std::array<double, 3>{p.x, p.y, p.z};
     }
+    // The menu up over the picture, its animation on the wall clock (it moves while paused).
+    fall_line::app::draw_shell(shell, overlay, static_cast<int>(frame->output_width),
+                               static_cast<int>(frame->output_height),
+                               fresh ? 0 : view.time_s - last_frame_s, view.time_s);
     last_frame_s = view.time_s;
-    // The figures' lags run over the steps this frame took; the first frame starts them settled.
-    fall_line::app::draw(
-        *device, *frame, view,
-        {skiers, static_cast<double>(granted) / 120.0, presented == 0, {}, subject}, target);
+    // The figures' lags run over the steps this frame took; a new run starts them settled.
+    fall_line::app::draw(*device, *frame, view,
+                         {skiers, static_cast<double>(granted) / 120.0, fresh, {}, subject}, target,
+                         &overlay);
+    fresh = false;
     surface.present();
     ++presented;
   }
 
-  // The run as its input log, and the session as its device events.
-  const ge::play::InputLog log = fall_line::controls::hand_log(*hand);
-  if (write_file(inputs_path, ge::play::to_text(log))) {
+  // The run as its input log (the player's latest; none when no run was played from the front
+  // door), and the session as its device events.
+  const bool any_played = played || left.has_value();
+  const ge::play::InputLog log =
+      played || !left ? fall_line::controls::hand_log(*hand) : *std::move(left);
+  if (!any_played) {
+    out::status("fall_line: no run was played from the front door, so none is written");
+  } else if (write_file(inputs_path, ge::play::to_text(log))) {
     out::status("fall_line: the run is written to " + inputs_path + " (" +
                 std::to_string(log.steps()) + " steps, digest " +
-                ge::play::hex64(log.digest.value_or(0)) + (hand->run->over() ? ", finished" : "") +
+                ge::play::hex64(log.digest.value_or(0)) +
+                (played && hand->run->over() ? ", finished" : "") +
                 (sky_picked ? "); under a picked sky, which `ge replay` does not rebuild"
                             : "); play it back with `ge replay " + inputs_path + "`"));
   } else {
