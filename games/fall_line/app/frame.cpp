@@ -158,8 +158,8 @@ FrameOptions frame_options(const cfg::Settings& s) {
   o.precip = s.precip;
   o.splashes = s.splashes;
   o.wet = s.wet;
-  o.fall.particles =
-      static_cast<uint32_t>(std::lround(o.fall.particles * std::clamp(s.precip_density, 0.25, 2.0)));
+  o.fall.particles = static_cast<uint32_t>(
+      std::lround(o.fall.particles * std::clamp(s.precip_density, 0.25, 2.0)));
   o.weather = s.weather;
   o.clouds = s.clouds;
   o.cover = s.cover;
@@ -401,7 +401,8 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
     const ge::wind::Precip here{fall.fall, fall.rain};
     const double rate = ge::wind::rate_of(here) * here.rain;
     const double sun = view.weather.sun_pass * std::max(0.0, std::sin(view.sun_elevation));
-    const double dry = ge::wind::dry_rate(ge::mountain::air::wind_at(*f.level, view.time_s).speed, sun);
+    const double dry =
+        ge::wind::dry_rate(ge::mountain::air::wind_at(*f.level, view.time_s).speed, sun);
     const double since = view.time_s - f.wet_time;
     f.wet = f.wet_placed && since >= 0 && since < 60 ? ge::wind::step_wet(f.wet, rate, dry, since)
                                                      : ge::wind::wet_steady(rate, dry);

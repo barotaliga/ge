@@ -19,8 +19,8 @@
 #include "gpu_support.hpp"
 #include "render/frame.hpp"
 #include "render/post.hpp"
-#include "render/sky.hpp"
 #include "render/precip.hpp"
+#include "render/sky.hpp"
 #include "render/terrain.hpp"
 
 namespace {

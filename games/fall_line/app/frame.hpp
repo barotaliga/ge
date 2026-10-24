@@ -173,9 +173,10 @@ struct GameFrame {
   std::vector<ge::mountain::app::TrailStamp> laid;
   ge::render::Particles particles;
   ge::render::Precip precip;
-  ge::wind::Wet wet;         // the water on the ground, stepped by the frames' clock
-  double wet_time = 0;       // the last drawn frame's time_s
-  bool wet_placed = false;   // a frame has been drawn: off, the wet ground starts at its steady state
+  ge::wind::Wet wet;    // the water on the ground, stepped by the frames' clock
+  double wet_time = 0;  // the last drawn frame's time_s
+  bool wet_placed =
+      false;  // a frame has been drawn: off, the wet ground starts at its steady state
   ge::render::CloudPass clouds;
   ge::render::Water water;       // its bodies, `add_water`'s; none: the passes draw nothing
   ge::render::Underwater under;  // the view when the eye is under a body (`under.look`)

@@ -27,9 +27,9 @@
 //   own turbulence intensity times its speed, plus a floor in still air.
 // - THE WET GROUND (`Wet`, `step_wet`, `wet_steady`, `dry_rate`): the water standing on a surface,
 //   mm: rain wets a film (0.3 mm) and fills puddles (up to 3 mm) that drain at 6 per hour of what
-//   stands over the film (a tenth of it a minute) and dry by the wind and the sun. `wet` (the film's share) and `puddles`
-//   (the puddles' share) are what a material reads. Snow lays no water; it is the ground's
-//   snow's to settle (a snow layer reads `rate_of` with the rain share).
+//   stands over the film (a tenth of it a minute) and dry by the wind and the sun. `wet` (the
+//   film's share) and `puddles` (the puddles' share) are what a material reads. Snow lays no water;
+//   it is the ground's snow's to settle (a snow layer reads `rate_of` with the rain share).
 //
 // ge:summary Snow, sleet and rain: intensity, rate, tiers, phase by height, fall speed, visibility
 // ge:keywords precip precipitation rain sleet snow drizzle downpour storm blizzard intensity rate

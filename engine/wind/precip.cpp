@@ -32,7 +32,7 @@ double snow_rate(double i) { return 0.04 * lm::pow(250.0, i); }
 // a^(1-s) b^s: two positive numbers blended in the logarithm.
 double log_mix(double a, double b, double s) { return a * lm::pow(b / a, s); }
 
-constexpr double kClear = 20000;  // m: what one sees through dry air in these formulas
+constexpr double kClear = 20000;   // m: what one sees through dry air in these formulas
 constexpr double kStormWind = 15;  // m/s
 
 }  // namespace

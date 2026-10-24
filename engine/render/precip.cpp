@@ -35,8 +35,8 @@ struct Params {
 }  // namespace
 
 void create_precip(gpu::Device& device, gpu::PipelineSet& pipelines, Precip& sf,
-                     const wgpu::BindGroupLayout& frame, const Terrain& terrain,
-                     const PrecipSettings& settings) {
+                   const wgpu::BindGroupLayout& frame, const Terrain& terrain,
+                   const PrecipSettings& settings) {
   sf.settings = settings;
   sf.settings.particles = std::max(settings.particles, kGroup);
   // Spread through the box round the origin, each with its own phase.
@@ -44,17 +44,16 @@ void create_precip(gpu::Device& device, gpu::PipelineSet& pipelines, Precip& sf,
   std::vector<float> parts(size_t{sf.settings.particles} * 4);
   const double half = 0.5 * sf.settings.box;
   for (size_t i = 0; i < parts.size(); i += 4) {
-    for (size_t k = 0; k < 3; ++k)
-      parts[i + k] = static_cast<float>(core::range(rng, -half, half));
+    for (size_t k = 0; k < 3; ++k) parts[i + k] = static_cast<float>(core::range(rng, -half, half));
     parts[i + 3] = static_cast<float>(core::range(rng, 0, 6.283185307179586));
   }
   sf.particles = make_buffer(device, "precip.particles", parts.size() * sizeof(float),
-                          BU::Storage | BU::CopySrc);
+                             BU::Storage | BU::CopySrc);
   device.queue.WriteBuffer(sf.particles, 0, parts.data(), parts.size() * sizeof(float));
   sf.params = make_buffer(device, "precip.params", sizeof(Params), BU::Uniform);
 
-  sf.sim_layout = make_layout(device, "precip.sim", {Slot::uniform, Slot::storage},
-                              wgpu::ShaderStage::Compute);
+  sf.sim_layout =
+      make_layout(device, "precip.sim", {Slot::uniform, Slot::storage}, wgpu::ShaderStage::Compute);
   wgpu::ComputePipelineDescriptor cd{};
   cd.label = "precip.sim";
   cd.layout = make_pipeline_layout(device, "precip.sim", {sf.sim_layout});
@@ -150,7 +149,7 @@ void prepare_precip(gpu::Device& device, Precip& sf, const PrecipFrame& at) {
 }
 
 void encode_precip_sim(const Precip& sf, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
-                         wgpu::CommandEncoder& encoder) {
+                       wgpu::CommandEncoder& encoder) {
   // Only the particles drawn fly: the rest lie where they were, and the box's wrap brings each
   // back round the eye the step it is drawn again. A clear day dispatches nothing.
   wgpu::ComputePassEncoder pass = rec.compute(encoder, "precip.sim");
@@ -164,8 +163,8 @@ void encode_precip_sim(const Precip& sf, const gpu::PipelineSet& pipelines, Fram
 }
 
 void encode_precip(const Precip& sf, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
-                     wgpu::CommandEncoder& encoder, const FrameTargets& targets,
-                     const wgpu::BindGroup& frame) {
+                   wgpu::CommandEncoder& encoder, const FrameTargets& targets,
+                   const wgpu::BindGroup& frame) {
   if (sf.drawn == 0) {
     // Nothing falls: an empty compute pass keeps the row without loading and storing the targets.
     rec.compute(encoder, "precip").End();

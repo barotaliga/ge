@@ -128,8 +128,8 @@ void run(ge::lab::Lab& lab) {
   std::vector<const Sky*> picked;
   const std::string& want = lab.arg("skies");
   for (const Sky& sky : kSkies) {
-    if (want == "all" || ("," + want + ",").find("," + std::string(sky.id) + ",") !=
-                             std::string::npos) {
+    if (want == "all" ||
+        ("," + want + ",").find("," + std::string(sky.id) + ",") != std::string::npos) {
       picked.push_back(&sky);
     }
   }
@@ -195,10 +195,10 @@ void run(ge::lab::Lab& lab) {
     for (char& c : title) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
     const std::string caption =
         "Seed " + seed_s + "'s `" + view_name + "` view under " + sky.id + ": a " +
-        ge::wind::tier_name(tier) + " fall of " + fixed(f.fall, 2) + ", " +
-        fixed(100 * f.rain, 0) + " % rain, " + fixed(ge::wind::rate_of({f.fall, f.rain}), 1) +
-        " mm/h, " + fixed(f.visibility, 0) + " m visibility, wind " + fixed(w.speed, 1) +
-        " m/s; " + std::to_string(frames) + " frames up to " + fixed(at, 1) + " s.";
+        ge::wind::tier_name(tier) + " fall of " + fixed(f.fall, 2) + ", " + fixed(100 * f.rain, 0) +
+        " % rain, " + fixed(ge::wind::rate_of({f.fall, f.rain}), 1) + " mm/h, " +
+        fixed(f.visibility, 0) + " m visibility, wind " + fixed(w.speed, 1) + " m/s; " +
+        std::to_string(frames) + " frames up to " + fixed(at, 1) + " s.";
     return ge::lab::Shot{sky.id,
                          title,
                          caption,
@@ -261,8 +261,7 @@ void run(ge::lab::Lab& lab) {
     const ge::gpu::Image img = ge::gpu::read_now(*device, target);
     lab.shot(shot_of(i), ge::lab::Picture{width, height, img.rgba}, Det::measured);
     lab.metric(std::string(picked[i]->id) + ".wet", frame->wet.wet, "share", Det::measured);
-    lab.metric(std::string(picked[i]->id) + ".puddles", frame->wet.puddles, "share",
-               Det::measured);
+    lab.metric(std::string(picked[i]->id) + ".puddles", frame->wet.puddles, "share", Det::measured);
     if (picked[i]->snowline == kAllRain && frame->wet.wet <= 0) {
       lab.fail(std::string("the ") + picked[i]->id + " sky leaves the ground dry",
                "Check the wet ground's step in games/fall_line/app/frame.cpp (r_wet). Skill: "

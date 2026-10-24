@@ -55,16 +55,17 @@ void dial(gl::Lab& lab) {
   rate.log_y = true;
   rate.spikes = false;
   rate.rules = {2.5, 7.6, 50};
-  seen.frame = {"WHAT ONE SEES THROUGH IT", "the visual range; dashed: 1 km and 500 m, snow's tiers",
-                "intensity", "visibility (m)"};
+  seen.frame = {"WHAT ONE SEES THROUGH IT",
+                "the visual range; dashed: 1 km and 500 m, snow's tiers", "intensity",
+                "visibility (m)"};
   seen.log_y = true;
   seen.spikes = false;
   seen.rules = {1000, 500};
-  gl::LabTable table{"The dial's stops: rate, visibility and tier (wind " + fixed(wind, 0) +
-                         " m/s), and the storm the same fall makes in a 18 m/s wind",
-                     {"intensity", "fall", "mm/h", "visibility m", "fall speed m/s", "tier",
-                      "in 18 m/s"},
-                     {}};
+  gl::LabTable table{
+      "The dial's stops: rate, visibility and tier (wind " + fixed(wind, 0) +
+          " m/s), and the storm the same fall makes in a 18 m/s wind",
+      {"intensity", "fall", "mm/h", "visibility m", "fall speed m/s", "tier", "in 18 m/s"},
+      {}};
   for (const Mix& m : kMixes) {
     gl::Trace r{m.name, {}, {}}, v{m.name, {}, {}};
     for (int k = 2; k <= 100; ++k) {
@@ -80,22 +81,26 @@ void dial(gl::Lab& lab) {
       const gw::Precip p{i, m.rain};
       table.rows.push_back({fixed(i, 2), m.name, fixed(gw::rate_of(p), 2),
                             fixed(gw::visibility_of(p), 0), fixed(gw::fall_speed(p), 2),
-                            gw::tier_name(gw::tier_of(p, wind)), gw::tier_name(gw::tier_of(p, 18))});
+                            gw::tier_name(gw::tier_of(p, wind)),
+                            gw::tier_name(gw::tier_of(p, 18))});
       lab.metric(std::string("rate.") + m.name + "." + fixed(i, 2), gw::rate_of(p), "mm/h");
-      lab.metric(std::string("visibility.") + m.name + "." + fixed(i, 2), gw::visibility_of(p), "m");
+      lab.metric(std::string("visibility.") + m.name + "." + fixed(i, 2), gw::visibility_of(p),
+                 "m");
     }
   }
-  chart_shot(lab, "rate", gl::line_chart(rate),
-             "The liquid-equivalent rate (log scale) against the dial, for dry snow, a half-and-half "
-             "sleet and rain. The dashed lines are rain's light/moderate (2.5), moderate/heavy "
-             "(7.6) and heavy/storm (50 mm/h) edges.",
-             "three straight lines on the log scale, rain steepest; rain crosses 2.5 near 0.25 and "
-             "50 near 0.8; snow ends at 10 mm/h");
-  chart_shot(lab, "visibility", gl::line_chart(seen),
-             "The visual range (log scale) against the dial: snow hides about ten times what rain "
-             "does at the same rate.",
-             "every line falls with the dial; snow under 1 km past the middle, rain under 1 km only "
-             "near the top");
+  chart_shot(
+      lab, "rate", gl::line_chart(rate),
+      "The liquid-equivalent rate (log scale) against the dial, for dry snow, a half-and-half "
+      "sleet and rain. The dashed lines are rain's light/moderate (2.5), moderate/heavy "
+      "(7.6) and heavy/storm (50 mm/h) edges.",
+      "three straight lines on the log scale, rain steepest; rain crosses 2.5 near 0.25 and "
+      "50 near 0.8; snow ends at 10 mm/h");
+  chart_shot(
+      lab, "visibility", gl::line_chart(seen),
+      "The visual range (log scale) against the dial: snow hides about ten times what rain "
+      "does at the same rate.",
+      "every line falls with the dial; snow under 1 km past the middle, rain under 1 km only "
+      "near the top");
   lab.table(table);
 }
 
@@ -177,11 +182,11 @@ void shower(gl::Lab& lab) {
   chart_shot(lab, "shower", gl::line_chart(line),
              "The water film's share and the puddles' over five spells: a drizzle, a downpour, an "
              "hour of sun, a shower, an hour and a half dry in the shade.",
-             "the film soaks within the drizzle; the puddles fill in the downpour and drain within a quarter "
+             "the film soaks within the drizzle; the puddles fill in the downpour and drain within "
+             "a quarter "
              "hour; the sun dries faster than the shade");
-  gl::LabTable table{"The steady wet ground by the rain rate", {"mm/h", "water mm", "film",
-                                                                "puddles"},
-                     {}};
+  gl::LabTable table{
+      "The steady wet ground by the rain rate", {"mm/h", "water mm", "film", "puddles"}, {}};
   for (const double r : {0.2, 1.0, 2.5, 7.6, 20.0, 50.0}) {
     const gw::Wet s = gw::wet_steady(r, gw::dry_rate(wind, 0));
     table.rows.push_back({fixed(r, 1), fixed(s.water, 2), fixed(s.wet, 2), fixed(s.puddles, 2)});
