@@ -36,6 +36,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "audio/synth.hpp"
@@ -50,6 +51,7 @@
 #include "fall_line/cfg/cvars.hpp"
 #include "fall_line/sim/bot.hpp"
 #include "fall_line/sim/simulate.hpp"
+#include "fall_line/sim/sky.hpp"
 #include "fall_line/sound/mix.hpp"
 #include "fall_line/sound/route.hpp"
 #include "gpu/device.hpp"
@@ -146,8 +148,10 @@ int main(int argc, char** argv) {
 
   ge::mountain::mapgen::GenerateOptions opts;
   opts.version = fall_line::app::kMapVersion;
-  auto shared = std::make_shared<const ge::mountain::mapgen::Level>(
-      ge::mountain::mapgen::generate_level(set.seed, opts));
+  ge::mountain::mapgen::Level built = ge::mountain::mapgen::generate_level(set.seed, opts);
+  if (const std::string problem = fall_line::sim::server_sky(set, built); !problem.empty())
+    out::error("fall_line: the run's sky was not picked as set (see docs/console.md): " + problem);
+  auto shared = std::make_shared<const ge::mountain::mapgen::Level>(std::move(built));
   const ge::mountain::mapgen::Level& level = *shared;
   ge::render::FrameView view;
   fall_line::app::day_view(level, set.hour, view);
@@ -238,6 +242,8 @@ int main(int argc, char** argv) {
     wgpu::TextureView target = surface.acquire(*device);
     if (!target) continue;
     view.time_s = static_cast<double>(now - first) * 1e-9;
+    if (set.sky_rate > 0)
+      fall_line::app::sky_view(level, fall_line::sim::sky_hour(set, level, view.time_s), view);
     view.frame = static_cast<uint64_t>(presented);
     skiers.clear();
     for (const auto& racer : run.state().racers) skiers.push_back(racer.skier);
