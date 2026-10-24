@@ -4,7 +4,7 @@
 // whole field's range.
 //
 // ge:summary Tests for the clipmap's level placement and the min/max pyramid
-// ge:keywords test render terrain clipmap levels nesting min-max-pyramid
+// ge:keywords test render terrain clipmap levels nesting min-max-pyramid reach clipmap_levels_to
 // ge:skill render testing
 #include <algorithm>
 #include <cmath>
@@ -47,6 +47,29 @@ TEST(levels_nest_on_each_others_grid) {
       CHECK(on_grid(l[i].origin_x, 2 * l[i].spacing));
     }
   }
+}
+
+// Every level drawn reaches its reach in every direction, wherever the eye stands; a reach asks
+// for the fewest levels that cover it, and none (0) or one past them all for every level.
+TEST(levels_drawn_cover_the_reach) {
+  const double eyes[][2] = {{0, 0}, {1234.56, -78.9}, {2999.99, 1500.01}, {-0.4, 0.6}};
+  const double side_quads = kLevelTiles * kTileQuads;
+  for (int n = 1; n <= 8; ++n) {
+    const double reach = ge::render::clipmap_reach(1.0, n);
+    for (const auto& e : eyes) {
+      ClipLevel l[8];
+      ge::render::clipmap_levels(e[0], e[1], 1.0, n, l);
+      const ClipLevel& o = l[n - 1];
+      const double side = side_quads * o.spacing;
+      CHECK(e[0] - o.origin_x >= reach && o.origin_x + side - e[0] >= reach);
+      CHECK(e[1] - o.origin_z >= reach && o.origin_z + side - e[1] >= reach);
+    }
+    CHECK(ge::render::clipmap_levels_to(reach, 1.0, 8) == n);
+    if (n > 1) CHECK(ge::render::clipmap_levels_to(reach * 0.999, 1.0, 8) == n);
+    if (n < 8) CHECK(ge::render::clipmap_levels_to(reach * 1.001, 1.0, 8) == n + 1);
+  }
+  CHECK(ge::render::clipmap_levels_to(0, 1.0, 8) == 8);
+  CHECK(ge::render::clipmap_levels_to(1e9, 1.0, 8) == 8);
 }
 
 TEST(pyramid_bounds_every_sample) {

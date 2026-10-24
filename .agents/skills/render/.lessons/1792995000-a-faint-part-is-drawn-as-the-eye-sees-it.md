@@ -13,3 +13,9 @@ twilight's compression lifts it to the sky's brightness. A disc close-up in a la
 "failing" because the map's cloud hid it, then because the check sampled a crescent's centre,
 which is its dark side. Draw close-ups under a clear sky and measure a disc's brightest point,
 not its middle.
+
+A perceptual pass in post (the rods' desaturation) reads the drawn brightness, so it treats a
+thing drawn "as seen" (dimmer than it is) as dim. Pre-compensating its colour in the earlier
+pass cannot undo an 85 % desaturation for a saturated colour: the clamped channel comes back as
+a false hue (an eclipse turned magenta). Exempt such a thing by where it is (the disc's
+direction from the view ray) and apply the pass to what lies in front of it at its own draw.

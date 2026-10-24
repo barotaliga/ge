@@ -109,6 +109,9 @@ void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint
   u.moon_prime[3] = static_cast<float>(n.penumbra);
   u.moon_east[3] = static_cast<float>(n.eclipse_peak);
   u.moon_shadow[3] = static_cast<float>(n.albedo_scale);
+  // THE REACH: the mist closes every surface into the sky from half the reach to all of it.
+  u.mist[0] = static_cast<float>(view.reach_m * kMistBegins);
+  u.mist[1] = static_cast<float>(view.reach_m);
 }
 
 FrameTargets create_targets(gpu::Device& device, std::string_view label, uint32_t width,
