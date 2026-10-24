@@ -16,6 +16,8 @@
 // stop less the row at its bottom, the rest at the top; a stop measured cheaper than the one under
 // it is set level, the noise), and the lines to paste into ladder.cpp's table. It shoots the view
 // at every preset. Times are measured, and a software adapter's say nothing of a GPU's.
+// `--spread=0` prices the cloud's quarter march taken whole every frame (FrameOptions::
+// cloud_spread off), the before of a change to the spread.
 // Built only with GE_GPU.
 //
 // ge:summary Lab: Fall Line's quality ladder checked, its fit swept, and every stop priced
@@ -169,6 +171,7 @@ void price(ge::lab::Lab& lab) {
              "vista).");
     return;
   }
+  const bool spread = lab.arg_bool("spread");
   const ge::gpu::Target target = ge::gpu::create_target(
       *device, "ladder.final", static_cast<uint32_t>(width), static_cast<uint32_t>(height));
 
@@ -188,9 +191,11 @@ void price(ge::lab::Lab& lab) {
 
   // The median GPU frame of a picture, and its last frame's picture when `shot` names one.
   auto time = [&](const gr::LadderPick& pick, const std::string& shot) {
-    auto frame = fa::create_frame(*device, level, static_cast<uint32_t>(width),
-                                  static_cast<uint32_t>(height), wgpu::TextureFormat::RGBA8Unorm,
-                                  fa::apply_picture(pick));
+    fa::FrameOptions options = fa::apply_picture(pick);
+    options.cloud_spread = spread;
+    auto frame =
+        fa::create_frame(*device, level, static_cast<uint32_t>(width),
+                         static_cast<uint32_t>(height), wgpu::TextureFormat::RGBA8Unorm, options);
     if (!frame) return -1.0;
     gr::FrameView view;
     fa::day_view(level, -1, view);
@@ -314,6 +319,7 @@ const ge::lab::LabSpec kSpec{
         {"fall", "0.6", "the flurry's fall, 0..1 (with --price)"},
         {"view", "start", "the camera: chase, or a named view of app/views.hpp (with --price)"},
         {"lift", "15", "degrees added to a named view's pitch, to show more sky (with --price)"},
+        {"spread", "1", "the cloud's quarter march spread over frames (0: whole every frame)"},
     },
     "",
     run,
