@@ -142,7 +142,9 @@ irregular ones, so ge also measures each texture's evidence (`evidence_of`: how 
 pattern repeats across and down a tile, the courses and the pieces in each, which way the lines
 run, the contrast) for the original and the clone, and prints each mismatch as a sentence to
 answer: "the original has 4 courses a tile, ours 3 (turn rows)". A pinned line without the
-original's `tint` and `spread` is warned about with the line to write. Each run draws a sheet per
+original's `tint` and `spread` is warned about with the line to write. A texture classed `logo`,
+`trademark` or `emblem` is never cloned: its candidates are the `blank` recipes only
+(`blank_plate`), and a pinned lookalike is warned about. Each run draws a sheet per
 texture (the original, the clone, the candidates, and under them the argument, the evidence and
 the mismatches), failed and unargued first. The procedure and each class's traits are the
 `texture-references` skill.

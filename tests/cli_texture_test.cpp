@@ -123,5 +123,21 @@ TEST(match_takes_real_names_from_a_level_export_list) {
   std::ifstream in(repo / "tex" / "textures.texmap");
   const std::string map((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
   CHECK(map.find("texture +0wall-2 ") != std::string::npos);  // the listed name, not the file's
+  in.close();
+  // Called a logo, it is never cloned: re-picked from the blank recipes, and a pinned lookalike
+  // is warned about.
+  std::ofstream(repo / "tex" / "textures.texmap", std::ios::app) << "class +0wall-2 logo\n";
+  CHECK(exit_of(run_texture_match(repo, opt)) == 0);
+  std::ifstream blank(repo / "tex" / "textures.texmap");
+  std::string text((std::istreambuf_iterator<char>(blank)), std::istreambuf_iterator<char>());
+  blank.close();
+  CHECK(text.find("texture +0wall-2 blank_plate ") != std::string::npos);
+  const size_t at = text.find("texture +0wall-2 ");
+  text.replace(at, text.find('\n', at) - at, "texture +0wall-2 brick_wall  # pin");
+  std::ofstream(repo / "tex" / "textures.texmap") << text;
+  bool lookalike = false;
+  for (const Finding& f : run_texture_match(repo, opt).findings)
+    lookalike |= f.what.find("a mark is never cloned") != std::string::npos;
+  CHECK(lookalike);
   fs::remove_all(repo);
 }

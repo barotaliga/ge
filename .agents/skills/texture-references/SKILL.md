@@ -87,7 +87,7 @@ argument about what the texture IS catches that. Per texture, in the texmap:
 
 1. **`class <name> <class>`: what it is.** One of the recipe tags: `bricks`, `blocks` (cut
    stone), `flagstones`, `tiles`, `planks`, `panels`, `plate`, `metal`, `rock`, `plain`,
-   `scales`, `stripes`, or a new one (then a recipe must carry it). The candidates narrow to
+   `scales`, `stripes`, `logo` (any mark someone owns: never cloned, see the table), or a new one (then a recipe must carry it). The candidates narrow to
    recipes tagged with it.
 2. **`traits <name> <description>`: how a texture of that class looks, and this one.** Name the
    traits that make the class read, then this texture's value for each (the table below). Write
@@ -111,7 +111,7 @@ for their renderers and need no argument.
 | Class | The traits to argue | Usual knobs |
 | --- | --- | --- |
 | bricks | the bond (running, stack, Flemish), courses a tile, the brick's length to height, mortar width and colour against the brick, each brick's own shade | `bricks rows= cols= offset= mortar= mortar_color= vary=`, `palette`, the tint |
-| blocks (cut stone) | regular courses or irregular (big and small mixed, blocks spanning courses), courses a tile, the blocks' size spread, edge rounding, the joints' darkness | `blocks rows= cols= vary_size= bevel= chip=`, `shade` |
+| blocks (cut stone) | regular courses or irregular (big and small mixed, blocks spanning courses), courses a tile, the blocks' size spread, edge rounding, the joints' darkness | `blocks rows= cols= vary_size= span= bevel= chip=`, `shade` |
 | flagstones | the stones' size and spread, polygonal or rounded, the gaps' width | `cells`, `voronoi`, `shade` |
 | tiles | square or offset, tiles a tile, grout width and colour, glaze | `tiles rows= cols= mortar= mortar_color=` |
 | planks | the boards' direction, boards a tile, their ends, the grain's run, gaps | `planks`, `noise stretch=` |
@@ -120,6 +120,12 @@ for their renderers and need no argument.
 | metal | flat or brushed, the grain, specks, stains and their colour | `speckle`, `noise stretch=`, `rust`, `grime` |
 | rock | chunk size, cracks, how lit the faces are | `noise kind=edges`, `cells`, `shade` |
 
-Lights, signs, emblems and tool textures (a lamp's grille, a face, a trigger volume) have no
-class to match yet: say so in the traits, judge them fail, and leave them for a technique of
-their own.
+| logo, trademark, emblem | **never cloned.** A game's mark, a maker's logo, a wordmark or any emblem someone owns is not copied, not even as a lookalike: the texture becomes a blank recipe (tagged `blank`, e.g. `blank_plate`) recoloured to the surface around the mark. Argue what the place needs (a plate, a panel, a slab) and judge that the mark is gone | the tint, `blank_plate`'s params; a new `blank` recipe for another surface |
+
+With a mark's class, ge draws the candidates from the `blank` recipes only, skips the likeness
+mismatches (a blank is meant to differ) and warns when a pinned line names a recipe that is
+not blank. When in doubt whether a picture is a mark (a letter cast in metal, a symbol on a
+door), treat it as one.
+
+Lights, signs and tool textures (a lamp's grille, a face, a trigger volume) have no class to
+match yet: say so in the traits, judge them fail, and leave them for a technique of their own.

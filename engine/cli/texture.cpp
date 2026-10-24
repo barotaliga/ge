@@ -165,6 +165,21 @@ struct Matched {
 
 std::string fixed2(double v) { return core::num::to_fixed(v, 2); }
 
+// A trademark, a logo or an emblem is never cloned: its texture becomes a blank recipe (tagged
+// `blank`) and is judged on keeping the place's surface, not the mark.
+bool is_mark(const std::string& klass) {
+  return klass == "logo" || klass == "trademark" || klass == "emblem";
+}
+
+// The class the candidates are drawn from: a mark's blanks, else the agent's own class.
+std::string search_class(const std::string& klass) { return is_mark(klass) ? "blank" : klass; }
+
+bool recipe_tagged(const texgen::Matcher& m, const std::string& name, const std::string& tag) {
+  for (const texgen::Matcher::Entry& e : m.entries)
+    if (e.recipe.name == name) return texgen::recipe_has_class(e.recipe, tag);
+  return false;
+}
+
 std::vector<std::string> split_commas(const std::string& s) {
   std::vector<std::string> out;
   std::stringstream in(s);
@@ -352,7 +367,7 @@ Outcome run_texture_match(const std::filesystem::path& repo, const TextureMatchO
       texgen::TextureRef ref = m.ref;
       if (!t.klass.empty()) {
         const std::vector<texgen::Candidate> in_class =
-            texgen::nearest_refs(matcher, t.name, t.picture, 1, t.klass);
+            texgen::nearest_refs(matcher, t.name, t.picture, 1, search_class(t.klass));
         if (!in_class.empty()) ref.name = in_class[0].recipe;
       }
       line->value = texgen::ref_text(ref);
@@ -375,13 +390,22 @@ Outcome run_texture_match(const std::filesystem::path& repo, const TextureMatchO
         texgen::likeness_distance(texgen::likeness_of(t.picture), texgen::likeness_of(ours));
     t.original = texgen::evidence_of(t.picture);
     t.ours = texgen::evidence_of(ours);
-    t.mismatches = texgen::evidence_mismatches(t.original, t.ours);
+    if (!is_mark(t.klass)) t.mismatches = texgen::evidence_mismatches(t.original, t.ours);
     t.line->note = fixed2(t.distance);
-    t.candidates = texgen::nearest_refs(matcher, t.name, t.picture, top, t.klass);
-    if (!t.klass.empty() && t.candidates.empty()) {
-      o.findings.push_back({Severity::warn, t.name + ": no recipe is tagged `" + t.klass + "`",
+    const std::string within = search_class(t.klass);
+    t.candidates = texgen::nearest_refs(matcher, t.name, t.picture, top, within);
+    if (is_mark(t.klass) && !recipe_tagged(matcher, ref.name, "blank")) {
+      o.findings.push_back({Severity::warn,
+                            t.name + " is a " + t.klass + " but `" + ref.name +
+                                "` is not a blank recipe: a mark is never cloned",
                             map_rel,
-                            "write one (the texture-references skill), tag it `" + t.klass +
+                            "map it to a recipe tagged `blank` (e.g. blank_plate), recoloured to "
+                            "the surface around the mark (skill: texture-references)"});
+    }
+    if (!within.empty() && t.candidates.empty()) {
+      o.findings.push_back({Severity::warn, t.name + ": no recipe is tagged `" + within + "`",
+                            map_rel,
+                            "write one (the texture-references skill), tag it `" + within +
                                 "`, or name another class"});
       t.candidates = texgen::nearest_refs(matcher, t.name, t.picture, top);
     }
