@@ -146,9 +146,10 @@ void run(gl::Lab& lab) {
       "clocks: true, or each client's clock run fast (even clients) or slow (odd) by the skew. "
       "sync off: the client's clock is its own and the others are drawn a fixed 6 ticks behind "
       "the newest snapshot; on: the server reports each client's slack (the fewest inputs left "
-      "waiting over half a second) and the client speeds or slows its clock up to 3% to hold one "
-      "in reserve, and draws the others behind its reckoning of the server's tick by the "
-      "snapshots' spacing plus 2.5 times their jitter. input ms: from an input made to the "
+      "waiting over half a second) and the client speeds or slows its clock up to 3% to bring it "
+      "to zero (one more for five seconds after it ran dry), and draws the others behind its "
+      "reckoning of the server's tick by the most any of the last 64 snapshots needed, easing up "
+      "fast and down slowly. input ms: from an input made to the "
       "server stepping it. repeated: server ticks that stepped a client's last input again for "
       "want of a new one. trimmed: inputs dropped for a queue past 32. view: how far behind "
       "the server's clock the others are drawn. held: drawn ticks past the newest snapshot (the "
@@ -175,11 +176,12 @@ void run(gl::Lab& lab) {
           "off: a fast clock's queue climbing until the server drops inputs (or a slow one's "
           "pinned at zero, repeating); on: the queue held at the reserve whatever the clock.");
   if (!delay.traces.empty())
-    shoot("delay", gl::line_chart(delay),
-          "How far behind the server one client draws the others with time sync, one line a "
-          "preset.",
-          "each line settling to the snapshots' spacing plus their jitter: low on a clean link, "
-          "higher on a jittery one, and never stepping, only easing.");
+    shoot(
+        "delay", gl::line_chart(delay),
+        "How far behind the server one client draws the others with time sync, one line a "
+        "preset.",
+        "each line settling to what the latest snapshots needed: low on a clean link, higher on "
+        "a jittery one, rising quickly after a late snapshot and sinking slowly, never stepping.");
   if (!inputs.empty())
     shoot("inputs",
           gl::box_chart({"INPUT TO SERVER STEP, TIME SYNC ON, EACH PRESET",
