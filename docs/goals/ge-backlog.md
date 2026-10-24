@@ -108,7 +108,9 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge lab strip <scenario>` (a side-view stick filmstrip of a body over time, frame by frame, without a hand-written dumper and image script)
 - `ge lab trace-points <scenario> --stage` (each point of a body's velocity after every solver stage, for finding an energy pump without instrumenting a copy of the solver; generalizes to `ge trace --actor=<id> --fields=<a,b>`, and to `ge trace-view <lab> <scenario> --around=<step>`: the steps round one as a table of position, velocity, grounded and events)
 - `ge lab <id> --only=<shot>` (one picture of a lab rerun while iterating on it, the others left as the last run wrote them)
+- `ge lab <lab> --scenario=<id> --watch` (one scenario re-run and its picture refreshed on every rebuild, while tuning it)
 - `ge level info|build|shot <file>` (a level file checked, each room's triangles and build time printed, one view rendered without the whole lab)
+- `ge bsp info|ents|shot <file>` (a classic BSP map's lumps and counts, its entities as a table, one view rendered, without the levels lab)
 - `ge texture show <recipe> [--ref=<photo>]` (one texture recipe baked and shown at its sizes and tilings, beside a reference photo when given, without the textures lab)
 
 ## Measuring
