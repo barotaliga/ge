@@ -184,8 +184,8 @@ void run(gl::Lab& lab) {
                "Install Mesa's Vulkan drivers (apt install mesa-vulkan-drivers). Skill: gpu.");
     }
     placeholders(lab,
-                 {"lake-calm", "lake-fresh", "wake", "rings", "looks", "sea-light", "sea-fresh",
-                  "sea-gale", "sunset", "fly-out", "river", "waterfall"},
+                 {"lake-calm", "lake-fresh", "wake", "wake-high", "rings", "looks", "sea-light",
+                  "sea-fresh", "sea-gale", "sunset", "fly-out", "river", "waterfall"},
                  w, h);
     return;
   }
@@ -262,12 +262,23 @@ void run(gl::Lab& lab) {
               "A BOAT'S WAKE ON THE CALM LAKE",
               "A 5 m boat across the lake at 5 m/s under a light air after 40 s, seen from 7 m up "
               "70 m behind it, looking along its track into a sun 17 degrees up: the rings it "
-              "set off every tenth of a second summed into its wake.",
-              "the arms spreading from the boat at about 19 degrees either side, their crests "
-              "breaking the calm mirror and catching the sun's glitter; the transverse waves "
-              "across the track between them; the water outside the arms still",
+              "set off along its track summed into its wake.",
+              "the arms spreading from the boat, short diverging crests along each breaking the "
+              "calm mirror and catching the sun's glitter; the transverse waves across the "
+              "track between them; the water outside the arms still",
               {{"speed", "5 m/s"}, {"wind", "1.5 m/s"}}},
              draw(d, lake, behind), Det::measured);
+    const gr::FrameView high =
+        view_at(bx - 55, kLakeLevel + 12, kLakeZ - 30, 1.0, -0.22, 0.35, 2.6, t);
+    lab.shot({"wake-high",
+              "THE WAKE FROM THE SIDE",
+              "The same boat's wake from 12 m up, 55 m behind and to one side of it, the sun "
+              "low on the right.",
+              "the V of the wake opening behind the boat: short diverging crests feathered "
+              "outward along each arm, the transverse waves curving across the track between "
+              "them, still water outside",
+              {{"speed", "5 m/s"}, {"wind", "1.5 m/s"}}},
+             draw(d, lake, high), Det::measured);
 
     gw::World drops = lake_world(0.5, "nordic-clear");
     const double sx = kLakeX - 240, sz = kLakeZ - 110;

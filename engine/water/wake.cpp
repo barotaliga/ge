@@ -39,32 +39,52 @@ void emit_ring(Wakes& wakes, const Ring& ring) {
 void wake_trail(Wakes& wakes, Trail& trail, int body, double x, double z, double vx, double vz,
                 double length, double beam, double draught, double t, double interval,
                 double strength) {
-  if (t - trail.last < interval) return;
   const double speed = core::hypot(vx, vz);
-  const double gap = trail.last < -1e299 ? interval : t - trail.last;
+  const double transverse = 2 * kPi * speed * speed / kGravity;
+  const double shortest = transverse / 8 > wakes.shortest ? transverse / 8 : wakes.shortest;
+  const bool first = trail.last < -1e299;
+  if (!first && t - trail.last < interval && core::hypot(x - trail.x, z - trail.z) < shortest / 3) {
+    return;
+  }
+  const double gap = first ? 0 : t - trail.last;
   trail.last = t;
-  if (speed <= 0) return;
+  trail.x = x;
+  trail.z = z;
+  if (speed <= 0 || first) return;
   Ring ring;
   ring.x = x;
   ring.z = z;
   ring.t0 = t;
   ring.volume = strength * beam * draught * speed * gap;
-  ring.size = 0.25 * length;
-  ring.shortest = 0.5 * length > 4 * speed * gap ? 0.5 * length : 4 * speed * gap;
+  ring.size = 0.1 * length;
+  ring.shortest = shortest;
   ring.body = body;
   emit_ring(wakes, ring);
 }
+
+namespace {
+
+// A ring's amplitude at `rs` (its softened distance) where its phase is `phase` and its local
+// wavenumber `k`: the far field, its source's spectrum, the waves shorter than kept damped, its
+// front faded in, its age faded out.
+double amplitude(const Wakes& wakes, const Ring& ring, double rs, double phase, double k,
+                 double tau) {
+  const double floor = wakes.shortest > ring.shortest ? wakes.shortest : ring.shortest;
+  const double keep = core::smoothstep(floor, 2 * floor, 2 * kPi / k) *
+                      core::smoothstep(0.25 * kPi, 1.25 * kPi, phase);
+  if (keep <= 0) return 0;
+  const double ks = k * ring.size;
+  return ring.volume * k / (kRoot2 * kPi * rs) * lm::exp(-0.25 * ks * ks) * keep * kept(wakes, tau);
+}
+
+}  // namespace
 
 double ring_height(const Wakes& wakes, const Ring& ring, double r, double tau) {
   if (tau <= 0) return 0;
   const double rs = std::sqrt(r * r + ring.size * ring.size);
   const double phase = kGravity * tau * tau / (4 * rs);
-  const double k = phase / rs;
-  const double floor = wakes.shortest > ring.shortest ? wakes.shortest : ring.shortest;
-  const double keep = core::smoothstep(floor, 2 * floor, 2 * kPi / k);
-  if (keep <= 0) return 0;
-  const double a = ring.volume * k / (kRoot2 * kPi * rs) * keep * kept(wakes, tau);
-  return a * lm::cos(phase);
+  const double a = amplitude(wakes, ring, rs, phase, phase / rs, tau);
+  return a == 0 ? 0 : a * lm::cos(phase);
 }
 
 WakeAt wake_at(const Wakes& wakes, int body, double x, double z, double t) {
@@ -77,10 +97,8 @@ WakeAt wake_at(const Wakes& wakes, int body, double x, double z, double t) {
     const double rs = std::sqrt(ex * ex + ez * ez + ring.size * ring.size);
     const double phase = kGravity * tau * tau / (4 * rs);
     const double k = phase / rs;
-    const double floor = wakes.shortest > ring.shortest ? wakes.shortest : ring.shortest;
-    const double keep = core::smoothstep(floor, 2 * floor, 2 * kPi / k);
-    if (keep <= 0) continue;
-    const double a = ring.volume * k / (kRoot2 * kPi * rs) * keep * kept(wakes, tau);
+    const double a = amplitude(wakes, ring, rs, phase, k, tau);
+    if (a == 0) continue;
     const double c = lm::cos(phase), s = lm::sin(phase);
     // The phase falls outward (d phase / dr = -k), so the slope is a k sin(phase) outward; the
     // water moves outward under a crest at the wave's frequency, omega = sqrt(g k).

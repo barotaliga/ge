@@ -145,16 +145,24 @@ angle (about 19.5°) by itself.
 **Built (M24i, `engine/water/wake.hpp`).** A ring is the deep-water answer to an impulse at a
 point (the Cauchy–Poisson ring): at a distance r and a time τ after it, its local wave has
 k = gτ²/4r², so its waves run out at their group speed, the long ones first, and its height is
-the volume pushed aside times k/(√2 π r). `wake_trail` sets one off every tenth of a second
-under a moving hull (its volume the beam times the draught times the distance run, its source a
-quarter of the hull's length across) and `splash_ring` one for a splash. Each ring keeps no
-waves shorter than four times the spacing of the rings (half the hull's length at the least):
-shorter ones would add up to the ridges of the line of sources rather than a hull's waves. Their
-sum opens into the V at Kelvin's angle: measured at 19.4° for a 4 m hull at 3 m/s (the `float`
-lab's wake table, held within 2° by `tests/water_wake_test.cpp`), narrowing past a length
-Froude number of about 0.6 (15.7° at 4 m/s, 13.2° at 5) as real hulls' wakes do. The rings live
-in `World::wakes`, each on its body, faded over the last third of their life; `sample` adds
-their height, slope and orbital velocity to a lake's or a sea's, so a float rides on them.
+the volume pushed aside times k/(√2 π r), times its source's spectrum exp(−k²b²/4) for a source
+b m across (a body makes few waves much shorter than itself). The formula is a far field, so a
+ring's first half turn of phase behind its front is faded in. `wake_trail` sets a ring off under
+a moving hull each time it has run a third of the shortest wave kept, which is an eighth of the
+transverse wave 2πU²/g: the DIVERGING waves run from two thirds of the transverse wave at the arms
+to ever shorter toward the track, so the floor decides how much of them is drawn, and rings a third
+of a wave apart are what keeps the sum from aliasing into ridges along the track (a slow hull sets
+off rings closer together than a fast one). Each ring carries the beam times the draught times
+the distance run, and its source is a tenth of the hull's length; `splash_ring` sets off one for
+a splash. Summed, the rings make Kelvin's pattern: transverse waves curving across the track and
+short diverging crests feathered outward along both arms (the `float` lab draws Kelvin's crest
+lines over the plan). The arms' outer edge, where the waves fall to half their highest, is at
+19.9° for a 4 m hull at 3 m/s (held within 2° by `tests/water_wake_test.cpp`), narrowing at higher
+Froude numbers (15.2° at 6 m/s), as wakes measured on real hulls do. A first version kept no wave
+shorter than half the hull: only the transverse waves survived, and the wake read as arcs across
+the track with nothing along its arms. The rings live in `World::wakes`, each on its body, faded
+over the last third of their life; `sample` adds their height, slope and orbital velocity to a
+lake's or a sea's, so a float rides on them.
 
 ## Floating (`engine/water/float`, M24c)
 
@@ -525,11 +533,11 @@ never read back by the simulation.
 | `wind` | picture | M24a | The gust series for three grounds with the intensity asked and measured and the gust factor, the log profile over each ground, a sheltered field's plan with a downwash and a whirl, the sources' decay (the mountain's wind is held bit for bit by its golden) |
 | `waves` | picture | M24b | The spectrum for a sweep of winds and fetches against the growth laws, the components laid, the height series at a point (measured Hs and Tp against the asked ones), plan maps of the surface, the breaking shares |
 | `fetch` | picture | M24b | A body's fetch and its sea per point, for a lake, a fjord, a coast |
-| `float` | scenario | M24c, M24i | A box, a log, a ball, a hull and a sled skipping: immersion, heave and its period against theory, the drift on a current; a hull's wake in plan and its arms' angle measured at four speeds |
+| `float` | scenario | M24c, M24i | A box, a log, a ball, a hull and a sled skipping: immersion, heave and its period against theory, the drift on a current; a hull's wake in plan at two speeds with Kelvin's crest lines over it, and its arms' angle measured at four speeds |
 | `swim` | scenario | M24d | Every preset side by side: the classic's scripted trajectories, the idle sink, the jump out; the clothed skier's sink over minutes, the cold's stages; the default swimmer |
 | `water-colour` | picture | M24e | Every look's swatches over depth and bed, in sun and shade, from above and below; visibility per look |
 | `flow` | picture | M24f | Dam break against the analytic solution, a basin emptying through a breach against Torricelli, a river to steady state, a waterfall's sheet; depth filmstrips; the volume held |
-| `gpu-water` | picture | M24g, M24g2, M24i | Named views: the calm mirror, a windy lake, the sea at several Beaufort forces, surf on a beach, a boat's wake, crates dropped in, a river, a waterfall, sunset glitter, night, rain; the distance-band diff |
+| `gpu-water` | picture | M24g, M24g2, M24i | Named views: the calm mirror, a windy lake, the sea at several Beaufort forces, surf on a beach, a boat's wake from behind and from the side, crates dropped in, a river, a waterfall, sunset glitter, night, rain; the distance-band diff |
 | `lake` | picture | M24g, M24h, M24l | Fall Line's own frame with a tarn on a seed: from the shore, from over it, into the sun, in a fresh wind, at the day's end, under it and looking up from under it |
 | `gpu-underwater` | picture | M24h, M24h2 | Every look's view round a scene under water, the presets, Snell's window measured, a dive through the surface; then the caustics and the waterline split |
 | `water-lod` | picture | M24f, M24g | The tiers round an actor and round the camera as maps; a flow region coarsened and refined with its volume held; the picture diff per distance band across a slow fly-out (no band pops); the cost against distance |

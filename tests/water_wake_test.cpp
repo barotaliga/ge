@@ -37,15 +37,17 @@ gw::Wakes trail(double length, double speed, double reach, double& t, double& z)
   return w;
 }
 
-// The arm's angle: on each line across the wake `d` m behind the hull, where the waves are
-// highest (their envelope over half a wavelength along the track); the angle of the straight
-// line fitted through those points.
+// The arm's angle: on each line across the wake `d` m behind the hull, the wake's outer edge (the
+// last point out where the waves' envelope over a wavelength along the track is half the line's
+// highest: the diverging waves inside the arm are as high as the cusp's, so the edge, not the
+// highest wave, marks the arm); the angle of the straight line fitted through those points.
 double arm_angle(const gw::Wakes& w, double speed, double t, double z) {
   const double lambda = 2 * kPi * speed * speed / gw::kGravity;
   double sx = 0, sy = 0, sxx = 0, sxy = 0;
   int n = 0;
   for (int m = 6; m <= 12; m += 2) {
     const double d = m * lambda;
+    std::vector<double> envelope;
     double best = 0, at = 0;
     for (int i = 0; 0.2 + i * lambda / 50 < 0.6 * d; ++i) {
       const double x = 0.2 + i * lambda / 50;
@@ -54,10 +56,12 @@ double arm_angle(const gw::Wakes& w, double speed, double t, double z) {
         const double dz = j * lambda / 8;
         h = std::fmax(h, std::fabs(gw::wake_at(w, 0, x, z - d + dz, t).height));
       }
-      if (h > best) {
-        best = h;
-        at = x;
-      }
+      envelope.push_back(h);
+      best = std::fmax(best, h);
+    }
+    // The wake's outer edge: the last point out where the waves are still half the line's highest.
+    for (size_t i = 0; i < envelope.size(); ++i) {
+      if (envelope[i] >= 0.5 * best) at = 0.2 + static_cast<double>(i) * lambda / 50;
     }
     sx += d;
     sy += at;

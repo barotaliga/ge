@@ -86,7 +86,8 @@ fn height_at(xz: vec2f, t: f32, shortest: f32) -> f32 {
 
 const kGravity = 9.80665;
 
-// THE WAKES: every ring's far field (water/wake.cpp's `wake_at`), its waves shorter than
+// THE WAKES: every ring's far field (water/wake.cpp's `wake_at`: its source's spectrum, its
+// front faded in), its waves shorter than
 // `shortest` m faded out (and their slopes' variance handed back in `lost`); the height and its
 // slope.
 fn wake_at(xz: vec2f, t: f32, shortest: f32) -> vec4f {
@@ -105,7 +106,9 @@ fn wake_at(xz: vec2f, t: f32, shortest: f32) -> vec4f {
     let k = phase / rs;
     let lambda = 6.2831853 / k;
     let lowest = max(body.wake.z, r.more.y);
-    let a = r.at.w * k / (1.4142136 * PI * rs) * smoothstep(lowest, 2.0 * lowest, lambda) *
+    let ks = k * r.more.x;
+    let a = r.at.w * k / (1.4142136 * PI * rs) * exp(-0.25 * ks * ks) *
+            smoothstep(lowest, 2.0 * lowest, lambda) * smoothstep(0.25 * PI, 1.25 * PI, phase) *
             (1.0 - smoothstep(life * 0.6666667, life, tau));
     let keep = smoothstep(shortest, 2.0 * shortest, lambda);
     out.w += (1.0 - keep) * 0.5 * (k * a) * (k * a);
