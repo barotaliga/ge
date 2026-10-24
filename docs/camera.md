@@ -182,7 +182,9 @@ height that is sprung rather than bolted:
   reads; running the arm out with speed shrinks the subject and reads slow); the SURGE lets the
   arm out under acceleration and in under braking; the TREMOR buzzes the lens past a brisk pace on
   rough ground and goes quiet in the air.
-- **The bank**: the horizon takes a small share of the subject's roll on the ground.
+- **The bank**: the horizon takes a small share of the subject's roll on the ground (`bank`), and
+  its own share in the air (`bank_air`, none for a skier's boom): a lens chasing a craft through
+  a turn flies it banked with the craft.
 - **The fall look**: once a flight's arc says the subject has a long way to fall, the arm climbs
   over its back and the look tips down to hold both the subject and the landing.
 - **Clearance**: never closer than `clearance` to the ground under the lens; the arm is pulled in
@@ -311,6 +313,33 @@ game's part around `update`:
 The `camera-world` lab follows a run on every rung at once and pictures them at the run's
 moments and through the densest wood, and measures how much of him each outside lens sees.
 
+### The machines' lenses (`games/fall_line/camera/machines.hpp`)
+
+On the free ride's machines the run is seen through a ladder of the machine's own, four rungs a
+machine, walked by the same key:
+
+| Machine | Worn | Chase | Third | Fourth |
+| --- | --- | --- | --- | --- |
+| snowmobile | `seat`: his eyes on the boards, the bars' roll, the belt's buzz | `chase`: low and close, its bank through a turn | `far` | `high` |
+| helicopter | `seat`: his eyes on the skid, looking down past it, rolled with the airframe | `chase`: well back and over the cabin, banked with it in the air | `far` | `down`: the long fall under it |
+| paramotor | `pilot`: his eyes in the harness, rolled with the wing | `chase`: behind him in the air, banked with the wing | `wing`: from up by the canopy, looking down on him | `down` |
+
+- **The subjects**: the snowmobile's CoG and its own frame; the helicopter's skid datum and its
+  fuselage's heading, pitch and roll; the paramotor's pilot (his skis' base, hung under the wing)
+  and the wing's heading and bank. The worn eye is the figure's helmet eye carried into the
+  machine's frame every frame. Landings and resets are read as the skier's are.
+- **The booms in the air** keep the fall look off (it would be on for the whole flight) except on
+  `down`, where it is the point, and bank with the craft (`bank_air`).
+- **The hand-over** (`RideCamera`): as he boards a machine or leaves it, the rung follows him
+  (worn to worn, chase to chase, the third and fourth to theirs), the arriving camera is snapped
+  onto its subject and the picture blends from the leaving camera's live pose to the arriving
+  one's over 1 s on a smootherstep. A change back before the hand-over is done runs it backwards
+  from where it is. Every lens is settled as the skier's are (the head, the snow, the bark).
+- The machines themselves are not drawn in the game's frame yet: the pictures show him.
+
+The `camera-machines` lab takes each machine's outing with the bot and pictures every rung at its
+moments and every hand-over as a strip.
+
 ## Settings and cvars
 
 Every number a player may change is a cvar (`engine/console`, `docs/console.md`), bound to the
@@ -344,6 +373,7 @@ binding; every row inside the engine is in metres, seconds and radians.
 | `camera-transitions` | Is every edit continuous where it should be and instant where it should be? | each edit between each pair of rigs while the subject moves fast: the eye's speed and the look's rate across the switch, the overshoot, the floor; filmstrips |
 | `camera-shake` | Does a shake have the shape and the size it should, and does comfort take it away? | trauma envelopes, the per-axis motion and its frequency content, at comfort 1, 0.5 and 0 |
 | `camera-world` (Fall Line, GPU) | What does each rung of Fall Line's ladder SHOW at the named moments of a run, and does any lens stand inside a trunk or the snow? | each rung's picture over seed 38 at the start, the hardest carve, the biggest jump, its landing, the closest pass to the trees and a straight run through the densest wood; the camera key's hand-overs as strips; every lens's least height over the snow and least gap to bark over the whole run; in the woods the trees each lens sees through, and on every sheet the share of him each outside lens sees (`--see-through=0`: the trees drawn whole, the before) |
+| `camera-machines` (Fall Line, GPU) | What does each rung of the snowmobile's, the helicopter's and the paramotor's ladders show at the moments of an outing, is the picture handed over on and off without a jump, and does any lens stand inside a trunk or the snow? | each machine's four rungs at four moments of the bot's outing on seed 38 (the board, the climb, the air and the hop off; the lift-off, the cruise, the bank and the drop; the launch, the turn, the height and the landing); every hand-over on and off as a strip on the worn rung and the chase; every lens's least height over the snow, least gap to bark and largest step through a hand-over past his own |
 | `se-view` (Shooter's Edge) | Does the first-person view bob, roll and kick as the classic look does? | the eye and the angles through a scripted run, against the formulas at the classic configs' values |
 
 ## Research
