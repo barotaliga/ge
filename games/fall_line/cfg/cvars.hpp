@@ -14,11 +14,15 @@
 //   sv_weather sv_snowfall sv_fog sv_wind sv_winddir sv_cover sv_skyrate
 //                                       the sky over the run, picked by hand, and how fast its
 //                                       hour runs (the server's, server info; sim/sky.hpp)
+//   sv_skytype sv_skyair sv_skydust sv_sunsize sv_sun2 sv_planet sv_planetdir sv_planetel
+//   sv_ring sv_nebula sv_skystars sv_skyglow
+//                                       the kind of sky (render/sky_style.hpp's types) and its
+//                                       knobs (the server's, server info; app/sky_type.hpp)
 //
 // ge:summary Fall Line's cvars: the window, the picture, the camera, the sound, the map
 // ge:keywords fall-line cvars settings cfg vid_width r_taa r_bloom r_shadowsize cl_view volume
 // ge:keywords s_mute sv_seed sv_hour add_cvars register_cvars sv_weather sv_snowfall sv_fog
-// ge:keywords sv_wind sv_winddir sv_cover sv_skyrate r_clouds
+// ge:keywords sv_wind sv_winddir sv_cover sv_skyrate r_clouds sv_skytype sky-type sky-knobs
 // ge:skill console sim
 // ge:test tests/fall_line_cvars_test.cpp
 #pragma once
@@ -56,6 +60,12 @@ struct Settings {
   double air = -1, air_from = -1;  // the mean wind, m/s at 10 m; the heading it blows from, deg
   double cover = -1;               // the broken sky's cloud cover, 0..1
   double sky_rate = 0;             // the sky's hours per hour of the run (0: the hour stands)
+  // The kind of sky (render/sky_style.hpp's type names) and its knobs, each kept where negative
+  // (render/sky_style.hpp's SkyKnobs; angles in degrees).
+  std::string sky_type = "earth";
+  double sky_air = -1, sky_dust = -1, sun_size = -1, sun2 = -1;
+  double planet = -1, planet_dir = -1, planet_el = -1, ring = -1;
+  double nebula = -1, sky_stars = -1, sky_glow = -1;
 };
 
 // Every cvar above, bound to `s`'s fields (which take the defaults now).

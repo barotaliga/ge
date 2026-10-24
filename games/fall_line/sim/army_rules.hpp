@@ -132,6 +132,15 @@ inline constexpr int32_t kGunBase = 10000;
 // down.
 inline constexpr double kArrestSpeed = 3;
 
+// RUN DOWN (army_meet.hpp): a man on the snow is a circle of `kManRadiusM` and `kManKg` (with his
+// kit and his rifle) the skier is held out of; skied into at `kRunDownSpeed` m/s or more (a jog,
+// about 11 km/h: enough to put a man on skis over) he goes down and lies `kDownS` before he is up
+// and after him again. A man knocked off a machine lies as long.
+inline constexpr double kManRadiusM = 0.35;
+inline constexpr double kManKg = 105;
+inline constexpr double kRunDownSpeed = 3;
+inline constexpr double kDownS = 4;
+
 // The most soldiers out at once (the roster's lift squads and the waves' men), and the first
 // pursuer id a soldier is (the wanted level's sight test keys them by it).
 inline constexpr size_t kMostSoldiers = 96;

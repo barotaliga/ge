@@ -30,6 +30,13 @@ struct Frame {
   mist: vec4f,             // x, y: the reach's mist: where it begins and where it closes, m (0: none);
                            // z: the scene's own light the eye adapts to (a white face's luminance,
                            // pre-exposed: FrameView::adapt_cd)
+  // The sky's style (render/sky_style.hpp's `style_rows`): 0 the Rayleigh scales, the dust's;
+  // 1 the dust's absorption scales, the ozone's; 2 the sun's disc's tint, its size; 3 toward the
+  // second sun, its brightness; 4 its tint, its size; 5 toward the planet, its angular radius;
+  // 6 its tint, the ring's outer radius; 7 the nebula's first tint, its strength; 8 its second
+  // tint, its size; 9 the glow's colour, its height; 10 the ring's tilt, the stars by day, the
+  // dust's asymmetry, its scale height (km).
+  style: array<vec4f, 11>,
 }
 
 // THE MOTION a surface at camera-relative `rel` (w = 1; w = 0 for a direction at infinity) made

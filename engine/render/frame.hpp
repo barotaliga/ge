@@ -77,9 +77,12 @@ struct FrameUniforms {
   float mist[4];         // the reach's mist: where it begins and where it closes, m (0: none);
                          // the scene's own light the eye adapts to (FrameView::adapt_cd,
                          // pre-exposed; 0: the sky's alone); 0
+  // The sky's style (render/sky_style.hpp's `style_rows`): the air's scales, the sun's disc, the
+  // second sun, the planet, the nebula, the glow from below, the ring's tilt and the stars by day.
+  float style[kSkyStyleRows][4];
 };
-static_assert(sizeof(FrameUniforms) ==
-                  64 * 3 + 16 * 5 + 16 * 6 + 16 * 9 + 16 * 3 * kCloudLayers + 16 * 5,
+static_assert(sizeof(FrameUniforms) == 64 * 3 + 16 * 5 + 16 * 6 + 16 * 9 + 16 * 3 * kCloudLayers +
+                                           16 * 5 + 16 * kSkyStyleRows,
               "match frame_types.wgsl");
 
 // The last frame's unjittered camera. Invalid on the first frame and after a cut, when the
