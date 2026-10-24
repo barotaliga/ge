@@ -4,11 +4,12 @@
 // hex.
 //
 //   ge digest [<lab>...] [--write] the labs named (or every lab) at their smoke flags, twice; each
-//                                 digest beside tests/labs_digests.txt's row. --write rewrites
-//                                 those rows only (every row with no lab), creating the file if
-//                                 it is not there. --affected takes the labs the change since
-//                                 --base reaches instead (cli/reach.hpp, each lab by its own
-//                                 source's object; a moved baseline row reaches its lab, a build
+//                                 digest beside its file under tests/digests/ (one file a lab,
+//                                 so parallel pull requests never touch the same one). --write
+//                                 rewrites those files only (every lab's with no lab), creating
+//                                 the directory if it is not there. --affected takes the labs the
+//                                 change since --base reaches instead (cli/reach.hpp, each lab by
+//                                 its own source's object; a moved baseline file its lab, a build
 //                                 file every lab), and --list names them and runs nothing. A repo
 //                                 with a baseline has its labs held to it by `ge test` (the
 //                                 labs_smoke case). --diff prints only the labs whose digest is off
@@ -27,7 +28,7 @@
 // is not a digest's or a hash's is shown as the double its bits are too.
 //
 // ge:summary ge digest, ge golden diff and ge golden write: a lab's baseline, a golden's moves
-// ge:keywords cli ge digest golden diff write baseline labs_digests golden-tables columns moved
+// ge:keywords cli ge digest golden diff write baseline labs_digests tests-digests golden-tables columns moved
 // ge:keywords ge_golden_write run_digest run_golden_diff run_golden_write diff_golden
 // ge:skill agent-interface
 // ge:test tests/cli_golden_test.cpp
@@ -45,7 +46,7 @@
 
 namespace ge::cli {
 
-inline constexpr std::string_view kDigestBaseline = "tests/labs_digests.txt";
+inline constexpr std::string_view kDigestBaseline = "tests/digests";
 
 struct DigestOptions {
   std::vector<std::string> labs;  // none: every lab
@@ -70,8 +71,8 @@ std::vector<AssetChange> asset_changes(const std::set<std::string>& changed);
 // Whether the lab at `source` (its text `text`) reads `a`: it lives under the asset's root, or
 // its text names `assets/<name>/` or `<name>.glb`.
 bool reads_asset(const std::string& source, std::string_view text, const AssetChange& a);
-// The lab ids whose rows a unified diff of the baseline adds or removes ("+<id> <16 hex>").
-std::set<std::string> moved_digest_rows(std::string_view diff);
+// The lab ids whose baseline files (tests/digests/<lab>.txt) the change adds, moves or deletes.
+std::set<std::string> moved_digest_labs(const std::set<std::string>& changed);
 Outcome run_golden_diff(const fs::path& repo, const std::vector<std::string>& targets,
                         const std::string& base);
 Outcome run_golden_write(const BuildOptions& o, const std::string& test);

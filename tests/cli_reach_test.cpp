@@ -133,7 +133,7 @@ TEST(the_tests_picked_take_the_smoke_slices_goldens_and_build_files) {
   CHECK((pick_affected(tests, {"g_outing_test"}, {}) == std::vector<std::string>{"g_outing_test"}));
   CHECK(pick_affected(tests, {"labs"}, {}) ==
         (std::vector<std::string>{"labs_smoke_1", "labs_smoke_2"}));
-  CHECK(pick_affected(tests, {}, {"tests/labs_digests.txt"}).size() == 2);
+  CHECK(pick_affected(tests, {}, {"tests/digests/glide.txt"}).size() == 2);
   CHECK((pick_affected(tests, {}, {"tests/golden/core_math.txt"}) ==
          std::vector<std::string>{"core_math_test"}));
   CHECK(pick_affected(tests, {}, {"CMakeLists.txt"}) == tests);

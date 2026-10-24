@@ -303,7 +303,7 @@ whole tree to it, and `ge doctor` holds a game repo to it (the `agent-interface`
   uses `std::stable_sort`: equal keys keep their order, and that order is part of the
   result.
 - Every lab's digest (`docs/labs.md` § Digests) is checked twice in one process and against
-  `tests/labs_digests.txt` on every CI row (`labs_smoke`), so a lab is a determinism test too.
+  `tests/digests/` on every CI row (`labs_smoke`), so a lab is a determinism test too.
 - Determinism is proven by the golden tables in `tests/golden/`, not by eye. They are the
   engine's own: a deliberate change of behaviour rewrites them in the PR that makes it.
 

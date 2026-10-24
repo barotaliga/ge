@@ -111,7 +111,7 @@ foreach(i RANGE 1 ${GE_LABS_SHARDS})
   set(name labs_smoke_${i})
   add_test(NAME ${name} COMMAND labs --all --smoke --repeat=2 --quiet --shard=${i}/${GE_LABS_SHARDS}
     --out=${PROJECT_BINARY_DIR}/previews
-    --check-digests=${PROJECT_SOURCE_DIR}/tests/labs_digests.txt)
+    --check-digests=${PROJECT_SOURCE_DIR}/tests/digests)
   # From the repository's root, where a lab finds its golden images (gpu-capture). With the GPU
   # in, the software driver's worker threads keep allocations past exit (as in the gpu_ tests).
   # COST: start the slices first, so a parallel ctest is not left waiting on one at the end.
