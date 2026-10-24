@@ -1,6 +1,6 @@
 ---
 name: net
-description: "Use for engine/net in gameengine2: multiplayer networking. Addresses, the wire, UDP and TCP sockets, the simulated network (stream links too) and its conditions, pcap captures, the packet format, connections (acks, round trip, loss, unreliable/sequenced/reliable channels, big messages in pieces, priorities, the send budget), nodes (host, client, peer; up to 32), sessions (the lobby: seats, teams, chat, kick, start, reconnect by token), LAN discovery, NATs (the simulated kinds, STUN, the rendezvous, hole punching, the relay), opening a port on the router (PCP, NAT-PMP, UPnP IGD, the simulated router), replication (quantized snapshots and deltas, interest, the byte budget, prediction and reconciliation, interpolation, lag compensation by rewind), lockstep and rollback (turns, input delay, prediction and resimulation, step digests that name a desync), fake-traffic sessions, the net-link, net-session, net-reach, net-replicate and net-lockstep labs; and the M17 plan (lobby, chat, NAT, replication, lockstep, voice, accounts)."
+description: "Use for engine/net in gameengine2: multiplayer networking. Addresses, the wire, UDP and TCP sockets, the simulated network (stream links too) and its conditions, pcap captures, the packet format, connections (acks, round trip, loss, unreliable/sequenced/reliable channels, big messages in pieces, priorities, the send budget), nodes (host, client, peer; up to 32), sessions (the lobby: seats, teams, chat, kick, start, reconnect by token), LAN discovery, NATs (the simulated kinds, STUN, the rendezvous, hole punching, the relay), opening a port on the router (PCP, NAT-PMP, UPnP IGD, the simulated router), replication (quantized snapshots and deltas, interest, the byte budget, prediction and reconciliation, interpolation, lag compensation by rewind), lockstep and rollback (turns, input delay, prediction and resimulation, step digests that name a desync), fake-traffic sessions, pressure tests (ramps to a breaking point, chaos scripts and reconnects, soaks and memory, the fuzzer), the net-link, net-session, net-reach, net-replicate, net-lockstep, net-stress, net-chaos and net-fuzz labs; and the M17 plan (lobby, chat, NAT, replication, lockstep, voice, accounts)."
 ---
 
 # Networking
@@ -38,7 +38,8 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
 | `net/lockstep.hpp` | The same step everywhere: seats in a mesh, inputs in turns with a delay, lockstep's waits or rollback's prediction and resimulation, the inputs message with its acks, step digests compared to name a desync |
 | `net/lockstep_trial.hpp` | One measured lockstep session (a strategy game in turns, a fighting game with rollback, a desync planted) over a link: what the `net-lockstep` lab runs |
 | `net/tap.hpp` | The live tap: a running node's datagrams mirrored as pcap records to a loopback port for `ge net watch` |
-| `net/traffic.hpp` | Fake traffic: a whole session over the simulated network, measured end to end |
+| `net/traffic.hpp` | Fake traffic: a whole session over the simulated network, measured end to end; chaos steps, reconnect tries, a per-tick hook; `sim_held_bytes` and `node_held_bytes` (what a soak holds flat) |
+| `net/stress.hpp` | Pressure tests over the traffic session: ramps bisected to a knob's breaking point against `StressBounds`, the named chaos scripts and their endings, the soak, the fuzzer (`stress_fuzz.cpp`) |
 
 ## Rules
 
@@ -119,6 +120,13 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
   `--send-every=3`, `--max-rollback=8`, `--plant=600`): four strategy seats in turns and two
   fighting seats with rollback under each preset: waits, an order's and a pad's latency, bytes,
   rollbacks and their depth, agreement; a planted desync and the step it is named on.
+- `make lab LAB=net-stress` (`--knobs=loss,bandwidth --mix=action --soak-seconds=3600`): each
+  knob ramped to its breaking point, its latencies charted against the knob, and a soak's held
+  memory charted. `make lab LAB=net-chaos` (`--scripts=partition,rebind --clients=16`): every
+  client's ending under each script, the connected clients charted. `make lab LAB=net-fuzz`
+  (`--datagrams=1000000 --spoof=0`): the honest session beside the fuzz, from strangers and
+  spoofed. `ge net stress --chaos=all --soak=3600 --fuzz=1000000` runs all four at once; reach
+  for it after any change to the node, the connection or the wire, and put its table in the PR.
 - `ge net sweep --knob=update-rate --values=10,20,30,60 --presets=wifi,bad`: the replication
   trial once a value; reach for it before arguing about a rate. `ge net watch --port=27950`: a
   running node's tap, live; a game opens one with `open_tap` and `transport.tap`.

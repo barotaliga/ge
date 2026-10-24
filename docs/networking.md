@@ -243,6 +243,27 @@ corrected; over the `bad` preset (90 ms, 5% loss in bursts) a prediction is corr
 a second, by a few metres at worst after a long burst; the server's rewinds land on what the
 client drew (a median gap of zero).
 
+## Prediction, state of the art (M17n–M17q)
+
+M17f predicts the client's own entity, replays the inputs the server has not applied over each
+snapshot, decays a correction's error, interpolates the others a fixed six ticks back and rewinds
+for hits. Four rows take it the rest of the way, each measured by the `net-predict` lab under every
+preset (the prediction's error against the server, how often and how far it corrects, the drawn
+path's jerk, the view delay):
+
+| Row | What | Why |
+| --- | --- | --- |
+| M17n | Time sync: the client's tick locked to the server's; the client ahead by just enough that its input lands a target buffer early; the server reports each client's input queue and the client dilates its tick a few percent to hold it; the interpolation delay set by the jitter measured | A fixed lead stalls on a bad link and wastes delay on a good one; dilation keeps the queue at its target with no stall, no repeat and no drop, and the view as fresh as the jitter allows |
+| M17o | Corrections drawn through a critically damped spring, velocity continuous, snapping only past a distance; others on cubic curves through their velocities; a capped extrapolation by the game's own step when snapshots are late | A decay alone leaves a kink in the velocity the eye catches; a late snapshot should not freeze the others |
+| M17p | The predicted world: what the client's input touches resimulated with it, others' inputs taken as their last; events predicted under a client's id, matched or undone; a resimulation budget | A player who bumps another or fires sees it at once, not a round trip later |
+| M17q | Sub-tick inputs applied at their fraction of a tick; the rewind capped (the shooter favoured up to a limit) and the hit confirmed; a finish line's order at sub-tick resolution | A tick is 16 ms: a press, a shot or a finish should not be rounded to it |
+
+Which of them a kind of game uses: a shooter all four; a racer its own vehicle predicted (M17n,
+M17o), rivals extrapolated a little so they are drawn where they are, contacts on the server
+(M17p); a fighting game rollback (M17g) with M17n's sync; a strategy game lockstep; a persistent
+world M17n and M17o for its own movement only. Character movement (M28d) reconciles an
+`engine/move` body on top of them.
+
 ## Rates and live tools (M17f2)
 
 A client asks for its own rates and the server caps them, as the settings a player tunes in a cfg
@@ -376,21 +397,43 @@ are an arms race the engine does not enter, and the checks above hold without th
 ## Pressure tests (M17m)
 
 The simulated network runs on virtual time, so an hour of play takes seconds and every run is
-seeded and replayable. `engine/net/stress` and `ge net stress` push it until something breaks:
+seeded and replayable. `engine/net/stress.hpp` and `ge net stress` push the fake-traffic session
+(`traffic.hpp`) until something breaks:
 
-- **Load.** 32 peers in a session, many sessions in one host process, each on a traffic mix.
-- **Soak.** Hours of virtual play, held to memory and queues staying flat, sequence numbers
-  wrapping cleanly and every reliable message delivered.
-- **Chaos.** A script changes the links over time: a link that flaps, a partition and its
-  healing, the host lost mid-session, a NAT that rebinds a client's port, clock skew, a burst of
-  loss, the bandwidth collapsing. Each ends with every peer reconnected or cleanly timed out.
-- **Ramps.** One knob (latency, loss, peers, message rate, bandwidth) is raised step by step
-  until a bound breaks (delivery late, a queue growing, a peer timing out), and the report
-  names the value where it broke for each traffic mix.
-- **Fuzzing.** The packet parser is fed random and mutated datagrams under the sanitizers;
-  every one is refused or read, never a crash or an overread.
-- **Bots at scale.** A game's bots play as clients across many simulated servers, so the
-  game's own traffic is the load, not only fake traffic.
+- **Ramps.** One knob of the links (loss, the burst a loss comes in, latency, jitter, or the
+  bandwidth taken down) is raised step by step until the session breaks a bound, then bisected
+  between the last step that held and the first that broke. The bounds (`StressBounds`): every
+  client connected and none dropped, the inputs' one-way p95 within 250 ms, at least 85% of the
+  snapshots delivered, every reliable message delivered in order by the end of the drain, the
+  reliable messages' p95 within 1500 ms. The racing mix of eight clients from broadband breaks
+  at 14% loss (snapshots), bursts of 56 drops at 5% loss (a reliable message, as a burst nears
+  the five-second timeout), 250 ms of latency or jitter (inputs late), and 54 kbit/s a link
+  (snapshots).
+- **Chaos.** A script (`ChaosStep`s on the traffic plan) changes the session as it runs: a link's
+  conditions changed and restored, the host's process lost and started again, a client's port
+  rebound as a NAT does, a client's clock run fast or slow. Clients that lose their connection
+  wait a second and try again, three times. Eight scripts (flap, partition, host-lost,
+  host-restart, rebind, skew, burst, collapse) each name how they must end: every client
+  connected (a flap, a burst and skewed clocks without even a drop) or, the host gone for good,
+  every client timed out; never stuck connecting, and never a host slot kept for a client that
+  is gone. A rebound port costs a reconnect today: a node knows its peers by address, so the
+  host hears the client's new port as a stranger until the old connection times out.
+- **Soak.** A session runs for hours of virtual time with the latencies summed instead of kept,
+  and what the simulated network and every node hold (their buffers' capacities, `sim_held_bytes`
+  and `node_held_bytes`) is sampled: the second half's peak must be the first's. An hour of 32
+  clients runs in twelve seconds; the host's packet sequence wraps twice and the reliable
+  message ids (events at 40 Hz) twice, every reliable message whole.
+- **Fuzzing.** Beside an honest session, datagrams made or mutated each tick go on the wire
+  (copies of packets in flight with bits flipped, cut short, run long or spliced; the game's own
+  header over garbage; a flood of requests and responses with made-up cookies; payloads with
+  guessed keys and messages of any shape), and every one is also run through the parser on its
+  own. From strangers' addresses the honest session never notices: a million datagrams in
+  2.5 s, the made-up cookies refused, no slot given away. Spoofed from a peer's own address, a
+  mutated copy of its real packet carries its real key, and some break the connection: payloads
+  are not yet authenticated (M17i adds it), and the `net-fuzz` lab's spoofed row counts it.
+
+Not yet built (the rest of M17m): load as many sessions in one host process, timed; and a
+game's bots playing as clients across many simulated servers, so its own traffic is the load.
 
 ## The tools
 
@@ -411,12 +454,13 @@ seeded and replayable. `engine/net/stress` and `ge net stress` push it until som
 | `ge net sweep` | M17f2 | A replicated world run once a value of one knob (a rate, the interpolation, the input backup, the tick, a link condition, a drop pattern): bytes each way, view delay, corrections, dropped snapshots, starved rows, rewind gaps, and the cheapest value within reach of the best |
 | the live tap and `ge net watch` | M17f2 | A RUNNING game's or server's datagrams mirrored to a loopback port: each connection every second, then saved as a capture and measured as `ge net stats` does |
 | fake conditions (`transport_fake`) | M17f2 | A live game's sends delayed, jittered and dropped (or dropped in a pattern) as a bad link would, for playing an experiment by hand |
+| the `net-predict` lab | M17n–M17q | Clients predicting over each preset: the prediction's error against the server, corrections a minute and their size, the drawn path's jerk, the view delay, the server's input queue against its target, charted over the run |
 | the `voice` lab | M17h | A voice through each preset, metered against the clean one, the WAV attached |
 | the `accounts` lab | M17j | Sign-ups, logins (a wrong password refused, a brute force throttled), friend requests, presence and an invite, against the service on the simulated network |
 | the `cheats` lab | M17l | Each scripted cheat (speed hack, teleport, input flood, off-grid or future inputs, forged and replayed packets, fishing for hidden state, a planted desync, a forged score or ghost) caught or refused; honest bots under every preset raising no flag |
-| `ge net stress` and the `net-stress` lab | M17m | Load and soak runs, ramps that name each knob's breaking point for a traffic mix, the session's memory and queues over time, charted |
-| the `net-chaos` lab | M17m | Each chaos script over a session: who disconnected, who came back, what was lost and how late |
-| the `net-fuzz` lab | M17m | The parser against random and mutated datagrams: how many read, how many refused, none crashed |
+| `ge net stress` and the `net-stress` lab | M17m | Each link knob ramped to its breaking point for a traffic mix, the bound it broke and the latencies charted against the knob; a soak's memory charted over an hour of virtual time; `ge net stress --chaos=all --soak=3600 --fuzz=1000000` runs every pressure test at once |
+| the `net-chaos` lab | M17m | Each chaos script over a session: how every client ended (connected, timed out, stuck), the drops, the reconnects and how long they took, the host's left-over slots; the clients connected charted through each script |
+| the `net-fuzz` lab | M17m | A million fuzzed datagrams beside an honest session, from strangers and then spoofed from the peers: how many parsed, what the host refused and why, whether the session noticed; its round trip charted with the fuzz and without |
 | the `net-play` lab | M17k | The game's bots as remote players under each preset: the corrections, the divergence, the bandwidth |
 
 ## Fall Line

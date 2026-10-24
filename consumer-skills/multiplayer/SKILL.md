@@ -1,6 +1,6 @@
 ---
 name: multiplayer
-description: "Use when this game talks over a network: the engine's ge::net (a node for a host, a client or a peer of up to 32, its channels, its events), a lobby (players by seat, teams, chat, kick, start, reconnect by token, LAN discovery), reaching a host behind a home router (STUN, a rendezvous server, hole punching, the relay, opening a port), replicating a world from a server (snapshots, prediction, interpolation, interest, lag compensation), lockstep and rollback (inputs only, turns, input delay, desync digests), testing a session on the simulated network under bad links, capturing a live node's traffic, and the ge net tools that read it (ge net inspect, ge net stats, ge net sim)."
+description: "Use when this game talks over a network: the engine's ge::net (a node for a host, a client or a peer of up to 32, its channels, its events), a lobby (players by seat, teams, chat, kick, start, reconnect by token, LAN discovery), reaching a host behind a home router (STUN, a rendezvous server, hole punching, the relay, opening a port), replicating a world from a server (snapshots, prediction, interpolation, interest, lag compensation), lockstep and rollback (inputs only, turns, input delay, desync digests), testing a session on the simulated network under bad links and pushing it until it breaks (ge net stress: ramps, chaos, soak, fuzz), capturing a live node's traffic, and the ge net tools that read it (ge net inspect, ge net stats, ge net sim)."
 ---
 
 # Multiplayer on ge::net
@@ -223,6 +223,15 @@ A bot can play the game over a simulated link: give it a node like a player's an
 network between the frames. Hold the game to what the player must never see, such as a
 reliable event lost or an input applied twice, under every preset, and keep the digest of the
 session in a golden.
+
+Before shipping a change to how the game uses the network, push the engine's session until it
+breaks: `ge net stress --mix=<the game's shape> --chaos=all --soak=3600 --fuzz=1000000` names the
+loss, burst, latency, jitter and bandwidth each mix breaks at, checks that every client ends a
+partition, a lost or restarted host, a rebound port and skewed clocks reconnected or cleanly timed
+out, soaks an hour of virtual play for flat memory, and fuzzes the wire beside an honest session.
+A game's own session can take the same chaos: put `net::ChaosStep`s and `reconnect_tries` on a
+`net::TrafficPlan` (net/traffic.hpp), or drive its own nodes and change the links with
+`sim_set_path` at the script's times.
 
 ## Capture and read the traffic
 
