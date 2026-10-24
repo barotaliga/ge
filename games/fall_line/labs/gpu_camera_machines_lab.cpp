@@ -42,6 +42,7 @@
 #include <vector>
 
 #include "camera/to_view.hpp"
+#include "core/math.hpp"
 #include "fall_line/app/frame.hpp"
 #include "fall_line/app/views.hpp"
 #include "fall_line/camera/machines.hpp"
@@ -203,8 +204,9 @@ void follow(Outing& o, sim::Driver& drive, const Pilot& pilot, const ge::skier::
       if (fc::handing_over(cams[i]) && !o.frames.empty()) {
         // The lens's step past his own (boarding puts his feet on the boards in one step).
         const cam::Vec3& e = f.lens[i].eye;
-        const double eye = std::hypot(e.x - prev[i].x, e.y - prev[i].y, e.z - prev[i].z);
-        const double moved = std::hypot(him.x - prev_him.x, him.y - prev_him.y, him.z - prev_him.z);
+        const double eye = ge::core::hypot3(e.x - prev[i].x, e.y - prev[i].y, e.z - prev[i].z);
+        const double moved =
+            ge::core::hypot3(him.x - prev_him.x, him.y - prev_him.y, him.z - prev_him.z);
         w.jump = std::max(w.jump, eye - moved);
       }
       prev[i] = f.lens[i].eye;

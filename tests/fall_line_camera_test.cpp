@@ -5,7 +5,8 @@
 // post across the arm); and over the first half minute of the bot's run on seed 38, every rung
 // kept out of every trunk and over the snow; a worn lens on a skier thrown into a trunk kept out of
 // its bark; the point a rung frames on him; the machines' ladders, what he is riding, and the
-// hand-over as he boards the snowmobile (a move, never a jump, landing on the machine's rung).
+// hand-over as he boards the snowmobile (a move round him, never a jump, landing on the machine's
+// rung).
 //
 // ge:summary Tests for Fall Line's camera ladder, subject, world and the lenses over a run
 // ge:keywords test fall-line camera ladder rung camera-key hand-over subject landing teleport
@@ -265,7 +266,7 @@ TEST(boarding_the_snowmobile_hands_the_picture_over_without_a_jump) {
   const ge::skier::World sw = run.state().world();
   const cam::World w = fc::camera_world(sw);
   fc::RideCamera rc = fc::make_ride_camera(fc::Rung::chase, 7);
-  double boarded = -1, worst = 0;
+  double boarded = -1, worst = 0, nearest = 1e9;
   cam::Vec3 last{}, last_him{};
   bool handed = false;
   last = fc::frame_ride(rc, run.state(), sw, w, 1.0 / 60).eye;  // on his skis before he boards
@@ -283,6 +284,7 @@ TEST(boarding_the_snowmobile_hands_the_picture_over_without_a_jump) {
       const double eye = std::hypot(p.eye.x - last.x, p.eye.y - last.y, p.eye.z - last.z);
       const double him = std::hypot(s.x - last_him.x, s.y - last_him.y, s.z - last_him.z);
       worst = std::max(worst, eye - him);
+      nearest = std::min(nearest, std::hypot(p.eye.x - s.x, p.eye.z - s.z));
     }
     last = p.eye;
     last_him = {s.x, s.y, s.z};
@@ -293,4 +295,6 @@ TEST(boarding_the_snowmobile_hands_the_picture_over_without_a_jump) {
   CHECK(!fc::handing_over(rc));
   CHECK(fc::active_lens(rc) == "chase");
   CHECK_MSG(worst < 1.0, "the hand-over stepped the lens " + std::to_string(worst) + " m");
+  // Swung round him, never through him.
+  CHECK_MSG(nearest > 3, "the chase came " + std::to_string(nearest) + " m from him");
 }

@@ -7,8 +7,10 @@
 #include "fall_line/camera/machines.hpp"
 
 #include <array>
+#include <cmath>
 
 #include "camera/ladders.hpp"
+#include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "fall_line/sim/heli_ride.hpp"
 #include "fall_line/sim/para_ride.hpp"
@@ -18,6 +20,7 @@ namespace fall_line::camera {
 
 namespace cam = ge::camera;
 namespace core = ge::core;
+namespace libm = ge::core::libm;
 
 namespace {
 
@@ -168,13 +171,21 @@ cam::Pose frame_one(RideCamera& rc, Ride r, const sim::GameState& state, const g
   return p;
 }
 
-bool worn_now(const RideCamera& rc, Ride r) {
-  if (r == Ride::skis) {
-    const Rung g = rung_of(rc.skis.cam);
-    return (g == Rung::helmet || g == Rung::tips) && !cam::in_transition(rc.skis.cam);
-  }
-  const cam::Camera& c = rc.machines[machine_index(r)];
-  return c.rung == 0 && !cam::in_transition(c);
+// Two poses blended round `c`: the eye swung round him on the shorter way at a blended reach
+// and height, so two arms on either side of him never cross through him on the straight line
+// between them. Lenses within `kWornReach` of him (worn) blend on the straight line.
+constexpr double kWornReach = 0.6;
+cam::Pose blend_round(const cam::Pose& a, const cam::Pose& b, double k, const cam::Vec3& c) {
+  cam::Pose p = cam::blend_pose(a, b, k);
+  const double ax = a.eye.x - c.x, az = a.eye.z - c.z, bx = b.eye.x - c.x, bz = b.eye.z - c.z;
+  const double ra = std::sqrt(ax * ax + az * az), rb = std::sqrt(bx * bx + bz * bz);
+  if (ra < kWornReach || rb < kWornReach) return p;
+  const double ya = libm::atan2(ax, az), yb = libm::atan2(bx, bz);
+  const double y = ya + core::angle_diff(ya, yb) * k;
+  const double r = ra + (rb - ra) * k;
+  p.eye.x = c.x + r * libm::sin(y);
+  p.eye.z = c.z + r * libm::cos(y);
+  return p;
 }
 
 // Put the ride's camera on `rung` at once, snapped onto its subject on its next frame.
@@ -376,9 +387,11 @@ cam::Pose frame_ride(RideCamera& rc, const sim::GameState& state, const ge::skie
   const cam::Pose leaving = frame_one(rc, rc.from, state, sw, cw, head, dt);
   rc.t += dt;
   const double k = rc.t >= kRideHandOverS ? 1.0 : cam::smootherstep(rc.t / kRideHandOverS);
-  cam::Pose p = cam::blend_pose(leaving, arriving, k);
   const ge::skier::SkierState& sk = state.racers[0].skier;
-  settle_lens(p, cw, head, !(worn_now(rc, rc.from) && worn_now(rc, rc.ride)), sk.x, sk.z);
+  cam::Pose p = blend_round(leaving, arriving, k, framed_point(sk));
+  // Two worn lenses look out of his head on different ways: the turn between them is from inside
+  // it, so the head is clipped through the whole hand-over.
+  settle_lens(p, cw, head, true, sk.x, sk.z);
   if (rc.t >= kRideHandOverS) rc.from = rc.ride;
   return p;
 }

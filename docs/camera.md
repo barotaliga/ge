@@ -333,7 +333,8 @@ machine, walked by the same key:
 - **The hand-over** (`RideCamera`): as he boards a machine or leaves it, the rung follows him
   (worn to worn, chase to chase, the third and fourth to theirs), the arriving camera is snapped
   onto its subject and the picture blends from the leaving camera's live pose to the arriving
-  one's over 1 s on a smootherstep. A change back before the hand-over is done runs it backwards
+  one's over 1 s on a smootherstep, the eye swung round him at a blended reach (two arms on
+  either side of him would otherwise cross through him) and his head clipped all the way. A change back before the hand-over is done runs it backwards
   from where it is. Every lens is settled as the skier's are (the head, the snow, the bark).
 - The machines themselves are not drawn in the game's frame yet: the pictures show him.
 
