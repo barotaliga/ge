@@ -3,7 +3,8 @@
 // of backdrop the engine offers (a colour, a gradient, a glow with a vignette, a slowly drifting
 // picture, the live scene softened behind a scrim), at the three reference viewports (a desktop,
 // a phone held upright, a phone on its side), then driven: the focus moved and the highlight
-// caught gliding, a page opened mid-fade, and the picture's drift at its two ends.
+// caught gliding, a page opened mid-fade, and the picture's drift at its two ends. Last, an
+// instrument panel built from every shape the draw list has, at every viewport.
 //
 // The picture behind is painted here from value noise (a winter range under a clear sky), so the
 // lab needs no asset and no GPU. Every layout is held to `layout_problems`: an item's words wider
@@ -190,6 +191,27 @@ void run(ge::lab::Lab& lab) {
               " s of a 24 s period: it zooms from 1.0 to 1.18 and pans left, then back.",
           "the later frame closer in and shifted; the menu exactly where it was", m, view, image,
           main.w, main.h, t);
+  }
+
+  // 5. The instrument panel at every viewport: every shape the draw list has.
+  const Image frame = panel_frame();
+  for (const Viewport& v : viewports) {
+    DrawList dl;
+    dl.begin(v.w, v.h);
+    instruments(dl, v.w, v.h, scenes.range, frame, ui_font(Weight::semibold));
+    Image img = make_image(v.w, v.h, hex(0x000000));
+    render(dl, img);
+    const std::string size = std::to_string(v.w) + "x" + std::to_string(v.h);
+    lab.shot({"instruments-" + size,
+              "INSTRUMENTS AT " + size,
+              "A HUD's instruments from the draw list's shapes: a dial's graded arc band, ticks as "
+              "lines, a polygon needle and a hub; a second needle as a box turned about its foot; "
+              "a ring meter with round ends; a nine-sliced panel with a line graph; a turned map "
+              "under a chevron, clipped to its frame.",
+              "smooth edges on every arc, line and needle; the panel's corners crisp at any size; "
+              "the map turned inside its square, the chevron upright",
+              {{"viewport", size}}},
+             to_picture(std::move(img)));
   }
 
   lab.metric("layout.problems", problems_total, "count");
