@@ -140,11 +140,65 @@ void run_joust(gl::Lab& lab, const gn::ReplicateTrialConfig& base, int hz) {
             "How far from the server's place one client draws the partner it charges, one box a "
             "preset, interpolated (drawn in the past) against predicted (drawn in the present, "
             "stepped by its last input and pushed by the contacts).",
-            "predicted boxes far lower than interpolated on every preset: the partner is where it "
-            "is when they meet, not a round trip behind.",
+            "predicted boxes lower than interpolated from lan to wifi: the partner is where it is "
+            "when they meet, not a round trip behind; past the horizon (mobile and slower) the "
+            "two the same, the partner drawn on its curve.",
             {{"presets", lab.arg("presets")},
              {"predict-radius", lab.arg("predict-radius")},
              {"predict-max", lab.arg("predict-max")},
+             {"clients", lab.arg("clients")},
+             {"seed", lab.arg("seed")}}},
+           gl::to_picture(c.plot));
+}
+
+// LAG COMPENSATION (M17q): every client fires at the weaving crowd four times a second, aimed
+// where it draws the target; the server judges each shot at the moment that input was drawn.
+void run_shots(gl::Lab& lab, const gn::ReplicateTrialConfig& base, int hz) {
+  const double cap = lab.arg_num("rewind-max");
+  gl::LabTable t{"Shots at " + std::to_string(hz) + " Hz: " + std::to_string(base.clients) +
+                     " clients firing at the crowd, judged where each input was drawn, the rewind "
+                     "capped at " +
+                     fmt(cap, 2) + " s",
+                 {"preset", "shots", "landed", "refused", "off m p95", "by message m p95",
+                  "hits confirmed", "undone", "log"},
+                 {}};
+  std::vector<gl::Sample> gaps;
+  for (const std::string& name : split(lab.arg("presets"))) {
+    gn::LinkConditions link;
+    if (!gn::conditions_preset(name, link)) continue;
+    gn::ReplicateTrialConfig k = base;
+    k.link = link;
+    k.replicate.tick_hz = hz;
+    k.replicate.rewind_max_s = cap;
+    k.shoot = true;
+    const gn::ReplicateTrial o = gn::run_replicate_trial(k);
+    const double shots = static_cast<double>(std::max<uint64_t>(1, o.shots));
+    const gl::Summary own = gl::summarize(o.shot_gap), msg = gl::summarize(o.shot_gap_message);
+    t.rows.push_back(
+        {name, std::to_string(o.shots), fmt(100.0 * static_cast<double>(o.landed) / shots, 1) + "%",
+         fmt(100.0 * static_cast<double>(o.refused) / shots, 1) + "%", fmt(own.p95, 3),
+         fmt(msg.p95, 3), std::to_string(o.confirmed), std::to_string(o.undone), hex(o.hash)});
+    lab.metric("shots-" + name + "-landed", static_cast<double>(o.landed) / shots, "share");
+    lab.metric("shots-" + name + "-off-p95", own.p95, "m");
+    gaps.push_back({name + " input", o.shot_gap});
+    gaps.push_back({name + " message", o.shot_gap_message});
+  }
+  lab.table(std::move(t));
+  const gl::Chart c = gl::box_chart(
+      {"LAG COMPENSATION: A SHOT'S TARGET AS DRAWN AGAINST WHERE THE SERVER REWOUND IT",
+       "every shot of every client, " + std::to_string(hz) + " Hz", "metres", ""},
+      gaps);
+  const std::string svg = gl::to_svg(c.plot);
+  lab.attach("shots.svg", std::vector<uint8_t>(svg.begin(), svg.end()));
+  lab.shot({"shots",
+            c.title,
+            "How far the server's rewound target lands from where the shooter drew it, one pair "
+            "of boxes a preset: rewound to the moment each input was drawn (M17q) against the one "
+            "view each input message carried before it.",
+            "the input boxes near zero on every preset that is not refused; the message boxes "
+            "tens of centimetres, growing with the link's jitter.",
+            {{"presets", lab.arg("presets")},
+             {"rewind-max", lab.arg("rewind-max")},
              {"clients", lab.arg("clients")},
              {"seed", lab.arg("seed")}}},
            gl::to_picture(c.plot));
@@ -274,6 +328,7 @@ void run(gl::Lab& lab) {
   }
   lab.table(std::move(table));
   run_joust(lab, base, hzs.front());
+  run_shots(lab, base, hzs.front());
   lab.note(
       "clocks: true, or each client's clock run fast (even clients) or slow (odd) by the skew. "
       "fixed: the client's clock is its own, the others drawn 6 ticks behind the newest "
@@ -370,6 +425,7 @@ const gl::LabSpec kSpec{
         {"chart-preset", "bad", "the preset whose queue and late error are charted"},
         {"predict-radius", "6", "the joust's predicted world, metres (M17p)"},
         {"predict-max", "0.1", "the joust's horizon: past it the others are drawn interpolated, s"},
+        {"rewind-max", "0.35", "the shots' rewind cap: a hit drawn further back is refused, s"},
         {"seed", "1", "the network's, the hands' and the crowd's stream"},
     },
     "--seconds=4 --presets=lan,bad --clients=4 --npcs=8 --hz=72",

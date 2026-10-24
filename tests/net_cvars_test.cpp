@@ -64,6 +64,8 @@ TEST(net_cvars_set_the_input_backup_and_the_predicted_world) {
   cv.set("cl_predictmax", "0.15", console::Source::local);
   net::net_cvars_apply(n);
   CHECK(k.redundancy == 8 && k.predict_radius == 6 && k.predict_max_s == 0.15);
+  CHECK(cv.set("sv_rewindmax", "0.25", console::Source::local) == console::SetResult::changed);
+  CHECK(k.rewind_max_s == 0.25);
   cv.set("cl_cmdbackup", "0", console::Source::local);
   CHECK(k.redundancy == 1);  // clamped: the input itself always goes
 }

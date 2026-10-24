@@ -596,6 +596,7 @@ void replicate_client_init(ReplicateClient& c, const Schema& schema, const Repli
   for (Snap& s : c.ring) s.rows.reserve(static_cast<size_t>(config.max_entities));
   c.scratch.reserve(static_cast<size_t>(config.max_entities));
   c.history.assign(kInputRing * static_cast<size_t>(schema.input_size), 0);
+  c.views.assign(kInputRing, 0);
   c.needs.assign(static_cast<size_t>(std::max(1, c.config.interp_window)), 0.0);
   c.sorted.reserve(c.needs.size());
   // The durations in ticks at this rate. A critically damped spring's error halves in about its
@@ -627,13 +628,14 @@ void replicate_client_receive(ReplicateClient& c) {
   }
 }
 
-void replicate_client_input(ReplicateClient& c, const uint8_t* input) {
+void replicate_client_input(ReplicateClient& c, const uint8_t* input, int press) {
   // Nothing is sent before the first snapshot: an input the connection could not carry yet would
   // be one the prediction replays and the server never applied.
   if (!c.has_snapshot) return;
   const auto n = static_cast<size_t>(c.schema.input_size);
   c.seq++;
   std::memcpy(&c.history[(c.seq % kInputRing) * n], input, n);
+  const uint32_t drawn_before = replicate_client_render_tick(c);
   c.local_tick++;
   if (c.config.sync && c.clocked) {
     // A tick of the server's per tick of the server's: this one runs `dilation` times as fast.
@@ -645,6 +647,12 @@ void replicate_client_input(ReplicateClient& c, const uint8_t* input) {
     const uint32_t x256 = at <= 0 ? 0 : static_cast<uint32_t>(at * 256);
     c.render_x256 = std::max(c.render_x256, x256);
   }
+  // What was drawn at the press: the render tick that far between the last input and this one.
+  const uint32_t drawn_now = replicate_client_render_tick(c);
+  const auto share = static_cast<uint32_t>(std::clamp(press, 0, 256));
+  c.views[c.seq % kInputRing] = drawn_now >= drawn_before
+                                    ? drawn_before + (drawn_now - drawn_before) * share / 256
+                                    : drawn_now;
   if (c.predicting) {
     step_own(c, c.predicted, input);
     step_world(c, c.predicted, true);
@@ -684,7 +692,7 @@ void replicate_client_input(ReplicateClient& c, const uint8_t* input) {
           : 1;
   if (c.unsent < every) return;
   const auto room = static_cast<uint32_t>(
-      std::min<size_t>(255, (kMaxMessage - kInputHeader) / std::max<size_t>(1, n)));
+      std::min<size_t>(255, (kMaxMessage - kInputHeader) / (n + kInputTiming)));
   const auto want = static_cast<uint32_t>(std::max(1, c.config.redundancy) + c.unsent - 1);
   const uint32_t count = std::min({c.seq, want, room, kInputRing});
   c.unsent = 0;
@@ -697,8 +705,13 @@ void replicate_client_input(ReplicateClient& c, const uint8_t* input) {
   write_u16(w, static_cast<uint16_t>(std::clamp(c.config.update_rate, 0, 65535)));
   write_u32(w, c.seq);
   write_u8(w, static_cast<uint8_t>(count));
-  for (uint32_t s = c.seq - count + 1; s <= c.seq; s++)
+  // Each input with how far behind the message's view it was drawn (x256, saturated).
+  const uint32_t view = replicate_client_render_tick(c);
+  for (uint32_t s = c.seq - count + 1; s <= c.seq; s++) {
     write_bytes(w, &c.history[(s % kInputRing) * n], n);
+    const uint32_t at = c.views[s % kInputRing];
+    write_u16(w, static_cast<uint16_t>(std::min<uint32_t>(at <= view ? view - at : 0, 65535)));
+  }
   if (!w.overflow) node_send(*c.node, c.server, c.config.input_channel, out, w.size);
 }
 

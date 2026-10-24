@@ -258,7 +258,7 @@ path's jerk, the view delay):
 | M17n (built) | Time sync: the client's tick locked to the server's; the client ahead by just enough that its input lands a target buffer early; the server reports each client's input queue and the client dilates its tick a few percent to hold it; the interpolation delay set by the jitter measured | A fixed lead stalls on a bad link and wastes delay on a good one; dilation keeps the queue at its target with no stall, no repeat and no drop, and the view as fresh as the jitter allows |
 | M17o (built) | Corrections drawn through a critically damped spring, velocity continuous, snapping only past a distance; others on cubic curves through their velocities; a capped extrapolation by the game's own step when snapshots are late | A decay alone leaves a kink in the velocity the eye catches; a late snapshot should not freeze the others |
 | M17p (built) | The predicted world: what the client's input touches resimulated with it, others' inputs taken as their last; events predicted under a client's id, matched or undone; a resimulation budget | A player who bumps another or fires sees it at once, not a round trip later |
-| M17q | Sub-tick inputs applied at their fraction of a tick; the rewind capped (the shooter favoured up to a limit) and the hit confirmed; a finish line's order at sub-tick resolution | A tick is 16 ms: a press, a shot or a finish should not be rounded to it |
+| M17q (built) | Sub-tick inputs applied at their fraction of a tick; the rewind capped (the shooter favoured up to a limit) and the hit confirmed; a finish line's order at sub-tick resolution | A tick is 16 ms: a press, a shot or a finish should not be rounded to it |
 
 M17n is built; the `net-predict` lab measures it. With 16 clients whose clocks run 2% fast or
 slow, an input's p95 from the hand to the server's step falls from 367 ms to 50 on `lan` and from
@@ -295,6 +295,23 @@ backing off the next, at 72 Hz) measures it: corrections a minute fall from 7.9 
 rows differ from the interpolated ones only by the network's draws, which the trailer's bytes
 move: other seeds swap which is lower).
 
+M17q is built on top. Each input carries the moment it was drawn: `replicate_client_input`
+takes when within the frame the player pressed (`press`, 0 to 256 of the frame), the client
+records the render tick at that moment, and the input message carries it per input (a u16, how
+far behind the message's view). The server keeps it with the queued input and, for the input it
+applies, `replicate_server_rewind_for` rewinds any entity to it. The rewind is capped
+(`rewind_max_s`, `sv_rewindmax`, 0.35 s): the shooter is favoured up to the cap, and a shot drawn
+further back is refused, so a lagging player cannot shoot into the past. A hit is an event
+(`kHitEvent`, the target's id): the client shows it at once, and the server confirms it or the
+client undoes it. A press's moment inside the tick is the game's to carry in its own input
+bytes when its step needs it (a jump begun mid-tick), and a finish inside a step is ordered by
+`racing::crossing_share` (the share of the step at which the line was crossed) instead of tied.
+The lab's shots (16 clients firing four times a second at a crowd that turns every half second,
+at 72 Hz) land within 1 cm of where they were drawn at the 95th percentile on every link up to
+`mobile`, all of them confirmed but for 2 to 4 of 1,250. Judged by the one view an input message
+carried before (the newest input's), they land 17 cm off on `broadband`, 31 on `wifi` and 35 on
+`mobile`. On `bad` the cap refuses 84% and on `awful` all; with no cap `awful`'s land.
+
 Which of them a kind of game uses: a shooter all four; a racer its own vehicle predicted (M17n,
 M17o), rivals extrapolated a little so they are drawn where they are, contacts on the server
 (M17p); a fighting game rollback (M17g) with M17n's sync; a strategy game lockstep; a persistent
@@ -319,6 +336,7 @@ can start at 72 Hz and a racer at 120; `net_cvars_apply` turns `cl_interp`'s sec
 | `sync` (`cl_timesync`) | client | time sync (M17n) on or off |
 | `spring`, `cubic` (`cl_smooth`) | client | smoothing (M17o) on or off |
 | `extrapolate_s` (`cl_extrapolate`) | client | the most the others are carried past the newest snapshot |
+| `rewind_max_s` (`sv_rewindmax`, s) | server | the furthest back a hit is judged (M17q); a shot drawn earlier is refused |
 | `predict_radius` (`cl_predictworld`, m), `predict_max_s` (`cl_predictmax`, s) | client | the predicted world (M17p): the other players this near predicted beside the own entity, while the replay is no longer than the horizon |
 | `max_rate` (`sv_maxrate`), `max_update_rate` (`sv_maxupdaterate`) | server | the most any client is sent, whatever it asks |
 | `tick_hz` (`sv_fps`, latched) | both | the step's rate, 10 to 240 Hz, which turns the rates and durations into ticks; a change waits for a new map or a restart |

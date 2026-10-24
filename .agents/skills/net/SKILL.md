@@ -34,7 +34,7 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
 | `net/portmap.hpp` | Opening a port on the router: PCP, then NAT-PMP, then UPnP IGD on a socket of its own; the lease renewed at half its life, closed with a lease of 0; `portmap_wire.hpp` the three protocols' messages (not installed) |
 | `net/sim_router.hpp` | The simulated router: PCP, NAT-PMP, SSDP and UPnP's SOAP answered on a NAT's LAN face (`NatConfig::gateway`), each grant a forward on the NAT |
 | `net/net_cvars.hpp` | The network's cvars (`sv_fps`, the rates, `cl_timesync`, `cl_smooth`, `cl_interp`, `cl_extrapolate`) bound to a `ReplicateConfig`, the game's values as the defaults |
-| `net/replicate.hpp` | Replication, the server's word: the schema's quantized fields, per-client deltas against the acked snapshot, interest, the budget, redundant inputs, time sync (the server's slack in each snapshot, the client's clock dilation, the interpolation delay from the arrivals' need), prediction and smoothing (the spring, the snap distance), the predicted world (others by their last inputs from the snapshot's trailer, `Schema::interact`, contact events and their outcomes, the replay budget, the horizon), interpolation on cubic curves, capped extrapolation and the blend back, `replicate_rewind`; `replicate_server.cpp` and `replicate_client.cpp` its halves, `replicate_wire.hpp` the messages and the bit packing (not installed) |
+| `net/replicate.hpp` | Replication, the server's word: the schema's quantized fields, per-client deltas against the acked snapshot, interest, the budget, redundant inputs, time sync (the server's slack in each snapshot, the client's clock dilation, the interpolation delay from the arrivals' need), prediction and smoothing (the spring, the snap distance), the predicted world (others by their last inputs from the snapshot's trailer, `Schema::interact`, contact events and their outcomes, the replay budget, the horizon), interpolation on cubic curves, capped extrapolation and the blend back, `replicate_rewind` and the capped `replicate_server_rewind_for` at each input's drawn moment; `replicate_server.cpp` and `replicate_client.cpp` its halves, `replicate_wire.hpp` the messages and the bit packing (not installed) |
 | `net/replicate_trial.hpp` | One measured replicated world (clients, a crowd, rewinds) over a link: what the `net-replicate` lab and `ge net sweep` run |
 | `net/lockstep.hpp` | The same step everywhere: seats in a mesh, inputs in turns with a delay, lockstep's waits or rollback's prediction and resimulation, the inputs message with its acks, step digests compared to name a desync |
 | `net/lockstep_trial.hpp` | One measured lockstep session (a strategy game in turns, a fighting game with rollback, a desync planted) over a link: what the `net-lockstep` lab runs |
@@ -139,6 +139,10 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
   partner predicted or interpolated: corrections a minute and a contact, the partner's drawn
   error, the events' outcomes and the replay's cost. Compare a joust's rows on a link past the
   horizon over several `--seed`s: there they differ only by the network's draws.
+  Its shots (`--rewind-max=0.35`) fire at a weaving crowd: landed, refused past the cap, how far
+  the rewound target lands from where it was drawn (by each input's own moment and by the input
+  message's one view) and the hits confirmed. Run it before and after any change to the input
+  message, the rewind or the history ring.
 - `ge net sweep --knob=update-rate --values=10,20,30,60 --presets=wifi,bad`: the replication
   trial once a value; reach for it before arguing about a rate. `ge net watch --port=27950`: a
   running node's tap, live; a game opens one with `open_tap` and `transport.tap`.

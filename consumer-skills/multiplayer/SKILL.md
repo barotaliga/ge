@@ -185,7 +185,15 @@ others fall back to their curves, so on a slow link it costs nothing; `rc.resim_
 replay's entity-steps on a slow machine.
 
 Spawn a player's entity with `replicate_spawn(server, peer, values)` when its peer connects. A
-hit is judged with `replicate_rewind(server, id, client_view_tick, out)`. Set
+HIT is judged where the shooter saw it: pass when in the frame the trigger was pressed
+(`replicate_client_input(client, input, press)`, 0 to 256), and on the server, when the input
+that fired is applied (`server.clients[peer].fresh`), call
+`replicate_server_rewind_for(server, peer, target, out)`: `ok` gives the target where it was
+drawn, `too_old` means it was drawn further back than `rc.rewind_max_s` (`sv_rewindmax`, 0.35 s)
+and the shot is refused. Show the hit at once with `replicate_client_predict_event(client,
+net::kHitEvent, id, 2)` and confirm it from the server with `replicate_server_event`: an undone
+outcome takes the hit marker back. A finish inside a step: `racing::crossing_share(before,
+after)` from the distances to the line, so the clock is (steps - 1 + share) * dt. Set
 `interest_radius` (with `interest_x`, `interest_z`) for an open world and `snapshot_budget` to cap
 a client's bandwidth. Run it on the simulated network under every preset and count
 `client.stats.corrections`: with no loss it must be zero.

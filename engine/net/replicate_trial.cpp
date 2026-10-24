@@ -77,7 +77,9 @@ struct Client {
   ReplicateClient r;
   core::Rng hand{0};
   int peer = -1;
-  uint8_t held[3] = {};
+  uint8_t held[4] =
+      {};  // x, z, heading; then whom it fires at (1 + an index of the crowd, 0: none)
+  double aim[256][2] = {};  // where it drew its target, by the input that fired
   uint64_t corrections_seen = 0;
   double rate = 1;  // its clock against the network's
   double acc = 0;   // ticks of its own owed
@@ -118,7 +120,7 @@ ReplicateTrial run_replicate_trial(const ReplicateTrialConfig& k) {
   schema.spec[kZ] = {-256, 256, 20, false};
   schema.spec[kHeading] = {0, 6.283185307179586, 12, true};
   schema.spec[kHealth] = {0, 100, 8, false, false};
-  schema.input_size = 3;
+  schema.input_size = k.shoot ? 4 : 3;
   schema.step = step_mover;
   if (k.collide) schema.interact = push_apart;
   schema.ctx = &scale;
@@ -127,13 +129,13 @@ ReplicateTrial run_replicate_trial(const ReplicateTrialConfig& k) {
   Transport host_t;
   open_sim_transport(host_t, net, sim_address(0, 1));
   auto host_n = std::make_unique<Node>();
-  node_init(*host_n, node_config(true, uint64_t{k.seed} * 7 + 1, k.collide), host_t);
+  node_init(*host_n, node_config(true, uint64_t{k.seed} * 7 + 1, k.collide || k.shoot), host_t);
   ReplicateConfig config = k.replicate;
   config.max_entities = k.clients + k.npcs;
   config.ring = std::max(config.ring, hz);  // a second of history to rewind into
   config.interest_x = kX;
   config.interest_z = kZ;
-  if (k.collide) config.event_channel = 2;
+  if (k.collide || k.shoot) config.event_channel = 2;
   auto server = std::make_unique<ReplicateServer>();
   replicate_server_init(*server, schema, config, *host_n);
 
@@ -153,7 +155,7 @@ ReplicateTrial run_replicate_trial(const ReplicateTrialConfig& k) {
     auto c = std::make_unique<Client>();
     const auto id = static_cast<uint32_t>(i + 1);
     open_sim_transport(c->t, net, sim_address(id, 1));
-    node_init(c->n, node_config(false, uint64_t{k.seed} * 1000 + id, k.collide), c->t);
+    node_init(c->n, node_config(false, uint64_t{k.seed} * 1000 + id, k.collide || k.shoot), c->t);
     c->peer = node_connect(c->n, sim_address(0, 1), 0);
     replicate_client_init(c->r, schema, config, c->n, c->peer);
     c->hand = core::make_rng(k.seed * 977 + id);
@@ -193,6 +195,13 @@ ReplicateTrial run_replicate_trial(const ReplicateTrialConfig& k) {
       }
       if (t % (3 * hz) == static_cast<int>(i % static_cast<size_t>(3 * hz)))
         v[kHealth] = core::range(world, 0, 100);
+      // Shooting at it, the crowd weaves: a new heading every half second, so a shot drawn on the
+      // curve and judged on the server's ticks can differ.
+      if (k.shoot && t % std::max(1, hz / 2) ==
+                         static_cast<int>(i % static_cast<size_t>(std::max(1, hz / 2)))) {
+        vel[i * 2] = core::range(world, -6, 6) / hz;
+        vel[i * 2 + 1] = core::range(world, -6, 6) / hz;
+      }
       replicate_set(*server, npcs[i], v);
     }
     replicate_server_tick(*server);
@@ -230,8 +239,26 @@ ReplicateTrial run_replicate_trial(const ReplicateTrialConfig& k) {
             c->held[1] = static_cast<uint8_t>(static_cast<int8_t>(std::lround(way * dz / d)));
           }
         }
+        const int every = std::max(1, hz / 4);
+        c->held[3] = 0;
+        if (k.shoot && !npcs.empty() && (c->r.seq + 1) % static_cast<uint32_t>(every) == 0) {
+          const size_t target = ((c->r.seq + 1) / static_cast<uint32_t>(every) + ci) %
+                                std::min<size_t>(npcs.size(), 255);
+          c->held[3] = static_cast<uint8_t>(target + 1);
+        }
         replicate_client_input(c->r, c->held);
         c->made[c->r.seq % 256] = now;
+        if (c->held[3]) {
+          double drawn[kMaxFields];
+          if (!replicate_client_sample(c->r, npcs[c->held[3] - 1u], drawn)) drawn[kX] = 1e9;
+          c->aim[c->r.seq % 256][0] = drawn[kX];
+          c->aim[c->r.seq % 256][1] = drawn[kZ];
+          // Aimed true: the client shows the hit at once, and the server confirms or undoes it.
+          const uint16_t id = npcs[c->held[3] - 1u];
+          const uint8_t payload[2] = {static_cast<uint8_t>(id & 0xff),
+                                      static_cast<uint8_t>(id >> 8)};
+          replicate_client_predict_event(c->r, kHitEvent, payload, 2);
+        }
         if (&c == &cs.front() && c->r.predicting) {
           // The drawn path, less the four ticks after each change of the held input: the game's
           // own steps are the same on any link, so what is left is the jerk the network adds.
@@ -268,6 +295,30 @@ ReplicateTrial run_replicate_trial(const ReplicateTrialConfig& k) {
             const double dx = drawn_at[sl.applied % 256][0] - truth[kX];
             const double dz = drawn_at[sl.applied % 256][1] - truth[kZ];
             o.partner_gap.push_back(std::sqrt(dx * dx + dz * dz));
+          }
+        }
+        // A shot the server applied this tick, judged where this client drew its target.
+        if (k.shoot && sl.fresh && sl.last[3] && c->aim[sl.applied % 256][0] < 1e8) {
+          const uint16_t target = npcs[sl.last[3] - 1u];
+          const double* aim = c->aim[sl.applied % 256];
+          double judged[kMaxFields];
+          o.shots++;
+          const RewindResult r = replicate_server_rewind_for(*server, c->slot, target, judged);
+          if (r == RewindResult::too_old) o.refused++;
+          if (r == RewindResult::ok) {
+            const double dx = aim[0] - judged[kX], dz = aim[1] - judged[kZ];
+            const double gap = std::sqrt(dx * dx + dz * dz);
+            o.shot_gap.push_back(gap);
+            if (gap <= k.hit_radius) {
+              o.landed++;
+              const uint8_t payload[2] = {static_cast<uint8_t>(target & 0xff),
+                                          static_cast<uint8_t>(target >> 8)};
+              replicate_server_event(*server, c->slot, kHitEvent, payload, 2);
+            }
+          }
+          if (replicate_rewind(*server, target, sl.view_tick, judged)) {
+            const double dx = aim[0] - judged[kX], dz = aim[1] - judged[kZ];
+            o.shot_gap_message.push_back(std::sqrt(dx * dx + dz * dz));
           }
         }
         c->applied = sl.applied;

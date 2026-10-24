@@ -5,6 +5,7 @@
 //
 //   sv_fps            the simulation's ticks a second (latched: a new map or a restart)
 //   sv_maxupdaterate  sv_maxrate          the most snapshots a second and bytes a second sent
+//   sv_rewindmax                          the furthest back a hit is judged (M17q, s)
 //   cl_updaterate     cl_cmdrate  rate    the snapshots and input messages a second asked, bytes
 //   cl_timesync       cl_smooth           time sync (M17n) and smoothing (M17o) on or off
 //   cl_interp         cl_extrapolate      the fixed delay without sync (s), the extrapolation cap
@@ -14,7 +15,7 @@
 // ge:summary The network's cvars: sv_fps, the rates, time sync and smoothing, bound to the config
 // ge:keywords net cvars sv_fps tick-rate tick-hz sv_maxupdaterate sv_maxrate cl_updaterate
 // ge:keywords cl_cmdrate rate cl_interp cl_timesync cl_smooth cl_extrapolate console
-// ge:keywords cl_cmdbackup cl_predictworld cl_predictmax redundancy predicted-world
+// ge:keywords cl_cmdbackup cl_predictworld cl_predictmax redundancy predicted-world sv_rewindmax
 // ge:skill net
 // ge:test tests/net_cvars_test.cpp
 #pragma once

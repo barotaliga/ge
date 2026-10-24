@@ -33,6 +33,7 @@ void add_net_cvars(con::Cvars& v, NetCvars& n) {
   const std::string cb = std::to_string(k.redundancy);
   const std::string pw = std::to_string(k.predict_radius);
   const std::string pm = std::to_string(k.predict_max_s);
+  const std::string rw = std::to_string(k.rewind_max_s);
   v.bind({.name = "sv_fps",
           .fallback = fps,
           .flags = kServerRule | con::kLatch,
@@ -41,6 +42,14 @@ void add_net_cvars(con::Cvars& v, NetCvars& n) {
           .min = 10,
           .max = 240},
          &k.tick_hz);
+  v.bind(
+      {.name = "sv_rewindmax",
+       .fallback = rw,
+       .flags = kServerRule,
+       .help = "the furthest back a hit is judged, s: a shot drawn earlier is refused (0: no cap)",
+       .min = 0,
+       .max = 1},
+      &k.rewind_max_s);
   v.bind({.name = "sv_maxupdaterate",
           .fallback = mur,
           .flags = kServerRule,

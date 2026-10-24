@@ -15,6 +15,7 @@
 //   input     kind 2, acked snapshot u32 (0: none), view tick x256 u32, rate u32 (bytes a
 //             second, 0: no cap), update rate u16 (snapshots a second, 0: the server's), newest
 //             input u32, count u8, then the last `count` inputs, oldest first, input_size each
+//             and how far behind the view tick it was drawn when made (x256 u16, saturated)
 //   event     kind 4 (reliable, server to the client that caused it), event kind u8, the input
 //             that caused it u32, payload size u8, then the payload (at most kMaxEventPayload)
 //
@@ -35,6 +36,7 @@ constexpr uint8_t kSnapshot = 1, kInput = 2, kSnapshotInputs = 3, kEvent = 4;
 constexpr uint8_t kUpdate = 0, kNew = 1, kGone = 2;
 constexpr size_t kSnapshotHeader = 1 + 4 + 4 + 4 + 2 + 1;
 constexpr size_t kInputHeader = 1 + 4 + 4 + 4 + 2 + 4 + 1;
+constexpr size_t kInputTiming = 2;     // after each input: how far behind the view it was drawn
 constexpr size_t kSnapshotFloor = 64;  // the least a rate leaves a snapshot
 
 // Bits written least significant first into a caller's buffer; a write past its end sets

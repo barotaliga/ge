@@ -6,12 +6,14 @@
 // only past its distance; all of it holds at a shooter's 72 Hz and a racer's 120; a trial replays
 // to the bit. The predicted world (M17p): in a joust the partner predicted cuts the corrections
 // where the replay is short, past the horizon the others are drawn on the curve and the server's
-// contacts heard, the replay budget leaves out the farthest, and a joust replays to the bit.
+// contacts heard, the replay budget leaves out the farthest, and a joust replays to the bit. Lag
+// compensation (M17q): a shot lands where it was drawn on every link inside the cap, and past it is
+// refused and undone.
 //
 // ge:summary Test: time sync and smoothing: skewed clocks held, view delay, jerk, any tick rate
 // ge:keywords test net predict prediction time-sync dilation skew interpolation-delay held
 // ge:keywords smoothing spring cubic extrapolation jerk snap tick-rate predicted-world joust
-// ge:keywords contact-events resim-budget horizon
+// ge:keywords contact-events resim-budget horizon lag-compensation shots rewind-cap
 // ge:skill net testing
 #include <algorithm>
 #include <string>
@@ -186,4 +188,39 @@ TEST(predict_the_replay_budget_leaves_out_the_farthest) {
 TEST(predict_a_joust_replays_to_the_bit) {
   const ReplicateTrialConfig k = joust("wifi", true);
   CHECK(run_replicate_trial(k).hash == run_replicate_trial(k).hash);
+}
+
+namespace {
+
+// LAG COMPENSATION (M17q): every client firing at a weaving crowd.
+ReplicateTrialConfig shots(const char* preset, double cap = 0.35) {
+  ReplicateTrialConfig k = trial(preset, true, 0, 72);
+  k.shoot = true;
+  k.replicate.rewind_max_s = cap;
+  return k;
+}
+
+}  // namespace
+
+TEST(predict_a_shot_lands_where_it_was_drawn) {
+  for (const char* preset : {"lan", "broadband", "wifi", "mobile"}) {
+    const ReplicateTrial o = run_replicate_trial(shots(preset));
+    CHECK_MSG(o.shots > 100 && o.landed == o.shots,
+              std::string(preset) + ": not every shot landed");
+    const double own = ge::lab::summarize(o.shot_gap).p95;
+    CHECK_MSG(own < 0.02, std::string(preset) + ": " + std::to_string(own) + " m off at p95");
+    // Every hit the client showed is confirmed but for a very few lost to the event's wait.
+    CHECK(o.confirmed * 100 >= o.shots * 98);
+  }
+  // The one view an input message carried, as before: tens of centimetres off on a jittery link.
+  const ReplicateTrial wifi = run_replicate_trial(shots("wifi"));
+  CHECK(ge::lab::summarize(wifi.shot_gap_message).p95 > 10 * ge::lab::summarize(wifi.shot_gap).p95);
+}
+
+TEST(predict_a_shot_drawn_past_the_cap_is_refused_and_undone) {
+  const ReplicateTrial awful = run_replicate_trial(shots("awful"));
+  CHECK(awful.shots > 100 && awful.refused == awful.shots && awful.landed == 0);
+  CHECK(awful.confirmed == 0 && awful.undone > 0);
+  const ReplicateTrial uncapped = run_replicate_trial(shots("awful", 0));
+  CHECK(uncapped.refused == 0 && uncapped.landed > 0);
 }

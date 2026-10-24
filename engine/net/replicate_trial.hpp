@@ -42,6 +42,11 @@ struct ReplicateTrialConfig {
   // their prediction of each other on.
   bool collide = false;
   bool joust = false;
+  // LAG COMPENSATION (M17q): every client fires at one of the crowd four times a second, aimed
+  // where it draws it; the server judges each shot at the moment that input was drawn, within
+  // `replicate.rewind_max_s`. A shot lands when the rewound place is within `hit_radius`.
+  bool shoot = false;
+  double hit_radius = 0.5;
 };
 
 struct ReplicateTrial {
@@ -77,6 +82,11 @@ struct ReplicateTrial {
   std::vector<double> correction_m;  // every correction of every client's own entity, metres
   std::vector<double> partner_gap;   // client 1's partner as drawn against the server, metres
   double resim_mean = 0, resim_max = 0;
+  // The shots: judged, landed, refused past the cap, and how far each rewound place was from
+  // where it was drawn: by the input's own drawn moment, and by the input message's (one per
+  // message, the view before M17q).
+  uint64_t shots = 0, landed = 0, refused = 0;
+  std::vector<double> shot_gap, shot_gap_message;
   uint64_t resim_capped = 0;
   uint64_t hash = 0;  // every end's final state
 };

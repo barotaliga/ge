@@ -38,9 +38,9 @@
 // THE PREDICTED WORLD (M17p): others near the own entity replayed beside it by their last inputs,
 // contacts and events predicted and judged (`outcomes`), within a budget and a horizon.
 //
-// LAG COMPENSATION: each input names the tick the client was drawing, and `replicate_rewind`
-// returns any entity's state at that tick from the server's history, so a hit is judged against
-// what the player saw.
+// LAG COMPENSATION (M17q): each input carries the tick drawn at its press, and
+// `replicate_server_rewind_for` judges a hit there, within `rewind_max_s`, so what the player saw
+// is what is judged.
 //
 // Like the node, nothing here reads a clock or draws randomness; every call takes its tick, and
 // the whole exchange over the simulated network replays to the bit.
@@ -99,6 +99,7 @@ struct Schema {
 };
 
 constexpr uint8_t kContactEvent = 0;  // an event kind: a contact began; its payload the other's id
+constexpr uint8_t kHitEvent = 1;  // an event kind: a hit the server judged; payload the target id
 constexpr int kMaxEventPayload = 8;
 
 // confirmed: predicted and the server's agreed; undone: predicted and never came; unpredicted: the
@@ -149,6 +150,7 @@ struct ReplicateConfig {
   // a reaction time, so further ahead their last one guesses worse than the curve draws (the
   // joust: wifi's corrections a fifth of interpolated's at 0.1 s, mobile's worse at 0.15 s; 0: no
   // limit).
+  double rewind_max_s = 0.35; // LAG COMPENSATION: the furthest back a hit is judged (0: no cap)
   double predict_max_s = 0.1;
   size_t snapshot_budget = 0;  // bytes a snapshot may take (0: the largest message)
   // THE RATES, the client's to ask and the server's to cap (a game exposes them as settings).
@@ -226,11 +228,14 @@ struct ReplicateClientSlot {
   uint32_t applied = 0;   // the last input applied
   uint32_t repeats = 0;   // ticks that stepped the last input again, not yet set off
   uint8_t last[kMaxInputSize] = {};
-  uint32_t view_tick = 0;    // the tick it said it was drawing (x256)
-  uint32_t rate = 0;         // the bytes a second it asked for (0: no cap)
-  int update_rate = 0;       // the snapshots a second it asked for (0: the server's)
-  uint32_t last_sent = 0;    // the tick of the last snapshot sent it
-  int slack_now = kNoSlack;  // TIME SYNC: the fewest waiting over this window, and the last
+  uint32_t view_tick = 0;            // the tick it said it was drawing (x256), at its newest input
+  std::vector<uint32_t> queue_view;  // per queued input: the tick it was drawing when made (x256)
+  uint32_t applied_view = 0;         // the same for the input applied this tick
+  bool fresh = false;                // the input applied this tick is new (false: a repeat)
+  uint32_t rate = 0;                 // the bytes a second it asked for (0: no cap)
+  int update_rate = 0;               // the snapshots a second it asked for (0: the server's)
+  uint32_t last_sent = 0;            // the tick of the last snapshot sent it
+  int slack_now = kNoSlack;          // TIME SYNC: the fewest waiting over this window, and the last
   int slack_before = kNoSlack;
   int slack_ticks = 0;
   std::vector<double> priority;   // per entity index: its place in the last snapshot's order
@@ -278,6 +283,13 @@ void replicate_server_event(ReplicateServer& s, int client, uint8_t kind, const 
                             int size);
 // Entity `id`'s state at `tick` (fractional, x256) from the history; false when out of the ring.
 bool replicate_rewind(const ReplicateServer& s, uint16_t id, uint32_t tick_x256, double* out);
+// LAG COMPENSATION (M17q): entity `id` where `client` drew it when it made the input applied this
+// tick (its press's moment within the frame included), for a hit judged on what the player saw.
+// The rewind is capped at `rewind_max_s`: the shooter is favoured up to that, and an input drawn
+// further back is refused (a lagging player cannot shoot into the past).
+enum class RewindResult : uint8_t { ok, too_old, missing };
+RewindResult replicate_server_rewind_for(const ReplicateServer& s, int client, uint16_t id,
+                                         double* out);
 
 // An entity predicted beside the own one (THE PREDICTED WORLD), or fading back to the curve.
 struct Predicted {
@@ -311,6 +323,7 @@ struct ReplicateClient {
   uint32_t applied = 0;          // the server's last applied input, as of the newest snapshot
   uint32_t seq = 0;              // the last input made
   std::vector<uint8_t> history;  // inputs by seq, ring x input_size
+  std::vector<uint32_t> views;   // by seq, ring: the tick drawn when each was made (x256)
   double predicted[kMaxFields] = {};
   double error[kMaxFields] = {};          // a correction still being smoothed away
   double error_v[kMaxFields] = {};        // its velocity (the spring), a tick
@@ -357,8 +370,9 @@ void replicate_client_init(ReplicateClient& c, const Schema& schema, const Repli
 // Decode the snapshots in the node's events and reconcile the prediction with the newest.
 void replicate_client_receive(ReplicateClient& c);
 // This tick's input: predicted at once and sent with the last `redundancy` (call each tick);
-// ignored until the first snapshot has arrived.
-void replicate_client_input(ReplicateClient& c, const uint8_t* input);
+// ignored until the first snapshot has arrived. `press` (0..256): when within the frame since the
+// last input the player pressed (256: now), so the server rewinds a hit to the moment drawn then.
+void replicate_client_input(ReplicateClient& c, const uint8_t* input, int press = 256);
 // The own entity as drawn: the prediction plus what is left of the last correction.
 void replicate_client_predicted(const ReplicateClient& c, double* out);
 // How fast the caller should run this client's tick (TIME SYNC): 1 +- dilate_max, 1 with sync off.

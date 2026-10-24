@@ -228,7 +228,7 @@ void on_input(ReplicateServer& s, int client, const uint8_t* data, size_t size) 
   const uint32_t newest = read_u32(r);
   const uint8_t count = read_u8(r);
   const auto n = static_cast<size_t>(s.schema.input_size);
-  if (r.bad || remaining(r) != count * n || count == 0 || newest < count) return;
+  if (r.bad || remaining(r) != count * (n + kInputTiming) || count == 0 || newest < count) return;
   c.active = true;
   if (ack && (!c.has_ack || ack > c.acked) && ack <= s.tick) {
     c.acked = ack;
@@ -238,7 +238,11 @@ void on_input(ReplicateServer& s, int client, const uint8_t* data, size_t size) 
   c.rate = rate;
   c.update_rate = update_rate;
   const uint8_t* inputs = data + r.at;
+  const size_t stride = n + kInputTiming;
   for (uint32_t k = 0; k < count; k++) {
+    const uint8_t* in = inputs + k * stride;
+    const uint32_t back = static_cast<uint32_t>(in[n] | (in[n + 1] << 8));
+    const uint32_t drawn = view > back ? view - back : 0;
     const uint32_t seq = newest - count + 1 + k;
     const uint32_t expect = c.queue_seq.empty() ? c.next_seq : c.queue_seq.back() + 1;
     if (seq < expect) continue;  // had it
@@ -251,6 +255,7 @@ void on_input(ReplicateServer& s, int client, const uint8_t* data, size_t size) 
       c.repeats -= covered;
       if (lost - covered > kMaxQueued) {
         c.queue_seq.clear();
+        c.queue_view.clear();
         c.inputs.clear();
         c.next_seq = seq;
       } else {
@@ -258,17 +263,20 @@ void on_input(ReplicateServer& s, int client, const uint8_t* data, size_t size) 
           const uint8_t* before = c.queue_seq.empty() ? c.last : &c.inputs[c.inputs.size() - n];
           c.inputs.insert(c.inputs.end(), before, before + n);
           c.queue_seq.push_back(k2);
+          c.queue_view.push_back(drawn);
         }
         // Those the repeats stood in for are skipped: the queue goes on after them.
         if (covered && c.queue_seq.empty()) c.next_seq = expect + covered;
       }
     }
     c.queue_seq.push_back(seq);
-    c.inputs.insert(c.inputs.end(), inputs + k * n, inputs + (k + 1) * n);
+    c.queue_view.push_back(drawn);
+    c.inputs.insert(c.inputs.end(), in, in + n);
   }
   while (c.queue_seq.size() > kMaxQueued) {
     s.stats.trimmed++;
     c.queue_seq.erase(c.queue_seq.begin());
+    c.queue_view.erase(c.queue_view.begin());
     c.inputs.erase(c.inputs.begin(), c.inputs.begin() + static_cast<std::ptrdiff_t>(n));
   }
 }
@@ -389,6 +397,7 @@ void replicate_server_init(ReplicateServer& s, const Schema& schema, const Repli
     c.touching.assign(n, 0);
     c.inputs.reserve(kMaxQueued * static_cast<size_t>(kMaxInputSize) * 2);
     c.queue_seq.reserve(kMaxQueued * 2);
+    c.queue_view.reserve(kMaxQueued * 2);
   }
 }
 
@@ -448,6 +457,7 @@ void replicate_server_receive(ReplicateServer& s) {
       std::vector<double> priority = std::move(c.priority);
       std::vector<uint8_t> inputs = std::move(c.inputs);
       std::vector<uint32_t> queue = std::move(c.queue_seq);
+      std::vector<uint32_t> queue_view = std::move(c.queue_view);
       std::vector<uint8_t> touching = std::move(c.touching);
       c = ReplicateClientSlot{};
       std::fill(touching.begin(), touching.end(), uint8_t{0});
@@ -456,6 +466,8 @@ void replicate_server_receive(ReplicateServer& s) {
       std::fill(priority.begin(), priority.end(), 0.0);
       inputs.clear();
       queue.clear();
+      queue_view.clear();
+      c.queue_view = std::move(queue_view);
       c.sent = std::move(sent);
       c.priority = std::move(priority);
       c.inputs = std::move(inputs);
@@ -484,10 +496,14 @@ void replicate_server_tick(ReplicateServer& s) {
       c.slack_now = kNoSlack;
       c.slack_ticks = 0;
     }
+    c.fresh = false;
     if (!c.queue_seq.empty()) {
       std::memcpy(c.last, c.inputs.data(), n);
       c.applied = c.queue_seq.front();
+      c.applied_view = c.queue_view.front();
+      c.fresh = true;
       c.queue_seq.erase(c.queue_seq.begin());
+      c.queue_view.erase(c.queue_view.begin());
       c.inputs.erase(c.inputs.begin(), c.inputs.begin() + static_cast<std::ptrdiff_t>(n));
       c.next_seq = c.applied + 1;
       s.stats.inputs++;
@@ -580,6 +596,17 @@ bool replicate_rewind(const ReplicateServer& s, uint16_t id, uint32_t tick_x256,
     out[f] = va + (vb - va) * frac;
   }
   return true;
+}
+
+RewindResult replicate_server_rewind_for(const ReplicateServer& s, int client, uint16_t id,
+                                         double* out) {
+  if (client < 0 || client >= static_cast<int>(s.clients.size())) return RewindResult::missing;
+  const ReplicateClientSlot& c = s.clients[static_cast<size_t>(client)];
+  if (!c.applied) return RewindResult::missing;
+  const uint32_t now = s.tick << 8, at = std::min(c.applied_view, now);
+  const auto cap = static_cast<uint32_t>(s.config.rewind_max_s * s.config.tick_hz * 256);
+  if (s.config.rewind_max_s > 0 && now - at > cap) return RewindResult::too_old;
+  return replicate_rewind(s, id, at, out) ? RewindResult::ok : RewindResult::missing;
 }
 
 }  // namespace ge::net
