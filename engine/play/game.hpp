@@ -31,6 +31,11 @@
 // THE TRACE is what `ge why` reads: a Run whose bots write decision records (ai/why.hpp) says so
 // by accepting a recorder (`trace`), and the engine replays a log with it on (play/why.hpp).
 //
+// THE CVARS are what `ge cvar` and `ge cfg` answer for: a game whose settings are cvars
+// (console/cvar.hpp) names the function that registers them on a console (`cvars`), the same one
+// its app calls, so the play executable lists, checks and runs cfgs against the game's own names
+// without a screen (play/console_cmds.hpp).
+//
 // A game registers its spec with `GE_GAME(spec)` in one file of its `play` executable, whose
 // `main` is `ge::play::play_main` (main.hpp). One executable holds one game.
 //
@@ -39,6 +44,7 @@
 // ge:keywords snap_axis ge_game register view views shoot shot picture caption trace why
 // ge:keywords clone keyframe copy
 // ge:keywords renderer renderer-spec ge_renderer gpu mode modes lit wireframe depth overlay
+// ge:keywords cvars console cfg
 // ge:skill agent-interface
 // ge:test tests/play_session_test.cpp
 #pragma once
@@ -51,6 +57,7 @@
 #include <string_view>
 
 #include "ai/why.hpp"
+#include "console/console.hpp"
 #include "lab/raster.hpp"
 
 namespace ge::play {
@@ -155,6 +162,8 @@ struct GameSpec {
   std::unique_ptr<Run> (*open)(const Setup& setup, std::string& error);
   // What `ge shot` can picture, the first the default; empty when the game draws none.
   std::span<const View> views = {};
+  // Registers every cvar the game reads on `c` (null: the game has none).
+  void (*cvars)(console::Console& c) = nullptr;
   // THE BEHAVIOUR'S VERSION: raised by a change that moves what a log plays to (a step, a rule, a
   // tuning), so a replay file recorded by another version is refused rather than played as a
   // different run (replay/file.hpp).

@@ -136,6 +136,21 @@ void throw_spray(GameFrame& f, const FrameScene& scene, double dt) {
 
 std::string pass_table_faults() { return r::check_pass_table(kPassTable, kLoadInputs); }
 
+FrameOptions frame_options(const cfg::Settings& s) {
+  FrameOptions o;
+  o.taa = s.taa;
+  o.scale = s.scale;
+  o.occlusion = s.occlusion;
+  o.shadow_size = s.shadow_size;
+  o.bloom = s.bloom;
+  o.snow = s.snow;
+  o.trails = s.trails;
+  o.spray = s.spray;
+  o.snowfall = s.snowfall;
+  o.weather = s.weather;
+  return o;
+}
+
 std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
                                         const ge::mountain::mapgen::Level& level, uint32_t width,
                                         uint32_t height, wgpu::TextureFormat output,
