@@ -180,17 +180,21 @@ std::string_view view_caption(std::string_view name) {
   return "";
 }
 
-void day_view(const Level& level, double hour, ge::render::FrameView& v) {
+void sky_view(const Level& level, double hour, ge::render::FrameView& v) {
   const double h = hour < 0 ? level.sun.hour : hour;
   const ge::core::SunPlace sun = ge::core::sun_at(
       h, level.sun.latitude, ge::mountain::mapgen::declination_of(level.sun.day_of_year));
   v.sun_elevation = sun.elevation;
   v.sun_azimuth = sun.azimuth;
   v.sun_illuminance = 1.0;
+  ge::mountain::app::night_look(level, h, v);
+}
+
+void day_view(const Level& level, double hour, ge::render::FrameView& v) {
   v.altitude_m = -level.mountain.sea;
   v.fov_y = 55 * kDeg;
   v.near_m = 0.1;
-  ge::mountain::app::night_look(level, h, v);
+  sky_view(level, hour, v);
 }
 
 bool make_view(const Level& level, std::string_view name, ge::render::FrameView& v) {
