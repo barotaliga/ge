@@ -29,6 +29,7 @@
 #include "capture/av_export.hpp"
 #include "capture/mkv_read.hpp"
 #include "capture/yuv.hpp"
+#include "core/libm/libm.hpp"
 #include "core/num_text.hpp"
 #include "fall_line/sim/play.hpp"
 #include "fall_line/sound/play_sound.hpp"
@@ -58,7 +59,9 @@ std::vector<uint8_t> read_all(const std::string& path) {
   return {std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
 }
 
-double db_of(double amplitude) { return amplitude > 0 ? 20 * std::log10(amplitude) : -200; }
+double db_of(double amplitude) {
+  return amplitude > 0 ? 20 * ge::core::libm::log(amplitude) / ge::core::libm::log(10.0) : -200;
+}
 
 // `count` pictures spread over the file, decoded, in a row over the sound's wave (both channels'
 // louder side, min and max a column), each picture's time marked on the wave.
