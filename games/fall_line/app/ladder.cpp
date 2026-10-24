@@ -22,7 +22,7 @@ constexpr uint32_t kTrailSize[] = {0, 1024, 2048};    // 0: no trails
 constexpr uint32_t kFlakes[] = {0, 8192, 24576};      // 0: no falling snow
 constexpr double kCloudSteps[] = {0, 0.5, 1.0, 1.0};  // 0: no layer
 constexpr bool kCloudQuarter[] = {true, true, true, false};
-constexpr double kBloom[] = {0, 0.04};
+constexpr double kBloom[] = {0, 0.04, 0.04};
 constexpr int kReachLevels[] = {5, 6, 7, kGroundLevels};  // the ground's levels drawn
 
 // THE PRICE TABLE: ms a frame over the row's cheapest stop on the reference machine, from
@@ -43,7 +43,9 @@ constexpr int kReachLevels[] = {5, 6, 7, kGroundLevels};  // the ground's levels
 //   marches half the steps, a slightly blockier cloud; the top marches every pixel, the
 //   reference, a hair sharper at a ridge's edge; off, the sky keeps its mean cloud and loses its
 //   shapes and shadows.
-// BLOOM: the sun's glow off the snow and the lamps, small.
+// BLOOM: the sun's glow off the snow and the lamps, small; its top stop adds the lens pass (the
+//   sun streaming through the trees and over the ridges, and the flare when the player has it on),
+//   a quarter of the pixels and only round the sun, worth a little more where the sun is in view.
 // DISTANCE: the ground drawn to 1, 2 or 4 km and misted into the sky from half of it, or the
 //   whole ground to the horizon; the near mountain is the run, the far one where it lies.
 //
@@ -68,7 +70,7 @@ constexpr r::LadderStop kSpray[] = {{"off", 0, 0}, {"on", 1.44, 20}};
 constexpr r::LadderStop kSnowfall[] = {{"off", 0, 0}, {"low", 0, 10}, {"high", 3.93, 14}};
 constexpr r::LadderStop kClouds[] = {
     {"off", 0, 0}, {"low", 27.59, 12}, {"high", 30.16, 15}, {"full", 72.09, 16}};
-constexpr r::LadderStop kBloomStops[] = {{"off", 0, 0}, {"on", 17.30, 4}};
+constexpr r::LadderStop kBloomStops[] = {{"off", 0, 0}, {"on", 17.30, 4}, {"lens", 17.30, 6}};
 constexpr r::LadderStop kDistance[] = {
     {"1 km", 0, 0}, {"2 km", 85.98, 10}, {"4 km", 224.85, 18}, {"full", 237.31, 22}};
 
@@ -106,6 +108,7 @@ FrameOptions apply_picture(const r::LadderPick& pick, FrameOptions o) {
   o.clouds = kCloudSteps[at(PictureRow::clouds)];
   o.cloud_quarter = kCloudQuarter[at(PictureRow::clouds)];
   o.bloom = kBloom[at(PictureRow::bloom)];
+  if (at(PictureRow::bloom) < 2) o.lens = {};  // the lens pass only at the row's top
   const int levels = kReachLevels[at(PictureRow::distance)];
   o.reach_m = levels < kGroundLevels ? r::clipmap_reach(kGroundSpacing, levels) : 0;
   return o;
@@ -133,7 +136,7 @@ r::LadderPick preset_pick(Preset p) {
     case Preset::medium:
       return {1, 1, 1, 1, 1, 1, 1, 1, 2};
     case Preset::high:
-      return {2, 1, 1, 2, 1, 2, 2, 1, 3};
+      return {2, 1, 1, 2, 1, 2, 2, 2, 3};
     case Preset::top:
       break;
   }

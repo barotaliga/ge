@@ -45,7 +45,9 @@ void encode(TerrainPass&, gpu::Encoder&);                 // GPU: bind and dispa
 | `engine/render/shadows.hpp` | The sun's shadows of what stands: two cached cascades (`update_cascade`, the redraw decision, pure CPU; `SunShadows::redraws`) and the figures' atlas, three layers of one depth array; `prepare_sun_shadows`, `encode_sun_shadows`; the receivers bind `sun_shadow_layout` (`no_sun_shadows` until a frame's are bound) and call `sun_shadow` in `wgsl/sun_shadow.wgsl` |
 | `engine/render/horizon.hpp` | The ground's own shadow: two horizon maps either side of the sun's bearing (`horizon.wgsl` bakes one), the bake decision (`prepare_horizon`, `Horizon::bakes`), the CPU reference `horizon_tan`, `read_horizon`; the terrain owns one and its draw and the instances read it (`ground_shadow` in `wgsl/terrain_common.wgsl`) |
 | `engine/render/bloom.hpp` | The glow: a half-size mip chain down (13-tap, a Karis first level) and up (tent), alpha counting the levels (`bloom.wgsl`) |
-| `engine/render/post.hpp` | The bloom mixed in, exposure from the sky, the tone curve, the grade's 32³ table (`set_grade`, `identity_grade`), dither, encoding (`post.wgsl`) |
+| `engine/render/post.hpp` | The bloom mixed in, exposure from the sky, the tone curve, the grade's 32³ table (`set_grade`, `identity_grade`), dither, encoding (`post.wgsl`); the lens and the film (`PostLook`: sharpening, fringes, vignette, grain, dirt), each an `override` switch with a live strength (`set_post_look`) |
+| `engine/render/lens.hpp` | The quarter-size `lens` pass: the sun's rays through what stands (a march over the open sky round its place, off the depth) and its flare (`lens.wgsl`) |
+| `engine/render/grade.hpp` | The grade's knobs (contrast, saturation, temperature, tint, gamma) baked into the table, CPU only |
 | `engine/render/mesh.hpp` | CPU meshes for instance families: `add_box`, `add_cylinder` (and cones), `add_ellipsoid`, all wound outward; `bounding_sphere`; `pack_mesh` (three words a vertex) and `unpack_vertex` |
 | `engine/render/instances.hpp` | Instance families (`instances_cull.wgsl`, `instances.wgsl`, `wgsl/instances_common.wgsl`): `create_family`, `set_instances` / `cut_family`, `prepare_family`; the two-phase cull (`encode_instances_cull`, `late` false then true), the depth draws, the lit draw over both phases, the overdraw probe; `pick_lod` (the CPU twin of the LOD band), `read_instance_stats` (the cull's counters) |
 | `engine/render/wgsl/` | The shared WGSL: `frame_types.wgsl` (and `screen_motion`, the one motion vector), `atmosphere.wgsl` (the air, the tables' maps, the scattering march), `frame.wgsl` (group 0, the haze, the sun's light, the sky's irradiance, the exposure), `terrain_common.wgsl` (the terrain's params block, `ground_shadow`), `terrain_draw.wgsl` (the half every ground material shares), `instances_common.wgsl` (the family's blocks, the packed vertex, the list entry's bits) |
@@ -114,6 +116,12 @@ per bearing step crossed). A change to the bake or its decision runs it before a
 camera (ghosting, and a picture of the difference eight times brighter), a single jittered
 frame against it (aliasing), and two stills after a cut, which must be the same bits. A change
 to the resolve, the jitter or the motion vectors runs it before and after.
+
+**`post`** (`games/fall_line/labs/gpu_post_lab.cpp`): every post effect off, at Fall Line's
+defaults and each alone at full strength, into the sun through the trees and down the start, with
+each variant's post and lens passes' ms. A change to the post pass, the lens pass or the grade runs
+it before and after; judge a default by whether the defaults' picture reads as the scene, not as
+an effect.
 
 Every pass lands with a `picture` lab. Until the GPU capture exists (M6–M7), a lab draws on
 the CPU raster (`engine/lab/raster.hpp`). After that, a lab renders a named view offscreen

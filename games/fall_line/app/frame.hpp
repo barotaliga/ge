@@ -37,7 +37,10 @@
 //   snowfall             -> hdr motion (the falling snow round the eye, as the particles)
 //   taa                  -> taa.history (at the output's size; with FrameOptions::taa)
 //   bloom                -> bloom (the glow's mip chain, from what post reads)
-//   post                 -> final (the bloom mixed in, the grade's table: look.hpp's)
+//   lens                 -> lens (the sun's rays through what stands and its flare, a quarter
+//                           of the output's pixels, from what post reads and the depth)
+//   post                 -> final (the bloom and the lens mixed in, the sharpening, the
+//                           vignette, the grade's table: look.hpp's under the player's knobs)
 //
 // With TAA the frame renders at FrameOptions::scale of the output's size, jittered, and the
 // resolve brings it up to the output; without it, at the output's size, unjittered, and post
@@ -79,8 +82,10 @@
 #include "render/cloud_kinds.hpp"
 #include "render/clouds.hpp"
 #include "render/frame.hpp"
+#include "render/grade.hpp"
 #include "render/hiz.hpp"
 #include "render/instances.hpp"
+#include "render/lens.hpp"
 #include "render/particles.hpp"
 #include "render/post.hpp"
 #include "render/shadows.hpp"
@@ -110,9 +115,14 @@ struct FrameOptions {
   bool occlusion = true;        // cull the instances by the depth pyramid (off: the frustum only)
   uint32_t shadow_size = 2048;  // the sun's shadow maps' texels a side
   double bloom = 0.04;          // the share of the bloom's glow in the picture; 0: none
-  bool snow = true;             // the snow's material (mountain/app/snow.hpp); off: the albedo lit
-  bool trails = true;           // the tracks (mountain/app/trails.hpp); drawn only with the snow
-  bool spray = true;            // the racers' spray (skier/app/spray.hpp) thrown into the particles
+  // The lens and the film (render/post.hpp), the lens pass (render/lens.hpp) and the grade's
+  // knobs (render/grade.hpp): Fall Line's defaults, cfg/cvars.hpp's r_ cvars'.
+  ge::render::PostLook look{.sharpen = 0.3, .vignette = 0.25};
+  ge::render::LensSettings lens{.rays = 0.5};
+  ge::render::GradeKnobs grade;
+  bool snow = true;    // the snow's material (mountain/app/snow.hpp); off: the albedo lit
+  bool trails = true;  // the tracks (mountain/app/trails.hpp); drawn only with the snow
+  bool spray = true;   // the racers' spray (skier/app/spray.hpp) thrown into the particles
   ge::render::ParticleSettings particles;
   bool snowfall = true;  // the falling snow, when the map's sky snows
   bool weather =
@@ -182,6 +192,7 @@ struct GameFrame {
   ge::render::Hiz hiz;
   ge::render::Taa taa;
   ge::render::Bloom bloom;
+  ge::render::Lens lens;  // made only when FrameOptions::lens has a half on
   ge::render::Post post;
   ge::render::InstancePipelines instancing;
   ge::render::InstanceFamily forest, figures, crowd;

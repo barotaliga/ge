@@ -7,6 +7,9 @@
 //   vid_width vid_height vid_vsync      the window (A, latched: read at startup)
 //   r_taa r_scale r_occlusion r_shadowsize r_bloom r_snow r_trails r_spray r_snowfall r_weather
 //   r_clouds                            the picture (A, latched: the frame is made once)
+//   r_sharpen r_sunrays r_flare r_vignette r_chromatic r_grain r_lensdirt
+//   r_contrast r_saturation r_temperature r_tint r_gamma
+//                                       the lens, the film and the grade's knobs (A, latched)
 //   cl_view                             the camera: a rung or a still view (A)
 //   cl_chasedist cl_chaseheight cl_fovspeed cl_camblend cl_motion cl_shake, and the first
 //   person's (cl_fov cl_viewheight cl_bob* cl_roll* v_kick* v_idlescale cl_landdip, read by no
@@ -25,7 +28,8 @@
 // ge:keywords fall-line cvars settings cfg vid_width r_taa r_bloom r_shadowsize cl_view volume
 // ge:keywords s_mute sv_seed sv_hour add_cvars register_cvars sv_weather sv_snowfall sv_fog
 // ge:keywords sv_wind sv_winddir sv_cover sv_skyrate r_clouds sv_skytype sky-type sky-knobs
-// ge:keywords cl_chasedist cl_motion
+// ge:keywords cl_chasedist cl_motion r_sharpen r_sunrays r_flare r_vignette r_chromatic r_grain
+// ge:keywords r_lensdirt r_contrast r_saturation r_temperature r_tint r_gamma post-effects
 // ge:skill console sim
 // ge:test tests/fall_line_cvars_test.cpp
 #pragma once
@@ -50,6 +54,10 @@ struct Settings {
   double bloom = 0.04;
   bool snow = true, trails = true, spray = true, snowfall = true, weather = true;
   double clouds = 1.0;  // the share of the cloud march's steps; 0: no layer drawn
+  // The lens and the film, each 0..1 (0: off), and the grade's knobs (render/grade.hpp).
+  double sharpen = 0.3, sunrays = 0.5, flare = 0, vignette = 0.25, chromatic = 0, grain = 0,
+         lensdirt = 0;
+  double contrast = 1, saturation = 1, temperature = 0, tint = 0, gamma = 1;
   // The camera.
   std::string view = "chase";
   ge::camera::CameraCvars camera;  // the camera's settings, in metres (no cl_camera: cl_view)
