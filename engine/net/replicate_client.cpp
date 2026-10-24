@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cstring>
 
+#include "core/libm/libm.hpp"
 #include "net/replicate.hpp"
 #include "net/replicate_wire.hpp"
 #include "net/wire.hpp"
@@ -18,8 +19,7 @@ namespace {
 
 using namespace replicate_wire;
 
-constexpr uint32_t kInputRing = 256;   // inputs kept for replaying: seconds at any tick rate
-constexpr uint32_t kStarveHold = 300;  // ticks a short window keeps the reserve raised
+constexpr uint32_t kInputRing = 256;  // inputs kept for replaying: seconds at any tick rate
 
 const Snap* find_snap(const ReplicateClient& c, uint32_t tick) {
   const Snap& s = c.ring[tick % c.ring.size()];
@@ -68,6 +68,10 @@ void reconcile(ReplicateClient& c, const Snap& snap) {
       c.stats.corrections++;
       c.last_error = worst;
     }
+    if (c.config.snap_distance > 0 && worst >= c.config.snap_distance) {
+      c.stats.snaps++;  // a teleport, a respawn: shown at once, nothing left to draw out
+      for (int f = 0; f < nf; f++) c.error[f] = c.error_v[f] = 0;
+    }
   }
   std::memcpy(c.predicted, v, sizeof(double) * static_cast<size_t>(nf));
   c.predicting = true;
@@ -82,7 +86,8 @@ void sync_clock(ReplicateClient& c, uint32_t tick, int slack) {
   // twice as hard as it slows down.
   // A window that ran short raises the reserve by one for the next few seconds (`starve_hold`).
   if (slack < 0) c.starved_at = c.seq + 1;
-  const bool recent = c.starved_at && c.seq + 1 - c.starved_at < kStarveHold;
+  const bool recent =
+      c.starved_at && c.seq + 1 - c.starved_at < static_cast<uint32_t>(c.starve_hold);
   const int off = slack - (k.input_slack + (recent ? 1 : 0));
   const double ask = -k.dilate_gain * off * (off < 0 ? 2 : 1);
   c.dilation = 1 + std::clamp(ask, -k.dilate_max, k.dilate_max);
@@ -180,7 +185,11 @@ void on_snapshot(ReplicateClient& c, const uint8_t* data, size_t size) {
         std::remove_if(rows.begin(), rows.end(), [](const Row& x) { return x.id == kNoEntity; }),
         rows.end());
   std::sort(rows.begin(), rows.end(), [](const Row& a, const Row& b) { return a.id < b.id; });
+  // Whether the others were being drawn past every snapshot on hand when this one came: the
+  // sample blends from where they were carried to back onto the curve.
+  const uint32_t drawing = replicate_client_render_tick(c);
   Snap& slot = c.ring[tick % c.ring.size()];
+  slot.late_x256 = c.has_snapshot && drawing > (c.newest << 8) ? drawing : 0;
   slot.rows.swap(rows);
   slot.tick = tick;
   slot.valid = true;
@@ -214,6 +223,14 @@ void replicate_client_init(ReplicateClient& c, const Schema& schema, const Repli
   c.history.assign(kInputRing * static_cast<size_t>(schema.input_size), 0);
   c.needs.assign(static_cast<size_t>(std::max(1, c.config.interp_window)), 0.0);
   c.sorted.reserve(c.needs.size());
+  // The durations in ticks at this rate. A critically damped spring's error halves in about its
+  // half-life: w = 2 ln 2 / half-life.
+  const auto hz = static_cast<double>(c.config.tick_hz);
+  c.spring_w = 1.3862943611198906 / std::max(0.25, c.config.spring_halflife_s * hz);
+  c.spring_decay = core::libm::exp(-c.spring_w);
+  c.starve_hold = std::max(1, static_cast<int>(c.config.starve_hold_s * hz));
+  c.extrapolate_ticks = std::max(0.0, c.config.extrapolate_s * hz);
+  c.blend_ticks = std::max(0.0, c.config.extrapolate_blend_s * hz);
 }
 
 void replicate_client_receive(ReplicateClient& c) {
@@ -243,7 +260,16 @@ void replicate_client_input(ReplicateClient& c, const uint8_t* input) {
     c.render_x256 = std::max(c.render_x256, x256);
   }
   if (c.predicting) step_own(c, c.predicted, input);
-  for (int f = 0; f < c.schema.fields; f++) c.error[f] *= c.config.smoothing;
+  if (c.config.spring) {
+    // Critically damped, over one tick: e(1) = (e + j) d, e'(1) = (e' - j w) d, j = e' + e w.
+    for (int f = 0; f < c.schema.fields; f++) {
+      const double j = c.error_v[f] + c.error[f] * c.spring_w;
+      c.error[f] = (c.error[f] + j) * c.spring_decay;
+      c.error_v[f] = (c.error_v[f] - j * c.spring_w) * c.spring_decay;
+    }
+  } else {
+    for (int f = 0; f < c.schema.fields; f++) c.error[f] *= c.config.smoothing;
+  }
   // cmd_rate: a message every tick_hz / cmd_rate ticks, carrying every input since the last one
   // and `redundancy` before them.
   c.unsent++;
@@ -284,36 +310,79 @@ uint32_t replicate_client_render_tick(const ReplicateClient& c) {
 
 bool replicate_client_sample(const ReplicateClient& c, uint16_t id, double* out) {
   const uint32_t t = replicate_client_render_tick(c);
-  const Snap* a = nullptr;
-  const Snap* b = nullptr;
-  const Row* ra = nullptr;
-  const Row* rb = nullptr;
+  // The snapshots holding the entity around the render tick: a at or before it, b after, and the
+  // one either side of them for the curve's slopes (p before a, n after b).
+  struct Hit {
+    const Snap* s = nullptr;
+    const Row* r = nullptr;
+  } p, a, b, n;
   for (const Snap& s : c.ring) {
     if (!s.valid) continue;
     const Row* r = find_row(s, id);
     if (!r) continue;
-    const uint32_t at = s.tick << 8;
-    if (at <= t && (!a || s.tick > a->tick)) {
-      a = &s;
-      ra = r;
-    } else if (at > t && (!b || s.tick < b->tick)) {
-      b = &s;
-      rb = r;
+    if ((s.tick << 8) <= t) {
+      if (!a.s || s.tick > a.s->tick) {
+        p = a;
+        a = {&s, r};
+      } else if (!p.s || s.tick > p.s->tick) {
+        p = {&s, r};
+      }
+    } else if (!b.s || s.tick < b.s->tick) {
+      n = b;
+      b = {&s, r};
+    } else if (!n.s || s.tick < n.s->tick) {
+      n = {&s, r};
     }
   }
-  if (!a && !b) return false;
-  if (!a || !b) {
-    const Row* r = a ? ra : rb;  // only one side: held where it is
-    for (int f = 0; f < c.schema.fields; f++) out[f] = dequantize(c.schema.spec[f], r->q[f]);
+  if (!a.s && !b.s) return false;
+  const int nf = c.schema.fields;
+  if (!a.s) {
+    for (int f = 0; f < nf; f++) out[f] = dequantize(c.schema.spec[f], b.r->q[f]);
+    return true;  // nothing before it yet: held where it is
+  }
+  const auto value = [&](const Hit& h, int f, double from) {
+    const FieldSpec& spec = c.schema.spec[f];
+    return from + wrap_diff(spec, dequantize(spec, h.r->q[f]) - from);
+  };
+  // Carried on from a at the velocity from p to a, at most extrapolate_s past it.
+  const auto carried = [&](int f, uint32_t at) {
+    const FieldSpec& spec = c.schema.spec[f];
+    const double va = dequantize(spec, a.r->q[f]);
+    if (!p.s || c.extrapolate_ticks <= 0 || !spec.extrapolate) return va;
+    const double ahead =
+        std::min(static_cast<double>(at - (a.s->tick << 8)) / 256, c.extrapolate_ticks);
+    const double vp = value(p, f, va);
+    return va + (va - vp) / static_cast<double>(a.s->tick - p.s->tick) * ahead;
+  };
+  if (!b.s) {
+    for (int f = 0; f < nf; f++) out[f] = carried(f, t);
     return true;
   }
-  const double frac =
-      static_cast<double>(t - (a->tick << 8)) / static_cast<double>((b->tick - a->tick) << 8);
-  for (int f = 0; f < c.schema.fields; f++) {
+  const double span = static_cast<double>(b.s->tick - a.s->tick);
+  const double u = static_cast<double>(t - (a.s->tick << 8)) / (span * 256);
+  // A late b: blended in from where a carried it, over extrapolate_blend_s from its arrival.
+  double blend = 1;
+  if (b.s->late_x256 > (a.s->tick << 8) && c.extrapolate_ticks > 0 && c.blend_ticks > 0) {
+    const auto since = static_cast<double>(int64_t{t} - int64_t{b.s->late_x256});
+    blend = std::clamp(since / (256.0 * c.blend_ticks), 0.0, 1.0);
+  }
+  for (int f = 0; f < nf; f++) {
     const FieldSpec& spec = c.schema.spec[f];
-    const double va = dequantize(spec, ra->q[f]);
-    const double vb = va + wrap_diff(spec, dequantize(spec, rb->q[f]) - va);
-    out[f] = va + (vb - va) * frac;
+    const double va = dequantize(spec, a.r->q[f]);
+    const double vb = value(b, f, va);
+    double v = va + (vb - va) * u;
+    if (c.config.cubic) {
+      // Hermite through a and b, each slope from its neighbours (Catmull-Rom on uneven ticks):
+      // the velocity is continuous from one span to the next, so the path does not kink.
+      const double ma = p.s ? (vb - value(p, f, va)) / static_cast<double>(b.s->tick - p.s->tick)
+                            : (vb - va) / span;
+      const double mb = n.s ? (value(n, f, va) - va) / static_cast<double>(n.s->tick - a.s->tick)
+                            : (vb - va) / span;
+      const double u2 = u * u, u3 = u2 * u;
+      v = (2 * u3 - 3 * u2 + 1) * va + (u3 - 2 * u2 + u) * span * ma + (-2 * u3 + 3 * u2) * vb +
+          (u3 - u2) * span * mb;
+    }
+    out[f] = blend < 1 ? carried(f, t) + (v - carried(f, t)) * blend : v;
   }
   return true;
 }

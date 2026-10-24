@@ -67,6 +67,25 @@ struct Client {
   int slot = -1;    // its slot on the server, once its entity is known
   uint32_t applied = 0;
   int64_t made[256] = {};  // when each input was made, by its number
+  int since_change = 0;    // inputs made since the held input last changed
+};
+
+// The last three drawn positions of a path, and its jerk once it has four.
+struct Path {
+  double x[3] = {}, z[3] = {};
+  int n = 0;
+  // Push a position; the jerk's magnitude in units a tick cubed, or -1 until there are four.
+  double push(double px, double pz) {
+    double j = -1;
+    if (n >= 3) {
+      const double jx = px - 3 * x[2] + 3 * x[1] - x[0], jz = pz - 3 * z[2] + 3 * z[1] - z[0];
+      j = std::sqrt(jx * jx + jz * jz);
+    }
+    x[0] = x[1], x[1] = x[2], x[2] = px;
+    z[0] = z[1], z[1] = z[2], z[2] = pz;
+    n = std::min(n + 1, 3);
+    return j;
+  }
 };
 
 }  // namespace
@@ -81,7 +100,7 @@ ReplicateTrial run_replicate_trial(const ReplicateTrialConfig& k) {
   schema.spec[kX] = {-256, 256, 20, false};
   schema.spec[kZ] = {-256, 256, 20, false};
   schema.spec[kHeading] = {0, 6.283185307179586, 12, true};
-  schema.spec[kHealth] = {0, 100, 8, false};
+  schema.spec[kHealth] = {0, 100, 8, false, false};
   schema.input_size = 3;
   schema.step = step_mover;
   schema.ctx = &scale;
@@ -128,6 +147,9 @@ ReplicateTrial run_replicate_trial(const ReplicateTrialConfig& k) {
   uint64_t bytes_mark = 0;
   double delay_sum = 0;
   uint64_t delay_n = 0, drawn_n = 0, held_n = 0;
+  const double cube = static_cast<double>(hz) * hz * hz;  // a tick cubed to a second cubed
+  Path own_path;
+  Path other_path[8];
   for (int t = 1; t <= ticks; t++) {
     now += tick_us;
     sim_advance(net, now);
@@ -165,6 +187,7 @@ ReplicateTrial run_replicate_trial(const ReplicateTrialConfig& k) {
         c->held[0] = static_cast<uint8_t>(core::int_in(c->hand, -80, 80));
         c->held[1] = static_cast<uint8_t>(core::int_in(c->hand, -80, 80));
         c->held[2] = static_cast<uint8_t>(core::int_in(c->hand, -40, 40));
+        c->since_change = 0;
       }
       // The client's own clock: its rate against the network's, sped or slowed by time sync.
       c->acc += c->rate * replicate_client_dilation(c->r);
@@ -172,6 +195,14 @@ ReplicateTrial run_replicate_trial(const ReplicateTrialConfig& k) {
         c->acc -= 1;
         replicate_client_input(c->r, c->held);
         c->made[c->r.seq % 256] = now;
+        if (&c == &cs.front() && c->r.predicting) {
+          // The drawn path, less the four ticks after each change of the held input: the game's
+          // own steps are the same on any link, so what is left is the jerk the network adds.
+          double v[kMaxFields];
+          replicate_client_predicted(c->r, v);
+          const double j = own_path.push(v[kX], v[kZ]);
+          if (j >= 0 && ++c->since_change >= 4) o.own_jerk.push_back(j * cube);
+        }
       }
       if (c->slot < 0 && c->r.own != kNoEntity) {
         for (int p = 0; p < kMaxPeers; p++) {
@@ -199,7 +230,19 @@ ReplicateTrial run_replicate_trial(const ReplicateTrialConfig& k) {
       const uint32_t at = replicate_client_render_tick(c->r);
       if (at < 256) continue;  // still drawing the first snapshot: nothing in the past to judge
       drawn_n++;
-      held_n += at > (c->r.newest << 8);
+      const bool past = at > (c->r.newest << 8);
+      held_n += past;
+      if (&c == &cs.front()) {
+        for (size_t i = 0; i < std::min<size_t>(8, npcs.size()); i++) {
+          double v[kMaxFields];
+          if (!replicate_client_sample(c->r, npcs[i], v)) {
+            other_path[i].n = 0;
+            continue;
+          }
+          const double j = other_path[i].push(v[kX], v[kZ]);
+          if (j >= 0) o.other_jerk.push_back(j * cube);
+        }
+      }
       delay_sum += static_cast<double>((server->tick << 8) - at) / 256.0 * 1000.0 / hz;
       delay_n++;
       for (size_t i = static_cast<size_t>(t) % 8; i < npcs.size(); i += 8) {
@@ -212,6 +255,10 @@ ReplicateTrial run_replicate_trial(const ReplicateTrialConfig& k) {
         }
         const double dx = drawn[kX] - judged[kX], dz = drawn[kZ] - judged[kZ];
         o.gaps.push_back(std::sqrt(dx * dx + dz * dz));
+        if (past) {
+          o.late_ms.push_back(static_cast<double>(at - (c->r.newest << 8)) / 256.0 * 1000.0 / hz);
+          o.late_gap.push_back(o.gaps.back());
+        }
       }
     }
     if (t % hz == 0) {
@@ -235,6 +282,7 @@ ReplicateTrial run_replicate_trial(const ReplicateTrialConfig& k) {
       o.wire_down_kbps += static_cast<double>(ls.bytes_received) * 8 / 1000 / seconds / k.clients;
     }
     corrections += c->r.stats.corrections;
+    o.snaps += c->r.stats.snaps;
     o.dropped += c->r.stats.dropped;
     o.decoded += c->r.stats.snapshots;
     double v[kMaxFields];

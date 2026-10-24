@@ -231,9 +231,10 @@ that names its entities' fields and its step.
 | Interest | A client is sent its own entity and those within `interest_radius` on two named fields, and as `visible` allows; a row out of sight is sent gone | The persistent world's and the open world's "what is near you", and nothing hidden is sent (M17l) |
 | The budget | `snapshot_budget` caps a snapshot's bytes; rows are written stalest first, a row's priority being how many ticks the client's copy (the baseline's) is behind; a row left out keeps the baseline's value | Deltas against acks that lag form chains of baselines: a priority reset when a row is sent would starve it in the other chain for ever, so the age is read off the baseline itself |
 | Inputs | Each tick's input goes up with the last `redundancy` (4) beside it; the server queues them by number and applies one a tick | One lost packet costs nothing. A tick with none waiting steps the last again and the queue grows by one, a buffer the link's jitter set; inputs lost past the redundancy are taken to be the one before them, less those the repeats stood in for, so the entity is stepped as often as the client stepped it |
-| Prediction | The client steps its own entity at once, and on each snapshot replays every input the server had not applied over the server's state; a difference is kept as an error that decays by `smoothing` a tick | Corrections are shown as a glide, not a snap |
+| Prediction | The client steps its own entity at once, and on each snapshot replays every input the server had not applied over the server's state; a difference is kept as an error drawn out through a critically damped spring (half-life `spring_halflife_s`, 1/15 s) that carries its own velocity, or shown at once past `snap_distance` (a teleport, a respawn); `spring` off, the error decays by `smoothing` a tick | A decay jumps the drawn velocity at every correction, a kink the eye catches; the spring starts from the velocity the path already had, so it bends instead |
 | Time sync (M17n) | Each snapshot carries the client's SLACK: the fewest of its inputs left waiting on the server over the last half second (-1: a tick went without). The client runs its tick `replicate_client_dilation` times as fast (within 3%) to hold the slack at zero, one in reserve for a few seconds after a window ran short | A clock a little fast piles inputs up on the server (a third of a second of lag within a minute at 2%); a little slow starves it (a repeated step, a correction). Held at zero, an input arrives just in time whatever the drift |
-| Interpolation | With time sync, others are drawn behind the client's reckoning of the server's tick by what the last 64 snapshots' arrivals needed (how far the reckoning had run past the newest snapshot when the next came), eased up quickly and down slowly; with sync off, `interp_ticks` (6) behind the newest heard of | On a clean link the others are drawn 38 ms behind instead of 100; on a jittery one the delay grows until they rarely stand still |
+| Interpolation | With time sync, others are drawn behind the client's reckoning of the server's tick by what the last 64 snapshots' arrivals needed (how far the reckoning had run past the newest snapshot when the next came), eased up quickly and down slowly; with sync off, `interp_ticks` (6) behind the newest heard of. Between snapshots, a cubic Hermite curve whose slopes come from the snapshots either side (`cubic`); past the newest, carried on at the last velocity for up to `extrapolate_s` (0.2 s, then held; a field with `extrapolate` false is held at once) and blended back over `extrapolate_blend_s` once the late one arrives | On a clean link the others are drawn 38 ms behind instead of 100; on a jittery one the delay grows until they rarely stand still. Straight lines turn a corner at every snapshot, and a held entity stops and starts |
+| The tick rate | `tick_hz` is the game's (`sv_fps`): every duration above is set in seconds and turned into ticks at it | A shooter at 72 Hz and a racer at 120 behave alike with the same settings; the `net-predict` lab runs both |
 | Lag compensation | Each input names the tick the client was drawing; `replicate_rewind` returns any entity at that tick (fractional) from the server's quantized history | A hit is judged against what the player saw |
 
 Nothing reads a clock or draws randomness: the exchange over the simulated network replays to
@@ -255,7 +256,7 @@ path's jerk, the view delay):
 | Row | What | Why |
 | --- | --- | --- |
 | M17n (built) | Time sync: the client's tick locked to the server's; the client ahead by just enough that its input lands a target buffer early; the server reports each client's input queue and the client dilates its tick a few percent to hold it; the interpolation delay set by the jitter measured | A fixed lead stalls on a bad link and wastes delay on a good one; dilation keeps the queue at its target with no stall, no repeat and no drop, and the view as fresh as the jitter allows |
-| M17o | Corrections drawn through a critically damped spring, velocity continuous, snapping only past a distance; others on cubic curves through their velocities; a capped extrapolation by the game's own step when snapshots are late | A decay alone leaves a kink in the velocity the eye catches; a late snapshot should not freeze the others |
+| M17o (built) | Corrections drawn through a critically damped spring, velocity continuous, snapping only past a distance; others on cubic curves through their velocities; a capped extrapolation by the game's own step when snapshots are late | A decay alone leaves a kink in the velocity the eye catches; a late snapshot should not freeze the others |
 | M17p | The predicted world: what the client's input touches resimulated with it, others' inputs taken as their last; events predicted under a client's id, matched or undone; a resimulation budget | A player who bumps another or fires sees it at once, not a round trip later |
 | M17q | Sub-tick inputs applied at their fraction of a tick; the rewind capped (the shooter favoured up to a limit) and the hit confirmed; a finish line's order at sub-tick resolution | A tick is 16 ms: a press, a shot or a finish should not be rounded to it |
 
@@ -267,6 +268,15 @@ drawing past the newest snapshot under 1% of the time. On `awful` it grows from 
 stands still 3% of the time instead of 8%: there the delay buys smoothness, and M17o's
 extrapolation will take some of it back.
 
+M17o is built on top, measured by the same lab at 72 Hz and 120 Hz in three modes (fixed, time
+sync, smooth). Against time sync alone, at 72 Hz the others' drawn jerk at the 99th percentile
+falls from 12,900 m/s³ to 4,600 on `broadband`, 25,300 to 7,600 on `wifi` and 83,400 to 59,700 on
+`awful`. The own entity's jerk, less the ticks where its own input changed, falls from 26,200 to
+6,100 on `bad` and from 37,900 to 7,600 on `awful` (at 120 Hz, 43,900 to 3,900 and 85,600 to
+9,200). Drawn past the newest snapshot, the others land a mean 0.28 m from the server's truth when
+held and 0.01 m when carried on (`bad`, 72 Hz). At 72 Hz on `lan` an input reaches the server's
+step in 14 ms and the others are drawn 31 ms behind; at 120 Hz, 8 ms and 19.
+
 Which of them a kind of game uses: a shooter all four; a racer its own vehicle predicted (M17n,
 M17o), rivals extrapolated a little so they are drawn where they are, contacts on the server
 (M17p); a fighting game rollback (M17g) with M17n's sync; a strategy game lockstep; a persistent
@@ -276,7 +286,10 @@ world M17n and M17o for its own movement only. Character movement (M28d) reconci
 ## Rates and live tools (M17f2)
 
 A client asks for its own rates and the server caps them, as the settings a player tunes in a cfg
-(the console's names in brackets):
+(the console's names in brackets). `add_net_cvars` (`engine/net/net_cvars.hpp`) binds every one of
+them to the `ReplicateConfig` a game makes, the game's own values as the defaults, so a shooter
+can start at 72 Hz and a racer at 120; `net_cvars_apply` turns `cl_interp`'s seconds into ticks at
+`sv_fps`:
 
 | Setting | Side | What it does |
 | --- | --- | --- |
@@ -284,9 +297,12 @@ A client asks for its own rates and the server caps them, as the settings a play
 | `update_rate` (`cl_updaterate`) | client | snapshots a second it asks for; sent every max(`send_every`, tick_hz / update_rate) ticks |
 | `cmd_rate` (`cl_cmdrate`) | client | input messages a second; each carries every input since the last and `redundancy` before them |
 | `redundancy` (`cl_cmdbackup`) | client | inputs repeated in every message |
-| `interp_ticks` (`cl_interp`) | client | how far behind the newest snapshot others are drawn |
-| `max_rate`, `max_update_rate` (`sv_maxrate`) | server | the most any client is sent, whatever it asks |
-| `tick_hz` (`sv_fps`) | both | the step's rate, which turns the rates into ticks |
+| `interp_ticks` (`cl_interp`, s) | client | how far behind the newest snapshot others are drawn without time sync |
+| `sync` (`cl_timesync`) | client | time sync (M17n) on or off |
+| `spring`, `cubic` (`cl_smooth`) | client | smoothing (M17o) on or off |
+| `extrapolate_s` (`cl_extrapolate`) | client | the most the others are carried past the newest snapshot |
+| `max_rate` (`sv_maxrate`), `max_update_rate` (`sv_maxupdaterate`) | server | the most any client is sent, whatever it asks |
+| `tick_hz` (`sv_fps`, latched) | both | the step's rate, 10 to 240 Hz, which turns the rates and durations into ticks; a change waits for a new map or a restart |
 
 The client's ask rides on every input message (`rate` u32 and `update_rate` u16), so a change
 takes effect on the next one. Finding the right numbers is an experiment, and three tools run it:

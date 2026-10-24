@@ -54,8 +54,16 @@ struct ReplicateTrial {
   std::vector<double> delay_ms;    // client 1's view delay at the same moments
   std::vector<double> dilation;    // client 1's clock speed at the same moments
   std::vector<double> gaps;        // a rewind against what was drawn, metres
-  std::vector<double> t_s, kbps;   // snapshot kbit/s a client, each second
-  uint64_t hash = 0;               // every end's final state
+  // SMOOTHNESS (M17o): the drawn paths' jerk (m/s^3, the third difference of position on x and z):
+  // client 1's own entity as drawn each of its ticks (less the four after each change of its held
+  // input: the game's own steps, the same on any link), and
+  // the first eight of the crowd as it draws them each server tick.
+  std::vector<double> own_jerk, other_jerk;
+  uint64_t snaps = 0;  // corrections shown at once, past snap_distance
+  // Each rewind drawn past the newest snapshot: how late (ms past it) and how far off (metres).
+  std::vector<double> late_ms, late_gap;
+  std::vector<double> t_s, kbps;  // snapshot kbit/s a client, each second
+  uint64_t hash = 0;              // every end's final state
 };
 
 ReplicateTrial run_replicate_trial(const ReplicateTrialConfig& config);

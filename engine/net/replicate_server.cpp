@@ -268,6 +268,8 @@ void replicate_server_init(ReplicateServer& s, const Schema& schema, const Repli
   if (s.config.ring < 2) s.config.ring = 2;
   if (s.config.send_every < 1) s.config.send_every = 1;
   if (s.config.tick_hz < 1) s.config.tick_hz = 1;
+  s.slack_window =
+      std::max(1, static_cast<int>(std::lround(s.config.slack_window_s * s.config.tick_hz)));
   s.node = &node;
   const auto n = static_cast<size_t>(config.max_entities);
   const auto ring = static_cast<size_t>(s.config.ring);
@@ -372,7 +374,7 @@ void replicate_server_tick(ReplicateServer& s) {
     const int sample = c.queue_seq.empty() ? (c.applied ? -1 : kNoSlack)
                                            : static_cast<int>(c.queue_seq.size()) - 1;
     c.slack_now = std::min(c.slack_now, sample);
-    if (++c.slack_ticks >= std::max(1, s.config.slack_window)) {
+    if (++c.slack_ticks >= s.slack_window) {
       c.slack_before = c.slack_now;
       c.slack_now = kNoSlack;
       c.slack_ticks = 0;

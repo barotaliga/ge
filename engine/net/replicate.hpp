@@ -23,10 +23,19 @@
 // jitter); inputs lost past the redundancy are taken to be the one before them, less those the
 // repeats already stood in for, so the server steps a client's entity as often as the client did.
 // The client PREDICTS its entity by replaying every input the server has not yet applied over the
-// newest snapshot; a correction is shown smoothly, the error decaying by `smoothing` a tick.
+// newest snapshot; a correction is shown smoothly (SMOOTHING, M17o): the error drawn out through a
+// critically damped spring that carries its own velocity, so the drawn path bends instead of
+// kinking, and snapped at once past `snap_distance` (a teleport, a respawn).
 //
-// OTHERS are drawn `interp_ticks` behind the server's newest tick the client has heard of,
-// interpolated between the two snapshots around that moment. LAG COMPENSATION: each input names
+// OTHERS are drawn a little behind the server (TIME SYNC, M17n), on a cubic curve through the
+// snapshots around that moment, its slopes from the snapshots either side (M17o); when the
+// snapshots run late they are carried on at their last velocity for up to `extrapolate_s`, then
+// held, and blended back onto the curve over `extrapolate_blend_s` once one arrives.
+//
+// THE TICK RATE is the game's (`tick_hz`: 60, 72, 120 or any other), and every duration below is
+// in seconds, turned into ticks at that rate, so the same settings behave the same at any rate.
+//
+// LAG COMPENSATION: each input names
 // the tick the client was drawing, and `replicate_rewind` returns any entity's state at that tick
 // from the server's history, so a hit is judged against what the player saw.
 //
@@ -63,8 +72,9 @@ constexpr int kNoSlack = 1 << 20;  // no input applied in the window yet
 
 struct FieldSpec {
   double min = 0, max = 1;
-  uint8_t bits = 16;   // 1..32
-  bool angle = false;  // wraps over [min, max): interpolated the short way round
+  uint8_t bits = 16;        // 1..32
+  bool angle = false;       // wraps over [min, max): interpolated the short way round
+  bool extrapolate = true;  // drawn ahead of the newest snapshot when late (false: a count, a flag)
 };
 
 // The game's step for an owned entity: its state (the schema's fields) moved by one tick's input.
@@ -92,20 +102,29 @@ struct ReplicateConfig {
   double interest_radius = 0;            // 0: everyone sees everything
   VisibleFn visible = nullptr;
   void* visible_ctx = nullptr;
-  int interp_ticks = 6;        // how far behind the newest snapshot others are drawn
-  double smoothing = 0.85;     // a correction's error left after each tick
-  size_t snapshot_budget = 0;  // bytes a snapshot may take (0: the largest message)
+  int interp_ticks = 6;  // how far behind the newest snapshot others are drawn
+  // SMOOTHING (M17o). spring: a correction's error drawn out through a critically damped spring
+  // whose error halves in about `spring_halflife_s`, its velocity carried across corrections;
+  // off: the error scaled by `smoothing` each tick (a kink in the drawn velocity at every one).
+  bool spring = true;
+  double spring_halflife_s = 1.0 / 15;
+  double smoothing = 0.85;     // without the spring: a correction's error left after each tick
+  double snap_distance = 0;    // a correction this large on any field is shown at once (0: never)
+  bool cubic = true;           // others on a cubic curve (false: straight between snapshots)
+  double extrapolate_s = 0.2;  // the most others are carried past the newest snapshot (0: held)
+  double extrapolate_blend_s = 0.13;  // a late snapshot is blended in over this long
+  size_t snapshot_budget = 0;         // bytes a snapshot may take (0: the largest message)
   // THE RATES, the client's to ask and the server's to cap (a game exposes them as settings).
   // A client's ask rides on its inputs; the server sends it a snapshot every
   // max(send_every, tick_hz / update_rate) ticks, each within rate / its snapshots a second.
-  int tick_hz = 60;         // the step's rate, which turns the rates into ticks
+  int tick_hz = 60;         // the step's rate, which turns the rates and durations into ticks
   int update_rate = 0;      // client: snapshots a second it asks for (0: every send_every)
   int cmd_rate = 0;         // client: input messages a second it sends (0: one a tick)
   uint32_t rate = 0;        // client: snapshot bytes a second it takes (0: no cap)
   int max_update_rate = 0;  // server: the most snapshots a second anyone is sent (0: no cap)
   uint32_t max_rate = 0;    // server: the most snapshot bytes a second anyone is sent (0: none)
   // TIME SYNC (M17n). The server tells each client its SLACK: the fewest of its inputs left waiting
-  // behind the one applied, over the last `slack_window` ticks (-1: a tick went without). The
+  // behind the one applied, over the last `slack_window_s` (-1: a tick went without). The
   // client runs its own tick `replicate_client_dilation` times as fast as it otherwise would,
   // within 1 +- `dilate_max`, to hold the slack at `input_slack`: ahead of the server by its round
   // trip and just enough for the link's jitter, never stalling and never queuing more. Its
@@ -114,8 +133,9 @@ struct ReplicateConfig {
   // `interp_quantile`, instead of a fixed `interp_ticks`; it eases at most `interp_ease` a tick.
   // Off (`sync` false): a fixed `interp_ticks`, and the client's clock is the caller's alone.
   bool sync = true;
-  int input_slack = 0;         // inputs to hold in reserve at the worst moment of a window
-  int slack_window = 30;       // ticks
+  int input_slack = 0;  // inputs to hold in reserve at the worst moment of a window
+  double slack_window_s = 0.5;
+  double starve_hold_s = 5;    // a window that ran short raises the target slack by one this long
   double dilate_max = 0.03;    // the most the client's clock is sped up or slowed
   double dilate_gain = 0.01;   // the speed change a tick of slack off the target asks for
   int interp_window = 64;      // arrivals
@@ -130,6 +150,7 @@ struct ReplicateStats {
   uint64_t inputs = 0, repeated = 0;  // server: inputs applied, ticks that reused the last one
   uint64_t trimmed = 0;               // server: inputs dropped for a queue past its most
   uint64_t corrections = 0;           // client: snapshots that moved its prediction
+  uint64_t snaps = 0;                 // client: corrections past snap_distance, shown at once
 };
 
 // One entity's quantized row.
@@ -143,6 +164,8 @@ struct Row {
 struct Snap {
   uint32_t tick = 0;
   bool valid = false;
+  uint32_t late_x256 =
+      0;                  // client: the tick it was drawing when this arrived past the newest, or 0
   std::vector<Row> rows;  // by id, ascending
 };
 
@@ -174,6 +197,7 @@ struct ReplicateServer {
   ReplicateConfig config;
   Node* node = nullptr;
   uint32_t tick = 0;
+  int slack_window = 30;  // slack_window_s in ticks at tick_hz
   uint16_t next_id = 0;
   std::vector<uint16_t> ids;      // per index: the entity's id, kNoEntity when free
   std::vector<int> owner;         // per index: the peer whose inputs move it, -1: the game
@@ -219,11 +243,15 @@ struct ReplicateClient {
   uint32_t seq = 0;              // the last input made
   std::vector<uint8_t> history;  // inputs by seq, ring x input_size
   double predicted[kMaxFields] = {};
-  double error[kMaxFields] = {};  // a correction still being smoothed away
-  double last_error = 0;          // the size of the last correction (the schema's units)
-  uint32_t local_tick = 0;        // ticks since the newest snapshot arrived
-  int unsent = 0;                 // inputs made since the last input message (cmd_rate)
-  bool predicting = false;        // `predicted` holds a reconciled state to step on from
+  double error[kMaxFields] = {};          // a correction still being smoothed away
+  double error_v[kMaxFields] = {};        // its velocity (the spring), a tick
+  double spring_w = 0, spring_decay = 1;  // the spring's rate and its decay a tick
+  int starve_hold = 300;                  // the durations in ticks at tick_hz
+  double extrapolate_ticks = 12, blend_ticks = 8;
+  double last_error = 0;    // the size of the last correction (the schema's units)
+  uint32_t local_tick = 0;  // ticks since the newest snapshot arrived
+  int unsent = 0;           // inputs made since the last input message (cmd_rate)
+  bool predicting = false;  // `predicted` holds a reconciled state to step on from
   // TIME SYNC: the server's last word on this client's slack, the speed it asks of the clock,
   // and the server's tick as the client reckons it (`server_tick`, advanced a tick of the
   // server's each tick of its own and pulled toward each snapshot as it arrives); the snapshots'
@@ -259,7 +287,8 @@ inline double replicate_client_dilation(const ReplicateClient& c) { return c.dil
 // The tick others are drawn at, x256: with sync, `delay` behind the reckoned server tick; without,
 // interp_ticks behind the newest heard of.
 uint32_t replicate_client_render_tick(const ReplicateClient& c);
-// Entity `id` at the render tick, interpolated; false when it is in no snapshot around it.
+// Entity `id` at the render tick, on the curve through the snapshots, carried on (capped) past the
+// newest and blended back; false when it is in no snapshot around it.
 bool replicate_client_sample(const ReplicateClient& c, uint16_t id, double* out);
 
 // The schema's quantization, exposed for tests and tools.

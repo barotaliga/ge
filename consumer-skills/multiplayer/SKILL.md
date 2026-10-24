@@ -165,7 +165,12 @@ clock says (multiply the frame's seconds by it before they feed the accumulator,
 run clock). That is TIME SYNC (on by default, `rc.sync`): the server reports how many of the
 client's inputs wait in its queue, and the client speeds up or slows down by at most 3% to keep
 none waiting but none late, whatever its clock's drift. The others are then drawn behind the
-server by what the link's jitter needs, not a fixed six ticks.
+server by what the link's jitter needs, not a fixed six ticks. SMOOTHING (on by default,
+`rc.spring`, `rc.cubic`, `rc.extrapolate_s`) draws a correction out through a spring that keeps
+the velocity, draws the others on curves, and carries them on for up to 0.2 s when a snapshot is
+late. Set `rc.tick_hz` to the game's own step rate (72 for a shooter, 120 for a racer): every other
+duration in the config is in seconds and follows it. Mark a field that must never be guessed (a
+count, a flag) `extrapolate = false` in its `FieldSpec`.
 
 Spawn a player's entity with `replicate_spawn(server, peer, values)` when its peer connects. A
 hit is judged with `replicate_rewind(server, id, client_view_tick, out)`. Set
@@ -204,8 +209,11 @@ latencies under every preset before choosing `delay` and `turn_steps`.
 ## Tune the rates, and watch a live game
 
 A client's `rate`, `update_rate`, `cmd_rate`, `redundancy` and `interp_ticks` and the server's
-`max_rate`, `max_update_rate` and `tick_hz` are `ReplicateConfig` fields (the console's `rate`,
-`cl_updaterate`, `cl_cmdrate`, `cl_cmdbackup`, `cl_interp`, `sv_maxrate`, `sv_fps`). Pick them
+`max_rate`, `max_update_rate` and `tick_hz` are `ReplicateConfig` fields. Bind them to the console
+with `net::NetCvars nc{&rc}; net::add_net_cvars(console.cvars(), nc);` (the config's values are
+the defaults; call `net::net_cvars_apply(nc)` after the cfg runs): `sv_fps` (latched),
+`sv_maxupdaterate`, `sv_maxrate`, `cl_updaterate`, `cl_cmdrate`, `rate`, `cl_timesync`,
+`cl_smooth`, `cl_interp`, `cl_extrapolate`. Pick them
 with `ge net sweep --knob=update-rate --values=10,20,30,60 --presets=wifi,bad`, which names the
 cheapest value within reach of the best. To see a running game or server's packets, open a tap
 on its transport (`net::Tap tap; net::open_tap(tap, 27950, &err); transport.tap = &tap;`) and run
