@@ -1,0 +1,5 @@
+# each scene's end: its name and the state digest (fall_line_army_meet_test)
+knock e313fed892d51c61
+hull 182667d97bcb3319
+steal 8bf758061c3e7ab6
+run-down 9d43a5b344560363

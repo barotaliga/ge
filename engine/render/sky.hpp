@@ -4,7 +4,8 @@
 // render/wgsl/frame.wgsl).
 //
 // WHAT IS REDRAWN WHEN (prepare decides, encode obeys):
-// - the transmittance and multiple-scattering tables: once, the first frame;
+// - the transmittance and multiple-scattering tables: the first frame, and when the sky's air
+//   changes (render/sky_style.hpp: a sky type picked, its air knob turned), with every table after;
 // - the sky-view table and the sky's light: when the real sun's direction has turned more than
 //   kSunTurn or the eye's altitude has moved more than kEyeMove since they were built;
 // - at night (the moon's light set: render/night.hpp) the MOON's sky-view table and light, the
@@ -68,6 +69,7 @@ struct Sky {
   bool built = false;
   double built_sun[3] = {0, 0, 0};
   double built_eye_m = 0;
+  SkyStyle built_air{};  // the air the tables were built in (render/sky_style.hpp)
   double built_moon[3] = {0, 0, 0};
   double built_moon_eye_m = 0;
   bool moon_built = false;
