@@ -42,8 +42,8 @@ TEST(a_rivers_ribbon_lies_on_its_surface) {
   r::StreamMesh mesh;
   r::build_water_streams(world, 3, mesh, 1.0);
   // 40 rows past the first, nine across, two triangles a quad.
-  CHECK(mesh.vertices.size() == 41u * 9);
-  CHECK(mesh.indices.size() == 40u * 8 * 6);
+  CHECK(mesh.vertices.size() == size_t{41} * 9);
+  CHECK(mesh.indices.size() == size_t{40} * 8 * 6);
   for (const r::StreamVertex& v : mesh.vertices) {
     CHECK(v.tag == 0);
     const gw::Sample s = gw::sample(world, v.p[0], v.p[1], v.p[2], 3);

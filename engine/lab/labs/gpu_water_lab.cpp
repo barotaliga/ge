@@ -481,7 +481,7 @@ void run(gl::Lab& lab) {
     gr::StreamMesh mesh;
     gr::build_water_streams(world, t, mesh);
     gr::prepare_water_streams(dfl, fs.water, mesh, world);
-    lab.metric("streams.triangles", static_cast<double>(mesh.indices.size() / 3), "count",
+    lab.metric("streams.triangles", static_cast<double>(mesh.indices.size()) / 3, "count",
                Det::measured);
     // The mist and the spray where the sheets land, flown for 4 s before the pictures.
     ge::core::Rng spray_rng = ge::core::make_rng(24);
