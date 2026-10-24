@@ -12,10 +12,10 @@ sees plain structs.
 
 - **Window**: create, resize, fullscreen toggle, DPI scale, and the native handles the
   GPU surface needs (`gpu` skill). Vsync is the GPU's job.
-- **Input**: keyboard (the game's default keys), pointer and touch (the HUD presses and
-  thumb zones), gamepad axes and buttons, and gamepad rumble. Platform input becomes a
-  per-frame `InputSnapshot`, and the game maps it to its `SkierInput` (the one place
-  screen axes become engine signs).
+- **Input**: the window's own `InputSnapshot` (keys, pointer, focus, quit), and every input
+  device as engine/input events through `devices.hpp` (keyboards, raw mice, gamepads,
+  joysticks, wheels, touch; rumble, lights and force feedback back out) read in the same pump.
+  The device side is the `input` skill's (`docs/input.md` § The platform backend).
 - **Focus**: losing focus pauses the run clock; regaining it resumes with an empty
   accumulator (`engine/loop/run_clock.hpp`'s rule).
 - **Audio device**: one output stream at the device's rate. The `audio` layer fills it.
