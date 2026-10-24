@@ -16,7 +16,7 @@
 #   ge_ai        the bots' layer (engine/ai: the decision record `ge why` reads)
 #   ge_wind      the wind as a pure function of place and time (engine/wind; docs/water.md)
 #   ge_water     bodies of water, the waves a wind grows on them and the one query (engine/water)
-#   ge_move      character movement (engine/move: the knobs, the step, the box world, scenarios)
+#   ge_move      character movement (engine/move: the knobs and their cvars, the step, scenarios)
 #   ge_camera    the camera (engine/camera: poses, followers, rigs, shake, transitions, the stack)
 #   ge_play      the play contract (engine/play: GameSpec and Run, the session, the input log,
 #                the bench, the stills `ge shot` draws)
@@ -183,6 +183,7 @@ if(GE_GPU)
     engine/render/instances.wgsl engine/render/instances_cull.wgsl engine/render/bloom.wgsl
     engine/render/skinning.wgsl engine/render/particles.wgsl engine/render/particles_sim.wgsl engine/render/snowfall.wgsl engine/render/snowfall_sim.wgsl
     engine/render/clouds.wgsl engine/render/water.wgsl engine/render/water_copy.wgsl
+    engine/render/water_stream.wgsl
     engine/render/underwater.wgsl)
 endif()
 
@@ -215,15 +216,16 @@ target_link_libraries(ge_input PUBLIC ge_core)
 # platform; a game binds the knobs to its console and answers the trace with its own world.
 file(GLOB GE_MOVE_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/move/*.cpp)
 add_library(ge_move STATIC ${GE_MOVE_SOURCES})
-target_link_libraries(ge_move PUBLIC ge_core)
+target_link_libraries(ge_move PUBLIC ge_core ge_console)
 
 # The camera (engine/camera, docs/camera.md): the pose, the followers, the subject, the rigs
 # (first person, boom, mounted, orbit, planted, free), the shake, the transitions and the stack.
 # No GPU and no platform: a game hands it a subject and the world's queries and gets a pose back
 # (camera/to_view.hpp writes it into the renderer's FrameView).
+# Its cvars (camera/cvars.hpp) bind the player's settings on the console.
 file(GLOB GE_CAMERA_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/camera/*.cpp)
 add_library(ge_camera STATIC ${GE_CAMERA_SOURCES})
-target_link_libraries(ge_camera PUBLIC ge_core)
+target_link_libraries(ge_camera PUBLIC ge_core ge_console)
 
 # The lab framework (engine/lab: the contract, the runner, the raster, the PNG), published as
 # ge::lab so a game's labs plug into the same contract as the engine's (docs/labs.md).

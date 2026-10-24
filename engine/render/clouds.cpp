@@ -80,6 +80,52 @@ std::vector<uint8_t> make_noise() {
   return out;
 }
 
+// Cellular (Worley) noise of `period` cells across the tile at the tile point (u, v, w), 0..1:
+// one minus the distance to the nearest of the cells' points (one a cell, placed by the lattice's
+// hash), over the cell's span. 1 at a point, falling to the boundaries between them: a billow.
+double cell_noise(double u, double v, double w, int period, uint32_t octave) {
+  const double x = u * period, y = v * period, z = w * period;
+  const int ix = static_cast<int>(std::floor(x)), iy = static_cast<int>(std::floor(y)),
+            iz = static_cast<int>(std::floor(z));
+  double best = 9;
+  for (int dz = -1; dz <= 1; ++dz)
+    for (int dy = -1; dy <= 1; ++dy)
+      for (int dx = -1; dx <= 1; ++dx) {
+        const int cx = ix + dx, cy = iy + dy, cz = iz + dz;
+        const double px = cx + lattice(cx, cy, cz, period, octave + 11);
+        const double py = cy + lattice(cx, cy, cz, period, octave + 23);
+        const double pz = cz + lattice(cx, cy, cz, period, octave + 37);
+        const double d2 = (px - x) * (px - x) + (py - y) * (py - y) + (pz - z) * (pz - z);
+        best = std::min(best, d2);
+      }
+  return std::max(0.0, 1.0 - std::sqrt(best));
+}
+
+std::vector<uint8_t> make_detail() {
+  // Billows at 4, 8 and 16 cells across the tile, each half the last.
+  std::vector<double> f(size_t{kN} * kN * kN);
+  double lo = 1e9, hi = -1e9;
+  for (int z = 0; z < kN; ++z)
+    for (int y = 0; y < kN; ++y)
+      for (int x = 0; x < kN; ++x) {
+        const double u = (x + 0.5) / kN, v = (y + 0.5) / kN, w = (z + 0.5) / kN;
+        double sum = 0, weight = 1, total = 0;
+        for (uint32_t o = 0; o < 3; ++o) {
+          sum += weight * cell_noise(u, v, w, 4 << o, o);
+          total += weight;
+          weight *= 0.5;
+        }
+        const double n = sum / total;
+        f[(size_t{static_cast<size_t>(z)} * kN + y) * kN + x] = n;
+        lo = std::min(lo, n);
+        hi = std::max(hi, n);
+      }
+  std::vector<uint8_t> out(f.size());
+  for (size_t i = 0; i < f.size(); ++i)
+    out[i] = static_cast<uint8_t>(std::lround((f[i] - lo) / (hi - lo) * 255.0));
+  return out;
+}
+
 // How many texels hold each byte, from the top: `above[b]` texels hold more than b.
 const std::array<double, 256>& share_above() {
   static const std::array<double, 256> table = [] {
@@ -109,6 +155,11 @@ double age_in_tile(const CloudLayer& l) { return frac(l.evolve / kCloudTileCells
 const std::vector<uint8_t>& cloud_noise() {
   static const std::vector<uint8_t> noise = make_noise();
   return noise;
+}
+
+const std::vector<uint8_t>& cloud_detail() {
+  static const std::vector<uint8_t> detail = make_detail();
+  return detail;
 }
 
 double cloud_noise_at(double u, double v, double w) {
@@ -152,13 +203,20 @@ double cloud_cut(double cover) {
 }
 
 double cloud_column(const CloudLayer& l, double x, double z) {
-  const double c = core::libm::cos(l.heading), s = core::libm::sin(l.heading);
-  const double across = x * c - z * s, along = x * s + z * c;
+  const double hc = core::libm::cos(l.heading), hs = core::libm::sin(l.heading);
+  const double across = x * hc - z * hs, along = x * hs + z * hc;
   const double scale = 1.0 / (l.cell_m * kCloudTileCells);
-  const double n = cloud_noise_at(
-      across * scale, along * scale / std::max(l.stretch, 1e-3) - drift_in_tile(l), age_in_tile(l));
+  const double u = across * scale, v = along * scale / std::max(l.stretch, 1e-3) - drift_in_tile(l);
+  const double w = age_in_tile(l);
+  const double n = cloud_noise_at(u, v, w);
   const double cut = cloud_cut(l.cover);
-  return std::clamp((n - cut) / std::max(1.0 - cut, 1e-3), 0.0, 1.0);
+  double c = std::clamp((n - cut) / std::max(std::min(1.0 - cut, kColumnRamp), 1e-3), 0.0, 1.0);
+  const double patch = std::clamp(l.patch, 0.0, 1.0);
+  if (patch > 0) {
+    const double m = cloud_noise_at(u * 0.25, v * 0.25, w + 0.5);
+    c *= 1 + (std::clamp((m - 0.5) * 4 + 0.5, 0.0, 1.0) - 1) * patch;
+  }
+  return c;
 }
 
 void cloud_rows(const Clouds& clouds, float info[4], float rows[][4]) {
@@ -166,13 +224,14 @@ void cloud_rows(const Clouds& clouds, float info[4], float rows[][4]) {
   info[0] = static_cast<float>(n);
   info[1] = static_cast<float>(std::clamp(clouds.steps, 0.25, 1.0));
   info[2] = info[3] = 0;
-  for (int i = 0; i < kCloudLayers * 3; ++i) rows[i][0] = rows[i][1] = rows[i][2] = rows[i][3] = 0;
+  for (int i = 0; i < kCloudLayers * 4; ++i) rows[i][0] = rows[i][1] = rows[i][2] = rows[i][3] = 0;
   for (int i = 0; i < n; ++i) {
     const CloudLayer& l = clouds.layers[i];
-    const size_t r = static_cast<size_t>(i) * 3;
+    const size_t r = static_cast<size_t>(i) * 4;
     float* v0 = rows[r];
     float* v1 = rows[r + 1];
     float* v2 = rows[r + 2];
+    float* v3 = rows[r + 3];
     v0[0] = static_cast<float>(l.base_m);
     v0[1] = static_cast<float>(std::max(l.top_m, l.base_m + 1.0));
     v0[2] = static_cast<float>(cloud_cut(l.cover));
@@ -185,21 +244,33 @@ void cloud_rows(const Clouds& clouds, float info[4], float rows[][4]) {
     v2[1] = static_cast<float>(std::clamp(l.dome, 0.0, 1.0));
     v2[2] = static_cast<float>(std::max(l.density, 0.0));
     v2[3] = static_cast<float>(std::max(l.shadow_tau, 0.0));
+    v3[0] = static_cast<float>(std::clamp(l.anvil, 0.0, 1.0));
+    v3[1] = static_cast<float>(std::clamp(l.erode, 0.0, 1.0));
+    v3[2] = static_cast<float>(std::clamp(l.fibre, 0.0, 1.0));
+    v3[3] = static_cast<float>(std::clamp(l.patch, 0.0, 1.0));
   }
 }
 
 CloudNoise create_cloud_noise(gpu::Device& device) {
   CloudNoise c;
   const auto n = static_cast<uint32_t>(kN);
-  c.texture = make_texture(device, "clouds.noise", n, n, n, wgpu::TextureFormat::R8Unorm,
+  c.texture = make_texture(device, "clouds.noise", n, n, n, wgpu::TextureFormat::RG8Unorm,
                            wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst);
+  // The column's noise in red, the billows in green.
+  const std::vector<uint8_t>& col = cloud_noise();
+  const std::vector<uint8_t>& bil = cloud_detail();
+  std::vector<uint8_t> texels(col.size() * 2);
+  for (size_t i = 0; i < col.size(); ++i) {
+    texels[i * 2] = col[i];
+    texels[i * 2 + 1] = bil[i];
+  }
   wgpu::TexelCopyTextureInfo dst{};
   dst.texture = c.texture;
   wgpu::TexelCopyBufferLayout layout{};
-  layout.bytesPerRow = n;
+  layout.bytesPerRow = n * 2;
   layout.rowsPerImage = n;
   const wgpu::Extent3D size{n, n, n};
-  device.queue.WriteTexture(&dst, cloud_noise().data(), cloud_noise().size(), &layout, &size);
+  device.queue.WriteTexture(&dst, texels.data(), texels.size(), &layout, &size);
   c.view = c.texture.CreateView();
   wgpu::SamplerDescriptor sd{};
   sd.label = "render.linear_repeat";

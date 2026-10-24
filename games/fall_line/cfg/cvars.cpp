@@ -118,10 +118,13 @@ void add_cvars(con::Console& c, Settings& s) {
   v.bind({.name = "cl_view",
           .fallback = "chase",
           .flags = kPlayer,
-          .help = "the camera: a rung (tips helmet chase far high orbit) or a still view (start "
-                  "piste lookback vista aerial)",
+          .help = "the camera: a rung (tips helmet chase far high orbit; on a machine its own: "
+                  "seat pilot wing down) or a still view (start piste lookback vista aerial)",
           .kind = CvarKind::text},
          &s.view);
+
+  // The camera's settings at the engine's defaults: a world in metres, the ladders' own rows.
+  ge::camera::add_camera_cvars(v, s.camera, {});
 
   v.bind({.name = "volume",
           .fallback = "0.8",
@@ -213,6 +216,15 @@ void add_cvars(con::Console& c, Settings& s) {
           .min = -1,
           .max = 1},
          &s.cover);
+  v.bind({.name = "sv_clouds",
+          .fallback = "map",
+          .flags = kRun,
+          .help = "the kinds of cloud drawn, lowest first, joined by '+' (cumulus+cirrus): "
+                  "inversion stratus stratocumulus cumulus congestus cumulonimbus nimbostratus "
+                  "altocumulus altostratus lenticular cirrocumulus cirrostratus cirrus wisps "
+                  "(map: the map's own)",
+          .kind = CvarKind::text},
+         &s.cloud_kinds);
   v.bind({.name = "sv_skytype",
           .fallback = "earth",
           .flags = kRun,
