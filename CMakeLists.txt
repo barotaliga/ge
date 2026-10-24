@@ -9,15 +9,21 @@
 #                (engine/assets; cmake/Cgltf.cmake)
 #   ge_net       the network: links, the simulated network, captures, connections, nodes
 #                (engine/net; docs/networking.md)
+#   ge_console   the console: cvars, the command buffer, aliases, binds, cfg files (engine/console;
+#                docs/console.md)
 #   ge_lab       the lab framework (engine/lab: the contract, the runner, the raster, the PNG,
 #                the series files, the charts and the model views)
 #   ge_ai        the bots' layer (engine/ai: the decision record `ge why` reads)
+#   ge_wind      the wind as a pure function of place and time (engine/wind; docs/water.md)
+#   ge_water     bodies of water, the waves a wind grows on them and the one query (engine/water)
 #   ge_move      character movement (engine/move: the knobs, the step, the box world, scenarios)
 #   ge_camera    the camera (engine/camera: poses, followers, rigs, shake, transitions, the stack)
 #   ge_charset   the bitmap fonts (engine/charset: the atlases, the builder, layers, looks)
 #   ge_hud       the HUD kit (engine/hud: anchors, readouts, meters, pips, banners, the feed)
 #   ge_play      the play contract (engine/play: GameSpec and Run, the session, the input log,
 #                the bench, the stills `ge shot` draws)
+#   ge_replay    replays (engine/replay: the keyframes, the player's seek, the transport;
+#                docs/replays.md)
 #   ge_prof      the profiler (engine/prof: timing zones, allocation counts, the resident set);
 #                ge_prof_alloc the counting operator new an executable links to count allocations
 #   ge_cli, ge   the ge command line (engine/cli: ge new, ge skills sync, ge doctor, ge lessons;
@@ -35,9 +41,11 @@
 #   ge_isa       the instruction-set baseline (x86-64: AVX2), linked by ge_core and
 #                published as ge::isa
 #   ge_flags     warnings, -Werror, sanitizers: this tree only, never published
-# ge_core, ge_fp, ge_isa, ge_assets, ge_ai, ge_move, ge_camera, ge_charset, ge_hud, ge_net, ge_lab, ge_play, ge_prof,
-# ge_prof_alloc and every plugin target are installed and published as ge::core, ge::fp, ge::isa,
-# ge::assets, ge::ai, ge::move, ge::camera, ge::net, ge::lab, ge::play, ge::prof, ge::prof_alloc and
+# ge_core, ge_fp, ge_isa, ge_assets, ge_ai, ge_wind, ge_water, ge_move, ge_camera, ge_charset, ge_hud,
+# ge_net, ge_console, ge_lab, ge_play, ge_replay, ge_prof, ge_prof_alloc and every plugin target are
+# installed and published as ge::core, ge::fp, ge::isa, ge::assets, ge::ai, ge::wind, ge::water,
+# ge::move, ge::camera, ge::charset, ge::hud, ge::net, ge::console, ge::lab, ge::play, ge::replay,
+# ge::prof, ge::prof_alloc and
 # ge::<plugin>, and the ge executable is installed to bin/
 # (cmake/Packaging.cmake, docs/publishing.md).
 cmake_minimum_required(VERSION 3.25)
@@ -170,13 +178,14 @@ if(GE_GPU)
   # map, the Hi-Z pyramid, TAA-U, post, the instance families and their meshes, the sun's shadows.
   file(GLOB GE_RENDER_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/render/*.cpp)
   add_library(ge_render STATIC ${GE_RENDER_SOURCES})
-  target_link_libraries(ge_render PUBLIC ge_gpu ge_assets)
+  target_link_libraries(ge_render PUBLIC ge_gpu ge_assets ge_water)
   ge_embed_wgsl(ge_render engine/render/sky_tables.wgsl engine/render/sky.wgsl
     engine/render/terrain.wgsl engine/render/terrain_cull.wgsl engine/render/terrain_normals.wgsl
     engine/render/horizon.wgsl engine/render/hiz.wgsl engine/render/taa.wgsl engine/render/post.wgsl
     engine/render/instances.wgsl engine/render/instances_cull.wgsl engine/render/bloom.wgsl
     engine/render/skinning.wgsl engine/render/particles.wgsl engine/render/particles_sim.wgsl engine/render/snowfall.wgsl engine/render/snowfall_sim.wgsl
-    engine/render/clouds.wgsl)
+    engine/render/clouds.wgsl engine/render/water.wgsl engine/render/water_copy.wgsl
+    engine/render/underwater.wgsl)
 endif()
 
 # The network (engine/net, docs/networking.md): addresses, the wire, the OS's UDP and TCP sockets
@@ -190,6 +199,11 @@ if(WIN32)
   target_link_libraries(ge_net PRIVATE ws2_32)
 endif()
 
+# The console (engine/console, docs/console.md): cvars and their tiers, the command buffer, aliases,
+# scripting, binds and cfg files. No platform and no clock: a frame is one `run`.
+file(GLOB GE_CONSOLE_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/console/*.cpp)
+add_library(ge_console STATIC ${GE_CONSOLE_SOURCES})
+target_link_libraries(ge_console PUBLIC ge_core)
 # Input devices (engine/input, docs/input.md): the device model, the events and the state they
 # fold into, dead zones, actions and bindings, rebinding, the device database, touch controls,
 # players, feedback and force-feedback effects, the event log and the simulated backend. No
@@ -252,14 +266,33 @@ file(GLOB GE_AI_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/ai/
 add_library(ge_ai STATIC ${GE_AI_SOURCES})
 target_link_libraries(ge_ai PUBLIC ge_core)
 
+# The wind (engine/wind): a pure function of place and time over a field built once, the
+# mountain's air one configuration of it (docs/water.md § Wind). Deterministic, no platform;
+# published as ge::wind.
+add_library(ge_wind STATIC engine/wind/field.cpp engine/wind/sources.cpp)
+target_link_libraries(ge_wind PUBLIC ge_core)
+
+# The water (engine/water): bodies of water, the sea a wind grows on them and the one `sample`
+# query (docs/water.md). Deterministic, no platform; published as ge::water.
+file(GLOB GE_WATER_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/water/*.cpp)
+add_library(ge_water STATIC ${GE_WATER_SOURCES})
+target_link_libraries(ge_water PUBLIC ge_core ge_wind)
+
 # The play contract (engine/play: a game's spec and Run, the session and its line protocol, the
 # input log, replay and diverge, the bench, the stills, the `play` executable's main), published
 # as ge::play so a game's `play` target is driven by `ge play`, `ge sim`, `ge replay`, `ge state`,
 # `ge diverge`, `ge shot`, `ge bench`, `ge profile` and `ge mem`.
 add_library(ge_play STATIC engine/play/inputs.cpp engine/play/json_read.cpp
   engine/play/session.cpp engine/play/bench.cpp engine/play/record.cpp engine/play/why.cpp
-  engine/play/human.cpp engine/play/devices.cpp engine/play/main.cpp)
-target_link_libraries(ge_play PUBLIC ge_core ge_ai ge_input ge_lab ge_prof ge_prof_alloc)
+  engine/play/human.cpp engine/play/devices.cpp engine/play/console_cmds.cpp engine/play/main.cpp)
+target_link_libraries(ge_play PUBLIC ge_core ge_ai ge_console ge_input ge_lab ge_prof ge_prof_alloc)
+
+# Replays (engine/replay, docs/replays.md): the keyframes a seek starts from, the player that steps
+# a run off its input log to any step, the transport; over the play contract's Run. Published as
+# ge::replay.
+file(GLOB GE_REPLAY_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/replay/*.cpp)
+add_library(ge_replay STATIC ${GE_REPLAY_SOURCES})
+target_link_libraries(ge_replay PUBLIC ge_core ge_play)
 
 # The ge command line (engine/cli, cmake/Cli.cmake): built here too when a game pulls the engine
 # in, so the game runs the ge of the engine it pins.
@@ -319,7 +352,7 @@ if(PROJECT_IS_TOP_LEVEL)
   get_property(GE_PLUGIN_TARGETS GLOBAL PROPERTY GE_PLUGIN_TARGETS)
   get_property(GE_GAME_TARGETS GLOBAL PROPERTY GE_GAME_TARGETS)
   add_executable(labs engine/lab/main.cpp ${GE_LAB_SOURCES})
-  target_link_libraries(labs PRIVATE ge_lab ge_play ge_core ge_audio ge_assets ge_net ge_input ge_move ge_camera ge_ui ge_charset ge_hud ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
+  target_link_libraries(labs PRIVATE ge_lab ge_play ge_replay ge_core ge_audio ge_assets ge_net ge_input ge_wind ge_water ge_move ge_camera ge_ui ge_charset ge_hud ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
     ${GE_LAB_EXTRA})
 
   # The `assets` executable (engine/assets/tool.hpp): the built assets listed, checked and stamped,

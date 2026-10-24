@@ -22,6 +22,10 @@
 // an adapter it notes that and draws placeholders, so the digest is the same on every row;
 // GE_GPU_REQUIRE=1 fails instead. Built only with GE_GPU.
 //
+// --cfg runs console commands over Fall Line's cvars first (cfg/cvars.hpp), so a sky a server
+// picks (sv_weather, sv_snowfall, sv_fog, sv_wind, sv_winddir, sv_cover, sv_hour, sv_skyrate) and
+// r_clouds are photographed as the game draws them (sim/sky.hpp).
+//
 // ge:summary Lab: Fall Line's frame from named views of a seed, captured headless
 // ge:keywords lab world picture screenshot views frame terrain sky post gpu-capture headless
 // ge:keywords tiles-drawn gpu-ms cpu-ms pass-table fall-line taa render-scale shimmer overdraw
@@ -40,10 +44,13 @@
 #include <utility>
 #include <vector>
 
+#include "console/console.hpp"
 #include "fall_line/app/frame.hpp"
 #include "fall_line/app/views.hpp"
+#include "fall_line/cfg/cvars.hpp"
 #include "fall_line/sim/bot.hpp"
 #include "fall_line/sim/simulate.hpp"
+#include "fall_line/sim/sky.hpp"
 #include "gpu/device.hpp"
 #include "gpu/target.hpp"
 #include "lab/lab.hpp"
@@ -158,7 +165,17 @@ std::string fixed(double v, int places) {
 
 void run(ge::lab::Lab& lab) {
   const double seed = lab.arg_num("seed");
-  const double hour = lab.arg_num("hour");
+  // --cfg: console commands over Fall Line's cvars, as a cfg would set them (the sky's sv_ cvars
+  // and r_clouds reach the map and the picture here; nothing else is read from them).
+  ge::console::Console console;
+  fall_line::cfg::Settings cvars;
+  fall_line::cfg::add_cvars(console, cvars);
+  console.execute(lab.arg("cfg"));
+  console.cvars().apply_latched();
+  for (const ge::console::Problem& p : console.problems()) {
+    lab.fail("--cfg: " + p.what, p.next + " Skill: console.");
+  }
+  const double hour = lab.arg_num("hour") >= 0 ? lab.arg_num("hour") : cvars.hour;
   const int width = static_cast<int>(lab.arg_num("width"));
   const int height = static_cast<int>(lab.arg_num("height"));
   const int settle = static_cast<int>(lab.arg_num("settle"));
@@ -168,10 +185,15 @@ void run(ge::lab::Lab& lab) {
   options.overdraw_probe = true;
   options.snow = lab.arg_num("snow") != 0;
   options.trails = lab.arg_num("trails") != 0;
+  options.reach_m = lab.arg_num("reach");
+  options.clouds = cvars.clouds;
+  options.cover = cvars.cover;
   if (width <= 0 || height <= 0 || width > 4096 || height > 4096 || settle < 1 ||
-      options.scale < 0.25 || options.scale > 1) {
-    lab.fail("--width and --height must be 1..4096, --settle at least 1 and --scale 0.25..1",
-             "next: pass a size such as --width=640 --height=360 --scale=1.");
+      options.scale < 0.25 || options.scale > 1 || options.reach_m < 0) {
+    lab.fail(
+        "--width and --height must be 1..4096, --settle at least 1, --scale 0.25..1 and "
+        "--reach at least 0",
+        "next: pass a size such as --width=640 --height=360 --scale=1 --reach=0.");
     return;
   }
   const double scale = options.taa ? options.scale : 1.0;
@@ -191,8 +213,11 @@ void run(ge::lab::Lab& lab) {
 
   ge::mountain::mapgen::GenerateOptions opts;
   opts.version = fall_line::app::kMapVersion;
-  const auto shared = std::make_shared<const ge::mountain::mapgen::Level>(
-      ge::mountain::mapgen::generate_level(seed, opts));
+  ge::mountain::mapgen::Level built = ge::mountain::mapgen::generate_level(seed, opts);
+  if (const std::string problem = fall_line::sim::server_sky(cvars, built); !problem.empty()) {
+    lab.fail("--cfg: " + problem, "Skill: console.");
+  }
+  const auto shared = std::make_shared<const ge::mountain::mapgen::Level>(std::move(built));
   const ge::mountain::mapgen::Level& level = *shared;
   const std::string seed_s = std::to_string(static_cast<long long>(seed));
   const std::string hour_s = hour < 0 ? fixed(level.sun.hour, 2) + " (the map's)" : fixed(hour, 2);
@@ -238,6 +263,13 @@ void run(ge::lab::Lab& lab) {
                    "each in his own jacket.";
       for (const auto& racer : run.state().racers) sc.skiers.push_back(racer.skier);
       fall_line::app::day_view(level, hour, sc.view);
+      // The sky's clock moved on by sv_skyrate (cfg) over the run so far.
+      if (cvars.sky_rate > 0) {
+        fall_line::cfg::Settings at = cvars;
+        at.hour = hour;
+        fall_line::app::sky_view(level, fall_line::sim::sky_hour(at, level, run.state().t),
+                                 sc.view);
+      }
       fall_line::app::chase_view(level, sc.skiers[0], sc.view);
       scenes.push_back(std::move(sc));
     }
@@ -297,7 +329,9 @@ void run(ge::lab::Lab& lab) {
          {"hour", hour_s},
          {"size", std::to_string(width) + "x" + std::to_string(height)},
          {"render", std::to_string(render_w) + "x" + std::to_string(render_h) +
-                        (options.taa ? ", TAA-U" : ", no TAA")}}};
+                        (options.taa ? ", TAA-U" : ", no TAA")},
+         {"reach", options.reach_m > 0 ? fixed(options.reach_m, 0) + " m, misted" : "all"},
+         {"cfg", lab.arg("cfg").empty() ? "none" : lab.arg("cfg")}}};
   };
 
   auto device = ge::gpu::create_device({.label = "world", .validation = 1});
@@ -463,6 +497,9 @@ const ge::lab::LabSpec kSpec{
         {"seed", "38", "the map's seed"},
         {"views", "all", "the views to shoot, comma-separated (games/fall_line/app/views.hpp)"},
         {"hour", "-1", "the solar hour to light the map at; negative: the map's own"},
+        {"cfg", "",
+         "console commands over Fall Line's cvars (\"sv_weather storm; sv_cover 0.6\"): "
+         "the sky's sv_ cvars and r_clouds reach the map and the picture"},
         {"width", "640", "the picture's width, px"},
         {"height", "360", "the picture's height, px"},
         {"settle", "8", "frames drawn after each view's cut before the capture"},
@@ -470,6 +507,8 @@ const ge::lab::LabSpec kSpec{
         {"scale", "1", "the render size over the picture's, with TAA (0.25..1)"},
         {"snow", "1", "the snow's material (1) or the albedo lit (0)"},
         {"trails", "1", "the tracks (1) or none (0); drawn only with the snow's material"},
+        {"reach", "0",
+         "how far the picture draws, misted into the sky from half of it, m (0: all)"},
         {"moments", "3,15,30",
          "seconds of the bot's run to shoot from the chase camera, comma-"
          "separated (empty: none)"},

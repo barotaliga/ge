@@ -212,6 +212,8 @@ void run(ge::lab::Lab& lab) {
                           {"scenario", "top km/h", "end km/h", "metres", "max g", "radius m",
                            "flights", "longest s", "landing g", "stop s", "wipeout"},
                           {}};
+  ge::lab::LabTable thrown{
+      "thrown", {"scenario", "cause", "tumble rad", "thrown m", "highest m", "lies s"}, {}};
   int ran = 0;
   for (const sk::Scenario& sc : sk::scenarios()) {
     if (want != "all" && want != sc.id) continue;
@@ -241,6 +243,21 @@ void run(ge::lab::Lab& lab) {
                           std::to_string(r.flights), fixed(r.longest_flight, 2),
                           fixed(r.max_landing_g, 1), fixed(r.stop_time, 2),
                           sk::wipeout_name(r.cause)});
+    if (r.cause != sk::Wipeout::none) {
+      lab.metric(k + ".tumble", r.tumble, "rad");
+      lab.metric(k + ".thrown", r.thrown, "m");
+      lab.metric(k + ".thrown-top", r.thrown_top, "m");
+      lab.metric(k + ".lies", r.lie_time, "s");
+      thrown.rows.push_back({k, sk::wipeout_name(r.cause), fixed(r.tumble, 2), fixed(r.thrown, 1),
+                             fixed(r.thrown_top, 2), fixed(r.lie_time, 2)});
+      if (r.lie_time < 0) {
+        lab.fail(
+            k + ": the thrown body never lay still for a second in " + fixed(sc.seconds, 0) + " s",
+            "Read plugins/skier/ragdoll.cpp's snow (the friction, the plough, the spin "
+            "drag) and look at previews/ride/" +
+                k + ".png (skill: skier).");
+      }
+    }
     lab.shot({k,
               "RIDE " + k,
               std::string(sc.what) +
@@ -259,6 +276,7 @@ void run(ge::lab::Lab& lab) {
              "ids, or `all`.");
   }
   lab.table(std::move(table));
+  lab.table(std::move(thrown));
 }
 
 const ge::lab::LabSpec kSpec{
