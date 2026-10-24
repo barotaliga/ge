@@ -69,6 +69,7 @@
 #include <vector>
 
 #include "fall_line/app/scene.hpp"
+#include "fall_line/cfg/cvars.hpp"
 #include "gpu/device.hpp"
 #include "gpu/pipeline.hpp"
 #include "mountain/app/snow.hpp"
@@ -122,6 +123,9 @@ struct FrameOptions {
   ge::render::SnowfallSettings flakes;
   ge::mountain::app::TrailOptions trail_maps;  // their sizes
 };
+
+// The options a player's cfg chose (the r_ cvars, cfg/cvars.hpp), the rest at their defaults.
+FrameOptions frame_options(const cfg::Settings& s);
 
 // What of the run a frame draws, besides the map: the racers, the player's first. `settle` poses
 // every figure settled, keeping nothing of the last frame (a still, or a jump in the run); off, the
