@@ -150,7 +150,7 @@ struct ReplicateConfig {
   // a reaction time, so further ahead their last one guesses worse than the curve draws (the
   // joust: wifi's corrections a fifth of interpolated's at 0.1 s, mobile's worse at 0.15 s; 0: no
   // limit).
-  double rewind_max_s = 0.35; // LAG COMPENSATION: the furthest back a hit is judged (0: no cap)
+  double rewind_max_s = 0.35;  // LAG COMPENSATION: the furthest back a hit is judged (0: no cap)
   double predict_max_s = 0.1;
   size_t snapshot_budget = 0;  // bytes a snapshot may take (0: the largest message)
   // THE RATES, the client's to ask and the server's to cap (a game exposes them as settings).
