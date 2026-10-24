@@ -65,13 +65,18 @@ struct WaterDraw {
   double refraction = 0.04;   // how far the normal bends the view into the water
   double calm_mss = 2e-4;     // a calm surface's own roughness (the capillary ripples)
   uint32_t seed = 7;          // the detail components' directions and phases
+  // Under a roof (a cave's pool, a hall's): the share of the dome the surface sees the sky
+  // through (its reflection, the sun and the sky's light), and the room's own light round it, a
+  // share of a white face's luminance under the open day, over the rest.
+  double open_sky = 1;
+  double room = 0;
 };
 
 struct WaterGpuBody {
   float info[4];
   float box[4];
   float grid[4];
-  float rough[4];
+  float rough[4];  // the tail's slope variance, the calm surface's, refraction, the open sky
   float c[4], kd[4], deep[4], emission[4];
   float levels[kWaterLevels][4];
 };

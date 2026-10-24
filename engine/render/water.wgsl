@@ -242,7 +242,11 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   let r = normalize(vec3f(r0.x, max(r0.y, 0.01), r0.z));
   let mirrored = reflected_scene(in.rel, normalize(vec3f(r0.x, max(r0.y, 0.002), r0.z)),
                                  max(0.02 * dist, 0.25));
-  let sky = mix(sky_luminance(r), mirrored.rgb, mirrored.a);
+  // A body under a roof (a cave's pool) sees the sky through `open` of its dome (rough.w) and the
+  // room's own light, a share of a white face's (emission.w), over the rest.
+  let open = body.rough.w;
+  let room = vec3f(white_luminance() * body.emission.w);
+  let sky = mix(mix(room, sky_luminance(r), open), mirrored.rgb, mirrored.a);
 
   // Into the water: the scene behind the surface, bent by the normal.
   let size = vec2i(frame.size.xy);
@@ -263,8 +267,9 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   let bed_depth = max(body.info.x - (behind.y + frame.eye.y), 0.0);
   let through = exp(-body.c.rgb * depth_view) * exp(-body.kd.rgb * bed_depth);
   let seen = textureSampleLevel(scene_colour, linear_clamp, at, 0.0).rgb;
-  let sun = sun_light(world_y, in.xz);
-  let light = sun * max(frame.sun.y, 0.0) + sky_irradiance(vec3f(0.0, 1.0, 0.0));
+  let sun = sun_light(world_y, in.xz) * open;
+  let light = sun * max(frame.sun.y, 0.0) + sky_irradiance(vec3f(0.0, 1.0, 0.0)) * open +
+              room * PI;
   let own = body.deep.rgb * light / PI;
   var into = seen * through + own * (1.0 - through);
   into += body.emission.rgb * (0.8 * frame.world.y / PI);
