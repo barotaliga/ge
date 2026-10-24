@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <fstream>
 #include <map>
 #include <sstream>
@@ -214,12 +215,21 @@ std::vector<std::string> wrap(const std::string& text, size_t width) {
   return out;
 }
 
+// `p` repeated n x n: how a tile reads on a wall, its seams in plain sight.
+lab::Picture tiled(const lab::Picture& p, int n) {
+  lab::Picture out = lab::create_picture(p.width * n, p.height * n, {0, 0, 0});
+  for (int ty = 0; ty < n; ++ty)
+    for (int tx = 0; tx < n; ++tx) lab::blit(out, p, tx * p.width, ty * p.height);
+  return out;
+}
+
 // One texture's sheet: the original, its current reference, then each candidate baked with the
-// same seed, tint and spread, every panel labelled with its recipe and distance; under them the
-// agent's argument (class, traits, judgement), both textures' evidence and every mismatch.
+// same seed, tint and spread, every panel labelled with its recipe and distance (after the clone,
+// the original and the clone tiled 3x3, for the seams); under them the agent's argument (class,
+// traits, judgement), both textures' evidence and every mismatch.
 lab::Picture match_sheet(const texgen::Matcher& m, const Matched& t) {
   constexpr int kPanel = 128, kGap = 8, kLabel = 24, kLine = 10;
-  const int panels = 2 + static_cast<int>(t.candidates.size());
+  const int panels = 4 + static_cast<int>(t.candidates.size());
   const int width = panels * (kPanel + kGap) + kGap;
   const size_t chars = static_cast<size_t>((width - 2 * kGap) / lab::kGlyphW);
   std::vector<std::pair<std::string, lab::Rgba>> notes;
@@ -252,19 +262,117 @@ lab::Picture match_sheet(const texgen::Matcher& m, const Matched& t) {
   panel(0, t.picture, t.name, "ORIGINAL", {220, 220, 220});
   std::vector<texgen::Diagnostic> errors;
   const texgen::TextureRef ref = texgen::parse_ref(t.line->value, errors);
-  panel(1, texgen::bake_ref(m, ref, t.picture.width, t.picture.height, errors), ref.name,
+  const lab::Picture ours = texgen::bake_ref(m, ref, t.picture.width, t.picture.height, errors);
+  panel(1, ours, ref.name,
         std::string(t.line->pinned ? "PINNED " : "CURRENT ") + fixed2(t.distance), {200, 200, 160});
+  panel(2, tiled(t.picture, 3), "3X3", "ORIGINAL TILED", {220, 220, 220});
+  panel(3, tiled(ours, 3), "3X3", "OURS TILED", {200, 200, 160});
   for (size_t k = 0; k < t.candidates.size(); ++k) {
     texgen::TextureRef alt = ref;
     alt.name = t.candidates[k].recipe;
     alt.params.clear();
     std::vector<texgen::Diagnostic> alt_errors;
-    panel(static_cast<int>(k) + 2,
+    panel(static_cast<int>(k) + 4,
           texgen::bake_ref(m, alt, t.picture.width, t.picture.height, alt_errors), alt.name,
           "#" + std::to_string(k + 1) + " " + fixed2(t.candidates[k].distance), {160, 200, 220});
   }
   for (size_t i = 0; i < notes.size(); ++i)
     lab::draw_text(sheet, kGap, text_top + static_cast<int>(i) * kLine, notes[i].first,
+                   notes[i].second);
+  return sheet;
+}
+
+// Textures seen together, judged as a set: the joins between them in the order they meet and
+// one look across them.
+struct Cluster {
+  std::string name, judge;
+  std::vector<const Matched*> members;
+  std::vector<std::string> mismatches;
+  bool argued() const { return !judge.empty(); }
+  bool failed() const { return judge.starts_with("fail"); }
+};
+
+// The mean luma of a picture's strip three texels wide along its left or right edge.
+double edge_luma(const lab::Picture& p, bool right) {
+  double sum = 0;
+  int n = 0;
+  for (int y = 0; y < p.height; ++y)
+    for (int k = 0; k < std::min(3, p.width); ++k) {
+      const int x = right ? p.width - 1 - k : k;
+      const size_t o = (static_cast<size_t>(y) * p.width + x) * 4;
+      sum += (0.299 * p.rgba[o] + 0.587 * p.rgba[o + 1] + 0.114 * p.rgba[o + 2]) / 255;
+      ++n;
+    }
+  return n > 0 ? sum / n : 0;
+}
+
+// What differs between the originals as a set and the clones as a set.
+void cluster_mismatches(Cluster& c, const std::vector<lab::Picture>& ours) {
+  const size_t n = c.members.size();
+  for (size_t i = 0; i < n; ++i)
+    for (size_t j = i + 1; j < n; ++j) {
+      const double o = c.members[i]->original.brightness - c.members[j]->original.brightness;
+      const double u = c.members[i]->ours.brightness - c.members[j]->ours.brightness;
+      if (std::fabs(o) > 0.03 && o * u < 0)
+        c.mismatches.push_back(c.members[i]->name + " is " + (o > 0 ? "lighter" : "darker") +
+                               " than " + c.members[j]->name + " in the originals but " +
+                               (u > 0 ? "lighter" : "darker") + " in ours");
+    }
+  double olo = 1, ohi = 0, ulo = 1, uhi = 0;
+  for (const Matched* t : c.members) {
+    olo = std::min(olo, t->original.brightness), ohi = std::max(ohi, t->original.brightness);
+    ulo = std::min(ulo, t->ours.brightness), uhi = std::max(uhi, t->ours.brightness);
+  }
+  if (n > 1 && ohi - olo > 0.02 &&
+      ((uhi - ulo) > 2 * (ohi - olo) || (uhi - ulo) < 0.5 * (ohi - olo)))
+    c.mismatches.push_back("the set's brightness spans " + fixed2(ohi - olo) +
+                           " in the originals and " + fixed2(uhi - ulo) +
+                           " in ours: the family does not read as one");
+  for (size_t i = 0; i + 1 < n; ++i) {
+    const double jo = std::fabs(edge_luma(c.members[i]->picture, true) -
+                                edge_luma(c.members[i + 1]->picture, false));
+    const double ju = std::fabs(edge_luma(ours[i], true) - edge_luma(ours[i + 1], false));
+    if (ju > 2 * jo + 0.03)
+      c.mismatches.push_back("the join from " + c.members[i]->name + " to " +
+                             c.members[i + 1]->name + " jumps " + fixed2(ju) + " in ours, " +
+                             fixed2(jo) + " in the originals");
+  }
+}
+
+// A cluster's sheet: the originals side by side in the order they meet, each tiled 2x2, and the
+// clones under them the same way; then the judgement and every mismatch.
+lab::Picture cluster_sheet(const Cluster& c, const std::vector<lab::Picture>& ours) {
+  constexpr int kPanel = 128, kGap = 8, kLabel = 14, kLine = 10;
+  const int n = static_cast<int>(c.members.size());
+  const int width = std::max(n * kPanel + 2 * kGap, 360);
+  const size_t chars = static_cast<size_t>((width - 2 * kGap) / lab::kGlyphW);
+  std::vector<std::pair<std::string, lab::Rgba>> notes;
+  for (const std::string& l : wrap(
+           "JUDGE " + (c.judge.empty()
+                           ? std::string("(not judged: write `judge ") + c.name + " pass|fail ...`)"
+                           : c.judge),
+           chars))
+    notes.emplace_back(l, c.failed() ? lab::Rgba{230, 120, 120} : lab::Rgba{140, 220, 140});
+  for (const std::string& mm : c.mismatches)
+    for (const std::string& l : wrap("MISMATCH " + mm, chars))
+      notes.emplace_back(l, lab::Rgba{230, 170, 90});
+  const int top = kGap + kLabel, row = kPanel + kLabel;
+  lab::Picture sheet = lab::create_picture(
+      width, top + 2 * row + kGap + static_cast<int>(notes.size()) * kLine + kGap, {24, 24, 26});
+  lab::draw_text(sheet, kGap, kGap, "CLUSTER " + c.name + ": ORIGINALS, THEN OURS",
+                 {220, 220, 220});
+  for (int k = 0; k < n; ++k) {
+    const int x = kGap + k * kPanel;
+    lab::blit(sheet,
+              lab::resized(tiled(c.members[static_cast<size_t>(k)]->picture, 2), kPanel, kPanel), x,
+              top);
+    lab::blit(sheet, lab::resized(tiled(ours[static_cast<size_t>(k)], 2), kPanel, kPanel), x,
+              top + row);
+    lab::draw_text(sheet, x, top + kPanel + 2, c.members[static_cast<size_t>(k)]->name,
+                   {170, 170, 170});
+  }
+  for (size_t i = 0; i < notes.size(); ++i)
+    lab::draw_text(sheet, kGap, top + 2 * row + kGap + static_cast<int>(i) * kLine, notes[i].first,
                    notes[i].second);
   return sheet;
 }
@@ -444,6 +552,44 @@ Outcome run_texture_match(const std::filesystem::path& repo, const TextureMatchO
     }
   }
 
+  // The clusters: each judged as a set once its members are measured.
+  std::vector<Cluster> clusters;
+  std::vector<std::vector<lab::Picture>> cluster_ours;
+  for (const texgen::TextureMapLine& l : map.lines) {
+    if (l.keyword != "cluster") continue;
+    Cluster c;
+    c.name = l.texture;
+    c.judge = map.note("judge", l.texture);
+    std::vector<lab::Picture> baked;
+    std::istringstream words(l.value);
+    std::string member;
+    while (words >> member) {
+      const auto it = std::find_if(textures.begin(), textures.end(),
+                                   [&](const Matched& t) { return t.name == member; });
+      if (it == textures.end() || it->distance < 0) {
+        o.findings.push_back({Severity::warn,
+                              "cluster " + c.name + ": `" + member + "` is not a texture line here",
+                              map_rel, "name the textures as the map's texture lines name them"});
+        continue;
+      }
+      std::vector<texgen::Diagnostic> errors;
+      baked.push_back(texgen::bake_ref(matcher, texgen::parse_ref(it->line->value, errors),
+                                       it->picture.width, it->picture.height, errors));
+      c.members.push_back(&*it);
+    }
+    cluster_mismatches(c, baked);
+    if (!c.argued())
+      o.findings.push_back({Severity::warn, "cluster " + c.name + " is not judged", map_rel,
+                            "look at the cluster's sheet and write `judge " + c.name +
+                                " pass|fail <the joins, the family's look>`"});
+    else if (!c.failed())
+      for (const std::string& mm : c.mismatches)
+        o.findings.push_back({Severity::warn, "cluster " + c.name + ": " + mm, map_rel,
+                              "answer it in the judge line or retune a member"});
+    clusters.push_back(std::move(c));
+    cluster_ours.push_back(std::move(baked));
+  }
+
   // The sheets: the textures asked for, or the ones most in need of an argument (failed, then
   // unargued and farthest).
   std::vector<Matched*> shown;
@@ -466,6 +612,12 @@ Outcome run_texture_match(const std::filesystem::path& repo, const TextureMatchO
   for (Matched* t : shown) {
     const fs::path png = sheets / (fs::path(t->file).stem().string() + ".png");
     if (lab::write_png(png.string(), match_sheet(matcher, *t)))
+      o.written.push_back(rel_path(repo, png));
+  }
+
+  for (size_t k = 0; k < clusters.size(); ++k) {
+    const fs::path png = sheets / ("cluster_" + clusters[k].name + ".png");
+    if (lab::write_png(png.string(), cluster_sheet(clusters[k], cluster_ours[k])))
       o.written.push_back(rel_path(repo, png));
   }
 
@@ -518,12 +670,32 @@ Outcome run_texture_match(const std::filesystem::path& repo, const TextureMatchO
       ++listed;
     }
   }
+  std::vector<std::string> cluster_rows;
+  for (const Cluster& c : clusters) {
+    std::string names;
+    std::vector<std::string> members;
+    for (const Matched* t : c.members) {
+      names += " " + t->name;
+      members.push_back(json_str(t->name));
+    }
+    o.text += std::string(c.failed()   ? "FAIL "
+                          : c.argued() ? "ok   "
+                                       : "argue") +
+              " cluster " + c.name + ":" + names + "\n";
+    if (!c.judge.empty()) o.text += "       judge: " + c.judge + "\n";
+    for (const std::string& mm : c.mismatches) o.text += "       mismatch: " + mm + "\n";
+    cluster_rows.push_back(json_obj({{"cluster", json_str(c.name)},
+                                     {"members", json_arr(members)},
+                                     {"judge", json_str(c.judge)},
+                                     {"mismatches", json_strs(c.mismatches)}}));
+  }
   if (listed < static_cast<int>(order.size()))
     o.text += "... " + std::to_string(order.size() - listed) +
               " more in the map (--list=<n> prints more)\n";
   o.result = json_obj({{"map", json_str(map_rel)},
                        {"sheets", json_str(rel_path(repo, sheets))},
-                       {"textures", json_arr(rows)}});
+                       {"textures", json_arr(rows)},
+                       {"clusters", json_arr(cluster_rows)}});
   o.summary = std::to_string(textures.size()) + " textures: " + std::to_string(argued) +
               " argued (" + std::to_string(failed) + " judged fail), " + std::to_string(pinned) +
               " pinned, " + std::to_string(far) + " far (distance over " + fixed2(opt.near) +
@@ -533,7 +705,8 @@ Outcome run_texture_match(const std::filesystem::path& repo, const TextureMatchO
       "3 pick or tune the reference and end it `# pin`, 4 `judge` it trait by trait against "
       "the sheet in " +
       rel_path(repo, sheets) +
-      "; run ge texture match again (skill: "
+      " (its 3x3 panels for the seams); group the textures that meet with `cluster <name> "
+      "<texture> ...` and judge each set on its sheet; run ge texture match again (skill: "
       "texture-references)";
   return o;
 }

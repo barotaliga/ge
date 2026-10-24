@@ -141,3 +141,33 @@ TEST(match_takes_real_names_from_a_level_export_list) {
   CHECK(lookalike);
   fs::remove_all(repo);
 }
+
+TEST(match_judges_a_cluster_and_draws_tiled_sheets) {
+  const fs::path repo = fs::temp_directory_path() / "ge_cli_texture_cluster_test";
+  fs::remove_all(repo);
+  fs::create_directories(repo / "tex");
+  for (const char* name : {"brick_wall", "red_bricks"}) {
+    ge::texgen::ParseResult r =
+        ge::texgen::load_recipe(ge::test::root_path(ge::texgen::kLibraryDir) + "/" + name + ".tex");
+    r.recipe.size = 32;
+    const ge::texgen::Maps maps = ge::texgen::bake(r.recipe, {name, 6u, {}}).maps;
+    CHECK(ge::lab::write_png((repo / "tex" / (std::string(name) + ".png")).string(),
+                             ge::texgen::map_picture(maps, ge::texgen::MapKind::albedo, 32)));
+  }
+  std::ofstream(repo / "tex" / "textures.texmap")
+      << "cluster walls brick_wall red_bricks nowhere\n";
+  TextureMatchOptions opt;
+  opt.dir = "tex";
+  opt.library = ge::test::root_path(ge::texgen::kLibraryDir);
+  const Outcome o = run_texture_match(repo, opt);
+  CHECK(exit_of(o) == 0);
+  CHECK(fs::exists(repo / "tex" / "sheets" / "cluster_walls.png"));
+  CHECK(o.text.find("cluster walls: brick_wall red_bricks") != std::string::npos);
+  bool unjudged = false, unknown = false;
+  for (const Finding& f : o.findings) {
+    unjudged |= f.what == "cluster walls is not judged";
+    unknown |= f.what.find("`nowhere` is not a texture line") != std::string::npos;
+  }
+  CHECK(unjudged && unknown);
+  fs::remove_all(repo);
+}

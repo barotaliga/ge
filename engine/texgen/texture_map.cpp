@@ -41,7 +41,9 @@ bool check_ref(std::string_view ref, int line_no, std::vector<Diagnostic>& error
 
 namespace {
 
-bool is_note(std::string_view k) { return k == "class" || k == "traits" || k == "judge"; }
+bool is_note(std::string_view k) {
+  return k == "class" || k == "traits" || k == "judge" || k == "cluster";
+}
 
 bool is_texture_kind(std::string_view k) {
   return k == "texture" || k == "liquid" || k == "sky" || k == "surface";

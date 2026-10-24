@@ -22,6 +22,7 @@ TEST(a_map_reads_and_writes_back) {
       "class city2_1 bricks\n"
       "traits city2_1 running bond, 8 courses a tile, #825540 red-brown, pale mortar\n"
       "judge city2_1 pass bond and courses match\n"
+      "cluster red_wall city2_1 metal1_4\n"
       "light lamp1 300\n";
   std::vector<tg::Diagnostic> errors;
   const tg::TextureMap map = tg::parse_texture_map(text, errors);
@@ -30,6 +31,7 @@ TEST(a_map_reads_and_writes_back) {
   CHECK(bricks && bricks->pinned && bricks->note == "0.31");
   CHECK(bricks->value == "red_bricks seed=7 tint=#825540 spread=#281913");
   CHECK(map.find("metal1_4") && !map.find("metal1_4")->pinned);
+  CHECK(map.note("cluster", "red_wall") == "city2_1 metal1_4");
   CHECK(map.find("*lava1")->value == "lava" && map.find("sky4")->value.empty());
   CHECK(map.find("lamp1") == nullptr);
   CHECK(map.note("class", "city2_1") == "bricks");

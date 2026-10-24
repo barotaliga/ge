@@ -198,3 +198,18 @@ TEST(a_dark_dithered_tile_repeats_at_its_pattern_not_its_dither) {
   const tg::Likeness l = tg::likeness_of(p);
   CHECK(l.period_x == 0.5 && l.period_y == 0.5);
 }
+
+TEST(a_seam_shows_where_a_tile_does_not_wrap) {
+  // A smooth ramp left to right jumps where its right edge meets its left; a library bake wraps.
+  lab::Picture ramp;
+  ramp.width = ramp.height = 64;
+  ramp.rgba.assign(64 * 64 * 4, 255);
+  for (int y = 0; y < 64; ++y)
+    for (int x = 0; x < 64; ++x)
+      for (int c = 0; c < 3; ++c)
+        ramp.rgba[static_cast<size_t>(y * 64 + x) * 4 + c] = static_cast<uint8_t>(60 + 2 * x);
+  const tg::Evidence e = tg::evidence_of(ramp);
+  CHECK(e.seam_x > tg::kSeam && e.seam_y < tg::kSeam);
+  const tg::Evidence wall = tg::evidence_of(own_bake(recipe("concrete"), 2, 64));
+  CHECK(wall.seam_x < tg::kSeam && wall.seam_y < tg::kSeam);
+}

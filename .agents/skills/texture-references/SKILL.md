@@ -103,6 +103,20 @@ argument about what the texture IS catches that. Per texture, in the texmap:
    contrast) is answered in the judge line or fixed, never ignored. Pass only when every trait
    holds; a fail stays visible at the top of every run until it is fixed.
 
+5. **Seams: the 3x3 panels.** Every sheet tiles the original and the clone 3x3. Look for a
+   line where the tile meets itself: a band cut by the edge, a gradient that does not wrap, a
+   lit edge on one side only. ge measures it too (`seams` in the evidence) and asks when ours
+   has a hard edge the original lacks; a plate's own rim on the border is not a seam, so say
+   which it is in the judge line.
+6. **Clusters: textures that meet.** Group the textures a map shows together, in the order they
+   meet: a wall and its trim, a floor and its skirting, a family of variants (`cluster red_wall
+   citya1_1 city5_4 city5_7`). ge draws `sheets/cluster_<name>.png` (the originals side by side,
+   each tiled 2x2, the clones under them) and asks where the set comes apart: one member lighter
+   than another in the originals and darker in ours, a family whose brightness spread is twice
+   or half the originals', a join that jumps where the originals' does not. Judge the set with
+   `judge <cluster> pass|fail ...`: the courses and bands line up across the joins, the family
+   reads as one material, and no two members are the same tile copied (give each its own seed).
+
 Run `ge texture match` again after every change: unpinned lines are re-picked (inside the
 class), pinned ones are re-measured, and the sheets are redrawn, failed and unargued first. The
 texmap is done when every texture line is pinned and judged pass. Liquids and skies are named

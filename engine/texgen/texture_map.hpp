@@ -13,6 +13,9 @@
 //                                          tile, the joints, the colour
 //   judge <name> pass|fail <reason>        4. the clone (3, the texture line) held against
 //                                          those traits, trait by trait
+//   cluster <name> <texture> <texture> ... textures seen together (a wall and its trim, a family
+//                                          of variants), judged as a set by `judge <name> ...`
+//                                          for the joins between them and one look across them
 //   # ...                                  a comment
 //
 // A reference is a texture reference (`recipe.hpp`): `red_bricks seed=7 wear=0.4 tint=#825540
@@ -38,8 +41,8 @@
 namespace ge::texgen {
 
 struct TextureMapLine {
-  std::string
-      keyword;  // texture, liquid, sky, surface, class, traits, judge; "" for a comment or another
+  std::string keyword;  // texture, liquid, sky, surface, class, traits, judge, cluster; "" for a
+                        // comment or another
   std::string texture;  // the level's own name for it ("city2_1", "*lava1", "+0slip")
   std::string value;    // the rest: the reference, or "<kind> [<reference>]" on a liquid
   bool pinned = false;  // the agent's: never rewritten
@@ -52,7 +55,7 @@ struct TextureMap {
   // The texture's line (texture, liquid, sky or surface), or null.
   TextureMapLine* find(std::string_view texture);
   const TextureMapLine* find(std::string_view texture) const;
-  // The texture's `class`, `traits` or `judge` text, or "".
+  // The texture's (or cluster's) `class`, `traits`, `judge` or `cluster` text, or "".
   std::string note(std::string_view keyword, std::string_view texture) const;
 };
 

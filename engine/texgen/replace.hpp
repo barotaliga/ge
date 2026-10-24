@@ -131,7 +131,13 @@ struct Evidence {
   std::vector<int> pieces;  // per course, top first
   double brightness = 0, contrast = 0;
   std::array<uint8_t, 3> mean{};
+  // The seams: how far the colour jumps where the tile meets its own other edge, over the
+  // typical jump between neighbouring strips inside it (strips three texels wide, row by row,
+  // so a joint on the edge is not a seam). About 1 tiles cleanly; over kSeam a seam shows.
+  double seam_x = 0, seam_y = 0;
 };
+
+inline constexpr double kSeam = 1.8;
 
 Evidence evidence_of(const lab::Picture& p);
 // One line: "4 courses, pieces a course 2 3 2 3; repeat 16x8 px (4x8 a tile), horizontal

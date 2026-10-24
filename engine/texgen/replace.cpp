@@ -353,6 +353,34 @@ std::vector<int> dips(const std::vector<double>& raw, double depth) {
   return out;
 }
 
+// The seam across x (or down y): the jump between the three-texel strips either side of the
+// wrapped edge, row by row, over the median of the same jump at every other boundary.
+double seam_of(const lab::Picture& p, bool across) {
+  const int w = p.width, h = p.height, n = across ? w : h, m = across ? h : w;
+  if (n < 8) return 0;
+  constexpr int kStrip = 3;
+  auto lum = [&](int a, int b) {
+    return across ? luma_at(p, (a + w) % w, b) : luma_at(p, b, (a + h) % h);
+  };
+  std::vector<double> jump(static_cast<size_t>(n), 0.0);
+  for (int b = 0; b < n; ++b) {
+    double sum = 0;
+    for (int r = 0; r < m; ++r) {
+      double before = 0, after = 0;
+      for (int k = 0; k < kStrip; ++k) {
+        before += lum(b - 1 - k, r);
+        after += lum(b + k, r);
+      }
+      sum += std::fabs(before - after) / kStrip;
+    }
+    jump[static_cast<size_t>(b)] = sum / m;
+  }
+  std::vector<double> inner(jump.begin() + 1, jump.end());
+  std::nth_element(inner.begin(), inner.begin() + static_cast<long>(inner.size() / 2), inner.end());
+  const double median = std::max(inner[inner.size() / 2], 1e-4);
+  return jump[0] / median;
+}
+
 }  // namespace
 
 Evidence evidence_of(const lab::Picture& p) {
@@ -426,6 +454,8 @@ Evidence evidence_of(const lab::Picture& p) {
   }
   e.brightness = mean;
   e.contrast = std::sqrt(var / static_cast<double>(soft.size()));
+  e.seam_x = seam_of(p, true);
+  e.seam_y = seam_of(p, false);
   const TextureRef c = colour_ref("", p);
   if (c.tint) e.mean = *c.tint;
   return e;
@@ -442,7 +472,8 @@ std::string evidence_text(const Evidence& e) {
            (e.repeat_y > 0 ? count_text(e.repeat_y) : "-") + " px (" + count_text(e.per_tile_x) +
            "x" + count_text(e.per_tile_y) + " a tile)";
   out += ", " + e.lines + " lines, contrast " + core::num::to_fixed(e.contrast, 3) + ", " +
-         hex_colour(e.mean);
+         hex_colour(e.mean) + ", seams " + core::num::to_fixed(e.seam_x, 1) + "x" +
+         core::num::to_fixed(e.seam_y, 1);
   return out;
 }
 
@@ -479,6 +510,15 @@ std::vector<std::string> evidence_mismatches(const Evidence& a, const Evidence& 
     out.push_back("the original has " + core::num::to_fixed(ma, 1) +
                   " pieces a course on average, ours " + core::num::to_fixed(mb, 1) +
                   " (turn cols)");
+  auto seam = [&](const char* way, double sa, double sb) {
+    if (sb > kSeam && sb > 1.3 * sa)
+      out.push_back(std::string("ours has a hard edge ") + way + " where the tile meets itself (" +
+                    core::num::to_fixed(sb, 1) + ", the original's " + core::num::to_fixed(sa, 1) +
+                    "): a seam (a layer that does not wrap, a band or a gradient cut by the "
+                    "edge), or a plate's own rim on the border; look at the 3x3 panels");
+  };
+  seam("across", a.seam_x, b.seam_x);
+  seam("down", a.seam_y, b.seam_y);
   if (a.lines != b.lines && a.lines != "mixed" && b.lines != "mixed")
     out.push_back("the original's lines are " + a.lines + ", ours " + b.lines);
   if (a.contrast > 0.002 && b.contrast > 0.002) {
