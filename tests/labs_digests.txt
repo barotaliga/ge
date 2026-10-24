@@ -11,8 +11,7 @@ camera-shake 3d1734df5bafe175
 camera-transitions 750b195eaca33076
 camera-world f1a1bd0f0e71bfeb
 charts 77f2319a5ea24272
-cli-loop 945576cbc8d5ba4f
-cli-loop e90f90ce3cd22ca6
+cli-loop 99509cf5b11def0a
 crowd cf02cf9a7c917783
 crowd-look 194a06db20f2ebb2
 forest f1881cb20efe0144
