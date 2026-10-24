@@ -37,13 +37,18 @@ struct Medium {
 fn medium_at(height_km: f32) -> Medium {
   let h = max(height_km, 0.0);
   let r = exp(-h / kRayleighHeight);
-  let m = exp(-h / kMieHeight);
+  let m = exp(-h / frame.style[10].w);  // the dust's scale height: kMieHeight on the Earth
   let o = max(0.0, 1.0 - abs(h - kOzoneCentre) / kOzoneHalfWidth);
+  // The sky's style scales each part (frame_types.wgsl's `style` rows 0 and 1; all ones on the
+  // Earth).
+  let air = frame.style[0];
+  let absorb = frame.style[1];
   var s: Medium;
-  s.rayleigh = kRayleighScattering * r;
-  s.mie = vec3f(kMieScattering * m);
+  s.rayleigh = kRayleighScattering * air.xyz * r;
+  s.mie = vec3f(kMieScattering * air.w * m);
   s.scattering = s.rayleigh + s.mie;
-  s.extinction = s.scattering + vec3f(kMieAbsorption * m) + kOzoneAbsorption * o;
+  s.extinction = s.scattering + kMieAbsorption * air.w * absorb.xyz * m +
+                 kOzoneAbsorption * absorb.w * o;
   return s;
 }
 
@@ -51,9 +56,10 @@ fn rayleigh_phase(c: f32) -> f32 {
   return 3.0 / (16.0 * PI) * (1.0 + c * c);
 }
 
-// Cornette-Shanks.
+// Cornette-Shanks, its asymmetry the sky style's (frame_types.wgsl's `style` row 10; kMieG on the
+// Earth).
 fn mie_phase(c: f32) -> f32 {
-  let g = kMieG;
+  let g = frame.style[10].z;
   let g2 = g * g;
   let d = max(1.0 + g2 - 2.0 * g * c, 1e-4);
   return 3.0 / (8.0 * PI) * ((1.0 - g2) * (1.0 + c * c)) / ((2.0 + g2) * d * sqrt(d));

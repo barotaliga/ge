@@ -605,6 +605,18 @@ of the sun's illuminance (`FrameView::sun_illuminance` scales them all). The sky
 full-screen triangle at the far plane tested `equal`, with the sun's disc. `frame.wgsl`
 holds the one copy of the haze, the sun's light at a point and the sky's irradiance.
 
+**Sky types (M8f7)** (`render/sky_style.hpp`, `FrameView::style`): a world that is not the Earth
+changes its AIR (scales on the Rayleigh scattering per channel, the dust's scattering,
+absorption per channel, asymmetry and scale height, and the ozone), which `medium_at` reads, so
+the tables are rebuilt in it and everything lit by the sky follows (the sky, the sun's colour,
+the sky's light, the haze, the cloud's light). Over the sky the pass draws what an air cannot:
+the sun's disc's size and tint, a second sun with a halo, a planet lit as a ball (its phase
+fixed by its offset from the sun, banded, a ring whose near half crosses it, dimming half the
+sky behind it), a nebula on the star sphere and the stars by day (both against the snow's
+white, not physical), and a glow from under the horizon. Ten named types (`sky_types`) a game
+picks by a word, knobs over them (`SkyKnobs`). The Earth's style is every scale 1 and every
+extra 0, so its picture is the same to the bit.
+
 **The weather in the picture (M8f1).** A frame is seen under a `Weather` (`render/view.hpp`,
 in the frame block as `weather` and `deck`), and `wgsl/frame.wgsl` is the one place it acts, so
 the ground, the trees, the figures, the particles, the flakes and the sky all see the same day:
