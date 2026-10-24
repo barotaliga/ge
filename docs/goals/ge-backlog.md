@@ -117,6 +117,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge bsp info|ents|shot <file>` (a classic BSP map's lumps and counts, its entities as a table, one view rendered, without the levels lab)
 - `ge bsp probe <pak> <map> [--at=<x,y,z>]` (a map's sky and liquid surfaces, each with its level, centre and area, and a point's leaf contents and column: camera views picked without putting the eye in a wall)
 - `ge texture show <recipe> [--ref=<photo>]` (one texture recipe baked and shown at its sizes and tilings, beside a reference photo when given, without the textures lab)
+- `ge texture why <name>` (a recipe's likeness_distance split into its parts, the look numbers, the lines and the repeat, so a score can be argued with; it blows up on near-black textures, 1.9 for a visual match)
 - `ge texture match --sweep-seeds=<a..b> --only=<name>` (a pinned recipe tried at every seed in a range, each seed's measured evidence in one table: courses a tile, pieces a course, the line's direction, the colour mismatches; `ge lab sweep` reaches a lab's flags, not this command, so today it is a shell loop)
 
 ## Measuring
