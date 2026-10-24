@@ -19,6 +19,7 @@
 #include "gpu/pipeline.hpp"
 #include "gpu/target.hpp"
 #include "lab/lab.hpp"
+#include "lab/raster.hpp"
 #include "render/frame.hpp"
 #include "render/post.hpp"
 #include "render/sky.hpp"
@@ -43,6 +44,21 @@ inline bool gpu_required() {
   const char* v = std::getenv("GE_GPU_REQUIRE");
   return v && std::strcmp(v, "1") == 0;
 #endif
+}
+
+// The no-device path: a grey card under each shot id the device path takes, in its order, and
+// the device path's two checks at 0. A shot's id enters the digest even when its picture is
+// measured, so a row with no adapter (Windows on CI) cuts the same digest as one with a GPU.
+inline void placeholders(gl::Lab& lab, const std::vector<std::string>& ids, uint32_t w,
+                         uint32_t h) {
+  lab.note("No GPU adapter on this machine: the pictures are placeholders.");
+  for (const std::string& id : ids) {
+    gl::Picture none = gl::create_picture(static_cast<int>(w), static_cast<int>(h), {40, 40, 48});
+    gl::draw_text(none, 4, 4, "NO GPU ADAPTER", {230, 230, 230});
+    lab.shot({id, id, "", "", {}}, none, gl::Det::measured);
+  }
+  lab.metric("gpu-errors", 0, "count");
+  lab.metric("pipelines-after-load", 0, "count");
 }
 
 inline std::string fixed(double v, int digits) {

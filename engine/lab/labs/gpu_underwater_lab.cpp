@@ -43,6 +43,7 @@ using ge::lab::water_scene::fixed;
 using ge::lab::water_scene::gpu_required;
 using ge::lab::water_scene::make_scene;
 using ge::lab::water_scene::paste;
+using ge::lab::water_scene::placeholders;
 using ge::lab::water_scene::Scene;
 using ge::lab::water_scene::view_at;
 using gl::Det;
@@ -117,7 +118,7 @@ void run(gl::Lab& lab) {
       lab.fail("no GPU device, and GE_GPU_REQUIRE=1",
                "Install Mesa's Vulkan drivers (apt install mesa-vulkan-drivers). Skill: gpu.");
     }
-    lab.note("No GPU adapter on this machine: no pictures.");
+    placeholders(lab, {"looks", "presets", "window", "dive"}, w, h);
     return;
   }
   Scene s;
