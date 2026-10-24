@@ -37,7 +37,7 @@
 // ge:keywords bloom colour-grade color-grade lut lookup-table 3d-lut grade
 // ge:keywords create_post post_group encode_post set_grade identity_grade set_post_look
 // ge:keywords sharpen cas contrast-adaptive-sharpening chromatic-aberration vignette film-grain
-// ge:keywords lens-dirt PostLook lens-effects
+// ge:keywords lens-dirt post-look lens-effects
 // ge:skill render
 // ge:test tests/render_post_test.cpp
 #pragma once

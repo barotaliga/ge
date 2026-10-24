@@ -171,9 +171,9 @@ std::vector<uint8_t> lens_dirt(uint32_t w, uint32_t h, uint32_t seed) {
   for (size_t i = 0; i < amount.size(); ++i) {
     const float a = std::min(amount[i], 1.0f);
     // A faintly warm grime: dust scatters a little more red than blue.
-    out[i * 4 + 0] = static_cast<uint8_t>(a * 255.0f + 0.5f);
-    out[i * 4 + 1] = static_cast<uint8_t>(a * 240.0f + 0.5f);
-    out[i * 4 + 2] = static_cast<uint8_t>(a * 220.0f + 0.5f);
+    out[i * 4 + 0] = static_cast<uint8_t>(std::lround(a * 255.0f));
+    out[i * 4 + 1] = static_cast<uint8_t>(std::lround(a * 240.0f));
+    out[i * 4 + 2] = static_cast<uint8_t>(std::lround(a * 220.0f));
     out[i * 4 + 3] = 255;
   }
   return out;

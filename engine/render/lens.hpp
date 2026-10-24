@@ -21,7 +21,7 @@
 // ge:summary The lens pass: sun rays through what stands and the sun's flare, at a quarter size
 // ge:keywords render lens sun-rays god-rays light-shafts crepuscular radial-blur lens-flare flare
 // ge:keywords ghosts halo occlusion quarter-resolution create_lens_pipelines create_lens_targets
-// ge:keywords encode_lens set_lens LensSettings r_sunrays r_flare
+// ge:keywords encode_lens set_lens lens-settings r_sunrays r_flare
 // ge:skill render
 // ge:test tests/render_lens_test.cpp
 #pragma once

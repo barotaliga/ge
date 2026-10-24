@@ -82,7 +82,7 @@ TEST(the_table_is_each_entry_through_grade_colour) {
   std::vector<float> t = gr::identity_grade();
   gr::apply_grade_knobs(t, k);
   const std::vector<float> id = gr::identity_grade();
-  for (size_t i : {size_t{0}, size_t{3 * 1000}, size_t{3 * 17000}, id.size() - 3}) {
+  for (size_t i : {size_t{0}, size_t{3000}, size_t{51000}, id.size() - 3}) {
     float c[3] = {id[i], id[i + 1], id[i + 2]};
     gr::grade_colour(k, c);
     CHECK(c[0] == t[i] && c[1] == t[i + 1] && c[2] == t[i + 2]);

@@ -28,6 +28,7 @@
 #include <string>
 #include <vector>
 
+#include "core/libm/libm.hpp"
 #include "fall_line/app/frame.hpp"
 #include "fall_line/app/views.hpp"
 #include "gpu/device.hpp"
@@ -159,8 +160,8 @@ std::vector<Variant> variants() {
 // True when the ground hides no part of the sun's ray from (x, y, z): 96 samples toward the sun,
 // growing from 4 m to about 10 km.
 bool sees_sun(const mg::Level& level, double x, double y, double z, const gr::FrameView& v) {
-  const double rise = std::tan(v.sun_elevation);
-  const double fx = std::sin(v.sun_azimuth), fz = std::cos(v.sun_azimuth);
+  const double rise = ge::core::libm::tan(v.sun_elevation);
+  const double fx = ge::core::libm::sin(v.sun_azimuth), fz = ge::core::libm::cos(v.sun_azimuth);
   double d = 4;
   for (int i = 0; i < 96; ++i, d *= 1.085) {
     if (level.ground_at(x + d * fx, z + d * fz) > y + d * rise) return false;
@@ -173,7 +174,8 @@ bool sees_sun(const mg::Level& level, double x, double y, double z, const gr::Fr
 // along, 15 m either side) holds the number of trees nearest to `trees` and whose sun the
 // mountain does not hide, looking past the sun's left, raised so it sits high in the frame.
 bool sun_view(const mg::Level& level, double trees, gr::FrameView& v) {
-  const double flat_x = std::sin(v.sun_azimuth), flat_z = std::cos(v.sun_azimuth);
+  const double flat_x = ge::core::libm::sin(v.sun_azimuth),
+               flat_z = ge::core::libm::cos(v.sun_azimuth);
   double best = 1e9;
   bool found = false;
   for (size_t i = 0; i < level.trees.size(); i += 5) {
@@ -311,7 +313,7 @@ void run(ge::lab::Lab& lab) {
       std::vector<double> total, post, lens;
       for (int k = 0; k < frames; ++k) {
         gr::FrameView view = sun;
-        view.frame = static_cast<uint64_t>(settle + k);
+        view.frame = static_cast<uint64_t>(settle) + static_cast<uint64_t>(k);
         fa::draw(*device, *frame, view, {}, target.view);
         frame->recorder.wait(*device);
         const gr::FrameStats& st = frame->recorder.stats;

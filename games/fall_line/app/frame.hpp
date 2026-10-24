@@ -25,8 +25,7 @@
 //   hiz                  -> hiz (the depth's pyramid)
 //   instances.cull.late  -> instances.late (what the last frame's pyramid hid, against this one)
 //   instances.depth.late -> depth
-//   terrain              -> hdr motion (shaded where the depth is equal, in the snow's material;
-//                           reads shadows.maps and the trail maps)
+//   terrain              -> hdr motion (the snow's material; reads the shadows and trail maps)
 //   instances            -> hdr motion (both lists, where the depth is equal)
 //   sky                  -> hdr motion (behind depth)
 //   clouds               -> hdr (the cloud's layers, behind depth)
@@ -37,10 +36,8 @@
 //   snowfall             -> hdr motion (the falling snow round the eye, as the particles)
 //   taa                  -> taa.history (at the output's size; with FrameOptions::taa)
 //   bloom                -> bloom (the glow's mip chain, from what post reads)
-//   lens                 -> lens (the sun's rays through what stands and its flare, a quarter
-//                           of the output's pixels, from what post reads and the depth)
-//   post                 -> final (the bloom and the lens mixed in, the sharpening, the
-//                           vignette, the grade's table: look.hpp's under the player's knobs)
+//   lens                 -> lens (the sun's rays and flare, at a quarter of the pixels)
+//   post                 -> final (bloom, lens, the film's effects, the grade's table)
 //
 // With TAA the frame renders at FrameOptions::scale of the output's size, jittered, and the
 // resolve brings it up to the output; without it, at the output's size, unjittered, and post
