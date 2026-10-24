@@ -184,11 +184,17 @@ wgpu::BindGroup frame_group(gpu::Device& device, const wgpu::BindGroupLayout& la
 void prepare_sky(Sky& sky, const FrameView& view) {
   double sun[3];
   real_sun_direction(view, sun);
-  sky.build_tables = !sky.built;
+  // A new air rebuilds every table, the moon's too.
+  const bool new_air = !same_air(view.style, sky.built_air);
+  if (new_air) {
+    sky.built_air = view.style;
+    sky.moon_built = false;
+  }
+  sky.build_tables = !sky.built || new_air;
   const double turn =
       sun[0] * sky.built_sun[0] + sun[1] * sky.built_sun[1] + sun[2] * sky.built_sun[2];
-  sky.build_view =
-      !sky.built || turn < kSunTurnCos || std::fabs(view.eye[1] - sky.built_eye_m) > kEyeMove;
+  sky.build_view = !sky.built || new_air || turn < kSunTurnCos ||
+                   std::fabs(view.eye[1] - sky.built_eye_m) > kEyeMove;
   if (sky.build_view) {
     for (int i = 0; i < 3; ++i) sky.built_sun[i] = sun[i];
     sky.built_eye_m = view.eye[1];
