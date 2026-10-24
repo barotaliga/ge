@@ -7,6 +7,7 @@
 #include "fall_line/camera/subject.hpp"
 
 #include <array>
+#include <cmath>
 
 #include "core/math.hpp"
 #include "fall_line/camera/rungs.hpp"
@@ -31,6 +32,8 @@ core::Quat body_of(const ge::skier::SkierState& s, const ge::skier::World& world
 constexpr double kEyeAhead = 0.11, kEyeUp = 0.03;
 // The tips' eye: a hand over the snow, ahead of the boots.
 constexpr double kTipsUp = 0.3, kTipsAhead = 0.55;
+// His middle over the skis' base, m: standing, and down on the snow.
+constexpr double kMiddle = 1.0, kDownMiddle = 0.3;
 
 }  // namespace
 
@@ -86,6 +89,10 @@ void fit_worn(cam::Camera& c, const ge::skier::SkierState& s, const ge::skier::W
   fit_eyes(c, s, world, head_of(s, world));
 }
 
+cam::Vec3 framed_point(const ge::skier::SkierState& s) {
+  return {s.x, s.y + (s.down ? kDownMiddle : kMiddle), s.z};
+}
+
 RunCamera make_skier_camera(Rung start, uint32_t seed) {
   return RunCamera{make_run_camera(start, seed), SubjectMemory{}};
 }
@@ -106,6 +113,26 @@ cam::Pose frame_camera(RunCamera& rc, const ge::skier::SkierState& s,
   // A worn lens on a body thrown down on its side would go under the snow with it.
   const double floor = cam::ground_at(camera_world, p.eye.x, p.eye.z) + kLensFloor;
   if (p.eye.y < floor) p.eye.y = floor;
+  // Nor into a trunk: a body thrown into one takes a worn lens with it.
+  std::array<cam::Obstacle, 8> near{};
+  const int n = cam::obstacles_near(camera_world, p.eye.x, p.eye.z, kBarkClear, near.data(),
+                                    static_cast<int>(near.size()));
+  for (int i = 0; i < n; ++i) {
+    const cam::Obstacle& o = near[static_cast<size_t>(i)];
+    if (p.eye.y < o.y0 || p.eye.y > o.y1) continue;
+    double dx = p.eye.x - o.x, dz = p.eye.z - o.z;
+    double r = std::sqrt(dx * dx + dz * dz);
+    const double out = o.radius + kBarkClear;
+    if (r >= out) continue;
+    if (r < 1e-6) {  // on the axis: out toward him
+      dx = s.x - o.x;
+      dz = s.z - o.z;
+      r = std::sqrt(dx * dx + dz * dz);
+      if (r < 1e-6) dx = 1, dz = 0, r = 1;
+    }
+    p.eye.x = o.x + dx / r * out;
+    p.eye.z = o.z + dz / r * out;
+  }
   return p;
 }
 

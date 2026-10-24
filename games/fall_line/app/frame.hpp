@@ -59,6 +59,7 @@
 #include <array>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
@@ -125,6 +126,10 @@ struct FrameScene {
   // The free ride's crowd (sim/crowd.hpp), by id: each drawn as the skier model in his own pose
   // (scene.hpp's `crowd_instance`); empty, none.
   std::span<const sim::Amateur> crowd = {};
+  // The point the camera frames, world m (a rung's: camera/subject.hpp's `framed_point`): the
+  // trees between the eye and it are seen through (render/instances.hpp § Seeing through). None:
+  // every tree whole (a view of the mountain).
+  std::optional<std::array<double, 3>> subject = std::nullopt;
 };
 
 struct GameFrame {
