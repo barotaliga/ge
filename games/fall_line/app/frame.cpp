@@ -168,8 +168,8 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
   r::TerrainSource source;
   source.height = &level.ground;
   source.albedo = &f->albedo;
-  source.base_spacing = 1.0;
-  source.levels = 8;
+  source.base_spacing = kGroundSpacing;
+  source.levels = kGroundLevels;
   source.overdraw_probe = options.overdraw_probe;
   source.wire_probe = options.wire_probe;
   f->tracks = options.snow && options.trails;
@@ -332,6 +332,7 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
     view.clouds.steps = f.options.clouds;
     view.clouds.quarter = f.options.cloud_quarter;
   }
+  view.reach_m = f.options.reach_m;
   const auto start = std::chrono::steady_clock::now();
   f.recorder.begin_frame(device);
   // Prepare: every decision of the frame, and the uploads.
@@ -418,6 +419,12 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   }
   {
     GE_ZONE("frame.instances");
+    r::SeeThrough see;
+    if (scene.subject) {
+      see.on = true;
+      for (int k = 0; k < 3; ++k) see.subject[k] = (*scene.subject)[static_cast<size_t>(k)];
+    }
+    r::set_see_through(f.forest, see);
     for (r::InstanceFamily* family : f.families) {
       r::prepare_family(device, *family, view, f.targets.height, occlusion);
     }

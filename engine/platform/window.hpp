@@ -41,6 +41,7 @@ struct NativeWindow {
 // `InputSnapshot::held`. Only the keys something reads are named.
 enum class Key : uint8_t {
   a = 4,
+  c = 6,
   d = 7,
   s = 22,
   w = 26,

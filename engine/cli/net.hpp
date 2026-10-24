@@ -11,12 +11,20 @@
 //   ge net sim              fake-traffic clients and a host over chosen conditions (presets, a
 //                           traffic mix, --link overrides): the same numbers the net-link lab
 //                           prints, a digest a run, and a capture with --capture
+//   ge net watch            a RUNNING game's or server's datagrams, from its live tap
+//                           (net/tap.hpp) on a loopback port: per connection every second,
+//                           then saved as a capture and measured as ge net stats measures it
+//   ge net sweep            a replicated world (net/replicate_trial.hpp) run once a value of
+//                           one knob (a rate, the interpolation, a link condition): bandwidth
+//                           each way, view delay, corrections, rewind gaps; the cheapest value
+//                           within reach of the best named
 //
 // No game and no build are needed: everything runs inside ge.
 //
-// ge:summary ge net inspect, stats and sim: captures decoded and measured, fake traffic run
+// ge:summary ge net inspect, stats, sim and sweep: captures read, traffic run, rates swept
 // ge:keywords cli ge net network inspect stats sim pcap capture rtt loss bandwidth kbps
-// ge:keywords fake-traffic conditions preset mix link wireshark multiplayer
+// ge:keywords fake-traffic conditions preset mix link wireshark multiplayer sweep rate
+// ge:keywords update-rate cmd-rate replicate experiment knee watch tap live attach running
 // ge:skill agent-interface net
 // ge:test tests/cli_net_test.cpp
 #pragma once
@@ -59,9 +67,34 @@ struct NetSimOptions {
   std::string capture;  // a .pcap path: the host's capture (one a preset when several)
 };
 
+struct NetWatchOptions {
+  int port = 27950;                          // where the tap sends (net/tap.hpp: kTapPort)
+  double seconds = 10;                       // how long to watch; 0: until --frames
+  double every = 1;                          // a live line a connection this often, seconds
+  long long frames = 0;                      // stop after this many datagrams (0: no limit)
+  std::string save = "runs/net-watch.pcap";  // what was seen, read back by ge net stats
+};
+
+struct NetSweepOptions {
+  std::string knob;                  // update-rate, cmd-rate, rate, interp, backup, tick-hz, or
+                                     // a --link key (loss, latency, jitter, drop-every, ...)
+  std::vector<std::string> values;   // the knob's values, one trial each
+  std::vector<std::string> presets;  // empty: wifi
+  std::string link;                  // overrides on every preset
+  int clients = 16, npcs = 32;
+  double seconds = 10;
+  int tick_hz = 60, update_rate = 0, cmd_rate = 0, interp = 6, backup = 4;
+  double rate = 0;
+  unsigned seed = 1;
+};
+
 Outcome run_net_inspect(const NetInspectOptions& opts);
 Outcome run_net_stats(const NetStatsOptions& opts);
 Outcome run_net_sim(const NetSimOptions& opts);
+Outcome run_net_sweep(const NetSweepOptions& opts);
+// Listens for a live tap; a line a connection every `every` seconds on stderr, then the whole
+// watch as ge net stats reads it.
+Outcome run_net_watch(const NetWatchOptions& opts);
 // A parsed `ge net <inspect|stats|sim>` line's flags read into the options, and run.
 Outcome run_net(const Args& a);
 

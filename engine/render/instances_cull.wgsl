@@ -149,6 +149,12 @@ fn screen_px(v: Seen) -> f32 {
   return v.radius / d * fp.cull.x;
 }
 
+// Past the view's reach (FrameView::reach_m), where the mist has closed it: counted with the
+// frustum's.
+fn past_reach(v: Seen) -> bool {
+  return frame.mist.y > 0.0 && length(v.centre) - v.radius > frame.mist.y;
+}
+
 @compute @workgroup_size(64)
 fn early(@builtin(global_invocation_id) id: vec3u) {
   let i = id.x;
@@ -157,6 +163,10 @@ fn early(@builtin(global_invocation_id) id: vec3u) {
   }
   state[i] = 0u;
   let v = seen(i);
+  if (past_reach(v)) {
+    atomicAdd(&counters.stats[kStatFrustum], 1u);
+    return;
+  }
   for (var k = 0; k < 5; k++) {
     let p = frame.planes[k];
     if (dot(p.xyz, v.centre) + p.w < -v.radius) {
@@ -201,6 +211,10 @@ fn shadow(@builtin(global_invocation_id) id: vec3u) {
     return;
   }
   let v = seen(i);
+  if (past_reach(v)) {
+    atomicAdd(&counters.stats[kStatFrustum], 1u);
+    return;
+  }
   for (var k = 0; k < 5; k++) {
     let p = frame.planes[k];
     if (dot(p.xyz, v.centre) + p.w < -v.radius) {

@@ -321,6 +321,21 @@ On seed 38 at 640 × 360 a run's moment draws about 3,000 trees of 21,000 and th
 hides about 9,000; the forest is twenty meshes (five forms, four variants each) at three LODs
 each (`plugins/mountain/app/trees.hpp`), 9 to 384 triangles a tree.
 
+**Seeing through (M26g)** (`set_see_through`, `SeeThrough`). A follow camera in a wood sees
+crowns, not its subject. A family may be told the point the camera frames; every upright
+instance whose crown holds the eye or crosses the line from the eye to that point (stopped
+0.6 m short of it, so a tree beside the subject and not before him stays whole) keeps only a
+dithered share of its pixels in the depth prepass, easing from all of them 1 m off the line
+to 15 % on it. An instance stands as its axis (its position up its rotated +y by its y
+scale) and its crown (the larger of its x and z scales), which is what a unit-sized upright
+mesh at its true size is. The share is computed per instance in the vertex stage (a branch
+on a uniform when the family is not seen through), uses the LOD band's dither, so in a band
+the two LODs together keep just that share, and moves smoothly with the line, so nothing
+pops; under TAA the screen door reads as a ghost of the tree. The shadow maps draw it whole,
+so its shadow stays on the snow. `see_through_keep` is the CPU twin; the `camera-world` lab
+measures how much of the skier each outside lens sees in the densest wood of seed 38: 80 to
+93 % of him, against 0 to 33 % with the trees drawn whole.
+
 ## Geometry and resources
 
 - **Vertex pulling.** Meshes of one vertex format share one large storage buffer, and
@@ -713,7 +728,11 @@ read in 2026, longitude 0) by `core/moon.hpp` (M8f6):
   under half a degree, is not applied), with the galaxy's band;
 - THE EYE: under 14 lx on white the exposure adapts only partly (dark scenes stay dark), and
   the rods' share desaturates the picture toward a blue tint (`night_vision`, in post before
-  the exposure).
+  the exposure). The share is the scene's or the pixel's own, whichever is less, so a bright
+  star keeps its tint; the moon's disc, drawn far dimmer than it is but always bright enough
+  for the cones (an eclipse's umbra near 1 cd/m2), keeps its own colour: the sky pass gives the
+  sky in front of it to the rods and post leaves the disc's pixels alone (`on_moon`), so a full
+  moon is a warm white and an eclipsed one copper red over a blue-grey night.
 
 The `night` lab draws it on seed 38's vista: the snow's luma falls from 194 at three degrees
 under to 67 at fourteen, a full moon's snow is 71, a quarter's 28 and a new moon's 10, the
@@ -913,7 +932,7 @@ The picture's settings are one table of ROWS in the game (Fall Line's:
 `games/fall_line/app/ladder.hpp`), each a ladder of STOPS, cheapest first. A stop maps to the
 frame's parameters (`FrameOptions`: the render scale, the shadow maps' size, the trail maps'
 texels, the flakes, the cloud march's share of its steps and whether it marches a quarter of the
-pixels), never to a code path of its own. Each row is its
+pixels, the picture's reach), never to a code path of its own. Each row is its
 own bill, because a machine can be short of pixels and rich in passes, or the other way round.
 
 - **The price table.** Every stop carries a COST, the ms it adds to a frame over its row's
@@ -940,9 +959,22 @@ own bill, because a machine can be short of pixels and rich in passes, or the ot
 
 The table's costs today are the software adapter's (lavapipe at 1280 × 720), whose ratios are a
 CPU raster's: the reference machine's prices (the Mac, § Where it is developed) replace them.
-What the ladder does not have yet: a terrain reach row (it needs the mist that hides a shorter
-view), the cloud's march spread over frames with reprojection, and changing a stop without
-making the frame again.
+- **The reach and its mist.** `FrameView::reach_m` is how far a picture draws. The ground's
+  clipmap draws only the levels that cover it (`clipmap_levels_to`: 1, 2 or 4 km round the eye
+  where all eight reach 8 km), the instances' cull drops every one past it (counted with the
+  frustum's), and the haze closes every surface but the cloud into the sky behind its pixel from
+  half the reach to all of it (`haze` in `wgsl/frame.wgsl`; the cloud's own colour goes through
+  `haze_air`, the air alone, since it is sky). While there is a reach the sky under the horizon is
+  drawn as the horizon's, so the land past it is lost in a bright haze, never seen as an edge or a
+  dark sea beyond it. Fall Line's DISTANCE row is priced where it is seen, from over the summit
+  on a clear day (`--view=vista --lift=0 --fall=0`): there the woods past 2 km are most of the
+  frame's cost on the software adapter.
+
+The table's costs today are the software adapter's (lavapipe at 1280 × 720), whose ratios are a
+CPU raster's: the reference machine's prices (the Mac, § Where it is developed) replace them.
+What the ladder does not have yet: the cloud's march spread over frames with reprojection, and
+changing a stop without making the frame again (the reach already can: it is a field of the
+view, not of the frame).
 
 ## Measurement
 
