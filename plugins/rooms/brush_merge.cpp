@@ -1,9 +1,10 @@
 // Brush merging (brush_merge.hpp): a pair tried by the dent test and the volumes, the pairs found
 // through the planes they face each other on.
 //
-// ge:summary Merges a level's touching brushes whose union is convex: the pair test, the greedy
-// pass ge:keywords brush merge union convex volume dent plane-key greedy ge:skill rooms ge:test
-// tests/rooms_brush_test.cpp
+// ge:summary Merges touching brushes whose union is convex: the pair test, the greedy pass
+// ge:keywords brush merge union convex volume dent plane-key greedy
+// ge:skill rooms
+// ge:test tests/rooms_brush_test.cpp
 #include "rooms/brush_merge.hpp"
 
 #include <algorithm>
