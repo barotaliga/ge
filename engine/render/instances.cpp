@@ -75,6 +75,68 @@ uint32_t draw_buckets(wgpu::RenderPassEncoder& pass, const InstanceFamily& f, in
 
 }  // namespace
 
+namespace {
+
+struct V3 {
+  double x, y, z;
+};
+V3 sub(V3 a, V3 b) { return {a.x - b.x, a.y - b.y, a.z - b.z}; }
+V3 add_scaled(V3 a, V3 b, double t) { return {a.x + b.x * t, a.y + b.y * t, a.z + b.z * t}; }
+double dot(V3 a, V3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
+double clamp01(double v) { return v < 0 ? 0 : (v > 1 ? 1 : v); }
+
+// The least distance between segments p0 p1 and q0 q1 (either may be a point). instances.wgsl's
+// `segment_gap` is its twin.
+double segment_distance(V3 p0, V3 p1, V3 q0, V3 q1) {
+  const V3 d1 = sub(p1, p0), d2 = sub(q1, q0), r = sub(p0, q0);
+  const double a = dot(d1, d1), e = dot(d2, d2), f = dot(d2, r);
+  double s = 0, t = 0;
+  if (a <= 1e-12 && e <= 1e-12) {
+    s = t = 0;
+  } else if (a <= 1e-12) {
+    t = clamp01(f / e);
+  } else {
+    const double c = dot(d1, r);
+    if (e <= 1e-12) {
+      s = clamp01(-c / a);
+    } else {
+      const double b = dot(d1, d2), den = a * e - b * b;
+      s = den > 1e-12 ? clamp01((b * f - c * e) / den) : 0;
+      t = (b * s + f) / e;
+      if (t < 0) {
+        t = 0;
+        s = clamp01(-c / a);
+      } else if (t > 1) {
+        t = 1;
+        s = clamp01((b - c) / a);
+      }
+    }
+  }
+  const V3 w = sub(add_scaled(p0, d1, s), add_scaled(q0, d2, t));
+  return std::sqrt(dot(w, w));
+}
+
+}  // namespace
+
+float see_through_keep(const SeeThrough& see, const double eye[3], const Instance& in) {
+  if (!see.on || see.width_m <= 0) return 1;
+  const V3 e{eye[0], eye[1], eye[2]};
+  const V3 to = sub(V3{see.subject[0], see.subject[1], see.subject[2]}, e);
+  const double len = std::sqrt(dot(to, to));
+  const double reach = len > see.short_m ? 1 - see.short_m / len : 0;
+  const V3 end = add_scaled(e, to, reach);
+  // The axis: +y rotated by the instance's quaternion (engine/core/quat.hpp's rotate of (0, 1, 0)).
+  const double x = in.rotation[0], y = in.rotation[1], z = in.rotation[2], w = in.rotation[3];
+  const V3 up{2 * (x * y - w * z), 1 - 2 * (x * x + z * z), 2 * (y * z + w * x)};
+  const V3 foot{in.position[0], in.position[1], in.position[2]};
+  const V3 top = add_scaled(foot, up, in.scale[1]);
+  const double crown = std::max(in.scale[0], in.scale[2]);
+  const double gap = segment_distance(e, end, foot, top) - crown;
+  const double u = clamp01(gap / see.width_m);
+  const double ease = u * u * (3 - 2 * u);
+  return static_cast<float>(see.floor + (1 - see.floor) * ease);
+}
+
 LodPick pick_lod(const float* min_px, int lods, float px) {
   LodPick p;
   if (px < kMinPixels || lods <= 0) return p;
@@ -521,9 +583,18 @@ void prepare_family(gpu::Device& device, InstanceFamily& f, const FrameView& vie
   f.staged.cull[2] = kLodBand;
   f.staged.cull[3] = 0;
   palette_rows(f, f.staged.skin);
+  const bool see = f.see.on && f.see.width_m > 0;
+  for (int k = 0; k < 3; ++k) f.staged.see[k] = static_cast<float>(f.see.subject[k]);
+  f.staged.see[3] = see ? f.see.width_m : 0;
+  f.staged.see_more[0] = f.see.floor;
+  f.staged.see_more[1] = f.see.short_m;
+  f.staged.see_more[2] = 0;
+  f.staged.see_more[3] = 0;
   device.queue.WriteBuffer(f.params, 0, &f.staged, sizeof f.staged);
   device.queue.WriteBuffer(f.args, 0, f.args_reset.data(), f.args_reset.size() * 4);
 }
+
+void set_see_through(InstanceFamily& f, const SeeThrough& see) { f.see = see; }
 
 void prepare_family_caster(gpu::Device& device, InstanceFamily& f, int slot, float texels_per_m) {
   if (slot < 0 || static_cast<size_t>(slot) >= f.casters.size()) return;

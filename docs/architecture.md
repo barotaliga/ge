@@ -78,6 +78,12 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   packet format, connections with their channels, and nodes of up to 32 peers. It depends on
   `engine/core` only and reads no clock: the caller passes the time and the seeds, so a session
   over the simulated network is deterministic and every net lab is a determinism test.
+- **`engine/console`**: the console and cfg files (M21; `docs/console.md` is the design): cvars
+  in three tiers (the player's, the server's, code's), bound to the settings structs the
+  subsystems already read so no subsystem includes the console; the command buffer, aliases,
+  scripting, binds, the cfg startup order and `cfg_save`; and the drop-down console's model,
+  which holds no pixels. It depends on `engine/core` only and reads no clock: a frame is one
+  `run`.
 - **`engine/input`**: the input layer (`ge::input`, M19; `docs/input.md` is the design): one
   32-byte event for every device, the state a frame reads, dead zones and ramps, action maps in
   contexts, the bindings file and rebinding, the device database, touch controls, local players,
@@ -112,6 +118,11 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   `ge profile`, `ge mem`), a log replayed with the decision trace on (`ge why`), and the `play`
   executable's main. It depends on `engine/core`, `engine/ai` and `engine/prof`; a game's
   `play` target links it and `ge` runs it.
+- **`engine/replay`**: replays (`ge::replay`, `docs/replays.md`): a run watched again off its
+  input log from any moment. The keyframes are the game's own `Run::clone`s, kept every few
+  seconds and thinned with age; the player seeks by cloning the nearest one and stepping it on
+  in a budget of steps a frame; the transport is a video player's controls as pure state. It
+  depends on `engine/play`; a game that clones its run gets seeking for free.
 - **`engine/ai`**: the bots' layer (`ge::ai`): the DECISION RECORD every bot writes where it
   chooses (`why.hpp`: the facts it read, the options it weighed with their scores and the named
   terms of each, the choice and its margin over the next best), held to one rule: off is a null

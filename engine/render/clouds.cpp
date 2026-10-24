@@ -283,8 +283,16 @@ void create_clouds(gpu::Device& device, gpu::PipelineSet& pipelines, CloudPass& 
       make_pipeline_layout(device, "clouds.draw", {frame, clouds.layout});
   clouds.p_draw = add_cloud_pipeline(device, pipelines, draw, "clouds.draw", "fs_main", full,
                                      {kHdrFormat}, true);
-  clouds.p_march = add_cloud_pipeline(device, pipelines, draw, "clouds.march", "fs_march", full,
-                                      {kHdrFormat, wgpu::TextureFormat::R32Float}, false);
+  clouds.march_layout =
+      make_layout(device, "clouds.history",
+                  {Slot::depth, Slot::texture, Slot::texture_raw, Slot::texture, Slot::texture_raw},
+                  wgpu::ShaderStage::Fragment);
+  clouds.p_fresh = add_cloud_pipeline(device, pipelines, draw, "clouds.fresh", "fs_fresh", full,
+                                      {kHdrFormat, wgpu::TextureFormat::RG32Float}, false);
+  clouds.p_march =
+      add_cloud_pipeline(device, pipelines, draw, "clouds.march", "fs_march",
+                         make_pipeline_layout(device, "clouds.march", {frame, clouds.march_layout}),
+                         {kHdrFormat, wgpu::TextureFormat::RGBA32Float}, false);
   clouds.p_upsample =
       add_cloud_pipeline(device, pipelines, draw, "clouds.upsample", "fs_upsample",
                          make_pipeline_layout(device, "clouds.upsample", {frame, clouds.up_layout}),
@@ -295,33 +303,56 @@ void bind_cloud_targets(gpu::Device& device, CloudPass& clouds, const FrameTarge
   clouds.quarter_width = std::max(1u, (targets.width + 1) / 2);
   clouds.quarter_height = std::max(1u, (targets.height + 1) / 2);
   const auto usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding;
-  clouds.quarter = make_texture(device, "clouds.quarter", clouds.quarter_width,
-                                clouds.quarter_height, 1, kHdrFormat, usage);
-  clouds.quarter_dist =
-      make_texture(device, "clouds.quarter_dist", clouds.quarter_width, clouds.quarter_height, 1,
-                   wgpu::TextureFormat::R32Float, usage);
-  clouds.quarter_view = clouds.quarter.CreateView();
-  clouds.quarter_dist_view = clouds.quarter_dist.CreateView();
+  for (int k = 0; k < 2; ++k) {
+    clouds.quarter[k] = make_texture(device, "clouds.quarter", clouds.quarter_width,
+                                     clouds.quarter_height, 1, kHdrFormat, usage);
+    clouds.quarter_dist[k] =
+        make_texture(device, "clouds.quarter_dist", clouds.quarter_width, clouds.quarter_height, 1,
+                     wgpu::TextureFormat::RGBA32Float, usage);
+    clouds.quarter_view[k] = clouds.quarter[k].CreateView();
+    clouds.quarter_dist_view[k] = clouds.quarter_dist[k].CreateView();
+  }
+  const uint32_t fw = (clouds.quarter_width + 1) / 2, fh = (clouds.quarter_height + 1) / 2;
+  clouds.fresh = make_texture(device, "clouds.fresh", fw, fh, 1, kHdrFormat, usage);
+  clouds.fresh_dist =
+      make_texture(device, "clouds.fresh_dist", fw, fh, 1, wgpu::TextureFormat::RG32Float, usage);
+  clouds.fresh_view = clouds.fresh.CreateView();
+  clouds.fresh_dist_view = clouds.fresh_dist.CreateView();
   clouds.group = make_group(device, "clouds.depth", clouds.layout, {targets.depth_view});
-  clouds.up_group = make_group(device, "clouds.quarter", clouds.up_layout,
-                               {targets.depth_view, clouds.quarter_view, clouds.quarter_dist_view});
+  for (int k = 0; k < 2; ++k) {
+    clouds.march_group[k] =
+        make_group(device, "clouds.history", clouds.march_layout,
+                   {targets.depth_view, clouds.quarter_view[1 - k], clouds.quarter_dist_view[1 - k],
+                    clouds.fresh_view, clouds.fresh_dist_view});
+    clouds.up_group[k] =
+        make_group(device, "clouds.quarter", clouds.up_layout,
+                   {targets.depth_view, clouds.quarter_view[k], clouds.quarter_dist_view[k]});
+  }
 }
 
 void encode_clouds(const CloudPass& clouds, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
                    wgpu::CommandEncoder& encoder, const FrameTargets& targets,
-                   const wgpu::BindGroup& frame, const FrameView& view) {
+                   const wgpu::BindGroup& frame, const FrameView& view,
+                   const FrameUniforms& block) {
   // A pass with nothing to do: an empty compute pass keeps its row without loading and storing a
   // target.
+  // Spread as fill_uniforms decided it (cloud_info.z: with the last frame's camera).
+  const bool spread = view.clouds.count > 0 && block.cloud_info[2] > 0;
+  if (!spread) rec.compute(encoder, "clouds.fresh").End();
   if (view.clouds.count <= 0 || !view.clouds.quarter) rec.compute(encoder, "clouds.march").End();
   if (view.clouds.count <= 0) {
     rec.compute(encoder, "clouds").End();
     return;
   }
+  if (spread)
+    draw_full(rec, encoder, "clouds.fresh", {clouds.fresh_view, clouds.fresh_dist_view}, false,
+              pipelines.render(clouds.p_fresh), frame, clouds.group);
   if (view.clouds.quarter) {
-    draw_full(rec, encoder, "clouds.march", {clouds.quarter_view, clouds.quarter_dist_view}, false,
-              pipelines.render(clouds.p_march), frame, clouds.group);
+    const size_t k = view.frame & 1;
+    draw_full(rec, encoder, "clouds.march", {clouds.quarter_view[k], clouds.quarter_dist_view[k]},
+              false, pipelines.render(clouds.p_march), frame, clouds.march_group[k]);
     draw_full(rec, encoder, "clouds", {targets.hdr_view}, true, pipelines.render(clouds.p_upsample),
-              frame, clouds.up_group);
+              frame, clouds.up_group[k]);
   } else {
     draw_full(rec, encoder, "clouds", {targets.hdr_view}, true, pipelines.render(clouds.p_draw),
               frame, clouds.group);

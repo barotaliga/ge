@@ -180,7 +180,10 @@ Picture depth_picture(const std::vector<float>& distance, int width, int height)
   return p;
 }
 
-bool camera(const sim::GameState& s, std::string_view name, r::FrameView& view) {
+// A rung's view also says the point it frames (`subject`); a view of the mountain frames none.
+bool camera(const sim::GameState& s, std::string_view name, r::FrameView& view,
+            std::optional<std::array<double, 3>>& subject) {
+  subject.reset();
   const auto& level = *s.level;
   day_view(level, -1, view);
   view.time_s = s.t;
@@ -193,6 +196,8 @@ bool camera(const sim::GameState& s, std::string_view name, r::FrameView& view) 
     ge::camera::to_frame_view(fall_line::camera::frame_camera(
                                   cam, skier, sw, fall_line::camera::camera_world(sw), 1.0 / 60),
                               view);
+    const ge::camera::Vec3 p = fall_line::camera::framed_point(skier);
+    subject = std::array<double, 3>{p.x, p.y, p.z};
     return true;
   }
   return make_view(level, name, view);
@@ -232,7 +237,8 @@ class FrameRenderer final : public ge::play::Renderer {
                                      frame_->targets.height, r::kWireFormat);
     }
     r::FrameView view;
-    if (!camera(*s, shot.view, view)) {
+    std::optional<std::array<double, 3>> subject;
+    if (!camera(*s, shot.view, view, subject)) {
       error = "no view `" + std::string(shot.view) + "`";
       return false;
     }
@@ -243,7 +249,7 @@ class FrameRenderer final : public ge::play::Renderer {
     const int frames = shot.cut ? kSettle : 1;
     for (int i = 0; i < frames; ++i) {
       view.frame = drawn_++;
-      fall_line::app::draw(*device_, *frame_, view, {skiers}, target_.view);
+      fall_line::app::draw(*device_, *frame_, view, {skiers, 0, true, {}, subject}, target_.view);
     }
     const int pw = shot.width, ph = shot.height;
     if (shot.mode == "wireframe") {
