@@ -24,7 +24,7 @@ fast chase camera close to the ground. Per frame, at the top of its picture ladd
 | Props and buildings | Lifts and their moving carriers, a village, gates, fences: hundreds of instanced meshes | Draw submission; per-instance culling, not per-mesh |
 | Figures | The player, a few rivals, and up to a few hundred people in a crowd, all skinned | Skinning once and drawing many times (main view and shadows) |
 | Snow marks | Trail maps stamped from the skiers' prints every frame | Render-to-texture with max blending, a fine window that follows the camera redrawn from the stamps' history, and a coarse map over the whole mountain |
-| Particles | Tens of thousands of spray, snowfall and cloud particles | Overdraw of soft transparent quads; simulated on the GPU |
+| Particles | Tens of thousands of spray, snow, rain and cloud particles | Overdraw of soft transparent quads; simulated on the GPU |
 | Sky | A physical atmosphere, a raymarched cloud volume, a night sky, aerial perspective on every material | Lookup tables computed on the GPU; a temporal cloud buffer |
 | Light | One sun or moon, the sky's light, at most a handful of point lamps at night | No need for a many-light pipeline |
 | Shadows | The mountain shading itself over kilometres, sharp shadows under the figures | Two different problems, solved by two different techniques |
@@ -924,10 +924,11 @@ lab), the flight of all 16384 slots the larger half.
 **As built (M8d2).** The drag pulls a particle toward the AIR, not still air: the frame hands the
 pool the map's wind at the view's time (`plugins/mountain/air/air.hpp`), so a powder cloud (the
 spray's big thin puffs, hanging three to five seconds) drifts off downwind. THE FALLING SNOW is
-`engine/render/snowfall.hpp`: 24576 flakes in a 36 m cube centred on the eye, no births and no
-deaths. `snowfall.sim` moves each at the wind plus its own fall (0.6 to 1.4 m/s by its index)
-and a flutter on its phase, and wraps its offset from the eye back into the cube, so the eye
-always stands in a full fall however fast it moves. `snowfall` draws the first `fall` share of
+`engine/render/precip.hpp` (named `snowfall` until M36 brought the rain into it): 24576 flakes
+in a 36 m cube centred on the eye, no births and no deaths. `precip.sim` moves each at the wind
+plus its own fall (0.6 to 1.4 m/s by its index) and a flutter on its phase, and wraps its offset
+from the eye back into the cube, so the eye always stands in a full fall however fast it moves.
+`precip` draws the first `fall` share of
 them (the air's fall at the view's time: a flurry a scatter, a storm the whole box) as streaks
 over a 1/60 s shutter, at least a pixel and a half wide (a far flake widened and thinned as much,
 so it keeps its light and does not shimmer), thinned by the root of the streak's length, faded
@@ -935,6 +936,47 @@ toward the cube's faces and at the lens, lit by the sun past the horizon and the
 softened against the depth. When nothing falls the pass is an empty compute pass under its name
 (an empty render pass still loads and stores its targets). The flakes are lit as the day is: under
 a clear sky that is a sunny fall; under a lid they are lit as its flat grey (M8f1, above).
+
+**Precipitation (M36).** What falls, and how hard, is a world's to say through
+`engine/wind/precip.hpp` (no GPU, golden): ONE DIAL, a fall's intensity 0..1 and its rain share
+0 (dry snow) .. 1 (rain), gives the liquid-equivalent rate (rain 0.64 * 232.6^i mm/h, so 2.5 at
+0.25 and 50 at 0.8; snow 0.04 * 250^i, 10 mm/h of water at the top), the TIER (rain by its rate:
+light, moderate, heavy; snow by what it hides: 1 km, 500 m; either a storm when heavy in a wind
+of 15 m/s or more, and rain past 50 mm/h), the visual range (rain 11.5 R^-0.63 km, snow
+1.2 R^-0.9 km), the pace (a drop's terminal speed by its median size off the exponential size
+spectrum, a flake's 1 m/s, sleet between), the PHASE by height (snow above a freezing level,
+melting through the 300 m under it) and the WET GROUND (a 0.3 mm film and puddles to 3 mm that
+drain and dry by the wind and the sun). The picture reads the same numbers:
+
+- `engine/render/precip.hpp` turns the first `rain` share of the particles (by a rank of their
+  index) into DROPS, so a sleet is flakes and drops at once and a rising share turns them one by
+  one. A drop falls at 0.75 to 1.25 of the rain's pace and is drawn as a thin clear line over
+  1/30 s (the eye smears a drop), at least a pixel and a half wide and never thinned below a
+  faint trace, taking the sky's light with the sun caught along it. Every particle rides THE
+  EDDIES, a slow field of swirls some metres across at `swirl` m/s (the wind's turbulence
+  intensity times its speed, over a floor), so a storm's snow swirls in sheets; a drop shrugs off
+  most of it.
+- THE SPLASHES are the same draw's next instances: up to 6144 crowns at a full rain, each living
+  0.16 s at a spot drawn afresh each life out of the screen and set on the surface the depth
+  shows (its normal off the depth's neighbours), kept where that faces up and within 24 m, at an
+  even density over the ground (a far spot kept by the share of ground its pixel covers). Off the
+  depth, so a splash lands on any game's ground, roof or deck; nothing keeps one off a floor under
+  a roof yet (a rain occlusion map, top-down depth, is the next step for rooms).
+- THE WET GROUND rides in the frame's `mist.zw` (`Weather::wet`, `puddles`): every world material
+  calls `wet_albedo` (a porous surface goes to half its albedo soaked, the water keeping the light
+  in its pores) and adds `wet_sheen` (Schlick's Fresnel off water, the sky along the reflected ray
+  and the sun's glint; on the flats the puddles lie level and mirror sharply). On Fall Line's snow
+  that reads as slush: the glitter goes, the glare dulls, the flats pool.
+- Fall Line keeps one wet ground a frame, the eye's, stepped by the frames' clock from the steady
+  state its rain and drying would leave. Its rain comes from the map's SNOW LINE
+  (`Weather::snowline`, raised only by `sv_snowline`: R19 deals none, so every dealt map is snow
+  to the valley and no digest moves). The cvars: `r_precip`, `r_precip_density`, `r_splashes`,
+  `r_wet`; the labs `precip` (eight skies from a flurry to a rainstorm) and `precip-air` (the
+  numbers as charts).
+
+Every shader's whole-line comments are left out of what is embedded (`cmake/WgslEmbed.cmake`), so
+a material that includes `frame.wgsl` stays under the 60 KB literal cap however well it is
+explained.
 - **Skinning** uses bone palettes in a storage buffer. A figure drawn in more than one
   view (the player in the main view, the sun's cascade and the shadow atlas) is skinned
   once by a compute pass into a vertex buffer that every view reads. Crowd members,

@@ -34,8 +34,7 @@
 //   water                -> hdr motion depth (every body of water added, render/water.hpp)
 //   water.under          -> hdr (the view under water, when the eye is under a body)
 //   particles            -> hdr motion (the spray, over the picture; the motion's reactive b)
-//   precip               -> hdr motion (the snow and rain round the eye and the rain's splashes,
-//                           as the particles)
+//   precip               -> hdr motion (the snow and rain round the eye, the rain's splashes)
 //   taa                  -> taa.history (at the output's size; with FrameOptions::taa)
 //   bloom                -> bloom (the glow's mip chain, from what post reads)
 //   post                 -> final (the bloom mixed in, the grade's table: look.hpp's)
@@ -84,9 +83,9 @@
 #include "render/instances.hpp"
 #include "render/particles.hpp"
 #include "render/post.hpp"
+#include "render/precip.hpp"
 #include "render/shadows.hpp"
 #include "render/skinning.hpp"
-#include "render/precip.hpp"
 #include "render/sky.hpp"
 #include "render/taa.hpp"
 #include "render/terrain.hpp"

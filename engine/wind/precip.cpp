@@ -125,7 +125,7 @@ Wet wet_of(double water) {
 }  // namespace
 
 Wet step_wet(const Wet& w, double rate, double dry, double dt) {
-  // Sub-steps of at most a minute: the drain's time constant is half an hour.
+  // Sub-steps of at most a minute: the drain's time constant is ten minutes.
   const double secs = std::max(0.0, dt);
   const int n = std::max(1, static_cast<int>(std::ceil(secs / 60 - 1e-9)));
   const double h = secs / 3600 / n;

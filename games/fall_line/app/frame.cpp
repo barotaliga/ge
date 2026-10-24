@@ -393,6 +393,23 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
     view.clouds.quarter = f.options.cloud_quarter;
     view.clouds.spread = f.options.cloud_spread;
   }
+  // THE WET GROUND the rain leaves (the eye's own: one wet ground a frame), stepped by the frames'
+  // clock from the steady state its rain and drying would leave, before the uniforms take it.
+  if (f.options.wet && f.options.weather) {
+    const ge::mountain::air::Fall fall =
+        ge::mountain::air::fall_at(*f.level, view.time_s, view.eye[1]);
+    const ge::wind::Precip here{fall.fall, fall.rain};
+    const double rate = ge::wind::rate_of(here) * here.rain;
+    const double sun = view.weather.sun_pass * std::max(0.0, std::sin(view.sun_elevation));
+    const double dry = ge::wind::dry_rate(ge::mountain::air::wind_at(*f.level, view.time_s).speed, sun);
+    const double since = view.time_s - f.wet_time;
+    f.wet = f.wet_placed && since >= 0 && since < 60 ? ge::wind::step_wet(f.wet, rate, dry, since)
+                                                     : ge::wind::wet_steady(rate, dry);
+    f.wet_time = view.time_s;
+    f.wet_placed = true;
+    view.weather.wet = f.wet.wet;
+    view.weather.puddles = f.wet.puddles;
+  }
   view.reach_m = f.options.reach_m;
   const auto start = std::chrono::steady_clock::now();
   f.recorder.begin_frame(device);
@@ -446,7 +463,6 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
     // What falls at the eye: snow above the map's snow line, rain under it, sleet between.
     const ge::mountain::air::Fall fall =
         ge::mountain::air::fall_at(*f.level, view.time_s, view.eye[1]);
-    const ge::wind::Precip here{fall.fall, fall.rain};
     r::PrecipFrame at;
     for (int k = 0; k < 3; ++k) {
       at.eye[k] = view.eye[k];
@@ -461,20 +477,6 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
     at.time = view.time_s;
     at.near_m = view.near_m;
     r::prepare_precip(device, f.precip, at);
-    // The ground the rain wets (the eye's own: one wet ground a frame), stepped by the frames'
-    // clock, starting at the steady state its rain and drying would leave.
-    if (f.options.wet) {
-      const double rate = ge::wind::rate_of(here) * here.rain;
-      const double sun = view.weather.sun_pass * std::max(0.0, std::sin(view.sun_elevation));
-      const double dry = ge::wind::dry_rate(wind.speed, sun);
-      const double since = view.time_s - f.wet_time;
-      f.wet = f.wet_placed && since >= 0 && since < 60 ? ge::wind::step_wet(f.wet, rate, dry, since)
-                                                       : ge::wind::wet_steady(rate, dry);
-      f.wet_time = view.time_s;
-      f.wet_placed = true;
-      view.weather.wet = f.wet.wet;
-      view.weather.puddles = f.wet.puddles;
-    }
   }
   const size_t racers = std::min<size_t>(scene.skiers.size(), kMaxFigures);
   {

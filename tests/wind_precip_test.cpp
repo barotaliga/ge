@@ -103,9 +103,13 @@ TEST(snow_hides_more_than_rain_and_a_heavier_fall_more) {
   CHECK(gw::visibility_of(rain(0)) == 20000);
   CHECK(gw::visibility_of(rain(0.9)) < 1000);
   CHECK(gw::visibility_of(rain(0.1)) > 5000);
-  for (const double i : {0.2, 0.5, 0.8}) {
+  // Past a flurry's scatter (which sees as far as a drizzle does), snow hides more.
+  for (const double i : {0.5, 0.8}) {
     CHECK(gw::visibility_of(snow(i)) < gw::visibility_of(rain(i)));
+  }
+  for (const double i : {0.2, 0.5, 0.8}) {
     CHECK(gw::visibility_of(rain(i + 0.1)) < gw::visibility_of(rain(i)));
+    CHECK(gw::visibility_of(snow(i + 0.1)) < gw::visibility_of(snow(i)));
   }
 }
 

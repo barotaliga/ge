@@ -29,7 +29,7 @@
 //
 // ge:summary The wind and the falling snow at a moment: gusts, veer, squalls, visibility
 // ge:keywords air wind gust veer downhill_from wind_at field_of fall_at snowfall squall visibility
-// ge:keywords visibility_in weather blizzard flurries storm rain sleet snowline kAloft
+// ge:keywords visibility_in weather blizzard flurries storm rain sleet snowline aloft
 // ge:skill mountain
 // ge:test tests/mountain_air_test.cpp
 #pragma once

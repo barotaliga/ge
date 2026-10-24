@@ -52,7 +52,7 @@ struct PrecipSettings {
   uint32_t particles = 24576;  // in the box at a fall of 1
   float box = 36.0f;           // m on a side
   float size = 0.03f;          // a flake's width, m (a clump of flakes; a crystal is too small to see)
-  float drop = 0.0015f;        // a drop's width, m
+  float drop = 0.002f;         // a drop's width, m
   float soft_m = 0.3f;         // the depth over which a particle fades into what is behind it
   uint32_t splashes = 6144;    // at a full rain
   float splash_reach = 24.0f;  // m

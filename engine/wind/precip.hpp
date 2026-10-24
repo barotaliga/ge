@@ -26,8 +26,8 @@
 // - THE SWIRL (`swirl_of`): the turbulent speed that carries a flake about the mean, the wind's
 //   own turbulence intensity times its speed, plus a floor in still air.
 // - THE WET GROUND (`Wet`, `step_wet`, `wet_steady`, `dry_rate`): the water standing on a surface,
-//   mm: rain wets a film (0.3 mm) and fills puddles (up to 3 mm) that drain at 2 per hour of what
-//   stands over the film and dry by the wind and the sun. `wet` (the film's share) and `puddles`
+//   mm: rain wets a film (0.3 mm) and fills puddles (up to 3 mm) that drain at 6 per hour of what
+//   stands over the film (a tenth of it a minute) and dry by the wind and the sun. `wet` (the film's share) and `puddles`
 //   (the puddles' share) are what a material reads. Snow lays no water; it is the ground's
 //   snow's to settle (a snow layer reads `rate_of` with the rain share).
 //
@@ -90,7 +90,7 @@ struct Wet {
 };
 inline constexpr double kFilm = 0.3;   // mm
 inline constexpr double kPools = 3.0;  // mm
-inline constexpr double kDrain = 2.0;  // of the water over the film, an hour
+inline constexpr double kDrain = 6.0;  // of the water over the film, an hour
 
 // The drying, mm/h, by the wind (m/s) and the sun's share on the surface (0 .. 1).
 double dry_rate(double wind, double sun);

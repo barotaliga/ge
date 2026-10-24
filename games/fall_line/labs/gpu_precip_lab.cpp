@@ -35,6 +35,7 @@
 #include "lab/raster.hpp"
 #include "mountain/air/air.hpp"
 #include "mountain/mapgen/generate.hpp"
+#include "mountain/mapgen/weather.hpp"
 #include "render/precip.hpp"
 #include "wind/field.hpp"
 #include "wind/precip.hpp"
@@ -151,7 +152,9 @@ void run(ge::lab::Lab& lab) {
     if (sky->snowline == kAtEye) {
       l.weather.snowline = eye_y;
     } else if (sky->snowline >= 0) {
-      mg::with_sky(l, {.snowline = sky->snowline});
+      mg::SkyPick pick;
+      pick.snowline = sky->snowline;
+      mg::with_sky(l, pick);
     }
     levels.push_back(std::move(l));
     const mg::Level& level = levels.back();
@@ -300,7 +303,7 @@ const ge::lab::LabSpec kSpec{
     {
         {"seed", "38", "the map's seed"},
         {"skies", "all", "the skies drawn: all, or ids comma-separated (flurries,rain,...)"},
-        {"view", "start", "the named view to shoot from"},
+        {"view", "piste", "the named view to shoot from"},
         {"at", "30", "seconds into the run the shot is taken at"},
         {"frames", "60", "frames drawn, at 60 a second, up to the shot"},
         {"width", "640", "the picture's width, px"},

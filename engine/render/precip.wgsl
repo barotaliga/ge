@@ -37,7 +37,7 @@ struct VertexOut {
 const kCorners = array<vec2f, 6>(vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(1.0, 1.0),
                                  vec2f(-1.0, -1.0), vec2f(1.0, 1.0), vec2f(-1.0, 1.0));
 const kShutter = 1.0 / 60.0;
-const kDropShutter = 1.0 / 30.0;
+const kDropShutter = 1.0 / 20.0;
 
 fn culled() -> VertexOut {
   var out: VertexOut;
@@ -78,10 +78,13 @@ fn splash_vertex(s: u32, vid: u32) -> VertexOut {
     return culled();  // the sky
   }
   let rel = unproject(px);
-  let n = normalize(cross(unproject(px + vec2i(2, 0)) - rel, unproject(px + vec2i(0, 2)) - rel));
   let dist = length(rel);
   let reach = sp.splash.x;
   let to_eye = -rel / max(dist, 1e-4);
+  // The surface's normal off the depth's neighbours, turned to face the eye (a surface the depth
+  // shows always does).
+  var n = normalize(cross(unproject(px + vec2i(2, 0)) - rel, unproject(px + vec2i(0, 2)) - rel));
+  n *= sign(dot(n, to_eye) + 1e-6);
   let facing = abs(dot(n, to_eye));
   // An even density over the ground: a pixel at distance d covers d^2 / cos of it.
   let keep = dist * dist / (reach * reach * max(facing, 0.08));
@@ -140,8 +143,9 @@ fn vs_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) iid: u32) -
   }
   let across = normalize(cross(to_eye, along));
   let centre = rel - flat_motion * 0.5 * select(0.0, 1.0, len > size);
-  // A far particle is narrower than a pixel: widened to a pixel and a half, and as much thinner, so
-  // it covers the same light and does not shimmer in and out between pixels.
+  // A far particle is narrower than a pixel: widened to a pixel and a half, and thinner by the root
+  // of the widening, so it does not shimmer in and out between pixels and a far fall still reads
+  // as a fall (the eye holds a small bright point brighter than its share of the pixel).
   let c0 = frame.view_proj * vec4f(centre, 1.0);
   let c1 = frame.view_proj * vec4f(centre + across, 1.0);
   let px_per_m = length((c1.xy / c1.w - c0.xy / c0.w) * frame.size.xy * 0.5);
@@ -153,13 +157,14 @@ fn vs_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) iid: u32) -
   out.quad = c;
   out.rel = corner;
   // A streak spreads a flake over its length, but the eye keeps a moving flake brighter than its
-  // share of the shutter: thinned by the root of its length, not the length. A drop is a clear
-  // line: it is seen by the light it bends, never thinned below a faint trace.
-  var thin = sqrt(width / max(len, width));
+  // share of the shutter: thinned by the root of its length, not the length. A drop is far
+  // thinner than a pixel and still seen: the eye holds a thin bright line, so it is thinned by
+  // the root of its widening, never by its length.
   if (drop) {
-    thin = max(thin, 0.6);
+    out.look = vec4f(fade * min(1.0, 1.6 / sqrt(widen)), 1.0, 1.0, 0.0);
+  } else {
+    out.look = vec4f(fade / sqrt(widen), sqrt(width / max(len, width)), 0.0, 0.0);
   }
-  out.look = vec4f(fade / widen, thin, select(0.0, 1.0, drop), 0.0);
   return out;
 }
 
@@ -175,7 +180,7 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   if (kind < 1.5) {
     let across = 1.0 - in.quad.y * in.quad.y;
     let ends = 1.0 - smoothstep(0.6, 1.0, abs(in.quad.x));
-    a *= across * ends * select(1.0, 0.45, kind > 0.5);
+    a *= across * ends;
   } else {
     // The crown: a rim of spray round the landing, its sides thrown higher than its middle,
     // thinning as it spreads.
@@ -198,12 +203,17 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   let lit = ground_shadow(ground, horizon0, horizon1, linear_clamp, frame.sun.xyz, xz);
   let sun = sun_light(y, xz) * lit;
   let sky = sky_irradiance(vec3f(0.0, 1.0, 0.0));
-  var c = 0.9 / PI * (sun + sky);
-  if (kind > 0.5) {
-    // Clear water: the sky it bends toward the eye, and the sun caught along it.
+  // A flake (and a splash's spray) is white ice lit by the sun and the sky. Seen in the near air
+  // it scatters toward the eye the light of the whole sky ahead, so against a fog's or a fall's
+  // grey veil it is never lost: kept well brighter than the veil.
+  var c = max(0.9 / PI * (sun + sky), veil_luminance() * 1.6);
+  if (kind > 0.5 && kind < 1.5) {
+    // A drop is a lens: it bends most of the sky toward the eye (brighter than the ground it
+    // falls past) and catches the sun along it.
     let v = normalize(in.rel);
     let toward = max(dot(v, frame.sun.xyz), 0.0);
-    c = 0.55 / PI * sky + sun * (0.08 + 0.6 * pow(toward, 12.0)) / PI;
+    c = max(1.15 / PI * sky + sun * (0.1 + 0.8 * pow(toward, 12.0)) / PI,
+            veil_luminance() * 1.25);
   }
   let hazed = haze(c, in.position.xy * frame.size.zw, length(in.rel));
   var out: FragmentOut;
