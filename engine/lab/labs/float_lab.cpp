@@ -18,6 +18,7 @@
 #include <string>
 #include <vector>
 
+#include "core/libm/libm.hpp"
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
@@ -455,7 +456,7 @@ double arm_angle(const gw::Wakes& w, double speed, double t, double z, double& t
     sxy += d * at;
     ++n;
   }
-  return std::atan((n * sxy - sx * sy) / (n * sxx - sx * sx)) * 180 / kPi;
+  return gc::libm::atan((n * sxy - sx * sy) / (n * sxx - sx * sx)) * 180 / kPi;
 }
 
 std::vector<double> speeds(const std::string& list) {
@@ -492,7 +493,7 @@ void wakes(gl::Lab& lab) {
       }
     }
     p = gl::resized(p, 2 * kW, 2 * kH);
-    const double arm = std::tan(19.47 * kPi / 180);
+    const double arm = gc::libm::tan(19.47 * kPi / 180);
     for (const double side : {-1.0, 1.0}) {
       gl::draw_line(p, 2 * cx, 2 * top, 2 * (cx + side * arm * (kH - top)), 2 * kH, {230, 120, 30},
                     1);
