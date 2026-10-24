@@ -50,6 +50,8 @@
 
 #include <cstdint>
 
+#include "render/sky_style.hpp"
+
 namespace ge::render {
 
 // A column-major 4x4 matrix: element (row r, column c) is m[c * 4 + r].
@@ -167,6 +169,7 @@ struct FrameView {
   Weather weather{};  // the cloud and the fog; the default is a clear sky
   Night night{};      // the moon, the stars and the dark sky's glow; the default is none
   Clouds clouds{};    // the cloud's layers; the default is none
+  SkyStyle style{};   // the kind of sky (render/sky_style.hpp); the default is the Earth's
   // THE REACH, m: how far the picture draws. Past half of it a mist closes every surface into
   // the sky behind it, all of it by the reach, and nothing farther is drawn; 0: no reach, no mist.
   double reach_m = 0;
