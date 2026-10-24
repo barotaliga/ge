@@ -19,7 +19,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # Windows on the same image as ci.yml's windows row, so one MSVC judges every Windows
+        # build: windows-latest moved to a newer MSVC whose warnings the PR row never saw.
+        os: [ubuntu-latest, macos-latest, windows-2025]
     runs-on: ${{ matrix.os }}
     defaults:
       run:
