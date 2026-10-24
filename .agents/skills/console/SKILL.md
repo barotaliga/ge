@@ -56,5 +56,8 @@ every player setting, commented, to start from.
 ## Looking at the console
 
 `make lab LAB=console` pictures the drop-down console (down, sliding, closed with the notify
-lines) from the same `ConsoleView` model the app draws. Change the view, run it with
+lines, and autocomplete's list, selection and value prompt) from the same `ConsoleView` model the
+app draws. The pixels come from `ui::draw_console` (`engine/ui/console.hpp`), the draw list the
+GPU's 2D pass draws in the game, so a change to the console's look is made there, in its
+`ConsoleStyle`, and nowhere in the lab. Change the view, run it with
 `--tag=before` first and `--compare=before` after, and look at the three pictures.

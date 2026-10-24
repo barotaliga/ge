@@ -216,8 +216,10 @@ Its cvars:
 | `con_bgalpha` | 0.85 | how much of the game the panel hides, 0 to 1 |
 | `con_bgimage` | (none) | a picture drawn over the gradient, a path in the game's files |
 
-The view (`engine/console/view.hpp`) is a model that holds no pixels: the app's 2D layer draws
-it, and the `console` lab draws it on the CPU (`make lab LAB=console`).
+The view (`engine/console/view.hpp`) is a model that holds no pixels. `ui::draw_console`
+(`engine/ui/console.hpp`) turns it into the 2D layer's draw list, which the game draws over its
+frame and the `console` lab draws on the CPU (`make lab LAB=console`). A game sets the look (the
+sizes, each kind's colour, the list's colours) in a `ConsoleStyle`.
 
 ## Tooling
 
