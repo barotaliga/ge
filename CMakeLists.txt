@@ -97,6 +97,9 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   endif()
 elseif(MSVC)
   target_compile_options(ge_flags INTERFACE /W4 /permissive-)
+  # C4996 calls standard C (fopen, getenv, sprintf) unsafe and, under /WX, fails code that GCC
+  # and Clang build as portable. The tree uses the standard calls on every OS.
+  target_compile_definitions(ge_flags INTERFACE _CRT_SECURE_NO_WARNINGS)
   if(GE_WERROR)
     target_compile_options(ge_flags INTERFACE /WX)
   endif()
