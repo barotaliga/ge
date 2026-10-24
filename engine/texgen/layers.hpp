@@ -6,7 +6,7 @@
 // The kinds fall in four groups:
 //   base     fill, noise, stripes                    a colour and a relief to start from
 //   pattern  bricks, tiles, planks, panels, blocks,  built structure: joints, bevels, rivets,
-//            studs, scales                           studs and scales
+//            studs, scales, trim                     studs, scales and trim bands
 //   life     cracks, scratches, dirt, dust, grime,   what time and the place do to a surface:
 //            wear, rust, streaks, moss, snow, glow   each reads the height so far, so grime
 //                                                    pools in the joints the bricks cut and
@@ -82,6 +82,7 @@ const KeyDef* find_key(const LayerKind& kind, std::string_view key);
 void paint_fill(Surface&, const Args&);
 void paint_noise(Surface&, const Args&);
 void paint_stripes(Surface&, const Args&);
+void paint_trim(Surface&, const Args&);
 void paint_bricks(Surface&, const Args&);
 void paint_planks(Surface&, const Args&);
 void paint_panels(Surface&, const Args&);

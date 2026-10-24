@@ -266,7 +266,20 @@ constexpr KeyDef kPalette[] = {
     {"amount", K::number, 1, 0, 1, "", "", "how much the colour snaps"},
 };
 
-constexpr std::array<LayerKind, 24> kKindsTable = {{
+constexpr KeyDef kTrim[] = {
+    {"at", K::number, 0, 0, 1, "", "", "the band's top, down the tile (0: the top edge)"},
+    {"height", K::number, 0.15, 0.01, 1, "", "", "the band's height, a share of the tile"},
+    {"beads", K::number, 2, 1, 16, "", "",
+     "rounded mouldings down the band (its top half with teeth)"},
+    {"teeth", K::number, 0, 0, 64, "", "", "crenellation teeth across the tile; 0 for none"},
+    {"depth", K::number, 0.5, 0, 1, "", "", "how far the mouldings stand proud"},
+    {"color", K::colour, 0, 0, 1, "#8a7a64", "", "the trim"},
+    {"vary", K::number, 0.05, 0, 1, "", "", "how much each tooth differs in colour"},
+    {"shadow", K::number, 0.4, 0, 1, "", "", "the shadow it casts on what is below"},
+    {"rough", K::number, 0.8, 0, 1, "", "", "the trim's roughness"},
+};
+
+constexpr std::array<LayerKind, 25> kKindsTable = {{
     {"fill", "base", "the whole tile one colour, height, roughness and metal", kFill, paint_fill},
     {"noise", "base", "a noise field blended into the colour, height and roughness", kNoise,
      paint_noise},
@@ -282,6 +295,8 @@ constexpr std::array<LayerKind, 24> kKindsTable = {{
     {"studs", "pattern", "a field of domes, pyramids, diamond-plate bars or holes", kStuds,
      paint_studs},
     {"scales", "pattern", "overlapping scales or arches, row over row", kScales, paint_scales},
+    {"trim", "pattern", "a band across the tile: mouldings, crenellation teeth, a shadow below",
+     kTrim, paint_trim},
     {"cracks", "life", "a web of cracks cut into the surface", kCracks, paint_cracks},
     {"scratches", "life", "thin bright scratches, most one way", kScratches, paint_scratches},
     {"dirt", "life", "blotches of dirt, thicker in the low places", kDirt, paint_dirt},

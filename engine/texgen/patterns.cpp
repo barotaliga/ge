@@ -5,9 +5,13 @@
 // fill and edges to wear, and gives every piece its own colour off a hash of its place, so the tile
 // still repeats.
 //
-// ge:summary Pattern painters: bricks, tiles, planks, riveted panels, blocks, studs, scales
+// A trim is a band across the tile: a moulding of beads and the teeth of a crenellation, laid
+// over whatever is under it with a shadow cast below.
+//
+// ge:summary Pattern painters: bricks, tiles, planks, riveted panels, blocks, studs, scales, trim
 // ge:keywords pattern bricks tiles mortar grout planks wood grain knots panels seams rivets
 // ge:keywords blocks ashlar masonry studs diamond-plate dimples grate holes scales arches
+// ge:keywords trim moulding band frieze cornice crenellation teeth
 // ge:skill textures
 // ge:test tests/texgen_bake_test.cpp
 #include <algorithm>
@@ -335,6 +339,52 @@ void paint_scales(Surface& s, const Args& a) {
     s.plane[kHeight][i] =
         static_cast<float>(clamp01(0.5 + depth * (face - 0.5) + 0.15 * depth * hit / kR));
     s.plane[kRough][i] = static_cast<float>(rough);
+  });
+}
+
+void paint_trim(Surface& s, const Args& a) {
+  const double at = a.n("at"), band = a.n("height"), depth = a.n("depth"), vary = a.n("vary");
+  const double shadow = a.n("shadow"), rough = a.n("rough");
+  const int beads = a.i("beads"), teeth = a.i("teeth");
+  const Rgb colour = a.c("color");
+  const double aa = 1.0 / s.size;
+  for_texels(s.size, [&](int x, int y, double u, double v) {
+    const double t = (v - at) - std::floor(v - at);  // down from the band's top, wrapped
+    const size_t i = s.at(x, y);
+    if (t >= band) {
+      // The shadow the band casts on what is under it, fading over a share of its height.
+      const double below = (t - band) / std::max(band * 0.5, aa);
+      if (below < 1 && shadow > 0) {
+        const double k = 1 - shadow * (1 - below);
+        const Rgb c = colour_at(s, i);
+        set_colour(s, i, {c.r * k, c.g * k, c.b * k});
+      }
+      return;
+    }
+    const double f = t / band;
+    // The moulding: `beads` rounded ridges across the top part (all of it without teeth), a
+    // dark groove between them.
+    const double split = teeth > 0 ? 0.5 : 1.0;
+    double h = 0.5, lit = 1;
+    if (f < split) {
+      const double g = f / split * beads, bf = g - std::floor(g);
+      const double round = std::sqrt(std::max(0.0, 1 - (2 * bf - 1) * (2 * bf - 1)));
+      h = 0.5 + depth * 0.5 * round;
+      lit = 0.7 + 0.45 * (1 - bf);  // lit from above: each bead's upper half the brighter
+    } else {
+      // The teeth: proud blocks with recesses between them, a joint round each.
+      const double g = u * teeth, gf = g - std::floor(g);
+      const double edge = std::min(std::min(gf, 1 - gf) / teeth, (1 - f) * band);
+      const bool tooth = gf < 0.5;
+      h = tooth ? 0.5 + depth * 0.5 * smoothstep(0, 2 * aa, edge) : 0.5 - depth * 0.3;
+      lit = tooth ? 1.0 : 0.45;
+    }
+    const uint32_t cell = static_cast<uint32_t>(std::floor(u * std::max(1, teeth)));
+    const Rgb c = varied(colour, vary, cell, 7, a.seed);
+    set_colour(s, i, {c.r * lit, c.g * lit, c.b * lit});
+    s.plane[kHeight][i] = static_cast<float>(clamp01(h));
+    s.plane[kRough][i] = static_cast<float>(rough);
+    s.plane[kMetal][i] = 0;
   });
 }
 

@@ -53,7 +53,7 @@ layer streaks amount=$dirt count=24 length=0.4
 | Group | Kinds | What they do |
 | --- | --- | --- |
 | base | `fill`, `noise`, `stripes` | Set a colour, height, roughness and metal; blend a noise field into them (mix, multiply, overlay, screen, add, with a two-colour ramp); draw stripes |
-| pattern | `bricks`, `tiles`, `planks`, `panels`, `blocks`, `studs`, `scales` | Cut structure into the height: courses of bricks with ragged mortar, grouted tiles, boards with grain, knots, ends and gaps, steel plates with pressed seams and rivets, dressed stone in uneven courses, fields of domes, pyramids, diamond-plate bars or holes, and overlapping scales or arches. Each piece gets its own colour |
+| pattern | `bricks`, `tiles`, `planks`, `panels`, `blocks`, `studs`, `scales`, `trim` | Cut structure into the height: courses of bricks with ragged mortar, grouted tiles, boards with grain, knots, ends and gaps, steel plates with pressed seams and rivets, dressed stone in uneven courses, fields of domes, pyramids, diamond-plate bars or holes, overlapping scales or arches, and trim bands (mouldings and crenellation teeth casting a shadow below). Each piece gets its own colour |
 | life | `cracks`, `scratches`, `dirt`, `dust`, `grime`, `wear`, `rust`, `streaks`, `moss`, `snow`, `glow` | Age the surface by reading the height so far: cavities (`relief`) and ledges (`up_facing`), broken up by noise, with an `amount` a level can drive |
 | finish | `speckle`, `shade`, `palette` | The paint over everything: grain a texel at a time with specks of a second colour gathering in the pits, the light baked into the colour off the height, and every colour snapped onto a few ramps of shades |
 
@@ -74,6 +74,7 @@ the tree and none is named in it. What each round found and built:
 | Irregular ashlar | Even courses of long and short blocks, some running down through two courses (`span`), the joint drawn beside each tall block | `blocks` |
 | Stud fields | Rows of domes, pyramids, the leaning bars of diamond plate, or holes | `studs` |
 | Scales and arches | Discs in offset rows, each row lying over the one above, rimmed | `scales` |
+| Trim bands | A band across a wall: rounded beads lit from above, crenellation teeth below them, a shadow cast on the wall; it may run over the tile's edge | `trim` `at`, `height`, `beads`, `teeth` |
 | Rock chunks | Cellular edges cut into the height and lit by `shade` | `noise kind=edges` with `shade` |
 
 The look in numbers (`look.hpp`): brightness, contrast, saturation, warmth, grain, edges and
