@@ -11,6 +11,7 @@
 #include <cstdlib>
 
 #include "assets/inflate.hpp"
+#include "core/libm/libm.hpp"
 
 namespace ge::assets {
 
@@ -163,7 +164,8 @@ const uint8_t* texel(const Image& image, float u, float v) {
 
 float srgb_to_linear(uint8_t c) {
   const float s = static_cast<float>(c) / 255.0f;
-  return s <= 0.04045f ? s / 12.92f : std::pow((s + 0.055f) / 1.055f, 2.4f);
+  return s <= 0.04045f ? s / 12.92f
+                       : static_cast<float>(core::libm::pow((s + 0.055) / 1.055, 2.4));
 }
 
 }  // namespace ge::assets
