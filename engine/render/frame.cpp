@@ -116,6 +116,9 @@ void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint
   // THE REACH: the mist closes every surface into the sky from half the reach to all of it.
   u.mist[0] = static_cast<float>(view.reach_m * kMistBegins);
   u.mist[1] = static_cast<float>(view.reach_m);
+  // THE SKY'S STYLE (render/sky_style.hpp), the second sun off the real one.
+  real_sun_direction(view, d);
+  style_rows(view.style, d, u.style);
 }
 
 FrameTargets create_targets(gpu::Device& device, std::string_view label, uint32_t width,

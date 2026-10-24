@@ -12,16 +12,20 @@
 // waves' machines climb the mountain at him), `face` (beside the highest lift's line, more than
 // halfway up it on a face steeper than a laden machine climbs, four stars: they come as far as the
 // face's foot and wait there), `arrest` (the open spot with the army not shooting to kill: a
-// machine runs him down and its crew get off and take him in).
+// machine runs him down and its crew get off and take him in), `answer` (his answer, at the open
+// spot at three stars: once a machine has halted side-on to him he skis into it at a run and
+// knocks its crew off, then takes the empty machine with the machine press and rides it off
+// toward the village; THE ANSWER table and a close-up of the knock and the theft).
 //
-// A machine still caught at the end, a scenario shooting to kill within reach with no halt, or an
-// arrest that never comes is a failure (exit 1).
+// A machine still caught at the end, a scenario shooting to kill within reach with no halt, an
+// arrest that never comes, or an answer with no crew knocked off, no theft or no heat raised by
+// either is a failure (exit 1).
 //
 // ge:summary Lab: the army's snowmobiles on seed 38: the call, the drive, the halt, the arrest
 // ge:keywords lab army snowmobile sled army-sled halt dismount arrest dug righted paths stuck
-// ge:keywords scenario open slope
+// ge:keywords scenario open slope answer knock-off steal stolen hull
 // ge:skill sim labs
-// ge:test tests/fall_line_army_sled_test.cpp
+// ge:test tests/fall_line_army_sled_test.cpp tests/fall_line_army_meet_test.cpp
 #include <memory>
 #include <span>
 #include <string>
@@ -31,10 +35,12 @@
 #include "core/math.hpp"
 #include "core/num_text.hpp"
 #include "fall_line/sim/army.hpp"
+#include "fall_line/sim/army_rules.hpp"
 #include "fall_line/sim/army_sled.hpp"
 #include "fall_line/sim/army_sled_rules.hpp"
 #include "fall_line/sim/free.hpp"
 #include "fall_line/sim/game.hpp"
+#include "fall_line/sim/sled_ride.hpp"
 #include "fall_line/sim/wanted.hpp"
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
@@ -42,6 +48,7 @@
 #include "mountain/lifts/lift_loop.hpp"
 #include "mountain/mapgen/generate.hpp"
 #include "skier/skier.hpp"
+#include "snowmobile/spec.hpp"
 
 namespace {
 
@@ -216,6 +223,252 @@ Hunt run_scene(const std::shared_ptr<const mg::Level>& level, Scene scene, doubl
   return h;
 }
 
+// ─── his answer ──────────────────────────────────────────────────────────────────────────────
+
+// THE ANSWER: how far out to the machine's right he sets off at it, m, and how fast, m/s (past the
+// knock off, short of being thrown himself); how long after the knock he stands beside it to take
+// it, s; how long he rides it off, s, at what throttle.
+constexpr double kAnswerOffM = 3;
+constexpr double kAnswerSpeed = 4.6;
+constexpr double kStealAfterS = 1.5;
+constexpr double kRideS = 25;
+constexpr double kRideTuck = 0.7;
+// The close-up: metres across it.
+constexpr double kCloseM = 36;
+
+struct Answer {
+  bool halted = false;
+  double halt_at = -1;            // s, the machine he answers settled in its halt
+  double knocked_at = -1;         // s, its crew knocked off
+  int32_t crew_down = 0;          // soldiers lying beside it after the knock
+  int32_t crew_up = 0;            // ...up and after him again `kDownS` later
+  double heat_before = 0;         // the heat before the knock
+  double heat_knock = 0;          // ...after it
+  double stolen_at = -1;          // s, the machine taken
+  double heat_steal = 0;          // the heat after the theft
+  int32_t stars_end = 0;          // the stars at the end
+  double ridden = 0;              // m ridden on it
+  bool thrown = false;            // he went down at the knock
+  fs::Spot centre;                // the machine at the knock
+  double heading = 0;             // ...its heading
+  std::vector<fs::Spot> skier;    // his path to it, every step
+  std::vector<fs::Spot> down_at;  // the crew lying, just after the knock
+  std::vector<fs::Spot> up_at;    // ...and once up
+  std::vector<fs::Spot> ride;     // the stolen machine's path, every 0.25 s
+};
+
+Answer run_answer(const std::shared_ptr<const mg::Level>& level, double limit) {
+  fs::GameState st = fs::create_free_ride(level, 0);
+  st.army.send_helis = false;
+  st.army.fire = false;
+  Answer a;
+  const fs::Spot at = spot_of(st, Scene::open);
+  st.racers[0].skier = ge::skier::stand_skier(st.world(), at.x, at.z, 0, 0);
+  st.wanted.lethal = true;
+  fs::set_wanted(st, 3);
+  const fs::Controls none{};
+  const auto hover = [&st](const fs::Spot& q) {
+    fs::WantedState& w = st.wanted;
+    std::erase_if(w.pursuers, [](const fs::Pursuer& p) { return p.id == 1; });
+    w.pursuers.push_back(fs::Pursuer{1, fs::PursuerKind::helicopter, q.x, q.y + kHoverM, q.z});
+  };
+  // The hunt pinned at three stars until a machine has settled in its halt.
+  int32_t id = -1;
+  while (st.t < limit && id < 0) {
+    st.wanted.heat = 3;
+    hover(fs::quarry_of(st));
+    st.racers[0].skier = ge::skier::stand_skier(st.world(), at.x, at.z, 0, 0);
+    fs::step(st, std::span<const fs::Controls>(&none, 1));
+    for (const fs::ArmySled& m : st.army.sleds) {
+      if (m.mode == fs::ArmySledMode::halt && m.t > 2 * as::kSettleS && m.body.speed < 0.5) {
+        id = m.id;
+      }
+    }
+  }
+  if (id < 0) return a;
+  a.halted = true;
+  a.halt_at = st.t;
+  const auto sled = [&st](int32_t k) -> const fs::ArmySled* {
+    for (const fs::ArmySled& m : st.army.sleds) {
+      if (m.id == k) return &m;
+    }
+    return nullptr;
+  };
+  // At it from its right, at a run.
+  const ge::snowmobile::SledState b = sled(id)->body;
+  a.centre = {b.x, b.y, b.z};
+  a.heading = b.heading;
+  const double rx = lm::cos(b.heading);
+  const double rz = -lm::sin(b.heading);
+  st.racers[0].skier =
+      ge::skier::stand_skier(st.world(), b.x + rx * kAnswerOffM, b.z + rz * kAnswerOffM,
+                             lm::atan2(-rx, -rz), kAnswerSpeed);
+  a.heat_before = st.wanted.heat;
+  const double t0 = st.t;
+  while (st.t < t0 + kStealAfterS) {
+    hover(fs::quarry_of(st));
+    fs::step(st, std::span<const fs::Controls>(&none, 1));
+    const ge::skier::SkierState& c = st.racers[0].skier;
+    if (a.knocked_at < 0) a.skier.push_back({c.x, c.y, c.z});
+    a.thrown = a.thrown || c.down;
+    for (const fs::GameEvent& e : st.events) {
+      if (e.kind == fs::EventKind::army_sled &&
+          static_cast<fs::ArmySledChange>(e.gate) == fs::ArmySledChange::knocked) {
+        a.knocked_at = st.t;
+        a.heat_knock = st.wanted.heat;
+      }
+    }
+  }
+  for (const fs::Soldier& s : st.army.soldiers) {
+    if (s.from != fs::SoldierFrom::sled || s.mode != fs::SoldierMode::down) continue;
+    a.crew_down++;
+    a.down_at.push_back({s.x, s.y, s.z});
+  }
+  // Stood beside the empty machine, still, and the press.
+  const fs::ArmySled* m = sled(id);
+  if (m == nullptr || m->mode != fs::ArmySledMode::empty) return a;
+  st.racers[0].skier = ge::skier::stand_skier(st.world(), m->body.x + rx * 2, m->body.z + rz * 2,
+                                              lm::atan2(-rx, -rz), 0);
+  fs::Controls press{};
+  press.machine = true;
+  hover(fs::quarry_of(st));
+  fs::step(st, std::span<const fs::Controls>(&press, 1));
+  if (!st.stolen.rider) return a;
+  a.stolen_at = st.t;
+  a.heat_steal = st.wanted.heat;
+  // Ridden off toward the village.
+  const double t1 = st.t;
+  double px = st.stolen.body.x;
+  double pz = st.stolen.body.z;
+  bool counted = false;
+  while (st.t < t1 + kRideS && st.stolen.rider) {
+    const ge::snowmobile::SledState& r = st.stolen.body;
+    const double to = lm::atan2(st.army.pad_x - r.x, st.army.pad_z - r.z);
+    fs::Controls gas{};
+    gas.ski.tuck = kRideTuck;
+    gas.ski.steer = ge::core::clamp(ge::core::angle_diff(r.heading, to) * 1.5, -1, 1);
+    hover(fs::quarry_of(st));
+    fs::step(st, std::span<const fs::Controls>(&gas, 1));
+    a.ridden += hypot(st.stolen.body.x - px, st.stolen.body.z - pz);
+    px = st.stolen.body.x;
+    pz = st.stolen.body.z;
+    if (st.steps % static_cast<int64_t>(fs::kHz / 4) == 0) a.ride.push_back({px, 0, pz});
+    if (!counted && st.t > a.knocked_at + fall_line::sim::army::kDownS + 1) {
+      counted = true;
+      for (const fs::Soldier& s : st.army.soldiers) {
+        if (s.from != fs::SoldierFrom::sled || s.mode == fs::SoldierMode::down) continue;
+        a.crew_up++;
+        a.up_at.push_back({s.x, s.y, s.z});
+      }
+    }
+  }
+  a.stars_end = st.wanted.stars;
+  return a;
+}
+
+// THE CLOSE-UP: `kCloseM` across round the machine he knocked the crew off, from above.
+ge::lab::Picture draw_answer(const Answer& a, int px) {
+  ge::lab::Picture pic = ge::lab::create_picture(px, px, Rgba{236, 242, 248});
+  const double k = px / kCloseM;
+  const auto sx = [&](double x) { return (x - a.centre.x) * k + px / 2.0; };
+  const auto sz = [&](double z) { return (z - a.centre.z) * k + px / 2.0; };
+  for (int g = -18; g <= 18; g += 2) {
+    const double u = (g + kCloseM / 2) * k;
+    ge::lab::draw_line(pic, u, 0, u, px, Rgba{214, 222, 232}, 1);
+    ge::lab::draw_line(pic, 0, u, px, u, Rgba{214, 222, 232}, 1);
+  }
+  // The machine's plan: its capsule's box, nose marked.
+  const double fx = lm::sin(a.heading);
+  const double fz = lm::cos(a.heading);
+  const double hl = ge::snowmobile::spec::kLength / 2;
+  const double hw = ge::snowmobile::spec::kHalfWidth;
+  const double cx[4] = {hl, hl, -hl, -hl};
+  const double cw[4] = {hw, -hw, -hw, hw};
+  for (int i = 0; i < 4; i++) {
+    const int j = (i + 1) % 4;
+    const double x0 = a.centre.x + fx * cx[i] + fz * cw[i];
+    const double z0 = a.centre.z + fz * cx[i] - fx * cw[i];
+    const double x1 = a.centre.x + fx * cx[j] + fz * cw[j];
+    const double z1 = a.centre.z + fz * cx[j] - fx * cw[j];
+    ge::lab::draw_line(pic, sx(x0), sz(z0), sx(x1), sz(z1), Rgba{60, 70, 50}, 3);
+  }
+  ge::lab::fill_disc(pic, sx(a.centre.x + fx * hl), sz(a.centre.z + fz * hl), 5, Rgba{60, 70, 50});
+  // The stolen machine's way off, his way in, the crew down and up.
+  for (size_t i = 1; i < a.ride.size(); i++) {
+    ge::lab::draw_line(pic, sx(a.ride[i - 1].x), sz(a.ride[i - 1].z), sx(a.ride[i].x),
+                       sz(a.ride[i].z), Rgba{150, 60, 220}, 3);
+  }
+  for (size_t i = 1; i < a.skier.size(); i++) {
+    ge::lab::draw_line(pic, sx(a.skier[i - 1].x), sz(a.skier[i - 1].z), sx(a.skier[i].x),
+                       sz(a.skier[i].z), Rgba{20, 110, 240}, 3);
+  }
+  if (!a.skier.empty()) {
+    ge::lab::fill_disc(pic, sx(a.skier.back().x), sz(a.skier.back().z), 6, Rgba{20, 110, 240});
+  }
+  for (const fs::Spot& s : a.down_at)
+    ge::lab::fill_disc(pic, sx(s.x), sz(s.z), 6, Rgba{220, 40, 40});
+  for (const fs::Spot& s : a.up_at) {
+    for (const double r : {11.0, 12.0, 13.0})
+      ge::lab::draw_ring(pic, sx(s.x), sz(s.z), r, Rgba{0, 160, 70});
+  }
+  return pic;
+}
+
+void answer(ge::lab::Lab& lab, const std::shared_ptr<const mg::Level>& level, double seed,
+            double limit, int px, bool pictures) {
+  const Answer a = run_answer(level, limit);
+  const auto t = [](double v) { return v >= 0 ? fixed(v, 2) : std::string("-"); };
+  ge::lab::LabTable table{
+      "answer",
+      {"halt s", "knocked s", "crew down", "crew up", "heat before", "heat knocked", "stolen s",
+       "heat stolen", "ridden m", "stars end", "he fell"},
+      {}};
+  table.rows.push_back({t(a.halt_at), t(a.knocked_at), std::to_string(a.crew_down),
+                        std::to_string(a.crew_up), fixed(a.heat_before, 2), fixed(a.heat_knock, 2),
+                        t(a.stolen_at), fixed(a.heat_steal, 2), fixed(a.ridden, 1),
+                        std::to_string(a.stars_end), a.thrown ? "yes" : "no"});
+  lab.table(std::move(table));
+  lab.metric("answer.knocked", a.knocked_at, "s");
+  lab.metric("answer.crew-down", a.crew_down, "men");
+  lab.metric("answer.crew-up", a.crew_up, "men");
+  lab.metric("answer.heat-knocked", a.heat_knock - a.heat_before, "stars");
+  lab.metric("answer.stolen", a.stolen_at, "s");
+  lab.metric("answer.heat-stolen", a.heat_steal - a.heat_knock, "stars");
+  lab.metric("answer.ridden", a.ridden, "m");
+  if (!a.halted) {
+    lab.fail("answer: no machine halted within " + fixed(limit, 0) + " s",
+             "Run the open scenario and look at previews/army-sleds/open.png (skill: sim).");
+    return;
+  }
+  if (a.knocked_at < 0 || a.heat_knock <= a.heat_before) {
+    lab.fail("answer: the crew was not knocked off, or the heat did not rise",
+             "Read meet_machines in games/fall_line/sim/army_meet.cpp and kKnockOffSpeed in "
+             "army_sled_rules.hpp (skill: sim).");
+  }
+  if (a.stolen_at < 0 || a.heat_steal <= a.heat_knock) {
+    lab.fail("answer: the empty machine was not stolen, or the heat did not rise",
+             "Read take_of and steal in games/fall_line/sim/sled_ride.cpp (skill: sim).");
+  }
+  if (!pictures) return;
+  lab.shot(
+      {"answer",
+       "SEED " + fixed(seed, 0) + " HIS ANSWER: A CREW KNOCKED OFF, THE MACHINE STOLEN",
+       "A close-up " + fixed(kCloseM, 0) +
+           " m across from above (+x right, +z down; grid 2 m) round an army snowmobile "
+           "halted side-on to him (dark box, its nose the dot). Blue: his line in at " +
+           fixed(kAnswerSpeed * 3.6, 0) +
+           " km/h to the knock, the dot where it stopped him. Red dots: its crew knocked "
+           "off, lying; green rings: the same men on their feet again " +
+           fixed(fall_line::sim::army::kDownS + 1, 0) +
+           " s later. Purple: the machine ridden off once he stole it. Heat " +
+           fixed(a.heat_before, 1) + " before, " + fixed(a.heat_knock, 1) + " after the knock, " +
+           fixed(a.heat_steal, 1) + " after the theft.",
+       "a blue line ending at the side of the dark box, two red dots either side of it, "
+       "a green ring round or near each, and a purple line leaving from the box",
+       {{"seed", fixed(seed, 0)}, {"scenario", "answer"}, {"speed m/s", fixed(kAnswerSpeed, 1)}}},
+      draw_answer(a, px));
+}
+
 void run(ge::lab::Lab& lab) {
   const double seed = lab.arg_num("seed");
   const auto version = static_cast<int>(lab.arg_num("version"));
@@ -324,6 +577,7 @@ void run(ge::lab::Lab& lab) {
              pic);
   }
   lab.table(std::move(table));
+  answer(lab, level, seed, limit, px, pictures);
 }
 
 const ge::lab::LabSpec kSpec{
@@ -335,7 +589,8 @@ const ge::lab::LabSpec kSpec{
     "sim",
     "On a real ski area, do the army's snowmobiles get from the village to a man up the mountain "
     "without getting caught on the way, halt side-on to him where they shoot to kill, and run "
-    "him down and take him in where they do not?",
+    "him down and take him in where they do not? And does his answer work: a crew skied into "
+    "knocked off, the empty machine stolen, each raising the heat?",
     {
         {"seed", "38", "the map's seed"},
         {"version", "10", "the generator's version (a ski area: 10 or later)"},
