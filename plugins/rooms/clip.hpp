@@ -7,7 +7,9 @@
 // (build.hpp), so a rock floor is walked as the flat floor it grows from, never as its bumps,
 // and a body does not catch on a relief a few centimetres deep. A cave is solid where it is
 // drawn: its rock is the shape, so the body meets the grown surface itself. Both are a pure
-// function of the level, so a server and every client meet the same walls.
+// function of the level, so a server and every client meet the same walls. A brush
+// (brush_build.hpp) is met where its faces survive the CSG, a solid's, sky's or clip's, hidden ones
+// too; a liquid brush is not met.
 //
 // ge:summary The room level as the mover's world: flat prisms, grown caves, frames and solids
 // ge:keywords rooms clip collision mover move trace mesh-world walk hull solid flat cave

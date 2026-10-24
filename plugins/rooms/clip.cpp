@@ -1,4 +1,5 @@
-// The clip world: prisms built flat, caves as grown, every triangle handed to the mesh world.
+// The clip world: prisms built flat, caves as grown, brushes met, every triangle handed to the
+// mesh world.
 //
 // ge:summary The room level's mover world (flat prisms, grown caves) and a point's room
 // ge:keywords rooms clip collision mesh-world flat relief cave room_at point-in-polygon
@@ -9,6 +10,7 @@
 #include <vector>
 
 #include "core/parallel.hpp"
+#include "rooms/brush_build.hpp"
 #include "rooms/build.hpp"
 
 namespace ge::rooms {
@@ -30,6 +32,18 @@ move::MeshWorld clip_world(const Level& level, size_t workers, double cell_m) {
     for (const uint32_t i : m.idx) {
       const float* p = &m.pos[size_t(i) * 3];
       corners.push_back({double(p[0]), double(p[1]), double(p[2])});
+    }
+  }
+  // The brushes a body meets: solid, sky and clip, hidden faces too; a liquid is swum, not met.
+  if (!level.brushes.empty()) {
+    const BrushMesh bm = build_brushes(level, workers);
+    for (size_t t = 0; t < bm.triangles(); ++t) {
+      const Contents c = bm.contents[t];
+      if (c != Contents::solid && c != Contents::sky && c != Contents::clip) continue;
+      for (size_t k = 0; k < 3; ++k) {
+        const float* p = &bm.pos[size_t(bm.idx[t * 3 + k]) * 3];
+        corners.push_back({double(p[0]), double(p[1]), double(p[2])});
+      }
     }
   }
   move::MeshWorld w = move::build_mesh_world(corners, cell_m);

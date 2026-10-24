@@ -26,6 +26,19 @@
 //   never stored, so the two can never disagree. `trim` is the material of a frame round the
 //   opening (kNoMaterial: none; a cave's mouth always gets one, to cover the rock's edge).
 // - A SOLID is a box standing in a room (a pillar, a step, a crate), room-relative, one material.
+// - A BRUSH is a convex solid given by its planes, for geometry no room describes (a classic map's
+//   solid space is brushes): each FACE a plane in absolute metres (`n·p = d`, `n` the outward unit
+//   normal, single floats as written), a material and a texture PROJECTION (texel coordinates
+//   `s = dot(s_axis, p) + s_off`, the same for t, p in metres), and `hidden` when it is never
+//   drawn but still stops a body. A brush is made of its CONTENTS: solid, water, slime, lava,
+//   sky (drawn as sky, solid to a body), clip (stops a body, never drawn). It belongs to the world
+//   or to a GROUP: brushes that move or act together (a door, a button, a trigger), named.
+//   Brushes are built into faces at load: build_brushes.hpp.
+// - An ENTITY is a class and its key/value pairs, standing at a point (its `origin` key, metres)
+//   or owning a group. The format keeps them as data; a game's step gives the classes meaning.
+// - A material's SURFACE is a procedural surface drawn in place of its texture (tall grass, moss):
+//   a reference the surface system reads, as `texture` is the texture baker's. `tex_w` and `tex_h`
+//   are the texture's size in texels, which a brush face's projection counts in (0: unsized).
 //
 // `validate` says what is wrong with a level in the diagnostics' shape (what, where, what to do);
 // `link` fills the derived fields (each portal's far wall) a builder reads. The bytes on disk are
@@ -40,6 +53,7 @@
 
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace ge::rooms {
@@ -50,6 +64,10 @@ inline constexpr uint8_t kNoMaterial = 0xff;   // a portal's `trim` when it has 
 inline constexpr size_t kMaxMaterials = 255;
 inline constexpr size_t kMaxRooms = 0xfffe;
 inline constexpr size_t kMaxCorners = 255;
+inline constexpr uint16_t kWorld = 0xffff;  // a brush's or an entity's group when it has none
+inline constexpr size_t kMaxFaces = 255;    // a brush's planes
+inline constexpr size_t kMaxProjections = 0xffff;
+inline constexpr size_t kMaxGroups = 0xfffe;
 
 // What a surface of a material grows into (relief.hpp has each one's shape).
 enum class Relief : uint8_t {
@@ -64,14 +82,17 @@ enum class Relief : uint8_t {
   dents = 8,
 };
 enum class Shape : uint8_t { prism = 0, cave = 1 };
+enum class Contents : uint8_t { solid = 0, water = 1, slime = 2, lava = 3, sky = 4, clip = 5 };
 
 struct Material {
   std::string name;     // what the level calls it ("stone", "plaster"); unique in a level
   std::string texture;  // the texture reference: "<name> [seed=<u32>] [<param>=<n>...]"
   uint8_t rgb[3] = {160, 160, 160};  // the colour a picture without textures draws, sRGB
   Relief relief = Relief::none;
-  uint8_t relief_cm = 0;  // how deep the relief reaches into the room, cm
-  uint8_t scale_dm = 8;   // the relief's largest feature, dm
+  uint8_t relief_cm = 0;          // how deep the relief reaches into the room, cm
+  uint8_t scale_dm = 8;           // the relief's largest feature, dm
+  uint16_t tex_w = 0, tex_h = 0;  // the texture's size in texels (0: unsized)
+  std::string surface;            // a procedural surface drawn in its place ("" for none)
 };
 
 struct Corner {
@@ -108,11 +129,48 @@ struct Solid {
   int16_t min[3] = {0, 0, 0}, max[3] = {0, 0, 0};  // room-relative, units
 };
 
+struct Projection {
+  float s[4] = {1, 0, 0, 0};  // s_axis xyz (texels a metre), s_off (texels)
+  float t[4] = {0, 0, 1, 0};
+};
+
+struct Face {
+  float n[3] = {0, 1, 0};  // outward unit normal
+  float d = 0;             // m: the plane is n·p = d
+  uint8_t material = 0;
+  uint16_t projection = 0;
+  bool hidden = false;  // never drawn; still stops a body
+};
+
+struct Brush {
+  uint16_t group = kWorld;
+  Contents contents = Contents::solid;
+  uint32_t first_face = 0;  // into Level::faces
+  uint8_t faces = 0;
+};
+
+struct Group {
+  std::string name;  // unique in a level
+};
+
+struct Entity {
+  std::string classname;
+  uint16_t group = kWorld;
+  std::vector<std::pair<std::string, std::string>> keys;  // in the order written
+  // The value of `key`, or "" when the entity has none.
+  const std::string& get(const std::string& key) const;
+};
+
 struct Level {
   std::vector<Material> materials;
   std::vector<Room> rooms;
   std::vector<Portal> portals;
   std::vector<Solid> solids;
+  std::vector<Projection> projections;
+  std::vector<Face> faces;
+  std::vector<Brush> brushes;
+  std::vector<Group> groups;
+  std::vector<Entity> entities;
 };
 
 // A stored coordinate in metres and back (the nearest step).
@@ -136,5 +194,13 @@ bool link(Level& level, std::string* error);
 // Index of the material or room named `name`, -1 when there is none.
 int material_index(const Level& level, const std::string& name);
 int room_index(const Level& level, const std::string& name);
+int group_index(const Level& level, const std::string& name);
+
+// Every problem with the level's brushes, groups and entities, appended to `out` (validate's half
+// for them, in brushes.cpp).
+void validate_brushes(const Level& level, std::vector<std::string>& out);
+// The projection equal to `p`, appended when there is none: how a writer keeps the table
+// deduplicated in first-use order, the order the text form prints.
+uint16_t projection_index(Level& level, const Projection& p);
 
 }  // namespace ge::rooms

@@ -128,7 +128,8 @@ the walk's bits golden; the `rooms` lab draws it).
 
 The rest of M32c: textures from the texture generator (M31) drawn by the GPU over a room's mesh,
 and `ge level info/build/shot`. M32d grows more (sloped floors, stairs, arches, scattered rubble,
-stalactites, liquids).
+stalactites, liquids). M32e and M32f grow the format for classic maps and clone them into it
+(§ Cloning a classic map); M32g runs their doors, buttons, platforms and triggers.
 
 ## The classic BSP families
 
@@ -184,3 +185,55 @@ Content read this way stays outside the tree.
 
 Left to M18b: the clip hulls' trace (they are read and checked), the PHS, the BSPX lumps, animated
 texture sequences, and `ge bsp`.
+
+## Cloning a classic map
+
+A classic map's STRUCTURE can be carried into the room format: where its solid space is, its
+faces' planes and how each texture is laid on them, its moving parts and its entities. Its
+TEXTURES cannot: they are someone else's pictures. The cloner (`rooms/from_bsp`, M32f) therefore
+resolves every texture to a procedural recipe (the texture generator's matching, M31) before it
+writes anything. It looks at the picture at convert time, from the user's own files, and keeps
+only the recipe reference. A texture with no match gets a neutral recipe, and the clone says
+which ones did. No pixel of a source map is ever written into a level, the tree or a lab's
+output that is kept.
+
+### What the format grows (M32e)
+
+Rooms describe empty space; a classic map describes solid space. The room format therefore
+gains a second kind of geometry beside its rooms:
+
+- **Brushes**: a convex solid as a list of planes. Each face carries a material and a texture
+  projection (two axes and offsets in the face's plane, so a texture lies exactly as it did).
+  Brushes can stand alone or within a room.
+- **Contents**: what a brush is made of: solid, water, slime, lava, sky, or clip (stops a body,
+  never drawn). A liquid brush is a volume the water and liquid systems (M24, M30) take over.
+- **Brush groups**: brushes that move or act together. A door, a button or a trigger volume is a
+  group, named by the entity that owns it.
+- **Entities**: a class and its key/value pairs, standing at a point or owning a brush group.
+  The format keeps them as data. The classic gameplay classes run on M32g's step.
+- **Surface replacements**: a material may name a procedural surface (tall grass, short grass,
+  moss) drawn in place of its texture. The grass system fills the name. The cloner offers a
+  table from texture names to replacements.
+
+Brushes are built into faces at load: each brush's faces are cut by its own planes, and the
+parts that lie inside another solid brush are removed (constructive solid geometry, the same
+bits on every machine). The mover's world is built from the same faces.
+
+### The clone (M32f)
+
+- **Solid space** comes from the map's tree: each path to a solid leaf bounds a convex cell,
+  and the cell becomes a brush. Cells that share a face and stay convex can be merged into
+  fewer, larger brushes (an option). Each visible face takes the plane and texture projection
+  of the map face it lies on.
+- **Brush models** (doors, buttons, platforms, triggers) become brush groups the same way,
+  each from its own tree.
+- **Liquids and sky**: water, slime and lava leaves become liquid brushes, and sky faces become
+  sky.
+- **Entities** are copied as they are. A brush entity's `model` becomes its group.
+- **Smoothing** (an option): a run of faces that approximates an arch, a column or a vault (each
+  face sharing a straight edge with the next, turning by a small, even angle) is replaced by a
+  curved surface through the same edges.
+- **Units**: map units become the format's units through `brush::to_engine` (z up becomes y up).
+
+The `rooms` lab draws each cloned map beside its original from the same eyes and measures how
+far the clone's surfaces lie from the original's. It then walks the clone from its start.
