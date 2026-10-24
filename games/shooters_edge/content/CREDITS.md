@@ -17,7 +17,14 @@ Every sound and model in this directory, the pack it came from, its author and i
 | `models/pickup/rockets_large.glb` | `Models/GLB format/crate-wide.glb` |
 | `models/pickup/shells_large.glb` | `Models/GLB format/crate-medium.glb` |
 | `models/pickup/shells_small.glb` | `Models/GLB format/crate-small.glb` |
+| `models/pickup/weapon_beam_gun.glb` | `Models/GLB format/blaster-r.glb` |
+| `models/pickup/weapon_double_shotgun.glb` | `Models/GLB format/blaster-l.glb` |
+| `models/pickup/weapon_grenade_launcher.glb` | `Models/GLB format/blaster-b.glb` |
+| `models/pickup/weapon_heavy_nailgun.glb` | `Models/GLB format/blaster-p.glb` |
+| `models/pickup/weapon_nailgun.glb` | `Models/GLB format/blaster-d.glb` |
+| `models/pickup/weapon_rocket_launcher.glb` | `Models/GLB format/blaster-h.glb` |
 | `models/projectile/grenade.glb` | `Models/GLB format/grenade-a.glb` |
+| `models/projectile/laser.glb` | `Models/GLB format/bullet-foam-tip.glb` |
 | `models/projectile/nail.glb` | `Models/GLB format/bullet-foam.glb` |
 | `models/projectile/nail_heavy.glb` | `Models/GLB format/bullet-foam-thick.glb` |
 | `models/projectile/rocket.glb` | `Models/GLB format/bullet-foam-tip-thick.glb` |
@@ -61,6 +68,12 @@ Every sound and model in this directory, the pack it came from, its author and i
 | `models/creature/flyer.glb` | `Models/GLB format/character-ghost.glb` |
 | `models/creature/ghoul.glb` | `Models/GLB format/character-zombie.glb` |
 | `models/creature/swordsman.glb` | `Models/GLB format/character-skeleton.glb` |
+| `models/pickup/rune_1.glb` | `Models/GLB format/detail-chalice.glb` |
+| `models/pickup/rune_2.glb` | `Models/GLB format/urn-round.glb` |
+| `models/pickup/rune_3.glb` | `Models/GLB format/urn-square.glb` |
+| `models/pickup/rune_4.glb` | `Models/GLB format/detail-bowl.glb` |
+| `models/prop/fire_flame.glb` | `Models/GLB format/fire-basket.glb` |
+| `models/prop/torch_flame.glb` | `Models/GLB format/lantern-candle.glb` |
 
 ## Kenney: Impact Sounds
 
@@ -91,6 +104,48 @@ Every sound and model in this directory, the pack it came from, its author and i
 | `sounds/ui/back.wav` | `Audio/minimize_006.ogg` |
 | `sounds/ui/move.wav` | `Audio/select_005.ogg` |
 | `sounds/ui/select.wav` | `Audio/confirmation_004.ogg` |
+
+## Kenney: Mini Characters
+
+- Id: `kenney/mini-characters`
+- Author: Kenney (kenney.nl)
+- Source: <https://kenney.nl/assets/mini-characters>
+- Licence: CC0 1.0 (<https://creativecommons.org/publicdomain/zero/1.0/>)
+
+| Our file | Source file |
+| --- | --- |
+| `models/character/player.glb` | `Models/GLB format/character-male-a.glb` |
+| `models/pickup/power_suit.glb` | `Models/GLB format/aid-mask.glb` |
+
+## Kenney: Mini Dungeon
+
+- Id: `kenney/mini-dungeon`
+- Author: Kenney (kenney.nl)
+- Source: <https://kenney.nl/assets/mini-dungeon>
+- Licence: CC0 1.0 (<https://creativecommons.org/publicdomain/zero/1.0/>)
+
+| Our file | Source file |
+| --- | --- |
+| `models/pickup/key_silver_old.glb` | `Models/GLB format/key.glb` |
+| `models/pickup/key_silver_rune.glb` | `Models/GLB format/key.glb` |
+
+## Kenney: Platformer Kit
+
+- Id: `kenney/platformer-kit`
+- Author: Kenney (kenney.nl)
+- Source: <https://kenney.nl/assets/platformer-kit>
+- Licence: CC0 1.0 (<https://creativecommons.org/publicdomain/zero/1.0/>)
+
+| Our file | Source file |
+| --- | --- |
+| `models/pickup/health_mega.glb` | `Models/GLB format/heart.glb` |
+| `models/pickup/key_gold_old.glb` | `Models/GLB format/key.glb` |
+| `models/pickup/key_gold_rune.glb` | `Models/GLB format/key.glb` |
+| `models/pickup/power_cloak.glb` | `Models/GLB format/coin-silver.glb` |
+| `models/pickup/power_damage.glb` | `Models/GLB format/star.glb` |
+| `models/pickup/power_shield.glb` | `Models/GLB format/jewel.glb` |
+| `models/prop/barrel_explosive_small.glb` | `Models/GLB format/barrel.glb` |
+| `models/prop/flag.glb` | `Models/GLB format/flag.glb` |
 
 ## Kenney: Prototype Kit
 
@@ -145,6 +200,18 @@ Every sound and model in this directory, the pack it came from, its author and i
 | `sounds/world/laser_fire.wav` | `Audio/laserSmall_002.ogg` |
 | `sounds/world/laser_hit.wav` | `Audio/impactMetal_001.ogg` |
 
+## Kenney: Space Station Kit
+
+- Id: `kenney/space-station-kit`
+- Author: Kenney (kenney.nl)
+- Source: <https://kenney.nl/assets/space-station-kit>
+- Licence: CC0 1.0 (<https://creativecommons.org/publicdomain/zero/1.0/>)
+
+| Our file | Source file |
+| --- | --- |
+| `models/pickup/cells_large.glb` | `Models/GLB format/container-wide.glb` |
+| `models/pickup/cells_small.glb` | `Models/GLB format/container.glb` |
+
 ## Kenney: Survival Kit
 
 - Id: `kenney/survival-kit`
@@ -157,6 +224,8 @@ Every sound and model in this directory, the pack it came from, its author and i
 | `models/pickup/backpack.glb` | `Models/GLB format/chest.glb` |
 | `models/pickup/health.glb` | `Models/GLB format/bottle-large.glb` |
 | `models/pickup/health_small.glb` | `Models/GLB format/bottle.glb` |
+| `models/pickup/rockets_small.glb` | `Models/GLB format/box.glb` |
+| `models/projectile/lava_ball.glb` | `Models/GLB format/rock-c.glb` |
 | `models/prop/barrel_explosive.glb` | `Models/GLB format/barrel.glb` |
 | `models/view/melee.glb` | `Models/GLB format/tool-axe-upgraded.glb` |
 
