@@ -9,6 +9,8 @@ camera-follow b1dbf6ae474cba78
 camera-rigs bd01263b4d16d23c
 camera-shake 3d1734df5bafe175
 camera-transitions 750b195eaca33076
+charset-looks 8905e4d42c149c41
+charsets 92706253fa5e80a4
 camera-world 663b2b2d72b24d8b
 charts 77f2319a5ea24272
 cli-loop 2a54afc4b75dac63
@@ -26,6 +28,8 @@ gpu-underwater eb4871f6a59d741e
 gpu-water f43c11858a5a6d30
 gunfire c4f5b96a6cfec13c
 heli edc6a93febc6f52d
+hud 6129ad11d0595da1
+hud-kit d8befd69c39128cb
 humanness a486ef984a6511d7
 injuries ec4584c9411ecd22
 input-ffb 565464637bf28b86

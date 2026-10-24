@@ -37,6 +37,14 @@ add_library(fall_line_camera STATIC ${FALL_LINE_CAMERA_SOURCES})
 target_link_libraries(fall_line_camera PUBLIC fall_line_sim ge_skier_app ge_camera)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS fall_line_camera)
 
+# Its HUD (hud/): the free ride's figures read off the state, its words, its news and its view
+# over the engine's HUD kit. No GPU: the CPU raster draws it in the `hud` lab and the tests
+# (skill: ui).
+file(GLOB FALL_LINE_HUD_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/hud/*.cpp)
+add_library(fall_line_hud STATIC ${FALL_LINE_HUD_SOURCES})
+target_link_libraries(fall_line_hud PUBLIC fall_line_sim ge_hud)
+set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS fall_line_hud)
+
 # Its app half: `fall_line_app`, the game's frame (its pass table over engine/render, the look it hands the
 # passes, its named views, its forest and its skinned skiers), which the `fall_line` window and the game's GPU labs both link; it
 # needs the GPU. Headers are spelled "fall_line/app/<file>.hpp".

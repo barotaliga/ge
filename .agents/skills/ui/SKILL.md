@@ -35,6 +35,50 @@ is the design; this skill is how to work in it.
   the highlight and fades a page in, stepped by the caller's dt so a recorded run draws the same.
   `layout_problems` names what a screenshot would show wrong.
 
+## The HUD kit (`engine/hud/`, `ge::hud`)
+
+- **Faces** (`face.hpp`): a HUD's type is a `Face`, a TrueType font of the 2D layer or a bitmap
+  charset, behind one size (the line's pixel height) and one baseline. A charset run is one image
+  box a character over the charset's atlas, built on first use at the multiple of 64 px whose
+  cells are at least the run's height. `draw_shadowed` puts every HUD word over an outline and a
+  drop in the shadow colour: that, not a plate, is what reads over white snow.
+- **The frame** (`hud.hpp`): sizes in a `Style` are pixels at a 720 px short side; `frame_for`
+  scales them (clamped, so a phone's words stay legible) and takes the platform's insets and the
+  margin off the screen for the safe area. `place` anchors a box to one of nine points of it, and
+  a `Stack` lays boxes down from a top anchor or up from a bottom one.
+- **Widgets** are a struct, a `measure` and a `draw` into the box the measure was placed at:
+  `Readout` (a value over its caption), `Big` (a number and its unit), `Meter` (0..1 or centred
+  -1..1, ticks), `Pips` (charset symbols: stars, hearts), `Banner` (a prompt on a plate). The
+  `Feed` (`feed.hpp`) holds, fades and slides lines in on the caller's clock.
+- **The check**: a view returns every box it drew as `Placed`; `layout_problems` names overlaps
+  and boxes off the screen, and a HUD lab fails on any. Fix the layout or shorten the words.
+- **A game's HUD** is a snapshot (a pure function of its state and what the HUD remembers across
+  the run), its words, and a view over the kit. Fall Line's is `games/fall_line/hud/`: the
+  snapshot is where a new figure is read, `words.hpp` where its words go, `view.cpp` where it is
+  placed. Race and trick figures wait until races and tricks are a player's to run.
+
+## The charsets (`engine/charset/`, `docs/charsets.md`)
+
+- Ten monospaced ASCII fonts, each committed at 256, 512 and 1024 px as one channel of
+  coverage on a 16 x 8 grid of 1:2 cells. A byte's cell is `cell_rect(size, code_of(byte))`,
+  and the advance is the cell's width (half its height). `atlas_size_for(cell_h)` picks the
+  atlas to shrink from. Codes 1..31 are UI symbols (`Sym`), 10 stays empty, and 127 is the
+  missing glyph.
+- The fonts are built, not drawn by hand. Seven share one set of skeletons
+  (`design_glyphs.cpp`, a small path language) stroked by each font's `Style` (`charset.cpp`'s
+  `style_of`). Terminal and matrix are pixel art (`pixel_art.cpp`), and segment is bars. To
+  change a glyph, edit its skeleton or its art. Then rewrite the atlases with
+  `GE_GOLDEN_WRITE=1 build/<preset>/tests/charset_charset_test`, and show `make lab
+  LAB=charsets` before and after.
+- No ink may touch a cell's outer pixel ring at 256 px; only the box lines and shades reach the
+  edge, so that they tile. `fit` in `pen.cpp` narrows a glyph that is too wide.
+- Effects are a `Look` (fill, erode, outline, shadow, glow, bevel, overlay) over the tileable
+  layers. Sizes are shares of the cell height, so a look stays the same at any text size.
+  `paint_text` is the CPU reference, and `make lab LAB=charset-looks` pictures it. A GPU text
+  pass (M27b) must match it.
+- Every new code, font or look must stay ASCII, monospaced, and our own drawing. Never trace or
+  embed outside font data.
+
 ## Rules
 
 - **Every word the player reads** comes from the game's strings table; a menu item's `text` and
@@ -65,4 +109,12 @@ camera, the REPRO line). It is never on a release path.
   highlight's glide, a page's fade and a picture's drift, every picture captioned. Its smoke
   digest is in `tests/labs_digests.txt`: a change to the raster, a font or the layout moves it, so
   look at the pictures, then rewrite the row (`--write-digests`).
-- M10 lands `screenshots`: the HUD and every card at the three viewports.
+- `hud-kit` (M10a): a racer's and a shooter's HUD made from the kit alone, over daylit snow and a
+  dim corridor, at the three viewports, and every charset as a HUD face. Pure CPU, digested.
+- `hud` (M10a, `gpu_` so built with GE_GPU): Fall Line's HUD over the game's own frame on the
+  software adapter, the free ride's moments (cruising, in the air, hunted, the most news) and a
+  staged moment with every widget up, at the three viewports. Any layout problem fails it.
+- `charsets` (every atlas, a specimen of each font in use) and `charset-looks` (the layers, every
+  look, a mock game screen) are M27a's.
+- M10c lands `screenshots`: every card at 1280x720, 390x844 and 844x390, each captioned with its
+  state and what to look for (overlap, clipping, legibility).
