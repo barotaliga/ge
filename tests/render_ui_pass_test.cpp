@@ -46,6 +46,7 @@ struct Rig {
 std::unique_ptr<Rig> make_rig() {
   auto rig = std::make_unique<Rig>();
   rig->device = ge::test::test_device();
+  if (!rig->device) return nullptr;  // skipped (or failed under GE_GPU_REQUIRE)
   r::create_ui_pass(*rig->device, rig->pipelines, rig->pass);
   CHECK(rig->pipelines.finish(*rig->device));
   ge::gpu::end_load(*rig->device);
@@ -107,6 +108,7 @@ void backdrop(u::DrawList& list, int w, int h) {
 
 TEST(boxes_paints_borders_and_clips_match_the_raster) {
   auto rig = make_rig();
+  if (!rig) return;
   constexpr int w = 160, h = 120;
   u::DrawList list;
   list.begin(w, h);
@@ -151,6 +153,7 @@ TEST(boxes_paints_borders_and_clips_match_the_raster) {
 
 TEST(text_matches_the_raster_at_every_size_and_clip) {
   auto rig = make_rig();
+  if (!rig) return;
   constexpr int w = 240, h = 140;
   u::DrawList list;
   list.begin(w, h);
@@ -169,6 +172,7 @@ TEST(text_matches_the_raster_at_every_size_and_clip) {
 
 TEST(images_match_the_raster_stretched_and_tinted) {
   auto rig = make_rig();
+  if (!rig) return;
   constexpr int w = 128, h = 96;
   u::Image img = u::make_image(16, 12, {0, 0, 0, 1});
   for (int y = 0; y < img.height; ++y) {
@@ -198,6 +202,7 @@ TEST(images_match_the_raster_stretched_and_tinted) {
 
 TEST(a_menu_page_over_its_backdrop_matches_the_raster) {
   auto rig = make_rig();
+  if (!rig) return;
   constexpr int w = 640, h = 360;
   u::Menu menu;
   u::Page& root = menu.add_page("root");
@@ -223,6 +228,7 @@ TEST(a_menu_page_over_its_backdrop_matches_the_raster) {
 
 TEST(a_list_drawn_again_uploads_nothing_and_counts_its_draws) {
   auto rig = make_rig();
+  if (!rig) return;
   auto& d = *rig->device;
   const u::Font& semi = u::ui_font(u::Weight::semibold);
   u::Image img = u::make_image(4, 4, u::hex(0x336699));
@@ -254,6 +260,7 @@ TEST(a_list_drawn_again_uploads_nothing_and_counts_its_draws) {
 
 TEST(a_full_atlas_is_emptied_and_refilled) {
   auto rig = make_rig();
+  if (!rig) return;
   auto& d = *rig->device;
   const u::Font& semi = u::ui_font(u::Weight::semibold);
   // Every capital at many sizes, one list at a time: more glyphs than one atlas holds.
@@ -272,6 +279,7 @@ TEST(a_full_atlas_is_emptied_and_refilled) {
 
 TEST(a_texture_bound_to_a_key_is_what_its_boxes_draw) {
   auto rig = make_rig();
+  if (!rig) return;
   auto& d = *rig->device;
   // The "live frame": a target the GPU filled, never on the CPU.
   const ge::gpu::Target frame = ge::gpu::create_target(d, "test.ui.frame", 8, 8);
