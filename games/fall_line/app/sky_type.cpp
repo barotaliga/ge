@@ -32,4 +32,14 @@ std::string sky_style_of(const cfg::Settings& s, ge::render::SkyStyle& out) {
   return problem;
 }
 
+std::string cloud_stack_of(const cfg::Settings& s, FrameOptions& o) {
+  o.cloud_count = -1;
+  if (s.cloud_kinds.empty() || s.cloud_kinds == "map") return {};
+  const std::string problem =
+      ge::render::cloud_stack_named(s.cloud_kinds, o.cloud_kinds, o.cloud_count);
+  if (problem.empty()) return {};
+  return "sv_clouds: " + problem + ". next: set sv_clouds to kinds joined by '+' (such as " +
+         "cumulus+cirrus), or map for the map's own.";
+}
+
 }  // namespace fall_line::app
