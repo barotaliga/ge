@@ -33,6 +33,9 @@ struct ReplicateTrialConfig {
   // The rates, the interest radius, the budget and the rest; the trial sets the entity count,
   // the history ring and which fields interest reads. Every client asks the same rates.
   ReplicateConfig replicate;
+  // Each client's clock runs this much fast (the even ones) or slow (the odd ones): a cheap
+  // crystal, a busy machine. TIME SYNC is what keeps their inputs arriving on time anyway.
+  double skew = 0;
 };
 
 struct ReplicateTrial {
@@ -44,9 +47,15 @@ struct ReplicateTrial {
   double view_delay_ms = 0;  // how far behind the server's clock the others are drawn, mean
   uint64_t dropped = 0, decoded = 0, full = 0, starved = 0, repeated = 0, inputs = 0;
   uint64_t rewinds = 0, missed = 0;
-  std::vector<double> gaps;       // a rewind against what was drawn, metres
-  std::vector<double> t_s, kbps;  // snapshot kbit/s a client, each second
-  uint64_t hash = 0;              // every end's final state
+  uint64_t trimmed = 0;            // inputs the server dropped for a queue past its most
+  std::vector<double> input_ms;    // each input, made on its client to applied on the server
+  double underrun = 0;             // share of drawn ticks past the newest snapshot (held)
+  std::vector<double> t_q, queue;  // client 1's inputs waiting on the server, ten times a second
+  std::vector<double> delay_ms;    // client 1's view delay at the same moments
+  std::vector<double> dilation;    // client 1's clock speed at the same moments
+  std::vector<double> gaps;        // a rewind against what was drawn, metres
+  std::vector<double> t_s, kbps;   // snapshot kbit/s a client, each second
+  uint64_t hash = 0;               // every end's final state
 };
 
 ReplicateTrial run_replicate_trial(const ReplicateTrialConfig& config);

@@ -89,6 +89,7 @@ void send_snapshot(ReplicateServer& s, int client, uint8_t* buffer, size_t budge
   write_u32(head, base ? base->tick : 0);
   write_u32(head, c.applied);
   write_u16(head, c.entity);
+  write_u8(head, static_cast<uint8_t>(static_cast<int8_t>(replicate_slack(c))));
   uint8_t* body = buffer + kSnapshotHeader;
   std::memset(body, 0, budget - kSnapshotHeader);  // the bits' last byte, and the count's pad
   // The entry count goes first as a varint of at most 3 bytes; the bits follow it.
@@ -230,6 +231,7 @@ void on_input(ReplicateServer& s, int client, const uint8_t* data, size_t size) 
     c.inputs.insert(c.inputs.end(), inputs + k * n, inputs + (k + 1) * n);
   }
   while (c.queue_seq.size() > kMaxQueued) {
+    s.stats.trimmed++;
     c.queue_seq.erase(c.queue_seq.begin());
     c.inputs.erase(c.inputs.begin(), c.inputs.begin() + static_cast<std::ptrdiff_t>(n));
   }
@@ -365,6 +367,16 @@ void replicate_server_tick(ReplicateServer& s) {
     ReplicateClientSlot& c = s.clients[k];
     const int i = c.entity == kNoEntity ? -1 : index_of(s, c.entity);
     if (i < 0 || !s.schema.step) continue;
+    // TIME SYNC: the inputs left waiting behind the one applied now (-1: none came in time), the
+    // fewest over a window, which the client's clock is steered by.
+    const int sample = c.queue_seq.empty() ? (c.applied ? -1 : kNoSlack)
+                                           : static_cast<int>(c.queue_seq.size()) - 1;
+    c.slack_now = std::min(c.slack_now, sample);
+    if (++c.slack_ticks >= std::max(1, s.config.slack_window)) {
+      c.slack_before = c.slack_now;
+      c.slack_now = kNoSlack;
+      c.slack_ticks = 0;
+    }
     if (!c.queue_seq.empty()) {
       std::memcpy(c.last, c.inputs.data(), n);
       c.applied = c.queue_seq.front();
@@ -403,6 +415,11 @@ void replicate_server_tick(ReplicateServer& s) {
     c.last_sent = s.tick;
     send_snapshot(s, p, buffer, replicate_snapshot_budget(s, p));
   }
+}
+
+int replicate_slack(const ReplicateClientSlot& c) {
+  const int v = std::min(c.slack_now, c.slack_before);
+  return v == kNoSlack ? 0 : std::clamp(v, -128, 127);
 }
 
 int replicate_send_interval(const ReplicateServer& s, int client) {

@@ -18,7 +18,8 @@ namespace {
 
 using namespace replicate_wire;
 
-constexpr uint32_t kInputRing = 256;  // inputs kept for replaying: seconds at any tick rate
+constexpr uint32_t kInputRing = 256;   // inputs kept for replaying: seconds at any tick rate
+constexpr uint32_t kStarveHold = 300;  // ticks a short window keeps the reserve raised
 
 const Snap* find_snap(const ReplicateClient& c, uint32_t tick) {
   const Snap& s = c.ring[tick % c.ring.size()];
@@ -72,11 +73,56 @@ void reconcile(ReplicateClient& c, const Snap& snap) {
   c.predicting = true;
 }
 
+// TIME SYNC on a snapshot's arrival: the clock's speed from the slack the server saw, and the
+// reckoned server tick, the arrivals' spacing and their jitter from when it came.
+void sync_clock(ReplicateClient& c, uint32_t tick, int slack) {
+  const ReplicateConfig& k = c.config;
+  c.slack = slack;
+  // Running short starves the server (a step repeated, a correction), so the clock speeds up
+  // twice as hard as it slows down.
+  // A window that ran short raises the reserve by one for the next few seconds (`starve_hold`).
+  if (slack < 0) c.starved_at = c.seq + 1;
+  const bool recent = c.starved_at && c.seq + 1 - c.starved_at < kStarveHold;
+  const int off = slack - (k.input_slack + (recent ? 1 : 0));
+  const double ask = -k.dilate_gain * off * (off < 0 ? 2 : 1);
+  c.dilation = 1 + std::clamp(ask, -k.dilate_max, k.dilate_max);
+  const auto t = static_cast<double>(tick);
+  if (!c.clocked) {
+    c.clocked = true;
+    c.server_tick = t;
+    c.spacing = static_cast<double>(std::max(1, k.send_every));
+    c.jitter = 0;
+    c.delay = c.want = c.spacing + 1;
+    c.render_x256 = 0;
+    c.spacing_from = tick;
+    return;
+  }
+  const double late = t - c.server_tick;  // + early, - late against the reckoning
+  c.jitter += 0.05 * ((late < 0 ? -late : late) - c.jitter);
+  // What this arrival needed: how far the reckoning had run past the newest snapshot before it.
+  // A delay below it would have drawn past every snapshot on hand, the others standing still.
+  if (!c.needs.empty()) {
+    c.needs[c.need_count % c.needs.size()] = c.server_tick - static_cast<double>(c.spacing_from);
+    c.need_count++;
+    const size_t n = std::min<size_t>(c.need_count, c.needs.size());
+    c.sorted.assign(c.needs.begin(), c.needs.begin() + static_cast<std::ptrdiff_t>(n));
+    // The quantile rounded down to a rank: 1 is the window's most, 0 its least.
+    const auto at = static_cast<size_t>(k.interp_quantile * static_cast<double>(n - 1));
+    std::nth_element(c.sorted.begin(), c.sorted.begin() + static_cast<std::ptrdiff_t>(at),
+                     c.sorted.end());
+    c.want = std::max(c.sorted[at], 1.0) + 0.25;
+  }
+  c.server_tick += 0.1 * late;
+  if (c.spacing_from) c.spacing += 0.1 * (static_cast<double>(tick - c.spacing_from) - c.spacing);
+  c.spacing_from = tick;
+}
+
 void on_snapshot(ReplicateClient& c, const uint8_t* data, size_t size) {
   Reader r = make_reader(data, size);
   if (read_u8(r) != kSnapshot) return;
   const uint32_t tick = read_u32(r), baseline = read_u32(r), applied = read_u32(r);
   const uint16_t own = read_u16(r);
+  const auto slack = static_cast<int8_t>(read_u8(r));
   const uint64_t entries = read_varint(r);
   if (r.bad || size < kSnapshotHeader + 3) return;
   if (c.has_snapshot && tick <= c.newest) {
@@ -147,6 +193,7 @@ void on_snapshot(ReplicateClient& c, const uint8_t* data, size_t size) {
   c.stats.snapshots++;
   c.stats.bytes += size;
   if (!baseline) c.stats.full++;
+  if (c.config.sync) sync_clock(c, tick, slack);
   reconcile(c, slot);
 }
 
@@ -165,6 +212,8 @@ void replicate_client_init(ReplicateClient& c, const Schema& schema, const Repli
   for (Snap& s : c.ring) s.rows.reserve(static_cast<size_t>(config.max_entities));
   c.scratch.reserve(static_cast<size_t>(config.max_entities));
   c.history.assign(kInputRing * static_cast<size_t>(schema.input_size), 0);
+  c.needs.assign(static_cast<size_t>(std::max(1, c.config.interp_window)), 0.0);
+  c.sorted.reserve(c.needs.size());
 }
 
 void replicate_client_receive(ReplicateClient& c) {
@@ -183,6 +232,16 @@ void replicate_client_input(ReplicateClient& c, const uint8_t* input) {
   c.seq++;
   std::memcpy(&c.history[(c.seq % kInputRing) * n], input, n);
   c.local_tick++;
+  if (c.config.sync && c.clocked) {
+    // A tick of the server's per tick of the server's: this one runs `dilation` times as fast.
+    c.server_tick += 1 / c.dilation;
+    // The delay grows quickly (the others slowed a few percent, so they do not stand still) and
+    // shrinks slowly (sped a little), so a burst's need outlasts the burst.
+    c.delay += std::clamp(c.want - c.delay, -c.config.interp_ease / 4, c.config.interp_ease);
+    const double at = c.server_tick - c.delay;
+    const uint32_t x256 = at <= 0 ? 0 : static_cast<uint32_t>(at * 256);
+    c.render_x256 = std::max(c.render_x256, x256);
+  }
   if (c.predicting) step_own(c, c.predicted, input);
   for (int f = 0; f < c.schema.fields; f++) c.error[f] *= c.config.smoothing;
   // cmd_rate: a message every tick_hz / cmd_rate ticks, carrying every input since the last one
@@ -218,6 +277,7 @@ void replicate_client_predicted(const ReplicateClient& c, double* out) {
 
 uint32_t replicate_client_render_tick(const ReplicateClient& c) {
   if (!c.has_snapshot) return 0;
+  if (c.config.sync) return c.render_x256;
   const int64_t t = int64_t{c.newest} + c.local_tick - c.config.interp_ticks;
   return t <= 0 ? 0 : static_cast<uint32_t>(t) << 8;
 }

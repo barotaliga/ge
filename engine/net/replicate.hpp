@@ -59,6 +59,7 @@ namespace ge::net {
 constexpr int kMaxFields = 16;
 constexpr uint16_t kNoEntity = 0xffff;
 constexpr int kMaxInputSize = 32;
+constexpr int kNoSlack = 1 << 20;  // no input applied in the window yet
 
 struct FieldSpec {
   double min = 0, max = 1;
@@ -103,6 +104,23 @@ struct ReplicateConfig {
   uint32_t rate = 0;        // client: snapshot bytes a second it takes (0: no cap)
   int max_update_rate = 0;  // server: the most snapshots a second anyone is sent (0: no cap)
   uint32_t max_rate = 0;    // server: the most snapshot bytes a second anyone is sent (0: none)
+  // TIME SYNC (M17n). The server tells each client its SLACK: the fewest of its inputs left waiting
+  // behind the one applied, over the last `slack_window` ticks (-1: a tick went without). The
+  // client runs its own tick `replicate_client_dilation` times as fast as it otherwise would,
+  // within 1 +- `dilate_max`, to hold the slack at `input_slack`: ahead of the server by its round
+  // trip and just enough for the link's jitter, never stalling and never queuing more. Its
+  // interpolation delay is what the last `interp_window` snapshots' arrivals needed (how far the
+  // reckoned server tick had passed the newest snapshot when the next one came), at their
+  // `interp_quantile`, instead of a fixed `interp_ticks`; it eases at most `interp_ease` a tick.
+  // Off (`sync` false): a fixed `interp_ticks`, and the client's clock is the caller's alone.
+  bool sync = true;
+  int input_slack = 0;         // inputs to hold in reserve at the worst moment of a window
+  int slack_window = 30;       // ticks
+  double dilate_max = 0.03;    // the most the client's clock is sped up or slowed
+  double dilate_gain = 0.01;   // the speed change a tick of slack off the target asks for
+  int interp_window = 64;      // arrivals
+  double interp_quantile = 1;  // the worst of the window
+  double interp_ease = 0.05;   // ticks the delay may grow a tick (it shrinks a quarter as fast)
 };
 
 struct ReplicateStats {
@@ -110,6 +128,7 @@ struct ReplicateStats {
   uint64_t dropped = 0;               // client: snapshots whose baseline was gone, or stale
   uint64_t starved = 0;               // server: entities left out of a snapshot for its budget
   uint64_t inputs = 0, repeated = 0;  // server: inputs applied, ticks that reused the last one
+  uint64_t trimmed = 0;               // server: inputs dropped for a queue past its most
   uint64_t corrections = 0;           // client: snapshots that moved its prediction
 };
 
@@ -140,10 +159,13 @@ struct ReplicateClientSlot {
   uint32_t applied = 0;   // the last input applied
   uint32_t repeats = 0;   // ticks that stepped the last input again, not yet set off
   uint8_t last[kMaxInputSize] = {};
-  uint32_t view_tick = 0;        // the tick it said it was drawing (x256)
-  uint32_t rate = 0;             // the bytes a second it asked for (0: no cap)
-  int update_rate = 0;           // the snapshots a second it asked for (0: the server's)
-  uint32_t last_sent = 0;        // the tick of the last snapshot sent it
+  uint32_t view_tick = 0;    // the tick it said it was drawing (x256)
+  uint32_t rate = 0;         // the bytes a second it asked for (0: no cap)
+  int update_rate = 0;       // the snapshots a second it asked for (0: the server's)
+  uint32_t last_sent = 0;    // the tick of the last snapshot sent it
+  int slack_now = kNoSlack;  // TIME SYNC: the fewest waiting over this window, and the last
+  int slack_before = kNoSlack;
+  int slack_ticks = 0;
   std::vector<double> priority;  // per entity index: its place in the last snapshot's order
 };
 
@@ -172,6 +194,8 @@ uint16_t replicate_spawn(ReplicateServer& s, int owner, const double* values);
 void replicate_set(ReplicateServer& s, uint16_t id, const double* values);
 const double* replicate_get(const ReplicateServer& s, uint16_t id);
 void replicate_despawn(ReplicateServer& s, uint16_t id);
+// The client's slack as the server reports it (TIME SYNC).
+int replicate_slack(const ReplicateClientSlot& c);
 // The ticks between snapshots and the bytes each may take, for a client's asked rates.
 int replicate_send_interval(const ReplicateServer& s, int client);
 size_t replicate_snapshot_budget(const ReplicateServer& s, int client);
@@ -200,7 +224,24 @@ struct ReplicateClient {
   uint32_t local_tick = 0;        // ticks since the newest snapshot arrived
   int unsent = 0;                 // inputs made since the last input message (cmd_rate)
   bool predicting = false;        // `predicted` holds a reconciled state to step on from
-  std::vector<Row> scratch;       // a snapshot being decoded
+  // TIME SYNC: the server's last word on this client's slack, the speed it asks of the clock,
+  // and the server's tick as the client reckons it (`server_tick`, advanced a tick of the
+  // server's each tick of its own and pulled toward each snapshot as it arrives); the snapshots'
+  // spacing and their arrivals' mean deviation from the reckoning (ticks); the interpolation
+  // delay and the tick drawn (x256, never going back).
+  int slack = 0;
+  uint32_t starved_at = 0;  // the input number when the server last reported running short + 1
+  double dilation = 1;
+  double server_tick = 0;
+  double spacing = 0, jitter = 0, delay = 0;
+  std::vector<double> needs;  // the last interp_window arrivals' needed delay, a ring (ticks)
+  uint32_t need_count = 0;
+  std::vector<double> sorted;  // scratch for the quantile
+  double want = 0;             // the delay the needs ask for
+  uint32_t render_x256 = 0;
+  uint32_t spacing_from = 0;  // the tick of the snapshot the spacing is measured from
+  bool clocked = false;
+  std::vector<Row> scratch;  // a snapshot being decoded
   ReplicateStats stats;
 };
 
@@ -213,7 +254,10 @@ void replicate_client_receive(ReplicateClient& c);
 void replicate_client_input(ReplicateClient& c, const uint8_t* input);
 // The own entity as drawn: the prediction plus what is left of the last correction.
 void replicate_client_predicted(const ReplicateClient& c, double* out);
-// The tick others are drawn at, x256: interp_ticks behind the newest heard of.
+// How fast the caller should run this client's tick (TIME SYNC): 1 +- dilate_max, 1 with sync off.
+inline double replicate_client_dilation(const ReplicateClient& c) { return c.dilation; }
+// The tick others are drawn at, x256: with sync, `delay` behind the reckoned server tick; without,
+// interp_ticks behind the newest heard of.
 uint32_t replicate_client_render_tick(const ReplicateClient& c);
 // Entity `id` at the render tick, interpolated; false when it is in no snapshot around it.
 bool replicate_client_sample(const ReplicateClient& c, uint16_t id, double* out);

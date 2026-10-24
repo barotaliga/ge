@@ -2,7 +2,9 @@
 // (replicate_client.cpp), and not installed: a game replicates through replicate.hpp.
 //
 //   snapshot  kind 1, tick u32, baseline u32 (0: whole), applied input u32, own entity u16,
-//             entries varint, then the entries as BITS (least significant first):
+//             slack i8 (the fewest inputs the client's queue held over the last window when
+//             one was applied; -1: a tick went without), entries varint, then the entries as BITS
+//             (least significant first):
 //               id 16, op 2:  update  a field mask, then each changed field in its bits
 //                             new     every field in its bits
 //                             gone    nothing more
@@ -26,7 +28,7 @@ namespace ge::net::replicate_wire {
 
 constexpr uint8_t kSnapshot = 1, kInput = 2;
 constexpr uint8_t kUpdate = 0, kNew = 1, kGone = 2;
-constexpr size_t kSnapshotHeader = 1 + 4 + 4 + 4 + 2;
+constexpr size_t kSnapshotHeader = 1 + 4 + 4 + 4 + 2 + 1;
 constexpr size_t kInputHeader = 1 + 4 + 4 + 4 + 2 + 4 + 1;
 constexpr size_t kSnapshotFloor = 64;  // the least a rate leaves a snapshot
 

@@ -62,6 +62,11 @@ struct Client {
   int peer = -1;
   uint8_t held[3] = {};
   uint64_t corrections_seen = 0;
+  double rate = 1;  // its clock against the network's
+  double acc = 0;   // ticks of its own owed
+  int slot = -1;    // its slot on the server, once its entity is known
+  uint32_t applied = 0;
+  int64_t made[256] = {};  // when each input was made, by its number
 };
 
 }  // namespace
@@ -114,6 +119,7 @@ ReplicateTrial run_replicate_trial(const ReplicateTrialConfig& k) {
     c->peer = node_connect(c->n, sim_address(0, 1), 0);
     replicate_client_init(c->r, schema, config, c->n, c->peer);
     c->hand = core::make_rng(k.seed * 977 + id);
+    c->rate = 1 + (i % 2 == 0 ? k.skew : -k.skew);
     cs.push_back(std::move(c));
   }
 
@@ -121,7 +127,7 @@ ReplicateTrial run_replicate_trial(const ReplicateTrialConfig& k) {
   const auto ticks = static_cast<int>(k.seconds * hz);
   uint64_t bytes_mark = 0;
   double delay_sum = 0;
-  uint64_t delay_n = 0;
+  uint64_t delay_n = 0, drawn_n = 0, held_n = 0;
   for (int t = 1; t <= ticks; t++) {
     now += tick_us;
     sim_advance(net, now);
@@ -160,11 +166,40 @@ ReplicateTrial run_replicate_trial(const ReplicateTrialConfig& k) {
         c->held[1] = static_cast<uint8_t>(core::int_in(c->hand, -80, 80));
         c->held[2] = static_cast<uint8_t>(core::int_in(c->hand, -40, 40));
       }
-      replicate_client_input(c->r, c->held);
+      // The client's own clock: its rate against the network's, sped or slowed by time sync.
+      c->acc += c->rate * replicate_client_dilation(c->r);
+      while (c->acc >= 1) {
+        c->acc -= 1;
+        replicate_client_input(c->r, c->held);
+        c->made[c->r.seq % 256] = now;
+      }
+      if (c->slot < 0 && c->r.own != kNoEntity) {
+        for (int p = 0; p < kMaxPeers; p++) {
+          if (server->clients[static_cast<size_t>(p)].entity == c->r.own) c->slot = p;
+        }
+      }
+      if (c->slot >= 0) {
+        const ReplicateClientSlot& sl = server->clients[static_cast<size_t>(c->slot)];
+        for (uint32_t q = c->applied + 1; q <= sl.applied && c->applied; q++) {
+          if (sl.applied - q < 256 && c->made[q % 256] > 0)
+            o.input_ms.push_back(static_cast<double>(now - c->made[q % 256]) / 1000.0);
+        }
+        c->applied = sl.applied;
+        if (&c == &cs.front() && t % std::max(1, hz / 10) == 0) {
+          o.t_q.push_back(static_cast<double>(t) / hz);
+          o.queue.push_back(static_cast<double>(sl.queue_seq.size()));
+          const uint32_t at = replicate_client_render_tick(c->r);
+          o.delay_ms.push_back(
+              at < 256 ? 0 : static_cast<double>((server->tick << 8) - at) / 256.0 * 1000.0 / hz);
+          o.dilation.push_back(replicate_client_dilation(c->r));
+        }
+      }
       node_flush(c->n, now);
       // Lag compensation: the server judges the crowd at the tick this client drew it at.
       const uint32_t at = replicate_client_render_tick(c->r);
       if (at < 256) continue;  // still drawing the first snapshot: nothing in the past to judge
+      drawn_n++;
+      held_n += at > (c->r.newest << 8);
       delay_sum += static_cast<double>((server->tick << 8) - at) / 256.0 * 1000.0 / hz;
       delay_n++;
       for (size_t i = static_cast<size_t>(t) % 8; i < npcs.size(); i += 8) {
@@ -216,6 +251,8 @@ ReplicateTrial run_replicate_trial(const ReplicateTrialConfig& k) {
   o.starved = server->stats.starved;
   o.repeated = server->stats.repeated;
   o.inputs = server->stats.inputs;
+  o.trimmed = server->stats.trimmed;
+  o.underrun = drawn_n ? static_cast<double>(held_n) / static_cast<double>(drawn_n) : 0;
   return o;
 }
 

@@ -160,6 +160,13 @@ net::replicate_client_predicted(client, own);              // the own entity, sm
 net::replicate_client_sample(client, id, other);           // anyone else, interpolated
 ```
 
+Run the client's fixed step `net::replicate_client_dilation(client)` times as fast as the frame
+clock says (multiply the frame's seconds by it before they feed the accumulator, engine/loop's
+run clock). That is TIME SYNC (on by default, `rc.sync`): the server reports how many of the
+client's inputs wait in its queue, and the client speeds up or slows down by at most 3% to keep
+none waiting but none late, whatever its clock's drift. The others are then drawn behind the
+server by what the link's jitter needs, not a fixed six ticks.
+
 Spawn a player's entity with `replicate_spawn(server, peer, values)` when its peer connects. A
 hit is judged with `replicate_rewind(server, id, client_view_tick, out)`. Set
 `interest_radius` (with `interest_x`, `interest_z`) for an open world and `snapshot_budget` to cap

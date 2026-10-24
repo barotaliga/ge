@@ -232,7 +232,8 @@ that names its entities' fields and its step.
 | The budget | `snapshot_budget` caps a snapshot's bytes; rows are written stalest first, a row's priority being how many ticks the client's copy (the baseline's) is behind; a row left out keeps the baseline's value | Deltas against acks that lag form chains of baselines: a priority reset when a row is sent would starve it in the other chain for ever, so the age is read off the baseline itself |
 | Inputs | Each tick's input goes up with the last `redundancy` (4) beside it; the server queues them by number and applies one a tick | One lost packet costs nothing. A tick with none waiting steps the last again and the queue grows by one, a buffer the link's jitter set; inputs lost past the redundancy are taken to be the one before them, less those the repeats stood in for, so the entity is stepped as often as the client stepped it |
 | Prediction | The client steps its own entity at once, and on each snapshot replays every input the server had not applied over the server's state; a difference is kept as an error that decays by `smoothing` a tick | Corrections are shown as a glide, not a snap |
-| Interpolation | Others are drawn `interp_ticks` (6) behind the newest snapshot heard of, between the two around that moment | Two snapshots are nearly always there to draw between, at 30 a second over a lossy link |
+| Time sync (M17n) | Each snapshot carries the client's SLACK: the fewest of its inputs left waiting on the server over the last half second (-1: a tick went without). The client runs its tick `replicate_client_dilation` times as fast (within 3%) to hold the slack at zero, one in reserve for a few seconds after a window ran short | A clock a little fast piles inputs up on the server (a third of a second of lag within a minute at 2%); a little slow starves it (a repeated step, a correction). Held at zero, an input arrives just in time whatever the drift |
+| Interpolation | With time sync, others are drawn behind the client's reckoning of the server's tick by what the last 64 snapshots' arrivals needed (how far the reckoning had run past the newest snapshot when the next came), eased up quickly and down slowly; with sync off, `interp_ticks` (6) behind the newest heard of | On a clean link the others are drawn 38 ms behind instead of 100; on a jittery one the delay grows until they rarely stand still |
 | Lag compensation | Each input names the tick the client was drawing; `replicate_rewind` returns any entity at that tick (fractional) from the server's quantized history | A hit is judged against what the player saw |
 
 Nothing reads a clock or draws randomness: the exchange over the simulated network replays to
@@ -253,10 +254,18 @@ path's jerk, the view delay):
 
 | Row | What | Why |
 | --- | --- | --- |
-| M17n | Time sync: the client's tick locked to the server's; the client ahead by just enough that its input lands a target buffer early; the server reports each client's input queue and the client dilates its tick a few percent to hold it; the interpolation delay set by the jitter measured | A fixed lead stalls on a bad link and wastes delay on a good one; dilation keeps the queue at its target with no stall, no repeat and no drop, and the view as fresh as the jitter allows |
+| M17n (built) | Time sync: the client's tick locked to the server's; the client ahead by just enough that its input lands a target buffer early; the server reports each client's input queue and the client dilates its tick a few percent to hold it; the interpolation delay set by the jitter measured | A fixed lead stalls on a bad link and wastes delay on a good one; dilation keeps the queue at its target with no stall, no repeat and no drop, and the view as fresh as the jitter allows |
 | M17o | Corrections drawn through a critically damped spring, velocity continuous, snapping only past a distance; others on cubic curves through their velocities; a capped extrapolation by the game's own step when snapshots are late | A decay alone leaves a kink in the velocity the eye catches; a late snapshot should not freeze the others |
 | M17p | The predicted world: what the client's input touches resimulated with it, others' inputs taken as their last; events predicted under a client's id, matched or undone; a resimulation budget | A player who bumps another or fires sees it at once, not a round trip later |
 | M17q | Sub-tick inputs applied at their fraction of a tick; the rewind capped (the shooter favoured up to a limit) and the hit confirmed; a finish line's order at sub-tick resolution | A tick is 16 ms: a press, a shot or a finish should not be rounded to it |
+
+M17n is built; the `net-predict` lab measures it. With 16 clients whose clocks run 2% fast or
+slow, an input's p95 from the hand to the server's step falls from 367 ms to 50 on `lan` and from
+467 to 250 on `bad`, and the corrections a minute fall by up to seven times. With true clocks the
+view delay falls from 100 ms to 38 on `lan`, 106 to 61 on `broadband` and 120 to 88 on `wifi`,
+drawing past the newest snapshot under 1% of the time. On `awful` it grows from 317 ms to 444 and
+stands still 3% of the time instead of 8%: there the delay buys smoothness, and M17o's
+extrapolation will take some of it back.
 
 Which of them a kind of game uses: a shooter all four; a racer its own vehicle predicted (M17n,
 M17o), rivals extrapolated a little so they are drawn where they are, contacts on the server
