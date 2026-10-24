@@ -189,6 +189,10 @@ void run(ge::lab::Lab& lab) {
   options.reach_m = lab.arg_num("reach");
   options.clouds = cvars.clouds;
   options.cover = cvars.cover;
+  if (const std::string problem = fall_line::app::cloud_stack_of(cvars, options);
+      !problem.empty()) {
+    lab.fail("--cfg: " + problem, "Skill: console.");
+  }
   if (width <= 0 || height <= 0 || width > 4096 || height > 4096 || settle < 1 ||
       options.scale < 0.25 || options.scale > 1 || options.reach_m < 0) {
     lab.fail(
