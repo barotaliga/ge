@@ -230,6 +230,25 @@ constexpr FlagSpec kRecordFlags[] = {
      "the build to record with (default release: a frame is drawn on the CPU)"},
     kEngine,
     kRepo};
+constexpr FlagSpec kSoundMatchFlags[] = {
+    {"pool", "<regex>", "only the candidates whose paths match (case-insensitive): splash|water"},
+    {"top", "<n>", "how many to list (default 5)"},
+    {"rate", "<hz>", "the rate both are compared at (default 22050)"}};
+constexpr FlagSpec kSoundImportFlags[] = {
+    {"to", "<dir>", "the directory the sound is written under (default sounds)"},
+    {"max", "<s>", "the longest it may be after the trim (default 6)"},
+    {"loop", "", "a loop: a 50 ms fade out instead of 20 ms"},
+    {"lufs", "<lufs>", "the integrated loudness wanted (default -16)"},
+    {"threshold", "<dBFS>", "quieter than this at either end is silence (default -50)"},
+    {"rate", "<hz>", "the rate it is written at (default 22050)"}};
+constexpr FlagSpec kSoundSplitFlags[] = {
+    {"to", "<dir>", "the directory the pieces are written under (default sounds)"},
+    {"gap", "<s>", "a silence at least this long ends a piece (default 0.15)"},
+    {"max", "<s>", "the longest a piece may be (default 6)"},
+    {"lufs", "<lufs>", "the integrated loudness wanted (default -16)"},
+    {"threshold", "<dBFS>", "quieter than this is silence (default -50)"},
+    {"rate", "<hz>", "the rate they are written at (default 22050)"}};
+
 constexpr FlagSpec kGraphFlags[] = {
     {"kind", "<auto|line|scatter|hist|box|heat|spans>",
      "the chart (default auto: spans for a spans file, line for the rest)"},
@@ -504,6 +523,20 @@ const CommandSpec kCommands[] = {
      "move the repo onto this ge's engine release: the pin rewritten, the skills synced, the repo "
      "doctored; run it with the new release's ge",
      kUpgradeFlags, "ge upgrade --engine-sha256=<hex>", "engine"},
+    {"sound match", "<reference> <candidate>...", 2, -1, "see",
+     "rank free sounds (files, or every sound under a directory) by how close each comes to a "
+     "reference in length, band energies and loudness envelope; the best is the one to import",
+     kSoundMatchFlags, "ge sound match ref/door_stop.wav packs/ --pool=door|slam --top=3",
+     "assets"},
+    {"sound import", "<source> <name>", 2, 2, "create",
+     "a sound taken in under our name: decoded, trimmed of silence, cut to --max, faded, brought "
+     "to --lufs under a -1.5 dBFS peak, written as mono 16-bit WAV at <to>/<name>.wav",
+     kSoundImportFlags, "ge sound import packs/kenney/doorClose_2.ogg door/stone_stop --to=sounds",
+     "assets"},
+    {"sound split", "<source> <name>", 2, 2, "create",
+     "one recording of many sounds cut at its silences, each piece imported as import does to "
+     "<to>/<name>_01.wav, _02 ...",
+     kSoundSplitFlags, "ge sound split packs/footsteps.ogg player/step --gap=0.2", "assets"},
 };
 
 constexpr FlagSpec kGlobal[] = {

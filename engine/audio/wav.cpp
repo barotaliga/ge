@@ -27,7 +27,12 @@ void tag(std::vector<uint8_t>& b, const char* t) {
 }  // namespace
 
 std::vector<uint8_t> wav_bytes(std::span<const float> stereo) {
-  const uint32_t data = static_cast<uint32_t>(stereo.size() * 2);
+  return wav_bytes(stereo, 2, kRate);
+}
+
+std::vector<uint8_t> wav_bytes(std::span<const float> samples, int channels, int rate) {
+  const uint32_t data = static_cast<uint32_t>(samples.size() * 2);
+  const uint32_t frame = static_cast<uint32_t>(channels) * 2;
   std::vector<uint8_t> b;
   b.reserve(44 + data);
   tag(b, "RIFF");
@@ -36,14 +41,14 @@ std::vector<uint8_t> wav_bytes(std::span<const float> stereo) {
   tag(b, "fmt ");
   put32(b, 16);
   put16(b, 1);  // PCM
-  put16(b, 2);  // channels
-  put32(b, kRate);
-  put32(b, kRate * 4);  // bytes a second
-  put16(b, 4);          // bytes a frame
-  put16(b, 16);         // bits a sample
+  put16(b, static_cast<uint16_t>(channels));
+  put32(b, static_cast<uint32_t>(rate));
+  put32(b, static_cast<uint32_t>(rate) * frame);  // bytes a second
+  put16(b, static_cast<uint16_t>(frame));         // bytes a frame
+  put16(b, 16);                                   // bits a sample
   tag(b, "data");
   put32(b, data);
-  for (const float x : stereo) {
+  for (const float x : samples) {
     const double c = x < -1 ? -1 : x > 1 ? 1 : x;
     const int32_t s = static_cast<int32_t>(core::num::round(c * 32767));
     put16(b, static_cast<uint16_t>(static_cast<int16_t>(s)));
