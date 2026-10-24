@@ -107,7 +107,7 @@ opens on the run-in, before the lip), how long it holds after, its rate, what th
 scaled by beside the others, and the lens (a name only the game's renderer reads). Fall Line's
 (`games/fall_line/sim/moments.hpp`): a flight from 2.5 s before its take-off to 3 s after at half
 speed through the long lens beside the kicker, worth its air time and its landing's load; a
-wipeout at half speed from behind; a shoulder with a rival (a brush under 2 m/s is not one) from
+wipeout at half speed through the impact lens, planted just past the fall; a shoulder with a rival (a brush under 2 m/s is not one) from
 the front; a missed gate; the finish from above.
 
 THE ENGINE'S HALF is the choice, a pure function of the marks, the rules and the policy: the best
@@ -119,6 +119,12 @@ says for the reel's seconds which shot is up and which run step it shows; betwee
 seeks. A reel is played off the live run's own keyframes (the instant replay's player), so a cut
 seeks from a copy the race already took: seed 38's 27 s reel holds 2 frames at one cut, where a
 fresh player, stepping the race again from its start, held 42 (the `replay-cut` lab).
+
+THE FILM CAMERA draws a cut (M26d, `games/fall_line/camera/film.hpp`, `docs/camera.md` §
+Directors): each shot's lens is planted once, off the player's path, where it sees most of the
+shot's stretch, and every pose after that is a pure function of the shot and the run step
+(`film_pose`, fractional between steps), so a video export draws any frame without stepping the
+camera from the start (the `camera-director` lab).
 
 ## Video with sound (M23d)
 

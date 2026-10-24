@@ -5,6 +5,7 @@ army c3e9faa0202c9fc0
 army-flight 383c454be759df5d
 army-sleds bae04af32e36e808
 audition d47fda4a9cb22fbb
+camera-director d471bf22e0fde9f5
 camera-follow b1dbf6ae474cba78
 camera-machines fa674ce82d9f1c5e
 camera-rigs bd01263b4d16d23c
