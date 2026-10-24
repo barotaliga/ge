@@ -14,6 +14,7 @@
 // ge:keywords before-after overview gpu-bsp
 // ge:skill brush render labs
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdlib>
 #include <memory>
@@ -37,6 +38,7 @@
 #include "render/liquid.hpp"
 #include "render/post.hpp"
 #include "render/sky.hpp"
+#include "render/sky_style.hpp"
 #include "render/water.hpp"
 
 namespace {
@@ -56,6 +58,7 @@ struct MapState {
   gr::Liquids liquids;
   ba::LiquidWorld world;
   ba::LiquidRows rows;
+  gr::SkyStyle style{};  // the map's kind of sky (--sky)
 };
 
 struct Frame {
@@ -85,7 +88,7 @@ struct View {
 void dress(gr::FrameView& v, double sun_el, double sun_az, double cover, double t) {
   v.sun_elevation = sun_el;
   v.sun_azimuth = sun_az;
-  v.altitude_m = 600;
+  v.altitude_m = 100;  // a level near the sea: the dust's colour reads its altitude
   v.time_s = t;
   v.fov_y = 1.25;
   v.near_m = 0.05;
@@ -550,6 +553,26 @@ void run(gl::Lab& lab) {
   knob("film", &g.film);
   knob("bubbles", &g.bubbles);
   knob("glow", &g.glow);
+  // --sky: one type for every map, or <map>:<type> pairs (the rest keep the Earth's).
+  {
+    const std::string& list = lab.arg("sky");
+    size_t at = 0;
+    while (!list.empty() && at <= list.size()) {
+      size_t end = list.find(',', at);
+      if (end == std::string::npos) end = list.size();
+      const std::string item = list.substr(at, end - at);
+      const size_t colon = item.find(':');
+      const std::string type = colon == std::string::npos ? item : item.substr(colon + 1);
+      gr::SkyStyle style;
+      if (!gr::sky_style_named(type, style))
+        lab.fail("--sky names no sky type: " + type,
+                 "next: pick one of earth, dust, alien, hell, void, nebula, violet, ice, ash, "
+                 "toxic (engine/render/sky_style.hpp).");
+      for (size_t i = 0; i < maps.size(); ++i)
+        if (colon == std::string::npos || names[i] == item.substr(0, colon)) maps[i]->style = style;
+      at = end + 1;
+    }
+  }
   for (auto& m : maps) {
     m->rows = rows;
     ba::create_bsp(d, f.pipelines, m->bsp, m->scene, f.layout);
@@ -600,6 +623,18 @@ void run(gl::Lab& lab) {
   if (!lab.arg("bounce").empty()) {
     for (Way& way : ways) way.o.bounce = lab.arg_num("bounce");
   }
+  // The sky types each view whose id holds --skies-on is drawn under too.
+  std::vector<std::string> skies;
+  {
+    const std::string& list = lab.arg("skies");
+    size_t at = 0;
+    while (!list.empty() && at <= list.size()) {
+      size_t end = list.find(',', at);
+      if (end == std::string::npos) end = list.size();
+      skies.push_back(list.substr(at, end - at));
+      at = end + 1;
+    }
+  }
   // The ladder: v2 lit in real time with neither the floor nor the bounce, then at each floor.
   std::vector<Way> ladder;
   std::vector<std::string> labels;  // the ladder's labels, alive while the ladder is drawn
@@ -637,6 +672,7 @@ void run(gl::Lab& lab) {
     fv.pitch = v.pitch;
     dress(fv, sun_el, sun_az, cover, t);
     MapState& m = *maps[v.map];
+    fv.style = m.style;
     std::vector<gl::Picture> pics;
     pics.reserve(ways.size());
     for (const Way& way : ways) pics.push_back(draw(d, f, m, fv, way.o));
@@ -657,6 +693,30 @@ void run(gl::Lab& lab) {
                {"heading", ls::fixed(v.heading / kDeg, 0)},
                {"pitch", ls::fixed(v.pitch / kDeg, 0)}}},
              sheet, Det::measured);
+    if (!skies.empty() && v.id.find(lab.arg("skies-on")) != std::string::npos) {
+      std::vector<gl::Picture> panes;
+      panes.reserve(skies.size());
+      for (const std::string& name : skies) {
+        gr::FrameView sv = fv;
+        gr::sky_style_named(name, sv.style);
+        panes.push_back(draw(d, f, m, sv, ways[2].o));
+      }
+      const int n = int(panes.size());
+      gl::Picture row = gl::create_picture(int(w) * n + 10 * (n + 1), int(h) + 30, {250, 250, 248});
+      for (int i = 0; i < n; ++i) {
+        const int ox = 10 + i * (int(w) + 10);
+        std::string label = skies[size_t(i)];
+        for (char& ch : label) ch = char(std::toupper(static_cast<unsigned char>(ch)));
+        gl::draw_text(row, ox, 6, label, {24, 26, 32});
+        ls::paste(row, panes[size_t(i)], ox, 20);
+      }
+      lab.shot({v.id + "-skies",
+                v.title + ": the sky types",
+                v.caption + " V2 lit in real time under each of the engine's sky types.",
+                "Each sky shows through the sky faces and its sun and air light the room.",
+                {}},
+               row, Det::measured);
+    }
     if (!ladder.empty()) {
       std::vector<gl::Picture> rungs;
       rungs.reserve(ladder.size());
@@ -714,6 +774,9 @@ const gl::LabSpec kSpec{
      {"film", "300", "the slime's oily sheen, nm (0 none)"},
      {"bubbles", "1.5", "the slime's bubbles a square metre a second"},
      {"glow", "0.4", "the slime's own green light, a share of the murky slime's"},
+     {"sky", "", "the maps' sky types: one for all, or <map>:<type> pairs, comma separated"},
+     {"skies", "", "sky types to draw the sky views under too, comma separated (e.g. hell,toxic)"},
+     {"skies-on", "sky", "the views --skies draws: those whose id holds this"},
      {"ladder", "",
       "rungs to draw each view at too, comma separated: <minlight> or <minlight>@<brightness>"}},
     "--width=160",
