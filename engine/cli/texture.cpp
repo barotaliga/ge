@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <chrono>
 #include <fstream>
+#include <map>
 #include <sstream>
 
 #include "cli/json.hpp"
@@ -254,6 +255,18 @@ Outcome run_texture_match(const std::filesystem::path& repo, const TextureMatchO
   const fs::path dir = fs::absolute(repo / opt.dir);
   std::error_code ec;
   std::vector<Matched> textures;
+  // A level's export may list each file's real name (`textures.txt`: `<name> <file> <w>x<h>`,
+  // '#' lines skipped); without it the name is decoded from the file's.
+  std::map<std::string, std::string> list_names;
+  if (std::ifstream list(dir / "textures.txt"); list) {
+    std::string line;
+    while (std::getline(list, line)) {
+      if (line.empty() || line[0] == '#') continue;
+      std::istringstream words(line);
+      std::string name, file;
+      if (words >> name >> file) list_names[file] = name;
+    }
+  }
   for (const auto& f : fs::directory_iterator(dir, ec)) {
     if (f.path().extension() != ".png") continue;
     std::optional<lab::Picture> p = lab::read_png(f.path().string());
@@ -263,7 +276,9 @@ Outcome run_texture_match(const std::filesystem::path& repo, const TextureMatchO
       continue;
     }
     Matched t;
-    t.name = texgen::texture_name_of_file(f.path().stem().string());
+    const auto named = list_names.find(f.path().filename().string());
+    t.name = named != list_names.end() ? named->second
+                                       : texgen::texture_name_of_file(f.path().stem().string());
     t.file = f.path().string();
     t.picture = std::move(*p);
     textures.push_back(std::move(t));
@@ -271,8 +286,8 @@ Outcome run_texture_match(const std::filesystem::path& repo, const TextureMatchO
   if (textures.empty()) {
     o.findings.push_back({Severity::error, "no PNG textures in " + rel_path(repo, dir), "",
                           "write the map's textures as PNGs into a directory outside the tree "
-                          "(liq_ for a leading '*', anim_ for '+'), e.g. ge level textures "
-                          "<map> --out=<dir>"});
+                          "(liq_ for a leading '*', anim_ for '+'), e.g. labs bsp --pak=<pak> "
+                          "--map=<map> --textures-out=<dir>"});
     return o;
   }
   std::sort(textures.begin(), textures.end(),

@@ -130,7 +130,9 @@ Build the `Matcher` once per conversion.
 
 A converter writes only a texture map an agent has argued (`<map>.texmap`,
 `texture_map.hpp`). `ge texture match <dir> --map=<map>.texmap` reads the map's textures as PNGs
-(kept outside the tree), writes a first reference for every texture, and re-measures every run.
+(kept outside the tree; a `textures.txt` beside them, as `labs bsp --textures-out=<dir>` writes,
+gives each file's real name), writes a first reference for every texture, and re-measures every
+run.
 Per texture the agent writes four things into the map: `class` (what it is: bricks, blocks,
 planks, panels, ...; candidates narrow to recipes tagged with it), `traits` (how that class
 looks and how this one does: the laying pattern, the pieces a tile, the joints, the colour),

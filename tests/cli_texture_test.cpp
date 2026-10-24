@@ -102,3 +102,26 @@ TEST(match_writes_a_map_keeps_pins_and_argues) {
   CHECK(uncoloured);
   fs::remove_all(repo);
 }
+
+TEST(match_takes_real_names_from_a_level_export_list) {
+  const fs::path repo = fs::temp_directory_path() / "ge_cli_texture_list_test";
+  fs::remove_all(repo);
+  fs::create_directories(repo / "tex");
+  ge::texgen::ParseResult r =
+      ge::texgen::load_recipe(ge::test::root_path(ge::texgen::kLibraryDir) + "/brick_wall.tex");
+  r.recipe.size = 32;
+  const ge::texgen::Maps maps = ge::texgen::bake(r.recipe, {"brick_wall", 5u, {}}).maps;
+  CHECK(ge::lab::write_png((repo / "tex" / "anim_0wall_2.png").string(),
+                           ge::texgen::map_picture(maps, ge::texgen::MapKind::albedo, 32)));
+  std::ofstream(repo / "tex" / "textures.txt")
+      << "# name file size\n+0wall-2 anim_0wall_2.png 32x32\n";
+  TextureMatchOptions opt;
+  opt.dir = "tex";
+  opt.library = ge::test::root_path(ge::texgen::kLibraryDir);
+  opt.sheets = 0;
+  CHECK(exit_of(run_texture_match(repo, opt)) == 0);
+  std::ifstream in(repo / "tex" / "textures.texmap");
+  const std::string map((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  CHECK(map.find("texture +0wall-2 ") != std::string::npos);  // the listed name, not the file's
+  fs::remove_all(repo);
+}
