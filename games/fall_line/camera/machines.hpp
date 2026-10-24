@@ -30,7 +30,7 @@
 // ge:keywords fall-line camera machine sled snowmobile heli helicopter para paramotor ride
 // ge:keywords seat skid pilot wing down chase bank bank_air hand-over board hop drop
 // ge:keywords ride_of machine_ladder lens_name ride-camera make_ride_camera next_lens set_lens
-// ge:keywords frame_ride
+// ge:keywords frame_ride apply_ride_cvars
 // ge:skill camera
 // ge:test tests/fall_line_camera_test.cpp
 #pragma once
@@ -40,6 +40,7 @@
 #include <string_view>
 
 #include "camera/camera.hpp"
+#include "camera/cvars.hpp"
 #include "fall_line/camera/rungs.hpp"
 #include "fall_line/camera/subject.hpp"
 #include "fall_line/sim/state.hpp"
@@ -92,6 +93,10 @@ void next_lens(RideCamera& rc);
 // Put the camera at once on the ride `state` has the player on, on its rung named `name` (a skis'
 // rung named on a machine puts it on that rung's counterpart); false for a name on neither.
 bool set_lens(RideCamera& rc, const sim::GameState& state, std::string_view name);
+
+// The player's camera settings (engine/camera/cvars.hpp) written over every ladder the ride
+// camera holds, the skis' and each machine's, before a frame.
+void apply_ride_cvars(ge::camera::CameraCvars& v, RideCamera& rc);
 
 // One display frame of `dt` s of the camera on the player in `state`.
 ge::camera::Pose frame_ride(RideCamera& rc, const sim::GameState& state,

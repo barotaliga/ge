@@ -249,6 +249,7 @@ int main(int argc, char** argv) {
       if (input.tapped(ge::platform::Key::c)) {
         fall_line::camera::next_lens(camera);
       }
+      fall_line::camera::apply_ride_cvars(set.camera, camera);
       const double dt = presented == 0 ? 1.0 / 60 : view.time_s - last_frame_s;
       ge::camera::to_frame_view(
           fall_line::camera::frame_ride(camera, run.state(), skier_world, camera_world, dt), view);

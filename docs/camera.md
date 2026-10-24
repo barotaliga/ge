@@ -351,19 +351,33 @@ binding; every row inside the engine is in metres, seconds and radians.
 
 | Cvar | Unit | What |
 | --- | --- | --- |
-| `cl_fov` | deg | the horizontal field of view at 4:3 |
-| `cl_viewheight` | world units | the eyes over the body (first person) |
+| `cl_fov` | deg | the first-person lens, horizontal at 4:3 (0: the rig's own) |
+| `cl_viewheight` | world units | the eyes over the body, first person (0: the rig's own) |
 | `cl_bob`, `cl_bobcycle`, `cl_bobup` | share, s, share | the stride's height per unit of speed, its period, the rising share |
 | `cl_rollangle`, `cl_rollspeed` | deg, world units/s | the strafe roll and the sideways speed that reaches it |
 | `v_kicktime`, `v_kickpitch`, `v_kickroll` | s, deg, deg | the view punch |
-| `v_idlescale` | share | the idle sway (0 off) |
+| `v_idlescale` | deg | the idle sway at its most (0 off) |
 | `cl_landdip` | share | the landing dip |
-| `cl_camera` | name | the rung (`chase`, `helmet`, `eyes`, …: the game's ladder) |
-| `cl_chasedist`, `cl_chaseheight` | world units | the chase boom's arm |
+| `cl_camera` | name | the rung (`chase`, `helmet`, `eyes`, …: the game's ladder), registered only when a game asks for it |
+| `cl_chasedist`, `cl_chaseheight` | world units | the arm of every boom named `chase` (0: the rig's own) |
 | `cl_fovspeed` | share | how much the fov widens with speed on a boom |
 | `cl_camblend` | share | every transition's length; 0 cuts |
 | `cl_motion` | 0..1 | comfort: the bob, the roll, the tremor and the shakes at once |
 | `cl_shake` | 0..1 | the shakes alone |
+
+They live in `engine/camera/cvars.hpp`. `add_camera_cvars` registers them on a console with a
+game's `CameraDefaults` (its world unit, `unit_m`, and its own fallbacks, in the cvars' units) and
+binds them to a `CameraCvars`; `apply_camera_cvars`, once a frame, writes them over the ladder
+the camera was made from: the settings struct, every first-person row (in metres and radians)
+and the boom named `chase`. A length or a lens of 0 leaves the row its own, so a ladder stands as
+it was cut until a player turns it. The `landdip` scales the row's own dip. `cl_camera` changes the
+rung by the game's edit when it moves, and a name off the ladder is left with `false`.
+
+Fall Line registers them at the engine's defaults (a world in metres) and names its view with its
+own `cl_view` (a rung or a still view) instead of `cl_camera`; the window applies them to the
+skis' ladder and every machine's before each frame (`apply_ride_cvars`). `ge cvar ls cl_` lists
+them. `camera-rigs --motion=0` runs every rig through every scenario at comfort 0 and fails a
+horizon that rolls; `camera-shake` holds the shakes still at comfort 0.
 
 ## The labs
 

@@ -359,6 +359,13 @@ bool set_lens(RideCamera& rc, const sim::GameState& state, std::string_view name
   return true;
 }
 
+void apply_ride_cvars(cam::CameraCvars& v, RideCamera& rc) {
+  cam::apply_camera_cvars(v, fall_line_ladder(), rc.skis.cam);
+  for (int m = 0; m < kMachines; ++m) {
+    cam::apply_camera_cvars(v, ladders()[static_cast<size_t>(m)], rc.machines[m]);
+  }
+}
+
 cam::Pose frame_ride(RideCamera& rc, const sim::GameState& state, const ge::skier::World& sw,
                      const cam::World& cw, double dt) {
   const Ride now = ride_of(state);
