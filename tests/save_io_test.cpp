@@ -84,7 +84,7 @@ demo::Rider sample() {
   r.scores = {-1, 0, 1 << 30};
   r.spare = demo::Gear::sled;
   r.gates = {true, false, true, true};
-  r.lift = {9, true};
+  r.lift = {uint16_t{9}, true};
   r.down = true;
   r.rng = ge::core::make_rng(1234);
   r.best = 61.25;
