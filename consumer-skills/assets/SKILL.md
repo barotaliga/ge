@@ -88,7 +88,9 @@ the `models` lab before committing it.
 ffmpeg on the PATH decodes the sources. Take only what may be redistributed, changed and sold
 (CC0 first; no share-alike, noncommercial or no-derivatives licence), name every file by what it
 is in this game rather than its pack's name, and record the pack, author, URL and licence of each
-one in the game's credits file in the same commit.
+one in the directory's CREDITS.md in the same commit (one `## <pack>` section with a `- Licence:`
+line and a table whose first column is each file's path in backquotes); `ge credits check <dir>`
+fails an uncredited file, a credit whose file is gone and a licence this repository cannot carry.
 
 ## The rules
 

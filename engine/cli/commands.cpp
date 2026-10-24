@@ -547,6 +547,16 @@ const CommandSpec kCommands[] = {
      kModelImportFlags,
      "ge model import \"packs/kit/Models/GLB format/crate.glb\" pickup/shells --to=models",
      "assets"},
+    {"credits check",
+     "[<dir>]",
+     0,
+     1,
+     "maintain",
+     "a content directory's CREDITS.md against its files: every sound, model, image and font "
+     "credited, every credit's file there, every source under a licence this repository can carry",
+     {},
+     "ge credits check games/shooters_edge/content",
+     "assets"},
 };
 
 constexpr FlagSpec kGlobal[] = {
