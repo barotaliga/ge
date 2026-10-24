@@ -8,7 +8,8 @@
 #include "net/stress.hpp"
 
 #include <algorithm>
-#include <cmath>
+
+#include "core/libm/libm.hpp"
 
 namespace ge::net {
 
@@ -134,7 +135,7 @@ Ramp run_ramp(const TrafficPlan& base, const RampPlan& plan) {
   // steps.
   const bool geometric = plan.knob == StressKnob::bandwidth || plan.knob == StressKnob::burst;
   const auto between = [&](double a, double b, double t) {
-    return geometric ? a * std::exp(std::log(b / a) * t) : a + (b - a) * t;
+    return geometric ? a * ge::core::libm::exp(ge::core::libm::log(b / a) * t) : a + (b - a) * t;
   };
   const auto run = [&](double value) {
     TrafficPlan p = base;
