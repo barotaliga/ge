@@ -9,6 +9,7 @@
 // ge:keywords event-log replay digest pad
 // ge:skill input sim testing
 #include <filesystem>
+#include <fstream>
 #include <string>
 
 #include "check.hpp"
@@ -91,9 +92,8 @@ TEST(the_players_file_is_saved_and_read_back_and_a_broken_one_keeps_the_defaults
   CHECK(fc::load_player_map(path, read, error));
   CHECK(in::write_bindings(read) == in::write_bindings(map));
   {
-    std::FILE* f = std::fopen(path.c_str(), "wb");
-    std::fputs("ge-bindings 1\ncontext ride\nbind jump key:nonsense\n", f);
-    std::fclose(f);
+    std::ofstream f(path, std::ios::binary);
+    f << "ge-bindings 1\ncontext ride\nbind jump key:nonsense\n";
   }
   in::ActionMap kept = fc::default_map();
   CHECK(!fc::load_player_map(path, kept, error));
