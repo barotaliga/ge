@@ -140,7 +140,7 @@ void send(Lockstep& ls) {
   const size_t count_at = w.size;
   write_u8(w, 0);
   // Room for the acks and the digests after the inputs.
-  const size_t tail = 2 + 2 * static_cast<size_t>(ls.config.seats) * 5 + 6 + kMaxDigestsSent * 8;
+  const size_t tail = 2 + 2 * static_cast<size_t>(ls.config.seats) * 5 + 6 + size_t{kMaxDigestsSent} * 8;
   int count = 0;
   for (uint32_t t = first; t < ls.closed && count < 255; t++) {
     const TurnInput& in = me.inputs[t % me.inputs.size()];

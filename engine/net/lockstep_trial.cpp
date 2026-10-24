@@ -64,7 +64,7 @@ void step_strategy(World& w, uint32_t step, const uint8_t* const* inputs, const 
       std::memcpy(&x, o + 1, 2);
       std::memcpy(&z, o + 3, 2);
       std::memcpy(&given, o + 5, 4);
-      Unit& u = w.units[static_cast<size_t>(k * kUnits + o[0] % kUnits)];
+      Unit& u = w.units[static_cast<size_t>(k) * kUnits + o[0] % kUnits];
       u.tx = x;
       u.tz = z;
       if (k == w.seat && w.latency && w.tick >= given && step >= w.logged)
@@ -205,7 +205,7 @@ LockstepTrial run_lockstep_trial(const LockstepTrialConfig& k) {
     p.w.kind = k.game;
     p.w.seats = seats;
     p.w.seat = i;
-    p.w.units.resize(static_cast<size_t>(seats * kUnits));
+    p.w.units.resize(static_cast<size_t>(seats) * kUnits);
     for (size_t u = 0; u < p.w.units.size(); u++) {  // each seat's units in a row of their own
       p.w.units[u].x = p.w.units[u].tx = static_cast<int32_t>(u % kUnits) * 100 - 800;
       p.w.units[u].z = p.w.units[u].tz = static_cast<int32_t>(u / kUnits) * 400 - 600;
@@ -213,7 +213,7 @@ LockstepTrial run_lockstep_trial(const LockstepTrialConfig& k) {
     p.w.fighters.resize(k.game == LockstepGameKind::fighting ? static_cast<size_t>(seats) : 0);
     for (size_t f = 0; f < p.w.fighters.size(); f++)
       p.w.fighters[f].x = static_cast<int32_t>(f) * 600 - 300;
-    p.w.saved.resize(static_cast<size_t>(lc.max_rollback + 1));
+    p.w.saved.resize(static_cast<size_t>(lc.max_rollback) + 1);
     p.w.plant_step = k.plant_step;
     p.w.plant_seat = k.plant_seat;
     p.w.latency = &o.latency_ms;

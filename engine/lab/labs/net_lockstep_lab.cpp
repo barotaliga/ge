@@ -83,7 +83,7 @@ void run(gl::Lab& lab) {
         "net.");
     return;
   }
-  const int ms_turn = static_cast<int>(1000.0 * s.lockstep.turn_steps / s.tick_hz + 0.5);
+  const int ms_turn = (1000 * s.lockstep.turn_steps + s.tick_hz / 2) / s.tick_hz;
   gl::LabTable strat{std::to_string(s.seats) + " strategy seats in lockstep, turns of " +
                          std::to_string(s.lockstep.turn_steps) + " steps (" +
                          std::to_string(ms_turn) + " ms), " + std::to_string(s.lockstep.delay) +
