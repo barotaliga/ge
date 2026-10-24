@@ -27,6 +27,7 @@ struct Frame {
   moon_prime: vec4f,       // toward its 0 N 0 E; w: the penumbra's angular radius
   moon_east: vec4f,        // toward its 0 N 90 E; w: the disc's brightest light under the shadow
   moon_shadow: vec4f,      // toward the Earth's shadow's axis; w: the albedo map's scale
+  mist: vec4f,             // the reach's mist: where it begins and where it closes, m (0: none)
 }
 
 // THE MOTION a surface at camera-relative `rel` (w = 1; w = 0 for a direction at infinity) made

@@ -3,7 +3,8 @@
 // as a subject (his frame rolled by his lean, a landing and a reset read between frames, the
 // helmet's eye folded down by the tuck); the mountain's answers (the trunks round a point, a
 // post across the arm); and over the first half minute of the bot's run on seed 38, every rung
-// kept out of every trunk and over the snow.
+// kept out of every trunk and over the snow; a worn lens on a skier thrown into a trunk kept out of
+// its bark; the point a rung frames on him.
 //
 // ge:summary Tests for Fall Line's camera ladder, subject, world and the lenses over a run
 // ge:keywords test fall-line camera ladder rung camera-key hand-over subject landing teleport
@@ -174,4 +175,30 @@ TEST(every_rung_stays_out_of_the_trunks_and_over_the_snow) {
   }
   CHECK(worst_trunk < 0);
   CHECK(least_over > 0.1);
+}
+
+TEST(a_worn_lens_on_a_skier_in_a_trunk_stays_out_of_its_bark) {
+  const auto level = map38();
+  fall_line::sim::Driver run(level, 0);
+  const ge::skier::World sw = run.state().world();
+  const cam::World w = fc::camera_world(sw);
+  const auto& t = level->trees[level->trees.size() / 2];
+  // Stood with his boots half way into the trunk, facing its axis: his head is in the bark.
+  const ge::skier::SkierState s = ge::skier::stand_skier(sw, t.x - t.radius * 0.5, t.z, 1.5708, 0);
+  for (const fc::Rung r : {fc::Rung::helmet, fc::Rung::tips}) {
+    fc::RunCamera rc = fc::make_skier_camera(r, 7);
+    const cam::Pose p = fc::frame_camera(rc, s, sw, w, 1.0 / 60);
+    CHECK(inside_trunk(sw, p.eye) < -0.1);
+  }
+}
+
+TEST(a_rung_frames_his_middle_and_lower_when_he_is_down) {
+  ge::skier::SkierState s;
+  s.x = 3;
+  s.y = 100;
+  s.z = -2;
+  const cam::Vec3 up = fc::framed_point(s);
+  CHECK(up.x == 3 && up.z == -2 && up.y > 100.8 && up.y < 101.2);
+  s.down = true;
+  CHECK(fc::framed_point(s).y < up.y - 0.5);
 }

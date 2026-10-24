@@ -1,7 +1,8 @@
 // THE BODY, HELD: the blow and the risk curve against their numbers, the severity score, the
 // frailty draw, mending, and every ride scenario's body (plugins/skier/scenarios.cpp) held bit
 // for bit by tests/golden/skier_body.txt, with the crash scenarios held to what they must do:
-// a clean ride hurts nothing, a trunk at speed breaks him, a high drop breaks his legs and back.
+// a clean ride hurts nothing, a trunk at speed breaks him, a high drop breaks his legs and back
+// (the trunk when it meets the snow), and the head first into the snow hurts the neck.
 //
 // A deliberate change to the body or its catalog moves the golden: rewrite it with
 // `GE_GOLDEN_WRITE=1 build/<preset>/tests/skier_body_test`, run the `injuries` lab before and
@@ -201,4 +202,77 @@ TEST(a_high_drop_breaks_the_legs_and_the_back_and_a_crooked_one_the_knee) {
   CHECK(has(across.body, sk::Part::knee_l, "torn_mcl") ||
         has(across.body, sk::Part::knee_l, "torn_acl_twist") ||
         has(across.body, sk::Part::knee_l, "torn_meniscus"));
+}
+
+namespace {
+
+bool trunk_part(sk::Part p) {
+  return p == sk::Part::back || p == sk::Part::chest || p == sk::Part::abdomen ||
+         p == sk::Part::neck;
+}
+
+}  // namespace
+
+TEST(a_landing_the_legs_fold_under_hurts_the_trunk_when_it_meets_the_snow) {
+  const sk::Scenario& sc = *sk::find_scenario("drop-high");
+  const auto level = sk::scenario_level(sc);
+  const sk::TreeIndex trees = sk::build_tree_index(level);
+  const sk::World world{&level, &trees};
+  const double dt = 1.0 / 120;
+  sk::SkierState s = sk::stand_skier(world, sc.x, sc.z, sc.heading, sc.speed, sc.lift);
+  sk::BodyState b;
+  sk::SkierEvents ev;
+  sk::BodyEvents bev;
+  double landed = -1;
+  double trunk_at = -1;
+  for (int64_t i = 0; i < int64_t{4} * 120 && trunk_at < 0; i++) {
+    sk::step_skier(s, sc.input(static_cast<double>(i) * dt, s), world, sk::kReferenceSkis, dt, ev);
+    const double now = static_cast<double>(i + 1) * dt;
+    sk::step_body(b, s, ev, world, sk::kReferenceSkis, sk::BodyClock{now, dt, i, 7}, bev);
+    for (int32_t k = bev.first; k < bev.first + bev.taken; k++) {
+      const sk::Part p = b.injuries[static_cast<size_t>(k)].part;
+      // The legs break where the skis meet the snow; the spine and the organs wait for the trunk.
+      if (landed < 0 || now == landed) {
+        CHECK_MSG(!trunk_part(p),
+                  std::string("the trunk was hurt at the skis' touch: ") + sk::part_name(p));
+      } else if (trunk_part(p) && trunk_at < 0) {
+        trunk_at = now;
+      }
+    }
+    if (ev.landed && landed < 0) {
+      landed = now;
+      CHECK_MSG(ev.wiped_out && b.owed.owed, "the legs folded and the trunk's load was owed");
+    }
+  }
+  CHECK_MSG(landed > 0 && trunk_at > landed, "the trunk was never hurt after the landing");
+  CHECK_MSG(trunk_at - landed <= sk::injury::kOwedMost + 1.5 * dt,
+            "the trunk was hurt " + std::to_string(trunk_at - landed) + " s after the skis");
+  CHECK(!b.owed.owed);
+}
+
+TEST(the_head_first_into_the_snow_hurts_the_neck) {
+  const sk::Scenario& sc = *sk::find_scenario("drop-high");
+  const auto level = sk::scenario_level(sc);
+  const sk::TreeIndex trees = sk::build_tree_index(level);
+  const sk::World world{&level, &trees};
+  const double dt = 1.0 / 120;
+  // Dropped head down (rolled over) from a metre and a bit: the neck takes the head's blow, and
+  // more of it as it runs down the spine.
+  auto neck_after = [&](double roll, double pitch_rate) {
+    sk::SkierState s = sk::stand_skier(world, sc.x, sc.z, 0, 0);
+    const double y = level.ground_at(s.x, s.z) + 1.2;
+    s.thrown = sk::throw_body(s.x, y, s.z, 0, roll, 0, -2, 0, pitch_rate, 0, 0, dt);
+    s.down = true;
+    s.cause = sk::Wipeout::hurt;
+    sk::BodyState b;
+    sk::SkierEvents ev;
+    sk::BodyEvents bev;
+    for (int64_t i = 0; i < int64_t{2} * 120; i++) {
+      sk::step_skier(s, sk::SkierInput{}, world, sk::kReferenceSkis, dt, ev);
+      sk::step_body(b, s, ev, world, sk::kReferenceSkis,
+                    sk::BodyClock{static_cast<double>(i + 1) * dt, dt, i, 7}, bev);
+    }
+    return b.worst[static_cast<size_t>(sk::Part::neck)];
+  };
+  CHECK_MSG(neck_after(ge::core::kPi, 0) >= 1, "head first into the snow left the neck whole");
 }

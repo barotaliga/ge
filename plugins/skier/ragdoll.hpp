@@ -22,7 +22,8 @@
 // its arrival, and the plough through powder, a share of every point's loss taken off the body as
 // a whole; and while a trunk's weight of him lies on it the snow scrubs off his turning. A TRUNK
 // meets every point too, pushed out along the line of centres. Every point's arrival on the snow
-// (`impact`) and closing speed on a trunk (`struck`) this step are kept for the body
+// (`impact`) and fresh closing speed on a trunk (`struck`, the way it came into the step with) this
+// step are kept for the body
 // (`body.hpp`).
 //
 // Nothing draws a random number: the body is a pure function of the moment it left the skis.
@@ -76,6 +77,7 @@ struct Ragdoll {
   double tumble = 0;              // rad the spine has turned through
   bool touching = false;          // a point on the snow this step
   uint16_t planted = 0;           // the points on the snow this step, a bit each
+  uint16_t leaning = 0;           // the points against a trunk this step, a bit each
   double down = -1;               // s since his trunk met the snow, -1 not yet
   double still = 0;               // s lain still on the snow
   double aloft = 0;               // s since any point touched the snow
@@ -84,6 +86,7 @@ struct Ragdoll {
   // lying there), and its closing speed on a trunk, m/s.
   std::array<double, kPoints> impact{};
   std::array<double, kPoints> struck{};
+  std::array<int32_t, kPoints> struck_by{};  // the trunk each point met hardest, -1 none
 };
 
 // HOW A BODY GOES OVER: the share of his tumble head over heels along his way (negative back),
