@@ -134,12 +134,91 @@ inline constexpr double kBodyRadius = 0.35;
 // Meeting a trunk faster than this along the line between them, m/s, is a wipeout; slower, he
 // glances off it.
 inline constexpr double kTreeSpeed = 3;
-// A body down on the snow slides on this share of its load, and counts as still under this
-// speed, m/s.
+// A skier put down from outside (`put_down`) slides on this share of his load for the one step
+// before his body is thrown.
 inline constexpr double kBodyFriction = 0.6;
-inline constexpr double kStill = 0.4;
 // How far inside the world's edge a skier is held, m.
 inline constexpr double kEdgeMargin = 2;
 }  // namespace wipeout
+
+// THE THROWN BODY (`ragdoll.hpp`): thirteen points at a skier's measures, the throw a wipeout
+// gives them, the joints, the muscles, the air and the snow.
+namespace ragdoll {
+// The bones, m: the thigh, the shin, the upper arm, the forearm; the spine from between the hips
+// to between the shoulders, the half widths of the shoulders and the hips, the neck.
+inline constexpr double kThigh = 0.44;
+inline constexpr double kShin = 0.46;
+inline constexpr double kUpperArm = 0.31;
+inline constexpr double kForearm = 0.34;
+inline constexpr double kSpine = 0.5;
+inline constexpr double kShoulder = 0.2;
+inline constexpr double kHip = 0.12;
+inline constexpr double kNeck = 0.18;
+// Each point's mass, kg (80 in all).
+inline constexpr double kMassHip = 14;
+inline constexpr double kMassShoulder = 11;
+inline constexpr double kMassHead = 5;
+inline constexpr double kMassKnee = 5;
+inline constexpr double kMassFoot = 4;
+inline constexpr double kMassElbow = 2;
+inline constexpr double kMassHand = 1.5;
+// The radius the snow and the trunks keep each point out by, m: the torso's, the head's, a
+// limb's.
+inline constexpr double kRadiusTorso = 0.11;
+inline constexpr double kRadiusHead = 0.13;
+inline constexpr double kRadiusLimb = 0.06;
+// The drag area of a body tumbling through the air, Cd A, m^2 (belly to the air: some 55 m/s
+// falling).
+inline constexpr double kDragArea = 0.5;
+// The height of his centre of mass over the skis' base as he stands, m.
+inline constexpr double kStand = 0.95;
+// Passes over the joints a step: enough that no limb is seen to stretch.
+inline constexpr int kIterations = 8;
+// THE JOINTS a body cannot pass: the thigh no further than `kHipBack` of its length behind the
+// hip nor `kHipUp` above it; a hand no nearer its shoulder than `kFoldArm` m; the knee and the
+// elbow folded no tighter than `kKneeFold` and `kElbowFold` rad between their bones (35 and 30
+// degrees); no limb nearer the line of the spine than `kTorso` m.
+inline constexpr double kHipBack = 0.35;
+inline constexpr double kHipUp = 0.3;
+inline constexpr double kFoldArm = 0.2;
+inline constexpr double kKneeFold = 0.6;
+inline constexpr double kElbowFold = 0.52;
+inline constexpr double kTorso = 0.16;
+// THE MUSCLES: every limb driven toward a pose in the trunk's frame by a damped spring, `kBrace`
+// rad/s at `kBraceDamp` of critical damping in the air (the hands thrown out `kReach` of the
+// arm's length toward the snow, the knees drawn up), giving way at `kRelax` 1/s once his trunk is
+// down to the slack pose a body lies in, `kLie` rad/s at `kLieDamp`.
+inline constexpr double kBrace = 10;
+inline constexpr double kBraceDamp = 0.8;
+inline constexpr double kLie = 2;
+inline constexpr double kLieDamp = 1.2;
+inline constexpr double kRelax = 12;
+inline constexpr double kReach = 0.85;
+// THE SNOW under every point: settled `kSink` m into powder (the packed share's complement),
+// Coulomb friction along it on the weight and the arrival (`kFrictionPacked` on the groomer,
+// `kFrictionPowder` in powder), the plough (1/s per unit of powder) a buried point loses its way
+// at, the share of every point's loss taken off the body as a whole (`kPatch`: a back, not a
+// point to cartwheel over), the turn the snow scrubs a second once a trunk's weight of him lies on
+// it (`kSpinDrag`), and the most of the push out of the snow a point keeps, m/s.
+inline constexpr double kSink = 0.15;
+inline constexpr double kFrictionPacked = 0.45;
+inline constexpr double kFrictionPowder = 0.8;
+inline constexpr double kPlough = 1.2;
+inline constexpr double kPatch = 0.7;
+inline constexpr double kSpinDrag = 3;
+inline constexpr double kPushOut = 0.3;
+// THE THROW: he leaves with `kKeep` of his velocity and a turn at his speed over `kTumbleRadius`
+// m, no faster than `kMaxSpin` rad/s, a sideways fall at least `kTopple` rad/s, with `kCarry` of
+// his own turning on top.
+inline constexpr double kKeep = 0.85;
+inline constexpr double kTumbleRadius = 2;
+inline constexpr double kMaxSpin = 6;
+inline constexpr double kTopple = 3;
+inline constexpr double kCarry = 0.5;
+// Lying: still under `kRestSpeed` m/s on the snow; a flight is one off the snow longer than
+// `kFlightGap` s (a bounce in a tumble is not).
+inline constexpr double kRestSpeed = 0.6;
+inline constexpr double kFlightGap = 0.4;
+}  // namespace ragdoll
 
 }  // namespace ge::skier::tuning

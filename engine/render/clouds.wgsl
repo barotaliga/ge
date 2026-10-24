@@ -233,7 +233,7 @@ fn cloud_at(uv: vec2f, px: vec2f, z: f32) -> vec4f {
     }
     // Seen through the air to where its light comes from, and lost into the sky far off.
     let fade = 1.0 - smoothstep(kFadeNear, kFadeFar, look.dist);
-    let hazed = haze(look.light / alpha, uv, look.dist) * alpha;
+    let hazed = haze_air(look.light / alpha, uv, look.dist) * alpha;
     light += through * fade * hazed;
     through *= 1.0 - fade * alpha;
     if (through < 0.01) {

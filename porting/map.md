@@ -31,7 +31,7 @@ the row when the file moves.
 | `engine/core/prng.hpp` | `oss-game-framework/src/core/prng.ts` | pickIndex createRng |
 | `engine/core/quat.hpp` | `oss-game-framework/src/core/quat.ts` | fromEuler toEuler fromAxisAngle |
 | `engine/core/solar.cpp` | `oss-game-framework/src/core/solar.ts` |  |
-| `engine/core/solar.hpp` | `oss-game-framework/src/core/solar.ts` | sunAt moonAt daylightWindow sunOnDate moonOnDate hourOfElevation |
+| `engine/core/solar.hpp` | `oss-game-framework/src/core/solar.ts` | sunAt moonAt daylightWindow sunOnDate hourOfElevation |
 | `engine/loop/run_clock.hpp` | `oss-game-framework/src/loop/run-clock.ts` | createRunClock MAX_FRAME_SECONDS |
 | `games/fall_line/labs/army_flight_lab.cpp` | `game5/scripts/army-flight.mjs` | the army's helicopters shown (here measured: the helicopters table and every machine's path, per scenario) |
 | `games/fall_line/labs/army_lab.cpp` | `game5/scripts/army-ground.mjs` | the ground army shown (here measured: the army table and every soldier's path, per scenario) |

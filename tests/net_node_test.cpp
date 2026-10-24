@@ -161,3 +161,27 @@ TEST(node_times_out_disconnects_and_fails_to_reach_nobody) {
   step(net, {lonely.get()}, now, 5100, &s1);
   CHECK(s1[0].size() == 1 && s1[0][0].reason == Reason::connect_timed_out);
 }
+
+TEST(node_fake_conditions_on_a_transport_delay_and_drop_its_sends) {
+  SimNetwork net = make_sim_network(3, LinkConditions{});
+  auto host = make_end(net, 0, true, 4);
+  auto client = make_end(net, 1, false, 1);
+  FakeLink fake;
+  LinkConditions c;
+  c.latency_ms = 80;  // one way, on the client's sends alone
+  c.drop_every = 4;   // and one of every four lost
+  transport_fake(client->t, &fake, c, 9);
+  int64_t now = 0;
+  const int peer = node_connect(client->n, sim_address(0, 1), now);
+  step(net, {host.get(), client.get()}, now, 3000);
+  CHECK(peer_connected(client->n, peer));
+  // The round trip the client measures carries the fake 80 ms its sends wait (and the ticks).
+  const double rtt = client->n.peers[static_cast<size_t>(peer)].conn.stats.rtt_ms;
+  CHECK(rtt > 80 && rtt < 130);
+  CHECK(fake.lost > 0 && fake.delayed > 0 && fake.overflow == 0);
+  // The client's own loss meter (smoothed) sees its sends go missing.
+  const double loss = client->n.peers[static_cast<size_t>(peer)].conn.stats.loss;
+  CHECK_MSG(loss > 0.05, "loss " + std::to_string(loss));
+  transport_fake(client->t, nullptr, c, 0);
+  CHECK(client->t.fake == nullptr);
+}
