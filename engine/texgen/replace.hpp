@@ -124,12 +124,18 @@ struct Evidence {
   double repeat_x = 0, repeat_y = 0;      // the pattern's repeat in texels (0: none)
   double per_tile_x = 0, per_tile_y = 0;  // how many times it repeats across and down a tile
   std::string lines;                      // "horizontal", "vertical", "mixed", "flat"
+  // Masonry read off the joints: the dark lines running right across the tile split it into
+  // courses, and the dark lines down each course into its pieces. A texture with no joints has
+  // one course of one piece.
+  int courses = 0;
+  std::vector<int> pieces;  // per course, top first
   double brightness = 0, contrast = 0;
   std::array<uint8_t, 3> mean{};
 };
 
 Evidence evidence_of(const lab::Picture& p);
-// One line: "repeat 16x8 px (4x8 a tile), horizontal lines, contrast 0.12, #825540".
+// One line: "4 courses, pieces a course 2 3 2 3; repeat 16x8 px (4x8 a tile), horizontal
+// lines, contrast 0.12, #825540".
 std::string evidence_text(const Evidence& e);
 // Each difference worth an argument, as a sentence an agent can act on; empty when none.
 std::vector<std::string> evidence_mismatches(const Evidence& original, const Evidence& ours);

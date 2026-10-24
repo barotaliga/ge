@@ -300,38 +300,128 @@ std::string count_text(double v) {
 
 }  // namespace
 
+namespace {
+
+// Runs of `profile` (wrapped) `depth` standard deviations below its mean: the joints. Each run is
+// returned as its middle index; a profile with no clear dip returns none.
+std::vector<int> dips(const std::vector<double>& profile, double depth) {
+  const int n = static_cast<int>(profile.size());
+  std::vector<int> out;
+  if (n < 4) return out;
+  double mean = 0, var = 0;
+  for (const double v : profile) mean += v;
+  mean /= n;
+  for (const double v : profile) var += (v - mean) * (v - mean);
+  const double sd = std::sqrt(var / n);
+  if (sd < 1e-4) return out;
+  const double cut = mean - depth * sd;
+  std::vector<char> low(static_cast<size_t>(n));
+  for (int i = 0; i < n; ++i) low[static_cast<size_t>(i)] = profile[static_cast<size_t>(i)] < cut;
+  int start = 0;  // a run's start, found from a texel that is not low
+  while (start < n && low[static_cast<size_t>(start)]) ++start;
+  if (start == n) return out;
+  for (int k = 1; k <= n; ++k) {
+    const int i = (start + k) % n;
+    if (!low[static_cast<size_t>(i)]) continue;
+    int len = 0;
+    while (low[static_cast<size_t>((i + len) % n)] && len < n) ++len;
+    out.push_back((i + len / 2) % n);
+    k += len;
+  }
+  std::sort(out.begin(), out.end());
+  return out;
+}
+
+}  // namespace
+
 Evidence evidence_of(const lab::Picture& p) {
   Evidence e;
   e.width = p.width;
   e.height = p.height;
   if (p.width <= 0 || p.height <= 0) return e;
-  const Likeness l = likeness_of(p);
-  if (l.repeat_x >= kRepeats) {
-    e.repeat_x = l.period_x * p.width;
-    e.per_tile_x = 1 / l.period_x;
+  const int w = p.width, h = p.height;
+  // The luma softened by its 3x3 neighbourhood (wrapped), so a texel's grain does not read as
+  // structure: what is left is the joints, the pieces and the light on them.
+  std::vector<double> soft(static_cast<size_t>(w) * h);
+  for (int y = 0; y < h; ++y) {
+    for (int x = 0; x < w; ++x) {
+      double sum = 0;
+      for (int dy = -1; dy <= 1; ++dy)
+        for (int dx = -1; dx <= 1; ++dx) sum += luma_at(p, (x + dx + w) % w, (y + dy + h) % h);
+      soft[static_cast<size_t>(y) * w + x] = sum / 9;
+    }
   }
-  if (l.repeat_y >= kRepeats) {
-    e.repeat_y = l.period_y * p.height;
-    e.per_tile_y = 1 / l.period_y;
+  double px = 0.5, py = 0.5, sx = 0, sy = 0;
+  repeat_of(soft, w, h, true, &px, &sx);
+  repeat_of(soft, w, h, false, &py, &sy);
+  if (sx >= kRepeats) {
+    e.repeat_x = px * w;
+    e.per_tile_x = 1 / px;
   }
-  // A course of bricks steps going DOWN across its joints: horizontal lines.
-  if (l.down + l.across < 0.04) e.lines = "flat";
-  else if (l.down > 1.5 * l.across) e.lines = "horizontal";
-  else if (l.across > 1.5 * l.down) e.lines = "vertical";
-  else e.lines = "mixed";
-  e.brightness = l.look.brightness;
-  e.contrast = l.look.contrast;
+  if (sy >= kRepeats) {
+    e.repeat_y = py * h;
+    e.per_tile_y = 1 / py;
+  }
+  // Which way the lines run: steps of the softened luma, against its own spread.
+  double mean = 0, var = 0;
+  for (const double v : soft) mean += v;
+  mean /= static_cast<double>(soft.size());
+  for (const double v : soft) var += (v - mean) * (v - mean);
+  const double step = std::max(0.004, 0.6 * std::sqrt(var / static_cast<double>(soft.size())));
+  size_t across = 0, down = 0;
+  for (int y = 0; y < h; ++y) {
+    for (int x = 0; x < w; ++x) {
+      const double c = soft[static_cast<size_t>(y) * w + x];
+      if (std::fabs(c - soft[static_cast<size_t>(y) * w + (x + 1) % w]) > step) ++across;
+      if (std::fabs(c - soft[static_cast<size_t>((y + 1) % h) * w + x]) > step) ++down;
+    }
+  }
+  const double n = static_cast<double>(w) * h;
+  const double a = static_cast<double>(across) / n, d = static_cast<double>(down) / n;
+  if (a + d < 0.02)
+    e.lines = "flat";
+  else if (d > 1.4 * a)
+    e.lines = "horizontal";
+  else if (a > 1.4 * d)
+    e.lines = "vertical";
+  else
+    e.lines = "mixed";
+  // Courses: the rows where the mean luma dips. Pieces: in each course, the columns that dip.
+  std::vector<double> rows(static_cast<size_t>(h), 0.0);
+  for (int y = 0; y < h; ++y)
+    for (int x = 0; x < w; ++x)
+      rows[static_cast<size_t>(y)] += soft[static_cast<size_t>(y) * w + x] / w;
+  std::vector<int> joints = dips(rows, 0.8);
+  if (joints.empty()) joints.push_back(0);
+  e.courses = static_cast<int>(joints.size());
+  for (size_t c = 0; c < joints.size(); ++c) {
+    const int from = joints[c], to = c + 1 < joints.size() ? joints[c + 1] : joints[0] + h;
+    std::vector<double> cols(static_cast<size_t>(w), 0.0);
+    int band = 0;
+    for (int yy = from + 2; yy < to - 1; ++yy, ++band)
+      for (int x = 0; x < w; ++x)
+        cols[static_cast<size_t>(x)] += soft[static_cast<size_t>(yy % h) * w + x];
+    e.pieces.push_back(band > 0 ? std::max(1, static_cast<int>(dips(cols, 1.5).size())) : 1);
+  }
+  e.brightness = mean;
+  e.contrast = std::sqrt(var / static_cast<double>(soft.size()));
   const TextureRef c = colour_ref("", p);
   if (c.tint) e.mean = *c.tint;
   return e;
 }
 
 std::string evidence_text(const Evidence& e) {
-  std::string out = "repeat ";
-  out += (e.repeat_x > 0 ? count_text(e.repeat_x) : "-") + "x" +
-         (e.repeat_y > 0 ? count_text(e.repeat_y) : "-") + " px (" + count_text(e.per_tile_x) +
-         "x" + count_text(e.per_tile_y) + " a tile), " + e.lines + " lines, contrast " +
-         core::num::to_fixed(e.contrast, 2) + ", " + hex_colour(e.mean);
+  std::string out =
+      std::to_string(e.courses) + (e.courses == 1 ? " course" : " courses") + ", pieces a course";
+  for (const int k : e.pieces) out += " " + std::to_string(k);
+  if (e.repeat_x <= 0 && e.repeat_y <= 0)
+    out += "; no repeat inside the tile";
+  else
+    out += "; repeat " + (e.repeat_x > 0 ? count_text(e.repeat_x) : "-") + "x" +
+           (e.repeat_y > 0 ? count_text(e.repeat_y) : "-") + " px (" + count_text(e.per_tile_x) +
+           "x" + count_text(e.per_tile_y) + " a tile)";
+  out += ", " + e.lines + " lines, contrast " + core::num::to_fixed(e.contrast, 3) + ", " +
+         hex_colour(e.mean);
   return out;
 }
 
@@ -355,13 +445,27 @@ std::vector<std::string> evidence_mismatches(const Evidence& a, const Evidence& 
   };
   axis("across", a.per_tile_x, b.per_tile_x);
   axis("down", a.per_tile_y, b.per_tile_y);
+  if (a.courses != b.courses)
+    out.push_back("the original has " + std::to_string(a.courses) + " courses a tile, ours " +
+                  std::to_string(b.courses) + " (turn rows)");
+  auto mean_of = [](const std::vector<int>& v) {
+    double m = 0;
+    for (const int k : v) m += k;
+    return v.empty() ? 0.0 : m / static_cast<double>(v.size());
+  };
+  const double ma = mean_of(a.pieces), mb = mean_of(b.pieces);
+  if (ma > 0 && mb > 0 && (ma / mb > 1.3 || mb / ma > 1.3))
+    out.push_back("the original has " + core::num::to_fixed(ma, 1) +
+                  " pieces a course on average, ours " + core::num::to_fixed(mb, 1) +
+                  " (turn cols)");
   if (a.lines != b.lines && a.lines != "mixed" && b.lines != "mixed")
     out.push_back("the original's lines are " + a.lines + ", ours " + b.lines);
-  if (a.contrast > 0.01 && b.contrast > 0.01) {
+  if (a.contrast > 0.002 && b.contrast > 0.002) {
     const double r = a.contrast / b.contrast;
     if (r > 1.6 || r < 1 / 1.6)
-      out.push_back("contrast " + core::num::to_fixed(a.contrast, 2) + " in the original, " +
-                    core::num::to_fixed(b.contrast, 2) + " in ours");
+      out.push_back("the structure's contrast is " + core::num::to_fixed(a.contrast, 3) +
+                    " in the original, " + core::num::to_fixed(b.contrast, 3) +
+                    " in ours (joint depth, shade, the pieces' own shades)");
   }
   return out;
 }

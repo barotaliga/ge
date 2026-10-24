@@ -192,14 +192,49 @@ void paint_blocks(Surface& s, const Args& a) {
     block[static_cast<size_t>(r)] = cuts(n, vary_size, rr + 1, a.seed + 3);
     shift[static_cast<size_t>(r)] = hash01(rr, 2, a.seed + 4);
   }
+  // Irregular ashlar: a share of the blocks in every other course run down through the next
+  // one as a single tall block (never two in a row, so no course is claimed twice).
+  const double span = a.n("span");
+  auto spans = [&](int r, int k) {
+    if (span <= 0 || r % 2 != 0 || (rows % 2 != 0 && r == rows - 1)) return false;
+    return hash01(static_cast<uint32_t>(k), static_cast<uint32_t>(r), a.seed + 6) < span;
+  };
+  // A course's top and bottom on the wrapped tile, for the course after or before it.
+  auto top = [&](int r) { return course[static_cast<size_t>(r)]; };
+  auto bottom = [&](int r) { return course[static_cast<size_t>(r) + 1]; };
   NoiseSpec ragged{NoiseKind::perlin, rows * 4, 3, 0.5, 1, 0, a.seed + 5};
   const double aa = 1.0 / s.size;
   for_texels(s.size, [&](int x, int y, double u, double v) {
     double ey = 0, ex = 0;
-    const int r = piece(course, v, ey);
+    int r = piece(course, v, ey);
     double t = u + shift[static_cast<size_t>(r)];
     t -= std::floor(t);
-    const int k = piece(block[static_cast<size_t>(r)], t, ex);
+    int k = piece(block[static_cast<size_t>(r)], t, ex);
+    if (span > 0) {
+      // Under a tall block from the course above: that block's, the joint between gone.
+      const int above = (r + rows - 1) % rows;
+      double ta = u + shift[static_cast<size_t>(above)];
+      ta -= std::floor(ta);
+      double exa = 0;
+      const int ka = piece(block[static_cast<size_t>(above)], ta, exa);
+      if (r % 2 != 0 && spans(above, ka)) {
+        const double from = above < r ? top(above) : top(above) - 1;
+        ey = std::min(v - from, bottom(r) - v);
+        ex = exa;
+        k = ka;
+        r = above;
+      } else if (r % 2 != 0) {
+        // Beside a tall block: its side is a joint for this course's block too.
+        const std::vector<double>& b = block[static_cast<size_t>(above)];
+        const int n = static_cast<int>(b.size()) - 1;
+        if (spans(above, (ka + n - 1) % n)) ex = std::min(ex, ta - b[static_cast<size_t>(ka)]);
+        if (spans(above, (ka + 1) % n)) ex = std::min(ex, b[static_cast<size_t>(ka) + 1] - ta);
+      } else if (spans(r, k)) {
+        const int below = (r + 1) % rows;
+        const double to = below > r ? bottom(below) : bottom(below) + 1;
+        ey = std::min(v - top(r), to - v);
+      }
+    }
     const double d = std::min(ex, ey);
     const double w = joint * (1 + chip * (sample(ragged, u, v) - 0.5) * 2);
     const auto bx = static_cast<uint32_t>(k), by = static_cast<uint32_t>(r);

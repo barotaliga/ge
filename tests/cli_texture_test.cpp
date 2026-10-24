@@ -56,8 +56,8 @@ TEST(match_writes_a_map_keeps_pins_and_argues) {
   fs::create_directories(repo / "tex");
   // Two "level" textures: the library's own bricks and planks under another seed.
   for (const char* name : {"brick_wall", "wood_planks"}) {
-    ge::texgen::ParseResult r = ge::texgen::load_recipe(
-        ge::test::root_path(ge::texgen::kLibraryDir) + "/" + name + ".tex");
+    ge::texgen::ParseResult r =
+        ge::texgen::load_recipe(ge::test::root_path(ge::texgen::kLibraryDir) + "/" + name + ".tex");
     r.recipe.size = 32;
     const ge::texgen::Maps maps = ge::texgen::bake(r.recipe, {name, 9u, {}}).maps;
     CHECK(ge::lab::write_png((repo / "tex" / (std::string(name) + ".png")).string(),
@@ -71,7 +71,8 @@ TEST(match_writes_a_map_keeps_pins_and_argues) {
   CHECK(exit_of(first) == 0);
   CHECK(fs::exists(repo / "tex" / "textures.texmap"));
   CHECK(fs::exists(repo / "tex" / "sheets" / "brick_wall.png"));
-  CHECK(first.text.find("original: repeat") != std::string::npos);
+  CHECK(first.text.find("original: ") != std::string::npos);
+  CHECK(first.text.find(" courses, pieces a course") != std::string::npos);
   // The agent pins the planks as bricks without arguing: kept, and warned about.
   {
     std::ofstream out(repo / "tex" / "textures.texmap", std::ios::app);
@@ -90,9 +91,14 @@ TEST(match_writes_a_map_keeps_pins_and_argues) {
                           std::istreambuf_iterator<char>());
   CHECK(after.find("texture wood_planks brick_wall seed=3  # pin") != std::string::npos);
   CHECK(after.find("class brick_wall bricks") != std::string::npos);
-  bool warned = false;
-  for (const Finding& f : second.findings)
-    warned |= f.message.find("wood_planks is pinned without its argument") != std::string::npos;
+  bool warned = false, uncoloured = false;
+  for (const Finding& f : second.findings) {
+    warned |= f.what.find("wood_planks is pinned without its argument") != std::string::npos;
+    uncoloured |=
+        f.what.find("wood_planks is pinned without the original's colour") != std::string::npos &&
+        f.next.find("texture wood_planks brick_wall seed=3 tint=#") != std::string::npos;
+  }
   CHECK(warned);
+  CHECK(uncoloured);
   fs::remove_all(repo);
 }

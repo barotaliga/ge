@@ -17,8 +17,9 @@
 //
 // A reference is a texture reference (`recipe.hpp`): `red_bricks seed=7 wear=0.4 tint=#825540
 // spread=#281913`. A comment starts at a '#' that begins the line or follows a space, so a tint's
-// '#' is not one. A line the agent has approved or tuned ends in `# pin`, and has all three notes: `ge texture match`
-// never rewrites it, and re-picks every other texture line, appending its distance (`# 0.31`,
+// '#' is not one. A line the agent has approved or tuned ends in `# pin`, and has all three notes:
+// `ge texture match` never rewrites it, and re-picks every other texture line, appending its
+// distance (`# 0.31`,
 // `# pin 0.31`). Lines of a kind this reader does not know are kept as they are. Nothing in the
 // file is anyone's pixels, so it may be committed with the level.
 //
@@ -37,7 +38,8 @@
 namespace ge::texgen {
 
 struct TextureMapLine {
-  std::string keyword;  // texture, liquid, sky, surface, class, traits, judge; "" for a comment or another
+  std::string
+      keyword;  // texture, liquid, sky, surface, class, traits, judge; "" for a comment or another
   std::string texture;  // the level's own name for it ("city2_1", "*lava1", "+0slip")
   std::string value;    // the rest: the reference, or "<kind> [<reference>]" on a liquid
   bool pinned = false;  // the agent's: never rewritten

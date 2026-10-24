@@ -82,7 +82,8 @@ void run(lab::Lab& lab) {
       std::optional<lab::Picture> p = lab::read_png(path);
       if (p)
         originals.push_back(
-            {texgen::texture_name_of_file(std::filesystem::path(path).stem().string()), std::move(*p)});
+            {texgen::texture_name_of_file(std::filesystem::path(path).stem().string()),
+             std::move(*p)});
     }
     if (originals.empty()) {
       lab.fail("no PNGs in " + refs,

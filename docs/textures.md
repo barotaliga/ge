@@ -71,6 +71,7 @@ the tree and none is named in it. What each round found and built:
 | Coloured specks | A second colour in a share of the grains, gathering in the pits: patina on copper, blue flecks in dark iron | `speckle` `amount`, `color`, `cavity` |
 | A small palette | Every colour snapped onto a few ramps of shades, near black up to the colour and on toward white; an ordered dither between shades | `palette` |
 | Uneven masonry | Courses of different heights, blocks of different widths, each course's joints shifted | `blocks` |
+| Irregular ashlar | Even courses of long and short blocks, some running down through two courses (`span`), the joint drawn beside each tall block | `blocks` |
 | Stud fields | Rows of domes, pyramids, the leaning bars of diamond plate, or holes | `studs` |
 | Scales and arches | Discs in offset rows, each row lying over the one above, rimmed | `scales` |
 | Rock chunks | Cellular edges cut into the height and lit by `shade` | `noise kind=edges` with `shade` |
@@ -136,9 +137,10 @@ looks and how this one does: the laying pattern, the pieces a tile, the joints, 
 the clone (the `texture` line, tuned and ended `# pin`), and `judge` (pass or fail, trait by
 trait). A look distance alone rates a wall of small regular blocks close to one of large
 irregular ones, so ge also measures each texture's evidence (`evidence_of`: how many times the
-pattern repeats across and down a tile, which way the lines run, the contrast) for the original
-and the clone, and prints each mismatch as a sentence to answer: "the pattern repeats 4 times
-down the original but 6 times down ours: its pieces are too small". Each run draws a sheet per
+pattern repeats across and down a tile, the courses and the pieces in each, which way the lines
+run, the contrast) for the original and the clone, and prints each mismatch as a sentence to
+answer: "the original has 4 courses a tile, ours 3 (turn rows)". A pinned line without the
+original's `tint` and `spread` is warned about with the line to write. Each run draws a sheet per
 texture (the original, the clone, the candidates, and under them the argument, the evidence and
 the mismatches), failed and unargued first. The procedure and each class's traits are the
 `texture-references` skill.

@@ -34,7 +34,10 @@ TEST(a_map_reads_and_writes_back) {
   CHECK(map.find("lamp1") == nullptr);
   CHECK(map.note("class", "city2_1") == "bricks");
   CHECK(map.note("judge", "city2_1") == "pass bond and courses match");
-  CHECK(map.note("traits", "city2_1") == "running bond, 8 courses a tile, #825540 red-brown, pale mortar");  // another reader's line, kept but not a texture
+  CHECK(
+      map.note("traits", "city2_1") ==
+      "running bond, 8 courses a tile, #825540 red-brown, pale mortar");  // another reader's line,
+                                                                          // kept but not a texture
   CHECK(tg::texture_map_text(map) == text);
 }
 

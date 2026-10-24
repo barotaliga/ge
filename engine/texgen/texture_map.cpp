@@ -11,7 +11,8 @@ namespace {
 
 std::string_view trim(std::string_view s) {
   while (!s.empty() && (s.front() == ' ' || s.front() == '\t')) s.remove_prefix(1);
-  while (!s.empty() && (s.back() == ' ' || s.back() == '\t' || s.back() == '\r')) s.remove_suffix(1);
+  while (!s.empty() && (s.back() == ' ' || s.back() == '\t' || s.back() == '\r'))
+    s.remove_suffix(1);
   return s;
 }
 
@@ -81,26 +82,26 @@ TextureMap parse_texture_map(std::string_view text, std::vector<Diagnostic>& err
     const size_t hash = comment_at(line);
     std::string_view rest;
     std::string_view keyword = first_word(line, &rest);
-    if (!is_note(keyword))
-      keyword = first_word(trim(line.substr(0, hash)), &rest);
+    if (!is_note(keyword)) keyword = first_word(trim(line.substr(0, hash)), &rest);
     if (is_note(keyword)) {
-      std::string_view text;
-      const std::string_view name = first_word(rest, &text);
-      if (name.empty() || text.empty()) {
-        errors.push_back({line_no, "write `" + std::string(keyword) + " <name> <text>`, e.g. " +
-                                       (keyword == "class"    ? "`class city2_1 bricks`"
-                                        : keyword == "traits" ? "`traits city2_1 running bond, 8 courses`"
-                                                              : "`judge city2_1 pass courses and bond match`")});
+      std::string_view prose;
+      const std::string_view name = first_word(rest, &prose);
+      if (name.empty() || prose.empty()) {
+        errors.push_back(
+            {line_no, "write `" + std::string(keyword) + " <name> <text>`, e.g. " +
+                          (keyword == "class"    ? "`class city2_1 bricks`"
+                           : keyword == "traits" ? "`traits city2_1 running bond, 8 courses`"
+                                                 : "`judge city2_1 pass courses and bond match`")});
         continue;
       }
       if (!map.note(keyword, name).empty()) {
-        errors.push_back({line_no, "`" + std::string(name) + "` has two `" +
-                                       std::string(keyword) + "` lines; keep one"});
+        errors.push_back({line_no, "`" + std::string(name) + "` has two `" + std::string(keyword) +
+                                       "` lines; keep one"});
         continue;
       }
       l.keyword = std::string(keyword);
       l.texture = std::string(name);
-      l.value = std::string(text);  // the whole line past the name, '#' and all: it is prose
+      l.value = std::string(prose);  // the whole line past the name, '#' and all: it is prose
       map.lines.push_back(std::move(l));
       continue;
     }

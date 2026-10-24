@@ -114,6 +114,7 @@ constexpr KeyDef kBlocks[] = {
     {"rows", K::number, 4, 1, 64, "", "", "courses down the tile"},
     {"cols", K::number, 3, 1, 64, "", "", "blocks across a course, on average"},
     {"vary_size", K::number, 0.5, 0, 1, "", "", "how uneven the courses and blocks are"},
+    {"span", K::number, 0, 0, 1, "", "", "the share of blocks running down through two courses"},
     {"mortar", K::number, 0.06, 0, 0.6, "", "", "the joint, a share of a course's height"},
     {"bevel", K::number, 0.1, 0, 1, "", "", "the rounded edge, a share of a course"},
     {"depth", K::number, 0.4, 0, 1, "", "", "how far the joint sits below the face"},

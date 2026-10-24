@@ -14,12 +14,12 @@
 
 #include "cli/json.hpp"
 #include "core/num_text.hpp"
+#include "lab/png.hpp"
 #include "texgen/bake.hpp"
 #include "texgen/layers.hpp"
 #include "texgen/library.hpp"
 #include "texgen/replace.hpp"
 #include "texgen/texture_map.hpp"
-#include "lab/png.hpp"
 
 namespace ge::cli {
 namespace {
@@ -153,7 +153,7 @@ struct Matched {
   std::string file;  // its PNG
   lab::Picture picture;
   texgen::TextureMapLine* line = nullptr;
-  double distance = -1;  // -1: not a texture line (a liquid, a sky, a surface)
+  double distance = -1;              // -1: not a texture line (a liquid, a sky, a surface)
   std::string klass, traits, judge;  // the agent's notes
   texgen::Evidence original, ours;
   std::vector<std::string> mismatches;
@@ -230,8 +230,7 @@ lab::Picture match_sheet(const texgen::Matcher& m, const Matched& t) {
   std::vector<texgen::Diagnostic> errors;
   const texgen::TextureRef ref = texgen::parse_ref(t.line->value, errors);
   panel(1, texgen::bake_ref(m, ref, t.picture.width, t.picture.height, errors), ref.name,
-        std::string(t.line->pinned ? "PINNED " : "CURRENT ") + fixed2(t.distance),
-        {200, 200, 160});
+        std::string(t.line->pinned ? "PINNED " : "CURRENT ") + fixed2(t.distance), {200, 200, 160});
   for (size_t k = 0; k < t.candidates.size(); ++k) {
     texgen::TextureRef alt = ref;
     alt.name = t.candidates[k].recipe;
@@ -278,8 +277,8 @@ Outcome run_texture_match(const std::filesystem::path& repo, const TextureMatchO
   }
   std::sort(textures.begin(), textures.end(),
             [](const Matched& a, const Matched& b) { return a.name < b.name; });
-  const fs::path library = fs::absolute(
-      repo / (opt.library.empty() ? std::string(texgen::kLibraryDir) : opt.library));
+  const fs::path library =
+      fs::absolute(repo / (opt.library.empty() ? std::string(texgen::kLibraryDir) : opt.library));
   texgen::Matcher matcher = texgen::make_matcher(library.string());
   matcher.max_distance = opt.near;
   if (matcher.entries.empty()) {
@@ -357,16 +356,16 @@ Outcome run_texture_match(const std::filesystem::path& repo, const TextureMatchO
       o.findings.push_back({Severity::error, t.name + ": " + d.message, map_rel,
                             "fix the line's reference (ge texture kinds; the library's recipes)"});
     if (!errors.empty()) continue;
-    t.distance = texgen::likeness_distance(texgen::likeness_of(t.picture),
-                                           texgen::likeness_of(ours));
+    t.distance =
+        texgen::likeness_distance(texgen::likeness_of(t.picture), texgen::likeness_of(ours));
     t.original = texgen::evidence_of(t.picture);
     t.ours = texgen::evidence_of(ours);
     t.mismatches = texgen::evidence_mismatches(t.original, t.ours);
     t.line->note = fixed2(t.distance);
     t.candidates = texgen::nearest_refs(matcher, t.name, t.picture, top, t.klass);
     if (!t.klass.empty() && t.candidates.empty()) {
-      o.findings.push_back({Severity::warn,
-                            t.name + ": no recipe is tagged `" + t.klass + "`", map_rel,
+      o.findings.push_back({Severity::warn, t.name + ": no recipe is tagged `" + t.klass + "`",
+                            map_rel,
                             "write one (the texture-references skill), tag it `" + t.klass +
                                 "`, or name another class"});
       t.candidates = texgen::nearest_refs(matcher, t.name, t.picture, top);
@@ -381,6 +380,15 @@ Outcome run_texture_match(const std::filesystem::path& repo, const TextureMatchO
                             "add `class " + t.name + " <class>`, `traits " + t.name +
                                 " <how it looks>` and `judge " + t.name +
                                 " pass|fail <trait by trait>` (skill: texture-references)"});
+    }
+    if (t.line->pinned && !ref.tint) {
+      texgen::TextureRef coloured = texgen::colour_ref(ref.name, t.picture);
+      coloured.name = ref.name;
+      if (ref.seed) coloured.seed = ref.seed;
+      coloured.params = ref.params;
+      o.findings.push_back(
+          {Severity::warn, t.name + " is pinned without the original's colour", map_rel,
+           "write the line as `texture " + t.name + " " + texgen::ref_text(coloured) + "  # pin`"});
     }
     if (t.line->pinned && !t.failed()) {
       for (const std::string& mm : t.mismatches)
@@ -434,23 +442,25 @@ Outcome run_texture_match(const std::filesystem::path& repo, const TextureMatchO
       cand_text += " " + c.recipe + " " + fixed2(c.distance);
     }
     const bool scored = t->distance >= 0;
-    rows.push_back(json_obj(
-        {{"texture", json_str(t->name)},
-         {"kind", json_str(t->line->keyword)},
-         {"value", json_str(t->line->value)},
-         {"pinned", json_bool(t->line->pinned)},
-         {"class", json_str(t->klass)},
-         {"traits", json_str(t->traits)},
-         {"judge", json_str(t->judge)},
-         {"distance", scored ? fixed2(t->distance) : "null"},
-         {"original", json_str(scored ? texgen::evidence_text(t->original) : "")},
-         {"ours", json_str(scored ? texgen::evidence_text(t->ours) : "")},
-         {"mismatches", json_strs(t->mismatches)},
-         {"candidates", json_arr(cands)}}));
+    rows.push_back(
+        json_obj({{"texture", json_str(t->name)},
+                  {"kind", json_str(t->line->keyword)},
+                  {"value", json_str(t->line->value)},
+                  {"pinned", json_bool(t->line->pinned)},
+                  {"class", json_str(t->klass)},
+                  {"traits", json_str(t->traits)},
+                  {"judge", json_str(t->judge)},
+                  {"distance", scored ? fixed2(t->distance) : "null"},
+                  {"original", json_str(scored ? texgen::evidence_text(t->original) : "")},
+                  {"ours", json_str(scored ? texgen::evidence_text(t->ours) : "")},
+                  {"mismatches", json_strs(t->mismatches)},
+                  {"candidates", json_arr(cands)}}));
     if (scored && listed < opt.list) {
-      o.text += std::string(t->failed() ? "FAIL " : t->argued() ? "ok   " : "argue") + " " +
-                fixed2(t->distance) + "  " + (t->line->pinned ? "pin " : "") + t->name + " = " +
-                t->line->value + "\n";
+      o.text += std::string(t->failed()   ? "FAIL "
+                            : t->argued() ? "ok   "
+                                          : "argue") +
+                " " + fixed2(t->distance) + "  " + (t->line->pinned ? "pin " : "") + t->name +
+                " = " + t->line->value + "\n";
       if (!t->klass.empty()) o.text += "       class: " + t->klass + "\n";
       if (!t->traits.empty()) o.text += "       traits: " + t->traits + "\n";
       if (!t->judge.empty()) o.text += "       judge: " + t->judge + "\n";
@@ -468,13 +478,16 @@ Outcome run_texture_match(const std::filesystem::path& repo, const TextureMatchO
                        {"sheets", json_str(rel_path(repo, sheets))},
                        {"textures", json_arr(rows)}});
   o.summary = std::to_string(textures.size()) + " textures: " + std::to_string(argued) +
-              " argued (" + std::to_string(failed) + " judged fail), " +
-              std::to_string(pinned) + " pinned, " + std::to_string(far) +
-              " far (distance over " + fixed2(opt.near) + "); map " + map_rel;
-  o.next = "per texture, in the map: 1 `class`, 2 `traits` (how that class looks and this one), "
-           "3 pick or tune the reference and end it `# pin`, 4 `judge` it trait by trait against "
-           "the sheet in " + rel_path(repo, sheets) + "; run ge texture match again (skill: "
-           "texture-references)";
+              " argued (" + std::to_string(failed) + " judged fail), " + std::to_string(pinned) +
+              " pinned, " + std::to_string(far) + " far (distance over " + fixed2(opt.near) +
+              "); map " + map_rel;
+  o.next =
+      "per texture, in the map: 1 `class`, 2 `traits` (how that class looks and this one), "
+      "3 pick or tune the reference and end it `# pin`, 4 `judge` it trait by trait against "
+      "the sheet in " +
+      rel_path(repo, sheets) +
+      "; run ge texture match again (skill: "
+      "texture-references)";
   return o;
 }
 
