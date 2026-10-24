@@ -629,8 +629,10 @@ void run(gl::Lab& lab) {
   ways[0].label = "CLASSIC";
   ways[0].o.mode = ba::Mode::classic;
   ways[1].label = "V2: LIGHTMAPS, OUR SKY AND LIQUIDS";
+  ways[1].o.mode = ba::Mode::v2;
   ways[1].o.lighting = ba::Lighting::lightmaps;
   ways[2].label = "V2: REAL-TIME LIGHTS";
+  ways[2].o.mode = ba::Mode::v2;
   ways[2].o.strength = lab.arg_num("strength") > 0 ? lab.arg_num("strength") : 1;
   if (!lab.arg("shadowed").empty()) ways[2].o.shadowed = int(lab.arg_num("shadowed"));
   if (!lab.arg("most").empty()) ways[2].o.most = int(lab.arg_num("most"));

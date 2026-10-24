@@ -37,7 +37,8 @@ enum class Lighting : uint8_t { lightmaps, lights };
 bool parse_mode(std::string_view word, Mode* out);
 
 struct Options {
-  Mode mode = Mode::v2;
+  // The classic look unless a game turns v2 on (r_bspmode v2): v2 is opt-in.
+  Mode mode = Mode::classic;
   Lighting lighting = Lighting::lights;
   double ambient = 0.015;   // the light every face gets, the lightmaps' units
   double brightness = 2.0;  // a lightmap's 1 against a white face under the open day
