@@ -44,13 +44,16 @@ double arm_angle(const gw::Wakes& w, double speed, double t, double z) {
   const double lambda = 2 * kPi * speed * speed / gw::kGravity;
   double sx = 0, sy = 0, sxx = 0, sxy = 0;
   int n = 0;
-  for (double m = 6; m <= 12; m += 2) {
+  for (int m = 6; m <= 12; m += 2) {
     const double d = m * lambda;
     double best = 0, at = 0;
-    for (double x = 0.2; x < 0.6 * d; x += lambda / 50) {
+    for (int i = 0; 0.2 + i * lambda / 50 < 0.6 * d; ++i) {
+      const double x = 0.2 + i * lambda / 50;
       double h = 0;
-      for (double dz = -lambda / 2; dz <= lambda / 2; dz += lambda / 8)
+      for (int j = -4; j <= 4; ++j) {
+        const double dz = j * lambda / 8;
         h = std::fmax(h, std::fabs(gw::wake_at(w, 0, x, z - d + dz, t).height));
+      }
       if (h > best) {
         best = h;
         at = x;
@@ -96,7 +99,8 @@ TEST(a_rings_waves_run_at_the_group_speed) {
   const double at = 0.5 * std::sqrt(gw::kGravity / k) * tau;
   std::vector<double> zeros;
   double prev = gw::ring_height(w, r, at - 2 * lambda, tau);
-  for (double x = at - 2 * lambda; x < at + 2 * lambda; x += 0.001) {
+  for (int j = 0; j < static_cast<int>(4 * lambda / 0.001); ++j) {
+    const double x = at - 2 * lambda + j * 0.001;
     const double h = gw::ring_height(w, r, x, tau);
     if ((h > 0) != (prev > 0)) zeros.push_back(x);
     prev = h;
@@ -163,8 +167,10 @@ TEST(every_number_keeps_its_golden) {
   double t = 0, z = 0;
   const gw::Wakes w = trail(4, 3, 4, t, z);
   std::vector<std::vector<uint64_t>> got;
-  for (double d = 5; d <= 45; d += 10) {
-    for (double x = 0; x <= 12; x += 4) {
+  for (int i = 0; i < 5; ++i) {
+    const double d = 5 + 10.0 * i;
+    for (int j = 0; j < 4; ++j) {
+      const double x = 4.0 * j;
       const gw::WakeAt a = gw::wake_at(w, 0, x, z - d, t);
       got.push_back({ge::test::bits(a.height), ge::test::bits(a.dx), ge::test::bits(a.dz),
                      ge::test::bits(a.u), ge::test::bits(a.v), ge::test::bits(a.w)});
