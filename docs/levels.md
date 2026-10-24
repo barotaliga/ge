@@ -103,11 +103,32 @@ room independent, so `build_level` runs rooms side by side on the worker pool an
 bits for any number of workers (`tests/rooms_build_test.cpp` holds each room's digest golden).
 A cave evaluates its noise only where the rock can reach the surface.
 
+### In a world: what a body meets
+
+`plugins/rooms/clip.hpp` (M32c) hands the mover (engine/move) the level as a mesh world
+(`move/mesh_world.hpp`), so a character walks the level the renderer draws with no collision of
+the level's own. A **prism is solid where it is stored**: its flat floor, ceiling and walls with
+the openings cut out, the frames round them and its solids, built with every relief left off, so
+a rock floor is walked as the flat floor it grows from and a body never catches on a relief a few
+centimetres deep. A **cave is solid where it is drawn**: its rock is its shape, so the body meets
+the grown surface itself. The sample level's world is about 37,000 triangles, built in some 40 ms.
+
+`plugins/rooms/walk.hpp` is the proof and the lab's picture: a **tour** of every room linked to
+the start room, depth first by its doorways, into each room's middle and out through each
+doorway and back, routed inside a room on a quarter-metre grid by the grid A* (`ai/path.hpp`)
+where every cell and every step between two is decided by the mover's own sweeps (a probe dropped
+onto walkable ground, the standing hull fitting, a step no higher than the step height and no
+deeper than a stair), then string-pulled; and the **walk**, the walker preset driven down it,
+view toward the next point and stick forward. On the sample level the tour is 58 points and the
+walker sprints its 147 m in 3,499 steps at under 10 µs a step, through all ten rooms, down the
+crypt's steps and over both caves' rock, never under a floor (`tests/rooms_clip_test.cpp` holds
+the walk's bits golden; the `rooms` lab draws it).
+
 ### Still to come
 
-M32c puts rooms in a world (the mover's trace answered by grown rooms, textures from the texture
-generator, a GPU draw, `ge level`); M32d grows more (sloped floors, stairs, arches, scattered
-rubble, stalactites, liquids).
+The rest of M32c: textures from the texture generator (M31) drawn by the GPU over a room's mesh,
+and `ge level info/build/shot`. M32d grows more (sloped floors, stairs, arches, scattered rubble,
+stalactites, liquids).
 
 ## The classic BSP families
 

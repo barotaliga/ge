@@ -7,7 +7,7 @@ description: "Use for plugins/rooms in gameengine2: the engine's own level forma
 
 `plugins/rooms/` (`ge_rooms`, namespace `ge::rooms`) is the engine's own level format: a level is
 a few plain shapes and every room carries the seed its surfaces grow from. It depends on the
-engine's core only. The design is [`docs/levels.md`](../../../docs/levels.md); each file's header
+engine's core, and on `engine/move` and `engine/ai` for a body walking it. The design is [`docs/levels.md`](../../../docs/levels.md); each file's header
 states its part once.
 
 | File | What |
@@ -18,6 +18,8 @@ states its part once.
 | `relief.hpp/.cpp` | The reliefs a surface grows: heights and grid sizes |
 | `noise3.hpp` | Seeded 3D value noise and fbm on an integer hash |
 | `build.hpp/.cpp`, `build_parts.hpp`, `cave.cpp` | Growing a room: walls, caps, frames, solids; caves |
+| `clip.hpp/.cpp` | The level as the mover's world: flat prisms, grown caves (`clip_world`), `room_at` |
+| `walk.hpp/.cpp` | The scripted walk: a tour of every room by its doorways, routed by sweeps; the drive |
 | `levels/halls.gelv.txt` | The sample level: every relief, two caves |
 | `labs/rooms_lab.cpp` | The `rooms` lab |
 
@@ -37,6 +39,16 @@ into a cave needs `trim=`.
 3. `make lab LAB=rooms ARGS=--compare=before`; look at `reliefs.png`, `cutaway.png`, `inside.png`.
 4. Rewrite the golden: `GE_GOLDEN_WRITE=1 build/<preset>/tests/rooms_build_test`, then
    `make labs-digests`, and say in the PR why the bits moved.
+
+## Changing what a body meets
+
+The clip world and the walk are held by `tests/rooms_clip_test.cpp` (the walk's bits golden) and
+pictured by the lab's `walk` and `walk-eyes` shots. A tour that stops short names the room and the
+two points it found no way between; a walk that stalls names where it stuck. Drive the body into
+the spot step by step before changing anything: a stall at a low sill or riser is usually the
+world's skin against the step-up's creep (the `move` skill's lesson). A builder change that moves
+a prism's flat hull or a cave's rock moves the walk's golden too: rewrite it with
+`GE_GOLDEN_WRITE=1 build/<preset>/tests/rooms_clip_test` and say why.
 
 ## Rules
 

@@ -27,10 +27,13 @@
 #include "lab/lab.hpp"
 #include "lab/model_view.hpp"
 #include "lab/raster.hpp"
+#include "move/spec.hpp"
 #include "rooms/build.hpp"
+#include "rooms/clip.hpp"
 #include "rooms/codec.hpp"
 #include "rooms/relief.hpp"
 #include "rooms/text.hpp"
+#include "rooms/walk.hpp"
 
 namespace {
 
@@ -45,6 +48,8 @@ constexpr Rgba kInk{24, 26, 32};
 constexpr Rgba kGrid{222, 220, 212};
 constexpr Rgba kOpening{40, 170, 90};
 constexpr Rgba kDark{22, 24, 30};
+constexpr Rgba kTrail{214, 48, 40};
+constexpr Rgba kMissed{230, 140, 20};
 
 std::string fixed(double v, int d) { return ge::core::num::to_fixed(v, d); }
 
@@ -93,8 +98,10 @@ void label(Picture& p, int x, int y, const std::string& text) {
 
 ge::assets::Box box_of(const lab::Shape& s) { return lab::shape_box(s); }
 
-// The plan from above: +x right, +z up the page.
-Picture draw_plan(const rm::Level& level, int px) {
+// The plan from above: +x right, +z up the page; with a walk, its tour's points (rings) and the
+// feet's trail (a red line) over it.
+Picture draw_plan(const rm::Level& level, int px, const rm::Tour* tour = nullptr,
+                  const rm::Walk* walk = nullptr) {
   double lo[2] = {1e30, 1e30}, hi[2] = {-1e30, -1e30};
   for (const rm::Room& r : level.rooms) {
     for (size_t i = 0; i < r.corners.size(); ++i) {
@@ -181,6 +188,21 @@ Picture draw_plan(const rm::Level& level, int px) {
     const std::string a = r.name, b = "SEED " + std::to_string(r.seed);
     lab::draw_text(p, X(cx) - lab::text_width(a, 2) / 2.0, Y(cz) - 12, a, kInk, 2);
     lab::draw_text(p, X(cx) - lab::text_width(b) / 2.0, Y(cz) + 6, b, kInk);
+  }
+  if (walk) {
+    for (size_t i = 1; i < walk->trail.size(); ++i) {
+      const auto& a = walk->trail[i - 1];
+      const auto& b = walk->trail[i];
+      lab::draw_line(p, X(a.x), Y(a.z), X(b.x), Y(b.z), kTrail, 3);
+    }
+  }
+  if (tour) {
+    for (size_t i = 0; i < tour->points.size(); ++i) {
+      const auto& q = tour->points[i].at;
+      const bool got = walk && i < walk->reached;
+      lab::fill_disc(p, X(q.x), Y(q.z), 4, kPaper);
+      lab::draw_ring(p, X(q.x), Y(q.z), 5, got ? kInk : kMissed);
+    }
   }
   return p;
 }
@@ -429,6 +451,94 @@ void run(lab::Lab& lab) {
           p);
     }
   }
+
+  // The walk: the level as the mover meets it, a tour of every room, and the walker down it.
+  {
+    t0 = std::chrono::steady_clock::now();
+    const ge::move::MeshWorld clip = rm::clip_world(level, workers);
+    const double clip_ms = ms_since(t0);
+    const ge::move::World world = ge::move::as_world(clip);
+    const ge::move::MoveSpec spec = *ge::move::find_preset("walker");
+    const auto start = lab.arg_nums("start");
+    const ge::move::Vec3 from{start.size() > 0 ? start[0] : 0, start.size() > 1 ? start[1] : 0,
+                              start.size() > 2 ? start[2] : 0};
+    t0 = std::chrono::steady_clock::now();
+    const rm::Tour tour = rm::tour(level, world, spec, from);
+    const double tour_ms = ms_since(t0);
+    if (!tour.error.empty()) lab.fail("rooms: the tour stops short: " + tour.error, "skill: rooms");
+    rm::WalkOptions options;
+    options.sprint = true;
+    t0 = std::chrono::steady_clock::now();
+    const rm::Walk walk = rm::walk(level, world, spec, tour, options);
+    const double walk_ms = ms_since(t0);
+    if (!walk.error.empty()) lab.fail("rooms: the walk stops short: " + walk.error, "skill: rooms");
+    double metres_walked = 0;
+    for (size_t i = 1; i < walk.trail.size(); ++i) {
+      const double dx = walk.trail[i].x - walk.trail[i - 1].x;
+      const double dz = walk.trail[i].z - walk.trail[i - 1].z;
+      metres_walked += std::sqrt(dx * dx + dz * dz);
+    }
+    lab.metric("clip-triangles", double(clip.tri.size() / 3), "count");
+    lab.metric("tour-points", double(tour.points.size()), "count");
+    lab.metric("walk-rooms", double(walk.rooms.size()), "count");
+    lab.metric("walk-steps", double(walk.steps), "count");
+    lab.metric("walk-m", metres_walked, "m");
+    lab.metric("walk-under-floor-m", walk.lowest_below_floor, "m");
+    lab.metric("clip-build-ms", clip_ms, "ms", Det::measured);
+    lab.metric("tour-ms", tour_ms, "ms", Det::measured);
+    lab.metric("walk-ms", walk_ms, "ms", Det::measured);
+    lab.metric("walk-us-per-step", walk.steps ? walk_ms * 1000 / double(walk.steps) : 0, "us",
+               Det::measured);
+    const std::vector<std::pair<std::string, std::string>> walk_inputs{{"level", path},
+                                                                       {"start", lab.arg("start")}};
+    lab.shot({"walk", "A WALKER THROUGH EVERY ROOM",
+              "The tour (rings: black reached, orange not) from the hall through every room by "
+              "its doorways and back, routed round the pillars, down the crypt's steps and over "
+              "the caves' rock; the red line is where the walker's feet went, sprinting, on the "
+              "mover's own collision with the level (flat prisms, grown caves).",
+              "the red line passes every doorway and ends where it began; no ring is orange",
+              walk_inputs},
+             draw_plan(level, px * 2, &tour, &walk));
+
+    // Four rooms as the walker comes into them: its eyes at the doorway, looking at the farthest
+    // point it walks to in the room before it turns back or on.
+    {
+      const char* names[4] = {"cave", "crypt", "grotto", "boiler"};
+      const int cw = px, ch = px * 3 / 4;
+      Picture p = lab::create_picture(cw * 2, ch * 2, kDark);
+      for (int i = 0; i < 4; ++i) {
+        const int r = rm::room_index(level, names[i]);
+        size_t first = tour.points.size();
+        for (size_t k = 0; k < tour.points.size(); ++k) {
+          if (tour.points[k].room == r) {
+            first = k;
+            break;
+          }
+        }
+        if (first == tour.points.size()) continue;
+        const auto& a = tour.points[first].at;
+        auto far = a;
+        double far_d = -1;
+        for (size_t k = first; k < tour.points.size() && tour.points[k].room == r; ++k) {
+          const auto& q = tour.points[k].at;
+          const double d = (q.x - a.x) * (q.x - a.x) + (q.z - a.z) * (q.z - a.z);
+          if (d > far_d) far = q, far_d = d;
+        }
+        lab::ViewCam cam;
+        cam.eye[0] = a.x, cam.eye[1] = a.y + spec.eye_height, cam.eye[2] = a.z;
+        cam.target[0] = far.x, cam.target[1] = far.y + 1.0, cam.target[2] = far.z;
+        cam.fov_deg = 75;
+        lab::draw_shape(p, (i % 2) * cw, (i / 2) * ch, cw, ch, cam, model, all, style());
+        label(p, (i % 2) * cw + 4, (i / 2) * ch + 4, std::string("INTO THE ") + names[i]);
+      }
+      lab.shot({"walk-eyes", "THE WALK THROUGH ITS EYES",
+                "Four rooms as the walker comes in, from its eyes (1.62 m) at the doorway toward "
+                "the room's middle: the cave and the grotto it climbs into over their rock, the "
+                "crypt down its steps, the boiler room round its tank.",
+                "the eye is inside the room, never in a wall or under a floor", walk_inputs},
+               p);
+    }
+  }
 }
 
 const lab::LabSpec kSpec{
@@ -442,6 +552,7 @@ const lab::LabSpec kSpec{
         {"level", "plugins/rooms/levels/halls.gelv.txt", "the level, as text (.gelv.txt)"},
         {"px", "480", "a panel's width, px"},
         {"seeds", "88123,1,2,3", "the cave's seeds, side by side"},
+        {"start", "5,0,4", "where the walk starts, world m (x, y, z), on a room's floor"},
     },
     "--px=120 --seeds=88123,1",
     run,
