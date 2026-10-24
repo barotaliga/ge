@@ -43,8 +43,6 @@ menu 1c01d0b767f484fc
 model-views 0d0824a2168f6b14
 models bdc7f86743249676
 moon 26034a53f978b0b3
-move-strafe 69411462ef3f2545
-move-trace 223a9e049e1b0e94
 net-chaos 13da9a1e8d811d97
 net-fuzz a9a6024574d71acd
 move-strafe 302a67208d9eacac
