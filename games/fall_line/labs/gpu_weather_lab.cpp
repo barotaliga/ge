@@ -3,7 +3,8 @@
 // R19's eight kinds in turn, its own weather replaced (a CLEAR day, FAIR heaps, a FLURRY, a HIGH
 // veil, an OVERCAST, a steady SNOW, a STORM and a valley FOG), from a named view, --frames frames
 // at 60 a second up to --at seconds into the run (--lift raises the view's pitch, degrees, to show
-// more of the sky).
+// more of the sky; --turn swings it round to its heading over the frames, so the spread cloud
+// march reprojects a moving picture, and --spread=0 takes the quarter whole every frame).
 //
 // Beside each: the look's numbers (the sun's pass, the deck's cover, the visual range, the deck
 // overhead hidden, the cloud's layers, the share of the sky its lowest layer covers and the share
@@ -20,6 +21,7 @@
 // ge:keywords lab weather overcast deck flat-light fog visibility storm sky fall-line picture
 // ge:skill render labs
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cmath>
 #include <cstdio>
@@ -189,6 +191,8 @@ void run(ge::lab::Lab& lab) {
   const int width = static_cast<int>(lab.arg_num("width"));
   const int height = static_cast<int>(lab.arg_num("height"));
   const double lift = lab.arg_num("lift");
+  const bool spread_march = lab.arg_bool("spread");
+  const double turn = lab.arg_num("turn") * 3.14159265358979 / 180;
   if (lift < -60 || lift > 60) {
     lab.fail("--lift must be -60..60 degrees", "next: pass --lift=10.");
     return;
@@ -310,28 +314,50 @@ void run(ge::lab::Lab& lab) {
     ge::render::FrameView view;
     fall_line::app::make_view(level, view_name, view);
     view.pitch += lift * 3.14159265358979 / 180;
-    auto draw_frames = [&] {
+    const double heading = view.heading;
+    // Each frame's cloud passes' GPU ms past the first two (NaN without timestamps) into `ms`:
+    // the three passes', then their sum.
+    constexpr std::string_view kCloudPasses[] = {"clouds.fresh", "clouds.march", "clouds"};
+    auto draw_frames = [&](std::vector<std::array<double, 4>>* ms) {
       for (int n = 0; n < frames; ++n) {
         view.frame = static_cast<uint64_t>(n);
         view.time_s = at - static_cast<double>(frames - 1 - n) / 60;
+        view.heading = heading - turn * static_cast<double>(frames - 1 - n) / 60;
         fall_line::app::draw(*device, *frame, view, {}, target.view);
+        if (!ms || (n < 2 && n < frames - 1)) continue;
+        frame->recorder.wait(*device);
+        std::array<double, 4> row{};
+        for (int p = 0; p < frame->recorder.stats.count; ++p) {
+          const auto& pass = frame->recorder.stats.passes[static_cast<size_t>(p)];
+          for (size_t c = 0; c < 3; ++c)
+            if (pass.name == kCloudPasses[c]) {
+              row[c] += pass.gpu_ms;
+              row[3] += pass.gpu_ms;
+            }
+        }
+        ms->push_back(row);
       }
     };
     // The cloud marched at every pixel first (the reference the quarter is held to), then at a
-    // quarter of them, the picture shot.
+    // quarter of them (spread over the frames unless --spread=0), the picture shot.
     frame->options.cloud_quarter = false;
-    draw_frames();
+    draw_frames(nullptr);
     const ge::lab::Picture full{width, height, ge::gpu::read_now(*device, target).rgba};
     frame->options.cloud_quarter = true;
+    frame->options.cloud_spread = spread_march;
     fall_line::app::cut(*frame);
-    draw_frames();
-    // What the last frame's cloud cost the GPU (NaN without timestamps).
-    frame->recorder.wait(*device);
-    double cloud_ms = 0;
-    for (int p = 0; p < frame->recorder.stats.count; ++p) {
-      const auto& pass = frame->recorder.stats.passes[static_cast<size_t>(p)];
-      if (pass.name == "clouds" || pass.name == "clouds.march") cloud_ms += pass.gpu_ms;
+    std::vector<std::array<double, 4>> frame_ms;
+    draw_frames(&frame_ms);
+    // What a frame's cloud cost the GPU, each pass and the whole: the median of the frames past
+    // the first two.
+    std::array<double, 4> cloud_pass_ms{};
+    for (size_t c = 0; c < 4; ++c) {
+      std::vector<double> col(frame_ms.size());
+      for (size_t f = 0; f < frame_ms.size(); ++f) col[f] = frame_ms[f][c];
+      std::sort(col.begin(), col.end());
+      cloud_pass_ms[c] = col[col.size() / 2];
     }
+    const double cloud_ms = cloud_pass_ms[3];
     const ge::gpu::Image img = ge::gpu::read_now(*device, target);
     const ge::lab::Picture pic{width, height, img.rgba};
     lab.shot(shot_of(i), pic, Det::measured);
@@ -345,6 +371,9 @@ void run(ge::lab::Lab& lab) {
     lab.metric(k + ".contrast", spread[i], "level", Det::measured);
     lab.metric(k + ".far-contrast", top_spread, "level", Det::measured);
     lab.metric(k + ".clouds-ms", cloud_ms, "ms", Det::measured);
+    lab.metric(k + ".clouds-fresh-ms", cloud_pass_ms[0], "ms", Det::measured);
+    lab.metric(k + ".clouds-march-ms", cloud_pass_ms[1], "ms", Det::measured);
+    lab.metric(k + ".clouds-upsample-ms", cloud_pass_ms[2], "ms", Det::measured);
     // The quarter's picture against every pixel's: the share of its own pixels more than 8 levels
     // of luma apart.
     const double misses = luma_misses(pic, full, 8);
@@ -405,6 +434,8 @@ const ge::lab::LabSpec kSpec{
         {"width", "640", "the picture's width, px"},
         {"height", "360", "the picture's height, px"},
         {"lift", "0", "degrees added to the view's pitch (up), to show more of the sky"},
+        {"spread", "1", "the cloud's quarter march spread over the frames (0: whole every frame)"},
+        {"turn", "0", "degrees a second the view turns to its heading over the frames"},
     },
     "--frames=2 --width=160 --height=90",
     run,
