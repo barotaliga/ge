@@ -231,7 +231,8 @@ actions on every machine, and the labs' digests hold them.
   stepped, hashed and written down exactly as an agent's is. The `fall_line` window writes it as
   an input log when it closes (`runs/fall_line-<seed>.inputs` in the per-user directory, or
   `--inputs`), and `ge replay` plays it back to its digest. `--bot` hands the skis to the bot
-  through the same loop.
+  through the same loop. A sky the `sv_` cvars pick is skied too (the run opened on the map under
+  it, `sim::open_run_on`), and that log is not one `ge replay` rebuilds from the seed.
 - **A scripted session** (`script.hpp`): `--events=<ge-events file>` plays a device event log
   into the window's loop in place of the devices, and `--record-events` writes one. A scripted
   frame is granted the steps due by its time, counted in whole nanoseconds (`steps_due`), so a
