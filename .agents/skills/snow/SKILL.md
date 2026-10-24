@@ -1,6 +1,6 @@
 ---
 name: snow
-description: "Use for engine/snow in gameengine2: a layer of snow over any ground that remembers what crossed it. The column model (depth and mass over a ground), the cover, the sparse fixed-point tiles, sample, press and the imprint record, the reference contacts, the snapshot and `ge snow`; the snow-press and snow-field labs; and the M29 plan in docs/snow.md (contact laws, time, tiers, drawing, sound, Fall Line's move onto it)."
+description: "Use for engine/snow in gameengine2: a layer of snow over any ground that remembers what crossed it. The column model (depth and mass over a ground), the cover, the sparse fixed-point tiles, sample, press and the imprint record, the reference contacts, the snapshot and `ge snow`; snow over time (weather schedules, settling, filling, drift, melt and crust, grooming); the snow-press, snow-field, snow-contact and snow-weather labs; and the M29 plan in docs/snow.md (contact laws, time, tiers, drawing, sound, Fall Line's move onto it)."
 ---
 
 # Snow
@@ -14,7 +14,8 @@ and the plan (rows M29a–M29l); this skill is how to work on it.
 | `snow/kinds.hpp` | The named snows, their loose, packed and cap densities, the packed share |
 | `snow/layer.hpp/.cpp` | The layer: region, ground, cover, tiles of fixed-point cells, `sample`, `cell_for`, `mass_units` |
 | `snow/contact.hpp/.cpp` | The contact laws: a `ContactRow` a kind, Bekker's sink and its cap (`column_sink`), compaction and bulldozing, Mohr–Coulomb and Janosi traction, glide and tyre friction, planing |
-| `snow/press.hpp/.cpp` | `press`: targets from a sink or a pressure, mass kept, the berm, the imprint record |
+| `snow/press.hpp/.cpp` | `press`: targets from a sink or a pressure, mass kept, the berm, the imprint record; with a weather, cells brought to the minute first and a crust broken or borne |
+| `snow/time.hpp/.cpp` | Snow over time: `Schedule`, `Weather`, `spell`, `weathered`, `filled`, `Moment`, `bring_to`, `crust_load`, `sample(layer, x, z, t)`, `groom` |
 | `snow/reference.hpp` | The reference contacts (a carving and a skidding ski, a boot, a tyre, a tread, a body), `place` |
 | `snow/snapshot.hpp/.cpp` | `save`, `load`, `read_info`, `load_bare` (the format in the header) |
 | `engine/cli/snow.hpp/.cpp` | `ge snow show` and `ge snow column` over a saved layer |
@@ -48,5 +49,14 @@ and the plan (rows M29a–M29l); this skill is how to work on it.
   fitted to one stated sink each (its comment). Moving a row moves `tests/golden/snow_contact.txt`
   and the press golden: say what it was fitted to and put the `snow-contact` table before and
   after in the PR.
-- **What is next** is `docs/snow.md`'s rows: M29c adds time, M29d folds stale tiles into a
-  coarse layer under a budget.
+- **Time is read, not stepped.** A `Weather` is schedules; what it does between two moments is
+  worked out from their integrals (`spell`). Never add a per-step update to the layer: a cell
+  carries the minute it last changed and is weathered from there on read. Every write to a cell
+  of a weathered layer goes through `bring_to` first, which counts the weather's mass into
+  `mass_in`; a write that skips it breaks the ledger (`snow-weather` and
+  `tests/snow_time_test.cpp` catch it). A layer with no weather must stay the static layer bit
+  for bit.
+- **Labs for time**: `snow-weather` (storms filling a groove, settling, drift, crust, a groomer).
+  A default in `Weather` moved is a behaviour change: put its table before and after in the PR.
+- **What is next** is `docs/snow.md`'s rows: M29d folds stale tiles into a coarse layer under a
+  budget.

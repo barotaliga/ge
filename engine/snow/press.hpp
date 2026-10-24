@@ -86,6 +86,7 @@ struct Pressed {
   double spilled = 0;    // kg of it that found no sample to land on
   int samples = 0;       // samples brought down
   int refused = 0;       // samples left as they were: no tile left in the budget
+  bool broke = false;    // the load broke a crust the weather froze (time.hpp, `crust_load`)
 };
 
 Pressed press(Layer& layer, const Imprint& imp, double t);
