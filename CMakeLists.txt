@@ -255,9 +255,9 @@ add_library(ge_ai STATIC ${GE_AI_SOURCES})
 target_link_libraries(ge_ai PUBLIC ge_core)
 
 # The wind (engine/wind): a pure function of place and time over a field built once, the
-# mountain's air one configuration of it (docs/water.md § Wind). Deterministic, no platform;
-# published as ge::wind.
-add_library(ge_wind STATIC engine/wind/field.cpp engine/wind/sources.cpp)
+# mountain's air one configuration of it (docs/water.md § Wind), and what falls through it (snow,
+# sleet and rain: engine/wind/precip.hpp). Deterministic, no platform; published as ge::wind.
+add_library(ge_wind STATIC engine/wind/field.cpp engine/wind/sources.cpp engine/wind/precip.cpp)
 target_link_libraries(ge_wind PUBLIC ge_core)
 
 # The water (engine/water): bodies of water, the sea a wind grows on them and the one `sample`
