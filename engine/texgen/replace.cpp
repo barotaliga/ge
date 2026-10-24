@@ -11,6 +11,7 @@
 #include <cmath>
 
 #include "core/libm/libm.hpp"
+#include "core/num_text.hpp"
 #include "texgen/bake.hpp"
 #include "texgen/library.hpp"
 #include "texgen/preview.hpp"
@@ -176,11 +177,11 @@ TextureRef colour_ref(std::string_view name, const lab::Picture& original) {
 }
 
 std::vector<Candidate> nearest_refs(const Matcher& m, std::string_view name,
-                                    const lab::Picture& original, int n) {
+                                    const lab::Picture& original, int n, std::string_view klass) {
   // The structure's ranking first (cheap: no bake), then the `refine` nearest of it baked with
   // the texture's seed and colours and measured whole: a recipe whose own colours do not survive
   // the recolouring (a glow, a hue that clips) falls behind there.
-  std::vector<Candidate> rough = rank_recipes(m, original, std::max(n, m.refine));
+  std::vector<Candidate> rough = rank_recipes(m, original, std::max(n, m.refine), klass);
   const TextureRef base = colour_ref(name, original);
   for (Candidate& c : rough) {
     TextureRef ref = base;
@@ -212,6 +213,7 @@ TextureMatch match_texture(const Matcher& m, std::string_view name, const lab::P
   if (w <= 0 || h <= 0 || m.entries.empty()) return out;
   out.ref = colour_ref(name, original);
   const std::vector<Candidate> best = nearest_refs(m, name, original, 1);
+  if (best.empty()) return out;
   out.ref.name = best[0].recipe;
   out.text = ref_text(out.ref);
   out.distance = best[0].distance;
@@ -278,17 +280,109 @@ lab::Picture bake_match(const Matcher& m, const TextureMatch& match, int w, int 
   return bake_ref(m, match.ref, w, h, ignored);
 }
 
+namespace {
+
+constexpr double kRepeats = 0.25;  // an autocorrelation peak this strong is a repeat
+
+std::string hex_colour(const std::array<uint8_t, 3>& c) {
+  static const char* digits = "0123456789abcdef";
+  std::string h = "#";
+  for (const uint8_t b : c) {
+    h += digits[b >> 4];
+    h += digits[b & 15];
+  }
+  return h;
+}
+
+std::string count_text(double v) {
+  return v <= 0 ? "-" : core::num::to_fixed(v, v < 10 && v != std::floor(v) ? 1 : 0);
+}
+
+}  // namespace
+
+Evidence evidence_of(const lab::Picture& p) {
+  Evidence e;
+  e.width = p.width;
+  e.height = p.height;
+  if (p.width <= 0 || p.height <= 0) return e;
+  const Likeness l = likeness_of(p);
+  if (l.repeat_x >= kRepeats) {
+    e.repeat_x = l.period_x * p.width;
+    e.per_tile_x = 1 / l.period_x;
+  }
+  if (l.repeat_y >= kRepeats) {
+    e.repeat_y = l.period_y * p.height;
+    e.per_tile_y = 1 / l.period_y;
+  }
+  // A course of bricks steps going DOWN across its joints: horizontal lines.
+  if (l.down + l.across < 0.04) e.lines = "flat";
+  else if (l.down > 1.5 * l.across) e.lines = "horizontal";
+  else if (l.across > 1.5 * l.down) e.lines = "vertical";
+  else e.lines = "mixed";
+  e.brightness = l.look.brightness;
+  e.contrast = l.look.contrast;
+  const TextureRef c = colour_ref("", p);
+  if (c.tint) e.mean = *c.tint;
+  return e;
+}
+
+std::string evidence_text(const Evidence& e) {
+  std::string out = "repeat ";
+  out += (e.repeat_x > 0 ? count_text(e.repeat_x) : "-") + "x" +
+         (e.repeat_y > 0 ? count_text(e.repeat_y) : "-") + " px (" + count_text(e.per_tile_x) +
+         "x" + count_text(e.per_tile_y) + " a tile), " + e.lines + " lines, contrast " +
+         core::num::to_fixed(e.contrast, 2) + ", " + hex_colour(e.mean);
+  return out;
+}
+
+std::vector<std::string> evidence_mismatches(const Evidence& a, const Evidence& b) {
+  std::vector<std::string> out;
+  auto axis = [&](const char* way, double pa, double pb) {
+    if (pa > 0 && pb > 0) {
+      const double r = pa > pb ? pa / pb : pb / pa;
+      if (r > 1.25)
+        out.push_back(std::string("the pattern repeats ") + count_text(pa) + " times " + way +
+                      " the original but " + count_text(pb) + " times " + way +
+                      " ours: its pieces are " + (pb < pa ? "too big" : "too small") +
+                      " (turn the recipe's rows, cols or scale)");
+    } else if (pa > 0) {
+      out.push_back(std::string("the original repeats ") + count_text(pa) + " times " + way +
+                    " a tile; ours shows no repeat " + way);
+    } else if (pb > 0) {
+      out.push_back(std::string("ours repeats ") + count_text(pb) + " times " + way +
+                    " a tile; the original shows no repeat " + way);
+    }
+  };
+  axis("across", a.per_tile_x, b.per_tile_x);
+  axis("down", a.per_tile_y, b.per_tile_y);
+  if (a.lines != b.lines && a.lines != "mixed" && b.lines != "mixed")
+    out.push_back("the original's lines are " + a.lines + ", ours " + b.lines);
+  if (a.contrast > 0.01 && b.contrast > 0.01) {
+    const double r = a.contrast / b.contrast;
+    if (r > 1.6 || r < 1 / 1.6)
+      out.push_back("contrast " + core::num::to_fixed(a.contrast, 2) + " in the original, " +
+                    core::num::to_fixed(b.contrast, 2) + " in ours");
+  }
+  return out;
+}
+
 std::string texture_name_of_file(std::string_view stem) {
   if (stem.starts_with("liq_")) return "*" + std::string(stem.substr(4));
   if (stem.starts_with("anim_")) return "+" + std::string(stem.substr(5));
   return std::string(stem);
 }
 
-std::vector<Candidate> rank_recipes(const Matcher& m, const lab::Picture& original, int n) {
+bool recipe_has_class(const Recipe& r, std::string_view klass) {
+  return std::find(r.tags.begin(), r.tags.end(), klass) != r.tags.end();
+}
+
+std::vector<Candidate> rank_recipes(const Matcher& m, const lab::Picture& original, int n,
+                                    std::string_view klass) {
   std::vector<Candidate> out;
   if (original.width <= 0 || original.height <= 0) return out;
   const Likeness want = likeness_of(original);
   for (const Matcher::Entry& e : m.entries) {
+    if (!klass.empty() && !recipe_has_class(e.recipe, klass)) continue;
     Likeness a = want;
     a.look.brightness = e.likeness.look.brightness;
     a.look.saturation = e.likeness.look.saturation;

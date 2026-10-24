@@ -20,6 +20,7 @@
 // ge:test tests/texgen_replace_test.cpp
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -112,6 +113,27 @@ std::optional<Replacement> replace_indexed(const Matcher& m, std::string_view na
 // The texture a match stands for, baked at w x h (the recipe at the next power of two, resized).
 lab::Picture bake_match(const Matcher& m, const TextureMatch& match, int w, int h);
 
+// WHAT AN AGENT ARGUES FROM. A match is argued, not taken on a number: the agent says what kind
+// of surface a texture is (bricks, planks, a riveted panel), what matters for that kind (how the
+// bricks are laid and how many courses, the boards' direction and width, the panels' count and
+// seams, the colour), and checks the reference meets it. The evidence is the texture's structure
+// in the units that argument uses; the mismatches are where a reference's bake differs from the
+// original in a way the eye catches before the colour: the wrong scale, lines the wrong way.
+struct Evidence {
+  int width = 0, height = 0;
+  double repeat_x = 0, repeat_y = 0;      // the pattern's repeat in texels (0: none)
+  double per_tile_x = 0, per_tile_y = 0;  // how many times it repeats across and down a tile
+  std::string lines;                      // "horizontal", "vertical", "mixed", "flat"
+  double brightness = 0, contrast = 0;
+  std::array<uint8_t, 3> mean{};
+};
+
+Evidence evidence_of(const lab::Picture& p);
+// One line: "repeat 16x8 px (4x8 a tile), horizontal lines, contrast 0.12, #825540".
+std::string evidence_text(const Evidence& e);
+// Each difference worth an argument, as a sentence an agent can act on; empty when none.
+std::vector<std::string> evidence_mismatches(const Evidence& original, const Evidence& ours);
+
 // A texture's name from its PNG's file name: a file system cannot always hold '*' or '+', so a
 // leading "liq_" stands for a liquid's '*' and "anim_" for an animation's '+'.
 std::string texture_name_of_file(std::string_view stem);
@@ -127,7 +149,9 @@ struct Candidate {
 };
 
 // The `n` nearest recipes for a texture by structure alone (no bake), nearest first.
-std::vector<Candidate> rank_recipes(const Matcher& m, const lab::Picture& original, int n);
+// With a class ("bricks"), only the recipes tagged with it.
+std::vector<Candidate> rank_recipes(const Matcher& m, const lab::Picture& original, int n,
+                                    std::string_view klass = {});
 
 // The reference a texture's match starts from: the seed of its name, its tint and spread.
 TextureRef colour_ref(std::string_view name, const lab::Picture& original);
@@ -135,7 +159,11 @@ TextureRef colour_ref(std::string_view name, const lab::Picture& original);
 // The `n` nearest recipes for a texture, measured whole (colour included) as `colour_ref` baked
 // with each: the structure's max(n, refine) nearest, re-ranked. What the match picks from.
 std::vector<Candidate> nearest_refs(const Matcher& m, std::string_view name,
-                                    const lab::Picture& original, int n);
+                                    const lab::Picture& original, int n,
+                                    std::string_view klass = {});
+
+// Whether a recipe's tags hold the class word.
+bool recipe_has_class(const Recipe& r, std::string_view klass);
 
 // Any reference (a recipe of the matcher's, its seed, params, tint and spread) baked at w x h.
 // Errors (an unknown recipe or param) go to `errors` and the picture is grey.

@@ -38,16 +38,32 @@ bool check_ref(std::string_view ref, int line_no, std::vector<Diagnostic>& error
 
 }  // namespace
 
+namespace {
+
+bool is_note(std::string_view k) { return k == "class" || k == "traits" || k == "judge"; }
+
+bool is_texture_kind(std::string_view k) {
+  return k == "texture" || k == "liquid" || k == "sky" || k == "surface";
+}
+
+}  // namespace
+
 TextureMapLine* TextureMap::find(std::string_view texture) {
   for (TextureMapLine& l : lines)
-    if (!l.keyword.empty() && l.texture == texture) return &l;
+    if (is_texture_kind(l.keyword) && l.texture == texture) return &l;
   return nullptr;
 }
 
 const TextureMapLine* TextureMap::find(std::string_view texture) const {
   for (const TextureMapLine& l : lines)
-    if (!l.keyword.empty() && l.texture == texture) return &l;
+    if (is_texture_kind(l.keyword) && l.texture == texture) return &l;
   return nullptr;
+}
+
+std::string TextureMap::note(std::string_view keyword, std::string_view texture) const {
+  for (const TextureMapLine& l : lines)
+    if (l.keyword == keyword && l.texture == texture) return l.value;
+  return "";
 }
 
 TextureMap parse_texture_map(std::string_view text, std::vector<Diagnostic>& errors) {
@@ -63,10 +79,32 @@ TextureMap parse_texture_map(std::string_view text, std::vector<Diagnostic>& err
     TextureMapLine l;
     l.raw = std::string(line);
     const size_t hash = comment_at(line);
-    const std::string_view body = trim(line.substr(0, hash));
     std::string_view rest;
-    const std::string_view keyword = first_word(body, &rest);
-    if (keyword != "texture" && keyword != "liquid" && keyword != "sky" && keyword != "surface") {
+    std::string_view keyword = first_word(line, &rest);
+    if (!is_note(keyword))
+      keyword = first_word(trim(line.substr(0, hash)), &rest);
+    if (is_note(keyword)) {
+      std::string_view text;
+      const std::string_view name = first_word(rest, &text);
+      if (name.empty() || text.empty()) {
+        errors.push_back({line_no, "write `" + std::string(keyword) + " <name> <text>`, e.g. " +
+                                       (keyword == "class"    ? "`class city2_1 bricks`"
+                                        : keyword == "traits" ? "`traits city2_1 running bond, 8 courses`"
+                                                              : "`judge city2_1 pass courses and bond match`")});
+        continue;
+      }
+      if (!map.note(keyword, name).empty()) {
+        errors.push_back({line_no, "`" + std::string(name) + "` has two `" +
+                                       std::string(keyword) + "` lines; keep one"});
+        continue;
+      }
+      l.keyword = std::string(keyword);
+      l.texture = std::string(name);
+      l.value = std::string(text);  // the whole line past the name, '#' and all: it is prose
+      map.lines.push_back(std::move(l));
+      continue;
+    }
+    if (!is_texture_kind(keyword)) {
       map.lines.push_back(std::move(l));  // a comment, a blank or a line for another reader
       continue;
     }
@@ -112,6 +150,10 @@ TextureMap parse_texture_map(std::string_view text, std::vector<Diagnostic>& err
 std::string texture_map_text(const TextureMap& map) {
   std::string out;
   for (const TextureMapLine& l : map.lines) {
+    if (is_note(l.keyword)) {
+      out += l.keyword + " " + l.texture + " " + l.value + "\n";
+      continue;
+    }
     if (l.keyword.empty()) {
       out += l.raw + "\n";
       continue;

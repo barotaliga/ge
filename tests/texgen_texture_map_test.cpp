@@ -19,6 +19,9 @@ TEST(a_map_reads_and_writes_back) {
       "liquid *lava1 lava\n"
       "sky sky4\n"
       "surface grass1 grass long=0.6\n"
+      "class city2_1 bricks\n"
+      "traits city2_1 running bond, 8 courses a tile, #825540 red-brown, pale mortar\n"
+      "judge city2_1 pass bond and courses match\n"
       "light lamp1 300\n";
   std::vector<tg::Diagnostic> errors;
   const tg::TextureMap map = tg::parse_texture_map(text, errors);
@@ -28,7 +31,10 @@ TEST(a_map_reads_and_writes_back) {
   CHECK(bricks->value == "red_bricks seed=7 tint=#825540 spread=#281913");
   CHECK(map.find("metal1_4") && !map.find("metal1_4")->pinned);
   CHECK(map.find("*lava1")->value == "lava" && map.find("sky4")->value.empty());
-  CHECK(map.find("lamp1") == nullptr);  // another reader's line, kept but not a texture
+  CHECK(map.find("lamp1") == nullptr);
+  CHECK(map.note("class", "city2_1") == "bricks");
+  CHECK(map.note("judge", "city2_1") == "pass bond and courses match");
+  CHECK(map.note("traits", "city2_1") == "running bond, 8 courses a tile, #825540 red-brown, pale mortar");  // another reader's line, kept but not a texture
   CHECK(tg::texture_map_text(map) == text);
 }
 

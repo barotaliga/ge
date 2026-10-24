@@ -125,6 +125,24 @@ near (`near` says which). A liquid comes back as `TextureKind::liquid` with its 
 is `water`), and a sky as `TextureKind::sky`, for the converter to map to its own materials.
 Build the `Matcher` once per conversion.
 
+### The argued loop: `ge texture match`
+
+A converter writes only a texture map an agent has argued (`<map>.texmap`,
+`texture_map.hpp`). `ge texture match <dir> --map=<map>.texmap` reads the map's textures as PNGs
+(kept outside the tree), writes a first reference for every texture, and re-measures every run.
+Per texture the agent writes four things into the map: `class` (what it is: bricks, blocks,
+planks, panels, ...; candidates narrow to recipes tagged with it), `traits` (how that class
+looks and how this one does: the laying pattern, the pieces a tile, the joints, the colour),
+the clone (the `texture` line, tuned and ended `# pin`), and `judge` (pass or fail, trait by
+trait). A look distance alone rates a wall of small regular blocks close to one of large
+irregular ones, so ge also measures each texture's evidence (`evidence_of`: how many times the
+pattern repeats across and down a tile, which way the lines run, the contrast) for the original
+and the clone, and prints each mismatch as a sentence to answer: "the pattern repeats 4 times
+down the original but 6 times down ours: its pieces are too small". Each run draws a sheet per
+texture (the original, the clone, the candidates, and under them the argument, the evidence and
+the mismatches), failed and unargued first. The procedure and each class's traits are the
+`texture-references` skill.
+
 ## The noise kinds
 
 `value`, `perlin` (gradient), `cells` (the distance to the nearest point), `edges` (F2 - F1:

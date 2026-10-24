@@ -1,6 +1,6 @@
 ---
 name: texture-references
-description: "Use to GROW engine/texgen's techniques by studying reference textures as inspiration: another game's wall and floor textures, a material photograph, a texture set's look. The loop: fetch the references into scratch (never the tree), sheet and study them, name the techniques the layer kinds lack (grain, baked light, palettes, patterns, wear), build them as layer kinds or keys, write recipes steered toward the references with texgen-compare (side by side, the look in numbers: brightness, contrast, saturation, warmth, grain, edges, colours), publish the comparison sheets, and delete the references. No pixel is copied and no source is named in the tree; M31d."
+description: "Use to MATCH a converted map's textures to recipes with ge texture match (the argued loop: class, traits, clone, judge, in the .texmap) and to GROW engine/texgen's techniques by studying reference textures as inspiration: another game's wall and floor textures, a material photograph, a texture set's look. The loop: fetch the references into scratch (never the tree), sheet and study them, name the techniques the layer kinds lack (grain, baked light, palettes, patterns, wear), build them as layer kinds or keys, write recipes steered toward the references with texgen-compare (side by side, the look in numbers: brightness, contrast, saturation, warmth, grain, edges, colours), publish the comparison sheets, and delete the references. No pixel is copied and no source is named in the tree; M31d."
 ---
 
 # Gather techniques from reference textures
@@ -75,3 +75,51 @@ ARGS=texture-references`.
 | grain | per-texel step against the neighbours | `speckle` contrast and size |
 | edges | share of texels with a hard step | structure: joints, studs, cracks; `shade` |
 | colours | distinct colours over texels | `palette` steps and dither (few shades: low) |
+
+## Matching a map's textures: the argued loop
+
+A map converted from another game may keep its structure but never its painted textures: each
+one becomes a recipe reference in the map's `<map>.texmap` (`engine/texgen/texture_map.hpp`),
+which the converter reads. `ge texture match <dir> --map=<map>.texmap` picks a first reference
+for every texture, but **a pick is not a match until the agent has argued it**. A look distance
+rates a wall of small running-bond blocks close to a wall of large irregular ones; only an
+argument about what the texture IS catches that. Per texture, in the texmap:
+
+1. **`class <name> <class>`: what it is.** One of the recipe tags: `bricks`, `blocks` (cut
+   stone), `flagstones`, `tiles`, `planks`, `panels`, `plate`, `metal`, `rock`, `plain`,
+   `scales`, `stripes`, or a new one (then a recipe must carry it). The candidates narrow to
+   recipes tagged with it.
+2. **`traits <name> <description>`: how a texture of that class looks, and this one.** Name the
+   traits that make the class read, then this texture's value for each (the table below). Write
+   numbers you can check on the sheet: "4 courses a tile, 2 to 3 blocks a course".
+3. **The clone: the `texture` line.** Pick a candidate, then turn its knobs (`rows`, `cols`,
+   params, the seed, the tint) until the traits hold. End the line with `# pin`. When no recipe
+   can show a trait (blocks that span two courses, rounded corners), the technique is missing:
+   build it (the loop above) before pinning.
+4. **`judge <name> pass|fail <reason>`: the clone held against the traits, trait by trait.**
+   Read the sheet (`<dir>/sheets/<name>.png`: the original, ours, the candidates; under them
+   both textures' evidence and every MISMATCH ge measured). A mismatch ge prints (the pattern
+   repeats 4 times down the original and 6 down ours, the lines run the other way, half the
+   contrast) is answered in the judge line or fixed, never ignored. Pass only when every trait
+   holds; a fail stays visible at the top of every run until it is fixed.
+
+Run `ge texture match` again after every change: unpinned lines are re-picked (inside the
+class), pinned ones are re-measured, and the sheets are redrawn, failed and unargued first. The
+texmap is done when every texture line is pinned and judged pass. Liquids and skies are named
+for their renderers and need no argument.
+
+| Class | The traits to argue | Usual knobs |
+| --- | --- | --- |
+| bricks | the bond (running, stack, Flemish), courses a tile, the brick's length to height, mortar width and colour against the brick, each brick's own shade | `bricks rows= cols= offset= mortar= mortar_color= vary=`, `palette`, the tint |
+| blocks (cut stone) | regular courses or irregular (big and small mixed, blocks spanning courses), courses a tile, the blocks' size spread, edge rounding, the joints' darkness | `blocks rows= cols= vary_size= bevel= chip=`, `shade` |
+| flagstones | the stones' size and spread, polygonal or rounded, the gaps' width | `cells`, `voronoi`, `shade` |
+| tiles | square or offset, tiles a tile, grout width and colour, glaze | `tiles rows= cols= mortar= mortar_color=` |
+| planks | the boards' direction, boards a tile, their ends, the grain's run, gaps | `planks`, `noise stretch=` |
+| panels | panels a tile, seams (pressed, gaps), rivets (where, how many, how big) | `panels rows= cols= rivet_*` |
+| plate | the stud pattern (domes, diamonds, holes), the studs' pitch a tile | `studs rows= cols= shape=` |
+| metal | flat or brushed, the grain, specks, stains and their colour | `speckle`, `noise stretch=`, `rust`, `grime` |
+| rock | chunk size, cracks, how lit the faces are | `noise kind=edges`, `cells`, `shade` |
+
+Lights, signs, emblems and tool textures (a lamp's grille, a face, a trigger volume) have no
+class to match yet: say so in the traits, judge them fail, and leave them for a technique of
+their own.
