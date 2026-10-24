@@ -148,6 +148,8 @@ FrameOptions frame_options(const cfg::Settings& s) {
   o.spray = s.spray;
   o.snowfall = s.snowfall;
   o.weather = s.weather;
+  o.clouds = s.clouds;
+  o.cover = s.cover;
   return o;
 }
 
@@ -346,6 +348,12 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   if (f.options.weather) {
     ge::mountain::app::sky_at(*f.level, view.time_s, view.weather, view.clouds,
                               f.options.clouds > 0);
+    // A cover picked by hand: the lowest layer's, the layers over it in the same proportion.
+    if (f.options.cover >= 0 && view.clouds.count > 0 && view.clouds.layers[0].cover > 0) {
+      const double k = f.options.cover / view.clouds.layers[0].cover;
+      for (int i = 0; i < view.clouds.count; ++i)
+        view.clouds.layers[i].cover = std::min(1.0, view.clouds.layers[i].cover * k);
+    }
     view.clouds.steps = f.options.clouds;
     view.clouds.quarter = f.options.cloud_quarter;
     view.clouds.spread = f.options.cloud_spread;
