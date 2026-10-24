@@ -29,6 +29,10 @@
 //   joints (render/skinning.hpp's `set_palettes`), and LODs made by `palette_source` posed by it
 //   in the vertex stage, this frame's and the last's (a crowd: one mesh, a pose an instance).
 //
+// - SEEING THROUGH (`set_see_through`, docs/rendering.md § Seeing through): an upright instance
+//   whose crown holds the eye or crosses the line to a given point keeps a dithered share of its
+//   prepass pixels, by the LOD band's dither, so a tree before a framed skier fades, never pops.
+//
 // - CASTERS: a family that casts into the sun's shadow maps (render/shadows.hpp) has a CASTER
 //   SLOT a map it is drawn into (`create_family_casters`): lists and draws of its own, filled by
 //   the cull's `shadow` entry (the map's box, no pyramid, the LOD by the radius in the map's
@@ -48,6 +52,7 @@
 // ge:keywords hi-z lod lod-band dither cross-fade bucket indirect-draw base-vertex compaction
 // ge:keywords vertex-pulling soa streams materials pick_lod create_family set_instances
 // ge:keywords encode_instances_cull encode_instances_depth encode_instances instance-stats
+// ge:keywords see-through set_see_through see_through_keep occluder-fade dithered-fade
 // ge:keywords casters caster-slot shadow-cull create_family_casters draw_casters
 // ge:keywords wire-probe wireframe encode_instances_wire palette-family palettes
 // ge:skill render
@@ -130,6 +135,21 @@ struct InstanceStats {
   uint32_t hidden = 0;    // and by this frame's: not drawn
 };
 
+// The point a family is seen through to, and how (above, § Seeing through). An instance stands as
+// its axis (its position up its rotated +y by its y scale) and its crown (the larger of its x and
+// z scales): a unit-sized upright mesh at its true size. Off (the default) keeps every pixel.
+struct SeeThrough {
+  bool on = false;
+  double subject[3] = {0, 0, 0};  // world, m: the point the camera frames
+  float width_m = 1.0f;           // the ease past the crown, m: whole this far off the line
+  float floor = 0.15f;            // the share of its pixels an instance on the line keeps
+  float short_m = 0.6f;           // the line stops this far short of the subject, m, so a tree
+                                  // beside him and not in front of him stays whole
+};
+
+// The share of its pixels `instance` keeps seen from `eye` through to `see`'s subject (1: all).
+float see_through_keep(const SeeThrough& see, const double eye[3], const Instance& instance);
+
 // The pipelines and layouts every family shares (added to the manifest once).
 struct InstancePipelines {
   wgpu::BindGroupLayout cull_layout, draw_layout, light_layout, empty_layout;
@@ -183,10 +203,13 @@ struct InstanceFamily {
   bool palettes_settle = true;
   // instances_cull.wgsl's `FamilyParams`, filled by prepare.
   struct Params {
-    uint32_t info[4];  // count, LODs, capacity, occlusion on
-    float cull[4];     // px a unit of tan on screen, kMinPixels, kLodBand, 0
-    uint32_t skin[4];  // joints a palette, this frame's first row, the last frame's, 0
+    uint32_t info[4];   // count, LODs, capacity, occlusion on
+    float cull[4];      // px a unit of tan on screen, kMinPixels, kLodBand, 0
+    uint32_t skin[4];   // joints a palette, this frame's first row, the last frame's, 0
+    float see[4];       // seen through: the subject (world xyz), the ease's width (0: off)
+    float see_more[4];  // the share kept on the line, the metres short of the subject, 0, 0
   } staged{};
+  SeeThrough see;  // `set_see_through`'s, staged by `prepare_family`
 };
 
 // A family of `capacity` instances (≤ kMaxInstances) of `meshes` (≤ kMaxBuckets LODs in all)
@@ -214,6 +237,9 @@ void set_instance_count(InstanceFamily& family, uint32_t count);
 void cut_family(InstanceFamily& family);
 // A palette family's rows for its parameters' `skin`: joints, this frame's first row, the last's.
 void palette_rows(const InstanceFamily& family, uint32_t out[4]);
+
+// The point the family is seen through to from the next `prepare_family` on (off: whole).
+void set_see_through(InstanceFamily& family, const SeeThrough& see);
 
 // The family's parameters for this frame (the screen's scale for the LOD, whether the last
 // frame's pyramid may cull) and its draws' arguments reset.

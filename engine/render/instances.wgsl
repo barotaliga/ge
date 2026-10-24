@@ -5,7 +5,8 @@
 // frame.wgsl's functions, seen through the haze, with its motion
 // from the last frame's place (and a skinned vertex's own last place in its mesh). A palette
 // LOD's vertex is posed here, by its instance's palette this frame and the last (`skinned`). Drawn twice from one `@invariant` vertex stage: depth only
-// (`fs_depth`, which keeps a LOD band's dithered share of the pixels), then shaded where the
+// (`fs_depth`, which keeps a LOD band's dithered share of the pixels, and a seen-through
+// instance's: `see_keep`), then shaded where the
 // depth is `equal` (`fs_main`, which never discards).
 #include "render/wgsl/frame.wgsl"
 #include "render/wgsl/terrain_common.wgsl"
@@ -72,6 +73,58 @@ fn skinned(skin: u32, first: u32, p: vec3f, n: vec3f) -> Posed {
   return out;
 }
 
+// The least distance between segments p0 p1 and q0 q1 (either may be a point): the twin of
+// instances.cpp's `segment_distance`.
+fn segment_gap(p0: vec3f, p1: vec3f, q0: vec3f, q1: vec3f) -> f32 {
+  let d1 = p1 - p0;
+  let d2 = q1 - q0;
+  let r = p0 - q0;
+  let a = dot(d1, d1);
+  let e = dot(d2, d2);
+  let f = dot(d2, r);
+  var s = 0.0;
+  var t = 0.0;
+  if (a <= 1e-8 && e <= 1e-8) {
+    s = 0.0;
+  } else if (a <= 1e-8) {
+    t = clamp(f / e, 0.0, 1.0);
+  } else {
+    let c = dot(d1, r);
+    if (e <= 1e-8) {
+      s = clamp(-c / a, 0.0, 1.0);
+    } else {
+      let b = dot(d1, d2);
+      let den = a * e - b * b;
+      s = select(0.0, clamp((b * f - c * e) / den, 0.0, 1.0), den > 1e-8);
+      t = (b * s + f) / e;
+      if (t < 0.0) {
+        t = 0.0;
+        s = clamp(-c / a, 0.0, 1.0);
+      } else if (t > 1.0) {
+        t = 1.0;
+        s = clamp((b - c) / a, 0.0, 1.0);
+      }
+    }
+  }
+  return length((p0 + d1 * s) - (q0 + d2 * t));
+}
+
+// The share of its pixels an instance at `p` (rotation q, scale s) keeps, seen from the eye
+// through to the family's subject (render/instances.hpp § Seeing through): its axis up its +y by
+// s.y, its crown the larger of s.x and s.z. 1 when the family is not seen through.
+fn see_keep(p: vec3f, q: vec4f, s: vec3f) -> f32 {
+  if (fp.see.w <= 0.0) {
+    return 1.0;
+  }
+  let to = fp.see.xyz - frame.eye.xyz;
+  let len = length(to);
+  let reach = select(0.0, 1.0 - fp.see_more.y / len, len > fp.see_more.y);
+  let foot = p - frame.eye.xyz;
+  let top = foot + quat_rotate(q, vec3f(0.0, s.y, 0.0));
+  let gap = segment_gap(vec3f(0.0), to * reach, foot, top) - max(s.x, s.z);
+  return mix(fp.see_more.x, 1.0, smoothstep(0.0, fp.see.w, gap));
+}
+
 struct VertexOut {
   @invariant @builtin(position) position: vec4f,
   @location(0) rel: vec3f,       // camera-relative world position, m
@@ -79,6 +132,7 @@ struct VertexOut {
   @location(2) normal: vec3f,
   @location(3) @interpolate(flat) material: u32,
   @location(4) @interpolate(flat) band: u32,  // the entry's band bits (0: no band)
+  @location(5) @interpolate(flat) keep: f32,  // the share seen through keeps (1: all)
 }
 
 @vertex
@@ -116,6 +170,7 @@ fn vs_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) iid: u32) -
   out.normal = quat_rotate(q, normalize(normal / s.xyz));
   out.material = u32(p.w) + v.part;
   out.band = entry >> 23u;
+  out.keep = see_keep(p.xyz, q, s.xyz);
   return out;
 }
 
@@ -135,9 +190,19 @@ fn band_keeps(band: u32, pixel: vec2f) -> bool {
   return (dither(pixel) < share) != coarse;
 }
 
+// What of a seen-through instance stays: the pixels whose dither is under its share. The same
+// dither as the band's, so in a band the two LODs together keep just that share.
+fn see_keeps(keep: f32, pixel: vec2f) -> bool {
+  return keep >= 1.0 || dither(pixel) < keep;
+}
+
+fn kept(in: VertexOut) -> bool {
+  return band_keeps(in.band, in.position.xy) && see_keeps(in.keep, in.position.xy);
+}
+
 @fragment
 fn fs_depth(in: VertexOut) {
-  if (!band_keeps(in.band, in.position.xy)) {
+  if (!kept(in)) {
     discard;
   }
 }
@@ -169,7 +234,7 @@ fn fs_main(in: VertexOut, @builtin(front_facing) front: bool) -> FragmentOut {
 // The overdraw probe (labs only): one per kept fragment that passes the depth test.
 @fragment
 fn fs_count(in: VertexOut) -> @location(0) vec4f {
-  if (!band_keeps(in.band, in.position.xy)) {
+  if (!kept(in)) {
     discard;
   }
   return vec4f(1.0, 0.0, 0.0, 0.0);
@@ -185,7 +250,7 @@ struct WireOut {
 
 @fragment
 fn fs_wire(in: VertexOut) -> WireOut {
-  if (!band_keeps(in.band, in.position.xy)) {
+  if (!kept(in)) {
     discard;
   }
   var out: WireOut;
