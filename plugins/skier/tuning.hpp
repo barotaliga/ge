@@ -134,6 +134,14 @@ inline constexpr double kBodyRadius = 0.35;
 // Meeting a trunk faster than this along the line between them, m/s, is a wipeout; slower, he
 // glances off it.
 inline constexpr double kTreeSpeed = 3;
+// THE SKIS AHEAD OF HIM: the tips stand this share of the pair's length ahead of the boots (the
+// boots mounted a little behind the middle), and the pair, side by side, is this wide to a trunk
+// either side of its line, m. A circle at the tip and one halfway to it meet a trunk before his
+// body does; a glance off them turns the skis with his way when he is going faster than
+// `kTipTurnSpeed`, m/s.
+inline constexpr double kTipShare = 0.55;
+inline constexpr double kTipRadius = 0.12;
+inline constexpr double kTipTurnSpeed = 0.5;
 // A skier put down from outside (`put_down`) slides on this share of his load for the one step
 // before his body is thrown.
 inline constexpr double kBodyFriction = 0.6;

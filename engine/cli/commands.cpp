@@ -138,6 +138,16 @@ constexpr FlagSpec kGoldenWriteFlags[] = {
 
 constexpr FlagSpec kPlayFlags[] = {
     {"seed", "<n>", "the run's seed (default 1)"}, kPreset, kEngine, kRepo};
+constexpr FlagSpec kServerFlag{"server", "",
+                               "a dedicated server's console: the server's cvars may be set"};
+constexpr FlagSpec kCvarFlags[] = {kServerFlag, kPreset, kEngine, kRepo};
+constexpr FlagSpec kCfgFlags[] = {
+    kServerFlag,
+    {"cmd", "<commands>", "exec: more commands run after the files (`r_bloom 0; echo $r_bloom`)"},
+    {"out", "<file>", "dump: write the cfg here instead of printing it"},
+    kPreset,
+    kEngine,
+    kRepo};
 constexpr FlagSpec kSimFlags[] = {
     {"seeds", "<a,b,...>", "the seeds the pilot runs (default 1)"},
     {"human", "",
@@ -441,6 +451,26 @@ const CommandSpec kCommands[] = {
      "the options it weighed and their scores, the one it took and by what margin); --flips for "
      "every change of mind, --timeline for a chart",
      kWhyFlags, "ge why runs/fall_line-38.inputs --step=1200 --around=6", "play-test"},
+    {"cvar ls", "[<prefix>]", 0, 1, "see",
+     "the game's cvars (the settings a cfg may change): value, default, range, flags (A "
+     "archived, S server info, V the server's, C cheat, L latched) and what each does",
+     kCvarFlags, "ge cvar ls r_", "play-test"},
+    {"cvar get", "<name>...", 1, -1, "see",
+     "the named cvars, each with its default, range, flags and help; an unknown name gets the "
+     "nearest one",
+     kCvarFlags, "ge cvar get r_bloom sv_seed", "play-test"},
+    {"cfg check", "<file>...", 1, -1, "build",
+     "cfg files run in a fresh console of the game: every unknown command, refused set and name "
+     "nothing reads a finding at its file:line",
+     kCfgFlags, "ge cfg check autoexec.cfg", "play-test"},
+    {"cfg exec", "<file>...", 0, -1, "see",
+     "cfg files run in a fresh console of the game: what they changed, what they printed, and "
+     "their problems; --cmd runs more after them",
+     kCfgFlags, "ge cfg exec autoexec.cfg --cmd=\"cvarlist r_\"", "play-test"},
+    {"cfg dump", "", 0, 0, "create",
+     "every setting a player may change, at its default, each commented with what it does: "
+     "the cfg to start one's own from",
+     kCfgFlags, "ge cfg dump --out=my.cfg", "play-test"},
     {"net sim", "", 0, 0, "measure",
      "fake-traffic clients and a host over chosen link conditions, no game needed: delivery, "
      "round trip, loss, bandwidth and a digest a session; --capture for the pcap",
