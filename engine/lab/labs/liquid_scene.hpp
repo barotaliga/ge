@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -37,6 +38,20 @@ namespace ge::lab::liquid_scene {
 namespace gl = ge::lab;
 namespace gr = ge::render;
 namespace gw = ge::water;
+
+// Whether GE_GPU_REQUIRE=1 asks for a device (so a missing adapter fails the lab, not skips it).
+inline bool gpu_required() {
+#ifdef _MSC_VER
+  char* v = nullptr;
+  size_t n = 0;
+  const bool on = _dupenv_s(&v, &n, "GE_GPU_REQUIRE") == 0 && v && std::strcmp(v, "1") == 0;
+  std::free(v);
+  return on;
+#else
+  const char* v = std::getenv("GE_GPU_REQUIRE");
+  return v && std::strcmp(v, "1") == 0;
+#endif
+}
 
 // THE PIT: a quarry floor at 10 m, a pit 40 x 40 m round (200, 200) with walls 3 m high and a
 // bed at 6 m, stones on its bed; the liquid's top at 9 m. The field is 256 m a side at 1 m.

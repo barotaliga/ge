@@ -12,8 +12,6 @@
 // ge:test tests/render_liquid_test.cpp
 #include <cctype>
 #include <cmath>
-#include <cstdlib>
-#include <cstring>
 #include <memory>
 #include <string>
 #include <vector>
@@ -71,8 +69,7 @@ void run(gl::Lab& lab) {
   const uint32_t h = w * 9 / 16;
   auto device = ge::gpu::create_device({.label = "gpu-slime", .validation = 1});
   if (!device) {
-    const char* req = std::getenv("GE_GPU_REQUIRE");
-    if (req && std::strcmp(req, "1") == 0) {
+    if (ls::gpu_required()) {
       lab.fail("no GPU device, and GE_GPU_REQUIRE=1",
                "Install Mesa's Vulkan drivers (apt install mesa-vulkan-drivers). Skill: gpu.");
     }
