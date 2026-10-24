@@ -40,14 +40,14 @@ float lever_value(const TouchControl& c, float ay, float y, float r) {
 
 // The flick's look back: the finger at `y` at `t`, kept while it is inside the window.
 void track(TouchValue& g, float y, double t, float window_s) {
-  g.ys[static_cast<size_t>((g.at + g.n) % TouchValue::kTrack)] = y;
-  g.ts[static_cast<size_t>((g.at + g.n) % TouchValue::kTrack)] = t;
+  g.heights[static_cast<size_t>((g.at + g.n) % TouchValue::kTrack)] = y;
+  g.times[static_cast<size_t>((g.at + g.n) % TouchValue::kTrack)] = t;
   if (g.n < TouchValue::kTrack) {
     ++g.n;
   } else {
     g.at = (g.at + 1) % TouchValue::kTrack;
   }
-  while (g.n > 1 && t - g.ts[static_cast<size_t>(g.at)] > window_s) {
+  while (g.n > 1 && t - g.times[static_cast<size_t>(g.at)] > window_s) {
     g.at = (g.at + 1) % TouchValue::kTrack;
     --g.n;
   }
@@ -70,14 +70,14 @@ void flick(const TouchControl& c, const TouchValue& w, TouchValue& g, double now
       // rose from it to here.
       int low = 0;
       for (int i = 1; i < g.n; i++) {
-        if (g.ys[static_cast<size_t>((g.at + i) % TouchValue::kTrack)] >
-            g.ys[static_cast<size_t>((g.at + low) % TouchValue::kTrack)]) {
+        if (g.heights[static_cast<size_t>((g.at + i) % TouchValue::kTrack)] >
+            g.heights[static_cast<size_t>((g.at + low) % TouchValue::kTrack)]) {
           low = i;
         }
       }
       const size_t li = static_cast<size_t>((g.at + low) % TouchValue::kTrack);
-      const float rise = g.ys[li] - w.fy;
-      const double dt = now - g.ts[li] > 1e-3 ? now - g.ts[li] : 1e-3;
+      const float rise = g.heights[li] - w.fy;
+      const double dt = now - g.times[li] > 1e-3 ? now - g.times[li] : 1e-3;
       const float speed = static_cast<float>(rise / dt);
       if (rise >= k.rise && speed >= k.speed) {
         g.armed = false;

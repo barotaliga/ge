@@ -96,8 +96,8 @@ struct TouchValue {
   bool tapped = false, armed = true;
   float strength = 0, peak = 0;
   static constexpr int kTrack = 32;
-  std::array<float, kTrack> ys{};
-  std::array<double, kTrack> ts{};
+  std::array<float, kTrack> heights{};
+  std::array<double, kTrack> times{};
   int at = 0, n = 0;
 };
 
