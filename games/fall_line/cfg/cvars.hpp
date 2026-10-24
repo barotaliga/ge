@@ -62,6 +62,7 @@ struct Settings {
   double sky_rate = 0;             // the sky's hours per hour of the run (0: the hour stands)
   // The kind of sky (render/sky_style.hpp's type names) and its knobs, each kept where negative
   // (render/sky_style.hpp's SkyKnobs; angles in degrees).
+  std::string cloud_kinds = "map";  // sv_clouds: the kinds of cloud drawn (map: the map's)
   std::string sky_type = "earth";
   double sky_air = -1, sky_dust = -1, sun_size = -1, sun2 = -1;
   double planet = -1, planet_dir = -1, planet_el = -1, ring = -1;
