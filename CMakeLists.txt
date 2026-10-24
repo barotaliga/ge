@@ -14,7 +14,7 @@
 #   ge_lab       the lab framework (engine/lab: the contract, the runner, the raster, the PNG,
 #                the series files, the charts and the model views)
 #   ge_ai        the bots' layer (engine/ai: the decision record `ge why` reads)
-#   ge_move      character movement (engine/move: the knobs, the step, the box world, scenarios)
+#   ge_move      character movement (engine/move: the knobs and their cvars, the step, scenarios)
 #   ge_camera    the camera (engine/camera: poses, followers, rigs, shake, transitions, the stack)
 #   ge_play      the play contract (engine/play: GameSpec and Run, the session, the input log,
 #                the bench, the stills `ge shot` draws)
@@ -211,7 +211,7 @@ target_link_libraries(ge_input PUBLIC ge_core)
 # platform; a game binds the knobs to its console and answers the trace with its own world.
 file(GLOB GE_MOVE_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/move/*.cpp)
 add_library(ge_move STATIC ${GE_MOVE_SOURCES})
-target_link_libraries(ge_move PUBLIC ge_core)
+target_link_libraries(ge_move PUBLIC ge_core ge_console)
 
 # The camera (engine/camera, docs/camera.md): the pose, the followers, the subject, the rigs
 # (first person, boom, mounted, orbit, planted, free), the shake, the transitions and the stack.
