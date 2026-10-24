@@ -88,6 +88,7 @@ enum class EventKind : uint8_t {
   gunfire,    // a round fired, into him, into the snow or a trunk, or past him (gunfire.hpp)
   hurt,       // injuries taken (`gate` how many this step, `value` the body's severity score after)
   died,       // the body gave out (`value` its severity score); his run is over
+  army_para,  // an army paramotor (`gate` its ArmyParaChange, `value` its id; army_para.hpp)
 };
 
 const char* event_name(EventKind kind);

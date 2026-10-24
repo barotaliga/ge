@@ -61,8 +61,10 @@ seed. The skier on the snow is `plugins/skier` (the `skier` skill).
    wounds judged on the body, death ending the hunt; the `gunfire` lab.
 11. The door gunners (M15e2, done): the roster's gunners on the hunting machines' door guns, laid
    in their arcs and fired by the rules of fire; the `gunfire` lab's doors table.
-12. Next: the free ride's other systems, a row each (M13+), and the army rows that wait on them
-   (M15d2 his answer to the machines, M15d3 the heavier machines, M15e3–M15e5 the rest of the
+12. The paramotor riflemen (M15e3, done): the free ride's wing flown by the army's hands round a
+   circle over him, the rifle, home; the `army-para` lab.
+13. Next: the free ride's other systems, a row each (M13+), and the army rows that wait on them
+   (M15d2 his answer to the machines, M15d3 the heavier machines, M15e4–M15e5 the rest of the
    air).
 
 ## Rules
@@ -160,6 +162,19 @@ that never comes fails it. A change to `army_sled*.cpp`, `army_drive.cpp` or the
 build/release/tests/fall_line_army_sled_test`), `fall_line_army.txt`, `fall_line_wanted.txt` and
 the `army` and `army-sleds` digests: put the sleds table before and after in the PR. A race's map
 has no snowmobile spot, so a race sends no machines.
+
+`army-para` (scenario, `games/fall_line/labs/army_para_lab.cpp`): the army's paramotor riflemen
+on seed 38 (v10) with only the paramotors sent (`four`, `five`, `home`): the paramotors table,
+every rig's path round him and every rig's height over the snow. A rig brought down by the snow
+or a crown, a roster not filled, no round fired at four stars or a rig still out after `home`
+fails it. A change to `army_para*.cpp`, its numbers or `plugins/paramotor` moves
+`tests/golden/fall_line_army_para.txt` (`GE_GOLDEN_WRITE=1
+build/release/tests/fall_line_army_para_test`), `fall_line_gunfire.txt`, `fall_line_wanted.txt`
+and the `army-para` digest: put the paramotors table before and after in the PR. The rigs are the
+free ride's own paramotor flown by `paramotor::para_pilot` to an aim the army sets; the wing's
+physics decides what it can do, so a rig in sinking air sinks even at full throttle: hold the
+height in the aim (`kHoldM`) and gentle the toggles under the floor rather than asking more of
+the pilot.
 
 `army-flight` (scenario, `games/fall_line/labs/army_flight_lab.cpp`): the army's helicopters on
 seed 38 (v10) with the army's other arms on (`open`, `rope`, `leapfrog`, `hide`, `fast`): the
