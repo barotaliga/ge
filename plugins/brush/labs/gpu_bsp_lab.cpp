@@ -205,12 +205,14 @@ gl::Picture overview(const ba::Scene& s, int size) {
       col = {uint8_t(60 + 150 * t), uint8_t(60 + 150 * t), uint8_t(64 + 150 * t)};
     fill_tri(p, pa, pb, pc, col);
   }
-  for (double x = std::ceil(s.mins[0] / 10) * 10; x <= s.maxs[0]; x += 10) {
+  for (int gx = int(std::ceil(s.mins[0] / 10)); gx * 10.0 <= s.maxs[0]; ++gx) {
+    const double x = gx * 10.0;
     double q[2];
     to(x, s.mins[2], q);
     gl::draw_text(p, q[0], size - 12, ls::fixed(x, 0), {150, 150, 160});
   }
-  for (double z = std::ceil(s.mins[2] / 10) * 10; z <= s.maxs[2]; z += 10) {
+  for (int gz = int(std::ceil(s.mins[2] / 10)); gz * 10.0 <= s.maxs[2]; ++gz) {
+    const double z = gz * 10.0;
     double q[2];
     to(s.mins[0], z, q);
     gl::draw_text(p, 2, q[1] - 3, ls::fixed(z, 0), {150, 150, 160});
@@ -250,13 +252,14 @@ bool open_at(const ge::brush::Map& m, const double e[3]) {
 
 // How far the eye can see along a heading at its own height before a wall, m (up to 40).
 double open_run(const ge::brush::Map& m, const double e[3], double heading) {
-  double d = 0;
-  for (; d < 40; d += 0.4) {
+  int i = 0;
+  for (; i * 0.4 < 40; ++i) {
+    const double d = i * 0.4;
     const double p[3] = {e[0] + d * ge::core::libm::sin(heading), e[1],
                          e[2] + d * ge::core::libm::cos(heading)};
     if (!open_at(m, p)) break;
   }
-  return d;
+  return i * 0.4;
 }
 
 double widest(const ge::brush::Map& m, const double e[3]) {

@@ -18,10 +18,11 @@ double open_sky_of(const Map& map, const LiquidPatch& p) {
     for (int j = 0; j < 8; ++j) {
       const double x = p.box[0] + (i + 0.5) / 8 * (p.box[2] - p.box[0]);
       const double z = p.box[1] + (j + 0.5) / 8 * (p.box[3] - p.box[1]);
-      for (double y = p.level + 0.1; y < p.level + 300; y += 0.5) {
+      for (int k = 0; k < 600; ++k) {
+        const double y = p.level + 0.1 + 0.5 * k;
         const float f[3] = {float(x / kUnitM), float(z / kUnitM), float(y / kUnitM)};
         const Leaf& l = map.leaves[leaf_at(map, f)];
-        if (y == p.level + 0.1 && l.solid) break;  // the point is in a wall, not over the pool
+        if (k == 0 && l.solid) break;  // the point is in a wall, not over the pool
         if (l.contents == -6) {
           ++seen;
           ++open;

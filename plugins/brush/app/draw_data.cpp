@@ -248,8 +248,8 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
               for (int c = 0; c < 4; ++c) {
                 int sum = 0;
                 for (uint32_t d = 0; d < 4; ++d)
-                  sum += rgba[i][k - 1]
-                             [((size_t(2 * y + d / 2) * pw) + 2 * x + d % 2) * 4 + size_t(c)];
+                  sum += rgba[i][k - 1][((size_t(2 * y + d / 2) * pw) + size_t(x) * 2 + d % 2) * 4 +
+                                        size_t(c)];
                 rgba[i][k][(size_t(y) * w + x) * 4 + size_t(c)] = uint8_t(sum / 4);
               }
         }
