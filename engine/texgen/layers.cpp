@@ -67,6 +67,9 @@ constexpr KeyDef kBricks[] = {
     {"vary", K::number, 0.15, 0, 1, "", "", "how much bricks differ in colour"},
     {"mortar_color", K::colour, 0, 0, 1, "#a39c8e", "", "the joint"},
     {"rough", K::number, 0.85, 0, 1, "", "", "the brick's roughness"},
+    {"color2", K::colour, 0, 0, 1, "#3a4a5a", "", "the second colour of a checkerboard"},
+    {"checker", K::number, 0, 0, 1, "", "",
+     "every other piece toward color2: 1 a full checkerboard"},
 };
 
 constexpr KeyDef kTiles[] = {
@@ -80,6 +83,9 @@ constexpr KeyDef kTiles[] = {
     {"vary", K::number, 0.05, 0, 1, "", "", "how much tiles differ in colour"},
     {"mortar_color", K::colour, 0, 0, 1, "#6e6a62", "", "the grout"},
     {"rough", K::number, 0.35, 0, 1, "", "", "the tile's roughness"},
+    {"color2", K::colour, 0, 0, 1, "#3a4a5a", "", "the second colour of a checkerboard"},
+    {"checker", K::number, 0, 0, 1, "", "",
+     "every other piece toward color2: 1 a full checkerboard"},
 };
 
 constexpr KeyDef kPlanks[] = {

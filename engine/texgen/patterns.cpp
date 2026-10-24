@@ -41,7 +41,8 @@ void paint_bricks(Surface& s, const Args& a) {
   // Joint and bevel widths in tile units: shares of a course's height.
   const double joint = a.n("mortar") / rows * 0.5;
   const double bevel = std::max(a.n("bevel") / rows * 0.5, 1.0 / s.size);
-  const Rgb brick = a.c("color"), mortar = a.c("mortar_color");
+  const Rgb brick = a.c("color"), mortar = a.c("mortar_color"), second = a.c("color2");
+  const double checker = a.n("checker");
   NoiseSpec ragged{NoiseKind::perlin, rows * 4, 3, 0.5, 1, 0, a.seed + 5};
   const double aa = 1.0 / s.size;
   for_texels(s.size, [&](int x, int y, double u, double v) {
@@ -58,7 +59,8 @@ void paint_bricks(Surface& s, const Args& a) {
     const double in = smoothstep(w - aa, w + aa, d);
     const double tilt = depth * 0.08 * (hash01(bx, by, a.seed + 9) - 0.5);
     const size_t i = s.at(x, y);
-    set_colour(s, i, mix(mortar, varied(brick, vary, bx, by, a.seed), in));
+    const Rgb own = (bx + by) % 2 ? mix(brick, second, checker) : brick;
+    set_colour(s, i, mix(mortar, varied(own, vary, bx, by, a.seed), in));
     s.plane[kHeight][i] = static_cast<float>(clamp01(0.5 + depth * (face - 0.5) + tilt * face));
     s.plane[kRough][i] = static_cast<float>(lerp(0.95, rough, in));
     s.plane[kMetal][i] = 0;

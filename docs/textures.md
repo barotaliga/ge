@@ -70,6 +70,7 @@ the tree and none is named in it. What each round found and built:
 | Per-texel grain | Every texel a little brighter or darker than its neighbours (salt and pepper), sometimes in clumps of two or four | `speckle` `contrast`, `size` |
 | Coloured specks | A second colour in a share of the grains, gathering in the pits: patina on copper, blue flecks in dark iron | `speckle` `amount`, `color`, `cavity` |
 | A small palette | Every colour snapped onto a few ramps of shades, near black up to the colour and on toward white; an ordered dither between shades | `palette` |
+| Checkerboards | Every other tile or brick in a second colour | `tiles`, `bricks` `color2`, `checker` |
 | Uneven masonry | Courses of different heights, blocks of different widths, each course's joints shifted | `blocks` |
 | Irregular ashlar | Even courses of long and short blocks, some running down through two courses (`span`), the joint drawn beside each tall block | `blocks` |
 | Stud fields | Rows of domes, pyramids, the leaning bars of diamond plate, or holes | `studs` |
