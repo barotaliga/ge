@@ -93,14 +93,16 @@ std::optional<Image> decode_png(std::span<const uint8_t> bytes) {
   const auto raw = inflate_zlib(z);
   // A row's bytes: whole bytes for 8 bits a channel, packed indices below that.
   const size_t stride = (size_t{width} * static_cast<size_t>(channels) * depth + 7) / 8;
-  if (!raw || raw->size() != (stride + 1) * height) return {};
+  if (!raw) return {};
+  const std::vector<uint8_t>& inflated = *raw;
+  if (inflated.size() != (stride + 1) * height) return {};
   // Undo each row's filter in place, against the row above (zeros above the first). The filter's
   // byte step is a pixel's bytes, at least one.
   std::vector<uint8_t> rows(stride * height);
   const size_t bpp = std::max<size_t>(1, static_cast<size_t>(channels) * depth / 8);
   for (size_t y = 0; y < height; y++) {
-    const uint8_t filter = (*raw)[y * (stride + 1)];
-    const uint8_t* in = &(*raw)[y * (stride + 1) + 1];
+    const uint8_t filter = inflated[y * (stride + 1)];
+    const uint8_t* in = &inflated[y * (stride + 1) + 1];
     uint8_t* out = &rows[y * stride];
     const uint8_t* up = y > 0 ? out - stride : nullptr;
     for (size_t i = 0; i < stride; i++) {

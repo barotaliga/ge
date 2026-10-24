@@ -329,28 +329,30 @@ struct Loader {
     int texcoord = 0;
     float xf[6] = {1, 0, 0, 0, 1, 0};
   };
-  std::map<cgltf_size, std::optional<Image>> images;     // decoded once an image
+  std::map<cgltf_size, Image> images;                    // decoded once an image
+  std::vector<cgltf_size> unread;                        // images that could not be
   std::map<std::tuple<int, uint32_t>, int> baked_parts;  // (source part, sRGB colour) to part
 
   const Image* image_of(const cgltf_image* img) {
     const cgltf_size i = cgltf_image_index(data, img);
-    auto it = images.find(i);
-    if (it != images.end()) return it->second ? &*it->second : nullptr;
-    std::optional<Image> out;
+    if (const auto it = images.find(i); it != images.end()) return &it->second;
+    if (std::find(unread.begin(), unread.end(), i) != unread.end()) return nullptr;
     if (!img->buffer_view) {
       note(
           "a texture outside the file's buffers (a URI image) is skipped: its base colour factor "
           "is used");
-    } else {
-      const uint8_t* bytes = cgltf_buffer_view_data(img->buffer_view);
-      out = bytes ? decode_png({bytes, img->buffer_view->size}) : std::nullopt;
-      if (!out) {
-        note(
-            "a texture that is not an 8-bit PNG (a JPEG, a 16-bit or interlaced PNG) is "
-            "skipped: its base colour factor is used");
+    } else if (const uint8_t* bytes = cgltf_buffer_view_data(img->buffer_view)) {
+      if (std::optional<Image> out = decode_png({bytes, img->buffer_view->size})) {
+        return &images.emplace(i, std::move(*out)).first->second;
       }
     }
-    return images.emplace(i, std::move(out)).first->second ? &*images[i] : nullptr;
+    if (img->buffer_view) {
+      note(
+          "a texture that is not an 8-bit PNG (a JPEG, a 16-bit or interlaced PNG) is "
+          "skipped: its base colour factor is used");
+    }
+    unread.push_back(i);
+    return nullptr;
   }
 
   // The texture a primitive's material draws its base colour from, if one can be read.
@@ -709,7 +711,7 @@ LoadResult load_gltf(std::span<const uint8_t> bytes, std::string_view where) {
     return result;
   }
   result.ok = true;
-  Loader l{data, name, result, {}, {}, {}, -1, {}, {}};
+  Loader l{data, name, result, {}, {}, {}, -1, {}, {}, {}};
   if (l.joints() && l.skins() && l.meshes()) l.clips();
   if (result.ok && result.model.meshes.empty()) {
     l.fail("it has no mesh in its scene", "export the objects with their meshes; skill: assets");

@@ -131,7 +131,9 @@ TEST(a_palette_png_reads_at_a_packed_depth_with_its_transparency) {
   const auto png =
       palette_png(5, 2, {0, 1, 2, 1, 0}, {255, 0, 0, 0, 0, 255, 0, 255, 0}, {255, 255, 128});
   const auto img = a::decode_png(png);
-  CHECK(img && img->width == 5 && img->height == 1);
+  CHECK(img.has_value());
+  if (!img) return;
+  CHECK(img->width == 5 && img->height == 1);
   const uint8_t want[5][4] = {
       {255, 0, 0, 255}, {0, 0, 255, 255}, {0, 255, 0, 128}, {0, 0, 255, 255}, {255, 0, 0, 255}};
   for (int x = 0; x < 5; ++x) CHECK(std::memcmp(&img->rgba[size_t(x) * 4], want[x], 4) == 0);
@@ -142,7 +144,10 @@ TEST(a_palette_png_reads_at_a_packed_depth_with_its_transparency) {
 }
 
 TEST(the_texel_is_the_nearest_and_repeats) {
-  const auto img = *a::decode_png(palette_png(2, 8, {0, 1}, {10, 20, 30, 40, 50, 60}, {}));
+  const auto read = a::decode_png(palette_png(2, 8, {0, 1}, {10, 20, 30, 40, 50, 60}, {}));
+  CHECK(read.has_value());
+  if (!read) return;
+  const a::Image& img = *read;
   CHECK(a::texel(img, 0.2f, 0.5f)[0] == 10);
   CHECK(a::texel(img, 0.7f, 0.5f)[0] == 40);
   CHECK(a::texel(img, 1.2f, 0.5f)[0] == 10);
