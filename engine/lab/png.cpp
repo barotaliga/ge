@@ -14,7 +14,7 @@
 #include <fstream>
 #include <iterator>
 
-#include "lab/inflate.hpp"
+#include "assets/inflate.hpp"
 
 namespace ge::lab {
 
