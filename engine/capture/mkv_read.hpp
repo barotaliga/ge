@@ -27,6 +27,8 @@ struct ReadTrack {
   double rate = 0;
   uint64_t channels = 0, bits = 0;
   uint64_t default_duration_ns = 0;
+  std::vector<uint8_t> codec_private;
+  uint64_t codec_delay_ns = 0, seek_pre_roll_ns = 0;
 };
 
 struct ReadBlock {
