@@ -1,5 +1,5 @@
 # Shooter's Edge sound registry: one row a sound the game needs, by our name.
-# Columns (tab-separated): name, what it is, what plays or shows it, scope (game | creature), status (replaced | open), source pack id (CREDITS.md).
+# Columns (tab-separated): name, what it is, what plays or shows it, scope (game | creature), status (replaced | open | skip: no multiplayer code plays or shows it), source pack id (CREDITS.md).
 # The classic name each row stands in for is in classic.assetmap. Read with the free-assets skill.
 weapon/melee_swing	Melee weapon swung	player attack with the melee weapon	game	replaced	kenney/rpg-audio
 weapon/melee_hit_flesh	Melee weapon hits a body	melee trace hits a living thing (also a player hurt by it)	game	replaced	kenney/impact-sounds
@@ -129,101 +129,101 @@ ambient/leaf_sky	Sky nearby	client: by leaf, under open sky	game	replaced	oga/10
 ui/move	Menu cursor moves	client menu	game	replaced	kenney/interface-sounds
 ui/select	Menu item chosen	client menu	game	replaced	kenney/interface-sounds
 ui/back	Menu closed	client menu	game	replaced	kenney/interface-sounds
-creature/jelly/death	Bouncing jelly: death	killed	creature	open	-
-creature/jelly/hit	Bouncing jelly: hit	projectile or melee hits	creature	open	-
-creature/jelly/land	Bouncing jelly: lands	lands after a leap	creature	open	-
-creature/jelly/sight	Bouncing jelly: sees a target	first sight of an enemy	creature	open	-
-creature/lava_lord/death	Lava lord (boss): death	killed	creature	open	-
-creature/lava_lord/rise	Lava lord (boss): rises	emerges or sinks in lava	creature	open	-
-creature/lava_lord/pain	Lava lord (boss): pain	struck by the arena lightning	creature	open	-
-creature/lava_lord/sight	Lava lord (boss): sees a target	first sight of an enemy	creature	open	-
-creature/lava_lord/attack	Lava lord (boss): ranged attack	fires or throws	creature	open	-
-creature/elder/death	Elder (final boss): death	killed	creature	open	-
-creature/elder/idle	Elder (final boss): idle	random while walking or standing	creature	open	-
-creature/elder/burst	Elder (final boss): bursts	final death	creature	open	-
-creature/elder/sight	Elder (final boss): sees a target	first sight of an enemy	creature	open	-
-creature/leaper/death	Leaping fiend: death	killed	creature	open	-
-creature/leaper/melee	Leaping fiend: melee attack	swings or bites	creature	open	-
-creature/leaper/leap	Leaping fiend: leaps	starts a leap	creature	open	-
-creature/leaper/land	Leaping fiend: lands	lands after a leap	creature	open	-
-creature/leaper/pain	Leaping fiend: pain	hurt	creature	open	-
-creature/leaper/idle	Leaping fiend: idle	random while walking or standing	creature	open	-
-creature/leaper/sight	Leaping fiend: sees a target	first sight of an enemy	creature	open	-
-creature/hound/melee	Hound: melee attack	swings or bites	creature	open	-
-creature/hound/death	Hound: death	killed	creature	open	-
-creature/hound/pain	Hound: pain	hurt	creature	open	-
-creature/hound/sight	Hound: sees a target	first sight of an enemy	creature	open	-
-creature/hound/idle	Hound: idle	random while walking or standing	creature	open	-
-creature/trooper/death	Laser trooper: death	killed	creature	open	-
-creature/trooper/attack	Laser trooper: ranged attack	fires or throws	creature	open	-
-creature/trooper/projectile_hit	Laser trooper: projectile hits	laser hits	creature	open	-
-creature/trooper/idle	Laser trooper: idle	random while walking or standing	creature	open	-
-creature/trooper/pain_1	Laser trooper: pain	hurt	creature	open	-
-creature/trooper/pain_2	Laser trooper: pain	hurt	creature	open	-
-creature/trooper/sight_1	Laser trooper: sees a target	first sight of an enemy	creature	open	-
-creature/trooper/sight_2	Laser trooper: sees a target	first sight of an enemy	creature	open	-
-creature/trooper/sight_3	Laser trooper: sees a target	first sight of an enemy	creature	open	-
-creature/trooper/sight_4	Laser trooper: sees a target	first sight of an enemy	creature	open	-
-creature/eel/melee	Biting fish: melee attack	swings or bites	creature	open	-
-creature/eel/death	Biting fish: death	killed	creature	open	-
-creature/eel/idle	Biting fish: idle	random while walking or standing	creature	open	-
-creature/dark_swordsman/attack	Dark swordsman: ranged attack	fires or throws	creature	open	-
-creature/dark_swordsman/death	Dark swordsman: death	killed	creature	open	-
-creature/dark_swordsman/grunt	Dark swordsman: grunt	attack effort	creature	open	-
-creature/dark_swordsman/hit	Dark swordsman: hit	projectile or melee hits	creature	open	-
-creature/dark_swordsman/idle	Dark swordsman: idle	random while walking or standing	creature	open	-
-creature/dark_swordsman/pain	Dark swordsman: pain	hurt	creature	open	-
-creature/dark_swordsman/sight	Dark swordsman: sees a target	first sight of an enemy	creature	open	-
-creature/dark_swordsman/melee	Dark swordsman: melee attack	swings or bites	creature	open	-
-creature/swordsman/idle	Swordsman: idle	random while walking or standing	creature	open	-
-creature/swordsman/death	Swordsman: death	killed	creature	open	-
-creature/swordsman/pain	Swordsman: pain	hurt	creature	open	-
-creature/swordsman/sight	Swordsman: sees a target	first sight of an enemy	creature	open	-
-creature/swordsman/melee_1	Swordsman: melee attack	swings the sword	creature	open	-
-creature/swordsman/melee_2	Swordsman: melee attack	swings the sword	creature	open	-
-creature/brute/idle_1	Chainsaw brute: idle	random while walking or standing	creature	open	-
-creature/brute/death	Chainsaw brute: death	killed	creature	open	-
-creature/brute/idle_2	Chainsaw brute: idle	random while walking or standing	creature	open	-
-creature/brute/idle_3	Chainsaw brute: idle	random while walking or standing	creature	open	-
-creature/brute/pain	Chainsaw brute: pain	hurt	creature	open	-
-creature/brute/melee	Chainsaw brute: melee attack	swings or bites	creature	open	-
-creature/brute/sight	Chainsaw brute: sees a target	first sight of an enemy	creature	open	-
-creature/caster/attack_1	Homing-pod caster: ranged attack	fires or throws	creature	open	-
-creature/caster/attack_2	Homing-pod caster: ranged attack	fires or throws	creature	open	-
-creature/caster/death	Homing-pod caster: death	killed	creature	open	-
-creature/caster/idle	Homing-pod caster: idle	random while walking or standing	creature	open	-
-creature/caster/pain	Homing-pod caster: pain	hurt	creature	open	-
-creature/caster/sight	Homing-pod caster: sees a target	first sight of an enemy	creature	open	-
-creature/hulk/melee_1	Lightning hulk: melee attack	swings or bites	creature	open	-
-creature/hulk/melee_2	Lightning hulk: melee attack	swings or bites	creature	open	-
-creature/hulk/attack	Lightning hulk: ranged attack	fires or throws	creature	open	-
-creature/hulk/charge	Lightning hulk: charges up	lightning charge	creature	open	-
-creature/hulk/death	Lightning hulk: death	killed	creature	open	-
-creature/hulk/pain	Lightning hulk: pain	hurt	creature	open	-
-creature/hulk/idle	Lightning hulk: idle	random while walking or standing	creature	open	-
-creature/hulk/melee_3	Lightning hulk: melee attack	swings or bites	creature	open	-
-creature/hulk/sight	Lightning hulk: sees a target	first sight of an enemy	creature	open	-
-creature/rifleman/death	Rifleman: death	killed	creature	open	-
-creature/rifleman/idle	Rifleman: idle	random while walking or standing	creature	open	-
-creature/rifleman/pain_1	Rifleman: pain	hurt	creature	open	-
-creature/rifleman/pain_2	Rifleman: pain	hurt	creature	open	-
-creature/rifleman/attack	Rifleman: ranged attack	fires or throws	creature	open	-
-creature/rifleman/sight	Rifleman: sees a target	first sight of an enemy	creature	open	-
-creature/vomit_beast/sight	Vomiting beast: sees a target	first sight of an enemy	creature	open	-
-creature/flyer/hit	Spitting flyer: hit	projectile or melee hits	creature	open	-
-creature/flyer/attack	Spitting flyer: ranged attack	fires or throws	creature	open	-
-creature/flyer/death	Spitting flyer: death	killed	creature	open	-
-creature/flyer/idle_1	Spitting flyer: idle	random while walking or standing	creature	open	-
-creature/flyer/idle_2	Spitting flyer: idle	random while walking or standing	creature	open	-
-creature/flyer/pain	Spitting flyer: pain	hurt	creature	open	-
-creature/flyer/sight	Spitting flyer: sees a target	first sight of an enemy	creature	open	-
-creature/ghoul/idle_1	Flesh-throwing ghoul: idle	random while walking or standing	creature	open	-
-creature/ghoul/pain_1	Flesh-throwing ghoul: pain	hurt	creature	open	-
-creature/ghoul/death	Flesh-throwing ghoul: death	killed	creature	open	-
-creature/ghoul/hit	Flesh-throwing ghoul: thrown flesh hits	projectile hits	creature	open	-
-creature/ghoul/idle_2	Flesh-throwing ghoul: idle	random while walking or standing	creature	open	-
-creature/ghoul/idle_3	Flesh-throwing ghoul: idle	random while walking or standing	creature	open	-
-creature/ghoul/miss	Flesh-throwing ghoul: thrown flesh misses	projectile lands without hitting	creature	open	-
-creature/ghoul/pain_2	Flesh-throwing ghoul: pain	hurt	creature	open	-
-creature/ghoul/pain_3	Flesh-throwing ghoul: pain	hurt	creature	open	-
-creature/ghoul/attack	Flesh-throwing ghoul: ranged attack	fires or throws	creature	open	-
+creature/jelly/death	Bouncing jelly: death	killed	creature	skip	-
+creature/jelly/hit	Bouncing jelly: hit	projectile or melee hits	creature	skip	-
+creature/jelly/land	Bouncing jelly: lands	lands after a leap	creature	skip	-
+creature/jelly/sight	Bouncing jelly: sees a target	first sight of an enemy	creature	skip	-
+creature/lava_lord/death	Lava lord (boss): death	killed	creature	skip	-
+creature/lava_lord/rise	Lava lord (boss): rises	emerges or sinks in lava	creature	skip	-
+creature/lava_lord/pain	Lava lord (boss): pain	struck by the arena lightning	creature	skip	-
+power/bonus_powers	A player is granted every power at once	a weapon picked up in the deathmatch mode that grants every power for 30 seconds	game	open	-
+creature/lava_lord/attack	Lava lord (boss): ranged attack	fires or throws	creature	skip	-
+creature/elder/death	Elder (final boss): death	killed	creature	skip	-
+creature/elder/idle	Elder (final boss): idle	random while walking or standing	creature	skip	-
+creature/elder/burst	Elder (final boss): bursts	final death	creature	skip	-
+creature/elder/sight	Elder (final boss): sees a target	first sight of an enemy	creature	skip	-
+creature/leaper/death	Leaping fiend: death	killed	creature	skip	-
+creature/leaper/melee	Leaping fiend: melee attack	swings or bites	creature	skip	-
+creature/leaper/leap	Leaping fiend: leaps	starts a leap	creature	skip	-
+creature/leaper/land	Leaping fiend: lands	lands after a leap	creature	skip	-
+creature/leaper/pain	Leaping fiend: pain	hurt	creature	skip	-
+creature/leaper/idle	Leaping fiend: idle	random while walking or standing	creature	skip	-
+creature/leaper/sight	Leaping fiend: sees a target	first sight of an enemy	creature	skip	-
+creature/hound/melee	Hound: melee attack	swings or bites	creature	skip	-
+creature/hound/death	Hound: death	killed	creature	skip	-
+creature/hound/pain	Hound: pain	hurt	creature	skip	-
+creature/hound/sight	Hound: sees a target	first sight of an enemy	creature	skip	-
+creature/hound/idle	Hound: idle	random while walking or standing	creature	skip	-
+creature/trooper/death	Laser trooper: death	killed	creature	skip	-
+world/laser_fire	A wall trap fires a laser bolt	a laser shooter fires when triggered	game	open	-
+world/laser_hit	A laser bolt hits	a trap's laser bolt hits a wall or a player	game	open	-
+creature/trooper/idle	Laser trooper: idle	random while walking or standing	creature	skip	-
+creature/trooper/pain_1	Laser trooper: pain	hurt	creature	skip	-
+creature/trooper/pain_2	Laser trooper: pain	hurt	creature	skip	-
+creature/trooper/sight_1	Laser trooper: sees a target	first sight of an enemy	creature	skip	-
+creature/trooper/sight_2	Laser trooper: sees a target	first sight of an enemy	creature	skip	-
+creature/trooper/sight_3	Laser trooper: sees a target	first sight of an enemy	creature	skip	-
+creature/trooper/sight_4	Laser trooper: sees a target	first sight of an enemy	creature	skip	-
+creature/eel/melee	Biting fish: melee attack	swings or bites	creature	skip	-
+creature/eel/death	Biting fish: death	killed	creature	skip	-
+creature/eel/idle	Biting fish: idle	random while walking or standing	creature	skip	-
+creature/dark_swordsman/attack	Dark swordsman: ranged attack	fires or throws	creature	skip	-
+creature/dark_swordsman/death	Dark swordsman: death	killed	creature	skip	-
+creature/dark_swordsman/grunt	Dark swordsman: grunt	attack effort	creature	skip	-
+creature/dark_swordsman/hit	Dark swordsman: hit	projectile or melee hits	creature	skip	-
+creature/dark_swordsman/idle	Dark swordsman: idle	random while walking or standing	creature	skip	-
+creature/dark_swordsman/pain	Dark swordsman: pain	hurt	creature	skip	-
+creature/dark_swordsman/sight	Dark swordsman: sees a target	first sight of an enemy	creature	skip	-
+creature/dark_swordsman/melee	Dark swordsman: melee attack	swings or bites	creature	skip	-
+creature/swordsman/idle	Swordsman: idle	random while walking or standing	creature	skip	-
+creature/swordsman/death	Swordsman: death	killed	creature	skip	-
+creature/swordsman/pain	Swordsman: pain	hurt	creature	skip	-
+creature/swordsman/sight	Swordsman: sees a target	first sight of an enemy	creature	skip	-
+creature/swordsman/melee_1	Swordsman: melee attack	swings the sword	creature	skip	-
+creature/swordsman/melee_2	Swordsman: melee attack	swings the sword	creature	skip	-
+creature/brute/idle_1	Chainsaw brute: idle	random while walking or standing	creature	skip	-
+creature/brute/death	Chainsaw brute: death	killed	creature	skip	-
+creature/brute/idle_2	Chainsaw brute: idle	random while walking or standing	creature	skip	-
+creature/brute/idle_3	Chainsaw brute: idle	random while walking or standing	creature	skip	-
+creature/brute/pain	Chainsaw brute: pain	hurt	creature	skip	-
+creature/brute/melee	Chainsaw brute: melee attack	swings or bites	creature	skip	-
+creature/brute/sight	Chainsaw brute: sees a target	first sight of an enemy	creature	skip	-
+creature/caster/attack_1	Homing-pod caster: ranged attack	fires or throws	creature	skip	-
+creature/caster/attack_2	Homing-pod caster: ranged attack	fires or throws	creature	skip	-
+creature/caster/death	Homing-pod caster: death	killed	creature	skip	-
+creature/caster/idle	Homing-pod caster: idle	random while walking or standing	creature	skip	-
+creature/caster/pain	Homing-pod caster: pain	hurt	creature	skip	-
+creature/caster/sight	Homing-pod caster: sees a target	first sight of an enemy	creature	skip	-
+creature/hulk/melee_1	Lightning hulk: melee attack	swings or bites	creature	skip	-
+creature/hulk/melee_2	Lightning hulk: melee attack	swings or bites	creature	skip	-
+creature/hulk/attack	Lightning hulk: ranged attack	fires or throws	creature	skip	-
+creature/hulk/charge	Lightning hulk: charges up	lightning charge	creature	skip	-
+creature/hulk/death	Lightning hulk: death	killed	creature	skip	-
+creature/hulk/pain	Lightning hulk: pain	hurt	creature	skip	-
+creature/hulk/idle	Lightning hulk: idle	random while walking or standing	creature	skip	-
+creature/hulk/melee_3	Lightning hulk: melee attack	swings or bites	creature	skip	-
+creature/hulk/sight	Lightning hulk: sees a target	first sight of an enemy	creature	skip	-
+creature/rifleman/death	Rifleman: death	killed	creature	skip	-
+creature/rifleman/idle	Rifleman: idle	random while walking or standing	creature	skip	-
+creature/rifleman/pain_1	Rifleman: pain	hurt	creature	skip	-
+creature/rifleman/pain_2	Rifleman: pain	hurt	creature	skip	-
+creature/rifleman/attack	Rifleman: ranged attack	fires or throws	creature	skip	-
+creature/rifleman/sight	Rifleman: sees a target	first sight of an enemy	creature	skip	-
+creature/vomit_beast/sight	Vomiting beast: sees a target	first sight of an enemy	creature	skip	-
+creature/flyer/hit	Spitting flyer: hit	projectile or melee hits	creature	skip	-
+creature/flyer/attack	Spitting flyer: ranged attack	fires or throws	creature	skip	-
+creature/flyer/death	Spitting flyer: death	killed	creature	skip	-
+creature/flyer/idle_1	Spitting flyer: idle	random while walking or standing	creature	skip	-
+creature/flyer/idle_2	Spitting flyer: idle	random while walking or standing	creature	skip	-
+creature/flyer/pain	Spitting flyer: pain	hurt	creature	skip	-
+creature/flyer/sight	Spitting flyer: sees a target	first sight of an enemy	creature	skip	-
+creature/ghoul/idle_1	Flesh-throwing ghoul: idle	random while walking or standing	creature	skip	-
+creature/ghoul/pain_1	Flesh-throwing ghoul: pain	hurt	creature	skip	-
+creature/ghoul/death	Flesh-throwing ghoul: death	killed	creature	skip	-
+creature/ghoul/hit	Flesh-throwing ghoul: thrown flesh hits	projectile hits	creature	skip	-
+creature/ghoul/idle_2	Flesh-throwing ghoul: idle	random while walking or standing	creature	skip	-
+creature/ghoul/idle_3	Flesh-throwing ghoul: idle	random while walking or standing	creature	skip	-
+creature/ghoul/miss	Flesh-throwing ghoul: thrown flesh misses	projectile lands without hitting	creature	skip	-
+creature/ghoul/pain_2	Flesh-throwing ghoul: pain	hurt	creature	skip	-
+creature/ghoul/pain_3	Flesh-throwing ghoul: pain	hurt	creature	skip	-
+creature/ghoul/attack	Flesh-throwing ghoul: ranged attack	fires or throws	creature	skip	-
