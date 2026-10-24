@@ -94,7 +94,8 @@ TEST(the_vault_reads_back_from_its_text_and_bytes_to_the_bit) {
   CHECK(level.brushes[11].group == 0);
   CHECK(level.materials[rm::material_index(level, "wall")].texture ==
         "stone_wall seed=3 tint=#8a8478");
-  CHECK(level.materials[rm::material_index(level, "grass")].surface == "grass meadow height=0.6 density=300");
+  CHECK(level.materials[rm::material_index(level, "grass")].surface ==
+        "grass meadow height=0.6 density=300");
 
   const std::vector<uint8_t> bytes = rm::encode(level);
   CHECK(bytes[4] == 2);
