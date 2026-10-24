@@ -100,6 +100,7 @@ struct Clouds {
   CloudLayer layers[kCloudLayers];
   double steps = 1;     // the share of the march's full steps taken (the quality ladder's), 0.25..1
   bool quarter = true;  // marched at a quarter of the pixels, then upsampled (false: every pixel)
+  bool spread = true;   // the quarter's march spread over four frames, the rest reprojected
 };
 
 // THE NIGHT a frame is seen under (render/night.hpp fills it from where the moon is). The
