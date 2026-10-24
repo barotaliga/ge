@@ -53,7 +53,7 @@ Everything lives in `games/shooters_edge/content/`:
 
 | File | What |
 | --- | --- |
-| `sounds.tsv`, `models.tsv` | THE REGISTRY: one row a sound or model the game needs, by OUR name, with what it is, what plays or shows it, its scope (`game` or `creature`), its status (`replaced` or `open`) and its source pack's id |
+| `sounds.tsv`, `models.tsv` | THE REGISTRY: one row a sound or model the game needs, by OUR name, with what it is, what plays or shows it, its scope (`game` or `creature`), its status (`replaced`, `open`, or `skip` when no multiplayer code plays or shows it: the game is multiplayer only, so creature content and single-player-only content are listed but not replaced) and its source pack's id |
 | `classic.assetmap` | The classic name each of ours stands in for, read by the map cloner (`rooms::parse_asset_map`) and by the game: `sound <classic path> <our name>`, `model <classic path> <our name>`, and `set <classname> <key>=<value> <field> <our name>` for the numbered sound sets a map picks by number (doors, buttons, lifts, trains, triggers) or by worldspawn's `worldtype` (locks and keys). The same comment and `# pin` rules as a `.texmap` |
 | `sounds/<our name>.wav` | Mono 16-bit PCM at 22 050 Hz, trimmed, loudness-normalised to -16 LUFS with -1.5 dB true peak |
 | `models/<our name>.glb` | Binary glTF with every texture packed inside, loadable by `assets::load_gltf` |
