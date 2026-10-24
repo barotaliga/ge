@@ -221,7 +221,8 @@ SkyColours sky_colours_of(const std::vector<uint8_t>& rgba, uint32_t w, uint32_t
     c.cloud[k] /= std::max(clouds, 1.0);
     c.back[k] /= std::max(backs, 1.0);
   }
-  c.cover = clouds / std::max(double(w / 2) * h, 1.0);
+  const uint32_t half = w / 2;  // the cloud layer's texels across
+  c.cover = clouds / std::max(double(half) * h, 1.0);
   c.found = backs > 0;
   return c;
 }
