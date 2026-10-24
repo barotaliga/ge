@@ -122,3 +122,26 @@ TEST(the_rows_hold_each_layers_numbers) {
   gr::fill_uniforms(u, view, 64, 32);
   CHECK(u.cloud_info[0] == 2 && u.clouds[0][1] == 2200);
 }
+
+TEST(the_march_is_spread_only_with_the_last_frames_camera) {
+  gr::FrameView view;
+  view.clouds.count = 1;
+  view.frame = 4097;
+  gr::FrameHistory history;
+  gr::FrameUniforms u{};
+  // The first frame has no last camera to reproject by: every half-size pixel marches.
+  gr::fill_uniforms(u, view, 64, 32, &history);
+  CHECK(u.cloud_info[2] == 0);
+  // The stamp counts 1..kCloudStamps, so a cleared target (0) is never the last frame's.
+  CHECK(u.cloud_info[3] == 2);
+  gr::fill_uniforms(u, view, 64, 32, &history);
+  CHECK(u.cloud_info[2] == 1);
+  // Not at a quarter, or not asked for: never.
+  view.clouds.spread = false;
+  gr::fill_uniforms(u, view, 64, 32, &history);
+  CHECK(u.cloud_info[2] == 0);
+  view.clouds.spread = true;
+  view.clouds.quarter = false;
+  gr::fill_uniforms(u, view, 64, 32, &history);
+  CHECK(u.cloud_info[2] == 0);
+}

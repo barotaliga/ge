@@ -30,6 +30,9 @@
 //               [--codec=C] [--crf=N | --bitrate=4M]        webm, gif; png writes the frames) and
 //               [--encoder-preset=P] [--thumbs=24]          a contact sheet of --thumbs stills,
 //               [--band=0] [--<option>=V] [--out=DIR]       each with its time and step, in DIR
+//   play cvar ls [<prefix>] | get <name>...                 the game's cvars (console_cmds.hpp)
+//   play cfg check|exec <file>... [--server] [--cmd=C]      cfg files run against them: problems,
+//   play cfg dump                                           what changed; every player setting
 //
 // Every command but the protocol prints exactly one JSON object on one line. A problem prints
 // `{"error":...,"where":...,"next":...}`; the exit code is 0 done, 1 a problem (a replay that
@@ -38,7 +41,7 @@
 // ge:summary The play executable's main: protocol, describe, sim, replay, state, diverge, bench
 // ge:summary shot, record and why
 // ge:keywords play main executable command-line describe sim replay state diverge bench
-// ge:keywords play_main why human record video load
+// ge:keywords play_main why human record video cvar cfg load
 // ge:skill agent-interface
 // ge:test tests/play_session_test.cpp
 #pragma once

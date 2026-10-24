@@ -20,11 +20,13 @@
 // thing more. A hand-over to or from the helmet flies the lens through the space his head takes,
 // so while a lens off the helmet rung is within `kHeadClip` m of his head's centre its near plane
 // is pushed out past the head: the lens looks through his head on its way in or out, never at
-// the inside of the helmet's shell. And no lens is let under `kLensFloor` m over the snow: a worn
-// one rides a body that a wipeout throws down on its side.
+// the inside of the helmet's shell. And no lens is let under `kLensFloor` m over the snow, nor
+// nearer a trunk's bark than `kBarkClear` m: a worn one rides a body that a wipeout throws down
+// on its side, or into the tree it met.
 //
 // ge:summary A skier as the camera's subject: pose, frame, surface, landings, resets, worn eyes
 // ge:keywords fall-line camera subject skier frame lean landing teleport reset worn helmet tips
+// ge:keywords framed_point see-through
 // ge:keywords skier_subject fit_worn subject-memory frame_camera run-camera head-clip near-plane
 // ge:skill camera
 // ge:test tests/fall_line_camera_test.cpp
@@ -59,8 +61,14 @@ inline constexpr double kHeadClip = 0.6;
 // The head's reach from its centre the near plane is pushed past, m (the helmet's shell).
 inline constexpr double kHeadReach = 0.22;
 
-// The least a lens stands over the snow, m.
+// The least a lens stands over the snow, m, and off the bark of a trunk.
 inline constexpr double kLensFloor = 0.15;
+inline constexpr double kBarkClear = 0.12;
+
+// The point a rung frames on him, world m: his middle, the height the booms look at, nearer the
+// snow when he is down. The trees between a lens and it are seen through (app/frame.hpp's
+// `FrameScene::subject`).
+ge::camera::Vec3 framed_point(const ge::skier::SkierState& s);
 
 // A run's camera: the ladder and what its subject remembers.
 struct RunCamera {

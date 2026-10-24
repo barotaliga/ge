@@ -8,6 +8,8 @@
 // ge:test tests/fall_line_play_test.cpp
 #include "fall_line/sim/play.hpp"
 
+#include "fall_line/cfg/cvars.hpp"
+
 #include <array>
 #include <cmath>
 #include <memory>
@@ -177,6 +179,14 @@ class FallLineRun final : public ge::play::Run {
     why_ = why;
     driver_.set_why(why);
     return true;
+  }
+
+  // The whole run copied: the driver (the state, the plan, the tape so far, the rivals' hands),
+  // the pilot's hands and the events not yet observed; the map and the runs' lines are shared.
+  std::unique_ptr<ge::play::Run> clone() const override {
+    auto copy = std::make_unique<FallLineRun>(*this);
+    copy->trace(nullptr);
+    return copy;
   }
 
   bool shoot(std::string_view view, ge::lab::Picture& out, std::string& caption,
@@ -388,10 +398,15 @@ const GameState* state_of(const ge::play::Run& run) {
 }
 
 const ge::play::GameSpec kGame{
-    "fall_line", "a downhill race through the gates of a generated mountain, the field beside you",
-    kHz,         600,
-    kAxes,       kOptions,
-    open_run,    kViews,
+    "fall_line",
+    "a downhill race through the gates of a generated mountain, the field beside you",
+    kHz,
+    600,
+    kAxes,
+    kOptions,
+    open_run,
+    kViews,
+    cfg::register_cvars,
 };
 
 }  // namespace fall_line::sim

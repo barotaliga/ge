@@ -603,6 +603,7 @@ Ragdoll throw_body(double x, double y, double z, double heading, double lean, do
   const Vec3 up{ch * sl, cl, -sh * sl};
   const double oy = y + rd::kStand;
   Ragdoll b;
+  b.struck_by.fill(-1);
   b.active = true;
   const std::array<Vec3, N> stand = standing();
   for (int i = 0; i < N; i++) {
@@ -658,8 +659,12 @@ void step_ragdoll(Ragdoll& b, const Level& level, const TreeIndex* trees, double
   drive(P, L, b, dt);
   air_drag(P, L, dt);
   const double g = tuning::kGravity * dt * dt;
+  // Each point's way into this step, m (what a trunk is met at: the joints' passes after it are
+  // corrections).
+  PointArray way{};
   for (size_t i = 0; i < P.size(); i++) {
     const double v = P[i] - L[i];
+    way[i] = v;
     L[i] = P[i];
     P[i] += v;
   }
@@ -691,6 +696,8 @@ void step_ragdoll(Ragdoll& b, const Level& level, const TreeIndex* trees, double
   }
   b.impact.fill(0);
   b.struck.fill(0);
+  b.struck_by.fill(-1);
+  uint16_t leaning = 0;
   const double lo = tuning::wipeout::kEdgeMargin;
   const double hi = level.size - tuning::wipeout::kEdgeMargin;
   const Vec3 com0 = centre_of(P);
@@ -714,18 +721,40 @@ void step_ragdoll(Ragdoll& b, const Level& level, const TreeIndex* trees, double
           if (d == 0) d = 1e-6;
           const double reach = radius_of(i) + tree.radius;
           if (d >= reach) return;
-          const double closing =
-              -((cx(P, i, 0) - cx(L, i, 0)) * dx + (cx(P, i, 2) - cx(L, i, 2)) * dz) / (d * dt);
-          if (closing > b.struck[static_cast<size_t>(i)])
+          // A point already against a trunk last step is lying on it, not meeting it; a fresh one
+          // meets it at the way it came into the step with (the joints' passes are corrections).
+          leaning = static_cast<uint16_t>(leaning | (1u << i));
+          const double closing = -(cx(way, i, 0) * dx + cx(way, i, 2) * dz) / (d * dt);
+          if (!(b.leaning & (1u << i)) && closing > b.struck[static_cast<size_t>(i)]) {
             b.struck[static_cast<size_t>(i)] = closing;
-          px(P, i, 0) = tree.x + dx / d * reach;
-          px(P, i, 2) = tree.z + dz / d * reach;
+            b.struck_by[static_cast<size_t>(i)] = t;
+          }
+          // Put back against it, a position corrected that carries no velocity, and its way into
+          // the trunk gone.
+          const double nx = dx / d;
+          const double nz = dz / d;
+          const double by = reach - d;
+          px(P, i, 0) += nx * by;
+          px(P, i, 2) += nz * by;
+          px(L, i, 0) += nx * by;
+          px(L, i, 2) += nz * by;
+          const double in = (cx(P, i, 0) - cx(L, i, 0)) * nx + (cx(P, i, 2) - cx(L, i, 2)) * nz;
+          if (in < 0) {
+            px(L, i, 0) += nx * in;
+            px(L, i, 2) += nz * in;
+          }
         });
       }
       const double h = hold[static_cast<size_t>(i)];
+      // Put back on the snow. The first pass's push is the step's fall onto it and holds the
+      // point where it lies (the pass along the snow below takes the way out of it); every later
+      // pass's undoes a joint's limit pressing the point back into the snow, a position corrected
+      // that carries no velocity, or the fight between them would pump the body up off the snow.
       if (cx(P, i, 1) < h) {
-        pushed[static_cast<size_t>(i)] += h - cx(P, i, 1);
+        const double by = h - cx(P, i, 1);
+        pushed[static_cast<size_t>(i)] += by;
         px(P, i, 1) = h;
+        if (k > 0) px(L, i, 1) += by;
       }
     }
   }
@@ -809,6 +838,7 @@ void step_ragdoll(Ragdoll& b, const Level& level, const TreeIndex* trees, double
   b.tumble += core::libm::acos(core::clamp(dot(spine0, spine1), -1, 1));
   b.touching = touching;
   b.planted = planted;
+  b.leaning = leaning;
   // Down: the brace gives way from the step his trunk, or a trunk's weight of him, meets the snow.
   const double trunk_on =
       pushed[kHipL] + pushed[kHipR] + pushed[kShoulderL] + pushed[kShoulderR] + pushed[kHead];
@@ -833,6 +863,8 @@ uint64_t ragdoll_hash(const Ragdoll& b, uint64_t h) {
   const double nums[] = {b.t, b.tumble, b.down, b.still, b.aloft, b.ground};
   for (double v : nums) fold_hash(h, v);
   h ^= b.planted;
+  h *= 0x100000001b3ull;
+  h ^= b.leaning;
   h *= 0x100000001b3ull;
   return h;
 }

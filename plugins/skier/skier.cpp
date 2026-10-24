@@ -134,42 +134,66 @@ void meet_ground(SkierState& s, const Level& level, double dt, SkierEvents& ev) 
   if (!s.down && before < a::kFlightMin && s.air_time >= a::kFlightMin) ev.took_off = true;
 }
 
-// THE TRUNKS: pushed back out of any trunk he overlaps; met fast, a wipeout.
-void meet_trees(SkierState& s, const World& world, SkierEvents& ev) {
+// ONE CIRCLE OF HIM MEETING A TRUNK: the circle of `radius` at `ahead` m along his heading pushed
+// back out of the trunk it overlaps, and his way into it taken off; met fast, a wipeout; slower,
+// a glance, which turns the skis with his way when it was their tips that met it. False when the
+// circle meets nothing.
+bool meet_trunk(SkierState& s, const World& world, SkierEvents& ev, double ahead, double radius) {
   namespace w = tuning::wipeout;
   const Level& level = *world.level;
-  const int32_t i = tree_overlap(*world.trees, level, s.x, s.z, w::kBodyRadius);
-  if (i < 0) return;
+  const double fx = core::libm::sin(s.heading);
+  const double fz = core::libm::cos(s.heading);
+  const double cx = s.x + fx * ahead;
+  const double cz = s.z + fz * ahead;
+  const int32_t i = tree_overlap(*world.trees, level, cx, cz, radius);
+  if (i < 0) return false;
   const auto& t = level.trees[static_cast<size_t>(i)];
-  if (s.y > t.y + t.height) return;  // flying over its crown
-  double dx = s.x - t.x;
-  double dz = s.z - t.z;
+  if (s.y > t.y + t.height) return false;  // flying over its crown
+  double dx = cx - t.x;
+  double dz = cz - t.z;
   double d = core::hypot(dx, dz);
   if (d <= 1e-9) {
-    dx = -core::libm::sin(s.heading);
-    dz = -core::libm::cos(s.heading);
+    dx = -fx;
+    dz = -fz;
     d = 1;
   }
   const double nx = dx / d;
   const double nz = dz / d;
-  const double reach = t.radius + w::kBodyRadius;
-  s.x = t.x + nx * reach;
-  s.z = t.z + nz * reach;
+  const double reach = t.radius + radius;
+  s.x += nx * (reach - d);
+  s.z += nz * (reach - d);
   const double closing = -(s.vx * nx + s.vz * nz);
-  if (closing <= 0) return;
+  if (closing <= 0) return true;
   s.vx += closing * nx;
   s.vz += closing * nz;
-  if (s.down) return;
+  if (s.down) return true;
   ev.tree = i;
   ev.closing = closing;
   if (closing > w::kTreeSpeed) {
-    // The trunk stops the body; what was going past it is mostly lost in the fall.
+    // The trunk stops the body (or the skis, and he goes on over them); what was going past it
+    // is mostly lost in the fall.
     s.vx *= 0.3;
     s.vz *= 0.3;
     wipe_out(s, ev, Wipeout::tree);
   } else {
     ev.glanced = true;
+    // The tips turned aside: the skis follow the way the trunk left him.
+    if (ahead > 0 && core::hypot(s.vx, s.vz) > w::kTipTurnSpeed) {
+      s.heading = core::libm::atan2(s.vx, s.vz);
+    }
   }
+  return true;
+}
+
+// THE TRUNKS: his body's circle, then the circles along his skis ahead of the boots (the middle
+// of the fore-ski and its tip), each pushed back out of any trunk it overlaps.
+void meet_trees(SkierState& s, const World& world, const SkiSpec& spec, SkierEvents& ev) {
+  namespace w = tuning::wipeout;
+  if (meet_trunk(s, world, ev, 0, w::kBodyRadius)) return;
+  if (s.down) return;
+  const double tip = spec.length * w::kTipShare;
+  if (meet_trunk(s, world, ev, tip, w::kTipRadius)) return;
+  meet_trunk(s, world, ev, tip / 2, w::kTipRadius);
 }
 
 // The world's edge holds him inside it.
@@ -384,7 +408,7 @@ void step_skier(SkierState& s, const SkierInput& in, const World& world, const S
   s.z += s.vz * dt;
   meet_edge(s, level.size);
   meet_ground(s, level, dt, ev);
-  meet_trees(s, world, ev);
+  meet_trees(s, world, spec, ev);
 
   s.speed = core::hypot3(s.vx, s.vy, s.vz);
   if (s.down) {

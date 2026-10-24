@@ -11,17 +11,18 @@ game rides it, so the modes, the course's rules, the bot and the field stay in t
 
 | File | What |
 | --- | --- |
-| `skier/skier.hpp/.cpp` | THE MODEL, its order stated once in the header: `SkierState`, `SkierInput`, `SkierEvents`, `World`, `step_skier`, `stand_skier`, `skier_hash` |
+| `skier/skier.hpp/.cpp` | THE MODEL, its order stated once in the header: `SkierState`, `SkierInput`, `SkierEvents`, `World`, `step_skier` (its trunks met by the body's circle and two along the skis ahead: `meet_trees`), `stand_skier`, `skier_hash` |
 | `skier/snow.hpp` | The snow under the skis by its packed share: `sink_target`, `base_friction`, `powder_drag`, `side_grip`, `brake_grip` |
 | `skier/limits.hpp` | What a skier can do: `edge_most`, `carve_curvature`, `edge_for_curvature`, `corner_speed`, `carve_speed`, `terminal_speed`, `top_speed` |
 | `skier/skis.hpp` | `SkiSpec` and `kReferenceSkis`, the pair every shared number was tuned on |
 | `skier/tuning.hpp` | Every shared number, with its unit |
 | `skier/trees.hpp/.cpp` | The trunks on a grid once a map: `build_tree_index`, `tree_overlap` |
-| `skier/ragdoll.hpp/.cpp` | THE THROWN BODY: thirteen Verlet points (`Point`, `point_mass`, `point_radius`), `throw_body`, `throw_of` (by an `Over` row), `step_ragdoll` (the muscles, the air, gravity, the joints and the bones, the snow, the trunks; each point's `impact` on the snow and `struck` on a trunk this step), `ragdoll_hash`. `step_skier` throws it the step he goes down (`over_of` the cause's row) and steps it while he is down. Its test: `tests/skier_ragdoll_test.cpp` |
+| `skier/ragdoll.hpp/.cpp` | THE THROWN BODY: thirteen Verlet points (`Point`, `point_mass`, `point_radius`), `throw_body`, `throw_of` (by an `Over` row), `step_ragdoll` (the muscles, the air, gravity, the joints and the bones, the snow, the trunks; each point's `impact` on the snow and fresh `struck` on a trunk this step, at the way it came into the step with, and `struck_by` the trunk), `ragdoll_hash`. `step_skier` throws it the step he goes down (`over_of` the cause's row) and steps it while he is down. Its test: `tests/skier_ragdoll_test.cpp` |
 | `skier/synthetic.hpp/.cpp` | The hand-built maps: `synthetic_slope()`, `flat_strip(pitch, packed)` |
 | `skier/scenarios.hpp/.cpp` | The ride scenarios (one table for the tests and the labs) and `run_scenario`, which steps the body after every step |
 | `skier/anatomy.hpp/.cpp` | THE BODY'S CATALOG (M13e1): the twenty parts, the bones and the organs, the mechanisms, the 98 injuries of the skis and the 32 penetrating wounds of a round (M15b) with their AIS and even-chance doses, and every number of the body (`injury::`), each with its research |
-| `skier/body.hpp/.cpp` | THE BODY: `blow_of`, `risk_of`, `Doses` and `judge_body` (the ladders read worst first off a hash of the step, never the Rng), `step_body` (a trunk on the skis, a landing, a landing across), `severity_of` (the ISS), `dies_of`, death, `mend_body`, `body_hash`. Its test: `tests/skier_body_test.cpp` |
+| `skier/body.hpp/.cpp` | THE BODY: `blow_of`, `risk_of`, `Doses` and `judge_body` (the ladders read worst first off a hash of the step, never the Rng), `step_body` (a trunk on the skis, a landing, a landing across, and thrown, every point of him on the snow at its give by the packed share or on a trunk: `ragdoll_blows`; a folded landing's trunk load `Owed` until his trunk meets the snow), `severity_of` (the ISS), `dies_of`, death, `mend_body`, `body_hash`. Its test: `tests/skier_body_test.cpp` |
+| `skier/swim.hpp` | THE DRESSED SKIER IN THE WATER (M24d): `dressed_skier()`, the engine's swimmer (`water::SwimSpec`, the `water` skill) filled with his jacket, trousers, boots, helmet, gloves and base layers, each garment's mass, density, soak and trapped air. Its test: `tests/skier_swim_test.cpp`; its lab: `skier-swim` |
 | `skier/pilot.hpp/.cpp` | THE SKIER'S PILOT every bot on skis flies (M16c): `lay_pilot_plan` (the curvature along the game's line and an offset line, the speed off `carve_speed` eased to every lip, carried back so each slowing is braked for) and `skier_pilot` (pure pursuit of a `PilotRider`'s lane, further by late hands' lead; the brake over the plan at his pace, the tuck under it), its `line` and `speed` decisions on an `ai::Why` (the `bots` skill). Its test: `tests/skier_pilot_test.cpp` on the slope |
 
 Its app half, `plugins/skier/app/` (`ge_skier_app`, no GPU), is the skier as seen and heard:
@@ -75,8 +76,9 @@ when it lay still; a body that never lies still for a second fails the lab.
 `make lab LAB=ride ARGS=--scenario=kicker` runs one. The `labs` skill owns how to read it.
 
 `injuries` (scenario): every scenario's body (its injuries by part, the ISS, when he was
-mortally hurt and when he died) and the body's curves over 400 draws: a trunk met head-on and
-beside him by closing speed, a landing by its load, as the share hurt, the mean ISS and the
+mortally hurt and when he died) and the body's curves over 400 draws: a trunk skied into
+head-on (the physics run once, the body thrown on into it, every draw judged off the same steps)
+and across his whole line (13 lines from 0.6 m left of it to 0.6 m right, averaged), met beside him by closing speed, a landing by its load, as the share hurt, the mean ISS and the
 share killed; pictures: every scenario's parts shaded by their worst AIS, and the curves.
 
 `anim` (scenario): the skier ridden through a scenario and recorded every step as a pose track:
@@ -89,6 +91,5 @@ A change to how the figure is posed runs it before and after.
 ## Still to come
 
 What the game does not ask for yet stays out (G4): the catalog of pairs, the wind, crust and
-ice, the poles and the legs as stations, the tricks, and the ragdoll (the body thrown, whose
-points' blows on the snow and the trunks the body will judge). Each lands with the milestone
-row that needs it.
+ice, the poles and the legs as stations, and the tricks.
+Each lands with the milestone row that needs it.

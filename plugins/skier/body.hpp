@@ -14,9 +14,16 @@
 //   glancing share of the head on that side.
 // - A LANDING of load `g`: up the legs' bones (the heel, the pilon, the plateau, the femur, the
 //   hip socket) into the spine, onto the knees as a drawer as far as he came down crooked, the
-//   neck whipped, and the spine handed more when the legs folded under it.
+//   neck whipped, and the spine handed more when the legs folded under it: that share owed until
+//   his trunk meets the snow (`Owed`).
 // - A LANDING ACROSS his way: the ski on the side he slides toward catches, and the knee over it
 //   is twisted at the slide's speed.
+// - THROWN (`Ragdoll`): every point of his body arriving into the snow (`Ragdoll::impact`, the
+//   snow's give by the packed share there) or onto a trunk (`Ragdoll::struck`): the head (the
+//   neck whipped, and loaded down the spine in a dive), the shoulders and the hips (the trunk on
+//   the side he lies on; sat upright on the hips, the spine loaded), the knees and the feet (a
+//   sole met along a straight leg loads the leg as a landing does), the elbows and the hands (the
+//   arm, and the shoulder up it).
 //
 // A DOSE IS A CHANCE, NOT A LINE (`risk_of`): every injury on a part's ladder has the dose at
 // which it is an even chance, and the chance at any other comes off the log-logistic of the
@@ -36,7 +43,7 @@
 // ge:summary The skier's body: blows by part, the injury ladders, the severity score, death
 // ge:keywords body injury injuries blow blow_of risk_of energy_over severity iss ais dose doses
 // ge:keywords judge_body step_body mend_body body_hash mortal death dies_of g-meter impact
-// ge:keywords trunk landing drawer twist bend
+// ge:keywords trunk landing drawer twist bend thrown ragdoll point_blow snow_give owed dive seat
 // ge:skill skier
 // ge:test tests/skier_body_test.cpp
 #pragma once
@@ -76,6 +83,16 @@ struct Impact {
   bool fall = false;
 };
 
+// A LANDING'S LOAD OWED TO THE TRUNK: a landing the legs folded under hands the spine, the organs
+// and the neck their share the step his trunk meets the snow (`injury::kOwedMost` s on at the
+// latest), not the step the skis did.
+struct Owed {
+  bool owed = false;
+  double t = 0;                             // s, when the skis landed
+  double back = 0, chest = 0, abdomen = 0;  // g, a load each
+  double neck = 0;                          // g, a blow
+};
+
 struct BodyState {
   std::array<uint8_t, kParts> worst{};  // each part's worst AIS
   std::array<Injury, kMostInjuries> injuries{};
@@ -86,6 +103,7 @@ struct BodyState {
   int32_t blows = 0;
   double mortal = -1;  // s he was mortally hurt, -1 not
   double dead = -1;    // s he died, -1 alive
+  Owed owed;
 };
 
 // What one step of the body did: the injuries taken are `injuries[first .. first + taken)`.
