@@ -213,6 +213,15 @@ void add_cvars(con::Console& c, Settings& s) {
           .min = -1,
           .max = 1},
          &s.cover);
+  v.bind({.name = "sv_clouds",
+          .fallback = "map",
+          .flags = kRun,
+          .help = "the kinds of cloud drawn, lowest first, joined by '+' (cumulus+cirrus): "
+                  "inversion stratus stratocumulus cumulus congestus cumulonimbus nimbostratus "
+                  "altocumulus altostratus lenticular cirrocumulus cirrostratus cirrus wisps "
+                  "(map: the map's own)",
+          .kind = CvarKind::text},
+         &s.cloud_kinds);
   v.bind({.name = "sv_skytype",
           .fallback = "earth",
           .flags = kRun,

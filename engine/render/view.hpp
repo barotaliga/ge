@@ -93,8 +93,16 @@ struct CloudLayer {
   double dome = 1;               // 1 a heap, 0 a sheet
   double density = 0.02;         // the extinction inside a full cell, 1/m
   double shadow_tau = 0;         // the optical depth a full column takes off the sun below
+  // Its FORM: how far a heap's top spreads into an anvil (0 none .. 1 a storm's), how deep the
+  // detail eats the edge (0.6 a heap's boil, near 0 a lens's smooth skin), how far the detail is
+  // combed along the wind (0 none .. 1 ice's hairs), and how far its cells gather into patches
+  // with clear sky between (0 none .. 1 islands of cells).
+  double anvil = 0;
+  double erode = 0.6;
+  double fibre = 0;
+  double patch = 0;
 };
-inline constexpr int kCloudLayers = 3;
+inline constexpr int kCloudLayers = 4;
 // Where the reach's mist begins, as a share of the reach (FrameView::reach_m).
 inline constexpr double kMistBegins = 0.5;
 struct Clouds {
