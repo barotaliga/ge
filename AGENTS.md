@@ -201,7 +201,8 @@ result; the output is `build/session-start.log`, the one-line state `build/sessi
 
 CI (`.github/workflows/ci.yml`) is tiered, because the org's runners are a small shared pool. A pull
 request runs the gates (fmt-check, agents-check, libm-check, release-check, the changeset rule),
-lint and shaders-check, and ONE build-and-test row (Linux x64, GCC debug+ASan); the merge queue
+lint and shaders-check, ONE Linux build-and-test row (Linux x64, GCC debug+ASan) and the Windows
+row (MSVC, whose warnings and CRT break most Linux-built changes); the merge queue
 runs the whole matrix on the tree that lands: Linux x64 (GCC debug+ASan, GCC release, Clang
 release), Linux arm64 (GCC), macOS (Apple Clang), Windows (MSVC), and `packaging.yml` (the
 installed package building a consumer on Linux, macOS and Windows, and `ge new` growing a repo).
