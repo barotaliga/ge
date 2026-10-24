@@ -1,6 +1,7 @@
 // LAB `menu-gpu`: the `menu` lab's pages drawn by the 2D pass on the GPU (render/ui_pass.hpp),
 // held to the CPU raster's pictures of the same draw lists. The front door over every backdrop at
-// the first viewport, and both pages at every viewport over the drifting picture: each drawn
+// the first viewport, both pages at every viewport over the drifting picture, and the
+// instrument panel (every shape the draw list has) at every viewport: each drawn
 // both ways, pictured as the GPU drew it beside a map of where it differs from the raster
 // (black where it matches; brighter the more levels off). On the pinned adapter (Mesa's
 // lavapipe) a page off the raster by more than 3 levels at more than 0.3% of its pixels fails
@@ -60,7 +61,7 @@ bool env_on(const char* name) {
 struct Page {
   std::string id, title, caption;
   const Backdrop* backdrop;
-  const char* page;
+  const char* page;  // "root", "options", or "instruments" (the panel of shapes)
   Viewport viewport;
 };
 
@@ -83,7 +84,7 @@ void run(ge::lab::Lab& lab) {
   const MenuStyle st = front_style();
 
   std::vector<Page> pages;
-  pages.reserve(scenes.backdrops.size() + viewports.size() * 2);
+  pages.reserve(scenes.backdrops.size() + viewports.size() * 3);
   const Viewport& main = viewports.front();
   for (const Backdrop& b : scenes.backdrops) {
     pages.push_back({"door-" + std::string(b.id), "FRONT DOOR OVER " + std::string(b.id) + ", GPU",
@@ -100,6 +101,15 @@ void run(ge::lab::Lab& lab) {
                        &scenes.backdrops[3], page, v});
     }
   }
+  for (const Viewport& v : viewports) {
+    const std::string size = std::to_string(v.w) + "x" + std::to_string(v.h);
+    pages.push_back({"instruments-" + size, "INSTRUMENTS AT " + size + ", GPU",
+                     "The `menu` lab's instrument panel (arcs, lines, polygons, turned and "
+                     "nine-sliced boxes) at " +
+                         size + ", drawn by the GPU's 2D pass.",
+                     &scenes.backdrops[3], "instruments", v});
+  }
+  const Image frame = panel_frame();
 
   Gpu gpu;
   gpu.device = ge::gpu::create_device({.label = "menu-gpu", .validation = 1});
@@ -128,19 +138,23 @@ void run(ge::lab::Lab& lab) {
   double worst_share = 0, gpu_ms = 0, prepare_ms = 0;
   uint32_t draws = 0;
   for (const Page& p : pages) {
-    Menu m = front_door();
-    if (std::string(p.page) == "options") m.open("options");
-    m.input({});
-    if (std::string(p.page) == "options") m.focus("volume");
     const int w = p.viewport.w, h = p.viewport.h;
-    const MenuLayout L = layout_menu(m, w, h, st);
-    MenuView view;
-    view.settle(m, L);
     DrawList dl;
     dl.begin(w, h);
-    draw_background(dl, p.backdrop->bg, {0, 0, float(w), float(h)}, 0,
-                    p.backdrop->scene ? &scenes.soft : nullptr);
-    view.draw(dl, m, L, st);
+    if (std::string(p.page) == "instruments") {
+      instruments(dl, w, h, scenes.range, frame, ui_font(Weight::semibold));
+    } else {
+      Menu m = front_door();
+      if (std::string(p.page) == "options") m.open("options");
+      m.input({});
+      if (std::string(p.page) == "options") m.focus("volume");
+      const MenuLayout L = layout_menu(m, w, h, st);
+      MenuView view;
+      view.settle(m, L);
+      draw_background(dl, p.backdrop->bg, {0, 0, float(w), float(h)}, 0,
+                      p.backdrop->scene ? &scenes.soft : nullptr);
+      view.draw(dl, m, L, st);
+    }
     commands += dl.size();
     const std::pair<std::string, std::string> size{"viewport",
                                                    std::to_string(w) + "x" + std::to_string(h)};
