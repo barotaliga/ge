@@ -5,8 +5,9 @@
 // (window.cpp) and nothing else in the tree includes it.
 //
 // Fall Line's needs set the scope: one window, resizable, high pixel density, keyboard and
-// pointer, focus (which pauses the run clock, engine/loop/run_clock.hpp) and quit. Gamepads,
-// rumble and touch arrive with the HUD's presses (M10) and the mobile builds (M11).
+// pointer, focus (which pauses the run clock, engine/loop/run_clock.hpp) and quit. Every input
+// device as engine/input events (gamepads, joysticks, wheels, raw mice, touch) is devices.hpp's,
+// read in the same pump.
 //
 // HEADLESS: a test or a lab never opens a window. `display_available()` says whether this
 // process can; a test that needs one skips when it cannot.
@@ -99,6 +100,9 @@ class Window {
   explicit Window(std::unique_ptr<Impl> impl);
   friend std::unique_ptr<Window> open_window(const WindowDesc& desc);
   friend void poll_input(Window& window, InputSnapshot& input);
+  friend void set_relative_mouse(Window& window, bool on);
+  friend bool relative_mouse(const Window& window);
+  friend void set_text_input(Window& window, bool on);
   std::unique_ptr<Impl> impl_;
 };
 
