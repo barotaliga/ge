@@ -121,7 +121,11 @@ bool MatroskaWriter::open(const std::string& path, const MatroskaOptions& o, std
   }
   opt_ = o;
   if (!path.empty()) {
+#ifdef _WIN32
+    if (fopen_s(&file_, path.c_str(), "wb+") != 0) file_ = nullptr;
+#else
     file_ = std::fopen(path.c_str(), "wb+");
+#endif
     if (!file_) {
       error = "cannot write " + path;
       return false;

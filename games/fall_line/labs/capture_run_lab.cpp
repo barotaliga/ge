@@ -119,14 +119,14 @@ void run(gl::Lab& lab) {
   namespace fl = fall_line::sim;
   const double seed = lab.arg_num("seed"), from = lab.arg_num("from"),
                seconds = lab.arg_num("seconds"), fps = lab.arg_num("fps");
-  int width = 0, height = 0;
-  if (std::sscanf(lab.arg("size").c_str(), "%dx%d", &width, &height) != 2 || width < 2 ||
-      height < 2) {
+  const std::string size = lab.arg("size");
+  const size_t x = size.find('x');
+  const int width = x == std::string::npos ? 0 : std::atoi(size.substr(0, x).c_str()) & ~1;
+  const int height = x == std::string::npos ? 0 : std::atoi(size.substr(x + 1).c_str()) & ~1;
+  if (width < 2 || height < 2) {
     lab.fail("--size must be WxH, not " + lab.arg("size"), "Pass --size=320x180 (skill: labs).");
     return;
   }
-  width &= ~1;
-  height &= ~1;
   gp::Setup setup;
   std::string error;
   if (!gp::make_setup(fl::kGame, seed, {{"rivals", lab.arg("rivals")}}, setup, error)) {
