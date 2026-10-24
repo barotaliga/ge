@@ -1,7 +1,7 @@
 // The clip world: prisms built flat, caves as grown, every triangle handed to the mesh world.
 //
-// ge:summary Builds the room level's mover world (flat prisms, grown caves) and finds a point's
-// room ge:keywords rooms clip collision mesh-world flat relief cave room_at point-in-polygon
+// ge:summary The room level's mover world (flat prisms, grown caves) and a point's room
+// ge:keywords rooms clip collision mesh-world flat relief cave room_at point-in-polygon
 // ge:skill rooms move
 // ge:test tests/rooms_clip_test.cpp
 #include "rooms/clip.hpp"
