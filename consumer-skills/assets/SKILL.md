@@ -1,6 +1,6 @@
 ---
 name: assets
-description: "Use to add or change one of this game's MODELS (a rigged figure, a vehicle, a prop) built in headless Blender: the asset's directory and manifest (asset.txt), the builder script and the engine's ge_asset library it imports, the game data it is fed (GE_ASSET_DATA), ge asset build, list and check, the stamp that says what a model was built from, the size budget, and looking at the result with the models and model-views labs, beside reference photographs; and SOUNDS taken in from free packs with ge sound match, import and split."
+description: "Use to add or change one of this game's MODELS (a rigged figure, a vehicle, a prop) built in headless Blender: the asset's directory and manifest (asset.txt), the builder script and the engine's ge_asset library it imports, the game data it is fed (GE_ASSET_DATA), ge asset build, list and check, the stamp that says what a model was built from, the size budget, and looking at the result with the models and model-views labs, beside reference photographs; and SOUNDS and MODELS taken in from free packs with ge sound match, import and split and ge model import."
 ---
 
 # Built assets
@@ -65,7 +65,7 @@ Blender comes from `--blender=<cmd>`, `GE_BLENDER`, `blender` on the PATH, or a 
 `import bpy`. With no Blender, `pip install bpy` into a directory and point `GE_BLENDER` at the
 Python and `PYTHONPATH` at the directory (the finding gives the exact line).
 
-## Free sounds
+## Free sounds and models
 
 A sound someone else made free comes in through `ge sound`, never by hand:
 
@@ -77,6 +77,13 @@ A sound someone else made free comes in through `ge sound`, never by hand:
   fades (`--loop` for a longer tail), brings it to -16 LUFS under a -1.5 dBFS peak and writes
   mono 16-bit WAV at 22.05 kHz. A loudness it cannot reach under the peak is reported.
 - `ge sound split <file> <group/name>` cuts a recording of many sounds at its silences.
+
+A free MODEL comes in through `ge model import <file> <group/name> --to=<dir>`: kits ship a .glb
+or .gltf whose textures (often one shared `Textures/colormap.png` that differs from kit to kit)
+and buffers sit in files beside it, so a copied file loses its colours. The import packs every
+buffer and image into one .glb, loads it with the engine's loader and answers with its joints,
+meshes, triangles, clips and size (a warning over `--budget-kib`, default 300). Look at it with
+the `models` lab before committing it.
 
 ffmpeg on the PATH decodes the sources. Take only what may be redistributed, changed and sold
 (CC0 first; no share-alike, noncommercial or no-derivatives licence), name every file by what it
