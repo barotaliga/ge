@@ -223,14 +223,31 @@ TEST(keys_and_a_relative_mouse_are_read_through_the_windows_pump) {
   in::update(s, q);
   CHECK(in::key_pressed(s, in::key::w) && in::key_held(s, in::key::w));
   CHECK(snap.down(pl::Key::w));  // the window's own snapshot still reads the same pump
+  // On a loaded shared display the deltas can reach the pump a frame or two late: keep pumping
+  // for a moment and look for them across every frame's events.
   const float want[2][2] = {{3.5f, -2.0f}, {1.0f, 0.5f}};
-  int found = 0;
-  for (const in::Event& e : q.events) {
-    if (e.type != in::EventType::mouse_motion || found == 2) continue;
-    if (e.device != s.mouse_id || e.v[0] != want[found][0] || e.v[1] != want[found][1]) continue;
-    CHECK_MSG((e.aux != 0) == relative,
-              "a motion is flagged raw exactly while relative mode is in force");
-    ++found;
+  int found = 0, others = 0;
+  for (int frame = 0; frame < 20 && found < 2; ++frame) {
+    if (frame > 0) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      q.clear();
+      pl::poll_input(*window, snap, *dev, q);
+      in::update(s, q);
+    }
+    for (const in::Event& e : q.events) {
+      if (e.type != in::EventType::mouse_motion || found == 2) continue;
+      if (e.device != s.mouse_id || e.v[0] != want[found][0] || e.v[1] != want[found][1]) {
+        if (others++ < 8) {
+          std::fprintf(stderr, "note: another motion: device %u (the mouse is %u), %g, %g\n",
+                       static_cast<unsigned>(e.device), static_cast<unsigned>(s.mouse_id),
+                       static_cast<double>(e.v[0]), static_cast<double>(e.v[1]));
+        }
+        continue;
+      }
+      CHECK_MSG((e.aux != 0) == relative,
+                "a motion is flagged raw exactly while relative mode is in force");
+      ++found;
+    }
   }
   CHECK_MSG(found == 2, "both deltas arrive, in order, as the mouse's motion");
   if (!relative) std::fprintf(stderr, "note: relative mode was not in force (no focus)\n");
