@@ -1,6 +1,6 @@
 ---
 name: assets
-description: "Use to add or change one of this game's MODELS (a rigged figure, a vehicle, a prop) built in headless Blender: the asset's directory and manifest (asset.txt), the builder script and the engine's ge_asset library it imports, the game data it is fed (GE_ASSET_DATA), ge asset build, list and check, the stamp that says what a model was built from, the size budget, and looking at the result with the models and model-views labs, beside reference photographs."
+description: "Use to add or change one of this game's MODELS (a rigged figure, a vehicle, a prop) built in headless Blender: the asset's directory and manifest (asset.txt), the builder script and the engine's ge_asset library it imports, the game data it is fed (GE_ASSET_DATA), ge asset build, list and check, the stamp that says what a model was built from, the size budget, and looking at the result with the models and model-views labs, beside reference photographs; and SOUNDS taken in from free packs with ge sound match, import and split."
 ---
 
 # Built assets
@@ -64,6 +64,24 @@ game's own lab poses the model its own way through `lab/model_sheets.hpp`.
 Blender comes from `--blender=<cmd>`, `GE_BLENDER`, `blender` on the PATH, or a python3 that can
 `import bpy`. With no Blender, `pip install bpy` into a directory and point `GE_BLENDER` at the
 Python and `PYTHONPATH` at the directory (the finding gives the exact line).
+
+## Free sounds
+
+A sound someone else made free comes in through `ge sound`, never by hand:
+
+- `ge sound match <reference> <pack-dir>... --pool=door|slam` ranks every sound in the packs
+  against a reference (the sound it stands in for, or one you like) by length, energy in seven
+  bands and loudness envelope. The pool decides more than the score: keep it to the right kind of
+  sound, then take the best one or two and say in the PR that nobody listened.
+- `ge sound import <file> <group/name> --to=<dir>` trims the silence, cuts to `--max` seconds,
+  fades (`--loop` for a longer tail), brings it to -16 LUFS under a -1.5 dBFS peak and writes
+  mono 16-bit WAV at 22.05 kHz. A loudness it cannot reach under the peak is reported.
+- `ge sound split <file> <group/name>` cuts a recording of many sounds at its silences.
+
+ffmpeg on the PATH decodes the sources. Take only what may be redistributed, changed and sold
+(CC0 first; no share-alike, noncommercial or no-derivatives licence), name every file by what it
+is in this game rather than its pack's name, and record the pack, author, URL and licence of each
+one in the game's credits file in the same commit.
 
 ## The rules
 
