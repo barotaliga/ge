@@ -24,6 +24,8 @@
 #include "brush/app/bsp_liquids.hpp"
 #include "brush/app/draw_data.hpp"
 #include "brush/write.hpp"
+#include "core/libm/libm.hpp"
+#include "core/math.hpp"
 #include "gpu/device.hpp"
 #include "gpu/target.hpp"
 #include "lab/lab.hpp"
@@ -233,8 +235,8 @@ gl::Picture overview(const ba::Scene& s, int size) {
   double q[2];
   to(s.start[0], s.start[2], q);
   gl::draw_ring(p, q[0], q[1], 6, {255, 60, 60});
-  gl::draw_line(p, q[0], q[1], q[0] + 14 * std::sin(s.start_heading),
-                q[1] - 14 * std::cos(s.start_heading), {255, 60, 60});
+  gl::draw_line(p, q[0], q[1], q[0] + 14 * ge::core::libm::sin(s.start_heading),
+                q[1] - 14 * ge::core::libm::cos(s.start_heading), {255, 60, 60});
   return p;
 }
 
@@ -250,7 +252,7 @@ bool open_at(const ge::brush::Map& m, const double e[3]) {
 double open_run(const ge::brush::Map& m, const double e[3], double heading) {
   double d = 0;
   for (; d < 40; d += 0.4) {
-    const double p[3] = {e[0] + d * std::sin(heading), e[1], e[2] + d * std::cos(heading)};
+    const double p[3] = {e[0] + d * ge::core::libm::sin(heading), e[1], e[2] + d * ge::core::libm::cos(heading)};
     if (!open_at(m, p)) break;
   }
   return d;
@@ -269,7 +271,7 @@ double widest(const ge::brush::Map& m, const double e[3]) {
 // Back the eye off along the way it looks, up to `most` m, staying in the open.
 void back_off(const ge::brush::Map& m, double e[3], double heading, double most) {
   for (double d = 0.4; d <= most; d += 0.4) {
-    const double p[3] = {e[0] - 0.4 * std::sin(heading), e[1], e[2] - 0.4 * std::cos(heading)};
+    const double p[3] = {e[0] - 0.4 * ge::core::libm::sin(heading), e[1], e[2] - 0.4 * ge::core::libm::cos(heading)};
     if (!open_at(m, p)) return;
     for (int k = 0; k < 3; ++k) e[k] = p[k];
   }
@@ -355,8 +357,8 @@ std::vector<View> auto_views(const ba::Scene& s, size_t map, const std::string& 
     if (ok) {
       v.heading = widest(s.map, v.eye);
       back_off(s.map, v.eye, v.heading, 8);
-      const double run = std::hypot(c[0] - v.eye[0], c[2] - v.eye[2]);
-      v.pitch = std::atan2(c[1] - v.eye[1], std::max(run, 1.0)) * 0.8;
+      const double run = ge::core::hypot(c[0] - v.eye[0], c[2] - v.eye[2]);
+      v.pitch = ge::core::libm::atan2(c[1] - v.eye[1], std::max(run, 1.0)) * 0.8;
       v.id = name + "-sky";
       v.title = name + ": the sky";
       v.caption = "Up at the largest of the map's sky ceilings.";
