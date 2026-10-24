@@ -20,12 +20,15 @@
 //   sv_ring sv_nebula sv_skystars sv_skyglow
 //                                       the kind of sky (render/sky_style.hpp's types) and its
 //                                       knobs (the server's, server info; app/sky_type.hpp)
+//   sv_lethal sv_armyfire sv_helis sv_paras
+//                                       the hunt: whether the army shoots to kill, fires at all,
+//                                       and sends its helicopters and paramotors (the server's)
 //
-// ge:summary Fall Line's cvars: the window, the picture, the camera, the sound, the map
+// ge:summary Fall Line's cvars: the window, the picture, the camera, the sound, the map, the hunt
 // ge:keywords fall-line cvars settings cfg vid_width r_taa r_bloom r_shadowsize cl_view volume
 // ge:keywords s_mute sv_seed sv_hour add_cvars register_cvars sv_weather sv_snowfall sv_fog
 // ge:keywords sv_wind sv_winddir sv_cover sv_skyrate r_clouds sv_skytype sky-type sky-knobs
-// ge:keywords cl_chasedist cl_motion
+// ge:keywords sv_lethal sv_armyfire sv_helis sv_paras hunt army cl_chasedist cl_motion
 // ge:skill console sim
 // ge:test tests/fall_line_cvars_test.cpp
 #pragma once
@@ -72,6 +75,11 @@ struct Settings {
   double sky_air = -1, sky_dust = -1, sun_size = -1, sun2 = -1;
   double planet = -1, planet_dir = -1, planet_el = -1, ring = -1;
   double nebula = -1, sky_stars = -1, sky_glow = -1;
+  // The hunt (sim/hunt_cfg.hpp hands them to a run's wanted level and army).
+  bool lethal = true;  // the army shoots to kill; off, it chases him down and arrests him
+  bool army_fire = true;
+  bool helis = true;
+  bool paras = true;
 };
 
 // Every cvar above, bound to `s`'s fields (which take the defaults now).
