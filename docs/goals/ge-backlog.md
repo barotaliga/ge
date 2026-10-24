@@ -25,6 +25,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge digest <lab> --why` (which table row and which columns moved when a digest did; for a lab that hashes the command catalog or another input, name that input: "cli-loop moved because a command or flag was added")
 - `ge lab diff` for a lab's tables and `--stash`
 - `ge lab sheet <lab> --grid=2x2 [shots]` (shots on one image) and `--watch`
+- `ge lab grid <lab> --vary=cfg:a,b,c` (one composite picture of the same view under several settings, each tile captioned with its setting)
 - a shared `--viewports=<w>x<h>,...` flag for picture labs (every view drawn at each size, e.g. a phone, a laptop and a 4K screen, without each lab adding its own)
 - `ge profile --pass=<name>` (one pass's median and p95, before and after) and `--cost <shader-term>`
 - `ge lab <id> --at-ref=<git-ref>` (the "before" shot from a worktree build of that ref, without stashing, rebuilding and restoring this tree)
@@ -75,6 +76,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge stage --put=skier --beside=<entity:id> --off=<m> --speed=<m/s>` (the player set down mid-run beside a live entity, at an offset and a speed, to stage a meeting without scripting a run up to it)
 - `ge trace <test> --rows=<series> --every=<s>` (one actor's state, a pursuer's say, as a table every N seconds from a scripted test, without adding prints to the test)
 - `ge cvar ls --module=<module>` (an engine module's cvars, their defaults and ranges, without a game: today `ge cvar` reads only a game's play console)
+- `ge lab <lab> --cfg=<script>` for every lab (any lab run under a cfg script's cvars, the runner applying it, instead of a --cfg flag each lab adds)
 - `ge sim --human --compare=<tag>` (the humanness report beside a kept run's, each metric's move)
 - `ge sim find <seed> --when "<predicate>"`
 - `ge sim --stalls`
