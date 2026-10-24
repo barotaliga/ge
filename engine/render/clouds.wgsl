@@ -64,13 +64,16 @@ fn cloud_density(l: CloudRows, p: vec3f, detail: bool) -> f32 {
   let n = textureSampleLevel(cloud_noise, linear_repeat, uvw, 0.0).r;
   let c = cloud_column_of(l, uvw, n);
   // AN ANVIL (form.x): near the slab's top the same noise cut far lower, so the tower's top
-  // spreads out flat round it.
+  // spreads out flat to several times its width, thinning toward its rim; its base hangs in
+  // pouches (mammatus), a coarse read of the billows lowering it cell by cell.
   var anvil = 0.0;
-  if (l.form.x > 0.0 && h > 0.7) {
-    let cut = l.shape.z * 0.85;
-    let wide = clamp((n - cut) / max(1.0 - cut, 1e-3) * 3.0, 0.0, 1.0);
-    let band = smoothstep(0.7, 0.8, h) * (1.0 - smoothstep(0.93, 1.0, h));
-    anvil = l.form.x * wide * band;
+  if (l.form.x > 0.0 && h > 0.55) {
+    let cut = l.shape.z * 0.72;
+    let wide = clamp((n - cut) / max(1.0 - cut, 1e-3) * 2.0, 0.0, 1.0);
+    let pouch = textureSampleLevel(cloud_noise, linear_repeat, vec3f(uvw.xy * 6.0, uvw.z), 0.0).g;
+    let lo = 0.8 - 0.07 * wide - 0.12 * smoothstep(0.3, 0.8, pouch) * wide;
+    let band = smoothstep(lo, lo + 0.04, h) * (1.0 - smoothstep(0.95 - 0.12 * (1.0 - wide), 1.0, h));
+    anvil = l.form.x * sqrt(wide) * band;
   }
   if (c <= 0.0 && anvil <= 0.0) {
     return 0.0;
@@ -303,7 +306,7 @@ fn cloud_look(uv: vec2f, px: vec2f, z: f32) -> CloudLook {
     }
     // Under a deck a sheet is the deck: its light mostly the deck's grey along the ray (what the
     // ground is lit by, so the two agree), a little of its own march kept for its texture.
-    let lid = 0.6 * frame.weather.y * (1.0 - cloud_layer(i).look.y);
+    let lid = 0.5 * frame.weather.y * (1.0 - cloud_layer(i).look.y);
     look.light = mix(look.light, deck_luminance(d) * alpha, lid);
     // Seen through the air to where its light comes from, and lost into the sky far off.
     let fade = 1.0 - smoothstep(kFadeNear, kFadeFar, look.dist);

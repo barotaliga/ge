@@ -8,6 +8,8 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdlib>
+#include <string>
 
 #include "core/solar.hpp"
 #include "mountain/app/night_look.hpp"
@@ -157,6 +159,7 @@ void place(const Level& level, double x, double z, double over_ground, ge::rende
 std::span<const std::string_view> view_names() { return kNames; }
 
 std::string_view view_caption(std::string_view name) {
+  name = name.substr(0, name.find('@'));
   if (name == "start") return "From behind the start line, a skier's eye height, down the piste.";
   if (name == "piste") return "Halfway down the piste at a skier's eye height, looking down it.";
   if (name == "lookback") return "From the finish, looking back up the piste to the summit.";
@@ -205,6 +208,22 @@ void day_view(const Level& level, double hour, ge::render::FrameView& v) {
 }
 
 bool make_view(const Level& level, std::string_view name, ge::render::FrameView& v) {
+  // A turned view, `<view>@<degrees>[:<pitch degrees>]`: the named view's eye, turned clockwise
+  // (and pitched) by so much.
+  if (const size_t at = name.find('@'); at != std::string_view::npos) {
+    if (!make_view(level, name.substr(0, at), v)) return false;
+    const std::string rest(name.substr(at + 1));
+    char* end = nullptr;
+    const double turn = std::strtod(rest.c_str(), &end);
+    if (end == rest.c_str()) return false;
+    v.heading += turn * kDeg;
+    if (*end == ':') {
+      const char* p = end + 1;
+      v.pitch = std::strtod(p, &end) * kDeg;
+      if (end == p) return false;
+    }
+    return *end == '\0';
+  }
   const auto& track = level.track;
   if (track.points.empty()) return false;
   const auto& m = level.mountain;

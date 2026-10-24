@@ -740,8 +740,10 @@ the layer's frame block (`CloudLayer::anvil`, `erode`, `fibre`, `patch`):
   cirrus is fibres and hooks rather than a smear.
 - THE PATCHES (`patch`): a quarter-scale read of the noise masks the column, so a cirrocumulus
   or an altocumulus comes as fields of cells with clear sky between, never a uniform sheet.
-- THE ANVIL (`anvil`): above 70 % of its depth a heap's cut is lowered, so a cumulonimbus
-  spreads its top wider than its tower.
+- THE ANVIL (`anvil`): from 55 to 80 % of its depth up a heap's cut is lowered to 0.72 of
+  itself, so a cumulonimbus spreads its top to several times its tower's width, thinning toward
+  the rim, and a coarse read of the billows lowers the anvil's base cell by cell into hanging
+  pouches (mammatus).
 - THE COLUMN ramps from the cut to full over at most 0.3 of the noise (`kColumnRamp`), so a
   full sheet is evenly thick and does not break into the noise's blotches.
 - THE LIGHT IN A SHEET: where a thin slab is marched along a long path the steps grow (up to
@@ -749,7 +751,8 @@ the layer's frame block (`CloudLayer::anvil`, `erode`, `fibre`, `patch`):
   is diffusion's 1/(1 + σ′τ) along the path up through the slab (one more read halfway to its
   top) rather than the heap's forward exp(−σ′τ), and the sky's light from above dims through
   the same path, so a deck is grey under and bright on top. A thick sheet under a lid is
-  blended toward the deck's own grey, so the ground's flat light and the sheet overhead agree.
+  blended toward the deck's own grey (half of the way), so the ground's flat light and the sheet
+  overhead agree and the sheet keeps its texture.
 - THE HALO: a sheet with strands (cirrostratus) lights a ring at 22° round the sun, its red
   inside its blue (a Gaussian of 0.9° at 21.7°, 22.0° and 22.4° for red, green and blue).
 - THE SHAFTS (`shafts` in `wgsl/frame.wgsl`): six points along the view ray, out to 20 km,
