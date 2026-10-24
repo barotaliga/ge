@@ -150,9 +150,9 @@ fn star_light(c: vec3f, p: vec3f, m: f32, bv: f32, bg: f32, px: f32, limit: f32)
 
 // THE REAL STARS along celestial direction `c` (render/stars.hpp's map: the cube's cells, up to
 // kStarSlots stars a cell), against a sky of luminance `bg` (the sun's units), one pixel `px` rad
-// across: the pixel's cell and the eight round it on its face.
-fn stars(c: vec3f, bg: f32, px: f32) -> vec3f {
-  let limit = limiting_magnitude(bg * kSunLux / frame.world.y);
+// across, the faintest seen of magnitude `limit`: the pixel's cell and the eight round it on its
+// face.
+fn stars(c: vec3f, bg: f32, px: f32, limit: f32) -> vec3f {
   if (limit < -1.0) {
     return vec3f(0.0);
   }
@@ -300,6 +300,117 @@ fn moon_disc(d: vec3f, r: f32, px: f32) -> vec3f {
                             max(through, 1e-30));
 }
 
+// THE SKY'S STYLE (render/sky_style.hpp; frame_types.wgsl's `style` rows): what a world that is
+// not the Earth shows over its sky. Each part is drawn only when its strength is set, so the
+// Earth's sky (every strength 0) is drawn as it always was.
+
+// How much a halo round a disc is seen: the air's scattering against the Earth's, so an airless
+// sky has none.
+fn air_halo() -> f32 {
+  let air = frame.style[0];
+  return min(dot(air.xyz, kLuma) * 0.6 + air.w * 0.25, 2.0);
+}
+
+// The second sun along `d`: its disc as bright as the sun's times its share, darkened toward the
+// limb, and a halo round it in the air, all through the air to the eye.
+fn second_sun(d: vec3f) -> vec3f {
+  let s = frame.style[3];
+  let look = frame.style[4];
+  let r = kSunRadius * look.w;
+  let ang = acos(clamp(dot(d, s.xyz), -1.0, 1.0));
+  let sun = frame.night_sun.w * frame.weather.x * s.w;
+  var light = sun * (0.5 * exp(-ang / (6.0 * r)) + 0.06 * exp(-ang / 0.3)) * air_halo();
+  if (ang < r) {
+    let x = ang / r;
+    let limb = 1.0 - 0.6 * (1.0 - sqrt(max(1.0 - x * x, 0.0)));
+    light += sun / (PI * kSunRadius * kSunRadius) * limb;
+  }
+  let through = transmittance_to_top(transmittance_lut, linear_clamp, radius_at(frame.eye.y), s.y);
+  return look.xyz * through * light;
+}
+
+// How much of the sky the planet's ball and ring dim behind them.
+const kPlanetDims = 0.5;
+
+// The planet's bands: a stripe along its axis's latitude, mottled.
+fn bands(lat: f32, q: vec3f) -> f32 {
+  return 0.82 + 0.18 * sin(lat * 23.0 + 2.0 * mottle(q * 0.2)) + 0.08 * (mottle(q * 0.6) - 0.5);
+}
+
+// THE PLANET along `d`: rgb its light (lit by the sun as a ball is, its phase following, its
+// night side faint; banded) and its ring's (a flat lit annulus round it, tilted toward the eye,
+// the near half over the ball and the far half behind it), through the air; a: the share of the
+// sky behind it the ball and the ring hide.
+fn planet(d: vec3f) -> vec4f {
+  let p = frame.style[5];
+  let c = dot(d, p.xyz);
+  if (c <= 0.0) {
+    return vec4f(0.0);
+  }
+  // The disc's own frame: east and up across it, and a place on it in planet radii.
+  let east = normalize(vec3f(p.z, 0.0, -p.x) + vec3f(1e-6, 0.0, 0.0));
+  let up = cross(p.xyz, east);
+  let q = vec2f(dot(d, east), dot(d, up)) / sin(p.w);
+  let rho2 = dot(q, q);
+  let tilt = frame.style[10].x;
+  let outer = frame.style[6].w;
+  // The ring's plane: its normal leans from the disc's up toward the eye by the tilt.
+  let axis = normalize(up * cos(tilt) - p.xyz * sin(tilt));
+  let rq = vec2f(q.x, q.y / max(sin(tilt), 0.02));
+  let rr = length(rq);
+  let sun = frame.night_sun.xyz;
+  let e = frame.night_sun.w * frame.weather.x;
+  var light = vec3f(0.0);
+  var hide = 0.0;
+  // The ball.
+  let ball = rho2 < 1.0;
+  if (ball) {
+    let n = q.x * east + q.y * up - sqrt(1.0 - rho2) * p.xyz;
+    let lambert = max(dot(n, sun), 0.0);
+    let lat = asin(clamp(dot(n, axis), -1.0, 1.0));
+    light = frame.style[6].xyz * (bands(lat, n * 40.0) * (lambert + 0.004) * e / PI);
+    hide = 1.0 - smoothstep(0.96, 1.0, sqrt(rho2));
+  }
+  // The ring: the near half (under the disc's middle on screen) over the ball, the far half
+  // where the ball does not cover it.
+  if (outer > 1.0 && rr > 1.2 && rr < outer) {
+    let near = rq.y < 0.0;
+    if (near || !ball) {
+      let t = (rr - 1.2) / (outer - 1.2);
+      let gaps = smoothstep(0.0, 0.05, abs(t - 0.62)) * (0.6 + 0.4 * sin(t * 61.0));
+      let lit = 0.25 + 0.75 * abs(dot(axis, sun));
+      let alpha = 0.75 * gaps * smoothstep(0.0, 0.05, t) * smoothstep(1.0, 0.95, t);
+      light = mix(light, frame.style[6].xyz * (0.7 * lit * e / PI), alpha);
+      hide = max(hide, alpha);
+    }
+  }
+  let through = transmittance_to_top(transmittance_lut, linear_clamp, radius_at(frame.eye.y), p.y);
+  return vec4f(light * through, hide);
+}
+
+// THE NEBULA along celestial direction `c`: a mottled cloud between its two tints, at its
+// brightest its strength times the sunlit snow's white.
+fn nebula(c: vec3f) -> vec3f {
+  let a = frame.style[7];
+  let size = max(frame.style[8].w, 0.05);
+  let n1 = mottle(c * (0.12 / size));
+  let n2 = mottle(c * (0.31 / size) + 1.7);
+  let n3 = mottle(c * (0.83 / size) + 4.1);
+  let n4 = mottle(c * (2.2 / size) + 7.3);
+  let field = n1 * 0.55 + n2 * 0.27 + n3 * 0.12 + n4 * 0.06;
+  let dense = smoothstep(0.42, 0.8, field);
+  let wisp = dense * dense * (0.6 + 0.8 * n3);
+  return mix(a.xyz, frame.style[8].xyz, smoothstep(0.3, 0.7, n2)) *
+         (a.w * white_luminance() * wisp);
+}
+
+// THE GLOW FROM BELOW along `d`: strongest at and under the horizon (its strength times the snow's
+// white there), fading by its height.
+fn glow_below(d: vec3f) -> vec3f {
+  let g = frame.style[9];
+  return g.xyz * (white_luminance() * exp(-max(d.y, 0.0) / max(g.w, 1e-3)));
+}
+
 @fragment
 fn fs_main(in: VertexOut) -> FragmentOut {
   let d = view_ray(frame, in.uv);
@@ -307,18 +418,58 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   // Under the horizon while there is a reach, the horizon's sky (frame.wgsl's `mist_dir`).
   let h = mist_dir(d);
   var colour = sky_luminance(h);
+  // The shafts: the cloud's shadow across the air in front of the sky, strongest toward the sun
+  // where the air scatters most of what it scatters forward.
+  let toward = pow(max(dot(h, frame.sun.xyz), 0.0), 4.0);
+  colour *= mix(1.0, shafts(h, kShaftReach, in.position.xy), kShaftShare * mix(0.4, 1.0, toward) * (1.0 - frame.weather.y));
   // The disc: the sun's light over its solid angle, darkened toward the limb, and only where
   // the planet does not hide it; behind a deck it is lost in the deck's grey. It is the real
   // sun's, whichever light is the key.
   let c = dot(d, frame.night_sun.xyz);
-  let edge = cos(kSunRadius);
+  let sun_r = kSunRadius * frame.style[2].w;
+  let edge = cos(sun_r);
   if (c > edge) {
-    let x = sqrt(max(1.0 - c * c, 0.0)) / sin(kSunRadius);
+    let x = sqrt(max(1.0 - c * c, 0.0)) / sin(sun_r);
     let limb = 1.0 - 0.6 * (1.0 - sqrt(max(1.0 - x * x, 0.0)));
     let through = transmittance_to_top(transmittance_lut, linear_clamp, radius_at(frame.eye.y),
                                        frame.night_sun.y);
-    let disc = frame.night_sun.w * frame.weather.x * through / (PI * kSunRadius * kSunRadius);
-    colour += disc * limb * (1.0 - frame.weather.y);
+    let disc = frame.night_sun.w * frame.weather.x * through / (PI * sun_r * sun_r);
+    colour += frame.style[2].xyz * disc * limb * (1.0 - frame.weather.y);
+  }
+  // THE SKY'S STYLE: the second sun, the nebula and the stars by day, the planet over them, the
+  // glow from below; behind the deck's share and lost in a fog's or a fall's air as the night is.
+  let open = (1.0 - frame.weather.y) * exp(-frame.weather.z * 10000.0);
+  if (frame.style[3].w > 0.0) {
+    colour += second_sun(d) * (1.0 - frame.weather.y);
+  }
+  var hidden = 0.0;
+  if (frame.style[5].w > 0.0) {
+    let pl = planet(d);
+    hidden = pl.w * (1.0 - frame.weather.y);
+    // Not as the air would have it (its light in front of the ball is all there is of the sky
+    // there) but as a world's sky is drawn: the ball and the ring stand out of it, dimming half
+    // of the sky behind them.
+    colour = colour * (1.0 - kPlanetDims * hidden) + pl.rgb * (1.0 - frame.weather.y);
+  }
+  let by_day = frame.style[10].y;
+  if ((frame.style[7].w > 0.0 || by_day > 0.0) && d.y > -0.02 && open > 0.0) {
+    let cel = celestial(d);
+    let air = transmittance_to_top(transmittance_lut, linear_clamp,
+                                   kGroundRadius + max(frame.eye.w, 0.0), d.y);
+    var far = vec3f(0.0);
+    if (frame.style[7].w > 0.0) {
+      far += nebula(cel);
+    }
+    if (by_day > 0.0 && frame.night.x <= 0.0) {
+      // Not the eye's threshold against the day's sky but the share's: down to the sixth
+      // magnitude at 1, the faintest a hundredth of the snow's white.
+      let bg = 0.0017 * white_luminance();
+      far += stars(cel, bg, px, mix(1.0, 6.0, by_day));
+    }
+    colour += far * air * open * (1.0 - hidden);
+  }
+  if (frame.style[9].w > 0.0 && dot(frame.style[9].xyz, vec3f(1.0)) > 0.0) {
+    colour += glow_below(d) * (1.0 - 0.6 * frame.weather.y);
   }
   // THE NIGHT: behind the deck's share, lost in a fog's or a fall's air, under the horizon none.
   let clear = (1.0 - frame.weather.y) * exp(-frame.weather.z * 10000.0);
@@ -330,7 +481,8 @@ fn fs_main(in: VertexOut) -> FragmentOut {
     // The disc hides the stars behind it; the post pass leaves its colour to the cones, so the
     // sky in front of it is given to the rods here (frame.wgsl's night_vision).
     let cover = on_moon(d);
-    colour += (stars(cel, bg, px) + galaxy(cel)) * air * clear * (1.0 - cover);
+    let limit = limiting_magnitude(bg * kSunLux / frame.world.y);
+    colour += (stars(cel, bg, px, limit) + galaxy(cel)) * air * clear * (1.0 - max(cover, hidden));
     colour = mix(colour, rods(colour), cover) + moon_disc(d, r, px) * clear;
   } else if (frame.moon_light.z > 0.0) {
     let r = kGroundRadius + max(frame.eye.w, 0.0);

@@ -605,6 +605,18 @@ of the sun's illuminance (`FrameView::sun_illuminance` scales them all). The sky
 full-screen triangle at the far plane tested `equal`, with the sun's disc. `frame.wgsl`
 holds the one copy of the haze, the sun's light at a point and the sky's irradiance.
 
+**Sky types (M8f7)** (`render/sky_style.hpp`, `FrameView::style`): a world that is not the Earth
+changes its AIR (scales on the Rayleigh scattering per channel, the dust's scattering,
+absorption per channel, asymmetry and scale height, and the ozone), which `medium_at` reads, so
+the tables are rebuilt in it and everything lit by the sky follows (the sky, the sun's colour,
+the sky's light, the haze, the cloud's light). Over the sky the pass draws what an air cannot:
+the sun's disc's size and tint, a second sun with a halo, a planet lit as a ball (its phase
+fixed by its offset from the sun, banded, a ring whose near half crosses it, dimming half the
+sky behind it), a nebula on the star sphere and the stars by day (both against the snow's
+white, not physical), and a glow from under the horizon. Ten named types (`sky_types`) a game
+picks by a word, knobs over them (`SkyKnobs`). The Earth's style is every scale 1 and every
+extra 0, so its picture is the same to the bit.
+
 **The weather in the picture (M8f1).** A frame is seen under a `Weather` (`render/view.hpp`,
 in the frame block as `weather` and `deck`), and `wgsl/frame.wgsl` is the one place it acts, so
 the ground, the trees, the figures, the particles, the flakes and the sky all see the same day:
@@ -634,7 +646,7 @@ map's sky at the view's time (`FrameOptions::weather`). The `weather` lab draws 
 seed 38's piste the clear day's picture spreads 37 levels of luma, an overcast's 15, a snow's 3
 and a storm's 2. The cloud volume itself is M8f3 (below).
 
-**The cloud in the picture (M8f3).** A frame is seen under up to three cloud layers
+**The cloud in the picture (M8f3).** A frame is seen under up to four cloud layers
 (`render/view.hpp`'s `Clouds`, in the frame block as `cloud_info` and `clouds`), drawn by
 `render/clouds.hpp`:
 
@@ -707,7 +719,50 @@ rippled sheet at 4 km, a HIGH sky's streaks over a veil; every band dealt off th
 the layers carried at a quarter of the wind aloft (the map's mean wind grown and turned with
 height) and living their kind's life. Where they are drawn a broken sky's mean cloud
 (`weather_look`'s pass and cover) is given back, since the layers cast their own shadows; a
-lid keeps its deck.
+lid keeps its deck, and stands a sheet under it (OVERCAST a stratus, SNOW and a STORM a
+nimbostratus) so the deck has a texture.
+
+**Cloud kinds (M8f8)** (`render/cloud_kinds.hpp`): fourteen named kinds, each a layer's bands
+and its form, matched by eye against photographs of real skies side by side (the photographs
+are kept out of the tree): inversion, stratus, stratocumulus, cumulus, congestus,
+cumulonimbus, nimbostratus, altocumulus, altostratus, lenticular, cirrocumulus, cirrostratus,
+cirrus and wisps. A kind's bands are its base over the valley floor, its depth, its cover and
+its cell (m); its stretch along the wind, its dome (0 a sheet, 1 a heap), its optical depth,
+its shadow, its life and its speed; and four FORM knobs, each 0..1, carried in a fourth row of
+the layer's frame block (`CloudLayer::anvil`, `erode`, `fibre`, `patch`):
+
+- THE BILLOWS. The noise texture is two channels (RG8Unorm 64³): the column's value fbm, and a
+  cellular (Worley) fbm at 4, 8 and 16 cells a tile. Two reads of it at ten times the cell's
+  scale take a heap's edge away in rounded lobes, harder toward the top, by the kind's `erode`
+  (a lenticular's 0.06 leaves it smooth as a lens, a cumulus's 0.6 cauliflowers it).
+- THE STRANDS (`fibre`): the detail read stretched along the wind and squeezed across it, and
+  the value noise's wisps in place of the billows, then the density cut into strands, so a
+  cirrus is fibres and hooks rather than a smear.
+- THE PATCHES (`patch`): a quarter-scale read of the noise masks the column, so a cirrocumulus
+  or an altocumulus comes as fields of cells with clear sky between, never a uniform sheet.
+- THE ANVIL (`anvil`): above 70 % of its depth a heap's cut is lowered, so a cumulonimbus
+  spreads its top wider than its tower.
+- THE COLUMN ramps from the cut to full over at most 0.3 of the noise (`kColumnRamp`), so a
+  full sheet is evenly thick and does not break into the noise's blotches.
+- THE LIGHT IN A SHEET: where a thin slab is marched along a long path the steps grow (up to
+  three times) and bunch toward its ends; the light that has scattered many times in a sheet
+  is diffusion's 1/(1 + σ′τ) along the path up through the slab (one more read halfway to its
+  top) rather than the heap's forward exp(−σ′τ), and the sky's light from above dims through
+  the same path, so a deck is grey under and bright on top. A thick sheet under a lid is
+  blended toward the deck's own grey, so the ground's flat light and the sheet overhead agree.
+- THE HALO: a sheet with strands (cirrostratus) lights a ring at 22° round the sun, its red
+  inside its blue (a Gaussian of 0.9° at 21.7°, 22.0° and 22.4° for red, green and blue).
+- THE SHAFTS (`shafts` in `wgsl/frame.wgsl`): six points along the view ray, out to 20 km,
+  read the cloud's shadow; the air scatters that share of the sun (70 % of its in-scatter is
+  shadowed at most), on the world through the haze and on the sky strongest toward the sun, so
+  the gaps between heaps throw beams.
+
+Fall Line picks a stack with `sv_clouds` (kinds joined by '+', such as `cumulus+cirrus`, up to
+four; `map`, the default, keeps the map's own), each kind's bands dealt off the map's seed by
+`cloud_layers_of`; a stack whose lowest kind is a thick full sheet (`lid_under`) turns the day
+grey under it as a lid would. The `world` lab's `clouds` view stands at the finish in the
+valley and looks up the sky with the sun behind and to one side, the way a photograph of a sky
+is taken.
 
 **The night in the picture (M8f2).** A frame's `Night` (`render/view.hpp`, filled by
 `render/night.hpp`'s `set_night` once the game has placed the sun) carries the moon and the dark
