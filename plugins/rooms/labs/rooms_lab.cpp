@@ -478,7 +478,7 @@ void run(lab::Lab& lab) {
       const double dz = walk.trail[i].z - walk.trail[i - 1].z;
       metres_walked += std::sqrt(dx * dx + dz * dz);
     }
-    lab.metric("clip-triangles", double(clip.tri.size() / 3), "count");
+    lab.metric("clip-triangles", double(clip.tri.size()) / 3, "count");
     lab.metric("tour-points", double(tour.points.size()), "count");
     lab.metric("walk-rooms", double(walk.rooms.size()), "count");
     lab.metric("walk-steps", double(walk.steps), "count");

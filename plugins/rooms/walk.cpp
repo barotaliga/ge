@@ -108,8 +108,11 @@ struct Planner {
     }
     Vec3 best{mid[0], y0, mid[1]};
     double best_d = 1e300;
-    for (double z = lo[1] + cell / 2; z < hi[1]; z += cell) {
-      for (double x = lo[0] + cell / 2; x < hi[0]; x += cell) {
+    const int32_t cols = static_cast<int32_t>((hi[0] - lo[0]) / cell);
+    const int32_t rows = static_cast<int32_t>((hi[1] - lo[1]) / cell);
+    for (int32_t j = 0; j < rows; ++j) {
+      for (int32_t i = 0; i < cols; ++i) {
+        const double x = lo[0] + (double(i) + 0.5) * cell, z = lo[1] + (double(j) + 0.5) * cell;
         const double d = (x - mid[0]) * (x - mid[0]) + (z - mid[1]) * (z - mid[1]);
         if (d >= best_d || room_at(level, {x, y0 + 0.3, z}) != r || in_solid(r, x, z)) continue;
         const double h = stand_height(x, z, y0);
@@ -140,8 +143,8 @@ struct Planner {
     grid.cols = static_cast<int32_t>((hi[0] - lo[0]) / cell) + 1;
     grid.rows = static_cast<int32_t>((hi[1] - lo[1]) / cell) + 1;
     const auto centre = [&](int32_t k) {
-      return Vec3{lo[0] + (double(k % grid.cols) + 0.5) * cell, y0,
-                  lo[1] + (double(k / grid.cols) + 0.5) * cell};
+      const int32_t col = k % grid.cols, row = k / grid.cols;
+      return Vec3{lo[0] + (double(col) + 0.5) * cell, y0, lo[1] + (double(row) + 0.5) * cell};
     };
     const auto cell_of = [&](const Vec3& p) {
       const int32_t i = std::clamp(static_cast<int32_t>((p.x - lo[0]) / cell), 0, grid.cols - 1);
