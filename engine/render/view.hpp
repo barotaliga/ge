@@ -27,6 +27,12 @@
 // default is a clear sky: nothing changes. What a world's weather kinds mean in these numbers is
 // the world's (plugins/mountain/app/weather_look.hpp); wgsl/frame.wgsl reads them.
 //
+// THE REACH a frame is drawn to is `FrameView::reach_m`: past half of it a mist closes every
+// surface but the cloud into the sky behind its pixel (the sky under the horizon drawn as the
+// horizon's), so a picture that draws less far ends in a bright haze rather than at an edge;
+// nothing past it is drawn.
+// The default draws to the horizon, unmisted.
+//
 // THE CLOUD a frame is seen under is `FrameView::clouds` (`Clouds`): up to three layers, each a
 // slab of the air (its base and its top, world metres) where a tileable noise passes the cut its
 // cover sets, carried by the wind and changing its shape as it goes. render/clouds.hpp draws it
@@ -87,11 +93,14 @@ struct CloudLayer {
   double shadow_tau = 0;         // the optical depth a full column takes off the sun below
 };
 inline constexpr int kCloudLayers = 3;
+// Where the reach's mist begins, as a share of the reach (FrameView::reach_m).
+inline constexpr double kMistBegins = 0.5;
 struct Clouds {
   int count = 0;
   CloudLayer layers[kCloudLayers];
   double steps = 1;     // the share of the march's full steps taken (the quality ladder's), 0.25..1
   bool quarter = true;  // marched at a quarter of the pixels, then upsampled (false: every pixel)
+  bool spread = true;   // the quarter's march spread over four frames, the rest reprojected
 };
 
 // THE NIGHT a frame is seen under (render/night.hpp fills it from where the moon is). The
@@ -108,6 +117,19 @@ struct Night {
   double moon_radius = 0;
   double moon_surface = 0;
   double earthshine = 0;
+  // Its face (world unit vectors: its north pole, 0 N 0 E, 0 N 90 E) and the albedo map's scale
+  // (render/moon.hpp: the map's byte over 255 times it is the albedo against the near side's
+  // mean).
+  double moon_pole[3] = {0, 1, 0};
+  double moon_prime[3] = {0, 0, -1};
+  double moon_east[3] = {1, 0, 0};
+  double albedo_scale = 1;
+  // The Earth's shadow on it (render/night.hpp): toward its axis, the umbra's and penumbra's
+  // angular radii (rad; 0: none), and the disc's brightest point's light against full sunlight.
+  double shadow[3] = {0, 0, 1};
+  double umbra = 0;
+  double penumbra = 0;
+  double eclipse_peak = 1;
   // Whether the KEY LIGHT is the moon: FrameView's sun_* then stand for the moon, and these for
   // the real sun (the moon's bright limb faces it; its sky is drawn beside the moon's).
   bool moon_key = false;
@@ -142,9 +164,12 @@ struct FrameView {
   double sun_illuminance = 1.0;  // relative; the sky and every light scale with it
   // The world's y = 0 over the sea, m: where the atmosphere starts.
   double altitude_m = 0;
-  Weather weather{};   // the cloud and the fog; the default is a clear sky
-  Night night{};       // the moon, the stars and the dark sky's glow; the default is none
-  Clouds clouds{};     // the cloud's layers; the default is none
+  Weather weather{};  // the cloud and the fog; the default is a clear sky
+  Night night{};      // the moon, the stars and the dark sky's glow; the default is none
+  Clouds clouds{};    // the cloud's layers; the default is none
+  // THE REACH, m: how far the picture draws. Past half of it a mist closes every surface into
+  // the sky behind it, all of it by the reach, and nothing farther is drawn; 0: no reach, no mist.
+  double reach_m = 0;
   double time_s = 0;   // the frame's time (the renderer reads no clock)
   uint64_t frame = 0;  // the frame's number (TAA's jitter is indexed by it)
 };

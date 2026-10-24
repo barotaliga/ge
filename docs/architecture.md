@@ -76,11 +76,25 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   packet format, connections with their channels, and nodes of up to 32 peers. It depends on
   `engine/core` only and reads no clock: the caller passes the time and the seeds, so a session
   over the simulated network is deterministic and every net lab is a determinism test.
+- **`engine/console`**: the console and cfg files (M21; `docs/console.md` is the design): cvars
+  in three tiers (the player's, the server's, code's), bound to the settings structs the
+  subsystems already read so no subsystem includes the console; the command buffer, aliases,
+  scripting, binds, the cfg startup order and `cfg_save`; and the drop-down console's model,
+  which holds no pixels. It depends on `engine/core` only and reads no clock: a frame is one
+  `run`.
 - **`engine/input`**: the input layer (`ge::input`, M19; `docs/input.md` is the design): one
   32-byte event for every device, the state a frame reads, dead zones and ramps, action maps in
   contexts, the bindings file and rebinding, the device database, touch controls, local players,
   rumble and force feedback as pure functions, a simulated backend and the event log. It depends
   on `engine/core` only; the OS's devices reach it through `engine/platform`'s backend.
+- **`engine/ui`**: the immediate-mode 2D layer (M22): paints (colours, linear and radial
+  gradients), a draw list of rounded boxes (a paint, an image, a border, a feather) and text runs
+  under clips, fonts over stb_truetype with a built-in family compiled in, a CPU raster (the labs'
+  pictures and the GPU pass's reference), backdrops (`Background`: a colour, a gradient, a drifting
+  picture, the live scene, scrims and vignettes) and menus as a model (pages, items, focus, events)
+  with a responsive view. It depends on `engine/core` only and holds no GPU: the draw list is data,
+  and the 2D pass in `engine/render` (M22b) draws the same commands. A menu never calls the game;
+  it hands back events, so the game's state stays the game's and a menu replays from its inputs.
 - **`engine/texgen`**: procedural textures (`ge::texgen`, M31; `docs/textures.md` is the design):
   a recipe an agent writes as text (`.tex`), its layers painted over float planes (colour,
   height, roughness, metal, glow) in order, the maps derived off them, and the bake cached on
@@ -108,6 +122,11 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   `ge profile`, `ge mem`), a log replayed with the decision trace on (`ge why`), and the `play`
   executable's main. It depends on `engine/core`, `engine/ai` and `engine/prof`; a game's
   `play` target links it and `ge` runs it.
+- **`engine/replay`**: replays (`ge::replay`, `docs/replays.md`): a run watched again off its
+  input log from any moment. The keyframes are the game's own `Run::clone`s, kept every few
+  seconds and thinned with age; the player seeks by cloning the nearest one and stepping it on
+  in a budget of steps a frame; the transport is a video player's controls as pure state. It
+  depends on `engine/play`; a game that clones its run gets seeking for free.
 - **`engine/ai`**: the bots' layer (`ge::ai`): the DECISION RECORD every bot writes where it
   chooses (`why.hpp`: the facts it read, the options it weighed with their scores and the named
   terms of each, the choice and its margin over the next best), held to one rule: off is a null

@@ -5,7 +5,9 @@
 // first QUARTER and a NEW moon (the nearest days to the map's own with the moon so, each at the
 // hour after dark its moon stands highest; the new moon's at midnight), once as the view looks,
 // over the snow, and once at the sky: at the moon through a long lens (its phase, its bright
-// limb toward the sun, its earthlit dark part), or, with no moon, up into the south.
+// limb toward the sun, its earthlit dark part), or, with no moon, up into the south. Then the
+// moon itself through a lens its disc fills: by day (and over the mountain), a crescent at dusk,
+// the full moon's face and the partial eclipse of 28 August 2026.
 //
 // Beside each: where the sun and the moon stand and how much of the moon is lit (deterministic,
 // core/solar.hpp's), and, measured, the moon's light on the ground and the twilight's (which of
@@ -74,7 +76,8 @@ std::string fixed(double v, int places) {
 
 // Where a shot looks from the view's eye: as the view looks (down over the snow), toward the
 // sun under the horizon (the dusk's glow), at the moon through a long lens, or up into the south.
-enum class Aim : std::uint8_t { view, sun, moon, up, figure };
+// `wide` looks at the moon with the mountain under it, `close` fills the frame with its disc.
+enum class Aim : std::uint8_t { view, sun, moon, up, figure, wide, close };
 
 // THE FIGURES a real sky is checked by (render/stars.hpp): a pattern's middle on the celestial
 // sphere (right ascension, h; declination, degrees). The `figure` shot looks at the highest.
@@ -157,6 +160,23 @@ double moon_hour(const mg::Level& level, double day) {
   for (int k = 0; k <= 56; ++k) {
     const double h = 17 + k * 0.25;
     if (sun_elevation(level, day, h) > -12 * kDeg) continue;
+    const double e = ge::mountain::app::moon_of(l, h).elevation;
+    if (e > high) {
+      high = e;
+      best = h;
+    }
+  }
+  return best;
+}
+
+// The afternoon hour (12 to 18) its moon stands highest with the sun still 15 degrees up.
+double day_moon_hour(const mg::Level& level, double day) {
+  mg::Level l = level;
+  l.sun.day_of_year = day;
+  double best = 15, high = -10;
+  for (int k = 0; k <= 24; ++k) {
+    const double h = 12 + k * 0.25;
+    if (sun_elevation(level, day, h) < 15 * kDeg) continue;
     const double e = ge::mountain::app::moon_of(l, h).elevation;
     if (e > high) {
       high = e;
@@ -274,6 +294,31 @@ void run(ge::lab::Lab& lab) {
                     "band"});
   nights.push_back({"new-figure", none, 24.0, Aim::figure,
                     "the real stars: the figure the caption names, as a sky chart draws it"});
+  // THE MOON ITSELF (core/moon.hpp, render/moon.hpp): by day, a crescent at dusk, the full moon
+  // and the partial eclipse of 28 August 2026 (day 240, 4:13 UT), each through a lens that
+  // fills the frame with its disc, and the day's moon over the mountain.
+  const double gibbous = moon_day(
+      level, day, [](double lit, bool waxing) { return waxing && lit > 0.7 && lit < 0.85; });
+  const double crescent = moon_day(
+      level, day, [](double lit, bool waxing) { return waxing && lit > 0.12 && lit < 0.25; });
+  const double gibbous_h = day_moon_hour(level, gibbous);
+  const std::optional<double> dusk8 =
+      ge::core::hour_of_elevation(-8 * kDeg, false, lat, mg::declination_of(crescent));
+  nights.push_back({"day-moon", gibbous, gibbous_h, Aim::wide,
+                    "the waxing moon by day: a pale disc in the blue over the mountain, its "
+                    "bright limb toward the sun"});
+  nights.push_back({"day-moon-close", gibbous, gibbous_h, Aim::close,
+                    "the day's moon through a long lens: its seas pale against the blue, the "
+                    "blue through its dark part"});
+  nights.push_back({"crescent-close", crescent, dusk8 ? *dusk8 : 18.5, Aim::close,
+                    "the evening crescent in the twilight: its bright limb toward the set sun, "
+                    "the rest of the disc faintly earthlit with its seas"});
+  nights.push_back({"full-close", full, full_h, Aim::close,
+                    "the full moon's face: the seas where they are on the real moon, the rays "
+                    "of the bright southern crater, bright to its edge"});
+  nights.push_back({"eclipse-close", 240, 4.2, Aim::close,
+                    "the partial eclipse of 28 August 2026: the umbra's dark copper bite over "
+                    "most of the disc, the penumbra's soft edge, a bright sliver left"});
 
   std::vector<mg::Level> levels;
   for (const Night& n : nights) {
@@ -307,6 +352,16 @@ void run(ge::lab::Lab& lab) {
       v.heading = n.moon_azimuth;
       v.pitch = n.moon_elevation;
       v.fov_y = 5 * kDeg;
+    } else if (nights[i].aim == Aim::wide) {
+      // The moon high in the frame, the mountain under it.
+      v.heading = n.moon_azimuth;
+      v.pitch = std::max(n.moon_elevation - 15 * kDeg, 0.0);
+      v.fov_y = 45 * kDeg;
+    } else if (nights[i].aim == Aim::close) {
+      // Its disc some four fifths of the frame's height.
+      v.heading = n.moon_azimuth;
+      v.pitch = n.moon_elevation;
+      v.fov_y = 2.6 * n.moon_radius;
     } else if (nights[i].aim == Aim::figure) {
       figure_at(n, kFigures[highest_figure(n)], v.heading, v.pitch);
       v.fov_y = 40 * kDeg;
@@ -321,7 +376,8 @@ void run(ge::lab::Lab& lab) {
     const double sun = v.night.moon_key ? v.night.sun_elevation : v.sun_elevation;
     const std::string caption =
         "Seed " + seed_s + "'s `" + view_name + "` view on day " + fixed(n.day, 0) + " at " +
-        fixed(n.hour, 2) + " h: the sun " + fixed(-sun / kDeg, 1) + " degrees under, the moon " +
+        fixed(n.hour, 2) + " h: the sun " + fixed(std::fabs(sun) / kDeg, 1) +
+        (sun < 0 ? " degrees under" : " degrees up") + ", the moon " +
         fixed(v.night.moon_elevation / kDeg, 1) + " degrees up and " +
         fixed(levels.size() ? ge::mountain::app::moon_of(levels[i], n.hour).lit * 100 : 0, 0) +
         " % lit; the key light the " + (v.night.moon_key ? "moon" : "sun") + "." +
@@ -357,6 +413,7 @@ void run(ge::lab::Lab& lab) {
     return;
   }
   fall_line::app::FrameOptions options;
+  options.weather = lab.arg_num("weather") != 0;
   auto frame = fall_line::app::create_frame(*device, level, static_cast<uint32_t>(width),
                                             static_cast<uint32_t>(height),
                                             wgpu::TextureFormat::RGBA8Unorm, options);
@@ -368,8 +425,11 @@ void run(ge::lab::Lab& lab) {
       *device, "night.final", static_cast<uint32_t>(width), static_cast<uint32_t>(height));
   std::vector<double> snow(nights.size());
   std::vector<int> seen(nights.size());
+  std::vector<double> disc_contrast(nights.size());
   for (size_t i = 0; i < nights.size(); ++i) {
     ge::render::FrameView v = view_of(i);
+    // The close-ups judge the disc, so they are drawn under a clear sky whatever the map's.
+    frame->options.weather = options.weather && nights[i].aim != Aim::close;
     for (int n = 0; n < frames; ++n) {
       v.frame = static_cast<uint64_t>(i * 1000 + static_cast<size_t>(n));
       v.time_s = static_cast<double>(n) / 60;
@@ -384,6 +444,13 @@ void run(ge::lab::Lab& lab) {
     luma_stats(pic, 0, height / 3, sky, stars);
     luma_stats(pic, height * 4 / 5, height, snow[i], ground_stars);
     seen[i] = stars;
+    // The disc's brightest point (a crescent's lit limb is off its centre) over the sky's corner.
+    double brightest = 0;
+    for (int y = height / 8; y < height * 7 / 8; y += 2) {
+      for (int x = width / 4; x < width * 3 / 4; x += 2)
+        brightest = std::max(brightest, luma_at(pic, x, y));
+    }
+    disc_contrast[i] = brightest - luma_at(pic, 2, 2);
     const std::string k = nights[i].id;
     const ge::render::Night& night = v.night;
     const double moon_lux = ge::render::moonlight_on_ground(
@@ -470,6 +537,15 @@ void run(ge::lab::Lab& lab) {
     lab.fail("the new moon's sky shows no stars",
              "Check stars in engine/render/sky.wgsl. Skill: render.");
   }
+  // The close-ups: each disc's brightest point against the sky at the frame's corner.
+  for (size_t i = 0; i < nights.size(); ++i) {
+    if (nights[i].aim != Aim::close) continue;
+    lab.metric(nights[i].id + ".disc-over-sky", disc_contrast[i], "level", Det::measured);
+    if (nights[i].id != "eclipse-close" && disc_contrast[i] < 10) {
+      lab.fail("the moon's disc in `" + nights[i].id + "` is not brighter than the sky round it",
+               "Check moon_disc in engine/render/sky.wgsl and set_night's face. Skill: render.");
+    }
+  }
 }
 
 const ge::lab::LabSpec kSpec{
@@ -488,6 +564,7 @@ const ge::lab::LabSpec kSpec{
         {"frames", "8", "frames drawn, at 60 a second, for each shot"},
         {"width", "640", "the picture's width, px"},
         {"height", "360", "the picture's height, px"},
+        {"weather", "1", "the map's sky and cloud in the wide pictures (0: a clear sky)"},
     },
     "--frames=2 --width=160 --height=90",
     run,

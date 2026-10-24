@@ -180,6 +180,43 @@ TEST(session_chat_reaches_its_scope_only) {
   CHECK(w.host.stats.chat_relayed == 3);
 }
 
+// Proximity chat: the game's earshot here stands seats on a line, a voice carrying one seat.
+static bool hears_next_seat(void* ctx, int speaker, int listener) {
+  ++*static_cast<int*>(ctx);
+  return listener - speaker <= 1 && speaker - listener <= 1;
+}
+
+TEST(session_nearby_chat_reaches_whom_the_game_says_hears) {
+  int asked = 0;
+  SessionConfig sc = lobby(6);
+  sc.hears = hears_next_seat;
+  sc.hears_ctx = &asked;
+  World w(sc, 4);
+  for (int i = 0; i < 4; i++) w.join(i, "p");
+  w.run(400);
+  const int a = w.clients[1]->s.me;
+  session_client_chat(w.clients[1]->s, ChatScope::nearby, kNoPlayer, "near", 4);
+  w.run(300);
+  for (size_t i = 0; i < w.clients.size(); i++) {
+    const int me = w.clients[i]->s.me;
+    const bool near = me - a <= 1 && a - me <= 1;
+    CHECK(w.count(w.clients[i]->log, "chat " + std::to_string(a) + " nearby -1 near") ==
+          (near ? 1 : 0));
+  }
+  CHECK(asked > 0);
+  CHECK(w.host.stats.chat_relayed == 1 && w.host.stats.chat_copies == 3);
+  // A session whose game gave no earshot refuses it, and says why.
+  World none(lobby(4), 2);
+  none.join(0, "p");
+  none.join(1, "q");
+  none.run(300);
+  session_client_chat(none.clients[0]->s, ChatScope::nearby, kNoPlayer, "x", 1);
+  none.run(300);
+  CHECK(none.count(none.clients[0]->log,
+                   "refused " + std::to_string(none.clients[0]->s.me) + " no_nearby chat") == 1);
+  CHECK(none.count(none.clients[1]->log, "chat") == 0);
+}
+
 TEST(session_chat_is_rate_limited_and_capped) {
   SessionConfig sc = lobby(4);
   sc.chat_max = 10;

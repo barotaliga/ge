@@ -39,6 +39,7 @@ updates that row's status file (`docs/goals/<row>.md`) in its PR.
 | [`docs/movement.md`](docs/movement.md) | Character movement for any genre: the knobs and presets, the step's model (friction, the acceleration rule and strafe jumping, jumps, steps, slopes, crouch, slide), the world's trace, cvars, what a camera reads, water, the labs |
 | [`docs/networking.md`](docs/networking.md) | Multiplayer: what each kind of game asks of the network, the layers of `engine/net`, the decisions, the wire format, the simulated network, the tools, and Fall Line's pilot (M17) |
 | [`docs/publishing.md`](docs/publishing.md) | What a release is (GitHub Releases + GitHub Packages), how a game consumes it, changeset fragments, cutting a release, the credentials |
+| [`docs/replays.md`](docs/replays.md) | Replays, recording and broadcasting: a run kept as its inputs, keyframes and the seek, the replay file, the director, video with sound, streaming to a video service, spectating by inputs, Discord presence (M23) |
 | [`docs/shooters-edge.md`](docs/shooters-edge.md) | The second game, Shooter's Edge (M18, after Fall Line): the compatibility contract, the clean room, the homes, the protocols, the labs and the `ge` commands it needs |
 
 **The working area.** `porting/` holds everything that only matters while modules are
@@ -235,7 +236,9 @@ characters.
 | `templates/` | What `ge add` writes (a system, a test, a lab of each kind) and the starting games of `ge new --game=<name>`, compiled into `ge` | `agent-interface` |
 | `*/assets/<name>/` | Built models (`ge asset`): the manifest, the Blender builder, the committed .glb and its data | `assets` |
 | `*/labs/` | Labs beside their subject, compiled into the one `labs` executable | `labs` |
-| `engine/net/` | Multiplayer networking (`ge::net`, `docs/networking.md`): addresses, the wire, UDP and TCP sockets, the links, the simulated network, sessions, LAN discovery; the only place socket headers are included | `net` |
+| `engine/console/` | The console (`ge::console`, `docs/console.md`): cvars and their tiers, the console language, aliases, binds, cfg files, the drop-down console's model | `console` |
+| `engine/replay/` | Replays (`ge::replay`, `docs/replays.md`): a run watched again off its input log, the keyframes a seek starts from (the game's `Run::clone`), the player's seek in a step budget, the transport | `replay` |
+| `engine/net/` | Multiplayer networking (`ge::net`, `docs/networking.md`): addresses, the wire, UDP and TCP sockets, links, the simulated network, sessions, LAN discovery, replication; the only place socket headers are included | `net` |
 | `engine/texgen/` | Procedural textures (`ge::texgen`, `docs/textures.md`): the `.tex` recipe, tileable noise, the layer kinds, the bake to maps and its disk cache; `library/` the specimens | `textures` |
 | `engine/move/` | Character movement (`ge::move`, `docs/movement.md`): the knobs and presets, the step over a trace callback, the box world, the strafer, the scenarios | `move` |
 | `engine/input/` | Input devices (`ge::input`, `docs/input.md`): the device model, events, state, dead zones, actions and bindings, rebinding, wheels' roles, touch, players, feedback, the event log, simulated devices | `input` |
@@ -245,7 +248,7 @@ characters.
 | `engine/render/` | Generic rendering mechanisms (`docs/rendering.md`): the frame and its pass table, sky, terrain, shadows, Hi-Z, TAA-U, bloom, post, meshes, instances, skinning; WGSL beside each | `render` |
 | `engine/audio/` | The synth (`ge::audio`): the voice vocabulary, the DSP graph, sounds and racks, the meter, WAV; deterministic, no platform | `audio` |
 | `engine/assets/` | Authored models: the glTF loader and writer, the `Model`, posing and CPU skinning; no GPU | `assets` |
-| `engine/ui/` | Immediate-mode 2D and text, plus the dev UI | `ui` |
+| `engine/ui/` | The 2D layer (`ge::ui`): paints, the draw list, images, fonts, the CPU raster, backdrops, menus as a model and a view; no GPU | `ui` |
 | `plugins/` | Plugins, one directory each, built as `ge_<name>` (`cmake/Plugins.cmake`, checked by `tools/check-plugins.mjs`) | `plugins` |
 | `plugins/racing/` | The racing primitives (`ge::racing`): the control tape, the record book's policy, the standings | `racing` |
 | `plugins/mountain/mapgen/` | The world generator (`ge::mountain::mapgen`): the piste and the ski area by stage, the rule books, the real faces and hints, the digest; `picture/` the map on the CPU | `mountain` |
@@ -259,7 +262,9 @@ characters.
 | `plugins/helicopter/` | The helicopter in the air and on the snow (`ge::helicopter`): the spec, the step, the bot's hands, the downwash, the scenarios | `helicopter` |
 | `plugins/paramotor/` | The powered speed wing a skier flies (`ge::paramotor`): the spec, the wing on its lines, the engine, the acro, the bot's hands, the scenarios | `paramotor` |
 | `games/fall_line/sim/` | Fall Line's own simulation (`fall_line_sim`): the state, the step, the course, the free ride and lifts, the bot and the field, the headless run, the hunt, the play contract | `sim` |
+| `games/fall_line/cfg/` | Fall Line's cvars (`fall_line_cfg`): every setting a cfg may change, bound to the Settings its app reads | `console` |
 | `games/fall_line/sound/` | Fall Line's sound (`fall_line_sound`, no GPU): the bank, the route, the listener, the mix | `audio`, `sim` |
+| `games/fall_line/camera/` | Fall Line's camera (`fall_line_camera`, no GPU): the ladder of engine rigs and the camera key, the skier as the subject, the trunks and posts it answers | `camera` |
 | `games/fall_line/labs/` | Fall Line's labs, the headless ones and the GPU's | `sim`, `labs`, `audio` |
 | `games/fall_line/app/` | Fall Line's presentation (`fall_line_app`): the pass table, the look, the scene, the views, the `fall_line` window; then the HUD | `platform`, `gpu`, `render`, `ui`, `audio` |
 | `tests/` | `<topic>_test.cpp`, one executable each; `check.hpp` (the harness), `golden.hpp`, `golden/` | `testing` |
@@ -351,10 +356,12 @@ and the directories agree.
 | `render` | A draw pass, the pass table, GPU-driven instances, shadows, sky, TAA-U, post, lab captures, extraction from `GameState` |
 | `assets` | `engine/assets`: an authored model (glTF), posing and skinning, the `models` lab, exporting from Blender |
 | `audio` | The synth, a voice, a bed, the audio thread |
-| `ui` | The 2D layer, text, the HUD, a card, the dev UI |
+| `ui` | The 2D layer, text, fonts, backdrops, menus, the HUD, a card, the dev UI |
 | `labs` | Writing, running or reading a lab: a measurement, a captioned screenshot, a scenario, a drive, a bench; the before-and-after a PR owes |
 | `debug` | Finding out why a run behaves as it does: log channels and `--log` dumps, series traces and spans, the outlier rule, the charts (PNG + SVG), `ge graph` |
 | `perf` | Any optimisation, a benchmark, a profile, a cost claim |
 | `agent-interface` | Diagnostics wording, consumer skills, the `ge` CLI (M12) |
 | `bots` | Anything a bot decides: `engine/ai`, the decision record every bot writes, `Run::trace`, `ge why`, making a bot more human, paths and thinking on a schedule (M16) |
+| `console` | `engine/console`: a setting (cvar) added or named, its tier, cfg files and the console language, aliases, scripting, binds, the drop-down console, `ge cvar` and `ge cfg`, the `console` lab (M21) |
+| `replay` | `engine/replay`: watching a run again: a game's `Run::clone`, the keyframes and their thinning, the player's seek in a step budget, the transport; later the replay file, the instant replay, the director, spectating by inputs and the video export (M23) |
 | `net` | `engine/net`: multiplayer networking: sockets, the simulated network and its conditions, captures, the wire format, connections and channels, nodes up to 32, sessions (lobby, teams, chat, kick, reconnect), LAN discovery, NAT traversal (STUN, the rendezvous, hole punching, the relay, a port opened by PCP, NAT-PMP or UPnP), fake traffic, the `net-link`, `net-session` and `net-reach` labs; the M17 plan |

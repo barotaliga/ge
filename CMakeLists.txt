@@ -9,6 +9,8 @@
 #                (engine/assets; cmake/Cgltf.cmake)
 #   ge_net       the network: links, the simulated network, captures, connections, nodes
 #                (engine/net; docs/networking.md)
+#   ge_console   the console: cvars, the command buffer, aliases, binds, cfg files (engine/console;
+#                docs/console.md)
 #   ge_lab       the lab framework (engine/lab: the contract, the runner, the raster, the PNG,
 #                the series files, the charts and the model views)
 #   ge_ai        the bots' layer (engine/ai: the decision record `ge why` reads)
@@ -17,6 +19,8 @@
 #   ge_camera    the camera (engine/camera: poses, followers, rigs, shake, transitions, the stack)
 #   ge_play      the play contract (engine/play: GameSpec and Run, the session, the input log,
 #                the bench, the stills `ge shot` draws)
+#   ge_replay    replays (engine/replay: the keyframes, the player's seek, the transport;
+#                docs/replays.md)
 #   ge_prof      the profiler (engine/prof: timing zones, allocation counts, the resident set);
 #                ge_prof_alloc the counting operator new an executable links to count allocations
 #   ge_cli, ge   the ge command line (engine/cli: ge new, ge skills sync, ge doctor, ge lessons;
@@ -34,10 +38,11 @@
 #   ge_isa       the instruction-set baseline (x86-64: AVX2), linked by ge_core and
 #                published as ge::isa
 #   ge_flags     warnings, -Werror, sanitizers: this tree only, never published
-# ge_core, ge_fp, ge_isa, ge_assets, ge_ai, ge_move, ge_camera, ge_net, ge_lab, ge_play, ge_prof,
-# ge_prof_alloc and every plugin target are installed and published as ge::core, ge::fp, ge::isa,
-# ge::assets, ge::ai, ge::move, ge::camera, ge::net, ge::lab, ge::play, ge::prof, ge::prof_alloc and
-# ge::<plugin>, and the ge executable is installed to bin/
+# ge_core, ge_fp, ge_isa, ge_assets, ge_ai, ge_move, ge_camera, ge_net, ge_console, ge_lab, ge_play,
+# ge_replay, ge_prof, ge_prof_alloc and every plugin target are installed and published as ge::core,
+# ge::fp, ge::isa, ge::assets, ge::ai, ge::move, ge::camera, ge::net, ge::console, ge::lab,
+# ge::play, ge::replay, ge::prof, ge::prof_alloc and ge::<plugin>, and the ge executable is
+# installed to bin/
 # (cmake/Packaging.cmake, docs/publishing.md).
 cmake_minimum_required(VERSION 3.25)
 project(gameengine2 LANGUAGES CXX)
@@ -104,7 +109,7 @@ set(GE_LIBM_VENDORED
   engine/core/libm/fdlibm_arc.cpp
   engine/core/libm/fdlibm_exp_log.cpp)
 add_library(ge_core STATIC ${GE_LIBM_VENDORED} engine/core/libm/pow.cpp
-  engine/core/solar.cpp engine/core/output.cpp engine/core/num_text.cpp engine/core/parallel.cpp)
+  engine/core/solar.cpp engine/core/moon.cpp engine/core/output.cpp engine/core/num_text.cpp engine/core/parallel.cpp)
 target_include_directories(ge_core PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/engine>)
 target_compile_features(ge_core PUBLIC cxx_std_20)
 target_link_libraries(ge_core PUBLIC ge_fp ge_isa Threads::Threads)
@@ -138,6 +143,18 @@ list(FILTER GE_ASSETS_SOURCES EXCLUDE REGEX "/engine/assets/main\\.cpp$")
 add_library(ge_assets STATIC ${GE_ASSETS_SOURCES})
 target_link_libraries(ge_assets PUBLIC ge_core)
 target_include_directories(ge_assets SYSTEM PRIVATE ${GE_CGLTF_INCLUDE})
+
+# The 2D layer (engine/ui, the `ui` skill): paints, the draw list, images, fonts over
+# stb_truetype with the built-in family compiled in (cmake/Ui.cmake), the CPU raster, backdrops,
+# and menus as a model and a view. No GPU and no platform: the labs picture it headless, and the
+# GPU pass (M22b) draws the same draw list.
+include(cmake/Ui.cmake)
+file(GLOB GE_UI_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/ui/*.cpp)
+add_library(ge_ui STATIC ${GE_UI_SOURCES})
+target_link_libraries(ge_ui PUBLIC ge_core)
+target_include_directories(ge_ui SYSTEM PRIVATE ${GE_STB_INCLUDE})
+ge_embed_binary(ge_ui ge_ui_font_semibold "${GE_FONTS_DIR}/BarlowCondensed-SemiBold.ttf")
+ge_embed_binary(ge_ui ge_ui_font_medium "${GE_FONTS_DIR}/BarlowCondensed-Medium.ttf")
 
 # The platform and the GPU (M6). Each is optional (GE_PLATFORM, GE_GPU) and nothing else
 # depends on them: the simulation, the plugins and their tests build without either.
@@ -177,6 +194,11 @@ if(WIN32)
   target_link_libraries(ge_net PRIVATE ws2_32)
 endif()
 
+# The console (engine/console, docs/console.md): cvars and their tiers, the command buffer, aliases,
+# scripting, binds and cfg files. No platform and no clock: a frame is one `run`.
+file(GLOB GE_CONSOLE_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/console/*.cpp)
+add_library(ge_console STATIC ${GE_CONSOLE_SOURCES})
+target_link_libraries(ge_console PUBLIC ge_core)
 # Input devices (engine/input, docs/input.md): the device model, the events and the state they
 # fold into, dead zones, actions and bindings, rebinding, the device database, touch controls,
 # players, feedback and force-feedback effects, the event log and the simulated backend. No
@@ -239,8 +261,15 @@ target_link_libraries(ge_ai PUBLIC ge_core)
 # `ge diverge`, `ge shot`, `ge bench`, `ge profile` and `ge mem`.
 add_library(ge_play STATIC engine/play/inputs.cpp engine/play/json_read.cpp
   engine/play/session.cpp engine/play/bench.cpp engine/play/record.cpp engine/play/why.cpp
-  engine/play/human.cpp engine/play/devices.cpp engine/play/main.cpp)
-target_link_libraries(ge_play PUBLIC ge_core ge_ai ge_input ge_lab ge_prof ge_prof_alloc)
+  engine/play/human.cpp engine/play/devices.cpp engine/play/console_cmds.cpp engine/play/main.cpp)
+target_link_libraries(ge_play PUBLIC ge_core ge_ai ge_console ge_input ge_lab ge_prof ge_prof_alloc)
+
+# Replays (engine/replay, docs/replays.md): the keyframes a seek starts from, the player that steps
+# a run off its input log to any step, the transport; over the play contract's Run. Published as
+# ge::replay.
+file(GLOB GE_REPLAY_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/replay/*.cpp)
+add_library(ge_replay STATIC ${GE_REPLAY_SOURCES})
+target_link_libraries(ge_replay PUBLIC ge_core ge_play)
 
 # The ge command line (engine/cli, cmake/Cli.cmake): built here too when a game pulls the engine
 # in, so the game runs the ge of the engine it pins.
@@ -300,7 +329,7 @@ if(PROJECT_IS_TOP_LEVEL)
   get_property(GE_PLUGIN_TARGETS GLOBAL PROPERTY GE_PLUGIN_TARGETS)
   get_property(GE_GAME_TARGETS GLOBAL PROPERTY GE_GAME_TARGETS)
   add_executable(labs engine/lab/main.cpp ${GE_LAB_SOURCES})
-  target_link_libraries(labs PRIVATE ge_lab ge_play ge_core ge_audio ge_assets ge_net ge_input ge_move ge_camera ge_texgen ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
+  target_link_libraries(labs PRIVATE ge_lab ge_play ge_replay ge_core ge_audio ge_assets ge_net ge_input ge_move ge_camera ge_texgen ge_ui ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
     ${GE_LAB_EXTRA})
 
   # The `assets` executable (engine/assets/tool.hpp): the built assets listed, checked and stamped,

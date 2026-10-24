@@ -15,9 +15,12 @@
 #include <string>
 #include <vector>
 
+#include "camera/to_view.hpp"
 #include "core/num_text.hpp"
 #include "fall_line/app/frame.hpp"
 #include "fall_line/app/views.hpp"
+#include "fall_line/camera/subject.hpp"
+#include "fall_line/camera/world.hpp"
 #include "fall_line/sim/play.hpp"
 #include "fall_line/sim/state.hpp"
 #include "gpu/device.hpp"
@@ -177,16 +180,24 @@ Picture depth_picture(const std::vector<float>& distance, int width, int height)
   return p;
 }
 
-bool camera(const sim::GameState& s, std::string_view name, r::FrameView& view) {
+// A rung's view also says the point it frames (`subject`); a view of the mountain frames none.
+bool camera(const sim::GameState& s, std::string_view name, r::FrameView& view,
+            std::optional<std::array<double, 3>>& subject) {
+  subject.reset();
   const auto& level = *s.level;
   day_view(level, -1, view);
   view.time_s = s.t;
-  if (name == "chase") {
-    chase_view(level, s.racers[0].skier, view);
-    return true;
-  }
-  if (name == "high") {
-    chase_view(level, s.racers[0].skier, view, 16.0, 8.0);
+  // A rung of the camera ladder, settled on the player (a still has no frames before it).
+  fall_line::camera::Rung rung{};
+  if (fall_line::camera::rung_named(name, rung)) {
+    const ge::skier::SkierState& skier = s.racers[0].skier;
+    const ge::skier::World sw = s.world();
+    fall_line::camera::RunCamera cam = fall_line::camera::make_skier_camera(rung, 1);
+    ge::camera::to_frame_view(fall_line::camera::frame_camera(
+                                  cam, skier, sw, fall_line::camera::camera_world(sw), 1.0 / 60),
+                              view);
+    const ge::camera::Vec3 p = fall_line::camera::framed_point(skier);
+    subject = std::array<double, 3>{p.x, p.y, p.z};
     return true;
   }
   return make_view(level, name, view);
@@ -226,7 +237,8 @@ class FrameRenderer final : public ge::play::Renderer {
                                      frame_->targets.height, r::kWireFormat);
     }
     r::FrameView view;
-    if (!camera(*s, shot.view, view)) {
+    std::optional<std::array<double, 3>> subject;
+    if (!camera(*s, shot.view, view, subject)) {
       error = "no view `" + std::string(shot.view) + "`";
       return false;
     }
@@ -237,7 +249,7 @@ class FrameRenderer final : public ge::play::Renderer {
     const int frames = shot.cut ? kSettle : 1;
     for (int i = 0; i < frames; ++i) {
       view.frame = drawn_++;
-      fall_line::app::draw(*device_, *frame_, view, {skiers}, target_.view);
+      fall_line::app::draw(*device_, *frame_, view, {skiers, 0, true, {}, subject}, target_.view);
     }
     const int pw = shot.width, ph = shot.height;
     if (shot.mode == "wireframe") {
@@ -294,9 +306,13 @@ std::unique_ptr<ge::play::Renderer> open_renderer(std::string& error) {
   return std::make_unique<FrameRenderer>(std::move(device));
 }
 
-constexpr std::array<ge::play::View, 7> kViews{{
+constexpr std::array<ge::play::View, 11> kViews{{
+    {"tips", "low over the player's ski tips: the snow coming straight at the lens"},
+    {"helmet", "the player's own eyes, tipped with his lean"},
     {"chase", "behind and over the player along his way, the camera a run is watched from"},
-    {"high", "the chase camera from further back and higher: the line through the gates ahead"},
+    {"far", "the chase from further back and higher, heavier"},
+    {"high", "high over and behind the player: the line through the gates ahead"},
+    {"orbit", "the menu's drone, off to the side of the player"},
     {"start", "from behind the start line at a skier's eye height, down the piste"},
     {"piste", "halfway down the piste at a skier's eye height, looking down it"},
     {"lookback", "from the finish, looking back up the piste to the summit"},
