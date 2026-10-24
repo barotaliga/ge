@@ -52,7 +52,8 @@ constexpr r::PassRow kPassTable[] = {
      "sky.aerial sky.light depth",
      "hdr motion"},
     {"sky", "sky.view sky.moon_view depth", "hdr motion"},
-    {"clouds.march", "depth sky.aerial sky.light", "clouds.quarter"},
+    {"clouds.fresh", "depth sky.aerial sky.light", "clouds.fresh"},
+    {"clouds.march", "depth clouds.history clouds.fresh sky.aerial sky.light", "clouds.quarter"},
     {"clouds", "depth clouds.quarter sky.aerial sky.light", "hdr"},
     {"water.copy", "hdr depth", "water.scene"},
     {"water", "water.scene sky.view sky.aerial sky.light depth", "hdr motion depth"},
@@ -66,10 +67,11 @@ constexpr r::PassRow kPassTable[] = {
 };
 // What is made at load rather than by a pass (the instances' meshes and streams: the figures'
 // placements and palettes are written before the frame is encoded, their vertices by the skinning
-// pass), and what is the last frame's (the TAA history, the
-// depth pyramid the early cull reads).
+// pass), and what is the last frame's (the TAA history, the depth pyramid the early cull reads,
+// the cloud's half-size picture the spread reprojects).
 constexpr std::string_view kLoadInputs =
-    "terrain.height terrain.pyramid terrain.albedo snow.ground instances taa.history hiz.last";
+    "terrain.height terrain.pyramid terrain.albedo snow.ground instances taa.history hiz.last "
+    "clouds.history";
 
 constexpr int kPasses = static_cast<int>(std::size(kPassTable));
 
@@ -347,6 +349,7 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
                               f.options.clouds > 0);
     view.clouds.steps = f.options.clouds;
     view.clouds.quarter = f.options.cloud_quarter;
+    view.clouds.spread = f.options.cloud_spread;
   }
   view.reach_m = f.options.reach_m;
   const auto start = std::chrono::steady_clock::now();
@@ -494,7 +497,8 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   r::encode_instances(families, f.instancing, f.pipelines, f.recorder, encoder, f.targets,
                       f.frame_group, f.instance_light);
   r::encode_sky(f.sky, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
-  r::encode_clouds(f.clouds, f.pipelines, f.recorder, encoder, f.targets, f.frame_group, view);
+  r::encode_clouds(f.clouds, f.pipelines, f.recorder, encoder, f.targets, f.frame_group, view,
+                   f.staged);
   r::encode_water(f.water, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
   r::encode_underwater(f.under, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
   r::encode_particles(f.particles, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
