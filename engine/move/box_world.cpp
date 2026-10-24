@@ -1,7 +1,7 @@
 // The brushes' planes and corners as they are added, and the swept-box clip against each one.
 //
 // ge:summary Box world's brush building (boxes, ramps, stairs) and the swept-box clip
-// ge:keywords move box-world brush clip sweep enter leave fraction skin
+// ge:keywords move box-world brush clip sweep enter leave fraction skin move_brush surface
 // ge:skill move
 // ge:test tests/move_box_world_test.cpp
 #include "move/box_world.hpp"
@@ -42,12 +42,14 @@ void axial_planes(BoxWorld& w, const Vec3& lo, const Vec3& hi) {
 
 }  // namespace
 
-void add_box(BoxWorld& w, const Vec3& lo, const Vec3& hi) {
+size_t add_box(BoxWorld& w, const Vec3& lo, const Vec3& hi, const Surface& surface) {
   begin(w, lo, hi);
+  w.brushes.back().surface = surface;
   axial_planes(w, lo, hi);
   for (int i = 0; i < 8; i++) {
     corner(w, {(i & 1) ? hi.x : lo.x, (i & 2) ? hi.y : lo.y, (i & 4) ? hi.z : lo.z});
   }
+  return w.brushes.size() - 1;
 }
 
 void add_ramp(BoxWorld& w, const Vec3& lo, const Vec3& hi, Rise rise) {
@@ -99,6 +101,21 @@ void add_stairs(BoxWorld& w, const Vec3& start, int count, double rise, double t
   }
 }
 
+void move_brush(BoxWorld& w, size_t index, const Vec3& delta, double dt) {
+  Brush& b = w.brushes[index];
+  for (uint32_t i = 0; i < b.planes; i++) {
+    Plane& p = w.planes[b.first_plane + i];
+    p.d += dot(p.n, delta);
+  }
+  for (uint32_t i = 0; i < b.corners; i++) {
+    Vec3& c = w.corners[b.first_corner + i];
+    c = add(c, delta);
+  }
+  b.lo = add(b.lo, delta);
+  b.hi = add(b.hi, delta);
+  b.surface.vel = dt > 0 ? scale(delta, 1.0 / dt) : Vec3{0, 0, 0};
+}
+
 Hit trace_box_world(const BoxWorld& w, const Box& box, const Vec3& from, const Vec3& to) {
   // The box's centre swept, each plane pushed out by the box's half extents along its normal.
   const Vec3 mid = scale(add(box.mins, box.maxs), 0.5);
@@ -107,7 +124,8 @@ Hit trace_box_world(const BoxWorld& w, const Box& box, const Vec3& from, const V
   const Vec3 c1 = add(to, mid);
   Hit best;
   best.end = to;
-  for (const Brush& b : w.brushes) {
+  for (size_t bi = 0; bi < w.brushes.size(); bi++) {
+    const Brush& b = w.brushes[bi];
     double enter = -1, leave = 1;
     bool starts_out = false, gets_out = false, misses = false;
     Vec3 normal{0, 1, 0};
@@ -149,6 +167,10 @@ Hit trace_box_world(const BoxWorld& w, const Box& box, const Vec3& from, const V
     if (enter < leave && enter > -1 && enter < best.fraction) {
       best.fraction = enter < 0 ? 0 : enter;
       best.normal = normal;
+      best.solid = static_cast<uint32_t>(bi + 1);
+      best.surface_vel = b.surface.vel;
+      best.surface = b.surface.flags;
+      best.bounce = b.surface.bounce;
     }
   }
   if (best.fraction < 1) best.end = add_scaled(from, sub(to, from), best.fraction);
