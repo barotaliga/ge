@@ -1,0 +1,14 @@
+# Dark dressed stone in courses of uneven blocks, deep black joints, a gritty face.
+texture dark_ashlar
+size    64
+seed    9
+surface stone
+scale   2
+tags    stone wall dark masonry low-colour
+param   grime 0.4 0 1
+
+layer blocks  rows=4 cols=2 vary_size=0.6 mortar=0.08 bevel=0.12 depth=0.5 chip=0.3 color=#3a3026 vary=0.1 mortar_color=#0e0c0a
+layer speckle size=1 contrast=0.55 amount=0.06 color=#5a4a3a cavity=0
+layer grime   amount=$grime
+layer shade   strength=1.2 highlight=0.25 occlusion=0.5
+layer palette color=#6a5a48 steps=16

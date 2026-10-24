@@ -1,0 +1,15 @@
+# Broken rock in small chunks, each lit on its upper edge, olive and brown in the cracks.
+texture rock_chunks
+size    128
+seed    17
+surface stone
+scale   2
+tags    rock natural cave ground low-colour
+
+layer fill    color=#4a3c22 height=0.5 rough=0.9
+layer noise   kind=edges period=10 octaves=1 jitter=1 warp=0.15 color=#120e08 color2=#5a4a2a blend=mix amount=0.9 height=0.7 hi=0.25
+layer noise   kind=voronoi period=10 octaves=1 warp=0.15 color=#3a2e18 color2=#6a5630 blend=mix amount=0.5 salt=1
+layer noise   kind=perlin period=16 octaves=3 color=#000000 color2=#ffffff blend=overlay amount=0.3 height=0.15
+layer speckle size=1 contrast=0.3 cavity=0
+layer shade   strength=1.5 highlight=0.3 occlusion=0.5
+layer palette color=#6a5630 steps=16

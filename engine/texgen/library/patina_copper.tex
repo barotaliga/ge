@@ -1,0 +1,14 @@
+# Old copper gone to verdigris: red-brown metal under blooms of green, a grain in every texel.
+texture patina_copper
+size    64
+seed    5
+surface metal
+scale   1
+tags    metal copper wall old low-colour
+param   patina 0.45 0 1
+
+layer fill    color=#6a3424 height=0.5 rough=0.5 metal=0.9
+layer noise   kind=perlin period=3 octaves=5 color=#3a1e18 color2=#8a4a30 blend=mix amount=0.7
+layer noise   kind=turbulence period=4 octaves=4 color=#1e4a40 color2=#1e4a40 blend=mix amount=$patina lo=0.35 hi=0.6 invert=1
+layer speckle size=1 contrast=0.45 amount=0.08 color=#2e6a5a cavity=0
+layer palette color=#8a4a30 color2=#2e6a5a steps=16

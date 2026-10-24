@@ -1,14 +1,17 @@
 // The pattern painters: bricks and tiles in their joints, planks with grain and knots, metal
-// panels with seams and rivets. Each cuts its structure into the height (proud faces, sunken
+// panels with seams and rivets, uneven dressed blocks (ashlar), a field of studs (domes,
+// diamond-plate bars, pyramids or holes) and overlapping scales. Each cuts its structure into the height (proud faces, sunken
 // joints, rounded edges) so the life layers after it find joints to fill and edges to wear,
 // and gives every piece its own colour off a hash of its place, so the tile still repeats.
 //
-// ge:summary Pattern painters: bricks and tiles, planks with grain and knots, riveted panels
+// ge:summary Pattern painters: bricks, tiles, planks, riveted panels, blocks, studs, scales
 // ge:keywords pattern bricks tiles mortar grout planks wood grain knots panels seams rivets
+// ge:keywords blocks ashlar masonry studs diamond-plate dimples grate holes scales arches
 // ge:skill textures
 // ge:test tests/texgen_bake_test.cpp
 #include <algorithm>
 #include <cmath>
+#include <vector>
 
 #include "texgen/layers.hpp"
 #include "texgen/noise.hpp"
@@ -141,6 +144,151 @@ void paint_panels(Surface& s, const Args& a) {
     s.plane[kHeight][i] = static_cast<float>(clamp01(0.5 + depth * (face - 0.5) + 0.12 * rivet));
     s.plane[kRough][i] = static_cast<float>(lerp(0.9, rough, in) - 0.1 * rivet);
     s.plane[kMetal][i] = static_cast<float>(metal * in);
+  });
+}
+
+namespace {
+
+// Uneven cuts of [0, 1): `n` pieces whose sizes differ by up to `vary`, as n + 1 boundaries.
+std::vector<double> cuts(int n, double vary, uint32_t a, uint32_t seed) {
+  std::vector<double> b(static_cast<size_t>(n) + 1, 0.0);
+  for (int k = 0; k < n; ++k)
+    b[static_cast<size_t>(k) + 1] =
+        b[static_cast<size_t>(k)] + 1 + vary * 1.6 * (hash01(a, static_cast<uint32_t>(k), seed) - 0.5);
+  for (double& x : b) x /= b.back();
+  return b;
+}
+
+// The piece of `b` that holds t, and t's distance to that piece's nearer cut.
+int piece(const std::vector<double>& b, double t, double& edge) {
+  int k = 0;
+  while (k + 2 < static_cast<int>(b.size()) && t >= b[static_cast<size_t>(k) + 1]) ++k;
+  edge = std::min(t - b[static_cast<size_t>(k)], b[static_cast<size_t>(k) + 1] - t);
+  return k;
+}
+
+}  // namespace
+
+void paint_blocks(Surface& s, const Args& a) {
+  const int rows = a.i("rows"), cols = a.i("cols");
+  const double vary_size = a.n("vary_size"), depth = a.n("depth"), vary = a.n("vary");
+  const double rough = a.n("rough"), chip = a.n("chip");
+  const double joint = a.n("mortar") / rows * 0.5;
+  const double bevel = std::max(a.n("bevel") / rows * 0.5, 1.0 / s.size);
+  const Rgb stone = a.c("color"), mortar = a.c("mortar_color");
+  // The courses' heights, then each course's blocks: how many, how wide, how far shifted.
+  const std::vector<double> course = cuts(rows, vary_size, 0, a.seed);
+  std::vector<std::vector<double>> block(static_cast<size_t>(rows));
+  std::vector<double> shift(static_cast<size_t>(rows));
+  for (int r = 0; r < rows; ++r) {
+    const auto rr = static_cast<uint32_t>(r);
+    const int n = std::max(
+        1, static_cast<int>(std::floor(cols + cols * vary_size * (hash01(rr, 1, a.seed + 2) - 0.5) + 0.5)));
+    block[static_cast<size_t>(r)] = cuts(n, vary_size, rr + 1, a.seed + 3);
+    shift[static_cast<size_t>(r)] = hash01(rr, 2, a.seed + 4);
+  }
+  NoiseSpec ragged{NoiseKind::perlin, rows * 4, 3, 0.5, 1, 0, a.seed + 5};
+  const double aa = 1.0 / s.size;
+  for_texels(s.size, [&](int x, int y, double u, double v) {
+    double ey = 0, ex = 0;
+    const int r = piece(course, v, ey);
+    double t = u + shift[static_cast<size_t>(r)];
+    t -= std::floor(t);
+    const int k = piece(block[static_cast<size_t>(r)], t, ex);
+    const double d = std::min(ex, ey);
+    const double w = joint * (1 + chip * (sample(ragged, u, v) - 0.5) * 2);
+    const auto bx = static_cast<uint32_t>(k), by = static_cast<uint32_t>(r);
+    const double face = smoothstep(w, w + bevel, d);
+    const double in = smoothstep(w - aa, w + aa, d);
+    const double tilt = depth * 0.1 * (hash01(bx, by, a.seed + 9) - 0.5);
+    const size_t i = s.at(x, y);
+    set_colour(s, i, mix(mortar, varied(stone, vary, bx, by + 1000, a.seed), in));
+    s.plane[kHeight][i] = static_cast<float>(clamp01(0.5 + depth * (face - 0.5) + tilt * face));
+    s.plane[kRough][i] = static_cast<float>(lerp(0.95, rough, in));
+    s.plane[kMetal][i] = 0;
+  });
+}
+
+void paint_studs(Surface& s, const Args& a) {
+  const int rows = a.i("rows"), cols = a.i("cols");
+  const double size = a.n("size") * 0.5, offset = a.n("offset"), depth = a.n("depth");
+  const double amount = a.n("amount");
+  const std::string& shape = a.w("shape");
+  const bool coloured = a.given("color");
+  const Rgb colour = a.c("color");
+  const double aa = static_cast<double>(std::max(rows, cols)) / s.size;
+  for_texels(s.size, [&](int x, int y, double u, double v) {
+    const double gy = v * rows;
+    const int row = static_cast<int>(std::floor(gy));
+    const double gx = u * cols + offset * (row % 2);
+    const int col = static_cast<int>(std::floor(gx));
+    // In cell units, centred: -0.5 .. 0.5 each way.
+    const double px = gx - col - 0.5, py = gy - row - 0.5;
+    double r = 0;  // 0 at the stud's middle, 1 at its rim
+    if (shape == "diamond") {
+      r = (std::fabs(px) + std::fabs(py)) / size;
+    } else if (shape == "bar") {
+      // Diamond plate: a short bar, leaning one way or the other like a checkerboard.
+      const double sgn = ((row + col) & 1) != 0 ? 1.0 : -1.0;
+      const double along = (px + sgn * py) * 0.7071067811865476;
+      const double across = (px - sgn * py) * 0.7071067811865476;
+      const double len = std::max(0.0, std::fabs(along) - size * 0.9);
+      r = std::sqrt(len * len + across * across) / (size * 0.35);
+    } else {
+      r = std::sqrt(px * px + py * py) / size;
+    }
+    const double cover = smoothstep(1 + aa / size, 1 - aa / size, r);
+    if (cover <= 0) return;
+    const double dome = std::sqrt(std::max(0.0, 1 - std::min(r, 1.0) * std::min(r, 1.0)));
+    const double lift = shape == "hole" ? -depth : depth * (shape == "diamond" ? 1 - r : dome);
+    const size_t i = s.at(x, y);
+    s.plane[kHeight][i] = static_cast<float>(clamp01(s.plane[kHeight][i] + lift * cover));
+    Rgb c = colour_at(s, i);
+    if (shape == "hole") c = scaled(c, 1 - 0.8 * cover);
+    if (coloured) c = mix(c, colour, amount * cover);
+    set_colour(s, i, c);
+  });
+}
+
+void paint_scales(Surface& s, const Args& a) {
+  const int rows = std::max(2, a.i("rows") + a.i("rows") % 2), cols = a.i("cols");
+  const double rim = std::max(a.n("rim"), 0.5 * rows / s.size), depth = a.n("depth");
+  const double vary = a.n("vary"), rough = a.n("rough");
+  const bool up = a.w("dir") == "up";
+  const Rgb colour = a.c("color");
+  const bool rimmed = a.given("rim_color");
+  const Rgb rim_colour = a.c("rim_color");
+  constexpr double kR = 0.75;  // a scale's radius, in cells: wide enough that the rows overlap
+  for_texels(s.size, [&](int x, int y, double u, double v) {
+    const double gx = u * cols, gy = (up ? v : 1 - v) * rows;
+    // The scale on top is the lowest row whose disc holds the texel: rows below lie over it.
+    int hit_row = 0, hit_col = 0;
+    double hit = -1;
+    for (int j = static_cast<int>(std::floor(gy + kR)); j >= static_cast<int>(std::floor(gy - kR)); --j) {
+      const double off = (j & 1) != 0 ? 0.5 : 0.0;
+      const double ci = std::floor(gx - off + 0.5) + off;
+      for (double c : {ci - 1, ci, ci + 1}) {
+        const double dx = gx - c, dy = gy - j;
+        const double d = kR - std::sqrt(dx * dx + dy * dy);
+        if (d > 0) {
+          hit = d;
+          hit_row = j;
+          hit_col = static_cast<int>(std::floor(c));
+          break;
+        }
+      }
+      if (hit > 0) break;
+    }
+    if (hit < 0) return;
+    const double face = smoothstep(0, rim, hit);
+    const auto bx = wrap_cell(hit_col, cols), by = wrap_cell(hit_row, rows);
+    const size_t i = s.at(x, y);
+    Rgb c = varied(colour, vary, bx, by, a.seed);
+    if (rimmed) c = mix(rim_colour, c, face);
+    set_colour(s, i, c);
+    s.plane[kHeight][i] =
+        static_cast<float>(clamp01(0.5 + depth * (face - 0.5) + 0.15 * depth * hit / kR));
+    s.plane[kRough][i] = static_cast<float>(rough);
   });
 }
 

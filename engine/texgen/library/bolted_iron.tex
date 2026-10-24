@@ -1,0 +1,16 @@
+# Dark iron plate, a grain of blue and rust in every texel, a few heavy bronze bolts.
+texture bolted_iron
+size    64
+seed    11
+surface metal
+scale   1
+tags    metal wall dark industrial low-colour
+param   grime 0.5 0 1
+
+layer fill    color=#2a2622 height=0.5 rough=0.6 metal=0.8
+layer noise   kind=perlin period=4 octaves=4 color=#1c1c22 color2=#4a3a2e blend=mix amount=0.6
+layer speckle size=1 contrast=0.6 amount=0.12 color=#4a4a66 cavity=0
+layer studs   rows=4 cols=2 shape=dome size=0.22 depth=0.35 color=#a07848 amount=0.9
+layer grime   amount=$grime
+layer shade   strength=1.4 highlight=0.4 occlusion=0.4
+layer palette color=#6a5a48 color2=#4a4a66 color3=#a07848 steps=16

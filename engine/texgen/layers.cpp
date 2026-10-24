@@ -107,6 +107,44 @@ constexpr KeyDef kPanels[] = {
     {"metal", K::number, 1, 0, 1, "", "", "metalness"},
 };
 
+constexpr KeyDef kBlocks[] = {
+    {"rows", K::number, 4, 1, 64, "", "", "courses down the tile"},
+    {"cols", K::number, 3, 1, 64, "", "", "blocks across a course, on average"},
+    {"vary_size", K::number, 0.5, 0, 1, "", "", "how uneven the courses and blocks are"},
+    {"mortar", K::number, 0.06, 0, 0.6, "", "", "the joint, a share of a course's height"},
+    {"bevel", K::number, 0.1, 0, 1, "", "", "the rounded edge, a share of a course"},
+    {"depth", K::number, 0.4, 0, 1, "", "", "how far the joint sits below the face"},
+    {"chip", K::number, 0.4, 0, 1, "", "", "how ragged the joints are"},
+    {"color", K::colour, 0, 0, 1, "#8a7a62", "", "the stone"},
+    {"vary", K::number, 0.12, 0, 1, "", "", "how much blocks differ in colour"},
+    {"mortar_color", K::colour, 0, 0, 1, "#3a342c", "", "the joint"},
+    {"rough", K::number, 0.85, 0, 1, "", "", "the stone's roughness"},
+};
+
+constexpr KeyDef kStuds[] = {
+    {"rows", K::number, 8, 1, 256, "", "", "studs down the tile (even, with an offset)"},
+    {"cols", K::number, 8, 1, 256, "", "", "studs across"},
+    {"shape", K::word, 0, 0, 1, "dome", "dome diamond bar hole",
+     "dome, a pyramid, diamond-plate bars or holes"},
+    {"size", K::number, 0.4, 0, 1, "", "", "a stud's width, a share of its cell"},
+    {"offset", K::number, 0, 0, 1, "", "", "each row's shift, of a cell"},
+    {"depth", K::number, 0.25, 0, 1, "", "", "how far a stud stands out (a hole sinks)"},
+    {"color", K::colour, 0, 0, 1, "#a0a0a0", "", "the studs' colour, only when written"},
+    {"amount", K::number, 1, 0, 1, "", "", "how much of the colour"},
+};
+
+constexpr KeyDef kScales[] = {
+    {"rows", K::number, 8, 2, 128, "", "", "rows of scales down the tile (even)"},
+    {"cols", K::number, 6, 1, 128, "", "", "scales across"},
+    {"dir", K::word, 0, 0, 1, "up", "up down", "up: arches stacked upward; down: hanging"},
+    {"rim", K::number, 0.12, 0, 0.75, "", "", "the rounded rim, in cells"},
+    {"depth", K::number, 0.4, 0, 1, "", "", "how far each scale stands over the next"},
+    {"color", K::colour, 0, 0, 1, "#5a6a62", "", "the scales"},
+    {"vary", K::number, 0.1, 0, 1, "", "", "how much scales differ in colour"},
+    {"rim_color", K::colour, 0, 0, 1, "#202020", "", "the rim's colour, only when written"},
+    {"rough", K::number, 0.5, 0, 1, "", "", "roughness"},
+};
+
 constexpr KeyDef kCracks[] = {
     {"amount", K::number, 0.5, 0, 1, "", "", "the share of the surface cracked"},
     {"period", K::number, 5, 1, 128, "", "", "cells across the tile"},
@@ -195,7 +233,36 @@ constexpr KeyDef kGlow[] = {
     {"salt", K::number, 0, 0, 1000000, "", "", "layers with one salt share one pattern"},
 };
 
-constexpr std::array<LayerKind, 18> kKindsTable = {{
+constexpr KeyDef kShade[] = {
+    {"light", K::word, 0, 0, 1, "top-left", "top-left top top-right left right",
+     "where the baked light comes from"},
+    {"strength", K::number, 1, 0, 4, "", "", "how strongly the slopes are lit and shadowed"},
+    {"soft", K::number, 0, 0, 16, "", "", "the height blurred first, texels (0: crisp)"},
+    {"highlight", K::number, 0.25, 0, 1, "", "", "how far lit edges go toward white"},
+    {"occlusion", K::number, 0.3, 0, 1, "", "", "how dark the joints and pits go"},
+};
+
+constexpr KeyDef kSpeckle[] = {
+    {"size", K::number, 1, 1, 16, "", "", "a grain's width, texels (a power of two)"},
+    {"contrast", K::number, 0.15, 0, 1, "", "", "how much each grain's brightness jumps"},
+    {"amount", K::number, 0, 0, 1, "", "", "the share of grains that take the speck colour"},
+    {"color", K::colour, 0, 0, 1, "#3c8c78", "", "the specks"},
+    {"cavity", K::number, 0.5, 0, 1, "", "", "how much the specks gather in the pits"},
+    {"height", K::number, 0.04, -1, 1, "", "", "the grain added to the height, signed"},
+};
+
+constexpr KeyDef kPalette[] = {
+    {"color", K::colour, 0, 0, 1, "#8c6a48", "", "a ramp's colour"},
+    {"color2", K::colour, 0, 0, 1, "#606060", "", "a second ramp, only when written"},
+    {"color3", K::colour, 0, 0, 1, "#606060", "", "a third ramp, only when written"},
+    {"color4", K::colour, 0, 0, 1, "#606060", "", "a fourth ramp, only when written"},
+    {"steps", K::number, 16, 2, 32, "", "", "shades in each ramp"},
+    {"top", K::number, 0.35, 0, 1, "", "", "how far the brightest shade goes toward white"},
+    {"dither", K::number, 0, 0, 2, "", "", "ordered dither, in shades"},
+    {"amount", K::number, 1, 0, 1, "", "", "how much the colour snaps"},
+};
+
+constexpr std::array<LayerKind, 24> kKindsTable = {{
     {"fill", "base", "the whole tile one colour, height, roughness and metal", kFill, paint_fill},
     {"noise", "base", "a noise field blended into the colour, height and roughness", kNoise,
      paint_noise},
@@ -206,6 +273,11 @@ constexpr std::array<LayerKind, 18> kKindsTable = {{
      paint_bricks},
     {"planks", "pattern", "boards with grain, knots, ends and gaps", kPlanks, paint_planks},
     {"panels", "pattern", "metal plates with pressed seams and rivets", kPanels, paint_panels},
+    {"blocks", "pattern", "dressed stone blocks of uneven sizes in their joints", kBlocks,
+     paint_blocks},
+    {"studs", "pattern", "a field of domes, pyramids, diamond-plate bars or holes", kStuds,
+     paint_studs},
+    {"scales", "pattern", "overlapping scales or arches, row over row", kScales, paint_scales},
     {"cracks", "life", "a web of cracks cut into the surface", kCracks, paint_cracks},
     {"scratches", "life", "thin bright scratches, most one way", kScratches, paint_scratches},
     {"dirt", "life", "blotches of dirt, thicker in the low places", kDirt, paint_dirt},
@@ -217,6 +289,11 @@ constexpr std::array<LayerKind, 18> kKindsTable = {{
     {"moss", "life", "moss in the joints and the damp low places", kMoss, paint_moss},
     {"snow", "life", "snow on the ledges and in the joints", kSnow, paint_snow},
     {"glow", "life", "light: in the low places, cracks, spots, lines or noise", kGlow, paint_glow},
+    {"speckle", "finish", "grain a texel at a time, and specks gathering in the pits", kSpeckle,
+     paint_speckle},
+    {"shade", "finish", "the light baked into the colour off the height", kShade, paint_shade},
+    {"palette", "finish", "every colour snapped onto a few ramps of shades", kPalette,
+     paint_palette},
 }};
 
 size_t key_index(std::span<const KeyDef> keys, std::string_view key) {

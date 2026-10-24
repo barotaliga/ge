@@ -1,0 +1,13 @@
+# Arched scales of dark green stone, row over row, each rimmed in black.
+texture scale_stone
+size    64
+seed    4
+surface stone
+scale   2
+tags    stone wall scales arches low-colour
+
+layer scales  rows=4 cols=2 dir=up rim=0.1 depth=0.5 color=#3a4a40 vary=0.05 rim_color=#0c100e
+layer noise   kind=perlin period=8 octaves=4 color=#26302a color2=#4a5a50 blend=overlay amount=0.5
+layer speckle size=1 contrast=0.35 cavity=0
+layer shade   strength=1.4 highlight=0.35 occlusion=0.3
+layer palette color=#4a5a50 steps=16
