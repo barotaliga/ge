@@ -11,6 +11,7 @@
 #include "core/math.hpp"
 #include "core/num.hpp"
 #include "fall_line/sim/gunfire_body.hpp"
+#include "fall_line/sim/sled_ride.hpp"
 
 namespace fall_line::sim {
 
@@ -43,7 +44,7 @@ int32_t stars_of(const GameState& state) {
 const sk::SkierState& quarry(const GameState& state) { return state.racers.front().skier; }
 
 // Whether a round may find his body: not while a machine's cabin or its seat holds him.
-bool exposed(const GameState& state) { return !state.sled.rider && !state.heli.rider; }
+bool exposed(const GameState& state) { return !on_sled(state, 0) && !state.heli.rider; }
 
 struct Aim {
   double x, y, z, vx, vy, vz;
