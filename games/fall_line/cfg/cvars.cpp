@@ -106,6 +106,14 @@ void add_cvars(con::Console& c, Settings& s) {
           .help = "the map's own sky (off: always clear)",
           .kind = CvarKind::boolean},
          &s.weather);
+  v.bind({.name = "r_clouds",
+          .fallback = "1",
+          .flags = kStartup,
+          .help = "the share of the cloud march's steps, 0.25 .. 1 (0: no cloud layer drawn, the "
+                  "sky keeps its mean cloud)",
+          .min = 0,
+          .max = 1},
+         &s.clouds);
 
   v.bind({.name = "cl_view",
           .fallback = "chase",
@@ -155,6 +163,56 @@ void add_cvars(con::Console& c, Settings& s) {
           .min = -1,
           .max = 24},
          &s.hour);
+  v.bind({.name = "sv_skyrate",
+          .fallback = "0",
+          .flags = kRun,
+          .help = "the sky's hours per hour of the run: 1 real time, 60 an hour a minute (0: the "
+                  "hour stands)",
+          .min = 0,
+          .max = 3600},
+         &s.sky_rate);
+  v.bind({.name = "sv_weather",
+          .fallback = "map",
+          .flags = kRun,
+          .help = "the sky: clear fair flurries high overcast snow storm fog (map: the map's own)",
+          .kind = CvarKind::text},
+         &s.sky);
+  v.bind({.name = "sv_snowfall",
+          .fallback = "-1",
+          .flags = kRun,
+          .help = "how hard it snows, 0 none .. 1 a blizzard, on a sky that snows (-1: the sky's)",
+          .min = -1,
+          .max = 1},
+         &s.fall);
+  v.bind({.name = "sv_fog",
+          .fallback = "-1",
+          .flags = kRun,
+          .help = "how thick the valley fog lies, 0 .. 1, under a fog (-1: the sky's)",
+          .min = -1,
+          .max = 1},
+         &s.fog);
+  v.bind({.name = "sv_wind",
+          .fallback = "-1",
+          .flags = kRun,
+          .help = "the mean wind at 10 m, m/s (-1: the sky's)",
+          .min = -1,
+          .max = 40},
+         &s.air);
+  v.bind({.name = "sv_winddir",
+          .fallback = "-1",
+          .flags = kRun,
+          .help = "the heading the wind blows from, degrees clockwise from the map's +z (-1: the "
+                  "map's)",
+          .min = -1,
+          .max = 360},
+         &s.air_from);
+  v.bind({.name = "sv_cover",
+          .fallback = "-1",
+          .flags = kRun,
+          .help = "a broken sky's cloud cover (fair, flurries, high), 0 .. 1 (-1: the map's)",
+          .min = -1,
+          .max = 1},
+         &s.cover);
 
   v.bind({.name = "sv_lethal",
           .fallback = "1",
