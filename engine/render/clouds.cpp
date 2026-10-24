@@ -224,14 +224,16 @@ void cloud_rows(const Clouds& clouds, float info[4], float rows[][4]) {
   info[0] = static_cast<float>(n);
   info[1] = static_cast<float>(std::clamp(clouds.steps, 0.25, 1.0));
   info[2] = info[3] = 0;
-  for (int i = 0; i < kCloudLayers * 4; ++i) rows[i][0] = rows[i][1] = rows[i][2] = rows[i][3] = 0;
+  for (int i = 0; i < kCloudLayers * kCloudRows; ++i)
+    rows[i][0] = rows[i][1] = rows[i][2] = rows[i][3] = 0;
   for (int i = 0; i < n; ++i) {
     const CloudLayer& l = clouds.layers[i];
-    const size_t r = static_cast<size_t>(i) * 4;
+    const size_t r = static_cast<size_t>(i) * kCloudRows;
     float* v0 = rows[r];
     float* v1 = rows[r + 1];
     float* v2 = rows[r + 2];
     float* v3 = rows[r + 3];
+    float* v4 = rows[r + 4];
     v0[0] = static_cast<float>(l.base_m);
     v0[1] = static_cast<float>(std::max(l.top_m, l.base_m + 1.0));
     v0[2] = static_cast<float>(cloud_cut(l.cover));
@@ -248,6 +250,10 @@ void cloud_rows(const Clouds& clouds, float info[4], float rows[][4]) {
     v3[1] = static_cast<float>(std::clamp(l.erode, 0.0, 1.0));
     v3[2] = static_cast<float>(std::clamp(l.fibre, 0.0, 1.0));
     v3[3] = static_cast<float>(std::clamp(l.patch, 0.0, 1.0));
+    v4[0] = static_cast<float>(std::clamp(l.drop_um, 1.0, 200.0));
+    v4[1] = static_cast<float>(std::clamp(l.drop_spread, 0.0, 0.6));
+    v4[2] = static_cast<float>(std::clamp(l.halo, 0.0, 1.0));
+    v4[3] = static_cast<float>(std::clamp(l.deck, 0.0, 1.0));
   }
 }
 

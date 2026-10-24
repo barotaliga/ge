@@ -722,14 +722,15 @@ height) and living their kind's life. Where they are drawn a broken sky's mean c
 lid keeps its deck, and stands a sheet under it (OVERCAST a stratus, SNOW and a STORM a
 nimbostratus) so the deck has a texture.
 
-**Cloud kinds (M8f8)** (`render/cloud_kinds.hpp`): fourteen named kinds, each a layer's bands
-and its form, matched by eye against photographs of real skies side by side (the photographs
-are kept out of the tree): inversion, stratus, stratocumulus, cumulus, congestus,
-cumulonimbus, nimbostratus, altocumulus, altostratus, lenticular, cirrocumulus, cirrostratus,
-cirrus and wisps. A kind's bands are its base over the valley floor, its depth, its cover and
+**Cloud kinds (M8f8)** (`render/cloud_kinds.hpp`): fifteen named kinds, each a layer's bands,
+its form and its light, matched by eye against photographs of real skies side by side (the
+photographs are kept out of the tree): inversion, stratus, stratocumulus, cumulus, congestus,
+cumulonimbus, nimbostratus, altocumulus, altostratus, lenticular, cirrocumulus, veil,
+cirrostratus, cirrus and wisps. A kind's bands are its base over the valley floor, its depth, its cover and
 its cell (m); its stretch along the wind, its dome (0 a sheet, 1 a heap), its optical depth,
-its shadow, its life and its speed; and four FORM knobs, each 0..1, carried in a fourth row of
-the layer's frame block (`CloudLayer::anvil`, `erode`, `fibre`, `patch`):
+its shadow, its life and its speed; four FORM knobs, each 0..1, carried in a fourth row of the
+layer's frame block (`CloudLayer::anvil`, `erode`, `fibre`, `patch`); and its LIGHT in a fifth
+(`drop_um`, `drop_spread`, `halo`, `deck`), below:
 
 - THE BILLOWS. The noise texture is two channels (RG8Unorm 64³): the column's value fbm, and a
   cellular (Worley) fbm at 4, 8 and 16 cells a tile. Two reads of it at ten times the cell's
@@ -753,8 +754,28 @@ the layer's frame block (`CloudLayer::anvil`, `erode`, `fibre`, `patch`):
   the same path, so a deck is grey under and bright on top. A thick sheet under a lid is
   blended toward the deck's own grey (half of the way), so the ground's flat light and the sheet
   overhead agree and the sheet keeps its texture.
-- THE HALO: a sheet with strands (cirrostratus) lights a ring at 22° round the sun, its red
-  inside its blue (a Gaussian of 0.9° at 21.7°, 22.0° and 22.4° for red, green and blue).
+- THE HALO: an ice layer lights a ring at 22° round the sun (and the moon, when it is the key
+  light), its red inside its blue (a Gaussian of 0.9° at 21.7°, 22.0° and 22.4° for red, green
+  and blue), as strong as its kind's `halo`: the veil's 1, cirrus's 0.8, cirrostratus's 0.4.
+- THE GLOW ROUND THE DISC (`diffraction` in `clouds.wgsl`): half of what a particle much
+  larger than the light's wavelength takes out of a beam is diffracted round its edge, so every
+  layer in front of the sun or the moon adds the Airy pattern (k a)²/4π (2 J1(k a θ)/(k a θ))² of
+  its particles, for red, green and blue, lit by the key light through the layer as its single
+  scattering is: the aureole a few degrees wide and, where the particles are of one size, the
+  corona's coloured rings round it. Each kind names its particles' radius and their spread (five
+  sizes, a share either side, which wash the outer rings out): altocumulus's 8 µm droplets
+  spread 0.1 and a lenticular's 6 µm spread 0.06 ring the moon in colour; altostratus's mixed
+  14 µm spread 0.45 give the sun the soft glare of ground glass and no rings; the ice kinds'
+  30–40 µm crystals a tight bright glare. The sun's glow dazzles as it is; the moon's is seen
+  beside its disc as the disc is (`as_seen`, now in `wgsl/frame.wgsl`): the disc's brightness as
+  seen times the glow's ratio to the disc's to the power 0.35 (`kGlowSeen`), never brighter than
+  it is, so its rings show at night.
+- THE DECK'S TOP (`deck`): the light that scatters on in a deck comes in through its top, which
+  the sun lights at a slant, so in a layer whose kind is a deck (stratus, nimbostratus,
+  altostratus, an inversion, and 0.6 of stratocumulus) that light is the sun's height's sine of
+  the beam's: an altostratus under a low sun is grey with the sun a pale disc in it, not white
+  over the whole sky. A heap's sides and a thin layer's edges face the sun at any height, so a
+  high veil keeps its pink at sunset.
 - THE SHAFTS (`shafts` in `wgsl/frame.wgsl`): six points along the view ray, out to 20 km,
   read the cloud's shadow; the air scatters that share of the sun (70 % of its in-scatter is
   shadowed at most), on the world through the haze and on the sky strongest toward the sun, so
