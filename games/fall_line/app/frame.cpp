@@ -13,8 +13,10 @@
 #include "core/output.hpp"
 #include "fall_line/app/look.hpp"
 #include "fall_line/app/scene.hpp"
+#include "fall_line/app/sky_type.hpp"
 #include "mountain/air/air.hpp"
 #include "mountain/app/cloud_field.hpp"
+#include "mountain/app/weather_look.hpp"
 #include "prof/zones.hpp"
 
 namespace fall_line::app {
@@ -155,6 +157,7 @@ FrameOptions frame_options(const cfg::Settings& s) {
   o.weather = s.weather;
   o.clouds = s.clouds;
   o.cover = s.cover;
+  cloud_stack_of(s, o);
   return o;
 }
 
@@ -364,6 +367,16 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   if (f.options.weather) {
     ge::mountain::app::sky_at(*f.level, view.time_s, view.weather, view.clouds,
                               f.options.clouds > 0);
+    // Kinds of cloud picked by hand (sv_clouds) in place of the map's, dealt off its seed.
+    if (f.options.cloud_count >= 0 && f.options.clouds > 0) {
+      const ge::mountain::mapgen::Level& l = *f.level;
+      view.clouds = ge::mountain::app::cloud_layers_of(f.options.cloud_kinds, f.options.cloud_count,
+                                                       l.weather, l.seed, l.mountain.base.y,
+                                                       l.sun.latitude, view.time_s);
+      view.weather = ge::mountain::app::weather_look(
+          l.weather, ge::mountain::air::fall_at(l, view.time_s), view.clouds.count > 0);
+      ge::mountain::app::lid_under(f.options.cloud_kinds, f.options.cloud_count, view.weather);
+    }
     // A cover picked by hand: the lowest layer's, the layers over it in the same proportion.
     if (f.options.cover >= 0 && view.clouds.count > 0 && view.clouds.layers[0].cover > 0) {
       const double k = f.options.cover / view.clouds.layers[0].cover;
