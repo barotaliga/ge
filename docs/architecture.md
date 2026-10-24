@@ -76,6 +76,12 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   packet format, connections with their channels, and nodes of up to 32 peers. It depends on
   `engine/core` only and reads no clock: the caller passes the time and the seeds, so a session
   over the simulated network is deterministic and every net lab is a determinism test.
+- **`engine/console`**: the console and cfg files (M21; `docs/console.md` is the design): cvars
+  in three tiers (the player's, the server's, code's), bound to the settings structs the
+  subsystems already read so no subsystem includes the console; the command buffer, aliases,
+  scripting, binds, the cfg startup order and `cfg_save`; and the drop-down console's model,
+  which holds no pixels. It depends on `engine/core` only and reads no clock: a frame is one
+  `run`.
 - **`engine/input`**: the input layer (`ge::input`, M19; `docs/input.md` is the design): one
   32-byte event for every device, the state a frame reads, dead zones and ramps, action maps in
   contexts, the bindings file and rebinding, the device database, touch controls, local players,
