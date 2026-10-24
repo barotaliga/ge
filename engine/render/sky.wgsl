@@ -418,6 +418,10 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   // Under the horizon while there is a reach, the horizon's sky (frame.wgsl's `mist_dir`).
   let h = mist_dir(d);
   var colour = sky_luminance(h);
+  // The shafts: the cloud's shadow across the air in front of the sky, strongest toward the sun
+  // where the air scatters most of what it scatters forward.
+  let toward = pow(max(dot(h, frame.sun.xyz), 0.0), 4.0);
+  colour *= mix(1.0, shafts(h, kShaftReach, in.position.xy), kShaftShare * mix(0.4, 1.0, toward) * (1.0 - frame.weather.y));
   // The disc: the sun's light over its solid angle, darkened toward the limb, and only where
   // the planet does not hide it; behind a deck it is lost in the deck's grey. It is the real
   // sun's, whichever light is the key.

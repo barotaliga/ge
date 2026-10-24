@@ -53,10 +53,12 @@ struct CloudRows {
   shape: vec4f,  // base, top (world m), the noise's cut, one over the cell (1/m)
   wind: vec4f,   // the heading (cos, sin), the drift and the age in the noise's tile
   look: vec4f,   // one over the stretch, the dome (1 a heap), the density (1/m), the shadow's depth
+  form: vec4f,   // the anvil, the detail's bite, its comb along the wind, the patches
 }
 
 fn cloud_layer(i: i32) -> CloudRows {
-  return CloudRows(frame.clouds[i * 3], frame.clouds[i * 3 + 1], frame.clouds[i * 3 + 2]);
+  let r = i * 4;
+  return CloudRows(frame.clouds[r], frame.clouds[r + 1], frame.clouds[r + 2], frame.clouds[r + 3]);
 }
 
 // render/clouds.hpp's kCloudTileCells: the noise's base lattice across its tile.
@@ -71,11 +73,25 @@ fn cloud_uvw(l: CloudRows, xz: vec2f) -> vec3f {
   return vec3f(across * s, along * s * l.look.x - l.wind.z, l.wind.w);
 }
 
+// How far past the cut the noise climbs to a full column (render/clouds.hpp's kColumnRamp): a
+// sheet of a full cover is full nearly everywhere, not as patchy as the noise.
+const kColumnRamp = 0.3;
+
 // How full a layer's column is over `xz`, 0..1 (render/clouds.hpp's `cloud_column`): where the
-// noise passes the cut, how far past it.
+// noise passes the cut, how far past it; with PATCHES (form.w), only where a read at four times
+// the cell passes its middle too, so the cells gather into islands with clear sky between.
+fn cloud_column_of(l: CloudRows, uvw: vec3f, n: f32) -> f32 {
+  var c = clamp((n - l.shape.z) / max(min(1.0 - l.shape.z, kColumnRamp), 1e-3), 0.0, 1.0);
+  if (l.form.w > 0.0) {
+    let m = textureSampleLevel(cloud_noise, linear_repeat, vec3f(uvw.xy * 0.25, uvw.z + 0.5), 0.0).r;
+    c *= mix(1.0, clamp((m - 0.5) * 4.0 + 0.5, 0.0, 1.0), l.form.w);
+  }
+  return c;
+}
+
 fn cloud_column(l: CloudRows, xz: vec2f) -> f32 {
-  let n = textureSampleLevel(cloud_noise, linear_repeat, cloud_uvw(l, xz), 0.0).r;
-  return clamp((n - l.shape.z) / max(1.0 - l.shape.z, 1e-3), 0.0, 1.0);
+  let uvw = cloud_uvw(l, xz);
+  return cloud_column_of(l, uvw, textureSampleLevel(cloud_noise, linear_repeat, uvw, 0.0).r);
 }
 
 // THE CLOUD'S SHADOW at a world point: each layer whose middle is above it, read where the beam
@@ -95,6 +111,28 @@ fn cloud_shadow(p: vec3f) -> f32 {
     }
   }
   return exp(-tau);
+}
+
+// THE SHAFTS: the share of the sun's light the air along a view ray `d` gets, out to `far` m (at
+// most kShaftReach), averaged over kShaftSteps points dithered per pixel `px` and per frame:
+// where the cloud's shadow crosses the air, the air scatters less of the sun, and the sky reads
+// as beams between the heaps. 1 with no layer, or with the sun low.
+const kShaftSteps = 6;
+const kShaftReach = 20000.0;
+const kShaftShare = 0.7;
+
+fn shafts(d: vec3f, far: f32, px: vec2f) -> f32 {
+  if (i32(frame.cloud_info.x) == 0 || frame.sun.y < 0.02 || frame.weather.y > 0.99) {
+    return 1.0;
+  }
+  let reach = min(far, kShaftReach);
+  let j = fract(52.9829189 * fract(dot(px, vec2f(0.06711056, 0.00583715)) + 0.618034 * frame.time.y));
+  var lit = 0.0;
+  for (var i = 0; i < kShaftSteps; i++) {
+    let a = (f32(i) + j) / f32(kShaftSteps);
+    lit += cloud_shadow(frame.eye.xyz + d * (reach * a * a));
+  }
+  return lit / f32(kShaftSteps);
 }
 
 // The sun's light reaching a point at `world_y` (m) over the world's `xz`: illuminance times the
@@ -281,6 +319,8 @@ fn haze_air(colour: vec3f, uv: vec2f, dist_m: f32) -> vec3f {
     b = normalize(vec3f(b.x, max(b.y, 0.01), b.z));
     air += (1.0 - v.a) * select(moon_sky(b), sun_sky(b), frame.world.w > 0.5);
   }
+  let lit = shafts(view_ray(frame, uv), dist_m, uv * frame.size.xy);
+  air *= mix(1.0, lit, kShaftShare * (1.0 - frame.weather.y));
   let inscatter = mix(air, (1.0 - v.a) * deck_horizon(), frame.weather.y);
   var c = colour * mix(1.0, v.a, k) + inscatter * k;
   if (frame.weather.z > 0.0) {
