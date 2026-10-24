@@ -51,6 +51,11 @@ struct Options {
   // r_bounce: the share of the map's baked light added to the real-time lights as the light
   // bounced round the room (the lightmaps as light probes: the room's own light, not flat grey).
   double bounce = 0.35;
+  // r_skylight: the sky through the sky faces against the rooms, and its light in them (the
+  // sun's and the open sky's): 1 our sky as it is, under 1 dimmer (a dusk's against torch-lit
+  // halls), times `sky_tint` (each channel's share, a tint toward the map's own sky).
+  double sky_light = 1;
+  double sky_tint[3] = {1, 1, 1};
 };
 
 inline constexpr uint32_t kCubeSize = 256;    // a cube face's texels a side
@@ -71,7 +76,7 @@ struct GpuBsp {
   float info[4];
   float info2[4];
   float sky[4];
-  float info3[4];  // the floor (minlight), the bounce
+  float info3[4];  // the floor (minlight), the bounce, the sky's light (r_skylight)
   GpuJob ortho[2];
 };
 
@@ -91,7 +96,7 @@ struct BspDraw {
   wgpu::BindGroup group, fix_group, shadow_group;
   wgpu::Texture mask;
   wgpu::TextureView mask_view;
-  uint32_t p_draw = 0, p_fix = 0, p_shadow = 0;
+  uint32_t p_draw = 0, p_fix = 0, p_veil = 0, p_shadow = 0;
   // This frame's (prepare_bsp).
   GpuBsp staged{};
   std::vector<GpuLight> frame_lights;
@@ -113,6 +118,11 @@ void prepare_bsp(gpu::Device& device, BspDraw& draw, const render::FrameView& vi
 void encode_bsp(const BspDraw& draw, const gpu::PipelineSet& pipelines, render::FrameRecorder& rec,
                 wgpu::CommandEncoder& encoder, const render::FrameTargets& targets,
                 const wgpu::BindGroup& frame);
+// "bsp.veil", after the sky and the clouds: the sky faces' pixels times the options' sky light
+// and tint (nothing when both are 1, or in the classic mode).
+void encode_bsp_veil(const BspDraw& draw, const gpu::PipelineSet& pipelines,
+                     render::FrameRecorder& rec, wgpu::CommandEncoder& encoder,
+                     const render::FrameTargets& targets);
 
 // The lights the scene's lava gives off: a grid over each pool's top, each its share of the
 // pool's glow (physical, cd), just over the surface. `core_c` the melt's temperature, `cover` the

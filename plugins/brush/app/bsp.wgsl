@@ -27,7 +27,8 @@ struct Bsp {
   info: vec4f,   // mode (0 classic, 1 v2), lighting (0 lightmaps, 1 lights), lights, ambient
   info2: vec4f,  // time s, the cube face's size, the ortho map's size, the brightness
   sky: vec4f,    // the classic sky texture's rectangle
-  info3: vec4f,  // v2's soft floor of light (minlight), the baked light's share as bounce
+  info3: vec4f,  // v2's soft floor of light (minlight), the baked light's share as bounce, the
+                 // sky's light (r_skylight: the sun's and the open sky's in the rooms)
   ortho: array<Job, 2>,  // the sun's map and the zenith's
 };
 
@@ -266,10 +267,10 @@ fn fs_main(in: VsOut) -> FsOut {
   let sun_ndl = max(dot(n, sun_dir), 0.0);
   if (sun_ndl > 0.0 && frame.sun.y > 0.0) {
     let lit = ortho_lit(bsp.ortho[0], 0, p, 0.05);
-    c += albedo / PI * sun_light(in.world.y, in.world.xz) * sun_ndl * lit;
+    c += albedo / PI * sun_light(in.world.y, in.world.xz) * sun_ndl * lit * bsp.info3.z;
   }
   let open = ortho_lit(bsp.ortho[1], 1, in.world + n * 0.3, 1.2);
-  c += albedo / PI * sky_irradiance(n) * open;
+  c += albedo / PI * sky_irradiance(n) * open * bsp.info3.z;
   if (glows) {
     c += albedo * white;
   }

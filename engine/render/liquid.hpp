@@ -67,6 +67,7 @@ struct LavaLook {
   double crust_rough = 0.35;  // the crust's glassy rind
   double melt_rough = 0.12;
   water::Rgb crust_albedo{0.045, 0.041, 0.038};
+  double patch = 0;  // m: the open melt's patches' size (0: seven plates)
 };
 
 struct SlimeLook {

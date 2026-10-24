@@ -23,6 +23,7 @@
 
 #include "brush/app/bsp_draw.hpp"
 #include "brush/app/bsp_liquids.hpp"
+#include "brush/app/bsp_sky.hpp"
 #include "brush/app/draw_data.hpp"
 #include "brush/write.hpp"
 #include "core/libm/libm.hpp"
@@ -58,7 +59,7 @@ struct MapState {
   gr::Liquids liquids;
   ba::LiquidWorld world;
   ba::LiquidRows rows;
-  gr::SkyStyle style{};  // the map's kind of sky (--sky)
+  ba::SkyPick sky;  // the map's sky: picked by its sky texture, or --sky's type over that
 };
 
 struct Frame {
@@ -84,21 +85,25 @@ struct View {
   double heading = 0, pitch = 0;
 };
 
-// The sky of the views: the sun where `--sun` puts it, a fair day's heaps of cloud.
-void dress(gr::FrameView& v, double sun_el, double sun_az, double cover, double t) {
-  v.sun_elevation = sun_el;
-  v.sun_azimuth = sun_az;
+// The sky of the views: the map's picked sky (its type, its hour, its sun's strength and its
+// heaps), with --sun and --clouds over it when they are given.
+void dress(gr::FrameView& v, const ba::SkyPick& sky, const std::vector<double>& sun, double cover,
+           double t) {
+  v.style = sky.style;
+  v.sun_elevation = (sun.size() > 0 ? sun[0] : sky.sun_elevation) * kDeg;
+  v.sun_azimuth = (sun.size() > 1 ? sun[1] : 220) * kDeg;
   v.altitude_m = 100;  // a level near the sea: the dust's colour reads its altitude
   v.time_s = t;
   v.fov_y = 1.25;
   v.near_m = 0.05;
+  if (cover < 0) cover = sky.cover;
   if (cover > 0) {
     v.clouds.count = 1;
     gr::CloudLayer& l = v.clouds.layers[0];
     l.base_m = 1500;
     l.top_m = 2300;
     l.cover = cover;
-    l.cell_m = 1600;
+    l.cell_m = sky.cell_m;
     l.stretch = 1.3;
     l.dome = 1;
     l.density = 28.0 / 800;
@@ -114,7 +119,10 @@ gl::Picture draw(ge::gpu::Device& d, Frame& f, MapState& m, const gr::FrameView&
   gr::fill_uniforms(f.staged, v, f.w, f.h);
   d.queue.WriteBuffer(f.uniforms, 0, &f.staged, sizeof f.staged);
   gr::prepare_sky(f.sky, v);
-  ba::prepare_bsp(d, m.bsp, v, o);
+  ba::Options lit = o;  // the sky's light and tint the map's
+  lit.sky_light = m.sky.sky_light;
+  for (int k = 0; k < 3; ++k) lit.sky_tint[k] = m.sky.tint[k];
+  ba::prepare_bsp(d, m.bsp, v, lit);
   const bool v2 = o.mode == ba::Mode::v2;
   for (auto& b : m.water.bodies) b.hidden = !v2;
   for (auto& b : m.liquids.bodies) b.hidden = !v2;
@@ -126,6 +134,7 @@ gl::Picture draw(ge::gpu::Device& d, Frame& f, MapState& m, const gr::FrameView&
   ba::encode_bsp(m.bsp, f.pipelines, f.rec, e, f.targets, f.frame);
   gr::encode_sky(f.sky, f.pipelines, f.rec, e, f.targets, f.frame);
   gr::encode_clouds(f.clouds, f.pipelines, f.rec, e, f.targets, f.frame, v, f.staged);
+  ba::encode_bsp_veil(m.bsp, f.pipelines, f.rec, e, f.targets);
   gr::encode_water(m.water, f.pipelines, f.rec, e, f.targets, f.frame);
   gr::encode_liquid(m.liquids, f.pipelines, f.rec, e, f.targets, f.frame);
   gr::encode_bloom(f.bloom, f.pipelines, f.rec, e, 0);
@@ -415,10 +424,9 @@ std::vector<std::string> split(const std::string& s, char c) {
 void run(gl::Lab& lab) {
   const uint32_t w = static_cast<uint32_t>(lab.arg_num("width"));
   const uint32_t h = w * 9 / 16;
-  const std::vector<double> sun = lab.arg_nums("sun");
-  const double sun_el = (sun.size() > 0 ? sun[0] : 30) * kDeg;
-  const double sun_az = (sun.size() > 1 ? sun[1] : 220) * kDeg;
-  const double cover = lab.arg_num("clouds");
+  const std::vector<double> sun =
+      lab.arg("sun").empty() ? std::vector<double>{} : lab.arg_nums("sun");
+  const double cover = lab.arg("clouds").empty() ? -1 : lab.arg_num("clouds");
   const double t = lab.arg_num("time");
 
   // ── The maps ──
@@ -553,26 +561,38 @@ void run(gl::Lab& lab) {
   knob("film", &g.film);
   knob("bubbles", &g.bubbles);
   knob("glow", &g.glow);
-  // --sky: one type for every map, or <map>:<type> pairs (the rest keep the Earth's).
-  {
-    const std::string& list = lab.arg("sky");
-    size_t at = 0;
-    while (!list.empty() && at <= list.size()) {
-      size_t end = list.find(',', at);
-      if (end == std::string::npos) end = list.size();
-      const std::string item = list.substr(at, end - at);
-      const size_t colon = item.find(':');
-      const std::string type = colon == std::string::npos ? item : item.substr(colon + 1);
-      gr::SkyStyle style;
-      if (!gr::sky_style_named(type, style))
+  knob("lava-plate", &rows.lava_plate);
+  knob("lava-crack", &rows.lava_crack);
+  knob("lava-cover", &rows.lava_cover);
+  knob("lava-ropes", &rows.lava_ropes);
+  knob("lava-patch", &rows.lava_patch);
+  knob("lava-rough", &rows.lava_rough);
+  // Each map's sky picked by its sky texture; --sky: one type for every map, or <map>:<type>
+  // pairs, over the pick (its hour and light kept).
+  for (auto& m : maps) m->sky = ba::pick_sky(m->scene.sky_colours);
+  for (const std::string& item : split(lab.arg("sky"), ',')) {
+    const size_t colon = item.find(':');
+    const std::string type = colon == std::string::npos ? item : item.substr(colon + 1);
+    for (size_t i = 0; i < maps.size(); ++i) {
+      if (colon != std::string::npos && names[i] != item.substr(0, colon)) continue;
+      if (!ba::with_type(maps[i]->sky, type))
         lab.fail("--sky names no sky type: " + type,
                  "next: pick one of earth, dust, alien, hell, void, nebula, violet, ice, ash, "
                  "toxic (engine/render/sky_style.hpp).");
-      for (size_t i = 0; i < maps.size(); ++i)
-        if (colon == std::string::npos || names[i] == item.substr(0, colon)) maps[i]->style = style;
-      at = end + 1;
     }
   }
+  if (!lab.arg("skylight").empty()) {
+    for (auto& m : maps) m->sky.sky_light = lab.arg_num("skylight");
+  }
+  if (!lab.arg("cell").empty()) {
+    for (auto& m : maps) m->sky.cell_m = lab.arg_num("cell");
+  }
+  if (!lab.arg("tint").empty()) {
+    const std::vector<double> tint = lab.arg_nums("tint");
+    for (auto& m : maps)
+      for (size_t k = 0; k < 3; ++k) m->sky.tint[k] = tint.size() > k ? tint[k] : 1;
+  }
+  for (size_t i = 0; i < maps.size(); ++i) lab.note(names[i] + "'s sky: " + maps[i]->sky.why);
   for (auto& m : maps) {
     m->rows = rows;
     ba::create_bsp(d, f.pipelines, m->bsp, m->scene, f.layout);
@@ -670,9 +690,8 @@ void run(gl::Lab& lab) {
     fv.eye[2] = v.eye[2];
     fv.heading = v.heading;
     fv.pitch = v.pitch;
-    dress(fv, sun_el, sun_az, cover, t);
     MapState& m = *maps[v.map];
-    fv.style = m.style;
+    dress(fv, m.sky, sun, cover, t);
     std::vector<gl::Picture> pics;
     pics.reserve(ways.size());
     for (const Way& way : ways) pics.push_back(draw(d, f, m, fv, way.o));
@@ -698,7 +717,9 @@ void run(gl::Lab& lab) {
       panes.reserve(skies.size());
       for (const std::string& name : skies) {
         gr::FrameView sv = fv;
-        gr::sky_style_named(name, sv.style);
+        ba::SkyPick pick = m.sky;
+        ba::with_type(pick, name);
+        dress(sv, pick, sun, cover, t);
         panes.push_back(draw(d, f, m, sv, ways[2].o));
       }
       const int n = int(panes.size());
@@ -757,8 +778,8 @@ const gl::LabSpec kSpec{
      {"pak", "", "a pack file holding maps/*.bsp and gfx/palette.lmp (none: the sample fixture)"},
      {"maps", "start", "the maps in the pack, comma separated, without maps/ and .bsp"},
      {"view", "", "more views: <map>:x,y,z,heading,pitch (m, degrees), separated by ;"},
-     {"sun", "30,220", "the sun's elevation and azimuth, degrees"},
-     {"clouds", "0.3", "the heaps' cover, 0..1 (0: a clear sky)"},
+     {"sun", "", "the sun's elevation and azimuth, degrees (none: each map's picked sky's)"},
+     {"clouds", "", "the heaps' cover, 0..1, 0 a clear sky (none: each map's picked sky's)"},
      {"time", "20", "the views' time, s (the flicker, the liquids, the clouds)"},
      {"strength", "1", "the point lights' strength against the classic's"},
      {"shadowed", "32", "the nearest lights that cast shadows"},
@@ -774,7 +795,19 @@ const gl::LabSpec kSpec{
      {"film", "300", "the slime's oily sheen, nm (0 none)"},
      {"bubbles", "1.5", "the slime's bubbles a square metre a second"},
      {"glow", "0.4", "the slime's own green light, a share of the murky slime's"},
-     {"sky", "", "the maps' sky types: one for all, or <map>:<type> pairs, comma separated"},
+     {"lava-plate", "0.25", "the lava's crust plates' size, m"},
+     {"lava-crack", "0.02", "a young plate's crack, m (the glow's fall-off from its line)"},
+     {"lava-cover", "0.3", "the share of the lava crusted over"},
+     {"lava-patch", "0.6", "the lava's open melt patches' size, m"},
+     {"lava-ropes", "0", "the ropy folds on the lava's crust, 0 none"},
+     {"lava-rough", "0.7", "the lava crust's roughness (0.35 a glassy rind)"},
+     {"sky", "",
+      "the maps' sky types over their picked skies: one for all, or <map>:<type> pairs, comma "
+      "separated (none: each picked by its sky texture)"},
+     {"skylight", "",
+      "the sky against the rooms for every map (r_skylight; none: each picked sky's)"},
+     {"cell", "", "the heaps' span for every map, m (none: each picked sky's)"},
+     {"tint", "", "the sky's tint for every map, r,g,b (none: each picked sky's)"},
      {"skies", "", "sky types to draw the sky views under too, comma separated (e.g. hell,toxic)"},
      {"skies-on", "sky", "the views --skies draws: those whose id holds this"},
      {"ladder", "",

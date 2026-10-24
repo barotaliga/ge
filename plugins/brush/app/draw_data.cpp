@@ -15,6 +15,7 @@
 #include "brush/app/draw_data.hpp"
 #include "brush/bytes.hpp"
 #include "brush/read.hpp"
+#include "core/libm/libm.hpp"
 
 namespace ge::brush::app {
 
@@ -194,6 +195,39 @@ double flicker_at(const PointLight& l, double t) {
   return 1;
 }
 
+namespace {
+
+// sRGB 0..255 to linear light.
+double linear_of(uint8_t v) {
+  const double c = v / 255.0;
+  return c <= 0.04045 ? c / 12.92 : ge::core::libm::pow((c + 0.055) / 1.055, 2.4);
+}
+
+// A sky texture's colours (RGBA, w x h): the left half its cloud layer, a texel with alpha 1 (the
+// palette's first colour) see-through; the right half its back layer.
+SkyColours sky_colours_of(const std::vector<uint8_t>& rgba, uint32_t w, uint32_t h) {
+  SkyColours c;
+  double clouds = 0, backs = 0;
+  for (uint32_t y = 0; y < h; ++y)
+    for (uint32_t x = 0; x < w; ++x) {
+      const uint8_t* t = &rgba[(size_t(y) * w + x) * 4];
+      const bool front = x < w / 2;
+      if (front && t[3] == 1) continue;
+      double* sum = front ? c.cloud : c.back;
+      for (int k = 0; k < 3; ++k) sum[k] += linear_of(t[k]);
+      (front ? clouds : backs) += 1;
+    }
+  for (int k = 0; k < 3; ++k) {
+    c.cloud[k] /= std::max(clouds, 1.0);
+    c.back[k] /= std::max(backs, 1.0);
+  }
+  c.cover = clouds / std::max(double(w / 2) * h, 1.0);
+  c.found = backs > 0;
+  return c;
+}
+
+}  // namespace
+
 bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t> palette,
                 Scene* out, std::string* error, const TextureSource& source) {
   Scene& s = *out;
@@ -210,6 +244,12 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
     uint32_t x = 0, y = 0, w = 16, h = 16;
   };
   std::vector<Placed> placed(m.textures.size());
+  for (size_t i = 0; i < m.textures.size(); ++i) {
+    if (s.sky_texture == UINT32_MAX && m.textures[i].name.size() >= 3 &&
+        lower(m.textures[i].name).rfind("sky", 0) == 0) {
+      s.sky_texture = uint32_t(i);
+    }
+  }
   {
     std::vector<size_t> order(m.textures.size());
     std::iota(order.begin(), order.end(), size_t{0});
@@ -273,6 +313,9 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
         }
       }
     }
+    if (s.sky_texture < placed.size() && !rgba[s.sky_texture][0].empty())
+      s.sky_colours =
+          sky_colours_of(rgba[s.sky_texture][0], placed[s.sky_texture].w, placed[s.sky_texture].h);
     for (uint32_t k = 0; k < 4; ++k) {
       const uint32_t w = s.textures.width >> k, h = s.textures.height >> k;
       std::vector<uint8_t> level(size_t(w) * h * 4, 0);
@@ -285,12 +328,6 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
         }
       }
       s.textures.levels.push_back(std::move(level));
-    }
-  }
-  for (size_t i = 0; i < m.textures.size(); ++i) {
-    if (s.sky_texture == UINT32_MAX && m.textures[i].name.size() >= 3 &&
-        lower(m.textures[i].name).rfind("sky", 0) == 0) {
-      s.sky_texture = uint32_t(i);
     }
   }
 

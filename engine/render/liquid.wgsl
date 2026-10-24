@@ -27,7 +27,7 @@ struct LiquidBody {
   flow: vec4f,
   lava0: vec4f,   // core K, crust_hot K, crust_cold K, cover
   lava1: vec4f,   // plate, crack, ropes, age_rate
-  lava2: vec4f,   // emissivity, crust_rough, melt_rough
+  lava2: vec4f,   // emissivity, crust_rough, melt_rough, the melt's patches' size
   crust: vec4f,
   absorb: vec4f,
   scatter: vec4f,
@@ -156,7 +156,7 @@ fn lava_at(q: vec2f, t: f32, foot: f32) -> vec3f {
   let cold = body.lava0.z;
   let plate = body.lava1.x;
   // The open melt: where a slow noise (spread to about even over 0..1) passes the cover.
-  let field = smoothstep(0.28, 0.72, fbm(q / (plate * 7.0) + vec2f(t * 0.004, -t * 0.003)));
+  let field = smoothstep(0.28, 0.72, fbm(q / body.lava2.w + vec2f(t * 0.004, -t * 0.003)));
   let cover = body.lava0.w;
   let open = smoothstep(cover - 0.03, cover + 0.03, field);
   // The plates, warped so no two are alike: an age per plate, running on and renewed; each

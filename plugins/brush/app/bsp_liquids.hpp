@@ -23,7 +23,13 @@ struct LiquidRows {
   std::string lava = "lava", slime = "slime";                // rows of water/liquids.hpp
   double depth = 2;                                          // m under the top the volume reaches
   double lava_cover = 0.3;  // the share of the lava crusted over (the classic's lava is molten)
-  double lava_plate = 0.8;  // m: a crust plate's size
+  // m: a crust plate's size and a young plate's crack (the classic's lava is fine-grained: its
+  // texture's cells are a hand across, so the plates are too)
+  double lava_plate = 0.25;
+  double lava_crack = 0.02;
+  double lava_patch = 0.6;  // m: the open melt's patches
+  double lava_ropes = 0;    // the ropy folds on the crust (0 none: at this scale they alias)
+  double lava_rough = 0.7;  // the crust's roughness: a dull, ash-dusted crust, not a glassy one
   // The slime drawn murky and grimy (a dark green ooze, scummed, dirtied, things afloat, a faint
   // glow) like the classic maps', not the toxic row's bright opaque green; false: the row's look.
   bool murky_slime = true;

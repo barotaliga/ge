@@ -110,6 +110,10 @@ void add_bsp_liquids(gpu::Device& device, render::Water& water, render::Liquids&
       if (lw.kinds[i] == kLava) {
         here.lava.cover = rows.lava_cover;
         here.lava.plate = rows.lava_plate;
+        here.lava.crack = rows.lava_crack;
+        here.lava.ropes = rows.lava_ropes;
+        here.lava.patch = rows.lava_patch;
+        here.lava.crust_rough = rows.lava_rough;
       }
       here.room = rows.room;
       render::add_liquid_body(device, liquids, b, here, world.wind.mean,

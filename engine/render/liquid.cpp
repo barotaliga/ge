@@ -111,7 +111,7 @@ void stage_body(Liquids::Slot& slot, const water::Body& body, const LiquidLook& 
   const LavaLook& l = look.lava;
   put(b.lava0, l.core + kKelvin, l.crust_hot + kKelvin, l.crust_cold + kKelvin, l.cover);
   put(b.lava1, l.plate, l.crack, l.ropes, l.age_rate);
-  put(b.lava2, l.emissivity, l.crust_rough, l.melt_rough, 0);
+  put(b.lava2, l.emissivity, l.crust_rough, l.melt_rough, l.patch > 0 ? l.patch : 7 * l.plate);
   put(b.crust, l.crust_albedo);
   const SlimeLook& s = look.slime;
   put(b.absorb, s.absorb);

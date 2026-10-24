@@ -264,6 +264,31 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
     d.p_fix = pipelines.add_render(device, desc);
   }
   {
+    const wgpu::ShaderModule module = gpu::create_shader(device, wgsl::bsp_fix, "bsp.veil");
+    // The sky's pixels times the blend constant: dst * constant.
+    wgpu::BlendState blend{};
+    blend.color.srcFactor = wgpu::BlendFactor::Zero;
+    blend.color.dstFactor = wgpu::BlendFactor::Constant;
+    blend.alpha.srcFactor = wgpu::BlendFactor::Zero;
+    blend.alpha.dstFactor = wgpu::BlendFactor::One;
+    wgpu::ColorTargetState target{};
+    target.format = r::kHdrFormat;
+    target.blend = &blend;
+    wgpu::FragmentState fragment{};
+    fragment.module = module;
+    fragment.entryPoint = "fs_veil";
+    fragment.targetCount = 1;
+    fragment.targets = &target;
+    wgpu::RenderPipelineDescriptor desc{};
+    desc.label = "bsp.veil";
+    desc.layout = r::make_pipeline_layout(device, "bsp.veil", {d.fix_layout});
+    desc.vertex.module = module;
+    desc.vertex.entryPoint = "vs_main";
+    desc.primitive.topology = wgpu::PrimitiveTopology::TriangleList;
+    desc.fragment = &fragment;
+    d.p_veil = pipelines.add_render(device, desc);
+  }
+  {
     const wgpu::ShaderModule module = gpu::create_shader(device, wgsl::bsp_shadow, "bsp.shadows");
     wgpu::VertexBufferLayout pos{};
     pos.arrayStride = sizeof(DrawVertex);
@@ -384,7 +409,7 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   set4(d.staged.info, o.mode == Mode::v2 ? 1 : 0, o.lighting == Lighting::lights ? 1 : 0,
        double(d.frame_lights.size()), o.ambient);
   set4(d.staged.info2, view.time_s, kCubeSize, kOrthoSize, o.brightness);
-  set4(d.staged.info3, o.minlight, o.lighting == Lighting::lights ? o.bounce : 0, 0, 0);
+  set4(d.staged.info3, o.minlight, o.lighting == Lighting::lights ? o.bounce : 0, o.sky_light, 0);
   if (s.sky_texture < s.map.textures.size()) {
     // The sky texture's rectangle: any vertex of a sky face carries it.
     for (size_t k = 0; k < s.vertices.size(); ++k) {
@@ -487,6 +512,33 @@ void encode_bsp(const BspDraw& d, const gpu::PipelineSet& pipelines, r::FrameRec
   } else {
     rec.compute(encoder, "bsp.sky").End();
   }
+}
+
+void encode_bsp_veil(const BspDraw& d, const gpu::PipelineSet& pipelines,
+                     render::FrameRecorder& rec, wgpu::CommandEncoder& encoder,
+                     const render::FrameTargets& targets) {
+  const Options& o = d.options;
+  const double k[3] = {o.sky_light * o.sky_tint[0], o.sky_light * o.sky_tint[1],
+                       o.sky_light * o.sky_tint[2]};
+  if (o.mode != Mode::v2 || (k[0] == 1 && k[1] == 1 && k[2] == 1)) {
+    rec.compute(encoder, "bsp.veil").End();
+    return;
+  }
+  wgpu::RenderPassColorAttachment colour{};
+  colour.view = targets.hdr_view;
+  colour.loadOp = wgpu::LoadOp::Load;
+  colour.storeOp = wgpu::StoreOp::Store;
+  wgpu::RenderPassDescriptor desc{};
+  desc.colorAttachmentCount = 1;
+  desc.colorAttachments = &colour;
+  wgpu::RenderPassEncoder pass = rec.render(encoder, desc, "bsp.veil");
+  pass.SetPipeline(pipelines.render(d.p_veil));
+  pass.SetBindGroup(0, d.fix_group);
+  const wgpu::Color c{k[0], k[1], k[2], 1};
+  pass.SetBlendConstant(&c);
+  pass.Draw(3);
+  ++rec.current().draws;
+  pass.End();
 }
 
 }  // namespace ge::brush::app

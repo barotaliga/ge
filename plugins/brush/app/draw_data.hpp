@@ -89,6 +89,16 @@ struct Atlas {
   std::vector<std::vector<uint8_t>> levels;  // RGBA8 a level; alpha 255 a fullbright texel
 };
 
+// The classic sky texture's colours, the means of its texels in linear light (0..1): its cloud
+// layer (the left half) where it is not see-through, its back layer (the right half), and the
+// share of the cloud layer that is cloud. `found` false: the map has no sky texture.
+struct SkyColours {
+  double cloud[3] = {0, 0, 0};
+  double back[3] = {0, 0, 0};
+  double cover = 0;
+  bool found = false;
+};
+
 struct Scene {
   std::string name;
   Map map;
@@ -103,6 +113,7 @@ struct Scene {
   double start[3] = {0, 0, 0};
   double start_heading = 0;
   uint32_t sky_texture = UINT32_MAX;  // the first sky texture (the classic before's)
+  SkyColours sky_colours;             // that texture's colours (bsp_sky.hpp picks our sky by them)
   uint32_t counts[kKinds] = {};       // triangles of each kind
 };
 
