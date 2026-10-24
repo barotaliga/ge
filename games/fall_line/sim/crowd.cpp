@@ -19,6 +19,7 @@
 #include "core/prng.hpp"
 #include "fall_line/sim/crowd_lift.hpp"
 #include "fall_line/sim/free.hpp"
+#include "fall_line/sim/sled_ride.hpp"
 #include "mountain/lifts/lift_loop.hpp"
 #include "mountain/mapgen/query.hpp"
 
@@ -690,7 +691,7 @@ void meet_crowd(GameState& state) {
     Racer& racer = state.racers[static_cast<size_t>(i)];
     // On a lift or a machine he is the machine's: nobody shoulders him.
     if (racer.free.lift.phase != LiftPhase::none) continue;
-    if (i == 0 && (state.sled.rider || state.heli.rider)) continue;
+    if (on_sled(state, i) || (i == 0 && state.heli.rider)) continue;
     ge::skier::SkierState& c = racer.skier;
     for (Amateur& a : crowd.amateurs) {
       if (on_lift(a)) continue;
