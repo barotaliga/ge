@@ -8,6 +8,7 @@
 // ge:summary Tests for the grass drawn: the GPU scatter against the CPU's, thinning, shapes, draw
 // ge:keywords test render grass scatter thinning shape probe draw wind
 // ge:skill render grass testing
+#include <algorithm>
 #include <cmath>
 #include <map>
 #include <vector>
