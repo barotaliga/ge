@@ -17,6 +17,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <string>
@@ -28,6 +29,7 @@
 #include "core/num_text.hpp"
 #include "lab/lab.hpp"
 #include "lab/model_view.hpp"
+#include "lab/png.hpp"
 #include "lab/raster.hpp"
 #include "textured_view.hpp"
 #include "vfs/pak.hpp"
@@ -269,6 +271,61 @@ std::vector<std::pair<std::string, br::labs::TexturedEye>> eyes_of(const br::Map
   return out;
 }
 
+// A texture's file name for the matcher: a leading '*' (a liquid) is `liq_`, a leading '+' (an
+// animation frame) `anim_`, and anything a file name cannot hold an underscore.
+std::string texture_file(const std::string& name) {
+  std::string out;
+  size_t at = 0;
+  if (!name.empty() && name[0] == '*') out = "liq_", at = 1;
+  if (!name.empty() && name[0] == '+') out = "anim_", at = 1;
+  for (size_t i = at; i < name.size(); ++i) {
+    const char c = name[i];
+    out += std::isalnum(uint8_t(c)) || c == '_' || c == '-' ? char(std::tolower(uint8_t(c))) : '_';
+  }
+  return out + ".png";
+}
+
+// --textures-out: every texture of each 29 or BSP2 map written as a PNG through the palette, to
+// `<dir>/<map>/`, with `textures.txt` naming each (the map's name, the file, the size). For the
+// procedural texture matcher to read OUTSIDE the tree; nothing here enters a digest or a shot.
+bool write_textures(lab::Lab& lab, const std::vector<Loaded>& maps,
+                    const std::vector<uint8_t>& palette, const std::string& dir) {
+  for (const Loaded& l : maps) {
+    if (l.map.family != br::Family::v29 && l.map.family != br::Family::bsp2) continue;
+    std::string stem = l.name.substr(l.name.rfind('/') + 1);
+    stem = stem.substr(0, stem.rfind('.'));
+    const std::filesystem::path out = std::filesystem::path(dir) / stem;
+    std::error_code ec;
+    std::filesystem::create_directories(out, ec);
+    std::ofstream index(out / "textures.txt");
+    if (ec || !index) {
+      lab.fail("bsp: cannot write under " + out.string(),
+               "next: pass --textures-out=<a writable directory outside the tree>");
+      return false;
+    }
+    index << "# <name in the map> <file> <width>x<height> (bsp lab --textures-out)\n";
+    size_t written = 0;
+    for (const br::Texture& t : l.map.textures) {
+      if (t.indexed.size() != size_t(t.width) * t.height || t.indexed.empty()) continue;
+      Picture p = lab::create_picture(int(t.width), int(t.height), Rgba{0, 0, 0});
+      for (size_t i = 0; i < t.indexed.size(); ++i) {
+        for (size_t k = 0; k < 3; ++k) p.rgba[i * 4 + k] = palette[size_t(t.indexed[i]) * 3 + k];
+        p.rgba[i * 4 + 3] = 255;
+      }
+      const std::string file = texture_file(t.name);
+      if (!lab::write_png((out / file).string(), p)) {
+        lab.fail("bsp: cannot write " + (out / file).string(), "next: check the directory");
+        return false;
+      }
+      index << t.name << " " << file << " " << t.width << "x" << t.height << "\n";
+      ++written;
+    }
+    std::printf("  textures: %zu of %s written to %s\n", written, l.name.c_str(),
+                out.string().c_str());
+  }
+  return true;
+}
+
 void run(lab::Lab& lab) {
   const int px = int(lab.arg_num("px"));
   const std::string path = lab.arg("map");
@@ -441,6 +498,15 @@ void run(lab::Lab& lab) {
              p);
   }
 
+  if (const std::string dir = lab.arg("textures-out"); !dir.empty()) {
+    if (palette.empty()) {
+      lab.fail("bsp: --textures-out needs a palette",
+               "next: pass --pak=<file.pak> holding gfx/palette.lmp and --map=<path in it>");
+      return;
+    }
+    if (!write_textures(lab, maps, palette, dir)) return;
+  }
+
   // With a palette (a pack's gfx/palette.lmp), each 29 or BSP2 map seen textured from its starts.
   if (!palette.empty()) {
     for (const Loaded& l : maps) {
@@ -569,6 +635,9 @@ const lab::LabSpec kSpec{
         {"pak", "",
          "a pack archive --map's paths are read from (comma separated); its "
          "gfx/palette.lmp textures the views"},
+        {"textures-out", "",
+         "a directory OUTSIDE the tree: each map's textures written there as PNGs (liq_ for "
+         "'*', anim_ for '+') with textures.txt, for the texture matcher"},
         {"px", "480", "a panel's width, px"},
         {"patch-levels", "2,6,12", "46's patch tessellated at these levels"},
     },

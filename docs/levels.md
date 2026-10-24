@@ -181,7 +181,10 @@ the maps and `gfx/palette.lmp` out of a pack archive (`engine/vfs/pak.hpp`, the 
 M18a), then draws each from its player start and three other starts. Each texel is lit by its
 lightmap, so a luxel of 128 shows the picture as painted. The palette's last 32 colours glow
 whatever the light, the sky is its two layers along the view, and trigger volumes are left out.
-Content read this way stays outside the tree.
+Content read this way stays outside the tree. `--textures-out=<dir>` (a directory outside the
+tree) also writes each map's textures there as PNGs, `<dir>/<map>/<name>.png` with `liq_` for a
+leading `*` and `anim_` for a leading `+`, and `textures.txt` naming each with its size: what the
+procedural texture matcher reads to propose the cloner's texture map (§ Cloning a classic map).
 
 Left to M18b: the clip hulls' trace (they are read and checked), the PHS, the BSPX lumps, animated
 texture sequences, and `ge bsp`.
