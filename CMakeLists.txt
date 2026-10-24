@@ -11,6 +11,8 @@
 #                (engine/net; docs/networking.md)
 #   ge_console   the console: cvars, the command buffer, aliases, binds, cfg files (engine/console;
 #                docs/console.md)
+#   ge_services  the platform services: a store's achievements, stats, boards, cloud, friends
+#                behind one interface, and the simulated and offline stores (engine/services)
 #   ge_lab       the lab framework (engine/lab: the contract, the runner, the raster, the PNG,
 #                the series files, the charts and the model views)
 #   ge_ai        the bots' layer (engine/ai: the decision record `ge why` reads)
@@ -41,9 +43,9 @@
 #                published as ge::isa
 #   ge_flags     warnings, -Werror, sanitizers: this tree only, never published
 # ge_core, ge_fp, ge_isa, ge_assets, ge_ai, ge_wind, ge_water, ge_move, ge_camera, ge_net, ge_console,
-# ge_lab, ge_play, ge_replay, ge_prof, ge_prof_alloc and every plugin target are installed and
-# published as ge::core, ge::fp, ge::isa, ge::assets, ge::ai, ge::wind, ge::water, ge::move,
-# ge::camera, ge::net, ge::console, ge::lab, ge::play, ge::replay, ge::prof, ge::prof_alloc and
+# ge_services, ge_lab, ge_play, ge_replay, ge_prof, ge_prof_alloc and every plugin target are installed
+# and published as ge::core, ge::fp, ge::isa, ge::assets, ge::ai, ge::wind, ge::water, ge::move,
+# ge::camera, ge::net, ge::console, ge::services, ge::lab, ge::play, ge::replay, ge::prof, ge::prof_alloc and
 # ge::<plugin>, and the ge executable is installed to bin/
 # (cmake/Packaging.cmake, docs/publishing.md).
 cmake_minimum_required(VERSION 3.25)
@@ -212,6 +214,14 @@ file(GLOB GE_INPUT_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/
 add_library(ge_input STATIC ${GE_INPUT_SOURCES})
 target_link_libraries(ge_input PUBLIC ge_core)
 
+# The platform services (engine/services, docs/services.md): the one interface a game uses for a
+# store's achievements, stats, leaderboards, cloud files, presence, friends, overlay, ownership and
+# screenshots, and the simulated and offline stores behind it. No platform, no SDK: a store's own
+# backend (engine/steam, docs/goals.md M20b) is built beside it only when its SDK is supplied.
+file(GLOB GE_SERVICES_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/services/*.cpp)
+add_library(ge_services STATIC ${GE_SERVICES_SOURCES})
+target_link_libraries(ge_services PUBLIC ge_core)
+
 # Character movement (engine/move, docs/movement.md): the knobs and presets, one step of a moving
 # body over a trace callback, the box world, the strafer and the scenarios. Deterministic, no
 # platform; a game binds the knobs to its console and answers the trace with its own world.
@@ -344,7 +354,7 @@ if(PROJECT_IS_TOP_LEVEL)
   get_property(GE_PLUGIN_TARGETS GLOBAL PROPERTY GE_PLUGIN_TARGETS)
   get_property(GE_GAME_TARGETS GLOBAL PROPERTY GE_GAME_TARGETS)
   add_executable(labs engine/lab/main.cpp ${GE_LAB_SOURCES})
-  target_link_libraries(labs PRIVATE ge_lab ge_play ge_replay ge_core ge_audio ge_assets ge_net ge_input ge_wind ge_water ge_move ge_camera ge_ui ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
+  target_link_libraries(labs PRIVATE ge_lab ge_play ge_replay ge_core ge_audio ge_assets ge_net ge_input ge_wind ge_water ge_move ge_camera ge_ui ge_services ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
     ${GE_LAB_EXTRA})
 
   # The `assets` executable (engine/assets/tool.hpp): the built assets listed, checked and stamped,
