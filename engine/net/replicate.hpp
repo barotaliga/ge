@@ -35,9 +35,12 @@
 // THE TICK RATE is the game's (`tick_hz`: 60, 72, 120 or any other), and every duration below is
 // in seconds, turned into ticks at that rate, so the same settings behave the same at any rate.
 //
-// LAG COMPENSATION: each input names
-// the tick the client was drawing, and `replicate_rewind` returns any entity's state at that tick
-// from the server's history, so a hit is judged against what the player saw.
+// THE PREDICTED WORLD (M17p): others near the own entity replayed beside it by their last inputs,
+// contacts and events predicted and judged (`outcomes`), within a budget and a horizon.
+//
+// LAG COMPENSATION: each input names the tick the client was drawing, and `replicate_rewind`
+// returns any entity's state at that tick from the server's history, so a hit is judged against
+// what the player saw.
 //
 // Like the node, nothing here reads a clock or draws randomness; every call takes its tick, and
 // the whole exchange over the simulated network replays to the bit.
@@ -52,7 +55,7 @@
 // ge:summary Replication: snapshots and deltas, interest, prediction, interpolation, rewind
 // ge:keywords net replicate replication snapshot delta quantize interest prediction reconcile
 // ge:keywords interpolation lag-compensation rewind server-authoritative input redundancy
-// ge:keywords priority bandwidth entity schema
+// ge:keywords priority bandwidth entity schema predicted-world contact-events horizon
 // ge:skill net
 // ge:test tests/net_replicate_test.cpp
 #pragma once
@@ -82,13 +85,33 @@ struct FieldSpec {
 using StepFn = void (*)(void* ctx, double* state, const uint8_t* input);
 // Whether `client` (a peer slot) may see entity `index`; null: interest_radius alone decides.
 using VisibleFn = bool (*)(void* ctx, int client, int index);
+// A contact between entity `a` (moved by inputs) and `b`, resolved in place (a push, a stop);
+// true when they touched. The server and the predicting client call the same one.
+using InteractFn = bool (*)(void* ctx, double* a, double* b);
 
 struct Schema {
   int fields = 0;
   FieldSpec spec[kMaxFields];
   int input_size = 0;  // bytes an input carries, at most kMaxInputSize
   StepFn step = nullptr;
+  InteractFn interact = nullptr;  // null: entities pass through each other
   void* ctx = nullptr;
+};
+
+constexpr uint8_t kContactEvent = 0;  // an event kind: a contact began; its payload the other's id
+constexpr int kMaxEventPayload = 8;
+
+// confirmed: predicted and the server's agreed; undone: predicted and never came; unpredicted: the
+// server's, about an entity the client was predicting, and missed; heard: the server's, about one
+// it was not (out of reach or past the horizon), so shown as it arrives with nothing to take back.
+enum class EventOutcome : uint8_t { confirmed, undone, unpredicted, heard };
+
+struct EventResult {
+  uint8_t kind = 0;
+  EventOutcome outcome = EventOutcome::confirmed;
+  uint32_t seq = 0;  // the input that caused it
+  uint8_t size = 0;
+  uint8_t payload[kMaxEventPayload] = {};
 };
 
 struct ReplicateConfig {
@@ -113,7 +136,21 @@ struct ReplicateConfig {
   bool cubic = true;           // others on a cubic curve (false: straight between snapshots)
   double extrapolate_s = 0.2;  // the most others are carried past the newest snapshot (0: held)
   double extrapolate_blend_s = 0.13;  // a late snapshot is blended in over this long
-  size_t snapshot_budget = 0;         // bytes a snapshot may take (0: the largest message)
+  // THE PREDICTED WORLD (M17p): entities within this distance of the own one (on interest_x and
+  // interest_z) are predicted with it, kept until 1.5 times as far (0: none; needs interact).
+  double predict_radius = 0;
+  int max_predicted = 8;
+  int resim_budget = 0;        // entity-steps a replay may take (0: no cap)
+  int event_channel = -1;      // reliable: the server's events to their causes (-1: none)
+  bool contact_events = true;  // a contact beginning is an event (kContactEvent)
+  double event_wait_s = 0.3;   // after its input is applied, how long a predicted one waits
+  double event_slop_s = 0.1;   // a server event matches a predicted one this near in inputs
+  // Others are predicted only while the replay is this short: a player holds an input for about
+  // a reaction time, so further ahead their last one guesses worse than the curve draws (the
+  // joust: wifi's corrections a fifth of interpolated's at 0.1 s, mobile's worse at 0.15 s; 0: no
+  // limit).
+  double predict_max_s = 0.1;
+  size_t snapshot_budget = 0;  // bytes a snapshot may take (0: the largest message)
   // THE RATES, the client's to ask and the server's to cap (a game exposes them as settings).
   // A client's ask rides on its inputs; the server sends it a snapshot every
   // max(send_every, tick_hz / update_rate) ticks, each within rate / its snapshots a second.
@@ -151,6 +188,13 @@ struct ReplicateStats {
   uint64_t trimmed = 0;               // server: inputs dropped for a queue past its most
   uint64_t corrections = 0;           // client: snapshots that moved its prediction
   uint64_t snaps = 0;                 // client: corrections past snap_distance, shown at once
+  uint64_t contacts = 0;              // server: contacts begun; client: predicted contacts begun
+  uint64_t events = 0;                // server: events sent
+  uint64_t confirmed = 0, undone = 0, unpredicted = 0;     // client: predicted events' outcomes
+  uint64_t heard = 0;                                      // client: events it could not predict
+  uint64_t resim_steps = 0, resims = 0, resim_capped = 0;  // client: replays' entity-steps
+  uint64_t resim_max = 0;                                  // client: the costliest replay
+  uint64_t predicted_corrections = 0;                      // client: predicted others moved
 };
 
 // One entity's quantized row.
@@ -189,7 +233,8 @@ struct ReplicateClientSlot {
   int slack_now = kNoSlack;  // TIME SYNC: the fewest waiting over this window, and the last
   int slack_before = kNoSlack;
   int slack_ticks = 0;
-  std::vector<double> priority;  // per entity index: its place in the last snapshot's order
+  std::vector<double> priority;   // per entity index: its place in the last snapshot's order
+  std::vector<uint8_t> touching;  // per entity index: in contact with its entity last tick
 };
 
 struct ReplicateServer {
@@ -227,8 +272,32 @@ size_t replicate_snapshot_budget(const ReplicateServer& s, int client);
 void replicate_server_receive(ReplicateServer& s);
 // Step every owned entity by its client's next input, record the tick, send what is due.
 void replicate_server_tick(ReplicateServer& s);
+// An event the game makes on the server, caused by `client`'s input (the one applied this tick):
+// sent to that client on the event channel to confirm what it predicted.
+void replicate_server_event(ReplicateServer& s, int client, uint8_t kind, const uint8_t* payload,
+                            int size);
 // Entity `id`'s state at `tick` (fractional, x256) from the history; false when out of the ring.
 bool replicate_rewind(const ReplicateServer& s, uint16_t id, uint32_t tick_x256, double* out);
+
+// An entity predicted beside the own one (THE PREDICTED WORLD), or fading back to the curve.
+struct Predicted {
+  uint16_t id = kNoEntity;
+  bool active = false;   // predicted now (false: fading, drawn on the curve plus `error`)
+  bool stepped = false;  // another player's, stepped by its last input
+  bool touching = false;
+  uint8_t input[kMaxInputSize] = {};
+  double state[kMaxFields] = {};
+  double error[kMaxFields] = {}, error_v[kMaxFields] = {};
+  double prior[kMaxFields] = {};  // the prediction before the last snapshot (for corrections)
+  bool continuing = false;        // predicted before the last snapshot too
+  double dist2 = 0;               // from the own entity, at the last reconcile
+};
+
+// An event the client predicted, waiting for the server's word.
+struct PredictedEvent {
+  EventResult e;
+  uint32_t due = 0;  // the input count when the server had applied its input (0: not yet)
+};
 
 struct ReplicateClient {
   Schema schema;
@@ -269,7 +338,17 @@ struct ReplicateClient {
   uint32_t render_x256 = 0;
   uint32_t spacing_from = 0;  // the tick of the snapshot the spacing is measured from
   bool clocked = false;
-  std::vector<Row> scratch;  // a snapshot being decoded
+  std::vector<Row> scratch;             // a snapshot being decoded
+  std::vector<Predicted> world;         // THE PREDICTED WORLD: max_predicted slots
+  std::vector<uint16_t> others_id;      // the newest snapshot's trailer: players' last inputs
+  std::vector<uint8_t> others_input;    // input_size each
+  std::vector<PredictedEvent> pending;  // predicted events awaiting the server's word
+  std::vector<EventResult> outcomes;    // this tick's outcomes: the caller reads, then clears
+  int event_wait = 18;                  // event_wait_s in inputs
+  int event_slop = 6;                   // event_slop_s in inputs
+  int predict_max = 7;                  // predict_max_s in inputs (0: no limit)
+  bool beyond = false;                  // past the horizon: the others are drawn on the curve
+  double last_world_error = 0;          // the largest move of a predicted other, last snapshot
   ReplicateStats stats;
 };
 
@@ -287,8 +366,15 @@ inline double replicate_client_dilation(const ReplicateClient& c) { return c.dil
 // The tick others are drawn at, x256: with sync, `delay` behind the reckoned server tick; without,
 // interp_ticks behind the newest heard of.
 uint32_t replicate_client_render_tick(const ReplicateClient& c);
-// Entity `id` at the render tick, on the curve through the snapshots, carried on (capped) past the
-// newest and blended back; false when it is in no snapshot around it.
+// An event the game predicts on the client, caused by the input just made (call after
+// replicate_client_input); its outcome comes back in `outcomes`.
+void replicate_client_predict_event(ReplicateClient& c, uint8_t kind, const uint8_t* payload,
+                                    int size);
+// Whether entity `id` is predicted beside the own one now.
+bool replicate_client_predicts(const ReplicateClient& c, uint16_t id);
+// Entity `id` as drawn: predicted (THE PREDICTED WORLD) or at the render tick on the curve through
+// the snapshots, carried on (capped) past the newest and blended back; false when it is in no
+// snapshot around it.
 bool replicate_client_sample(const ReplicateClient& c, uint16_t id, double* out);
 
 // The schema's quantization, exposed for tests and tools.

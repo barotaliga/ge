@@ -9,9 +9,14 @@
 //                             new     every field in its bits
 //                             gone    nothing more
 //             a row of the baseline no entry names is kept as it was
+//   snapshot with inputs  kind 3: a snapshot (as kind 1), then a TRAILER: for each other player
+//             near the client's entity (THE PREDICTED WORLD), id u16 and the last input the server
+//             applied for it (input_size), then the trailer's byte count u16, last
 //   input     kind 2, acked snapshot u32 (0: none), view tick x256 u32, rate u32 (bytes a
 //             second, 0: no cap), update rate u16 (snapshots a second, 0: the server's), newest
 //             input u32, count u8, then the last `count` inputs, oldest first, input_size each
+//   event     kind 4 (reliable, server to the client that caused it), event kind u8, the input
+//             that caused it u32, payload size u8, then the payload (at most kMaxEventPayload)
 //
 // Both little endian (wire.hpp) up to the bits.
 //
@@ -26,7 +31,7 @@
 
 namespace ge::net::replicate_wire {
 
-constexpr uint8_t kSnapshot = 1, kInput = 2;
+constexpr uint8_t kSnapshot = 1, kInput = 2, kSnapshotInputs = 3, kEvent = 4;
 constexpr uint8_t kUpdate = 0, kNew = 1, kGone = 2;
 constexpr size_t kSnapshotHeader = 1 + 4 + 4 + 4 + 2 + 1;
 constexpr size_t kInputHeader = 1 + 4 + 4 + 4 + 2 + 4 + 1;

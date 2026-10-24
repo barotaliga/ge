@@ -172,6 +172,18 @@ late. Set `rc.tick_hz` to the game's own step rate (72 for a shooter, 120 for a 
 duration in the config is in seconds and follows it. Mark a field that must never be guessed (a
 count, a flag) `extrapolate = false` in its `FieldSpec`.
 
+THE PREDICTED WORLD (off by default) lets a player who bumps another see it at once: give the
+schema `interact` (a function that resolves a contact between two entities' states, the same one
+the server runs, returning whether they touch), set `rc.predict_radius` (metres; `interest_x`
+and `interest_z` name the position fields) and `rc.event_channel` (a reliable channel). The
+others within the radius are stepped beside the own entity by their last inputs; each contact is
+an event (`kContactEvent`) whose outcome, `confirmed`, `undone`, `unpredicted` or `heard`, is in
+`client.outcomes`: play a bump's sound when it is predicted, and take it back when it is undone.
+A game's own events (a shot, a pickup) go the same way: `replicate_client_predict_event` on the
+client, `replicate_server_event` on the server. Past `rc.predict_max_s` (0.1 s) of replay the
+others fall back to their curves, so on a slow link it costs nothing; `rc.resim_budget` caps a
+replay's entity-steps on a slow machine.
+
 Spawn a player's entity with `replicate_spawn(server, peer, values)` when its peer connects. A
 hit is judged with `replicate_rewind(server, id, client_view_tick, out)`. Set
 `interest_radius` (with `interest_x`, `interest_z`) for an open world and `snapshot_budget` to cap

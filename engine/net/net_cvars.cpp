@@ -30,6 +30,9 @@ void add_net_cvars(con::Cvars& v, NetCvars& n) {
   const std::string sm = k.spring && k.cubic ? "1" : "0";
   const std::string ex = std::to_string(k.extrapolate_s);
   const std::string in = std::to_string(n.interp_s);
+  const std::string cb = std::to_string(k.redundancy);
+  const std::string pw = std::to_string(k.predict_radius);
+  const std::string pm = std::to_string(k.predict_max_s);
   v.bind({.name = "sv_fps",
           .fallback = fps,
           .flags = kServerRule | con::kLatch,
@@ -104,6 +107,28 @@ void add_net_cvars(con::Cvars& v, NetCvars& n) {
           .min = 0,
           .max = 1},
          &n.interp_s);
+  v.bind({.name = "cl_cmdbackup",
+          .fallback = cb,
+          .flags = kPlayer,
+          .help = "inputs repeated in every input message, so a lost one is carried by the next",
+          .kind = con::CvarKind::integer,
+          .min = 1,
+          .max = 32},
+         &k.redundancy);
+  v.bind({.name = "cl_predictworld",
+          .fallback = pw,
+          .flags = kPlayer,
+          .help = "the other players within this many metres predicted beside this one (0: none)",
+          .min = 0,
+          .max = 1000},
+         &k.predict_radius);
+  v.bind({.name = "cl_predictmax",
+          .fallback = pm,
+          .flags = kPlayer,
+          .help = "the longest replay the others are predicted over, s (0: no limit)",
+          .min = 0,
+          .max = 1},
+         &k.predict_max_s);
 }
 
 void net_cvars_apply(NetCvars& n) {

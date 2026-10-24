@@ -8,10 +8,13 @@
 //   cl_updaterate     cl_cmdrate  rate    the snapshots and input messages a second asked, bytes
 //   cl_timesync       cl_smooth           time sync (M17n) and smoothing (M17o) on or off
 //   cl_interp         cl_extrapolate      the fixed delay without sync (s), the extrapolation cap
+//   cl_cmdbackup                          inputs repeated in each input message
+//   cl_predictworld   cl_predictmax       the predicted world's radius (M17p, m), its horizon (s)
 //
 // ge:summary The network's cvars: sv_fps, the rates, time sync and smoothing, bound to the config
 // ge:keywords net cvars sv_fps tick-rate tick-hz sv_maxupdaterate sv_maxrate cl_updaterate
 // ge:keywords cl_cmdrate rate cl_interp cl_timesync cl_smooth cl_extrapolate console
+// ge:keywords cl_cmdbackup cl_predictworld cl_predictmax redundancy predicted-world
 // ge:skill net
 // ge:test tests/net_cvars_test.cpp
 #pragma once

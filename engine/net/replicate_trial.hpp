@@ -36,6 +36,12 @@ struct ReplicateTrialConfig {
   // Each client's clock runs this much fast (the even ones) or slow (the odd ones): a cheap
   // crystal, a busy machine. TIME SYNC is what keeps their inputs arriving on time anyway.
   double skew = 0;
+  // THE PREDICTED WORLD (M17p): movers are discs that push each other apart (`collide`), and in a
+  // JOUST each pair of clients (0 and 1, 2 and 3, ...) charges the other for a second and backs
+  // off for the next, so a contact begins every two seconds. `replicate.predict_radius` turns
+  // their prediction of each other on.
+  bool collide = false;
+  bool joust = false;
 };
 
 struct ReplicateTrial {
@@ -63,7 +69,16 @@ struct ReplicateTrial {
   // Each rewind drawn past the newest snapshot: how late (ms past it) and how far off (metres).
   std::vector<double> late_ms, late_gap;
   std::vector<double> t_s, kbps;  // snapshot kbit/s a client, each second
-  uint64_t hash = 0;              // every end's final state
+  // The predicted world: contacts begun (the server's), the clients' predicted contact events
+  // and their outcomes, each correction's size, how far client 1 draws its partner from where
+  // the server has it (each tick of the joust), and a replay's entity-steps.
+  uint64_t contacts = 0, predicted_contacts = 0, confirmed = 0, undone = 0, unpredicted = 0;
+  uint64_t heard = 0;  // the server's events about entities a client was not predicting
+  std::vector<double> correction_m;  // every correction of every client's own entity, metres
+  std::vector<double> partner_gap;   // client 1's partner as drawn against the server, metres
+  double resim_mean = 0, resim_max = 0;
+  uint64_t resim_capped = 0;
+  uint64_t hash = 0;  // every end's final state
 };
 
 ReplicateTrial run_replicate_trial(const ReplicateTrialConfig& config);

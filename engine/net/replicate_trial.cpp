@@ -31,6 +31,22 @@ void step_mover(void* ctx, double* v, const uint8_t* input) {
   v[kHeading] += static_cast<int8_t>(input[2]) * scale / 2;
 }
 
+// Movers are discs of a metre's radius: an overlap is pushed apart, half each way.
+bool push_apart(void*, double* a, double* b) {
+  constexpr double kR = 1.0;
+  double dx = b[kX] - a[kX], dz = b[kZ] - a[kZ];
+  const double d2 = dx * dx + dz * dz;
+  if (d2 >= 4 * kR * kR) return false;
+  double d = std::sqrt(d2);
+  if (d < 1e-9) {
+    dx = 1, dz = 0, d = 1e-9;
+  }
+  const double push = (2 * kR - d) / 2 / (d < 1e-9 ? 1 : d);
+  a[kX] -= dx * push, a[kZ] -= dz * push;
+  b[kX] += dx * push, b[kZ] += dz * push;
+  return true;
+}
+
 uint64_t fnv(uint64_t h, uint64_t v) {
   for (int i = 0; i < 8; i++) h = (h ^ ((v >> (8 * i)) & 0xff)) * 0x100000001b3ull;
   return h;
@@ -41,14 +57,15 @@ uint64_t fnv_double(uint64_t h, double d) {
   return fnv(h, bits);
 }
 
-NodeConfig node_config(bool host, uint64_t seed) {
+NodeConfig node_config(bool host, uint64_t seed, bool events) {
   NodeConfig c;
   c.protocol = protocol_id("net-replicate", 1);
   c.accept = host;
   c.max_peers = host ? kMaxPeers : 1;
-  c.channels.count = 2;
+  c.channels.count = events ? 3 : 2;
   c.channels.delivery[0] = Delivery::unreliable;
   c.channels.delivery[1] = Delivery::unreliable;
+  c.channels.delivery[2] = Delivery::reliable;
   c.timeout_us = 3000000;
   c.seed = seed;
   return c;
@@ -103,18 +120,20 @@ ReplicateTrial run_replicate_trial(const ReplicateTrialConfig& k) {
   schema.spec[kHealth] = {0, 100, 8, false, false};
   schema.input_size = 3;
   schema.step = step_mover;
+  if (k.collide) schema.interact = push_apart;
   schema.ctx = &scale;
 
   SimNetwork net = make_sim_network(k.seed, k.link);
   Transport host_t;
   open_sim_transport(host_t, net, sim_address(0, 1));
   auto host_n = std::make_unique<Node>();
-  node_init(*host_n, node_config(true, uint64_t{k.seed} * 7 + 1), host_t);
+  node_init(*host_n, node_config(true, uint64_t{k.seed} * 7 + 1, k.collide), host_t);
   ReplicateConfig config = k.replicate;
   config.max_entities = k.clients + k.npcs;
   config.ring = std::max(config.ring, hz);  // a second of history to rewind into
   config.interest_x = kX;
   config.interest_z = kZ;
+  if (k.collide) config.event_channel = 2;
   auto server = std::make_unique<ReplicateServer>();
   replicate_server_init(*server, schema, config, *host_n);
 
@@ -134,7 +153,7 @@ ReplicateTrial run_replicate_trial(const ReplicateTrialConfig& k) {
     auto c = std::make_unique<Client>();
     const auto id = static_cast<uint32_t>(i + 1);
     open_sim_transport(c->t, net, sim_address(id, 1));
-    node_init(c->n, node_config(false, uint64_t{k.seed} * 1000 + id), c->t);
+    node_init(c->n, node_config(false, uint64_t{k.seed} * 1000 + id, k.collide), c->t);
     c->peer = node_connect(c->n, sim_address(0, 1), 0);
     replicate_client_init(c->r, schema, config, c->n, c->peer);
     c->hand = core::make_rng(k.seed * 977 + id);
@@ -149,6 +168,8 @@ ReplicateTrial run_replicate_trial(const ReplicateTrialConfig& k) {
   uint64_t delay_n = 0, drawn_n = 0, held_n = 0;
   const double cube = static_cast<double>(hz) * hz * hz;  // a tick cubed to a second cubed
   Path own_path;
+  double drawn_at[256][2] = {};  // client 1's partner as drawn, by its input number
+  uint32_t drawn_seq[256] = {};
   Path other_path[8];
   for (int t = 1; t <= ticks; t++) {
     now += tick_us;
@@ -182,7 +203,11 @@ ReplicateTrial run_replicate_trial(const ReplicateTrialConfig& k) {
       if (c->r.stats.corrections != c->corrections_seen) {
         c->corrections_seen = c->r.stats.corrections;
         o.worst_correction = std::max(o.worst_correction, c->r.last_error);
+        if (k.collide) o.correction_m.push_back(c->r.last_error);
       }
+      c->r.outcomes.clear();  // read through the stats at the end
+      const size_t ci = static_cast<size_t>(&c - &cs.front());
+      Client* partner = k.joust && (ci ^ 1) < cs.size() ? cs[ci ^ 1].get() : nullptr;
       if (t % std::max(1, hz / 2) == 0) {
         c->held[0] = static_cast<uint8_t>(core::int_in(c->hand, -80, 80));
         c->held[1] = static_cast<uint8_t>(core::int_in(c->hand, -80, 80));
@@ -193,6 +218,18 @@ ReplicateTrial run_replicate_trial(const ReplicateTrialConfig& k) {
       c->acc += c->rate * replicate_client_dilation(c->r);
       while (c->acc >= 1) {
         c->acc -= 1;
+        if (partner && partner->r.own != kNoEntity && c->r.predicting) {
+          // The joust: at the partner as this client draws it for a second, away the next.
+          double me[kMaxFields], them[kMaxFields];
+          replicate_client_predicted(c->r, me);
+          if (replicate_client_sample(c->r, partner->r.own, them)) {
+            const double dx = them[kX] - me[kX], dz = them[kZ] - me[kZ];
+            const double d = std::max(1e-6, std::sqrt(dx * dx + dz * dz));
+            const double way = (c->r.seq / static_cast<uint32_t>(hz)) % 2 == 0 ? 80 : -80;
+            c->held[0] = static_cast<uint8_t>(static_cast<int8_t>(std::lround(way * dx / d)));
+            c->held[1] = static_cast<uint8_t>(static_cast<int8_t>(std::lround(way * dz / d)));
+          }
+        }
         replicate_client_input(c->r, c->held);
         c->made[c->r.seq % 256] = now;
         if (&c == &cs.front() && c->r.predicting) {
@@ -202,6 +239,16 @@ ReplicateTrial run_replicate_trial(const ReplicateTrialConfig& k) {
           replicate_client_predicted(c->r, v);
           const double j = own_path.push(v[kX], v[kZ]);
           if (j >= 0 && ++c->since_change >= 4) o.own_jerk.push_back(j * cube);
+        }
+      }
+      // Client 1's partner as drawn at each of its inputs, against where the server had the
+      // partner when it applied that input: the same moment of the game on both sides.
+      if (partner && ci == 0 && partner->r.own != kNoEntity) {
+        double drawn[kMaxFields];
+        if (replicate_client_sample(c->r, partner->r.own, drawn)) {
+          drawn_at[c->r.seq % 256][0] = drawn[kX];
+          drawn_at[c->r.seq % 256][1] = drawn[kZ];
+          drawn_seq[c->r.seq % 256] = c->r.seq;
         }
       }
       if (c->slot < 0 && c->r.own != kNoEntity) {
@@ -214,6 +261,14 @@ ReplicateTrial run_replicate_trial(const ReplicateTrialConfig& k) {
         for (uint32_t q = c->applied + 1; q <= sl.applied && c->applied; q++) {
           if (sl.applied - q < 256 && c->made[q % 256] > 0)
             o.input_ms.push_back(static_cast<double>(now - c->made[q % 256]) / 1000.0);
+        }
+        if (partner && ci == 0 && partner->r.own != kNoEntity && sl.applied &&
+            drawn_seq[sl.applied % 256] == sl.applied) {
+          if (const double* truth = replicate_get(*server, partner->r.own)) {
+            const double dx = drawn_at[sl.applied % 256][0] - truth[kX];
+            const double dz = drawn_at[sl.applied % 256][1] - truth[kZ];
+            o.partner_gap.push_back(std::sqrt(dx * dx + dz * dz));
+          }
         }
         c->applied = sl.applied;
         if (&c == &cs.front() && t % std::max(1, hz / 10) == 0) {
@@ -283,6 +338,17 @@ ReplicateTrial run_replicate_trial(const ReplicateTrialConfig& k) {
     }
     corrections += c->r.stats.corrections;
     o.snaps += c->r.stats.snaps;
+    o.predicted_contacts += c->r.stats.contacts;
+    o.confirmed += c->r.stats.confirmed;
+    o.undone += c->r.stats.undone;
+    o.unpredicted += c->r.stats.unpredicted;
+    o.heard += c->r.stats.heard;
+    o.resim_max = std::max(o.resim_max, static_cast<double>(c->r.stats.resim_max));
+    o.resim_capped += c->r.stats.resim_capped;
+    if (c->r.stats.resims) {
+      o.resim_mean += static_cast<double>(c->r.stats.resim_steps) /
+                      static_cast<double>(c->r.stats.resims) / k.clients;
+    }
     o.dropped += c->r.stats.dropped;
     o.decoded += c->r.stats.snapshots;
     double v[kMaxFields];
@@ -300,6 +366,7 @@ ReplicateTrial run_replicate_trial(const ReplicateTrialConfig& k) {
   o.repeated = server->stats.repeated;
   o.inputs = server->stats.inputs;
   o.trimmed = server->stats.trimmed;
+  o.contacts = server->stats.contacts;
   o.underrun = drawn_n ? static_cast<double>(held_n) / static_cast<double>(drawn_n) : 0;
   return o;
 }

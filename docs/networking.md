@@ -257,7 +257,7 @@ path's jerk, the view delay):
 | --- | --- | --- |
 | M17n (built) | Time sync: the client's tick locked to the server's; the client ahead by just enough that its input lands a target buffer early; the server reports each client's input queue and the client dilates its tick a few percent to hold it; the interpolation delay set by the jitter measured | A fixed lead stalls on a bad link and wastes delay on a good one; dilation keeps the queue at its target with no stall, no repeat and no drop, and the view as fresh as the jitter allows |
 | M17o (built) | Corrections drawn through a critically damped spring, velocity continuous, snapping only past a distance; others on cubic curves through their velocities; a capped extrapolation by the game's own step when snapshots are late | A decay alone leaves a kink in the velocity the eye catches; a late snapshot should not freeze the others |
-| M17p | The predicted world: what the client's input touches resimulated with it, others' inputs taken as their last; events predicted under a client's id, matched or undone; a resimulation budget | A player who bumps another or fires sees it at once, not a round trip later |
+| M17p (built) | The predicted world: what the client's input touches resimulated with it, others' inputs taken as their last; events predicted under a client's id, matched or undone; a resimulation budget | A player who bumps another or fires sees it at once, not a round trip later |
 | M17q | Sub-tick inputs applied at their fraction of a tick; the rewind capped (the shooter favoured up to a limit) and the hit confirmed; a finish line's order at sub-tick resolution | A tick is 16 ms: a press, a shot or a finish should not be rounded to it |
 
 M17n is built; the `net-predict` lab measures it. With 16 clients whose clocks run 2% fast or
@@ -276,6 +276,24 @@ falls from 12,900 m/s³ to 4,600 on `broadband`, 25,300 to 7,600 on `wifi` and 8
 9,200). Drawn past the newest snapshot, the others land a mean 0.28 m from the server's truth when
 held and 0.01 m when carried on (`bad`, 72 Hz). At 72 Hz on `lan` an input reaches the server's
 step in 14 ms and the others are drawn 31 ms behind; at 120 Hz, 8 ms and 19.
+
+M17p is built on top: the other players within `predict_radius` of the own entity (at most
+`max_predicted`, kept out to 1.5 radii) are stepped beside it by their last inputs, which the
+server sends in a trailer on the snapshot (kind 3: each nearby player's id and newest input), and
+a game's `Schema::interact` resolves each contact on both ends with the same step. A contact
+beginning is an event (`kContactEvent`, the other's id): the client predicts it under the input
+that caused it, the server sends its own over the reliable `event_channel`, and each one ends
+`confirmed` (matched within `event_slop_s`), `undone` (never came within `event_wait_s`),
+`unpredicted` (the server's, about an entity the client was predicting) or `heard` (about one it
+was not). A replay costs an entity-step per input per predicted entity; past `resim_budget` the
+farthest leave it. Past `predict_max_s` (0.1 s) of replay a stale input guesses worse than the
+curve draws, so the others fade back to the curve through the spring and come back at three
+quarters of it. The lab's joust (16 clients in pairs, each charging its partner for a second and
+backing off the next, at 72 Hz) measures it: corrections a minute fall from 7.9 to 0 on `lan`
+(every contact confirmed), 13.1 to 5.8 on `broadband` (96%) and 92 to 14 on `wifi`; on `mobile`,
+`bad` and `awful` the replay is past the horizon and the partner is drawn as interpolated (their
+rows differ from the interpolated ones only by the network's draws, which the trailer's bytes
+move: other seeds swap which is lower).
 
 Which of them a kind of game uses: a shooter all four; a racer its own vehicle predicted (M17n,
 M17o), rivals extrapolated a little so they are drawn where they are, contacts on the server
@@ -301,6 +319,7 @@ can start at 72 Hz and a racer at 120; `net_cvars_apply` turns `cl_interp`'s sec
 | `sync` (`cl_timesync`) | client | time sync (M17n) on or off |
 | `spring`, `cubic` (`cl_smooth`) | client | smoothing (M17o) on or off |
 | `extrapolate_s` (`cl_extrapolate`) | client | the most the others are carried past the newest snapshot |
+| `predict_radius` (`cl_predictworld`, m), `predict_max_s` (`cl_predictmax`, s) | client | the predicted world (M17p): the other players this near predicted beside the own entity, while the replay is no longer than the horizon |
 | `max_rate` (`sv_maxrate`), `max_update_rate` (`sv_maxupdaterate`) | server | the most any client is sent, whatever it asks |
 | `tick_hz` (`sv_fps`, latched) | both | the step's rate, 10 to 240 Hz, which turns the rates and durations into ticks; a change waits for a new map or a restart |
 

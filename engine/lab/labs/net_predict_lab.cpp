@@ -77,6 +77,79 @@ std::vector<int> rates(const std::string& s) {
   return out;
 }
 
+// THE PREDICTED WORLD (M17p): pairs of clients charging each other, with each other predicted or
+// only interpolated.
+void run_joust(gl::Lab& lab, const gn::ReplicateTrialConfig& base, int hz) {
+  const double radius = lab.arg_num("predict-radius");
+  gl::LabTable t{
+      "The joust at " + std::to_string(hz) + " Hz: " + std::to_string(base.clients) +
+          " clients in pairs charging each other, the partner predicted or not",
+      {"preset", "partner", "contacts", "corr/min", "corr/contact", "corr p95 m", "worst m",
+       "partner off m p95", "events ok", "undone", "missed", "heard", "replay steps", "max", "log"},
+      {}};
+  std::vector<gl::Sample> gaps;
+  for (const std::string& name : split(lab.arg("presets"))) {
+    gn::LinkConditions link;
+    if (!gn::conditions_preset(name, link)) continue;
+    for (const bool predict : {false, true}) {
+      gn::ReplicateTrialConfig k = base;
+      k.link = link;
+      k.replicate.tick_hz = hz;
+      k.collide = true;
+      k.joust = true;
+      k.replicate.predict_radius = predict ? radius : 0;
+      k.replicate.predict_max_s = lab.arg_num("predict-max");
+      const gn::ReplicateTrial o = gn::run_replicate_trial(k);
+      const gl::Summary corr = gl::summarize(o.correction_m);
+      const gl::Summary gap = gl::summarize(o.partner_gap);
+      const uint64_t judged = o.confirmed + o.undone;
+      t.rows.push_back(
+          {name, predict ? "predicted" : "interpolated", std::to_string(o.contacts),
+           fmt(o.corrections_per_min, 1),
+           o.contacts ? fmt(o.corrections_per_min * k.clients * k.seconds / 60 /
+                                static_cast<double>(o.contacts),
+                            2)
+                      : "-",
+           fmt(corr.p95, 3), fmt(o.worst_correction, 2), fmt(gap.p95, 2),
+           predict && judged
+               ? fmt(100.0 * static_cast<double>(o.confirmed) / static_cast<double>(judged), 1) +
+                     "%"
+               : "-",
+           predict ? std::to_string(o.undone) : "-", predict ? std::to_string(o.unpredicted) : "-",
+           predict ? std::to_string(o.heard) : "-", predict ? fmt(o.resim_mean, 1) : "-",
+           predict ? fmt(o.resim_max, 0) : "-", hex(o.hash)});
+      const std::string key = "joust-" + name + (predict ? "-predicted-" : "-interpolated-");
+      lab.metric(key + "corr-p95", corr.p95, "m");
+      lab.metric(key + "partner-p95", gap.p95, "m");
+      if (predict) {
+        lab.metric(key + "undone", static_cast<double>(o.undone), "count");
+        lab.metric(key + "unpredicted", static_cast<double>(o.unpredicted), "count");
+      }
+      gaps.push_back({name + (predict ? " pred" : " interp"), o.partner_gap});
+    }
+  }
+  lab.table(std::move(t));
+  const gl::Chart c =
+      gl::box_chart({"THE JOUST: THE PARTNER AS DRAWN AGAINST WHERE THE SERVER HAS IT",
+                     "client 1's partner, each tick, " + std::to_string(hz) + " Hz", "metres", ""},
+                    gaps);
+  const std::string svg = gl::to_svg(c.plot);
+  lab.attach("joust.svg", std::vector<uint8_t>(svg.begin(), svg.end()));
+  lab.shot({"joust",
+            c.title,
+            "How far from the server's place one client draws the partner it charges, one box a "
+            "preset, interpolated (drawn in the past) against predicted (drawn in the present, "
+            "stepped by its last input and pushed by the contacts).",
+            "predicted boxes far lower than interpolated on every preset: the partner is where it "
+            "is when they meet, not a round trip behind.",
+            {{"presets", lab.arg("presets")},
+             {"predict-radius", lab.arg("predict-radius")},
+             {"predict-max", lab.arg("predict-max")},
+             {"clients", lab.arg("clients")},
+             {"seed", lab.arg("seed")}}},
+           gl::to_picture(c.plot));
+}
+
 void run(gl::Lab& lab) {
   gn::ReplicateTrialConfig base;
   base.clients = static_cast<int>(lab.arg_num("clients"));
@@ -200,6 +273,7 @@ void run(gl::Lab& lab) {
     }
   }
   lab.table(std::move(table));
+  run_joust(lab, base, hzs.front());
   lab.note(
       "clocks: true, or each client's clock run fast (even clients) or slow (odd) by the skew. "
       "fixed: the client's clock is its own, the others drawn 6 ticks behind the newest "
@@ -294,6 +368,8 @@ const gl::LabSpec kSpec{
         {"hz", "72,120",
          "tick rates, comma-separated (10 to 240): 72 a shooter's, 120 Fall Line's"},
         {"chart-preset", "bad", "the preset whose queue and late error are charted"},
+        {"predict-radius", "6", "the joust's predicted world, metres (M17p)"},
+        {"predict-max", "0.1", "the joust's horizon: past it the others are drawn interpolated, s"},
         {"seed", "1", "the network's, the hands' and the crowd's stream"},
     },
     "--seconds=4 --presets=lan,bad --clients=4 --npcs=8 --hz=72",

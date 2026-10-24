@@ -4,11 +4,14 @@
 // clean link and rarely running past the newest snapshot; the clock's speed stays within its
 // bound; smoothing lowers the drawn paths' jerk and the error when snapshots run late, and snaps
 // only past its distance; all of it holds at a shooter's 72 Hz and a racer's 120; a trial replays
-// to the bit.
+// to the bit. The predicted world (M17p): in a joust the partner predicted cuts the corrections
+// where the replay is short, past the horizon the others are drawn on the curve and the server's
+// contacts heard, the replay budget leaves out the farthest, and a joust replays to the bit.
 //
 // ge:summary Test: time sync and smoothing: skewed clocks held, view delay, jerk, any tick rate
 // ge:keywords test net predict prediction time-sync dilation skew interpolation-delay held
-// ge:keywords smoothing spring cubic extrapolation jerk snap tick-rate
+// ge:keywords smoothing spring cubic extrapolation jerk snap tick-rate predicted-world joust
+// ge:keywords contact-events resim-budget horizon
 // ge:skill net testing
 #include <algorithm>
 #include <string>
@@ -124,4 +127,63 @@ TEST(predict_holds_at_any_tick_rate) {
     // An input on a clean link reaches the server's step within about a tick and a half.
     CHECK(ge::lab::summarize(clean.input_ms).p95 < 1500.0 / hz + 1);
   }
+}
+
+namespace {
+
+// THE PREDICTED WORLD (M17p): pairs of clients charging each other, the partner predicted or not.
+ReplicateTrialConfig joust(const char* preset, bool predict) {
+  ReplicateTrialConfig k = trial(preset, true, 0, 72);
+  k.seconds = 20;
+  k.collide = true;
+  k.joust = true;
+  k.replicate.predict_radius = predict ? 6 : 0;
+  return k;
+}
+
+}  // namespace
+
+TEST(predict_the_world_cuts_the_joust_s_corrections_on_a_short_replay) {
+  for (const char* preset : {"lan", "broadband", "wifi"}) {
+    const ReplicateTrial off = run_replicate_trial(joust(preset, false));
+    const ReplicateTrial on = run_replicate_trial(joust(preset, true));
+    CHECK_MSG(off.contacts > 0 && on.contacts > 0, std::string(preset) + ": no contacts");
+    CHECK_MSG(on.corrections_per_min < off.corrections_per_min,
+              std::string(preset) + ": " + std::to_string(on.corrections_per_min) +
+                  " corrections a minute predicted against " +
+                  std::to_string(off.corrections_per_min) + " interpolated");
+    CHECK(on.predicted_contacts > 0);
+    // Interpolated, the server's contacts are only heard.
+    CHECK(off.predicted_contacts == 0 && off.confirmed == 0 && off.heard > 0);
+  }
+  // On a clean link the partner is where the server has it: every contact predicted and confirmed.
+  const ReplicateTrial lan = run_replicate_trial(joust("lan", true));
+  CHECK(lan.corrections_per_min == 0);
+  CHECK(lan.confirmed > 0 && lan.undone == 0 && lan.unpredicted == 0 && lan.heard == 0);
+}
+
+TEST(predict_past_the_horizon_the_others_are_drawn_on_the_curve) {
+  // A long replay guesses worse than the curve draws: nothing is predicted, and the server's
+  // contacts are heard, not missed.
+  const ReplicateTrial o = run_replicate_trial(joust("bad", true));
+  CHECK(o.contacts > 0);
+  CHECK(o.predicted_contacts == 0 && o.confirmed == 0 && o.undone == 0 && o.unpredicted == 0);
+  CHECK(o.heard > 0);
+}
+
+TEST(predict_the_replay_budget_leaves_out_the_farthest) {
+  ReplicateTrialConfig k = joust("wifi", true);
+  k.npcs = 0;
+  const ReplicateTrial free = run_replicate_trial(k);
+  k.replicate.resim_budget = 8;
+  const ReplicateTrial capped = run_replicate_trial(k);
+  CHECK(free.resim_capped == 0 && capped.resim_capped > 0);
+  CHECK_MSG(capped.resim_max < free.resim_max, "the costliest replay " +
+                                                   std::to_string(capped.resim_max) + " capped, " +
+                                                   std::to_string(free.resim_max) + " free");
+}
+
+TEST(predict_a_joust_replays_to_the_bit) {
+  const ReplicateTrialConfig k = joust("wifi", true);
+  CHECK(run_replicate_trial(k).hash == run_replicate_trial(k).hash);
 }
