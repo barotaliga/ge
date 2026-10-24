@@ -19,6 +19,7 @@ scale_stone 631cabff0fa2688f
 snowy_stone 7581cd516365c98c
 speckled_steel 8a4f28a6d560ace5
 stone_tiles ac3d793c2a3b5767
+stucco 303aed138cd6b475
 stucco_trim 7a17aca4fa85aa10
 stud_plate 94dd3c02147ccab8
 tech_panel bb551c4c4ccf63ab
