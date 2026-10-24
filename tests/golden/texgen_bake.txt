@@ -3,6 +3,7 @@ blank_plate 3f9adbd2eabca8b2
 bolted_iron 24eb8429ee2de3f8
 brick_wall e20e25cd2e9b1965
 cave_rock 3cc414c962976367
+cobbles d6db59c8ed477d7b
 concrete 3d9085dcfb0bfa4d
 dark_ashlar 005995920a251234
 flagstones 61966ea6440aa5b3

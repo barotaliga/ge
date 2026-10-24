@@ -73,6 +73,7 @@ the tree and none is named in it. What each round found and built:
 | Checkerboards | Every other tile or brick in a second colour | `tiles`, `bricks` `color2`, `checker` |
 | Uneven masonry | Courses of different heights, blocks of different widths, each course's joints shifted | `blocks` |
 | Irregular ashlar | Even courses of long and short blocks, some running down through two courses (`span`), the joint drawn beside each tall block | `blocks` |
+| Rounded cobbles | Lumps swelling from narrow gaps, each lit from above | `noise kind=edges` as height, `shade` (`cobbles`) |
 | Stud fields | Rows of domes, pyramids, the leaning bars of diamond plate, or holes | `studs` |
 | Scales and arches | Discs in offset rows, each row lying over the one above, rimmed | `scales` |
 | Trim bands | A band across a wall: rounded beads lit from above, crenellation teeth below them, a shadow cast on the wall; it may run over the tile's edge | `trim` `at`, `height`, `beads`, `teeth` |
