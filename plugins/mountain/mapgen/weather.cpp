@@ -7,6 +7,8 @@
 #include "mountain/mapgen/weather.hpp"
 
 #include <array>
+#include <optional>
+#include <string_view>
 
 #include "core/math.hpp"
 #include "core/num.hpp"
@@ -81,6 +83,29 @@ DealtWeather deal_weather(uint32_t sub, const Sun& sun) {
   const double late = in_band(rng, rules::sun::evening);
   const double hour = evening ? sunset_of(sun.day_of_year, sun.latitude) + late : sun.hour;
   return {{kind, snowfall, fog, wind, wind_from, evening}, hour};
+}
+
+std::optional<WeatherKind> weather_named(std::string_view name) {
+  for (int k = 0; k < kWeatherKinds; ++k) {
+    const auto kind = static_cast<WeatherKind>(k);
+    if (name == weather_name(kind)) return kind;
+  }
+  return std::nullopt;
+}
+
+void with_sky(Level& level, const SkyPick& pick) {
+  Weather& w = level.weather;
+  if (pick.kind && *pick.kind != w.kind) {
+    w.kind = *pick.kind;
+    const auto mid = [](Band b) { return 0.5 * (b.min + b.max); };
+    w.snowfall = snows(w.kind) ? mid(snowfall_band(w.kind)) : 0.0;
+    w.fog = w.kind == WeatherKind::fog ? mid(W::fog) : 0.0;
+    w.wind = wind_in(w.kind, 0.5, w.snowfall);
+  }
+  if (pick.snowfall >= 0) w.snowfall = num::min(1.0, pick.snowfall);
+  if (pick.fog >= 0) w.fog = num::min(1.0, pick.fog);
+  if (pick.wind >= 0) w.wind = pick.wind;
+  if (pick.wind_from >= 0) w.wind_from = pick.wind_from;
 }
 
 }  // namespace ge::mountain::mapgen
