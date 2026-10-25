@@ -104,6 +104,12 @@ const Knob kKnobs[] = {
     num("slidesteer", "share", "ground acceleration's share in a slide", 0, 1, N,
         &MoveSpec::slide_steer),
     num("flyscale", "share", "max speed's share flying", 0, 100, N, &MoveSpec::fly_scale),
+    num("ladderspeed", "L/s", "speed on a ladder's rungs, up, down and sideways", 0, kInf, L,
+        &MoveSpec::ladder_speed),
+    num("ladderjump", "L/s", "the push off a ladder a jump gives", 0, kInf, L,
+        &MoveSpec::ladder_jump),
+    num("ladderprobe", "L", "how far ahead of the body a ladder is found", 0, kInf, L,
+        &MoveSpec::ladder_probe),
 };
 
 bool is_sep(char c) { return c == ',' || c == ' ' || c == '\t' || c == '\n'; }
