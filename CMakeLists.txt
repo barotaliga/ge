@@ -187,7 +187,7 @@ if(GE_GPU)
     engine/render/terrain.wgsl engine/render/terrain_cull.wgsl engine/render/terrain_normals.wgsl
     engine/render/horizon.wgsl engine/render/hiz.wgsl engine/render/taa.wgsl engine/render/post.wgsl
     engine/render/instances.wgsl engine/render/instances_cull.wgsl engine/render/bloom.wgsl
-    engine/render/skinning.wgsl engine/render/particles.wgsl engine/render/particles_sim.wgsl engine/render/snowfall.wgsl engine/render/snowfall_sim.wgsl
+    engine/render/skinning.wgsl engine/render/particles.wgsl engine/render/particles_sim.wgsl engine/render/precip.wgsl engine/render/precip_sim.wgsl
     engine/render/clouds.wgsl engine/render/water.wgsl engine/render/water_copy.wgsl
     engine/render/water_stream.wgsl
     engine/render/underwater.wgsl engine/render/ui_pass.wgsl)
@@ -263,9 +263,9 @@ add_library(ge_ai STATIC ${GE_AI_SOURCES})
 target_link_libraries(ge_ai PUBLIC ge_core)
 
 # The wind (engine/wind): a pure function of place and time over a field built once, the
-# mountain's air one configuration of it (docs/water.md § Wind). Deterministic, no platform;
-# published as ge::wind.
-add_library(ge_wind STATIC engine/wind/field.cpp engine/wind/sources.cpp)
+# mountain's air one configuration of it (docs/water.md § Wind), and what falls through it (snow,
+# sleet and rain: engine/wind/precip.hpp). Deterministic, no platform; published as ge::wind.
+add_library(ge_wind STATIC engine/wind/field.cpp engine/wind/sources.cpp engine/wind/precip.cpp)
 target_link_libraries(ge_wind PUBLIC ge_core)
 
 # The water (engine/water): bodies of water, the sea a wind grows on them and the one `sample`

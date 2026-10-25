@@ -38,7 +38,7 @@ input-ffb 565464637bf28b86
 input-session 4f1df87418fff1f7
 input-shape e2284bbd066830af
 junctions 036999ca677e12e6
-ladder 825b7f06d92b69d3
+ladder e2fd256b2ac77061
 lake cd671548fc72e5d6
 level 4fbff3da7a82c4aa
 lift-ride a374f35eb85cc161
@@ -62,6 +62,8 @@ parallel-cost c8eb921ab2c030ba
 park d53bc7b207dfab4a
 path 110d60b3391ee093
 play 8c742a9739dd3504
+precip bc33f962b5670252
+precip-air 5533e8f9af85376f
 profile 589e45741a595806
 real-faces b53c6303e783fd1b
 real-hints eb15bbe4ffd14810
@@ -84,7 +86,6 @@ skijump-hills 3fa0eff35ac0f70a
 slalom 2adb7c679ec93adf
 sled 30cd3df2c903518c
 snow 3f444a51a1e8a91c
-snowfall 4bc8eb3fda4edade
 speed-events 2e575d7a0184d4b2
 speed-ski 55c4cfa78de28f7e
 spray 7479b5a25c39b195

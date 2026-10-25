@@ -139,9 +139,9 @@ render::Clouds cloud_field(const mapgen::Level& level, double t) {
 }
 
 void sky_at(const mapgen::Level& level, double t, render::Weather& weather, render::Clouds& clouds,
-            bool layers) {
+            bool layers, double eye_y) {
   clouds = layers ? cloud_field(level, t) : render::Clouds{};
-  weather = weather_look(level.weather, air::fall_at(level, t), clouds.count > 0);
+  weather = weather_look(level.weather, air::fall_at(level, t, eye_y), clouds.count > 0);
 }
 
 }  // namespace ge::mountain::app
