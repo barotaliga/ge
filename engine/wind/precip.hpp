@@ -35,7 +35,8 @@
 // ge:keywords precip precipitation rain sleet snow drizzle downpour storm blizzard intensity rate
 // ge:keywords tier freezing-level phase drop terminal-speed marshall-palmer visibility swirl wet
 // ge:keywords puddle wetness rate_of tier_of rain_share_at drop_speed median_drop fall_speed
-// ge:keywords visibility_of swirl_of step_wet wet_steady dry_rate
+// ge:keywords visibility_of swirl_of step_wet wet_steady dry_rate cover step_cover lightning flash_at
+// ge:keywords strokes_per_minute thunderstorm
 // ge:skill water render
 // ge:test tests/wind_precip_test.cpp
 #pragma once
@@ -98,5 +99,22 @@ double dry_rate(double wind, double sun);
 Wet step_wet(const Wet& w, double rate, double dry, double dt);
 // What a long spell of the same rain and drying leaves (a rewind or a first frame starts here).
 Wet wet_steady(double rate, double dry);
+
+// THE SNOW'S COVER on a surface open to the fall.
+struct Cover {
+  double depth = 0;  // mm of snow
+  double cover = 0;  // the share of the surface it hides, 0 .. 1
+};
+inline constexpr double kNewSnow = 10;      // mm of new snow a mm of water
+inline constexpr double kCoverDepth = 20;   // mm: the depth that hides 63 % of a surface
+inline constexpr double kDeepestCover = 400;  // mm: past this it is drifted away as it falls
+// `c` after `dt` s of the fall `p` with the sun's share `sun` (0 .. 1) on it.
+Cover step_cover(const Cover& c, const Precip& p, double sun, double dt);
+
+// LIGHTNING: a thunderstorm's strokes a minute under the fall `p` in a wind of `wind` m/s.
+double strokes_per_minute(const Precip& p, double wind);
+// The flash at time `t` s: 0 dark .. about 1 a main stroke at its brightest, over the open sky's
+// light. `seed` sets which half-second slots strike.
+double flash_at(double t, const Precip& p, double wind, uint32_t seed = 0);
 
 }  // namespace ge::wind

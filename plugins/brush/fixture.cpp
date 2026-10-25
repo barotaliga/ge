@@ -46,6 +46,35 @@ Fixture sample_fixture() {
   return f;
 }
 
+Fixture weather_fixture() {
+  Fixture f;
+  f.message = "The fixture courtyard";
+  const auto room = [&](const char* name, std::array<int32_t, 6> b, const char* floor,
+                        const char* wall, const char* ceiling) {
+    FixtureRoom r;
+    r.name = name;
+    for (int k = 0; k < 3; ++k) r.min[k] = b[size_t(k)], r.max[k] = b[size_t(k) + 3];
+    r.floor = floor;
+    r.wall = wall;
+    r.ceiling = ceiling;
+    f.rooms.push_back(r);
+  };
+  // The walls between the rooms are 16 units (40 cm) thick; the openings are rooms that touch
+  // both sides.
+  room("hall", {0, -400, 0, 640, -16, 224}, "tile", "plaster", "plaster");
+  room("courtyard", {0, 0, 0, 640, 480, 320}, "flagstone", "stone", "sky1");
+  room("west window", {96, -16, 64, 224, 0, 176}, "stone", "stone", "stone");
+  room("east window", {416, -16, 64, 544, 0, 176}, "stone", "stone", "stone");
+  room("yard door", {288, -16, 0, 352, 0, 144}, "stone", "metal", "stone");
+  room("store door", {288, -416, 0, 352, -400, 128}, "flagstone", "metal", "metal");
+  room("store", {160, -656, 0, 480, -416, 192}, "concrete", "brick", "plaster");
+  f.lights = {
+      FixtureLight{{320, -208, 200}, 420, 200},
+      FixtureLight{{320, -536, 160}, 300, 190},
+  };
+  return f;
+}
+
 namespace detail {
 
 namespace {
