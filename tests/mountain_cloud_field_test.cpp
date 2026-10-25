@@ -3,7 +3,8 @@
 // under high streaks; taller heaps under a rippled sheet; streaks over a veil), each within its
 // bands over the valley floor; the same map deals the same sky and another seed another; the wind
 // aloft grows and turns with height, drifts the layers downwind and ages them; and with the layers
-// drawn a broken sky takes nothing off the sun on the whole.
+// drawn a broken sky takes nothing off the sun on the whole; a layer carries its kind's light round
+// the disc (its particles, its halo, its deck).
 //
 // ge:summary Tests for the cloud field: the stacks, the deal, the wind aloft, the drift
 // ge:keywords test mountain cloud field cloud_layers_for wind_aloft veer_aloft drift sky_at
@@ -120,4 +121,15 @@ TEST(drawn_layers_take_nothing_off_the_sun_on_the_whole) {
   // A lid keeps its deck.
   const ge::render::Weather lid = app::weather_look(sky(mg::WeatherKind::overcast), none, true);
   CHECK(lid.cover == 1 && lid.sun_pass < 0.2);
+}
+
+TEST(a_layer_carries_its_kinds_light_round_the_disc) {
+  const ge::render::CloudKind* kinds[2] = {ge::render::cloud_kind_named("altostratus"),
+                                           ge::render::cloud_kind_named("veil")};
+  const ge::render::Clouds c =
+      app::cloud_layers_of(kinds, 2, sky(mg::WeatherKind::fair), 7, 1000, 46, 0);
+  CHECK(c.count == 2);
+  CHECK(c.layers[0].drop_um == kinds[0]->drop && c.layers[0].drop_spread == kinds[0]->spread);
+  CHECK(c.layers[0].deck == 1 && c.layers[0].halo == 0);
+  CHECK(c.layers[1].halo == 1 && c.layers[1].deck == 0 && c.layers[1].drop_um > 20);
 }
