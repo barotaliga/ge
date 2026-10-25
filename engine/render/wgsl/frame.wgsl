@@ -54,11 +54,13 @@ struct CloudRows {
   wind: vec4f,   // the heading (cos, sin), the drift and the age in the noise's tile
   look: vec4f,   // one over the stretch, the dome (1 a heap), the density (1/m), the shadow's depth
   form: vec4f,   // the anvil, the detail's bite, its comb along the wind, the patches
+  glow: vec4f,   // its particles' radius (um), their sizes' spread, the 22 degree halo, the deck
 }
 
 fn cloud_layer(i: i32) -> CloudRows {
-  let r = i * 4;
-  return CloudRows(frame.clouds[r], frame.clouds[r + 1], frame.clouds[r + 2], frame.clouds[r + 3]);
+  let r = i * 5;
+  return CloudRows(frame.clouds[r], frame.clouds[r + 1], frame.clouds[r + 2], frame.clouds[r + 3],
+                   frame.clouds[r + 4]);
 }
 
 // render/clouds.hpp's kCloudTileCells: the noise's base lattice across its tile.
@@ -329,6 +331,33 @@ fn haze_air(colour: vec3f, uv: vec2f, dist_m: f32) -> vec3f {
   return c;
 }
 
+// THE WET GROUND (render/view.hpp's `Weather::wet` and `puddles`, in `frame.mist.zw`): a wet
+// surface is darker, because the water filling its pores keeps the light inside it longer
+// (`wet_albedo`: a porous surface, 1, goes to half its albedo soaked; a sealed one, 0, keeps it),
+// and it mirrors the sky in its film (`wet_sheen`: Schlick's Fresnel off water, 0.02 head on, the
+// sky's light along the reflected ray and the sun's glint, the film's mirror rough and a puddle's
+// flat). `flat` is how level the surface lies (its normal's y over 0.9 .. 0.98 is a puddle's).
+fn wet_albedo(albedo: vec3f, porous: f32) -> vec3f {
+  return albedo * (1.0 - 0.5 * frame.mist.z * clamp(porous, 0.0, 1.0));
+}
+
+fn wet_sheen(n: vec3f, v: vec3f, sun: vec3f, flat: f32) -> vec3f {
+  let wet = frame.mist.z;
+  if (wet <= 0.0) {
+    return vec3f(0.0);
+  }
+  let pool = frame.mist.w * smoothstep(0.9, 0.98, flat);
+  // A puddle lies level whatever the ground's grain under it.
+  let m = normalize(mix(n, vec3f(0.0, 1.0, 0.0), pool));
+  let r = reflect(-v, m);
+  let cos_v = clamp(dot(m, v), 0.0, 1.0);
+  let fresnel = 0.02 + 0.98 * pow(1.0 - cos_v, 5.0);
+  let sky = sky_luminance(normalize(vec3f(r.x, max(r.y, 0.02), r.z)));
+  let sharp = mix(60.0, 1500.0, pool);
+  let glint = pow(max(dot(r, frame.sun.xyz), 0.0), sharp) * mix(4.0, 60.0, pool);
+  return (sky + sun * glint / PI) * fresnel * wet * mix(0.5, 1.0, pool);
+}
+
 // What a white surface lit by the sun and the sky maps to before the tone curve; under a deck,
 // lower: a grey day's snow is a light grey, not the sunlit white, or the flat light reads as a
 // white-out where there is none.
@@ -365,6 +394,21 @@ fn exposure() -> f32 {
     e *= pow(lux / kAdaptLux, 1.0 - kAdaptGain);
   }
   return e;
+}
+
+// THE MOON AS SEEN (sky.wgsl's disc, and the clouds' glow round it): its lit surface is hundreds
+// to tens of thousands of times as bright as the snow the eye has adapted to (the more so in the
+// twilight and in the dark of an eclipse), which no display holds; the eye sees it as a bright
+// thing whatever its light. A brightness is drawn as it is while it is a small share of what the
+// picture shows as white (a moon by day, pale in the blue), and eased toward kMoonTop of that
+// white above it, so a full moon at midnight, a crescent in the twilight and the sliver left in
+// an eclipse all read bright, their seas and shading multiplied on as they are.
+const kMoonTop = 0.45;
+
+fn as_seen(l: f32) -> f32 {
+  let top = kMoonTop / exposure();
+  let x = l / top;
+  return top * select(x * (1.0 - 0.5 * x), 1.0 - exp(-x), x > 1e-3);
 }
 
 // THE RODS' SHARE of the eye's seeing at `luminance` (a radiance in white_luminance's units, so

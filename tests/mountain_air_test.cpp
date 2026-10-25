@@ -6,7 +6,7 @@
 // tests/golden/mountain_air.txt.
 //
 // A deliberate change to the air moves the golden: rewrite it with
-// `GE_GOLDEN_WRITE=1 build/release/tests/mountain_air_test`, and put the `snowfall` lab's table
+// `GE_GOLDEN_WRITE=1 build/release/tests/mountain_air_test`, and put the `precip` lab's table
 // before and after in the PR.
 //
 // ge:summary Test: the wind and the fall at a moment: downhill, breath, squalls, visibility; golden
@@ -146,6 +146,6 @@ TEST(every_number_keeps_its_golden) {
     return;
   }
   CHECK_MSG(got == want, "the air moved; if the move is meant, rewrite " + std::string(kGolden) +
-                             " with GE_GOLDEN_WRITE=1 on the release build and put the snowfall "
+                             " with GE_GOLDEN_WRITE=1 on the release build and put the precip "
                              "lab's table before and after in the PR (skill: mountain)");
 }

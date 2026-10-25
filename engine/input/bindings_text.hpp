@@ -20,7 +20,8 @@
 // SOURCES: `key:<name>` (names.hpp), `mouse:left|middle|right|back|forward|x|y|wheel_x|wheel_y`,
 // `pad:<button>`, `pad:<axis>`, `pad:left_stick|right_stick`, `joy:button<N>|axis<N>|hat<N>_up`
 // (`_right`, `_down`, `_left`), `gyro:x|y|z`, `touch:<control>`, `role:<role>` (device_db.hpp).
-// An axis source takes a trailing `+` or `-` to read one half of it (`pad:left_x-`).
+// An axis source takes a trailing `+` or `-` to read one half of it (`pad:left_x-`, a touch
+// lever's brake range `touch:lever-`).
 //
 // OPTIONS (each written only when it is not its default): `value=`, `component=x|y`,
 // `deadzone=<inner>,<outer>`, `curve=<exponent>`, `anti=`, `zone=<zone>` (a stick's),

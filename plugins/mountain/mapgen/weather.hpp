@@ -40,7 +40,8 @@ DealtWeather deal_weather(uint32_t sub, const Sun& sun);
 std::optional<WeatherKind> weather_named(std::string_view name);
 
 // A SKY PICKED BY HAND over a built map (a server's settings, a lab): the kind, and the fall, the
-// fog, the mean wind (m/s) and the heading it blows from (rad), each kept where negative. A kind
+// fog, the mean wind (m/s), the heading it blows from (rad) and the snow line, each kept where
+// negative. A kind
 // other than the map's brings its own fall and fog (the middle of its bands, none for a sky that
 // does not snow or a clear one) and its wind (the middle of its band, as the deal would draw it),
 // unless they are picked too. Nothing the map built moves: only `Level::weather` changes.
@@ -50,6 +51,9 @@ struct SkyPick {
   double fog = -1;
   double wind = -1;
   double wind_from = -1;
+  // The snow line as a share of the mountain's height, from its base (0) to its summit (1); over
+  // 1 rain falls on the summit too. Kept where negative.
+  double snowline = -1;
 };
 void with_sky(Level& level, const SkyPick& pick);
 
