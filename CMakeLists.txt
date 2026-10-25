@@ -98,6 +98,9 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   endif()
 elseif(MSVC)
   target_compile_options(ge_flags INTERFACE /W4 /permissive-)
+  # C4996 calls standard C (fopen, getenv, sprintf) unsafe and, under /WX, fails code that GCC
+  # and Clang build as portable. The tree uses the standard calls on every OS.
+  target_compile_definitions(ge_flags INTERFACE _CRT_SECURE_NO_WARNINGS)
   if(GE_WERROR)
     target_compile_options(ge_flags INTERFACE /WX)
   endif()
@@ -261,10 +264,11 @@ add_library(ge_wind STATIC engine/wind/field.cpp engine/wind/sources.cpp)
 target_link_libraries(ge_wind PUBLIC ge_core)
 
 # The water (engine/water): bodies of water, the sea a wind grows on them and the one `sample`
-# query (docs/water.md). Deterministic, no platform; published as ge::water.
+# query, and the sound of it on the synth (docs/water.md). Deterministic, no platform; published
+# as ge::water.
 file(GLOB GE_WATER_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/water/*.cpp)
 add_library(ge_water STATIC ${GE_WATER_SOURCES})
-target_link_libraries(ge_water PUBLIC ge_core ge_wind)
+target_link_libraries(ge_water PUBLIC ge_core ge_wind ge_audio)
 
 # The play contract (engine/play: a game's spec and Run, the session and its line protocol, the
 # input log, replay and diverge, the bench, the stills, the `play` executable's main), published
