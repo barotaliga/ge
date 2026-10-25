@@ -142,6 +142,8 @@ struct Sample {
   double density = 1000;          // kg/m^3
   double temperature = 10;        // degrees C
   Breaking breaking;              // the foam's three shares
+  double hs = 0;                  // the sea's significant height here, m: the whole spectrum's,
+                                  // the waves too short to lay included (what the ear hears)
 };
 
 Sample sample(const World& world, double x, double y, double z, double t);

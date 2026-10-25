@@ -44,6 +44,7 @@ router's Skills table and the directories against each other.
 | `bots` | What a bot decides: `engine/ai`, the decision record, `ge why`, making a bot more human |
 | `console` | Cvars and their tiers, cfg files, the console language, binds, the drop-down console, `ge cvar` and `ge cfg` |
 | `replay` | Watching a run again: a game's clone, the keyframes, the player's seek, the transport; later the replay file, the director, spectating and the video export |
+| `free-assets` | Free sounds and models: the sources, the licences we can carry, the registry, matching, converting, credits |
 | `net` | Multiplayer networking: sockets, the simulated network, captures, the wire, channels, nodes, sessions and the lobby, LAN discovery, NAT traversal, port mapping, replication, fake traffic |
 | `plugins` | Engine, plugin or game: where code lives, adding a plugin, moving code between homes |
 
