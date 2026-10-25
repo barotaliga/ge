@@ -37,8 +37,8 @@ void add_weather_cvars(con::Cvars& cvars, WeatherCvars& out) {
       {"sv_winddir", out.wind_from, 0, 360, server,
        "the bearing the wind blows from, deg (0 the map's +z, clockwise from above)",
        &out.wind_from},
-      {"sv_gust", out.gust, 0, 1, server, "the gusts' strength, the speed's deviation over its mean",
-       &out.gust},
+      {"sv_gust", out.gust, 0, 1, server,
+       "the gusts' strength, the speed's deviation over its mean", &out.gust},
       {"r_precip_density", out.density, 0.25, 2, player,
        "the particles a full fall draws, a share of the default", &out.density},
   };
@@ -61,7 +61,8 @@ void add_weather_cvars(con::Cvars& cvars, WeatherCvars& out) {
     bool* field;
   };
   const Switch switches[] = {
-      {"sv_weather", out.on, server, "the weather on the map: rain, snow, wind and storms", &out.on},
+      {"sv_weather", out.on, server, "the weather on the map: rain, snow, wind and storms",
+       &out.on},
       {"r_precip", out.draw, player, "the falling rain and snow drawn", &out.draw},
       {"r_splashes", out.splashes, player, "the drops' splashes where the rain lands",
        &out.splashes},
@@ -84,6 +85,7 @@ namespace {
 
 constexpr double kDeg = core::kPi / 180;
 constexpr uint32_t kGustSeed = 0x77e47e5u;
+constexpr double kSteepest = 3.73;  // the most a fall runs across for a metre down: 75 degrees
 
 // The air at `t`: the mean from the bearing, the gusts and the veer laid by the strength.
 wind::Air air_at(const WeatherCvars& c, double t) {
@@ -114,7 +116,14 @@ WeatherFrame step_weather(const WeatherCvars& c, WeatherState& s, const double e
   w.rate = wind::rate_of(w.fall);
   w.visibility = wind::visibility_of(w.fall);
   const double pace = wind::fall_speed(w.fall);
-  const double v[3] = {air.x, -pace, air.z};
+  // The way it falls, kept off the level: within a few metres of the ground a gale's snow driven
+  // near flat still came from the sky, and the shelter's map looks along this way.
+  double v[3] = {air.x, -pace, air.z};
+  const double run = std::sqrt(v[0] * v[0] + v[2] * v[2]);
+  if (run > kSteepest * pace) {
+    v[0] *= kSteepest * pace / run;
+    v[2] *= kSteepest * pace / run;
+  }
   const double l = std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
   for (int k = 0; k < 3; ++k) w.way[k] = v[k] / l;
   if (c.lightning) w.flash = wind::flash_at(t, w.fall, air.speed);

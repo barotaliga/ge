@@ -144,10 +144,10 @@ TEST(the_wet_ground_fills_drains_and_dries_toward_its_steady_state) {
 
 TEST(snow_covers_what_is_open_to_it_and_the_rain_and_the_sun_take_it) {
   gw::Cover c;
-  // An hour of a moderate snow (0.7 of the dial, 4.8 mm/h of water) lays near five centimetres.
+  // An hour of a moderate snow (0.7 of the dial, 1.9 mm/h of water) lays near two centimetres.
   for (int k = 0; k < 60; ++k) c = gw::step_cover(c, snow(0.7), 0, 60);
-  CHECK(c.depth > 40 && c.depth < 60);
-  CHECK(c.cover > 0.85 && c.cover < 1);
+  CHECK(c.depth > 15 && c.depth < 25);
+  CHECK(c.cover > 0.9 && c.cover < 1);
   // Rain takes it faster than the sun does.
   gw::Cover rained = c, sunned = c;
   for (int k = 0; k < 30; ++k) {
@@ -207,8 +207,14 @@ TEST(every_number_keeps_its_golden) {
     c = gw::step_cover(c, {i, i == 0.5 ? 1.0 : 0.0}, 0.3, 1800);
     got.push_back({ge::test::bits(c.depth), ge::test::bits(c.cover)});
   }
-  for (const double t : {10.0, 61.37, 300.25, 1999.9}) {
-    got.push_back({ge::test::bits(gw::flash_at(t, {1, 1}, 20, 7))});
+  // The first four lit moments of a storm (a hundredth of a second apart, a second between).
+  int lit = 0;
+  for (int k = 0; k < 100000 && lit < 4; ++k) {
+    const double f = gw::flash_at(k * 0.01, {1, 1}, 20, 7);
+    if (f <= 0.2) continue;
+    got.push_back({ge::test::bits(k * 0.01), ge::test::bits(f)});
+    ++lit;
+    k += 100;
   }
   if (write) {
     std::ofstream out(ge::test::root_path(kGolden));

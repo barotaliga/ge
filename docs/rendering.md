@@ -960,8 +960,8 @@ drain and dry by the wind and the sun). The picture reads the same numbers:
   0.16 s at a spot drawn afresh each life out of the screen and set on the surface the depth
   shows (its normal off the depth's neighbours), kept where that faces up and within 24 m, at an
   even density over the ground (a far spot kept by the share of ground its pixel covers). Off the
-  depth, so a splash lands on any game's ground, roof or deck; nothing keeps one off a floor under
-  a roof yet (a rain occlusion map, top-down depth, is the next step for rooms).
+  depth, so a splash lands on any game's ground, roof or deck; a world with roofs binds THE
+  SHELTER (below) to keep them off the floors under them.
 - THE WET GROUND rides in the frame's `wet` row (`wet.xy`) (`Weather::wet`, `puddles`): every world material
   calls `wet_albedo` (a porous surface goes to half its albedo soaked, the water keeping the light
   in its pores) and adds `wet_sheen` (Schlick's Fresnel off water, the sky along the reflected ray
@@ -973,6 +973,33 @@ drain and dry by the wind and the sun). The picture reads the same numbers:
   to the valley and no digest moves). The cvars: `r_precip`, `r_precip_density`, `r_splashes`,
   `r_wet`; the labs `precip` (eight skies from a flurry to a rainstorm) and `precip-air` (the
   numbers as charts).
+- THE SNOW'S COVER and THE LIGHTNING are the dial's too: `step_cover` lays ten millimetres of
+  snow a millimetre of snow's water and takes it with the rain (4 mm an hour a mm of rain) and
+  the sun (2 mm an hour in full sun), the cover's share 1 - e^(-depth / 6 mm); `flash_at(t)`
+  lights a heavy fall 1 stroke a minute and a storm up to 6 (fewer the more it is snow), each a
+  main stroke and two returns, a pure function of the clock (half-second slots hashed, so a
+  replay flashes at the same moments). The frame carries both in `wet.zw`: the snow on what faces
+  up, the flash over the open sky and the dome.
+- THE SHELTER (`PrecipShelter`, `bind_precip_shelter`): a depth map looking ALONG THE FALL (down
+  and downwind, kept within 75 degrees of the vertical), the surface nearest the sky in each
+  texel. A particle deeper than it is faded out and a splash whose spot is deeper is not set, so
+  the rain falls in a courtyard and through a window as far as the wind slants it, and not in the
+  room behind the wall. Without one everything is open. Four comparison taps soften its edge.
+
+**The weather on a BSP map (M36e).** `plugins/brush/app/bsp_weather.hpp` turns twelve cvars
+(`sv_weather`, `sv_precip`, `sv_rain`, `sv_wind`, `sv_winddir`, `sv_gust` the server's;
+`r_precip`, `r_precip_density`, `r_splashes`, `r_wet`, `r_snowcover`, `r_lightning` the player's)
+into a frame's weather: the wind off `engine/wind`'s field with its gusts and veer, the fall's
+way, the wet ground and the snow's cover for the whole map stepped by the clock, the flash, and
+a storm's deck over the sky. The v2 renderer draws a third orthographic map of its `orthos`
+array along the fall (the sky faces do not block it), binds it as the fall's shelter, and reads
+it in every face's material (`weathered` in `bsp.wgsl`): what faces the fall and the map reaches
+is wet, a flat's low noise pools into puddles that the drops ring while it rains, what faces up
+gathers the snow in drifts (a thin cover in the hollows first, the floor showing between), and a
+flash lights what is open overhead and a little round the rooms. The open sky and the windows
+decide all of it: lab `gpu-bsp-weather` (the weather fixture, a hall with windows onto a yard and
+a store behind it) shows eight weathers in four views and checks, with no GPU, that a ray back up
+the fall leaves by the sky from the yard and the window's patch and is stopped from the store.
 
 Every shader's whole-line comments are left out of what is embedded (`cmake/WgslEmbed.cmake`), so
 a material that includes `frame.wgsl` stays under the 60 KB literal cap however well it is

@@ -26,6 +26,7 @@ forest f1881cb20efe0144
 frame-pace c5058023a52812c3
 free 2b3f2cf5100bf9b4
 gpu-bsp 5512e59ceda3361a
+gpu-bsp-weather 806aef61a571239d
 gpu-capture 8b5d5e3b7be5a4fc
 gpu-lava 0c288375858e883f
 gpu-slime 34e861611a9a3ba6
@@ -40,7 +41,6 @@ input-ffb 565464637bf28b86
 input-session dcb313b33f4ddf37
 input-shape e2284bbd066830af
 junctions 036999ca677e12e6
-ladder 825b7f06d92b69d3
 ladder e2fd256b2ac77061
 lake cd671548fc72e5d6
 level 4fbff3da7a82c4aa

@@ -62,11 +62,13 @@ Fixture weather_fixture() {
   // The walls between the rooms are 16 units (40 cm) thick; the openings are rooms that touch
   // both sides.
   room("hall", {0, -400, 0, 640, -16, 224}, "tile", "plaster", "plaster");
-  room("courtyard", {0, 0, 0, 640, 480, 320}, "flagstone", "stone", "sky1");
+  // A long yard with low walls, so even a gale's slanted fall reaches the floor by the hall.
+  room("courtyard", {0, 0, 0, 640, 1600, 200}, "flagstone", "stone", "sky1");
   room("west window", {96, -16, 64, 224, 0, 176}, "stone", "stone", "stone");
   room("east window", {416, -16, 64, 544, 0, 176}, "stone", "stone", "stone");
   room("yard door", {288, -16, 0, 352, 0, 144}, "stone", "metal", "stone");
-  room("store door", {288, -416, 0, 352, -400, 128}, "flagstone", "metal", "metal");
+  // The store's door is off the line of the yard's door, so no fall slants in through both.
+  room("store door", {192, -416, 0, 256, -400, 128}, "flagstone", "metal", "metal");
   room("store", {160, -656, 0, 480, -416, 192}, "concrete", "brick", "plaster");
   f.lights = {
       FixtureLight{{320, -208, 200}, 420, 200},

@@ -35,8 +35,8 @@
 // ge:keywords precip precipitation rain sleet snow drizzle downpour storm blizzard intensity rate
 // ge:keywords tier freezing-level phase drop terminal-speed marshall-palmer visibility swirl wet
 // ge:keywords puddle wetness rate_of tier_of rain_share_at drop_speed median_drop fall_speed
-// ge:keywords visibility_of swirl_of step_wet wet_steady dry_rate cover step_cover lightning flash_at
-// ge:keywords strokes_per_minute thunderstorm
+// ge:keywords visibility_of swirl_of step_wet wet_steady dry_rate cover step_cover lightning
+// ge:keywords flash_at strokes_per_minute thunderstorm
 // ge:skill water render
 // ge:test tests/wind_precip_test.cpp
 #pragma once
@@ -105,8 +105,8 @@ struct Cover {
   double depth = 0;  // mm of snow
   double cover = 0;  // the share of the surface it hides, 0 .. 1
 };
-inline constexpr double kNewSnow = 10;      // mm of new snow a mm of water
-inline constexpr double kCoverDepth = 20;   // mm: the depth that hides 63 % of a surface
+inline constexpr double kNewSnow = 10;        // mm of new snow a mm of water
+inline constexpr double kCoverDepth = 6;      // mm: the depth that hides 63 % of a surface
 inline constexpr double kDeepestCover = 400;  // mm: past this it is drifted away as it falls
 // `c` after `dt` s of the fall `p` with the sun's share `sun` (0 .. 1) on it.
 Cover step_cover(const Cover& c, const Precip& p, double sun, double dt);

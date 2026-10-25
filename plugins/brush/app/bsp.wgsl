@@ -356,9 +356,10 @@ fn weathered(p: vec3f, n: vec3f, albedo: vec3f, eye_dir: vec3f) -> Weathered {
   }
   let up = n.y;
   // The snow: what faces up and the fall reaches, the noise's highest first.
-  let drift = noise2(p.xz * 1.3) * 0.6 + noise2(p.xz * 5.1) * 0.4;
+  // A thin cover lies in the drifts first and the floor shows between; a deep one hides it all.
+  let drift = noise2(p.xz * 1.3) * 0.5 + noise2(p.xz * 5.1) * 0.3 + noise2(p.xz * 23.0) * 0.2;
   let snowed = smoothstep(0.35, 0.75, up) * reached * frame.wet.z;
-  let snow = smoothstep(0.0, 0.3, snowed * 1.25 - 0.45 * (1.0 - drift));
+  let snow = smoothstep(0.0, 0.2, snowed - 0.85 * (1.0 - drift) + 0.15);
   // The wet: the film where the fall reaches, the puddles on the level where the noise is lowest.
   let wet = frame.wet.x * reached * (1.0 - snow);
   let low = noise2(p.xz * 0.55 + vec2f(17.0)) * 0.7 + noise2(p.xz * 1.9) * 0.3;
@@ -367,7 +368,10 @@ fn weathered(p: vec3f, n: vec3f, albedo: vec3f, eye_dir: vec3f) -> Weathered {
   let pool = level * reached * (1.0 - snow) * smoothstep(0.0, 0.08, fill * 0.75 - low + 0.2);
   var a = albedo * (1.0 - 0.45 * wet);
   a = mix(a, a * 0.55, pool);
-  a = mix(a, vec3f(0.8, 0.83, 0.88), snow);
+  // The snow's white, a little grey in its hollows, with a glint here and there.
+  let grain = noise2(p.xz * 61.0);
+  let white = vec3f(0.78, 0.81, 0.86) * (0.9 + 0.1 * drift) + vec3f(0.12 * step(0.93, grain));
+  a = mix(a, white, snow);
   w.albedo = a;
   // A pool lies level and the drops ring it while it rains.
   var m = normalize(mix(n, vec3f(0.0, 1.0, 0.0), pool));
