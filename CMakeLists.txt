@@ -23,7 +23,8 @@
 #                the export with sound)
 #   ge_replay    replays (engine/replay: the keyframes, the player's seek, the transport;
 #                docs/replays.md)
-#   ge_prof      the profiler (engine/prof: timing zones, allocation counts, the resident set);
+#   ge_prof      the profiler (engine/prof: timing zones, allocation counts, the resident set,
+#                every thread's timeline, the OS sampler and the load analysis);
 #                ge_prof_alloc the counting operator new an executable links to count allocations
 #   ge_cli, ge   the ge command line (engine/cli: ge new, ge skills sync, ge doctor, ge lessons;
 #                cmake/Cli.cmake)
@@ -114,7 +115,8 @@ set(GE_LIBM_VENDORED
   engine/core/libm/fdlibm_arc.cpp
   engine/core/libm/fdlibm_exp_log.cpp)
 add_library(ge_core STATIC ${GE_LIBM_VENDORED} engine/core/libm/pow.cpp
-  engine/core/solar.cpp engine/core/moon.cpp engine/core/output.cpp engine/core/num_text.cpp engine/core/parallel.cpp)
+  engine/core/solar.cpp engine/core/moon.cpp engine/core/output.cpp engine/core/num_text.cpp engine/core/parallel.cpp
+  engine/core/thread_name.cpp)
 target_include_directories(ge_core PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/engine>)
 target_compile_features(ge_core PUBLIC cxx_std_20)
 target_link_libraries(ge_core PUBLIC ge_fp ge_isa Threads::Threads)
@@ -237,13 +239,16 @@ add_library(ge_lab STATIC engine/lab/lab.cpp engine/lab/report.cpp engine/lab/ru
   engine/lab/raster.cpp engine/lab/png.cpp engine/lab/diff.cpp engine/lab/inflate.cpp engine/lab/sound.cpp
   engine/lab/series.cpp engine/lab/stats.cpp engine/lab/plot.cpp engine/lab/chart.cpp
   engine/lab/anim.cpp engine/lab/series_charts.cpp engine/lab/teleport.cpp
-  engine/lab/model_view.cpp engine/lab/model_compare.cpp engine/lab/model_sheets.cpp)
-target_link_libraries(ge_lab PUBLIC ge_core ge_audio ge_assets)
+  engine/lab/model_view.cpp engine/lab/model_compare.cpp engine/lab/model_sheets.cpp
+  engine/lab/load_chart.cpp)
+target_link_libraries(ge_lab PUBLIC ge_core ge_audio ge_assets ge_prof)
 
 # The profiler (engine/prof): the timing zones any code opens with GE_ZONE, the allocation
-# counts and the resident set. The counting operator new is its own target, ge_prof_alloc: an
+# counts and the resident set, every thread's timeline, the OS's thread and core sampler and the
+# load analysis over them. The counting operator new is its own target, ge_prof_alloc: an
 # executable that links it counts every allocation (the play executable does).
-add_library(ge_prof STATIC engine/prof/zones.cpp engine/prof/memory.cpp)
+add_library(ge_prof STATIC engine/prof/zones.cpp engine/prof/memory.cpp engine/prof/timeline.cpp
+  engine/prof/cpu_sampler.cpp engine/prof/load.cpp)
 target_link_libraries(ge_prof PUBLIC ge_core)
 if(WIN32)
   target_link_libraries(ge_prof PRIVATE psapi)
@@ -264,10 +269,11 @@ add_library(ge_wind STATIC engine/wind/field.cpp engine/wind/sources.cpp)
 target_link_libraries(ge_wind PUBLIC ge_core)
 
 # The water (engine/water): bodies of water, the sea a wind grows on them and the one `sample`
-# query (docs/water.md). Deterministic, no platform; published as ge::water.
+# query, and the sound of it on the synth (docs/water.md). Deterministic, no platform; published
+# as ge::water.
 file(GLOB GE_WATER_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/water/*.cpp)
 add_library(ge_water STATIC ${GE_WATER_SOURCES})
-target_link_libraries(ge_water PUBLIC ge_core ge_wind)
+target_link_libraries(ge_water PUBLIC ge_core ge_wind ge_audio)
 
 # The play contract (engine/play: a game's spec and Run, the session and its line protocol, the
 # input log, replay and diverge, the bench, the stills, the `play` executable's main), published
@@ -278,7 +284,7 @@ target_link_libraries(ge_water PUBLIC ge_core ge_wind)
 file(GLOB GE_CAPTURE_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/capture/*.cpp)
 add_library(ge_play STATIC engine/play/inputs.cpp engine/play/json_read.cpp
   engine/play/session.cpp engine/play/bench.cpp engine/play/record.cpp engine/play/why.cpp
-  engine/play/human.cpp engine/play/devices.cpp engine/play/console_cmds.cpp engine/play/main.cpp
+  engine/play/human.cpp engine/play/devices.cpp engine/play/console_cmds.cpp engine/play/main.cpp engine/play/load.cpp
   ${GE_CAPTURE_SOURCES})
 target_link_libraries(ge_play PUBLIC ge_core ge_ai ge_console ge_input ge_lab ge_prof ge_prof_alloc)
 
