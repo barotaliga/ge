@@ -10,14 +10,16 @@
 // in so a tap is a small turn; W tucks, S brakes, SPACE jumps, R resets, C the camera, F5 rebinds),
 // on a gamepad (the left stick steers, the right trigger tucks, the left brakes, south jumps,
 // north resets, back the camera) and on a wheel (its steer, throttle and brake roles: the gas
-// pedal is the tuck). A keyboard, a pad and a wheel all play at once with no switch.
+// pedal is the tuck), and on a phone's thumbs (thumbs.hpp: the edge thumb steers, the tuck
+// lever tucks and below it brakes, a flick or a tap-and-hold jumps, two corner buttons reset and
+// change the camera). A keyboard, a pad, a wheel and a screen all play at once with no switch.
 //
 // THE PLAYER'S FILE is the defaults until the player rebinds (rebinding.hpp): `load_player_map`
 // reads it when it is there, and `save_player_map` writes it back. A file that does not read
 // leaves the defaults in force and says which line is wrong.
 //
 // ge:summary Fall Line's actions and default bindings; the player's bindings file read and saved
-// ge:keywords fall-line controls actions bindings defaults keys gamepad wheel ride app camera
+// ge:keywords fall-line controls actions bindings defaults keys gamepad wheel touch ride app camera
 // ge:keywords rebind player-file load_player_map save_player_map default_map default-bindings
 // ge:skill input
 // ge:test tests/fall_line_controls_test.cpp

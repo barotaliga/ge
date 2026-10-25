@@ -92,7 +92,7 @@ jobs:
           - platform: macos-arm64
             os: macos-latest
           - platform: windows-x64
-            os: windows-latest
+            os: windows-2025  # the image ci.yml and packaging.yml build Windows on
     runs-on: ${{ matrix.os }}
     defaults:
       run:
