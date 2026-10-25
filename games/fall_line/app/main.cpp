@@ -253,6 +253,7 @@ int main(int argc, char** argv) {
     }
   }
   hand->pilot = args.bot;
+  if (h > 0) fall_line::controls::hand_screen(*hand, static_cast<float>(w) / static_cast<float>(h));
   ge::input::EventLog script;
   if (!args.events.empty()) {
     std::string text;
@@ -382,10 +383,15 @@ int main(int argc, char** argv) {
                         static_cast<uint32_t>(input.height_px), set.vsync);
       fall_line::app::resize(*device, *frame, static_cast<uint32_t>(input.width_px),
                              static_cast<uint32_t>(input.height_px));
+      if (input.height_px > 0) {
+        fall_line::controls::hand_screen(
+            *hand, static_cast<float>(input.width_px) / static_cast<float>(input.height_px));
+      }
     }
 
     // The actions; the rebinding walk holds the run while it asks.
-    fall_line::controls::hand_frame(*hand, held, wall);
+    const double felt_s = static_cast<double>(frame_ns) * 1e-9;
+    fall_line::controls::hand_frame(*hand, held, wall, felt_s);
     std::string said;
     if (rebinding.active) {
       const auto at = fall_line::controls::poll_rebinding(rebinding, held, hand->map, said);
@@ -405,7 +411,6 @@ int main(int argc, char** argv) {
       ge::loop::pause(clock);
     }
 
-    const double felt_s = static_cast<double>(frame_ns) * 1e-9;
     // The run clock grants a live frame its steps; a scripted frame's are due by its time.
     const int granted = script.frames.empty() ? ge::loop::frame(clock, wall) : scripted_steps;
     steps += granted;
