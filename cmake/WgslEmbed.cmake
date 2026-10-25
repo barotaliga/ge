@@ -1,5 +1,6 @@
 # The script half of ge_embed_wgsl (cmake/Wgsl.cmake), run as `cmake -P` at build time:
-# resolve IN's #include lines, write RESOLVED, and write HEADER with the text as a string_view.
+# resolve IN's #include lines, empty its comment lines, write RESOLVED, and write HEADER with the
+# text as a string_view.
 # Inputs: IN, HEADER, RESOLVED, NAME, ROOTS ('|'-separated include roots).
 cmake_minimum_required(VERSION 3.25)
 string(REPLACE "|" ";" roots "${ROOTS}")
@@ -34,6 +35,10 @@ function(resolve file out_var)
       resolve("${found}" inner)
       set(seen "${seen}" PARENT_SCOPE)
       string(APPEND text "${inner}")
+    elseif(line MATCHES "^[ \t]*//")
+      # A comment line is the reader's, not the GPU's: kept as an empty line, so it never counts
+      # toward the literal's size.
+      string(APPEND text "\n")
     else()
       string(REPLACE "@SEMI@" ";" line "${line}")
       string(APPEND text "${line}\n")
@@ -51,8 +56,9 @@ if(wgsl MATCHES "\\)wgsl\"")
 endif()
 string(LENGTH "${wgsl}" size)
 if(size GREATER 60000)
-  message(FATAL_ERROR "wgsl: ${IN} resolves to ${size} bytes; one string literal must stay "
-    "under 64 KB (MSVC). Split the pass's shader; skill: gpu, § Shaders.")
+  message(FATAL_ERROR "wgsl: ${IN} resolves to ${size} bytes of code (comment lines do not "
+    "count); one string literal must stay under 64 KB (MSVC). Split the pass's shader; skill: "
+    "gpu, § Shaders.")
 endif()
 # Adjacent raw-string pieces of at most ~4 KB each (MSVC caps one piece at 16 KB).
 set(body "")

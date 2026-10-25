@@ -103,6 +103,10 @@ render::Clouds cloud_layers_of(const render::CloudKind* const* kinds, int count,
     l.drop_spread = d.spread;
     l.halo = d.halo;
     l.deck = d.deck;
+    l.thin = d.thin;
+    l.thick_cells = d.thick_cells;
+    // This sky's layer thinner or thicker than the kind's middle.
+    l.thick_bias = 0.8 * u(6) - 0.4;
     l.heading = weather.wind_from + kPi + veer_aloft(std::max(mid, 0.0), latitude);
     // Where in the noise this map's layer starts: a share of the tile along the wind and of the
     // cell's lives, so two maps' skies differ.
@@ -123,8 +127,9 @@ render::Clouds cloud_layers_for(const mapgen::Weather& weather, double seed, dou
 void lid_under(const render::CloudKind* const* kinds, int count, render::Weather& weather) {
   for (int i = 0; i < count; ++i) {
     const CloudKind& k = *kinds[i];
-    // A lid: a full, thick sheet over the valley floor (not one lying in it).
-    if (k.cover[0] < 0.9 || k.opacity < 10 || k.base[1] <= 0) continue;
+    // A lid: a full, thick, low sheet over the valley floor (not one lying in it; a middle
+    // layer's thin patches let the sun through).
+    if (k.cover[0] < 0.9 || k.opacity < 10 || k.base[1] <= 0 || k.base[0] > 2500) continue;
     const double dark = std::min(1.0, k.opacity / 100);
     weather.cover = 1;
     weather.deck_light = std::min(weather.deck_light, 1.15 - 0.45 * dark);
