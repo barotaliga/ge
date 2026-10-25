@@ -1,0 +1,377 @@
+# The classic content's sound and model names, mapped to Shooter's Edge's own (sounds.tsv, models.tsv).
+# Read by the map cloner and the game: `sound <classic path> <our name>`, `model <classic path> <our name>`,
+# and `set <classname> <key>=<value> <field> <our name>` for the numbered sound sets a map picks by a
+# number (doors, buttons, lifts, trains, triggers) or by worldspawn's worldtype (locks and keys).
+# Our names are paths under sounds/ and models/ without the extension. A comment is a '#' at line start
+# or after whitespace; a trailing `# pin` marks a line tools never rewrite. Edit with the free-assets skill.
+
+sound weapons/ax1.wav weapon/melee_swing
+sound player/axhit1.wav weapon/melee_hit_flesh
+sound player/axhit2.wav weapon/melee_hit_wall
+sound weapons/guncock.wav weapon/shotgun_fire
+sound weapons/shotgn2.wav weapon/double_shotgun_fire
+sound weapons/rocket1i.wav weapon/nailgun_fire
+sound weapons/spike2.wav weapon/heavy_nailgun_fire
+sound weapons/grenade.wav weapon/grenade_launch
+sound weapons/bounce.wav weapon/grenade_bounce
+sound weapons/sgun1.wav weapon/rocket_fire
+sound weapons/r_exp3.wav weapon/explosion
+sound weapons/lstart.wav weapon/beam_start
+sound weapons/lhit.wav weapon/beam_loop
+sound weapons/tink1.wav weapon/nail_hit_wall
+sound weapons/ric1.wav weapon/ricochet_1
+sound weapons/ric2.wav weapon/ricochet_2
+sound weapons/ric3.wav weapon/ricochet_3
+sound weapons/pkup.wav pickup/weapon
+sound weapons/lock4.wav pickup/ammo
+sound items/health1.wav pickup/health
+sound items/r_item1.wav pickup/health_small
+sound items/r_item2.wav pickup/health_mega
+sound items/armor1.wav pickup/armor
+sound items/itembk2.wav pickup/respawn
+sound items/damage.wav power/damage_pickup
+sound items/damage2.wav power/damage_fading
+sound items/damage3.wav power/damage_attack
+sound items/protect.wav power/shield_pickup
+sound items/protect2.wav power/shield_fading
+sound items/protect3.wav power/shield_hit
+sound items/inv1.wav power/cloak_pickup
+sound items/inv2.wav power/cloak_fading
+sound items/inv3.wav power/cloak_idle
+sound items/suit.wav power/suit_pickup
+sound items/suit2.wav power/suit_fading
+sound player/plyrjmp8.wav player/jump
+sound player/land.wav player/land
+sound player/land2.wav player/land_hard
+sound player/pain1.wav player/pain_1
+sound player/pain2.wav player/pain_2
+sound player/pain3.wav player/pain_3
+sound player/pain4.wav player/pain_4
+sound player/pain5.wav player/pain_5
+sound player/pain6.wav player/pain_6
+sound player/death1.wav player/death_1
+sound player/death2.wav player/death_2
+sound player/death3.wav player/death_3
+sound player/death4.wav player/death_4
+sound player/death5.wav player/death_5
+sound player/gib.wav player/gib
+sound player/udeath.wav player/gib_wet
+sound player/teledth1.wav player/telefrag
+sound player/tornoff2.wav player/disconnect
+sound player/h2odeath.wav player/death_water
+sound player/drown1.wav player/drown_1
+sound player/drown2.wav player/drown_2
+sound player/gasp1.wav player/gasp
+sound player/gasp2.wav player/gasp_long
+sound player/inh2o.wav player/enter_water
+sound player/h2ojump.wav player/water_jump
+sound player/inlava.wav player/enter_lava
+sound player/lburn1.wav player/burn_1
+sound player/lburn2.wav player/burn_2
+sound player/slimbrn2.wav player/enter_slime
+sound misc/outwater.wav player/leave_water
+sound misc/water1.wav player/swim_1
+sound misc/water2.wav player/swim_2
+sound misc/h2ohit1.wav player/water_hit
+sound doors/drclos4.wav door/stone_stop
+sound doors/doormv1.wav door/stone_move
+sound doors/hydro2.wav door/machine_stop
+sound doors/hydro1.wav door/machine_move
+sound doors/stndr2.wav door/chain_stop
+sound doors/stndr1.wav door/chain_move
+sound doors/ddoor2.wav door/screech_stop
+sound doors/ddoor1.wav door/screech_move
+sound doors/medtry.wav door/locked_old
+sound doors/meduse.wav door/unlock_old
+sound doors/runetry.wav door/locked_rune
+sound doors/runeuse.wav door/unlock_rune
+sound doors/basetry.wav door/locked_base
+sound doors/baseuse.wav door/unlock_base
+sound doors/latch2.wav door/secret_latch
+sound doors/winch2.wav door/secret_winch
+sound doors/airdoor2.wav door/secret_air_stop
+sound doors/airdoor1.wav door/secret_air_move
+sound doors/basesec2.wav door/secret_base_stop
+sound doors/basesec1.wav door/secret_base_move
+sound misc/null.wav common/silence
+sound buttons/airbut1.wav button/steam
+sound buttons/switch21.wav button/wood
+sound buttons/switch02.wav button/metal
+sound buttons/switch04.wav button/switch
+sound plats/plat1.wav lift/base_move
+sound plats/plat2.wav lift/base_stop
+sound plats/medplat1.wav lift/chain_move
+sound plats/medplat2.wav lift/chain_stop
+sound plats/train1.wav mover/train_stop
+sound plats/train2.wav mover/train_move
+sound misc/secret.wav trigger/secret
+sound misc/talk.wav common/message
+sound misc/trigger1.wav trigger/activate
+sound misc/medkey.wav pickup/key_old
+sound misc/runekey.wav pickup/key_rune
+sound misc/basekey.wav pickup/keycard
+sound misc/r_tele1.wav teleport/arrive_1
+sound misc/r_tele2.wav teleport/arrive_2
+sound misc/r_tele3.wav teleport/arrive_3
+sound misc/r_tele4.wav teleport/arrive_4
+sound misc/r_tele5.wav teleport/arrive_5
+sound misc/power.wav world/power_surge
+sound ambience/windfly.wav world/push_wind
+sound ambience/hum1.wav ambient/teleporter
+sound ambience/fire1.wav ambient/fire
+sound ambience/buzz1.wav ambient/fluorescent_spark
+sound ambience/fl_hum1.wav ambient/fluorescent_hum
+sound ambience/comp1.wav ambient/computer
+sound ambience/drip1.wav ambient/drip
+sound ambience/drone6.wav ambient/drone
+sound ambience/suck1.wav ambient/suck_wind
+sound ambience/swamp1.wav ambient/swamp_1
+sound ambience/swamp2.wav ambient/swamp_2
+sound ambience/thunder1.wav ambient/thunder
+sound ambience/water1.wav ambient/leaf_water
+sound ambience/wind2.wav ambient/leaf_sky
+sound misc/menu1.wav ui/move
+sound misc/menu2.wav ui/select
+sound misc/menu3.wav ui/back
+sound blob/death1.wav creature/jelly/death
+sound blob/hit1.wav creature/jelly/hit
+sound blob/land1.wav creature/jelly/land
+sound blob/sight1.wav creature/jelly/sight
+sound boss1/death.wav creature/lava_lord/death
+sound boss1/out1.wav creature/lava_lord/rise
+sound boss1/pain.wav creature/lava_lord/pain
+sound boss1/sight1.wav creature/lava_lord/sight
+sound boss1/throw.wav creature/lava_lord/attack
+sound boss2/death.wav creature/elder/death
+sound boss2/idle.wav creature/elder/idle
+sound boss2/pop2.wav creature/elder/burst
+sound boss2/sight.wav creature/elder/sight
+sound demon/ddeath.wav creature/leaper/death
+sound demon/dhit2.wav creature/leaper/melee
+sound demon/djump.wav creature/leaper/leap
+sound demon/dland2.wav creature/leaper/land
+sound demon/dpain1.wav creature/leaper/pain
+sound demon/idle1.wav creature/leaper/idle
+sound demon/sight2.wav creature/leaper/sight
+sound dog/dattack1.wav creature/hound/melee
+sound dog/ddeath.wav creature/hound/death
+sound dog/dpain1.wav creature/hound/pain
+sound dog/dsight.wav creature/hound/sight
+sound dog/idle.wav creature/hound/idle
+sound enforcer/death1.wav creature/trooper/death
+sound enforcer/enfire.wav creature/trooper/attack
+sound enforcer/enfstop.wav creature/trooper/projectile_hit
+sound enforcer/idle1.wav creature/trooper/idle
+sound enforcer/pain1.wav creature/trooper/pain_1
+sound enforcer/pain2.wav creature/trooper/pain_2
+sound enforcer/sight1.wav creature/trooper/sight_1
+sound enforcer/sight2.wav creature/trooper/sight_2
+sound enforcer/sight3.wav creature/trooper/sight_3
+sound enforcer/sight4.wav creature/trooper/sight_4
+sound fish/bite.wav creature/eel/melee
+sound fish/death.wav creature/eel/death
+sound fish/idle.wav creature/eel/idle
+sound hknight/attack1.wav creature/dark_swordsman/attack
+sound hknight/death1.wav creature/dark_swordsman/death
+sound hknight/grunt.wav creature/dark_swordsman/grunt
+sound hknight/hit.wav creature/dark_swordsman/hit
+sound hknight/idle.wav creature/dark_swordsman/idle
+sound hknight/pain1.wav creature/dark_swordsman/pain
+sound hknight/sight1.wav creature/dark_swordsman/sight
+sound hknight/slash1.wav creature/dark_swordsman/melee
+sound knight/idle.wav creature/swordsman/idle
+sound knight/kdeath.wav creature/swordsman/death
+sound knight/khurt.wav creature/swordsman/pain
+sound knight/ksight.wav creature/swordsman/sight
+sound knight/sword1.wav creature/swordsman/melee_1
+sound knight/sword2.wav creature/swordsman/melee_2
+sound ogre/ogdrag.wav creature/brute/idle_1
+sound ogre/ogdth.wav creature/brute/death
+sound ogre/ogidle.wav creature/brute/idle_2
+sound ogre/ogidle2.wav creature/brute/idle_3
+sound ogre/ogpain1.wav creature/brute/pain
+sound ogre/ogsawatk.wav creature/brute/melee
+sound ogre/ogwake.wav creature/brute/sight
+sound shalrath/attack.wav creature/caster/attack_1
+sound shalrath/attack2.wav creature/caster/attack_2
+sound shalrath/death.wav creature/caster/death
+sound shalrath/idle.wav creature/caster/idle
+sound shalrath/pain.wav creature/caster/pain
+sound shalrath/sight.wav creature/caster/sight
+sound shambler/melee1.wav creature/hulk/melee_1
+sound shambler/melee2.wav creature/hulk/melee_2
+sound shambler/sattck1.wav creature/hulk/attack
+sound shambler/sboom.wav creature/hulk/charge
+sound shambler/sdeath.wav creature/hulk/death
+sound shambler/shurt2.wav creature/hulk/pain
+sound shambler/sidle.wav creature/hulk/idle
+sound shambler/smack.wav creature/hulk/melee_3
+sound shambler/ssight.wav creature/hulk/sight
+sound soldier/death1.wav creature/rifleman/death
+sound soldier/idle.wav creature/rifleman/idle
+sound soldier/pain1.wav creature/rifleman/pain_1
+sound soldier/pain2.wav creature/rifleman/pain_2
+sound soldier/sattck1.wav creature/rifleman/attack
+sound soldier/sight1.wav creature/rifleman/sight
+sound vomitus/v_sight1.wav creature/vomit_beast/sight
+sound wizard/hit.wav creature/flyer/hit
+sound wizard/wattack.wav creature/flyer/attack
+sound wizard/wdeath.wav creature/flyer/death
+sound wizard/widle1.wav creature/flyer/idle_1
+sound wizard/widle2.wav creature/flyer/idle_2
+sound wizard/wpain.wav creature/flyer/pain
+sound wizard/wsight.wav creature/flyer/sight
+sound zombie/idle_w2.wav creature/ghoul/idle_1
+sound zombie/z_fall.wav creature/ghoul/pain_1
+sound zombie/z_gib.wav creature/ghoul/death
+sound zombie/z_hit.wav creature/ghoul/hit
+sound zombie/z_idle.wav creature/ghoul/idle_2
+sound zombie/z_idle1.wav creature/ghoul/idle_3
+sound zombie/z_miss.wav creature/ghoul/miss
+sound zombie/z_pain.wav creature/ghoul/pain_2
+sound zombie/z_pain1.wav creature/ghoul/pain_3
+sound zombie/z_shot1.wav creature/ghoul/attack
+model progs/player.mdl character/player
+model progs/h_player.mdl character/player_head
+model progs/eyes.mdl character/player_eyes
+model progs/gib1.mdl gore/gib_1
+model progs/gib2.mdl gore/gib_2
+model progs/gib3.mdl gore/gib_3
+model progs/zom_gib.mdl gore/flesh_ball
+model progs/v_axe.mdl view/melee
+model progs/v_shot.mdl view/shotgun
+model progs/v_shot2.mdl view/double_shotgun
+model progs/v_nail.mdl view/nailgun
+model progs/v_nail2.mdl view/heavy_nailgun
+model progs/v_rock.mdl view/grenade_launcher
+model progs/v_rock2.mdl view/rocket_launcher
+model progs/v_light.mdl view/beam_gun
+model progs/g_shot.mdl pickup/weapon_double_shotgun
+model progs/g_nail.mdl pickup/weapon_nailgun
+model progs/g_nail2.mdl pickup/weapon_heavy_nailgun
+model progs/g_rock.mdl pickup/weapon_grenade_launcher
+model progs/g_rock2.mdl pickup/weapon_rocket_launcher
+model progs/g_light.mdl pickup/weapon_beam_gun
+model progs/armor.mdl pickup/armor
+model progs/backpack.mdl pickup/backpack
+model progs/quaddama.mdl pickup/power_damage
+model progs/invulner.mdl pickup/power_shield
+model progs/invisibl.mdl pickup/power_cloak
+model progs/suit.mdl pickup/power_suit
+model progs/w_s_key.mdl pickup/key_silver_old
+model progs/w_g_key.mdl pickup/key_gold_old
+model progs/m_s_key.mdl pickup/key_silver_rune
+model progs/m_g_key.mdl pickup/key_gold_rune
+model progs/b_s_key.mdl pickup/keycard_silver
+model progs/b_g_key.mdl pickup/keycard_gold
+model progs/end1.mdl pickup/rune_1
+model progs/end2.mdl pickup/rune_2
+model progs/end3.mdl pickup/rune_3
+model progs/end4.mdl pickup/rune_4
+model maps/b_bh10.bsp pickup/health_small
+model maps/b_bh25.bsp pickup/health
+model maps/b_bh100.bsp pickup/health_mega
+model maps/b_shell0.bsp pickup/shells_small
+model maps/b_shell1.bsp pickup/shells_large
+model maps/b_nail0.bsp pickup/nails_small
+model maps/b_nail1.bsp pickup/nails_large
+model maps/b_rock0.bsp pickup/rockets_small
+model maps/b_rock1.bsp pickup/rockets_large
+model maps/b_batt0.bsp pickup/cells_small
+model maps/b_batt1.bsp pickup/cells_large
+model maps/b_explob.bsp prop/barrel_explosive
+model maps/b_exbox2.bsp prop/barrel_explosive_small
+model progs/missile.mdl projectile/rocket
+model progs/grenade.mdl projectile/grenade
+model progs/spike.mdl projectile/nail
+model progs/s_spike.mdl projectile/nail_heavy
+model progs/bolt.mdl projectile/beam_1
+model progs/bolt2.mdl projectile/beam_2
+model progs/bolt3.mdl projectile/beam_3
+model progs/laser.mdl projectile/laser
+model progs/lavaball.mdl projectile/lava_ball
+model progs/k_spike.mdl projectile/spike_dark
+model progs/w_spike.mdl projectile/spit
+model progs/v_spike.mdl projectile/pod
+model progs/s_explod.spr effect/explosion
+model progs/s_bubble.spr effect/bubble
+model progs/s_light.spr effect/light_flash
+model progs/s_light.mdl effect/light_orb
+model progs/flame.mdl prop/torch_flame
+model progs/flame2.mdl prop/fire_flame
+model progs/teleport.mdl effect/teleport
+model progs/ogre.mdl creature/brute
+model progs/h_ogre.mdl creature/brute_head
+model progs/demon.mdl creature/leaper
+model progs/h_demon.mdl creature/leaper_head
+model progs/shambler.mdl creature/hulk
+model progs/h_shams.mdl creature/hulk_head
+model progs/knight.mdl creature/swordsman
+model progs/h_knight.mdl creature/swordsman_head
+model progs/hknight.mdl creature/dark_swordsman
+model progs/h_hellkn.mdl creature/dark_swordsman_head
+model progs/soldier.mdl creature/rifleman
+model progs/h_guard.mdl creature/rifleman_head
+model progs/enforcer.mdl creature/trooper
+model progs/h_mega.mdl creature/trooper_head
+model progs/wizard.mdl creature/flyer
+model progs/h_wizard.mdl creature/flyer_head
+model progs/zombie.mdl creature/ghoul
+model progs/h_zombie.mdl creature/ghoul_head
+model progs/dog.mdl creature/hound
+model progs/h_dog.mdl creature/hound_head
+model progs/fish.mdl creature/eel
+model progs/tarbaby.mdl creature/jelly
+model progs/shalrath.mdl creature/caster
+model progs/h_shal.mdl creature/caster_head
+model progs/boss.mdl creature/lava_lord
+model progs/oldone.mdl creature/elder
+
+set func_door sounds=0 noise1 common/silence
+set func_door sounds=0 noise2 common/silence
+set func_door sounds=1 noise1 door/stone_stop
+set func_door sounds=1 noise2 door/stone_move
+set func_door sounds=2 noise1 door/machine_stop
+set func_door sounds=2 noise2 door/machine_move
+set func_door sounds=3 noise1 door/chain_stop
+set func_door sounds=3 noise2 door/chain_move
+set func_door sounds=4 noise1 door/screech_stop
+set func_door sounds=4 noise2 door/screech_move
+set func_door worldtype=0 noise3 door/locked_old
+set func_door worldtype=0 noise4 door/unlock_old
+set func_door worldtype=1 noise3 door/locked_rune
+set func_door worldtype=1 noise4 door/unlock_rune
+set func_door worldtype=2 noise3 door/locked_base
+set func_door worldtype=2 noise4 door/unlock_base
+set func_door_secret sounds=1 noise1 door/secret_latch
+set func_door_secret sounds=1 noise2 door/secret_winch
+set func_door_secret sounds=1 noise3 door/stone_stop
+set func_door_secret sounds=2 noise1 door/secret_air_stop
+set func_door_secret sounds=2 noise2 door/secret_air_move
+set func_door_secret sounds=2 noise3 door/secret_air_stop
+set func_door_secret sounds=3 noise1 door/secret_base_stop
+set func_door_secret sounds=3 noise2 door/secret_base_move
+set func_door_secret sounds=3 noise3 door/secret_base_stop
+set func_button sounds=0 noise button/steam
+set func_button sounds=1 noise button/wood
+set func_button sounds=2 noise button/metal
+set func_button sounds=3 noise button/switch
+set func_plat sounds=1 noise lift/base_move
+set func_plat sounds=1 noise1 lift/base_stop
+set func_plat sounds=2 noise lift/chain_move
+set func_plat sounds=2 noise1 lift/chain_stop
+set func_train sounds=0 noise common/silence
+set func_train sounds=0 noise1 common/silence
+set func_train sounds=1 noise mover/train_move
+set func_train sounds=1 noise1 mover/train_stop
+set trigger_multiple sounds=1 noise trigger/secret
+set trigger_multiple sounds=2 noise common/message
+set trigger_multiple sounds=3 noise trigger/activate
+set trigger_secret sounds=1 noise trigger/secret
+set trigger_secret sounds=2 noise common/message
+set item_key1 worldtype=0 noise pickup/key_old
+set item_key1 worldtype=1 noise pickup/key_rune
+set item_key1 worldtype=2 noise pickup/keycard
+set item_key2 worldtype=0 noise pickup/key_old
+set item_key2 worldtype=1 noise pickup/key_rune
+set item_key2 worldtype=2 noise pickup/keycard

@@ -136,6 +136,9 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge tsan <test>` (one test and its sources built with ThreadSanitizer, without a whole sanitizer preset)
 - `ge ref ephemeris <body> --from=<t> --to=<t> --site=<lat,lon,m>` (a published reference ephemeris fetched once into a test table, and a core function such as the moon's place diffed against it, worst error in arc minutes)
 - `ge gpu probe --lab=<id> --shot=<name> --pixel=x,y --expr=<wgsl>` (a uniform or a shader expression read back at one pixel of a lab shot, instead of patching the shader with select() outputs and rebuilding)
+- `ge load --tag=<name>` / `--compare=<name>` (two load runs' efficiency, lanes' shares and the median frame's bound side by side, so a threading change proves what it spread)
+- `ge load --frame=<n>` (the lanes chart zoomed round one frame, the slowest by default, with its critical path as a table)
+- `ge load --live` (the load monitor over the game's own window as a player drives it, once the desktop game steps by hand: M19c)
 
 ## Hygiene
 
@@ -187,3 +190,12 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge input replay <events-log> --bindings=<file>` (each action's value frame by frame, from a recorded event log under a binding set)
 - `ge play --events=<session>` and `ge replay <session>` (a recorded device session played headless through the game's bindings into a run: the step's inputs and the run's digest, where `ge input replay` stops at the actions; `ge replay` today takes only an input log)
 - `ge input bindings check <file>` (a bindings file parsed against the game's actions: conflicts and unbound actions listed)
+
+## Free content
+
+- `ge content scan <pak|dir>` (every sound and model a content set's maps and game logic name, with the event that plays or shows each: the registry and an assetmap draft)
+- `ge asset source search|fetch <source>:<pack>` (the free sources as a catalogue: found, unpacked into a cache, licence, author, URL and hash written to a lock file; a licence the repo cannot carry refused)
+- `ge sound match <reference> <candidates>` (candidates ranked against a reference by length, bands and envelope, a reason per trait and a sheet of waveforms)
+- `ge sound split <file>` (a long take cut at its silences into numbered files)
+- `ge sound import <source> <name> [--loop]` and `ge model import <source> <name>` (converted, textures packed, load-checked, previewed, registry and credits rows written)
+- A check that every file under a game's `content/` has a credits row

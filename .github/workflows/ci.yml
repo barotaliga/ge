@@ -1,9 +1,10 @@
 # Every push, pull request and queued merge. The org's runners are a small shared pool, so a
-# pull request runs the cheap gates and ONE build-and-test row; the merge queue runs the whole
-# matrix (every compiler and OS the engine promises the same bits on) and the packaging, on the
-# exact tree that lands; a push to main builds the cached rows only, to save their compiler
-# caches. A change that touches only prose (docs, skills, lessons, root Markdown, changeset
-# fragments) runs the gates alone. A pull request labelled `full-ci` runs the whole matrix.
+# pull request runs the cheap gates, ONE Linux build-and-test row and the Windows row; the merge
+# queue runs the whole matrix (every compiler and OS the engine promises the same bits on) and
+# the packaging, on the exact tree that lands; a push to main builds the cached rows only, to
+# save their compiler caches. A change that touches only prose (docs, skills, lessons, root
+# Markdown, changeset fragments) runs the gates alone. A pull request labelled `full-ci` runs
+# the whole matrix.
 #
 # The ruleset requires ONE check, `required` (the last job): it passes when every job either
 # passed or was skipped by the rules above, so a skipped row never leaves a required check
@@ -171,9 +172,12 @@ jobs:
         if: runner.os != 'Linux' || runner.arch != 'X64'
         run: ctest --preset ${{ matrix.preset }}
 
+  # MSVC on every pull request too, not only in the queue: its warnings (/W4 /WX) and its CRT are
+  # where Linux-built changes break most, and a break first found at the head of the queue costs
+  # every PR queued behind it a full rebuild of the matrix.
   windows:
     needs: gates
-    if: needs.gates.outputs.code == 'true' && needs.gates.outputs.full == 'true'
+    if: needs.gates.outputs.code == 'true' && github.event_name != 'push'
     runs-on: windows-2025
     timeout-minutes: 150
     steps:

@@ -82,6 +82,12 @@ foreach(src ${GE_TEST_SOURCES})
     # repo's guidance; the scaffold's tests skip there.
     set_tests_properties(${name} PROPERTIES SKIP_RETURN_CODE 77)
   endif()
+  if(name MATCHES "^platform_")
+    # The window tests share one display (a virtual X server on CI). A window opened by a test
+    # running beside them can take the focus and the pointer, and the virtual mouse's motion
+    # meant for this test's window then never arrives (platform_devices_test). Run them alone.
+    set_tests_properties(${name} PROPERTIES RUN_SERIAL TRUE)
+  endif()
   if(extra OR app_includes)
     # A plugin's app half draws with the GPU, so its tests skip without an adapter too. The
     # software driver's worker threads keep allocations past exit, which the leak check
