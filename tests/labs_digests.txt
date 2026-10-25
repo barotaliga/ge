@@ -5,6 +5,7 @@ army c3e9faa0202c9fc0
 army-flight 383c454be759df5d
 army-sleds bae04af32e36e808
 audition d47fda4a9cb22fbb
+by-hand 09f2cd6fd64b8769
 camera-follow b1dbf6ae474cba78
 camera-machines fa674ce82d9f1c5e
 camera-rigs bd01263b4d16d23c
@@ -92,6 +93,7 @@ taa 01ee5d58d90a05ce
 trace cccfaac48bafaa60
 trails 1aaa468d0dbd81a0
 wanted 507dbbcbbbb4187e
+water-audition 3b2a928e2111e5dd
 water-colour f5da3e4186a81286
 water-cost cbf29ce484222325
 water-lod 2b07a3a3e77f568f
