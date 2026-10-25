@@ -257,12 +257,14 @@ void CpuSampler::start(int64_t period_us, int64_t origin_ns) {
     core::name_this_thread("sampler");
     os_id_.store(core::this_thread_os_id());
     auto next = std::chrono::steady_clock::now();
-    while (running_.load()) {
+    // At least one sample at the start and one at the stop, even when the stop came before this
+    // thread was first scheduled (a loaded machine): a run always has a span to read.
+    do {
       sample();
       next += std::chrono::microseconds(period_us_);
       std::unique_lock<std::mutex> lock(g_wait_lock);
       g_wake.wait_until(lock, next, [this] { return !running_.load(); });
-    }
+    } while (running_.load());
     sample();
   });
 }
