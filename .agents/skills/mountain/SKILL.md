@@ -80,7 +80,7 @@ one game's: which maps a game races, its modes and its strings stay in the game.
   `real_faces/` (a file a face and `index.cpp`) by the `real-faces` lab's bake
   (`--bake --fetch --write`, from the repository's root): the free Copernicus 30 m elevation
   model read off its public bucket with `curl` into the gitignored `.cache/dem/`, through the
-  labs' GeoTIFF reader (`labs/dem_tiles.hpp`) and inflater (`engine/lab/inflate.hpp`). Never
+  labs' GeoTIFF reader (`labs/dem_tiles.hpp`) and inflater (`engine/assets/inflate.hpp`). Never
   edit a face's file by hand; a crop moved is a face baked again and its golden row rewritten.
   A face is BUILT ON by `GenerateOptions::face` (its region the map's, `massif::real::attempts`
   attempts): `plan_massif` reads it (`read_face`: the summit ridge down to its brow, the peak,
@@ -137,6 +137,27 @@ them). `bake_ground` paints the plan onto a metre grid (`Ground`: road, street, 
 and `felled_trees` reads which of the map's trees go. The caller keeps the plan; nothing stores it
 on the `Level`. `tests/mountain_village_test.cpp` holds the loop, the clearances, the graph, the
 ground and the reference seeds' golden; the `village` lab draws it.
+
+## The village's traffic (`mountain/village`, M13h)
+
+`furnish_streets` (`furniture.hpp`) reads the street plan for what drives and parks on it: the
+lanes (lane `2k` is street `k`'s +1, `2k + 1` its -1, `lane_of`; right-hand, so a +1 lane is on
+the street's left), the loop round the village, the crossings, the kerbside and car park bays and
+the bus stop. `plan_traffic` (`traffic.hpp`) deals off hashes of the seed on `kTrafficSalt`,
+never a stream: the bus first, then the visitors to car park bays, the cars through, the loop's
+cars each way and the cyclists. Every route is the line its REAR AXLE follows
+(`traffic_route.hpp`: the lanes' offset lines joined round the corners by cubics, laid every half
+metre, the speed eased for each bend by its sideways pull and integrated once into the time at
+every point) and comes round in a whole fraction of `traffic::kPeriod`; each vehicle is placed at
+the first dealt phase whose whole period, sampled every `kSample`, keeps its room (its body, the
+gap it keeps ahead) clear of every vehicle placed before it, or is left off. A car and a cyclist
+on one lane are the one meeting not held apart: `vehicle_at` swings the car out round him. Bays
+any vehicle's body sweeps are never parked in. `vehicle_at(level, plan, k, t)` is a pure function
+of the clock, as a lift's carriers are; nothing is stepped or stored on a game's state. Every
+number is `traffic_rules.hpp`'s. `tests/mountain_traffic_test.cpp` holds the period, the kinds,
+the bays, no overlap over the whole period, the speeds, the bus at its stop and the golden; the
+`traffic` lab draws the routes and four moments. Where a building pulls cars to a kerb is not
+built (there are no buildings yet): every kerb's bay takes the same share.
 
 ## The mountain as drawn (`mountain/app`, M8)
 
@@ -204,9 +225,10 @@ it moves the ground the simulation skis on; every term is light.
 `mapgen-cost` (`PRESET=release`), and for the ski area `resort` (the area from above and its
 courses, with its lifts, runs and courses as tables and the attempts tried) and `junctions`
 (where the groomed snow steps where runs meet, the worst drawn as relief), and `village` (the
-village's streets, the ground under them and the trees felled, over seeds). A change to mapgen or
+village's streets, the ground under them and the trees felled, over seeds) and `traffic` (the
+village's routes and four moments of its traffic). A change to mapgen or
 analysis runs `level` and `analyze` before and after (`--tag=before`, then `--compare=before`);
-a change to the ski area's build runs `resort`, `junctions` and `village` the same way, and a change to a
+a change to the ski area's build runs `resort`, `junctions`, `village` and `traffic` the same way, and a change to a
 discipline runs its lab (`slalom`: both runs straightened, the map from above, the gate table;
 `speed-events`: the downhill, super-G and both giant slalom runs straightened, with their
 jumps, nets and speed trap; `speed-ski`: the track's profile from the side and the map from

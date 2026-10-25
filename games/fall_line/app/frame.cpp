@@ -18,6 +18,8 @@
 #include "mountain/app/cloud_field.hpp"
 #include "mountain/app/weather_look.hpp"
 #include "prof/zones.hpp"
+#include "wind/field.hpp"
+#include "wind/precip.hpp"
 
 namespace fall_line::app {
 
@@ -35,7 +37,7 @@ constexpr r::PassRow kPassTable[] = {
     {"trails.fine", "", "trails.fine"},
     {"trails.coarse", "", "trails.coarse"},
     {"particles.sim", "terrain.height", "particles"},
-    {"snowfall.sim", "", "snowfall"},
+    {"precip.sim", "", "precip"},
     {"shadows.cull", "instances", "shadows.lists"},
     {"shadows.near", "instances shadows.lists", "shadows.maps"},
     {"shadows.far", "instances shadows.lists", "shadows.maps"},
@@ -62,7 +64,7 @@ constexpr r::PassRow kPassTable[] = {
     {"water.under", "water.scene sky.light", "hdr"},
     {"particles", "particles terrain.horizon shadows.maps sky.aerial sky.light depth",
      "hdr motion"},
-    {"snowfall", "snowfall terrain.horizon sky.aerial sky.light depth", "hdr motion"},
+    {"precip", "precip terrain.horizon sky.aerial sky.light depth", "hdr motion"},
     {"taa", "hdr motion depth taa.history sky.light", "taa.history"},
     {"bloom", "taa.history", "bloom"},
     {"post", "taa.history bloom sky.light", "final"},
@@ -88,7 +90,7 @@ void make_targets(ge::gpu::Device& device, GameFrame& f, uint32_t w, uint32_t h)
   for (r::InstanceFamily* family : f.families)
     r::bind_family_hiz(device, f.instancing, *family, f.hiz);
   r::bind_particle_targets(device, f.particles, f.targets);
-  r::bind_snowfall_targets(device, f.snowfall, f.targets);
+  r::bind_precip_targets(device, f.precip, f.targets);
   r::bind_cloud_targets(device, f.clouds, f.targets);
   r::create_water_targets(device, f.water, f.targets);
   r::bind_underwater(device, f.under, f.water);
@@ -153,7 +155,11 @@ FrameOptions frame_options(const cfg::Settings& s) {
   o.snow = s.snow;
   o.trails = s.trails;
   o.spray = s.spray;
-  o.snowfall = s.snowfall;
+  o.precip = s.precip;
+  o.splashes = s.splashes;
+  o.wet = s.wet;
+  o.fall.particles = static_cast<uint32_t>(
+      std::lround(o.fall.particles * std::clamp(s.precip_density, 0.25, 2.0)));
   o.weather = s.weather;
   o.clouds = s.clouds;
   o.cover = s.cover;
@@ -212,8 +218,7 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
   r::create_terrain(device, f->pipelines, f->terrain, source, f->frame_layout);
   r::create_particles(device, f->pipelines, f->particles, f->frame_layout, f->terrain,
                       options.particles);
-  r::create_snowfall(device, f->pipelines, f->snowfall, f->frame_layout, f->terrain,
-                     options.flakes);
+  r::create_precip(device, f->pipelines, f->precip, f->frame_layout, f->terrain, options.fall);
   r::create_clouds(device, f->pipelines, f->clouds, f->frame_layout);
   r::create_water(device, f->pipelines, f->water, f->frame_layout);
   r::create_underwater(device, f->pipelines, f->under, f->frame_layout);
@@ -366,7 +371,7 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   r::FrameView view = seen;
   if (f.options.weather) {
     ge::mountain::app::sky_at(*f.level, view.time_s, view.weather, view.clouds,
-                              f.options.clouds > 0);
+                              f.options.clouds > 0, view.eye[1]);
     // Kinds of cloud picked by hand (sv_clouds) in place of the map's, dealt off its seed.
     if (f.options.cloud_count >= 0 && f.options.clouds > 0) {
       const ge::mountain::mapgen::Level& l = *f.level;
@@ -374,7 +379,8 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
                                                        l.weather, l.seed, l.mountain.base.y,
                                                        l.sun.latitude, view.time_s);
       view.weather = ge::mountain::app::weather_look(
-          l.weather, ge::mountain::air::fall_at(l, view.time_s), view.clouds.count > 0);
+          l.weather, ge::mountain::air::fall_at(l, view.time_s, view.eye[1]),
+          view.clouds.count > 0);
       ge::mountain::app::lid_under(f.options.cloud_kinds, f.options.cloud_count, view.weather);
     }
     // A cover picked by hand: the lowest layer's, the layers over it in the same proportion.
@@ -386,6 +392,24 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
     view.clouds.steps = f.options.clouds;
     view.clouds.quarter = f.options.cloud_quarter;
     view.clouds.spread = f.options.cloud_spread;
+  }
+  // THE WET GROUND the rain leaves (the eye's own: one wet ground a frame), stepped by the frames'
+  // clock from the steady state its rain and drying would leave, before the uniforms take it.
+  if (f.options.wet && f.options.weather) {
+    const ge::mountain::air::Fall fall =
+        ge::mountain::air::fall_at(*f.level, view.time_s, view.eye[1]);
+    const ge::wind::Precip here{fall.fall, fall.rain};
+    const double rate = ge::wind::rate_of(here) * here.rain;
+    const double sun = view.weather.sun_pass * std::max(0.0, std::sin(view.sun_elevation));
+    const double dry =
+        ge::wind::dry_rate(ge::mountain::air::wind_at(*f.level, view.time_s).speed, sun);
+    const double since = view.time_s - f.wet_time;
+    f.wet = f.wet_placed && since >= 0 && since < 60 ? ge::wind::step_wet(f.wet, rate, dry, since)
+                                                     : ge::wind::wet_steady(rate, dry);
+    f.wet_time = view.time_s;
+    f.wet_placed = true;
+    view.weather.wet = f.wet.wet;
+    view.weather.puddles = f.wet.puddles;
   }
   view.reach_m = f.options.reach_m;
   const auto start = std::chrono::steady_clock::now();
@@ -437,16 +461,23 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
     const ge::mountain::air::Wind wind = ge::mountain::air::wind_at(*f.level, view.time_s);
     const double air[3] = {wind.x, 0.0, wind.z};
     r::prepare_particles(device, f.particles, dt, view.near_m, air);
-    r::SnowfallFrame at;
+    // What falls at the eye: snow above the map's snow line, rain under it, sleet between.
+    const ge::mountain::air::Fall fall =
+        ge::mountain::air::fall_at(*f.level, view.time_s, view.eye[1]);
+    r::PrecipFrame at;
     for (int k = 0; k < 3; ++k) {
       at.eye[k] = view.eye[k];
       at.wind[k] = air[k];
     }
-    at.fall = f.options.snowfall ? ge::mountain::air::fall_at(*f.level, view.time_s).fall : 0.0;
+    at.fall = f.options.precip ? fall.fall : 0.0;
+    at.rain = fall.rain;
+    at.drop_speed = ge::wind::fall_speed({fall.fall, 1});
+    at.swirl = ge::wind::swirl_of(wind.speed, ge::wind::turbulence_for(ge::wind::kRoughness::snow));
+    at.splash = f.options.splashes ? fall.rain * std::sqrt(fall.fall) : 0.0;
     at.dt = dt;
     at.time = view.time_s;
     at.near_m = view.near_m;
-    r::prepare_snowfall(device, f.snowfall, at);
+    r::prepare_precip(device, f.precip, at);
   }
   const size_t racers = std::min<size_t>(scene.skiers.size(), kMaxFigures);
   {
@@ -519,7 +550,7 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
     f.recorder.compute(encoder, "trails.coarse").End();
   }
   r::encode_particles_sim(f.particles, f.pipelines, f.recorder, encoder);
-  r::encode_snowfall_sim(f.snowfall, f.pipelines, f.recorder, encoder);
+  r::encode_precip_sim(f.precip, f.pipelines, f.recorder, encoder);
   r::encode_sun_shadows(f.shadows, still, moving, f.instancing, f.pipelines, f.recorder, encoder);
   r::encode_terrain_depth(f.terrain, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
   r::encode_instances_depth(families, f.instancing, f.pipelines, f.recorder, encoder, f.targets,
@@ -538,7 +569,7 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   r::encode_water(f.water, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
   r::encode_underwater(f.under, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
   r::encode_particles(f.particles, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
-  r::encode_snowfall(f.snowfall, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
+  r::encode_precip(f.precip, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
   if (f.options.taa) {
     r::encode_taa(device, f.taa, f.pipelines, f.recorder, encoder, f.frame_group);
   }
