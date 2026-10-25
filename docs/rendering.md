@@ -373,6 +373,17 @@ figure, the machines). They come in as **glTF 2.0** and nothing else.
   whole to its node's joint), the base colours as materials, the clips baked at 60 Hz. glTF's
   frame is mirrored in x into the world's, so a model faces heading 0. Nothing after the
   load reads glTF.
+- **A base colour texture is baked into parts at load** (`assets/image.hpp`, its PNG reader
+  palettes included). Each triangle takes the texel at its middle (NEAREST, repeating, through
+  the texture's KHR_texture_transform), linear and times the base colour factor, as a material
+  of its own colour (`<material>#rrggbb`, at most 256 a model), and a vertex two colours share
+  is split. A low-poly kit's colour atlas (flat swatches, the common free kits' one 512 x 512
+  palette PNG) then draws exactly in every pass that draws parts (the instances, the skinning,
+  the shadows, the `models` lab) with no texture on the GPU and nothing more a frame. Not
+  taken, for now: sampling the texture per pixel, which needs UVs in the packed vertex and a
+  texture binding in every instanced pass; it waits on a model whose texture is a picture
+  rather than an atlas (the loader notes one: a face whose corners read other colours than its
+  middle).
 - **Posed on the CPU, skinned on the GPU.** A frame samples a clip (or the game's own pose)
   into the joints' locals, chains them to model space and multiplies the inverse binds into
   a bone palette (`assets/pose.hpp`; no allocation). The `skinning` compute pass
