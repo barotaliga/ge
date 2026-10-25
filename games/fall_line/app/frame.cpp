@@ -163,6 +163,7 @@ FrameOptions frame_options(const cfg::Settings& s) {
   o.weather = s.weather;
   o.clouds = s.clouds;
   o.cover = s.cover;
+  o.thick = s.thick;
   cloud_stack_of(s, o);
   return o;
 }
@@ -388,6 +389,11 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
       const double k = f.options.cover / view.clouds.layers[0].cover;
       for (int i = 0; i < view.clouds.count; ++i)
         view.clouds.layers[i].cover = std::min(1.0, view.clouds.layers[i].cover * k);
+    }
+    // A thickness picked by hand: every layer's, between its kind's thin patches and its cores.
+    if (f.options.thick >= 0) {
+      for (int i = 0; i < view.clouds.count; ++i)
+        view.clouds.layers[i].thick_bias = 2 * std::min(f.options.thick, 1.0) - 1;
     }
     view.clouds.steps = f.options.clouds;
     view.clouds.quarter = f.options.cloud_quarter;
