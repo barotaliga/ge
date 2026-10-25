@@ -726,14 +726,15 @@ height) and living their kind's life. Where they are drawn a broken sky's mean c
 lid keeps its deck, and stands a sheet under it (OVERCAST a stratus, SNOW and a STORM a
 nimbostratus) so the deck has a texture.
 
-**Cloud kinds (M8f8)** (`render/cloud_kinds.hpp`): fourteen named kinds, each a layer's bands
-and its form, matched by eye against photographs of real skies side by side (the photographs
-are kept out of the tree): inversion, stratus, stratocumulus, cumulus, congestus,
-cumulonimbus, nimbostratus, altocumulus, altostratus, lenticular, cirrocumulus, cirrostratus,
-cirrus and wisps. A kind's bands are its base over the valley floor, its depth, its cover and
+**Cloud kinds (M8f8)** (`render/cloud_kinds.hpp`): fifteen named kinds, each a layer's bands,
+its form and its light, matched by eye against photographs of real skies side by side (the
+photographs are kept out of the tree): inversion, stratus, stratocumulus, cumulus, congestus,
+cumulonimbus, nimbostratus, altocumulus, altostratus, lenticular, cirrocumulus, veil,
+cirrostratus, cirrus and wisps. A kind's bands are its base over the valley floor, its depth, its cover and
 its cell (m); its stretch along the wind, its dome (0 a sheet, 1 a heap), its optical depth,
-its shadow, its life and its speed; and four FORM knobs, each 0..1, carried in a fourth row of
-the layer's frame block (`CloudLayer::anvil`, `erode`, `fibre`, `patch`):
+its shadow, its life and its speed; four FORM knobs, each 0..1, carried in a fourth row of the
+layer's frame block (`CloudLayer::anvil`, `erode`, `fibre`, `patch`); and its LIGHT in a fifth
+(`drop_um`, `drop_spread`, `halo`, `deck`), below:
 
 - THE BILLOWS. The noise texture is two channels (RG8Unorm 64³): the column's value fbm, and a
   cellular (Worley) fbm at 4, 8 and 16 cells a tile. Two reads of it at ten times the cell's
@@ -744,8 +745,10 @@ the layer's frame block (`CloudLayer::anvil`, `erode`, `fibre`, `patch`):
   cirrus is fibres and hooks rather than a smear.
 - THE PATCHES (`patch`): a quarter-scale read of the noise masks the column, so a cirrocumulus
   or an altocumulus comes as fields of cells with clear sky between, never a uniform sheet.
-- THE ANVIL (`anvil`): above 70 % of its depth a heap's cut is lowered, so a cumulonimbus
-  spreads its top wider than its tower.
+- THE ANVIL (`anvil`): from 55 to 80 % of its depth up a heap's cut is lowered to 0.72 of
+  itself, so a cumulonimbus spreads its top to several times its tower's width, thinning toward
+  the rim, and a coarse read of the billows lowers the anvil's base cell by cell into hanging
+  pouches (mammatus).
 - THE COLUMN ramps from the cut to full over at most 0.3 of the noise (`kColumnRamp`), so a
   full sheet is evenly thick and does not break into the noise's blotches.
 - THE LIGHT IN A SHEET: where a thin slab is marched along a long path the steps grow (up to
@@ -753,9 +756,30 @@ the layer's frame block (`CloudLayer::anvil`, `erode`, `fibre`, `patch`):
   is diffusion's 1/(1 + σ′τ) along the path up through the slab (one more read halfway to its
   top) rather than the heap's forward exp(−σ′τ), and the sky's light from above dims through
   the same path, so a deck is grey under and bright on top. A thick sheet under a lid is
-  blended toward the deck's own grey, so the ground's flat light and the sheet overhead agree.
-- THE HALO: a sheet with strands (cirrostratus) lights a ring at 22° round the sun, its red
-  inside its blue (a Gaussian of 0.9° at 21.7°, 22.0° and 22.4° for red, green and blue).
+  blended toward the deck's own grey (half of the way), so the ground's flat light and the sheet
+  overhead agree and the sheet keeps its texture.
+- THE HALO: an ice layer lights a ring at 22° round the sun (and the moon, when it is the key
+  light), its red inside its blue (a Gaussian of 0.9° at 21.7°, 22.0° and 22.4° for red, green
+  and blue), as strong as its kind's `halo`: the veil's 1, cirrus's 0.8, cirrostratus's 0.4.
+- THE GLOW ROUND THE DISC (`diffraction` in `clouds.wgsl`): half of what a particle much
+  larger than the light's wavelength takes out of a beam is diffracted round its edge, so every
+  layer in front of the sun or the moon adds the Airy pattern (k a)²/4π (2 J1(k a θ)/(k a θ))² of
+  its particles, for red, green and blue, lit by the key light through the layer as its single
+  scattering is: the aureole a few degrees wide and, where the particles are of one size, the
+  corona's coloured rings round it. Each kind names its particles' radius and their spread (five
+  sizes, a share either side, which wash the outer rings out): altocumulus's 8 µm droplets
+  spread 0.1 and a lenticular's 6 µm spread 0.06 ring the moon in colour; altostratus's mixed
+  14 µm spread 0.45 give the sun the soft glare of ground glass and no rings; the ice kinds'
+  30–40 µm crystals a tight bright glare. The sun's glow dazzles as it is; the moon's is seen
+  beside its disc as the disc is (`as_seen`, now in `wgsl/frame.wgsl`): the disc's brightness as
+  seen times the glow's ratio to the disc's to the power 0.35 (`kGlowSeen`), never brighter than
+  it is, so its rings show at night.
+- THE DECK'S TOP (`deck`): the light that scatters on in a deck comes in through its top, which
+  the sun lights at a slant, so in a layer whose kind is a deck (stratus, nimbostratus,
+  altostratus, an inversion, and 0.6 of stratocumulus) that light is the sun's height's sine of
+  the beam's: an altostratus under a low sun is grey with the sun a pale disc in it, not white
+  over the whole sky. A heap's sides and a thin layer's edges face the sun at any height, so a
+  high veil keeps its pink at sunset.
 - THE SHAFTS (`shafts` in `wgsl/frame.wgsl`): six points along the view ray, out to 20 km,
   read the cloud's shadow; the air scatters that share of the sun (70 % of its in-scatter is
   shadowed at most), on the world through the haze and on the sky strongest toward the sun, so
@@ -897,6 +921,34 @@ saturation). On the software adapter at 1280 × 720 the bloom costs about 11 ms 
 pass 7 ms (the `profile` lab); the bloom's cost on a real GPU waits for the Mac's numbers.
 
 Linear light is used throughout, and the conversion happens here, once.
+
+## The 2D pass
+
+Menus, the HUD and the console are drawn by the 2D layer (`engine/ui`, `docs/architecture.md`):
+an immediate-mode draw list of rounded boxes and text runs, which a CPU raster pictures headless.
+The GPU draws the same list in one pass after post, blended over the display image.
+
+**As built (M22b)** (`render/ui_pass.hpp`, `ui_pass.wgsl`):
+
+- **One instanced draw.** Each box is one quad, and its rounded rectangle's signed distance,
+  paint (solid, or a linear or radial gradient of up to eight stops), image and border are
+  worked out in the fragment shader. Each glyph is one quad that reads a glyph atlas. Every
+  instance is in one storage buffer and every paint in another. The draw splits only where a
+  box's image changes, because each image has its own small bind group. A menu page is one draw.
+- **The glyph atlas** is a 1024² `R8Unorm` texture packed in shelves. A glyph's mask is copied
+  in the first time a list draws it, and kept under the font's cached mask. A full atlas is
+  emptied and refilled from the list being prepared.
+- **Images** are uploaded the first time a box names them. A texture the GPU already has, such
+  as the live frame under a menu, is bound to a key with `ui_texture`.
+- **The CPU raster's pixels.** The pass uses the same signed distance and coverage at the
+  pixel's centre, the same clip rule, and text set by the same `ui::place_glyphs` from the same
+  masks. It samples images bilinearly at the same texel centres. It blends straight
+  sRGB-encoded colours, folding a fill and its border into one premultiplied colour, so the
+  output must be a UNORM target: an `*Srgb` one would blend in linear light. Gradients get half
+  a level of dither against banding.
+- **Measured.** The `menu-gpu` lab holds every page of the `menu` lab to the raster: on lavapipe,
+  none is more than 3 levels off at any pixel. Preparing a 1280 × 720 page costs about 1.7 ms of
+  CPU, and the software adapter draws it in 19 ms. The real GPU's cost waits for the Mac.
 
 ## Particles and figures
 
@@ -1143,7 +1195,7 @@ contract (scenes, captions, sheets). The renderer's half is:
 | Home | Holds |
 | --- | --- |
 | `engine/gpu/` | The `webgpu.h` wrapper: the device and its feature tiers, RAII handles, the pipeline manifest and creation counter, timestamp queries, staging uploads, readback. The only directory that includes `webgpu.h` |
-| `engine/render/` | Mechanisms any game could use: the pass table and named targets, the frame's stats, GPU-driven instance families and their culling, the depth pyramid, the heightfield clipmap renderer, the horizon map, cascaded shadows and the shadow atlas, the sky tables and aerial perspective, the cloud volume, TAA-U, post, compute particles, skinning, and the shared WGSL library |
+| `engine/render/` | Mechanisms any game could use: the pass table and named targets, the frame's stats, GPU-driven instance families and their culling, the depth pyramid, the heightfield clipmap renderer, the horizon map, cascaded shadows and the shadow atlas, the sky tables and aerial perspective, the cloud volume, TAA-U, post, the 2D pass, compute particles, skinning, and the shared WGSL library |
 | `plugins/<name>/app/` | A plugin's presentation half, shared by every game that links the plugin: `mountain/app` holds the snow material, the trail maps and their stamping, and the procedural tree shapes; `skier/app` holds the figure, the tracks' prints and the spray emitters (`docs/architecture.md` § Plugins) |
 | `games/fall_line/app/` | The game's own: its pass table, its quality ladder's values, its grade, and whatever draws only this game has |
 

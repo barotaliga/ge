@@ -38,6 +38,21 @@ const kReduced = 0.15;
 const kOrders = 3.0;
 // The 22 degree halo's peak in an ice layer, per steradian (the forward lobe is about 0.4 there).
 const kHalo = 0.5;
+// THE GLOW ROUND THE DISC: half of what a particle much larger than the light's wavelength takes
+// out of a beam is diffracted round its edge, into a lobe a few degrees wide (the aureole), with
+// coloured rings out from it where the particles are of one size (the corona: blue inside, red
+// outside each). A layer's particles diffract as their radius (`glow.x`, um), over five sizes a
+// share `glow.y` either side of it, which washes the outer rings out: a thin altocumulus's rings,
+// an altostratus's or an ice veil's plain bright glare (the `diffraction` below).
+//
+// How a glow round the MOON is seen beside its disc: as the disc's brightness as seen
+// (frame.wgsl's `as_seen`) times its ratio to the disc's own to this power, the law sky.wgsl's
+// faint parts of the moon are seen by (never brighter than it is).
+const kGlowSeen = 0.35;
+// The most the sun's glow adds, against the picture's white, and the glow (against the white)
+// whose colour is a share 1 - 1/e of the way to white.
+const kSunGlowTop = 8.0;
+const kSunGlowWhite = 1.5;
 
 struct VertexOut {
   @builtin(position) position: vec4f,
@@ -64,13 +79,16 @@ fn cloud_density(l: CloudRows, p: vec3f, detail: bool) -> f32 {
   let n = textureSampleLevel(cloud_noise, linear_repeat, uvw, 0.0).r;
   let c = cloud_column_of(l, uvw, n);
   // AN ANVIL (form.x): near the slab's top the same noise cut far lower, so the tower's top
-  // spreads out flat round it.
+  // spreads out flat to several times its width, thinning toward its rim; its base hangs in
+  // pouches (mammatus), a coarse read of the billows lowering it cell by cell.
   var anvil = 0.0;
-  if (l.form.x > 0.0 && h > 0.7) {
-    let cut = l.shape.z * 0.85;
-    let wide = clamp((n - cut) / max(1.0 - cut, 1e-3) * 3.0, 0.0, 1.0);
-    let band = smoothstep(0.7, 0.8, h) * (1.0 - smoothstep(0.93, 1.0, h));
-    anvil = l.form.x * wide * band;
+  if (l.form.x > 0.0 && h > 0.55) {
+    let cut = l.shape.z * 0.72;
+    let wide = clamp((n - cut) / max(1.0 - cut, 1e-3) * 2.0, 0.0, 1.0);
+    let pouch = textureSampleLevel(cloud_noise, linear_repeat, vec3f(uvw.xy * 6.0, uvw.z), 0.0).g;
+    let lo = 0.8 - 0.07 * wide - 0.12 * smoothstep(0.3, 0.8, pouch) * wide;
+    let band = smoothstep(lo, lo + 0.04, h) * (1.0 - smoothstep(0.95 - 0.12 * (1.0 - wide), 1.0, h));
+    anvil = l.form.x * sqrt(wide) * band;
   }
   if (c <= 0.0 && anvil <= 0.0) {
     return 0.0;
@@ -110,6 +128,43 @@ fn cloud_density(l: CloudRows, p: vec3f, detail: bool) -> f32 {
 }
 
 // Henyey-Greenstein's phase function, per steradian.
+// The Bessel function J1 (rational fits under 8, the asymptotic form over it).
+fn bessel_j1(x: f32) -> f32 {
+  if (x < 8.0) {
+    let y = x * x;
+    let a = x * (72362614232.0 + y * (-7895059235.0 + y * (242396853.1 + y * (-2972611.439 +
+            y * (15704.4826 + y * -30.16036606)))));
+    let b = 144725228442.0 + y * (2300535178.0 + y * (18583304.74 + y * (99447.43394 +
+            y * (376.9991397 + y))));
+    return a / b;
+  }
+  let z = 8.0 / x;
+  let y = z * z;
+  let xx = x - 2.356194491;
+  let a = 1.0 + y * (0.00183105 + y * (-3.516396496e-5 + y * (2.457520174e-6 + y * -2.40337019e-7)));
+  let b = 0.04687499995 + y * (-2.002690873e-4 + y * (8.449199096e-6 + y * (-8.8228987e-7 +
+          y * 1.05787412e-7)));
+  return sqrt(0.636619772 / x) * (cos(xx) * a - z * sin(xx) * b);
+}
+
+// The diffraction lobe per steradian (it sums to one over the sphere) at `theta` rad off the
+// light, red, green and blue, for particles of radius `a` um spread `spread` either side (five
+// sizes): a round edge's Airy pattern, (k a)^2 / 4 pi (2 J1(k a theta) / (k a theta))^2.
+fn diffraction(theta: f32, a: f32, spread: f32) -> vec3f {
+  let wave = vec3f(0.61, 0.55, 0.465);
+  let sizes = array<f32, 5>(1.0 - spread, 1.0 - 0.5 * spread, 1.0, 1.0 + 0.5 * spread, 1.0 + spread);
+  let shares = array<f32, 5>(0.1, 0.2, 0.4, 0.2, 0.1);
+  var out = vec3f(0.0);
+  for (var i = 0; i < 5; i++) {
+    let ka = 2.0 * PI * a * sizes[i] / wave;
+    let u = max(ka * theta, vec3f(1e-4));
+    let j = vec3f(bessel_j1(u.x), bessel_j1(u.y), bessel_j1(u.z));
+    let airy = 2.0 * j / u;
+    out += shares[i] * ka * ka / (4.0 * PI) * airy * airy;
+  }
+  return out;
+}
+
 fn hg(c: f32, g: f32) -> f32 {
   let g2 = g * g;
   return (1.0 - g2) / (4.0 * PI * pow(max(1.0 + g2 - 2.0 * g * c, 1e-4), 1.5));
@@ -169,11 +224,13 @@ fn march(i: i32, d: vec3f, t0: f32, t1: f32, j: f32) -> LayerLook {
   // The phase: a forward and a back lobe, and a wider one for the light scattered on.
   let ph = 0.75 * hg(c, 0.6) + 0.25 * hg(c, -0.25);
   let ph_ms = hg(c, 0.2);
-  // ICE (a combed layer, form.z) bends the light 22 degrees through its hexagonal plates: a
+  // ICE (a layer with a halo, glow.z) bends the light 22 degrees through its hexagonal plates: a
   // ring round the sun, red inside, blue outside.
-  let theta = acos(clamp(c, -1.0, 1.0));
+  let theta = 2.0 * asin(min(0.5 * length(d - L), 1.0));
   let off = (theta - vec3f(0.3787, 0.3840, 0.3910)) / 0.016;
-  let halo = l.form.z * kHalo * exp(-off * off);
+  let halo = l.glow.z * kHalo * exp(-off * off);
+  // The glow round the disc, off its droplets or crystals.
+  let glow = 0.5 * diffraction(theta, l.glow.x, l.glow.y);
   // The light at the layer: the key's through the air and the layers above at its middle; the
   // sky's from above, the snow's from below.
   let mid_p = eye + d * (0.5 * (t0 + t1));
@@ -181,6 +238,11 @@ fn march(i: i32, d: vec3f, t0: f32, t1: f32, j: f32) -> LayerLook {
   let key = sun_light_open(mid_y) * shadow_from(vec3f(mid_p.x, mid_y, mid_p.z), i);
   let sky = (clear_sky_up() + dark_light()) * mix(1.0, deck_zenith_share(), frame.weather.y);
   let ground = kGroundAlbedo * (sun_light_open(0.0) * max(L.y, 0.0) * 0.6 + sky);
+  // A DECK's light scattered on comes in through its top, which the sun lights at a slant: its
+  // light on the top is the sun's height's sine of the beam's (what lets a deck under a low sun
+  // show grey, the sun bright in it); a heap's sides and a thin layer's edges face the sun at any
+  // height (a high veil's pink at sunset).
+  let top_lit = mix(1.0, max(L.y, 0.05), l.glow.w);
   // The light's reads, as shares of the slab's depth.
   let ds = array<f32, 4>(0.05, 0.1, 0.2, 0.4);
   var out: LayerLook;
@@ -188,6 +250,8 @@ fn march(i: i32, d: vec3f, t0: f32, t1: f32, j: f32) -> LayerLook {
   out.through = 1.0;
   var weight = 0.0;
   var wdist = 0.0;
+  // The light the glow is lit by along the ray, a share of the key's.
+  var glow_lit = 0.0;
   for (var k = 0; k < steps; k++) {
     let a = (f32(k) + j) / f32(steps);
     let t = t0 + span * (a + bunch * (a * a - a));
@@ -224,12 +288,13 @@ fn march(i: i32, d: vec3f, t0: f32, t1: f32, j: f32) -> LayerLook {
     // falls off as the heap's body shades it (a heap backlit is dark, rimmed with light).
     let tau_ms = min(tau, mix(tau_up / max(L.y, 0.4), tau, l.look.y));
     let ms = mix(1.0 / (1.0 + kReduced * tau_ms), exp(-kReduced * tau_ms), l.look.y);
-    let direct = key * (exp(-tau) * (ph + halo) + kOrders * ph_ms * ms) * powder;
+    let direct = key * (exp(-tau) * (ph + halo) + kOrders * ph_ms * ms * top_lit) * powder;
     let ambient = sky * (mix(0.35, 1.0, h) / (2.0 * PI) / (1.0 + kReduced * tau_up)) +
                   ground * ((1.0 - h) * 0.3 / (2.0 * PI));
     let step_t = exp(-sigma * dt);
     let gain = out.through * (1.0 - step_t);
     out.light += (direct + ambient) * gain;
+    glow_lit += exp(-tau) * powder * gain;
     weight += gain;
     wdist += gain * t;
     out.through *= step_t;
@@ -238,7 +303,30 @@ fn march(i: i32, d: vec3f, t0: f32, t1: f32, j: f32) -> LayerLook {
     }
   }
   out.dist = select(0.5 * (t0 + t1), wdist / max(weight, 1e-6), weight > 0.0);
+  out.light += glow_seen(key * glow * glow_lit);
   return out;
+}
+
+// The glow round the key light as seen. Round the sun it dazzles: eased toward kSunGlowTop of the
+// picture's white and whitened as it brightens, so its middle is a white glare and its rings show
+// only as pastel where it is about as bright as the cloud (each channel clipped on its own would
+// band a glare hundreds of times the white into rainbows). Round the moon, seen beside the disc as the
+// disc is seen (kGlowSeen), so its rings show.
+fn glow_seen(l: vec3f) -> vec3f {
+  let lum = dot(l, kLuma);
+  if (lum <= 0.0) {
+    return l;
+  }
+  if (frame.moon_light.w < 0.5) {
+    let white = 1.0 / exposure();
+    let top = kSunGlowTop * white;
+    let seen = top * (1.0 - exp(-lum / top));
+    let hue = mix(l / lum, vec3f(1.0), 1.0 - exp(-lum / (kSunGlowWhite * white)));
+    return hue * seen;
+  }
+  let disc = frame.moon_light.x * frame.moon_east.w * dot(key_at_eye(), kLuma);
+  let seen = as_seen(disc) * pow(lum / max(disc, 1e-30), kGlowSeen);
+  return l * (min(seen, lum) / lum);
 }
 
 // A pixel's cloud: its ray (at `uv`) marched through every layer to the scene at depth `z`,
@@ -303,7 +391,7 @@ fn cloud_look(uv: vec2f, px: vec2f, z: f32) -> CloudLook {
     }
     // Under a deck a sheet is the deck: its light mostly the deck's grey along the ray (what the
     // ground is lit by, so the two agree), a little of its own march kept for its texture.
-    let lid = 0.6 * frame.weather.y * (1.0 - cloud_layer(i).look.y);
+    let lid = 0.5 * frame.weather.y * (1.0 - cloud_layer(i).look.y);
     look.light = mix(look.light, deck_luminance(d) * alpha, lid);
     // Seen through the air to where its light comes from, and lost into the sky far off.
     let fade = 1.0 - smoothstep(kFadeNear, kFadeFar, look.dist);
