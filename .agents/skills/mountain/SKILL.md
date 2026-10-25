@@ -80,7 +80,7 @@ one game's: which maps a game races, its modes and its strings stay in the game.
   `real_faces/` (a file a face and `index.cpp`) by the `real-faces` lab's bake
   (`--bake --fetch --write`, from the repository's root): the free Copernicus 30 m elevation
   model read off its public bucket with `curl` into the gitignored `.cache/dem/`, through the
-  labs' GeoTIFF reader (`labs/dem_tiles.hpp`) and inflater (`engine/lab/inflate.hpp`). Never
+  labs' GeoTIFF reader (`labs/dem_tiles.hpp`) and inflater (`engine/assets/inflate.hpp`). Never
   edit a face's file by hand; a crop moved is a face baked again and its golden row rewritten.
   A face is BUILT ON by `GenerateOptions::face` (its region the map's, `massif::real::attempts`
   attempts): `plan_massif` reads it (`read_face`: the summit ridge down to its brow, the peak,
