@@ -19,7 +19,7 @@ namespace r = ge::render;
 constexpr double kScale[] = {0.5, 0.67, 0.83, 1.0};
 constexpr uint32_t kShadowSize[] = {1024, 2048, 4096};
 constexpr uint32_t kTrailSize[] = {0, 1024, 2048};    // 0: no trails
-constexpr uint32_t kFlakes[] = {0, 8192, 24576};      // 0: no falling snow
+constexpr uint32_t kParticles[] = {0, 8192, 24576};   // 0: no falling snow
 constexpr double kCloudSteps[] = {0, 0.5, 1.0, 1.0};  // 0: no layer
 constexpr bool kCloudQuarter[] = {true, true, true, false};
 constexpr double kBloom[] = {0, 0.04, 0.04};
@@ -37,7 +37,8 @@ constexpr int kReachLevels[] = {5, 6, 7, kGroundLevels};  // the ground's levels
 // TRAILS: the tracks are the game's own mark, the line a skier reads back; the higher stop is a
 //   sharper groove.
 // SPRAY: what a turn throws, the most alive thing at the skis.
-// SNOWFALL: on a snowing day the flakes are the weather near the eye; the low stop keeps a third.
+// PRECIP: on a snowing or a raining day what falls is the weather near the eye; the low stop keeps
+//   a third of it.
 // CLOUDS: a broken sky's layers, marched at a quarter of the pixels (a quarter of those each
 //   frame, the rest reprojected from the last) and upsampled; the low stop
 //   marches half the steps, a slightly blockier cloud; the top marches every pixel, the
@@ -67,7 +68,7 @@ constexpr r::LadderStop kShadows[] = {{"1024", 0, 0}, {"2048", 1.77, 5}, {"4096"
 constexpr r::LadderStop kSnow[] = {{"plain", 0, 0}, {"material", 15.07, 60}};
 constexpr r::LadderStop kTrails[] = {{"off", 0, 0}, {"low", 5.31, 30}, {"high", 8.06, 36}};
 constexpr r::LadderStop kSpray[] = {{"off", 0, 0}, {"on", 1.44, 20}};
-constexpr r::LadderStop kSnowfall[] = {{"off", 0, 0}, {"low", 0, 10}, {"high", 3.93, 14}};
+constexpr r::LadderStop kPrecip[] = {{"off", 0, 0}, {"low", 0, 10}, {"high", 3.93, 14}};
 constexpr r::LadderStop kClouds[] = {
     {"off", 0, 0}, {"low", 27.59, 12}, {"high", 30.16, 15}, {"full", 72.09, 16}};
 constexpr r::LadderStop kBloomStops[] = {{"off", 0, 0}, {"on", 17.30, 4}, {"lens", 17.30, 6}};
@@ -80,7 +81,7 @@ const std::array<r::LadderRow, kPictureRows> kRows = {{
     {"snow", kSnow},
     {"trails", kTrails},
     {"spray", kSpray},
-    {"snowfall", kSnowfall},
+    {"precip", kPrecip},
     {"clouds", kClouds},
     {"bloom", kBloomStops},
     {"distance", kDistance},
@@ -102,9 +103,9 @@ FrameOptions apply_picture(const r::LadderPick& pick, FrameOptions o) {
   o.trails = trail > 0;
   if (trail > 0) o.trail_maps.fine_size = o.trail_maps.coarse_size = trail;
   o.spray = at(PictureRow::spray) > 0;
-  const uint32_t flakes = kFlakes[at(PictureRow::snowfall)];
-  o.snowfall = flakes > 0;
-  if (flakes > 0) o.flakes.flakes = flakes;
+  const uint32_t particles = kParticles[at(PictureRow::precip)];
+  o.precip = particles > 0;
+  if (particles > 0) o.fall.particles = particles;
   o.clouds = kCloudSteps[at(PictureRow::clouds)];
   o.cloud_quarter = kCloudQuarter[at(PictureRow::clouds)];
   o.bloom = kBloom[at(PictureRow::bloom)];
@@ -129,7 +130,7 @@ std::string_view preset_name(Preset p) {
 }
 
 r::LadderPick preset_pick(Preset p) {
-  // resolution, shadows, snow, trails, spray, snowfall, clouds, bloom, distance
+  // resolution, shadows, snow, trails, spray, precip, clouds, bloom, distance
   switch (p) {
     case Preset::low:
       return {0, 0, 1, 1, 1, 1, 0, 0, 1};

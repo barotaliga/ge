@@ -5,8 +5,9 @@
 // stays a constant in code (docs/console.md § Tiers).
 //
 //   vid_width vid_height vid_vsync      the window (A, latched: read at startup)
-//   r_taa r_scale r_occlusion r_shadowsize r_bloom r_snow r_trails r_spray r_snowfall r_weather
-//   r_clouds                            the picture (A, latched: the frame is made once)
+//   r_taa r_scale r_occlusion r_shadowsize r_bloom r_snow r_trails r_spray r_precip
+//   r_precip_density r_splashes r_wet r_weather r_clouds
+//                                       the picture (A, latched: the frame is made once)
 //   r_sharpen r_sunrays r_flare r_vignette r_chromatic r_grain r_lensdirt
 //   r_contrast r_saturation r_temperature r_tint r_gamma
 //                                       the lens, the film and the grade's knobs (A, latched)
@@ -16,7 +17,7 @@
 //   rung of Fall Line's)                 the camera's settings (engine/camera/cvars.hpp, A)
 //   volume s_wind s_effects s_mute      the sound's faders (A)
 //   sv_seed sv_hour                     the run's map and hour (the server's, server info)
-//   sv_weather sv_snowfall sv_fog sv_wind sv_winddir sv_cover sv_skyrate
+//   sv_weather sv_snowfall sv_snowline sv_fog sv_wind sv_winddir sv_cover sv_skyrate
 //                                       the sky over the run, picked by hand, and how fast its
 //                                       hour runs (the server's, server info; sim/sky.hpp)
 //   sv_skytype sv_skyair sv_skydust sv_sunsize sv_sun2 sv_planet sv_planetdir sv_planetel
@@ -28,7 +29,8 @@
 // ge:keywords fall-line cvars settings cfg vid_width r_taa r_bloom r_shadowsize cl_view volume
 // ge:keywords s_mute sv_seed sv_hour add_cvars register_cvars sv_weather sv_snowfall sv_fog
 // ge:keywords sv_wind sv_winddir sv_cover sv_skyrate r_clouds sv_skytype sky-type sky-knobs
-// ge:keywords cl_chasedist cl_motion r_sharpen r_sunrays r_flare r_vignette r_chromatic r_grain
+// ge:keywords cl_chasedist cl_motion r_precip r_precip_density r_splashes r_wet sv_snowline rain
+// ge:keywords r_sharpen r_sunrays r_flare r_vignette r_chromatic r_grain
 // ge:keywords r_lensdirt r_contrast r_saturation r_temperature r_tint r_gamma post-effects
 // ge:skill console sim
 // ge:test tests/fall_line_cvars_test.cpp
@@ -52,7 +54,9 @@ struct Settings {
   bool occlusion = true;
   uint32_t shadow_size = 2048;
   double bloom = 0.04;
-  bool snow = true, trails = true, spray = true, snowfall = true, weather = true;
+  bool snow = true, trails = true, spray = true, weather = true;
+  bool precip = true, splashes = true, wet = true;  // what falls, the rain's splashes, wet ground
+  double precip_density = 1.0;                      // the share of the falling particles, 0.25..2
   double clouds = 1.0;  // the share of the cloud march's steps; 0: no layer drawn
   // The lens and the film, each 0..1 (0: off), and the grade's knobs (render/grade.hpp).
   double sharpen = 0.3, sunrays = 0.5, flare = 0, vignette = 0.25, chromatic = 0, grain = 0,
@@ -70,6 +74,7 @@ struct Settings {
   // The sky over the run (sim/sky.hpp): a weather word or "map", then each kept where negative.
   std::string sky = "map";
   double fall = -1, fog = -1;
+  double snowline = -1;  // the snow line, a share of the mountain's height (rain under it)
   double air = -1, air_from = -1;  // the mean wind, m/s at 10 m; the heading it blows from, deg
   double cover = -1;               // the broken sky's cloud cover, 0..1
   double sky_rate = 0;             // the sky's hours per hour of the run (0: the hour stands)
