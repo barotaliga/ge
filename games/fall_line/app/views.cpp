@@ -8,6 +8,8 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdlib>
+#include <string>
 
 #include "core/solar.hpp"
 #include "mountain/app/night_look.hpp"
@@ -22,9 +24,9 @@ using ge::mountain::mapgen::Level;
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kDeg = kPi / 180.0;
 
-constexpr std::array<std::string_view, 11> kNames = {"start",   "piste", "lookback", "vista",
+constexpr std::array<std::string_view, 12> kNames = {"start",   "piste", "lookback", "vista",
                                                      "aerial",  "wood",  "corduroy", "powder",
-                                                     "glitter", "sky",   "clouds"};
+                                                     "glitter", "sky",   "clouds",   "veil"};
 
 // The piste's station nearest arc `s`.
 const ge::mountain::mapgen::TrackPoint& station_at(const Level& level, double s) {
@@ -157,6 +159,7 @@ void place(const Level& level, double x, double z, double over_ground, ge::rende
 std::span<const std::string_view> view_names() { return kNames; }
 
 std::string_view view_caption(std::string_view name) {
+  name = name.substr(0, name.find('@'));
   if (name == "start") return "From behind the start line, a skier's eye height, down the piste.";
   if (name == "piste") return "Halfway down the piste at a skier's eye height, looking down it.";
   if (name == "lookback") return "From the finish, looking back up the piste to the summit.";
@@ -166,6 +169,10 @@ std::string_view view_caption(std::string_view name) {
   if (name == "clouds") {
     return "From the finish in the valley, the sun behind and to one side, looking up the sky: "
            "the cloud lit as a photograph of it is (sv_clouds).";
+  }
+  if (name == "veil") {
+    return "From the finish, looking at the sun (the moon at night) through what is over it: the "
+           "disc, its glow, its corona and its halo (sv_clouds).";
   }
   if (name == "aerial") return "From high over a corner of the map, the whole mountain.";
   if (name == "corduroy") {
@@ -205,6 +212,27 @@ void day_view(const Level& level, double hour, ge::render::FrameView& v) {
 }
 
 bool make_view(const Level& level, std::string_view name, ge::render::FrameView& v) {
+  // A turned view, `<view>@<degrees>[:<pitch degrees>[:<lens degrees>]]`: the named view's eye,
+  // turned clockwise by so much (and pitched to, and seen through a lens so many degrees high).
+  if (const size_t at = name.find('@'); at != std::string_view::npos) {
+    if (!make_view(level, name.substr(0, at), v)) return false;
+    const std::string rest(name.substr(at + 1));
+    char* end = nullptr;
+    const double turn = std::strtod(rest.c_str(), &end);
+    if (end == rest.c_str()) return false;
+    v.heading += turn * kDeg;
+    if (*end == ':') {
+      const char* p = end + 1;
+      v.pitch = std::strtod(p, &end) * kDeg;
+      if (end == p) return false;
+    }
+    if (*end == ':') {
+      const char* p = end + 1;
+      v.fov_y = std::strtod(p, &end) * kDeg;
+      if (end == p || v.fov_y <= 0) return false;
+    }
+    return *end == '\0';
+  }
   const auto& track = level.track;
   if (track.points.empty()) return false;
   const auto& m = level.mountain;
@@ -238,6 +266,14 @@ bool make_view(const Level& level, std::string_view name, ge::render::FrameView&
     place(level, p.x, p.z, 4.0, v);
     v.heading = v.sun_azimuth + 2.4;
     v.pitch = 16 * kDeg;
+    v.fov_y = 70 * kDeg;
+  } else if (name == "veil") {
+    // Straight at the key light, wide enough for its 22 degree halo: the sun, or the moon once it
+    // is the key.
+    const auto& p = station_at(level, track.length);
+    place(level, p.x, p.z, 4.0, v);
+    v.heading = v.sun_azimuth;
+    v.pitch = std::clamp(v.sun_elevation, 8 * kDeg, 60 * kDeg);
     v.fov_y = 70 * kDeg;
   } else if (name == "vista") {
     place(level, m.summit.x, m.summit.z, 0, v);

@@ -26,13 +26,26 @@ TEST(every_kind_is_found_by_its_name_and_its_bands_are_in_order) {
     for (const double* band : {k.base, k.depth, k.cover, k.cell}) CHECK(band[0] <= band[1]);
     CHECK(k.depth[0] > 0 && k.cell[0] > 0 && k.cover[0] > 0 && k.cover[1] <= 1);
     CHECK(k.stretch >= 1 && k.dome >= 0 && k.dome <= 1 && k.opacity > 0 && k.life > 0);
-    for (double f : {k.anvil, k.erode, k.fibre, k.patch}) CHECK(f >= 0 && f <= 1);
+    for (double f : {k.anvil, k.erode, k.fibre, k.patch, k.halo, k.deck}) CHECK(f >= 0 && f <= 1);
+    // Particles a corona or an aureole is diffracted round: droplets of a few um to crystals of
+    // tens, and a spread the shader's five sizes keep positive.
+    CHECK(k.drop >= 3 && k.drop <= 60 && k.spread > 0 && k.spread <= 0.6);
+    // A halo only off ice (the large particles).
+    if (k.halo > 0) CHECK(k.drop >= 25);
   }
   CHECK(names.size() >= 13);
   CHECK(r::cloud_kind_named("cumulonimbus")->anvil > 0);
   CHECK(r::cloud_kind_named("cirrus")->fibre > 0);
   CHECK(r::cloud_kind_named("cirrocumulus")->patch > 0);
   CHECK(r::cloud_kind_named("lenticular")->erode < 0.2);
+  // The veil the sun and the moon shine through: whole-sky ice, thin, its halo the plainest.
+  const r::CloudKind* veil = r::cloud_kind_named("veil");
+  CHECK(veil != nullptr && veil->cover[0] > 0.9 && veil->opacity < 1 && veil->halo == 1);
+  // A corona's rings off a thin altocumulus's even droplets; an altostratus's glare off mixed
+  // ones, lit through its top as a deck.
+  CHECK(r::cloud_kind_named("altocumulus")->spread < 0.2);
+  CHECK(r::cloud_kind_named("altostratus")->spread > 0.3);
+  CHECK(r::cloud_kind_named("altostratus")->deck == 1 && r::cloud_kind_named("cirrus")->deck == 0);
   CHECK(r::cloud_kind_named("mammoth") == nullptr);
 }
 
