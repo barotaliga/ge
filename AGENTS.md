@@ -202,7 +202,8 @@ result; the output is `build/session-start.log`, the one-line state `build/sessi
 
 CI (`.github/workflows/ci.yml`) is tiered, because the org's runners are a small shared pool. A pull
 request runs the gates (fmt-check, agents-check, libm-check, release-check, the changeset rule),
-lint and shaders-check, and ONE build-and-test row (Linux x64, GCC debug+ASan); the merge queue
+lint and shaders-check, ONE Linux build-and-test row (Linux x64, GCC debug+ASan) and the Windows
+row (MSVC, whose warnings and CRT break most Linux-built changes); the merge queue
 runs the whole matrix on the tree that lands: Linux x64 (GCC debug+ASan, GCC release, Clang
 release), Linux arm64 (GCC), macOS (Apple Clang), Windows (MSVC), and `packaging.yml` (the
 installed package building a consumer on Linux, macOS and Windows, and `ge new` growing a repo).
@@ -270,6 +271,7 @@ characters.
 | `games/fall_line/cfg/` | Fall Line's cvars (`fall_line_cfg`): every setting a cfg may change, bound to the Settings its app reads | `console` |
 | `games/fall_line/sound/` | Fall Line's sound (`fall_line_sound`, no GPU): the bank, the route, the listener, the mix | `audio`, `sim` |
 | `games/fall_line/camera/` | Fall Line's camera (`fall_line_camera`, no GPU): the ladder of engine rigs and the camera key, the skier as the subject, the trunks and posts it answers | `camera` |
+| `games/fall_line/controls/` | Fall Line's controls (`fall_line_controls`, no GPU): the actions and default bindings, the player's file, the rebinding walk, what is felt, the run played by hand, scripted sessions | `input` |
 | `games/fall_line/labs/` | Fall Line's labs, the headless ones and the GPU's | `sim`, `labs`, `audio` |
 | `games/fall_line/app/` | Fall Line's presentation (`fall_line_app`): the pass table, the look, the scene, the views, the `fall_line` window; then the HUD | `platform`, `gpu`, `render`, `ui`, `audio` |
 | `tests/` | `<topic>_test.cpp`, one executable each; `check.hpp` (the harness), `golden.hpp`, `golden/` | `testing` |
