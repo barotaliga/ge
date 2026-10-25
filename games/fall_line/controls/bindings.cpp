@@ -20,7 +20,7 @@ namespace in = ge::input;
 // The keys' ramps (attack, release: the rates, 1/s, a key's push eases toward its target at): the
 // steer eases in with a time constant of a sixth of a second and lets go a little faster, so a tap
 // is a small correction; the tuck folds in over a quarter second and opens fast; the brake is
-// near instant either way.
+// near instant either way. The `touch:` controls are the phone's thumbs (thumbs.hpp).
 const char* const kDefaultBindings = R"(ge-bindings 1
 context ride
 bind steer key:a value=-1 ramp=6,9
@@ -29,21 +29,28 @@ bind steer key:left value=-1 ramp=6,9
 bind steer key:right ramp=6,9
 bind steer pad:left_x deadzone=0.12,0.97
 bind steer role:steer
+bind steer touch:edge deadzone=0,1 curve=1.15
 bind tuck key:w ramp=4,12
 bind tuck key:up ramp=4,12
 bind tuck pad:right_trigger
 bind tuck role:throttle
+bind tuck touch:lever+ deadzone=0,1
 bind brake key:s ramp=20,30
 bind brake key:down ramp=20,30
 bind brake pad:left_trigger
 bind brake role:brake
+bind brake touch:lever- deadzone=0,1
 bind jump key:space
 bind jump pad:south
+bind jump touch:flick
+bind jump touch:load
 bind reset key:r
 bind reset pad:north
+bind reset touch:reset
 context app
 bind camera key:c
 bind camera pad:back
+bind camera touch:camera
 bind rebind key:f5
 )";
 
