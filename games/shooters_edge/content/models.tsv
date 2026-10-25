@@ -1,0 +1,98 @@
+# Shooter's Edge model registry: one row a model the game needs, by our name.
+# Columns (tab-separated): name, what it is, what plays or shows it, scope (game | creature), status (replaced | open), source pack id (CREDITS.md).
+# The classic name each row stands in for is in classic.assetmap. Read with the free-assets skill.
+character/player	The player (top and bottom colours remapped)	every client; frames for run, shoot per weapon, pain, death	game	open	-
+character/player_head	The player's head left after a gib	gibbed player	game	open	-
+character/player_eyes	Floating eyes of an invisible player	player under the invisibility power-up	game	open	-
+gore/gib_1	Flesh chunk	any gib (random of three)	game	open	-
+gore/gib_2	Flesh chunk	as above	game	open	-
+gore/gib_3	Flesh chunk	as above	game	open	-
+gore/flesh_ball	Thrown flesh lump	ghoul's projectile; meat spray	game	open	-
+view/melee	First-person melee weapon	held weapon 1	game	replaced	kenney/survival-kit
+view/shotgun	First-person shotgun	held weapon 2	game	replaced	kenney/blaster-kit
+view/double_shotgun	First-person double shotgun	held weapon 3	game	replaced	kenney/blaster-kit
+view/nailgun	First-person nailgun	held weapon 4	game	replaced	kenney/blaster-kit
+view/heavy_nailgun	First-person heavy nailgun	held weapon 5	game	replaced	kenney/blaster-kit
+view/grenade_launcher	First-person grenade launcher	held weapon 6	game	replaced	kenney/blaster-kit
+view/rocket_launcher	First-person rocket launcher	held weapon 7	game	replaced	kenney/blaster-kit
+view/beam_gun	First-person beam gun	held weapon 8	game	replaced	kenney/blaster-kit
+pickup/weapon_double_shotgun	Double shotgun on the floor	weapon pickup	game	open	-
+pickup/weapon_nailgun	Nailgun on the floor	weapon pickup	game	open	-
+pickup/weapon_heavy_nailgun	Heavy nailgun on the floor	weapon pickup	game	open	-
+pickup/weapon_grenade_launcher	Grenade launcher on the floor	weapon pickup	game	open	-
+pickup/weapon_rocket_launcher	Rocket launcher on the floor	weapon pickup	game	open	-
+pickup/weapon_beam_gun	Beam gun on the floor	weapon pickup	game	open	-
+pickup/armor	Armour (skins: green, yellow, red)	armour pickups	game	replaced	kenney/prototype-kit
+pickup/backpack	Dropped backpack	a dead player's weapon and ammo	game	replaced	kenney/survival-kit
+pickup/power_damage	Damage boost	power-up pickup	game	open	-
+pickup/power_shield	Invulnerability sphere	power-up pickup	game	open	-
+pickup/power_cloak	Invisibility ring	power-up pickup	game	open	-
+pickup/power_suit	Environment suit	power-up pickup	game	open	-
+pickup/key_silver_old	Silver key, old world	worldtype 0	game	open	-
+pickup/key_gold_old	Gold key, old world	worldtype 0	game	open	-
+pickup/key_silver_rune	Silver key, rune world	worldtype 1	game	open	-
+pickup/key_gold_rune	Gold key, rune world	worldtype 1	game	open	-
+pickup/keycard_silver	Silver keycard, base world	worldtype 2	game	open	-
+pickup/keycard_gold	Gold keycard, base world	worldtype 2	game	open	-
+pickup/rune_1	Episode rune 1	single-player episode end	game	open	-
+pickup/rune_2	Episode rune 2	as above	game	open	-
+pickup/rune_3	Episode rune 3	as above	game	open	-
+pickup/rune_4	Episode rune 4	as above	game	open	-
+pickup/health_small	Small health box (brush model)	health pickup	game	replaced	kenney/survival-kit
+pickup/health	Health box (brush model)	health pickup	game	replaced	kenney/survival-kit
+pickup/health_mega	Mega health (brush model)	health pickup	game	open	-
+pickup/shells_small	Small box of shells	ammo pickup	game	replaced	kenney/blaster-kit
+pickup/shells_large	Large box of shells	ammo pickup	game	replaced	kenney/blaster-kit
+pickup/nails_small	Small box of nails	ammo pickup	game	replaced	kenney/blaster-kit
+pickup/nails_large	Large box of nails	ammo pickup	game	replaced	kenney/blaster-kit
+pickup/rockets_small	Small box of rockets	ammo pickup	game	open	-
+pickup/rockets_large	Large box of rockets	ammo pickup	game	replaced	kenney/blaster-kit
+pickup/cells_small	Small battery	ammo pickup	game	open	-
+pickup/cells_large	Large battery	ammo pickup	game	open	-
+prop/barrel_explosive	Exploding barrel	world prop	game	replaced	kenney/survival-kit
+prop/barrel_explosive_small	Small exploding barrel	world prop	game	open	-
+projectile/rocket	Rocket in flight	rocket launcher	game	replaced	kenney/blaster-kit
+projectile/grenade	Grenade in flight	grenade launcher; the brute's grenades	game	replaced	kenney/blaster-kit
+projectile/nail	Nail in flight	nailgun, traps	game	replaced	kenney/blaster-kit
+projectile/nail_heavy	Heavy nail in flight	heavy nailgun	game	replaced	kenney/blaster-kit
+projectile/beam_1	Beam segment	beam gun (client temp entity)	game	open	-
+projectile/beam_2	Beam segment	hulk's lightning	game	open	-
+projectile/beam_3	Beam segment	boss arena lightning	game	open	-
+projectile/laser	Laser bolt	trooper's gun, laser traps	game	open	-
+projectile/lava_ball	Lava ball	boss's throw, fireball traps	game	open	-
+projectile/spike_dark	Dark spike	dark swordsman's attack	game	open	-
+projectile/spit	Flyer's spit	flyer's attack	game	open	-
+projectile/pod	Homing pod	caster's attack	game	open	-
+effect/explosion	Explosion sprite	every explosion	game	replaced	kenney/blaster-kit
+effect/bubble	Air bubble sprite	under water, bubble spawners	game	open	-
+effect/light_flash	Light flash sprite	effects	game	open	-
+effect/light_orb	Light orb	the hulk's charge	game	open	-
+prop/torch_flame	Torch flame	wall torches	game	open	-
+prop/fire_flame	Large flame	flame lights (two sizes)	game	open	-
+effect/teleport	Teleport effect	finale	game	open	-
+creature/brute	Chainsaw brute	monster	creature	open	-
+creature/brute_head	Brute's head	gibbed brute	creature	open	-
+creature/leaper	Leaping fiend	monster	creature	open	-
+creature/leaper_head	Fiend's head	gibbed fiend	creature	open	-
+creature/hulk	Lightning hulk	monster	creature	open	-
+creature/hulk_head	Hulk's head	gibbed hulk	creature	open	-
+creature/swordsman	Swordsman	monster	creature	replaced	kenney/graveyard-kit
+creature/swordsman_head	Swordsman's head	gibbed swordsman	creature	open	-
+creature/dark_swordsman	Dark swordsman	monster	creature	open	-
+creature/dark_swordsman_head	Dark swordsman's head	gibbed	creature	open	-
+creature/rifleman	Rifleman	monster	creature	open	-
+creature/rifleman_head	Rifleman's head	gibbed	creature	open	-
+creature/trooper	Laser trooper	monster	creature	open	-
+creature/trooper_head	Trooper's head	gibbed	creature	open	-
+creature/flyer	Spitting flyer	monster	creature	replaced	kenney/graveyard-kit
+creature/flyer_head	Flyer's head	gibbed	creature	open	-
+creature/ghoul	Flesh-throwing ghoul	monster	creature	replaced	kenney/graveyard-kit
+creature/ghoul_head	Ghoul's head	gibbed	creature	open	-
+creature/hound	Hound	monster	creature	replaced	kenney/prototype-kit
+creature/hound_head	Hound's head	gibbed	creature	open	-
+creature/eel	Biting fish	monster	creature	open	-
+creature/jelly	Bouncing jelly	monster	creature	open	-
+creature/caster	Homing-pod caster	monster	creature	open	-
+creature/caster_head	Caster's head	gibbed	creature	open	-
+creature/lava_lord	Lava lord	episode one boss	creature	open	-
+creature/elder	Elder	final boss	creature	open	-

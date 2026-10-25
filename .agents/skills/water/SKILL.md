@@ -38,7 +38,8 @@ for anything the simulation reads, `render` for a pass, `audio` for a voice, `la
 | A black body's glow | `engine/water/glow.hpp` | `gpu-lava` | `tests/water_glow_test.cpp` |
 | The named liquids (lava, slime, ...) | `engine/water/liquids.hpp` | `liquids` | `tests/water_liquids_test.cpp` |
 | Lava and slime drawn, the looks, the eye's key (`adapt_cd`) | `engine/render/liquid.hpp`, `liquid.wgsl` | `gpu-lava`, `gpu-slime` | `tests/render_liquid_test.cpp` |
-| Sound, one call, Fall Line's water | the rows M24j–M24l | the doc's § Labs | as each row lands |
+| The water's sound: what an ear hears (`hear`), the bed, splashes, strokes, bubbles, the muffle | `engine/water/sound.hpp` | `water-audition` | `tests/water_sound_test.cpp` |
+| One call, Fall Line's water | the rows M24k–M24l | the doc's § Labs | as each row lands |
 
 ## The rules
 
@@ -84,6 +85,11 @@ for anything the simulation reads, `render` for a pass, `audio` for a voice, `la
   change to `coarsen` keeps `water-lod`'s three floods the same water in the same shape.
 - **A waterfall's first trickle lands at the foot.** The sheet's reach grows with the
   discharge; check the landing on a sheet worth the name, never on the first quanta over the lip.
+- **The sound is intensities, never levels picked by ear.** Every voice of `hear` is a power the
+  water spends over the square of the distance; retune a voice by its `kFull*` or its layer's
+  gain and keep the `water-audition` lab's orders (the fresh shore over the calm, the stream
+  over the slow river, the near fall over the far, under darker than over) and its chart's 1 / r.
+  "How rough is the water here" is `Sample::hs`, never the laid surface's variance.
 - **A plan view drops the components shorter than a few pixels** (the picture's own tier):
   drawn, they alias into stripes that are not on the water.
 
