@@ -182,7 +182,7 @@ if(GE_GPU)
   # map, the Hi-Z pyramid, TAA-U, post, the instance families and their meshes, the sun's shadows.
   file(GLOB GE_RENDER_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/render/*.cpp)
   add_library(ge_render STATIC ${GE_RENDER_SOURCES})
-  target_link_libraries(ge_render PUBLIC ge_gpu ge_assets ge_water)
+  target_link_libraries(ge_render PUBLIC ge_gpu ge_assets ge_ui ge_water)
   ge_embed_wgsl(ge_render engine/render/sky_tables.wgsl engine/render/sky.wgsl
     engine/render/terrain.wgsl engine/render/terrain_cull.wgsl engine/render/terrain_normals.wgsl
     engine/render/horizon.wgsl engine/render/hiz.wgsl engine/render/taa.wgsl engine/render/post.wgsl
@@ -190,7 +190,7 @@ if(GE_GPU)
     engine/render/skinning.wgsl engine/render/particles.wgsl engine/render/particles_sim.wgsl engine/render/snowfall.wgsl engine/render/snowfall_sim.wgsl
     engine/render/clouds.wgsl engine/render/water.wgsl engine/render/water_copy.wgsl
     engine/render/water_stream.wgsl
-    engine/render/underwater.wgsl engine/render/lens.wgsl)
+    engine/render/underwater.wgsl engine/render/ui_pass.wgsl engine/render/lens.wgsl)
 endif()
 
 # The network (engine/net, docs/networking.md): addresses, the wire, the OS's UDP and TCP sockets
@@ -236,7 +236,7 @@ target_link_libraries(ge_camera PUBLIC ge_core ge_console)
 # The lab framework (engine/lab: the contract, the runner, the raster, the PNG), published as
 # ge::lab so a game's labs plug into the same contract as the engine's (docs/labs.md).
 add_library(ge_lab STATIC engine/lab/lab.cpp engine/lab/report.cpp engine/lab/runner.cpp
-  engine/lab/raster.cpp engine/lab/png.cpp engine/lab/diff.cpp engine/lab/inflate.cpp engine/lab/sound.cpp
+  engine/lab/raster.cpp engine/lab/png.cpp engine/lab/diff.cpp engine/lab/sound.cpp
   engine/lab/series.cpp engine/lab/stats.cpp engine/lab/plot.cpp engine/lab/chart.cpp
   engine/lab/anim.cpp engine/lab/series_charts.cpp engine/lab/teleport.cpp
   engine/lab/model_view.cpp engine/lab/model_compare.cpp engine/lab/model_sheets.cpp

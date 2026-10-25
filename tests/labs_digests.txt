@@ -5,7 +5,7 @@ army c3e9faa0202c9fc0
 army-flight 383c454be759df5d
 army-sleds bae04af32e36e808
 audition d47fda4a9cb22fbb
-by-hand 09f2cd6fd64b8769
+by-hand 724329dc4776353a
 camera-follow b1dbf6ae474cba78
 camera-machines fa674ce82d9f1c5e
 camera-rigs bd01263b4d16d23c
@@ -35,7 +35,7 @@ humanness a486ef984a6511d7
 injuries ec4584c9411ecd22
 input-devices 4742025acdd7b87d
 input-ffb 565464637bf28b86
-input-session dcb313b33f4ddf37
+input-session 4f1df87418fff1f7
 input-shape e2284bbd066830af
 junctions 036999ca677e12e6
 ladder 5ff2381ffbd86a80
@@ -45,11 +45,12 @@ lift-ride a374f35eb85cc161
 load 0257cf6ad193e740
 mapgen-cost 3baf51b6907817f3
 menu 1c01d0b767f484fc
+menu-gpu 76e7ffd902dd89d1
 model-views 0d0824a2168f6b14
 models bdc7f86743249676
 moon 26034a53f978b0b3
 move-strafe 302a67208d9eacac
-move-trace 6cb0a4a15c5a5d17
+move-trace 6bffe12afa59fd5f
 net-link 458927d87fc48ec1
 net-reach 4f1b6a129fc2c4fa
 net-replicate 879bab8516e04297
@@ -95,6 +96,7 @@ synth 39e6460e5c8a8c8e
 taa 01ee5d58d90a05ce
 trace cccfaac48bafaa60
 trails 1aaa468d0dbd81a0
+village 23e3236139b8860d
 wanted 507dbbcbbbb4187e
 water-audition 3b2a928e2111e5dd
 water-colour f5da3e4186a81286

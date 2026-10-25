@@ -74,6 +74,9 @@ MoveSpec modern_shooter() {
   s.slide_boost = 1.5;
   s.slide_cooldown = 1.2;
   s.slide_steer = 0.15;
+  s.ladder_speed = 3;
+  s.ladder_jump = 4;
+  s.ladder_probe = 0.03;
   return s;
 }
 
@@ -113,6 +116,9 @@ MoveSpec platformer() {
   s.air_jumps = 1;
   s.air_jump_speed = 10;
   s.crouch_time = 0.08;
+  s.ladder_speed = 4;
+  s.ladder_jump = 6;
+  s.ladder_probe = 0.03;
   return s;
 }
 
@@ -151,6 +157,9 @@ MoveSpec walker() {
   s.jump_speed = 3.3;
   s.coyote_time = 0.08;
   s.crouch_time = 0.25;
+  s.ladder_speed = 1.2;
+  s.ladder_jump = 3;
+  s.ladder_probe = 0.03;
   return s;
 }
 

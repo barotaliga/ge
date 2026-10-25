@@ -31,7 +31,9 @@ inline constexpr int kMapVersion = 1;
 std::span<const std::string_view> view_names();
 
 // The view's camera over `level`, under the map's own day (`out`'s sun is read: `wood` finds the
-// wood that sun lights best). False for an unknown name.
+// wood that sun lights best). `<view>@<deg>[:<pitch deg>[:<lens deg>]]` turns a named view
+// clockwise by so much (and sets its pitch), so a lab can look round from its eye. False for an
+// unknown name.
 bool make_view(const ge::mountain::mapgen::Level& level, std::string_view name,
                ge::render::FrameView& out);
 
