@@ -162,21 +162,26 @@ void run(gl::Lab& lab) {
     p.sample_s = std::max(1.0, soak_s / 240);
     const gn::SoakReport s = gn::run_soak(p);
     const gn::TrafficReport& t = s.traffic;
-    gl::LabTable soak{
-        std::to_string(soak_clients) + " clients soaked for " + fmt(soak_s, 0) +
-            " s of virtual time on " + lab.arg("preset"),
-        {"held KB, first half", "second half", "flat", "packet wraps", "reliable id wraps",
-         "reliable whole", "inputs mean ms", "inputs max ms", "drops", "log"},
-        {}};
+    // What is held is buffers' capacities, which each standard library grows its own way: shown
+    // and compared, never hashed. Whether it stayed flat is the deterministic verdict.
+    gl::LabTable soak{std::to_string(soak_clients) + " clients soaked for " + fmt(soak_s, 0) +
+                          " s of virtual time on " + lab.arg("preset"),
+                      {"flat", "packet wraps", "reliable id wraps", "reliable whole",
+                       "inputs mean ms", "inputs max ms", "drops", "log"},
+                      {}};
     soak.rows.push_back(
-        {fmt(s.held_kb_start, 0), fmt(s.held_kb_end, 0), s.flat ? "yes" : "NO",
-         std::to_string(s.seq_wraps), std::to_string(s.id_wraps), s.reliable_whole ? "yes" : "NO",
+        {s.flat ? "yes" : "NO", std::to_string(s.seq_wraps), std::to_string(s.id_wraps),
+         s.reliable_whole ? "yes" : "NO",
          fmt(t.inputs.delivered ? t.inputs.latency_sum_ms / static_cast<double>(t.inputs.delivered)
                                 : 0,
              1),
          fmt(t.inputs.latency_max_ms, 0), std::to_string(t.dropped), hex(t.digest)});
     lab.table(std::move(soak));
-    lab.metric("soak-held-kb", s.held_kb_end, "KB");
+    gl::LabTable kept{"What the soak held (buffers' capacities, per standard library)",
+                      {"held KB, first half", "second half"},
+                      {{fmt(s.held_kb_start, 0), fmt(s.held_kb_end, 0)}}};
+    lab.table(std::move(kept), gl::Det::measured);
+    lab.metric("soak-held-kb", s.held_kb_end, "KB", gl::Det::measured);
     if (!s.flat)
       lab.fail("the soak's memory grew from " + fmt(s.held_kb_start, 0) + " KB to " +
                    fmt(s.held_kb_end, 0) + " KB",
@@ -199,7 +204,7 @@ void run(gl::Lab& lab) {
         true};
     const gl::Chart c = gl::line_chart(held);
     const std::string svg = gl::to_svg(c.plot);
-    lab.attach("soak.svg", std::vector<uint8_t>(svg.begin(), svg.end()));
+    lab.attach("soak.svg", std::vector<uint8_t>(svg.begin(), svg.end()), gl::Det::measured);
     lab.shot({"soak",
               c.title,
               "The bytes the simulated network and every node hold (their buffers' capacities), "
@@ -210,7 +215,7 @@ void run(gl::Lab& lab) {
                {"soak-clients", lab.arg("soak-clients")},
                {"preset", lab.arg("preset")},
                {"seed", lab.arg("seed")}}},
-             gl::to_picture(c.plot));
+             gl::to_picture(c.plot), gl::Det::measured);
   }
   lab.note(
       "A bound breaks when: a client never connects or drops; the inputs' one-way p95 passes "
