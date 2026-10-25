@@ -5,7 +5,7 @@
 // - A ROW A BILL. A machine can be short of pixels and rich in passes, or the other way round, so
 //   each row is its own: RESOLUTION (the render size TAA-U brings up to the output), SHADOWS (the
 //   sun's maps' texels), SNOW (the snow's material, or the albedo lit), TRAILS (the trail maps'
-//   texels, or none), SPRAY (thrown or not), SNOWFALL (the flakes round the eye), CLOUDS (the
+//   texels, or none), SPRAY (thrown or not), PRECIP (the snow and rain round the eye), CLOUDS (the
 //   march's share of its steps at a quarter of the pixels, every pixel at the top, or no layer:
 //   the sky's mean cloud), BLOOM and DISTANCE (how far the ground and what stands on it are
 //   drawn, closed into the sky by a mist; the whole ground, unmisted, at the top).
@@ -38,7 +38,7 @@ enum class PictureRow : uint8_t {
   snow,
   trails,
   spray,
-  snowfall,
+  precip,
   clouds,
   bloom,
   distance,

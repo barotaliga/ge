@@ -118,6 +118,11 @@ void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint
   u.mist[1] = static_cast<float>(view.reach_m);
   // The scene's own light the eye adapts to, in the frame's light (FrameView::adapt_cd).
   u.mist[2] = static_cast<float>(view.adapt_cd / kSunLux * pre);
+  // THE WET GROUND, the snow's cover and a flash of lightning.
+  u.wet[0] = unit(w.wet);
+  u.wet[1] = unit(w.puddles);
+  u.wet[2] = unit(w.snow);
+  u.wet[3] = static_cast<float>(std::max(0.0, w.flash));
   // THE SKY'S STYLE (render/sky_style.hpp), the second sun off the real one.
   real_sun_direction(view, d);
   style_rows(view.style, d, u.style);

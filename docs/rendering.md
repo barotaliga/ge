@@ -24,7 +24,7 @@ fast chase camera close to the ground. Per frame, at the top of its picture ladd
 | Props and buildings | Lifts and their moving carriers, a village, gates, fences: hundreds of instanced meshes | Draw submission; per-instance culling, not per-mesh |
 | Figures | The player, a few rivals, and up to a few hundred people in a crowd, all skinned | Skinning once and drawing many times (main view and shadows) |
 | Snow marks | Trail maps stamped from the skiers' prints every frame | Render-to-texture with max blending, a fine window that follows the camera redrawn from the stamps' history, and a coarse map over the whole mountain |
-| Particles | Tens of thousands of spray, snowfall and cloud particles | Overdraw of soft transparent quads; simulated on the GPU |
+| Particles | Tens of thousands of spray, snow, rain and cloud particles | Overdraw of soft transparent quads; simulated on the GPU |
 | Sky | A physical atmosphere, a raymarched cloud volume, a night sky, aerial perspective on every material | Lookup tables computed on the GPU; a temporal cloud buffer |
 | Light | One sun or moon, the sky's light, at most a handful of point lamps at night | No need for a many-light pipeline |
 | Shadows | The mountain shading itself over kilometres, sharp shadows under the figures | Two different problems, solved by two different techniques |
@@ -646,7 +646,7 @@ map's sky at the view's time (`FrameOptions::weather`). The `weather` lab draws 
 seed 38's piste the clear day's picture spreads 37 levels of luma, an overcast's 15, a snow's 3
 and a storm's 2. The cloud volume itself is M8f3 (below).
 
-**The cloud in the picture (M8f3).** A frame is seen under up to three cloud layers
+**The cloud in the picture (M8f3).** A frame is seen under up to four cloud layers
 (`render/view.hpp`'s `Clouds`, in the frame block as `cloud_info` and `clouds`), drawn by
 `render/clouds.hpp`:
 
@@ -719,7 +719,50 @@ rippled sheet at 4 km, a HIGH sky's streaks over a veil; every band dealt off th
 the layers carried at a quarter of the wind aloft (the map's mean wind grown and turned with
 height) and living their kind's life. Where they are drawn a broken sky's mean cloud
 (`weather_look`'s pass and cover) is given back, since the layers cast their own shadows; a
-lid keeps its deck.
+lid keeps its deck, and stands a sheet under it (OVERCAST a stratus, SNOW and a STORM a
+nimbostratus) so the deck has a texture.
+
+**Cloud kinds (M8f8)** (`render/cloud_kinds.hpp`): fourteen named kinds, each a layer's bands
+and its form, matched by eye against photographs of real skies side by side (the photographs
+are kept out of the tree): inversion, stratus, stratocumulus, cumulus, congestus,
+cumulonimbus, nimbostratus, altocumulus, altostratus, lenticular, cirrocumulus, cirrostratus,
+cirrus and wisps. A kind's bands are its base over the valley floor, its depth, its cover and
+its cell (m); its stretch along the wind, its dome (0 a sheet, 1 a heap), its optical depth,
+its shadow, its life and its speed; and four FORM knobs, each 0..1, carried in a fourth row of
+the layer's frame block (`CloudLayer::anvil`, `erode`, `fibre`, `patch`):
+
+- THE BILLOWS. The noise texture is two channels (RG8Unorm 64³): the column's value fbm, and a
+  cellular (Worley) fbm at 4, 8 and 16 cells a tile. Two reads of it at ten times the cell's
+  scale take a heap's edge away in rounded lobes, harder toward the top, by the kind's `erode`
+  (a lenticular's 0.06 leaves it smooth as a lens, a cumulus's 0.6 cauliflowers it).
+- THE STRANDS (`fibre`): the detail read stretched along the wind and squeezed across it, and
+  the value noise's wisps in place of the billows, then the density cut into strands, so a
+  cirrus is fibres and hooks rather than a smear.
+- THE PATCHES (`patch`): a quarter-scale read of the noise masks the column, so a cirrocumulus
+  or an altocumulus comes as fields of cells with clear sky between, never a uniform sheet.
+- THE ANVIL (`anvil`): above 70 % of its depth a heap's cut is lowered, so a cumulonimbus
+  spreads its top wider than its tower.
+- THE COLUMN ramps from the cut to full over at most 0.3 of the noise (`kColumnRamp`), so a
+  full sheet is evenly thick and does not break into the noise's blotches.
+- THE LIGHT IN A SHEET: where a thin slab is marched along a long path the steps grow (up to
+  three times) and bunch toward its ends; the light that has scattered many times in a sheet
+  is diffusion's 1/(1 + σ′τ) along the path up through the slab (one more read halfway to its
+  top) rather than the heap's forward exp(−σ′τ), and the sky's light from above dims through
+  the same path, so a deck is grey under and bright on top. A thick sheet under a lid is
+  blended toward the deck's own grey, so the ground's flat light and the sheet overhead agree.
+- THE HALO: a sheet with strands (cirrostratus) lights a ring at 22° round the sun, its red
+  inside its blue (a Gaussian of 0.9° at 21.7°, 22.0° and 22.4° for red, green and blue).
+- THE SHAFTS (`shafts` in `wgsl/frame.wgsl`): six points along the view ray, out to 20 km,
+  read the cloud's shadow; the air scatters that share of the sun (70 % of its in-scatter is
+  shadowed at most), on the world through the haze and on the sky strongest toward the sun, so
+  the gaps between heaps throw beams.
+
+Fall Line picks a stack with `sv_clouds` (kinds joined by '+', such as `cumulus+cirrus`, up to
+four; `map`, the default, keeps the map's own), each kind's bands dealt off the map's seed by
+`cloud_layers_of`; a stack whose lowest kind is a thick full sheet (`lid_under`) turns the day
+grey under it as a lid would. The `world` lab's `clouds` view stands at the finish in the
+valley and looks up the sky with the sun behind and to one side, the way a photograph of a sky
+is taken.
 
 **The night in the picture (M8f2).** A frame's `Night` (`render/view.hpp`, filled by
 `render/night.hpp`'s `set_night` once the game has placed the sun) carries the moon and the dark
@@ -881,10 +924,11 @@ lab), the flight of all 16384 slots the larger half.
 **As built (M8d2).** The drag pulls a particle toward the AIR, not still air: the frame hands the
 pool the map's wind at the view's time (`plugins/mountain/air/air.hpp`), so a powder cloud (the
 spray's big thin puffs, hanging three to five seconds) drifts off downwind. THE FALLING SNOW is
-`engine/render/snowfall.hpp`: 24576 flakes in a 36 m cube centred on the eye, no births and no
-deaths. `snowfall.sim` moves each at the wind plus its own fall (0.6 to 1.4 m/s by its index)
-and a flutter on its phase, and wraps its offset from the eye back into the cube, so the eye
-always stands in a full fall however fast it moves. `snowfall` draws the first `fall` share of
+`engine/render/precip.hpp` (named `snowfall` until M36 brought the rain into it): 24576 flakes
+in a 36 m cube centred on the eye, no births and no deaths. `precip.sim` moves each at the wind
+plus its own fall (0.6 to 1.4 m/s by its index) and a flutter on its phase, and wraps its offset
+from the eye back into the cube, so the eye always stands in a full fall however fast it moves.
+`precip` draws the first `fall` share of
 them (the air's fall at the view's time: a flurry a scatter, a storm the whole box) as streaks
 over a 1/60 s shutter, at least a pixel and a half wide (a far flake widened and thinned as much,
 so it keeps its light and does not shimmer), thinned by the root of the streak's length, faded
@@ -892,6 +936,47 @@ toward the cube's faces and at the lens, lit by the sun past the horizon and the
 softened against the depth. When nothing falls the pass is an empty compute pass under its name
 (an empty render pass still loads and stores its targets). The flakes are lit as the day is: under
 a clear sky that is a sunny fall; under a lid they are lit as its flat grey (M8f1, above).
+
+**Precipitation (M36).** What falls, and how hard, is a world's to say through
+`engine/wind/precip.hpp` (no GPU, golden): ONE DIAL, a fall's intensity 0..1 and its rain share
+0 (dry snow) .. 1 (rain), gives the liquid-equivalent rate (rain 0.64 * 232.6^i mm/h, so 2.5 at
+0.25 and 50 at 0.8; snow 0.04 * 250^i, 10 mm/h of water at the top), the TIER (rain by its rate:
+light, moderate, heavy; snow by what it hides: 1 km, 500 m; either a storm when heavy in a wind
+of 15 m/s or more, and rain past 50 mm/h), the visual range (rain 11.5 R^-0.63 km, snow
+1.2 R^-0.9 km), the pace (a drop's terminal speed by its median size off the exponential size
+spectrum, a flake's 1 m/s, sleet between), the PHASE by height (snow above a freezing level,
+melting through the 300 m under it) and the WET GROUND (a 0.3 mm film and puddles to 3 mm that
+drain and dry by the wind and the sun). The picture reads the same numbers:
+
+- `engine/render/precip.hpp` turns the first `rain` share of the particles (by a rank of their
+  index) into DROPS, so a sleet is flakes and drops at once and a rising share turns them one by
+  one. A drop falls at 0.75 to 1.25 of the rain's pace and is drawn as a thin clear line over
+  1/30 s (the eye smears a drop), at least a pixel and a half wide and never thinned below a
+  faint trace, taking the sky's light with the sun caught along it. Every particle rides THE
+  EDDIES, a slow field of swirls some metres across at `swirl` m/s (the wind's turbulence
+  intensity times its speed, over a floor), so a storm's snow swirls in sheets; a drop shrugs off
+  most of it.
+- THE SPLASHES are the same draw's next instances: up to 6144 crowns at a full rain, each living
+  0.16 s at a spot drawn afresh each life out of the screen and set on the surface the depth
+  shows (its normal off the depth's neighbours), kept where that faces up and within 24 m, at an
+  even density over the ground (a far spot kept by the share of ground its pixel covers). Off the
+  depth, so a splash lands on any game's ground, roof or deck; nothing keeps one off a floor under
+  a roof yet (a rain occlusion map, top-down depth, is the next step for rooms).
+- THE WET GROUND rides in the frame's `wet` row (`wet.xy`) (`Weather::wet`, `puddles`): every world material
+  calls `wet_albedo` (a porous surface goes to half its albedo soaked, the water keeping the light
+  in its pores) and adds `wet_sheen` (Schlick's Fresnel off water, the sky along the reflected ray
+  and the sun's glint; on the flats the puddles lie level and mirror sharply). On Fall Line's snow
+  that reads as slush: the glitter goes, the glare dulls, the flats pool.
+- Fall Line keeps one wet ground a frame, the eye's, stepped by the frames' clock from the steady
+  state its rain and drying would leave. Its rain comes from the map's SNOW LINE
+  (`Weather::snowline`, raised only by `sv_snowline`: R19 deals none, so every dealt map is snow
+  to the valley and no digest moves). The cvars: `r_precip`, `r_precip_density`, `r_splashes`,
+  `r_wet`; the labs `precip` (eight skies from a flurry to a rainstorm) and `precip-air` (the
+  numbers as charts).
+
+Every shader's whole-line comments are left out of what is embedded (`cmake/WgslEmbed.cmake`), so
+a material that includes `frame.wgsl` stays under the 60 KB literal cap however well it is
+explained.
 - **Skinning** uses bone palettes in a storage buffer. A figure drawn in more than one
   view (the player in the main view, the sun's cascade and the shadow atlas) is skinned
   once by a compute pass into a vertex buffer that every view reads. Crowd members,

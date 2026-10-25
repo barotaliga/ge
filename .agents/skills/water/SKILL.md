@@ -18,7 +18,8 @@ for anything the simulation reads, `render` for a pass, `audio` for a voice, `la
 | --- | --- | --- | --- |
 | The wind: the field, gusts, veer, the profile, shelter | `engine/wind/field.hpp` | `wind` | `tests/wind_field_test.cpp` (golden) |
 | Local wind sources: jet, whirl, blast | `engine/wind/sources.hpp` | `wind` | `tests/wind_sources_test.cpp` |
-| A world's wind as a field (the mountain's) | `plugins/mountain/air/air.hpp` (`field_of`) | `wind`, `snowfall` | `tests/mountain_air_test.cpp` (golden) |
+| A world's wind as a field (the mountain's) | `plugins/mountain/air/air.hpp` (`field_of`) | `wind`, `precip` | `tests/mountain_air_test.cpp` (golden) |
+| What falls: snow, sleet, rain, the tiers, the phase by height, drop speeds, visibility, the wet ground | `engine/wind/precip.hpp` | `precip-air`, `precip` | `tests/wind_precip_test.cpp` (golden) |
 | The sea a wind grows: growth laws, spectrum, depth, spread, dispersion | `engine/water/spectrum.hpp` | `waves` | `tests/water_spectrum_test.cpp` |
 | The simulation tier's waves: the components laid, the surface, breaking | `engine/water/waves.hpp` | `waves` | `tests/water_waves_test.cpp` (golden) |
 | The fetch over a body's outline | `engine/water/fetch.hpp` | `fetch` | `tests/water_fetch_test.cpp` |

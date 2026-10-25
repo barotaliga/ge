@@ -77,6 +77,16 @@ struct Weather {
   double deck_tint[3] = {0.86, 0.9, 0.98};
   double deck_light = 1.0;
   double deck_zenith = 0.6;
+  // THE WET GROUND (engine/wind/precip.hpp's `Wet`): the share of a surface's water film, 0 dry ..
+  // 1 soaked, and of its puddles, 0 .. 1. Read by every world material through wgsl/frame.wgsl's
+  // `wet_albedo` and `wet_sheen`.
+  double wet = 0.0;
+  double puddles = 0.0;
+  // THE SNOW'S COVER on what faces up and is open to the fall, 0 bare .. 1 deep (a world that
+  // draws its own snow, as a mountain does, leaves it 0), and A FLASH of lightning: its light over
+  // the open sky's, a share (engine/wind/precip.hpp's `flash_at`).
+  double snow = 0.0;
+  double flash = 0.0;
 };
 
 // ONE LAYER OF CLOUD (render/clouds.hpp): a slab of the air where the noise passes its cover's
@@ -93,8 +103,16 @@ struct CloudLayer {
   double dome = 1;               // 1 a heap, 0 a sheet
   double density = 0.02;         // the extinction inside a full cell, 1/m
   double shadow_tau = 0;         // the optical depth a full column takes off the sun below
+  // Its FORM: how far a heap's top spreads into an anvil (0 none .. 1 a storm's), how deep the
+  // detail eats the edge (0.6 a heap's boil, near 0 a lens's smooth skin), how far the detail is
+  // combed along the wind (0 none .. 1 ice's hairs), and how far its cells gather into patches
+  // with clear sky between (0 none .. 1 islands of cells).
+  double anvil = 0;
+  double erode = 0.6;
+  double fibre = 0;
+  double patch = 0;
 };
-inline constexpr int kCloudLayers = 3;
+inline constexpr int kCloudLayers = 4;
 // Where the reach's mist begins, as a share of the reach (FrameView::reach_m).
 inline constexpr double kMistBegins = 0.5;
 struct Clouds {

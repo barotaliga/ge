@@ -22,7 +22,7 @@ struct Frame {
   night_sun: vec4f,        // unit direction toward the real sun; w: its illuminance, pre-exposed
   night: vec4f,            // the dark sky's zenith luminance, its light, the sidereal angle, latitude
   cloud_info: vec4f,       // the cloud's layers drawn, the share of the march's steps, 1 if spread, the stamp
-  clouds: array<vec4f, 9>, // three a layer (render/clouds.hpp's `cloud_rows`)
+  clouds: array<vec4f, 16>, // four a layer (render/clouds.hpp's `cloud_rows`)
   moon_pole: vec4f,        // the moon's north pole (world); w: the umbra's angular radius
   moon_prime: vec4f,       // toward its 0 N 0 E; w: the penumbra's angular radius
   moon_east: vec4f,        // toward its 0 N 90 E; w: the disc's brightest light under the shadow
@@ -30,6 +30,8 @@ struct Frame {
   mist: vec4f,             // x, y: the reach's mist: where it begins and where it closes, m (0: none);
                            // z: the scene's own light the eye adapts to (a white face's luminance,
                            // pre-exposed: FrameView::adapt_cd)
+  wet: vec4f,              // the wet ground: the film's share, the puddles' share; the snow's
+                           // cover on what faces up; a lightning flash's light over the open sky's
   // The sky's style (render/sky_style.hpp's `style_rows`): 0 the Rayleigh scales, the dust's;
   // 1 the dust's absorption scales, the ozone's; 2 the sun's disc's tint, its size; 3 toward the
   // second sun, its brightness; 4 its tint, its size; 5 toward the planet, its angular radius;
