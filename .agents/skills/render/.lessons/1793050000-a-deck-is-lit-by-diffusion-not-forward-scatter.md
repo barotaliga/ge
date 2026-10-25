@@ -13,6 +13,6 @@ the two by the kind's dome (a sheet diffuses, a heap scatters forward), take the
 slab's top for it (one read halfway there), and dim the sky's own light by the same path. Even
 then a thick sheet over a lid read darker than the ground under it, because the exposure keys
 to the sunlit white and the ground is lit by the deck's horizon grey: blend a lid's sheet toward
-the deck's own luminance (0.6 of it, not all, or the base loses its texture). Compare a kind
+the deck's own luminance (half of it, not all, or the base loses its texture). Compare a kind
 with its photograph from where a photograph is taken (the valley, the sun behind and to one
 side: the `world` lab's `clouds` view), never from the summit, which stands inside the low ones.

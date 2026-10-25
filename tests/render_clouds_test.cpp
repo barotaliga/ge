@@ -107,20 +107,25 @@ TEST(the_rows_hold_each_layers_numbers) {
   clouds.layers[1].shadow_tau = 0.25;
   clouds.layers[1].anvil = 0.5;
   clouds.layers[1].fibre = 2;
+  clouds.layers[1].drop_um = 30;
+  clouds.layers[1].halo = 3;
   float info[4];
-  float rows[gr::kCloudLayers * 4][4];
+  float rows[gr::kCloudLayers * gr::kCloudRows][4];
   gr::cloud_rows(clouds, info, rows);
   CHECK(info[0] == 2);
   CHECK(rows[0][0] == 1500 && rows[0][1] == 2200);
   CHECK(std::fabs(rows[0][2] - gr::cloud_cut(0.3)) < 1e-6);
   CHECK(std::fabs(rows[0][3] - 1e-3) < 1e-9);
-  // The first layer's form is a heap's: no anvil, the boil's bite, no comb, no patches.
+  // The first layer's form is a heap's: no anvil, the boil's bite, no comb, no patches; its light
+  // a water cloud's droplets, no halo, no deck.
   CHECK(rows[3][0] == 0 && rows[3][1] == 0.6f && rows[3][2] == 0 && rows[3][3] == 0);
-  CHECK(rows[6][1] == 0 && std::fabs(rows[6][0] - 0.25f) < 1e-7 && rows[6][3] == 0.25f);
-  // The second's form, held to 0..1.
-  CHECK(rows[7][0] == 0.5f && rows[7][2] == 1);
+  CHECK(rows[4][0] == 10 && rows[4][1] == 0.35f && rows[4][2] == 0 && rows[4][3] == 0);
+  CHECK(rows[7][1] == 0 && std::fabs(rows[7][0] - 0.25f) < 1e-7 && rows[7][3] == 0.25f);
+  // The second's form and light, held to their ranges.
+  CHECK(rows[8][0] == 0.5f && rows[8][2] == 1);
+  CHECK(rows[9][0] == 30 && rows[9][2] == 1);
   // The third layer's rows are zero.
-  for (int r = 8; r < 12; ++r) CHECK(rows[r][0] == 0 && rows[r][3] == 0);
+  for (int r = 10; r < 15; ++r) CHECK(rows[r][0] == 0 && rows[r][3] == 0);
   // The frame block carries them.
   gr::FrameView view;
   view.clouds = clouds;
