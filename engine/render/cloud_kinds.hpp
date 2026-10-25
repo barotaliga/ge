@@ -3,10 +3,10 @@
 // tower and its anvil (cumulonimbus), the low sheets (stratocumulus's rolls, stratus's grey lid,
 // nimbostratus's dark rain deck), the middle layers (altocumulus's cells, altostratus's veil the
 // sun shows through as through frosted glass), the high ice (cirrus's hairs, cirrostratus's
-// milky veil, cirrocumulus's fine ripples), the lens a mountain wave stands still (lenticular)
-// and a sea of cloud filling the valleys under a clear sky (inversion). A game names a stack of
-// them (`cloud_stack_named`, a cvar's word: "cumulus+cirrus") and deals each kind's bands off its
-// own seed.
+// milky veil, the thin even veil the sun shines through in its halo, cirrocumulus's fine
+// ripples), the lens a mountain wave stands still (lenticular) and a sea of cloud filling the
+// valleys under a clear sky (inversion). A game names a stack of them (`cloud_stack_named`, a
+// cvar's word: "cumulus+cirrus") and deals each kind's bands off its own seed.
 //
 // WHAT A ROW SAYS: the bands [least, most] of its base over the ground's floor, its depth, its
 // cover and its cell's span across the wind (m); how far a cell is drawn out along the wind;
@@ -14,13 +14,16 @@
 // cell's life (s) and the least speed the kind is seen to move at aloft (m/s); and its FORM
 // (`CloudLayer`'s): the anvil a tower's top spreads into, how deep the detail eats its edge (a
 // heap's boil against a lens's smooth skin), how far the detail is combed along the wind (ice's
-// hairs), and how far its cells gather into patches with clear sky between (a mackerel sky).
+// hairs), and how far its cells gather into patches with clear sky between (a mackerel sky); and
+// its LIGHT: the radius its droplets or crystals diffract the key light as (um) and their sizes'
+// spread (the aureole and the corona round the sun and the moon), its 22 degree halo, and how far
+// it is a deck lit through its top alone.
 //
 // ge:summary The cloud genera a sky is built from, named and stacked, each a row of bands
 // ge:keywords render clouds cloud-kinds cloud-genera cumulus congestus cumulonimbus anvil
 // ge:keywords stratocumulus stratus nimbostratus altocumulus altostratus cirrus cirrostratus
 // ge:keywords cirrocumulus lenticular inversion sea-of-cloud mackerel-sky cloud_stack_named
-// ge:keywords cloud_kind_named cloud-form erode fibre patch
+// ge:keywords cloud_kind_named cloud-form erode fibre patch veil corona aureole halo droplet
 // ge:skill render
 // ge:test tests/render_cloud_kinds_test.cpp
 #pragma once
@@ -40,6 +43,9 @@ struct CloudKind {
   double stretch, dome, opacity, shadow_tau, life, speed;
   // Its form (CloudLayer's): the anvil, the detail's bite, its comb and the patches.
   double anvil = 0, erode = 0.6, fibre = 0, patch = 0;
+  // Its light (CloudLayer's): round the disc, the particles' radius (um), their spread, the halo;
+  // and how far it is lit through its top alone (a deck).
+  double drop = 10, spread = 0.35, halo = 0, deck = 0;
 };
 
 // Every kind, lowest first.
