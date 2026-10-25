@@ -1,7 +1,7 @@
 ---
 title: A sub-pixel streak is invisible; widen it to a pixel and thin it as much
 date: 2026-10-22
-scope: engine/render/snowfall.wgsl
+scope: engine/render/precip.wgsl
 concepts: [particles, snowfall, sub-pixel, coverage, streak, motion-blur, alpha]
 ---
 

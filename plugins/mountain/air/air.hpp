@@ -17,6 +17,11 @@
 //   storm's gusts lifting snow off the ground into the air. Out of a sky that does not snow, 0.
 //   With it, how far one can see through it (`visibility_in`: 45 m at a fall of 1, opening as
 //   the inverse square of the fall, 20 km at none).
+// - SNOW OR RAIN (`fall_at`'s height): under the map's snow line (`Weather::snowline`, raised only
+//   by a sky picked by hand) the fall turns to rain over engine/wind/precip.hpp's melting band,
+//   its `rain` share; one sees through rain as precip.hpp's `visibility_of` says (far further than
+//   through snow), a sleet blended between in the logarithm. Above the line, or with no height,
+//   nothing moves: a dealt map's air keeps its bits.
 //
 // Readers: the frame's falling snow and the particles' drift (games/fall_line/app/frame.hpp). The
 // skier's drag against it, the sound's wind and the new snow a fall lays are later readers of the
@@ -24,7 +29,7 @@
 //
 // ge:summary The wind and the falling snow at a moment: gusts, veer, squalls, visibility
 // ge:keywords air wind gust veer downhill_from wind_at field_of fall_at snowfall squall visibility
-// ge:keywords visibility_in weather blizzard flurries storm
+// ge:keywords visibility_in weather blizzard flurries storm rain sleet snowline aloft
 // ge:skill mountain
 // ge:test tests/mountain_air_test.cpp
 #pragma once
@@ -45,7 +50,11 @@ struct Wind {
 struct Fall {
   double fall = 0;            // 0 (nothing) .. 1 (a blizzard at its worst)
   double visibility = 20000;  // how far one sees through it, m
+  double rain = 0;            // the share of it that is rain where it was asked: 0 snow .. 1 rain
 };
+
+// A height above every snow line: the fall as it is aloft, all snow.
+inline constexpr double kAloft = 1e9;
 
 // The bearing a wind FROM `from` really blows from: mirrored across the slope when it would blow
 // up it, unchanged otherwise. Continuous through the fold.
@@ -57,7 +66,8 @@ double downhill_from(double from);
 wind::Field field_of(const mapgen::Level& level);
 
 Wind wind_at(const mapgen::Level& level, double t);
-Fall fall_at(const mapgen::Level& level, double t);
+// The fall at time `t` s and world height `y` m.
+Fall fall_at(const mapgen::Level& level, double t, double y = kAloft);
 
 // How far one sees through a fall of `fall`, m.
 double visibility_in(double fall);

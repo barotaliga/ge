@@ -14,7 +14,7 @@
 //                           window redrawn from the history when it moved)
 //   trails.coarse        -> trails.coarse (the tracks laid since the last frame)
 //   particles.sim        -> particles (the spray thrown since the last frame, flown a frame)
-//   snowfall.sim         -> snowfall (the flakes round the eye, carried a frame on the wind)
+//   precip.sim           -> precip (the snow and rain round the eye, carried a frame on the wind)
 //   shadows.cull         -> shadows.lists (the casters of the maps drawn this frame)
 //   shadows.near         -> shadows.maps (the near cascade: the forest, when due)
 //   shadows.far          -> shadows.maps (the far cascade, when due)
@@ -34,7 +34,7 @@
 //   water                -> hdr motion depth (every body of water added, render/water.hpp)
 //   water.under          -> hdr (the view under water, when the eye is under a body)
 //   particles            -> hdr motion (the spray, over the picture; the motion's reactive b)
-//   snowfall             -> hdr motion (the falling snow round the eye, as the particles)
+//   precip               -> hdr motion (the snow and rain round the eye, the rain's splashes)
 //   taa                  -> taa.history (at the output's size; with FrameOptions::taa)
 //   bloom                -> bloom (the glow's mip chain, from what post reads)
 //   post                 -> final (the bloom mixed in, the grade's table: look.hpp's)
@@ -83,10 +83,10 @@
 #include "render/instances.hpp"
 #include "render/particles.hpp"
 #include "render/post.hpp"
+#include "render/precip.hpp"
 #include "render/shadows.hpp"
 #include "render/skinning.hpp"
 #include "render/sky.hpp"
-#include "render/snowfall.hpp"
 #include "render/taa.hpp"
 #include "render/terrain.hpp"
 #include "render/underwater.hpp"
@@ -95,6 +95,7 @@
 #include "skier/app/spray.hpp"
 #include "skier/app/tracks.hpp"
 #include "skier/skier.hpp"
+#include "wind/precip.hpp"
 
 namespace fall_line::app {
 
@@ -114,7 +115,9 @@ struct FrameOptions {
   bool trails = true;           // the tracks (mountain/app/trails.hpp); drawn only with the snow
   bool spray = true;            // the racers' spray (skier/app/spray.hpp) thrown into the particles
   ge::render::ParticleSettings particles;
-  bool snowfall = true;  // the falling snow, when the map's sky snows
+  bool precip = true;    // what falls (snow, sleet, rain), when the map's sky snows
+  bool splashes = true;  // the rain's splashes on the ground (with `precip`)
+  bool wet = true;       // the rain wets the ground: darker, mirroring, pooled on the flats
   bool weather =
       true;  // the map's sky and cloud in the picture (mountain/app/cloud_field.hpp): off, clear
   double clouds = 1.0;  // the share of the cloud march's steps (0.25..1); 0: no layer drawn
@@ -126,7 +129,7 @@ struct FrameOptions {
   bool cloud_quarter = true;  // the cloud marched at a quarter of the pixels (false: every one)
   bool cloud_spread = true;   // the quarter's march spread over four frames, the rest reprojected
   double reach_m = 0;  // how far the picture draws, misted (render/view.hpp); 0: the whole ground
-  ge::render::SnowfallSettings flakes;
+  ge::render::PrecipSettings fall;
   ge::mountain::app::TrailOptions trail_maps;  // their sizes
 };
 
@@ -169,7 +172,11 @@ struct GameFrame {
   std::vector<ge::skier::TrackPen> pens;  // each racer's, by his place in the scene
   std::vector<ge::mountain::app::TrailStamp> laid;
   ge::render::Particles particles;
-  ge::render::Snowfall snowfall;
+  ge::render::Precip precip;
+  ge::wind::Wet wet;    // the water on the ground, stepped by the frames' clock
+  double wet_time = 0;  // the last drawn frame's time_s
+  bool wet_placed =
+      false;  // a frame has been drawn: off, the wet ground starts at its steady state
   ge::render::CloudPass clouds;
   ge::render::Water water;       // its bodies, `add_water`'s; none: the passes draw nothing
   ge::render::Underwater under;  // the view when the eye is under a body (`under.look`)

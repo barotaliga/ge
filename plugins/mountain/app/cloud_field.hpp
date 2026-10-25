@@ -25,6 +25,7 @@
 // ge:test tests/mountain_cloud_field_test.cpp
 #pragma once
 
+#include "mountain/air/air.hpp"
 #include "mountain/mapgen/types.hpp"
 #include "render/cloud_kinds.hpp"
 #include "render/view.hpp"
@@ -63,7 +64,9 @@ render::Clouds cloud_field(const mapgen::Level& level, double t);
 // sky's mean cloud takes given back, since each layer now casts its own shadow) and the layers.
 // With `layers` off (the quality ladder's bottom), no layer is drawn and the weather keeps the
 // broken sky's mean cloud.
+// `eye_y` is the eye's world height, m: under the map's snow line the fall it looks through is
+// rain (air::fall_at).
 void sky_at(const mapgen::Level& level, double t, render::Weather& weather, render::Clouds& clouds,
-            bool layers = true);
+            bool layers = true, double eye_y = air::kAloft);
 
 }  // namespace ge::mountain::app
