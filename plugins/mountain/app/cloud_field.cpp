@@ -13,6 +13,7 @@
 #include "core/libm/libm.hpp"
 #include "mountain/air/air.hpp"
 #include "mountain/app/weather_look.hpp"
+#include "render/cloud_kinds.hpp"
 #include "render/clouds.hpp"
 
 namespace ge::mountain::app {
@@ -21,42 +22,30 @@ namespace {
 
 using mapgen::WeatherKind;
 
-// One kind of layer: its bands [least, most] (the base over the valley floor, the depth, the
-// cover, the cell's span across the wind, m), how far a cell is drawn out along the wind, 1 a
-// heap or 0 a sheet, the optical depth a full column shows the eye and takes off the sun, a
-// cell's life (s) and the least speed the kind is seen to move at (m/s).
-struct Def {
-  double base[2], depth[2], cover[2], cell[2];
-  double stretch, dome, opacity, shadow_tau, life, speed;
-};
+using render::CloudKind;
 
-constexpr Def kCumulus{{1500, 2000}, {500, 900}, {0.22, 0.36}, {1300, 1900}, 1.3, 1, 28, 2.4,
-                       480,          4};
-constexpr Def kCongestus{
-    {1500, 1800}, {1300, 2000}, {0.32, 0.44}, {1700, 2400}, 1.3, 1, 40, 3, 600, 4};
-constexpr Def kRipples{{3600, 4500}, {250, 450}, {0.15, 0.3}, {600, 900}, 1.6, 0.6, 5, 0.5, 900, 8};
-constexpr Def kStreaks{{7500, 9000}, {400, 800}, {0.35, 0.5}, {2500, 4000}, 5, 0, 0.9,
-                       0.25,         1200,       15};
-constexpr Def kFairStreaks{{7600, 8800}, {300, 600}, {0.02, 0.14}, {3000, 5000}, 5, 0, 0.9, 0.25,
-                           1200,         15};
-constexpr Def kVeil{{7000, 7800}, {600, 900}, {0.75, 0.92}, {6000, 9000}, 2.5, 0, 0.35, 0.2,
-                    1800,         15};
+const CloudKind& kind(const char* name) { return *render::cloud_kind_named(name); }
 
 struct Stack {
   int count;
-  const Def* defs[render::kCloudLayers];
+  const CloudKind* kinds[render::kCloudLayers];
 };
 
 Stack stack_of(WeatherKind k) {
   switch (k) {
     case WeatherKind::fair:
-      return {2, {&kCumulus, &kFairStreaks, nullptr}};
+      return {2, {&kind("cumulus"), &kind("wisps"), nullptr, nullptr}};
     case WeatherKind::flurries:
-      return {2, {&kCongestus, &kRipples, nullptr}};
+      return {2, {&kind("congestus"), &kind("altocumulus"), nullptr, nullptr}};
     case WeatherKind::high:
-      return {2, {&kStreaks, &kVeil, nullptr}};
+      return {2, {&kind("cirrus"), &kind("cirrostratus"), nullptr, nullptr}};
+    case WeatherKind::overcast:
+      return {1, {&kind("stratus"), nullptr, nullptr, nullptr}};
+    case WeatherKind::snow:
+    case WeatherKind::storm:
+      return {1, {&kind("nimbostratus"), nullptr, nullptr, nullptr}};
     default:
-      return {0, {nullptr, nullptr, nullptr}};
+      return {0, {nullptr, nullptr, nullptr, nullptr}};
   }
 }
 
@@ -86,13 +75,13 @@ double veer_aloft(double h, double latitude) {
   return (latitude < 0 ? -1.0 : 1.0) * 0.35 * core::libm::log(1 + h / 1000);
 }
 
-render::Clouds cloud_layers_for(const mapgen::Weather& weather, double seed, double floor_y,
-                                double latitude, double t) {
-  const Stack stack = stack_of(weather.kind);
+render::Clouds cloud_layers_of(const render::CloudKind* const* kinds, int count,
+                               const mapgen::Weather& weather, double seed, double floor_y,
+                               double latitude, double t) {
   render::Clouds out;
-  out.count = stack.count;
-  for (int i = 0; i < stack.count; ++i) {
-    const Def& d = *stack.defs[i];
+  out.count = std::clamp(count, 0, render::kCloudLayers);
+  for (int i = 0; i < out.count; ++i) {
+    const CloudKind& d = *kinds[i];
     auto u = [&](uint32_t k) { return hash01(seed, 101 + static_cast<uint32_t>(i) * 17 + k); };
     render::CloudLayer& l = out.layers[i];
     const double base = deal(d.base, u(0));
@@ -106,14 +95,39 @@ render::Clouds cloud_layers_for(const mapgen::Weather& weather, double seed, dou
     l.dome = d.dome;
     l.density = d.opacity / depth;
     l.shadow_tau = d.shadow_tau;
-    l.heading = weather.wind_from + kPi + veer_aloft(mid, latitude);
+    l.anvil = d.anvil;
+    l.erode = d.erode;
+    l.fibre = d.fibre;
+    l.patch = d.patch;
+    l.heading = weather.wind_from + kPi + veer_aloft(std::max(mid, 0.0), latitude);
     // Where in the noise this map's layer starts: a share of the tile along the wind and of the
     // cell's lives, so two maps' skies differ.
     const double tile = l.cell_m * l.stretch * render::kCloudTileCells;
-    l.drift_m = u(4) * tile + wind_aloft(weather.wind, mid, d.speed) * kCloudDrift * t;
+    l.drift_m =
+        u(4) * tile + wind_aloft(weather.wind, std::max(mid, 0.0), d.speed) * kCloudDrift * t;
     l.evolve = u(5) * render::kCloudTileCells + t / d.life;
   }
   return out;
+}
+
+render::Clouds cloud_layers_for(const mapgen::Weather& weather, double seed, double floor_y,
+                                double latitude, double t) {
+  const Stack stack = stack_of(weather.kind);
+  return cloud_layers_of(stack.kinds, stack.count, weather, seed, floor_y, latitude, t);
+}
+
+void lid_under(const render::CloudKind* const* kinds, int count, render::Weather& weather) {
+  for (int i = 0; i < count; ++i) {
+    const CloudKind& k = *kinds[i];
+    // A lid: a full, thick sheet over the valley floor (not one lying in it).
+    if (k.cover[0] < 0.9 || k.opacity < 10 || k.base[1] <= 0) continue;
+    const double dark = std::min(1.0, k.opacity / 100);
+    weather.cover = 1;
+    weather.deck_light = std::min(weather.deck_light, 1.15 - 0.45 * dark);
+    weather.deck_zenith = std::min(weather.deck_zenith, 0.62 - 0.25 * dark);
+    const double tint[3] = {0.95, 1.0, 1.1};
+    for (int c = 0; c < 3; ++c) weather.deck_tint[c] = tint[c];
+  }
 }
 
 render::Clouds cloud_field(const mapgen::Level& level, double t) {

@@ -22,9 +22,9 @@ using ge::mountain::mapgen::Level;
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kDeg = kPi / 180.0;
 
-constexpr std::array<std::string_view, 10> kNames = {"start",   "piste", "lookback", "vista",
+constexpr std::array<std::string_view, 11> kNames = {"start",   "piste", "lookback", "vista",
                                                      "aerial",  "wood",  "corduroy", "powder",
-                                                     "glitter", "sky"};
+                                                     "glitter", "sky",   "clouds"};
 
 // The piste's station nearest arc `s`.
 const ge::mountain::mapgen::TrackPoint& station_at(const Level& level, double s) {
@@ -163,6 +163,10 @@ std::string_view view_caption(std::string_view name) {
   if (name == "vista") return "High over the summit, looking down the mountain to the valley.";
   if (name == "sky")
     return "From the start, looking up the sky beside the sun: the kind of sky (sv_skytype).";
+  if (name == "clouds") {
+    return "From the finish in the valley, the sun behind and to one side, looking up the sky: "
+           "the cloud lit as a photograph of it is (sv_clouds).";
+  }
   if (name == "aerial") return "From high over a corner of the map, the whole mountain.";
   if (name == "corduroy") {
     return "Close over the groomed piste in the sun, looking down it at the comb's ribs and the "
@@ -226,6 +230,14 @@ bool make_view(const Level& level, std::string_view name, ge::render::FrameView&
     place(level, p.x, p.z, 4.0, v);
     v.heading = v.sun_azimuth + 0.45;
     v.pitch = 22 * kDeg;
+    v.fov_y = 70 * kDeg;
+  } else if (name == "clouds") {
+    // From the valley, the sun over the shoulder, as most photographs of a sky are taken: the
+    // cloud's lit sides and its shaded base both seen, the low kinds overhead.
+    const auto& p = station_at(level, track.length);
+    place(level, p.x, p.z, 4.0, v);
+    v.heading = v.sun_azimuth + 2.4;
+    v.pitch = 16 * kDeg;
     v.fov_y = 70 * kDeg;
   } else if (name == "vista") {
     place(level, m.summit.x, m.summit.z, 0, v);
