@@ -37,7 +37,7 @@
 // ge:summary Bodies of water (lake, ocean, channel, volume) and the one sample query
 // ge:keywords water world body lake ocean river channel stream volume brush hull add_lake
 // ge:keywords add_ocean add_river add_volume sample surface depth bed current density look
-// ge:keywords optics colour add_flow step_flows lay_waves liquid viscosity yield drift wakes
+// ge:keywords optics colour add_flow step_flows wakes lay_waves liquid viscosity yield drift
 // ge:skill water
 // ge:test tests/water_world_test.cpp
 #pragma once

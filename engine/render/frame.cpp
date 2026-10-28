@@ -63,6 +63,8 @@ void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint
   u.size[3] = 1.0f / static_cast<float>(height);
   u.time[0] = static_cast<float>(view.time_s);
   u.time[1] = static_cast<float>(view.frame);
+  // The scene's own light the eye adapts to, in the frame's light (FrameView::adapt_cd).
+  u.time[2] = static_cast<float>(view.adapt_cd / kSunLux * pre);
   u.world[0] = static_cast<float>(view.altitude_m * 1e-3);
   std::memcpy(u.planes, cam.planes, sizeof cam.planes);
   // THE WEATHER: a visual range V closes the view as exp(-3.912 d / V) (the contrast a black
@@ -116,8 +118,6 @@ void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint
   // THE REACH: the mist closes every surface into the sky from half the reach to all of it.
   u.mist[0] = static_cast<float>(view.reach_m * kMistBegins);
   u.mist[1] = static_cast<float>(view.reach_m);
-  // The scene's own light the eye adapts to, in the frame's light (FrameView::adapt_cd).
-  u.mist[2] = static_cast<float>(view.adapt_cd / kSunLux * pre);
   // THE WET GROUND, the snow's cover and a flash of lightning.
   u.wet[0] = unit(w.wet);
   u.wet[1] = unit(w.puddles);

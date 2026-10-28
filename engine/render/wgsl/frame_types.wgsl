@@ -9,7 +9,8 @@ struct Frame {
   eye: vec4f,              // world xyz (m); w: the eye's altitude over the sea, km
   sun: vec4f,              // unit direction toward the key light; w: its illuminance, pre-exposed
   size: vec4f,             // render width, height, 1/width, 1/height
-  time: vec4f,             // seconds, frame number
+  time: vec4f,             // seconds, frame number, the scene's own light the eye adapts to (a
+                           // white face's luminance, pre-exposed: FrameView::adapt_cd)
   world: vec4f,            // y = 0's altitude over the sea (km), the pre-exposure (light's stored
                            // scale), the moon's direct light while the sun keys, 1: the haze is the moon's
   planes: array<vec4f, 6>, // the frustum: left, right, bottom, top, near (and one zero)
@@ -28,10 +29,9 @@ struct Frame {
   moon_east: vec4f,        // toward its 0 N 90 E; w: the disc's brightest light under the shadow
   moon_shadow: vec4f,      // toward the Earth's shadow's axis; w: the albedo map's scale
   mist: vec4f,             // x, y: the reach's mist: where it begins and where it closes, m (0: none);
-                           // z: the scene's own light the eye adapts to (a white face's luminance,
-                           // pre-exposed: FrameView::adapt_cd)
+                           // z, w: 0
   wet: vec4f,              // the wet ground: the film's share, the puddles' share; the snow's
-                           // cover on what faces up; a lightning flash's light over the open sky's
+                           // cover on what faces up; a lightning flash's light over the open sky
   // The sky's style (render/sky_style.hpp's `style_rows`): 0 the Rayleigh scales, the dust's;
   // 1 the dust's absorption scales, the ozone's; 2 the sun's disc's tint, its size; 3 toward the
   // second sun, its brightness; 4 its tint, its size; 5 toward the planet, its angular radius;
