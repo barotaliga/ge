@@ -51,7 +51,7 @@ fn lamp_irradiance(i: u32, p: vec3f, l: ptr<function, vec3f>) -> vec3f {
   let d2 = dot(to, to);
   *l = to * inverseSqrt(max(d2, 1e-8));
   let w = clamp(1.0 - d2 * d2 * lt.at.w * lt.at.w, 0.0, 1.0);
-  var e = lt.colour.rgb * (w * w / max(d2, lt.colour.w));
+  var e = lt.colour.rgb * (w * w / (d2 + lt.colour.w));
   if (lt.axis.w > -1.5) {
     let c = dot(-*l, lt.axis.xyz);
     let k = clamp((c - lt.axis.w) * lt.cone.x, 0.0, 1.0);

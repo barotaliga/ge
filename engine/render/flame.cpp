@@ -20,8 +20,9 @@ namespace {
 using BU = wgpu::BufferUsage;
 
 // The flame's mean temperature (where its light's colour is read) and its area seen side on:
-// a teardrop fills about 0.55 of its box, and its mean luminance is about 0.45 of the core's.
-constexpr double kMeanTemp = 0.88, kFill = 0.55, kMeanGlow = 0.45;
+// a teardrop fills about 0.55 of its box, and the soot glows far below its core over most of it
+// (its mean luminance about 0.28 of the core's).
+constexpr double kMeanTemp = 0.88, kFill = 0.55, kMeanGlow = 0.28;
 
 // The bounding sphere's centre (world) and radius of a flame at full height in its wind.
 void sphere_of(const Flame& f, double c[3], double& r) {
@@ -90,7 +91,9 @@ LocalLight flame_light(const Flame& f) {
   l.candela = static_cast<float>(f.luminance_nits * kMeanGlow * area);
   // Its reach: where it has fallen to a third of a lux (moonlight's), within the clusters' sense.
   l.range_m = static_cast<float>(std::clamp(std::sqrt(l.candela / 0.3), 0.5, 40.0));
-  l.radius_m = std::max(f.radius_m, 0.005f);
+  // The fire lights the wall behind it from its whole flame, not a point: its light softened over
+  // the flame's height.
+  l.radius_m = std::max(f.height_m, 0.005f);
   l.flicker = Flicker::flame;
   l.rate_hz = f.rate_hz;
   l.depth = f.depth;

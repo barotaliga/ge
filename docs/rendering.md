@@ -579,7 +579,7 @@ between frames.
   lux, the units the sun's 128 000 lx is in, and the shader pre-exposes it as it does the sun. A
   torch is 10 to 40 cd, a bulb about 70, a street lamp 1000 to 3000, a muzzle flash 10⁴ to 10⁵
   for a few milliseconds. Every light ends at its `range_m` by the window (1 − (d/r)⁴)², and the
-  inverse square stops at the emitter's `radius_m`. A spot is whole inside `inner_deg` of its
+  emitter's `radius_m` softens the inverse square near it, candela / (d² + radius²). A spot is whole inside `inner_deg` of its
   axis and dark past `outer_deg`, smoothstepped between.
 - **Flicker** is `flicker_level(light, t)`, a pure function of the light and the frame's time
   computed on the CPU (so the shader reads one colour a light, and a replay or a lab flickers
@@ -644,7 +644,9 @@ white, each primary saturating on its own, so the core reads yellow-white and th
 
 A flame and its light flicker as one: `flame_light` makes the `LocalLight` (at the gas's centre,
 the colour of its mean temperature, its candela its luminance over its area seen side on: a
-torch 125 cd, a candle 1, a camp fire 1700; flickering as a flame with the flame's seed), and
+torch 78 cd, a candle 0.7, a camp fire 1060; its `radius_m` the flame's height, so it lights the
+wall beside it from the whole fire rather than a point and falls off softly; flickering as a flame
+with the flame's seed), and
 `prepare_flames` swells and brightens the gas with that light's level. A game puts the light in
 its lights list. `Flame::wind` bends the flame downwind against its rise, and its light leans
 with it. The presets are a torch, a candle, a brazier and a camp fire.

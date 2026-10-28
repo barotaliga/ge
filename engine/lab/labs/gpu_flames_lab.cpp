@@ -156,12 +156,16 @@ gr::FrameView look(const double eye[3], const double target[3], double t) {
   return ge::lab::lit_scene::view_at(eye[0], eye[1], eye[2], heading, pitch, true, t);
 }
 
+// An eye at night never quite adapts to firelight: it settles as if the room were this much
+// brighter than it is, so a fire-lit room reads dim and its fires bright.
+constexpr double kNightKey = 3;
+
 // The light an eye adapts to round `points`: the geometric mean of the lamps' on a white face.
 double adapted(const std::vector<gr::LocalLight>& lamps,
                const std::vector<std::vector<double>>& pts, double t) {
   double e = 0;
   for (const auto& p : pts) e += libm::log(std::max(gr::lamp_lux_at(lamps, p.data(), t), 1e-3));
-  return libm::exp(e / static_cast<double>(pts.size()));
+  return kNightKey * libm::exp(e / static_cast<double>(pts.size()));
 }
 
 gl::Picture half(const gl::Picture& p) {
@@ -364,7 +368,8 @@ void run(gl::Lab& lab) {
       gr::FrameView c = look(near, torch, tk);
       const double wall[3] = {kCx - 5.95, kTorchY + 0.2, kCz + kTorchZ[1]};
       const double floor[3] = {kCx - 5.2, 0.1, kCz + kTorchZ[1]};
-      c.lamp_lux = std::sqrt(gr::lamp_lux_at(lamps, wall, t) * gr::lamp_lux_at(lamps, floor, t));
+      c.lamp_lux =
+          kNightKey * std::sqrt(gr::lamp_lux_at(lamps, wall, t) * gr::lamp_lux_at(lamps, floor, t));
       const gl::Picture p = draw(d, s, c, lamps, burning);
       for (size_t i = 0; i < p.rgba.size(); i += 4) {
         const double l = luma_at(p, i);
@@ -410,7 +415,7 @@ void run(gl::Lab& lab) {
       gr::FrameView c = look(eye_at, mid, t);
       const double near_floor[3] = {mid[0], f.base[1] - 0.5 * f.height_m,
                                     mid[2] - 0.6 * picks[k].back};
-      c.lamp_lux = std::max(gr::lamp_lux_at(lamps, near_floor, t), 0.5);
+      c.lamp_lux = kNightKey * std::max(gr::lamp_lux_at(lamps, near_floor, t), 0.5);
       paste(sheet, half(draw(d, s, c, lamps, burning)), (k % 2) * static_cast<int>(w) / 2,
             (k / 2) * static_cast<int>(h) / 2);
     }
