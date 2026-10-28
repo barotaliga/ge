@@ -1,6 +1,6 @@
 ---
 name: free-assets
-description: "Use when a game needs sounds or models it does not have and someone else has made them free: the free sources (Kenney, OpenGameArt, Poly Haven, Quaternius and others), which licences this repository can carry, how to fetch and unpack each source, finding what a game needs (Shooter's Edge's registry from the classic content's maps and game logic), picking a replacement without listening (the match on length, bands and envelope), converting and renaming it to our name, the classic.assetmap the map cloner and the game read, CREDITS.md, and the pain points the `ge` tools for all of this should remove."
+description: "Use when a game needs sounds or models it does not have and someone else has made them free: the free sources (Kenney, OpenGameArt, Poly Haven, Quaternius and others), which licences this repository can carry, how to fetch and unpack each source, finding what a game needs (Shooter's Edge's registry from the classic content's maps and game logic), picking a replacement without listening (the match on length, bands and envelope), converting and renaming it to our name, the classic.assetmap the map cloner and the game read, CREDITS.md, and the `ge` commands that do it (`ge source`, `ge sound`, `ge model import`, `ge credits check`)."
 ---
 
 # Free assets
@@ -91,18 +91,25 @@ Everything lives in `games/shooters_edge/content/`:
 7. **Budget**: keep the sounds under about 8 MB and a model under 300 KB unless the PR argues
    for it; prefer low-poly CC0 kits over photoscans.
 
-## The `ge` tools this wants
+## The `ge` tools
 
-Every step above was done by hand with throwaway scripts. Each is a `ge` command to build (the
-wishes are in `docs/goals/ge-backlog.md`):
+Steps 3 to 6 are `ge` commands now (`ge help <command>` for every flag):
 
-- `ge content scan <pak|dir>`: the registry and an assetmap draft from a content set's maps,
-  game logic and archives (on M18a–c's readers).
-- `ge asset source search|fetch <source>:<pack>`: a catalogue of the sources above, unpacked
-  into a cache, with licence, author, URL and hash written to a lock file; a licence the table
-  above refuses is refused.
-- `ge sound match <reference> <candidates…>`: the ranking above, a reason per trait, a sheet of
-  waveforms; `ge sound split <file>` cuts a long take at its silences.
-- `ge sound import <source> <our name> [--loop]` and `ge model import <source> <our name>`:
-  convert, pack, load-check, preview, and write the registry and CREDITS.md rows in one step.
-- A check that every file under a game's `content/` has a CREDITS.md row.
+- `ge source list`; `ge source search <kenney|oga|polyhaven> <word>...`; `ge source fetch
+  <source>:<pack>`: the packs found and unpacked into a cache outside the repository (`--cache`,
+  else `GE_ASSET_CACHE`, else `~/.cache/ge/sources`), a `SOURCE.txt` beside each with its title,
+  author, page and licence; a licence the table above refuses is refused. Quaternius and
+  Freesound are not read (above).
+- `ge sound match <reference> <candidate>... [--pool=<dir>] [--top=N]`: step 4's ranking, the
+  distance per trait on each line.
+- `ge sound import <source> <our name> [--loop] [--max=<s>]`: step 5's trim, BS.1770 loudness to
+  -16 LUFS with the peak held at -1.5 dB, mono 16-bit at 22 050 Hz, written as
+  `sounds/<our name>.wav`; `ge sound split <file>` cuts a long take at its silences.
+- `ge model import <source.gltf|glb> <our name> [--budget-kib=300]`: buffers and images packed
+  into one GLB, load-checked with `assets::load_gltf`, held to the budget.
+- `ge credits check [<content dir>]`: every sound, model, image and font has a CREDITS.md row,
+  every row's file is there, every section's licence is one this repository can carry.
+
+Still wanted (`docs/goals/ge-backlog.md`): `ge content scan <pak|dir>` (the registry and an
+assetmap draft from a content set, on M18a–c's readers), a waveform sheet from `sound match`, and
+the import commands writing the registry and CREDITS.md rows themselves.
