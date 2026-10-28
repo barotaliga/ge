@@ -13,4 +13,6 @@ felled trees) must call `reset-sun-shadows`, or the trees' shadows stay on the e
 family made after the frame's load (`create_family`, `bind_family_hiz`) creates no pipeline, but a
 second `create_frame` on the same device does: a lab that wants a before and an after films the
 before, then changes the one frame. Without `mesa-vulkan-drivers` a GPU lab's pictures are black
-with no error; install it before trusting a dark picture.
+with no error; install it before trusting a dark picture. A shot's id is in the lab's digest even when its pixels are
+measured, so the no-adapter branch (Windows CI has none) must take the same shot ids as the drawn
+one, `-before` shots included, or the digest differs only there.

@@ -154,6 +154,11 @@ void run(ge::lab::Lab& lab) {
     ge::lab::Picture none = ge::lab::create_picture(width, height, {40, 40, 48});
     ge::lab::draw_text(none, 4, 4, text, {230, 230, 230});
     lab.shot(shot_of(l), none, Det::measured);
+    // The before too: a shot's id is in the digest, so the lab takes the same shots with a GPU
+    // and without one.
+    ge::lab::Shot b = shot_of(l);
+    b.id = std::string(l.id) + "-before";
+    lab.shot(b, none, Det::measured);
   };
   if (!st.village) {
     lab.note("seed " + seed_s + " lays no village");
