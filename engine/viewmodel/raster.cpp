@@ -96,6 +96,7 @@ void draw_lit(ViewTarget& t, const DrawLit& d, const Lighting& light) {
   const float near_m = static_cast<float>(d.near_m);
 
   for (size_t tri = 0; tri + 2 < d.indices.size(); tri += 3) {
+    if (tri / 3 < d.hidden.size() && d.hidden[tri / 3] != 0) continue;
     Vert v[3];
     for (int c = 0; c < 3; ++c) {
       const uint32_t i = d.indices[tri + c];

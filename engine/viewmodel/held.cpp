@@ -3,12 +3,15 @@
 //
 // ge:summary The held model's conversions: glTF to frames, the grip mount, bounds, frame blend
 // ge:keywords viewmodel held-model fit_mount held_from_model pose_frames held_bounds
+// ge:keywords find_muzzle muzzle_at muzzle-tip
 // ge:skill render assets
 // ge:test tests/viewmodel_held_test.cpp
 #include "viewmodel/held.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <span>
+#include <utility>
 
 #include "assets/pose.hpp"
 
@@ -82,6 +85,59 @@ void fit_mount(HeldModel& model, const Mount& mount) {
     for (size_t i = 0; i + 2 < f.positions.size(); i += 3)
       for (int k = 0; k < 3; ++k)
         f.positions[i + k] = static_cast<float>((f.positions[i + k] - grip[k]) * s);
+  if (model.muzzle_vertices.empty()) find_muzzle(model);
+}
+
+void find_muzzle(HeldModel& model, double share) {
+  model.muzzle_vertices.clear();
+  model.muzzle_dir[0] = model.muzzle_dir[1] = 0;
+  model.muzzle_dir[2] = 1;
+  if (model.frames.empty()) return;
+  const std::vector<float>& p = model.frames[0].positions;
+  float lo[3], hi[3];
+  held_bounds(model, lo, hi);
+  const double front = hi[2] - (hi[2] - lo[2]) * share;
+  // The front-most slice; nearest the long axis through the slice's own middle first.
+  double mid[2] = {0, 0};
+  std::vector<uint32_t> slice;
+  for (size_t v = 0; v * 3 + 2 < p.size(); ++v) {
+    if (p[v * 3 + 2] < front) continue;
+    slice.push_back(static_cast<uint32_t>(v));
+    mid[0] += p[v * 3];
+    mid[1] += p[v * 3 + 1];
+  }
+  if (slice.empty()) return;
+  mid[0] /= static_cast<double>(slice.size());
+  mid[1] /= static_cast<double>(slice.size());
+  std::vector<std::pair<double, uint32_t>> near;
+  near.reserve(slice.size());
+  for (uint32_t v : slice) {
+    const double dx = p[size_t{v} * 3] - mid[0], dy = p[size_t{v} * 3 + 1] - mid[1];
+    near.emplace_back(dx * dx + dy * dy, v);
+  }
+  std::sort(near.begin(), near.end());  // ties by index: the same pick every time
+  for (size_t i = 0; i < near.size() && i < 16; ++i)
+    model.muzzle_vertices.push_back(near[i].second);
+}
+
+void muzzle_at(const HeldModel& model, int a, int b, double t, float out[3]) {
+  out[0] = out[1] = out[2] = 0;
+  if (model.frames.empty() || model.muzzle_vertices.empty()) return;
+  const int last = static_cast<int>(model.frames.size()) - 1;
+  a = a < 0 ? 0 : a > last ? last : a;
+  b = b < 0 ? 0 : b > last ? last : b;
+  const std::vector<float>& pa = model.frames[size_t(a)].positions;
+  const std::vector<float>& pb = model.frames[size_t(b)].positions;
+  const double u = t < 0 ? 0 : t > 1 ? 1 : t;
+  double sum[3] = {0, 0, 0};
+  for (uint32_t v : model.muzzle_vertices) {
+    for (size_t k = 0; k < 3; ++k) {
+      const double x = pa[size_t{v} * 3 + k], y = pb[size_t{v} * 3 + k];
+      sum[k] += x + (y - x) * u;
+    }
+  }
+  const auto n = static_cast<double>(model.muzzle_vertices.size());
+  for (size_t k = 0; k < 3; ++k) out[k] = static_cast<float>(sum[k] / n);
 }
 
 HeldModel held_from_model(const assets::Model& model, int clip, int frames) {

@@ -125,3 +125,22 @@ TEST(a_glowing_texel_ignores_the_light_and_the_resolve_repeats) {
   const uint8_t* c = &a[size_t{8 * 16 + 8} * 4];
   CHECK(c[0] > 200 && c[2] < 10);
 }
+
+TEST(a_hidden_triangle_is_not_drawn) {
+  for (bool hide : {false, true}) {
+    vm::ViewTarget t = vm::make_target(32, 32, 1, kBlack);
+    std::vector<float> p, n, c;
+    std::vector<uint32_t> idx;
+    square(p, n, idx, 1, 0.5f);
+    c.assign(p.size(), 1.0f);
+    const std::vector<uint8_t> mask = {uint8_t(hide ? 1 : 0), uint8_t(hide ? 1 : 0)};
+    vm::DrawLit d;
+    d.positions = p;
+    d.normals = n;
+    d.indices = idx;
+    d.colour = c;
+    d.hidden = mask;
+    vm::draw_lit(t, d, bright());
+    CHECK((centre_red(t) > 0) == !hide);
+  }
+}

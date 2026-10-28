@@ -32,11 +32,13 @@
 // ge:keywords viewmodel view-model first-person weapon gun held place placement offset bob
 // ge:keywords gun-bob weapon-bob sway weapon-sway lag inertia kick recoil dip landing switch
 // ge:keywords lower raise put-away idle breathing viewmodel-fov frame_viewmodel placement-row
+// ge:keywords held_to_world held_dir_to_world muzzle-world lens-match
 // ge:skill render camera
 // ge:test tests/viewmodel_place_test.cpp
 #pragma once
 
 #include "camera/follow.hpp"
+#include "camera/pose.hpp"
 
 namespace ge::viewmodel {
 
@@ -107,5 +109,17 @@ Placement frame_viewmodel(const PlaceRow& row, const PlaceInput& in, PlaceState&
 void place_point(const Placement& p, const float in[3], float out[3]);
 // A direction (a normal) into the view's.
 void place_vector(const Placement& p, const float in[3], float out[3]);
+
+// A point of the held frame (the muzzle's tip) into the WORLD, where an effect drawn in the
+// world's pass (a muzzle flash, its smoke, the shot's light) lines up with the gun drawn through
+// its own lens: placed into the view, then moved across at its depth so it lands on the same
+// screen ray under the view's lens (x and y times tan(view.fov_y / 2) / tan(gun_fov_y / 2)).
+// `gun_fov_y` is the lens the gun is drawn with (the placement's, or 0: the view's, no change).
+void held_to_world(const Placement& p, double gun_fov_y, const camera::Pose& view,
+                   const float held[3], double out[3]);
+// A direction of the held frame (the muzzle's) into the world through the same lens, unit: the
+// way from the tip's world point to the world point of the tip moved a step along it.
+void held_dir_to_world(const Placement& p, double gun_fov_y, const camera::Pose& view,
+                       const float held_at[3], const float held_dir[3], double out[3]);
 
 }  // namespace ge::viewmodel

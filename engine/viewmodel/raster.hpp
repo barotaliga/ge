@@ -16,7 +16,7 @@
 // ge:summary The held model drawn on the CPU: a lit, depth-tested raster in the view's frame
 // ge:keywords viewmodel cpu raster rasterizer triangles depth z-buffer perspective-correct
 // ge:keywords near-clip back-face supersample resolve exposure srgb draw_lit clear_depth
-// ge:keywords held-raster view-target
+// ge:keywords held-raster view-target hidden-triangles hide-flame
 // ge:skill render labs
 // ge:test tests/viewmodel_raster_test.cpp
 #pragma once
@@ -53,6 +53,7 @@ struct DrawLit {
   double fov_y = 1.2;
   double near_m = 0.02;
   bool cull_back = true;
+  std::span<const uint8_t> hidden;  // one a triangle: nonzero, not drawn (empty: all drawn)
 };
 void draw_lit(ViewTarget& t, const DrawLit& d, const Lighting& light);
 

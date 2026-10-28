@@ -12,6 +12,7 @@
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "core/quat.hpp"
+#include "viewmodel/light.hpp"
 
 namespace ge::viewmodel {
 
@@ -120,6 +121,35 @@ void place_vector(const Placement& p, const float in[3], float out[3]) {
   for (size_t r = 0; r < 3; ++r)
     out[r] =
         static_cast<float>(p.m[r * 4] * in[0] + p.m[r * 4 + 1] * in[1] + p.m[r * 4 + 2] * in[2]);
+}
+
+void held_to_world(const Placement& p, double gun_fov_y, const camera::Pose& view,
+                   const float held[3], double out[3]) {
+  float v[3];
+  place_point(p, held, v);
+  if (gun_fov_y > 0 && view.fov_y > 0) {
+    const double k = core::libm::tan(view.fov_y * 0.5) / core::libm::tan(gun_fov_y * 0.5);
+    v[0] = static_cast<float>(v[0] * k);
+    v[1] = static_cast<float>(v[1] * k);
+  }
+  view_to_world(view, v, out);
+}
+
+void held_dir_to_world(const Placement& p, double gun_fov_y, const camera::Pose& view,
+                       const float held_at[3], const float held_dir[3], double out[3]) {
+  constexpr float kStep = 0.1f;  // m along the direction: well inside the gun's own depth range
+  const float ahead[3] = {held_at[0] + held_dir[0] * kStep, held_at[1] + held_dir[1] * kStep,
+                          held_at[2] + held_dir[2] * kStep};
+  double a[3], b[3];
+  held_to_world(p, gun_fov_y, view, held_at, a);
+  held_to_world(p, gun_fov_y, view, ahead, b);
+  double len = 0;
+  for (int k = 0; k < 3; ++k) {
+    out[k] = b[k] - a[k];
+    len += out[k] * out[k];
+  }
+  len = std::sqrt(len);
+  for (int k = 0; k < 3; ++k) out[k] = len > 0 ? out[k] / len : 0;
 }
 
 }  // namespace ge::viewmodel

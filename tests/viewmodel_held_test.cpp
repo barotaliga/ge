@@ -103,3 +103,28 @@ TEST(two_frames_blend_with_unit_normals) {
   const float len = std::sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
   CHECK(std::fabs(len - 1) < 1e-5f);
 }
+
+TEST(the_muzzle_is_the_front_of_the_barrel_and_rides_the_frames) {
+  // A barrel along +z from 0 to 1 m: a ring of four vertices at each end; frame 1 pulled back.
+  vm::HeldModel m;
+  vm::HeldFrame rest;
+  for (float z : {0.0f, 1.0f}) {
+    for (int k = 0; k < 4; ++k) {
+      const float x = (k == 0 || k == 3) ? -0.02f : 0.02f, y = k < 2 ? -0.02f : 0.02f;
+      rest.positions.insert(rest.positions.end(), {x + 0.1f, y - 0.1f, z});
+      rest.normals.insert(rest.normals.end(), {0, 0, 1});
+    }
+  }
+  vm::HeldFrame back = rest;
+  for (size_t i = 2; i < back.positions.size(); i += 3) back.positions[i] -= 0.1f;
+  m.frames = {rest, back};
+  vm::find_muzzle(m);
+  CHECK(m.muzzle_vertices.size() == 4);
+  float tip[3];
+  vm::muzzle_at(m, 0, 0, 0, tip);
+  CHECK(std::fabs(tip[0] - 0.1f) < 1e-6f && std::fabs(tip[1] + 0.1f) < 1e-6f);
+  CHECK(std::fabs(tip[2] - 1.0f) < 1e-6f);
+  vm::muzzle_at(m, 0, 1, 0.5, tip);
+  CHECK(std::fabs(tip[2] - 0.95f) < 1e-6f);
+  CHECK(m.muzzle_dir[2] == 1.0f);
+}

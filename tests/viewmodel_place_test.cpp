@@ -11,6 +11,7 @@
 #include <cmath>
 
 #include "check.hpp"
+#include "viewmodel/light.hpp"
 #include "viewmodel/place.hpp"
 
 namespace vm = ge::viewmodel;
@@ -121,4 +122,46 @@ TEST(the_same_frames_give_the_same_bits) {
   };
   const vm::Placement a = run(), b = run();
   for (int k = 0; k < 12; ++k) CHECK_BITS(a.m[k], b.m[k]);
+}
+
+TEST(a_held_point_lands_on_the_same_screen_ray_in_the_world) {
+  vm::PlaceState st;
+  const vm::Placement p = vm::frame_viewmodel(vm::classic_row(), vm::PlaceInput{}, st, kDt);
+  ge::camera::Pose view;
+  view.eye = {1, 2, 3};
+  view.yaw = 0.3;
+  view.pitch = -0.1;
+  view.fov_y = 1.2;
+  const float tip[3] = {0.02f, 0.01f, 0.4f};
+  float in_view[3];
+  vm::place_point(p, tip, in_view);
+  // Drawn through its own narrower lens, the tip is on screen where (x, y) / (z tan(gun / 2)) says;
+  // the world point, seen through the view's lens, is at the same place on the screen.
+  const double gun = 0.9;
+  double w[3];
+  vm::held_to_world(p, gun, view, tip, w);
+  double eye_rel[3] = {w[0] - view.eye.x, w[1] - view.eye.y, w[2] - view.eye.z};
+  // Back into the view's frame through the yaw and pitch (the inverse of view_to_world).
+  const ge::core::Vec3 fwd = ge::camera::look_forward(view.yaw, view.pitch);
+  const double z = eye_rel[0] * fwd.x + eye_rel[1] * fwd.y + eye_rel[2] * fwd.z;
+  CHECK(std::fabs(z - in_view[2]) < 1e-5);  // the same depth
+  const double screen_gun = in_view[0] / (in_view[2] * std::tan(gun / 2));
+  // The world point's offset across, measured along the view's right.
+  const double len_sq = eye_rel[0] * eye_rel[0] + eye_rel[1] * eye_rel[1] + eye_rel[2] * eye_rel[2];
+  const double across = std::sqrt(len_sq - z * z);
+  const double screen_view = across / (z * std::tan(view.fov_y / 2));
+  const double gun_across =
+      std::sqrt(double(in_view[0]) * in_view[0] + double(in_view[1]) * in_view[1]);
+  CHECK(std::fabs(screen_view - gun_across / (in_view[2] * std::tan(gun / 2))) < 1e-5);
+  CHECK(screen_gun > 0);
+  // The view's own lens moves nothing: the world point is the placed point.
+  double same[3], plain[3];
+  vm::held_to_world(p, 0, view, tip, same);
+  vm::view_to_world(view, in_view, plain);
+  for (int k = 0; k < 3; ++k) CHECK(same[k] == plain[k]);
+  // The muzzle's direction comes out unit.
+  const float dir[3] = {0, 0, 1};
+  double d[3];
+  vm::held_dir_to_world(p, gun, view, tip, dir, d);
+  CHECK(std::fabs(d[0] * d[0] + d[1] * d[1] + d[2] * d[2] - 1) < 1e-9);
 }
