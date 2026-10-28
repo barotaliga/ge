@@ -149,6 +149,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 
 ## Hygiene
 
+- a lab that reads the user's own content (a pak) marked private in its spec, so the runner writes it under the local cache instead of previews/ unless `--out` says otherwise, and `ge lab publish` refuses it without `--private-ok`: pak-derived pictures then never sit where a commit or a shared page could pick them up (weapons thread)
 - a shared CPU scene view in engine/lab (a camera, a lit raster with occlusion and a tone map over meshes) for labs that draw a model or a room without the GPU: brush detail's detail_view.cpp is the third lab-local renderer of its kind
 - a `ge` older than the base saying so (the commands main has that this build lacks, and `git merge origin/main` as the next step): a branch cut before `ge goals free` landed scanned branches by hand
 - `ge build` and `ge lab` warning when the labs binary is older than a library it links
@@ -167,7 +168,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 
 ## Shooter's Edge, the FPS port (M18: the ge tooling it needs)
 
-- `ge pak ls|cat|extract|build` (search paths, which archive wins a file, fixture packs: pak, pk3, .pk3dir)
+- `ge pak ls|cat|extract|build` (search paths, which archive wins a file, fixture packs: pak, pk3, .pk3dir; asked for by the classic-enhance and weapons threads)
 - `ge bsp info|ents|shot` (lumps and limits, the entity lump as text, a top-down CPU picture of the leaves, the PVS from a point, the hulls)
 - `ge progs build|disasm|run|trace|profile|diff` (the engine's own compiler for the game's VM language, and the `progs` VM inspected)
 - `ge server --map --bots --for` (a headless dedicated server with bots, its input log written for replay, `ge state` and diverge)
