@@ -16,7 +16,7 @@ camera-world 663b2b2d72b24d8b
 capture 65fdfcf8245cd8c1
 capture-run 37cb60d7564b6edc
 charts 77f2319a5ea24272
-cli-loop 2a54afc4b75dac63
+cli-loop 47b6a089fc320879
 clone fb8a0fbd49f14540
 console e8456b0db59560ce
 crowd cf02cf9a7c917783
