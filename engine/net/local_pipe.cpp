@@ -59,13 +59,22 @@ void local_close(LocalPipe& p) {
 void local_pump(LocalPipe& p) {
   if (p.handle == -1 || p.closed) return;
   HANDLE h = pipe_of(p.handle);
-  if (!p.out.empty()) {
+  // A no-wait write larger than the room left in the pipe's buffer can take nothing at all, so
+  // the queue goes in slices well under the buffer, until the pipe takes none. A full pipe takes
+  // nothing and says so with success; a failure is a pipe being closed.
+  constexpr size_t kSlice = 4096;
+  size_t sent = 0;
+  while (sent < p.out.size()) {
+    const size_t n = p.out.size() - sent < kSlice ? p.out.size() - sent : kSlice;
     DWORD wrote = 0;
-    // A full pipe takes nothing and says so with success; a failure is a pipe being closed.
-    if (!WriteFile(h, p.out.data(), static_cast<DWORD>(p.out.size()), &wrote, nullptr))
+    if (!WriteFile(h, p.out.data() + sent, static_cast<DWORD>(n), &wrote, nullptr)) {
       p.closed = true;
-    p.out.erase(0, wrote);
+      break;
+    }
+    if (wrote == 0) break;
+    sent += wrote;
   }
+  p.out.erase(0, sent);
   char chunk[16384];
   while (!p.closed) {
     DWORD waiting = 0;
