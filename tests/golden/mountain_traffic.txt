@@ -1,0 +1,4 @@
+# each seed's village traffic at generator v10: the seed, the plan's hash with every vehicle at two moments, its vehicles and its parked cars (mountain_traffic_test)
+38 65b33cbe4ff9ed36 17 59
+7 512199bce60731a0 14 59
+101 4681e56531931638 12 65

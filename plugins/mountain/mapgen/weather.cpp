@@ -106,6 +106,10 @@ void with_sky(Level& level, const SkyPick& pick) {
   if (pick.fog >= 0) w.fog = num::min(1.0, pick.fog);
   if (pick.wind >= 0) w.wind = pick.wind;
   if (pick.wind_from >= 0) w.wind_from = pick.wind_from;
+  if (pick.snowline >= 0) {
+    const double base = level.mountain.base.y;
+    w.snowline = base + pick.snowline * (level.mountain.summit.y - base);
+  }
 }
 
 }  // namespace ge::mountain::mapgen

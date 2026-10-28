@@ -11,6 +11,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <filesystem>
 #include <memory>
 #include <thread>
 
@@ -20,6 +21,7 @@
 #include "input/names.hpp"
 #include "input/state.hpp"
 #include "platform/devices.hpp"
+#include "platform/window.hpp"
 
 namespace in = ge::input;
 namespace pl = ge::platform;
@@ -216,23 +218,53 @@ TEST(keys_and_a_relative_mouse_are_read_through_the_windows_pump) {
   }
   const bool relative = pl::relative_mouse(*window);
   pl::virtual_key(*dev, in::key::w, true);
-  pl::virtual_mouse_motion(*dev, 3.5f, -2.0f);
-  pl::virtual_mouse_motion(*dev, 1.0f, 0.5f);
   q.clear();
   pl::poll_input(*window, snap, *dev, q);
   in::update(s, q);
   CHECK(in::key_pressed(s, in::key::w) && in::key_held(s, in::key::w));
   CHECK(snap.down(pl::Key::w));  // the window's own snapshot still reads the same pump
+  // SDL flushes every pending mouse motion whenever it re-applies relative mode, which it does
+  // when the window's focus moves (and on a shared virtual display it can move at any pump). A
+  // pump that delivers neither delta was flushed, so the pair is sent again, a few times at most.
   const float want[2][2] = {{3.5f, -2.0f}, {1.0f, 0.5f}};
-  int found = 0;
-  for (const in::Event& e : q.events) {
-    if (e.type != in::EventType::mouse_motion || found == 2) continue;
-    if (e.device != s.mouse_id || e.v[0] != want[found][0] || e.v[1] != want[found][1]) continue;
-    CHECK_MSG((e.aux != 0) == relative,
-              "a motion is flagged raw exactly while relative mode is in force");
-    ++found;
+  int found = 0, others = 0, sends = 0;
+  for (; sends < 5 && found < 2; ++sends) {
+    found = 0;
+    pl::virtual_mouse_motion(*dev, want[0][0], want[0][1]);
+    pl::virtual_mouse_motion(*dev, want[1][0], want[1][1]);
+    q.clear();
+    pl::poll_input(*window, snap, *dev, q);
+    in::update(s, q);
+    for (const in::Event& e : q.events) {
+      if (e.type != in::EventType::mouse_motion || found == 2) continue;
+      if (e.device != s.mouse_id || e.v[0] != want[found][0] || e.v[1] != want[found][1]) {
+        if (others++ < 8) {
+          std::fprintf(stderr, "note: another motion: device %u (the mouse is %u), %g, %g\n",
+                       static_cast<unsigned>(e.device), static_cast<unsigned>(s.mouse_id),
+                       static_cast<double>(e.v[0]), static_cast<double>(e.v[1]));
+        }
+        continue;
+      }
+      CHECK_MSG((e.aux != 0) == pl::relative_mouse(*window),
+                "a motion is flagged raw exactly while relative mode is in force");
+      ++found;
+    }
+    if (found < 2) std::this_thread::sleep_for(std::chrono::milliseconds(25));
   }
+  if (sends > 1)
+    std::fprintf(stderr, "note: the deltas were sent %d times (SDL flushed them)\n", sends);
   CHECK_MSG(found == 2, "both deltas arrive, in order, as the mouse's motion");
   if (!relative) std::fprintf(stderr, "note: relative mode was not in force (no focus)\n");
   pl::set_relative_mouse(*window, false);
+}
+
+TEST(the_prefs_dir_is_the_players_own_and_is_made) {
+  const std::string dir = pl::prefs_dir("gameengine2-test", "prefs");
+  if (dir.empty()) return;  // a platform with no per-user place: a game keeps nothing
+  CHECK_MSG(dir.back() == '/' || dir.back() == '\\', "the directory ends in a separator");
+  CHECK_MSG(std::filesystem::is_directory(dir), "the directory is made when missing");
+  const std::filesystem::path app = std::filesystem::path(dir).parent_path();
+  std::error_code ec;
+  std::filesystem::remove(app, ec);
+  std::filesystem::remove(app.parent_path(), ec);
 }

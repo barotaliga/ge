@@ -38,12 +38,12 @@ TEST(each_stop_sets_what_it_says_on_the_frame) {
   CHECK(low.snow && low.trails && low.trail_maps.fine_size == 1024);
   const fa::FrameOptions top = fa::apply_picture(fa::preset_pick(fa::Preset::top));
   CHECK(top.scale == 1.0 && top.shadow_size == 4096 && top.snow && top.trails && top.spray);
-  CHECK(top.snowfall && top.flakes.flakes == 24576 && top.clouds == 1.0 && top.bloom > 0);
+  CHECK(top.precip && top.fall.particles == 24576 && top.clouds == 1.0 && top.bloom > 0);
   CHECK(top.trail_maps.fine_size == 2048 && top.trail_maps.coarse_size == 2048);
   CHECK(top.reach_m == 0);  // the whole ground, unmisted
   gr::LadderPick none(static_cast<size_t>(fa::kPictureRows), 0);
   const fa::FrameOptions bare = fa::apply_picture(none);
-  CHECK(!bare.snow && !bare.trails && !bare.spray && !bare.snowfall);
+  CHECK(!bare.snow && !bare.trails && !bare.spray && !bare.precip);
   CHECK(bare.reach_m == ge::render::clipmap_reach(fa::kGroundSpacing, 5));
 }
 
