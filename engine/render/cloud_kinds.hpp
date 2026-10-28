@@ -4,9 +4,10 @@
 // nimbostratus's dark rain deck), the middle layers (altocumulus's cells, altostratus's veil the
 // sun shows through as through frosted glass), the high ice (cirrus's hairs, cirrostratus's
 // milky veil, the thin even veil the sun shines through in its halo, cirrocumulus's fine
-// ripples), the lens a mountain wave stands still (lenticular) and a sea of cloud filling the
-// valleys under a clear sky (inversion). A game names a stack of them (`cloud_stack_named`, a
-// cvar's word: "cumulus+cirrus") and deals each kind's bands off its own seed.
+// ripples), the ragged scud racing low under a sky in the evening's wind (fractus), the lens a
+// mountain wave stands still (lenticular) and a sea of cloud filling the valleys under a clear sky
+// (inversion). A game names a stack of them (`cloud_stack_named`, a cvar's word: "cumulus+cirrus")
+// and deals each kind's bands off its own seed.
 //
 // WHAT A ROW SAYS: the bands [least, most] of its base over the ground's floor, its depth, its
 // cover and its cell's span across the wind (m); how far a cell is drawn out along the wind;
@@ -26,7 +27,7 @@
 // ge:keywords stratocumulus stratus nimbostratus altocumulus altostratus cirrus cirrostratus
 // ge:keywords cirrocumulus lenticular inversion sea-of-cloud mackerel-sky cloud_stack_named
 // ge:keywords cloud_kind_named cloud-form erode fibre patch veil corona aureole halo droplet
-// ge:keywords thickness optical-depth translucidus opacus
+// ge:keywords thickness optical-depth translucidus opacus fractus scud
 // ge:skill render
 // ge:test tests/render_cloud_kinds_test.cpp
 #pragma once
