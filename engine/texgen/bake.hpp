@@ -61,6 +61,12 @@ Maps derive_maps(const Surface& surface, double bump);
 
 BakeResult bake(const Recipe& recipe, const TextureRef& ref);
 
+// A reference's `tint` and `spread` applied to an RGBA8 colour map in place: each channel's mean
+// moved onto the tint and its standard deviation onto the spread (the ratio within 0.5..2).
+// `bake` does it to the albedo; nothing is done when both are absent.
+void recolour(std::vector<uint8_t>& rgba, const std::optional<std::array<uint8_t, 3>>& tint,
+              const std::optional<std::array<uint8_t, 3>>& spread);
+
 // The hex key of a bake: an FNV-1a 64 over the recipe's canonical text, the resolved seed and
 // params and the size. Changes whenever the bytes could.
 std::string bake_key(const Recipe& recipe, const TextureRef& ref);

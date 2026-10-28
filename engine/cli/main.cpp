@@ -165,6 +165,23 @@ Outcome run(const Args& a) {
   }
   if (name == "texture kinds") return run_texture_kinds();
   if (name == "texture check") return run_texture_check(fs::absolute(repo_of(a)), a.words);
+  if (name == "texture match") {
+    TextureMatchOptions m;
+    m.dir = a.words[0];
+    m.map = flag_value(a, "map");
+    m.library = flag_value(a, "library");
+    m.only = flag_value(a, "only");
+    m.sheet_dir = flag_value(a, "sheet-dir");
+    auto number = [&](const char* flag, double fallback) {
+      const std::string v = flag_value(a, flag);
+      return v.empty() ? fallback : std::strtod(v.c_str(), nullptr);
+    };
+    m.top = static_cast<int>(number("top", m.top));
+    m.sheets = static_cast<int>(number("sheets", m.sheets));
+    m.list = static_cast<int>(number("list", m.list));
+    m.near = number("near", m.near);
+    return run_texture_match(fs::absolute(repo_of(a)), m);
+  }
   if (name == "texture bake") {
     return run_texture_bake(fs::absolute(repo_of(a)), a.words[0], flag_value(a, "ref"),
                             flag_value(a, "size"), flag_value(a, "out"));

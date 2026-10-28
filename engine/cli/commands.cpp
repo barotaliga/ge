@@ -125,6 +125,16 @@ constexpr FlagSpec kTextureBakeFlags[] = {
     {"size", "<px>", "bake at this size instead of the recipe's (a power of two)"},
     {"out", "<dir>", "the cache directory (default build/textures)"},
     kRepo};
+constexpr FlagSpec kTextureMatchFlags[] = {
+    {"map", "<file>", "the texture map to write (default <dir>/textures.texmap)"},
+    {"only", "<a,b>", "draw sheets for these textures (default: the farthest)"},
+    {"top", "<n>", "the nearest recipes listed and drawn per texture (default 4)"},
+    {"sheets", "<n>", "with no --only, sheets for the n farthest (default 8)"},
+    {"list", "<n>", "textures printed, farthest first (default 20)"},
+    {"near", "<d>", "over this distance a texture is far (default 0.5)"},
+    {"library", "<dir>", "the recipes to match from (default engine/texgen/library)"},
+    {"sheet-dir", "<dir>", "where the sheets go (default <dir>/sheets)"},
+    kRepo};
 constexpr FlagSpec kGoalsFlags[] = {
     {"base", "<ref>", "the roadmap rows are already taken on (default origin/main)"},
     {"fetch", "", "git fetch origin first (the default; kept so old command lines still run)"},
@@ -418,6 +428,11 @@ const CommandSpec kCommands[] = {
      "the next free row reserved and pushed to this branch at once, then checked against every "
      "branch: an earlier claim on the same row keeps it, and this one moves to the next",
      kGoalsClaimFlags, "ge goals claim \"Lava and slime\"", "commit"},
+    {"texture match", "<dir>", 1, 1, "see",
+     "match a converted map's textures to recipes in a texture map an agent steers: scores, "
+     "nearest recipes, sheets",
+     kTextureMatchFlags, "ge texture match /tmp/e1m1-textures --map=levels/e1m1.texmap",
+     "textures"},
     {"new", "<dir>", 1, 1, "create",
      "a game repo against this engine release: the simulation, a lab, a test, the skills",
      kNewFlags, "ge new snow-racer --game=racer", "ge"},

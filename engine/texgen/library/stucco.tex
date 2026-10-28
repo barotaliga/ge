@@ -1,0 +1,14 @@
+# Speckled stucco: a rough render pitted with dark specks, no pattern.
+texture stucco
+size    64
+seed    5
+surface plaster
+scale   1
+tags    plain wall stucco low-colour
+
+layer fill    color=#4a2a18 rough=0.9
+layer noise   kind=perlin period=6 octaves=4 color=#000000 color2=#ffffff blend=overlay amount=0.35
+layer speckle size=1 contrast=0.35 amount=0.1 color=#1a0e08 cavity=0
+layer noise   kind=perlin period=3 octaves=3 color=#000000 color2=#ffffff blend=multiply amount=0.12
+layer shade   strength=0.7 highlight=0.15 occlusion=0.2
+layer palette color=#8a5a3a steps=16

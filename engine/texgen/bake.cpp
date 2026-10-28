@@ -7,6 +7,7 @@
 // ge:test tests/texgen_bake_test.cpp
 #include "texgen/bake.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <filesystem>
@@ -168,10 +169,31 @@ Maps derive_maps(const Surface& s, double bump) {
   return m;
 }
 
+void recolour(std::vector<uint8_t>& rgba, const std::optional<std::array<uint8_t, 3>>& tint,
+              const std::optional<std::array<uint8_t, 3>>& spread) {
+  if (!tint && !spread) return;
+  const size_t n = rgba.size() / 4;
+  if (n == 0) return;
+  for (int c = 0; c < 3; ++c) {
+    double mean = 0, var = 0;
+    for (size_t i = 0; i < n; ++i) mean += rgba[i * 4 + c];
+    mean /= static_cast<double>(n);
+    for (size_t i = 0; i < n; ++i) var += (rgba[i * 4 + c] - mean) * (rgba[i * 4 + c] - mean);
+    const double sd = std::sqrt(var / static_cast<double>(n));
+    const double to_mean = tint ? (*tint)[c] : mean;
+    const double k = spread ? std::clamp(sd > 1e-6 ? (*spread)[c] / sd : 1.0, 0.5, 2.0) : 1.0;
+    for (size_t i = 0; i < n; ++i) {
+      const double v = to_mean + (rgba[i * 4 + c] - mean) * k;
+      rgba[i * 4 + c] = static_cast<uint8_t>(std::clamp(std::floor(v + 0.5), 0.0, 255.0));
+    }
+  }
+}
+
 BakeResult bake(const Recipe& recipe, const TextureRef& ref) {
   BakeResult r;
   const Surface s = paint(recipe, ref, r.errors);
   r.maps = derive_maps(s, recipe.bump);
+  recolour(r.maps.rgba[static_cast<int>(MapKind::albedo)], ref.tint, ref.spread);
   return r;
 }
 
@@ -211,6 +233,13 @@ std::string bake_key(const Recipe& recipe, const TextureRef& ref) {
   h = fnv(h, "seed=" + std::to_string(ref.seed.value_or(0)));
   for (size_t i = 0; i < params.size(); ++i)
     h = fnv(h, recipe.params[i].name + "=" + core::num::to_string(params[i]));
+  // The recolouring, when a reference asks for it (absent, the key is what it always was).
+  if (ref.tint || ref.spread) {
+    TextureRef colour_only;
+    colour_only.tint = ref.tint;
+    colour_only.spread = ref.spread;
+    h = fnv(h, ref_text(colour_only));
+  }
   static const char* digits = "0123456789abcdef";
   std::string out(16, '0');
   for (int i = 15; i >= 0; --i, h >>= 4) out[i] = digits[h & 15];

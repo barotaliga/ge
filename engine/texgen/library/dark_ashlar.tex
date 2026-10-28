@@ -1,0 +1,18 @@
+# Dark irregular ashlar: four even courses of long and short blocks, some running down through
+# two courses, thin black joints, a gritty face flecked with blue.
+texture dark_ashlar
+size    64
+seed    9
+surface stone
+scale   2
+tags    blocks stone wall dark masonry low-colour
+param   grime 0.4 0 1
+param   rows 4 1 16
+param   cols 2 1 16
+
+layer blocks  rows=$rows cols=$cols vary_size=0.25 span=0.4 mortar=0.06 bevel=0.04 depth=0.3 chip=0.2 color=#221a12 vary=0.12 mortar_color=#060504
+layer speckle size=1 contrast=0.5 amount=0.14 color=#2a3050 cavity=0
+layer grime   amount=$grime
+layer noise   kind=perlin period=3 octaves=3 color=#000000 color2=#ffffff blend=multiply amount=0.4
+layer shade   strength=0.6 highlight=0.1 occlusion=0.3
+layer palette color=#5a4430 steps=16

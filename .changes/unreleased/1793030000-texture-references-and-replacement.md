@@ -1,0 +1,10 @@
+---
+type: Added
+title: Texture techniques from references, and replacement by likeness
+---
+
+`engine/texgen` gains the techniques a round of study against hand-painted reference textures showed: a `finish` group (`speckle` grain and coloured specks, `shade` light baked from the height, `palette` ramps with an ordered dither), `blocks` (uneven masonry), `studs` (domes, pyramids, diamond plate, holes), `scales`, and rivet keys on panels, with ten new library recipes. `look.hpp` measures a texture's look in numbers. `replace.hpp` swaps a level's painted texture for the most alike library recipe, recoloured to the original and with its full-bright texels kept, as an option a renderer can offer. The `texgen-compare` and `texgen-replace` labs show both, and the `texture-references` skill is the loop.
+
+`ge texture match <dir>` puts an agent in the middle of a map's conversion: it writes a texture map (`texture_map.hpp`) with a reference for every texture, re-measures each run, and draws a sheet per texture. For each texture the agent argues the class, the traits, the clone and a judge line. ge measures the evidence on both pictures (courses, pieces in each course, repeat, line direction, contrast, colour) and prints every mismatch for the agent to answer. A texture classed `logo`, `trademark` or `emblem` is never cloned: it becomes a `blank` recipe (`blank_plate`). `blocks` gains `span`, blocks that run down through two courses.
+
+Every match sheet tiles the original and the clone 3x3 so seams show, and the evidence measures them. `cluster <name> <texture> ...` groups textures that meet in a map. ge draws them side by side and asks where the set comes apart (brightness order flipped, a family's spread, a join that jumps), and the agent judges the set. New techniques from the first argued round: `trim` bands, checkerboard `tiles` and `bricks`, and the recipes `stucco`, `stucco_trim`, `stone_tiles` and `cobbles`. Coursed recipes take `rows` and `cols` as parameters. The likeness measure no longer reads a dark tile's ordered dither as its pattern.
