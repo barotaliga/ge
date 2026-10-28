@@ -5,7 +5,8 @@ description: "Use for engine/audio in gameengine2 and any sound: the synth (tone
 
 # Audio
 
-Every sound is synthesized. There are no audio files and no music. `engine/audio/` is the
+A game's own sounds are synthesized: the tree ships no audio files and no music. (A player's
+own classic pack is read and enhanced offline by `plugins/classicenhance`, into their cache.) `engine/audio/` is the
 instrument; a game's sound (its bank, its beds, its listener table, its faders) is the game's,
 and the beds a genre shares go in that plugin's `app/` half (`plugins` skill).
 
@@ -19,6 +20,7 @@ and the beds a genre shares go in that plugin's `app/` half (`plugins` skill).
 | `sound.hpp` | `SoundDef` (id, the sentence it should feel like, its voices), `PlayShape` (gain, pitch, stretch, pan), `play_def`, `find_sound` |
 | `rack.hpp` | A bed's layers: built on the first `rack_apply`, steered every frame |
 | `meter.hpp`, `wav.hpp` | A buffer's level, peak, octave bands, centroid, onset, length and balance; its WAV bytes |
+| `fft.hpp`, `resample.hpp` | Offline analysis: a radix-2 transform, the short-time spectrum (sqrt-Hann, overlap-add inverse); a Kaiser-windowed sinc resampler. Never on the audio thread (they allocate) |
 | `engine/platform/audio.hpp` | The device: `open_audio` pulls the synth on SDL's audio thread |
 | `engine/lab/sound.hpp` | `sound_shot`: a buffer metered, its metrics, its picture, its WAV, in a lab |
 

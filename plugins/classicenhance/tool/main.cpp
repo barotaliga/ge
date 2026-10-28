@@ -166,7 +166,7 @@ int main(int argc, char** argv) {
     Stage s;
     if (!stage_named(f.only.substr(at, comma - at), &s)) {
       return fail("--only names an unknown stage '" + f.only.substr(at, comma - at) +
-                      "'; the stages are pack, textures, lightmaps",
+                      "'; the stages are pack, textures, lightmaps, sounds",
                   2);
     }
     opts.only.push_back(s);

@@ -1,6 +1,6 @@
 ---
 name: classicenhance
-description: "Use for plugins/classicenhance in gameengine2: the classic shareware pack enhanced on the player's own machine. Finding the pack (the release zip and its self-extracting LHA archive, an installed folder, the pack file) and refusing anything but a known unchanged pack by SHA-256; the local cache and its stages (pack, textures, lightmaps); the texture enhancer (the edge-aware upscale, the height, normal, roughness and glow maps); the lightmap stage's slot for the rebake; the `classicenhance` tool run by `ge tool`; and the line that keeps it legal: ship the pipeline, never its output."
+description: "Use for plugins/classicenhance in gameengine2: the classic shareware pack enhanced on the player's own machine. Finding the pack (the release zip and its self-extracting LHA archive, an installed folder, the pack file) and refusing anything but a known unchanged pack by SHA-256; the local cache and its stages (pack, textures, lightmaps, sounds); the texture enhancer (the edge-aware upscale, the height, normal, roughness and glow maps); the sound enhancer (noise reduction, 48 kHz, the rebuilt top band); the lightmap stage's slot for the rebake; the `classicenhance` tool run by `ge tool`; and the line that keeps it legal: ship the pipeline, never its output."
 ---
 
 # The classic-enhance plugin
@@ -61,12 +61,19 @@ container the pack is fetched into the scratchpad only, never into the tree.
 
 ## Changing a stage
 
-1. A stage's output depends on its version and options: bump `kTextureStageVersion` or
-   `kLightmapStageVersion` when what it writes changes, so every cache reruns it.
+1. A stage's output depends on its version and options: bump `kTextureStageVersion`,
+   `kLightmapStageVersion` or `kSoundStageVersion` when what it writes changes, so every cache
+   reruns it.
 2. Texture work: measure before and after. Upscale each texture's own quarter-size mip back by
    4× and compare with its full-size picture (PSNR; the palette's quantisation caps it near
    24 dB), and look at zoomed crops beside nearest and Catmull-Rom. PSNR alone hides edge
    quality: a wider kernel scores the same and looks soft.
+   Sound work: measure on synthetic signals in the test (a band-limited burst, a voice-like
+   chirp, a hum with hiss), each resampled from a full-band original: the log-spectral distance
+   above the source's band for the extension, and segmental SNR for the noise reduction, which
+   must never lower it on a clean signal. Then listen: render the real set to a private page with
+   before and after players. Never a per-sample `tanh` on the output: it leaves bars of
+   harmonics in the rebuilt band; the look-ahead limiter does not.
 3. Tests: `tests/classicenhance_*_test.cpp` on fixtures made in the test (an LHA archive from a
    small `-lh5-` encoder, packs from `vfs::write_pak`, maps from `brush::write_bsp`). A test
    passes its fixture's digest as the known list; the real list stays the default.

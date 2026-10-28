@@ -43,6 +43,7 @@ cache is `GE_CLASSIC_CACHE` when set, else the platform's cache folder (`XDG_CAC
 | `pack` | `pack/pak0.pak`, `NOTICE.txt`, `source.txt` | the source changes |
 | `textures` | `textures/<name>/{albedo,height,normal,roughness,emissive}.png` | `kTextureStageVersion` or the options move |
 | `lightmaps` | `lightmaps/<map>.png` (the map's own light, packed); the rebake's file once M41b lands | `kLightmapStageVersion` moves |
+| `sounds` | `sounds/<path>.wav` (48 kHz, 16-bit, the loop start in a `cue ` chunk), `sounds/index.txt` | `kSoundStageVersion` or the options move |
 
 Each stage records a key in `stages.txt`; a file is written whole (to `.part`, then renamed), so a
 stopped run never leaves half a texture that looks finished.
@@ -63,3 +64,26 @@ Each wall texture is indexed colour on a 256-entry palette. The enhancer works i
    wood, liquid) moved by height; **emissive** is the fullbright palette entries (224 and up).
 
 Every step wraps at the edges, so the textures still tile. Sky textures get the albedo only.
+
+## The sound enhancer
+
+The pack's sounds are 8-bit or 16-bit mono PCM at 11 025 Hz: band-limited near 5 kHz, with
+quantisation hiss under the quiet ones. `enhance_sound` (`plugins/classicenhance/sound.hpp`) brings
+each to 48 kHz in four steps, all deterministic:
+
+1. **Noise reduction** at the source rate: a short-time spectrum (256 samples, hop 64), the noise
+   measured in the sound's own quiet gaps, and a decision-directed Wiener gain with a floor
+   (`floor_db`), which lowers the hiss without the warble of plain spectral subtraction. A sound
+   with no quiet gap is held to a quarter of the quantisation floor, so a held tone is never taken
+   for noise.
+2. **Resampling** to 48 kHz through `audio::resample` (a Kaiser-windowed sinc; images under −85 dB).
+3. **Bandwidth extension**: the empty band above the source's edge, up to `extend_to_hz`, is filled
+   by copying the top of the real spectrum upward by a shift that is a whole number of frame hops,
+   so the copies' phases stay coherent and transients stay sharp. Each copy is attenuated by the
+   frame's own spectral slope plus `rolloff_db` an octave, and less is added to tonal frames than
+   to noisy ones.
+4. **Peaks**: a look-ahead limiter with a smooth gain holds them under `knee`. Levels are not
+   normalised, so the set keeps its original balance.
+
+The cache keeps WAV. A compressed form (Opus) waits on the engine's encoder (M23d2); at 64 kbit/s
+the whole set is about 2.5 MB against the original 3.2 MB.

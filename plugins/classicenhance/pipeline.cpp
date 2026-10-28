@@ -1,7 +1,7 @@
 // The pipeline's stages (pipeline.hpp).
 //
-// ge:summary Runs the pack, textures and lightmaps stages into the cache, skipping what is current
-// ge:keywords pipeline run stage key skip textures index lightmaps pack notice
+// ge:summary Runs the pack, textures, lightmaps and sounds stages into the cache, skipping what is current
+// ge:keywords pipeline run stage key skip textures index lightmaps sounds wav pack notice
 // ge:skill classicenhance
 // ge:test tests/classicenhance_pipeline_test.cpp
 #include "classicenhance/pipeline.hpp"
@@ -53,6 +53,12 @@ std::string stage_key(Stage s, const RunOptions& o) {
             " limit " + std::to_string(o.texture_limit);
   } else if (s == Stage::lightmaps) {
     text += " v" + std::to_string(kLightmapStageVersion);
+  } else if (s == Stage::sounds) {
+    const SoundOptions& d = o.sounds;
+    text += " v" + std::to_string(kSoundStageVersion) + " rate " + std::to_string(d.rate) +
+            " denoise " + num(d.denoise) + " floor " + num(d.floor_db) + " extend " +
+            num(d.extend) + " to " + num(d.extend_to_hz) + " rolloff " + num(d.rolloff_db) +
+            " knee " + num(d.knee);
   } else {
     text += " v1";
   }
@@ -156,6 +162,44 @@ bool run_lightmaps(const Source& src, const fs::path& dir, StageResult& r, std::
   return true;
 }
 
+bool run_sounds(const Source& src, const fs::path& dir, const RunOptions& o, StageResult& r,
+                std::string* error) {
+  vfs::Pak pak;
+  if (!vfs::read_pak(src.pack, &pak, error)) return false;
+  std::vector<const vfs::PakEntry*> sounds;
+  for (const vfs::PakEntry& e : pak.entries) {
+    if (e.path.rfind("sound/", 0) == 0 && e.path.ends_with(".wav")) sounds.push_back(&e);
+  }
+  std::sort(sounds.begin(), sounds.end(), [](auto* a, auto* b) { return a->path < b->path; });
+  std::string index = "# path seconds loop-start source-hz noise-db removed-db added-db\n";
+  for (const vfs::PakEntry* e : sounds) {
+    Pcm in;
+    if (!read_wav(vfs::pak_file(src.pack, *e), &in, error)) {
+      *error = e->path + ": " + *error;
+      return false;
+    }
+    SoundReport rep;
+    const Pcm out = enhance_sound(in, o.sounds, &rep);
+    const std::string rel = e->path.substr(6);  // past "sound/"
+    if (!write_whole(dir / "sounds" / rel, write_wav(out))) {
+      *error = "cannot write " + (dir / "sounds" / rel).string();
+      return false;
+    }
+    r.files++;
+    const double seconds = out.rate > 0 ? double(out.samples.size()) / out.rate : 0.0;
+    index += rel + " " + num(seconds) + " " + std::to_string(out.loop_start) + " " +
+             num(rep.source_hz) + " " + num(rep.noise_db) + " " + num(rep.removed_db) + " " +
+             num(rep.added_db) + "\n";
+  }
+  if (!write_text(dir / "sounds" / "index.txt", index)) {
+    *error = "cannot write " + (dir / "sounds" / "index.txt").string();
+    return false;
+  }
+  r.files++;
+  r.note = std::to_string(sounds.size()) + " sounds at " + std::to_string(o.sounds.rate) + " Hz";
+  return true;
+}
+
 }  // namespace
 
 const char* stage_name(Stage s) {
@@ -166,6 +210,8 @@ const char* stage_name(Stage s) {
       return "textures";
     case Stage::lightmaps:
       return "lightmaps";
+    case Stage::sounds:
+      return "sounds";
   }
   return "?";
 }
@@ -246,6 +292,9 @@ bool run_pipeline(const Source& source, const fs::path& root_in, const RunOption
         break;
       case Stage::lightmaps:
         ok = run_lightmaps(source, report->dir, r, error);
+        break;
+      case Stage::sounds:
+        ok = run_sounds(source, report->dir, opts, r, error);
         break;
     }
     r.seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();

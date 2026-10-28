@@ -1,11 +1,11 @@
 // The pipeline (plugins/classicenhance/pipeline.hpp, cache.hpp, lightmaps.hpp) on a fixture pack
-// made here: two fixture maps of the brush plugin's writer and a palette. Every stage writes what
+// made here: two fixture maps of the brush plugin's writer, a palette and a looping 8-bit sound. Every stage writes what
 // its header says into a temporary cache; a rerun skips every stage; a changed option reruns only
 // the textures; --force reruns all; `only` runs the one asked; and a source that was never
 // verified is refused before anything is written.
 //
 // ge:summary Tests the pipeline's stages, cache layout, reruns and refusals on a fixture pack
-// ge:keywords test classicenhance pipeline cache stages rerun skip force lightmaps textures
+// ge:keywords test classicenhance pipeline cache stages rerun skip force lightmaps textures sounds
 // ge:skill classicenhance testing
 #include <filesystem>
 #include <fstream>
@@ -17,6 +17,7 @@
 #include "check.hpp"
 #include "classicenhance/cache.hpp"
 #include "classicenhance/pipeline.hpp"
+#include "classicenhance/sound.hpp"
 #include "vfs/pak.hpp"
 
 namespace ce = ge::classicenhance;
@@ -31,9 +32,16 @@ std::vector<uint8_t> fixture_pack() {
   std::string error;
   CHECK_MSG(ge::brush::write_bsp(ge::brush::sample_fixture(), ge::brush::Family::v29, &map, &error),
             error);
+  // A tone at the classic 11 025 Hz, 8 bits, looping from its 1000th sample.
+  ce::Pcm tone;
+  tone.rate = 11025;
+  tone.loop_start = 1000;
+  for (int i = 0; i < 4000; i++) tone.samples.push_back(float((i % 50) - 25) / 50.0f);
   std::vector<uint8_t> out;
-  CHECK_MSG(ge::vfs::write_pak(
-                {{"gfx/palette.lmp", pal}, {"maps/b_hall.bsp", map}, {"maps/a_copy.bsp", map}},
+  CHECK_MSG(ge::vfs::write_pak({{"gfx/palette.lmp", pal},
+                                {"maps/b_hall.bsp", map},
+                                {"maps/a_copy.bsp", map},
+                                {"sound/ambience/hum1.wav", ce::write_wav(tone)}},
                 &out, &error),
             error);
   return out;
@@ -59,17 +67,28 @@ TEST(pipeline_writes_every_stage_and_skips_what_is_current) {
   fs::remove_all(root);
   ce::RunOptions opts;
   opts.textures.scale = 2;
+  opts.sounds.extend = 0;  // keep the fixture quick
   ce::RunReport report;
   CHECK_MSG(ce::run_pipeline(src, root, opts, &report, &error), error);
   const fs::path dir = ce::pack_dir(root, sha);
   CHECK(report.dir == dir);
-  CHECK(report.stages.size() == 3);
+  CHECK(report.stages.size() == 4);
   for (const ce::StageResult& r : report.stages) CHECK(r.ran && r.files > 0);
   CHECK(fs::file_size(dir / "pack" / "pak0.pak") == src.pack.size());
   CHECK(read_text(dir / "NOTICE.txt").find("do not share") != std::string::npos);
   CHECK(read_text(dir / "source.txt").find(sha) != std::string::npos);
   CHECK(fs::exists(dir / "lightmaps" / "a_copy.png") &&
         fs::exists(dir / "lightmaps" / "b_hall.png"));
+
+  // The sound at 48 kHz, its loop start carried to the new rate, named in the index.
+  ce::Pcm hum;
+  {
+    std::ifstream f(dir / "sounds" / "ambience" / "hum1.wav", std::ios::binary);
+    const std::vector<uint8_t> bytes{std::istreambuf_iterator<char>(f), {}};
+    CHECK_MSG(ce::read_wav(bytes, &hum, &error), error);
+  }
+  CHECK(hum.rate == 48000 && hum.loop_start == 4354);
+  CHECK(read_text(dir / "sounds" / "index.txt").find("ambience/hum1.wav ") != std::string::npos);
 
   // Every drawn texture of the fixture once, its maps beside it, named in the index.
   std::vector<ce::PackTexture> textures;
@@ -89,12 +108,14 @@ TEST(pipeline_writes_every_stage_and_skips_what_is_current) {
   for (const ce::StageResult& r : report.stages) CHECK(!r.ran && r.note == "up to date");
   opts.textures.scale = 3;
   CHECK(ce::run_pipeline(src, root, opts, &report, &error));
-  CHECK(!report.stages[0].ran && report.stages[1].ran && !report.stages[2].ran);
+  CHECK(!report.stages[0].ran && report.stages[1].ran && !report.stages[2].ran &&
+        !report.stages[3].ran);
   opts.force = true;
   opts.only = {ce::Stage::lightmaps};
   CHECK(ce::run_pipeline(src, root, opts, &report, &error));
-  CHECK(!report.stages[0].ran && !report.stages[1].ran && report.stages[2].ran);
-  CHECK(ce::read_records(dir).size() == 3);
+  CHECK(!report.stages[0].ran && !report.stages[1].ran && report.stages[2].ran &&
+        !report.stages[3].ran);
+  CHECK(ce::read_records(dir).size() == 4);
   fs::remove_all(root);
 }
 
