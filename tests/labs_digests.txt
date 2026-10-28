@@ -1,7 +1,7 @@
 # lab digests at their smoke flags: labs --all --smoke --write-digests
 analyze 47aeb41752f58f41
 anim ef8d546cbda7d03f
-army c3e9faa0202c9fc0
+army 5e5cb60c383a07ae
 army-flight 383c454be759df5d
 army-sleds bae04af32e36e808
 audition d47fda4a9cb22fbb
@@ -18,6 +18,7 @@ capture-run 7bce75d64b174712
 charts 77f2319a5ea24272
 clone fb8a0fbd49f14540
 cli-loop 0c501f1dbb02b7b9
+cli-loop de9c6a726fc004ea
 console e8456b0db59560ce
 crowd cf02cf9a7c917783
 crowd-look 194a06db20f2ebb2
@@ -29,6 +30,7 @@ forest f1881cb20efe0144
 frame-pace c5058023a52812c3
 free 2b3f2cf5100bf9b4
 gpu-capture 8b5d5e3b7be5a4fc
+gpu-eye dec0f5b45ab21c1c
 gpu-load d0f81d39aa78ab53
 gpu-underwater eb4871f6a59d741e
 gpu-water eee3da1407e861c4
@@ -78,6 +80,7 @@ replay-file b9f41fcd00bac8b3
 resort f82a1fca6fb6ba42
 ride c3794669e029f0c9
 rooms c9c0d8aa3cc86a49
+room 92faf3442a36c5a1
 routes 739cf0534473b4f8
 run-clock 81607c7ac1161166
 services e18be19ecda96bed
@@ -91,6 +94,10 @@ skijump-hills 3fa0eff35ac0f70a
 slalom 2adb7c679ec93adf
 sled 30cd3df2c903518c
 snow 3f444a51a1e8a91c
+snow-contact c39eba995c9962ca
+snow-field eb9df0a82901b26a
+snow-press f60252f878f863e2
+snow-weather e064191b64090918
 speed-events 2e575d7a0184d4b2
 speed-ski 55c4cfa78de28f7e
 spray 7479b5a25c39b195
@@ -109,7 +116,7 @@ water-colour f5da3e4186a81286
 water-cost cbf29ce484222325
 water-lod 2b07a3a3e77f568f
 waves 4bb64972b68a7f9d
-weather 2805777f6ed8326a
+weather e5679c1f1b7b20f4
 why eedccc4692a8953d
 wind 2eec9682b721e768
-world 59572dd4a51a1bae
+world 9f5e50ae3e35ebcd

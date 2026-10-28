@@ -244,6 +244,14 @@ void add_cvars(con::Console& c, Settings& s) {
           .min = -1,
           .max = 1},
          &s.cover);
+  v.bind({.name = "sv_thick",
+          .fallback = "-1",
+          .flags = kRun,
+          .help = "how thick the clouds are, the sun and the moon shining through their thin "
+                  "patches, 0 thin .. 1 thick (-1: the map's)",
+          .min = -1,
+          .max = 1},
+         &s.thick);
   v.bind({.name = "sv_clouds",
           .fallback = "map",
           .flags = kRun,
