@@ -99,7 +99,7 @@ std::vector<uint8_t> play(double fps, double seconds, const std::string& codec,
   std::string error;
   CHECK(live.open(o, 0, error));
   if (!error.empty()) std::fprintf(stderr, "%s\n", error.c_str());
-  std::vector<float> chunk(2 * kPull);
+  std::vector<float> chunk(size_t{2} * kPull);
   int64_t pulled = 0;
   struct InFlight {
     ge::lab::Picture p;
@@ -249,9 +249,9 @@ TEST(a_tap_the_ring_cannot_hold_is_written_as_silence_and_the_sound_keeps_its_le
   o.audio_seconds = 0.1;  // 8192 frames
   std::string error;
   CHECK(live.open(o, 0, error));
-  std::vector<float> big(2 * 10000, 0.5f);
+  std::vector<float> big(size_t{2} * 10000, 0.5f);
   live.audio(big.data(), 10000, 0);  // more than the ring: lost
-  std::vector<float> small(2 * kPull, 0.25f);
+  std::vector<float> small(size_t{2} * kPull, 0.25f);
   live.audio(small.data(), kPull, 300 * kMs);
   ge::lab::Picture p = solid(kW, kH, 16);
   CHECK(live.picture(p, live.stamp(300 * kMs)));

@@ -226,7 +226,7 @@ void run(gl::Lab& lab) {
   // The device: 10 ms every 10 ms on a thread of its own, clicking on its schedule.
   std::atomic<bool> stop{false};
   std::thread speaker([&] {
-    std::vector<float> chunk(2 * kPull);
+    std::vector<float> chunk(size_t{2} * kPull);
     int64_t pulled = 0;
     auto next = std::chrono::steady_clock::now();
     while (!stop.load()) {
