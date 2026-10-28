@@ -25,7 +25,7 @@ constexpr uint32_t rotr(uint32_t x, int n) { return (x >> n) | (x << (32 - n)); 
 
 void compress(std::array<uint32_t, 8>& h, const uint8_t* p) {
   uint32_t w[64];
-  for (int i = 0; i < 16; i++) {
+  for (size_t i = 0; i < 16; i++) {
     w[i] = (uint32_t(p[4 * i]) << 24) | (uint32_t(p[4 * i + 1]) << 16) |
            (uint32_t(p[4 * i + 2]) << 8) | uint32_t(p[4 * i + 3]);
   }

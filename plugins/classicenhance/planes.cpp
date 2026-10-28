@@ -11,6 +11,7 @@
 #include <array>
 
 #include "core/libm/libm.hpp"
+#include "core/num.hpp"
 
 namespace ge::classicenhance {
 
@@ -71,13 +72,13 @@ Plane blur(const Plane& p, int r, int passes) {
 float percentile(const Plane& p, double share) {
   if (p.v.empty()) return 0;
   std::vector<float> s = p.v;
-  const size_t k = std::min(s.size() - 1, size_t(share * double(s.size() - 1) + 0.5));
+  const size_t k = std::min(s.size() - 1, size_t(core::num::round(share * double(s.size() - 1))));
   std::nth_element(s.begin(), s.begin() + long(k), s.end());
   return s[k];
 }
 
 uint8_t linear_to_srgb8(float c) {
-  const int i = int(std::clamp(c, 0.0f, 1.0f) * 4096.0f + 0.5f);
+  const int i = int(core::num::round(double(std::clamp(c, 0.0f, 1.0f)) * 4096.0));
   return to_srgb_table()[size_t(i)];
 }
 

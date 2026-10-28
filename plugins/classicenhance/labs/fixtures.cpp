@@ -80,7 +80,7 @@ uint8_t nearest_index(const Palette& palette, int r, int g, int b) {
 std::vector<FixtureTexture> fixture_textures(const Palette& pal) {
   std::vector<FixtureTexture> out;
   auto begin = [&](const char* name) {
-    return Painter{pal, {name, 64, 64, std::vector<uint8_t>(64 * 64)}};
+    return Painter{pal, {name, 64, 64, std::vector<uint8_t>(size_t{64} * 64)}};
   };
 
   {  // Brick: courses of 16 × 8, staggered, each brick its own shade, dark mortar between.
@@ -90,7 +90,8 @@ std::vector<FixtureTexture> fixture_textures(const Palette& pal) {
         const int course = y / 8;
         const int bx = (x + (course % 2) * 8) & 63;
         const bool mortar = y % 8 == 7 || bx % 16 == 15;
-        const double shade = 0.75 + 0.25 * core::hash2(bx / 16, course, 3);
+        const int block = bx / 16;
+        const double shade = 0.75 + 0.25 * core::hash2(block, course, 3);
         const double n = 0.8 + 0.4 * grit(x, y, 4) * tile_noise(x, y, 8, 5);
         if (mortar) {
           p.put(x, y, 70 * n, 66 * n, 60 * n);

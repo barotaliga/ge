@@ -195,6 +195,7 @@ TEST(lha_reads_lh5_and_lh0_behind_a_program) {
 
 TEST(lha_refuses_damage) {
   std::vector<uint8_t> words;
+  words.reserve(300);
   for (int i = 0; i < 300; i++) words.push_back(uint8_t('a' + (i * 7) % 26));
   auto archive = sfx({{"A.TXT", words}});
   std::vector<ce::LhaEntry> entries;

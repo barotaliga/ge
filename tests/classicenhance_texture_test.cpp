@@ -25,7 +25,7 @@ ce::Palette palette() {
     p.rgb[size_t(i) * 3 + 1] = uint8_t(i);
     p.rgb[size_t(i) * 3 + 2] = uint8_t(i);
   }
-  p.rgb[230 * 3] = 255;  // a fullbright red
+  p.rgb[size_t{230} * 3] = 255;  // a fullbright red
   p.rgb[230 * 3 + 1] = 40;
   p.rgb[230 * 3 + 2] = 20;
   return p;
@@ -38,7 +38,7 @@ int px(const ge::assets::Image& img, int x, int y, int c = 0) {
 }  // namespace
 
 TEST(texture_flat_colour_stays_flat) {
-  const std::vector<uint8_t> flat(16 * 16, 120);
+  const std::vector<uint8_t> flat(size_t{16} * 16, 120);
   const auto e = ce::enhance_texture("wall_flat", flat, 16, 16, palette());
   CHECK(e.albedo.width == 64 && e.albedo.height == 64);
   CHECK(e.normal.width == 64 && e.height.width == 64 && e.roughness.width == 64);
@@ -55,7 +55,7 @@ TEST(texture_flat_colour_stays_flat) {
 
 TEST(texture_hard_edge_stays_hard_and_tiles) {
   // Left half dark, right half light: an edge at x = 8 and, tiling, another at x = 0.
-  std::vector<uint8_t> edge(16 * 16);
+  std::vector<uint8_t> edge(size_t{16} * 16);
   for (int y = 0; y < 16; y++) {
     for (int x = 0; x < 16; x++) edge[size_t(y) * 16 + size_t(x)] = x < 8 ? 40 : 200;
   }
@@ -81,7 +81,7 @@ TEST(texture_hard_edge_stays_hard_and_tiles) {
 }
 
 TEST(texture_glow_only_where_fullbright) {
-  std::vector<uint8_t> lamp(16 * 16, 60);
+  std::vector<uint8_t> lamp(size_t{16} * 16, 60);
   for (int y = 6; y < 10; y++) {
     for (int x = 6; x < 10; x++) lamp[size_t(y) * 16 + size_t(x)] = 230;
   }
@@ -92,7 +92,7 @@ TEST(texture_glow_only_where_fullbright) {
 }
 
 TEST(texture_sky_and_liquid) {
-  const std::vector<uint8_t> pic(32 * 16, 90);
+  const std::vector<uint8_t> pic(size_t{32} * 16, 90);
   const auto sky = ce::enhance_texture("sky4", pic, 32, 16, palette());
   CHECK(sky.material == ce::Material::sky);
   CHECK(sky.albedo.width == 128 && sky.normal.width == 0);
@@ -105,7 +105,7 @@ TEST(texture_sky_and_liquid) {
 }
 
 TEST(texture_same_bits_every_run) {
-  std::vector<uint8_t> noise(32 * 32);
+  std::vector<uint8_t> noise(size_t{32} * 32);
   uint32_t s = 7;
   for (uint8_t& v : noise) {
     s = s * 1664525u + 1013904223u;
