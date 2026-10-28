@@ -13,6 +13,7 @@
 #include "core/math.hpp"
 #include "core/num.hpp"
 #include "mountain/mapgen/weather.hpp"
+#include "wind/precip.hpp"
 
 namespace ge::mountain::air {
 
@@ -96,7 +97,7 @@ Wind wind_at(const mapgen::Level& level, double t) {
   return out;
 }
 
-Fall fall_at(const mapgen::Level& level, double t) {
+Fall fall_at(const mapgen::Level& level, double t, double y) {
   const mapgen::Weather& w = level.weather;
   Fall out;
   if (!mapgen::snows(w.kind) || w.snowfall <= 0) return out;
@@ -109,6 +110,13 @@ Fall fall_at(const mapgen::Level& level, double t) {
   if (w.kind == mapgen::WeatherKind::storm) fall += kBlown * (wind_at(level, t).gust - 0.5);
   out.fall = core::clamp(fall, 0.0, 1.0);
   out.visibility = visibility_in(out.fall);
+  if (w.snowline > mapgen::kNoSnowline && out.fall > 0) {
+    out.rain = wind::rain_share_at(y, w.snowline + 0.5 * wind::kMeltBand);
+    if (out.rain > 0) {
+      const double rain = wind::visibility_of({out.fall, 1});
+      out.visibility = out.visibility * core::libm::pow(rain / out.visibility, out.rain);
+    }
+  }
   return out;
 }
 

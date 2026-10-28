@@ -218,13 +218,14 @@ fn fs_main(in: VertexOut, @builtin(front_facing) front: bool) -> FragmentOut {
   if (!front) {
     n = -n;
   }
-  let a = materials[in.material].rgb;
+  let a = wet_albedo(materials[in.material].rgb, 0.6);
   let y = in.rel.y + frame.eye.y;
   let xz = in.rel.xz + frame.eye.xz;
   let lit = max(dot(n, frame.sun.xyz), 0.0) *
             ground_shadow(ground, horizon0, horizon1, linear_clamp, frame.sun.xyz, xz) *
             sun_shadow(shadow, shadow_maps, shadow_cmp, in.rel, n, in.position.xy, frame.time.y);
-  let c = a / PI * (sun_light(y, xz) * lit + sky_irradiance(n));
+  var c = a / PI * (sun_light(y, xz) * lit + sky_irradiance(n));
+  c += wet_sheen(n, -in.rel / max(length(in.rel), 1e-3), sun_light(y, xz) * lit, 0.0);
   var out: FragmentOut;
   out.colour = vec4f(haze(c, in.position.xy * frame.size.zw, length(in.rel)), 1.0);
   out.motion = vec4f(screen_motion(frame, vec4f(in.last_rel, 1.0), in.position.xy), 0.0, 0.0);

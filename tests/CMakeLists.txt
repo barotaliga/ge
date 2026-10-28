@@ -69,7 +69,7 @@ foreach(src ${GE_TEST_SOURCES})
     continue()
   endif()
   add_executable(${name} ${src} $<TARGET_OBJECTS:ge_test_main>)
-  target_link_libraries(${name} PRIVATE ge_core ge_audio ge_assets ge_net ge_input ge_wind ge_water ge_move ge_camera ge_texgen ge_ui ge_lab ge_play ge_replay ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
+  target_link_libraries(${name} PRIVATE ge_core ge_audio ge_assets ge_net ge_input ge_wind ge_water ge_move ge_camera ge_texgen ge_ui ge_services ge_lab ge_play ge_replay ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
     ${extra} ${cli})
   target_compile_definitions(${name} PRIVATE GE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
   add_test(NAME ${name} COMMAND ${name})
@@ -81,6 +81,12 @@ foreach(src ${GE_TEST_SOURCES})
     # A machine that cannot make symlinks (Windows without Developer Mode) cannot hold a game
     # repo's guidance; the scaffold's tests skip there.
     set_tests_properties(${name} PROPERTIES SKIP_RETURN_CODE 77)
+  endif()
+  if(name MATCHES "^platform_")
+    # The window tests share one display (a virtual X server on CI). A window opened by a test
+    # running beside them can take the focus and the pointer, and the virtual mouse's motion
+    # meant for this test's window then never arrives (platform_devices_test). Run them alone.
+    set_tests_properties(${name} PROPERTIES RUN_SERIAL TRUE)
   endif()
   if(extra OR app_includes)
     # A plugin's app half draws with the GPU, so its tests skip without an adapter too. The

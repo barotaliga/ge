@@ -26,6 +26,7 @@ std::string server_sky(const cfg::Settings& s, mg::Level& level) {
     }
   }
   pick.snowfall = s.fall;
+  pick.snowline = s.snowline;
   pick.fog = s.fog;
   pick.wind = s.air;
   if (s.air_from >= 0) pick.wind_from = s.air_from * ge::core::kPi / 180;
