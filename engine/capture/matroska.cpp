@@ -25,7 +25,8 @@ constexpr uint32_t kTracks = 0x1654AE6B, kTrackEntry = 0xAE, kTrackNumber = 0xD7
                    kTrackUid = 0x73C5, kTrackType = 0x83, kFlagLacing = 0x9C, kCodecId = 0x86,
                    kCodecPrivate = 0x63A2, kDefaultDuration = 0x23E383, kVideo = 0xE0,
                    kPixelWidth = 0xB0, kPixelHeight = 0xBA, kColourSpace = 0x2EB524, kAudio = 0xE1,
-                   kSamplingFrequency = 0xB5, kChannels = 0x9F, kBitDepth = 0x6264;
+                   kSamplingFrequency = 0xB5, kChannels = 0x9F, kBitDepth = 0x6264,
+                   kCodecDelay = 0x56AA, kSeekPreRoll = 0x56BB;
 constexpr uint32_t kCluster = 0x1F43B675, kTimestamp = 0xE7, kSimpleBlock = 0xA3;
 constexpr uint32_t kCues = 0x1C53BB6B, kCuePoint = 0xBB, kCueTime = 0xB3, kCueTrackPositions = 0xB7,
                    kCueTrack = 0xF7, kCueClusterPosition = 0xF1;
@@ -75,8 +76,8 @@ std::string options_problem(const MatroskaOptions& o) {
       return "V_UNCOMPRESSED needs a four-character colour space (I420)";
     }
   }
-  if (o.audio && (o.audio->rate <= 0 || o.audio->channels <= 0 || o.audio->bits <= 0)) {
-    return "the audio needs a rate, channels and a bit depth over 0";
+  if (o.audio && (o.audio->rate <= 0 || o.audio->channels <= 0 || o.audio->bits < 0)) {
+    return "the audio needs a rate and channels over 0, and a bit depth of 0 or more";
   }
   if (o.cluster_ms <= 0 || o.cluster_ms > kMostRelativeMs) {
     return "cluster_ms must be in 1.." + std::to_string(kMostRelativeMs);
@@ -191,10 +192,12 @@ bool MatroskaWriter::open(const std::string& path, const MatroskaOptions& o, std
     h.uint(kFlagLacing, 0);
     h.text(kCodecId, a.codec);
     if (!a.codec_private.empty()) h.bin(kCodecPrivate, a.codec_private);
+    if (a.codec_delay_ns > 0) h.uint(kCodecDelay, static_cast<uint64_t>(a.codec_delay_ns));
+    if (a.seek_pre_roll_ns > 0) h.uint(kSeekPreRoll, static_cast<uint64_t>(a.seek_pre_roll_ns));
     const size_t audio = h.open(kAudio);
     h.real(kSamplingFrequency, static_cast<double>(a.rate));
     h.uint(kChannels, static_cast<uint64_t>(a.channels));
-    h.uint(kBitDepth, static_cast<uint64_t>(a.bits));
+    if (a.bits > 0) h.uint(kBitDepth, static_cast<uint64_t>(a.bits));
     h.close(audio);
     h.close(t);
   }
