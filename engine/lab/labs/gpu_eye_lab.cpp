@@ -315,9 +315,14 @@ void run(gl::Lab& lab) {
        "end. Left: the sky's exposure. Right: the eye opening to the dark over seconds.",
        "the right column black at first and the walls coming up out of the dark over the next "
        "seconds, never past the sky's exposure plus max_ev (4 stops)");
-  lab.metric("gpu-errors", static_cast<double>(d.errors.load()), "count", Det::measured);
-  if (d.errors.load() != 0)
-    lab.fail("the device reported " + std::to_string(d.errors.load()) + " errors",
+  // The same two metrics the placeholders give, so a machine with no adapter digests alike.
+  const int errors = static_cast<int>(d.errors.load());
+  const int late = static_cast<int>(d.pipelines_after_load);
+  lab.metric("gpu-errors", errors, "count");
+  lab.metric("pipelines-after-load", late, "count");
+  if (errors != 0 || late != 0)
+    lab.fail("the device reported " + std::to_string(errors) + " errors and " +
+                 std::to_string(late) + " pipelines built after the load",
              "next: read the validation lines above; run make shaders-check; skill: gpu");
 }
 
