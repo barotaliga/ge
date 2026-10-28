@@ -19,6 +19,7 @@
 #   ge_wind      the wind as a pure function of place and time (engine/wind; docs/water.md)
 #   ge_water     bodies of water, the waves a wind grows on them and the one query (engine/water)
 #   ge_move      character movement (engine/move: the knobs and their cvars, the step, scenarios)
+#   ge_vfs       content files (engine/vfs: the pack archive; search paths and zips to come)
 #   ge_camera    the camera (engine/camera: poses, followers, rigs, shake, transitions, the stack)
 #   ge_play      the play contract (engine/play: GameSpec and Run, the session, the input log,
 #                the bench, the stills `ge shot` draws; engine/capture: the Matroska muxer and
@@ -234,6 +235,13 @@ file(GLOB GE_MOVE_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/m
 add_library(ge_move STATIC ${GE_MOVE_SOURCES})
 target_link_libraries(ge_move PUBLIC ge_core ge_console)
 
+# Content files (engine/vfs): the pack archive's checked directory and its files as views, and
+# zips (stored and deflated, read through ge_assets' inflate); the rest of the virtual file
+# system (search paths, directories) lands with docs/goals.md M18a.
+file(GLOB GE_VFS_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/vfs/*.cpp)
+add_library(ge_vfs STATIC ${GE_VFS_SOURCES})
+target_link_libraries(ge_vfs PUBLIC ge_core ge_assets)
+
 # The camera (engine/camera, docs/camera.md): the pose, the followers, the subject, the rigs
 # (first person, boom, mounted, orbit, planted, free), the shake, the transitions and the stack.
 # No GPU and no platform: a game hands it a subject and the world's queries and gets a pose back
@@ -363,7 +371,7 @@ if(PROJECT_IS_TOP_LEVEL)
   get_property(GE_PLUGIN_TARGETS GLOBAL PROPERTY GE_PLUGIN_TARGETS)
   get_property(GE_GAME_TARGETS GLOBAL PROPERTY GE_GAME_TARGETS)
   add_executable(labs engine/lab/main.cpp ${GE_LAB_SOURCES})
-  target_link_libraries(labs PRIVATE ge_lab ge_play ge_replay ge_core ge_audio ge_assets ge_net ge_input ge_wind ge_water ge_move ge_camera ge_ui ge_services ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
+  target_link_libraries(labs PRIVATE ge_lab ge_play ge_replay ge_core ge_audio ge_assets ge_net ge_input ge_wind ge_water ge_move ge_vfs ge_camera ge_ui ge_services ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
     ${GE_LAB_EXTRA})
 
   # The `assets` executable (engine/assets/tool.hpp): the built assets listed, checked and stamped,

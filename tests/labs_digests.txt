@@ -6,6 +6,7 @@ army-flight 383c454be759df5d
 army-sleds bae04af32e36e808
 audition d47fda4a9cb22fbb
 by-hand 724329dc4776353a
+bsp c267f2409a135822
 camera-follow b1dbf6ae474cba78
 camera-machines fa674ce82d9f1c5e
 camera-rigs bd01263b4d16d23c
@@ -16,6 +17,8 @@ capture 65fdfcf8245cd8c1
 capture-run 37cb60d7564b6edc
 charts 77f2319a5ea24272
 cli-loop c2fb04573ad718d4
+cli-loop 2a54afc4b75dac63
+clone fb8a0fbd49f14540
 console e8456b0db59560ce
 crowd cf02cf9a7c917783
 crowd-look 194a06db20f2ebb2
@@ -74,6 +77,7 @@ replay-cut 1381f20bd27caa95
 replay-file b9f41fcd00bac8b3
 resort f82a1fca6fb6ba42
 ride c3794669e029f0c9
+rooms c9c0d8aa3cc86a49
 routes 739cf0534473b4f8
 run-clock 81607c7ac1161166
 services 066720b02adca9e4
@@ -82,7 +86,7 @@ sight 2c2aefbe619a6874
 sim a9c6d0f6bb29ce2a
 ski-cross fbe386cdba062259
 skier-swim aa7aa24c5ebdcc04
-skier-views 57f8a3b89b88b616
+skier-views a29c13a64a90d895
 skijump-hills 3fa0eff35ac0f70a
 slalom 2adb7c679ec93adf
 sled 30cd3df2c903518c
