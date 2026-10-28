@@ -1263,6 +1263,49 @@ GPU's times need the Mac. The CPU stages 32 blasts in about 0.1 ms in the debug 
 (it needs the decals, M42b), and particles colliding with anything but a heightfield: rows M47b and
 M47c.
 
+## Muzzle fire
+
+A gun's flash in the classic content is a few triangles in the weapon's model, drawn on the frame
+it fires. The engine draws it as fire instead, with the explosions' code (§ Explosions), so the
+fire is lit by its heat, the smoke is lit by the sun and the cost is the same pass's.
+
+**As built (M47d).** `engine/render/muzzle.hpp` says what a shot's fire is at each moment: pure
+functions of the `Shot` (its look, its seed, when it went off), the muzzle's pose (`MuzzlePose`:
+the barrel's tip, the way it points, the gun's up) and the clock. **One code for every weapon, and
+a LOOK of knobs for each** (`MuzzleLook`, 19 knobs named, explained and ranged in `muzzle_knobs()`,
+set by name with `set_muzzle_knob`, clamped). Those knobs set the flame's length and width, life,
+heat, the heat it cools to, glow, flash, prongs and their depth, and billows. The smoke is a whole
+`BlastLook` of its own, set as `smoke.<knob>`, and `smoke_speed` sets how fast it leaves. The
+sparks' knobs set their count, speed, life and heat, and the cone's spread. The light's reach is a
+knob too. There are four presets by id: `muzzle.shotgun` (a wide five-petalled star for 60 ms, a
+fat grey-white puff, ten sparks), `muzzle.nailgun` (a small 30 ms jet and a wisp),
+`muzzle.grenade` (a cooler, dull orange thump and a brown cloud) and `muzzle.rocket` (a long
+white-hot jet for 120 ms, fast sparks, white smoke thrown at 6 m/s). A game copies one and turns
+it for each of its guns.
+
+**The flame follows the gun.** A game hands the pass each live shot with the muzzle's pose THIS
+frame (`MuzzleFire`), so the flame rides the firing animation's kick and the player's turn. The
+flame (`flame_at`) is the explosions' ball stretched along the barrel: `stretch` is its length over
+its width, and its base sits at the muzzle. It swells to its full length in a third of its life
+while it cools and its burning share falls. In the shader the ray is squeezed along the axis, so
+the bound is an ellipsoid round the flame and the march spends its steps on fire, not air; the
+noise read in squeezed space streaks the billows along the barrel. Prongs are petals round the
+axis (`cos(prongs·phi)`), cut deeper away from it, and turned per shot off its seed. The flame is
+hotter at its base. `glow` scales its emission below a blackbody's, because a flame's thin gas
+radiates far less than a solid radiator at its temperature. The smoke and the sparks stay in the
+world. `smoke_of` is a `Blast` born where the muzzle was when the shot went off, carried by its
+`v` and slowed by the air (e^(-t/0.3 s), `kBlastDragS`). `throw_shot` throws the sparks into the
+particle pool in a cone down the barrel. `muzzle_flash_at` is the flame's light for the local
+lights: its glowing area times its core's blackbody luminance times what burns times `flash`.
+
+**The cost.** Flames are staged in the same list as the blasts, so at most 32 are drawn in all. On
+the software adapter at 480 x 270 (`gpu-muzzle`), a shotgun's flame at its peak costs the pass about
+1.2 to 2.6 ms, a nailgun's stream (seven flames and wisps in view) about 2.6 ms, and a rocket's jet
+about 1.2 ms. The CPU stages a stream in about 13 us.
+
+**Not yet:** the flame on a weapon model's own muzzle, with its flash triangles hidden (it needs
+the view models, M48), and the flash as a local light (M47b).
+
 ## Shaders
 
 - **WGSL**, one file per pass, beside the pass's C++. A small build step resolves
