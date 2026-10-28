@@ -11,4 +11,12 @@ add_library(ge_play STATIC engine/play/inputs.cpp engine/play/json_read.cpp
   ${GE_CAPTURE_SOURCES})
 target_link_libraries(ge_play PUBLIC ge_core ge_ai ge_console ge_input ge_lab ge_prof ge_prof_alloc)
 
+# The export's encoders (cmake/Codecs.cmake, GE_ENCODERS) are linked into it privately and only
+# in this tree's own build, so the published package and a consumer need neither.
+include(cmake/Codecs.cmake)
+if(GE_ENCODERS)
+  target_link_libraries(ge_play PRIVATE $<BUILD_INTERFACE:ge::aom> $<BUILD_INTERFACE:ge::opus>)
+  target_compile_definitions(ge_play PRIVATE GE_ENCODERS=1)
+endif()
+
 ge_module(ge_play EXPORT play DIRS play capture)
