@@ -6,8 +6,8 @@
 // whose text answer outgrows its budget: an agent pays for every line ge prints. Every metric is
 // measured (printed and compared with --compare, never hashed): the answers carry the version,
 // name paths and read the engine's tags, and the catalog grows with every new command or flag, so
-// a digest of any of it would move in every pull request that touches ge and make them clash. Building and testing a scaffolded repo for real is the
-// packaging workflow's `scaffold` job.
+// a digest of any of it would move in every pull request that touches ge and make them clash.
+// Building and testing a scaffolded repo for real is the packaging workflow's `scaffold` job.
 //
 // ge:summary Lab: the ge commands of an agent's loop run on a scaffolded repo; answer sizes, times
 // ge:keywords lab cli ge loop output-size budget agent tokens help json new add use doctor find

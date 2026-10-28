@@ -14,8 +14,8 @@
 //
 // A row is a line of `docs/goals.md`'s tables that opens `| M<n><suffix> |`, a status file
 // `docs/goals/M<n><suffix>.md`, or a line of the same shape in `docs/goals/reserved.md`: a row
-// promised to a piece of work before any branch carries it. The remote branches are read as they
-// were last fetched (--fetch fetches them first).
+// promised to a piece of work before any branch carries it. The remote branches are fetched first
+// (--no-fetch answers from the branches as last fetched).
 //
 // ge:summary ge goals free and claim: the roadmap rows taken everywhere, the next free one reserved
 // ge:keywords cli ge goals roadmap milestone row next-free number claimed branches pull-request
