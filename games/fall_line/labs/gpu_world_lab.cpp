@@ -25,7 +25,8 @@
 //
 // --cfg runs console commands over Fall Line's cvars first (cfg/cvars.hpp), so a sky a server
 // picks (sv_weather, sv_snowfall, sv_fog, sv_wind, sv_winddir, sv_cover, sv_thick,
-// sv_cloudheight, sv_cloudspeed, sv_hour, sv_skyrate) and r_clouds are photographed as the game draws them (sim/sky.hpp).
+// sv_cloudheight, sv_cloudspeed, sv_hour, sv_skyrate) and r_clouds are photographed as the game
+// draws them (sim/sky.hpp).
 //
 // ge:summary Lab: Fall Line's frame from named views of a seed, captured headless
 // ge:keywords lab world picture screenshot views frame terrain sky post gpu-capture headless

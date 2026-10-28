@@ -178,7 +178,8 @@ TEST(dusk_winds_up_the_low_level_jet_and_sends_scud_racing_under_the_sky) {
   CHECK(night.count == 3);
   const ge::render::CloudLayer& scud = night.layers[0];
   CHECK(scud.base_m >= 1200 && scud.base_m <= 1450 && scud.cover > 0.1);
-  CHECK(night.layers[1].base_m == day.layers[0].base_m && night.layers[1].cover == day.layers[0].cover);
+  CHECK(night.layers[1].base_m == day.layers[0].base_m &&
+        night.layers[1].cover == day.layers[0].cover);
   const auto later = app::cloud_layers_for(fair, 38, 1000, 45, 61, {.dusk = 1});
   auto across = [&](int i) {  // radians of sky a layer's base crosses overhead in a second
     const double h = night.layers[i].base_m - 1000;
@@ -186,12 +187,12 @@ TEST(dusk_winds_up_the_low_level_jet_and_sends_scud_racing_under_the_sky) {
   };
   CHECK(across(0) > 3 * across(1));
   // Twilight brings less of it; a high, a clear and a still sky none.
-  CHECK(app::cloud_layers_for(fair, 38, 1000, 45, 60, {.dusk = 0.3}).layers[0].cover <
-        scud.cover);
+  CHECK(app::cloud_layers_for(fair, 38, 1000, 45, 60, {.dusk = 0.3}).layers[0].cover < scud.cover);
   CHECK(app::cloud_layers_for(sky(mg::WeatherKind::high, 6), 38, 1000, 45, 60, {.dusk = 1}).count ==
         2);
-  CHECK(app::cloud_layers_for(sky(mg::WeatherKind::clear, 6), 38, 1000, 45, 60, {.dusk = 1})
-            .count == 0);
+  CHECK(
+      app::cloud_layers_for(sky(mg::WeatherKind::clear, 6), 38, 1000, 45, 60, {.dusk = 1}).count ==
+      0);
   CHECK(app::cloud_layers_for(sky(mg::WeatherKind::fair, 1), 38, 1000, 45, 60, {.dusk = 1}).count ==
         2);
 }

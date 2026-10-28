@@ -20,13 +20,13 @@
 // THE EVENING'S LOW-LEVEL JET: once the sun is down the ground cools, the air over it stops
 // mixing with the air aloft, and the wind a few hundred metres up speeds up past its day's value
 // (up to about 1.7 times it at 300 to 500 m, peaking after midnight). A layer's wind grows by that
-// as dusk falls (`Aloft::dusk`). With a wind of 2 m/s or more, a fair, flurrying, grey or snowing sky also
-// gets ragged scud racing under it at 250 to 550 m (`fractus`) from twilight into the night. The scud
-// is so near that it crosses the sky many times faster than the layers over it, and it blows
-// across a lit moon.
-// A layer's height and its speed can be picked by hand (`Aloft::base`, `Aloft::speed`): every
-// height is a true one over the floor, since the layers are marched on the eye's rays and need
-// no world under them; a lower layer moves faster across the sky for the same wind.
+// as dusk falls (`Aloft::dusk`). With a wind of 2 m/s or more, a fair, flurrying, grey or snowing
+// sky also gets ragged scud racing under it at 200 to 450 m (`fractus`) from twilight into the
+// night. The scud is so near that it crosses the sky many times faster than the layers over it, and
+// it blows across a lit moon. A layer's height and its speed can be picked by hand (`Aloft::base`,
+// `Aloft::speed`): every height is a true one over the floor, since the layers are marched on the
+// eye's rays and need no world under them; a lower layer moves faster across the sky for the same
+// wind.
 //
 // ge:summary Which cloud layers a broken sky stands over a map, and how the wind carries them
 // ge:keywords cloud field layers cumulus congestus altocumulus cirrus veil wind-aloft veer

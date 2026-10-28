@@ -121,7 +121,8 @@ void deal_layer(const CloudKind& d, uint32_t salt, const mapgen::Weather& weathe
   // cell's lives, so two maps' skies differ.
   const double tile = l.cell_m * l.stretch * render::kCloudTileCells;
   const double share = aloft.speed < 0 ? kCloudDrift : aloft.speed;
-  l.drift_m = u(4) * tile + wind_aloft(weather.wind, h, d.speed) * jet_at(h, aloft.dusk) * share * t;
+  l.drift_m =
+      u(4) * tile + wind_aloft(weather.wind, h, d.speed) * jet_at(h, aloft.dusk) * share * t;
   l.evolve = u(5) * render::kCloudTileCells + t / d.life;
 }
 
@@ -157,7 +158,8 @@ render::Clouds cloud_layers_for(const mapgen::Weather& weather, double seed, dou
   const Stack stack = stack_of(weather.kind);
   const bool scud = aloft.dusk > 0 && weather.wind >= 2 && stack.count > 0 &&
                     stack.count < render::kCloudLayers && weather.kind != WeatherKind::high;
-  if (!scud) return cloud_layers_of(stack.kinds, stack.count, weather, seed, floor_y, latitude, t, aloft);
+  if (!scud)
+    return cloud_layers_of(stack.kinds, stack.count, weather, seed, floor_y, latitude, t, aloft);
   // The scud under the stack, its heights the reference the stack's are lifted by.
   const CloudKind& fractus = kind("fractus");
   const double lift = lift_of(fractus, kScudSalt, seed, aloft);
