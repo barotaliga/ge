@@ -236,7 +236,7 @@ target_link_libraries(ge_charset PUBLIC ge_core)
 # docs/goals.md M20b) is built beside it only when its SDK is supplied.
 file(GLOB GE_SERVICES_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/services/*.cpp)
 add_library(ge_services STATIC ${GE_SERVICES_SOURCES})
-target_link_libraries(ge_services PUBLIC ge_core ge_net)
+target_link_libraries(ge_services PUBLIC ge_core ge_net ge_input)
 
 # Character movement (engine/move, docs/movement.md): the knobs and presets, one step of a moving
 # body over a trace callback, the box world, the strafer and the scenarios. Deterministic, no
