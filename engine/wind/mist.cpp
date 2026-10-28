@@ -99,11 +99,13 @@ Mist mist_at(const Climate& c, const Site& s, double hour) {
            0});
   }
   {
-    // Steam off water far warmer than the air over it.
-    const double gap = c.water_c - air.temp_c;
+    // Steam off water far warmer than the air coming over it (the air before the water warms it).
+    Site away = s;
+    away.water_m = 1e9;
+    const double gap = c.water_c - air_at(c, away, hour).temp_c;
     const double strength = smooth((gap - 6) / 8) * lm::exp(-std::max(s.water_m, 0.0) / 30);
     offer({MistKind::steam, strength, std::min(15.0, 2 + 0.5 * std::max(gap, 0.0)), 2000, 100, 0.85,
-           0.3});
+           0.3, c.water_c});
   }
   {
     // Moist air over a colder surface: a cold lake, or snow in a thaw (lying at 0 C at most).
