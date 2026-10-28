@@ -40,9 +40,9 @@ namespace gl = ge::lab;
 using gl::Det;
 
 // The hall's materials.
-enum Mat : uint32_t { kFlags, kBrick, kRed, kPlaster, kSlime, kPillar, kMats };
+enum Mat : uint8_t { kFlags, kBrick, kRed, kPlaster, kSlime, kPillar, kMats };
 // The relief each material's surface carries (none, bricks, flags).
-enum class Relief { none, bricks, flags };
+enum class Relief : uint8_t { none, bricks, flags };
 
 constexpr double kW = 12, kH = 5, kD = 8;  // the hall, m (x, y, z)
 
@@ -310,7 +310,7 @@ gl::Picture draw(const Look& look, const double eye[3], const double at[3], doub
           // The tangent along b: the world's up on an upright wall, v on a floor.
           double ta[3], tb[3];
           for (int k = 0; k < 3; k++) {
-            ta[k] = upright ? tu[k] : tu[k];
+            ta[k] = tu[k];
             tb[k] = upright ? (k == 1 ? 1.0 : 0.0) : tv[k];
           }
           for (int k = 0; k < 3; k++) n[k] += ta[k] * ga + tb[k] * gb2;
@@ -323,10 +323,11 @@ gl::Picture draw(const Look& look, const double eye[3], const double at[3], doub
         for (int k = 0; k < 3; k++)
           c[k] = mat.albedo[k] * tint * shade * e[k] * scale + mat.emit[k];
       }
-      gl::set_pixel(pic, px, py,
-                    {static_cast<uint8_t>(std::clamp(tone(c[0]), 0.0, 1.0) * 255 + 0.5),
-                     static_cast<uint8_t>(std::clamp(tone(c[1]), 0.0, 1.0) * 255 + 0.5),
-                     static_cast<uint8_t>(std::clamp(tone(c[2]), 0.0, 1.0) * 255 + 0.5)});
+      gl::set_pixel(
+          pic, px, py,
+          {static_cast<uint8_t>(std::floor(std::clamp(tone(c[0]), 0.0, 1.0) * 255 + 0.5)),
+           static_cast<uint8_t>(std::floor(std::clamp(tone(c[1]), 0.0, 1.0) * 255 + 0.5)),
+           static_cast<uint8_t>(std::floor(std::clamp(tone(c[2]), 0.0, 1.0) * 255 + 0.5))});
     }
   }
   return pic;

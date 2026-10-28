@@ -8,6 +8,7 @@
 #include "bake/trace.hpp"
 
 #include <cmath>
+#include <cstddef>
 
 #include "bake/chart.hpp"
 #include "check.hpp"
@@ -46,11 +47,11 @@ TEST(trace_floor_front_and_back) {
   // Barycentrics rebuild the hit point.
   h = closest_hit(bvh, ray(1.5f, 1, 0.25f, 0, -1, 0));
   const float* p = &s.positions[0];
-  const uint32_t* i = &s.indices[h.tri * 3];
+  const uint32_t* i = &s.indices[size_t{h.tri} * 3];
   float x = 0;
   for (int c = 0; c < 3; c++) {
     const float w = c == 0 ? 1 - h.b1 - h.b2 : c == 1 ? h.b1 : h.b2;
-    x += p[i[c] * 3] * w;
+    x += p[size_t{i[c]} * 3] * w;
   }
   CHECK(std::fabs(x - 1.5f) < 1e-5f);
 }
@@ -97,7 +98,8 @@ TEST(trace_matches_brute_force) {
     float best = 1e30f;
     uint32_t tri = 0xffffffffu;
     for (uint32_t t = 0; t < 500; t++) {
-      one.indices.assign(s.indices.begin() + t * 3, s.indices.begin() + t * 3 + 3);
+      one.indices.assign(s.indices.begin() + ptrdiff_t{t} * 3,
+                         s.indices.begin() + ptrdiff_t{t} * 3 + 3);
       const Bvh b1 = build_bvh(one);
       const Hit h = closest_hit(b1, r);
       if (h.hit() && h.t < best) {
