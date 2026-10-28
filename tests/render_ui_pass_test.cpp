@@ -1,7 +1,8 @@
 // engine/render/ui_pass.hpp: the 2D pass draws what the CPU raster (ui/raster.hpp) draws. Each
 // list is drawn both ways and held within a level or two at almost every pixel: rounded boxes,
 // borders, feathered shadows, every paint, opacity and clips; text at several sizes, clipped;
-// images stretched and tinted; a whole menu page over a backdrop. Then the bookkeeping: a list
+// images stretched and tinted; boxes turned about their centre or a pivot and nine-sliced;
+// lines, arcs and convex polygons; a whole menu page over a backdrop. Then the bookkeeping: a list
 // drawn again uploads no glyph again, a list with no image is one draw, each image change
 // another, and an atlas too small for a frame is emptied and refilled.
 //
@@ -11,6 +12,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -198,6 +200,64 @@ TEST(images_match_the_raster_stretched_and_tinted) {
   b.fill = u::solid(u::hex(0xd6e2ef, 0.9f));
   list.box(b);
   check_same(*rig, "ui_pass_images", list, w, h);
+}
+
+TEST(turned_and_sliced_boxes_lines_arcs_and_polygons_match_the_raster) {
+  auto rig = make_rig();
+  if (!rig) return;
+  constexpr int w = 200, h = 140;
+  // A 12x12 frame for the nine-slice: light corners, mid edges, a dark middle.
+  u::Image frame = u::make_image(12, 12, u::hex(0x203040));
+  for (int y = 0; y < 12; ++y) {
+    for (int x = 0; x < 12; ++x) {
+      const bool ex = x < 4 || x >= 8, ey = y < 4 || y >= 8;
+      if (!ex && !ey) continue;
+      uint8_t* p = frame.rgba.data() + (static_cast<size_t>(y) * 12 + x) * 4;
+      p[0] = ex && ey ? 240 : 120, p[1] = ex && ey ? 220 : 160, p[2] = 90, p[3] = 255;
+    }
+  }
+  u::DrawList list;
+  list.begin(w, h);
+  backdrop(list, w, h);
+  const u::Stop warm[2] = {{0, u::hex(0xffd54f)}, {1, u::hex(0xd8312b)}};
+  u::Box tilted;
+  tilted.rect = {20, 20, 50, 24};
+  tilted.radius = 6;
+  tilted.fill = u::linear(0, 0, 50, 0, warm[0].color, warm[1].color);
+  tilted.border = 2;
+  tilted.border_color = u::hex(0xffffff, 0.8f);
+  tilted.rotation = 0.4f;
+  list.box(tilted);
+  u::Box needle;  // a needle standing on (150, 70), turned past three o'clock
+  needle.rect = {148, 30, 4, 40};
+  needle.radius = 2;
+  needle.fill = u::solid(u::hex(0xff5252));
+  needle.pivot = u::Vec2{2, 40};
+  needle.rotation = 2.2f;
+  list.box(needle);
+  u::Box panel;
+  panel.rect = {14, 86, 80, 44};
+  panel.image = &frame;
+  panel.uv = {0, 0, 12, 12};
+  panel.slice = {4, 4, 4, 4};
+  panel.slice_to = {8, 8, 8, 8};
+  list.box(panel);
+  list.arc({150, 70}, 30, 6, -2.2f, 2.2f, u::linear(0, 0, 72, 0, warm[0].color, warm[1].color));
+  list.arc({150, 70}, 22, 3, 0, 1.3f, u::solid(u::hex(0x80d8ff)), true);
+  list.arc({110, 110}, 12, 4, 0, 7, u::solid(u::hex(0xffffff, 0.7f)));
+  list.line({100, 20}, {190, 40.5f}, 3, u::hex(0xffffff));
+  const u::Vec2 zig[4] = {{100, 50}, {112, 34}, {124, 50}, {136, 34}};
+  list.polyline(zig, 2, u::hex(0x4caf50));
+  const u::Vec2 chevron[4] = {{150, 112}, {170, 100}, {190, 112}, {170, 106}};
+  list.polygon(std::span<const u::Vec2>(chevron, 3), u::solid(u::hex(0xffd54f)));
+  const u::Vec2 hexagon[6] = {{140, 120}, {148, 116}, {156, 120},
+                              {156, 130}, {148, 134}, {140, 130}};
+  const u::Stop cool[2] = {{0, u::hex(0x80d8ff)}, {1, u::hex(0x0e2a47, 0.6f)}};
+  list.polygon(hexagon, u::radial(8, 9, 10, cool, 2));
+  list.push_clip({60, 60, 40, 30});
+  list.arc({80, 75}, 16, 8, 0, 6.3f, u::solid(u::hex(0xd8312b, 0.8f)));
+  list.pop_clip();
+  check_same(*rig, "ui_pass_shapes", list, w, h);
 }
 
 TEST(a_menu_page_over_its_backdrop_matches_the_raster) {

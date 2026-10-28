@@ -6,7 +6,8 @@
 // the same body alike, and a bot's command moves it the way a player's does.
 //
 // THE ORDER of a step (docs/movement.md § The step): the crouch (the hull changes before it
-// moves), the ground under the feet, the jump, then by mode: WALK (friction and acceleration on
+// moves), a ladder ahead (on its rungs the stick climbs and nothing else below applies), the
+// jump, then by mode: WALK (friction and acceleration on
 // the ground, the air's rules off it, gravity by halves either side of the move, the slide along
 // whatever is hit, a step up, the snap down), FLY (three-dimensional wish, no gravity, the same
 // collision) or NOCLIP (no collision). Then the ground again, so the events see the landing.
@@ -23,7 +24,7 @@
 // ge:keywords move movement step step_move character controller pmove walk fly noclip
 // ge:keywords friction accelerate air-accelerate gravity jump land slide clip-velocity step-up
 // ge:keywords ground-snap crouch edge-friction coyote-time jump-buffer air-control events
-// ge:keywords landing impact wish-direction usercmd
+// ge:keywords landing impact wish-direction usercmd ladder climb moving-ground platform bounce
 // ge:skill move
 // ge:test tests/move_step_test.cpp
 #pragma once
@@ -69,7 +70,12 @@ struct MoveState {
   double buffer_left = 0;    // s an early press is still waiting
   double slide_ready = 0;    // s until a slide's boost is given again
   int32_t air_jumps_left = 0;
-  double t = 0;  // s: the time stepped, for a lab's trace
+  // The ground's own motion (world.hpp's `solid` and `surface_vel`): standing, `vel` is relative
+  // to it; leaving it, the body takes its velocity with it.
+  uint32_t ground_solid = 0;
+  Vec3 ground_vel{0, 0, 0};
+  bool on_ladder = false;  // on a ladder's rungs: no gravity, the stick climbs
+  double t = 0;            // s: the time stepped, for a lab's trace
 };
 
 enum MoveEvent : uint16_t {
@@ -81,9 +87,12 @@ enum MoveEvent : uint16_t {
   kSteppedDown = 1u << 5,  // followed a drop down (`stepped` negative)
   kSlideStart = 1u << 6,
   kSlideEnd = 1u << 7,
-  kDucked = 1u << 8,    // the crouched hull taken
-  kStood = 1u << 9,     // the standing hull back
-  kBlocked = 1u << 10,  // ran into something (`blocked` says how much speed it took)
+  kDucked = 1u << 8,      // the crouched hull taken
+  kStood = 1u << 9,       // the standing hull back
+  kBlocked = 1u << 10,    // ran into something (`blocked` says how much speed it took)
+  kBounced = 1u << 11,    // came down on a bouncing surface and was thrown up (`impact`)
+  kLadderOn = 1u << 12,   // took hold of a ladder
+  kLadderOff = 1u << 13,  // let go of it (stepped off its top or bottom, jumped off, turned away)
 };
 
 struct MoveEvents {
@@ -94,6 +103,9 @@ struct MoveEvents {
 
   bool has(MoveEvent e) const { return (bits & e) != 0; }
 };
+
+// `MoveState::since_ground` for a body that left the ground by a jump or a push: no coyote jump.
+inline constexpr double kSinceNever = 1e300;
 
 // The hull standing or crouched, feet at the origin.
 Box hull(const MoveSpec& spec, bool ducked);
