@@ -52,6 +52,10 @@ const std::vector<Kind>& table() {
                      {0.110f, 0.100f, 0.040f}, {0.420f, 0.360f, 0.150f}, 0.6f));
     v.push_back(make("reeds", 1.6f, 0.012f, 90, 0.08f, 0.5f, 0.1f, 9, 0.6f,
                      {0.060f, 0.080f, 0.030f}, {0.250f, 0.270f, 0.110f}, 0.25f));
+    // How long a path pressed into each stays: a springy lawn is back in seconds, long soft
+    // grass keeps a walked line for most of a minute.
+    const float spring[] = {3, 8, 25, 12, 15, 5};
+    for (size_t i = 0; i < v.size(); ++i) v[i].spring = spring[i];
     v[2].height_jitter = 0.35f;
     v[5].height_jitter = 0.2f;
     v[5].lean_jitter = 0.1f;
@@ -94,13 +98,14 @@ struct Field {
 };
 
 const Field kFields[] = {
-    {"height", &Kind::height, nullptr}, {"height_jitter", &Kind::height_jitter, nullptr},
-    {"width", &Kind::width, nullptr},   {"density", &Kind::density, nullptr},
-    {"lean", &Kind::lean, nullptr},     {"lean_jitter", &Kind::lean_jitter, nullptr},
-    {"clump", &Kind::clump, nullptr},   {"pull", &Kind::pull, nullptr},
-    {"give", &Kind::give, nullptr},     {"sway", &Kind::sway, nullptr},
-    {"dry", &Kind::dry, nullptr},       {"root", nullptr, &Kind::root},
-    {"tip", nullptr, &Kind::tip},       {"dry_tip", nullptr, &Kind::dry_tip},
+    {"height", &Kind::height, nullptr},   {"height_jitter", &Kind::height_jitter, nullptr},
+    {"width", &Kind::width, nullptr},     {"density", &Kind::density, nullptr},
+    {"lean", &Kind::lean, nullptr},       {"lean_jitter", &Kind::lean_jitter, nullptr},
+    {"clump", &Kind::clump, nullptr},     {"pull", &Kind::pull, nullptr},
+    {"give", &Kind::give, nullptr},       {"sway", &Kind::sway, nullptr},
+    {"spring", &Kind::spring, nullptr},   {"dry", &Kind::dry, nullptr},
+    {"root", nullptr, &Kind::root},       {"tip", nullptr, &Kind::tip},
+    {"dry_tip", nullptr, &Kind::dry_tip},
 };
 
 std::string names() {
@@ -163,9 +168,9 @@ std::optional<Kind> parse_kind(std::string_view recipe, std::string* error) {
     }
   }
   if (kind->height <= 0 || kind->width <= 0 || kind->density < 0 || kind->give <= 0 ||
-      kind->sway <= 0) {
+      kind->sway <= 0 || kind->spring <= 0) {
     return fail("grass recipe '" + std::string(recipe) +
-                "': height, width, give and sway must be above 0 and density at least 0");
+                "': height, width, give, sway and spring must be above 0 and density at least 0");
   }
   return kind;
 }
