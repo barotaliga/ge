@@ -35,6 +35,7 @@ namespace ge::assets {
 
 inline constexpr int kMaxJoints = 256;       // a vertex's joint index is a byte
 inline constexpr int kJointsPerVertex = 4;   // the strongest four influences
+inline constexpr int kMaxParts = 256;        // a vertex's material is a byte
 inline constexpr float kClipRateHz = 60.0f;  // a clip's baked frames a second
 
 // A transform as translation, rotation (a unit quaternion x, y, z, w) and scale, applied

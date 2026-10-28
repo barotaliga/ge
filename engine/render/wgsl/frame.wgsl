@@ -54,11 +54,13 @@ struct CloudRows {
   wind: vec4f,   // the heading (cos, sin), the drift and the age in the noise's tile
   look: vec4f,   // one over the stretch, the dome (1 a heap), the density (1/m), the shadow's depth
   form: vec4f,   // the anvil, the detail's bite, its comb along the wind, the patches
+  glow: vec4f,   // its particles' radius (um), their sizes' spread, the 22 degree halo, the deck
 }
 
 fn cloud_layer(i: i32) -> CloudRows {
-  let r = i * 4;
-  return CloudRows(frame.clouds[r], frame.clouds[r + 1], frame.clouds[r + 2], frame.clouds[r + 3]);
+  let r = i * 5;
+  return CloudRows(frame.clouds[r], frame.clouds[r + 1], frame.clouds[r + 2], frame.clouds[r + 3],
+                   frame.clouds[r + 4]);
 }
 
 // render/clouds.hpp's kCloudTileCells: the noise's base lattice across its tile.
@@ -394,6 +396,21 @@ fn exposure() -> f32 {
     e *= pow(lux / kAdaptLux, 1.0 - kAdaptGain);
   }
   return e;
+}
+
+// THE MOON AS SEEN (sky.wgsl's disc, and the clouds' glow round it): its lit surface is hundreds
+// to tens of thousands of times as bright as the snow the eye has adapted to (the more so in the
+// twilight and in the dark of an eclipse), which no display holds; the eye sees it as a bright
+// thing whatever its light. A brightness is drawn as it is while it is a small share of what the
+// picture shows as white (a moon by day, pale in the blue), and eased toward kMoonTop of that
+// white above it, so a full moon at midnight, a crescent in the twilight and the sliver left in
+// an eclipse all read bright, their seas and shading multiplied on as they are.
+const kMoonTop = 0.45;
+
+fn as_seen(l: f32) -> f32 {
+  let top = kMoonTop / exposure();
+  let x = l / top;
+  return top * select(x * (1.0 - 0.5 * x), 1.0 - exp(-x), x > 1e-3);
 }
 
 // THE RODS' SHARE of the eye's seeing at `luminance` (a radiance in white_luminance's units, so

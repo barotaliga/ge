@@ -5,15 +5,18 @@
 // a RACER's (steer on a wheel's role or a pad, throttle, brake and clutch pedals, the shifter's
 // paddles). The session is recorded as an event log, written out, read back and replayed: every
 // frame's action values must come back to the bit (the lab fails otherwise). Then two players
-// join on their pads, one's cable comes out and goes back in; and a rebinding screen captures a
-// pad button for JUMP and names its conflicts.
+// join on their pads, one's cable comes out and goes back in; a rebinding screen captures a
+// pad button for JUMP and names its conflicts; and a pad whose gyro reads a bias at rest is held
+// still, turned and held still again (engine/input/gyro.hpp): the bias must settle while it is
+// still and stay through the turn, so the aim does not creep.
 //
 // ge:summary Lab: a scripted session on every simulated device through skier, shooter and racer
 // ge:summary maps, recorded and replayed to the bit, players joining and rebinding
 // ge:keywords lab input session simulated keyboard mouse gamepad wheel pedals touch gyro
 // ge:keywords shooter racer skier action-map event-log replay players rebind hot-plug
+// ge:keywords gyro-bias still settle creep
 // ge:skill input labs
-// ge:test tests/input_actions_test.cpp tests/input_sim_test.cpp
+// ge:test tests/input_actions_test.cpp tests/input_sim_test.cpp tests/input_gyro_test.cpp
 #include <cmath>
 #include <cstring>
 #include <string>
@@ -22,6 +25,7 @@
 #include "input/actions.hpp"
 #include "input/bindings_text.hpp"
 #include "input/event_log.hpp"
+#include "input/gyro.hpp"
 #include "input/names.hpp"
 #include "input/players.hpp"
 #include "input/rebind.hpp"
@@ -129,6 +133,78 @@ std::string fmt(float v) {
   char b[16];
   std::snprintf(b, sizeof b, "%.3f", static_cast<double>(v));
   return b;
+}
+
+// THE GYRO'S BIAS: a pad at rest reading a bias and a little noise, held still, turned at
+// 0.6 rad/s for half a second, then held still again.
+void gyro_bias(gl::Lab& lab) {
+  constexpr double kDt = 1.0 / 120;
+  constexpr float kBias[3] = {0.021f, -0.034f, 0.013f};
+  in::SimInput sim;
+  in::InputState s;
+  in::GyroBiases g;
+  const auto pad = in::sim_plug(sim, in::sim_pad(in::Family::playstation));
+  gl::Trace raw{"gyro y as read", {}, {}}, aim{"gyro y unbiased", {}, {}},
+      bias{"the bias taken", {}, {}};
+  double settled_at = -1, worst_bias = 0, creep = 0;
+  int creep_n = 0;
+  for (int i = 0; i < 360; i++) {
+    const double t = i * kDt;
+    const float turn = t >= 1.4 && t < 1.9 ? 0.6f : 0.0f;
+    const float noise = (i % 2 ? 0.006f : -0.006f) * (i % 5 ? 1.0f : 0.4f);
+    in::sim_gyro(sim, pad, kBias[0] + noise, kBias[1] + turn - noise, kBias[2] + noise);
+    in::sim_advance(sim, kDt);
+    in::sim_frame(sim, s);
+    const float read = in::find_slot(s, pad)->gyro[1];
+    in::unbias_gyro(s, g, kDt);
+    const in::Slot& sl = *in::find_slot(s, pad);
+    const in::GyroBias* b = nullptr;
+    for (const in::GyroBias& x : g.slot) {
+      if (x.seen) b = &x;
+    }
+    if (b && b->settled && settled_at < 0) settled_at = t;
+    if (b && b->settled) {
+      for (int a = 0; a < 3; a++) {
+        const double e = std::fabs(b->bias[static_cast<size_t>(a)] - kBias[a]);
+        worst_bias = e > worst_bias ? e : worst_bias;
+      }
+      if (turn == 0) {
+        creep += sl.gyro[1];
+        creep_n++;
+      }
+    }
+    raw.x.push_back(t);
+    raw.y.push_back(read);
+    aim.x.push_back(t);
+    aim.y.push_back(sl.gyro[1]);
+    bias.x.push_back(t);
+    bias.y.push_back(b ? b->bias[1] : 0);
+  }
+  const double mean_creep = creep_n ? creep / creep_n : 0;
+  lab.metric("gyro.settled-after", settled_at, "s");
+  lab.metric("gyro.bias-error", worst_bias, "rad/s");
+  lab.metric("gyro.creep-when-still", mean_creep, "rad/s");
+  if (settled_at < 0 || settled_at > 1.4 || worst_bias > 0.004 || std::fabs(mean_creep) > 0.002) {
+    lab.fail("the gyro's bias did not settle while still (settled at " +
+                 fmt(static_cast<float>(settled_at)) + " s, off by " +
+                 fmt(static_cast<float>(worst_bias)) + " rad/s)",
+             "Run tests/input_gyro_test and read engine/input/gyro.cpp (skill: input).");
+  }
+  gl::LineChart chart;
+  chart.frame = {"THE GYRO'S BIAS, TAKEN WHILE STILL", "a pad at rest, turned, at rest again",
+                 "t (s)", "rad/s about the vertical"};
+  chart.spikes = false;
+  chart.traces = {raw, aim, bias};
+  chart.marks = {{1.4, "turn"}, {1.9, "still"}};
+  const gl::Chart drawn = gl::line_chart(chart);
+  lab.shot({"gyro-bias",
+            drawn.title,
+            "A pad's gyro about the vertical as read (a bias of -0.034 rad/s and a little noise "
+            "at rest), the bias taken while it is still, and the reading with it taken off.",
+            "the bias line steps to -0.034 after 0.8 s of rest and holds through the turn; "
+            "the unbiased reading sits on 0 at rest and on 0.6 in the turn",
+            {}},
+           gl::to_picture(drawn.plot));
 }
 
 void run(gl::Lab& lab) {
@@ -369,6 +445,7 @@ void run(gl::Lab& lab) {
     lab.fail("the rebinding screen did not capture pad:east as on CROUCH",
              "Run tests/input_actions_test and read engine/input/rebind.cpp (skill: input).");
   }
+  gyro_bias(lab);
 }
 
 const gl::LabSpec kSpec{
@@ -378,7 +455,8 @@ const gl::LabSpec kSpec{
     "engine/input/",
     "input",
     "Do keys, a mouse, a pad, a wheel and a touch screen drive a skier's, a shooter's and a "
-    "racer's controls, and does the recorded session replay to the bit?",
+    "racer's controls, does the recorded session replay to the bit, and does a gyro's bias "
+    "settle while it is still?",
     {
         {"fps", "60", "frames a second"},
         {"seconds", "3.2", "the session's length"},

@@ -153,6 +153,8 @@ struct Sample {
   double viscosity = 0;           // Pa s (0: thin)
   double yield = 0;               // Pa
   Breaking breaking;              // the foam's three shares
+  double hs = 0;                  // the sea's significant height here, m: the whole spectrum's,
+                                  // the waves too short to lay included (what the ear hears)
 };
 
 Sample sample(const World& world, double x, double y, double z, double t);

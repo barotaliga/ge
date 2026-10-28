@@ -99,6 +99,10 @@ render::Clouds cloud_layers_of(const render::CloudKind* const* kinds, int count,
     l.erode = d.erode;
     l.fibre = d.fibre;
     l.patch = d.patch;
+    l.drop_um = d.drop;
+    l.drop_spread = d.spread;
+    l.halo = d.halo;
+    l.deck = d.deck;
     l.heading = weather.wind_from + kPi + veer_aloft(std::max(mid, 0.0), latitude);
     // Where in the noise this map's layer starts: a share of the tile along the wind and of the
     // cell's lives, so two maps' skies differ.

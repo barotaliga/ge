@@ -76,6 +76,8 @@ void put_surface(const World& world, const Body& body, double level, double x, d
     out.vz += body.drift[1];
   }
   out.breaking = breaking_at(s, water_depth, world.wind.mean);
+  out.hs =
+      core::num::min(body.waves.sea.hs * scale, kBreakDepth * core::num::max(0.0, water_depth));
 }
 
 // A body's rings on its surface: the height, the slope folded into the normal, the velocity.
