@@ -21,6 +21,7 @@
 #   ge_move      character movement (engine/move: the knobs and their cvars, the step, scenarios)
 #   ge_vfs       content files (engine/vfs: the pack archive and zips; search paths to come)
 #   ge_camera    the camera (engine/camera: poses, followers, rigs, shake, transitions, the stack)
+#   ge_snow      snow (engine/snow: the layer over any ground, press, the snapshot; docs/snow.md)
 #   ge_play      the play contract (engine/play: GameSpec and Run, the session, the input log,
 #                the bench, the stills `ge shot` draws; engine/capture: the Matroska muxer and
 #                the export with sound)
@@ -194,7 +195,8 @@ if(GE_GPU)
     engine/render/skinning.wgsl engine/render/particles.wgsl engine/render/particles_sim.wgsl engine/render/precip.wgsl engine/render/precip_sim.wgsl
     engine/render/clouds.wgsl engine/render/water.wgsl engine/render/water_copy.wgsl
     engine/render/water_stream.wgsl
-    engine/render/underwater.wgsl engine/render/ui_pass.wgsl)
+    engine/render/underwater.wgsl engine/render/ui_pass.wgsl engine/render/eye.wgsl
+    engine/render/eye_adapt.wgsl)
 endif()
 
 # The network (engine/net, docs/networking.md): addresses, the wire, the OS's UDP and TCP sockets
@@ -252,6 +254,12 @@ target_link_libraries(ge_vfs PUBLIC ge_core ge_assets)
 file(GLOB GE_CAMERA_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/camera/*.cpp)
 add_library(ge_camera STATIC ${GE_CAMERA_SOURCES})
 target_link_libraries(ge_camera PUBLIC ge_core ge_console)
+
+# Snow (engine/snow, docs/snow.md): a layer of snow over any ground, its sparse fixed-point tiles,
+# the one sample query, press and the imprint record, the snapshot. Deterministic, no platform.
+file(GLOB GE_SNOW_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/snow/*.cpp)
+add_library(ge_snow STATIC ${GE_SNOW_SOURCES})
+target_link_libraries(ge_snow PUBLIC ge_core)
 
 # The lab framework (engine/lab: the contract, the runner, the raster, the PNG), published as
 # ge::lab so a game's labs plug into the same contract as the engine's (docs/labs.md).
@@ -380,8 +388,12 @@ if(PROJECT_IS_TOP_LEVEL)
   get_property(GE_PLUGIN_TARGETS GLOBAL PROPERTY GE_PLUGIN_TARGETS)
   get_property(GE_GAME_TARGETS GLOBAL PROPERTY GE_GAME_TARGETS)
   add_executable(labs engine/lab/main.cpp ${GE_LAB_SOURCES})
-  target_link_libraries(labs PRIVATE ge_lab ge_play ge_replay ge_core ge_audio ge_assets ge_net ge_input ge_wind ge_water ge_move ge_vfs ge_camera ge_ui ge_services ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
+  target_link_libraries(labs PRIVATE ge_lab ge_play ge_replay ge_core ge_audio ge_assets ge_net ge_input ge_wind ge_water ge_move ge_vfs ge_camera ge_ui ge_services ge_snow ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
     ${GE_LAB_EXTRA})
+  if(GE_GPU)
+    # A GPU lab's own shader (the eye lab's hall, drawn over its frame).
+    ge_embed_wgsl(labs engine/lab/labs/gpu_eye_hall.wgsl)
+  endif()
 
   # The `assets` executable (engine/assets/tool.hpp): the built assets listed, checked and stamped,
   # and the game data their builders are fed. A data set registers itself from a static

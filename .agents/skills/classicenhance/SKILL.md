@@ -1,6 +1,6 @@
 ---
 name: classicenhance
-description: "Use for plugins/classicenhance in gameengine2: the classic shareware pack enhanced on the player's own machine. Finding the pack (the release zip and its self-extracting LHA archive, an installed folder, the pack file) and refusing anything but a known unchanged pack by SHA-256; the local cache and its stages (pack, textures, lightmaps, sounds, pictures); the texture enhancer (the edge-aware upscale, the height, normal, roughness and glow maps); the sound enhancer (noise reduction, 48 kHz, the rebuilt top band); the lightmap stage's slot for the rebake; the `classicenhance` tool run by `ge tool`; and the line that keeps it legal: ship the pipeline, never its output."
+description: "Use for plugins/classicenhance in gameengine2: the classic shareware pack enhanced on the player's own machine. Finding the pack (the release zip and its self-extracting LHA archive, an installed folder, the pack file) and refusing anything but a known unchanged pack by SHA-256; the local cache and its stages (pack, textures, lightmaps, sounds, models, pictures); the texture enhancer (the edge-aware upscale, the height, normal, roughness and glow maps); the sound enhancer (noise reduction, 48 kHz, the rebuilt top band); the models as glTF and the effects the engine draws in their place; the lightmap stage's slot for the rebake; the `classicenhance` tool run by `ge tool`; and the line that keeps it legal: ship the pipeline, never its output."
 ---
 
 # The classic-enhance plugin
@@ -9,8 +9,8 @@ description: "Use for plugins/classicenhance in gameengine2: the classic sharewa
 classic shareware pack a player already has and enhances it on their machine into a local
 cache. It depends on the core, `assets` (the inflater, SHA-256), `audio` (the spectrum and the
 resampler), `lab` (the PNG writer), `vfs`
-(the pack and zip archives) and `brush` (the maps):
-`ge_add_plugin(classicenhance ENGINE core assets audio lab vfs PLUGINS brush)`.
+(the pack and zip archives), `brush` (the maps) and `morph` (the models and sprites):
+`ge_add_plugin(classicenhance ENGINE core assets audio lab vfs PLUGINS brush morph)`.
 
 ## The line that keeps it legal
 
@@ -42,8 +42,10 @@ resampler), `lab` (the PNG writer), `vfs`
 | `classicenhance/cache.hpp/.cpp` | The cache's root (`GE_CLASSIC_CACHE`, else the per-user cache folder), the per-pack layout, stage records, whole-file writes, `safe_name` |
 | `classicenhance/lightmaps.hpp/.cpp` | The lightmap stage: `light_map` writes a map's light; until the rebake (M40) lands, the map's own lightmaps shelf-packed into one picture |
 | `classicenhance/sound.hpp/.cpp` | The sound enhancer: `read_wav`, `write_wav` (the loop start in a `cue ` chunk), `reduce_noise`, `extend_band`, `enhance_sound` |
+| `classicenhance/models.hpp/.cpp` | The models stage: `enhance_models` (every model as glTF with enhanced skins, sprites' frames as PNGs, the index and `replaced.txt`), `drop_glowing` |
+| `classicenhance/replace.hpp` | `kReplacements`: the pack files the engine draws its own effect in place of (file, effect id, keep the glowing parts, why) |
 | `classicenhance/pictures.hpp/.cpp` | The pictures stage's reading: `pack_pictures` (the wad's pictures and font sheet, the `gfx/` pictures; the palette and colour map left out), `picture_rgba` (index 255 see-through, index 0 in the font sheet) |
-| `classicenhance/pipeline.hpp/.cpp` | `run_pipeline`: the stages pack → textures → lightmaps → sounds → pictures, each skipped when its recorded key is current; `pack_textures` |
+| `classicenhance/pipeline.hpp/.cpp` | `run_pipeline`: the stages pack → textures → lightmaps → sounds → models → pictures, each skipped when its recorded key is current; `pack_textures` |
 | `classicenhance/tool/main.cpp` | The `classicenhance` executable (`verify`, `run`, `status`), one JSON object an answer |
 
 Beside it in the engine: `engine/vfs/zip.hpp` (the zip reader, also the `.pk3` container),
@@ -66,7 +68,7 @@ container the pack is fetched into the scratchpad only, never into the tree.
 ## Changing a stage
 
 1. A stage's output depends on its version and options: bump `kTextureStageVersion`,
-   `kLightmapStageVersion` or `kSoundStageVersion` when what it writes changes, so every cache
+   `kLightmapStageVersion`, `kSoundStageVersion` or `kModelStageVersion` when what it writes changes, so every cache
    reruns it.
 2. Texture work: measure before and after. Upscale each texture's own quarter-size mip back by
    4× and compare with its full-size picture (PSNR; the palette's quantisation caps it near

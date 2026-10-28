@@ -1,6 +1,6 @@
 ---
 name: morph
-description: "Use for plugins/morph in gameengine2: classic vertex-animated models and sprites read into one view (skins and their groups, the seam split, triangles, every frame as a morph target with its group and interval; sprites' frames and facing), refusing damage; the fixture writers; per-frame smooth normals; the optional point-normal rounding; the morph lab."
+description: "Use for plugins/morph in gameengine2: classic vertex-animated models and sprites read into one view (skins and their groups, the seam split, triangles, every frame as a morph target with its group and interval; sprites' frames and facing), refusing damage; the fixture writers; the glTF writer (morph targets, weight clips); per-frame smooth normals; the optional point-normal rounding; the morph lab."
 ---
 
 # The morph plugin
@@ -17,6 +17,7 @@ asset. The player's own pack is read by `plugins/classicenhance`, into their cac
 | `morph/read.hpp/.cpp` | `read_model` and `read_sprite`: a checked cursor; every count and size held to a range before anything is read; a refusal names the file, what was wrong and the next step |
 | `morph/write.hpp/.cpp` | `write_model`, `write_sprite` (fixture files that read back into the same view, positions to the packing's 1/255) and the fixtures `sample_model`, `sample_sprite` |
 | `morph/smooth.hpp/.cpp` | `frame_normals` (area-weighted, summed over a position's seam copies); `smooth_model` (point-normal triangles, `level²` a triangle, creases kept straight) |
+| `morph/glb.hpp/.cpp` | `write_glb`: a model as one binary glTF (the first frame and its normals as the mesh, every frame a morph target, clips of morph weights with STEP sampling, the caller's PNG skins embedded, glTF's frame, metres by `unit_m`); `clips_of` (a frame group, or a run of lone frames sharing a name stem) |
 | `morph/labs/morph_lab.cpp` | The `morph` lab: a lumpy low-poly body flat, smooth-shaded and rounded in two frames |
 
 ## Rules
@@ -42,4 +43,6 @@ asset. The player's own pack is read by `plugins/classicenhance`, into their cac
 `tests/morph_read_test.cpp` (round trips, the seam, groups and intervals, every truncation and a
 wrong magic, version or vertex refused) and `tests/morph_smooth_test.cpp` (unit outward normals
 shared across the seam; rounding keeps the corners, cuts `level²`, meets without cracks, stays
-flat past the crease and bulges inside it). The lab: `make lab LAB=morph`.
+flat past the crease and bulges inside it), `tests/morph_glb_test.cpp` (the written file loads through
+the engine's glTF loader with its vertices in the engine's frame and its skin's colour; clips by
+stem and group). The lab: `make lab LAB=morph`.

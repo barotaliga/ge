@@ -6,6 +6,7 @@
 //
 //   verify <path>                      find the pack in <path> and check it is a known release
 //   run <path> [--cache=<dir>] [--only=<stage,...>] [--force] [--scale=<n>] [--limit=<n>]
+//       [--round=<n>]
 //                                      verify, then run the stages into the cache
 //   status [--cache=<dir>]             the cache's pack folders and the stages each has done
 //   help                               this list
@@ -35,9 +36,9 @@ constexpr const char* kHelp =
     "cache\n"
     "  verify <path>     find the pack in <path> (the release zip, an installed folder or its "
     "pak0.pak) and check it\n"
-    "  run <path> [--cache=<dir>] [--only=pack,textures,lightmaps,sounds,pictures] [--force] "
-    "[--scale=<1..8>] "
-    "[--limit=<n>]\n"
+    "  run <path> [--cache=<dir>] [--only=pack,textures,lightmaps,sounds,models,pictures] "
+    "[--force] "
+    "[--scale=<1..8>] [--limit=<n>] [--round=<0..4>]\n"
     "  status [--cache=<dir>]\n"
     "The cache defaults to GE_CLASSIC_CACHE, else the platform's per-user cache folder.\n";
 
@@ -80,6 +81,7 @@ struct Flags {
   std::string cache, only;
   bool force = false;
   int scale = 4;
+  int round = 0;
   uint32_t limit = 0;
 };
 
@@ -100,6 +102,12 @@ bool parse(int argc, char** argv, Flags* f, std::string* error) {
       f->scale = std::atoi(v.c_str());
       if (f->scale < 1 || f->scale > 8) {
         *error = "--scale takes 1 to 8";
+        return false;
+      }
+    } else if (value("round", &v)) {
+      f->round = std::atoi(v.c_str());
+      if (f->round < 0 || f->round > 4) {
+        *error = "--round takes 0 (smooth shading only) to 4 (each triangle into 16)";
         return false;
       }
     } else if (value("limit", &v)) {
@@ -161,13 +169,15 @@ int main(int argc, char** argv) {
   RunOptions opts;
   opts.force = f.force;
   opts.textures.scale = f.scale;
+  opts.models.skin_scale = f.scale;
+  opts.models.round = f.round;
   opts.texture_limit = f.limit;
   for (size_t at = 0; at < f.only.size();) {
     const size_t comma = std::min(f.only.find(',', at), f.only.size());
     Stage s;
     if (!stage_named(f.only.substr(at, comma - at), &s)) {
       return fail("--only names an unknown stage '" + f.only.substr(at, comma - at) +
-                      "'; the stages are pack, textures, lightmaps, sounds",
+                      "'; the stages are pack, textures, lightmaps, sounds, models",
                   2);
     }
     opts.only.push_back(s);

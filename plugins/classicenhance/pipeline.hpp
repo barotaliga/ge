@@ -9,7 +9,10 @@
 // 3. **lightmaps**: each map's light (lightmaps.hpp) into `lightmaps/`.
 // 4. **sounds**: every sound in the pack (`sound/**.wav`) enhanced (sound.hpp) to 48 kHz 16-bit
 //    WAV under `sounds/` at the same relative path, with `sounds/index.txt`.
-// 5. **pictures**: the pack's 2D art (pictures.hpp: the wad's pictures and font sheet, the
+// 5. **models**: every model and sprite in the pack (`progs/*.mdl`, `progs/*.spr`; models.hpp)
+//    as glTF with enhanced skins under `models/`, sprites' frames under `sprites/`, and
+//    `replaced.txt`: what the engine draws in their place (replace.hpp).
+// 6. **pictures**: the pack's 2D art (pictures.hpp: the wad's pictures and font sheet, the
 //    `gfx/` pictures) in the palette's colours under `pictures/<name>.png`, unscaled, with
 //    `pictures/index.txt`.
 //
@@ -17,9 +20,9 @@
 // reruns it. `RunOptions::only` runs the named stages alone (the ones before them must have run).
 // A report says per stage whether it ran, what it wrote and how long it took.
 //
-// ge:summary The enhancement pipeline's stages (pack, textures, lightmaps, sounds, pictures)
-// ge:keywords pipeline stage pack textures lightmaps sounds pictures run skip force report cache
-// ge:keywords enhance
+// ge:summary The enhancement pipeline's stages, pack to pictures, into the cache
+// ge:keywords pipeline stage pack textures lightmaps sounds models run skip force cache enhance
+// ge:keywords pictures
 // ge:skill classicenhance
 // ge:test tests/classicenhance_pipeline_test.cpp
 #pragma once
@@ -30,15 +33,16 @@
 #include <string>
 #include <vector>
 
+#include "classicenhance/models.hpp"
 #include "classicenhance/sound.hpp"
 #include "classicenhance/source.hpp"
 #include "classicenhance/texture.hpp"
 
 namespace ge::classicenhance {
 
-enum class Stage : uint8_t { pack, textures, lightmaps, sounds, pictures };
-inline constexpr Stage kStages[] = {Stage::pack, Stage::textures, Stage::lightmaps, Stage::sounds,
-                                    Stage::pictures};
+enum class Stage : uint8_t { pack, textures, lightmaps, sounds, models, pictures };
+inline constexpr Stage kStages[] = {Stage::pack,   Stage::textures, Stage::lightmaps,
+                                    Stage::sounds, Stage::models,   Stage::pictures};
 const char* stage_name(Stage s);
 // The stage named `name`; false when none is.
 bool stage_named(const std::string& name, Stage* out);
@@ -50,6 +54,7 @@ inline constexpr int kPictureStageVersion = 1;
 struct RunOptions {
   EnhanceOptions textures;
   SoundOptions sounds;
+  ModelOptions models;
   bool force = false;
   std::vector<Stage> only;  // empty: every stage
   // At most this many textures (0: all), for a quick look; recorded in the stage's key.
