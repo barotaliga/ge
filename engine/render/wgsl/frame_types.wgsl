@@ -22,7 +22,7 @@ struct Frame {
   night_sun: vec4f,        // unit direction toward the real sun; w: its illuminance, pre-exposed
   night: vec4f,            // the dark sky's zenith luminance, its light, the sidereal angle, latitude
   cloud_info: vec4f,       // the cloud's layers drawn, the share of the march's steps, 1 if spread, the stamp
-  clouds: array<vec4f, 20>, // five a layer (render/clouds.hpp's `cloud_rows`)
+  clouds: array<vec4f, 24>, // six a layer (render/clouds.hpp's `cloud_rows`)
   moon_pole: vec4f,        // the moon's north pole (world); w: the umbra's angular radius
   moon_prime: vec4f,       // toward its 0 N 0 E; w: the penumbra's angular radius
   moon_east: vec4f,        // toward its 0 N 90 E; w: the disc's brightest light under the shadow
