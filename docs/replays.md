@@ -130,10 +130,10 @@ Two ways to a video, one pipeline:
   no dropped frames however slow the machine. This is `ge record` (`engine/play/record.hpp`) made a
   player's feature: the same frame clock, the renderer's own picture, plus the sound.
 - **Live capture** (what the player saw, as it happened): the presented frame copied into a ring of
-  readback buffers inside the frame's own encoder and mapped a frame or two later
-  (`engine/gpu/target.hpp`'s `Readback`), never stalling the frame; the mix tapped where the synth
-  hands it to the audio device. Both are stamped on the run clock, so the muxer interleaves them by
-  time, not by arrival.
+  readback buffers after the frame's own work and mapped a frame or two later
+  (`engine/gpu/readback_ring.hpp`), never stalling the frame; the mix tapped where the synth hands
+  it to the audio device. Both are stamped on the tap's clock, so the muxer interleaves them by
+  time, not by arrival (M23d3, below).
 
 The ENCODERS, in order of preference: the platform's hardware encoder (VideoToolbox on Apple,
 Media Foundation on Windows, MediaCodec on Android, VA-API on Linux) for H.264, HEVC or AV1, and
@@ -150,7 +150,7 @@ It lands in four rows:
 | --- | --- | --- |
 | M23d1 | The export's core: the engine's Matroska muxer and reader, I420, the run's sound on the play contract, `record --format=mkv` with the sound in lockstep, uncompressed | `capture`, `capture-run` |
 | M23d2 | The software encoders (AV1 by libaom, Opus by libopus) in WebM, `record --format=mkv --codec=av1` | `capture`, `capture-run` |
-| M23d3 | The live capture: the readback ring and the mix tapped, stamped on the run clock | `capture` |
+| M23d3 | The live capture: the readback ring and the mix tapped, stamped on the tap's clock, `fall_line --capture` | `gpu-capture-live` |
 | M23d4 | The platform's hardware encoders | `capture` (on the machine that has one) |
 | M23d5 | The fragmented MP4 muxer, for the hardware encoders' H.264 and HEVC | `capture` |
 
@@ -218,6 +218,48 @@ engine's own encoders and no ffmpeg; a browser, a phone and every desktop player
 
 Fragmented MP4 waits for the hardware encoders' H.264 and HEVC, which WebM cannot carry (M23d5).
 
+### The live capture (M23d3)
+
+`fall_line --capture=run.webm` records the window and its sound while it is played: the same
+Matroska or WebM file as an export (`.webm` AV1 and Opus, `.mkv` uncompressed), with no frame of
+the game waiting for it. Three threads meet in `engine/capture/live.hpp`, and none waits on another:
+
+- **The audio device's thread taps the mix** (`Live::audio`, called by the device's pull right
+  after the synth renders): the samples go into a lock-free ring of a few seconds, and the count
+  of samples tapped IS THE CAPTURE'S CLOCK. Each tap also leaves an anchor (the samples before it
+  and when it came) in a seqlock.
+- **The game's thread stamps each presented frame on that clock** (`Live::stamp`: the anchor's
+  samples carried forward by the wall clock since it, at most 100 ms, and never backwards; with no
+  sound, the wall clock since the capture opened), then copies the frame back through the ring of
+  readbacks (`gpu::ReadbackRing`: its own command buffer submitted after the frame's, the map
+  started, the pixels handed back oldest first a frame or two later with their stamps), and hands
+  each picture that has come back to the capture (`Live::picture`: a swap of buffers under a lock,
+  so nothing is allocated once warm). A frame the ring has no free slot for, or that finds
+  `queue` pictures already waiting for the worker, is DROPPED and counted, never waited for: a slow
+  machine records fewer frames, not a slower game.
+- **The capture's worker** converts each picture to I420 (cropped or padded to the file's size
+  if the window was resized), encodes it, cuts the sound into 20 ms packets and writes both tracks
+  in time order (`capture/interleave.hpp`, shared with the export): a sound packet goes in once a
+  picture at or after it has been encoded, or once it is half a second older than the last frame
+  stamped with no earlier picture still waiting; a picture once the sound has been cut past it.
+  A picture handed to the encoder counts as still to come until its packet is out, since an
+  encoder may hold one back.
+
+The frame rate is variable: each picture keeps the time it was shown at, and `fps` is only the
+track's nominal rate and AV1's keyframe spacing. If the worker stalls longer than the tap's ring
+holds, the samples that did not fit are written as silence where the worker notices them, so the
+sound keeps its length.
+
+Proved by `tests/capture_live_test.cpp` (on a simulated clock: each flash within a frame of its
+click at 60, 50 and 24 fps and every tapped sample in the file; a full queue drops and the hand-in
+never waits; a resized window cropped or padded; a tap bigger than the ring kept as silence; a
+`.webm` in time order), `tests/gpu_readback_ring_test.cpp` (frames back oldest first with their
+stamps and colours, a full ring dropping instead of waiting, BGRA read back as RGBA), and the
+`gpu-capture-live` lab, which runs it in real time: a frame loop at 60 fps for 30 s on the software
+adapter with an audio thread pulling 10 ms every 10 ms took all 1800 frames, dropped none, spent at
+most 0.9 ms of a frame on the capture (0.24 ms on average) and put every one of 24 flashes within
+2 ms of its click; AV1 cost the worker 7.4 ms a 640x360 frame on average.
+
 ## Broadcasting to a video service (M23e)
 
 The services a player streams to take RTMP: plain RTMP and RTMPS carry H.264 and AAC, and Enhanced
@@ -266,6 +308,7 @@ environment or the game's own settings, never hard-coded in the engine.
 | `replay-cut` | Which moments did the director cut to, when, at what rate, and is each shot spaced from the last? | M23c |
 | `capture` | Does a replay export decode to its frames and its sound, is the sound in sync to a frame (a click and a flash on the same step), uncompressed and as AV1 and Opus, and what does each encoder cost a frame? | M23d |
 | `capture-run` | Does Fall Line's race export with its own sound, every picture and every sample of it in the file, and is the sound never silence? How much smaller is it as AV1 and Opus, and how close to the uncompressed pictures? | M23d1, M23d2 |
+| `gpu-capture-live` | Does the live capture take every frame and its sound in real time, in sync, with no frame waiting on it? | M23d3 |
 | `stream` | Does an RTMP session to a test ingest in the lab carry every frame, does the bitrate follow a narrowed link and recover, and is the key never printed? | M23e |
 | `spectate` | Do spectators through a relay over every network preset step to the player's digest, how late, and at how many bytes a second? | M23f |
 | `discord` | Against a stand-in Discord client in the lab: the handshake, the activity set and cleared, a join request answered? | M23g |
