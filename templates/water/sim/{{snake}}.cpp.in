@@ -1,0 +1,56 @@
+// The definitions behind {{snake}}.hpp: a lake about 85 m by 55 m, its bed a bowl shelving to
+// a shallow shore, its water a clear mountain lake's over grey stones ("nordic-clear").
+//
+// ge:summary The game's water: the lake's shore, its bed and the one call that lays it
+// ge:keywords water lake add_lake shore bed bowl
+// ge:keywords {{snake}}
+// ge:skill water
+// ge:test tests/sim_{{snake}}_test.cpp
+#include "sim/{{snake}}.hpp"
+
+#include <array>
+
+namespace {{ident}}::sim {
+
+namespace {
+
+namespace water = ge::water;
+
+// The shore, m, round the plan's origin.
+constexpr std::array<water::Point, 12> kShore = {{
+    {-42, 0},
+    {-35, 18},
+    {-18, 26},
+    {0, 23},
+    {20, 27},
+    {37, 16},
+    {43, -2},
+    {34, -18},
+    {14, -26},
+    {-6, -21},
+    {-24, -26},
+    {-38, -14},
+}};
+
+// The bed: a bowl kLakeDeepest under the surface at its middle, shelving to 0.3 m at the shore.
+double bowl(const void*, double x, double z) {
+  const double r2 = (x / 46) * (x / 46) + (z / 32) * (z / 32);
+  const double share = r2 < 1 ? 1 - r2 : 0;
+  return kLakeLevel - 0.3 - (kLakeDeepest - 0.3) * share;
+}
+
+}  // namespace
+
+water::World make_{{snake}}(double wind_mps) {
+  ge::wind::Field air;
+  air.mean = wind_mps;
+  air.from = 0;  // the bearing it blows FROM: +z, so the lee shore is at -z
+  water::World world(air);
+  // A small lake's sea is short (a 7 m/s wind over 50 m peaks at about 0.3 m): lay the waves
+  // down to 0.25 m so a float or a swimmer on it feels them (an open sea keeps the default).
+  world.lay.shortest = 0.25;
+  water::add_lake(world, kShore, kLakeLevel, {.look = "nordic-clear"}, {bowl, nullptr});
+  return world;
+}
+
+}  // namespace {{ident}}::sim

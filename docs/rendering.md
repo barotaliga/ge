@@ -733,9 +733,9 @@ height) and living their kind's life. Where they are drawn a broken sky's mean c
 lid keeps its deck, and stands a sheet under it (OVERCAST a stratus, SNOW and a STORM a
 nimbostratus) so the deck has a texture.
 
-**Cloud kinds (M8f8)** (`render/cloud_kinds.hpp`): fifteen named kinds, each a layer's bands,
+**Cloud kinds (M8f8)** (`render/cloud_kinds.hpp`): sixteen named kinds, each a layer's bands,
 its form and its light, matched by eye against photographs of real skies side by side (the
-photographs are kept out of the tree): inversion, stratus, stratocumulus, cumulus, congestus,
+photographs are kept out of the tree): inversion, fractus (the scud of M8f9), stratus, stratocumulus, cumulus, congestus,
 cumulonimbus, nimbostratus, altocumulus, altostratus, lenticular, cirrocumulus, veil,
 cirrostratus, cirrus and wisps. A kind's bands are its base over the valley floor, its depth, its cover and
 its cell (m); its stretch along the wind, its dome (0 a sheet, 1 a heap), its optical depth,
@@ -816,6 +816,23 @@ layer's frame block (`CloudLayer::anvil`, `erode`, `fibre`, `patch`); its LIGHT 
   read the cloud's shadow; the air scatters that share of the sun (70 % of its in-scatter is
   shadowed at most), on the world through the haze and on the sky strongest toward the sun, so
   the gaps between heaps throw beams.
+- THE HEIGHT AND THE WIND (M8f9, `mountain/app/cloud_field.hpp`): every layer stands at its
+  true height over the valley floor. The march walks the eye's rays through each slab, so a
+  cirrus 8 km up needs no world under it. Each layer drifts on the wind aloft at its own
+  height: the map's wind grown on a log law and turned with height. A low layer crosses the
+  sky the faster for being near. THE EVENING'S LOW-LEVEL JET: as dusk falls (`dusk_of`: 0 with
+  the sun 6 degrees up, 1 with it 6 down) the air a few hundred metres up decouples from the
+  cooling ground, and its wind speeds up to 1.7 times the day's at 400 m (`jet_at`, a Gaussian
+  450 m wide). From twilight a fair, flurrying, grey or snowing sky in a wind of 2 m/s or more
+  also gets ragged SCUD (`fractus`) racing under it at 200 to 450 m. It is dealt on a salt of
+  its own, so it moves none of the stack's layers, and more of it comes the further dusk has
+  fallen. Being so near and in the jet, it crosses the sky five times faster than the heaps
+  over it and blows across a lit moon. `Aloft` carries the picked height and speed (`base`, the
+  lowest layer's base, every layer over it in proportion; `speed`, a share of the true wind in
+  place of the true wind's whole; the layers drifted at a quarter of it before M8f9, and a low
+  cloud hung still where a real one races), and Fall Line's `sv_cloudheight` and `sv_cloudspeed` set them.
+  The drift is the wind times the clock, not integrated, so with the sky's clock running
+  (`sv_skyrate`) a jet winding up moves the layers on a little as it does.
 
 Fall Line picks a stack with `sv_clouds` (kinds joined by '+', such as `cumulus+cirrus`, up to
 four; `map`, the default, keeps the map's own), each kind's bands dealt off the map's seed by
@@ -927,7 +944,8 @@ One full-screen fragment pass reads the resolved HDR frame and writes the swapch
 `BGRA8Unorm` without an optional feature, and a tile GPU keeps a full-screen fragment pass
 in tile memory):
 
-- exposure from the sky's brightness, not from a histogram, so it never pumps;
+- exposure from the sky's brightness, not from a histogram, so it never pumps outdoors; the
+  eye's adaptation (M43) opens it where the world is darker than the sky lights it;
 - bloom from a half-resolution mip chain (dual-filter down and up), cheap and stable;
 - the colour grade as a 32³ 3D lookup table the game bakes from its look;
 - tone mapping, a blue-noise dither against banding, and the output transfer function.
@@ -953,6 +971,23 @@ identity, and the game bakes its own (`fall_line::app::bake_grade`: a little con
 through the middle tones with the ends held, cooler shadows, warmer highlights, 5 % more
 saturation). On the software adapter at 1280 × 720 the bloom costs about 11 ms and the post
 pass 7 ms (the `profile` lab); the bloom's cost on a real GPU waits for the Mac's numbers.
+
+**As built (M43)** (`render/eye.hpp`). **The eye's adaptation** leaves the sky's exposure as
+the eye AT REST, so the snow under the sky still never pumps, and opens the eye past it only
+where the picture is darker than the sky lights it: a hall, a cave, the woods at dusk. A compute
+pass (`eye`, after bloom) meters the post pass's input on a 128 × 72 grid of bilinear taps at
+the sky's exposure into a 64-bin log2 histogram (a quarter stop a bin, the middle of the picture
+weighed four times the corners), then one workgroup averages the bins between 40 % and 90 % of
+the weight, takes the stops that average sits under the key (0.18) beyond a band of one stop,
+scales them by the strength (0.85) and clamps them to 0..4 stops, and steps the eye toward
+them with a half-life of 2.5 s opening and 0.35 s closing (the eye closes to light fast and
+opens to the dark slowly). The eye is kept on the GPU in the fifth row of the sky's light buffer
+(`SkyLight.eye`), which every pass already binds, so the post pass, TAA-U's weights, the
+clouds' white and the moon as seen read the same exposure with no new binding and no readback.
+The opened stops dim the white the eye adapts to (`exposure_at`), so the night's partial
+adaptation under 14 lx still holds in the dark. A zeroed buffer is the eye at rest: a frame that
+never runs the pass keeps its bits. The `gpu-eye` lab walks out of a 40 m stone corridor into a
+noon and back into the dark.
 
 Linear light is used throughout, and the conversion happens here, once.
 
