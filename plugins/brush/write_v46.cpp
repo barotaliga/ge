@@ -101,7 +101,7 @@ bool write_v46(const Fixture& fx, const Compiled& c, Out* out, std::string* err)
 
   std::vector<std::vector<uint8_t>> pages;
   const auto luxel = [&](uint32_t page, uint32_t x, uint32_t y, uint8_t g) {
-    while (pages.size() <= page) pages.emplace_back(size_t(kPage) * kPage * 3, 0);
+    while (pages.size() <= page) pages.emplace_back(size_t(kPage) * kPage * 3, uint8_t{0});
     for (int k = 0; k < 3; ++k) pages[page][(size_t(y) * kPage + x) * 3 + size_t(k)] = g;
   };
   Packer pack;
