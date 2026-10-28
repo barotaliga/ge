@@ -326,6 +326,7 @@ finished.
 | M41c | **The cache drawn**: the BSP renderer reads a map's enhanced albedo, normal, roughness and emissive and its rebaked light from the cache when present, the original otherwise (`r_enhanced`) | A shareware map drawn from the cache in the named views; off, it draws as before | `bsp`, `enhance` | [open](goals/M41c.md) |
 | M41d | **The sounds enhanced**: every sound in the pack read (8 or 16 bits, its loop start), noise reduced in its own quiet gaps, resampled to 48 kHz and its missing top band rebuilt, written to the cache; `audio::fft`, `audio::resample` in the engine | The real pack's 190 sounds enhanced, a private listening page with before and after | `enhance` | [done](goals/M41d.md) |
 | M41e | **The models**: the classic morph models and sprites read (`plugins/morph`), skins enhanced, smooth vertex normals per frame, written to the cache as glTF with morph targets; rounding an option, off | Every model in the pack read and drawn from the cache, before and after | `models`, `enhance` | [open](goals/M41e.md) |
+| M41f | **The pictures**: the pack's 2D art (the wad's status bar pictures and font sheet, the `gfx/` pictures) read through `vfs::read_wad` and `read_picture` and written to the cache unscaled in the palette's colours, for Shooter's Edge's classic HUD (M18k1) to draw in place of its free art | The real pack's pictures in the cache; the `se-hud` lab's classic look drawn from them | `se-hud` (`--classic`) | [done](goals/M41f.md) |
 
 ## Where each milestone's code goes (G8)
 

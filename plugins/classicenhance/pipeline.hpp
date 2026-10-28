@@ -9,13 +9,17 @@
 // 3. **lightmaps**: each map's light (lightmaps.hpp) into `lightmaps/`.
 // 4. **sounds**: every sound in the pack (`sound/**.wav`) enhanced (sound.hpp) to 48 kHz 16-bit
 //    WAV under `sounds/` at the same relative path, with `sounds/index.txt`.
+// 5. **pictures**: the pack's 2D art (pictures.hpp: the wad's pictures and font sheet, the
+//    `gfx/` pictures) in the palette's colours under `pictures/<name>.png`, unscaled, with
+//    `pictures/index.txt`.
 //
 // A stage whose recorded key (its version and options) matches is skipped; `RunOptions::force`
 // reruns it. `RunOptions::only` runs the named stages alone (the ones before them must have run).
 // A report says per stage whether it ran, what it wrote and how long it took.
 //
-// ge:summary The enhancement pipeline's stages (pack, textures, lightmaps, sounds) into the cache
-// ge:keywords pipeline stage pack textures lightmaps sounds run skip force report cache enhance
+// ge:summary The enhancement pipeline's stages (pack, textures, lightmaps, sounds, pictures)
+// ge:keywords pipeline stage pack textures lightmaps sounds pictures run skip force report cache
+// ge:keywords enhance
 // ge:skill classicenhance
 // ge:test tests/classicenhance_pipeline_test.cpp
 #pragma once
@@ -32,14 +36,16 @@
 
 namespace ge::classicenhance {
 
-enum class Stage : uint8_t { pack, textures, lightmaps, sounds };
-inline constexpr Stage kStages[] = {Stage::pack, Stage::textures, Stage::lightmaps, Stage::sounds};
+enum class Stage : uint8_t { pack, textures, lightmaps, sounds, pictures };
+inline constexpr Stage kStages[] = {Stage::pack, Stage::textures, Stage::lightmaps, Stage::sounds,
+                                    Stage::pictures};
 const char* stage_name(Stage s);
 // The stage named `name`; false when none is.
 bool stage_named(const std::string& name, Stage* out);
 
 inline constexpr int kTextureStageVersion = 1;
 inline constexpr int kSoundStageVersion = 1;
+inline constexpr int kPictureStageVersion = 1;
 
 struct RunOptions {
   EnhanceOptions textures;

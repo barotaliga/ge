@@ -1,7 +1,7 @@
 // The pipeline's stages (pipeline.hpp).
 //
-// ge:summary Runs the pack, textures, lightmaps and sounds stages, skipping what is current
-// ge:keywords pipeline run stage key skip textures index lightmaps sounds wav pack notice
+// ge:summary Runs the pack, textures, lightmaps, sounds and pictures stages, skipping the current
+// ge:keywords pipeline run stage key skip textures index lightmaps sounds wav pack notice pictures
 // ge:skill classicenhance
 // ge:test tests/classicenhance_pipeline_test.cpp
 #include "classicenhance/pipeline.hpp"
@@ -14,6 +14,7 @@
 #include "brush/read.hpp"
 #include "classicenhance/cache.hpp"
 #include "classicenhance/lightmaps.hpp"
+#include "classicenhance/pictures.hpp"
 #include "lab/png.hpp"
 #include "vfs/pak.hpp"
 
@@ -59,6 +60,8 @@ std::string stage_key(Stage s, const RunOptions& o) {
             " denoise " + num(d.denoise) + " floor " + num(d.floor_db) + " extend " +
             num(d.extend) + " to " + num(d.extend_to_hz) + " rolloff " + num(d.rolloff_db) +
             " knee " + num(d.knee);
+  } else if (s == Stage::pictures) {
+    text += " v" + std::to_string(kPictureStageVersion);
   } else {
     text += " v1";
   }
@@ -200,6 +203,31 @@ bool run_sounds(const Source& src, const fs::path& dir, const RunOptions& o, Sta
   return true;
 }
 
+bool run_pictures(const Source& src, const fs::path& dir, StageResult& r, std::string* error) {
+  Palette palette;
+  std::vector<PackPicture> pictures;
+  if (!pack_pictures(src.pack, &palette, &pictures, error)) return false;
+  std::string index = "# name width height transparent-index from\n";
+  for (const PackPicture& p : pictures) {
+    const fs::path at = dir / "pictures" / (p.name + ".png");
+    if (!save_png(at, picture_rgba(p.picture, palette, p.transparent))) {
+      *error = "cannot write " + at.string();
+      return false;
+    }
+    r.files++;
+    index += p.name + " " + std::to_string(p.picture.width) + " " +
+             std::to_string(p.picture.height) + " " + std::to_string(p.transparent) + " " + p.from +
+             "\n";
+  }
+  if (!write_text(dir / "pictures" / "index.txt", index)) {
+    *error = "cannot write " + (dir / "pictures" / "index.txt").string();
+    return false;
+  }
+  r.files++;
+  r.note = std::to_string(pictures.size()) + " pictures, unscaled";
+  return true;
+}
+
 }  // namespace
 
 const char* stage_name(Stage s) {
@@ -212,6 +240,8 @@ const char* stage_name(Stage s) {
       return "lightmaps";
     case Stage::sounds:
       return "sounds";
+    case Stage::pictures:
+      return "pictures";
   }
   return "?";
 }
@@ -295,6 +325,9 @@ bool run_pipeline(const Source& source, const fs::path& root_in, const RunOption
         break;
       case Stage::sounds:
         ok = run_sounds(source, report->dir, opts, r, error);
+        break;
+      case Stage::pictures:
+        ok = run_pictures(source, report->dir, r, error);
         break;
     }
     r.seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();

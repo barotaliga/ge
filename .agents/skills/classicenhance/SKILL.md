@@ -1,6 +1,6 @@
 ---
 name: classicenhance
-description: "Use for plugins/classicenhance in gameengine2: the classic shareware pack enhanced on the player's own machine. Finding the pack (the release zip and its self-extracting LHA archive, an installed folder, the pack file) and refusing anything but a known unchanged pack by SHA-256; the local cache and its stages (pack, textures, lightmaps, sounds); the texture enhancer (the edge-aware upscale, the height, normal, roughness and glow maps); the sound enhancer (noise reduction, 48 kHz, the rebuilt top band); the lightmap stage's slot for the rebake; the `classicenhance` tool run by `ge tool`; and the line that keeps it legal: ship the pipeline, never its output."
+description: "Use for plugins/classicenhance in gameengine2: the classic shareware pack enhanced on the player's own machine. Finding the pack (the release zip and its self-extracting LHA archive, an installed folder, the pack file) and refusing anything but a known unchanged pack by SHA-256; the local cache and its stages (pack, textures, lightmaps, sounds, pictures); the texture enhancer (the edge-aware upscale, the height, normal, roughness and glow maps); the sound enhancer (noise reduction, 48 kHz, the rebuilt top band); the lightmap stage's slot for the rebake; the `classicenhance` tool run by `ge tool`; and the line that keeps it legal: ship the pipeline, never its output."
 ---
 
 # The classic-enhance plugin
@@ -42,7 +42,8 @@ resampler), `lab` (the PNG writer), `vfs`
 | `classicenhance/cache.hpp/.cpp` | The cache's root (`GE_CLASSIC_CACHE`, else the per-user cache folder), the per-pack layout, stage records, whole-file writes, `safe_name` |
 | `classicenhance/lightmaps.hpp/.cpp` | The lightmap stage: `light_map` writes a map's light; until the rebake (M40) lands, the map's own lightmaps shelf-packed into one picture |
 | `classicenhance/sound.hpp/.cpp` | The sound enhancer: `read_wav`, `write_wav` (the loop start in a `cue ` chunk), `reduce_noise`, `extend_band`, `enhance_sound` |
-| `classicenhance/pipeline.hpp/.cpp` | `run_pipeline`: the stages pack → textures → lightmaps → sounds, each skipped when its recorded key is current; `pack_textures` |
+| `classicenhance/pictures.hpp/.cpp` | The pictures stage's reading: `pack_pictures` (the wad's pictures and font sheet, the `gfx/` pictures; the palette and colour map left out), `picture_rgba` (index 255 see-through, index 0 in the font sheet) |
+| `classicenhance/pipeline.hpp/.cpp` | `run_pipeline`: the stages pack → textures → lightmaps → sounds → pictures, each skipped when its recorded key is current; `pack_textures` |
 | `classicenhance/tool/main.cpp` | The `classicenhance` executable (`verify`, `run`, `status`), one JSON object an answer |
 
 Beside it in the engine: `engine/vfs/zip.hpp` (the zip reader, also the `.pk3` container),

@@ -35,7 +35,8 @@ constexpr const char* kHelp =
     "cache\n"
     "  verify <path>     find the pack in <path> (the release zip, an installed folder or its "
     "pak0.pak) and check it\n"
-    "  run <path> [--cache=<dir>] [--only=pack,textures,lightmaps] [--force] [--scale=<1..8>] "
+    "  run <path> [--cache=<dir>] [--only=pack,textures,lightmaps,sounds,pictures] [--force] "
+    "[--scale=<1..8>] "
     "[--limit=<n>]\n"
     "  status [--cache=<dir>]\n"
     "The cache defaults to GE_CLASSIC_CACHE, else the platform's per-user cache folder.\n";
