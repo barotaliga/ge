@@ -160,5 +160,7 @@ TEST(a_train_runs_its_corners_there_and_back_to_the_same_bits) {
   const mv::Vec3 a = run(180);
   CHECK_MSG(std::fabs(a.z - 1.5) < 0.06, "at z offset " + std::to_string(a.z));
   const mv::Vec3 b = run(180);
-  CHECK(std::memcmp(&a, &b, sizeof a) == 0);
+  CHECK_BITS(a.x, b.x);
+  CHECK_BITS(a.y, b.y);
+  CHECK_BITS(a.z, b.z);
 }

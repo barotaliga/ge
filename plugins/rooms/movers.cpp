@@ -141,8 +141,6 @@ void activate(Movers& m, size_t i, bool fired) {
       if (fired && mv.phase == Phase::out && mv.timer < 0) set_coming(m, i), mv.timer = 0;
       break;
     case MoverKind::button:
-      if (mv.phase == Phase::rest) set_going(m, i);
-      break;
     case MoverKind::train:
       if (mv.phase == Phase::rest) set_going(m, i);
       break;
@@ -256,10 +254,20 @@ bool build_movers(const Level& level, size_t workers, Movers* out, std::string* 
           for (const Entity& o : level.entities) {
             if (o.classname == "path_corner" && o.get("targetname") == next) corner = &o;
           }
-          if (!corner) return fail(where + ": no path_corner named '" + next + "'; name one");
+          if (!corner) {
+            std::string what = where;
+            what += ": no path_corner named '";
+            what += next;
+            what += "'; name one";
+            return fail(what);
+          }
           Vec3 at;
           if (!point(*corner, "origin", &at)) {
-            return fail(where + ": path_corner '" + next + "' has no origin; give it one");
+            std::string what = where;
+            what += ": path_corner '";
+            what += next;
+            what += "' has no origin; give it one";
+            return fail(what);
           }
           mv.path.push_back(move::sub(at, mv.lo));
           mv.path_wait.push_back(number(*corner, "wait", 0));
