@@ -58,6 +58,36 @@ std::vector<fs::path> cmake_files(const fs::path& repo) {
   return out;
 }
 
+// Adds ge::<module> to the link of the game's simulation target in CMakeLists.txt; false, with
+// the finding said, when there is no such link to add to.
+bool link_into_sim(const fs::path& repo, const std::string& game, const std::string& module,
+                   Outcome& o) {
+  const fs::path cmake = repo / "CMakeLists.txt";
+  std::string text = read_text(cmake).value_or("");
+  const std::string target = ident_of(game) + "_sim";
+  const std::regex link("(target_link_libraries\\(\\s*" + target + "\\s+PUBLIC\\s+ge::core)");
+  if (!std::regex_search(text, link)) {
+    o.findings.push_back(
+        {Severity::error,
+         "no `target_link_libraries(" + target + " PUBLIC ge::core ...)` to add to",
+         "CMakeLists.txt",
+         "add ge::" + module +
+             " to the link of the target that holds the simulation, then "
+             "`ge skills sync`"});
+    return false;
+  }
+  text =
+      std::regex_replace(text, link, "$1 ge::" + module, std::regex_constants::format_first_only);
+  std::string error;
+  if (!write_text(cmake, text, error)) {
+    o.findings.push_back(
+        {Severity::error, error, "CMakeLists.txt", "check the file's permissions"});
+    return false;
+  }
+  o.written.push_back("CMakeLists.txt");
+  return true;
+}
+
 }  // namespace
 
 std::vector<PluginInfo> plugin_infos() {
@@ -132,30 +162,8 @@ Outcome run_use(const fs::path& repo, const std::string& plugin) {
   if (links_plugin(repo, plugin)) {
     o.summary = "ge::" + plugin + " is already linked";
   } else {
-    const fs::path cmake = repo / "CMakeLists.txt";
-    std::string text = read_text(cmake).value_or("");
-    const std::string target = ident_of(*name) + "_sim";
-    const std::regex link("(target_link_libraries\\(\\s*" + target + "\\s+PUBLIC\\s+ge::core)");
-    if (!std::regex_search(text, link)) {
-      o.findings.push_back(
-          {Severity::error,
-           "no `target_link_libraries(" + target + " PUBLIC ge::core ...)` to add to",
-           "CMakeLists.txt",
-           "add ge::" + plugin +
-               " to the link of the target that holds the simulation, then "
-               "`ge skills sync`"});
-      return o;
-    }
-    text =
-        std::regex_replace(text, link, "$1 ge::" + plugin, std::regex_constants::format_first_only);
-    std::string error;
-    if (!write_text(cmake, text, error)) {
-      o.findings.push_back(
-          {Severity::error, error, "CMakeLists.txt", "check the file's permissions"});
-      return o;
-    }
-    o.written.push_back("CMakeLists.txt");
-    o.summary = "linked ge::" + plugin + " into " + target;
+    if (!link_into_sim(repo, *name, plugin, o)) return o;
+    o.summary = "linked ge::" + plugin + " into " + ident_of(*name) + "_sim";
   }
   SyncResult sync = sync_skills(repo, false);
   o.written.insert(o.written.end(), sync.written.begin(), sync.written.end());
@@ -190,7 +198,7 @@ Outcome run_add(const fs::path& repo, const std::string& kind, const std::string
     o.exit = 2;
     return o;
   }
-  std::string snake = name_typed;
+  std::string snake = name_typed.empty() && kind == "water" ? "water" : name_typed;
   std::replace(snake.begin(), snake.end(), '-', '_');
   if (!std::regex_match(snake, std::regex("^[a-z][a-z0-9]*(_[a-z0-9]+)*$"))) {
     o.findings.push_back({Severity::error,
@@ -249,6 +257,14 @@ Outcome run_add(const fs::path& repo, const std::string& kind, const std::string
     for (const std::string& p : paths) cmd += " \"" + (repo / p).string() + "\"";
     run_quiet(cmd);
   }
+  // Water is one call a body, and the calls are ge::water's: the pieces link it, and its
+  // consumer skill (which says how to choose a look, a swimmer and a flow region) is synced.
+  if (kind == "water" && !dry_run) {
+    if (!links_plugin(repo, "water") && !link_into_sim(repo, *game, "water", o)) return o;
+    SyncResult sync = sync_skills(repo, false);
+    o.written.insert(o.written.end(), sync.written.begin(), sync.written.end());
+    o.findings.insert(o.findings.end(), sync.findings.begin(), sync.findings.end());
+  }
   o.result = json_obj({{"kind", json_str(kind)},
                        {"lab_kind", kind == "lab" ? json_str(lab_kind) : "null"},
                        {"name", json_str(snake)},
@@ -259,9 +275,13 @@ Outcome run_add(const fs::path& repo, const std::string& kind, const std::string
     for (const std::string& p : paths) list += "  would write " + p + "\n";
     o.text = list;
   }
-  o.summary = (dry_run ? "would add " : "added ") + kind + " " + snake;
+  o.summary = (dry_run ? "would add " : "added ") +
+              (kind == "water" ? "a lake as sim/" + snake + ".hpp" : kind + " " + snake);
   if (kind == "system") {
     o.next = "wire it into sim/game.hpp and sim/game.cpp (its header says how), then ge test";
+  } else if (kind == "water") {
+    o.next = "ge lab " + kebab_of(snake) + " to see it, then shape it to your world: read " +
+             std::string(kSkillsDir) + "/water/SKILL.md";
   } else if (kind == "lab") {
     o.next = "make it measure your question, then ge lab " + kebab_of(snake);
   } else {

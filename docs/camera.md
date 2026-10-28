@@ -341,6 +341,55 @@ machine, walked by the same key:
 The `camera-machines` lab takes each machine's outing with the bot and pictures every rung at its
 moments and every hand-over as a strip.
 
+## Directors
+
+A director decides which lens the picture is seen through and when it cuts. Two kinds are built
+(`engine/camera/plant.hpp`, Fall Line's in `games/fall_line/camera/film.hpp`):
+
+- **Planting by a known path** (`plant_beside`). A replay, and a course, know where the subject
+  will go, so a lens can be put where it will SEE the moment before it happens. Candidates stand
+  round a key point of the path (the lip, the fall) at the spec's distance across the travel and
+  along it, on three rings and five turns round it, on the side the spec asks for; each is
+  scored by the share of the path it has a clear line to (`sight_share`: the line marched against
+  the ground, the trunks and the world's `clear`), and the first best wins. Nothing is drawn from a
+  random stream: the same path and world always plant the same lens.
+- **The replay's film camera is a pure function** of the plan and the step (`planted_at`,
+  `film_pose`). A live planted lens pans on a follower; a replay has the whole path, so its aim is
+  the path averaged over a window round the step (the same smoothness, no state) and its zoom
+  holds the subject's height in frame at that range. Any frame can be drawn on its own, which a
+  video export needs (`docs/replays.md`), and every shot's first frame is a cut.
+- **The broadcast's cut rules** (`direct_broadcast`) over a set of trackside lenses. The live lens
+  is kept while it sees the subject. Once held `min_hold_s` it hands over to the best lens the
+  subject runs TOWARD (nearest first) when the live one recedes past `behind_m` or out of range,
+  and at once, held or not, when it has lost sight for `lost_s`. Among lenses near in range it
+  keeps to the side of the subject's line the live lens stands on (the 180° rule: a cut across the
+  line flips the direction of travel on screen). The line is the caller's (Fall Line passes the
+  piste's direction where he is) or the travel eased over `line_halflife_s`: the way he is going,
+  not the swing of one turn. A lens looking nearly along the line (him running at it or away) is
+  NEUTRAL, on neither side, and a cut to or from one crosses nothing; `crossed` counts the rest.
+
+### Fall Line's lenses
+
+The replay director's shot rules (`games/fall_line/sim/moments.cpp`) name a lens for each kind of
+moment, and the film camera says what each name is:
+
+| Lens | Moment | Where it stands |
+| --- | --- | --- |
+| `side` | a flight | 16 m across the lip, 6 m ahead, 1.4 m up, keyed 0.4 s after the take-off: the flight crosses the frame |
+| `front` | a shoulder pass | 30 m down the line, 6 m off it, 1.6 m up: he runs at the lens |
+| `aerial` | the finish | 24 m up, 22 m across and a little back: the finish from high and wide |
+| `impact` | a wipeout | 8 m across, 7 m past the fall, 1 m up, waiting for it |
+| `chase` | a missed gate (and any name it does not know) | 6.5 m behind the smoothed path, 2.2 m up, at least 0.6 m over the snow; the one lens that moves |
+
+The trackside lenses (`trackside_lenses`) stand one every 110 m of the piste, 8 m off its edge on
+its right, 6 m up, each planted where it sees its stretch; one that cannot see 60 % of it, or that
+a bend turned onto the piste or across it, is left out, so every lens stands on one side of the
+line.
+
+The `camera-director` lab races seed 38, cuts it with the director, and plays the cut through the
+film camera (a strip a shot, the first shot through every lens) and the race through the
+broadcast (the first cuts, before and after), with a timeline of both.
+
 ## Settings and cvars
 
 Every number a player may change is a cvar (`engine/console`, `docs/console.md`), bound to the
@@ -389,6 +438,7 @@ horizon that rolls; `camera-shake` holds the shakes still at comfort 0.
 | `camera-shake` | Does a shake have the shape and the size it should, and does comfort take it away? | trauma envelopes, the per-axis motion and its frequency content, at comfort 1, 0.5 and 0 |
 | `camera-world` (Fall Line, GPU) | What does each rung of Fall Line's ladder SHOW at the named moments of a run, and does any lens stand inside a trunk or the snow? | each rung's picture over seed 38 at the start, the hardest carve, the biggest jump, its landing, the closest pass to the trees and a straight run through the densest wood; the camera key's hand-overs as strips; every lens's least height over the snow and least gap to bark over the whole run; in the woods the trees each lens sees through, and on every sheet the share of him each outside lens sees (`--see-through=0`: the trees drawn whole, the before) |
 | `camera-machines` (Fall Line, GPU) | What does each rung of the snowmobile's, the helicopter's and the paramotor's ladders show at the moments of an outing, is the picture handed over on and off without a jump, and does any lens stand inside a trunk or the snow? | each machine's four rungs at four moments of the bot's outing on seed 38 (the board, the climb, the air and the hop off; the lift-off, the cruise, the bank and the drop; the launch, the turn, the height and the landing); every hand-over on and off as a strip on the worn rung and the chase; every lens's least height over the snow, least gap to bark and largest step through a hand-over past his own |
+| `camera-director` (Fall Line, GPU) | Does the film camera draw the director's cut with him in every frame, each shot one continuous move, is every lens planted where it sees its moment, and does the broadcast cut between trackside lenses by its rules? | the cut of the bot's race on seed 38 played through the film camera, a strip a shot, and the first shot through every lens; the share of each shot's stretch its lens sees, him in frame and in sight, the most the lens turns in a frame, its least height over the snow; the broadcast's lenses, cuts, cuts across his line, least hold and share in sight, its first cuts before and after; a timeline of the film's shots and the broadcast's live lens |
 | `se-view` (Shooter's Edge) | Does the first-person view bob, roll and kick as the classic look does? | the eye and the angles through a scripted run, against the formulas at the classic configs' values |
 
 ## Research
