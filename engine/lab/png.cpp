@@ -36,11 +36,10 @@ void chunk(std::vector<uint8_t>& out, const char* type, const std::vector<uint8_
   put32(out, crc32(&out[start], out.size() - start));
 }
 
+// The PNG Paeth predictor: whichever of left, up and up-left is nearest left + up - up-left.
 int paeth(int a, int b, int c) {
-  const int p = a + b - c;
-  const int pa = std::abs(p - a), pb = std::abs(p - b), pc = std::abs(p - c);
-  if (pa <= pb && pa <= pc) return a;
-  return pb <= pc ? b : c;
+  const int p = a + b - c, pa = std::abs(p - a), pb = std::abs(p - b), pc = std::abs(p - c);
+  return pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
 }
 
 }  // namespace

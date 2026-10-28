@@ -1,6 +1,6 @@
 ---
 name: ui
-description: "Use for engine/ui and any game's menus, HUD and cards in gameengine2: the immediate-mode 2D layer (paints, the draw list, images, fonts over stb_truetype, the CPU raster), backdrops (colour, gradient, drifting picture, the live scene, scrims), menus as a model and a view (pages, items, focus, events, the responsive layout), the `menu` lab, the strings table, the HUD readouts and presses, the shell's cards and settings, and the Dear ImGui developer UI."
+description: "Use for engine/ui and any game's menus, HUD and cards in gameengine2: engine/charset (the bitmap fonts, noise layers and text looks), the immediate-mode 2D layer (paints, the draw list, images, fonts over stb_truetype, the CPU raster), backdrops (colour, gradient, drifting picture, the live scene, scrims), menus as a model and a view (pages, items, focus, events, the responsive layout), the `menu` lab, the strings table, the HUD readouts and presses, the shell's cards and settings, and the Dear ImGui developer UI."
 ---
 
 # UI

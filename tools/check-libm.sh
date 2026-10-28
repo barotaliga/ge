@@ -9,7 +9,8 @@
 # (except a plugin's app/ directory, its presentation half), games/*/sim, and engine/lab and
 # every labs/ directory, whose pictures and digests must match on every CI row, and engine/audio,
 # whose rendered buffers are goldens and lab digests, and engine/net, whose simulated sessions are
-# goldens too, engine/charset, whose atlases and layers are committed, and engine/console, whose cvars set simulation values. Renderer and UI code may use <cmath>: they
+# goldens too, and engine/console, whose cvars set simulation values, and engine/charset, whose atlases and
+# layers are committed. Renderer and UI code may use <cmath>: they
 # feed no digest.
 #
 # ge:summary Fails any <cmath> transcendental in simulation code (make libm-check)
