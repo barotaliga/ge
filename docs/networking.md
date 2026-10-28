@@ -74,6 +74,8 @@ engine/net  node          connections: handshake, keepalive, timeout, peers up t
             capture       pcap files any packet tool opens, read back by `ge net`
             udp_socket    the OS's UDP sockets (POSIX and Winsock)
             tcp_socket    the OS's TCP sockets, carrying the packets as length-prefixed frames
+            local_pipe    a byte stream to another program on the machine (a Unix domain
+                          socket, a Windows named pipe): the Discord app's IPC
             os_socket     the socket shim both share: the only file that includes the OS's headers
             address, wire IPv4, IPv6 and simulated addresses; the byte writer and reader
         │
