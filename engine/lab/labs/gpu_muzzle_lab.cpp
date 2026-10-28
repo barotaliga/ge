@@ -147,9 +147,10 @@ void draw_barrel(gl::Picture& pic, const Gun& g, double t, double fov_y) {
 // The gun fired at its rate from 0 until `until`; the shots it has fired by now.
 void fire_until(Gun& g, double until) {
   g.shots.clear();
-  uint32_t seed = 1;
-  for (double t = 0; t < until + 1e-9; t += g.weapon->refire_s) {
-    g.shots.push_back({g.look, seed++, t});
+  const auto n = static_cast<uint32_t>(until / g.weapon->refire_s + 1e-9) + 1;
+  g.shots.reserve(n);
+  for (uint32_t i = 0; i < n; ++i) {
+    g.shots.push_back({g.look, i + 1, i * g.weapon->refire_s});
   }
 }
 
