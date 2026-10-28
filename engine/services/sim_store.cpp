@@ -70,6 +70,28 @@ std::string_view event_name(EventKind k) {
       return "connection_lost";
     case EventKind::connection_restored:
       return "connection_restored";
+    case EventKind::join_asked:
+      return "join_asked";
+    case EventKind::call_refused:
+      return "call_refused";
+    case EventKind::items_queried:
+      return "items_queried";
+    case EventKind::item_submitted:
+      return "item_submitted";
+    case EventKind::item_subscribed:
+      return "item_subscribed";
+    case EventKind::item_installed:
+      return "item_installed";
+    case EventKind::text_entered:
+      return "text_entered";
+    case EventKind::suspended:
+      return "suspended";
+    case EventKind::resumed:
+      return "resumed";
+    case EventKind::remote_player_joined:
+      return "remote_player_joined";
+    case EventKind::remote_player_left:
+      return "remote_player_left";
   }
   return "?";
 }
@@ -101,9 +123,43 @@ void SimStore::Impl::save_if_asked() {
     journal.push_back("          store save failed: " + save_error);
 }
 
-namespace {
+SimItem* SimStore::Impl::find_item(ItemId id) {
+  for (SimItem& i : items)
+    if (i.id == id) return &i;
+  return nullptr;
+}
+const SimItem* SimStore::Impl::find_item(ItemId id) const {
+  for (const SimItem& i : items)
+    if (i.id == id) return &i;
+  return nullptr;
+}
 
-constexpr size_t kMaxPresenceKeys = 20;
+Result SimStore::Impl::server_result(SimPlayer& p) {
+  if (!p.online || p.asleep) return Result::offline;
+  const Result staged = p.fail_next;
+  p.fail_next = Result::ok;
+  return staged;
+}
+
+int64_t SimStore::Impl::answer_time(const SimPlayer& p) {
+  int64_t t = p.now_us + config.latency_us;
+  if (config.jitter_us > 0)
+    t += static_cast<int64_t>(core::next(rng) * static_cast<double>(config.jitter_us));
+  return t;
+}
+
+void SimStore::Impl::queue(SimPlayer& to, Event e, int64_t due) {
+  to.queue.push_back({due, queued++, std::move(e)});
+}
+
+Result SimStore::Impl::log(const SimPlayer& p, std::string_view call, std::string_view what,
+                           Result r) {
+  char t[32];
+  std::snprintf(t, sizeof t, "%9.3f s ", static_cast<double>(p.now_us) / 1e6);
+  journal.push_back(std::string(t) + p.name + " " + std::string(call) + " " + std::string(what) +
+                    " -> " + std::string(result_name(r)));
+  return r;
+}
 
 bool cloud_name_ok(std::string_view name) {
   if (name.empty() || name.size() > 255 || name.front() == '/' || name.back() == '/') return false;
@@ -116,6 +172,10 @@ bool cloud_name_ok(std::string_view name) {
   }
   return true;
 }
+
+namespace {
+
+constexpr size_t kMaxPresenceKeys = 20;
 
 std::string num(double v) {
   char buf[32];
@@ -147,6 +207,7 @@ class SimBackend final : public Backend {
   void poll(int64_t now_us, std::vector<Event>& out) override {
     SimPlayer& p = me();
     p.now_us = std::max(p.now_us, now_us);
+    workshop_land(p);
     std::stable_sort(p.queue.begin(), p.queue.end(), [](const SimPending& a, const SimPending& b) {
       return a.due_us != b.due_us ? a.due_us < b.due_us : a.seq < b.seq;
     });
@@ -504,26 +565,42 @@ class SimBackend final : public Backend {
     log("hook_screenshots", hook ? "on" : "off", Result::ok);
   }
 
+  RequestId query_items(const ItemQuery& query) override { return workshop_query(s_, me(), query); }
+  RequestId submit_item(ItemId item, const ItemDraft& draft,
+                        std::span<const ItemFile> files) override {
+    return workshop_submit(s_, me(), item, draft, files);
+  }
+  RequestId subscribe_item(ItemId item, bool subscribe) override {
+    return workshop_subscribe(s_, me(), item, subscribe);
+  }
+  void subscribed_items(std::vector<ItemInfo>& out) const override {
+    workshop_subscribed(s_, me(), out);
+  }
+  Result item_files(ItemId item, std::vector<CloudFile>& out) const override {
+    return workshop_files(me(), item, out);
+  }
+  Result item_read(ItemId item, std::string_view name, std::vector<uint8_t>& out) const override {
+    return workshop_read(me(), item, name, out);
+  }
+
+  Result show_keyboard(KeyboardMode mode, std::string_view prompt, std::string_view initial,
+                       uint32_t max_chars) override {
+    return extras_keyboard(s_, me(), mode, prompt, initial, max_chars);
+  }
+  Result timeline_mark(const TimelineMark& mark) override {
+    return extras_timeline_mark(s_, me(), mark);
+  }
+  Result timeline_mode(TimelineMode mode) override { return extras_timeline_mode(s_, me(), mode); }
+  Result invite_remote_play(UserId user) override { return extras_invite_remote(s_, me(), user); }
+  void remote_players(std::vector<RemotePlayer>& out) const override { out = me().remote; }
+
  private:
   SimPlayer& me() { return *s_.find(user_); }
   const SimPlayer& me() const { return *s_.find(user_); }
 
-  // What a call to the store's servers answers now: offline, a staged failure, or ok.
-  Result server_result(SimPlayer& p) {
-    if (!p.online) return Result::offline;
-    const Result staged = p.fail_next;
-    p.fail_next = Result::ok;
-    return staged;
-  }
-  int64_t answer_time() {
-    int64_t t = me().now_us + s_.config.latency_us;
-    if (s_.config.jitter_us > 0)
-      t += static_cast<int64_t>(core::next(s_.rng) * static_cast<double>(s_.config.jitter_us));
-    return t;
-  }
-  void queue(SimPlayer& to, Event e, int64_t due) {
-    to.queue.push_back({due, s_.queued++, std::move(e)});
-  }
+  Result server_result(SimPlayer& p) { return s_.server_result(p); }
+  int64_t answer_time() { return s_.answer_time(me()); }
+  void queue(SimPlayer& to, Event e, int64_t due) { s_.queue(to, std::move(e), due); }
   void tell_friends(const SimPlayer& p) {
     for (const UserId id : p.friends) {
       SimPlayer* f = s_.find(id);
@@ -535,12 +612,7 @@ class SimBackend final : public Backend {
     }
   }
   Result log(std::string_view call, std::string_view what, Result r) const {
-    const SimPlayer& p = me();
-    char t[32];
-    std::snprintf(t, sizeof t, "%9.3f s ", static_cast<double>(p.now_us) / 1e6);
-    s_.journal.push_back(std::string(t) + p.name + " " + std::string(call) + " " +
-                         std::string(what) + " -> " + std::string(result_name(r)));
-    return r;
+    return s_.log(me(), call, what, r);
   }
 
   SimStore::Impl& s_;
