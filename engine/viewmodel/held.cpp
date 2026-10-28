@@ -94,19 +94,32 @@ void find_muzzle(HeldModel& model, double share) {
   model.muzzle_dir[2] = 1;
   if (model.frames.empty()) return;
   const std::vector<float>& p = model.frames[0].positions;
-  float lo[3], hi[3];
-  held_bounds(model, lo, hi);
-  const double front = hi[2] - (hi[2] - lo[2]) * share;
+  // The rest frame's own vertices, less the model's own flash (it may sit anywhere at rest).
+  std::vector<uint8_t> use(p.size() / 3, 1);
+  for (size_t t = 0; t < model.flame.size() && t * 3 + 2 < model.indices.size(); ++t) {
+    if (model.flame[t] == 0) continue;
+    for (size_t k = 0; k < 3; ++k) use[model.indices[t * 3 + k]] = 0;
+  }
+  float lo = 0, hi = 0;
+  bool first = true;
+  for (size_t v = 0; v < use.size(); ++v) {
+    if (!use[v]) continue;
+    const float z = p[v * 3 + 2];
+    if (first || z < lo) lo = z;
+    if (first || z > hi) hi = z;
+    first = false;
+  }
+  if (first) return;
+  const double front = hi - (double(hi) - lo) * share;
   // The front-most slice; nearest the long axis through the slice's own middle first.
   double mid[2] = {0, 0};
   std::vector<uint32_t> slice;
-  for (size_t v = 0; v * 3 + 2 < p.size(); ++v) {
-    if (p[v * 3 + 2] < front) continue;
+  for (size_t v = 0; v < use.size(); ++v) {
+    if (!use[v] || p[v * 3 + 2] < front) continue;
     slice.push_back(static_cast<uint32_t>(v));
     mid[0] += p[v * 3];
     mid[1] += p[v * 3 + 1];
   }
-  if (slice.empty()) return;
   mid[0] /= static_cast<double>(slice.size());
   mid[1] /= static_cast<double>(slice.size());
   std::vector<std::pair<double, uint32_t>> near;

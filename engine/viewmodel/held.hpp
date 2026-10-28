@@ -87,8 +87,9 @@ struct Mount {
 // (`find_muzzle`) when it has none.
 void fit_mount(HeldModel& model, const Mount& mount);
 
-// The muzzle as the vertices of frame 0 within `share` of the model's length from its front (+z),
-// those nearest the long axis first: at most 16 of them. The direction is +z.
+// The muzzle as the vertices of frame 0 within `share` of its length from its front (+z), those
+// nearest the long axis first: at most 16 of them, the model's own flash (`flame`) left out. The
+// direction is +z.
 void find_muzzle(HeldModel& model, double share = 0.04);
 
 // The barrel's tip on frames `a` and `b` blended by `t`, held frame, m.
