@@ -1,6 +1,6 @@
 // The pipeline's stages (pipeline.hpp).
 //
-// ge:summary Runs the pack, textures, lightmaps and sounds stages, skipping what is current
+// ge:summary Runs the pack, textures, lightmaps, sounds and models stages, skipping current ones
 // ge:keywords pipeline run stage key skip textures index lightmaps sounds wav pack notice
 // ge:skill classicenhance
 // ge:test tests/classicenhance_pipeline_test.cpp
@@ -59,6 +59,11 @@ std::string stage_key(Stage s, const RunOptions& o) {
             " denoise " + num(d.denoise) + " floor " + num(d.floor_db) + " extend " +
             num(d.extend) + " to " + num(d.extend_to_hz) + " rolloff " + num(d.rolloff_db) +
             " knee " + num(d.knee);
+  } else if (s == Stage::models) {
+    const EnhanceOptions& e = o.textures;
+    text += " v" + std::to_string(kModelStageVersion) + " scale " +
+            std::to_string(o.models.skin_scale) + " round " + std::to_string(o.models.round) +
+            " sharpen " + num(e.sharpen) + " grain " + num(e.grain) + " relief " + num(e.relief);
   } else {
     text += " v1";
   }
@@ -200,6 +205,26 @@ bool run_sounds(const Source& src, const fs::path& dir, const RunOptions& o, Sta
   return true;
 }
 
+bool run_models(const Source& src, const fs::path& dir, const RunOptions& o, StageResult& r,
+                std::string* error) {
+  vfs::Pak pak;
+  if (!vfs::read_pak(src.pack, &pak, error)) return false;
+  const vfs::PakEntry* pal = vfs::pak_find(pak, "gfx/palette.lmp");
+  if (pal == nullptr || pal->size < 768) {
+    *error = "the pack has no gfx/palette.lmp of 768 bytes; it is not the classic pack";
+    return false;
+  }
+  Palette palette;
+  std::copy_n(vfs::pak_file(src.pack, *pal).data(), 768, palette.rgb.data());
+  ModelStats stats;
+  if (!enhance_models(src.pack, palette, dir, o.models, o.textures, &stats, error)) return false;
+  r.files = stats.files;
+  r.note = std::to_string(stats.models) + " models as glTF, skins at " +
+           std::to_string(o.models.skin_scale) + "x, " + std::to_string(stats.sprites) +
+           " sprites; " + std::to_string(stats.replaced) + " drawn by the engine's own effects";
+  return true;
+}
+
 }  // namespace
 
 const char* stage_name(Stage s) {
@@ -212,6 +237,8 @@ const char* stage_name(Stage s) {
       return "lightmaps";
     case Stage::sounds:
       return "sounds";
+    case Stage::models:
+      return "models";
   }
   return "?";
 }
@@ -295,6 +322,9 @@ bool run_pipeline(const Source& source, const fs::path& root_in, const RunOption
         break;
       case Stage::sounds:
         ok = run_sounds(source, report->dir, opts, r, error);
+        break;
+      case Stage::models:
+        ok = run_models(source, report->dir, opts, r, error);
         break;
     }
     r.seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();

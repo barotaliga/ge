@@ -1,23 +1,27 @@
 // The pipeline (plugins/classicenhance/pipeline.hpp, cache.hpp, lightmaps.hpp) on a fixture pack
-// made here: two fixture maps of the brush plugin's writer, a palette and a looping 8-bit sound.
+// made here: two fixture maps of the brush plugin's writer, a palette, a looping 8-bit sound and
+// the morph plugin's fixture model and sprite.
 // Every stage writes what its header says into a temporary cache; a rerun skips every stage; a
 // changed option reruns only the textures; --force reruns all; `only` runs the one asked; and a
 // source that was never verified is refused before anything is written.
 //
 // ge:summary Tests the pipeline's stages, cache layout, reruns and refusals on a fixture pack
 // ge:keywords test classicenhance pipeline cache stages rerun skip force lightmaps textures sounds
+// ge:keywords models sprites replaced glb
 // ge:skill classicenhance testing
 #include <filesystem>
 #include <fstream>
 #include <string>
 #include <vector>
 
+#include "assets/gltf.hpp"
 #include "assets/sha256.hpp"
 #include "brush/write.hpp"
 #include "check.hpp"
 #include "classicenhance/cache.hpp"
 #include "classicenhance/pipeline.hpp"
 #include "classicenhance/sound.hpp"
+#include "morph/write.hpp"
 #include "vfs/pak.hpp"
 
 namespace ce = ge::classicenhance;
@@ -38,11 +42,14 @@ std::vector<uint8_t> fixture_pack() {
   tone.loop_start = 1000;
   for (int i = 0; i < 4000; i++) tone.samples.push_back(float((i % 50) - 25) / 50.0f);
   std::vector<uint8_t> out;
-  CHECK_MSG(ge::vfs::write_pak({{"gfx/palette.lmp", pal},
-                                {"maps/b_hall.bsp", map},
-                                {"maps/a_copy.bsp", map},
-                                {"sound/ambience/hum1.wav", ce::write_wav(tone)}},
-                               &out, &error),
+  CHECK_MSG(ge::vfs::write_pak(
+                {{"gfx/palette.lmp", pal},
+                 {"maps/b_hall.bsp", map},
+                 {"maps/a_copy.bsp", map},
+                 {"sound/ambience/hum1.wav", ce::write_wav(tone)},
+                 {"progs/thing.mdl", ge::morph::write_model(ge::morph::sample_model())},
+                 {"progs/s_light.spr", ge::morph::write_sprite(ge::morph::sample_sprite())}},
+                &out, &error),
             error);
   return out;
 }
@@ -72,7 +79,7 @@ TEST(pipeline_writes_every_stage_and_skips_what_is_current) {
   CHECK_MSG(ce::run_pipeline(src, root, opts, &report, &error), error);
   const fs::path dir = ce::pack_dir(root, sha);
   CHECK(report.dir == dir);
-  CHECK(report.stages.size() == 4);
+  CHECK(report.stages.size() == 5);
   for (const ce::StageResult& r : report.stages) CHECK(r.ran && r.files > 0);
   CHECK(fs::file_size(dir / "pack" / "pak0.pak") == src.pack.size());
   CHECK(read_text(dir / "NOTICE.txt").find("do not share") != std::string::npos);
@@ -89,6 +96,16 @@ TEST(pipeline_writes_every_stage_and_skips_what_is_current) {
   }
   CHECK(hum.rate == 48000 && hum.loop_start == 4354);
   CHECK(read_text(dir / "sounds" / "index.txt").find("ambience/hum1.wav ") != std::string::npos);
+  // The model as a glTF any loader reads, the sprite's frames, and what the engine draws instead.
+  const ge::assets::LoadResult thing =
+      ge::assets::load_gltf_file((dir / "models" / "thing.glb").string());
+  CHECK_MSG(thing.ok, thing.error);
+  CHECK(fs::exists(dir / "sprites" / "s_light" / "00.png") &&
+        fs::exists(dir / "sprites" / "s_light" / "02.png"));
+  const std::string models = read_text(dir / "models" / "index.txt");
+  CHECK(models.find("model thing progs/thing.mdl ") != std::string::npos);
+  CHECK(models.find("sprite s_light progs/s_light.spr ") != std::string::npos);
+  CHECK(read_text(dir / "replaced.txt").find("progs/s_light.spr flare yes") != std::string::npos);
 
   // Every drawn texture of the fixture once, its maps beside it, named in the index.
   std::vector<ce::PackTexture> textures;
@@ -109,13 +126,13 @@ TEST(pipeline_writes_every_stage_and_skips_what_is_current) {
   opts.textures.scale = 3;
   CHECK(ce::run_pipeline(src, root, opts, &report, &error));
   CHECK(!report.stages[0].ran && report.stages[1].ran && !report.stages[2].ran &&
-        !report.stages[3].ran);
+        !report.stages[3].ran && !report.stages[4].ran);
   opts.force = true;
   opts.only = {ce::Stage::lightmaps};
   CHECK(ce::run_pipeline(src, root, opts, &report, &error));
   CHECK(!report.stages[0].ran && !report.stages[1].ran && report.stages[2].ran &&
-        !report.stages[3].ran);
-  CHECK(ce::read_records(dir).size() == 4);
+        !report.stages[3].ran && !report.stages[4].ran);
+  CHECK(ce::read_records(dir).size() == 5);
   fs::remove_all(root);
 }
 
