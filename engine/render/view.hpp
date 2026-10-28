@@ -116,10 +116,17 @@ struct CloudLayer {
   double drop_spread = 0.35;
   double halo = 0;
   double deck = 0;
+  // Its THICKNESS across it: the share of a full cell's extinction (`density`) its thinnest
+  // patches keep (1 even all through .. near 0 thin enough to show the sun's disc), the span of
+  // a patch in cells, and where this sky's layer stands between thin and thick (-1 all thin ..
+  // 1 all thick). The cloud's optical depth, so its shadow too, is the column's times it.
+  double thin = 1;
+  double thick_cells = 3;
+  double thick_bias = 0;
 };
 inline constexpr int kCloudLayers = 4;
 // The frame block's rows a layer (render/clouds.hpp's `cloud_rows`).
-inline constexpr int kCloudRows = 5;
+inline constexpr int kCloudRows = 6;
 // Where the reach's mist begins, as a share of the reach (FrameView::reach_m).
 inline constexpr double kMistBegins = 0.5;
 struct Clouds {

@@ -52,6 +52,9 @@ const kGlowSeen = 0.35;
 // The most the sun's glow adds, against the picture's white, and the glow (against the white)
 // whose colour is a share 1 - 1/e of the way to white.
 const kSunGlowTop = 8.0;
+// The core of a particle's glow as a Gaussian's width (rad um): a round edge's lobe's half width
+// at half its peak, 0.257 wavelengths over the radius, at 0.55 um.
+const kGlowCore = 0.141;
 const kSunGlowWhite = 1.5;
 
 struct VertexOut {
@@ -124,7 +127,7 @@ fn cloud_density(l: CloudRows, p: vec3f, detail: bool) -> f32 {
     // Ice is strands all through, not only at its edge: the combed noise cut sharp.
     dens *= mix(1.0, smoothstep(0.42, 0.58, 0.7 * d1.r + 0.3 * d2.r), l.form.z);
   }
-  return dens * l.look.z;
+  return dens * l.look.z * cloud_thickness(l, uvw, c);
 }
 
 // Henyey-Greenstein's phase function, per steradian.
@@ -181,7 +184,7 @@ fn shadow_from(p: vec3f, skip: i32) -> f32 {
     let l = cloud_layer(i);
     let mid = 0.5 * (l.shape.x + l.shape.y);
     if (i != skip && mid > p.y) {
-      tau += cloud_column(l, p.xz + frame.sun.xz * ((mid - p.y) / frame.sun.y)) * l.look.w;
+      tau += cloud_cast(l, p.xz + frame.sun.xz * ((mid - p.y) / frame.sun.y)) * l.look.w;
     }
   }
   return exp(-tau);
@@ -250,7 +253,7 @@ fn march(i: i32, d: vec3f, t0: f32, t1: f32, j: f32) -> LayerLook {
   out.through = 1.0;
   var weight = 0.0;
   var wdist = 0.0;
-  // The light the glow is lit by along the ray, a share of the key's.
+  // How much of the key's light the ray's steps scatter, for the glow.
   var glow_lit = 0.0;
   for (var k = 0; k < steps; k++) {
     let a = (f32(k) + j) / f32(steps);
@@ -294,16 +297,34 @@ fn march(i: i32, d: vec3f, t0: f32, t1: f32, j: f32) -> LayerLook {
     let step_t = exp(-sigma * dt);
     let gain = out.through * (1.0 - step_t);
     out.light += (direct + ambient) * gain;
-    glow_lit += exp(-tau) * powder * gain;
+    glow_lit += (1.0 - step_t) * powder;
     weight += gain;
     wdist += gain * t;
     out.through *= step_t;
     if (out.through < 0.01) {
+      // The rest of the path taken as thick as the ray's so far: a hundredth of the sun would
+      // still shine through as a disc far brighter than the cloud.
+      let tau_ray = -log(out.through);
+      out.through *= exp(-tau_ray * max(t1 - t - dt, 0.0) / max(t + dt - t0, 1.0));
       break;
     }
   }
   out.dist = select(0.5 * (t0 + t1), wdist / max(weight, 1e-6), weight > 0.0);
-  out.light += glow_seen(key * glow * glow_lit);
+  // THE GLOW comes nearly straight from the disc, so its light crosses the whole of the cloud on
+  // the ray, wherever on it it was bent: whatever step bent it, the rest of the ray's depth
+  // toward the light and the depth back to the eye add to the ray's whole, so it is lit by the
+  // light the steps scatter times the ray's own transmittance (tau exp(-tau): brightest through a
+  // thin patch about one deep, gone behind a thick core).
+  // Through a thicker cloud the light is bent again and again: the orders past the first (the
+  // diffracted half of each extinction, Poisson in their count) spread the glow ever wider, a
+  // Gaussian of the first's core widened as the root of its order, and take the disc's place: a
+  // bright smudge where the sun stands, its disc lost in it.
+  let tau_ray = -log(max(out.through, 1e-30));
+  let tf = 0.5 * tau_ray;
+  let many = exp(-0.5 * tau_ray) * (1.0 - exp(-tf) * (1.0 + tf));
+  let s = kGlowCore / l.glow.x * sqrt(max(2.0, tf));
+  let spread = many * exp(-0.5 * theta * theta / (s * s)) / (2.0 * PI * s * s);
+  out.light += glow_seen(key * (glow * (glow_lit * out.through) + spread));
   return out;
 }
 
@@ -405,7 +426,9 @@ fn cloud_look(uv: vec2f, px: vec2f, z: f32) -> CloudLook {
     }
   }
   var out: CloudLook;
-  out.cloud = vec4f(light, 1.0 - through);
+  // Over the moon's disc the post pass leaves the picture to the cones (frame.wgsl's
+  // night_vision), for the disc's own light: the cloud's in front of it is the rods' as anywhere.
+  out.cloud = vec4f(mix(light, rods(light), on_moon(d)), 1.0 - through);
   out.dist = select(0.0, wdist / max(weight, 1e-6), weight > 0.0);
   return out;
 }
@@ -495,6 +518,13 @@ fn quarter_uv(q: vec2i) -> vec2f {
   return (vec2f(q) + 0.5) / vec2f(half);
 }
 
+// The half-size targets keep a pixel's TRANSMITTANCE in alpha, not one minus it: a half float
+// holds a small number finely but one near 1 only in steps of 1/2048, and the sun, tens of
+// thousands of times the white, would shine through a thick deck in the last step.
+fn kept(c: vec4f) -> vec4f {
+  return vec4f(c.rgb, 1.0 - c.a);
+}
+
 struct FreshOut {
   @location(0) cloud: vec4f,
   @location(1) dist: vec2f,
@@ -507,7 +537,7 @@ fn fs_fresh(in: VertexOut) -> FreshOut {
   let uv = quarter_uv(q);
   let look = cloud_look(uv, vec2f(q) + 0.5, z);
   var out: FreshOut;
-  out.cloud = look.cloud;
+  out.cloud = kept(look.cloud);
   out.dist = vec2f(scene_dist(uv, z), look.dist);
   return out;
 }
@@ -593,7 +623,7 @@ fn fs_march(in: VertexOut) -> MarchOut {
     }
   }
   let look = cloud_look(in.uv, in.position.xy, z);
-  out.cloud = look.cloud;
+  out.cloud = kept(look.cloud);
   out.dist = vec4f(scene, look.dist, stamp, 0.0);
   return out;
 }
@@ -630,5 +660,5 @@ fn fs_upsample(in: VertexOut) -> @location(0) vec4f {
   if (best > kDepthMiss) {
     return cloud_at(in.uv, in.position.xy, z);
   }
-  return sum / max(weight, 1e-6);
+  return kept(sum / max(weight, 1e-6));
 }

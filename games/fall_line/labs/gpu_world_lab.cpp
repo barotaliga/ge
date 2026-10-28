@@ -3,7 +3,8 @@
 // (the software adapter in the GPU-less container and on CI) and renders each named view
 // (views.hpp) offscreen, reads it back and hands it to `Lab::shot` with its caption. Then the
 // bot skis the map (with --rivals beside him) and each --moments second of the run is shot from
-// the chase camera, the racers drawn as figures. Beside each picture: the tiles the terrain's GPU
+// the chase camera, the racers drawn as figures. --at shoots each named view at the sky's moments,
+// so a sequence shows the cloud on the wind. Beside each picture: the tiles the terrain's GPU
 // cull drew, what the instances' cull did (drawn early, drawn late, hidden), every pass's GPU ms
 // (measured: a software adapter's times say nothing about a real GPU) and the frame's CPU half.
 //
@@ -22,15 +23,20 @@
 // an adapter it notes that and draws placeholders, so the digest is the same on every row;
 // GE_GPU_REQUIRE=1 fails instead. Built only with GE_GPU.
 //
+// --console=1 draws the last scene once more with the drop-down console down over it, as the
+// window draws it (frame.hpp's `ui` row: ui/console.hpp's list through the 2D pass after post): a
+// few lines in its scrollback and a command half typed, its suggestions under the panel.
+//
 // --cfg runs console commands over Fall Line's cvars first (cfg/cvars.hpp), so a sky a server
-// picks (sv_weather, sv_snowfall, sv_fog, sv_wind, sv_winddir, sv_cover, sv_hour, sv_skyrate) and
-// r_clouds are photographed as the game draws them (sim/sky.hpp).
+// picks (sv_weather, sv_snowfall, sv_fog, sv_wind, sv_winddir, sv_cover, sv_thick,
+// sv_cloudheight, sv_cloudspeed, sv_hour, sv_skyrate) and r_clouds are photographed as the game
+// draws them (sim/sky.hpp).
 //
 // ge:summary Lab: Fall Line's frame from named views of a seed, captured headless
 // ge:keywords lab world picture screenshot views frame terrain sky post gpu-capture headless
 // ge:keywords tiles-drawn gpu-ms cpu-ms pass-table fall-line taa render-scale shimmer overdraw
 // ge:keywords instances forest figures run-moments chase-camera occlusion-culling cull-check
-// ge:keywords sun-shadow cascade-redraws shadow-cache
+// ge:keywords sun-shadow cascade-redraws shadow-cache drop-down-console overlay ui-pass
 // ge:skill render labs
 #include <algorithm>
 #include <array>
@@ -45,6 +51,7 @@
 #include <vector>
 
 #include "console/console.hpp"
+#include "console/view.hpp"
 #include "fall_line/app/frame.hpp"
 #include "fall_line/app/sky_type.hpp"
 #include "fall_line/app/views.hpp"
@@ -59,6 +66,8 @@
 #include "mountain/mapgen/generate.hpp"
 #include "render/shadows.hpp"
 #include "render/taa.hpp"
+#include "ui/console.hpp"
+#include "ui/draw.hpp"
 
 namespace {
 
@@ -95,10 +104,11 @@ std::vector<std::string> views_of(const ge::lab::Lab& lab) {
   return out;
 }
 
-// The --moments list: seconds of the run, each a shot from the chase camera.
-std::vector<double> moments_of(const ge::lab::Lab& lab) {
+// A comma-separated list of seconds: --moments (the run's, each a shot from the chase camera) or
+// --at (the sky's, each named view shot at each).
+std::vector<double> seconds_of(const ge::lab::Lab& lab, const char* arg) {
   std::vector<double> out;
-  const std::string& list = lab.arg("moments");
+  const std::string& list = lab.arg(arg);
   size_t i = 0;
   while (i < list.size()) {
     const size_t j = list.find(',', i);
@@ -189,6 +199,9 @@ void run(ge::lab::Lab& lab) {
   options.reach_m = lab.arg_num("reach");
   options.clouds = cvars.clouds;
   options.cover = cvars.cover;
+  options.thick = cvars.thick;
+  options.cloud_height = cvars.cloud_height;
+  options.cloud_speed = cvars.cloud_speed;
   if (const std::string problem = fall_line::app::cloud_stack_of(cvars, options);
       !problem.empty()) {
     lab.fail("--cfg: " + problem, "Skill: console.");
@@ -243,18 +256,29 @@ void run(ge::lab::Lab& lab) {
     std::vector<std::vector<ge::skier::SkierState>> laid;
   };
   std::vector<Scene> scenes;
+  // Each named view at each of the sky's --at seconds (more than one: a sequence, each shot
+  // named `<view>+<s>`), the cloud carried on by the wind between them.
+  std::vector<double> ats = seconds_of(lab, "at");
+  if (ats.empty()) ats.push_back(0);
   for (const std::string& name : views) {
-    Scene sc{name, std::string(fall_line::app::view_caption(name)), {}, {}, {}};
-    fall_line::app::day_view(level, hour, sc.view);
-    sc.view.style = style;
-    if (!fall_line::app::make_view(level, name, sc.view)) {
-      lab.fail("no view named '" + name + "'",
-               "next: pick from games/fall_line/app/views.hpp (or --views=all).");
-      continue;
+    for (double at : ats) {
+      Scene sc{name, std::string(fall_line::app::view_caption(name)), {}, {}, {}};
+      if (ats.size() > 1) {
+        sc.name += "+" + fixed(at, 1);
+        sc.caption += " At " + fixed(at, 1) + " s.";
+      }
+      fall_line::app::day_view(level, hour, sc.view);
+      sc.view.style = style;
+      sc.view.time_s = at;
+      if (!fall_line::app::make_view(level, name, sc.view)) {
+        lab.fail("no view named '" + name + "'",
+                 "next: pick from games/fall_line/app/views.hpp (or --views=all).");
+        break;
+      }
+      scenes.push_back(std::move(sc));
     }
-    scenes.push_back(std::move(sc));
   }
-  const std::vector<double> moments = moments_of(lab);
+  const std::vector<double> moments = seconds_of(lab, "moments");
   const int rivals = static_cast<int>(lab.arg_num("rivals"));
   if (!moments.empty()) {
     fall_line::sim::Driver run(shared, std::max(rivals, 0));
@@ -347,6 +371,24 @@ void run(ge::lab::Lab& lab) {
          {"cfg", lab.arg("cfg").empty() ? "none" : lab.arg("cfg")}}};
   };
 
+  // The console's still: the last scene with the drop-down console down over it.
+  const bool with_console = lab.arg_num("console") != 0 && !scenes.empty();
+  auto console_shot = [&] {
+    ge::lab::Shot shot = shot_of(scenes.back());
+    shot.id = "console";
+    shot.title = "SEED " + seed_s + ", CONSOLE";
+    shot.caption =
+        "The last scene again with the drop-down console down over the top half, drawn by the "
+        "2D pass after post as the window draws it: the con_bg gradient over the game, the "
+        "scrollback coloured by kind, the input line with a cvar's name half typed and its hint, "
+        "the suggestions under the panel's edge.";
+    shot.look_for =
+        "the panel covers the top of the frame and the mountain shows under it and through it; "
+        "the text is crisp and inside the panel; the suggestion list hangs under the yellow "
+        "edge; the mountain below the panel is the same picture as the scene";
+    return shot;
+  };
+
   auto device = ge::gpu::create_device({.label = "world", .validation = 1});
   if (!device) {
     if (env_on("GE_GPU_REQUIRE")) {
@@ -358,6 +400,11 @@ void run(ge::lab::Lab& lab) {
       ge::lab::Picture none = ge::lab::create_picture(width, height, {40, 40, 48});
       ge::lab::draw_text(none, 4, 4, "NO GPU ADAPTER", {230, 230, 230});
       lab.shot(shot_of(sc), none, Det::measured);
+    }
+    if (with_console) {
+      ge::lab::Picture none = ge::lab::create_picture(width, height, {40, 40, 48});
+      ge::lab::draw_text(none, 4, 4, "NO GPU ADAPTER", {230, 230, 230});
+      lab.shot(console_shot(), none, Det::measured);
     }
     // The digest hashes in call order: the shots, then these, as the device path does.
     lab.metric("overdraw-faults", 0, "count");
@@ -471,6 +518,33 @@ void run(ge::lab::Lab& lab) {
     }
     lab.shot(shot_of(sc), picture, Det::measured, std::move(distance));
   }
+  if (with_console) {
+    Scene& sc = scenes.back();
+    ge::console::ConsoleView con(console);
+    con.add(ge::console::LineKind::output, "Fall Line: seed " + seed_s + ", the free ride");
+    con.add(ge::console::LineKind::command, "] /sv_hour 15.5");
+    con.add(ge::console::LineKind::event, "a gate missed: 4");
+    con.add(ge::console::LineKind::chat, "skier: the powder under the ridge is untracked");
+    con.toggle();
+    con.frame(10);
+    con.type("/r_bl");
+    ge::ui::DrawList overlay;
+    overlay.begin(width, height);
+    ge::ui::draw_console(overlay, con, {}, nullptr, 0);
+    fall_line::app::cut(*frame);
+    for (int i = 0; i < settle; ++i) {
+      sc.view.frame = static_cast<uint64_t>(i);
+      fall_line::app::draw(*device, *frame, sc.view,
+                           {sc.skiers, 0, true, {}, std::nullopt, &overlay}, target.view);
+    }
+    const ge::gpu::Image img = ge::gpu::read_now(*device, target);
+    if (img.rgba.size() == static_cast<size_t>(width) * static_cast<size_t>(height) * 4) {
+      lab.shot(console_shot(), ge::lab::Picture{width, height, img.rgba}, Det::measured);
+    } else {
+      lab.fail("the readback of the console's still came back the wrong size",
+               "Check engine/gpu/target.cpp's Readback. Skill: gpu.");
+    }
+  }
   lab.note(costs);
   lab.metric("overdraw-faults", overdraw_faults, "count");
   if (overdraw_faults != 0) {
@@ -527,6 +601,10 @@ const ge::lab::LabSpec kSpec{
          "seconds of the bot's run to shoot from the chase camera, comma-"
          "separated (empty: none)"},
         {"rivals", "3", "the bots racing beside him"},
+        {"at", "0",
+         "the sky's moment each named view is shot at, s; comma-separated for a sequence of "
+         "each (the cloud carried on by the wind between them)"},
+        {"console", "1", "the last scene again with the drop-down console down over it (0: not)"},
     },
     "--views=start,vista --moments=4 --width=160 --height=90 --settle=2",
     run,

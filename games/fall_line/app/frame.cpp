@@ -68,6 +68,7 @@ constexpr r::PassRow kPassTable[] = {
     {"taa", "hdr motion depth taa.history sky.light", "taa.history"},
     {"bloom", "taa.history", "bloom"},
     {"post", "taa.history bloom sky.light", "final"},
+    {"ui", "final", "final"},
 };
 // What is made at load rather than by a pass (the instances' meshes and streams: the figures'
 // placements and palettes are written before the frame is encoded, their vertices by the skinning
@@ -163,6 +164,9 @@ FrameOptions frame_options(const cfg::Settings& s) {
   o.weather = s.weather;
   o.clouds = s.clouds;
   o.cover = s.cover;
+  o.thick = s.thick;
+  o.cloud_height = s.cloud_height;
+  o.cloud_speed = s.cloud_speed;
   cloud_stack_of(s, o);
   return o;
 }
@@ -240,6 +244,7 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
   r::create_post(device, f->pipelines, f->post, f->frame_layout, output, post);
   r::set_grade(device, f->post, bake_grade());
   r::create_skin_pipelines(device, f->pipelines, f->skinning);
+  r::create_ui_pass(device, f->pipelines, f->ui, output);
   if (!f->pipelines.finish(device)) return nullptr;
   ge::gpu::end_load(device);
   f->frame_group = r::frame_group(device, f->frame_layout, f->uniforms, f->sky);
@@ -370,14 +375,21 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   // The map's sky at the view's moment: the cloud, the deck and the fog it is seen under.
   r::FrameView view = seen;
   if (f.options.weather) {
+    // How far dusk has fallen under the view's sun (the evening's jet and its scud), and the
+    // height and the speed picked by hand.
+    // (With the moon the key light the view's sun_* are the moon's, and Night's the sun's.)
+    const double sun = view.night.moon_key ? view.night.sun_elevation : view.sun_elevation;
+    const ge::mountain::app::Aloft aloft{.dusk = ge::mountain::app::dusk_of(sun),
+                                         .speed = f.options.cloud_speed,
+                                         .base = f.options.cloud_height};
     ge::mountain::app::sky_at(*f.level, view.time_s, view.weather, view.clouds,
-                              f.options.clouds > 0, view.eye[1]);
+                              f.options.clouds > 0, view.eye[1], aloft);
     // Kinds of cloud picked by hand (sv_clouds) in place of the map's, dealt off its seed.
     if (f.options.cloud_count >= 0 && f.options.clouds > 0) {
       const ge::mountain::mapgen::Level& l = *f.level;
       view.clouds = ge::mountain::app::cloud_layers_of(f.options.cloud_kinds, f.options.cloud_count,
                                                        l.weather, l.seed, l.mountain.base.y,
-                                                       l.sun.latitude, view.time_s);
+                                                       l.sun.latitude, view.time_s, aloft);
       view.weather = ge::mountain::app::weather_look(
           l.weather, ge::mountain::air::fall_at(l, view.time_s, view.eye[1]),
           view.clouds.count > 0);
@@ -388,6 +400,11 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
       const double k = f.options.cover / view.clouds.layers[0].cover;
       for (int i = 0; i < view.clouds.count; ++i)
         view.clouds.layers[i].cover = std::min(1.0, view.clouds.layers[i].cover * k);
+    }
+    // A thickness picked by hand: every layer's, between its kind's thin patches and its cores.
+    if (f.options.thick >= 0) {
+      for (int i = 0; i < view.clouds.count; ++i)
+        view.clouds.layers[i].thick_bias = 2 * std::min(f.options.thick, 1.0) - 1;
     }
     view.clouds.steps = f.options.clouds;
     view.clouds.quarter = f.options.cloud_quarter;
@@ -582,6 +599,12 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   }
   r::encode_post(f.post, f.pipelines, f.recorder, encoder, f.frame_group, f.post_groups[input],
                  output);
+  if (scene.overlay != nullptr && scene.overlay->size() > 0) {
+    r::prepare_ui(device, f.ui, *scene.overlay, f.output_width, f.output_height);
+    r::encode_ui(f.ui, f.pipelines, f.recorder, encoder, output);
+  } else {
+    f.recorder.compute(encoder, "ui").End();  // the row runs empty, as bloom's does
+  }
   f.recorder.end_frame(encoder);
   wgpu::CommandBuffer commands = encoder.Finish();
   f.recorder.stats.cpu_ms =

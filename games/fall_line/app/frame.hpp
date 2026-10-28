@@ -38,10 +38,10 @@
 //   taa                  -> taa.history (at the output's size; with FrameOptions::taa)
 //   bloom                -> bloom (the glow's mip chain, from what post reads)
 //   post                 -> final (the bloom mixed in, the grade's table: look.hpp's)
+//   ui                   -> final (the 2D layer's list over it: the console, render/ui_pass.hpp)
 //
 // With TAA the frame renders at FrameOptions::scale of the output's size, jittered, and the
-// resolve brings it up to the output; without it, at the output's size, unjittered, and post
-// reads the HDR target.
+// resolve brings it up; without it, at the output's size, unjittered, post reading the HDR target.
 //
 // The frame reads the game only through a FrameView (views.hpp), the map it was made for, and a
 // FrameScene: the racers' skiers this frame, drawn as skinned skiers (scene.hpp: each racer's
@@ -89,12 +89,14 @@
 #include "render/sky.hpp"
 #include "render/taa.hpp"
 #include "render/terrain.hpp"
+#include "render/ui_pass.hpp"
 #include "render/underwater.hpp"
 #include "render/water.hpp"
 #include "skier/app/rig_pose.hpp"
 #include "skier/app/spray.hpp"
 #include "skier/app/tracks.hpp"
 #include "skier/skier.hpp"
+#include "ui/draw.hpp"
 #include "wind/precip.hpp"
 
 namespace fall_line::app {
@@ -122,6 +124,10 @@ struct FrameOptions {
       true;  // the map's sky and cloud in the picture (mountain/app/cloud_field.hpp): off, clear
   double clouds = 1.0;  // the share of the cloud march's steps (0.25..1); 0: no layer drawn
   double cover = -1;  // a broken sky's cover, its lowest layer's (the others kept in step); -1 own
+  double thick =
+      -1;  // how thick every layer is, 0 thin .. 1 thick (CloudLayer::thick_bias); -1 own
+  double cloud_height = -1;  // the lowest layer's base over the floor, m (Aloft::base); -1 own
+  double cloud_speed = -1;   // the layers' share of the true wind aloft (Aloft::speed); -1 own
   // The kinds of cloud drawn in place of the map's (sv_clouds, app/sky_type.hpp), lowest first;
   // a count of -1 keeps the map's own.
   const ge::render::CloudKind* cloud_kinds[ge::render::kCloudLayers] = {};
@@ -151,6 +157,9 @@ struct FrameScene {
   // trees between the eye and it are seen through (render/instances.hpp § Seeing through). None:
   // every tree whole (a view of the mountain).
   std::optional<std::array<double, 3>> subject = std::nullopt;
+  // The 2D layer's list drawn over the finished frame (the console, ui/console.hpp), begun at
+  // the output's size; null or empty: nothing.
+  const ge::ui::DrawList* overlay = nullptr;
 };
 
 struct GameFrame {
@@ -190,6 +199,7 @@ struct GameFrame {
   ge::render::Taa taa;
   ge::render::Bloom bloom;
   ge::render::Post post;
+  ge::render::UiPass ui;
   ge::render::InstancePipelines instancing;
   ge::render::InstanceFamily forest, figures, crowd;
   ge::render::InstanceFamily* families[3] = {&forest, &figures, &crowd};
