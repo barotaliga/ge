@@ -226,7 +226,7 @@ void blackbody_sheet(gl::Lab& lab, uint32_t w, uint32_t h) {
   lab.shot({"blackbody",
             "THE COLOURS THE GAS IS PAINTED WITH",
             "Planck's law integrated against the CIE 1931 observer, 700 to 3200 K "
-            "(render/flame.hpp's blackbody table). Top: each temperature's colour at full "
+            "(render/blackbody.hpp's table). Top: each temperature's colour at full "
             "brightness. Bottom: as bright as it burns beside a torch's hottest gas (1900 K), "
             "the visible radiance falling five orders of magnitude to 1000 K, softened to the "
             "eye's 0.45 power as the shader does. The orange bar: the span a torch's gas covers.",
