@@ -5,12 +5,15 @@
 // pictures decoded from it (I420 back to RGB) over the sound's whole wave, so what a viewer of the
 // file sees and hears is what the picture shows. The sound must run exactly as long as the
 // pictures and must not be silence; when ffmpeg is installed it decodes the same file and must
-// count every picture.
+// count every picture. Then the same take as AV1 and Opus (`--codec=av1`, a .webm): its size and
+// export cost against the raw file's, every picture decoded and measured against the raw one's
+// (luma PSNR), and its own strip; measured, so the digest is the same without the encoders.
 //
 //   make lab LAB=capture-run ARGS="--seed=38 --from=0 --seconds=20 --size=320x180"
 //
 // ge:summary Lab: Fall Line's race exported with its sound, decoded back as a strip and a wave
 // ge:keywords lab capture export mkv sound wave strip decode fall-line race ffmpeg loudness
+// ge:keywords av1 opus webm psnr compressed size
 // ge:skill replay labs
 // ge:test tests/fall_line_sound_test.cpp
 #include <algorithm>
@@ -22,11 +25,13 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <span>
 #include <string>
 #include <vector>
 
 #include "audio/voice.hpp"
 #include "capture/av_export.hpp"
+#include "capture/codecs.hpp"
 #include "capture/mkv_read.hpp"
 #include "capture/yuv.hpp"
 #include "core/libm/libm.hpp"
@@ -63,32 +68,42 @@ double db_of(double amplitude) {
   return amplitude > 0 ? 20 * ge::core::libm::log(amplitude) / ge::core::libm::log(10.0) : -200;
 }
 
-// `count` pictures spread over the file, decoded, in a row over the sound's wave (both channels'
-// louder side, min and max a column), each picture's time marked on the wave.
-gl::Picture strip(const std::vector<uint8_t>& bytes, const gc::ReadFile& f,
-                  const std::vector<float>& wave, int width, int height, int count) {
-  std::vector<const gc::ReadBlock*> pictures;
+struct Shown {
+  int64_t ms = 0;
+  gl::Picture picture;
+};
+
+// The raw file's pictures, decoded from its I420.
+std::vector<Shown> raw_pictures(const std::vector<uint8_t>& bytes, const gc::ReadFile& f, int width,
+                                int height) {
+  std::vector<Shown> out;
   for (const gc::ReadBlock& b : f.blocks) {
-    if (b.track == 1) pictures.push_back(&b);
+    if (b.track != 1 || b.size < gc::i420_bytes(width, height)) continue;
+    out.push_back({b.ms, gc::from_i420(bytes.data() + b.offset, width, height)});
   }
+  return out;
+}
+
+// `count` of `pictures` spread over the take, in a row over the sound's wave (both channels'
+// louder side, min and max a column), each picture's time marked on the wave.
+gl::Picture strip(const std::vector<Shown>& pictures, const std::vector<float>& wave, int width,
+                  int height, int count) {
   constexpr int kGap = 6, kWave = 120, kPad = 8;
   const int tw = std::max(width, 96), th = tw * height / std::max(width, 1);
   const int w = kPad * 2 + count * tw + (count - 1) * kGap;
   gl::Picture p = gl::create_picture(w, kPad * 3 + th + 14 + kWave + 14, {250, 250, 252, 255});
   const gl::Rgba ink{30, 34, 40, 255}, faint{150, 156, 166, 255}, red{205, 40, 40, 255};
   const double total_ms =
-      pictures.empty() ? 1 : static_cast<double>(pictures.back()->ms - pictures.front()->ms) + 1;
-  const double start_ms = pictures.empty() ? 0 : static_cast<double>(pictures.front()->ms);
+      pictures.empty() ? 1 : static_cast<double>(pictures.back().ms - pictures.front().ms) + 1;
+  const double start_ms = pictures.empty() ? 0 : static_cast<double>(pictures.front().ms);
   const int wave_y = kPad * 2 + th + 14, mid = wave_y + kWave / 2;
   for (int k = 0; k < count && !pictures.empty(); k++) {
     const size_t i = pictures.size() == 1 ? 0
                                           : static_cast<size_t>(k) * (pictures.size() - 1) /
                                                 static_cast<size_t>(std::max(count - 1, 1));
-    const gc::ReadBlock& b = *pictures[i];
-    if (b.size < gc::i420_bytes(width, height)) continue;
-    const gl::Picture frame = gc::from_i420(bytes.data() + b.offset, width, height);
+    const Shown& b = pictures[i];
     const int x = kPad + k * (tw + kGap);
-    gl::blit(p, gl::resized(frame, tw, th), x, kPad);
+    gl::blit(p, gl::resized(b.picture, tw, th), x, kPad);
     gl::draw_text(p, x, kPad + th + 3, num::to_fixed(static_cast<double>(b.ms) / 1000, 1) + " s",
                   ink);
     const double wx = kPad + (static_cast<double>(b.ms) - start_ms) / total_ms * (w - 2 * kPad);
@@ -113,6 +128,125 @@ gl::Picture strip(const std::vector<uint8_t>& bytes, const gc::ReadFile& f,
   gl::draw_text(p, kPad, wave_y + kWave + 3,
                 "the sound, scaled to its peak (" + num::to_fixed(db_of(peak), 1) + " dB)", faint);
   return p;
+}
+
+double luma_psnr(const gl::Picture& a, const gl::Picture& b) {
+  std::vector<uint8_t> ya, yb;
+  gc::to_i420(a, ya);
+  gc::to_i420(b, yb);
+  const size_t n = static_cast<size_t>(a.width) * static_cast<size_t>(a.height);
+  double se = 0;
+  for (size_t i = 0; i < n; i++) {
+    const double d = static_cast<double>(ya[i]) - static_cast<double>(yb[i]);
+    se += d * d;
+  }
+  if (se == 0) return 99;
+  return 10 * ge::core::libm::log(255.0 * 255.0 / (se / static_cast<double>(n))) /
+         ge::core::libm::log(10.0);
+}
+
+// The same take as AV1 and Opus (`record --format=mkv --codec=av1`, a .webm): its size and cost
+// against the raw file's, every picture decoded and measured against the raw file's (luma PSNR),
+// and a strip of the decoded pictures over the decoded sound. All measured: an encoder's bytes
+// vary with the machine, and a build without the encoders has the same digest.
+void compressed(gl::Lab& lab, const gp::InputLog& log, gp::RecordOptions o, int64_t raw_bytes,
+                double raw_ms, const std::vector<Shown>& raw) {
+  const std::string shot_id = "race-av1";
+  const std::string title = "THE SAME TAKE AS AV1 AND OPUS, DECODED BACK";
+  const std::string about =
+      "The take exported again with --codec=av1 (AV1 and Opus in a .webm, the engine's own "
+      "encoders) and decoded back by the engine: the same moments as above, the sound under them "
+      "decoded from Opus.";
+  const std::string look =
+      "The same pictures as the uncompressed strip with no blocks or smear "
+      "you notice at this size, and the same wave.";
+  if (!gc::encoders_built()) {
+    lab.note("this build has no encoders (GE_ENCODERS is OFF): the AV1 take is skipped");
+    gl::Picture blank = gl::create_picture(480, 60, {250, 250, 252, 255});
+    gl::draw_text(blank, 8, 24, "NO ENCODERS IN THIS BUILD", {30, 34, 40, 255});
+    lab.shot({shot_id, title, about, look, {}}, blank, gl::Det::measured);
+    return;
+  }
+  o.encoding.codec = "av1";
+  o.video = fs::path(o.video).replace_extension(".webm").string();
+  std::string error;
+  const auto t0 = Clock::now();
+  const auto rec = gp::record(fall_line::sim::kGame, log, o, error);
+  const double ms = std::chrono::duration<double, std::milli>(Clock::now() - t0).count();
+  if (!rec) {
+    lab.fail("the AV1 export failed: " + error,
+             "Run tests/capture_codecs_test.cpp (skill: replay).");
+    return;
+  }
+  const std::vector<uint8_t> bytes = read_all(o.video);
+  const auto f = gc::read_mkv(bytes, error);
+  gc::Av1Decoder vd;
+  gc::OpusDecoder ad;
+  if (!f || f->tracks.size() != 2 || !vd.open(error) || !ad.open(error)) {
+    lab.fail("the AV1 file did not read back: " + error,
+             "Run tests/capture_codecs_test.cpp (skill: replay).");
+    return;
+  }
+  std::vector<Shown> pictures;
+  std::vector<float> stereo;
+  for (const gc::ReadBlock& b : f->blocks) {
+    const std::span<const uint8_t> data(bytes.data() + b.offset, b.size);
+    if (b.track == 1) {
+      std::vector<uint8_t> yuv;
+      int w = 0, h = 0;
+      bool got = false;
+      if (!vd.decode(data, yuv, w, h, got, error)) break;
+      if (got) pictures.push_back({b.ms, gc::from_i420(yuv.data(), w, h)});
+    } else if (!ad.decode(data, stereo, error)) {
+      break;
+    }
+  }
+  const auto skip = static_cast<size_t>(
+      std::llround(static_cast<double>(f->tracks[1].codec_delay_ns) * gc::kOpusRate / 1e9));
+  std::vector<float> wave;
+  for (size_t i = skip; 2 * i + 1 < stereo.size(); i++) {
+    const float l = stereo[2 * i], r = stereo[2 * i + 1];
+    wave.push_back(std::fabs(l) >= std::fabs(r) ? l : r);
+  }
+  double psnr = 0, worst = 99;
+  const size_t n = std::min(pictures.size(), raw.size());
+  for (size_t i = 0; i < n; i++) {
+    const double d = luma_psnr(raw[i].picture, pictures[i].picture);
+    psnr += d;
+    worst = std::min(worst, d);
+  }
+  psnr /= static_cast<double>(std::max<size_t>(n, 1));
+  const double minutes = static_cast<double>(rec->frames) / o.fps / 60;
+  const double frames = static_cast<double>(std::max<int64_t>(rec->frames, 1));
+  lab.metric("av1.pictures-decoded", static_cast<double>(pictures.size()), "count",
+             gl::Det::measured);
+  lab.metric("av1.mb", static_cast<double>(rec->bytes) / 1e6, "MB", gl::Det::measured);
+  lab.metric("av1.mb-per-minute", static_cast<double>(rec->bytes) / 1e6 / minutes, "MB",
+             gl::Det::measured);
+  lab.metric("av1.smaller-by",
+             static_cast<double>(raw_bytes) / std::max<double>(1, static_cast<double>(rec->bytes)),
+             "x", gl::Det::measured);
+  lab.metric("av1.export-ms-per-frame", ms / frames, "ms", gl::Det::measured);
+  lab.metric("av1.psnr-db", psnr, "dB", gl::Det::measured);
+  lab.metric("av1.worst-psnr-db", worst, "dB", gl::Det::measured);
+  lab.table({"The take uncompressed and as AV1 and Opus: size, MB a minute, export a frame, "
+             "luma PSNR against the uncompressed pictures (mean, worst)",
+             {"file", "MB", "MB/min", "export-ms", "psnr-db", "worst-db"},
+             {{"mkv (I420, float)", num::to_fixed(static_cast<double>(raw_bytes) / 1e6, 2),
+               num::to_fixed(static_cast<double>(raw_bytes) / 1e6 / minutes, 1),
+               num::to_fixed(raw_ms / frames, 1), "-", "-"},
+              {"webm (AV1, Opus)", num::to_fixed(static_cast<double>(rec->bytes) / 1e6, 2),
+               num::to_fixed(static_cast<double>(rec->bytes) / 1e6 / minutes, 1),
+               num::to_fixed(ms / frames, 1), num::to_fixed(psnr, 1), num::to_fixed(worst, 1)}}},
+            gl::Det::measured);
+  if (static_cast<int64_t>(pictures.size()) != rec->frames || worst < 25) {
+    lab.fail("the AV1 file decoded to " + std::to_string(pictures.size()) + " of " +
+                 std::to_string(rec->frames) + " pictures, the worst at " +
+                 num::to_fixed(worst, 1) + " dB",
+             "Run tests/capture_codecs_test.cpp; lower --crf (skill: replay).");
+  }
+  lab.shot({shot_id, title, about, look, {}}, strip(pictures, wave, o.width, o.height, 6),
+           gl::Det::measured);
 }
 
 void run(gl::Lab& lab) {
@@ -260,7 +394,9 @@ void run(gl::Lab& lab) {
              {"seconds", num::to_string(seconds)},
              {"fps", num::to_string(fps)},
              {"size", lab.arg("size")}}},
-           strip(bytes, *f, wave, width, height, 6));
+           strip(raw_pictures(bytes, *f, width, height), wave, width, height, 6));
+
+  compressed(lab, played->log, o, rec->bytes, export_ms, raw_pictures(bytes, *f, width, height));
 }
 
 const gl::LabSpec kSpec{
