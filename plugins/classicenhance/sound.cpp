@@ -255,21 +255,24 @@ std::vector<float> extend_band(std::span<const float> x, int rate, double source
   // advances a hop exactly as a real one at its new frequency would.
   const size_t lock = kSize / kHop;
   const size_t shift = std::max(lock, (kc / 2) / lock * lock);
+  // The bands the slope and flatness are read over: [quarter, half) and [half, kc).
+  const size_t quarter = kc / 4, half = kc / 2;
+  const auto n_lo = static_cast<double>(half - quarter), n_hi = static_cast<double>(kc - half);
   double whole = 0, added = 0;
   for (auto& fr : s.frames) {
     // The frame's slope, dB an octave, from the octave under the top half-octave to it.
     double lo = 0, hi = 0;
-    for (size_t k = kc / 4; k < kc / 2; k++) lo += std::norm(fr[k]);
-    for (size_t k = kc / 2; k < kc; k++) hi += std::norm(fr[k]);
-    lo /= double(kc / 4);
-    hi /= double(kc - kc / 2);
+    for (size_t k = quarter; k < half; k++) lo += std::norm(fr[k]);
+    for (size_t k = half; k < kc; k++) hi += std::norm(fr[k]);
+    lo /= n_lo;
+    hi /= n_hi;
     const double slope = std::clamp(db(hi / std::max(lo, 1e-30)), -30.0, -3.0) - opts.rolloff_db;
     // A tonal frame's partials copied up land off its harmonic series and ring like metal, so
     // the copy is scaled by the top band's flatness (geometric over arithmetic mean): noise and
     // transients are copied in full, a held tone at a fifth.
     double logs = 0;
-    for (size_t k = kc / 2; k < kc; k++) logs += core::libm::log(std::norm(fr[k]) + 1e-20);
-    const double flat = core::libm::exp(logs / double(kc - kc / 2)) / std::max(hi, 1e-20);
+    for (size_t k = half; k < kc; k++) logs += core::libm::log(std::norm(fr[k]) + 1e-20);
+    const double flat = core::libm::exp(logs / n_hi) / std::max(hi, 1e-20);
     const double tonal = std::clamp(flat / 0.3, 0.2, 1.0);
     for (size_t k = 0; k < kc; k++) whole += std::norm(fr[k]);
     for (size_t k = kc; k <= ktop; k++) {
