@@ -41,17 +41,26 @@ const ui::Image& atlas_image(charset::FontId font, int size) {
   return cache.emplace(key, std::move(img)).first->second;
 }
 
+bool whole_unit(float u) {
+  const int n = static_cast<int>(u);
+  const float r = static_cast<float>(u - static_cast<float>(n) >= 0.5f ? n + 1 : n);
+  return r >= 1 && u - r < 1e-3f && r - u < 1e-3f;
+}
+
 float ascent(const Face& face, float size) {
+  if (face.sheet != nullptr) return size;
   if (face.font != nullptr) return face.font->metrics(size).ascent;
   return static_cast<float>(charset::kBaselineFromTop) * size;
 }
 
 float descent(const Face& face, float size) {
+  if (face.sheet != nullptr) return 0;
   if (face.font != nullptr) return face.font->metrics(size).descent;
   return static_cast<float>(1 - charset::kBaselineFromTop) * size;
 }
 
 float text_width(const Face& face, float size, std::string_view text, float tracking) {
+  if (face.sheet != nullptr) return static_cast<float>(text.size()) * (size + tracking);
   if (face.font != nullptr) return face.font->advance(text, size, tracking);
   return static_cast<float>(text.size()) * charset_advance(size, tracking);
 }
@@ -72,9 +81,32 @@ void draw_symbol(ui::DrawList& dl, charset::FontId font, uint8_t code, ui::Rect 
 
 float draw_text(ui::DrawList& dl, const Face& face, float size, float x, float baseline,
                 std::string_view text, ui::Color color, ui::Align align, float tracking) {
-  if (face.font != nullptr)
+  if (face.font != nullptr && face.sheet == nullptr)
     return dl.text(*face.font, size, x, baseline, text, color, align, tracking);
   const float w = text_width(face, size, text, tracking);
+  if (face.sheet != nullptr) {
+    if (align == ui::Align::center) x -= w / 2;
+    if (align == ui::Align::right) x -= w;
+    const ui::Image& img = *face.sheet;
+    const float cw = static_cast<float>(img.width) / 16, ch = static_cast<float>(img.height) / 16;
+    const float unit = size / ch;
+    const bool whole = whole_unit(unit);
+    for (size_t i = 0; i < text.size(); i++) {
+      auto code = static_cast<unsigned char>(text[i]);
+      if (code == ' ') continue;
+      if (code >= '0' && code <= '9')
+        code = static_cast<unsigned char>(face.digits_at + (code - '0'));
+      ui::Box b;
+      b.rect = {x + static_cast<float>(i) * (size + tracking), baseline - size, size, size};
+      b.image = &img;
+      b.uv = {static_cast<float>(code & 15) * cw, static_cast<float>(code >> 4) * ch, cw, ch};
+      b.fill = ui::solid(color);
+      b.nearest = whole;
+      b.feather = 0.5f;
+      dl.box(b);
+    }
+    return w;
+  }
   if (align == ui::Align::center) x -= w / 2;
   if (align == ui::Align::right) x -= w;
   const float top = baseline - ascent(face, size);

@@ -69,7 +69,8 @@ struct Box {
   // tinted or graded one colours it). `uv` is the source rectangle in the image's pixels.
   const Image* image = nullptr;
   Rect uv;
-  float border = 0;  // px inside the edge, drawn in border_color
+  bool nearest = false;  // the image's nearest pixel, not the bilinear blend: crisp pixel art
+  float border = 0;      // px inside the edge, drawn in border_color
   Color border_color{1, 1, 1, 1};
   float feather = 1;  // px of edge softness: 1 antialiases, more blurs it outward
   float opacity = 1;

@@ -24,10 +24,12 @@ each; built in M10d, `engine/hud/layout.hpp`):
 | Field | What it is |
 | --- | --- |
 | `id` | A short lower-case name, used in its cvars: `speed`, `map`, `health`. |
-| `kind` | The widget that draws it: `readout`, `big`, `bar`, `pips`, `banner`, `feed` today; `dial`, `wind`, `compass`, `minimap` as M10f and M10g land. |
+| `kind` | The widget that draws it: `readout`, `big`, `bar`, `pips`, `banner`, `feed`, and the picture kinds `picture`, `digits`, `strip` and `ring` (below) today; `dial`, `wind`, `compass`, `minimap` as M10f and M10g land. |
 | `anchor`, `x`, `y`, `scale`, `alpha`, `show` | Its default place: one of the nine points of the safe area, an offset as a share of the safe area, a size and an opacity. |
 | A kind's shape | A bar's length and ticks, the pips' symbol and size, the feed's column. |
 | `under_corners`, `under` | The two clearance rules (below). |
+| `parent`, `attach` | The element it hangs from, and which of its own nine points meets the parent's `anchor` point (below). |
+| `unit`, `snap`, `fit` | A picture kind's size: screen px per art pixel at scale 1, floored to a whole number, and kept to a share of the safe area's width (below). |
 
 Elements that share an anchor **stack** in table order, as the kit's `Stack` stacks boxes:
 hiding one closes its gap, and an element's own offset moves it alone. Two rules keep the
@@ -63,6 +65,7 @@ set writes the field directly, so the draw reads its own struct and never asks t
 | `hud_<id>_x`, `hud_<id>_y` | Its offset from that point, as a share of the safe area's width and height (-1..1, y down), so a layout survives a change of resolution or aspect. |
 | `hud_<id>_scale` | Its size, times the HUD's (0.25..4). |
 | `hud_<id>_alpha` | Its opacity (0..1): every command it drew, faded. |
+| `hud_<id>_parent`, `hud_<id>_attach` | The element it hangs from (empty: it stands alone) and which of its points meets the parent's. On a parent, `x` and `y` are in the parent's drawn units, not shares of the safe area (±4096). |
 | `hud_<id>_skin` | Its skin (below; M10e). |
 | `hud_<id>_…` | A kind's own settings as the kinds land: `hud_map_span` (metres across), `hud_map_shape` (`round`/`square`), `hud_speedo_max`, `hud_speedo_style` (`dial`/`number`). |
 | `hud_scale`, `hud_alpha`, `hud_margin` | The whole HUD: its scale over the frame's, its opacity, and the margin (reference px) from the screen's safe edge. `hud_face` (its type) comes with the skins. |
@@ -77,6 +80,38 @@ exactly what the player set and a later `exec` restores it. `hud_reset` also dro
 flag, so a reset place is not saved. No HUD cvar is a server setting. A competitive server may
 one day want to forbid one (a minimap in a mode that should not have it). That would be a later
 row, using the console's server tier, and it is not planned here.
+
+### Pictures and parents
+
+A HUD drawn from pictures (a classic status bar, its digits, a row of weapon icons) needs four
+more kinds and one more relation (`engine/hud/pictures.hpp`, `engine/hud/layout.hpp`):
+
+| Kind | What it draws |
+| --- | --- |
+| `picture` | One image, its size in ART pixels: the image's pixels over its `density` (pixels per art pixel), so a set painted at 4x and a set at 1x lay out the same. |
+| `digits` | A right-aligned field of `cells` figures from a digit sheet (0-9 and a minus), and from the sheet's alternate glyphs when `alt` is set (a low value's alarm figures). |
+| `strip` | A row or column of cells: a picture each, shown or keeping its place, lit or framed, with a plate under it and a count over it; a cell's width from its picture when the strip gives none (the wide beam gun). |
+| `ring` | An arc round a point, filled to a level; past 1 the second lap is drawn over it in its own colour. |
+
+The picture kinds are sized by a **unit**: screen px per art pixel, the element's `unit` times
+its scale. `snap` floors the unit to a whole number, so pixel art is drawn at 2x, 3x or 4x and
+never at 2.7x, and `fit` caps the element at a share of the safe area's width (a 320-pixel bar
+on an upright phone). When the unit is a whole number of the image's pixels the box samples the
+NEAREST pixel (`ui::Box::nearest`, on the CPU raster and the GPU pass alike), so the art stays
+crisp.
+
+An element with a **parent** hangs from it rather than from the safe area: its anchor names a
+point on the parent's drawn box, its `attach` the point of its own box that meets it, and its
+offset is in the parent's units (a picture parent's art pixels), so a status bar's pieces are
+declared at the bar's own coordinates and follow the bar wherever the player puts it. A child
+takes its parent's scale times its own. A parent must be declared before its children; a parent
+that is hidden or missing leaves the child standing alone. A face drawn from a 16x16 character
+sheet (`Face::glyph_sheet`) draws the counts in a set's own type.
+
+Shooter's Edge's three HUDs (`games/shooters_edge/hud/layout.hpp`) are the first user: the
+classic bar, the modern corners and the compact rings round the crosshair, one table picked by
+`hud_style`, drawn from the game's free art or, through classic-enhance, the classic set's own
+pictures.
 
 ## Skins: the player's and the game's own textures
 

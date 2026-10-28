@@ -3,6 +3,9 @@
 // 2D layer (ui/font.hpp: Barlow Condensed built in, or a game's own) or one of the engine's bitmap
 // charsets (charset/charset.hpp: ten monospaced ASCII looks), drawn into the same draw list.
 //
+// A third kind, a GLYPH SHEET (a game's own 16 x 16 picture of square cells), is drawn the same
+// way: a cell a character, sampled nearest, its line the cell's height sitting on the baseline.
+//
 // SIZE means the same for both: the line's pixel height (a TrueType font's ascent plus descent; a
 // charset's whole cell, whose baseline sits 0.72 of the way down). A run is placed by its
 // BASELINE, as the 2D layer places text, so a number in one face and its unit in another sit on
@@ -20,6 +23,7 @@
 // ge:summary The HUD's type: a TrueType font or a bitmap charset behind one size and baseline
 // ge:keywords hud face font charset bitmap-font truetype text measure draw baseline ascent
 // ge:keywords symbol star heart icon atlas-image glyph tint draw_text text_width draw_symbol
+// ge:keywords glyph-sheet sheet-font conchars digits_at
 // ge:skill ui
 // ge:test tests/hud_hud_test.cpp
 #pragma once
@@ -35,10 +39,22 @@ namespace ge::hud {
 struct Face {
   const ui::Font* font = nullptr;  // a TrueType font, or nullptr for the charset below
   charset::FontId charset = charset::FontId::rounded;
+  // A game's own glyph SHEET instead of both: a picture of 16 x 16 square cells, the byte's
+  // cell in reading order, drawn nearest at a whole scale. `digits_at` is the cell of '0' (a
+  // sheet may hold a second set of figures in another colour: its digits are drawn from there).
+  const ui::Image* sheet = nullptr;
+  uint8_t digits_at = '0';
 
   static Face truetype(const ui::Font& f) { return Face{&f, charset::FontId::rounded}; }
   static Face bitmap(charset::FontId id) { return Face{nullptr, id}; }
+  static Face glyph_sheet(const ui::Image& img, uint8_t digits_at = '0') {
+    return Face{nullptr, charset::FontId::rounded, &img, digits_at};
+  }
 };
+
+// Whether `u` px per picture pixel is (all but) a whole number of at least 1, so a picture drawn
+// at it samples nearest and stays crisp; a fractional scale blends, so it does not shimmer.
+bool whole_unit(float u);
 
 // Px above and below the baseline a run of `size` takes.
 float ascent(const Face& face, float size);

@@ -82,13 +82,16 @@ int Layout::add(const ElementSpec& spec) {
   Element& e = elements_.emplace_back();
   e.id = std::string(spec.id);
   e.help = std::string(spec.help);
+  e.parent = std::string(spec.parent);
   e.spec = spec;
   e.spec.id = e.id;
   e.spec.help = e.help;
+  e.spec.parent = e.parent;
   e.under = spec.under.empty() ? -1 : find(spec.under);
   e.spec.under = {};
-  e.place = {spec.show, std::string(anchor_name(spec.anchor)), spec.x, spec.y, spec.scale,
-             spec.alpha};
+  e.place = {
+      spec.show, std::string(anchor_name(spec.anchor)), spec.x, spec.y, spec.scale, spec.alpha,
+      e.parent,  std::string(anchor_name(spec.attach))};
   return static_cast<int>(elements_.size() - 1);
 }
 
@@ -106,27 +109,86 @@ Frame Layout::frame(int width, int height, const Style& style, Insets insets) co
   return f;
 }
 
+namespace {
+
+// The point `a` of `r`.
+ui::Vec2 point_of(const ui::Rect& r, Anchor a) {
+  const int col = static_cast<int>(a) % 3, row = static_cast<int>(a) / 3;
+  return {r.x + r.w * 0.5f * static_cast<float>(col), r.y + r.h * 0.5f * static_cast<float>(row)};
+}
+
+Strip strip_of(const Element& e, const Style& st) {
+  const Content& c = e.content;
+  return Strip{&c.cells, c.density, c.face != nullptr ? *c.face : st.value_face, st.shadow};
+}
+
+bool picture_kind(Kind k) { return k == Kind::picture || k == Kind::digits || k == Kind::strip; }
+
+// The picture kinds' size at one screen px per picture pixel.
+Size natural(const Element& e, const Style& st) {
+  const Content& c = e.content;
+  switch (e.spec.kind) {
+    case Kind::picture:
+      return measure(Picture{c.image, c.color, c.density}, 1);
+    case Kind::digits:
+      return measure(Digits{c.sheet, c.value, e.spec.digit_cells, c.alt, c.color}, 1);
+    case Kind::strip:
+      return measure(e.spec.strip, strip_of(e, st), 1);
+    default:
+      return {0, 0};
+  }
+}
+
+}  // namespace
+
 std::vector<Placed> Layout::draw(ui::DrawList& dl, const Frame& f, const Style& st) {
   std::vector<Placed> placed;
   Stacks stacks{&f, f.px(st.gap), {}, {}};
-  for (Element& e : elements_) {
+  for (size_t ei = 0; ei < elements_.size(); ++ei) {
+    Element& e = elements_[ei];
     e.shown = false;
     const Content& c = e.content;
     if (!c.on || !e.place.show || (e.spec.kind == Kind::feed && c.feed == nullptr)) continue;
     const Anchor a = anchor_from(e.place.anchor).value_or(e.spec.anchor);
+    // A parent declared before this element and shown this frame; else it stands alone.
+    const Element* parent = nullptr;
+    if (!e.place.parent.empty()) {
+      const int pi = find(e.place.parent);
+      if (pi >= 0 && static_cast<size_t>(pi) < ei && elements_[static_cast<size_t>(pi)].shown)
+        parent = &elements_[static_cast<size_t>(pi)];
+    }
     Frame fe = f;
-    fe.scale *= static_cast<float>(e.place.scale);
-    const float dx = static_cast<float>(e.place.x) * f.safe.w;
-    const float dy = static_cast<float>(e.place.y) * f.safe.h;
+    fe.scale = (parent ? parent->drawn_scale : f.scale) * static_cast<float>(e.place.scale);
+    const float dx = parent ? static_cast<float>(e.place.x) * parent->drawn_unit
+                            : static_cast<float>(e.place.x) * f.safe.w;
+    const float dy = parent ? static_cast<float>(e.place.y) * parent->drawn_unit
+                            : static_cast<float>(e.place.y) * f.safe.h;
+    // The picture kinds' unit: screen px per picture pixel, fitted and snapped.
+    float u = fe.scale * e.spec.unit;
+    if (picture_kind(e.spec.kind)) {
+      const Size n = natural(e, st);
+      if (e.spec.fit > 0 && n.w * u > e.spec.fit * f.safe.w && n.w > 0)
+        u = e.spec.fit * f.safe.w / n.w;
+      if (e.spec.snap && u >= 1) u = static_cast<float>(static_cast<int>(u));
+      fe.scale = u / e.spec.unit;
+    }
     const ui::Align align = align_of(a);
     const size_t mark = dl.size();
     const bool corners = e.spec.under_corners;
     ui::Rect box;
     auto slot = [&](float w, float h) {
-      ui::Rect r = moved(stacks.next(a, w, h, corners), dx, dy);
+      ui::Rect r;
+      if (parent != nullptr) {
+        const Anchor at = anchor_from(e.place.attach).value_or(e.spec.attach);
+        const ui::Vec2 p = point_of(parent->drawn, a);
+        const ui::Vec2 o = point_of({0, 0, w, h}, at);
+        r = {p.x - o.x + dx, p.y - o.y + dy, w, h};
+      } else {
+        r = moved(stacks.next(a, w, h, corners), dx, dy);
+      }
       if (e.under >= 0) {
-        const Element& u = elements_[static_cast<size_t>(e.under)];
-        if (u.shown) r.y = std::max(r.y, u.drawn.bottom() + stacks.gap);
+        const Element& un = elements_[static_cast<size_t>(e.under)];
+        if (un.shown) r.y = std::max(r.y, un.drawn.bottom() + stacks.gap);
       }
       return r;
     };
@@ -185,10 +247,40 @@ std::vector<Placed> Layout::draw(ui::DrawList& dl, const Frame& f, const Style& 
         box = draw_feed(dl, fe, st, *c.feed, c.t, a, e.spec.feed_size, w, dx, dy);
         break;
       }
+      case Kind::picture: {
+        const Picture p{c.image, c.color, c.density};
+        const Size z = measure(p, u);
+        box = slot(z.w, z.h);
+        hud::draw(dl, p, box, u);
+        break;
+      }
+      case Kind::digits: {
+        const Digits d{c.sheet, c.value, e.spec.digit_cells, c.alt, c.color};
+        const Size z = measure(d, u);
+        box = slot(z.w, z.h);
+        hud::draw(dl, d, box, u);
+        break;
+      }
+      case Kind::strip: {
+        const Strip sp = strip_of(e, st);
+        const Size z = measure(e.spec.strip, sp, u);
+        box = slot(z.w, z.h);
+        hud::draw(dl, e.spec.strip, sp, box, u);
+        break;
+      }
+      case Kind::ring: {
+        const Ring r{c.level, c.color, c.over, st.track};
+        const Size z = measure(fe, e.spec.ring);
+        box = slot(z.w, z.h);
+        hud::draw(dl, fe, e.spec.ring, r, box);
+        break;
+      }
     }
     const float fade = static_cast<float>(e.place.alpha * alpha);
     if (fade != 1) dl.fade(mark, fade);
     e.drawn = box;
+    e.drawn_scale = fe.scale;
+    e.drawn_unit = picture_kind(e.spec.kind) ? u : fe.scale;
     e.shown = true;
     placed.push_back({e.id, box});
   }
@@ -205,34 +297,51 @@ void add_hud_cvars(console::Console& con, Layout& layout) {
     Element& e = layout[i];
     const std::string p = "hud_" + e.id + "_";
     const std::string what = e.help.empty() ? e.id : e.help;
-    const std::string names[6] = {p + "show", p + "anchor", p + "x",
-                                  p + "y",    p + "scale",  p + "alpha"};
-    const std::string helps[6] = {
+    const std::string names[8] = {p + "show",  p + "anchor", p + "x",      p + "y",
+                                  p + "scale", p + "alpha",  p + "parent", p + "attach"};
+    const bool child = !e.parent.empty();
+    const std::string helps[8] = {
         "show " + what + " (0 hides it)",
         "where " + what +
             " hangs: top_left top top_right left center right bottom_left bottom "
             "bottom_right",
-        what + "'s offset across, a share of the safe area's width",
-        what + "'s offset down, a share of the safe area's height",
+        child ? what + "'s offset across, in its parent's units"
+              : what + "'s offset across, a share of the safe area's width",
+        child ? what + "'s offset down, in its parent's units"
+              : what + "'s offset down, a share of the safe area's height",
         what + "'s size, times the HUD's",
-        what + "'s opacity, 0..1"};
-    const std::string fallbacks[6] = {
-        e.spec.show ? "1" : "0", std::string(anchor_name(e.spec.anchor)),
-        text(e.spec.x),          text(e.spec.y),
-        text(e.spec.scale),      text(e.spec.alpha)};
+        what + "'s opacity, 0..1",
+        "the element " + what + " hangs from (empty: none), one declared before it",
+        "the point of " + what + "'s own box set on its parent's anchor point"};
+    const std::string fallbacks[8] = {e.spec.show ? "1" : "0",
+                                      std::string(anchor_name(e.spec.anchor)),
+                                      text(e.spec.x),
+                                      text(e.spec.y),
+                                      text(e.spec.scale),
+                                      text(e.spec.alpha),
+                                      e.parent,
+                                      std::string(anchor_name(e.spec.attach))};
+    // A child's offsets are in its parent's units (picture px), a top-level one's shares.
+    const double reach = child ? 4096 : 1;
     cv.bind(
         {.name = names[0], .fallback = fallbacks[0], .help = helps[0], .kind = CvarKind::boolean},
         &e.place.show);
     cv.bind({.name = names[1], .fallback = fallbacks[1], .help = helps[1], .kind = CvarKind::text},
             &e.place.anchor);
-    cv.bind({.name = names[2], .fallback = fallbacks[2], .help = helps[2], .min = -1, .max = 1},
-            &e.place.x);
-    cv.bind({.name = names[3], .fallback = fallbacks[3], .help = helps[3], .min = -1, .max = 1},
-            &e.place.y);
+    cv.bind(
+        {.name = names[2], .fallback = fallbacks[2], .help = helps[2], .min = -reach, .max = reach},
+        &e.place.x);
+    cv.bind(
+        {.name = names[3], .fallback = fallbacks[3], .help = helps[3], .min = -reach, .max = reach},
+        &e.place.y);
     cv.bind({.name = names[4], .fallback = fallbacks[4], .help = helps[4], .min = 0.25, .max = 4},
             &e.place.scale);
     cv.bind({.name = names[5], .fallback = fallbacks[5], .help = helps[5], .min = 0, .max = 1},
             &e.place.alpha);
+    cv.bind({.name = names[6], .fallback = fallbacks[6], .help = helps[6], .kind = CvarKind::text},
+            &e.place.parent);
+    cv.bind({.name = names[7], .fallback = fallbacks[7], .help = helps[7], .kind = CvarKind::text},
+            &e.place.attach);
     for (const std::string& n : names) owned->emplace_back(e.id, n);
   }
   cv.bind({.name = "hud_scale",
