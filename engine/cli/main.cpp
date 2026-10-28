@@ -206,6 +206,7 @@ Outcome run(const Args& a) {
     p.ids = a.words;
     p.before = flag_value(a, "before");
     p.out = flag_value(a, "out");
+    p.title = flag_value(a, "title");
     if (const std::string w = flag_value(a, "width"); !w.empty()) {
       if (w.find_first_not_of("0123456789") != std::string::npos || w.size() > 5 ||
           std::stoi(w) < 16)

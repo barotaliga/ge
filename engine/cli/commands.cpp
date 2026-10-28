@@ -83,6 +83,7 @@ constexpr FlagSpec kLabPublishFlags[] = {
      "a kept run (ge lab <id> --tag=<tag>) shown beside this one, metric by metric"},
     {"width", "<px>", "the pictures' width on the page (default 720)"},
     {"out", "<file>", "where the page goes (default previews/<id>/publish.html)"},
+    {"title", "<text>", "the page's title (default \"<id> lab run\", or \"Lab runs\")"},
     kRepo};
 constexpr FlagSpec kLabDiffFlags[] = {
     kPreset,

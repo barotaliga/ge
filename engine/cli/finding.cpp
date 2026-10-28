@@ -98,9 +98,7 @@ bool skipped_dir(std::string_view name) {
          name == ".cache" || name == "stage" || name == "node_modules";
 }
 
-std::string regex_line(std::string_view line) {
-  return std::string(line.substr(0, kRegexLine));
-}
+std::string regex_line(std::string_view line) { return std::string(line.substr(0, kRegexLine)); }
 
 std::vector<std::string_view> split_lines(std::string_view text) {
   std::vector<std::string_view> lines;

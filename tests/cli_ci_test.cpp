@@ -139,8 +139,8 @@ TEST(a_megabyte_log_line_is_read_without_overflowing_the_stack) {
   const std::string long_line(1 << 20, 'x');
   const std::string log = "2026-10-22T13:44:36.9Z " + long_line + "\n" +
                           "2026-10-22T13:44:37.0Z ge check: error: " + long_line + "\n" +
-                          "2026-10-22T13:44:37.1Z /work/game/src/a.cpp:12:5: error: " +
-                          long_line + "\n" +
+                          "2026-10-22T13:44:37.1Z /work/game/src/a.cpp:12:5: error: " + long_line +
+                          "\n" +
                           "2026-10-22T13:44:37.2Z /work/game/src/b.cpp:3:1: error: 'y' was not "
                           "declared\n";
   const auto f = ci_log_findings(kRepo, "build", log);
