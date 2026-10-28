@@ -30,6 +30,7 @@
 #include "fall_line/sim/lift_ride.hpp"
 #include "fall_line/sim/para_ride.hpp"
 #include "fall_line/sim/sled_ride.hpp"
+#include "fall_line/sim/village.hpp"
 #include "fall_line/sim/wanted.hpp"
 #include "mountain/mapgen/generate.hpp"
 #include "prof/zones.hpp"
@@ -156,6 +157,11 @@ void log_step(const GameState& state) {
       case EventKind::died:
         line += " at severity " + f(e.value, 0);
         break;
+      case EventKind::traffic:
+        line += (e.gate >= 0 ? " vehicle " + std::to_string(e.gate)
+                             : " parked car " + std::to_string(-1 - e.gate)) +
+                " at " + f(e.value, 1) + " m/s";
+        break;
     }
     line += " at x " + f(s.x, 1) + " z " + f(s.z, 1) + ", " + f(s.speed * 3.6, 1) + " km/h";
     out::log_on(ch, out::Level::debug, line);
@@ -245,6 +251,8 @@ const char* event_name(EventKind kind) {
       return "hurt";
     case EventKind::died:
       return "died";
+    case EventKind::traffic:
+      return "traffic";
   }
   return "?";
 }
@@ -374,6 +382,10 @@ void step(GameState& state, std::span<const Controls> controls) {
     GE_ZONE("crowd");
     step_crowd(state);
     meet_crowd(state);
+  }
+  if (state.village) {
+    GE_ZONE("traffic");
+    meet_traffic(state);
   }
   {
     GE_ZONE("army");

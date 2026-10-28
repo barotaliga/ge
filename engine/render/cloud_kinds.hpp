@@ -17,13 +17,16 @@
 // hairs), and how far its cells gather into patches with clear sky between (a mackerel sky); and
 // its LIGHT: the radius its droplets or crystals diffract the key light as (um) and their sizes'
 // spread (the aureole and the corona round the sun and the moon), its 22 degree halo, and how far
-// it is a deck lit through its top alone.
+// it is a deck lit through its top alone; and its THICKNESS: how thin its thinnest patches are
+// beside its thick cores (the sun a white disc through a thin patch of a grey sheet, gone behind
+// its core) and how wide a patch is.
 //
 // ge:summary The cloud genera a sky is built from, named and stacked, each a row of bands
 // ge:keywords render clouds cloud-kinds cloud-genera cumulus congestus cumulonimbus anvil
 // ge:keywords stratocumulus stratus nimbostratus altocumulus altostratus cirrus cirrostratus
 // ge:keywords cirrocumulus lenticular inversion sea-of-cloud mackerel-sky cloud_stack_named
 // ge:keywords cloud_kind_named cloud-form erode fibre patch veil corona aureole halo droplet
+// ge:keywords thickness optical-depth translucidus opacus
 // ge:skill render
 // ge:test tests/render_cloud_kinds_test.cpp
 #pragma once
@@ -46,6 +49,9 @@ struct CloudKind {
   // Its light (CloudLayer's): round the disc, the particles' radius (um), their spread, the halo;
   // and how far it is lit through its top alone (a deck).
   double drop = 10, spread = 0.35, halo = 0, deck = 0;
+  // Its THICKNESS across it (CloudLayer's): the share of the full optical depth (`opacity`) its
+  // thinnest patches hold, and a patch's span in cells.
+  double thin = 1, thick_cells = 3;
 };
 
 // Every kind, lowest first.

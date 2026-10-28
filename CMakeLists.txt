@@ -20,6 +20,7 @@
 #   ge_water     bodies of water, the waves a wind grows on them and the one query (engine/water)
 #   ge_move      character movement (engine/move: the knobs and their cvars, the step, scenarios)
 #   ge_camera    the camera (engine/camera: poses, followers, rigs, shake, transitions, the stack)
+#   ge_snow      snow (engine/snow: the layer over any ground, press, the snapshot; docs/snow.md)
 #   ge_play      the play contract (engine/play: GameSpec and Run, the session, the input log,
 #                the bench, the stills `ge shot` draws; engine/capture: the Matroska muxer and
 #                the export with sound)
@@ -161,7 +162,7 @@ target_include_directories(ge_assets SYSTEM PRIVATE ${GE_CGLTF_INCLUDE})
 include(cmake/Ui.cmake)
 file(GLOB GE_UI_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/ui/*.cpp)
 add_library(ge_ui STATIC ${GE_UI_SOURCES})
-target_link_libraries(ge_ui PUBLIC ge_core ge_console)
+target_link_libraries(ge_ui PUBLIC ge_core ge_console ge_input)
 target_include_directories(ge_ui SYSTEM PRIVATE ${GE_STB_INCLUDE})
 ge_embed_binary(ge_ui ge_ui_font_semibold "${GE_FONTS_DIR}/BarlowCondensed-SemiBold.ttf")
 ge_embed_binary(ge_ui ge_ui_font_medium "${GE_FONTS_DIR}/BarlowCondensed-Medium.ttf")
@@ -244,6 +245,12 @@ target_link_libraries(ge_move PUBLIC ge_core ge_console)
 file(GLOB GE_CAMERA_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/camera/*.cpp)
 add_library(ge_camera STATIC ${GE_CAMERA_SOURCES})
 target_link_libraries(ge_camera PUBLIC ge_core ge_console)
+
+# Snow (engine/snow, docs/snow.md): a layer of snow over any ground, its sparse fixed-point tiles,
+# the one sample query, press and the imprint record, the snapshot. Deterministic, no platform.
+file(GLOB GE_SNOW_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/snow/*.cpp)
+add_library(ge_snow STATIC ${GE_SNOW_SOURCES})
+target_link_libraries(ge_snow PUBLIC ge_core)
 
 # The lab framework (engine/lab: the contract, the runner, the raster, the PNG), published as
 # ge::lab so a game's labs plug into the same contract as the engine's (docs/labs.md).
@@ -372,7 +379,7 @@ if(PROJECT_IS_TOP_LEVEL)
   get_property(GE_PLUGIN_TARGETS GLOBAL PROPERTY GE_PLUGIN_TARGETS)
   get_property(GE_GAME_TARGETS GLOBAL PROPERTY GE_GAME_TARGETS)
   add_executable(labs engine/lab/main.cpp ${GE_LAB_SOURCES})
-  target_link_libraries(labs PRIVATE ge_lab ge_play ge_replay ge_core ge_audio ge_assets ge_net ge_input ge_wind ge_water ge_move ge_camera ge_ui ge_services ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
+  target_link_libraries(labs PRIVATE ge_lab ge_play ge_replay ge_core ge_audio ge_assets ge_net ge_input ge_wind ge_water ge_move ge_camera ge_ui ge_services ge_snow ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
     ${GE_LAB_EXTRA})
 
   # The `assets` executable (engine/assets/tool.hpp): the built assets listed, checked and stamped,
