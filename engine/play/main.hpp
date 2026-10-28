@@ -29,7 +29,8 @@
 //               [--speed=1] [--size=WxH] [--format=mp4]     at --speed, encoded by ffmpeg (mp4,
 //               [--codec=C] [--crf=N | --bitrate=4M]        webm, gif; png writes the frames; mkv
 //               [--encoder-preset=P] [--thumbs=24]          is the engine's own, with the run's
-//               [--band=0] [--sound=0] [--<option>=V]       sound) and a contact sheet of --thumbs
+//               [--band=0] [--sound=0] [--<option>=V]       sound; --codec=av1 compresses it to a
+//                                                           .webm) and a contact sheet of --thumbs
 //               [--out=DIR]                                 stills, each with its time and step
 //   play cvar ls [<prefix>] | get <name>...                 the game's cvars (console_cmds.hpp)
 //   play cfg check|exec <file>... [--server] [--cmd=C]      cfg files run against them: problems,

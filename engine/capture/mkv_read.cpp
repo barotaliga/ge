@@ -183,6 +183,15 @@ std::optional<ReadFile> read_mkv(std::span<const uint8_t> bytes, std::string& er
             case 0x6264:
               t->bits = be(body);
               break;
+            case 0x63A2:
+              t->codec_private.assign(body.begin(), body.end());
+              break;
+            case 0x56AA:
+              t->codec_delay_ns = be(body);
+              break;
+            case 0x56BB:
+              t->seek_pre_roll_ns = be(body);
+              break;
             default:
               break;
           }

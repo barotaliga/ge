@@ -26,6 +26,8 @@
 // ge:keywords achievement unlock stat store_stats leaderboard board score upload download blob
 // ge:keywords ghost cloud cloud-save remote-storage quota rich-presence presence friends invite
 // ge:keywords join overlay dlc ownership screenshot deck big-picture event poll request callback
+// ge:keywords workshop ugc item mod subscribe install query_items submit_item
+// ge:keywords on-screen-keyboard suspend resume timeline remote-play
 // ge:skill services
 // ge:test tests/services_sim_store_test.cpp
 #pragma once
@@ -105,6 +107,79 @@ struct CloudFile {
   uint64_t size = 0;
 };
 
+// THE WORKSHOP: items players make for the game (maps, outfits, mods), each a set of named
+// files with a title, a description and tags, kept by the store. A player subscribes; the store
+// downloads the item and keeps it up to date, and the game reads an installed item's files
+// (`item_files`, `item_read`) as its content. Titles are 1 to 128 bytes, descriptions up to
+// 8000, up to 20 tags of 1 to 255 bytes, file names as cloud files'.
+using ItemId = uint64_t;  // 0 is no item (and, to `submit_item`, a new one)
+
+// Who sees an item in a query: everyone, the author's friends, or only the author.
+enum class ItemVisibility : uint8_t { everyone, friends, author };
+enum class ItemOrder : uint8_t { newest, most_subscribed };
+
+inline constexpr size_t kItemsPerPage = 50;
+inline constexpr size_t kMaxItemTags = 20;
+
+struct ItemQuery {
+  ItemOrder order = ItemOrder::newest;
+  std::string tag;               // only items with this tag ("" any)
+  UserId author = 0;             // only this player's items (0 anyone)
+  bool subscribed_only = false;  // only the player's subscriptions
+  uint32_t page = 1;             // 1-based, kItemsPerPage a page
+};
+
+struct ItemDraft {
+  std::string title, description;
+  std::vector<std::string> tags;
+  ItemVisibility visibility = ItemVisibility::everyone;
+  std::string change_note;  // what this version changed, shown with it
+};
+
+struct ItemFile {
+  std::string name;
+  std::vector<uint8_t> bytes;
+};
+
+struct ItemInfo {
+  ItemId id = 0;
+  UserId author = 0;
+  std::string title, description;
+  std::vector<std::string> tags;
+  ItemVisibility visibility = ItemVisibility::everyone;
+  uint32_t version = 0;  // 1 at creation, one more each update
+  uint64_t bytes = 0;    // its files' total
+  int32_t subscribers = 0;
+  bool subscribed = false;  // by the player asking
+  uint32_t installed = 0;   // the version on the player's machine, 0 none
+};
+
+// THE HANDHELD AND THE EXTRAS. The store's on-screen keyboard, for a player with no keyboard
+// (a handheld, the big-picture mode): the text typed arrives as `text_entered`.
+enum class KeyboardMode : uint8_t { single_line, multiple_lines, email, numeric };
+
+// What the game is doing, for the store's recording timeline (its background colour there).
+enum class TimelineMode : uint8_t { menus, loading, playing, staging };
+
+// A moment marked on the store's recording timeline: an icon (one of the store's or the game's
+// own), a title and a description, how much it matters (0 to 1000), when it began relative to
+// now (seconds, back up to 600) and how long it lasted (0: an instant, up to 600).
+struct TimelineMark {
+  std::string icon, title, description;
+  uint32_t priority = 0;
+  double start_offset_s = 0;
+  double duration_s = 0;
+};
+
+// The device a remote player streams the game to.
+enum class RemoteDevice : uint8_t { computer, phone, tablet, tv };
+
+struct RemotePlayer {
+  UserId user = 0;
+  std::string name;
+  RemoteDevice device = RemoteDevice::computer;
+};
+
 // A page of the store's overlay. `store` opens the given app's store page (the game's when 0);
 // `url` opens a web page in the overlay's browser.
 enum class OverlayPage : uint8_t {
@@ -131,7 +206,19 @@ enum class EventKind : uint8_t {
   presence_changed,      // a friend's rich presence changed (user)
   screenshot_requested,  // the store's screenshot key, when the game hooks it
   connection_lost,       // the store went offline
-  connection_restored,   // and came back
+  connection_restored,   // and came back (a presence service: found, the first time too)
+  join_asked,            // a friend asked to join the player's game (user, text: their name);
+                         // answer it (Discord::answer_join)
+  call_refused,          // a service refused a call it had taken (id: the call, text: why)
+  items_queried,         // query_items answered (items, total)
+  item_submitted,        // submit_item answered (item: its id, total: its version)
+  item_subscribed,       // subscribe_item answered (item, changed: now subscribed)
+  item_installed,        // an item's version landed on the machine (item, total: the version)
+  text_entered,          // the on-screen keyboard closed (changed: submitted; text: the text)
+  suspended,             // the machine is going to sleep: save now, the clock stops
+  resumed,               // it woke (total: seconds asleep)
+  remote_player_joined,  // a friend joined over the store's remote play (user, text: name)
+  remote_player_left,    // and left (user)
 };
 std::string_view event_name(EventKind k);
 
@@ -142,15 +229,17 @@ struct Event {
   Result result = Result::ok;
   UserId user = 0;
   std::string id;    // an achievement's or a board's id
-  std::string text;  // a connect string
+  std::string text;  // a connect string, a join secret, a name or a refusal's reason
   int32_t score = 0;
   int32_t rank = 0;
   int32_t previous_rank = 0;
-  int32_t total = 0;     // the board's entry count
+  int32_t total = 0;     // the board's entry count, the items matched, an item's version
   bool changed = false;  // the upload changed the player's entry
   BlobId blob = 0;
   std::vector<BoardEntry> entries;
   std::vector<uint8_t> bytes;
+  ItemId item = 0;
+  std::vector<ItemInfo> items;
 };
 
 class Backend {
@@ -222,6 +311,32 @@ class Backend {
   virtual Result add_screenshot(std::span<const uint8_t> rgb, int width, int height,
                                 std::string_view caption) = 0;
   virtual void hook_screenshots(bool hook) = 0;
+
+  // ---- the workshop (see ItemId above). Every call but the last three goes to the store's
+  // servers. `submit_item` creates an item (`item` 0) or a new version of the player's own,
+  // replacing its files; every subscriber's machine downloads it (`item_installed`).
+  // `subscribe_item(item, true)` answers `item_subscribed`, then `item_installed` once the
+  // download lands; `false` unsubscribes and the item's files go.
+  virtual RequestId query_items(const ItemQuery& query) = 0;
+  virtual RequestId submit_item(ItemId item, const ItemDraft& draft,
+                                std::span<const ItemFile> files) = 0;
+  virtual RequestId subscribe_item(ItemId item, bool subscribe) = 0;
+  virtual void subscribed_items(std::vector<ItemInfo>& out) const = 0;
+  virtual Result item_files(ItemId item, std::vector<CloudFile>& out) const = 0;
+  virtual Result item_read(ItemId item, std::string_view name, std::vector<uint8_t>& out) const = 0;
+
+  // ---- the handheld and the extras. `show_keyboard` opens the store's on-screen keyboard
+  // (`unsupported` where the player has a keyboard: not a handheld, not the big-picture mode;
+  // `invalid` while one is open, for a prompt over 256 bytes or `max_chars` outside 1 to 1024);
+  // `text_entered` answers. The timeline marks the game's moments on the store's recording.
+  // Remote play streams the game to a friend, whose input arrives as another player's devices
+  // (`engine/input`); `invite_remote_play` asks a friend, `remote_players` lists who is in.
+  virtual Result show_keyboard(KeyboardMode mode, std::string_view prompt, std::string_view initial,
+                               uint32_t max_chars) = 0;
+  virtual Result timeline_mark(const TimelineMark& mark) = 0;
+  virtual Result timeline_mode(TimelineMode mode) = 0;
+  virtual Result invite_remote_play(UserId user) = 0;
+  virtual void remote_players(std::vector<RemotePlayer>& out) const = 0;
 };
 
 }  // namespace ge::services
