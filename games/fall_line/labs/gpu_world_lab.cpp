@@ -22,6 +22,10 @@
 // an adapter it notes that and draws placeholders, so the digest is the same on every row;
 // GE_GPU_REQUIRE=1 fails instead. Built only with GE_GPU.
 //
+// --console=1 draws the last scene once more with the drop-down console down over it, as the
+// window draws it (frame.hpp's `ui` row: ui/console.hpp's list through the 2D pass after post): a
+// few lines in its scrollback and a command half typed, its suggestions under the panel.
+//
 // --cfg runs console commands over Fall Line's cvars first (cfg/cvars.hpp), so a sky a server
 // picks (sv_weather, sv_snowfall, sv_fog, sv_wind, sv_winddir, sv_cover, sv_hour, sv_skyrate) and
 // r_clouds are photographed as the game draws them (sim/sky.hpp).
@@ -30,7 +34,7 @@
 // ge:keywords lab world picture screenshot views frame terrain sky post gpu-capture headless
 // ge:keywords tiles-drawn gpu-ms cpu-ms pass-table fall-line taa render-scale shimmer overdraw
 // ge:keywords instances forest figures run-moments chase-camera occlusion-culling cull-check
-// ge:keywords sun-shadow cascade-redraws shadow-cache
+// ge:keywords sun-shadow cascade-redraws shadow-cache drop-down-console overlay ui-pass
 // ge:skill render labs
 #include <algorithm>
 #include <array>
@@ -45,6 +49,7 @@
 #include <vector>
 
 #include "console/console.hpp"
+#include "console/view.hpp"
 #include "fall_line/app/frame.hpp"
 #include "fall_line/app/sky_type.hpp"
 #include "fall_line/app/views.hpp"
@@ -59,6 +64,8 @@
 #include "mountain/mapgen/generate.hpp"
 #include "render/shadows.hpp"
 #include "render/taa.hpp"
+#include "ui/console.hpp"
+#include "ui/draw.hpp"
 
 namespace {
 
@@ -347,6 +354,24 @@ void run(ge::lab::Lab& lab) {
          {"cfg", lab.arg("cfg").empty() ? "none" : lab.arg("cfg")}}};
   };
 
+  // The console's still: the last scene with the drop-down console down over it.
+  const bool with_console = lab.arg_num("console") != 0 && !scenes.empty();
+  auto console_shot = [&] {
+    ge::lab::Shot shot = shot_of(scenes.back());
+    shot.id = "console";
+    shot.title = "SEED " + seed_s + ", CONSOLE";
+    shot.caption =
+        "The last scene again with the drop-down console down over the top half, drawn by the "
+        "2D pass after post as the window draws it: the con_bg gradient over the game, the "
+        "scrollback coloured by kind, the input line with a cvar's name half typed and its hint, "
+        "the suggestions under the panel's edge.";
+    shot.look_for =
+        "the panel covers the top of the frame and the mountain shows under it and through it; "
+        "the text is crisp and inside the panel; the suggestion list hangs under the yellow "
+        "edge; the mountain below the panel is the same picture as the scene";
+    return shot;
+  };
+
   auto device = ge::gpu::create_device({.label = "world", .validation = 1});
   if (!device) {
     if (env_on("GE_GPU_REQUIRE")) {
@@ -358,6 +383,11 @@ void run(ge::lab::Lab& lab) {
       ge::lab::Picture none = ge::lab::create_picture(width, height, {40, 40, 48});
       ge::lab::draw_text(none, 4, 4, "NO GPU ADAPTER", {230, 230, 230});
       lab.shot(shot_of(sc), none, Det::measured);
+    }
+    if (with_console) {
+      ge::lab::Picture none = ge::lab::create_picture(width, height, {40, 40, 48});
+      ge::lab::draw_text(none, 4, 4, "NO GPU ADAPTER", {230, 230, 230});
+      lab.shot(console_shot(), none, Det::measured);
     }
     // The digest hashes in call order: the shots, then these, as the device path does.
     lab.metric("overdraw-faults", 0, "count");
@@ -471,6 +501,33 @@ void run(ge::lab::Lab& lab) {
     }
     lab.shot(shot_of(sc), picture, Det::measured, std::move(distance));
   }
+  if (with_console) {
+    Scene& sc = scenes.back();
+    ge::console::ConsoleView con(console);
+    con.add(ge::console::LineKind::output, "Fall Line: seed " + seed_s + ", the free ride");
+    con.add(ge::console::LineKind::command, "] /sv_hour 15.5");
+    con.add(ge::console::LineKind::event, "a gate missed: 4");
+    con.add(ge::console::LineKind::chat, "skier: the powder under the ridge is untracked");
+    con.toggle();
+    con.frame(10);
+    con.type("/r_bl");
+    ge::ui::DrawList overlay;
+    overlay.begin(width, height);
+    ge::ui::draw_console(overlay, con, {}, nullptr, 0);
+    fall_line::app::cut(*frame);
+    for (int i = 0; i < settle; ++i) {
+      sc.view.frame = static_cast<uint64_t>(i);
+      fall_line::app::draw(*device, *frame, sc.view,
+                           {sc.skiers, 0, true, {}, std::nullopt, &overlay}, target.view);
+    }
+    const ge::gpu::Image img = ge::gpu::read_now(*device, target);
+    if (img.rgba.size() == static_cast<size_t>(width) * static_cast<size_t>(height) * 4) {
+      lab.shot(console_shot(), ge::lab::Picture{width, height, img.rgba}, Det::measured);
+    } else {
+      lab.fail("the readback of the console's still came back the wrong size",
+               "Check engine/gpu/target.cpp's Readback. Skill: gpu.");
+    }
+  }
   lab.note(costs);
   lab.metric("overdraw-faults", overdraw_faults, "count");
   if (overdraw_faults != 0) {
@@ -527,6 +584,7 @@ const ge::lab::LabSpec kSpec{
          "seconds of the bot's run to shoot from the chase camera, comma-"
          "separated (empty: none)"},
         {"rivals", "3", "the bots racing beside him"},
+        {"console", "1", "the last scene again with the drop-down console down over it (0: not)"},
     },
     "--views=start,vista --moments=4 --width=160 --height=90 --settle=2",
     run,
