@@ -433,6 +433,47 @@ pass runs and nothing is stored a figure: a palette costs 48 bytes a joint a fra
 draws two limbs in poses of their own as one palette family and through the `skinning` pass and
 finds the same depth on every pixel either covers.
 
+## The view model
+
+A first-person game draws the weapon its player holds in front of the eye (`engine/viewmodel`,
+row M48). Three questions decide how it looks, and each has one answer in one file:
+
+- **What it is** (`held.hpp`): a `HeldModel`, morph frames (a position and a normal a vertex a
+  frame) over shared triangles, coloured by a skin read at its UVs (its glowing texels lit by
+  themselves) or by a colour a vertex. Any format is converted into it once, at load: a glTF
+  posed into frames (`held_from_model`), a game's own morph format by its reader. `fit_mount`
+  turns a model authored in any frame so its muzzle is +z and its up +y without mirroring it,
+  scales it and puts the grip at the origin.
+- **Where it is** (`place.hpp`): an affine from the held frame into the view's, a display frame
+  at a time from the look, the eye's own bob and the moments (a shot, a landing, a weapon put
+  away): the rest offset low and right, the bob pushed forward, the sway that lags a turn on a
+  second-order follower (so a gun has weight), the kick on a stiff spring, the put-away at a
+  steady rate. Presentation only; comfort (`cl_motion`) scales every motion the player did not
+  command. A classic row and a modern one are the starting points.
+- **How it is lit** (`light.hpp`): by the place the player stands in, never by a fixed lamp. A
+  game samples its baked light at the player (the lightmap under the feet, a light grid's cell,
+  the sky and the sun) as a probe of an ambient and a direct colour, and hands its local lights
+  (torches, lamps, a muzzle flash) on the same fall-off law as the renderer's local lights. The
+  strongest eight at the grip are kept, a floor keeps a gun in the dark a silhouette, and the
+  surface is a wrapped Lambert with a Blinn highlight.
+
+**The draw** is two passes into one target: the world, then the depth cleared and the gun drawn
+through its own lens, so it is never cut by a wall it is pushed into and a wide view does not
+stretch it. `raster.hpp` is the CPU reference every lab draws with (`viewmodel`, on the stage's
+corridor and its six named lights); the GPU pass (M48c) draws the same light per pixel over the
+clustered local lights and is held to the reference.
+
+**The muzzle** is where a game stages what a shot makes (the flash, its smoke, its light). A held
+model names its tip as the centre of a few of its vertices (`muzzle_vertices`, the barrel's front
+on the rest frame by `find_muzzle`, or the game's own), so `muzzle_at` follows every morph frame
+the barrel does, and `muzzle_dir` is the way the shot leaves. The gun is drawn through its own
+lens, so its tip is carried into the world by `held_to_world` / `held_dir_to_world`: placed into
+the view, then moved across at its depth by tan(view / 2) / tan(gun / 2), so an effect drawn in
+the world's pass sits on the same screen ray as the barrel. A model that draws its own flash (a
+classic weapon's glowing triangles on its firing frames) marks them in `flame`, and a game whose
+engine draws the flash hides them through `DrawLit::hidden`. The effect is drawn after the gun,
+so a flame can overlap the barrel.
+
 ## Terrain
 
 A generic **heightfield renderer** in `engine/render`, which a game hands a height
