@@ -740,8 +740,9 @@ cumulonimbus, nimbostratus, altocumulus, altostratus, lenticular, cirrocumulus, 
 cirrostratus, cirrus and wisps. A kind's bands are its base over the valley floor, its depth, its cover and
 its cell (m); its stretch along the wind, its dome (0 a sheet, 1 a heap), its optical depth,
 its shadow, its life and its speed; four FORM knobs, each 0..1, carried in a fourth row of the
-layer's frame block (`CloudLayer::anvil`, `erode`, `fibre`, `patch`); and its LIGHT in a fifth
-(`drop_um`, `drop_spread`, `halo`, `deck`), below:
+layer's frame block (`CloudLayer::anvil`, `erode`, `fibre`, `patch`); its LIGHT in a fifth
+(`drop_um`, `drop_spread`, `halo`, `deck`); and its THICKNESS in a sixth (`thin`,
+`thick_cells`, `thick_bias`), below:
 
 - THE BILLOWS. The noise texture is two channels (RG8Unorm 64³): the column's value fbm, and a
   cellular (Worley) fbm at 4, 8 and 16 cells a tile. Two reads of it at ten times the cell's
@@ -787,6 +788,30 @@ layer's frame block (`CloudLayer::anvil`, `erode`, `fibre`, `patch`); and its LI
   the beam's: an altostratus under a low sun is grey with the sun a pale disc in it, not white
   over the whole sky. A heap's sides and a thin layer's edges face the sun at any height, so a
   high veil keeps its pink at sunset.
+- THE THICKNESS (`cloud_thickness` in `wgsl/frame.wgsl`, mirrored by `render/clouds.hpp`): a
+  layer's extinction is not even across it. A read of the noise a patch wide (`thick_cells`
+  cells, set off from the column's read), a share of the column itself (so it thins toward its
+  gaps) and the sky's lean (`thick_bias`, dealt per map in ±0.4, or `sv_thick` in Fall Line)
+  give each column a share of its kind's full optical depth between its thinnest patches
+  (`thin`) and 1. The kinds that vary are the sheets: an altostratus from 1.6 (the sun as
+  through frosted glass) to 32 (hidden), a stratus from 3.4 (a watery disc) to 28, a
+  stratocumulus from 2.7 to 18, cirrus from 0.4 to 4; a storm's tower is never less than half
+  its depth. The cloud's shadow on the ground (`cloud_cast`) is the column times its thickness,
+  so a thin patch's shadow is faint.
+- THROUGH IT, THE DISC: the sky draws the sun's and the moon's discs behind the cloud, so a
+  disc shows by the ray's own transmittance, exp(−τ), wherever on the ray its light was taken:
+  bright through a thin patch, gone behind a core. Two things used to leak it: the march stopping
+  at a hundredth of the light (the rest of the path is now taken as thick as the ray's so far)
+  and the half-size picture's half floats, which hold one minus a transmittance near 1 only in
+  steps of 1/2048 (they now hold the transmittance itself). A sun tens of thousands of times the
+  white showed through both as a disc behind any deck.
+- THE GLOW'S ORDERS: the glow is lit by the light the ray's steps scatter times the ray's own
+  transmittance (τ e^−τ: brightest through a patch about one deep, gone behind a thick core).
+  Through a thicker cloud the light is bent again and again: the orders past the first (Poisson
+  in their count, each the diffracted half of an extinction) spread the glow ever wider, a
+  Gaussian of the first's core (0.257 wavelengths over the radius) widened as the root of the
+  order, so the disc melts into a bright smudge where the sun stands and, thicker still, into
+  the deck's grey: frosted glass, then a bright patch, then nothing.
 - THE SHAFTS (`shafts` in `wgsl/frame.wgsl`): six points along the view ray, out to 20 km,
   read the cloud's shadow; the air scatters that share of the sun (70 % of its in-scatter is
   shadowed at most), on the world through the haze and on the sky strongest toward the sun, so
@@ -794,8 +819,10 @@ layer's frame block (`CloudLayer::anvil`, `erode`, `fibre`, `patch`); and its LI
 
 Fall Line picks a stack with `sv_clouds` (kinds joined by '+', such as `cumulus+cirrus`, up to
 four; `map`, the default, keeps the map's own), each kind's bands dealt off the map's seed by
-`cloud_layers_of`; a stack whose lowest kind is a thick full sheet (`lid_under`) turns the day
-grey under it as a lid would. The `world` lab's `clouds` view stands at the finish in the
+`cloud_layers_of`; a stack whose lowest kind is a thick, full, low sheet (`lid_under`; a middle
+altostratus, its thin patches the sun shows through, is none) turns the day grey under it as a
+lid would. `sv_thick` (0 thin .. 1 thick, -1 the map's) leans every layer between its kind's
+thin patches and its cores. The `world` lab's `clouds` view stands at the finish in the
 valley and looks up the sky with the sun behind and to one side, the way a photograph of a sky
 is taken.
 

@@ -122,6 +122,8 @@ struct FrameOptions {
       true;  // the map's sky and cloud in the picture (mountain/app/cloud_field.hpp): off, clear
   double clouds = 1.0;  // the share of the cloud march's steps (0.25..1); 0: no layer drawn
   double cover = -1;  // a broken sky's cover, its lowest layer's (the others kept in step); -1 own
+  double thick =
+      -1;  // how thick every layer is, 0 thin .. 1 thick (CloudLayer::thick_bias); -1 own
   // The kinds of cloud drawn in place of the map's (sv_clouds, app/sky_type.hpp), lowest first;
   // a count of -1 keeps the map's own.
   const ge::render::CloudKind* cloud_kinds[ge::render::kCloudLayers] = {};
