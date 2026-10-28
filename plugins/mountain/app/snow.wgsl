@@ -261,6 +261,8 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   c += g.sun * lobe * 0.35 * snow.look2.x * (1.0 - rock) * (1.0 - 0.7 * frame.mist.z) / PI;
   // The wet film's mirror and the slush's pools on the flats.
   c += wet_sheen(n, v, g.sun, g.n.y);
+  // The lamps: the street's, a headlamp's, a fire's.
+  c += local_lights(matte(albedo), g.rel, n, v, in.position.xyz);
   // The glitter, on the loose snow in the sun: fine cells close in, coarser ones a little
   // further, none past 140 m.
   var glint = 0.0;
