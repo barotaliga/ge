@@ -1,7 +1,7 @@
 // The pipeline's stages (pipeline.hpp).
 //
-// ge:summary Runs the pack, textures, lightmaps and sounds stages into the cache, skipping what is
-// current ge:keywords pipeline run stage key skip textures index lightmaps sounds wav pack notice
+// ge:summary Runs the pack, textures, lightmaps and sounds stages, skipping what is current
+// ge:keywords pipeline run stage key skip textures index lightmaps sounds wav pack notice
 // ge:skill classicenhance
 // ge:test tests/classicenhance_pipeline_test.cpp
 #include "classicenhance/pipeline.hpp"
