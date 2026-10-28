@@ -40,6 +40,7 @@
 #include "mountain/mapgen/types.hpp"
 #include "render/cloud_kinds.hpp"
 #include "render/view.hpp"
+#include "wind/aloft.hpp"
 
 namespace ge::mountain::app {
 
@@ -56,16 +57,11 @@ struct Aloft {
   double base = -1;
 };
 
-// How far dusk has fallen with the sun `elevation` rad over the horizon: 0 with it 6 degrees up
-// or higher, 1 with it 6 degrees down or lower.
-double dusk_of(double elevation);
-// The low-level jet's factor on the wind at `h` m over the floor at dusk `dusk`.
-double jet_at(double h, double dusk);
-
-// The wind aloft at `h` m over the floor from a surface mean of `surface` m/s, floored at
-// `least` and held under 45 m/s; and how far it has turned by then, rad (positive clockwise).
-double wind_aloft(double surface, double h, double least);
-double veer_aloft(double h, double latitude);
+// The wind aloft and the evening's jet (wind/aloft.hpp), as the mountain's layers read them.
+using ge::wind::dusk_of;
+using ge::wind::jet_at;
+using ge::wind::veer_aloft;
+using ge::wind::wind_aloft;
 
 // The layers of the `count` kinds `kinds` (render/cloud_kinds.hpp, lowest first) over a map of
 // `seed` whose valley floor is at world `floor_y`, under `weather`'s wind, at the map's moment

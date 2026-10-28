@@ -32,6 +32,7 @@ struct Bsp {
   info3: vec4f,  // v2's soft floor of light (minlight), the baked light's share as bounce, the
                  // sky's light (r_skylight: the sun's and the open sky's in the rooms), the
                  // textures filtered (1) or crisp (0)
+  veil: vec4f,   // the sky faces' pixels times these (bsp_fix.wgsl's veil)
   ortho: array<Job, 2>,  // the sun's map and the zenith's
 };
 
