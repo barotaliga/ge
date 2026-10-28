@@ -350,7 +350,7 @@ bool parse_json(std::string_view text, JsonNode& out, std::string& error) {
   }
   p.space();
   if (p.i != text.size()) {
-    p.fail("text after the value");
+    p.fail("text after the value; next: check the file holds one JSON value and nothing after it");
     error = p.error;
     return false;
   }
