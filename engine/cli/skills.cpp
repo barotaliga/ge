@@ -215,8 +215,10 @@ std::vector<ConsumerSkill> skills_for(const fs::path& repo) {
   std::vector<ConsumerSkill> out;
   for (ConsumerSkill& s : consumer_skills()) {
     const auto doc = parse_skill(s.text);
+    // `plugin:` names a plugin, or an engine module a game links on its own (ge::water).
     if (doc && !doc->plugin.empty() &&
-        std::find(linked.begin(), linked.end(), doc->plugin) == linked.end()) {
+        std::find(linked.begin(), linked.end(), doc->plugin) == linked.end() &&
+        !links_plugin(repo, doc->plugin)) {
       continue;
     }
     out.push_back(std::move(s));
