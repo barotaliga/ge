@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "core/heightfield.hpp"
+#include "core/libm/libm.hpp"
 #include "gpu/device.hpp"
 #include "gpu/pipeline.hpp"
 #include "gpu/target.hpp"
@@ -47,6 +48,7 @@ namespace {
 
 namespace gl = ge::lab;
 namespace gr = ge::render;
+namespace libm = ge::core::libm;
 using ge::lab::water_scene::fixed;
 using ge::lab::water_scene::gpu_required;
 using ge::lab::water_scene::paste;
@@ -229,7 +231,7 @@ std::vector<gr::LocalLight> lamps(double flash_s) {
 
 float flat_ground(double x, double z) {
   // Flagstones' slight unevenness, a few millimetres.
-  return static_cast<float>(0.004 * std::sin(x * 2.1) * std::cos(z * 1.7) - 0.05);
+  return static_cast<float>(0.004 * libm::sin(x * 2.1) * libm::cos(z * 1.7) - 0.05);
 }
 
 struct Scene {
@@ -366,8 +368,8 @@ double adapted(const std::vector<gr::LocalLight>& list, double t) {
                                {kCx, 0.1, kCz + 3},     {kCx - 9, 2, kCz + 13.4},
                                {kCx + 9, 2, kCz + 13.4}};
   double e = 0;
-  for (const auto& p : points) e += std::log(std::max(gr::lamp_lux_at(list, p, t), 1e-3));
-  return std::exp(e / 7);
+  for (const auto& p : points) e += libm::log(std::max(gr::lamp_lux_at(list, p, t), 1e-3));
+  return libm::exp(e / 7);
 }
 
 double luma(const gl::Picture& p, int x, int y) {
