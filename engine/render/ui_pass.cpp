@@ -18,7 +18,8 @@ namespace ge::render {
 
 namespace {
 
-constexpr uint32_t kKindBox = 0, kKindGlyph = 1, kKindSampled = 2;
+constexpr uint32_t kKindBox = 0, kKindGlyph = 1, kKindSampled = 2, kKindSegment = 3, kKindArc = 4,
+                   kKindPolygon = 5;
 constexpr uint32_t kPad = 1;  // texels between glyphs in the atlas, so no filter reads a neighbour
 
 bool srgb_format(wgpu::TextureFormat f) {
@@ -26,8 +27,9 @@ bool srgb_format(wgpu::TextureFormat f) {
 }
 
 void make_main_group(gpu::Device& device, UiPass& pass) {
-  pass.group = make_group(device, "ui", pass.layout,
-                          {pass.uniforms, pass.items, pass.paints, pass.atlas_view, pass.sampler});
+  pass.group = make_group(
+      device, "ui", pass.layout,
+      {pass.uniforms, pass.items, pass.paints, pass.atlas_view, pass.sampler, pass.points});
 }
 
 // Room for `n` of `size`-byte elements in `buffer`, growing it to the next power of two.
@@ -110,6 +112,8 @@ void set_clip(UiItem& it, const ui::Rect& clip) {
   set4(it.clip, clip.x, clip.y, clip.right(), clip.bottom());
 }
 
+void set_bounds(UiItem& it, const ui::Rect& r) { set4(it.bounds, r.x, r.y, r.right(), r.bottom()); }
+
 UiPaint to_paint(const ui::Paint& p) {
   UiPaint g{};
   set4(g.line, p.from_x, p.from_y, p.to_x, p.to_y);
@@ -130,6 +134,7 @@ UiPaint to_paint(const ui::Paint& p) {
 bool stage(gpu::Device& device, UiPass& pass, const ui::DrawList& list) {
   pass.staged_items.clear();
   pass.staged_paints.clear();
+  pass.staged_points.clear();
   pass.ranges.clear();
   const wgpu::BindGroup* current = &pass.blank;
   bool fits = true;
@@ -143,7 +148,64 @@ bool stage(gpu::Device& device, UiPass& pass, const ui::DrawList& list) {
     pass.ranges.push_back({first, 0, image});
   };
   open_range(current);
+  auto add_shape = [&](UiItem& it, const ui::Paint* fill) {
+    if (fill) {
+      it.info[1] = static_cast<uint32_t>(pass.staged_paints.size());
+      pass.staged_paints.push_back(to_paint(*fill));
+    }
+    pass.staged_items.push_back(it);
+    ++pass.ranges.back().count;
+  };
   for (const ui::Cmd& c : list.cmds()) {
+    if (c.kind == ui::CmdKind::segment) {
+      const ui::Segment& g = c.segment;
+      const float grow = g.half + std::max(g.feather, 0.5f);
+      UiItem it{};
+      set4(it.rect, g.a.x, g.a.y, g.b.x, g.b.y);
+      set_clip(it, c.clip);
+      set4(it.ink, g.color.r, g.color.g, g.color.b, g.color.a);
+      set4(it.shape, g.half, g.feather, 0, g.opacity);
+      set4(it.bounds, std::min(g.a.x, g.b.x) - grow, std::min(g.a.y, g.b.y) - grow,
+           std::max(g.a.x, g.b.x) + grow, std::max(g.a.y, g.b.y) + grow);
+      it.info[0] = kKindSegment;
+      add_shape(it, nullptr);
+      continue;
+    }
+    if (c.kind == ui::CmdKind::arc) {
+      const ui::Arc& a = c.arc;
+      const float out = a.radius + a.half;
+      const ui::Rect frame{a.centre.x - out, a.centre.y - out, 2 * out, 2 * out};
+      UiItem it{};
+      set4(it.rect, a.centre.x, a.centre.y, a.radius, a.half);
+      set_clip(it, c.clip);
+      set4(it.uv, a.dir_from.x, a.dir_from.y, a.dir_to.x, a.dir_to.y);
+      set4(it.turn, a.dir_mid.x, a.dir_mid.y, a.cos_half, a.round ? 1.0f : 0.0f);
+      set4(it.shape, 0, a.feather, 0, a.opacity);
+      set4(it.src, frame.x, frame.y, 0, 0);
+      set_bounds(it, ui::inset(frame, std::max(a.feather, 0.5f)));
+      it.info[0] = kKindArc;
+      add_shape(it, &a.fill);
+      continue;
+    }
+    if (c.kind == ui::CmdKind::polygon) {
+      const ui::Polygon& g = c.polygon;
+      if (g.first + g.count > list.points().size()) continue;
+      UiItem it{};
+      set_clip(it, c.clip);
+      set4(it.shape, 0, g.feather, 0, g.opacity);
+      set4(it.src, g.bounds.x, g.bounds.y, 0, 0);
+      set_bounds(it, ui::inset(g.bounds, std::max(g.feather, 0.5f)));
+      it.info[0] = kKindPolygon;
+      it.info[2] = static_cast<uint32_t>(pass.staged_points.size() / 4);
+      it.info[3] = g.count;
+      for (uint32_t k = 0; k < g.count; ++k) {
+        const ui::PolyPoint& p = list.points()[g.first + k];
+        pass.staged_points.insert(pass.staged_points.end(),
+                                  {p.at.x, p.at.y, p.normal.x, p.normal.y});
+      }
+      add_shape(it, &g.fill);
+      continue;
+    }
     if (c.kind == ui::CmdKind::box) {
       const ui::Box& b = c.box;
       if (b.rect.w <= 0 || b.rect.h <= 0 || b.opacity <= 0) continue;
@@ -152,6 +214,14 @@ bool stage(gpu::Device& device, UiPass& pass, const ui::DrawList& list) {
       set_clip(it, c.clip);
       set4(it.ink, b.border_color.r, b.border_color.g, b.border_color.b, b.border_color.a);
       set4(it.shape, b.radius, b.feather, b.border, b.opacity);
+      const ui::Turn turn = ui::turn_of(b);
+      // Unturned, the pivot is the origin, so the shader's frame is exactly p - rect's corner.
+      if (turn.turned) {
+        set4(it.turn, turn.cos, turn.sin, turn.pivot.x, turn.pivot.y);
+      } else {
+        set4(it.turn, 1, 0, 0, 0);
+      }
+      set_bounds(it, ui::turned_bounds(turn, b, std::max(b.feather, 0.5f)));
       it.info[0] = kKindBox;
       it.info[1] = static_cast<uint32_t>(pass.staged_paints.size());
       auto found = b.image ? pass.pictures.find(b.image) : pass.pictures.end();
@@ -162,7 +232,16 @@ bool stage(gpu::Device& device, UiPass& pass, const ui::DrawList& list) {
       if (found != pass.pictures.end()) {
         const UiPass::Picture& pic = found->second;
         const float iw = static_cast<float>(pic.width), ih = static_cast<float>(pic.height);
-        set4(it.uv, b.uv.x / iw, b.uv.y / ih, b.uv.w / b.rect.w / iw, b.uv.h / b.rect.h / ih);
+        if (b.slice.empty()) {
+          set4(it.uv, b.uv.x / iw, b.uv.y / ih, b.uv.w / b.rect.w / iw, b.uv.h / b.rect.h / ih);
+        } else {
+          const ui::Insets& to = b.slice_to.empty() ? b.slice : b.slice_to;
+          set4(it.uv, b.uv.x / iw, b.uv.y / ih, b.uv.w / iw, b.uv.h / ih);
+          set4(it.src, b.slice.left / iw, b.slice.top / ih, b.slice.right / iw,
+               b.slice.bottom / ih);
+          set4(it.dst, to.left, to.top, to.right, to.bottom);
+          it.info[2] = 1;
+        }
         it.info[0] = kKindSampled;
         current = &pic.group;
         open_range(current);
@@ -188,6 +267,8 @@ bool stage(gpu::Device& device, UiPass& pass, const ui::DrawList& list) {
                          set4(it.uv, static_cast<float>(at & 0xffff), static_cast<float>(at >> 16),
                               0, 0);
                          set4(it.ink, t.color.r, t.color.g, t.color.b, t.color.a);
+                         set4(it.bounds, static_cast<float>(left), static_cast<float>(top),
+                              static_cast<float>(left + m.w), static_cast<float>(top + m.h));
                          it.info[0] = kKindGlyph;
                          pass.staged_items.push_back(it);
                          ++pass.ranges.back().count;
@@ -209,9 +290,10 @@ void create_ui_pass(gpu::Device& device, gpu::PipelineSet& pipelines, UiPass& pa
   }
   pass.output = format;
   const auto both = wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment;
-  pass.layout = make_layout(
-      device, "ui",
-      {Slot::uniform, Slot::storage_read, Slot::storage_read, Slot::texture, Slot::sampler}, both);
+  pass.layout = make_layout(device, "ui",
+                            {Slot::uniform, Slot::storage_read, Slot::storage_read, Slot::texture,
+                             Slot::sampler, Slot::storage_read},
+                            both);
   pass.image_layout = make_layout(device, "ui.image", {Slot::texture}, wgpu::ShaderStage::Fragment);
   wgpu::SamplerDescriptor sd{};
   sd.label = "ui.linear";
@@ -225,6 +307,7 @@ void create_ui_pass(gpu::Device& device, gpu::PipelineSet& pipelines, UiPass& pa
   pass.atlas_view = pass.atlas.CreateView();
   grow(device, pass.items, pass.item_room, 1, sizeof(UiItem), "ui.items");
   grow(device, pass.paints, pass.paint_room, 1, sizeof(UiPaint), "ui.paints");
+  grow(device, pass.points, pass.point_room, 1, 16, "ui.points");
   make_main_group(device, pass);
   const uint8_t white[4] = {255, 255, 255, 255};
   UiPass::Picture blank = make_picture(device, pass, 1, 1, nullptr);
@@ -296,12 +379,18 @@ void prepare_ui(gpu::Device& device, UiPass& pass, const ui::DrawList& list, uin
       grow(device, pass.items, pass.item_room, items, sizeof(UiItem), "ui.items");
   const bool more_paints =
       grow(device, pass.paints, pass.paint_room, paints, sizeof(UiPaint), "ui.paints");
-  if (more_items || more_paints) make_main_group(device, pass);
+  const auto points = static_cast<uint32_t>(pass.staged_points.size() / 4);
+  const bool more_points = grow(device, pass.points, pass.point_room, points, 16, "ui.points");
+  if (more_items || more_paints || more_points) make_main_group(device, pass);
   if (items) {
     device.queue.WriteBuffer(pass.items, 0, pass.staged_items.data(), items * sizeof(UiItem));
   }
   if (paints) {
     device.queue.WriteBuffer(pass.paints, 0, pass.staged_paints.data(), paints * sizeof(UiPaint));
+  }
+  if (points) {
+    device.queue.WriteBuffer(pass.points, 0, pass.staged_points.data(),
+                             pass.staged_points.size() * sizeof(float));
   }
 }
 

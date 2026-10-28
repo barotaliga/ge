@@ -987,6 +987,30 @@ The GPU draws the same list in one pass after post, blended over the display ima
   none is more than 3 levels off at any pixel. Preparing a 1280 × 720 page costs about 1.7 ms of
   CPU, and the software adapter draws it in 19 ms. The real GPU's cost waits for the Mac.
 
+**Shapes (M22e).** A HUD's instruments need more than boxes, so the draw list has five kinds of
+command, every one a quad in the same instanced draw with its own signed distance:
+
+- **Boxes turn and nine-slice.** A box turns by `rotation` (radians, clockwise) about `pivot`
+  (box-local pixels, the centre by default): the quad is the turned box's bounds, and the
+  fragment shader moves the pixel back into the box's own frame before the rounded rectangle,
+  the paint and the image are worked out, so a needle is a box turned about its foot and a map is
+  an image turned under a heading. A nine-sliced box maps each band of the box (`slice_to`) to its
+  band of the image (`slice`): the corners keep their pixels at any size, the edges and the
+  middle stretch.
+- **Lines** are capsules of a width between two points; a polyline is a line a segment.
+- **Arcs** are bands of a width round a centre, from one angle to another (0 at twelve o'clock,
+  clockwise), with flat or round ends: the distance is to the ring inside the sweep and to the
+  ends outside it. A gradient over an arc is in the arc's box, so a dial's band grades from one
+  end to the other.
+- **Convex polygons** of up to 16 points, in either winding: the distance is the largest of the
+  edges' distances, the edges' outward normals worked out once on the CPU and read from a third
+  storage buffer.
+
+Every angle's sine and cosine is worked out once a command on the CPU with the engine's libm,
+so the raster and the GPU read the same numbers. On lavapipe the `menu-gpu` lab's instrument
+panel is within 8 levels of the raster everywhere but one pixel a picture, at the needle's
+point, where an acute vertex's coverage swings on the last bit of a float.
+
 ## Particles and figures
 
 - **Particles are simulated in compute** in fixed pools: emission appends to a ring, the

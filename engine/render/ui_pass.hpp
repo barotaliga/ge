@@ -3,10 +3,12 @@
 // tests picture with. A menu, the HUD and the console are drawn this way in a game.
 //
 // ONE INSTANCED DRAW PER PICTURE. `prepare_ui` turns the list into instances: each box is one
-// quad with its rounded rectangle, paint and border worked out in the fragment shader, and each
-// glyph of a text run is one quad reading the glyph atlas. Every instance lives in one storage
-// buffer and every paint in a second, so the whole list is one draw, split only where a box's
-// image changes (each image is a texture with its own small bind group).
+// quad with its rounded rectangle (turned, when it is), paint, image (nine-sliced, when it is)
+// and border worked out in the fragment shader; each glyph of a text run is one quad reading the
+// glyph atlas; a segment, an arc and a convex polygon are one quad each over their bounds, their
+// signed distance worked per pixel. Every instance lives in one storage buffer, every paint in a
+// second and every polygon point in a third, so the whole list is one draw, split only where a
+// box's image changes (each image is a texture with its own small bind group).
 //
 // THE SAME PIXELS AS THE CPU RASTER, within a level or two: coverage comes from the same signed
 // distance at the pixel's centre, the clip keeps the same centres, text is set by the same
@@ -51,16 +53,21 @@ namespace ge::render {
 
 inline constexpr uint32_t kUiAtlasSize = 1024;  // the glyph atlas, a side (R8)
 
-// render/ui_pass.wgsl's `Item`, field for field: one box or one glyph.
+// render/ui_pass.wgsl's `Item`, field for field: one box, glyph, segment, arc or polygon (the
+// shader's header says what each field holds for each kind).
 struct UiItem {
-  float rect[4];     // x, y, w, h (px)
-  float clip[4];     // x0, y0, x1, y1 (px)
-  float uv[4];       // a box's image: u, v at the rect's corner, du/dx, dv/dy; a glyph: atlas x, y
-  float ink[4];      // a box's border colour; a glyph's colour
+  float rect[4];
+  float clip[4];  // x0, y0, x1, y1 (px)
+  float uv[4];
+  float ink[4];
   float shape[4];    // radius, feather, border, opacity
-  uint32_t info[4];  // kind (0 box, 1 glyph, 2 box with an image), paint index, 0, 0
+  uint32_t info[4];  // kind, paint index, a box: sliced / a polygon: first point, its count
+  float turn[4];
+  float src[4];
+  float dst[4];
+  float bounds[4];  // x0, y0, x1, y1: what the quad covers (px)
 };
-static_assert(sizeof(UiItem) == 96, "match ui_pass.wgsl");
+static_assert(sizeof(UiItem) == 160, "match ui_pass.wgsl");
 
 // render/ui_pass.wgsl's `Paint`: a ui::Paint's stops and shape.
 struct UiPaint {
@@ -77,8 +84,8 @@ struct UiPass {
   wgpu::BindGroupLayout image_layout;  // one image
   wgpu::Sampler sampler;
   wgpu::Buffer uniforms;
-  wgpu::Buffer items, paints;
-  uint32_t item_room = 0, paint_room = 0;
+  wgpu::Buffer items, paints, points;
+  uint32_t item_room = 0, paint_room = 0, point_room = 0;
   wgpu::BindGroup group;  // made again when a buffer grows
   uint32_t p_draw = 0;
 
@@ -107,6 +114,7 @@ struct UiPass {
   };
   std::vector<UiItem> staged_items;
   std::vector<UiPaint> staged_paints;
+  std::vector<float> staged_points;  // x, y, normal x, normal y a polygon point
   std::vector<Range> ranges;
   uint32_t width = 0, height = 0;
 };
