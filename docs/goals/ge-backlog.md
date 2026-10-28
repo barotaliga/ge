@@ -72,6 +72,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 ## Inspecting a run
 
 - plugin commands (next, after the module registry): a plugin's or a game's `tools/*.cpp` registering `GE_TOOL({group, verb, summary, args, flags, run})` into one `tools` executable the build makes, and `ge` forwarding a command it does not know to it, listed in `ge help` and answering with findings and `--json` like its own; first users `ge level textures <pak> <map> --out=<dir>` and `ge level clone <bsp> --texmap=<file>`, which today hide as lab flags
+- `ge lab <id> --compare=<tag> --metric=<name>` (one metric across the kept run and this one, a table per scenario or shot, in place of every metric `--compare` prints today)
 - `ge lab why <lab> <metric>` (what drove a lab's metric: the scenario steps, series and inputs that moved it most, and against a kept run with `--compare=<tag>` where it parted)
 - `ge lab listen <lab> <id>` (a lab's WAVs transcoded to a small web format, Opus in Ogg, for its report page and `ge lab publish`, without ffmpeg by hand)
 - `ge record` (done: a run as an MP4, WebM or GIF and a contact sheet of timestamped stills, its resolution, frame rate, speed, range and encoder quality; and `--gpu`, the game's registered renderer drawing each frame headless in a mode, Fall Line's `lit`, `wireframe`, `depth` and `overlay` from a chase camera, a high chase or the named views; `ge shot --gpu` the same still)
@@ -154,6 +155,8 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge add lab --kind=overlay`
 - `ge services check` (a game's store catalog checked by `check_catalog`, and later diffed against a store's exported partner configuration)
 - `ge doctor --tools` / `ge env` (which tools, versions and drivers a gate needs, and which are missing)
+- `ge shader check <file.wgsl>` (one shader's includes resolved as the embedder does, compiled by Tint, the error named with its line: `make shaders-check` builds every shader and needs GE_GPU, and a reserved word showed only as finish() returning false)
+- the WGSL embedder failing on an empty generated shader (an unbalanced bracket in a comment splits the CMake list and silently empties it)
 
 (`ge shot` is M12b's; `ge anim` is M14b's.)
 
