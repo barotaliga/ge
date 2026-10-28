@@ -36,6 +36,8 @@ struct SkyLight {
   sun_at_eye: vec4f,     // the sun's transmittance to the eye
   moon_up: vec4f,        // the moon's sky's, per unit of its light (zero by day)
   moon_at_eye: vec4f,    // the moon's transmittance to the eye
+  eye: vec4f,            // the eye's adaptation (render/eye.hpp): x the stops it has opened
+                         // past the sky's exposure; zero (the eye at rest) unless it runs
 }
 @group(0) @binding(6) var<storage, read> sky_light: SkyLight;
 @group(0) @binding(7) var moon_view_lut: texture_2d<f32>;
@@ -382,18 +384,34 @@ fn white_luminance() -> f32 {
   return max(dot((sun + sky) / PI, kLuma), kDarkestLux * frame.world.y / (PI * kSunLux));
 }
 
-// THE EXPOSURE: the scale that maps a white Lambertian surface under this sun and sky to
-// kWhiteKey, read off the sky's light (never a histogram, so it never pumps); under kAdaptLux
-// on white, the eye's partial adaptation leaves the night darker than the day. The post pass
-// applies it; TAA-U weighs its samples in the light it gives.
-fn exposure() -> f32 {
-  let white = white_luminance();
+// THE EXPOSURE at `white`, a white Lambertian surface's luminance the eye is adapted to: the
+// scale that maps it to kWhiteKey; under kAdaptLux on white, the eye's partial adaptation leaves
+// the night darker than the day.
+fn exposure_at(white: f32) -> f32 {
   var e = mix(kWhiteKey, kDeckKey, frame.weather.y) / white;
   let lux = white * PI * kSunLux / frame.world.y;
   if (lux < kAdaptLux) {
     e *= pow(lux / kAdaptLux, 1.0 - kAdaptGain);
   }
   return e;
+}
+
+// THE SKY'S EXPOSURE: the eye adapted to a white surface under this sun and sky, read off the
+// sky's light (never a histogram, so it never pumps). What the eye's meter exposes at.
+fn sky_exposure() -> f32 {
+  return exposure_at(white_luminance());
+}
+
+// THE EXPOSURE the picture is shown at: the sky's, with the eye opened `sky_light.eye.x` stops
+// past it where render/eye.hpp's pass metered a darker world than the sky lights (a hall, a
+// cave); the white the eye adapts to is that much dimmer, so the night's partial adaptation still
+// holds in the dark. The post pass applies it; TAA-U weighs its samples in the light it gives.
+fn exposure() -> f32 {
+  let open = sky_light.eye.x;
+  if (open == 0.0) {
+    return sky_exposure();
+  }
+  return exposure_at(white_luminance() * exp2(-open));
 }
 
 // THE MOON AS SEEN (sky.wgsl's disc, and the clouds' glow round it): its lit surface is hundreds

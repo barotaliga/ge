@@ -26,6 +26,7 @@ forest f1881cb20efe0144
 frame-pace c5058023a52812c3
 free 2b3f2cf5100bf9b4
 gpu-capture 8b5d5e3b7be5a4fc
+gpu-eye bb72126e2e347d23
 gpu-load d0f81d39aa78ab53
 gpu-underwater eb4871f6a59d741e
 gpu-water eee3da1407e861c4
@@ -74,6 +75,7 @@ replay-cut 1381f20bd27caa95
 replay-file b9f41fcd00bac8b3
 resort f82a1fca6fb6ba42
 ride c3794669e029f0c9
+room fd58d703c9dfac75
 routes 739cf0534473b4f8
 run-clock 81607c7ac1161166
 services 066720b02adca9e4
