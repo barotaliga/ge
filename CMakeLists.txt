@@ -192,7 +192,8 @@ if(GE_GPU)
     engine/render/skinning.wgsl engine/render/particles.wgsl engine/render/particles_sim.wgsl engine/render/precip.wgsl engine/render/precip_sim.wgsl
     engine/render/clouds.wgsl engine/render/water.wgsl engine/render/water_copy.wgsl
     engine/render/water_stream.wgsl
-    engine/render/underwater.wgsl engine/render/ui_pass.wgsl)
+    engine/render/underwater.wgsl engine/render/ui_pass.wgsl engine/render/fog.wgsl
+    engine/render/fog_integrate.wgsl)
 endif()
 
 # The network (engine/net, docs/networking.md): addresses, the wire, the OS's UDP and TCP sockets

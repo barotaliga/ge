@@ -36,6 +36,7 @@ struct Frame {
   // tint, its size; 9 the glow's colour, its height; 10 the ring's tilt, the stars by day, the
   // dust's asymmetry, its scale height (km).
   style: array<vec4f, 11>,
+  fog: vec4f,              // the fog in areas (render/fog.hpp): its range (m; 0: none), its slices
 }
 
 // THE MOTION a surface at camera-relative `rel` (w = 1; w = 0 for a direction at infinity) made

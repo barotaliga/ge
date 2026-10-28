@@ -42,6 +42,8 @@ constexpr r::PassRow kPassTable[] = {
     {"shadows.near", "instances shadows.lists", "shadows.maps"},
     {"shadows.far", "instances shadows.lists", "shadows.maps"},
     {"shadows.figures", "instances figures.posed shadows.lists", "shadows.maps"},
+    {"fog.inject", "shadows.maps terrain.horizon sky.aerial sky.light fog.history", "fog.media"},
+    {"fog.integrate", "fog.media", "fog.volume"},
     {"terrain.depth", "terrain.tiles terrain.indirect terrain.height", "depth"},
     {"instances.depth", "instances figures.posed instances.early", "depth"},
     {"hiz", "depth", "hiz"},
@@ -49,22 +51,22 @@ constexpr r::PassRow kPassTable[] = {
     {"instances.depth.late", "instances figures.posed instances.late", "depth"},
     {"terrain",
      "terrain.tiles terrain.indirect terrain.height terrain.horizon shadows.maps sky.aerial "
-     "sky.light snow.ground trails.fine trails.coarse depth",
+     "sky.light snow.ground trails.fine trails.coarse depth fog.volume",
      "hdr motion"},
     {"instances",
      "instances figures.posed instances.early instances.late terrain.horizon shadows.maps "
-     "sky.aerial sky.light depth",
+     "sky.aerial sky.light depth fog.volume",
      "hdr motion"},
-    {"sky", "sky.view sky.moon_view depth", "hdr motion"},
+    {"sky", "sky.view sky.moon_view depth fog.volume", "hdr motion"},
     {"clouds.fresh", "depth sky.aerial sky.light", "clouds.fresh"},
     {"clouds.march", "depth clouds.history clouds.fresh sky.aerial sky.light", "clouds.quarter"},
-    {"clouds", "depth clouds.quarter sky.aerial sky.light", "hdr"},
+    {"clouds", "depth clouds.quarter sky.aerial sky.light fog.volume", "hdr"},
     {"water.copy", "hdr depth", "water.scene"},
-    {"water", "water.scene sky.view sky.aerial sky.light depth", "hdr motion depth"},
+    {"water", "water.scene sky.view sky.aerial sky.light depth fog.volume", "hdr motion depth"},
     {"water.under", "water.scene sky.light", "hdr"},
-    {"particles", "particles terrain.horizon shadows.maps sky.aerial sky.light depth",
+    {"particles", "particles terrain.horizon shadows.maps sky.aerial sky.light depth fog.volume",
      "hdr motion"},
-    {"precip", "precip terrain.horizon sky.aerial sky.light depth", "hdr motion"},
+    {"precip", "precip terrain.horizon sky.aerial sky.light depth fog.volume", "hdr motion"},
     {"taa", "hdr motion depth taa.history sky.light", "taa.history"},
     {"bloom", "taa.history", "bloom"},
     {"post", "taa.history bloom sky.light", "final"},
@@ -72,10 +74,10 @@ constexpr r::PassRow kPassTable[] = {
 // What is made at load rather than by a pass (the instances' meshes and streams: the figures'
 // placements and palettes are written before the frame is encoded, their vertices by the skinning
 // pass), and what is the last frame's (the TAA history, the depth pyramid the early cull reads,
-// the cloud's half-size picture the spread reprojects).
+// the cloud's half-size picture the spread reprojects, the fog's lit froxels it blends with).
 constexpr std::string_view kLoadInputs =
     "terrain.height terrain.pyramid terrain.albedo snow.ground instances taa.history hiz.last "
-    "clouds.history";
+    "clouds.history fog.history";
 
 constexpr int kPasses = static_cast<int>(std::size(kPassTable));
 
@@ -222,6 +224,7 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
   r::create_clouds(device, f->pipelines, f->clouds, f->frame_layout);
   r::create_water(device, f->pipelines, f->water, f->frame_layout);
   r::create_underwater(device, f->pipelines, f->under, f->frame_layout);
+  r::create_fog(device, f->pipelines, f->fog, f->frame_layout, &f->terrain, options.froxels);
   r::create_hiz_pipelines(device, f->pipelines, f->hiz);
   r::create_instance_pipelines(device, f->pipelines, f->instancing, f->frame_layout,
                                options.overdraw_probe, options.wire_probe);
@@ -242,7 +245,7 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
   r::create_skin_pipelines(device, f->pipelines, f->skinning);
   if (!f->pipelines.finish(device)) return nullptr;
   ge::gpu::end_load(device);
-  f->frame_group = r::frame_group(device, f->frame_layout, f->uniforms, f->sky);
+  f->frame_group = r::frame_group(device, f->frame_layout, f->uniforms, f->sky, f->fog.volume_view);
   f->level = &level;
   const std::vector<r::Instance> trees = tree_instances(level);
   r::create_family(device, f->instancing, f->forest, "forest", forest_meshes(), forest_materials(),
@@ -277,6 +280,7 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
   if (options.snow) r::bind_terrain_material(f->terrain, f->snow.group);
   r::bind_instance_shadows(f->instancing, f->shadows.group);
   r::bind_particle_shadows(f->particles, f->shadows.group);
+  r::bind_fog_shadows(f->fog, f->shadows.group);
   make_targets(device, *f, width, height);
   f->recorder.init(device, "frame.timer", kPasses);
   return f;
@@ -419,8 +423,15 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   const bool occlusion = f.options.occlusion && f.history.valid;
   double jitter[2] = {0, 0};
   if (f.options.taa) r::taa_jitter(view.frame, r::taa_phases(f.options.scale), jitter);
+  const bool fresh = !f.history.valid;
   r::fill_uniforms(f.staged, view, f.targets.width, f.targets.height, &f.history,
                    f.options.taa ? jitter : nullptr);
+  {
+    GE_ZONE("frame.fog");
+    r::prepare_fog(device, f.fog, view, f.options.fog ? scene.fog : std::span<const r::FogVolume>{},
+                   fresh);
+    r::fog_uniforms(f.fog, f.staged);
+  }
   device.queue.WriteBuffer(f.uniforms, 0, &f.staged, sizeof f.staged);
   {
     GE_ZONE("frame.sky");
@@ -552,6 +563,7 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   r::encode_particles_sim(f.particles, f.pipelines, f.recorder, encoder);
   r::encode_precip_sim(f.precip, f.pipelines, f.recorder, encoder);
   r::encode_sun_shadows(f.shadows, still, moving, f.instancing, f.pipelines, f.recorder, encoder);
+  r::encode_fog(f.fog, f.pipelines, f.recorder, encoder, f.frame_group);
   r::encode_terrain_depth(f.terrain, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
   r::encode_instances_depth(families, f.instancing, f.pipelines, f.recorder, encoder, f.targets,
                             f.frame_group, f.instance_light, false);
