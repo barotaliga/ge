@@ -70,6 +70,7 @@ constexpr r::PassRow kPassTable[] = {
     {"taa", "hdr motion depth taa.history sky.light", "taa.history"},
     {"bloom", "taa.history", "bloom"},
     {"post", "taa.history bloom sky.light", "final"},
+    {"ui", "final", "final"},
 };
 // What is made at load rather than by a pass (the instances' meshes and streams: the figures'
 // placements and palettes are written before the frame is encoded, their vertices by the skinning
@@ -165,6 +166,7 @@ FrameOptions frame_options(const cfg::Settings& s) {
   o.weather = s.weather;
   o.clouds = s.clouds;
   o.cover = s.cover;
+  o.thick = s.thick;
   cloud_stack_of(s, o);
   return o;
 }
@@ -243,6 +245,7 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
   r::create_post(device, f->pipelines, f->post, f->frame_layout, output, post);
   r::set_grade(device, f->post, bake_grade());
   r::create_skin_pipelines(device, f->pipelines, f->skinning);
+  r::create_ui_pass(device, f->pipelines, f->ui, output);
   if (!f->pipelines.finish(device)) return nullptr;
   ge::gpu::end_load(device);
   f->frame_group = r::frame_group(device, f->frame_layout, f->uniforms, f->sky, f->fog.volume_view);
@@ -392,6 +395,11 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
       const double k = f.options.cover / view.clouds.layers[0].cover;
       for (int i = 0; i < view.clouds.count; ++i)
         view.clouds.layers[i].cover = std::min(1.0, view.clouds.layers[i].cover * k);
+    }
+    // A thickness picked by hand: every layer's, between its kind's thin patches and its cores.
+    if (f.options.thick >= 0) {
+      for (int i = 0; i < view.clouds.count; ++i)
+        view.clouds.layers[i].thick_bias = 2 * std::min(f.options.thick, 1.0) - 1;
     }
     view.clouds.steps = f.options.clouds;
     view.clouds.quarter = f.options.cloud_quarter;
@@ -594,6 +602,12 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   }
   r::encode_post(f.post, f.pipelines, f.recorder, encoder, f.frame_group, f.post_groups[input],
                  output);
+  if (scene.overlay != nullptr && scene.overlay->size() > 0) {
+    r::prepare_ui(device, f.ui, *scene.overlay, f.output_width, f.output_height);
+    r::encode_ui(f.ui, f.pipelines, f.recorder, encoder, output);
+  } else {
+    f.recorder.compute(encoder, "ui").End();  // the row runs empty, as bloom's does
+  }
   f.recorder.end_frame(encoder);
   wgpu::CommandBuffer commands = encoder.Finish();
   f.recorder.stats.cpu_ms =
