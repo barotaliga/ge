@@ -463,6 +463,17 @@ stretch it. `raster.hpp` is the CPU reference every lab draws with (`viewmodel`,
 corridor and its six named lights); the GPU pass (M48c) draws the same light per pixel over the
 clustered local lights and is held to the reference.
 
+**The muzzle** is where a game stages what a shot makes (the flash, its smoke, its light). A held
+model names its tip as the centre of a few of its vertices (`muzzle_vertices`, the barrel's front
+on the rest frame by `find_muzzle`, or the game's own), so `muzzle_at` follows every morph frame
+the barrel does, and `muzzle_dir` is the way the shot leaves. The gun is drawn through its own
+lens, so its tip is carried into the world by `held_to_world` / `held_dir_to_world`: placed into
+the view, then moved across at its depth by tan(view / 2) / tan(gun / 2), so an effect drawn in
+the world's pass sits on the same screen ray as the barrel. A model that draws its own flash (a
+classic weapon's glowing triangles on its firing frames) marks them in `flame`, and a game whose
+engine draws the flash hides them through `DrawLit::hidden`. The effect is drawn after the gun,
+so a flame can overlap the barrel.
+
 ## Terrain
 
 A generic **heightfield renderer** in `engine/render`, which a game hands a height
