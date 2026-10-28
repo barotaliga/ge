@@ -88,7 +88,9 @@ slalom 2adb7c679ec93adf
 sled 30cd3df2c903518c
 snow 3f444a51a1e8a91c
 snow-contact c39eba995c9962ca
-snow-field eb9df0a82901b26a
+snow-cost cbf29ce484222325
+snow-field 208ebbb7fdc340c5
+snow-lod b4dbf5e265aa981f
 snow-press f60252f878f863e2
 snow-weather e064191b64090918
 speed-events 2e575d7a0184d4b2
