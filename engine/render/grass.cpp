@@ -24,7 +24,7 @@ constexpr uint32_t kRows = 65535;
 
 // grass_common.wgsl's GrassKind, GrassTri and GrassParams.
 struct GpuKind {
-  float shape[4], lean[4], air[4], root[4], tip[4], dry_tip[4];
+  float shape[4], lean[4], air[4], root[4], tip[4], dry_tip[4], flower[4], flower2[4], seed[4];
 };
 struct GpuTri {
   float a[4], b[4], c[4];
@@ -171,7 +171,15 @@ bool set_grass_cover(gpu::Device& device, Grass& g, const grass::Cover& cover) {
       o.root[c] = k.root[c];
       o.tip[c] = k.tip[c];
       o.dry_tip[c] = k.dry_tip[c];
+      o.flower[c] = k.flower[c];
+      o.flower2[c] = k.flower2[c];
+      o.seed[c] = k.seed[c];
     }
+    o.root[3] = k.flowers;
+    o.tip[3] = k.seeds;
+    o.flower[3] = k.flower_size;
+    o.flower2[3] = k.flower2_share;
+    o.seed[3] = k.seed_length;
   }
   device.queue.WriteBuffer(g.kinds, 0, kinds.data(), kinds.size() * sizeof(GpuKind));
   std::vector<GpuTri> tris;

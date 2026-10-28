@@ -1,9 +1,9 @@
 // engine/grass/kind.hpp: every preset is sound and round-trips through its recipe; a recipe's
-// overrides land on their fields; every fault names itself; the far colour lies between the
-// blade's root and tip.
+// overrides land on their fields; every fault names itself; flowers and seed heads are a kind's
+// own and tint its far colour; the far colour lies between the blade's root and tip.
 //
 // ge:summary Test: kinds of grass: presets, recipes parsed and printed, faults, the far colour
-// ge:keywords test grass kind preset recipe parse print far-colour
+// ge:keywords test grass kind preset recipe parse print far-colour flowers seeds
 // ge:skill grass testing
 #include <algorithm>
 #include <string>
@@ -53,6 +53,23 @@ TEST(every_fault_names_itself) {
   CHECK(!gg::parse_kind("meadow height=x", &e) && e.find("write a number") != std::string::npos);
   CHECK(!gg::parse_kind("meadow tip=1,2", &e) && e.find("r,g,b") != std::string::npos);
   CHECK(!gg::parse_kind("meadow height=0", &e) && e.find("above 0") != std::string::npos);
+  CHECK(!gg::parse_kind("meadow flowers=0.7 seeds=0.5", &e) &&
+        e.find("flowers + seeds at most 1") != std::string::npos);
+  CHECK(!gg::parse_kind("long seed_length=0.8", &e) && e.find("seed_length") != std::string::npos);
+}
+
+TEST(flowers_and_seed_heads_are_a_kinds_own) {
+  const auto k = gg::parse_kind("lawn flowers=0.1 flower=0.9,0.9,0.9 seeds=0.2 seed_length=0.25");
+  CHECK(k.has_value());
+  if (!k) return;
+  CHECK(k->flowers == 0.1f && k->seeds == 0.2f && k->seed_length == 0.25f);
+  CHECK(k->flower[0] == 0.9f);
+  const auto again = gg::parse_kind(gg::print_kind(*k));
+  CHECK(again.has_value() && gg::print_kind(*again) == gg::print_kind(*k));
+  // A lawn in white flower reads paler from afar than one without.
+  const auto bare = gg::parse_kind("lawn");
+  CHECK(bare.has_value());
+  if (bare) CHECK(gg::far_colour(*k)[0] > gg::far_colour(*bare)[0]);
 }
 
 TEST(the_far_colour_lies_between_the_shaded_root_and_the_tip) {
@@ -60,7 +77,8 @@ TEST(the_far_colour_lies_between_the_shaded_root_and_the_tip) {
     const auto c = gg::far_colour(k);
     for (size_t i = 0; i < 3; ++i) {
       const float lo = std::min(std::min(k.root[i], k.tip[i]), k.dry_tip[i]) * 0.68f;
-      const float hi = std::max(std::max(k.root[i], k.tip[i]), k.dry_tip[i]);
+      const float hi =
+          std::max({k.root[i], k.tip[i], k.dry_tip[i], k.flower[i], k.flower2[i], k.seed[i]});
       CHECK(c[i] >= lo && c[i] <= hi);
     }
   }
