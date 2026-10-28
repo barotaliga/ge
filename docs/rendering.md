@@ -625,6 +625,30 @@ no lobe at all, not even at a grazing angle), so every picture made before the m
 unchanged. The `gpu-lights` lab's sphere sheet shows roughness across a dielectric, a metal and
 the presets under the noon sun and under one lamp at night.
 
+### Flames
+
+**As built (M39f)** (`render/flame.hpp`, `render/flame.wgsl`). Fire is drawn as burning gas, not
+a sprite or a model: one quad a flame facing the eye over its bounding sphere, and per pixel a
+march of 28 steps through the gas, stopped at the scene's depth so a bracket or a wall in front
+of it hides it (the `gpu-flames` lab holds a flame behind a wall to changing no byte). The gas is
+a teardrop on its fuel (widest an eighth of the way up, a point at its tip), its edge a Gaussian
+in its radius so it fades over decades of light, torn by three octaves of value noise carried up
+at the gas's rise and growing toward the tip, where the tongues tear loose. Its temperature is
+hottest on the axis low down and cools toward the rim and the tip; every temperature's colour
+and brightness come from Planck's law against the CIE 1931 observer (`render/blackbody.hpp`, a
+64-row table any glowing thing can read through `render/wgsl/blackbody.wgsl`), so a cooling gas dims by orders of magnitude, softened to the eye's 0.45 power. A candle
+or a gas flame has a blue base. The gas only adds light. Shown at its physical luminance (a
+torch's core is about 9000 cd/m²) it would clip to one white against any lit room, so the pass
+shows it as the eye adapts to a bright source: on a log scale of its light past the picture's
+white, each primary saturating on its own, so the core reads yellow-white and the rim orange.
+
+A flame and its light flicker as one: `flame_light` makes the `LocalLight` (at the gas's centre,
+the colour of its mean temperature, its candela its luminance over its area seen side on: a
+torch 125 cd, a candle 1, a camp fire 1700; flickering as a flame with the flame's seed), and
+`prepare_flames` swells and brightens the gas with that light's level. A game puts the light in
+its lights list. `Flame::wind` bends the flame downwind against its rise, and its light leans
+with it. The presets are a torch, a candle, a brazier and a camp fire.
+
 **Shadows use three techniques, one for each scale:**
 
 1. **The mountain's own shadow: a horizon map.** For each texel of a grid over the
