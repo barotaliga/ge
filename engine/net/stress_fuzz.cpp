@@ -37,6 +37,14 @@ uint32_t word(core::Rng& r) {
   return static_cast<uint32_t>(std::floor(core::next(r) * 4294967296.0));
 }
 
+// Two words, high first. Each draw is its own statement: the order of a call's arguments or of
+// an operator's operands is the compiler's to choose, and a different order is a different fuzz.
+uint64_t wide(core::Rng& r) {
+  const uint64_t hi = word(r);
+  const uint64_t lo = word(r);
+  return (hi << 32) | lo;
+}
+
 void fill(core::Rng& r, uint8_t* out, size_t n) {
   for (size_t i = 0; i < n; i++) out[i] = static_cast<uint8_t>(word(r));
 }
@@ -49,8 +57,9 @@ const Datagram* in_flight(Fuzzer& f, const SimNetwork& net) {
 }
 
 Address stranger(Fuzzer& f) {
-  return sim_address(1000 + static_cast<uint32_t>(core::int_in(f.rng, 0, 63)),
-                     static_cast<uint16_t>(core::int_in(f.rng, 1, 999)));
+  const auto host = 1000 + static_cast<uint32_t>(core::int_in(f.rng, 0, 63));
+  const auto port = static_cast<uint16_t>(core::int_in(f.rng, 1, 999));
+  return sim_address(host, port);
 }
 
 // One datagram: its bytes in f.bytes, its size, and where it goes from and to.
@@ -117,10 +126,10 @@ size_t make_one(Fuzzer& f, const SimNetwork& net, int kind, Address& from, Addre
       // A well-formed request or a response with a made-up cookie: a handshake flood.
       Writer w = make_writer(f.bytes, kMaxPacket);
       Handshake h;
-      h.salt = (static_cast<uint64_t>(word(f.rng)) << 32) | word(f.rng);
-      h.value = (static_cast<uint64_t>(word(f.rng)) << 32) | word(f.rng);
-      write_handshake(w, f.protocol,
-                      core::chance(f.rng, 0.5) ? PacketType::request : PacketType::response, h);
+      h.salt = wide(f.rng);
+      h.value = wide(f.rng);
+      const PacketType type = core::chance(f.rng, 0.5) ? PacketType::request : PacketType::response;
+      write_handshake(w, f.protocol, type, h);
       n = w.size;
       break;
     }
@@ -128,7 +137,7 @@ size_t make_one(Fuzzer& f, const SimNetwork& net, int kind, Address& from, Addre
       // A payload with a guessed key, any sequence and acks, and messages of any shape.
       Writer w = make_writer(f.bytes, kMaxPacket);
       PayloadHeader h;
-      h.key = (static_cast<uint64_t>(word(f.rng)) << 32) | word(f.rng);
+      h.key = wide(f.rng);
       h.seq = static_cast<uint16_t>(word(f.rng));
       h.ack = static_cast<uint16_t>(word(f.rng));
       h.ack_bits = word(f.rng);
@@ -139,8 +148,11 @@ size_t make_one(Fuzzer& f, const SimNetwork& net, int kind, Address& from, Addre
         const size_t size = core::pick_index(f.rng, sizeof body + 1);
         fill(f.rng, body, size);
         if (w.size + message_wire_size(true, size) > kMaxPacket) break;
-        write_message(w, static_cast<uint8_t>(core::int_in(f.rng, 0, 9)), core::chance(f.rng, 0.5),
-                      static_cast<uint16_t>(word(f.rng)), body, size, core::chance(f.rng, 0.2));
+        const auto channel = static_cast<uint8_t>(core::int_in(f.rng, 0, 9));
+        const bool has_id = core::chance(f.rng, 0.5);
+        const auto id = static_cast<uint16_t>(word(f.rng));
+        const bool more = core::chance(f.rng, 0.2);
+        write_message(w, channel, has_id, id, body, size, more);
       }
       n = w.size;
       break;
