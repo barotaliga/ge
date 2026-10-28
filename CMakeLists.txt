@@ -233,7 +233,7 @@ target_link_libraries(ge_charset PUBLIC ge_core)
 # banners, the feed and the layout check. No GPU: the CPU raster draws it in the labs.
 file(GLOB GE_HUD_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/hud/*.cpp)
 add_library(ge_hud STATIC ${GE_HUD_SOURCES})
-target_link_libraries(ge_hud PUBLIC ge_ui ge_charset)
+target_link_libraries(ge_hud PUBLIC ge_ui ge_charset ge_console)
 
 # The platform services (engine/services, docs/services.md): the one interface a game uses for a
 # store's achievements, stats, leaderboards, cloud files, presence, friends, overlay, ownership and

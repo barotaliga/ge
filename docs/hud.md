@@ -3,7 +3,7 @@
 A HUD is the figures, bars, dials and the map drawn over the frame while a run is played. The
 engine's HUD lives in `engine/hud` (`ge::hud`, `ge_hud`). It started (M10a) as a kit of
 widgets that a game's view code places by hand. This page is the design for what it becomes:
-**the HUD as data**. The game declares its elements and sets their default places in a cfg.
+**the HUD as data**. The game declares its elements and their default places in a table.
 The player then moves, resizes, hides and re-skins any of them, with cvars, the console, a cfg
 file, or by dragging them in an edit mode. The roadmap rows are M10d to M10h
 (`docs/goals.md`). M10b draws all of it in the game's window.
@@ -18,56 +18,65 @@ the engine and nothing in it names a game.
 ### Elements
 
 An **element** is one thing on the HUD: the speedometer, the minimap, the health bar. A game
-declares its elements once, at start-up, in a table:
+declares its elements once, at start-up, as a table (`ge::hud::Layout::add`, an `ElementSpec`
+each; built in M10d, `engine/hud/layout.hpp`):
 
 | Field | What it is |
 | --- | --- |
-| `id` | A short lower-case name, used in its cvars: `speedo`, `map`, `health`. |
-| `kind` | The widget that draws it: `readout`, `big`, `bar`, `pips`, `banner`, `feed`, `dial`, `wind`, `compass`, `minimap`, `icon`, `crosshair`. |
-| `channels` | The values it reads (below): a bar reads `health` and `health_max`. |
-| `place` | Its default anchor (one of the nine points of the safe area), offset and scale. |
-| `look` | Its default face, colours and skin. |
-| `when` | Which of the game's HUD modes show it (on foot, on a machine, dead, spectating). |
+| `id` | A short lower-case name, used in its cvars: `speed`, `map`, `health`. |
+| `kind` | The widget that draws it: `readout`, `big`, `bar`, `pips`, `banner`, `feed` today; `dial`, `wind`, `compass`, `minimap` as M10f and M10g land. |
+| `anchor`, `x`, `y`, `scale`, `alpha`, `show` | Its default place: one of the nine points of the safe area, an offset as a share of the safe area, a size and an opacity. |
+| A kind's shape | A bar's length and ticks, the pips' symbol and size, the feed's column. |
+| `under_corners`, `under` | The two clearance rules (below). |
 
-The kit's widgets (M10a) stay the drawing code. An element is a widget, a place and a look.
-A game that wants something no kind draws can still register its own draw function for one
-element. It is placed, scaled, hidden and edited like the others.
+Elements that share an anchor **stack** in table order, as the kit's `Stack` stacks boxes:
+hiding one closes its gap, and an element's own offset moves it alone. Two rules keep the
+centre clear. An element with `under_corners` on the top or bottom row's middle anchor drops past
+its row's corner stacks when it would meet a box of either, so a narrow screen's air clock goes
+under the corners' columns. An element `under` another stays at least a gap below that one's box
+while it shows, so a prompt never sits on the air clock.
 
-### Channels: the game's values, written once a frame
+The kit's widgets (M10a) stay the drawing code. An element is a widget, a place and a shape.
+Which elements show in which of the game's modes (on foot, on a machine, dead) is the game's
+call, made every frame through the content below.
 
-The game fills a flat array of **channels** every frame from its own snapshot: `speed`,
-`health`, `ammo`, `wind_felt_heading`. Channels are numbers or short strings. Each is
-registered once and gets an index, so a frame writes and reads them by index, with no lookup
-and no allocation. The HUD never reads the game's state. That split (a pure snapshot in,
-pixels out) is what lets a lab, a test or a replay draw the HUD with no game running. Fall
-Line's `HudSnapshot` (M10a) becomes the code that fills its channels.
+### Content: the game's values, written once a frame
+
+The game writes each element's **content** every frame, by the index `add` returned: whether it
+shows now, its words (value, caption, unit), its level (a bar's 0..1, or -1..1 centred), its pips
+(count, lit, blinking off), its colour, and for a feed the feed and the clock. Nothing is looked
+up by name in a frame. The HUD never reads the game's state. That split (a pure snapshot in,
+pixels out) is what lets a lab, a test or a replay draw the HUD with no game running. Fall Line's
+`fill_hud` writes its content from the M10a `HudSnapshot`. The instruments (M10f) and the
+minimap (M10g) add the numbers their kinds read (a speed, a heading, a pose).
 
 ### The layout is cvars
 
-Every element's place and look is a set of HUD cvars (`hud_` is the HUD's prefix,
-`docs/console.md`), each bound to a field of the element's struct (`console::bind`). A set
-writes the field directly, so the draw reads its own struct and never asks the console.
+Every element's place is a set of HUD cvars (`hud_` is the HUD's prefix, `docs/console.md`),
+each bound to a field of the element (`console::Cvars::bind`, registered by `add_hud_cvars`). A
+set writes the field directly, so the draw reads its own struct and never asks the console.
 
 | Cvar | Meaning |
 | --- | --- |
 | `hud_<id>_show` | 0 hides it. |
-| `hud_<id>_anchor` | `top_left` … `bottom_right`: which of the nine points it hangs from. |
-| `hud_<id>_x`, `hud_<id>_y` | Its offset from that point, as a share of the safe area's width and height, so a layout survives a change of resolution or aspect. |
-| `hud_<id>_scale` | Its size, times the frame's scale. |
-| `hud_<id>_alpha` | Its opacity. |
-| `hud_<id>_skin` | Its skin (below); empty draws the built-in look. |
-| `hud_<id>_…` | A kind's own settings: `hud_map_span` (metres across), `hud_map_shape` (`round`/`square`), `hud_speedo_max`, `hud_speedo_style` (`dial`/`number`). |
-| `hud_scale`, `hud_alpha`, `hud_margin`, `hud_face` | The whole HUD: its scale over the frame's, its opacity, the safe area's margin, its type. |
-| `hud_edit` | 1 opens the edit mode. |
+| `hud_<id>_anchor` | `top_left` … `bottom_right`: which of the nine points it hangs from. A word that is none of the nine keeps the game's anchor. |
+| `hud_<id>_x`, `hud_<id>_y` | Its offset from that point, as a share of the safe area's width and height (-1..1, y down), so a layout survives a change of resolution or aspect. |
+| `hud_<id>_scale` | Its size, times the HUD's (0.25..4). |
+| `hud_<id>_alpha` | Its opacity (0..1): every command it drew, faded. |
+| `hud_<id>_skin` | Its skin (below; M10e). |
+| `hud_<id>_…` | A kind's own settings as the kinds land: `hud_map_span` (metres across), `hud_map_shape` (`round`/`square`), `hud_speedo_max`, `hud_speedo_style` (`dial`/`number`). |
+| `hud_scale`, `hud_alpha`, `hud_margin` | The whole HUD: its scale over the frame's, its opacity, and the margin (reference px) from the screen's safe edge. `hud_face` (its type) comes with the skins. |
+| `hud_reset [<id>]` | A command: one element (or the whole HUD) back to the game's place. |
+| `hud_edit` | 1 opens the edit mode (M10h). |
 
-**Who sets what.** The game ships `hud.cfg`, which it runs at start-up. It sets every
-element's default with plain `set`, so these defaults are never written to the player's
-config. The player's own changes are archived player settings (`seta`, the player's tier),
-which `cfg_save` keeps and a later `exec` restores. `hud_reset <id>` (or no id) puts an element
-back to the game's default by re-running its lines from `hud.cfg`. No HUD cvar is a server
-setting. A competitive server may one day want to forbid one (a minimap in a mode that should
-not have it). That would be a later row, using the console's server tier, and it is not
-planned here.
+**Who sets what.** The game's defaults are its element table: they are the cvars' defaults, so
+`reset` and `hud_reset` return to them. A game that wants a different layout for a mode (or a
+shipped variant) runs its own lines with plain `set`, which never reaches the player's config.
+The HUD's cvars carry no archive flag until a player's own `seta` gives one, so `cfg_save` keeps
+exactly what the player set and a later `exec` restores it. `hud_reset` also drops the archive
+flag, so a reset place is not saved. No HUD cvar is a server setting. A competitive server may
+one day want to forbid one (a minimap in a mode that should not have it). That would be a later
+row, using the console's server tier, and it is not planned here.
 
 ## Skins: the player's and the game's own textures
 
@@ -92,7 +101,7 @@ texture recipe (M31), baked once and cached like any other texture.
 
 ## The instruments
 
-These are four new kinds that are **drawn** rather than printed. Each takes channels and draws
+These are four new kinds that are **drawn** rather than printed. Each reads the numbers in its content and draws
 itself. None of them reads a game.
 
 - **`dial`: a speedometer, a tachometer or any needle gauge.** It has a range, an optional
@@ -175,10 +184,14 @@ so that every element is visible while it is being edited.
 
 ## How it is held
 
-- **Layout tests.** For each layout (the game's `hud.cfg`, and cfgs that move, hide and scale
-  every element), the test checks that only the named element moved and that the layout check
-  passes at 1280x720, 390x844 and 844x390.
+- **Layout tests.** For each layout (the game's table, and cfgs that move, hide and scale
+  elements), the test checks that only the named element moved and that the layout check
+  passes at 1280x720, 390x844 and 844x390 (`tests/hud_layout_test.cpp`,
+  `tests/fall_line_hud_test.cpp`).
 - **The cvar round trip.** Edit, `cfg_save`, a fresh start, `exec`: the same boxes come back.
+- **`hud-layout`**: Fall Line's HUD with every widget up in the game's places, after a player's
+  cfg, and after `hud_reset`, at the three viewports. A problem in the game's layout, or a box the
+  reset did not put back, fails it.
 - **Skins.** A skin with every part draws from its pictures. A skin missing a part falls back
   to the built-in look for that part alone.
 - **Instruments.** A dial at known values puts its needle at known angles. The wind arrow
