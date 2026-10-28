@@ -219,6 +219,25 @@ double cloud_column(const CloudLayer& l, double x, double z) {
   return c;
 }
 
+double cloud_thickness(const CloudLayer& l, double x, double z, double c) {
+  const double thin = std::clamp(l.thin, 0.0, 1.0);
+  if (thin >= 1) return 1;
+  const double hc = core::libm::cos(l.heading), hs = core::libm::sin(l.heading);
+  const double across = x * hc - z * hs, along = x * hs + z * hc;
+  const double scale = 1.0 / (l.cell_m * kCloudTileCells);
+  const double u = across * scale, v = along * scale / std::max(l.stretch, 1e-3) - drift_in_tile(l);
+  const double k = 1.0 / std::max(l.thick_cells, 0.25);
+  const double m = cloud_noise_at(u * k + 0.37, v * k + 0.71, age_in_tile(l) + 0.25);
+  const double bias = std::clamp(l.thick_bias, -1.0, 1.0);
+  const double t = std::clamp((m - 0.5) * 2.5 + 0.5 + bias + 0.5 * (c - 1), 0.0, 1.0);
+  return thin + (1 - thin) * t * t * (3 - 2 * t);
+}
+
+double cloud_cast(const CloudLayer& l, double x, double z) {
+  const double c = cloud_column(l, x, z);
+  return c > 0 ? c * cloud_thickness(l, x, z, c) : 0.0;
+}
+
 void cloud_rows(const Clouds& clouds, float info[4], float rows[][4]) {
   const int n = std::clamp(clouds.count, 0, kCloudLayers);
   info[0] = static_cast<float>(n);
@@ -234,6 +253,7 @@ void cloud_rows(const Clouds& clouds, float info[4], float rows[][4]) {
     float* v2 = rows[r + 2];
     float* v3 = rows[r + 3];
     float* v4 = rows[r + 4];
+    float* v5 = rows[r + 5];
     v0[0] = static_cast<float>(l.base_m);
     v0[1] = static_cast<float>(std::max(l.top_m, l.base_m + 1.0));
     v0[2] = static_cast<float>(cloud_cut(l.cover));
@@ -254,6 +274,9 @@ void cloud_rows(const Clouds& clouds, float info[4], float rows[][4]) {
     v4[1] = static_cast<float>(std::clamp(l.drop_spread, 0.0, 0.6));
     v4[2] = static_cast<float>(std::clamp(l.halo, 0.0, 1.0));
     v4[3] = static_cast<float>(std::clamp(l.deck, 0.0, 1.0));
+    v5[0] = static_cast<float>(std::clamp(l.thin, 0.0, 1.0));
+    v5[1] = static_cast<float>(1.0 / std::max(l.thick_cells, 0.25));
+    v5[2] = static_cast<float>(std::clamp(l.thick_bias, -1.0, 1.0));
   }
 }
 

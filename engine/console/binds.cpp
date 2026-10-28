@@ -7,6 +7,7 @@
 #include "console/binds.hpp"
 
 #include <algorithm>
+#include <iterator>
 
 #include "console/cvar.hpp"
 
@@ -40,7 +41,55 @@ bool numbered(std::string_view key, std::string_view prefix, int lo, int hi) {
 
 constexpr std::string_view kModifiers[] = {"ctrl", "alt", "shift"};
 
+// usage_key's table: HID usage 4 to 99 (the keyboard's main block, the F keys, the editing block,
+// the arrows and the keypad); "" where no bind names the key.
+constexpr std::string_view kUsageNames[] = {
+    "a",        "b",        "c",         "d",
+    "e",        "f",        "g",         "h",  // 4
+    "i",        "j",        "k",         "l",
+    "m",        "n",        "o",         "p",  // 12
+    "q",        "r",        "s",         "t",
+    "u",        "v",        "w",         "x",  // 20
+    "y",        "z",        "1",         "2",
+    "3",        "4",        "5",         "6",  // 28
+    "7",        "8",        "9",         "0",
+    "enter",    "escape",   "backspace", "tab",  // 36
+    "space",    "-",        "=",         "[",
+    "]",        "\\",       "",          "semicolon",  // 44
+    "'",        "`",        ",",         ".",
+    "/",        "capslock", "f1",        "f2",  // 52
+    "f3",       "f4",       "f5",        "f6",
+    "f7",       "f8",       "f9",        "f10",  // 60
+    "f11",      "f12",      "",          "",
+    "pause",    "ins",      "home",      "pgup",  // 68
+    "del",      "end",      "pgdn",      "right",
+    "left",     "down",     "up",        "",  // 76
+    "kp_slash", "kp_star",  "kp_minus",  "kp_plus",
+    "kp_enter", "kp_1",     "kp_2",      "kp_3",  // 84
+    "kp_4",     "kp_5",     "kp_6",      "kp_7",
+    "kp_8",     "kp_9",     "kp_0",      "kp_del",  // 92
+};
+constexpr uint16_t kFirstUsage = 4;
+
 }  // namespace
+
+std::string_view usage_key(uint16_t usage) {
+  if (usage >= kFirstUsage && static_cast<size_t>(usage - kFirstUsage) < std::size(kUsageNames))
+    return kUsageNames[usage - kFirstUsage];
+  switch (usage) {
+    case 224:
+    case 228:
+      return "ctrl";
+    case 225:
+    case 229:
+      return "shift";
+    case 226:
+    case 230:
+      return "alt";
+    default:
+      return {};
+  }
+}
 
 std::string_view mode_name(BindMode m) {
   switch (m) {

@@ -101,6 +101,11 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   world for labs and prototypes, the strafe jumper's best angle and the scenarios, and the knobs
   bound as console cvars (`cvars.hpp`). It depends on `engine/core`, and on `engine/console` for
   that binding alone; the step is a pure function of its inputs, so a run replays from its commands.
+- **`engine/snow`**: a layer of snow over any ground (`ge::snow`, M29; `docs/snow.md` is the
+  design): the analytic cover read exactly where nothing has crossed, sparse fixed-point tiles
+  of columns (depth and mass) where something has, `sample`, `press` with its mass conserved to
+  the unit and the berm it throws, the imprint records the picture and the sound read, and the
+  snapshot. It depends on `engine/core` only and draws nothing from a clock or an RNG.
 - **`engine/ui`**: the immediate-mode 2D layer (rects, images, SDF text), plus Dear
   ImGui behind `GE_DEV_UI`.
 - **`engine/charset`**: the engine's bitmap fonts (`ge::charset`, M27; `docs/charsets.md`):
