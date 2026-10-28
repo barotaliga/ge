@@ -29,6 +29,7 @@ void toy(Lab& lab) {
   lab.table({"rows", {"a", "b"}, {{"1", "2"}}});
   Picture p = create_picture(32, 16, {0, 90, 0});
   lab.shot({"green", "A GREEN BOX", "A box, green.", "that it is green", {{"n", lab.arg("n")}}}, p);
+  lab.attach("frames/0001.txt", {'o', 'k'});
   if (lab.arg_bool("fail")) lab.fail("asked to", "Do not pass --fail.");
 }
 
@@ -95,6 +96,7 @@ TEST(a_run_writes_its_files) {
   const std::string d = dir() + "/toy";
   CHECK(slurp(d + "/metrics.tsv").find("n-squared\t16\tcount\tdeterministic") != std::string::npos);
   CHECK(slurp(d + "/metrics.tsv").find("wall\t1.5\tms\tmeasured") != std::string::npos);
+  CHECK(slurp(d + "/frames/0001.txt") == "ok");  // an attachment in a subdirectory
   const std::string json = slurp(d + "/report.json");
   CHECK(json.find("\"lab\": \"toy\"") != std::string::npos);
   CHECK(json.find("\"look_for\": \"that it is green\"") != std::string::npos);
