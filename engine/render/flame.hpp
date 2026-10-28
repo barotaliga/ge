@@ -60,6 +60,9 @@ struct Flame {
   uint32_t seed = 0;            // its own turbulence, so two torches never burn as one
   float level = -1;             // >= 0: the level the caller's own light is at (the gas follows
                                 // it); < 0: its own flicker (`flame_level`)
+  float relative = 0;           // > 0: the core is this many times as bright as a white face under
+                                // the scene's own light (frame.wgsl's white_luminance), in place of
+                                // luminance_nits: for a scene lit in units of its own
 };
 
 // Presets, standing at `base`.
@@ -82,7 +85,8 @@ inline constexpr uint32_t kMaxFlames = 256;
 // wgsl's `GpuFlame`, four rows a flame.
 struct GpuFlame {
   float base[4];   // camera-relative base, m; the height at this level
-  float shape[4];  // radius; the hottest gas, K; the core's luminance, cd/m^2; the seed's phase
+  float shape[4];  // radius; the hottest gas, K; the core's luminance, cd/m^2 (negative: times a
+                   // white face's, `Flame::relative`); the seed's phase
   float wind[4];   // the tip's offset downwind per metre of height (x, z); the rise, m/s; the blue
   float bound[4];  // the bounding sphere's centre (camera-relative xyz) and radius
 };

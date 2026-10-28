@@ -9,7 +9,8 @@
 
 struct GpuFlame {
   base: vec4f,   // camera-relative base, m; the height at this level
-  shape: vec4f,  // radius; the hottest gas, K; the core's luminance, cd/m^2; the seed's phase
+  shape: vec4f,  // radius; the hottest gas, K; the core's luminance, cd/m^2 (negative: times a
+                 // white face's under the scene's light); the seed's phase
   wind: vec4f,   // the tip's offset a metre of height (x, z); the rise, m/s; the blue base
   bound: vec4f,  // the bounding sphere's camera-relative centre and radius
 }
@@ -189,8 +190,13 @@ fn fs_main(in: VertexOut) -> FragmentOut {
     let p = d * (t0 + (f32(k) + jitter) * ds);
     sum += flame_glow(f, p, t);
   }
-  // Through the core's width the sum is about the core's luminance.
-  let nits = f.shape.z * sum * ds / (1.2 * f.shape.x);
+  // Through the core's width the sum is about the core's luminance (a negative: that many white
+  // faces' under the scene's own light, taken to cd/m^2).
+  var core = f.shape.z;
+  if (core < 0.0) {
+    core = -core * white_luminance() * kSunLux / frame.world.y;
+  }
+  let nits = core * sum * ds / (1.2 * f.shape.x);
   // The eye's local adaptation to a bright source: the gas is shown on a log scale of its light
   // (its hue kept), so a core a thousand times the room reads yellow-white and its cooler rim and
   // tongues orange and red rather than all of it clipping to one white.

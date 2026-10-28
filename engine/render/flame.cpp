@@ -206,7 +206,7 @@ void prepare_flames(gpu::Device& device, Flames& fl, std::span<const Flame> list
     g.base[3] = f.height_m * (0.7f + 0.3f * level);
     g.shape[0] = f.radius_m * (0.85f + 0.15f * level);
     g.shape[1] = f.temperature_k * (0.94f + 0.06f * level);
-    g.shape[2] = f.luminance_nits * level;
+    g.shape[2] = f.relative > 0 ? -f.relative * level : f.luminance_nits * level;
     g.shape[3] = static_cast<float>(f.seed % 1024u) * 7.31f;
     g.wind[0] = static_cast<float>(lean[0]);
     g.wind[1] = static_cast<float>(lean[1]);
