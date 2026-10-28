@@ -158,11 +158,11 @@ struct FrameScene {
   // trees between the eye and it are seen through (render/instances.hpp § Seeing through). None:
   // every tree whole (a view of the mountain).
   std::optional<std::array<double, 3>> subject = std::nullopt;
-  // The fog in areas this frame (render/fog.hpp): mist, ground fog, dust; empty, none.
-  std::span<const ge::render::FogVolume> fog = {};
   // The 2D layer's list drawn over the finished frame (the console, ui/console.hpp), begun at
   // the output's size; null or empty: nothing.
   const ge::ui::DrawList* overlay = nullptr;
+  // The fog in areas this frame (render/fog.hpp): mist, ground fog, dust; empty, none.
+  std::span<const ge::render::FogVolume> fog = {};
 };
 
 struct GameFrame {
