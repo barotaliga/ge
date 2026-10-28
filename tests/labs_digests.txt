@@ -31,6 +31,7 @@ gpu-capture 8b5d5e3b7be5a4fc
 gpu-explosion ad9b9b63b7fc0982
 gpu-eye dec0f5b45ab21c1c
 gpu-load d0f81d39aa78ab53
+gpu-snow b9d60b7cf54ec719
 gpu-underwater eb4871f6a59d741e
 gpu-water eee3da1407e861c4
 gunfire c4f5b96a6cfec13c
