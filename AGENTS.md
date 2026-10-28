@@ -38,6 +38,7 @@ updates that row's status file (`docs/goals/<row>.md`) in its PR.
 | [`docs/camera.md`](docs/camera.md) | The camera: the pose, the followers, the subject, the rigs (first person, boom, mounted, orbit, planted, free), the modifiers, the world's queries, the transitions, the stack, the cvars, the labs and the research |
 | [`docs/movement.md`](docs/movement.md) | Character movement for any genre: the knobs and presets, the step's model (friction, the acceleration rule and strafe jumping, jumps, steps, slopes, crouch, slide), the world's trace, cvars, what a camera reads, water, the labs |
 | [`docs/networking.md`](docs/networking.md) | Multiplayer: what each kind of game asks of the network, the layers of `engine/net`, the decisions, the wire format, the simulated network, the tools, and Fall Line's pilot (M17) |
+| [`docs/services.md`](docs/services.md) | Platform services: what a store gives a game behind one interface, the simulated and offline stores, Steam call by call, the SDK kept out of the tree (M20) |
 | [`docs/publishing.md`](docs/publishing.md) | What a release is (GitHub Releases + GitHub Packages), how a game consumes it, changeset fragments, cutting a release, the credentials |
 | [`docs/replays.md`](docs/replays.md) | Replays, recording and broadcasting: a run kept as its inputs, keyframes and the seek, the replay file, the director, video with sound, streaming to a video service, spectating by inputs, Discord presence (M23) |
 | [`docs/shooters-edge.md`](docs/shooters-edge.md) | The second game, Shooter's Edge (M18, after Fall Line): the compatibility contract, the clean room, the homes, the protocols, the labs and the `ge` commands it needs |
@@ -247,6 +248,7 @@ characters.
 | `engine/move/` | Character movement (`ge::move`, `docs/movement.md`): the knobs and presets, the step over a trace callback, the box world, the strafer, the scenarios | `move` |
 | `engine/input/` | Input devices (`ge::input`, `docs/input.md`): the device model, events, state, dead zones, actions and bindings, rebinding, wheels' roles, touch, players, feedback, the event log, simulated devices | `input` |
 | `engine/camera/` | The camera (`ge::camera`, `docs/camera.md`): poses, followers, the rigs (first person, boom, mounted, orbit, planted, free), shake, transitions, the stack, the scripted subjects | `camera` |
+| `engine/services/` | Platform services (`ge::services`, `docs/services.md`): one interface for a store's achievements, stats, boards, cloud, presence, friends, overlay, DLC and screenshots; the simulated and offline stores | `services` |
 | `engine/platform/` | SDL3 (`GE_PLATFORM`): the window, the input devices as `engine/input` events, the frame clock, the audio device; the only place SDL is included | `platform`, `input` |
 | `engine/gpu/` | The native GPU device over Dawn (`GE_GPU`): adapters and tiers, pipelines and the manifest, surfaces, targets, timers; the only place webgpu.h is included | `gpu` |
 | `engine/render/` | Generic rendering mechanisms (`docs/rendering.md`): the frame and its pass table, sky, terrain, shadows, Hi-Z, TAA-U, bloom, post, meshes, instances, skinning; WGSL beside each | `render` |
@@ -261,6 +263,7 @@ characters.
 | `plugins/mountain/air/` | The air at run time (`ge::mountain::air`): the wind's gusts and veer, the fall's squalls and the visual range, as pure functions of the map and the clock | `mountain` |
 | `plugins/mountain/app/` | The mountain as drawn (`ge_mountain_app`, with the GPU): the snow's material, the trail map, the trees, the weather's look | `mountain`, `render` |
 | `plugins/mountain/analysis/` | The rule book re-checked on a finished map (`ge::mountain::analysis`) | `mountain` |
+| `plugins/mountain/village/` | The village's streets (`ge::mountain::village`): the street plan below the hub, the ground under it, the trees felled for it | `mountain` |
 | `plugins/skier/` | The skier on the snow (`ge::skier`): the step, the snow, the limits, the skis and tuning, the trees, the body and its injuries, the hand-built maps, the ride scenarios | `skier` |
 | `plugins/skier/app/` | The skier as seen and heard (`ge_skier_app`): the rig and figure, the wind and snow beds, the tracks | `skier`, `audio` |
 | `plugins/snowmobile/` | The snowmobile on the snow (`ge::snowmobile`): the spec, the step, the body, the drive, the bot's hands, the scenarios | `snowmobile` |
@@ -372,3 +375,4 @@ and the directories agree.
 | `replay` | `engine/replay`: watching a run again: a game's `Run::clone`, the keyframes and their thinning, the player's seek in a step budget, the transport; later the replay file, the instant replay, the director, spectating by inputs and the video export (M23) |
 | `free-assets` | Sounds and models made free by others: the sources and the licences this repository can carry, fetching and unpacking, a game's registry of what it needs (Shooter's Edge's `games/shooters_edge/content/`), picking without listening, converting to our names, `classic.assetmap`, CREDITS.md |
 | `net` | `engine/net`: multiplayer networking: sockets, the simulated network and its conditions, captures, the wire format, connections and channels, nodes up to 32, sessions (lobby, teams, chat, kick, reconnect), LAN discovery, NAT traversal (STUN, the rendezvous, hole punching, the relay, a port opened by PCP, NAT-PMP or UPnP), fake traffic, the `net-link`, `net-session` and `net-reach` labs; the M17 plan |
+| `services` | `engine/services`: platform services (achievements, stats, leaderboards, cloud, presence, friends, overlay, DLC, screenshots) behind one `Backend`, the game's catalog, the simulated and offline stores, the `services` lab; Steam and other stores' backends, the SDK kept out of the tree (M20) |

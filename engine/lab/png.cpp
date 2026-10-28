@@ -14,8 +14,8 @@
 #include <fstream>
 #include <iterator>
 
+#include "assets/image.hpp"
 #include "lab/deflate.hpp"
-#include "lab/inflate.hpp"
 
 namespace ge::lab {
 
@@ -36,27 +36,13 @@ void chunk(std::vector<uint8_t>& out, const char* type, const std::vector<uint8_
   put32(out, crc32(&out[start], out.size() - start));
 }
 
-uint32_t get32(const uint8_t* p) {
-  return (uint32_t{p[0]} << 24) | (uint32_t{p[1]} << 16) | (uint32_t{p[2]} << 8) | p[3];
-}
-
+// The PNG Paeth predictor: whichever of left, up and up-left is nearest left + up - up-left.
 int paeth(int a, int b, int c) {
-  const int p = a + b - c;
-  const int pa = std::abs(p - a), pb = std::abs(p - b), pc = std::abs(p - c);
-  if (pa <= pb && pa <= pc) return a;
-  return pb <= pc ? b : c;
+  const int p = a + b - c, pa = std::abs(p - a), pb = std::abs(p - b), pc = std::abs(p - c);
+  return pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
 }
 
 }  // namespace
-
-uint32_t crc32(const uint8_t* bytes, size_t n, uint32_t crc) {
-  crc = ~crc;
-  for (size_t i = 0; i < n; i++) {
-    crc ^= bytes[i];
-    for (int k = 0; k < 8; k++) crc = (crc >> 1) ^ (0xedb88320u & (0u - (crc & 1u)));
-  }
-  return ~crc;
-}
 
 std::vector<uint8_t> encode_png(const Picture& picture) {
   const size_t stride = static_cast<size_t>(picture.width) * 4;
@@ -160,83 +146,9 @@ std::vector<uint8_t> encode_png_grey(int width, int height, std::span<const uint
 }
 
 std::optional<Picture> decode_png(std::span<const uint8_t> bytes) {
-  static const uint8_t kSignature[8] = {0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'};
-  if (bytes.size() < 8 || !std::equal(kSignature, kSignature + 8, bytes.begin())) return {};
-  uint32_t width = 0, height = 0;
-  int channels = 0;
-  std::vector<uint8_t> z;
-  size_t at = 8;
-  while (at + 12 <= bytes.size()) {
-    const uint32_t len = get32(&bytes[at]);
-    if (len > bytes.size() - at - 12) return {};
-    const uint8_t* type = &bytes[at + 4];
-    const uint8_t* data = type + 4;
-    if (crc32(type, len + 4) != get32(data + len)) return {};
-    if (std::equal(type, type + 4, "IHDR")) {
-      if (len < 13) return {};
-      width = get32(data);
-      height = get32(data + 4);
-      const uint8_t depth = data[8], colour = data[9], interlace = data[12];
-      channels = colour == 6 ? 4 : colour == 2 ? 3 : colour == 4 ? 2 : colour == 0 ? 1 : 0;
-      if (depth != 8 || channels == 0 || interlace != 0) return {};
-    } else if (std::equal(type, type + 4, "IDAT")) {
-      z.insert(z.end(), data, data + len);
-    } else if (std::equal(type, type + 4, "IEND")) {
-      break;
-    }
-    at += 12 + len;
-  }
-  if (width == 0 || height == 0 || width > 1u << 15 || height > 1u << 15) return {};
-  const auto raw = inflate_zlib(z);
-  const size_t stride = size_t{width} * static_cast<size_t>(channels);
-  if (!raw || raw->size() != (stride + 1) * height) return {};
-  // Undo each row's filter in place, against the row above (zeros above the first).
-  std::vector<uint8_t> rows(stride * height);
-  const auto bpp = static_cast<size_t>(channels);
-  for (size_t y = 0; y < height; y++) {
-    const uint8_t filter = (*raw)[y * (stride + 1)];
-    const uint8_t* in = &(*raw)[y * (stride + 1) + 1];
-    uint8_t* out = &rows[y * stride];
-    const uint8_t* up = y > 0 ? out - stride : nullptr;
-    for (size_t i = 0; i < stride; i++) {
-      const int a = i >= bpp ? out[i - bpp] : 0;
-      const int b = up ? up[i] : 0;
-      const int c = up && i >= bpp ? up[i - bpp] : 0;
-      int v = in[i];
-      switch (filter) {
-        case 0:
-          break;
-        case 1:
-          v += a;
-          break;
-        case 2:
-          v += b;
-          break;
-        case 3:
-          v += (a + b) / 2;
-          break;
-        case 4:
-          v += paeth(a, b, c);
-          break;
-        default:
-          return {};
-      }
-      out[i] = static_cast<uint8_t>(v);
-    }
-  }
-  Picture p{static_cast<int>(width), static_cast<int>(height), {}};
-  p.rgba.resize(size_t{width} * height * 4);
-  for (size_t i = 0; i < size_t{width} * height; i++) {
-    const uint8_t* s = &rows[i * bpp];
-    uint8_t* d = &p.rgba[i * 4];
-    if (channels >= 3) {
-      d[0] = s[0], d[1] = s[1], d[2] = s[2];
-    } else {
-      d[0] = d[1] = d[2] = s[0];
-    }
-    d[3] = channels == 4 ? s[3] : channels == 2 ? s[1] : 255;
-  }
-  return p;
+  auto image = assets::decode_png(bytes);
+  if (!image) return {};
+  return Picture{image->width, image->height, std::move(image->rgba)};
 }
 
 std::optional<Picture> read_png(const std::string& path) {

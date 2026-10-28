@@ -1,14 +1,14 @@
 // The definitions behind inflate.hpp: a canonical-Huffman decoder read a bit at a time.
 //
-// ge:summary The labs' inflater: deflate's stored, fixed and dynamic blocks decoded
+// ge:summary The inflater: deflate's stored, fixed and dynamic blocks decoded
 // ge:keywords inflate deflate huffman canonical-code length-distance
-// ge:skill labs
+// ge:skill assets labs
 // ge:test tests/lab_raster_test.cpp
-#include "lab/inflate.hpp"
+#include "assets/inflate.hpp"
 
 #include <array>
 
-namespace ge::lab {
+namespace ge::assets {
 
 namespace {
 
@@ -204,4 +204,4 @@ std::optional<std::vector<uint8_t>> inflate_zlib(std::span<const uint8_t> stream
   return out;
 }
 
-}  // namespace ge::lab
+}  // namespace ge::assets

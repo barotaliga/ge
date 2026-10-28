@@ -10,6 +10,7 @@
 
 #include "core/num.hpp"
 #include "fall_line/controls/felt.hpp"
+#include "fall_line/controls/thumbs.hpp"
 #include "fall_line/sim/play.hpp"
 #include "fall_line/sim/state.hpp"
 
@@ -37,6 +38,8 @@ std::unique_ptr<HandRun> open_hand_run(double seed, int rivals, in::ActionMap ma
     return nullptr;
   }
   h->map = std::move(map);
+  h->thumbs = touch_layout();
+  h->touch = in::make_touch_frame(h->thumbs);
   h->values = in::make_values(h->map);
   h->recorder = pl::InputRecorder(pl::new_log(spec, setup));
   h->step_in.assign(spec.axes.size(), 0);
@@ -46,10 +49,16 @@ std::unique_ptr<HandRun> open_hand_run(double seed, int rivals, in::ActionMap ma
 
 const sim::GameState& hand_state(const HandRun& h) { return *sim::state_of(*h.run); }
 
-void hand_frame(HandRun& h, const in::InputState& s, double dt_s) {
-  in::evaluate(h.map, s, dt_s, h.values);
+void hand_frame(HandRun& h, const in::InputState& s, double dt_s, double now_s) {
+  in::touch_update(h.thumbs, s, h.touch, now_s);
+  in::Sources from;
+  from.layout = &h.thumbs;
+  from.touch = &h.touch;
+  in::evaluate(h.map, s, dt_s, h.values, from);
   pl::axes_frame(h.axes, h.values);
 }
+
+void hand_screen(HandRun& h, float aspect) { h.thumbs.aspect = aspect; }
 
 bool hand_playing(const HandRun& h) { return !h.run->over() && h.steps < h.most_steps; }
 

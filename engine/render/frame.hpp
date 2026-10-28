@@ -66,22 +66,25 @@ struct FrameUniforms {
   float night[4];       // the dark sky's zenith luminance, its light, the sidereal angle, latitude
   float cloud_info[4];  // the cloud's layers drawn, the share of the march's steps, 1 if spread,
                         // the stamp
-  // Four a layer (render/clouds.hpp's `cloud_rows`): base, top (world m), the noise's cut, one
+  // Five a layer (render/clouds.hpp's `cloud_rows`): base, top (world m), the noise's cut, one
   // over the cell (1/m); the wind's heading (cos, sin), the drift and the age in the noise's
   // tile (0..1); one over the stretch, the dome, the density (1/m), the shadow's optical depth;
-  // the form: the anvil, the detail's bite, its comb, the patches.
-  float clouds[kCloudLayers * 4][4];
+  // the form: the anvil, the detail's bite, its comb, the patches; the light round the disc: the
+  // particles' radius (um), their spread, the halo, how far it is lit through its top alone.
+  float clouds[kCloudLayers * kCloudRows][4];
   float moon_pole[4];    // the moon's north pole (world); w: the umbra's angular radius
   float moon_prime[4];   // toward its 0 N 0 E; w: the penumbra's angular radius
   float moon_east[4];    // toward its 0 N 90 E; w: the disc's brightest light under the shadow
   float moon_shadow[4];  // toward the Earth's shadow's axis; w: the albedo map's scale
-  float mist[4];         // the reach's mist: where it begins and where it closes, m (0: none), 0, 0
+  float mist[4];         // the reach's mist: where it begins and where it closes, m (0: none);
+                         // the wet ground: the film's share, the puddles' share
   // The sky's style (render/sky_style.hpp's `style_rows`): the air's scales, the sun's disc, the
   // second sun, the planet, the nebula, the glow from below, the ring's tilt and the stars by day.
   float style[kSkyStyleRows][4];
 };
-static_assert(sizeof(FrameUniforms) == 64 * 3 + 16 * 5 + 16 * 6 + 16 * 9 + 16 * 4 * kCloudLayers +
-                                           16 * 5 + 16 * kSkyStyleRows,
+static_assert(sizeof(FrameUniforms) == 64 * 3 + 16 * 5 + 16 * 6 + 16 * 9 +
+                                           16 * kCloudRows * kCloudLayers + 16 * 5 +
+                                           16 * kSkyStyleRows,
               "match frame_types.wgsl");
 
 // The last frame's unjittered camera. Invalid on the first frame and after a cut, when the
