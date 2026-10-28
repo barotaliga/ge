@@ -15,7 +15,7 @@ camera-world 663b2b2d72b24d8b
 capture b274066858db8393
 capture-run 7bce75d64b174712
 charts 77f2319a5ea24272
-cli-loop 0c501f1dbb02b7b9
+cli-loop de9c6a726fc004ea
 console e8456b0db59560ce
 crowd cf02cf9a7c917783
 crowd-look 194a06db20f2ebb2
@@ -88,6 +88,10 @@ skijump-hills 3fa0eff35ac0f70a
 slalom 2adb7c679ec93adf
 sled 30cd3df2c903518c
 snow 3f444a51a1e8a91c
+snow-contact c39eba995c9962ca
+snow-field eb9df0a82901b26a
+snow-press f60252f878f863e2
+snow-weather e064191b64090918
 speed-events 2e575d7a0184d4b2
 speed-ski 55c4cfa78de28f7e
 spray 7479b5a25c39b195
