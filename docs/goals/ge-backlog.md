@@ -15,6 +15,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge golden diff` pairing rows by their key when the count changes (done: a row inserted mid-table is one row added)
 - `ge golden write` listing every golden file it rewrote, and the engine's own tree pointed at it (`build/<preset>/ge golden write <test>`) rather than setting `GE_GOLDEN_WRITE` by hand
 - `ge digest-diff --base=<ref> --versions --regions` (which generator versions and regions a change moved)
+- `ge digest --rebase=<ref>` (after a merge, the ref's digest files taken for every lab this change does not reach, only the reached labs rerun and written: a conflict in tests/digests/ settled in one step; multiplayer thread)
 
 ## Before and after across refs
 
