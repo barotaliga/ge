@@ -37,7 +37,8 @@ for anything the simulation reads, `render` for a pass, `audio` for a voice, `la
 | The view under water: the fog, blur, Snell's window, the presets | `engine/render/underwater.hpp`, `underwater.wgsl` | `gpu-underwater`, `lake` | `tests/render_water_test.cpp` |
 | Water in Fall Line's frame (`add_water`) | `games/fall_line/app/frame.hpp` | `lake` | `create_frame`'s pass-table check |
 | The water's sound: what an ear hears (`hear`), the bed, splashes, strokes, bubbles, the muffle | `engine/water/sound.hpp` | `water-audition` | `tests/water_sound_test.cpp` |
-| One call, Fall Line's water | the rows M24k–M24l | the doc's § Labs | as each row lands |
+| The one step (`water::step`) and a game repo's water: `ge add water`, its template, the `water` consumer skill | `engine/water/world.hpp`, `templates/water/`, `consumer-skills/water/`, `engine/cli/add.cpp` | the scaffold's `water` (packaging's `scaffold` job) | `tests/cli_add_test.cpp`, `tests/water_world_test.cpp` |
+| Fall Line's water | the row M24l | the doc's § Labs | as it lands |
 
 ## The rules
 
