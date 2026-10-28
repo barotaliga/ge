@@ -164,7 +164,7 @@ void cloud_cover(const mg::Level& level, const ge::render::Clouds& clouds, doubl
       const double x = (i + 0.5) / 64 * level.size, z = (j + 0.5) / 64 * level.size;
       double tau = 0;
       for (int k = 0; k < clouds.count; ++k)
-        tau += ge::render::cloud_column(clouds.layers[k], x, z) * clouds.layers[k].shadow_tau;
+        tau += ge::render::cloud_cast(clouds.layers[k], x, z) * clouds.layers[k].shadow_tau;
       sum += ge::core::libm::exp(-tau);
     }
   }
