@@ -983,7 +983,8 @@ One full-screen fragment pass reads the resolved HDR frame and writes the swapch
 `BGRA8Unorm` without an optional feature, and a tile GPU keeps a full-screen fragment pass
 in tile memory):
 
-- exposure from the sky's brightness, not from a histogram, so it never pumps;
+- exposure from the sky's brightness, not from a histogram, so it never pumps outdoors; the
+  eye's adaptation (M43) opens it where the world is darker than the sky lights it;
 - bloom from a half-resolution mip chain (dual-filter down and up), cheap and stable;
 - the colour grade as a 32³ 3D lookup table the game bakes from its look;
 - tone mapping, a blue-noise dither against banding, and the output transfer function.
@@ -1009,6 +1010,23 @@ identity, and the game bakes its own (`fall_line::app::bake_grade`: a little con
 through the middle tones with the ends held, cooler shadows, warmer highlights, 5 % more
 saturation). On the software adapter at 1280 × 720 the bloom costs about 11 ms and the post
 pass 7 ms (the `profile` lab); the bloom's cost on a real GPU waits for the Mac's numbers.
+
+**As built (M43)** (`render/eye.hpp`). **The eye's adaptation** leaves the sky's exposure as
+the eye AT REST, so the snow under the sky still never pumps, and opens the eye past it only
+where the picture is darker than the sky lights it: a hall, a cave, the woods at dusk. A compute
+pass (`eye`, after bloom) meters the post pass's input on a 128 × 72 grid of bilinear taps at
+the sky's exposure into a 64-bin log2 histogram (a quarter stop a bin, the middle of the picture
+weighed four times the corners), then one workgroup averages the bins between 40 % and 90 % of
+the weight, takes the stops that average sits under the key (0.18) beyond a band of one stop,
+scales them by the strength (0.85) and clamps them to 0..4 stops, and steps the eye toward
+them with a half-life of 2.5 s opening and 0.35 s closing (the eye closes to light fast and
+opens to the dark slowly). The eye is kept on the GPU in the fifth row of the sky's light buffer
+(`SkyLight.eye`), which every pass already binds, so the post pass, TAA-U's weights, the
+clouds' white and the moon as seen read the same exposure with no new binding and no readback.
+The opened stops dim the white the eye adapts to (`exposure_at`), so the night's partial
+adaptation under 14 lx still holds in the dark. A zeroed buffer is the eye at rest: a frame that
+never runs the pass keeps its bits. The `gpu-eye` lab walks out of a 40 m stone corridor into a
+noon and back into the dark.
 
 Linear light is used throughout, and the conversion happens here, once.
 
