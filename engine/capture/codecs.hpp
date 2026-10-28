@@ -71,7 +71,7 @@ class Av1Encoder {
   struct Impl;
   std::unique_ptr<Impl> impl_;
   std::vector<uint8_t> sequence_header_;
-  double fps_ = 30;
+  [[maybe_unused]] double fps_ = 30;  // read only by the real encoder (GE_ENCODERS)
 };
 
 // Matroska's AV1 codec private: the `av1C` record (8-bit 4:2:0, the profile and level read from
@@ -123,8 +123,8 @@ class OpusEncoder {
 
   struct Impl;
   std::unique_ptr<Impl> impl_;
-  std::vector<float> held_;  // pushed, not yet in a packet
-  int64_t pushed_ = 0;       // frames pushed
+  std::vector<float> held_;              // pushed, not yet in a packet
+  [[maybe_unused]] int64_t pushed_ = 0;  // frames pushed (GE_ENCODERS)
   int64_t packets_ = 0;
   int preskip_ = 0;
 };
