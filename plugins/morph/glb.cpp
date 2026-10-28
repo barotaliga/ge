@@ -206,6 +206,7 @@ std::vector<uint8_t> write_glb(const Model& m, const std::string& name,
   while (out.bin.size() % 4) out.bin.push_back(0);
 
   std::vector<std::string> target_names;
+  target_names.reserve(frames);
   for (const Frame& f : m.frames) target_names.push_back(quoted(f.name));
   std::string prim = "{\"attributes\":" + attributes + ",\"indices\":" + std::to_string(a_idx);
   if (!materials.empty()) prim += ",\"material\":0";

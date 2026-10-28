@@ -18,8 +18,9 @@
 // A report says per stage whether it ran, what it wrote and how long it took.
 //
 // ge:summary The enhancement pipeline's stages, pack to models, into the cache
-// ge:keywords pipeline stage pack textures lightmaps sounds models run skip force report cache
-// enhance ge:skill classicenhance ge:test tests/classicenhance_pipeline_test.cpp
+// ge:keywords pipeline stage pack textures lightmaps sounds models run skip force cache enhance
+// ge:skill classicenhance
+// ge:test tests/classicenhance_pipeline_test.cpp
 #pragma once
 
 #include <cstdint>

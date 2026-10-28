@@ -34,15 +34,15 @@ mo::Model stick_and_flame() {
   const uint32_t n = one.vertex_count();
   int files = 0;
   for (const int v : one.source_vertex) files = std::max(files, v + 1);
-  for (uint32_t v = 0; v < n; v++) m.st[v * 2 + 1] = one.st[v * 2 + 1] / 2;
-  for (uint32_t v = 0; v < n; v++) {
+  for (size_t v = 0; v < n; v++) m.st[v * 2 + 1] = one.st[v * 2 + 1] / 2;
+  for (size_t v = 0; v < n; v++) {
     m.st.insert(m.st.end(), {one.st[v * 2], 0.5f + one.st[v * 2 + 1] / 2});
     m.source_vertex.push_back(one.source_vertex[v] + files);
   }
   for (const uint32_t i : one.indices) m.indices.push_back(i + n);
   for (size_t f = 0; f < m.frames.size(); f++) {
     std::vector<float>& p = m.frames[f].positions;
-    for (uint32_t v = 0; v < n; v++)
+    for (size_t v = 0; v < n; v++)
       p.insert(p.end(), {one.frames[f].positions[v * 3] + 100, one.frames[f].positions[v * 3 + 1],
                          one.frames[f].positions[v * 3 + 2]});
   }
@@ -72,7 +72,8 @@ TEST(drop_glowing_removes_the_glowing_piece_only) {
     u += spotted.st[size_t(spotted.indices[first + k]) * 2] / 3;
     v += spotted.st[size_t(spotted.indices[first + k]) * 2 + 1] / 3;
   }
-  skin.indices[size_t(int(v * float(skin.height)) * skin.width + int(u * float(skin.width)))] = 240;
+  skin.indices[size_t(int(v * float(skin.height))) * size_t(skin.width) +
+               size_t(int(u * float(skin.width)))] = 240;
   CHECK(one.indices.size() / 3 >= 4);
   CHECK(ce::drop_glowing(spotted).indices.size() == spotted.indices.size());
 }

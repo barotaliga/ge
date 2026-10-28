@@ -61,9 +61,9 @@ TEST(written_file_loads_with_its_targets_skin_and_frame) {
   // Every loaded vertex is a file vertex of the first frame: forward (x) to the engine's +z, left
   // (y) to its -x (glTF's +x is the asset's left, the loader mirrors it), up (z) to +y, halved.
   const std::vector<float>& p = m.frames[0].positions;
-  for (uint32_t v = 0; v < mesh.vertex_count(); v++) {
+  for (size_t v = 0; v < mesh.vertex_count(); v++) {
     bool found = false;
-    for (uint32_t w = 0; w < m.vertex_count() && !found; w++) {
+    for (size_t w = 0; w < m.vertex_count() && !found; w++) {
       found = std::fabs(mesh.positions[v * 3] + 0.5f * p[w * 3 + 1]) < 1e-5f &&
               std::fabs(mesh.positions[v * 3 + 1] - 0.5f * p[w * 3 + 2]) < 1e-5f &&
               std::fabs(mesh.positions[v * 3 + 2] - 0.5f * p[w * 3]) < 1e-5f;
