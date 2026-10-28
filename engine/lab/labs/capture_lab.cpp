@@ -7,12 +7,16 @@
 // (its numbers are measured, since a machine may not have it).
 //
 // The cost of the uncompressed path is measured too: a 1280x720 picture to I420 and into the
-// muxer, a frame, and the bytes a minute of it takes (what the encoders, row M23d2, will cut).
+// muxer, a frame, and the bytes a minute of it takes. Then the COMPRESSED export (AV1 and Opus,
+// capture/codecs.hpp): the same sync check through the decoders, with ffmpeg decoding the .webm,
+// and what the AV1 encoder costs at 720p and 1080p at three qualities. Those numbers are all
+// measured, so a build without the encoders (GE_ENCODERS=OFF) has the same digest.
 //
 //   make lab LAB=capture ARGS="--seconds=30 --fps=24,25,30,60"
 //
 // ge:summary Lab: an export's sound against its pictures, a click and a flash on one step
-// ge:keywords lab capture export sync flash click lag mkv ffmpeg decode i420 cost
+// ge:keywords lab capture export sync flash click lag mkv ffmpeg decode i420 cost av1 opus webm
+// ge:keywords encoder-cost psnr crf
 // ge:skill replay labs
 // ge:test tests/capture_av_export_test.cpp
 #include <algorithm>
@@ -24,15 +28,18 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <span>
 #include <string>
 #include <vector>
 
 #include "audio/voice.hpp"
 #include "capture/av_export.hpp"
+#include "capture/codecs.hpp"
 #include "capture/matroska.hpp"
 #include "capture/mkv_read.hpp"
 #include "capture/sync_fixture.hpp"
 #include "capture/yuv.hpp"
+#include "core/libm/libm.hpp"
 #include "core/num_text.hpp"
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
@@ -105,7 +112,9 @@ int64_t probe_frames(const std::string& path) {
   return got ? std::atoll(line) : -1;
 }
 
-Take take(double fps, int64_t steps, const fs::path& dir, bool ffmpeg) {
+// The sync fixture exported at `fps`, uncompressed (`codec` "") or as AV1 and Opus ("av1"), and
+// read back: the raw file by its bytes, the compressed one through the decoders.
+Take take(double fps, int64_t steps, const fs::path& dir, bool ffmpeg, const std::string& codec) {
   Take t;
   t.fps = fps;
   gp::RecordOptions o;
@@ -114,8 +123,10 @@ Take take(double fps, int64_t steps, const fs::path& dir, bool ffmpeg) {
   o.band = false;
   o.thumbs = 0;
   o.encoding.format = "mkv";
+  o.encoding.codec = codec;
   o.sound = &gc::kSyncSound;
-  o.video = (dir / ("sync-" + num::to_string(fps) + "fps.mkv")).string();
+  o.video =
+      (dir / ("sync-" + num::to_string(fps) + "fps" + (codec.empty() ? ".mkv" : ".webm"))).string();
   const auto rec = gp::record(gc::kSyncGame, gc::sync_log(steps, kPeriod, kFirst), o, t.error);
   if (!rec) return t;
   const std::vector<uint8_t> bytes = read_all(o.video);
@@ -124,8 +135,23 @@ Take take(double fps, int64_t steps, const fs::path& dir, bool ffmpeg) {
   t.frames = rec->frames;
   t.samples = rec->samples;
   t.bytes = rec->bytes;
+  const bool coded = !codec.empty();
+  gc::Av1Decoder vd;
+  gc::OpusDecoder ad;
+  std::vector<float> stereo;
+  if (coded && (!vd.open(t.error) || !ad.open(t.error))) return t;
   for (const gc::ReadBlock& b : f->blocks) {
-    if (b.track == 1) {
+    const std::span<const uint8_t> data(bytes.data() + b.offset, b.size);
+    if (coded && b.track == 1) {
+      std::vector<uint8_t> yuv;
+      int w = 0, h = 0;
+      bool got = false;
+      if (!vd.decode(data, yuv, w, h, got, t.error)) return t;
+      // The middle pixel's luma: the flash fills the picture.
+      if (got) t.pictures.emplace_back(b.ms, yuv[static_cast<size_t>(w) * (h / 2) + w / 2] > 128);
+    } else if (coded) {
+      if (!ad.decode(data, stereo, t.error)) return t;
+    } else if (b.track == 1) {
       t.pictures.emplace_back(b.ms, bytes[b.offset] > 128);
     } else {
       const size_t n = b.size / (2 * sizeof(float));
@@ -136,7 +162,17 @@ Take take(double fps, int64_t steps, const fs::path& dir, bool ffmpeg) {
       }
     }
   }
+  if (coded && f->tracks.size() == 2) {
+    // The decoded sound with the encoder's delay (the track's CodecDelay) dropped, as a player
+    // drops it.
+    const auto skip = static_cast<size_t>(
+        std::llround(static_cast<double>(f->tracks[1].codec_delay_ns) * gc::kOpusRate / 1e9));
+    for (size_t i = skip; 2 * i + 1 < stereo.size(); i++) t.left.push_back(stereo[2 * i]);
+  }
   constexpr double kRate = ge::audio::kRate;
+  // Silence is exactly 0 in the raw file; Opus leaves a faint floor and smears a click's onset.
+  const float loud = coded ? 0.05F : 1e-6F;
+  const double early_ms = coded ? 3 : 1;
   size_t from = 0;
   for (int64_t s = 1; s <= steps; s++) {
     if (!gc::sync_clicks_at(s, kPeriod, kFirst)) continue;
@@ -146,12 +182,12 @@ Take take(double fps, int64_t steps, const fs::path& dir, bool ffmpeg) {
                static_cast<double>(gc::step_sample(s, 0, gc::kSyncGame.hz, ge::audio::kRate)) /
                kRate;
     size_t i = from;
-    while (i < t.left.size() && std::fabs(t.left[i]) < 1e-6f) i++;
+    while (i < t.left.size() && std::fabs(t.left[i]) < loud) i++;
     if (i >= t.left.size()) break;  // the last click past the last picture's sound
     c.sound_ms = 1000.0 * static_cast<double>(i) / kRate;
     from = i + static_cast<size_t>(kRate / 10);
     for (const auto& [ms, lit] : t.pictures) {
-      if (lit && static_cast<double>(ms) + 1 >= c.sound_ms) {
+      if (lit && static_cast<double>(ms) + early_ms >= c.sound_ms) {
         c.lit_ms = static_cast<double>(ms);
         break;
       }
@@ -168,13 +204,13 @@ Take take(double fps, int64_t steps, const fs::path& dir, bool ffmpeg) {
 
 // Each frame rate's first click, 120 ms either side: the pictures as boxes on the time line
 // (white when lit), the sound's wave under them, the click's step as a red line.
-gl::Picture strips(const std::vector<Take>& takes) {
+gl::Picture strips(const std::vector<Take>& takes, const std::string& title) {
   constexpr int kW = 960, kRow = 92, kHead = 24, kLeft = 90;
   constexpr double kSpan = 240;  // ms across
   gl::Picture p = gl::create_picture(kW, kHead + kRow * static_cast<int>(takes.size()) + 20,
                                      {250, 250, 252, 255});
   const gl::Rgba ink{30, 34, 40, 255}, faint{150, 156, 166, 255}, red{205, 40, 40, 255};
-  gl::draw_text(p, 8, 8, "EACH FRAME RATE'S FIRST CLICK: PICTURES ABOVE, SOUND BELOW", ink);
+  gl::draw_text(p, 8, 8, title, ink);
   const double px = (kW - kLeft - 16) / kSpan;
   for (size_t r = 0; r < takes.size(); r++) {
     const Take& t = takes[r];
@@ -220,6 +256,167 @@ gl::Picture strips(const std::vector<Take>& takes) {
   return p;
 }
 
+// A picture that costs an encoder something: blocks of hashed grey scrolling 3 px a frame over a
+// gradient, with a bright square crossing it.
+gl::Picture pattern(int w, int h, int k) {
+  gl::Picture p = gl::create_picture(w, h, {0, 0, 0, 255});
+  for (int y = 0; y < h; y++) {
+    for (int x = 0; x < w; x++) {
+      const int sx = x + 3 * k;
+      auto n =
+          static_cast<uint32_t>((sx / 8) * 73856093) ^ static_cast<uint32_t>((y / 8) * 19349663);
+      n = (n ^ (n >> 13)) * 0x5bd1e995u;
+      const auto g = static_cast<uint8_t>(40 + (n >> 24) % 120 + (x + y) % 60);
+      const bool square = x > w / 4 + 4 * k % (w / 2) && x < w / 4 + 4 * k % (w / 2) + w / 8 &&
+                          y > h / 3 && y < h / 3 + h / 6;
+      const size_t at =
+          4 * (static_cast<size_t>(y) * static_cast<size_t>(w) + static_cast<size_t>(x));
+      p.rgba[at] = square ? 250 : g;
+      p.rgba[at + 1] = square ? 220 : g;
+      p.rgba[at + 2] = square ? 120 : static_cast<uint8_t>(std::min(255, g + 20));
+    }
+  }
+  return p;
+}
+
+double luma_psnr(const std::vector<uint8_t>& a, const std::vector<uint8_t>& b, int w, int h) {
+  double se = 0;
+  const size_t n = static_cast<size_t>(w) * static_cast<size_t>(h);
+  for (size_t i = 0; i < n; i++) {
+    const double d = static_cast<double>(a[i]) - static_cast<double>(b[i]);
+    se += d * d;
+  }
+  if (se == 0) return 99;
+  // 10 * log10(x) as ln(x) * 10 / ln(10), on the engine's own libm.
+  return 10.0 * ge::core::libm::log(255.0 * 255.0 / (se / static_cast<double>(n))) /
+         ge::core::libm::log(10.0);
+}
+
+// The compressed export (AV1 and Opus, a .webm): the same sync check through the decoders, and
+// what the AV1 encoder costs at 720p and 1080p at three qualities. Everything here is measured
+// (an encoder's bytes and timing vary with the machine and its threads), so the digest is the same
+// with the encoders or without them.
+void coded(gl::Lab& lab, const std::vector<double>& rates, int64_t steps, const fs::path& dir,
+           bool ffmpeg, int cost_frames) {
+  const std::string shot_id = "sync-av1";
+  const std::string title = "THE SAME, AS AV1 AND OPUS IN A .WEBM";
+  const std::string about =
+      "The sync fixture exported as AV1 and Opus and decoded back by the engine's decoders: each "
+      "row is 240 ms round its first click, as above. Opus smears a click's onset by a few "
+      "milliseconds, so the wave may start just before the red line.";
+  const std::string look =
+      "The wave starting within 3 ms of the red line in every row, and the "
+      "first white box after it by less than one box's width.";
+  if (!gc::encoders_built()) {
+    lab.note("this build has no encoders (GE_ENCODERS is OFF): the compressed export is skipped");
+    gl::Picture blank = gl::create_picture(480, 60, {250, 250, 252, 255});
+    gl::draw_text(blank, 8, 24, "NO ENCODERS IN THIS BUILD", {30, 34, 40, 255});
+    lab.shot({shot_id, title, about, look, {}}, blank, gl::Det::measured);
+    return;
+  }
+  std::vector<Take> takes;
+  gl::LabTable table{
+      "AV1 and Opus: every frame rate's pictures, KB, KB a second, worst lag "
+      "(picture after its step), sound off its step",
+      {"fps", "frames", "KB", "KB/s", "clicks", "worst-lag-ms", "sound-off-ms", "ffmpeg"},
+      {}};
+  int64_t bad = 0;
+  for (const double fps : rates) {
+    Take t = take(fps, steps, dir, ffmpeg, "av1");
+    if (!t.error.empty()) {
+      lab.fail("the AV1 export at " + num::to_string(fps) + " fps failed: " + t.error,
+               "Run tests/capture_codecs_test.cpp (skill: replay).");
+      continue;
+    }
+    double worst = 0, off = 0;
+    for (const Click& c : t.clicks) {
+      off = std::max(off, std::fabs(c.sound_ms - c.due_ms));
+      const double lag = c.lit_ms < 0 ? 1e9 : c.lit_ms - c.due_ms;
+      worst = std::max(worst, lag);
+    }
+    if (worst >= 1000.0 / fps + 3 || off > 3 || t.clicks.empty()) bad++;
+    const double secs = static_cast<double>(t.frames) / fps;
+    table.rows.push_back({num::to_string(fps), std::to_string(t.frames),
+                          num::to_fixed(static_cast<double>(t.bytes) / 1e3, 1),
+                          num::to_fixed(static_cast<double>(t.bytes) / 1e3 / secs, 1),
+                          std::to_string(t.clicks.size()), num::to_fixed(worst, 2),
+                          num::to_fixed(off, 2),
+                          !ffmpeg                                           ? "-"
+                          : t.ffmpeg_decodes && t.ffmpeg_frames == t.frames ? "every picture"
+                                                                            : "NO"});
+    if (ffmpeg && (!t.ffmpeg_decodes || t.ffmpeg_frames != t.frames)) bad++;
+    lab.metric("av1.fps" + num::to_string(fps) + ".worst-lag-ms", worst, "ms", gl::Det::measured);
+    takes.push_back(std::move(t));
+  }
+  lab.table(std::move(table), gl::Det::measured);
+  if (bad) {
+    lab.fail(std::to_string(bad) +
+                 " AV1 exports out of sync (a flash 3 ms or more past a frame "
+                 "after its step, a click 3 ms or more off it) or not decoded whole by ffmpeg",
+             "Read av_export.cpp's interleave and the CodecDelay it writes; run "
+             "tests/capture_codecs_test.cpp (skill: replay).");
+  }
+  lab.shot({shot_id, title, about, look, {}}, strips(takes, title), gl::Det::measured);
+
+  // What the encoder costs: `cost_frames` pictures of the pattern at each size and quality.
+  gl::LabTable cost{
+      "AV1 (libaom, realtime, speed 9, 4 threads) on a scrolling pattern of hashed "
+      "blocks (much harder than a game's picture): a frame's encode, MB a minute at "
+      "30 fps, luma PSNR decoded",
+      {"size", "crf", "encode-ms", "MB/min", "psnr-db"},
+      {}};
+  for (const auto& [w, h] : {std::pair{1280, 720}, std::pair{1920, 1080}}) {
+    std::vector<std::vector<uint8_t>> frames;
+    for (int k = 0; k < cost_frames; k++) {
+      std::vector<uint8_t> yuv;
+      gc::to_i420(pattern(w, h, k), yuv);
+      frames.push_back(std::move(yuv));
+    }
+    for (const int crf : {24, 32, 40}) {
+      gc::Av1Encoder enc;
+      gc::Av1Options o;
+      o.width = w;
+      o.height = h;
+      o.crf = crf;
+      std::string error;
+      std::vector<gc::Packet> packets;
+      if (!enc.open(o, error)) {
+        lab.fail("the AV1 encoder did not open: " + error, "Run tests/capture_codecs_test.cpp.");
+        return;
+      }
+      const auto t0 = Clock::now();
+      for (size_t k = 0; k < frames.size(); k++) {
+        enc.encode(frames[k], gc::frame_ms(static_cast<int64_t>(k), 30), packets, error);
+      }
+      enc.flush(packets, error);
+      const double ms = std::chrono::duration<double, std::milli>(Clock::now() - t0).count() /
+                        static_cast<double>(frames.size());
+      size_t bytes = 0;
+      double psnr = 0;
+      gc::Av1Decoder dec;
+      dec.open(error);
+      for (size_t k = 0; k < packets.size() && k < frames.size(); k++) {
+        bytes += packets[k].data.size();
+        std::vector<uint8_t> got;
+        int gw = 0, gh = 0;
+        bool any = false;
+        dec.decode(packets[k].data, got, gw, gh, any, error);
+        if (any) psnr += luma_psnr(frames[k], got, w, h);
+      }
+      psnr /= static_cast<double>(frames.size());
+      const double mb_min =
+          static_cast<double>(bytes) / static_cast<double>(frames.size()) * 30 * 60 / 1e6;
+      const std::string key = "av1." + std::to_string(h) + "p.crf" + std::to_string(crf);
+      lab.metric(key + ".encode-ms", ms, "ms", gl::Det::measured);
+      lab.metric(key + ".mb-per-minute", mb_min, "MB", gl::Det::measured);
+      lab.metric(key + ".psnr-db", psnr, "dB", gl::Det::measured);
+      cost.rows.push_back({std::to_string(w) + "x" + std::to_string(h), std::to_string(crf),
+                           num::to_fixed(ms, 1), num::to_fixed(mb_min, 1), num::to_fixed(psnr, 1)});
+    }
+  }
+  lab.table(std::move(cost), gl::Det::measured);
+}
+
 void run(gl::Lab& lab) {
   const double seconds = lab.arg_num("seconds");
   const std::vector<double> rates = lab.arg_nums("fps");
@@ -240,7 +437,7 @@ void run(gl::Lab& lab) {
   double worst_off = 0;
   int64_t late = 0, early = 0, unshown = 0, mismatched = 0;
   for (const double fps : rates) {
-    Take t = take(fps, steps, dir, ffmpeg);
+    Take t = take(fps, steps, dir, ffmpeg, "");
     if (!t.error.empty()) {
       lab.fail("the export at " + num::to_string(fps) + " fps failed: " + t.error,
                "Run tests/capture_av_export_test.cpp (skill: replay).");
@@ -337,7 +534,9 @@ void run(gl::Lab& lab) {
             "The wave starting on the red line in every row, and the first white box starting "
             "on it or after it by less than one box's width.",
             {{"seconds", num::to_string(seconds)}, {"fps", lab.arg("fps")}}},
-           strips(takes));
+           strips(takes, "EACH FRAME RATE'S FIRST CLICK: PICTURES ABOVE, SOUND BELOW"));
+
+  coded(lab, rates, steps, dir, ffmpeg, static_cast<int>(lab.arg_num("cost-frames")));
 }
 
 const gl::LabSpec kSpec{
@@ -349,8 +548,9 @@ const gl::LabSpec kSpec{
     "Does an export's sound land on its steps, and does a flash on a click's step show less than "
     "a frame after it, at every frame rate?",
     {{"seconds", "30", "how long each export runs"},
-     {"fps", "24,25,30,60", "the frame rates exported"}},
-    "--seconds=4 --fps=24,30",
+     {"fps", "24,25,30,60", "the frame rates exported"},
+     {"cost-frames", "60", "the pictures the AV1 encoder's cost is timed over, at each size"}},
+    "--seconds=4 --fps=24,30 --cost-frames=4",
     run,
 };
 GE_LAB(kSpec);

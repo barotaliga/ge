@@ -24,6 +24,7 @@ stepped again through the game's own `Run`, never a recording of positions or pi
 | `capture/yuv.hpp/.cpp` | RGBA to I420 and back, BT.709 limited range in integers |
 | `capture/av_export.hpp/.cpp` | The A/V clock: pictures on the frame clock, the synth rendered to each step's sample before the run's sound hears it, the file interleaved by time |
 | `capture/sync_fixture.hpp/.cpp` | A game that flashes and clicks on the same steps, with its sound |
+| `capture/codecs.hpp/.cpp` | The AV1 (libaom) and Opus (libopus) encoders and decoders as packets, the `av1C` record; stubs when `GE_ENCODERS` is off (`cmake/Codecs.cmake`) |
 | `play/game.hpp`'s `Sound`, `SoundSpec`, `GE_SOUND` | The run's sound on the play contract; Fall Line's is `games/fall_line/sound/play_sound.hpp` |
 
 `tests/replay_walker.hpp` is the toy game the replay tests share (a walker on its own seeded
@@ -70,6 +71,14 @@ stream, its log and the straight digest).
 - **The muxer's bytes are pinned.** `tests/capture_matroska_test.cpp` pins one small file's hash;
   a deliberate change of the layout rewrites it and says why in the PR. The file must still read
   when cut at a cluster's end (a crash), and ffmpeg must decode what the labs write.
+- **A compressed export is interleaved by time and its numbers are measured.** With `--codec=av1`
+  an Opus packet covers 20 ms whatever the frame rate, so `AvExport::interleave` holds a picture
+  until no packet still to come can start before it; the encoder's delay is the track's
+  CodecDelay, so the decoded sound still starts on its step (within 3 ms: Opus smears a click).
+  An encoder's bytes depend on the machine and its threads, so every AV1 number in a lab is
+  `measured` and a lab adds the same shot ids with or without the encoders (the digest must not
+  depend on `GE_ENCODERS`). The libraries are included by `codecs.cpp` alone; a new codec is a
+  wrapper there, built by `cmake/Codecs.cmake` with a pinned archive.
 - **The export is offline and steady.** It renders the synth on demand, never through the audio
   device, so the file's sound is the run's whatever the machine's speed; it plays at `--speed=1`
   only.
