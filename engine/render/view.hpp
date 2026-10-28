@@ -77,6 +77,11 @@ struct Weather {
   double deck_tint[3] = {0.86, 0.9, 0.98};
   double deck_light = 1.0;
   double deck_zenith = 0.6;
+  // THE WET GROUND (engine/wind/precip.hpp's `Wet`): the share of a surface's water film, 0 dry ..
+  // 1 soaked, and of its puddles, 0 .. 1. Read by every world material through wgsl/frame.wgsl's
+  // `wet_albedo` and `wet_sheen`.
+  double wet = 0.0;
+  double puddles = 0.0;
 };
 
 // ONE LAYER OF CLOUD (render/clouds.hpp): a slab of the air where the noise passes its cover's
@@ -101,8 +106,20 @@ struct CloudLayer {
   double erode = 0.6;
   double fibre = 0;
   double patch = 0;
+  // Its LIGHT round the key's disc: the radius its droplets or crystals diffract as (um: a water
+  // cloud's about 10, an ice cloud's tens) and their sizes' spread (a share either side: under
+  // about 0.2 a corona's coloured rings, over it a plain aureole), and its 22 degree halo's
+  // strength (0 none .. 1 a veil of ice's plain ring); and how far the light scattered on in it
+  // comes in through its top alone, as a deck's does, so a low sun lights it as little as it
+  // lights the ground (0 a heap's, a thin layer's, lit through its sides and edges .. 1).
+  double drop_um = 10;
+  double drop_spread = 0.35;
+  double halo = 0;
+  double deck = 0;
 };
 inline constexpr int kCloudLayers = 4;
+// The frame block's rows a layer (render/clouds.hpp's `cloud_rows`).
+inline constexpr int kCloudRows = 5;
 // Where the reach's mist begins, as a share of the reach (FrameView::reach_m).
 inline constexpr double kMistBegins = 0.5;
 struct Clouds {

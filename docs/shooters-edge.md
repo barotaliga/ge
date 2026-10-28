@@ -133,6 +133,7 @@ free content (§ Content and test data).
 - **Fixtures of our own**: the tests write their own tiny archives, maps (a box, two rooms and a
   door, a ramp, water) and models with writers in the test support code, so a unit test needs
   no download.
+- **Our own sounds and models**: `games/shooters_edge/content/` holds the game's registry of every sound and model it needs under our own names (`sounds.tsv`, `models.tsv`), `classic.assetmap` from the classic content's names to ours (read by the map cloner and the game), and free CC0 replacements credited in `CREDITS.md` (M18n, the `free-assets` skill). A player's own data still wins when the player points the game at it.
 - **A player's own data**: the client reads the base game directory and any mod from a directory the player
   chooses; nothing in a test depends on it.
 

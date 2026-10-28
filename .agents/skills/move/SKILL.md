@@ -15,9 +15,10 @@ here names a genre's word: a feel is a ROW of knobs, never a code path.
 | `move/spec.hpp` | `MoveSpec`: every knob with its unit; the presets; `scale_lengths` |
 | `move/knobs.hpp` | The knobs by name (unit, range, help): `apply_knobs`, `knob_text`, the fields a console binds |
 | `move/cvars.hpp` | The knobs bound as console cvars (`bind_knobs`: `sv_` and the server's tier by default) and a server cfg run on a spec (`apply_cfg`, the labs' `--cfg`) |
+| `move/push.hpp` | What moves a body from outside its step: `carry` (moving ground, pushers, a crush refused), `push` (knock-back), `launch` and `arc_velocity` (jump pads) |
 | `move/presets.cpp` | The five preset rows and what each is for |
 | `move/world.hpp` | `World::trace`: the one question a mover asks a world, and its contract |
-| `move/box_world.hpp` | Boxes, ramps and stairs as brushes; the swept-box trace |
+| `move/box_world.hpp` | Boxes, ramps and stairs as brushes, each with a `Surface` (velocity, `kLadder`, bounce); `move_brush`; the swept-box trace |
 | `move/mesh_world.hpp` | A world of triangles: the swept separating-axis trace, bucketed in a grid |
 | `move/step.hpp` | `step_move`: the step's order, `MoveCmd`, `MoveState`, `MoveEvents`, `accelerate`, `wish_of` |
 | `move/strafe.hpp` | `best_wish_angle`, `strafe_cmd`: the strafe jumper's hands |
