@@ -91,9 +91,21 @@ any store (its progress kept on disk), and headless in a test, with no change.
 | Friends and the overlay | `friends`, `invite`, `open_overlay` | `invite_received`, `join_requested`, `overlay_shown`, `overlay_hidden` |
 | Ownership | `owns`, `installed` | |
 | Screenshots | `add_screenshot`, `hook_screenshots` | `screenshot_requested` |
+| The workshop | `query_items` (newest or most subscribed, a tag, an author, the player's subscriptions, 50 a page), `submit_item` (a new item or the author's next version: title, description, tags, who sees it, a change note, its files), `subscribe_item`, `subscribed_items`, `item_files`, `item_read` | `items_queried`, `item_submitted`, `item_subscribed`, `item_installed` |
+| The handheld and the extras | `show_keyboard` (the store's on-screen keyboard, only where the player has no keyboard: a handheld or the big-picture mode), `timeline_mark` and `timeline_mode` (the game's moments on the store's recording), `invite_remote_play`, `remote_players` | `text_entered`, `suspended`, `resumed` (the seconds asleep), `remote_player_joined`, `remote_player_left` |
 
-Lobbies, the store's network, the workshop and the controller layer are rows of their own
-(M20c–M20e) and join the interface when they land.
+**The workshop** is content players make for the game (maps, outfits, mods). The store keeps
+each item's latest version; a subscriber's machine downloads it after the answer, at the store's
+speed, and again whenever the author submits a new version, so an `item_installed` event is the
+moment to (re)load it. The game reads an installed item as named files (`item_files`,
+`item_read`), the same whatever store holds it; Steam's backend reads them from the item's
+install folder. The simulated store holds an item to a store's limits (a title of 1 to 128
+bytes, a description up to 8000, up to 20 tags, cloud-file names, `SimConfig::item_max_bytes`)
+and refuses a new version from anyone but its author; a query shows each player only what they
+may see (everyone's items, their friends' friends-only items, their own).
+
+Lobbies, the store's network and the controller layer are rows of their own (M20c, M20e) and
+join the interface when they land.
 
 ## Steam, call by call
 
@@ -118,13 +130,68 @@ code that includes Steamworks' headers.
 | `ISteamNetworkingSockets`, `ISteamNetworkingMessages`, the Steam Datagram Relay | One more `engine/net` transport kind beside UDP, TCP and the simulated network: a peer addressed by its Steam id, reached through Steam's relay, with no NAT work of the game's own | M20c |
 | `ISteamUser::GetAuthTicketForWebApi`, `BeginAuthSession` | A host trusting a player's store identity; a store account linked to the game's own account service (M17j) | M20c |
 | `ISteamGameServer` | A dedicated server listed and authenticated by Steam | M20c |
-| `ISteamUGC` (query, subscribe, download, install folders, create and submit an item) | The workshop: mods, maps, outfits; items mounted as the game's content | M20d |
+| `ISteamUGC` (`CreateQueryAllUGCRequest`/`CreateQueryUserUGCRequest`, `AddRequiredTag`, `SendQueryUGCRequest`; `CreateItem`, `StartItemUpdate`, `SetItemTitle`/`Description`/`Tags`/`Visibility`/`Content`, `SubmitItemUpdate`; `SubscribeItem`/`UnsubscribeItem`, `GetSubscribedItems`, `GetItemInstallInfo`, `ItemInstalled_t`) | `query_items`, `submit_item` (`item` 0 creates first), `subscribe_item`, `subscribed_items`; `item_files` and `item_read` over the install folder; `item_installed` from `ItemInstalled_t` | M20d (the interface and the simulated store), M20b (Steam's side) |
 | `ISteamInput` (action sets, digital and analog actions, origins and glyphs, rumble, the configurator) | A backend of `engine/input` (M19): its actions and action sets are the engine's action maps, its glyphs the prompts the HUD draws | M20e |
-| `ISteamUtils::ShowFloatingGamepadTextInput`, the Deck's suspend and resume, `ISteamTimeline` (events and game modes on the recording timeline), `ISteamRemotePlay` | The handheld and the extras: the on-screen keyboard, the game's moments marked on Steam's recording, playing together remotely | M20f |
+| `ISteamUtils::ShowFloatingGamepadTextInput`, the Deck's suspend and resume, `ISteamTimeline` (events and game modes on the recording timeline), `ISteamRemotePlay` | `show_keyboard` and `text_entered` (`FloatingGamepadTextInputDismissed_t`); `suspended` and `resumed`; `timeline_mark` (`AddTimelineEvent`), `timeline_mode` (`SetTimelineGameMode`); `invite_remote_play` (`BSendRemotePlayTogetherInvite`), `remote_players` and their events (`SteamRemotePlaySessionConnected_t`/`Disconnected_t`) | M20f (the interface and the simulated store), M20b (Steam's side) |
 | `ISteamInventory`, `ISteamMicroTxn`, `ISteamHTMLSurface`, `ISteamMusic`, `ISteamParentalSettings`, `ISteamVideo` | Not planned: no game on the engine sells items or plays the player's music; a row is added when one does | none |
 
 Other stores fit the same interface: Game Center on iOS, iPadOS and the Mac App Store, and
 Google Play Games on Android (M20h, with the store builds of M11).
+
+## Discord
+
+Discord is not a store: it sells no game and keeps no achievements. What it gives a game is the
+player's profile line (rich presence: what they are playing, with a timer, art and a party),
+friends asking to join from that line, and the player joining a friend's game from Discord. So
+it is a presence service beside the store's `Backend`, not another backend: a game keeps its
+store for progress and adds a `services::Discord` for its profile line. Both deliver through the
+same `Event` and the same once-a-frame `poll`.
+
+**Two ways in, and which rows they are.**
+
+- **The client's local IPC (M23g, built).** The Discord app on the player's machine listens on a
+  local pipe, `discord-ipc-0` to `-9` (a Unix domain socket under `$XDG_RUNTIME_DIR`, `$TMPDIR`
+  or `/tmp`, and the Flatpak's and the Snap's folders; a named pipe on Windows). A game connects,
+  says which application it is (the application id from Discord's developer portal, which is
+  public), and speaks framed JSON: set the activity, subscribe to joins and asks, answer an ask.
+  No SDK, no library, no secret and no network: `engine/net/local_pipe.hpp` is the pipe,
+  `engine/services/discord.hpp` the protocol and the client. With no Discord running, the game
+  looks again with backoff (2 s doubling to a minute) and nothing else changes.
+- **The Social SDK (M23g, open).** Discord's friends list, lobbies, voice chat, direct messages
+  and account linking come through its Social SDK, a closed library under Discord's terms. It
+  follows Steam's rule exactly: never committed, supplied by path at build time
+  (`GE_DISCORD_SOCIAL_SDK`), on CI from the repository secret `DISCORD_SOCIAL_SDK_URL`, the
+  runtime library shipped beside the executable, and the lobbies reaching `engine/net` the way
+  Steam's do (M20c).
+
+| Discord | `services::Discord` |
+| --- | --- |
+| Handshake (`v: 1`, the client id); `READY` with the user | `poll` finds the app; `connection_restored` (id `discord`), `user()` |
+| `SET_ACTIVITY` (details, state, timestamps, assets, party, join secret) | `set_activity(Activity)`, checked by `check_activity`, sent paced by `poll`; `clear_activity()` |
+| `SUBSCRIBE ACTIVITY_JOIN` / `ACTIVITY_JOIN` | `join_requested` (text: the friend's join secret) |
+| `SUBSCRIBE ACTIVITY_JOIN_REQUEST` / `ACTIVITY_JOIN_REQUEST` | `join_asked` (user, text: their name) |
+| `SEND_ACTIVITY_JOIN_INVITE` / `CLOSE_ACTIVITY_REQUEST` | `answer_join(user, accept)` |
+| An `ERROR` event; a close (op 2) | `call_refused` (id: the command, text: Discord's message and code) |
+| The app quits (the pipe closes) | `connection_lost`; the activity is sent again when it returns |
+| Ping (op 3) | a pong, by `poll` |
+
+**The rate limit.** Discord takes five activity updates in 20 seconds. The client paces its
+updates to one every 4 seconds and always sends the newest, so a game may set its activity
+whenever anything changes: the updates in between are coalesced, the profile is never more than
+4 seconds behind, and no window ever holds a sixth update. The `discord` lab measured it: a run
+changing its line every half second showed a line at most 3.5 s old, against 15 s when the
+client sent five at once and waited out the window.
+
+**Limits checked before sending** (`check_activity`, `invalid`): every text empty or 2 to 128
+bytes, image keys up to 256, a party 1 ≤ size ≤ max, a join secret only with a party, timestamps
+in unix milliseconds that do not end before they start.
+
+**Testing.** `SimDiscord` is the Discord app in memory over the same frames: it answers the
+handshake, refuses a bad client id with a close, holds the activity to the limits above and
+refuses a sixth update in 20 seconds, and the player's and friends' actions (start, quit, ask to
+join, join, ping) are calls on it. `tests/services_discord_test.cpp` runs the client against it
+and over a real local pipe; `make lab LAB=discord` plays a session (the app starting late, a run,
+two asks, a join, a quit and return) and tables every event and every frame.
 
 ## The SDK, the secrets and the build
 
@@ -147,7 +214,9 @@ Google Play Games on Android (M20h, with the store builds of M11).
 
 - Every call is tested on the simulated store (`tests/services_sim_store_test.cpp`), the offline
   store's directory round trip (`tests/services_offline_test.cpp`) and the catalog's check
-  (`tests/services_catalog_test.cpp`).
+  (`tests/services_catalog_test.cpp`); Discord against the simulated Discord app and a real local
+  pipe (`tests/services_discord_test.cpp`); the workshop on the simulated and offline stores
+  (`tests/services_workshop_test.cpp`).
 - The `services` lab plays a game's whole use of the services by four players on one script and
   tables every event, the store's journal and how long each kind of answer took
   (`make lab LAB=services ARGS="--latency-ms=200 --jitter-ms=100"`).
