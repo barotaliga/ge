@@ -294,6 +294,7 @@ Outcome run_model(const Args& a) {
   size_t triangles = 0;
   for (const assets::Mesh& m : loaded.model.meshes) triangles += m.indices.size() / 3;
   std::vector<std::string> clips;
+  clips.reserve(loaded.model.clips.size());
   for (const assets::Clip& c : loaded.model.clips) clips.push_back(c.name);
   const double kib = static_cast<double>(p.glb.size()) / 1024;
   Outcome o;
