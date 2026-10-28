@@ -19,10 +19,10 @@ cli-loop 0c501f1dbb02b7b9
 console e8456b0db59560ce
 crowd cf02cf9a7c917783
 crowd-look 194a06db20f2ebb2
+discord 26b51dc9bfa13a56
 fetch 6938ae41f6759c43
 float 317c4f82117ff544
 flow 53bf6a0ab0ac209f
-discord 26b51dc9bfa13a56
 forest f1881cb20efe0144
 frame-pace c5058023a52812c3
 free 2b3f2cf5100bf9b4
@@ -93,6 +93,7 @@ speed-ski 55c4cfa78de28f7e
 spray 7479b5a25c39b195
 stars 9cdfe902087f03b7
 steer 1a0cad67ccb0869e
+store-input bbf03c2fd77ab05e
 swim c6acad32e55847d9
 synth 39e6460e5c8a8c8e
 taa 01ee5d58d90a05ce
