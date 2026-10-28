@@ -165,7 +165,7 @@ TEST(digest_baseline_as_a_directory_of_one_file_a_lab) {
   CHECK(run({"drift", "--check-digests=" + base}) == 1);
   // Writing one lab leaves every other lab's file as it was, and a file of a lab this build does
   // not register (a GPU lab on a GPU-less build) stays.
-  std::ofstream(base + "/gpu-only.txt") << "0123456789abcdef\n";
+  std::ofstream(base + "/gpu-only.txt", std::ios::binary) << "0123456789abcdef\n";
   CHECK(run({"drift", "--smoke", "--write-digests=" + base}) == 0);
   CHECK(slurp(base + "/toy.txt") == toy);
   CHECK(fs::exists(base + "/drift.txt"));
