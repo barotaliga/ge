@@ -279,6 +279,8 @@ characters.
 | `games/fall_line/hud/` | Fall Line's HUD (`fall_line_hud`, no GPU): the free ride's snapshot, the news, the words, the view | `ui` |
 | `games/fall_line/labs/` | Fall Line's labs, the headless ones and the GPU's | `sim`, `labs`, `audio` |
 | `games/fall_line/app/` | Fall Line's presentation (`fall_line_app`): the pass table, the look, the scene, the views, the `fall_line` window; then the HUD | `platform`, `gpu`, `render`, `ui`, `audio` |
+| `games/shooters_edge/hud/` | Shooter's Edge's HUDs (`shooters_edge_hud`, no GPU): the classic, modern and compact looks, `hud_style`, the free art, the classic set's pictures | `ui` |
+| `games/shooters_edge/labs/` | Shooter's Edge's labs | `labs`, `ui` |
 | `tests/` | `<topic>_test.cpp`, one executable each; `check.hpp` (the harness), `golden.hpp`, `golden/` | `testing` |
 | `porting/` | The WORKING AREA (above): the porting guide, the porting map, the golden-table generators. Deleted when porting ends | `port` |
 | `tools/` | The repository's checks and scripts: `check-agents.sh`, `agents-index.mjs` (the `ge:` tags, `docs/index.md`, `make find`), `skill-lessons.mjs`, `precheck.sh`, `lint.sh` | `write-code` |
