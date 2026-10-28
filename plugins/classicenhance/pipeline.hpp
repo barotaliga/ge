@@ -14,10 +14,9 @@
 // reruns it. `RunOptions::only` runs the named stages alone (the ones before them must have run).
 // A report says per stage whether it ran, what it wrote and how long it took.
 //
-// ge:summary The enhancement pipeline's stages (pack, textures, lightmaps, sounds) run into the cache
-// ge:keywords pipeline stage pack textures lightmaps sounds run skip force report cache enhance
-// ge:skill classicenhance
-// ge:test tests/classicenhance_pipeline_test.cpp
+// ge:summary The enhancement pipeline's stages (pack, textures, lightmaps, sounds) run into the
+// cache ge:keywords pipeline stage pack textures lightmaps sounds run skip force report cache
+// enhance ge:skill classicenhance ge:test tests/classicenhance_pipeline_test.cpp
 #pragma once
 
 #include <cstdint>

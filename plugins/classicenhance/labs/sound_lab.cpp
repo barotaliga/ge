@@ -43,7 +43,7 @@ struct Made {
   const char* id;
   const char* title;
   const char* what;
-  std::vector<float> full;  // 48 kHz, full band
+  std::vector<float> full;          // 48 kHz, full band
   size_t gap_from = 0, gap_to = 0;  // a stretch of hiss alone (0, 0: none)
 };
 
@@ -51,7 +51,10 @@ std::vector<Made> made_sounds() {
   std::vector<Made> out;
   ge::core::Rng rng{41};
   {  // A burst: white noise through a falling one-pole low-pass, decaying.
-    Made m{"burst", "A NOISE BURST", "white noise decaying over half a second, its brightness falling", {}};
+    Made m{"burst",
+           "A NOISE BURST",
+           "white noise decaying over half a second, its brightness falling",
+           {}};
     m.full.resize(size_t(kRate) * 6 / 10);
     double lp = 0;
     for (size_t i = 0; i < m.full.size(); i++) {
@@ -63,8 +66,10 @@ std::vector<Made> made_sounds() {
     out.push_back(std::move(m));
   }
   {  // A voice-like buzz: a sawtooth's harmonics gliding 140 -> 220 Hz, then hiss alone.
-    Made m{"voice", "A GLIDING BUZZ, THEN HISS",
-           "harmonics to 16 kHz on a pitch rising 140 to 220 Hz with vibrato, then a gap of faint hiss",
+    Made m{"voice",
+           "A GLIDING BUZZ, THEN HISS",
+           "harmonics to 16 kHz on a pitch rising 140 to 220 Hz with vibrato, then a gap of faint "
+           "hiss",
            {}};
     m.full.resize(size_t(kRate) * 12 / 10);
     double phase = 0;
@@ -206,22 +211,22 @@ void run(ge::lab::Lab& lab) {
       gap_b = f1(gb);
       gap_a = f1(ga);
     }
-    table.rows.push_back({id, f1(ao), f1(ab), f1(aa), has_top ? f1(lb) : "-",
-                          has_top ? f1(la) : "-", gap_b, gap_a});
+    table.rows.push_back(
+        {id, f1(ao), f1(ab), f1(aa), has_top ? f1(lb) : "-", has_top ? f1(la) : "-", gap_b, gap_a});
 
-    const std::vector<std::pair<std::string, std::string>> inputs = {
-        {"source", "11025 Hz, 8 bits"}, {"out", "48000 Hz"}};
+    const std::vector<std::pair<std::string, std::string>> inputs = {{"source", "11025 Hz, 8 bits"},
+                                                                     {"out", "48000 Hz"}};
     ge::lab::sound_shot(lab,
                         {id + "-original", std::string(m.title) + ": THE ORIGINAL",
                          std::string(m.what) + ", made at 48 kHz with its whole band.",
                          "the octave bands up to 16 kHz: what the classic copy lost", inputs},
                         stereo(m.full));
-    ge::lab::sound_shot(lab,
-                        {id + "-classic", std::string(m.title) + ": AS THE PACK HOLDS IT",
-                         "The same brought to 11 025 Hz and 8 bits, played back at 48 kHz unchanged.",
-                         "nothing above about 5 kHz; quantisation hiss under the quiet parts",
-                         inputs},
-                        stereo(before.samples));
+    ge::lab::sound_shot(
+        lab,
+        {id + "-classic", std::string(m.title) + ": AS THE PACK HOLDS IT",
+         "The same brought to 11 025 Hz and 8 bits, played back at 48 kHz unchanged.",
+         "nothing above about 5 kHz; quantisation hiss under the quiet parts", inputs},
+        stereo(before.samples));
     ge::lab::sound_shot(lab,
                         {id + "-enhanced", std::string(m.title) + ": ENHANCED",
                          "The classic copy denoised, resampled and its top band rebuilt.",

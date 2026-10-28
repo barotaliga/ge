@@ -38,7 +38,7 @@ std::vector<float> resample(std::span<const float> in, double from, double to,
   std::vector<float> out(out_len, 0.0f);
   if (in.empty() || out_len == 0) return out;
   const double lower = std::min(from, to);
-  const double fc = opts.cutoff * lower / 2.0 / from;  // cycles per input sample
+  const double fc = opts.cutoff * lower / 2.0 / from;     // cycles per input sample
   const double width = double(opts.taps) * from / lower;  // half-width, input samples
   const int phases = opts.phases;
   const size_t count = size_t(std::ceil(width * phases)) + 2;

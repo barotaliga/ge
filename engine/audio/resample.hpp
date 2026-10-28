@@ -17,10 +17,10 @@
 namespace ge::audio {
 
 struct ResampleOptions {
-  int taps = 32;          // kernel half-width, in samples of the lower rate
-  double cutoff = 0.95;   // of the lower Nyquist rate
-  double beta = 9.0;      // the Kaiser window's shape (about 90 dB stopband)
-  int phases = 512;       // kernel positions tabulated between two input samples
+  int taps = 32;         // kernel half-width, in samples of the lower rate
+  double cutoff = 0.95;  // of the lower Nyquist rate
+  double beta = 9.0;     // the Kaiser window's shape (about 90 dB stopband)
+  int phases = 512;      // kernel positions tabulated between two input samples
 };
 
 // `in` at `from` Hz, returned at `to` Hz; the result is round(in.size() * to / from) long.

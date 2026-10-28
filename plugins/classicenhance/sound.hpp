@@ -62,10 +62,10 @@ struct SoundOptions {
 };
 
 struct SoundReport {
-  double noise_db = 0;     // the noise floor found, dBFS per bin (relative)
-  double removed_db = 0;   // energy taken out by the noise reduction, dB
-  double added_db = 0;     // energy of the rebuilt band against the whole, dB
-  double source_hz = 0;    // where the source's band ends
+  double noise_db = 0;    // the noise floor found, dBFS per bin (relative)
+  double removed_db = 0;  // energy taken out by the noise reduction, dB
+  double added_db = 0;    // energy of the rebuilt band against the whole, dB
+  double source_hz = 0;   // where the source's band ends
 };
 
 Pcm enhance_sound(const Pcm& in, const SoundOptions& opts, SoundReport* report = nullptr);

@@ -73,7 +73,8 @@ TEST(sound_wav_round_trip_keeps_samples_and_loop) {
 
 TEST(sound_comes_out_at_48k_with_its_loop) {
   std::vector<float> x(11025);
-  for (size_t i = 0; i < x.size(); i++) x[i] = float(0.6 * ge::core::libm::sin(2 * kPi * 440 * double(i) / 11025));
+  for (size_t i = 0; i < x.size(); i++)
+    x[i] = float(0.6 * ge::core::libm::sin(2 * kPi * 440 * double(i) / 11025));
   const ce::Pcm out = ce::enhance_sound(eight_bit(x, 5000), {});
   CHECK(out.rate == 48000 && out.samples.size() == 48000);
   CHECK(out.loop_start == 21769);  // 5000 * 48000 / 11025, rounded
@@ -84,7 +85,8 @@ TEST(sound_band_is_filled_for_noise_not_for_a_tone) {
   ge::core::Rng rng{3};
   std::vector<float> noise(11025), tone(11025);
   for (size_t i = 0; i < noise.size(); i++) {
-    noise[i] = float(0.4 * (ge::core::next(rng) * 2 - 1) * ge::core::libm::exp(-double(i) / 4000.0));
+    noise[i] =
+        float(0.4 * (ge::core::next(rng) * 2 - 1) * ge::core::libm::exp(-double(i) / 4000.0));
     tone[i] = float(0.5 * ge::core::libm::sin(2 * kPi * 330 * double(i) / 11025));
   }
   const ce::Pcm n = ce::enhance_sound(eight_bit(noise), {});
@@ -92,9 +94,12 @@ TEST(sound_band_is_filled_for_noise_not_for_a_tone) {
   ce::SoundOptions off;
   off.extend = 0;
   const ce::Pcm plain = ce::enhance_sound(eight_bit(noise), off);
-  CHECK_MSG(above_db(n.samples, 48000, 6000) > -15, "noise above 6 kHz: " + std::to_string(above_db(n.samples, 48000, 6000)));
-  CHECK_MSG(above_db(plain.samples, 48000, 7000) < -60, std::to_string(above_db(plain.samples, 48000, 7000)));
-  CHECK_MSG(above_db(t.samples, 48000, 6000) < -40, "a tone above 6 kHz: " + std::to_string(above_db(t.samples, 48000, 6000)));
+  CHECK_MSG(above_db(n.samples, 48000, 6000) > -15,
+            "noise above 6 kHz: " + std::to_string(above_db(n.samples, 48000, 6000)));
+  CHECK_MSG(above_db(plain.samples, 48000, 7000) < -60,
+            std::to_string(above_db(plain.samples, 48000, 7000)));
+  CHECK_MSG(above_db(t.samples, 48000, 6000) < -40,
+            "a tone above 6 kHz: " + std::to_string(above_db(t.samples, 48000, 6000)));
 }
 
 TEST(sound_hiss_in_the_gaps_comes_down) {
@@ -103,7 +108,8 @@ TEST(sound_hiss_in_the_gaps_comes_down) {
   std::vector<float> x(22050);
   for (size_t i = 0; i < x.size(); i++) {
     const double hiss = 0.01 * (ge::core::next(rng) * 2 - 1);
-    const double body = i < 5000 ? 0.5 * ge::core::libm::sin(2 * kPi * 300 * double(i) / 11025) : 0.0;
+    const double body =
+        i < 5000 ? 0.5 * ge::core::libm::sin(2 * kPi * 300 * double(i) / 11025) : 0.0;
     x[i] = float(body + hiss);
   }
   ce::SoundOptions only;
@@ -112,7 +118,8 @@ TEST(sound_hiss_in_the_gaps_comes_down) {
   const std::vector<float> y = ce::reduce_noise(eight_bit(x).samples, 8, only, &report);
   double gap_in = 0, gap_out = 0, body_in = 0, body_out = 0;
   for (size_t i = 0; i < 4000; i++) body_in += double(x[i]) * x[i], body_out += double(y[i]) * y[i];
-  for (size_t i = 10000; i < 20000; i++) gap_in += double(x[i]) * x[i], gap_out += double(y[i]) * y[i];
+  for (size_t i = 10000; i < 20000; i++)
+    gap_in += double(x[i]) * x[i], gap_out += double(y[i]) * y[i];
   CHECK_MSG(gap_out < gap_in * 0.3, "the gap kept " + std::to_string(gap_out / gap_in));
   CHECK(body_out > body_in * 0.9);
 }

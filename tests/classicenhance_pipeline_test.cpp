@@ -1,8 +1,8 @@
 // The pipeline (plugins/classicenhance/pipeline.hpp, cache.hpp, lightmaps.hpp) on a fixture pack
-// made here: two fixture maps of the brush plugin's writer, a palette and a looping 8-bit sound. Every stage writes what
-// its header says into a temporary cache; a rerun skips every stage; a changed option reruns only
-// the textures; --force reruns all; `only` runs the one asked; and a source that was never
-// verified is refused before anything is written.
+// made here: two fixture maps of the brush plugin's writer, a palette and a looping 8-bit sound.
+// Every stage writes what its header says into a temporary cache; a rerun skips every stage; a
+// changed option reruns only the textures; --force reruns all; `only` runs the one asked; and a
+// source that was never verified is refused before anything is written.
 //
 // ge:summary Tests the pipeline's stages, cache layout, reruns and refusals on a fixture pack
 // ge:keywords test classicenhance pipeline cache stages rerun skip force lightmaps textures sounds
@@ -42,7 +42,7 @@ std::vector<uint8_t> fixture_pack() {
                                 {"maps/b_hall.bsp", map},
                                 {"maps/a_copy.bsp", map},
                                 {"sound/ambience/hum1.wav", ce::write_wav(tone)}},
-                &out, &error),
+                               &out, &error),
             error);
   return out;
 }

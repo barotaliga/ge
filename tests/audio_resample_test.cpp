@@ -21,7 +21,8 @@ constexpr double kPi = 3.14159265358979323846;
 
 std::vector<float> tone(double hz, double rate, size_t n) {
   std::vector<float> x(n);
-  for (size_t i = 0; i < n; i++) x[i] = float(0.5 * ge::core::libm::sin(2 * kPi * hz * double(i) / rate));
+  for (size_t i = 0; i < n; i++)
+    x[i] = float(0.5 * ge::core::libm::sin(2 * kPi * hz * double(i) / rate));
   return x;
 }
 

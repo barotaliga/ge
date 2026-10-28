@@ -32,7 +32,9 @@ void put16(std::vector<uint8_t>& b, uint16_t v) {
 }
 void tag(std::vector<uint8_t>& b, const char* t) { b.insert(b.end(), t, t + 4); }
 
-double db(double ratio) { return 10.0 * core::libm::log(std::max(ratio, 1e-30)) / core::libm::log(10.0); }
+double db(double ratio) {
+  return 10.0 * core::libm::log(std::max(ratio, 1e-30)) / core::libm::log(10.0);
+}
 double from_db(double d) { return core::libm::pow(10.0, d / 10.0); }
 
 // A look-ahead limiter: the gain each sample needs to stay under `ceiling`, held at its least
@@ -71,8 +73,10 @@ void limit_peaks(std::vector<float>& x, double ceiling, int rate) {
 }  // namespace
 
 bool read_wav(std::span<const uint8_t> b, Pcm* out, std::string* error) {
-  const std::string next = "; next: give a PCM WAV (8 or 16 bits) or skip this file (skill: classicenhance)";
-  if (b.size() < 12 || std::memcmp(b.data(), "RIFF", 4) != 0 || std::memcmp(b.data() + 8, "WAVE", 4) != 0) {
+  const std::string next =
+      "; next: give a PCM WAV (8 or 16 bits) or skip this file (skill: classicenhance)";
+  if (b.size() < 12 || std::memcmp(b.data(), "RIFF", 4) != 0 ||
+      std::memcmp(b.data() + 8, "WAVE", 4) != 0) {
     *error = "not a RIFF WAVE file (" + std::to_string(b.size()) + " bytes)" + next;
     return false;
   }
@@ -85,7 +89,8 @@ bool read_wav(std::span<const uint8_t> b, Pcm* out, std::string* error) {
     const uint8_t* c = b.data() + at;
     const size_t size = le32(c + 4);
     const size_t body = at + 8;
-    const size_t have = std::min(size, b.size() - body);  // a short last chunk is read as far as it goes
+    const size_t have =
+        std::min(size, b.size() - body);  // a short last chunk is read as far as it goes
     if (std::memcmp(c, "fmt ", 4) == 0 && have >= 16) {
       format = le16(c + 8);
       channels = le16(c + 10);
@@ -143,13 +148,13 @@ std::vector<uint8_t> write_wav(const Pcm& pcm) {
   if (cue) {
     tag(b, "cue ");
     put32(b, 28);
-    put32(b, 1);                          // one cue point
-    put32(b, 1);                          // its id
-    put32(b, uint32_t(pcm.loop_start));   // its position
+    put32(b, 1);                         // one cue point
+    put32(b, 1);                         // its id
+    put32(b, uint32_t(pcm.loop_start));  // its position
     tag(b, "data");
     put32(b, 0);
     put32(b, 0);
-    put32(b, uint32_t(pcm.loop_start));   // its sample offset: the loop start
+    put32(b, uint32_t(pcm.loop_start));  // its sample offset: the loop start
   }
   tag(b, "data");
   put32(b, data);
@@ -297,9 +302,8 @@ Pcm enhance_sound(const Pcm& in, const SoundOptions& opts, SoundReport* report) 
   out.rate = opts.rate;
   out.bits = 16;
   out.samples = std::move(wide);
-  out.loop_start = in.loop_start < 0
-                       ? -1
-                       : long(core::num::round(double(in.loop_start) * opts.rate / in.rate));
+  out.loop_start =
+      in.loop_start < 0 ? -1 : long(core::num::round(double(in.loop_start) * opts.rate / in.rate));
   return out;
 }
 
