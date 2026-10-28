@@ -371,7 +371,7 @@ and the directories agree.
 | `debug` | Finding out why a run behaves as it does: log channels and `--log` dumps, series traces and spans, the outlier rule, the charts (PNG + SVG), `ge graph` |
 | `perf` | Any optimisation, a benchmark, a profile, a cost claim |
 | `agent-interface` | Diagnostics wording, consumer skills, the `ge` CLI (M12) |
-| `detail` | `engine/detail`: bevels on brush edges (exposed, buried, thin, flat), the receivers grid, decals (scorch and its embers, bullet holes, blood; masks, the atlas, the clip, the pool, ageing), the marks of a game's events (`shot_hit`, `bleed` by health lost), seeded props by rules (rubble, debris, moss), the test hall and the `detail-*` labs; the M42 rows |
+| `detail` | `engine/detail`: bevels on brush edges (exposed, buried, thin, flat), the receivers grid, decals (scorch and its embers, bullet holes, blood; masks, the atlas, the clip, the pool, ageing), the marks of a game's events (`shot_hit`, `bleed` by health lost), seeded props by rules (rubble, debris, moss), floor clutter by surface class and open sky (`clutter_rules`), the test hall and yard and the `detail-*` labs; the M42 rows |
 | `water` | Water and wind: `engine/wind` (the field, gusts, the log-law profile, shelter, local sources), `engine/water` and its passes as M24's rows land (bodies, waves, floating, swimming, colour, flow), their labs |
 | `bots` | Anything a bot decides: `engine/ai`, the decision record every bot writes, `Run::trace`, `ge why`, making a bot more human, paths and thinking on a schedule (M16) |
 | `console` | `engine/console`: a setting (cvar) added or named, its tier, cfg files and the console language, aliases, scripting, binds, the drop-down console, `ge cvar` and `ge cfg`, the `console` lab (M21) |

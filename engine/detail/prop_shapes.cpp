@@ -35,7 +35,15 @@ double hash3(const Vec3& v, double seed) {
   return core::hash2(std::floor(v.x * 1000 + v.y * 37), std::floor(v.z * 1000 - v.y * 53), seed);
 }
 
-PropMesh rubble(uint32_t var) {
+// A lump: an icosahedron cut once, every corner pushed to `base` + `rough` times its own hash,
+// squashed and stretched within the ranges, standing on a cut flat face.
+PropMesh lump(uint32_t var, uint32_t salt, double base, double rough, double squash_lo,
+              double squash_hi, double stretch_hi);
+
+PropMesh rubble(uint32_t var) { return lump(var, 17, 0.72, 0.4, 0.45, 0.75, 1.5); }
+
+PropMesh lump(uint32_t var, uint32_t salt, double base, double rough, double squash_lo,
+              double squash_hi, double stretch_hi) {
   const double g = (1 + std::sqrt(5.0)) / 2;
   std::vector<Vec3> v = {{-1, g, 0},  {1, g, 0},  {-1, -g, 0}, {1, -g, 0}, {0, -1, g},  {0, 1, g},
                          {0, -1, -g}, {0, 1, -g}, {g, 0, -1},  {g, 0, 1},  {-g, 0, -1}, {-g, 0, 1}};
@@ -44,15 +52,15 @@ PropMesh rubble(uint32_t var) {
                         {1, 5, 9},  {5, 11, 4}, {11, 10, 2}, {10, 7, 6}, {7, 1, 8},
                         {3, 9, 4},  {3, 4, 2},  {3, 2, 6},   {3, 6, 8},  {3, 8, 9},
                         {4, 9, 5},  {2, 4, 11}, {6, 2, 10},  {8, 6, 7},  {9, 8, 1}};
-  core::Rng rng = core::make_rng(var * 2654435761u + 17);
-  const double squash = core::range(rng, 0.45, 0.75);
-  const double stretch = core::range(rng, 1, 1.5);
-  const double seed = 41 + var;
+  core::Rng rng = core::make_rng(var * 2654435761u + salt);
+  const double squash = core::range(rng, squash_lo, squash_hi);
+  const double stretch = core::range(rng, 1, stretch_hi);
+  const double seed = 41 + var + (salt - 17) * 101.0;
   // One cut: each face into four, the new corners pushed to the sphere, then every corner pushed
   // in or out by its own hash (shared corners get the same push, so the lump stays closed).
   auto push = [&](Vec3 p) {
     p = normalized(p);
-    const double r = 0.72 + 0.4 * hash3(p, seed);
+    const double r = base + rough * hash3(p, seed);
     return Vec3{p.x * r * 0.5 * stretch, p.y * r * 0.5 * squash, p.z * r * 0.5};
   };
   PropMesh m;
@@ -120,11 +128,12 @@ PropMesh debris(uint32_t var) {
   return m;
 }
 
-PropMesh moss(uint32_t var) {
+// A lumpy dome: moss's cushion, or a clod of earth when low.
+PropMesh dome(uint32_t var, uint32_t salt, double h_lo, double h_hi) {
   constexpr int kRings = 5, kSegs = 12;
-  const double seed = 61 + var;
-  core::Rng rng = core::make_rng(var * 3266489917u + 5);
-  const double height = core::range(rng, 0.14, 0.26);
+  const double seed = 61 + var + (salt - 5) * 89.0;
+  core::Rng rng = core::make_rng(var * 3266489917u + salt);
+  const double height = core::range(rng, h_lo, h_hi);
   auto at = [&](int ring, int seg) {
     const double r = 0.5 * ring / kRings;
     const double a = seg * core::kTau / kSegs;
@@ -146,6 +155,108 @@ PropMesh moss(uint32_t var) {
   return m;
 }
 
+PropMesh moss(uint32_t var) { return dome(var, 5, 0.14, 0.26); }
+
+// A tapered tube of `sides` from `a` (radius `ra`) to `b` (radius `rb`), capped at both ends.
+void limb(PropMesh& m, const Vec3& a, const Vec3& b, double ra, double rb, int sides) {
+  const Vec3 axis = normalized(sub(b, a));
+  const Vec3 u = any_perpendicular(axis), v = cross(axis, u);
+  auto ring = [&](const Vec3& c, double r, int k) {
+    const double t = k * core::kTau / sides;
+    return add(c, add(mul(u, core::libm::cos(t) * r), mul(v, core::libm::sin(t) * r)));
+  };
+  for (int k = 0; k < sides; ++k) {
+    const Vec3 a0 = ring(a, ra, k), a1 = ring(a, ra, k + 1);
+    const Vec3 b0 = ring(b, rb, k), b1 = ring(b, rb, k + 1);
+    tri(m, a0, a1, b1);
+    tri(m, a0, b1, b0);
+    tri(m, a, a1, a0);
+    tri(m, b, b0, b1);
+  }
+}
+
+// A tuft of blades fanned out of a clump, each a bent strip seen from both sides.
+PropMesh grass(uint32_t var) {
+  core::Rng rng = core::make_rng(var * 2654435761u + 71);
+  PropMesh m;
+  const int blades = core::int_in(rng, 9, 14);
+  for (int i = 0; i < blades; ++i) {
+    const double a = core::range(rng, 0, core::kTau);
+    const double r = core::range(rng, 0, 0.16);
+    const double h = core::range(rng, 0.55, 1.0);
+    const double lean = core::range(rng, 0.1, 0.45);
+    const double w = core::range(rng, 0.03, 0.055);
+    const Vec3 out{core::libm::cos(a), 0, core::libm::sin(a)};
+    const Vec3 side{-out.z, 0, out.x};
+    const Vec3 base = mul(out, r);
+    const Vec3 mid = add(base, Vec3{out.x * lean * 0.35 * h, h * 0.55, out.z * lean * 0.35 * h});
+    const Vec3 tip = add(base, Vec3{out.x * lean * h, h, out.z * lean * h});
+    const Vec3 b0 = mad(base, side, -w), b1 = mad(base, side, w);
+    const Vec3 m0 = mad(mid, side, -w * 0.7), m1 = mad(mid, side, w * 0.7);
+    for (int face = 0; face < 2; ++face) {
+      if (face == 0) {
+        tri(m, b0, b1, m1);
+        tri(m, b0, m1, m0);
+        tri(m, m0, m1, tip);
+      } else {
+        tri(m, b0, m1, b1);
+        tri(m, b0, m0, m1);
+        tri(m, m0, tip, m1);
+      }
+    }
+  }
+  return m;
+}
+
+// A twig (a thin stick with a fork) or a branch (a heavier limb, bent, with two forks), lying on
+// the ground along x.
+PropMesh stick(uint32_t var, bool branch) {
+  core::Rng rng = core::make_rng(var * 2246822519u + (branch ? 83 : 79));
+  PropMesh m;
+  const double r = branch ? 0.035 : 0.02;
+  const double bend = core::range(rng, -0.12, 0.12);
+  const Vec3 a{-0.5, r, 0}, mid{0, r * 0.9, bend}, b{0.5, r * 0.6, core::range(rng, -0.05, 0.05)};
+  limb(m, a, mid, r, r * 0.8, 5);
+  limb(m, mid, b, r * 0.8, r * 0.35, 5);
+  const int forks = branch ? 2 : 1;
+  for (int f = 0; f < forks; ++f) {
+    const double t = core::range(rng, 0.2, 0.7);
+    const Vec3 at = add(mul(a, 1 - t), mul(b, t));
+    const double side = core::chance(rng, 0.5) ? 1 : -1;
+    const double len = core::range(rng, 0.18, 0.35);
+    const Vec3 end{at.x + len * 0.6, at.y * 0.7, at.z + side * len * 0.8};
+    limb(m, at, end, r * 0.55, r * 0.2, 4);
+  }
+  stand(m);
+  return m;
+}
+
+// A spent cartridge case lying on its side: a tube with its rim, along x.
+PropMesh shell(uint32_t var) {
+  core::Rng rng = core::make_rng(var * 3266489917u + 97);
+  PropMesh m;
+  const double r = core::range(rng, 0.17, 0.24);
+  limb(m, {-0.5, r * 1.12, 0}, {-0.42, r * 1.12, 0}, r * 1.12, r * 1.12, 10);
+  limb(m, {-0.42, r * 1.12, 0}, {0.5, r * 1.12, 0}, r, r * 0.97, 10);
+  stand(m);
+  return m;
+}
+
+// A bone: a shaft with a knuckle at each end, lying along x.
+PropMesh bone(uint32_t var) {
+  core::Rng rng = core::make_rng(var * 2654435761u + 101);
+  PropMesh m;
+  const double r = core::range(rng, 0.045, 0.07), k = r * core::range(rng, 1.8, 2.3);
+  const double y = k;
+  limb(m, {-0.5, y, 0}, {-0.4, y, 0}, k * 0.7, k, 6);
+  limb(m, {-0.4, y, 0}, {-0.32, y, 0}, k, r, 6);
+  limb(m, {-0.32, y, 0}, {0.32, y, 0}, r, r, 6);
+  limb(m, {0.32, y, 0}, {0.4, y, 0}, r, k, 6);
+  limb(m, {0.4, y, 0}, {0.5, y, 0}, k, k * 0.7, 6);
+  stand(m);
+  return m;
+}
+
 }  // namespace
 
 PropMesh prop_mesh(PropKind kind, uint32_t variant) {
@@ -156,6 +267,22 @@ PropMesh prop_mesh(PropKind kind, uint32_t variant) {
       return debris(variant);
     case PropKind::moss:
       return moss(variant);
+    case PropKind::pebble:
+      return lump(variant, 23, 0.85, 0.14, 0.4, 0.6, 1.5);
+    case PropKind::rock:
+      return lump(variant, 31, 0.62, 0.6, 0.55, 0.9, 1.3);
+    case PropKind::dirt:
+      return dome(variant, 13, 0.08, 0.15);
+    case PropKind::grass:
+      return grass(variant);
+    case PropKind::twig:
+      return stick(variant, false);
+    case PropKind::branch:
+      return stick(variant, true);
+    case PropKind::shell:
+      return shell(variant);
+    case PropKind::bone:
+      return bone(variant);
   }
   return {};
 }

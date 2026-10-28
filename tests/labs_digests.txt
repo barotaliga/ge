@@ -20,9 +20,10 @@ console e8456b0db59560ce
 crowd cf02cf9a7c917783
 crowd-look 194a06db20f2ebb2
 detail-bevel 5ce84c5c9deaef27
+detail-clutter 2eff9412a65809b6
 detail-decals da7fd891a50f9714
 detail-hits f76c7e37d3add44d
-detail-props ca8cb29a306fac46
+detail-props 21d7d952126956a6
 fetch 6938ae41f6759c43
 float 317c4f82117ff544
 flow 53bf6a0ab0ac209f

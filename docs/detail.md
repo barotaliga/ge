@@ -127,6 +127,40 @@ the level off a seed.
 `prop_mesh` builds each kind's variants in code (faceted, a unit across, base at y 0);
 `prop_frame` turns a prop's up, yaw and size into its frame.
 
+## Floor clutter by surface
+
+What lies on a floor depends on what the floor is made of and on whether it is under the sky:
+grass grows on grass out in the open, stones lie on stone, clods on bare earth, spent shells and
+bones anywhere a fight was.
+
+- **The class** (`surfaces.hpp`) is read off the little a level gives: its texture's NAME
+  (`classify_name`: words found in its lower case, in a fixed order, so `grass_lawn` is grass,
+  `mossy_rock` stone, `metal_floor` metal, `lava_rock` liquid) and, where the level carries the
+  texture's pixels, their MEAN COLOUR (`classify_surface`: a green texture is grass unless its
+  name says metal, wood, tile, sky or liquid, so an unnamed green floor or a `ground` painted green
+  grows it). The caller hands each tag's class over in a `ScatterEnv`.
+- **A rule** keeps to some classes (`PropRule::classes`, `class_bit`) and weighs the open sky
+  against a roof (`outdoor_weight`, `indoor_weight`): a point is outdoors when a ray straight up
+  meets nothing within `sky_reach_m` or meets a sky surface (`ScatterEnv::sky_tags`). The ray is
+  cast only for a sample its other weights would keep.
+- **`clutter_rules`**:
+
+| Kind | On | Under the sky | Under a roof |
+| --- | --- | --- | --- |
+| grass tufts | grass, 30 a m², in patches | all | 6% |
+| grass tufts | bare earth, thin, more at walls | 12% (all near a wall) | none |
+| twigs, branches | grass and earth, in heaps | all | twigs 4%, no branches |
+| pebbles | stone, earth, sand; at walls' feet, thin in the open | all | all |
+| rocks | stone, earth, grass; fewer and larger | all | 40% |
+| dirt clods | earth | all | all |
+| moss | stone, earth, grass, timber, in the damp | all | all |
+| debris | timber, metal, tile, stone | 15% | all |
+| spent shells | every floor but sky and liquid, in tight heaps | all | all |
+| bones | the same, thin, nearer walls | all | all |
+
+Grass tufts are props like the rest (a root of thin two-sided blades); a renderer with its own
+grass may grow it at their places instead.
+
 ## Labs
 
 | Lab | Shows |
@@ -135,10 +169,12 @@ the level off a seed.
 | `detail-decals` | every kind's masks; the hall after a fire fight; marks wrapping corners; blood drying and fading; the decals' own triangles |
 | `detail-props` | every shape; the hall bare and dressed; the plan; close-ups; all three passes together |
 | `detail-hits` | shotgun blasts and a rifle's burst with every round's ray; one victim's blood at four shares of health lost; a scorch's embers cooling |
+| `detail-clutter` | the clutter's shapes; the test yard bare and cluttered; the plan; six close-ups from a lawn to a timber floor under a roof; each texture's class and the clutter it took |
 
 They draw on the CPU (`engine/lab/labs/detail_view.hpp`: per-pixel light with a key, a warm lamp,
 a sky fill, a glint and a screen-space occlusion), so they run in the GPU-less container and every
-pixel is in the lab's digest. The test hall they share is `detail/test_hall.hpp`.
+pixel is in the lab's digest. The test hall they share, and the clutter's test yard, are
+`detail/test_hall.hpp`.
 
 ## Not yet (M42e, M42f)
 
@@ -147,4 +183,7 @@ as instances. M42f: the passes applied to the room format's and the BSP families
 with a per-material bevel radius and a no-props flag; receivers a BSP model each (the world binned
 once, a moving door's or platform's carried by its transform, so a mark rides with it); and the
 callers of `shot_hit` and `bleed`, which are a game's code: Shooter's Edge's (M18) and, for the
-shareware maps, the temp-entity messages of a demo played back.
+shareware maps, the temp-entity messages of a demo played back. And for the clutter: the BSP
+renderer's floors handed to `scatter_props` with each texture's class (its name and its mean
+colour from the shareware pak's own pixels), the sky surfaces as `sky_tags`, and the grass tufts'
+places handed to `engine/grass` where it is built.

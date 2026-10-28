@@ -40,7 +40,7 @@ router's Skills table and the directories against each other.
 | `debug` | Log channels and dumps, series traces, the outlier rule, the chart kit, `ge graph` |
 | `perf` | Budgets, measuring, the proofs a speed-up owes, the levers |
 | `agent-interface` | Diagnostics as prompts, consumer skills, the `ge` CLI |
-| `detail` | Brush detail: solids and bevels on exposed edges, receivers, decals that age, the marks of shots and wounds, seeded props by rules, the `detail-*` labs |
+| `detail` | Brush detail: solids and bevels on exposed edges, receivers, decals that age, the marks of shots and wounds, seeded props by rules, floor clutter by surface class, the `detail-*` labs |
 | `water` | Water and wind: the wind's field and sources, bodies of water, waves, floating, swimming, colour, flow, and their labs |
 | `bots` | What a bot decides: `engine/ai`, the decision record, `ge why`, making a bot more human |
 | `console` | Cvars and their tiers, cfg files, the console language, binds, the drop-down console, `ge cvar` and `ge cfg` |
