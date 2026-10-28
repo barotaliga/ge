@@ -66,6 +66,9 @@ there before the first edit.
 
 - WGSL, one file per pass, beside the pass's C++. A CMake step resolves `#include`
   and embeds the result as a string. No shader is read from disk at run time.
+- The embedded string stays under 60 000 bytes (MSVC's literal cap), counted after the
+  includes are resolved. Whole-line `//` comments are left out as it is embedded and never count,
+  so comment a shader as fully as any C++ file; past the cap, split the pass.
 - `make shaders-check` compiles every WGSL file with Tint offline, so a shader error
   fails CI with its file and line, without a GPU.
 - Work in linear light. The post pass is the one place that encodes for the display.

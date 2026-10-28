@@ -10,6 +10,7 @@
 // ge:summary The ge executable: parses the command line against the catalog and runs each command
 // ge:keywords cli ge main command-line usage dispatch help version new find explain use add
 // ge:keywords build test check precheck ci digest golden lab graph shot upgrade doctor skills net
+// ge:keywords snow
 // ge:keywords lessons json bench profile mem leaks asset blender
 // ge:skill agent-interface
 // ge:test tests/cli_commands_test.cpp
@@ -37,8 +38,10 @@
 #include "cli/outcome.hpp"
 #include "cli/perf.hpp"
 #include "cli/play.hpp"
+#include "cli/publish.hpp"
 #include "cli/scaffold.hpp"
 #include "cli/skills.hpp"
+#include "cli/snow.hpp"
 #include "cli/sweep.hpp"
 #include "cli/upgrade.hpp"
 
@@ -154,6 +157,13 @@ Outcome run(const Args& a) {
     return run_goals_free(fs::absolute(repo_of(a)), a.words.empty() ? "" : a.words[0],
                           base.empty() ? "origin/main" : base, has_flag(a, "fetch"));
   }
+  if (name == "goals claim") {
+    const std::string base = flag_value(a, "base");
+    std::string title;
+    for (const std::string& w : a.words) title += (title.empty() ? "" : " ") + w;
+    return run_goals_claim(fs::absolute(repo_of(a)), title, flag_value(a, "under"),
+                           base.empty() ? "origin/main" : base);
+  }
   if (name == "new") return cmd_new(a);
   if (name == "use") return run_use(repo_of(a), a.words[0]);
   if (name == "upgrade") {
@@ -190,6 +200,20 @@ Outcome run(const Args& a) {
     sweep.metrics = flag_value(a, "metrics");
     sweep.passthrough = a.passthrough;
     return run_lab_sweep(build_options(a), sweep);
+  }
+  if (name == "lab publish") {
+    PublishOptions p;
+    p.ids = a.words;
+    p.before = flag_value(a, "before");
+    p.out = flag_value(a, "out");
+    if (const std::string w = flag_value(a, "width"); !w.empty()) {
+      if (w.find_first_not_of("0123456789") != std::string::npos || w.size() > 5 ||
+          std::stoi(w) < 16)
+        return usage_error("--width takes a whole number of pixels, 16 or more",
+                           "rerun with --width=720");
+      p.width = std::stoi(w);
+    }
+    return run_lab_publish(fs::absolute(repo_of(a)), p);
   }
   if (name == "lab diff") {
     LabDiffOptions diff;
@@ -334,6 +358,8 @@ Outcome run(const Args& a) {
     as.blender = flag_value(a, "blender");
     return run_asset_build(build_options(a), as);
   }
+  if (name == "snow show") return run_snow_show(a.words[0], flag_value(a, "out"));
+  if (name == "snow column") return run_snow_column(a.words[0], flag_value(a, "at"));
   if (name == "graph") {
     GraphOptions g;
     g.files = a.words;

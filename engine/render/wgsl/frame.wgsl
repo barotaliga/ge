@@ -36,6 +36,8 @@ struct SkyLight {
   sun_at_eye: vec4f,     // the sun's transmittance to the eye
   moon_up: vec4f,        // the moon's sky's, per unit of its light (zero by day)
   moon_at_eye: vec4f,    // the moon's transmittance to the eye
+  eye: vec4f,            // the eye's adaptation (render/eye.hpp): x the stops it has opened
+                         // past the sky's exposure; zero (the eye at rest) unless it runs
 }
 @group(0) @binding(6) var<storage, read> sky_light: SkyLight;
 @group(0) @binding(7) var moon_view_lut: texture_2d<f32>;
@@ -48,19 +50,20 @@ fn radius_at(world_y: f32) -> f32 {
   return kGroundRadius + max(frame.world.x + world_y * 1e-3, 0.0);
 }
 
-// THE CLOUD'S LAYERS (render/clouds.hpp): layer `i`'s three rows of `frame.clouds`.
+// THE CLOUD'S LAYERS (render/clouds.hpp): layer `i`'s six rows of `frame.clouds`.
 struct CloudRows {
   shape: vec4f,  // base, top (world m), the noise's cut, one over the cell (1/m)
   wind: vec4f,   // the heading (cos, sin), the drift and the age in the noise's tile
   look: vec4f,   // one over the stretch, the dome (1 a heap), the density (1/m), the shadow's depth
   form: vec4f,   // the anvil, the detail's bite, its comb along the wind, the patches
   glow: vec4f,   // its particles' radius (um), their sizes' spread, the 22 degree halo, the deck
+  thick: vec4f,  // the thinnest patches' share of the extinction, one over a patch's cells, the bias
 }
 
 fn cloud_layer(i: i32) -> CloudRows {
-  let r = i * 5;
+  let r = i * 6;
   return CloudRows(frame.clouds[r], frame.clouds[r + 1], frame.clouds[r + 2], frame.clouds[r + 3],
-                   frame.clouds[r + 4]);
+                   frame.clouds[r + 4], frame.clouds[r + 5]);
 }
 
 // render/clouds.hpp's kCloudTileCells: the noise's base lattice across its tile.
@@ -91,9 +94,30 @@ fn cloud_column_of(l: CloudRows, uvw: vec3f, n: f32) -> f32 {
   return c;
 }
 
-fn cloud_column(l: CloudRows, xz: vec2f) -> f32 {
+// HOW THICK a layer is over its column `c` at the noise's point `uvw` (render/clouds.hpp's
+// `cloud_thickness`): the share of a full cell's extinction it holds there, thick.x (its thinnest
+// patches) .. 1. A read of the noise a patch wide (thick.y), set off from the column's, moved by
+// the sky's bias (thick.z), and a share of the column itself, so the thin patches gather where the
+// cloud thins toward its gaps and its cores are thick.
+fn cloud_thickness(l: CloudRows, uvw: vec3f, c: f32) -> f32 {
+  if (l.thick.x >= 1.0) {
+    return 1.0;
+  }
+  let q = vec3f(uvw.xy * l.thick.y + vec2f(0.37, 0.71), uvw.z + 0.25);
+  let m = textureSampleLevel(cloud_noise, linear_repeat, q, 0.0).r;
+  let t = clamp((m - 0.5) * 2.5 + 0.5 + l.thick.z + 0.5 * (c - 1.0), 0.0, 1.0);
+  return mix(l.thick.x, 1.0, t * t * (3.0 - 2.0 * t));
+}
+
+// The optical depth's share a layer's column over `xz` takes off the key light: how full it is
+// times how thick (the shadow's read).
+fn cloud_cast(l: CloudRows, xz: vec2f) -> f32 {
   let uvw = cloud_uvw(l, xz);
-  return cloud_column_of(l, uvw, textureSampleLevel(cloud_noise, linear_repeat, uvw, 0.0).r);
+  let c = cloud_column_of(l, uvw, textureSampleLevel(cloud_noise, linear_repeat, uvw, 0.0).r);
+  if (c <= 0.0) {
+    return 0.0;
+  }
+  return c * cloud_thickness(l, uvw, c);
 }
 
 // THE CLOUD'S SHADOW at a world point: each layer whose middle is above it, read where the beam
@@ -109,7 +133,7 @@ fn cloud_shadow(p: vec3f) -> f32 {
     let mid = 0.5 * (l.shape.x + l.shape.y);
     if (mid > p.y) {
       let at = p.xz + frame.sun.xz * ((mid - p.y) / frame.sun.y);
-      tau += cloud_column(l, at) * l.look.w;
+      tau += cloud_cast(l, at) * l.look.w;
     }
   }
   return exp(-tau);
@@ -384,18 +408,34 @@ fn white_luminance() -> f32 {
              kDarkestLux * frame.world.y / (PI * kSunLux));
 }
 
-// THE EXPOSURE: the scale that maps a white Lambertian surface under this sun and sky to
-// kWhiteKey, read off the sky's light (never a histogram, so it never pumps); under kAdaptLux
-// on white, the eye's partial adaptation leaves the night darker than the day. The post pass
-// applies it; TAA-U weighs its samples in the light it gives.
-fn exposure() -> f32 {
-  let white = white_luminance();
+// THE EXPOSURE at `white`, a white Lambertian surface's luminance the eye is adapted to: the
+// scale that maps it to kWhiteKey; under kAdaptLux on white, the eye's partial adaptation leaves
+// the night darker than the day.
+fn exposure_at(white: f32) -> f32 {
   var e = mix(kWhiteKey, kDeckKey, frame.weather.y) / white;
   let lux = white * PI * kSunLux / frame.world.y;
   if (lux < kAdaptLux) {
     e *= pow(lux / kAdaptLux, 1.0 - kAdaptGain);
   }
   return e;
+}
+
+// THE SKY'S EXPOSURE: the eye adapted to a white surface under this sun and sky, read off the
+// sky's light (never a histogram, so it never pumps). What the eye's meter exposes at.
+fn sky_exposure() -> f32 {
+  return exposure_at(white_luminance());
+}
+
+// THE EXPOSURE the picture is shown at: the sky's, with the eye opened `sky_light.eye.x` stops
+// past it where render/eye.hpp's pass metered a darker world than the sky lights (a hall, a
+// cave); the white the eye adapts to is that much dimmer, so the night's partial adaptation still
+// holds in the dark. The post pass applies it; TAA-U weighs its samples in the light it gives.
+fn exposure() -> f32 {
+  let open = sky_light.eye.x;
+  if (open == 0.0) {
+    return sky_exposure();
+  }
+  return exposure_at(white_luminance() * exp2(-open));
 }
 
 // THE MOON AS SEEN (sky.wgsl's disc, and the clouds' glow round it): its lit surface is hundreds
@@ -427,9 +467,9 @@ fn rod_share() -> f32 {
 
 // The share of the pixel looking along `d` that the moon's disc covers, seen through the
 // weather's deck and fog: 1 inside, 0 outside, over the soft edge render/sky.wgsl draws it with.
-// It reads no depth, so a ridge or a cloud layer in front of the disc counts as the disc; a
-// ridge there is a dark silhouette and a cloud there is lit by the moon itself, so neither
-// shows it.
+// It reads no depth, so a ridge or a cloud layer in front of the disc counts as the disc: a
+// ridge there is a dark silhouette, and the cloud pass gives a cloud's own light there to the
+// rods itself (render/clouds.wgsl), so neither shows it.
 fn on_moon(d: vec3f) -> f32 {
   let rad = frame.moon_light.z;
   let c = dot(d, frame.moon.xyz);

@@ -61,3 +61,9 @@ app draws. The pixels come from `ui::draw_console` (`engine/ui/console.hpp`), th
 GPU's 2D pass draws in the game, so a change to the console's look is made there, in its
 `ConsoleStyle`, and nowhere in the lab. Change the view, run it with
 `--tag=before` first and `--compare=before` after, and look at the three pictures.
+
+Over the game's own frame, `make lab LAB=world ARGS="--views=vista --moments=15"` adds a
+`console` still: the console down over the last scene, drawn by the 2D pass after post as the
+window draws it. The keyboard's path (tilde, typed text, the edit keys, the binds) is
+`ui::feed_console` (`engine/ui/console_keys.hpp`), held by `tests/ui_console_keys_test.cpp`: a
+window or a lab that drives the console feeds it the input layer's queue and nothing else.

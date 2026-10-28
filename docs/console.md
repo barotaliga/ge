@@ -221,6 +221,16 @@ The view (`engine/console/view.hpp`) is a model that holds no pixels. `ui::draw_
 frame and the `console` lab draws on the CPU (`make lab LAB=console`). A game sets the look (the
 sizes, each kind's colour, the list's colours) in a `ConsoleStyle`.
 
+The keyboard reaches it through `ui::feed_console` (`engine/ui/console_keys.hpp`): each frame's
+key events go to the binds by their bind names (`console::usage_key`, held modifiers spelled
+before the key), in the `console` table while the view is down and the `game` table while it is
+up, so the key under the tilde opens and closes it; while it is down the input line also takes
+the edit keys (with a held key's repeats) and the typed text, and `ConsoleKeys::held` tells the
+game to read no keys that frame. Fall Line's window does exactly this: the tilde drops the
+console over the run, the skier coasts on with no hands while it is down, Escape closes it
+(rather than quitting), and the 2D pass draws it after post. The `world` lab's `console` still
+(`--console=1`, the default) photographs it over the game's own frame.
+
 ## Tooling
 
 ```sh

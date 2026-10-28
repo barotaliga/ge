@@ -20,6 +20,7 @@
 #   ge_water     bodies of water, the waves a wind grows on them and the one query (engine/water)
 #   ge_move      character movement (engine/move: the knobs and their cvars, the step, scenarios)
 #   ge_camera    the camera (engine/camera: poses, followers, rigs, shake, transitions, the stack)
+#   ge_snow      snow (engine/snow: the layer over any ground, press, the snapshot; docs/snow.md)
 #   ge_play      the play contract (engine/play: GameSpec and Run, the session, the input log,
 #                the bench, the stills `ge shot` draws; engine/capture: the Matroska muxer and
 #                the export with sound)
@@ -118,7 +119,8 @@ set(GE_LIBM_VENDORED
   engine/core/libm/fdlibm_exp_log.cpp)
 add_library(ge_core STATIC ${GE_LIBM_VENDORED} engine/core/libm/pow.cpp
   engine/core/solar.cpp engine/core/moon.cpp engine/core/output.cpp engine/core/num_text.cpp engine/core/parallel.cpp
-  engine/core/thread_name.cpp)
+  engine/core/thread_name.cpp
+  engine/core/json_read.cpp)
 target_include_directories(ge_core PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/engine>)
 target_compile_features(ge_core PUBLIC cxx_std_20)
 target_link_libraries(ge_core PUBLIC ge_fp ge_isa Threads::Threads)
@@ -160,7 +162,7 @@ target_include_directories(ge_assets SYSTEM PRIVATE ${GE_CGLTF_INCLUDE})
 include(cmake/Ui.cmake)
 file(GLOB GE_UI_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/ui/*.cpp)
 add_library(ge_ui STATIC ${GE_UI_SOURCES})
-target_link_libraries(ge_ui PUBLIC ge_core ge_console)
+target_link_libraries(ge_ui PUBLIC ge_core ge_console ge_input)
 target_include_directories(ge_ui SYSTEM PRIVATE ${GE_STB_INCLUDE})
 ge_embed_binary(ge_ui ge_ui_font_semibold "${GE_FONTS_DIR}/BarlowCondensed-SemiBold.ttf")
 ge_embed_binary(ge_ui ge_ui_font_medium "${GE_FONTS_DIR}/BarlowCondensed-Medium.ttf")
@@ -192,7 +194,8 @@ if(GE_GPU)
     engine/render/skinning.wgsl engine/render/particles.wgsl engine/render/particles_sim.wgsl engine/render/precip.wgsl engine/render/precip_sim.wgsl
     engine/render/clouds.wgsl engine/render/water.wgsl engine/render/water_copy.wgsl
     engine/render/water_stream.wgsl
-    engine/render/underwater.wgsl engine/render/liquid.wgsl engine/render/ui_pass.wgsl)
+    engine/render/underwater.wgsl engine/render/liquid.wgsl engine/render/ui_pass.wgsl
+    engine/render/eye.wgsl engine/render/eye_adapt.wgsl)
 endif()
 
 # The network (engine/net, docs/networking.md): addresses, the wire, the OS's UDP and TCP sockets
@@ -221,11 +224,12 @@ target_link_libraries(ge_input PUBLIC ge_core)
 
 # The platform services (engine/services, docs/services.md): the one interface a game uses for a
 # store's achievements, stats, leaderboards, cloud files, presence, friends, overlay, ownership and
-# screenshots, and the simulated and offline stores behind it. No platform, no SDK: a store's own
-# backend (engine/steam, docs/goals.md M20b) is built beside it only when its SDK is supplied.
+# screenshots, and the simulated and offline stores behind it; Discord's presence beside it over
+# the Discord app's local pipe (ge_net). No platform, no SDK: a store's own backend (engine/steam,
+# docs/goals.md M20b) is built beside it only when its SDK is supplied.
 file(GLOB GE_SERVICES_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/services/*.cpp)
 add_library(ge_services STATIC ${GE_SERVICES_SOURCES})
-target_link_libraries(ge_services PUBLIC ge_core)
+target_link_libraries(ge_services PUBLIC ge_core ge_net)
 
 # Character movement (engine/move, docs/movement.md): the knobs and presets, one step of a moving
 # body over a trace callback, the box world, the strafer and the scenarios. Deterministic, no
@@ -243,10 +247,16 @@ file(GLOB GE_CAMERA_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine
 add_library(ge_camera STATIC ${GE_CAMERA_SOURCES})
 target_link_libraries(ge_camera PUBLIC ge_core ge_console)
 
+# Snow (engine/snow, docs/snow.md): a layer of snow over any ground, its sparse fixed-point tiles,
+# the one sample query, press and the imprint record, the snapshot. Deterministic, no platform.
+file(GLOB GE_SNOW_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/snow/*.cpp)
+add_library(ge_snow STATIC ${GE_SNOW_SOURCES})
+target_link_libraries(ge_snow PUBLIC ge_core)
+
 # The lab framework (engine/lab: the contract, the runner, the raster, the PNG), published as
 # ge::lab so a game's labs plug into the same contract as the engine's (docs/labs.md).
 add_library(ge_lab STATIC engine/lab/lab.cpp engine/lab/report.cpp engine/lab/runner.cpp
-  engine/lab/raster.cpp engine/lab/png.cpp engine/lab/diff.cpp engine/lab/sound.cpp
+  engine/lab/raster.cpp engine/lab/png.cpp engine/lab/gif.cpp engine/lab/diff.cpp engine/lab/sound.cpp
   engine/lab/series.cpp engine/lab/stats.cpp engine/lab/plot.cpp engine/lab/chart.cpp
   engine/lab/anim.cpp engine/lab/series_charts.cpp engine/lab/teleport.cpp
   engine/lab/model_view.cpp engine/lab/model_compare.cpp engine/lab/model_sheets.cpp
@@ -291,12 +301,19 @@ target_link_libraries(ge_water PUBLIC ge_core ge_wind ge_audio)
 # `ge diverge`, `ge shot`, `ge bench`, `ge profile` and `ge mem`. The capture (engine/capture:
 # the engine's Matroska muxer, I420, a run exported with its sound) is built into it, since a
 # recording (`ge record --format=mkv`) is its user.
+# The export's encoders (cmake/Codecs.cmake, GE_ENCODERS) are linked into it privately and only
+# in this tree's own build, so the published package and a consumer need neither.
+include(cmake/Codecs.cmake)
 file(GLOB GE_CAPTURE_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/capture/*.cpp)
-add_library(ge_play STATIC engine/play/inputs.cpp engine/play/json_read.cpp
+add_library(ge_play STATIC engine/play/inputs.cpp
   engine/play/session.cpp engine/play/bench.cpp engine/play/record.cpp engine/play/why.cpp
   engine/play/human.cpp engine/play/devices.cpp engine/play/console_cmds.cpp engine/play/main.cpp engine/play/load.cpp
   ${GE_CAPTURE_SOURCES})
 target_link_libraries(ge_play PUBLIC ge_core ge_ai ge_console ge_input ge_lab ge_prof ge_prof_alloc)
+if(GE_ENCODERS)
+  target_link_libraries(ge_play PRIVATE $<BUILD_INTERFACE:ge::aom> $<BUILD_INTERFACE:ge::opus>)
+  target_compile_definitions(ge_play PRIVATE GE_ENCODERS=1)
+endif()
 
 # Replays (engine/replay, docs/replays.md): the keyframes a seek starts from, the player that steps
 # a run off its input log to any step, the transport; over the play contract's Run. Published as
@@ -363,8 +380,12 @@ if(PROJECT_IS_TOP_LEVEL)
   get_property(GE_PLUGIN_TARGETS GLOBAL PROPERTY GE_PLUGIN_TARGETS)
   get_property(GE_GAME_TARGETS GLOBAL PROPERTY GE_GAME_TARGETS)
   add_executable(labs engine/lab/main.cpp ${GE_LAB_SOURCES})
-  target_link_libraries(labs PRIVATE ge_lab ge_play ge_replay ge_core ge_audio ge_assets ge_net ge_input ge_wind ge_water ge_move ge_camera ge_ui ge_services ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
+  target_link_libraries(labs PRIVATE ge_lab ge_play ge_replay ge_core ge_audio ge_assets ge_net ge_input ge_wind ge_water ge_move ge_camera ge_ui ge_services ge_snow ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
     ${GE_LAB_EXTRA})
+  if(GE_GPU)
+    # A GPU lab's own shader (the eye lab's hall, drawn over its frame).
+    ge_embed_wgsl(labs engine/lab/labs/gpu_eye_hall.wgsl)
+  endif()
 
   # The `assets` executable (engine/assets/tool.hpp): the built assets listed, checked and stamped,
   # and the game data their builders are fed. A data set registers itself from a static

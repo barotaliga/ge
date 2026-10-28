@@ -42,11 +42,12 @@ router's Skills table and the directories against each other.
 | `agent-interface` | Diagnostics as prompts, consumer skills, the `ge` CLI |
 | `water` | Water and wind: the wind's field and sources, bodies of water, waves, floating, swimming, colour, flow, and their labs |
 | `bots` | What a bot decides: `engine/ai`, the decision record, `ge why`, making a bot more human |
+| `snow` | Snow over any ground: the column model, the cover and tiles, `press` and imprints, the snapshot, `ge snow`, the M29 plan |
 | `console` | Cvars and their tiers, cfg files, the console language, binds, the drop-down console, `ge cvar` and `ge cfg` |
 | `replay` | Watching a run again: a game's clone, the keyframes, the player's seek, the transport; later the replay file, the director, spectating and the video export |
 | `free-assets` | Free sounds and models: the sources, the licences we can carry, the registry, matching, converting, credits |
 | `net` | Multiplayer networking: sockets, the simulated network, captures, the wire, channels, nodes, sessions and the lobby, LAN discovery, NAT traversal, port mapping, replication, fake traffic |
-| `services` | Platform services: achievements, stats, leaderboards, cloud, presence, friends, overlay, DLC and screenshots behind one interface; the simulated and offline stores; Steam's backend |
+| `services` | Platform services: achievements, stats, leaderboards, cloud, presence, friends, overlay, DLC and screenshots behind one interface; the simulated and offline stores; Steam's backend; Discord's presence |
 | `plugins` | Engine, plugin or game: where code lives, adding a plugin, moving code between homes |
 
 ## Plugins
