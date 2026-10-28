@@ -40,6 +40,7 @@
 #include "cli/scaffold.hpp"
 #include "cli/skills.hpp"
 #include "cli/sweep.hpp"
+#include "cli/tool.hpp"
 #include "cli/upgrade.hpp"
 
 namespace {
@@ -255,6 +256,9 @@ Outcome run(const Args& a) {
     lab.compare = flag_value(a, "compare");
     lab.passthrough = a.passthrough;
     return run_lab(build_options(a), lab);
+  }
+  if (name == "tool") {
+    return run_tool(build_options(a), a.words.empty() ? "" : a.words[0], a.passthrough);
   }
   if (name == "sim") {
     std::vector<std::string> options = a.passthrough;

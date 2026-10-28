@@ -68,6 +68,8 @@ constexpr FlagSpec kLabFlags[] = {
     kEngine,
     kRepo};
 
+constexpr FlagSpec kToolFlags[] = {kPreset, kEngine, kRepo};
+
 constexpr FlagSpec kLabSweepFlags[] = {
     kPreset,
     {"set", "<name>=<a>,<b>,...",
@@ -387,6 +389,10 @@ const CommandSpec kCommands[] = {
      "list the labs, or run one: its metrics, tables, captioned pictures and digest; its own "
      "flags go after --",
      kLabFlags, "ge lab run --json -- --seeds=1,2", "labs"},
+    {"tool", "[<plugin>]", 0, 1, "see",
+     "list the plugins' own command-line tools, or build one and run it with the arguments "
+     "after --; its JSON answer is the result",
+     kToolFlags, "ge tool classicenhance -- verify shareware.zip", "agent-interface"},
     {"lab sweep", "<id>", 1, 1, "see",
      "one constexpr constant of the code rewritten to each value, the labs rebuilt and the lab "
      "run at each, every metric side by side; the source is put back after",
