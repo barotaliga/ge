@@ -136,7 +136,7 @@ bool decode_sound(const fs::path& file, int rate, std::vector<float>& out, std::
 
 bool is_sound_file(const fs::path& p) {
   std::string e = p.extension().string();
-  std::transform(e.begin(), e.end(), e.begin(), [](unsigned char c) { return std::tolower(c); });
+  for (char& c : e) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
   return e == ".wav" || e == ".ogg" || e == ".flac" || e == ".mp3" || e == ".opus" || e == ".aif" ||
          e == ".aiff";
 }
