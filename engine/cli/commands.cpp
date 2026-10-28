@@ -385,6 +385,10 @@ const CommandSpec kCommands[] = {
      kAddLabFlags, "ge add lab wind --kind=sim", "labs"},
     {"add test", "<name>", 1, 1, "create", "a test file on the repo's harness", kAddFlags,
      "ge add test wind", "sim-system"},
+    {"add water", "[<name>]", 0, 1, "create",
+     "a lake laid in one call (sim/<name>.hpp, .cpp), its picture lab and its test; links "
+     "ge::water (default name: water)",
+     kAddFlags, "ge add water", "water"},
     {"build", "", 0, 0, "build",
      "configure and build; compiler and CMake errors come back as findings", kBuildFlags,
      "ge build", "ge"},

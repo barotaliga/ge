@@ -3,7 +3,8 @@
 // (the software adapter in the GPU-less container and on CI) and renders each named view
 // (views.hpp) offscreen, reads it back and hands it to `Lab::shot` with its caption. Then the
 // bot skis the map (with --rivals beside him) and each --moments second of the run is shot from
-// the chase camera, the racers drawn as figures. Beside each picture: the tiles the terrain's GPU
+// the chase camera, the racers drawn as figures. --at shoots each named view at the sky's moments,
+// so a sequence shows the cloud on the wind. Beside each picture: the tiles the terrain's GPU
 // cull drew, what the instances' cull did (drawn early, drawn late, hidden), every pass's GPU ms
 // (measured: a software adapter's times say nothing about a real GPU) and the frame's CPU half.
 //
@@ -27,8 +28,9 @@
 // few lines in its scrollback and a command half typed, its suggestions under the panel.
 //
 // --cfg runs console commands over Fall Line's cvars first (cfg/cvars.hpp), so a sky a server
-// picks (sv_weather, sv_snowfall, sv_fog, sv_wind, sv_winddir, sv_cover, sv_thick, sv_hour,
-// sv_skyrate) and r_clouds are photographed as the game draws them (sim/sky.hpp).
+// picks (sv_weather, sv_snowfall, sv_fog, sv_wind, sv_winddir, sv_cover, sv_thick,
+// sv_cloudheight, sv_cloudspeed, sv_hour, sv_skyrate) and r_clouds are photographed as the game
+// draws them (sim/sky.hpp).
 //
 // ge:summary Lab: Fall Line's frame from named views of a seed, captured headless
 // ge:keywords lab world picture screenshot views frame terrain sky post gpu-capture headless
@@ -102,10 +104,11 @@ std::vector<std::string> views_of(const ge::lab::Lab& lab) {
   return out;
 }
 
-// The --moments list: seconds of the run, each a shot from the chase camera.
-std::vector<double> moments_of(const ge::lab::Lab& lab) {
+// A comma-separated list of seconds: --moments (the run's, each a shot from the chase camera) or
+// --at (the sky's, each named view shot at each).
+std::vector<double> seconds_of(const ge::lab::Lab& lab, const char* arg) {
   std::vector<double> out;
-  const std::string& list = lab.arg("moments");
+  const std::string& list = lab.arg(arg);
   size_t i = 0;
   while (i < list.size()) {
     const size_t j = list.find(',', i);
@@ -197,6 +200,8 @@ void run(ge::lab::Lab& lab) {
   options.clouds = cvars.clouds;
   options.cover = cvars.cover;
   options.thick = cvars.thick;
+  options.cloud_height = cvars.cloud_height;
+  options.cloud_speed = cvars.cloud_speed;
   if (const std::string problem = fall_line::app::cloud_stack_of(cvars, options);
       !problem.empty()) {
     lab.fail("--cfg: " + problem, "Skill: console.");
@@ -251,18 +256,29 @@ void run(ge::lab::Lab& lab) {
     std::vector<std::vector<ge::skier::SkierState>> laid;
   };
   std::vector<Scene> scenes;
+  // Each named view at each of the sky's --at seconds (more than one: a sequence, each shot
+  // named `<view>+<s>`), the cloud carried on by the wind between them.
+  std::vector<double> ats = seconds_of(lab, "at");
+  if (ats.empty()) ats.push_back(0);
   for (const std::string& name : views) {
-    Scene sc{name, std::string(fall_line::app::view_caption(name)), {}, {}, {}};
-    fall_line::app::day_view(level, hour, sc.view);
-    sc.view.style = style;
-    if (!fall_line::app::make_view(level, name, sc.view)) {
-      lab.fail("no view named '" + name + "'",
-               "next: pick from games/fall_line/app/views.hpp (or --views=all).");
-      continue;
+    for (double at : ats) {
+      Scene sc{name, std::string(fall_line::app::view_caption(name)), {}, {}, {}};
+      if (ats.size() > 1) {
+        sc.name += "+" + fixed(at, 1);
+        sc.caption += " At " + fixed(at, 1) + " s.";
+      }
+      fall_line::app::day_view(level, hour, sc.view);
+      sc.view.style = style;
+      sc.view.time_s = at;
+      if (!fall_line::app::make_view(level, name, sc.view)) {
+        lab.fail("no view named '" + name + "'",
+                 "next: pick from games/fall_line/app/views.hpp (or --views=all).");
+        break;
+      }
+      scenes.push_back(std::move(sc));
     }
-    scenes.push_back(std::move(sc));
   }
-  const std::vector<double> moments = moments_of(lab);
+  const std::vector<double> moments = seconds_of(lab, "moments");
   const int rivals = static_cast<int>(lab.arg_num("rivals"));
   if (!moments.empty()) {
     fall_line::sim::Driver run(shared, std::max(rivals, 0));
@@ -585,6 +601,9 @@ const ge::lab::LabSpec kSpec{
          "seconds of the bot's run to shoot from the chase camera, comma-"
          "separated (empty: none)"},
         {"rivals", "3", "the bots racing beside him"},
+        {"at", "0",
+         "the sky's moment each named view is shot at, s; comma-separated for a sequence of "
+         "each (the cloud carried on by the wind between them)"},
         {"console", "1", "the last scene again with the drop-down console down over it (0: not)"},
     },
     "--views=start,vista --moments=4 --width=160 --height=90 --settle=2",

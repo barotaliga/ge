@@ -28,7 +28,8 @@ backends                    feed it events and play its feedback:
                             platform/devices.hpp
   engine/input/sim          simulated devices on a virtual clock: tests and labs (M19a)
   an event log              a recorded session played back (M19a)
-  Steam Input               a backend of its own, from the Steam integration work
+  Steam Input               the store's controller layer (engine/services/controllers.hpp, M20e):
+                            the store reads the pad and hands actions, merged with the rest
 ```
 
 `engine/input` (`ge_input`, namespace `ge::input`) depends on `engine/core` alone. A backend is

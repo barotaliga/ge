@@ -345,6 +345,8 @@ void step_flows(World& world, double dt) {
   for (Flow& flow : world.flows) step_flow(flow, dt);
 }
 
+void step(World& world, double dt) { step_flows(world, dt); }
+
 Sample sample(const World& world, double x, double y, double z, double t) {
   // The body the point is under the surface of wins; else the nearest surface below the point.
   Sample best;
