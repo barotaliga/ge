@@ -276,7 +276,7 @@ ui::Image paint_face(float hurt, bool wince, Look look) {
 
 // The guns, side on, muzzle to the right, in 24 x 16 (the beam gun 48 x 16).
 ui::Image paint_gun(Weapon w) {
-  const float wide = w == Weapon::beam_gun ? 48 : 24;
+  const float wide = w == Weapon::beam_gun ? 48.0f : 24.0f;
   Canvas c(wide, 16);
   const ui::Color steel = ui::hex(0xa8b0b6), dark = ui::hex(0x4c545a), wood = ui::hex(0x8a5a32);
   switch (w) {
