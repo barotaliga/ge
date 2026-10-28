@@ -70,6 +70,7 @@ struct WeatherFrame {
   double air[3] = {0, 0, 0};   // the wind's velocity, m/s
   double gust = 0.5;           // the gusts' share now
   double way[3] = {0, -1, 0};  // the way the fall comes (unit, down and downwind, 75 deg at most)
+  double spread = 0.1;         // the scatter round the way: eddies over pace (a tangent)
   double rate = 0;             // mm/h of water
   double visibility = 20000;   // m
   double flash = 0;

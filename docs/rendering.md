@@ -1071,7 +1071,12 @@ drain and dry by the wind and the sun). The picture reads the same numbers:
   and downwind, kept within 75 degrees of the vertical), the surface nearest the sky in each
   texel. A particle deeper than it is faded out and a splash whose spot is deeper is not set, so
   the rain falls in a courtyard and through a window as far as the wind slants it, and not in the
-  room behind the wall. Without one everything is open. Four comparison taps soften its edge.
+  room behind the wall. Without one everything is open. The edge is a soft shadow's
+  (`PrecipShelter::spread`, the tangent of the fall's scatter): a blocker search finds how far
+  below the opening a point lies, the penumbra widens with that depth, and eight comparison taps
+  rotated by a hash of the position break it into spots, so a fall scatters out from where the
+  slant puts it instead of landing as the window's square. A particle is kept by its open share
+  against a hash of its own, so the edge thins rather than fades.
 
 **The weather on a BSP map (M36e).** `plugins/brush/app/bsp_weather.hpp` turns twelve cvars
 (`sv_weather`, `sv_precip`, `sv_rain`, `sv_wind`, `sv_winddir`, `sv_gust` the server's;
@@ -1084,7 +1089,8 @@ it in every face's material (`weathered` in `bsp.wgsl`): what faces the fall and
 is wet, a flat's low noise pools into puddles that the drops ring while it rains, what faces up
 gathers the snow in drifts (a thin cover in the hollows first, the floor showing between), and a
 flash lights what is open overhead and a little round the rooms. The open sky and the windows
-decide all of it: lab `gpu-bsp-weather` (the weather fixture, a hall with windows onto a yard and
+decide all of it, through a soft edge whose spread is the eddies over the fall's pace (snow,
+slow, scatters wider than rain), with the wet and the snow struck in noise spots across it: lab `gpu-bsp-weather` (the weather fixture, a hall with windows onto a yard and
 a store behind it) shows eight weathers in four views and checks, with no GPU, that a ray back up
 the fall leaves by the sky from the yard and the window's patch and is stopped from the store.
 

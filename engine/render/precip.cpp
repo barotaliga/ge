@@ -30,7 +30,8 @@ struct Params {
   float fall[4];
   uint32_t info[4];
   float splash[4];
-  // The shelter's camera (PrecipShelter): o (w: half), x, y, z, then on, depth, layer, texel.
+  // The shelter's camera (PrecipShelter): o (w: half), x (w: the spread), y, z, then on, depth,
+  // layer, texel.
   float shelter_o[4];
   float shelter_x[4];
   float shelter_y[4];
@@ -232,6 +233,7 @@ void prepare_precip(gpu::Device& device, Precip& sf, const PrecipFrame& at) {
       p.shelter_z[k] = static_cast<float>(h.z[k]);
     }
     p.shelter_o[3] = static_cast<float>(h.half);
+    p.shelter_x[3] = static_cast<float>(h.spread);
     p.shelter_info[0] = 1;
     p.shelter_info[1] = static_cast<float>(h.depth);
     p.shelter_info[2] = static_cast<float>(h.layer);

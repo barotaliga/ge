@@ -154,6 +154,9 @@ WeatherFrame step_weather(const WeatherCvars& c, WeatherState& s, const double e
   d.rain = w.fall.rain;
   d.drop_speed = wind::fall_speed({w.fall.intensity, 1});
   d.swirl = wind::swirl_of(air.speed, wind::turbulence_for(wind::kRoughness::town));
+  // The drops and flakes come on a spread round the fall's way: the eddies' speed over the pace
+  // they fall at (a flake is tossed far wider than a drop).
+  w.spread = std::clamp(d.swirl / pace + 0.05, 0.05, 0.8);
   d.splash = c.splashes ? w.fall.rain * std::sqrt(w.fall.intensity) : 0;
   d.time = t;
   return w;
@@ -164,6 +167,7 @@ void apply_weather(const WeatherFrame& w, const WeatherCvars& c, render::FrameVi
   options.weather = w.on;
   options.raining = w.on ? std::sqrt(w.fall.intensity) * w.fall.rain : 0;
   for (int k = 0; k < 3; ++k) options.fall[k] = w.way[k];
+  options.spread = w.spread;
   render::Weather& v = view.weather;
   v.wet = w.on && c.wet ? w.wet.wet : 0;
   v.puddles = w.on && c.wet ? w.wet.puddles : 0;

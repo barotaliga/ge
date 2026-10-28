@@ -91,6 +91,9 @@ struct PrecipShelter {
   double x[3] = {1, 0, 0}, y[3] = {0, 0, 1}, z[3] = {0, -1, 0};
   double half = 1, depth = 1;
   uint32_t size = 1;  // the map's texels a side
+  // The tangent of the spread of ways round `z` the drops and flakes come on (the gusts and the
+  // eddies): the edge of what the fall reaches widens by it with the depth below the blocker.
+  double spread = 0;
 };
 
 struct Precip {

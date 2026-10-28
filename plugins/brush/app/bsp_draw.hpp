@@ -17,8 +17,8 @@
 //   while it rains, or snowed on, and the rooms behind stay dry; a lightning flash lights what
 //   is open to the sky. The same map is the fall's shelter (`bsp_shelter`).
 //
-// The passes, in a frame's order: "bsp.shadows" (v2 with lights or weather), "bsp", "bsp.sky" (v2); then the
-// caller's sky, clouds, water and liquids over the frame's targets.
+// The passes, in a frame's order: "bsp.shadows" (v2 with lights or weather), "bsp", "bsp.sky" (v2);
+// then the caller's sky, clouds, water and liquids over the frame's targets.
 //
 // ge:summary The BSP renderer: classic or v2 (our sky, our liquids, real-time lights and shadows)
 // ge:keywords bsp brush render renderer r_bspmode classic v2 lightmap point-light cube-shadow
@@ -73,6 +73,7 @@ struct Options {
   // puddles, how much snow and the lightning's flash are the frame's (render/view.hpp's Weather).
   bool weather = false;
   double raining = 0;
+  double spread = 0.3;  // the tangent of the spread of ways round `fall` the drops and flakes come
   double fall[3] = {0, -1, 0};
 };
 
@@ -95,7 +96,7 @@ struct GpuBsp {
   float info[4];
   float info2[4];
   float sky[4];
-  float info3[4];  // the floor (minlight), the bounce, the sky's light, filtered (1) or crisp
+  float info3[4];    // the floor (minlight), the bounce, the sky's light, filtered (1) or crisp
   float weather[4];  // on (1), the rain falling now, 0, 0
   GpuJob ortho[kOrthos];
 };

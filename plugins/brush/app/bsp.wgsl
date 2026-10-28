@@ -289,6 +289,57 @@ fn ortho_lit(j: Job, layer: i32, p: vec3f, spread: f32) -> f32 {
   return lit / 9.0;
 }
 
+// THE SHARE OF THE FALL THAT REACHES `p` (0 .. 1). The drops and the flakes do not come along
+// one line: the gusts veer them and the eddies toss them, so they arrive on a spread of ways round
+// the fall's (`bsp.weather.z`, the spread's tangent: wider for snow than for rain). Like a soft
+// shadow: the faces between `p` and the sky along the fall (the blocker, searched in the fall's
+// map) stand some metres above it, and the further below its opening a point lies, the wider the
+// edge it sees: the twelve taps over that disc, turned by a hash of the place, say how much of
+// the spread gets through. So a window's patch is densest where the line through it lands and
+// thins out, scattered, round it.
+fn fall_reach(p: vec3f) -> f32 {
+  let j = bsp.ortho[2];
+  let q = p - j.o.xyz;
+  let half = j.o.w;
+  let depth = j.info.y;
+  let uv = vec2f(0.5 + 0.5 * dot(q, j.x.xyz) / half, 0.5 - 0.5 * dot(q, j.y.xyz) / half);
+  let z = (dot(q, j.z.xyz) + depth) / (2.0 * depth) - 0.0015;
+  let size = f32(textureDimensions(orthos).x);
+  let spread = bsp.weather.z;
+  // The blocker: the faces nearer the sky than `p` within the widest edge this map could give.
+  let reach_m = min(spread * 10.0, 4.0);
+  var blocker = 0.0;
+  var blocked = 0.0;
+  for (var k = 0; k < 9; k++) {
+    let o = vec2f(f32(k % 3) - 1.0, f32(k / 3) - 1.0) * reach_m * 0.5 / half;
+    let t = clamp(vec2i((uv + o) * size), vec2i(0), vec2i(i32(size) - 1));
+    let d = textureLoad(orthos, t, 2, 0);
+    if (d < z) {
+      blocker += d;
+      blocked += 1.0;
+    }
+  }
+  if (blocked < 0.5) {
+    return 1.0;
+  }
+  // How far below the blocker `p` lies along the fall, m, and the edge that gives.
+  let below = max(z - blocker / blocked, 0.0) * 2.0 * depth;
+  let edge = max(below * spread, 0.03) * 0.5 / half;
+  let turn = hash12(floor(p.xz * 40.0) + vec2f(floor(p.y * 40.0))) * 6.2831853;
+  let c = cos(turn);
+  let sn = sin(turn);
+  var lit = 0.0;
+  for (var k = 0; k < 12; k++) {
+    // A golden-angle spiral over the unit disc.
+    let r = sqrt((f32(k) + 0.5) / 12.0);
+    let a = f32(k) * 2.3999632;
+    let d = vec2f(cos(a), sin(a)) * r;
+    let o = vec2f(d.x * c - d.y * sn, d.x * sn + d.y * c) * edge;
+    lit += textureSampleCompareLevel(orthos, shadow_cmp, uv + o, 2, z);
+  }
+  return lit / 12.0;
+}
+
 // A smooth value noise in 0 .. 1 over the plane.
 fn noise2(p: vec2f) -> f32 {
   let i = floor(p);
@@ -352,8 +403,11 @@ fn weathered(p: vec3f, n: vec3f, albedo: vec3f, eye_dir: vec3f) -> Weathered {
   let facing = smoothstep(-0.05, 0.3, dot(n, -fall));
   var reached = 0.0;
   if (facing > 0.0) {
-    reached = ortho_lit(bsp.ortho[2], 2, p + n * 0.04 - fall * 0.04, 0.06) * facing;
+    reached = fall_reach(p + n * 0.04 - fall * 0.04) * facing;
   }
+  // Where only a share of the fall reaches, the drops' spots: wet where they landed, dry between.
+  let spots = noise2(p.xz * 9.0 + vec2f(p.y * 3.0)) * 0.6 + noise2(p.xz * 31.0) * 0.4;
+  let struck = smoothstep(spots - 0.2, spots + 0.2, reached * 1.25);
   let up = n.y;
   // The snow: what faces up and the fall reaches, the noise's highest first.
   // A thin cover lies in the drifts first and the floor shows between; a deep one hides it all.
@@ -361,11 +415,12 @@ fn weathered(p: vec3f, n: vec3f, albedo: vec3f, eye_dir: vec3f) -> Weathered {
   let snowed = smoothstep(0.35, 0.75, up) * reached * frame.wet.z;
   let snow = smoothstep(0.0, 0.2, snowed - 0.85 * (1.0 - drift) + 0.15);
   // The wet: the film where the fall reaches, the puddles on the level where the noise is lowest.
-  let wet = frame.wet.x * reached * (1.0 - snow);
+  let wet = frame.wet.x * struck * (1.0 - snow);
   let low = noise2(p.xz * 0.55 + vec2f(17.0)) * 0.7 + noise2(p.xz * 1.9) * 0.3;
   let level = smoothstep(0.93, 0.985, up);
   let fill = frame.wet.y;
-  let pool = level * reached * (1.0 - snow) * smoothstep(0.0, 0.08, fill * 0.75 - low + 0.2);
+  let pool = level * smoothstep(0.4, 0.9, reached) * (1.0 - snow) *
+             smoothstep(0.0, 0.08, fill * 0.75 - low + 0.2);
   var a = albedo * (1.0 - 0.45 * wet);
   a = mix(a, a * 0.55, pool);
   // The snow's white, a little grey in its hollows, with a glint here and there.

@@ -434,8 +434,8 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   for (double& c : fall) c /= fl;
   d.staged.ortho[2] = ortho_job(fall, centre, radius, radius);
   for (uint32_t k = 0; k < kOrthos; ++k) d.frame_jobs.push_back(d.staged.ortho[k]);
-  set4(d.staged.weather, o.weather && o.mode == Mode::v2 ? 1 : 0,
-       std::clamp(o.raining, 0.0, 1.0), 0, 0);
+  set4(d.staged.weather, o.weather && o.mode == Mode::v2 ? 1 : 0, std::clamp(o.raining, 0.0, 1.0),
+       std::clamp(o.spread, 0.0, 1.0), 0);
 
   set4(d.staged.info, o.mode == Mode::v2 ? 1 : 0, o.lighting == Lighting::lights ? 1 : 0,
        double(d.frame_lights.size()), o.ambient);
@@ -595,6 +595,7 @@ r::PrecipShelter bsp_shelter(const BspDraw& d) {
   h.half = j.o[3];
   h.depth = j.info[1];
   h.size = kOrthoSize;
+  h.spread = d.staged.weather[2];
   return h;
 }
 
