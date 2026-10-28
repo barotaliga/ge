@@ -12,7 +12,9 @@
 #include "core/math.hpp"
 #include "core/num.hpp"
 #include "core/quat.hpp"
+#include "fall_line/sim/army_sled_rules.hpp"
 #include "fall_line/sim/course.hpp"
+#include "fall_line/sim/wanted.hpp"
 #include "skier/skier.hpp"
 #include "snowmobile/spec.hpp"
 
@@ -83,9 +85,9 @@ void say(GameState& state, int32_t i, SledPhase phase, double speed) {
 
 // THE SKIER ON THE BOARDS: where the machine has him, facing its way, moving with it. His skis are
 // on the rack: nothing of theirs is edged, tucked or sunk.
-void hold(GameState& state, int32_t i) {
+void hold(GameState& state, int32_t i, const FreeSled& m) {
   sk::SkierState& c = state.racers[static_cast<size_t>(i)].skier;
-  const sm::SledState& b = state.sled.body;
+  const sm::SledState& b = m.body;
   const core::Vec3 at = sm::boards_at(b);
   c.x = at.x;
   c.y = at.y;
@@ -112,8 +114,7 @@ void hold(GameState& state, int32_t i) {
 }
 
 // On the boards, the skis racked: the machine his, the engine started.
-void mount(GameState& state, int32_t i) {
-  FreeSled& m = state.sled;
+void mount(GameState& state, int32_t i, FreeSled& m) {
   Racer& r = state.racers[static_cast<size_t>(i)];
   m.rider = true;
   m.mode = SledMode::ridden;
@@ -125,22 +126,23 @@ void mount(GameState& state, int32_t i) {
   r.free.lift.phase = LiftPhase::none;
   r.free.lift.carrier = -1;
   r.progress.stuck = 0;
-  hold(state, i);
+  // On this machine, never put back on another by the run's reset.
+  state.sled.thrown = false;
+  state.stolen.thrown = false;
+  hold(state, i, m);
 }
 
-void board(GameState& state, int32_t i) {
-  FreeSled& m = state.sled;
+void board(GameState& state, int32_t i, FreeSled& m) {
   if (m.body.over_for > 0 || m.mode == SledMode::down) restand(*state.level, m);
   m.taken++;
-  mount(state, i);
+  mount(state, i, m);
   say(state, i, SledPhase::board, m.body.speed);
 }
 
 // THE HOP OFF: stood beside it on its left, the rack's side, with its way, a little out and (if
 // it was moving) up; slow, facing down the fall line. A new descent: his foot is to be reached
 // again.
-void hop(GameState& state, int32_t i) {
-  FreeSled& m = state.sled;
+void hop(GameState& state, int32_t i, FreeSled& m) {
   const sm::SledState& b = m.body;
   Racer& r = state.racers[static_cast<size_t>(i)];
   const core::Vec3 left = core::rotate(b.q, core::Vec3{-1, 0, 0});
@@ -172,8 +174,7 @@ void hop(GameState& state, int32_t i) {
 // THE RIDER THROWN: put down off the boards with the way the machine had before the step that
 // threw him (`v0`), his skis still on its rack; it goes on without him and lies where it comes to
 // rest.
-void throw_off(GameState& state, int32_t i, const core::Vec3& v0, sm::Thrown why) {
-  FreeSled& m = state.sled;
+void throw_off(GameState& state, int32_t i, FreeSled& m, const core::Vec3& v0, sm::Thrown why) {
   Racer& r = state.racers[static_cast<size_t>(i)];
   const core::Vec3 at = sm::boards_at(m.body);
   const double over = at.y - state.level->ground_at(at.x, at.z);
@@ -195,8 +196,7 @@ void throw_off(GameState& state, int32_t i, const core::Vec3& v0, sm::Thrown why
 
 // The machine with nobody on it: settling on its parking brake until it is at rest, then asleep;
 // the engine shut off once it has idled long enough or lies thrown over.
-void step_parked(GameState& state) {
-  FreeSled& m = state.sled;
+void step_parked(GameState& state, FreeSled& m) {
   if (m.body.running && (m.mode == SledMode::down || m.t > kIdleFor)) {
     m.body.running = false;
     m.body.rpm = 0;
@@ -262,7 +262,7 @@ void place_sled(GameState& state) {
   state.army.pad_z = spot.z;
   state.army.pad_heading = spot.heading;
   const auto steps = static_cast<int>(num::round(kSettle * kHz));
-  for (int k = 0; k < steps && !m.asleep; k++) step_parked(state);
+  for (int k = 0; k < steps && !m.asleep; k++) step_parked(state, m);
   m.asleep = true;
   m.still = 0;
   m.t = 0;
@@ -277,32 +277,134 @@ sm::SledWorld sled_world(const GameState& state) {
   return sm::SledWorld{state.level.get(), &state.trees, 0, 0, 1};
 }
 
-bool sled_within(const GameState& state, int32_t i) {
-  const FreeSled& m = state.sled;
-  if (i != 0 || !m.present || m.rider || m.thrown) return false;
+namespace {
+
+// Whether racer `i` on his skis may take a machine standing at `b` now.
+bool takes(const GameState& state, int32_t i, const sm::SledState& b) {
+  if (i != 0 || state.sled.rider || state.stolen.rider) return false;
   const Racer& r = state.racers[static_cast<size_t>(i)];
   const sk::SkierState& c = r.skier;
   if (c.down || r.free.lift.phase != LiftPhase::none) return false;
-  return core::hypot(c.x - m.body.x, c.z - m.body.z) <= kBoardReach && c.speed <= kBoardFastest &&
-         m.body.speed <= kStill;
+  return core::hypot(c.x - b.x, c.z - b.z) <= kBoardReach && c.speed <= kBoardFastest &&
+         b.speed <= kStill;
+}
+
+bool free_takes(const GameState& state, int32_t i, const FreeSled& m) {
+  return m.present && !m.thrown && takes(state, i, m.body);
+}
+
+// What the machine press would take: the free ride's own machine, the one he stole, or one of the
+// army's left standing empty (its index in `ArmyState::sleds`), the nearest of them.
+struct Take {
+  FreeSled* own = nullptr;
+  int32_t army = -1;
+};
+Take take_of(GameState& state, int32_t i) {
+  Take best;
+  double d = 1e9;
+  const sk::SkierState& c = state.racers[static_cast<size_t>(i)].skier;
+  for (FreeSled* m : {&state.sled, &state.stolen}) {
+    if (!free_takes(state, i, *m)) continue;
+    const double e = core::hypot(c.x - m->body.x, c.z - m->body.z);
+    if (e < d) {
+      d = e;
+      best = Take{m, -1};
+    }
+  }
+  for (size_t k = 0; k < state.army.sleds.size(); k++) {
+    const ArmySled& m = state.army.sleds[k];
+    if (m.mode != ArmySledMode::empty || !takes(state, i, m.body)) continue;
+    const double e = core::hypot(c.x - m.body.x, c.z - m.body.z);
+    if (e < d) {
+      d = e;
+      best = Take{nullptr, static_cast<int32_t>(k)};
+    }
+  }
+  return best;
+}
+
+// STOLEN: one of the army's machines left standing taken off it, his own from now on (an
+// offence); one he stole before and left is the army's again, standing empty where he left it.
+FreeSled& steal(GameState& state, int32_t k) {
+  ArmyState& a = state.army;
+  ArmySled& taken = a.sleds[static_cast<size_t>(k)];
+  const sm::SledState body = taken.body;
+  taken.mode = ArmySledMode::gone;
+  state.events.push_back(GameEvent{EventKind::army_sled, 0,
+                                   static_cast<int32_t>(ArmySledChange::stolen),
+                                   static_cast<double>(taken.id)});
+  FreeSled& m = state.stolen;
+  if (m.present && static_cast<int32_t>(a.sleds.size()) < army_sled::kMostSleds) {
+    ArmySled left;
+    left.id = a.next_sled++;
+    left.mode = ArmySledMode::empty;
+    left.body = m.body;
+    left.home_x = a.pad_x;
+    left.home_z = a.pad_z;
+    left.way = m.body.heading;
+    left.progress.x = m.body.x;
+    left.progress.z = m.body.z;
+    a.sleds.push_back(left);
+  }
+  const int32_t taken_before = m.present ? m.taken : 0;
+  m = FreeSled{};
+  m.present = true;
+  m.body = body;
+  m.taken = taken_before;
+  raise_heat(state, WantedCause::stole_snowmobile);
+  return m;
+}
+
+}  // namespace
+
+bool sled_within(const GameState& state, int32_t i) {
+  if (i != 0 || !state.sled.present) return false;
+  if (free_takes(state, i, state.sled) || free_takes(state, i, state.stolen)) return true;
+  for (const ArmySled& m : state.army.sleds) {
+    if (m.mode == ArmySledMode::empty && takes(state, i, m.body)) return true;
+  }
+  return false;
+}
+
+FreeSled* ridden(GameState& state) {
+  if (state.sled.rider) return &state.sled;
+  if (state.stolen.rider) return &state.stolen;
+  return nullptr;
+}
+
+const FreeSled* ridden(const GameState& state) {
+  if (state.sled.rider) return &state.sled;
+  if (state.stolen.rider) return &state.stolen;
+  return nullptr;
 }
 
 bool step_sled_ride(GameState& state, int32_t i, const Controls& c) {
-  FreeSled& m = state.sled;
-  if (!m.present) return false;
+  if (!state.sled.present) return false;
   if (i != 0) return false;
-  m.t += kDt;
-  if (!m.rider) {
+  state.sled.t += kDt;
+  if (state.stolen.present) state.stolen.t += kDt;
+  FreeSled* rides = ridden(state);
+  if (rides == nullptr) {
     // Taken on: the press that does it is spent on it, never read again as the hop off.
-    if (c.machine && sled_within(state, i)) {
-      board(state, i);
-      return true;
+    if (c.machine) {
+      const Take t = take_of(state, i);
+      if (t.own != nullptr || t.army >= 0) {
+        FreeSled& m = t.own != nullptr ? *t.own : steal(state, t.army);
+        board(state, i, m);
+        if (&m != &state.sled) step_parked(state, state.sled);
+        if (&m != &state.stolen && state.stolen.present) step_parked(state, state.stolen);
+        return true;
+      }
     }
-    step_parked(state);
+    step_parked(state, state.sled);
+    if (state.stolen.present) step_parked(state, state.stolen);
     return false;
   }
+  FreeSled& m = *rides;
+  FreeSled& other = rides == &state.sled ? state.stolen : state.sled;
+  if (other.present) step_parked(state, other);
   if (c.machine) {
-    hop(state, i);
+    hop(state, i, m);
     return false;
   }
   Racer& r = state.racers[static_cast<size_t>(i)];
@@ -315,27 +417,29 @@ bool step_sled_ride(GameState& state, int32_t i, const Controls& c) {
   }
   if (ev.hit > 0) state.events.push_back(GameEvent{EventKind::glance, i, ev.tree, 0});
   if (ev.thrown != sm::Thrown::none) {
-    throw_off(state, i, v0, ev.thrown);
+    throw_off(state, i, m, v0, ev.thrown);
     return false;
   }
-  hold(state, i);
+  hold(state, i, m);
   return true;
 }
 
 bool remount_sled(GameState& state, int32_t i) {
-  FreeSled& m = state.sled;
-  if (i != 0 || !m.present) return false;
-  if (m.rider) {
+  if (i != 0 || !state.sled.present) return false;
+  if (FreeSled* rides = ridden(state)) {
     // RIGHTED AND DUG OUT: his reset on the boards stands the machine back on its belt.
-    restand(*state.level, m);
-    hold(state, i);
+    restand(*state.level, *rides);
+    hold(state, i, *rides);
     say(state, i, SledPhase::right, 0);
     return true;
   }
-  if (!m.thrown) return false;
-  restand(*state.level, m);
-  m.thrown = false;
-  mount(state, i);
+  FreeSled* thrown = state.sled.thrown     ? &state.sled
+                     : state.stolen.thrown ? &state.stolen
+                                           : nullptr;
+  if (thrown == nullptr) return false;
+  restand(*state.level, *thrown);
+  thrown->thrown = false;
+  mount(state, i, *thrown);
   say(state, i, SledPhase::right, 0);
   return true;
 }

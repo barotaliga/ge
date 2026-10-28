@@ -1,11 +1,14 @@
-// plugins/mountain/app/cloud_field.hpp: a clear sky and every lid stand no layers; each broken
-// sky its own (heaps under high streaks; taller heaps under a rippled sheet; streaks over a
-// veil), each within its bands over the valley floor; the same map deals the same sky and
-// another seed another; the wind aloft grows and turns with height, drifts the layers downwind
-// and ages them; and with the layers drawn a broken sky takes nothing off the sun on the whole.
+// plugins/mountain/app/cloud_field.hpp: a clear sky and a fog stand no layers and every lid one
+// full sheet; a lid picked by hand turns the weather to a deck; each broken sky its own (heaps
+// under high streaks; taller heaps under a rippled sheet; streaks over a veil), each within its
+// bands over the valley floor; the same map deals the same sky and another seed another; the wind
+// aloft grows and turns with height, drifts the layers downwind and ages them; and with the layers
+// drawn a broken sky takes nothing off the sun on the whole; a layer carries its kind's light round
+// the disc (its particles, its halo, its deck).
 //
 // ge:summary Tests for the cloud field: the stacks, the deal, the wind aloft, the drift
 // ge:keywords test mountain cloud field cloud_layers_for wind_aloft veer_aloft drift sky_at
+// ge:keywords lid_under
 // ge:skill mountain testing
 #include <cmath>
 
@@ -27,11 +30,40 @@ constexpr double kPi = 3.14159265358979323846;
 
 }  // namespace
 
-TEST(clear_and_lids_stand_no_layers) {
-  for (mg::WeatherKind k : {mg::WeatherKind::clear, mg::WeatherKind::overcast,
-                            mg::WeatherKind::snow, mg::WeatherKind::storm, mg::WeatherKind::fog}) {
+TEST(clear_and_fog_stand_no_layers_and_a_lid_one_full_sheet) {
+  for (mg::WeatherKind k : {mg::WeatherKind::clear, mg::WeatherKind::fog}) {
     CHECK(app::cloud_layers_for(sky(k), 38, 0, 45, 0).count == 0);
   }
+  for (mg::WeatherKind k :
+       {mg::WeatherKind::overcast, mg::WeatherKind::snow, mg::WeatherKind::storm}) {
+    const auto lid = app::cloud_layers_for(sky(k), 38, 0, 45, 0);
+    CHECK(lid.count == 1 && lid.layers[0].dome == 0 && lid.layers[0].cover >= 0.96);
+  }
+  // The snow's deck is thicker and darker than the overcast's.
+  const auto grey = app::cloud_layers_for(sky(mg::WeatherKind::overcast), 38, 0, 45, 0);
+  const auto deck = app::cloud_layers_for(sky(mg::WeatherKind::snow), 38, 0, 45, 0);
+  CHECK(deck.layers[0].top_m - deck.layers[0].base_m >
+        grey.layers[0].top_m - grey.layers[0].base_m);
+}
+
+TEST(a_lid_picked_by_hand_turns_the_weather_to_a_deck) {
+  const ge::render::CloudKind* kinds[2] = {ge::render::cloud_kind_named("cumulus"),
+                                           ge::render::cloud_kind_named("cirrus")};
+  ge::render::Weather w;
+  app::lid_under(kinds, 2, w);
+  CHECK(w.cover == 0);  // broken skies are no lid
+  kinds[1] = ge::render::cloud_kind_named("stratus");
+  app::lid_under(kinds, 2, w);
+  CHECK(w.cover == 1);
+  ge::render::Weather dark;
+  kinds[1] = ge::render::cloud_kind_named("nimbostratus");
+  app::lid_under(kinds, 2, dark);
+  CHECK(dark.cover == 1 && dark.deck_light < w.deck_light && dark.deck_zenith < w.deck_zenith);
+  // A sea of cloud lying in the valley is no lid over it.
+  ge::render::Weather sea;
+  kinds[0] = ge::render::cloud_kind_named("inversion");
+  app::lid_under(kinds, 1, sea);
+  CHECK(sea.cover == 0);
 }
 
 TEST(each_broken_sky_stands_its_layers_in_their_bands) {
@@ -89,4 +121,15 @@ TEST(drawn_layers_take_nothing_off_the_sun_on_the_whole) {
   // A lid keeps its deck.
   const ge::render::Weather lid = app::weather_look(sky(mg::WeatherKind::overcast), none, true);
   CHECK(lid.cover == 1 && lid.sun_pass < 0.2);
+}
+
+TEST(a_layer_carries_its_kinds_light_round_the_disc) {
+  const ge::render::CloudKind* kinds[2] = {ge::render::cloud_kind_named("altostratus"),
+                                           ge::render::cloud_kind_named("veil")};
+  const ge::render::Clouds c =
+      app::cloud_layers_of(kinds, 2, sky(mg::WeatherKind::fair), 7, 1000, 46, 0);
+  CHECK(c.count == 2);
+  CHECK(c.layers[0].drop_um == kinds[0]->drop && c.layers[0].drop_spread == kinds[0]->spread);
+  CHECK(c.layers[0].deck == 1 && c.layers[0].halo == 0);
+  CHECK(c.layers[1].halo == 1 && c.layers[1].deck == 0 && c.layers[1].drop_um > 20);
 }

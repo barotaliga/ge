@@ -3,9 +3,9 @@
 // megabytes at most, and a compression dependency is not worth the saving. Any viewer, and an
 // agent's image reader, opens it.
 //
-// THE READER brings a lab's own pictures back for a diff (diff.hpp): 8-bit RGBA or RGB, grey or
-// grey with alpha, not interlaced, any of the five row filters, through the labs' inflater, so
-// it also reads a PNG another tool compressed.
+// THE READER brings a lab's own pictures back for a diff (diff.hpp): assets/image.hpp's PNG
+// reader (8-bit RGBA, RGB, grey, grey with alpha and palettes, any row filter), so it also reads
+// a PNG another tool compressed.
 //
 // ge:summary The labs' PNG writer and reader: RGBA8, stored deflate, CRC-32 and Adler-32
 // ge:keywords png encode decode read image file crc32 adler32 deflate screenshot grey
@@ -20,11 +20,12 @@
 #include <string>
 #include <vector>
 
+#include "assets/image.hpp"
 #include "lab/raster.hpp"
 
 namespace ge::lab {
 
-uint32_t crc32(const uint8_t* bytes, size_t n, uint32_t crc = 0);
+using assets::crc32;  // the one CRC-32, assets/image.hpp's
 
 std::vector<uint8_t> encode_png(const Picture& picture);
 
@@ -39,7 +40,7 @@ std::vector<uint8_t> encode_png_grey(int width, int height, std::span<const uint
 bool write_file(const std::string& path, std::span<const uint8_t> bytes);
 
 // The picture a PNG holds, as RGBA8; nothing when the bytes are not a PNG the reader takes
-// (16-bit, palette or interlaced images) or a checksum fails.
+// (16-bit or interlaced images) or a checksum fails.
 std::optional<Picture> decode_png(std::span<const uint8_t> bytes);
 std::optional<Picture> read_png(const std::string& path);
 

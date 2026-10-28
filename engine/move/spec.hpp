@@ -101,6 +101,11 @@ struct MoveSpec {
 
   // ─── free flight (a spectator, a noclip developer) ──────────────────────────────────────
   double fly_scale = 1;  // share of `max_speed` flying
+
+  // ─── ladders (a surface flagged kLadder, world.hpp) ─────────────────────────────────────
+  double ladder_speed = 200;  // L/s: climbing, descending and sideways on the rungs
+  double ladder_jump = 270;   // L/s: the push off the rungs a jump gives, out along their normal
+  double ladder_probe = 1;    // L: how far ahead of the hull a ladder is found
 };
 
 // THE PRESETS, each a starting row for one kind of game (presets.cpp says what each is for).

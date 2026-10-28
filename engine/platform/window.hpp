@@ -5,8 +5,9 @@
 // (window.cpp) and nothing else in the tree includes it.
 //
 // Fall Line's needs set the scope: one window, resizable, high pixel density, keyboard and
-// pointer, focus (which pauses the run clock, engine/loop/run_clock.hpp) and quit. Gamepads,
-// rumble and touch arrive with the HUD's presses (M10) and the mobile builds (M11).
+// pointer, focus (which pauses the run clock, engine/loop/run_clock.hpp) and quit. Every input
+// device as engine/input events (gamepads, joysticks, wheels, raw mice, touch) is devices.hpp's,
+// read in the same pump.
 //
 // HEADLESS: a test or a lab never opens a window. `display_available()` says whether this
 // process can; a test that needs one skips when it cannot.
@@ -14,7 +15,7 @@
 // ge:summary The window, its native handles, per-frame input snapshot and the frame clock
 // ge:keywords platform window sdl native-window surface-handles input keyboard pointer mouse
 // ge:keywords focus quit resize pixel-size hidpi input-snapshot poll clock ticks monotonic
-// ge:keywords headless display_available open_window poll_input now_ns
+// ge:keywords headless display_available open_window poll_input now_ns prefs_dir prefs user-dir
 // ge:skill platform
 // ge:test tests/platform_window_test.cpp
 #pragma once
@@ -22,6 +23,7 @@
 #include <array>
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <string_view>
 
 namespace ge::platform {
@@ -99,6 +101,9 @@ class Window {
   explicit Window(std::unique_ptr<Impl> impl);
   friend std::unique_ptr<Window> open_window(const WindowDesc& desc);
   friend void poll_input(Window& window, InputSnapshot& input);
+  friend void set_relative_mouse(Window& window, bool on);
+  friend bool relative_mouse(const Window& window);
+  friend void set_text_input(Window& window, bool on);
   std::unique_ptr<Impl> impl_;
 };
 
@@ -111,5 +116,11 @@ void poll_input(Window& window, InputSnapshot& input);
 
 // A monotonic clock, ns. For the frame's delta only: the simulation never sees it.
 uint64_t now_ns();
+
+// The player's own directory for what a game keeps between sessions (the bindings file, the
+// runs), made when missing and ending in a separator: the platform's per-user place for an app's
+// data under `org` and `app`. Empty when there is none (then a game keeps nothing, or asks for a
+// path).
+std::string prefs_dir(std::string_view org, std::string_view app);
 
 }  // namespace ge::platform

@@ -38,6 +38,10 @@ struct MoveScenario {
   double start_yaw;         // rad
   MoveCmd (*script)(const MoveSpec& spec, const MoveState& s, double dt, ScriptMemory& m);
   Mode mode = Mode::walk;
+  // What the world does before each step, or null: moves its solids (`move_brush`, then `carry`
+  // for the body), pushes or launches the body (push.hpp). The lab draws the world as built.
+  void (*animate)(BoxWorld& w, const World& world, const MoveSpec& spec, MoveState& s, double dt,
+                  ScriptMemory& m) = nullptr;
 };
 
 std::span<const MoveScenario> move_scenarios();
@@ -52,6 +56,7 @@ struct MoveRun {
   double end_height = 0;  // L: the feet's height at the end above where they started
   double max_impact = 0;  // L/s: the hardest landing
   int32_t jumps = 0, air_jumps = 0, landings = 0, steps_up = 0, slides = 0;
+  int32_t bounces = 0, climbs = 0;  // bounces off a bouncing surface; ladders taken hold of
   int32_t steps = 0;
 };
 

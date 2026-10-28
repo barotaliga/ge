@@ -116,6 +116,12 @@ void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint
   // THE REACH: the mist closes every surface into the sky from half the reach to all of it.
   u.mist[0] = static_cast<float>(view.reach_m * kMistBegins);
   u.mist[1] = static_cast<float>(view.reach_m);
+  // THE WET GROUND rides in the mist's spare pair.
+  u.mist[2] = unit(w.wet);
+  u.mist[3] = unit(w.puddles);
+  // THE SKY'S STYLE (render/sky_style.hpp), the second sun off the real one.
+  real_sun_direction(view, d);
+  style_rows(view.style, d, u.style);
 }
 
 FrameTargets create_targets(gpu::Device& device, std::string_view label, uint32_t width,
@@ -218,6 +224,7 @@ void FrameRecorder::begin_frame(gpu::Device& device) {
   if (timed) timer.ready(device);
   for (int i = 0; i < stats.count; ++i) {
     stats.passes[static_cast<size_t>(i)].gpu_ms = timer.ms(static_cast<uint32_t>(i));
+    stats.passes[static_cast<size_t>(i)].gpu_start_ms = timer.start_ms(static_cast<uint32_t>(i));
   }
   stats.count = 0;
   mark_ns = steady_ns();
@@ -291,6 +298,7 @@ void FrameRecorder::end_frame(wgpu::CommandEncoder& encoder) {
 }
 
 void FrameRecorder::after_submit(gpu::Device& device) {
+  submit_ns = steady_ns();
   if (timed) timer.request(device);
 }
 
@@ -299,6 +307,7 @@ void FrameRecorder::wait(gpu::Device& device) {
   timer.wait(device);
   for (int i = 0; i < stats.count; ++i) {
     stats.passes[static_cast<size_t>(i)].gpu_ms = timer.ms(static_cast<uint32_t>(i));
+    stats.passes[static_cast<size_t>(i)].gpu_start_ms = timer.start_ms(static_cast<uint32_t>(i));
   }
 }
 

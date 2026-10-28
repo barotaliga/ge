@@ -94,12 +94,31 @@ void add_cvars(con::Console& c, Settings& s) {
           .help = "the snow the skis throw",
           .kind = CvarKind::boolean},
          &s.spray);
-  v.bind({.name = "r_snowfall",
+  v.bind({.name = "r_precip",
           .fallback = "1",
           .flags = kStartup,
-          .help = "the falling snow when the sky snows",
+          .help = "the snow and rain falling round the eye when the sky gives any",
           .kind = CvarKind::boolean},
-         &s.snowfall);
+         &s.precip);
+  v.bind({.name = "r_precip_density",
+          .fallback = "1",
+          .flags = kStartup,
+          .help = "how many particles the falling snow and rain has, a share of the default",
+          .min = 0.25,
+          .max = 2},
+         &s.precip_density);
+  v.bind({.name = "r_splashes",
+          .fallback = "1",
+          .flags = kStartup,
+          .help = "the rain's splashes on the ground (needs r_precip)",
+          .kind = CvarKind::boolean},
+         &s.splashes);
+  v.bind({.name = "r_wet",
+          .fallback = "1",
+          .flags = kStartup,
+          .help = "rain wets the ground: darker, mirroring the sky, pooled on the flats",
+          .kind = CvarKind::boolean},
+         &s.wet);
   v.bind({.name = "r_weather",
           .fallback = "1",
           .flags = kStartup,
@@ -118,10 +137,13 @@ void add_cvars(con::Console& c, Settings& s) {
   v.bind({.name = "cl_view",
           .fallback = "chase",
           .flags = kPlayer,
-          .help = "the camera: a rung (tips helmet chase far high orbit) or a still view (start "
-                  "piste lookback vista aerial)",
+          .help = "the camera: a rung (tips helmet chase far high orbit; on a machine its own: "
+                  "seat pilot wing down) or a still view (start piste lookback vista aerial)",
           .kind = CvarKind::text},
          &s.view);
+
+  // The camera's settings at the engine's defaults: a world in metres, the ladders' own rows.
+  ge::camera::add_camera_cvars(v, s.camera, {});
 
   v.bind({.name = "volume",
           .fallback = "0.8",
@@ -180,10 +202,19 @@ void add_cvars(con::Console& c, Settings& s) {
   v.bind({.name = "sv_snowfall",
           .fallback = "-1",
           .flags = kRun,
-          .help = "how hard it snows, 0 none .. 1 a blizzard, on a sky that snows (-1: the sky's)",
+          .help = "how hard it falls, 0 none .. 1 a blizzard or a cloudburst, on a sky that snows "
+                  "(-1: the sky's)",
           .min = -1,
           .max = 1},
          &s.fall);
+  v.bind({.name = "sv_snowline",
+          .fallback = "-1",
+          .flags = kRun,
+          .help = "the snow line, a share of the mountain from its base (0) to its summit (1): "
+                  "rain falls under it, sleet about it, snow above (-1: snow to the valley)",
+          .min = -1,
+          .max = 2},
+         &s.snowline);
   v.bind({.name = "sv_fog",
           .fallback = "-1",
           .flags = kRun,
@@ -213,6 +244,43 @@ void add_cvars(con::Console& c, Settings& s) {
           .min = -1,
           .max = 1},
          &s.cover);
+  v.bind({.name = "sv_clouds",
+          .fallback = "map",
+          .flags = kRun,
+          .help = "the kinds of cloud drawn, lowest first, joined by '+' (cumulus+cirrus): "
+                  "inversion stratus stratocumulus cumulus congestus cumulonimbus nimbostratus "
+                  "altocumulus altostratus lenticular cirrocumulus veil cirrostratus cirrus wisps "
+                  "(map: the map's own)",
+          .kind = CvarKind::text},
+         &s.cloud_kinds);
+  v.bind({.name = "sv_skytype",
+          .fallback = "earth",
+          .flags = kRun,
+          .help = "the kind of sky: earth dust alien hell void nebula violet ice ash toxic",
+          .kind = CvarKind::text},
+         &s.sky_type);
+  // The sky type's knobs (render/sky_style.hpp's SkyKnobs): -1 keeps the type's own.
+  const auto knob = [&](const char* name, const char* help, double max, double* field) {
+    v.bind({.name = name, .fallback = "-1", .flags = kRun, .help = help, .min = -1, .max = max},
+           field);
+  };
+  knob("sv_skyair", "the sky type's air, scaled: 0 none, 1 its own (-1: its own)", 4, &s.sky_air);
+  knob("sv_skydust", "the air's dust against the Earth's: 0 none (-1: the type's)", 200,
+       &s.sky_dust);
+  knob("sv_sunsize", "the sun's disc against the real one's (-1: the type's)", 10, &s.sun_size);
+  knob("sv_sun2", "a second sun's brightness against the sun's: 0 none (-1: the type's)", 2,
+       &s.sun2);
+  knob("sv_planet", "a planet's angular radius, degrees: 0 none (-1: the type's)", 60, &s.planet);
+  knob("sv_planetdir", "the planet's heading, degrees (-1: the type's)", 360, &s.planet_dir);
+  knob("sv_planetel", "the planet's elevation, degrees (-1: the type's)", 90, &s.planet_el);
+  knob("sv_ring", "the planet's ring's outer radius in its own: 0 none (-1: the type's)", 4,
+       &s.ring);
+  knob("sv_nebula", "a nebula's brightness against the snow's white: 0 none (-1: the type's)", 2,
+       &s.nebula);
+  knob("sv_skystars", "the share of the stars seen by day, 0 .. 1 (-1: the type's)", 1,
+       &s.sky_stars);
+  knob("sv_skyglow", "a fire's glow from under the horizon: 0 none (-1: the type's)", 4,
+       &s.sky_glow);
 }
 
 void register_cvars(con::Console& c) {

@@ -65,7 +65,7 @@ bool open_at(const GameState& state, double x, double z, double r) {
 
 // How the hunted man moves, m/s: his skis' way, or the free ride's machine's while he rides it.
 Spot quarry_way(const GameState& state) {
-  if (on_sled(state, 0)) return {state.sled.body.vx, 0, state.sled.body.vz};
+  if (const FreeSled* m = ridden(state)) return {m->body.vx, 0, m->body.vz};
   const sk::SkierState& c = state.racers[0].skier;
   return {c.vx, 0, c.vz};
 }
@@ -274,18 +274,22 @@ void rest(const GameState& state, ArmySled& m) {
 
 // THE CREW OFF TO TAKE HIM IN: the driver out to the left, the gunner to the right, soldiers after
 // him on foot from now on; the machine left standing empty.
-void dismount(GameState& state, ArmySled& m) {
+void crew_off(GameState& state, ArmySled& m, SoldierMode mode, ArmySledChange change) {
   const sm::SledState& b = m.body;
   const double rx = lm::cos(b.heading);
   const double rz = -lm::sin(b.heading);
   for (const double out : {-1.0, 1.0}) {
     if (army::kMostSoldiers <= state.army.soldiers.size()) break;
-    enlist_soldier(state, SoldierFrom::sled, kSledSquad + m.id, SoldierMode::chase,
-                   b.x + rx * out * kStepOffM, b.z + rz * out * kStepOffM, b.heading);
+    enlist_soldier(state, SoldierFrom::sled, kSledSquad + m.id, mode, b.x + rx * out * kStepOffM,
+                   b.z + rz * out * kStepOffM, b.heading);
   }
   m.mode = ArmySledMode::empty;
   m.t = 0;
-  say(state, ArmySledChange::dismount, m);
+  say(state, change, m);
+}
+
+void dismount(GameState& state, ArmySled& m) {
+  crew_off(state, m, SoldierMode::chase, ArmySledChange::dismount);
 }
 
 // ─── the modes ───────────────────────────────────────────────────────────────────────────────
@@ -430,6 +434,10 @@ SledPad sled_pad(const GameState& state, int32_t k) {
   return {a.pad_x, a.pad_z, a.pad_heading};
 }
 
+void knock_off(GameState& state, ArmySled& m) {
+  crew_off(state, m, SoldierMode::down, ArmySledChange::knocked);
+}
+
 bool crewed(const ArmySled& m) {
   return m.mode == ArmySledMode::due || m.mode == ArmySledMode::drive ||
          m.mode == ArmySledMode::halt || m.mode == ArmySledMode::leave;
@@ -555,6 +563,10 @@ const char* army_sled_change_name(ArmySledChange c) {
       return "righted";
     case ArmySledChange::gone:
       return "gone";
+    case ArmySledChange::knocked:
+      return "knocked";
+    case ArmySledChange::stolen:
+      return "stolen";
   }
   return "?";
 }

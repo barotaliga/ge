@@ -24,7 +24,7 @@ fast chase camera close to the ground. Per frame, at the top of its picture ladd
 | Props and buildings | Lifts and their moving carriers, a village, gates, fences: hundreds of instanced meshes | Draw submission; per-instance culling, not per-mesh |
 | Figures | The player, a few rivals, and up to a few hundred people in a crowd, all skinned | Skinning once and drawing many times (main view and shadows) |
 | Snow marks | Trail maps stamped from the skiers' prints every frame | Render-to-texture with max blending, a fine window that follows the camera redrawn from the stamps' history, and a coarse map over the whole mountain |
-| Particles | Tens of thousands of spray, snowfall and cloud particles | Overdraw of soft transparent quads; simulated on the GPU |
+| Particles | Tens of thousands of spray, snow, rain and cloud particles | Overdraw of soft transparent quads; simulated on the GPU |
 | Sky | A physical atmosphere, a raymarched cloud volume, a night sky, aerial perspective on every material | Lookup tables computed on the GPU; a temporal cloud buffer |
 | Light | One sun or moon, the sky's light, at most a handful of point lamps at night | No need for a many-light pipeline |
 | Shadows | The mountain shading itself over kilometres, sharp shadows under the figures | Two different problems, solved by two different techniques |
@@ -373,6 +373,17 @@ figure, the machines). They come in as **glTF 2.0** and nothing else.
   whole to its node's joint), the base colours as materials, the clips baked at 60 Hz. glTF's
   frame is mirrored in x into the world's, so a model faces heading 0. Nothing after the
   load reads glTF.
+- **A base colour texture is baked into parts at load** (`assets/image.hpp`, its PNG reader
+  palettes included). Each triangle takes the texel at its middle (NEAREST, repeating, through
+  the texture's KHR_texture_transform), linear and times the base colour factor, as a material
+  of its own colour (`<material>#rrggbb`, at most 256 a model), and a vertex two colours share
+  is split. A low-poly kit's colour atlas (flat swatches, the common free kits' one 512 x 512
+  palette PNG) then draws exactly in every pass that draws parts (the instances, the skinning,
+  the shadows, the `models` lab) with no texture on the GPU and nothing more a frame. Not
+  taken, for now: sampling the texture per pixel, which needs UVs in the packed vertex and a
+  texture binding in every instanced pass; it waits on a model whose texture is a picture
+  rather than an atlas (the loader notes one: a face whose corners read other colours than its
+  middle).
 - **Posed on the CPU, skinned on the GPU.** A frame samples a clip (or the game's own pose)
   into the joints' locals, chains them to model space and multiplies the inverse binds into
   a bone palette (`assets/pose.hpp`; no allocation). The `skinning` compute pass
@@ -605,6 +616,18 @@ of the sun's illuminance (`FrameView::sun_illuminance` scales them all). The sky
 full-screen triangle at the far plane tested `equal`, with the sun's disc. `frame.wgsl`
 holds the one copy of the haze, the sun's light at a point and the sky's irradiance.
 
+**Sky types (M8f7)** (`render/sky_style.hpp`, `FrameView::style`): a world that is not the Earth
+changes its AIR (scales on the Rayleigh scattering per channel, the dust's scattering,
+absorption per channel, asymmetry and scale height, and the ozone), which `medium_at` reads, so
+the tables are rebuilt in it and everything lit by the sky follows (the sky, the sun's colour,
+the sky's light, the haze, the cloud's light). Over the sky the pass draws what an air cannot:
+the sun's disc's size and tint, a second sun with a halo, a planet lit as a ball (its phase
+fixed by its offset from the sun, banded, a ring whose near half crosses it, dimming half the
+sky behind it), a nebula on the star sphere and the stars by day (both against the snow's
+white, not physical), and a glow from under the horizon. Ten named types (`sky_types`) a game
+picks by a word, knobs over them (`SkyKnobs`). The Earth's style is every scale 1 and every
+extra 0, so its picture is the same to the bit.
+
 **The weather in the picture (M8f1).** A frame is seen under a `Weather` (`render/view.hpp`,
 in the frame block as `weather` and `deck`), and `wgsl/frame.wgsl` is the one place it acts, so
 the ground, the trees, the figures, the particles, the flakes and the sky all see the same day:
@@ -634,7 +657,7 @@ map's sky at the view's time (`FrameOptions::weather`). The `weather` lab draws 
 seed 38's piste the clear day's picture spreads 37 levels of luma, an overcast's 15, a snow's 3
 and a storm's 2. The cloud volume itself is M8f3 (below).
 
-**The cloud in the picture (M8f3).** A frame is seen under up to three cloud layers
+**The cloud in the picture (M8f3).** A frame is seen under up to four cloud layers
 (`render/view.hpp`'s `Clouds`, in the frame block as `cloud_info` and `clouds`), drawn by
 `render/clouds.hpp`:
 
@@ -707,7 +730,74 @@ rippled sheet at 4 km, a HIGH sky's streaks over a veil; every band dealt off th
 the layers carried at a quarter of the wind aloft (the map's mean wind grown and turned with
 height) and living their kind's life. Where they are drawn a broken sky's mean cloud
 (`weather_look`'s pass and cover) is given back, since the layers cast their own shadows; a
-lid keeps its deck.
+lid keeps its deck, and stands a sheet under it (OVERCAST a stratus, SNOW and a STORM a
+nimbostratus) so the deck has a texture.
+
+**Cloud kinds (M8f8)** (`render/cloud_kinds.hpp`): fifteen named kinds, each a layer's bands,
+its form and its light, matched by eye against photographs of real skies side by side (the
+photographs are kept out of the tree): inversion, stratus, stratocumulus, cumulus, congestus,
+cumulonimbus, nimbostratus, altocumulus, altostratus, lenticular, cirrocumulus, veil,
+cirrostratus, cirrus and wisps. A kind's bands are its base over the valley floor, its depth, its cover and
+its cell (m); its stretch along the wind, its dome (0 a sheet, 1 a heap), its optical depth,
+its shadow, its life and its speed; four FORM knobs, each 0..1, carried in a fourth row of the
+layer's frame block (`CloudLayer::anvil`, `erode`, `fibre`, `patch`); and its LIGHT in a fifth
+(`drop_um`, `drop_spread`, `halo`, `deck`), below:
+
+- THE BILLOWS. The noise texture is two channels (RG8Unorm 64³): the column's value fbm, and a
+  cellular (Worley) fbm at 4, 8 and 16 cells a tile. Two reads of it at ten times the cell's
+  scale take a heap's edge away in rounded lobes, harder toward the top, by the kind's `erode`
+  (a lenticular's 0.06 leaves it smooth as a lens, a cumulus's 0.6 cauliflowers it).
+- THE STRANDS (`fibre`): the detail read stretched along the wind and squeezed across it, and
+  the value noise's wisps in place of the billows, then the density cut into strands, so a
+  cirrus is fibres and hooks rather than a smear.
+- THE PATCHES (`patch`): a quarter-scale read of the noise masks the column, so a cirrocumulus
+  or an altocumulus comes as fields of cells with clear sky between, never a uniform sheet.
+- THE ANVIL (`anvil`): from 55 to 80 % of its depth up a heap's cut is lowered to 0.72 of
+  itself, so a cumulonimbus spreads its top to several times its tower's width, thinning toward
+  the rim, and a coarse read of the billows lowers the anvil's base cell by cell into hanging
+  pouches (mammatus).
+- THE COLUMN ramps from the cut to full over at most 0.3 of the noise (`kColumnRamp`), so a
+  full sheet is evenly thick and does not break into the noise's blotches.
+- THE LIGHT IN A SHEET: where a thin slab is marched along a long path the steps grow (up to
+  three times) and bunch toward its ends; the light that has scattered many times in a sheet
+  is diffusion's 1/(1 + σ′τ) along the path up through the slab (one more read halfway to its
+  top) rather than the heap's forward exp(−σ′τ), and the sky's light from above dims through
+  the same path, so a deck is grey under and bright on top. A thick sheet under a lid is
+  blended toward the deck's own grey (half of the way), so the ground's flat light and the sheet
+  overhead agree and the sheet keeps its texture.
+- THE HALO: an ice layer lights a ring at 22° round the sun (and the moon, when it is the key
+  light), its red inside its blue (a Gaussian of 0.9° at 21.7°, 22.0° and 22.4° for red, green
+  and blue), as strong as its kind's `halo`: the veil's 1, cirrus's 0.8, cirrostratus's 0.4.
+- THE GLOW ROUND THE DISC (`diffraction` in `clouds.wgsl`): half of what a particle much
+  larger than the light's wavelength takes out of a beam is diffracted round its edge, so every
+  layer in front of the sun or the moon adds the Airy pattern (k a)²/4π (2 J1(k a θ)/(k a θ))² of
+  its particles, for red, green and blue, lit by the key light through the layer as its single
+  scattering is: the aureole a few degrees wide and, where the particles are of one size, the
+  corona's coloured rings round it. Each kind names its particles' radius and their spread (five
+  sizes, a share either side, which wash the outer rings out): altocumulus's 8 µm droplets
+  spread 0.1 and a lenticular's 6 µm spread 0.06 ring the moon in colour; altostratus's mixed
+  14 µm spread 0.45 give the sun the soft glare of ground glass and no rings; the ice kinds'
+  30–40 µm crystals a tight bright glare. The sun's glow dazzles as it is; the moon's is seen
+  beside its disc as the disc is (`as_seen`, now in `wgsl/frame.wgsl`): the disc's brightness as
+  seen times the glow's ratio to the disc's to the power 0.35 (`kGlowSeen`), never brighter than
+  it is, so its rings show at night.
+- THE DECK'S TOP (`deck`): the light that scatters on in a deck comes in through its top, which
+  the sun lights at a slant, so in a layer whose kind is a deck (stratus, nimbostratus,
+  altostratus, an inversion, and 0.6 of stratocumulus) that light is the sun's height's sine of
+  the beam's: an altostratus under a low sun is grey with the sun a pale disc in it, not white
+  over the whole sky. A heap's sides and a thin layer's edges face the sun at any height, so a
+  high veil keeps its pink at sunset.
+- THE SHAFTS (`shafts` in `wgsl/frame.wgsl`): six points along the view ray, out to 20 km,
+  read the cloud's shadow; the air scatters that share of the sun (70 % of its in-scatter is
+  shadowed at most), on the world through the haze and on the sky strongest toward the sun, so
+  the gaps between heaps throw beams.
+
+Fall Line picks a stack with `sv_clouds` (kinds joined by '+', such as `cumulus+cirrus`, up to
+four; `map`, the default, keeps the map's own), each kind's bands dealt off the map's seed by
+`cloud_layers_of`; a stack whose lowest kind is a thick full sheet (`lid_under`) turns the day
+grey under it as a lid would. The `world` lab's `clouds` view stands at the finish in the
+valley and looks up the sky with the sun behind and to one side, the way a photograph of a sky
+is taken.
 
 **The night in the picture (M8f2).** A frame's `Night` (`render/view.hpp`, filled by
 `render/night.hpp`'s `set_night` once the game has placed the sun) carries the moon and the dark
@@ -839,6 +929,58 @@ pass 7 ms (the `profile` lab); the bloom's cost on a real GPU waits for the Mac'
 
 Linear light is used throughout, and the conversion happens here, once.
 
+## The 2D pass
+
+Menus, the HUD and the console are drawn by the 2D layer (`engine/ui`, `docs/architecture.md`):
+an immediate-mode draw list of rounded boxes and text runs, which a CPU raster pictures headless.
+The GPU draws the same list in one pass after post, blended over the display image.
+
+**As built (M22b)** (`render/ui_pass.hpp`, `ui_pass.wgsl`):
+
+- **One instanced draw.** Each box is one quad, and its rounded rectangle's signed distance,
+  paint (solid, or a linear or radial gradient of up to eight stops), image and border are
+  worked out in the fragment shader. Each glyph is one quad that reads a glyph atlas. Every
+  instance is in one storage buffer and every paint in another. The draw splits only where a
+  box's image changes, because each image has its own small bind group. A menu page is one draw.
+- **The glyph atlas** is a 1024² `R8Unorm` texture packed in shelves. A glyph's mask is copied
+  in the first time a list draws it, and kept under the font's cached mask. A full atlas is
+  emptied and refilled from the list being prepared.
+- **Images** are uploaded the first time a box names them. A texture the GPU already has, such
+  as the live frame under a menu, is bound to a key with `ui_texture`.
+- **The CPU raster's pixels.** The pass uses the same signed distance and coverage at the
+  pixel's centre, the same clip rule, and text set by the same `ui::place_glyphs` from the same
+  masks. It samples images bilinearly at the same texel centres. It blends straight
+  sRGB-encoded colours, folding a fill and its border into one premultiplied colour, so the
+  output must be a UNORM target: an `*Srgb` one would blend in linear light. Gradients get half
+  a level of dither against banding.
+- **Measured.** The `menu-gpu` lab holds every page of the `menu` lab to the raster: on lavapipe,
+  none is more than 3 levels off at any pixel. Preparing a 1280 × 720 page costs about 1.7 ms of
+  CPU, and the software adapter draws it in 19 ms. The real GPU's cost waits for the Mac.
+
+**Shapes (M22e).** A HUD's instruments need more than boxes, so the draw list has five kinds of
+command, every one a quad in the same instanced draw with its own signed distance:
+
+- **Boxes turn and nine-slice.** A box turns by `rotation` (radians, clockwise) about `pivot`
+  (box-local pixels, the centre by default): the quad is the turned box's bounds, and the
+  fragment shader moves the pixel back into the box's own frame before the rounded rectangle,
+  the paint and the image are worked out, so a needle is a box turned about its foot and a map is
+  an image turned under a heading. A nine-sliced box maps each band of the box (`slice_to`) to its
+  band of the image (`slice`): the corners keep their pixels at any size, the edges and the
+  middle stretch.
+- **Lines** are capsules of a width between two points; a polyline is a line a segment.
+- **Arcs** are bands of a width round a centre, from one angle to another (0 at twelve o'clock,
+  clockwise), with flat or round ends: the distance is to the ring inside the sweep and to the
+  ends outside it. A gradient over an arc is in the arc's box, so a dial's band grades from one
+  end to the other.
+- **Convex polygons** of up to 16 points, in either winding: the distance is the largest of the
+  edges' distances, the edges' outward normals worked out once on the CPU and read from a third
+  storage buffer.
+
+Every angle's sine and cosine is worked out once a command on the CPU with the engine's libm,
+so the raster and the GPU read the same numbers. On lavapipe the `menu-gpu` lab's instrument
+panel is within 8 levels of the raster everywhere but one pixel a picture, at the needle's
+point, where an acute vertex's coverage swings on the last bit of a float.
+
 ## Particles and figures
 
 - **Particles are simulated in compute** in fixed pools: emission appends to a ring, the
@@ -869,10 +1011,11 @@ lab), the flight of all 16384 slots the larger half.
 **As built (M8d2).** The drag pulls a particle toward the AIR, not still air: the frame hands the
 pool the map's wind at the view's time (`plugins/mountain/air/air.hpp`), so a powder cloud (the
 spray's big thin puffs, hanging three to five seconds) drifts off downwind. THE FALLING SNOW is
-`engine/render/snowfall.hpp`: 24576 flakes in a 36 m cube centred on the eye, no births and no
-deaths. `snowfall.sim` moves each at the wind plus its own fall (0.6 to 1.4 m/s by its index)
-and a flutter on its phase, and wraps its offset from the eye back into the cube, so the eye
-always stands in a full fall however fast it moves. `snowfall` draws the first `fall` share of
+`engine/render/precip.hpp` (named `snowfall` until M36 brought the rain into it): 24576 flakes
+in a 36 m cube centred on the eye, no births and no deaths. `precip.sim` moves each at the wind
+plus its own fall (0.6 to 1.4 m/s by its index) and a flutter on its phase, and wraps its offset
+from the eye back into the cube, so the eye always stands in a full fall however fast it moves.
+`precip` draws the first `fall` share of
 them (the air's fall at the view's time: a flurry a scatter, a storm the whole box) as streaks
 over a 1/60 s shutter, at least a pixel and a half wide (a far flake widened and thinned as much,
 so it keeps its light and does not shimmer), thinned by the root of the streak's length, faded
@@ -880,6 +1023,47 @@ toward the cube's faces and at the lens, lit by the sun past the horizon and the
 softened against the depth. When nothing falls the pass is an empty compute pass under its name
 (an empty render pass still loads and stores its targets). The flakes are lit as the day is: under
 a clear sky that is a sunny fall; under a lid they are lit as its flat grey (M8f1, above).
+
+**Precipitation (M36).** What falls, and how hard, is a world's to say through
+`engine/wind/precip.hpp` (no GPU, golden): ONE DIAL, a fall's intensity 0..1 and its rain share
+0 (dry snow) .. 1 (rain), gives the liquid-equivalent rate (rain 0.64 * 232.6^i mm/h, so 2.5 at
+0.25 and 50 at 0.8; snow 0.04 * 250^i, 10 mm/h of water at the top), the TIER (rain by its rate:
+light, moderate, heavy; snow by what it hides: 1 km, 500 m; either a storm when heavy in a wind
+of 15 m/s or more, and rain past 50 mm/h), the visual range (rain 11.5 R^-0.63 km, snow
+1.2 R^-0.9 km), the pace (a drop's terminal speed by its median size off the exponential size
+spectrum, a flake's 1 m/s, sleet between), the PHASE by height (snow above a freezing level,
+melting through the 300 m under it) and the WET GROUND (a 0.3 mm film and puddles to 3 mm that
+drain and dry by the wind and the sun). The picture reads the same numbers:
+
+- `engine/render/precip.hpp` turns the first `rain` share of the particles (by a rank of their
+  index) into DROPS, so a sleet is flakes and drops at once and a rising share turns them one by
+  one. A drop falls at 0.75 to 1.25 of the rain's pace and is drawn as a thin clear line over
+  1/30 s (the eye smears a drop), at least a pixel and a half wide and never thinned below a
+  faint trace, taking the sky's light with the sun caught along it. Every particle rides THE
+  EDDIES, a slow field of swirls some metres across at `swirl` m/s (the wind's turbulence
+  intensity times its speed, over a floor), so a storm's snow swirls in sheets; a drop shrugs off
+  most of it.
+- THE SPLASHES are the same draw's next instances: up to 6144 crowns at a full rain, each living
+  0.16 s at a spot drawn afresh each life out of the screen and set on the surface the depth
+  shows (its normal off the depth's neighbours), kept where that faces up and within 24 m, at an
+  even density over the ground (a far spot kept by the share of ground its pixel covers). Off the
+  depth, so a splash lands on any game's ground, roof or deck; nothing keeps one off a floor under
+  a roof yet (a rain occlusion map, top-down depth, is the next step for rooms).
+- THE WET GROUND rides in the frame's `mist.zw` (`Weather::wet`, `puddles`): every world material
+  calls `wet_albedo` (a porous surface goes to half its albedo soaked, the water keeping the light
+  in its pores) and adds `wet_sheen` (Schlick's Fresnel off water, the sky along the reflected ray
+  and the sun's glint; on the flats the puddles lie level and mirror sharply). On Fall Line's snow
+  that reads as slush: the glitter goes, the glare dulls, the flats pool.
+- Fall Line keeps one wet ground a frame, the eye's, stepped by the frames' clock from the steady
+  state its rain and drying would leave. Its rain comes from the map's SNOW LINE
+  (`Weather::snowline`, raised only by `sv_snowline`: R19 deals none, so every dealt map is snow
+  to the valley and no digest moves). The cvars: `r_precip`, `r_precip_density`, `r_splashes`,
+  `r_wet`; the labs `precip` (eight skies from a flurry to a rainstorm) and `precip-air` (the
+  numbers as charts).
+
+Every shader's whole-line comments are left out of what is embedded (`cmake/WgslEmbed.cmake`), so
+a material that includes `frame.wgsl` stays under the 60 KB literal cap however well it is
+explained.
 - **Skinning** uses bone palettes in a storage buffer. A figure drawn in more than one
   view (the player in the main view, the sun's cascade and the shadow atlas) is skinned
   once by a compute pass into a vertex buffer that every view reads. Crowd members,
@@ -1084,7 +1268,7 @@ contract (scenes, captions, sheets). The renderer's half is:
 | Home | Holds |
 | --- | --- |
 | `engine/gpu/` | The `webgpu.h` wrapper: the device and its feature tiers, RAII handles, the pipeline manifest and creation counter, timestamp queries, staging uploads, readback. The only directory that includes `webgpu.h` |
-| `engine/render/` | Mechanisms any game could use: the pass table and named targets, the frame's stats, GPU-driven instance families and their culling, the depth pyramid, the heightfield clipmap renderer, the horizon map, cascaded shadows and the shadow atlas, the sky tables and aerial perspective, the cloud volume, TAA-U, post, compute particles, skinning, and the shared WGSL library |
+| `engine/render/` | Mechanisms any game could use: the pass table and named targets, the frame's stats, GPU-driven instance families and their culling, the depth pyramid, the heightfield clipmap renderer, the horizon map, cascaded shadows and the shadow atlas, the sky tables and aerial perspective, the cloud volume, TAA-U, post, the 2D pass, compute particles, skinning, and the shared WGSL library |
 | `plugins/<name>/app/` | A plugin's presentation half, shared by every game that links the plugin: `mountain/app` holds the snow material, the trail maps and their stamping, and the procedural tree shapes; `skier/app` holds the figure, the tracks' prints and the spray emitters (`docs/architecture.md` § Plugins) |
 | `games/fall_line/app/` | The game's own: its pass table, its quality ladder's values, its grade, and whatever draws only this game has |
 

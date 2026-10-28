@@ -60,6 +60,10 @@ SledPad sled_pad(const GameState& state, int32_t k);
 // star; `q` where he is; `fire` the rules of fire at his stars.
 void step_army_sleds(GameState& state, bool on, Spot q, FireRule fire);
 
+// ITS CREW KNOCKED OFF IT (army_meet.hpp): the driver and the gunner put down beside it as
+// soldiers lying where they fell (`SoldierMode::down`), the machine left standing empty.
+void knock_off(GameState& state, ArmySled& m);
+
 // Whether a machine carries its crew: called, on its way, halted or going home.
 bool crewed(const ArmySled& m);
 

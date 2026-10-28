@@ -50,6 +50,8 @@
 
 #include <cstdint>
 
+#include "render/sky_style.hpp"
+
 namespace ge::render {
 
 // A column-major 4x4 matrix: element (row r, column c) is m[c * 4 + r].
@@ -75,6 +77,11 @@ struct Weather {
   double deck_tint[3] = {0.86, 0.9, 0.98};
   double deck_light = 1.0;
   double deck_zenith = 0.6;
+  // THE WET GROUND (engine/wind/precip.hpp's `Wet`): the share of a surface's water film, 0 dry ..
+  // 1 soaked, and of its puddles, 0 .. 1. Read by every world material through wgsl/frame.wgsl's
+  // `wet_albedo` and `wet_sheen`.
+  double wet = 0.0;
+  double puddles = 0.0;
 };
 
 // ONE LAYER OF CLOUD (render/clouds.hpp): a slab of the air where the noise passes its cover's
@@ -91,8 +98,28 @@ struct CloudLayer {
   double dome = 1;               // 1 a heap, 0 a sheet
   double density = 0.02;         // the extinction inside a full cell, 1/m
   double shadow_tau = 0;         // the optical depth a full column takes off the sun below
+  // Its FORM: how far a heap's top spreads into an anvil (0 none .. 1 a storm's), how deep the
+  // detail eats the edge (0.6 a heap's boil, near 0 a lens's smooth skin), how far the detail is
+  // combed along the wind (0 none .. 1 ice's hairs), and how far its cells gather into patches
+  // with clear sky between (0 none .. 1 islands of cells).
+  double anvil = 0;
+  double erode = 0.6;
+  double fibre = 0;
+  double patch = 0;
+  // Its LIGHT round the key's disc: the radius its droplets or crystals diffract as (um: a water
+  // cloud's about 10, an ice cloud's tens) and their sizes' spread (a share either side: under
+  // about 0.2 a corona's coloured rings, over it a plain aureole), and its 22 degree halo's
+  // strength (0 none .. 1 a veil of ice's plain ring); and how far the light scattered on in it
+  // comes in through its top alone, as a deck's does, so a low sun lights it as little as it
+  // lights the ground (0 a heap's, a thin layer's, lit through its sides and edges .. 1).
+  double drop_um = 10;
+  double drop_spread = 0.35;
+  double halo = 0;
+  double deck = 0;
 };
-inline constexpr int kCloudLayers = 3;
+inline constexpr int kCloudLayers = 4;
+// The frame block's rows a layer (render/clouds.hpp's `cloud_rows`).
+inline constexpr int kCloudRows = 5;
 // Where the reach's mist begins, as a share of the reach (FrameView::reach_m).
 inline constexpr double kMistBegins = 0.5;
 struct Clouds {
@@ -167,6 +194,7 @@ struct FrameView {
   Weather weather{};  // the cloud and the fog; the default is a clear sky
   Night night{};      // the moon, the stars and the dark sky's glow; the default is none
   Clouds clouds{};    // the cloud's layers; the default is none
+  SkyStyle style{};   // the kind of sky (render/sky_style.hpp); the default is the Earth's
   // THE REACH, m: how far the picture draws. Past half of it a mist closes every surface into
   // the sky behind it, all of it by the reach, and nothing farther is drawn; 0: no reach, no mist.
   double reach_m = 0;

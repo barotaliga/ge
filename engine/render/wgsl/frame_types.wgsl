@@ -22,12 +22,20 @@ struct Frame {
   night_sun: vec4f,        // unit direction toward the real sun; w: its illuminance, pre-exposed
   night: vec4f,            // the dark sky's zenith luminance, its light, the sidereal angle, latitude
   cloud_info: vec4f,       // the cloud's layers drawn, the share of the march's steps, 1 if spread, the stamp
-  clouds: array<vec4f, 9>, // three a layer (render/clouds.hpp's `cloud_rows`)
+  clouds: array<vec4f, 20>, // five a layer (render/clouds.hpp's `cloud_rows`)
   moon_pole: vec4f,        // the moon's north pole (world); w: the umbra's angular radius
   moon_prime: vec4f,       // toward its 0 N 0 E; w: the penumbra's angular radius
   moon_east: vec4f,        // toward its 0 N 90 E; w: the disc's brightest light under the shadow
   moon_shadow: vec4f,      // toward the Earth's shadow's axis; w: the albedo map's scale
-  mist: vec4f,             // the reach's mist: where it begins and where it closes, m (0: none)
+  mist: vec4f,             // the reach's mist: where it begins and where it closes, m (0: none);
+                           // the wet ground: the film's share, the puddles' share
+  // The sky's style (render/sky_style.hpp's `style_rows`): 0 the Rayleigh scales, the dust's;
+  // 1 the dust's absorption scales, the ozone's; 2 the sun's disc's tint, its size; 3 toward the
+  // second sun, its brightness; 4 its tint, its size; 5 toward the planet, its angular radius;
+  // 6 its tint, the ring's outer radius; 7 the nebula's first tint, its strength; 8 its second
+  // tint, its size; 9 the glow's colour, its height; 10 the ring's tilt, the stars by day, the
+  // dust's asymmetry, its scale height (km).
+  style: array<vec4f, 11>,
 }
 
 // THE MOTION a surface at camera-relative `rel` (w = 1; w = 0 for a direction at infinity) made
