@@ -1,6 +1,6 @@
 ---
 name: snow
-description: "Use for engine/snow in gameengine2: a layer of snow over any ground that remembers what crossed it. The column model (depth and mass over a ground), the cover, the sparse fixed-point tiles, sample, press and the imprint record, the reference contacts, the snapshot and `ge snow`; snow over time (weather schedules, settling, filling, drift, melt and crust, grooming); the snow-press, snow-field, snow-contact and snow-weather labs; and the M29 plan in docs/snow.md (contact laws, time, tiers, drawing, sound, Fall Line's move onto it)."
+description: "Use for engine/snow in gameengine2: a layer of snow over any ground that remembers what crossed it. The column model (depth and mass over a ground), the cover, the sparse fixed-point tiles, sample, press and the imprint record, the reference contacts, the snapshot and `ge snow`; snow over time (weather schedules, settling, filling, drift, melt and crust, grooming); the level of detail (focus actors, the coarse layer, folding and refining, the tile budget); the snow-press, snow-field, snow-contact, snow-weather, snow-lod and snow-cost labs; and the M29 plan in docs/snow.md (contact laws, time, tiers, drawing, sound, Fall Line's move onto it)."
 ---
 
 # Snow
@@ -16,6 +16,7 @@ and the plan (rows M29a–M29l); this skill is how to work on it.
 | `snow/contact.hpp/.cpp` | The contact laws: a `ContactRow` a kind, Bekker's sink and its cap (`column_sink`), compaction and bulldozing, Mohr–Coulomb and Janosi traction, glide and tyre friction, planing |
 | `snow/press.hpp/.cpp` | `press`: targets from a sink or a pressure, mass kept, the berm, the imprint record; with a weather, cells brought to the minute first and a crust broken or borne |
 | `snow/time.hpp/.cpp` | Snow over time: `Schedule`, `Weather`, `spell`, `weathered`, `filled`, `Moment`, `bring_to`, `crust_load`, `sample(layer, x, z, t)`, `groom` |
+| `snow/lod.hpp/.cpp` | The level of detail: `set_focus`, `far_from_focus`, `fold_stale`, `fold_tile`, `refine_tile`, `stalest_tile`, `press_coarse`, `bytes_of`, `live_tiles` |
 | `snow/reference.hpp` | The reference contacts (a carving and a skidding ski, a boot, a tyre, a tread, a body), `place` |
 | `snow/snapshot.hpp/.cpp` | `save`, `load`, `read_info`, `load_bare` (the format in the header) |
 | `engine/cli/snow.hpp/.cpp` | `ge snow show` and `ge snow column` over a saved layer |
@@ -58,5 +59,13 @@ and the plan (rows M29a–M29l); this skill is how to work on it.
   for bit.
 - **Labs for time**: `snow-weather` (storms filling a groove, settling, drift, crust, a groomer).
   A default in `Weather` moved is a behaviour change: put its table before and after in the PR.
-- **What is next** is `docs/snow.md`'s rows: M29d folds stale tiles into a coarse layer under a
-  budget.
+- **Coarse cells hold sums.** A coarse cell keeps the SUM of its 16×16 samples' mass units and
+  depths, never a mean, so folding and refining are integer arithmetic and the ledger holds to
+  the unit. Read a column through `stored_at` (fine cell, else touched coarse cell, else the
+  cover); a reader that goes to `cell_at` alone misses the coarse layer.
+- **The focus is the game's actors, never the camera.** Tiles near a focus are stamped at
+  `set_focus`; the fold order (stalest first, ties by slot) is the same on every machine. A tile
+  the operation in progress wrote is never folded by it (`near_t < layer.clock`).
+- **Labs for the level of detail**: `snow-lod` (a long run under a small budget: the strip, the
+  memory, close-ups) and `snow-cost` (a call's cost, measured; quote the release build).
+- **What is next** is `docs/snow.md`'s rows: M29e draws the snow on the GPU.
