@@ -102,6 +102,10 @@ void run_sound_step(RunSound& sound, ge::audio::Synth& synth, const sim::GameSta
       case EventKind::reset:
         play(synth, kReset, ear);
         break;
+      case EventKind::traffic:
+        // Into a vehicle's panel: the knock of a body met, louder the faster they closed.
+        play(synth, kBump, ear, 0.5f + 0.5f * unit(e.value / 8));
+        break;
       case EventKind::takeoff:  // the wind's rush coming up is the take-off
       case EventKind::shoulder:
       case EventKind::bump:

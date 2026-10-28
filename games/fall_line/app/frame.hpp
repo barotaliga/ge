@@ -38,10 +38,10 @@
 //   taa                  -> taa.history (at the output's size; with FrameOptions::taa)
 //   bloom                -> bloom (the glow's mip chain, from what post reads)
 //   post                 -> final (the bloom mixed in, the grade's table: look.hpp's)
-//   ui                   -> final (`draw`'s 2D overlay, a menu or the HUD: render/ui_pass.hpp)
+//   ui                   -> final (the 2D layer's list over it: the console, render/ui_pass.hpp)
 //
 // With TAA the frame renders at FrameOptions::scale of the output's size, jittered, and the
-// resolve brings it up to it; without, at the output's size, unjittered, post reading the HDR.
+// resolve brings it up; without it, at the output's size, unjittered, post reading the HDR target.
 //
 // The frame reads the game only through a FrameView (views.hpp), the map it was made for, and a
 // FrameScene: the racers' skiers this frame, drawn as skinned skiers (scene.hpp: each racer's
@@ -124,6 +124,8 @@ struct FrameOptions {
       true;  // the map's sky and cloud in the picture (mountain/app/cloud_field.hpp): off, clear
   double clouds = 1.0;  // the share of the cloud march's steps (0.25..1); 0: no layer drawn
   double cover = -1;  // a broken sky's cover, its lowest layer's (the others kept in step); -1 own
+  double thick =
+      -1;  // how thick every layer is, 0 thin .. 1 thick (CloudLayer::thick_bias); -1 own
   // The kinds of cloud drawn in place of the map's (sv_clouds, app/sky_type.hpp), lowest first;
   // a count of -1 keeps the map's own.
   const ge::render::CloudKind* cloud_kinds[ge::render::kCloudLayers] = {};
@@ -153,6 +155,9 @@ struct FrameScene {
   // trees between the eye and it are seen through (render/instances.hpp § Seeing through). None:
   // every tree whole (a view of the mountain).
   std::optional<std::array<double, 3>> subject = std::nullopt;
+  // The 2D layer's list drawn over the finished frame (the console, ui/console.hpp), begun at
+  // the output's size; null or empty: nothing.
+  const ge::ui::DrawList* overlay = nullptr;
 };
 
 struct GameFrame {
@@ -192,8 +197,7 @@ struct GameFrame {
   ge::render::Taa taa;
   ge::render::Bloom bloom;
   ge::render::Post post;
-  ge::render::UiPass ui;        // the 2D layer drawn over the picture
-  ge::ui::DrawList no_overlay;  // the empty list a frame without one draws
+  ge::render::UiPass ui;
   ge::render::InstancePipelines instancing;
   ge::render::InstanceFamily forest, figures, crowd;
   ge::render::InstanceFamily* families[3] = {&forest, &figures, &crowd};
@@ -254,12 +258,10 @@ void set_water(ge::gpu::Device& device, GameFrame& frame, int index, const ge::w
 void forget_tracks(GameFrame& frame);
 
 // Encode and submit one frame of `view` and `scene` into `output` (a view of a texture of the
-// output format at the output's size), with `overlay` (a 2D draw list at the output's size: a
-// menu, the HUD) drawn over the finished picture. `view.frame` indexes the jitter. The stats' GPU
-// times arrive a frame or more later.
+// output format at the output's size). `view.frame` indexes the jitter. The stats' GPU times
+// arrive a frame or more later.
 void draw(ge::gpu::Device& device, GameFrame& frame, const ge::render::FrameView& view,
-          const FrameScene& scene, const wgpu::TextureView& output,
-          const ge::ui::DrawList* overlay = nullptr);
+          const FrameScene& scene, const wgpu::TextureView& output);
 
 // The last drawn frame's meshes as lines (needs FrameOptions::wire_probe): the ground's tiles
 // banded by distance and the trees and figures in one warm colour, over black, into `colour` (a

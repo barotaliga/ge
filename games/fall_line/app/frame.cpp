@@ -164,6 +164,7 @@ FrameOptions frame_options(const cfg::Settings& s) {
   o.weather = s.weather;
   o.clouds = s.clouds;
   o.cover = s.cover;
+  o.thick = s.thick;
   cloud_stack_of(s, o);
   return o;
 }
@@ -367,7 +368,7 @@ void pose_crowd(ge::gpu::Device& device, GameFrame& f, const FrameScene& scene) 
 }  // namespace
 
 void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const FrameScene& scene,
-          const wgpu::TextureView& output, const ge::ui::DrawList* overlay) {
+          const wgpu::TextureView& output) {
   GE_ZONE("frame");
   // The map's sky at the view's moment: the cloud, the deck and the fog it is seen under.
   r::FrameView view = seen;
@@ -390,6 +391,11 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
       const double k = f.options.cover / view.clouds.layers[0].cover;
       for (int i = 0; i < view.clouds.count; ++i)
         view.clouds.layers[i].cover = std::min(1.0, view.clouds.layers[i].cover * k);
+    }
+    // A thickness picked by hand: every layer's, between its kind's thin patches and its cores.
+    if (f.options.thick >= 0) {
+      for (int i = 0; i < view.clouds.count; ++i)
+        view.clouds.layers[i].thick_bias = 2 * std::min(f.options.thick, 1.0) - 1;
     }
     view.clouds.steps = f.options.clouds;
     view.clouds.quarter = f.options.cloud_quarter;
@@ -584,11 +590,12 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   }
   r::encode_post(f.post, f.pipelines, f.recorder, encoder, f.frame_group, f.post_groups[input],
                  output);
-  // The 2D layer over the finished picture (an empty list draws nothing; the row keeps its time).
-  if (!overlay)
-    f.no_overlay.begin(static_cast<int>(f.output_width), static_cast<int>(f.output_height));
-  r::prepare_ui(device, f.ui, overlay ? *overlay : f.no_overlay, f.output_width, f.output_height);
-  r::encode_ui(f.ui, f.pipelines, f.recorder, encoder, output);
+  if (scene.overlay != nullptr && scene.overlay->size() > 0) {
+    r::prepare_ui(device, f.ui, *scene.overlay, f.output_width, f.output_height);
+    r::encode_ui(f.ui, f.pipelines, f.recorder, encoder, output);
+  } else {
+    f.recorder.compute(encoder, "ui").End();  // the row runs empty, as bloom's does
+  }
   f.recorder.end_frame(encoder);
   wgpu::CommandBuffer commands = encoder.Finish();
   f.recorder.stats.cpu_ms =

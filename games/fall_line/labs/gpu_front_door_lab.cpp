@@ -204,7 +204,9 @@ void run(ge::lab::Lab& lab) {
       for (int i = 0; i < settle; ++i) {
         view.frame = static_cast<uint64_t>(i);
         fall_line::app::draw_shell(shell, overlay, v.w, v.h, 1.0, view.time_s);
-        fall_line::app::draw(*device, *frame, view, {skiers}, target.view, &overlay);
+        fall_line::app::FrameScene scene{skiers};
+        scene.overlay = &overlay;
+        fall_line::app::draw(*device, *frame, view, scene, target.view);
       }
       const ge::gpu::Image got = ge::gpu::read_now(*device, target);
       lab.shot(shot_of(p, v), ge::lab::Picture{v.w, v.h, got.rgba}, Det::measured);
