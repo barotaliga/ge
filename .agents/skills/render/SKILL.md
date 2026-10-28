@@ -15,6 +15,7 @@ technique, change that page in the same PR.
 
 - `engine/render/`: a mechanism any game could use, with no genre's words (a
   heightfield, an instance family, a cloud volume, TAA-U).
+- `engine/bake/`: light worked out once on the CPU into a lightmap atlas (charts, a BVH, bounce, the light's direction; no GPU, `docs/rendering.md` § Baked light).
 - `plugins/<name>/app/`: a plugin's presentation half, such as `mountain/app`'s snow material or tree shapes (the `plugins` skill classifies a file).
 - `games/<game>/app/`: the game's pass table, its quality ladder's values, its grade.
 
