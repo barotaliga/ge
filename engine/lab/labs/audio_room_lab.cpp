@@ -22,6 +22,7 @@
 #include "audio/room.hpp"
 #include "audio/synth.hpp"
 #include "core/libm/libm.hpp"
+#include "core/prng.hpp"
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
@@ -273,6 +274,37 @@ Place walk_place() {
   return p;
 }
 
+// A hard shoe on stone: the heel's thud and click, then the sole rolling off a beat later, each
+// step a little different (its level, its pitch, the roll's timing) so the walk never reads as
+// one sample looped; `pan` puts the foot a little to its side.
+void footstep(Synth& s, ge::core::Rng& rng, float pan) {
+  namespace core = ge::core;
+  const float level = static_cast<float>(core::range(rng, 0.8, 1.15));
+  const float pitch = static_cast<float>(core::range(rng, 0.9, 1.1));
+  const float roll_ms = static_cast<float>(core::range(rng, 55, 85));
+  s.tone({.wave = Wave::sine,
+          .from_hz = 95 * pitch,
+          .to_hz = 52 * pitch,
+          .duration_ms = 70,
+          .volume = 0.22f * level,
+          .attack_ms = 1,
+          .pan = pan,
+          .echo = 0.8f});
+  s.noise({.duration_ms = 16,
+           .volume = 0.2f * level,
+           .color = Color::white,
+           .filter = {.type = FilterType::bandpass, .hz = 2000 * pitch, .q = 1.2f},
+           .pan = pan,
+           .echo = 0.8f});
+  s.noise({.duration_ms = 45,
+           .volume = 0.1f * level,
+           .delay_ms = roll_ms,
+           .color = Color::pink,
+           .filter = {.type = FilterType::bandpass, .hz = 900 * pitch, .to_hz = 600 * pitch},
+           .pan = pan,
+           .echo = 0.8f});
+}
+
 void walk(gl::Lab& lab) {
   const Place place = walk_place();
   const RoomWorld world{&place, ray_of};
@@ -283,6 +315,7 @@ void walk(gl::Lab& lab) {
   constexpr double kFrom = -38, kTo = 18, kStep = 0.5;
   // A step every 0.5 m at 1.25 m/s: one probe and one footfall a step, the room glided 0.3 s.
   Synth s(7, EchoRoom{.delay_s = 0.21f, .feedback = 0.24f, .damp_hz = 1800});
+  ge::core::Rng rng = ge::core::make_rng(38);
   std::vector<float> out;
   const int per_step = static_cast<int>(kStep / 1.25 * kRate);
   std::vector<float> chunk(2 * static_cast<size_t>(per_step));
@@ -301,11 +334,7 @@ void walk(gl::Lab& lab) {
     echo.x.push_back(z);
     echo.y.push_back(rs.echo);
     s.room(rs, 0.3f);
-    s.noise({.duration_ms = 25,
-             .volume = 0.3f,
-             .color = Color::pink,
-             .filter = {.type = FilterType::lowpass, .hz = 900},
-             .echo = 0.6f});
+    footstep(s, rng, (i & 1) ? 0.12f : -0.12f);
     s.render(chunk.data(), per_step);
     out.insert(out.end(), chunk.begin(), chunk.end());
   }
@@ -331,7 +360,8 @@ void walk(gl::Lab& lab) {
   gl::sound_shot(lab,
                  {"walk-steps",
                   "FOOTSTEPS ALONG THE WALK",
-                  "A footfall every 0.5 m at a walking pace along the same walk, the room probed "
+                  "A hard shoe's step on stone every 0.5 m at a walking pace (heel, click and "
+                  "roll, each a little different) along the same walk, the room probed "
                   "at each step and glided over 0.3 s: the corridor's flutter, the hall's long "
                   "tail opening as the door is passed, the court's short answer and the outdoor "
                   "echo returning under the sky.",

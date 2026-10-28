@@ -7,6 +7,7 @@
 // ge:summary Tests for the room's reverb: decay time, level, taps, predelay, rest, the synth's room
 // ge:keywords test audio reverb rt60 schroeder fdn early-tap predelay energy determinism
 // ge:skill audio testing
+#include <algorithm>
 #include <cmath>
 #include <string>
 #include <vector>
@@ -59,11 +60,10 @@ double rt60_of(const std::vector<float>& v) {
   return 3 * (t25 - t5);
 }
 
-RoomSound tail_only(float decay, float size) {
+RoomSound tail_only(float decay) {
   RoomSound r;
   r.wet = 1;
   r.decay_s = decay;
-  r.size_m = size;
   r.damp_hz = 20000;
   r.predelay_ms = 0;
   r.echo = 1;
@@ -73,31 +73,51 @@ RoomSound tail_only(float decay, float size) {
 }  // namespace
 
 TEST(the_tail_falls_sixty_db_in_its_decay_time) {
-  for (const float decay : {0.4f, 1.5f, 4.0f}) {
-    for (const float size : {3.0f, 12.0f, 40.0f}) {
-      Reverb rv;
-      rv.set(tail_only(decay, size), 0);
-      const Ir ir = pulse(rv, decay * 1.2 + 0.3);
-      const double got = rt60_of(ir.l);
-      CHECK_MSG(std::fabs(got / decay - 1) < 0.15, "decay " + std::to_string(decay) + " size " +
-                                                       std::to_string(size) + ": " +
-                                                       std::to_string(got));
-    }
+  for (const float decay : {0.3f, 0.8f, 1.5f, 4.0f}) {
+    Reverb rv;
+    rv.set(tail_only(decay), 0);
+    const Ir ir = pulse(rv, decay * 1.2 + 0.3);
+    const double got = rt60_of(ir.l);
+    CHECK_MSG(std::fabs(got / decay - 1) < 0.15,
+              "decay " + std::to_string(decay) + ": " + std::to_string(got));
   }
 }
 
 TEST(wet_one_is_a_tail_with_the_sends_energy) {
-  for (const float decay : {0.5f, 2.0f}) {
-    for (const float size : {4.0f, 20.0f}) {
-      Reverb rv;
-      rv.set(tail_only(decay, size), 0);
-      const Ir ir = pulse(rv, decay * 2.5 + 0.3);
-      const double db = 10 * std::log10(energy(ir.l));
-      CHECK_MSG(std::fabs(db) < 3, "decay " + std::to_string(decay) + " size " +
-                                       std::to_string(size) + ": " + std::to_string(db) + " dB");
-      CHECK(std::fabs(10 * std::log10(energy(ir.r)) - db) < 2);  // both sides alike
-    }
+  for (const float decay : {0.5f, 1.0f, 2.0f}) {
+    Reverb rv;
+    rv.set(tail_only(decay), 0);
+    const Ir ir = pulse(rv, decay * 2.5 + 0.3);
+    const double db = 10 * std::log10(energy(ir.l));
+    CHECK_MSG(std::fabs(db) < 3,
+              "decay " + std::to_string(decay) + ": " + std::to_string(db) + " dB");
+    CHECK(std::fabs(10 * std::log10(energy(ir.r)) - db) < 2);  // both sides alike
   }
+}
+
+// How much of the tail repeats itself: the largest normalised autocorrelation of the tail
+// (from 60 ms) at a lag of 2 to 30 ms. A tail that rings as a pitch repeats at its period.
+double self_likeness(const std::vector<float>& v) {
+  const size_t from = static_cast<size_t>(0.06 * kRate), to = static_cast<size_t>(0.5 * kRate);
+  const double e = energy(v, from, to);
+  double most = 0;
+  for (size_t lag = static_cast<size_t>(0.002 * kRate); lag < static_cast<size_t>(0.03 * kRate);
+       ++lag) {
+    double c = 0;
+    for (size_t i = from; i + lag < to; ++i) c += static_cast<double>(v[i]) * v[i + lag];
+    most = std::max(most, std::fabs(c) / e);
+  }
+  return most;
+}
+
+TEST(a_small_rooms_tail_is_noise_not_a_pitch) {
+  // A short bright decay, as in a stone closet: the tail must not repeat itself at any lag a
+  // small room's echoes would ring at.
+  Reverb rv;
+  rv.set(tail_only(1.4f), 0);
+  const Ir ir = pulse(rv, 0.6);
+  const double r = self_likeness(ir.l);
+  CHECK_MSG(r < 0.25, "the tail repeats at " + std::to_string(r) + " of its energy");
 }
 
 TEST(an_early_tap_answers_after_its_delay_on_its_side) {
@@ -115,12 +135,12 @@ TEST(an_early_tap_answers_after_its_delay_on_its_side) {
 
 TEST(nothing_of_the_tail_comes_before_its_predelay) {
   Reverb rv;
-  RoomSound r = tail_only(1, 8);
+  RoomSound r = tail_only(1);
   r.predelay_ms = 30;
   rv.set(r, 0);
   const Ir ir = pulse(rv, 0.4);
-  // The first answer: the predelay plus the shortest line's length.
-  const size_t first = static_cast<size_t>((0.030 + 8 * 0.613 / 343.0) * kRate) - 2;
+  // The first answer: the predelay plus the shortest line (1489 frames).
+  const size_t first = static_cast<size_t>(0.030 * kRate) + 1489 - 2;
   CHECK(energy(ir.l, 0, first) == 0);
   CHECK(energy(ir.l, first) > 0);
 }
@@ -128,13 +148,13 @@ TEST(nothing_of_the_tail_comes_before_its_predelay) {
 TEST(a_room_gone_dry_stops_running_and_replays_its_bits) {
   Reverb rv;
   CHECK(!rv.active());
-  rv.set(tail_only(1, 8), 0);
+  rv.set(tail_only(1), 0);
   CHECK(rv.active());
   const Ir a = pulse(rv, 0.5);
   rv.set(RoomSound{}, 0.05f);
   pulse(rv, 2.0);
   CHECK(!rv.active());  // silent and cleared
-  rv.set(tail_only(1, 8), 0);
+  rv.set(tail_only(1), 0);
   const Ir b = pulse(rv, 0.5);
   CHECK(a.l == b.l && a.r == b.r);  // from cleared lines, the same bits again
 }
@@ -143,7 +163,7 @@ TEST(a_synths_room_is_heard_through_its_send) {
   auto play = [](bool room, float echo) {
     Synth s(1, EchoRoom{.delay_s = 0.25f, .feedback = 0.3f, .damp_hz = 3000});
     if (room) {
-      RoomSound r = tail_only(1.2f, 10);
+      RoomSound r = tail_only(1.2f);
       r.echo = echo;
       s.room(r, 0);
     }

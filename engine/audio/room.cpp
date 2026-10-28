@@ -19,7 +19,7 @@ namespace {
 constexpr double kPiD = 3.14159265358979323846;
 constexpr double kSabine = 0.161;  // s/m: 24 ln 10 / the speed of sound
 constexpr double kMaxRt60 = 12;
-constexpr double kMaxWet = 2;
+constexpr double kMaxWet = 1;  // the tail never outweighs the sound it answers
 
 std::array<std::array<double, 3>, kProbeRays> make_fan() {
   std::array<std::array<double, 3>, kProbeRays> fan{};
@@ -106,7 +106,6 @@ RoomSound room_sound(const RoomProbe& p, const double right[3], const ProbeSetti
   s.echo = static_cast<float>(clampd(p.open_share * settings.open_echo, 0, 1));
   if (p.hits == 0) return s;
   s.decay_s = static_cast<float>(p.rt60_s);
-  s.size_m = static_cast<float>(clampd(p.mean_free_path_m, 1, kMaxPathM));
   // Past the critical distance the tail outweighs the direct sound; what leaves through the open
   // share never builds a field, so a court keeps part of its tail and an open field almost none.
   const double shut = 1 - p.open_share;
