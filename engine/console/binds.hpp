@@ -19,6 +19,7 @@
 // ge:summary Binds: key names, modifiers, the bind tables by mode, press and release
 // ge:keywords bind binds key keys key-name modifier ctrl alt shift mode game menu demo
 // ge:keywords plus-command button held press release normalize_key mouse gamepad
+// ge:keywords usage_key hid usage scancode
 // ge:skill console
 // ge:test tests/console_binds_test.cpp
 #pragma once
@@ -46,6 +47,11 @@ bool known_key(std::string_view key);
 // `name` in canonical form: lower case, modifiers in the order ctrl, alt, shift, each known, and
 // a known key last. False (with `out` empty) when it names no key.
 bool normalize_key(std::string_view name, std::string& out);
+
+// The name a bind uses for the keyboard key with USB HID usage `usage` (the physical key, as
+// the input layer numbers it: 4 is `a`, 53 is `` ` ``, 225 is `shift`); empty for a key no bind
+// names. The left and right modifiers both name theirs.
+std::string_view usage_key(uint16_t usage);
 
 class Binds {
  public:

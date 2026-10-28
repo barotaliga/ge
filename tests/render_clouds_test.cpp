@@ -109,6 +109,9 @@ TEST(the_rows_hold_each_layers_numbers) {
   clouds.layers[1].fibre = 2;
   clouds.layers[1].drop_um = 30;
   clouds.layers[1].halo = 3;
+  clouds.layers[1].thin = -0.5;
+  clouds.layers[1].thick_cells = 0.1;
+  clouds.layers[1].thick_bias = -2;
   float info[4];
   float rows[gr::kCloudLayers * gr::kCloudRows][4];
   gr::cloud_rows(clouds, info, rows);
@@ -120,12 +123,15 @@ TEST(the_rows_hold_each_layers_numbers) {
   // a water cloud's droplets, no halo, no deck.
   CHECK(rows[3][0] == 0 && rows[3][1] == 0.6f && rows[3][2] == 0 && rows[3][3] == 0);
   CHECK(rows[4][0] == 10 && rows[4][1] == 0.35f && rows[4][2] == 0 && rows[4][3] == 0);
-  CHECK(rows[7][1] == 0 && std::fabs(rows[7][0] - 0.25f) < 1e-7 && rows[7][3] == 0.25f);
-  // The second's form and light, held to their ranges.
-  CHECK(rows[8][0] == 0.5f && rows[8][2] == 1);
-  CHECK(rows[9][0] == 30 && rows[9][2] == 1);
+  // Its thickness even all through: its thinnest patches a full cell's, a patch three cells.
+  CHECK(rows[5][0] == 1 && std::fabs(rows[5][1] - 1.0f / 3) < 1e-7 && rows[5][2] == 0);
+  CHECK(rows[8][1] == 0 && std::fabs(rows[8][0] - 0.25f) < 1e-7 && rows[8][3] == 0.25f);
+  // The second's form, light and thickness, held to their ranges.
+  CHECK(rows[9][0] == 0.5f && rows[9][2] == 1);
+  CHECK(rows[10][0] == 30 && rows[10][2] == 1);
+  CHECK(rows[11][0] == 0 && rows[11][1] == 4 && rows[11][2] == -1);
   // The third layer's rows are zero.
-  for (int r = 10; r < 15; ++r) CHECK(rows[r][0] == 0 && rows[r][3] == 0);
+  for (int r = 12; r < 18; ++r) CHECK(rows[r][0] == 0 && rows[r][3] == 0);
   // The frame block carries them.
   gr::FrameView view;
   view.clouds = clouds;
@@ -155,4 +161,48 @@ TEST(the_march_is_spread_only_with_the_last_frames_camera) {
   view.clouds.quarter = false;
   gr::fill_uniforms(u, view, 64, 32, &history);
   CHECK(u.cloud_info[2] == 0);
+}
+
+TEST(a_layer_is_thin_in_patches_and_thick_in_its_cores) {
+  gr::CloudLayer l = heap(0.97);
+  l.dome = 0;
+  // Even all through: every column as thick as a full cell.
+  for (int i = 0; i < 20; ++i) CHECK(gr::cloud_thickness(l, i * 731.0, i * 377.0, 1) == 1);
+  l.thin = 0.1;
+  double thin_sum = 0, thick_sum = 0, mid_sum = 0;
+  int thin_patches = 0, thick_cores = 0;
+  for (int i = 0; i < 400; ++i) {
+    const int col = i % 20, row = i / 20;
+    const double x = col * 1700.0, z = row * 1300.0;
+    l.thick_bias = 0;
+    const double mid = gr::cloud_thickness(l, x, z, 1);
+    CHECK(mid >= 0.1 && mid <= 1);
+    if (mid < 0.2) ++thin_patches;
+    if (mid > 0.9) ++thick_cores;
+    mid_sum += mid;
+    // The sky's bias moves every column the same way.
+    l.thick_bias = -1;
+    const double thin = gr::cloud_thickness(l, x, z, 1);
+    l.thick_bias = 1;
+    const double thick = gr::cloud_thickness(l, x, z, 1);
+    CHECK(thin <= mid && mid <= thick);
+    thin_sum += thin;
+    thick_sum += thick;
+    // A column thinning toward a gap is no thicker.
+    l.thick_bias = 0;
+    CHECK(gr::cloud_thickness(l, x, z, 0.5) <= mid);
+  }
+  // Varied across the layer: thin patches and thick cores both, and the bias's ends near the
+  // kind's ends.
+  CHECK(thin_patches > 20 && thick_cores > 20);
+  CHECK(thin_sum / 400 < 0.25 && thick_sum / 400 > 0.85);
+  CHECK(mid_sum / 400 > 0.3 && mid_sum / 400 < 0.8);
+  // The shadow's share is the column's times its thickness.
+  l.thick_bias = 0;
+  for (int i = 0; i < 20; ++i) {
+    const double x = i * 911.0, z = i * 613.0;
+    const double c = gr::cloud_column(l, x, z);
+    CHECK(std::fabs(gr::cloud_cast(l, x, z) - (c > 0 ? c * gr::cloud_thickness(l, x, z, c) : 0)) <
+          1e-12);
+  }
 }
