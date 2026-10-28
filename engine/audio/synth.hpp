@@ -5,7 +5,8 @@
 //   one-shots (`tone`, `noise`)  oscillators or a noise window -> drive -> filter -> envelope
 //   layers (`layer`, `set`)      a steered source -> drive -> filter -> level
 //        each -> pan -> its BUS's gain -> the mix, with a send into the shared ECHO
-//   the mix + the echo -> the LIMITER -> the output
+//   the send -> the ROOM's reverb (reverb.hpp), while a room is set
+//   the mix + the echo + the room -> the LIMITER -> the output
 //
 // THE BUSES are the faders: every voice and layer is played on one of `kBuses`, and a bus's gain
 // (`bus_gain`) is applied as it renders, so a fader moved mid-sound is heard at once and a bus at
@@ -13,6 +14,10 @@
 //
 // THE ECHO is one filtered feedback delay every voice can send into, so overlapping sounds sit in
 // the same place: outdoors what answers is a treeline a few hundred metres off, short and damped.
+//
+// THE ROOM is the space round the listener (`room`, a RoomSound: the walls' early echoes and a
+// reverberant tail, room.hpp probes it from the level), fed by the same send; it also sets how
+// much of the outdoor echo is heard, so a closed room silences the treeline.
 //
 // THE LIMITER keeps a stack of sounds out of the clip: a soft-knee compressor at -10 dBFS, ratio
 // 12, 5 ms attack (slower would let a landing through; faster would distort the bass inside a
@@ -31,7 +36,7 @@
 // ge:summary The synth: one-shots, steered layers, buses, echo, limiter; the producer/render ring
 // ge:keywords synth instrument dsp-graph render block one-shot layer bus fader echo delay
 // ge:keywords limiter compressor ring spsc command producer consumer render-thread device
-// ge:keywords voice-pool steal stats offline-render
+// ge:keywords voice-pool steal stats offline-render room reverb
 // ge:skill audio
 // ge:test tests/audio_synth_test.cpp
 #pragma once
@@ -39,6 +44,7 @@
 #include <cstdint>
 #include <memory>
 
+#include "audio/reverb.hpp"
 #include "audio/voice.hpp"
 
 namespace ge::audio {
@@ -91,6 +97,8 @@ class Synth {
   void stop(LayerId id);
   // A fader: the bus's gain, reached on `glide_s` (0: set at once, as before a sound plays).
   void bus_gain(int bus, float gain, float glide_s = 0.05f);
+  // The listener's room, glided to over `glide_s` (0: at once). A synth starts with none.
+  void room(const RoomSound& room, float glide_s = 0.3f);
 
   // --- the consumer (the render thread) ---
   // Render `frames` of interleaved stereo (L, R, L, R, ...) into `out`, applying every call
