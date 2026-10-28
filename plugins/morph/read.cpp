@@ -26,8 +26,8 @@ class Cursor {
   bool need(size_t n, const char* what) {
     if (!ok_) return false;
     if (n > b_.size() - at_) {
-      fail(std::string(what) + " runs past the end (" + std::to_string(n) + " bytes at offset " +
-           std::to_string(at_) + " of " + std::to_string(b_.size()) + ")");
+      refuse(std::string(what) + " runs past the end (" + std::to_string(n) + " bytes at offset " +
+             std::to_string(at_) + " of " + std::to_string(b_.size()) + ")");
     }
     return ok_;
   }
@@ -50,7 +50,8 @@ class Cursor {
     at_ += n;
     return p;
   }
-  void fail(const std::string& what) {
+  // Refuses the file: `what` was wrong; the next step (fetch it again or skip it) is added here.
+  void refuse(const std::string& what) {
     if (!ok_) return;
     ok_ = false;
     *error_ = where_ + ": " + what +
@@ -61,8 +62,8 @@ class Cursor {
   int count(const char* what, int lo, int hi) {
     const int32_t v = i32(what);
     if (ok_ && (v < lo || v > hi)) {
-      fail(std::string(what) + " is " + std::to_string(v) + ", outside " + std::to_string(lo) +
-           ".." + std::to_string(hi));
+      refuse(std::string(what) + " is " + std::to_string(v) + ", outside " + std::to_string(lo) +
+             ".." + std::to_string(hi));
     }
     return ok_ ? v : 0;
   }
@@ -79,12 +80,12 @@ bool magic(Cursor& c, const char* m, int version) {
   const uint8_t* p = c.bytes(4, "the magic");
   if (p == nullptr) return false;
   if (std::memcmp(p, m, 4) != 0) {
-    c.fail(std::string("no '") + m + "' magic");
+    c.refuse(std::string("no '") + m + "' magic");
     return false;
   }
   const int32_t v = c.i32("the version");
   if (c.ok() && v != version)
-    c.fail("version " + std::to_string(v) + ", not " + std::to_string(version));
+    c.refuse("version " + std::to_string(v) + ", not " + std::to_string(version));
   return c.ok();
 }
 
@@ -146,8 +147,8 @@ bool read_model(std::span<const uint8_t> bytes, const std::string& where, Model*
     if (!c.ok()) break;
     for (int k = 0; k < 3; k++) {
       if (v[k] < 0 || v[k] >= verts) {
-        c.fail("triangle " + std::to_string(t) + " names vertex " + std::to_string(v[k]) + " of " +
-               std::to_string(verts));
+        c.refuse("triangle " + std::to_string(t) + " names vertex " + std::to_string(v[k]) +
+                 " of " + std::to_string(verts));
         break;
       }
       const bool back = !front && st[size_t(v[k])].seam != 0;
