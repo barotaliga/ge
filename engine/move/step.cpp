@@ -15,8 +15,8 @@ namespace ge::move {
 
 namespace {
 
-constexpr int kBumps = 4;         // planes a move may slide along in a step
-constexpr double kNever = 1e300;  // `since_ground` after a jump: no coyote jump from the air
+constexpr int kBumps = 4;  // planes a move may slide along in a step
+constexpr double kNever = kSinceNever;
 
 Vec3 clip(const Vec3& v, const Vec3& n) { return add_scaled(v, n, -dot(v, n)); }
 
@@ -193,14 +193,15 @@ void update_crouch(const MoveSpec& spec, const World& world, MoveState& s, const
 }
 
 // The ground under the feet after a move: found within `contact` (or `snap` for a walker that was
-// standing), the body set onto it.
-void find_ground(const MoveSpec& spec, const World& world, MoveState& s, double snap,
-                 MoveEvents& ev) {
+// standing), the body set onto it, its solid and motion kept. Returns the ground's hit (untouched
+// when there is none).
+Hit find_ground(const MoveSpec& spec, const World& world, MoveState& s, double snap,
+                MoveEvents& ev) {
   s.grounded = false;
-  if (s.vel.y > spec.unground_speed) return;
+  if (s.vel.y > spec.unground_speed) return {};
   const double probe = snap > spec.contact ? snap : spec.contact;
   const Hit h = world.sweep(hull(spec, s.ducked), s.pos, sub(s.pos, {0, probe, 0}));
-  if (!walkable(spec, h)) return;
+  if (!walkable(spec, h)) return {};
   const double drop = s.pos.y - h.end.y;
   if (drop > spec.contact) {
     ev.bits |= kSteppedDown;
@@ -209,6 +210,52 @@ void find_ground(const MoveSpec& spec, const World& world, MoveState& s, double 
   s.pos = h.end;
   s.grounded = true;
   s.ground_normal = h.normal;
+  s.ground_solid = h.solid;
+  s.ground_vel = h.surface_vel;
+  return h;
+}
+
+// Below this pitch (rad, the view looking down) pressing forward on a ladder climbs down.
+constexpr double kDescendPitch = -0.35;
+
+// A ladder within `ladder_probe` ahead of the hull along the view's heading: its normal, or
+// false.
+bool ladder_ahead(const MoveSpec& spec, const World& world, const MoveState& s, double yaw,
+                  Vec3& normal) {
+  if (spec.ladder_probe <= 0) return false;
+  const Vec3 ahead{core::libm::sin(yaw), 0, core::libm::cos(yaw)};
+  const Hit h =
+      world.sweep(hull(spec, s.ducked), s.pos, add_scaled(s.pos, ahead, spec.ladder_probe));
+  if (!h.touched() || h.all_solid || (h.surface & kLadder) == 0) return false;
+  normal = h.normal;
+  return true;
+}
+
+// ON THE RUNGS: no gravity, no friction; forward climbs (down when the view looks down), a strafe
+// moves along the ladder, nothing held hangs still, a fresh jump pushes off along its normal.
+void ladder_move(const MoveSpec& spec, const World& world, MoveState& s, const MoveCmd& cmd,
+                 const Vec3& n, double dt, MoveEvents& ev) {
+  const Box box = hull(spec, s.ducked);
+  s.grounded = false;
+  s.sliding = false;
+  s.ground_solid = 0;
+  s.ground_vel = {0, 0, 0};
+  s.since_ground = kNever;
+  if (cmd.jump && !s.jump_held) {
+    s.vel = scale(n, spec.ladder_jump);
+    s.on_ladder = false;
+    ev.bits |= kLadderOff;
+  } else {
+    if (!s.on_ladder) ev.bits |= kLadderOn;
+    s.on_ladder = true;
+    const double sy = core::libm::sin(cmd.yaw), cy = core::libm::cos(cmd.yaw);
+    const double up = core::clamp(cmd.forward, -1, 1) * (cmd.pitch < kDescendPitch ? -1.0 : 1.0);
+    const Vec3 v = add(Vec3{0, up, 0}, scale(Vec3{cy, 0, -sy}, core::clamp(cmd.side, -1, 1)));
+    s.vel = scale(clip(v, n), spec.ladder_speed);  // along the rungs, never into or off them
+  }
+  s.jump_held = cmd.jump;
+  slide_move(spec, world, box, s.pos, s.vel, dt);
+  if (s.on_ladder) find_ground(spec, world, s, 0, ev);  // standing at its foot
 }
 
 void free_flight(const MoveSpec& spec, const World& world, MoveState& s, const MoveCmd& cmd,
@@ -294,7 +341,20 @@ MoveEvents step_move(const MoveSpec& spec, const World& world, MoveState& s, con
     return ev;
   }
   const bool was_grounded = s.grounded;
+  const Vec3 left_vel = s.ground_vel;  // the ground's velocity, taken along if the body leaves it
   update_crouch(spec, world, s, cmd, dt, ev);
+
+  // A ladder ahead takes the body onto its rungs, except one standing and not pressing forward
+  // (so a body at its foot can back away from it).
+  Vec3 rungs;
+  if (ladder_ahead(spec, world, s, cmd.yaw, rungs) && !(s.grounded && cmd.forward <= 0)) {
+    ladder_move(spec, world, s, cmd, rungs, dt, ev);
+    return ev;
+  }
+  if (s.on_ladder) {
+    s.on_ladder = false;
+    ev.bits |= kLadderOff;
+  }
 
   // The slide: started by crouching fast on the ground, over when slow, standing or airborne.
   const double plan_speed = flat_length(s.vel);
@@ -321,6 +381,7 @@ MoveEvents step_move(const MoveSpec& spec, const World& world, MoveState& s, con
   if (want && (s.grounded || s.since_ground < spec.coyote_time)) {
     const double base = spec.jump_additive && s.vel.y > 0 ? s.vel.y : 0;
     s.vel.y = base + spec.jump_speed;
+    if (s.grounded) s.vel = add(s.vel, s.ground_vel);  // a moving ground's speed goes along
     s.grounded = false;
     s.sliding = false;
     s.since_ground = kNever;
@@ -392,10 +453,25 @@ MoveEvents step_move(const MoveSpec& spec, const World& world, MoveState& s, con
   }
 
   const double snap = was_grounded && !jumped ? spec.ground_snap : 0;
-  find_ground(spec, world, s, snap, ev);
+  const Hit ground = find_ground(spec, world, s, snap, ev);
+  // A bouncing surface throws a landing back up while what it gives back beats `unground_speed`.
+  const double rebound = !was_grounded && vy_into < 0 ? -vy_into * ground.bounce : 0;
+  if (s.grounded && rebound > spec.unground_speed) {
+    s.grounded = false;
+    s.vel.y = rebound;
+    s.since_ground = kNever;
+    s.jump_rising = false;
+    s.air_jumps_left = spec.air_jumps;
+    ev.bits |= kBounced;
+    ev.impact = -vy_into;
+    ev.bits = static_cast<uint16_t>(ev.bits & ~kSteppedDown);
+    ev.stepped = 0;
+  }
   if (s.grounded) {
     if (dot(s.vel, s.ground_normal) < 0) s.vel = clip(s.vel, s.ground_normal);
     if (!was_grounded) {
+      s.vel.x -= s.ground_vel.x;  // standing, the velocity is the ground's relative one
+      s.vel.z -= s.ground_vel.z;
       ev.bits |= kLanded;
       ev.impact = vy_into < 0 ? -vy_into : 0;
       // A landing the step down already counted is a landing, not a step.
@@ -409,7 +485,10 @@ MoveEvents step_move(const MoveSpec& spec, const World& world, MoveState& s, con
     if (was_grounded && !jumped) {
       ev.bits |= kLeftGround;
       s.since_ground = 0;
+      s.vel = add(s.vel, left_vel);
     }
+    s.ground_solid = 0;
+    s.ground_vel = {0, 0, 0};
     if (s.since_ground < kNever) s.since_ground += dt;
     if (s.sliding) {
       s.sliding = false;

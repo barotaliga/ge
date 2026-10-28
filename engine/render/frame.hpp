@@ -52,7 +52,8 @@ struct FrameUniforms {
   float eye[4];              // world xyz (m); w: the eye's altitude over the sea, km
   float sun[4];              // unit direction toward the key light; w: its illuminance, pre-exposed
   float size[4];             // render width, height, 1/width, 1/height
-  float time[4];             // seconds, frame number, 0, 0
+  float time[4];             // seconds, frame number, the scene's own light the eye adapts to
+                             // (FrameView::adapt_cd, pre-exposed; 0: the sky's alone), 0
   float world[4];       // y = 0's altitude over the sea (km), the pre-exposure, the moon's direct
                         // light while the sun keys, 1 when the haze is the moon's
   float planes[6][4];   // the frustum (view.hpp's five), the sixth all zero
@@ -77,8 +78,7 @@ struct FrameUniforms {
   float moon_east[4];    // toward its 0 N 90 E; w: the disc's brightest light under the shadow
   float moon_shadow[4];  // toward the Earth's shadow's axis; w: the albedo map's scale
   float mist[4];         // the reach's mist: where it begins and where it closes, m (0: none);
-                         // the scene's own light the eye adapts to (FrameView::adapt_cd,
-                         // pre-exposed; 0: the sky's alone); 0
+                         // the wet ground: the film's share, the puddles' share
   // The sky's style (render/sky_style.hpp's `style_rows`): the air's scales, the sun's disc, the
   // second sun, the planet, the nebula, the glow from below, the ring's tilt and the stars by day.
   float style[kSkyStyleRows][4];

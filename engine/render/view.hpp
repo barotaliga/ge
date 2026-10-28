@@ -77,6 +77,11 @@ struct Weather {
   double deck_tint[3] = {0.86, 0.9, 0.98};
   double deck_light = 1.0;
   double deck_zenith = 0.6;
+  // THE WET GROUND (engine/wind/precip.hpp's `Wet`): the share of a surface's water film, 0 dry ..
+  // 1 soaked, and of its puddles, 0 .. 1. Read by every world material through wgsl/frame.wgsl's
+  // `wet_albedo` and `wet_sheen`.
+  double wet = 0.0;
+  double puddles = 0.0;
 };
 
 // ONE LAYER OF CLOUD (render/clouds.hpp): a slab of the air where the noise passes its cover's

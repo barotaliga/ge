@@ -331,6 +331,33 @@ fn haze_air(colour: vec3f, uv: vec2f, dist_m: f32) -> vec3f {
   return c;
 }
 
+// THE WET GROUND (render/view.hpp's `Weather::wet` and `puddles`, in `frame.mist.zw`): a wet
+// surface is darker, because the water filling its pores keeps the light inside it longer
+// (`wet_albedo`: a porous surface, 1, goes to half its albedo soaked; a sealed one, 0, keeps it),
+// and it mirrors the sky in its film (`wet_sheen`: Schlick's Fresnel off water, 0.02 head on, the
+// sky's light along the reflected ray and the sun's glint, the film's mirror rough and a puddle's
+// flat). `flat` is how level the surface lies (its normal's y over 0.9 .. 0.98 is a puddle's).
+fn wet_albedo(albedo: vec3f, porous: f32) -> vec3f {
+  return albedo * (1.0 - 0.5 * frame.mist.z * clamp(porous, 0.0, 1.0));
+}
+
+fn wet_sheen(n: vec3f, v: vec3f, sun: vec3f, flat: f32) -> vec3f {
+  let wet = frame.mist.z;
+  if (wet <= 0.0) {
+    return vec3f(0.0);
+  }
+  let pool = frame.mist.w * smoothstep(0.9, 0.98, flat);
+  // A puddle lies level whatever the ground's grain under it.
+  let m = normalize(mix(n, vec3f(0.0, 1.0, 0.0), pool));
+  let r = reflect(-v, m);
+  let cos_v = clamp(dot(m, v), 0.0, 1.0);
+  let fresnel = 0.02 + 0.98 * pow(1.0 - cos_v, 5.0);
+  let sky = sky_luminance(normalize(vec3f(r.x, max(r.y, 0.02), r.z)));
+  let sharp = mix(60.0, 1500.0, pool);
+  let glint = pow(max(dot(r, frame.sun.xyz), 0.0), sharp) * mix(4.0, 60.0, pool);
+  return (sky + sun * glint / PI) * fresnel * wet * mix(0.5, 1.0, pool);
+}
+
 // What a white surface lit by the sun and the sky maps to before the tone curve; under a deck,
 // lower: a grey day's snow is a light grey, not the sunlit white, or the flat light reads as a
 // white-out where there is none.
@@ -353,7 +380,7 @@ fn white_luminance() -> f32 {
   let sun = key_at_eye() * frame.sun.w * frame.weather.x * max(frame.sun.y, 0.0);
   let sky = sky_irradiance(vec3f(0.0, 1.0, 0.0));
   // The scene's own lights (a lava lake at night) key it when they outshine the sky.
-  return max(max(dot((sun + sky) / PI, kLuma), frame.mist.z),
+  return max(max(dot((sun + sky) / PI, kLuma), frame.time.z),
              kDarkestLux * frame.world.y / (PI * kSunLux));
 }
 
