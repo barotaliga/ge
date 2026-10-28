@@ -17,6 +17,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <string>
+#include <vector>
 
 #include "classicenhance/planes.hpp"
 #include "core/noise.hpp"

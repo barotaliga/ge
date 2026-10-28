@@ -7,6 +7,7 @@
 #include "classicenhance/lightmaps.hpp"
 
 #include <algorithm>
+#include <vector>
 
 #include "classicenhance/cache.hpp"
 #include "lab/png.hpp"

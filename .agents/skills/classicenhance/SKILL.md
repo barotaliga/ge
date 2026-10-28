@@ -7,18 +7,19 @@ description: "Use for plugins/classicenhance in gameengine2: the classic sharewa
 
 `plugins/classicenhance/` (`ge_classicenhance`, namespace `ge::classicenhance`) takes the
 classic shareware pack a player already has and enhances it on their machine into a local
-cache. It depends on the core, `assets` (the inflater, SHA-256), `lab` (the PNG writer), `vfs`
+cache. It depends on the core, `assets` (the inflater, SHA-256), `audio` (the spectrum and the
+resampler), `lab` (the PNG writer), `vfs`
 (the pack and zip archives) and `brush` (the maps):
-`ge_add_plugin(classicenhance ENGINE core assets lab vfs PLUGINS brush)`.
+`ge_add_plugin(classicenhance ENGINE core assets audio lab vfs PLUGINS brush)`.
 
 ## The line that keeps it legal
 
 - **Ship the pipeline, never its output.** The shareware pack may be passed on only unchanged;
   its textures, sounds and maps stay its authors'. Everything this plugin derives (upscaled
   textures, generated maps, rebaked light) is written to the player's cache and nowhere else.
-  Nothing derived from the pack is ever committed, attached to a PR, published as an artifact,
-  or put in a release. Pictures for a PR come from the tests' own fixtures, or from the pack on
-  a reviewer's machine (a local run's `previews/`, which is gitignored and stays local).
+  Nothing derived from the pack is ever committed, attached to a PR or put in a release.
+  Pictures for a PR come from the tests' own fixtures. The user may ask to see the real pack's
+  results: those go on a PRIVATE Artifact page for them alone, never linked from the PR.
 - **Read only a known unchanged pack.** `source.hpp`'s `kKnownPacks` lists the packs by SHA-256.
   A pack not on it (another release, a modded or damaged copy) is refused with its digest and
   nothing is written. Adding a row needs the release named and its licence checked first; ask
@@ -40,11 +41,13 @@ cache. It depends on the core, `assets` (the inflater, SHA-256), `lab` (the PNG 
 | `classicenhance/planes.hpp/.cpp` | The wrapping float planes the enhancer works in: blur, percentile, the sRGB tables |
 | `classicenhance/cache.hpp/.cpp` | The cache's root (`GE_CLASSIC_CACHE`, else the per-user cache folder), the per-pack layout, stage records, whole-file writes, `safe_name` |
 | `classicenhance/lightmaps.hpp/.cpp` | The lightmap stage: `light_map` writes a map's light; until the rebake (M40) lands, the map's own lightmaps shelf-packed into one picture |
-| `classicenhance/pipeline.hpp/.cpp` | `run_pipeline`: the stages pack → textures → lightmaps, each skipped when its recorded key is current; `pack_textures` |
+| `classicenhance/sound.hpp/.cpp` | The sound enhancer: `read_wav`, `write_wav` (the loop start in a `cue ` chunk), `reduce_noise`, `extend_band`, `enhance_sound` |
+| `classicenhance/pipeline.hpp/.cpp` | `run_pipeline`: the stages pack → textures → lightmaps → sounds, each skipped when its recorded key is current; `pack_textures` |
 | `classicenhance/tool/main.cpp` | The `classicenhance` executable (`verify`, `run`, `status`), one JSON object an answer |
 
 Beside it in the engine: `engine/vfs/zip.hpp` (the zip reader, also the `.pk3` container),
-`engine/assets/inflate.hpp`'s `inflate_raw` and `engine/assets/sha256.hpp`.
+`engine/assets/inflate.hpp`'s `inflate_raw`, `engine/assets/sha256.hpp`, and for the sounds
+`engine/audio/fft.hpp` (the short-time spectrum) and `engine/audio/resample.hpp`.
 
 ## Running it
 

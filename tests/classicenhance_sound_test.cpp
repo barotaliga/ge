@@ -8,6 +8,7 @@
 // ge:keywords test classicenhance sound wav loop cue denoise bandwidth-extension limiter
 // ge:skill classicenhance testing
 #include <cmath>
+#include <string>
 #include <vector>
 
 #include "audio/fft.hpp"
