@@ -60,8 +60,8 @@ void create_sky(gpu::Device& device, gpu::PipelineSet& pipelines, Sky& sky,
   sky.moon_view_view = sky.moon_view.CreateView();
   sky.aerial_view = sky.aerial.CreateView();
   sky.blank_view = sky.blank.CreateView();
-  sky.light =
-      make_buffer(device, "sky.light", 64, wgpu::BufferUsage::Storage | wgpu::BufferUsage::CopySrc);
+  sky.light = make_buffer(device, "sky.light", kSkyLightBytes,
+                          wgpu::BufferUsage::Storage | wgpu::BufferUsage::CopySrc);
 
   wgpu::SamplerDescriptor sd{};
   sd.label = "render.linear_clamp";
@@ -278,18 +278,19 @@ void encode_sky(const Sky& sky, const gpu::PipelineSet& pipelines, FrameRecorder
 SkyLightReading read_sky_light(gpu::Device& device, const Sky& sky) {
   wgpu::BufferDescriptor bd{};
   bd.label = "sky.light.readback";
-  bd.size = 64;
+  bd.size = kSkyLightBytes;
   bd.usage = wgpu::BufferUsage::MapRead | wgpu::BufferUsage::CopyDst;
   wgpu::Buffer rb = device.device.CreateBuffer(&bd);
   wgpu::CommandEncoder encoder = device.device.CreateCommandEncoder();
-  encoder.CopyBufferToBuffer(sky.light, 0, rb, 0, 64);
+  encoder.CopyBufferToBuffer(sky.light, 0, rb, 0, kSkyLightBytes);
   wgpu::CommandBuffer commands = encoder.Finish();
   device.queue.Submit(1, &commands);
-  gpu::wait(device, rb.MapAsync(wgpu::MapMode::Read, 0, 64, wgpu::CallbackMode::WaitAnyOnly,
-                                [](wgpu::MapAsyncStatus, wgpu::StringView) {}));
+  gpu::wait(device,
+            rb.MapAsync(wgpu::MapMode::Read, 0, kSkyLightBytes, wgpu::CallbackMode::WaitAnyOnly,
+                        [](wgpu::MapAsyncStatus, wgpu::StringView) {}));
   SkyLightReading out{};
-  if (const void* p = rb.GetConstMappedRange(0, 64)) {
-    float f[16];
+  if (const void* p = rb.GetConstMappedRange(0, kSkyLightBytes)) {
+    float f[20];
     std::memcpy(f, p, sizeof f);
     for (int i = 0; i < 3; ++i) {
       out.irradiance_up[i] = f[i];
@@ -297,6 +298,7 @@ SkyLightReading read_sky_light(gpu::Device& device, const Sky& sky) {
       out.moon_up[i] = f[8 + i];
       out.moon_at_eye[i] = f[12 + i];
     }
+    for (int i = 0; i < 4; ++i) out.eye[i] = f[16 + i];
   }
   rb.Unmap();
   return out;
