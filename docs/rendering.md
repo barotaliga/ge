@@ -867,6 +867,13 @@ read in 2026, longitude 0) by `core/moon.hpp` (M8f6):
   one is drawn as the eye sees it (the earthshine's ratio to the lit limb to the power 0.35,
   never above the earthshine alone), so a day moon is a pale disc in the blue and a twilight
   crescent shows its ashen light;
+- THE DISCS DRAWN LARGER (`FrameView::sun_size`, `moon_size`; Fall Line's `r_sunsize` and
+  `r_moonsize`): each disc's angular radius times its factor, as through a longer lens. Only the
+  disc grows: the sun shares the same light over its larger face and the moon keeps its face's
+  brightness, and neither lights the world more. A cloud's glow round the key light is a point's
+  pattern spread over the disc, so it is read off the drawn limb (`clouds.wgsl`'s
+  `disc_swell`): its core fills a larger face and its corona's rings stand out from the larger
+  edge. The Earth's shadow on an enlarged moon is still laid at the real disc's scale;
 - AN ECLIPSE: the Earth's shadow on the disc, the penumbra by the share of the sun's disc it
   leaves and the umbra the air's refracted red (a thousandth of the sun's light at its edge, a
   ten-thousandth on its axis), its contrast against the disc's brightest point to the power
