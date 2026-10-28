@@ -18,6 +18,7 @@
 #   ge_ai        the bots' layer (engine/ai: the decision record `ge why` reads)
 #   ge_wind      the wind as a pure function of place and time (engine/wind; docs/water.md)
 #   ge_water     bodies of water, the waves a wind grows on them and the one query (engine/water)
+#   ge_detail    a level's surface detail: bevels, decals that age, seeded props (engine/detail)
 #   ge_move      character movement (engine/move: the knobs and their cvars, the step, scenarios)
 #   ge_camera    the camera (engine/camera: poses, followers, rigs, shake, transitions, the stack)
 #   ge_play      the play contract (engine/play: GameSpec and Run, the session, the input log,
@@ -43,9 +44,9 @@
 #   ge_isa       the instruction-set baseline (x86-64: AVX2), linked by ge_core and
 #                published as ge::isa
 #   ge_flags     warnings, -Werror, sanitizers: this tree only, never published
-# ge_core, ge_fp, ge_isa, ge_assets, ge_ai, ge_wind, ge_water, ge_move, ge_camera, ge_net, ge_console,
+# ge_core, ge_fp, ge_isa, ge_assets, ge_ai, ge_wind, ge_water, ge_detail, ge_move, ge_camera, ge_net, ge_console,
 # ge_services, ge_lab, ge_play, ge_replay, ge_prof, ge_prof_alloc and every plugin target are installed
-# and published as ge::core, ge::fp, ge::isa, ge::assets, ge::ai, ge::wind, ge::water, ge::move,
+# and published as ge::core, ge::fp, ge::isa, ge::assets, ge::ai, ge::wind, ge::water, ge::detail, ge::move,
 # ge::camera, ge::net, ge::console, ge::services, ge::lab, ge::play, ge::replay, ge::prof, ge::prof_alloc and
 # ge::<plugin>, and the ge executable is installed to bin/
 # (cmake/Packaging.cmake, docs/publishing.md).
@@ -287,6 +288,13 @@ file(GLOB GE_WATER_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/
 add_library(ge_water STATIC ${GE_WATER_SOURCES})
 target_link_libraries(ge_water PUBLIC ge_core ge_wind ge_audio)
 
+# A level's surface detail (engine/detail, docs/detail.md): convex solids and the bevels on their
+# exposed edges, decals clipped to surfaces that age in a fixed pool, and props scattered by rules.
+# Deterministic, no platform; published as ge::detail.
+file(GLOB GE_DETAIL_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/detail/*.cpp)
+add_library(ge_detail STATIC ${GE_DETAIL_SOURCES})
+target_link_libraries(ge_detail PUBLIC ge_core)
+
 # The play contract (engine/play: a game's spec and Run, the session and its line protocol, the
 # input log, replay and diverge, the bench, the stills, the `play` executable's main), published
 # as ge::play so a game's `play` target is driven by `ge play`, `ge sim`, `ge replay`, `ge state`,
@@ -372,7 +380,7 @@ if(PROJECT_IS_TOP_LEVEL)
   get_property(GE_PLUGIN_TARGETS GLOBAL PROPERTY GE_PLUGIN_TARGETS)
   get_property(GE_GAME_TARGETS GLOBAL PROPERTY GE_GAME_TARGETS)
   add_executable(labs engine/lab/main.cpp ${GE_LAB_SOURCES})
-  target_link_libraries(labs PRIVATE ge_lab ge_play ge_replay ge_core ge_audio ge_assets ge_net ge_input ge_wind ge_water ge_move ge_camera ge_ui ge_services ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
+  target_link_libraries(labs PRIVATE ge_lab ge_play ge_replay ge_core ge_audio ge_assets ge_net ge_input ge_wind ge_water ge_detail ge_move ge_camera ge_ui ge_services ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
     ${GE_LAB_EXTRA})
 
   # The `assets` executable (engine/assets/tool.hpp): the built assets listed, checked and stamped,
