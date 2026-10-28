@@ -36,7 +36,8 @@ std::vector<std::pair<std::string, std::string>> file_rows(const std::string& pa
 }  // namespace
 
 bool digest_file_form(const std::string& path) {
-  return path.size() >= kExt.size() && path.compare(path.size() - kExt.size(), kExt.size(), kExt) == 0;
+  return path.size() >= kExt.size() &&
+         path.compare(path.size() - kExt.size(), kExt.size(), kExt) == 0;
 }
 
 std::map<std::string, std::string> read_digests(const std::string& path) {
@@ -47,7 +48,7 @@ std::map<std::string, std::string> read_digests(const std::string& path) {
   }
   std::error_code ec;
   for (const auto& e : fs::directory_iterator(path, ec)) {
-    const fs::path p = e.path();
+    const fs::path& p = e.path();
     if (!e.is_regular_file() || p.extension() != kExt) continue;
     std::ifstream f(p);
     std::string hex;

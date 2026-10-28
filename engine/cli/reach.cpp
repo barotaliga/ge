@@ -205,9 +205,10 @@ std::vector<std::string> pick_affected(const std::vector<std::string>& tests,
   for (const std::string& f : changed) {
     if (global_build_file(f)) return tests;
   }
-  const bool labs = targets.count("labs") > 0 || std::any_of(changed.begin(), changed.end(), [](const std::string& f) {
-    return f.starts_with("tests/digests/");
-  });
+  const bool labs = targets.count("labs") > 0 ||
+                    std::any_of(changed.begin(), changed.end(), [](const std::string& f) {
+                      return f.starts_with("tests/digests/");
+                    });
   std::vector<std::string> out;
   for (const std::string& t : tests) {
     const bool smoke = t == "labs_smoke" || t.starts_with("labs_smoke_");

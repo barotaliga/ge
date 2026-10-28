@@ -40,12 +40,13 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 ## The CI loop
 
 - precheck running every gate and printing each failure whole (done: no gate stops the run but the build, so every lint finding shows in one round)
-- precheck refusing two rows of one lab in `tests/labs_digests.txt` (done: the `digest rows` gate, which CI's labs-smoke would otherwise fail a round later)
+- precheck refusing two rows of one lab in `tests/labs_digests.txt` (done, then retired: each lab's digest is its own file under `tests/digests/`, so no union merge can double one)
 - `ge precheck` (done: the repo's CI gates in both presets) and `ge lint --like-ci` (CI's exact gates and file set)
 - `ge lint` (done: clang-tidy's bug-finding checks over what the change since `--base` reaches, the changed .cpp files and every .cpp including a changed header, or the files named, each finding at its line with its check's page; a few files in seconds)
 - a teleport detector for the labs (done: `engine/lab/teleport.hpp`, every step of a track that moves farther than its speed allows, reported under every scenario lab's `--trace`)
 - `ge test --affected` (done: the tests the change since `--base` reaches through the include graph, a target reached when its objects include a changed file or a header in a reached library's directory; only their targets built, `--list` names them; precheck takes its tests from it)
 - precheck's lab digests following the same reach (done: `ge digest --affected [--list]`, each lab by its own source's object, so a plugin change reaches the game's labs through the game library including its headers; `tools/labs-reached.sh` retired; a changed committed asset reaches the labs under its plugin or game and those naming it)
+- precheck's digests under a time budget (a change to engine/lab or engine/core reaches every lab, and the whole set outran a session's time limit: the labs a changed file names first, then the rest sharded in the background or left to CI's labs-smoke with the list printed)
 - the labs' digest baseline merging without conflicts (done: `merge=union`, a lab's doubled row failed by name)
 - `ge digest`'s smoke run writing its previews apart from a full lab run's (`previews/<id>/smoke/`), so a digest check never overwrites the pictures a full run left
 - `ge digest --dedupe` (the duplicate rows a union merge leaves in the baseline dropped, keeping the row the current build writes)
@@ -125,6 +126,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 
 ## Measuring
 
+- `ge lab sound <lab>` (a spectrogram of each WAV a lab writes, on its report page: the cut-off falling with distance seen without listening; the classic-enhance sound page's spectrogram moved into engine/lab and reused)
 - `ge profile --wall` (a sampling CPU profiler: wall time by inlined frame, the main thread apart from the workers, where instruction counts hide a slow call)
 - `ge profile --callgrind <lab>`
 - `ge lab <id> --toggle=<feature>` (a lab's passes timed with the feature on and off, one table)
@@ -145,6 +147,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 
 ## Hygiene
 
+- a shared CPU scene view in engine/lab (a camera, a lit raster with occlusion and a tone map over meshes) for labs that draw a model or a room without the GPU: brush detail's detail_view.cpp is the third lab-local renderer of its kind
 - a `ge` older than the base saying so (the commands main has that this build lacks, and `git merge origin/main` as the next step): a branch cut before `ge goals free` landed scanned branches by hand
 - `ge build` and `ge lab` warning when the labs binary is older than a library it links
 - `ge deps fetch`

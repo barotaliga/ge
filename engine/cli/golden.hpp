@@ -28,7 +28,8 @@
 // is not a digest's or a hash's is shown as the double its bits are too.
 //
 // ge:summary ge digest, ge golden diff and ge golden write: a lab's baseline, a golden's moves
-// ge:keywords cli ge digest golden diff write baseline labs_digests tests-digests golden-tables columns moved
+// ge:keywords cli ge digest golden diff write baseline labs_digests tests-digests golden-tables
+// ge:keywords columns moved
 // ge:keywords ge_golden_write run_digest run_golden_diff run_golden_write diff_golden
 // ge:skill agent-interface
 // ge:test tests/cli_golden_test.cpp
