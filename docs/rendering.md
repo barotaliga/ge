@@ -983,6 +983,9 @@ The GPU draws the same list in one pass after post, blended over the display ima
 - **Measured.** The `menu-gpu` lab holds every page of the `menu` lab to the raster: on lavapipe,
   none is more than 3 levels off at any pixel. Preparing a 1280 × 720 page costs about 1.7 ms of
   CPU, and the software adapter draws it in 19 ms. The real GPU's cost waits for the Mac.
+- **In Fall Line's frame (M21d)** it is the pass table's last row, `ui` (reads and writes
+  `final`), drawn when the frame's scene hands it a list (`FrameScene::overlay`): the window
+  hands it the console's every frame. With no list, the row runs empty and keeps its timing row.
 
 **Shapes (M22e).** A HUD's instruments need more than boxes, so the draw list has five kinds of
 command, every one a quad in the same instanced draw with its own signed distance:
