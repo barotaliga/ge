@@ -54,25 +54,22 @@ using DirKey = std::tuple<int64_t, int64_t, int64_t>;
 
 }  // namespace
 
-std::vector<Curve> find_curves(const Level& level, const CurveOptions& o) {
-  // The visible faces of the solid brushes, each a polygon.
+std::vector<Curve> find_curves(const Level& level, const BrushMesh& mesh, const CurveOptions& o) {
+  // The drawn triangles of the solid brushes (what CSG left of their faces), each a polygon.
   std::vector<Poly> polys;
-  for (size_t b = 0; b < level.brushes.size(); ++b) {
-    if (level.brushes[b].contents != Contents::solid) continue;
-    for (Polygon& pg : brush_polygons(level, b)) {
-      const Face& f = level.faces[pg.face];
-      if (f.hidden) continue;
-      Poly p;
-      p.face = pg.face;
-      p.n = {f.n[0], f.n[1], f.n[2]};
-      const size_t n = pg.xyz.size() / 3;
-      for (size_t v = 0; v < n; ++v) {
-        p.pts.push_back({pg.xyz[v * 3], pg.xyz[v * 3 + 1], pg.xyz[v * 3 + 2]});
-        p.mid = {p.mid.x + pg.xyz[v * 3] / double(n), p.mid.y + pg.xyz[v * 3 + 1] / double(n),
-                 p.mid.z + pg.xyz[v * 3 + 2] / double(n)};
-      }
-      polys.push_back(std::move(p));
+  for (size_t t = 0; t < mesh.triangles(); ++t) {
+    if (mesh.hidden[t] || mesh.contents[t] != Contents::solid) continue;
+    const Face& f = level.faces[mesh.face[t]];
+    Poly p;
+    p.face = mesh.face[t];
+    p.n = {f.n[0], f.n[1], f.n[2]};
+    for (size_t k = 0; k < 3; ++k) {
+      const size_t v = mesh.idx[t * 3 + k];
+      const V3 q{double(mesh.pos[v * 3]), double(mesh.pos[v * 3 + 1]), double(mesh.pos[v * 3 + 2])};
+      p.pts.push_back(q);
+      p.mid = {p.mid.x + q.x / 3, p.mid.y + q.y / 3, p.mid.z + q.z / 3};
     }
+    polys.push_back(std::move(p));
   }
   // Every edge filed under its direction (signed to point the same way), with the line's nearest
   // point to the origin; edges are on one line when those points lie within `line_tol_m`.

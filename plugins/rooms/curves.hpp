@@ -3,7 +3,7 @@
 // of convex brushes can only facet a curve; the facets meet edge to edge along one direction (the
 // curve's AXIS) at shallow creases, all bending the same way. That is what is looked for:
 //
-//   - the visible faces (not hidden) of solid brushes, each as its own polygon;
+//   - the drawn triangles of solid brushes (what CSG leaves of their visible faces);
 //   - pairs with edges on one line, overlapping or end to end (staggered slices), linked when their
 //   normals are a shallow crease apart
 //     (`min_crease_deg` to `max_crease_deg`, 3 and 50 by default) or lie in one plane (a facet cut
@@ -63,8 +63,11 @@ struct Curve {
   std::vector<uint32_t> faces;   // into Level::faces, ascending
 };
 
-// Every run of faces in `level` that facets a curve, in the order of their lowest face.
-std::vector<Curve> find_curves(const Level& level, const CurveOptions& options = {});
+// Every run of faces in `level` that facets a curve, in the order of their lowest face, read off
+// `mesh` (the level's `build_brushes`: only what CSG leaves of a face is seen, so a face buried
+// between two brushes is not taken for a curve).
+std::vector<Curve> find_curves(const Level& level, const BrushMesh& mesh,
+                               const CurveOptions& options = {});
 
 // `mesh` (the level's `build_brushes`) with every curve's faces drawn round (round.cpp): each
 // triangle cut where the curve turns through a multiple of `segment_deg`, every corner moved onto

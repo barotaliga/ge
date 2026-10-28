@@ -99,39 +99,28 @@ lab::Shape shape_of(const rm::BrushMesh& m, bool cut = false) {
   return s;
 }
 
-// The faces of every curve as a shape, each in the highlight material after the level's own
-// (`base` convex, `base + 1` concave), lifted 2 cm off its face so it draws over it.
-lab::Shape curves_shape(const rm::Level& level, const std::vector<rm::Curve>& curves,
-                        uint8_t base) {
+// The drawn triangles of every curve as a shape, each in the highlight material after the
+// level's own (`base` convex, `base + 1` concave), lifted 2 cm off its face so it draws over it.
+lab::Shape curves_shape(const rm::Level& level, const rm::BrushMesh& mesh,
+                        const std::vector<rm::Curve>& curves, uint8_t base) {
   std::vector<int8_t> kind(level.faces.size(), -1);
-  std::vector<uint8_t> brush_has(level.brushes.size(), 0);
   for (const rm::Curve& c : curves) {
     for (const uint32_t f : c.faces) kind[f] = c.concave ? 1 : 0;
   }
-  for (size_t b = 0; b < level.brushes.size(); ++b) {
-    const rm::Brush& br = level.brushes[b];
-    for (uint32_t f = br.first_face; f < br.first_face + br.faces; ++f) {
-      if (kind[f] >= 0) brush_has[b] = 1;
-    }
-  }
   lab::Shape s;
-  for (size_t b = 0; b < level.brushes.size(); ++b) {
-    if (!brush_has[b]) continue;
-    for (const rm::Polygon& pg : rm::brush_polygons(level, b)) {
-      if (kind[pg.face] < 0) continue;
-      const rm::Face& f = level.faces[pg.face];
-      const size_t n = pg.xyz.size() / 3;
-      for (size_t k = 1; k + 1 < n; ++k) {
-        for (const size_t v : {size_t(0), k, k + 1}) {
-          s.idx.push_back(uint32_t(s.part.size()));
-          for (size_t a = 0; a < 3; ++a) {
-            s.pos.push_back(float(pg.xyz[v * 3 + a] + f.n[a] * 0.02));
-            s.nrm.push_back(float(f.n[a]));
-          }
-          s.part.push_back(uint8_t(base + uint8_t(kind[pg.face])));
-          s.top.push_back(0);
-        }
+  for (size_t t = 0; t < mesh.triangles(); ++t) {
+    const uint32_t face = mesh.face[t];
+    if (kind[face] < 0 || mesh.hidden[t]) continue;
+    const rm::Face& f = level.faces[face];
+    for (size_t k = 0; k < 3; ++k) {
+      const size_t v = size_t(mesh.idx[t * 3 + k]) * 3;
+      s.idx.push_back(uint32_t(s.part.size()));
+      for (size_t a = 0; a < 3; ++a) {
+        s.pos.push_back(float(double(mesh.pos[v + a]) + f.n[a] * 0.02));
+        s.nrm.push_back(float(f.n[a]));
       }
+      s.part.push_back(uint8_t(base + uint8_t(kind[face])));
+      s.top.push_back(0);
     }
   }
   return s;
@@ -425,7 +414,7 @@ void run(lab::Lab& lab) {
 
     // The runs of faces that facet an arch or a pillar (curves.hpp).
     t0 = std::chrono::steady_clock::now();
-    const std::vector<rm::Curve> curves = rm::find_curves(level);
+    const std::vector<rm::Curve> curves = rm::find_curves(level, mesh);
     const double curves_ms = ms_since(t0);
     size_t pillars = 0, arches = 0, round = 0;
     for (const rm::Curve& c : curves) {
@@ -563,7 +552,7 @@ void run(lab::Lab& lab) {
       hm.materials.push_back(convex);
       hm.materials.push_back(concave);
       lab::Shape painted = shape;
-      const lab::Shape hl = curves_shape(level, curves, base);
+      const lab::Shape hl = curves_shape(level, mesh, curves, base);
       const uint32_t at = uint32_t(painted.part.size());
       painted.pos.insert(painted.pos.end(), hl.pos.begin(), hl.pos.end());
       painted.nrm.insert(painted.nrm.end(), hl.nrm.begin(), hl.nrm.end());

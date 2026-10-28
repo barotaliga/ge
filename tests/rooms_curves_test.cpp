@@ -51,7 +51,8 @@ TEST(an_eight_sided_pillar_is_one_convex_run_round_its_axis) {
     text += face(nx, 0, nz, nx * 3 + nz * 2 + 0.5);
   }
   text += face(0, 1, 0, 3) + face(0, -1, 0, 0) + "\n";
-  const std::vector<rm::Curve> curves = rm::find_curves(parse(text));
+  const rm::Level level = parse(text);
+  const std::vector<rm::Curve> curves = rm::find_curves(level, rm::build_brushes(level, 1));
   CHECK(curves.size() == 1);
   if (curves.size() != 1) return;
   const rm::Curve& c = curves[0];
@@ -82,7 +83,8 @@ TEST(a_half_round_arch_of_wedge_cells_is_one_concave_run) {
     text += face(ux, uy, 0, uy * cy + 2, true);                              // inside 2 m
     text += face(0, 0, 1, 1, true) + face(0, 0, -1, 0, true) + "\n";
   }
-  const std::vector<rm::Curve> curves = rm::find_curves(parse(text));
+  const rm::Level level = parse(text);
+  const std::vector<rm::Curve> curves = rm::find_curves(level, rm::build_brushes(level, 1));
   CHECK(curves.size() == 1);
   if (curves.size() != 1) return;
   const rm::Curve& c = curves[0];
@@ -99,10 +101,11 @@ TEST(a_plain_box_room_has_no_curves) {
   const std::string text = box(-0.5, -0.5, -0.5, 8.5, 0, 8.5) + box(-0.5, 0, -0.5, 0, 3, 8.5) +
                            box(8, 0, -0.5, 8.5, 3, 8.5) + box(0, 0, -0.5, 8, 3, 0) +
                            box(0, 0, 8, 8, 3, 8.5) + box(-0.5, 3, -0.5, 8.5, 3.5, 8.5);
-  CHECK(rm::find_curves(parse(text)).empty());
+  const rm::Level level = parse(text);
+  CHECK(rm::find_curves(level, rm::build_brushes(level, 1)).empty());
 }
 
-TEST(a_pillar_drawn_round_lies_on_its_circle_with_round_normals) {
+TEST(a_pillar_drawn_round_lies_on_its_circle_and_its_caps_gap_is_filled) {
   std::string text = "brush solid\n";
   for (int k = 0; k < 8; ++k) {
     const double a = k * kPi / 4;
@@ -111,7 +114,7 @@ TEST(a_pillar_drawn_round_lies_on_its_circle_with_round_normals) {
   }
   text += face(0, 1, 0, 3) + face(0, -1, 0, 0) + "\n";
   const rm::Level level = parse(text);
-  const std::vector<rm::Curve> curves = rm::find_curves(level);
+  const std::vector<rm::Curve> curves = rm::find_curves(level, rm::build_brushes(level, 1));
   CHECK(curves.size() == 1);
   if (curves.size() != 1) return;
   const rm::BrushMesh flat = rm::build_brushes(level, 1);
@@ -120,18 +123,82 @@ TEST(a_pillar_drawn_round_lies_on_its_circle_with_round_normals) {
   CHECK_MSG(round.triangles() > flat.triangles() * 4,
             std::to_string(flat.triangles()) + " -> " + std::to_string(round.triangles()));
   const double corner = 0.5 / std::cos(kPi / 8);
-  double worst = 0, worst_n = 0;
+  double worst = 0;
+  size_t surface = 0, fills = 0;
   for (size_t t = 0; t < round.triangles(); ++t) {
     if (level.faces[round.face[t]].n[1] != 0) continue;  // the caps stay flat
+    // The round surface's triangles are shaded with the cylinder's normal, out of the axis; the
+    // strips that fill the gap at a cap are not.
+    bool radial = true;
+    for (size_t k = 0; k < 3; ++k) {
+      const size_t v = round.idx[t * 3 + k];
+      const double dx = round.pos[v * 3] - 3, dz = round.pos[v * 3 + 2] - 2;
+      const double r = std::sqrt(dx * dx + dz * dz);
+      radial =
+          radial && std::fabs(round.nrm[v * 3 + 1]) < 1e-6 &&
+          std::fabs(round.nrm[v * 3] - dx / r) + std::fabs(round.nrm[v * 3 + 2] - dz / r) < 1e-4;
+    }
+    if (!radial) {
+      ++fills;
+      continue;
+    }
+    ++surface;
     for (size_t k = 0; k < 3; ++k) {
       const size_t v = round.idx[t * 3 + k];
       const double dx = round.pos[v * 3] - 3, dz = round.pos[v * 3 + 2] - 2;
       worst = std::max(worst, std::fabs(std::sqrt(dx * dx + dz * dz) - corner));
-      const double r = std::sqrt(dx * dx + dz * dz);
-      worst_n = std::max(
-          worst_n, std::fabs(round.nrm[v * 3] - dx / r) + std::fabs(round.nrm[v * 3 + 2] - dz / r));
     }
   }
+  CHECK_MSG(surface >= 8 * 6 * 2, "surface " + std::to_string(surface));
+  CHECK_MSG(fills > 0, "no strip fills the gap at the caps");
   CHECK_MSG(worst < 1e-5, "off the circle by " + std::to_string(worst));
-  CHECK_MSG(worst_n < 1e-4, "normal off by " + std::to_string(worst_n));
+}
+
+TEST(an_arch_drawn_round_lies_on_its_circle_facing_the_opening_its_ends_filled) {
+  std::string text;
+  const double cy = 2;
+  for (int k = 0; k < 6; ++k) {
+    const double a0 = k * kPi / 6, a1 = (k + 1) * kPi / 6, am = (a0 + a1) / 2;
+    const double ux = std::cos(am), uy = std::sin(am);
+    const double apothem = std::cos(kPi / 12);
+    text += "brush solid\n";
+    text += face(-ux, -uy, 0, -(uy * cy) - apothem);
+    text += face(std::sin(a0), -std::cos(a0), 0, -std::cos(a0) * cy, true);
+    text += face(-std::sin(a1), std::cos(a1), 0, std::cos(a1) * cy, true);
+    text += face(ux, uy, 0, uy * cy + 2, true);
+    text += face(0, 0, 1, 1, true) + face(0, 0, -1, 0, true) + "\n";
+  }
+  const rm::Level level = parse(text);
+  const std::vector<rm::Curve> curves = rm::find_curves(level, rm::build_brushes(level, 1));
+  CHECK(curves.size() == 1);
+  if (curves.size() != 1) return;
+  const rm::BrushMesh flat = rm::build_brushes(level, 1);
+  const rm::BrushMesh round = rm::round_curves(level, flat, curves, 7.5);
+  size_t drawn = 0, fills = 0;
+  double worst = 0;
+  for (size_t t = 0; t < round.triangles(); ++t) {
+    if (round.hidden[t]) continue;
+    // The soffit's triangles face the axis (into the opening); the strips that fill the gap at
+    // its ends and springings do not.
+    bool facing = true;
+    for (size_t k = 0; k < 3; ++k) {
+      const size_t v = round.idx[t * 3 + k];
+      const double dx = round.pos[v * 3], dy = round.pos[v * 3 + 1] - 2;
+      const double r = std::sqrt(dx * dx + dy * dy);
+      facing = facing && -(round.nrm[v * 3] * dx + round.nrm[v * 3 + 1] * dy) / r > 0.9999;
+    }
+    if (!facing) {
+      ++fills;
+      continue;
+    }
+    ++drawn;
+    for (size_t k = 0; k < 3; ++k) {
+      const size_t v = round.idx[t * 3 + k];
+      const double dx = round.pos[v * 3], dy = round.pos[v * 3 + 1] - 2;
+      worst = std::max(worst, std::fabs(std::sqrt(dx * dx + dy * dy) - 1));
+    }
+  }
+  CHECK_MSG(drawn >= 12, "drawn " + std::to_string(drawn));
+  CHECK_MSG(worst < 1e-5, "off the circle by " + std::to_string(worst));
+  CHECK_MSG(fills > 0, "no strip fills the gap at the ends");
 }
