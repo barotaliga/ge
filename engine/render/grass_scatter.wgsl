@@ -8,6 +8,7 @@
 // indirect draw; `clamp` then holds each count to the list's capacity.
 #include "render/wgsl/frame.wgsl"
 #include "render/wgsl/grass_common.wgsl"
+#include "render/wgsl/grass_scatter_common.wgsl"
 
 struct DrawArgs {
   vertex_count: u32,

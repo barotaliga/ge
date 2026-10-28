@@ -17,6 +17,9 @@
 //   short for a springy lawn, long for long soft grass that keeps a path walked through it.
 // - THE COLOUR: linear RGB at the root and at the tip, and a `dry` share of blades turned to
 //   `dry_tip`, so a meadow in late summer is not one green.
+// - FLOWERS AND SEED HEADS: a `flowers` share of blades topped by a head `flower_size` m across
+//   in `flower` (or, for `flower2_share` of them, `flower2`), and a `seeds` share whose top
+//   `seed_length` of the blade is a seed head in `seed`, swelling and tapering again.
 //
 // PRESETS (`preset`): `lawn` (short, thin, dense), `meadow` (shin high), `long` (knee to thigh
 // high, soft), `tussock` (clumped and tufted), `steppe` (dry, thin, wiry), `reeds` (tall, stiff,
@@ -24,9 +27,10 @@
 // `ge` command line write: `meadow height=0.6 density=300 width=0.004 dry=0.2`. `print_kind`
 // writes the canonical recipe back, every field that differs from its preset.
 //
-// ge:summary Kinds of grass: blade height, width, density, lean, clumps, give, sway, colours
+// ge:summary Kinds of grass: blade height, width, density, lean, clumps, give, sway, colours, heads
 // ge:keywords grass kind preset recipe lawn meadow long-grass tussock steppe reeds density
-// ge:keywords tall short thick thin clump give sway spring parse_kind print_kind
+// ge:keywords tall short thick thin clump give sway spring parse_kind print_kind flowers seeds
+// ge:keywords seed-head flower-head
 // ge:skill grass
 // ge:test tests/grass_kind_test.cpp
 #pragma once
@@ -56,6 +60,14 @@ struct Kind {
   std::array<float, 3> tip{0.180f, 0.300f, 0.060f};   // linear RGB at the tip
   float dry = 0.08f;                                  // the share of blades dried
   std::array<float, 3> dry_tip{0.42f, 0.36f, 0.14f};  // a dried blade's tip
+  float flowers = 0;                                  // the share of blades in flower
+  float flower_size = 0.035f;                         // m, a flower's head across
+  std::array<float, 3> flower{0.80f, 0.60f, 0.04f};   // linear RGB of a flower's head
+  float flower2_share = 0.5f;                         // the share of flowers in `flower2`
+  std::array<float, 3> flower2{0.80f, 0.80f, 0.74f};  // a second flower's
+  float seeds = 0;                                    // the share of blades in seed
+  float seed_length = 0.3f;                           // the seed head's share of its blade
+  std::array<float, 3> seed{0.36f, 0.30f, 0.15f};     // linear RGB of a seed head
 };
 
 // The named presets, in a fixed order (their ids in a cover).
@@ -65,7 +77,8 @@ std::span<const Kind> presets();
 std::optional<Kind> preset(std::string_view name);
 
 // A recipe: a preset's name, then `field=value` words (height, height_jitter, width, density,
-// lean, lean_jitter, clump, pull, give, sway, spring, dry; root, tip and dry_tip as `r,g,b`). On a
+// lean, lean_jitter, clump, pull, give, sway, spring, dry, flowers, flower_size, flower2_share,
+// seeds, seed_length; root, tip, dry_tip, flower, flower2 and seed as `r,g,b`). On a
 // fault, nothing, with `error` set to what is wrong and what to write instead.
 std::optional<Kind> parse_kind(std::string_view recipe, std::string* error = nullptr);
 

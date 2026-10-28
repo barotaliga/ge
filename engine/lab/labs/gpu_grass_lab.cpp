@@ -10,7 +10,7 @@
 //
 // ge:summary Lab: the grass drawn: meadow, kinds, wind, sway, backlight, reach, trampled, floors
 // ge:keywords lab gpu grass meadow kinds wind sway backlight translucency reach thinning terrace
-// ge:keywords picture software-adapter blades trample path wheel-track
+// ge:keywords picture software-adapter blades trample path wheel-track flowers seed-heads
 // ge:skill grass render labs
 // ge:test tests/render_grass_test.cpp
 #include <algorithm>
@@ -286,8 +286,8 @@ void run(gl::Lab& lab) {
   const uint32_t w = static_cast<uint32_t>(lab.arg_num("width"));
   const uint32_t h = w * 9 / 16;
   auto device = ge::gpu::create_device({.label = "gpu-grass", .validation = 1});
-  const std::vector<std::string> ids = {"meadow", "kinds",      "wind",     "sway",  "backlit",
-                                        "reach",  "from-above", "trampled", "floors"};
+  const std::vector<std::string> ids = {"meadow",  "kinds", "heads",      "wind",     "sway",
+                                        "backlit", "reach", "from-above", "trampled", "floors"};
   if (!device) {
     if (gpu_required()) {
       lab.fail("no GPU device, and GE_GPU_REQUIRE=1",
@@ -357,6 +357,31 @@ void run(gl::Lab& lab) {
               "the lawn a short dense carpet, the meadow shin high, the long grass knee to thigh "
               "high and soft, the tussock in tufts, the steppe thin and straw-coloured, the reeds "
               "tall, sparse and upright",
+              {}},
+             sheet(pics, labels, 3), gl::Det::measured);
+  }
+
+  // HEADS: flowers and seed heads, close to.
+  {
+    std::vector<gl::Picture> pics;
+    std::vector<std::string> labels;
+    const auto light = air_of(2, 1.5 * kPi);
+    for (const char* name : {"meadow", "long", "reeds"}) {
+      const gg::Kind k = named(name);
+      gr::set_grass_cover(d, s.grass, meadow_cover(s, {k}, ex, ez + 6, 12, true));
+      const double up = eye_y - 1.6 + std::max(0.9, static_cast<double>(k.height) + 0.5);
+      pics.push_back(
+          draw(d, s, view_at(ex, up, ez, 0.25, -0.45, 0.6, 2.4, 0), light->air, 7, true));
+      labels.push_back(name);
+    }
+    lab.shot({"heads",
+              "FLOWERS AND SEED HEADS",
+              "The meadow, the long grass and the reeds from just above their tops, looking down "
+              "into them: a share of the blades of each kind ends in a flower head (the meadow's "
+              "yellow and white, the long grass's purple and white) or a seed head (swelling over "
+              "the top of the blade and tapering again; the reeds' dark plumes).",
+              "flowers scattered over the meadow's top, a few in the long grass, seed heads on "
+              "the long grass and the reeds; none of them floating free of a blade",
               {}},
              sheet(pics, labels, 3), gl::Det::measured);
   }

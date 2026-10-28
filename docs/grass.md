@@ -43,17 +43,20 @@ A kind (`grass::Kind`) is a handful of numbers: the blade's height and how much 
 width at the root, the blades a square metre (`density`), the rest lean, the clumps (`clump`:
 their size; `pull`: how far a blade leans toward its clump's middle), the wind's `give` (the
 speed at the blade's height that bends it halfway) and its own `sway` frequency, and the colours
-(root, tip, a `dry` share turned to `dry_tip`). Tall or short is `height`, thick or thin is
-`density` and `width`.
+(root, tip, a `dry` share turned to `dry_tip`), how long a trampled blade takes to stand up
+(`spring`), and its **heads**: a `flowers` share of blades topped by a cup `flower_size` m
+across in `flower` (or, for `flower2_share` of them, `flower2`), and a `seeds` share whose top
+`seed_length` of the blade swells into a seed head in `seed`. Tall or short is `height`, thick or
+thin is `density` and `width`.
 
-| Preset | Height | Width | Blades/m² | Give | Sway | What it is |
-| --- | --- | --- | --- | --- | --- | --- |
-| `lawn` | 0.07 m | 3 mm | 900 | 11 m/s | 2.8 Hz | short, dense, stiff |
-| `meadow` | 0.35 m | 5 mm | 400 | 6 m/s | 1.6 Hz | shin high, some dry |
-| `long` | 0.85 m | 7 mm | 220 | 3.5 m/s | 0.9 Hz | knee to thigh high, soft |
-| `tussock` | 0.5 m | 4 mm | 450 | 5 m/s | 1.3 Hz | tufts, strongly clumped |
-| `steppe` | 0.45 m | 2.5 mm | 300 | 7 m/s | 1.4 Hz | thin, wiry, mostly dry |
-| `reeds` | 1.6 m | 12 mm | 90 | 9 m/s | 0.6 Hz | tall, stiff, sparse |
+| Preset | Height | Width | Blades/m² | Give | Sway | Spring | Heads | What it is |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `lawn` | 0.07 m | 3 mm | 900 | 11 m/s | 2.8 Hz | 3 s | none | short, dense, stiff |
+| `meadow` | 0.35 m | 5 mm | 400 | 6 m/s | 1.6 Hz | 8 s | 6 % yellow and white flowers, 6 % seed | shin high, some dry |
+| `long` | 0.85 m | 7 mm | 220 | 3.5 m/s | 0.9 Hz | 25 s | 2 % purple and white flowers, 20 % seed | knee to thigh high, soft |
+| `tussock` | 0.5 m | 4 mm | 450 | 5 m/s | 1.3 Hz | 12 s | 1 % flowers, 12 % seed | tufts, strongly clumped |
+| `steppe` | 0.45 m | 2.5 mm | 300 | 7 m/s | 1.4 Hz | 15 s | 30 % straw seed | thin, wiry, mostly dry |
+| `reeds` | 1.6 m | 12 mm | 90 | 9 m/s | 0.6 Hz | 5 s | 35 % dark plumes | tall, stiff, sparse |
 
 A **recipe** is a preset's name and overrides, the form a level file and the command line
 write: `meadow height=0.6 density=300 width=0.004 dry=0.2`. `parse_kind` reads one and names
@@ -166,7 +169,7 @@ cast onto it: the blades read the shadow maps.
 kind's `far_colour` (the blades' mean as seen from afar, darkened by the field's own shade), so
 the field thins into a ground of its own colour with no ring.
 
-On the software adapter the `gpu-grass` lab's nine views (about 130,000 blades each at 480 ×
+On the software adapter the `gpu-grass` lab's ten views (about 130,000 blades each at 480 ×
 270) take about 11 s together.
 
 ## Rows
@@ -175,6 +178,6 @@ On the software adapter the `gpu-grass` lab's nine views (about 130,000 blades e
 | --- | --- | --- |
 | M34a | Kinds, covers, the scatter and the sway on the CPU; the `grass` lab | done |
 | M34b | The grass drawn: the scatter pass, thinning, the blades, the light; the `gpu-grass` lab | done |
-| M34c | The rest of the look: blades pressed down by what walks or drives through them and springing back (a trample map), the canopy's own shade from the sun, flowers and seed heads, the sway's own motion vectors, a stop on the picture's quality ladder priced | in progress: trampling, motion vectors and the canopy's shade built |
+| M34c | The rest of the look: blades pressed down by what walks or drives through them and springing back (a trample map), the canopy's own shade from the sun, flowers and seed heads, the sway's own motion vectors, a stop on the picture's quality ladder priced | in progress: trampling, motion vectors, the canopy's shade, flowers and seed heads built |
 | M34d | A level's grass: a room format material's `surface <material> grass <recipe>` line and a cloned classic map's grass-textured faces (the cloner's texture map, `*grass*` to a meadow by default) grown into covers by the builders (`plugins/rooms`, `plugins/brush`, with M32) | open |
 | M34e | Fall Line's summer grass: the summer ground's meadows, pastures and runs as covers, the rotor's downwash flattening them | open |

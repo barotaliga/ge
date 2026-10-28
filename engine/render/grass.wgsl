@@ -9,7 +9,8 @@
 // toward the root (a dense field shades its own floor), and a faint sheen. Hazed. A blade pressed
 // underfoot (grass_common.wgsl's `press_at`) lies along the press's way, on top of the field, so
 // it is lit to its root and shows its paler back; the fine blades' motion vectors carry their own
-// sway since the last frame, so temporal anti-aliasing keeps a waving field sharp.
+// sway since the last frame, so temporal anti-aliasing keeps a waving field sharp. Some blades
+// end in a flower or a seed head (`blade_head`).
 #include "render/wgsl/frame.wgsl"
 #include "render/wgsl/terrain_common.wgsl"
 #include "render/wgsl/sun_shadow.wgsl"
@@ -41,6 +42,41 @@ struct VertexOut {
                                                 // relative to this frame's eye
   @location(6) @interpolate(flat) pressed: f32,  // 0..1, how flat it is pressed (lies on top)
   @location(7) sunlit: f32,                      // the share of the sun the canopy lets through
+  @location(8) @interpolate(flat) head: vec4f,   // the head's rgb, and where it starts along
+}
+
+// A blade's head (`k.root.w` of the blades in flower, `k.tip.w` in seed): its colour, where it
+// starts along the blade (2: none), and the width at `u`. A flower's head is the blade's top
+// `k.flower.w` m, a cup opening to a little more than that across; a seed head swells over the top `k.seed.w` of the blade
+// and tapers again.
+struct Head {
+  colour: vec4f,
+  width: f32,
+}
+
+fn blade_head(k: GrassKind, b: Blade, u: f32, width: f32) -> Head {
+  var h = Head(vec4f(0.0, 0.0, 0.0, 2.0), width);
+  let hh = grass_hash(b.seed ^ 0x9e3779b9u);
+  let pick = grass_unit(hh);
+  if (pick < k.root.w) {
+    var c = k.flower.xyz;
+    if (grass_unit(grass_hash(hh)) < k.flower2.w) {
+      c = k.flower2.xyz;
+    }
+    // The head is the blade's top `k.flower.w` m, a cup opening from the stem to its rim.
+    let foot = 1.0 - k.flower.w / max(b.height, 1e-3);
+    h.colour = vec4f(c, foot - 1e-3);
+    if (u > 0.999) {
+      h.width = max(width, 1.2 * k.flower.w);
+    }
+  } else if (pick < k.root.w + k.tip.w) {
+    let start = 1.0 - k.seed.w;
+    h.colour = vec4f(k.seed.xyz, start);
+    if (u > start) {
+      h.width = max(width, b.width * 2.5 * sin(3.14159265 * (u - start) / k.seed.w));
+    }
+  }
+  return h;
 }
 
 // The field's own shade (docs/grass.md § Drawn): the sun reaching a point of a blade crosses the
@@ -66,7 +102,12 @@ fn blade_vertex(b: Blade, vid: u32, segments: u32, moving: bool) -> VertexOut {
   let s = blade_shape(k, b, air, t, press);
   let seg = vid / 2u;
   let side = f32(vid & 1u) * 2.0 - 1.0;
-  let u = min(f32(seg) / f32(segments), 1.0);
+  var u = min(f32(seg) / f32(segments), 1.0);
+  // A flower's last segment is its head alone: its lower edge moved up to the head's foot.
+  let flowering = grass_unit(grass_hash(b.seed ^ 0x9e3779b9u)) < k.root.w;
+  if (flowering && seg + 1u == segments) {
+    u = max(u, 1.0 - k.flower.w / max(b.height, 1e-3));
+  }
   let p = bezier_at(s, u);
   var moved = vec3f(0.0);
   if (moving) {
@@ -90,7 +131,8 @@ fn blade_vertex(b: Blade, vid: u32, segments: u32, moving: bool) -> VertexOut {
   across = normalize(mix(across, view_side * sign(dot(view_side, across) + 1e-6), edge * 0.6));
   // Never under about a pixel across, so the far field keeps its cover and does not alias away.
   let pixel = length(rel_p) * 2.0 / (frame.size.y * abs(frame.view_proj[1][1]));
-  let width = max(b.width * (1.0 - u * u), pixel * 0.7 * (1.0 - u));
+  let head = blade_head(k, b, u, b.width * (1.0 - u * u));
+  let width = max(head.width, pixel * 0.7 * (1.0 - u));
   let corner = rel_p + across * (side * 0.5 * width);
   out.position = frame.view_proj * vec4f(corner, 1.0);
   out.rel = corner;
@@ -108,6 +150,7 @@ fn blade_vertex(b: Blade, vid: u32, segments: u32, moving: bool) -> VertexOut {
   let shade = 0.8 + 0.4 * grass_unit(grass_hash(hc));
   out.colour = tip * shade;
   out.root = k.root.xyz * shade;
+  out.head = vec4f(head.colour.xyz * shade, head.colour.w);
   return out;
 }
 
@@ -142,7 +185,10 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   // A pressed blade lies on top of the field, open to the sky along its whole length and showing
   // its paler back: it is shaded as its tip is, and lighter.
   let open = max(in.along, in.pressed);
-  let albedo = mix(in.root, in.colour, pow(open, 0.7)) * (1.0 + 0.25 * in.pressed);
+  var albedo = mix(in.root, in.colour, pow(open, 0.7)) * (1.0 + 0.25 * in.pressed);
+  if (in.along >= in.head.w) {
+    albedo = in.head.xyz;
+  }
   // A dense field shades its own floor from the sky: it reaches the root a quarter as well as the
   // tip.
   let floor_shade = mix(0.25, 1.0, smoothstep(0.0, 0.9, open));
