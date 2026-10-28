@@ -85,32 +85,25 @@ struct View {
   double heading = 0, pitch = 0;
 };
 
-// The sky of the views: the map's picked sky (its type, its hour, its sun's strength and its
-// heaps), with --sun and --clouds over it when they are given.
+// The sky of the views: the map's picked sky (its type, its hour, its moon, its wind and its
+// layers at time `t`; bsp_sky.hpp's dress_sky), with --sun and --clouds over it when they are
+// given (at night --clouds is the deck's cover, the scud's three quarters of it).
 void dress(gr::FrameView& v, const ba::SkyPick& sky, const std::vector<double>& sun, double cover,
-           double t) {
-  v.style = sky.style;
-  v.sun_elevation = (sun.size() > 0 ? sun[0] : sky.sun_elevation) * kDeg;
-  v.sun_azimuth = (sun.size() > 1 ? sun[1] : 220) * kDeg;
+           double top_y, double t) {
+  ba::SkyPick p = sky;
+  if (sun.size() > 0) p.sun_elevation = sun[0];
+  if (sun.size() > 1) p.sun_azimuth = sun[1];
+  if (cover >= 0) {
+    p.cover = cover;
+    p.deck_cover = cover;
+    p.scud_cover = 0.75 * cover;
+  }
+  ba::dress_sky(v, p, top_y, t);
   v.altitude_m = 100;  // a level near the sea: the dust's colour reads its altitude
-  v.time_s = t;
   v.fov_y = 1.25;
   v.near_m = 0.05;
-  if (cover < 0) cover = sky.cover;
-  if (cover > 0) {
-    v.clouds.count = 1;
-    gr::CloudLayer& l = v.clouds.layers[0];
-    l.base_m = 1500;
-    l.top_m = 2300;
-    l.cover = cover;
-    l.cell_m = sky.cell_m;
-    l.stretch = 1.3;
-    l.dome = 1;
-    l.density = 28.0 / 800;
-    l.shadow_tau = 2.4;
-    v.clouds.quarter = false;
-    v.clouds.spread = false;
-  }
+  v.clouds.quarter = false;
+  v.clouds.spread = false;
 }
 
 gl::Picture draw(ge::gpu::Device& d, Frame& f, MapState& m, const gr::FrameView& v,
@@ -121,6 +114,7 @@ gl::Picture draw(ge::gpu::Device& d, Frame& f, MapState& m, const gr::FrameView&
   gr::prepare_sky(f.sky, v);
   ba::Options lit = o;  // the sky's light and tint the map's
   lit.sky_light = m.sky.sky_light;
+  lit.sky_seen = m.sky.sky_seen;
   for (int k = 0; k < 3; ++k) lit.sky_tint[k] = m.sky.tint[k];
   ba::prepare_bsp(d, m.bsp, v, lit);
   const bool v2 = o.mode == ba::Mode::v2;
@@ -464,6 +458,8 @@ void run(gl::Lab& lab) {
       lab.arg("sun").empty() ? std::vector<double>{} : lab.arg_nums("sun");
   const double cover = lab.arg("clouds").empty() ? -1 : lab.arg_num("clouds");
   const double t = lab.arg_num("time");
+  const std::vector<double> at_times =
+      lab.arg("at").empty() ? std::vector<double>{} : lab.arg_nums("at");
 
   // ── The maps ──
   ba::Pack pack;
@@ -618,6 +614,16 @@ void run(gl::Lab& lab) {
                  "toxic (engine/render/sky_style.hpp).");
     }
   }
+  // The classic night over each map's pick (--night=0: the picked hour by day).
+  if (lab.arg("night") != "0") {
+    for (size_t i = 0; i < maps.size(); ++i) ba::night_over(maps[i]->sky, names[i]);
+  }
+  if (!lab.arg("adapt").empty()) {
+    for (auto& m : maps) m->sky.adapt_cd = lab.arg_num("adapt");
+  }
+  if (!lab.arg("seen").empty()) {
+    for (auto& m : maps) m->sky.sky_seen = lab.arg_num("seen");
+  }
   if (!lab.arg("skylight").empty()) {
     for (auto& m : maps) m->sky.sky_light = lab.arg_num("skylight");
   }
@@ -734,7 +740,7 @@ void run(gl::Lab& lab) {
     fv.heading = v.heading;
     fv.pitch = v.pitch;
     MapState& m = *maps[v.map];
-    dress(fv, m.sky, sun, cover, t);
+    dress(fv, m.sky, sun, cover, m.scene.maxs[1], t);
     std::vector<gl::Picture> pics;
     pics.reserve(ways.size());
     for (const Way& way : ways) pics.push_back(draw(d, f, m, fv, way.o));
@@ -755,6 +761,23 @@ void run(gl::Lab& lab) {
                {"heading", ls::fixed(v.heading / kDeg, 0)},
                {"pitch", ls::fixed(v.pitch / kDeg, 0)}}},
              sheet, Det::measured);
+    // The sequence: the same eye at each of --at's times, v2 lit in real time alone.
+    for (const double at : at_times) {
+      gr::FrameView tv = fv;
+      dress(tv, m.sky, sun, cover, m.scene.maxs[1], at);
+      if (lab.arg_bool("to-moon") && m.sky.night) {
+        // Turned to the moon through a longer lens, the scud crossing it.
+        tv.heading = m.sky.moon_azimuth * kDeg;
+        tv.pitch = m.sky.moon_elevation * kDeg;
+        tv.fov_y = 0.6;
+      }
+      lab.shot({v.id + "+" + ls::fixed(at, 2),
+                v.title + " at " + ls::fixed(at, 2) + " s",
+                v.caption + " V2 lit in real time, a frame of a sequence.",
+                "The layers drift on the wind between frames, the scud fastest.",
+                {{"t", ls::fixed(at, 2)}}},
+               draw(d, f, m, tv, ways[2].o), Det::measured);
+    }
     if (!skies.empty() && v.id.find(lab.arg("skies-on")) != std::string::npos) {
       std::vector<gl::Picture> panes;
       panes.reserve(skies.size());
@@ -762,7 +785,7 @@ void run(gl::Lab& lab) {
         gr::FrameView sv = fv;
         ba::SkyPick pick = m.sky;
         ba::with_type(pick, name);
-        dress(sv, pick, sun, cover, t);
+        dress(sv, pick, sun, cover, m.scene.maxs[1], t);
         panes.push_back(draw(d, f, m, sv, ways[2].o));
       }
       const int n = int(panes.size());
@@ -823,6 +846,14 @@ const gl::LabSpec kSpec{
      {"view", "", "more views: <map>:x,y,z,heading,pitch (m, degrees), separated by ;"},
      {"sun", "", "the sun's elevation and azimuth, degrees (none: each map's picked sky's)"},
      {"clouds", "", "the heaps' cover, 0..1, 0 a clear sky (none: each map's picked sky's)"},
+     {"night", "1", "the classic night over every map (0: the picked sky's hour by day)"},
+     {"seen", "",
+      "the night sky as seen through the sky faces against the rooms (none: the night's)"},
+     {"to-moon", "0", "the --at sequence turned to the moon through a longer lens (1: on)"},
+     {"adapt", "",
+      "the rooms' light the eye stays adapted to at night, cd/m^2 (none: the night's)"},
+     {"at", "",
+      "times to shoot each view at too, s, comma separated: v2 lit in real time, a sequence"},
      {"time", "20", "the views' time, s (the flicker, the liquids, the clouds)"},
      {"strength", "1", "the point lights' strength against the classic's"},
      {"shadowed", "32", "the nearest lights that cast shadows"},
