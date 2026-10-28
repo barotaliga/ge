@@ -19,7 +19,7 @@
 #   ge_wind      the wind as a pure function of place and time (engine/wind; docs/water.md)
 #   ge_water     bodies of water, the waves a wind grows on them and the one query (engine/water)
 #   ge_move      character movement (engine/move: the knobs and their cvars, the step, scenarios)
-#   ge_vfs       content files (engine/vfs: the pack archive, zips through ge_assets' inflate; search paths to come)
+#   ge_vfs       content files (engine/vfs: the pack archive and zips; search paths to come)
 #   ge_camera    the camera (engine/camera: poses, followers, rigs, shake, transitions, the stack)
 #   ge_play      the play contract (engine/play: GameSpec and Run, the session, the input log,
 #                the bench, the stills `ge shot` draws; engine/capture: the Matroska muxer and
@@ -235,8 +235,9 @@ file(GLOB GE_MOVE_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/m
 add_library(ge_move STATIC ${GE_MOVE_SOURCES})
 target_link_libraries(ge_move PUBLIC ge_core ge_console)
 
-# Content files (engine/vfs): the pack archive's checked directory and its files as views; the
-# rest of the virtual file system (search paths, zips, directories) lands with docs/goals.md M18a.
+# Content files (engine/vfs): the pack archive's checked directory and its files as views, and
+# zips (stored and deflated, read through ge_assets' inflate); the rest of the virtual file
+# system (search paths, directories) lands with docs/goals.md M18a.
 file(GLOB GE_VFS_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/vfs/*.cpp)
 add_library(ge_vfs STATIC ${GE_VFS_SOURCES})
 target_link_libraries(ge_vfs PUBLIC ge_core ge_assets)
