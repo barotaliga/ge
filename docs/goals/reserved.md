@@ -8,4 +8,3 @@ the same number twice. A row leaves this table in the pull request that adds it 
 | --- | --- |
 | M27 | **Bitmap font charsets** |
 | M28 | **Character movement physics** |
-| M42 | **Brush detail**: bevels on sharp brush edges, decals that age (scorch marks, bullet holes, blood that fades), seeded detail props (rubble, debris, moss) from rules on a level's structure |

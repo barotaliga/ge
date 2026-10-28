@@ -139,6 +139,11 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   river, a volume of hulls) and the one `sample` query everything reads, the sea a wind grows
   over each point's fetch and the components the simulation sums. It depends on `engine/core`
   and `engine/wind` and is simulation code (`docs/water.md`).
+- **`engine/detail`**: a level's surface detail (`ge::detail`, `docs/detail.md`): convex solids as
+  planes and the bevels on their exposed edges, a level's triangles binned for queries, decals
+  clipped onto them that age in a fixed pool, and props scattered over them by rules. It depends
+  on `engine/core` alone and is simulation code: a shot's hole and a seed's rubble are the same
+  bits everywhere, so a replay leaves the same marks.
 - **`engine/prof`**: the profiler (`ge::prof`): timing zones (`GE_ZONE("name")`, one relaxed
   load when no recording runs; a span with its depth, time and allocations when one does), their
   totals (a zone's own time and its children's), the counting `operator new` an executable
