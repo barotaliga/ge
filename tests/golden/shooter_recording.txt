@@ -1,8 +1,7 @@
 # THE CLASSIC MOVE'S RECORDINGS: the player move measured over hand-built worlds, the parity
 # target tests/shooter_recording_test.cpp and the pmove lab hold plugins/shooter to (format and
-# tolerance: plugins/shooter/recording.hpp). Measurements, never edited. One block was moved: the
-# scenario ramp_down_slidefix ran on the 30 degree ramp (it lands on that ramp's top at
-# 147.80 + 24 + 1/32) and now follows that scene, since a scenario runs on the scene before it.
+# tolerance: plugins/shooter/recording.hpp). Measurements, never edited; a scenario runs on the
+# scene before it.
 scene flat
 brush solid
 plane 1 0 0 4096

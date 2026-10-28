@@ -33,8 +33,8 @@ a game converts to the engine's y-up at its edges. `docs/shooters-edge.md` is th
   tolerance (today all 4033 agree in every printed digit); `tests/shooter_pmove_test.cpp` holds
   the move's own bits per scenario in `tests/golden/shooter_pmove.txt`. A deliberate change
   rewrites the second (`GE_GOLDEN_WRITE=1`) and must keep the first green; say why in the PR.
-- **The recordings are measurements.** `tests/golden/shooter_recording.txt` is never edited but
-  to move a scenario under the scene it was recorded on (its header says which was moved).
+- **The recordings are measurements.** `tests/golden/shooter_recording.txt` is never edited: a
+  scenario runs on the scene printed before it.
 - **Run the lab before and after** a change to the move or the hulls:
   `make lab LAB=pmove ARGS="--tag=before"`, then `--compare=before`; `--draw=<names>` picks the
   scenarios drawn. Rewrite its digest with `make ge ARGS="digest pmove --write"` when it moves.
