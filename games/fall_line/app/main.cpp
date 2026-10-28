@@ -44,9 +44,15 @@
 // virtual display: xvfb-run -a build/release/games/fall_line/fall_line --frames=60).
 // Escape or closing the window quits.
 //
+// THE CONSOLE: the key under the tilde drops it over the run (engine/console/view.hpp's model, fed
+// by ui/console_keys.hpp, drawn by ui/console.hpp through the frame's 2D pass); while it is down
+// the run reads no keys (the skier coasts), typed text goes to its input line, and Escape closes
+// it rather than quitting. Every line the console prints is in its scrollback and on stdout.
+//
 // ge:summary Fall Line's app: the window, the frame loop on the run clock, the GPU frame
 // ge:keywords app main frame-loop window vsync present run-clock frame-pace fall-line
 // ge:keywords camera-key camera-ladder player by-hand bindings rebind rumble input-log events
+// ge:keywords drop-down-console tilde overlay
 // ge:skill platform gpu render audio input
 #include <array>
 #include <cstdio>
@@ -64,6 +70,7 @@
 #include "audio/synth.hpp"
 #include "camera/to_view.hpp"
 #include "console/cfg.hpp"
+#include "console/view.hpp"
 #include "core/num_text.hpp"
 #include "core/output.hpp"
 #include "fall_line/app/frame.hpp"
@@ -92,6 +99,9 @@
 #include "platform/devices.hpp"
 #include "platform/window.hpp"
 #include "play/inputs.hpp"
+#include "ui/console.hpp"
+#include "ui/console_keys.hpp"
+#include "ui/draw.hpp"
 
 namespace {
 
@@ -198,7 +208,13 @@ int main(int argc, char** argv) {
   }
   // The settings: the cfgs, the --flags, the command line, then every latched value applied.
   ge::console::Console console;
-  console.set_sink([](std::string_view line) { out::status("console: " + std::string(line)); });
+  // The drop-down console over the run (its con_ cvars before the cfgs set them): every line the
+  // console prints is kept in its scrollback and printed to the terminal too.
+  ge::console::ConsoleView con_view(console);
+  console.set_sink([&con_view](std::string_view line) {
+    con_view.add(ge::console::LineKind::output, line);
+    out::status("console: " + std::string(line));
+  });
   fall_line::cfg::Settings set;
   fall_line::cfg::add_cvars(console, set);
   for (const std::string& cmd : args.sets) console.append(cmd);
@@ -313,6 +329,12 @@ int main(int argc, char** argv) {
   ge::input::InputState held;
   ge::input::EventLog session;
   fall_line::controls::Rebinding rebinding;
+  // The console at the keyboard: while it is down the run reads no keys (an idle state).
+  ge::ui::ConsoleKeys con_keys;
+  const ge::input::InputState idle;
+  bool text_on = false;
+  ge::ui::DrawList overlay;
+  uint32_t out_w = static_cast<uint32_t>(w), out_h = static_cast<uint32_t>(h);
 
   ge::loop::RunClock clock = ge::loop::create_run_clock(120);
   ge::platform::InputSnapshot input;
@@ -362,7 +384,16 @@ int main(int argc, char** argv) {
     last = now;
     ge::input::update(held, queue);
     if (!args.record_events.empty()) session.add(frame_ns, queue);
-    if (input.quit || (input.tapped(ge::platform::Key::escape) && !rebinding.active)) break;
+    ge::ui::feed_console(console, con_view, queue, con_keys);
+    if (con_view.open() != text_on) {
+      text_on = con_view.open();
+      ge::platform::set_text_input(*window, text_on);
+    }
+    const ge::input::InputState& played = con_keys.held ? idle : held;
+    if (input.quit ||
+        (input.tapped(ge::platform::Key::escape) && !rebinding.active && !con_keys.held)) {
+      break;
+    }
     // A scripted session is a batch: the window closes once it is played and the run is done.
     if (!script.frames.empty() && scripted > script.frames.size() &&
         !fall_line::controls::hand_playing(*hand)) {
@@ -383,6 +414,8 @@ int main(int argc, char** argv) {
                         static_cast<uint32_t>(input.height_px), set.vsync);
       fall_line::app::resize(*device, *frame, static_cast<uint32_t>(input.width_px),
                              static_cast<uint32_t>(input.height_px));
+      out_w = static_cast<uint32_t>(input.width_px);
+      out_h = static_cast<uint32_t>(input.height_px);
       if (input.height_px > 0) {
         fall_line::controls::hand_screen(
             *hand, static_cast<float>(input.width_px) / static_cast<float>(input.height_px));
@@ -391,10 +424,10 @@ int main(int argc, char** argv) {
 
     // The actions; the rebinding walk holds the run while it asks.
     const double felt_s = static_cast<double>(frame_ns) * 1e-9;
-    fall_line::controls::hand_frame(*hand, held, wall, felt_s);
+    fall_line::controls::hand_frame(*hand, played, wall, felt_s);
     std::string said;
     if (rebinding.active) {
-      const auto at = fall_line::controls::poll_rebinding(rebinding, held, hand->map, said);
+      const auto at = fall_line::controls::poll_rebinding(rebinding, played, hand->map, said);
       if (!said.empty()) out::status("fall_line: " + said);
       if (at == fall_line::controls::RebindStep::done ||
           at == fall_line::controls::RebindStep::stopped) {
@@ -406,7 +439,7 @@ int main(int argc, char** argv) {
         ge::loop::resume(clock);
       }
     } else if (fall_line::controls::hand_pressed(*hand, "rebind")) {
-      fall_line::controls::begin_rebinding(rebinding, held, hand->map, said);
+      fall_line::controls::begin_rebinding(rebinding, played, hand->map, said);
       out::status("fall_line: " + said);
       ge::loop::pause(clock);
     }
@@ -415,7 +448,7 @@ int main(int argc, char** argv) {
     const int granted = script.frames.empty() ? ge::loop::frame(clock, wall) : scripted_steps;
     steps += granted;
     for (int k = 0; k < granted && fall_line::controls::hand_playing(*hand); ++k) {
-      fall_line::controls::hand_step(*hand, held, felt_s);
+      fall_line::controls::hand_step(*hand, played, felt_s);
       fall_line::sound::run_sound_step(sound, synth, fall_line::controls::hand_state(*hand));
     }
     if (devices) ge::platform::play_feedback(*devices, hand->felt, held, felt_s);
@@ -451,10 +484,15 @@ int main(int argc, char** argv) {
       subject = std::array<double, 3>{p.x, p.y, p.z};
     }
     last_frame_s = view.time_s;
+    // The console over the frame: down, its panel; up, its notify lines (ui/console.hpp).
+    con_view.frame(wall);
+    overlay.begin(static_cast<int>(out_w), static_cast<int>(out_h));
+    ge::ui::draw_console(overlay, con_view, {}, nullptr, view.time_s);
     // The figures' lags run over the steps this frame took; the first frame starts them settled.
     fall_line::app::draw(
         *device, *frame, view,
-        {skiers, static_cast<double>(granted) / 120.0, presented == 0, {}, subject}, target);
+        {skiers, static_cast<double>(granted) / 120.0, presented == 0, {}, subject, &overlay},
+        target);
     surface.present();
     ++presented;
   }

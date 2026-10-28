@@ -2,13 +2,13 @@
 //
 // ge:summary The flat JSON reader: objects, scalars and optionally arrays into dotted paths
 // ge:keywords json read parse flat reader
-// ge:skill agent-interface
-// ge:test tests/play_session_test.cpp
-#include "play/json_read.hpp"
+// ge:skill agent-interface services
+// ge:test tests/play_session_test.cpp tests/services_discord_test.cpp
+#include "core/json_read.hpp"
 
 #include <cstdlib>
 
-namespace ge::play {
+namespace ge::core {
 
 namespace {
 
@@ -162,4 +162,4 @@ std::string json_text(const JsonValue& v) {
   return "null";
 }
 
-}  // namespace ge::play
+}  // namespace ge::core
