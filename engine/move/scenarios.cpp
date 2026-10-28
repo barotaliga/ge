@@ -11,6 +11,7 @@
 
 #include "core/math.hpp"
 #include "core/num.hpp"
+#include "move/push.hpp"
 #include "move/strafe.hpp"
 
 namespace ge::move {
@@ -55,6 +56,81 @@ void gap(BoxWorld& w, double u) {  // the ground ends at 5 m; a platform from 9 
   add_box(w, m(-100, -1, -100, u), m(300, 0, 5, u));
   add_box(w, m(-100, -1, 9, u), m(300, 0, 300, u));
   add_box(w, m(-100, -6, -100, u), m(300, -5, 300, u));
+}
+
+void platform(BoxWorld& w, double u) {  // a 4 m platform over a pit 6 m down
+  add_box(w, m(-100, -7, -100, u), m(300, -6, 300, u));
+  add_box(w, m(-2, -1, -2, u), m(2, 0, 2, u));
+}
+
+void lift(BoxWorld& w, double u) {  // a 2 m lift in the floor beside a ledge 3 m up
+  flat(w, u);
+  add_box(w, m(-3, 0, 1, u), m(3, 3, 60, u));
+  add_box(w, m(-1, -1, -1, u), m(1, 0, 1, u));
+}
+
+void pad(BoxWorld& w, double u) {  // the floor, and a platform 3 m up from 11 m along
+  flat(w, u);
+  add_box(w, m(-3, 0, 11, u), m(3, 3, 60, u));
+}
+
+void trampoline(BoxWorld& w, double u) {  // a 3 m drop at 2 m onto a trampoline floor
+  add_box(w, m(-100, -1, -100, u), m(300, 0, 2, u));
+  add_box(w, m(-100, -4, 2, u), m(300, -3, 60, u), Surface{{0, 0, 0}, 0, 0.8});
+  add_box(w, m(-100, -4, 60, u), m(300, -3, 300, u));
+}
+
+void ladder(BoxWorld& w, double u) {  // a 4 m wall from 3 m along, its face a ladder
+  flat(w, u);
+  add_box(w, m(-3, 0, 3, u), m(3, 4, 60, u), Surface{{0, 0, 0}, kLadder, 0});
+}
+
+void pusher(BoxWorld& w, double u) {  // a wall 3 m ahead that will come toward the body
+  flat(w, u);
+  add_box(w, m(-3, 0, 3, u), m(3, 3, 4, u));
+}
+
+// ─── what the worlds do ──────────────────────────────────────────────────────────────────────
+
+// The last brush moved by `delta`, the body carried with it.
+void shift(BoxWorld& w, const World& world, const MoveSpec& spec, MoveState& s, const Vec3& delta,
+           double dt) {
+  const size_t last = w.brushes.size() - 1;
+  move_brush(w, last, delta, dt);
+  carry(spec, world, s, static_cast<uint32_t>(last + 1), delta);
+}
+
+void slide_platform(BoxWorld& w, const World& world, const MoveSpec& spec, MoveState& s, double dt,
+                    ScriptMemory&) {
+  shift(w, world, spec, s, {0, 0, 2 * spec.unit * dt}, dt);  // 2 m/s along
+}
+
+void raise_lift(BoxWorld& w, const World& world, const MoveSpec& spec, MoveState& s, double dt,
+                ScriptMemory&) {
+  const double top = w.brushes.back().hi.y, end = 3 * spec.unit;
+  double rise = s.t >= 0.5 ? 1 * spec.unit * dt : 0;  // 1 m/s, from 0.5 s, to 3 m
+  if (rise > end - top) rise = end - top;
+  shift(w, world, spec, s, {0, rise, 0}, dt);
+}
+
+void knock(BoxWorld&, const World&, const MoveSpec& spec, MoveState& s, double, ScriptMemory& mem) {
+  if (s.t < 0.5 || mem.jumps != 0) return;
+  push(s, {0, 9.5 * spec.unit, 12.5 * spec.unit});  // a blast from behind: up and forward
+  mem.jumps = 1;
+}
+
+void jump_pad(BoxWorld&, const World&, const MoveSpec& spec, MoveState& s, double,
+              ScriptMemory& mem) {
+  const double z = s.pos.z / spec.unit;
+  if (mem.jumps != 0 || !s.grounded || z < 3 || z > 4) return;
+  const Vec3 target{s.pos.x, 3 * spec.unit, 13 * spec.unit};
+  launch(spec, s, arc_velocity(s.pos, target, 1.5 * spec.unit, spec.gravity));
+  mem.jumps = 1;
+}
+
+void push_wall(BoxWorld& w, const World& world, const MoveSpec& spec, MoveState& s, double dt,
+               ScriptMemory&) {
+  shift(w, world, spec, s, {0, 0, -1.5 * spec.unit * dt}, dt);  // 1.5 m/s toward the body
 }
 
 // ─── the scripts ─────────────────────────────────────────────────────────────────────────────
@@ -182,6 +258,27 @@ MoveCmd air_turn(const MoveSpec&, const MoveState& s, double, ScriptMemory& mem)
   return c;
 }
 
+MoveCmd still(const MoveSpec&, const MoveState&, double, ScriptMemory&) { return {}; }
+
+MoveCmd ride_jump(const MoveSpec&, const MoveState& s, double, ScriptMemory&) {
+  MoveCmd c;
+  c.jump = s.t >= 1.5 && s.t < 1.6;  // one jump off the moving platform
+  return c;
+}
+
+MoveCmd ride_walk_off(const MoveSpec&, const MoveState& s, double, ScriptMemory&) {
+  MoveCmd c;
+  c.forward = s.t >= 4 ? 1 : 0;  // wait for the lift, then walk off it onto the ledge
+  return c;
+}
+
+MoveCmd stroll(const MoveSpec&, const MoveState&, double, ScriptMemory&) {
+  MoveCmd c;
+  c.forward = 1;
+  c.walk = true;
+  return c;
+}
+
 MoveCmd fly_up(const MoveSpec&, const MoveState&, double, ScriptMemory&) {
   MoveCmd c;
   c.forward = 1;
@@ -234,6 +331,27 @@ const MoveScenario kScenarios[] = {
      1.45, flat, 0, 0, 0, air_turn},
     {"fly", "classic_arena", "flying forward with the view 0.5 rad up: through the air, no gravity",
      2, flat, 0, 0, 0, fly_up, Mode::fly},
+    {"platform-ride", "classic_arena",
+     "standing on a platform sliding along at 2 m/s, then a jump: carried, and back down on it "
+     "where it left",
+     3, platform, 0, 0, 0, ride_jump, Mode::walk, slide_platform},
+    {"lift", "classic_arena",
+     "standing on a lift rising 3 m at 1 m/s, then walking off it onto the ledge at its top", 5,
+     lift, 0, 0, 0, ride_walk_off, Mode::walk, raise_lift},
+    {"knockback", "classic_arena", "standing, blown up and forward by a blast at 0.5 s: the arc",
+     2.5, flat, 0, 0, 0, still, Mode::walk, knock},
+    {"jump-pad", "classic_arena",
+     "running onto a pad at 3 m that throws the body onto a platform 3 m up at 13 m", 3, pad, 0, 0,
+     0, forward, Mode::walk, jump_pad},
+    {"trampoline", "classic_arena",
+     "walking off a 3 m drop onto a trampoline that gives back 0.8 of each landing: bounce, "
+     "bounce, "
+     "settle",
+     4, trampoline, 0, 0, 0, stroll},
+    {"ladder", "classic_arena", "walking into a 4 m ladder: up it, and off its top onto the ledge",
+     2.5, ladder, 0, 0, 0, forward},
+    {"pusher", "classic_arena", "standing as a wall comes on at 1.5 m/s: pushed along before it", 3,
+     pusher, 0, 0, 0, still, Mode::walk, push_wall},
 };
 
 void mix(uint64_t& h, double v) {
@@ -265,7 +383,7 @@ BoxWorld scenario_world(const MoveScenario& sc, const MoveSpec& spec) {
 
 MoveRun run_move_scenario(const MoveScenario& sc, const MoveSpec& spec, double hz, OnStep on_step,
                           void* ctx) {
-  const BoxWorld bw = scenario_world(sc, spec);
+  BoxWorld bw = scenario_world(sc, spec);
   const World world = as_world(bw);
   const double dt = 1.0 / hz;
   MoveState s = stand_at(spec, world, {sc.start_x * spec.unit, 0, sc.start_z * spec.unit});
@@ -276,6 +394,7 @@ MoveRun run_move_scenario(const MoveScenario& sc, const MoveSpec& spec, double h
   r.digest = 0xcbf29ce484222325ull;
   const int n = static_cast<int>(core::num::round(sc.seconds * hz));
   for (int i = 0; i < n; i++) {
+    if (sc.animate != nullptr) sc.animate(bw, world, spec, s, dt, mem);
     MoveCmd cmd = sc.script(spec, s, dt, mem);
     if (cmd.yaw == 0 && sc.start_yaw != 0) cmd.yaw = sc.start_yaw;
     const Vec3 before = s.pos;
@@ -292,6 +411,8 @@ MoveRun run_move_scenario(const MoveScenario& sc, const MoveSpec& spec, double h
     }
     if (ev.has(kSteppedUp)) r.steps_up++;
     if (ev.has(kSlideStart)) r.slides++;
+    if (ev.has(kBounced)) r.bounces++;
+    if (ev.has(kLadderOn)) r.climbs++;
     mix(r.digest, s.pos.x);
     mix(r.digest, s.pos.y);
     mix(r.digest, s.pos.z);

@@ -10,9 +10,14 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <fstream>
 #include <iterator>
+#include <map>
+#include <optional>
+#include <tuple>
 
+#include "assets/image.hpp"
 #include "core/libm/libm.hpp"
 
 #include <cgltf.h>
@@ -303,12 +308,167 @@ struct Loader {
       if (mat->has_pbr_metallic_roughness) {
         const auto& pbr = mat->pbr_metallic_roughness;
         std::copy(pbr.base_color_factor, pbr.base_color_factor + 3, out.rgb);
-        if (pbr.base_color_texture.texture)
-          note("textures are skipped: the base colour factor is used");
       }
       m.materials.push_back(out);
     }
     return part_of_material[i];
+  }
+
+  // ── Base colour textures, baked into parts ──
+  //
+  // A textured material's every triangle takes the colour of the texel at its middle (the
+  // texture's colour, linear, times the base colour factor) as a part of its own, one part a
+  // colour: a low-poly kit's colour atlas (flat swatches, a NEAREST sampler) draws exactly, and
+  // every pass that draws parts draws it, with no texture on the GPU. A face whose corners read
+  // other colours than its middle (a photograph's texture) keeps its middle's, and a note says so.
+
+  // A material's texture: its image, which set of coordinates, and the transform on them
+  // (u' = a u + b v + c, v' = d u + e v + f).
+  struct Texture {
+    const Image* image = nullptr;
+    int texcoord = 0;
+    float xf[6] = {1, 0, 0, 0, 1, 0};
+  };
+  std::map<cgltf_size, Image> images;                    // decoded once an image
+  std::vector<cgltf_size> unread;                        // images that could not be
+  std::map<std::tuple<int, uint32_t>, int> baked_parts;  // (source part, sRGB colour) to part
+
+  const Image* image_of(const cgltf_image* img) {
+    const cgltf_size i = cgltf_image_index(data, img);
+    if (const auto it = images.find(i); it != images.end()) return &it->second;
+    if (std::find(unread.begin(), unread.end(), i) != unread.end()) return nullptr;
+    if (!img->buffer_view) {
+      note(
+          "a texture outside the file's buffers (a URI image) is skipped: its base colour factor "
+          "is used");
+    } else if (const uint8_t* bytes = cgltf_buffer_view_data(img->buffer_view)) {
+      if (std::optional<Image> out = decode_png({bytes, img->buffer_view->size})) {
+        return &images.emplace(i, std::move(*out)).first->second;
+      }
+    }
+    if (img->buffer_view) {
+      note(
+          "a texture that is not an 8-bit PNG (a JPEG, a 16-bit or interlaced PNG) is "
+          "skipped: its base colour factor is used");
+    }
+    unread.push_back(i);
+    return nullptr;
+  }
+
+  // The texture a primitive's material draws its base colour from, if one can be read.
+  std::optional<Texture> texture_of(const cgltf_material* mat) {
+    if (!mat || !mat->has_pbr_metallic_roughness) return {};
+    const cgltf_texture_view& view = mat->pbr_metallic_roughness.base_color_texture;
+    if (!view.texture || !view.texture->image) return {};
+    Texture t;
+    t.image = image_of(view.texture->image);
+    if (!t.image) return {};
+    t.texcoord = view.texcoord;
+    if (view.has_transform) {
+      const cgltf_texture_transform& x = view.transform;
+      if (x.has_texcoord) t.texcoord = x.texcoord;
+      // KHR_texture_transform: scaled, then rotated, then offset.
+      const auto c = static_cast<float>(core::libm::cos(x.rotation)),
+                 s = static_cast<float>(core::libm::sin(x.rotation));
+      const float xf[6] = {c * x.scale[0],  s * x.scale[1], x.offset[0],
+                           -s * x.scale[0], c * x.scale[1], x.offset[1]};
+      std::copy(xf, xf + 6, t.xf);
+    }
+    return t;
+  }
+
+  // The part for the colour `px` (sRGB bytes) of a face of source part `source`.
+  int baked_part(int source, const uint8_t* px) {
+    Model& m = result.model;
+    const uint32_t key = (uint32_t{px[0]} << 16) | (uint32_t{px[1]} << 8) | px[2];
+    const auto it = baked_parts.find({source, key});
+    if (it != baked_parts.end()) return it->second;
+    const Material& base = m.materials[static_cast<size_t>(source)];
+    float rgb[3];
+    for (int k = 0; k < 3; ++k) rgb[k] = srgb_to_linear(px[k]) * base.rgb[k];
+    if (m.materials.size() >= size_t{kMaxParts}) {
+      // Out of parts: the nearest colour already baked.
+      note("a texture has more colours than the model has parts (" + std::to_string(kMaxParts) +
+           "): the rest take the nearest");
+      int best = source;
+      float best_d = 1e30f;
+      for (const auto& [k, p] : baked_parts) {
+        const float* c = m.materials[static_cast<size_t>(p)].rgb;
+        const float d = (c[0] - rgb[0]) * (c[0] - rgb[0]) + (c[1] - rgb[1]) * (c[1] - rgb[1]) +
+                        (c[2] - rgb[2]) * (c[2] - rgb[2]);
+        if (d < best_d) best_d = d, best = p;
+      }
+      return best;
+    }
+    char hex[8];
+    std::snprintf(hex, sizeof hex, "#%02x%02x%02x", px[0], px[1], px[2]);
+    Material out;
+    out.name = base.name + hex;
+    std::copy(rgb, rgb + 3, out.rgb);
+    const int p = static_cast<int>(m.materials.size());
+    m.materials.push_back(out);
+    baked_parts.emplace(std::make_tuple(source, key), p);
+    return p;
+  }
+
+  // Each triangle of the primitive whose vertices start at `base` and whose indices start at
+  // `first` takes its texel's part; a vertex two colours share is split, one copy a colour.
+  void bake(Mesh& mesh, const Texture& tex, const std::vector<float>& uvs, uint32_t base,
+            size_t first, int source) {
+    std::map<std::pair<uint32_t, int>, uint32_t> copies;  // (vertex, part) to its copy
+    std::vector<int> owner(mesh.vertex_count() - base, -1);
+    size_t mixed = 0, faces = 0;
+    auto at = [&](uint32_t v, float out[2]) {
+      const float u = uvs[size_t{v - base} * 2], w = uvs[size_t{v - base} * 2 + 1];
+      out[0] = tex.xf[0] * u + tex.xf[1] * w + tex.xf[2];
+      out[1] = tex.xf[3] * u + tex.xf[4] * w + tex.xf[5];
+    };
+    for (size_t t = first; t + 2 < mesh.indices.size(); t += 3) {
+      float c[3][2];
+      for (int k = 0; k < 3; ++k) at(mesh.indices[t + static_cast<size_t>(k)], c[k]);
+      const float mu = (c[0][0] + c[1][0] + c[2][0]) / 3, mv = (c[0][1] + c[1][1] + c[2][1]) / 3;
+      const uint8_t* px = texel(*tex.image, mu, mv);
+      for (const auto& k : c) {
+        const uint8_t* q = texel(*tex.image, k[0], k[1]);
+        if (q[0] != px[0] || q[1] != px[1] || q[2] != px[2]) {
+          ++mixed;
+          break;
+        }
+      }
+      ++faces;
+      const int p = baked_part(source, px);
+      for (int k = 0; k < 3; ++k) {
+        uint32_t& v = mesh.indices[t + static_cast<size_t>(k)];
+        int& own = owner[v - base];
+        if (own < 0 || own == p) {
+          own = p;
+          mesh.parts[v] = static_cast<uint8_t>(p);
+          continue;
+        }
+        const auto key = std::make_pair(v, p);
+        auto found = copies.find(key);
+        if (found == copies.end()) {
+          const uint32_t n = mesh.vertex_count();
+          mesh.positions.insert(mesh.positions.end(),
+                                {mesh.positions[size_t{v} * 3], mesh.positions[size_t{v} * 3 + 1],
+                                 mesh.positions[size_t{v} * 3 + 2]});
+          mesh.normals.insert(mesh.normals.end(),
+                              {mesh.normals[size_t{v} * 3], mesh.normals[size_t{v} * 3 + 1],
+                               mesh.normals[size_t{v} * 3 + 2]});
+          for (int j = 0; j < kJointsPerVertex; ++j) {
+            mesh.joints.push_back(mesh.joints[size_t{v} * 4 + static_cast<size_t>(j)]);
+            mesh.weights.push_back(mesh.weights[size_t{v} * 4 + static_cast<size_t>(j)]);
+          }
+          mesh.parts.push_back(static_cast<uint8_t>(p));
+          found = copies.emplace(key, n).first;
+        }
+        v = found->second;
+      }
+    }
+    if (mixed * 10 > faces) {
+      note("a texture varies across its faces (" + std::to_string(mixed) + " of " +
+           std::to_string(faces) + "): each face is drawn in the colour at its middle");
+    }
   }
 
   bool meshes() {
@@ -332,9 +492,13 @@ struct Loader {
                       "triangulate it before export (assets skill)");
         }
         if (prim.targets_count) note("morph targets are skipped");
-        const cgltf_accessor *pos = nullptr, *nrm = nullptr, *jnt = nullptr, *wgt = nullptr;
+        const std::optional<Texture> tex = texture_of(prim.material);
+        const cgltf_accessor *pos = nullptr, *nrm = nullptr, *jnt = nullptr, *wgt = nullptr,
+                             *uv = nullptr;
         for (cgltf_size a = 0; a < prim.attributes_count; ++a) {
           const cgltf_attribute& at = prim.attributes[a];
+          if (tex && at.type == cgltf_attribute_type_texcoord && at.index == tex->texcoord)
+            uv = at.data;
           if (at.type == cgltf_attribute_type_position) pos = at.data;
           if (at.type == cgltf_attribute_type_normal) nrm = at.data;
           if (at.type == cgltf_attribute_type_joints && at.index == 0) jnt = at.data;
@@ -352,6 +516,15 @@ struct Loader {
         const bool skinned = skin && jnt && wgt;
         const auto base = static_cast<uint32_t>(mesh.vertex_count());
         const auto material = static_cast<uint8_t>(part(prim.material));
+        std::vector<float> uvs;
+        if (tex && uv) {
+          uvs.resize(pos->count * 2);
+          for (cgltf_size v = 0; v < pos->count; ++v)
+            cgltf_accessor_read_float(uv, v, &uvs[v * 2], 2);
+        } else if (tex) {
+          note("a textured primitive has no texture coordinates: its base colour factor is used");
+        }
+        const size_t first = mesh.indices.size();
         for (cgltf_size v = 0; v < pos->count; ++v) {
           float p3[3] = {0, 0, 0}, n3[3] = {0, 1, 0};
           cgltf_accessor_read_float(pos, v, p3, 3);
@@ -405,6 +578,7 @@ struct Loader {
           // The mirror turns the winding over: swap the last two to keep the front outside.
           mesh.indices.insert(mesh.indices.end(), {base + t[0], base + t[2], base + t[1]});
         }
+        if (!uvs.empty()) bake(mesh, *tex, uvs, base, first, material);
       }
       if (faceted) make_faceted(mesh);
       m.meshes.push_back(std::move(mesh));
@@ -537,7 +711,7 @@ LoadResult load_gltf(std::span<const uint8_t> bytes, std::string_view where) {
     return result;
   }
   result.ok = true;
-  Loader l{data, name, result, {}, {}, {}, -1};
+  Loader l{data, name, result, {}, {}, {}, -1, {}, {}, {}};
   if (l.joints() && l.skins() && l.meshes()) l.clips();
   if (result.ok && result.model.meshes.empty()) {
     l.fail("it has no mesh in its scene", "export the objects with their meshes; skill: assets");

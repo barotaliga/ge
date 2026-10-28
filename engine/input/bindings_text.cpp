@@ -73,7 +73,7 @@ std::string source_text(const Source& s) {
     case SourceKind::gyro:
       return std::string("gyro:") + "xyz"[s.code < 3 ? s.code : 0] + h;
     case SourceKind::touch:
-      return "touch:" + s.name;
+      return "touch:" + s.name + h;
     case SourceKind::role:
       return "role:" + std::string(role_name(static_cast<Role>(s.code))) + h;
   }
@@ -143,7 +143,7 @@ std::optional<Source> parse_source(std::string_view word) {
     return done(SourceKind::gyro, static_cast<unsigned>(what[0] - 'x'));
   }
   if (dev == "touch") {
-    if (what.empty() || s.half) return std::nullopt;
+    if (what.empty()) return std::nullopt;
     s.name = std::string(what);
     return done(SourceKind::touch, 0);
   }

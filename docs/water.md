@@ -495,13 +495,57 @@ picture diff holds it.
 valley lake is mostly far, a watercraft racer's sea stretches to the horizon) and the quality
 ladder scales the picture's: a phone's near tier is shorter than a desktop's.
 
-## Sound (`engine/audio`, M24j)
+## Sound (`engine/water/sound`, M24j)
 
 Voices built on the synth, driven by the water's own numbers: lapping (noise bands by the
 spectrum's height and period, louder at a shore), a river's rush (by discharge and speed), a
 waterfall's roar (by the drop and the discharge, low and wide), splashes by the event's speed
 and size, a swimmer's strokes and breaths, and the world muffled under water (a low-pass and
 a damped room) with bubbles.
+
+**Built** (`engine/water/sound.hpp`, on the synth in `engine/audio`). **What is heard** is one
+function, `hear`: it asks `sample` at the ear and on seven rings round it (1.5 to 96 m, each
+twice the last, eight directions), so the sound can never disagree with the physics or the
+picture about where the water is, and adds the flow regions' sheets. Each voice is an
+INTENSITY at the ear, the power the water spends where it is over the square of the distance:
+
+- **the lapping**: the waves' energy, rho g (the whole sea's variance Hs^2 / 16 from
+  `Sample::hs`, the laid crests rising over it as they pass), spent in full where the water is
+  shallower than 1.2 m or the next ring out is dry (the shore) and at a twelfth on open water;
+  its **surf** is the breaking share of it (`Sample::breaking`);
+- **a river's rush**: the bed's friction, rho c_f |v|^3 with c_f = 0.004, over a channel's or a
+  flow region's wet points, so a mountain stream is far louder than a slow deep river of the
+  same discharge, as it is;
+- **a waterfall's roar**: each sheet's fall, rho g Q h, at the distance to where it lands, over
+  2 pi r^2: twice as far is half as loud (the `water-audition` lab's chart).
+
+A ring's points each carry the share of an even sheet of water their sector has, the same on
+every ring, because the area grows as r^2 as the intensity falls as 1 / r^2. A level is the root
+of the intensity over its voice's full one (`kFull*`), held at 1.5. Each voice also carries
+where it comes from (the pan, by the ear's heading) and its intensity-weighted distance, with
+which the air takes the highs.
+
+**The water bed** is seven noise layers on a rack, a pure function of the hearing
+(`water_targets`): the lap (pink, a band falling with the waves' period), the surf (a high
+pink band), the rush (pink, brighter with the current) and its babble (a narrow white band),
+the roar (brown, darker the bigger the drop), the spray (the drops landing round the ear: only
+near the foot) and the room under water. **Under water** (the ear more than 0.4 m down) the
+water's own voices keep their level and lose their highs to 500 Hz, and the room (a low brown
+hum, louder near a fall) comes up; `muffle` pulls a game's AIRBORNE layer or one-shot down to
+420 Hz and a quarter of its level, so the whole world goes under together.
+
+**Bubbles** ring at their Minnaert frequency, f r = 3.26 m/s at the surface's pressure (a 3 mm
+bubble at 1.09 kHz), a sine rising a little as it nears the surface. They are a river's babble
+(1.5 to 5 mm, above water), the churn under a fall and round a swimmer under water (2 to 12 mm),
+and the cloud a splash takes down. **Splashes** (`play_splash` off a `Splash`): the crack and
+the drops falling back, pitched down and stretched as the body grows, and the cavity's whump
+(`plunge`) growing faster than the crack, so a pebble plips and a boulder booms. **A swimmer**
+(`play_swim` off `SwimEvents`): the splash in and out, a stroke (the pull, the drops off the
+arm, the hand going in), a breath every other stroke with his eyes out, a few bubbles from a
+stroke under, and the gasp coming up.
+
+Not yet: a fall heard through the rock between (the rings know water, not ground); the room's
+own echo under water (the synth's echo is one room for every voice); rain on the water.
 
 ## Adding water is one call (M24k)
 
@@ -541,7 +585,7 @@ never read back by the simulation.
 | `lake` | picture | M24g, M24h, M24l | Fall Line's own frame with a tarn on a seed: from the shore, from over it, into the sun, in a fresh wind, at the day's end, under it and looking up from under it |
 | `gpu-underwater` | picture | M24h, M24h2 | Every look's view round a scene under water, the presets, Snell's window measured, a dive through the surface; then the caustics and the waterline split |
 | `water-lod` | picture | M24f, M24g | The tiers round an actor and round the camera as maps; a flow region coarsened and refined with its volume held; the picture diff per distance band across a slow fly-out (no band pops); the cost against distance |
-| `water-audition` | sound | M24j | Every water voice, metered and written as WAV |
+| `water-audition` | sound | M24j | Every water voice, metered and written as WAV: the bank, splashes from a pebble to a boulder, eleven places (a calm and a fresh lake from the shore, a boat and under it, a gale on a beach, a slow river and a stream, a waterfall from 15 and 60 m and under its pool, nowhere), the roar against distance beside 1 / r, a swim |
 | `water-cost` | bench | M24f, M24g | The CPU's costs per step (sample, floats, the flow grid) and the GPU's per pass |
 | `free --water` | drive | M24l | Fall Line: the bot near and into water on the free ride |
 

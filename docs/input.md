@@ -149,13 +149,45 @@ duration, the triggers' motors, the light's colour and the player-number lights.
 in rad/s as a `delta` source (gyro aiming), the accelerometer in m/s², a touchpad's fingers as a
 pad's own fingers, and the battery's charge for a HUD.
 
+A gyro at rest reads a small turn that is not there, its bias, which a gyro aim turns into a slow
+creep. `unbias_gyro` (`gyro.hpp`) takes it while the device is still. Each slot's reading is
+followed by a running mean. A reading within `rate` of the mean on every axis, with the mean
+itself under `most`, counts as still: a slow steady turn is a hand, never a bias. After
+`settle_s` of stillness the mean becomes the bias, refreshed for as long as the device stays
+still. It is taken off the slot's reading in place, before the actions read it, so every `gyro:`
+binding reads the turn the hand made. It is a pure function of the readings and the frame's
+step.
+
 ## Touch
 
-A phone or a tablet has no buttons, so the screen becomes controls (`touch.hpp`). A floating
-stick is centred where the thumb lands. A lever starts at its `start` value under the thumb and
-moves as the thumb slides, so a skier's tuck can be held full by default and eased off. Buttons
-and drags (a look) complete the set. The controls are read by bindings like any other source,
-so a touch layout and a pad drive the same actions.
+A phone or a tablet has no buttons, so the screen becomes controls (`touch.hpp`).
+
+- **A floating stick** is centred where the thumb lands. A `trail` stick drags its centre
+  behind a thumb that passes its reach, so the way back is never longer than the push.
+- **A lever** starts at its `start` value under the thumb and moves as the thumb slides, so a
+  skier's tuck can be held full by default and eased off. A `floor` below 0 gives it a second
+  range under the first, past a `dead` band. That puts a brake under a throttle on one thumb,
+  read as the lever's two halves (`touch:lever+`, `touch:lever-`).
+- **Buttons and drags** (a look) complete the set.
+- **Gestures** claim no finger. They watch another control (`of`) and read as buttons:
+  - A **flick** is the watched thumb thrown up fast. It presses for longer the faster it was.
+  - A **tap-and-hold** is a tap, then the thumb put back down and held.
+
+The controls are read by bindings like any other source, so a touch layout and a pad drive the
+same actions.
+
+**Fall Line's thumbs** (`games/fall_line/controls/thumbs.hpp`) are this set:
+
+- **The edge thumb** is a trailing stick on the left half. Its steer is shaped by a 1.15 curve,
+  so a slight edge is a target.
+- **The tuck lever** is on the right half, anchored full. A thumb on the glass is a tucked
+  skier; sliding down stands him up, and further down skids him.
+- **The jump** is a flick or a tap-and-hold on the lever's thumb.
+- **Reset and camera** are two corner buttons.
+
+The reaches are shares of the screen's height, so the controls are the same size under the thumb
+on any phone. The default bindings name them, and the `fall_line` window reads the screen's
+shape into them.
 
 ## Players and hot-plug
 
@@ -206,13 +238,49 @@ Everything above the backend is deterministic: the shapes, the ramps and the eff
 `core::libm`, and no clock is read but the events' stamps. So the same events give the same
 actions on every machine, and the labs' digests hold them.
 
+## Fall Line played by hand
+
+`games/fall_line/controls` is the first game on the layer, and the shape a game repeats:
+
+- **The actions and the defaults** (`bindings.hpp`). The `ride` context's actions carry the play
+  contract's axis names (`steer`, `tuck`, `brake`, `jump`, `reset`), so `play::bind_axes` pairs
+  them with no table between. The `app` context holds what only the window does (`camera`,
+  `rebind`). The defaults are a bindings file in the source (`kDefaultBindings`): A and D or the
+  arrows steer through a ramp (a tap is a small turn), W tucks, S brakes, SPACE jumps, R resets,
+  C the camera, F5 rebinds; the left stick, the triggers, south and north on a pad; a wheel's
+  steer, throttle and brake roles. A keyboard, a pad and a wheel play at once.
+- **The player's file** is `bindings.txt` in the platform's per-user directory
+  (`platform::prefs_dir`), the defaults until it exists. A file that does not read keeps the
+  defaults and names the line.
+- **The rebinding walk** (`rebinding.hpp`): F5 asks for each action in turn (steer left, steer
+  right, tuck, brake, jump, reset, camera), captures the next deliberate input, keeps the slot's
+  push and ramp, names any other action the source is also on, and saves the file. Escape stops
+  it. The menu's keys page (M22d) will draw the same walk.
+- **What is felt** (`felt.hpp`): a step's events pick a rumble pulse for every pad with motors (a
+  landing by its load, a wipeout, a trunk brushed, a gate missed, another racer met, an injury,
+  the finish). A pulse never cuts a stronger one short.
+- **The run played by hand** (`by_hand.hpp`) is the play contract's own run, so a person's run is
+  stepped, hashed and written down exactly as an agent's is. The `fall_line` window writes it as
+  an input log when it closes (`runs/fall_line-<seed>.inputs` in the per-user directory, or
+  `--inputs`), and `ge replay` plays it back to its digest. `--bot` hands the skis to the bot
+  through the same loop. A sky the `sv_` cvars pick is skied too (the run opened on the map under
+  it, `sim::open_run_on`), and that log is not one `ge replay` rebuilds from the seed.
+- **A scripted session** (`script.hpp`): `--events=<ge-events file>` plays a device event log
+  into the window's loop in place of the devices, and `--record-events` writes one. A scripted
+  frame is granted the steps due by its time, counted in whole nanoseconds (`steps_due`), so a
+  session steps the same run on every machine at any frame rate. `pad_session` holds an input
+  log's axes on a simulated pad; through `kExactPadBindings` (no dead zone, no curve) every step
+  reads back the log's own axes, so the bot's run held on a pad finishes the race on the bot's
+  digest. `tests/fall_line_controls_test.cpp` and the `by-hand` lab hold that.
+
 ## Labs
 
 | Lab | Kind | What it shows |
 | --- | --- | --- |
 | `input-shape` | picture | Each dead zone's output against the push on a diagonal and near a cardinal; the response curves; the key ramps over time |
-| `input-session` | scenario | A scripted session on a simulated keyboard, mouse, pad, wheel with pedals and touch screen, read through a skier's, a shooter's and a racer's action maps at once; written as an event log, read back and replayed to the bit; two players joining and a pad unplugged and returned; rebinding a shooter's jump by pressing |
+| `input-session` | scenario | A scripted session on a simulated keyboard, mouse, pad, wheel with pedals and touch screen, read through a skier's, a shooter's and a racer's action maps at once; written as an event log, read back and replayed to the bit; two players joining and a pad unplugged and returned; rebinding a shooter's jump by pressing; a pad's gyro bias settling while it is still and holding through a turn |
 | `input-ffb` | scenario | Force-feedback effects on the simulated rim under a hand: a spring and a damper bringing it back (the settle time and the overshoot), a spring ringing, a constant pull held straight, a road's rumble |
+| `by-hand` | drive | Fall Line's bot's run held on a simulated pad as a device session and played back by hand through the bindings: the steps that read other axes than the bot's (0), the finish and the digest, the log replayed; the pad's stick and trigger against the steer and the tuck; the rumble motors over the run; the default bindings as a table. Then the same run on a phone's two thumbs (`touch_session`): every step reads back what the thumbs gave (0 off), the steps where a thumb asks other than the bot, the jumps and those with no room for a tap, the finish and the log replayed; the edge thumb and the lever charted against the bot. Writes the sessions, the run's log and the defaults for the window and `ge replay` |
 | `input-devices` | scenario | One script on a pad and a wheel played through SDL's own virtual devices (the platform's backend, headless) and through the simulated backend: a skier's and a racer's actions held to each other frame by frame (the largest gap per action, the 16-bit step); rumble, its end, the light and the player lights reaching the pad; the pad unplugged and plugged in again as a new device |
 
 ## Decisions
