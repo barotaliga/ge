@@ -32,7 +32,7 @@ env:
   GE_LINUX_PACKAGES: >-
     libx11-dev libxext-dev libxcursor-dev libxrandr-dev libxi-dev libxss-dev libxfixes-dev
     libxtst-dev libxkbcommon-dev libwayland-dev wayland-protocols libdecor-0-dev
-    libasound2-dev libpulse-dev libpipewire-0.3-dev mesa-vulkan-drivers xvfb xauth
+    libasound2-dev libpulse-dev libpipewire-0.3-dev mesa-vulkan-drivers xvfb xauth nasm
   # Every runner has four cores (three on macOS); ctest runs that many cases at once.
   CTEST_PARALLEL_LEVEL: "4"
 
@@ -147,7 +147,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: .cache/deps
-          key: deps-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('cmake/Dawn.cmake', 'cmake/SDL.cmake') }}
+          key: deps-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('cmake/Dawn.cmake', 'cmake/SDL.cmake', 'cmake/Codecs.cmake') }}
       # The compiler cache: the newest one main saved for this row.
       - uses: actions/cache/restore@v4
         with:
@@ -185,7 +185,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: .cache/deps
-          key: deps-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('cmake/Dawn.cmake', 'cmake/SDL.cmake') }}
+          key: deps-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('cmake/Dawn.cmake', 'cmake/SDL.cmake', 'cmake/Codecs.cmake') }}
       - uses: ilammy/msvc-dev-cmd@v1
       - run: cmake --preset release
       - run: cmake --build --preset release
@@ -218,7 +218,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: .cache/deps
-          key: deps-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('cmake/Dawn.cmake', 'cmake/SDL.cmake') }}
+          key: deps-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('cmake/Dawn.cmake', 'cmake/SDL.cmake', 'cmake/Codecs.cmake') }}
       # The same compiler and preset as the g++ release row: share its cache.
       - uses: actions/cache/restore@v4
         with:

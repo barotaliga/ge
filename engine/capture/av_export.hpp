@@ -11,14 +11,16 @@
 // (the samples from its time to the next picture's) is written just before the next picture, so
 // the file interleaves the tracks by time.
 //
-// THE TRACKS: the video as uncompressed I420 (capture/yuv.hpp) and the sound as 32-bit float
-// stereo at the synth's rate, so the file is `matroska`, not `webm`, until the encoders (row
-// M23d2) take their place. The game's sound comes from its `SoundSpec` (play/game.hpp); with none
-// the file has no audio track.
+// THE TRACKS: by default the video as uncompressed I420 (capture/yuv.hpp) and the sound as 32-bit
+// float stereo at the synth's rate, a `matroska` file. With `codec` "av1" the video is AV1 and the
+// sound Opus (capture/codecs.hpp), a `webm` file: then the blocks are INTERLEAVED BY TIME, since
+// an Opus packet covers 20 ms whatever the frame rate, so a picture waits until no packet still
+// to come can start before it. The game's sound comes from its `SoundSpec` (play/game.hpp); with
+// none the file has no audio track.
 //
 // ge:summary A run exported with its sound: pictures as I420, the synth rendered on the step clock
 // ge:keywords export av-export mkv matroska sound audio sync lockstep click flash frame-clock
-// ge:keywords sample step-sample offline-render synth i420 pcm
+// ge:keywords sample step-sample offline-render synth i420 pcm av1 opus webm interleave
 // ge:skill replay
 // ge:test tests/capture_av_export_test.cpp
 #pragma once
@@ -29,6 +31,7 @@
 #include <vector>
 
 #include "audio/synth.hpp"
+#include "capture/codecs.hpp"
 #include "capture/matroska.hpp"
 #include "lab/raster.hpp"
 #include "play/game.hpp"
@@ -43,6 +46,11 @@ struct AvExportOptions {
   int64_t from = 0;                        // the step picture 0 shows
   const play::SoundSpec* sound = nullptr;  // null: no audio track
   uint32_t seed = 1;                       // the synth's noise
+  std::string codec;                       // "" uncompressed, "av1" AV1 and Opus
+  int crf = 32;                            // av1: 0..63, lower is better and larger
+  int speed = 9;                           // av1: libaom's realtime speed, 7..11
+  int threads = 4;                         // av1: the encoder's threads
+  int audio_bitrate = 128000;              // av1: Opus's bits a second
 };
 
 // The sample step `at`'s events sound at: (at - from) * rate / hz, rounded.
@@ -72,6 +80,9 @@ class AvExport {
  private:
   void render_to(int64_t sample);
   bool emit_sound(int64_t to, std::string& error);
+  // The packets held, in time order: all of them when `all`, else every one nothing still to be
+  // encoded can come before.
+  bool interleave(bool all, std::string& error);
 
   AvExportOptions opt_;
   MatroskaWriter mux_;
@@ -84,6 +95,11 @@ class AvExport {
   int64_t frames_ = 0;
   std::vector<uint8_t> yuv_;
   std::vector<uint8_t> pcm_;
+  bool coded_ = false;  // codec "av1"
+  Av1Encoder av1_;
+  OpusEncoder opus_;
+  std::vector<Packet> video_q_, audio_q_;  // encoded, not yet written
+  size_t video_at_ = 0, audio_at_ = 0;     // the next to write in each
 };
 
 }  // namespace ge::capture
