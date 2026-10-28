@@ -71,9 +71,12 @@ std::vector<Curve> find_curves(const Level& level, const BrushMesh& mesh,
 
 // `mesh` (the level's `build_brushes`) with every curve's faces drawn round (round.cpp): each
 // triangle cut where the curve turns through a multiple of `segment_deg`, every corner moved onto
-// the cylinder through the facets' corners (so a pillar still covers the hole the floor leaves for
-// it) and shaded with the cylinder's normal. The faces a body meets are not touched: collision
-// stays on the facets.
+// the curve's cylinder on its open side (a pillar on the circle through its facets' corners, so it
+// still covers the hole the floor leaves for it; an arch or a pipe's inside on the circle its
+// facets touch) and shaded with the cylinder's normal. Where a curve's triangle borders a face
+// that is not rounded (a pipe's rim, the wall round an arch), a strip fills the gap between the
+// edge as it was and as it is drawn, so the outline seen end on is round. The faces a body meets
+// are not touched: collision stays on the facets.
 BrushMesh round_curves(const Level& level, const BrushMesh& mesh, std::span<const Curve> curves,
                        double segment_deg = 7.5);
 

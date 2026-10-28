@@ -239,6 +239,31 @@ lab::ViewCam curve_cam(const rm::Level& level, const rm::Curve& c) {
     }
   }
   lab::ViewCam cam;
+  if (c.sweep_deg >= 359.9 && c.length < 2 * c.radius) {
+    // A ring (a pipe's mouth, a round window): looked into along its axis, a little off it, from
+    // the side that is open.
+    const auto solid = [&level](const double p[3]) {
+      for (const rm::Brush& b : level.brushes) {
+        if (b.contents != rm::Contents::solid) continue;
+        bool inside = true;
+        for (uint32_t f = b.first_face; inside && f < b.first_face + b.faces; ++f) {
+          const rm::Face& fc = level.faces[f];
+          inside = fc.n[0] * p[0] + fc.n[1] * p[1] + fc.n[2] * p[2] <= fc.d;
+        }
+        if (inside) return true;
+      }
+      return false;
+    };
+    const double back = 2.2 * c.radius + 1;
+    for (const double way : {1.0, -1.0}) {
+      for (size_t k = 0; k < 3; ++k) {
+        cam.target[k] = c.centre[k];
+        cam.eye[k] = c.centre[k] + way * c.axis[k] * back + n[k] * 0.6 * c.radius;
+      }
+      if (!solid(cam.eye)) break;
+    }
+    return cam;
+  }
   const double side = c.concave ? -1 : 1;
   const double back = c.concave ? c.radius + 2 : 3;
   for (size_t k = 0; k < 3; ++k) {

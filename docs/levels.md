@@ -291,13 +291,19 @@ run's median is dropped (the wall a chamfer turns off, the straight a vault spri
 is fitted with the circle its planes are tangent to (least squares in the plane square to the
 axis), and kept only when every plane lies within 15 percent of that radius, the radius is 0.1 to
 12 m, it turns through at least three normals, and its normals follow one another round with at
-most one open side. Each `Curve` carries its axis, centre, radius, sweep, length, facets and faces.
+most one open side. A facet the walk or the width test missed (cut off from its neighbours by another
+brush, as the inside of a pipe's mouth is) joins the run when its plane is square to the axis,
+tangent to the fitted circle on the run's side, and lies within the run's length and near the
+circle; the circle is then fitted again. Each `Curve` carries its axis, centre, radius, sweep, length, facets and faces.
 
 `round_curves` draws them round. Each triangle of a curve's faces is cut where the curve turns
 through a multiple of `segment_deg` (7.5 by default; one grid a curve, so neighbouring triangles
-cut at the same angles and never crack), every corner is moved onto the cylinder through the
-facets' corners and shaded with its normal. The circle through the corners keeps a pillar
-covering the hole its floor and ceiling leave for it. Only the drawn mesh changes: a body still
+cut at the same angles and never crack), every corner is moved onto the cylinder and shaded with its normal. A convex curve is drawn on
+the circle through the facets' corners, so a pillar still covers the hole its floor and ceiling
+leave for it; a concave one on the circle its facets touch, so a soffit or a pipe's inside moves
+out into the open and never into the solid behind it. Where a moved edge leaves the flat face
+beside it (a pillar's cap, a ring's front), a strip fills the gap between the old edge and the
+new one. Only the drawn mesh changes: a body still
 meets the facets. `BrushMesh::face` names each triangle's face, which is how the rounding finds
 them.
 

@@ -238,57 +238,107 @@ std::vector<Curve> find_curves(const Level& level, const BrushMesh& mesh, const 
           kept.push_back(run[k]);
         }
       }
-      // The facets: the kept patches' distinct normals, each with the middle of its faces.
-      std::vector<V3> normals, mids;
-      std::vector<double> weights;
-      for (const uint32_t pt : kept) {
-        for (const uint32_t p : patches[pt]) {
-          size_t k = 0;
-          while (k < normals.size() && dot(normals[k], polys[p].n) < 0.99999) ++k;
-          if (k == normals.size()) {
-            normals.push_back(polys[p].n);
-            mids.push_back({0, 0, 0});
-            weights.push_back(0);
-          }
-          mids[k] = {mids[k].x + polys[p].mid.x, mids[k].y + polys[p].mid.y,
-                     mids[k].z + polys[p].mid.z};
-          weights[k] += 1;
-        }
-      }
-      if (normals.size() < o.min_facets) continue;
-      for (size_t k = 0; k < mids.size(); ++k) mids[k] = scale(mids[k], 1 / weights[k]);
-      // A basis square to the axis.
+      // The fit: the kept patches' distinct normals, the centre their planes turn round and the
+      // radius they keep from it.
+      struct Fit {
+        std::vector<V3> normals;
+        double cx = 0, cy = 0, radius = 0;
+      };
       const V3 ref = std::fabs(axis.y) < 0.9 ? V3{0, 1, 0} : V3{1, 0, 0};
       V3 u = sub(ref, scale(axis, dot(ref, axis)));
       u = scale(u, 1 / len(u));
       const V3 v{axis.y * u.z - axis.z * u.y, axis.z * u.x - axis.x * u.z,
                  axis.x * u.y - axis.y * u.x};
-      // The centre c minimising the squared distance to the lines through each facet's middle
-      // along its normal: each line's row (ny, -nx) . c = px ny - py nx, two unknowns.
-      double a11 = 0, a12 = 0, a22 = 0, b1 = 0, b2 = 0;
-      for (size_t k = 0; k < normals.size(); ++k) {
-        const double px = dot(mids[k], u), py = dot(mids[k], v);
-        const double nx = dot(normals[k], u), ny = dot(normals[k], v);
-        const double r = px * ny - py * nx;
-        a11 += ny * ny, a12 += -ny * nx, a22 += nx * nx;
-        b1 += ny * r, b2 += -nx * r;
+      const auto fit = [&](const std::vector<uint32_t>& set, Fit* f) {
+        std::vector<V3> mids;
+        std::vector<double> weights;
+        f->normals.clear();
+        for (const uint32_t pt : set) {
+          for (const uint32_t p : patches[pt]) {
+            size_t k = 0;
+            while (k < f->normals.size() && dot(f->normals[k], polys[p].n) < 0.99999) ++k;
+            if (k == f->normals.size()) {
+              f->normals.push_back(polys[p].n);
+              mids.push_back({0, 0, 0});
+              weights.push_back(0);
+            }
+            mids[k] = {mids[k].x + polys[p].mid.x, mids[k].y + polys[p].mid.y,
+                       mids[k].z + polys[p].mid.z};
+            weights[k] += 1;
+          }
+        }
+        if (f->normals.size() < o.min_facets) return false;
+        for (size_t k = 0; k < mids.size(); ++k) mids[k] = scale(mids[k], 1 / weights[k]);
+        // The centre c minimising the squared distance to the lines through each facet's middle
+        // along its normal: each line's row (ny, -nx) . c = px ny - py nx, two unknowns.
+        double a11 = 0, a12 = 0, a22 = 0, b1 = 0, b2 = 0;
+        for (size_t k = 0; k < f->normals.size(); ++k) {
+          const double px = dot(mids[k], u), py = dot(mids[k], v);
+          const double nx = dot(f->normals[k], u), ny = dot(f->normals[k], v);
+          const double r = px * ny - py * nx;
+          a11 += ny * ny, a12 += -ny * nx, a22 += nx * nx;
+          b1 += ny * r, b2 += -nx * r;
+        }
+        const double det = a11 * a22 - a12 * a12;
+        if (std::fabs(det) < 1e-12) return false;
+        f->cx = (b1 * a22 - b2 * a12) / det, f->cy = (a11 * b2 - a12 * b1) / det;
+        // The radius: the mean distance from the centre to the facets' planes; every plane must
+        // lie near it, or the faces are not one circle's facets.
+        std::vector<double> dist;
+        f->radius = 0;
+        for (size_t k = 0; k < f->normals.size(); ++k) {
+          const double px = dot(mids[k], u) - f->cx, py = dot(mids[k], v) - f->cy;
+          dist.push_back(std::fabs(px * dot(f->normals[k], u) + py * dot(f->normals[k], v)));
+          f->radius += dist.back() / double(f->normals.size());
+        }
+        bool round = f->radius >= o.min_radius_m && f->radius <= o.max_radius_m;
+        for (const double d : dist)
+          round = round && std::fabs(d - f->radius) <= o.fit_tolerance * f->radius;
+        return round;
+      };
+      Fit fitted;
+      if (!fit(kept, &fitted)) continue;
+      // Facets the walk or the width test missed (a facet cut off from its neighbours by another
+      // brush, or cut narrower): any free patch square to the axis, on the circle's tangent on
+      // the curve's side and within the run's length and the circle's reach, joins it.
+      {
+        double alo = 1e30, ahi = -1e30;
+        for (const uint32_t pt : kept) {
+          for (const uint32_t p : patches[pt]) {
+            for (const V3& q : polys[p].pts)
+              alo = std::min(alo, dot(q, axis)), ahi = std::max(ahi, dot(q, axis));
+          }
+        }
+        const double r = fitted.radius, tol = o.fit_tolerance * r;
+        const double side = bend < 0 ? -1 : 1;
+        std::vector<uint8_t> taken(patches.size(), 0);
+        for (const uint32_t pt : kept) taken[pt] = 1;
+        const auto on_circle = [&](const Poly& p) {
+          if (std::fabs(dot(p.n, axis)) > 1e-3) return false;
+          const double px = dot(p.mid, u) - fitted.cx, py = dot(p.mid, v) - fitted.cy;
+          const double d = side * (px * dot(p.n, u) + py * dot(p.n, v));
+          if (std::fabs(d - r) > tol) return false;
+          for (const V3& q : p.pts) {
+            const double at = dot(q, axis);
+            if (at < alo - o.line_tol_m || at > ahi + o.line_tol_m) return false;
+            const double qx = dot(q, u) - fitted.cx, qy = dot(q, v) - fitted.cy;
+            const double reach = std::sqrt(qx * qx + qy * qy);
+            if (reach > (r + tol) / core::libm::cos(o.max_crease_deg * kPi / 180)) return false;
+          }
+          return true;
+        };
+        std::vector<uint32_t> grown = kept;
+        for (uint32_t pt = 0; pt < patches.size(); ++pt) {
+          if (taken[pt] || used[pt]) continue;
+          bool all = true;
+          for (const uint32_t p : patches[pt]) all = all && on_circle(polys[p]);
+          if (all) grown.push_back(pt);
+        }
+        Fit refit;
+        if (grown.size() > kept.size() && fit(grown, &refit)) kept = grown, fitted = refit;
       }
-      const double det = a11 * a22 - a12 * a12;
-      if (std::fabs(det) < 1e-12) continue;
-      const double cx = (b1 * a22 - b2 * a12) / det, cy = (a11 * b2 - a12 * b1) / det;
-      // The radius: the mean distance from the centre to the facets' planes; every plane must lie
-      // near it, or the faces are not one circle's facets.
-      std::vector<double> dist;
-      double radius = 0;
-      for (size_t k = 0; k < normals.size(); ++k) {
-        const double px = dot(mids[k], u) - cx, py = dot(mids[k], v) - cy;
-        dist.push_back(std::fabs(px * dot(normals[k], u) + py * dot(normals[k], v)));
-        radius += dist.back() / double(normals.size());
-      }
-      bool round = radius >= o.min_radius_m && radius <= o.max_radius_m;
-      for (const double d : dist)
-        round = round && std::fabs(d - radius) <= o.fit_tolerance * radius;
-      if (!round) continue;
+      const std::vector<V3>& normals = fitted.normals;
+      const double cx = fitted.cx, cy = fitted.cy, radius = fitted.radius;
       Curve c;
       c.concave = bend < 0;
       c.facets = normals.size();

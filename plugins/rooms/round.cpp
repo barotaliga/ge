@@ -1,5 +1,5 @@
 // Curves drawn round (curves.hpp `round_curves`): each triangle of a curve's faces cut at the
-// curve's angular grid, every corner moved onto the cylinder through the facets' corners and
+// curve's angular grid, every corner moved onto the curve's cylinder on its open side and
 // given the cylinder's normal.
 //
 // ge:summary Draws found curves round: triangles cut at an angular grid, moved onto the cylinder
@@ -23,7 +23,7 @@ constexpr double kPi = 3.14159265358979323846;
 
 struct Frame {
   double c[3], a[3], u[3], v[3];
-  double corner = 0;  // the radius through the facets' corners
+  double corner = 0;  // the radius drawn: on the open side of every facet
   double sign = 1;    // the normal's: out of a pillar, into an arch
 };
 
@@ -45,7 +45,10 @@ Frame frame_of(const Curve& c) {
   // The turn between neighbouring facets, and the corners' radius it gives the facets' circle.
   const double step = c.sweep_deg >= 360 ? 2 * kPi / double(c.facets)
                                          : c.sweep_deg * kPi / 180 / double(c.facets - 1);
-  f.corner = c.radius / core::libm::cos(step / 2);
+  // Always out into the open: a pillar on the circle through its facets' corners, an arch on the
+  // circle its facets touch. The flat faces at the ends then reach the round edge through the
+  // strips that fill the gap, so the outline seen end on is round too.
+  f.corner = c.concave ? c.radius : c.radius / core::libm::cos(step / 2);
   f.sign = c.concave ? -1 : 1;
   return f;
 }

@@ -195,7 +195,8 @@ TEST(an_arch_drawn_round_lies_on_its_circle_facing_the_opening_its_ends_filled) 
     for (size_t k = 0; k < 3; ++k) {
       const size_t v = round.idx[t * 3 + k];
       const double dx = round.pos[v * 3], dy = round.pos[v * 3 + 1] - 2;
-      worst = std::max(worst, std::fabs(std::sqrt(dx * dx + dy * dy) - 1));
+      // An arch is drawn on the circle its facets touch, into the opening.
+      worst = std::max(worst, std::fabs(std::sqrt(dx * dx + dy * dy) - std::cos(kPi / 12)));
     }
   }
   CHECK_MSG(drawn >= 12, "drawn " + std::to_string(drawn));
