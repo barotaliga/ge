@@ -27,7 +27,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge lab sheet <lab> --grid=2x2 [shots]` (shots on one image) and `--watch`
 - `ge lab grid <lab> --vary=cfg:a,b,c` (one composite picture of the same view under several settings, each tile captioned with its setting; asked again as `ge lab sheet <lab> --view=<v> --vary=cfg:...`)
 - `ge lab run --jobs=N <labs>` (independent labs run in parallel, each with its own log, instead of one after another)
-- `ge lab shot <lab> <id>...` (one named view of a picture lab drawn alone while a look is iterated: a runner-wide `--shots=<ids>` and `lab.wants(id)` the lab asks before it renders, in place of the `--views` flag gpu-world and gpu-snow each added and the rest lack)
+- `ge lab shot <lab> <id>...` / `ge lab <id> --only=<shot>` (one named view of a picture lab drawn alone while a look is iterated, the others left as the last run wrote them, written to `--out=<path>` when given: a runner-wide `--shots=<ids>` and `lab.wants(id)` the lab asks before it renders, in place of the `--views` flag gpu-world and gpu-snow each added and the rest lack; asked for by the console, replays and classic-enhance threads)
 - a shared `--viewports=<w>x<h>,...` flag for picture labs (every view drawn at each size, e.g. a phone, a laptop and a 4K screen, without each lab adding its own)
 - `ge profile --pass=<name>` (one pass's median and p95, before and after) and `--cost <shader-term>`
 - `ge lab <id> --at-ref=<git-ref>` (the "before" shot from a worktree build of that ref, without stashing, rebuilding and restoring this tree)
@@ -71,7 +71,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 
 ## Inspecting a run
 
-- plugin commands (next, after the module registry): a plugin's or a game's `tools/*.cpp` registering `GE_TOOL({group, verb, summary, args, flags, run})` into one `tools` executable the build makes, and `ge` forwarding a command it does not know to it, listed in `ge help` and answering with findings and `--json` like its own; first users `ge level textures <pak> <map> --out=<dir>` and `ge level clone <bsp> --texmap=<file>`, which today hide as lab flags
+- plugin commands: `ge tool <plugin> -- <args>` (being built by the classic-enhance PR: a plugin's tool executable built and its JSON relayed); next, its commands listed in `ge help` and forwarded without `tool --`; first users `ge level textures <pak> <map> --out=<dir>` and `ge level clone <bsp> --texmap=<file>`, which today hide as lab flags
 - `ge lab <id> --compare=<tag> --metric=<name>` (one metric across the kept run and this one, a table per scenario or shot, in place of every metric `--compare` prints today)
 - `ge lab why <lab> <metric>` (what drove a lab's metric: the scenario steps, series and inputs that moved it most, and against a kept run with `--compare=<tag>` where it parted)
 - `ge lab listen <lab> <id>` (a lab's WAVs transcoded to a small web format, Opus in Ogg, for its report page and `ge lab publish`, without ffmpeg by hand)
@@ -115,7 +115,6 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge lab pixels <lab> <shot> --line=x0,y0,x1,y1 | --histogram` (a picture's values along a line or its colour histogram, for banding and colour checks without decoding the PNG)
 - `ge lab strip <scenario>` (a side-view stick filmstrip of a body over time, frame by frame, without a hand-written dumper and image script)
 - `ge lab trace-points <scenario> --stage` (each point of a body's velocity after every solver stage, for finding an energy pump without instrumenting a copy of the solver; generalizes to `ge trace --actor=<id> --fields=<a,b>`, and to `ge trace-view <lab> <scenario> --around=<step>`: the steps round one as a table of position, velocity, grounded and events)
-- `ge lab <id> --only=<shot>` (one picture of a lab rerun while iterating on it, the others left as the last run wrote them)
 - `ge lab <lab> --scenario=<id> --watch` (one scenario re-run and its picture refreshed on every rebuild, while tuning it)
 - `ge level info|build|shot <file>` (a level file checked, each room's triangles and build time printed, one view rendered without the whole lab)
 - `ge bsp info|ents|shot <file>` (a classic BSP map's lumps and counts, its entities as a table, one view rendered, without the levels lab)
@@ -179,7 +178,6 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge net reach --host --client --preset --forward` (one pair of peers' reach timeline)
 ## Shooter's Edge (M18, docs/shooters-edge.md § The `ge` tooling it needs)
 
-- `ge pak ls/cat/extract/build` (a search path's files, which archive wins one, a fixture pack built from a directory)
 - `ge bsp info/ents/shot` (a map's lumps and limits, its entity lump, a CPU picture of leaves, the PVS from a point and the hulls)
 - `ge qc build/disasm/run/trace/profile/diff` (our QC compiler; a progs disassembled, run, traced a step at a time, timed by function, diffed against another build)
 - `ge server --map --bots --for` (a headless dedicated server with bots, writing an input log for `ge replay`, `ge state` and `ge diverge`)
