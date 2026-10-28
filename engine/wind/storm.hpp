@@ -44,9 +44,9 @@ namespace ge::wind {
 
 inline constexpr int kMaxCells = 16;
 
-inline constexpr double kTowering = 900;     // s, the cumulus stage
+inline constexpr double kTowering = 900;      // s, the cumulus stage
 inline constexpr double kDissipating = 1800;  // s
-inline constexpr double kGlaciation = 6500;  // m over the ground, where the charging starts
+inline constexpr double kGlaciation = 6500;   // m over the ground, where the charging starts
 
 enum class Stage : uint8_t { none, towering, mature, dissipating };
 
@@ -54,11 +54,11 @@ enum class Stage : uint8_t { none, towering, mature, dissipating };
 const char* stage_name(Stage stage);
 
 struct Cell {
-  double x = 0, z = 0;   // where its updraft stands at `born`, m
-  double born = 0;       // s
-  double peak = 0.5;     // its strength: 0.3 a weak cell, 0.5 an ordinary one, 1 a severe one
-  double core = 2500;    // the rain core's radius, m
-  uint32_t seed = 0;     // what its lightning is hashed off
+  double x = 0, z = 0;  // where its updraft stands at `born`, m
+  double born = 0;      // s
+  double peak = 0.5;    // its strength: 0.3 a weak cell, 0.5 an ordinary one, 1 a severe one
+  double core = 2500;   // the rain core's radius, m
+  uint32_t seed = 0;    // what its lightning is hashed off
 };
 
 struct Storm {
@@ -72,16 +72,16 @@ struct Storm {
 // What one cell is doing at a moment.
 struct CellAt {
   Stage stage = Stage::none;
-  double age = 0;           // s since it rose
-  double x = 0, z = 0;      // its centre, drifted, m
-  double updraft = 0;       // m/s at its core
-  double downdraft = 0;     // m/s at its core
-  double top = 0;           // the cloud top over the ground, m (the anvil's, once spread)
-  double rain = 0;          // the fall at its core on the precipitation dial, 0 .. 1
-  double flashes = 0;       // lightning flashes a minute
-  double in_cloud = 0;      // the share of them that stay in the cloud
-  double front = 0;         // the gust front's distance from the centre, m (0: not down yet)
-  double outflow = 0;       // the outflow's speed just behind the front, m/s
+  double age = 0;        // s since it rose
+  double x = 0, z = 0;   // its centre, drifted, m
+  double updraft = 0;    // m/s at its core
+  double downdraft = 0;  // m/s at its core
+  double top = 0;        // the cloud top over the ground, m (the anvil's, once spread)
+  double rain = 0;       // the fall at its core on the precipitation dial, 0 .. 1
+  double flashes = 0;    // lightning flashes a minute
+  double in_cloud = 0;   // the share of them that stay in the cloud
+  double front = 0;      // the gust front's distance from the centre, m (0: not down yet)
+  double outflow = 0;    // the outflow's speed just behind the front, m/s
 };
 
 // How long a cell of strength `peak` stays mature, s.

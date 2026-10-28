@@ -1,6 +1,6 @@
 ---
 name: water
-description: "Use for water and wind in gameengine2 or a game on it: engine/wind (the wind as a pure function: the mean, gusts and veer, the log-law profile, shelter, local sources such as a downwash, a whirl or a blast), engine/water as its rows land (bodies of water and the one sample query, waves off the wind and the fetch, floating, swimming and its per-game presets, the colour from what is in the water, flowing water), the water's render passes and sound, and their labs. Load it before adding water or wind to a game, or changing how either behaves."
+description: "Use for water and wind in gameengine2 or a game on it: engine/wind (the wind as a pure function: the mean, gusts and veer, the log-law profile, shelter, local sources such as a downwash, a whirl or a blast; thunderstorms, lightning and thunder), engine/water as its rows land (bodies of water and the one sample query, waves off the wind and the fetch, floating, swimming and its per-game presets, the colour from what is in the water, flowing water), the water's render passes and sound, and their labs. Load it before adding water or wind to a game, or changing how either behaves."
 ---
 
 # Water and wind
@@ -20,6 +20,8 @@ for anything the simulation reads, `render` for a pass, `audio` for a voice, `la
 | Local wind sources: jet, whirl, blast | `engine/wind/sources.hpp` | `wind` | `tests/wind_sources_test.cpp` |
 | A world's wind as a field (the mountain's) | `plugins/mountain/air/air.hpp` (`field_of`) | `wind`, `precip` | `tests/mountain_air_test.cpp` (golden) |
 | What falls: snow, sleet, rain, the tiers, the phase by height, drop speeds, visibility, the wet ground | `engine/wind/precip.hpp` | `precip-air`, `precip` | `tests/wind_precip_test.cpp` (golden) |
+| Thunderstorms: cells' life cycle, gust fronts, rain cores, multicell storms | `engine/wind/storm.hpp` | `storm` | `tests/wind_storm_test.cpp` (golden) |
+| Lightning: the flash schedule, strokes and flicker, light over a frame, channels; thunder by distance | `engine/wind/lightning.hpp`, `thunder.hpp` | `storm` | `tests/wind_lightning_test.cpp` (golden) |
 | The sea a wind grows: growth laws, spectrum, depth, spread, dispersion | `engine/water/spectrum.hpp` | `waves` | `tests/water_spectrum_test.cpp` |
 | The simulation tier's waves: the components laid, the surface, breaking | `engine/water/waves.hpp` | `waves` | `tests/water_waves_test.cpp` (golden) |
 | The fetch over a body's outline | `engine/water/fetch.hpp` | `fetch` | `tests/water_fetch_test.cpp` |
