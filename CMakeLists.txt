@@ -118,7 +118,8 @@ set(GE_LIBM_VENDORED
   engine/core/libm/fdlibm_exp_log.cpp)
 add_library(ge_core STATIC ${GE_LIBM_VENDORED} engine/core/libm/pow.cpp
   engine/core/solar.cpp engine/core/moon.cpp engine/core/output.cpp engine/core/num_text.cpp engine/core/parallel.cpp
-  engine/core/thread_name.cpp)
+  engine/core/thread_name.cpp
+  engine/core/json_read.cpp)
 target_include_directories(ge_core PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/engine>)
 target_compile_features(ge_core PUBLIC cxx_std_20)
 target_link_libraries(ge_core PUBLIC ge_fp ge_isa Threads::Threads)
@@ -160,7 +161,7 @@ target_include_directories(ge_assets SYSTEM PRIVATE ${GE_CGLTF_INCLUDE})
 include(cmake/Ui.cmake)
 file(GLOB GE_UI_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/ui/*.cpp)
 add_library(ge_ui STATIC ${GE_UI_SOURCES})
-target_link_libraries(ge_ui PUBLIC ge_core ge_console)
+target_link_libraries(ge_ui PUBLIC ge_core ge_console ge_input)
 target_include_directories(ge_ui SYSTEM PRIVATE ${GE_STB_INCLUDE})
 ge_embed_binary(ge_ui ge_ui_font_semibold "${GE_FONTS_DIR}/BarlowCondensed-SemiBold.ttf")
 ge_embed_binary(ge_ui ge_ui_font_medium "${GE_FONTS_DIR}/BarlowCondensed-Medium.ttf")
@@ -221,11 +222,12 @@ target_link_libraries(ge_input PUBLIC ge_core)
 
 # The platform services (engine/services, docs/services.md): the one interface a game uses for a
 # store's achievements, stats, leaderboards, cloud files, presence, friends, overlay, ownership and
-# screenshots, and the simulated and offline stores behind it. No platform, no SDK: a store's own
-# backend (engine/steam, docs/goals.md M20b) is built beside it only when its SDK is supplied.
+# screenshots, and the simulated and offline stores behind it; Discord's presence beside it over
+# the Discord app's local pipe (ge_net). No platform, no SDK: a store's own backend (engine/steam,
+# docs/goals.md M20b) is built beside it only when its SDK is supplied.
 file(GLOB GE_SERVICES_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/services/*.cpp)
 add_library(ge_services STATIC ${GE_SERVICES_SOURCES})
-target_link_libraries(ge_services PUBLIC ge_core)
+target_link_libraries(ge_services PUBLIC ge_core ge_net)
 
 # Character movement (engine/move, docs/movement.md): the knobs and presets, one step of a moving
 # body over a trace callback, the box world, the strafer and the scenarios. Deterministic, no
@@ -295,7 +297,7 @@ target_link_libraries(ge_water PUBLIC ge_core ge_wind ge_audio)
 # in this tree's own build, so the published package and a consumer need neither.
 include(cmake/Codecs.cmake)
 file(GLOB GE_CAPTURE_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/capture/*.cpp)
-add_library(ge_play STATIC engine/play/inputs.cpp engine/play/json_read.cpp
+add_library(ge_play STATIC engine/play/inputs.cpp
   engine/play/session.cpp engine/play/bench.cpp engine/play/record.cpp engine/play/why.cpp
   engine/play/human.cpp engine/play/devices.cpp engine/play/console_cmds.cpp engine/play/main.cpp engine/play/load.cpp
   ${GE_CAPTURE_SOURCES})
