@@ -3,12 +3,16 @@
 // layer made from the same spec, and only the tiles (and the mass bookkeeping) come back.
 //
 // THE FORMAT, little-endian throughout:
-//   "GESNOW1\0"                     8 bytes
+//   "GESNOW2\0"                     8 bytes ("GESNOW1\0", the same without the coarse section,
+//                                   still loads)
 //   region x0 z0 x1 z1, cell        5 doubles (the layer it was taken of, checked on load)
 //   mass_in, spilled                2 uint64
 //   tile count                      uint32
 //   per tile: tx, tz (int32), then 4096 cells of depth_mm (u16) mass (u16) kind (u8) flags (u8)
 //   minute (u16), in sample order
+//   coarse block count              uint32
+//   per block: tx, tz (int32), then 16 coarse cells of mass (u32) depth_mm (u32) kind (u8)
+//   flags (u8) minute (u16), in cell order (lod.hpp)
 //
 // ge:summary A snow layer's tiles saved to bytes and loaded back (save games, ge snow)
 // ge:keywords snow snapshot save load bytes gesnow format serialize late-join save-game
@@ -37,6 +41,7 @@ struct SnapshotInfo {
   double cell = 0;
   uint64_t mass_in = 0, spilled = 0;
   uint32_t tiles = 0;
+  uint32_t blocks = 0;  // coarse blocks (lod.hpp)
 };
 bool read_info(const std::vector<uint8_t>& bytes, SnapshotInfo& info, std::string& error);
 
