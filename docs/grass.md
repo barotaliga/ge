@@ -143,9 +143,24 @@ the scatter's probe and the draw read the same cells as the CPU, held to them by
    tapering to the tip, never under about 0.7 px, turned toward the eye when edge-on. Lit
    two-sided: the sun past the ground's horizon and the shadow maps on the face toward the eye,
    the sun through the blade from behind (translucency, strongest at the tip), the sky dimmed
-   toward the root (a dense field shades its own floor), a faint sheen; hazed. The fine blades
+   toward the root (a dense field shades its own floor from the sky), a faint sheen; hazed.
+   **The field's own shade**: the sun reaching a point of a blade has crossed the canopy above it,
+   `exp(−0.5 · lad · L)` of it getting through, where `lad` is the kind's blade area a cubic
+   metre (density × width: 2.7 for a lawn, 1.5 for long grass), the 0.5 the share of a blade
+   facing the sun's way, and `L` the path along the sun from the canopy's top (the blade's own
+   tip, so a field laid over by a gale or trampled flat is lit deeper) down to the point. A high
+   sun lights long grass halfway down; a sun 8° up lights only its tips, the rest glowing
+   through from behind (the light through a blade is scattered forward, so the canopy dims it
+   by the square root of that). The fine blades
    bend again at the last frame's time and write their own motion, so temporal anti-aliasing keeps
    a waving field sharp; the coarse ones move by less than a pixel and carry the camera's.
+
+**Why the blades do not cast into the shadow maps.** The sun's cascades are cached and redrawn
+only when the eye drifts or the sun turns (`render/shadows.hpp`); a swaying field would have to
+redraw the near cascade every frame, and draw hundreds of thousands of blades into it, to put on
+the ground a shadow the blades themselves hide. The canopy's shade above gives the field its
+depth for the price of an exponential a vertex. What stands on the grass (trees, figures) does
+cast onto it: the blades read the shadow maps.
 
 **Far away** there are no blades: the game paints the ground's albedo under a cover with each
 kind's `far_colour` (the blades' mean as seen from afar, darkened by the field's own shade), so
@@ -160,6 +175,6 @@ On the software adapter the `gpu-grass` lab's nine views (about 130,000 blades e
 | --- | --- | --- |
 | M34a | Kinds, covers, the scatter and the sway on the CPU; the `grass` lab | done |
 | M34b | The grass drawn: the scatter pass, thinning, the blades, the light; the `gpu-grass` lab | done |
-| M34c | The rest of the look: blades pressed down by what walks or drives through them and springing back (a trample map), blades casting into the sun's shadow maps, flowers and seed heads, the sway's own motion vectors, a stop on the picture's quality ladder priced | in progress: trampling and motion vectors built |
+| M34c | The rest of the look: blades pressed down by what walks or drives through them and springing back (a trample map), the canopy's own shade from the sun, flowers and seed heads, the sway's own motion vectors, a stop on the picture's quality ladder priced | in progress: trampling, motion vectors and the canopy's shade built |
 | M34d | A level's grass: a room format material's `surface <material> grass <recipe>` line and a cloned classic map's grass-textured faces (the cloner's texture map, `*grass*` to a meadow by default) grown into covers by the builders (`plugins/rooms`, `plugins/brush`, with M32) | open |
 | M34e | Fall Line's summer grass: the summer ground's meadows, pastures and runs as covers, the rotor's downwash flattening them | open |

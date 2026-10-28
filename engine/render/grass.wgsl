@@ -4,12 +4,12 @@
 // share of the curve and out to its side by the blade's width tapering to the tip, never under
 // about a pixel (a blade edge-on is widened toward the eye's side, so the field never shimmers to
 // threads). Lit two-sided: the sun past the ground's horizon and the shadow maps on the face
-// toward the eye, the sun through the blade from behind (translucency, strongest at the tips), the
-// sky's light dimmed toward the root (a dense field shades its own floor), and a faint sheen.
-// Hazed. A blade pressed underfoot (grass_common.wgsl's `press_at`) lies along the press's way,
-// on top of the field, so it is lit to its root and shows its paler back;
-// the fine blades' motion vectors carry their own sway since the last frame, so temporal
-// anti-aliasing keeps a waving field sharp.
+// toward the eye, dimmed by the canopy the sun crosses to reach it (`canopy_sun`), the sun
+// through the blade from behind (translucency, strongest at the tips), the sky's light dimmed
+// toward the root (a dense field shades its own floor), and a faint sheen. Hazed. A blade pressed
+// underfoot (grass_common.wgsl's `press_at`) lies along the press's way, on top of the field, so
+// it is lit to its root and shows its paler back; the fine blades' motion vectors carry their own
+// sway since the last frame, so temporal anti-aliasing keeps a waving field sharp.
 #include "render/wgsl/frame.wgsl"
 #include "render/wgsl/terrain_common.wgsl"
 #include "render/wgsl/sun_shadow.wgsl"
@@ -40,6 +40,18 @@ struct VertexOut {
   @location(5) prev_rel: vec3f,                 // where this point of the blade was last frame,
                                                 // relative to this frame's eye
   @location(6) @interpolate(flat) pressed: f32,  // 0..1, how flat it is pressed (lies on top)
+  @location(7) sunlit: f32,                      // the share of the sun the canopy lets through
+}
+
+// The field's own shade (docs/grass.md § Drawn): the sun reaching a point of a blade crosses the
+// canopy above it on its way down, through `lad` m² of blade a m³ (the kind's density times its
+// width), half of it facing the sun's way: exp(-0.5 lad L), L the path from the canopy's top to
+// the point along the sun. The canopy's top is the blade's own tip, since its neighbours bend
+// and are pressed as it is: a field laid over by a gale or trampled flat is lit deeper.
+fn canopy_sun(k: GrassKind, above_root: f32, top: f32) -> f32 {
+  let lad = k.shape.w * k.shape.z;
+  let depth = max(top - above_root, 0.0);
+  return exp(-0.5 * lad * depth / max(frame.sun.y, 0.08));
 }
 
 // `moving`: the blade's own motion since the last frame goes into the motion target (the fine
@@ -87,6 +99,7 @@ fn blade_vertex(b: Blade, vid: u32, segments: u32, moving: bool) -> VertexOut {
   out.normal = normalize(face + across * (side * 0.45));
   out.along = u;
   out.pressed = press.x;
+  out.sunlit = canopy_sun(k, p.y - b.root.y, s.v2.y - b.root.y);
   let hc = grass_hash(b.seed ^ 0x2545f491u);
   var tip = k.tip.xyz;
   if (grass_unit(hc) < k.air.z) {
@@ -130,13 +143,16 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   // its paler back: it is shaded as its tip is, and lighter.
   let open = max(in.along, in.pressed);
   let albedo = mix(in.root, in.colour, pow(open, 0.7)) * (1.0 + 0.25 * in.pressed);
-  // A dense field shades its own floor: the sky reaches the root a quarter as well as the tip.
+  // A dense field shades its own floor from the sky: it reaches the root a quarter as well as the
+  // tip.
   let floor_shade = mix(0.25, 1.0, smoothstep(0.0, 0.9, open));
-  let facing = max(dot(n, l), 0.0);
-  let through = max(dot(-n, l), 0.0) * 0.55 * mix(0.4, 1.0, in.along);
+  // The direct sun is the canopy's to dim (`sunlit`); what comes through the blades from behind
+  // is scattered forward on its way down, so the canopy dims it less.
+  let facing = max(dot(n, l), 0.0) * in.sunlit;
+  let through = max(dot(-n, l), 0.0) * 0.55 * mix(0.4, 1.0, in.along) * sqrt(in.sunlit);
   let sheen = pow(max(dot(reflect(-l, n), to_eye), 0.0), 18.0) * 0.06 * in.along;
-  let c = albedo / PI * (sun * (facing * floor_shade + through) + sky_irradiance(n) * floor_shade) +
-          sun * sheen;
+  let c = albedo / PI * (sun * (facing + through) + sky_irradiance(n) * floor_shade) +
+          sun * sheen * in.sunlit;
   var out: FragmentOut;
   out.colour = vec4f(haze(c, in.position.xy * frame.size.zw, length(in.rel)), 1.0);
   out.motion = vec4f(screen_motion(frame, vec4f(in.prev_rel, 1.0), in.position.xy), 0.0, 0.0);
