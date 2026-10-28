@@ -156,6 +156,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge services check` (a game's store catalog checked by `check_catalog`, and later diffed against a store's exported partner configuration)
 - `ge doctor --tools` / `ge env` (which tools, versions and drivers a gate needs, and which are missing)
 - `ge shader check <file.wgsl>` (one shader's includes resolved as the embedder does, compiled by Tint, the error named with its line: `make shaders-check` builds every shader and needs GE_GPU, and a reserved word showed only as finish() returning false)
+- `ge template check` (every `ge add` template and the scaffold filled at a short and a long game name, then `ge check` and clang-format run on each: a placeholder's tag line reflowed by clang-format broke only at a long name)
 - the WGSL embedder failing on an empty generated shader (an unbalanced bracket in a comment splits the CMake list and silently empties it)
 
 (`ge shot` is M12b's; `ge anim` is M14b's.)
