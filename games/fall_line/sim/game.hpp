@@ -16,7 +16,8 @@
 //    rides or was thrown off back on its belt with him on it.
 // 3. Skier against skier (`meet_racers`, field.hpp), the field in pair order.
 // 4. On a free ride dealt a crowd (`deal_crowd`, crowd.hpp): the crowd stepped (`step_crowd`)
-//    and every racer against it (`meet_crowd`).
+//    and every racer against it (`meet_crowd`). On a free ride with a village (village.hpp):
+//    every racer against its traffic where the clock has it (`meet_traffic`).
 // 5. The army on foot (`step_army`, army.hpp): the lifts' squads and the ground waves sent, every
 //    soldier moved, the arrest, and each one written into the hunt's pursuers; nothing on a run
 //    whose hunt never reached a star.
