@@ -13,6 +13,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <span>
 #include <vector>
 
 #include "mountain/mapgen/types.hpp"
@@ -27,7 +28,9 @@ struct TreeIndex {
   std::vector<int32_t> items;   // indices into level.trees
 };
 
-TreeIndex build_tree_index(const mountain::mapgen::Level& level);
+// `gone` (empty, or one flag a tree of `level.trees`) leaves out every tree flagged 1: felled.
+TreeIndex build_tree_index(const mountain::mapgen::Level& level,
+                           std::span<const uint8_t> gone = {});
 
 // The tree whose trunk a body of `radius` m at (x, z) overlaps most deeply, or -1.
 int32_t tree_overlap(const TreeIndex& index, const mountain::mapgen::Level& level, double x,
