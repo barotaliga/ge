@@ -10,6 +10,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
+#include <utility>
 
 #include "core/num_text.hpp"
 
@@ -147,7 +148,7 @@ struct Parser {
         i++;
         JsonNode m;
         if (!value(m, depth + 1)) return false;
-        v.members.emplace_back(std::move(key), std::move(m));
+        v.members.push_back({std::move(key), std::move(m)});
         space();
         if (i < s.size() && s[i] == ',') {
           i++;
@@ -275,9 +276,9 @@ void dump(std::string& out, const JsonNode& v) {
       out += '{';
       for (size_t k = 0; k < v.members.size(); k++) {
         if (k) out += ',';
-        quote(out, v.members[k].first);
+        quote(out, v.members[k].key);
         out += ':';
-        dump(out, v.members[k].second);
+        dump(out, v.members[k].value);
       }
       out += '}';
       break;
@@ -303,13 +304,13 @@ const JsonNode* JsonNode::find(std::string_view key) const {
 JsonNode& JsonNode::at(std::string_view key) {
   if (JsonNode* v = find(key)) return *v;
   kind = Kind::object;
-  members.emplace_back(std::string(key), JsonNode{});
-  return members.back().second;
+  members.push_back({std::string(key), JsonNode{}});
+  return members.back().value;
 }
 
 bool JsonNode::erase(std::string_view key) {
   for (auto it = members.begin(); it != members.end(); ++it) {
-    if (it->first == key) {
+    if (it->key == key) {
       members.erase(it);
       return true;
     }

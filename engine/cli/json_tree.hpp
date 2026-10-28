@@ -12,17 +12,18 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
-#include <utility>
 #include <vector>
 
 namespace ge::cli {
+
+struct JsonMember;
 
 struct JsonNode {
   enum class Kind : uint8_t { null, boolean, number, string, array, object } kind = Kind::null;
   bool boolean = false;
   std::string text;             // a string's value, or a number's spelling
   std::vector<JsonNode> items;  // an array's
-  std::vector<std::pair<std::string, JsonNode>> members;  // an object's, in order
+  std::vector<JsonMember> members;  // an object's, in order
 
   // An object's member by key, or nullptr.
   JsonNode* find(std::string_view key);
@@ -36,6 +37,11 @@ struct JsonNode {
 
   static JsonNode of_number(double v);
   static JsonNode of_string(std::string s);
+};
+
+struct JsonMember {
+  std::string key;
+  JsonNode value;
 };
 
 // `text` as one JSON value; false with `error` (what, and at which byte) when it is not.

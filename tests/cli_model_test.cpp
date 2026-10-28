@@ -88,7 +88,7 @@ TEST(a_json_document_round_trips_as_it_was) {
   c::JsonNode doc;
   std::string error;
   CHECK_MSG(c::parse_json(text, doc, error), error);
-  CHECK(doc.members.size() == 4 && doc.members[0].first == "z" && doc.members[1].first == "a");
+  CHECK(doc.members.size() == 4 && doc.members[0].key == "z" && doc.members[1].key == "a");
   CHECK(doc.find("a")->items[0].text == "1.50" && doc.find("a")->items[1].number() == -2000);
   CHECK(doc.find("s")->text == "t\"ab\\\n\xc3\xa9\xf0\x9f\x98\x80");
   const std::string out = c::dump_json(doc);
