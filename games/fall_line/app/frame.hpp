@@ -124,6 +124,8 @@ struct FrameOptions {
   double cover = -1;  // a broken sky's cover, its lowest layer's (the others kept in step); -1 own
   double thick =
       -1;  // how thick every layer is, 0 thin .. 1 thick (CloudLayer::thick_bias); -1 own
+  double cloud_height = -1;  // the lowest layer's base over the floor, m (Aloft::base); -1 own
+  double cloud_speed = -1;   // the layers' share of the true wind aloft (Aloft::speed); -1 own
   // The kinds of cloud drawn in place of the map's (sv_clouds, app/sky_type.hpp), lowest first;
   // a count of -1 keeps the map's own.
   const ge::render::CloudKind* cloud_kinds[ge::render::kCloudLayers] = {};

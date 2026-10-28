@@ -16,7 +16,7 @@ namespace {
 // base, depth, cover, cell bands; stretch, dome, opacity, shadow, life, speed; anvil, erode,
 // fibre, patch; the particles' radius, their spread, the halo; the deck; the thinnest patches'
 // share of the extinction and a patch's span in cells.
-const std::array<CloudKind, 15> kKinds{{
+const std::array<CloudKind, 16> kKinds{{
     {"inversion",
      "a sea of cloud filling the valleys under a clear sky",
      {-150, -50},
@@ -39,6 +39,29 @@ const std::array<CloudKind, 15> kKinds{{
      1,
      0.5,
      3},
+
+    {"fractus",
+     "ragged scud racing low under the sky, the moon through its gaps",
+     {200, 450},
+     {120, 260},
+     {0.2, 0.4},
+     {200, 400},
+     1.4,
+     0.6,
+     30,
+     2,
+     300,
+     6,
+     0,
+     0.65,
+     0,
+     0.3,
+     9,
+     0.35,
+     0,
+     0,
+     0.25,
+     2},
 
     {"stratus",   "a low grey lid, nearly even, the hills' tops in it",
      {350, 600},  {300, 500},
