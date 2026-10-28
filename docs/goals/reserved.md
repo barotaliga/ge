@@ -8,3 +8,4 @@ the same number twice. A row leaves this table in the pull request that adds it 
 | --- | --- |
 | M27 | **Bitmap font charsets** |
 | M28 | **Character movement physics** |
+| M39 | **Dynamic lights, shadows and materials**: local point and spot lights with flicker and pulses, their shadows, physically based materials, ambient occlusion and light shafts |
