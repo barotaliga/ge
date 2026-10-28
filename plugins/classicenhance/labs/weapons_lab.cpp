@@ -215,7 +215,7 @@ struct Scene {
 // One first-person frame: the map from `spot`, the weapon over it in its own depth range.
 Picture frame(const Scene& sc, const Spot& spot, const vm::HeldModel& gun, int fa, int fb,
               double ft, const vm::Placement& place, const std::vector<vm::PointLight>& lights,
-              double* gun_level = nullptr) {
+              double* gun_level = nullptr, bool hide_flame = false, bool mark = false) {
   const double aspect = double(sc.width) / sc.height;
   const double fov_y = ge::camera::fov_y_of(kFovH * ge::core::kPi / 180);
   Picture room = ge::lab::create_picture(sc.width, sc.height, {0, 0, 0});
@@ -248,8 +248,31 @@ Picture frame(const Scene& sc, const Spot& spot, const vm::HeldModel& gun, int f
   d.skin = gun.skin.image.rgba.empty() ? nullptr : &gun.skin;
   d.fov_y = place.fov_y > 0 ? place.fov_y : fov_y;
   d.near_m = 0.01;
+  if (hide_flame) d.hidden = gun.flame;
   vm::draw_lit(t, d, lit);
   room.rgba = vm::resolve_over(t, room.rgba);
+  if (mark) {
+    // The muzzle as a world effect would place it: the tip and its direction into the world
+    // through the gun's lens, then onto the screen through the view's.
+    float tip[3];
+    vm::muzzle_at(gun, fa, fb, ft, tip);
+    double w[3], dir[3];
+    vm::held_to_world(place, d.fov_y, view, tip, w);
+    vm::held_dir_to_world(place, d.fov_y, view, tip, gun.muzzle_dir, dir);
+    const auto screen = [&](const double world[3], double out[2]) {
+      float v[3];
+      vm::world_to_view(view, world, v);
+      const double ty = ge::core::libm::tan(fov_y * 0.5), tx = ty * aspect;
+      out[0] = (v[0] / v[2] / tx + 1) * 0.5 * sc.width;
+      out[1] = (1 - v[1] / v[2] / ty) * 0.5 * sc.height;
+    };
+    const double ahead[3] = {w[0] + dir[0] * 0.3, w[1] + dir[1] * 0.3, w[2] + dir[2] * 0.3};
+    double a[2], b[2];
+    screen(w, a);
+    screen(ahead, b);
+    ge::lab::draw_line(room, a[0], a[1], b[0], b[1], {80, 220, 255});
+    ge::lab::draw_ring(room, a[0], a[1], 5, {80, 220, 255});
+  }
   return room;
 }
 
@@ -373,19 +396,21 @@ void run(ge::lab::Lab& lab) {
   }
   const Weapon& gun = weapons[chosen];
 
-  ge::lab::LabTable table{"every held weapon: its size and its frames",
-                          {"weapon", "frames", "vertices", "triangles", "length m", "glows"},
-                          {}};
+  ge::lab::LabTable table{
+      "every held weapon: its size and its frames",
+      {"weapon", "frames", "vertices", "triangles", "length m", "glows", "flame tris"},
+      {}};
   {
     std::vector<Picture> panels;
     std::vector<std::string> labels;
     for (const Weapon& w : weapons) {
       float lo[3], hi[3];
       vm::held_bounds(w.held, lo, hi);
-      table.rows.push_back({short_name(w.name), std::to_string(w.held.frames.size()),
-                            std::to_string(w.held.vertex_count()),
-                            std::to_string(w.held.indices.size() / 3), f2(hi[2] - lo[2]),
-                            w.held.skin.glow.empty() ? "no" : "yes"});
+      table.rows.push_back(
+          {short_name(w.name), std::to_string(w.held.frames.size()),
+           std::to_string(w.held.vertex_count()), std::to_string(w.held.indices.size() / 3),
+           f2(hi[2] - lo[2]), w.held.skin.glow.empty() ? "no" : "yes",
+           std::to_string(std::count(w.held.flame.begin(), w.held.flame.end(), uint8_t{1}))});
       lab.metric("length-" + short_name(w.name), hi[2] - lo[2], "m");
       panels.push_back(frame(sc, start, w.held, 0, 0, 0, rest, {}));
       labels.push_back(short_name(w.name));
@@ -435,6 +460,29 @@ void run(ge::lab::Lab& lab) {
                 {{"map", where}}},
                sheet(panels, labels, std::min<int>(3, int(panels.size()))));
     }
+  }
+
+  {
+    // Each weapon on its first firing frame: the file's flash, then the engine's place for one.
+    std::vector<Picture> panels;
+    std::vector<std::string> labels;
+    for (const Weapon& w : weapons) {
+      const int f = w.held.frames.size() > 1 ? 1 : 0;
+      panels.push_back(frame(sc, start, w.held, f, f, 0, rest, {}, nullptr, false, false));
+      labels.push_back(short_name(w.name) + " file flash");
+      panels.push_back(frame(sc, start, w.held, f, f, 0, rest, {}, nullptr, true, true));
+      labels.push_back(short_name(w.name) + " muzzle");
+    }
+    lab.shot({"muzzle",
+              "THE FILE'S FLASH, THEN THE MUZZLE",
+              "Each weapon on its first firing frame, twice: with the flash its file draws, then "
+              "with that flash hidden and the muzzle marked where a world effect would stand (the "
+              "ring the tip, the line the way the shot leaves), carried into the world through "
+              "the gun's lens and back onto the screen.",
+              "the ring sits on the barrel's tip, where the file's flash was; the line runs out "
+              "along the barrel; nothing of the file's flash is left when it is hidden",
+              {{"map", where}}},
+             sheet(panels, labels, 4));
   }
 
   {

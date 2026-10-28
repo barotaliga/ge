@@ -49,6 +49,32 @@ bool parse_origin(const std::string& s, float out[3]) {
   return std::sscanf(s.c_str(), "%f %f %f", &out[0], &out[1], &out[2]) == 3;
 }
 
+// The file's own muzzle flash: glowing triangles parked BEHIND the eye (out of sight) on some
+// frames and in front of it on others, as the classic files hide a flash between shots. A lamp
+// or a sight glows on every frame in front of the eye and is not marked.
+void mark_flame(viewmodel::HeldModel& h) {
+  h.flame.assign(h.indices.size() / 3, 0);
+  if (h.skin.glow.empty() || h.frames.size() < 2) return;
+  const assets::Image& img = h.skin.image;
+  for (size_t t = 0; t + 2 < h.indices.size(); t += 3) {
+    double u = 0, v = 0;
+    for (size_t k = 0; k < 3; k++) {
+      u += h.uv[size_t{h.indices[t + k]} * 2] / 3.0;
+      v += h.uv[size_t{h.indices[t + k]} * 2 + 1] / 3.0;
+    }
+    const int x = std::clamp(int(u * img.width), 0, img.width - 1);
+    const int y = std::clamp(int(v * img.height), 0, img.height - 1);
+    if (h.skin.glow[size_t(y) * size_t(img.width) + size_t(x)] == 0) continue;
+    bool behind = false, ahead = false;
+    for (const viewmodel::HeldFrame& f : h.frames) {
+      double z = 0;
+      for (size_t k = 0; k < 3; k++) z += f.positions[size_t{h.indices[t + k]} * 3 + 2];
+      (z < 0 ? behind : ahead) = true;
+    }
+    if (behind && ahead) h.flame[t / 3] = 1;
+  }
+}
+
 }  // namespace
 
 viewmodel::HeldModel held_from_morph(const morph::Model& model, const Palette& palette, int skin) {
@@ -87,6 +113,8 @@ viewmodel::HeldModel held_from_morph(const morph::Model& model, const Palette& p
   } else {
     out.colour.assign(size_t(n) * 3, 0.5f);
   }
+  mark_flame(out);
+  viewmodel::find_muzzle(out);
   return out;
 }
 

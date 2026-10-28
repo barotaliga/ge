@@ -11,6 +11,11 @@
 //   fronts out. Normals are the frame's own smooth ones (`morph::frame_normals`).
 // - **The skin**: the palette indices through the pack's palette, and the GLOW mask from the
 //   palette's fullbright range (`kFullbrightFirst` up): a sight or a nail gun's lamp lights itself.
+// - **The flash and the muzzle**: a held weapon's file draws its muzzle flash as glowing triangles
+//   parked behind the eye between shots and brought in front of the barrel on the firing frames.
+//   Those are marked as the model's `flame` (a game whose engine draws the flash hides them); the
+//   muzzle is the barrel's front on the rest frame, the flash left out (`find_muzzle`), so the tip
+//   rides the recoil frames with the barrel.
 // - **The light** (`probe_under`): the classic game lights a model by the floor under it, so the
 //   probe is the lightmap of the first surface straight below the player, read where the line down
 //   meets it. A luxel of 128 is a surface as painted, so 128 is 1 in the view model's light unit;
