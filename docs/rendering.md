@@ -1097,6 +1097,66 @@ the silhouette, not the folds. The `crowd-look` lab
 films a lift's queue, a busy run, a group and one of them down at `--hour` (11: the sun on the
 runs), each with the crowd and without.
 
+## Explosions
+
+A blast is common in the games this engine serves (a rocket, a grenade, a barrel), so it is built
+to cost little and to read as fire and smoke rather than as a flat sprite.
+
+**As built (M47a).** What a blast IS at each moment of its life is `engine/render/explosion.hpp`,
+pure functions of the `Blast` (where and when it went off, its look, its scale, its seed, whether
+it went off against a surface) and the clock, so a replay, a lab and two clients see the same
+fireball. **One code draws every blast; what tells a rocket from a grenade, or one game's blast from
+another's, is its LOOK** (`BlastLook`): 26 knobs, each named, explained and ranged in
+`blast_knobs()` and set by name with `set_knob` (clamped). They cover the fireball (its radius, how
+fast it swells, how much it grows as smoke, how fast it rises), the fire (how much burns, for how
+long, how hot it starts, what it cools toward and how fast, how bright its light), the smoke (how
+thick, how fast it builds, how long it lasts, how pale it is and its tint: soot, dust, steam), the
+shape (how deep the billows cut, their size, the fray at the edge, how fast it rolls), what it throws
+(sparks: how many, how fast, how long, how hot; debris: how many, how many still glowing) and what it
+leaves (the scorch's size, the light's reach). The engine's presets are starting points with stable
+ids a content table names them by: `explosion` (the common blast, 1.4 m), `explosion.rocket` (hot,
+quick and bright, a spray of fast sparks, thin dark smoke), `explosion.grenade` (a short dull flash,
+a fat cloud of pale brown dust, many chunks of debris, hanging longer), `explosion.small` and
+`explosion.large`; a game copies one, turns its knobs and points its blasts at its own, and the
+`gpu-explosion` lab's `--look` and `--set=knob=value,...` show any of them. The shader reads the
+shape and the smoke's colour per blast, so many looks in one frame cost nothing more. The fireball swells to its radius in about a fifth of a second, grows on
+slowly as smoke, rises as hot air does, and cools from about 2300 K toward a dull red while its
+burning share falls and its smoke climbs and thins away over 3 to 5 s. Its colour and brightness are
+a blackbody's (`engine/render/blackbody.hpp`: Planck's law against the CIE 1931 colour matching
+functions, the absolute luminance a perfect radiator has), so the fire sits in the sun's units: blown
+white for a few hundredths of a second, orange, then red, and far brighter against a dusk the eye
+has adapted to than against a sunlit yard. The flash a game hands its local lights
+(`flash_at`) is the glowing ball's own luminous intensity (its disc times its core's blackbody
+luminance times what still burns, about 1.5 million cd at its peak), in the core's colour. What it
+throws (`blast_births`, dealt off its seed at the moment it goes off) is white-hot sparks that cool
+to red as they fall and dark debris, some still glowing; off a surface they fly into the half space
+it faces. The scorch it leaves (`scorch_of`) is its kind's size times its scale, turned and picked
+off the seed, for a game to press with `engine/detail`'s scorch decal (none for a look whose
+scorch is 0).
+
+`engine/render/explosions.hpp` draws them. Each live blast is ONE QUAD round its ball's outline on
+the screen (the whole screen when the eye is inside it), and the pixel's ray is cut by the ball and
+by the scene's depth, so a wall or the floor clips it exactly, and marched in 10 steps from a jittered
+start that the TAA resolve averages away. Each step reads the cloud's tileable noise twice (the
+billows and a finer fray, `render/clouds.hpp`'s texture already bound in group 0, so the pass has no
+texture of its own) and carves the ball's edge into rolling billows. Gas that is deep inside and
+still burning emits its temperature's blackbody light; the rest is smoke of its look's albedo and tint lit by the sun
+on its sunward side, the sky and the fire inside it; emission and absorption are integrated front to
+back and the march stops once the ray is opaque. At most 32 are drawn a frame, the nearest, back to
+front, premultiplied, each writing the reactive channel so TAA does not smear it. The sparks are the
+particle pool's (§ Particles and figures): a particle with a `kelvin` glows as a blackbody cooling
+toward 700 K by e every `cool_s`.
+
+**The cost.** The pass runs only on the pixels a ball covers, two fetches a step. On the software
+adapter at 640 x 360 (`gpu-explosion`, the pass's own timestamps), a frame of the yard costs about
+42 ms; one blast 10 m ahead (3% of the screen) costs the pass 0.5 to 0.7 ms, 32 at once 0.8 ms (most of them small
+and far), and one filling the whole screen 0.9 ms, since dense smoke ends the march early (about 2% of the frame at most). A real
+GPU's times need the Mac. The CPU stages 32 blasts in about 0.1 ms in the debug build.
+
+**Not yet:** the flash lighting the scene (it needs the local lights, M39a) and the scorch pressed
+(it needs the decals, M42b), and particles colliding with anything but a heightfield: rows M47b and
+M47c.
+
 ## Shaders
 
 - **WGSL**, one file per pass, beside the pass's C++. A small build step resolves
