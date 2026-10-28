@@ -3,10 +3,10 @@
 // new, add system, add lab, add test, use, doctor, find, explain, golden diff) through the same
 // code the ge executable runs, printing each answer as text the way an agent reads it. For each
 // command it reports the answer's lines and bytes and how long it took, and it fails a command
-// whose text answer outgrows its budget: an agent pays for every line ge prints. Only the catalog's
-// shape (its commands and flags) is in the digest: the answers carry the version, name paths and
-// read the engine's tags, which releases and changes move, so they are measured (printed and
-// compared with --compare, never hashed). Building and testing a scaffolded repo for real is the
+// whose text answer outgrows its budget: an agent pays for every line ge prints. Every metric is
+// measured (printed and compared with --compare, never hashed): the answers carry the version,
+// name paths and read the engine's tags, and the catalog grows with every new command or flag, so
+// a digest of any of it would move in every pull request that touches ge and make them clash. Building and testing a scaffolded repo for real is the
 // packaging workflow's `scaffold` job.
 //
 // ge:summary Lab: the ge commands of an agent's loop run on a scaffolded repo; answer sizes, times
@@ -70,12 +70,14 @@ void run(ge::lab::Lab& lab) {
     }
   };
 
-  // The catalog: its shape is in the digest. The help's sizes carry the engine's version, which
-  // every release moves, so they are measured.
+  // The catalog's size is measured, not in the digest: every pull request that adds a command or a
+  // flag would move it, and two such pull requests would then clash on this lab's digest file.
+  // The catalog itself is held by cli_diagnostics_test. The help's sizes carry the engine's
+  // version, which every release moves, so they are measured too.
   int flags = 0;
   for (const CommandSpec& c : commands()) flags += static_cast<int>(c.flags.size());
-  lab.metric("catalog.commands", static_cast<double>(commands().size()), "count");
-  lab.metric("catalog.flags", flags, "count");
+  lab.metric("catalog.commands", static_cast<double>(commands().size()), "count", Det::measured);
+  lab.metric("catalog.flags", flags, "count", Det::measured);
   Outcome help;
   help.text = help_text(nullptr);
   // One line a command, a blank and a heading a stage, three lines before and two after: a
