@@ -12,7 +12,7 @@
 
 namespace ge::skier {
 
-TreeIndex build_tree_index(const mountain::mapgen::Level& level) {
+TreeIndex build_tree_index(const mountain::mapgen::Level& level, std::span<const uint8_t> gone) {
   TreeIndex ix;
   const double size = level.size > 0 ? level.size : 1;
   ix.cols = static_cast<int32_t>(std::ceil(size / ix.cell));
@@ -20,7 +20,11 @@ TreeIndex build_tree_index(const mountain::mapgen::Level& level) {
   const size_t n = static_cast<size_t>(ix.cols) * static_cast<size_t>(ix.rows);
   ix.starts.assign(n + 1, 0);
   std::vector<size_t> cell_of_tree(level.trees.size());
+  const auto felled = [&gone](size_t i) { return i < gone.size() && gone[i] != 0; };
+  size_t kept = 0;
   for (size_t i = 0; i < level.trees.size(); i++) {
+    if (felled(i)) continue;
+    kept++;
     const auto& t = level.trees[i];
     const size_t c =
         static_cast<size_t>(tree_cell(t.z, ix.cell, ix.rows)) * static_cast<size_t>(ix.cols) +
@@ -29,9 +33,10 @@ TreeIndex build_tree_index(const mountain::mapgen::Level& level) {
     ix.starts[c + 1]++;
   }
   for (size_t c = 0; c < n; c++) ix.starts[c + 1] += ix.starts[c];
-  ix.items.assign(level.trees.size(), 0);
+  ix.items.assign(kept, 0);
   std::vector<int32_t> fill(ix.starts.begin(), ix.starts.end() - 1);
   for (size_t i = 0; i < level.trees.size(); i++) {
+    if (felled(i)) continue;
     ix.items[static_cast<size_t>(fill[cell_of_tree[i]]++)] = static_cast<int32_t>(i);
   }
   return ix;
