@@ -197,7 +197,6 @@ bool write_report(const Lab& lab, const std::string& dir, std::string& error) {
   for (const auto& f : lab.files()) {
     const std::string path = dir + "/" + f.name;
     // An attachment may sit in a subdirectory of the run's (frames/0001.png).
-    std::error_code ec;
     std::filesystem::create_directories(std::filesystem::path(path).parent_path(), ec);
     std::ofstream file(path, std::ios::binary);
     file.write(reinterpret_cast<const char*>(f.bytes.data()),
