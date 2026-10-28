@@ -167,6 +167,8 @@ FrameOptions frame_options(const cfg::Settings& s) {
   o.clouds = s.clouds;
   o.cover = s.cover;
   o.thick = s.thick;
+  o.cloud_height = s.cloud_height;
+  o.cloud_speed = s.cloud_speed;
   cloud_stack_of(s, o);
   return o;
 }
@@ -377,14 +379,21 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   // The map's sky at the view's moment: the cloud, the deck and the fog it is seen under.
   r::FrameView view = seen;
   if (f.options.weather) {
+    // How far dusk has fallen under the view's sun (the evening's jet and its scud), and the
+    // height and the speed picked by hand.
+    // (With the moon the key light the view's sun_* are the moon's, and Night's the sun's.)
+    const double sun = view.night.moon_key ? view.night.sun_elevation : view.sun_elevation;
+    const ge::mountain::app::Aloft aloft{.dusk = ge::mountain::app::dusk_of(sun),
+                                         .speed = f.options.cloud_speed,
+                                         .base = f.options.cloud_height};
     ge::mountain::app::sky_at(*f.level, view.time_s, view.weather, view.clouds,
-                              f.options.clouds > 0, view.eye[1]);
+                              f.options.clouds > 0, view.eye[1], aloft);
     // Kinds of cloud picked by hand (sv_clouds) in place of the map's, dealt off its seed.
     if (f.options.cloud_count >= 0 && f.options.clouds > 0) {
       const ge::mountain::mapgen::Level& l = *f.level;
       view.clouds = ge::mountain::app::cloud_layers_of(f.options.cloud_kinds, f.options.cloud_count,
                                                        l.weather, l.seed, l.mountain.base.y,
-                                                       l.sun.latitude, view.time_s);
+                                                       l.sun.latitude, view.time_s, aloft);
       view.weather = ge::mountain::app::weather_look(
           l.weather, ge::mountain::air::fall_at(l, view.time_s, view.eye[1]),
           view.clouds.count > 0);
