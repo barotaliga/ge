@@ -127,7 +127,8 @@ porting ends, and nothing outside it may depend on it except `make golden`.
   pictures: a lab's screenshots, before and after side by side, a chart of the numbers, a
   diagram of a design, or a table of measurements drawn as an image. Nearly all work can be
   shown this way; the labs exist to make that cheap (`labs` skill). Put the pictures on one
-  page linked from the report and the PR, never as loose attachments.
+  page linked from the report and the PR, never as loose attachments: `ge lab publish <id>
+  --before=before` writes that page for a lab's run.
 - **SAY WHAT `ge` LACKED.** `ge` is the agent's whole interface (G6), so it grows from what
   agents miss. When a task would have been easier with a `ge` command or flag that does not
   exist (to build, debug, inspect, measure or optimise), say so in the PR description under
@@ -377,4 +378,4 @@ and the directories agree.
 | `replay` | `engine/replay`: watching a run again: a game's `Run::clone`, the keyframes and their thinning, the player's seek in a step budget, the transport; later the replay file, the instant replay, the director, spectating by inputs and the video export (M23) |
 | `free-assets` | Sounds and models made free by others: the sources and the licences this repository can carry, fetching and unpacking, a game's registry of what it needs (Shooter's Edge's `games/shooters_edge/content/`), picking without listening, converting to our names, `classic.assetmap`, CREDITS.md |
 | `net` | `engine/net`: multiplayer networking: sockets, the simulated network and its conditions, captures, the wire format, connections and channels, nodes up to 32, sessions (lobby, teams, chat, kick, reconnect), LAN discovery, NAT traversal (STUN, the rendezvous, hole punching, the relay, a port opened by PCP, NAT-PMP or UPnP), fake traffic, the `net-link`, `net-session` and `net-reach` labs; the M17 plan |
-| `services` | `engine/services`: platform services (achievements, stats, leaderboards, cloud, presence, friends, overlay, DLC, screenshots) behind one `Backend`, the game's catalog, the simulated and offline stores, the `services` lab; Steam and other stores' backends, the SDK kept out of the tree (M20) |
+| `services` | `engine/services`: platform services (achievements, stats, leaderboards, cloud, presence, friends, overlay, DLC, screenshots) behind one `Backend`, the game's catalog, the simulated and offline stores, the `services` lab; Steam and other stores' backends, the SDK kept out of the tree; Discord's presence over its local IPC and the `discord` lab (M20) |
