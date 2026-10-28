@@ -1,7 +1,7 @@
 ---
 title: A failed read_flat leaves the map empty
 date: 2026-10-22
-scope: engine/play/json_read.hpp
+scope: engine/core/json_read.hpp
 concepts: [json, read-flat, play, testing]
 ---
 

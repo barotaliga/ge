@@ -2,7 +2,7 @@
 // audio track written as blocks in time order, in clusters, with the cues a player seeks by. WebM
 // is Matroska with a narrower list of codecs; the file says `webm` when every track's codec is one
 // WebM allows (VP8, VP9, AV1, Opus, Vorbis) and `matroska` otherwise (the uncompressed I420 and
-// float PCM the export writes until an encoder is built, row M23d2).
+// float PCM the export writes by default).
 //
 // THE LAYOUT: the EBML header, then the SEGMENT, written with an unknown size and patched on
 // close: a seek head (reserved as a Void, filled in on close with where the info, the tracks and
@@ -20,6 +20,7 @@
 // ge:summary The Matroska / WebM muxer: tracks, clusters, cues, a seek head patched on close
 // ge:keywords matroska mkv webm muxer mux container cluster cues seek-head simpleblock segment
 // ge:keywords v_uncompressed i420 a_pcm float doc-type track video audio keyframe
+// ge:keywords v_av1 a_opus codec-delay seek-pre-roll codec-private
 // ge:skill replay
 // ge:test tests/capture_matroska_test.cpp
 #pragma once
@@ -48,8 +49,10 @@ struct AudioTrack {
   std::string codec = "A_PCM/FLOAT/IEEE";
   int rate = 48000;
   int channels = 2;
-  int bits = 32;
+  int bits = 32;  // 0: none written (a compressed codec has no bit depth)
   std::vector<uint8_t> codec_private;
+  int64_t codec_delay_ns = 0;    // > 0: the samples a decoder drops first (Opus's pre-skip)
+  int64_t seek_pre_roll_ns = 0;  // > 0: how far before a seek's target decoding must start
 };
 
 struct MatroskaOptions {
