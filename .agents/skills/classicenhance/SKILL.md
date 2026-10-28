@@ -1,6 +1,6 @@
 ---
 name: classicenhance
-description: "Use for plugins/classicenhance in gameengine2: the classic packs (the shareware pack or the player's own full game) enhanced on the player's own machine. Finding the pack (the release zip and its self-extracting LHA archive, an installed folder, the pack file) the full game's later packs layered over the first, known releases reported by SHA-256 and any other pack taken unverified; the local cache and its stages (pack, textures, lightmaps, sounds, models); the texture enhancer (the edge-aware upscale, the height, normal, roughness and glow maps); the sound enhancer (noise reduction, 48 kHz, the rebuilt top band); the models as glTF and the effects the engine draws in their place; the lightmap stage's slot for the rebake; the `classicenhance` tool run by `ge tool`; and the line that keeps it legal: ship the pipeline, never its output."
+description: "Use for plugins/classicenhance in gameengine2: the classic packs (the shareware pack or the player's own full game) enhanced on the player's own machine. Finding the pack (the release zip and its self-extracting LHA archive, an installed folder, the pack file) the full game's later packs layered over the first, known releases reported by SHA-256 and any other pack taken unverified; the local cache and its stages (pack, textures, lightmaps, sounds, models); the texture enhancer (the edge-aware upscale, the height, normal, roughness and glow maps); the sound enhancer (noise reduction, 48 kHz, the rebuilt top band); the models as glTF and the effects the engine draws in their place; the pack's held weapons as view models (`weapons.hpp`, the `classic-weapons` lab); the lightmap stage's slot for the rebake; the `classicenhance` tool run by `ge tool`; and the line that keeps it legal: ship the pipeline, never its output."
 ---
 
 # The classic-enhance plugin
@@ -9,8 +9,9 @@ description: "Use for plugins/classicenhance in gameengine2: the classic packs (
 classic shareware pack a player already has and enhances it on their machine into a local
 cache. It depends on the core, `assets` (the inflater, SHA-256), `audio` (the spectrum and the
 resampler), `lab` (the PNG writer), `vfs`
-(the pack and zip archives), `brush` (the maps) and `morph` (the models and sprites):
-`ge_add_plugin(classicenhance ENGINE core assets audio lab vfs PLUGINS brush morph)`.
+(the pack and zip archives), `camera` and `viewmodel` (the view, and the held weapon's form, place and light), `brush` (the
+maps) and `morph` (the models and sprites):
+`ge_add_plugin(classicenhance ENGINE core assets audio camera lab vfs viewmodel PLUGINS brush morph)`.
 
 ## The line that keeps it legal
 
@@ -48,6 +49,7 @@ resampler), `lab` (the PNG writer), `vfs`
 | `classicenhance/models.hpp/.cpp` | The models stage: `enhance_models` (every model as glTF with enhanced skins, sprites' frames as PNGs, the index and `replaced.txt`), `drop_glowing` |
 | `classicenhance/replace.hpp` | `kReplacements`: the pack files the engine draws its own effect in place of (file, effect id, keep the glowing parts, why) |
 | `classicenhance/pipeline.hpp/.cpp` | `run_pipeline`: the stages pack → textures → lightmaps → sounds → models, each skipped when its recorded key is current; `pack_textures` |
+| `classicenhance/weapons.hpp/.cpp` | The held weapons (M48b): `held_from_morph` (the eye frame into the held frame, wound back out, the fullbright skin texels as glow), `classic_weapon_row`, `probe_under` (the lightmap under the player, 128 = 1), `muzzle_flash_light`, `flame_lights`, `pack_weapons` |
 | `classicenhance/tool/main.cpp` | The `classicenhance` executable (`verify`, `run`, `status`), one JSON object an answer |
 
 Beside it in the engine: `engine/vfs/zip.hpp` (the zip reader, also the `.pk3` container),

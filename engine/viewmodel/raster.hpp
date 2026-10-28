@@ -16,7 +16,8 @@
 // ge:summary The held model drawn on the CPU: a lit, depth-tested raster in the view's frame
 // ge:keywords viewmodel cpu raster rasterizer triangles depth z-buffer perspective-correct
 // ge:keywords near-clip back-face supersample resolve exposure srgb draw_lit clear_depth
-// ge:keywords held-raster view-target hidden-triangles hide-flame
+// ge:keywords held-raster view-target hidden-triangles hide-flame resolve_over composite
+// ge:keywords over-picture
 // ge:skill render labs
 // ge:test tests/viewmodel_raster_test.cpp
 #pragma once
@@ -61,6 +62,11 @@ void draw_lit(ViewTarget& t, const DrawLit& d, const Lighting& light);
 // pixel times `exposure` and rolled off above 1 (x / (1 + x) past a knee), so a flash does not
 // clip flat.
 std::vector<uint8_t> resolve(const ViewTarget& t, double exposure = 1.0);
+// The same, laid over `under` (RGBA8, sRGB, the resolved size): where the target drew nothing
+// the picture beneath shows, and a pixel the drawing half covers is blended by its share (a
+// held weapon over a room another raster drew).
+std::vector<uint8_t> resolve_over(const ViewTarget& t, std::span<const uint8_t> under,
+                                  double exposure = 1.0);
 
 // A held model placed by `place` (viewmodel/place.hpp) into the view: its frames `a`, `b` blended
 // by `t`, drawn with `fov_y` into `out_positions` and `out_normals` (view).
