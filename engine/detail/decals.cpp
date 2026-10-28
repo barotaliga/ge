@@ -192,7 +192,8 @@ std::vector<uint8_t> bake_atlas(int size, int variants) {
         for (int x = 0; x < size; ++x) {
           const MaskSample m = mask_at(static_cast<DecalKind>(k), static_cast<uint32_t>(var),
                                        (x + 0.5) / size, (y + 0.5) / size);
-          const size_t o = (static_cast<size_t>(k * size + y) * w + var * size + x) * 4;
+          const size_t o =
+              ((static_cast<size_t>(k) * size + y) * w + static_cast<size_t>(var) * size + x) * 4;
           const auto c = static_cast<uint8_t>(std::lround(m.cover * 255));
           px[o] = c;
           px[o + 1] = static_cast<uint8_t>(std::lround((m.shade * 0.5 + 0.5) * 255));
@@ -212,8 +213,8 @@ DecalPool make_pool(uint32_t capacity, uint32_t verts_per_decal) {
   p.verts.resize(static_cast<size_t>(capacity) * p.verts_per_decal);
   p.poly.reserve(16);
   p.next.reserve(16);
-  p.staged.reserve(p.verts_per_decal * 4);
-  p.order.reserve(p.verts_per_decal * 4 / 3);
+  p.staged.reserve(size_t{p.verts_per_decal} * 4);
+  p.order.reserve(size_t{p.verts_per_decal} * 4 / 3);
   p.kept.reserve(p.verts_per_decal);
   return p;
 }

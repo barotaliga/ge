@@ -211,17 +211,17 @@ void run(gl::Lab& lab) {
     // Everything at once: bevels, props, and a few marks.
     gd::DecalPool pool = gd::make_pool(16);
     struct M {
-      gd::DecalKind kind;
       gd::Vec3 at, n;
       double size, age;
       uint32_t var;
+      gd::DecalKind kind;
     };
     const M marks[] = {
-        {gd::DecalKind::scorch, {6, 0, 3}, gd::normalized({-1, 1, 0}), 1.6, 0, 0},
-        {gd::DecalKind::scorch, {1.2, 0, 2.2}, {0, 1, 0}, 1.1, 0, 1},
-        {gd::DecalKind::blood, {3.62, 0.2, 8.4}, gd::normalized({-1, 1.2, 0}), 1, 5, 2},
-        {gd::DecalKind::bullet_hole, {-0.4, 1.6, 9.6}, {0, 0, -1}, 0.16, 0, 1},
-        {gd::DecalKind::bullet_hole, {0.3, 1.9, 9.6}, {0, 0, -1}, 0.16, 0, 2}};
+        {{6, 0, 3}, gd::normalized({-1, 1, 0}), 1.6, 0, 0, gd::DecalKind::scorch},
+        {{1.2, 0, 2.2}, {0, 1, 0}, 1.1, 0, 1, gd::DecalKind::scorch},
+        {{3.62, 0.2, 8.4}, gd::normalized({-1, 1.2, 0}), 1, 5, 2, gd::DecalKind::blood},
+        {{-0.4, 1.6, 9.6}, {0, 0, -1}, 0.16, 0, 1, gd::DecalKind::bullet_hole},
+        {{0.3, 1.9, 9.6}, {0, 0, -1}, 0.16, 0, 2, gd::DecalKind::bullet_hole}};
     dv::Canvas c = dv::make_canvas(w, h, kHallCam);
     dv::draw_mesh(c, mesh, dv::hall_paint);
     for (const M& m : marks) {

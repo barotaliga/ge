@@ -290,7 +290,8 @@ Picture finish(const Canvas& c, Rgba sky) {
       double sum[3] = {0, 0, 0};
       for (int sy = 0; sy < c.ss; ++sy) {
         for (int sx = 0; sx < c.ss; ++sx) {
-          const size_t i = static_cast<size_t>(y * c.ss + sy) * W + x * c.ss + sx;
+          const size_t i =
+              static_cast<size_t>(y * c.ss + sy) * W + static_cast<size_t>(x * c.ss + sx);
           double rgb[3];
           if (c.depth[i] == kInf) {
             for (int k = 0; k < 3; ++k) rgb[k] = sky_lin[k];
@@ -329,6 +330,7 @@ std::vector<gd::Solid> bevelled(const std::vector<gd::Solid>& solids, const gd::
                                 std::vector<gd::BevelResult>* out) {
   const auto r = gd::bevel_all(solids, spec);
   std::vector<gd::Solid> s;
+  s.reserve(r.size());
   for (const gd::BevelResult& b : r) s.push_back(b.solid);
   if (out) *out = r;
   return s;

@@ -19,7 +19,7 @@
 namespace ge::detail {
 
 // The tags the hall's faces carry.
-enum HallTag : uint16_t { kHallFloor = 0, kHallWall = 1, kHallTimber = 2, kHallBasin = 3 };
+enum HallTag : uint8_t { kHallFloor = 0, kHallWall = 1, kHallTimber = 2, kHallBasin = 3 };
 
 struct TestHall {
   std::vector<Solid> solids;

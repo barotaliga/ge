@@ -161,10 +161,10 @@ TEST(placements_keep_their_bits) {
   gd::DecalPool pool = gd::make_pool(16);
   std::vector<std::vector<uint64_t>> got;
   const gd::DecalAt shots[] = {
-      {gd::DecalKind::scorch, {6, 0, 3}, gd::normalized({-1, 1, 0}), 1.2, 0.3, 1, 0},
-      {gd::DecalKind::blood, {4.1, 0.25, 7.6}, gd::normalized({-1, 1, -1}), 0.9, 1.1, 2, 0},
-      {gd::DecalKind::bullet_hole, {-3, 2, 5.58}, {0, 0, -1}, 0.14, 2.2, 3, 0},
-      {gd::DecalKind::blood, {-0.2, 2.8, 9.55}, gd::normalized({0, -0.3, -1}), 0.5, 0, 0, 0},
+      {{6, 0, 3}, gd::normalized({-1, 1, 0}), 1.2, 0.3, 0, 1, gd::DecalKind::scorch},
+      {{4.1, 0.25, 7.6}, gd::normalized({-1, 1, -1}), 0.9, 1.1, 0, 2, gd::DecalKind::blood},
+      {{-3, 2, 5.58}, {0, 0, -1}, 0.14, 2.2, 0, 3, gd::DecalKind::bullet_hole},
+      {{-0.2, 2.8, 9.55}, gd::normalized({0, -0.3, -1}), 0.5, 0, 0, 0, gd::DecalKind::blood},
   };
   for (const gd::DecalAt& d : shots) {
     const int slot = gd::place_decal(pool, r, d);

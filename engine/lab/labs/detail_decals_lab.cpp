@@ -53,7 +53,8 @@ std::vector<Mark> fire_fight() {
   add(K::scorch, {6, 0, 4.6}, {-1, 1, 0}, 1.6, 0.4, 0, 0);
   add(K::scorch, {1.2, 0, 2.2}, {0, 1, 0}, 1.1, 2.0, 1, 0);
   for (int i = 0; i < 9; ++i) {
-    const double x = -4.2 + (i % 3) * 0.55 + 0.13 * (i / 3), y = 1.1 + (i / 3) * 0.42;
+    const int row = i / 3;
+    const double x = -4.2 + (i % 3) * 0.55 + 0.13 * row, y = 1.1 + row * 0.42;
     add(K::bullet_hole, {x, y, 10}, {0, 0, -1}, 0.16, i * 1.3, static_cast<uint32_t>(i % 4), 0);
   }
   for (int i = 0; i < 5; ++i) {

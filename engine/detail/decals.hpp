@@ -105,13 +105,13 @@ struct DecalPool {
 DecalPool make_pool(uint32_t capacity, uint32_t verts_per_decal = 240);
 
 struct DecalAt {
-  DecalKind kind = DecalKind::scorch;
   Vec3 at{0, 0, 0};
   Vec3 normal{0, 1, 0};  // the surface's, out of it; unit
   double size_m = 0.5;
   double spin_rad = 0;  // the mark's turn about its normal
-  uint32_t variant = 0;
   double now_s = 0;
+  uint32_t variant = 0;
+  DecalKind kind = DecalKind::scorch;
 };
 // The decal pressed onto `receivers`: its slot, or -1 when no surface under it faces its way.
 int place_decal(DecalPool& pool, const Receivers& receivers, const DecalAt& d);
