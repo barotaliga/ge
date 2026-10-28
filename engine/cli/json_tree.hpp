@@ -21,8 +21,8 @@ struct JsonMember;
 struct JsonNode {
   enum class Kind : uint8_t { null, boolean, number, string, array, object } kind = Kind::null;
   bool boolean = false;
-  std::string text;             // a string's value, or a number's spelling
-  std::vector<JsonNode> items;  // an array's
+  std::string text;                 // a string's value, or a number's spelling
+  std::vector<JsonNode> items;      // an array's
   std::vector<JsonMember> members;  // an object's, in order
 
   // An object's member by key, or nullptr.
