@@ -130,7 +130,9 @@ void jump(Mover& m, const MoveCmd& cmd) {
   if (s.waterjump_time > 0) return;
   if (s.waterlevel >= 2) {  // swimming up, not jumping
     s.ground = -1;
-    s.velocity.z = s.watertype == kContentsWater ? 100.0f : s.watertype == kContentsSlime ? 80.0f : 50.0f;
+    s.velocity.z = s.watertype == kContentsWater   ? 100.0f
+                   : s.watertype == kContentsSlime ? 80.0f
+                                                   : 50.0f;
     return;
   }
   if (s.ground == -1) return;
