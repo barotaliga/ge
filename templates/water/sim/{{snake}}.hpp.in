@@ -1,0 +1,35 @@
+// THE GAME'S WATER: a lake laid in one call on the wind (ge::water; skill: water). Everything
+// anything asks of it, the physics, a swimmer, the sound and a picture, goes through
+// `ge::water::sample`, so none of them can disagree about where the surface is.
+//
+// The world is data, built once: hold it beside the GameState (never inside it: it is not part
+// of a run's digest, the seed and the time say everything about a lake) and hand it to whatever
+// asks. Each fixed step, `ge::water::step(world, kDt)` steps what moves on its own (the flow
+// regions; a lake's waves are a pure function of the time). Ask it with
+// `ge::water::sample(world, x, y, z, t)`: the surface, its normal and velocity, the depth, the
+// bed, the foam.
+//
+// To make it yours: move the shore, the level and the bed to your world's; pick a look by name
+// (`ge::water::looks()`: the colour is what is in the water); add an ocean, a river, a volume or
+// a flow region beside it (add_ocean, add_river, add_volume, add_flow). The lab pictures it.
+//
+// ge:summary The game's water: a lake laid in one call on the wind, and its bed
+// ge:keywords water lake add_lake sample wind look bed shore
+// ge:keywords {{snake}}
+// ge:keywords make_{{snake}}
+// ge:skill water
+// ge:test tests/sim_{{snake}}_test.cpp
+#pragma once
+
+#include "water/world.hpp"
+
+namespace {{ident}}::sim {
+
+// The lake's surface, m (world y), and the deepest its bed goes under it.
+inline constexpr double kLakeLevel = 0.0;
+inline constexpr double kLakeDeepest = 6.0;
+
+// The water, under a wind of `wind_mps` (10 m over the lake) blowing from +z toward -z.
+ge::water::World make_{{snake}}(double wind_mps = 7.0);
+
+}  // namespace {{ident}}::sim
