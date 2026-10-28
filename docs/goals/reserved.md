@@ -8,4 +8,3 @@ the same number twice. A row leaves this table in the pull request that adds it 
 | --- | --- |
 | M27 | **Bitmap font charsets** |
 | M28 | **Character movement physics** |
-| M48 | **First-person view models: the held weapon placed, lit by the world and drawn** |
