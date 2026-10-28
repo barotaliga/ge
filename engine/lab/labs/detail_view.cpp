@@ -164,6 +164,7 @@ Canvas make_canvas(int w, int h, const Cam& cam, const Light& light, int ss) {
   c.diffuse.assign(n * 3, 0);
   c.glint.assign(n, 0);
   c.over.assign(n * 4, 0);
+  c.emit.assign(n * 3, 0);
   return c;
 }
 
@@ -218,6 +219,12 @@ void draw_decal(Canvas& c, std::span<const gd::DecalVertex> verts, gd::DecalKind
         c.albedo[i * 3 + ch] = static_cast<float>(c.albedo[i * 3 + ch] * (1 - a) + rgb[ch] * a);
       }
       c.gloss[i] = static_cast<float>(c.gloss[i] * (1 - a) + look.gloss * a);
+      // The look's glow where the mask's embers are.
+      const double e = a * m.ember;
+      const double glow[3] = {look.er, look.eg, look.eb};
+      for (int ch = 0; ch < 3; ++ch) {
+        c.emit[i * 3 + ch] = static_cast<float>(c.emit[i * 3 + ch] * (1 - a) + glow[ch] * e);
+      }
     });
   }
 }
@@ -299,7 +306,7 @@ Picture finish(const Canvas& c, Rgba sky) {
             const double ao = 1 - 1.4 * occlusion_at(c, x * c.ss + sx, y * c.ss + sy);
             for (int k = 0; k < 3; ++k) {
               const double lit = c.albedo[i * 3 + k] * c.diffuse[i * 3 + k] * std::max(0.2, ao) +
-                                 c.gloss[i] * c.glint[i] * 0.6;
+                                 c.gloss[i] * c.glint[i] * 0.6 + c.emit[i * 3 + k];
               // Tone: an exponential shoulder, then the display's gamma of two.
               rgb[k] = std::sqrt(1 - core::libm::exp(-lit * 1.6));
             }
@@ -379,6 +386,69 @@ Material hall_paint(uint16_t tag, const gd::Vec3& p, const gd::Vec3& n) {
   const double g = (0.78 + 0.35 * block) * (0.88 + 0.16 * grain + 0.08 * fine);
   const double warm = 0.04 * (block - 0.5);
   return {base[0] * g + warm, base[1] * g, base[2] * g - warm, 0.18};
+}
+
+Material yard_paint(uint16_t tag, const gd::Vec3& p, const gd::Vec3& n) {
+  const double grain = core::value_noise(p.x * 3 + p.y * 2, p.z * 3 - p.y * 4, 1, 15);
+  const double fine = core::value_noise(p.x * 23 + p.y * 11, p.z * 23 - p.y * 7, 1, 19);
+  const double g = 0.82 + 0.25 * grain + 0.12 * fine;
+  switch (tag) {
+    case 0:  // lawn
+      return {0.13 * g, 0.24 * g, 0.07 * g, 0.05};
+    case 1:  // a dirt path
+      return {0.30 * g, 0.22 * g, 0.14 * g, 0.04};
+    case 2:  // ground painted green
+      return {0.20 * g, 0.27 * g, 0.12 * g, 0.05};
+    case 3:  // stone flags
+    case 4:  // brick (the hall's ashlar and flags serve)
+      return hall_paint(0, p, n);
+    case 5: {  // a metal deck in plates with a raised tread
+      const bool seam = fract(p.x / 1.2) < 0.015 || fract(p.z / 1.2) < 0.015;
+      const double tread =
+          fract((p.x + p.z) * 9) < 0.18 || fract((p.x - p.z) * 9) < 0.18 ? 1.25 : 1;
+      const double m = (seam ? 0.45 : tread * (0.9 + 0.15 * grain)) * (0.95 + 0.1 * fine);
+      return {0.17 * m, 0.18 * m, 0.19 * m, 0.5};
+    }
+    case 6: {  // a wood floor of 0.2 m boards running along x, their ends staggered
+      const double board = std::floor(p.z / 0.2);
+      const double along = p.x / 1.8 + 0.37 * board;
+      const bool joint = fract(p.z / 0.2) < 0.05 || fract(along) < 0.012;
+      const double tone = 0.8 + 0.35 * core::hash2(board, std::floor(along), 29);
+      const double gr = 0.85 + 0.2 * core::value_noise(p.x * 3, p.z * 90, 1, 31);
+      const double v = joint ? 0.45 : tone * gr;
+      return {0.30 * v, 0.19 * v, 0.10 * v, 0.14};
+    }
+    default:  // the roof
+      return {0.22 * g, 0.20 * g, 0.19 * g, 0.08};
+  }
+}
+
+Material prop_material(gd::PropKind kind, uint32_t variant) {
+  const double t = 0.9 + 0.2 * static_cast<double>(variant % 3) / 2;
+  switch (kind) {
+    case gd::PropKind::rubble:
+      return {0.33, 0.31, 0.28, 0.12};
+    case gd::PropKind::debris:
+      return variant % 2 == 0 ? Material{0.47, 0.44, 0.39, 0.1} : Material{0.31, 0.20, 0.11, 0.08};
+    case gd::PropKind::moss:
+      return {0.17, 0.30, 0.06, 0.04};
+    case gd::PropKind::pebble:
+      return {0.42 * t, 0.40 * t, 0.37 * t, 0.2};
+    case gd::PropKind::rock:
+      return {0.36 * t, 0.35 * t, 0.33 * t, 0.12};
+    case gd::PropKind::dirt:
+      return {0.25 * t, 0.18 * t, 0.11 * t, 0.03};
+    case gd::PropKind::grass:
+      return {0.16 * t, 0.36 * t, 0.07 * t, 0.06};
+    case gd::PropKind::twig:
+    case gd::PropKind::branch:
+      return {0.27 * t, 0.19 * t, 0.12 * t, 0.05};
+    case gd::PropKind::shell:  // brass
+      return {0.62, 0.45, 0.18, 0.7};
+    case gd::PropKind::bone:
+      return {0.70 * t, 0.66 * t, 0.56 * t, 0.15};
+  }
+  return {1, 0, 1, 0};
 }
 
 }  // namespace ge::lab::detail_view

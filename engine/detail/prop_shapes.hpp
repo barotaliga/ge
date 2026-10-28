@@ -1,12 +1,17 @@
 // THE PROPS' SHAPES, built in code: a lump of rubble (an icosahedron cut once, its corners pushed
 // in and out by a hash and squashed), a piece of debris (an even variant a flat shard of broken
-// slab, an odd one a splinter of timber), and a cushion of moss (a lumpy dome). Faceted (every
-// face its own vertices and normal, so a low-poly shape reads as cut), a unit across, its base
-// at y = 0 and up along +y; a prop's `size_m` scales it and its `up` and `yaw_rad` turn it.
+// slab, an odd one a splinter of timber), and a cushion of moss (a lumpy dome); and the floor
+// clutter's: a rounded pebble and an angular rock (lumps like the rubble's), a low clod of dirt
+// (a dome), a tuft of grass (thin two-sided blades leaning out from a root), a twig and a forked
+// branch (tapered tubes), a spent shell (a short open cylinder) and a bone (a shaft between two
+// knobs). Faceted (every face its own vertices and normal, so a low-poly shape reads as cut), a
+// unit across, its base at y = 0 and up along +y; a prop's `size_m` scales it and its `up` and
+// `yaw_rad` turn it.
 //
-// ge:summary The detail props' faceted shapes: rubble lumps, shards and splinters, moss cushions
+// ge:summary The detail props' faceted shapes: rubble, shards, moss, stones, grass, twigs, bones
 // ge:keywords detail props prop-mesh shape rubble rock icosahedron debris shard splinter moss
-// ge:keywords cushion faceted prop_mesh prop_transform
+// ge:keywords cushion faceted prop_mesh prop_transform pebble clod tuft blade twig branch shell
+// ge:keywords bone
 // ge:skill detail
 // ge:test tests/detail_props_test.cpp
 #pragma once

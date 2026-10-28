@@ -32,17 +32,11 @@ namespace dv = ge::lab::detail_view;
 
 constexpr gl::Rgba kSky{38, 42, 52};
 
+// The kinds the default rules place (the rest are the clutter's, lab `detail-clutter`).
+constexpr int kHallKinds = 3;
+
 dv::Material material_of(gd::PropKind kind, uint32_t variant) {
-  switch (kind) {
-    case gd::PropKind::rubble:
-      return {0.33, 0.31, 0.28, 0.12};
-    case gd::PropKind::debris:
-      return variant % 2 == 0 ? dv::Material{0.47, 0.44, 0.39, 0.1}
-                              : dv::Material{0.31, 0.20, 0.11, 0.08};
-    case gd::PropKind::moss:
-      return {0.17, 0.30, 0.06, 0.04};
-  }
-  return {1, 0, 1, 0};
+  return dv::prop_material(kind, variant);
 }
 
 // Every prop's shape, made once a kind and variant.
@@ -68,13 +62,13 @@ void draw_props(dv::Canvas& c, const Shapes& shapes, const std::vector<gd::Prop>
 
 void gallery(gl::Lab& lab, const Shapes& shapes, int cell) {
   constexpr int kVariants = 4;
-  gl::Picture pic = gl::create_picture(cell * kVariants, cell * gd::kPropKinds, kSky);
+  gl::Picture pic = gl::create_picture(cell * kVariants, cell * kHallKinds, kSky);
   gd::TriMesh floor;
   floor.pos = {{-0.7, 0, -0.7}, {-0.7, 0, 0.7}, {0.7, 0, 0.7}, {0.7, 0, -0.7}};
   floor.idx = {0, 1, 2, 0, 2, 3};
   floor.tag = {0, 0};
   const dv::Cam cam{{0.85, 0.75, -0.95}, {0, 0.12, 0}, 40, 1};
-  for (int k = 0; k < gd::kPropKinds; ++k) {
+  for (int k = 0; k < kHallKinds; ++k) {
     for (int v = 0; v < kVariants; ++v) {
       dv::Light light;
       light.lamp = {-0.6, 1.2, -0.8};
@@ -133,7 +127,7 @@ void run(gl::Lab& lab) {
   gl::LabTable t{"Props by kind: sampled, placed and dropped for spacing",
                  {"kind", "tried", "placed", "too close", "buried"},
                  {}};
-  for (int k = 0; k < gd::kPropKinds; ++k) {
+  for (int k = 0; k < kHallKinds; ++k) {
     const std::string name(gd::prop_name(static_cast<gd::PropKind>(k)));
     t.rows.push_back({name, std::to_string(rep.tried[k]), std::to_string(rep.placed[k]),
                       std::to_string(rep.too_close[k]), std::to_string(rep.buried[k])});
@@ -217,8 +211,8 @@ void run(gl::Lab& lab) {
       gd::DecalKind kind;
     };
     const M marks[] = {
-        {{6, 0, 3}, gd::normalized({-1, 1, 0}), 1.6, 0, 0, gd::DecalKind::scorch},
-        {{1.2, 0, 2.2}, {0, 1, 0}, 1.1, 0, 1, gd::DecalKind::scorch},
+        {{6, 0, 3}, gd::normalized({-1, 1, 0}), 1.6, 30, 0, gd::DecalKind::scorch},
+        {{1.2, 0, 2.2}, {0, 1, 0}, 1.1, 30, 1, gd::DecalKind::scorch},
         {{3.62, 0.2, 8.4}, gd::normalized({-1, 1.2, 0}), 1, 5, 2, gd::DecalKind::blood},
         {{-0.4, 1.6, 9.6}, {0, 0, -1}, 0.16, 0, 1, gd::DecalKind::bullet_hole},
         {{0.3, 1.9, 9.6}, {0, 0, -1}, 0.16, 0, 2, gd::DecalKind::bullet_hole}};

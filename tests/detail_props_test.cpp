@@ -21,6 +21,9 @@ namespace {
 
 namespace gd = ge::detail;
 
+// The kinds the default rules place; the floor clutter's are tests/detail_clutter_test.cpp's.
+constexpr int kHallKinds = 3;
+
 struct Hall {
   gd::TestHall hall = gd::test_hall();
   gd::TriMesh mesh;
@@ -82,7 +85,7 @@ TEST(rubble_gathers_at_walls_feet_and_moss_in_the_damp) {
             "rubble near " + std::to_string(rubble_near) + " open " + std::to_string(rubble_open));
   CHECK_MSG(moss_damp > 3 * moss_dry,
             "moss damp " + std::to_string(moss_damp) + " dry " + std::to_string(moss_dry));
-  for (int k = 0; k < gd::kPropKinds; ++k) {
+  for (int k = 0; k < kHallKinds; ++k) {
     CHECK(rep.placed[k] > 0 && rep.placed[k] <= rep.tried[k]);
   }
 }
@@ -110,7 +113,7 @@ TEST(props_keep_their_spacing_and_their_surfaces) {
 }
 
 TEST(the_shapes_are_closed_and_stand_on_the_ground) {
-  for (int k = 0; k < gd::kPropKinds; ++k) {
+  for (int k = 0; k < kHallKinds; ++k) {
     for (uint32_t var = 0; var < 4; ++var) {
       const gd::PropMesh m = gd::prop_mesh(static_cast<gd::PropKind>(k), var);
       CHECK(!m.pos.empty() && m.pos.size() % 3 == 0 && m.nrm.size() == m.pos.size());
@@ -145,7 +148,7 @@ TEST(the_halls_props_keep_their_bits) {
     got.push_back({seed, rep.placed[0], rep.placed[1], rep.placed[2], hash_of(props).h});
   }
   ge::test::BitsHash shapes;
-  for (int k = 0; k < gd::kPropKinds; ++k) {
+  for (int k = 0; k < kHallKinds; ++k) {
     for (const gd::Vec3& v : gd::prop_mesh(static_cast<gd::PropKind>(k), 1).pos) shapes.add(v);
   }
   got.push_back({shapes.h});

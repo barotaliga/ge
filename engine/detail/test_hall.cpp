@@ -63,4 +63,48 @@ double hall_damp(const void* ctx, const Vec3& p) {
   return ramp(h->damp_radius_m, h->damp_radius_m * 0.35, d);
 }
 
+TestYard test_yard() {
+  TestYard y;
+  y.textures = {
+      {"grass_lawn", {0.22, 0.34, 0.12}},   // 0: a lawn its name says is grass
+      {"dirt_path", {0.33, 0.26, 0.18}},    // 1
+      {"ground_02", {0.25, 0.36, 0.14}},    // 2: "ground" by name, grass by its green
+      {"stone_flags", {0.45, 0.43, 0.4}},   // 3
+      {"brick_wall", {0.42, 0.25, 0.2}},    // 4
+      {"metal_plate", {0.36, 0.37, 0.38}},  // 5
+      {"wood_floor", {0.4, 0.28, 0.16}},    // 6
+      {"roof", {0.3, 0.3, 0.32}},           // 7
+  };
+  auto box = [&](Vec3 lo, Vec3 hi, int tag) { y.solids.push_back(box_solid(lo, hi, tag)); };
+  // The ground, its top at y 0: the lawn, the path, the green ground and the court.
+  box({-10, -0.4, 0}, {-2, 0, 16}, 0);
+  box({-2, -0.4, 0}, {1, 0, 16}, 1);
+  box({1, -0.4, 0}, {10, 0, 6}, 2);
+  box({1, -0.4, 6}, {10, 0, 16}, 3);
+  // A low garden wall along the lawn's back and a boulder on it, so stones have a foot to gather
+  // at out in the open.
+  box({-10, 0, 15.4}, {-2, 0.8, 16}, 4);
+  box({-6.5, 0, 6.5}, {-5.3, 0.7, 7.6}, 3);
+  // The room on the court: the floors (a metal deck and timber) laid on the flags, the brick shell
+  // with a doorway in its front, and the roof.
+  box({3, 0, 9}, {6, 0.08, 15}, 5);
+  box({6, 0, 9}, {9, 0.08, 15}, 6);
+  box({2.7, 0, 15}, {9.3, 3, 15.3}, 4);
+  box({2.7, 0, 8.7}, {3, 3, 15}, 4);
+  box({9, 0, 8.7}, {9.3, 3, 15}, 4);
+  box({3, 0, 8.7}, {5.2, 3, 9}, 4);
+  box({6.4, 0, 8.7}, {9, 3, 9}, 4);
+  box({5.2, 2.3, 8.7}, {6.4, 3, 9}, 4);
+  box({2.5, 3, 8.5}, {9.5, 3.25, 15.5}, 7);
+  y.damp_centre = {5.8, 0, 8.2};
+  y.damp_radius_m = 2.2;
+  return y;
+}
+
+double yard_damp(const void* ctx, const Vec3& p) {
+  const auto* y = static_cast<const TestYard*>(ctx);
+  const double d = core::hypot(p.x - y->damp_centre.x, p.z - y->damp_centre.z);
+  return ramp(y->damp_radius_m, y->damp_radius_m * 0.35, d);
+}
+
 }  // namespace ge::detail

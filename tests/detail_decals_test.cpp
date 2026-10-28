@@ -91,6 +91,15 @@ TEST(blood_dries_fades_and_is_freed) {
   CHECK(gd::look_at(gd::DecalKind::blood, s.life_s - s.fade_s / 2).opacity < fresh.opacity);
   CHECK(gd::look_at(gd::DecalKind::blood, s.life_s).opacity == 0);
   CHECK(gd::look_at(gd::DecalKind::scorch, 1e6).opacity > 0.5);
+  // A scorch's embers glow when fresh, dim as they cool and are out by `ember_s`; nothing else
+  // glows.
+  const double ember_s = gd::decal_spec(gd::DecalKind::scorch).ember_s;
+  CHECK(gd::look_at(gd::DecalKind::scorch, 0).er > 1);
+  CHECK(gd::look_at(gd::DecalKind::scorch, ember_s / 2).er <
+        gd::look_at(gd::DecalKind::scorch, 0).er);
+  CHECK(gd::look_at(gd::DecalKind::scorch, ember_s).er == 0);
+  CHECK(gd::look_at(gd::DecalKind::blood, 0).er == 0);
+  CHECK(gd::look_at(gd::DecalKind::bullet_hole, 0).er == 0);
   const gd::TriMesh m = hall_mesh();
   const gd::Receivers r = gd::bin_receivers(m);
   gd::DecalPool pool = gd::make_pool(4);
@@ -183,6 +192,7 @@ TEST(placements_keep_their_bits) {
       const gd::MaskSample s = gd::mask_at(static_cast<gd::DecalKind>(k), 1, (i + 0.5) / 48, 0.47);
       masks.add(s.cover);
       masks.add(s.shade);
+      masks.add(s.ember);
     }
   }
   got.push_back({masks.h});

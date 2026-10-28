@@ -19,9 +19,9 @@ namespace ge::detail {
 namespace {
 
 constexpr DecalKindSpec kSpecs[kDecalKinds] = {
-    {"scorch", 0, 0, 0, 0.55, 80},
-    {"bullet_hole", 0, 0, 0, 0.5, 60},
-    {"blood", 120, 60, 45, 0.4, 85},
+    {"scorch", 0, 0, 0, 0.55, 80, 1.5},
+    {"bullet_hole", 0, 0, 0, 0.5, 60, 0},
+    {"blood", 120, 60, 45, 0.4, 85, 0},
 };
 
 // The lift off the surface that keeps a decal in front of it, m.
@@ -56,7 +56,10 @@ MaskSample scorch(uint32_t var, double x, double y, double r, double a) {
   double cover = std::max(core_cover, halo);
   cover *= 0.82 + 0.18 * fbm(x * 8, y * 8, 1, seed + 9);
   const double shade = -0.35 * ramp(0.3, 0, r) + 0.15 * (fbm(x * 20, y * 20, 1, seed) - 0.5);
-  return {core::clamp(cover, 0, 1), shade};
+  // The embers: patches of the burnt core and the blast's tongues, not the soot halo.
+  const double ember = std::max(core_cover * ramp(0.42, 0.7, fbm(x * 14, y * 14, 1, seed + 21)),
+                                0.8 * core_cover * streak * ramp(0.12, 0.3, r));
+  return {core::clamp(cover, 0, 1), shade, core::clamp(ember, 0, 1)};
 }
 
 MaskSample bullet(uint32_t var, double x, double y, double r, double a) {
@@ -152,8 +155,13 @@ const DecalKindSpec& decal_spec(DecalKind kind) { return kSpecs[static_cast<int>
 DecalLook look_at(DecalKind kind, double age_s) {
   const DecalKindSpec& s = decal_spec(kind);
   switch (kind) {
-    case DecalKind::scorch:
-      return {0.035, 0.03, 0.025, 0.92, 0};
+    case DecalKind::scorch: {
+      // Embers: white-orange at the blast, cooling through red to nothing over `ember_s`; the
+      // square of what is left so the glow falls fast and lingers as a dull red.
+      const double hot = 1 - ramp(0, s.ember_s, age_s);
+      const double k = hot * hot;
+      return {0.035, 0.03, 0.025, 0.92, 0, 2.6 * k, 0.9 * k * hot, 0.2 * k * hot * hot};
+    }
     case DecalKind::bullet_hole:
       return {0.09, 0.085, 0.08, 1, 0};
     case DecalKind::blood: {
@@ -197,6 +205,7 @@ std::vector<uint8_t> bake_atlas(int size, int variants) {
           const auto c = static_cast<uint8_t>(std::lround(m.cover * 255));
           px[o] = c;
           px[o + 1] = static_cast<uint8_t>(std::lround((m.shade * 0.5 + 0.5) * 255));
+          px[o + 2] = static_cast<uint8_t>(std::lround(m.ember * 255));
           px[o + 3] = c;
         }
       }

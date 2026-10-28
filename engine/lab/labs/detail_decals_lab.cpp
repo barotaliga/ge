@@ -50,8 +50,8 @@ std::vector<Mark> fire_fight() {
     m.push_back({d, age});
   };
   using K = gd::DecalKind;
-  add(K::scorch, {6, 0, 4.6}, {-1, 1, 0}, 1.6, 0.4, 0, 0);
-  add(K::scorch, {1.2, 0, 2.2}, {0, 1, 0}, 1.1, 2.0, 1, 0);
+  add(K::scorch, {6, 0, 4.6}, {-1, 1, 0}, 1.6, 0.4, 0, 30);
+  add(K::scorch, {1.2, 0, 2.2}, {0, 1, 0}, 1.1, 2.0, 1, 30);
   for (int i = 0; i < 9; ++i) {
     const int row = i / 3;
     const double x = -4.2 + (i % 3) * 0.55 + 0.13 * row, y = 1.1 + row * 0.42;

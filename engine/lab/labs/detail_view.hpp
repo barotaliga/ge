@@ -23,6 +23,7 @@
 #include "detail/decals.hpp"
 #include "detail/mesh.hpp"
 #include "detail/prop_shapes.hpp"
+#include "detail/props.hpp"
 #include "lab/raster.hpp"
 
 namespace ge::lab::detail_view {
@@ -63,6 +64,7 @@ struct Canvas {
   std::vector<float> diffuse;  // rgb light on a white surface
   std::vector<float> glint;    // the specular term at full gloss
   std::vector<float> over;     // rgba drawn over the lit picture (lines)
+  std::vector<float> emit;     // rgb light given off (a scorch's embers), added after lighting
 };
 
 // A canvas of `w` x `h` final pixels drawn `ss` times larger, under `cam` and `light`.
@@ -91,5 +93,10 @@ void label(Picture& p, int x, int y, const std::string& text);
 
 // The test hall's materials: flagstones, ashlar walls, timber, a dark wet basin.
 Material hall_paint(uint16_t tag, const gd::Vec3& p, const gd::Vec3& n);
+// The test yard's (test_hall.hpp `test_yard`): lawn, a dirt path, green ground, stone flags,
+// brick, a metal deck, a wood floor and a roof, by tag.
+Material yard_paint(uint16_t tag, const gd::Vec3& p, const gd::Vec3& n);
+// A prop's material by its kind and variant.
+Material prop_material(gd::PropKind kind, uint32_t variant);
 
 }  // namespace ge::lab::detail_view

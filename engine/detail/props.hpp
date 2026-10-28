@@ -17,11 +17,20 @@
 // - A PROP is where it stands, the surface's up, a turn about it, a size and a variant; its shape
 //   is `prop_mesh` (prop_shapes.hpp), and it sits `sink_share` of its size into the surface.
 //
-// `default_rules` is the dressing a stone-and-timber interior takes; a game passes its own.
+// - BY WHAT AND WHERE: a rule may be kept to surfaces of some classes (`classes`, surfaces.hpp:
+//   the caller hands each tag's class in a `ScatterEnv`), and weighted apart under the open sky
+//   and under a roof (`outdoor_weight`, `indoor_weight`; a point is outdoors when a ray straight
+//   up meets nothing or a sky surface). So grass grows on grass out in the open, stones lie on
+//   stone, spent shells on a metal deck, twigs only where trees could have dropped them.
+//
+// `default_rules` is the dressing a stone-and-timber interior takes; `clutter_rules` the floor
+// clutter by surface class (stones, rocks, dirt, grass tufts, twigs, branches, moss, spent shells,
+// bones); a game passes its own.
 //
 // ge:summary Seeded detail props (rubble, debris, moss) placed by rules on a level's shape
 // ge:keywords detail props scatter rubble debris moss rule density near-wall damp clump seeded
-// ge:keywords prop-rule scatter_props default_rules spacing poisson dressing
+// ge:keywords prop-rule scatter_props default_rules spacing poisson dressing clutter clutter_rules
+// ge:keywords outdoor indoor open-sky surface-class grass pebble twig shell bone
 // ge:skill detail
 // ge:test tests/detail_props_test.cpp
 #pragma once
@@ -32,11 +41,24 @@
 #include <vector>
 
 #include "detail/receivers.hpp"
+#include "detail/surfaces.hpp"
 
 namespace ge::detail {
 
-enum class PropKind : uint8_t { rubble, debris, moss };
-inline constexpr int kPropKinds = 3;
+enum class PropKind : uint8_t {
+  rubble,
+  debris,
+  moss,
+  pebble,  // a small rounded stone
+  rock,    // a larger angular one
+  dirt,    // a low clod of earth
+  grass,   // a tuft of blades (a renderer may grow it with its own grass)
+  twig,
+  branch,  // a fallen limb with a fork or two
+  shell,   // a spent cartridge case
+  bone,
+};
+inline constexpr int kPropKinds = 11;
 std::string_view prop_name(PropKind kind);
 
 enum class PropPlace : uint8_t { floor, wall };
@@ -56,6 +78,9 @@ struct PropRule {
   double spacing_m = 0.08;
   double sink_share = 0.15;
   int variants = 4;
+  uint32_t classes = ~0u;     // the surface classes it may use (`class_bit`)
+  double outdoor_weight = 1;  // the weight's factor under the open sky
+  double indoor_weight = 1;   // and under a roof
 };
 
 struct Prop {
@@ -72,6 +97,15 @@ struct Prop {
 // The damp at `p`, 0..1.
 using DampAt = double (*)(const void* ctx, const Vec3& p);
 
+// What the scatter reads off the level besides its triangles.
+struct ScatterEnv {
+  DampAt damp = nullptr;
+  const void* ctx = nullptr;
+  std::span<const SurfaceClass> class_of_tag;  // a tag past its end is `unknown`
+  uint64_t sky_tags = 0;     // tags (below 64) of sky surfaces, which count as open sky above
+  double sky_reach_m = 200;  // how far up a roof is looked for
+};
+
 struct ScatterReport {
   uint32_t tried[kPropKinds] = {};
   uint32_t placed[kPropKinds] = {};
@@ -84,9 +118,17 @@ std::vector<Prop> scatter_props(const TriMesh& mesh, const Receivers& receivers,
                                 std::span<const PropRule> rules, uint32_t seed,
                                 DampAt damp = nullptr, const void* ctx = nullptr,
                                 ScatterReport* report = nullptr);
+std::vector<Prop> scatter_props(const TriMesh& mesh, const Receivers& receivers,
+                                std::span<const PropRule> rules, uint32_t seed,
+                                const ScatterEnv& env, ScatterReport* report = nullptr);
 
 // Rubble heaped at walls' feet, debris thin over open floors, moss on damp floors and low on damp
 // walls; every tag.
 std::vector<PropRule> default_rules();
+
+// Floor clutter by what the floor is made of and whether it is under the sky: grass tufts, twigs
+// and branches out in the open on grass and dirt; stones and rocks on stone and dirt; clods on
+// dirt; moss in the damp; spent shells and bones thin over every floor that is not sky or liquid.
+std::vector<PropRule> clutter_rules();
 
 }  // namespace ge::detail
