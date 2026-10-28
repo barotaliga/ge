@@ -5,6 +5,6 @@
 # docs/goals.md M20b) is built beside it only when its SDK is supplied.
 file(GLOB GE_SERVICES_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/services/*.cpp)
 add_library(ge_services STATIC ${GE_SERVICES_SOURCES})
-target_link_libraries(ge_services PUBLIC ge_core ge_net)
+target_link_libraries(ge_services PUBLIC ge_core ge_net ge_input)
 
 ge_module(ge_services EXPORT services)
