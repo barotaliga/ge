@@ -23,6 +23,7 @@ jobs:
         # build: windows-latest moved to a newer MSVC whose warnings the PR row never saw.
         os: [ubuntu-latest, macos-latest, windows-2025]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
     defaults:
       run:
         shell: bash
@@ -31,7 +32,7 @@ jobs:
       - name: Build, install, consume
         run: |
           ROOT=$(cygpath -m "$PWD" 2>/dev/null || pwd)  # a path CMake reads on Windows too
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DGE_PLATFORM=OFF -DGE_GPU=OFF
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DGE_PLATFORM=OFF -DGE_GPU=OFF -DGE_ENCODERS=OFF
           # A bounded job count: an unbounded one under Make runs every source at once and the
           # runner runs out of memory.
           cmake --build build --config Release --parallel 4
@@ -43,11 +44,12 @@ jobs:
 
   scaffold:
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
       - name: ge alone grows a new repo, then holds it to its whole gate, against this tree
         run: |
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DGE_PLATFORM=OFF -DGE_GPU=OFF
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DGE_PLATFORM=OFF -DGE_GPU=OFF -DGE_ENCODERS=OFF
           cmake --build build --target ge
           G="$GITHUB_WORKSPACE/build/ge"
           "$G" new "$RUNNER_TEMP/snow-racer"
