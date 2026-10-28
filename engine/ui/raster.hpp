@@ -4,9 +4,11 @@
 // the reference the GPU pass (M22b) is held to. It is plain float arithmetic with no
 // transcendental, so its pixels are the same on every CI row and feed a lab's digest.
 //
-// A box's edge is its rounded rectangle's signed distance at the pixel centre over the feather
-// (1 px: antialiased; more: soft), its border the band `border` px inside that edge. Text is
-// each glyph's coverage mask (font.hpp) times the run's colour.
+// A box's edge is its rounded rectangle's signed distance at the pixel centre (in the box's own
+// frame when it is turned) over the feather (1 px: antialiased; more: soft), its border the band
+// `border` px inside that edge. A segment is a capsule's distance, an arc an annular sector's (a
+// ring's inside the sweep, its ends' outside it), a convex polygon the largest of its edges'
+// distances. Text is each glyph's coverage mask (font.hpp) times the run's colour.
 //
 // ge:summary The 2D layer's CPU raster: a draw list painted into an RGBA8 image
 // ge:keywords ui raster cpu software render draw-list rounded-rect sdf antialias feather blend
@@ -25,5 +27,10 @@ void render(const DrawList& list, Image& target);
 
 // `src` over `dst` for one pixel, straight alpha: the blend every command uses.
 void blend_over(uint8_t* dst, Color src);
+
+// The signed distances (px, negative inside) the raster covers an arc and a convex polygon by;
+// the GPU pass (render/ui_pass.wgsl) works the same ones.
+float arc_distance(const Arc& a, float px, float py);
+float polygon_distance(const PolyPoint* pts, uint32_t n, float px, float py);
 
 }  // namespace ge::ui

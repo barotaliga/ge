@@ -45,8 +45,8 @@ level 4fbff3da7a82c4aa
 lift-ride a374f35eb85cc161
 load 0257cf6ad193e740
 mapgen-cost 3baf51b6907817f3
-menu 1c01d0b767f484fc
-menu-gpu 76e7ffd902dd89d1
+menu d6ecea9815f35067
+menu-gpu e0605b6973e39138
 model-views 0d0824a2168f6b14
 models bdc7f86743249676
 moon 26034a53f978b0b3
@@ -97,6 +97,7 @@ swim c6acad32e55847d9
 synth 39e6460e5c8a8c8e
 taa 01ee5d58d90a05ce
 trace cccfaac48bafaa60
+traffic 488293494d3aafb5
 trails 1aaa468d0dbd81a0
 village 23e3236139b8860d
 wanted 507dbbcbbbb4187e
