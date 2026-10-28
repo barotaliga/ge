@@ -153,7 +153,7 @@ Outcome run(const Args& a) {
   if (name == "goals free") {
     const std::string base = flag_value(a, "base");
     return run_goals_free(fs::absolute(repo_of(a)), a.words.empty() ? "" : a.words[0],
-                          base.empty() ? "origin/main" : base, has_flag(a, "fetch"));
+                          base.empty() ? "origin/main" : base, !has_flag(a, "no-fetch"));
   }
   if (name == "goals claim") {
     const std::string base = flag_value(a, "base");

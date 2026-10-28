@@ -402,7 +402,7 @@ Outcome run_goals_claim(const fs::path& repo, const std::string& title, const st
     run_to_log(cat(git, "push --quiet origin HEAD:refs/heads/", branch), log);
   }
   return fail("three rows in a row were claimed first by other branches",
-              "ge goals free --fetch to see who holds what, then ge goals claim again");
+              "ge goals free to see who holds what, then ge goals claim again");
 }
 
 }  // namespace ge::cli
