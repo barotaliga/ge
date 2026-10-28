@@ -19,7 +19,7 @@
 #   ge_wind      the wind as a pure function of place and time (engine/wind; docs/water.md)
 #   ge_water     bodies of water, the waves a wind grows on them and the one query (engine/water)
 #   ge_move      character movement (engine/move: the knobs and their cvars, the step, scenarios)
-#   ge_vfs       content files (engine/vfs: the pack archive; search paths and zips to come)
+#   ge_vfs       content files (engine/vfs: the pack archive, zips through ge_assets' inflate; search paths to come)
 #   ge_camera    the camera (engine/camera: poses, followers, rigs, shake, transitions, the stack)
 #   ge_play      the play contract (engine/play: GameSpec and Run, the session, the input log,
 #                the bench, the stills `ge shot` draws; engine/capture: the Matroska muxer and
@@ -44,11 +44,11 @@
 #   ge_isa       the instruction-set baseline (x86-64: AVX2), linked by ge_core and
 #                published as ge::isa
 #   ge_flags     warnings, -Werror, sanitizers: this tree only, never published
-# ge_core, ge_fp, ge_isa, ge_assets, ge_ai, ge_wind, ge_water, ge_move, ge_camera, ge_net, ge_console,
-# ge_services, ge_lab, ge_play, ge_replay, ge_prof, ge_prof_alloc and every plugin target are installed
-# and published as ge::core, ge::fp, ge::isa, ge::assets, ge::ai, ge::wind, ge::water, ge::move,
-# ge::camera, ge::net, ge::console, ge::services, ge::lab, ge::play, ge::replay, ge::prof, ge::prof_alloc and
-# ge::<plugin>, and the ge executable is installed to bin/
+# ge_core, ge_fp, ge_isa, ge_assets, ge_ai, ge_wind, ge_water, ge_move, ge_vfs, ge_camera, ge_net,
+# ge_console, ge_services, ge_lab, ge_play, ge_replay, ge_prof, ge_prof_alloc and every plugin target
+# are installed and published as ge::core, ge::fp, ge::isa, ge::assets, ge::ai, ge::wind, ge::water,
+# ge::move, ge::vfs, ge::camera, ge::net, ge::console, ge::services, ge::lab, ge::play, ge::replay,
+# ge::prof, ge::prof_alloc and ge::<plugin>, and the ge executable is installed to bin/
 # (cmake/Packaging.cmake, docs/publishing.md).
 cmake_minimum_required(VERSION 3.25)
 project(gameengine2 LANGUAGES CXX)
@@ -235,9 +235,8 @@ file(GLOB GE_MOVE_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/m
 add_library(ge_move STATIC ${GE_MOVE_SOURCES})
 target_link_libraries(ge_move PUBLIC ge_core ge_console)
 
-# Content files (engine/vfs): the pack archive's checked directory and its files as views, and
-# zips (stored and deflated, read through ge_assets' inflate); the rest of the virtual file
-# system (search paths, directories) lands with docs/goals.md M18a.
+# Content files (engine/vfs): the pack archive's checked directory and its files as views; the
+# rest of the virtual file system (search paths, zips, directories) lands with docs/goals.md M18a.
 file(GLOB GE_VFS_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/vfs/*.cpp)
 add_library(ge_vfs STATIC ${GE_VFS_SOURCES})
 target_link_libraries(ge_vfs PUBLIC ge_core ge_assets)
