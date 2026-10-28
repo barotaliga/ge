@@ -194,7 +194,8 @@ if(GE_GPU)
     engine/render/skinning.wgsl engine/render/particles.wgsl engine/render/particles_sim.wgsl engine/render/precip.wgsl engine/render/precip_sim.wgsl
     engine/render/clouds.wgsl engine/render/water.wgsl engine/render/water_copy.wgsl
     engine/render/water_stream.wgsl
-    engine/render/underwater.wgsl engine/render/ui_pass.wgsl)
+    engine/render/underwater.wgsl engine/render/ui_pass.wgsl engine/render/eye.wgsl
+    engine/render/eye_adapt.wgsl)
 endif()
 
 # The network (engine/net, docs/networking.md): addresses, the wire, the OS's UDP and TCP sockets
@@ -381,6 +382,10 @@ if(PROJECT_IS_TOP_LEVEL)
   add_executable(labs engine/lab/main.cpp ${GE_LAB_SOURCES})
   target_link_libraries(labs PRIVATE ge_lab ge_play ge_replay ge_core ge_audio ge_assets ge_net ge_input ge_wind ge_water ge_move ge_camera ge_ui ge_services ge_snow ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
     ${GE_LAB_EXTRA})
+  if(GE_GPU)
+    # A GPU lab's own shader (the eye lab's hall, drawn over its frame).
+    ge_embed_wgsl(labs engine/lab/labs/gpu_eye_hall.wgsl)
+  endif()
 
   # The `assets` executable (engine/assets/tool.hpp): the built assets listed, checked and stamped,
   # and the game data their builders are fed. A data set registers itself from a static
