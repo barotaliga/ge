@@ -275,4 +275,29 @@ there (the highest level face under its footprint) in the clone's mover world an
 stands on that floor. It reports the cells, merges, brushes, faces, hidden faces, groups,
 entities, bytes and times. `--write=<dir>` (outside the tree) keeps the clone as `.gelv` and
 `.gelv.txt`. Without a pack it clones the brush plugin's fixture, which is what `make
-labs-smoke` runs.
+labs-smoke` runs. It also counts each clone's movers by kind, its triggers and the groups whose
+classname nothing moves yet.
+
+### Movers (M32g)
+
+`rooms::build_movers` reads a level's brush entities into moving parts, and `rooms::step_movers`
+steps them as a pure function of the level, the bodies and the steps (`movers.hpp` states every
+key and default). Keys are in metres, metres a second and seconds; the cloner converts a classic
+map's `speed`, `lip` and `height`.
+
+- **Doors** (`func_door`) slide along `heading` by their own size less `lip`. They wait, then
+  come back. A door with no name opens when touched; a named one waits to be fired. Doors that
+  touch each other move as one, and a closing door that meets a body goes back open.
+- **Plats** (`func_plat`) rest lowered and rise when a body stands on or touches them. They stay
+  up while ridden, then go back down.
+- **Buttons** (`func_button`) are pressed in by a touch. They fire their `target` and come back
+  out.
+- **Trains** (`func_train`) run their `path_corner` chain, looping, and wait at each corner for
+  that corner's `wait`.
+- **Triggers** (`trigger_multiple`, `trigger_once`) fire their `target` when a body is inside.
+
+The world a body meets (`movers_world`) is the still level plus each mover's brushes built
+alone, swept at its offset. A hit on a mover reports its solid number and velocity, so a rider
+is carried (`move::carry`). Secret doors, walls that appear or vanish, teleporters, counters,
+relays, `killtarget`, delays and messages are still to come. The `rooms` lab's `vault-door`
+shot shows the vault's trigger opening its door as a walker comes up to it.

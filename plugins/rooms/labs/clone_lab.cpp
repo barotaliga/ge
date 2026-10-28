@@ -39,6 +39,7 @@
 #include "rooms/clip.hpp"
 #include "rooms/clone.hpp"
 #include "rooms/codec.hpp"
+#include "rooms/movers.hpp"
 #include "rooms/text.hpp"
 #include "vfs/pak.hpp"
 
@@ -312,6 +313,21 @@ void run(lab::Lab& lab) {
           .write(reinterpret_cast<const char*>(bytes.data()), std::streamsize(bytes.size()));
       std::ofstream(base + ".gelv.txt") << rm::print(level);
     }
+
+    // The clone's moving parts, as movers.hpp reads them.
+    rm::Movers movers;
+    std::string merr;
+    if (!rm::build_movers(level, workers, &movers, &merr)) {
+      std::printf("  %s: movers: %s\n", stem.c_str(), merr.c_str());
+    }
+    size_t kinds[4] = {0, 0, 0, 0};
+    for (const rm::Mover& mv : movers.movers) ++kinds[size_t(mv.kind)];
+    lab.metric(stem + "-doors", double(kinds[0]), "count");
+    lab.metric(stem + "-plats", double(kinds[1]), "count");
+    lab.metric(stem + "-buttons", double(kinds[2]), "count");
+    lab.metric(stem + "-trains", double(kinds[3]), "count");
+    lab.metric(stem + "-triggers", double(movers.triggers.size()), "count");
+    lab.metric(stem + "-groups-not-moved", double(movers.skipped), "count");
 
     // A body stood at every start in the clone's mover world.
     const ge::move::MeshWorld w = rm::clip_world(level, workers);
