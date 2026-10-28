@@ -77,7 +77,8 @@ void create_fog(gpu::Device& device, gpu::PipelineSet& pipelines, Fog& fog,
       make_layout(device, "fog.inject",
                   {Slot::uniform, Slot::storage_read, Slot::texture_3d, Slot::store_3d}, cs);
   fog.ground_layout = make_layout(
-      device, "fog.ground", {Slot::uniform, Slot::texture, Slot::texture, Slot::texture_raw}, cs);
+      device, "fog.ground",
+      {Slot::uniform, Slot::texture, Slot::texture, Slot::texture_raw, Slot::texture}, cs);
   fog.integrate_layout =
       make_layout(device, "fog.integrate", {Slot::uniform, Slot::texture_3d, Slot::store_3d}, cs);
   // The casters' group is render/shadows.hpp's layout, whoever made it.
@@ -88,9 +89,10 @@ void create_fog(gpu::Device& device, gpu::PipelineSet& pipelines, Fog& fog,
   // `ground_shadow` returns 1 when the maps are off).
   fog.ground = terrain != nullptr;
   if (terrain) {
-    fog.ground_group = make_group(device, "fog.ground", fog.ground_layout,
-                                  {terrain->params, terrain->horizon.views[0],
-                                   terrain->horizon.views[1], terrain->height.CreateView()});
+    fog.ground_group =
+        make_group(device, "fog.ground", fog.ground_layout,
+                   {terrain->params, terrain->horizon.views[0], terrain->horizon.views[1],
+                    terrain->height.CreateView(), terrain->albedo.CreateView()});
   } else {
     const wgpu::Buffer zero =
         make_buffer(device, "fog.ground.none", sizeof(Terrain::Params), BU::Uniform);
@@ -102,7 +104,7 @@ void create_fog(gpu::Device& device, gpu::PipelineSet& pipelines, Fog& fog,
     const wgpu::Texture low = make_texture(device, "fog.ground.low", 1, 1, 1,
                                            wgpu::TextureFormat::R32Float, TU::TextureBinding);
     fog.ground_group =
-        make_group(device, "fog.ground", fog.ground_layout, {zero, v, v, low.CreateView()});
+        make_group(device, "fog.ground", fog.ground_layout, {zero, v, v, low.CreateView(), v});
   }
 
   wgpu::ComputePipelineDescriptor cd{};

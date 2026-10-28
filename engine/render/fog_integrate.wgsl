@@ -29,9 +29,10 @@ fn integrate(@builtin(global_invocation_id) id: vec3u) {
     let depth = far - near;
     near = far;
     let m = textureLoad(media, vec3u(id.xy, z), 0);
-    let ext = max(m.a, 1e-7);
-    let pass_share = exp(-ext * depth);
-    light += seen * m.rgb * (1.0 - pass_share) / ext;
+    let pass_share = exp(-m.a * depth);
+    // Over a clear slice the light is its source times its depth (the limit of the share taken
+    // over the extinction); the transmittance stays exactly 1.
+    light += seen * m.rgb * select(depth, (1.0 - pass_share) / m.a, m.a > 1e-7);
     seen *= pass_share;
     textureStore(volume_out, vec3u(id.xy, z), vec4f(light, seen));
   }

@@ -879,10 +879,15 @@ it is (`render/fog.hpp`, M38a).
   the air's transmittance, the cloud's shadow) past the casters' maps (the shafts through a wood)
   and the ground's horizon (raised for a point over the snow by its height over a ridge 400 m
   off), dimmed by the fog's own medium toward the light (a 63 m march: the floor of a bank in
-  its top's shade), with the orders of scattering past the first counted as the cloud counts them
-  (`clouds.wgsl`: a gentle lobe, a diffusion falling as one over the reduced depth, reaching a
-  sheet through its top), but only as far as the fog round the point is thick (a dust scatters
-  once, a bank glows white); plus the sky's light and its glow. The result is blended with the
+  its top's shade). The orders of scattering past the first come out evenly, held to what a deep
+  bank's lit top sends back (0.8 of a white face's light, so a sunlit bank is as bright as the
+  snow beside it), counted only as far as the fog round the point is thick (a dust scatters once)
+  and falling as one over the reduced depth into it from above. Then the sky's light through the
+  fog over the point, and THE GROUND'S LIGHT from below: the sun and the sky sent back by the
+  terrain's albedo under the point (the frame's even ground with no terrain), through the fog
+  over and under the point. Over snow that is nearly the light from above again, and without it
+  a mist over a sunlit field came out at under half the snow's brightness. Last, its glow. The
+  result is blended with the
   last frame's light at the same world point (reprojected through the last camera), nine
   tenths of it, so the jitter averages to a smooth medium.
 - **`fog.integrate`** (compute, a thread a column): front to back, each slice's light over its

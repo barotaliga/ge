@@ -20,10 +20,12 @@
 //   lowered for a point standing over the snow by its height over a ridge 400 m off) and
 //   the casters' maps (render/shadows.hpp), so a wood throws SHAFTS through its mist, and past
 //   the fog's own medium toward the light (a short march: the floor of a deep bank lies in its
-//   top's shade), with the further orders of scattering counted as the cloud counts them
-//   (`key_scatter`: a deep bank glows white, a thin dust scatters once), by the sky's light
-//   and by its glow; then blended with the last frame's light at the same world point
-//   (reprojected), `history` of it, so the jitter averages into a smooth medium with no bands.
+//   top's shade), with the further orders of scattering held to a deep bank's lit top
+//   (`key_scatter`: a sunlit bank as bright as the snow, a thin dust scatters once), by the
+//   sky's light, by the ground's light from below (the sun and sky sent back by the terrain's
+//   albedo under the point) and by its glow; then blended with the last frame's light at the
+//   same world point (reprojected), `history` of it, so the jitter averages into a smooth medium
+//   with no bands.
 // - "fog.integrate" (one thread a column): front to back, each slice's light over its depth
 //   (energy-conserving: the light a slice scatters is dimmed by the slice itself), its
 //   transmittance multiplied on, both written at the slice's far edge into `volume`: the light

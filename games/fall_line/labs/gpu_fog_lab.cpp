@@ -32,6 +32,8 @@
 #include <string>
 #include <vector>
 
+#include "core/libm/libm.hpp"
+#include "core/math.hpp"
 #include "fall_line/app/frame.hpp"
 #include "fall_line/app/views.hpp"
 #include "gpu/device.hpp"
@@ -82,7 +84,7 @@ struct Scene {
 void sun_flat(const r::FrameView& v, double& sx, double& sz) {
   double sun[3];
   r::sun_direction(v, sun);
-  const double l = std::max(std::hypot(sun[0], sun[2]), 1e-6);
+  const double l = std::max(ge::core::hypot(sun[0], sun[2]), 1e-6);
   sx = sun[0] / l;
   sz = sun[2] / l;
 }
@@ -91,8 +93,8 @@ void sun_flat(const r::FrameView& v, double& sx, double& sz) {
 void wood_at(const mg::Level& level, double hour, r::FrameView& v, double& tx, double& tz) {
   fall_line::app::day_view(level, hour, v);
   fall_line::app::make_view(level, "wood", v);
-  tx = v.eye[0] + 70 * std::sin(v.heading);
-  tz = v.eye[2] + 70 * std::cos(v.heading);
+  tx = v.eye[0] + 70 * ge::core::libm::sin(v.heading);
+  tz = v.eye[2] + 70 * ge::core::libm::cos(v.heading);
 }
 
 // A ground mist lying on the wood at (tx, tz), turned to the sun along the ground (sx, sz).
@@ -103,7 +105,7 @@ r::FogVolume wood_mist(double tx, double tz, double sx, double sz) {
   f.hug_ground = true;
   f.half[0] = f.half[2] = 110;
   f.half[1] = 20;  // 40 m deep over the snow
-  f.yaw = std::atan2(sx, sz);
+  f.yaw = ge::core::libm::atan2(sx, sz);
   f.density = 0.035;
   f.falloff = 0.05;
   f.edge = 12;
@@ -149,8 +151,9 @@ Scene shafts(const mg::Level& level, double hour) {
   s.view.eye[0] = ex;
   s.view.eye[2] = ez;
   s.view.eye[1] = level.ground_at(ex, ez) + 2.0;
-  s.view.heading = std::atan2(sx, sz) + 14 * kDeg;  // the sun just off the left of the picture
-  s.view.pitch = std::atan2(level.ground_at(ax, az) + 8 - s.view.eye[1], 80.0);
+  s.view.heading =
+      ge::core::libm::atan2(sx, sz) + 14 * kDeg;  // the sun just off the left of the picture
+  s.view.pitch = ge::core::libm::atan2(level.ground_at(ax, az) + 8 - s.view.eye[1], 80.0);
   s.view.fov_y = 62 * kDeg;
   s.fog = {wood_mist(tx, tz, sx, sz)};
   s.what = kMistWhat;
@@ -195,8 +198,8 @@ Scene glow(const mg::Level& level, double hour) {
       "and the trees round it dark in the night, the stars and the far slope behind it";
   fall_line::app::day_view(level, hour, s.view);
   fall_line::app::make_view(level, "piste", s.view);
-  const double x = s.view.eye[0] + 28 * std::sin(s.view.heading);
-  const double z = s.view.eye[2] + 28 * std::cos(s.view.heading);
+  const double x = s.view.eye[0] + 28 * ge::core::libm::sin(s.view.heading);
+  const double z = s.view.eye[2] + 28 * ge::core::libm::cos(s.view.heading);
   r::FogVolume f;
   f.shape = r::FogVolume::Shape::ellipsoid;
   f.centre[0] = x;
@@ -293,8 +296,8 @@ void run(ge::lab::Lab& lab) {
     lab.metric(s.id + ".range", s.range, "m");
     const r::FogVolume& f0 = s.fog.front();
     lab.metric(s.id + ".distance",
-               std::hypot(f0.centre[0] - s.view.eye[0], f0.centre[1] - s.view.eye[1],
-                          f0.centre[2] - s.view.eye[2]),
+               ge::core::hypot3(f0.centre[0] - s.view.eye[0], f0.centre[1] - s.view.eye[1],
+                                f0.centre[2] - s.view.eye[2]),
                "m");
     lab.metric(s.id + ".below", s.view.eye[1] - f0.centre[1], "m");
     if (in == 0) {

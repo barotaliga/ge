@@ -30,6 +30,7 @@ struct FogVol {
 @group(2) @binding(1) var horizon0: texture_2d<f32>;
 @group(2) @binding(2) var horizon1: texture_2d<f32>;
 @group(2) @binding(3) var heights: texture_2d<f32>;
+@group(2) @binding(4) var ground_albedo: texture_2d<f32>;
 @group(3) @binding(0) var<uniform> shadow: SunShadow;
 @group(3) @binding(1) var shadow_maps: texture_depth_2d_array;
 @group(3) @binding(2) var shadow_cmp: sampler_comparison;
@@ -128,24 +129,41 @@ fn depth_along(rel: vec3f, toward: vec3f) -> f32 {
   return tau;
 }
 
-// THE KEY LIGHT SCATTERED toward the eye, a unit of extinction (render/clouds.wgsl's model):
-// the first scattering, dimmed by the medium toward the light (`tau`), on the volume's lobe; and
-// the orders past it on one gentle lobe, as a diffusion that falls as one over the reduced depth
-// (most of it goes on forward, so it dies at kFogReduced of the extinction) rather than
-// exponentially, reaching the point the short way: through the medium toward the light or, a
-// sheet lit from its whole top as a deck is, down through the medium over it (`tau_up`, over the
-// light's height's sine). Unlike the cloud, a fog may be thin: the orders are counted only as far
-// as the medium round the point is thick enough to bounce the light again, so a thin dust
-// scatters once and a deep bank glows white through its lit top.
-const kFogOrders = 3.0;
+// THE KEY LIGHT SCATTERED toward the eye, a unit of extinction: the first scattering, dimmed
+// by the medium toward the light (`tau`), on the volume's lobe; and the orders past it as the
+// light diffused through the medium, coming out evenly. Those are held to what a deep bank's
+// lit top sends back, kFogDeep of a white face's light (the light on a level face over pi,
+// with the sun no lower than kFogLowSun so a bank's sunward side is lit too), counted as far as
+// the medium round the point is thick enough to scatter the light again (a thin dust scatters
+// once), and falling as one over the reduced depth into the medium from above (`tau_up`: most
+// of it goes on forward, so it dies at kFogReduced of the extinction).
+const kFogDeep = 0.8;
+const kFogLowSun = 0.2;
 const kFogReduced = 0.15;
 
 fn key_scatter(c: f32, g: f32, tau: f32, tau_up: f32, sun_y: f32) -> f32 {
   let first = exp(-tau) * henyey_greenstein(c, g);
   let thick = 1.0 - exp(-max(tau, tau_up));
-  let tau_ms = min(tau, tau_up / max(sun_y, 0.4));
-  let orders = kFogOrders * henyey_greenstein(c, 0.2) * thick / (1.0 + kFogReduced * tau_ms);
+  let orders = kFogDeep * max(sun_y, kFogLowSun) / PI * thick / (1.0 + kFogReduced * tau_up);
   return first + orders;
+}
+
+// The diffuse light's share that crosses `tau` of the medium (a forward-scattering medium lets
+// most of it through: one over the reduced depth, not the exponential of the direct beam).
+fn diffuse_through(tau: f32) -> f32 {
+  return 1.0 / (1.0 + kFogReduced * tau);
+}
+
+// The ground's albedo under a camera-relative point: the terrain's where one is bound, else the
+// frame's even ground.
+fn albedo_under(rel: vec3f) -> vec3f {
+  if (fp.look.w < 0.5) {
+    return kGroundAlbedo;
+  }
+  let maxc = grid_max(ground);
+  let g = mirror_grid((rel.xz + frame.eye.xz - ground.field.xy) / ground.field.z, maxc);
+  return textureSampleLevel(ground_albedo, linear_clamp,
+                            (g + 0.5) / vec2f(ground.field_size.xy), 0.0).rgb;
 }
 
 const kHorizonReach = 400.0;
@@ -186,13 +204,22 @@ fn inject(@builtin(global_invocation_id) id: vec3u) {
     } else {
       key = vec3f(0.0);
     }
+    let tau_up = depth_along(rel, vec3f(0.0, 1.0, 0.0));
+    let phase = key_scatter(dot(d, frame.sun.xyz), m.g, depth_along(rel, frame.sun.xyz), tau_up,
+                            frame.sun.y);
     // The sky's light: its irradiance on a level face as an even radiance over the upper half,
-    // scattered evenly (E / 2 pi).
-    let sky = sky_irradiance(vec3f(0.0, 1.0, 0.0)) / (2.0 * PI);
-    let phase = key_scatter(dot(d, frame.sun.xyz), m.g, depth_along(rel, frame.sun.xyz),
-                            depth_along(rel, vec3f(0.0, 1.0, 0.0)), frame.sun.y);
+    // scattered evenly (E / 2 pi), through the medium over the point.
+    let sky_up = sky_irradiance(vec3f(0.0, 1.0, 0.0));
+    let sky = sky_up / (2.0 * PI) * diffuse_through(tau_up);
+    // THE GROUND'S LIGHT from below: what the ground under the point sends back of the sun and
+    // the sky (a white face's light times its albedo), as an even radiance over the lower half,
+    // through the medium over the ground and between it and the point. Over snow it is nearly
+    // the light from above again: a mist over a sunlit field is lit from both sides.
+    let low = clamp(above, 0.0, 63.0) * m.extinction;
+    let ground_in = (key * max(frame.sun.y, 0.0) + sky_up) * albedo_under(rel) / PI;
+    let bounce = 0.5 * ground_in * diffuse_through(tau_up + 2.0 * low);
     let glow = m.glow * (frame.world.y / kSunLux);
-    lit = vec4f(m.scatter * (key * phase + sky) + glow, m.extinction);
+    lit = vec4f(m.scatter * (key * phase + sky + bounce) + glow, m.extinction);
   }
   // The last frame's light at the same world point, where that point was in its volume.
   if (fp.look.y > 0.0) {
