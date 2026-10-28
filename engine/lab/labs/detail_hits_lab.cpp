@@ -73,7 +73,7 @@ void fire(gd::DecalPool& pool, const gd::Receivers& rec, const gd::Vec3& from, c
 
 const dv::Cam kShotCam{{-0.6, 2.2, 3.2}, {-1.2, 1.2, 9.0}, 62, 5};
 
-// The victim of the wound panels: where he stands, where he is struck, the gun behind the shot.
+// The victim of the wound panels: where they stand, where they are struck, the gun behind the shot.
 constexpr gd::Vec3 kVictimFeet{2.2, 0, 8.7};
 constexpr gd::Vec3 kWound{2.2, 1.3, 8.7};
 constexpr gd::Vec3 kGun{1.3, 1.5, 4.2};
@@ -162,7 +162,7 @@ void run(gl::Lab& lab) {
       dv::Canvas c = dv::make_canvas(pw, ph, kWoundCam);
       dv::draw_mesh(c, mesh, dv::hall_paint);
       draw_pool(c, pool, 0);
-      // Where the victim stood and the shot's line through him.
+      // Where the victim stood and the shot's line through them.
       dv::draw_line3(c, kVictimFeet, {kVictimFeet.x, 1.8, kVictimFeet.z}, kVictim, 2);
       dv::draw_line3(c, kGun, kWound, kRay, 1);
       gl::Picture p = dv::finish(c, kSky);
@@ -176,9 +176,9 @@ void run(gl::Lab& lab) {
     lab.shot({"wounds",
               "BLOOD BY THE HEALTH A HIT TOOK",
               "One victim (the blue post) shot from the same gun (the yellow line) four times as "
-              "hard, each in a clean hall: a twentieth of his health, a quarter, a half and all "
-              "of it. The spatter carries on along the shot onto the wall behind him, the pool "
-              "gathers on the floor under the wound and drops fall round his feet, all growing "
+              "hard, each in a clean hall: a twentieth of their health, a quarter, a half and all "
+              "of it. The spatter carries on along the shot onto the wall behind them, the pool "
+              "gathers on the floor under the wound and drops fall round their feet, all growing "
               "with the share of health lost.",
               "a spot or two for the graze; the wall behind painted and a pool a metre across "
               "for the full hit; every mark on a surface, on the far side of the victim from "
