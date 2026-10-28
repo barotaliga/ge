@@ -8,6 +8,7 @@
 #include "render/view.hpp"
 
 #include <cmath>
+#include <cstddef>
 #include <limits>
 
 namespace ge::render {
@@ -167,6 +168,28 @@ double depth_distance(const CameraMatrices& m, double ndc_x, double ndc_y, float
   transform(m.inv_view_proj, clip, p);
   const double x = p[0] / p[3], y = p[1] / p[3], z = p[2] / p[3];
   return std::sqrt(x * x + y * y + z * z) / depth;
+}
+
+void flash_rows(const Flashes& flashes, double pre, float info[4], float rows[][4]) {
+  // The sun's illuminance is 128000 lx a unit (render/night.hpp's kSunLux); a lamp's light rides
+  // as its whole flux, 4 pi times its intensity, so flash.wgsl's L / (4 pi r^2) is its lux.
+  constexpr double kLux = 128000, kFourPi = 4 * 3.14159265358979;
+  const int n = flashes.count < 0 ? 0 : (flashes.count > kFlashLamps ? kFlashLamps : flashes.count);
+  info[0] = static_cast<float>(n);
+  info[1] = info[2] = info[3] = 0;
+  for (int k = 0; k < kFlashLamps; ++k) {
+    float* a = rows[static_cast<ptrdiff_t>(2) * k];
+    float* b = rows[static_cast<ptrdiff_t>(2) * k + 1];
+    for (int c = 0; c < 4; ++c) a[c] = b[c] = 0;
+    if (k >= n) continue;
+    const FlashLamp& l = flashes.lamp[k];
+    for (int c = 0; c < 3; ++c) {
+      a[c] = static_cast<float>(l.at[c]);
+      b[c] = static_cast<float>(l.tint[c] * l.candela * kFourPi / kLux * pre);
+    }
+    a[3] = static_cast<float>(l.radius_m);
+    b[3] = static_cast<float>(l.out_tau);
+  }
 }
 
 }  // namespace ge::render

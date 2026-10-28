@@ -233,6 +233,7 @@ fn fs_main(in: VertexOut, @builtin(front_facing) front: bool) -> FragmentOut {
             ground_shadow(ground, horizon0, horizon1, linear_clamp, frame.sun.xyz, xz) *
             sun_shadow(shadow, shadow_maps, shadow_cmp, in.rel, n, in.position.xy, frame.time.y);
   var c = surface_lit(s, n, v, sun, sky_seen(in.position));
+  c += s.albedo / PI * flash_on(frame.eye.xyz + in.rel, n);
   c += local_lights(s, in.rel, n, v, in.position.xyz);
   c += s.albedo * s.emissive * (frame.world.y / kSunLux);
   c += wet_sheen(n, v, sun * max(dot(n, frame.sun.xyz), 0.0), 0.0);

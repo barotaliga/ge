@@ -88,16 +88,26 @@ struct FrameUniforms {
   // The fog in areas (render/fog.hpp's `fog_uniforms`): the froxel volume's range (m; 0: none
   // in reach, nothing reads it) and its slices. fill_uniforms writes zero.
   float fog[4];
+  // THE LIGHTNING (render/view.hpp's `flash_rows`): the lamps lit; two rows a lamp: where (world
+  // m) and its reach (m); its light (candela over the sun's lux, pre-exposed, times 4 pi) and the
+  // optical depth out of its cloud.
+  float flash_info[4];
+  float flashes[2 * kFlashLamps][4];
 };
 static_assert(sizeof(FrameUniforms) == 64 * 3 + 16 * 5 + 16 * 6 + 16 * 9 +
                                            16 * kCloudRows * kCloudLayers + 16 * 5 +
-                                           16 * kSkyStyleRows + 16 * kMaxMoons * kMoonRows + 16,
+                                           16 * kSkyStyleRows + 16 * kMaxMoons * kMoonRows + 16 +
+                                           16 + 16 * 2 * kFlashLamps,
               "match frame_types.wgsl");
 
 // The last frame's unjittered camera. Invalid on the first frame and after a cut, when the
 // "previous" camera is this one (no motion).
 struct FrameHistory {
   bool valid = false;
+  // The last frame a flash lit: the cloud's spread march takes the quarter whole until four
+  // frames past it, so no pixel is reprojected from a flash's frame into the dark after it.
+  bool flashed = false;
+  uint64_t flash_frame = 0;
   Mat4 view_proj{};
   double eye[3] = {0, 0, 0};
 };

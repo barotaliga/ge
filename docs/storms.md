@@ -123,19 +123,56 @@ the envelope, soft-clipped, mono at any rate.
 ## The picture
 
 A renderer reads the flashes alive in its frame's window (`flashes_between` over
-[t − dt, t]). It draws three things:
+[t − dt, t]). The `storm` lab's night pictures light a side view on the CPU; the GPU frame draws
+it as below.
 
-- **The cloud lit from inside.** Each flash is a light at the channel's middle, with its radius
-  and power (`brightest`). Inside the cloud its light diffuses rather than travelling straight:
-  L / (4π r²) / (1 + 0.15 τ), with the optical depth τ ≈ σ r capped at the radius. A thick core
-  then glows softly while a thin patch shows the flash sharply, and sheet lightning is that light
-  seen through the cloud. M37b puts it in the frame's uniforms (`flash_info`, `flashes`) and in
-  `render/wgsl/flash.wgsl`, which the clouds' march calls.
-- **The channel itself.** A bright core and a halo where it runs in clear air, a glow where it
-  runs inside the cloud, lit by the frame's light.
-- **The sky and the ground.** The frame's one scalar (`sky_light`) lights the sky and the ground.
+## The storm drawn
 
-The `storm` lab's night pictures light a side view the same way on the CPU.
+**The lamps.** Each flash in the frame is a lamp in the frame's uniforms (`render/view.hpp`'s
+`Flashes`, at most four, `flash_info` and `flashes`): the channel's middle, its reach (half its
+extent), its luminous intensity over the frame and the optical depth of cloud its light crosses
+on the way out. A game takes them from `brightest` (or `light_of`): the intensity is the power
+times `kUnitCandela`, 3·10⁷ cd. A first return stroke of energy 1 over a 1/60 s frame then lights
+a face 1 km away with about 30 lx, and one 8 km away about as a full moon does. Optical records
+put a return stroke's light at 10⁸–10⁹ W for tens of microseconds; the unit sits in that band once
+spread over a frame.
+
+**`render/wgsl/flash.wgsl`** turns a lamp into light (`frame.wgsl` includes it, so every pass can
+call it):
+
+- `flash_light(p, σ)` is the light at a point inside a medium: L / (4π r²) / (1 + 0.15 τ). The
+  channel's extent softens the near field (r² plus a quarter of the reach squared). Light that
+  scatters many times through a cloud of optical depth τ leaves it as a diffusion does, falling as
+  one over the depth rather than exponentially. Inside the cloud τ = σ·r, capped at the reach and
+  at the lamp's own depth out. The clouds' march adds it, times the scattering orders over 4π, to
+  each step's light. That is how a flash deep in a tower lights all of it, and how its base glows
+  as a sheet.
+- `flash_on(p, n)` is the light on a face. For a strike it comes from the lamp's direction. For
+  a flash in the cloud it comes as much from the base overhead as from the lamp. The ground's
+  materials (the snow, the default terrain) and the instances (the trees) add it to the sky's
+  light.
+- `flash_air(d, far)` is the clear air's glow along the eye's ray: the line integral of the light
+  the air (and a fog or a fall) scatters toward the eye, in closed form. The sky adds it, and a
+  deck's base 1.5 km over the eye lit from inside.
+
+The ground is not shadowed from a flash. A strike behind a ridge lights the near slope too, which
+the eye forgives in a flash this short.
+
+**The cloud's spread march.** The cloud is marched at a quarter of the pixels, a quarter of them
+each frame, with the rest reprojected. A flash lasts a frame or two, so a reprojected pixel would
+carry it into the dark frames after it. A frame with a lamp, and the four after it, march the
+quarter whole (`FrameHistory::flash_frame`).
+
+**The channel** (`render/bolts.hpp`, the `bolts` pass after the fall and before the resolve and
+the bloom). Each segment is a camera-facing ribbon two drawn widths across, with a Gaussian core.
+The width is the channel's true width, or 1.5 px at its distance if that is wider. The segment's
+light is luminous intensity per metre: the flash's candela shared along the lit segments by glow
+and length. Its luminance is that over the drawn width, so a far channel drawn wider is dimmer
+and gives the same light. The air's extinction dims it, the depth hides it behind a ridge, and it
+marks the motion target reactive so the resolve does not smear a stroke into the next frame. The
+bloom spreads its glare. The main channel is lit by every stroke and the branches only by the
+first. A flash inside the cloud shows no channel (that is sheet lightning), and neither does a
+strike's channel above the cloud's base.
 
 ## The labs
 
@@ -144,3 +181,10 @@ minute, one flash's flicker against 60 Hz frames, night views of a ground strike
 and a bolt from the blue, a filmstrip, the radar view with gust fronts and strikes, thunder's
 envelope at 1, 4 and 12 km with its sound, and the bands table above, which fails the lab when the
 in-cloud share, the strokes or the interstroke time leave their band.
+
+`make lab LAB=storm-sky` draws the storm in Fall Line's frame: a seed's map at night under
+towers, with one cell laid ahead of the view where a tower stands. It shoots the night with no
+flash, a strike at its first stroke, sheet lightning and a bolt from the blue, and a filmstrip of
+the strike's frames at 60 a second. The lab fails when a flash's picture is no brighter than the
+same view in the dark, or when the filmstrip's brightest frame is not the one the most light fell
+in.

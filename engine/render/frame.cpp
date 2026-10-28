@@ -44,7 +44,16 @@ void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint
   } else {
     std::memcpy(u.prev_view_proj, cam.view_proj.m, sizeof u.prev_view_proj);
   }
+  // A flash this frame, or within the spread's four frames before it, takes the cloud's quarter
+  // whole (below).
+  const bool flash_near = view.flashes.count > 0 ||
+                          (had_history && history->flashed && view.frame >= history->flash_frame &&
+                           view.frame - history->flash_frame < 4);
   if (history) {
+    if (view.flashes.count > 0) {
+      history->flashed = true;
+      history->flash_frame = view.frame;
+    }
     history->valid = true;
     history->view_proj = cam.view_proj;
     for (int i = 0; i < 3; ++i) history->eye[i] = view.eye[i];
@@ -104,7 +113,8 @@ void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint
   // THE CLOUD (render/clouds.hpp).
   cloud_rows(view.clouds, u.cloud_info, u.clouds);
   // Spread over frames only with the last frame's camera to reproject by; the stamp is 1..4096.
-  u.cloud_info[2] = view.clouds.quarter && view.clouds.spread && had_history ? 1.0f : 0.0f;
+  u.cloud_info[2] =
+      view.clouds.quarter && view.clouds.spread && had_history && !flash_near ? 1.0f : 0.0f;
   u.cloud_info[3] = static_cast<float>(view.frame % kCloudStamps + 1);
   // THE MOON'S FACE AND THE EARTH'S SHADOW ON IT (render/night.hpp).
   for (int i = 0; i < 3; ++i) {
@@ -157,6 +167,9 @@ void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint
 
   // THE FOG IN AREAS: none until render/fog.hpp's fog_uniforms says a volume is in reach.
   for (float& f : u.fog) f = 0.0f;
+
+  // THE LIGHTNING (render/view.hpp).
+  flash_rows(view.flashes, pre, u.flash_info, u.flashes);
 }
 
 FrameTargets create_targets(gpu::Device& device, std::string_view label, uint32_t width,

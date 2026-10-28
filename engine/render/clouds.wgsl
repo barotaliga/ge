@@ -339,9 +339,12 @@ fn march(i: i32, d: vec3f, t0: f32, t1: f32, j: f32) -> LayerLook {
     let direct = key * (exp(-tau) * (ph + halo) + kOrders * ph_ms * ms * top_lit) * powder;
     let ambient = sky * (mix(0.35, 1.0, h) / (2.0 * PI) / (1.0 + kReduced * tau_up)) +
                   ground * ((1.0 - h) * 0.3 / (2.0 * PI));
+    // THE LIGHTNING's light inside the cloud, scattered on and on (render/wgsl/flash.wgsl): what
+    // makes a flash deep in the tower light it whole, and the deck's base a sheet.
+    let lit = flash_light(p, sigma) * (kOrders / (4.0 * PI));
     let step_t = exp(-sigma * dt);
     let gain = out.through * (1.0 - step_t);
-    out.light += (direct + ambient) * gain;
+    out.light += (direct + ambient + lit) * gain;
     glow_lit += (1.0 - step_t) * powder;
     weight += gain;
     wdist += gain * t;
