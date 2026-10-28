@@ -24,12 +24,10 @@
 // this one through its ring. No device (a container, SDL_AUDIO_DRIVER=dummy failing) is not an
 // error: the app runs silent. Focus lost fades the buses out with the clock.
 //
-// THE CAPTURE: --capture=PATH records the window and its sound while it is played (capture/
-// live.hpp, docs/replays.md § The live capture): each presented frame copied back through a ring
-// of readbacks (gpu/readback_ring.hpp) and stamped on the mix's clock, the mix tapped on the
-// device's thread, both encoded off the frame on the capture's worker. A .webm is AV1 and Opus,
-// a .mkv uncompressed. A frame the ring or the worker cannot take is dropped, never waited for;
-// the closing line counts them.
+// THE CAPTURE: --capture=PATH records the window and its sound as played (capture/live.hpp,
+// docs/replays.md § The live capture): frames back through gpu/readback_ring.hpp, stamped on the
+// mix's clock, encoded on the capture's worker (.webm AV1 and Opus, .mkv raw). What cannot be
+// taken is dropped, never waited for; the closing line counts it.
 //
 //   fall_line [--frames=N] [--size=WxH] [--no-vsync] [--seed=N] [--rivals=N] [--view=NAME]
 //             [--hour=H] [--mute] [--bot] [--bindings=PATH] [--inputs=PATH] [--events=PATH]
@@ -47,9 +45,8 @@
 // for the game); --inputs where the run's log is written (default: runs/fall_line-<seed>.inputs
 // there).
 //
-// --frames quits after N presented frames and prints the frame pace (a smoke run under a
-// virtual display: xvfb-run -a build/release/games/fall_line/fall_line --frames=60).
-// Escape or closing the window quits.
+// --frames quits after N frames and prints the frame pace (xvfb-run -a ... --frames=60). Escape
+// or closing the window quits.
 //
 // THE CONSOLE: the key under the tilde drops it over the run (engine/console/view.hpp's model, fed
 // by ui/console_keys.hpp, drawn by ui/console.hpp through the frame's 2D pass); while it is down
