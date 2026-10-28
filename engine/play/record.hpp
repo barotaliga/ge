@@ -18,13 +18,14 @@
 // `mkv` is the ENGINE'S OWN FILE (engine/capture/av_export.hpp), with no ffmpeg: the frames as
 // uncompressed I420 in the engine's Matroska muxer and the run's SOUND beside them (the game's
 // `SoundSpec`, play/game.hpp), rendered by the synth on the run's own clock, so it plays at
-// --speed=1 only. It is large (width * height * 1.5 bytes a frame) until the encoders land
-// (docs/replays.md, row M23d2).
+// --speed=1 only. Uncompressed it is large (width * height * 1.5 bytes a frame); with `codec`
+// av1 the pictures are AV1 and the sound Opus, by the engine's own encoders (capture/codecs.hpp),
+// in a .webm, about a hundredth of the size (docs/replays.md § Compressed video).
 //
 // ge:summary A run recorded: a view drawn at a frame rate, encoded by ffmpeg, and a contact sheet
 // ge:keywords record video recording mp4 webm gif h264 vp9 ffmpeg encode frames frame-rate speed
 // ge:keywords contact-sheet thumbnails timestamps resolution crf bitrate frame_steps
-// ge:keywords gpu-recording record-gpu mode lit wireframe depth overlay mkv sound
+// ge:keywords gpu-recording record-gpu mode lit wireframe depth overlay mkv sound av1 opus
 // ge:skill agent-interface
 // ge:test tests/play_record_test.cpp
 #pragma once
@@ -43,7 +44,8 @@ namespace ge::play {
 
 // How the frames become a file. `format` mp4 (H.264), webm (VP9), gif, mkv (the engine's own,
 // with sound: above), or png (frames in a directory, no encoder). An empty `codec` is the format's
-// own; `crf` < 0 its usual quality (23 for H.264, 32 for VP9: lower is better and larger); a
+// own (an mkv's: none, uncompressed; `av1` for AV1 and Opus); `crf` < 0 its usual quality (23
+// for H.264, 32 for VP9 and AV1: lower is better and larger); a
 // `bitrate` ("4M") replaces the crf. `preset` is H.264's speed against size (ultrafast .. veryslow;
 // default medium).
 struct Encoding {
