@@ -877,8 +877,10 @@ it is (`render/fog.hpp`, M38a).
 - **`fog.inject`** (compute, a thread a froxel): the medium at a point jittered in depth inside
   the froxel (a new depth each frame on the golden ratio), lit by the key light (`sun_light`:
   the air's transmittance, the cloud's shadow) past the casters' maps (the shafts through a wood)
-  and the ground's horizon (raised for a point over the snow by its height over a ridge 400 m
-  off), dimmed by the fog's own medium toward the light (a 63 m march: the floor of a bank in
+  and the mountains (`terrain_sun`: 16 steps toward the sun over the ground's heights, growing
+  from 6 m to about 11 km, soft by the distance; near the snow the horizon maps' answer too: the
+  horizon a point on the ground sees says little of what one 300 m over it sees, so a bank in a
+  shaded valley lies in the shade with its floor), dimmed by the fog's own medium toward the light (a 63 m march: the floor of a bank in
   its top's shade). The orders of scattering past the first come out evenly, held to what a deep
   bank's lit top sends back (0.8 of a white face's light, so a sunlit bank is as bright as the
   snow beside it), counted only as far as the fog round the point is thick (a dust scatters once)

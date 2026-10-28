@@ -166,7 +166,33 @@ fn albedo_under(rel: vec3f) -> vec3f {
                             (g + 0.5) / vec2f(ground.field_size.xy), 0.0).rgb;
 }
 
-const kHorizonReach = 400.0;
+// THE MOUNTAINS' SHADOW on a point in the air: a march toward the sun over the ground's heights,
+// kSunSteps steps growing by kSunGrowth from kSunFirst m (to about 11 km), each a soft step where
+// the ray passes over the ground with a margin that widens with the distance (the sun's disc and
+// the heights' grid). The start is jittered a froxel at a time so the history averages the gaps
+// between the far steps. A point on the snow has the horizon maps' answer too; one in the air has
+// only this, since the horizon a point on the ground sees says little of what one 300 m over it
+// sees.
+const kSunSteps = 16;
+const kSunFirst = 6.0;
+const kSunGrowth = 1.65;
+
+fn terrain_sun(world: vec3f, jitter: f32) -> f32 {
+  let sun = frame.sun.xyz;
+  var lit = 1.0;
+  var t = kSunFirst * (0.75 + 0.5 * jitter);
+  for (var k = 0; k < kSunSteps; k++) {
+    let p = world + sun * t;
+    let margin = p.y - field_height(heights, ground, p.xz);
+    let soft = 2.0 + 0.01 * t;
+    lit = min(lit, smoothstep(-soft, soft, margin));
+    if (lit <= 0.0) {
+      break;
+    }
+    t *= kSunGrowth;
+  }
+  return lit;
+}
 
 fn henyey_greenstein(c: f32, g: f32) -> f32 {
   let k = 1.0 + g * g - 2.0 * g * c;
@@ -193,13 +219,14 @@ fn inject(@builtin(global_invocation_id) id: vec3u) {
     let world = rel + frame.eye.xyz;
     var key = sun_light(world.y, world.xz);
     if (frame.sun.y > 0.0) {
-      // The ground's horizon is a point's on the snow; one standing over it sees the sun over a
-      // horizon lower by its height over a ridge kHorizonReach off.
-      let flat = length(frame.sun.xz);
-      let raised = vec3f(frame.sun.x, frame.sun.y + max(above, 0.0) / kHorizonReach * flat,
-                         frame.sun.z);
-      key *= ground_shadow(ground, horizon0, horizon1, linear_clamp, raised, world.xz) *
-             sun_shadow(shadow, shadow_maps, shadow_cmp, rel, vec3f(0.0),
+      if (fp.look.w > 0.5) {
+        let jitter = fract(0.618034 * f32(id.x + 7u * id.y + 13u * id.z) + fp.look.z);
+        let near = 1.0 - smoothstep(0.0, 20.0, above);
+        key *= terrain_sun(world, jitter) *
+               mix(1.0, ground_shadow(ground, horizon0, horizon1, linear_clamp, frame.sun.xyz,
+                                      world.xz), near);
+      }
+      key *= sun_shadow(shadow, shadow_maps, shadow_cmp, rel, vec3f(0.0),
                         vec2f(id.xy) + vec2f(f32(id.z) * 7.0), frame.time.y);
     } else {
       key = vec3f(0.0);

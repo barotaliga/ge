@@ -16,8 +16,8 @@
 //   centimetres deep and the last ones metres.
 // - "fog.inject" (one thread a froxel): the medium at a point jittered inside the froxel (a new
 //   depth each frame on the golden ratio), lit by the key light (frame.wgsl's `sun_light`: the
-//   air's transmittance and the cloud's shadow) past the ground's horizon (render/horizon.hpp,
-//   lowered for a point standing over the snow by its height over a ridge 400 m off) and
+//   air's transmittance and the cloud's shadow) past the mountains (a march toward the sun over
+//   the ground's heights, to about 11 km, with the horizon maps' answer near the snow) and
 //   the casters' maps (render/shadows.hpp), so a wood throws SHAFTS through its mist, and past
 //   the fog's own medium toward the light (a short march: the floor of a deep bank lies in its
 //   top's shade), with the further orders of scattering held to a deep bank's lit top
