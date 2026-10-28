@@ -133,3 +133,27 @@ TEST(a_layer_carries_its_kinds_light_round_the_disc) {
   CHECK(c.layers[0].deck == 1 && c.layers[0].halo == 0);
   CHECK(c.layers[1].halo == 1 && c.layers[1].deck == 0 && c.layers[1].drop_um > 20);
 }
+
+TEST(a_layer_carries_its_kinds_thickness_and_a_sky_its_own_lean) {
+  const ge::render::CloudKind* kinds[2] = {ge::render::cloud_kind_named("altostratus"),
+                                           ge::render::cloud_kind_named("stratus")};
+  int thinner = 0, thicker = 0;
+  for (int n = 1; n <= 40; ++n) {
+    const double seed = n;
+    const ge::render::Clouds c =
+        app::cloud_layers_of(kinds, 2, sky(mg::WeatherKind::fair), seed, 1000, 46, 0);
+    for (int i = 0; i < 2; ++i) {
+      CHECK(c.layers[i].thin == kinds[i]->thin && c.layers[i].thick_cells == kinds[i]->thick_cells);
+      CHECK(c.layers[i].thick_bias >= -0.4 && c.layers[i].thick_bias <= 0.4);
+    }
+    if (c.layers[0].thick_bias < -0.1) ++thinner;
+    if (c.layers[0].thick_bias > 0.1) ++thicker;
+  }
+  CHECK(thinner > 5 && thicker > 5);
+  // A middle veil the sun shows through in places is no lid over the valley.
+  ge::render::Weather w;
+  app::lid_under(kinds, 1, w);
+  CHECK(w.cover == 0);
+  app::lid_under(kinds + 1, 1, w);
+  CHECK(w.cover == 1);
+}

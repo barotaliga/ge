@@ -1,15 +1,18 @@
 // The simulated store saved to and loaded from a directory, and the offline store built on it.
 // The directory holds `store.txt` (one record a line: the players, their friends, licences,
-// stored stats and achievements, every leaderboard entry), `cloud/<player id>/<name>` (each
-// player's cloud files as they are) and `blobs/<id>.bin`. A save writes `store.txt.tmp` and
+// stored stats and achievements, every leaderboard entry, the workshop's items and who is
+// subscribed), `cloud/<player id>/<name>` (each player's cloud files as they are),
+// `items/<item id>/<name>` (each item's latest files) and `blobs/<id>.bin`. A reopened store's
+// subscribed items are installed at their latest version. A save writes `store.txt.tmp` and
 // renames it over the old one, so a crash mid-save leaves the last good save. Presence, invites
 // and queued answers belong to a session and are not kept.
 //
 // ge:summary The simulated store saved to a directory and read back; the offline store over it
 // ge:keywords services sim store save load persist directory store-txt offline open_offline
-// ge:keywords save_store load_store cloud-files blobs atomic-rename
+// ge:keywords save_store load_store cloud-files blobs atomic-rename workshop items
 // ge:skill services
 // ge:test tests/services_offline_test.cpp
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -50,6 +53,37 @@ bool read_file(const fs::path& path, std::vector<uint8_t>& out) {
   return true;
 }
 
+// Free text on one line: every byte outside printable ASCII, and the space, '%' and ',', as %XX.
+std::string enc(const std::string& t) {
+  if (t.empty()) return "%";
+  std::string out;
+  for (const char c : t) {
+    const auto u = static_cast<unsigned char>(c);
+    if (u <= 0x20 || u >= 0x7f || c == '%' || c == ',') {
+      char buf[4];
+      std::snprintf(buf, sizeof buf, "%%%02X", u);
+      out += buf;
+    } else {
+      out.push_back(c);
+    }
+  }
+  return out;
+}
+
+std::string dec(const std::string& t) {
+  if (t == "%") return {};
+  std::string out;
+  for (size_t i = 0; i < t.size(); i++) {
+    if (t[i] == '%' && i + 2 < t.size()) {
+      out.push_back(static_cast<char>(std::strtol(t.substr(i + 1, 2).c_str(), nullptr, 16)));
+      i += 2;
+    } else {
+      out.push_back(t[i]);
+    }
+  }
+  return out;
+}
+
 bool fail(std::string* error, std::string line) {
   if (error) *error = std::move(line);
   return false;
@@ -64,7 +98,8 @@ bool save_store(const SimStore::Impl& s, const std::string& dir, std::string* er
   std::ostringstream o;
   o << kHeader << "\n";
   o << "app " << s.catalog.app << "\n";
-  o << "next " << s.next_user << " " << s.next_seq << " " << s.next_blob << "\n";
+  o << "next " << s.next_user << " " << s.next_seq << " " << s.next_blob << " " << s.next_item
+    << "\n";
   for (const SimPlayer& p : s.players) {
     o << "player " << p.id << " " << (p.online ? 1 : 0) << " " << p.language << " "
       << (p.country.empty() ? "-" : p.country) << " " << p.name << "\n";
@@ -72,8 +107,17 @@ bool save_store(const SimStore::Impl& s, const std::string& dir, std::string* er
     o << "env " << p.id << " " << e.handheld << " " << e.big_picture << " " << e.overlay << " "
       << e.cloud << "\n";
   }
-  // Every player before anything that names one, so a load meets each id before its records.
+  for (const SimItem& item : s.items) {
+    std::string tags;
+    for (const std::string& t : item.draft.tags)
+      tags.append(tags.empty() ? "" : ",").append(enc(t));
+    o << "item " << item.id << " " << item.author << " " << static_cast<int>(item.draft.visibility)
+      << " " << item.version << " " << enc(item.draft.title) << " " << enc(item.draft.description)
+      << " " << (tags.empty() ? "%" : tags) << " " << enc(item.draft.change_note) << "\n";
+  }
+  // Every player and item before anything that names one, so a load meets each id first.
   for (const SimPlayer& p : s.players) {
+    for (const ItemId id : p.subscriptions) o << "subscribed " << p.id << " " << id << "\n";
     for (const UserId f : p.friends)
       if (p.id < f) o << "friend " << p.id << " " << f << "\n";
     for (const auto& [app, installed] : p.licences)
@@ -92,8 +136,18 @@ bool save_store(const SimStore::Impl& s, const std::string& dir, std::string* er
       o << "\n";
     }
 
-  // The cloud files and the blobs first, so a store.txt never names what is not on disk.
+  // The cloud files, the items' files and the blobs first, so a store.txt never names what is
+  // not on disk.
   fs::remove_all(root / "cloud", ec);
+  fs::remove_all(root / "items", ec);
+  for (const SimItem& item : s.items)
+    for (const ItemFile& f : item.files)
+      if (!write_file(root / "items" / std::to_string(item.id) / f.name, f.bytes))
+        return fail(error, std::string("services: offline store cannot write item file '")
+                               .append(f.name)
+                               .append("' under ")
+                               .append(dir)
+                               .append("; next: check the directory is writable and has room"));
   for (const SimPlayer& p : s.players)
     for (const auto& [name, bytes] : p.cloud)
       if (!write_file(root / "cloud" / std::to_string(p.id) / name, bytes))
@@ -138,6 +192,7 @@ bool load_store(SimStore::Impl& s, const std::string& dir, std::string* error) {
   };
   s.players.clear();
   s.blobs.clear();
+  s.items.clear();
   for (auto& b : s.boards) b.clear();
   while (std::getline(f, line)) {
     n++;
@@ -156,6 +211,46 @@ bool load_store(SimStore::Impl& s, const std::string& dir, std::string* error) {
                    std::to_string(s.catalog.app));
     } else if (tag == "next") {
       in >> s.next_user >> s.next_seq >> s.next_blob;
+      if (!(in >> s.next_item)) s.next_item = 1;  // a store saved before the workshop
+    } else if (tag == "item") {
+      SimItem item;
+      int vis = 0;
+      std::string title, description, tags, note;
+      in >> item.id >> item.author >> vis >> item.version >> title >> description >> tags >> note;
+      if (!in || vis < 0 || vis > 2)
+        return bad("an item needs id, author, visibility, version, title, description, tags, note");
+      item.draft.visibility = static_cast<ItemVisibility>(vis);
+      item.draft.title = dec(title);
+      item.draft.description = dec(description);
+      item.draft.change_note = dec(note);
+      if (tags != "%") {
+        std::istringstream ts(tags);
+        for (std::string t; std::getline(ts, t, ',');) item.draft.tags.push_back(dec(t));
+      }
+      const fs::path files = root / "items" / std::to_string(item.id);
+      std::error_code iec;
+      for (const auto& file : fs::recursive_directory_iterator(files, iec)) {
+        if (!file.is_regular_file()) continue;
+        ItemFile got;
+        got.name = fs::relative(file.path(), files).generic_string();
+        if (!read_file(file.path(), got.bytes))
+          return bad("item file " + got.name + " is unreadable");
+        item.files.push_back(std::move(got));
+      }
+      std::sort(item.files.begin(), item.files.end(),
+                [](const ItemFile& a, const ItemFile& b) { return a.name < b.name; });
+      if (item.files.empty())
+        return bad("item " + std::to_string(item.id) + "'s files are missing from items/");
+      s.items.push_back(std::move(item));
+    } else if (tag == "subscribed") {
+      UserId id = 0;
+      ItemId item = 0;
+      in >> id >> item;
+      SimPlayer* p = s.find(id);
+      const SimItem* it = s.find_item(item);
+      if (!p || !it) return bad("a subscription of an unknown player or item");
+      p->subscriptions.push_back(item);
+      p->installs[item] = {it->version, it->files};  // a reopened store's items are up to date
     } else if (tag == "player") {
       SimPlayer p;
       int online = 1;
