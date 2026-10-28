@@ -18,6 +18,7 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
 | `net/os_socket.hpp` | The socket shim (POSIX, Winsock): the only file with the OS's socket headers; not installed |
 | `net/udp_socket.hpp` | The OS's non-blocking UDP sockets; `os_entropy` |
 | `net/tcp_socket.hpp` | The OS's non-blocking TCP sockets: listen, accept, connect, packets as length-prefixed frames |
+| `net/local_pipe.hpp` | A non-blocking byte stream to a program on the same machine by name (Unix domain socket, Windows named pipe); the Discord app's IPC (`services` skill) |
 | `net/conditions.hpp` | A link's conditions and each packet's fate (a `stream` link: nothing lost, a drop a resend late, head-of-line blocking); the presets `lan` … `awful` |
 | `net/sim_network.hpp` | The simulated network: conditioned directed links on a virtual clock, seeded |
 | `net/capture.hpp` | pcap captures (link type RAW; sim nodes as 198.18.0.0/15), written and read back |

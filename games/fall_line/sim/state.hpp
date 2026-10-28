@@ -88,6 +88,8 @@ enum class EventKind : uint8_t {
   gunfire,    // a round fired, into him, into the snow or a trunk, or past him (gunfire.hpp)
   hurt,       // injuries taken (`gate` how many this step, `value` the body's severity score after)
   died,       // the body gave out (`value` its severity score); his run is over
+  traffic,    // met a vehicle of the village (`gate` its index, or -1 - a parked car's id; `value`
+              // the closing speed, m/s; village.hpp)
 };
 
 const char* event_name(EventKind kind);
@@ -224,6 +226,8 @@ struct Racer {
   ge::skier::BodyState body;
 };
 
+struct Village;  // village.hpp
+
 struct GameState {
   std::shared_ptr<const ge::mountain::mapgen::Level> level;
   Mode mode = Mode::race;
@@ -246,6 +250,9 @@ struct GameState {
   FreeHeli heli;         // the free ride's helicopter (heli_ride.hpp); none in a race
   FreePara para;         // the free ride's paramotor (para_ride.hpp); only a ride begun under it
   CrowdState crowd;      // the amateurs on the ski area (crowd.hpp); inactive until dealt
+  // A free ride's village: its streets, the trees felled for them and its traffic (village.hpp),
+  // planned at create; none in a race or where the map lays none.
+  std::shared_ptr<const Village> village;
   // THE INJURIES SWITCH: every racer's body stepped after his skis, blows hurting and killing.
   // Off, the skis' blows never touch the bodies and no digest reads them.
   bool injuries = false;

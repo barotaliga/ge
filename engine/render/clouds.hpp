@@ -50,8 +50,9 @@
 // ge:keywords billows worley cellular-noise cauliflower anvil patches halo diffusion corona
 // ge:keywords aureole diffraction airy bessel moon-glow
 // ge:keywords cloud-noise value-noise fbm cover cut quantile powder beer drift cloud_rows
-// ge:keywords cloud_cut cloud_column encode_clouds quarter-resolution half-resolution upsample
-// ge:keywords depth-aware-upsample bilateral temporal reprojection spread-over-frames history
+// ge:keywords cloud_cut cloud_column cloud_thickness cloud_cast optical-depth thickness
+// ge:keywords encode_clouds quarter-resolution half-resolution upsample depth-aware-upsample
+// ge:keywords bilateral temporal reprojection spread-over-frames history
 // ge:skill render
 // ge:test tests/render_clouds_test.cpp
 #pragma once
@@ -84,6 +85,12 @@ double cloud_noise_at(double x, double y, double z);
 double cloud_cut(double cover);
 // How full a layer's column is (0..1) over the world point (x, z): the shader's `column`.
 double cloud_column(const CloudLayer& layer, double x, double z);
+// How thick it is there (the shader's `cloud_thickness`): the share of a full cell's extinction
+// the layer holds over (x, z) where its column is `c`, `thin` .. 1.
+double cloud_thickness(const CloudLayer& layer, double x, double z, double c);
+// The column times its thickness: the share of the shadow's optical depth (`shadow_tau`) the
+// layer takes off the key light over (x, z) (the shader's `cloud_cast`).
+double cloud_cast(const CloudLayer& layer, double x, double z);
 
 // The frame block's rows for `clouds` (FrameUniforms::cloud_info and clouds).
 void cloud_rows(const Clouds& clouds, float info[4], float rows[][4]);

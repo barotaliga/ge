@@ -101,6 +101,11 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   world for labs and prototypes, the strafe jumper's best angle and the scenarios, and the knobs
   bound as console cvars (`cvars.hpp`). It depends on `engine/core`, and on `engine/console` for
   that binding alone; the step is a pure function of its inputs, so a run replays from its commands.
+- **`engine/snow`**: a layer of snow over any ground (`ge::snow`, M29; `docs/snow.md` is the
+  design): the analytic cover read exactly where nothing has crossed, sparse fixed-point tiles
+  of columns (depth and mass) where something has, `sample`, `press` with its mass conserved to
+  the unit and the berm it throws, the imprint records the picture and the sound read, and the
+  snapshot. It depends on `engine/core` only and draws nothing from a clock or an RNG.
 - **`engine/ui`**: the immediate-mode 2D layer (rects, images, SDF text), plus Dear
   ImGui behind `GE_DEV_UI`.
 - **`games/fall_line/app`**: Fall Line's presentation, the `fall_line_app` library (which
@@ -323,6 +328,7 @@ whole tree to it, and `ge doctor` holds a game repo to it (the `agent-interface`
 | Assets | glTF 2.0 through cgltf (`engine/assets`) for the few authored models, made by Blender Python builders run headless offline (`ge asset`, M8g) and committed as .glb; everything else generated in code or baked to embedded blobs |
 | Built venues on a map | A venue whose features are finer than the 2 m grid (a ski jump's edge, its landing radius) answers `Level::ground_at` and `normal_at` off an ANALYTIC profile inside its width (`Level::venue`, one null check on the hot path), with the grid cut beneath it so a reader of the raw grid never sees ground above the surface |
 | Real-world data | Baked offline by a lab off free public datasets that need no credentials (the 30 m elevation model's public bucket), into GENERATED C++ sources committed in the tree (a real face's heights: a base64 string of second-differenced varints, about 21 KB a face), so a build reads no file and fetches nothing; the bake is re-runnable and reproduces the tree to the bit |
+| Video encoding | AV1 by libaom and Opus by libopus for an export (`cmake/Codecs.cmake`, `engine/capture/codecs.hpp`), built once at configure time and linked privately; the platform's hardware encoders later (M23d4); no patent-encumbered software encoder |
 | Tests | Our own header harness, CTest, golden tables |
 | Build/CI | CMake + Ninja + presets; GitHub Actions on Linux x64/arm64 (GCC, Clang), macOS, Windows |
 
@@ -332,8 +338,10 @@ CMake ≥ 3.25 + Ninja, `CMakePresets.json` (`debug` with ASan/UBSan, `release`)
 Dependencies are pinned to a tag and a SHA-256, and each one is added in the milestone that
 needs it: SDL3 through `FetchContent` from its release archive (`cmake/SDL.cmake`), Dawn as its
 prebuilt GitHub release (`cmake/Dawn.cmake`; Tint comes in the same archive), later cgltf
-and Dear ImGui. Downloads land in `.cache/deps/` (gitignored, shared by every preset,
-cached by CI). `GE_PLATFORM` and `GE_GPU` switch the platform layer and the GPU off; the
+and Dear ImGui, and libaom and libopus from their release archives, built once at configure time
+(`cmake/Codecs.cmake`). Downloads land in `.cache/deps/` (gitignored, shared by every preset,
+cached by CI). `GE_PLATFORM` and `GE_GPU` switch the platform layer and the GPU off, and
+`GE_ENCODERS` the export's encoders (off for the published package and a consumer); the
 simulation, the plugins and their tests never need either, and `GE_GPU` defaults off where
 Dawn publishes no archive (Linux arm64). `Makefile` names the everyday commands. CI (`.github/workflows/ci.yml`) runs format,
 agents-check, lint and the test matrix, with ctest in parallel, ccache on the Linux and macOS
