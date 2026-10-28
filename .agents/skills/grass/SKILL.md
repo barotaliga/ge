@@ -19,6 +19,7 @@ pass, `labs` for a lab, and `water` for anything about the wind itself.
 | Kinds, presets, recipes, the far colour | `engine/grass/kind.hpp` | `grass` | `tests/grass_kind_test.cpp` |
 | Covers (heightfield, mesh), the scatter, the hash | `engine/grass/cover.hpp` | `grass` | `tests/grass_cover_test.cpp` (golden) |
 | The wind grid, the bend, the sway, the Bézier | `engine/grass/sway.hpp` | `grass` | `tests/grass_sway_test.cpp` (golden) |
+| Trampling: stamps, the spring back, the cells | `engine/grass/trample.hpp` | `gpu-grass` (`trampled`) | `tests/grass_trample_test.cpp` (golden) |
 | The GPU scatter, the lists, the draw, the light | `engine/render/grass.hpp`, `grass_scatter.wgsl`, `grass.wgsl`, `wgsl/grass_common.wgsl` | `gpu-grass` | `tests/render_grass_test.cpp` |
 
 ## Adding grass to a game
@@ -35,10 +36,13 @@ pass, `labs` for a lab, and `water` for anything about the wind itself.
    `grass::GrassAir` (its `wind::Field`, shelter, sources and ground), then
    `encode_grass_scatter` after the frame's uniforms and `encode_grass` after the ground's colour
    and before the sky. Name both passes in the game's pass table.
+5. Underfoot: keep a `grass::Trample` (`init_trample`), `stamp` it where a foot, a wheel or a body
+   meets the grass (the way it travels, the game's clock), and `set_grass_trample` before the
+   frame; it uploads only the cells that changed.
 
 ## The rules
 
-- **Two halves, one function.** `scatter_one`, `wind_at_blade` and `blade_shape` exist twice: in
+- **Two halves, one function.** `scatter_one`, `wind_at_blade`, `press_at` and `blade_shape` exist twice: in
   C++ (`engine/grass`) and in WGSL (`wgsl/grass_common.wgsl`), float for float in the same
   order. Change one, change the other in the same commit; `tests/render_grass_test.cpp` holds
   them together (blades, air and shapes) on the software adapter.

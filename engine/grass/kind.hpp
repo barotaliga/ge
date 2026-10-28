@@ -13,6 +13,8 @@
 // - THE WIND: `give`, the wind speed (m/s at the blade's height) that bends a blade halfway to
 //   flat, so a stiff short lawn has a large give and long soft grass a small one; `sway`, the
 //   blade's own swaying frequency (Hz), lower for a taller blade.
+// - UNDERFOOT: `spring`, the seconds a blade pressed flat (trample.hpp) takes to stand back up,
+//   short for a springy lawn, long for long soft grass that keeps a path walked through it.
 // - THE COLOUR: linear RGB at the root and at the tip, and a `dry` share of blades turned to
 //   `dry_tip`, so a meadow in late summer is not one green.
 //
@@ -24,7 +26,7 @@
 //
 // ge:summary Kinds of grass: blade height, width, density, lean, clumps, give, sway, colours
 // ge:keywords grass kind preset recipe lawn meadow long-grass tussock steppe reeds density
-// ge:keywords tall short thick thin clump give sway parse_kind print_kind
+// ge:keywords tall short thick thin clump give sway spring parse_kind print_kind
 // ge:skill grass
 // ge:test tests/grass_kind_test.cpp
 #pragma once
@@ -49,6 +51,7 @@ struct Kind {
   float pull = 0.4f;           // 0..1, how far a blade leans toward its clump's middle
   float give = 6;              // m/s at the blade's height that bends it halfway to flat
   float sway = 1.6f;           // Hz, the blade's own swaying
+  float spring = 8;            // s a blade pressed flat takes to stand back up (trample.hpp)
   std::array<float, 3> root{0.050f, 0.090f, 0.018f};  // linear RGB at the root
   std::array<float, 3> tip{0.180f, 0.300f, 0.060f};   // linear RGB at the tip
   float dry = 0.08f;                                  // the share of blades dried
@@ -62,8 +65,8 @@ std::span<const Kind> presets();
 std::optional<Kind> preset(std::string_view name);
 
 // A recipe: a preset's name, then `field=value` words (height, height_jitter, width, density,
-// lean, lean_jitter, clump, pull, give, sway, dry; root, tip and dry_tip as `r,g,b`). On a fault,
-// nothing, with `error` set to what is wrong and what to write instead.
+// lean, lean_jitter, clump, pull, give, sway, spring, dry; root, tip and dry_tip as `r,g,b`). On a
+// fault, nothing, with `error` set to what is wrong and what to write instead.
 std::optional<Kind> parse_kind(std::string_view recipe, std::string* error = nullptr);
 
 // The canonical recipe: the name, then every field that differs from that preset's, in the order

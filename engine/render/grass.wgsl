@@ -6,7 +6,10 @@
 // threads). Lit two-sided: the sun past the ground's horizon and the shadow maps on the face
 // toward the eye, the sun through the blade from behind (translucency, strongest at the tips), the
 // sky's light dimmed toward the root (a dense field shades its own floor), and a faint sheen.
-// Hazed; the motion target written as a solid surface's.
+// Hazed. A blade pressed underfoot (grass_common.wgsl's `press_at`) lies along the press's way,
+// on top of the field, so it is lit to its root and shows its paler back;
+// the fine blades' motion vectors carry their own sway since the last frame, so temporal
+// anti-aliasing keeps a waving field sharp.
 #include "render/wgsl/frame.wgsl"
 #include "render/wgsl/terrain_common.wgsl"
 #include "render/wgsl/sun_shadow.wgsl"
@@ -21,6 +24,7 @@
 @group(2) @binding(2) var<storage, read> near_blades: array<Blade>;
 @group(2) @binding(3) var<storage, read> far_blades: array<Blade>;
 @group(2) @binding(4) var<storage, read> grass_wind: array<vec2f>;
+@group(2) @binding(5) var<storage, read> grass_press: array<GrassPress>;
 
 @group(3) @binding(0) var<uniform> shadow: SunShadow;
 @group(3) @binding(1) var shadow_maps: texture_depth_2d_array;
@@ -33,19 +37,32 @@ struct VertexOut {
   @location(2) along: f32,                      // 0 at the root .. 1 at the tip
   @location(3) @interpolate(flat) colour: vec3f, // the tip's linear albedo
   @location(4) @interpolate(flat) root: vec3f,   // the root's
+  @location(5) prev_rel: vec3f,                 // where this point of the blade was last frame,
+                                                // relative to this frame's eye
+  @location(6) @interpolate(flat) pressed: f32,  // 0..1, how flat it is pressed (lies on top)
 }
 
-fn blade_vertex(b: Blade, vid: u32, segments: u32) -> VertexOut {
+// `moving`: the blade's own motion since the last frame goes into the motion target (the fine
+// blades; the coarse ones far off move by less than a pixel and keep the camera's motion alone).
+fn blade_vertex(b: Blade, vid: u32, segments: u32, moving: bool) -> VertexOut {
   var out: VertexOut;
   let kind = b.seed >> 24u;
   let k = kinds[kind];
   let t = gp.mean.z;
   let air = wind_at_blade(b.root.x, b.root.z, t);
-  let s = blade_shape(k, b, air, t);
+  let press = press_at(k, b.root.x, b.root.z, t);
+  let s = blade_shape(k, b, air, t, press);
   let seg = vid / 2u;
   let side = f32(vid & 1u) * 2.0 - 1.0;
   let u = min(f32(seg) / f32(segments), 1.0);
   let p = bezier_at(s, u);
+  var moved = vec3f(0.0);
+  if (moving) {
+    let t0 = gp.mean.w;
+    let s0 = blade_shape(k, b, wind_at_blade(b.root.x, b.root.z, t0), t0,
+                         press_at(k, b.root.x, b.root.z, t0));
+    moved = bezier_at(s0, u) - p;
+  }
   let tangent = normalize(bezier_tangent(s, u) + vec3f(0.0, 1e-5, 0.0));
   // The blade's face: across it a hashed plan direction, square to the tangent.
   let hf = grass_hash(b.seed ^ 0x165667b1u);
@@ -65,9 +82,11 @@ fn blade_vertex(b: Blade, vid: u32, segments: u32) -> VertexOut {
   let corner = rel_p + across * (side * 0.5 * width);
   out.position = frame.view_proj * vec4f(corner, 1.0);
   out.rel = corner;
+  out.prev_rel = corner + moved;
   face = normalize(cross(tangent, across));
   out.normal = normalize(face + across * (side * 0.45));
   out.along = u;
+  out.pressed = press.x;
   let hc = grass_hash(b.seed ^ 0x2545f491u);
   var tip = k.tip.xyz;
   if (grass_unit(hc) < k.air.z) {
@@ -81,12 +100,12 @@ fn blade_vertex(b: Blade, vid: u32, segments: u32) -> VertexOut {
 
 @vertex
 fn vs_near(@builtin(vertex_index) vid: u32, @builtin(instance_index) iid: u32) -> VertexOut {
-  return blade_vertex(near_blades[iid], vid, gp.cover.z);
+  return blade_vertex(near_blades[iid], vid, gp.cover.z, true);
 }
 
 @vertex
 fn vs_far(@builtin(vertex_index) vid: u32, @builtin(instance_index) iid: u32) -> VertexOut {
-  return blade_vertex(far_blades[iid], vid, gp.cover.w);
+  return blade_vertex(far_blades[iid], vid, gp.cover.w, false);
 }
 
 struct FragmentOut {
@@ -107,9 +126,12 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   let lit = ground_shadow(ground, horizon0, horizon1, linear_clamp, l, xz) *
             sun_shadow(shadow, shadow_maps, shadow_cmp, in.rel, n, in.position.xy, frame.time.y);
   let sun = sun_light(y, xz) * lit;
-  let albedo = mix(in.root, in.colour, pow(in.along, 0.7));
+  // A pressed blade lies on top of the field, open to the sky along its whole length and showing
+  // its paler back: it is shaded as its tip is, and lighter.
+  let open = max(in.along, in.pressed);
+  let albedo = mix(in.root, in.colour, pow(open, 0.7)) * (1.0 + 0.25 * in.pressed);
   // A dense field shades its own floor: the sky reaches the root a quarter as well as the tip.
-  let floor_shade = mix(0.25, 1.0, smoothstep(0.0, 0.9, in.along));
+  let floor_shade = mix(0.25, 1.0, smoothstep(0.0, 0.9, open));
   let facing = max(dot(n, l), 0.0);
   let through = max(dot(-n, l), 0.0) * 0.55 * mix(0.4, 1.0, in.along);
   let sheen = pow(max(dot(reflect(-l, n), to_eye), 0.0), 18.0) * 0.06 * in.along;
@@ -117,6 +139,6 @@ fn fs_main(in: VertexOut) -> FragmentOut {
           sun * sheen;
   var out: FragmentOut;
   out.colour = vec4f(haze(c, in.position.xy * frame.size.zw, length(in.rel)), 1.0);
-  out.motion = vec4f(screen_motion(frame, vec4f(in.rel, 1.0), in.position.xy), 0.0, 0.0);
+  out.motion = vec4f(screen_motion(frame, vec4f(in.prev_rel, 1.0), in.position.xy), 0.0, 0.0);
   return out;
 }
