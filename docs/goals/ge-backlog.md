@@ -73,6 +73,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 
 ## Inspecting a run
 
+- `ge lab <id> --zoom=x,y,w,h` (every shot, or `--zoom=<shot>:x,y,w,h` one, also written cropped to a region and scaled up, so a lab needs no close-up code of its own; Shooter's Edge HUD thread)
 - `ge lab record <lab> --frames=N --fps=F --out=<file>` / `ge lab anim <lab> --shots=<glob> --out=<file>` (a lab's frames written and encoded in one step, or its numbered frame shots assembled: an animated GIF on the engine's own encoder, WebP or MP4 later through the capture's encoders; `ge lab publish` inlining those animations; asked for by the explosions and lightning beam threads)
 - plugin commands: `ge tool <plugin> -- <args>` (being built by the classic-enhance PR: a plugin's tool executable built and its JSON relayed); next, its commands listed in `ge help` and forwarded without `tool --`; first users `ge level textures <pak> <map> --out=<dir>` and `ge level clone <bsp> --texmap=<file>`, which today hide as lab flags
 - `ge lab <id> --compare=<tag> --metric=<name>` (one metric across the kept run and this one, a table per scenario or shot, in place of every metric `--compare` prints today)

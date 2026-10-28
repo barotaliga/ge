@@ -6,6 +6,8 @@
 //                          and the next free number: one past the highest anywhere
 //   ge goals free M17      the same for one milestone's rows: the letters taken under M17 on the
 //                          base and on every branch, and the next free letter
+//   ge goals free M18k     a row's own sub-rows: numbers under a row ending in a letter (M18k1),
+//                          letters under one ending in a digit (M23d1a)
 //   ge goals claim <what>  the next free row (--under=M17: the next letter under it) written to
 //                          `docs/goals/reserved.md`, committed and pushed to this branch at once;
 //                          then, five seconds on, the branches read again: a branch that claimed
@@ -51,6 +53,9 @@ GoalRow goal_row_of_file(std::string_view file_name);
 int next_free_number(const std::vector<int>& taken);
 // The next free letter after the single-letter suffixes among `taken` ("a" when none).
 std::string next_free_letter(const std::vector<std::string>& taken);
+// The number one past the highest leading number of the suffixes under a row (M18k1, M18k2 ->
+// "3"), "1" when there are none: the sub-rows of a row that ends in a letter.
+std::string next_free_digit(const std::vector<std::string>& taken);
 
 Outcome run_goals_free(const fs::path& repo, const std::string& row, const std::string& base,
                        bool fetch);

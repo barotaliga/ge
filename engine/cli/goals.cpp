@@ -160,6 +160,18 @@ std::string next_free_letter(const std::vector<std::string>& taken) {
   return std::string(1, most == 0 ? 'a' : static_cast<char>(most + 1));
 }
 
+std::string next_free_digit(const std::vector<std::string>& taken) {
+  int most = 0;
+  for (const std::string& s : taken) {
+    int n = 0;
+    std::size_t i = 0;
+    while (i < s.size() && i < 4 && std::isdigit(static_cast<unsigned char>(s[i])))
+      n = n * 10 + (s[i++] - '0');
+    most = std::max(most, n);
+  }
+  return std::to_string(most + 1);
+}
+
 namespace {
 
 // Every row a ref, branch or the working tree holds that the base does not, and the next free.
@@ -170,7 +182,11 @@ struct Scan {
   std::string next;
 };
 
-Scan scan(const fs::path& repo, int number, const std::string& base, const fs::path& log) {
+// `number` -1 scans the top-level numbers; else the rows under M<number><parent>: the letters under
+// a number or under a row ending in a digit (M18 -> M18k, M23d1 -> M23d1a), the numbers under a row
+// ending in a letter (M18k -> M18k1).
+Scan scan(const fs::path& repo, int number, const std::string& parent, const std::string& base,
+          const fs::path& log) {
   Scan out;
   const std::string git = "git -C " + quoted(repo) + " ";
   std::vector<Source> sources;
@@ -195,8 +211,10 @@ Scan scan(const fs::path& repo, int number, const std::string& base, const fs::p
   for (const Source& s : sources) {
     for (const GoalRow& r : s.rows) {
       if (number >= 0 && r.number != number) continue;
+      if (!parent.empty() && (r.suffix.size() <= parent.size() || !r.suffix.starts_with(parent)))
+        continue;
       numbers.push_back(r.number);
-      if (number >= 0) letters.push_back(r.suffix);
+      if (number >= 0) letters.push_back(r.suffix.substr(parent.size()));
       // A top-level number at or under the base's highest is the base's, renamed or retired.
       if (on_base.count(key_of(r)) ||
           (number < 0 && (!r.suffix.empty() || r.number <= out.base_most)))
@@ -206,14 +224,19 @@ Scan scan(const fs::path& repo, int number, const std::string& base, const fs::p
         who.emplace_back(s.name, r.title);
     }
   }
-  out.next = number < 0 ? "M" + std::to_string(next_free_number(numbers))
-                        : "M" + std::to_string(number) + next_free_letter(letters);
+  const bool digit_next =
+      !parent.empty() && std::isalpha(static_cast<unsigned char>(parent.back()));
+  out.next = number < 0   ? "M" + std::to_string(next_free_number(numbers))
+             : digit_next ? "M" + std::to_string(number) + parent + next_free_digit(letters)
+                          : "M" + std::to_string(number) + parent + next_free_letter(letters);
   return out;
 }
 
-// The number a row such as "M17" names (-1 for none), or a finding when it is not a row.
-bool row_number(const std::string& row, int& number, Outcome& out) {
+// The number and suffix a row such as "M17" or "M18k" names (-1 for none), or a finding when it is
+// not a row.
+bool row_number(const std::string& row, int& number, std::string& suffix, Outcome& out) {
   number = -1;
+  suffix.clear();
   if (row.empty()) return true;
   const GoalRow r = row_id(row);
   if (r.number == 0 && row != "M0") {
@@ -223,6 +246,7 @@ bool row_number(const std::string& row, int& number, Outcome& out) {
     return false;
   }
   number = r.number;
+  suffix = r.suffix;
   return true;
 }
 
@@ -248,7 +272,8 @@ Outcome run_goals_free(const fs::path& repo, const std::string& row, const std::
   fs::create_directories(log.parent_path(), ec);
   const std::string git = "git -C " + quoted(repo) + " ";
   int number = -1;
-  if (!row_number(row, number, out)) return out;
+  std::string parent;
+  if (!row_number(row, number, parent, out)) return out;
   if (fetch && run_to_log(git + "fetch --quiet origin", log).code != 0) {
     out.findings.push_back({Severity::warn,
                             "git fetch origin failed; the branches are as last fetched",
@@ -259,7 +284,7 @@ Outcome run_goals_free(const fs::path& repo, const std::string& row, const std::
                             "fetch it (git fetch origin), or name --base"});
     return out;
   }
-  const Scan sc = scan(repo, number, base, log);
+  const Scan sc = scan(repo, number, parent, base, log);
 
   std::vector<std::string> rows_json;
   out.text += "  read: " + base + ", " + std::to_string(sc.branches) +
@@ -333,7 +358,8 @@ Outcome run_goals_claim(const fs::path& repo, const std::string& title, const st
     return out;
   };
   int number = -1;
-  if (!row_number(under, number, out)) return out;
+  std::string parent;
+  if (!row_number(under, number, parent, out)) return out;
   const std::string branch =
       std::string(trim(first_line(run_to_log(git + "rev-parse --abbrev-ref HEAD", log).output)));
   if (branch.empty() || branch == "HEAD")
@@ -345,8 +371,8 @@ Outcome run_goals_claim(const fs::path& repo, const std::string& title, const st
     if (run_to_log(git + "fetch --quiet origin", log).code != 0)
       return fail("git fetch origin failed, so the branches' rows cannot be read",
                   "check the remote (git remote -v), then ge goals claim again");
-    const std::string key = scan(repo, number, base, log).next;
-    if (key.size() < 2 || key == "M" + std::to_string(number))
+    const std::string key = scan(repo, number, parent, base, log).next;
+    if (key.size() < 2 || key == "M" + std::to_string(number) + parent)
       return fail("no letter is free under " + under, "claim a top-level row: drop --under");
     const std::string before = read_text(reserved).value_or("");
     std::string error;
@@ -365,7 +391,7 @@ Outcome run_goals_claim(const fs::path& repo, const std::string& title, const st
     // claim seen later than this was committed later, so both sides agree who came first.
     std::this_thread::sleep_for(std::chrono::seconds(5));
     run_to_log(git + "fetch --quiet origin", log);
-    const Scan after = scan(repo, number, base, log);
+    const Scan after = scan(repo, number, parent, base, log);
     std::vector<Claimant> claimants;
     const auto ct = [&](const std::string& ref) {
       const std::string t = std::string(
