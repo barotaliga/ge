@@ -36,6 +36,13 @@ void chunk(std::vector<uint8_t>& out, const char* type, const std::vector<uint8_
   put32(out, crc32(&out[start], out.size() - start));
 }
 
+int paeth(int a, int b, int c) {
+  const int p = a + b - c;
+  const int pa = std::abs(p - a), pb = std::abs(p - b), pc = std::abs(p - c);
+  if (pa <= pb && pa <= pc) return a;
+  return pb <= pc ? b : c;
+}
+
 }  // namespace
 
 std::vector<uint8_t> encode_png(const Picture& picture) {
