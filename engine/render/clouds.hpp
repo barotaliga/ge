@@ -47,7 +47,8 @@
 //
 // ge:summary The cloud's layers marched and laid over the frame, their noise and their shadow
 // ge:keywords render clouds cloud-layer heap sheet cumulus cirrus raymarch cloud-shadow
-// ge:keywords billows worley cellular-noise cauliflower anvil patches halo diffusion
+// ge:keywords billows worley cellular-noise cauliflower anvil patches halo diffusion corona
+// ge:keywords aureole diffraction airy bessel moon-glow
 // ge:keywords cloud-noise value-noise fbm cover cut quantile powder beer drift cloud_rows
 // ge:keywords cloud_cut cloud_column encode_clouds quarter-resolution half-resolution upsample
 // ge:keywords depth-aware-upsample bilateral temporal reprojection spread-over-frames history

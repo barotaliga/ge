@@ -47,6 +47,9 @@ struct Track {
     const char* what = ev.has(mv::kJumped)       ? "JUMP"
                        : ev.has(mv::kAirJumped)  ? "AIR JUMP"
                        : ev.has(mv::kLanded)     ? "LAND"
+                       : ev.has(mv::kBounced)    ? "BOUNCE"
+                       : ev.has(mv::kLadderOn)   ? "LADDER"
+                       : ev.has(mv::kLadderOff)  ? "LET GO"
                        : ev.has(mv::kSlideStart) ? "SLIDE"
                        : ev.has(mv::kLeftGround) ? "OFF"
                                                  : nullptr;
@@ -158,14 +161,16 @@ void draw(gl::Lab& lab, const mv::MoveScenario& sc, const mv::MoveSpec& spec, co
   }
   for (const auto& e : k.events) c.marks.push_back({e.first, e.second});
   const std::string look = std::string(sc.what);
-  shoot(lab, sc.id, gl::line_chart(c),
-        std::string(top ? "From above: " : "From the side: ") + "the path of the feet" +
-            (top ? ""
-                 : " and the top of the head (the hull's height: it "
-                   "drops while crouched) over the world's solids, "
-                   "each drawn as its outline") +
-            ". Grey lines mark take-offs, landings, slides and walking off. Row: " + preset + ".",
-        look, preset);
+  shoot(
+      lab, sc.id, gl::line_chart(c),
+      std::string(top ? "From above: " : "From the side: ") + "the path of the feet" +
+          (top ? ""
+               : " and the top of the head (the hull's height: it "
+                 "drops while crouched) over the world's solids, "
+                 "each drawn as its outline where it starts") +
+          ". Grey lines mark take-offs, landings, bounces, ladders, slides and walking off. Row: " +
+          preset + ".",
+      look, preset);
 }
 
 void run(gl::Lab& lab) {
