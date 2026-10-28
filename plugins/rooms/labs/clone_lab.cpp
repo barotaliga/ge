@@ -39,6 +39,7 @@
 #include "rooms/clip.hpp"
 #include "rooms/clone.hpp"
 #include "rooms/codec.hpp"
+#include "rooms/curves.hpp"
 #include "rooms/movers.hpp"
 #include "rooms/text.hpp"
 #include "vfs/pak.hpp"
@@ -93,6 +94,44 @@ lab::Shape shape_of(const rm::BrushMesh& m, bool cut = false) {
       for (size_t a = 0; a < 3; ++a) s.pos.push_back(m.pos[v + a]), s.nrm.push_back(m.nrm[v + a]);
       s.part.push_back(m.material[t]);
       s.top.push_back(0);
+    }
+  }
+  return s;
+}
+
+// The faces of every curve as a shape, each in the highlight material after the level's own
+// (`base` convex, `base + 1` concave), lifted 2 cm off its face so it draws over it.
+lab::Shape curves_shape(const rm::Level& level, const std::vector<rm::Curve>& curves,
+                        uint8_t base) {
+  std::vector<int8_t> kind(level.faces.size(), -1);
+  std::vector<uint8_t> brush_has(level.brushes.size(), 0);
+  for (const rm::Curve& c : curves) {
+    for (const uint32_t f : c.faces) kind[f] = c.concave ? 1 : 0;
+  }
+  for (size_t b = 0; b < level.brushes.size(); ++b) {
+    const rm::Brush& br = level.brushes[b];
+    for (uint32_t f = br.first_face; f < br.first_face + br.faces; ++f) {
+      if (kind[f] >= 0) brush_has[b] = 1;
+    }
+  }
+  lab::Shape s;
+  for (size_t b = 0; b < level.brushes.size(); ++b) {
+    if (!brush_has[b]) continue;
+    for (const rm::Polygon& pg : rm::brush_polygons(level, b)) {
+      if (kind[pg.face] < 0) continue;
+      const rm::Face& f = level.faces[pg.face];
+      const size_t n = pg.xyz.size() / 3;
+      for (size_t k = 1; k + 1 < n; ++k) {
+        for (const size_t v : {size_t(0), k, k + 1}) {
+          s.idx.push_back(uint32_t(s.part.size()));
+          for (size_t a = 0; a < 3; ++a) {
+            s.pos.push_back(float(pg.xyz[v * 3 + a] + f.n[a] * 0.02));
+            s.nrm.push_back(float(f.n[a]));
+          }
+          s.part.push_back(uint8_t(base + uint8_t(kind[pg.face])));
+          s.top.push_back(0);
+        }
+      }
     }
   }
   return s;
@@ -189,6 +228,55 @@ bool floor_below(const br::Map& map, double x, double y, double z, double* out) 
   return found;
 }
 
+// An eye facing curve `c`: off the middle of its sweep on its open side (outside a pillar, under
+// an arch), looking at that middle.
+lab::ViewCam curve_cam(const rm::Level& level, const rm::Curve& c) {
+  double mean[3] = {0, 0, 0};
+  for (const uint32_t f : c.faces) {
+    for (size_t k = 0; k < 3; ++k) mean[k] += level.faces[f].n[k];
+  }
+  double l = std::sqrt(mean[0] * mean[0] + mean[1] * mean[1] + mean[2] * mean[2]);
+  if (l < 1e-6 * double(c.faces.size())) {
+    for (size_t k = 0; k < 3; ++k) mean[k] = level.faces[c.faces.front()].n[k];
+    l = 1;
+  }
+  double n[3] = {mean[0] / l, mean[1] / l, mean[2] / l};
+  if (c.sweep_deg >= 359.9) {
+    // All the way round: the facet facing most nearly level.
+    for (const uint32_t f : c.faces) {
+      if (std::fabs(level.faces[f].n[1]) < std::fabs(n[1])) {
+        for (size_t k = 0; k < 3; ++k) n[k] = level.faces[f].n[k];
+      }
+    }
+  }
+  lab::ViewCam cam;
+  const double side = c.concave ? -1 : 1;
+  const double back = c.concave ? c.radius + 2 : 3;
+  for (size_t k = 0; k < 3; ++k) {
+    cam.target[k] = c.centre[k] + side * n[k] * c.radius;
+    cam.eye[k] = cam.target[k] + n[k] * back;
+  }
+  if (std::fabs(n[1]) > 0.85) {
+    // Under an arch or over a beam: stand off along the axis too, so the view is not straight up
+    // or down.
+    for (size_t k = 0; k < 3; ++k) cam.eye[k] -= c.axis[k] * back;
+  }
+  return cam;
+}
+
+// The map's eye for an engine camera (file units, z up; yaw and pitch toward the target).
+br::labs::TexturedEye eye_of(const lab::ViewCam& cam) {
+  br::labs::TexturedEye e;
+  e.at[0] = cam.eye[0] / br::kUnitM, e.at[1] = cam.eye[2] / br::kUnitM;
+  e.at[2] = cam.eye[1] / br::kUnitM;
+  const double dx = cam.target[0] - cam.eye[0], dy = cam.target[1] - cam.eye[1];
+  const double dz = cam.target[2] - cam.eye[2];
+  e.yaw_deg = ge::core::libm::atan2(dz, dx) * 180 / kPi;
+  e.pitch_deg = ge::core::libm::atan2(dy, std::sqrt(dx * dx + dz * dz)) * 180 / kPi;
+  e.fov_deg = 90;
+  return e;
+}
+
 struct Loaded {
   std::string name;
   std::vector<uint8_t> bytes;
@@ -255,7 +343,13 @@ void run(lab::Lab& lab) {
       {"map", "cells", "merged", "brushes", "faces", "unseen", "open", "groups", "entities",
        "bytes", "placeholders", "starts stood"},
       {}};
-  lab::LabTable times{"CLONE AND BUILD TIMES, ms (measured)", {"map", "clone", "build"}, {}};
+  lab::LabTable times{
+      "CLONE AND BUILD TIMES, ms (measured)", {"map", "clone", "build", "curves"}, {}};
+  lab::LabTable curve_table{
+      "CURVES FOUND (runs of faces faceting a round surface: convex a pillar, concave an arch "
+      "or vault; full round: all the way round)",
+      {"map", "convex", "concave", "full round"},
+      {}};
   const size_t workers = ge::core::default_workers();
   for (Loaded& l : maps) {
     std::string error;
@@ -329,6 +423,30 @@ void run(lab::Lab& lab) {
     lab.metric(stem + "-triggers", double(movers.triggers.size()), "count");
     lab.metric(stem + "-groups-not-moved", double(movers.skipped), "count");
 
+    // The runs of faces that facet an arch or a pillar (curves.hpp).
+    t0 = std::chrono::steady_clock::now();
+    const std::vector<rm::Curve> curves = rm::find_curves(level);
+    const double curves_ms = ms_since(t0);
+    size_t pillars = 0, arches = 0, round = 0;
+    for (const rm::Curve& c : curves) {
+      ++(c.concave ? arches : pillars);
+      if (c.sweep_deg >= 359.9) ++round;
+    }
+    lab.metric(stem + "-curves-convex", double(pillars), "count");
+    lab.metric(stem + "-curves-concave", double(arches), "count");
+    lab.metric(stem + "-curves-full-round", double(round), "count");
+    curve_table.rows.push_back(
+        {l.name, std::to_string(pillars), std::to_string(arches), std::to_string(round)});
+    for (size_t i = 0; i < curves.size() && i < size_t(lab.arg_num("list")); ++i) {
+      const rm::Curve& c = curves[i];
+      std::printf(
+          "  %s curve %zu: %s, %zu facets, %zu faces, r %.3f m, sweep %.1f, length %.2f m, "
+          "axis %.2f %.2f %.2f, centre %.2f %.2f %.2f\n",
+          stem.c_str(), i, c.concave ? "concave" : "convex", c.facets, c.faces.size(), c.radius,
+          c.sweep_deg, c.length, c.axis[0], c.axis[1], c.axis[2], c.centre[0], c.centre[1],
+          c.centre[2]);
+    }
+
     // A body stood at every start in the clone's mover world.
     const ge::move::MeshWorld w = rm::clip_world(level, workers);
     const ge::move::World world = ge::move::as_world(w);
@@ -388,7 +506,7 @@ void run(lab::Lab& lab) {
                           std::to_string(rep.groups), std::to_string(rep.entities),
                           std::to_string(bytes.size()), std::to_string(rep.placeholders.size()),
                           std::to_string(stood) + " of " + std::to_string(starts)});
-    times.rows.push_back({l.name, fixed(clone_ms, 1), fixed(build_ms, 1)});
+    times.rows.push_back({l.name, fixed(clone_ms, 1), fixed(build_ms, 1), fixed(curves_ms, 1)});
 
     // The original and the clone from the same eyes.
     const auto eyes = eyes_of(l.map);
@@ -431,8 +549,69 @@ void run(lab::Lab& lab) {
                 {{"map", l.name}}},
                o);
     }
+    if (!curves.empty()) {
+      // Close-ups of the curves found, the most facets first: the map from an eye facing each one
+      // on the left, the clone with every curve painted on the right (convex orange, concave
+      // cyan).
+      ge::assets::Model hm = model;
+      const uint8_t base = uint8_t(hm.materials.size());
+      ge::assets::Material convex, concave;
+      convex.name = "curve-convex";
+      convex.rgb[0] = 1.0f, convex.rgb[1] = 0.55f, convex.rgb[2] = 0.1f;
+      concave.name = "curve-concave";
+      concave.rgb[0] = 0.15f, concave.rgb[1] = 0.85f, concave.rgb[2] = 1.0f;
+      hm.materials.push_back(convex);
+      hm.materials.push_back(concave);
+      lab::Shape painted = shape;
+      const lab::Shape hl = curves_shape(level, curves, base);
+      const uint32_t at = uint32_t(painted.part.size());
+      painted.pos.insert(painted.pos.end(), hl.pos.begin(), hl.pos.end());
+      painted.nrm.insert(painted.nrm.end(), hl.nrm.begin(), hl.nrm.end());
+      painted.part.insert(painted.part.end(), hl.part.begin(), hl.part.end());
+      painted.top.insert(painted.top.end(), hl.top.begin(), hl.top.end());
+      for (const uint32_t i : hl.idx) painted.idx.push_back(at + i);
+      std::vector<size_t> order(curves.size());
+      for (size_t i = 0; i < order.size(); ++i) order[i] = i;
+      std::stable_sort(order.begin(), order.end(), [&curves](size_t x, size_t y) {
+        return curves[x].facets > curves[y].facets;
+      });
+      const size_t shown = std::min<size_t>(order.size(), size_t(lab.arg_num("closeups")));
+      const rm::BrushMesh rounded = rm::round_curves(level, mesh, curves, lab.arg_num("segment"));
+      const lab::Shape round_shape = shape_of(rounded);
+      lab.metric(stem + "-rounded-triangles", double(rounded.triangles()), "count");
+      Picture o = lab::create_picture(cw * 3, ch * int(shown), kDark);
+      for (size_t r = 0; r < shown; ++r) {
+        const rm::Curve& c = curves[order[r]];
+        lab::ViewCam cam = curve_cam(level, c);
+        cam.fov_deg = 64.0;
+        const int y = int(r) * ch;
+        if (textured) {
+          br::labs::draw_textured(o, 0, y, cw, ch, l.map, palette, eye_of(cam));
+        }
+        lab::draw_shape(o, cw, y, cw, ch, cam, hm, painted, style());
+        lab::draw_shape(o, cw * 2, y, cw, ch, cam, model, round_shape, style());
+        label(o, cw * 2 + 4, y + 4, "DRAWN ROUND");
+        label(o, 4, y + 4,
+              std::string(c.concave ? "CONCAVE" : "CONVEX") + ", " + std::to_string(c.facets) +
+                  " FACETS, R " + fixed(c.radius, 2) + " M, " + fixed(c.sweep_deg, 0) + " DEG");
+      }
+      lab.shot({id + "-curves",
+                "CURVES FOUND: " + l.name,
+                std::to_string(pillars) +
+                    " convex runs (orange: the solid inside the bend, a "
+                    "pillar or a rounded corner) and " +
+                    std::to_string(arches) +
+                    " concave (cyan: the open side inside, an arch or a vault); the ones with the "
+                    "most facets close up: the map, the clone painted, the clone drawn round "
+                    "(round_curves: cut every `segment` degrees onto the facets' circle).",
+                "the painted faces facet one round surface each; no flat wall, stair or chamfer "
+                "painted",
+                {{"map", l.name}}},
+               o);
+    }
   }
   lab.table(table);
+  lab.table(curve_table);
   lab.table(times, Det::measured);
 }
 
@@ -453,6 +632,9 @@ const lab::LabSpec kSpec{
         {"smooth", "0", "1: every face shaded round with its smooth neighbours"},
         {"merge", "1", "0: every leaf its own brush (1: a subtree of one contents as one brush)"},
         {"write", "", "a directory OUTSIDE the tree the clones are written to (.gelv, .gelv.txt)"},
+        {"list", "0", "print the first N curves found on each map"},
+        {"segment", "7.5", "degrees a curve turns between the cuts it is drawn round with"},
+        {"closeups", "6", "the curves drawn close up on each map, the most facets first"},
         {"px", "480", "a panel's width, px"},
     },
     "--px=160",

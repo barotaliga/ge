@@ -335,6 +335,7 @@ BrushMesh build_brushes(const Level& level, size_t workers) {
         m.hidden.push_back(
             f.hidden || br.contents == Contents::clip || br.contents == Contents::trigger ? 1 : 0);
         m.brush.push_back(uint32_t(b));
+        m.face.push_back(p.face);
       }
       if (f.smooth) {
         for (size_t i = 0; i < n; ++i) smooth.push_back(base + uint32_t(i));
