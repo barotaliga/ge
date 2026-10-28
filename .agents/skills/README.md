@@ -47,7 +47,7 @@ router's Skills table and the directories against each other.
 | `free-assets` | Free sounds and models: the sources, the licences we can carry, the registry, matching, converting, credits |
 | `net` | Multiplayer networking: sockets, the simulated network, captures, the wire, channels, nodes, sessions and the lobby, LAN discovery, NAT traversal, port mapping, replication, fake traffic |
 | `vfs` | Content files: the pack archive's checked directory and its files as views, zip archives; later search paths and directories |
-| `services` | Platform services: achievements, stats, leaderboards, cloud, presence, friends, overlay, DLC and screenshots behind one interface; the simulated and offline stores; Steam's backend |
+| `services` | Platform services: achievements, stats, leaderboards, cloud, presence, friends, overlay, DLC and screenshots behind one interface; the simulated and offline stores; Steam's backend; Discord's presence |
 | `plugins` | Engine, plugin or game: where code lives, adding a plugin, moving code between homes |
 
 ## Plugins
