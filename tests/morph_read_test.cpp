@@ -32,7 +32,8 @@ TEST(model_round_trip_keeps_skins_frames_and_seam) {
   for (size_t i = 0; i < in.indices.size(); i++) {
     const uint32_t a = in.indices[i], b = out.indices[i];
     CHECK(in.source_vertex[a] == out.source_vertex[b]);
-    CHECK(in.st[a * 2] == out.st[b * 2] && in.st[a * 2 + 1] == out.st[b * 2 + 1]);
+    CHECK(in.st[size_t{a} * 2] == out.st[size_t{b} * 2] &&
+          in.st[size_t{a} * 2 + 1] == out.st[size_t{b} * 2 + 1]);
   }
   CHECK(out.frames.size() == 3 && out.frames[0].name == "stand" && out.frames[2].name == "grow2");
   CHECK(out.frames[0].group == 0 && out.frames[1].group == 1 && out.frames[2].group == 1);
@@ -89,7 +90,7 @@ TEST(damage_is_refused_with_a_next_step) {
   bad = model;
   const size_t header = 84;
   const size_t skins = 4 + 32 + 4 + 4 + 8 + 64;  // a lone skin, then a group of two
-  const size_t first_tri = header + skins + 6 * 12;
+  const size_t first_tri = header + skins + size_t{6} * 12;
   bad[first_tri + 4] = 99;
   CHECK(!mo::read_model(bad, "tri.mdl", &m, &error) &&
         error.find("names vertex 99") != std::string::npos);

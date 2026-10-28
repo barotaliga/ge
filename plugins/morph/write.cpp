@@ -81,8 +81,8 @@ std::vector<uint8_t> write_model(const Model& m) {
   std::vector<int> texel_s(m.vertex_count()), texel_t(m.vertex_count());
   std::vector<uint32_t> first(size_t(sources), UINT32_MAX);
   for (uint32_t v = 0; v < m.vertex_count(); v++) {
-    texel_s[v] = round_int(double(m.st[v * 2]) * sw - 0.5);
-    texel_t[v] = round_int(double(m.st[v * 2 + 1]) * sh - 0.5);
+    texel_s[v] = round_int(double(m.st[size_t{v} * 2]) * sw - 0.5);
+    texel_t[v] = round_int(double(m.st[size_t{v} * 2 + 1]) * sh - 0.5);
     St& q = st[size_t(m.source_vertex[v])];
     if (texel_s[v] < q.s) q.s = texel_s[v], q.t = texel_t[v];
   }
@@ -149,7 +149,7 @@ std::vector<uint8_t> write_model(const Model& m) {
     }
     b.insert(b.end(), {fmin[0], fmin[1], fmin[2], 0, fmax[0], fmax[1], fmax[2], 0});
     char name[16] = {};
-    std::memcpy(name, f.name.data(), std::min<size_t>(f.name.size(), 15));
+    std::copy_n(f.name.data(), std::min<size_t>(f.name.size(), 15), name);  // the rest stays 0
     b.insert(b.end(), name, name + 16);
     b.insert(b.end(), packed.begin(), packed.end());
   };

@@ -69,7 +69,7 @@ mo::Model lumpy_body() {
   auto vertex = [&](int source, int column) {
     const float u = (float(column) + 0.5f) / 32.0f;
     for (uint32_t v = 0; v < m.vertex_count(); v++) {
-      if (m.source_vertex[v] == source && m.st[v * 2] == u) return v;
+      if (m.source_vertex[v] == source && m.st[size_t{v} * 2] == u) return v;
     }
     m.source_vertex.push_back(source);
     m.st.push_back(u);
@@ -165,8 +165,8 @@ void run(lab::Lab& lab) {
   lab.metric("file-bytes", double(bytes.size()), "bytes");
   lab.metric("file-vertices", sources, "count");
   lab.metric("vertices", m.vertex_count(), "count");
-  lab.metric("triangles", double(m.indices.size() / 3), "count");
-  lab.metric("rounded-triangles", double(r.indices.size() / 3), "count");
+  lab.metric("triangles", static_cast<double>(m.indices.size()) / 3.0, "count");
+  lab.metric("rounded-triangles", static_cast<double>(r.indices.size()) / 3.0, "count");
   // How far rounding pushes the surface out: the widest radius of the rounded frame over the
   // widest of the original's, in units of the body's radius.
   double most_flat = 0, most_round = 0;
@@ -182,8 +182,8 @@ void run(lab::Lab& lab) {
   // The seam's copies share one normal.
   const std::vector<float> n = mo::frame_normals(m, m.frames[0]);
   int split = 0;
-  for (uint32_t a = 0; a < m.vertex_count(); a++) {
-    for (uint32_t b = a + 1; b < m.vertex_count(); b++) {
+  for (size_t a = 0; a < m.vertex_count(); a++) {
+    for (size_t b = a + 1; b < m.vertex_count(); b++) {
       if (m.source_vertex[a] != m.source_vertex[b]) continue;
       split++;
       if (n[a * 3] != n[b * 3] || n[a * 3 + 1] != n[b * 3 + 1] || n[a * 3 + 2] != n[b * 3 + 2]) {

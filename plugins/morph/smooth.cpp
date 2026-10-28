@@ -13,6 +13,7 @@
 #include <tuple>
 
 #include "core/libm/libm.hpp"
+#include "core/num.hpp"
 
 namespace ge::morph {
 
@@ -40,7 +41,7 @@ V near(V a, V na, V b) { return (a * 2.0 + b - na * dot(b - a, na)) * (1.0 / 3.0
 // A recipe: corners name one vertex; an edge point names its two ends (in a canonical order) and
 // how far along it lies; an inside point names its triangle and its barycentric weights.
 struct Recipe {
-  enum Kind { corner, edge, inside } kind = corner;
+  enum Kind : uint8_t { corner, edge, inside } kind = corner;
   uint32_t a = 0, b = 0, c = 0;  // vertices (corner: a; edge: a, b; inside: a, b, c)
   double wa = 1, wb = 0, wc = 0;
 };
@@ -101,15 +102,17 @@ Model smooth_model(const Model& m, const SmoothOptions& opts) {
       for (int j = 0; j <= level - i; j++) {
         const int k = level - i - j;
         const double a = double(i) / level, b = double(j) / level, c = double(k) / level;
-        const double s = a * m.st[v[0] * 2] + b * m.st[v[1] * 2] + c * m.st[v[2] * 2];
-        const double t = a * m.st[v[0] * 2 + 1] + b * m.st[v[1] * 2 + 1] + c * m.st[v[2] * 2 + 1];
+        const double s =
+            a * m.st[size_t{v[0]} * 2] + b * m.st[size_t{v[1]} * 2] + c * m.st[size_t{v[2]} * 2];
+        const double t = a * m.st[size_t{v[0]} * 2 + 1] + b * m.st[size_t{v[1]} * 2 + 1] +
+                         c * m.st[size_t{v[2]} * 2 + 1];
         uint32_t id;
         const int zeros = (i == 0) + (j == 0) + (k == 0);
         if (zeros == 2) {  // a corner
           const uint32_t w = i == level ? v[0] : j == level ? v[1] : v[2];
           if (corners[w] == UINT32_MAX) {
-            corners[w] = add({Recipe::corner, w, 0, 0, 1, 0, 0}, m.st[w * 2], m.st[w * 2 + 1],
-                             m.source_vertex[w]);
+            corners[w] = add({Recipe::corner, w, 0, 0, 1, 0, 0}, m.st[size_t{w} * 2],
+                             m.st[size_t{w} * 2 + 1], m.source_vertex[w]);
           }
           id = corners[w];
         } else if (zeros == 1) {  // on an edge: the two corners it runs between and how far
@@ -158,7 +161,7 @@ Model smooth_model(const Model& m, const SmoothOptions& opts) {
     const Recipe& q = recipes[r];
     if (q.kind == Recipe::edge) {
       const auto key = std::make_tuple(m.source_vertex[q.a], m.source_vertex[q.b],
-                                       uint32_t(q.wb * 4096.0 + 0.5));
+                                       uint32_t(core::num::round(q.wb * 4096.0)));
       auto [it, fresh] = edge_source.try_emplace(key, next);
       if (fresh) next++;
       out.source_vertex[r] = it->second;
