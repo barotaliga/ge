@@ -1,5 +1,5 @@
 // The held weapon's light (engine/viewmodel/light.hpp): the fall-off is the renderer's (inverse
-// square capped at the emitter, ending at the range); the strongest lights are kept in a fixed
+// square softened by the emitter, ending at the range); the strongest lights are kept in a fixed
 // order; a light is turned into the view's frame; a face toward a light is brighter than one
 // away; and the floor holds a gun in the dark above black.
 //
@@ -16,11 +16,11 @@
 namespace vm = ge::viewmodel;
 
 TEST(the_falloff_is_the_renderers_law) {
-  CHECK(std::fabs(vm::light_falloff(2, 100, 0.05f) - 0.25f) < 1e-4f);
+  CHECK(std::fabs(vm::light_falloff(2, 100, 0.05f) - 0.25f) < 1e-3f);
   CHECK(vm::light_falloff(10, 10, 0.05f) == 0);
-  CHECK(vm::light_falloff(0.01f, 10, 0.1f) == vm::light_falloff(0.05f, 10, 0.1f) ||
-        vm::light_falloff(0.01f, 10, 0.1f) > vm::light_falloff(0.05f, 10, 0.1f));
-  CHECK(vm::light_falloff(0.0f, 10, 0.1f) <= 100.0f);
+  CHECK(vm::light_falloff(0.01f, 10, 0.1f) > vm::light_falloff(0.05f, 10, 0.1f));
+  CHECK(std::fabs(vm::light_falloff(0.0f, 10, 0.1f) - 100.0f) <
+        1e-3f);  // the emitter's size caps it
 }
 
 TEST(the_strongest_lights_are_kept_in_order) {

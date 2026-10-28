@@ -11,7 +11,8 @@
 //                 reads its nearest cell; a sunlit world gives the sky and the sun. Its own call.
 //   POINT LIGHTS  lamps, torches, flames, a muzzle flash, a rocket going by: each at its world
 //                 place, `colour` times `intensity` arriving at 1 m, falling off with the inverse
-//                 square (capped at the emitter's `radius_m`) and ending smoothly at `range_m`
+//                 square softened by the emitter's size (1 / (d^2 + radius^2)) and ending smoothly
+//                 at `range_m`
 //                 ((1 - (d/r)^4)^2), the same law the renderer's local lights use, so a lamp
 //                 lights the gun as it lights the wall beside it.
 //
@@ -90,8 +91,8 @@ void world_to_view(const camera::Pose& view, const double world[3], float out[3]
 void world_to_view_dir(const camera::Pose& view, const float world[3], float out[3]);
 void view_to_world(const camera::Pose& view, const float in[3], double out[3]);
 
-// The fall-off of a point light at `d` m, the renderer's law: the inverse square capped at the
-// radius, times the smooth window to the range.
+// The fall-off of a point light at `d` m, the renderer's law: 1 / (d^2 + radius^2), times the
+// smooth window to the range.
 float light_falloff(float d, float range_m, float radius_m);
 
 }  // namespace ge::viewmodel

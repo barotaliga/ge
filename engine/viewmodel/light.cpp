@@ -77,11 +77,10 @@ void view_to_world(const camera::Pose& view, const float in[3], double out[3]) {
 
 float light_falloff(float d, float range_m, float radius_m) {
   if (range_m <= 0 || d >= range_m) return 0;
-  const float r = d > radius_m ? d : radius_m;
   const float q = d / range_m;
   const float q4 = q * q * q * q;
   const float w = (1 - q4) * (1 - q4);
-  return w / (r * r);
+  return w / (d * d + radius_m * radius_m);
 }
 
 Lighting light_held(const Probe& probe, std::span<const PointLight> lights,
