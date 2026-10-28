@@ -1183,6 +1183,62 @@ the silhouette, not the folds. The `crowd-look` lab
 films a lift's queue, a busy run, a group and one of them down at `--hour` (11: the sun on the
 runs), each with the crowd and without.
 
+### Beams
+
+A held electric beam (a weapon's lightning gun, a machine's arc, a spell) is a channel of
+glowing segments from its source to whatever it hits, redrawn many times a second, lighting the
+room round it and burning where it lands (`engine/render/beam.hpp`, `beams.hpp`, `beams.wgsl`).
+
+- **The channel is struck, not animated.** A real arc's path does not slide; it is ionised
+  afresh and the eye sees one bright path, then another. `build_beam` draws a walk from the
+  source to the hit in `step_m` steps, each point kicked sideways (`wander`) and pulled back to
+  the line (`pull`), pinned at both ends, from a hash of the shot's seed and the strike number
+  (`strike_hz` a second). Inside one strike two frames see the same channel; the next strike is
+  a new one. A pull of 0.4 keeps a 15 m beam within a few centimetres of straight (a thick,
+  nearly straight bar); a pull of 0.2 with a large wander is lightning's stepped
+  zigzag. `filaments` strands wind round the axis on a spinning helix (`braid_m`, `twist`,
+  `spin_hz`), and forks (`fork_chance`, `fork_m`) branch off, dimmer and thinner to their tips,
+  never in the first 1.5 m off the source, where a fork by the eye would fill the view.
+- **The light flickers by strike.** `beam_level` swells in over `attack_s`, gives each strike
+  its own level (`flicker`), flashes in a strike's first `flash_s` (`flash`: a return stroke's
+  peak over its glow) and fades over `release_s` when let go. Inside a strike the shader ripples
+  the glow along the beam (`shimmer`).
+- **The look is a core and a sheath in physical units.** The core (`core_m`, `core_cd`, cd/m²)
+  is a Gaussian at least a pixel and a half wide (its light kept as it widens, so a far beam is
+  a fainter line, never a gap) and at most a hundredth of the screen's height (its brightness
+  kept, so the root by the eye is a thick line, not a white blot), and is whitened as it
+  brightens; the sheath (`glow_m`,
+  `glow_cd`) is the ionised air's glow round it. Both are emissive at the frame's pre-exposure,
+  added over the lit picture, depth-tested and softened against the depth behind so the beam
+  sinks into the wall it hits. A segment's ribbon runs a ramp past each end and the ramps of two
+  segments cross-fade, so the glow is even along a bent channel with no bead at a joint.
+- **It lights the world through the local lights.** `beam_lights` hands render/lights a row of
+  steady point lights along the beam (one each `light_every_m`, the look's `light_cd` shared
+  among them, each as soft as their spacing), one at its root by the source (`root_cd`: the
+  muzzle's glow on the gun and the hand) and one at the hit, at this frame's level, so the
+  walls, the floor and the gun flicker with the strikes. The lamps' light counts in the frame's
+  pre-exposure (`night.cpp`'s `pre_exposure` adds `FrameView::lamp_lux`): a dark room exposed for
+  its torches alone stores the beam's white past a half float's 65504, the target holds
+  infinity and the tone curve turns it black. The pass also clamps what it writes below that.
+- **It burns where it lands.** `beam_burns` says when a held beam leaves a scorch: at once on a
+  new spot, again each `scorch_every_s` while it dwells, and, when the hit jumps further than
+  half a scorch in a frame, at every half scorch along the jump (the caller asks again until it
+  says no), so a fast sweep still leaves an unbroken trail. The game presses each through its decal
+  system (engine/detail's `place_decal`, a scorch) and hands the pass the clipped meshes; the
+  pass lays the soot over the picture and a fresh burn's ember (`ember_level`: `ember_cd`
+  cooling over `ember_s`) in it, white-yellow to a dull red, hottest in the heart and the cracks
+  of the atlas's mask, in one blend (the ember added, the picture kept by the soot's alpha).
+- **Presets.** `arc` (one thick, nearly straight channel in a violet-blue sheath, struck 30
+  times a second), `bolt` (a jagged forking channel, struck 14 times a second with a bright
+  flash each), `braid` (three thin strands wound round each other, cyan, crackling at 40 a
+  second). Every knob is named (`beam_knobs`, `set_beam_knob`) for a console or a lab's `--set`.
+
+The `gpu-beam` lab fires each preset from a held gun down a stone corridor at night and sweeps it
+over three walls, with the bloom mixed in as a game's frame mixes it and the eye adapting to the
+room's light (quick to a brighter room, slow to a darker one), so the corridor falls back to its
+torches when the beam is let go; `--frames=N` writes each sweep's frames
+(`frame-<look>-NNN.png`) for an animation.
+
 ## Shaders
 
 - **WGSL**, one file per pass, beside the pass's C++. A small build step resolves
