@@ -15,6 +15,7 @@
 //   volume s_wind s_effects s_mute      the sound's faders (A)
 //   sv_seed sv_hour                     the run's map and hour (the server's, server info)
 //   sv_weather sv_snowfall sv_snowline sv_fog sv_wind sv_winddir sv_cover sv_thick sv_skyrate
+//   sv_cloudheight sv_cloudspeed
 //                                       the sky over the run, picked by hand, and how fast its
 //                                       hour runs (the server's, server info; sim/sky.hpp)
 //   sv_skytype sv_skyair sv_skydust sv_sunsize sv_sun2 sv_planet sv_planetdir sv_planetel
@@ -30,7 +31,7 @@
 // ge:keywords s_mute sv_seed sv_hour add_cvars register_cvars sv_weather sv_snowfall sv_fog
 // ge:keywords sv_wind sv_winddir sv_cover sv_thick sv_skyrate r_clouds sv_skytype sky-type
 // ge:keywords sky-knobs cl_chasedist cl_motion r_precip r_precip_density r_splashes r_wet
-// ge:keywords sv_snowline rain
+// ge:keywords sv_snowline rain sv_cloudheight sv_cloudspeed
 // ge:keywords sv_lethal sv_armyfire sv_helis sv_paras hunt army
 // ge:skill console sim
 // ge:test tests/fall_line_cvars_test.cpp
@@ -74,6 +75,8 @@ struct Settings {
   double air = -1, air_from = -1;  // the mean wind, m/s at 10 m; the heading it blows from, deg
   double cover = -1;               // the broken sky's cloud cover, 0..1
   double thick = -1;               // how thick the clouds are, 0 thin .. 1 thick
+  double cloud_height = -1;        // the lowest layer's base over the floor, m
+  double cloud_speed = -1;         // the clouds' share of the wind aloft (1: the true wind)
   double sky_rate = 0;             // the sky's hours per hour of the run (0: the hour stands)
   // The kind of sky (render/sky_style.hpp's type names) and its knobs, each kept where negative
   // (render/sky_style.hpp's SkyKnobs; angles in degrees).

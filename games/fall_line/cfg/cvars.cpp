@@ -252,6 +252,22 @@ void add_cvars(con::Console& c, Settings& s) {
           .min = -1,
           .max = 1},
          &s.thick);
+  v.bind({.name = "sv_cloudheight",
+          .fallback = "-1",
+          .flags = kRun,
+          .help = "the lowest cloud layer's base over the valley floor, m, the layers over it "
+                  "moved in proportion; a lower cloud crosses the sky faster (-1: the map's)",
+          .min = -1,
+          .max = 12000},
+         &s.cloud_height);
+  v.bind({.name = "sv_cloudspeed",
+          .fallback = "-1",
+          .flags = kRun,
+          .help = "how fast the clouds drift, a share of the wind aloft at their height (-1 or 1: "
+                  "the true wind)",
+          .min = -1,
+          .max = 10},
+         &s.cloud_speed);
   v.bind({.name = "sv_clouds",
           .fallback = "map",
           .flags = kRun,
