@@ -1,13 +1,13 @@
 ---
 name: detail
-description: "Use for engine/detail in gameengine2 and anything about dressing a level built of brushes: convex solids as planes and their faces, bevels and chamfers on sharp brush edges (which edges are buried, thin or flat), the receivers grid (box queries, raycasts, buried faces), decals (scorch marks, bullet holes, blood that dries and fades; the masks, the atlas, the clip, the pool), and seeded detail props (rubble, debris, moss; the rules, the damp field, the scatter, the shapes); the test hall and the detail-bevel, detail-decals and detail-props labs; the M42 rows."
+description: "Use for engine/detail in gameengine2 and anything about dressing a level built of brushes: convex solids as planes and their faces, bevels and chamfers on sharp brush edges (which edges are buried, thin or flat), the receivers grid (box queries, raycasts, buried faces), decals (scorch marks and their embers, bullet holes, blood that dries and fades; the masks, the atlas, the clip, the pool), the marks a game's events leave (shot_hit: a bullet hole where a round lands; bleed: blood by the health a hit took), and seeded detail props (rubble, debris, moss; the rules, the damp field, the scatter, the shapes); the test hall and the detail-bevel, detail-decals, detail-props and detail-hits labs; the M42 rows."
 ---
 
 # Brush detail
 
 `engine/detail/` (`ge_detail`, namespace `ge::detail`) dresses a level built of brushes for any
 game: bevels on exposed edges, decals that age, props by rules. The design is
-[`docs/detail.md`](../../../docs/detail.md); the rows are `docs/goals.md` M42–M42d. It is
+[`docs/detail.md`](../../../docs/detail.md); the rows are `docs/goals.md` M42–M42f. It is
 simulation code: libm only, no allocation in a decal's placement after the pool is made.
 
 | File | What |
@@ -18,6 +18,7 @@ simulation code: libm only, no allocation in a decal's placement after the pool 
 | `detail/bevel.hpp` | `bevel`, `bevel_all`, the edge verdicts, `SolidIndex` |
 | `detail/receivers.hpp` | `bin_receivers`, `triangles_in`, `raycast`, `buried_at` |
 | `detail/decals.hpp` | kinds, masks, looks by age, `bake_atlas`, the pool, `place_decal`, `expire` |
+| `detail/hits.hpp` | `shot_hit` (a round's hole where its ray lands), `bleed` (blood by the share of health lost) |
 | `detail/props.hpp` | `PropRule`, `scatter_props`, `default_rules` |
 | `detail/prop_shapes.hpp` | `prop_mesh`, `prop_frame` |
 | `detail/test_hall.hpp` | the brush-built hall the tests and labs share, and its damp field |
@@ -41,7 +42,7 @@ simulation code: libm only, no allocation in a decal's placement after the pool 
 ## Changing a look
 
 1. Run the lab before: `make lab LAB=detail-decals ARGS=--tag=before` (or `detail-bevel`,
-   `detail-props`).
+   `detail-props`, `detail-hits`).
 2. Change the mask, the look, the rule or the bevel's numbers.
 3. Run it again with `--compare=before`, look at every picture, and rewrite the golden the change
    moves (`GE_GOLDEN_WRITE=1 build/release/tests/detail_<name>_test`).

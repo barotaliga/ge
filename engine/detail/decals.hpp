@@ -13,7 +13,9 @@
 // - THE MASK is a pure function of the kind, a variant number and (u, v) (`mask_at`): how much the
 //   mark covers there and its relief (`shade`, -1 the dark wall of a hole .. +1 a raised rim). A
 //   renderer bakes it once into an atlas (`bake_atlas`); a CPU lab reads it directly.
-// - THE LOOK AGES (`look_at`): a scorch and a hole keep; blood darkens from wet red to dried brown
+// - THE LOOK AGES (`look_at`): a scorch glows with embers for its first `ember_s` (the `er`, `eg`,
+//   `eb` a renderer adds as light and a light pass may cast) and then keeps as soot; a hole keeps;
+//   blood darkens from wet red to dried brown
 //   over `dry_s` and fades to nothing over the last `fade_s` of its `life_s`, and `expire` frees
 //   it.
 // - THE POOL is made once (`make_pool`): `capacity` decals of at most `verts_per_decal` vertices.
@@ -49,27 +51,31 @@ struct DecalKindSpec {
   double dry_s;          // how long its colour takes to dry (blood)
   double depth_share;    // the box's half depth as a share of the decal's size
   double max_angle_deg;  // triangles turned further than this from the decal's normal are left
+  double ember_s;        // how long it glows when fresh (a scorch's embers); 0 never
 };
 const DecalKindSpec& decal_spec(DecalKind kind);
 
-// The colour (linear 0..1), opacity and gloss a mark has at `age_s`.
+// The colour (linear 0..1), opacity, gloss and glow a mark has at `age_s`.
 struct DecalLook {
   double r, g, b;
   double opacity;
-  double gloss;  // 0 matte .. 1 wet
+  double gloss;                   // 0 matte .. 1 wet
+  double er = 0, eg = 0, eb = 0;  // the light it gives off, linear, may pass 1 (embers)
 };
 DecalLook look_at(DecalKind kind, double age_s);
 
 struct MaskSample {
   double cover;  // 0..1
   double shade;  // -1 (a hole's dark wall) .. +1 (a raised rim)
+  double ember =
+      0;  // 0..1: where a fresh mark glows (a scorch's embers); the look's glow times this
 };
 // The mark of variant `variant` at (u, v) in [0, 1]^2; zero outside.
 MaskSample mask_at(DecalKind kind, uint32_t variant, double u, double v);
 
 // Every kind's `variants` masks side by side, each `size` px square, in one RGBA8 picture
 // `size * variants` wide and `size * kDecalKinds` tall (kind by row): r = cover, g = the shade
-// mapped to 0..255, b = 0, a = cover.
+// mapped to 0..255, b = the ember, a = cover.
 std::vector<uint8_t> bake_atlas(int size, int variants);
 
 struct DecalVertex {

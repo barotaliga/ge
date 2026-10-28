@@ -20,7 +20,8 @@ console e8456b0db59560ce
 crowd cf02cf9a7c917783
 crowd-look 194a06db20f2ebb2
 detail-bevel 5ce84c5c9deaef27
-detail-decals 6438d451b9b5be62
+detail-decals da7fd891a50f9714
+detail-hits f322fb18662a82b5
 detail-props ca8cb29a306fac46
 fetch 6938ae41f6759c43
 float 317c4f82117ff544

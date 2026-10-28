@@ -71,15 +71,41 @@ floor, blood runs over a step's rounded nose, and nothing floats past an edge.
 
 | Kind | Mask (`mask_at`) | Look (`look_at`) | Life |
 | --- | --- | --- | --- |
-| `scorch` | a ragged burnt core, tongues thrown out by the blast, a soot halo | near-black, matte | kept |
+| `scorch` | a ragged burnt core, tongues thrown out by the blast, a soot halo; embers in patches of the core and along the tongues | near-black, matte; its embers glow white-orange at the blast and cool through red, out by 1.5 s (`ember_s`) | kept |
 | `bullet_hole` | a dark hole, a crater to a pale rim, three to six cracks, a halo of dust | dark grey | kept |
 | `blood` | a splash with a rim, a run one way, six to ten droplets | wet red, drying to matte brown over 45 s | fades over the last 60 s of 120 s |
 
 The masks are pure functions of the kind, a variant number and (u, v); a renderer bakes them once
-(`bake_atlas`: cover in red and alpha, the relief in green), a CPU lab reads them directly. The
+(`bake_atlas`: cover in red and alpha, the relief in green, the embers in blue), a CPU lab reads
+them directly. A look's glow (`er`, `eg`, `eb`, linear and above 1 when hot) times the mask's
+`ember` is light the mark gives off: a renderer adds it after lighting, and a light pass may cast
+it. The
 POOL is made once (`make_pool(capacity, verts_per_decal)`): a decal takes a free slot, else the
 oldest one's; one that needs more vertices than a slot holds keeps the triangles nearest its
 centre. `expire` frees what is past its life. Every number of a kind is in `decal_spec`.
+
+## Marks from a game's events
+
+`detail/hits.hpp` is what a game calls when a fight happens; the game owns the event (its round,
+its damage, its seed), this module where the marks go and how big they are. Neither call draws
+from anything but a `core::Rng` made of the event's seed.
+
+- `shot_hit(pool, receivers, ShotAt{from, dir, far_m, size_m, now_s, seed})` casts the round's
+  ray and presses a bullet hole where it lands, facing back toward the shooter from whichever side
+  of the surface the round came; a round into the open presses nothing. A shotgun calls it once a
+  pellet.
+- `bleed(pool, receivers, WoundAt{at, shot_dir, health_lost, max_health, now_s, seed})` scales
+  everything by the share of health the hit took (`s`, 0..1, clamped):
+
+| What | How many | Where | Size (decal across) |
+| --- | --- | --- | --- |
+| spatter | 1 + round(5 s) | cast on along the shot in a cone of 0.3 + 0.45 s rad, drooping, within 0.8 + 2.7 m s: the wall or floor behind the victim | (0.25 + 0.75 s) m, times 0.7 to 1.1 |
+| the pool | 1 | straight down from the wound | (0.35 + 1.75 s) m |
+| drops | round(4 s) | down from round the wound, 0.15 to 0.5 + 0.5 s m out | 0.12 to 0.22 m |
+
+So a twentieth of the bar leaves a spot under the victim, a quarter a pool and a mark on the wall,
+the whole bar paints the wall behind and leaves a pool about a metre across. A game keeps blood,
+holes and scorches in pools of their own when one kind must not push out another.
 
 ## Props
 
@@ -108,13 +134,17 @@ the level off a seed.
 | `detail-bevel` | the hall sharp and bevelled; five corners sharp, chamfered and rounded; every edge by its verdict |
 | `detail-decals` | every kind's masks; the hall after a fire fight; marks wrapping corners; blood drying and fading; the decals' own triangles |
 | `detail-props` | every shape; the hall bare and dressed; the plan; close-ups; all three passes together |
+| `detail-hits` | shotgun blasts and a rifle's burst with every round's ray; one victim's blood at four shares of health lost; a scorch's embers cooling |
 
 They draw on the CPU (`engine/lab/labs/detail_view.hpp`: per-pixel light with a key, a warm lamp,
 a sky fill, a glint and a screen-space occlusion), so they run in the GPU-less container and every
 pixel is in the lab's digest. The test hall they share is `detail/test_hall.hpp`.
 
-## Not yet (M42d)
+## Not yet (M42e, M42f)
 
-The GPU frame's decal pass and the props as instances; the passes applied to the room format's and
-the BSP families' levels on load, with a per-material bevel radius and a no-props flag; decals from
-a game's events; the shareware maps dressed by the classic-enhance pipeline.
+M42e: the GPU frame's decal pass (the atlas, the pool's vertices, the embers' glow) and the props
+as instances. M42f: the passes applied to the room format's and the BSP families' levels on load,
+with a per-material bevel radius and a no-props flag; receivers a BSP model each (the world binned
+once, a moving door's or platform's carried by its transform, so a mark rides with it); and the
+callers of `shot_hit` and `bleed`, which are a game's code: Shooter's Edge's (M18) and, for the
+shareware maps, the temp-entity messages of a demo played back.

@@ -164,6 +164,7 @@ Canvas make_canvas(int w, int h, const Cam& cam, const Light& light, int ss) {
   c.diffuse.assign(n * 3, 0);
   c.glint.assign(n, 0);
   c.over.assign(n * 4, 0);
+  c.emit.assign(n * 3, 0);
   return c;
 }
 
@@ -218,6 +219,12 @@ void draw_decal(Canvas& c, std::span<const gd::DecalVertex> verts, gd::DecalKind
         c.albedo[i * 3 + ch] = static_cast<float>(c.albedo[i * 3 + ch] * (1 - a) + rgb[ch] * a);
       }
       c.gloss[i] = static_cast<float>(c.gloss[i] * (1 - a) + look.gloss * a);
+      // The look's glow where the mask's embers are.
+      const double e = a * m.ember;
+      const double glow[3] = {look.er, look.eg, look.eb};
+      for (int ch = 0; ch < 3; ++ch) {
+        c.emit[i * 3 + ch] = static_cast<float>(c.emit[i * 3 + ch] * (1 - a) + glow[ch] * e);
+      }
     });
   }
 }
@@ -299,7 +306,7 @@ Picture finish(const Canvas& c, Rgba sky) {
             const double ao = 1 - 1.4 * occlusion_at(c, x * c.ss + sx, y * c.ss + sy);
             for (int k = 0; k < 3; ++k) {
               const double lit = c.albedo[i * 3 + k] * c.diffuse[i * 3 + k] * std::max(0.2, ao) +
-                                 c.gloss[i] * c.glint[i] * 0.6;
+                                 c.gloss[i] * c.glint[i] * 0.6 + c.emit[i * 3 + k];
               // Tone: an exponential shoulder, then the display's gamma of two.
               rgb[k] = std::sqrt(1 - core::libm::exp(-lit * 1.6));
             }

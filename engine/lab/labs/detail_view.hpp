@@ -63,6 +63,7 @@ struct Canvas {
   std::vector<float> diffuse;  // rgb light on a white surface
   std::vector<float> glint;    // the specular term at full gloss
   std::vector<float> over;     // rgba drawn over the lit picture (lines)
+  std::vector<float> emit;     // rgb light given off (a scorch's embers), added after lighting
 };
 
 // A canvas of `w` x `h` final pixels drawn `ss` times larger, under `cam` and `light`.
