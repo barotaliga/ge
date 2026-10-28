@@ -43,21 +43,27 @@ a metre). Each step, in this order (`step_move`):
    crouch-jump clear a ledge). Let go: the standing hull is taken back only where it fits
    (under a ceiling it stays crouched). The eyes travel between `eye_height` and `crouch_eye`
    over `crouch_time`.
-2. **The slide.** Crouching on the ground faster than `slide_min_speed` starts a slide: friction
+2. **The ladder.** A hull swept `ladder_probe` ahead along the view's heading that touches a
+   surface flagged `kLadder` holds the body on it: no gravity, no ground, and the stick moves it
+   at `ladder_speed` (forward climbs, or descends when the view is pitched down past about 20°;
+   sideways slides along it), the motion clipped into the ladder's face. A fresh jump pushes off
+   along the ladder's normal at `ladder_jump`; standing at its foot and pulling back walks away.
+   The body leaves it at its top by climbing past it onto whatever is there.
+3. **The slide.** Crouching on the ground faster than `slide_min_speed` starts a slide: friction
    `slide_friction` instead of `friction`, steering `slide_steer` of the ground's acceleration,
    and once every `slide_cooldown` s a `slide_boost`. It ends slow, standing or airborne.
-3. **The jump.** A press is an edge of the button; it waits `jump_buffer` s to be used; with
+4. **The jump.** A press is an edge of the button; it waits `jump_buffer` s to be used; with
    `jump_hold` a held button counts too (an automatic bunny hop). On the ground, or within
    `coyote_time` s of walking off it, the vertical speed becomes `jump_speed` (added to a rising
    speed when `jump_additive`, so a ramp's lift is kept). In the air a fresh press spends one of
    `air_jumps`. Letting go while still rising multiplies the vertical speed by `jump_cut`.
-4. **The wish.** The stick turned by the view's yaw (`forward` along the heading, `side` to the
+5. **The wish.** The stick turned by the view's yaw (`forward` along the heading, `side` to the
    right, held to length 1), times `max_speed` and the shares in force (`back_scale`,
    `side_scale`, `walk_scale`, `sprint_scale`, `crouch_scale` on the ground).
-5. **On the ground**: the vertical speed is dropped, then **friction** takes
+6. **On the ground**: the vertical speed is dropped, then **friction** takes
    `max(speed, stop_speed) * friction * dt` off the speed (times `edge_friction` when nothing
    is under a point `edge_probe` ahead within a step's drop), then **acceleration** adds
-   `accelerate * wish * dt` along the wish, never past `wish` along it, then the move (6).
+   `accelerate * wish * dt` along the wish, never past `wish` along it, then the move (7).
    **In the air**: the same acceleration rule with `air_accelerate`, the speed along the wish
    held to `air_speed_cap` (0: the wish itself), `air_stop_accelerate` while wishing against the
    velocity, `air_strafe_accelerate` and `air_strafe_cap` while only sideways is held; with only
@@ -66,15 +72,17 @@ a metre). Each step, in this order (`step_move`):
    jumping: the platformer's, the modern shooter's). Gravity
    (`gravity`, times `fall_gravity_scale` falling, held to `terminal_speed`) is applied by halves
    either side of the move, so a jump's apex is `jump_speed^2 / 2g` at any step length.
-6. **The move.** The hull is swept along the velocity; each surface hit takes the part of the
+7. **The move.** The hull is swept along the velocity; each surface hit takes the part of the
    velocity into it and the rest carries on, up to four surfaces a step (two at once leave the
    crease between them; a third stops it). On the ground a move blocked by a wall is tried again
    lifted by `step_height`, carried and set down, and kept when it got farther on walkable ground:
    that is climbing a step.
-7. **The ground.** A surface within `contact` under the feet whose normal's up part is at least
+8. **The ground.** A surface within `contact` under the feet whose normal's up part is at least
    `walk_normal` is ground (anything steeper is a slope slid down, a surf ramp); a body that was
    standing follows a drop of up to `ground_snap` (down stairs, over a ramp's crest); rising
-   faster than `unground_speed` is never grounded. Landing drops the speed into the ground.
+   faster than `unground_speed` is never grounded. Landing drops the speed into the ground, unless
+   the surface has a `bounce` and `impact * bounce` beats `unground_speed`: then the speed into it
+   comes back times `bounce` (a trampoline, `kBounced`).
 
 **THE ACCELERATION RULE is why strafe jumping exists.** It adds speed along the wish only until
 the speed ALONG the wish reaches the cap. With a small air cap, a wish pointed far enough off the
@@ -107,6 +115,40 @@ lifted try of one step carries it more than the skin past where it stopped, and 
 `accelerate * wish * dt^2`: about 3 mm for the walker at 120 Hz. A world whose skin is larger
 than that (the box world's 1/32 L is 3 cm when L is a metre) leaves a walker stuck at the foot of
 a 10 cm sill; the room level's world keeps a millimetre.
+
+A hit also says WHAT it touched, for the surfaces that do something: `solid` (the world's own id,
+0 for none), `surface_vel` (how fast that solid is moving, L/s), `surface` (flags: `kLadder`) and
+`bounce` (the share of the speed into it a landing gets back). A world with none of these leaves
+them zero and the body behaves as before. In `box_world.hpp` each brush carries a `Surface`, and
+`move_brush` moves one and sets its velocity.
+
+## Moving ground and pushes
+
+What moves a body from outside its own step (`push.hpp`), and the order a game runs it in:
+
+1. **Move the solids** (`move_brush` in the box world, the game's own movers elsewhere).
+2. **Carry the bodies** on or against them: `carry(spec, world, state, solid, delta)` moves a body
+   that stands on that solid (its `ground_solid`) or that the solid now overlaps, by the solid's
+   move. It returns false when the body has nowhere to go (a crush), and leaves it where it was:
+   what a crush does (stop the mover, hurt the body) is the game's.
+3. **Step the bodies.**
+
+While standing, `MoveState::vel` is the body's own velocity RELATIVE to its ground, and the
+ground's is in `ground_vel`: a body standing still on a moving platform has zero velocity and is
+carried. Leaving the ground (a jump, walking off, a push upward) adds the ground's velocity, so a
+jump off a moving platform keeps its speed and lands back on the same spot of it; landing takes
+the new ground's plan velocity off again.
+
+- **`push(state, dv)`** adds a velocity change: a knock-back, an explosion. Any upward part takes
+  the body off the ground and spends its coyote time, so a knock is never turned into a jump.
+- **`launch(spec, state, v)`** sets the velocity outright: a jump pad.
+- **`arc_velocity(from, to, apex, gravity)`** is the launch that peaks `apex` above the higher of
+  the two points and comes down on `to`, so a pad aims at its landing spot. Gravity by halves keeps
+  the arc's height exact at any step rate; where it lands moves by less than one step's travel.
+- **Ladders** are a surface flag, not a kind of solid (§ The model, step 2).
+
+A body's state is still all in `MoveState`, so a predicting client (M28d) replays these the same
+way: the ground's id, its velocity and `on_ladder` are part of what it keeps.
 
 ## Knobs as cvars
 
@@ -166,7 +208,7 @@ world's trace.
 | Lab | Question |
 | --- | --- |
 | `move-strafe` | How much speed does each row let a strafe jumper gain, at which angle, at which step rate? The classic row's speed over a run (a run, straight hops, the strafe jumper two ways), every row strafe jumping, the gain of one step of air against the wish's angle with the best angle marked, the paths from above, and the end speed by step rate |
-| `move-trace` | What does each scenario do? The feet and the top of the head from the side with the world's solids (or from above when the path turns), take-offs and landings marked; every row's running jump; a table of every run's numbers and digest. `--preset` and `--set` retune a run |
+| `move-trace` | What does each scenario do? The feet and the top of the head from the side with the world's solids (or from above when the path turns), take-offs, landings, bounces, ladders, slides and walking off marked, the moving solids drawn where they start; every row's running jump; a table of every run's numbers and digest. `--preset` and `--set` retune a run |
 
 ## Decisions
 
@@ -184,5 +226,5 @@ world's trace.
 
 ## Later
 
-M28c brings moving ground (platforms, lifts), knock-back, jump pads, pushers and ladders; M28d prediction and reconciliation over the network. A capsule
-hull and a heightfield trace wait for a game that needs them.
+M28d brings prediction and reconciliation over the network. A rotating platform (carry turns the
+body and its view), a capsule hull and a heightfield trace wait for a game that needs them.

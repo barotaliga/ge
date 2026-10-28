@@ -223,21 +223,6 @@ fn galaxy(c: vec3f) -> vec3f {
   return vec3f(0.96, 0.98, 1.04) * (frame.night.x * 1.6 * band * dust);
 }
 
-// THE MOON AS SEEN: its lit surface is hundreds to tens of thousands of times as bright as the
-// snow the eye has adapted to (the more so in the twilight and in the dark of an eclipse), which no
-// display holds; the eye sees it as a bright thing whatever its light. A brightness is drawn as
-// it is while it is a small share of what the picture shows as white (a moon by day, pale in the
-// blue), and eased toward kMoonTop of that white above it, so a full moon at midnight, a
-// crescent in the twilight and the sliver left in an eclipse all read bright, their seas and
-// shading multiplied on as they are.
-const kMoonTop = 0.45;
-
-fn as_seen(l: f32) -> f32 {
-  let top = kMoonTop / exposure();
-  let x = l / top;
-  return top * select(x * (1.0 - 0.5 * x), 1.0 - exp(-x), x > 1e-3);
-}
-
 // The light a point of the moon `s` rad from the Earth's shadow's axis gets against full
 // sunlight (render/night.hpp's `shadow_light`): the sun's share the Earth leaves it, white, and
 // the air's red light bent into the umbra.
@@ -418,6 +403,10 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   // Under the horizon while there is a reach, the horizon's sky (frame.wgsl's `mist_dir`).
   let h = mist_dir(d);
   var colour = sky_luminance(h);
+  // The shafts: the cloud's shadow across the air in front of the sky, strongest toward the sun
+  // where the air scatters most of what it scatters forward.
+  let toward = pow(max(dot(h, frame.sun.xyz), 0.0), 4.0);
+  colour *= mix(1.0, shafts(h, kShaftReach, in.position.xy), kShaftShare * mix(0.4, 1.0, toward) * (1.0 - frame.weather.y));
   // The disc: the sun's light over its solid angle, darkened toward the limb, and only where
   // the planet does not hide it; behind a deck it is lost in the deck's grey. It is the real
   // sun's, whichever light is the key.

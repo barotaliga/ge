@@ -189,6 +189,10 @@ void run(ge::lab::Lab& lab) {
   options.reach_m = lab.arg_num("reach");
   options.clouds = cvars.clouds;
   options.cover = cvars.cover;
+  if (const std::string problem = fall_line::app::cloud_stack_of(cvars, options);
+      !problem.empty()) {
+    lab.fail("--cfg: " + problem, "Skill: console.");
+  }
   if (width <= 0 || height <= 0 || width > 4096 || height > 4096 || settle < 1 ||
       options.scale < 0.25 || options.scale > 1 || options.reach_m < 0) {
     lab.fail(
@@ -215,6 +219,7 @@ void run(ge::lab::Lab& lab) {
   ge::mountain::mapgen::GenerateOptions opts;
   opts.version = fall_line::app::kMapVersion;
   ge::mountain::mapgen::Level built = ge::mountain::mapgen::generate_level(seed, opts);
+  if (lab.arg_num("day") > 0) built.sun.day_of_year = lab.arg_num("day");
   if (const std::string problem = fall_line::sim::server_sky(cvars, built); !problem.empty()) {
     lab.fail("--cfg: " + problem, "Skill: console.");
   }
@@ -505,6 +510,7 @@ const ge::lab::LabSpec kSpec{
         {"seed", "38", "the map's seed"},
         {"views", "all", "the views to shoot, comma-separated (games/fall_line/app/views.hpp)"},
         {"hour", "-1", "the solar hour to light the map at; negative: the map's own"},
+        {"day", "0", "the day of the year the map is lit on (its moon with it); 0: the map's own"},
         {"cfg", "",
          "console commands over Fall Line's cvars (\"sv_weather storm; sv_cover 0.6\"): "
          "the sky's sv_ cvars and r_clouds reach the map and the picture"},

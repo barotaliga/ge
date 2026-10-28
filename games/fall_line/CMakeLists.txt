@@ -12,7 +12,7 @@ set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS fall_line_sim)
 file(GLOB FALL_LINE_CFG_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/cfg/*.cpp)
 add_library(fall_line_cfg STATIC ${FALL_LINE_CFG_SOURCES})
 target_include_directories(fall_line_cfg PUBLIC ${PROJECT_SOURCE_DIR}/games)
-target_link_libraries(fall_line_cfg PUBLIC ge_console)
+target_link_libraries(fall_line_cfg PUBLIC ge_console ge_camera)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS fall_line_cfg)
 
 # Its `play` executable (play/): the game on the play contract, which `ge play`, `ge sim`,
@@ -27,6 +27,8 @@ set_target_properties(play PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_
 file(GLOB FALL_LINE_SOUND_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/sound/*.cpp)
 add_library(fall_line_sound STATIC ${FALL_LINE_SOUND_SOURCES})
 target_link_libraries(fall_line_sound PUBLIC fall_line_sim ge_skier_app ge_audio)
+# The play executable writes a run with its sound (`ge record --format=mkv`).
+target_link_libraries(play PRIVATE fall_line_sound)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS fall_line_sound)
 
 # Its camera (camera/): the ladder of engine rigs a run is seen from, the skier as the camera's
@@ -36,6 +38,14 @@ file(GLOB FALL_LINE_CAMERA_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}
 add_library(fall_line_camera STATIC ${FALL_LINE_CAMERA_SOURCES})
 target_link_libraries(fall_line_camera PUBLIC fall_line_sim ge_skier_app ge_camera)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS fall_line_camera)
+
+# Its controls (controls/): the actions a person plays with, the default bindings file, what is
+# felt, the rebinding walk and the run played by hand on the play contract. No GPU and no device,
+# so the tests and the labs drive it with simulated devices (skill: input).
+file(GLOB FALL_LINE_CONTROLS_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/controls/*.cpp)
+add_library(fall_line_controls STATIC ${FALL_LINE_CONTROLS_SOURCES})
+target_link_libraries(fall_line_controls PUBLIC fall_line_sim ge_input ge_play)
+set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS fall_line_controls)
 
 # Its app half: `fall_line_app`, the game's frame (its pass table over engine/render, the look it hands the
 # passes, its named views, its forest and its skinned skiers), which the `fall_line` window and the game's GPU labs both link; it
@@ -56,5 +66,6 @@ if(GE_GPU)
 endif()
 if(GE_PLATFORM AND GE_GPU)
   add_executable(fall_line app/main.cpp)
-  target_link_libraries(fall_line PRIVATE ge_platform fall_line_app fall_line_sound fall_line_cfg)
+  target_link_libraries(fall_line PRIVATE ge_platform fall_line_app fall_line_sound fall_line_cfg
+                                          fall_line_controls)
 endif()
