@@ -81,6 +81,13 @@ std::string encoding_problem(const Encoding& e) {
     return "no format `" + e.format + "`; the formats are mp4, webm, gif, mkv and png";
   }
   if (e.crf > 63) return "--crf " + std::to_string(e.crf) + " is over 63";
+  if (e.format == "mkv" && !e.codec.empty() && e.codec != "av1") {
+    return "an mkv's codecs are av1 (AV1 and Opus, a .webm) and none (uncompressed); not `" +
+           e.codec + "`";
+  }
+  if (e.format == "mkv" && !e.bitrate.empty()) {
+    return "an mkv takes --crf, not --bitrate";
+  }
   for (const std::string* w : {&e.codec, &e.bitrate, &e.preset}) {
     if (!plain_word(*w)) return "`" + *w + "` is not a plain word (letters, digits and ._-)";
   }
@@ -89,6 +96,7 @@ std::string encoding_problem(const Encoding& e) {
 
 std::string_view extension_of(const Encoding& e) {
   if (e.format == "png") return "";
+  if (e.format == "mkv" && e.codec == "av1") return "webm";
   return e.format;
 }
 
@@ -277,6 +285,8 @@ std::optional<Recording> record(const GameSpec& spec, const InputLog& log, const
       ao.hz = spec.hz;
       ao.from = at;
       ao.sound = opt.sound;
+      ao.codec = opt.encoding.codec;
+      if (opt.encoding.crf >= 0) ao.crf = opt.encoding.crf;
       if (!av.open(ao, error)) return std::nullopt;
       av_open = true;
     }
