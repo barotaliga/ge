@@ -6,6 +6,8 @@
 @fragment
 fn fs_main(in: VertexOut) -> FragmentOut {
   let g = ground_at(in);
-  let c = g.albedo / PI * (g.sun * max(dot(g.n, frame.sun.xyz), 0.0) + sky_irradiance(g.n));
+  let albedo = wet_albedo(g.albedo, 1.0);
+  var c = albedo / PI * (g.sun * max(dot(g.n, frame.sun.xyz), 0.0) + sky_irradiance(g.n));
+  c += wet_sheen(g.n, -g.rel / max(g.dist, 1e-3), g.sun, g.n.y);
   return ground_out(in, c, 0.0);
 }

@@ -242,7 +242,8 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   let l = frame.sun.xyz;
   let v = -g.rel / max(g.dist, 1e-3);
   let ndl = dot(n, l);
-  let albedo = g.albedo * shade;
+  // Rain on snow: the water in its pores darkens it to slush (rock less, being sealed).
+  let albedo = wet_albedo(g.albedo * shade, mix(1.0, 0.4, rock));
   // A deep trough sees less of the sky.
   let cavity = 1.0 - 0.4 * smoothstep(0.0, 0.25, track.depth * tk);
   var c = albedo / PI * (g.sun * max(ndl, 0.0) + sky_irradiance(n) * cavity);
@@ -257,7 +258,9 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   var graze = 1.0 - max(dot(n, v), 0.0);
   graze *= graze;
   let lobe = pow(rv, sharp) * (0.25 + 2.5 * gloss * gloss) * (0.15 + 1.6 * graze);
-  c += g.sun * lobe * 0.35 * snow.look2.x * (1.0 - rock) / PI;
+  c += g.sun * lobe * 0.35 * snow.look2.x * (1.0 - rock) * (1.0 - 0.7 * frame.mist.z) / PI;
+  // The wet film's mirror and the slush's pools on the flats.
+  c += wet_sheen(n, v, g.sun, g.n.y);
   // The glitter, on the loose snow in the sun: fine cells close in, coarser ones a little
   // further, none past 140 m.
   var glint = 0.0;
@@ -269,7 +272,7 @@ fn fs_main(in: VertexOut) -> FragmentOut {
              (1.0 - smoothstep(50.0, 140.0, g.dist));
     // A glint is the sun's disc in a crystal: through cloud the disc spreads and the glint goes
     // before the light does.
-    glint *= loose * snow.look.x * frame.weather.x;
+    glint *= loose * snow.look.x * frame.weather.x * (1.0 - frame.mist.z);
     c += g.sun * glint * 400.0 / PI;
   }
   return ground_out(in, c, clamp(glint * 4.0, 0.0, 1.0));
