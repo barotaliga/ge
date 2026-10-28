@@ -102,7 +102,8 @@ void upscale(const Rgb& src, const Plane& glow, int scale, Rgb& out, Plane& out_
         const float en = 1.0f / std::sqrt(ex * ex + ey * ey);
         ex *= en;
         ey *= en;
-        const float across = kFlat - (kFlat - kAcross) * coh, along = kFlat + (kAlong - kFlat) * coh;
+        const float across = kFlat - (kFlat - kAcross) * coh,
+                    along = kFlat + (kAlong - kFlat) * coh;
         const float ia = 1.0f / (across * across), il = 1.0f / (along * along);
         float sw = 0, sr = 0, sg = 0, sb = 0, sm = 0;
         for (int dy = -1; dy <= 2; dy++) {
@@ -246,12 +247,18 @@ assets::Image colour(const Rgb& c, const Plane* mask) {
 
 float base_roughness(Material m) {
   switch (m) {
-    case Material::stone: return 0.85f;
-    case Material::metal: return 0.42f;
-    case Material::wood: return 0.7f;
-    case Material::liquid: return 0.06f;
-    case Material::sky: return 1.0f;
-    case Material::other: return 0.75f;
+    case Material::stone:
+      return 0.85f;
+    case Material::metal:
+      return 0.42f;
+    case Material::wood:
+      return 0.7f;
+    case Material::liquid:
+      return 0.06f;
+    case Material::sky:
+      return 1.0f;
+    case Material::other:
+      return 0.75f;
   }
   return 0.75f;
 }
@@ -260,12 +267,18 @@ float base_roughness(Material m) {
 
 const char* material_name(Material m) {
   switch (m) {
-    case Material::stone: return "stone";
-    case Material::metal: return "metal";
-    case Material::wood: return "wood";
-    case Material::liquid: return "liquid";
-    case Material::sky: return "sky";
-    case Material::other: return "other";
+    case Material::stone:
+      return "stone";
+    case Material::metal:
+      return "metal";
+    case Material::wood:
+      return "wood";
+    case Material::liquid:
+      return "liquid";
+    case Material::sky:
+      return "sky";
+    case Material::other:
+      return "other";
   }
   return "other";
 }
@@ -359,8 +372,10 @@ Enhanced enhance_texture(std::string_view name, std::span<const uint8_t> indexed
   for (int y = 0; y < oh; y++) {
     for (int x = 0; x < ow; x++) {
       auto hp = [&](int dx, int dy) { return height_p.wrap(x + dx, y + dy); };
-      const float dx = (hp(1, -1) + 2 * hp(1, 0) + hp(1, 1)) - (hp(-1, -1) + 2 * hp(-1, 0) + hp(-1, 1));
-      const float dy = (hp(-1, 1) + 2 * hp(0, 1) + hp(1, 1)) - (hp(-1, -1) + 2 * hp(0, -1) + hp(1, -1));
+      const float dx =
+          (hp(1, -1) + 2 * hp(1, 0) + hp(1, 1)) - (hp(-1, -1) + 2 * hp(-1, 0) + hp(-1, 1));
+      const float dy =
+          (hp(-1, 1) + 2 * hp(0, 1) + hp(1, 1)) - (hp(-1, -1) + 2 * hp(0, -1) + hp(1, -1));
       // dy is down the picture; +Y of the normal is up it.
       float nx = -dx / 8.0f * depth, ny = dy / 8.0f * depth, nz = 1.0f;
       const float inv = 1.0f / std::sqrt(nx * nx + ny * ny + nz * nz);
@@ -369,8 +384,10 @@ Enhanced enhance_texture(std::string_view name, std::span<const uint8_t> indexed
       nz *= inv;
       const size_t i = (size_t(y) * size_t(ow) + size_t(x)) * 4;
       out.normal.rgba[i] = uint8_t(std::clamp((nx * 0.5f + 0.5f) * 255.0f + 0.5f, 0.0f, 255.0f));
-      out.normal.rgba[i + 1] = uint8_t(std::clamp((ny * 0.5f + 0.5f) * 255.0f + 0.5f, 0.0f, 255.0f));
-      out.normal.rgba[i + 2] = uint8_t(std::clamp((nz * 0.5f + 0.5f) * 255.0f + 0.5f, 0.0f, 255.0f));
+      out.normal.rgba[i + 1] =
+          uint8_t(std::clamp((ny * 0.5f + 0.5f) * 255.0f + 0.5f, 0.0f, 255.0f));
+      out.normal.rgba[i + 2] =
+          uint8_t(std::clamp((nz * 0.5f + 0.5f) * 255.0f + 0.5f, 0.0f, 255.0f));
     }
   }
 

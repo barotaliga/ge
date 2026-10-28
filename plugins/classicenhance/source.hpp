@@ -19,8 +19,8 @@
 // release zip whose own digest is in `kKnownZips` is reported as such; another zip holding a
 // known pack is accepted for the pack.
 //
-// ge:summary Finds the classic shareware pack in a zip, LHA archive, file or folder; known hashes only
-// ge:keywords source pack pak0 shareware release zip lha folder installed verify sha256 known
+// ge:summary Finds the classic shareware pack in a zip, LHA archive, file or folder; known hashes
+// only ge:keywords source pack pak0 shareware release zip lha folder installed verify sha256 known
 // ge:keywords unchanged licence refuse identity
 // ge:skill classicenhance
 // ge:test tests/classicenhance_source_test.cpp
@@ -55,8 +55,8 @@ const char* route_name(Route r);
 
 struct Source {
   Route route = Route::pack_file;
-  std::string path;        // the file the pack was read from (a zip or the pack itself)
-  std::string zip_sha256;  // the zip's digest, when the route went through one
+  std::string path;                // the file the pack was read from (a zip or the pack itself)
+  std::string zip_sha256;          // the zip's digest, when the route went through one
   const KnownFile* zip = nullptr;  // the zip as a known release, or nullptr
   std::vector<uint8_t> pack;       // the pack's bytes, unchanged
   std::string pack_sha256;

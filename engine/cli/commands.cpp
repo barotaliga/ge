@@ -392,7 +392,7 @@ const CommandSpec kCommands[] = {
     {"tool", "[<plugin>]", 0, 1, "see",
      "list the plugins' own command-line tools, or build one and run it with the arguments "
      "after --; its JSON answer is the result",
-     kToolFlags, "ge tool classicenhance -- verify shareware.zip", "agent-interface"},
+     kToolFlags, "ge tool classicenhance -- verify shareware.zip", "ge"},
     {"lab sweep", "<id>", 1, 1, "see",
      "one constexpr constant of the code rewritten to each value, the labs rebuilt and the lab "
      "run at each, every metric side by side; the source is put back after",

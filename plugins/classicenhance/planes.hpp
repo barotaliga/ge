@@ -18,7 +18,8 @@ struct Plane {
   std::vector<float> v;
 
   Plane() = default;
-  Plane(int width, int height, float fill = 0) : w(width), h(height), v(size_t(width) * size_t(height), fill) {}
+  Plane(int width, int height, float fill = 0)
+      : w(width), h(height), v(size_t(width) * size_t(height), fill) {}
   float& at(int x, int y) { return v[size_t(y) * size_t(w) + size_t(x)]; }
   float at(int x, int y) const { return v[size_t(y) * size_t(w) + size_t(x)]; }
   // The texel at (x, y) with both coordinates wrapped into the plane.

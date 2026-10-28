@@ -32,9 +32,9 @@ std::vector<uint8_t> fixture_pack() {
   CHECK_MSG(ge::brush::write_bsp(ge::brush::sample_fixture(), ge::brush::Family::v29, &map, &error),
             error);
   std::vector<uint8_t> out;
-  CHECK_MSG(ge::vfs::write_pak({{"gfx/palette.lmp", pal}, {"maps/b_hall.bsp", map},
-                                {"maps/a_copy.bsp", map}},
-                               &out, &error),
+  CHECK_MSG(ge::vfs::write_pak(
+                {{"gfx/palette.lmp", pal}, {"maps/b_hall.bsp", map}, {"maps/a_copy.bsp", map}},
+                &out, &error),
             error);
   return out;
 }
@@ -68,7 +68,8 @@ TEST(pipeline_writes_every_stage_and_skips_what_is_current) {
   CHECK(fs::file_size(dir / "pack" / "pak0.pak") == src.pack.size());
   CHECK(read_text(dir / "NOTICE.txt").find("do not share") != std::string::npos);
   CHECK(read_text(dir / "source.txt").find(sha) != std::string::npos);
-  CHECK(fs::exists(dir / "lightmaps" / "a_copy.png") && fs::exists(dir / "lightmaps" / "b_hall.png"));
+  CHECK(fs::exists(dir / "lightmaps" / "a_copy.png") &&
+        fs::exists(dir / "lightmaps" / "b_hall.png"));
 
   // Every drawn texture of the fixture once, its maps beside it, named in the index.
   std::vector<ce::PackTexture> textures;

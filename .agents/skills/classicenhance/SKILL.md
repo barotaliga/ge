@@ -73,6 +73,10 @@ container the pack is fetched into the scratchpad only, never into the tree.
 
 ## The lightmap stage's owner
 
-The rebake's baker and its `plugins/brush` adapter belong to the lightmaps work (row M40). When
-`brush::rebake_lightmaps` lands, `light_map` calls it and writes `write_rebaked`'s bytes as
-`lightmaps/<map>.lit2`, and `kLightmapStageVersion` moves; nothing else in the pipeline changes.
+The rebake's baker and its `plugins/brush` adapter belong to the lightmaps work (rows M40a, the
+baker in `engine/bake`, and M40b, `plugins/brush/rebake.hpp`). When `brush::rebake_map(map, input,
+options, &out, &err)` lands, `light_map` (row M41b) fills `RebakeInput` with the enhanced albedo
+(`texture_means`), the map's lights (`bake_lights`, both in `plugins/brush/app/draw_data.hpp`) and
+the sky colour, and writes `write_rebaked`'s bytes (magic `GERB`, version 1; the light's direction
+in world space) as `lightmaps/<map>.gerb`; `kLightmapStageVersion` moves to 2 so every cache reruns
+the stage. Nothing else in the pipeline changes.

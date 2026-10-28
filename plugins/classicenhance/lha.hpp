@@ -20,11 +20,11 @@
 namespace ge::classicenhance {
 
 struct LhaEntry {
-  std::string name;    // as stored, usually with '\\' separators
-  char method = '0';   // the digit of `-lh?-`: '0' stored, '5' compressed
+  std::string name;   // as stored, usually with '\\' separators
+  char method = '0';  // the digit of `-lh?-`: '0' stored, '5' compressed
   uint32_t packed = 0, size = 0;
-  uint16_t crc = 0;    // CRC-16 of the unpacked bytes
-  uint64_t data = 0;   // offset of the packed bytes
+  uint16_t crc = 0;   // CRC-16 of the unpacked bytes
+  uint64_t data = 0;  // offset of the packed bytes
 };
 
 // The entries of the archive in `bytes`, found anywhere in them (a self-extractor's program comes

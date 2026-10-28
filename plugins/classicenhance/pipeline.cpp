@@ -78,7 +78,8 @@ std::string map_name(const std::string& path) {
 }
 
 bool run_pack(const Source& src, const fs::path& dir, StageResult& r, std::string* error) {
-  if (!write_whole(dir / "pack" / "pak0.pak", src.pack) || !write_text(dir / "NOTICE.txt", kNotice)) {
+  if (!write_whole(dir / "pack" / "pak0.pak", src.pack) ||
+      !write_text(dir / "NOTICE.txt", kNotice)) {
     *error = "cannot write into " + dir.string() + "; check the cache folder is writable";
     return false;
   }
@@ -159,9 +160,12 @@ bool run_lightmaps(const Source& src, const fs::path& dir, StageResult& r, std::
 
 const char* stage_name(Stage s) {
   switch (s) {
-    case Stage::pack: return "pack";
-    case Stage::textures: return "textures";
-    case Stage::lightmaps: return "lightmaps";
+    case Stage::pack:
+      return "pack";
+    case Stage::textures:
+      return "textures";
+    case Stage::lightmaps:
+      return "lightmaps";
   }
   return "?";
 }
@@ -234,9 +238,15 @@ bool run_pipeline(const Source& source, const fs::path& root_in, const RunOption
     const auto t0 = std::chrono::steady_clock::now();
     bool ok = false;
     switch (s) {
-      case Stage::pack: ok = run_pack(source, report->dir, r, error); break;
-      case Stage::textures: ok = run_textures(source, report->dir, opts, r, error); break;
-      case Stage::lightmaps: ok = run_lightmaps(source, report->dir, r, error); break;
+      case Stage::pack:
+        ok = run_pack(source, report->dir, r, error);
+        break;
+      case Stage::textures:
+        ok = run_textures(source, report->dir, opts, r, error);
+        break;
+      case Stage::lightmaps:
+        ok = run_lightmaps(source, report->dir, r, error);
+        break;
     }
     r.seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
     r.ran = true;
@@ -246,8 +256,8 @@ bool run_pipeline(const Source& source, const fs::path& root_in, const RunOption
       return false;
     }
     if (!write_record(report->dir, stage_name(s), key)) {
-      *error = "cannot record the " + std::string(stage_name(s)) + " stage in " +
-               report->dir.string();
+      *error =
+          "cannot record the " + std::string(stage_name(s)) + " stage in " + report->dir.string();
       return false;
     }
   }

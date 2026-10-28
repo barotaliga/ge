@@ -10,7 +10,7 @@
 // border round each), so the cache's layout and the stage's place in the pipeline are final and
 // only this stage's body changes.
 //
-// ge:summary The lightmap stage: a map's light into the cache (the original packed, until the rebake)
+// ge:summary The lightmap stage: a map's light into the cache (its own, until the rebake)
 // ge:keywords lightmap stage rebake light atlas pack shelf cache map
 // ge:skill classicenhance
 // ge:test tests/classicenhance_pipeline_test.cpp

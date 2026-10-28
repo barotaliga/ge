@@ -160,8 +160,8 @@ fs::path scratch(const std::string& name) {
 
 void write(const fs::path& p, const std::vector<uint8_t>& b) {
   fs::create_directories(p.parent_path());
-  std::ofstream(p, std::ios::binary).write(reinterpret_cast<const char*>(b.data()),
-                                           std::streamsize(b.size()));
+  std::ofstream(p, std::ios::binary)
+      .write(reinterpret_cast<const char*>(b.data()), std::streamsize(b.size()));
 }
 
 }  // namespace
@@ -173,7 +173,9 @@ TEST(lha_reads_lh5_and_lh0_behind_a_program) {
   for (int i = 0; i < 40000; i++) {
     s = s * 1103515245u + 12345u;
     const int kind = (i / 997) % 3;
-    big.push_back(kind == 0 ? uint8_t(s >> 24) : kind == 1 ? uint8_t(i % 7) : uint8_t((i / 3) % 251));
+    big.push_back(kind == 0   ? uint8_t(s >> 24)
+                  : kind == 1 ? uint8_t(i % 7)
+                              : uint8_t((i / 3) % 251));
   }
   const std::vector<uint8_t> words = text("the pack, the pack, the pack and its maps and its maps");
   for (const bool compress : {true, false}) {

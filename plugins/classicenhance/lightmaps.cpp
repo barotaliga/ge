@@ -39,7 +39,8 @@ assets::Image pack_lightmaps(const brush::Map& map, int max_width) {
       for (uint32_t lx = 0; lx < lm.width; lx++) {
         const size_t src = lm.offset + (size_t(ly) * lm.width + lx) * 3;
         if (src + 2 >= map.light_rgb.size()) continue;
-        const size_t dst = (size_t(at[i].y + int(ly)) * size_t(width) + size_t(at[i].x + int(lx))) * 4;
+        const size_t dst =
+            (size_t(at[i].y + int(ly)) * size_t(width) + size_t(at[i].x + int(lx))) * 4;
         img.rgba[dst] = map.light_rgb[src];
         img.rgba[dst + 1] = map.light_rgb[src + 1];
         img.rgba[dst + 2] = map.light_rgb[src + 2];

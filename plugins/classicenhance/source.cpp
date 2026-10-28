@@ -69,10 +69,14 @@ constexpr const char* kWhatToGive =
 
 const char* route_name(Route r) {
   switch (r) {
-    case Route::release_zip: return "release-zip";
-    case Route::pack_file: return "pack-file";
-    case Route::folder: return "folder";
-    case Route::installer: return "installer-archive";
+    case Route::release_zip:
+      return "release-zip";
+    case Route::pack_file:
+      return "pack-file";
+    case Route::folder:
+      return "folder";
+    case Route::installer:
+      return "installer-archive";
   }
   return "?";
 }
@@ -84,7 +88,8 @@ bool verify_pack(Source* out, std::string* error, std::span<const KnownFile> pac
     *error = "the pack (" + std::to_string(out->pack.size()) + " bytes, SHA-256 " +
              out->pack_sha256 +
              ") is not a known unchanged release; only an unchanged shareware pack is read, so "
-             "nothing was written. " + kWhatToGive;
+             "nothing was written. " +
+             kWhatToGive;
     return false;
   }
   return true;
@@ -149,8 +154,8 @@ bool open_source(const std::string& path, Source* out, std::string* error,
           return true;
         }
       }
-      *error = "no id1/pak0.pak, pak0.pak or release zip holding it in '" + path + "'; " +
-               kWhatToGive;
+      *error =
+          "no id1/pak0.pak, pak0.pak or release zip holding it in '" + path + "'; " + kWhatToGive;
       return false;
     }
     file = found;

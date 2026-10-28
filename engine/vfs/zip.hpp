@@ -21,7 +21,7 @@
 namespace ge::vfs {
 
 struct ZipEntry {
-  std::string name;  // as stored ('/' or '\\' separators, case kept)
+  std::string name;     // as stored ('/' or '\\' separators, case kept)
   uint16_t method = 0;  // 0 stored, 8 deflated
   uint32_t crc = 0, packed = 0, size = 0;
   uint32_t data = 0;  // offset of the entry's packed bytes in the archive

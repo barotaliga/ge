@@ -81,8 +81,8 @@ bool read_zip(std::span<const uint8_t> bytes, Zip* out, std::string* error) {
   }
   size_t at = dir_at;
   for (uint32_t i = 0; i < count; i++) {
-    const std::string where = "zip: central record " + std::to_string(i) + " at byte " +
-                              std::to_string(at);
+    const std::string where =
+        "zip: central record " + std::to_string(i) + " at byte " + std::to_string(at);
     if (at + 46 > end || u32(bytes, at) != 0x02014b50) {
       *error = where + " is not a central record";
       return false;
@@ -154,8 +154,8 @@ bool zip_unpack(std::span<const uint8_t> bytes, const ZipEntry& entry, std::vect
     *out = std::move(*bytes_out);
   }
   if (assets::crc32(out->data(), out->size()) != entry.crc) {
-    *error = "zip: entry '" + entry.name +
-             "' fails its CRC-32; the archive is damaged: fetch it again";
+    *error =
+        "zip: entry '" + entry.name + "' fails its CRC-32; the archive is damaged: fetch it again";
     return false;
   }
   return true;

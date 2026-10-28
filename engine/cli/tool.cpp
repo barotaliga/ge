@@ -65,10 +65,10 @@ Outcome tool_answer(const std::string& name, int code, const std::string& output
   out.result = line;
   if (line.empty()) {
     out.text = output;
-    out.findings.push_back({Severity::error,
-                            "tool " + name + " exited " + std::to_string(code) +
-                                " without a JSON answer",
-                            "plugins/" + name + "/tool", "ge tool " + name + " -- help"});
+    out.findings.push_back(
+        {Severity::error,
+         "tool " + name + " exited " + std::to_string(code) + " without a JSON answer",
+         "plugins/" + name + "/tool", "ge tool " + name + " -- help"});
     return out;
   }
   if (code != 0) {

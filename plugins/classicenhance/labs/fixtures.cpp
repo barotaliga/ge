@@ -34,9 +34,9 @@ struct Painter {
   const Palette& pal;
   FixtureTexture t;
   void put(int x, int y, double r, double g, double b) {
-    t.indexed[size_t(y) * 64 + size_t(x)] = nearest_index(
-        pal, int(std::clamp(r, 0.0, 255.0)), int(std::clamp(g, 0.0, 255.0)),
-        int(std::clamp(b, 0.0, 255.0)));
+    t.indexed[size_t(y) * 64 + size_t(x)] =
+        nearest_index(pal, int(std::clamp(r, 0.0, 255.0)), int(std::clamp(g, 0.0, 255.0)),
+                      int(std::clamp(b, 0.0, 255.0)));
   }
 };
 
@@ -45,16 +45,17 @@ struct Painter {
 Palette fixture_palette() {
   // Each ramp's brightest colour; the ramp runs from near black up to it.
   static const int kRamps[16][3] = {
-      {255, 255, 255}, {190, 150, 110}, {150, 160, 200}, {120, 170, 90},  {210, 90, 70},
-      {230, 190, 90},  {170, 120, 70},  {140, 140, 120}, {200, 110, 150}, {110, 190, 200},
-      {220, 150, 60},  {160, 100, 90},  {100, 110, 130}, {200, 200, 160}, {255, 230, 120},
-      {255, 90, 60}};
+      {255, 255, 255}, {190, 150, 110}, {150, 160, 200}, {120, 170, 90},
+      {210, 90, 70},   {230, 190, 90},  {170, 120, 70},  {140, 140, 120},
+      {200, 110, 150}, {110, 190, 200}, {220, 150, 60},  {160, 100, 90},
+      {100, 110, 130}, {200, 200, 160}, {255, 230, 120}, {255, 90, 60}};
   Palette p;
   for (int r = 0; r < 16; r++) {
     for (int s = 0; s < 16; s++) {
       const double k = r >= 14 ? 0.55 + 0.45 * s / 15.0 : (s + 1) / 16.0;
       for (int c = 0; c < 3; c++) {
-        p.rgb[size_t(r * 16 + s) * 3 + size_t(c)] = uint8_t(std::clamp(kRamps[r][c] * k, 0.0, 255.0));
+        p.rgb[size_t(r * 16 + s) * 3 + size_t(c)] =
+            uint8_t(std::clamp(kRamps[r][c] * k, 0.0, 255.0));
       }
     }
   }

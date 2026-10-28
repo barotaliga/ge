@@ -46,10 +46,10 @@ struct RunOptions {
 
 struct StageResult {
   Stage stage = Stage::pack;
-  bool ran = false;       // false: skipped, up to date (or not asked for)
-  uint32_t files = 0;     // files written
+  bool ran = false;    // false: skipped, up to date (or not asked for)
+  uint32_t files = 0;  // files written
   double seconds = 0;
-  std::string note;       // what it did, in a line
+  std::string note;  // what it did, in a line
 };
 
 struct RunReport {

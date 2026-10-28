@@ -30,8 +30,8 @@ TEST(tool_answer_reads_the_last_json_line) {
   CHECK(ok.result == "{\"ok\":true,\"n\":3}");
   CHECK(ge::cli::exit_of(ok) == 0);
 
-  const auto refused =
-      ge::cli::tool_answer("alpha", 1, "{\"ok\":false,\"error\":\"the \\\"pack\\\" is unknown\"}\n");
+  const auto refused = ge::cli::tool_answer(
+      "alpha", 1, "{\"ok\":false,\"error\":\"the \\\"pack\\\" is unknown\"}\n");
   CHECK(refused.findings.size() == 1);
   CHECK(refused.findings[0].what == "the \"pack\" is unknown");
   CHECK(ge::cli::exit_of(refused) == 1);

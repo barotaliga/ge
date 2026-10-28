@@ -45,9 +45,8 @@ TEST(zip_reads_stored_entries_by_name) {
 TEST(zip_unpacks_a_deflated_entry) {
   // "the snow, the snow, the snow on the mountain" deflated by a stock zlib (fixed Huffman), with
   // no zlib wrapper, as a zip stores it.
-  const std::vector<uint8_t> raw{43,  201, 72,  85,  40,  206, 203, 47,  215, 81,  40,  193,
-                                 96,  41,  228, 231, 129, 217, 185, 249, 165, 121, 37,  137,
-                                 153, 121, 0};
+  const std::vector<uint8_t> raw{43,  201, 72,  85,  40,  206, 203, 47,  215, 81,  40,  193, 96, 41,
+                                 228, 231, 129, 217, 185, 249, 165, 121, 37,  137, 153, 121, 0};
   const std::string want = "the snow, the snow, the snow on the mountain";
   std::vector<uint8_t> zip = vfs::write_stored_zip({{"s.txt", raw}});
   // Turn the stored entry into a deflated one: method 8, the unpacked size and CRC in both
@@ -87,7 +86,8 @@ TEST(zip_refuses_damage) {
   CHECK(vfs::read_zip(good, &dir, &error));
   // The first central record's method: 12 (bzip2) is refused at the directory, naming the entry.
   for (size_t at = 0; at + 4 <= method.size(); at++) {
-    if (method[at] == 0x50 && method[at + 1] == 0x4b && method[at + 2] == 1 && method[at + 3] == 2) {
+    if (method[at] == 0x50 && method[at + 1] == 0x4b && method[at + 2] == 1 &&
+        method[at + 3] == 2) {
       method[at + 10] = 12;
       break;
     }

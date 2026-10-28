@@ -63,4 +63,5 @@ One skill per plugin, named after it (`docs/architecture.md` § Plugins).
 | `helicopter` | `plugins/helicopter`: the helicopter in the air and on the snow, the downwash, the bot's hands on it and the heli scenarios |
 | `paramotor` | `plugins/paramotor`: the powered speed wing a skier flies, the air it flies in, the bot's hands on it and the para scenarios |
 | `brush` | `plugins/brush`: maps in the classic BSP families read into one view, the fixture writers that make test maps of each, and the `bsp` lab |
+| `classicenhance` | `plugins/classicenhance`: the classic shareware pack verified and enhanced on the player's own machine into a local cache (textures, their maps, the lightmap stage), run through `ge tool` |
 | `rooms` | `plugins/rooms`: the engine's own level format, rooms of plain geometry grown from their seeds (reliefs, caves), its text form and its lab |

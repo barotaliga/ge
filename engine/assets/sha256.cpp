@@ -36,8 +36,8 @@ void compress(std::array<uint32_t, 8>& h, const uint8_t* p) {
   }
   uint32_t a = h[0], b = h[1], c = h[2], d = h[3], e = h[4], f = h[5], g = h[6], k = h[7];
   for (int i = 0; i < 64; i++) {
-    const uint32_t t1 = k + (rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25)) + ((e & f) ^ (~e & g)) +
-                        kK[i] + w[i];
+    const uint32_t t1 =
+        k + (rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25)) + ((e & f) ^ (~e & g)) + kK[i] + w[i];
     const uint32_t t2 = (rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22)) + ((a & b) ^ (a & c) ^ (b & c));
     k = g;
     g = f;
