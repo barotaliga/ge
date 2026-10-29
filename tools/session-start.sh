@@ -4,10 +4,11 @@
 # runs while the agent reads. Only in a cloud session (CLAUDE_CODE_REMOTE=true), or when
 # GE_SESSION_BUILD=1 asks for it locally.
 #
-# The worker (this script with --worker) installs the Linux packages CI installs that the
-# container lacks (GE_LINUX_PACKAGES in .github/workflows/ci.yml, read from there, never
-# restated), then runs `make build` into build/debug, reusing it, so a second session or a
-# resumed one rebuilds only what changed. One worker at a time (a lock); a hook fired while
+# The worker (this script with --worker) brings the container up to what the tree needs with
+# tools/setup-ubuntu.sh (the one list of Linux packages, CI's too; a no-op in well under a second
+# when nothing is missing), switching the Ubuntu archive to its HTTPS mirrors first because the
+# cloud session's proxy passes HTTPS alone, then runs `make build` into build/debug, reusing it,
+# so a second session or a resumed one rebuilds only what changed. One worker at a time (a lock); a hook fired while
 # one runs does nothing.
 #
 # Where to look: build/session-start.log (the whole output) and build/session-start.status
@@ -36,19 +37,10 @@ worker() {
   {
     echo "== session-start $(stamp): $ROOT"
     if [[ "$(uname -s)" == Linux && "$(id -u)" == 0 ]] && command -v apt-get >/dev/null; then
-      # The folded block's lines: indented deeper than the key, up to the first that is not.
-      pkgs="$(awk '/^  GE_LINUX_PACKAGES:/ { on = 1; next } on && /^    / { print; next } { on = 0 }' \
-        .github/workflows/ci.yml)"
-      [[ -n "$pkgs" ]] || echo "session-start: no GE_LINUX_PACKAGES in .github/workflows/ci.yml"
-      missing=()
-      for p in $pkgs; do dpkg -s "$p" >/dev/null 2>&1 || missing+=("$p"); done
-      if ((${#missing[@]})); then
-        echo "== apt-get install ${missing[*]}"
-        # Best effort: without them SDL builds without that backend, and the build goes on.
-        { apt-get update -qq && DEBIAN_FRONTEND=noninteractive \
-          apt-get install -y -qq --no-install-recommends "${missing[@]}"; } ||
-          echo "session-start: apt-get failed; the build continues without those packages"
-      fi
+      echo "== tools/setup-ubuntu.sh $(stamp)"
+      # Best effort: without a package SDL builds without that backend, and the build goes on.
+      tools/setup-ubuntu.sh --https-mirrors ||
+        echo "session-start: tools/setup-ubuntu.sh failed (above); the build continues without those packages"
     fi
     echo "== make build $(stamp)"
     make build

@@ -86,3 +86,9 @@ TEST(several_labs_share_one_page_one_after_another) {
   CHECK(has(page, "<code>level</code>") && has(page, "<code>para</code>"));
   CHECK(page.find("<code>level</code>") < page.find("<code>para</code>"));
 }
+
+TEST(a_page_takes_the_title_it_is_given) {
+  const std::string page = publish_html(std::vector<Page>{sample()}, 60, "Fog <and> glow");
+  CHECK(has(page, "<title>Fog &lt;and&gt; glow</title>"));
+  CHECK(has(publish_html(sample()), "<title>level lab run</title>"));
+}

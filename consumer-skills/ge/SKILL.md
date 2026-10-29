@@ -20,7 +20,7 @@ are always the pinned release's.
 
 ```sh
 ge find <words>                  # what exists: this repo's and the engine's files, skills, lessons
-ge goals free [<row>] --fetch    # the roadmap numbers main and every branch already use, and the next free one
+ge goals free [<row>]            # the roadmap numbers main and every branch already use, and the next free one
 ge goals claim "<what>"          # that row reserved and pushed to this branch at once; an earlier claim elsewhere wins, and it moves on
 ge explain <file|name>           # one of them: its header comment, declaration, skill, test
 ge add system <name>             # sim/<name>.hpp, .cpp and its replay test, to start from

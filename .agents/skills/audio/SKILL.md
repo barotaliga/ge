@@ -16,12 +16,12 @@ and the beds a genre shares go in that plugin's `app/` half (`plugins` skill).
 | --- | --- |
 | `voice.hpp` | The vocabulary: `Tone`, `Noise` (one-shots), `LayerSpec`, `LayerTarget` (steered layers), `kRate` (48 kHz, everywhere), the envelope floor `kMinAttackMs`, `safe_cutoff`, the shaper's rules |
 | `dsp.hpp` | Per-sample blocks: the sine table, the saturation curves, the noise pools, polyBLEP oscillators, the state-variable filter (`svf_tune` every `kControl` samples), one-pole glides |
-| `synth.hpp` | The graph: `tone`, `noise`, `layer`/`set`/`stop`, `bus_gain`, `render`; the ring, the voice pool, the echo, the limiter, `stats` |
+| `synth.hpp` | The graph: `tone`, `noise`, `layer`/`set`/`stop`, `bus_gain`, `render`; the ring, the voice pool, the echo, the limiter, `stats`; STREAMS (`stream`, `feed`, `queued`, `steer`, `stop`): mono samples made elsewhere (voice chat's talkers, `engine/net/voice.hpp`) on a lock-free ring each, played on a bus, `Stats::starved` when one runs dry |
 | `sound.hpp` | `SoundDef` (id, the sentence it should feel like, its voices), `PlayShape` (gain, pitch, stretch, pan), `play_def`, `find_sound` |
 | `rack.hpp` | A bed's layers: built on the first `rack_apply`, steered every frame |
 | `meter.hpp`, `wav.hpp` | A buffer's level, peak, octave bands, centroid, onset, length and balance; its WAV bytes |
 | `fft.hpp`, `resample.hpp` | Offline analysis: a radix-2 transform, the short-time spectrum (sqrt-Hann, overlap-add inverse); a Kaiser-windowed sinc resampler. Never on the audio thread (they allocate) |
-| `engine/platform/audio.hpp` | The device: `open_audio` pulls the synth on SDL's audio thread |
+| `engine/platform/audio.hpp` | The device: `open_audio` pulls the synth on SDL's audio thread; `open_audio_in` and `read_audio_in` the microphone |
 | `engine/lab/sound.hpp` | `sound_shot`: a buffer metered, its metrics, its picture, its WAV, in a lab |
 
 ## Design rules
