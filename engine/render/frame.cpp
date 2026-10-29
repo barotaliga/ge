@@ -170,12 +170,13 @@ FrameTargets create_targets(gpu::Device& device, std::string_view label, uint32_
   };
   t.hdr = make("hdr", kHdrFormat,
                wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding);
-  // CopySrc: the labs and tests read the depth back (render/hiz.hpp's read_depth).
+  // CopySrc: the labs and tests read the depth and the motion back (render/hiz.hpp's read_depth).
   t.depth = make("depth", kDepthFormat,
                  wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding |
                      wgpu::TextureUsage::CopySrc);
   t.motion = make("motion", kMotionFormat,
-                  wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding);
+                  wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding |
+                      wgpu::TextureUsage::CopySrc);
   t.hdr_view = t.hdr.CreateView();
   t.depth_view = t.depth.CreateView();
   t.motion_view = t.motion.CreateView();

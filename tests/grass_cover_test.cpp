@@ -1,8 +1,9 @@
 // engine/grass/cover.hpp: a cover grows its density, fades with its share, thins by rank as a
 // strict subset, keeps every blade on its triangle, grows the same blades whatever order its
-// triangles come in, takes a mesh's floors and not its walls, and keeps its bits in
-// tests/golden/grass_cover.txt (rewrite it with `GE_GOLDEN_WRITE=1 build/debug/tests/
-// grass_cover_test` for a deliberate move, with the `grass` lab before and after in the PR).
+// triangles come in, takes a mesh's floors and not its walls and thins by its corners' shares, and
+// keeps its bits in tests/golden/grass_cover.txt (rewrite it with `GE_GOLDEN_WRITE=1
+// build/debug/tests/grass_cover_test` for a deliberate move, with the `grass` lab before and after
+// in the PR).
 //
 // ge:summary Test: grass covers and the blade scatter: density, share, rank, order, mesh; golden
 // ge:keywords test grass cover scatter density share rank golden add_mesh cover_heightfield
@@ -127,6 +128,28 @@ TEST(a_mesh_grows_on_its_floors_not_its_walls) {
   const auto blades = gg::scatter_all(c);
   CHECK(std::fabs(static_cast<double>(blades.size()) / (16 * 900) - 1) < 0.03);
   for (const auto& b : blades) CHECK(b.root[1] == 0);
+}
+
+TEST(a_mesh_thins_by_its_corners_shares) {
+  // A 4 m floor quad, bare along x = 0 and full along x = 4: about half the blades, more of them
+  // toward x = 4; a quad bare at every corner grows nothing and adds no triangle.
+  const float p[] = {0, 0, 0, 4, 0, 0, 4, 0, 4, 0, 0, 4};
+  const uint32_t idx[] = {0, 1, 2, 0, 3, 2};
+  const float shares[] = {0, 1, 1, 0};
+  gg::Cover c;
+  c.kinds.push_back(grass_preset("lawn"));
+  gg::add_mesh(c, p, idx, 0, 1, 0.6f, shares);
+  const auto blades = gg::scatter_all(c);
+  CHECK_MSG(std::fabs(static_cast<double>(blades.size()) / (16 * 900 * 0.5) - 1) < 0.05,
+            "blades " + std::to_string(blades.size()));
+  size_t right = 0;
+  for (const auto& b : blades) right += b.root[0] > 2 ? 1 : 0;
+  CHECK(right * 10 > blades.size() * 7);
+  gg::Cover none;
+  none.kinds.push_back(grass_preset("lawn"));
+  const float zero[] = {0, 0, 0, 0};
+  gg::add_mesh(none, p, idx, 0, 1, 0.6f, zero);
+  CHECK(none.tris.empty());
 }
 
 TEST(the_scatter_keeps_its_bits) {
