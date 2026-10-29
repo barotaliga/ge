@@ -222,9 +222,10 @@ struct GameFrame {
   ge::render::UiPass ui;
   ge::render::InstancePipelines instancing;
   ge::render::InstanceFamily forest, figures, crowd;
-  // The free ride's village (`show_village`): its streets (casting nothing), its parked cars
-  // (casting into the cascades with the forest) and its traffic (into the figures' atlas).
-  ge::render::InstanceFamily streets, parked, traffic;
+  // The free ride's village (`show_village`): its streets (casting nothing), its buildings and its
+  // parked cars (casting into the cascades with the forest) and its traffic (into the figures'
+  // atlas).
+  ge::render::InstanceFamily streets, buildings, parked, traffic;
   std::vector<ge::render::InstanceFamily*> families{&forest, &figures, &crowd};
   // What casts into the cached cascades and what into the atlas's tiles, each frame.
   std::vector<ge::render::InstanceFamily*> still{&forest};
@@ -269,10 +270,11 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
                                         const FrameOptions& options = {});
 
 // THE FREE RIDE'S VILLAGE drawn in the frame from now on: the trees felled for it left out of the
-// forest, its streets laid on the snow, its parked cars, and its traffic where each frame's
-// `FrameScene::run_time` has it (mountain/app/village_look.hpp); the frame keeps it while it draws
-// it. Nothing for null. The parked cars cast into the cached cascades as the forest does, the
-// traffic into the figures' atlas, so a vehicle under way casts only near a figure's tile.
+// forest, its streets laid on the snow, its buildings on their plinths (building_look.hpp), its
+// parked cars, and its traffic where each frame's `FrameScene::run_time` has it
+// (mountain/app/village_look.hpp); the frame keeps it while it draws it. Nothing for null. The
+// buildings and the parked cars cast into the cached cascades as the forest does, the traffic
+// into the figures' atlas, so a vehicle under way casts only near a figure's tile.
 void show_village(ge::gpu::Device& device, GameFrame& frame,
                   std::shared_ptr<const sim::Village> village);
 
