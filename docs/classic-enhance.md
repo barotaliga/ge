@@ -1,18 +1,25 @@
 # Classic content enhanced locally
 
-`plugins/classicenhance` (row M41) takes a player's own copy of the classic shareware pack and
-enhances it on their machine into a local cache. The enhanced textures look sharper, and the
+`plugins/classicenhance` (row M41) takes a player's own classic packs (the shareware pack, or
+the full game they own) and enhances them on their machine into a local cache. The enhanced textures look sharper, and the
 generated maps give a modern renderer normals, height, roughness and glow to light them with.
 
 ## The line that keeps it legal
 
 The shareware pack may be used unchanged, as it comes in its release zip or as an installed game
-leaves it. So the pipeline:
+leaves it; the full game is the player's own copy, for them alone. So the pipeline:
 
-- starts **only** from a pack whose SHA-256 is a known unchanged one (`kKnownPacks` in
-  `source.hpp`), read from the release zip (and the self-extracting LHA installer inside it), an
-  installed folder, or the pack file itself. Anything else is refused, and the refusal prints the
-  digest it saw;
+- starts from **any pack that reads**: the release zip (and the self-extracting LHA installer
+  inside it), an installed folder, or the pack file itself. A pack whose SHA-256 is in
+  `kKnownPacks` (`source.hpp`) is reported as that release; any other (the full game, another
+  release) is taken as the player's own copy and reported **unverified** in `source.txt` and the
+  tool's answer. A pack that does not read is refused, and the refusal prints the digest it saw;
+- layers the **full game's later packs** (`pak1.pak`, `pak2.pak` ... beside `pak0.pak`, in any
+  case, read until one is missing) over the first, a later copy of a path winning, as the game
+  does. Every stage finds its assets by path and kind in the merged packs (`maps/*.bsp`,
+  `sound/*.wav`, `progs/*.mdl` and `*.spr`), never by a list of one release's files, so the full
+  game's every level, sound and model is enhanced. The cache folder is keyed by every pack's
+  digest together;
 - writes everything it reads or makes to the player's **local cache** and nowhere else, beside a
   `NOTICE.txt` that says not to share it;
 - ships the **code** and never the output. Nothing read from the pack or made from it is
@@ -26,7 +33,7 @@ the lightmaps work's (`plugins/brush`, M40) and this plugin only calls it.
 ## Running it
 
 ```sh
-ge tool classicenhance -- verify <zip|folder|pack>   # which route, the digest, known or not
+ge tool classicenhance -- verify <zip|folder|pack>   # which route, each pack's digest, known or not
 ge tool classicenhance -- run <zip|folder|pack>      # every stage, skipping those up to date
 ge tool classicenhance -- run <src> --only=textures --force --scale=4 --limit=8
 ge tool classicenhance -- status <src>               # what the cache holds for this pack

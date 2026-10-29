@@ -1,7 +1,7 @@
-// WHERE THE CLASSIC CONTENT COMES FROM, AND THE PROOF IT IS UNCHANGED. The pipeline reads one
-// thing only: the classic shareware pack (`pak0.pak`) exactly as it was released, which its
-// licence lets anyone keep and pass on unchanged. Everything the pipeline derives from it stays
-// in the player's local cache (cache.hpp); nothing derived is committed or shipped.
+// WHERE THE CLASSIC CONTENT COMES FROM, AND WHICH RELEASE IT IS. The pipeline reads the player's
+// own classic packs: the shareware pack (`pak0.pak`), which its licence lets anyone keep and pass
+// on unchanged, or the full game the player owns. Everything the pipeline derives from them stays
+// in the player's local cache (cache.hpp); nothing read or derived is committed or shipped.
 //
 // `open_source` takes a path the player gives and finds the pack in it:
 //
@@ -14,14 +14,24 @@
 // - **a folder**: an installed game's folder (its `id1/pak0.pak`, names matched in any case), or
 //   a folder holding a release zip or the pack itself.
 //
-// Whichever route, the pack's SHA-256 must be one of `kKnownPacks`: an unknown pack (another
-// release, a modified or damaged copy) is refused with its digest, and nothing is written. A
-// release zip whose own digest is in `kKnownZips` is reported as such; another zip holding a
-// known pack is accepted for the pack.
+// **The full game.** An installed folder may hold later packs beside the first (`pak1.pak`,
+// `pak2.pak` ... in any case, read in order until one is missing), as the registered game's does.
+// Each must read as a pack; a later pack's file of the same path is the one the game uses, so the
+// pipeline reads them merged (`Source::content`): every file of every pack, the latest copy of a
+// path winning. A later pack whose digest is in `kKnownPacks` is reported as that release; any
+// other is accepted as the player's own copy and reported unverified. Assets are found by their
+// path and kind (maps, sounds, models), never by a list of one release's files, so whatever the
+// packs hold is enhanced.
 //
-// ge:summary Finds the classic shareware pack in a zip, LHA archive, file or folder; known hashes
-// only ge:keywords source pack pak0 shareware release zip lha folder installed verify sha256 known
-// ge:keywords unchanged licence refuse identity
+// Whichever route, the first pack must read as a pack, or it is refused with its digest and
+// nothing is written. Its SHA-256 is looked up in `kKnownPacks`: a known release is reported as
+// that release, any other (the full game, another release, the player's own copy) is accepted and
+// reported unverified. A release zip whose own digest is in `kKnownZips` is reported as such;
+// another zip holding a pack is accepted for the pack.
+//
+// ge:summary Finds the classic packs in a zip, LHA archive, file or folder, verified by SHA-256
+// ge:keywords source pack pak0 pak1 shareware registered release zip lha folder installed
+// ge:keywords verify sha256 known unchanged licence refuse identity merge layered later-pack
 // ge:skill classicenhance
 // ge:test tests/classicenhance_source_test.cpp
 #pragma once
@@ -53,6 +63,15 @@ inline constexpr KnownFile kKnownZips[] = {
 enum class Route : uint8_t { release_zip, installer, pack_file, folder };
 const char* route_name(Route r);
 
+// A pack after the first in an installed folder (`pak1.pak` ...).
+struct LaterPack {
+  std::string name;  // as the folder spells it
+  std::string path;
+  std::string sha256;
+  const KnownFile* known = nullptr;  // a known release's pack, or nullptr: the player's own copy
+  std::vector<uint8_t> bytes;
+};
+
 struct Source {
   Route route = Route::pack_file;
   std::string path;                // the file the pack was read from (a zip or the pack itself)
@@ -61,6 +80,11 @@ struct Source {
   std::vector<uint8_t> pack;       // the pack's bytes, unchanged
   std::string pack_sha256;
   const KnownFile* known = nullptr;  // the known pack it is
+  std::vector<LaterPack> later;      // the later packs beside it, in order
+  std::vector<uint8_t> merged;       // every pack's files, a later copy winning; empty with none
+  std::string set_sha256;            // the cache's key: the pack's digest, or every pack's hashed
+  // What the pipeline reads: the first pack alone, or every pack merged.
+  const std::vector<uint8_t>& content() const { return merged.empty() ? pack : merged; }
 };
 
 // The pack at `path` (a zip, a pack, or a folder holding either), verified against `packs`;
@@ -71,7 +95,13 @@ bool open_source(const std::string& path, Source* out, std::string* error,
 // The pack inside a release zip's bytes (through its LHA archive when it has one), verified.
 bool pack_from_zip(std::span<const uint8_t> zip, Source* out, std::string* error,
                    std::span<const KnownFile> packs = kKnownPacks);
-// Whether `out->pack` is one of `packs`; sets `out->pack_sha256` and `out->known`.
+// The later packs in `dir` (pak1.pak, pak2.pak ... in any case) read into `out->later`, and
+// `out->merged` and `out->set_sha256` set; false when one does not read as a pack.
+bool add_later_packs(const std::string& dir, Source* out, std::string* error,
+                     std::span<const KnownFile> packs = kKnownPacks);
+
+// Whether `out->pack` reads as a pack; sets `out->pack_sha256`, and `out->known` when it is one
+// of `packs` (nullptr: the player's own copy, unverified).
 bool verify_pack(Source* out, std::string* error, std::span<const KnownFile> packs = kKnownPacks);
 
 }  // namespace ge::classicenhance

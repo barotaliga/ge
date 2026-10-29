@@ -2,13 +2,15 @@
 // archive written here (level-0 headers, `-lh5-` blocks with fixed but complete codes, matches
 // and literals) found behind a self-extractor's program and unpacked; the pack found through a
 // release zip's installer archive, in a zip directly, as a file and in an installed folder in
-// any case; and every unknown or damaged pack refused, with its digest, writing nothing.
+// any case; an unknown pack taken as the player's own copy, unverified; a damaged one refused,
+// with its digest, writing nothing; and the full game's later packs layered over the first.
 //
-// ge:summary Tests the LHA reader and the source search: every route, and refusing unknown packs
+// ge:summary Tests the LHA reader and the source search: every route, unverified and later packs
 // ge:keywords test classicenhance lha lh5 source zip folder pack verify refuse sha256
 // ge:skill classicenhance testing
 #include <filesystem>
 #include <fstream>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -252,25 +254,71 @@ TEST(source_finds_the_pack_by_every_route) {
   fs::remove_all(dir);
 }
 
-TEST(source_refuses_an_unknown_pack) {
+TEST(source_takes_an_unknown_pack_unverified_and_refuses_damage) {
   std::vector<uint8_t> pack = fixture_pack();
   const fs::path dir = scratch("refuse");
   write(dir / "pak0.pak", pack);
   ce::Source s;
   std::string error;
-  // The real pack's list: the fixture is not on it.
+  // The real pack's list: the fixture is not on it, so it is the player's own copy, unverified.
+  CHECK_MSG(ce::open_source((dir / "pak0.pak").string(), &s, &error), error);
+  CHECK(s.known == nullptr && s.pack == pack && s.pack_sha256 == ge::assets::sha256_hex(pack));
+  // A pack that does not read is refused with its digest.
+  std::vector<uint8_t> damaged = pack;
+  damaged.resize(damaged.size() / 2);
+  write(dir / "pak0.pak", damaged);
   CHECK(!ce::open_source((dir / "pak0.pak").string(), &s, &error));
-  CHECK(error.find(ge::assets::sha256_hex(pack)) != std::string::npos);
-  CHECK(error.find("not a known unchanged release") != std::string::npos);
-  // One byte changed is another pack.
+  CHECK(error.find(ge::assets::sha256_hex(damaged)) != std::string::npos);
+  CHECK(error.find("does not read as a pack") != std::string::npos);
+  CHECK(!ce::open_source((dir / "nothing-here").string(), &s, &error));
+  write(dir / "notes.txt", text("not a pack"));
+  CHECK(!ce::open_source((dir / "notes.txt").string(), &s, &error));
+  CHECK(error.find("neither a zip, an installer archive nor a pack") != std::string::npos);
+  fs::remove_all(dir);
+}
+
+TEST(source_layers_the_full_games_later_packs) {
+  const std::vector<uint8_t> pack = fixture_pack();
   const std::string sha = ge::assets::sha256_hex(pack);
   const ce::KnownFile known[] = {{sha.c_str(), uint32_t(pack.size()), "the fixture pack"}};
-  pack[20] ^= 1;
-  write(dir / "pak0.pak", pack);
-  CHECK(!ce::open_source((dir / "pak0.pak").string(), &s, &error, known));
-  CHECK(!ce::open_source((dir / "nothing-here").string(), &s, &error, known));
-  write(dir / "notes.txt", text("not a pack"));
-  CHECK(!ce::open_source((dir / "notes.txt").string(), &s, &error, known));
-  CHECK(error.find("neither a zip, an installer archive nor a pack") != std::string::npos);
+  const fs::path dir = scratch("later");
+  // A registered-style install: the first pack, then a second that replaces the readme and adds
+  // a file, and a third that replaces the readme again.
+  std::vector<uint8_t> second, third;
+  std::string error;
+  CHECK(ge::vfs::write_pak({{"readme.txt", text("the second")}, {"maps/e2m1.bsp", text("map")}},
+                           &second, &error));
+  CHECK(ge::vfs::write_pak({{"readme.txt", text("the third")}}, &third, &error));
+  write(dir / "id1" / "PAK0.PAK", pack);
+  write(dir / "id1" / "Pak1.pak", second);
+  write(dir / "id1" / "pak2.pak", third);
+  write(dir / "id1" / "pak4.pak", third);  // after a gap: not read, as the game reads them
+  ce::Source s;
+  CHECK_MSG(ce::open_source(dir.string(), &s, &error, known), error);
+  CHECK(s.known == &known[0] && s.later.size() == 2);
+  CHECK(s.later[0].name == "Pak1.pak" && s.later[0].known == nullptr &&
+        s.later[1].known == nullptr);
+  CHECK(s.set_sha256 != s.pack_sha256 && s.content() == s.merged);
+  ge::vfs::Pak merged;
+  CHECK_MSG(ge::vfs::read_pak(s.content(), &merged, &error), error);
+  CHECK(merged.entries.size() == 3);  // the palette, the readme once, the new map
+  const ge::vfs::PakEntry* readme = ge::vfs::pak_find(merged, "readme.txt");
+  const std::span<const uint8_t> latest = ge::vfs::pak_file(s.content(), *readme);
+  CHECK(std::string(latest.begin(), latest.end()) == "the third");
+  CHECK(ge::vfs::pak_find(merged, "maps/e2m1.bsp") != nullptr);
+  // A later pack known by its digest is reported as that release.
+  const std::string sha2 = ge::assets::sha256_hex(second);
+  const ce::KnownFile both[] = {known[0], {sha2.c_str(), uint32_t(second.size()), "the second"}};
+  CHECK_MSG(ce::open_source(dir.string(), &s, &error, both), error);
+  CHECK(s.later[0].known == &both[1] && s.later[1].known == nullptr);
+  // The first pack alone keeps its own digest as the cache's key.
+  fs::remove(dir / "id1" / "Pak1.pak");
+  CHECK_MSG(ce::open_source(dir.string(), &s, &error, known), error);
+  CHECK(s.later.empty() && s.set_sha256 == s.pack_sha256 && s.content() == pack);
+  // A damaged later pack is refused.
+  write(dir / "id1" / "pak1.pak", text("PACK but not one"));
+  CHECK(!ce::open_source(dir.string(), &s, &error, known));
+  CHECK(error.find("pak1.pak") != std::string::npos &&
+        error.find("does not read as a pack") != std::string::npos);
   fs::remove_all(dir);
 }

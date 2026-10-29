@@ -1,10 +1,10 @@
 // The `classicenhance` executable, run through `ge tool classicenhance -- <command> ...`: the
-// pipeline on the player's own copy of the classic shareware pack, from the command line. Every
-// command prints one JSON object on stdout (what an agent reads) and exits 0 when it did what was
-// asked, 1 when the source was refused or a stage failed (the object's "error" says why and what
-// to do), 2 on a usage error.
+// pipeline on the player's own classic packs (the shareware pack or the full game), from the
+// command line. Every command prints one JSON object on stdout (what an agent reads) and exits 0
+// when it did what was asked, 1 when the source was refused or a stage failed (the object's "error"
+// says why and what to do), 2 on a usage error.
 //
-//   verify <path>                      find the pack in <path> and check it is a known release
+//   verify <path>                      find the packs in <path> and say which release each is
 //   run <path> [--cache=<dir>] [--only=<stage,...>] [--force] [--scale=<n>] [--limit=<n>]
 //       [--round=<n>]
 //                                      verify, then run the stages into the cache
@@ -32,10 +32,11 @@ using namespace ge::classicenhance;
 namespace {
 
 constexpr const char* kHelp =
-    "classicenhance: the classic shareware pack, verified unchanged and enhanced into a local "
+    "classicenhance: the player's classic packs (the shareware pack or the full game) enhanced "
+    "into a local "
     "cache\n"
     "  verify <path>     find the pack in <path> (the release zip, an installed folder or its "
-    "pak0.pak) and check it\n"
+    "pak0.pak, with any later packs) and say which release each is\n"
     "  run <path> [--cache=<dir>] [--only=pack,textures,lightmaps,sounds,models] [--force] "
     "[--scale=<1..8>] [--limit=<n>] [--round=<0..4>]\n"
     "  status [--cache=<dir>]\n"
@@ -67,10 +68,22 @@ std::string source_json(const Source& s) {
   std::string j = "{\"route\":" + esc(route_name(s.route)) + ",\"path\":" + esc(s.path) +
                   ",\"pack_sha256\":" + esc(s.pack_sha256) +
                   ",\"pack_bytes\":" + std::to_string(s.pack.size()) +
-                  ",\"pack\":" + esc(s.known ? s.known->what : "");
+                  ",\"pack\":" + (s.known ? esc(s.known->what) : std::string("null")) +
+                  ",\"verified\":" + (s.known ? "true" : "false");
   if (!s.zip_sha256.empty()) {
     j += ",\"zip_sha256\":" + esc(s.zip_sha256) +
          ",\"zip\":" + (s.zip ? esc(s.zip->what) : std::string("null"));
+  }
+  if (!s.later.empty()) {
+    j += ",\"later\":[";
+    for (size_t i = 0; i < s.later.size(); i++) {
+      const LaterPack& p = s.later[i];
+      j += std::string(i ? "," : "") + "{\"name\":" + esc(p.name) + ",\"sha256\":" + esc(p.sha256) +
+           ",\"bytes\":" + std::to_string(p.bytes.size()) +
+           ",\"pack\":" + (p.known ? esc(p.known->what) : std::string("null")) +
+           ",\"verified\":" + (p.known ? "true" : "false") + "}";
+    }
+    j += "]";
   }
   return j + "}";
 }

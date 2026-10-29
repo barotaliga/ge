@@ -1,6 +1,6 @@
 ---
 name: classicenhance
-description: "Use for plugins/classicenhance in gameengine2: the classic shareware pack enhanced on the player's own machine. Finding the pack (the release zip and its self-extracting LHA archive, an installed folder, the pack file) and refusing anything but a known unchanged pack by SHA-256; the local cache and its stages (pack, textures, lightmaps, sounds, models); the texture enhancer (the edge-aware upscale, the height, normal, roughness and glow maps); the sound enhancer (noise reduction, 48 kHz, the rebuilt top band); the models as glTF and the effects the engine draws in their place; the lightmap stage's slot for the rebake; the `classicenhance` tool run by `ge tool`; and the line that keeps it legal: ship the pipeline, never its output."
+description: "Use for plugins/classicenhance in gameengine2: the classic packs (the shareware pack or the player's own full game) enhanced on the player's own machine. Finding the pack (the release zip and its self-extracting LHA archive, an installed folder, the pack file) the full game's later packs layered over the first, known releases reported by SHA-256 and any other pack taken unverified; the local cache and its stages (pack, textures, lightmaps, sounds, models); the texture enhancer (the edge-aware upscale, the height, normal, roughness and glow maps); the sound enhancer (noise reduction, 48 kHz, the rebuilt top band); the models as glTF and the effects the engine draws in their place; the lightmap stage's slot for the rebake; the `classicenhance` tool run by `ge tool`; and the line that keeps it legal: ship the pipeline, never its output."
 ---
 
 # The classic-enhance plugin
@@ -20,10 +20,13 @@ resampler), `lab` (the PNG writer), `vfs`
   Nothing derived from the pack is ever committed, attached to a PR or put in a release.
   Pictures for a PR come from the tests' own fixtures. The user may ask to see the real pack's
   results: those go on a PRIVATE Artifact page for them alone, never linked from the PR.
-- **Read only a known unchanged pack.** `source.hpp`'s `kKnownPacks` lists the packs by SHA-256.
-  A pack not on it (another release, a modded or damaged copy) is refused with its digest and
-  nothing is written. Adding a row needs the release named and its licence checked first; ask
-  the user.
+- **Read any pack that reads; name the ones that are known.** `source.hpp`'s `kKnownPacks` lists
+  known releases by SHA-256 and they are reported as such; any other pack (the full game the
+  player owns, another release) is taken as their own copy and reported unverified. A pack that
+  does not read is refused with its digest and nothing is written. The full game's later packs
+  (`pak1.pak` ...) are layered over the first (`Source::content`). No stage may list one
+  release's files: find assets by path and kind, so the full game works whole. Never fetch,
+  commit or publish the full game's data; only the shareware pack is ever fetched here.
 - **Only the classic pack's own steps live here**: finding it, its palette's conventions (the
   fullbright range), what its texture names mean, and wiring its maps to the cache. A technique
   any game could use goes in the engine or the plugin that owns it (the light baker: `engine/`
@@ -61,7 +64,7 @@ ge tool classicenhance -- status             # the cache's packs and their stage
 ```
 
 `<path>` is the shareware release zip as published, an installed game folder (its `id1/pak0.pak`
-in any case), the pack file itself, or a folder holding the release zip. In this repository's
+and any later packs, in any case), the pack file itself, or a folder holding the release zip. In this repository's
 container the pack is fetched into the scratchpad only, never into the tree.
 
 ## Changing a stage
