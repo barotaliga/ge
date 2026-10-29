@@ -11,12 +11,12 @@
 3 a0c4448165d74a75 8 carrier:park:2103,3433 truck:drive:2124,3779
 3 2baaebc95906ee15 10 carrier:park:2103,3433 truck:drop:2128,3795
 3 37f315099341ce90 20 carrier:park:2103,3433 truck:leave:2120,3793
-3 2b1d7468b7d4ff45 20 carrier:park:2103,3433 truck:leave:2038,3844 carrier:drive:2109,3619 truck:drive:1927,3989
-3 aa024a128059a936 20 carrier:park:2103,3433 truck:leave:2042,3839 carrier:drive:2102,3534 truck:drive:1958,3895
-3 08899e372af862ce 20 carrier:park:2103,3433 truck:leave:2019,3831 carrier:drive:2099,3450 truck:drive:2022,3807
-3 bb4ac6bf190586a4 20 carrier:park:2103,3433 truck:leave:1956,3900 carrier:park:2102,3439 truck:drive:2125,3779
-3 d6c3a1b1ece5b1a0 20 carrier:park:2103,3433 truck:leave:1945,3984 carrier:park:2102,3439 truck:drop:2128,3795
-3 45cd08611c543d0f 20 carrier:park:2103,3433 truck:leave:1922,3952 carrier:park:2102,3439 truck:leave:2079,3818
+3 19974bab2450fa38 20 carrier:park:2103,3433 truck:leave:2038,3844 carrier:drive:2109,3619 truck:drive:1927,3989
+3 560c4a56c70b809f 20 carrier:park:2103,3433 truck:leave:1954,3906 carrier:drive:2102,3534 truck:drive:1953,3905
+3 61bc9d13989a4d3e 20 carrier:park:2103,3433 truck:leave:1948,3985 carrier:drive:2099,3450 truck:drive:1992,3849
+3 6d5b87c8abc73ec0 20 carrier:park:2103,3433 truck:leave:1920,3959 carrier:park:2102,3439 truck:drive:2073,3787
+3 d31894df93c96495 20 carrier:park:2103,3433 truck:leave:1952,3939 carrier:park:2102,3439 truck:drop:2126,3784
+3 d492f84113f13437 20 carrier:park:2103,3433 truck:leave:1963,3976 carrier:park:2102,3439 truck:leave:2137,3786
 5 cbf29ce484222325 0
 5 cbf29ce484222325 0
 5 cbf29ce484222325 0
@@ -26,9 +26,9 @@
 5 e4c1bf3f51222710 8 carrier:park:2103,3433 truck:drive:2124,3779 tank:drive:2095,3479 carrier:drive:2098,3517 truck:drive:1972,3877
 5 c74c361efb17798c 10 carrier:park:2103,3433 truck:drop:2128,3795 tank:drive:2101,3441 carrier:drive:2099,3448 truck:drive:2041,3795 carrier:drive:2109,3620 truck:drive:1927,3989 tank:due:2110,3682 carrier:due:2110,3682 truck:due:1926,4000
 5 53bd447de11cdb95 24 carrier:park:2103,3433 truck:leave:2120,3793 tank:drive:2111,3419 carrier:drop:2092,3439 truck:drive:2125,3780 carrier:drive:2102,3535 truck:drive:1958,3896 tank:drive:2109,3645 carrier:drive:2110,3679 truck:due:1926,4000
-5 fde107130e53c29e 24 carrier:park:2103,3433 truck:leave:2038,3844 tank:drive:2124,3347 carrier:park:2092,3439 truck:leave:2128,3795 carrier:drive:2099,3451 truck:drive:2021,3807 tank:drive:2106,3560 carrier:drive:2108,3601 truck:drive:1930,3977
-5 c7c5b9c60d5e6842 24 carrier:park:2103,3433 truck:leave:2042,3839 tank:drive:2110,3281 carrier:park:2092,3439 truck:leave:2060,3829 carrier:park:2102,3439 truck:drive:2125,3779 tank:drive:2095,3479 carrier:drive:2098,3517 truck:drive:1970,3878
-5 88b61f46785ac66b 24 carrier:park:2103,3433 truck:leave:2019,3831 tank:drive:2140,3264 carrier:park:2092,3439 truck:leave:1969,3886 carrier:park:2102,3439 truck:drop:2128,3795 tank:drive:2100,3446 carrier:drive:2098,3453 truck:drive:2038,3796 carrier:drive:2109,3619 truck:drive:1927,3989
-5 4c0e30ade754b37c 24 carrier:park:2103,3433 truck:leave:1956,3900 tank:drive:2117,3251 carrier:park:2092,3439 truck:leave:1929,3975 carrier:park:2102,3439 truck:leave:2080,3817 tank:drive:2098,3443 carrier:drop:2109,3435 truck:drive:2125,3779 carrier:drive:2102,3535 truck:drive:1947,3929
-5 ee1f01e03ac4cc6a 24 carrier:park:2103,3433 truck:leave:1945,3984 tank:drive:2105,3280 carrier:park:2092,3439 truck:leave:1937,3938 carrier:park:2102,3439 truck:leave:1987,3875 tank:drive:2101,3442 carrier:park:2109,3435 truck:leave:2128,3795 carrier:drive:2099,3451 truck:drive:1968,3883
-5 c6c27d39f49be0ba 24 carrier:park:2103,3433 truck:leave:1923,3952 tank:drive:2134,3293 carrier:park:2092,3439 truck:leave:1969,3957 carrier:park:2102,3439 truck:leave:1942,3934 tank:drive:2106,3444 carrier:park:2109,3435 truck:leave:2062,3828 carrier:drive:2101,3449 truck:drive:2034,3798
+5 e4520fa4b58006e8 24 carrier:park:2103,3433 truck:leave:2037,3844 tank:drive:2124,3347 carrier:park:2092,3439 truck:leave:2128,3795 carrier:drive:2099,3451 truck:drive:2021,3807 tank:drive:2106,3560 carrier:drive:2108,3601 truck:drive:1930,3977
+5 8e9684a130075494 24 carrier:park:2103,3433 truck:leave:1954,3907 tank:drive:2110,3281 carrier:park:2092,3439 truck:leave:2060,3829 carrier:park:2102,3439 truck:drive:2125,3779 tank:drive:2095,3479 carrier:drive:2098,3517 truck:drive:1958,3896
+5 b12362eb928de710 24 carrier:park:2103,3433 truck:leave:1948,3985 tank:drive:2140,3264 carrier:park:2092,3439 truck:leave:1968,3887 carrier:park:2102,3439 truck:drop:2128,3795 tank:drive:2100,3446 carrier:drive:2098,3453 truck:drive:2002,3833 carrier:drive:2109,3619 truck:drive:1927,3989
+5 39025106d3312705 24 carrier:park:2103,3433 truck:leave:1920,3959 tank:drive:2117,3251 carrier:park:2092,3439 truck:leave:1926,3975 carrier:park:2102,3439 truck:leave:2080,3817 tank:drive:2098,3443 carrier:drop:2109,3435 truck:drive:2093,3785 carrier:drive:2102,3535 truck:drive:1944,3937
+5 f36fbc91d2cc72f8 24 carrier:park:2103,3433 truck:leave:1952,3939 tank:drive:2105,3280 carrier:park:2092,3439 truck:leave:1936,3939 carrier:park:2102,3439 truck:leave:1987,3875 tank:drive:2101,3442 carrier:park:2109,3435 truck:leave:2125,3784 carrier:drive:2099,3451 truck:drive:1986,3855
+5 8ed43c0126f36ea2 24 carrier:park:2103,3433 truck:leave:1963,3976 tank:drive:2134,3293 carrier:park:2092,3439 truck:leave:1969,3957 carrier:park:2102,3439 truck:leave:1923,3953 tank:drive:2106,3444 carrier:park:2109,3435 truck:leave:2139,3784 carrier:drive:2101,3449 truck:drive:2065,3789
