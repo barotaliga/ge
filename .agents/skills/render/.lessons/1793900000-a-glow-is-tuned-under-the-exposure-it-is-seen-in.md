@@ -2,7 +2,7 @@
 title: A surface's glow is tuned in the light it is seen in, and dusk clips it soonest
 date: 2026-10-29
 scope: plugins/mountain/app/building_look.cpp
-concepts: [emissive, emissive_nits, exposure, tone-curve, dusk, night, windows, glow]
+concepts: [emissive, emissive-nits, exposure, tone-curve, dusk, night, windows, glow]
 ---
 
 The post pass sets its exposure from the sky's light. At dusk that light is low, so the exposure
