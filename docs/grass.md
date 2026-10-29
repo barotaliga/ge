@@ -72,7 +72,21 @@ density at each corner. It comes from:
   share asked of the game (nothing on a path, long grass in a hollow);
 - **any mesh** (`add_mesh`): every triangle whose normal is within `acos(min_up)` of vertical,
   either winding. This is the hook for a level's floors: the room format's grass material and a
-  classic map's grass-textured faces (`docs/levels.md`).
+  classic map's grass-textured faces (`docs/levels.md`), grown by `rooms::level_grass` and
+  `grow_on_brushes` / `grow_on_rooms` (`plugins/rooms/grass.hpp`, below).
+
+**A level's grass** (M34d). A room level's material grows grass when its surface reference starts
+with the word `grass`: `surface turf grass meadow height=0.6 density=300` in a level's text, or
+`surface grass1 grass lawn` in a cloned map's texture map (a bare `grass` is a meadow). What
+follows is a recipe as `parse_kind` reads it. Materials with the same recipe share one kind; a
+recipe that does not read, or a ninth kind, is a fault naming the material and the fix, and that
+material grows nothing. The cover takes every drawn, solid brush face of such a material whose
+outward normal is at least 0.8 up (`kFloorUp`, 37 degrees off level), and every grown room
+triangle whose three corners wear it and whose normals into the room are as far up, so a floor
+and a ramp grow and a wall, a ceiling or a bank of the same material stay bare. The cover's seed
+is the rooms' seeds mixed. The `rooms` lab's `vault-grass` view and the `clone` lab's `--grass`
+(the fixture's tiled side room a lawn by default) picture it; `tests/rooms_grass_test.cpp` holds
+it.
 
 A triangle whose blades would pass half of `kMaxBladesPerTri` is halved across its longest edge
 until they fit, so a large floor is never capped.
@@ -179,5 +193,5 @@ On the software adapter the `gpu-grass` lab's ten views (about 130,000 blades ea
 | M34a | Kinds, covers, the scatter and the sway on the CPU; the `grass` lab | done |
 | M34b | The grass drawn: the scatter pass, thinning, the blades, the light; the `gpu-grass` lab | done |
 | M34c | The rest of the look: blades pressed down by what walks or drives through them and springing back (a trample map), the canopy's own shade from the sun, flowers and seed heads, the sway's own motion vectors, a stop on the picture's quality ladder priced | in progress: trampling, motion vectors, the canopy's shade, flowers and seed heads built |
-| M34d | A level's grass: a room format material's `surface <material> grass <recipe>` line and a cloned classic map's grass-textured faces (the cloner's texture map, `*grass*` to a meadow by default) grown into covers by the builders (`plugins/rooms`, `plugins/brush`, with M32) | open |
+| M34d | A level's grass: a room format material's `surface <material> grass <recipe>` line and a cloned classic map's texture-map `surface <texture> grass <recipe>` rows grown into covers (`plugins/rooms/grass.hpp`, with M32): each recipe one kind, a brush face or a grown room's floor at least 37 degrees off a wall grown, hidden, clip and liquid faces never | done |
 | M34e | Fall Line's summer grass: the summer ground's meadows, pastures and runs as covers, the rotor's downwash flattening them | open |

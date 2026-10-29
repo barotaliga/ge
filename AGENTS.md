@@ -254,6 +254,7 @@ characters.
 | `engine/wind/` | The wind (`ge::wind`): a pure function of place and time over a field (mean, gusts, veer, the log-law profile, shelter, local sources); a world's wind is one field of it | `water` |
 | `engine/water/` | The water (`ge::water`): bodies and the one `sample` query, the sea a wind grows over a fetch, floating, swimming, the colour from what is in the water, flowing water and its tiers | `water` |
 | `engine/detail/` | Brush detail (`ge::detail`, `docs/detail.md`): convex solids and bevels on their exposed edges, the receivers grid, decals that age in a pool, seeded props by rules and their shapes, the test hall | `detail` |
+| `engine/bake/` | The light bake (`ge::bake`): charts and the atlas, a BVH ray tracer, direct light, colour bounce and the light's direction a luxel, worked out once on the CPU | `render` |
 | `engine/grass/` | The grass (`ge::grass`): kinds and recipes, covers from a heightfield's region or a mesh's floors, every blade scattered off its triangle's seed, a blade's sway in the engine's wind | `grass` |
 | `engine/cli/` | The `ge` command line for game repos (`cmake/Cli.cmake`): the command catalog, the answer shape and findings, and one file per command group | `agent-interface` |
 | `consumer-skills/` | The skills a game repo gets from `ge new` and `ge skills sync`, compiled into `ge`; written for a game repo, never for this one | `agent-interface` |
@@ -266,6 +267,7 @@ characters.
 | `engine/save/` | Saves (`ge::save`, `docs/saves.md`): the save file (header, meta, tagged versioned chunks, directory, XXH64), the state described once for its writer and reader | `save` |
 | `engine/capture/` | Video with sound (`ge::capture`, in `ge_play`; `docs/replays.md`): the Matroska muxer and reader, I420, the encoders, the export's A/V clock, the live capture, the sync fixture | `replay` |
 | `engine/net/` | Multiplayer networking (`ge::net`, `docs/networking.md`): addresses, the wire, UDP and TCP sockets, links, the simulated network, sessions, LAN discovery, replication; the only place socket headers are included | `net` |
+| `engine/texgen/` | Procedural textures (`ge::texgen`, `docs/textures.md`): the `.tex` recipe, tileable noise, the layer kinds, the bake to maps and its disk cache; `library/` the specimens | `textures` |
 | `engine/snow/` | Snow over any ground (`ge::snow`, `docs/snow.md`): the layer and its cover, sparse fixed-point tiles, `sample`, `press` and imprint records, reference contacts, the snapshot | `snow` |
 | `engine/move/` | Character movement (`ge::move`, `docs/movement.md`): the knobs and presets, the step over a trace callback, the box world, the strafer, the scenarios | `move` |
 | `engine/vfs/` | Content files (`ge::vfs`): the pack archive's checked directory and its files as views into it; search paths, zips and directories to come (M18a) | `vfs` |
@@ -394,6 +396,7 @@ and the directories agree.
 | `shooter` | `plugins/shooter`: the classic player move in 32-bit floats (`player_move`, `run_command`, every move type and server setting), clip hulls and the line trace, hulls from brushes, the move's solids, the recorded scenarios and the `pmove` lab; the M18o rows |
 | `sim` | `games/fall_line/sim`: `create_game`, the step, the bot, the headless sim CLI, the run clock |
 | `platform` | `engine/platform`: SDL3, the window, input, the gamepad, the audio device, files |
+| `textures` | `engine/texgen`: a procedural texture's `.tex` recipe and its layer kinds (bricks, planks, panels, noise, dirt, dust, grime, wear, rust, moss, snow, glow), tileable noise, texture references a level stores, the bake to albedo, normal, ORM, glow and height and its cache, `ge texture`, the `texgen-*` labs; the M31 rows |
 | `move` | `engine/move`: a moving character's knobs, presets and step (ground and air acceleration, friction, jumps, strafe jumping, steps, slopes, crouch, slide, flight), the trace a world answers, the box world, the strafer, the scenarios, the `move-*` labs; the M28 rows |
 | `input` | `engine/input`: keyboards, raw mice, gamepads, joysticks, wheels and pedals, touch; actions, contexts, the bindings file, rebinding, the device database, players and hot-plug, rumble and force feedback, the event log, the simulated backend; `play/devices`; the M19 rows |
 | `camera` | `engine/camera`: the pose and its roll, the followers, the subject and the world's queries, the rigs (first person with bob, roll and kick; the boom; the mounted head; orbit, planted, free), shake and comfort, cut, blend and inertialize, the camera stack, the scripted subjects and the camera labs; the M26 rows |

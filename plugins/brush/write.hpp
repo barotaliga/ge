@@ -50,6 +50,8 @@ struct Fixture {
   std::string message;  // the world's name, in its entity
   int vault_room = -1;  // 46: a curved patch under this room's ceiling
   int ambient = 28;     // 0..255 everywhere
+  std::vector<std::pair<std::string, std::string>> world_keys;  // more of worldspawn's keys
+  std::vector<Entity> entities;  // more entities, after the start and the lights
 };
 
 // The fixture the tests and the lab use: a hall, a side room, a corridor and a vaulted room joined
