@@ -216,7 +216,11 @@ struct FrameView {
   // THE REACH, m: how far the picture draws. Past half of it a mist closes every surface into
   // the sky behind it, all of it by the reach, and nothing farther is drawn; 0: no reach, no mist.
   double reach_m = 0;
-  double time_s = 0;   // the frame's time (the renderer reads no clock)
+  double time_s = 0;  // the frame's time (the renderer reads no clock)
+  // THE LAMPS' LIGHT THE EYE HAS ADAPTED TO, lx on a white face (render/lights.hpp): what the
+  // local lights round the eye add to the sky's light in the exposure, so a lit street at night
+  // is seen as the eye in it sees it rather than at the dark sky's gain. 0: the sky's alone.
+  double lamp_lux = 0;
   uint64_t frame = 0;  // the frame's number (TAA's jitter is indexed by it)
 };
 

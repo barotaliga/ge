@@ -21,8 +21,15 @@
 // table at the moon's height, lit by its light), summed wherever the sky's light is read; the
 // KEY LIGHT (`frame.sun`, the one direct light) is the moon once the sun is gone, and the haze
 // is the brighter sky's light scattered, the other's added as the sky behind it.
+//
+// THE SURFACE MODEL (wgsl/surface.wgsl: one physically based response for every material) and
+// THE LOCAL LIGHTS (wgsl/lights.wgsl, binding 10: render/lights.hpp's lamps and their clusters)
+// are included here, so every draw that reads the frame can light a surface by the sun, the sky
+// and the lamps the same way.
 #include "render/wgsl/frame_types.wgsl"
 #include "render/wgsl/atmosphere.wgsl"
+#include "render/wgsl/surface.wgsl"
+#include "render/wgsl/lights.wgsl"
 
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var linear_clamp: sampler;
@@ -403,8 +410,8 @@ const kDarkestLux = 1e-4;
 fn white_luminance() -> f32 {
   let sun = key_at_eye() * frame.sun.w * frame.weather.x * max(frame.sun.y, 0.0);
   let sky = sky_irradiance(vec3f(0.0, 1.0, 0.0));
-  // The scene's own lights (a lava lake at night) key it when they outshine the sky.
-  return max(max(dot((sun + sky) / PI, kLuma), frame.time.z),
+  // The scene's own lights (a lava lake at night) key it when they outshine the sky and lamps.
+  return max(max(dot((sun + sky) / PI, kLuma) + frame.time.z, frame.time.w),
              kDarkestLux * frame.world.y / (PI * kSunLux));
 }
 
