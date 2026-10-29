@@ -70,8 +70,11 @@ struct LayerSpec {
   Cover cover;
   const Weather* weather = nullptr;  // the snow over time (time.hpp); none: the layer is static
   double cell = 0.1;                 // m between samples
-  uint32_t max_tiles = 2048;         // fine tiles kept (32 KB each)
-  uint32_t max_records = 4096;       // imprint records kept between `clear_records`
+  uint32_t max_tiles =
+      2048;           // fine tiles kept (32 KB each); past it the stalest is folded (lod.hpp)
+  double near = 64;   // m from a focus actor inside which imprints keep fine detail
+  double stale = 60;  // s a fine tile no focus came near is kept before `fold_stale`
+  uint32_t max_records = 4096;  // imprint records kept between `clear_records`
 };
 
 inline constexpr int kTileCells = 64;      // samples a tile side
@@ -95,8 +98,28 @@ struct Cell {
 };
 static_assert(sizeof(Cell) == 8, "a cell is 8 bytes (docs/snow.md)");
 
+// THE COARSE LAYER (lod.hpp): a column every kCoarseCells samples, kept where a fine tile was
+// folded or an imprint far from every focus landed. Its mass and depth are SUMS over the samples
+// it stands for, so folding and refining move whole units and keep the mass to the bit.
+inline constexpr int kCoarseCells = 16;                           // samples a coarse cell side
+inline constexpr int kCoarsePerTile = kTileCells / kCoarseCells;  // coarse cells a tile side
+
+struct CoarseCell {
+  uint32_t mass = 0;      // kMassUnit units over its samples
+  uint32_t depth_mm = 0;  // mm summed over its samples
+  Kind kind = Kind::powder;
+  uint8_t flags = 0;    // kTouched where it, not the cover, is the snow
+  uint16_t minute = 0;  // when it last changed
+};
+
+struct CoarseBlock {
+  int32_t tx = 0, tz = 0;  // the tile it lies under
+  std::array<CoarseCell, static_cast<size_t>(kCoarsePerTile) * kCoarsePerTile> cells;
+};
+
 struct Tile {
-  int32_t tx = 0, tz = 0;
+  int32_t tx = 0, tz = 0;  // -1: a free slot (the tile was folded)
+  double near_t = 0;       // s, the last moment a focus was near it or a press wrote it
   std::array<Cell, static_cast<size_t>(kTileCells) * kTileCells> cells;
 };
 
@@ -136,6 +159,13 @@ struct Layer {
   uint64_t spilled = 0;          // mass units thrown past the region's edge or onto no tile
   uint32_t records_dropped = 0;  // past max_records
   uint32_t refused = 0;          // samples a press could not keep (no tile left)
+  // The level of detail (lod.hpp).
+  std::vector<int32_t> free_tiles;    // tile slots a fold emptied, reused first
+  std::vector<int32_t> coarse_slots;  // the coarse block's index by tile_cols * tz + tx, -1 none
+  std::vector<CoarseBlock> coarse;
+  std::vector<double> focus;  // the focus actors' x, z pairs (`set_focus`)
+  double clock = 0;           // s, the moment of the operation in progress
+  uint32_t folds = 0, refines = 0;
 };
 
 struct SnowWorld {
@@ -191,9 +221,12 @@ inline double sample_z(const Layer& l, int r) { return l.spec.region.z0 + r * l.
 
 // The cell at sample (c, r), or null where its tile is not allocated (the cover is the snow).
 const Cell* cell_at(const Layer& layer, int c, int r);
-// The cell at sample (c, r), its tile allocated and filled from the cover first; null when no
-// tile is left in the budget.
+// The cell at sample (c, r), its tile allocated and filled first (from the coarse layer where it
+// holds the snow there, the cover elsewhere; the stalest tile folded to make room past the
+// budget); null when no tile can be had.
 Cell* cell_for(Layer& layer, int c, int r);
+// The cell the cover fills sample (c, r) with (no snow past the region).
+Cell cover_cell(const Layer& layer, int c, int r);
 
 inline double cell_depth(const Cell& c) { return c.depth_mm * 0.001; }
 inline double cell_mass(const Cell& c) { return c.mass * kMassUnit; }
@@ -201,7 +234,19 @@ inline double cell_density(const Cell& c) {
   return c.depth_mm ? cell_mass(c) / cell_depth(c) : 0.0;
 }
 
-// Every mass unit the allocated tiles hold; with `spilled`, always `mass_in`.
+// The coarse cell over sample (c, r) and how many samples it stands for; null where none is kept.
+const CoarseCell* coarse_at(const Layer& layer, int c, int r, int* samples = nullptr);
+// What is stored at sample (c, r) in place of the cover: a touched fine cell, or the mean of a
+// touched coarse cell over it. False where the cover is the snow.
+struct Stored {
+  double depth = 0, mass = 0;  // m, kg/m2
+  Kind kind = Kind::powder;
+  uint16_t minute = 0;
+  bool pressed = false;
+};
+bool stored_at(const Layer& layer, int c, int r, Stored& out);
+
+// Every mass unit the tiles and the coarse layer hold; with `spilled`, always `mass_in`.
 uint64_t mass_units(const Layer& layer);
 // The records kept since the last call are read; start a new frame's.
 void clear_records(Layer& layer);
