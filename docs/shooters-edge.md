@@ -207,7 +207,13 @@ the engine's own):
   transparency, more than 64 visible entities, the larger model and sound lists, and the MVD
   stream's own extension flags. The negotiation (the extension bits in the challenge and the
   connect) is a table, so the next extension is a row.
-- Downloads of maps, models and sounds a client lacks, from the server, in chunks.
+- Downloads of maps, models, sounds and player skins a client lacks, from the server, in chunks.
+- Player skins: each player's user info carries a `skin` name beside the top and bottom
+  colours, and the server passes it on to every client with the player's other user info.
+  A client draws a player with `skins/<name>.pcx` from the game directory (an 8-bit picture in
+  the palette, the size of the player model's skin), recoloured by the top and bottom colours
+  like the base skin. A missing or damaged file falls back to the base skin, and the client
+  asks the server for a missing skin when downloads are allowed.
 
 **The native protocol** is the engine's own (`docs/networking.md`), used between our client and
 our server when both ends are ours: the M17 handshake and AEAD (M17i), the snapshot ring and
