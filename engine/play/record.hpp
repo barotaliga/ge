@@ -20,7 +20,8 @@
 // `SoundSpec`, play/game.hpp), rendered by the synth on the run's own clock, so it plays at
 // --speed=1 only. Uncompressed it is large (width * height * 1.5 bytes a frame); with `codec`
 // av1 the pictures are AV1 and the sound Opus, by the engine's own encoders (capture/codecs.hpp),
-// in a .webm, about a hundredth of the size (docs/replays.md § Compressed video).
+// in a .webm, about a hundredth of the size (docs/replays.md § Compressed video), or in the
+// engine's own fragmented MP4 when the file's name ends .mp4 (capture/mp4.hpp).
 //
 // ge:summary A run recorded: a view drawn at a frame rate, encoded by ffmpeg, and a contact sheet
 // ge:keywords record video recording mp4 webm gif h264 vp9 ffmpeg encode frames frame-rate speed

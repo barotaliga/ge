@@ -107,8 +107,11 @@ bool Live::open(const LiveOptions& o, uint64_t now_ns, std::string& error) {
     ring_.assign(2 * ring_frames_, 0.0f);
     pcm_hold_.reserve(2 * ring_frames_);
   }
-  doc_type_ = std::string(doc_type_of(m));
-  if (!mux_.open(o.file, m, error)) return false;
+  Container c = Container::kMatroska;
+  if (!container_named(o.container, o.file, c, error) || !mux_.open(o.file, c, m, error)) {
+    return false;
+  }
+  doc_type_ = std::string(mux_.doc_type());
   open_ns_ = now_ns;
   anchor_frames_.store(0);
   anchor_ns_.store(now_ns);
