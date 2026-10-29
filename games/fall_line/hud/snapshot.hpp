@@ -7,6 +7,8 @@
 // THE FREE RIDE'S FIGURES, as the player reads them:
 //   - the SPEED (km/h, |v| as the skier state keeps it), the EDGE he stands on (-1 full left
 //     .. 1 full right, of the pair's most) and the TUCK;
+//   - the HEADING he faces and the WIND: the air he feels (the mountain's air at his body, less
+//     his own velocity) and the weather's wind over open ground, for the wind meter;
 //   - the AIR CLOCK while a flight lasts past the skier's least, and whether it beats the run's
 //     best so far;
 //   - the map's SEED and where on it he stands, the run under his skis, the metres skied, the
@@ -22,10 +24,9 @@
 //
 // ge:summary Fall Line's HUD snapshot: the free ride's figures, the HUD's memory and its news
 // ge:keywords hud snapshot speed km-h edge tuck air-clock best-air seed position run skied
-// ge:keywords altitude wanted stars flashing search survived machine lift sled heli para
-// ge:keywords prompt down stuck died arrested hud-run note_step news
-// ge:skill ui sim
-// ge:test tests/fall_line_hud_test.cpp
+// ge:keywords heading felt-wind weather-wind altitude wanted stars flashing search survived machine
+// lift sled heli para ge:keywords prompt down stuck died arrested hud-run note_step news ge:skill
+// ui sim ge:test tests/fall_line_hud_test.cpp
 #pragma once
 
 #include <cstdint>
@@ -60,8 +61,11 @@ struct HudSnapshot {
   double seed = 0;
   double x = 0, z = 0;
   double speed_kmh = 0;
-  double edge = 0;  // -1 .. 1 of the pair's most
-  double tuck = 0;  // 0 .. 1
+  double edge = 0;                      // -1 .. 1 of the pair's most
+  double tuck = 0;                      // 0 .. 1
+  double heading = 0;                   // rad, the way his skis point
+  double felt_x = 0, felt_z = 0;        // m/s, the air he feels (world, the way it blows to)
+  double weather_x = 0, weather_z = 0;  // m/s, the weather's wind at 10 m over open ground
   double altitude_m = 0;
   double air_s = 0;  // 0 unless a flight shows
   bool air_best = false;
