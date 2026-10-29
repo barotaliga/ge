@@ -478,6 +478,45 @@ classic weapon's glowing triangles on its firing frames) marks them in `flame`, 
 engine draws the flash hides them through `DrawLit::hidden`. The effect is drawn after the gun,
 so a flame can overlap the barrel.
 
+## Morph meshes
+
+A **morph mesh** (`engine/render/morph.hpp`, `morph.wgsl`) is a model animated by whole frames:
+every vertex has a position and a normal in every frame, as vertex-animated model formats store
+them. Shooter's Edge draws its players, monsters and items this way (M18i). The pass is generic.
+A game hands it `MorphModel`s (frames, triangles, texture coordinates, a skin) once, and each
+frame a list of `MorphDraw`s.
+
+- **Upload once.** Every frame of every model goes into one storage buffer, two `vec4` a vertex.
+  The triangles and the coordinates go into two more. The skins are shelf-packed into one
+  2048-wide atlas, tallest first, a texel apart (`pack_morph_atlas`). A frame writes only its
+  draws: 160 bytes each, at most `kMaxMorphDraws`.
+- **Frames blended on the GPU.** The vertex stage pulls each vertex by index and mixes the draw's
+  two frames by its share. It does the same for the frame before, so a swinging limb carries its
+  own motion into the motion target and TAA keeps it sharp. A model with frames at 10 a second
+  is drawn between them at any rate.
+- **Team colours without a skin per team.** A skin texel's alpha is its **mark**:
+  - plain, an sRGB colour;
+  - **glow**, which lights itself (eyes, lamps, a muzzle);
+  - **tinted**, in region A or B with a step from 0 to 15.
+
+  A tinted texel takes the instance's ramp for its region at its step. The step keeps the
+  painter's shading and the ramp gives the colour. The ramps are a table of 16-colour rows the
+  game fills, from its palette's colour rows or from any colour with `ramp_from`.
+- **Sharp or smooth, per draw.** Sharp reads the texel the point falls in, which gives the
+  classic look. Smooth blends the four nearest texels, each resolved to its colour first, so a
+  tinted texel never bleeds the wrong ramp into its neighbour.
+- **The game's own light.** `outdoor` is the share of the frame's sun and sky. `ambient` and a
+  `shade` from one direction are what a game samples where the model stands: an indoor map's
+  light at its feet. Glowing texels add `glow` times the scene's white, whatever the light.
+- The draws go into the HDR and motion targets after the opaque world. Depth is tested and
+  written (reversed z) and back faces are culled.
+
+The CPU twins (`pose_morph`, `morph_texel`) are the shader's arithmetic for
+`tests/render_morph_test.cpp`. The `gpu-morph` lab draws a runner in four teams, sharp beside
+smooth, its frames and in-betweens, at dusk and in a game's own light, and times 64 of them.
+**Not yet:** the local lights of the lighting pass, shadows cast by the figures, and the classic
+model reader (it lands with its plugin).
+
 ## Terrain
 
 A generic **heightfield renderer** in `engine/render`, which a game hands a height
