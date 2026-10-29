@@ -200,7 +200,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge pmove <scenario> --line=N` (one recorded movement scenario stepped against `engine/move`, stopping at the first line that differs, with both sides' state there; classic game loop thread)
 - `ge bsp info/ents/shot` (a map's lumps and limits, its entity lump, a CPU picture of leaves, the PVS from a point and the hulls)
 - `ge qc build/disasm/run/trace/profile/diff/assemble/builtins` (our QC compiler; a progs disassembled, run, traced a step at a time, timed by function, diffed against another build by the functions and fields that changed, and assembled from a text listing; `ge qc builtins <progs>`: the builtin numbers a progs calls, checked against the game's catalogue, so "will this mod run here" is one command)
-- `ge server --map --bots --for` (a headless dedicated server with bots, writing an input log for `ge replay`, `ge state` and `ge diverge`)
+- `ge server --map --bots --for` (a headless dedicated server with bots, writing an input log for `ge replay`, `ge state` and `ge diverge`; run, replayed and diffed from a game repo as well, which the lobby and hosting thread asked for)
 - `ge demo info/frames/shot/diff` (a client or MVD demo decoded frame by frame, a frame pictured, two demos to their first difference)
 - `ge net inspect --protocol=<name>` (pluggable decoders, so a capture of the classic protocol reads as its messages)
 - `ge pmove <scenario>` (a movement scenario's trajectory as a table and a chart, against its parity recording)
