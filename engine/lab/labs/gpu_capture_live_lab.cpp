@@ -5,8 +5,9 @@
 // thread pulls 10 ms of sound every 10 ms, as a device does, clicking every 1.25 s, and taps it.
 // The file is then decoded (AV1 and Opus, or raw I420 and float PCM without the encoders) and
 // held to: every frame handed in is in the file, every tapped sample, each click's flash less
-// than a frame after it, and no frame waiting on the capture (the frame's capture call, the copy
-// requested and the frames back handed over, stays far under a frame).
+// than a frame (the longest gap between frames) after it, and no frame waiting on the capture (the
+// frame's capture call, the copy requested and the frames back handed over, stays far under a
+// frame).
 //
 // Everything timed is `measured`, so the digest is the flags and the counts that do not depend
 // on the machine. Without an adapter it notes that and draws placeholders; GE_GPU_REQUIRE=1
@@ -362,9 +363,14 @@ void run(gl::Lab& lab) {
                  " were heard and " + std::to_string(lags.size()) + " had a flash after them",
              "Open previews/gpu-capture-live/frames-at-a-click.png. Skill: replay.");
   }
-  if (!lags.empty() && (least_lag <= -1.5 || worst_lag >= 1000.0 / fps + 1)) {
+  // A flash is drawn on the first frame stamped at or after its click, so it lands within the
+  // gap between two frames: one frame's time when the loop keeps pace, more on a loaded machine
+  // where a frame slips (the longest gap the loop measured).
+  const double frame_gap = std::max(1000.0 / fps, pace.max);
+  if (!lags.empty() && (least_lag <= -1.5 || worst_lag >= frame_gap + 1)) {
     lab.fail("a flash landed " + num(least_lag, 1) + " to " + num(worst_lag, 1) +
-                 " ms from its click, outside one frame",
+                 " ms from its click, outside the longest gap between frames (" +
+                 num(frame_gap, 1) + " ms)",
              "Read capture/live.cpp's stamp. Skill: replay.");
   }
   if (cost.max > kStallMs) {
