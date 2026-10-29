@@ -22,7 +22,8 @@
 //
 // ge:summary ge goals free and claim: the roadmap rows taken everywhere, the next free one reserved
 // ge:keywords cli ge goals roadmap milestone row next-free number claimed branches pull-request
-// ge:keywords goal_rows next_free_row docs-goals claim reserve reserved race row-file milestone-line
+// ge:keywords goal_rows next_free_row docs-goals claim reserve reserved race row-file
+// ge:keywords milestone-line
 // ge:skill agent-interface
 // ge:test tests/cli_goals_test.cpp
 #pragma once

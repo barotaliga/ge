@@ -90,7 +90,8 @@ std::vector<GoalRow> rows_at(const fs::path& repo, const std::string& ref, const
   if (held.code == 0) {
     for (GoalRow& r : goal_rows(held.output)) rows.push_back(std::move(r));
   }
-  // Each status file's `Milestone:` line, one grep for the ref: "<ref>:docs/goals/M17d.md:Milestone:
+  // Each status file's `Milestone:` line, one grep for the ref:
+  // "<ref>:docs/goals/M17d.md:Milestone:
   // **Sessions** ...".
   std::map<std::string, std::string> titles;
   const Logged named =

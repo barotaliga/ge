@@ -35,6 +35,8 @@ ge lab publish <id>... [--before=before]   # the run (or several labs') on one s
 ge digest [<lab>...] [--write]   # the labs' digests beside tests/digests/<lab>.txt; --write moves their files
 ge digest --affected [--list]    # only the labs the change since --base reaches
 ge digest --diff                 # every lab, printing only the digests off the baseline
+ge queue                         # the merge queue in merge order, each merged onto main and the queue ahead; dirty PRs; failed queue runs
+ge pr clash <n>                  # will it merge onto main and everything queued ahead of it? the files, and who brings them in
 ge golden diff [<test>] [--base=<ref>]   # what moved in each golden file, column by column
 ge golden write <test>           # a test's goldens rewritten (GE_GOLDEN_WRITE=1), held, diffed
 ge sim [--seeds=1,2]             # the game's pilot plays each seed; input logs in runs/
