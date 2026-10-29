@@ -169,7 +169,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - GPU labs on no adapter reported as skipped
 - `ge add lab --kind=overlay`
 - `ge services check` (a game's store catalog checked by `check_catalog`, and later diffed against a store's exported partner configuration)
-- `ge doctor --tools` / `ge env` (which tools, versions and drivers a gate needs, and which are missing)
+- `ge doctor [--tools]` / `ge env` (what the machine lacks per ge command: toolchain versions, GPU adapter, display, Blender; each gap with its fix named, tools/setup-ubuntu.sh on Ubuntu)
 - `ge shader check <file.wgsl>` (one shader's includes resolved as the embedder does, compiled by Tint, the error named with its line: `make shaders-check` builds every shader and needs GE_GPU, and a reserved word showed only as finish() returning false; and the same Tint error printed wherever a test or a lab sees `pipelines.finish` fail)
 - `ge template check` (every `ge add` template and the scaffold filled at a short and a long game name, then `ge check` and clang-format run on each: a placeholder's tag line reflowed by clang-format broke only at a long name)
 - the WGSL embedder failing on an empty generated shader (an unbalanced bracket in a comment splits the CMake list and silently empties it)
