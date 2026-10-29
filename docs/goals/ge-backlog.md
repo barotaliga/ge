@@ -74,6 +74,13 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge build --lean` (no GPU, no debug info: CPU-only plugin work on a small cloud disk), and precheck / `ge digest --affected` reaching only the tests a cmake/ change touches, not every test executable
 - `ge ci --cost[=<runs>]` (runner-minutes and wall time per job over the last N runs, split by event: pull request, merge queue, push; what a workflow change saves, measured)
 - a precheck stamp: `make precheck` writes the head it passed on and its gates, the push carries it, and the gates job fails a push whose head has none (once CI stops running Linux, precheck is the only Linux run, so it must be provable)
+- `ge queue` and `ge pr clash <n>` (done in #250: the merge queue in merge order by each PR's last queue event, the armed PRs behind it, every PR dirty against main and the failed group runs, all by a real `git merge-tree`; one PR merged onto main and everything ahead of it, the PR ahead that brings a conflict named); next, `ge queue --watch` on a schedule telling each PR's owner when it starts to clash (#250), and each group run's ref checked so a stale run shows (#243)
+- `ge test --affected --by-link` (a test counted as reached when it links a library whose `.cpp` changed, not only through the include graph: #231's precheck missed the army-steal golden this way; #257, #277)
+- `ge test --affected --budget=<s>` / `ge precheck --budget=<s>` (when the reach is wide, the reached tests nearest the change run first and the run stops at the budget, the rest left to CI and listed: a shared-library change reached 78 tests and about 8 minutes; #110, #115)
+- precheck running a lab's full flags, not only its smoke flags, when a change reaches that lab's subject (`ge lab run --full-for=<lab>`: the smoke run stopped short of the moment that moved; #156)
+- precheck naming the goldens and digests main already fails (`--known-red`, off main's last CI run), so a red that is main's own is ruled out without a second full run (#267)
+- `ge ci <run> --lab-log` (a failed lab's per-view metrics read out of a CI job's log, so a flake names its view without a rerun; #233)
+- `ge digest --affected` following the running `ge`'s preset (the release `ge` still ran the debug labs), and `--only-moved-by=<symbol>` (only the labs whose digest a named symbol can move: a `state.hpp` change reached 67 labs, over 25 minutes in debug; #231)
 
 ## Inspecting a run
 
@@ -118,7 +125,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - a reference round in one run: a per-tag list of `tag=cfg:view` the lab runs in one process, each tag under its own cfg and view, in place of a shell loop of runs
 - `ge lab view <glb>` (the model-views lab on any model, in one command)
 - `ge lab table <lab> --where col=value` (one slice of a lab's table, a weapon at one range, read without re-running the lab or opening the whole report)
-- `ge lab publish <id> [--before=<tag>]` (done: the run's pictures resized and quantized onto one self-contained HTML page, captions and metrics beside them, before and after side by side, ready to publish as the report's picture page: every thread now owes one, and the water rows each built it by hand; several labs on one page as `ge lab publish <a> <b>`, the cross-lab sheet the liquids rows asked for)
+- `ge lab publish <id> [--before=<tag>]` (done: the run's pictures resized and quantized onto one self-contained HTML page, captions and metrics beside them, before and after side by side, ready to publish as the report's picture page: every thread now owes one, and the water rows each built it by hand; several labs on one page as `ge lab publish <a> <b>`, the cross-lab sheet the liquids rows asked for; `--title=<name>` done in #246)
 - `ge replay <log> --seek=<s>[,<s>...]` (any game's replay sought off its keyframes: each seek's digest against the straight run, the steps and ms it took, the keyframes' bytes; the `replay` lab's check for every game repo, so a game's `Run::clone` is proven without writing a lab)
 - `ge lab publish <id> [--before=<tag>]` (the run's pictures resized and quantized onto one self-contained HTML page, captions and metrics beside them, before and after side by side, ready to publish as the report's picture page: every thread now owes one, and the water rows each built it by hand)
 - `ge lab <id> --show` (the run's pictures shown inline beside its metrics: an unmoved digest can hide a visual bug)
@@ -133,6 +140,15 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge texture why <name>` (a recipe's likeness_distance split into its parts, the look numbers, the lines and the repeat, so a score can be argued with; it blows up on near-black textures, 1.9 for a visual match)
 - `ge texture match --sweep-seeds=<a..b> --only=<name>` (a pinned recipe tried at every seed in a range, each seed's measured evidence in one table: courses a tile, pieces a course, the line's direction, the colour mismatches; `ge lab sweep` reaches a lab's flags, not this command, so today it is a shell loop)
 - `ge lab probe <id> --at=<time>` (a lab's frame records printed around one moment, a match's say, without dumping the whole trace)
+- `ge lab diff --mask=<family>` (only the pixels one instance family covers compared, so a change to the figures is shown to touch nothing else; #78) and `ge lab diff --summary` (one line a view with its worst band, in place of the full band table; #225)
+- `ge graph <lab> --scenario=<id> --cols=a,b` (a scenario's trace read from `previews/<lab>/<id>.trace.tsv` without naming the path; #96)
+- `--look=sun|moon[:lens]` on every picture lab (a view aimed at the key light or the moon at the scene's hour, in place of a named view or a printed heading each time; #187, #217, #222)
+- the world lab's aims: `--aim=cloud` (the nearest cloud of a layer in frame, for a sparse kind; #183), `--ski-through=<layer>` (the eye above, at the top of, inside and under a layer; #234), `--wind-across` (the wind set across a view's heading, so a sequence shows it moving; #214)
+- `ge lab shelter <map> <point>` (whether a point is open to a fall at a slant, and which face stops it; #203)
+- `ge record --gpu --modes=lit,wireframe` (several modes side by side on one contact sheet, frame for frame; #85)
+- `ge lab <id> --stage=<pass>:<off>` (one stage of a pass switched off for a run, a layer's glow or its compression, without editing the shader; #224)
+- `ge save check --describe-coverage` (every field of a state struct its `describe` leaves out, read from the struct: today a missing field shows only when a save parts from the straight run; #276)
+- `ge texture match --round=<n>` keeping each round's verdicts and printing what moved against the last round (#259)
 
 ## Measuring
 
@@ -156,6 +172,9 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge load --tag=<name>` / `--compare=<name>` (two load runs' efficiency, lanes' shares and the median frame's bound side by side, so a threading change proves what it spread)
 - `ge load --frame=<n>` (the lanes chart zoomed round one frame, the slowest by default, with its critical path as a table)
 - `ge load --live` (the load monitor over the game's own window as a player drives it, once the desktop game steps by hand: M19c)
+- `ge lab <lab> --rates=60,120,240` (a scenario lab run at several step rates, a metric that moves past its tolerance flagged: a step-rate bug in one command; #107)
+- `ge lab run --realtime-report` (a frame-pace chart of any GPU lab's own loop, so "nothing stalled" needs no hand-written chart; #205)
+- `ge lab sweep <lab> --flag=a,b,c --seeds=1..N` (a grid of flags and seeds, the combinations that fail tabled: 144 runs looped by hand; #245)
 
 ## Hygiene
 
@@ -173,6 +192,10 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge shader check <file.wgsl>` (one shader's includes resolved as the embedder does, compiled by Tint, the error named with its line: `make shaders-check` builds every shader and needs GE_GPU, and a reserved word showed only as finish() returning false; and the same Tint error printed wherever a test or a lab sees `pipelines.finish` fail)
 - `ge template check` (every `ge add` template and the scaffold filled at a short and a long game name, then `ge check` and clang-format run on each: a placeholder's tag line reflowed by clang-format broke only at a long name)
 - the WGSL embedder failing on an empty generated shader (an unbalanced bracket in a comment splits the CMake list and silently empties it)
+
+- `ge lab run --no-gpu` (a GPU lab forced onto its placeholder path, to check its digest matches a runner without an adapter, without a temporary code switch; #228)
+- `ge lab new <id> --like=<lab>` (a lab's skeleton copied from another: the spec, a WAV loader, the sound shot; #274)
+- `ge lab run <lab> --pak=<file>` remembered (an installed pack's path kept for content-dependent labs; #278)
 
 (`ge shot` is M12b's; `ge anim` is M14b's.)
 
@@ -195,6 +218,8 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge net reach --host --client --preset --forward` (one pair of peers' reach timeline)
 - `ge net token --master-env=NAME --host=<id> --client=<id>` (mint a connect token with the master key read from the named environment variable, and inspect one: test a real host by hand without a matchmaker)
 - `net-link --attack=<name>` (run one of the lab's attacks on its own: isolating one took a temporary code edit)
+- `ge net lobby --clients=N --script=<file>` (a session script, join, chat, kick, cut and restore, run against the simulated network, each end's event log and each client's player list diffed against the host's; #83)
+
 ## Shooter's Edge (M18, docs/shooters-edge.md § The `ge` tooling it needs)
 
 - `ge pmove <scenario> --line=N` (one recorded movement scenario stepped against `engine/move`, stopping at the first line that differs, with both sides' state there; classic game loop thread)
@@ -217,6 +242,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge input replay <events-log> --bindings=<file>` (each action's value frame by frame, from a recorded event log under a binding set)
 - `ge play --events=<session>` and `ge replay <session>` (a recorded device session played headless through the game's bindings into a run: the step's inputs and the run's digest, where `ge input replay` stops at the actions; `ge replay` today takes only an input log)
 - `ge input bindings check <file>` (a bindings file parsed against the game's actions: conflicts and unbound actions listed)
+- `ge input devices` (what is plugged in: id, kind, key, features and the database row it matched, in place of a throwaway lab run; #130)
 
 ## Free content
 
