@@ -111,6 +111,14 @@ fn fresnel(cos_t: f32) -> f32 {
 // the body's optics, and the foam's share.
 fn shade_water(n: vec3f, rel: vec3f, xz: vec2f, position: vec2f, level: f32, lost: f32,
                refract: f32, o: Optics, foam: f32) -> vec3f {
+  return shade_water_roofed(n, rel, xz, position, level, lost, refract, o, foam, 1.0, 0.0);
+}
+
+// The same under a roof (a cave's pool): the surface sees the sky through `open` of its dome and
+// the room's own light, `room` of a white face's, over the rest; the sun and the sky light the
+// water by `open`, the room by its own.
+fn shade_water_roofed(n: vec3f, rel: vec3f, xz: vec2f, position: vec2f, level: f32, lost: f32,
+                      refract: f32, o: Optics, foam: f32, open: f32, room_share: f32) -> vec3f {
   let dist = length(rel);
   let v = -rel / dist;
   let cos_v = max(dot(n, v), 1e-3);
@@ -122,7 +130,8 @@ fn shade_water(n: vec3f, rel: vec3f, xz: vec2f, position: vec2f, level: f32, los
   let r = normalize(vec3f(r0.x, max(r0.y, 0.01), r0.z));
   let mirrored = reflected_scene(rel, normalize(vec3f(r0.x, max(r0.y, 0.002), r0.z)),
                                  max(0.02 * dist, 0.25));
-  let sky = mix(sky_luminance(r), mirrored.rgb, mirrored.a);
+  let room = vec3f(white_luminance() * room_share);
+  let sky = mix(mix(room, sky_luminance(r), open), mirrored.rgb, mirrored.a);
 
   // Into the water: the scene behind the surface, bent by the normal.
   let size = vec2i(frame.size.xy);
@@ -143,8 +152,9 @@ fn shade_water(n: vec3f, rel: vec3f, xz: vec2f, position: vec2f, level: f32, los
   let bed_depth = max(level - (behind.y + frame.eye.y), 0.0);
   let through = exp(-o.c * depth_view) * exp(-o.kd * bed_depth);
   let seen = textureSampleLevel(scene_colour, linear_clamp, at, 0.0).rgb;
-  let sun = sun_light(world_y, xz);
-  let light = sun * max(frame.sun.y, 0.0) + sky_irradiance(vec3f(0.0, 1.0, 0.0));
+  let sun = sun_light(world_y, xz) * open;
+  let light = sun * max(frame.sun.y, 0.0) + sky_irradiance(vec3f(0.0, 1.0, 0.0)) * open +
+              room * PI;
   let own = o.deep * light / PI;
   var into = seen * through + own * (1.0 - through);
   into += o.emission * (0.8 * frame.world.y / PI);

@@ -83,6 +83,10 @@ after (`perf` skill).
   and sixteen sources into eight channels; the bench times a full pool.
 - **`se-audio`** (`games/shooters_edge/labs/se_audio_lab.cpp`): a scripted fight of the game's
   WAVs through `Channels`: the fight from above, each source's heard gain, the mix and its WAV.
+- **`se-ambient`** (`games/shooters_edge/labs/se_ambient_lab.cpp`): a walk through the fixture
+  halls (sky in the hall, water in the side room) with the game's ambience by leaf: the walk
+  from above, each layer's target and level, the mix and its WAV; fails a level faster than the
+  rate, a silent layer holding a voice, a clip.
 - **`synth`** (`engine/lab/labs/audio_synth_lab.cpp`): every wave, colour, sweep, drive, the pair
   and vibrato, the echo, two steered layers and the limiter under a stack, each metered,
   pictured and written as WAV, with failures for the checks a listener would make; the bench.
@@ -107,6 +111,11 @@ after (`perf` skill).
 - Labs: `samples` (the mechanism, synthetic recordings) and `se-audio` (a scripted fight of
   Shooter's Edge's own WAVs; the fight's balance checks: the rocket's blast and the beam left,
   the door right).
+- **An ambience is a bed, not a placed sound** (`audio/ambient.hpp`): its layers are not panned
+  or attenuated, and a level walks to its target at a fixed rate, so crossing a leaf swells or
+  fades it. A target under the bed's floor is silence and a layer at zero frees its voice, so a
+  map that is quiet costs no voices. Shooter's Edge sets the targets off the listener's leaf
+  (`games/shooters_edge/sound/ambience.hpp`); only the 29 family and BSP2 store leaf levels.
 
 ## Fall Line's sound (where each piece is)
 
