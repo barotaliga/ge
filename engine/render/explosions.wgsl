@@ -1,7 +1,8 @@
 // THE EXPLOSIONS DRAWN (render/explosions.hpp): one quad round each staged blast's ball on the
 // screen (the whole screen when the eye is inside it); a pixel's ray cut by the ball and by the
 // scene's depth and marched front to back through hot gas that glows by its temperature and
-// smoke that the sun, the sky and the fire light. Premultiplied over the picture; the motion
+// smoke that the sun, the sky and the fire light. A muzzle's flame is the same ball stretched
+// along the barrel and carved into prongs round it. Premultiplied over the picture; the motion
 // target's reactive channel only.
 #include "render/wgsl/frame.wgsl"
 #include "render/wgsl/blackbody.wgsl"
@@ -10,9 +11,11 @@ struct Blast {
   centre: vec4f,  // camera-relative, m; the fireball's radius
   state: vec4f,   // the core's temperature, K; the fire share; the smoke; the age, s
   look: vec4f,    // the noise's offset; the bound's radius, m
-  more: vec4f,    // 1 when the eye is inside the bound
+  more: vec4f,    // 1 when the eye is inside the bound; the prongs' depth; the glow
   shape: vec4f,   // the look's billows; fray; the noise's tiles per radius; roll, radii/s
   soot: vec4f,    // the smoke's single-scattering albedo times its tint
+  axis: vec4f,    // the stretch's axis (unit); the stretch (1: a ball)
+  side: vec4f,    // the first prong's way (unit, square to the axis); the prongs (0: none)
 }
 
 struct ExplosionParams {
@@ -85,6 +88,12 @@ fn fire_light(kelvin: f32) -> vec3f {
   return blackbody_mix(lo, hi, x - f32(i), 1.0) * xp.info.z * frame.world.y / kSunLux;
 }
 
+// A vector with its part along `axis` shrunk by `stretch`.
+fn squeeze(v: vec3f, axis: vec3f, stretch: f32) -> vec3f {
+  let along = dot(v, axis);
+  return v - along * axis + axis * (along / stretch);
+}
+
 @fragment
 fn fs_main(in: VertexOut) -> FragmentOut {
   let b = blasts[in.blast];
@@ -92,16 +101,23 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   let ray = view_ray(frame, uv);
   let centre = b.centre.xyz;
   let bound = b.look.w;
-  // The ball along the ray.
-  let along = dot(ray, centre);
-  let disc = along * along - (dot(centre, centre) - bound * bound);
+  // The ball along the ray, squeezed along its axis by the stretch (a flame's bound is the
+  // ellipsoid round it, so the march spends its steps on the flame, not the air beside it).
+  let axis = b.axis.xyz;
+  let stretch = max(b.axis.w, 1.0);
+  let o2 = squeeze(-centre, axis, stretch);
+  let d2 = squeeze(ray, axis, stretch);
+  let held = bound / stretch;
+  let qa = dot(d2, d2);
+  let qb = dot(o2, d2);
+  let disc = qb * qb - qa * (dot(o2, o2) - held * held);
   if (disc <= 0.0) {
     discard;
   }
   let s = sqrt(disc);
   let near = xp.info.x;
-  let t0 = max(along - s, near);
-  var t1 = along + s;
+  let t0 = max((-qb - s) / qa, near);
+  var t1 = (-qb + s) / qa;
   // The scene in front of it.
   let dz = textureLoad(scene_depth, vec2i(in.position.xy), 0);
   if (dz > 0.0) {
@@ -121,6 +137,9 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   let age = b.state.w;
   let presence = fire + 0.7 * smoke;
   let flow = b.look.xyz + vec3f(0.0, -age * b.shape.w * b.shape.z, 0.0);
+  let prongs = b.side.w;
+  let side_a = b.side.xyz;
+  let side_b = cross(axis, side_a);
   let dt = (t1 - t0) / f32(kSteps);
   let sun = frame.sun.xyz;
   let world_c = centre + frame.eye.xyz;
@@ -135,25 +154,37 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   var t = t0 + dt * jitter(in.position.xy);
   for (var i = 0u; i < kSteps; i++) {
     let q = (ray * t - centre) * inv;
-    let r = length(q);
+    // Squeezed along the axis by the stretch (a flame's length over its width; 1 for a ball).
+    let along = dot(q, axis);
+    let across = q - along * axis;
+    let qs = across + axis * (along / stretch);
+    let r = length(qs);
     // Two reads of the noise: the big billows, and a finer fray turned across them.
-    let n = textureSampleLevel(cloud_noise, linear_repeat, q * b.shape.z + flow, 0.0).rg;
-    let m = textureSampleLevel(cloud_noise, linear_repeat, q.zxy * (b.shape.z * kFine) -
+    let n = textureSampleLevel(cloud_noise, linear_repeat, qs * b.shape.z + flow, 0.0).rg;
+    let m = textureSampleLevel(cloud_noise, linear_repeat, qs.zxy * (b.shape.z * kFine) -
                                flow * 1.7, 0.0).r;
     // The ball's edge carved into billows: the cells' tops bulge, the fbm frays them.
-    let shape = 1.0 - r + b.shape.x * (n.g - 0.5) + b.shape.y * (1.4 * (n.r - 0.5) + (m - 0.5));
+    var shape = 1.0 - r + b.shape.x * (n.g - 0.5) + b.shape.y * (1.4 * (n.r - 0.5) + (m - 0.5));
+    // A flame's prongs: petals round the axis, cut deeper away from it.
+    if (prongs > 0.5) {
+      let phi = atan2(dot(across, side_b), dot(across, side_a));
+      let petal = 0.5 + 0.5 * cos(prongs * phi);
+      shape -= b.more.y * (1.0 - petal) * smoothstep(0.05, 0.5, length(across));
+    }
     let density = clamp(shape * 2.5, 0.0, 1.0) * presence;
     if (density > 0.0) {
       let sigma = density * kExtinction * inv;
       let a = 1.0 - exp(-sigma * dt);
       // Hot deep inside and while it burns, cooler toward the billows' tips.
-      let heat = clamp(shape * 2.2 + 0.9 * (n.r - 0.5) + 0.6 * (m - 0.5), 0.0, 1.0) * fire;
+      // (A flame is hotter at its base, by the muzzle.)
+      let base = 1.0 - 0.45 * clamp(along / stretch, 0.0, 1.0) * step(1.001, stretch);
+      let heat = clamp(shape * 2.2 + 0.9 * (n.r - 0.5) + 0.6 * (m - 0.5), 0.0, 1.0) * fire * base;
       let kelvin = kBlackbodyLoK + (core_k - kBlackbodyLoK) * heat;
       let burning = fire / max(presence, 1e-4);
       let sunlit = mix(0.3, 1.0, clamp(0.5 + 0.5 * dot(q, sun) / max(r, 1e-3), 0.0, 1.0));
       let scatter = b.soot.rgb / PI * (sun_in * sunlit + sky_in) +
                     b.soot.rgb * fire_in * clamp(1.0 - r, 0.0, 1.0);
-      let source = fire_light(kelvin) * burning * heat + scatter * (1.0 - burning * heat);
+      let source = fire_light(kelvin) * b.more.z * burning * heat + scatter * (1.0 - burning * heat);
       light += trans * a * source;
       trans *= 1.0 - a;
       if (trans < 0.01) {
