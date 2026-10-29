@@ -1,0 +1,11 @@
+# games/shooters_edge/server/host.hpp's own record: 8 stand-in bots, seed 1, frame, server_hash after it (tests/shooters_edge_host_test.cpp)
+4c 816754b772ea7864
+99 3574fa7b0be9247e
+e6 e38c3f6f7380dee8
+133 ba1e4a4330f5e812
+180 dc2f6e45a7dc86b8
+1cd 435c89b0bca6081d
+21a b092d4d54685bb03
+267 47086037260c6e49
+2b4 3a08805ebee6959d
+301 0a9b982a3141dd59

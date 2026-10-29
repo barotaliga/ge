@@ -259,6 +259,19 @@ The owner asked for three things beyond a server and a client: a lobby on the ne
 hosted from inside the game, and bots that use the simulation code, so improving the simulation
 improves them.
 
+**The server (M18f).** One host (`games/shooters_edge/server/host`) runs a server on the
+classic loop: its slots are empty, a remote client's (its packets handed to the frame in arrival
+order) or a bot's, filled by a command source (`plugins/shooter/cmd_source.hpp`) that reads the
+server and returns a usercmd; the host puts it on the protocol's grid and packs it into a packet
+like a client's, so a bot's commands run exactly as a person's. Every frame is logged (the slot
+events, the packets, the hash after it), and the log replays the run to the bit with no bot at
+all, naming the first frame that leaves it. The headless `shooters_edge_server` binary runs the
+host with its slots filled by bots, prints a status line every few seconds and the digest at the
+end, writes the input log (`--log`) and replays one (`--replay`); `--realtime` paces it to the
+wall clock. Until M18r's bots land, a seeded stand-in wanders the arena and fires at whoever is
+ahead; until M18b's maps, the server runs the test arena under a roof. The `se-server` lab runs a
+full server and replays its log.
+
 **Hosting from inside the game (M18q).** The menu's HOST page starts a server with its settings
 on one page: the map and the rotation, the mode, the mod, the frag and time limits, the player
 cap, the bots and their skill, a password, and public or LAN only. Two ways to run it, picked on
