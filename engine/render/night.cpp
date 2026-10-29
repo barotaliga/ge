@@ -192,8 +192,10 @@ double pre_exposure(const FrameView& view) {
       moonlight_on_ground(n.moon_illuminance * kSunLux, n.moon_elevation) * (1 + kMoonSky);
   // The lamps the eye has adapted to count as the sky's light does, or a lit room at night would
   // be stored past what a half float holds (a white face under 185 lx at a moonless night's scale
-  // is 4.6e5) and its brightest pixels lost.
-  const double lux = twilight_lux(sun) + moonlight + n.dark_light * kSunLux + view.lamp_lux;
+  // is 4.6e5) and its brightest pixels lost; the scene's own lights (FrameView::adapt_cd) count as
+  // the illuminance that would light a white face to them.
+  const double lux = std::max(
+      twilight_lux(sun) + moonlight + n.dark_light * kSunLux + view.lamp_lux, view.adapt_cd * kPi);
   return std::max(1.0, 0.25 * kPi * kSunLux / std::max(lux, 1e-4));
 }
 

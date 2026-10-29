@@ -39,6 +39,11 @@ for anything the simulation reads, `render` for a pass, `audio` for a voice, `la
 | The view under water: the fog, blur, Snell's window, the presets, the waterline split, the specks | `engine/render/underwater.hpp`, `underwater.wgsl` | `gpu-underwater`, `gpu-plunge`, `lake` | `tests/render_water_test.cpp` |
 | The wet lens: the sheet and the drops on leaving the water | `engine/render/wet_lens.hpp`, `wet_lens.wgsl` | `gpu-plunge` | `tests/render_wet_lens_test.cpp` |
 | Water in Fall Line's frame (`add_water`) | `games/fall_line/app/frame.hpp` | `lake` | `create_frame`'s pass-table check |
+| Liquids: viscosity, yield, the wind's keep and drift, the swim they give, ripples (`docs/liquids.md`) | `engine/water/liquid.hpp` | `liquids` | `tests/water_liquid_test.cpp` (golden) |
+| Harm: ticks, burns by thermal dose, radiant heat | `engine/water/harm.hpp` | `liquids` | `tests/water_harm_test.cpp` (golden) |
+| A black body's glow | `engine/water/glow.hpp` | `gpu-lava` | `tests/water_glow_test.cpp` |
+| The named liquids (lava, slime, ...) | `engine/water/liquids.hpp` | `liquids` | `tests/water_liquids_test.cpp` |
+| Lava and slime drawn, the looks, the eye's key (`adapt_cd`) | `engine/render/liquid.hpp`, `liquid.wgsl` | `gpu-lava`, `gpu-slime` | `tests/render_liquid_test.cpp` |
 | The water's sound: what an ear hears (`hear`), the bed, splashes, strokes, bubbles, the muffle | `engine/water/sound.hpp` | `water-audition` | `tests/water_sound_test.cpp` |
 | The one step (`water::step`) and a game repo's water: `ge add water`, its template, the `water` consumer skill | `engine/water/world.hpp`, `templates/water/`, `consumer-skills/water/`, `engine/cli/add.cpp` | the scaffold's `water` (packaging's `scaffold` job) | `tests/cli_add_test.cpp`, `tests/water_world_test.cpp` |
 | Fall Line's water | the row M24l | the doc's § Labs | as it lands |
