@@ -12,13 +12,12 @@
 //   ping gets in, and only the relay reaches it.
 // - THE BASEMENT: a LAN-only game on a LAN of its own, which nobody in the scene should see.
 //
-// The timeline: every host starts at 0; the browsers refresh at 6 s (a lossy link's router
-// and rendezvous take a few seconds); once their refresh is done
-// the friend joins HOME by the LAN and AWAY joins HOME, the attic and FRIENDS ONLY by the
-// rendezvous; the
-// joined chat; HOME starts at 14 s and both browsers refresh again at 15 s; HOME stops at 20 s
-// and the browsers refresh a last time at 22 s. A refresh not done in 5 s is drawn as it stands. A
-// pure function of its config: the same trial, the same hash.
+// The timeline: every host starts at 0; the browsers refresh at 6 s (a lossy link's router and
+// rendezvous take a few seconds); once their refresh is done the friend joins HOME by the LAN
+// and AWAY joins HOME, the attic and FRIENDS ONLY by the rendezvous; the joined chat; HOME
+// starts at 14 s and both browsers refresh again at 15 s; HOME stops at 20 s and the browsers
+// refresh a last time at 22 s. A refresh not done in 5 s is drawn as it stands. A pure function
+// of its config: the same trial, the same hash.
 //
 // ge:summary A hosting trial: hosts found, pinged, joined, started and stopped
 // ge:keywords net hosting trial server-browser directory lobby listen-server dedicated-server
