@@ -309,6 +309,14 @@ void add_cvars(con::Console& c, Settings& s) {
           .help = "the kind of sky: earth dust alien hell void nebula violet ice ash toxic",
           .kind = CvarKind::text},
          &s.sky_type);
+  v.bind({.name = "sv_moons",
+          .fallback = "type",
+          .flags = kRun,
+          .help = "the moons over the sky, up to four besides the Earth's, each name[:size[:spin "
+                  "hours]]: moon phobos deimos io europa ganymede callisto titan enceladus miranda "
+                  "triton, or none (type: the sky type's own)",
+          .kind = CvarKind::text},
+         &s.moons);
   // The sky type's knobs (render/sky_style.hpp's SkyKnobs): -1 keeps the type's own.
   const auto knob = [&](const char* name, const char* help, double max, double* field) {
     v.bind({.name = name, .fallback = "-1", .flags = kRun, .help = help, .min = -1, .max = max},
@@ -331,6 +339,31 @@ void add_cvars(con::Console& c, Settings& s) {
        &s.sky_stars);
   knob("sv_skyglow", "a fire's glow from under the horizon: 0 none (-1: the type's)", 4,
        &s.sky_glow);
+
+  v.bind({.name = "sv_lethal",
+          .fallback = "1",
+          .flags = kRun,
+          .help = "the army shoots to kill (0: it chases him down and arrests him)",
+          .kind = CvarKind::boolean},
+         &s.lethal);
+  v.bind({.name = "sv_armyfire",
+          .fallback = "1",
+          .flags = kRun,
+          .help = "the army's guns fire at all (0: it hunts with its guns silent)",
+          .kind = CvarKind::boolean},
+         &s.army_fire);
+  v.bind({.name = "sv_helis",
+          .fallback = "1",
+          .flags = kRun,
+          .help = "the hunt sends the army's helicopters and the men they put down",
+          .kind = CvarKind::boolean},
+         &s.helis);
+  v.bind({.name = "sv_paras",
+          .fallback = "1",
+          .flags = kRun,
+          .help = "the hunt sends the army's paramotor riflemen (from four stars)",
+          .kind = CvarKind::boolean},
+         &s.paras);
 }
 
 void register_cvars(con::Console& c) {

@@ -12,8 +12,10 @@
 
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
+#include "core/num.hpp"
 #include "fall_line/sim/sled_ride.hpp"
 #include "mountain/mapgen/types.hpp"
+#include "mountain/village/buildings.hpp"
 #include "mountain/village/traffic_rules.hpp"
 #include "skier/skier.hpp"
 #include "skier/trees.hpp"
@@ -28,6 +30,7 @@ namespace vg = ge::mountain::village;
 namespace sk = ge::skier;
 namespace core = ge::core;
 namespace lm = ge::core::libm;
+namespace num = ge::core::num;
 
 constexpr double kSkierRadius = sk::tuning::wipeout::kBodyRadius;
 
@@ -47,7 +50,7 @@ double meet_body(sk::SkierState& c, const Body& b) {
   if (c.y > b.y + v.height || c.y < b.y - 2) return 0;
   const double hl = v.length / 2;
   const double hw = v.width / 2;
-  const double reach = hl + kSkierRadius;
+  const double reach = core::hypot(hl, hw) + kSkierRadius;
   if (std::fabs(c.x - b.x) > reach || std::fabs(c.z - b.z) > reach) return 0;
   const double fx = lm::sin(b.heading);
   const double fz = lm::cos(b.heading);
@@ -92,10 +95,10 @@ double meet_body(sk::SkierState& c, const Body& b) {
   return closing;
 }
 
-void struck(GameState& state, int32_t i, int32_t what, double closing) {
+void struck(GameState& state, int32_t i, EventKind kind, int32_t what, double closing) {
   sk::SkierState& c = state.racers[static_cast<size_t>(i)].skier;
   if (closing >= village::kEventSpeed) {
-    state.events.push_back(GameEvent{EventKind::traffic, i, what, closing});
+    state.events.push_back(GameEvent{kind, i, what, closing});
   }
   if (closing < village::kThrowSpeed || c.down) return;
   sk::put_down(c, sk::Wipeout::tree);
@@ -119,24 +122,56 @@ void plan_village(GameState& state) {
   v->streets = std::move(*streets);
   v->ground = vg::bake_ground(v->streets);
   v->felled = vg::felled_trees(level, v->ground);
-  for (const uint8_t f : v->felled) v->felled_count += f;
   v->traffic = vg::plan_traffic(level, v->streets);
+  v->buildings =
+      vg::place_buildings(level, v->streets, v->ground,
+                          vg::clearance_of(level, std::span<const mg::PlanPoint>(pads.data(), n)));
+  vg::fell_for_buildings(level, v->buildings, v->felled);
+  v->felled_count = 0;
+  for (const uint8_t f : v->felled) v->felled_count += f;
+  v->box[0] = v->ground.x0;
+  v->box[1] = v->ground.z0;
+  v->box[2] = v->ground.x0 + v->ground.cols * vg::GroundMask::kCell;
+  v->box[3] = v->ground.z0 + v->ground.rows * vg::GroundMask::kCell;
+  for (const vg::Building& b : v->buildings) {
+    const double r = core::hypot(b.width, b.depth) / 2;
+    v->box[0] = num::min(v->box[0], b.x - r);
+    v->box[1] = num::min(v->box[1], b.z - r);
+    v->box[2] = num::max(v->box[2], b.x + r);
+    v->box[3] = num::max(v->box[3], b.z + r);
+  }
   state.trees = sk::build_tree_index(level, v->felled);
   state.village = std::move(v);
 }
 
 void meet_traffic(GameState& state) {
   if (!state.village) return;
-  const std::optional<vg::TrafficPlan>& traffic = state.village->traffic;
-  if (!traffic) return;
-  const vg::TrafficPlan& plan = *traffic;
+  const Village& village = *state.village;
+  const std::optional<vg::TrafficPlan>& traffic = village.traffic;
   const mg::Level& level = *state.level;
   for (int32_t i = 0; i < static_cast<int32_t>(state.racers.size()); i++) {
     Racer& racer = state.racers[static_cast<size_t>(i)];
-    // On a lift or a machine he is the machine's: no car meets him.
+    // On a lift or a machine he is the machine's: no car or wall meets him.
     if (racer.free.lift.phase != LiftPhase::none) continue;
     if (on_sled(state, i) || (i == 0 && state.heli.rider)) continue;
     sk::SkierState& c = racer.skier;
+    if (c.x < village.box[0] || c.z < village.box[1] || c.x > village.box[2] ||
+        c.z > village.box[3]) {
+      continue;
+    }
+    // The walls: a building is a body that never moves, as tall as its ridge (its spire's for
+    // the church).
+    for (const vg::Building& b : village.buildings) {
+      vg::VehicleSize size{};
+      size.length = b.depth;
+      size.width = b.width;
+      size.height =
+          (b.kind == vg::BuildingKind::church ? vg::buildings::kSpire : b.ridge) + (b.y - b.low);
+      const double closing = meet_body(c, Body{b.x, b.low, b.z, b.heading, 0, 0, size});
+      if (closing > 0) struck(state, i, EventKind::building, b.id, closing);
+    }
+    if (!traffic) continue;
+    const vg::TrafficPlan& plan = *traffic;
     if (!vg::near_traffic(plan, c.x, c.z, 2)) continue;
     for (int32_t k = 0; k < static_cast<int32_t>(plan.vehicles.size()); k++) {
       const vg::VehiclePose p = vg::vehicle_at(level, plan, k, state.t);
@@ -145,12 +180,12 @@ void meet_traffic(GameState& state) {
       const double vz = p.speed * lm::cos(p.heading);
       const double closing =
           meet_body(c, Body{p.x, p.y, p.z, p.heading, vx, vz, vg::vehicle_size(p.kind)});
-      if (closing > 0) struck(state, i, k, closing);
+      if (closing > 0) struck(state, i, EventKind::traffic, k, closing);
     }
     for (const vg::Parked& p : plan.parked) {
       const double closing =
           meet_body(c, Body{p.x, p.y, p.z, p.heading, 0, 0, vg::vehicle_size(p.kind)});
-      if (closing > 0) struck(state, i, -1 - p.id, closing);
+      if (closing > 0) struck(state, i, EventKind::traffic, -1 - p.id, closing);
     }
   }
 }
