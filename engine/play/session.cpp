@@ -412,8 +412,6 @@ std::optional<std::string> state_at(const GameSpec& spec, const InputLog& log, i
   return s.run().state();
 }
 
-namespace {
-
 void compare_states(const std::string& a, const std::string& b, Divergence& d) {
   FlatJson fa, fb;
   std::string why;
@@ -438,8 +436,6 @@ void compare_states(const std::string& a, const std::string& b, Divergence& d) {
     if (!fa.contains(key)) note(key, "absent", json_text(vb));
   }
 }
-
-}  // namespace
 
 std::optional<Divergence> diverge(const GameSpec& spec, const InputLog& a, const InputLog& b,
                                   std::string& error) {

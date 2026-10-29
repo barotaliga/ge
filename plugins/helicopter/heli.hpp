@@ -48,6 +48,13 @@ struct HeliControls {
   double pitch = 0;
   double roll = 0;
   double pedal = 0;
+  template <class Io>
+  friend void describe(Io& io, HeliControls& v) {
+    io(v.collective);
+    io(v.pitch);
+    io(v.roll);
+    io(v.pedal);
+  }
 };
 
 // The rotor disc the cyclic flies and the thrust points along: its pitch and roll (the
@@ -55,6 +62,13 @@ struct HeliControls {
 struct HeliDisc {
   double pitch = 0, roll = 0;
   double pitch_rate = 0, roll_rate = 0;
+  template <class Io>
+  friend void describe(Io& io, HeliDisc& v) {
+    io(v.pitch);
+    io(v.roll);
+    io(v.pitch_rate);
+    io(v.roll_rate);
+  }
 };
 
 enum class HeliCrash : uint8_t { none, landing, rotor, airframe, tree };
@@ -77,6 +91,31 @@ struct HeliState {
   bool grounded = true;                 // the skids on the snow
   double agl = 0;                       // the hub's height over the snow, m
   HeliCrash crashed = HeliCrash::none;  // down for good once set
+  template <class Io>
+  friend void describe(Io& io, HeliState& v) {
+    io(v.x);
+    io(v.y);
+    io(v.z);
+    io(v.vx);
+    io(v.vy);
+    io(v.vz);
+    io(v.heading);
+    io(v.pitch);
+    io(v.roll);
+    io(v.yaw_rate);
+    io(v.pitch_rate);
+    io(v.roll_rate);
+    io(v.disc);
+    io(v.controls);
+    io(v.spool);
+    io(v.rotor);
+    io(v.tail_rotor);
+    io(v.thrust);
+    io(v.collective);
+    io(v.grounded);
+    io(v.agl);
+    io(v.crashed);
+  }
 };
 
 // A rider (or any load) carried on the machine: his mass, kg, and his place across the airframe,

@@ -26,6 +26,14 @@ struct Pursuer {
   int32_t id = 0;
   PursuerKind kind = PursuerKind::helicopter;
   double x = 0, y = 0, z = 0;
+  template <class Io>
+  friend void describe(Io& io, Pursuer& v) {
+    io(v.id);
+    io(v.kind);
+    io(v.x);
+    io(v.y);
+    io(v.z);
+  }
 };
 
 // How a hunt ended: still running, the stars lost (`escaped`), taken in where the army does not
@@ -61,6 +69,25 @@ struct WantedState {
   // THE PURSUERS OUT, written by the parts that move them; reserved for `wanted::kMaxPursuers`
   // at create, so filling it never allocates in a step.
   std::vector<Pursuer> pursuers;
+  template <class Io>
+  friend void describe(Io& io, WantedState& v) {
+    io(v.active);
+    io(v.stars);
+    io(v.heat);
+    io(v.seen);
+    io(v.unseen);
+    io(v.fix);
+    io(v.last);
+    io(v.look);
+    io(v.lethal);
+    io(v.since);
+    io(v.stopped);
+    io(v.ended);
+    io(v.peak);
+    io(v.reached);
+    io(v.cause);
+    io(v.pursuers);
+  }
 };
 
 }  // namespace fall_line::sim

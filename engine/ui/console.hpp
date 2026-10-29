@@ -8,8 +8,8 @@
 //
 // Sizes are at a 720 px tall reference and scale with the target's height, so a console reads
 // the same on every screen. The look is a `ConsoleStyle` a game sets; nothing here is Fall
-// Line's. The text is the built-in UI font until the charsets (M27a) are fonts a run can name;
-// then con_font picks one.
+// Line's. The text is in con_font's charset (ui/charset_font.hpp; mono by default), or the
+// style's font when it names one, or the built-in UI font when con_font names no charset.
 //
 // ge:summary The drop-down console as a draw list: panel, background, lines, input, hint, list
 // ge:keywords ui console draw drop-down panel notify suggestion hint cursor scrollback
@@ -30,7 +30,7 @@ namespace ge::ui {
 class Font;
 
 struct ConsoleStyle {
-  const Font* font = nullptr;  // null: the built-in UI font, medium weight
+  const Font* font = nullptr;  // null: con_font's charset (the UI font when it names none)
   // At the 720 px reference.
   float text_px = 18, row_px = 22, margin_px = 12, edge_px = 2;
   // One colour a line kind, in console::LineKind's order.

@@ -1,6 +1,6 @@
 ---
 name: saves
-description: "Use when this game saves and loads: the engine's ge::save (the save file of tagged, versioned and checksummed chunks; the state described once by describe(io, T&) for the writer and the reader; fields added and dropped across versions with since and until), what goes in a save and what the setup rebuilds, and `ge save inspect` to read a file without the game."
+description: "Use when this game saves and loads: the engine's ge::save (the save file of tagged, versioned and checksummed chunks; the state described once by describe(io, T&) for the writer and the reader; fields added and dropped across versions with since and until), what goes in a save and what the setup rebuilds, `ge save inspect` to read a file without the game, and Run::save and Run::load with `ge save write`, `load`, `check` and `diff`."
 ---
 
 # Saves on ge::save
@@ -48,8 +48,36 @@ r.get(sv::tag("PLYR"), 0, 2, player);  // 2: the newest version this build reads
 list of saves is shown without opening each. `ge save inspect <file>` prints a file's chunks or
 the one line saying why it is refused.
 
+## The run on the play contract
+
+Give the game's `ge::play::Run` a `save` and a `load` (engine/play/game.hpp): `save` puts the
+run's chunks into the `FileWriter` it is handed, `load` reads them back into a run the save's
+setup has just opened. The engine writes the meta (the game, the setup as the input log's
+header, the time played) and its own `PLAY` chunk (the step), so a save reopens on its own:
+
+```cpp
+bool save(sv::FileWriter& f) const override { f.put(sv::tag("WRLD"), 0, 1, world_); return true; }
+bool load(sv::FileReader& f, std::string& error) override {
+  if (!f.get(sv::tag("WRLD"), 0, 1, world_)) { error = f.problem(); return false; }
+  return true;
+}
+```
+
+Describe the WHOLE mutable state, the bot's and the pilot's included; leave out only what the
+setup rebuilds (the map, indices, pointers to them) and what is not the run's (a debug hook).
+
+```sh
+ge save write runs/my-game-38.inputs --step=7200 --out=saves/a.save   # a log played and saved
+ge save load saves/a.save --steps=1200      # loaded and played on by the pilot; the digests
+ge save check runs/my-game-38.inputs --every=10   # THE CHECK: every save steps on as the run never saved
+ge save diff saves/a.save saves/b.save      # the chunks that differ, then the state's fields
+```
+
 ## The check every game should have
 
-Save a run at a step, load it into a freshly set-up run, step both on: their state must stay
-identical. A field a step writes but the describe leaves out shows up at the first step that
-reads it.
+`ge save check` saves a log's run every few seconds, loads each save into a run already played
+on (so a field left out keeps a wrong value instead of a lucky default), plays it to the log's
+end beside the run never saved and names the first step any digest parts; a run that reaches
+the end must also save to the same bytes. Hold it in a test (`ge::play::check_saves`) on the
+game's longest runs. A field a step writes but the describe leaves out shows up at the first
+step that reads it; `ge save diff` of the two runs' saves names the field.
