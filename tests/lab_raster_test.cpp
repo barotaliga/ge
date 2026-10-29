@@ -113,6 +113,12 @@ TEST(inflate_reads_every_block_kind) {
   std::vector<uint8_t> bad = fixed;
   bad.back() ^= 1;
   CHECK(!ge::assets::inflate_zlib(bad));
+  // The same blocks with no zlib wrapper, as a zip entry stores them: read to the size the
+  // container states, and refused at any other size.
+  const std::span<const uint8_t> raw = std::span(dynamic).subspan(2, dynamic.size() - 6);
+  const auto c = ge::assets::inflate_raw(raw, want.size());
+  CHECK(c && std::string(c->begin(), c->end()) == want);
+  CHECK(!ge::assets::inflate_raw(raw, want.size() + 1));
   // Stored blocks: the PNG writer's image data back to its filtered rows.
   ge::lab::Picture pic = ge::lab::create_picture(300, 200, {10, 20, 30});
   const std::vector<uint8_t> png = ge::lab::encode_png(pic);

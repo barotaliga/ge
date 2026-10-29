@@ -149,15 +149,8 @@ bool dynamic(Bits& bits, Code& lit, Code& dist) {
          build(dist, std::span(lengths).subspan(nlen));
 }
 
-}  // namespace
-
-std::optional<std::vector<uint8_t>> inflate_zlib(std::span<const uint8_t> stream) {
-  if (stream.size() < 6 || (stream[0] & 0x0f) != 8 || ((stream[0] << 8) | stream[1]) % 31 != 0 ||
-      (stream[1] & 0x20) != 0) {
-    return std::nullopt;
-  }
-  Bits bits{stream.subspan(2, stream.size() - 6)};
-  std::vector<uint8_t> out;
+// The deflate blocks in `bits` appended to `out`, to the last block; false when malformed.
+bool inflate_blocks(Bits& bits, std::vector<uint8_t>& out) {
   Code fixed_lit;
   Code fixed_dist;
   {
@@ -171,26 +164,39 @@ std::optional<std::vector<uint8_t>> inflate_zlib(std::span<const uint8_t> stream
   for (bool last = false; !last;) {
     last = bits.take(1) != 0;
     const uint32_t type = bits.take(2);
-    if (bits.bad) return std::nullopt;
+    if (bits.bad) return false;
     if (type == 0) {
       bits.align();
-      if (bits.at + 4 > bits.in.size()) return std::nullopt;
+      if (bits.at + 4 > bits.in.size()) return false;
       const size_t len = bits.in[bits.at] | (size_t(bits.in[bits.at + 1]) << 8);
       const size_t nlen = bits.in[bits.at + 2] | (size_t(bits.in[bits.at + 3]) << 8);
       bits.at += 4;
-      if ((len ^ 0xffff) != nlen || bits.at + len > bits.in.size()) return std::nullopt;
+      if ((len ^ 0xffff) != nlen || bits.at + len > bits.in.size()) return false;
       out.insert(out.end(), bits.in.begin() + long(bits.at), bits.in.begin() + long(bits.at + len));
       bits.at += len;
     } else if (type == 1) {
-      if (!codes(bits, out, fixed_lit, fixed_dist)) return std::nullopt;
+      if (!codes(bits, out, fixed_lit, fixed_dist)) return false;
     } else if (type == 2) {
       Code lit;
       Code dist;
-      if (!dynamic(bits, lit, dist) || !codes(bits, out, lit, dist)) return std::nullopt;
+      if (!dynamic(bits, lit, dist) || !codes(bits, out, lit, dist)) return false;
     } else {
-      return std::nullopt;
+      return false;
     }
   }
+  return true;
+}
+
+}  // namespace
+
+std::optional<std::vector<uint8_t>> inflate_zlib(std::span<const uint8_t> stream) {
+  if (stream.size() < 6 || (stream[0] & 0x0f) != 8 || ((stream[0] << 8) | stream[1]) % 31 != 0 ||
+      (stream[1] & 0x20) != 0) {
+    return std::nullopt;
+  }
+  Bits bits{stream.subspan(2, stream.size() - 6)};
+  std::vector<uint8_t> out;
+  if (!inflate_blocks(bits, out)) return std::nullopt;
   uint32_t a = 1;
   uint32_t b = 0;
   for (const uint8_t v : out) {
@@ -201,6 +207,15 @@ std::optional<std::vector<uint8_t>> inflate_zlib(std::span<const uint8_t> stream
   const uint32_t want = (uint32_t(stream[t]) << 24) | (uint32_t(stream[t + 1]) << 16) |
                         (uint32_t(stream[t + 2]) << 8) | uint32_t(stream[t + 3]);
   if (((b << 16) | a) != want) return std::nullopt;
+  return out;
+}
+
+std::optional<std::vector<uint8_t>> inflate_raw(std::span<const uint8_t> stream,
+                                                size_t expected_size) {
+  Bits bits{stream};
+  std::vector<uint8_t> out;
+  out.reserve(expected_size);
+  if (!inflate_blocks(bits, out) || out.size() != expected_size) return std::nullopt;
   return out;
 }
 
