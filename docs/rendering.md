@@ -836,7 +836,7 @@ layer's frame block (`CloudLayer::anvil`, `erode`, `fibre`, `patch`); its LIGHT 
 - THE THICKNESS (`cloud_thickness` in `wgsl/frame.wgsl`, mirrored by `render/clouds.hpp`): a
   layer's extinction is not even across it. A read of the noise a patch wide (`thick_cells`
   cells, set off from the column's read), a share of the column itself (so it thins toward its
-  gaps) and the sky's lean (`thick_bias`, dealt per map in ±0.4, or `sv_thick` in Fall Line)
+  gaps) and the sky's lean (`thick_bias`, dealt per map in ±0.4, or `sv_clouddensity` in Fall Line)
   give each column a share of its kind's full optical depth between its thinnest patches
   (`thin`) and 1. The kinds that vary are the sheets: an altostratus from 1.6 (the sun as
   through frosted glass) to 32 (hidden), a stratus from 3.4 (a watery disc) to 28, a
@@ -893,12 +893,23 @@ layer's frame block (`CloudLayer::anvil`, `erode`, `fibre`, `patch`); its LIGHT 
   cloud hung still where a real one races), and Fall Line's `sv_cloudheight` and `sv_cloudspeed` set them.
   The drift is the wind times the clock, not integrated, so with the sky's clock running
   (`sv_skyrate`) a jet winding up moves the layers on a little as it does.
+- CLOUDS SKIED THROUGH (M8f13). A layer is a slab of the world's air at its height over the
+  valley floor, so a deck lower than the mountain lies across its slopes: the skier skis down
+  onto its top, through it and out of its base, and the march, walking each ray from the eye
+  through the slab to the scene's depth, puts the cloud round him and between him and the
+  ground. `Aloft::thickness` (Fall Line's `sv_cloudthickness`, m) is how tall the lowest layer
+  stands from its base to its top. Its cloud keeps its kind's density a metre, so a taller layer
+  is the darker under it and hides more of the sun (its shadow's optical depth grows with it).
+  Every layer, dealt or picked, starts at the top of the one under it, so a layer's top is
+  where clear sky or the next layer begins; two layers never share a slab of the air. The
+  `world` lab stamps every shot with the eye's height and each layer's base and top over the
+  floor, so a shot says whether it was taken over, in or under a layer.
 
 Fall Line picks a stack with `sv_clouds` (kinds joined by '+', such as `cumulus+cirrus`, up to
 four; `map`, the default, keeps the map's own), each kind's bands dealt off the map's seed by
 `cloud_layers_of`; a stack whose lowest kind is a thick, full, low sheet (`lid_under`; a middle
 altostratus, its thin patches the sun shows through, is none) turns the day grey under it as a
-lid would. `sv_thick` (0 thin .. 1 thick, -1 the map's) leans every layer between its kind's
+lid would. `sv_clouddensity` (0 thin .. 1 dense, -1 the map's) leans every layer between its kind's
 thin patches and its cores. The `world` lab's `clouds` view stands at the finish in the
 valley and looks up the sky with the sun behind and to one side, the way a photograph of a sky
 is taken.
@@ -1337,6 +1348,50 @@ eye. The model's own flash triangles are hidden with `DrawLit::hidden = model.fl
 
 **Not yet:** the classic pack's weapons each given their look and fired in a lab (M48b), and the
 flash as a local light (M47b).
+
+## Impacts
+
+A round that hits something throws a burst off it, and what is thrown says what the surface is.
+Concrete and stone give a grey cloud of powder blown out of the hole, with flakes thrown wide; a
+steel round may strike a few sparks there. A steel plate gives almost no dust but a bright spray
+of sparks carried on along the round's glance. Wood gives a tan puff and pale splinters and never
+sparks. Soil kicks a dark plume nearly straight up, and clods fall back out of it. Sand fans out in
+pale fines that settle fast. Glazed tile breaks into white shards. Water throws a narrow column of
+beads and a little mist. A soft lead pellet strikes far fewer sparks than a hardened spike.
+
+**As built (M47e).** `engine/render/impact.hpp` gives each surface's answer as pure functions of
+the hit (`Impact`: the point, the surface's normal, the round's way, the look, the round, a seed,
+the clock). **One code for every surface and a LOOK of knobs for each** (`ImpactLook`, 19 knobs
+in `impact_knobs()`, set by name and clamped with `set_impact_knob`). The DUST is a whole
+`BlastLook`, set as `dust.<knob>`, with `dust_speed` setting how fast it leaves. `ricochet` sets
+the burst's axis between the surface's normal and the round's glance (its way mirrored in the
+surface), always lifted out of the surface. Then come SPARKS (count, speed, life, heat, cone),
+CHIPS (count, speed, size, life, shade, cone), GRIT (fines that hang and drift: count, speed,
+shade) and DROPS (count, speed, cone). The presets are named `impact.<surface>`, using the words
+engine/detail's surface classes use: stone, metal, wood, dirt, grass, sand, tile, liquid, and
+unknown (stone's). `impact_look_for(word)` gives the look and returns none for the sky. The ROUND
+(`ImpactRound`) sizes the burst like a blast's `scale` and says how much of the look's sparks it
+strikes: `round.nail` gives all of them, and `round.pellet` gives 0.6 of the size and a third of
+the sparks. A shotgun's shot is a handful of pellet hits, each with its own seed.
+
+**Drawn by the passes already there.** `dust_of` is the puff as a `Blast` on the surface, thrown
+out along the axis. The explosions pass marches it as smoke of the surface's albedo and tint.
+`throw_impact` puts the sparks, chips, grit and drops into the particle pool. Each kind flies its
+own way (`spark_particle`):
+- A chip falls on its arc in the surface's shade (`Spark::albedo`).
+- Grit is slowed by the air at once and drifts down at a seventh of gravity, half clear.
+- A drop is a bright, half-clear streak.
+- A spark glows and cools as a blast's does.
+
+The MARK the hit leaves is the decals' (engine/detail's `shot_hit`, pressed at the same point and
+normal), so the hole and the burst never depend on each other. A game classes the surface it hit
+(engine/detail's `classify_surface`) and asks `impact_look_for(surface_name(class))`.
+
+**The cost.** The dust is staged in the same list as the blasts, so the 32 the pass draws are shared. A hit's throw is 4 to 24 things into the pool. On the software adapter at 320 x 180 (`gpu-impact`), a shotgun's spread of nine puffs filling a third of the view costs the pass about 3 ms (0.13 ms with nothing in view); the CPU throws the spread in about 0.12 ms (a debug build).
+
+**Not yet:** hits in a real level, where the shooter's code traces the round, classes the face it
+hit by its texture and hands the impact here and the hole to the decals (M18, M42f); a light for
+the metal's sparks; chips tinted by the surface's own texture rather than its shade.
 
 ## Shaders
 
