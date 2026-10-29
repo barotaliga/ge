@@ -1,43 +1,14 @@
 # gameengine2 — the top-level build. Targets:
-#   ge_core      the deterministic pool and the run clock (engine/core, engine/loop;
-#                headers, plus libm, solar and output compiled)
-#   ge_<plugin>  one per plugins/<plugin>/ (cmake/Plugins.cmake): ge_racing (tape, records,
-#                standings), ge_mountain (the generated ski mountain: mapgen, analysis)
-#   ge_audio     the synth: voices, layers, buses, echo, limiter, the meter, WAV bytes
-#                (engine/audio; deterministic, no platform)
-#   ge_assets    authored models: the glTF loader (cgltf), the Model, posing, CPU skinning
-#                (engine/assets; cmake/Cgltf.cmake)
-#   ge_net       the network: links, the simulated network, captures, connections, nodes
-#                (engine/net; docs/networking.md)
-#   ge_console   the console: cvars, the command buffer, aliases, binds, cfg files (engine/console;
-#                docs/console.md)
-#   ge_services  the platform services: a store's achievements, stats, boards, cloud, friends
-#                behind one interface, and the simulated and offline stores (engine/services)
-#   ge_lab       the lab framework (engine/lab: the contract, the runner, the raster, the PNG,
-#                the series files, the charts and the model views)
-#   ge_ai        the bots' layer (engine/ai: the decision record `ge why` reads)
-#   ge_wind      the wind as a pure function of place and time (engine/wind; docs/water.md)
-#   ge_water     bodies of water, the waves a wind grows on them and the one query (engine/water)
-#   ge_move      character movement (engine/move: the knobs and their cvars, the step, scenarios)
-#   ge_camera    the camera (engine/camera: poses, followers, rigs, shake, transitions, the stack)
-#   ge_viewmodel the first-person held weapon (engine/viewmodel: its form, place and light)
-#   ge_snow      snow (engine/snow: the layer over any ground, press, the snapshot; docs/snow.md)
-#   ge_play      the play contract (engine/play: GameSpec and Run, the session, the input log,
-#                the bench, the stills `ge shot` draws; engine/capture: the Matroska muxer and
-#                the export with sound)
-#   ge_replay    replays (engine/replay: the keyframes, the player's seek, the transport;
-#                docs/replays.md)
-#   ge_prof      the profiler (engine/prof: timing zones, allocation counts, the resident set,
-#                every thread's timeline, the OS sampler and the load analysis);
-#                ge_prof_alloc the counting operator new an executable links to count allocations
-#   ge_cli, ge   the ge command line (engine/cli: ge new, ge skills sync, ge doctor, ge lessons;
-#                cmake/Cli.cmake)
+#   ge_<module>  one per engine/<module>/module.cmake (cmake/Modules.cmake), each file saying what
+#                its module is: ge_core (engine/core and engine/loop), ge_audio, ge_assets, ge_net,
+#                ge_console, ge_services, ge_snow, ge_input, ge_wind, ge_water, ge_grass, ge_move, ge_camera, ge_viewmodel,
+#                ge_lab, ge_ai, ge_prof and ge_prof_alloc, ge_play (with engine/capture), ge_replay; and, when their layer is built,
+#                ge_platform (GE_PLATFORM), ge_gpu and ge_render (GE_GPU)
+#   ge_cli, ge   the ge command line (engine/cli, cmake/Cli.cmake)
+#   ge_<plugin>  one per plugins/<plugin>/ (cmake/Plugins.cmake): ge_racing, ge_mountain, ...
 #   fall_line_sim  Fall Line's simulation (games/fall_line: create_game, step, the bot)
 #   labs         the lab executable: every labs/ directory's files (engine, plugins, games)
-#   ge_platform  the window, input and the frame clock over SDL3 (engine/platform; GE_PLATFORM,
-#                cmake/SDL.cmake)
-#   ge_gpu       the native GPU device over Dawn (engine/gpu; GE_GPU, cmake/Dawn.cmake), with its
-#                shaders embedded (cmake/Wgsl.cmake) and checked by `shaders_check`
+#   assets       the built assets listed, checked and stamped (engine/assets/tool.hpp)
 #   <x>_test     one executable per tests/<x>_test.cpp, registered with CTest
 #   ge_fp        the FP flags of the DETERMINISM CONTRACT (AGENTS.md), linked by
 #                ge_core and published as ge::fp; a target that drops them can
@@ -45,11 +16,8 @@
 #   ge_isa       the instruction-set baseline (x86-64: AVX2), linked by ge_core and
 #                published as ge::isa
 #   ge_flags     warnings, -Werror, sanitizers: this tree only, never published
-# ge_core, ge_fp, ge_isa, ge_assets, ge_ai, ge_wind, ge_water, ge_move, ge_camera, ge_viewmodel, ge_net,
-# ge_console, ge_services, ge_lab, ge_play, ge_replay, ge_prof, ge_prof_alloc and every plugin target are installed
-# and published as ge::core, ge::fp, ge::isa, ge::assets, ge::ai, ge::wind, ge::water, ge::move,
-# ge::camera, ge::viewmodel, ge::net, ge::console, ge::services, ge::lab, ge::play, ge::replay, ge::prof, ge::prof_alloc and
-# ge::<plugin>, and the ge executable is installed to bin/
+# Every module registered with an EXPORT name, and every plugin target, is installed and published
+# as ge::<name>, with ge::fp and ge::isa, and the ge executable is installed to bin/
 # (cmake/Packaging.cmake, docs/publishing.md).
 cmake_minimum_required(VERSION 3.25)
 project(gameengine2 LANGUAGES CXX)
@@ -111,232 +79,19 @@ elseif(MSVC)
   endif()
 endif()
 
-# The deterministic pool. Mostly headers; libm, solar, output and the worker pool are compiled.
-# Threads: core/parallel.hpp runs a bake's independent rows side by side on a persistent pool.
-find_package(Threads REQUIRED)
-set(GE_LIBM_VENDORED
-  engine/core/libm/fdlibm_trig.cpp
-  engine/core/libm/fdlibm_arc.cpp
-  engine/core/libm/fdlibm_exp_log.cpp)
-add_library(ge_core STATIC ${GE_LIBM_VENDORED} engine/core/libm/pow.cpp
-  engine/core/solar.cpp engine/core/moon.cpp engine/core/output.cpp engine/core/num_text.cpp engine/core/parallel.cpp
-  engine/core/thread_name.cpp
-  engine/core/json_read.cpp)
-target_include_directories(ge_core PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/engine>)
-target_compile_features(ge_core PUBLIC cxx_std_20)
-target_link_libraries(ge_core PUBLIC ge_fp ge_isa Threads::Threads)
-# Our warnings only when this tree is the top-level build: a game that pulls it in
-# with FetchContent, or links the installed package, gets ge_fp alone.
-if(PROJECT_IS_TOP_LEVEL)
-  target_link_libraries(ge_core PUBLIC $<BUILD_INTERFACE:ge_flags>)
-endif()
-# fdlibm is kept line for line with V8's copy; its deliberate int/double word conversions
-# are not rewritten to quiet warnings. The FP flags above still apply to it.
-if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-  set_source_files_properties(${GE_LIBM_VENDORED} PROPERTIES COMPILE_OPTIONS "-Wno-conversion")
-elseif(MSVC)
-  set_source_files_properties(${GE_LIBM_VENDORED} PROPERTIES COMPILE_OPTIONS "/wd4244;/wd4146;/wd4701;/wd4723")
-endif()
-
-# The synth (M9): plain C++ over the core's libm and stream, so it builds, renders and is
-# metered with no platform; engine/platform's audio device plays it.
-file(GLOB GE_AUDIO_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/audio/*.cpp)
-add_library(ge_audio STATIC ${GE_AUDIO_SOURCES})
-target_link_libraries(ge_audio PUBLIC ge_core)
-
-# Authored models (M8e): the glTF loader (cgltf, cmake/Cgltf.cmake, compiled into
-# engine/assets/gltf.cpp alone), the Model it fills, posing and CPU skinning. No GPU and no
-# platform; render/skinning.hpp skins on the GPU.
-include(cmake/Cgltf.cmake)
-# A file compiled into a target as bytes: a game's models (cmake/EmbedBinary.cmake).
-include(cmake/EmbedBinary.cmake)
-file(GLOB GE_ASSETS_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/assets/*.cpp)
-list(FILTER GE_ASSETS_SOURCES EXCLUDE REGEX "/engine/assets/main\\.cpp$")
-add_library(ge_assets STATIC ${GE_ASSETS_SOURCES})
-target_link_libraries(ge_assets PUBLIC ge_core)
-target_include_directories(ge_assets SYSTEM PRIVATE ${GE_CGLTF_INCLUDE})
-
-# The 2D layer (engine/ui, the `ui` skill): paints, the draw list, images, fonts over
-# stb_truetype with the built-in family compiled in (cmake/Ui.cmake), the CPU raster, backdrops,
-# and menus as a model and a view. No GPU and no platform: the labs picture it headless, and the
-# GPU pass (M22b) draws the same draw list.
-include(cmake/Ui.cmake)
-file(GLOB GE_UI_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/ui/*.cpp)
-add_library(ge_ui STATIC ${GE_UI_SOURCES})
-target_link_libraries(ge_ui PUBLIC ge_core ge_console ge_input)
-target_include_directories(ge_ui SYSTEM PRIVATE ${GE_STB_INCLUDE})
-ge_embed_binary(ge_ui ge_ui_font_semibold "${GE_FONTS_DIR}/BarlowCondensed-SemiBold.ttf")
-ge_embed_binary(ge_ui ge_ui_font_medium "${GE_FONTS_DIR}/BarlowCondensed-Medium.ttf")
-
-# The platform and the GPU (M6). Each is optional (GE_PLATFORM, GE_GPU) and nothing else
-# depends on them: the simulation, the plugins and their tests build without either.
+# The engine's modules: every engine/<module>/module.cmake, each defining its target and
+# registering it with one ge_module(...) call (cmake/Modules.cmake). A new module is a new
+# directory; nothing is listed here, in the package, the tests or the checks.
+include(cmake/Modules.cmake)
+# What the modules build on: the GPU's and the platform's dependencies, the shader embedder.
 include(cmake/Dawn.cmake)
 include(cmake/SDL.cmake)
 include(cmake/Wgsl.cmake)
-if(GE_PLATFORM)
-  add_library(ge_platform STATIC engine/platform/window.cpp engine/platform/audio.cpp
-    engine/platform/devices.cpp)
-  target_link_libraries(ge_platform PUBLIC ge_core ge_input PRIVATE SDL3::SDL3-static)
-endif()
-if(GE_GPU)
-  file(GLOB GE_GPU_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/gpu/*.cpp)
-  add_library(ge_gpu STATIC ${GE_GPU_SOURCES})
-  target_link_libraries(ge_gpu PUBLIC ge_core dawn::webgpu_dawn)
-  ge_embed_wgsl(ge_gpu engine/gpu/test_scene.wgsl)
-  # The frame core (M7): the pass table's mechanisms, the sky, the terrain and its horizon
-  # map, the Hi-Z pyramid, TAA-U, post, the instance families and their meshes, the sun's shadows.
-  file(GLOB GE_RENDER_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/render/*.cpp)
-  add_library(ge_render STATIC ${GE_RENDER_SOURCES})
-  target_link_libraries(ge_render PUBLIC ge_gpu ge_assets ge_ui ge_water)
-  ge_embed_wgsl(ge_render engine/render/sky_tables.wgsl engine/render/sky.wgsl
-    engine/render/terrain.wgsl engine/render/terrain_cull.wgsl engine/render/terrain_normals.wgsl
-    engine/render/horizon.wgsl engine/render/hiz.wgsl engine/render/taa.wgsl engine/render/post.wgsl
-    engine/render/instances.wgsl engine/render/instances_cull.wgsl engine/render/bloom.wgsl
-    engine/render/skinning.wgsl engine/render/particles.wgsl engine/render/particles_sim.wgsl engine/render/precip.wgsl engine/render/precip_sim.wgsl
-    engine/render/clouds.wgsl engine/render/water.wgsl engine/render/water_copy.wgsl
-    engine/render/water_stream.wgsl
-    engine/render/underwater.wgsl engine/render/ui_pass.wgsl engine/render/eye.wgsl
-    engine/render/eye_adapt.wgsl engine/render/explosions.wgsl)
-endif()
-
-# The network (engine/net, docs/networking.md): addresses, the wire, the OS's UDP and TCP sockets
-# (os_socket.hpp the only file that includes the OS's headers), the simulated network, captures, connections and nodes. No platform
-# layer and no clock: the caller passes the time, so a session over the simulated network is
-# deterministic.
-file(GLOB GE_NET_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/net/*.cpp)
-add_library(ge_net STATIC ${GE_NET_SOURCES})
-target_link_libraries(ge_net PUBLIC ge_core ge_console)
-if(WIN32)
-  target_link_libraries(ge_net PRIVATE ws2_32)
-endif()
-
-# The console (engine/console, docs/console.md): cvars and their tiers, the command buffer, aliases,
-# scripting, binds and cfg files. No platform and no clock: a frame is one `run`.
-file(GLOB GE_CONSOLE_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/console/*.cpp)
-add_library(ge_console STATIC ${GE_CONSOLE_SOURCES})
-target_link_libraries(ge_console PUBLIC ge_core)
-# Input devices (engine/input, docs/input.md): the device model, the events and the state they
-# fold into, dead zones, actions and bindings, rebinding, the device database, touch controls,
-# players, feedback and force-feedback effects, the event log and the simulated backend. No
-# platform: engine/platform's backend feeds it events, and the simulated one runs anywhere.
-file(GLOB GE_INPUT_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/input/*.cpp)
-add_library(ge_input STATIC ${GE_INPUT_SOURCES})
-target_link_libraries(ge_input PUBLIC ge_core)
-
-# The platform services (engine/services, docs/services.md): the one interface a game uses for a
-# store's achievements, stats, leaderboards, cloud files, presence, friends, overlay, ownership and
-# screenshots, and the simulated and offline stores behind it; Discord's presence beside it over
-# the Discord app's local pipe (ge_net). No platform, no SDK: a store's own backend (engine/steam,
-# docs/goals.md M20b) is built beside it only when its SDK is supplied.
-file(GLOB GE_SERVICES_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/services/*.cpp)
-add_library(ge_services STATIC ${GE_SERVICES_SOURCES})
-target_link_libraries(ge_services PUBLIC ge_core ge_net ge_input)
-
-# Character movement (engine/move, docs/movement.md): the knobs and presets, one step of a moving
-# body over a trace callback, the box world, the strafer and the scenarios. Deterministic, no
-# platform; a game binds the knobs to its console and answers the trace with its own world.
-file(GLOB GE_MOVE_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/move/*.cpp)
-add_library(ge_move STATIC ${GE_MOVE_SOURCES})
-target_link_libraries(ge_move PUBLIC ge_core ge_console)
-
-# The camera (engine/camera, docs/camera.md): the pose, the followers, the subject, the rigs
-# (first person, boom, mounted, orbit, planted, free), the shake, the transitions and the stack.
-# No GPU and no platform: a game hands it a subject and the world's queries and gets a pose back
-# (camera/to_view.hpp writes it into the renderer's FrameView).
-# Its cvars (camera/cvars.hpp) bind the player's settings on the console.
-file(GLOB GE_CAMERA_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/camera/*.cpp)
-add_library(ge_camera STATIC ${GE_CAMERA_SOURCES})
-target_link_libraries(ge_camera PUBLIC ge_core ge_console)
-
-# The view model (engine/viewmodel): the first-person held weapon's model form, its place in the
-# view (offset, bob, sway, kick) and its light from the world round the player, with the CPU
-# reference raster the labs draw it with. No GPU and no platform.
-file(GLOB GE_VIEWMODEL_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/viewmodel/*.cpp)
-add_library(ge_viewmodel STATIC ${GE_VIEWMODEL_SOURCES})
-target_link_libraries(ge_viewmodel PUBLIC ge_core ge_camera ge_assets)
-
-# Snow (engine/snow, docs/snow.md): a layer of snow over any ground, its sparse fixed-point tiles,
-# the one sample query, press and the imprint record, the snapshot. Deterministic, no platform.
-file(GLOB GE_SNOW_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/snow/*.cpp)
-add_library(ge_snow STATIC ${GE_SNOW_SOURCES})
-target_link_libraries(ge_snow PUBLIC ge_core)
-
-# The lab framework (engine/lab: the contract, the runner, the raster, the PNG), published as
-# ge::lab so a game's labs plug into the same contract as the engine's (docs/labs.md).
-add_library(ge_lab STATIC engine/lab/lab.cpp engine/lab/report.cpp engine/lab/runner.cpp
-  engine/lab/raster.cpp engine/lab/png.cpp engine/lab/gif.cpp engine/lab/diff.cpp engine/lab/sound.cpp
-  engine/lab/series.cpp engine/lab/stats.cpp engine/lab/plot.cpp engine/lab/chart.cpp
-  engine/lab/anim.cpp engine/lab/series_charts.cpp engine/lab/teleport.cpp
-  engine/lab/model_view.cpp engine/lab/model_compare.cpp engine/lab/model_sheets.cpp
-  engine/lab/load_chart.cpp)
-target_link_libraries(ge_lab PUBLIC ge_core ge_audio ge_assets ge_prof)
-
-# The profiler (engine/prof): the timing zones any code opens with GE_ZONE, the allocation
-# counts and the resident set, every thread's timeline, the OS's thread and core sampler and the
-# load analysis over them. The counting operator new is its own target, ge_prof_alloc: an
-# executable that links it counts every allocation (the play executable does).
-add_library(ge_prof STATIC engine/prof/zones.cpp engine/prof/memory.cpp engine/prof/timeline.cpp
-  engine/prof/cpu_sampler.cpp engine/prof/load.cpp)
-target_link_libraries(ge_prof PUBLIC ge_core)
-if(WIN32)
-  target_link_libraries(ge_prof PRIVATE psapi)
-endif()
-add_library(ge_prof_alloc STATIC engine/prof/alloc_hook.cpp)
-target_link_libraries(ge_prof_alloc PUBLIC ge_prof)
-
-# The bots' layer (engine/ai): the decision record a bot writes and `ge why` reads back, and
-# the pieces bots share. Deterministic, no platform; published as ge::ai.
-file(GLOB GE_AI_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/ai/*.cpp)
-add_library(ge_ai STATIC ${GE_AI_SOURCES})
-target_link_libraries(ge_ai PUBLIC ge_core)
-
-# The wind (engine/wind): a pure function of place and time over a field built once, the
-# mountain's air one configuration of it (docs/water.md § Wind), and what falls through it (snow,
-# sleet and rain: engine/wind/precip.hpp), and the air's temperature and moisture with what they
-# do: fog, frost, ice, the snow's feel (climate.hpp, mist.hpp, cold.hpp; docs/climate.md).
-# Deterministic, no platform; published as ge::wind.
-add_library(ge_wind STATIC engine/wind/field.cpp engine/wind/sources.cpp engine/wind/precip.cpp
-                    engine/wind/climate.cpp engine/wind/mist.cpp engine/wind/cold.cpp)
-target_link_libraries(ge_wind PUBLIC ge_core)
-
-# The water (engine/water): bodies of water, the sea a wind grows on them and the one `sample`
-# query, and the sound of it on the synth (docs/water.md). Deterministic, no platform; published
-# as ge::water.
-file(GLOB GE_WATER_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/water/*.cpp)
-add_library(ge_water STATIC ${GE_WATER_SOURCES})
-target_link_libraries(ge_water PUBLIC ge_core ge_wind ge_audio)
-
-# The play contract (engine/play: a game's spec and Run, the session and its line protocol, the
-# input log, replay and diverge, the bench, the stills, the `play` executable's main), published
-# as ge::play so a game's `play` target is driven by `ge play`, `ge sim`, `ge replay`, `ge state`,
-# `ge diverge`, `ge shot`, `ge bench`, `ge profile` and `ge mem`. The capture (engine/capture:
-# the engine's Matroska muxer, I420, a run exported with its sound) is built into it, since a
-# recording (`ge record --format=mkv`) is its user.
-# The export's encoders (cmake/Codecs.cmake, GE_ENCODERS) are linked into it privately and only
-# in this tree's own build, so the published package and a consumer need neither.
-include(cmake/Codecs.cmake)
-file(GLOB GE_CAPTURE_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/capture/*.cpp)
-add_library(ge_play STATIC engine/play/inputs.cpp
-  engine/play/session.cpp engine/play/bench.cpp engine/play/record.cpp engine/play/why.cpp
-  engine/play/human.cpp engine/play/devices.cpp engine/play/console_cmds.cpp engine/play/main.cpp engine/play/load.cpp
-  ${GE_CAPTURE_SOURCES})
-target_link_libraries(ge_play PUBLIC ge_core ge_ai ge_console ge_input ge_lab ge_prof ge_prof_alloc)
-if(GE_ENCODERS)
-  target_link_libraries(ge_play PRIVATE $<BUILD_INTERFACE:ge::aom> $<BUILD_INTERFACE:ge::opus>)
-  target_compile_definitions(ge_play PRIVATE GE_ENCODERS=1)
-endif()
-
-# Replays (engine/replay, docs/replays.md): the keyframes a seek starts from, the player that steps
-# a run off its input log to any step, the transport; over the play contract's Run. Published as
-# ge::replay.
-file(GLOB GE_REPLAY_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/replay/*.cpp)
-add_library(ge_replay STATIC ${GE_REPLAY_SOURCES})
-target_link_libraries(ge_replay PUBLIC ge_core ge_play)
-
-# The ge command line (engine/cli, cmake/Cli.cmake): built here too when a game pulls the engine
-# in, so the game runs the ge of the engine it pins.
-include(cmake/Cli.cmake)
-ge_add_cli()
+file(GLOB GE_MODULE_FILES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/*/module.cmake)
+foreach(module_cmake ${GE_MODULE_FILES})
+  include(${module_cmake})
+endforeach()
+ge_linked_modules(GE_MODULE_TARGETS)
 
 # The plugins: every plugins/<name>/CMakeLists.txt, each one ge_add_plugin(...) call. A new
 # plugin is a new directory; nothing is listed here (docs/architecture.md § Plugins).
@@ -391,7 +146,7 @@ if(PROJECT_IS_TOP_LEVEL)
   get_property(GE_PLUGIN_TARGETS GLOBAL PROPERTY GE_PLUGIN_TARGETS)
   get_property(GE_GAME_TARGETS GLOBAL PROPERTY GE_GAME_TARGETS)
   add_executable(labs engine/lab/main.cpp ${GE_LAB_SOURCES})
-  target_link_libraries(labs PRIVATE ge_lab ge_play ge_replay ge_core ge_audio ge_assets ge_net ge_input ge_wind ge_water ge_move ge_camera ge_viewmodel ge_ui ge_services ge_snow ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
+  target_link_libraries(labs PRIVATE ${GE_MODULE_TARGETS} ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
     ${GE_LAB_EXTRA})
   if(GE_GPU)
     # A GPU lab's own shader (the eye lab's hall, drawn over its frame).

@@ -1,20 +1,26 @@
-# Every push, pull request and queued merge. The org's runners are a small shared pool, so a
-# pull request runs the cheap gates, ONE Linux build-and-test row and the Windows row; the merge
-# queue runs the whole matrix (every compiler and OS the engine promises the same bits on) and
-# the packaging, on the exact tree that lands; a push to main builds the cached rows only, to
-# save their compiler caches. A change that touches only prose (docs, skills, lessons, root
-# Markdown, changeset fragments) runs the gates alone. A pull request labelled `full-ci` runs
-# the whole matrix.
+# Every push, pull request and queued merge. Linux is checked BEFORE the push, not here: `make
+# precheck` (tools/precheck.sh) builds this tree in the development container (Linux x64, GCC
+# debug with ASan, Mesa's lavapipe as the GPU) and runs the gates, the lint, the shaders, the tests
+# and the labs' digests the change reaches. So CI runs only what can come out DIFFERENT somewhere
+# else: the gates (cheap, and they hold the queue's combined tree), Windows (MSVC: its warnings,
+# its CRT, its libm) and macOS (Apple Clang on arm64: another compiler, another ISA, the Metal
+# adapter), each building everything and running the whole suite, so the goldens and the labs'
+# digests are held on both. The merge queue adds the installed package on Windows and macOS, and
+# `ge new`'s scaffold when the change reaches it. A push to main builds the macOS row only, to
+# save its compiler cache. A change that touches only prose (docs, skills, lessons, root Markdown,
+# changeset fragments) runs the gates alone. A pull request labelled `full-ci` also runs the Linux
+# rows (GCC debug+ASan, GCC and Clang release, arm64), the lint and the shaders' check, and the
+# whole packaging.
 #
 # The ruleset requires ONE check, `required` (the last job): it passes when every job either
 # passed or was skipped by the rules above, so a skipped row never leaves a required check
-# pending. A determinism break shows as a parity test failing on ONE row of the matrix: that
-# row's compiler or libm is the suspect.
+# pending. A determinism break shows as a parity test failing on ONE row: that row's compiler or
+# libm is the suspect.
 #
 # Speed: every ctest runs its cases in parallel (CTEST_PARALLEL_LEVEL; the labs' smoke pass is
 # cut into slices for it), the Linux and macOS rows compile through ccache (restored on every
-# run, saved only from main so pull requests do not churn the cache), and on a pull request the
-# lint checks only what the change can reach (tools/lint.sh).
+# run, saved only from main so pull requests do not churn the cache), and the lint checks only
+# what the change can reach (tools/lint.sh).
 name: ci
 
 on:
@@ -49,6 +55,8 @@ jobs:
     outputs:
       code: ${{ steps.scope.outputs.code }}
       full: ${{ steps.scope.outputs.full }}
+      package: ${{ steps.scope.outputs.package }}
+      scaffold: ${{ steps.scope.outputs.scaffold }}
       rows: ${{ steps.scope.outputs.rows }}
     steps:
       - uses: actions/checkout@v5
@@ -71,24 +79,30 @@ jobs:
           # Prose only: nothing a build, a test or a package reads. consumer-skills/, scaffold/
           # and templates/ are compiled into ge, so their Markdown is code.
           PROSE='^(docs/|\.agents/|\.changes/|porting/.*\.md$|[^/]*\.md$|LICENSE$)'
+          # What `ge new` writes and grows a repo with, and the build it grows it on.
+          SCAFFOLD='^(engine/cli/|engine/play/|engine/lab/|scaffold/|templates/|consumer-skills/|cmake/|CMakeLists\.txt$|\.github/workflows/)'
           if CHANGED=$(git diff --name-only "$BASE" HEAD 2> /dev/null); then
             CODE=$(echo "$CHANGED" | grep -Evq "$PROSE" && echo true || echo false)
+            SCAFFOLD=$(echo "$CHANGED" | grep -Eq "$SCAFFOLD" && echo true || echo false)
           else
             CODE=true  # no base to diff against (a new branch, a forced push): run everything
+            SCAFFOLD=true
           fi
           FULL=false
-          if [ "$EVENT" = merge_group ] || [ "$FULL_LABEL" = true ]; then FULL=true; fi
-          ROW_DEBUG='{"os":"ubuntu-24.04","cxx":"g++","preset":"debug"}'
-          ROWS_REST='{"os":"ubuntu-24.04","cxx":"g++","preset":"release"},{"os":"ubuntu-24.04","cxx":"clang++","preset":"release"},{"os":"ubuntu-24.04-arm","cxx":"g++","preset":"release"},{"os":"macos-15","cxx":"clang++","preset":"release"}'
-          if [ "$FULL" = true ] || [ "$EVENT" = push ]; then
-            ROWS="[$ROW_DEBUG,$ROWS_REST]"
-          else
-            ROWS="[$ROW_DEBUG]"
-          fi
-          echo "code=$CODE" >> "$GITHUB_OUTPUT"
-          echo "full=$FULL" >> "$GITHUB_OUTPUT"
-          echo "rows=$ROWS" >> "$GITHUB_OUTPUT"
-          echo "event $EVENT, code $CODE, full $FULL, rows $ROWS"
+          if [ "$FULL_LABEL" = true ]; then FULL=true; SCAFFOLD=true; fi
+          PACKAGE=false
+          if [ "$EVENT" = merge_group ] || [ "$FULL" = true ]; then PACKAGE=true; fi
+          ROW_MAC='{"os":"macos-15","cxx":"clang++","preset":"release"}'
+          ROWS_LINUX='{"os":"ubuntu-24.04","cxx":"g++","preset":"debug"},{"os":"ubuntu-24.04","cxx":"g++","preset":"release"},{"os":"ubuntu-24.04","cxx":"clang++","preset":"release"},{"os":"ubuntu-24.04-arm","cxx":"g++","preset":"release"}'
+          if [ "$FULL" = true ]; then ROWS="[$ROW_MAC,$ROWS_LINUX]"; else ROWS="[$ROW_MAC]"; fi
+          {
+            echo "code=$CODE"
+            echo "full=$FULL"
+            echo "package=$PACKAGE"
+            echo "scaffold=$SCAFFOLD"
+            echo "rows=$ROWS"
+          } >> "$GITHUB_OUTPUT"
+          echo "event $EVENT, code $CODE, full $FULL, package $PACKAGE, scaffold $SCAFFOLD, rows $ROWS"
       - run: make fmt-check
       # tools/agents-index.mjs and tools/skill-lessons.mjs: plain Node, no npm install.
       - uses: actions/setup-node@v4
@@ -193,10 +207,11 @@ jobs:
 
   # clang-tidy's bug-finding checks (.clang-tidy), in parallel, over the files the change can
   # reach: each changed .cpp and each .cpp that includes a changed header (tools/lint.sh); a
-  # change to the lint's rules lints them all. The queue already linted what lands on main.
+  # change to the lint's rules lints them all. `make precheck` runs both before every push (the
+  # lint and the shaders do not depend on the platform), so here only under `full-ci`.
   lint:
     needs: gates
-    if: needs.gates.outputs.code == 'true' && github.event_name != 'push'
+    if: needs.gates.outputs.code == 'true' && needs.gates.outputs.full == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:
@@ -234,11 +249,15 @@ jobs:
       # Every embedded WGSL shader through Tint, offline (no GPU needed).
       - run: make shaders-check PRESET=release
 
-  # The installed package consumed on every platform, and ge growing a new repo: the queue's.
+  # The installed package consumed on Windows and macOS (Linux too under `full-ci`), and ge
+  # growing a new repo when the change reaches it: the queue's.
   packaging:
     needs: gates
-    if: needs.gates.outputs.code == 'true' && needs.gates.outputs.full == 'true'
+    if: needs.gates.outputs.code == 'true' && needs.gates.outputs.package == 'true'
     uses: ./.github/workflows/packaging.yml
+    with:
+      linux: ${{ needs.gates.outputs.full == 'true' }}
+      scaffold: ${{ needs.gates.outputs.scaffold == 'true' }}
 
   # The one check the ruleset requires: every job above passed, or was skipped by the rules.
   required:
