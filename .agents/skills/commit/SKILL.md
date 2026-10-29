@@ -53,6 +53,11 @@ squash-merged). The body contains:
 
 ## 5. Green, then merge
 
+**Open the PR as a draft** (`gh pr create --draft`): a draft runs no CI. When the work is done,
+merge `origin/main` into the branch (no conflicts left), run `make precheck`, push, and only then
+mark it ready (`gh pr ready <pr>`, or `POST .../pulls/<n>/ccr/ready_for_review`): that starts CI;
+arm auto-merge after it. A PR that goes back to work in progress goes back to draft.
+
 CI is the gate. **After the push, check the PR every 15 minutes until it is merged**: schedule
 the check-in (never a sleep loop), and on each one look at both its checks and whether it still
 merges (`build/<preset>/ge ci <pr>` answers both: a conflict is an error finding, each red job's
