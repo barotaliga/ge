@@ -10,7 +10,9 @@
 #     (tools/agents-index.mjs), and every lesson fragment is well formed
 #     (tools/skill-lessons.mjs);
 #   - every plugin keeps the plugin contract (tools/check-plugins.mjs);
-#   - every roadmap row has its status file and agrees with it (tools/check-goals.mjs).
+#   - every roadmap row has its status file and agrees with it (tools/check-goals.mjs);
+#   - every lab's LabSpec reads off its source, and no table lists the labs (tools/check-labs.mjs,
+#     which writes docs/lab-list.md).
 #
 # ge:summary The agent guidance's structure check (make agents-check)
 # ge:keywords ci check agents symlinks skills router line-cap
@@ -66,6 +68,7 @@ done < <(git ls-files --cached --others --exclude-standard '*.cpp' '*.hpp' '*.h'
 node tools/agents-index.mjs --check || fail=1
 node tools/check-plugins.mjs || fail=1
 node tools/check-goals.mjs || fail=1
+node tools/check-labs.mjs || fail=1
 node tools/skill-lessons.mjs --check || fail=1
 
 (( fail == 0 )) && echo "agents-check: ok (${#skills[@]} skills)"

@@ -167,6 +167,7 @@ FrameOptions frame_options(const cfg::Settings& s) {
   o.cover = s.cover;
   o.thick = s.thick;
   o.cloud_height = s.cloud_height;
+  o.cloud_thickness = s.cloud_thickness;
   o.cloud_speed = s.cloud_speed;
   o.sun_size = s.disc_sun;
   o.moon_size = s.disc_moon;
@@ -441,7 +442,8 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
     const double sun = view.night.moon_key ? view.night.sun_elevation : view.sun_elevation;
     const ge::mountain::app::Aloft aloft{.dusk = ge::mountain::app::dusk_of(sun),
                                          .speed = f.options.cloud_speed,
-                                         .base = f.options.cloud_height};
+                                         .base = f.options.cloud_height,
+                                         .thickness = f.options.cloud_thickness};
     ge::mountain::app::sky_at(*f.level, view.time_s, view.weather, view.clouds,
                               f.options.clouds > 0, view.eye[1], aloft);
     // Kinds of cloud picked by hand (sv_clouds) in place of the map's, dealt off its seed.
@@ -470,6 +472,7 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
     view.clouds.quarter = f.options.cloud_quarter;
     view.clouds.spread = f.options.cloud_spread;
   }
+  f.drawn_clouds = view.clouds;
   // THE WET GROUND the rain leaves (the eye's own: one wet ground a frame), stepped by the frames'
   // clock from the steady state its rain and drying would leave, before the uniforms take it.
   if (f.options.wet && f.options.weather) {
