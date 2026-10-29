@@ -251,6 +251,7 @@ characters.
 | `engine/move/` | Character movement (`ge::move`, `docs/movement.md`): the knobs and presets, the step over a trace callback, the box world, the strafer, the scenarios | `move` |
 | `engine/input/` | Input devices (`ge::input`, `docs/input.md`): the device model, events, state, dead zones, actions and bindings, rebinding, wheels' roles, touch, players, feedback, the event log, simulated devices | `input` |
 | `engine/camera/` | The camera (`ge::camera`, `docs/camera.md`): poses, followers, the rigs (first person, boom, mounted, orbit, planted, free), shake, transitions, the stack, the scripted subjects | `camera` |
+| `engine/viewmodel/` | The first-person held weapon (`ge::viewmodel`, `docs/rendering.md` § The view model): its form and grip mount, its place in the view, its light from the world, the CPU reference | `render`, `camera` |
 | `engine/services/` | Platform services (`ge::services`, `docs/services.md`): one interface for a store's achievements, stats, boards, cloud, presence, friends, overlay, DLC and screenshots; the simulated and offline stores | `services` |
 | `engine/platform/` | SDL3 (`GE_PLATFORM`): the window, the input devices as `engine/input` events, the frame clock, the audio device; the only place SDL is included | `platform`, `input` |
 | `engine/gpu/` | The native GPU device over Dawn (`GE_GPU`): adapters and tiers, pipelines and the manifest, surfaces, targets, timers; the only place webgpu.h is included | `gpu` |
