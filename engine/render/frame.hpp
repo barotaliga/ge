@@ -52,7 +52,9 @@ struct FrameUniforms {
   float eye[4];              // world xyz (m); w: the eye's altitude over the sea, km
   float sun[4];              // unit direction toward the key light; w: its illuminance, pre-exposed
   float size[4];             // render width, height, 1/width, 1/height
-  float time[4];             // seconds, frame number, the lamps' adapted luminance, 0
+  float time[4];             // seconds, frame number, the lamps' adapted luminance, the scene's
+                             // own light the eye adapts to (FrameView::adapt_cd, pre-exposed; 0:
+                             // the sky's alone)
   float world[4];       // y = 0's altitude over the sea (km), the pre-exposure, the moon's direct
                         // light while the sun keys, 1 when the haze is the moon's
   float planes[6][4];   // the frustum (view.hpp's five), the sixth all zero
@@ -83,10 +85,13 @@ struct FrameUniforms {
   float style[kSkyStyleRows][4];
   // Other worlds' moons (render/moons.hpp's kMoonRows a moon; a drawn radius of 0: none).
   float moons[kMaxMoons * kMoonRows][4];
+  // The fog in areas (render/fog.hpp's `fog_uniforms`): the froxel volume's range (m; 0: none
+  // in reach, nothing reads it) and its slices. fill_uniforms writes zero.
+  float fog[4];
 };
 static_assert(sizeof(FrameUniforms) == 64 * 3 + 16 * 5 + 16 * 6 + 16 * 9 +
                                            16 * kCloudRows * kCloudLayers + 16 * 5 +
-                                           16 * kSkyStyleRows + 16 * kMaxMoons * kMoonRows,
+                                           16 * kSkyStyleRows + 16 * kMaxMoons * kMoonRows + 16,
               "match frame_types.wgsl");
 
 // The last frame's unjittered camera. Invalid on the first frame and after a cut, when the
@@ -226,9 +231,11 @@ wgpu::Texture make_texture(gpu::Device& device, std::string_view label, uint32_t
                            wgpu::TextureUsage usage, uint32_t mips = 1);
 
 // Labs and tests (blocks): channel 0 of one mip of a texture, row-major, as floats. `format` is
-// the texture's: R32Float, Depth32Float (the depth aspect), R16Float or RGBA16Float.
+// the texture's: R32Float, Depth32Float (the depth aspect), R16Float or RGBA16Float (whose
+// `channel` 1, 2 or 3 it reads instead when asked).
 std::vector<float> read_red(gpu::Device& device, const wgpu::Texture& texture, uint32_t mip,
-                            uint32_t width, uint32_t height, wgpu::TextureFormat format);
+                            uint32_t width, uint32_t height, wgpu::TextureFormat format,
+                            uint32_t channel = 0);
 // Labs and tests (blocks): how far from the eye, m, each pixel of `targets`' depth lies, seen by
 // `view`'s camera (depth_distance), row-major from the top; infinity where nothing was drawn.
 std::vector<float> read_distance(gpu::Device& device, const FrameTargets& targets,

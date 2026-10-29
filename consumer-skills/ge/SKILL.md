@@ -54,6 +54,7 @@ ge load [--render]               # how the run spreads over the cores and the GP
 ge graph <file>... [--kind=<k>]  # chart traces, benches, profiles: PNG + SVG, outliers as notes
 ge net inspect <pcap>            # a network capture, datagram by datagram (skill: multiplayer)
 ge save inspect <file>           # a save file's header, meta and chunks, or why it is refused (skill: saves)
+ge save check <log> --every=10   # every save of a run steps on as the run never saved (skill: saves)
 ge net stats <pcap>              # per connection: kbps, round trip, loss, resends; charted
 ge net sim [--presets=wifi,bad]  # fake clients and a host over bad links, no game needed
 ge snow show <file.snow>         # a saved snow layer: tiles, pressed samples, mass, maps (skill: snow)
@@ -69,6 +70,10 @@ ge sound import <file> <name>    # a free sound trimmed, loudness-matched, writt
 ge sound split <file> <name>     # a recording of many sounds cut at its silences
 ge model import <file> <name>    # a free kit's model packed into one .glb, loaded and measured
 ge credits check [<dir>]         # every asset credited, every credit's file there, licences allowed
+ge content scan <pak|dir>        # a classic set's sounds, models and sets held to an asset map (brush)
+ge texture kinds                 # every procedural texture layer kind and key (skill: textures)
+ge texture check <file.tex>...   # a texture recipe's mistakes, each at its line
+ge texture bake <file.tex> --ref="seed=12 wear=0.8"   # one variant to PNG maps in build/textures
 ge check                         # the whole gate: format, doctor, build, tests
 ge lint [--base=<ref>] [<file>...]  # clang-tidy's bug-finding checks over what the change reaches
 ge precheck [--preset=<p>]       # what CI runs, both presets: ge check, the pilot, the replays

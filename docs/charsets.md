@@ -170,7 +170,12 @@ A game that would rather read files than build atlases embeds the committed PNG 
 `ge_embed_binary` and decodes it at start-up. The builder and the file are the same bytes, and
 a test holds them to each other.
 
-**Who draws with them:** the console (M21d) draws its view in `terminal` or `mono`, the menus
+A 2D layer's text run names a charset as a font: `ui::charset_font("terminal")`
+(`engine/ui/charset_font.hpp`) builds its atlases into a grid `ui::Font` once, so `DrawList::text`
+and the GPU's ui pass set it like any other font (a pixel font at whole multiples of its grid).
+
+**Who draws with them:** the console (M21d) draws its view in the charset `con_font` names (`mono`
+by default), the menus
 (M22) can use any of the ten for a game's own look, and Fall Line's HUD readouts can use
 `segment`, `rounded` and `matrix`.
 

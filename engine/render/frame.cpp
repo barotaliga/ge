@@ -65,6 +65,8 @@ void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint
   u.time[1] = static_cast<float>(view.frame);
   // A white Lambertian face under lamp_lux: lamp_lux / pi in the sun's units, pre-exposed.
   u.time[2] = static_cast<float>(view.lamp_lux / (kSunLux * 3.14159265358979323846) * pre);
+  // The scene's own light the eye adapts to, in the frame's light (FrameView::adapt_cd).
+  u.time[3] = static_cast<float>(view.adapt_cd / kSunLux * pre);
   u.world[0] = static_cast<float>(view.altitude_m * 1e-3);
   std::memcpy(u.planes, cam.planes, sizeof cam.planes);
   // THE WEATHER: a visual range V closes the view as exp(-3.912 d / V) (the contrast a black
@@ -152,6 +154,9 @@ void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint
     row[4][3] = static_cast<float>(kind.lump);
     row[5][0] = static_cast<float>(kind.haze);
   }
+
+  // THE FOG IN AREAS: none until render/fog.hpp's fog_uniforms says a volume is in reach.
+  for (float& f : u.fog) f = 0.0f;
 }
 
 FrameTargets create_targets(gpu::Device& device, std::string_view label, uint32_t width,
@@ -530,7 +535,7 @@ uint16_t float_to_half(float f) {
 }
 
 std::vector<float> read_red(gpu::Device& device, const wgpu::Texture& texture, uint32_t mip,
-                            uint32_t w, uint32_t h, wgpu::TextureFormat format) {
+                            uint32_t w, uint32_t h, wgpu::TextureFormat format, uint32_t channel) {
   const bool half =
       format == wgpu::TextureFormat::R16Float || format == wgpu::TextureFormat::RGBA16Float;
   const uint32_t texel = format == wgpu::TextureFormat::RGBA16Float ? 8 : half ? 2 : 4;
@@ -561,7 +566,8 @@ std::vector<float> read_red(gpu::Device& device, const wgpu::Texture& texture, u
     const auto* bytes = static_cast<const uint8_t*>(p);
     for (uint32_t y = 0; y < h; ++y) {
       for (uint32_t x = 0; x < w; ++x) {
-        const uint8_t* at = bytes + size_t{y} * row + size_t{x} * texel;
+        const uint8_t* at = bytes + size_t{y} * row + size_t{x} * texel +
+                            (texel == 8 ? size_t{channel % 4} * 2 : 0);
         if (half) {
           uint16_t v;
           std::memcpy(&v, at, 2);

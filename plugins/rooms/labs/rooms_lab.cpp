@@ -3,7 +3,8 @@
 // away from above (the walls nearest the eye and every ceiling drop out, so each room is seen from
 // inside), every room on its own, every relief the format grows on a test room under a raking
 // light, a cave grown from four seeds side by side, views from inside, the cave's mouth wired,
-// and the vault sample's brushes built by CSG.
+// the vault sample's brushes built by CSG, the grass its grass floor grows (grass.hpp), and its
+// door opened by its trigger as a walker comes.
 // The numbers: the level's bytes on disk against the triangles it grows, each room's triangles
 // and build time, and the whole level built on one thread and on every worker, held to the same
 // bits. CPU pictures, in the digest; times measured.
@@ -23,16 +24,21 @@
 
 #include "assets/model.hpp"
 #include "assets/pose.hpp"
+#include "blades.hpp"
 #include "core/num_text.hpp"
 #include "core/parallel.hpp"
+#include "grass/cover.hpp"
 #include "lab/lab.hpp"
 #include "lab/model_view.hpp"
 #include "lab/raster.hpp"
 #include "move/spec.hpp"
+#include "move/step.hpp"
 #include "rooms/brush_build.hpp"
 #include "rooms/build.hpp"
 #include "rooms/clip.hpp"
 #include "rooms/codec.hpp"
+#include "rooms/grass.hpp"
+#include "rooms/movers.hpp"
 #include "rooms/relief.hpp"
 #include "rooms/text.hpp"
 #include "rooms/walk.hpp"
@@ -262,6 +268,82 @@ rm::Level relief_room(rm::Relief kind, uint32_t seed) {
 
 // The brush half of the format: the vault sample's convex brushes built by CSG into the faces
 // that can be seen, from above with the roof left off, and from its player start.
+// `level` with every mover's brushes where it has moved to (each face's plane slid by the
+// mover's offset), for drawing.
+rm::Level moved(const rm::Level& level, const rm::Movers& m) {
+  rm::Level out = level;
+  for (const rm::Mover& mv : m.movers) {
+    for (const rm::Brush& b : out.brushes) {
+      if (b.group != mv.group) continue;
+      for (uint32_t f = b.first_face; f < b.first_face + b.faces; ++f) {
+        rm::Face& fc = out.faces[f];
+        fc.d = float(double(fc.d) + fc.n[0] * mv.offset.x + fc.n[1] * mv.offset.y +
+                     fc.n[2] * mv.offset.z);
+      }
+    }
+  }
+  return out;
+}
+
+// The vault's door, opened by its trigger as a walker comes up to it: four frames from behind.
+void vault_door_shot(lab::Lab& lab, const rm::Level& level, int px,
+                     const std::vector<std::pair<std::string, std::string>>& inputs) {
+  rm::Movers m;
+  std::string error;
+  if (!rm::build_movers(level, ge::core::default_workers(), &m, &error)) {
+    lab.fail("rooms: the vault's movers: " + error, "next: fix the entity it names");
+    return;
+  }
+  const ge::move::MoveSpec spec = *ge::move::find_preset("walker");
+  const ge::move::World world = rm::movers_world(m);
+  ge::move::MoveState s = ge::move::stand_at(spec, world, {4, 0.3, 3});
+  const double dt = 1.0 / 120;
+  const int w = px, h = px * 3 / 4;
+  Picture p = lab::create_picture(w * 4, h, kDark);
+  const auto model = model_of(level);
+  int frame = 0, steps = 0;
+  double fired_at = -1, open_at = -1;
+  const auto draw = [&](const std::string& caption) {
+    lab::Shape shape;
+    add_brushes(shape, rm::build_brushes(moved(level, m), 1));
+    lab::ViewCam cam;
+    cam.eye[0] = 4, cam.eye[1] = 1.7, cam.eye[2] = s.pos.z - 1.6;
+    cam.target[0] = 4, cam.target[1] = 1.1, cam.target[2] = 6.5;
+    cam.fov_deg = 70;
+    lab::draw_shape(p, frame * w, 0, w, h, cam, model, shape, style());
+    label(p, frame * w + 4, 4, caption);
+    ++frame;
+  };
+  draw("0.0 S: WALKING UP");
+  for (; steps < 120 * 8 && frame < 4; ++steps) {
+    rm::step_movers(m, spec, std::span<ge::move::MoveState>(&s, 1), dt);
+    for (const rm::MoverEvent& e : m.events) {
+      if (e.kind == rm::MoverEventKind::fired && fired_at < 0) fired_at = steps * dt;
+    }
+    ge::move::MoveCmd cmd;
+    cmd.forward = s.pos.z < 6.2 ? 1 : 0;
+    ge::move::step_move(spec, world, s, cmd, dt);
+    const double t = (steps + 1) * dt;
+    if (frame == 1 && fired_at >= 0 && t >= fired_at + 0.2) draw(fixed(t, 1) + " S: OPENING");
+    if (frame == 2 && m.movers[0].phase == rm::Phase::out) {
+      open_at = t;
+      draw(fixed(t, 1) + " S: OPEN");
+    }
+    if (frame == 3 && s.pos.z >= 6.2) draw(fixed(t, 1) + " S: IN THE DOORWAY");
+  }
+  lab.metric("vault-door-fired-s", fired_at, "s");
+  lab.metric("vault-door-open-s", open_at, "s");
+  lab.metric("vault-door-through-s", steps * dt, "s");
+  lab.shot(
+      {"vault-door", "THE VAULT'S DOOR OPENED BY ITS TRIGGER",
+       "A walker heads for the door from the start's side. Stepping into the trigger in "
+       "front of it fires the door's name; the door slides west into the wall at 2 m/s and "
+       "the walker goes on into the doorway (movers.hpp).",
+       "the door closed, then part way, then fully in the wall; the walker never stopped by it",
+       inputs},
+      p);
+}
+
 void vault_shots(lab::Lab& lab, int px) {
   const std::string path = lab.arg("vault");
   std::ifstream in(path);
@@ -300,6 +382,45 @@ void vault_shots(lab::Lab& lab, int px) {
             "are gone; the floor under the water stays; the clip box is never drawn.",
             "no face shows inside a wall; no gap where two brushes meet", inputs},
            p);
+  vault_door_shot(lab, level, px, inputs);
+
+  // The grass floor's grass: every grass-surfaced material's up-facing faces, scattered.
+  rm::LevelGrass grass = rm::level_grass(level);
+  rm::grow_on_brushes(grass, m);
+  for (const std::string& f : grass.faults) lab.fail(f, "next: fix the surface line it names");
+  double area = 0;
+  for (const ge::grass::Tri& t : grass.cover.tris) area += ge::grass::tri_area(t);
+  const size_t blades = ge::grass::scatter_all(grass.cover).size();
+  lab.metric("vault-grass-kinds", double(grass.cover.kinds.size()), "count");
+  lab.metric("vault-grass-triangles", double(grass.cover.tris.size()), "count");
+  lab.metric("vault-grass-area", area, "m2");
+  lab.metric("vault-grass-blades", double(blades), "count");
+  auto green = model;
+  ge::assets::Material blade;
+  blade.name = "blade";
+  blade.rgb[0] = 0.10f, blade.rgb[1] = 0.30f, blade.rgb[2] = 0.05f;
+  green.materials.push_back(blade);
+  const auto blade_part = uint8_t(green.materials.size() - 1);
+  ge::rooms::labs::add_blades(low, grass.cover, blade_part);
+  ge::rooms::labs::add_blades(all, grass.cover, blade_part);
+  Picture g = lab::create_picture(w * 2, h, kDark);
+  lab::draw_shape(g, 0, 0, w, h, lab::orbit_cam(box_of(low), 210, 55, 30, 0.95, double(w) / h),
+                  green, low, style());
+  label(g, 4, 4, "FROM ABOVE, ROOF OFF");
+  lab::ViewCam low_cam = cam;
+  low_cam.eye[1] = 0.9;
+  low_cam.target[1] = 0.2;
+  lab::draw_shape(g, w, 0, w, h, low_cam, green, all, style());
+  label(g, w + 4, 4, "CROUCHED AT THE START");
+  lab.shot({"vault-grass", "THE VAULT'S GRASS FLOOR GROWN",
+            "The vault's grass material carries `surface grass meadow height=0.6 density=300`: "
+            "its brush faces that look up are handed to engine/grass and scattered, " +
+                std::to_string(blades) + " blades over " + fixed(area, 1) +
+                " m2, drawn at rest as the CPU's blade_shape.",
+            "blades only on the floor (none on the walls, the pillar, the pool's water or the "
+            "door), up to the walls' feet, none poking through a wall",
+            inputs},
+           g);
 }
 
 void run(lab::Lab& lab) {

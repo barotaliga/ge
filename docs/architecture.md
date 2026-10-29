@@ -97,6 +97,12 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   with a responsive view. It depends on `engine/core` only and holds no GPU: the draw list is data,
   and the 2D pass in `engine/render` (M22b) draws the same commands. A menu never calls the game;
   it hands back events, so the game's state stays the game's and a menu replays from its inputs.
+- **`engine/texgen`**: procedural textures (`ge::texgen`, M31; `docs/textures.md` is the design):
+  a recipe an agent writes as text (`.tex`), its layers painted over float planes (colour,
+  height, roughness, metal, glow) in order, the maps derived off them, and the bake cached on
+  disk as PNG under a key of everything its bytes depend on, so a variant is baked once. Pure
+  functions of the recipe and the texture reference, deterministic to the bit; no platform, no
+  GPU. Links `ge_lab` for the PNG writer.
 - **`engine/move`**: character movement (`ge::move`, M28; `docs/movement.md` is the design): the
   knobs of a moving body and their names, preset rows (an arena shooter's, a platformer's, a
   walker's), one step over a swept-box trace callback the game answers with its own world, a box
@@ -361,6 +367,7 @@ whole tree to it, and `ge doctor` holds a game repo to it (the `agent-interface`
 | Built venues on a map | A venue whose features are finer than the 2 m grid (a ski jump's edge, its landing radius) answers `Level::ground_at` and `normal_at` off an ANALYTIC profile inside its width (`Level::venue`, one null check on the hot path), with the grid cut beneath it so a reader of the raw grid never sees ground above the surface |
 | Real-world data | Baked offline by a lab off free public datasets that need no credentials (the 30 m elevation model's public bucket), into GENERATED C++ sources committed in the tree (a real face's heights: a base64 string of second-differenced varints, about 21 KB a face), so a build reads no file and fetches nothing; the bake is re-runnable and reproduces the tree to the bit |
 | Video encoding | AV1 by libaom and Opus by libopus for an export (`cmake/Codecs.cmake`, `engine/capture/codecs.hpp`), built once at configure time and linked privately; the platform's hardware encoders later (M23d4); no patent-encumbered software encoder |
+| Network crypto | XChaCha20-Poly1305 and BLAKE2b by Monocypher (BSD-2-Clause or CC0), two C files from its release archive compiled into `ge_net` (`cmake/Crypto.cmake`, `engine/net/crypto.hpp`), included by one file; keys from the environment, never the tree (M17i) |
 | Tests | Our own header harness, CTest, golden tables |
 | Build/CI | CMake + Ninja + presets; GitHub Actions on Linux x64/arm64 (GCC, Clang), macOS, Windows |
 
@@ -375,7 +382,8 @@ Dependencies are pinned to a tag and a SHA-256, and each one is added in the mil
 needs it: SDL3 through `FetchContent` from its release archive (`cmake/SDL.cmake`), Dawn as its
 prebuilt GitHub release (`cmake/Dawn.cmake`; Tint comes in the same archive), later cgltf
 and Dear ImGui, and libaom and libopus from their release archives, built once at configure time
-(`cmake/Codecs.cmake`). Downloads land in `.cache/deps/` (gitignored, shared by every preset,
+(`cmake/Codecs.cmake`), and Monocypher's two C files from its release archive, compiled into
+`ge_net` (`cmake/Crypto.cmake`). Downloads land in `.cache/deps/` (gitignored, shared by every preset,
 cached by CI). `GE_PLATFORM` and `GE_GPU` switch the platform layer and the GPU off, and
 `GE_ENCODERS` the export's encoders (off for the published package and a consumer); the
 simulation, the plugins and their tests never need either, and `GE_GPU` defaults off where

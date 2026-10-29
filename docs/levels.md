@@ -238,8 +238,9 @@ gains a second kind of geometry beside its rooms:
 - **Entities**: a class and its key/value pairs, standing at a point or owning a brush group.
   The format keeps them as data. The classic gameplay classes run on M32g's step.
 - **Surface replacements**: a material may name a procedural surface (tall grass, short grass,
-  moss) drawn in place of its texture. The grass system fills the name. The cloner offers a
-  table from texture names to replacements.
+  moss) drawn in place of its texture. The cloner offers a table from texture names to
+  replacements. A surface that starts with `grass` is grass: its floors grow a cover of the
+  recipe after it (`plugins/rooms/grass.hpp`, `docs/grass.md` § Cover).
 
 Brushes are built into faces at load: each brush's faces are cut by its own planes, and the
 parts that lie inside another solid brush are removed (constructive solid geometry, the same
@@ -266,7 +267,7 @@ bits on every machine). The mover's world is built from the same faces.
   clockwise from +z). Other keys keep the map's units for now; M32g reads them.
 - **Smoothing** (`--smooth=1`): every face is marked smooth, so neighbours less than about 53
   degrees apart are shaded as one curve (a faceted arch looks round) and right angles stay sharp.
-  Replacing such a run of faces with curved geometry is still to come.
+  Replacing such a run of faces with curved geometry is `round_curves` (below).
 - **Units**: map units become metres through `brush::to_engine` (z up becomes y up).
 
 The `clone` lab clones each map given (`--pak`, `--map`, `--texmap`) and draws it beside the
@@ -275,4 +276,65 @@ there (the highest level face under its footprint) in the clone's mover world an
 stands on that floor. It reports the cells, merges, brushes, faces, hidden faces, groups,
 entities, bytes and times. `--write=<dir>` (outside the tree) keeps the clone as `.gelv` and
 `.gelv.txt`. Without a pack it clones the brush plugin's fixture, which is what `make
-labs-smoke` runs.
+labs-smoke` runs. It also counts each clone's movers by kind, its triggers and the groups whose
+classname nothing moves yet.
+
+### Arches and pillars drawn round (`rooms/curves.hpp`)
+
+A level of convex brushes can only facet a curve. `find_curves` finds the runs of faces that
+stand for one: visible solid faces with edges on one line (within 2 cm, overlapping or end to end,
+so an arch built of staggered slices still links), joined into flat patches, then patches creased
+3 to 50 degrees apart along one axis, all bending one way. A run is CONVEX (the solid inside the
+bend: a pillar, a rounded corner, the top of an arch ring) or CONCAVE (the open side inside: an
+arch's soffit, a vault). Two tests keep flat walls out. A facet of a curve of radius r between turns
+a and b is r (tan a/2 + tan b/2) wide, so a patch whose width implies a radius 1.6 times off the
+run's median is dropped (the wall a chamfer turns off, the straight a vault springs from). The rest
+is fitted with the circle its planes are tangent to (least squares in the plane square to the
+axis), and kept only when every plane lies within 15 percent of that radius, the radius is 0.1 to
+12 m, it turns through at least three normals, and its normals follow one another round with at
+most one open side. A facet the walk or the width test missed (cut off from its neighbours by another
+brush, as the inside of a pipe's mouth is) joins the run when its plane is square to the axis,
+tangent to the fitted circle on the run's side, and lies within the run's length and near the
+circle; the circle is then fitted again. Each `Curve` carries its axis, centre, radius, sweep, length, facets and faces.
+
+`round_curves` draws them round. Each triangle of a curve's faces is cut where the curve turns
+through a multiple of `segment_deg` (7.5 by default; one grid a curve, so neighbouring triangles
+cut at the same angles and never crack), every corner is moved onto the cylinder and shaded with its normal. A convex curve is drawn on
+the circle through the facets' corners, so a pillar still covers the hole its floor and ceiling
+leave for it; a concave one on the circle its facets touch, so a soffit or a pipe's inside moves
+out into the open and never into the solid behind it. Where a moved edge leaves the flat face
+beside it (a pillar's cap, a ring's front), a strip fills the gap between the old edge and the
+new one. Only the drawn mesh changes: a body still
+meets the facets. `BrushMesh::face` names each triangle's face, which is how the rounding finds
+them.
+
+On the shareware maps it finds the octagonal pillars, the rounded wall corners and arch rings
+(4 to 30 runs a map, about 20 ms each); the `clone` lab counts them by kind (`curves` table),
+and its `-curves` picture draws the ones with the most facets close up: the map, the clone with
+each curve painted, and the clone drawn round. An ornate arch whose slices do not meet on one
+line within 2 cm is still missed; a pass that groups facets tangent to one circle without a
+shared edge would find it.
+
+### Movers (M32g)
+
+`rooms::build_movers` reads a level's brush entities into moving parts, and `rooms::step_movers`
+steps them as a pure function of the level, the bodies and the steps (`movers.hpp` states every
+key and default). Keys are in metres, metres a second and seconds; the cloner converts a classic
+map's `speed`, `lip` and `height`.
+
+- **Doors** (`func_door`) slide along `heading` by their own size less `lip`. They wait, then
+  come back. A door with no name opens when touched; a named one waits to be fired. Doors that
+  touch each other move as one, and a closing door that meets a body goes back open.
+- **Plats** (`func_plat`) rest lowered and rise when a body stands on or touches them. They stay
+  up while ridden, then go back down.
+- **Buttons** (`func_button`) are pressed in by a touch. They fire their `target` and come back
+  out.
+- **Trains** (`func_train`) run their `path_corner` chain, looping, and wait at each corner for
+  that corner's `wait`.
+- **Triggers** (`trigger_multiple`, `trigger_once`) fire their `target` when a body is inside.
+
+The world a body meets (`movers_world`) is the still level plus each mover's brushes built
+alone, swept at its offset. A hit on a mover reports its solid number and velocity, so a rider
+is carried (`move::carry`). Secret doors, walls that appear or vanish, teleporters, counters,
+relays, `killtarget`, delays and messages are still to come. The `rooms` lab's `vault-door`
+shot shows the vault's trigger opening its door as a walker comes up to it.

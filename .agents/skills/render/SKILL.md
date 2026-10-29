@@ -15,6 +15,7 @@ technique, change that page in the same PR.
 
 - `engine/render/`: a mechanism any game could use, with no genre's words (a
   heightfield, an instance family, a cloud volume, TAA-U).
+- `engine/bake/`: light worked out once on the CPU into a lightmap atlas (charts, a BVH, bounce, the light's direction; no GPU, `docs/rendering.md` § Baked light).
 - `plugins/<name>/app/`: a plugin's presentation half, such as `mountain/app`'s snow material or tree shapes (the `plugins` skill classifies a file).
 - `games/<game>/app/`: the game's pass table, its quality ladder's values, its grade.
 
@@ -45,12 +46,18 @@ void encode(TerrainPass&, gpu::Encoder&);                 // GPU: bind and dispa
 | `engine/render/shadows.hpp` | The sun's shadows of what stands: two cached cascades (`update_cascade`, the redraw decision, pure CPU; `SunShadows::redraws`) and the figures' atlas, three layers of one depth array; `prepare_sun_shadows`, `encode_sun_shadows`; the receivers bind `sun_shadow_layout` (`no_sun_shadows` until a frame's are bound) and call `sun_shadow` in `wgsl/sun_shadow.wgsl` |
 | `engine/render/horizon.hpp` | The ground's own shadow: two horizon maps either side of the sun's bearing (`horizon.wgsl` bakes one), the bake decision (`prepare_horizon`, `Horizon::bakes`), the CPU reference `horizon_tan`, `read_horizon`; the terrain owns one and its draw and the instances read it (`ground_shadow` in `wgsl/terrain_common.wgsl`) |
 | `engine/render/bloom.hpp` | The glow: a half-size mip chain down (13-tap, a Karis first level) and up (tent), alpha counting the levels (`bloom.wgsl`) |
-| `engine/render/post.hpp` | The bloom mixed in, exposure from the sky, the tone curve, the grade's 32³ table (`set_grade`, `identity_grade`), dither, encoding (`post.wgsl`) |
+| `engine/render/post.hpp` | The bloom mixed in, exposure from the sky, the tone curve, the grade's 32³ table (`set_grade`, `identity_grade`), dither, encoding (`post.wgsl`); the lens and the film (`PostLook`: sharpening, fringes, vignette, grain, dirt), each an `override` switch with a live strength (`set_post_look`) |
+| `engine/render/lens.hpp` | The quarter-size `lens` pass: the sun's rays through what stands (a march over the open sky round its place, off the depth) and its flare (`lens.wgsl`) |
+| `engine/render/ao.hpp` | Ambient occlusion's half-size `ao` pass (a horizon search over the depth, turned per frame, then a depth-aware 3 x 3 mean), read by the lit passes through `sky_seen` (the frame group's binding 10) |
+| `engine/render/dof.hpp` | Depth of field's half-size `dof` gather round a focus the game names, mixed in by post (`kDof`) by each pixel's own circle (`wgsl/dof_coc.wgsl`) |
+| `engine/render/motion_blur.hpp` | Motion blur's `motion_blur.tiles` pass: each 16 x 16 tile's fastest and slowest motion and over its neighbours, read by post's gather (`PostLook::motion_blur`) |
+| `engine/render/grade.hpp` | The grade's knobs (contrast, saturation, temperature, tint, gamma) baked into the table, CPU only |
 | `engine/render/lights.hpp` | Local lights (M39a): `LocalLight` in candela with range, radius and cone; `flicker_level` (flame, buzz, strobe, pulse, steps); the clusters (`bin_lights`, `cluster_of`, the CPU twin of `wgsl/lights.wgsl`'s `cluster_index`), `prepare_lights` into group 0 binding 10; `lamp_lux_at` for `FrameView::lamp_lux`; the `gpu-lights` lab |
 | `engine/render/surface.hpp` | Materials (M39b): `Surface` (albedo, roughness, metal, spec, emissive, porous), the presets, `pack_surfaces`; the model is `wgsl/surface.wgsl` (`surface_lit` for the sun and sky, `surface_brdf` for a lamp); an instance family takes surfaces, the rgb form is matte |
 | `engine/render/mesh.hpp` | CPU meshes for instance families: `add_box`, `add_cylinder` (and cones), `add_ellipsoid`, all wound outward; `bounding_sphere`; `pack_mesh` (three words a vertex) and `unpack_vertex` |
 | `engine/render/instances.hpp` | Instance families (`instances_cull.wgsl`, `instances.wgsl`, `wgsl/instances_common.wgsl`): `create_family`, `set_instances` / `cut_family`, `prepare_family`; the two-phase cull (`encode_instances_cull`, `late` false then true), the depth draws, the lit draw over both phases, the overdraw probe; `pick_lod` (the CPU twin of the LOD band), `read_instance_stats` (the cull's counters) |
 | `engine/render/morph.hpp` | Morph meshes (`morph.wgsl`, `docs/rendering.md` § Morph meshes): vertex-animated models uploaded once (`create_morph`), each draw's two frames blended on the GPU with the last frame's for motion, skins in one atlas (`pack_morph_atlas`) whose alpha is a mark (plain, glow, tint region and step) resolved against the game's `TintRamps` (`ramp_from`), sharp or smooth per draw, lit by `outdoor` sky and sun plus the game's own ambient and shade; CPU twins `pose_morph` and `morph_texel` |
+| `engine/render/sprites.hpp` | Sprites (`sprites.wgsl`, `docs/rendering.md` § Sprites): frames in one atlas (`pack_sprite_atlas`), each with an origin; five facing rules worked out on the CPU (`sprite_basis`: parallel, upright, parallel_upright, oriented, parallel_oriented); `cutout` (alpha-tested, depth and motion written, drawn first) or `over` / `add` (premultiplied through one blend, sorted far to near, the reactive channel); `glow`, `outdoor` and `ambient` light; sharp or smooth |
 | `engine/render/wgsl/` | The shared WGSL: `frame_types.wgsl` (and `screen_motion`, the one motion vector), `atmosphere.wgsl` (the air, the tables' maps, the scattering march), `frame.wgsl` (group 0, the haze, the sun's light, the sky's irradiance, the exposure), `terrain_common.wgsl` (the terrain's params block, `ground_shadow`), `terrain_draw.wgsl` (the half every ground material shares), `instances_common.wgsl` (the family's blocks, the packed vertex, the list entry's bits) |
 | `games/fall_line/app/frame.hpp` | Fall Line's pass table (`kPassTable`) and the `GameFrame` that owns the GPU half; `create_frame` is the manifest, `FrameOptions` the TAA switch and the render scale, `cut` the camera cut |
 | `games/fall_line/app/views.hpp`, `look.hpp` | The named views, the chase camera and the map's day; the ground's albedo |
@@ -117,6 +124,16 @@ per bearing step crossed). A change to the bake or its decision runs it before a
 camera (ghosting, and a picture of the difference eight times brighter), a single jittered
 frame against it (aliasing), and two stills after a cut, which must be the same bits. A change
 to the resolve, the jitter or the motion vectors runs it before and after.
+
+**`post`** (`games/fall_line/labs/gpu_post_lab.cpp`): every post effect off, at Fall Line's
+defaults and each alone at full strength, into the sun through the trees and down the start, with
+each variant's post, lens, motion blur tiles, ao and dof passes' ms; `moving` and `motionblur` shoot with
+the eye moving at 21 m/s and turning, and `--only=moving,motionblur` runs just those against off.
+Ambient occlusion shows best in the `world` lab (`--views=wood --moments=15 --cfg="r_ao 1"`
+against `r_ao 0`: the trees' feet and the skiers' boots), and so does depth of field
+(`--moments=15 --cfg="r_dof 1"`: each moment focuses on the chase camera's subject). A change to the post pass, the lens pass, the ao pass or the grade runs
+it before and after; judge a default by whether the defaults' picture reads as the scene, not as
+an effect.
 
 Every pass lands with a `picture` lab. Until the GPU capture exists (M6–M7), a lab draws on
 the CPU raster (`engine/lab/raster.hpp`). After that, a lab renders a named view offscreen

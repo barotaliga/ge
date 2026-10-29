@@ -1,0 +1,17 @@
+# A blank plate: one bevelled panel with nothing on it, scuffed and a little dirty. What a
+# trademark, a logo or an emblem in a level becomes: the place keeps a plate, never the mark.
+texture blank_plate
+size    64
+seed    4
+surface metal
+scale   1
+tags    blank plain plate panels metal low-colour
+param   dirt 0.3 0 1
+
+layer panels  rows=1 cols=1 seam=0.04 bevel=0.06 color=#3a3530 vary=0 depth=0.5 metal=0.5
+layer noise   kind=perlin period=4 octaves=5 color=#000000 color2=#ffffff blend=overlay amount=0.25
+layer speckle size=1 contrast=0.15 cavity=0
+layer dirt    amount=$dirt period=3
+layer scratches count=6 amount=0.2
+layer shade   strength=0.8 highlight=0.12 occlusion=0.2
+layer palette color=#6a6258 steps=16

@@ -71,6 +71,8 @@ TEST(a_shot_holes_where_its_ray_lands) {
   CHECK(hit.slot == 0);
   CHECK(std::fabs(hit.at.z - 10) < 1e-9);
   CHECK(hit.normal.z < -0.999);
+  CHECK(hit.tri >= 0 && hit.tri < static_cast<int>(m.tag.size()));
+  CHECK(std::fabs(gd::normal_of(m, static_cast<uint32_t>(hit.tri)).z) > 0.999);
   CHECK(pool.decals[0].kind == gd::DecalKind::bullet_hole);
   for (const gd::DecalVertex& v : gd::decal_verts(pool, 0)) {
     CHECK(gd::length(gd::sub(v.pos, hit.at)) < 0.2);
@@ -93,7 +95,7 @@ TEST(a_shot_into_the_open_leaves_nothing) {
   s.dir = {0.1, 1, 0.2};  // the hall has no roof
   const gd::ShotResult miss = gd::shot_hit(pool, r, s);
   CHECK(!miss.hit);
-  CHECK(miss.slot == -1);
+  CHECK(miss.slot == -1 && miss.tri == -1);
   CHECK(gd::live_count(pool) == 0);
 }
 

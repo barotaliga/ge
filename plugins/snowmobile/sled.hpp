@@ -55,6 +55,13 @@ struct SledControls {
   double brake = 0;
   double steer = 0;
   double lean = 0;
+  template <class Io>
+  friend void describe(Io& io, SledControls& v) {
+    io(v.throttle);
+    io(v.brake);
+    io(v.steer);
+    io(v.lean);
+  }
 };
 
 // One probe on the snow as a renderer stamps it: on the surface under the probe (world, m), sunk
@@ -64,6 +71,15 @@ struct SledContact {
   double sink = 0;
   double load = 0;
   bool touching = false;
+  template <class Io>
+  friend void describe(Io& io, SledContact& v) {
+    io(v.x);
+    io(v.y);
+    io(v.z);
+    io(v.sink);
+    io(v.load);
+    io(v.touching);
+  }
 };
 
 struct SledState {
@@ -94,6 +110,43 @@ struct SledState {
   double air_time = 0;  // s
   double over_for = 0;  // s it has stood past rolled or looped
   double hit_wait = 0;  // s before another trunk is reported
+  template <class Io>
+  friend void describe(Io& io, SledState& v) {
+    io(v.x);
+    io(v.y);
+    io(v.z);
+    io(v.vx);
+    io(v.vy);
+    io(v.vz);
+    io(v.q);
+    io(v.wx);
+    io(v.wy);
+    io(v.wz);
+    io(v.heading);
+    io(v.pitch);
+    io(v.roll);
+    io(v.speed);
+    io(v.way);
+    io(v.controls);
+    io(v.ski_angle);
+    io(v.rider_right);
+    io(v.rider_aft);
+    io(v.roll_aim);
+    io(v.rpm);
+    io(v.tread_speed);
+    io(v.running);
+    io(v.slip);
+    io(v.packed);
+    io(v.contacts);
+    io(v.sinks);
+    io(v.comps);
+    io(v.ski_comp);
+    io(v.tread_comp);
+    io(v.airborne);
+    io(v.air_time);
+    io(v.over_for);
+    io(v.hit_wait);
+  }
 };
 
 enum class Thrown : uint8_t { none, tree, rolled, landing, wall };

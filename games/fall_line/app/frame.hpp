@@ -10,23 +10,22 @@
 //   instances.cull       -> instances.early (the forest, the figures and the crowd: the
 //                           frustum, the last frame's pyramid)
 //   terrain.horizon      -> terrain.horizon (the bakes due)
-//   trails.fine          -> trails.fine (the tracks laid since the last frame, or the whole
-//                           window redrawn from the history when it moved)
+//   trails.fine          -> trails.fine (the tracks laid since, or the window redrawn as it moves)
 //   trails.coarse        -> trails.coarse (the tracks laid since the last frame)
 //   particles.sim        -> particles (the spray thrown since the last frame, flown a frame)
 //   precip.sim           -> precip (the snow and rain round the eye, carried a frame on the wind)
 //   shadows.cull         -> shadows.lists (the casters of the maps drawn this frame)
 //   shadows.near         -> shadows.maps (the near cascade: the forest, when due)
 //   shadows.far          -> shadows.maps (the far cascade, when due)
-//   shadows.figures      -> shadows.maps (the figures' atlas, every frame: the racers, the
-//                           nearest amateurs; each tile its own casters)
+//   shadows.figures      -> shadows.maps (the figures' atlas: the racers, the nearest amateurs)
+//   fog.inject           -> fog.media (render/fog.hpp: the scene's fog lit a froxel each)
+//   fog.integrate        -> fog.volume (each column toward the eye; every haze reads it)
 //   terrain.depth        -> depth (the prepass)
 //   instances.depth      -> depth (the early lists' prepass)
 //   hiz                  -> hiz (the depth's pyramid)
 //   instances.cull.late  -> instances.late (what the last frame's pyramid hid, against this one)
 //   instances.depth.late -> depth
-//   terrain              -> hdr motion (shaded where the depth is equal, in the snow's material;
-//                           reads shadows.maps and the trail maps)
+//   terrain              -> hdr motion (the snow's material; reads the shadows and trail maps)
 //   instances            -> hdr motion (both lists, where the depth is equal)
 //   sky                  -> hdr motion (behind depth)
 //   clouds               -> hdr (the cloud's layers, behind depth)
@@ -37,7 +36,8 @@
 //   precip               -> hdr motion (the snow and rain round the eye, the rain's splashes)
 //   taa                  -> taa.history (at the output's size; with FrameOptions::taa)
 //   bloom                -> bloom (the glow's mip chain, from what post reads)
-//   post                 -> final (the bloom mixed in, the grade's table: look.hpp's)
+//   lens, motion_blur.tiles -> lens (the sun's rays and flare), the motion's fastest a tile
+//   post                 -> final (bloom, lens, motion blur, the film, the grade's table)
 //   ui                   -> final (the 2D layer's list over it: the console, render/ui_pass.hpp)
 //
 // With TAA the frame renders at FrameOptions::scale of the output's size, jittered, and the
@@ -55,7 +55,7 @@
 // is an error.
 //
 // ge:summary Fall Line's frame: its pass table over engine/render and the GPU half it owns
-// ge:keywords fall-line frame pass-table game-frame create_frame draw pass_table_faults
+// ge:keywords fall-line frame pass-table game-frame create_frame draw pass_table_faults fog
 // ge:keywords render offscreen surface stats draw_wire wire-probe wireframe water add_water
 // ge:skill render
 #pragma once
@@ -76,12 +76,18 @@
 #include "mountain/app/snow.hpp"
 #include "mountain/app/trails.hpp"
 #include "mountain/mapgen/types.hpp"
+#include "render/ao.hpp"
 #include "render/bloom.hpp"
 #include "render/cloud_kinds.hpp"
 #include "render/clouds.hpp"
+#include "render/dof.hpp"
+#include "render/fog.hpp"
 #include "render/frame.hpp"
+#include "render/grade.hpp"
 #include "render/hiz.hpp"
 #include "render/instances.hpp"
+#include "render/lens.hpp"
+#include "render/motion_blur.hpp"
 #include "render/particles.hpp"
 #include "render/post.hpp"
 #include "render/precip.hpp"
@@ -114,13 +120,22 @@ struct FrameOptions {
   bool occlusion = true;        // cull the instances by the depth pyramid (off: the frustum only)
   uint32_t shadow_size = 2048;  // the sun's shadow maps' texels a side
   double bloom = 0.04;          // the share of the bloom's glow in the picture; 0: none
-  bool snow = true;             // the snow's material (mountain/app/snow.hpp); off: the albedo lit
-  bool trails = true;           // the tracks (mountain/app/trails.hpp); drawn only with the snow
-  bool spray = true;            // the racers' spray (skier/app/spray.hpp) thrown into the particles
+  // The lens and the film (render/post.hpp), the lens pass (render/lens.hpp) and the grade's
+  // knobs (render/grade.hpp): Fall Line's defaults, cfg/cvars.hpp's r_ cvars'.
+  ge::render::PostLook look{.sharpen = 0.3, .vignette = 0.25};
+  ge::render::LensSettings lens{.rays = 0.5};
+  ge::render::AoSettings ao{.strength = 0.6};  // the ambient occlusion (render/ao.hpp)
+  // Depth of field (render/dof.hpp); a focus of 0 is how far the camera's subject is.
+  ge::render::DofSettings dof{.focus_m = 0};
+  ge::render::GradeKnobs grade;
+  bool snow = true;    // the snow's material (mountain/app/snow.hpp); off: the albedo lit
+  bool trails = true;  // the tracks (mountain/app/trails.hpp); drawn only with the snow
+  bool spray = true;   // the racers' spray (skier/app/spray.hpp) thrown into the particles
   ge::render::ParticleSettings particles;
   bool precip = true;    // what falls (snow, sleet, rain), when the map's sky snows
   bool splashes = true;  // the rain's splashes on the ground (with `precip`)
   bool wet = true;       // the rain wets the ground: darker, mirroring, pooled on the flats
+  bool fog = true;       // the scene's fog in areas (FrameScene::fog, render/fog.hpp) drawn
   bool weather =
       true;  // the map's sky and cloud in the picture (mountain/app/cloud_field.hpp): off, clear
   double clouds = 1.0;  // the share of the cloud march's steps (0.25..1); 0: no layer drawn
@@ -140,6 +155,7 @@ struct FrameOptions {
   bool cloud_spread = true;   // the quarter's march spread over four frames, the rest reprojected
   double reach_m = 0;  // how far the picture draws, misted (render/view.hpp); 0: the whole ground
   ge::render::PrecipSettings fall;
+  ge::render::FogSettings froxels;             // the fog in areas' froxel volume
   ge::mountain::app::TrailOptions trail_maps;  // their sizes
 };
 
@@ -166,6 +182,8 @@ struct FrameScene {
   const ge::ui::DrawList* overlay = nullptr;
   // The run's clock, s: where the village's traffic is drawn (sim/village.hpp's `vehicle_at`).
   double run_time = 0;
+  // The fog in areas this frame (render/fog.hpp): mist, ground fog, dust; empty, none.
+  std::span<const ge::render::FogVolume> fog = {};
 };
 
 struct GameFrame {
@@ -188,6 +206,7 @@ struct GameFrame {
   std::vector<ge::mountain::app::TrailStamp> laid;
   ge::render::Particles particles;
   ge::render::Precip precip;
+  ge::render::Fog fog;
   ge::wind::Wet wet;    // the water on the ground, stepped by the frames' clock
   double wet_time = 0;  // the last drawn frame's time_s
   bool wet_placed =
@@ -204,13 +223,18 @@ struct GameFrame {
   ge::render::Hiz hiz;
   ge::render::Taa taa;
   ge::render::Bloom bloom;
+  ge::render::Lens lens;        // made only when FrameOptions::lens has a half on
+  ge::render::MotionBlur blur;  // made only with FrameOptions::look.motion_blur above 0
+  ge::render::Ao ao;            // made only with FrameOptions::ao's strength above 0
+  ge::render::Dof dof;          // made only with FrameOptions::dof's strength above 0
   ge::render::Post post;
   ge::render::UiPass ui;
   ge::render::InstancePipelines instancing;
   ge::render::InstanceFamily forest, figures, crowd;
-  // The free ride's village (`show_village`): its streets (casting nothing), its parked cars
-  // (casting into the cascades with the forest) and its traffic (into the figures' atlas).
-  ge::render::InstanceFamily streets, parked, traffic;
+  // The free ride's village (`show_village`): its streets (casting nothing), its buildings and its
+  // parked cars (casting into the cascades with the forest) and its traffic (into the figures'
+  // atlas).
+  ge::render::InstanceFamily streets, buildings, parked, traffic;
   std::vector<ge::render::InstanceFamily*> families{&forest, &figures, &crowd};
   // What casts into the cached cascades and what into the atlas's tiles, each frame.
   std::vector<ge::render::InstanceFamily*> still{&forest};
@@ -255,10 +279,11 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
                                         const FrameOptions& options = {});
 
 // THE FREE RIDE'S VILLAGE drawn in the frame from now on: the trees felled for it left out of the
-// forest, its streets laid on the snow, its parked cars, and its traffic where each frame's
-// `FrameScene::run_time` has it (mountain/app/village_look.hpp); the frame keeps it while it draws
-// it. Nothing for null. The parked cars cast into the cached cascades as the forest does, the
-// traffic into the figures' atlas, so a vehicle under way casts only near a figure's tile.
+// forest, its streets laid on the snow, its buildings on their plinths (building_look.hpp), its
+// parked cars, and its traffic where each frame's `FrameScene::run_time` has it
+// (mountain/app/village_look.hpp); the frame keeps it while it draws it. Nothing for null. The
+// buildings and the parked cars cast into the cached cascades as the forest does, the traffic
+// into the figures' atlas, so a vehicle under way casts only near a figure's tile.
 void show_village(ge::gpu::Device& device, GameFrame& frame,
                   std::shared_ptr<const sim::Village> village);
 

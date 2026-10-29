@@ -42,6 +42,9 @@ struct ShotResult {
   int slot = -1;  // the hole's pool slot; -1 when it hit nothing or no surface took the mark
   Vec3 at{0, 0, 0};
   Vec3 normal{0, 1, 0};  // out of the surface, toward the shooter
+  // The struck triangle of the receivers' mesh, -1 on a miss: its `mesh.tag` names the surface,
+  // so a game finds the texture and its class (`classify_surface`) for the impact's look.
+  int tri = -1;
 };
 // The round of `s` flown against `receivers` and its hole pressed into `pool`.
 ShotResult shot_hit(DecalPool& pool, const Receivers& receivers, const ShotAt& s);

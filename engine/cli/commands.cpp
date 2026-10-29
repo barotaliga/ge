@@ -120,6 +120,21 @@ constexpr FlagSpec kLintFlags[] = {
     kPreset,
     kEngine,
     kRepo};
+constexpr FlagSpec kTextureBakeFlags[] = {
+    {"ref", "<words>", "the reference's seed and params: \"seed=12 wear=0.8\""},
+    {"size", "<px>", "bake at this size instead of the recipe's (a power of two)"},
+    {"out", "<dir>", "the cache directory (default build/textures)"},
+    kRepo};
+constexpr FlagSpec kTextureMatchFlags[] = {
+    {"map", "<file>", "the texture map to write (default <dir>/textures.texmap)"},
+    {"only", "<a,b>", "draw sheets for these textures (default: the farthest)"},
+    {"top", "<n>", "the nearest recipes listed and drawn per texture (default 4)"},
+    {"sheets", "<n>", "with no --only, sheets for the n farthest (default 8)"},
+    {"list", "<n>", "textures printed, farthest first (default 20)"},
+    {"near", "<d>", "over this distance a texture is far (default 0.5)"},
+    {"library", "<dir>", "the recipes to match from (default engine/texgen/library)"},
+    {"sheet-dir", "<dir>", "where the sheets go (default <dir>/sheets)"},
+    kRepo};
 constexpr FlagSpec kGoalsFlags[] = {
     {"base", "<ref>", "the roadmap rows are already taken on (default origin/main)"},
     {"fetch", "", "git fetch origin first (the default; kept so old command lines still run)"},
@@ -205,6 +220,21 @@ constexpr FlagSpec kAssetBuildFlags[] = {
     kRepo};
 constexpr FlagSpec kStateFlags[] = {
     {"step", "<n>", "after this many steps (default: the log's end)"}, kPreset, kEngine, kRepo};
+constexpr FlagSpec kSaveWriteFlags[] = {
+    {"step", "<n>", "save after this many steps of the log (default 0)"},
+    {"out", "<file>", "the save file to write"},
+    {"title", "<text>", "the line a menu shows"},
+    {"place", "<text>", "where in the run, as a menu shows it"},
+    kPreset,
+    kEngine,
+    kRepo};
+constexpr FlagSpec kSaveLoadFlags[] = {
+    {"steps", "<n>", "steps the game's pilot plays on after the load (default 0)"},
+    kPreset,
+    kEngine,
+    kRepo};
+constexpr FlagSpec kSaveCheckFlags[] = {
+    {"every", "<s>", "seconds between saves (default 10)"}, kPreset, kEngine, kRepo};
 constexpr FlagSpec kWhyFlags[] = {
     {"agent", "<n>",
      "the bot to explain: 0 the player's pilot, then the game's others (default 0)"},
@@ -241,6 +271,8 @@ constexpr FlagSpec kRecordFlags[] = {
     {"size", "<WxH>", "the frame size (default: the view's own)"},
     {"format", "<mp4|webm|gif|png>", "H.264 MP4, VP9 WebM, a GIF, or PNG frames (default mp4)"},
     {"codec", "<name>", "an ffmpeg encoder in place of the format's own (libx264, libvpx-vp9)"},
+    {"container", "<mkv|mp4>",
+     "with --format=mkv --codec=av1: the engine's own fragmented MP4 in place of a .webm"},
     {"crf", "<n>", "quality: lower is better and larger (default 23 for mp4, 32 for webm)"},
     {"bitrate", "<rate>", "a bit rate such as 4M in place of --crf"},
     {"encoder-preset", "<name>",
@@ -281,6 +313,12 @@ constexpr FlagSpec kSourceSearchFlags[] = {
     {"kind", "<sound|model>", "only sounds or only models, where a source holds both"},
     {"refresh", "", "read the source's listing again instead of the cached one"},
     {"cache", "<dir>", "where packs are kept (default GE_ASSET_CACHE, else ~/.cache/ge/sources)"}};
+constexpr FlagSpec kContentScanFlags[] = {
+    {"assetmap", "<file>", "the game's asset map the set is held to"},
+    {"registry", "<dir>", "the directory of the game's sounds.tsv and models.tsv"},
+    kPreset,
+    kEngine,
+    kRepo};
 constexpr FlagSpec kSnowShowFlags[] = {
     {"out", "<dir>", "where the PNGs go (default: snow/ beside the file)"}};
 constexpr FlagSpec kSnowColumnFlags[] = {{"at", "<x,z>", "the point, m (required)"}};
@@ -399,10 +437,25 @@ const CommandSpec kCommands[] = {
      "the roadmap rows taken on the base and on every remote branch, and the next free number "
      "(or, for a row such as M17, the next free letter under it)",
      kGoalsFlags, "ge goals free", "commit"},
+    {"texture kinds", "", 0, 0, "learn",
+     "every procedural texture layer kind, its keys, their defaults and ranges", kRepoOnly,
+     "ge texture kinds", "textures"},
+    {"texture check", "<file.tex>...", 1, -1, "build",
+     "parse texture recipes; every mistake a finding at its line", kRepoOnly,
+     "ge texture check textures/brick_wall.tex", "textures"},
+    {"texture bake", "<file.tex>", 1, 1, "build",
+     "bake one texture variant to PNG maps and a .meta in the cache, or reuse it",
+     kTextureBakeFlags, "ge texture bake textures/brick_wall.tex --ref=\"seed=12 wear=0.8\"",
+     "textures"},
     {"goals claim", "<what>", 1, -1, "learn",
      "the next free row reserved and pushed to this branch at once, then checked against every "
      "branch: an earlier claim on the same row keeps it, and this one moves to the next",
      kGoalsClaimFlags, "ge goals claim \"Lava and slime\"", "commit"},
+    {"texture match", "<dir>", 1, 1, "see",
+     "match a converted map's textures to recipes in a texture map an agent steers: scores, "
+     "nearest recipes, sheets",
+     kTextureMatchFlags, "ge texture match /tmp/e1m1-textures --map=levels/e1m1.texmap",
+     "textures"},
     {"new", "<dir>", 1, 1, "create",
      "a game repo against this engine release: the simulation, a lab, a test, the skills",
      kNewFlags, "ge new snow-racer --game=racer", "ge"},
@@ -501,6 +554,22 @@ const CommandSpec kCommands[] = {
      {},
      "ge save inspect saves/slot-1",
      "saves"},
+    {"save write", "<log>", 1, 1, "play",
+     "a log played to --step and saved by the game to --out: the file's bytes, chunks and the "
+     "save's time",
+     kSaveWriteFlags, "ge save write runs/fall_line-38.inputs --step=7200 --out=saves/a.save",
+     "saves"},
+    {"save load", "<file>", 1, 1, "play",
+     "a save loaded (its map built from the setup it carries) and played on by the game's pilot "
+     "for --steps: the load's time and the digests",
+     kSaveLoadFlags, "ge save load saves/a.save --steps=1200", "saves"},
+    {"save check", "<log>", 1, 1, "play",
+     "a log saved every --every seconds, each save loaded and played on beside the run never "
+     "saved: the first step any parts (a field missing from a describe)",
+     kSaveCheckFlags, "ge save check runs/fall_line-38.inputs --every=10", "saves"},
+    {"save diff", "<a> <b>", 2, 2, "play",
+     "two saves of a game compared: the chunks that differ, then the fields of the state",
+     kBuildFlags, "ge save diff saves/a.save saves/b.save", "saves"},
     {"shot", "[<log>]", 0, 1, "see",
      "a still of a run at a step, drawn headless and captioned (seed, options, step, digest): "
      "a log played to --step, or the pilot's run of --seed; the game's options go after --",
@@ -654,6 +723,14 @@ const CommandSpec kCommands[] = {
      "a pack downloaded and unpacked into the cache (never the repository) with SOURCE.txt: "
      "title, author, page and licence; a licence the repository cannot carry is refused",
      kSourceFlags, "ge source fetch kenney:impact-sounds", "assets"},
+    {"content scan", "<pak|dir>", 1, 1, "see",
+     "every sound, model and numbered sound set a classic content set ships or its maps name, "
+     "where each is used, and what the game's asset map still leaves unmapped (the "
+     "content-scan lab: tables, a picture, assetmap-draft.txt); the report stays in previews/",
+     kContentScanFlags,
+     "ge content scan ~/classic/id1 --assetmap=games/shooters_edge/content/classic.assetmap "
+     "--registry=games/shooters_edge/content",
+     "assets"},
     {"credits check",
      "[<dir>]",
      0,

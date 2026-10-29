@@ -48,6 +48,7 @@
 #include "cli/sound.hpp"
 #include "cli/source.hpp"
 #include "cli/sweep.hpp"
+#include "cli/texture.hpp"
 #include "cli/upgrade.hpp"
 
 namespace {
@@ -161,6 +162,29 @@ Outcome run(const Args& a) {
     const std::string base = flag_value(a, "base");
     return run_goals_free(fs::absolute(repo_of(a)), a.words.empty() ? "" : a.words[0],
                           base.empty() ? "origin/main" : base, !has_flag(a, "no-fetch"));
+  }
+  if (name == "texture kinds") return run_texture_kinds();
+  if (name == "texture check") return run_texture_check(fs::absolute(repo_of(a)), a.words);
+  if (name == "texture match") {
+    TextureMatchOptions m;
+    m.dir = a.words[0];
+    m.map = flag_value(a, "map");
+    m.library = flag_value(a, "library");
+    m.only = flag_value(a, "only");
+    m.sheet_dir = flag_value(a, "sheet-dir");
+    auto number = [&](const char* flag, double fallback) {
+      const std::string v = flag_value(a, flag);
+      return v.empty() ? fallback : std::strtod(v.c_str(), nullptr);
+    };
+    m.top = static_cast<int>(number("top", m.top));
+    m.sheets = static_cast<int>(number("sheets", m.sheets));
+    m.list = static_cast<int>(number("list", m.list));
+    m.near = number("near", m.near);
+    return run_texture_match(fs::absolute(repo_of(a)), m);
+  }
+  if (name == "texture bake") {
+    return run_texture_bake(fs::absolute(repo_of(a)), a.words[0], flag_value(a, "ref"),
+                            flag_value(a, "size"), flag_value(a, "out"));
   }
   if (name == "goals claim") {
     const std::string base = flag_value(a, "base");
@@ -286,6 +310,18 @@ Outcome run(const Args& a) {
     lab.passthrough = a.passthrough;
     return run_lab(build_options(a), lab);
   }
+  if (name == "content scan") {
+    LabOptions lab;
+    lab.id = "content-scan";
+    lab.passthrough = {"--content=" + fs::absolute(a.words[0]).string()};
+    for (const char* f : {"assetmap", "registry"}) {
+      if (has_flag(a, f)) {
+        lab.passthrough.push_back("--" + std::string(f) + "=" +
+                                  fs::absolute(flag_value(a, f)).string());
+      }
+    }
+    return run_lab(build_options(a), lab);
+  }
   if (name == "sim") {
     std::vector<std::string> options = a.passthrough;
     if (has_flag(a, "human")) options.emplace_back("--human");
@@ -356,6 +392,7 @@ Outcome run(const Args& a) {
   }
   if (name.starts_with("net ")) return run_net(a);
   if (name == "save inspect") return run_save(a);
+  if (name.rfind("save ", 0) == 0) return run_save_game(build_options(a), a, name.substr(5));
   if (name.starts_with("sound ")) return run_sound(a);
   if (name == "model import") return run_model(a);
   if (name.starts_with("source ")) return run_source(a);
