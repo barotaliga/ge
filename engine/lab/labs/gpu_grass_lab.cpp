@@ -3,13 +3,14 @@
 // and stands of long grass in a breeze; every preset from the same eye; long grass in a calm, a
 // breeze, a fresh wind and a gale; six moments of its sway; a low sun behind long grass; the
 // field from eye height out to the reach, where the blades thin into the painted ground; a gust
-// crossing it from above; and lawn on a terraced slope's treads and none on its risers (a mesh's
-// floors, the way a level's grass material is grown). It fails on a GPU error, a pipeline made
-// after the load, or a view the grass does not change.
+// crossing it from above; a walker's path and two wheel tracks through it, pressed flat and
+// standing back up over the kind's spring; and lawn on a terraced slope's treads and none on its
+// risers (a mesh's floors, the way a level's grass material is grown). It fails on a GPU error, a
+// pipeline made after the load, or a view the grass does not change.
 //
-// ge:summary Lab: the grass drawn: meadow, every kind, wind sweep, sway, backlight, reach, floors
+// ge:summary Lab: the grass drawn: meadow, kinds, wind, sway, backlight, reach, trampled, floors
 // ge:keywords lab gpu grass meadow kinds wind sway backlight translucency reach thinning terrace
-// ge:keywords picture software-adapter blades
+// ge:keywords picture software-adapter blades trample path wheel-track flowers seed-heads
 // ge:skill grass render labs
 // ge:test tests/render_grass_test.cpp
 #include <algorithm>
@@ -28,6 +29,7 @@
 #include "grass/cover.hpp"
 #include "grass/kind.hpp"
 #include "grass/sway.hpp"
+#include "grass/trample.hpp"
 #include "lab/lab.hpp"
 #include "lab/labs/water_scene.hpp"
 #include "lab/raster.hpp"
@@ -284,8 +286,8 @@ void run(gl::Lab& lab) {
   const uint32_t w = static_cast<uint32_t>(lab.arg_num("width"));
   const uint32_t h = w * 9 / 16;
   auto device = ge::gpu::create_device({.label = "gpu-grass", .validation = 1});
-  const std::vector<std::string> ids = {"meadow",  "kinds", "wind",       "sway",
-                                        "backlit", "reach", "from-above", "floors"};
+  const std::vector<std::string> ids = {"meadow",  "kinds", "heads",      "wind",     "sway",
+                                        "backlit", "reach", "from-above", "trampled", "floors"};
   if (!device) {
     if (gpu_required()) {
       lab.fail("no GPU device, and GE_GPU_REQUIRE=1",
@@ -355,6 +357,31 @@ void run(gl::Lab& lab) {
               "the lawn a short dense carpet, the meadow shin high, the long grass knee to thigh "
               "high and soft, the tussock in tufts, the steppe thin and straw-coloured, the reeds "
               "tall, sparse and upright",
+              {}},
+             sheet(pics, labels, 3), gl::Det::measured);
+  }
+
+  // HEADS: flowers and seed heads, close to.
+  {
+    std::vector<gl::Picture> pics;
+    std::vector<std::string> labels;
+    const auto light = air_of(2, 1.5 * kPi);
+    for (const char* name : {"meadow", "long", "reeds"}) {
+      const gg::Kind k = named(name);
+      gr::set_grass_cover(d, s.grass, meadow_cover(s, {k}, ex, ez + 6, 12, true));
+      const double up = eye_y - 1.6 + std::max(0.9, static_cast<double>(k.height) + 0.5);
+      pics.push_back(
+          draw(d, s, view_at(ex, up, ez, 0.25, -0.45, 0.6, 2.4, 0), light->air, 7, true));
+      labels.push_back(name);
+    }
+    lab.shot({"heads",
+              "FLOWERS AND SEED HEADS",
+              "The meadow, the long grass and the reeds from just above their tops, looking down "
+              "into them: a share of the blades of each kind ends in a flower head (the meadow's "
+              "yellow and white, the long grass's purple and white) or a seed head (swelling over "
+              "the top of the blade and tapering again; the reeds' dark plumes).",
+              "flowers scattered over the meadow's top, a few in the long grass, seed heads on "
+              "the long grass and the reeds; none of them floating free of a blade",
               {}},
              sheet(pics, labels, 3), gl::Det::measured);
   }
@@ -443,6 +470,55 @@ void run(gl::Lab& lab) {
               {}},
              draw(d, s, view_at(236, top, 150, 0.0, -0.8, 1.0, 2.4, 0), gale->air, 30, true),
              gl::Det::measured);
+  }
+
+  // TRAMPLED: a walker's path and a vehicle's two wheel tracks through long grass (the cover
+  // from above's), seen as they are laid, halfway up again and after the kind's spring.
+  {
+    gg::Trample tr;
+    gg::init_trample(tr, 0.15f, 1024);
+    for (int i = 0; i < 60; ++i) {  // a walk across the slope, a step every 0.35 m
+      const float x = 226 + 0.35f * static_cast<float>(i);
+      const auto z = static_cast<float>(160 + 1.5 * lm::sin(0.08 * i));
+      const float side = (i % 2 == 0 ? 0.12f : -0.12f);
+      gg::stamp(tr, x, z + side, 0.3f, 1, 0, 0.1f * static_cast<float>(i));
+    }
+    for (int i = 0; i < 90; ++i) {  // two wheels 1.6 m apart driving up the slope
+      const float z = 152 + 0.25f * static_cast<float>(i);
+      for (const float x : {236.2f, 237.8f})
+        gg::stamp(tr, x, z, 0.32f, 0, 1, 2 + 0.02f * static_cast<float>(i));
+    }
+    gr::set_grass_trample(d, s.grass, tr);
+    const double ty = ge::core::sample_field(s.field, 233, 150) + 4.5;
+    const double ay = ge::core::sample_field(s.field, 237, 153) + 8;
+    const gr::FrameView views[2] = {view_at(233, ty, 150, 0.15, -0.55, 0.9, 2.4, 0),
+                                    view_at(237, ay, 153, 0.0, -1.05, 0.9, 2.4, 0)};
+    const float spring = tall.spring;
+    std::vector<gl::Picture> pics;
+    std::vector<std::string> labels;
+    const auto calm = air_of(3, 1.5 * kPi);
+    for (const auto& v : views) {
+      for (const double t : {6.0, 6.0 + 0.3 * spring, 6.0 + spring}) {
+        pics.push_back(draw(d, s, v, calm->air, t, true));
+        labels.push_back("T " + fixed(t, 0) + " S");
+      }
+    }
+    lab.metric("trampled.changed", changed(pics[0], pics[2]), "share", gl::Det::measured);
+    lab.shot({"trampled",
+              "A PATH AND WHEEL TRACKS THROUGH LONG GRASS",
+              "Long grass (spring " + fixed(spring, 0) +
+                  " s) in a 3 m/s breeze, from 4.5 m up (top row) and 8 m up looking down "
+                  "(bottom row): a walker crossed it, then two wheels 1.6 m apart drove up it; "
+                  "seen as the last print is laid, 30 % of the way through the spring and once "
+                  "it is over.",
+              "a winding trodden line and two straight tracks of blades lying flat along the way "
+              "they were pressed, splayed at their edges, paler where they lie open to the sky; "
+              "half risen in the "
+              "middle frame; the field whole again in the last",
+              {}},
+             sheet(pics, labels, 3), gl::Det::measured);
+    gg::init_trample(tr);
+    gr::set_grass_trample(d, s.grass, tr);
   }
 
   // FLOORS: lawn on a terraced slope's treads, none on its risers.

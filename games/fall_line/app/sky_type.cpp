@@ -1,7 +1,7 @@
 // Fall Line's sky type off its cvars (app/sky_type.hpp).
 //
 // ge:summary Fall Line's sky type and knobs from its cvars, as the frame's sky style
-// ge:keywords fall-line sky-type sky_style_of
+// ge:keywords fall-line sky-type sky_style_of sv_moons moon_set_of
 // ge:skill render console
 // ge:test tests/fall_line_sky_test.cpp
 #include "fall_line/app/sky_type.hpp"
@@ -30,6 +30,16 @@ std::string sky_style_of(const cfg::Settings& s, ge::render::SkyStyle& out) {
   k.glow = s.sky_glow;
   ge::render::with_knobs(out, k);
   return problem;
+}
+
+std::string moon_set_of(const cfg::Settings& s, ge::render::MoonSet& out) {
+  const std::string_view words =
+      s.moons.empty() || s.moons == "type" ? ge::render::sky_moons_named(s.sky_type) : s.moons;
+  std::string problem;
+  if (ge::render::moon_set_named(words, out, problem)) return {};
+  out = ge::render::MoonSet{};
+  return "sv_moons: " + problem + "; the Earth's moon is drawn. next: set sv_moons to names " +
+         "such as `phobos deimos` or `moon io:2`, or type for the sky type's own.";
 }
 
 std::string cloud_stack_of(const cfg::Settings& s, FrameOptions& o) {
