@@ -25,8 +25,7 @@
 //   hiz                  -> hiz (the depth's pyramid)
 //   instances.cull.late  -> instances.late (what the last frame's pyramid hid, against this one)
 //   instances.depth.late -> depth
-//   terrain              -> hdr motion (shaded where the depth is equal, in the snow's material;
-//                           reads shadows.maps and the trail maps)
+//   terrain              -> hdr motion (the snow's material; reads the shadows and trail maps)
 //   instances            -> hdr motion (both lists, where the depth is equal)
 //   sky                  -> hdr motion (behind depth)
 //   clouds               -> hdr (the cloud's layers, behind depth)
@@ -37,7 +36,8 @@
 //   precip               -> hdr motion (the snow and rain round the eye, the rain's splashes)
 //   taa                  -> taa.history (at the output's size; with FrameOptions::taa)
 //   bloom                -> bloom (the glow's mip chain, from what post reads)
-//   post                 -> final (the bloom mixed in, the grade's table: look.hpp's)
+//   lens                 -> lens (the sun's rays and flare, at a quarter of the pixels)
+//   post                 -> final (bloom, lens, the film's effects, the grade's table)
 //   ui                   -> final (the 2D layer's list over it: the console, render/ui_pass.hpp)
 //
 // With TAA the frame renders at FrameOptions::scale of the output's size, jittered, and the
@@ -80,8 +80,10 @@
 #include "render/cloud_kinds.hpp"
 #include "render/clouds.hpp"
 #include "render/frame.hpp"
+#include "render/grade.hpp"
 #include "render/hiz.hpp"
 #include "render/instances.hpp"
+#include "render/lens.hpp"
 #include "render/particles.hpp"
 #include "render/post.hpp"
 #include "render/precip.hpp"
@@ -114,9 +116,14 @@ struct FrameOptions {
   bool occlusion = true;        // cull the instances by the depth pyramid (off: the frustum only)
   uint32_t shadow_size = 2048;  // the sun's shadow maps' texels a side
   double bloom = 0.04;          // the share of the bloom's glow in the picture; 0: none
-  bool snow = true;             // the snow's material (mountain/app/snow.hpp); off: the albedo lit
-  bool trails = true;           // the tracks (mountain/app/trails.hpp); drawn only with the snow
-  bool spray = true;            // the racers' spray (skier/app/spray.hpp) thrown into the particles
+  // The lens and the film (render/post.hpp), the lens pass (render/lens.hpp) and the grade's
+  // knobs (render/grade.hpp): Fall Line's defaults, cfg/cvars.hpp's r_ cvars'.
+  ge::render::PostLook look{.sharpen = 0.3, .vignette = 0.25};
+  ge::render::LensSettings lens{.rays = 0.5};
+  ge::render::GradeKnobs grade;
+  bool snow = true;    // the snow's material (mountain/app/snow.hpp); off: the albedo lit
+  bool trails = true;  // the tracks (mountain/app/trails.hpp); drawn only with the snow
+  bool spray = true;   // the racers' spray (skier/app/spray.hpp) thrown into the particles
   ge::render::ParticleSettings particles;
   bool precip = true;    // what falls (snow, sleet, rain), when the map's sky snows
   bool splashes = true;  // the rain's splashes on the ground (with `precip`)
@@ -204,6 +211,7 @@ struct GameFrame {
   ge::render::Hiz hiz;
   ge::render::Taa taa;
   ge::render::Bloom bloom;
+  ge::render::Lens lens;  // made only when FrameOptions::lens has a half on
   ge::render::Post post;
   ge::render::UiPass ui;
   ge::render::InstancePipelines instancing;

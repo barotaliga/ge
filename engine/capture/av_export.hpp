@@ -32,6 +32,7 @@
 
 #include "audio/synth.hpp"
 #include "capture/codecs.hpp"
+#include "capture/interleave.hpp"
 #include "capture/matroska.hpp"
 #include "lab/raster.hpp"
 #include "play/game.hpp"
@@ -98,8 +99,7 @@ class AvExport {
   bool coded_ = false;  // codec "av1"
   Av1Encoder av1_;
   OpusEncoder opus_;
-  std::vector<Packet> video_q_, audio_q_;  // encoded, not yet written
-  size_t video_at_ = 0, audio_at_ = 0;     // the next to write in each
+  Interleave held_;  // encoded, not yet written
 };
 
 }  // namespace ge::capture

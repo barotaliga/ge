@@ -68,7 +68,8 @@ constexpr r::PassRow kPassTable[] = {
     {"precip", "precip terrain.horizon sky.aerial sky.light depth", "hdr motion"},
     {"taa", "hdr motion depth taa.history sky.light", "taa.history"},
     {"bloom", "taa.history", "bloom"},
-    {"post", "taa.history bloom sky.light", "final"},
+    {"lens", "taa.history depth sky.light", "lens"},
+    {"post", "taa.history bloom lens sky.light", "final"},
     {"ui", "final", "final"},
 };
 // What is made at load rather than by a pass (the instances' meshes and streams: the figures'
@@ -105,8 +106,11 @@ void make_targets(ge::gpu::Device& device, GameFrame& f, uint32_t w, uint32_t h)
   }
   const bool glow = f.options.bloom > 0;
   if (glow) r::create_bloom_targets(device, f.bloom, w, h, inputs);
+  const bool lens = r::lens_on(f.options.lens);
+  if (lens) r::create_lens_targets(device, f.lens, w, h, inputs, f.targets.depth_view);
   for (int k = 0; k < 2; ++k) {
-    f.post_groups[k] = r::post_group(device, f.post, inputs[k], glow ? f.bloom.view : nullptr);
+    f.post_groups[k] = r::post_group(device, f.post, inputs[k], glow ? f.bloom.view : nullptr,
+                                     lens ? f.lens.view : nullptr);
   }
   f.history.valid = false;
 }
@@ -154,6 +158,17 @@ FrameOptions frame_options(const cfg::Settings& s) {
   o.occlusion = s.occlusion;
   o.shadow_size = s.shadow_size;
   o.bloom = s.bloom;
+  o.look = {.sharpen = s.sharpen,
+            .chromatic = s.chromatic,
+            .vignette = s.vignette,
+            .grain = s.grain,
+            .dirt = s.lensdirt};
+  o.lens = {.rays = s.sunrays, .flare = s.flare};
+  o.grade = {.contrast = s.contrast,
+             .saturation = s.saturation,
+             .temperature = s.temperature,
+             .tint = s.tint,
+             .gamma = s.gamma};
   o.snow = s.snow;
   o.trails = s.trails;
   o.spray = s.spray;
@@ -243,10 +258,17 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
     bloom.strength = options.bloom;
     r::create_bloom_pipelines(device, f->pipelines, f->bloom, bloom);
   }
+  if (r::lens_on(options.lens)) {
+    r::create_lens_pipelines(device, f->pipelines, f->lens, f->frame_layout, options.lens);
+  }
   r::PostSettings post;
   post.bloom = options.bloom;
+  post.look = options.look;
+  post.lens = r::lens_on(options.lens);
   r::create_post(device, f->pipelines, f->post, f->frame_layout, output, post);
-  r::set_grade(device, f->post, bake_grade());
+  std::vector<float> grade = bake_grade();
+  r::apply_grade_knobs(grade, options.grade);
+  r::set_grade(device, f->post, grade);
   r::create_skin_pipelines(device, f->pipelines, f->skinning);
   r::create_ui_pass(device, f->pipelines, f->ui, output);
   if (!f->pipelines.finish(device)) return nullptr;
@@ -672,6 +694,11 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   } else {
     // The pass table's row runs empty, so every later pass keeps its timing row.
     f.recorder.compute(encoder, "bloom").End();
+  }
+  if (r::lens_on(f.options.lens)) {
+    r::encode_lens(f.lens, f.pipelines, f.recorder, encoder, f.frame_group, input);
+  } else {
+    f.recorder.compute(encoder, "lens").End();
   }
   r::encode_post(f.post, f.pipelines, f.recorder, encoder, f.frame_group, f.post_groups[input],
                  output);
