@@ -174,7 +174,7 @@ std::string row_file_title(std::string_view status_md) {
 
 std::string claimed_row_file(const std::string& title) {
   return cat("Status: open\nMilestone: **", title,
-             "**\nExit: to be written\nLabs: to be written\n");
+             "**\nExit: to be written\nLabs: to be written\n\nNotes to be written.\n");
 }
 
 int next_free_number(const std::vector<int>& taken) {
