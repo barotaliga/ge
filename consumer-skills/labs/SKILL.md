@@ -55,7 +55,7 @@ sees only that picture.
 **Digests.** Metrics, tables and pictures feed the lab's digest unless marked
 `Det::measured` (wall-clock times, anything that differs run to run). The digest is what makes a
 lab a determinism test for free. `ge digest --write` commits every lab's digest to
-`tests/labs_digests.txt`; from then on `ge test` fails a lab whose digest is not its row there,
+`tests/digests/`; from then on `ge test` fails a lab whose digest is not its file there,
 so an output that moves is a change someone meant. `ge digest <id>` checks one lab against it;
 `ge digest <id> --write` moves that lab's row alone (a new lab's row too).
 
