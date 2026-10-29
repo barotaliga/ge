@@ -65,7 +65,9 @@ engine/net/portmap        a port opened on the router: PCP, NAT-PMP, UPnP IGD (M
 engine/net/guard          input checks, interest, replay audits, cheat flags, reports (M17l)
 engine/net/stress         load, soak, chaos scripts, ramps to the breaking point, fuzzing (M17m)
         │
-engine/net  node          connections: handshake, keepalive, timeout, peers up to 32
+engine/net  node          connections: handshake, keepalive, timeout, peers up to 32;
+                          connect tokens, sealed packets, the replay window, flood guards (M17i)
+            token, crypto the matchmaker's connect tokens; AEAD and key derivation (M17i)
             channel       unreliable, sequenced, reliable-ordered messages; acks; resends;
                           big messages in pieces, priorities, the send budget
             packet        the wire format: header, acks, messages; decoded for the tools
@@ -104,7 +106,7 @@ the wire) would be a plugin's.
 | Reliability | Per message, not per packet: a reliable message rides in packets until one carrying it is acked, resent once a round trip has passed | The newest data goes in every packet; nothing waits behind a lost packet but the reliable messages it carried |
 | Handshake | Request → challenge (a cookie only the host can make) → response → accept, all packets padded to the request's size | A spoofed address never gets past the challenge, the host keeps no state for it, and a reply is never bigger than the request (no amplification) |
 | Peers | A node is both host and client: it may accept and it may connect (`NodeConfig`) | Client-server, a listen server and a peer-to-peer mesh (lockstep, rollback) are the same code; the game sets the maximum, 1 to 32 |
-| Encryption | AEAD over every payload with keys from a connect token a matchmaker signs (M17i); off until then | A LAN game and the labs need none; an internet game does. Keys come from the environment or GitHub secrets, never the tree |
+| Encryption | XChaCha20-Poly1305 (Monocypher) over every packet after the handshake, with session keys from a connect token the matchmaker seals under a key derived per host (M17i); off on a LAN and in the plain labs | A LAN game and the labs need none; an internet game does. A per-host key means a host that leaks it leaks only its own games. Keys come from the environment or GitHub secrets, never the tree |
 | Capture format | pcap (libpcap's format) with IPv4/UDP headers made up for simulated addresses | Every packet tool opens it, and `ge net` decodes our protocol inside it |
 | Accounts | Our own service executable, self-hosted, over the same transport (reliable channel over TCP or UDP); passwords stored only as Argon2id hashes; a login returns a signed session token a game host checks without asking the service | One account and one friends list across every store and desktop; testable headless in the container against the simulated network |
 | Sessions | A layer over a node's reliable channel (`session.hpp`): the host's process seats players and holds every rule, a client asks and mirrors; a player is a SEAT, not a peer slot, with a 64-bit token to come back to it | A dropped player keeps their seat, name, team and readiness for `reconnect_us`, and the roster survives a new peer slot; the host being the one authority is what makes the rules (rate limits, team caps, kicks) hold, and what an anti-cheat later trusts (M17l) |
@@ -423,6 +425,69 @@ two links (talker to host, host to listener), so it meets a preset's loss twice;
 comes in bursts, which FEC (one frame back) mends only at their edges. Mouth to ear is the frame
 (20 ms), the synth's two queued frames, the playout delay and both links' latency.
 
+## Security (M17i)
+
+An internet game needs three things a LAN game does not: only the players a matchmaker let in may
+join, nobody can read or change what they send, and a host stays up when strangers hammer it.
+Everything here is off by default, and a node with it off sends the same bytes as before (every
+plain lab digest is unchanged).
+
+- **Connect tokens** (`net/token.hpp`). A matchmaker (a game's login service, M17j) holds a master
+  key; each host's key is derived from it by the host's id (`host_key`, keyed BLAKE2b), so a host
+  never holds the master. For each player it seals, with XChaCha20-Poly1305 under that host's
+  key, the client's id, two fresh session keys (to the host, to the client) and 32 bytes of the
+  game's own; the host id, the expiry and the game's protocol are bound to it as associated
+  data. The client gets the sealed part (160 bytes) with the keys in the clear (248 bytes in all,
+  `token_write`); the sealed part rides in the padding of its connection requests and responses.
+  Times are on the matchmaker's clock (`NodeSecurity::clock_offset_us`).
+- **The host's checks.** A request is weighed by the flood guards first, then its token opened
+  with the host's key; a token for another host, another game or a past expiry is refused. A
+  token is used from one address only: the host remembers the last 256 tokens it saw by their
+  tag, so the same token from another address (a stolen one) is refused, as is a second
+  connection by a client id already in. The challenge's cookie is bound to the token.
+- **The sealed wire.** Once connected, a secure peer's accept, deny, payloads and disconnects are
+  sealed: the 64-bit session key's place carries a packet counter, the first 13 bytes (protocol,
+  type, sequence and counter) are the associated data, everything after is encrypted, and a
+  16-byte tag follows. The nonce is the counter and the packet's type, so no nonce is ever used
+  twice under one key. A receiver keeps a window of the last 256 counters: a counter seen
+  before, or too old, is a replay and dropped before it is opened; one that does not open is a
+  forgery. Either way the connection is untouched.
+- **Flood guards** (`NodeGuards`, `default_guards()`, 0 turns each off): a token bucket per address
+  (256 by hash) and one for all handshakes together, so a stranger's flood costs it a hash and a
+  compare; and a bucket per connected peer for its payloads, so a client with a good token
+  sending far more than any client does is dropped down to its rate (`NodeStats::flooded`).
+- **Keys stay out of the tree.** `key_from_env` reads a key as 64 hex digits from a named
+  environment variable (on CI, a GitHub Actions secret mapped into `env:`) and names the variable
+  when it is missing or malformed; `crypto::wipe` clears one when it is done. A lab or a test
+  derives its keys from its seed; a real host draws its token's randomness from the system
+  (`os_random_bytes`).
+- **The crypto** is Monocypher 4.0.2 (BSD-2-Clause or CC0), downloaded from its release archive
+  by `cmake/Crypto.cmake` and compiled into `ge_net`; only `net/crypto.cpp` includes it.
+
+Measured (`make lab LAB=net-link ARGS="--clients=8 --seconds=10 --secure=1"`): each preset
+secure under every attack at once (each second: 20 forged tokens, 20 stolen ones, 50 replayed
+payloads, 50 forged ones, 4000 requests from 64 addresses, one client sending 3000 packets),
+against the same preset plain:
+
+| Preset | rtt ms (plain) | loss (plain) | events | bad tokens | stolen refused | replays refused | forgeries refused | answered |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| lan | 33.3 (33.3) | 0.00% (0.00%) | all, in order | 19097 | 199/199 | 499/499 | 499/499 | 0 |
+| broadband | 46.4 (47.1) | 0.19% (0.16%) | all, in order | 19071 | 198/199 | 496/499 | 497/499 | 0 |
+| wifi | 74.4 (74.5) | 0.80% (0.79%) | all, in order | 19006 | 200/199 | 498/499 | 493/499 | 0 |
+| mobile | 125.3 (125.9) | 1.80% (2.44%) | all, in order | 18918 | 199/199 | 500/499 | 493/499 | 0 |
+| bad | 237.7 (237.4) | 4.77% (6.06%) | all, in order | 18617 | 199/199 | 535/499 | 479/499 | 0 |
+| awful | 468.8 (471.9) | 15.70% (14.40%) | all, in order | 16630 | 187/199 | 540/499 | 445/499 | 0 |
+
+The rest of the flood (about 21000 of 40132) was throttled before its token was looked at, and
+the loud client lost most of its 30000 packets to its bucket. A refused count under what was sent
+is the network's loss on the way; replays over what was sent are the network's own duplicates,
+which the window refuses too. The sealing costs nothing the host's bandwidth shows (501 kbit/s
+both ways on `lan`).
+
+Not yet built: the matchmaker itself, handing out tokens over HTTPS (M17j); voice frames sealed
+the same way (they ride a session's payloads, so they are sealed when the session is); a key
+rotated during a long session.
+
 ## The simulated network (M17a)
 
 `SimNetwork` is a network of nodes with simulated addresses, on a virtual clock in
@@ -525,7 +590,8 @@ seeded and replayable. `engine/net/stress.hpp` and `ge net stress` push the fake
   own. From strangers' addresses the honest session never notices: a million datagrams in
   2.5 s, the made-up cookies refused, no slot given away. Spoofed from a peer's own address, a
   mutated copy of its real packet carries its real key, and some break the connection: payloads
-  are not yet authenticated (M17i adds it), and the `net-fuzz` lab's spoofed row counts it.
+  are not authenticated on a plain node, and the `net-fuzz` lab's spoofed row counts it. On a
+  secure node (M17i) every one is a forgery that does not open, and the connection is untouched.
 
 Not yet built (the rest of M17m): load as many sessions in one host process, timed; and a
 game's bots playing as clients across many simulated servers, so its own traffic is the load.
@@ -542,6 +608,7 @@ game's bots playing as clients across many simulated servers, so its own traffic
 | traffic mixes (`traffic.hpp`) | M17b | The fake traffic shaped like a kind of game: racing, action (fast inputs, big snapshots), rpg, world (a busy shared world), lockstep (inputs and turns, no snapshots); `--mix` on the lab and on `ge net sim` |
 | `net-link --transport=tcp`, `--mix=download`, `--budget` | M17c | The same sessions with every link a stream (what head-of-line blocking does to the round trip and the resends), a 64 KB message to every client every two seconds checked whole byte for byte, and every connection held to a send budget; `ge net sim` takes the same flags |
 | a live node's capture | M17b | A game points its transport at a `Capture` with a size limit and saves it (`save_capture`) when a session ends or the player asks; the tools read it like a lab's |
+| `net-link --secure=1` | M17i | Every preset again with connect tokens, sealed packets and the flood guards, under every attack at once (forged and stolen tokens, replayed and forged payloads, a flood of requests, a loud client): the round trip, loss and bandwidth against the same preset plain, what the host refused of each attack, and that it answered none; a chart of the attacked round trip less the plain one. `--attack=0` measures the cost of sealing alone |
 | the `net-session` lab | M17d | A 32-player lobby on a dedicated host under each preset: everyone joins and picks a team, chats to all, to the team and to one player, one floods; the leader kicks one (whose return is refused), another is cut for six seconds and comes back to its seat, then the settings, the start and the return. The table checks every chat copy delivered, every player list the host's, the kick, the ban and the seat kept; the seats are charted and the pings drawn as boxes |
 | the `net-reach` lab | M17e1, M17e2 | Every pair of NAT kinds (none, full cone, restricted, port-restricted, symmetric) under each preset: the path each pair took (direct or relayed, against the one RFC 4787 predicts), how long it took, a reliable message each way; STUN from behind each kind; the connect times as a heatmap; a router speaking each of PCP, NAT-PMP and UPnP opening, renewing and closing a port that lets a client straight in |
 | the `net-replicate` lab | M17f | 32 clients each steering a mover and a crowd the game moves, under each preset: the bytes each client is sent a second, how often and how far a prediction is corrected, the snapshots lost or left without a baseline, the rows a budget starved, the inputs repeated, and how far the server's rewind lands from what each client drew; the bandwidth charted over the run, the rewind gaps as boxes |
