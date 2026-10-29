@@ -14,7 +14,8 @@ classic game", "QC" and "the classic protocol", and `make agents-check` holds it
 | `survey.md` | What today's community clients and servers do, their licences, and which features the plan takes |
 | `configs.md` | The console language at its modern extent, as a specification in our words (`engine/console` is built from it) |
 | `formats.md` | The file formats: pak, pk3, the search order, BSP29 lump by lump, BSP2, MDL, SPR, WAD2, LMP, WAV |
-| `progs.md` | QuakeC bytecode: the file, the records, the globals, every opcode; the engine-side fields and the builtins to fill with M18c |
+| `progs.md` | QuakeC bytecode for the VM (M18c): the file and its checks, memory and value encodings, calls, every opcode's semantics, the engine-side globals and fields, the map's entity text, allocating and freeing entities |
+| `builtins.md` | The modern server's builtins by number, its extension builtins and list, the monster moves, the hooks and when they are called, client commands, the extension fields (M18p) |
 | `movement.md` | The player's movement at the modern server's defaults: the settings, every step of the move, the clip hulls and the trace, the test vectors' format (M18o1) |
 | `gameloop.md` | The game loop: the game program's hooks, entities, the area tree, the server frame, thinking, tossing, pushers, touching, the player's packet and command, client prediction (M18o2) |
 | `vectors/` | Measured test vectors: `pmove.txt` (the player's move in hand-built worlds) and `entity.txt` (tossed, bounced and flying entities), for `se-parity` |
