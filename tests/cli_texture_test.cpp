@@ -83,12 +83,14 @@ TEST(match_writes_a_map_keeps_pins_and_argues) {
   in.close();
   const size_t at = text.find("texture wood_planks ");
   CHECK(at != std::string::npos);
+  if (at == std::string::npos) return;
   text.replace(at, text.find('\n', at) - at, "texture wood_planks brick_wall seed=3  # pin");
   std::ofstream(repo / "tex" / "textures.texmap") << text;
   const Outcome second = run_texture_match(repo, opt);
   std::ifstream again(repo / "tex" / "textures.texmap");
   const std::string after((std::istreambuf_iterator<char>(again)),
                           std::istreambuf_iterator<char>());
+  again.close();  // Windows refuses to remove a file still open
   CHECK(after.find("texture wood_planks brick_wall seed=3  # pin") != std::string::npos);
   CHECK(after.find("class brick_wall bricks") != std::string::npos);
   bool warned = false, uncoloured = false;
@@ -133,6 +135,8 @@ TEST(match_takes_real_names_from_a_level_export_list) {
   blank.close();
   CHECK(text.find("texture +0wall-2 blank_plate ") != std::string::npos);
   const size_t at = text.find("texture +0wall-2 ");
+  CHECK(at != std::string::npos);
+  if (at == std::string::npos) return;
   text.replace(at, text.find('\n', at) - at, "texture +0wall-2 brick_wall  # pin");
   std::ofstream(repo / "tex" / "textures.texmap") << text;
   bool lookalike = false;
