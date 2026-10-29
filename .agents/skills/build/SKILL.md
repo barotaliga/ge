@@ -28,12 +28,22 @@ description: "Use for CMake, presets, the Makefile, compiler flags, adding a dep
 
 `tools/session-start.sh` is the cloud session's SessionStart hook (registered in
 `.claude/settings.json`, the one Claude-specific config file; the script lives in `tools/` with the
-other checks). It returns at once and leaves a detached worker that installs the packages in
-`ci.yml`'s `GE_LINUX_PACKAGES` the container lacks (read from there, never restated) and runs
-`make build` into `build/debug/`. One worker at a time (`build/session-start.lock`); the log is
+other checks). It returns at once and leaves a detached worker that runs `tools/setup-ubuntu.sh --https-mirrors`
+(the container's proxy passes HTTPS alone) and then `make build` into `build/debug/`. One worker at a time (`build/session-start.lock`); the log is
 `build/session-start.log`, the state `build/session-start.status`; `--wait` blocks until it ends.
-It does nothing outside a cloud session unless `GE_SESSION_BUILD=1`. A new system package a build
-needs goes in `GE_LINUX_PACKAGES`, and the hook picks it up.
+It does nothing outside a cloud session unless `GE_SESSION_BUILD=1`. 
+
+## The Ubuntu packages
+
+`tools/setup-ubuntu.sh` is the ONE list of Linux packages (`LIB_PKGS`, checked by dpkg, and
+`TOOLS`, checked by the command on PATH and its version), for a fresh Ubuntu Server 24.04 or 22.04
+(which gets Kitware's, the toolchain PPA's, apt.llvm.org's, NodeSource's and GitHub's sources), a
+machine that has some of it, CI's Linux jobs and the session hook. It installs or upgrades only what
+is missing or too old and is a sub-second no-op with no network when nothing is, so callers run it
+unconditionally. CI passes `--cache-dir=.cache/apt` under an `actions/cache` keyed on the image, the
+script's hash and the week. `--check` reports without installing; `--verify` builds and runs the
+whole suite as CI's Linux x64 row. A new system package a build needs goes in `LIB_PKGS` (a library)
+or `TOOLS` (a command and its minimum), and CI and the hook pick it up.
 
 ## Adding a dependency
 
@@ -73,6 +83,13 @@ false`, so one row's golden failure shows alongside the others.
   skipped by the rules, so a skipped row never leaves a check pending: a new job joins its
   `needs:`, never the ruleset. A failure only the queue sees ejects the pull request from the
   queue; fix it, push, and auto-merge queues it again.
+- **Kept off the runners when it cannot change the answer** (`ci.yml`'s header): a newer push
+  cancels a PR's older run; a draft runs nothing until it is marked ready; a label other than
+  `full-ci` runs the gates alone, in its own concurrency group, so it never cancels the run going;
+  each queue run's gates cancel the queue runs whose group ref is gone (the queue rebuilt), so
+  nobody cancels stale queue runs by hand any more; the heavy jobs time out at about twice their
+  usual time. GitHub cannot cap a job kind by count (a concurrency group cancels its pending
+  job), so there is no cap on macOS or Windows jobs.
 - **Kept fast**: ctest runs four cases at
   once (`CTEST_PARALLEL_LEVEL`; `make test` uses every core), the labs' smoke pass is eight
   CTest cases (`labs_smoke_1`..`_8`, `labs --all --smoke --shard=I/N`) and the slow cases carry

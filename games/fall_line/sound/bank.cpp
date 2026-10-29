@@ -32,6 +32,43 @@ constexpr SoundVoice clack(float at_ms, float volume, float from, float to, floa
                      .drive = 0.5f});
 }
 
+// THE MENUS speak softly and dry, because they sit over the mountain's wind: a focus moved is
+// a short wooden tick, a press a low knock with a brighter tick on it, a page a short pink
+// breath of snow swept aside.
+constexpr SoundVoice kMenuFocusVoices[] = {
+    tone_voice({.wave = Wave::triangle,
+                .from_hz = 1800,
+                .to_hz = 1500,
+                .duration_ms = 22,
+                .volume = 0.05f,
+                .filter = {.type = FilterType::bandpass, .hz = 1700, .q = 2.5f},
+                .drive = 0.3f}),
+};
+
+constexpr SoundVoice kMenuPressVoices[] = {
+    tone_voice({.wave = Wave::sine,
+                .from_hz = 220,
+                .to_hz = 150,
+                .duration_ms = 70,
+                .volume = 0.06f,
+                .attack_ms = 2,
+                .drive = 0.4f}),
+    tone_voice({.wave = Wave::triangle,
+                .from_hz = 2400,
+                .to_hz = 2000,
+                .duration_ms = 25,
+                .volume = 0.025f,
+                .filter = {.type = FilterType::bandpass, .hz = 2200, .q = 2.0f}}),
+};
+
+constexpr SoundVoice kMenuPageVoices[] = {
+    noise_voice({.duration_ms = 160,
+                 .volume = 0.07f,
+                 .color = Color::pink,
+                 .filter = {.type = FilterType::bandpass, .hz = 900, .to_hz = 2600, .q = 0.8f},
+                 .attack_ms = 20}),
+};
+
 constexpr SoundVoice kLandSoftVoices[] = {
     tone_voice({.wave = Wave::sine,
                 .from_hz = 90,
@@ -437,6 +474,17 @@ constexpr SoundDef kDefs[] = {
      "second, a rising white band, then the body slammed down on the far side a beat later, a "
      "sliding pink hiss, and the skis clattering off.",
      kWipeoutCatchVoices},
+    {kMenuFocus,
+     "The menu's focus moved: a short wooden tick, dry and small under the wind, so a held arrow "
+     "reads as a ratchet and never as an alarm.",
+     kMenuFocusVoices},
+    {kMenuPress,
+     "An item pressed: a low knock with a bright tick on it, the press of a boot clicking into "
+     "its binding.",
+     kMenuPressVoices},
+    {kMenuPage,
+     "A page opened or closed: a short pink breath of snow swept aside, rising, with no edge.",
+     kMenuPageVoices},
 };
 
 }  // namespace
