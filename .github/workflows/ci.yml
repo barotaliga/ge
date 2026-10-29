@@ -12,6 +12,9 @@
 # rows (GCC debug+ASan, GCC and Clang release, arm64), the lint and the shaders' check, and the
 # whole packaging.
 #
+# A pull request labelled `skip-ci` runs nothing at all, on the PR and in the queue: it merges as
+# soon as it is armed, and what it breaks is fixed after it lands (the `commit` skill).
+#
 # The ruleset requires ONE check, `required` (the last job): it passes when every job either
 # passed or was skipped by the rules above, so a skipped row never leaves a required check
 # pending. A determinism break shows as a parity test failing on ONE row: that row's compiler or
@@ -65,6 +68,7 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
+      pull-requests: read  # a queued PR's labels, for `skip-ci` (below)
       actions: write  # cancelling the queue's stale runs
     outputs:
       code: ${{ steps.scope.outputs.code }}
@@ -72,6 +76,7 @@ jobs:
       package: ${{ steps.scope.outputs.package }}
       scaffold: ${{ steps.scope.outputs.scaffold }}
       rows: ${{ steps.scope.outputs.rows }}
+      skip: ${{ steps.scope.outputs.skip }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -112,9 +117,37 @@ jobs:
           QUEUE_BASE: ${{ github.event.merge_group.base_sha }}
           PUSH_BASE: ${{ github.event.before }}
           FULL_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') }}
+          SKIP_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'skip-ci') }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           ACTION: ${{ github.event.action }}
           LABEL: ${{ github.event.label.name }}
         run: |
+          # `skip-ci`: a PR its owner wants merged now, with CI fixed after it lands. Every job is
+          # skipped, the gates' checks included, so `required` passes, on the PR and in the merge
+          # queue. A queued run reads the label off the PR at the head of its group
+          # (gh-readonly-queue/main/pr-<n>-<sha>).
+          SKIP="$SKIP_LABEL"
+          if [ "$EVENT" = merge_group ]; then
+            N=$(echo "$GITHUB_REF" | sed -nE 's#.*/pr-([0-9]+)-[0-9a-f]+$#\1#p')
+            if [ -n "$N" ] && gh api "repos/$GH_REPO/issues/$N/labels" --jq '.[].name' | grep -qx skip-ci; then
+              SKIP=true
+            fi
+          fi
+          if [ "$SKIP" = true ]; then
+            echo "::warning::skip-ci: no check runs on this change; fix what it breaks after it lands"
+            {
+              echo "skip=true"
+              echo "code=false"
+              echo "full=false"
+              echo "package=false"
+              echo "scaffold=false"
+              echo 'rows=[{"os":"macos-15","cxx":"clang++","preset":"release"}]'
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
           case "$EVENT" in
             pull_request) BASE="$PR_BASE" ;;
             merge_group) BASE="$QUEUE_BASE" ;;
@@ -149,17 +182,22 @@ jobs:
             echo "rows=$ROWS"
           } >> "$GITHUB_OUTPUT"
           echo "event $EVENT, code $CODE, full $FULL, package $PACKAGE, scaffold $SCAFFOLD, rows $ROWS"
-      - run: make fmt-check
+      - if: steps.scope.outputs.skip != 'true'
+        run: make fmt-check
       # tools/agents-index.mjs and tools/skill-lessons.mjs: plain Node, no npm install.
-      - uses: actions/setup-node@v4
+      - if: steps.scope.outputs.skip != 'true'
+        uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: make agents-check
-      - run: make libm-check
+      - if: steps.scope.outputs.skip != 'true'
+        run: make agents-check
+      - if: steps.scope.outputs.skip != 'true'
+        run: make libm-check
       # tools/release.py's tests, and every fragment valid (docs/publishing.md).
-      - run: make release-check
+      - if: steps.scope.outputs.skip != 'true'
+        run: make release-check
       - name: A shipped change carries a fragment
-        if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'no-changelog')
+        if: steps.scope.outputs.skip != 'true' && github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'no-changelog')
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
         run: |
