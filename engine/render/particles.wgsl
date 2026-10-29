@@ -3,11 +3,13 @@
 // facing the eye; a dead one folds to a point off the screen. Lit as the instances are (the sun
 // past the ground's horizon and the shadow maps, the sky) with a forward lobe toward the sun,
 // hazed, faded in and out over its life, thinned by its length, and softened against the depth
-// behind it. Premultiplied over the picture; the motion target's reactive channel only.
+// behind it; a glowing one adds its blackbody light at the heat it has cooled to. Premultiplied over
+// the picture; the motion target's reactive channel only.
 #include "render/wgsl/frame.wgsl"
 #include "render/wgsl/terrain_common.wgsl"
 #include "render/wgsl/sun_shadow.wgsl"
 #include "render/wgsl/particle_types.wgsl"
+#include "render/wgsl/blackbody.wgsl"
 
 @group(1) @binding(0) var<uniform> ground: TerrainParams;
 @group(1) @binding(1) var horizon0: texture_2d<f32>;
@@ -26,6 +28,7 @@ struct VertexOut {
   @location(0) quad: vec2f,                    // -1..1 along the streak, -1..1 across it
   @location(1) rel: vec3f,                     // camera-relative, m
   @location(2) @interpolate(flat) look: vec4f, // albedo, opacity at this age, thinning, size
+  @location(3) @interpolate(flat) kelvin: f32, // its glow's heat now, K (0: none)
 }
 
 const kCorners = array<vec2f, 6>(vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(1.0, 1.0),
@@ -67,12 +70,25 @@ fn vs_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) iid: u32) -
   // A streak spreads the same grain over its length: thinner the longer it is.
   let thin = p.size / max(len, p.size);
   out.look = vec4f(p.albedo, p.opacity * fade, thin, p.size);
+  out.kelvin = 0.0;
+  if (p.kelvin > 0.0) {
+    out.kelvin = kBlackbodyLoK + (p.kelvin - kBlackbodyLoK) * exp(-p.age / max(p.cool_s, 1e-3));
+  }
   return out;
 }
 
 struct FragmentOut {
   @location(0) colour: vec4f,
   @location(1) motion: vec4f,  // b only: the reactive mask
+}
+
+// A glowing particle's own light at `kelvin`, in the frame's units (pre-exposed sun units).
+fn glow_light(kelvin: f32) -> vec3f {
+  let x = blackbody_coord(kelvin);
+  let i = u32(x);
+  let lo = pp.table[i];
+  let hi = pp.table[min(i + 1u, kBlackbodyRows - 1u)];
+  return blackbody_mix(lo, hi, x - f32(i), 1.0) * pp.glow.x * frame.world.y / kSunLux;
 }
 
 // Henyey–Greenstein, normalised to 1 over the sphere times 4 pi: light scattered by cos `c`
@@ -106,7 +122,10 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   // cloud of grains is lit through, not on one face: the sun's whole light round the lobe, as
   // bright as the snow it came off facing the sun.
   let lobe = mix(1.0, forward_lobe(dot(-to_eye, frame.sun.xyz), 0.6), 0.6);
-  let c = in.look.x / PI * (sun_light(y, xz) * lit * lobe + sky_irradiance(vec3f(0.0, 1.0, 0.0)));
+  var c = in.look.x / PI * (sun_light(y, xz) * lit * lobe + sky_irradiance(vec3f(0.0, 1.0, 0.0)));
+  if (in.kelvin > 0.0) {
+    c += glow_light(in.kelvin);
+  }
   let hazed = haze(c, in.position.xy * frame.size.zw, length(in.rel));
   var out: FragmentOut;
   out.colour = vec4f(hazed * a, a);
