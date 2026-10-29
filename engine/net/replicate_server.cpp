@@ -73,6 +73,40 @@ int total_bits(const Schema& schema) {
   return n;
 }
 
+// THE PREDICTED WORLD: the other players near this client's entity, each with the last input the
+// server applied for it, after the bits; the snapshot's kind says a trailer is there.
+size_t write_trailer(const ReplicateServer& s, int client, uint8_t* buffer, size_t size) {
+  const ReplicateClientSlot& c = s.clients[static_cast<size_t>(client)];
+  const ReplicateConfig& k = s.config;
+  const int own = c.entity == kNoEntity ? -1 : index_of(s, c.entity);
+  const auto n = static_cast<size_t>(s.schema.input_size);
+  const size_t start = size;
+  if (own >= 0 && k.interest_x >= 0 && k.interest_z >= 0) {
+    const int nf = s.schema.fields;
+    const double* a = &s.state[static_cast<size_t>(own) * static_cast<size_t>(nf)];
+    const double reach = 2 * k.predict_radius;
+    for (size_t p = 0; p < s.clients.size(); p++) {
+      const ReplicateClientSlot& o = s.clients[p];
+      if (static_cast<int>(p) == client || o.entity == kNoEntity || !o.applied) continue;
+      const int j = index_of(s, o.entity);
+      if (j < 0) continue;
+      const double* b = &s.state[static_cast<size_t>(j) * static_cast<size_t>(nf)];
+      const double dx = a[k.interest_x] - b[k.interest_x], dz = a[k.interest_z] - b[k.interest_z];
+      if (dx * dx + dz * dz > reach * reach) continue;
+      if (size + 2 + n + 2 > kMaxMessage) break;
+      buffer[size] = static_cast<uint8_t>(o.entity & 0xff);
+      buffer[size + 1] = static_cast<uint8_t>(o.entity >> 8);
+      std::memcpy(buffer + size + 2, o.last, n);
+      size += 2 + n;
+    }
+  }
+  const size_t len = size - start;
+  buffer[size] = static_cast<uint8_t>(len & 0xff);
+  buffer[size + 1] = static_cast<uint8_t>(len >> 8);
+  buffer[0] = kSnapshotInputs;
+  return size + 2;
+}
+
 void send_snapshot(ReplicateServer& s, int client, uint8_t* buffer, size_t budget) {
   ReplicateClientSlot& c = s.clients[static_cast<size_t>(client)];
   const Schema& schema = s.schema;
@@ -89,6 +123,7 @@ void send_snapshot(ReplicateServer& s, int client, uint8_t* buffer, size_t budge
   write_u32(head, base ? base->tick : 0);
   write_u32(head, c.applied);
   write_u16(head, c.entity);
+  write_u8(head, static_cast<uint8_t>(static_cast<int8_t>(replicate_slack(c))));
   uint8_t* body = buffer + kSnapshotHeader;
   std::memset(body, 0, budget - kSnapshotHeader);  // the bits' last byte, and the count's pad
   // The entry count goes first as a varint of at most 3 bytes; the bits follow it.
@@ -175,7 +210,9 @@ void send_snapshot(ReplicateServer& s, int client, uint8_t* buffer, size_t budge
   // The count, padded to its 3 bytes (a varint read stops at its last byte; the rest is skipped).
   Writer cw = make_writer(body, kCountBytes);
   write_varint(cw, entries);
-  const size_t size = kSnapshotHeader + kCountBytes + bytes_of(w);
+  size_t size = kSnapshotHeader + kCountBytes + bytes_of(w);
+  if (s.config.predict_radius > 0 && s.schema.interact)
+    size = write_trailer(s, client, buffer, size);
   node_send(*s.node, client, s.config.snapshot_channel, buffer, size);
   s.stats.snapshots++;
   s.stats.bytes += size;
@@ -191,7 +228,7 @@ void on_input(ReplicateServer& s, int client, const uint8_t* data, size_t size) 
   const uint32_t newest = read_u32(r);
   const uint8_t count = read_u8(r);
   const auto n = static_cast<size_t>(s.schema.input_size);
-  if (r.bad || remaining(r) != count * n || count == 0 || newest < count) return;
+  if (r.bad || remaining(r) != count * (n + kInputTiming) || count == 0 || newest < count) return;
   c.active = true;
   if (ack && (!c.has_ack || ack > c.acked) && ack <= s.tick) {
     c.acked = ack;
@@ -201,7 +238,11 @@ void on_input(ReplicateServer& s, int client, const uint8_t* data, size_t size) 
   c.rate = rate;
   c.update_rate = update_rate;
   const uint8_t* inputs = data + r.at;
+  const size_t stride = n + kInputTiming;
   for (uint32_t k = 0; k < count; k++) {
+    const uint8_t* in = inputs + k * stride;
+    const uint32_t back = static_cast<uint32_t>(in[n] | (in[n + 1] << 8));
+    const uint32_t drawn = view > back ? view - back : 0;
     const uint32_t seq = newest - count + 1 + k;
     const uint32_t expect = c.queue_seq.empty() ? c.next_seq : c.queue_seq.back() + 1;
     if (seq < expect) continue;  // had it
@@ -214,6 +255,7 @@ void on_input(ReplicateServer& s, int client, const uint8_t* data, size_t size) 
       c.repeats -= covered;
       if (lost - covered > kMaxQueued) {
         c.queue_seq.clear();
+        c.queue_view.clear();
         c.inputs.clear();
         c.next_seq = seq;
       } else {
@@ -221,21 +263,90 @@ void on_input(ReplicateServer& s, int client, const uint8_t* data, size_t size) 
           const uint8_t* before = c.queue_seq.empty() ? c.last : &c.inputs[c.inputs.size() - n];
           c.inputs.insert(c.inputs.end(), before, before + n);
           c.queue_seq.push_back(k2);
+          c.queue_view.push_back(drawn);
         }
         // Those the repeats stood in for are skipped: the queue goes on after them.
         if (covered && c.queue_seq.empty()) c.next_seq = expect + covered;
       }
     }
     c.queue_seq.push_back(seq);
-    c.inputs.insert(c.inputs.end(), inputs + k * n, inputs + (k + 1) * n);
+    c.queue_view.push_back(drawn);
+    c.inputs.insert(c.inputs.end(), in, in + n);
   }
   while (c.queue_seq.size() > kMaxQueued) {
+    s.stats.trimmed++;
     c.queue_seq.erase(c.queue_seq.begin());
+    c.queue_view.erase(c.queue_view.begin());
     c.inputs.erase(c.inputs.begin(), c.inputs.begin() + static_cast<std::ptrdiff_t>(n));
   }
 }
 
+void send_event(ReplicateServer& s, int client, uint8_t kind, const uint8_t* payload, int size) {
+  const ReplicateConfig& k = s.config;
+  if (k.event_channel < 0 || client < 0 || client >= kMaxPeers ||
+      client >= static_cast<int>(s.node->peers.size()) || !peer_connected(*s.node, client))
+    return;
+  size = std::clamp(size, 0, kMaxEventPayload);
+  uint8_t out[1 + 1 + 4 + 1 + kMaxEventPayload];
+  Writer w = make_writer(out, sizeof out);
+  write_u8(w, kEvent);
+  write_u8(w, kind);
+  write_u32(w, s.clients[static_cast<size_t>(client)].applied);
+  write_u8(w, static_cast<uint8_t>(size));
+  write_bytes(w, payload, static_cast<size_t>(size));
+  node_send(*s.node, client, k.event_channel, out, w.size);
+  s.stats.events++;
+}
+
+// THE PREDICTED WORLD's other half: every owned entity resolved against every other after the
+// steps, in slot order then index order, each pair once; a contact beginning is an event to each
+// side's client.
+void interact_all(ReplicateServer& s) {
+  const int nf = s.schema.fields;
+  const size_t ents = s.ids.size();
+  for (size_t k = 0; k < s.clients.size(); k++) {
+    ReplicateClientSlot& c = s.clients[k];
+    const int i = c.entity == kNoEntity ? -1 : index_of(s, c.entity);
+    if (i < 0) continue;
+    double* a = &s.state[static_cast<size_t>(i) * static_cast<size_t>(nf)];
+    for (size_t j = 0; j < ents; j++) {
+      if (static_cast<int>(j) == i || s.ids[j] == kNoEntity) continue;
+      const int m = s.owner[j];
+      const bool other_player =
+          m >= 0 && m < kMaxPeers && s.clients[static_cast<size_t>(m)].entity == s.ids[j];
+      if (other_player && static_cast<size_t>(m) < k) continue;  // that slot resolved the pair
+      double* b = &s.state[j * static_cast<size_t>(nf)];
+      const bool touched = s.schema.interact(s.schema.ctx, a, b);
+      if (touched) {
+        normalize(s.schema, a);
+        normalize(s.schema, b);
+      }
+      const bool began = touched && !c.touching[j];
+      c.touching[j] = touched ? 1 : 0;
+      if (other_player) {
+        s.clients[static_cast<size_t>(m)].touching[static_cast<size_t>(i)] = touched ? 1 : 0;
+      }
+      if (!began) continue;
+      s.stats.contacts++;
+      if (!s.config.contact_events) continue;
+      const uint8_t pj[2] = {static_cast<uint8_t>(s.ids[j] & 0xff),
+                             static_cast<uint8_t>(s.ids[j] >> 8)};
+      send_event(s, static_cast<int>(k), kContactEvent, pj, 2);
+      if (other_player) {
+        const uint8_t pi[2] = {static_cast<uint8_t>(c.entity & 0xff),
+                               static_cast<uint8_t>(c.entity >> 8)};
+        send_event(s, m, kContactEvent, pi, 2);
+      }
+    }
+  }
+}
+
 }  // namespace
+
+void replicate_server_event(ReplicateServer& s, int client, uint8_t kind, const uint8_t* payload,
+                            int size) {
+  send_event(s, client, kind, payload, size);
+}
 
 uint32_t quantize(const FieldSpec& f, double v) {
   const double range = f.max - f.min;
@@ -266,6 +377,8 @@ void replicate_server_init(ReplicateServer& s, const Schema& schema, const Repli
   if (s.config.ring < 2) s.config.ring = 2;
   if (s.config.send_every < 1) s.config.send_every = 1;
   if (s.config.tick_hz < 1) s.config.tick_hz = 1;
+  s.slack_window =
+      std::max(1, static_cast<int>(std::lround(s.config.slack_window_s * s.config.tick_hz)));
   s.node = &node;
   const auto n = static_cast<size_t>(config.max_entities);
   const auto ring = static_cast<size_t>(s.config.ring);
@@ -281,8 +394,10 @@ void replicate_server_init(ReplicateServer& s, const Schema& schema, const Repli
     c.sent.resize(ring);
     for (Snap& snap : c.sent) snap.rows.reserve(n);
     c.priority.assign(n, 0.0);
+    c.touching.assign(n, 0);
     c.inputs.reserve(kMaxQueued * static_cast<size_t>(kMaxInputSize) * 2);
     c.queue_seq.reserve(kMaxQueued * 2);
+    c.queue_view.reserve(kMaxQueued * 2);
   }
 }
 
@@ -342,11 +457,17 @@ void replicate_server_receive(ReplicateServer& s) {
       std::vector<double> priority = std::move(c.priority);
       std::vector<uint8_t> inputs = std::move(c.inputs);
       std::vector<uint32_t> queue = std::move(c.queue_seq);
+      std::vector<uint32_t> queue_view = std::move(c.queue_view);
+      std::vector<uint8_t> touching = std::move(c.touching);
       c = ReplicateClientSlot{};
+      std::fill(touching.begin(), touching.end(), uint8_t{0});
+      c.touching = std::move(touching);
       for (Snap& snap : sent) snap.valid = false;
       std::fill(priority.begin(), priority.end(), 0.0);
       inputs.clear();
       queue.clear();
+      queue_view.clear();
+      c.queue_view = std::move(queue_view);
       c.sent = std::move(sent);
       c.priority = std::move(priority);
       c.inputs = std::move(inputs);
@@ -365,10 +486,24 @@ void replicate_server_tick(ReplicateServer& s) {
     ReplicateClientSlot& c = s.clients[k];
     const int i = c.entity == kNoEntity ? -1 : index_of(s, c.entity);
     if (i < 0 || !s.schema.step) continue;
+    // TIME SYNC: the inputs left waiting behind the one applied now (-1: none came in time), the
+    // fewest over a window, which the client's clock is steered by.
+    const int sample = c.queue_seq.empty() ? (c.applied ? -1 : kNoSlack)
+                                           : static_cast<int>(c.queue_seq.size()) - 1;
+    c.slack_now = std::min(c.slack_now, sample);
+    if (++c.slack_ticks >= s.slack_window) {
+      c.slack_before = c.slack_now;
+      c.slack_now = kNoSlack;
+      c.slack_ticks = 0;
+    }
+    c.fresh = false;
     if (!c.queue_seq.empty()) {
       std::memcpy(c.last, c.inputs.data(), n);
       c.applied = c.queue_seq.front();
+      c.applied_view = c.queue_view.front();
+      c.fresh = true;
       c.queue_seq.erase(c.queue_seq.begin());
+      c.queue_view.erase(c.queue_view.begin());
       c.inputs.erase(c.inputs.begin(), c.inputs.begin() + static_cast<std::ptrdiff_t>(n));
       c.next_seq = c.applied + 1;
       s.stats.inputs++;
@@ -384,6 +519,7 @@ void replicate_server_tick(ReplicateServer& s) {
     s.schema.step(s.schema.ctx, v, c.last);
     normalize(s.schema, v);
   }
+  if (s.schema.interact) interact_all(s);
   // The history, for rewinding.
   const auto ring = static_cast<size_t>(s.config.ring);
   const size_t slot = s.tick % ring;
@@ -403,6 +539,11 @@ void replicate_server_tick(ReplicateServer& s) {
     c.last_sent = s.tick;
     send_snapshot(s, p, buffer, replicate_snapshot_budget(s, p));
   }
+}
+
+int replicate_slack(const ReplicateClientSlot& c) {
+  const int v = std::min(c.slack_now, c.slack_before);
+  return v == kNoSlack ? 0 : std::clamp(v, -128, 127);
 }
 
 int replicate_send_interval(const ReplicateServer& s, int client) {
@@ -455,6 +596,17 @@ bool replicate_rewind(const ReplicateServer& s, uint16_t id, uint32_t tick_x256,
     out[f] = va + (vb - va) * frac;
   }
   return true;
+}
+
+RewindResult replicate_server_rewind_for(const ReplicateServer& s, int client, uint16_t id,
+                                         double* out) {
+  if (client < 0 || client >= static_cast<int>(s.clients.size())) return RewindResult::missing;
+  const ReplicateClientSlot& c = s.clients[static_cast<size_t>(client)];
+  if (!c.applied) return RewindResult::missing;
+  const uint32_t now = s.tick << 8, at = std::min(c.applied_view, now);
+  const auto cap = static_cast<uint32_t>(s.config.rewind_max_s * s.config.tick_hz * 256);
+  if (s.config.rewind_max_s > 0 && now - at > cap) return RewindResult::too_old;
+  return replicate_rewind(s, id, at, out) ? RewindResult::ok : RewindResult::missing;
 }
 
 }  // namespace ge::net
