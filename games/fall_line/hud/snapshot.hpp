@@ -24,9 +24,10 @@
 //
 // ge:summary Fall Line's HUD snapshot: the free ride's figures, the HUD's memory and its news
 // ge:keywords hud snapshot speed km-h edge tuck air-clock best-air seed position run skied
-// ge:keywords heading felt-wind weather-wind altitude wanted stars flashing search survived machine
-// lift sled heli para ge:keywords prompt down stuck died arrested hud-run note_step news ge:skill
-// ui sim ge:test tests/fall_line_hud_test.cpp
+// ge:keywords heading felt-wind weather-wind altitude wanted stars flashing search survived
+// ge:keywords machine lift sled heli para prompt down stuck died arrested hud-run note_step news
+// ge:skill ui sim
+// ge:test tests/fall_line_hud_test.cpp
 #pragma once
 
 #include <cstdint>

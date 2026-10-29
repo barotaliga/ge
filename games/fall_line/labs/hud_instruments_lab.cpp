@@ -27,6 +27,7 @@
 #include <vector>
 
 #include "console/console.hpp"
+#include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "core/num_text.hpp"
 #include "fall_line/hud/view.hpp"
@@ -74,10 +75,10 @@ double last_polygon_angle(const ui::DrawList& dl, ui::Vec2 c) {
   float far = -1;
   for (uint32_t i = 0; i < last->polygon.count; ++i) {
     const ui::Vec2 p = dl.points()[last->polygon.first + i].at;
-    const float d = std::hypot(p.x - c.x, p.y - c.y);
+    const float d = static_cast<float>(ge::core::hypot(p.x - c.x, p.y - c.y));
     if (d > far) far = d, tip = p;
   }
-  return std::atan2(tip.x - c.x, c.y - tip.y);
+  return ge::core::libm::atan2(tip.x - c.x, c.y - tip.y);
 }
 
 // A label under an instrument in the sheet.
@@ -159,7 +160,7 @@ void winds(ge::lab::Lab& lab, const gh::Style& st) {
     const double heading = i * kPi / 4;
     gh::WindReading r;
     r.heading = heading;
-    r.felt_x = -15 * std::sin(heading), r.felt_z = -15 * std::cos(heading);
+    r.felt_x = -15 * ge::core::libm::sin(heading), r.felt_z = -15 * ge::core::libm::cos(heading);
     r.figure = "15", r.unit = fh::words::kWindUnit;
     const ui::Rect at{step * static_cast<float>(i) + (step - z.w) / 2, 30, z.w, z.h};
     gh::draw(dl, f, st, g, r, at);
@@ -275,10 +276,16 @@ void game(ge::lab::Lab& lab, const gh::Style& st) {
     const std::vector<std::string> problems = gh::layout_problems(f, placed);
     problems_total += static_cast<int>(problems.size());
     const std::string name = std::to_string(v.w) + "x" + std::to_string(v.h);
-    for (const std::string& p : problems)
-      lab.fail("Fall Line's HUD at " + name + " (" + v.style + "): " + p,
+    for (const std::string& p : problems) {
+      std::string what = "Fall Line's HUD at " + name;
+      what += " (";
+      what += v.style;
+      what += "): ";
+      what += p;
+      lab.fail(what,
                "move or shrink the element in games/fall_line/hud/view.cpp (hud_layout); "
                "rerun `make lab LAB=hud-instruments`. Skill: ui.");
+    }
     lab.shot({std::string("game-") + v.style + "-" + name,
               "FALL LINE'S HUD WITH ITS INSTRUMENTS AT " + name,
               std::string("The free ride at 87 km/h, hunted, with the wind blowing: the ") +
