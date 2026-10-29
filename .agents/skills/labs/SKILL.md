@@ -100,8 +100,9 @@ picture's band says what it shows and what to look for, so check exactly that. T
 4. **Caption every picture** (below).
 5. **Run it**, look at its contact sheet, run `make labs-smoke`, then `make ge ARGS="digest <id> --write"`
    for the new row, and `make index` (a lab file carries a `ge:` block like any source).
-6. Add its row to `docs/labs.md`'s table, and to its milestone's **Labs** cell in
-   `docs/goals.md` if it is one a milestone owes.
+6. Add it to its milestone's **Labs** cell in `docs/goals.md` if it is one a milestone owes.
+   There is no table of labs to add it to: the `LabSpec` is the list, and `make index` writes
+   `docs/lab-list.md` from every one.
 
 ## Captions: a picture's acceptance test, written down
 
