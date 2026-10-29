@@ -488,9 +488,10 @@ int record_cmd(const GameSpec& spec, const Line& l, std::ostream& out) {
                    "play record runs/x.inputs --view=map --fps=30");
   }
   static const std::initializer_list<const char*> kOwn = {
-      "seed", "view",    "from",           "to",     "fps",     "speed", "size", "format", "codec",
-      "crf",  "bitrate", "encoder-preset", "thumbs", "columns", "band",  "out",  "gpu",    "mode",
-      "sound"};
+      "seed",      "view",   "from",    "to",   "fps",     "speed",
+      "size",      "format", "codec",   "crf",  "bitrate", "encoder-preset",
+      "container", "thumbs", "columns", "band", "out",     "gpu",
+      "mode",      "sound"};
   InputLog log;
   std::string error;
   if (l.words.size() == 1) {
@@ -537,6 +538,7 @@ int record_cmd(const GameSpec& spec, const Line& l, std::ostream& out) {
   text_flag("view", o.view);
   text_flag("format", o.encoding.format);
   text_flag("codec", o.encoding.codec);
+  text_flag("container", o.encoding.container);
   text_flag("bitrate", o.encoding.bitrate);
   text_flag("encoder-preset", o.encoding.preset);
   if (const auto it = l.flags.find("band"); it != l.flags.end()) o.band = it->second != "0";

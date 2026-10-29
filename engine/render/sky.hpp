@@ -88,10 +88,13 @@ void create_sky(gpu::Device& device, gpu::PipelineSet& pipelines, Sky& sky,
 // Group 0 of every draw, made once the sky's tables exist. `lights` is the frame's local lights
 // (render/lights.hpp's `Lights::buffer`, binding 10); none: the sky's empty list. `fog` is the fog
 // in areas' volume (render/fog.hpp's `Fog::volume_view`, binding 11); null, the sky's clear air.
+// `ao` is the ambient occlusion's target (render/ao.hpp, binding 12), or none for the blank (no
+// occlusion).
 wgpu::BindGroup frame_group(gpu::Device& device, const wgpu::BindGroupLayout& layout,
                             const wgpu::Buffer& uniforms, const Sky& sky,
                             const wgpu::Buffer& lights = nullptr,
-                            const wgpu::TextureView& fog = nullptr);
+                            const wgpu::TextureView& fog = nullptr,
+                            const wgpu::TextureView& ao = nullptr);
 
 // Decide which tables this frame rebuilds.
 void prepare_sky(Sky& sky, const FrameView& view);

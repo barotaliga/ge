@@ -55,8 +55,8 @@ every player setting, commented, to start from.
 
 ## Looking at the console
 
-`make lab LAB=console` pictures the drop-down console (down, sliding, closed with the notify
-lines, and autocomplete's list, selection and value prompt) from the same `ConsoleView` model the
+`make lab LAB=console` pictures the drop-down console (down, down in each of the ten charsets,
+sliding, closed with the notify lines, and autocomplete's list, selection and value prompt) from the same `ConsoleView` model the
 app draws. The pixels come from `ui::draw_console` (`engine/ui/console.hpp`), the draw list the
 GPU's 2D pass draws in the game, so a change to the console's look is made there, in its
 `ConsoleStyle`, and nowhere in the lab. Change the view, run it with
@@ -67,3 +67,9 @@ Over the game's own frame, `make lab LAB=world ARGS="--views=vista --moments=15"
 window draws it. The keyboard's path (tilde, typed text, the edit keys, the binds) is
 `ui::feed_console` (`engine/ui/console_keys.hpp`), held by `tests/ui_console_keys_test.cpp`: a
 window or a lab that drives the console feeds it the input layer's queue and nothing else.
+
+The console's letters are the charset `con_font` names (`ui::charset_font`, a grid `ui::Font`
+built from the charset's atlases; `tests/ui_charset_font_test.cpp`). A `ConsoleStyle::font` set
+by the caller wins over it. A pixel charset draws at a whole multiple of its grid, so it can stand
+taller than the style's text size: `draw_console` sizes its rows from the font's drawn height,
+never from the style alone.

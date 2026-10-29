@@ -535,7 +535,7 @@ uint16_t float_to_half(float f) {
 }
 
 std::vector<float> read_red(gpu::Device& device, const wgpu::Texture& texture, uint32_t mip,
-                            uint32_t w, uint32_t h, wgpu::TextureFormat format) {
+                            uint32_t w, uint32_t h, wgpu::TextureFormat format, uint32_t channel) {
   const bool half =
       format == wgpu::TextureFormat::R16Float || format == wgpu::TextureFormat::RGBA16Float;
   const uint32_t texel = format == wgpu::TextureFormat::RGBA16Float ? 8 : half ? 2 : 4;
@@ -566,7 +566,8 @@ std::vector<float> read_red(gpu::Device& device, const wgpu::Texture& texture, u
     const auto* bytes = static_cast<const uint8_t*>(p);
     for (uint32_t y = 0; y < h; ++y) {
       for (uint32_t x = 0; x < w; ++x) {
-        const uint8_t* at = bytes + size_t{y} * row + size_t{x} * texel;
+        const uint8_t* at = bytes + size_t{y} * row + size_t{x} * texel +
+                            (texel == 8 ? size_t{channel % 4} * 2 : 0);
         if (half) {
           uint16_t v;
           std::memcpy(&v, at, 2);
