@@ -73,6 +73,13 @@ false`, so one row's golden failure shows alongside the others.
   skipped by the rules, so a skipped row never leaves a check pending: a new job joins its
   `needs:`, never the ruleset. A failure only the queue sees ejects the pull request from the
   queue; fix it, push, and auto-merge queues it again.
+- **Kept off the runners when it cannot change the answer** (`ci.yml`'s header): a newer push
+  cancels a PR's older run; a draft runs nothing until it is marked ready; a label other than
+  `full-ci` runs the gates alone, in its own concurrency group, so it never cancels the run going;
+  each queue run's gates cancel the queue runs whose group ref is gone (the queue rebuilt), so
+  nobody cancels stale queue runs by hand any more; the heavy jobs time out at about twice their
+  usual time. GitHub cannot cap a job kind by count (a concurrency group cancels its pending
+  job), so there is no cap on macOS or Windows jobs.
 - **Kept fast**: ctest runs four cases at
   once (`CTEST_PARALLEL_LEVEL`; `make test` uses every core), the labs' smoke pass is eight
   CTest cases (`labs_smoke_1`..`_8`, `labs --all --smoke --shard=I/N`) and the slow cases carry
