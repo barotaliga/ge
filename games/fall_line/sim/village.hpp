@@ -30,6 +30,7 @@
 #include <vector>
 
 #include "fall_line/sim/state.hpp"
+#include "mountain/village/buildings.hpp"
 #include "mountain/village/ground.hpp"
 #include "mountain/village/streets.hpp"
 #include "mountain/village/traffic.hpp"
@@ -55,14 +56,18 @@ struct Village {
   std::vector<uint8_t> felled;
   int32_t felled_count = 0;
   std::optional<ge::mountain::village::TrafficPlan> traffic;
+  // The buildings on its lots (mountain/village/buildings.hpp), their trees among `felled`, and
+  // the plan's box round them all, m.
+  std::vector<ge::mountain::village::Building> buildings;
+  double box[4] = {0, 0, 0, 0};  // x0, z0, x1, z1
 };
 
 // Plan the village on a free ride's map, clear of the snowmobile's spot and the helicopter's pad,
 // and fell its trees out of `state.trees`. Leaves `state.village` empty where the map lays none.
 void plan_village(GameState& state);
 
-// Every racer on his skis against the village's traffic, its vehicles where the clock has them.
-// Writes `wipeout` and `traffic` events.
+// Every racer on his skis against the village's traffic, its vehicles where the clock has them,
+// and against its buildings' walls. Writes `wipeout`, `traffic` and `building` events.
 void meet_traffic(GameState& state);
 
 }  // namespace fall_line::sim

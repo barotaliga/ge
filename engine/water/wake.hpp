@@ -15,6 +15,22 @@
 // of the track whatever the speed (the `float` lab measures it). A splash is one ring
 // (`splash_ring`, float.hpp).
 //
+// A BODY THROUGH THE SURFACE (entry.hpp) also opens a CRATER, the near field the far-field
+// formula softens away: a ring with `crater` > 0 adds, round its point, a cavity `depth` m deep
+// and `crater` m across with its rim raised (the shape (1 - rho^2) exp(-rho^2), rho = r /
+// crater, which moves no water), opening and closing again over 2 sqrt(crater / g) s, and then
+// the jet the closing throws up in the middle, 0.6 of the depth high and a third of the crater
+// across, up and down ballistically. Both are in `ring_height` and `wake_at`, so the drawn
+// crater is the one a float drops into.
+//
+// A body that comes in MOVING ACROSS the surface pushes the water ahead of it: a ring's `lean`
+// (a direction on the plan, its length the share, at most 1) tips everything it does forward by
+// the factor 1 + |lean| cos(phi), phi the angle from that direction: the waves ahead higher, the
+// ones behind lower, the crater's rim piled up in front. A cosine round the circle sums to
+// nothing, so it moves no water either. Its `reach` (m) draws the crater out along the lean, the
+// cavity the body dug as it ran on under the surface: an ellipse `reach` / 2 longer each way,
+// centred `reach` / 2 ahead, and the waves set off from that centre.
+//
 // THE TIER. Rings are evaluated where asked, like the waves; what is kept is bounded:
 // `Wakes::life` s of rings (faded out over its last third), at most kMaxRings (the oldest go
 // first), waves shorter than `Wakes::shortest` m damped out (the short waves near the source,
@@ -26,7 +42,8 @@
 //
 // ge:summary Wakes and rings: impulse rings on deep water, a hull's trail, the Kelvin wake
 // ge:keywords water wake ring rings kelvin cauchy-poisson impulse trail hull boat swimmer splash
-// ge:keywords emit_ring wake_trail wake_at wakes dispersion group-speed
+// ge:keywords emit_ring wake_trail wake_at wakes dispersion group-speed crater cavity jet
+// ge:keywords worthington crater_height near-field lean oblique bow reach
 // ge:skill water
 // ge:test tests/water_wake_test.cpp
 #pragma once
@@ -46,6 +63,11 @@ struct Ring {
   double size = 0.5;
   double shortest = 0;  // m: its own shortest wave (a trail's: an eighth of its transverse wave)
   int body = 0;         // the body whose surface it is on
+  double crater = 0;    // m: a body's crater round the point (entry.hpp); 0: none
+  double depth = 0;     // m: the crater's depth
+  double lean_x = 0,
+         lean_z = 0;  // the water pushed forward: its direction, its share (|lean| <= 1)
+  double reach = 0;   // m: the crater drawn out along the lean (0 without a lean)
 };
 
 struct Wakes {
@@ -83,9 +105,14 @@ void wake_trail(Wakes& wakes, Trail& trail, int body, double x, double z, double
                 double length, double beam, double draught, double t, double interval = 0.1,
                 double strength = 0.3);
 
-// One ring's height at a distance `r` m, `tau` s after it was set off (the far field above,
-// softened and damped as the wakes keep it).
-double ring_height(const Wakes& wakes, const Ring& ring, double r, double tau);
+// One ring's height (dx, dz) m from its point, `tau` s after it was set off (the far field
+// above, softened and damped as the wakes keep it, and its crater).
+double ring_height(const Wakes& wakes, const Ring& ring, double dx, double dz, double tau);
+
+// A ring's crater and jet (dx, dz) m from its point, `tau` s after it was set off (0 without one).
+double crater_height(const Ring& ring, double dx, double dz, double tau);
+// How long a ring's crater and its jet last, s (0 without one).
+double crater_time(const Ring& ring);
 
 // Every ring of `body` at (x, z) at `t`.
 WakeAt wake_at(const Wakes& wakes, int body, double x, double z, double t);

@@ -122,7 +122,20 @@ Cell* cell_for(Layer& layer, int c, int r) {
   }
   Tile& t = layer.tiles[layer.slots[at]];
   if (t.near_t < layer.clock) t.near_t = layer.clock;
+  stamp_tile(layer, layer.slots[at]);
   return &t.cells[(r % kTileCells) * kTileCells + c % kTileCells];
+}
+
+void stamp_tile(Layer& layer, int32_t slot) {
+  if (layer.tile_stamp.size() <= static_cast<size_t>(slot)) layer.tile_stamp.resize(slot + 1, 0);
+  layer.tile_stamp[slot] = ++layer.edits;
+}
+
+void stamp_coarse(Layer& layer, int32_t block) {
+  if (layer.coarse_stamp.size() <= static_cast<size_t>(block)) {
+    layer.coarse_stamp.resize(block + 1, 0);
+  }
+  layer.coarse_stamp[block] = ++layer.edits;
 }
 
 const CoarseCell* coarse_at(const Layer& layer, int c, int r, int* samples) {

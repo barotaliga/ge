@@ -96,7 +96,16 @@ void Readback::wait_mapped(Device& device) {
 
 Image Readback::take() {
   Image img;
-  if (!mapped_) return img;
+  take_into(img);
+  return img;
+}
+
+void Readback::take_into(Image& img) {
+  if (!mapped_) {
+    img.width = img.height = 0;
+    img.rgba.clear();
+    return;
+  }
   img.width = width_;
   img.height = height_;
   img.rgba.resize(size_t{width_} * height_ * 4);
@@ -110,7 +119,6 @@ Image Readback::take() {
   }
   buffer_.Unmap();
   mapped_ = false;
-  return img;
 }
 
 Image read_now(Device& device, const Target& target) {

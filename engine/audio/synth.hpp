@@ -1,9 +1,13 @@
 // THE INSTRUMENT every sound is played on: a fixed-capacity DSP graph that renders 48 kHz stereo
-// float. Nothing ships as an audio file; a sound is a list of numbers (`sound.hpp`), played here.
+// float. A sound is a list of numbers (`sound.hpp`) played here, or, for a game that ships
+// recordings, a `Pcm` (`pcm.hpp`) played as a SAMPLED VOICE beside them.
 //
 // THE GRAPH, per block of `kBlock` frames:
 //   one-shots (`tone`, `noise`)  oscillators or a noise window -> drive -> filter -> envelope
 //   layers (`layer`, `set`)      a steered source -> drive -> filter -> level
+//   samples (`sample`)           a recording read at its own rate (cubic interpolation, so
+//                                22 kHz plays at 48 kHz without its steps), looped where its
+//                                loop is, -> a steered gain
 //        each -> pan -> its BUS's gain -> the mix, with a send into the shared ECHO
 //   the send -> the ROOM's reverb (reverb.hpp), while a room is set
 //   the mix + the echo + the room -> the LIMITER -> the output
@@ -29,6 +33,12 @@
 // 12, 5 ms attack (slower would let a landing through; faster would distort the bass inside a
 // cycle) and 250 ms release. Single sounds (-34 to -20 dBFS) pass untouched.
 //
+// A SAMPLED VOICE is steered like a layer (`sample_set`: a gain and a pan on a glide, which is
+// how `channels.hpp` places a moving source each frame) and ends on its own when a recording
+// that does not loop runs out. Its `Pcm` is read in place, never copied: the caller keeps it
+// alive until the synth is gone. `kMaxSamples` sound at once; a new one past that steals the
+// quietest (`Stats::stolen`), so a far sound gives way before a near one.
+//
 // THREADS: the game thread is the PRODUCER (`tone`, `noise`, `layer`, `set`, `stop`, `bus_gain`)
 // and the render thread is the CONSUMER (`render`): calls travel through a single-producer
 // single-consumer ring and are applied at the start of the next block, so `render` never locks
@@ -50,6 +60,7 @@
 #include <cstdint>
 #include <memory>
 
+#include "audio/pcm.hpp"
 #include "audio/reverb.hpp"
 #include "audio/voice.hpp"
 
@@ -59,6 +70,7 @@ inline constexpr int kBlock = 128;           // frames a block: the unit calls a
 inline constexpr int kBuses = 4;             // faders
 inline constexpr int kMaxVoices = 96;        // one-shots sounding at once
 inline constexpr int kMaxLayers = 48;        // layers built at once
+inline constexpr int kMaxSamples = 32;       // sampled voices sounding at once
 inline constexpr int kRingSize = 1024;       // calls in flight between two blocks
 inline constexpr int kMaxStreams = 32;       // streams built at once (a talker each)
 inline constexpr int kStreamFrames = 16384;  // mono frames a stream's ring holds (0.34 s)
@@ -67,6 +79,30 @@ inline constexpr int kStreamFrames = 16384;  // mono frames a stream's ring hold
 struct LayerId {
   int16_t slot = -1;
   bool valid() const { return slot >= 0; }
+};
+
+// A sampled voice, as `sample` handed it out: an id never reused (0: none, as when the ring was
+// full). It stays valid to steer and stop after the voice has ended; those calls do nothing.
+struct SampleId {
+  uint32_t id = 0;
+  bool valid() const { return id != 0; }
+};
+
+// How a sampled voice loops.
+enum class Loop : uint8_t {
+  file,   // where the recording's own loop says (`Pcm::loops`), else once
+  once,   // never, whatever the file says
+  whole,  // the whole recording, over and over
+};
+
+// One play of a recording.
+struct SamplePlay {
+  float gain = 1;   // linear, on the recording's own level
+  float pan = 0;    // -1 left .. 1 right
+  float pitch = 1;  // a rate multiplier: 2 is an octave up and half as long
+  float echo = 0;   // the send into the shared echo, 0..1
+  float delay_ms = 0;
+  Loop loop = Loop::file;
 };
 
 // A stream, as `stream` handed it out. Invalid when the synth had no free slot.
@@ -87,7 +123,8 @@ struct Stats {
   uint32_t voices = 0;     // one-shots sounding after the last block
   uint32_t layers = 0;     // layers built
   uint32_t dropped = 0;    // calls lost to a full ring
-  uint32_t stolen = 0;     // one-shots cut short for a new one
+  uint32_t samples = 0;    // sampled voices sounding after the last block
+  uint32_t stolen = 0;     // one-shots and sampled voices cut short for a new one
   float reduction_db = 0;  // the limiter's gain reduction after the last block (<= 0)
   uint64_t starved = 0;    // stream frames rendered as silence, nothing fed
   uint64_t overfed = 0;    // stream frames refused by a full ring
@@ -115,6 +152,15 @@ class Synth {
   void bus_gain(int bus, float gain, float glide_s = 0.05f);
   // The listener's room, glided to over `glide_s` (0: at once). A synth starts with none.
   void room(const RoomSound& room, float glide_s = 0.3f);
+  // Play a recording. `pcm` is read in place and must outlive the synth. Invalid when the ring
+  // was full or the recording is empty.
+  SampleId sample(const Pcm& pcm, const SamplePlay& play, int bus = 0);
+  // Steer a sampled voice: its gain and pan reached on the one-pole `glide_s`.
+  void sample_set(SampleId id, float gain, float pan, float glide_s = 0.02f);
+  // Fade it out over `fade_s` and free its slot.
+  void sample_stop(SampleId id, float fade_s = 0.01f);
+  // Whether it is still sounding (or waiting for its first block). Safe from the producer.
+  bool sample_live(SampleId id) const;
   // Build a stream at gain 1, centred, with `echo` of it sent to the echo. Invalid when all
   // `kMaxStreams` are built or a stopped one has not finished fading. Its ring is allocated the
   // first time its slot is used, here, on the producer's thread.
