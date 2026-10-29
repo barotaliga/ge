@@ -163,8 +163,9 @@ has passed, then reports the session `lost`.
 
 **Discovery** (`discovery.hpp`): a client broadcasts a probe (the protocol, a nonce) to the
 game's discovery port; each host listening answers with an advert (its session's port, seated,
-maximum, phase, name). Over UDP the probe goes to a broadcast address; on the simulated network
-to `sim_broadcast(port)`, which reaches every socket bound on that port.
+maximum, phase, the session's id at the rendezvous, a locked flag, name). Over UDP the probe goes
+to a broadcast address; on the simulated network to `sim_broadcast(port)`, which reaches every
+socket bound on that port on the sender's own LAN (a router does not forward a broadcast).
 
 ## Reaching a host (M17e1)
 
@@ -219,6 +220,31 @@ only answers its own LAN. The tests also run NAT-PMP over real loopback UDP and 
 loopback UDP and TCP. The `net-reach` lab's second table runs, under each preset, a host behind
 a symmetric NAT whose router speaks one protocol, and a client behind another symmetric NAT: it
 maps, renews a 20 s lease for a minute, lets the client straight in and closes.
+
+## Hosting and the server browser (M17r)
+
+A game's HOST button and its FIND A GAME page sit on three pieces, the same for a listen server in
+the player's own process and for a dedicated server:
+
+| Piece | What it does |
+| --- | --- |
+| Hosting (`hosting.hpp`) | Given the game's node and session host: answers LAN probes on the discovery socket and pings on the node's own socket, asks the home router for a forward (`portmap.hpp`) and closes it at the end, registers with the rendezvous (`reach.hpp`), and, for a listed game, ADVERTISES its advert to the rendezvous every `advertise_us` and the moment its seats or phase change. `hosting_stop` unlists it at once |
+| The list (`rendezvous.hpp`) | The rendezvous keeps each session's last advertise and answers a LIST ask a page at a time (seven games a page, an ask padded to the biggest page, so no answer outweighs its ask). An advertise is taken only from the address the session registered from |
+| The directory (`directory.hpp`) | The browser's model: one refresh probes the LAN and reads the list's pages, merges a game found both ways into one entry by its session id, pings each entry three times (the discovery probe sent to its session address) and keeps the lowest round trip; the view filters (full, empty, playing, locked, a ping bound, part of the name, where it was found) and sorts (ping, players, name), ties by name then id |
+
+A game's VISIBILITY is `lan` (the LAN only: no rendezvous, no router), `invite` (registered, so
+joined by the id the host hands out, never listed) or `listed` (public). Joining an entry
+(`directory_route`) is straight to its LAN address, or through the rendezvous by its id, which
+punches or relays across the NATs; `session_client_attach` then seats the player over the peer
+reach connected. A host behind a NAT that lets no stranger in, with no forward, is listed but
+cannot be pinged: its ping shows as unknown and the relay gets players in.
+
+The `net-host` lab runs an evening of it (`hosting_trial.hpp`) under each preset and home
+router: a listen server on a home LAN, ten public arenas (one locked, one playing), an invite-only
+game, a listed host behind a symmetric NAT and a LAN-only game on a LAN of its own; a friend's
+browser on the home LAN and a stranger's on the internet refresh three times, join by the LAN, the
+list, an invite and the relay, chat, see the game start and see it leave the list. It draws both
+browsers as a game's menu would.
 
 ## Replication (M17f)
 

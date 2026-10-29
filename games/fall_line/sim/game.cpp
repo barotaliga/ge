@@ -168,6 +168,8 @@ void log_step(const GameState& state) {
         line += " paramotor " + f(e.value, 0) + " " +
                 army_para_change_name(static_cast<ArmyParaChange>(e.gate)) + ", " +
                 std::to_string(state.army.paras.size()) + " out";
+      case EventKind::building:
+        line += " building " + std::to_string(e.gate) + " at " + f(e.value, 1) + " m/s";
         break;
     }
     line += " at x " + f(s.x, 1) + " z " + f(s.z, 1) + ", " + f(s.speed * 3.6, 1) + " km/h";
@@ -262,6 +264,8 @@ const char* event_name(EventKind kind) {
       return "traffic";
     case EventKind::army_para:
       return "army-para";
+    case EventKind::building:
+      return "building";
   }
   return "?";
 }

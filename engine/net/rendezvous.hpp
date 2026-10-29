@@ -9,6 +9,13 @@
 // unread. It answers STUN on its own port (stun.hpp), so a node can learn its public address
 // without registering.
 //
+// THE LIST: a host that ADVERTISES its session listed (hosting.hpp does it for a public game) is
+// listed under its protocol with what its advert says (name, seats, phase, locked), and a server
+// browser asks for the list a page at a time (directory.hpp). A session's list entry lives and
+// dies with its registration; one advertised unlisted (an invite-only game) is joined by its id
+// and never listed. The list is in the order the sessions first registered, so its pages are
+// stable while a browser reads them.
+//
 // It is the server half of M17e; a game runs it beside its lobby service, or on any public
 // machine. Like the node, it takes the time from the caller, opens its relays on its transport's
 // kind (a UDP port, or a socket on the simulated network), and keeps a fixed table sized at init:
@@ -23,7 +30,8 @@
 //
 // ge:summary The rendezvous server: sessions registered, joins answered, STUN, the relay ports
 // ge:keywords net rendezvous nat-traversal hole-punching introduce register join relay turn
-// ge:keywords stun public-address matchmaking-server master-server punch
+// ge:keywords stun public-address matchmaking-server master-server punch server-list listing
+// ge:keywords advertise public-game invite-only server-browser
 // ge:skill net
 // ge:test tests/net_reach_test.cpp
 #pragma once
@@ -34,6 +42,7 @@
 
 #include "core/prng.hpp"
 #include "net/address.hpp"
+#include "net/discovery.hpp"
 #include "net/transport.hpp"
 
 namespace ge::net {
@@ -56,13 +65,18 @@ struct RendezvousStats {
   uint64_t relays = 0;      // relay ports opened
   uint64_t no_relay = 0;    // joins introduced without one, every relay taken
   uint64_t relayed = 0, relayed_bytes = 0;
-  uint64_t refused = 0;  // anything else: a stranger at a relay, a short or unknown message
+  uint64_t advertised = 0;  // advertise messages taken
+  uint64_t lists = 0;       // listing pages answered
+  uint64_t refused = 0;     // anything else: a stranger at a relay, a short or unknown message
 };
 
 struct RendezvousSession {
   uint64_t id = 0;
-  Address host;
+  Address host;  // as clients are introduced to it (the forwarded port, when it has one)
+  Address from;  // where it registered from: the only address its advertise is taken from
   int64_t last_us = 0;
+  bool listed = false;  // advertised as listed (directory.hpp's browser sees it)
+  Advert advert;        // the last advertise's
 };
 
 struct Relay {

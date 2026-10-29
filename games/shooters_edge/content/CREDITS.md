@@ -17,7 +17,14 @@ Every sound and model in this directory, the pack it came from, its author and i
 | `models/pickup/rockets_large.glb` | `Models/GLB format/crate-wide.glb` |
 | `models/pickup/shells_large.glb` | `Models/GLB format/crate-medium.glb` |
 | `models/pickup/shells_small.glb` | `Models/GLB format/crate-small.glb` |
+| `models/pickup/weapon_beam_gun.glb` | `Models/GLB format/blaster-r.glb` |
+| `models/pickup/weapon_double_shotgun.glb` | `Models/GLB format/blaster-l.glb` |
+| `models/pickup/weapon_grenade_launcher.glb` | `Models/GLB format/blaster-b.glb` |
+| `models/pickup/weapon_heavy_nailgun.glb` | `Models/GLB format/blaster-p.glb` |
+| `models/pickup/weapon_nailgun.glb` | `Models/GLB format/blaster-d.glb` |
+| `models/pickup/weapon_rocket_launcher.glb` | `Models/GLB format/blaster-h.glb` |
 | `models/projectile/grenade.glb` | `Models/GLB format/grenade-a.glb` |
+| `models/projectile/laser.glb` | `Models/GLB format/bullet-foam-tip.glb` |
 | `models/projectile/nail.glb` | `Models/GLB format/bullet-foam.glb` |
 | `models/projectile/nail_heavy.glb` | `Models/GLB format/bullet-foam-thick.glb` |
 | `models/projectile/rocket.glb` | `Models/GLB format/bullet-foam-tip-thick.glb` |
@@ -38,11 +45,13 @@ Every sound and model in this directory, the pack it came from, its author and i
 
 | Our file | Source file |
 | --- | --- |
+| `sounds/door/locked_rune.wav` | `Audio/threeTone2.ogg` |
 | `sounds/pickup/health.wav` | `Audio/powerUp12.ogg` |
 | `sounds/pickup/health_mega.wav` | `Audio/phaserUp1.ogg` |
 | `sounds/pickup/health_small.wav` | `Audio/phaserUp3.ogg` |
 | `sounds/power/damage_attack.wav` | `Audio/zap2.ogg` |
 | `sounds/power/shield_fading.wav` | `Audio/zapThreeToneDown.ogg` |
+| `sounds/power/shield_hit.wav` | `Audio/zapThreeToneUp.ogg` |
 | `sounds/trigger/activate.wav` | `Audio/zapTwoTone2.ogg` |
 | `sounds/weapon/beam_start.wav` | `Audio/zapTwoTone.ogg` |
 | `sounds/weapon/nailgun_fire.wav` | `Audio/laser2.ogg` |
@@ -59,6 +68,12 @@ Every sound and model in this directory, the pack it came from, its author and i
 | `models/creature/flyer.glb` | `Models/GLB format/character-ghost.glb` |
 | `models/creature/ghoul.glb` | `Models/GLB format/character-zombie.glb` |
 | `models/creature/swordsman.glb` | `Models/GLB format/character-skeleton.glb` |
+| `models/pickup/rune_1.glb` | `Models/GLB format/detail-chalice.glb` |
+| `models/pickup/rune_2.glb` | `Models/GLB format/urn-round.glb` |
+| `models/pickup/rune_3.glb` | `Models/GLB format/urn-square.glb` |
+| `models/pickup/rune_4.glb` | `Models/GLB format/detail-bowl.glb` |
+| `models/prop/fire_flame.glb` | `Models/GLB format/fire-basket.glb` |
+| `models/prop/torch_flame.glb` | `Models/GLB format/lantern-candle.glb` |
 
 ## Kenney: Impact Sounds
 
@@ -84,10 +99,53 @@ Every sound and model in this directory, the pack it came from, its author and i
 | --- | --- |
 | `sounds/button/switch.wav` | `Audio/switch_003.ogg` |
 | `sounds/common/message.wav` | `Audio/bong_001.ogg` |
+| `sounds/pickup/keycard.wav` | `Audio/confirmation_003.ogg` |
 | `sounds/trigger/secret.wav` | `Audio/confirmation_002.ogg` |
 | `sounds/ui/back.wav` | `Audio/minimize_006.ogg` |
 | `sounds/ui/move.wav` | `Audio/select_005.ogg` |
 | `sounds/ui/select.wav` | `Audio/confirmation_004.ogg` |
+
+## Kenney: Mini Characters
+
+- Id: `kenney/mini-characters`
+- Author: Kenney (kenney.nl)
+- Source: <https://kenney.nl/assets/mini-characters>
+- Licence: CC0 1.0 (<https://creativecommons.org/publicdomain/zero/1.0/>)
+
+| Our file | Source file |
+| --- | --- |
+| `models/character/player.glb` | `Models/GLB format/character-male-a.glb` |
+| `models/pickup/power_suit.glb` | `Models/GLB format/aid-mask.glb` |
+
+## Kenney: Mini Dungeon
+
+- Id: `kenney/mini-dungeon`
+- Author: Kenney (kenney.nl)
+- Source: <https://kenney.nl/assets/mini-dungeon>
+- Licence: CC0 1.0 (<https://creativecommons.org/publicdomain/zero/1.0/>)
+
+| Our file | Source file |
+| --- | --- |
+| `models/pickup/key_silver_old.glb` | `Models/GLB format/key.glb` |
+| `models/pickup/key_silver_rune.glb` | `Models/GLB format/key.glb` |
+
+## Kenney: Platformer Kit
+
+- Id: `kenney/platformer-kit`
+- Author: Kenney (kenney.nl)
+- Source: <https://kenney.nl/assets/platformer-kit>
+- Licence: CC0 1.0 (<https://creativecommons.org/publicdomain/zero/1.0/>)
+
+| Our file | Source file |
+| --- | --- |
+| `models/pickup/health_mega.glb` | `Models/GLB format/heart.glb` |
+| `models/pickup/key_gold_old.glb` | `Models/GLB format/key.glb` |
+| `models/pickup/key_gold_rune.glb` | `Models/GLB format/key.glb` |
+| `models/pickup/power_cloak.glb` | `Models/GLB format/coin-silver.glb` |
+| `models/pickup/power_damage.glb` | `Models/GLB format/star.glb` |
+| `models/pickup/power_shield.glb` | `Models/GLB format/jewel.glb` |
+| `models/prop/barrel_explosive_small.glb` | `Models/GLB format/barrel.glb` |
+| `models/prop/flag.glb` | `Models/GLB format/flag.glb` |
 
 ## Kenney: Prototype Kit
 
@@ -111,7 +169,11 @@ Every sound and model in this directory, the pack it came from, its author and i
 | Our file | Source file |
 | --- | --- |
 | `sounds/button/metal.wav` | `Audio/metalClick.ogg` |
+| `sounds/door/chain_stop.wav` | `Audio/doorClose_3.ogg` |
 | `sounds/door/screech_move.wav` | `Audio/creak2.ogg` |
+| `sounds/door/secret_base_stop.wav` | `Audio/doorClose_2.ogg` |
+| `sounds/door/unlock_base.wav` | `Audio/doorOpen_2.ogg` |
+| `sounds/lift/chain_stop.wav` | `Audio/doorClose_4.ogg` |
 | `sounds/pickup/ammo.wav` | `Audio/metalClick.ogg` |
 | `sounds/pickup/armor.wav` | `Audio/metalPot3.ogg` |
 | `sounds/player/disconnect.wav` | `Audio/clothBelt.ogg` |
@@ -126,11 +188,29 @@ Every sound and model in this directory, the pack it came from, its author and i
 
 | Our file | Source file |
 | --- | --- |
+| `sounds/mover/train_stop.wav` | `Audio/doorClose_002.ogg` |
+| `sounds/power/cloak_fading.wav` | `Audio/forceField_003.ogg` |
+| `sounds/power/cloak_idle.wav` | `Audio/forceField_004.ogg` |
+| `sounds/power/suit_fading.wav` | `Audio/thrusterFire_001.ogg` |
 | `sounds/power/suit_pickup.wav` | `Audio/forceField_000.ogg` |
 | `sounds/teleport/arrive_4.wav` | `Audio/forceField_001.ogg` |
 | `sounds/teleport/arrive_5.wav` | `Audio/forceField_002.ogg` |
 | `sounds/weapon/explosion.wav` | `Audio/explosionCrunch_003.ogg` |
 | `sounds/weapon/grenade_bounce.wav` | `Audio/impactMetal_003.ogg` |
+| `sounds/world/laser_fire.wav` | `Audio/laserSmall_002.ogg` |
+| `sounds/world/laser_hit.wav` | `Audio/impactMetal_001.ogg` |
+
+## Kenney: Space Station Kit
+
+- Id: `kenney/space-station-kit`
+- Author: Kenney (kenney.nl)
+- Source: <https://kenney.nl/assets/space-station-kit>
+- Licence: CC0 1.0 (<https://creativecommons.org/publicdomain/zero/1.0/>)
+
+| Our file | Source file |
+| --- | --- |
+| `models/pickup/cells_large.glb` | `Models/GLB format/container-wide.glb` |
+| `models/pickup/cells_small.glb` | `Models/GLB format/container.glb` |
 
 ## Kenney: Survival Kit
 
@@ -144,6 +224,8 @@ Every sound and model in this directory, the pack it came from, its author and i
 | `models/pickup/backpack.glb` | `Models/GLB format/chest.glb` |
 | `models/pickup/health.glb` | `Models/GLB format/bottle-large.glb` |
 | `models/pickup/health_small.glb` | `Models/GLB format/bottle.glb` |
+| `models/pickup/rockets_small.glb` | `Models/GLB format/box.glb` |
+| `models/projectile/lava_ball.glb` | `Models/GLB format/rock-c.glb` |
 | `models/prop/barrel_explosive.glb` | `Models/GLB format/barrel.glb` |
 | `models/view/melee.glb` | `Models/GLB format/tool-axe-upgraded.glb` |
 
@@ -180,6 +262,9 @@ Every sound and model in this directory, the pack it came from, its author and i
 
 | Our file | Source file |
 | --- | --- |
+| `sounds/door/screech_stop.wav` | `slam_06.ogg` |
+| `sounds/door/secret_air_stop.wav` | `slam_03.ogg` |
+| `sounds/mover/train_move.wav` | `machine_03.ogg` |
 | `sounds/weapon/ricochet_2.wav` | `spring_02.ogg` |
 | `sounds/weapon/ricochet_3.wav` | `spring_04.ogg` |
 
@@ -209,11 +294,23 @@ Every sound and model in this directory, the pack it came from, its author and i
 
 | Our file | Source file |
 | --- | --- |
+| `sounds/player/gasp_long.wav` | `slightscream-10.flac` |
 | `sounds/player/jump.wav` | `slightscream-01.flac` |
 | `sounds/player/pain_1.wav` | `slightscream-11.flac` |
 | `sounds/player/pain_2.wav` | `slightscream-02.flac` |
 | `sounds/player/pain_3.wav` | `slightscream-09.flac` |
 | `sounds/player/pain_4.wav` | `slightscream-12.flac` |
+
+## 16 Monster Growls
+
+- Id: `oga/16-monster-growls`
+- Author: starninjas (OpenGameArt)
+- Source: <https://opengameart.org/content/16-monster-growls>
+- Licence: CC0 1.0 (<https://creativecommons.org/publicdomain/zero/1.0/>)
+
+| Our file | Source file |
+| --- | --- |
+| `sounds/power/bonus_powers.wav` | `monster.8.ogg` |
 
 ## 25 CC0 bang / firework SFX
 
@@ -252,7 +349,11 @@ Every sound and model in this directory, the pack it came from, its author and i
 | `sounds/ambient/computer.wav` | `machine_11.ogg` |
 | `sounds/ambient/suck_wind.wav` | `noise_01.ogg` |
 | `sounds/ambient/swamp_2.wav` | `water_boiling.ogg` |
+| `sounds/door/chain_move.wav` | `machine_07.ogg` |
 | `sounds/door/machine_move.wav` | `machine_02.ogg` |
+| `sounds/door/secret_air_move.wav` | `pump_02.ogg` |
+| `sounds/door/secret_base_move.wav` | `machine_01.ogg` |
+| `sounds/door/secret_winch.wav` | `machine_10.ogg` |
 | `sounds/door/stone_move.wav` | `rolling.ogg` |
 | `sounds/lift/base_move.wav` | `machine_06.ogg` |
 | `sounds/world/push_wind.wav` | `noise_03.ogg` |
@@ -267,11 +368,14 @@ Every sound and model in this directory, the pack it came from, its author and i
 | Our file | Source file |
 | --- | --- |
 | `sounds/ambient/swamp_1.wav` | `loop_bubbles_02.ogg` |
+| `sounds/player/death_water.wav` | `splash_05.ogg` |
 | `sounds/player/drown_1.wav` | `bubble_03.ogg` |
+| `sounds/player/drown_2.wav` | `bubble_02.ogg` |
 | `sounds/player/enter_water.wav` | `splash_11.ogg` |
 | `sounds/player/leave_water.wav` | `bubble_01.ogg` |
 | `sounds/player/swim_1.wav` | `slime_15.ogg` |
 | `sounds/player/swim_2.wav` | `slime_05.ogg` |
+| `sounds/player/water_hit.wav` | `splash_07.ogg` |
 
 ## 50 CC0 Sci-Fi SFX
 
@@ -283,6 +387,7 @@ Every sound and model in this directory, the pack it came from, its author and i
 | Our file | Source file |
 | --- | --- |
 | `sounds/ambient/teleporter.wav` | `loop_machine_02.ogg` |
+| `sounds/lift/chain_move.wav` | `loop_machine_01.ogg` |
 | `sounds/pickup/respawn.wav` | `teleport_02.ogg` |
 | `sounds/teleport/arrive_2.wav` | `teleport_01.ogg` |
 | `sounds/weapon/heavy_nailgun_fire.wav` | `retro_laser_02.ogg` |
@@ -296,6 +401,7 @@ Every sound and model in this directory, the pack it came from, its author and i
 
 | Our file | Source file |
 | --- | --- |
+| `sounds/player/enter_slime.wav` | `ezwa-water_splash/water_splash-01.flac` |
 | `sounds/player/water_jump.wav` | `ezwa-water_splash/water_splash-06.flac` |
 
 ## 80 CC0 creature SFX
@@ -320,6 +426,8 @@ Every sound and model in this directory, the pack it came from, its author and i
 
 | Our file | Source file |
 | --- | --- |
+| `sounds/door/unlock_rune.wav` | `spell_fire_03.ogg` |
+| `sounds/pickup/key_rune.wav` | `spell_fire_04.ogg` |
 | `sounds/player/burn_1.wav` | `spell_fire_02.ogg` |
 | `sounds/player/burn_2.wav` | `spell_fire_01.ogg` |
 | `sounds/player/enter_lava.wav` | `spell_fire_05.ogg` |
@@ -361,6 +469,7 @@ Every sound and model in this directory, the pack it came from, its author and i
 | Our file | Source file |
 | --- | --- |
 | `sounds/door/machine_stop.wav` | `qubodup-DoorSet/ogg/qubodup-DoorClose09.ogg` |
+| `sounds/door/secret_latch.wav` | `qubodup-DoorSet/ogg/qubodup-DoorClose10.ogg` |
 | `sounds/door/stone_stop.wav` | `qubodup-DoorSet/ogg/qubodup-DoorClose06.ogg` |
 | `sounds/lift/base_stop.wav` | `qubodup-DoorSet/ogg/qubodup-DoorClose01.ogg` |
 
@@ -374,6 +483,17 @@ Every sound and model in this directory, the pack it came from, its author and i
 | Our file | Source file |
 | --- | --- |
 | `sounds/ambient/drip.wav` | `atmosbasement.mp3_.flac` |
+
+## Electric Buzz
+
+- Id: `oga/electric-buzz`
+- Author: themightyglider (OpenGameArt)
+- Source: <https://opengameart.org/content/electric-buzz>
+- Licence: CC0 1.0 (<https://creativecommons.org/publicdomain/zero/1.0/>)
+
+| Our file | Source file |
+| --- | --- |
+| `sounds/door/locked_base.wav` | `buzz_0.ogg` |
 
 ## Electricity Game Sound Pack
 
@@ -391,6 +511,7 @@ Every sound and model in this directory, the pack it came from, its author and i
 | `sounds/power/shield_pickup.wav` | `shieldhit.wav` |
 | `sounds/teleport/arrive_3.wav` | `teleport_1.wav` |
 | `sounds/weapon/beam_loop.wav` | `crackleelectricityloop.wav` |
+| `sounds/world/power_surge.wav` | `death_1.wav` |
 
 ## Fire Crackling
 
@@ -446,7 +567,6 @@ Every sound and model in this directory, the pack it came from, its author and i
 | Our file | Source file |
 | --- | --- |
 | `sounds/teleport/arrive_1.wav` | `172206__fins__teleport.wav` |
-
 
 ## Authored here
 
