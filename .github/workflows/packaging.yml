@@ -120,7 +120,7 @@ jobs:
           # The recorded bits: every lab's digest committed and held by ge test, one lab checked
           # alone; a golden file's rows diffed column by column; a test with no golden written.
           "$G" digest --write "$E"
-          test -s tests/labs_digests.txt
+          test -s tests/digests/look.txt
           "$G" digest look "$E" --json | grep -q '"state":"same"'
           "$G" test --filter=labs_smoke "$E"
           # A filter builds only its tests' targets: laps_test alone, then run.

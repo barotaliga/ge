@@ -13,7 +13,7 @@
 #   7. tests         cli_diagnostics_test (every message held to the diagnostics convention),
 #                    each changed test, and the test every changed file's ge:test tag names
 #   8. digests       each lab the change reaches (`ge digest --affected --list`) at its smoke flags,
-#                    against tests/labs_digests.txt: a digest the change moved is caught here,
+#                    against tests/digests: a digest the change moved is caught here,
 #                    not by CI's labs_smoke a round later
 #
 # It is not the whole of CI: the other compilers, the labs it does not reach and the GPU rows
@@ -61,16 +61,6 @@ gate fmt-check make -s fmt-check || true
 gate agents-check make -s agents-check || true
 gate libm-check make -s libm-check || true
 gate release python3 tools/release.py check || true
-# A union merge can keep two rows of one lab in the digests' baseline; CI's labs-smoke refuses it.
-doubled_digests() {
-  local d
-  d=$(grep -v '^#' tests/labs_digests.txt | awk '{print $1}' | sort | uniq -d)
-  [[ -z "$d" ]] && return 0
-  echo "tests/labs_digests.txt holds more than one row for: $d. Keep the row this build writes" \
-    "(ge digest <lab>) and delete the other."
-  return 1
-}
-gate "digest rows" doubled_digests || true
 if ! gate build make -s build PRESET="$preset"; then
   echo "precheck: the build failed, so the lint, the tests and the digests could not run;" \
     "red: ${failed[*]}. Fix them, then make precheck again." >&2
@@ -106,7 +96,7 @@ gate "tests (${#tests[@]})" ctest --test-dir "$build" -R "$regex" -j "$(nproc 2>
 labs_digests() {
   printf '%s\n' "$@" | ASAN_OPTIONS="${ASAN_OPTIONS:+$ASAN_OPTIONS:}detect_leaks=0" \
     xargs -P "$(nproc 2>/dev/null || sysctl -n hw.ncpu)" -I{} \
-    "$build/labs" {} --smoke --quiet --check-digests=tests/labs_digests.txt
+    "$build/labs" {} --smoke --quiet --check-digests=tests/digests
 }
 mapfile -t labs < <("$build/ge" digest --affected --list --preset="$preset" --base="$base" 2>/dev/null |
   grep -E '^[a-z0-9-]+$' || true)
