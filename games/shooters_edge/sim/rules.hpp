@@ -33,7 +33,7 @@
 namespace shooters_edge::sim {
 
 // The program's function numbers (0 is none).
-enum Fn : sh::Func {
+enum Fn : uint8_t {
   kFnNone = 0,
   kFnStartFrame,
   kFnPreThink,

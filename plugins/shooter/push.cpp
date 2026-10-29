@@ -124,11 +124,8 @@ void physics_pusher(Server& sv, int e, double dt) {
   }
   if (movetime != 0) {
     const Vec3f v = ent(sv, e).velocity;
-    if (zero(v)) {
-      ent(sv, e).ltime = ent(sv, e).ltime + movetime;
-    } else if (push_move(sv, e, v * movetime)) {
-      ent(sv, e).ltime = ent(sv, e).ltime + movetime;
-    }
+    // A still pusher only keeps time; a moving one keeps time only when its push went through.
+    if (zero(v) || push_move(sv, e, v * movetime)) ent(sv, e).ltime = ent(sv, e).ltime + movetime;
   }
   if (ent(sv, e).free) return;
 

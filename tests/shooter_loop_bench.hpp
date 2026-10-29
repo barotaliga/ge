@@ -49,6 +49,7 @@ struct Bench {
     data.push_back(sh::build_brush_model(world));
     for (const auto& m : extra) data.push_back(sh::build_brush_model(m));
     std::vector<sh::BrushModel> models;
+    models.reserve(data.size());
     for (const sh::ModelData& d : data) models.push_back(d.model());
     program.ctx = this;
     program.call = &Bench::call;

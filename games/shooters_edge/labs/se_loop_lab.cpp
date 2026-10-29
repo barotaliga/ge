@@ -118,6 +118,7 @@ void draw_arena(gl::Lab& lab, const se::Arena& arena, const se::MatchReport& r, 
   gl::Trace players[se::kPlayers] = {{"player 1", {}, {}}, {"player 2", {}, {}}};
   for (int p = 0; p < se::kPlayers; p++) {
     std::vector<sh::Vec3f> pts;
+    pts.reserve(r.frames.size());
     for (const se::FrameRecord& f : r.frames) pts.push_back(f.origin[p]);
     path(players[p], pts, a, b);
   }

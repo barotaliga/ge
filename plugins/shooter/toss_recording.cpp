@@ -8,6 +8,7 @@
 #include "shooter/toss_recording.hpp"
 
 #include <cmath>
+#include <cstdint>
 #include <cstdlib>
 
 #include "shooter/physics.hpp"
@@ -68,7 +69,7 @@ float max_diff(Vec3f a, Vec3f b) {
 
 bool parse_toss_recording(std::string_view text, TossRecording& out, std::string& error) {
   out = TossRecording{};
-  enum class In { none, scene, flight } in = In::none;
+  enum class In : uint8_t { none, scene, flight } in = In::none;
   int line_no = 0;
   size_t pos = 0;
   auto fail = [&](const std::string& what) {

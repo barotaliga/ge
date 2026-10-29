@@ -34,16 +34,16 @@ struct Reply {
 };
 
 struct ClientSim {
-  sh::MoveKeys keys;
-  sh::Vec3f view;
-  uint8_t impulse = 0;
-  sh::CmdClock clock;
-  uint32_t sequence = 0;
-  std::vector<sh::MoveCmd> sent;  // [sequence - 1]
-  bool acked = false;
-  Reply last;  // the newest reply heard
-  sh::Smoothing smooth;
   size_t script_at = 0;
+  sh::CmdClock clock;
+  std::vector<sh::MoveCmd> sent;  // [sequence - 1]
+  uint32_t sequence = 0;
+  sh::Vec3f view;
+  sh::Smoothing smooth;
+  Reply last;  // the newest reply heard
+  uint8_t impulse = 0;
+  bool acked = false;
+  sh::MoveKeys keys;
 };
 
 sh::KeyState& key_of(sh::MoveKeys& k, ScriptKey key) {
@@ -277,7 +277,7 @@ MatchReport run_match(const MatchOptions& opt) {
     FrameRecord fr;
     fr.time = sv.time;
     for (int p = 0; p < kPlayers; p++) {
-      const sh::Edict& pl = sv.edicts[static_cast<size_t>(p + 1)];
+      const sh::Edict& pl = sv.edicts[static_cast<size_t>(p) + 1];
       fr.origin[p] = pl.origin;
       fr.velocity[p] = pl.velocity;
       fr.onground[p] = (pl.flags & sh::kFlagOnGround) != 0;

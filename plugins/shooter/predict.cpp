@@ -54,7 +54,7 @@ MoveState unquantize_player(const NetPlayer& n, const MoveSettings& set) {
 
 NetPlayer net_player_of(const Server& sv, int slot) {
   const ClientSlot& c = sv.clients[static_cast<size_t>(slot)];
-  const Edict& ed = sv.edicts[static_cast<size_t>(slot + 1)];
+  const Edict& ed = sv.edicts[static_cast<size_t>(slot) + 1];
   MoveState s;
   s.origin = ed.origin + (ed.mins - kPlayerMins);
   s.velocity = ed.velocity;
