@@ -206,6 +206,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge pmove <scenario>` (a movement scenario's trajectory as a table and a chart, against its parity recording)
 - `ge console <target> "<command>"` (a console command or cvar run in a headless server or client, its output returned)
 - `ge play` for first-person games (an angle axis on the protocol's grid, a step whose length the input sets, several players a run)
+- `ge bot nav <map>` (build a map's navigation graph without a lab run, and print its node and link counts, the nodes no route reaches, and the proof of one route: bots thread, M18r)
 
 ## Store services
 
