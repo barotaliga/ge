@@ -326,6 +326,7 @@ int main(int argc, char** argv) {
                                             static_cast<uint32_t>(h), surface.format(),
                                             fall_line::app::frame_options(set));
   if (!frame) return 1;
+  fall_line::app::show_village(*device, *frame, fall_line::controls::hand_state(*hand).village);
 
   // The shell (menus.hpp): the front door first, its bot skiing behind it, unless the run is
   // asked for at once. The options start from their cvars.
@@ -604,7 +605,8 @@ int main(int argc, char** argv) {
     // The figures' lags run over the steps this frame took; a new run starts them settled.
     fall_line::app::draw(
         *device, *frame, view,
-        {skiers, static_cast<double>(granted) / 120.0, fresh, {}, subject, &overlay}, target);
+        {skiers, static_cast<double>(granted) / 120.0, fresh, {}, subject, &overlay, shown.t},
+        target);
     fresh = false;
     surface.present();
     ++presented;
