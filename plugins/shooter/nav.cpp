@@ -212,7 +212,8 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
     if (i < 0 || j < 0 || i >= g.cols || j >= g.rows) return false;
     const size_t c = static_cast<size_t>(i) * static_cast<size_t>(g.rows) + static_cast<size_t>(j);
     for (int32_t k = 0; k < g.col_n[c]; k++) {
-      const float dz = g.nodes[static_cast<size_t>(g.col_first[c] + k)].origin.z - z;
+      const float dz =
+          g.nodes[static_cast<size_t>(g.col_first[c]) + static_cast<size_t>(k)].origin.z - z;
       if (dz <= kGapUp && dz >= -kGapUp) return true;
     }
     return false;
@@ -380,7 +381,7 @@ NavRoute nav_route(const NavGraph& g, int32_t from, int32_t to, ai::Search& sear
   for (size_t a = 0; a < g.nodes.size(); a++) {
     const NavNode& n = g.nodes[a];
     for (int32_t k = 0; k < n.links; k++) {
-      const NavLink& l = g.links[static_cast<size_t>(n.first_link + k)];
+      const NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)];
       const double v = across(n.origin, g.nodes[static_cast<size_t>(l.to)].origin) / l.time_s;
       if (v > fastest) fastest = v;
     }
@@ -395,7 +396,7 @@ NavRoute nav_route(const NavGraph& g, int32_t from, int32_t to, ai::Search& sear
       [&](int32_t a) {
         const NavNode& n = g.nodes[static_cast<size_t>(a)];
         for (int32_t k = 0; k < n.links; k++) {
-          const NavLink& l = g.links[static_cast<size_t>(n.first_link + k)];
+          const NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)];
           const double cost = search.cost(a) + l.time_s + (l.mover >= 0 ? mover_penalty_s : 0);
           if (search.improves(l.to, cost)) search.reach(l.to, cost, a, heuristic(l.to));
         }
@@ -407,7 +408,7 @@ NavRoute nav_route(const NavGraph& g, int32_t from, int32_t to, ai::Search& sear
   for (size_t i = 0; i + 1 < r.nodes.size(); i++) {
     const NavNode& n = g.nodes[static_cast<size_t>(r.nodes[i])];
     for (int32_t k = 0; k < n.links; k++) {
-      const NavLink& l = g.links[static_cast<size_t>(n.first_link + k)];
+      const NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)];
       if (l.to == r.nodes[i + 1]) {
         r.time_s += l.time_s;
         break;
@@ -424,7 +425,7 @@ int32_t nav_reach(const NavGraph& g, int32_t from, ai::Search& search) {
   search.run_all([&](int32_t a) {
     const NavNode& n = g.nodes[static_cast<size_t>(a)];
     for (int32_t k = 0; k < n.links; k++) {
-      const NavLink& l = g.links[static_cast<size_t>(n.first_link + k)];
+      const NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)];
       const double cost = search.cost(a) + l.time_s;
       if (search.improves(l.to, cost)) search.reach(l.to, cost, a);
     }

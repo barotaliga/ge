@@ -113,8 +113,8 @@ void legend(gl::Picture& p) {
 const sh::NavLink* link_between(const sh::NavGraph& g, int32_t a, int32_t b) {
   const sh::NavNode& n = g.nodes[static_cast<size_t>(a)];
   for (int32_t k = 0; k < n.links; k++)
-    if (g.links[static_cast<size_t>(n.first_link + k)].to == b)
-      return &g.links[static_cast<size_t>(n.first_link + k)];
+    if (g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)].to == b)
+      return &g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)];
   return nullptr;
 }
 
@@ -170,7 +170,7 @@ void run_map(gl::Lab& lab, const Map& m, const sh::NavSettings& set, const In& i
   for (size_t a = 0; a < g.nodes.size(); a++) {
     const sh::NavNode& na = g.nodes[a];
     for (int32_t q = 0; q < na.links; q++) {
-      const sh::NavLink& l = g.links[static_cast<size_t>(na.first_link + q)];
+      const sh::NavLink& l = g.links[static_cast<size_t>(na.first_link) + static_cast<size_t>(q)];
       const sh::NavNode& nb = g.nodes[static_cast<size_t>(l.to)];
       if (l.kind == sh::NavKind::walk && l.mover < 0 && static_cast<size_t>(l.to) < a)
         continue;  // a walk both ways is drawn once
