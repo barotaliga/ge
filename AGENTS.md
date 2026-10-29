@@ -47,6 +47,7 @@ updates that row's status file (`docs/goals/<row>.md`) in its PR.
 | [`docs/saves.md`](docs/saves.md) | Saves: a save is the state, never the inputs; the file and its chunks, the state described once, the run saved and loaded, slots and the store, pictures, characters carried to another world, cloud saves, the content cache (M25) |
 | [`docs/shooters-edge.md`](docs/shooters-edge.md) | The second game, Shooter's Edge (M18, after Fall Line): the compatibility contract, the clean room, the homes, the protocols, the labs and the `ge` commands it needs |
 | [`docs/water.md`](docs/water.md) | Water and wind (M24): the bodies and the one query, the waves the wind grows, floating, swimming tuned per game, flowing water, the colour from what is in the water, the surface and the view under it, the sound, and the labs |
+| [`docs/climate.md`](docs/climate.md) | Temperature and humidity (M51): the air by the hour, the height, the weather and the ground, the dew point, and what they do: fog of five kinds, snow or rain, the snow's feel, frost, rime, black ice, the breath, lake ice; who reads what |
 | [`docs/grass.md`](docs/grass.md) | Grass (M34): the research, kinds and recipes, covers on a heightfield or a mesh's floors, the blade scatter, the sway in the wind, the grass drawn, and the rows |
 
 **The working area.** `porting/` holds everything that only matters while modules are
