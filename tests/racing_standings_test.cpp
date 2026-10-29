@@ -1,5 +1,6 @@
 // plugins/racing/standings against tests/golden/racing_standings.txt: legs to the bit, and whole
-// fields' order and every rider's place, dead heats included.
+// fields' order and every rider's place, dead heats included; a finish inside a step ordered
+// by when in it the line was crossed.
 //
 // ge:summary Golden test: racing/standings, bit for bit
 // ge:keywords test golden standings
@@ -43,4 +44,15 @@ TEST(standings_match_golden) {
     }
   }
   CHECK(legs == 406 && fields == 400);
+}
+
+TEST(standings_a_finish_inside_a_step_is_ordered_by_its_share) {
+  CHECK(r::crossing_share(0.5, -0.5) == 0.5);
+  CHECK(r::crossing_share(0.0, -1.0) == 0.0);  // over the line already
+  CHECK(r::crossing_share(1.0, 0.25) == 1.0);  // not over it yet
+  // Two riders over the line in step 100 at 72 Hz: the one that crossed earlier in it is ahead.
+  const double dt = 1.0 / 72;
+  r::Standing a{.finished = true, .time = (99 + r::crossing_share(0.1, -0.4)) * dt};
+  r::Standing b{.finished = true, .time = (99 + r::crossing_share(0.3, -0.2)) * dt};
+  CHECK(r::is_ahead(a, b) && !r::is_ahead(b, a));
 }
