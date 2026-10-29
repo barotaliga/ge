@@ -121,7 +121,7 @@ std::vector<std::string> tests_matching(const BuildOptions& o, const std::string
   std::vector<std::string> names;
   if (r.code != 0) return names;
   for (const auto view : split_lines(r.output)) {
-    const std::string line(view);
+    const std::string line = regex_line(view);
     std::smatch m;
     if (std::regex_search(line, m, kTest)) names.push_back(m.str(1));
   }
@@ -234,7 +234,7 @@ std::vector<Finding> compiler_findings(const fs::path& repo, std::string_view ou
     }
   };
   for (size_t i = 0; i < lines.size(); i++) {
-    const std::string line(lines[i]);
+    const std::string line = regex_line(lines[i]);
     std::smatch m;
     if (std::regex_match(line, m, kGcc)) {
       const std::string where = where_in(repo, m.str(1), m.str(2));
@@ -277,7 +277,7 @@ std::vector<Finding> test_findings(const fs::path& repo, std::string_view output
   std::vector<Finding> out;
   bool in_list = false;
   for (const auto view : split_lines(output)) {
-    const std::string line(view);
+    const std::string line = regex_line(view);
     std::smatch m;
     if (line.starts_with("The following tests FAILED")) {
       in_list = true;

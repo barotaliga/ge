@@ -5,7 +5,8 @@
 //   one-shots (`tone`, `noise`)  oscillators or a noise window -> drive -> filter -> envelope
 //   layers (`layer`, `set`)      a steered source -> drive -> filter -> level
 //        each -> pan -> its BUS's gain -> the mix, with a send into the shared ECHO
-//   the mix + the echo -> the LIMITER -> the output
+//   the send -> the ROOM's reverb (reverb.hpp), while a room is set
+//   the mix + the echo + the room -> the LIMITER -> the output
 //
 // THE BUSES are the faders: every voice and layer is played on one of `kBuses`, and a bus's gain
 // (`bus_gain`) is applied as it renders, so a fader moved mid-sound is heard at once and a bus at
@@ -13,6 +14,16 @@
 //
 // THE ECHO is one filtered feedback delay every voice can send into, so overlapping sounds sit in
 // the same place: outdoors what answers is a treeline a few hundred metres off, short and damped.
+//
+// THE ROOM is the space round the listener (`room`, a RoomSound: the walls' early echoes and a
+// reverberant tail, room.hpp probes it from the level), fed by the same send; it also sets how
+// much of the outdoor echo is heard, so a closed room silences the treeline.
+//
+// THE STREAMS are sound made elsewhere (a talker's voice off the network, engine/net/voice.hpp):
+// mono samples the producer `feed`s into a stream's own single-producer single-consumer ring,
+// played on a bus with a gain and a pan like a layer, through the echo send and the limiter.
+// A stream rendered with nothing fed plays silence and counts it (`Stats::starved`): a producer
+// keeps `queued` a few frames ahead (`voice_listener_mix` keeps two voice frames).
 //
 // THE LIMITER keeps a stack of sounds out of the clip: a soft-knee compressor at -10 dBFS, ratio
 // 12, 5 ms attack (slower would let a landing through; faster would distort the bass inside a
@@ -31,7 +42,7 @@
 // ge:summary The synth: one-shots, steered layers, buses, echo, limiter; the producer/render ring
 // ge:keywords synth instrument dsp-graph render block one-shot layer bus fader echo delay
 // ge:keywords limiter compressor ring spsc command producer consumer render-thread device
-// ge:keywords voice-pool steal stats offline-render
+// ge:keywords voice-pool steal stats offline-render room reverb stream feed queued starved pcm
 // ge:skill audio
 // ge:test tests/audio_synth_test.cpp
 #pragma once
@@ -39,18 +50,27 @@
 #include <cstdint>
 #include <memory>
 
+#include "audio/reverb.hpp"
 #include "audio/voice.hpp"
 
 namespace ge::audio {
 
-inline constexpr int kBlock = 128;      // frames a block: the unit calls are applied at
-inline constexpr int kBuses = 4;        // faders
-inline constexpr int kMaxVoices = 96;   // one-shots sounding at once
-inline constexpr int kMaxLayers = 48;   // layers built at once
-inline constexpr int kRingSize = 1024;  // calls in flight between two blocks
+inline constexpr int kBlock = 128;           // frames a block: the unit calls are applied at
+inline constexpr int kBuses = 4;             // faders
+inline constexpr int kMaxVoices = 96;        // one-shots sounding at once
+inline constexpr int kMaxLayers = 48;        // layers built at once
+inline constexpr int kRingSize = 1024;       // calls in flight between two blocks
+inline constexpr int kMaxStreams = 32;       // streams built at once (a talker each)
+inline constexpr int kStreamFrames = 16384;  // mono frames a stream's ring holds (0.34 s)
 
 // A layer, as `layer` handed it out. Invalid when the synth had no free slot.
 struct LayerId {
+  int16_t slot = -1;
+  bool valid() const { return slot >= 0; }
+};
+
+// A stream, as `stream` handed it out. Invalid when the synth had no free slot.
+struct StreamId {
   int16_t slot = -1;
   bool valid() const { return slot >= 0; }
 };
@@ -69,6 +89,8 @@ struct Stats {
   uint32_t dropped = 0;    // calls lost to a full ring
   uint32_t stolen = 0;     // one-shots cut short for a new one
   float reduction_db = 0;  // the limiter's gain reduction after the last block (<= 0)
+  uint64_t starved = 0;    // stream frames rendered as silence, nothing fed
+  uint64_t overfed = 0;    // stream frames refused by a full ring
 };
 
 class Synth {
@@ -91,6 +113,21 @@ class Synth {
   void stop(LayerId id);
   // A fader: the bus's gain, reached on `glide_s` (0: set at once, as before a sound plays).
   void bus_gain(int bus, float gain, float glide_s = 0.05f);
+  // The listener's room, glided to over `glide_s` (0: at once). A synth starts with none.
+  void room(const RoomSound& room, float glide_s = 0.3f);
+  // Build a stream at gain 1, centred, with `echo` of it sent to the echo. Invalid when all
+  // `kMaxStreams` are built or a stopped one has not finished fading. Its ring is allocated the
+  // first time its slot is used, here, on the producer's thread.
+  StreamId stream(int bus = 0, float echo = 0);
+  // Queue `frames` mono samples to play after those already queued: how many fit (the rest are
+  // dropped and counted in `Stats::overfed`). Never blocks.
+  int feed(StreamId id, const float* mono, int frames);
+  // Frames fed and not yet rendered: the producer's lead.
+  int queued(StreamId id) const;
+  // Its gain and pan, reached on the one-pole `glide_s`.
+  void steer(StreamId id, float gain, float pan, float glide_s);
+  // Fade it out over a few hundredths, drop what is still queued, and free its slot.
+  void stop(StreamId id);
 
   // --- the consumer (the render thread) ---
   // Render `frames` of interleaved stereo (L, R, L, R, ...) into `out`, applying every call

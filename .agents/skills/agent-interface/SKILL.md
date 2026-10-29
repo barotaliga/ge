@@ -43,6 +43,7 @@ example and consumer skill); the parser, `ge help` and `ge help --json` all read
 | `ge new <dir> [--game=racer]` | A game repo from `scaffold/`, its links, its skills; a starting game other than the demo writes its files from `templates/game-<name>/` over it | `scaffold.hpp` |
 | `ge use <plugin>` | Link a plugin into the game's sim, sync its skill (and the skills of the plugins it brings) | `add.hpp` |
 | `ge add system\|lab\|test <name>` | A working piece from `templates/`, tags filled, formatted, refusing to write over a file | `add.hpp` |
+| `ge add water [<name>]` | A lake laid in one call (`templates/water/`: the sim's water, its picture lab, its test), `ge::water` linked and its skill synced | `add.hpp` |
 | `ge build`, `ge test`, `ge check`, `ge lab` | Configure, build, test, the whole gate, a lab: the tool's output in `build/<preset>/ge-*.log`, the answer as findings | `build.hpp` |
 | `ge test --affected`, `ge lint` | What a change reaches (git's changed files, Ninja's deps, through the headers of reached libraries' directories): its tests run, its sources linted | `reach.hpp`, `lint.hpp` |
 | `ge play`, `ge sim`, `ge replay`, `ge state`, `ge diverge`, `ge shot` | The game's `play` executable built and run: the protocol on the terminal, the pilot's runs and their input logs, a log replayed to its digest, the state at a step, where two runs part, a captioned still of a view at a step (`--gpu --mode=<m>`: drawn by the game's registered renderer, engine/play/game.hpp § THE GPU'S PICTURES) | `play.hpp` |
@@ -82,7 +83,8 @@ example and consumer skill); the parser, `ge help` and `ge help --json` all read
   `tests/cli_add_test.cpp` checks every piece is filled and doctor-clean, and the `scaffold`
   job builds and tests every one.
 - **Plugin skills.** A consumer skill with `plugin: <name>` in its front matter is synced only
-  into a repo that links that plugin, directly or through another (`skills_for`).
+  into a repo that links that plugin, directly or through another (`skills_for`), or that links
+  `ge::<name>` itself: an engine module a game opts into (`water`, linked by `ge add water`).
 - **Every message is a `Finding`** (`finding.hpp`: severity, what, where, next), printed by
   `format_finding`.
 - **The engine skills a game owns only by lock.** Sync writes an engine skill only while its
@@ -104,7 +106,7 @@ engine as a dependency), never for this one: `ge` (the command line and its loop
 `ge play` and its siblings), `multiplayer` (`ge::net`, the simulated network and `ge net`),
 `start-work`, `write-code`, `engine` (the pin, determinism, upgrading, reporting an engine
 bug), `sim-system`, `labs`, `skill-reflection` and `commit`, plus one per plugin (`racing`,
-`mountain`, `skier`) with `plugin:` front matter.
+`mountain`, `skier`) and per opted-in engine module (`water`) with `plugin:` front matter.
 Each is a `SKILL.md` alone: lessons accumulate in each game
 repo, and a lesson that would hold for every game is promoted upstream into the skill's text.
 A new consumer skill is a directory with its `SKILL.md`; `tests/cli_skills_test.cpp` checks

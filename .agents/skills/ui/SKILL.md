@@ -1,6 +1,6 @@
 ---
 name: ui
-description: "Use for engine/ui and any game's menus, HUD and cards in gameengine2: the immediate-mode 2D layer (paints, the draw list, images, fonts over stb_truetype, the CPU raster), backdrops (colour, gradient, drifting picture, the live scene, scrims), menus as a model and a view (pages, items, focus, events, the responsive layout), the `menu` lab, the strings table, the HUD readouts and presses, the shell's cards and settings, and the Dear ImGui developer UI."
+description: "Use for engine/ui and any game's menus, HUD and cards in gameengine2: engine/charset (the bitmap fonts, noise layers and text looks), the immediate-mode 2D layer (paints, the draw list, images, fonts over stb_truetype, the CPU raster), backdrops (colour, gradient, drifting picture, the live scene, scrims), menus as a model and a view (pages, items, focus, events, the responsive layout), the `menu` lab, the strings table, the HUD readouts and presses, the shell's cards and settings, and the Dear ImGui developer UI."
 ---
 
 # UI
@@ -116,7 +116,7 @@ camera, the REPRO line). It is never on a release path.
 
 - `menu` (M22a): the front door over every backdrop kind, both pages at the three viewports, the
   highlight's glide, a page's fade and a picture's drift, every picture captioned. Its smoke
-  digest is in `tests/labs_digests.txt`: a change to the raster, a font or the layout moves it, so
+  digest is in `tests/digests/`: a change to the raster, a font or the layout moves it, so
   look at the pictures, then rewrite the row (`--write-digests`).
 - `hud-kit` (M10a): a racer's and a shooter's HUD made from the kit alone, over daylit snow and a
   dim corridor, at the three viewports, and every charset as a HUD face. Pure CPU, digested.

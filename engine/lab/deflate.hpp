@@ -17,7 +17,7 @@
 
 namespace ge::lab {
 
-// `bytes` as a zlib stream: inflate_zlib (inflate.hpp) gives them back.
+// `bytes` as a zlib stream: assets::inflate_zlib (assets/inflate.hpp) gives them back.
 std::vector<uint8_t> deflate_zlib(std::span<const uint8_t> bytes);
 
 uint32_t adler32(std::span<const uint8_t> bytes);

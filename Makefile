@@ -76,16 +76,18 @@ play:
 	@build/$(PRESET)/play $(ARGS)
 
 labs-smoke: build
-	$(LABS) --all --smoke --repeat=2 --quiet --check-digests=tests/labs_digests.txt
+	$(LABS) --all --smoke --repeat=2 --quiet --check-digests=tests/digests
 
 labs-digests: build
-	$(LABS) --all --smoke --quiet --write-digests=tests/labs_digests.txt
+	$(LABS) --all --smoke --quiet --write-digests=tests/digests
 
 # Discovery (AGENTS.md § Finding things). `index` writes docs/index.md (gitignored) from every file's ge:
 # tags; `find` searches the files, the skills and their lessons: make find Q="noise heightfield".
-# `lessons` reads the skills' lessons: make lessons ARGS="port --scope=engine/core".
+# `lessons` reads the skills' lessons: make lessons ARGS="port --scope=engine/core". `index` also
+# writes docs/lab-list.md (gitignored), the labs' table, from every LabSpec.
 index:
 	node tools/agents-index.mjs --write
+	node tools/check-labs.mjs
 
 find:
 	node tools/agents-index.mjs --find $(Q)

@@ -1,0 +1,189 @@
+# The flake ledger. Every failed `ci` run's failing tests (ctest's `The following tests FAILED`
+# list, and inside a labs smoke slice the lab that printed `FAIL <lab>:`) are written as rows into
+# ONE issue, labelled `ci-ledger`, that keeps the last two days. A test that fails on two
+# different pull requests within a day is not either change's fault until shown otherwise, so it
+# gets an issue of its own, labelled `flake`, titled `Flake: <test>`, with every sighting added
+# to it as a comment: an owner takes it and fixes the test or the code (a test is never skipped
+# or weakened to get green). A pull request's own failure that never repeats elsewhere stays a row
+# and ages out.
+#
+# It reads the job logs through the API and runs no code from the change. One run at a time, so
+# two failures never rewrite the ledger at once.
+name: flakes
+
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+
+permissions:
+  actions: read
+  issues: write
+
+concurrency:
+  group: flakes
+  cancel-in-progress: false
+
+jobs:
+  ledger:
+    if: github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RUN_ID: ${{ github.event.workflow_run.id }}
+      RUN_URL: ${{ github.event.workflow_run.html_url }}
+      RUN_EVENT: ${{ github.event.workflow_run.event }}
+      RUN_BRANCH: ${{ github.event.workflow_run.head_branch }}
+      RUN_PR: ${{ github.event.workflow_run.pull_requests[0].number }}
+    steps:
+      - name: The failing tests of the run
+        run: |
+          # Which change the run tested: the pull request, or the one at the head of a queued group
+          # (gh-readonly-queue/main/pr-<n>-<sha>).
+          pr="$RUN_PR"
+          [ -n "$pr" ] || pr=$(echo "$RUN_BRANCH" | sed -nE 's#.*/pr-([0-9]+)-[0-9a-f]+$#\1#p')
+          [ -n "$pr" ] || pr="$RUN_BRANCH"
+          echo "pr=$pr" >> "$GITHUB_ENV"
+          : > failures.tsv
+          gh api "repos/$GH_REPO/actions/runs/$RUN_ID/jobs?per_page=100" --paginate \
+            --jq '.jobs[] | select(.conclusion == "failure" and .name != "required") | [.id, .name] | @tsv' > jobs.tsv
+          # Rows on fd 3, so no call inside the loop reads them from stdin.
+          while IFS=$'\t' read -r -u 3 id job; do
+            gh api "repos/$GH_REPO/actions/jobs/$id/logs" > job.log 2> /dev/null || continue
+            # Drop the runner's timestamp, then read ctest's list and the labs' FAIL lines.
+            sed -E 's/^[0-9T:.-]+Z //' job.log |
+              awk -v job="$job" '
+                /^The following tests FAILED:/ { list = 1; next }
+                list && /^[[:space:]]+[0-9]+ - / {
+                  t = $0; sub(/^[[:space:]]+[0-9]+ - /, "", t); sub(/ \(.*$/, "", t)
+                  if (t !~ /^labs_smoke/) print t "\t" job
+                  next
+                }
+                list { list = 0 }
+                /^FAIL [a-z0-9-]+:/ { t = $2; sub(/:$/, "", t); print "lab " t "\t" job }
+              ' >> failures.tsv
+          done 3< jobs.tsv
+          sort -u failures.tsv -o failures.tsv
+          echo "run $RUN_ID ($RUN_EVENT, $pr):"; cat failures.tsv
+
+      - name: Write them to the ledger; open or feed a flake issue for a repeat
+        run: |
+          [ -s failures.tsv ] || { echo "no failing test named: a build or setup failure, not ledgered"; exit 0; }
+          gh label create ci-ledger --color EDEDED --description "The flakes workflow's ledger of failing tests" 2> /dev/null || true
+          gh label create flake --color D93F0B --description "A test that failed on two unrelated pull requests" 2> /dev/null || true
+          ledger=$(gh issue list --label ci-ledger --state open --limit 1 --json number --jq '.[0].number // empty')
+          if [ -z "$ledger" ]; then
+            ledger=$(gh issue create --label ci-ledger --title "CI failure ledger" \
+              --body "Written by the \`flakes\` workflow (.github/workflows/flakes.yml); never edit by hand." |
+              sed -E 's#.*/##')
+          fi
+          gh issue view "$ledger" --json body --jq .body > body.md
+          now=$(date -u +%s)
+          # Rows: epoch, test, job, pr, run. Keep two days of them.
+          grep -E '^\| [0-9]+ \|' body.md |
+            awk -F' \\| ' -v now="$now" '{ e = substr($1, 3) + 0; if (now - e < 172800) print }' > rows.md || true
+          while IFS=$'\t' read -r -u 3 test job; do
+            # The same test failing on another pull request within a day: a flake until shown otherwise.
+            others=$(awk -F' \\| ' -v t="$test" -v pr="$pr" -v now="$now" \
+              '$2 == t && $4 != pr && now - (substr($1, 3) + 0) < 86400 { print $4 }' rows.md | sort -u | tr '\n' ' ')
+            printf '| %s | %s | %s | %s | [%s](%s) |\n' "$now" "$test" "$job" "$pr" "$RUN_ID" "$RUN_URL" >> rows.md
+            [ -n "$others" ] || continue
+            title="Flake: $test"
+            issue=$(gh issue list --label flake --state open --limit 100 --json number,title |
+              jq -r --arg t "$title" '.[] | select(.title == $t) | .number' | head -1)
+            note="\`$test\` failed in $job on $pr ([run $RUN_ID]($RUN_URL)); it also failed within a day on: $others"
+            if [ -n "$issue" ]; then
+              gh issue comment "$issue" --body "$note"
+            else
+              gh issue create --label flake --title "$title" --body "$note
+
+          A test that fails on two unrelated changes is a flake until shown otherwise: find why it is not deterministic and fix the test or the code, never skip or weaken it. Every later sighting is added below by the \`flakes\` workflow; the sightings of the last two days are in #$ledger."
+            fi
+            echo "flake: $test ($others$pr)"
+          done 3< failures.tsv
+          {
+            echo "Written by the \`flakes\` workflow (.github/workflows/flakes.yml); never edit by hand."
+            echo "Every failing test of a failed \`ci\` run in the last two days, newest last. When is seconds since the epoch."
+            echo
+            echo "| When | Test | Job | PR | Run |"
+            echo "| --- | --- | --- | --- | --- |"
+            tail -n 300 rows.md
+          } > body.md
+          gh issue edit "$ledger" --body-file body.md
+
+  # Main's own runs. A pull request may merge with `skip-ci`, so a push to main runs the whole
+  # matrix, and its answer is kept in ONE issue labelled `main-red`: opened (or added to) when a
+  # run on main fails, with the failing jobs, the commits since the last green run and a comment
+  # on the pull request each landed with; closed by the next green run. A cancelled run (a newer
+  # push replaced it) says nothing.
+  main:
+    if: >-
+      github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' &&
+      (github.event.workflow_run.conclusion == 'failure' || github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RUN_ID: ${{ github.event.workflow_run.id }}
+      RUN_URL: ${{ github.event.workflow_run.html_url }}
+      RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+      CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+    steps:
+      - name: Open, add to or close the main-red issue
+        run: |
+          gh label create main-red --color B60205 \
+            --description "Main's CI is red: the PR that broke it fixes it first; no skip-ci until closed" \
+            2> /dev/null || true
+          issue=$(gh issue list --label main-red --state open --limit 1 --json number --jq '.[0].number // empty')
+          if [ "$CONCLUSION" = success ]; then
+            [ -n "$issue" ] || { echo "main is green"; exit 0; }
+            gh issue close "$issue" --comment "Green again at ${RUN_SHA:0:9} ([run $RUN_ID]($RUN_URL)).
+
+          ---
+          _Posted by the \`flakes\` workflow_"
+            exit 0
+          fi
+          jobs=$(gh api "repos/$GH_REPO/actions/runs/$RUN_ID/jobs?per_page=100" --paginate \
+            --jq '.jobs[] | select(.conclusion == "failure" and .name != "required") | "- [\(.name)](\(.html_url))"')
+          # The commits since main's last green run: one of them broke it.
+          green=$(gh api "repos/$GH_REPO/actions/workflows/ci.yml/runs?branch=main&event=push&status=success&per_page=1" \
+            --jq '.workflow_runs[0].head_sha // empty')
+          if [ -n "$green" ]; then
+            commits=$(gh api "repos/$GH_REPO/compare/$green...$RUN_SHA" --jq '.commits[] | "\(.sha[0:9]) \(.commit.message | split("\n")[0])"' | tail -n 30)
+          else
+            commits=$(gh api "repos/$GH_REPO/commits/$RUN_SHA" --jq '"\(.sha[0:9]) \(.commit.message | split("\n")[0])"')
+          fi
+          note="Main's \`ci\` run [$RUN_ID]($RUN_URL) at ${RUN_SHA:0:9} failed:
+
+          $jobs
+
+          Commits since the last green run on main${green:+ (${green:0:9})}:
+
+          \`\`\`
+          $commits
+          \`\`\`
+
+          The pull request that broke it fixes it first, in its next PR; no pull request is labelled \`skip-ci\` while this issue is open. It closes itself on the next green run.
+
+          ---
+          _Posted by the \`flakes\` workflow_"
+          if [ -n "$issue" ]; then
+            gh issue comment "$issue" --body "$note"
+          else
+            issue=$(gh issue create --label main-red --title "Main is red" --body "$note" | sed -nE 's#.*/issues/([0-9]+)$#\1#p')
+          fi
+          # Tell each pull request those commits landed with, so the thread that owns it hears.
+          echo "$commits" | sed -nE 's/.*\(#([0-9]+)\)$/\1/p' | sort -u | while read -r n; do
+            gh pr comment "$n" --body "Main's CI went red after this merged (#$issue, [run $RUN_ID]($RUN_URL)); this pull request is one of the commits since the last green run. If the failure is this change's, fix it in the next pull request first.
+
+          ---
+          _Posted by the \`flakes\` workflow_" < /dev/null || true
+          done

@@ -20,7 +20,8 @@ are always the pinned release's.
 
 ```sh
 ge find <words>                  # what exists: this repo's and the engine's files, skills, lessons
-ge goals free [<row>] --fetch    # the roadmap numbers main and every branch already use, and the next free one
+ge goals free [<row>]            # the roadmap numbers main and every branch already use, and the next free one
+ge goals claim "<what>"          # that row reserved and pushed to this branch at once; an earlier claim elsewhere wins, and it moves on
 ge explain <file|name>           # one of them: its header comment, declaration, skill, test
 ge add system <name>             # sim/<name>.hpp, .cpp and its replay test, to start from
 ge add lab <name> --kind=<k>     # a lab (sim, scenario, picture, bench), in the smoke pass
@@ -30,7 +31,8 @@ ge build                         # compiler and CMake errors come back as findin
 ge test [--filter=<regex>]       # every test and lab smoke; each failure a finding
 ge test --affected [--base=<ref>] [--list]  # only the tests the change reaches (the include graph)
 ge lab <id> [--tag=before | --compare=before] [-- <its flags>]   # measure and LOOK
-ge digest [<lab>...] [--write]   # the labs' digests beside tests/labs_digests.txt; --write moves their rows
+ge lab publish <id>... [--before=before]   # the run (or several labs') on one self-contained page for the report and the PR
+ge digest [<lab>...] [--write]   # the labs' digests beside tests/digests/<lab>.txt; --write moves their files
 ge digest --affected [--list]    # only the labs the change since --base reaches
 ge digest --diff                 # every lab, printing only the digests off the baseline
 ge golden diff [<test>] [--base=<ref>]   # what moved in each golden file, column by column
@@ -51,8 +53,11 @@ ge mem | ge leaks                # what the run allocates; what it never frees
 ge load [--render]               # how the run spreads over the cores and the GPU: idle or busy
 ge graph <file>... [--kind=<k>]  # chart traces, benches, profiles: PNG + SVG, outliers as notes
 ge net inspect <pcap>            # a network capture, datagram by datagram (skill: multiplayer)
+ge save inspect <file>           # a save file's header, meta and chunks, or why it is refused (skill: saves)
 ge net stats <pcap>              # per connection: kbps, round trip, loss, resends; charted
 ge net sim [--presets=wifi,bad]  # fake clients and a host over bad links, no game needed
+ge snow show <file.snow>         # a saved snow layer: tiles, pressed samples, mass, maps (skill: snow)
+ge snow column <file.snow> --at=x,z  # the snow's column at a point
 ge cvar ls [<prefix>]            # the game's settings: value, default, range, flags, help
 ge cvar get <name>...            # the named ones (an unknown name: the nearest known)
 ge cfg check <file>... [--server]   # a cfg's problems at file:line, and names nothing reads

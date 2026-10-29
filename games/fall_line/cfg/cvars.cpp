@@ -133,6 +133,22 @@ void add_cvars(con::Console& c, Settings& s) {
           .min = 0,
           .max = 1},
          &s.clouds);
+  v.bind({.name = "r_sunsize",
+          .fallback = "1",
+          .flags = kStartup,
+          .help = "the sun's disc drawn larger, its radius times this, its light the same (1: as "
+                  "it is)",
+          .min = 0.5,
+          .max = 20},
+         &s.disc_sun);
+  v.bind({.name = "r_moonsize",
+          .fallback = "1",
+          .flags = kStartup,
+          .help = "the moon's disc drawn larger, its radius times this, its face as bright and "
+                  "its light the same (1: as it is)",
+          .min = 0.5,
+          .max = 20},
+         &s.disc_moon);
 
   v.bind({.name = "cl_view",
           .fallback = "chase",
@@ -244,6 +260,40 @@ void add_cvars(con::Console& c, Settings& s) {
           .min = -1,
           .max = 1},
          &s.cover);
+  v.bind({.name = "sv_clouddensity",
+          .fallback = "-1",
+          .flags = kRun,
+          .help = "how dense the clouds are, the sun and the moon shining through their thin "
+                  "patches, 0 thin .. 1 dense (-1: the map's)",
+          .min = -1,
+          .max = 1},
+         &s.thick);
+  v.bind({.name = "sv_cloudheight",
+          .fallback = "-1",
+          .flags = kRun,
+          .help = "the lowest cloud layer's base over the valley floor, m, the layers over it "
+                  "moved in proportion; a lower cloud crosses the sky faster, and one below the "
+                  "skier's height is skied through (-1: the map's)",
+          .min = -1,
+          .max = 12000},
+         &s.cloud_height);
+  v.bind({.name = "sv_cloudthickness",
+          .fallback = "-1",
+          .flags = kRun,
+          .help = "how tall the lowest cloud layer stands from its base to its top, m: clear "
+                  "sky or the next layer starts over it, and a taller layer is darker under it "
+                  "(-1: the map's)",
+          .min = -1,
+          .max = 12000},
+         &s.cloud_thickness);
+  v.bind({.name = "sv_cloudspeed",
+          .fallback = "-1",
+          .flags = kRun,
+          .help = "how fast the clouds drift, a share of the wind aloft at their height (-1 or 1: "
+                  "the true wind)",
+          .min = -1,
+          .max = 10},
+         &s.cloud_speed);
   v.bind({.name = "sv_clouds",
           .fallback = "map",
           .flags = kRun,
@@ -259,6 +309,14 @@ void add_cvars(con::Console& c, Settings& s) {
           .help = "the kind of sky: earth dust alien hell void nebula violet ice ash toxic",
           .kind = CvarKind::text},
          &s.sky_type);
+  v.bind({.name = "sv_moons",
+          .fallback = "type",
+          .flags = kRun,
+          .help = "the moons over the sky, up to four besides the Earth's, each name[:size[:spin "
+                  "hours]]: moon phobos deimos io europa ganymede callisto titan enceladus miranda "
+                  "triton, or none (type: the sky type's own)",
+          .kind = CvarKind::text},
+         &s.moons);
   // The sky type's knobs (render/sky_style.hpp's SkyKnobs): -1 keeps the type's own.
   const auto knob = [&](const char* name, const char* help, double max, double* field) {
     v.bind({.name = name, .fallback = "-1", .flags = kRun, .help = help, .min = -1, .max = max},
@@ -281,6 +339,31 @@ void add_cvars(con::Console& c, Settings& s) {
        &s.sky_stars);
   knob("sv_skyglow", "a fire's glow from under the horizon: 0 none (-1: the type's)", 4,
        &s.sky_glow);
+
+  v.bind({.name = "sv_lethal",
+          .fallback = "1",
+          .flags = kRun,
+          .help = "the army shoots to kill (0: it chases him down and arrests him)",
+          .kind = CvarKind::boolean},
+         &s.lethal);
+  v.bind({.name = "sv_armyfire",
+          .fallback = "1",
+          .flags = kRun,
+          .help = "the army's guns fire at all (0: it hunts with its guns silent)",
+          .kind = CvarKind::boolean},
+         &s.army_fire);
+  v.bind({.name = "sv_helis",
+          .fallback = "1",
+          .flags = kRun,
+          .help = "the hunt sends the army's helicopters and the men they put down",
+          .kind = CvarKind::boolean},
+         &s.helis);
+  v.bind({.name = "sv_paras",
+          .fallback = "1",
+          .flags = kRun,
+          .help = "the hunt sends the army's paramotor riflemen (from four stars)",
+          .kind = CvarKind::boolean},
+         &s.paras);
 }
 
 void register_cvars(con::Console& c) {

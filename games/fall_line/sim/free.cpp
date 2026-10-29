@@ -13,11 +13,13 @@
 #include "core/math.hpp"
 #include "fall_line/sim/army.hpp"
 #include "fall_line/sim/army_heli_rules.hpp"
+#include "fall_line/sim/army_para_rules.hpp"
 #include "fall_line/sim/army_rules.hpp"
 #include "fall_line/sim/army_sled_rules.hpp"
 #include "fall_line/sim/course.hpp"
 #include "fall_line/sim/heli_ride.hpp"
 #include "fall_line/sim/sled_ride.hpp"
+#include "fall_line/sim/village.hpp"
 #include "fall_line/sim/wanted.hpp"
 #include "mountain/mapgen/generate.hpp"
 #include "mountain/mapgen/query.hpp"
@@ -147,6 +149,7 @@ GameState create_free_ride(std::shared_ptr<const mg::Level> level, int32_t start
   state.army.soldiers.reserve(army::kMostSoldiers);
   state.army.sleds.reserve(army_sled::kMostSleds);
   state.army.helis.reserve(army_heli::kMostHelis);
+  state.army.paras.reserve(army_para::kMostParas);
   state.ways = army_ways(*state.level);
   const auto n = static_cast<int32_t>(state.runs->size());
   FreeRide& f = state.racers[0].free;
@@ -157,6 +160,7 @@ GameState create_free_ride(std::shared_ptr<const mg::Level> level, int32_t start
   f.last = -1;
   place_sled(state);
   place_heli(state);
+  plan_village(state);
   return state;
 }
 

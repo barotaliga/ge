@@ -102,6 +102,10 @@ void run_sound_step(RunSound& sound, ge::audio::Synth& synth, const sim::GameSta
       case EventKind::reset:
         play(synth, kReset, ear);
         break;
+      case EventKind::traffic:
+        // Into a vehicle's panel: the knock of a body met, louder the faster they closed.
+        play(synth, kBump, ear, 0.5f + 0.5f * unit(e.value / 8));
+        break;
       case EventKind::takeoff:  // the wind's rush coming up is the take-off
       case EventKind::shoulder:
       case EventKind::bump:
@@ -116,6 +120,7 @@ void run_sound_step(RunSound& sound, ge::audio::Synth& synth, const sim::GameSta
       case EventKind::para:  // the paramotor's sound comes with its own bed
       case EventKind::army_sled:
       case EventKind::army_heli:
+      case EventKind::army_para:
       case EventKind::gunfire:  // the reports, the cracks and the strikes wait for their voices
       case EventKind::hurt:     // the blow is heard as the fall that dealt it
       case EventKind::died:
@@ -132,6 +137,11 @@ void run_sound_frame(RunSound& sound, ge::audio::Synth& synth, const sim::GameSt
   heard.wind = {ear.wind * duck, ear.tone};
   heard.snow = {ear.snow * duck};
   ge::skier::ride_bed_update(sound.bed, synth, state.racers[0].skier, state.spec, dt, heard);
+}
+
+void play_menu(ge::audio::Synth& synth, std::string_view id) {
+  const ge::audio::SoundDef* def = ge::audio::find_sound(kBank, id);
+  if (def) ge::audio::play_def(synth, *def, {}, kBusEffects);
 }
 
 void run_sound_silence(RunSound& sound, ge::audio::Synth& synth) {

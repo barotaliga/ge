@@ -30,6 +30,7 @@
 #include "render/clouds.hpp"
 #include "render/frame.hpp"
 #include "render/moon.hpp"
+#include "render/moon_maps.hpp"
 #include "render/stars.hpp"
 
 namespace ge::render {
@@ -39,6 +40,7 @@ inline constexpr uint32_t kTransmittanceW = 256, kTransmittanceH = 64;
 inline constexpr uint32_t kMultiscatterW = 32, kMultiscatterH = 32;
 inline constexpr uint32_t kSkyViewW = 192, kSkyViewH = 108;
 inline constexpr uint32_t kAerialW = 32, kAerialH = 32, kAerialD = 32;
+inline constexpr uint64_t kSkyLightBytes = 80;  // frame.wgsl's SkyLight: five vec4f
 // Rebuild thresholds: the sun's turn (the cosine of the angle) and the eye's move, m.
 inline constexpr double kSunTurnCos = 0.99996;  // about half a degree
 inline constexpr double kEyeMove = 50.0;
@@ -50,10 +52,13 @@ struct Sky {
   wgpu::Texture transmittance, multiscatter, sky_view, moon_view, aerial, blank;
   wgpu::TextureView transmittance_view, multiscatter_view, sky_view_view, moon_view_view,
       aerial_view, blank_view;
-  wgpu::Buffer light;  // frame.wgsl's SkyLight
+  wgpu::Buffer
+      light;  // frame.wgsl's SkyLight: the sky's four rows, then the eye's (render/eye.hpp)
+  wgpu::Buffer no_lights;  // an empty local light list (render/lights.hpp), for a frame with none
   wgpu::Sampler sampler;
   StarTexture stars;  // the real stars' map (render/stars.hpp), the sky pass's group 1
   MoonTexture moon;   // the moon's albedo map (render/moon.hpp), beside it
+  MoonMaps moons;     // other worlds' moons' maps (render/moon_maps.hpp), beside that
   wgpu::BindGroupLayout star_layout;
   wgpu::BindGroup star_group;
   CloudNoise cloud;  // the cloud's noise, bound beside the tables (frame.wgsl's 8 and 9)
@@ -79,9 +84,11 @@ struct Sky {
 // the frame's depth). `uniforms` is the frame block's buffer.
 void create_sky(gpu::Device& device, gpu::PipelineSet& pipelines, Sky& sky,
                 const wgpu::Buffer& uniforms, const wgpu::BindGroupLayout& frame);
-// Group 0 of every draw, made once the sky's tables exist.
+// Group 0 of every draw, made once the sky's tables exist. `lights` is the frame's local lights
+// (render/lights.hpp's `Lights::buffer`, binding 10); none: the sky's empty list.
 wgpu::BindGroup frame_group(gpu::Device& device, const wgpu::BindGroupLayout& layout,
-                            const wgpu::Buffer& uniforms, const Sky& sky);
+                            const wgpu::Buffer& uniforms, const Sky& sky,
+                            const wgpu::Buffer& lights = nullptr);
 
 // Decide which tables this frame rebuilds.
 void prepare_sky(Sky& sky, const FrameView& view);
@@ -95,6 +102,7 @@ struct SkyLightReading {
   double sun_at_eye[3];     // the sun's transmittance to the eye
   double moon_up[3];        // the moon's sky's, per unit of its light
   double moon_at_eye[3];    // the moon's transmittance to the eye
+  double eye[4];            // the eye's adaptation (render/eye.hpp's EyeReading, in its order)
 };
 SkyLightReading read_sky_light(gpu::Device& device, const Sky& sky);
 

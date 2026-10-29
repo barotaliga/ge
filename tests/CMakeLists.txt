@@ -1,7 +1,7 @@
 # Every tests/<topic>_test.cpp becomes its own executable and CTest case.
 # New test file = new topic; nothing to register by hand.
 file(GLOB GE_TEST_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/*_test.cpp)
-# Every test links the engine, every plugin and every game's simulation, so a plugin's tests
+# Every test links the engine (each exported module, cmake/Modules.cmake), every plugin and every game's simulation, so a plugin's tests
 # (tests/<plugin>_*_test.cpp) need no wiring either.
 get_property(GE_PLUGIN_TARGETS GLOBAL PROPERTY GE_PLUGIN_TARGETS)
 get_property(GE_GAME_TARGETS GLOBAL PROPERTY GE_GAME_TARGETS)
@@ -69,7 +69,7 @@ foreach(src ${GE_TEST_SOURCES})
     continue()
   endif()
   add_executable(${name} ${src} $<TARGET_OBJECTS:ge_test_main>)
-  target_link_libraries(${name} PRIVATE ge_core ge_audio ge_assets ge_net ge_input ge_wind ge_water ge_move ge_camera ge_ui ge_charset ge_hud ge_services ge_lab ge_play ge_replay ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
+  target_link_libraries(${name} PRIVATE ${GE_MODULE_TARGETS} ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
     ${extra} ${cli})
   target_compile_definitions(${name} PRIVATE GE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
   add_test(NAME ${name} COMMAND ${name})
@@ -111,7 +111,7 @@ foreach(i RANGE 1 ${GE_LABS_SHARDS})
   set(name labs_smoke_${i})
   add_test(NAME ${name} COMMAND labs --all --smoke --repeat=2 --quiet --shard=${i}/${GE_LABS_SHARDS}
     --out=${PROJECT_BINARY_DIR}/previews
-    --check-digests=${PROJECT_SOURCE_DIR}/tests/labs_digests.txt)
+    --check-digests=${PROJECT_SOURCE_DIR}/tests/digests)
   # From the repository's root, where a lab finds its golden images (gpu-capture). With the GPU
   # in, the software driver's worker threads keep allocations past exit (as in the gpu_ tests).
   # COST: start the slices first, so a parallel ctest is not left waiting on one at the end.

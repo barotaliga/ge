@@ -17,7 +17,9 @@ plugins/<name>           reusable by any game of one genre or world (§ Plugins)
         │                skier (the skier on the snow: step_skier, snow, limits, the pilot),
         │                snowmobile (the machine on the snow: step_sled, the drive, the pilot),
         │                helicopter (the machine in the air: step_heli, the wash, the pilot),
-        │                paramotor (the speed wing a skier flies: step_para, the air, the pilot)
+        │                paramotor (the speed wing a skier flies: step_para, the air, the pilot),
+        │                rooms (the engine's own level format: rooms grown from their seeds),
+        │                brush (the classic BSP families read into one view, fixture writers)
         ▼
 engine/render  engine/audio  engine/ui     generic draw passes, the synth, the 2D layer
         │             │          │
@@ -101,6 +103,14 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   world for labs and prototypes, the strafe jumper's best angle and the scenarios, and the knobs
   bound as console cvars (`cvars.hpp`). It depends on `engine/core`, and on `engine/console` for
   that binding alone; the step is a pure function of its inputs, so a run replays from its commands.
+- **`engine/vfs`**: content files (`ge::vfs`, M18a): the pack archive's directory checked whole
+  before anything is read, and each file handed out as a view into the archive. Search paths, zip
+  archives and directories come with the rest of M18a. It depends on `engine/core` only.
+- **`engine/snow`**: a layer of snow over any ground (`ge::snow`, M29; `docs/snow.md` is the
+  design): the analytic cover read exactly where nothing has crossed, sparse fixed-point tiles
+  of columns (depth and mass) where something has, `sample`, `press` with its mass conserved to
+  the unit and the berm it throws, the imprint records the picture and the sound read, and the
+  snapshot. It depends on `engine/core` only and draws nothing from a clock or an RNG.
 - **`engine/ui`**: the immediate-mode 2D layer (rects, images, SDF text), plus Dear
   ImGui behind `GE_DEV_UI`.
 - **`engine/charset`**: the engine's bitmap fonts (`ge::charset`, M27; `docs/charsets.md`):
@@ -156,6 +166,16 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   river, a volume of hulls) and the one `sample` query everything reads, the sea a wind grows
   over each point's fetch and the components the simulation sums. It depends on `engine/core`
   and `engine/wind` and is simulation code (`docs/water.md`).
+- **`engine/detail`**: a level's surface detail (`ge::detail`, `docs/detail.md`): convex solids as
+  planes and the bevels on their exposed edges, a level's triangles binned for queries, decals
+  clipped onto them that age in a fixed pool, and props scattered over them by rules. It depends
+  on `engine/core` alone and is simulation code: a shot's hole and a seed's rubble are the same
+  bits everywhere, so a replay leaves the same marks.
+- **`engine/grass`**: the grass (`ge::grass`): kinds and their recipes, covers of triangles
+  from a heightfield's region or a mesh's floors, every blade scattered off its triangle's own
+  seed, and a blade's shape in the engine's wind. It depends on `engine/core` and `engine/wind`
+  and is simulation code; `engine/render/grass` draws exactly the blades it scatters
+  (`docs/grass.md`).
 - **`engine/prof`**: the profiler (`ge::prof`): timing zones (`GE_ZONE("name")`, one relaxed
   load when no recording runs; a span with its depth, time and allocations when one does), their
   totals (a zone's own time and its children's), the counting `operator new` an executable
@@ -320,7 +340,7 @@ whole tree to it, and `ge doctor` holds a game repo to it (the `agent-interface`
   uses `std::stable_sort`: equal keys keep their order, and that order is part of the
   result.
 - Every lab's digest (`docs/labs.md` § Digests) is checked twice in one process and against
-  `tests/labs_digests.txt` on every CI row (`labs_smoke`), so a lab is a determinism test too.
+  `tests/digests/` on every CI row (`labs_smoke`), so a lab is a determinism test too.
 - Determinism is proven by the golden tables in `tests/golden/`, not by eye. They are the
   engine's own: a deliberate change of behaviour rewrites them in the PR that makes it.
 
@@ -340,17 +360,24 @@ whole tree to it, and `ge doctor` holds a game repo to it (the `agent-interface`
 | Assets | glTF 2.0 through cgltf (`engine/assets`) for the few authored models, made by Blender Python builders run headless offline (`ge asset`, M8g) and committed as .glb; everything else generated in code or baked to embedded blobs |
 | Built venues on a map | A venue whose features are finer than the 2 m grid (a ski jump's edge, its landing radius) answers `Level::ground_at` and `normal_at` off an ANALYTIC profile inside its width (`Level::venue`, one null check on the hot path), with the grid cut beneath it so a reader of the raw grid never sees ground above the surface |
 | Real-world data | Baked offline by a lab off free public datasets that need no credentials (the 30 m elevation model's public bucket), into GENERATED C++ sources committed in the tree (a real face's heights: a base64 string of second-differenced varints, about 21 KB a face), so a build reads no file and fetches nothing; the bake is re-runnable and reproduces the tree to the bit |
+| Video encoding | AV1 by libaom and Opus by libopus for an export (`cmake/Codecs.cmake`, `engine/capture/codecs.hpp`), built once at configure time and linked privately; the platform's hardware encoders later (M23d4); no patent-encumbered software encoder |
 | Tests | Our own header harness, CTest, golden tables |
 | Build/CI | CMake + Ninja + presets; GitHub Actions on Linux x64/arm64 (GCC, Clang), macOS, Windows |
 
 ## Build
 
-CMake ≥ 3.25 + Ninja, `CMakePresets.json` (`debug` with ASan/UBSan, `release`).
+CMake ≥ 3.25 + Ninja, `CMakePresets.json` (`debug` with ASan/UBSan, `release`). Each engine
+module builds itself from `engine/<module>/module.cmake` and registers with one `ge_module(...)`
+call (`cmake/Modules.cmake`): whether it is published, which directories it holds, whether it is
+simulation code. The package, the tests, the labs and the checks read that registration rather
+than a list, so adding a module edits no shared file.
 Dependencies are pinned to a tag and a SHA-256, and each one is added in the milestone that
 needs it: SDL3 through `FetchContent` from its release archive (`cmake/SDL.cmake`), Dawn as its
 prebuilt GitHub release (`cmake/Dawn.cmake`; Tint comes in the same archive), later cgltf
-and Dear ImGui. Downloads land in `.cache/deps/` (gitignored, shared by every preset,
-cached by CI). `GE_PLATFORM` and `GE_GPU` switch the platform layer and the GPU off; the
+and Dear ImGui, and libaom and libopus from their release archives, built once at configure time
+(`cmake/Codecs.cmake`). Downloads land in `.cache/deps/` (gitignored, shared by every preset,
+cached by CI). `GE_PLATFORM` and `GE_GPU` switch the platform layer and the GPU off, and
+`GE_ENCODERS` the export's encoders (off for the published package and a consumer); the
 simulation, the plugins and their tests never need either, and `GE_GPU` defaults off where
 Dawn publishes no archive (Linux arm64). `Makefile` names the everyday commands. CI (`.github/workflows/ci.yml`) runs format,
 agents-check, lint and the test matrix, with ctest in parallel, ccache on the Linux and macOS

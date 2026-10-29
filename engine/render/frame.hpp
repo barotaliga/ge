@@ -52,7 +52,7 @@ struct FrameUniforms {
   float eye[4];              // world xyz (m); w: the eye's altitude over the sea, km
   float sun[4];              // unit direction toward the key light; w: its illuminance, pre-exposed
   float size[4];             // render width, height, 1/width, 1/height
-  float time[4];             // seconds, frame number, 0, 0
+  float time[4];             // seconds, frame number, the lamps' adapted luminance, 0
   float world[4];       // y = 0's altitude over the sea (km), the pre-exposure, the moon's direct
                         // light while the sun keys, 1 when the haze is the moon's
   float planes[6][4];   // the frustum (view.hpp's five), the sixth all zero
@@ -81,10 +81,12 @@ struct FrameUniforms {
   // The sky's style (render/sky_style.hpp's `style_rows`): the air's scales, the sun's disc, the
   // second sun, the planet, the nebula, the glow from below, the ring's tilt and the stars by day.
   float style[kSkyStyleRows][4];
+  // Other worlds' moons (render/moons.hpp's kMoonRows a moon; a drawn radius of 0: none).
+  float moons[kMaxMoons * kMoonRows][4];
 };
 static_assert(sizeof(FrameUniforms) == 64 * 3 + 16 * 5 + 16 * 6 + 16 * 9 +
                                            16 * kCloudRows * kCloudLayers + 16 * 5 +
-                                           16 * kSkyStyleRows,
+                                           16 * kSkyStyleRows + 16 * kMaxMoons * kMoonRows,
               "match frame_types.wgsl");
 
 // The last frame's unjittered camera. Invalid on the first frame and after a cut, when the
@@ -131,7 +133,7 @@ struct PassRow {
 // agent-actionable line per fault.
 std::string check_pass_table(std::span<const PassRow> rows, std::string_view inputs);
 
-inline constexpr int kMaxPasses = 32;
+inline constexpr int kMaxPasses = 48;
 
 struct PassStat {
   std::string_view name;
@@ -186,6 +188,7 @@ struct FrameRecorder {
 enum class Slot : uint8_t {
   uniform,        // a uniform buffer
   storage_read,   // a read-only storage buffer
+  storage_shade,  // a read-only storage buffer the vertex stage does not see (fragment, compute)
   storage,        // a read-write storage buffer
   sampler,        // a filtering sampler
   texture,        // a filterable float 2D texture
