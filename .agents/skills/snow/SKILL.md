@@ -20,6 +20,8 @@ and the plan (rows M29a–M29l); this skill is how to work on it.
 | `snow/reference.hpp` | The reference contacts (a carving and a skidding ski, a boot, a tyre, a tread, a body), `place` |
 | `snow/snapshot.hpp/.cpp` | `save`, `load`, `read_info`, `load_bare` (the format in the header) |
 | `engine/render/wgsl/snow_light.wgsl` | The snow light model for any material: `snow_relief`, `snow_light` (`SnowPoint`, `SnowGains`), and the `snow_` noise, relief and glint blocks |
+| `engine/render/snow_mirror.hpp/.cpp` | The layer mirrored on the GPU: `create_snow_mirror`, `update_snow_mirror` (the fine window's atlas, the coarse view, only stamped tiles and blocks re-sent), `snow_mirror_expect`, `read_snow_raw`, `read_snow_columns` |
+| `engine/render/wgsl/snow_mirror.wgsl` | The mirror's bindings (group 3, 0 to 4), `snow_raw` (a sample to the bit) and `snow_column` (`snow::sample` on the GPU) |
 | `engine/cli/snow.hpp/.cpp` | `ge snow show` and `ge snow column` over a saved layer |
 
 ## Rules
@@ -73,5 +75,10 @@ and the plan (rows M29a–M29l); this skill is how to work on it.
   a material (the mountain's, later a sheet's or a roof's) keeps only its own surface and
   additions. A change there moves every snow picture: run `world --tag=before` and
   `--compare=before` around it, and put the diff table in the PR.
-- **What is next** is `docs/snow.md`'s rows: the rest of M29e (the GPU mirror of a layer, the
-  fine marks from the imprint records, `gpu-snow`).
+- **Every write stamps what it changed.** A write to a fine cell goes through `cell_for`, which
+  stamps the tile; a write to a coarse block through `block_for`, which stamps the block. The GPU
+  mirror re-sends only what a stamp moved, so a new write path that skips them leaves the picture
+  stale. `tests/render_snow_mirror_test.cpp` holds the uploads; `gpu-snow` holds the GPU to the
+  layer to the bit (run it before and after any change to the mirror or the cell layout).
+- **What is next** is `docs/snow.md`'s rows: the rest of M29e (the fine marks from the imprint
+  records, the mountain's material reading the mirror).

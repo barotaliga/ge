@@ -50,6 +50,7 @@ CoarseBlock& block_for(Layer& l, int tx, int tz) {
     b.tx = tx;
     b.tz = tz;
   }
+  stamp_coarse(l, slot);
   return l.coarse[slot];
 }
 
@@ -115,24 +116,13 @@ int fold_stale(Layer& layer, double t) {
   return folded;
 }
 
-void fold_tile(Layer& layer, int slot) {
-  Tile& tile = layer.tiles[slot];
-  if (tile.tx < 0) return;
-  const int tx = tile.tx, tz = tile.tz;
-  if (layer.spec.weather) {
-    // Every changed sample brought to the fold's minute, so the coarse cell starts from it.
-    Moment m = moment(layer, minute_of(layer.clock) * 60.0);
-    for (int j = 0; j < kTileCells; j++) {
-      for (int i = 0; i < kTileCells; i++) {
-        Cell& cell = tile.cells[j * kTileCells + i];
-        if (cell.flags & kTouched)
-          bring_to(layer, m, cell, tx * kTileCells + i, tz * kTileCells + j);
-      }
-    }
-  }
+CoarseBlock summary_of(const Layer& layer, const Tile& tile, uint64_t* mass_in) {
+  CoarseBlock b;
+  b.tx = tile.tx;
+  b.tz = tile.tz;
   for (int j = 0; j < kCoarsePerTile; j++) {
     for (int i = 0; i < kCoarsePerTile; i++) {
-      const Patch p = patch_of(layer, tx, tz, i, j);
+      const Patch p = patch_of(layer, tile.tx, tile.tz, i, j);
       uint64_t mass = 0, depth = 0;
       bool touched = false, pressed = false;
       uint16_t minute = 0;
@@ -150,14 +140,14 @@ void fold_tile(Layer& layer, int slot) {
       }
       if (!touched) {
         // The cover again: its units leave the books with the tile.
-        layer.mass_in -= mass;
+        if (mass_in) *mass_in -= mass;
         continue;
       }
       int kind = 0;
       for (int k = 1; k < static_cast<int>(Kind::count); k++) {
         if (counts[k] > counts[kind]) kind = k;
       }
-      CoarseCell& cc = block_for(layer, tx, tz).cells[j * kCoarsePerTile + i];
+      CoarseCell& cc = b.cells[j * kCoarsePerTile + i];
       cc.mass = static_cast<uint32_t>(mass);
       cc.depth_mm = static_cast<uint32_t>(depth);
       cc.kind = static_cast<Kind>(kind);
@@ -165,9 +155,33 @@ void fold_tile(Layer& layer, int slot) {
       cc.minute = minute;
     }
   }
+  return b;
+}
+
+void fold_tile(Layer& layer, int slot) {
+  Tile& tile = layer.tiles[slot];
+  if (tile.tx < 0) return;
+  const int tx = tile.tx, tz = tile.tz;
+  if (layer.spec.weather) {
+    // Every changed sample brought to the fold's minute, so the coarse cell starts from it.
+    Moment m = moment(layer, minute_of(layer.clock) * 60.0);
+    for (int j = 0; j < kTileCells; j++) {
+      for (int i = 0; i < kTileCells; i++) {
+        Cell& cell = tile.cells[j * kTileCells + i];
+        if (cell.flags & kTouched)
+          bring_to(layer, m, cell, tx * kTileCells + i, tz * kTileCells + j);
+      }
+    }
+  }
+  const CoarseBlock sum = summary_of(layer, tile, &layer.mass_in);
+  for (int k = 0; k < kCoarsePerTile * kCoarsePerTile; k++) {
+    if (!(sum.cells[k].flags & kTouched)) continue;
+    block_for(layer, tx, tz).cells[k] = sum.cells[k];
+  }
   layer.slots[static_cast<size_t>(tz) * layer.tile_cols + tx] = -1;
   tile.tx = tile.tz = -1;
   layer.free_tiles.push_back(slot);
+  stamp_tile(layer, slot);
   layer.folds++;
 }
 
@@ -208,6 +222,7 @@ void refine_tile(Layer& layer, Tile& tile) {
       }
       if (from_coarse) {
         *cc = CoarseCell{};
+        stamp_coarse(layer, bslot);
         refined = true;
       }
     }
