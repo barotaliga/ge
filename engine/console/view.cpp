@@ -112,6 +112,13 @@ ConsoleView::ConsoleView(Console& c) : c_(c) {
           .help = "a picture drawn over the gradient, a path in the game's files (\"\": none)",
           .kind = CvarKind::text},
          &bg_image_);
+  v.bind({.name = "con_font",
+          .fallback = "mono",
+          .flags = kArchive,
+          .help = "the charset the console writes in: terminal, matrix, segment, mono, typewriter, "
+                  "square, stencil, gothic, rounded or marker (\"\": the UI font)",
+          .kind = CvarKind::text},
+         &font_);
   if (v.find("name") == nullptr) {
     v.add({.name = "name",
            .fallback = "player",
