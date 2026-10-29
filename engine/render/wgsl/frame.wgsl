@@ -51,9 +51,13 @@ struct SkyLight {
 // The cloud's noise (render/clouds.hpp: 64^3, 0..1) and its wrapping sampler.
 @group(0) @binding(8) var cloud_noise: texture_3d<f32>;
 @group(0) @binding(9) var linear_repeat: sampler;
+// The fog in areas (render/fog.hpp): the in-scatter toward the eye (rgb) and the transmittance (a)
+// over the screen's uv and sqrt(distance / range), read by `local_fog`.
+@group(0) @binding(11) var fog_volume: texture_3d<f32>;
+
 // The ambient occlusion (render/ao.hpp: half size, r the occlusion times its strength, g the
 // depth it was worked at), or the sky's 1 x 1 blank with it off.
-@group(0) @binding(11) var ao_map: texture_2d<f32>;
+@group(0) @binding(12) var ao_map: texture_2d<f32>;
 
 // THE SHARE OF THE SKY a surface drawn at `at` (a fragment's position: the pixel and its depth)
 // sees, 0..1: the four half-size texels round it, each by how near it is and how like the
@@ -353,15 +357,48 @@ fn mist_sky(d: vec3f) -> vec3f {
 // times the air's transmittance plus the light the air scatters in, from the aerial-perspective
 // volume (under a deck, the deck's grey in its place); then a fog or a fall closing it into its
 // grey veil, so a surface at the visual range keeps 2 % of its contrast against it; then the
-// reach's mist closing it into the sky behind it. Every world material calls this, and none has
-// its own fog.
+// reach's mist closing it into the sky behind it; then the fog in areas (`local_fog`). Every world
+// material calls this, and none has its own fog.
 fn haze(colour: vec3f, uv: vec2f, dist_m: f32) -> vec3f {
   let c = haze_air(colour, uv, dist_m);
   if (frame.mist.y <= 0.0) {
-    return c;
+    return local_fog(c, uv, dist_m);
   }
   let t = clamp((dist_m - frame.mist.x) / (frame.mist.y - frame.mist.x), 0.0, 1.0);
-  return mix(c, mist_sky(view_ray(frame, uv)), t * t * (3.0 - 2.0 * t));
+  return local_fog(mix(c, mist_sky(view_ray(frame, uv)), t * t * (3.0 - 2.0 * t)), uv, dist_m);
+}
+
+// THE FOG IN AN AREA (render/fog.hpp), the nearest air of all, so it veils the haze, the mist,
+// the sky and the cloud behind it alike: a colour at `dist_m` (infinity for the sky) seen through
+// the froxel volume's column at screen `uv`. With no volume in reach (`frame.fog.x` 0) the colour
+// is returned as it came.
+fn local_fog(colour: vec3f, uv: vec2f, dist_m: f32) -> vec3f {
+  if (frame.fog.x <= 0.0) {
+    return colour;
+  }
+  let v = fog_column(uv, dist_m);
+  return colour * v.a + v.rgb;
+}
+
+// The same over a premultiplied colour (a cloud's light and cover blended over the sky): the
+// cover takes its share of the fog's in-scatter, the sky behind it the rest.
+fn local_fog_over(c: vec4f, uv: vec2f, dist_m: f32) -> vec4f {
+  if (frame.fog.x <= 0.0) {
+    return c;
+  }
+  let v = fog_column(uv, dist_m);
+  return vec4f(c.rgb * v.a + v.rgb * c.a, c.a);
+}
+
+// The volume's column at `uv` out to `dist_m`: the in-scatter (rgb) and the transmittance (a).
+// Nearer than the first slice's far edge, from no fog to the first slice's.
+fn fog_column(uv: vec2f, dist_m: f32) -> vec4f {
+  let n = frame.fog.y;
+  let s = sqrt(clamp(dist_m / frame.fog.x, 0.0, 1.0));
+  let w = max(s - 0.5 / n, 0.5 / n);
+  let v = textureSampleLevel(fog_volume, linear_clamp, vec3f(uv, w), 0.0);
+  let k = clamp(s * n, 0.0, 1.0);
+  return vec4f(v.rgb * k, mix(1.0, v.a, k));
 }
 
 // The haze without the reach's mist: the air and the weather alone (the cloud's, which is the

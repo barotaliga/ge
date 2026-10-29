@@ -22,8 +22,10 @@ if(GE_GPU)
     engine/render/water_stream.wgsl
     engine/render/underwater.wgsl engine/render/grass.wgsl engine/render/grass_scatter.wgsl
     engine/render/ui_pass.wgsl engine/render/eye.wgsl engine/render/eye_adapt.wgsl engine/render/explosions.wgsl
-    engine/render/morph.wgsl
+    engine/render/morph.wgsl engine/render/sprites.wgsl
     engine/render/wet_lens.wgsl engine/render/snow_probe.wgsl
-    engine/render/lens.wgsl engine/render/motion_blur.wgsl engine/render/ao.wgsl
+    engine/render/lens.wgsl
+    engine/render/fog.wgsl engine/render/fog_integrate.wgsl
+    engine/render/beams.wgsl engine/render/motion_blur.wgsl engine/render/ao.wgsl
     engine/render/ao_blur.wgsl engine/render/dof.wgsl)
 endif()
