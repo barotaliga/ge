@@ -170,7 +170,7 @@ AGENTS.md and the non-goals in `docs/goals.md` state this exception.
 | Files and archives | Embedded blobs; the labs' inflater | `engine/vfs`, inflate shipped (M18a) |
 | A map format with visibility and collision | A heightfield world (`plugins/mountain`) | `plugins/brush` (reading: M32b; collision: M18b) |
 | Scripting for mods | None, by design | `plugins/progs`, the stated exception (M18c, M18d) |
-| Player movement and weapons | `engine/move` (M28): the mover for any genre, the classic arena row among its presets, strafe jumping charted (`docs/movement.md`) | The classic row checked against recordings, the clip hulls answering the mover's trace, the weapons: `plugins/shooter` (M18e) |
+| Player movement and weapons | `engine/move` (M28): the mover for any genre, the classic arena row among its presets, strafe jumping charted (`docs/movement.md`); `plugins/shooter` (M18o1): the classic player move in floats over clip hulls, held to its recordings on every scenario (`pmove` lab) | The weapons: `plugins/shooter` (M18e) |
 | A server with many clients | `engine/net` links, channels, sessions, NAT, the simulated network, captures | The server's frame and clients (M18f); the compatible protocol (M18g); the native one on M17f's replication (M18h) |
 | Client prediction and interpolation | Planned in M17f | M17f lands the generic layer; the game's own prediction over `plugins/shooter` (M18h) |
 | Demos | The input log (`play/inputs`), recordings (`ge record`) | Client demos and MVD read and written, seek by snapshot (M18h) |
@@ -280,7 +280,7 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `pak` | sim | Archives mounted in order, every file's winner, lookup cost; digest of the file table |
 | `bsp` | picture | A map from above: leaves, the PVS of a point, hulls, entities; lump sizes and limits |
 | `qc` | sim | A progs run: per-function time and calls, builtins hit, errors with QC stack traces |
-| `pmove` | scenario | Scripted movement on fixture maps: ground acceleration, air control, strafe jumping, bunny hopping, stairs, ramps, water; trajectories charted |
+| `pmove` | scenario | Scripted movement on fixture maps: ground acceleration, air control, strafe jumping, bunny hopping, stairs, ramps, water; trajectories charted against the committed recordings (built, M18o1) |
 | `se-parity` | scenario | The same scripted inputs through our movement and an existing server's, measured against each other within a tolerance (needs the reference program; skipped with a reason when its cache is absent) |
 | `se-server` | drive | Eight bots deathmatch on a free map for a minute: frags, items, the server's frame cost, its digest |
 | `se-net` | sim | Compatible and native clients on the simulated network under every preset: bandwidth, prediction errors, corrections |

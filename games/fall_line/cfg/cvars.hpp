@@ -6,7 +6,7 @@
 //
 //   vid_width vid_height vid_vsync      the window (A, latched: read at startup)
 //   r_taa r_scale r_occlusion r_shadowsize r_bloom r_snow r_trails r_spray r_precip
-//   r_precip_density r_splashes r_wet r_weather r_clouds
+//   r_precip_density r_splashes r_wet r_weather r_clouds r_sunsize r_moonsize
 //                                       the picture (A, latched: the frame is made once)
 //   cl_view                             the camera: a rung or a still view (A)
 //   cl_chasedist cl_chaseheight cl_fovspeed cl_camblend cl_motion cl_shake, and the first
@@ -14,7 +14,8 @@
 //   rung of Fall Line's)                 the camera's settings (engine/camera/cvars.hpp, A)
 //   volume s_wind s_effects s_mute      the sound's faders (A)
 //   sv_seed sv_hour                     the run's map and hour (the server's, server info)
-//   sv_weather sv_snowfall sv_snowline sv_fog sv_wind sv_winddir sv_cover sv_skyrate
+//   sv_weather sv_snowfall sv_snowline sv_fog sv_wind sv_winddir sv_cover sv_thick sv_skyrate
+//   sv_cloudheight sv_cloudspeed
 //                                       the sky over the run, picked by hand, and how fast its
 //                                       hour runs (the server's, server info; sim/sky.hpp)
 //   sv_skytype sv_skyair sv_skydust sv_sunsize sv_sun2 sv_planet sv_planetdir sv_planetel
@@ -25,8 +26,9 @@
 // ge:summary Fall Line's cvars: the window, the picture, the camera, the sound, the map
 // ge:keywords fall-line cvars settings cfg vid_width r_taa r_bloom r_shadowsize cl_view volume
 // ge:keywords s_mute sv_seed sv_hour add_cvars register_cvars sv_weather sv_snowfall sv_fog
-// ge:keywords sv_wind sv_winddir sv_cover sv_skyrate r_clouds sv_skytype sky-type sky-knobs
-// ge:keywords cl_chasedist cl_motion r_precip r_precip_density r_splashes r_wet sv_snowline rain
+// ge:keywords sv_wind sv_winddir sv_cover sv_thick sv_skyrate r_clouds sv_skytype sky-type
+// ge:keywords sky-knobs cl_chasedist cl_motion r_precip r_precip_density r_splashes r_wet
+// ge:keywords sv_snowline rain sv_cloudheight sv_cloudspeed r_sunsize r_moonsize disc-size
 // ge:skill console sim
 // ge:test tests/fall_line_cvars_test.cpp
 #pragma once
@@ -53,6 +55,7 @@ struct Settings {
   bool precip = true, splashes = true, wet = true;  // what falls, the rain's splashes, wet ground
   double precip_density = 1.0;                      // the share of the falling particles, 0.25..2
   double clouds = 1.0;  // the share of the cloud march's steps; 0: no layer drawn
+  double disc_sun = 1.0, disc_moon = 1.0;  // r_sunsize r_moonsize: the discs drawn larger, 0.5..20
   // The camera.
   std::string view = "chase";
   ge::camera::CameraCvars camera;  // the camera's settings, in metres (no cl_camera: cl_view)
@@ -68,6 +71,9 @@ struct Settings {
   double snowline = -1;  // the snow line, a share of the mountain's height (rain under it)
   double air = -1, air_from = -1;  // the mean wind, m/s at 10 m; the heading it blows from, deg
   double cover = -1;               // the broken sky's cloud cover, 0..1
+  double thick = -1;               // how thick the clouds are, 0 thin .. 1 thick
+  double cloud_height = -1;        // the lowest layer's base over the floor, m
+  double cloud_speed = -1;         // the clouds' share of the wind aloft (1: the true wind)
   double sky_rate = 0;             // the sky's hours per hour of the run (0: the hour stands)
   // The kind of sky (render/sky_style.hpp's type names) and its knobs, each kept where negative
   // (render/sky_style.hpp's SkyKnobs; angles in degrees).

@@ -25,7 +25,7 @@ None of these is a different system. Each is a ROW of the same knobs (`MoveSpec`
 | Home | What |
 | --- | --- |
 | `engine/move/` | The knobs (`spec.hpp`) and their names (`knobs.hpp`), the presets, the step (`step.hpp`), the world's one question (`world.hpp`), a box world for labs and prototypes (`box_world.hpp`), the strafe jumper's hands (`strafe.hpp`), the scenarios (`scenarios.hpp`), the knobs bound as cvars (`cvars.hpp`). Depends on `engine/core` and, for the binding, `engine/console` |
-| `plugins/shooter/` (M18e) | The classic row in the classic map's units, the brush world's clip-hull trace answering `World::trace`, the server's other movetypes (toss, bounce, push) |
+| `plugins/shooter/` (M18o1, M18e) | The classic player move itself (`pmove.hpp`: one command in 32-bit floats over clip hulls, every move type and server setting, held to recordings of the classic move by `tests/shooter_recording_test.cpp` and drawn by the `pmove` lab), clip hulls and their trace (`hull.hpp`); later the server's other movetypes (toss, bounce, push, M18o2) and the weapons (M18e) |
 | `engine/water/swim` (M24d) | Swimming: a body in the water is handed to the swimmer, and back (§ Water) |
 | `engine/camera` (M26) | Reads the body (§ What a camera reads); never feeds it |
 | A game | Its row, its world's trace, the command from its input actions, the knobs bound to its console |

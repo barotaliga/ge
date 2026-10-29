@@ -1,6 +1,6 @@
-// The synth's graph: the call ring, the voice pool, the layers, the buses, the echo and the
-// limiter, rendered a block at a time. Everything is allocated in the constructor; `render` only
-// reads and writes what is already there.
+// The synth's graph: the call ring, the voice pool, the layers, the buses, the echo, the room and
+// the limiter, rendered a block at a time. Everything is allocated in the constructor; `render`
+// only reads and writes what is already there.
 //
 // ge:summary The synth's render: the ring, one-shot envelopes, layers, buses, echo and limiter
 // ge:keywords synth render envelope attack hold decay voice-pool steal layer glide bus echo
@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "audio/dsp.hpp"
+#include "audio/reverb.hpp"
 #include "core/libm/libm.hpp"
 #include "core/num.hpp"
 #include "core/prng.hpp"
@@ -56,7 +57,7 @@ float db_of(float x) {  // 20 log10 x, for x > 0
 }
 float gain_of_db(float db) { return static_cast<float>(libm::exp(0.11512925464970229 * db)); }
 
-enum class Cmd : uint8_t { tone, noise, layer_new, layer_set, layer_stop, bus };
+enum class Cmd : uint8_t { tone, noise, layer_new, layer_set, layer_stop, bus, room };
 
 struct Command {
   Cmd kind = Cmd::tone;
@@ -66,6 +67,7 @@ struct Command {
   Noise noise;
   LayerSpec spec;
   LayerTarget target;
+  RoomSound room;
   float glide = 0;
   float gain = 0;
 };
@@ -155,6 +157,9 @@ struct Synth::Impl {
   std::vector<float> line;
   int line_write = 0, line_delay = 1;
   float echo_feedback = 0, echo_coeff = 1, echo_damp = 0;
+  // the room
+  Reverb reverb;
+  std::array<float, kBlock> room_l{}, room_r{};
   // the limiter
   float limit_g = 0, limit_attack = 1, limit_release = 1, limit_below = 0;
   // the stats, read from any thread
@@ -223,6 +228,9 @@ struct Synth::Impl {
         if (c.glide <= 0) b.gain = b.target;  // a fader set, not moved: before anything plays
         break;
       }
+      case Cmd::room:
+        reverb.set(c.room, c.glide);
+        break;
     }
   }
 
@@ -510,6 +518,13 @@ struct Synth::Impl {
       render_layer(l, frame, count);
       built += l.live;
     }
+    // The room (reverb.hpp): only while one is set, so a synth with none keeps its bits.
+    const bool room = reverb.active();
+    if (room) {
+      for (int i = 0; i < count; i++) room_l[i] = room_r[i] = 0;
+      reverb.process(mix_e.data(), room_l.data(), room_r.data(), count);
+    }
+    const float echo_share = room ? reverb.echo_share() : 1.0f;
     const int size = static_cast<int>(line.size());
     for (int i = 0; i < count; i++) {
       int read = line_write - line_delay;
@@ -517,8 +532,12 @@ struct Synth::Impl {
       echo_damp += (line[read] - echo_damp) * echo_coeff;
       line[line_write] = mix_e[i] + echo_feedback * echo_damp;
       if (++line_write == size) line_write = 0;
-      float l = mix_l[i] + echo_damp;
-      float r = mix_r[i] + echo_damp;
+      float l = mix_l[i] + echo_damp * echo_share;
+      float r = mix_r[i] + echo_damp * echo_share;
+      if (room) {
+        l += room_l[i];
+        r += room_r[i];
+      }
       // The limiter: a soft-knee gain computer on the louder channel, smoothed in dB.
       const float a = l < 0 ? -l : l, b = r < 0 ? -r : r;
       const float peak = a > b ? a : b;
@@ -631,6 +650,14 @@ void Synth::bus_gain(int bus, float gain, float glide_s) {
   c.kind = Cmd::bus;
   c.bus = bus_of(bus);
   c.gain = gain;
+  c.glide = glide_s;
+  impl_->push(c);
+}
+
+void Synth::room(const RoomSound& room, float glide_s) {
+  Command c;
+  c.kind = Cmd::room;
+  c.room = room;
   c.glide = glide_s;
   impl_->push(c);
 }

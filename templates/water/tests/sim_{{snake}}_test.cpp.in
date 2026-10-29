@@ -1,0 +1,48 @@
+// The game's water's contract (sim/{{snake}}.hpp; skill: water): the lake is wet and deep in
+// its middle and dry past its shore, a sample replays to the same bits, and the wind's sea is
+// rougher on the lee shore than on the windward one.
+//
+// ge:summary Tests: the game's lake is where it is laid, replays bit for bit, and grows its sea
+// ge:keywords test water lake sample determinism fetch lee windward
+// ge:keywords {{snake}}
+// ge:skill water
+// ge:test tests/sim_{{snake}}_test.cpp
+#include <string>
+
+#include "check.hpp"
+#include "sim/{{snake}}.hpp"
+
+namespace {
+
+namespace water = ge::water;
+namespace sim = {{ident}}::sim;
+
+}  // namespace
+
+TEST(the_lake_is_wet_in_its_middle_and_dry_past_its_shore) {
+  const water::World world = sim::make_{{snake}}();
+  const water::Sample middle = water::sample(world, 0, sim::kLakeLevel - 1, 0, 10);
+  CHECK(middle.body == 0);
+  CHECK_MSG(middle.depth > 0.5 && middle.surface - middle.bed > sim::kLakeDeepest - 0.5,
+            "the middle is " + std::to_string(middle.surface - middle.bed) +
+                " m deep, want about kLakeDeepest; skill: water");
+  CHECK(water::sample(world, 80, sim::kLakeLevel, 0, 10).body < 0);
+}
+
+TEST(a_sample_replays_bit_for_bit) {
+  const water::World a = sim::make_{{snake}}(), b = sim::make_{{snake}}();
+  const water::Sample sa = water::sample(a, 12, sim::kLakeLevel, -9, 37.5);
+  const water::Sample sb = water::sample(b, 12, sim::kLakeLevel, -9, 37.5);
+  CHECK_BITS(sa.surface, sb.surface);
+  CHECK_BITS(sa.vx, sb.vx);
+  CHECK_BITS(sa.ny, sb.ny);
+}
+
+TEST(the_lee_shore_is_rougher_than_the_windward_one) {
+  const water::World world = sim::make_{{snake}}(9);
+  const double lee = water::sample(world, 0, sim::kLakeLevel, -18, 10).hs;
+  const double windward = water::sample(world, 0, sim::kLakeLevel, 18, 10).hs;
+  CHECK_MSG(lee > 1.5 * windward && windward >= 0,
+            "lee Hs " + std::to_string(lee) + " m, windward " + std::to_string(windward) +
+                " m: the fetch grows the sea downwind; skill: water");
+}

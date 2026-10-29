@@ -116,10 +116,17 @@ struct CloudLayer {
   double drop_spread = 0.35;
   double halo = 0;
   double deck = 0;
+  // Its THICKNESS across it: the share of a full cell's extinction (`density`) its thinnest
+  // patches keep (1 even all through .. near 0 thin enough to show the sun's disc), the span of
+  // a patch in cells, and where this sky's layer stands between thin and thick (-1 all thin ..
+  // 1 all thick). The cloud's optical depth, so its shadow too, is the column's times it.
+  double thin = 1;
+  double thick_cells = 3;
+  double thick_bias = 0;
 };
 inline constexpr int kCloudLayers = 4;
 // The frame block's rows a layer (render/clouds.hpp's `cloud_rows`).
-inline constexpr int kCloudRows = 5;
+inline constexpr int kCloudRows = 6;
 // Where the reach's mist begins, as a share of the reach (FrameView::reach_m).
 inline constexpr double kMistBegins = 0.5;
 struct Clouds {
@@ -200,6 +207,12 @@ struct FrameView {
   // would, not blown out against a dark sky. 0: the sky's light alone.
   double adapt_cd = 0;
   SkyStyle style{};  // the kind of sky (render/sky_style.hpp); the default is the Earth's
+  // THE DISCS DRAWN LARGER, as through a longer lens: the sun's and the moon's angular radii
+  // against what they would be (1: as they are). Only the discs grow, with the glow a cloud
+  // throws off their limbs; their light on the world is the real one's, so the sun's disc
+  // shares the same light over its larger face and the moon's keeps its surface's brightness.
+  double sun_size = 1;
+  double moon_size = 1;
   // THE REACH, m: how far the picture draws. Past half of it a mist closes every surface into
   // the sky behind it, all of it by the reach, and nothing farther is drawn; 0: no reach, no mist.
   double reach_m = 0;

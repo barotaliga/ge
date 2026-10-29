@@ -21,6 +21,8 @@ M20a–M20h.
 | `services/sim_store_extras.cpp` | The simulated store's extras: the on-screen keyboard, sleep and wake, the timeline, remote play |
 | `services/discord.hpp` | Discord beside the store: the `Activity` and its limits, the frames, the `Discord` client (found with backoff, paced updates, asks and joins as events) |
 | `services/discord_link.cpp` | The link over the OS's local pipe (`net/local_pipe.hpp`) and where a Discord app listens (`GE_DISCORD_IPC` overrides) |
+| `services/controllers.hpp` | The store's controller layer (Steam Input's shape): `ControllerLayer`, origins and glyphs, `merge_store_values`, the action manifest and default configuration from the map |
+| `services/sim_controllers.hpp` | The simulated controller layer: virtual pads read through each controller's store configuration by `input::evaluate`, rebinds, a journal |
 | `services/sim_discord.hpp` | The simulated Discord app: the same frames, Discord's limits and rate limit, the player's and friends' actions, a journal |
 
 ## Rules
@@ -52,6 +54,11 @@ M20a–M20h.
   pace the activity: call `set_activity` whenever the line changes and never throttle it in the
   game; a test against `SimDiscord` fails on a sixth update in 20 seconds.
 
+- **A store-read pad is read once.** A controller the store reads (`ControllerLayer`) is merged
+  into the game's values with `merge_store_values` and left out of the platform backend's
+  `input::Sources::only`; never evaluate it twice. Its configuration starts from the map's pad
+  bindings, so write the store's manifest with `action_manifest_text`, never by hand.
+
 ## Adding a call
 
 1. Declare it on `Backend` in the right group of `backend.hpp`, with its contract (what it
@@ -71,6 +78,10 @@ M20a–M20h.
 `make lab LAB=services` (`--latency-ms`, `--jitter-ms`, `--seed`): four players on one script,
 every event in order, the store's journal, and how long each kind of answer took. Read the
 events table first; a `lab.fail` line names the event the script was owed and did not get.
+
+`make lab LAB=store-input`: a pad read by the store's controller layer beside the same pad read
+directly and a keyboard, through a rebind and a change of set. `store-vs-direct-gap` must be 0;
+the glyph table shows every action's prompt on each family.
 
 `make lab LAB=discord` (`--update-ms`): a session against the simulated Discord app (found late,
 a run changing its line, two asks, a join, a ping, a quit and return). Read `stale-max` (how
