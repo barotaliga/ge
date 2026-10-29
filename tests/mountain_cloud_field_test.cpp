@@ -215,3 +215,33 @@ TEST(a_sky_picked_by_hand_stands_at_its_height_and_drifts_at_its_speed) {
   const double slow_moved = slow60.layers[0].drift_m - slow0.layers[0].drift_m;
   CHECK(app::kCloudDrift == 1 && std::fabs(4 * slow_moved - own_moved) < 1e-6);
 }
+
+TEST(a_layer_is_as_tall_as_its_thickness_and_the_next_starts_over_it) {
+  const mg::Weather fair = sky(mg::WeatherKind::fair, 6);
+  const auto own = app::cloud_layers_for(fair, 38, 1000, 45, 0);
+  // Picked by hand: the lowest layer 3 km tall, as dense a metre as its kind deals it, so its
+  // column hides the more of the sun; the next layer starts at its top.
+  const auto tall = app::cloud_layers_for(fair, 38, 1000, 45, 0, {.base = 400, .thickness = 3000});
+  CHECK(std::fabs(tall.layers[0].base_m - 1400) < 1e-9);
+  CHECK(std::fabs(tall.layers[0].top_m - 4400) < 1e-9);
+  CHECK(tall.layers[0].density == own.layers[0].density);
+  const double own_depth = own.layers[0].top_m - own.layers[0].base_m;
+  CHECK(std::fabs(tall.layers[0].shadow_tau - own.layers[0].shadow_tau * 3000 / own_depth) < 1e-9);
+  CHECK(tall.layers[1].base_m >= tall.layers[0].top_m);
+  // Thin: the next layer keeps its own height.
+  const auto thin = app::cloud_layers_for(fair, 38, 1000, 45, 0, {.thickness = 50});
+  CHECK(std::fabs(thin.layers[0].top_m - thin.layers[0].base_m - 50) < 1e-9);
+  CHECK(thin.layers[1].base_m == own.layers[1].base_m);
+  // In every sky, picked by hand or dealt, with the scud under it at dusk or not, no two layers
+  // share a slab of the air.
+  for (const mg::WeatherKind k : {mg::WeatherKind::fair, mg::WeatherKind::flurries,
+                                  mg::WeatherKind::high, mg::WeatherKind::overcast}) {
+    for (const app::Aloft aloft : {app::Aloft{}, app::Aloft{.dusk = 1}, app::Aloft{.base = 300},
+                                   app::Aloft{.base = 200, .thickness = 5000}}) {
+      for (const double seed : {7.0, 38.0, 91.0}) {
+        const auto s = app::cloud_layers_for(sky(k, 6), seed, 1000, 45, 0, aloft);
+        for (int i = 1; i < s.count; ++i) CHECK(s.layers[i].base_m >= s.layers[i - 1].top_m);
+      }
+    }
+  }
+}
