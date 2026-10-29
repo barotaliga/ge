@@ -42,6 +42,7 @@ struct Ran {
 Ran qc(std::vector<std::string> args) {
   args.insert(args.begin(), "qc");
   std::vector<const char*> argv;
+  argv.reserve(args.size());
   for (const std::string& a : args) argv.push_back(a.c_str());
   std::ostringstream out;
   const int code = qc_main(static_cast<int>(argv.size()), argv.data(), out);

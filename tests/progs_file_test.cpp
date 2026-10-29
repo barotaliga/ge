@@ -122,39 +122,39 @@ TEST(every_record_is_checked) {
   const int32_t globals = word(good, 52);
   std::vector<uint8_t> b = good;
 
-  put16(b, st + 8 * 1, 99);  // statement 1's opcode
+  put16(b, st + size_t{8} * 1, 99);  // statement 1's opcode
   refused(b, {"statements[1].op = 99", "not an opcode"}, "an unknown opcode");
   b = good;
-  put16(b, st + 8 * 1, kOpAddF);
-  put16(b, st + 8 * 1 + 6, static_cast<int16_t>(globals));
+  put16(b, st + size_t{8} * 1, kOpAddF);
+  put16(b, st + size_t{8} * 1 + 6, static_cast<int16_t>(globals));
   refused(b, {"statements[1].c", "outside the globals"}, "an operand past the globals");
   b = good;
-  put16(b, st + 8 * 1, kOpStoreV);
-  put16(b, st + 8 * 1 + 2, static_cast<int16_t>(globals - 2));
+  put16(b, st + size_t{8} * 1, kOpStoreV);
+  put16(b, st + size_t{8} * 1 + 2, static_cast<int16_t>(globals - 2));
   refused(b, {"statements[1].a", "STORE_V"}, "a vector operand two words from the end");
   b = good;
-  put16(b, st + 8 * 1, kOpGoto);
-  put16(b, st + 8 * 1 + 2, -5);
+  put16(b, st + size_t{8} * 1, kOpGoto);
+  put16(b, st + size_t{8} * 1 + 2, -5);
   refused(b, {"statements[1].a = -5", "jumps to statement -4"}, "a jump before statement 0");
 
   // Function 7 is fib, one parameter (five builtins and think before it).
   b = good;
-  put(b, fn + 36 * 7, 1000000);
+  put(b, fn + size_t{36} * 7, 1000000);
   refused(b, {"functions[7].first_statement", "outside the statements"}, "a body past the end");
   b = good;
-  put(b, fn + 36 * 7 + 4, globals);
+  put(b, fn + size_t{36} * 7 + 4, globals);
   refused(b, {"functions[7].parm_start", "outside the globals"}, "locals past the globals");
   b = good;
-  put(b, fn + 36 * 7 + 24, 9);
+  put(b, fn + size_t{36} * 7 + 24, 9);
   refused(b, {"functions[7].num_parms = 9"}, "nine parameters");
   b = good;
-  b[fn + 36 * 7 + 28] = 2;
+  b[fn + size_t{36} * 7 + 28] = 2;
   refused(b, {"functions[7].parm_size[0] = 2", "not 1 or 3"}, "a two-word parameter");
   b = good;
-  put(b, fn + 36 * 7 + 8, 0);
+  put(b, fn + size_t{36} * 7 + 8, 0);
   refused(b, {"functions[7].locals = 0", "fewer than its parameters"}, "no room for a parameter");
   b = good;
-  put(b, fn + 36 * 2 + 16, str_size);
+  put(b, fn + size_t{36} * 2 + 16, str_size);
   refused(b, {"functions[2].name", "outside the strings"}, "a name past the strings");
 
   b = good;

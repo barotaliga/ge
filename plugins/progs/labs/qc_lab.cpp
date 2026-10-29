@@ -218,9 +218,14 @@ void fault_section(gl::Lab& lab, const pg::Progs& p) {
   }
   lab.metric("fault.frames", vm.fault.depth, "count");
   const pg::Frame& f = vm.fault.frames[0];
-  lab.metric("fault.line", p.lines[static_cast<size_t>(f.statement)], "line");
+  const int32_t line = p.lines.empty() ? 0 : p.lines[static_cast<size_t>(f.statement)];
+  lab.metric("fault.line", line, "line");
+  if (line == 0) {
+    lab.fail("the sample's fault has no line: the line table did not reach the fault",
+             "run `make test T=progs_vm` and read plugins/progs/sample.cpp (skill: progs)");
+  }
+  const std::string text = pg::fault_text(vm);
   for (size_t at = 0;;) {
-    const std::string text = pg::fault_text(vm);
     const size_t nl = text.find('\n', at);
     lab.note(text.substr(at, nl == std::string::npos ? std::string::npos : nl - at));
     if (nl == std::string::npos) break;

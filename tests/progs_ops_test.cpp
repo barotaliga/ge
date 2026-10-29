@@ -56,10 +56,12 @@ struct Probe {
     create_vm(vm, progs);
   }
   void set(int at, const uint32_t (&w)[3]) {
-    for (int k = 0; k < 3; k++) vm.globals[static_cast<size_t>(at + k)] = w[k];
+    for (int k = 0; k < 3; k++) vm.globals[static_cast<size_t>(at) + static_cast<size_t>(k)] = w[k];
   }
   bool run(uint16_t op) { return call_function(vm, fn_of_op[op]); }
-  uint32_t c(int k = 0) const { return vm.globals[static_cast<size_t>(C + k)]; }
+  uint32_t c(int k = 0) const {
+    return vm.globals[static_cast<size_t>(C) + static_cast<size_t>(k)];
+  }
 };
 
 uint32_t w(float f) { return std::bit_cast<uint32_t>(f); }
@@ -122,8 +124,8 @@ TEST(every_matrix_opcode_keeps_its_golden_bits) {
         // STORE writes b, not c: its result is B.
         const bool store = op == kOpStoreF || op == kOpStoreV;
         const uint32_t r[3] = {store ? p.vm.globals[static_cast<size_t>(p.B)] : out[0],
-                               store ? p.vm.globals[static_cast<size_t>(p.B + 1)] : out[1],
-                               store ? p.vm.globals[static_cast<size_t>(p.B + 2)] : out[2]};
+                               store ? p.vm.globals[static_cast<size_t>(p.B) + 1] : out[1],
+                               store ? p.vm.globals[static_cast<size_t>(p.B) + 2] : out[2]};
         got += std::to_string(op);
         for (uint32_t u : a) got += " " + hex(u);
         for (uint32_t u : b) got += " " + hex(u);

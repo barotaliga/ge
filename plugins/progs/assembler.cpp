@@ -45,7 +45,7 @@ int Assembler::alloc(int words) {
 int Assembler::global(const char* name, uint16_t type, std::initializer_list<uint32_t> init) {
   const int at = alloc(type_words(type));
   int k = 0;
-  for (uint32_t w : init) globals[static_cast<size_t>(at + k++)] = w;
+  for (uint32_t w : init) globals[static_cast<size_t>(at) + static_cast<size_t>(k++)] = w;
   globaldefs.push_back({type, static_cast<uint16_t>(at), string(name)});
   return at;
 }
@@ -61,8 +61,8 @@ int Assembler::constant_f(float v) {
 int Assembler::constant_v(float x, float y, float z) {
   const int at = alloc(3);
   globals[static_cast<size_t>(at)] = std::bit_cast<uint32_t>(x);
-  globals[static_cast<size_t>(at + 1)] = std::bit_cast<uint32_t>(y);
-  globals[static_cast<size_t>(at + 2)] = std::bit_cast<uint32_t>(z);
+  globals[static_cast<size_t>(at) + 1] = std::bit_cast<uint32_t>(y);
+  globals[static_cast<size_t>(at) + 2] = std::bit_cast<uint32_t>(z);
   return at;
 }
 

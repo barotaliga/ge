@@ -19,6 +19,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <utility>
 
 #include "cli/add.hpp"
 #include "cli/asset.hpp"
@@ -381,7 +382,10 @@ Outcome run(const Args& a) {
     std::vector<std::string> flags;
     for (const auto& [k, v] : a.flags) {
       if (k == "preset" || k == "engine" || k == "repo" || k == "json") continue;
-      flags.push_back(v.empty() ? "--" + k : "--" + k + "=" + v);
+      std::string f = "--";
+      f.append(k);
+      if (!v.empty()) f.append("=").append(v);
+      flags.push_back(std::move(f));
     }
     return run_qc(build_options(a), std::string(name.substr(3)), a.words[0], flags);
   }
