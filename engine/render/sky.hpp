@@ -49,9 +49,10 @@ inline constexpr double kEyeMove = 50.0;
 wgpu::BindGroupLayout frame_layout(gpu::Device& device);
 
 struct Sky {
-  wgpu::Texture transmittance, multiscatter, sky_view, moon_view, aerial, blank;
+  wgpu::Texture transmittance, multiscatter, sky_view, moon_view, aerial, blank, no_fog;
   wgpu::TextureView transmittance_view, multiscatter_view, sky_view_view, moon_view_view,
       aerial_view, blank_view;
+  wgpu::TextureView no_fog_view;  // group 0's fog volume without render/fog.hpp: clear air
   wgpu::Buffer
       light;  // frame.wgsl's SkyLight: the sky's four rows, then the eye's (render/eye.hpp)
   wgpu::Buffer no_lights;  // an empty local light list (render/lights.hpp), for a frame with none
@@ -85,10 +86,12 @@ struct Sky {
 void create_sky(gpu::Device& device, gpu::PipelineSet& pipelines, Sky& sky,
                 const wgpu::Buffer& uniforms, const wgpu::BindGroupLayout& frame);
 // Group 0 of every draw, made once the sky's tables exist. `lights` is the frame's local lights
-// (render/lights.hpp's `Lights::buffer`, binding 10); none: the sky's empty list.
+// (render/lights.hpp's `Lights::buffer`, binding 10); none: the sky's empty list. `fog` is the fog
+// in areas' volume (render/fog.hpp's `Fog::volume_view`, binding 11); null, the sky's clear air.
 wgpu::BindGroup frame_group(gpu::Device& device, const wgpu::BindGroupLayout& layout,
                             const wgpu::Buffer& uniforms, const Sky& sky,
-                            const wgpu::Buffer& lights = nullptr);
+                            const wgpu::Buffer& lights = nullptr,
+                            const wgpu::TextureView& fog = nullptr);
 
 // Decide which tables this frame rebuilds.
 void prepare_sky(Sky& sky, const FrameView& view);
