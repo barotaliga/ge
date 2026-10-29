@@ -288,7 +288,7 @@ std::span<const ClassicFire> classic_fires() {
   // long jet. A nailgun throws nails, not burning powder: no flame, no flash, only a faint puff
   // from the barrel that fired. The rates are the classic game's.
   static constexpr std::string_view kPuff =
-      "length=0.02,width=0.02,glow=0,flash=0,sparks=0,light_range=0,smoke.smoke=0.22,"
+      "length=0.02,width=0.02,glow=0,flash=0,sparks=0,light_range=0,smoke.smoke=0.14,"
       "smoke_speed=1.5";
   static constexpr ClassicFire kFires[] = {
       {"v_axe", "", "", 0.5},

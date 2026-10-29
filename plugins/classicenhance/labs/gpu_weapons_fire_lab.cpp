@@ -24,6 +24,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -142,6 +143,37 @@ ge::camera::Pose pose_of(const gr::FrameView& v) {
   p.pitch = v.pitch;
   p.fov_y = v.fov_y;
   return p;
+}
+
+// A VARIANT of every weapon's fire for side-by-side judging: each knob of the weapon's own look
+// scaled. A real flash is a few milliseconds of glowing gas, a small bright core at the mouth and
+// a larger, dimmer burn a few calibres out where the gas meets the air; by day it is hardly seen
+// and the smoke is what shows; a shotgun's can be a red belch at dusk; a launcher's is little
+// more than a puff. The variants run from the weapon's look turned down to that.
+struct Variant {
+  const char* name;
+  double life, size, glow, flash, sparks, smoke;
+};
+constexpr Variant kVariants[] = {
+    {"FAINTER", 1.0, 0.8, 0.5, 0.5, 0.5, 0.6},
+    {"ONE FRAME", 0.45, 0.9, 0.7, 0.6, 0.4, 0.5},
+    {"REAL", 0.3, 0.6, 0.35, 0.4, 0.2, 0.45},
+};
+
+gr::MuzzleLook varied(const gr::MuzzleLook& in, const Variant& v) {
+  gr::MuzzleLook out = in;
+  const auto set = [&](std::string_view knob, double value) {
+    gr::set_muzzle_knob(out, knob, value);
+  };
+  set("life", in.life_s * v.life);
+  set("length", in.length_m * v.size);
+  set("width", in.width_m * v.size);
+  set("glow", in.glow * v.glow);
+  set("flash", in.flash * v.flash);
+  set("sparks", std::floor(in.sparks * v.sparks + 0.5));
+  set("light_range", in.light_range_m * v.flash);
+  set("smoke.smoke", in.smoke.smoke * v.smoke);
+  return out;
 }
 
 // The gun over `pic` on moment `m`, lit by the yard's light and (while it burns) its own flame.
@@ -325,7 +357,7 @@ void run(gl::Lab& lab) {
       lab.fail("no GPU device, and GE_GPU_REQUIRE=1",
                "Install Mesa's Vulkan drivers (apt install mesa-vulkan-drivers). Skill: gpu.");
     }
-    placeholders(lab, {"fire", "swap", "stream", "day"}, w, h);
+    placeholders(lab, {"fire", "swap", "stream", "variants", "day"}, w, h);
     return;
   }
   es::Scene s;
@@ -406,6 +438,34 @@ void run(gl::Lab& lab) {
                 {}},
                es::sheet_of(pics, names, static_cast<int>(at.size())), Det::measured);
     }
+  }
+  {
+    // Every weapon's look and three variants of it, at dusk, 8 ms and 25 ms into a shot.
+    const std::vector<double> at = {0.008, 0.025};
+    std::vector<gl::Picture> pics;
+    std::vector<std::string> names;
+    for (const Gun& g : guns) {
+      for (int k = -1; k < static_cast<int>(std::size(kVariants)); ++k) {
+        Gun v = g;
+        if (k >= 0) v.look = varied(g.look, kVariants[k]);
+        for (gl::Picture& p : shoot(*device, s, v, dusk, at, settle, true)) {
+          pics.push_back(std::move(p));
+        }
+        for (const double m : at) {
+          names.push_back(g.name + " " + (k < 0 ? "AS IS" : kVariants[k].name) + " " +
+                          fixed(m * 1000, 0) + " MS");
+        }
+      }
+    }
+    lab.shot({"variants",
+              "EACH WEAPON'S FIRE AND THREE VARIANTS",
+              "Each weapon's fire as it is, then fainter, then a one-frame flash, then as a real "
+              "flash looks (a few milliseconds, small, dim, mostly smoke), at dusk 8 ms and 25 ms "
+              "into a shot.",
+              "which reads best at speed: the brief ones gone by 25 ms, the smoke left",
+              {}},
+             es::sheet_of(pics, names, static_cast<int>(2 * (std::size(kVariants) + 1))),
+             Det::measured);
   }
   {
     std::vector<gl::Picture> pics;
