@@ -61,6 +61,15 @@ struct Controls {
   bool machine = false;
   double lever = 0;
   double pedal = 0;
+  template <class Io>
+  friend void describe(Io& io, Controls& v) {
+    io(v.ski);
+    io(v.reset);
+    io(v.lean);
+    io(v.machine);
+    io(v.lever);
+    io(v.pedal);
+  }
 };
 
 enum class EventKind : uint8_t {
@@ -91,8 +100,8 @@ enum class EventKind : uint8_t {
   traffic,    // met a vehicle of the village (`gate` its index, or -1 - a parked car's id; `value`
               // the closing speed, m/s; village.hpp)
   army_para,  // an army paramotor (`gate` its ArmyParaChange, `value` its id; army_para.hpp)
-  army_vehicle,  // an army vehicle (`gate` its ArmyVehicleChange, `value` its id; army_vehicle.hpp)
   building,  // met a wall of the village (`gate` the building's id, `value` the closing speed, m/s)
+  army_vehicle,  // an army vehicle (`gate` its ArmyVehicleChange, `value` its id; army_vehicle.hpp)
 };
 
 const char* event_name(EventKind kind);
@@ -102,6 +111,13 @@ struct GameEvent {
   int32_t racer;
   int32_t gate;
   double value;
+  template <class Io>
+  friend void describe(Io& io, GameEvent& v) {
+    io(v.kind);
+    io(v.racer);
+    io(v.gate);
+    io(v.value);
+  }
 };
 
 inline constexpr size_t kEventsReserve = 64;
@@ -116,6 +132,17 @@ struct Progress {
   int32_t wipeouts = 0;
   int32_t missed_gates = 0;  // gates skied past (each counted once)
   double stuck = 0;          // s going nowhere on his skis
+  template <class Io>
+  friend void describe(Io& io, Progress& v) {
+    io(v.next);
+    io(v.missed);
+    io(v.finished);
+    io(v.finish_time);
+    io(v.resets);
+    io(v.wipeouts);
+    io(v.missed_gates);
+    io(v.stuck);
+  }
 };
 
 // How a racer rides when the bot has his controls (field.hpp deals it): the share of the bot's
@@ -123,6 +150,11 @@ struct Progress {
 struct Rider {
   double pace = 1;
   double lane = 0;
+  template <class Io>
+  friend void describe(Io& io, Rider& v) {
+    io(v.pace);
+    io(v.lane);
+  }
 };
 
 // What a run is: a RACE down the course's gates to the finish, or the FREE RIDE over the ski
@@ -140,6 +172,14 @@ struct OnLift {
   int32_t carrier = -1;  // the carrier he is on, once carried
   double since = 0;      // s, the clock when he was taken from the load zone
   int32_t ridden = 0;    // lifts ridden to the top this run
+  template <class Io>
+  friend void describe(Io& io, OnLift& v) {
+    io(v.phase);
+    io(v.lift);
+    io(v.carrier);
+    io(v.since);
+    io(v.ridden);
+  }
 };
 
 struct FreeRide {
@@ -152,6 +192,18 @@ struct FreeRide {
   bool arrived = false;        // at a run's foot (since the last lift let him go)
   double arrived_at = 0;       // s, the clock when he got there
   OnLift lift;                 // the lift that has him, and the lifts ridden
+  template <class Io>
+  friend void describe(Io& io, FreeRide& v) {
+    io(v.start);
+    io(v.run);
+    io(v.last);
+    io(v.last_s);
+    io(v.skied);
+    io(v.distance);
+    io(v.arrived);
+    io(v.arrived_at);
+    io(v.lift);
+  }
 };
 
 // THE FREE RIDE'S SNOWMOBILE (sled_ride.hpp): the machine's body (snowmobile/sled.hpp), what it
@@ -170,6 +222,18 @@ struct FreeSled {
   int32_t taken = 0;    // times boarded this run
   double still = 0;     // s at rest with nobody on it
   bool asleep = false;  // at rest on its parking brake, not stepped until something wakes it
+  template <class Io>
+  friend void describe(Io& io, FreeSled& v) {
+    io(v.present);
+    io(v.body);
+    io(v.mode);
+    io(v.rider);
+    io(v.thrown);
+    io(v.t);
+    io(v.taken);
+    io(v.still);
+    io(v.asleep);
+  }
 };
 
 // THE FREE RIDE'S HELICOPTER (heli_ride.hpp): the machine's body (helicopter/heli.hpp), its pad,
@@ -190,6 +254,22 @@ struct FreeHeli {
   ge::helicopter::HeliControls flown;  // the controls of the last step flown
   int32_t taken = 0;                   // times boarded this run
   bool army = false;  // the army's machine he took (army_steal.hpp): no pilot to fly it home
+
+  template <class Io>
+  friend void describe(Io& io, FreeHeli& v) {
+    io(v.present);
+    io(v.body);
+    io(v.pad_x);
+    io(v.pad_z);
+    io(v.pad_heading);
+    io(v.mode);
+    io(v.rider);
+    io(v.aboard);
+    io(v.t);
+    io(v.flown);
+    io(v.taken);
+    io(v.army);
+  }
 };
 
 // THE FREE RIDE'S PARAMOTOR (para_ride.hpp): a free ride begun under it on the summit. The rig's
@@ -217,6 +297,16 @@ struct FreePara {
   ge::paramotor::ParaAirField field;
   double start_x = 0, start_z = 0, start_heading = 0;
   int32_t starts = 0;  // times the ride was begun on the summit
+  template <class Io>
+  friend void describe(Io& io, FreePara& v) {
+    io(v.present);
+    io(v.body);
+    io(v.field);
+    io(v.start_x);
+    io(v.start_z);
+    io(v.start_heading);
+    io(v.starts);
+  }
 };
 
 struct Racer {
@@ -228,6 +318,14 @@ struct Racer {
   // stepped after his skis under the INJURIES switch (gunfire.hpp judges the rounds); mended at
   // a reset. Dead (`body.mortal >= 0`), his run is over: he lies where he fell.
   ge::skier::BodyState body;
+  template <class Io>
+  friend void describe(Io& io, Racer& v) {
+    io(v.skier);
+    io(v.progress);
+    io(v.rider);
+    io(v.free);
+    io(v.body);
+  }
 };
 
 struct Village;  // village.hpp
@@ -268,6 +366,22 @@ struct GameState {
   ge::ai::Why* why = nullptr;
 
   ge::skier::World world() const { return ge::skier::World{level.get(), &trees}; }
+  template <class Io>
+  friend void describe(Io& io, GameState& v) {
+    io(v.mode);
+    io(v.racers);
+    io(v.events);
+    io(v.wanted);
+    io(v.army);
+    io(v.gunfire);
+    io(v.sled);
+    io(v.heli);
+    io(v.para);
+    io(v.crowd);
+    io(v.injuries);
+    io(v.t);
+    io(v.steps);
+  }
 };
 
 }  // namespace fall_line::sim

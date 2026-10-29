@@ -9,8 +9,9 @@
 // The cost of the uncompressed path is measured too: a 1280x720 picture to I420 and into the
 // muxer, a frame, and the bytes a minute of it takes. Then the COMPRESSED export (AV1 and Opus,
 // capture/codecs.hpp): the same sync check through the decoders, with ffmpeg decoding the .webm,
-// and what the AV1 encoder costs at 720p and 1080p at three qualities. Those numbers are all
-// measured, so a build without the encoders (GE_ENCODERS=OFF) has the same digest.
+// the same again in the engine's fragmented MP4 (and that file cut short, read to its last
+// whole fragment), and what the AV1 encoder costs at 720p and 1080p at three qualities. Those
+// numbers are all measured, so a build without the encoders (GE_ENCODERS=OFF) has the same digest.
 //
 //   make lab LAB=capture ARGS="--seconds=30 --fps=24,25,30,60"
 //
@@ -37,6 +38,7 @@
 #include "capture/codecs.hpp"
 #include "capture/matroska.hpp"
 #include "capture/mkv_read.hpp"
+#include "capture/mp4_read.hpp"
 #include "capture/sync_fixture.hpp"
 #include "capture/yuv.hpp"
 #include "core/libm/libm.hpp"
@@ -112,9 +114,41 @@ int64_t probe_frames(const std::string& path) {
   return got ? std::atoll(line) : -1;
 }
 
-// The sync fixture exported at `fps`, uncompressed (`codec` "") or as AV1 and Opus ("av1"), and
-// read back: the raw file by its bytes, the compressed one through the decoders.
-Take take(double fps, int64_t steps, const fs::path& dir, bool ffmpeg, const std::string& codec) {
+// A file's blocks, whichever container: the track (1 the pictures, 2 the sound), the time and
+// the bytes; and the samples a player drops from the sound's start.
+struct Block {
+  uint64_t track = 0;
+  int64_t ms = 0;
+  size_t offset = 0, size = 0;
+};
+
+bool blocks_of(const std::vector<uint8_t>& bytes, bool mp4, std::vector<Block>& out, size_t& skip,
+               std::string& error) {
+  skip = 0;
+  if (mp4) {
+    const auto f = gc::read_mp4(bytes, error);
+    if (!f) return false;
+    for (const gc::Mp4Sample& s : f->samples) out.push_back({s.track, s.ms, s.offset, s.size});
+    // The pre-skip is the sound track's edit list.
+    if (f->tracks.size() == 2) skip = static_cast<size_t>(f->tracks[1].edit_start);
+    return true;
+  }
+  const auto f = gc::read_mkv(bytes, error);
+  if (!f) return false;
+  for (const gc::ReadBlock& b : f->blocks) out.push_back({b.track, b.ms, b.offset, b.size});
+  if (f->tracks.size() == 2) {
+    // The track's CodecDelay, as a player drops it.
+    skip = static_cast<size_t>(
+        std::llround(static_cast<double>(f->tracks[1].codec_delay_ns) * gc::kOpusRate / 1e9));
+  }
+  return true;
+}
+
+// The sync fixture exported at `fps`, uncompressed (`codec` "") or as AV1 and Opus ("av1") in a
+// .webm or (`mp4`) the engine's fragmented MP4, and read back: the raw file by its bytes, the
+// compressed one through the decoders.
+Take take(double fps, int64_t steps, const fs::path& dir, bool ffmpeg, const std::string& codec,
+          bool mp4 = false) {
   Take t;
   t.fps = fps;
   gp::RecordOptions o;
@@ -125,13 +159,17 @@ Take take(double fps, int64_t steps, const fs::path& dir, bool ffmpeg, const std
   o.encoding.format = "mkv";
   o.encoding.codec = codec;
   o.sound = &gc::kSyncSound;
-  o.video =
-      (dir / ("sync-" + num::to_string(fps) + "fps" + (codec.empty() ? ".mkv" : ".webm"))).string();
+  o.video = (dir / ("sync-" + num::to_string(fps) + "fps" +
+                    (codec.empty() ? ".mkv"
+                     : mp4         ? ".mp4"
+                                   : ".webm")))
+                .string();
   const auto rec = gp::record(gc::kSyncGame, gc::sync_log(steps, kPeriod, kFirst), o, t.error);
   if (!rec) return t;
   const std::vector<uint8_t> bytes = read_all(o.video);
-  const auto f = gc::read_mkv(bytes, t.error);
-  if (!f) return t;
+  std::vector<Block> blocks;
+  size_t skip = 0;
+  if (!blocks_of(bytes, mp4, blocks, skip, t.error)) return t;
   t.frames = rec->frames;
   t.samples = rec->samples;
   t.bytes = rec->bytes;
@@ -140,7 +178,7 @@ Take take(double fps, int64_t steps, const fs::path& dir, bool ffmpeg, const std
   gc::OpusDecoder ad;
   std::vector<float> stereo;
   if (coded && (!vd.open(t.error) || !ad.open(t.error))) return t;
-  for (const gc::ReadBlock& b : f->blocks) {
+  for (const Block& b : blocks) {
     const std::span<const uint8_t> data(bytes.data() + b.offset, b.size);
     if (coded && b.track == 1) {
       std::vector<uint8_t> yuv;
@@ -162,11 +200,8 @@ Take take(double fps, int64_t steps, const fs::path& dir, bool ffmpeg, const std
       }
     }
   }
-  if (coded && f->tracks.size() == 2) {
-    // The decoded sound with the encoder's delay (the track's CodecDelay) dropped, as a player
-    // drops it.
-    const auto skip = static_cast<size_t>(
-        std::llround(static_cast<double>(f->tracks[1].codec_delay_ns) * gc::kOpusRate / 1e9));
+  if (coded) {
+    // The decoded sound with the encoder's delay dropped, as a player drops it.
     for (size_t i = skip; 2 * i + 1 < stereo.size(); i++) t.left.push_back(stereo[2 * i]);
   }
   constexpr double kRate = ge::audio::kRate;
@@ -264,7 +299,7 @@ gl::Picture pattern(int w, int h, int k) {
     for (int x = 0; x < w; x++) {
       const int sx = x + 3 * k;
       auto n =
-          static_cast<uint32_t>((sx / 8) * 73856093) ^ static_cast<uint32_t>((y / 8) * 19349663);
+          (static_cast<uint32_t>(sx / 8) * 73856093u) ^ (static_cast<uint32_t>(y / 8) * 19349663u);
       n = (n ^ (n >> 13)) * 0x5bd1e995u;
       const auto g = static_cast<uint8_t>(40 + (n >> 24) % 120 + (x + y) % 60);
       const bool square = x > w / 4 + 4 * k % (w / 2) && x < w / 4 + 4 * k % (w / 2) + w / 8 &&
@@ -292,6 +327,152 @@ double luma_psnr(const std::vector<uint8_t>& a, const std::vector<uint8_t>& b, i
          ge::core::libm::log(10.0);
 }
 
+// The MP4 as laid out on disk: the header, every fragment (its first picture's time on it) and
+// the mfra across the file's bytes, the cut halfway through the last fragment as a red line, and
+// under it how far the engine's reader and ffmpeg each got through the cut file.
+gl::Picture file_map(const gc::Mp4File& whole, size_t size, size_t cut_at, int64_t read_pictures,
+                     int64_t ffmpeg_pictures, int64_t frames, double fps) {
+  constexpr int kW = 960, kLeft = 16, kBarW = kW - 2 * kLeft;
+  gl::Picture p = gl::create_picture(kW, 200, {250, 250, 252, 255});
+  const gl::Rgba ink{30, 34, 40, 255}, faint{120, 126, 136, 255}, red{205, 40, 40, 255};
+  gl::draw_text(p, kLeft, 8,
+                "THE MP4 ON DISK AT " + num::to_string(fps) + " FPS, " +
+                    num::to_fixed(static_cast<double>(size) / 1e3, 1) + " KB, CUT SHORT",
+                ink);
+  const auto x_of = [&](size_t at) {
+    return kLeft + static_cast<double>(at) * kBarW / static_cast<double>(size);
+  };
+  const double y = 32, h = 44;
+  const size_t first = whole.fragments.empty() ? size : static_cast<size_t>(whole.fragments[0]);
+  gl::fill_rect(p, x_of(0), y, std::max(2.0, x_of(first) - x_of(0)), h, {70, 110, 190, 255});
+  // The last fragment's mdat ends where its last sample's bytes end; the mfra follows.
+  size_t mfra = 0;
+  for (const gc::Mp4Sample& s : whole.samples) mfra = std::max(mfra, s.offset + s.size);
+  for (size_t i = 0; i < whole.fragments.size(); i++) {
+    const size_t a = static_cast<size_t>(whole.fragments[i]);
+    const size_t b =
+        i + 1 < whole.fragments.size() ? static_cast<size_t>(whole.fragments[i + 1]) : mfra;
+    const gl::Rgba shade = i % 2 ? gl::Rgba{176, 182, 192, 255} : gl::Rgba{206, 210, 218, 255};
+    gl::fill_rect(p, x_of(a), y, x_of(b) - x_of(a), h, shade);
+    gl::draw_line(p, x_of(a), y, x_of(a), y + h, faint);
+    if (i < whole.seeks.size() && x_of(b) - x_of(a) > 30) {
+      gl::draw_text(p, x_of(a) + 3, y + h / 2 - 4,
+                    num::to_fixed(static_cast<double>(whole.seeks[i].t) / 1000.0, 0) + "s", ink);
+    }
+  }
+  gl::fill_rect(p, x_of(mfra), y, std::max(2.0, x_of(size) - x_of(mfra)), h, {150, 90, 170, 255});
+  gl::draw_text(p, kLeft, y + h + 6,
+                "ftyp + moov (blue), a fragment a box (moof + mdat, its first "
+                "picture's time), mfra (purple)",
+                faint);
+  gl::draw_line(p, x_of(cut_at), y - 4, x_of(cut_at), y + h + 4, red);
+  gl::draw_text(p, x_of(cut_at) + 4, y - 2, "cut", red);
+  const auto bar = [&](double yy, int64_t pictures, const std::string& who, gl::Rgba c) {
+    const double share =
+        frames > 0 ? static_cast<double>(pictures) / static_cast<double>(frames) : 0;
+    gl::fill_rect(p, kLeft, yy, std::max(0.0, share) * kBarW, 18, c);
+    gl::draw_text(p, kLeft + 4, yy + 5,
+                  who + ": " + (pictures < 0 ? std::string("-") : std::to_string(pictures)) +
+                      " of " + std::to_string(frames) + " pictures",
+                  ink);
+  };
+  bar(130, read_pictures, "THE ENGINE'S READER, WHOLE FRAGMENTS ONLY", {120, 196, 140, 255});
+  bar(156, ffmpeg_pictures, "FFMPEG, ALSO WHAT IT CAN OF THE CUT ONE", {236, 196, 110, 255});
+  return p;
+}
+
+// The compressed export again in the engine's fragmented MP4 (capture/mp4.hpp): the same sync
+// check, and the file cut halfway through its last fragment (as a crash would leave it) read to its
+// last whole fragment by the engine's reader and, when it is installed, played by ffmpeg to at
+// least as far. Measured, like the rest of the compressed export.
+void in_mp4(gl::Lab& lab, const std::vector<double>& rates, int64_t steps, const fs::path& dir,
+            bool ffmpeg) {
+  gl::LabTable table{
+      "AV1 and Opus in the engine's fragmented MP4: every frame rate's pictures, KB, worst lag, "
+      "sound off its step, ffmpeg's decode, and the file cut short: the pictures in its whole "
+      "fragments, and ffmpeg's count (at least as many: it also plays what it can of the cut one)",
+      {"fps", "frames", "KB", "fragments", "worst-lag-ms", "sound-off-ms", "ffmpeg", "cut: read",
+       "cut: ffmpeg"},
+      {}};
+  int64_t bad = 0;
+  bool shown = false;
+  for (const double fps : rates) {
+    Take t = take(fps, steps, dir, ffmpeg, "av1", true);
+    if (!t.error.empty()) {
+      lab.fail("the MP4 export at " + num::to_string(fps) + " fps failed: " + t.error,
+               "Run tests/capture_mp4_test.cpp (skill: replay).");
+      continue;
+    }
+    double worst = 0, off = 0;
+    for (const Click& c : t.clicks) {
+      off = std::max(off, std::fabs(c.sound_ms - c.due_ms));
+      worst = std::max(worst, c.lit_ms < 0 ? 1e9 : c.lit_ms - c.due_ms);
+    }
+    if (worst >= 1000.0 / fps + 3 || off > 3 || t.clicks.empty()) bad++;
+    if (ffmpeg && (!t.ffmpeg_decodes || t.ffmpeg_frames != t.frames)) bad++;
+    // Cut halfway through its last fragment, as a crash while writing it would leave it.
+    const std::string path = (dir / ("sync-" + num::to_string(fps) + "fps.mp4")).string();
+    const std::vector<uint8_t> bytes = read_all(path);
+    std::string error;
+    const auto whole = gc::read_mp4(bytes, error);
+    size_t cut_at = bytes.size() / 2;
+    if (whole && !whole->fragments.empty()) {
+      const auto last = static_cast<size_t>(whole->fragments.back());
+      size_t end = last;
+      for (const gc::Mp4Sample& s : whole->samples) end = std::max(end, s.offset + s.size);
+      cut_at = last + (end - last) / 2;
+    }
+    const std::string cut_path = (dir / ("cut-" + num::to_string(fps) + "fps.mp4")).string();
+    {
+      std::ofstream out(cut_path, std::ios::binary);
+      out.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(cut_at));
+    }
+    const auto cut = gc::read_mp4(std::span(bytes.data(), cut_at), error);
+    int64_t cut_pictures = -1;
+    if (cut) {
+      cut_pictures = 0;
+      for (const gc::Mp4Sample& s : cut->samples) cut_pictures += s.track == 1 ? 1 : 0;
+    }
+    const int64_t cut_ffmpeg = ffmpeg ? probe_frames(cut_path) : -1;
+    if (!cut || cut_pictures <= 0 || (ffmpeg && cut_ffmpeg < cut_pictures)) bad++;
+    table.rows.push_back(
+        {num::to_string(fps), std::to_string(t.frames),
+         num::to_fixed(static_cast<double>(t.bytes) / 1e3, 1),
+         whole ? std::to_string(whole->fragments.size()) : "-", num::to_fixed(worst, 2),
+         num::to_fixed(off, 2),
+         !ffmpeg                                           ? "-"
+         : t.ffmpeg_decodes && t.ffmpeg_frames == t.frames ? "every picture"
+                                                           : "NO",
+         cut ? std::to_string(cut_pictures) + " of " + std::to_string(t.frames) : "NO",
+         ffmpeg ? std::to_string(cut_ffmpeg) : "-"});
+    if (whole && !shown) {
+      lab.shot({"mp4-cut",
+                "THE MP4 CUT SHORT, AS A CRASH WOULD LEAVE IT",
+                "The sync fixture's MP4 at the first frame rate across its bytes: the header, "
+                "each fragment, the index at the end. Cut halfway through the last fragment, the "
+                "engine's reader keeps "
+                "every whole fragment; ffmpeg plays those and what it can of the one cut.",
+                "The green bar reaching the last whole fragment before the red line, and the "
+                "yellow one at least as far.",
+                {}},
+               file_map(*whole, bytes.size(), cut_at, cut_pictures, cut_ffmpeg, t.frames, fps),
+               gl::Det::measured);
+      shown = true;
+    }
+    lab.metric("mp4.fps" + num::to_string(fps) + ".worst-lag-ms", worst, "ms", gl::Det::measured);
+    lab.metric("mp4.fps" + num::to_string(fps) + ".cut-pictures", static_cast<double>(cut_pictures),
+               "count", gl::Det::measured);
+  }
+  lab.table(std::move(table), gl::Det::measured);
+  if (bad) {
+    lab.fail(std::to_string(bad) +
+                 " MP4 exports out of sync, not decoded whole by ffmpeg, or not read to their "
+                 "last whole fragment once cut short",
+             "Read capture/mp4.cpp's fragments and its edit list; run tests/capture_mp4_test.cpp "
+             "(skill: replay).");
+  }
+}
+
 // The compressed export (AV1 and Opus, a .webm): the same sync check through the decoders, and
 // what the AV1 encoder costs at 720p and 1080p at three qualities. Everything here is measured
 // (an encoder's bytes and timing vary with the machine and its threads), so the digest is the same
@@ -312,6 +493,8 @@ void coded(gl::Lab& lab, const std::vector<double>& rates, int64_t steps, const 
     gl::Picture blank = gl::create_picture(480, 60, {250, 250, 252, 255});
     gl::draw_text(blank, 8, 24, "NO ENCODERS IN THIS BUILD", {30, 34, 40, 255});
     lab.shot({shot_id, title, about, look, {}}, blank, gl::Det::measured);
+    lab.shot({"mp4-cut", "THE MP4 CUT SHORT, AS A CRASH WOULD LEAVE IT", about, look, {}}, blank,
+             gl::Det::measured);  // the same shots with the encoders or without, one digest
     return;
   }
   std::vector<Take> takes;
@@ -357,6 +540,7 @@ void coded(gl::Lab& lab, const std::vector<double>& rates, int64_t steps, const 
              "tests/capture_codecs_test.cpp (skill: replay).");
   }
   lab.shot({shot_id, title, about, look, {}}, strips(takes, title), gl::Det::measured);
+  in_mp4(lab, rates, steps, dir, ffmpeg);
 
   // What the encoder costs: `cost_frames` pictures of the pattern at each size and quality.
   gl::LabTable cost{

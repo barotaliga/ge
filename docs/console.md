@@ -215,6 +215,7 @@ Its cvars:
 | `con_bgbottom` | 10141c | the panel's colour at its bottom (the same as the top: a flat fill) |
 | `con_bgalpha` | 0.85 | how much of the game the panel hides, 0 to 1 |
 | `con_bgimage` | (none) | a picture drawn over the gradient, a path in the game's files |
+| `con_font` | mono | the charset the console writes in (`docs/charsets.md`: `terminal`, `mono`, ...); empty for the UI font, and a name no charset has draws in the UI font too |
 
 The view (`engine/console/view.hpp`) is a model that holds no pixels. `ui::draw_console`
 (`engine/ui/console.hpp`) turns it into the 2D layer's draw list, which the game draws over its

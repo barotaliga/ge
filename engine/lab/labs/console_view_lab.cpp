@@ -1,21 +1,24 @@
 // LAB `console`: the drop-down console (engine/console/view.hpp) LOOKED AT, drawn on the CPU from
 // the same model the game's 2D layer will draw: a scripted session (a server's messages, chat to
 // all, the team and one player, a game event, commands typed and their output, a half-typed
-// line) drawn by the 2D layer (ui/console.hpp) and pictured down, half-way through its slide and
-// closed with the notify lines over the game, then autocomplete: the list under the input line, a
-// row selected, and Enter on a cvar waiting for its value. Each kind of line has its colour. The
-// metrics count the lines by kind and the slide's frames.
+// line) drawn by the 2D layer (ui/console.hpp) and pictured down, down in each charset `con_font`
+// names, half-way through its slide and closed with the notify lines over the game, then
+// autocomplete: the list under the input line, a row selected, and Enter on a cvar waiting for
+// its value. Each kind of line has its colour. The metrics count the lines by kind and the
+// slide's frames.
 //
 // ge:summary Lab: the drop-down console pictured down, sliding and closed, lines coloured by kind
 // ge:keywords lab console view drop-down picture scrollback chat notify slide tilde
-// ge:keywords autocomplete suggestion hint
+// ge:keywords autocomplete suggestion hint con_font charset font
 // ge:skill console labs
 // ge:test tests/console_view_test.cpp
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <string>
 #include <vector>
 
+#include "charset/charset.hpp"
 #include "console/view.hpp"
 #include "lab/lab.hpp"
 #include "ui/console.hpp"
@@ -59,6 +62,11 @@ void draw(Picture& p, const con::ConsoleView& v) {
   ge::ui::draw_console(dl, v);
   ge::ui::render(dl, img);
   p.rgba = std::move(img.rgba);
+}
+
+std::string upper(std::string s) {
+  for (char& ch : s) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+  return s;
 }
 
 // The scripted session: what a multiplayer evening's console holds.
@@ -143,6 +151,21 @@ void run(ge::lab::Lab& lab) {
             "commands white after ], output grey; the newest line just over the input line",
             inputs},
            down);
+
+  // The same console in every charset con_font names.
+  for (const ge::charset::FontInfo& f : ge::charset::fonts()) {
+    c.execute(std::string("con_font ") + f.name);
+    Picture shot = backdrop(w, h);
+    draw(shot, v);
+    lab.shot({std::string("font-") + f.name,
+              "CON_FONT " + upper(f.name),
+              std::string("The console down in the ") + f.name + " charset: " + f.look + ".",
+              f.pixel ? "a pixel font: every glyph whole blocks of its 8x16 grid, nothing blurred"
+                      : "every glyph the same width, the input line's hint lined up under it",
+              {{"con_font", f.name}}},
+             shot);
+  }
+  c.execute("con_font mono");
 
   // Half-way through closing.
   v.toggle();

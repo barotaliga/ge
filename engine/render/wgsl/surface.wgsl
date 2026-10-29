@@ -99,13 +99,15 @@ fn env_brdf(f0: vec3f, rough: f32, nv: f32) -> vec3f {
 }
 
 // THE SUN AND THE SKY on a surface: `sun` is the key light's irradiance perpendicular to it at
-// this point (its colour here, past every shadow; before the cosine). A matte surface keeps the
-// plain Lambert sum.
-fn surface_lit(s: Surface, n: vec3f, v: vec3f, sun: vec3f) -> vec3f {
+// this point (its colour here, past every shadow; before the cosine); `seen` the share of the sky
+// the point sees (the ambient occlusion's `sky_seen`, 1 for open sky), which dims the sky's light
+// and its reflection alike. A matte surface keeps the plain Lambert sum.
+fn surface_lit(s: Surface, n: vec3f, v: vec3f, sun: vec3f, seen: f32) -> vec3f {
   let l = frame.sun.xyz;
   let f0 = surface_f0(s);
   if (max(f0.r, max(f0.g, f0.b)) <= 0.0) {
-    return s.albedo / PI * (1.0 - s.metal) * (sun * max(dot(n, l), 0.0) + sky_irradiance(n));
+    return s.albedo / PI * (1.0 - s.metal) *
+           (sun * max(dot(n, l), 0.0) + sky_irradiance(n) * seen);
   }
   let nv = max(dot(n, v), 1e-4);
   let env = env_brdf(f0, s.rough, nv);
@@ -113,9 +115,9 @@ fn surface_lit(s: Surface, n: vec3f, v: vec3f, sun: vec3f) -> vec3f {
   let up = normalize(vec3f(r.x, max(r.y, 0.02), r.z));
   // A rough lobe sees the sky's light spread over its half of the dome, a smooth one its ray.
   let blur = smoothstep(0.2, 0.75, s.rough);
-  let sky_r = mix(sky_luminance(up), sky_irradiance(up) / PI, blur);
+  let sky_r = mix(sky_luminance(up), sky_irradiance(up) / PI, blur) * seen;
   let diffuse = s.albedo / PI * (1.0 - s.metal) *
                 (sun * max(dot(n, l), 0.0) * surface_diffuse_weight(s, v, l) +
-                 sky_irradiance(n) * (1.0 - env));
+                 sky_irradiance(n) * seen * (1.0 - env));
   return diffuse + sun * surface_specular(s, n, v, l) + sky_r * env;
 }

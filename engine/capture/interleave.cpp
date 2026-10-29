@@ -10,7 +10,7 @@
 
 namespace ge::capture {
 
-bool Interleave::write(MatroskaWriter& mux, int64_t next_video, int64_t next_audio, bool all,
+bool Interleave::write(Mux& mux, int64_t next_video, int64_t next_audio, bool all,
                        std::string& error) {
   // The encoder's packets come out in time order: every picture fed up to the newest is out.
   if (v_ < video.size()) {

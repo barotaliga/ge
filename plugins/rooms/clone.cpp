@@ -566,7 +566,8 @@ bool clone_map(const brush::Map& map, const TextureMap& textures, const CloneOpt
   rep.brushes = level.brushes.size();
   rep.faces = level.faces.size();
 
-  // The entities: their keys, `model` as the group, `origin` and `angle` in the engine's terms.
+  // The entities: their keys, `model` as the group, `origin`, `angle` and a mover's `speed`,
+  // `lip` and `height` in the engine's terms.
   for (const br::Entity& e : map.entities) {
     Entity out_e;
     out_e.classname = storable_value(e.get("classname"));
@@ -606,6 +607,11 @@ bool clone_map(const brush::Map& map, const TextureMap& textures, const CloneOpt
           h -= 360 * std::floor(h / 360);
           out_e.keys.emplace_back("heading", num(h));
         }
+        continue;
+      }
+      // A mover's lengths and speeds (movers.hpp reads them in metres and metres a second).
+      if (out_e.classname.rfind("func_", 0) == 0 && (k == "speed" || k == "lip" || k == "height")) {
+        out_e.keys.emplace_back(key, num(std::strtod(v.c_str(), nullptr) * br::kUnitM));
         continue;
       }
       if (out_e.keys.size() < 255) out_e.keys.emplace_back(key, storable_value(v));

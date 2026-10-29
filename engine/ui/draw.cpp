@@ -172,4 +172,27 @@ void DrawList::pop_clip() {
   if (!clips_.empty()) clips_.pop_back();
 }
 
+void DrawList::fade(size_t from, float alpha) {
+  for (size_t i = from; i < cmds_.size(); ++i) {
+    Cmd& c = cmds_[i];
+    switch (c.kind) {
+      case CmdKind::box:
+        c.box.opacity *= alpha;
+        break;
+      case CmdKind::text:
+        c.text.color.a *= alpha;
+        break;
+      case CmdKind::segment:
+        c.segment.opacity *= alpha;
+        break;
+      case CmdKind::arc:
+        c.arc.opacity *= alpha;
+        break;
+      case CmdKind::polygon:
+        c.polygon.opacity *= alpha;
+        break;
+    }
+  }
+}
+
 }  // namespace ge::ui

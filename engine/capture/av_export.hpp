@@ -33,7 +33,7 @@
 #include "audio/synth.hpp"
 #include "capture/codecs.hpp"
 #include "capture/interleave.hpp"
-#include "capture/matroska.hpp"
+#include "capture/mux.hpp"
 #include "lab/raster.hpp"
 #include "play/game.hpp"
 
@@ -48,6 +48,7 @@ struct AvExportOptions {
   const play::SoundSpec* sound = nullptr;  // null: no audio track
   uint32_t seed = 1;                       // the synth's noise
   std::string codec;                       // "" uncompressed, "av1" AV1 and Opus
+  std::string container;                   // "mp4" or "mkv"; "" by the file's name (mux.hpp)
   int crf = 32;                            // av1: 0..63, lower is better and larger
   int speed = 9;                           // av1: libaom's realtime speed, 7..11
   int threads = 4;                         // av1: the encoder's threads
@@ -86,7 +87,7 @@ class AvExport {
   bool interleave(bool all, std::string& error);
 
   AvExportOptions opt_;
-  MatroskaWriter mux_;
+  Mux mux_;
   std::string doc_type_;
   std::unique_ptr<audio::Synth> synth_;
   std::unique_ptr<play::Sound> sound_;

@@ -15,6 +15,7 @@
 #include "fall_line/app/scene.hpp"
 #include "fall_line/app/sky_type.hpp"
 #include "mountain/air/air.hpp"
+#include "mountain/app/building_look.hpp"
 #include "mountain/app/cloud_field.hpp"
 #include "mountain/app/village_look.hpp"
 #include "mountain/app/weather_look.hpp"
@@ -50,13 +51,14 @@ constexpr r::PassRow kPassTable[] = {
     {"hiz", "depth", "hiz"},
     {"instances.cull.late", "instances hiz", "instances.late"},
     {"instances.depth.late", "instances figures.posed instances.late", "depth"},
+    {"ao", "depth", "ao"},
     {"terrain",
      "terrain.tiles terrain.indirect terrain.height terrain.horizon shadows.maps sky.aerial "
-     "sky.light snow.ground trails.fine trails.coarse depth fog.volume",
+     "sky.light snow.ground trails.fine trails.coarse depth fog.volume ao",
      "hdr motion"},
     {"instances",
      "instances figures.posed instances.early instances.late terrain.horizon shadows.maps "
-     "sky.aerial sky.light depth fog.volume",
+     "sky.aerial sky.light depth fog.volume ao",
      "hdr motion"},
     {"sky", "sky.view sky.moon_view depth fog.volume", "hdr motion"},
     {"clouds.fresh", "depth sky.aerial sky.light", "clouds.fresh"},
@@ -71,7 +73,9 @@ constexpr r::PassRow kPassTable[] = {
     {"taa", "hdr motion depth taa.history sky.light", "taa.history"},
     {"bloom", "taa.history", "bloom"},
     {"lens", "taa.history depth sky.light", "lens"},
-    {"post", "taa.history bloom lens sky.light", "final"},
+    {"dof", "taa.history depth", "dof"},
+    {"motion_blur.tiles", "motion", "motion_blur.near"},
+    {"post", "taa.history bloom lens dof motion depth motion_blur.near sky.light", "final"},
     {"ui", "final", "final"},
 };
 // What is made at load rather than by a pass (the instances' meshes and streams: the figures'
@@ -92,6 +96,14 @@ void make_targets(ge::gpu::Device& device, GameFrame& f, uint32_t w, uint32_t h)
   f.targets = r::create_targets(device, "frame", r::taa_render_size(w, scale),
                                 r::taa_render_size(h, scale));
   r::create_hiz_targets(device, f.hiz, f.targets);
+  // The ambient occlusion's target, bound in the frame group (the blank with it off).
+  const bool ao = r::ao_on(f.options.ao);
+  if (ao) {
+    r::create_ao_targets(device, f.ao, f.targets.width, f.targets.height, f.uniforms,
+                         f.targets.depth_view);
+  }
+  f.frame_group = r::frame_group(device, f.frame_layout, f.uniforms, f.sky, nullptr,
+                                 f.fog.volume_view, ao ? f.ao.view : nullptr);
   for (r::InstanceFamily* family : f.families)
     r::bind_family_hiz(device, f.instancing, *family, f.hiz);
   r::bind_particle_targets(device, f.particles, f.targets);
@@ -110,9 +122,20 @@ void make_targets(ge::gpu::Device& device, GameFrame& f, uint32_t w, uint32_t h)
   if (glow) r::create_bloom_targets(device, f.bloom, w, h, inputs);
   const bool lens = r::lens_on(f.options.lens);
   if (lens) r::create_lens_targets(device, f.lens, w, h, inputs, f.targets.depth_view);
+  r::PostReads reads;
+  if (f.options.look.motion_blur > 0) {
+    r::create_motion_blur_targets(device, f.blur, f.targets.width, f.targets.height,
+                                  f.targets.motion_view);
+    reads = {f.targets.motion_view, f.targets.depth_view, f.blur.near_view, nullptr};
+  }
+  if (r::dof_on(f.options.dof)) {
+    r::create_dof_targets(device, f.dof, w, h, inputs, f.targets.depth_view);
+    reads.depth = f.targets.depth_view;
+    reads.dof = f.dof.view;
+  }
   for (int k = 0; k < 2; ++k) {
     f.post_groups[k] = r::post_group(device, f.post, inputs[k], glow ? f.bloom.view : nullptr,
-                                     lens ? f.lens.view : nullptr);
+                                     lens ? f.lens.view : nullptr, reads);
   }
   f.history.valid = false;
 }
@@ -164,8 +187,11 @@ FrameOptions frame_options(const cfg::Settings& s) {
             .chromatic = s.chromatic,
             .vignette = s.vignette,
             .grain = s.grain,
-            .dirt = s.lensdirt};
+            .dirt = s.lensdirt,
+            .motion_blur = s.motionblur};
   o.lens = {.rays = s.sunrays, .flare = s.flare};
+  o.ao = {.strength = s.ao, .radius_m = s.ao_radius};
+  o.dof = {.strength = s.dof, .focus_m = s.dof_focus};
   o.grade = {.contrast = s.contrast,
              .saturation = s.saturation,
              .temperature = s.temperature,
@@ -264,10 +290,19 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
   if (r::lens_on(options.lens)) {
     r::create_lens_pipelines(device, f->pipelines, f->lens, f->frame_layout, options.lens);
   }
+  if (options.look.motion_blur > 0) r::create_motion_blur_pipelines(device, f->pipelines, f->blur);
+  if (r::dof_on(options.dof)) {
+    r::create_dof_pipelines(device, f->pipelines, f->dof, f->frame_layout);
+  }
+  if (r::ao_on(options.ao)) {
+    r::create_ao_pipelines(device, f->pipelines, f->ao);
+    r::set_ao(device, f->ao, options.ao);
+  }
   r::PostSettings post;
   post.bloom = options.bloom;
   post.look = options.look;
   post.lens = r::lens_on(options.lens);
+  post.dof = r::dof_on(options.dof);
   r::create_post(device, f->pipelines, f->post, f->frame_layout, output, post);
   std::vector<float> grade = bake_grade();
   r::apply_grade_knobs(grade, options.grade);
@@ -340,8 +375,9 @@ void show_village(ge::gpu::Device& device, GameFrame& f,
   r::set_instance_count(f.forest, static_cast<uint32_t>(trees.size()));
   // The cascades drew the trees that stood: drawn again, without the felled ones' shadows.
   r::reset_sun_shadows(f.shadows);
-  // Three families: the streets (one instance, casting nothing: a sheet on the snow), the parked
-  // cars (still: cast into the cascades) and the traffic (moving: cast into the atlas's tiles).
+  // Four families: the streets (one instance, casting nothing: a sheet on the snow), the buildings
+  // and the parked cars (still: cast into the cascades) and the traffic (moving: cast into the
+  // atlas's tiles).
   r::MeshSource sheet;
   sheet.lods.push_back({ma::street_mesh(*f.level, village.ground), 0.0f});
   if (sheet.lods.front().mesh.vertex_count() > 0) {
@@ -353,6 +389,19 @@ void show_village(ge::gpu::Device& device, GameFrame& f,
     at.position[2] = village.ground.z0;
     r::set_instances(device, f.streets, 0, std::span<const r::Instance>(&at, 1));
     f.families.push_back(&f.streets);
+  }
+  if (!village.buildings.empty()) {
+    // Each building and its plinth: still, casting into the cascades.
+    std::vector<r::Instance> stood;
+    stood.reserve(village.buildings.size() * 2);
+    for (const vg::Building& b : village.buildings) ma::building_instances(b, stood);
+    r::create_family(device, f.instancing, f.buildings, "village.buildings", ma::building_meshes(),
+                     ma::building_materials(), static_cast<uint32_t>(stood.size()));
+    r::create_family_casters(device, f.instancing, f.buildings, r::kCascades);
+    r::bind_family_hiz(device, f.instancing, f.buildings, f.hiz);
+    r::set_instances(device, f.buildings, 0, stood);
+    f.families.push_back(&f.buildings);
+    f.still.push_back(&f.buildings);
   }
   if (!village.traffic) return;
   const vg::TrafficPlan& plan = *village.traffic;
@@ -656,6 +705,20 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
     GE_ZONE("frame.shadows");
     r::prepare_sun_shadows(device, f.shadows, view, f.figure_centres, f.still, f.moving);
   }
+  // Depth of field's focus: the one asked for, or how far the camera's subject is.
+  if (r::dof_on(f.options.dof)) {
+    r::DofSettings lens = f.options.dof;
+    if (lens.focus_m <= 0) {
+      lens.focus_m = 20;
+      if (scene.subject) {
+        const auto& s = *scene.subject;
+        const double dx = s[0] - view.eye[0], dy = s[1] - view.eye[1], dz = s[2] - view.eye[2];
+        lens.focus_m = std::sqrt(dx * dx + dy * dy + dz * dz);
+      }
+    }
+    r::set_dof(device, f.dof, lens);
+    r::set_post_focus(device, f.post, lens);
+  }
   // Encode, in the pass table's order (the recorder times each pass's encoding).
   GE_ZONE("frame.encode");
   wgpu::CommandEncoder encoder = device.device.CreateCommandEncoder();
@@ -688,6 +751,11 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
                            true);
   r::encode_instances_depth(families, f.instancing, f.pipelines, f.recorder, encoder, f.targets,
                             f.frame_group, f.instance_light, true);
+  if (r::ao_on(f.options.ao)) {
+    r::encode_ao(f.ao, f.pipelines, f.recorder, encoder);
+  } else {
+    f.recorder.compute(encoder, "ao").End();
+  }
   r::encode_terrain(f.terrain, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
   r::encode_instances(families, f.instancing, f.pipelines, f.recorder, encoder, f.targets,
                       f.frame_group, f.instance_light);
@@ -712,6 +780,16 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
     r::encode_lens(f.lens, f.pipelines, f.recorder, encoder, f.frame_group, input);
   } else {
     f.recorder.compute(encoder, "lens").End();
+  }
+  if (r::dof_on(f.options.dof)) {
+    r::encode_dof(f.dof, f.pipelines, f.recorder, encoder, f.frame_group, input);
+  } else {
+    f.recorder.compute(encoder, "dof").End();
+  }
+  if (f.options.look.motion_blur > 0) {
+    r::encode_motion_blur(f.blur, f.pipelines, f.recorder, encoder);
+  } else {
+    f.recorder.compute(encoder, "motion_blur.tiles").End();
   }
   r::encode_post(f.post, f.pipelines, f.recorder, encoder, f.frame_group, f.post_groups[input],
                  output);

@@ -14,6 +14,7 @@
 
 #include "core/num_text.hpp"
 #include "net/node.hpp"
+#include "net/traffic_attack.hpp"
 
 namespace ge::net {
 
@@ -186,7 +187,20 @@ TrafficReport run_traffic(const TrafficPlan& plan) {
   hc.accept = true;
   hc.channels = channels;
   hc.seed = plan.seed * 2654435761ull + 1;
+  // SECURITY: the plan's matchmaker gives every client a token for host 1; the host holds the
+  // key it derives and the guards.
+  const Key master = traffic_master(plan.seed);
+  core::Rng token_rng = core::make_rng(plan.seed ^ 0x746f6b6eu);
+  const int64_t token_life_us =
+      static_cast<int64_t>(std::floor((plan.seconds + plan.drain_seconds) * 1e6)) + 60000000;
+  if (plan.secure) {
+    hc.security.on = true;
+    hc.security.host_id = 1;
+    hc.security.key = host_key(master, 1);
+  }
+  hc.guards = plan.guards;
   node_init(host->node, hc, host->transport);
+  std::vector<ConnectToken> tokens;
   for (int i = 0; i < n; i++) {
     clients.push_back(std::make_unique<Side>());
     Side& c = *clients.back();
@@ -194,6 +208,9 @@ TrafficReport run_traffic(const TrafficPlan& plan) {
     NodeConfig cc = hc;
     cc.max_peers = 1;
     cc.accept = false;
+    cc.security = NodeSecurity{};
+    cc.guards = NodeGuards{};
+    if (plan.secure) tokens.emplace_back();
     cc.seed = hc.seed + static_cast<uint64_t>(i + 1) * 0x9e3779b97f4a7c15ull;
     node_init(c.node, cc, c.transport);
     c.tries_left = plan.reconnect_tries;
@@ -223,11 +240,37 @@ TrafficReport run_traffic(const TrafficPlan& plan) {
   uint8_t msg[kMaxMessage];
   std::vector<uint8_t> big(bulk_bytes);
 
+  Attackers attackers;
+  const bool attacked = plan.secure && any_attack(plan.attack);
+  if (attacked) {
+    attackers_init(attackers, plan, net, sim_address(0, 1), static_cast<uint32_t>(n + 1));
+    if (n > 0 && (plan.attack.replays_per_s > 0 || plan.attack.forgeries_per_s > 0))
+      clients[0]->transport.capture = &attackers.seen;
+  }
+  // A client connects with a token the matchmaker makes it then, each try a new one.
+  const auto connect_client = [&](int i, int64_t at_us) {
+    Side& c = *clients[static_cast<size_t>(i)];
+    if (!plan.secure) {
+      node_connect(c.node, sim_address(0, 1), at_us);
+      return;
+    }
+    ConnectToken& t = tokens[static_cast<size_t>(i)];
+    t = traffic_token(master, static_cast<uint64_t>(i) + 1, at_us + token_life_us, token_rng);
+    node_connect_secure(c.node, sim_address(0, 1), t, at_us);
+  };
+  // A flooder is the host's peer too, but no honest client: what the host measured of the honest
+  // links leaves it out.
+  const auto honest = [&](const Peer& p) {
+    for (const auto& f : attackers.flooders) {
+      if (f->transport.local == p.address) return false;
+    }
+    return true;
+  };
   const auto host_means = [&](double& rtt, double& var, double& jit, double& loss) {
     rtt = var = jit = loss = 0;
     int k = 0;
     for (const Peer& p : host->node.peers) {
-      if (p.state != PeerState::connected || p.conn.stats.rtt_samples == 0) continue;
+      if (p.state != PeerState::connected || p.conn.stats.rtt_samples == 0 || !honest(p)) continue;
       rtt += p.conn.stats.rtt_ms;
       var += p.conn.stats.rtt_var_ms;
       jit += p.conn.stats.jitter_ms;
@@ -293,7 +336,8 @@ TrafficReport run_traffic(const TrafficPlan& plan) {
 
     sim_advance(net, now);
     if (plan.hook) plan.hook(plan.hook_ctx, net, now, tick);
-    if (tick < n) node_connect(clients[static_cast<size_t>(tick)]->node, sim_address(0, 1), now);
+    if (attacked) attackers_tick(attackers, net, now, tokens, rep.attack);
+    if (tick < n) connect_client(static_cast<int>(tick), now);
     for (int i = 0; i < n; i++) {
       Side& c = *clients[static_cast<size_t>(i)];
       if (!c.gone || c.retry_at_us < 0 || now < c.retry_at_us) continue;
@@ -301,7 +345,7 @@ TrafficReport run_traffic(const TrafficPlan& plan) {
       c.tries_left--;
       c.gone = false;
       c.connected_us = -1;
-      node_connect(c.node, sim_address(0, 1), side_now(c, now));
+      connect_client(i, side_now(c, now));
     }
 
     // The host's events.
@@ -480,6 +524,7 @@ TrafficReport run_traffic(const TrafficPlan& plan) {
       node_flush(c->node, side_now(*c, now));
       c->offset_us += (c->rate - 1) * tick_us;
     }
+    if (attacked) attackers_flush(attackers, now);
 
     if (now >= next_sample) {
       double rtt = 0, var = 0, jit = 0, loss = 0;
@@ -502,6 +547,7 @@ TrafficReport run_traffic(const TrafficPlan& plan) {
       host_means(rep.rtt_ms, rep.rtt_var_ms, rep.jitter_ms, rep.loss);
       uint64_t sent = 0, recv = 0, lost = 0, acked = 0;
       for (const Peer& p : host->node.peers) {
+        if (!honest(p)) continue;
         sent += p.conn.stats.bytes_sent;
         recv += p.conn.stats.bytes_received;
         lost += p.conn.stats.packets_lost;
@@ -543,6 +589,7 @@ TrafficReport run_traffic(const TrafficPlan& plan) {
     for (const auto& c : clients) {
       behind |= c->transport.local == p.address && peer_connected(c->node, 0);
     }
+    for (const auto& f : attackers.flooders) behind |= f->transport.local == p.address;
     rep.host_zombies += !behind;
   }
   bool any_peer = false;
@@ -556,12 +603,22 @@ TrafficReport run_traffic(const TrafficPlan& plan) {
   rep.host_bad_keys = host->node.stats.bad_keys;
   rep.host_bad_cookies = host->node.stats.bad_cookies;
   rep.host_foreign = host->node.stats.foreign;
+  rep.host_stats = host->node.stats;
+  for (const auto& f : attackers.flooders)
+    rep.attack.flooders_connected += peer_connected(f->node, 0);
+  if (plan.secure) {
+    const NodeStats& st = rep.host_stats;
+    for (const uint64_t v : {st.bad_tokens, st.expired_tokens, st.replayed_tokens, st.forged,
+                             st.replayed, st.throttled, st.flooded, rep.attack.answered})
+      fnv.value(v);
+  }
   rep.wire = net.stats;
   fnv.value(rep.wire.sent);
   fnv.value(rep.wire.delivered);
   fnv.value(rep.resends);
   rep.digest = fnv.h;
   host->transport.capture = nullptr;
+  if (n > 0) clients[0]->transport.capture = nullptr;
   return rep;
 }
 

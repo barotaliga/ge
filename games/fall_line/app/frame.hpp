@@ -36,8 +36,8 @@
 //   precip               -> hdr motion (the snow and rain round the eye, the rain's splashes)
 //   taa                  -> taa.history (at the output's size; with FrameOptions::taa)
 //   bloom                -> bloom (the glow's mip chain, from what post reads)
-//   lens                 -> lens (the sun's rays and flare, at a quarter of the pixels)
-//   post                 -> final (bloom, lens, the film's effects, the grade's table)
+//   lens, motion_blur.tiles -> lens (the sun's rays and flare), the motion's fastest a tile
+//   post                 -> final (bloom, lens, motion blur, the film, the grade's table)
 //   ui                   -> final (the 2D layer's list over it: the console, render/ui_pass.hpp)
 //
 // With TAA the frame renders at FrameOptions::scale of the output's size, jittered, and the
@@ -76,15 +76,18 @@
 #include "mountain/app/snow.hpp"
 #include "mountain/app/trails.hpp"
 #include "mountain/mapgen/types.hpp"
+#include "render/ao.hpp"
 #include "render/bloom.hpp"
 #include "render/cloud_kinds.hpp"
 #include "render/clouds.hpp"
+#include "render/dof.hpp"
 #include "render/fog.hpp"
 #include "render/frame.hpp"
 #include "render/grade.hpp"
 #include "render/hiz.hpp"
 #include "render/instances.hpp"
 #include "render/lens.hpp"
+#include "render/motion_blur.hpp"
 #include "render/particles.hpp"
 #include "render/post.hpp"
 #include "render/precip.hpp"
@@ -121,6 +124,9 @@ struct FrameOptions {
   // knobs (render/grade.hpp): Fall Line's defaults, cfg/cvars.hpp's r_ cvars'.
   ge::render::PostLook look{.sharpen = 0.3, .vignette = 0.25};
   ge::render::LensSettings lens{.rays = 0.5};
+  ge::render::AoSettings ao{.strength = 0.6};  // the ambient occlusion (render/ao.hpp)
+  // Depth of field (render/dof.hpp); a focus of 0 is how far the camera's subject is.
+  ge::render::DofSettings dof{.focus_m = 0};
   ge::render::GradeKnobs grade;
   bool snow = true;    // the snow's material (mountain/app/snow.hpp); off: the albedo lit
   bool trails = true;  // the tracks (mountain/app/trails.hpp); drawn only with the snow
@@ -217,14 +223,18 @@ struct GameFrame {
   ge::render::Hiz hiz;
   ge::render::Taa taa;
   ge::render::Bloom bloom;
-  ge::render::Lens lens;  // made only when FrameOptions::lens has a half on
+  ge::render::Lens lens;        // made only when FrameOptions::lens has a half on
+  ge::render::MotionBlur blur;  // made only with FrameOptions::look.motion_blur above 0
+  ge::render::Ao ao;            // made only with FrameOptions::ao's strength above 0
+  ge::render::Dof dof;          // made only with FrameOptions::dof's strength above 0
   ge::render::Post post;
   ge::render::UiPass ui;
   ge::render::InstancePipelines instancing;
   ge::render::InstanceFamily forest, figures, crowd;
-  // The free ride's village (`show_village`): its streets (casting nothing), its parked cars
-  // (casting into the cascades with the forest) and its traffic (into the figures' atlas).
-  ge::render::InstanceFamily streets, parked, traffic;
+  // The free ride's village (`show_village`): its streets (casting nothing), its buildings and its
+  // parked cars (casting into the cascades with the forest) and its traffic (into the figures'
+  // atlas).
+  ge::render::InstanceFamily streets, buildings, parked, traffic;
   std::vector<ge::render::InstanceFamily*> families{&forest, &figures, &crowd};
   // What casts into the cached cascades and what into the atlas's tiles, each frame.
   std::vector<ge::render::InstanceFamily*> still{&forest};
@@ -269,10 +279,11 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
                                         const FrameOptions& options = {});
 
 // THE FREE RIDE'S VILLAGE drawn in the frame from now on: the trees felled for it left out of the
-// forest, its streets laid on the snow, its parked cars, and its traffic where each frame's
-// `FrameScene::run_time` has it (mountain/app/village_look.hpp); the frame keeps it while it draws
-// it. Nothing for null. The parked cars cast into the cached cascades as the forest does, the
-// traffic into the figures' atlas, so a vehicle under way casts only near a figure's tile.
+// forest, its streets laid on the snow, its buildings on their plinths (building_look.hpp), its
+// parked cars, and its traffic where each frame's `FrameScene::run_time` has it
+// (mountain/app/village_look.hpp); the frame keeps it while it draws it. Nothing for null. The
+// buildings and the parked cars cast into the cached cascades as the forest does, the traffic
+// into the figures' atlas, so a vehicle under way casts only near a figure's tile.
 void show_village(ge::gpu::Device& device, GameFrame& frame,
                   std::shared_ptr<const sim::Village> village);
 

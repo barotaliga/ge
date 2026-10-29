@@ -29,6 +29,7 @@
 #include "mountain/picture/map_picture.hpp"
 #include "play/inputs.hpp"
 #include "play/session.hpp"
+#include "save/file.hpp"
 
 namespace fall_line::sim {
 
@@ -189,6 +190,40 @@ class FallLineRun final : public ge::play::Run {
     return copy;
   }
 
+  bool save(ge::save::FileWriter& file) const override {
+    file.put(kDriverTag, 0, kDriverVersion, driver_);
+    const_cast<FallLineRun*>(this)->pilot_fields(file.chunk(kPilotTag, 0, kPilotVersion));
+    return true;
+  }
+
+  bool load(ge::save::FileReader& file, std::string& error) override {
+    if (!file.get(kDriverTag, 0, kDriverVersion, driver_)) {
+      error = file.problem();
+      return false;
+    }
+    const ge::save::ChunkInfo* c = file.find(kPilotTag);
+    if (!c) {
+      error = "the save has no " + ge::save::tag_name(kPilotTag) +
+              " chunk (the pilot's hands); it was not written by Fall Line's Run::save";
+      return false;
+    }
+    if (c->version > kPilotVersion) {
+      error = "chunk PILT#0 is version " + std::to_string(c->version) +
+              "; this build reads up to version " + std::to_string(kPilotVersion) +
+              "; load it with a newer build of the game";
+      return false;
+    }
+    ge::save::Reader r = file.reader(*c);
+    pilot_fields(r);
+    if (!r.ok() || !r.at_end()) {
+      error = "chunk PILT#0 does not read: " +
+              (r.ok() ? std::to_string(r.left()) + " bytes left over" : r.problem());
+      return false;
+    }
+    driver_.set_why(why_);
+    return true;
+  }
+
   bool shoot(std::string_view view, ge::lab::Picture& out, std::string& caption,
              std::string& error) override {
     const GameState& s = driver_.state();
@@ -308,6 +343,16 @@ class FallLineRun final : public ge::play::Run {
            num::to_fixed(slowest * 3.6, 0) + " to " + num::to_fixed(fastest * 3.6, 0) +
            " km/h in view), thick where it reads its cap; the yellow disc is where it aims; the "
            "player white ringed in red.";
+  }
+
+  // The pilot's half of the run, walked by both save and load.
+  template <class Io>
+  void pilot_fields(Io& io) {
+    io(hands_);
+    io(asked_);
+    io(asked_at_);
+    io(backlog_);
+    io(dropped_);
   }
 
   void collect() {

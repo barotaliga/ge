@@ -90,6 +90,33 @@ struct Soldier {
   // stop to fire again.
   int32_t bursts = 0;
   double rest = 0;
+  template <class Io>
+  friend void describe(Io& io, Soldier& v) {
+    io(v.id);
+    io(v.from);
+    io(v.mode);
+    io(v.squad);
+    io(v.t);
+    io(v.x);
+    io(v.y);
+    io(v.z);
+    io(v.heading);
+    io(v.speed);
+    io(v.climbing);
+    io(v.sees);
+    io(v.tx);
+    io(v.tz);
+    io(v.lift);
+    io(v.carrier);
+    io(v.seat);
+    io(v.way);
+    io(v.s);
+    io(v.s_end);
+    io(v.lane);
+    io(v.progress);
+    io(v.bursts);
+    io(v.rest);
+  }
 };
 
 // What one of the army's snowmobiles is doing (army_sled.hpp):
@@ -138,6 +165,26 @@ struct ArmySled {
   ge::ai::Progress progress;
   int32_t dug = 0;
   int32_t bursts = 0;  // the gunner's bursts this halt (gunfire.hpp)
+  template <class Io>
+  friend void describe(Io& io, ArmySled& v) {
+    io(v.id);
+    io(v.mode);
+    io(v.due);
+    io(v.t);
+    io(v.body);
+    io(v.home_x);
+    io(v.home_z);
+    io(v.way);
+    io(v.pace);
+    io(v.blocked);
+    io(v.on_way);
+    io(v.way_end);
+    io(v.next);
+    io(v.saw);
+    io(v.progress);
+    io(v.dug);
+    io(v.bursts);
+  }
 };
 
 // What one of the army's helicopters is doing (army_heli.hpp):
@@ -180,6 +227,19 @@ struct LandTask {
   int32_t put = 0;
   double clear = -1;
   bool done = false;
+  template <class Io>
+  friend void describe(Io& io, LandTask& v) {
+    io(v.drop);
+    io(v.x);
+    io(v.y);
+    io(v.z);
+    io(v.heading);
+    io(v.rope);
+    io(v.count);
+    io(v.put);
+    io(v.clear);
+    io(v.done);
+  }
 };
 
 struct ArmyHeli {
@@ -204,6 +264,32 @@ struct ArmyHeli {
   std::array<double, 2> lay_pitch{};
   bool tasked = false;
   LandTask task;
+  template <class Io>
+  friend void describe(Io& io, ArmyHeli& v) {
+    io(v.id);
+    io(v.mode);
+    io(v.due);
+    io(v.t);
+    io(v.bearing);
+    io(v.x);
+    io(v.y);
+    io(v.z);
+    io(v.vx);
+    io(v.vy);
+    io(v.vz);
+    io(v.ax);
+    io(v.az);
+    io(v.heading);
+    io(v.pitch);
+    io(v.roll);
+    io(v.yaw_rate);
+    io(v.on);
+    io(v.dir);
+    io(v.doors);
+    io(v.aboard);
+    io(v.tasked);
+    io(v.task);
+  }
 };
 
 // What an army paramotor is doing (army_para.hpp):
@@ -231,6 +317,20 @@ struct ArmyPara {
   bool low = false;    // off the circle and down the fall line until back over `kFloorM`
   ge::skier::SkierState pilot;
   ge::paramotor::ParaState wing;
+
+  template <class Io>
+  friend void describe(Io& io, ArmyPara& v) {
+    io(v.id);
+    io(v.mode);
+    io(v.due);
+    io(v.t);
+    io(v.bearing);
+    io(v.dir);
+    io(v.next);
+    io(v.low);
+    io(v.pilot);
+    io(v.wing);
+  }
 };
 
 // What an army vehicle is doing (army_vehicle.hpp):
@@ -250,6 +350,12 @@ enum class ArmyVehicleChange : uint8_t { called, out, drop, dug, stuck, strike, 
 
 struct VehiclePoint {
   double x = 0, z = 0;
+
+  template <class Io>
+  friend void describe(Io& io, VehiclePoint& v) {
+    io(v.x);
+    io(v.z);
+  }
 };
 
 // The village's road in and the ground its streets clear (army_vehicle.hpp).
@@ -282,6 +388,38 @@ struct ArmyVehicle {
   ge::ai::Progress progress;       // its watch (ai/steer.hpp)
   int32_t dug = 0;                 // times backed out of where it was held
   int32_t stuck = 0;               // times put back on its way
+
+  template <class Io>
+  friend void describe(Io& io, ArmyVehicle& v) {
+    io(v.id);
+    io(v.kind);
+    io(v.mode);
+    io(v.wave);
+    io(v.due);
+    io(v.t);
+    io(v.x);
+    io(v.y);
+    io(v.z);
+    io(v.heading);
+    io(v.pitch);
+    io(v.roll);
+    io(v.speed);
+    io(v.rear);
+    io(v.way);
+    io(v.pace);
+    io(v.turret);
+    io(v.path);
+    io(v.leg);
+    io(v.leg_t);
+    io(v.road);
+    io(v.on_way);
+    io(v.way_end);
+    io(v.aboard);
+    io(v.saw);
+    io(v.progress);
+    io(v.dug);
+    io(v.stuck);
+  }
 };
 
 struct ArmyState {
@@ -357,6 +495,53 @@ struct ArmyState {
   int32_t unloaded = 0;
   int32_t vehicles_stuck = 0;
   std::shared_ptr<const ArmyRoad> road;
+
+  template <class Io>
+  friend void describe(Io& io, ArmyState& v) {
+    io(v.active);
+    io(v.soldiers);
+    io(v.next_id);
+    io(v.lift_called);
+    io(v.lift_due);
+    io(v.lift_squads);
+    io(v.waves);
+    io(v.wave_star);
+    io(v.wave_at);
+    io(v.marched);
+    io(v.arrested_by);
+    io(v.sleds);
+    io(v.next_sled);
+    io(v.sleds_called);
+    io(v.wave_sleds);
+    io(v.pad_x);
+    io(v.pad_z);
+    io(v.pad_heading);
+    io(v.helis);
+    io(v.next_heli);
+    io(v.helis_called);
+    io(v.from);
+    io(v.dropped);
+    io(v.picked);
+    io(v.stolen);
+    io(v.downed);
+    io(v.send_helis);
+    io(v.paras);
+    io(v.next_para);
+    io(v.paras_called);
+    io(v.paras_lost);
+    io(v.para_field);
+    io(v.near);
+    io(v.fire);
+    io(v.para_air);
+    io(v.send_paras);
+    io(v.send_vehicles);
+    io(v.vehicles);
+    io(v.next_vehicle);
+    io(v.vehicles_called);
+    io(v.unloaded);
+    io(v.vehicles_stuck);
+    // `road` is not kept: it is planned off the village again when a vehicle next asks for it.
+  }
 };
 
 }  // namespace fall_line::sim

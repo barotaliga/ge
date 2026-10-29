@@ -15,7 +15,50 @@
 
 namespace ge::rooms {
 
-move::MeshWorld clip_world(const Level& level, size_t workers, double cell_m) {
+namespace {
+
+// `level` with only the brushes `keep` takes (their faces carried along), its rooms kept when
+// `rooms` is set.
+Level with_brushes(const Level& level, bool rooms, uint16_t group, bool only_group) {
+  Level out;
+  out.materials = level.materials;
+  out.projections = level.projections;
+  if (rooms) out.rooms = level.rooms;
+  for (const Brush& b : level.brushes) {
+    if (only_group ? b.group != group : b.group != kWorld) continue;
+    Brush c = b;
+    c.first_face = uint32_t(out.faces.size());
+    out.faces.insert(out.faces.end(), level.faces.begin() + b.first_face,
+                     level.faces.begin() + b.first_face + b.faces);
+    out.brushes.push_back(c);
+  }
+  return out;
+}
+
+void brush_corners(const Level& level, size_t workers, std::vector<move::Vec3>& corners) {
+  if (level.brushes.empty()) return;
+  const BrushMesh bm = build_brushes(level, workers);
+  for (size_t t = 0; t < bm.triangles(); ++t) {
+    const Contents c = bm.contents[t];
+    if (c != Contents::solid && c != Contents::sky && c != Contents::clip) continue;
+    for (size_t k = 0; k < 3; ++k) {
+      const float* p = &bm.pos[size_t(bm.idx[t * 3 + k]) * 3];
+      corners.push_back({double(p[0]), double(p[1]), double(p[2])});
+    }
+  }
+}
+
+}  // namespace
+
+move::MeshWorld clip_group(const Level& level, uint16_t group, size_t workers, double cell_m) {
+  std::vector<move::Vec3> corners;
+  brush_corners(with_brushes(level, false, group, true), workers, corners);
+  move::MeshWorld w = move::build_mesh_world(corners, cell_m);
+  w.skin = 1.0 / 1024.0;
+  return w;
+}
+
+move::MeshWorld clip_world(const Level& level, size_t workers, double cell_m, bool groups) {
   Level flat = level;
   for (Material& m : flat.materials) m.relief = Relief::none;
   std::vector<Mesh> meshes(level.rooms.size());
@@ -35,17 +78,7 @@ move::MeshWorld clip_world(const Level& level, size_t workers, double cell_m) {
     }
   }
   // The brushes a body meets: solid, sky and clip, hidden faces too; a liquid is swum, not met.
-  if (!level.brushes.empty()) {
-    const BrushMesh bm = build_brushes(level, workers);
-    for (size_t t = 0; t < bm.triangles(); ++t) {
-      const Contents c = bm.contents[t];
-      if (c != Contents::solid && c != Contents::sky && c != Contents::clip) continue;
-      for (size_t k = 0; k < 3; ++k) {
-        const float* p = &bm.pos[size_t(bm.idx[t * 3 + k]) * 3];
-        corners.push_back({double(p[0]), double(p[1]), double(p[2])});
-      }
-    }
-  }
+  brush_corners(groups ? level : with_brushes(level, false, kWorld, false), workers, corners);
   move::MeshWorld w = move::build_mesh_world(corners, cell_m);
   // A millimetre: a walker blocked by a step's riser climbs it only once a step's move from rest
   // carries it past the skin, so the skin is kept far under one step's creep.

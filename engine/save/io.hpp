@@ -3,8 +3,8 @@
 //
 //   template <class Io>
 //   void describe(Io& io, Racer& r) {
-//     io(r.skier);               // a described type, a number, an enum, a string, a vector,
-//     io(r.gates);               //   an array, an optional or a pair: each walked by its kind
+//     io(r.skier);               // a described type, a number, an enum, a string, a vector, an
+//     io(r.gates);               //   array, an optional, a pair or a shared_ptr: each by its kind
 //     io.since(3, r.best, 0.0);  // added in the chunk's version 3: older chunks read 0.0
 //     io.until(5, r.old_lap);    // dropped in version 5: read from older chunks, never written
 //   }
@@ -29,7 +29,7 @@
 // ge:summary The state described once: describe(io, T&) walked by the save Writer and Reader
 // ge:keywords save load serialize deserialize describe io writer reader walk field version
 // ge:keywords since until plain bulk memcpy ge_save_plain plain_problem little-endian
-// ge:keywords vector string optional array pair enum bool
+// ge:keywords vector string optional array pair enum bool shared_ptr c-array
 // ge:skill save
 // ge:test tests/save_io_test.cpp
 #pragma once
@@ -39,6 +39,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <memory>
 #include <optional>
 #include <string>
 #include <type_traits>
@@ -46,6 +47,7 @@
 #include <vector>
 
 #include "core/prng.hpp"
+#include "core/quat.hpp"
 
 namespace ge::save {
 
@@ -76,6 +78,10 @@ template <class T>
 struct IsOptional : std::false_type {};
 template <class T>
 struct IsOptional<std::optional<T>> : std::true_type {};
+template <class T>
+struct IsShared : std::false_type {};
+template <class T>
+struct IsShared<std::shared_ptr<T>> : std::true_type {};
 template <class T>
 struct IsPair : std::false_type {};
 template <class A, class B>
@@ -242,6 +248,12 @@ void walk(Io& io, T& v) {
       io.raw(v.data(), sizeof(E) * v.size());
     else
       for (E& e : v) walk(io, e);
+  } else if constexpr (std::is_bounded_array_v<T>) {
+    using E = std::remove_extent_t<T>;
+    if constexpr (kBulk<E>)
+      io.raw(v, sizeof(T));
+    else
+      for (E& e : v) walk(io, e);
   } else if constexpr (IsOptional<T>::value) {
     bool has = v.has_value();
     io.boolean(has);
@@ -252,6 +264,21 @@ void walk(Io& io, T& v) {
         v.reset();
     }
     if (has) walk(io, *v);
+  } else if constexpr (IsShared<T>::value) {  // its own copy: what it pointed at, not its sharing
+    using E = std::remove_const_t<typename T::element_type>;
+    bool has = v != nullptr;
+    io.boolean(has);
+    if constexpr (Io::kReading) {
+      if (has) {
+        auto fresh = std::make_shared<E>();
+        walk(io, *fresh);
+        v = std::move(fresh);
+      } else {
+        v.reset();
+      }
+    } else if (has) {
+      walk(io, const_cast<E&>(*v));
+    }
   } else if constexpr (IsPair<T>::value) {
     walk(io, v.first);
     walk(io, v.second);
@@ -306,3 +333,5 @@ void describe(Io& io, Rng& r) {
   struct ge::save::Plain<T> : std::true_type {}
 
 GE_SAVE_PLAIN(ge::core::Rng);
+GE_SAVE_PLAIN(ge::core::Quat);
+GE_SAVE_PLAIN(ge::core::Vec3);

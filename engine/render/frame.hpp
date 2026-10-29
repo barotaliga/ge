@@ -88,10 +88,14 @@ struct FrameUniforms {
   // The fog in areas (render/fog.hpp's `fog_uniforms`): the froxel volume's range (m; 0: none
   // in reach, nothing reads it) and its slices. fill_uniforms writes zero.
   float fog[4];
+  // The sea of fog in the valleys (render/valley_fog.hpp's `valley_rows`): 0 its top over the eye
+  // (m), its extinction (1/m; 0 none), its edge (m), its wave (m); 1 one over the noise's tile
+  // (1/m), the noise's offset at the eye (the tile's share, x and z), its albedo.
+  float valley[2][4];
 };
-static_assert(sizeof(FrameUniforms) == 64 * 3 + 16 * 5 + 16 * 6 + 16 * 9 +
-                                           16 * kCloudRows * kCloudLayers + 16 * 5 +
-                                           16 * kSkyStyleRows + 16 * kMaxMoons * kMoonRows + 16,
+static_assert(sizeof(FrameUniforms) ==
+                  64 * 3 + 16 * 5 + 16 * 6 + 16 * 9 + 16 * kCloudRows * kCloudLayers + 16 * 5 +
+                      16 * kSkyStyleRows + 16 * kMaxMoons * kMoonRows + 16 + 32,
               "match frame_types.wgsl");
 
 // The last frame's unjittered camera. Invalid on the first frame and after a cut, when the
@@ -231,9 +235,11 @@ wgpu::Texture make_texture(gpu::Device& device, std::string_view label, uint32_t
                            wgpu::TextureUsage usage, uint32_t mips = 1);
 
 // Labs and tests (blocks): channel 0 of one mip of a texture, row-major, as floats. `format` is
-// the texture's: R32Float, Depth32Float (the depth aspect), R16Float or RGBA16Float.
+// the texture's: R32Float, Depth32Float (the depth aspect), R16Float or RGBA16Float (whose
+// `channel` 1, 2 or 3 it reads instead when asked).
 std::vector<float> read_red(gpu::Device& device, const wgpu::Texture& texture, uint32_t mip,
-                            uint32_t width, uint32_t height, wgpu::TextureFormat format);
+                            uint32_t width, uint32_t height, wgpu::TextureFormat format,
+                            uint32_t channel = 0);
 // Labs and tests (blocks): how far from the eye, m, each pixel of `targets`' depth lies, seen by
 // `view`'s camera (depth_distance), row-major from the top; infinity where nothing was drawn.
 std::vector<float> read_distance(gpu::Device& device, const FrameTargets& targets,
