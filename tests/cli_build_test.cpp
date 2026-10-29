@@ -71,7 +71,7 @@ TEST(failed_tests_and_their_harness_lines_become_findings) {
   const std::string out = in_repo("tests/sim_wind_test.cpp") +
                           ":36: FAIL level 4.1 after 20 s, want inside (-1, 1)\n"
                           "  FAIL look: the mark left the picture\n"
-                          "FAIL run: digest 1111111111111111, the baseline tests/labs_digests.txt "
+                          "FAIL run: digest 1111111111111111, the baseline tests/digests "
                           "says 2222222222222222.\n"
                           "50% tests passed, 2 tests failed out of 4\n\n"
                           "The following tests FAILED:\n"
