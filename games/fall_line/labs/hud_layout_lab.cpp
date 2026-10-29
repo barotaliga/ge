@@ -3,9 +3,9 @@
 // its side):
 //
 //   - the GAME'S layout: `hud_layout`'s places, untouched;
-//   - a PLAYER'S layout: a cfg of `seta` lines (the speed and the edge bar moved to the bottom
-//     centre and drawn bigger, the stars smaller, the seed fainter, the news hidden), run through
-//     the console exactly as a player's config would be;
+//   - a PLAYER'S layout: a cfg of `seta` lines (the speedometer and the edge bar moved to the
+//     bottom centre and drawn bigger, the stars smaller, the seed fainter, the news hidden), run
+//     through the console exactly as a player's config would be;
 //   - RESET: `hud_reset` after the player's cfg, which must put every box back where the game's
 //     layout had it.
 //
@@ -44,7 +44,7 @@ struct Viewport {
 
 // The player's own layout, as a config would hold it.
 constexpr const char* kPlayerCfg =
-    "seta hud_speed_anchor bottom; seta hud_speed_scale 1.25\n"
+    "seta hud_speedo_anchor bottom; seta hud_speedo_scale 1.25\n"
     "seta hud_edge_anchor bottom; seta hud_edge_scale 1.25\n"
     "seta hud_stars_scale 0.7\n"
     "seta hud_seed_alpha 0.55\n"
@@ -96,7 +96,7 @@ void run(ge::lab::Lab& lab) {
   const fh::HudSnapshot snap = staged(style, news);
   fh::HudLayout hud = fh::hud_layout(style);
   ge::console::Console console;
-  gh::add_hud_cvars(console, hud.layout);
+  fh::add_hud_cvars(console, hud);
   const std::vector<Viewport> viewports{{1280, 720}, {390, 844}, {844, 390}};
 
   int game_problems = 0, player_problems = 0, reset_moved = 0, player_moved = 0;
@@ -150,9 +150,9 @@ void run(ge::lab::Lab& lab) {
                     (v.h > v.w ? " (UPRIGHT)" : ""),
                 game_one ? "Fall Line's HUD in hud_layout's places with every widget up: the "
                            "seed's column top left, the hunt top right, the air clock top "
-                           "centre, the speed and the edge bar bottom left, the news bottom "
+                           "centre, the speedometer and the edge bar bottom left, the news bottom "
                            "right, the prompt above the centre."
-                         : "The same HUD after a player's five seta lines: the speed and the "
+                         : "The same HUD after a player's five seta lines: the speedometer and the "
                            "edge bar moved to the bottom centre at 1.25 times their size, the "
                            "stars at 0.7, the seed's line faded, the news hidden.",
                 game_one ? "nothing overlaps or leaves the screen; the air clock under the "
