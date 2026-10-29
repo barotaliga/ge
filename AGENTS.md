@@ -44,6 +44,7 @@ updates that row's status file (`docs/goals/<row>.md`) in its PR.
 | [`docs/publishing.md`](docs/publishing.md) | What a release is (GitHub Releases + GitHub Packages), how a game consumes it, changeset fragments, cutting a release, the credentials |
 | [`docs/snow.md`](docs/snow.md) | Snow: the layer over any ground and the column model, `press` and imprints, the contact laws, snow over time, the tiers and the budget, drawing, sound, one call, Fall Line's move onto it (M29) |
 | [`docs/replays.md`](docs/replays.md) | Replays, recording and broadcasting: a run kept as its inputs, keyframes and the seek, the replay file, the director, video with sound, streaming to a video service, spectating by inputs, Discord presence (M23) |
+| [`docs/saves.md`](docs/saves.md) | Saves: a save is the state, never the inputs; the file and its chunks, the state described once, the run saved and loaded, slots and the store, pictures, characters carried to another world, cloud saves, the content cache (M25) |
 | [`docs/shooters-edge.md`](docs/shooters-edge.md) | The second game, Shooter's Edge (M18, after Fall Line): the compatibility contract, the clean room, the homes, the protocols, the labs and the `ge` commands it needs |
 | [`docs/water.md`](docs/water.md) | Water and wind (M24): the bodies and the one query, the waves the wind grows, floating, swimming tuned per game, flowing water, the colour from what is in the water, the surface and the view under it, the sound, and the labs |
 | [`docs/liquids.md`](docs/liquids.md) | Liquids other than water (M30): viscosity, yield and harm on a body's stuff, the wind and the swimmer in them, lava and slime drawn, and the labs |
@@ -259,6 +260,7 @@ characters.
 | `*/labs/` | Labs beside their subject, compiled into the one `labs` executable | `labs` |
 | `engine/console/` | The console (`ge::console`, `docs/console.md`): cvars and their tiers, the console language, aliases, binds, cfg files, the drop-down console's model | `console` |
 | `engine/replay/` | Replays (`ge::replay`, `docs/replays.md`): a run watched again off its input log, the keyframes a seek starts from (the game's `Run::clone`), the player's seek in a step budget, the transport | `replay` |
+| `engine/save/` | Saves (`ge::save`, `docs/saves.md`): the save file (header, meta, tagged versioned chunks, directory, XXH64), the state described once for its writer and reader | `save` |
 | `engine/capture/` | Video with sound (`ge::capture`, in `ge_play`; `docs/replays.md`): the Matroska muxer and reader, I420, the export's A/V clock, the sync fixture | `replay` |
 | `engine/net/` | Multiplayer networking (`ge::net`, `docs/networking.md`): addresses, the wire, UDP and TCP sockets, links, the simulated network, sessions, LAN discovery, replication; the only place socket headers are included | `net` |
 | `engine/snow/` | Snow over any ground (`ge::snow`, `docs/snow.md`): the layer and its cover, sparse fixed-point tiles, `sample`, `press` and imprint records, reference contacts, the snapshot | `snow` |
@@ -274,6 +276,7 @@ characters.
 | `engine/audio/` | The synth (`ge::audio`): the voice vocabulary, the DSP graph, sounds and racks, the meter, WAV; deterministic, no platform | `audio` |
 | `engine/assets/` | Authored models: the glTF loader and writer, the `Model`, posing and CPU skinning; no GPU | `assets` |
 | `engine/ui/` | The 2D layer (`ge::ui`): paints, the draw list, images, fonts, the CPU raster, backdrops, menus as a model and a view; no GPU | `ui` |
+| `engine/charset/` | The bitmap fonts (`ge::charset`, `docs/charsets.md`): ten ASCII charsets as committed atlases and their builder, the noise layers, the text looks, text layout | `ui` |
 | `plugins/` | Plugins, one directory each, built as `ge_<name>` (`cmake/Plugins.cmake`, checked by `tools/check-plugins.mjs`) | `plugins` |
 | `plugins/racing/` | The racing primitives (`ge::racing`): the control tape, the record book's policy, the standings | `racing` |
 | `plugins/mountain/mapgen/` | The world generator (`ge::mountain::mapgen`): the piste and the ski area by stage, the rule books, the real faces and hints, the digest; `picture/` the map on the CPU | `mountain` |
@@ -405,5 +408,6 @@ and the directories agree.
 | `console` | `engine/console`: a setting (cvar) added or named, its tier, cfg files and the console language, aliases, scripting, binds, the drop-down console, `ge cvar` and `ge cfg`, the `console` lab (M21) |
 | `replay` | `engine/replay`: watching a run again: a game's `Run::clone`, the keyframes and their thinning, the player's seek in a step budget, the transport; later the replay file, the instant replay, the director, spectating by inputs and the video export (M23) |
 | `free-assets` | Sounds and models made free by others: the sources and the licences this repository can carry, fetching and unpacking, a game's registry of what it needs (Shooter's Edge's `games/shooters_edge/content/`), picking without listening, converting to our names, `classic.assetmap`, CREDITS.md |
+| `save` | `engine/save`: saves: the save file (header, chunks, directory, checksums), the state described once (`describe`, since and until, `GE_SAVE_PLAIN`), `ge save inspect`, the save labs; the M25 rows (the run saved, slots, pictures, characters, cloud, the content cache) |
 | `net` | `engine/net`: multiplayer networking: sockets, the simulated network and its conditions, captures, the wire format, connections and channels, nodes up to 32, sessions (lobby, teams, chat, kick, reconnect), LAN discovery, NAT traversal (STUN, the rendezvous, hole punching, the relay, a port opened by PCP, NAT-PMP or UPnP), fake traffic, the `net-link`, `net-session` and `net-reach` labs; the M17 plan |
 | `services` | `engine/services`: platform services (achievements, stats, leaderboards, cloud, presence, friends, overlay, DLC, screenshots) behind one `Backend`, the game's catalog, the simulated and offline stores, the `services` lab; Steam and other stores' backends, the SDK kept out of the tree; Discord's presence over its local IPC and the `discord` lab (M20) |
