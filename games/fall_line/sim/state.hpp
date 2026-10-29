@@ -90,6 +90,7 @@ enum class EventKind : uint8_t {
   died,       // the body gave out (`value` its severity score); his run is over
   traffic,    // met a vehicle of the village (`gate` its index, or -1 - a parked car's id; `value`
               // the closing speed, m/s; village.hpp)
+  building,  // met a wall of the village (`gate` the building's id, `value` the closing speed, m/s)
 };
 
 const char* event_name(EventKind kind);
