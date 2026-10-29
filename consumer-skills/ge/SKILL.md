@@ -55,6 +55,7 @@ ge mem | ge leaks                # what the run allocates; what it never frees
 ge load [--render]               # how the run spreads over the cores and the GPU: idle or busy
 ge graph <file>... [--kind=<k>]  # chart traces, benches, profiles: PNG + SVG, outliers as notes
 ge net inspect <pcap>            # a network capture, datagram by datagram (skill: multiplayer)
+ge save inspect <file>           # a save file's header, meta and chunks, or why it is refused (skill: saves)
 ge net stats <pcap>              # per connection: kbps, round trip, loss, resends; charted
 ge net sim [--presets=wifi,bad]  # fake clients and a host over bad links, no game needed
 ge snow show <file.snow>         # a saved snow layer: tiles, pressed samples, mass, maps (skill: snow)

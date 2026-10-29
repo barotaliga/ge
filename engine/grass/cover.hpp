@@ -86,9 +86,12 @@ void cover_heightfield(Cover& cover, const core::Heightfield& field, const Regio
                        double cell, const std::function<CoverAt(double x, double z)>& at);
 
 // Every triangle of a mesh (positions xyz, indices three a triangle) whose normal's y is at least
-// `min_up` either way round, under `kind` (already in `cover.kinds`) at `share`.
+// `min_up` either way round, under `kind` (already in `cover.kinds`) at `share`, times each
+// corner's own share in `shares` when it is given (one a position, 0..1: grass thinned toward a
+// doorway or a roof's edge without splitting a face). A triangle bare at every corner is left out.
 void add_mesh(Cover& cover, std::span<const float> positions, std::span<const uint32_t> indices,
-              uint32_t kind, float share = 1, float min_up = 0.6f);
+              uint32_t kind, float share = 1, float min_up = 0.6f,
+              std::span<const float> shares = {});
 
 // One blade, as render/grass_scatter.wgsl writes it (32 bytes).
 struct Blade {

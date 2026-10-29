@@ -21,8 +21,15 @@
 // table at the moon's height, lit by its light), summed wherever the sky's light is read; the
 // KEY LIGHT (`frame.sun`, the one direct light) is the moon once the sun is gone, and the haze
 // is the brighter sky's light scattered, the other's added as the sky behind it.
+//
+// THE SURFACE MODEL (wgsl/surface.wgsl: one physically based response for every material) and
+// THE LOCAL LIGHTS (wgsl/lights.wgsl, binding 10: render/lights.hpp's lamps and their clusters)
+// are included here, so every draw that reads the frame can light a surface by the sun, the sky
+// and the lamps the same way.
 #include "render/wgsl/frame_types.wgsl"
 #include "render/wgsl/atmosphere.wgsl"
+#include "render/wgsl/surface.wgsl"
+#include "render/wgsl/lights.wgsl"
 
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var linear_clamp: sampler;
@@ -403,7 +410,8 @@ const kDarkestLux = 1e-4;
 fn white_luminance() -> f32 {
   let sun = key_at_eye() * frame.sun.w * frame.weather.x * max(frame.sun.y, 0.0);
   let sky = sky_irradiance(vec3f(0.0, 1.0, 0.0));
-  return max(dot((sun + sky) / PI, kLuma), kDarkestLux * frame.world.y / (PI * kSunLux));
+  return max(dot((sun + sky) / PI, kLuma) + frame.time.z,
+             kDarkestLux * frame.world.y / (PI * kSunLux));
 }
 
 // THE EXPOSURE at `white`, a white Lambertian surface's luminance the eye is adapted to: the
@@ -468,14 +476,26 @@ fn rod_share() -> f32 {
 // It reads no depth, so a ridge or a cloud layer in front of the disc counts as the disc: a
 // ridge there is a dark silhouette, and the cloud pass gives a cloud's own light there to the
 // rods itself (render/clouds.wgsl), so neither shows it.
+// Other worlds' moons (render/moons.hpp) count by the circle that bounds each.
 fn on_moon(d: vec3f) -> f32 {
+  var on = 0.0;
   let rad = frame.moon_light.z;
   let c = dot(d, frame.moon.xyz);
-  if (rad <= 0.0 || c <= 0.0) {
+  if (rad > 0.0 && c > 0.0) {
+    on = 1.0 - smoothstep(0.95, 1.0, sqrt(max(1.0 - c * c, 0.0)) / sin(rad));
+  }
+  for (var k = 0; k < 4; k++) {
+    let o = frame.moons[k * 6];
+    let ck = dot(d, o.xyz);
+    if (o.w > 0.0 && ck > 0.0) {
+      on = max(on, 1.0 - smoothstep(0.95, 1.0, sqrt(max(1.0 - ck * ck, 0.0)) / sin(o.w)));
+    }
+  }
+  if (on <= 0.0) {
     return 0.0;
   }
   let clear = (1.0 - frame.weather.y) * exp(-frame.weather.z * 10000.0);
-  return (1.0 - smoothstep(0.95, 1.0, sqrt(max(1.0 - c * c, 0.0)) / sin(rad))) * clear;
+  return on * clear;
 }
 
 // NIGHT VISION: a colour as the rods see it, its luminance in a blue grey, by their share. A part
