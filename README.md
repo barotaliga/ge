@@ -89,10 +89,15 @@ In this tree, `make ge ARGS="new ../my-game"` builds and runs it.
 ## Build and test
 
 Requires CMake 3.25+, Ninja and a C++20 compiler (GCC 13+, Clang 17+, Apple Clang or
-MSVC 2022). SDL3 and Dawn are downloaded and pinned by CMake into `.cache/deps/`. On Linux,
-the window and audio need the X11, Wayland and ALSA/PulseAudio/PipeWire development
-packages, and GPU tests need `mesa-vulkan-drivers` (the full list is `GE_LINUX_PACKAGES` in
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
+MSVC 2022). SDL3 and Dawn are downloaded and pinned by CMake into `.cache/deps/`. On Ubuntu
+24.04 or 22.04, [`tools/setup-ubuntu.sh`](tools/setup-ubuntu.sh) installs everything else from a
+minimal server install (the toolchain, clang-format and clang-tidy 18, the X11, Wayland and audio
+development packages, Mesa's software Vulkan driver and Xvfb for the GPU tests, Node.js and
+Python 3 for the checks); rerun it any time, since it installs only what is missing or too old.
+
+```sh
+sudo tools/setup-ubuntu.sh   # once per machine; --check reports, --verify also builds and tests
+```
 
 ```sh
 make test                 # debug build with ASan/UBSan, then ctest

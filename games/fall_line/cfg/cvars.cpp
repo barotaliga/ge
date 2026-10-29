@@ -260,11 +260,11 @@ void add_cvars(con::Console& c, Settings& s) {
           .min = -1,
           .max = 1},
          &s.cover);
-  v.bind({.name = "sv_thick",
+  v.bind({.name = "sv_clouddensity",
           .fallback = "-1",
           .flags = kRun,
-          .help = "how thick the clouds are, the sun and the moon shining through their thin "
-                  "patches, 0 thin .. 1 thick (-1: the map's)",
+          .help = "how dense the clouds are, the sun and the moon shining through their thin "
+                  "patches, 0 thin .. 1 dense (-1: the map's)",
           .min = -1,
           .max = 1},
          &s.thick);
@@ -272,10 +272,20 @@ void add_cvars(con::Console& c, Settings& s) {
           .fallback = "-1",
           .flags = kRun,
           .help = "the lowest cloud layer's base over the valley floor, m, the layers over it "
-                  "moved in proportion; a lower cloud crosses the sky faster (-1: the map's)",
+                  "moved in proportion; a lower cloud crosses the sky faster, and one below the "
+                  "skier's height is skied through (-1: the map's)",
           .min = -1,
           .max = 12000},
          &s.cloud_height);
+  v.bind({.name = "sv_cloudthickness",
+          .fallback = "-1",
+          .flags = kRun,
+          .help = "how tall the lowest cloud layer stands from its base to its top, m: clear "
+                  "sky or the next layer starts over it, and a taller layer is darker under it "
+                  "(-1: the map's)",
+          .min = -1,
+          .max = 12000},
+         &s.cloud_thickness);
   v.bind({.name = "sv_cloudspeed",
           .fallback = "-1",
           .flags = kRun,
@@ -321,6 +331,31 @@ void add_cvars(con::Console& c, Settings& s) {
        &s.sky_stars);
   knob("sv_skyglow", "a fire's glow from under the horizon: 0 none (-1: the type's)", 4,
        &s.sky_glow);
+
+  v.bind({.name = "sv_lethal",
+          .fallback = "1",
+          .flags = kRun,
+          .help = "the army shoots to kill (0: it chases him down and arrests him)",
+          .kind = CvarKind::boolean},
+         &s.lethal);
+  v.bind({.name = "sv_armyfire",
+          .fallback = "1",
+          .flags = kRun,
+          .help = "the army's guns fire at all (0: it hunts with its guns silent)",
+          .kind = CvarKind::boolean},
+         &s.army_fire);
+  v.bind({.name = "sv_helis",
+          .fallback = "1",
+          .flags = kRun,
+          .help = "the hunt sends the army's helicopters and the men they put down",
+          .kind = CvarKind::boolean},
+         &s.helis);
+  v.bind({.name = "sv_paras",
+          .fallback = "1",
+          .flags = kRun,
+          .help = "the hunt sends the army's paramotor riflemen (from four stars)",
+          .kind = CvarKind::boolean},
+         &s.paras);
 }
 
 void register_cvars(con::Console& c) {

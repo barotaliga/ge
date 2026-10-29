@@ -48,12 +48,18 @@ inline constexpr double kCloudDrift = 1;
 
 // What a sky's layers are dealt under beside the map: how far dusk has fallen (0 by day, 1 with
 // the sun 6 degrees under the horizon; `dusk_of`), a share of the TRUE wind aloft they drift at
-// in place of `kCloudDrift` (negative: kCloudDrift), and the lowest layer's base over the floor,
-// m, every layer over it raised or lowered in the same proportion (negative: the dealt heights).
+// in place of `kCloudDrift` (negative: kCloudDrift), the lowest layer's base over the floor, m,
+// every layer over it raised or lowered in the same proportion (negative: the dealt heights), and
+// the lowest layer's THICKNESS, how tall it stands from its base to its top, m (negative: the
+// dealt depth). A layer's cloud is as dense a metre whatever its thickness, so a taller one is
+// darker below and hides more of the sun. However they are dealt, every layer starts where the
+// one under it ends: from a layer's top up there is clear sky or the next layer, never two
+// layers in one slab of air.
 struct Aloft {
   double dusk = 0;
   double speed = -1;
   double base = -1;
+  double thickness = -1;
 };
 
 // How far dusk has fallen with the sun `elevation` rad over the horizon: 0 with it 6 degrees up

@@ -85,6 +85,7 @@ constexpr FlagSpec kLabPublishFlags[] = {
      "a kept run (ge lab <id> --tag=<tag>) shown beside this one, metric by metric"},
     {"width", "<px>", "the pictures' width on the page (default 720)"},
     {"out", "<file>", "where the page goes (default previews/<id>/publish.html)"},
+    {"title", "<text>", "the page's title (default \"<id> lab run\", or \"Lab runs\")"},
     kRepo};
 constexpr FlagSpec kLabDiffFlags[] = {
     kPreset,
@@ -123,7 +124,8 @@ constexpr FlagSpec kLintFlags[] = {
     kRepo};
 constexpr FlagSpec kGoalsFlags[] = {
     {"base", "<ref>", "the roadmap rows are already taken on (default origin/main)"},
-    {"fetch", "", "git fetch origin first, so every branch is current"},
+    {"fetch", "", "git fetch origin first (the default; kept so old command lines still run)"},
+    {"no-fetch", "", "answer from the branches as last fetched, without the network"},
     kRepo};
 constexpr FlagSpec kGoalsClaimFlags[] = {
     {"under", "<row>",
@@ -369,7 +371,7 @@ const CommandSpec kCommands[] = {
     {"goals free", "[<row>]", 0, 1, "learn",
      "the roadmap rows taken on the base and on every remote branch, and the next free number "
      "(or, for a row such as M17, the next free letter under it)",
-     kGoalsFlags, "ge goals free --fetch", "commit"},
+     kGoalsFlags, "ge goals free", "commit"},
     {"goals claim", "<what>", 1, -1, "learn",
      "the next free row reserved and pushed to this branch at once, then checked against every "
      "branch: an earlier claim on the same row keeps it, and this one moves to the next",
@@ -466,6 +468,16 @@ const CommandSpec kCommands[] = {
      "round trip, loss each way, duplicates, reorders, resends; kbps, rtt and loss over time "
      "charted",
      kNetStatsFlags, "ge net stats previews/net-link/bad.pcap", "multiplayer"},
+    {"save inspect",
+     "<file>",
+     1,
+     1,
+     "see",
+     "a save file's header, the meta a menu lists and every chunk (tag, instance, version, "
+     "offset, bytes, checksum), or the one line that says why it is refused",
+     {},
+     "ge save inspect saves/slot-1",
+     "saves"},
     {"shot", "[<log>]", 0, 1, "see",
      "a still of a run at a step, drawn headless and captioned (seed, options, step, digest): "
      "a log played to --step, or the pilot's run of --seed; the game's options go after --",
