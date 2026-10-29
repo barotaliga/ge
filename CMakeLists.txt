@@ -20,6 +20,7 @@
 #   ge_water     bodies of water, the waves a wind grows on them and the one query (engine/water)
 #   ge_move      character movement (engine/move: the knobs and their cvars, the step, scenarios)
 #   ge_camera    the camera (engine/camera: poses, followers, rigs, shake, transitions, the stack)
+#   ge_viewmodel the first-person held weapon (engine/viewmodel: its form, place and light)
 #   ge_snow      snow (engine/snow: the layer over any ground, press, the snapshot; docs/snow.md)
 #   ge_play      the play contract (engine/play: GameSpec and Run, the session, the input log,
 #                the bench, the stills `ge shot` draws; engine/capture: the Matroska muxer and
@@ -44,10 +45,10 @@
 #   ge_isa       the instruction-set baseline (x86-64: AVX2), linked by ge_core and
 #                published as ge::isa
 #   ge_flags     warnings, -Werror, sanitizers: this tree only, never published
-# ge_core, ge_fp, ge_isa, ge_assets, ge_ai, ge_wind, ge_water, ge_move, ge_camera, ge_net, ge_console,
-# ge_services, ge_lab, ge_play, ge_replay, ge_prof, ge_prof_alloc and every plugin target are installed
+# ge_core, ge_fp, ge_isa, ge_assets, ge_ai, ge_wind, ge_water, ge_move, ge_camera, ge_viewmodel, ge_net,
+# ge_console, ge_services, ge_lab, ge_play, ge_replay, ge_prof, ge_prof_alloc and every plugin target are installed
 # and published as ge::core, ge::fp, ge::isa, ge::assets, ge::ai, ge::wind, ge::water, ge::move,
-# ge::camera, ge::net, ge::console, ge::services, ge::lab, ge::play, ge::replay, ge::prof, ge::prof_alloc and
+# ge::camera, ge::viewmodel, ge::net, ge::console, ge::services, ge::lab, ge::play, ge::replay, ge::prof, ge::prof_alloc and
 # ge::<plugin>, and the ge executable is installed to bin/
 # (cmake/Packaging.cmake, docs/publishing.md).
 cmake_minimum_required(VERSION 3.25)
@@ -195,7 +196,8 @@ if(GE_GPU)
     engine/render/clouds.wgsl engine/render/water.wgsl engine/render/water_copy.wgsl
     engine/render/water_stream.wgsl
     engine/render/underwater.wgsl engine/render/ui_pass.wgsl engine/render/eye.wgsl
-    engine/render/eye_adapt.wgsl engine/render/lens.wgsl)
+    engine/render/eye_adapt.wgsl engine/render/explosions.wgsl
+    engine/render/lens.wgsl)
 endif()
 
 # The network (engine/net, docs/networking.md): addresses, the wire, the OS's UDP and TCP sockets
@@ -229,7 +231,7 @@ target_link_libraries(ge_input PUBLIC ge_core)
 # docs/goals.md M20b) is built beside it only when its SDK is supplied.
 file(GLOB GE_SERVICES_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/services/*.cpp)
 add_library(ge_services STATIC ${GE_SERVICES_SOURCES})
-target_link_libraries(ge_services PUBLIC ge_core ge_net)
+target_link_libraries(ge_services PUBLIC ge_core ge_net ge_input)
 
 # Character movement (engine/move, docs/movement.md): the knobs and presets, one step of a moving
 # body over a trace callback, the box world, the strafer and the scenarios. Deterministic, no
@@ -246,6 +248,13 @@ target_link_libraries(ge_move PUBLIC ge_core ge_console)
 file(GLOB GE_CAMERA_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/camera/*.cpp)
 add_library(ge_camera STATIC ${GE_CAMERA_SOURCES})
 target_link_libraries(ge_camera PUBLIC ge_core ge_console)
+
+# The view model (engine/viewmodel): the first-person held weapon's model form, its place in the
+# view (offset, bob, sway, kick) and its light from the world round the player, with the CPU
+# reference raster the labs draw it with. No GPU and no platform.
+file(GLOB GE_VIEWMODEL_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/viewmodel/*.cpp)
+add_library(ge_viewmodel STATIC ${GE_VIEWMODEL_SOURCES})
+target_link_libraries(ge_viewmodel PUBLIC ge_core ge_camera ge_assets)
 
 # Snow (engine/snow, docs/snow.md): a layer of snow over any ground, its sparse fixed-point tiles,
 # the one sample query, press and the imprint record, the snapshot. Deterministic, no platform.
@@ -380,7 +389,7 @@ if(PROJECT_IS_TOP_LEVEL)
   get_property(GE_PLUGIN_TARGETS GLOBAL PROPERTY GE_PLUGIN_TARGETS)
   get_property(GE_GAME_TARGETS GLOBAL PROPERTY GE_GAME_TARGETS)
   add_executable(labs engine/lab/main.cpp ${GE_LAB_SOURCES})
-  target_link_libraries(labs PRIVATE ge_lab ge_play ge_replay ge_core ge_audio ge_assets ge_net ge_input ge_wind ge_water ge_move ge_camera ge_ui ge_services ge_snow ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
+  target_link_libraries(labs PRIVATE ge_lab ge_play ge_replay ge_core ge_audio ge_assets ge_net ge_input ge_wind ge_water ge_move ge_camera ge_viewmodel ge_ui ge_services ge_snow ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
     ${GE_LAB_EXTRA})
   if(GE_GPU)
     # A GPU lab's own shader (the eye lab's hall, drawn over its frame).

@@ -1,0 +1,4 @@
+---
+type: Added
+---
+Water in one call. `water::step(world, dt)` is the one step a world of water needs (its flow regions; a lake, an ocean, a river and a volume are pure functions of the time), beside the one call a body (`add_lake`, `add_ocean`, `add_river`, `add_volume`, `add_flow`) and the one query (`sample`). In a game repo, `ge add water [<name>]` writes a lake laid on the wind (`sim/<name>.hpp`, `.cpp`), a picture lab that draws it from above, every pixel one sample coloured by its look over the bed's depth, and in section, and a test that holds where it is wet, its bits and its lee shore's rougher sea; it links `ge::water` into the game's simulation and syncs the new `water` consumer skill, which says how to lay each kind, choose a look, float a hull, pick a swimmer, open a flow region and hear it. A consumer skill's `plugin:` may now name an engine module the game links itself.

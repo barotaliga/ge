@@ -6,7 +6,7 @@
 //
 //   vid_width vid_height vid_vsync      the window (A, latched: read at startup)
 //   r_taa r_scale r_occlusion r_shadowsize r_bloom r_snow r_trails r_spray r_precip
-//   r_precip_density r_splashes r_wet r_weather r_clouds
+//   r_precip_density r_splashes r_wet r_weather r_clouds r_sunsize r_moonsize
 //                                       the picture (A, latched: the frame is made once)
 //   r_sharpen r_sunrays r_flare r_vignette r_chromatic r_grain r_lensdirt
 //   r_contrast r_saturation r_temperature r_tint r_gamma
@@ -31,9 +31,9 @@
 // ge:keywords s_mute sv_seed sv_hour add_cvars register_cvars sv_weather sv_snowfall sv_fog
 // ge:keywords sv_wind sv_winddir sv_cover sv_thick sv_skyrate r_clouds sv_skytype sky-type
 // ge:keywords sky-knobs cl_chasedist cl_motion r_precip r_precip_density r_splashes r_wet
-// ge:keywords sv_snowline rain sv_cloudheight sv_cloudspeed r_sharpen r_sunrays r_flare
-// ge:keywords r_vignette r_chromatic r_grain r_lensdirt r_contrast r_saturation r_temperature
-// ge:keywords r_tint r_gamma post-effects
+// ge:keywords sv_snowline rain sv_cloudheight sv_cloudspeed r_sunsize r_moonsize disc-size
+// ge:keywords r_sharpen r_sunrays r_flare r_vignette r_chromatic r_grain r_lensdirt r_contrast
+// ge:keywords r_saturation r_temperature r_tint r_gamma post-effects
 // ge:skill console sim
 // ge:test tests/fall_line_cvars_test.cpp
 #pragma once
@@ -60,6 +60,7 @@ struct Settings {
   bool precip = true, splashes = true, wet = true;  // what falls, the rain's splashes, wet ground
   double precip_density = 1.0;                      // the share of the falling particles, 0.25..2
   double clouds = 1.0;  // the share of the cloud march's steps; 0: no layer drawn
+  double disc_sun = 1.0, disc_moon = 1.0;  // r_sunsize r_moonsize: the discs drawn larger, 0.5..20
   // The lens and the film, each 0..1 (0: off), and the grade's knobs (render/grade.hpp).
   double sharpen = 0.3, sunrays = 0.5, flare = 0, vignette = 0.25, chromatic = 0, grain = 0,
          lensdirt = 0;

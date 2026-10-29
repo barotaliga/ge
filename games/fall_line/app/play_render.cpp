@@ -226,6 +226,7 @@ class FrameRenderer final : public ge::play::Renderer {
         return false;
       }
       level_ = s->level.get();
+      show_village(*device_, *frame_, s->village);
     } else if (level_ != s->level.get()) {
       error = "this renderer drew another map; open a new one for this run";
       return false;
@@ -249,7 +250,8 @@ class FrameRenderer final : public ge::play::Renderer {
     const int frames = shot.cut ? kSettle : 1;
     for (int i = 0; i < frames; ++i) {
       view.frame = drawn_++;
-      fall_line::app::draw(*device_, *frame_, view, {skiers, 0, true, {}, subject}, target_.view);
+      fall_line::app::draw(*device_, *frame_, view, {skiers, 0, true, {}, subject, nullptr, s->t},
+                           target_.view);
     }
     const int pw = shot.width, ph = shot.height;
     if (shot.mode == "wireframe") {
