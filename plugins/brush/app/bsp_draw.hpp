@@ -32,7 +32,7 @@
 namespace ge::brush::app {
 
 enum class Mode : uint8_t { classic, v2 };
-enum class Lighting : uint8_t { lightmaps, lights };
+enum class Lighting : uint8_t { lightmaps, lights, rebaked };
 // "classic" or "v2"; false for any other word.
 bool parse_mode(std::string_view word, Mode* out);
 
@@ -64,6 +64,9 @@ struct Options {
   // light in the rooms: over 1 a night sky lifted so its moonlit cloud reads to an eye adapted to
   // the torch-lit halls (bsp_sky.hpp's classic night), as a photograph's window is.
   double sky_seen = 1;
+  // r_bump: the relief the rebaked lighting reads off each texture's luminance, m from black to
+  // white (0: flat faces). Only `Lighting::rebaked` draws it.
+  double bump = 0.012;
 };
 
 inline constexpr uint32_t kCubeSize = 256;    // a cube face's texels a side
@@ -85,6 +88,7 @@ struct GpuBsp {
   float info2[4];
   float sky[4];
   float info3[4];  // the floor (minlight), the bounce, the sky's light, filtered (1) or crisp
+  float info4[4];  // the relief's depth (bump), m
   float veil[4];   // the sky faces' pixels times these (the sky's light, seen and tinted)
   GpuJob ortho[2];
 };
@@ -95,6 +99,8 @@ struct BspDraw {
   // Index ranges by kind (draw_data.hpp's `Kind`): first, count.
   uint32_t range[kKinds][2] = {};
   wgpu::Texture atlas, light;
+  // The scene's rebaked light (RGB9E5) and its direction (RGBA8), or 1 x 1 stand-ins.
+  wgpu::Texture rebake_rgb, rebake_dir;
   wgpu::Buffer uniform, lights, jobs;
   wgpu::Texture cubes, orthos;
   std::vector<wgpu::TextureView> cube_layers;  // a view a cube face

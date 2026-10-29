@@ -15,6 +15,7 @@
 // ge:skill brush render labs
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <memory>
@@ -25,6 +26,7 @@
 #include "brush/app/bsp_liquids.hpp"
 #include "brush/app/bsp_sky.hpp"
 #include "brush/app/draw_data.hpp"
+#include "brush/rebake.hpp"
 #include "brush/write.hpp"
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
@@ -636,6 +638,55 @@ void run(gl::Lab& lab) {
       for (size_t k = 0; k < 3; ++k) m->sky.tint[k] = tint.size() > k ? tint[k] : 1;
   }
   for (size_t i = 0; i < maps.size(); ++i) lab.note(names[i] + "'s sky: " + maps[i]->sky.why);
+  // The rebake (rebake.hpp): each map's light worked out again from its lights, a sun through its
+  // sky faces and the open sky, before the renderer uploads it.
+  const bool rebaked = lab.arg_num("rebake") > 0;
+  for (size_t i = 0; rebaked && i < maps.size(); ++i) {
+    ba::Scene& s = maps[i]->scene;
+    ge::brush::RebakeInput in;
+    in.albedo = ba::texture_means(s);
+    in.lights = ba::bake_lights(s, lab.arg_num("strength") > 0 ? lab.arg_num("strength") : 1);
+    const std::vector<double> sd = lab.arg_nums("rebake-sun");  // azimuth, elevation, strength
+    const double az = (sd.size() > 0 ? sd[0] : 135) * kDeg,
+                 el = (sd.size() > 1 ? sd[1] : 50) * kDeg;
+    ge::bake::Light sunl;
+    sunl.kind = ge::bake::LightKind::sun;
+    sunl.radius = 0.02;
+    const double ce = ge::core::libm::cos(el);
+    sunl.dir[0] = -ce * ge::core::libm::sin(az);
+    sunl.dir[1] = -ge::core::libm::sin(el);
+    sunl.dir[2] = -ce * ge::core::libm::cos(az);
+    const double ss = sd.size() > 2 ? sd[2] : 1.0;
+    sunl.colour[0] = ss;
+    sunl.colour[1] = ss * 0.95;
+    sunl.colour[2] = ss * 0.85;
+    in.lights.push_back(sunl);
+    const double sky = lab.arg_num("rebake-sky");
+    in.sky[0] = float(sky * 0.8);
+    in.sky[1] = float(sky * 0.9);
+    in.sky[2] = float(sky);
+    ge::brush::RebakeOptions ro;
+    ro.luxel_m = lab.arg_num("rebake");
+    ro.bake.samples = int(lab.arg_num("rebake-samples"));
+    ro.bake.bounces = int(lab.arg_num("rebake-bounces"));
+    ro.bake.light_samples = 4;
+    ge::brush::Rebaked out;
+    std::string err;
+    const auto t0 = std::chrono::steady_clock::now();
+    if (!ge::brush::rebake_map(s.map, in, ro, &out, &err)) {
+      lab.fail(names[i] + ": " + err, "Pass a coarser --rebake luxel. Skill: brush.");
+      return;
+    }
+    const double ms =
+        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    lab.metric(names[i] + ".rebake.luxels", double(out.stats.luxels), "count");
+    lab.metric(names[i] + ".rebake.filled", double(out.stats.filled), "count");
+    lab.metric(names[i] + ".rebake.rays", double(out.stats.rays), "count");
+    lab.metric(names[i] + ".rebake.atlas", double(out.width) * out.height, "luxels");
+    lab.metric(names[i] + ".rebake.ms", ms, "ms", Det::measured);
+    lab.metric(names[i] + ".rebake.bytes", double(ge::brush::write_rebaked(out).size()), "bytes");
+    ba::attach_rebake(s, std::move(out));
+  }
   for (auto& m : maps) {
     m->rows = rows;
     ba::create_bsp(d, f.pipelines, m->bsp, m->scene, f.layout);
@@ -778,6 +829,33 @@ void run(gl::Lab& lab) {
                 {{"t", ls::fixed(at, 2)}}},
                draw(d, f, m, tv, ways[2].o), Det::measured);
     }
+    if (rebaked) {
+      // The rebake beside the file's lightmaps: flat, then with the textures' relief lit by the
+      // light's direction.
+      Way r3[3] = {ways[1], ways[1], ways[1]};
+      r3[0].label = "V2: THE FILE'S LIGHTMAPS";
+      r3[1].label = "V2: REBAKED, FLAT";
+      r3[1].o.lighting = ba::Lighting::rebaked;
+      r3[1].o.bump = 0;
+      r3[2].label = "V2: REBAKED, RELIEF BY DIRECTION";
+      r3[2].o.lighting = ba::Lighting::rebaked;
+      r3[2].o.bump = lab.arg_num("bump");
+      gl::Picture rs = gl::create_picture(int(w) * 3 + 40, int(h) + 30, {250, 250, 248});
+      for (int i = 0; i < 3; ++i) {
+        const int ox = 10 + i * (int(w) + 10);
+        gl::draw_text(rs, ox, 6, r3[i].label, {24, 26, 32});
+        ls::paste(rs, draw(d, f, m, fv, r3[i].o), ox, 20);
+      }
+      lab.shot({v.id + "-rebaked",
+                v.title + ", REBAKED",
+                v.caption + " Left: v2 lit by the file's own lightmaps. Middle: the map's light "
+                            "rebaked at finer luxels with coloured bounce. Right: the same rebake "
+                            "with each texture's relief lit from the light's direction.",
+                "Finer shadow edges and light bounced into corners in the middle; bricks and "
+                "panels catching the lamps from their side on the right.",
+                {{"rebake", lab.arg("rebake")}, {"bump", lab.arg("bump")}}},
+               rs, Det::measured);
+    }
     if (!skies.empty() && v.id.find(lab.arg("skies-on")) != std::string::npos) {
       std::vector<gl::Picture> panes;
       panes.reserve(skies.size());
@@ -886,6 +964,12 @@ const gl::LabSpec kSpec{
      {"skies-on", "sky", "the views --skies draws: those whose id holds this"},
      {"crisp", "0", "v2's textures crisp, each texel a square (r_texfilter 0)"},
      {"portal-lights", "1", "the teleporters light their rooms (0: not)"},
+     {"rebake", "0", "rebake each map's light at this luxel, m (0: no rebake; 0.25 a fine one)"},
+     {"rebake-samples", "64", "the rebake's gather rays a luxel a pass"},
+     {"rebake-bounces", "2", "the rebake's bounce passes"},
+     {"rebake-sun", "135,50,1", "the rebake's sun: azimuth, elevation (degrees), strength"},
+     {"rebake-sky", "0.35", "the rebake's open sky through the sky faces, the lightmaps' units"},
+     {"bump", "0.012", "the relief from the textures' luminance, m (r_bump)"},
      {"ladder", "",
       "rungs to draw each view at too, comma separated: <minlight> or <minlight>@<brightness>"}},
     "--width=160",

@@ -26,12 +26,14 @@
 #include "render/wgsl/frame.wgsl"
 
 struct Bsp {
-  info: vec4f,   // mode (0 classic, 1 v2), lighting (0 lightmaps, 1 lights), lights, ambient
+  info: vec4f,   // mode (0 classic, 1 v2), lighting (0 lightmaps, 1 lights, 2 rebaked), lights,
+                 // ambient
   info2: vec4f,  // time s, the cube face's size, the ortho map's size, the brightness
   sky: vec4f,    // the classic sky texture's rectangle
   info3: vec4f,  // v2's soft floor of light (minlight), the baked light's share as bounce, the
                  // sky's light (r_skylight: the sun's and the open sky's in the rooms), the
                  // textures filtered (1) or crisp (0)
+  info4: vec4f,  // the relief's depth from the textures' luminance, m (r_bump); unused
   veil: vec4f,   // the sky faces' pixels times these (bsp_fix.wgsl's veil)
   ortho: array<Job, 2>,  // the sun's map and the zenith's
 };
@@ -61,6 +63,8 @@ struct Light {
 @group(1) @binding(5) var cubes: texture_depth_2d_array;
 @group(1) @binding(6) var shadow_cmp: sampler_comparison;
 @group(1) @binding(7) var orthos: texture_depth_2d_array;
+@group(1) @binding(8) var rebake_rgb: texture_2d<f32>;
+@group(1) @binding(9) var rebake_dir: texture_2d<f32>;
 
 const kSky = 1u;
 const kWater = 2u;
@@ -76,6 +80,7 @@ struct VsIn {
   @location(3) nrm: vec3f,
   @location(4) rect: vec4f,
   @location(5) kind: u32,
+  @location(6) lm2: vec2f,
 };
 
 struct VsOut {
@@ -86,6 +91,7 @@ struct VsOut {
   @location(3) nrm: vec3f,
   @location(4) @interpolate(flat) rect: vec4f,
   @location(5) @interpolate(flat) kind: u32,
+  @location(6) lm2: vec2f,
 };
 
 @vertex
@@ -98,6 +104,7 @@ fn vs_main(v: VsIn) -> VsOut {
   o.nrm = v.nrm;
   o.rect = v.rect;
   o.kind = v.kind;
+  o.lm2 = v.lm2;
   return o;
 }
 
@@ -234,6 +241,39 @@ fn lightmap(lm: vec2f) -> vec3f {
   return textureSampleLevel(light_atlas, light_sampler, lm, 0.0).rgb * (255.0 / 128.0);
 }
 
+// THE DIRECTIONAL SHADE (engine/bake/bake.hpp, `directional_scale`, restated): the rebaked
+// irradiance's factor for the detailed normal `n` of a face whose flat normal is `ng`, under the
+// light's mean direction `d` (its length the share from that way).
+fn directional_scale(d: vec3f, n: vec3f, ng: vec3f) -> f32 {
+  let a = max(dot(n, d) * 0.5 + 0.5, 0.0);
+  let b = max(dot(ng, d) * 0.5 + 0.5, 0.05);
+  return a / b;
+}
+
+// The texture's relief as a normal: its luminance taken as a height (`depth` m from black to
+// white), differenced at the pixel's neighbours along the screen's axes (`dx`, `dy`: their
+// texels) and turned into a normal by the surface gradient over the pixel's world steps
+// (`dpx`, `dpy`), so no tangents are needed.
+fn relief_normal(ng: vec3f, st: vec2f, rect: vec4f, lod: f32, dx: vec2f, dy: vec2f, dpx: vec3f,
+                 dpy: vec3f, depth: f32) -> vec3f {
+  if (depth <= 0.0) {
+    return ng;
+  }
+  let k = u32(clamp(lod, 0.0, 3.0));
+  let w = vec3f(0.2126, 0.7152, 0.0722);
+  let h0 = dot(bilinear(st, rect, k).rgb, w);
+  let hx = (dot(bilinear(st + dx, rect, k).rgb, w) - h0) * depth;
+  let hy = (dot(bilinear(st + dy, rect, k).rgb, w) - h0) * depth;
+  let r1 = cross(dpy, ng);
+  let r2 = cross(ng, dpx);
+  let det = dot(dpx, r1);
+  if (abs(det) < 1e-12) {
+    return ng;
+  }
+  let grad = sign(det) * (hx * r1 + hy * r2);
+  return normalize(abs(det) * ng - grad);
+}
+
 // The classic sky: a far layer and a near one over it (its texel 0 clear), scrolling.
 fn classic_sky(d: vec3f) -> vec3f {
   let k = 1.0 / (abs(d.y) * 3.0 + 0.35);
@@ -304,6 +344,8 @@ fn fs_main(in: VsOut) -> FsOut {
   let dx = dpdx(st);
   let dy = dpdy(st);
   let lod = log2(max(max(length(dx), length(dy)), 1e-6));
+  let dpx = dpdx(in.world);
+  let dpy = dpdy(in.world);
   // A lightmap's 1 (and a light in its units): a white face as the open day lights it, times the
   // brightness (the eye adapted to a dim room).
   let white = white_luminance() * bsp.info2.w;
@@ -342,6 +384,18 @@ fn fs_main(in: VsOut) -> FsOut {
   var n = normalize(in.nrm);
   if (dot(n, eye_dir) > 0.0) {
     n = -n;
+  }
+
+  // ── Rebaked: the map's light worked out again (rebake.hpp), shaded by the light's direction ──
+  if (!classic && bsp.info.y > 1.5 && in.lm2.x >= 0.0) {
+    let ng = normalize(in.nrm);
+    let raw = textureSampleLevel(rebake_dir, light_sampler, in.lm2, 0.0).xyz;
+    let d = raw * (255.0 / 127.5) - vec3f(128.0 / 127.5);
+    let nd = relief_normal(ng, st, in.rect, lod, dx, dy, dpx, dpy, bsp.info4.x);
+    var e = textureSampleLevel(rebake_rgb, light_sampler, in.lm2, 0.0).rgb;
+    e = floor_light(e * directional_scale(d, nd, ng), bsp.info3.x);
+    out.colour = vec4f(albedo * e * white + albedo * white * glow, 1.0);
+    return out;
   }
 
   if (classic || bsp.info.y < 0.5) {

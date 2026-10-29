@@ -186,6 +186,29 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
   d.light = r::make_texture(device, "bsp.lightmaps", scene.light.width, scene.light.height, 1,
                             wgpu::TextureFormat::RGBA8Unorm, sampled);
   upload(device, d.light, scene.light);
+  {
+    // The rebaked light (rebake.hpp), or 1 x 1 stand-ins that no vertex reads (lm2 is -1).
+    const Rebaked& rb = scene.rebaked;
+    const bool has = rb.width > 0 && rb.height > 0;
+    const uint32_t w = has ? rb.width : 1, h = has ? rb.height : 1;
+    d.rebake_rgb =
+        r::make_texture(device, "bsp.rebake", w, h, 1, wgpu::TextureFormat::RGB9E5Ufloat, sampled);
+    d.rebake_dir = r::make_texture(device, "bsp.rebake.dir", w, h, 1,
+                                   wgpu::TextureFormat::RGBA8Unorm, sampled);
+    const uint32_t zero = 0;
+    const uint8_t flat[4] = {128, 128, 128, 0};
+    wgpu::TexelCopyBufferLayout layout{};
+    layout.bytesPerRow = w * 4;
+    layout.rowsPerImage = h;
+    const wgpu::Extent3D size{w, h, 1};
+    wgpu::TexelCopyTextureInfo dst{};
+    dst.texture = d.rebake_rgb;
+    device.queue.WriteTexture(&dst, has ? static_cast<const void*>(rb.rgb9e5.data()) : &zero,
+                              size_t(w) * h * 4, &layout, &size);
+    dst.texture = d.rebake_dir;
+    device.queue.WriteTexture(&dst, has ? static_cast<const void*>(rb.dir.data()) : flat,
+                              size_t(w) * h * 4, &layout, &size);
+  }
 
   d.cubes = depth_array(device, "bsp.cubes", kCubeSize, kMaxShadowed * 6);
   for (uint32_t k = 0; k < kMaxShadowed * 6; ++k) d.cube_layers.push_back(layer_view(d.cubes, k));
@@ -209,32 +232,34 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
 
   using r::Slot;
   const auto both = wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment;
-  d.layout =
-      r::make_layout(device, "bsp",
-                     {Slot::uniform, Slot::texture, Slot::texture, Slot::sampler,
-                      Slot::storage_read, Slot::depth_array, Slot::compare, Slot::depth_array},
-                     both);
+  d.layout = r::make_layout(
+      device, "bsp",
+      {Slot::uniform, Slot::texture, Slot::texture, Slot::sampler, Slot::storage_read,
+       Slot::depth_array, Slot::compare, Slot::depth_array, Slot::texture, Slot::texture},
+      both);
   d.group = r::make_group(device, "bsp", d.layout,
                           {d.uniform, d.atlas.CreateView(), d.light.CreateView(), d.light_sampler,
-                           d.lights, d.cubes_view, d.compare, d.orthos_view});
+                           d.lights, d.cubes_view, d.compare, d.orthos_view,
+                           d.rebake_rgb.CreateView(), d.rebake_dir.CreateView()});
   d.fix_layout = r::make_layout(device, "bsp.sky", {Slot::texture, Slot::uniform},
                                 wgpu::ShaderStage::Fragment);
   d.shadow_layout = r::make_layout(device, "bsp.shadows", {Slot::storage_read}, both);
   d.shadow_group = r::make_group(device, "bsp.shadows", d.shadow_layout, {d.jobs});
 
-  wgpu::VertexAttribute attrs[6] = {};
-  const uint64_t offsets[6] = {0, 12, 20, 28, 40, 56};
-  const wgpu::VertexFormat formats[6] = {
+  wgpu::VertexAttribute attrs[7] = {};
+  const uint64_t offsets[7] = {0, 12, 20, 28, 40, 56, 64};
+  const wgpu::VertexFormat formats[7] = {
       wgpu::VertexFormat::Float32x3, wgpu::VertexFormat::Float32x2, wgpu::VertexFormat::Float32x2,
-      wgpu::VertexFormat::Float32x3, wgpu::VertexFormat::Float32x4, wgpu::VertexFormat::Uint32};
-  for (uint32_t i = 0; i < 6; ++i) {
+      wgpu::VertexFormat::Float32x3, wgpu::VertexFormat::Float32x4, wgpu::VertexFormat::Uint32,
+      wgpu::VertexFormat::Float32x2};
+  for (uint32_t i = 0; i < 7; ++i) {
     attrs[i].shaderLocation = i;
     attrs[i].offset = offsets[i];
     attrs[i].format = formats[i];
   }
   wgpu::VertexBufferLayout vbl{};
   vbl.arrayStride = sizeof(DrawVertex);
-  vbl.attributeCount = 6;
+  vbl.attributeCount = 7;
   vbl.attributes = attrs;
   {
     const wgpu::ShaderModule module = gpu::create_shader(device, wgsl::bsp, "bsp");
@@ -431,11 +456,15 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   d.frame_jobs.push_back(d.staged.ortho[0]);
   d.frame_jobs.push_back(d.staged.ortho[1]);
 
-  set4(d.staged.info, o.mode == Mode::v2 ? 1 : 0, o.lighting == Lighting::lights ? 1 : 0,
+  set4(d.staged.info, o.mode == Mode::v2 ? 1 : 0,
+       o.lighting == Lighting::lights    ? 1
+       : o.lighting == Lighting::rebaked ? 2
+                                         : 0,
        double(d.frame_lights.size()), o.ambient);
   set4(d.staged.info2, view.time_s, kCubeSize, kOrthoSize, o.brightness);
   set4(d.staged.info3, o.minlight, o.lighting == Lighting::lights ? o.bounce : 0, o.sky_light,
        o.crisp ? 0 : 1);
+  set4(d.staged.info4, o.bump, 0, 0, 0);
   const double veil = o.sky_light * o.sky_seen;
   set4(d.staged.veil, veil * o.sky_tint[0], veil * o.sky_tint[1], veil * o.sky_tint[2], 1);
   if (s.sky_texture < s.map.textures.size()) {
