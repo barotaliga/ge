@@ -385,7 +385,7 @@ Outcome run_goals_claim(const fs::path& repo, const std::string& title, const st
     const std::string path = cat("docs/goals/", key, ".md");
     std::string error;
     if (!write_text(repo / path, claimed_row_file(title), error))
-      return fail("could not write " + path + ": " + error, "check the tree is writable");
+      return fail(cat("could not write ", path, ": ", error), "check the tree is writable");
     const std::string msg = cat("docs(goals): reserve ", key, " for ", title);
     if (!commit_row_file(repo, path, msg, log))
       return fail("git commit of the claim failed", "read the log, then ge goals claim again");
