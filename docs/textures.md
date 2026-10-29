@@ -53,10 +53,110 @@ layer streaks amount=$dirt count=24 length=0.4
 | Group | Kinds | What they do |
 | --- | --- | --- |
 | base | `fill`, `noise`, `stripes` | Set a colour, height, roughness and metal; blend a noise field into them (mix, multiply, overlay, screen, add, with a two-colour ramp); draw stripes |
-| pattern | `bricks`, `tiles`, `planks`, `panels` | Cut structure into the height: courses of bricks with ragged mortar, grouted tiles, boards with grain, knots, ends and gaps, and steel plates with pressed seams and rivets. Each piece gets its own colour |
+| pattern | `bricks`, `tiles`, `planks`, `panels`, `blocks`, `studs`, `scales`, `trim` | Cut structure into the height: courses of bricks with ragged mortar, grouted tiles, boards with grain, knots, ends and gaps, steel plates with pressed seams and rivets, dressed stone in uneven courses, fields of domes, pyramids, diamond-plate bars or holes, overlapping scales or arches, and trim bands (mouldings and crenellation teeth casting a shadow below). Each piece gets its own colour |
 | life | `cracks`, `scratches`, `dirt`, `dust`, `grime`, `wear`, `rust`, `streaks`, `moss`, `snow`, `glow` | Age the surface by reading the height so far: cavities (`relief`) and ledges (`up_facing`), broken up by noise, with an `amount` a level can drive |
+| finish | `speckle`, `shade`, `palette` | The paint over everything: grain a texel at a time with specks of a second colour gathering in the pits, the light baked into the colour off the height, and every colour snapped onto a few ramps of shades |
 
-### The noise kinds
+#### Techniques gathered from references
+
+The kinds grow by studying textures other people painted (the `texture-references` skill):
+what gives each its look is named, built as a kind or a key, and a recipe is steered toward the
+reference with `texgen-compare` until it reads as the same kind of surface. No reference enters
+the tree and none is named in it. What each round found and built:
+
+| Technique | What it is | Where |
+| --- | --- | --- |
+| Baked light | A low-resolution texture draws its relief into the colour: the upper-left edge of every raised shape lit, the lower-right one and the joints dark. Strength, softness, highlight and occlusion | `shade` |
+| Per-texel grain | Every texel a little brighter or darker than its neighbours (salt and pepper), sometimes in clumps of two or four | `speckle` `contrast`, `size` |
+| Coloured specks | A second colour in a share of the grains, gathering in the pits: patina on copper, blue flecks in dark iron | `speckle` `amount`, `color`, `cavity` |
+| A small palette | Every colour snapped onto a few ramps of shades, near black up to the colour and on toward white; an ordered dither between shades | `palette` |
+| Checkerboards | Every other tile or brick in a second colour | `tiles`, `bricks` `color2`, `checker` |
+| Uneven masonry | Courses of different heights, blocks of different widths, each course's joints shifted | `blocks` |
+| Irregular ashlar | Even courses of long and short blocks, some running down through two courses (`span`), the joint drawn beside each tall block | `blocks` |
+| Rounded cobbles | Lumps swelling from narrow gaps, each lit from above | `noise kind=edges` as height, `shade` (`cobbles`) |
+| Stud fields | Rows of domes, pyramids, the leaning bars of diamond plate, or holes | `studs` |
+| Scales and arches | Discs in offset rows, each row lying over the one above, rimmed | `scales` |
+| Trim bands | A band across a wall: rounded beads lit from above, crenellation teeth below them, a shadow cast on the wall; it may run over the tile's edge | `trim` `at`, `height`, `beads`, `teeth` |
+| Rock chunks | Cellular edges cut into the height and lit by `shade` | `noise kind=edges` with `shade` |
+
+The look in numbers (`look.hpp`): brightness, contrast, saturation, warmth, grain, edges and
+colours, and a distance between two looks. It is how far a recipe is from its reference in
+`texgen-compare`, and an agent's guide for which key to turn.
+
+## Replacing a level's painted textures
+
+A renderer that loads a map with hand-painted textures can offer to draw procedural ones in
+their place, as an option (`replace.hpp`). For each texture:
+
+1. **Measure it** (`likeness_of`): its look; which way its lines run (the share of texels with a
+   hard step across against down: bricks step down far more than across, planks the other way);
+   and how often its pattern repeats each way, the strongest peak of the luma's wrapped
+   autocorrelation as a share of the tile, with how strong it is.
+2. **Pick the nearest recipe** (`Matcher`, built once from a library with `make_matcher`, each
+   recipe measured off two seeds at 64 px). The structure ranks them first, with the colour
+   numbers left out since step 4 puts the colour back. Then the `refine` (6) nearest are baked
+   with the texture's seed and colours and measured whole, and the nearest of those wins, so a
+   recipe whose colours do not survive the recolouring falls behind. A renderer keeps the
+   texture's own pixels when nothing comes within `max_distance` (0.8).
+3. **Bake it** at the next power of two over the texture's size, under a seed of the texture's
+   name, and resize it to the texture's size. An animation's frames (`+0name`, `+1name`) share
+   one seed so they do not flicker between variants.
+4. **Recolour it**: each channel's mean and spread moved onto the original's, the spread's ratio
+   kept within a factor of two, so the room keeps its palette and brightness.
+5. **Keep its lights**: the texels the original marks as full-bright stay exactly as they were,
+   so a lamp still glows where the map put it.
+
+A name starting with `*` (a liquid) or `sky` is never replaced; a renderer draws those itself.
+`replace_indexed` takes a paletted texture and its 768-byte palette, and treats indices from 224
+up as full-bright. The match and the bake are pure functions of the texture and the library.
+The `texgen-replace` lab draws every texture beside its replacement, with the recipe picked, the
+distance and the reference a level would store.
+
+### Converting a map: references, never pixels
+
+A tool that converts another game's map into ours may copy its structure but not its painted
+textures. It asks `match_texture` (or `match_rgb`, `match_indexed`) for each texture and writes
+the answer's `text`, a texture reference like any other:
+
+```
+red_bricks seed=2359537275 tint=#825540 spread=#281913
+```
+
+The seed is made from the texture's name (an animation's frames share it), and `tint` and
+`spread` are the original's mean colour and per-channel spread. That is all that leaves the
+call: a recipe's name and seven numbers. Every surface gets an answer even when no recipe is
+near (`near` says which). A liquid comes back as `TextureKind::liquid` with its stem (`*04water1`
+is `water`), and a sky as `TextureKind::sky`, for the converter to map to its own materials.
+Build the `Matcher` once per conversion.
+
+### The argued loop: `ge texture match`
+
+A converter writes only a texture map an agent has argued (`<map>.texmap`,
+`texture_map.hpp`). `ge texture match <dir> --map=<map>.texmap` reads the map's textures as PNGs
+(kept outside the tree; a `textures.txt` beside them, as `labs bsp --textures-out=<dir>` writes,
+gives each file's real name), writes a first reference for every texture, and re-measures every
+run.
+Per texture the agent writes four things into the map: `class` (what it is: bricks, blocks,
+planks, panels, ...; candidates narrow to recipes tagged with it), `traits` (how that class
+looks and how this one does: the laying pattern, the pieces a tile, the joints, the colour),
+the clone (the `texture` line, tuned and ended `# pin`), and `judge` (pass or fail, trait by
+trait). A look distance alone rates a wall of small regular blocks close to one of large
+irregular ones, so ge also measures each texture's evidence (`evidence_of`: how many times the
+pattern repeats across and down a tile, the courses and the pieces in each, which way the lines
+run, the contrast) for the original and the clone, and prints each mismatch as a sentence to
+answer: "the original has 4 courses a tile, ours 3 (turn rows)". A pinned line without the
+original's `tint` and `spread` is warned about with the line to write. A texture classed `logo`,
+`trademark` or `emblem` is never cloned: its candidates are the `blank` recipes only
+(`blank_plate`), and a pinned lookalike is warned about. Every sheet tiles the original and the clone 3x3 for the
+seams (the evidence's `seams`: the jump where the tile meets itself over the typical jump inside
+it), and `cluster <name> <texture> ...` groups textures that meet in a map: ge draws them side by
+side on `sheets/cluster_<name>.png` and asks where the set comes apart (brightness order flipped,
+the family's spread, a join that jumps), for the agent's `judge <name>` line. Each run draws a sheet per
+texture (the original, the clone, the candidates, and under them the argument, the evidence and
+the mismatches), failed and unargued first. The procedure and each class's traits are the
+`texture-references` skill.
+
+## The noise kinds
 
 `value`, `perlin` (gradient), `cells` (the distance to the nearest point), `edges` (F2 - F1:
 thin lines where cells meet), `voronoi` (one flat value per cell), `ridged`, `turbulence` and
@@ -69,8 +169,13 @@ across, and its test holds periodicity and the bits.
 ## Texture references: how a level names a texture
 
 ```
-<name> [seed=<u32>] [<param>=<number> ...]      e.g.  cave_rock seed=88123 wet=0.6 moss=0.2
+<name> [seed=<u32>] [<param>=<number> ...] [tint=#rrggbb] [spread=#rrggbb]
+                                                e.g.  cave_rock seed=88123 wet=0.6 moss=0.2
 ```
+
+`tint` and `spread` recolour the bake's albedo: each channel's mean moves onto the tint and its
+standard deviation onto the spread, within a factor of two of the bake's own. A converted map
+carries both (above); a hand-written level rarely needs them.
 
 A level stores one reference per surface or room. The reference's seed is mixed with the
 recipe's seed and each layer's place (`layer_seed`). So each room that names the same recipe
@@ -143,6 +248,8 @@ ge texture bake textures/brick_wall.tex --ref="seed=12 wear=0.8" [--size=256] [-
 | `texgen-variants` | One recipe under four seeds (four rooms), with each param swept from its low end to its high end |
 | `texgen-noise` | Every noise kind at one octave, at five octaves, and at five octaves warped, two tiles across, with its range and a periodicity check |
 | `texgen-cost` | Each library recipe's bake time at 256, 512 and 1024 px, and each layer kind's cost |
+| `texgen-compare` | Each recipe beside the reference texture it is steered toward, kept outside the tree: both two tiles across at the nearest pixel, ours lit, and both looks in numbers with their distance |
+| `texgen-replace` | A level's textures, kept outside the tree, each beside the procedural replacement the likeness matcher picks, with the recipe, the distance and each texture's repeat; with no `--refs`, the library's own bakes tinted |
 
 The lit preview (`preview.hpp`) shades the maps on the CPU. It uses one light from the top
 left, ambient light scaled by the occlusion, a Blinn-Phong highlight sharpened by smoothness

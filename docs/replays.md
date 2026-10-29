@@ -222,12 +222,13 @@ engine's own encoders and no ffmpeg; a browser, a phone and every desktop player
   measures every AV1 picture against the uncompressed one. Their AV1 numbers are measured, never
   digested, since an encoder's bytes depend on the machine.
 
-Fragmented MP4 waits for the hardware encoders' H.264 and HEVC, which WebM cannot carry (M23d5).
+An export to a name ending `.mp4` writes the same tracks in the engine's fragmented MP4 instead
+(M23d5, below).
 
 ### The live capture (M23d3)
 
 `fall_line --capture=run.webm` records the window and its sound while it is played: the same
-Matroska or WebM file as an export (`.webm` AV1 and Opus, `.mkv` uncompressed), with no frame of
+file as an export (`.webm` or `.mp4` AV1 and Opus, `.mkv` uncompressed), with no frame of
 the game waiting for it. Three threads meet in `engine/capture/live.hpp`, and none waits on another:
 
 - **The audio device's thread taps the mix** (`Live::audio`, called by the device's pull right
@@ -265,6 +266,41 @@ stamps and colours, a full ring dropping instead of waiting, BGRA read back as R
 adapter with an audio thread pulling 10 ms every 10 ms took all 1800 frames, dropped none, spent at
 most 0.9 ms of a frame on the capture (0.24 ms on average) and put every one of 24 flashes within
 2 ms of its click; AV1 cost the worker 7.4 ms a 640x360 frame on average.
+
+### Fragmented MP4 (M23d5)
+
+`fall_line --capture=run.mp4`, or an export to a name ending `.mp4` (`ge record --format=mkv
+--codec=av1` with an `.mp4` file), writes the same AV1 and Opus in an MP4: the container the
+platforms' H.264 and HEVC encoders need (WebM cannot carry them, M23d4) and the one some sites and
+players take alone. The muxer is the engine's own (`capture/mp4.hpp`), and `capture/mux.hpp` picks
+it or the Matroska one by the file's name (`.mp4` or `.m4v`), so the export, the live capture and
+the interleave hand both the same packets in the same order.
+
+- **The layout.** An `ftyp` (isom, with iso6 for the fragments and av01 when the pictures are
+  AV1), a `moov` with every track and no sample in it, then FRAGMENTS: a `moof` (per track a
+  `traf` with the decode time in `tfdt` and one `trun` of each sample's duration, size and sync
+  flag, its data offset counted from the `moof`) and the `mdat` of its samples. A fragment is
+  written whole when the next one starts, at a video keyframe once a second has passed (or 16 MB
+  has been held), so A FILE CUT SHORT PLAYS TO ITS LAST WHOLE FRAGMENT: nothing after it is needed.
+  At the close an `mfra` lists every fragment's start for a player's seek, and the `mehd`'s
+  duration is patched; a file without them still plays.
+- **The tracks.** The video counts milliseconds and the sound samples at 48 kHz. A sample lasts
+  until the next one on its track, so each track's newest sample waits for the next before it goes
+  into a fragment, and the last lasts as long as the one before it. The sample entries take their
+  configuration from the same codec private as Matroska's: `av01` with `av1C`, `avc1` with `avcC`,
+  `hvc1` with `hvcC`, and `Opus` with a `dOps` built from the OpusHead. Opus's pre-skip is the
+  sound track's edit list, so a player drops the encoder's delay and the sound starts on its step.
+  Uncompressed pictures and float PCM have no MP4 entry players read; they stay in `.mkv`, and the
+  muxer says so.
+- **Proved** by `tests/capture_mp4_test.cpp` (the boxes read back by the engine's reader,
+  `capture/mp4_read.hpp`: every sample at its time with its bytes, duration and flag; fragments
+  cut at keys by time and by size and each found by the `mfra`; the file cut at every seventh byte
+  reading to its last whole fragment; the sync fixture as an `.mp4` decoded to every picture with
+  each click within 3 ms of its step and each flash within a frame) and the `capture` lab, which
+  repeats its sync check in an MP4 at every frame rate, has ffmpeg decode every picture, and cuts
+  each file halfway through its last fragment: the engine's reader keeps every whole fragment and
+  ffmpeg plays at least as far (at 24 fps over 30 s, 336 of 721 pictures read and 384 played from
+  a file cut in half).
 
 ## Broadcasting to a video service (M23e)
 
@@ -312,7 +348,7 @@ environment or the game's own settings, never hard-coded in the engine.
 | `replay` | Does a seek land on the same run as playing straight there, and what do the keyframes cost (bytes, a clone's time, the worst seek's steps)? | M23a |
 | `replay-file` | Does a replay file round-trip, refuse another version, and does a clip play its marks? | M23b |
 | `replay-cut` | Which moments did the director cut to, when, at what rate, and is each shot spaced from the last? | M23c |
-| `capture` | Does a replay export decode to its frames and its sound, is the sound in sync to a frame (a click and a flash on the same step), uncompressed and as AV1 and Opus, and what does each encoder cost a frame? | M23d |
+| `capture` | Does a replay export decode to its frames and its sound, is the sound in sync to a frame (a click and a flash on the same step), uncompressed and as AV1 and Opus in a WebM and an MP4, does an MP4 cut short play to its last whole fragment, and what does each encoder cost a frame? | M23d |
 | `capture-run` | Does Fall Line's race export with its own sound, every picture and every sample of it in the file, and is the sound never silence? How much smaller is it as AV1 and Opus, and how close to the uncompressed pictures? | M23d1, M23d2 |
 | `gpu-capture-live` | Does the live capture take every frame and its sound in real time, in sync, with no frame waiting on it? | M23d3 |
 | `stream` | Does an RTMP session to a test ingest in the lab carry every frame, does the bitrate follow a narrowed link and recover, and is the key never printed? | M23e |

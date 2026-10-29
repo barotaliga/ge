@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstdlib>
 
+#include "core/num.hpp"
 #include "core/num_text.hpp"
 #include "texgen/layers.hpp"
 #include "texgen/noise.hpp"
@@ -309,6 +310,19 @@ TextureRef parse_ref(std::string_view text, std::vector<Diagnostic>& errors) {
   ref.name = std::string(w[0]);
   for (size_t i = 1; i < w.size(); ++i) {
     const size_t eq = w[i].find('=');
+    if (eq != std::string_view::npos &&
+        (w[i].substr(0, eq) == "tint" || w[i].substr(0, eq) == "spread")) {
+      Rgb c;
+      if (!parse_colour(w[i].substr(eq + 1), c)) {
+        fail("`" + std::string(w[i]) + "` takes a colour: tint=#5e4734.");
+        continue;
+      }
+      const std::array<uint8_t, 3> bytes = {static_cast<uint8_t>(core::num::round(c.r * 255)),
+                                            static_cast<uint8_t>(core::num::round(c.g * 255)),
+                                            static_cast<uint8_t>(core::num::round(c.b * 255))};
+      (w[i].substr(0, eq) == "tint" ? ref.tint : ref.spread) = bytes;
+      continue;
+    }
     double v = 0;
     if (eq == std::string_view::npos || eq == 0 || !parse_number(w[i].substr(eq + 1), v)) {
       fail("`" + std::string(w[i]) + "` is not name=number.");
@@ -335,6 +349,17 @@ std::string ref_text(const TextureRef& ref) {
   for (const auto& [k, v] : ref.params) {
     out += " " + k + "=" + core::num::to_string(v);
   }
+  auto hex = [](const std::array<uint8_t, 3>& c) {
+    static const char* digits = "0123456789abcdef";
+    std::string h = "#";
+    for (const uint8_t b : c) {
+      h += digits[b >> 4];
+      h += digits[b & 15];
+    }
+    return h;
+  };
+  if (ref.tint) out += " tint=" + hex(*ref.tint);
+  if (ref.spread) out += " spread=" + hex(*ref.spread);
   return out;
 }
 

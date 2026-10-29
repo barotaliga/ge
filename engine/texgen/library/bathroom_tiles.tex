@@ -6,8 +6,10 @@ surface ceramic
 scale   1
 tags    wall floor interior tiles
 param   age 0.3 0 1
+param   rows 6 1 16
+param   cols 6 1 16
 
-layer tiles   rows=6 cols=6 color=#d9dde0 vary=0.04 mortar_color=#8e8a82
+layer tiles   rows=$rows cols=$cols color=#d9dde0 vary=0.04 mortar_color=#8e8a82
 layer noise   kind=value period=6 octaves=3 amount=0.08 blend=overlay
 layer grime   amount=$age reach=0.006
 layer cracks  amount=$age*0.5 period=6 width=0.012 depth=0.1 color=#5a5a58

@@ -8,7 +8,8 @@
 //   r_taa r_scale r_occlusion r_shadowsize r_bloom r_snow r_trails r_spray r_precip
 //   r_precip_density r_splashes r_wet r_weather r_clouds r_sunsize r_moonsize
 //                                       the picture (A, latched: the frame is made once)
-//   r_sharpen r_sunrays r_flare r_vignette r_chromatic r_grain r_lensdirt
+//   r_sharpen r_sunrays r_flare r_vignette r_chromatic r_grain r_lensdirt r_motionblur r_ao
+//   r_ao_radius r_dof r_dof_focus
 //   r_contrast r_saturation r_temperature r_tint r_gamma
 //                                       the lens, the film and the grade's knobs (A, latched)
 //   cl_view                             the camera: a rung or a still view (A)
@@ -39,6 +40,7 @@
 // ge:keywords sv_lethal sv_armyfire sv_helis sv_paras hunt army
 // ge:keywords r_sharpen r_sunrays r_flare r_vignette r_chromatic r_grain r_lensdirt r_contrast
 // ge:keywords r_saturation r_temperature r_tint r_gamma post-effects
+// ge:keywords r_motionblur r_ao r_dof r_dof_focus depth-of-field
 // ge:skill console sim
 // ge:test tests/fall_line_cvars_test.cpp
 #pragma once
@@ -68,7 +70,9 @@ struct Settings {
   double disc_sun = 1.0, disc_moon = 1.0;  // r_sunsize r_moonsize: the discs drawn larger, 0.5..20
   // The lens and the film, each 0..1 (0: off), and the grade's knobs (render/grade.hpp).
   double sharpen = 0.3, sunrays = 0.5, flare = 0, vignette = 0.25, chromatic = 0, grain = 0,
-         lensdirt = 0;
+         lensdirt = 0, motionblur = 0;
+  double ao = 0.6, ao_radius = 1.5;  // the ambient occlusion's strength (0: off) and reach, m
+  double dof = 0, dof_focus = 0;     // depth of field's strength (0: off), its focus (0: subject)
   double contrast = 1, saturation = 1, temperature = 0, tint = 0, gamma = 1;
   // The camera.
   std::string view = "chase";

@@ -3,17 +3,21 @@
 // parser checks a recipe against this table, `ge texture kinds` prints it, and docs/textures.md
 // points here rather than restating it.
 //
-// The kinds fall in three groups:
+// The kinds fall in four groups:
 //   base     fill, noise, stripes                    a colour and a relief to start from
-//   pattern  bricks, tiles, planks, panels           built structure: joints, bevels, rivets
+//   pattern  bricks, tiles, planks, panels, blocks,  built structure: joints, bevels, rivets,
+//            studs, scales, trim                     studs, scales and trim bands
 //   life     cracks, scratches, dirt, dust, grime,   what time and the place do to a surface:
 //            wear, rust, streaks, moss, snow, glow   each reads the height so far, so grime
 //                                                    pools in the joints the bricks cut and
 //                                                    dust lies on the ledges they raise
+//   finish   speckle, shade, palette                 the paint: per-texel grain, the light
+//                                                    baked in, the colour on a few ramps
 //
 // ge:summary The layer kinds' table (names, keys, defaults, ranges) and the resolved arguments
 // ge:keywords layer kinds schema keys defaults fill noise stripes bricks tiles planks panels
 // ge:keywords cracks scratches dirt dust grime wear rust streaks moss snow glow layer_kinds
+// ge:keywords blocks studs scales speckle shade palette finish
 // ge:keywords find_layer_kind args texgen
 // ge:skill textures
 // ge:test tests/texgen_recipe_test.cpp tests/texgen_bake_test.cpp
@@ -74,13 +78,17 @@ std::span<const LayerKind> layer_kinds();
 int find_layer_kind(std::string_view name);
 const KeyDef* find_key(const LayerKind& kind, std::string_view key);
 
-// The painters, by group (patterns.cpp, life.cpp, layers.cpp).
+// The painters, by group (layers.cpp, patterns.cpp, life.cpp, finish.cpp).
 void paint_fill(Surface&, const Args&);
 void paint_noise(Surface&, const Args&);
 void paint_stripes(Surface&, const Args&);
+void paint_trim(Surface&, const Args&);
 void paint_bricks(Surface&, const Args&);
 void paint_planks(Surface&, const Args&);
 void paint_panels(Surface&, const Args&);
+void paint_blocks(Surface&, const Args&);
+void paint_studs(Surface&, const Args&);
+void paint_scales(Surface&, const Args&);
 void paint_cracks(Surface&, const Args&);
 void paint_scratches(Surface&, const Args&);
 void paint_dirt(Surface&, const Args&);
@@ -92,6 +100,9 @@ void paint_streaks(Surface&, const Args&);
 void paint_moss(Surface&, const Args&);
 void paint_snow(Surface&, const Args&);
 void paint_glow(Surface&, const Args&);
+void paint_speckle(Surface&, const Args&);
+void paint_shade(Surface&, const Args&);
+void paint_palette(Surface&, const Args&);
 
 // The colour of a surface texel and the three planes' write, shared by the painters.
 inline Rgb colour_at(const Surface& s, size_t i) {
