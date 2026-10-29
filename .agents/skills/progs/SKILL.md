@@ -19,7 +19,7 @@ multiplayer builtins and extensions that come next.
 | `progs/extensions.hpp` | The extension registry: named groups of builtins, fields and hooks; `install`, `offers` |
 | `progs/assembler.hpp` | Bytecode built in memory for the tests, the lab and the sample (no compiler until M18d) |
 | `progs/sample.hpp` | The sample program that runs every opcode, and its five builtins |
-| `progs/disasm.hpp`, `progs/tool.hpp`, `bin/qc.cpp` | The disassembler and the `qc` tool `ge qc` runs (engine/cli/qc.cpp hands to it) |
+| `progs/disasm.hpp`, `progs/tool.hpp`, `tool/main.cpp` | The disassembler and the plugin's tool, the `progs` executable `ge qc` runs (engine/cli/qc.cpp hands to it) |
 | `labs/qc_lab.cpp` | The `qc` lab: opcode throughput, the sample's profile, a fault |
 | `games/shooters_edge/sim/qc_program.hpp` | A loaded progs as a program on the shooter loop's seam |
 

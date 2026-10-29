@@ -53,6 +53,8 @@ columns.
   mirror, layer, eye_x, eye_z)` once a frame after the step's presses, and bind `mirror.group` at
   group 3 in a material that includes `render/wgsl/snow_mirror.wgsl` (its own bindings after it).
   Light it with `render/wgsl/snow_light.wgsl` (`snow_relief`, `snow_light`).
+  For detail finer than the layer's cell, keep `render/snow_marks.hpp`'s maps beside it: feed
+  them `marks_from_records(layer.records, stamps)` once a frame, then `clear_records`.
 - **Save it with `snow::save`** and look at the file with `ge snow show <file.snow>` (stats and
   depth, density and state maps) and `ge snow column <file.snow> --at=x,z`.
 - Find the rest with `ge find snow <word>`; every header's leading comment is its manual.

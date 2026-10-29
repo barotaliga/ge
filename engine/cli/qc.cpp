@@ -1,6 +1,6 @@
 // `ge qc` (qc.hpp).
 //
-// ge:summary ge qc's hand-off to the qc executable and the reading of its answer lines
+// ge:summary ge qc's hand-off to the progs tool executable and the reading of its answer lines
 // ge:keywords cli ge qc progs answer findings summary result hand-off
 // ge:skill agent-interface progs
 // ge:test tests/cli_qc_test.cpp
@@ -16,9 +16,9 @@ constexpr std::string_view kTag = "@qc ";
 
 fs::path qc_exe(const BuildOptions& o) {
 #ifdef _WIN32
-  return o.repo / "build" / o.preset / "qc.exe";
+  return o.repo / "build" / o.preset / "progs.exe";
 #else
-  return o.repo / "build" / o.preset / "qc";
+  return o.repo / "build" / o.preset / "progs";
 #endif
 }
 
@@ -81,12 +81,12 @@ Outcome qc_answer(const BuildOptions& o, int code, const std::string& output) {
 Outcome run_qc(const BuildOptions& o, const std::string& command, const std::string& file,
                const std::vector<std::string>& flags) {
   Outcome out;
-  if (!build_targets(o, out, "qc")) return out;
+  if (!build_targets(o, out, "progs")) return out;
   std::error_code ec;
   if (!fs::is_regular_file(qc_exe(o), ec)) {
-    out.findings.push_back({Severity::error, "this build made no `qc` executable",
+    out.findings.push_back({Severity::error, "this build made no `progs` executable",
                             rel_path(o.repo, qc_exe(o)),
-                            "the progs plugin builds it (plugins/progs/bin/qc.cpp); skill: progs"});
+                            "the progs plugin builds it (plugins/progs/tool/main.cpp); skill: progs"});
     return out;
   }
   std::string cmd = quoted(qc_exe(o).string()) + " " + command + " " + quoted(file);
