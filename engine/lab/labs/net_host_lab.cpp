@@ -152,7 +152,7 @@ void run(gl::Lab& lab) {
   std::vector<std::pair<std::string, uint8_t>> routers;
   for (const std::string& r : split(lab.arg("routers"))) {
     if (r == "none") {
-      routers.emplace_back(r, 0);
+      routers.emplace_back(r, uint8_t{0});
       continue;
     }
     gn::PortmapProto p{};
