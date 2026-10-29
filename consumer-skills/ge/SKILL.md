@@ -63,6 +63,12 @@ ge cvar get <name>...            # the named ones (an unknown name: the nearest 
 ge cfg check <file>... [--server]   # a cfg's problems at file:line, and names nothing reads
 ge cfg exec <file>... [--cmd=...]   # what a cfg changed and printed; ge cfg dump: a cfg to start from
 ge asset build [<name>]          # a model built in headless Blender off the game's data (skill: assets)
+ge source search <src> <word>... # free packs (kenney, oga, polyhaven); ge source fetch <src>:<pack>
+ge sound match <ref> <dir>...    # free sounds ranked against a reference (skill: assets)
+ge sound import <file> <name>    # a free sound trimmed, loudness-matched, written as WAV
+ge sound split <file> <name>     # a recording of many sounds cut at its silences
+ge model import <file> <name>    # a free kit's model packed into one .glb, loaded and measured
+ge credits check [<dir>]         # every asset credited, every credit's file there, licences allowed
 ge texture kinds                 # every procedural texture layer kind and key (skill: textures)
 ge texture check <file.tex>...   # a texture recipe's mistakes, each at its line
 ge texture bake <file.tex> --ref="seed=12 wear=0.8"   # one variant to PNG maps in build/textures

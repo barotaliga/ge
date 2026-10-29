@@ -166,6 +166,11 @@ struct Layer {
   std::vector<double> focus;  // the focus actors' x, z pairs (`set_focus`)
   double clock = 0;           // s, the moment of the operation in progress
   uint32_t folds = 0, refines = 0;
+  // What changed since a reader last looked (a GPU mirror, render/snow_mirror.hpp): every write
+  // to a tile or a coarse block stamps it with the next `edits`. Nothing in the snow reads them.
+  uint64_t edits = 0;
+  std::vector<uint64_t> tile_stamp;    // by tile slot
+  std::vector<uint64_t> coarse_stamp;  // by coarse block
 };
 
 struct SnowWorld {
@@ -245,6 +250,10 @@ struct Stored {
   bool pressed = false;
 };
 bool stored_at(const Layer& layer, int c, int r, Stored& out);
+
+// Stamp tile slot `slot` or coarse block `block` as changed now (Layer::edits).
+void stamp_tile(Layer& layer, int32_t slot);
+void stamp_coarse(Layer& layer, int32_t block);
 
 // Every mass unit the tiles and the coarse layer hold; with `spilled`, always `mass_in`.
 uint64_t mass_units(const Layer& layer);

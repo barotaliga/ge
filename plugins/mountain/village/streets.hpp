@@ -31,6 +31,7 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <span>
 #include <string>
@@ -112,6 +113,14 @@ struct Streets {
 // fits near its village.
 std::optional<Streets> plan_streets(const mapgen::Level& level,
                                     std::span<const mapgen::PlanPoint> pads = {});
+
+// WHAT THE VILLAGE KEEPS AWAY FROM, worked out once a map: whether (x, z) is clear of the runs
+// and lanes, the lifts' lines, stations, queues and ramps, the wind tunnels, `pads`, the gates,
+// the start, the finish arena and the kickers, inside the map and, `hub_pad` m or more outside
+// the hub (from `streets::kClearHub` on, off the groomed snow too). The streets and the
+// buildings both stand by it.
+using Clear = std::function<bool(double x, double z, double hub_pad)>;
+Clear clearance_of(const mapgen::Level& level, std::span<const mapgen::PlanPoint> pads = {});
 
 // The point `lat` m to the RIGHT of a centreline point (right of a heading is (cos h, -sin h)).
 mapgen::PlanPoint beside_point(const StreetPoint& p, double lat);

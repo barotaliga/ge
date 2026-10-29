@@ -206,6 +206,22 @@ bool session_client_join(SessionClient& c, const Address& host, const char* name
   return c.peer >= 0;
 }
 
+bool session_client_attach(SessionClient& c, int peer, const char* name, uint64_t token,
+                           int64_t now_us) {
+  if (!peer_connected(*c.node, peer)) return false;
+  c.host = c.node->peers[static_cast<size_t>(peer)].address;
+  c.token = token;
+  const size_t n =
+      clean_text(reinterpret_cast<const uint8_t*>(name), std::strlen(name), kMaxName, c.name);
+  c.name[n] = 0;
+  c.me = kNoPlayer;
+  c.lost_at = c.tried_at = now_us;
+  c.peer = peer;
+  c.state = token ? ClientState::reconnecting : ClientState::joining;
+  send_hello(c);
+  return true;
+}
+
 void session_client_update(SessionClient& c, int64_t now_us) {
   c.events.clear();
   c.event_bytes.clear();

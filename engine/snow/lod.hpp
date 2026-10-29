@@ -19,7 +19,7 @@
 //
 // ge:summary Snow level of detail: focus actors, the coarse layer, folding and refining tiles
 // ge:keywords snow lod level-of-detail focus coarse fold refine budget tiles stale near memory
-// ge:keywords set_focus fold_stale fold_tile press_coarse bytes_of
+// ge:keywords set_focus fold_stale fold_tile press_coarse bytes_of summary_of
 // ge:skill snow
 // ge:test tests/snow_lod_test.cpp
 #pragma once
@@ -43,6 +43,11 @@ bool far_from_focus(const Layer& layer, double x, double z);
 int fold_stale(Layer& layer, double t);
 // Folds the tile in `slot` into the coarse layer and frees the slot.
 void fold_tile(Layer& layer, int slot);
+// What folding `tile` would leave in the coarse cells under it, without folding it: each touched
+// coarse cell's sums (untouched ones stay clear). `fold_tile` keeps it; a GPU mirror draws a live
+// tile outside its window from it. `mass_in`, when given, loses the cover's units of the
+// untouched cells (the fold's books).
+CoarseBlock summary_of(const Layer& layer, const Tile& tile, uint64_t* mass_in = nullptr);
 // Fills a newly allocated tile's samples from the coarse cells over it where they are touched
 // (the cover elsewhere); `cell_for` calls it.
 void refine_tile(Layer& layer, Tile& tile);
