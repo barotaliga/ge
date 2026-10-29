@@ -341,6 +341,21 @@ Held by `tests/snow_lod_test.cpp`.
 - **What snow throws**: an imprint's ploughed mass emits spray through `render/particles`
   (the skier's spray becomes a caller); a blast throws a cloud.
 
+**As built (M29e, the light model).** `render/wgsl/snow_light.wgsl` is the engine's snow light
+model. A material includes it, works out its own surface, and calls two functions:
+
+- `snow_relief(p, foot, packed, bare, loose)` gives the micro-relief as a world slope to bend into
+  the normal.
+- `snow_light(SnowPoint, SnowGains)` gives the colour and the glint: Lambert and the sky's light
+  dimmed by a cavity, the wrap's blue terminator, the glare gathered by the packed share, the wet
+  sheen and the glitter.
+
+The building blocks (`snow_noise`, `snow_noise_grad`, `snow_relief_layer`, `snow_glints`, the
+hashes) are there for a material's own additions. The mountain's material
+(`mountain/app/snow.wgsl`) now keeps only its ground map, its tracks, and the corduroy and lanes
+it adds over the library. Every `world` view is bit for bit what it was, with the same digest
+and 100 dB on every view and band, so the material's cost is unchanged.
+
 ## Sound (`engine/audio`, M29h)
 
 Voices driven by the imprint records and the column: the crunch of a step or a tyre, its

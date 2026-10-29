@@ -165,3 +165,31 @@ TEST(a_held_point_lands_on_the_same_screen_ray_in_the_world) {
   vm::held_dir_to_world(p, gun, view, tip, dir, d);
   CHECK(std::fabs(d[0] * d[0] + d[1] * d[1] + d[2] * d[2] - 1) < 1e-9);
 }
+
+TEST(the_muzzle_in_the_world_points_down_the_barrel_with_the_guns_up) {
+  vm::HeldModel model;
+  model.frames.resize(2);
+  model.frames[0].positions = {0.02f, -0.01f, 0.5f};
+  model.frames[1].positions = {0.02f, 0.03f, 0.5f};
+  model.muzzle_vertices = {0};
+  vm::PlaceState st;
+  const vm::Placement p = vm::frame_viewmodel(vm::classic_row(), vm::PlaceInput{}, st, kDt);
+  ge::camera::Pose view;
+  view.eye = {1, 2, 3};
+  view.yaw = 0.3;
+  view.fov_y = 1.2;
+  double at[3], dir[3], up[3];
+  vm::muzzle_to_world(model, 0, 1, 0.5, p, 0.9, view, at, dir, up);
+  // The tip is the blended frame's, through the same lens as held_to_world.
+  const float tip[3] = {0.02f, 0.01f, 0.5f};
+  double w[3];
+  vm::held_to_world(p, 0.9, view, tip, w);
+  for (int k = 0; k < 3; ++k) CHECK(std::fabs(at[k] - w[k]) < 1e-6);
+  // Unit, square to each other, the barrel ahead of the eye and the gun's up mostly up.
+  CHECK(std::fabs(dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2] - 1) < 1e-9);
+  CHECK(std::fabs(up[0] * up[0] + up[1] * up[1] + up[2] * up[2] - 1) < 1e-9);
+  CHECK(std::fabs(up[0] * dir[0] + up[1] * dir[1] + up[2] * dir[2]) < 1e-9);
+  const ge::core::Vec3 fwd = ge::camera::look_forward(view.yaw, view.pitch);
+  CHECK(dir[0] * fwd.x + dir[1] * fwd.y + dir[2] * fwd.z > 0.9);
+  CHECK(up[1] > 0.9);
+}

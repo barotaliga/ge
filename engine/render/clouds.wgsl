@@ -27,6 +27,19 @@ const kFadeFar = 55000.0;
 // half-size pixel's weight falls with its distance's miss (a share of the nearer), and the miss
 // past which no half-size pixel stands for this one.
 const kSky = 1e9;
+// The share a ray's cloud lets through under which the layers behind it are no longer marched.
+const kThroughGone = 1e-3;
+// The share under which a layer's march stops and takes the rest of its path as thick as the
+// ray's so far: a hundredth, and toward the key light a millionth. Near the light the glow is
+// seen as the disc is, so even a thousandth of a cloud's glow shows, and a ray stopped at a
+// hundredth (its rest guessed thick) beside one marched on through the clear air past a thin
+// wisp differed by that much: the cloud's edge across the moon was a line a pixel wide. Out to
+// kMarchNear rad from the light the march goes on to the millionth, by kMarchFar it is back to
+// the hundredth, so only the rays round the disc pay for the longer march.
+const kMarchGone = 0.01;
+const kMarchGoneNear = 1e-6;
+const kMarchNear = 0.1;
+const kMarchFar = 0.3;
 const kDepthSharp = 40.0;
 const kDepthMiss = 0.1;
 // The detail's scale (cells of the column a detail cell); how deep it eats the edge is the
@@ -56,6 +69,20 @@ const kSunGlowTop = 8.0;
 // at half its peak, 0.257 wavelengths over the radius, at 0.55 um.
 const kGlowCore = 0.141;
 const kSunGlowWhite = 1.5;
+// THE DISC DRAWN LARGER (render/view.hpp's sun_size and moon_size): a glow is a point's pattern
+// spread over the disc, so off a disc drawn larger than the real one it stands off the drawn
+// limb, its core filling the face. The real discs' radii, rad: the sun's, and the moon's at its
+// nearest, so a disc no larger than these is the point the pattern was cut for.
+const kSunDisc = 0.00465;
+const kMoonDiscMost = 0.0049;
+
+// How far past the real disc's the key light's drawn disc reaches, rad (0: drawn as it is).
+fn disc_swell() -> f32 {
+  if (frame.moon_light.w < 0.5) {
+    return max(kSunDisc * frame.style[2].w - kSunDisc, 0.0);
+  }
+  return max(frame.moon_light.z - kMoonDiscMost, 0.0);
+}
 
 struct VertexOut {
   @builtin(position) position: vec4f,
@@ -73,6 +100,22 @@ fn vs_main(@builtin(vertex_index) i: u32) -> VertexOut {
 
 // The cloud's extinction (1/m) of layer `l` at the world point `p`; `detail` false for the light's
 // cheaper reads.
+// THE FEATHER: no cloud ends in a cut. A dense layer's density climbing from nothing to its full
+// over its edge is optically all of it in the edge's first few percent (a scud of optical depth
+// 30 is opaque a thirtieth of the way in), so against the moon's glow it ends in a line a pixel
+// wide. The density's share is taken to a power so the edge reaches an optical depth of one a
+// kFeather share of the way in, whatever the layer's depth: ln(tau) / ln(1 / kFeather), never
+// under one, so a thin layer (its whole depth under 1 / kFeather) keeps its edge as it is.
+const kFeather = 0.3;
+
+fn feather(l: CloudRows, dens: f32) -> f32 {
+  let tau = l.look.z * (l.shape.y - l.shape.x);
+  if (tau * kFeather <= 1.0 || dens <= 0.0) {
+    return dens;
+  }
+  return pow(dens, log(tau) / log(1.0 / kFeather));
+}
+
 fn cloud_density(l: CloudRows, p: vec3f, detail: bool) -> f32 {
   let h = (p.y - l.shape.x) / (l.shape.y - l.shape.x);
   if (h <= 0.0 || h >= 1.0) {
@@ -127,7 +170,7 @@ fn cloud_density(l: CloudRows, p: vec3f, detail: bool) -> f32 {
     // Ice is strands all through, not only at its edge: the combed noise cut sharp.
     dens *= mix(1.0, smoothstep(0.42, 0.58, 0.7 * d1.r + 0.3 * d2.r), l.form.z);
   }
-  return dens * l.look.z * cloud_thickness(l, uvw, c);
+  return feather(l, dens) * l.look.z * cloud_thickness(l, uvw, c);
 }
 
 // Henyey-Greenstein's phase function, per steradian.
@@ -232,8 +275,10 @@ fn march(i: i32, d: vec3f, t0: f32, t1: f32, j: f32) -> LayerLook {
   let theta = 2.0 * asin(min(0.5 * length(d - L), 1.0));
   let off = (theta - vec3f(0.3787, 0.3840, 0.3910)) / 0.016;
   let halo = l.glow.z * kHalo * exp(-off * off);
-  // The glow round the disc, off its droplets or crystals.
-  let glow = 0.5 * diffraction(theta, l.glow.x, l.glow.y);
+  // The glow round the disc, off its droplets or crystals, off the drawn limb.
+  let off_limb = max(theta - disc_swell(), 0.0);
+  let glow = 0.5 * diffraction(off_limb, l.glow.x, l.glow.y);
+  let gone = mix(kMarchGoneNear, kMarchGone, smoothstep(kMarchNear, kMarchFar, theta));
   // The light at the layer: the key's through the air and the layers above at its middle; the
   // sky's from above, the snow's from below.
   let mid_p = eye + d * (0.5 * (t0 + t1));
@@ -301,7 +346,7 @@ fn march(i: i32, d: vec3f, t0: f32, t1: f32, j: f32) -> LayerLook {
     weight += gain;
     wdist += gain * t;
     out.through *= step_t;
-    if (out.through < 0.01) {
+    if (out.through < gone) {
       // The rest of the path taken as thick as the ray's so far: a hundredth of the sun would
       // still shine through as a disc far brighter than the cloud.
       let tau_ray = -log(out.through);
@@ -323,7 +368,7 @@ fn march(i: i32, d: vec3f, t0: f32, t1: f32, j: f32) -> LayerLook {
   let tf = 0.5 * tau_ray;
   let many = exp(-0.5 * tau_ray) * (1.0 - exp(-tf) * (1.0 + tf));
   let s = kGlowCore / l.glow.x * sqrt(max(2.0, tf));
-  let spread = many * exp(-0.5 * theta * theta / (s * s)) / (2.0 * PI * s * s);
+  let spread = many * exp(-0.5 * off_limb * off_limb / (s * s)) / (2.0 * PI * s * s);
   out.light += glow_seen(key * (glow * (glow_lit * out.through) + spread));
   return out;
 }
@@ -407,7 +452,9 @@ fn cloud_look(uv: vec2f, px: vec2f, z: f32) -> CloudLook {
     }
     var look = march(i, d, t0[i], t1[i], j);
     let alpha = 1.0 - look.through;
-    if (alpha <= 1e-4) {
+    // Not cut at a thin share: round the moon a wisp's glow is seen as the disc is, far over the
+    // picture's white, so even a ten-thousandth of cover shows.
+    if (alpha <= 1e-7) {
       continue;
     }
     // Under a deck a sheet is the deck: its light mostly the deck's grey along the ray (what the
@@ -417,11 +464,15 @@ fn cloud_look(uv: vec2f, px: vec2f, z: f32) -> CloudLook {
     // Seen through the air to where its light comes from, and lost into the sky far off.
     let fade = 1.0 - smoothstep(kFadeNear, kFadeFar, look.dist);
     let hazed = haze_air(look.light / alpha, uv, look.dist) * alpha;
-    light += through * fade * hazed;
+    // The layers behind a nearly opaque one fade out with what it lets through rather than stop
+    // at a share of it: a glow behind it as bright as the moon's, times even a hundredth, is
+    // brighter than the cloud in front, and a stop there cut it along a line.
+    let behind = smoothstep(kThroughGone, 10.0 * kThroughGone, through);
+    light += through * behind * fade * hazed;
     wdist += through * alpha * look.dist;
     weight += through * alpha;
     through *= 1.0 - fade * alpha;
-    if (through < 0.01) {
+    if (through < kThroughGone) {
       break;
     }
   }
