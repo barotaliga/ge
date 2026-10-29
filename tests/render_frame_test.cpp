@@ -1,10 +1,11 @@
 // engine/render/frame.hpp: the pass table's check names a read before its write and a pass
 // listed twice and passes a good order; the frame block is filled from a FrameView (the sun's
-// direction, the eye's altitude, the size, the weather); the stats sum their passes.
+// direction, the eye's altitude, the size, the weather, the discs drawn larger); the stats sum
+// their passes.
 //
 // ge:summary Tests for the frame's shared half: the pass table's check, the uniforms, the stats
 // ge:keywords test render pass-table check_pass_table uniforms fill_uniforms frame-stats
-// ge:keywords weather fog deck
+// ge:keywords weather fog deck sun_size moon_size disc-size
 // ge:skill render testing
 #include <cmath>
 #include <string>
@@ -94,6 +95,24 @@ TEST(uniforms_carry_the_weather) {
   // A visual range V is an extinction of 3.912 / V.
   CHECK(std::fabs(u.weather[2] - 0.01f) < 1e-7f);
   CHECK(std::fabs(u.deck[0] - 2 * 0.86f) < 1e-6f && std::fabs(u.deck[3] - 0.6f) < 1e-7f);
+}
+
+TEST(uniforms_draw_the_discs_larger_and_keep_their_light) {
+  ge::render::FrameView v;
+  v.style.sun_size = 2.6;  // a sky type's own larger sun
+  v.night.moon_radius = 0.0045;
+  v.night.moon_surface = 0.25;
+  v.night.moon_illuminance = 1e-6;
+  ge::render::FrameUniforms a, b;
+  ge::render::fill_uniforms(a, v, 64, 36);
+  CHECK(a.style[2][3] == 2.6f && a.moon_light[2] == 0.0045f);
+  v.sun_size = 3;
+  v.moon_size = 4;
+  ge::render::fill_uniforms(b, v, 64, 36);
+  // The sun's over the type's own, the moon's radius four times; the light as it was.
+  CHECK(std::fabs(b.style[2][3] - 7.8f) < 1e-6f && std::fabs(b.moon_light[2] - 0.018f) < 1e-9f);
+  CHECK(b.moon_light[0] == a.moon_light[0] && b.moon[3] == a.moon[3]);
+  CHECK(b.night_sun[3] == a.night_sun[3] && b.sun[3] == a.sun[3]);
 }
 
 // The pixel a camera-relative point lands on under a block's (column-major) view_proj.
