@@ -1093,9 +1093,10 @@ twilight matches `twilight_lux` within 1 % down to twelve degrees under.
 ## Fog in an area
 
 The sky's haze is the air's, the same over the whole map; the weather's fog closes everything at
-one visual range. **Fog in an area** is the third kind: a mist lying in a wood, a sea of fog in
-the valleys, the dust of a hall, the glowing haze over a pool of lava, placed by the game where
-it is (`render/fog.hpp`, M38a).
+one visual range. **Fog in an area** is the third kind: a mist lying in a wood, the dust of a
+hall, the glowing haze over a pool of lava, placed by the game where it is (`render/fog.hpp`,
+M38a). The froxels reach a few hundred metres; the sea of fog in the valleys seen from a peak is
+the next section's.
 
 - **The volumes** (`FogVolume`): a box or an ellipsoid turned about the vertical; its extinction
   at its floor, thinning upward by a falloff; soft over an edge inside its faces; carved into
@@ -1136,6 +1137,37 @@ it is (`render/fog.hpp`, M38a).
 On the software adapter at the default 160 x 90 x 64 froxels the inject costs 40 to 210 ms (the
 march toward the light in every froxel the medium fills) and the integrate 15 to 25 ms (the `fog` lab's `gpu-ms` rows); a real GPU's figures and a ladder row
 (the froxels' size) wait for M38f. Not yet: the lamps in the fog (M38e, on M39's light list).
+
+## The valley fog
+
+A still morning's inversion fills the valleys with fog up to a level top: from a peak a white sea
+with the ridges standing out of it as islands, from under its top a grey gloom. It lies over
+kilometres and its edge on a slope must stay sharp at any range, which no froxel volume of a few
+hundred metres can give, so it is a layer of its own, drawn per pixel (`render/valley_fog.hpp`,
+`FrameView::valley`, M38h).
+
+- **The medium**: an even extinction under the top, thinning linearly to none over an edge above
+  it. The integral of that share from a height up, G(y), is 0 over the edge, a square across it
+  and a line under it, so a ray's optical depth between the eye and a surface is the extinction
+  times |G(0) - G(end)| over the ray's slope: closed form, no march, no texture
+  (`valley_depth`, held against a numeric march by `render_valley_fog_test`).
+- **The top** rises and falls on two octaves of the cloud's tiled noise, read where the ray meets
+  it, drifting on the fog's own wind; the eye's offset in the noise is folded into its tile in
+  doubles on the CPU (`valley_rows`), so it stays exact at any place and hour.
+- **The light**: a white face's under this sun and sky, the fog's albedo of it (0.85): the sun on
+  the top's billows (the first octave's slope over two texels, with a wrapped cosine, since the
+  light a fog sends back is scattered many times inside it; laid level from three tiles off to
+  ten, where the waves are under a pixel) past the cloud's shadow, and the sky over them; dimmed
+  under the top by the eye's depth in it, to 0.3 of the top's at the deepest.
+- **The read**: `valley_fog` (wgsl/valley_fog.wgsl) first in `haze`, before the air's haze, so a
+  far sea is veiled by the air in front of it; by the sky pass, so the sea reaches the horizon
+  where no ground is drawn; and over the cloud's premultiplied colour (`valley_fog_over`). A
+  ray that meets no fog returns its colour as it came, and with no fog (`density` 0) nothing
+  reads it: the bits are the ones drawn without it.
+
+The `valley-fog` lab draws a seed's sea from the summit, from the air, at dawn and from under it.
+Not yet: the mountains' shade on the top (a sea at dawn is lit to its far shore under every
+ridge's shadow) and Fall Line's own seas, dealt by the map's weather and hour (M38f).
 
 ## Anti-aliasing and resolution
 

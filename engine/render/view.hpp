@@ -33,6 +33,9 @@
 // nothing past it is drawn.
 // The default draws to the horizon, unmisted.
 //
+// THE VALLEY FOG is `FrameView::valley` (`ValleyFog`): a sea of fog lying in the valleys under a
+// level top (render/valley_fog.hpp). The default is none.
+//
 // THE CLOUD a frame is seen under is `FrameView::clouds` (`Clouds`): up to three layers, each a
 // slab of the air (its base and its top, world metres) where a tileable noise passes the cut its
 // cover sets, carried by the wind and changing its shape as it goes. render/clouds.hpp draws it
@@ -43,7 +46,7 @@
 // ge:keywords frustum planes heading pitch fov mat4 inverse sun-direction camera_matrices
 // ge:keywords look_dir sun_direction depth_distance distance-from-depth unproject weather
 // ge:keywords overcast deck cloud-cover sun-pass visibility fog flat-light night moon key-light
-// ge:keywords cloud-layer clouds heap sheet roll horizon-tilt
+// ge:keywords cloud-layer clouds heap sheet roll horizon-tilt valley-fog sea-of-fog
 // ge:skill render
 // ge:test tests/render_view_test.cpp
 #pragma once
@@ -204,6 +207,20 @@ struct Night {
   SkyMoon moons[kMaxMoons];
 };
 
+// THE VALLEY FOG a frame is seen over (render/valley_fog.hpp): a sea of fog filling the valleys up
+// to a level top, its top waving on a tiled noise and softened over `edge_m`, lit from above by
+// the sun and the sky and drawn per pixel at any range, so the ground pokes out of it as islands
+// and an eye under its top is in a grey gloom. The default is none (`density` 0).
+struct ValleyFog {
+  double top_m = 0;          // world m: the top's mean height
+  double density = 0;        // 1/m: the extinction inside it (its visual range is 3 / it); 0 none
+  double edge_m = 20;        // m: the depth its top thins over
+  double wave_m = 12;        // m: how far its top rises and falls on the noise
+  double wave_size_m = 600;  // m: the noise's tile across the top
+  double drift[2] = {0, 0};  // m/s: the top's waves drift on it (x, z)
+  double albedo = 0.85;      // the share of the light on its top it sends back
+};
+
 struct FrameView {
   // The eye, world metres, and where it looks.
   double eye[3] = {0, 0, 0};
@@ -218,11 +235,12 @@ struct FrameView {
   double sun_illuminance = 1.0;  // relative; the sky and every light scale with it
   // The world's y = 0 over the sea, m: where the atmosphere starts.
   double altitude_m = 0;
-  Weather weather{};  // the cloud and the fog; the default is a clear sky
-  Night night{};      // the moon, the stars and the dark sky's glow; the default is none
-  Clouds clouds{};    // the cloud's layers; the default is none
-  SkyStyle style{};   // the kind of sky (render/sky_style.hpp); the default is the Earth's
-  MoonSet moons{};    // the moons over it (render/moons.hpp); the default the Earth's alone
+  Weather weather{};   // the cloud and the fog; the default is a clear sky
+  Night night{};       // the moon, the stars and the dark sky's glow; the default is none
+  Clouds clouds{};     // the cloud's layers; the default is none
+  SkyStyle style{};    // the kind of sky (render/sky_style.hpp); the default is the Earth's
+  MoonSet moons{};     // the moons over it (render/moons.hpp); the default the Earth's alone
+  ValleyFog valley{};  // the sea of fog in the valleys (render/valley_fog.hpp); the default none
   // THE DISCS DRAWN LARGER, as through a longer lens: the sun's and the moon's (and every other
   // world's moon's) angular radii against what they would be (1: as they are). Only the discs grow,
   // with the glow a cloud throws off their limbs; their light on the world is the real one's, so
