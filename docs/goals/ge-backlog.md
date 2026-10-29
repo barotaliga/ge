@@ -150,6 +150,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - a bench lab warns when the machine is loaded (load average over the cores: a concurrent ctest made thread starts look ten times slower)
 - `ge tsan <test>` (one test and its sources built with ThreadSanitizer, without a whole sanitizer preset)
 - `ge ref ephemeris <body> --from=<t> --to=<t> --site=<lat,lon,m>` (a published reference ephemeris fetched once into a test table, and a core function such as the moon's place diffed against it, worst error in arc minutes)
+- `ge sky when --seed=<n> --body=<sun|moon|io|...> [--sky=<type>]` (where a sky body stands, altitude and azimuth, and its phase, per day and hour of a seed's sky: a lab's shot time found in one call instead of a throwaway scan test)
 - `ge gpu probe --lab=<id> --shot=<name> --pixel=x,y --expr=<wgsl>` (a uniform or a shader expression read back at one pixel of a lab shot, instead of patching the shader with select() outputs and rebuilding)
 - `ge load --tag=<name>` / `--compare=<name>` (two load runs' efficiency, lanes' shares and the median frame's bound side by side, so a threading change proves what it spread)
 - `ge load --frame=<n>` (the lanes chart zoomed round one frame, the slowest by default, with its critical path as a table)
