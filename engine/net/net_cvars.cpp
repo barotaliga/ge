@@ -140,6 +140,89 @@ void add_net_cvars(con::Cvars& v, NetCvars& n) {
          &k.predict_max_s);
 }
 
+void add_voice_cvars(con::Cvars& v, VoiceCvars& out) {
+  VoiceConfig& k = *out.config;
+  out.mode = static_cast<int>(k.mode);
+  out.jitter_s = k.jitter_max * 0.02;
+  v.bind({.name = "voice_mode",
+          .fallback = std::to_string(out.mode),
+          .flags = con::kArchive,
+          .help = "when this player's microphone is sent: 0 while the talk key is held, 1 when "
+                  "they speak, 2 always",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 2},
+         &out.mode);
+  v.bind(
+      {.name = "voice_threshold",
+       .fallback = std::to_string(k.open_db),
+       .flags = con::kArchive,
+       .help = "voice_mode 1: how loud speech must be to be sent, dBFS (raise it in a noisy room)",
+       .min = -80,
+       .max = 0},
+      &k.open_db);
+  v.bind({.name = "voice_hangover",
+          .fallback = std::to_string(k.hangover_s),
+          .flags = con::kArchive,
+          .help = "voice_mode 1: how long the microphone stays open after speech falls, s",
+          .min = 0,
+          .max = 2},
+         &k.hangover_s);
+  v.bind({.name = "voice_bitrate",
+          .fallback = std::to_string(k.codec.bitrate),
+          .flags = con::kArchive,
+          .help = "the bits a second this player's voice is sent at (8000 to 80000)",
+          .kind = con::CvarKind::integer,
+          .min = 8000,
+          .max = 80000},
+         &k.codec.bitrate);
+  v.bind({.name = "voice_fec",
+          .fallback = k.codec.fec ? "1" : "0",
+          .flags = con::kArchive,
+          .help = "each voice frame carries a copy of the one before, so a lost one is rebuilt",
+          .kind = con::CvarKind::boolean},
+         &k.codec.fec);
+  v.bind({.name = "voice_loss",
+          .fallback = std::to_string(k.codec.loss_percent),
+          .flags = con::kArchive,
+          .help = "the packet loss the voice's FEC is sized for, %",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 50},
+         &k.codec.loss_percent);
+  v.bind({.name = "voice_jitter",
+          .fallback = std::to_string(out.jitter_s),
+          .flags = con::kArchive,
+          .help = "the longest a voice is held back to ride out a jittery link, s",
+          .min = 0.02,
+          .max = 0.64},
+         &out.jitter_s);
+  v.bind({.name = "voice_volume",
+          .fallback = std::to_string(k.volume),
+          .flags = con::kArchive,
+          .help = "every other player's voice, 0 to 2 (0: hear no one)",
+          .min = 0,
+          .max = 2},
+         &k.volume);
+  v.bind({.name = "sv_voiceflood",
+          .fallback = std::to_string(k.flood_burst),
+          .flags = con::kServer,
+          .help = "the voice frames a talker may send at once before the server refuses them (one "
+                  "more every 20 ms)",
+          .kind = con::CvarKind::integer,
+          .min = 1,
+          .max = 100},
+         &k.flood_burst);
+}
+
+void voice_cvars_apply(VoiceCvars& v) {
+  VoiceConfig& k = *v.config;
+  k.mode = static_cast<VoiceMode>(std::clamp(v.mode, 0, 2));
+  k.jitter_max = std::clamp(static_cast<int>(std::lround(v.jitter_s / 0.02)), 1, kVoiceSlots / 2);
+  k.jitter_min = std::min(k.jitter_min, k.jitter_max);
+  k.jitter_start = std::min(k.jitter_start, k.jitter_max);
+}
+
 void net_cvars_apply(NetCvars& n) {
   ReplicateConfig& k = *n.config;
   k.cubic = k.spring;  // cl_smooth sets both

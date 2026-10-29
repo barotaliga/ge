@@ -39,7 +39,10 @@ sees plain structs.
 - `engine/platform/audio.hpp`: `open_audio` opens the default output as a 48 kHz stereo float
   stream and pulls it from SDL's audio thread (`AudioDesc::pull`, the synth's `render`); SDL
   converts to the hardware's rate. `frames_pulled`, `driver`, `pause_audio`, `resume_audio`,
-  `audio_available`.
+  `audio_available`. The microphone (M17h): `open_audio_in` opens the default recording device
+  as mono float at the rate asked for, and `read_audio_in` reads what was captured since the last
+  read on the game thread (voice chat's `voice_sender_push`); SDL's dummy driver records silence,
+  so `tests/platform_audio_test.cpp` runs it headless.
 - Headless, SDL's `dummy` driver (`SDL_AUDIO_DRIVER=dummy`) consumes the stream at the device's
   rate with no hardware: `tests/platform_audio_test.cpp` runs the real device path that way.
 - On Linux SDL finds PipeWire, PulseAudio and ALSA by their headers (`libpipewire-0.3-dev`,
