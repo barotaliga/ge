@@ -143,15 +143,19 @@ struct Flash {
 };
 Flash flash_at(const Blast& b, double now_s);
 
-enum class SparkKind : uint8_t { spark, debris };
+// What a thrown thing is, which says how the particle pool flies and shades it: a glowing SPARK, a
+// dark chunk of DEBRIS, a CHIP of a surface a round hit (its `albedo` the surface's shade), a
+// GRIT of fine dust that hangs and drifts, a DROP of a splash.
+enum class SparkKind : uint8_t { spark, debris, chip, grit, drop };
 struct Spark {
   SparkKind kind;
   double p[3];  // world, m, at the blast's moment
   double v[3];  // m/s
   double life_s;
   double size_m;
-  double kelvin;  // a spark's heat at birth (0: none)
-  double cool_s;  // its heat's e-folding time
+  double kelvin;       // a spark's heat at birth (0: none)
+  double cool_s;       // its heat's e-folding time
+  double albedo = -1;  // its whiteness, 0..1 (below 0: its kind's)
 };
 // Upper bound on what one blast of `look` at `scale` throws.
 size_t blast_births_max(const BlastLook& look, double scale);

@@ -1,0 +1,151 @@
+// THE LABS' table (docs/labs.md § The labs; run by `make agents-check` and `make index`). A lab is
+// registered once, by its `LabSpec` beside its subject (`GE_LAB`), and nothing else lists the
+// labs, so pull requests adding different labs never touch the same file. Holds:
+//   - every `LabSpec k...{` in a tracked .cpp opens with its six text fields read off the source
+//     (id, kind, owner, subject, skill, question), and no two labs share an id;
+//   - docs/labs.md has no hand-kept table of labs.
+// Then writes docs/lab-list.md (gitignored, like docs/index.md): every lab in id order with its
+// kind, owner, subject, skill, the roadmap rows whose labs name it (docs/goals.md)
+// and the file that registers it. The built runner says the same (`make labs`, `labs --json`).
+//
+// ge:summary Checks every LabSpec reads off its source; writes the generated docs/lab-list.md
+// ge:keywords labs lab-list table registry labspec ge_lab generated check docs-labs
+// ge:skill labs
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+
+const ROOT = new URL("..", import.meta.url).pathname;
+const errors = [];
+const err = (msg) => errors.push(msg);
+
+// A spec's leading fields: C string literals (adjacent ones joined) or an expression, split on the
+// commas between them, comments skipped.
+const fieldsAt = (text, at, want) => {
+  const out = [];
+  let cur = "";
+  let str = null;
+  for (let i = at; i < text.length && out.length < want; ) {
+    const c = text[i];
+    if (c === '"') {
+      let j = i + 1;
+      let s = "";
+      while (j < text.length && text[j] !== '"') {
+        if (text[j] === "\\") {
+          s += text[j + 1];
+          j += 2;
+        } else s += text[j++];
+      }
+      str = (str ?? "") + s;
+      i = j + 1;
+    } else if (c === "/" && text[i + 1] === "/") {
+      i = text.indexOf("\n", i);
+      if (i < 0) break;
+    } else if (c === "," || c === "}") {
+      out.push(str ?? cur.trim());
+      str = null;
+      cur = "";
+      i++;
+      if (c === "}") break;
+    } else {
+      cur += c;
+      i++;
+    }
+  }
+  return out;
+};
+
+const files = execFileSync("git", ["grep", "-l", "-E", "LabSpec\\s+k", "--", "*.cpp"], {
+  cwd: ROOT,
+  encoding: "utf8",
+})
+  .trim()
+  .split("\n")
+  .filter(Boolean);
+const labs = [];
+for (const f of files) {
+  const text = readFileSync(join(ROOT, f), "utf8");
+  const re = /LabSpec\s+(k\w*)\s*(?:=\s*)?\{/g;
+  for (let m; (m = re.exec(text)); ) {
+    const line = text.slice(0, m.index).split("\n").length;
+    const [id, kind, owner, subject, skill, question] = fieldsAt(text, m.index + m[0].length, 6);
+    if (!id || !kind || !owner || !subject || !skill || !question) {
+      err(
+        `${f}:${line}: ${m[1]} does not open with six fields (id, kind, owner, subject, skill, question), ` +
+          "each a string literal but the kind; write them so, as engine/lab/lab.hpp's LabSpec orders them",
+      );
+      continue;
+    }
+    labs.push({ id, kind: kind.replace(/.*::/, ""), owner, subject, skill, file: f, line });
+  }
+}
+const seen = new Map();
+for (const l of labs) {
+  if (seen.has(l.id)) err(`${l.file}:${l.line}: lab \`${l.id}\` is also registered at ${seen.get(l.id)}; give one a new id`);
+  seen.set(l.id, `${l.file}:${l.line}`);
+}
+
+const doc = readFileSync(join(ROOT, "docs/labs.md"), "utf8").split("\n");
+const table = doc.findIndex((l) => /^\| Lab \| Kind \|/.test(l));
+if (table >= 0) {
+  err(`docs/labs.md:${table + 1}: a hand-kept table of labs; the LabSpecs are the list, so delete it (docs/lab-list.md is generated). Merging main into an older branch: " +
+      "take main's docs/labs.md (git checkout MERGE_HEAD -- docs/labs.md); each lab's LabSpec already lists it`);
+}
+
+if (errors.length) {
+  for (const e of errors) console.error(`check-labs: ${e}`);
+  console.error(`check-labs: ${errors.length} problem(s). Fix each as it says (docs/labs.md § The labs).`);
+  process.exit(1);
+}
+
+// The rows that land each lab: the ones whose labs (docs/goals.md's `Labs it lands` cell, or a
+// row file's `Labs:` line) name it in backticks.
+const rowsOf = new Map();
+const lands = (row, text) => {
+  for (const [, id] of text.matchAll(/`([a-z0-9-]+)`/g)) {
+    if (!rowsOf.has(id)) rowsOf.set(id, new Set());
+    rowsOf.get(id).add(row);
+  }
+};
+const roadmap = readFileSync(join(ROOT, "docs/goals.md"), "utf8").split("\n");
+const head = roadmap.findIndex((l) => l.startsWith("| # | Milestone |"));
+for (let k = head + 2; head >= 0 && k < roadmap.length && roadmap[k].startsWith("| "); k++) {
+  const c = roadmap[k].split(/(?<!\\)\|/).map((s) => s.trim());
+  if (c.length >= 6) lands(c[1], c[c.length - 3]);
+}
+const goals = join(ROOT, "docs/goals");
+for (const f of existsSync(goals) ? readdirSync(goals).sort() : []) {
+  if (!/^M.*\.md$/.test(f)) continue;
+  const m = /^Labs: (.*)$/m.exec(readFileSync(join(goals, f), "utf8").split("\n\n")[0]);
+  if (m) lands(f.slice(0, -3), m[1]);
+}
+for (const [id, rows] of rowsOf) rowsOf.set(id, [...rows].sort((a, b) => a.localeCompare(b, "en", { numeric: true })));
+labs.sort((a, b) => (a.id < b.id ? -1 : 1));
+const cell = (s) => s.replace(/\|/g, "\\|");
+const out = [
+  "<!-- GENERATED by tools/check-labs.mjs (make index) from every LabSpec; never edit or commit -->",
+  "# Lab list",
+  "",
+  "Every registered lab, in id order. How to run and read them is [`labs.md`](labs.md).",
+  "",
+  "| Lab | Kind | Owner | Subject | Skill | Rows | Registered in |",
+  "| --- | --- | --- | --- | --- | --- | --- |",
+  ...labs.map((l) =>
+    [
+      "",
+      `\`${l.id}\``,
+      l.kind,
+      l.owner,
+      cell(l.subject),
+      `\`${l.skill}\``,
+      (rowsOf.get(l.id) ?? []).map((r) => `[${r}](goals/${r}.md)`).join(", "),
+      `[\`${l.file}\`](../${l.file}#L${l.line})`,
+      "",
+    ]
+      .join(" | ")
+      .trim(),
+  ),
+  "",
+];
+writeFileSync(join(ROOT, "docs/lab-list.md"), out.join("\n"));
+console.log(`check-labs: ok (${labs.length} labs; table written to docs/lab-list.md)`);
