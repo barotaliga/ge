@@ -193,6 +193,8 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 
 - `ge net portmap open|renew|close` (a real port mapping from the command line, the OS's gateway and LAN address found: a real-router check on the Mac in one line)
 - `ge net reach --host --client --preset --forward` (one pair of peers' reach timeline)
+- `ge net token --master-env=NAME --host=<id> --client=<id>` (mint a connect token with the master key read from the named environment variable, and inspect one: test a real host by hand without a matchmaker)
+- `net-link --attack=<name>` (run one of the lab's attacks on its own: isolating one took a temporary code edit)
 ## Shooter's Edge (M18, docs/shooters-edge.md § The `ge` tooling it needs)
 
 - `ge pmove <scenario> --line=N` (one recorded movement scenario stepped against `engine/move`, stopping at the first line that differs, with both sides' state there; classic game loop thread)
