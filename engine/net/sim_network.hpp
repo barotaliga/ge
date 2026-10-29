@@ -8,7 +8,8 @@
 //
 // A datagram to an address nobody has bound is dropped and counted, as a real network would. A
 // datagram to `sim_broadcast(port)` is a LAN's broadcast: a copy to every socket bound on that
-// port but the sender's, each over its own link.
+// port but the sender's on the sender's own LAN (behind the same NAT, its router's LAN face
+// included; or the open network, for a node behind none), each over its own link.
 //
 // NATS. A node may sit behind a simulated NAT (`sim_add_nat`), as a player at home does behind
 // their router: a datagram it sends past the NAT leaves from the NAT's public node on a port the
