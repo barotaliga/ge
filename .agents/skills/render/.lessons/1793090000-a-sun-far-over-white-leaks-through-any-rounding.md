@@ -17,5 +17,5 @@ leave about 0.6 of it on the ray, so a kind that must hide the sun needs about 1
 depth that should do it; a glow lit by exp(-tau) toward the light read only part way up the
 slab ignores the cloud between, so light it by the ray's own transmittance; and the post pass
 keeps the moon's disc for the cones, so a cloud in front of it must be given to the rods in the
-cloud pass or it shows as a dark spot. The lab's thickness ladders (`sv_thick 0 .. 1`, `veil`
+cloud pass or it shows as a dark spot. The lab's thickness ladders (`sv_clouddensity 0 .. 1`, `veil`
 view, `--day=172` for a high sun) show all of it in one strip.
