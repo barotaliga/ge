@@ -16,6 +16,7 @@
 #include "fall_line/app/sky_type.hpp"
 #include "mountain/air/air.hpp"
 #include "mountain/app/cloud_field.hpp"
+#include "mountain/app/village_look.hpp"
 #include "mountain/app/weather_look.hpp"
 #include "prof/zones.hpp"
 #include "wind/field.hpp"
@@ -169,6 +170,8 @@ FrameOptions frame_options(const cfg::Settings& s) {
   o.thick = s.thick;
   o.cloud_height = s.cloud_height;
   o.cloud_speed = s.cloud_speed;
+  o.sun_size = s.disc_sun;
+  o.moon_size = s.disc_moon;
   cloud_stack_of(s, o);
   return o;
 }
@@ -300,6 +303,53 @@ void set_water(ge::gpu::Device& device, GameFrame& f, int index, const ge::water
   r::set_water_body(device, f.water, index, body);
 }
 
+void show_village(ge::gpu::Device& device, GameFrame& f,
+                  std::shared_ptr<const sim::Village> shown) {
+  namespace ma = ge::mountain::app;
+  namespace vg = ge::mountain::village;
+  if (f.shown_village != nullptr || shown == nullptr) return;
+  f.shown_village = std::move(shown);
+  const sim::Village& village = *f.shown_village;
+  // The forest without the felled trees: their instances dropped, the count cut to the rest.
+  const std::vector<r::Instance> trees = tree_instances(*f.level, village.felled);
+  r::set_instances(device, f.forest, 0, trees);
+  r::set_instance_count(f.forest, static_cast<uint32_t>(trees.size()));
+  // The cascades drew the trees that stood: drawn again, without the felled ones' shadows.
+  r::reset_sun_shadows(f.shadows);
+  // The family: a mesh a vehicle kind, then the streets' one; the streets' instance first, the
+  // parked cars after it, the traffic after them.
+  std::vector<r::MeshSource> meshes = ma::vehicle_meshes();
+  r::MeshSource streets;
+  streets.lods.push_back({ma::street_mesh(*f.level, village.ground), 0.0f});
+  const bool has_streets = streets.lods.front().mesh.vertex_count() > 0;
+  if (has_streets) meshes.push_back(std::move(streets));
+  const size_t parked = village.traffic ? village.traffic->parked.size() : 0;
+  const size_t moving = village.traffic ? village.traffic->vehicles.size() : 0;
+  const auto capacity = static_cast<uint32_t>(1 + parked + moving);
+  r::create_family(device, f.instancing, f.village, "village", meshes, ma::village_materials(),
+                   capacity);
+  r::bind_family_hiz(device, f.instancing, f.village, f.hiz);
+  f.families.push_back(&f.village);
+  f.staged_village.clear();
+  if (has_streets) {
+    r::Instance at;
+    at.position[0] = village.ground.x0;
+    at.position[2] = village.ground.z0;
+    at.mesh = static_cast<uint32_t>(ma::kVehicleKinds);
+    at.material = 0;
+    f.staged_village.push_back(at);
+  }
+  if (village.traffic) {
+    for (const vg::Parked& car : village.traffic->parked) {
+      f.staged_village.push_back(ma::parked_instance(car));
+    }
+  }
+  f.village_fixed = static_cast<uint32_t>(f.staged_village.size());
+  f.staged_village.resize(f.village_fixed + moving);
+  r::set_instances(device, f.village, 0, f.staged_village);
+  r::set_instance_count(f.village, f.village_fixed);
+}
+
 void resize(ge::gpu::Device& device, GameFrame& f, uint32_t width, uint32_t height) {
   make_targets(device, f, width, height);
 }
@@ -309,6 +359,7 @@ void cut(GameFrame& f) {
   r::reset_taa(f.taa);
   r::cut_family(f.figures);
   r::cut_family(f.crowd);
+  if (f.shown_village != nullptr) r::cut_family(f.village);
   for (ge::skier::RigPoser& p : f.posers) p = {};
   for (ge::skier::RigPoser& p : f.crowd_posers) p = {};
   for (r::Skin& s : f.skins) r::settle_skin(s);
@@ -378,6 +429,8 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   GE_ZONE("frame");
   // The map's sky at the view's moment: the cloud, the deck and the fog it is seen under.
   r::FrameView view = seen;
+  view.sun_size = f.options.sun_size;
+  view.moon_size = f.options.moon_size;
   if (f.options.weather) {
     // How far dusk has fallen under the view's sun (the evening's jet and its scud), and the
     // height and the speed picked by hand.
@@ -535,6 +588,22 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
     pose_crowd(device, f, scene);
   } else {
     r::set_instance_count(f.crowd, 0);
+  }
+  const std::optional<ge::mountain::village::TrafficPlan>* traffic =
+      f.shown_village != nullptr ? &f.shown_village->traffic : nullptr;
+  if (traffic != nullptr && traffic->has_value()) {
+    GE_ZONE("frame.village");
+    // The traffic where the run's clock has it.
+    const ge::mountain::village::TrafficPlan& plan = traffic->value();
+    const auto n = static_cast<int32_t>(plan.vehicles.size());
+    for (int32_t k = 0; k < n; ++k) {
+      f.staged_village[f.village_fixed + static_cast<size_t>(k)] =
+          ge::mountain::app::vehicle_instance(
+              ge::mountain::village::vehicle_at(*f.level, plan, k, scene.run_time), k);
+    }
+    if (scene.settle) r::cut_family(f.village);
+    r::set_instances(device, f.village, f.village_fixed,
+                     std::span<const r::Instance>(f.staged_village).subspan(f.village_fixed));
   }
   {
     GE_ZONE("frame.instances");

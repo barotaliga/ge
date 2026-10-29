@@ -16,7 +16,7 @@ camera-world 663b2b2d72b24d8b
 capture b274066858db8393
 capture-run 7bce75d64b174712
 charts 77f2319a5ea24272
-cli-loop de9c6a726fc004ea
+cli-loop 91e6e81134f41967
 console e8456b0db59560ce
 crowd cf02cf9a7c917783
 crowd-look 194a06db20f2ebb2
@@ -29,6 +29,7 @@ forest f1881cb20efe0144
 frame-pace c5058023a52812c3
 free 2b3f2cf5100bf9b4
 gpu-capture 8b5d5e3b7be5a4fc
+gpu-explosion ad9b9b63b7fc0982
 gpu-eye dec0f5b45ab21c1c
 gpu-load d0f81d39aa78ab53
 gpu-underwater eb4871f6a59d741e
@@ -110,7 +111,9 @@ taa 01ee5d58d90a05ce
 trace cccfaac48bafaa60
 traffic 488293494d3aafb5
 trails 1aaa468d0dbd81a0
+viewmodel ed059492dc9bd689
 village 23e3236139b8860d
+village-look 7c75c523c343dbe5
 wanted 507dbbcbbbb4187e
 water-audition 3b2a928e2111e5dd
 water-colour f5da3e4186a81286

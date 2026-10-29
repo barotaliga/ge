@@ -87,7 +87,7 @@ void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint
   u.moon[3] = static_cast<float>(n.moon_illuminance * pre);
   u.moon_light[0] = static_cast<float>(n.moon_surface * pre);
   u.moon_light[1] = static_cast<float>(n.earthshine * pre);
-  u.moon_light[2] = static_cast<float>(n.moon_radius);
+  u.moon_light[2] = static_cast<float>(n.moon_radius * view.moon_size);
   u.moon_light[3] = n.moon_key ? 1.0f : 0.0f;
   real_sun_direction(view, d);
   for (int i = 0; i < 3; ++i) u.night_sun[i] = static_cast<float>(d[i]);
@@ -122,6 +122,8 @@ void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint
   // THE SKY'S STYLE (render/sky_style.hpp), the second sun off the real one.
   real_sun_direction(view, d);
   style_rows(view.style, d, u.style);
+  // The sun's disc drawn larger (FrameView::sun_size) over the type's own.
+  u.style[2][3] = static_cast<float>(view.style.sun_size * view.sun_size);
   // THE FOG IN AREAS: none until render/fog.hpp's fog_uniforms says a volume is in reach.
   for (float& f : u.fog) f = 0.0f;
 }
