@@ -8,7 +8,7 @@
 //
 // By default it runs on the lab's own painted fixtures (fixtures.hpp), so its pictures and digest
 // are the same everywhere and may be published. `--source=<path>` runs it on the classic pack
-// found there (source.hpp: a known unchanged pack only); those pictures are derived from the
+// found there (source.hpp: any pack that reads); those pictures are derived from the
 // pack and stay on this machine: never attach them to a PR or publish them.
 //
 // ge:summary Lab: textures beside their enhanced albedo, lit view and maps; PSNR against cubic
@@ -158,12 +158,11 @@ void run(ge::lab::Lab& lab) {
     ce::Source src;
     std::string error;
     if (!ce::open_source(path, &src, &error)) {
-      lab.fail(error,
-               "next: give --source the shareware release zip, an installed folder or its pack.");
+      lab.fail(error, "next: give --source a release zip, an installed folder or its pack.");
       return;
     }
     std::vector<ce::PackTexture> all;
-    if (!ce::pack_textures(src.pack, &palette, &all, &error)) {
+    if (!ce::pack_textures(src.content(), &palette, &all, &error)) {
       lab.fail(
           error,
           "next: check the pack with `ge tool classicenhance -- verify`; skill: classicenhance.");

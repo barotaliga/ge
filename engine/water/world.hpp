@@ -9,6 +9,7 @@
 //   water::add_ocean(world, 0.0);                         // a level to the horizon
 //   water::add_river(world, centreline, 6.0);             // points with level and width, m^3/s
 //   water::add_volume(world, hulls);                      // convex hulls (a brush world's water)
+//   water::step(world, dt);                               // each fixed step (flow regions)
 //   water::Sample s = water::sample(world, x, y, z, t);   // anything, anywhere, any time
 //
 // THE KINDS. A LAKE is a polygon at a level; its sea is grown by the wind's mean over the lake's
@@ -37,7 +38,7 @@
 // ge:summary Bodies of water (lake, ocean, channel, volume) and the one sample query
 // ge:keywords water world body lake ocean river channel stream volume brush hull add_lake
 // ge:keywords add_ocean add_river add_volume sample surface depth bed current density look
-// ge:keywords optics colour add_flow step_flows wakes
+// ge:keywords optics colour add_flow step_flows step one-call wakes
 // ge:skill water
 // ge:test tests/water_world_test.cpp
 #pragma once
@@ -130,6 +131,11 @@ int add_volume(World& world, std::span<const Hull> hulls, Stuff stuff = {});
 int add_flow(World& world, Flow flow, Stuff stuff = {});
 // Every flow region one step of `dt` s.
 void step_flows(World& world, double dt);
+// THE ONE STEP: everything in the world that is stepped, one fixed step of `dt` s. Today that is
+// the flow regions; the lakes, oceans, channels and volumes are pure functions of the time and
+// the wakes prune themselves as they are emitted, so a world with no flow region costs nothing
+// here. A game's floating bodies and swimmers are its own (float.hpp, swim.hpp).
+void step(World& world, double dt);
 
 // WHAT THE WATER IS at a point and a moment.
 struct Sample {

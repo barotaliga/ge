@@ -174,7 +174,7 @@ TEST(pipeline_writes_every_stage_and_skips_what_is_current) {
   fs::remove_all(root);
 }
 
-TEST(pipeline_refuses_an_unverified_source) {
+TEST(pipeline_refuses_an_unopened_source) {
   ce::Source src;
   src.pack = {1, 2, 3};
   ce::RunReport report;

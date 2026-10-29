@@ -138,7 +138,8 @@ game presses in its step order.
 **As built (M29a).** `engine/snow/layer.hpp` (the layer, the cover, the tiles, `sample`),
 `press.hpp` (the shapes and `press`), `kinds.hpp` (the named snows), `reference.hpp` (a typical
 carving and skidding ski, a boot, a tyre, a snowmobile's track and a fallen body, with their
-loads) and `snapshot.hpp` (`save` / `load`, the `GESNOW1` format). The details settled there:
+loads) and `snapshot.hpp` (`save` / `load`, then the `GESNOW1` format; `GESNOW2` since M29d).
+The details settled there:
 
 - The sink a press reaches is measured from the UNTOUCHED cover, never from the column as it
   stands, so a second pass of the same contact changes nothing and a deeper one only deepens.
@@ -272,6 +273,48 @@ a run he tracked an hour ago finds it worn, not untouched. A **budget** caps the
 first, in a deterministic order. The tiers' distances are a game's to set: a courtyard is all
 near, a mountain mostly far.
 
+**As built (M29d).** `engine/snow/lod.hpp`. The game names its focus actors each step with
+`set_focus(layer, xz, t)`; every live fine tile within `LayerSpec::near` (64 m) of one is stamped
+near at `t`.
+
+- **The coarse layer** is one cell for every 16×16 samples (1.6 m at the default 0.1 m cell),
+  kept in sparse blocks of 4×4 cells under each tile. A coarse cell stores the SUM of its
+  samples' mass units and depths, so folding and refining are exact integer arithmetic and the
+  mass is kept to the unit both ways.
+- **A far imprint**: `press` sends an imprint farther than `near` from every focus, over ground no
+  fine tile holds, to `press_coarse`. Each coarse cell it touches is weathered to `t`, then worn
+  by the share of its samples the outline covers, its mass kept and its surface lowered. The
+  imprint is recorded as usual.
+- **Folding**: `fold_stale(layer, t)` folds every live tile no focus came near for
+  `LayerSpec::stale` (60 s), in slot order. `fold_tile` folds one and frees its slot for the next
+  tile. Cells no press ever touched go back to the cover, and their mass leaves `mass_in`.
+- **Refining**: a fine tile allocated over touched coarse cells is filled from them. Each cell's
+  units are spread evenly over its samples, and the remainder goes one unit each to the first
+  samples in sample order.
+- **The budget**: `LayerSpec::max_tiles` (2048 tiles, 64 MB). Past it, `cell_for` folds the tile
+  least recently near a focus that the operation in progress has not written (ties by slot), so
+  a long track stays inside the budget and refuses nothing.
+- **Snapshots**: `GESNOW2` writes the live tiles and the coarse blocks. `GESNOW1` still loads.
+
+Nothing here is stepped: the weather is read in closed form and the game presses in its own
+order, so there is no thread count for the bits to depend on, and `fold_stale` runs on the
+caller's thread in slot order.
+
+Measured (`snow-lod`): a 768 m strip of powder skied top to bottom by the focus skier while two
+skiers and a snowmobile cross it far from him. That is 38,863 presses, 23,663 of them coarse, with
+a 48-tile budget: 153 folds, a peak of 2.0 MB, against 79 MB if every tile it touched were kept
+fine. `snow-cost` (release build, one core):
+
+| Call | µs |
+| --- | --- |
+| `press`, a ski into a fine tile | 1.2 |
+| `press`, a ski into the coarse layer | 2.9 |
+| `sample`: the cover / a fine tile / a coarse cell | 0.03 / 0.06 / 0.08 |
+| fold / refine a tile | 14 / 20 |
+| save / load 40 tiles and their coarse blocks (1.3 MB) | 1100 / 315 |
+
+Held by `tests/snow_lod_test.cpp`.
+
 ## Drawn (`engine/render/snow*`, M29e–M29g)
 
 - **The GPU mirror**: the cover as plan textures over the layer; the fine tiles uploaded when
@@ -297,6 +340,21 @@ near, a mountain mostly far.
   ledge, a parked car's bonnet), with the same light model.
 - **What snow throws**: an imprint's ploughed mass emits spray through `render/particles`
   (the skier's spray becomes a caller); a blast throws a cloud.
+
+**As built (M29e, the light model).** `render/wgsl/snow_light.wgsl` is the engine's snow light
+model. A material includes it, works out its own surface, and calls two functions:
+
+- `snow_relief(p, foot, packed, bare, loose)` gives the micro-relief as a world slope to bend into
+  the normal.
+- `snow_light(SnowPoint, SnowGains)` gives the colour and the glint: Lambert and the sky's light
+  dimmed by a cavity, the wrap's blue terminator, the glare gathered by the packed share, the wet
+  sheen and the glitter.
+
+The building blocks (`snow_noise`, `snow_noise_grad`, `snow_relief_layer`, `snow_glints`, the
+hashes) are there for a material's own additions. The mountain's material
+(`mountain/app/snow.wgsl`) now keeps only its ground map, its tracks, and the corduroy and lanes
+it adds over the library. Every `world` view is bit for bit what it was, with the same digest
+and 100 dB on every view and band, so the material's cost is unchanged.
 
 ## Sound (`engine/audio`, M29h)
 

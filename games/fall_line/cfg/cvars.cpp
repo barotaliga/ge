@@ -133,6 +133,22 @@ void add_cvars(con::Console& c, Settings& s) {
           .min = 0,
           .max = 1},
          &s.clouds);
+  v.bind({.name = "r_sunsize",
+          .fallback = "1",
+          .flags = kStartup,
+          .help = "the sun's disc drawn larger, its radius times this, its light the same (1: as "
+                  "it is)",
+          .min = 0.5,
+          .max = 20},
+         &s.disc_sun);
+  v.bind({.name = "r_moonsize",
+          .fallback = "1",
+          .flags = kStartup,
+          .help = "the moon's disc drawn larger, its radius times this, its face as bright and "
+                  "its light the same (1: as it is)",
+          .min = 0.5,
+          .max = 20},
+         &s.disc_moon);
 
   v.bind({.name = "cl_view",
           .fallback = "chase",
@@ -252,6 +268,22 @@ void add_cvars(con::Console& c, Settings& s) {
           .min = -1,
           .max = 1},
          &s.thick);
+  v.bind({.name = "sv_cloudheight",
+          .fallback = "-1",
+          .flags = kRun,
+          .help = "the lowest cloud layer's base over the valley floor, m, the layers over it "
+                  "moved in proportion; a lower cloud crosses the sky faster (-1: the map's)",
+          .min = -1,
+          .max = 12000},
+         &s.cloud_height);
+  v.bind({.name = "sv_cloudspeed",
+          .fallback = "-1",
+          .flags = kRun,
+          .help = "how fast the clouds drift, a share of the wind aloft at their height (-1 or 1: "
+                  "the true wind)",
+          .min = -1,
+          .max = 10},
+         &s.cloud_speed);
   v.bind({.name = "sv_clouds",
           .fallback = "map",
           .flags = kRun,

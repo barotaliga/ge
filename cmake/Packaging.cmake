@@ -11,9 +11,9 @@
 # a target a game links.
 #
 # The package version is the VERSION file — the one place it is stated; the
-# release workflow writes it. Every target a consumer links is listed in
-# GE_EXPORTED_TARGETS below with its export name; a new public target is a
-# row there. ge::fp carries the floating-point determinism flags to the
+# release workflow writes it. Every target a consumer links is an engine module
+# registered with an EXPORT name (cmake/Modules.cmake), a plugin, or one of the
+# two flag sets below; nothing is listed here by hand. ge::fp carries the floating-point determinism flags to the
 # consumer, so a game built against the package computes what the engine's
 # own tests computed. ge_flags (warnings, -Werror) is linked
 # only as $<BUILD_INTERFACE:...> and never reaches a consumer.
@@ -30,13 +30,17 @@ set(GE_INSTALL_INCLUDEDIR "${CMAKE_INSTALL_INCLUDEDIR}/gameengine2")
 set(GE_INSTALL_CMAKEDIR "${CMAKE_INSTALL_LIBDIR}/cmake/gameengine2")
 
 # target -> export name (consumers see ge::<export name>)
-set(GE_EXPORTED_TARGETS ge_fp fp ge_isa isa ge_core core ge_audio audio ge_assets assets ge_ui ui ge_ai ai
-  ge_wind wind ge_water water ge_net net ge_console console ge_input input ge_move move ge_vfs vfs ge_camera camera ge_services services ge_snow snow ge_lab lab ge_prof prof ge_prof_alloc prof_alloc ge_play play
-  ge_replay replay)
+get_property(_ge_module_exports GLOBAL PROPERTY GE_MODULE_EXPORTS)
+set(GE_EXPORTED_TARGETS ge_fp fp ge_isa isa ${_ge_module_exports})
 # Every plugin is published as ge::<plugin> (cmake/Plugins.cmake collects them), and its
 # presentation half as ge::<plugin>_app when every engine target it links is published here
 # (APP audio is; render, gpu and platform are not yet, below).
-set(GE_PUBLISHED_MODULES core audio assets ui ai wind water console input move vfs camera snow lab prof play replay)
+set(GE_PUBLISHED_MODULES "")
+set(_ge_pairs ${_ge_module_exports})
+while(_ge_pairs)
+  list(POP_FRONT _ge_pairs _target _export_name)
+  list(APPEND GE_PUBLISHED_MODULES ${_export_name})
+endwhile()
 get_property(_ge_plugins GLOBAL PROPERTY GE_PLUGIN_TARGETS)
 foreach(_target IN LISTS _ge_plugins)
   get_property(_app_modules TARGET ${_target} PROPERTY GE_APP_MODULES)
@@ -77,14 +81,19 @@ install(TARGETS ${_ge_targets}
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
-# engine/platform, engine/gpu and engine/render (built on gpu) are not published yet: a
-# consumer would need SDL3 and Dawn from the package too, which the store builds (M11) and the ge CLI (M12) decide. The release
-# and packaging workflows build with -DGE_PLATFORM=OFF -DGE_GPU=OFF.
+# A module registered without EXPORT installs no headers (engine/platform, engine/gpu and
+# engine/render are not published yet: a consumer would need SDL3 and Dawn from the package too,
+# which the store builds (M11) and the ge CLI (M12) decide; engine/cli is a tool). The release and
+# packaging workflows build with -DGE_PLATFORM=OFF -DGE_GPU=OFF.
+get_property(_ge_unexported GLOBAL PROPERTY GE_MODULE_UNEXPORTED_DIRS)
+set(_ge_module_excludes "")
+foreach(_dir IN LISTS _ge_unexported)
+  list(APPEND _ge_module_excludes REGEX "/engine/${_dir}$" EXCLUDE)
+endforeach()
 install(DIRECTORY "${PROJECT_SOURCE_DIR}/engine/"
   DESTINATION ${GE_INSTALL_INCLUDEDIR}
   FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h" PATTERN "*.inl"
-  PATTERN "gpu" EXCLUDE PATTERN "platform" EXCLUDE PATTERN "render" EXCLUDE
-  PATTERN "cli" EXCLUDE PATTERN "labs" EXCLUDE PATTERN "os_socket.hpp" EXCLUDE
+  ${_ge_module_excludes} PATTERN "labs" EXCLUDE PATTERN "os_socket.hpp" EXCLUDE
   PATTERN "session_wire.hpp" EXCLUDE PATTERN "reach_wire.hpp" EXCLUDE PATTERN "portmap_wire.hpp" EXCLUDE
   PATTERN "replicate_wire.hpp" EXCLUDE PATTERN "to_view.hpp" EXCLUDE
   PATTERN "sim_store_state.hpp" EXCLUDE)

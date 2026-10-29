@@ -26,10 +26,9 @@ namespace fs = std::filesystem;
 namespace {
 
 constexpr const char* kNotice =
-    "This folder was made on this machine from your own copy of the classic shareware pack.\n"
-    "The pack's licence lets it be passed on only unchanged; everything else here is derived\n"
-    "from it, so keep it on this machine and do not share or publish it. Delete the folder at\n"
-    "any time: the pipeline makes it again from the pack.\n";
+    "This folder was made on this machine from your own copy of the classic packs. Everything\n"
+    "here is read or derived from them, so keep it on this machine and do not share or publish\n"
+    "it. Delete the folder at any time: the pipeline makes it again from the packs.\n";
 
 std::string fnv_hex(const std::string& text) {
   uint64_t h = 1469598103934665603ull;
@@ -92,14 +91,23 @@ std::string map_name(const std::string& path) {
   return path.substr(5, path.size() - 9);  // "maps/" ... ".bsp"
 }
 
+constexpr const char* kUnverified = "unverified: the player's own copy";
+
 bool run_pack(const Source& src, const fs::path& dir, StageResult& r, std::string* error) {
-  if (!write_whole(dir / "pack" / "pak0.pak", src.pack) ||
-      !write_text(dir / "NOTICE.txt", kNotice)) {
+  bool copied = write_whole(dir / "pack" / "pak0.pak", src.pack);
+  for (const LaterPack& p : src.later)
+    copied = copied && write_whole(dir / "pack" / p.name, p.bytes);
+  if (!copied || !write_text(dir / "NOTICE.txt", kNotice)) {
     *error = "cannot write into " + dir.string() + "; check the cache folder is writable";
     return false;
   }
   std::string text = "route " + std::string(route_name(src.route)) + "\npath " + src.path +
-                     "\npack-sha256 " + src.pack_sha256 + "\npack " + src.known->what + "\n";
+                     "\npack-sha256 " + src.pack_sha256 + "\npack " +
+                     (src.known != nullptr ? src.known->what : kUnverified) + "\n";
+  for (const LaterPack& p : src.later) {
+    text += "later " + p.name + " " + p.sha256 + " " +
+            (p.known != nullptr ? p.known->what : kUnverified) + "\n";
+  }
   if (!src.zip_sha256.empty()) {
     text += "zip-sha256 " + src.zip_sha256 + "\nzip " +
             (src.zip ? src.zip->what : "not a known release zip; its pack is") + "\n";
@@ -108,8 +116,10 @@ bool run_pack(const Source& src, const fs::path& dir, StageResult& r, std::strin
     *error = "cannot write " + (dir / "source.txt").string();
     return false;
   }
-  r.files = 3;
-  r.note = std::string("the pack, verified: ") + src.known->what;
+  r.files = 3 + uint32_t(src.later.size());
+  r.note = src.known != nullptr ? std::string("the pack, verified: ") + src.known->what
+                                : std::string("the pack, ") + kUnverified;
+  if (!src.later.empty()) r.note += "; and " + std::to_string(src.later.size()) + " later pack(s)";
   return true;
 }
 
@@ -117,7 +127,7 @@ bool run_textures(const Source& src, const fs::path& dir, const RunOptions& o, S
                   std::string* error) {
   Palette palette;
   std::vector<PackTexture> textures;
-  if (!pack_textures(src.pack, &palette, &textures, error)) return false;
+  if (!pack_textures(src.content(), &palette, &textures, error)) return false;
   if (o.texture_limit > 0 && textures.size() > o.texture_limit) textures.resize(o.texture_limit);
   std::string index = "# name folder width height material glows (first map)\n";
   uint32_t glowing = 0;
@@ -157,10 +167,10 @@ bool run_textures(const Source& src, const fs::path& dir, const RunOptions& o, S
 
 bool run_lightmaps(const Source& src, const fs::path& dir, StageResult& r, std::string* error) {
   vfs::Pak pak;
-  if (!vfs::read_pak(src.pack, &pak, error)) return false;
+  if (!vfs::read_pak(src.content(), &pak, error)) return false;
   for (const vfs::PakEntry* e : maps_of(pak)) {
     brush::Map map;
-    if (!brush::read_bsp(vfs::pak_file(src.pack, *e), &map, error)) {
+    if (!brush::read_bsp(vfs::pak_file(src.content(), *e), &map, error)) {
       *error = e->path + ": " + *error;
       return false;
     }
@@ -174,7 +184,7 @@ bool run_lightmaps(const Source& src, const fs::path& dir, StageResult& r, std::
 bool run_sounds(const Source& src, const fs::path& dir, const RunOptions& o, StageResult& r,
                 std::string* error) {
   vfs::Pak pak;
-  if (!vfs::read_pak(src.pack, &pak, error)) return false;
+  if (!vfs::read_pak(src.content(), &pak, error)) return false;
   std::vector<const vfs::PakEntry*> sounds;
   for (const vfs::PakEntry& e : pak.entries) {
     if (e.path.rfind("sound/", 0) == 0 && e.path.ends_with(".wav")) sounds.push_back(&e);
@@ -183,7 +193,7 @@ bool run_sounds(const Source& src, const fs::path& dir, const RunOptions& o, Sta
   std::string index = "# path seconds loop-start source-hz noise-db removed-db added-db\n";
   for (const vfs::PakEntry* e : sounds) {
     Pcm in;
-    if (!read_wav(vfs::pak_file(src.pack, *e), &in, error)) {
+    if (!read_wav(vfs::pak_file(src.content(), *e), &in, error)) {
       *error = e->path + ": " + *error;
       return false;
     }
@@ -212,16 +222,17 @@ bool run_sounds(const Source& src, const fs::path& dir, const RunOptions& o, Sta
 bool run_models(const Source& src, const fs::path& dir, const RunOptions& o, StageResult& r,
                 std::string* error) {
   vfs::Pak pak;
-  if (!vfs::read_pak(src.pack, &pak, error)) return false;
+  if (!vfs::read_pak(src.content(), &pak, error)) return false;
   const vfs::PakEntry* pal = vfs::pak_find(pak, "gfx/palette.lmp");
   if (pal == nullptr || pal->size < 768) {
     *error = "the pack has no gfx/palette.lmp of 768 bytes; it is not the classic pack";
     return false;
   }
   Palette palette;
-  std::copy_n(vfs::pak_file(src.pack, *pal).data(), 768, palette.rgb.data());
+  std::copy_n(vfs::pak_file(src.content(), *pal).data(), 768, palette.rgb.data());
   ModelStats stats;
-  if (!enhance_models(src.pack, palette, dir, o.models, o.textures, &stats, error)) return false;
+  if (!enhance_models(src.content(), palette, dir, o.models, o.textures, &stats, error))
+    return false;
   r.files = stats.files;
   r.note = std::to_string(stats.models) + " models as glTF, skins at " +
            std::to_string(o.models.skin_scale) + "x, " + std::to_string(stats.sprites) +
@@ -313,8 +324,8 @@ bool pack_textures(std::span<const uint8_t> pack_bytes, Palette* palette,
 bool run_pipeline(const Source& source, const fs::path& root_in, const RunOptions& opts,
                   RunReport* report, std::string* error) {
   report->stages.clear();
-  if (source.known == nullptr) {
-    *error = "the source is not a verified pack; open it with open_source first";
+  if (source.pack_sha256.empty()) {
+    *error = "the source is not an opened pack; open it with open_source first";
     return false;
   }
   const fs::path root = root_in.empty() ? default_cache_root() : root_in;
@@ -322,7 +333,7 @@ bool run_pipeline(const Source& source, const fs::path& root_in, const RunOption
     *error = "no cache folder: set GE_CLASSIC_CACHE to a folder on this machine";
     return false;
   }
-  report->dir = pack_dir(root, source.pack_sha256);
+  report->dir = pack_dir(root, source.set_sha256.empty() ? source.pack_sha256 : source.set_sha256);
   for (const Stage s : kStages) {
     StageResult r;
     r.stage = s;

@@ -41,6 +41,7 @@ router's Skills table and the directories against each other.
 | `perf` | Budgets, measuring, the proofs a speed-up owes, the levers |
 | `agent-interface` | Diagnostics as prompts, consumer skills, the `ge` CLI |
 | `water` | Water and wind: the wind's field and sources, bodies of water, waves, floating, swimming, colour, flow, and their labs |
+| `grass` | Grass: kinds and recipes, covers from a heightfield or a mesh's floors, the blade scatter, the sway in the wind, the grass drawn, and their labs |
 | `bots` | What a bot decides: `engine/ai`, the decision record, `ge why`, making a bot more human |
 | `snow` | Snow over any ground: the column model, the cover and tiles, `press` and imprints, the snapshot, `ge snow`, the M29 plan |
 | `console` | Cvars and their tiers, cfg files, the console language, binds, the drop-down console, `ge cvar` and `ge cfg` |
@@ -67,3 +68,4 @@ One skill per plugin, named after it (`docs/architecture.md` § Plugins).
 | `morph` | `plugins/morph`: classic vertex-animated models and sprites read into one view, the fixture writers, smooth normals and the optional rounding, and the `morph` lab |
 | `classicenhance` | `plugins/classicenhance`: the classic shareware pack verified and enhanced on the player's own machine into a local cache (textures, their maps, the lightmap stage), run through `ge tool` |
 | `rooms` | `plugins/rooms`: the engine's own level format, rooms of plain geometry grown from their seeds (reliefs, caves), its text form and its lab |
+| `shooter` | `plugins/shooter`: the classic player move in floats, clip hulls and their trace, the recorded scenarios and the pmove lab |
