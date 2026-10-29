@@ -10,16 +10,16 @@
 //   instances.cull       -> instances.early (the forest, the figures and the crowd: the
 //                           frustum, the last frame's pyramid)
 //   terrain.horizon      -> terrain.horizon (the bakes due)
-//   trails.fine          -> trails.fine (the tracks laid since the last frame, or the whole
-//                           window redrawn from the history when it moved)
+//   trails.fine          -> trails.fine (the tracks laid since, or the window redrawn as it moves)
 //   trails.coarse        -> trails.coarse (the tracks laid since the last frame)
 //   particles.sim        -> particles (the spray thrown since the last frame, flown a frame)
 //   precip.sim           -> precip (the snow and rain round the eye, carried a frame on the wind)
 //   shadows.cull         -> shadows.lists (the casters of the maps drawn this frame)
 //   shadows.near         -> shadows.maps (the near cascade: the forest, when due)
 //   shadows.far          -> shadows.maps (the far cascade, when due)
-//   shadows.figures      -> shadows.maps (the figures' atlas, every frame: the racers, the
-//                           nearest amateurs; each tile its own casters)
+//   shadows.figures      -> shadows.maps (the figures' atlas: the racers, the nearest amateurs)
+//   fog.inject           -> fog.media (render/fog.hpp: the scene's fog lit a froxel each)
+//   fog.integrate        -> fog.volume (each column toward the eye; every haze reads it)
 //   terrain.depth        -> depth (the prepass)
 //   instances.depth      -> depth (the early lists' prepass)
 //   hiz                  -> hiz (the depth's pyramid)
@@ -55,7 +55,7 @@
 // is an error.
 //
 // ge:summary Fall Line's frame: its pass table over engine/render and the GPU half it owns
-// ge:keywords fall-line frame pass-table game-frame create_frame draw pass_table_faults
+// ge:keywords fall-line frame pass-table game-frame create_frame draw pass_table_faults fog
 // ge:keywords render offscreen surface stats draw_wire wire-probe wireframe water add_water
 // ge:skill render
 #pragma once
@@ -79,6 +79,7 @@
 #include "render/bloom.hpp"
 #include "render/cloud_kinds.hpp"
 #include "render/clouds.hpp"
+#include "render/fog.hpp"
 #include "render/frame.hpp"
 #include "render/grade.hpp"
 #include "render/hiz.hpp"
@@ -128,6 +129,7 @@ struct FrameOptions {
   bool precip = true;    // what falls (snow, sleet, rain), when the map's sky snows
   bool splashes = true;  // the rain's splashes on the ground (with `precip`)
   bool wet = true;       // the rain wets the ground: darker, mirroring, pooled on the flats
+  bool fog = true;       // the scene's fog in areas (FrameScene::fog, render/fog.hpp) drawn
   bool weather =
       true;  // the map's sky and cloud in the picture (mountain/app/cloud_field.hpp): off, clear
   double clouds = 1.0;  // the share of the cloud march's steps (0.25..1); 0: no layer drawn
@@ -147,6 +149,7 @@ struct FrameOptions {
   bool cloud_spread = true;   // the quarter's march spread over four frames, the rest reprojected
   double reach_m = 0;  // how far the picture draws, misted (render/view.hpp); 0: the whole ground
   ge::render::PrecipSettings fall;
+  ge::render::FogSettings froxels;             // the fog in areas' froxel volume
   ge::mountain::app::TrailOptions trail_maps;  // their sizes
 };
 
@@ -173,6 +176,8 @@ struct FrameScene {
   const ge::ui::DrawList* overlay = nullptr;
   // The run's clock, s: where the village's traffic is drawn (sim/village.hpp's `vehicle_at`).
   double run_time = 0;
+  // The fog in areas this frame (render/fog.hpp): mist, ground fog, dust; empty, none.
+  std::span<const ge::render::FogVolume> fog = {};
 };
 
 struct GameFrame {
@@ -195,6 +200,7 @@ struct GameFrame {
   std::vector<ge::mountain::app::TrailStamp> laid;
   ge::render::Particles particles;
   ge::render::Precip precip;
+  ge::render::Fog fog;
   ge::wind::Wet wet;    // the water on the ground, stepped by the frames' clock
   double wet_time = 0;  // the last drawn frame's time_s
   bool wet_placed =

@@ -52,7 +52,9 @@ struct FrameUniforms {
   float eye[4];              // world xyz (m); w: the eye's altitude over the sea, km
   float sun[4];              // unit direction toward the key light; w: its illuminance, pre-exposed
   float size[4];             // render width, height, 1/width, 1/height
-  float time[4];             // seconds, frame number, the lamps' adapted luminance, 0
+  float time[4];             // seconds, frame number, the lamps' adapted luminance, the scene's
+                             // own light the eye adapts to (FrameView::adapt_cd, pre-exposed; 0:
+                             // the sky's alone)
   float world[4];       // y = 0's altitude over the sea (km), the pre-exposure, the moon's direct
                         // light while the sun keys, 1 when the haze is the moon's
   float planes[6][4];   // the frustum (view.hpp's five), the sixth all zero
@@ -83,10 +85,13 @@ struct FrameUniforms {
   float style[kSkyStyleRows][4];
   // Other worlds' moons (render/moons.hpp's kMoonRows a moon; a drawn radius of 0: none).
   float moons[kMaxMoons * kMoonRows][4];
+  // The fog in areas (render/fog.hpp's `fog_uniforms`): the froxel volume's range (m; 0: none
+  // in reach, nothing reads it) and its slices. fill_uniforms writes zero.
+  float fog[4];
 };
 static_assert(sizeof(FrameUniforms) == 64 * 3 + 16 * 5 + 16 * 6 + 16 * 9 +
                                            16 * kCloudRows * kCloudLayers + 16 * 5 +
-                                           16 * kSkyStyleRows + 16 * kMaxMoons * kMoonRows,
+                                           16 * kSkyStyleRows + 16 * kMaxMoons * kMoonRows + 16,
               "match frame_types.wgsl");
 
 // The last frame's unjittered camera. Invalid on the first frame and after a cut, when the

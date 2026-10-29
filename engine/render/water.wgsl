@@ -247,8 +247,11 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   let n = normalize(vec3f(-slope.x, 1.0, -slope.y));
   let dist = length(in.rel);
   let uv = in.position.xy * frame.size.zw;
-  let c = shade_water(n, in.rel, in.xz, in.position.xy, body.info.x, lost, body.rough.z,
-                      Optics(body.c.rgb, body.kd.rgb, body.deep.rgb, body.emission.rgb), 0.0);
+  // A body under a roof (a cave's pool) sees the sky through `open` of its dome (rough.w) and the
+  // room's own light, a share of a white face's (emission.w), over the rest.
+  let c = shade_water_roofed(n, in.rel, in.xz, in.position.xy, body.info.x, lost, body.rough.z,
+                             Optics(body.c.rgb, body.kd.rgb, body.deep.rgb, body.emission.rgb),
+                             0.0, body.rough.w, body.emission.w);
   var out: FragmentOut;
   out.colour = vec4f(haze(c, uv, dist), 1.0);
   out.motion = vec4f(screen_motion(frame, vec4f(in.rel, 1.0), in.position.xy), 0.0, 0.0);
