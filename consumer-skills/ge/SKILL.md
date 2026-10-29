@@ -32,7 +32,7 @@ ge test [--filter=<regex>]       # every test and lab smoke; each failure a find
 ge test --affected [--base=<ref>] [--list]  # only the tests the change reaches (the include graph)
 ge lab <id> [--tag=before | --compare=before] [-- <its flags>]   # measure and LOOK
 ge lab publish <id>... [--before=before]   # the run (or several labs') on one self-contained page for the report and the PR
-ge digest [<lab>...] [--write]   # the labs' digests beside tests/labs_digests.txt; --write moves their rows
+ge digest [<lab>...] [--write]   # the labs' digests beside tests/digests/<lab>.txt; --write moves their files
 ge digest --affected [--list]    # only the labs the change since --base reaches
 ge digest --diff                 # every lab, printing only the digests off the baseline
 ge golden diff [<test>] [--base=<ref>]   # what moved in each golden file, column by column
@@ -55,6 +55,8 @@ ge graph <file>... [--kind=<k>]  # chart traces, benches, profiles: PNG + SVG, o
 ge net inspect <pcap>            # a network capture, datagram by datagram (skill: multiplayer)
 ge net stats <pcap>              # per connection: kbps, round trip, loss, resends; charted
 ge net sim [--presets=wifi,bad]  # fake clients and a host over bad links, no game needed
+ge snow show <file.snow>         # a saved snow layer: tiles, pressed samples, mass, maps (skill: snow)
+ge snow column <file.snow> --at=x,z  # the snow's column at a point
 ge cvar ls [<prefix>]            # the game's settings: value, default, range, flags, help
 ge cvar get <name>...            # the named ones (an unknown name: the nearest known)
 ge cfg check <file>... [--server]   # a cfg's problems at file:line, and names nothing reads

@@ -32,6 +32,8 @@ TEST(every_kind_is_found_by_its_name_and_its_bands_are_in_order) {
     CHECK(k.drop >= 3 && k.drop <= 60 && k.spread > 0 && k.spread <= 0.6);
     // A halo only off ice (the large particles).
     if (k.halo > 0) CHECK(k.drop >= 25);
+    // Its thinnest patches a share of its cores, a patch at least a cell across.
+    CHECK(k.thin > 0 && k.thin <= 1 && k.thick_cells >= 1);
   }
   CHECK(names.size() >= 13);
   CHECK(r::cloud_kind_named("cumulonimbus")->anvil > 0);
@@ -47,6 +49,22 @@ TEST(every_kind_is_found_by_its_name_and_its_bands_are_in_order) {
   CHECK(r::cloud_kind_named("altostratus")->spread > 0.3);
   CHECK(r::cloud_kind_named("altostratus")->deck == 1 && r::cloud_kind_named("cirrus")->deck == 0);
   CHECK(r::cloud_kind_named("mammoth") == nullptr);
+}
+
+TEST(the_sun_shows_through_the_thin_patches_of_the_kinds_it_does_in_the_sky) {
+  const auto thinnest = [](const char* name) {
+    const r::CloudKind* k = r::cloud_kind_named(name);
+    return k->opacity * k->thin;
+  };
+  const auto thickest = [](const char* name) { return r::cloud_kind_named(name)->opacity; };
+  // A grey middle veil runs from the sun as through frosted glass to hiding it; a low grey lid's
+  // thin patches show a watery disc; a rain deck never shows it; a high veil never hides it.
+  CHECK(thinnest("altostratus") < 2 && thickest("altostratus") > 20);
+  CHECK(thinnest("stratus") < 5 && thickest("stratus") > 20);
+  CHECK(thinnest("nimbostratus") > 30);
+  CHECK(thickest("veil") < 1 && thickest("cirrostratus") < 2);
+  // The kinds that vary most are the sheets; a storm's tower is thick all through.
+  CHECK(r::cloud_kind_named("cumulonimbus")->thin >= 0.5);
 }
 
 TEST(a_stack_is_read_from_names_joined_by_plus) {

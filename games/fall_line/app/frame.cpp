@@ -16,6 +16,7 @@
 #include "fall_line/app/sky_type.hpp"
 #include "mountain/air/air.hpp"
 #include "mountain/app/cloud_field.hpp"
+#include "mountain/app/village_look.hpp"
 #include "mountain/app/weather_look.hpp"
 #include "prof/zones.hpp"
 #include "wind/field.hpp"
@@ -68,6 +69,7 @@ constexpr r::PassRow kPassTable[] = {
     {"taa", "hdr motion depth taa.history sky.light", "taa.history"},
     {"bloom", "taa.history", "bloom"},
     {"post", "taa.history bloom sky.light", "final"},
+    {"ui", "final", "final"},
 };
 // What is made at load rather than by a pass (the instances' meshes and streams: the figures'
 // placements and palettes are written before the frame is encoded, their vertices by the skinning
@@ -163,6 +165,11 @@ FrameOptions frame_options(const cfg::Settings& s) {
   o.weather = s.weather;
   o.clouds = s.clouds;
   o.cover = s.cover;
+  o.thick = s.thick;
+  o.cloud_height = s.cloud_height;
+  o.cloud_speed = s.cloud_speed;
+  o.sun_size = s.disc_sun;
+  o.moon_size = s.disc_moon;
   cloud_stack_of(s, o);
   return o;
 }
@@ -240,6 +247,7 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
   r::create_post(device, f->pipelines, f->post, f->frame_layout, output, post);
   r::set_grade(device, f->post, bake_grade());
   r::create_skin_pipelines(device, f->pipelines, f->skinning);
+  r::create_ui_pass(device, f->pipelines, f->ui, output);
   if (!f->pipelines.finish(device)) return nullptr;
   ge::gpu::end_load(device);
   f->frame_group = r::frame_group(device, f->frame_layout, f->uniforms, f->sky);
@@ -291,6 +299,58 @@ void set_water(ge::gpu::Device& device, GameFrame& f, int index, const ge::water
   r::set_water_body(device, f.water, index, body);
 }
 
+void show_village(ge::gpu::Device& device, GameFrame& f,
+                  std::shared_ptr<const sim::Village> shown) {
+  namespace ma = ge::mountain::app;
+  namespace vg = ge::mountain::village;
+  if (f.shown_village != nullptr || shown == nullptr) return;
+  f.shown_village = std::move(shown);
+  const sim::Village& village = *f.shown_village;
+  // The forest without the felled trees: their instances dropped, the count cut to the rest.
+  const std::vector<r::Instance> trees = tree_instances(*f.level, village.felled);
+  r::set_instances(device, f.forest, 0, trees);
+  r::set_instance_count(f.forest, static_cast<uint32_t>(trees.size()));
+  // The cascades drew the trees that stood: drawn again, without the felled ones' shadows.
+  r::reset_sun_shadows(f.shadows);
+  // Three families: the streets (one instance, casting nothing: a sheet on the snow), the parked
+  // cars (still: cast into the cascades) and the traffic (moving: cast into the atlas's tiles).
+  r::MeshSource sheet;
+  sheet.lods.push_back({ma::street_mesh(*f.level, village.ground), 0.0f});
+  if (sheet.lods.front().mesh.vertex_count() > 0) {
+    r::create_family(device, f.instancing, f.streets, "village.streets",
+                     std::span<const r::MeshSource>(&sheet, 1), ma::village_materials(), 1);
+    r::bind_family_hiz(device, f.instancing, f.streets, f.hiz);
+    r::Instance at;
+    at.position[0] = village.ground.x0;
+    at.position[2] = village.ground.z0;
+    r::set_instances(device, f.streets, 0, std::span<const r::Instance>(&at, 1));
+    f.families.push_back(&f.streets);
+  }
+  if (!village.traffic) return;
+  const vg::TrafficPlan& plan = *village.traffic;
+  if (!plan.parked.empty()) {
+    r::create_family(device, f.instancing, f.parked, "village.parked", ma::vehicle_meshes(),
+                     ma::village_materials(), static_cast<uint32_t>(plan.parked.size()));
+    r::create_family_casters(device, f.instancing, f.parked, r::kCascades);
+    r::bind_family_hiz(device, f.instancing, f.parked, f.hiz);
+    std::vector<r::Instance> cars;
+    cars.reserve(plan.parked.size());
+    for (const vg::Parked& car : plan.parked) cars.push_back(ma::parked_instance(car));
+    r::set_instances(device, f.parked, 0, cars);
+    f.families.push_back(&f.parked);
+    f.still.push_back(&f.parked);
+  }
+  if (!plan.vehicles.empty()) {
+    r::create_family(device, f.instancing, f.traffic, "village.traffic", ma::vehicle_meshes(),
+                     ma::village_materials(), static_cast<uint32_t>(plan.vehicles.size()));
+    r::create_family_casters(device, f.instancing, f.traffic, r::kMaxShadowFigures);
+    r::bind_family_hiz(device, f.instancing, f.traffic, f.hiz);
+    f.staged_traffic.assign(plan.vehicles.size(), r::Instance{});
+    f.families.push_back(&f.traffic);
+    f.moving.push_back(&f.traffic);
+  }
+}
+
 void resize(ge::gpu::Device& device, GameFrame& f, uint32_t width, uint32_t height) {
   make_targets(device, f, width, height);
 }
@@ -298,8 +358,11 @@ void resize(ge::gpu::Device& device, GameFrame& f, uint32_t width, uint32_t heig
 void cut(GameFrame& f) {
   f.history.valid = false;
   r::reset_taa(f.taa);
+  // The cascades were centred on the last camera: drawn again round the new one.
+  r::reset_sun_shadows(f.shadows);
   r::cut_family(f.figures);
   r::cut_family(f.crowd);
+  if (!f.staged_traffic.empty()) r::cut_family(f.traffic);
   for (ge::skier::RigPoser& p : f.posers) p = {};
   for (ge::skier::RigPoser& p : f.crowd_posers) p = {};
   for (r::Skin& s : f.skins) r::settle_skin(s);
@@ -369,15 +432,24 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   GE_ZONE("frame");
   // The map's sky at the view's moment: the cloud, the deck and the fog it is seen under.
   r::FrameView view = seen;
+  view.sun_size = f.options.sun_size;
+  view.moon_size = f.options.moon_size;
   if (f.options.weather) {
+    // How far dusk has fallen under the view's sun (the evening's jet and its scud), and the
+    // height and the speed picked by hand.
+    // (With the moon the key light the view's sun_* are the moon's, and Night's the sun's.)
+    const double sun = view.night.moon_key ? view.night.sun_elevation : view.sun_elevation;
+    const ge::mountain::app::Aloft aloft{.dusk = ge::mountain::app::dusk_of(sun),
+                                         .speed = f.options.cloud_speed,
+                                         .base = f.options.cloud_height};
     ge::mountain::app::sky_at(*f.level, view.time_s, view.weather, view.clouds,
-                              f.options.clouds > 0, view.eye[1]);
+                              f.options.clouds > 0, view.eye[1], aloft);
     // Kinds of cloud picked by hand (sv_clouds) in place of the map's, dealt off its seed.
     if (f.options.cloud_count >= 0 && f.options.clouds > 0) {
       const ge::mountain::mapgen::Level& l = *f.level;
       view.clouds = ge::mountain::app::cloud_layers_of(f.options.cloud_kinds, f.options.cloud_count,
                                                        l.weather, l.seed, l.mountain.base.y,
-                                                       l.sun.latitude, view.time_s);
+                                                       l.sun.latitude, view.time_s, aloft);
       view.weather = ge::mountain::app::weather_look(
           l.weather, ge::mountain::air::fall_at(l, view.time_s, view.eye[1]),
           view.clouds.count > 0);
@@ -388,6 +460,11 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
       const double k = f.options.cover / view.clouds.layers[0].cover;
       for (int i = 0; i < view.clouds.count; ++i)
         view.clouds.layers[i].cover = std::min(1.0, view.clouds.layers[i].cover * k);
+    }
+    // A thickness picked by hand: every layer's, between its kind's thin patches and its cores.
+    if (f.options.thick >= 0) {
+      for (int i = 0; i < view.clouds.count; ++i)
+        view.clouds.layers[i].thick_bias = 2 * std::min(f.options.thick, 1.0) - 1;
     }
     view.clouds.steps = f.options.clouds;
     view.clouds.quarter = f.options.cloud_quarter;
@@ -508,6 +585,20 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   } else {
     r::set_instance_count(f.crowd, 0);
   }
+  const std::optional<ge::mountain::village::TrafficPlan>* traffic =
+      f.shown_village != nullptr ? &f.shown_village->traffic : nullptr;
+  if (traffic != nullptr && traffic->has_value() && !f.staged_traffic.empty()) {
+    GE_ZONE("frame.traffic");
+    // The traffic where the run's clock has it.
+    const ge::mountain::village::TrafficPlan& plan = traffic->value();
+    for (size_t k = 0; k < f.staged_traffic.size(); ++k) {
+      const auto id = static_cast<int32_t>(k);
+      f.staged_traffic[k] = ge::mountain::app::vehicle_instance(
+          ge::mountain::village::vehicle_at(*f.level, plan, id, scene.run_time), id);
+    }
+    if (scene.settle) r::cut_family(f.traffic);
+    r::set_instances(device, f.traffic, 0, f.staged_traffic);
+  }
   {
     GE_ZONE("frame.instances");
     r::SeeThrough see;
@@ -524,11 +615,9 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   // the crowd by its own box, so an amateur is drawn only into the tiles he can shade.
   shadow_centres(std::span<const ge::skier::SkierState>(scene.skiers.data(), racers), scene.crowd,
                  view.eye, r::kMaxShadowFigures, f.figure_centres);
-  r::InstanceFamily* still[] = {&f.forest};
-  r::InstanceFamily* moving[] = {&f.figures, &f.crowd};
   {
     GE_ZONE("frame.shadows");
-    r::prepare_sun_shadows(device, f.shadows, view, f.figure_centres, still, moving);
+    r::prepare_sun_shadows(device, f.shadows, view, f.figure_centres, f.still, f.moving);
   }
   // Encode, in the pass table's order (the recorder times each pass's encoding).
   GE_ZONE("frame.encode");
@@ -551,7 +640,8 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   }
   r::encode_particles_sim(f.particles, f.pipelines, f.recorder, encoder);
   r::encode_precip_sim(f.precip, f.pipelines, f.recorder, encoder);
-  r::encode_sun_shadows(f.shadows, still, moving, f.instancing, f.pipelines, f.recorder, encoder);
+  r::encode_sun_shadows(f.shadows, f.still, f.moving, f.instancing, f.pipelines, f.recorder,
+                        encoder);
   r::encode_terrain_depth(f.terrain, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
   r::encode_instances_depth(families, f.instancing, f.pipelines, f.recorder, encoder, f.targets,
                             f.frame_group, f.instance_light, false);
@@ -582,6 +672,12 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   }
   r::encode_post(f.post, f.pipelines, f.recorder, encoder, f.frame_group, f.post_groups[input],
                  output);
+  if (scene.overlay != nullptr && scene.overlay->size() > 0) {
+    r::prepare_ui(device, f.ui, *scene.overlay, f.output_width, f.output_height);
+    r::encode_ui(f.ui, f.pipelines, f.recorder, encoder, output);
+  } else {
+    f.recorder.compute(encoder, "ui").End();  // the row runs empty, as bloom's does
+  }
   f.recorder.end_frame(encoder);
   wgpu::CommandBuffer commands = encoder.Finish();
   f.recorder.stats.cpu_ms =

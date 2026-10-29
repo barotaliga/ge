@@ -40,7 +40,8 @@ for anything the simulation reads, `render` for a pass, `audio` for a voice, `la
 | The named liquids (lava, slime, ...) | `engine/water/liquids.hpp` | `liquids` | `tests/water_liquids_test.cpp` |
 | Lava and slime drawn, the looks, the eye's key (`adapt_cd`) | `engine/render/liquid.hpp`, `liquid.wgsl` | `gpu-lava`, `gpu-slime` | `tests/render_liquid_test.cpp` |
 | The water's sound: what an ear hears (`hear`), the bed, splashes, strokes, bubbles, the muffle | `engine/water/sound.hpp` | `water-audition` | `tests/water_sound_test.cpp` |
-| One call, Fall Line's water | the rows M24k–M24l | the doc's § Labs | as each row lands |
+| The one step (`water::step`) and a game repo's water: `ge add water`, its template, the `water` consumer skill | `engine/water/world.hpp`, `templates/water/`, `consumer-skills/water/`, `engine/cli/add.cpp` | the scaffold's `water` (packaging's `scaffold` job) | `tests/cli_add_test.cpp`, `tests/water_world_test.cpp` |
+| Fall Line's water | the row M24l | the doc's § Labs | as it lands |
 
 ## The rules
 

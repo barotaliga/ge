@@ -60,13 +60,16 @@ TEST(the_server_cvars_reach_the_map) {
   ge::console::Console c;
   Settings s;
   fall_line::cfg::add_cvars(c, s);
-  c.execute("sv_weather snow; sv_wind 12; sv_winddir 90; sv_cover 0.6; sv_skyrate 60");
+  c.execute(
+      "sv_weather snow; sv_wind 12; sv_winddir 90; sv_cover 0.6; sv_thick 0.25; sv_skyrate 60; "
+      "sv_cloudheight 300; sv_cloudspeed 1");
   CHECK(c.problems().empty());
   mg::Level l = fair_noon();
   CHECK(fall_line::sim::server_sky(s, l).empty());
   CHECK(l.weather.kind == mg::WeatherKind::snow && l.weather.wind == 12);
   CHECK(std::fabs(l.weather.wind_from - 1.5707963267948966) < 1e-12);
-  CHECK(s.cover == 0.6 && s.sky_rate == 60);
+  CHECK(s.cover == 0.6 && s.thick == 0.25 && s.sky_rate == 60);
+  CHECK(s.cloud_height == 300 && s.cloud_speed == 1);
   // An unknown word keeps the map's sky and says so; the rest still applies.
   c.execute("sv_weather sunny");
   mg::Level k = fair_noon();
