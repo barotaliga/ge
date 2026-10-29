@@ -49,6 +49,7 @@
 #include "cli/sound.hpp"
 #include "cli/source.hpp"
 #include "cli/sweep.hpp"
+#include "cli/texture.hpp"
 #include "cli/upgrade.hpp"
 
 namespace {
@@ -162,6 +163,12 @@ Outcome run(const Args& a) {
     const std::string base = flag_value(a, "base");
     return run_goals_free(fs::absolute(repo_of(a)), a.words.empty() ? "" : a.words[0],
                           base.empty() ? "origin/main" : base, !has_flag(a, "no-fetch"));
+  }
+  if (name == "texture kinds") return run_texture_kinds();
+  if (name == "texture check") return run_texture_check(fs::absolute(repo_of(a)), a.words);
+  if (name == "texture bake") {
+    return run_texture_bake(fs::absolute(repo_of(a)), a.words[0], flag_value(a, "ref"),
+                            flag_value(a, "size"), flag_value(a, "out"));
   }
   if (name == "goals claim") {
     const std::string base = flag_value(a, "base");
@@ -290,6 +297,18 @@ Outcome run(const Args& a) {
     lab.tag = flag_value(a, "tag");
     lab.compare = flag_value(a, "compare");
     lab.passthrough = a.passthrough;
+    return run_lab(build_options(a), lab);
+  }
+  if (name == "content scan") {
+    LabOptions lab;
+    lab.id = "content-scan";
+    lab.passthrough = {"--content=" + fs::absolute(a.words[0]).string()};
+    for (const char* f : {"assetmap", "registry"}) {
+      if (has_flag(a, f)) {
+        lab.passthrough.push_back("--" + std::string(f) + "=" +
+                                  fs::absolute(flag_value(a, f)).string());
+      }
+    }
     return run_lab(build_options(a), lab);
   }
   if (name == "sim") {

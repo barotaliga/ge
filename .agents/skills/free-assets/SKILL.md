@@ -1,6 +1,6 @@
 ---
 name: free-assets
-description: "Use when a game needs sounds or models it does not have and someone else has made them free: the free sources (Kenney, OpenGameArt, Poly Haven, Quaternius and others), which licences this repository can carry, how to fetch and unpack each source, finding what a game needs (Shooter's Edge's registry from the classic content's maps and game logic), picking a replacement without listening (the match on length, bands and envelope), converting and renaming it to our name, the classic.assetmap the map cloner and the game read, CREDITS.md, and the `ge` commands that do it (`ge source`, `ge sound`, `ge model import`, `ge credits check`)."
+description: "Use when a game needs sounds or models it does not have and someone else has made them free: the free sources (Kenney, OpenGameArt, Poly Haven, Quaternius and others), which licences this repository can carry, how to fetch and unpack each source, finding what a game needs (Shooter's Edge's registry from the classic content's maps and game logic), picking a replacement without listening (the match on length, bands and envelope), converting and renaming it to our name, the classic.assetmap the map cloner and the game read, CREDITS.md, and the `ge` commands that do it (`ge source`, `ge sound`, `ge model import`, `ge credits check`, `ge content scan`)."
 ---
 
 # Free assets
@@ -65,8 +65,8 @@ Everything lives in `games/shooters_edge/content/`:
    (`setmodel`, `.weaponmodel`, a `.noise*` field) with the function it sits in. The function
    names say the event; the registry says it again in our words and never keeps the classic
    identifiers. Plus what the client plays itself (ricochets, the explosion, menu clicks, the
-   leaf ambients). A new content set gets the same treatment; `ge content scan` is the tool
-   this wants (below).
+   leaf ambients). A new content set gets the same treatment: `ge content scan` (below) lists
+   what its maps name and what the asset map leaves unmapped.
 2. **Name it ours.** `<group>/<name>`: groups `weapon`, `pickup`, `power`, `player`, `door`,
    `button`, `lift`, `mover`, `trigger`, `teleport`, `world`, `ambient`, `ui`, `common`,
    `creature/<kind>`; models `character`, `view`, `pickup`, `projectile`, `effect`, `prop`,
@@ -109,7 +109,15 @@ Steps 3 to 6 are `ge` commands now (`ge help <command>` for every flag):
   into one GLB, load-checked with `assets::load_gltf`, held to the budget.
 - `ge credits check [<content dir>]`: every sound, model, image and font has a CREDITS.md row,
   every row's file is there, every section's licence is one this repository can carry.
+- `ge content scan <pak|dir> [--assetmap=<file>] [--registry=<dir>]`: step 1 over a content set
+  (the `content-scan` lab over `brush::scan_content`): every sound and model it ships or its maps
+  name (`noise*`, `model`) with where, every numbered set its maps pick (`sounds`, the world's
+  `worldtype`, which is mapped by the `worldtype` rows of the classes that pick by it), each held
+  to the asset map and the registry, a picture of what is mapped, and `assetmap-draft.txt` with
+  the unmapped ones as lines to fill. Run it after any change to the asset map, and on any new
+  set. The report stays in `previews/`: it lists the set's names, and nothing of it is committed.
+  It does not yet read what the game logic plays or shows (the progs reader, M18c).
 
-Still wanted (`docs/goals/ge-backlog.md`): `ge content scan <pak|dir>` (the registry and an
-assetmap draft from a content set, on M18a–c's readers), a waveform sheet from `sound match`, and
-the import commands writing the registry and CREDITS.md rows themselves.
+Still wanted (`docs/goals/ge-backlog.md`): the game logic's calls in `ge content scan` (on the
+progs reader), a waveform sheet from `sound match`, and the import commands writing the registry
+and CREDITS.md rows themselves.
