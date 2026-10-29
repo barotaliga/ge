@@ -7,9 +7,17 @@
 //   register  session u64, port u16   registered  public address
 //   join      session u64, nonce u64  peer        address, nonce u64, relay address, key u64
 //                                     unknown     session u64
+//   advertise session u64, serial u32,  advertised  session u64, serial u32
+//             protocol u32, listed u8,
+//             the advert's body (discovery.hpp)
+//   list      protocol u32, page u16  listing     protocol u32, page u16, pages u16, count u8,
+//             (padded to kListAsk)                then count entries: address, the advert's body
 //   to the relay's port               between the two ends
 //   bind      key u64, role           punch       nonce u64
 //
+// An advertise is taken only from the address the session registered from, so nobody but its host
+// lists a session or changes what the list says of it. A session never advertised, or advertised
+// unlisted (an invite-only game), is joined by its id and never listed.
 // A join answers the client with the host's public address and the host with the client's, both
 // with the same nonce, relay port and key. A register's port is the one the host's router forwards
 // to it (0, the padding's, when none: portmap.hpp). STUN shares the server's port (stun.hpp).
@@ -36,15 +44,25 @@ enum Kind : uint8_t {
   kJoin = 2,
   kBind = 3,
   kPunch = 4,
+  kAdvertise = 5,
+  kList = 6,
   kRegistered = 20,
   kPeer = 21,
   kUnknown = 22,
+  kListing = 23,
+  kAdvertised = 24,
 };
 
 enum Role : uint8_t { kHost = 0, kClient = 1 };
 
 // The largest message: peer (magic, kind, two addresses, two u64s).
 constexpr size_t kMaxSize = 4 + 1 + 19 + 8 + 19 + 8;
+// A list ask is padded to this, the biggest listing page (its head and kListPage entries of an
+// address and the advert's longest body).
+constexpr size_t kListHead = 4 + 1 + 4 + 2 + 2 + 1;
+constexpr size_t kListEntry = 19 + 15 + 32;
+constexpr int kListPage = 7;
+constexpr size_t kListAsk = kListHead + kListPage * kListEntry;
 
 inline void write_start(Writer& w, Kind k) {
   write_bytes(w, kMagic, 4);

@@ -97,12 +97,14 @@ void Surface::configure(Device& device, uint32_t width, uint32_t height, bool vs
 }
 
 wgpu::TextureView Surface::acquire(Device& device) {
+  current_ = nullptr;
   if (width_ == 0 || height_ == 0) return nullptr;
   wgpu::SurfaceTexture st;
   surface_.GetCurrentTexture(&st);
   switch (st.status) {
     case wgpu::SurfaceGetCurrentTextureStatus::SuccessOptimal:
     case wgpu::SurfaceGetCurrentTextureStatus::SuccessSuboptimal:
+      current_ = st.texture;
       return st.texture.CreateView();
     case wgpu::SurfaceGetCurrentTextureStatus::Timeout:
       return nullptr;
@@ -118,6 +120,19 @@ wgpu::TextureView Surface::acquire(Device& device) {
   }
 }
 
-void Surface::present() { surface_.Present(); }
+void Surface::present() {
+  surface_.Present();
+  current_ = nullptr;
+}
+
+Target Surface::frame_target() const {
+  Target t;
+  t.name = "surface";
+  t.texture = current_;
+  t.format = format_;
+  t.width = width_;
+  t.height = height_;
+  return t;
+}
 
 }  // namespace ge::gpu
