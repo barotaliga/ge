@@ -133,6 +133,22 @@ void add_cvars(con::Console& c, Settings& s) {
           .min = 0,
           .max = 1},
          &s.clouds);
+  v.bind({.name = "r_sunsize",
+          .fallback = "1",
+          .flags = kStartup,
+          .help = "the sun's disc drawn larger, its radius times this, its light the same (1: as "
+                  "it is)",
+          .min = 0.5,
+          .max = 20},
+         &s.disc_sun);
+  v.bind({.name = "r_moonsize",
+          .fallback = "1",
+          .flags = kStartup,
+          .help = "the moon's disc drawn larger, its radius times this, its face as bright and "
+                  "its light the same (1: as it is)",
+          .min = 0.5,
+          .max = 20},
+         &s.disc_moon);
 
   v.bind({.name = "cl_view",
           .fallback = "chase",
