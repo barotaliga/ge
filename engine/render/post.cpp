@@ -8,6 +8,7 @@
 #include "render/post.hpp"
 
 #include <algorithm>
+#include <cstddef>
 #include <string>
 
 #include "core/output.hpp"
@@ -22,10 +23,12 @@ namespace {
 constexpr uint32_t kDirtW = 480, kDirtH = 270;  // the dirt's picture: soft, so small
 
 // The strengths as the shader reads them: vec4f(sharpen, chromatic, vignette, grain),
-// vec4f(dirt, 0, 0, 0).
+// vec4f(dirt, motion blur's shutter, 0, 0), vec4f(depth of field's focus (m), sharp share, widest
+// circle (a share of the height), 0).
 struct LookBlock {
   float a[4];
   float b[4];
+  float c[4];
 };
 
 }  // namespace
@@ -35,10 +38,11 @@ void create_post(gpu::Device& device, gpu::PipelineSet& pipelines, Post& post,
                  const PostSettings& settings) {
   post.settings = settings;
   post.output = output;
-  post.layout = make_layout(device, "post",
-                            {Slot::texture, Slot::texture, Slot::sampler, Slot::texture_3d,
-                             Slot::texture, Slot::texture, Slot::uniform},
-                            wgpu::ShaderStage::Fragment);
+  post.layout = make_layout(
+      device, "post",
+      {Slot::texture, Slot::texture, Slot::sampler, Slot::texture_3d, Slot::texture, Slot::texture,
+       Slot::uniform, Slot::texture, Slot::depth, Slot::texture, Slot::texture},
+      wgpu::ShaderStage::Fragment);
   wgpu::SamplerDescriptor sd{};
   sd.label = "post.linear";
   sd.addressModeU = sd.addressModeV = sd.addressModeW = wgpu::AddressMode::ClampToEdge;
@@ -59,6 +63,9 @@ void create_post(gpu::Device& device, gpu::PipelineSet& pipelines, Post& post,
   layout.rowsPerImage = 1;
   const wgpu::Extent3D one{1, 1, 1};
   device.queue.WriteTexture(&dst, zero, sizeof zero, &layout, &one);
+  post.flat = make_texture(device, "post.flat", 1, 1, 1, wgpu::TextureFormat::Depth32Float,
+                           wgpu::TextureUsage::TextureBinding);
+  post.flat_view = post.flat.CreateView();
   post.dirt_view = post.black_view;
   if (settings.look.dirt > 0) {
     post.dirt = make_texture(device, "post.dirt", kDirtW, kDirtH, 1,
@@ -78,12 +85,18 @@ void create_post(gpu::Device& device, gpu::PipelineSet& pipelines, Post& post,
   const bool srgb_target = output == wgpu::TextureFormat::RGBA8UnormSrgb ||
                            output == wgpu::TextureFormat::BGRA8UnormSrgb;
   const PostLook& look = settings.look;
-  wgpu::ConstantEntry constants[8] = {};
-  const std::pair<const char*, double> values[8] = {
-      {"kEncodeSrgb", srgb_target ? 0.0 : 1.0},     {"kBloom", settings.bloom},
-      {"kSharpen", look.sharpen > 0 ? 1.0 : 0.0},   {"kChromatic", look.chromatic > 0 ? 1.0 : 0.0},
-      {"kVignette", look.vignette > 0 ? 1.0 : 0.0}, {"kGrain", look.grain > 0 ? 1.0 : 0.0},
-      {"kDirt", look.dirt > 0 ? 1.0 : 0.0},         {"kLens", settings.lens ? 1.0 : 0.0},
+  wgpu::ConstantEntry constants[10] = {};
+  const std::pair<const char*, double> values[10] = {
+      {"kEncodeSrgb", srgb_target ? 0.0 : 1.0},
+      {"kBloom", settings.bloom},
+      {"kSharpen", look.sharpen > 0 ? 1.0 : 0.0},
+      {"kChromatic", look.chromatic > 0 ? 1.0 : 0.0},
+      {"kVignette", look.vignette > 0 ? 1.0 : 0.0},
+      {"kGrain", look.grain > 0 ? 1.0 : 0.0},
+      {"kDirt", look.dirt > 0 ? 1.0 : 0.0},
+      {"kLens", settings.lens ? 1.0 : 0.0},
+      {"kMotionBlur", look.motion_blur > 0 ? 1.0 : 0.0},
+      {"kDof", settings.dof ? 1.0 : 0.0},
   };
   for (size_t k = 0; k < std::size(values); ++k) {
     constants[k].key = values[k].first;
@@ -109,17 +122,29 @@ void create_post(gpu::Device& device, gpu::PipelineSet& pipelines, Post& post,
 }
 
 wgpu::BindGroup post_group(gpu::Device& device, const Post& post, const wgpu::TextureView& hdr,
-                           const wgpu::TextureView& bloom, const wgpu::TextureView& lens) {
-  return make_group(device, "post", post.layout,
-                    {hdr, bloom ? bloom : post.black_view, post.sampler, post.grade_view,
-                     lens ? lens : post.black_view, post.dirt_view, post.look});
+                           const wgpu::TextureView& bloom, const wgpu::TextureView& lens,
+                           const PostReads& reads) {
+  return make_group(
+      device, "post", post.layout,
+      {hdr, bloom ? bloom : post.black_view, post.sampler, post.grade_view,
+       lens ? lens : post.black_view, post.dirt_view, post.look,
+       reads.motion ? reads.motion : post.black_view, reads.depth ? reads.depth : post.flat_view,
+       reads.near ? reads.near : post.black_view, reads.dof ? reads.dof : post.black_view});
 }
 
 void set_post_look(gpu::Device& device, const Post& post, const PostLook& look) {
   const auto f = [](double v) { return static_cast<float>(std::clamp(v, 0.0, 1.0)); };
   const LookBlock block{{f(look.sharpen), f(look.chromatic), f(look.vignette), f(look.grain)},
-                        {f(look.dirt), 0, 0, 0}};
+                        {f(look.dirt), f(look.motion_blur), 0, 0},
+                        {20, 0.15f, 0, 0}};
   device.queue.WriteBuffer(post.look, 0, &block, sizeof block);
+}
+
+void set_post_focus(gpu::Device& device, const Post& post, const DofSettings& dof) {
+  const float c[4] = {static_cast<float>(std::max(dof.focus_m, 0.1)),
+                      static_cast<float>(std::clamp(dof.sharp, 0.0, 0.95)),
+                      static_cast<float>(std::clamp(dof.strength, 0.0, 1.0) * kDofWidest), 0};
+  device.queue.WriteBuffer(post.look, offsetof(LookBlock, c), c, sizeof c);
 }
 
 std::vector<uint8_t> lens_dirt(uint32_t w, uint32_t h, uint32_t seed) {

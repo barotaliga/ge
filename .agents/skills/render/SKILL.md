@@ -47,6 +47,9 @@ void encode(TerrainPass&, gpu::Encoder&);                 // GPU: bind and dispa
 | `engine/render/bloom.hpp` | The glow: a half-size mip chain down (13-tap, a Karis first level) and up (tent), alpha counting the levels (`bloom.wgsl`) |
 | `engine/render/post.hpp` | The bloom mixed in, exposure from the sky, the tone curve, the grade's 32³ table (`set_grade`, `identity_grade`), dither, encoding (`post.wgsl`); the lens and the film (`PostLook`: sharpening, fringes, vignette, grain, dirt), each an `override` switch with a live strength (`set_post_look`) |
 | `engine/render/lens.hpp` | The quarter-size `lens` pass: the sun's rays through what stands (a march over the open sky round its place, off the depth) and its flare (`lens.wgsl`) |
+| `engine/render/ao.hpp` | Ambient occlusion's half-size `ao` pass (a horizon search over the depth, turned per frame, then a depth-aware 3 x 3 mean), read by the lit passes through `sky_seen` (the frame group's binding 10) |
+| `engine/render/dof.hpp` | Depth of field's half-size `dof` gather round a focus the game names, mixed in by post (`kDof`) by each pixel's own circle (`wgsl/dof_coc.wgsl`) |
+| `engine/render/motion_blur.hpp` | Motion blur's `motion_blur.tiles` pass: each 16 x 16 tile's fastest and slowest motion and over its neighbours, read by post's gather (`PostLook::motion_blur`) |
 | `engine/render/grade.hpp` | The grade's knobs (contrast, saturation, temperature, tint, gamma) baked into the table, CPU only |
 | `engine/render/lights.hpp` | Local lights (M39a): `LocalLight` in candela with range, radius and cone; `flicker_level` (flame, buzz, strobe, pulse, steps); the clusters (`bin_lights`, `cluster_of`, the CPU twin of `wgsl/lights.wgsl`'s `cluster_index`), `prepare_lights` into group 0 binding 10; `lamp_lux_at` for `FrameView::lamp_lux`; the `gpu-lights` lab |
 | `engine/render/surface.hpp` | Materials (M39b): `Surface` (albedo, roughness, metal, spec, emissive, porous), the presets, `pack_surfaces`; the model is `wgsl/surface.wgsl` (`surface_lit` for the sun and sky, `surface_brdf` for a lamp); an instance family takes surfaces, the rgb form is matte |
@@ -122,7 +125,11 @@ to the resolve, the jitter or the motion vectors runs it before and after.
 
 **`post`** (`games/fall_line/labs/gpu_post_lab.cpp`): every post effect off, at Fall Line's
 defaults and each alone at full strength, into the sun through the trees and down the start, with
-each variant's post and lens passes' ms. A change to the post pass, the lens pass or the grade runs
+each variant's post, lens, motion blur tiles, ao and dof passes' ms; `moving` and `motionblur` shoot with
+the eye moving at 21 m/s and turning, and `--only=moving,motionblur` runs just those against off.
+Ambient occlusion shows best in the `world` lab (`--views=wood --moments=15 --cfg="r_ao 1"`
+against `r_ao 0`: the trees' feet and the skiers' boots), and so does depth of field
+(`--moments=15 --cfg="r_dof 1"`: each moment focuses on the chase camera's subject). A change to the post pass, the lens pass, the ao pass or the grade runs
 it before and after; judge a default by whether the defaults' picture reads as the scene, not as
 an effect.
 

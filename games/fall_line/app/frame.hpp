@@ -36,8 +36,8 @@
 //   precip               -> hdr motion (the snow and rain round the eye, the rain's splashes)
 //   taa                  -> taa.history (at the output's size; with FrameOptions::taa)
 //   bloom                -> bloom (the glow's mip chain, from what post reads)
-//   lens                 -> lens (the sun's rays and flare, at a quarter of the pixels)
-//   post                 -> final (bloom, lens, the film's effects, the grade's table)
+//   lens, motion_blur.tiles -> lens (the sun's rays and flare), the motion's fastest a tile
+//   post                 -> final (bloom, lens, motion blur, the film, the grade's table)
 //   ui                   -> final (the 2D layer's list over it: the console, render/ui_pass.hpp)
 //
 // With TAA the frame renders at FrameOptions::scale of the output's size, jittered, and the
@@ -76,14 +76,17 @@
 #include "mountain/app/snow.hpp"
 #include "mountain/app/trails.hpp"
 #include "mountain/mapgen/types.hpp"
+#include "render/ao.hpp"
 #include "render/bloom.hpp"
 #include "render/cloud_kinds.hpp"
 #include "render/clouds.hpp"
+#include "render/dof.hpp"
 #include "render/frame.hpp"
 #include "render/grade.hpp"
 #include "render/hiz.hpp"
 #include "render/instances.hpp"
 #include "render/lens.hpp"
+#include "render/motion_blur.hpp"
 #include "render/particles.hpp"
 #include "render/post.hpp"
 #include "render/precip.hpp"
@@ -120,6 +123,9 @@ struct FrameOptions {
   // knobs (render/grade.hpp): Fall Line's defaults, cfg/cvars.hpp's r_ cvars'.
   ge::render::PostLook look{.sharpen = 0.3, .vignette = 0.25};
   ge::render::LensSettings lens{.rays = 0.5};
+  ge::render::AoSettings ao{.strength = 0.6};  // the ambient occlusion (render/ao.hpp)
+  // Depth of field (render/dof.hpp); a focus of 0 is how far the camera's subject is.
+  ge::render::DofSettings dof{.focus_m = 0};
   ge::render::GradeKnobs grade;
   bool snow = true;    // the snow's material (mountain/app/snow.hpp); off: the albedo lit
   bool trails = true;  // the tracks (mountain/app/trails.hpp); drawn only with the snow
@@ -211,7 +217,10 @@ struct GameFrame {
   ge::render::Hiz hiz;
   ge::render::Taa taa;
   ge::render::Bloom bloom;
-  ge::render::Lens lens;  // made only when FrameOptions::lens has a half on
+  ge::render::Lens lens;        // made only when FrameOptions::lens has a half on
+  ge::render::MotionBlur blur;  // made only with FrameOptions::look.motion_blur above 0
+  ge::render::Ao ao;            // made only with FrameOptions::ao's strength above 0
+  ge::render::Dof dof;          // made only with FrameOptions::dof's strength above 0
   ge::render::Post post;
   ge::render::UiPass ui;
   ge::render::InstancePipelines instancing;

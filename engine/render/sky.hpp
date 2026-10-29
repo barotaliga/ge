@@ -85,10 +85,12 @@ struct Sky {
 void create_sky(gpu::Device& device, gpu::PipelineSet& pipelines, Sky& sky,
                 const wgpu::Buffer& uniforms, const wgpu::BindGroupLayout& frame);
 // Group 0 of every draw, made once the sky's tables exist. `lights` is the frame's local lights
-// (render/lights.hpp's `Lights::buffer`, binding 10); none: the sky's empty list.
+// (render/lights.hpp's `Lights::buffer`, binding 10); none: the sky's empty list. `ao` is the
+// ambient occlusion's target (render/ao.hpp, binding 11), or none for the blank (no occlusion).
 wgpu::BindGroup frame_group(gpu::Device& device, const wgpu::BindGroupLayout& layout,
                             const wgpu::Buffer& uniforms, const Sky& sky,
-                            const wgpu::Buffer& lights = nullptr);
+                            const wgpu::Buffer& lights = nullptr,
+                            const wgpu::TextureView& ao = nullptr);
 
 // Decide which tables this frame rebuilds.
 void prepare_sky(Sky& sky, const FrameView& view);

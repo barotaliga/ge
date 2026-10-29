@@ -51,6 +51,34 @@ struct SkyLight {
 // The cloud's noise (render/clouds.hpp: 64^3, 0..1) and its wrapping sampler.
 @group(0) @binding(8) var cloud_noise: texture_3d<f32>;
 @group(0) @binding(9) var linear_repeat: sampler;
+// The ambient occlusion (render/ao.hpp: half size, r the occlusion times its strength, g the
+// depth it was worked at), or the sky's 1 x 1 blank with it off.
+@group(0) @binding(11) var ao_map: texture_2d<f32>;
+
+// THE SHARE OF THE SKY a surface drawn at `at` (a fragment's position: the pixel and its depth)
+// sees, 0..1: the four half-size texels round it, each by how near it is and how like the
+// surface's own its depth is, so one surface's shade stays off the one beside it.
+fn sky_seen(at: vec4f) -> f32 {
+  let dims = vec2i(textureDimensions(ao_map));
+  if (dims.x < 2) {
+    return 1.0;
+  }
+  let q = at.xy * 0.5 - 0.5;
+  let b = vec2i(floor(q));
+  let f = q - floor(q);
+  var sum = 0.0;
+  var weights = 0.0;
+  for (var k = 0; k < 4; k++) {
+    let o = vec2i(k & 1, k >> 1);
+    let t = textureLoad(ao_map, clamp(b + o, vec2i(0), dims - 1), 0);
+    let near = select(1.0 - f, f, vec2<bool>(o.x == 1, o.y == 1));
+    let like = max(1.0 - 10.0 * abs(t.g - at.z) / max(at.z, 1e-6), 1e-3);
+    let w = near.x * near.y * like;
+    sum += t.r * w;
+    weights += w;
+  }
+  return 1.0 - sum / max(weights, 1e-6);
+}
 
 // A world height (m) as a radius from the planet's centre, km.
 fn radius_at(world_y: f32) -> f32 {
