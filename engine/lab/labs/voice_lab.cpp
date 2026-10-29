@@ -75,7 +75,8 @@ double conceal_bound(const gn::LinkConditions& c) {
 // The ear's level, dB RMS, every 20 ms.
 std::vector<double> envelope(const std::vector<float>& stereo) {
   std::vector<double> out;
-  for (size_t at = 0; at + 2 * gn::kVoiceFrame <= stereo.size(); at += 2 * gn::kVoiceFrame) {
+  const size_t frame = 2 * static_cast<size_t>(gn::kVoiceFrame);
+  for (size_t at = 0; at + frame <= stereo.size(); at += frame) {
     double sum = 0;
     for (size_t i = 0; i < 2 * static_cast<size_t>(gn::kVoiceFrame); i++)
       sum += static_cast<double>(stereo[at + i]) * stereo[at + i];

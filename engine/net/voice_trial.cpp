@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iterator>
 #include <memory>
 
 #include "audio/synth.hpp"
@@ -247,7 +248,7 @@ void tick(Run& run, Transport& /*ht*/, Node& hn, SessionHost& host, VoiceRelay* 
     float block[2 * kTickSamples];
     c.synth->render(block, kTickSamples);
     if (static_cast<int>(i) == run.ear && run.k->keep_audio)
-      run.o->mix.insert(run.o->mix.end(), block, block + 2 * kTickSamples);
+      run.o->mix.insert(run.o->mix.end(), block, block + std::size(block));
   }
   node_flush(hn, run.now);
   for (auto& c : run.clients) node_flush(c->n, run.now);

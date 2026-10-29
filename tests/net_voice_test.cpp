@@ -307,8 +307,8 @@ TEST(a_voice_fades_with_distance) {
   CHECK(voice_distance_gain(40, 3, 40) == 0);
   CHECK(voice_distance_gain(39, 3, 40) < voice_distance_gain(30, 3, 40));
   float last = 1;
-  for (float d = 3; d <= 40; d += 0.5f) {
-    const float g = voice_distance_gain(d, 3, 40);
+  for (int i = 0; i <= 74; i++) {
+    const float g = voice_distance_gain(3 + 0.5f * static_cast<float>(i), 3, 40);
     CHECK(g <= last);
     last = g;
   }
@@ -323,7 +323,7 @@ TEST(a_stream_plays_what_is_fed_and_counts_what_is_not) {
     in[i] = 0.05f * static_cast<float>(static_cast<int>(i % 16) - 8) / 8;
   CHECK(synth.feed(id, in.data(), 256) == 256);
   CHECK(synth.queued(id) == 256);
-  std::vector<float> out(2 * 384);
+  std::vector<float> out(size_t{2} * 384);
   synth.render(out.data(), 384);
   CHECK(synth.queued(id) == 0);
   for (size_t i = 0; i < 256; i++) {
@@ -332,10 +332,11 @@ TEST(a_stream_plays_what_is_fed_and_counts_what_is_not) {
   }
   CHECK(synth.stats().starved == 128);
   synth.stop(id);
-  std::vector<float> more(2 * 48000);
+  std::vector<float> more(size_t{2} * 48000);
   synth.render(more.data(), 48000);
   // Every slot is free again once the fades are done.
   std::vector<ge::audio::StreamId> all;
+  all.reserve(ge::audio::kMaxStreams);
   for (int i = 0; i < ge::audio::kMaxStreams; i++) all.push_back(synth.stream(0));
   for (const auto& s : all) CHECK(s.valid());
   CHECK(!synth.stream(0).valid());

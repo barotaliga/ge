@@ -244,7 +244,7 @@ bool voice_sender_init(VoiceSender& s, const VoiceConfig& config, std::string& e
   if (!s.encoder.open(config.codec, error)) return false;
   s.open_level = level_of_db(config.open_db);
   s.close_level = level_of_db(std::min(config.close_db, config.open_db));
-  s.hang_frames = std::max(1, static_cast<int>(config.hangover_s * 50 + 0.5f));
+  s.hang_frames = std::max(1, static_cast<int>(std::lround(config.hangover_s * 50)));
   s.filled = 0;
   s.gate = s.key = false;
   s.hang = 0;
