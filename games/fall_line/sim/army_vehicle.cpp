@@ -40,8 +40,8 @@ constexpr int64_t kLookSteps = static_cast<int64_t>(wanted::kLookEveryS * kHz);
 const int64_t kDecideSteps = num::to_int32(num::round(kDecideS * kHz));
 
 constexpr DriveRead read_of(const Spec& s) {
-  return DriveRead{kLookM,   kStepM,    kFan,         kSpread,   s.climb,  s.cliff,  kTunnelM,
-                   kTrunkM,  kEdgeM,    kTurnCost,    kBlockedCost, kTreeCost, kKeepCost};
+  return DriveRead{kLookM,  kStepM, kFan,      kSpread,      s.climb,   s.cliff,  kTunnelM,
+                   kTrunkM, kEdgeM, kTurnCost, kBlockedCost, kTreeCost, kKeepCost};
 }
 constexpr DriveRead kCarrierRead = read_of(kCarrier);
 constexpr DriveRead kTruckRead = read_of(kTruck);
@@ -303,8 +303,7 @@ void move(const GameState& state, ArmyVehicle& v, double pace, double way) {
   if (std::fabs(v.speed) > 0.05 && blocked(state, v)) v.speed = 0;
   // The turn: tracks at any pace, a truck's wheels no tighter than their radius (backing, its
   // wheels turned the other way, so its front still swings toward `way`).
-  const double most =
-      S.radius > 0 ? num::min(S.turn, std::fabs(v.speed) / S.radius) : S.turn;
+  const double most = S.radius > 0 ? num::min(S.turn, std::fabs(v.speed) / S.radius) : S.turn;
   const double off = angle_diff(v.heading, way);
   v.heading = num::mod(v.heading + clamp(off, -most * kDt, most * kDt) + kPi, 2 * kPi) - kPi;
   fx = lm::sin(v.heading);
@@ -544,7 +543,8 @@ void carry(GameState& state, ArmyVehicle& v, Spot q) {
 
 // The turret turned toward (x, z), or back over the nose with nothing to lay on, at its traverse.
 void traverse(ArmyVehicle& v, const Spot* at) {
-  const double want = at != nullptr ? angle_diff(v.heading, lm::atan2(at->x - v.x, at->z - v.z)) : 0;
+  const double want =
+      at != nullptr ? angle_diff(v.heading, lm::atan2(at->x - v.x, at->z - v.z)) : 0;
   const double step = kTraverse * kDt;
   v.turret += clamp(angle_diff(v.turret, want), -step, step);
 }

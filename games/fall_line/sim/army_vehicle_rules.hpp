@@ -10,8 +10,8 @@
 //   unit seats the driver and three or four, the rear a section of eight to eleven.
 // - THE TRUCK: a cross-country cargo truck, six wheels driven, the cab forward, a canvas tilt over
 //   the bed, chains on in winter. Some 8 m long, 2.5 m wide, 3.4 m to the tilt, about 15 t laden;
-//   85 km/h on a road, and some 30 % on packed snow before its chains spin. Its bed seats two squads
-//   facing in.
+//   85 km/h on a road, and some 30 % on packed snow before its chains spin. Its bed seats two
+//   squads facing in.
 // - THE TANK: a main battle tank. A 7.5-8 m hull, 3.6-3.8 m wide, 2.4-3 m to the turret's roof,
 //   55-65 t; about 70 km/h on a road and 40-50 off it; 60 % grades. Its turret turns a full circle
 //   in about nine seconds (its main gun is a later row: here it drives, stands off and runs down).
@@ -39,7 +39,8 @@ namespace fall_line::sim::army_vehicle {
 //   tracks).
 // - THE GROUND IT TAKES: the steepest rise it climbs and drop it goes down (slopes), and the share
 //   of its pace it keeps up a rise at its limit (it slows to it in proportion to the rise).
-// - Its crew's eyes over the snow (the commander in his hatch), m; the men it carries, and its crew.
+// - Its crew's eyes over the snow (the commander in his hatch), m; the men it carries, and its
+// crew.
 struct Spec {
   double half_length;
   double half_width;
@@ -59,9 +60,10 @@ struct Spec {
   int32_t crew;
 };
 
-inline constexpr Spec kCarrier{1.75, 0.95, 2.3, 5500, 9,   4,   1.6, 4, 0.7,
-                               0,    0.8,  0.9, 0.35, 2.5, 8, 2};
-inline constexpr Spec kTruck{4, 1.25, 3.3, 15000, 11, 4, 1.4, 4, 0.45, 11, 0.3, 0.4, 0.4, 2.6, 12, 2};
+inline constexpr Spec kCarrier{1.75, 0.95, 2.3, 5500, 9,    4,   1.6, 4,
+                               0.7,  0,    0.8, 0.9,  0.35, 2.5, 8,   2};
+inline constexpr Spec kTruck{4,    1.25, 3.3, 15000, 11,  4,   1.4, 4,
+                             0.45, 11,   0.3, 0.4,   0.4, 2.6, 12,  2};
 inline constexpr Spec kTank{3.9, 1.85, 2.6, 60000, 9, 3.5, 1.2, 5, 0.45, 0, 0.6, 0.7, 0.3, 3, 0, 3};
 
 // THE CARRIER'S REAR UNIT: its middle `kHitchM` behind the front's to the hitch and `kBackM` back
@@ -77,10 +79,10 @@ inline constexpr std::array<int32_t, wanted::kMaxStars + 1> kMost{0, 0, 2, 4, 8,
 // The most kept in the state at once, every mode counted.
 inline constexpr size_t kMostVehicles = 16;
 
-// WHERE THEY COME FROM: the way the wave climbs, `kSetOffBackM` further down it than its column forms up
-// (out of his sight), or the way's foot; the next of a wave `kStaggerS` after the one before, and
-// none setting off with another within `kRoomM` of its spot. A truck finding the village's road out
-// comes in along it from the map's edge, and on up the way from the road's end.
+// WHERE THEY COME FROM: the way the wave climbs, `kSetOffBackM` further down it than its column
+// forms up (out of his sight), or the way's foot; the next of a wave `kStaggerS` after the one
+// before, and none setting off with another within `kRoomM` of its spot. A truck finding the
+// village's road out comes in along it from the map's edge, and on up the way from the road's end.
 inline constexpr double kSetOffBackM = 260;
 inline constexpr double kStaggerS = 6;
 inline constexpr double kRoomM = 14;

@@ -260,28 +260,28 @@ struct ArmyVehicle {
   int32_t id = 0;  // the army's own, in the order called; pursuer `army_vehicle::kPursuerBase` + it
   ArmyVehicleKind kind = ArmyVehicleKind::carrier;
   ArmyVehicleMode mode = ArmyVehicleMode::due;
-  int32_t wave = 0;               // the ground wave that called it
-  double due = 0;                 // the clock it sets off at, s
-  double t = 0;                   // s in this mode
-  double x = 0, y = 0, z = 0;     // the middle of its (front) hull on the snow, world frame, m
-  double heading = 0;             // rad
-  double pitch = 0, roll = 0;     // rad, read off the ground under it
-  double speed = 0;               // m/s along `heading` (negative backing)
-  double rear = 0;                // a carrier's rear unit's heading, rad
-  double way = 0;                 // the heading it steers, rad
-  double pace = 0;                // the pace it is driven at, m/s
-  double turret = 0;              // a tank's turret, rad off its hull
-  std::vector<VehiclePoint> path; // its way up, laid when called
-  int32_t leg = 0;                // the point of `path` it is making for
-  double leg_t = 0;               // ...since this clock, s
-  int32_t road = 0;               // how many of `path`'s points are the road in
-  int32_t on_way = -1;            // the way it climbs (`GameState::ways`)
-  double way_end = 0;             // ...to the arc nearest him, m
-  int32_t aboard = 0;             // men aboard to put down
-  double saw = -1e9;              // the clock its crew last saw him, s
-  ge::ai::Progress progress;      // its watch (ai/steer.hpp)
-  int32_t dug = 0;                // times backed out of where it was held
-  int32_t stuck = 0;              // times put back on its way
+  int32_t wave = 0;                // the ground wave that called it
+  double due = 0;                  // the clock it sets off at, s
+  double t = 0;                    // s in this mode
+  double x = 0, y = 0, z = 0;      // the middle of its (front) hull on the snow, world frame, m
+  double heading = 0;              // rad
+  double pitch = 0, roll = 0;      // rad, read off the ground under it
+  double speed = 0;                // m/s along `heading` (negative backing)
+  double rear = 0;                 // a carrier's rear unit's heading, rad
+  double way = 0;                  // the heading it steers, rad
+  double pace = 0;                 // the pace it is driven at, m/s
+  double turret = 0;               // a tank's turret, rad off its hull
+  std::vector<VehiclePoint> path;  // its way up, laid when called
+  int32_t leg = 0;                 // the point of `path` it is making for
+  double leg_t = 0;                // ...since this clock, s
+  int32_t road = 0;                // how many of `path`'s points are the road in
+  int32_t on_way = -1;             // the way it climbs (`GameState::ways`)
+  double way_end = 0;              // ...to the arc nearest him, m
+  int32_t aboard = 0;              // men aboard to put down
+  double saw = -1e9;               // the clock its crew last saw him, s
+  ge::ai::Progress progress;       // its watch (ai/steer.hpp)
+  int32_t dug = 0;                 // times backed out of where it was held
+  int32_t stuck = 0;               // times put back on its way
 };
 
 struct ArmyState {

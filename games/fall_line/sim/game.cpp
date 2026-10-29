@@ -19,11 +19,11 @@
 #include "fall_line/sim/army_heli_rules.hpp"
 #include "fall_line/sim/army_meet.hpp"
 #include "fall_line/sim/army_para.hpp"
-#include "fall_line/sim/army_vehicle.hpp"
 #include "fall_line/sim/army_para_rules.hpp"
 #include "fall_line/sim/army_rules.hpp"
 #include "fall_line/sim/army_sled.hpp"
 #include "fall_line/sim/army_sled_rules.hpp"
+#include "fall_line/sim/army_vehicle.hpp"
 #include "fall_line/sim/course.hpp"
 #include "fall_line/sim/crowd.hpp"
 #include "fall_line/sim/field.hpp"
@@ -66,15 +66,15 @@ void log_step(const GameState& state) {
         e.kind == EventKind::reset || e.kind == EventKind::onto || e.kind == EventKind::arrived ||
         e.kind == EventKind::boarded || e.kind == EventKind::unloaded ||
         e.kind == EventKind::sled || e.kind == EventKind::heli || e.kind == EventKind::para;
-    const out::Channel ch = e.kind == EventKind::shoulder || e.kind == EventKind::bump ? kField
-                            : e.kind == EventKind::wanted                              ? kWanted
-                            : e.kind == EventKind::army || e.kind == EventKind::army_sled ||
-                                    e.kind == EventKind::army_heli || e.kind == EventKind::gunfire ||
-                                    e.kind == EventKind::army_para ||
-                                    e.kind == EventKind::army_vehicle
-                                ? kArmy
-                            : course ? kCourse
-                                     : kSkier;
+    const out::Channel ch =
+        e.kind == EventKind::shoulder || e.kind == EventKind::bump ? kField
+        : e.kind == EventKind::wanted                              ? kWanted
+        : e.kind == EventKind::army || e.kind == EventKind::army_sled ||
+                e.kind == EventKind::army_heli || e.kind == EventKind::gunfire ||
+                e.kind == EventKind::army_para || e.kind == EventKind::army_vehicle
+            ? kArmy
+        : course ? kCourse
+                 : kSkier;
     if (!out::enabled(ch, out::Level::debug)) continue;
     const sk::SkierState& s = state.racers[static_cast<size_t>(e.racer)].skier;
     std::string line = "racer " + std::to_string(e.racer) + " ";

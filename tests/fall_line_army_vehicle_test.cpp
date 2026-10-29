@@ -69,21 +69,21 @@ const std::shared_ptr<const mg::Level>& seed38() {
 // How a hunt is staged.
 struct Stage {
   int32_t stars = 3;
-  double limit = 180;   // s
-  double stop = -1;     // the hunt ended at this clock, s (never if negative)
-  bool lethal = true;   // whether the army shoots to kill
-  bool vehicles = true; // whether the waves bring their vehicles
+  double limit = 180;    // s
+  double stop = -1;      // the hunt ended at this clock, s (never if negative)
+  bool lethal = true;    // whether the army shoots to kill
+  bool vehicles = true;  // whether the waves bring their vehicles
 };
 
 // A HUNT ON SEED 38: he stands on open snow up the mountain from the army's pad (healed each step,
 // so the hunt runs its length) with only the ground waves sent and their rifles off.
 struct Hunt {
-  int32_t kinds[3] = {};       // called, by kind
-  int32_t men = 0;             // put down by them
-  int32_t stuck = 0;           // put back on their way
-  int32_t strikes = 0;         // `strike` events
-  double tank_nearest = 1e9;   // the nearest a tank came to him, m
-  bool home = false;           // every vehicle gone once the hunt was over
+  int32_t kinds[3] = {};          // called, by kind
+  int32_t men = 0;                // put down by them
+  int32_t stuck = 0;              // put back on their way
+  int32_t strikes = 0;            // `strike` events
+  double tank_nearest = 1e9;      // the nearest a tank came to him, m
+  bool home = false;              // every vehicle gone once the hunt was over
   std::vector<std::string> rows;  // each 10 s: the digest and every vehicle's mode and place
 };
 

@@ -138,8 +138,8 @@ void meet_soldiers(GameState& state, sk::SkierState& c, double mk) {
 
 // One unit of steel (a hull, a carrier's front or rear unit): a box in the plan, its middle at
 // `ux`, `uz` turned to `h`, held against him. Returns the closing speed met, m/s.
-double meet_unit(sk::SkierState& c, double ux, double uz, double h, double hl, double hw,
-                 double mk, double vx, double vz, double& into) {
+double meet_unit(sk::SkierState& c, double ux, double uz, double h, double hl, double hw, double mk,
+                 double vx, double vz, double& into) {
   const double fx = lm::sin(h);
   const double fz = lm::cos(h);
   const double dx = c.x - ux;
@@ -169,8 +169,8 @@ void meet_vehicles(GameState& state, sk::SkierState& c, double mk) {
     const double vx = v.speed * lm::sin(v.heading);
     const double vz = v.speed * lm::cos(v.heading);
     double into = 0;
-    double closing = meet_unit(c, v.x, v.z, v.heading, S.half_length, S.half_width, mk, vx, vz,
-                               into);
+    double closing =
+        meet_unit(c, v.x, v.z, v.heading, S.half_length, S.half_width, mk, vx, vz, into);
     if (v.kind == ArmyVehicleKind::carrier) {
       const PlanSpot r = rear_of(v);
       double rear_into = 0;

@@ -89,7 +89,7 @@ struct Hunt {
   double out = -1;        // the clock the first set off, s
   double nearest = -1;    // the nearest any came to him, m
   int32_t men = 0;        // men put down
-  int32_t strikes = 0;  // vehicles that ran him down (he is stood again each step: once each)
+  int32_t strikes = 0;    // vehicles that ran him down (he is stood again each step: once each)
   int32_t stuck = 0;
   int32_t gone = 0;
   int32_t left = 0;  // still out at the end
@@ -212,8 +212,7 @@ void run(gl::Lab& lab) {
     table.rows.push_back({id, std::to_string(h.stars), std::to_string(h.kinds[0]),
                           std::to_string(h.kinds[1]), std::to_string(h.kinds[2]), opt(h.out, 1),
                           opt(h.nearest, 0), std::to_string(h.men), std::to_string(h.strikes),
-                          std::to_string(h.stuck), std::to_string(h.gone),
-                          std::to_string(h.left)});
+                          std::to_string(h.stuck), std::to_string(h.gone), std::to_string(h.left)});
     lab.metric(id + ".carriers", h.kinds[0], "vehicles");
     lab.metric(id + ".trucks", h.kinds[1], "vehicles");
     lab.metric(id + ".tanks", h.kinds[2], "vehicles");
@@ -240,8 +239,9 @@ void run(gl::Lab& lab) {
                    "read in army_vehicle_rules.hpp (skill: sim).");
     }
     if (scene == Scene::three && h.men == 0) {
-      lab.fail("three: no man put down in " + fixed(limit, 0) + " s",
-               look + "start_drop and unload in games/fall_line/sim/army_vehicle.cpp (skill: sim).");
+      lab.fail(
+          "three: no man put down in " + fixed(limit, 0) + " s",
+          look + "start_drop and unload in games/fall_line/sim/army_vehicle.cpp (skill: sim).");
     }
     if (scene == Scene::five && h.kinds[2] == 0) {
       lab.fail("five: no tank called in " + fixed(limit, 0) + " s",
@@ -254,26 +254,26 @@ void run(gl::Lab& lab) {
     }
     if (!pictures) continue;
     const double view = scene == Scene::home ? level->size : kViewM;
-    lab.shot({id,
-              "SEED " + fixed(seed, 0) + " ARMY VEHICLES: " + id,
-              "The ground round the man hunted (magenta dot), " + fixed(view, 0) +
-                  " m across from above (+x right, +z down; the runs red, trees dark green), the "
-                  "ring the vehicles stop at (white) and every vehicle's track, a carrier's blue, "
-                  "a truck's orange and a tank's green, its last place a dot. " +
-                  std::to_string(h.kinds[0]) + " carriers, " + std::to_string(h.kinds[1]) +
-                  " trucks, " + std::to_string(h.kinds[2]) + " tanks; " + std::to_string(h.men) +
-                  " men put down.",
-              scene == Scene::home
-                  ? "tracks that climb the runs toward the magenta dot, then turn back down them "
-                    "and stop where they end"
-                  : "tracks that follow the runs up from below and leave them only near the "
-                    "magenta dot, never looping in one place",
-              {{"seed", fixed(seed, 0)},
-               {"version", lab.arg("version")},
-               {"scenario", id},
-               {"stars", std::to_string(h.stars)},
-               {"limit s", fixed(until, 0)}}},
-             ground_round(*level, h, view, px));
+    lab.shot(
+        {id,
+         "SEED " + fixed(seed, 0) + " ARMY VEHICLES: " + id,
+         "The ground round the man hunted (magenta dot), " + fixed(view, 0) +
+             " m across from above (+x right, +z down; the runs red, trees dark green), the "
+             "ring the vehicles stop at (white) and every vehicle's track, a carrier's blue, "
+             "a truck's orange and a tank's green, its last place a dot. " +
+             std::to_string(h.kinds[0]) + " carriers, " + std::to_string(h.kinds[1]) + " trucks, " +
+             std::to_string(h.kinds[2]) + " tanks; " + std::to_string(h.men) + " men put down.",
+         scene == Scene::home
+             ? "tracks that climb the runs toward the magenta dot, then turn back down them "
+               "and stop where they end"
+             : "tracks that follow the runs up from below and leave them only near the "
+               "magenta dot, never looping in one place",
+         {{"seed", fixed(seed, 0)},
+          {"version", lab.arg("version")},
+          {"scenario", id},
+          {"stars", std::to_string(h.stars)},
+          {"limit s", fixed(until, 0)}}},
+        ground_round(*level, h, view, px));
     gl::LineChart lc;
     lc.frame = {"each vehicle's distance from him, " + id,
                 "seed " + fixed(seed, 0) + ", " + std::to_string(h.stars) + " stars", "t (s)",
@@ -282,9 +282,9 @@ void run(gl::Lab& lab) {
     lc.spikes = false;
     for (size_t i = 0; i < h.tracks.size(); i++) {
       if (h.tracks[i].t.empty()) continue;
-      lc.traces.push_back({std::string(fs::army_vehicle_kind_name(h.tracks[i].kind)) + " " +
-                               std::to_string(i),
-                           h.tracks[i].t, h.tracks[i].away});
+      lc.traces.push_back(
+          {std::string(fs::army_vehicle_kind_name(h.tracks[i].kind)) + " " + std::to_string(i),
+           h.tracks[i].t, h.tracks[i].away});
     }
     if (scene == Scene::home) lc.marks.push_back({stop, "hunt over"});
     const gl::Chart ch = gl::line_chart(lc);

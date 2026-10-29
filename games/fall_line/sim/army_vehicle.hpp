@@ -42,8 +42,8 @@
 //
 // Nothing here draws a random number: where each comes from, its side and its pauses are its id's
 // own. A vehicle's way is laid once, when it is called; nothing in a step allocates.
-// `ArmyState::vehicles` stays empty, and nothing of it is hashed, on every run whose hunt never sent
-// a wave that names one.
+// `ArmyState::vehicles` stays empty, and nothing of it is hashed, on every run whose hunt never
+// sent a wave that names one.
 //
 // ge:summary The army's ground vehicles: carriers, trucks and tanks called, driven, unloaded, home
 // ge:keywords army vehicle carrier truck tank step_army_vehicles call_vehicles drive unload drop
