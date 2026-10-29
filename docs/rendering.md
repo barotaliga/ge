@@ -1128,6 +1128,53 @@ under to 67 at fourteen, a full moon's snow is 71, a quarter's 28 and a new moon
 handover moves the snow by 0.1 %, a moonless sky draws 319 star pixels, and the sky tables'
 twilight matches `twilight_lux` within 1 % down to twelve degrees under.
 
+## Fog in an area
+
+The sky's haze is the air's, the same over the whole map; the weather's fog closes everything at
+one visual range. **Fog in an area** is the third kind: a mist lying in a wood, a sea of fog in
+the valleys, the dust of a hall, the glowing haze over a pool of lava, placed by the game where
+it is (`render/fog.hpp`, M38a).
+
+- **The volumes** (`FogVolume`): a box or an ellipsoid turned about the vertical; its extinction
+  at its floor, thinning upward by a falloff; soft over an edge inside its faces; carved into
+  wisps by two octaves of the cloud's tiled noise drifting on the wind; scattering an albedo's
+  share of what it takes out on a Henyey-Greenstein lobe; glowing (cd/m2 a metre of extinction).
+  One that **hugs the ground** measures its height up from the terrain under each point, so a
+  mist lies as deep on a slope as on a flat. `prepare_fog` keeps the 32 nearest in reach.
+- **The froxels**: 160 x 90 columns over the screen, 64 slices deep to the range (160 m by
+  default), a slice's far edge at range x (slice / slices)^2: centimetres deep at the eye,
+  metres at the far end. A bank kilometres off takes a range of kilometres (`FogSettings`).
+- **`fog.inject`** (compute, a thread a froxel): the medium at a point jittered in depth inside
+  the froxel (a new depth each frame on the golden ratio), lit by the key light (`sun_light`:
+  the air's transmittance, the cloud's shadow) past the casters' maps (the shafts through a wood)
+  and the mountains (`terrain_sun`: 16 steps toward the sun over the ground's heights, growing
+  from 6 m to about 11 km, soft by the distance; near the snow the horizon maps' answer too: the
+  horizon a point on the ground sees says little of what one 300 m over it sees, so a bank in a
+  shaded valley lies in the shade with its floor), dimmed by the fog's own medium toward the light (a 63 m march: the floor of a bank in
+  its top's shade). The orders of scattering past the first come out evenly, held to what a deep
+  bank's lit top sends back (0.8 of a white face's light, so a sunlit bank is as bright as the
+  snow beside it), counted only as far as the fog round the point is thick (a dust scatters once)
+  and falling as one over the reduced depth into it from above. Then the sky's light through the
+  fog over the point, and THE GROUND'S LIGHT from below: the sun and the sky sent back by the
+  terrain's albedo under the point (the frame's even ground with no terrain), through the fog
+  over and under the point. Over snow that is nearly the light from above again, and without it
+  a mist over a sunlit field came out at under half the snow's brightness. Last, its glow. The
+  result is blended with the
+  last frame's light at the same world point (reprojected through the last camera), nine
+  tenths of it, so the jitter averages to a smooth medium.
+- **`fog.integrate`** (compute, a thread a column): front to back, each slice's light over its
+  depth dimmed by the slice itself (energy-conserving), the transmittance multiplied on, both
+  written at the slice's far edge.
+- **The read**: `frame.wgsl`'s `local_fog`, called last in `haze` (after the air, the weather's
+  veil and the reach's mist, since this air is the nearest), by the sky pass and, over a
+  premultiplied colour, by the cloud's composite (`local_fog_over`). It is group 0's binding 11
+  and `frame.fog` (the range, the slices). With no volume in reach the range is 0, nothing reads
+  the volume, and the picture is the bits it was without fog (`render_fog_test`).
+
+On the software adapter at the default 160 x 90 x 64 froxels the inject costs 40 to 210 ms (the
+march toward the light in every froxel the medium fills) and the integrate 15 to 25 ms (the `fog` lab's `gpu-ms` rows); a real GPU's figures and a ladder row
+(the froxels' size) wait for M38f. Not yet: the lamps in the fog (M38e, on M39's light list).
+
 ## Anti-aliasing and resolution
 
 **Temporal anti-aliasing with upscaling (TAA-U)** is the default. Each frame's
