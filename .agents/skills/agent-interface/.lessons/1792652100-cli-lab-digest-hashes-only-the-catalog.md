@@ -1,7 +1,7 @@
 ---
 title: A ge lab hashes only what no release or tag moves
 date: 2026-10-22
-scope: engine/lab/labs/cli_loop_lab.cpp, tests/labs_digests.txt
+scope: engine/lab/labs/cli_loop_lab.cpp, tests/digests
 concepts: [cli-loop, digest, labs-smoke, determinism]
 ---
 

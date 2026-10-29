@@ -72,8 +72,8 @@ picture's band says what it shows and what to look for, so check exactly that. T
 **What a PR owes:** for a change in a lab's subject, the lab's output before and after (the
 `--compare` table, the diff table and the sheets of the pictures that moved) in the PR body, plus
 `make labs-smoke` green. If the change moves a lab's digest on purpose, run `make ge ARGS="digest <id> --write"`
-(that lab's row only; `make labs-digests` rewrites every row), commit
-`tests/labs_digests.txt`, and say in the PR which lab moved and why.
+(that lab's file only; `make labs-digests` rewrites every lab's), commit
+`tests/digests/`, and say in the PR which lab moved and why.
 
 ## Write one
 
@@ -119,7 +119,7 @@ The font is upper case, 5x7 and ASCII only. A character it lacks draws blank, so
 
 Every lab's digest hashes its deterministic metrics, its table cells and its pictures'
 pixels. `labs_smoke` (CTest, every CI row) runs each lab twice in one process and checks the
-result against `tests/labs_digests.txt`:
+result against `tests/digests/`:
 
 - **Different digests between the two runs**: the lab or the code under it keeps state
   between runs or draws from an unseeded source. Load `determinism`.

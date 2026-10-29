@@ -22,8 +22,10 @@ how a game consumes it, which credentials exist).
 
 ## A new public target or header directory
 
-- A target a game links: add it to `GE_EXPORTED_TARGETS` in
-  `cmake/Packaging.cmake` (target, export name). Its include directories must
+- A target a game links: give its `ge_module(...)` call in
+  `engine/<module>/module.cmake` an `EXPORT <name>` (`cmake/Modules.cmake`); the
+  package exports it as `ge::<name>`, installs its headers, and every test links
+  it. A module without `EXPORT` installs no headers. Its include directories must
   be `$<BUILD_INTERFACE:...>`; Packaging adds the install side for `ge_core`.
 - What a consumer inherits: `ge_fp` (the determinism flags) travels with
   `ge_core`; `ge_flags` (warnings, `-Werror`, sanitizers) is linked only
