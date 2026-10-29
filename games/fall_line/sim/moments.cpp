@@ -20,7 +20,7 @@ constexpr double kLeastBump = 2;
 std::span<const ge::replay::ShotRule> shot_rules() {
   // kind, lead s, hold s, rate, scale, lens
   static const std::vector<ge::replay::ShotRule> rules{
-      {"flight", 2.5, 3, 0.5, 1, "side"},  {"wipeout", 2, 3, 0.5, 1, "chase"},
+      {"flight", 2.5, 3, 0.5, 1, "side"},  {"wipeout", 2, 3, 0.5, 1, "impact"},
       {"shoulder", 1.5, 2, 1, 1, "front"}, {"missed", 2, 1.5, 1, 1, "chase"},
       {"finish", 3, 2, 1, 1, "aerial"},
   };

@@ -552,17 +552,39 @@ own echo under water (the synth's echo is one room for every voice); rain on the
 
 ## Adding water is one call (M24k)
 
+Built. A body is one call, the step is one call and every question is one call:
+
 ```cpp
 water::World world(wind_field);                               // the air the waves grow from
-water::add_lake(world, shore_outline, /*level*/ 412.0, {.look = "nordic-clear"});
+water::add_lake(world, shore_outline, /*level*/ 412.0, {.look = "nordic-clear"}, bed);
 water::add_river(world, centreline, /*discharge m³/s*/ 6.0, {.look = "glacial"});
-// each step:   water::step(world, wind, dt);       (flow regions and floats only)
+// each step:   water::step(world, dt);            (the flow regions; a lake costs nothing)
 // any query:   water::sample(world, x, y, z, t);
-// each frame:  render::WaterPass reads the world;  audio reads the same world
+// each frame:  the renderer and the sound (water_bed_update) read the same world
 ```
 
-`ge add water` writes this into a game repo with a lab beside it, and the `water` consumer
-skill tells a downstream agent how to choose a look, a swimmer and a flow region.
+`water::step` steps everything in the world that is stepped, which today is the flow regions
+(the lakes, oceans, channels and volumes are pure functions of the time, and the wakes prune
+themselves as they are emitted); a game's floating bodies and swimmers stay its own.
+
+**In a game repo, `ge add water [<name>]`** (default `water`) writes it from
+`templates/water/` and links `ge::water` into the game's simulation:
+
+| File | What |
+| --- | --- |
+| `sim/<name>.hpp`, `.cpp` | `make_<name>(wind)`: a lake about 85 m by 55 m on a 12-point shore, its bed a bowl 6 m deep shelving to 0.3 m at the shore, the look `nordic-clear`, the wind from +z; its waves laid down to 0.25 m (`World::lay.shortest`), since a small lake's sea is shorter than the default's 1.5 m and would otherwise lay no component at all |
+| `labs/<name>_lab.cpp` | A picture lab, three shots: the lake from above, every pixel one `sample` (the look's water-leaving colour over the bed at that depth, white where the waves break); 6 m by 8 m of the windward and of the lee water side by side at 25 px a metre, shaded by the waves' normal; and a section across it (the surface over the bed, the waves drawn forty times over). The numbers: the sea's height at the lee and the windward water, the depth, the look's visibility |
+| `tests/sim_<name>_test.cpp` | Wet and deep in the middle and dry past the shore, a sample's bits replayed, the lee shore rougher than the windward one |
+
+It syncs the `water` consumer skill (`plugin: water`: a repo gets it once it links
+`ge::water`), which tells a downstream agent how to lay each kind, choose a look, float a hull,
+pick a swimmer, break a wall into a flow region and hear it. The scaffold's lab draws on the CPU
+raster: the engine's GPU layer is not published to game repos yet, so the drawn water a game
+gets is the engine's own `gpu-water` once it is. Packaging's `scaffold` job grows a repo with
+`ge add water` and holds it to `ge check`, its tests and its lab's smoke pass.
+
+Not yet: waking a lake or a volume into a flow region when the game breaks what held it (a game
+lays the region with `add_flow` and `fill_to` today); a window of the GPU's water in a game repo.
 
 ## Determinism (G1)
 
