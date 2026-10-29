@@ -318,7 +318,7 @@ whole tree to it, and `ge doctor` holds a game repo to it (the `agent-interface`
   uses `std::stable_sort`: equal keys keep their order, and that order is part of the
   result.
 - Every lab's digest (`docs/labs.md` § Digests) is checked twice in one process and against
-  `tests/labs_digests.txt` on every CI row (`labs_smoke`), so a lab is a determinism test too.
+  `tests/digests/` on every CI row (`labs_smoke`), so a lab is a determinism test too.
 - Determinism is proven by the golden tables in `tests/golden/`, not by eye. They are the
   engine's own: a deliberate change of behaviour rewrites them in the PR that makes it.
 
@@ -344,7 +344,11 @@ whole tree to it, and `ge doctor` holds a game repo to it (the `agent-interface`
 
 ## Build
 
-CMake ≥ 3.25 + Ninja, `CMakePresets.json` (`debug` with ASan/UBSan, `release`).
+CMake ≥ 3.25 + Ninja, `CMakePresets.json` (`debug` with ASan/UBSan, `release`). Each engine
+module builds itself from `engine/<module>/module.cmake` and registers with one `ge_module(...)`
+call (`cmake/Modules.cmake`): whether it is published, which directories it holds, whether it is
+simulation code. The package, the tests, the labs and the checks read that registration rather
+than a list, so adding a module edits no shared file.
 Dependencies are pinned to a tag and a SHA-256, and each one is added in the milestone that
 needs it: SDL3 through `FetchContent` from its release archive (`cmake/SDL.cmake`), Dawn as its
 prebuilt GitHub release (`cmake/Dawn.cmake`; Tint comes in the same archive), later cgltf

@@ -1,7 +1,7 @@
 ---
 title: The roadmap and the digests no longer share lines between threads
 date: 2026-10-23
-scope: docs/goals.md, docs/goals/, tests/labs_digests.txt, .gitattributes
+scope: docs/goals.md, docs/goals/, tests/digests, .gitattributes
 concepts: [merge-conflict, hot-spot, parallel-threads, union-merge, status-file]
 ---
 
