@@ -12,7 +12,7 @@
 // too; a liquid brush is not met.
 //
 // ge:summary The room level as the mover's world: flat prisms, grown caves, frames and solids
-// ge:keywords rooms clip collision mover move trace mesh-world walk hull solid flat cave
+// ge:keywords rooms clip collision mover move trace mesh-world walk hull solid flat cave group
 // ge:skill rooms move
 // ge:test tests/rooms_clip_test.cpp
 #pragma once
@@ -26,7 +26,13 @@ namespace ge::rooms {
 
 // Every room of a linked level (level.hpp `link`) as one mesh world in metres, the rooms built
 // side by side on `workers` threads (the same bits for any count), bucketed in `cell_m` cells.
-move::MeshWorld clip_world(const Level& level, size_t workers, double cell_m = 1.0);
+// Without `groups`, the brushes of a group (a door, a platform: movers.hpp moves them) are left
+// out, and the still world is what is left.
+move::MeshWorld clip_world(const Level& level, size_t workers, double cell_m = 1.0,
+                           bool groups = true);
+// The brushes of group `group` alone, built without the rest (so a door's faces against its
+// frame are kept for when it slides out), where they stand in the level.
+move::MeshWorld clip_group(const Level& level, uint16_t group, size_t workers, double cell_m = 1.0);
 
 // The room whose footprint and height hold the point `p` (world metres), -1 when none does.
 int room_at(const Level& level, const move::Vec3& p);
