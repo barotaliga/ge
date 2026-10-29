@@ -45,6 +45,7 @@ updates that row's status file (`docs/goals/<row>.md`) in its PR.
 | [`docs/replays.md`](docs/replays.md) | Replays, recording and broadcasting: a run kept as its inputs, keyframes and the seek, the replay file, the director, video with sound, streaming to a video service, spectating by inputs, Discord presence (M23) |
 | [`docs/shooters-edge.md`](docs/shooters-edge.md) | The second game, Shooter's Edge (M18, after Fall Line): the compatibility contract, the clean room, the homes, the protocols, the labs and the `ge` commands it needs |
 | [`docs/water.md`](docs/water.md) | Water and wind (M24): the bodies and the one query, the waves the wind grows, floating, swimming tuned per game, flowing water, the colour from what is in the water, the surface and the view under it, the sound, and the labs |
+| [`docs/grass.md`](docs/grass.md) | Grass (M34): the research, kinds and recipes, covers on a heightfield or a mesh's floors, the blade scatter, the sway in the wind, the grass drawn, and the rows |
 
 **The working area.** `porting/` holds everything that only matters while modules are
 being carried over from their reference sources: the porting guide (`porting/README.md`),
@@ -183,7 +184,7 @@ make sim ARGS=--rivals=3  # the same with a field of four: the field table, ever
 make play         # an agent at the controls: the play protocol on stdio (engine/play/session.hpp)
 build/debug/play why runs/fall_line-38.inputs --step=1200 --around=6   # why the bot did it (ge why)
 build/release/play bench --seeds=38 --rivals=3   # Fall Line's step timed per zone (ge bench's engine half)
-make labs-smoke   # every lab at its smoke flags, twice, digests against tests/labs_digests.txt
+make labs-smoke   # every lab at its smoke flags, twice, digests against tests/digests/
 make agents-check # symlinks, skills ↔ this router, the 1000-line cap, ge: tags (writing docs/index.md), lesson fragments
 make index        # write docs/index.md from every file's ge: tags (gitignored: never committed)
 make find Q="noise sample_field"  # files, skills, lessons and the porting map matching any word
@@ -203,20 +204,23 @@ build` (the debug preset, reusing `build/debug/`) in the background while you re
 rely on the build, `tools/session-start.sh --wait` blocks until it is done and exits with its
 result; the output is `build/session-start.log`, the one-line state `build/session-start.status`.
 
-CI (`.github/workflows/ci.yml`) is tiered, because the org's runners are a small shared pool. A pull
-request runs the gates (fmt-check, agents-check, libm-check, release-check, the changeset rule),
-lint and shaders-check, ONE Linux build-and-test row (Linux x64, GCC debug+ASan) and the Windows
-row (MSVC, whose warnings and CRT break most Linux-built changes); the merge queue
-runs the whole matrix on the tree that lands: Linux x64 (GCC debug+ASan, GCC release, Clang
-release), Linux arm64 (GCC), macOS (Apple Clang), Windows (MSVC), and `packaging.yml` (the
-installed package building a consumer on Linux, macOS and Windows, and `ge new` growing a repo).
-A change to prose alone (docs, skills, lessons, root Markdown, fragments) runs the gates only;
-the label `full-ci` runs everything on a pull request. The ruleset requires one check,
-`required`, which passes when every job passed or was skipped by those rules. A golden failure
-on one row points at that row's compiler or libm. The Linux x64 rows install Mesa's lavapipe and
-run the tests under a virtual X display with `GE_GPU_REQUIRE=1`, so the GPU and window tests run
-there and a skip fails; elsewhere they run when the runner has an adapter and skip (CTest's exit
-77) when not. A shipped change carries a `.changes/unreleased/` fragment (or the `no-changelog`
+**Linux is checked here, before the push; CI runs only what can differ elsewhere.** `make
+precheck` is the Linux gate (GCC debug+ASan on Mesa's lavapipe: the build, the lint, the shaders,
+the tests and the labs' digests the change reaches), and CI (`.github/workflows/ci.yml`) runs no
+Linux build, test or lint on a pull request or in the queue. A pull request runs the gates
+(fmt-check, agents-check, libm-check, release-check, the changeset rule: cheap, and the queue's
+combined tree needs them), Windows (MSVC: its warnings, its CRT) and macOS (Apple Clang on arm64:
+another compiler and ISA), each building everything and running the whole suite, so the goldens
+and the labs' digests are held on both; the merge queue runs the same on the tree that lands plus
+`packaging.yml` (the installed package consumed on Windows and macOS, and `ge new` growing a repo
+when the change reaches `engine/cli`, `engine/play`, `engine/lab`, the templates or the build). A
+change to prose alone (docs, skills, lessons, root Markdown, fragments) runs the gates only; the
+label `full-ci` adds the Linux rows (GCC debug+ASan, GCC and Clang release, arm64), the lint and
+the shaders' check, and the whole packaging. The ruleset requires one check, `required`, which
+passes when every job passed or was skipped by those rules. A golden failure on one row points at
+that row's compiler or libm. GPU and window tests run where there is an adapter and skip (CTest's
+exit 77) where not; the Linux rows under `full-ci` run them on lavapipe with `GE_GPU_REQUIRE=1`,
+as the container does. A shipped change carries a `.changes/unreleased/` fragment (or the `no-changelog`
 label). Releases are dispatched, never hand-made (`release` skill,
 [`docs/publishing.md`](docs/publishing.md)).
 
@@ -238,6 +242,7 @@ characters.
 | `engine/ai/` | The bots' layer (`ge::ai`): the decision record `ge why` reads, the hands that look human, paths, thinking on a schedule, sight and memory, steering, choosing | `bots` |
 | `engine/wind/` | The wind (`ge::wind`): a pure function of place and time over a field (mean, gusts, veer, the log-law profile, shelter, local sources); a world's wind is one field of it | `water` |
 | `engine/water/` | The water (`ge::water`): bodies and the one `sample` query, the sea a wind grows over a fetch, floating, swimming, the colour from what is in the water, flowing water and its tiers | `water` |
+| `engine/grass/` | The grass (`ge::grass`): kinds and recipes, covers from a heightfield's region or a mesh's floors, every blade scattered off its triangle's seed, a blade's sway in the engine's wind | `grass` |
 | `engine/cli/` | The `ge` command line for game repos (`cmake/Cli.cmake`): the command catalog, the answer shape and findings, and one file per command group | `agent-interface` |
 | `consumer-skills/` | The skills a game repo gets from `ge new` and `ge skills sync`, compiled into `ge`; written for a game repo, never for this one | `agent-interface` |
 | `scaffold/` | The game repo `ge new` writes, as `.in` files with placeholders, compiled into `ge` | `agent-interface` |
@@ -253,6 +258,7 @@ characters.
 | `engine/vfs/` | Content files (`ge::vfs`): the pack archive's checked directory and its files as views into it; search paths, zips and directories to come (M18a) | `vfs` |
 | `engine/input/` | Input devices (`ge::input`, `docs/input.md`): the device model, events, state, dead zones, actions and bindings, rebinding, wheels' roles, touch, players, feedback, the event log, simulated devices | `input` |
 | `engine/camera/` | The camera (`ge::camera`, `docs/camera.md`): poses, followers, the rigs (first person, boom, mounted, orbit, planted, free), shake, transitions, the stack, the scripted subjects | `camera` |
+| `engine/viewmodel/` | The first-person held weapon (`ge::viewmodel`, `docs/rendering.md` § The view model): its form and grip mount, its place in the view, its light from the world, the CPU reference | `render`, `camera` |
 | `engine/services/` | Platform services (`ge::services`, `docs/services.md`): one interface for a store's achievements, stats, boards, cloud, presence, friends, overlay, DLC and screenshots; the simulated and offline stores | `services` |
 | `engine/platform/` | SDL3 (`GE_PLATFORM`): the window, the input devices as `engine/input` events, the frame clock, the audio device; the only place SDL is included | `platform`, `input` |
 | `engine/gpu/` | The native GPU device over Dawn (`GE_GPU`): adapters and tiers, pipelines and the manifest, surfaces, targets, timers; the only place webgpu.h is included | `gpu` |
@@ -277,6 +283,7 @@ characters.
 | `plugins/brush/` | The classic BSP families (`ge::brush`, `docs/levels.md`): 29, BSP2, 38 and 46 read into one map view, refused when damaged; fixture writers for each | `brush` |
 | `plugins/morph/` | Classic vertex-animated models and sprites (`ge::morph`): skins, the seam split, every frame a morph target, refused when damaged; fixture writers; smooth normals and optional rounding | `morph` |
 | `plugins/rooms/` | The engine's own level format (`ge::rooms`, `docs/levels.md`): rooms, openings and solids in a few bytes, the .gelv bytes and text form, rooms grown from seeds | `rooms` |
+| `plugins/shooter/` | The first-person shooter's simulation (`ge::shooter`): the classic player move in floats, clip hulls and their trace, hulls from brushes, the recorded scenarios | `shooter` |
 | `games/fall_line/sim/` | Fall Line's own simulation (`fall_line_sim`): the state, the step, the course, the free ride and lifts, the bot and the field, the headless run, the hunt, the play contract | `sim` |
 | `games/fall_line/cfg/` | Fall Line's cvars (`fall_line_cfg`): every setting a cfg may change, bound to the Settings its app reads | `console` |
 | `games/fall_line/sound/` | Fall Line's sound (`fall_line_sound`, no GPU): the bank, the route, the listener, the mix | `audio`, `sim` |
@@ -319,6 +326,10 @@ Agents find code by grep, so the tree is built to be grepped:
 - **The plugin contract** (homes, layout, naming, dependencies, registration):
   `docs/architecture.md` § Plugins; built by `cmake/Plugins.cmake`, checked by
   `tools/check-plugins.mjs`.
+- **The engine's modules**: each `engine/<module>/module.cmake` builds its target and registers it
+  with one `ge_module(...)` call (`cmake/Modules.cmake`): published or not, its directories,
+  simulation code or not. The package, the tests, the labs and the checks read that; a new module
+  is a new directory and its row above, and edits no shared list.
 - **World conventions**: the plan is x/z with y up; heading 0 = +z,
   clockwise from above; pitch tips-up positive; roll right-side-down positive; `steer`
   and `edge` positive to the right. Stated in `engine/core/math.hpp`'s header.
@@ -368,6 +379,7 @@ and the directories agree.
 | `brush` | `plugins/brush`: maps in the classic BSP families (version 29, BSP2, 38, 46) read into one view (surfaces, lightmaps, tree, clusters, visibility, entities, 46's patches tessellated), refusing damage; the fixture writers; the `bsp` lab |
 | `morph` | `plugins/morph`: classic vertex-animated models and sprites read into one view (skins and groups, the seam split, frames as morph targets), refusing damage; the fixture writers; per-frame smooth normals and the optional rounding; the `morph` lab |
 | `rooms` | `plugins/rooms`: the engine's own level format (rooms, openings, solids, materials with a texture reference and a relief), its bytes (.gelv) and text form, growing rooms from their seeds (rock, crag, stones, ashlar, tiles, planks, corrugated, dents; caves by surface nets), the `rooms` lab |
+| `shooter` | `plugins/shooter`: the classic player move in 32-bit floats (`player_move`, `run_command`, every move type and server setting), clip hulls and the line trace, hulls from brushes, the move's solids, the recorded scenarios and the `pmove` lab; the M18o rows |
 | `sim` | `games/fall_line/sim`: `create_game`, the step, the bot, the headless sim CLI, the run clock |
 | `platform` | `engine/platform`: SDL3, the window, input, the gamepad, the audio device, files |
 | `move` | `engine/move`: a moving character's knobs, presets and step (ground and air acceleration, friction, jumps, strafe jumping, steps, slopes, crouch, slide, flight), the trace a world answers, the box world, the strafer, the scenarios, the `move-*` labs; the M28 rows |
@@ -383,6 +395,7 @@ and the directories agree.
 | `perf` | Any optimisation, a benchmark, a profile, a cost claim |
 | `agent-interface` | Diagnostics wording, consumer skills, the `ge` CLI (M12) |
 | `water` | Water and wind: `engine/wind` (the field, gusts, the log-law profile, shelter, local sources), `engine/water` and its passes as M24's rows land (bodies, waves, floating, swimming, colour, flow), their labs |
+| `grass` | Grass: `engine/grass` (kinds and recipes, covers from a heightfield or a mesh's floors, the blade scatter, the sway in the engine's wind) and `engine/render/grass` (the GPU scatter, thinning, the blades drawn), their labs |
 | `bots` | Anything a bot decides: `engine/ai`, the decision record every bot writes, `Run::trace`, `ge why`, making a bot more human, paths and thinking on a schedule (M16) |
 | `snow` | `engine/snow`: a layer of snow over any ground, `sample`, `press` and imprint records, the reference contacts, the snapshot, `ge snow`, the snow labs, the M29 plan (`docs/snow.md`) |
 | `console` | `engine/console`: a setting (cvar) added or named, its tier, cfg files and the console language, aliases, scripting, binds, the drop-down console, `ge cvar` and `ge cfg`, the `console` lab (M21) |

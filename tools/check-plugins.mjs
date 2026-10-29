@@ -19,10 +19,6 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = new URL("..", import.meta.url).pathname;
-// Which engine target each engine/ directory is built into (the root CMakeLists.txt). A new
-// engine directory adds its row here; the check says so if one is missing.
-const ENGINE_TARGET = { core: "core", loop: "core", audio: "audio", assets: "assets", ui: "ui", ai: "ai", wind: "wind", water: "water", input: "input", move: "move", vfs: "vfs", camera: "camera", net: "net", console: "console", services: "services", lab: "lab", gpu: "gpu", render: "render", platform: "platform", cli: "cli", play: "play", capture: "play", replay: "replay", prof: "prof", snow: "snow" };
-
 const errors = [];
 const err = (msg) => errors.push(msg);
 const dirs = (p) =>
@@ -35,9 +31,26 @@ const files = (p) =>
     .filter((f) => f && existsSync(join(ROOT, f)));
 const includes = (f) => [...readFileSync(join(ROOT, f), "utf8").matchAll(/^\s*#\s*include\s+"([^"/]+)\//gm)].map((m) => m[1]);
 
+// Which engine target each engine/ directory is built into: each engine/<module>/module.cmake's
+// ge_module(ge_<target> [DIRS <dir>...]) calls (cmake/Modules.cmake), the file's own directory
+// when it names none.
+const ENGINE_TARGET = {};
 const engineDirs = dirs("engine");
 for (const d of engineDirs) {
-  if (!ENGINE_TARGET[d]) err(`engine/${d}/ has no row in ENGINE_TARGET in tools/check-plugins.mjs. Add the target it builds into.`);
+  const mc = join("engine", d, "module.cmake");
+  if (!existsSync(join(ROOT, mc))) continue;
+  const text = readFileSync(join(ROOT, mc), "utf8").replace(/#.*$/gm, "");
+  for (const call of text.matchAll(/ge_module\s*\(([^)]*)\)/g)) {
+    const words = call[1].split(/\s+/).filter(Boolean);
+    const target = words[0].replace(/^ge_/, "");
+    const at = words.indexOf("DIRS");
+    const owned = [];
+    if (at >= 0) for (const w of words.slice(at + 1)) { if (/^[A-Z_]+$/.test(w)) break; owned.push(w); }
+    for (const o of owned.length ? owned : [d]) ENGINE_TARGET[o] ??= target;
+  }
+}
+for (const d of engineDirs) {
+  if (!ENGINE_TARGET[d]) err(`engine/${d}/ is built into no target: add engine/${d}/module.cmake ending in ge_module(ge_${d} ...), or name it in another module's DIRS (cmake/Modules.cmake).`);
 }
 
 const plugins = new Map();
