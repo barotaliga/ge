@@ -299,7 +299,8 @@ void set_water_wakes(gpu::Device& device, Water& water, int index, const water::
     if (r->body != body) continue;
     data.insert(data.end(), {static_cast<float>(r->x), static_cast<float>(r->z),
                              static_cast<float>(r->t0), static_cast<float>(r->volume),
-                             static_cast<float>(r->size), static_cast<float>(r->shortest), 0, 0});
+                             static_cast<float>(r->size), static_cast<float>(r->shortest),
+                             static_cast<float>(r->crater), static_cast<float>(r->depth)});
     ++n;
   }
   slot.staged.wake[0] = static_cast<float>(n);
@@ -310,12 +311,17 @@ void set_water_wakes(gpu::Device& device, Water& water, int index, const water::
 
 void prepare_water(gpu::Device& device, Water& water, const FrameView& view) {
   water.eye_under = -1;
+  water.eye_near = -1;
   for (Water::Slot& slot : water.bodies) {
     WaterGpuBody& b = slot.staged;
     slot.shown = !slot.hidden && view.eye[1] > b.info[0];
-    if (!slot.hidden && !slot.shown && view.eye[0] >= b.box[0] && view.eye[0] <= b.box[2] &&
-        view.eye[2] >= b.box[1] && view.eye[2] <= b.box[3] && water.eye_under < 0) {
+    const bool inside = view.eye[0] >= b.box[0] && view.eye[0] <= b.box[2] &&
+                        view.eye[2] >= b.box[1] && view.eye[2] <= b.box[3];
+    if (!slot.hidden && !slot.shown && inside && water.eye_under < 0) {
       water.eye_under = static_cast<int>(&slot - water.bodies.data());
+    }
+    if (slot.shown && inside && view.eye[1] < b.info[0] + kWaterlineBand && water.eye_near < 0) {
+      water.eye_near = static_cast<int>(&slot - water.bodies.data());
     }
     const int levels = static_cast<int>(b.grid[0]);
     const double half = kWaterGrid / 2.0;

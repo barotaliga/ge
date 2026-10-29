@@ -225,6 +225,53 @@ void splash_spray(const water::Splash& splash, core::Rng& rng, std::vector<Parti
   }
 }
 
+void entry_spray(const water::Entry& entry, core::Rng& rng, std::vector<Particle>& out) {
+  const water::Ring& ring = entry.ring;
+  const double rim = entry.radius > 0 ? entry.radius : ring.size;
+  for (int i = 0; i < entry.drops; ++i) {
+    const double a = core::range(rng, 0, 2 * kPi);
+    const double r = core::range(rng, 0.7, 1.1) * rim;
+    if (entry.radius > 0) {
+      // The crown: thrown up steeply off the rim, the fastest highest.
+      const double s = core::range(rng, 0.35, 1.0) * entry.speed;
+      const double up = s * core::range(rng, 0.75, 0.95), side = s * core::range(rng, 0.2, 0.5);
+      out.push_back(drop(ring.x + r * lm::cos(a), entry.y, ring.z + r * lm::sin(a),
+                         side * lm::cos(a), up, side * lm::sin(a), core::range(rng, 0.8, 1.6),
+                         core::range(rng, 0.03, 0.08), 0.3, 1.0, 0.85));
+    } else {
+      // The curtain off a body coming out: drops falling back near where it rose.
+      const double s = core::range(rng, 0.2, 1.0) * entry.speed;
+      out.push_back(drop(ring.x + r * lm::cos(a), entry.y + core::range(rng, 0.05, 0.6),
+                         ring.z + r * lm::sin(a), 0.3 * s * lm::cos(a), s * 0.3,
+                         0.3 * s * lm::sin(a), core::range(rng, 0.5, 1.0), 0.03, 0.2, 1.0, 0.8));
+    }
+  }
+  // A mist off the crown, a fine that drifts.
+  const int mist = entry.drops / 4;
+  for (int i = 0; i < mist; ++i) {
+    const double a = core::range(rng, 0, 2 * kPi);
+    const double s = core::range(rng, 0.1, 0.4) * entry.speed;
+    out.push_back(drop(ring.x + rim * lm::cos(a), entry.y + 0.1, ring.z + rim * lm::sin(a),
+                       s * lm::cos(a), s, s * lm::sin(a), core::range(rng, 1.0, 2.0),
+                       core::range(rng, 0.15, 0.3), 1.5, 0.15, 0.35));
+  }
+}
+
+void jet_spray(const water::Entry& entry, core::Rng& rng, std::vector<Particle>& out) {
+  if (entry.jet_speed <= 0) return;
+  const water::Ring& ring = entry.ring;
+  const int n = std::max(6, entry.drops / 3);
+  for (int i = 0; i < n; ++i) {
+    const double a = core::range(rng, 0, 2 * kPi);
+    const double r = core::range(rng, 0, 0.25) * entry.radius;
+    const double up = core::range(rng, 0.5, 1.0) * entry.jet_speed;
+    const double side = core::range(rng, 0, 0.12) * entry.jet_speed;
+    out.push_back(drop(ring.x + r * lm::cos(a), entry.y, ring.z + r * lm::sin(a), side * lm::cos(a),
+                       up, side * lm::sin(a), core::range(rng, 0.6, 1.2),
+                       core::range(rng, 0.04, 0.09), 0.2, 1.0, 0.9));
+  }
+}
+
 void prepare_water_streams(gpu::Device& device, Water& water, const StreamMesh& mesh,
                            const water::World& world) {
   Water::Streams& s = water.streams;

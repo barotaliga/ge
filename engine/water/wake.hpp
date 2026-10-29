@@ -15,6 +15,14 @@
 // of the track whatever the speed (the `float` lab measures it). A splash is one ring
 // (`splash_ring`, float.hpp).
 //
+// A BODY THROUGH THE SURFACE (entry.hpp) also opens a CRATER, the near field the far-field
+// formula softens away: a ring with `crater` > 0 adds, round its point, a cavity `depth` m deep
+// and `crater` m across with its rim raised (the shape (1 - rho^2) exp(-rho^2), rho = r /
+// crater, which moves no water), opening and closing again over 2 sqrt(crater / g) s, and then
+// the jet the closing throws up in the middle, 0.6 of the depth high and a third of the crater
+// across, up and down ballistically. Both are in `ring_height` and `wake_at`, so the drawn
+// crater is the one a float drops into.
+//
 // THE TIER. Rings are evaluated where asked, like the waves; what is kept is bounded:
 // `Wakes::life` s of rings (faded out over its last third), at most kMaxRings (the oldest go
 // first), waves shorter than `Wakes::shortest` m damped out (the short waves near the source,
@@ -26,7 +34,8 @@
 //
 // ge:summary Wakes and rings: impulse rings on deep water, a hull's trail, the Kelvin wake
 // ge:keywords water wake ring rings kelvin cauchy-poisson impulse trail hull boat swimmer splash
-// ge:keywords emit_ring wake_trail wake_at wakes dispersion group-speed
+// ge:keywords emit_ring wake_trail wake_at wakes dispersion group-speed crater cavity jet
+// ge:keywords worthington crater_height near-field
 // ge:skill water
 // ge:test tests/water_wake_test.cpp
 #pragma once
@@ -46,6 +55,8 @@ struct Ring {
   double size = 0.5;
   double shortest = 0;  // m: its own shortest wave (a trail's: an eighth of its transverse wave)
   int body = 0;         // the body whose surface it is on
+  double crater = 0;    // m: a body's crater round the point (entry.hpp); 0: none
+  double depth = 0;     // m: the crater's depth
 };
 
 struct Wakes {
@@ -86,6 +97,11 @@ void wake_trail(Wakes& wakes, Trail& trail, int body, double x, double z, double
 // One ring's height at a distance `r` m, `tau` s after it was set off (the far field above,
 // softened and damped as the wakes keep it).
 double ring_height(const Wakes& wakes, const Ring& ring, double r, double tau);
+
+// A ring's crater and jet at a distance `r` m, `tau` s after it was set off (0 without one).
+double crater_height(const Ring& ring, double r, double tau);
+// How long a ring's crater and its jet last, s (0 without one).
+double crater_time(const Ring& ring);
 
 // Every ring of `body` at (x, z) at `t`.
 WakeAt wake_at(const Wakes& wakes, int body, double x, double z, double t);

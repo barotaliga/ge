@@ -25,7 +25,54 @@ double kept(const Wakes& wakes, double tau) {
   return 1 - core::smoothstep(wakes.life * (2.0 / 3.0), wakes.life, tau);
 }
 
+// The crater's stages: it opens and closes over `open` s, then its jet rises and falls.
+struct Stages {
+  double open = 0, jet = 0, height = 0;
+};
+Stages stages(const Ring& ring) {
+  Stages st;
+  st.open = 2 * std::sqrt(ring.crater / kGravity);
+  st.height = 0.6 * ring.depth;
+  st.jet = 2 * std::sqrt(2 * st.height / kGravity);
+  return st;
+}
+
+// The crater and the jet at `r`, `tau`: the height, d height / dr and d height / dt.
+struct Near {
+  double h = 0, dr = 0, dt = 0;
+};
+Near near_field(const Ring& ring, double r, double tau) {
+  Near out;
+  if (ring.crater <= 0 || tau <= 0) return out;
+  const Stages st = stages(ring);
+  if (tau < st.open) {
+    const double rho = r / ring.crater, g = lm::exp(-rho * rho);
+    const double f = (1 - rho * rho) * g, df = -2 * rho * (2 - rho * rho) * g;
+    const double w = kPi / st.open;
+    const double e = lm::sin(w * tau);
+    out.h = -ring.depth * e * f;
+    out.dr = -ring.depth * e * df / ring.crater;
+    out.dt = -ring.depth * w * lm::cos(w * tau) * f;
+  } else if (tau < st.open + st.jet) {
+    const double wide = ring.crater / 3, q = r / wide, g = lm::exp(-q * q);
+    const double w = kPi / st.jet;
+    const double e = lm::sin(w * (tau - st.open));
+    out.h = st.height * e * g;
+    out.dr = st.height * e * g * (-2 * r / (wide * wide));
+    out.dt = st.height * w * lm::cos(w * (tau - st.open)) * g;
+  }
+  return out;
+}
+
 }  // namespace
+
+double crater_height(const Ring& ring, double r, double tau) { return near_field(ring, r, tau).h; }
+
+double crater_time(const Ring& ring) {
+  if (ring.crater <= 0) return 0;
+  const Stages st = stages(ring);
+  return st.open + st.jet;
+}
 
 void emit_ring(Wakes& wakes, const Ring& ring) {
   std::vector<Ring>& r = wakes.rings;
@@ -84,7 +131,8 @@ double ring_height(const Wakes& wakes, const Ring& ring, double r, double tau) {
   const double rs = std::sqrt(r * r + ring.size * ring.size);
   const double phase = kGravity * tau * tau / (4 * rs);
   const double a = amplitude(wakes, ring, rs, phase, phase / rs, tau);
-  return a == 0 ? 0 : a * lm::cos(phase);
+  const double far = a == 0 ? 0 : a * lm::cos(phase);
+  return ring.crater > 0 ? far + near_field(ring, r, tau).h : far;
 }
 
 WakeAt wake_at(const Wakes& wakes, int body, double x, double z, double t) {
@@ -98,6 +146,16 @@ WakeAt wake_at(const Wakes& wakes, int body, double x, double z, double t) {
     const double phase = kGravity * tau * tau / (4 * rs);
     const double k = phase / rs;
     const double a = amplitude(wakes, ring, rs, phase, k, tau);
+    if (ring.crater > 0) {
+      const double r = std::sqrt(ex * ex + ez * ez);
+      const Near n = near_field(ring, r, tau);
+      out.height += n.h;
+      if (r > 0) {
+        out.dx += n.dr * ex / r;
+        out.dz += n.dr * ez / r;
+      }
+      out.v += n.dt;
+    }
     if (a == 0) continue;
     const double c = lm::cos(phase), s = lm::sin(phase);
     // The phase falls outward (d phase / dr = -k), so the slope is a k sin(phase) outward; the

@@ -38,7 +38,7 @@ struct WaterBody {
 }
 
 // A wake's ring (water/wake.hpp): x, z, the moment it was set off, its volume; its source's
-// size, its own shortest wave, 0, 0.
+// size, its own shortest wave, a body's crater (m across, 0: none) and its depth.
 struct Ring {
   at: vec4f,
   more: vec4f,
@@ -86,6 +86,30 @@ fn height_at(xz: vec2f, t: f32, shortest: f32) -> f32 {
 
 const kGravity = 9.80665;
 
+// A ring's crater and the jet after it (water/wake.cpp's `near_field`): the height and its
+// slope along the radius.
+fn crater_at(r: Ring, dist: f32, tau: f32) -> vec2f {
+  let crater = r.more.z;
+  let open = 2.0 * sqrt(crater / kGravity);
+  let height = 0.6 * r.more.w;
+  let jet = 2.0 * sqrt(2.0 * height / kGravity);
+  if (tau < open) {
+    let rho = dist / crater;
+    let g = exp(-rho * rho);
+    let e = sin(PI * tau / open);
+    return vec2f(-r.more.w * e * (1.0 - rho * rho) * g,
+                 -r.more.w * e * (-2.0 * rho * (2.0 - rho * rho) * g) / crater);
+  }
+  if (tau < open + jet) {
+    let wide = crater / 3.0;
+    let q = dist / wide;
+    let g = exp(-q * q);
+    let e = sin(PI * (tau - open) / jet);
+    return vec2f(height * e * g, height * e * g * (-2.0 * dist / (wide * wide)));
+  }
+  return vec2f(0.0);
+}
+
 // THE WAKES: every ring's far field (water/wake.cpp's `wake_at`: its source's spectrum, its
 // front faded in), its waves shorter than
 // `shortest` m faded out (and their slopes' variance handed back in `lost`); the height and its
@@ -101,6 +125,15 @@ fn wake_at(xz: vec2f, t: f32, shortest: f32) -> vec4f {
       continue;
     }
     let e = xz - r.at.xy;
+    if (r.more.z > 0.0) {
+      let dist = length(e);
+      let c = crater_at(r, dist, tau);
+      out.x += c.x;
+      if (dist > 0.0) {
+        out.y += c.y * e.x / dist;
+        out.z += c.y * e.y / dist;
+      }
+    }
     let rs = sqrt(dot(e, e) + r.more.x * r.more.x);
     let phase = kGravity * tau * tau / (4.0 * rs);
     let k = phase / rs;
