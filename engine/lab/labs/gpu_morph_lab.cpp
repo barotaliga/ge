@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -270,7 +271,7 @@ Timed draw(ge::gpu::Device& d, Scene& s, const gr::FrameView& v,
   const ge::gpu::Image img = ge::gpu::read_now(d, s.out);
   s.rec.wait(d);
   Timed out{gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba},
-            0.0 / 0.0};
+            std::numeric_limits<double>::quiet_NaN()};
   if (s.rec.timed) {
     for (int i = 0; i < s.rec.stats.count; ++i) {
       const gr::PassStat& p = s.rec.stats.passes[static_cast<size_t>(i)];
