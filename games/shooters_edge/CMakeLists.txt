@@ -8,7 +8,7 @@
 file(GLOB SHOOTERS_EDGE_SIM_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/sim/*.cpp)
 add_library(shooters_edge_sim STATIC ${SHOOTERS_EDGE_SIM_SOURCES})
 target_include_directories(shooters_edge_sim PUBLIC ${PROJECT_SOURCE_DIR}/games)
-target_link_libraries(shooters_edge_sim PUBLIC ge_core ge_shooter ge_progs)
+target_link_libraries(shooters_edge_sim PUBLIC ge_core ge_console ge_shooter ge_progs)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_sim)
 
 file(GLOB SHOOTERS_EDGE_SOUND_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/sound/*.cpp)
@@ -18,7 +18,9 @@ target_link_libraries(shooters_edge_sound PUBLIC ge_audio ge_brush)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_sound)
 
 # Its server (server/): the host that runs the classic loop on the run clock with its slots, the
-# bots' seam and the input log, as a library the labs and the tests link (skill: shooter).
+# bots' seam and the input log, and the mod server over it (the builtins, hooks and extension
+# fields a multiplayer mod calls, skill: progs), as a library the labs and the tests link (skill:
+# shooter).
 file(GLOB SHOOTERS_EDGE_SERVER_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/server/*.cpp)
 add_library(shooters_edge_server STATIC ${SHOOTERS_EDGE_SERVER_SOURCES})
 target_link_libraries(shooters_edge_server PUBLIC shooters_edge_sim)
