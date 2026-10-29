@@ -1,12 +1,13 @@
 ---
 name: audio
-description: "Use for engine/audio in gameengine2 and any sound: the synth (tones, noise, steered layers, buses, echo, limiter, the render ring), SoundDef and play_def, racks and beds, the meter and WAV, the audio device, Fall Line's bank and beds, and checking a sound by its meters (the synth and audition labs) when nobody can listen."
+description: "Use for engine/audio in gameengine2 and any sound: the synth (tones, noise, steered layers, sampled voices from WAV files, buses, echo, limiter, the render ring), spatial sound and the channel limit (channels.hpp), SoundDef and play_def, racks and beds, the meter and WAV, the audio device, Fall Line's bank and beds, and checking a sound by its meters (the synth and audition labs) when nobody can listen."
 ---
 
 # Audio
 
-Every sound is synthesized. There are no audio files and no music. `engine/audio/` is the
-instrument; a game's sound (its bank, its beds, its listener table, its faders) is the game's,
+Fall Line's every sound is synthesized: it ships no audio files and no music. A game that ships
+recordings (Shooter's Edge) plays them on the same instrument as SAMPLED VOICES (below), through
+the same buses, echo, room and limiter. `engine/audio/` is the instrument; a game's sound (its bank, its beds, its listener table, its faders) is the game's,
 and the beds a genre shares go in that plugin's `app/` half (`plugins` skill).
 
 ## What is built (M9a)
@@ -18,6 +19,9 @@ and the beds a genre shares go in that plugin's `app/` half (`plugins` skill).
 | `synth.hpp` | The graph: `tone`, `noise`, `layer`/`set`/`stop`, `bus_gain`, `render`; the ring, the voice pool, the echo, the limiter, `stats`; STREAMS (`stream`, `feed`, `queued`, `steer`, `stop`): mono samples made elsewhere (voice chat's talkers, `engine/net/voice.hpp`) on a lock-free ring each, played on a bus, `Stats::starved` when one runs dry |
 | `sound.hpp` | `SoundDef` (id, the sentence it should feel like, its voices), `PlayShape` (gain, pitch, stretch, pan), `play_def`, `find_sound` |
 | `rack.hpp` | A bed's layers: built on the first `rack_apply`, steered every frame |
+| `pcm.hpp` | `Pcm` (mono samples at their own rate, the loop) and `read_wav` (8/16-bit PCM, float, extensible, the loop from `smpl`, `cue ` + `ltxt`, or `cue ` alone) |
+| `synth.hpp` (`sample`) | Sampled voices: a `Pcm` read in 32.32 fixed point with Catmull-Rom interpolation, pitched, looped (`Loop::file`, `once`, `whole`), steered (`sample_set`), stopped with a fade (`sample_stop`), `kMaxSamples` at once, the quietest stolen; `sample_live` from the producer |
+| `channels.hpp` | Sounds in a world: `hear` (gain falling linearly with distance, pan off the listener's right) and `Channels` (an entity's channel replaces, channel 0 stacks, the limit steals the quietest, the inaudible never start, the listener's own centred, `move` and `update` once a frame) |
 | `meter.hpp`, `wav.hpp` | A buffer's level, peak, octave bands, centroid, onset, length and balance; its WAV bytes |
 | `engine/platform/audio.hpp` | The device: `open_audio` pulls the synth on SDL's audio thread; `open_audio_in` and `read_audio_in` the microphone |
 | `engine/lab/sound.hpp` | `sound_shot`: a buffer metered, its metrics, its picture, its WAV, in a lab |
@@ -72,6 +76,11 @@ after (`perf` skill).
 
 ## Labs
 
+- **`samples`** (`engine/lab/labs/audio_samples_lab.cpp`): recordings at three rates, three
+  pitches, a cue's loop and its stop, a fly-by (its gain and pan charted, its balance metered)
+  and sixteen sources into eight channels; the bench times a full pool.
+- **`se-audio`** (`games/shooters_edge/labs/se_audio_lab.cpp`): a scripted fight of the game's
+  WAVs through `Channels`: the fight from above, each source's heard gain, the mix and its WAV.
 - **`synth`** (`engine/lab/labs/audio_synth_lab.cpp`): every wave, colour, sweep, drive, the pair
   and vibrato, the echo, two steered layers and the limiter under a stack, each metered,
   pictured and written as WAV, with failures for the checks a listener would make; the bench.
@@ -81,6 +90,21 @@ after (`perf` skill).
   skid, powder, air), with failures for the order a listener hears (the tuck over the cruise,
   the powder darker than the groomer, the skid brighter than the powder, silence at rest); and
   the bot's whole run on a seed through the route, under the limiter with no dropped call.
+
+## Sampled voices (M18j)
+
+- **A `Pcm` is read in place, never copied.** The game loads its bank once and keeps it alive as
+  long as the synth; a call carries a pointer across the ring.
+- **A sampled voice is steered, not re-fired.** A moving source keeps its voice and gets a
+  `sample_set` each frame (`Channels::update` does it); the 0.02-0.03 s glide is what keeps a
+  pan moving at 72 Hz from zippering.
+- **`sample_live` is safe before the first render**: an id sent and not yet applied counts as
+  live, so a channel table never frees a slot whose voice has not started.
+- **`hear`'s law is linear on purpose** (silent at 1 / attenuation): a channel table can then
+  say exactly what is out of earshot and never start it.
+- Labs: `samples` (the mechanism, synthetic recordings) and `se-audio` (a scripted fight of
+  Shooter's Edge's own WAVs; the fight's balance checks: the rocket's blast and the beam left,
+  the door right).
 
 ## Fall Line's sound (where each piece is)
 

@@ -1,11 +1,12 @@
-// The synth's graph: the call ring, the voice pool, the layers, the streams, the buses, the echo,
-// the room and the limiter, rendered a block at a time. Everything is allocated in the constructor
-// but a stream's ring, allocated once on the producer's thread before its slot is first used;
-// `render` only reads and writes what is already there.
+// The synth's graph: the call ring, the voice pool, the layers, the sampled voices, the streams,
+// the buses, the echo, the room and the limiter, rendered a block at a time. Everything is
+// allocated in the constructor but a stream's ring, allocated once on the producer's thread before
+// its slot is first used; `render` only reads and writes what is already there.
 //
 // ge:summary The synth's render: the ring, one-shot envelopes, layers, buses, echo and limiter
 // ge:keywords synth render envelope attack hold decay voice-pool steal layer glide bus echo
-// ge:keywords limiter soft-knee gain-reduction ring drain stream feed starved
+// ge:keywords limiter soft-knee gain-reduction ring drain sampled-voice resample catmull-rom
+// ge:keywords cubic-interpolation fixed-point loop steal-quietest stream feed starved
 // ge:skill audio
 // ge:test tests/audio_synth_test.cpp
 #include "audio/synth.hpp"
@@ -17,6 +18,7 @@
 
 #include "audio/dsp.hpp"
 #include "audio/reverb.hpp"
+#include "audio/sample_voice.hpp"
 #include "core/libm/libm.hpp"
 #include "core/num.hpp"
 #include "core/prng.hpp"
@@ -47,13 +49,6 @@ int64_t frames_of(float ms) {
   return static_cast<int64_t>(core::num::round(static_cast<double>(ms) * kRate / 1000));
 }
 
-void pan_gains(float pan, float& gl, float& gr) {
-  pan = pan < -1 ? -1 : pan > 1 ? 1 : pan;
-  // A balance law: the centre is full on both sides, and a hard pan silences the far side.
-  gl = pan > 0 ? 1 - pan : 1;
-  gr = pan < 0 ? 1 + pan : 1;
-}
-
 float db_of(float x) {  // 20 log10 x, for x > 0
   return static_cast<float>(8.68588963806503655 * libm::log(static_cast<double>(x)));
 }
@@ -67,6 +62,9 @@ enum class Cmd : uint8_t {
   layer_stop,
   bus,
   room,
+  sample_new,
+  sample_set,
+  sample_stop,
   stream_new,
   stream_set,
   stream_stop
@@ -84,6 +82,9 @@ struct Command {
   float glide = 0;
   float gain = 0;
   float pan = 0;
+  uint32_t id = 0;  // a sampled voice's
+  const Pcm* pcm = nullptr;
+  SamplePlay play;
   float echo = 0;
 };
 
@@ -187,6 +188,7 @@ struct Synth::Impl {
   // the render side
   std::array<Voice, kMaxVoices> voices{};
   std::array<LayerVoice, kMaxLayers> layers{};
+  std::array<SampleVoice, kMaxSamples> samples{};
   std::array<StreamVoice, kMaxStreams> streams{};
   std::array<Bus, kBuses> buses{};
   uint64_t order = 0;
@@ -202,9 +204,14 @@ struct Synth::Impl {
   std::array<float, kBlock> room_l{}, room_r{};
   // the limiter
   float limit_g = 0, limit_attack = 1, limit_release = 1, limit_below = 0;
+  // the sampled voices' ids, for `sample_live`: the producer's next, the render side's
+  // highest applied and each slot's sounding id (0: free)
+  uint32_t next_sample = 1;
+  std::atomic<uint32_t> applied_sample{0};
+  std::array<std::atomic<uint32_t>, kMaxSamples> sample_ids{};
   // the stats, read from any thread
   std::atomic<uint64_t> frames{0};
-  std::atomic<uint32_t> voices_live{0}, layers_live{0}, stolen{0};
+  std::atomic<uint32_t> voices_live{0}, layers_live{0}, samples_live{0}, stolen{0};
   std::atomic<uint64_t> starved{0};
   std::atomic<float> reduction{0};
 
@@ -221,14 +228,15 @@ struct Synth::Impl {
     for (auto& f : stream_free) f.store(true, std::memory_order_relaxed);
   }
 
-  void push(const Command& c) {
+  bool push(const Command& c) {
     const uint32_t h = head.load(std::memory_order_relaxed);
     if (h - tail.load(std::memory_order_acquire) >= kRingSize) {
       dropped.fetch_add(1, std::memory_order_relaxed);
-      return;
+      return false;
     }
     ring[h % kRingSize] = c;
     head.store(h + 1, std::memory_order_release);
+    return true;
   }
 
   void drain() {
@@ -273,6 +281,28 @@ struct Synth::Impl {
       case Cmd::room:
         reverb.set(c.room, c.glide);
         break;
+      case Cmd::sample_new:
+        start_sample(c);
+        break;
+      case Cmd::sample_set:
+        if (SampleVoice* s = sample_of(c.id)) {
+          if (s->stopping) break;
+          s->t_gain = c.gain < 0 ? 0 : c.gain;
+          s->t_pan = c.pan < -1 ? -1 : c.pan > 1 ? 1 : c.pan;
+          s->c_gain = glide_coeff(c.glide);
+          s->c_pan = glide_coeff(c.glide);
+        }
+        break;
+      case Cmd::sample_stop:
+        if (SampleVoice* s = sample_of(c.id)) {
+          if (s->stopping) break;
+          s->stopping = true;
+          s->t_gain = 0;
+          s->c_gain = glide_coeff(c.glide);
+          // Seven and a half time constants: the fade is 65 dB down when the slot is freed.
+          s->free_at = frame + frames_of(c.glide * 7500);
+        }
+        break;
       case Cmd::stream_new: {
         StreamVoice& v = streams[c.slot];
         v = StreamVoice{};
@@ -303,6 +333,35 @@ struct Synth::Impl {
         break;
       }
     }
+  }
+
+  SampleVoice* sample_of(uint32_t id) {
+    for (SampleVoice& s : samples) {
+      if (s.live && s.id == id) return &s;
+    }
+    return nullptr;
+  }
+
+  // A free slot, or the quietest voice's (the oldest among equals): a far sound gives way first.
+  SampleVoice& claim_sample() {
+    SampleVoice* pick = &samples[0];
+    for (SampleVoice& s : samples) {
+      if (!s.live) return s;
+      if (s.t_gain < pick->t_gain || (s.t_gain == pick->t_gain && s.order < pick->order)) {
+        pick = &s;
+      }
+    }
+    stolen.fetch_add(1, std::memory_order_relaxed);
+    return *pick;
+  }
+
+  void start_sample(const Command& c) {
+    SampleVoice& s = claim_sample();
+    const int64_t start = frame + (c.play.delay_ms > 0 ? frames_of(c.play.delay_ms) : 0);
+    begin_sample(s, *c.pcm, c.play, c.id, ++order, c.bus, start);
+    // The slot's id before the applied mark, so `sample_live` never sees a gap between them.
+    sample_ids[static_cast<size_t>(&s - samples.data())].store(c.id, std::memory_order_relaxed);
+    applied_sample.store(c.id, std::memory_order_release);
   }
 
   Voice& claim() {
@@ -627,6 +686,17 @@ struct Synth::Impl {
       render_layer(l, frame, count);
       built += l.live;
     }
+    uint32_t sounding = 0;
+    for (int k = 0; k < kMaxSamples; k++) {
+      SampleVoice& s = samples[k];
+      if (s.live && s.start < frame + count) {
+        render_sample(s, frame, count, bus_gain[s.bus].data(), mix_l.data(), mix_r.data(),
+                      mix_e.data());
+      }
+      sounding += s.live;
+      sample_ids[k].store(s.live ? s.id : 0, std::memory_order_relaxed);
+    }
+    samples_live.store(sounding, std::memory_order_relaxed);
     for (int k = 0; k < kMaxStreams; k++)
       if (streams[k].live) render_stream(k, frame, count);
     // The room (reverb.hpp): only while one is set, so a synth with none keeps its bits.
@@ -773,6 +843,30 @@ void Synth::room(const RoomSound& room, float glide_s) {
   impl_->push(c);
 }
 
+SampleId Synth::sample(const Pcm& pcm, const SamplePlay& play, int bus) {
+  if (pcm.samples.empty() || pcm.rate < 1) return SampleId{};
+  Command c;
+  c.kind = Cmd::sample_new;
+  c.bus = bus_of(bus);
+  c.id = impl_->next_sample;
+  c.pcm = &pcm;
+  c.play = play;
+  if (!impl_->push(c)) return SampleId{};
+  if (++impl_->next_sample == 0) impl_->next_sample = 1;
+  return SampleId{c.id};
+}
+
+void Synth::sample_set(SampleId id, float gain, float pan, float glide_s) {
+  if (!id.valid()) return;
+  Command c;
+  c.kind = Cmd::sample_set;
+  c.id = id.id;
+  c.gain = gain;
+  c.pan = pan;
+  c.glide = glide_s;
+  impl_->push(c);
+}
+
 StreamId Synth::stream(int bus, float echo) {
   for (int i = 0; i < kMaxStreams; i++) {
     if (impl_->stream_used[i] || !impl_->stream_free[i].load(std::memory_order_acquire)) continue;
@@ -823,6 +917,25 @@ void Synth::steer(StreamId id, float gain, float pan, float glide_s) {
   impl_->push(c);
 }
 
+void Synth::sample_stop(SampleId id, float fade_s) {
+  if (!id.valid()) return;
+  Command c;
+  c.kind = Cmd::sample_stop;
+  c.id = id.id;
+  c.glide = fade_s > 0.001f ? fade_s : 0.001f;
+  impl_->push(c);
+}
+
+bool Synth::sample_live(SampleId id) const {
+  if (!id.valid()) return false;
+  // Sent and not applied yet: it will sound at the next block.
+  if (id.id > impl_->applied_sample.load(std::memory_order_acquire)) return true;
+  for (const std::atomic<uint32_t>& s : impl_->sample_ids) {
+    if (s.load(std::memory_order_relaxed) == id.id) return true;
+  }
+  return false;
+}
+
 void Synth::stop(StreamId id) {
   if (!id.valid() || !impl_->stream_used[id.slot]) return;
   impl_->stream_used[id.slot] = false;
@@ -850,6 +963,7 @@ Stats Synth::stats() const {
   s.frames = impl_->frames.load(std::memory_order_acquire);
   s.voices = impl_->voices_live.load(std::memory_order_relaxed);
   s.layers = impl_->layers_live.load(std::memory_order_relaxed);
+  s.samples = impl_->samples_live.load(std::memory_order_relaxed);
   s.dropped = impl_->dropped.load(std::memory_order_relaxed);
   s.stolen = impl_->stolen.load(std::memory_order_relaxed);
   s.reduction_db = impl_->reduction.load(std::memory_order_relaxed);

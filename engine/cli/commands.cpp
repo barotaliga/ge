@@ -254,6 +254,35 @@ constexpr FlagSpec kRecordFlags[] = {
      "the build to record with (default release: a frame is drawn on the CPU)"},
     kEngine,
     kRepo};
+constexpr FlagSpec kSoundMatchFlags[] = {
+    {"pool", "<regex>", "only the candidates whose paths match (case-insensitive): splash|water"},
+    {"top", "<n>", "how many to list (default 5)"},
+    {"rate", "<hz>", "the rate both are compared at (default 22050)"}};
+constexpr FlagSpec kSoundImportFlags[] = {
+    {"to", "<dir>", "the directory the sound is written under (default sounds)"},
+    {"max", "<s>", "the longest it may be after the trim (default 6)"},
+    {"loop", "", "a loop: a 50 ms fade out instead of 20 ms"},
+    {"lufs", "<lufs>", "the integrated loudness wanted (default -16)"},
+    {"threshold", "<dBFS>", "quieter than this at either end is silence (default -50)"},
+    {"rate", "<hz>", "the rate it is written at (default 22050)"}};
+constexpr FlagSpec kSoundSplitFlags[] = {
+    {"to", "<dir>", "the directory the pieces are written under (default sounds)"},
+    {"gap", "<s>", "a silence at least this long ends a piece (default 0.15)"},
+    {"max", "<s>", "the longest a piece may be (default 6)"},
+    {"lufs", "<lufs>", "the integrated loudness wanted (default -16)"},
+    {"threshold", "<dBFS>", "quieter than this is silence (default -50)"},
+    {"rate", "<hz>", "the rate they are written at (default 22050)"}};
+
+constexpr FlagSpec kModelImportFlags[] = {
+    {"to", "<dir>", "the directory the model is written under (default models)"},
+    {"budget-kib", "<n>", "warn over this size (default 300)"}};
+
+constexpr FlagSpec kSourceFlags[] = {
+    {"cache", "<dir>", "where packs are kept (default GE_ASSET_CACHE, else ~/.cache/ge/sources)"}};
+constexpr FlagSpec kSourceSearchFlags[] = {
+    {"kind", "<sound|model>", "only sounds or only models, where a source holds both"},
+    {"refresh", "", "read the source's listing again instead of the cached one"},
+    {"cache", "<dir>", "where packs are kept (default GE_ASSET_CACHE, else ~/.cache/ge/sources)"}};
 constexpr FlagSpec kSnowShowFlags[] = {
     {"out", "<dir>", "where the PNGs go (default: snow/ beside the file)"}};
 constexpr FlagSpec kSnowColumnFlags[] = {{"at", "<x,z>", "the point, m (required)"}};
@@ -599,6 +628,53 @@ const CommandSpec kCommands[] = {
      "move the repo onto this ge's engine release: the pin rewritten, the skills synced, the repo "
      "doctored; run it with the new release's ge",
      kUpgradeFlags, "ge upgrade --engine-sha256=<hex>", "engine"},
+    {"sound match", "<reference> <candidate>...", 2, -1, "see",
+     "rank free sounds (files, or every sound under a directory) by how close each comes to a "
+     "reference in length, band energies and loudness envelope; the best is the one to import",
+     kSoundMatchFlags, "ge sound match ref/door_stop.wav packs/ --pool=door|slam --top=3",
+     "assets"},
+    {"sound import", "<source> <name>", 2, 2, "create",
+     "a sound taken in under our name: decoded, trimmed of silence, cut to --max, faded, brought "
+     "to --lufs under a -1.5 dBFS peak, written as mono 16-bit WAV at <to>/<name>.wav",
+     kSoundImportFlags, "ge sound import packs/kenney/doorClose_2.ogg door/stone_stop --to=sounds",
+     "assets"},
+    {"sound split", "<source> <name>", 2, 2, "create",
+     "one recording of many sounds cut at its silences, each piece imported as import does to "
+     "<to>/<name>_01.wav, _02 ...",
+     kSoundSplitFlags, "ge sound split packs/footsteps.ogg player/step --gap=0.2", "assets"},
+    {"model import", "<source> <name>", 2, 2, "create",
+     "a free kit's model taken in under our name: its buffers and textures (files beside it or "
+     "data: URIs) packed into one <to>/<name>.glb, loaded by the engine's loader and measured",
+     kModelImportFlags,
+     "ge model import \"packs/kit/Models/GLB format/crate.glb\" pickup/shells --to=models",
+     "assets"},
+    {"source list",
+     "",
+     0,
+     0,
+     "learn",
+     "the free sources ge searches and fetches from (Kenney, OpenGameArt's CC0 packs, Poly "
+     "Haven): what each holds, its licence, how a search reads it",
+     {},
+     "ge source list",
+     "assets"},
+    {"source search", "<source> <word>...", 2, -1, "see",
+     "a free source's packs whose names, titles or tags hold every word; --kind=sound or model",
+     kSourceSearchFlags, "ge source search kenney impact --kind=sound", "assets"},
+    {"source fetch", "<source>:<pack>", 1, 1, "create",
+     "a pack downloaded and unpacked into the cache (never the repository) with SOURCE.txt: "
+     "title, author, page and licence; a licence the repository cannot carry is refused",
+     kSourceFlags, "ge source fetch kenney:impact-sounds", "assets"},
+    {"credits check",
+     "[<dir>]",
+     0,
+     1,
+     "maintain",
+     "a content directory's CREDITS.md against its files: every sound, model, image and font "
+     "credited, every credit's file there, every source under a licence this repository can carry",
+     {},
+     "ge credits check games/shooters_edge/content",
+     "assets"},
 };
 
 constexpr FlagSpec kGlobal[] = {

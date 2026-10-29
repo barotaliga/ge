@@ -248,6 +248,10 @@ inline int session_seat_of_peer(const SessionHost& host, int peer) {
 void session_client_init(SessionClient& client, Node& node, int channel);
 bool session_client_join(SessionClient& client, const Address& host, const char* name,
                          uint64_t token, int64_t now_us);
+// Join over a peer the node has already connected (reach.hpp crossed the NATs to the host): the
+// hello goes at once. False when the peer is not connected.
+bool session_client_attach(SessionClient& client, int peer, const char* name, uint64_t token,
+                           int64_t now_us);
 void session_client_update(SessionClient& client, int64_t now_us);
 // Asks; each queues one message to the host (false: not seated, or the queue refused it). What
 // the host decided comes back as events.
