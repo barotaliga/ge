@@ -274,6 +274,7 @@ characters.
 | `plugins/snowmobile/` | The snowmobile on the snow (`ge::snowmobile`): the spec, the step, the body, the drive, the bot's hands, the scenarios | `snowmobile` |
 | `plugins/helicopter/` | The helicopter in the air and on the snow (`ge::helicopter`): the spec, the step, the bot's hands, the downwash, the scenarios | `helicopter` |
 | `plugins/paramotor/` | The powered speed wing a skier flies (`ge::paramotor`): the spec, the wing on its lines, the engine, the acro, the bot's hands, the scenarios | `paramotor` |
+| `plugins/shooter/` | The first-person shooter's simulation (`ge::shooter`): the classic player move in floats, clip hulls and their trace, hulls from brushes, the recorded scenarios | `shooter` |
 | `games/fall_line/sim/` | Fall Line's own simulation (`fall_line_sim`): the state, the step, the course, the free ride and lifts, the bot and the field, the headless run, the hunt, the play contract | `sim` |
 | `games/fall_line/cfg/` | Fall Line's cvars (`fall_line_cfg`): every setting a cfg may change, bound to the Settings its app reads | `console` |
 | `games/fall_line/sound/` | Fall Line's sound (`fall_line_sound`, no GPU): the bank, the route, the listener, the mix | `audio`, `sim` |
@@ -364,6 +365,7 @@ and the directories agree.
 | `snowmobile` | `plugins/snowmobile`: the snowmobile on the snow (`step_sled`, the body, the drive), what throws its rider, the bot's hands on it, the sled scenarios |
 | `helicopter` | `plugins/helicopter`: the helicopter (`step_heli`, the rotor, the disc, the landing, the strikes), the downwash, the bot's hands on it, the heli scenarios |
 | `paramotor` | `plugins/paramotor`: the powered speed wing a skier flies (`step_para`, the wing on its lines, the engine, the fold, the cut-away), the air it flies in, the bot's hands on it, the para scenarios |
+| `shooter` | `plugins/shooter`: the classic player move in 32-bit floats (`player_move`, `run_command`, every move type and server setting), clip hulls and the line trace, hulls from brushes, the move's solids, the recorded scenarios and the `pmove` lab; the M18o rows |
 | `sim` | `games/fall_line/sim`: `create_game`, the step, the bot, the headless sim CLI, the run clock |
 | `platform` | `engine/platform`: SDL3, the window, input, the gamepad, the audio device, files |
 | `move` | `engine/move`: a moving character's knobs, presets and step (ground and air acceleration, friction, jumps, strafe jumping, steps, slopes, crouch, slide, flight), the trace a world answers, the box world, the strafer, the scenarios, the `move-*` labs; the M28 rows |
