@@ -29,7 +29,7 @@ sees plain structs.
   `CAMetalLayer` on Apple, Win32), `pixel_size`, `poll_input` into an `InputSnapshot`
   (keys by USB HID usage, the pointer, focus, resize, quit), `now_ns`, `display_available`.
 - `cmake/SDL.cmake`: `GE_PLATFORM` and THE PIN (SDL's version and its archive's SHA-256).
-  On Linux SDL needs the X11 and Wayland headers (CI's `GE_LINUX_PACKAGES` lists them); a
+  On Linux SDL needs the X11 and Wayland headers (`tools/setup-ubuntu.sh` installs them); a
   missing one fails the configure with the package to install.
 - `games/fall_line/app/main.cpp`: the frame loop: input, focus pauses the run clock, the
   steps it grants, acquire, draw, present.
@@ -43,7 +43,7 @@ sees plain structs.
 - Headless, SDL's `dummy` driver (`SDL_AUDIO_DRIVER=dummy`) consumes the stream at the device's
   rate with no hardware: `tests/platform_audio_test.cpp` runs the real device path that way.
 - On Linux SDL finds PipeWire, PulseAudio and ALSA by their headers (`libpipewire-0.3-dev`,
-  `libpulse-dev`, `libasound2-dev`, in CI's `GE_LINUX_PACKAGES`); without them it builds with
+  `libpulse-dev`, `libasound2-dev`, in `tools/setup-ubuntu.sh`); without them it builds with
   the dummy and disk drivers only, and a desktop build is silent.
 
 ## Rules

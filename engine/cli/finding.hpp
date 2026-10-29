@@ -50,5 +50,10 @@ std::string rel_path(const fs::path& root, const fs::path& path);
 bool skipped_dir(std::string_view name);
 // Lines without their '\n'.
 std::vector<std::string_view> split_lines(std::string_view text);
+// A log line cut to the kRegexLine characters a std::regex may scan. libstdc++'s matcher recurses
+// once per character, so a line of a megabyte (a dump, a progress bar redrawn without a newline)
+// overflows the stack; every finding a log is read for fits in the cut.
+inline constexpr size_t kRegexLine = 1024;
+std::string regex_line(std::string_view line);
 
 }  // namespace ge::cli
