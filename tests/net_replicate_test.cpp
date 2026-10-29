@@ -1,11 +1,13 @@
 // engine/net/replicate.hpp over the simulated network: a server and its clients on a toy world of
 // movers. With no loss a prediction never needs correcting; under loss it is corrected and still
 // lands on the server's state; deltas are smaller than whole snapshots; interest hides the far;
-// a byte budget starves some rows but every one arrives; a rewind is what the client drew; the
-// whole exchange replays to the bit.
+// a byte budget starves some rows but every one arrives; a rewind is what the client drew; each
+// input carries the moment it was drawn, and a hit is rewound to it within the cap; the whole
+// exchange replays to the bit.
 //
 // ge:summary Test: replication's prediction, corrections, deltas, interest, budget and rewind
 // ge:keywords test net replicate snapshot delta prediction reconcile interest budget rewind
+// ge:keywords lag-compensation rewind-cap press sub-tick
 // ge:skill net testing
 #include "net/replicate.hpp"
 
@@ -70,6 +72,7 @@ struct World {
   int64_t now = 0;
   bool moving = true;
   double spread = 0;  // where each new mover is put: client k at x = k * spread
+  int press = 256;    // when within each frame the input was pressed (256: at the input)
 };
 
 std::unique_ptr<World> make_world(int clients, const LinkConditions& link,
@@ -116,7 +119,7 @@ void tick(World& w) {
       input[1] = static_cast<uint8_t>(ge::core::int_in(w.hands[k], -20, 20));
       input[2] = static_cast<uint8_t>(ge::core::int_in(w.hands[k], -10, 10));
     }
-    replicate_client_input(*w.clients[k], input);
+    replicate_client_input(*w.clients[k], input, w.press);
     node_flush(e.n, w.now);
   }
 }
@@ -224,7 +227,7 @@ TEST(replicate_deltas_are_smaller_than_whole_snapshots) {
   run(*w, 120);
   const ReplicateStats moving = w->server.stats;
   CHECK(moving.full == before.full);  // every client acks: no whole snapshot after the first
-  const double whole = (32 * (18.0 + 64) / 8) + 18;  // every row new
+  const double whole = (32 * (18.0 + 64) / 8) + 19;  // every row new
   const double per_moving = static_cast<double>(moving.bytes - before.bytes) /
                             static_cast<double>(moving.snapshots - before.snapshots);
   CHECK(per_moving < whole);
@@ -235,7 +238,7 @@ TEST(replicate_deltas_are_smaller_than_whole_snapshots) {
   const ReplicateStats still = w->server.stats;
   const double per_still = static_cast<double>(still.bytes - still0.bytes) /
                            static_cast<double>(still.snapshots - still0.snapshots);
-  CHECK(per_still <= 18);
+  CHECK(per_still <= 19);  // the 16-byte header and the 3-byte count
   for (const auto& c : w->clients) CHECK(c->stats.dropped == 0);
 }
 
@@ -402,4 +405,49 @@ TEST(replicate_a_client_asks_its_rates_and_the_server_caps_them) {
   w->server.config.max_rate = 1000;
   CHECK(replicate_send_interval(w->server, 0) == 6);
   CHECK(replicate_snapshot_budget(w->server, 0) == 100);
+}
+
+TEST(replicate_an_input_carries_the_moment_it_was_drawn) {
+  LinkConditions lan;
+  conditions_preset("lan", lan);
+  ReplicateConfig config;
+  auto w = make_world(1, lan, config);
+  run(*w, 90);
+  const ReplicateClient& c = *w->clients[0];
+  const ReplicateClientSlot& slot = w->server.clients[0];
+  int checked = 0;
+  for (int i = 0; i < 60; i++) {
+    w->press = (i % 3) * 128;  // a press at the frame's start, its middle and the input itself
+    tick(*w);
+    if (!slot.fresh) continue;
+    // The server holds, for the input it applied, the tick the client drew when it was pressed.
+    CHECK(slot.applied_view == c.views[slot.applied % 256]);
+    checked++;
+  }
+  CHECK(checked > 40);
+  // A press at the start of a frame was drawn a tick before one at its end.
+  const uint32_t s = c.seq;
+  CHECK(c.views[s % 256] > 0);
+  w->press = 0;
+  tick(*w);
+  const uint32_t early = c.views[c.seq % 256];
+  w->press = 256;
+  tick(*w);
+  const uint32_t late = c.views[c.seq % 256];
+  CHECK(late > early + 255);  // the next frame, at its end
+}
+
+TEST(replicate_a_hit_is_rewound_to_the_drawn_moment_within_the_cap) {
+  LinkConditions lan;
+  conditions_preset("lan", lan);
+  ReplicateConfig config;
+  config.ring = 60;
+  auto w = make_world(1, lan, config);
+  run(*w, 90);
+  double v[kMaxFields];
+  CHECK(replicate_server_rewind_for(w->server, 0, w->clients[0]->own, v) == RewindResult::ok);
+  CHECK(replicate_server_rewind_for(w->server, 3, w->clients[0]->own, v) == RewindResult::missing);
+  // The same moment judged under a cap shorter than how far back it was drawn: refused.
+  w->server.config.rewind_max_s = 1e-6;
+  CHECK(replicate_server_rewind_for(w->server, 0, w->clients[0]->own, v) == RewindResult::too_old);
 }

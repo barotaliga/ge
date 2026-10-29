@@ -19,7 +19,8 @@
 //   cools from `core_k` toward `cool_k` (T = cool + (core - cool) e^(-t/cool_s)); its FIRE share
 //   (`fire` at its start) falls as e^(-t/fire_s), while its SMOKE share (`smoke`) climbs over
 //   `smoke_in_s` and thins away by `smoke_s`. Off a surface it starts a third of its radius out
-//   along the surface's normal, a hemisphere rather than a ball buried in the wall.
+//   along the surface's normal, a hemisphere rather than a ball buried in the wall. A blast thrown
+//   (`v`, a muzzle's puff) is carried on at its speed, slowing as e^(-t/kBlastDragS).
 // - THE FLASH (`flash_at`) is the light the fireball gives its surroundings: a point at its
 //   centre whose luminous intensity is the glowing ball's (its disc, pi r^2, times its core's
 //   blackbody luminance times the fire share times `flash`), in the core's blackbody colour,
@@ -114,7 +115,9 @@ struct Blast {
   double scale = 1;                 // lengths by it, counts by its square, times by its square root
   uint32_t seed = 0;                // its own sparks, scorch and the turn of its noise
   double born_s = 0;                // the clock it went off at
+  double v[3] = {0, 0, 0};          // m/s it is thrown at (a muzzle's puff), slowed by the air
 };
+inline constexpr double kBlastDragS = 0.3;  // the air's e-folding time on a thrown blast, s
 inline const BlastLook& look_of(const Blast& b) { return b.look ? *b.look : default_look(); }
 
 // How long the blast is seen, s.
