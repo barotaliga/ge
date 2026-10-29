@@ -9,7 +9,8 @@ struct Frame {
   eye: vec4f,              // world xyz (m); w: the eye's altitude over the sea, km
   sun: vec4f,              // unit direction toward the key light; w: its illuminance, pre-exposed
   size: vec4f,             // render width, height, 1/width, 1/height
-  time: vec4f,             // seconds, frame number
+  time: vec4f,             // seconds, frame number, the lamps' light the eye adapted to (a white
+                           // face's luminance, the frame's units: render/view.hpp's lamp_lux)
   world: vec4f,            // y = 0's altitude over the sea (km), the pre-exposure (light's stored
                            // scale), the moon's direct light while the sun keys, 1: the haze is the moon's
   planes: array<vec4f, 6>, // the frustum: left, right, bottom, top, near (and one zero)
@@ -36,6 +37,11 @@ struct Frame {
   // tint, its size; 9 the glow's colour, its height; 10 the ring's tilt, the stars by day, the
   // dust's asymmetry, its scale height (km).
   style: array<vec4f, 11>,
+  // Other worlds' moons (render/moons.hpp's kMaxMoons, kMoonRows a moon): 0 toward it, its drawn
+  // angular radius (0: none); 1 its north pole, its kind; 2 its 0 N 0 E, its surface's luminance
+  // at its phase, pre-exposed; 3 its tint, Lambert's share; 4 its semi-axes against the longest,
+  // its dents; 5 its haze.
+  moons: array<vec4f, 24>,
 }
 
 // THE MOTION a surface at camera-relative `rel` (w = 1; w = 0 for a direction at infinity) made

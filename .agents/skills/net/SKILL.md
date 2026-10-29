@@ -1,6 +1,6 @@
 ---
 name: net
-description: "Use for engine/net in gameengine2: multiplayer networking. Addresses, the wire, UDP and TCP sockets, the simulated network (stream links too) and its conditions, pcap captures, the packet format, connections (acks, round trip, loss, unreliable/sequenced/reliable channels, big messages in pieces, priorities, the send budget), nodes (host, client, peer; up to 32), sessions (the lobby: seats, teams, chat, kick, start, reconnect by token), LAN discovery, NATs (the simulated kinds, STUN, the rendezvous, hole punching, the relay), opening a port on the router (PCP, NAT-PMP, UPnP IGD, the simulated router), replication (quantized snapshots and deltas, interest, the byte budget, prediction and reconciliation, interpolation, lag compensation by rewind), lockstep and rollback (turns, input delay, prediction and resimulation, step digests that name a desync), fake-traffic sessions, pressure tests (ramps to a breaking point, chaos scripts and reconnects, soaks and memory, the fuzzer), the net-link, net-session, net-reach, net-replicate, net-lockstep, net-stress, net-chaos and net-fuzz labs; and the M17 plan (lobby, chat, NAT, replication, lockstep, voice, accounts)."
+description: "Use for engine/net in gameengine2: multiplayer networking. Addresses, the wire, UDP and TCP sockets, the simulated network (stream links too) and its conditions, pcap captures, the packet format, connections (acks, round trip, loss, unreliable/sequenced/reliable channels, big messages in pieces, priorities, the send budget), nodes (host, client, peer; up to 32), sessions (the lobby: seats, teams, chat, kick, start, reconnect by token), LAN discovery, hosting from inside a game and the server browser (the directory, the rendezvous's list, invite-only and LAN-only games), NATs (the simulated kinds, STUN, the rendezvous, hole punching, the relay), opening a port on the router (PCP, NAT-PMP, UPnP IGD, the simulated router), replication (quantized snapshots and deltas, interest, the byte budget, prediction and reconciliation, interpolation, lag compensation by rewind), lockstep and rollback (turns, input delay, prediction and resimulation, step digests that name a desync), voice chat (the Opus codec at a constant bitrate with FEC, push-to-talk and voice activity, the host's relay by route, the jitter buffer, the mix onto the synth's streams, the voice cvars), fake-traffic sessions, pressure tests (ramps to a breaking point, chaos scripts and reconnects, soaks and memory, the fuzzer), the net-link, net-session, net-reach, net-host, net-replicate, net-lockstep, net-stress, net-chaos, net-fuzz and voice labs; and the M17 plan (lobby, chat, NAT, replication, lockstep, voice, accounts)."
 ---
 
 # Networking
@@ -28,17 +28,23 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
 | `net/node.hpp` | Host, client or peer: the challenge handshake, up to 32 peers, timeouts, events, flush |
 | `net/session.hpp` | Sessions: the lobby on a node's reliable channel; `SessionHost` seats players and holds the rules, `SessionClient` asks and mirrors |
 | `net/session_wire.hpp` | The session's messages, stated once for both sides (not installed) |
-| `net/discovery.hpp` | LAN discovery: a broadcast probe on a fixed port, each host's advert, the hosts found |
+| `net/discovery.hpp` | LAN discovery: a broadcast probe on a fixed port, each host's advert (the session's id, a locked flag), the hosts found; the same probe sent to a session address is a ping |
+| `net/hosting.hpp` | Hosting from inside a game: LAN answers and pings, the router's forward, the rendezvous, the list kept current and unlisted on stop; visibility `lan`, `invite`, `listed` |
+| `net/directory.hpp` | The server browser's model: the LAN's games and the list's pages merged by session id, pinged, filtered and sorted; `directory_route` to join one |
+| `net/hosting_trial.hpp` | An evening of hosted games found, pinged, joined, started and unlisted: what the `net-host` lab and `net_hosting_test` run |
 | `net/stun.hpp` | STUN's Binding request and answer: the public address a NAT gave a socket |
-| `net/rendezvous.hpp` | The public server: sessions registered, a client introduced to its host with a nonce and a relay port, STUN answered, relays forwarding |
+| `net/rendezvous.hpp` | The public server: sessions registered, a client introduced to its host with a nonce and a relay port, STUN answered, relays forwarding, the list of advertised games a page at a time |
 | `net/reach.hpp` | The two ends on the node's socket: the host registers and punches, the client joins, connects, follows a punch's port (`node_retarget`), falls back on the relay; `reach_wire.hpp` the messages (not installed) |
 | `net/portmap.hpp` | Opening a port on the router: PCP, then NAT-PMP, then UPnP IGD on a socket of its own; the lease renewed at half its life, closed with a lease of 0; `portmap_wire.hpp` the three protocols' messages (not installed) |
 | `net/sim_router.hpp` | The simulated router: PCP, NAT-PMP, SSDP and UPnP's SOAP answered on a NAT's LAN face (`NatConfig::gateway`), each grant a forward on the NAT |
-| `net/net_cvars.hpp` | The network's cvars (`sv_fps`, the rates, `cl_timesync`, `cl_smooth`, `cl_interp`, `cl_extrapolate`) bound to a `ReplicateConfig`, the game's values as the defaults |
+| `net/net_cvars.hpp` | The network's cvars (`sv_fps`, the rates, `cl_timesync`, `cl_smooth`, `cl_interp`, `cl_extrapolate`) bound to a `ReplicateConfig`, the game's values as the defaults; voice chat's (`voice_mode`, `voice_threshold`, `voice_bitrate`, `voice_fec`, `voice_jitter`, `voice_volume`, `sv_voiceflood`) bound to a `VoiceConfig` |
 | `net/replicate.hpp` | Replication, the server's word: the schema's quantized fields, per-client deltas against the acked snapshot, interest, the budget, redundant inputs, time sync (the server's slack in each snapshot, the client's clock dilation, the interpolation delay from the arrivals' need), prediction and smoothing (the spring, the snap distance), the predicted world (others by their last inputs from the snapshot's trailer, `Schema::interact`, contact events and their outcomes, the replay budget, the horizon), interpolation on cubic curves, capped extrapolation and the blend back, `replicate_rewind` and the capped `replicate_server_rewind_for` at each input's drawn moment; `replicate_server.cpp` and `replicate_client.cpp` its halves, `replicate_wire.hpp` the messages and the bit packing (not installed) |
 | `net/replicate_trial.hpp` | One measured replicated world (clients, a crowd, rewinds) over a link: what the `net-replicate` lab and `ge net sweep` run |
 | `net/lockstep.hpp` | The same step everywhere: seats in a mesh, inputs in turns with a delay, lockstep's waits or rollback's prediction and resimulation, the inputs message with its acks, step digests compared to name a desync |
 | `net/lockstep_trial.hpp` | One measured lockstep session (a strategy game in turns, a fighting game with rollback, a desync planted) over a link: what the `net-lockstep` lab runs |
+| `net/voice_codec.hpp` | The voice codec: Opus mono at 48 kHz, 20 ms frames at a CONSTANT bitrate, in-band FEC (`recover` from the next frame), concealment; a silent stand-in of the same frame size without GE_ENCODERS |
+| `net/voice.hpp` | Voice chat: the sender's gate (push to talk, activity with a hangover, open) and spurt flags, a frame's sequence and clock, the host's relay (the seat stamped, the route by the session's rules, the flood bucket, the server mute), the talker's jitter buffer (target by the transit spread at a spurt's start; played, recovered, concealed, late, dropped), the listener's mix onto synth streams with each talker's volume and placing, `voice_distance_gain` |
+| `net/voice_trial.hpp` | One measured voice session: talkers on the four routes through a dedicated host, every pair heard and metered against the clean decode; what the `voice` lab runs |
 | `net/tap.hpp` | The live tap: a running node's datagrams mirrored as pcap records to a loopback port for `ge net watch` |
 | `net/traffic.hpp` | Fake traffic: a whole session over the simulated network, measured end to end; chaos steps, reconnect tries, a per-tick hook; `sim_held_bytes` and `node_held_bytes` (what a soak holds flat) |
 | `net/stress.hpp` | Pressure tests over the traffic session: ramps bisected to a knob's breaking point against `StressBounds`, the named chaos scripts and their endings, the soak, the fuzzer (`stress_fuzz.cpp`) |
@@ -93,6 +99,13 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
   without bits enough for its step makes every prediction wrong by a quantum. A snapshot's row
   priority is the age of the client's copy in the BASELINE, never a counter reset when a row is
   sent: acks lag, so snapshots chain on two or three baselines at once.
+- **A voice frame's size is the bitrate's alone.** The codec runs at a constant bitrate (padded
+  with `opus_packet_pad`), so the packets a voice session sends are the same on every platform
+  although Opus's samples are floating point; a digest may count frames and turns but never read
+  a decoded sample (the `voice` lab's SNR and WAVs are `Det::measured`). Never turn on VBR or DTX.
+- **A voice is timed by its clock, ordered by its sequence.** Across a pause the sequence steps by
+  one and the clock by the pause; timing arrivals by the sequence reads every pause as jitter and
+  drives the playout delay to its cap (it did: 240 ms on a LAN before the clock was carried).
 
 ## Labs and tests
 
@@ -114,6 +127,11 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
   behind each kind; the connect times as a heatmap; then a symmetric host's router speaking each
   of PCP, NAT-PMP and UPnP: the time to map, the fallbacks, the renewals of a 20 s lease over a
   minute, a client behind another symmetric NAT let straight in, the close.
+- `make lab LAB=net-host` (`--presets=lan,wifi,bad --routers=all,none`): an evening of hosted
+  games (a listen server on a home LAN, ten arenas, an invite-only game, a host only the relay
+  reaches, a LAN-only game) found by a friend's and a stranger's browser three times, each join
+  seated and chatting, the game started and unlisted; both browsers drawn as a menu, the joins'
+  times as a heatmap.
 - `make lab LAB=net-replicate` (`--presets=lan,wifi,bad --clients=32 --npcs=64`; `--budget=600`,
   `--radius=150`): a replicated world under each preset: each client's bandwidth, corrections a
   minute and the worst, snapshots dropped, rows starved, inputs repeated, and how far the
@@ -144,6 +162,13 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
   the rewound target lands from where it was drawn (by each input's own moment and by the input
   message's one view) and the hits confirmed. Run it before and after any change to the input
   message, the rewind or the history ring.
+- `make lab LAB=voice` (`--presets=lan,wifi,bad,awful --clients=4 --bitrate=24000 --fec=1`;
+  `--nofec=bad,awful` runs those again without FEC): four talkers on the four routes through a
+  dedicated host; the routes checked pair by pair, the frames played, rebuilt, concealed, late
+  and dropped, the playout delay, mouth to ear, the bytes; the segmental SNR and level against
+  the clean decode (measured); the delay charted, latencies boxed, one client's ear charted, each
+  preset's mix as a WAV to listen to. Run it before and after any change to the gate, the relay,
+  the jitter buffer or the codec's settings.
 - `ge net sweep --knob=update-rate --values=10,20,30,60 --presets=wifi,bad`: the replication
   trial once a value; reach for it before arguing about a rate. `ge net watch --port=27950`: a
   running node's tap, live; a game opens one with `open_tap` and `transport.tap`.
@@ -164,6 +189,10 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
   fallbacks, the permanent-only and refused cases, a forwarded symmetric host reached directly,
   the RFC layouts, and NAT-PMP and UPnP over real loopback sockets; `net_replicate_test` no
   correction on a lossless link, corrections that land under loss, deltas against whole
-  snapshots, interest, a budget's starvation, a rewind against the drawn, and the bits replayed.
+  snapshots, interest, a budget's starvation, a rewind against the drawn, and the bits replayed;
+  `net_voice_test` the codec's constant frame, FEC and concealment, the gate by key and by
+  activity, the jitter buffer's order, recovery, concealment, lateness and spurt ends, the
+  target after jitter, every route and the flood bucket, the synth's streams, and a trial
+  replaying to the bit.
 - Before and after a change here: `make lab LAB=net-link ARGS=--tag=before`, then
   `--compare=before`, both in the PR.

@@ -25,8 +25,7 @@
 //   hiz                  -> hiz (the depth's pyramid)
 //   instances.cull.late  -> instances.late (what the last frame's pyramid hid, against this one)
 //   instances.depth.late -> depth
-//   terrain              -> hdr motion (shaded where the depth is equal, in the snow's material;
-//                           reads shadows.maps and the trail maps)
+//   terrain              -> hdr motion (the snow's material; reads the shadows and trail maps)
 //   instances            -> hdr motion (both lists, where the depth is equal)
 //   sky                  -> hdr motion (behind depth)
 //   clouds               -> hdr (the cloud's layers, behind depth)
@@ -37,7 +36,8 @@
 //   precip               -> hdr motion (the snow and rain round the eye, the rain's splashes)
 //   taa                  -> taa.history (at the output's size; with FrameOptions::taa)
 //   bloom                -> bloom (the glow's mip chain, from what post reads)
-//   post                 -> final (the bloom mixed in, the grade's table: look.hpp's)
+//   lens                 -> lens (the sun's rays and flare, at a quarter of the pixels)
+//   post                 -> final (bloom, lens, the film's effects, the grade's table)
 //   ui                   -> final (the 2D layer's list over it: the console, render/ui_pass.hpp)
 //
 // With TAA the frame renders at FrameOptions::scale of the output's size, jittered, and the
@@ -80,8 +80,10 @@
 #include "render/cloud_kinds.hpp"
 #include "render/clouds.hpp"
 #include "render/frame.hpp"
+#include "render/grade.hpp"
 #include "render/hiz.hpp"
 #include "render/instances.hpp"
+#include "render/lens.hpp"
 #include "render/particles.hpp"
 #include "render/post.hpp"
 #include "render/precip.hpp"
@@ -114,9 +116,14 @@ struct FrameOptions {
   bool occlusion = true;        // cull the instances by the depth pyramid (off: the frustum only)
   uint32_t shadow_size = 2048;  // the sun's shadow maps' texels a side
   double bloom = 0.04;          // the share of the bloom's glow in the picture; 0: none
-  bool snow = true;             // the snow's material (mountain/app/snow.hpp); off: the albedo lit
-  bool trails = true;           // the tracks (mountain/app/trails.hpp); drawn only with the snow
-  bool spray = true;            // the racers' spray (skier/app/spray.hpp) thrown into the particles
+  // The lens and the film (render/post.hpp), the lens pass (render/lens.hpp) and the grade's
+  // knobs (render/grade.hpp): Fall Line's defaults, cfg/cvars.hpp's r_ cvars'.
+  ge::render::PostLook look{.sharpen = 0.3, .vignette = 0.25};
+  ge::render::LensSettings lens{.rays = 0.5};
+  ge::render::GradeKnobs grade;
+  bool snow = true;    // the snow's material (mountain/app/snow.hpp); off: the albedo lit
+  bool trails = true;  // the tracks (mountain/app/trails.hpp); drawn only with the snow
+  bool spray = true;   // the racers' spray (skier/app/spray.hpp) thrown into the particles
   ge::render::ParticleSettings particles;
   bool precip = true;    // what falls (snow, sleet, rain), when the map's sky snows
   bool splashes = true;  // the rain's splashes on the ground (with `precip`)
@@ -127,10 +134,11 @@ struct FrameOptions {
   double cover = -1;  // a broken sky's cover, its lowest layer's (the others kept in step); -1 own
   double thick =
       -1;  // how thick every layer is, 0 thin .. 1 thick (CloudLayer::thick_bias); -1 own
-  double cloud_height = -1;  // the lowest layer's base over the floor, m (Aloft::base); -1 own
-  double cloud_speed = -1;   // the layers' share of the true wind aloft (Aloft::speed); -1 own
-  double sun_size = 1;       // the sun's disc drawn larger (render/view.hpp's FrameView::sun_size)
-  double moon_size = 1;      // the moon's disc drawn larger (FrameView::moon_size)
+  double cloud_height = -1;     // the lowest layer's base over the floor, m (Aloft::base); -1 own
+  double cloud_thickness = -1;  // the lowest layer's height, base to top, m (Aloft); -1 own
+  double cloud_speed = -1;      // the layers' share of the true wind aloft (Aloft::speed); -1 own
+  double sun_size = 1;   // the sun's disc drawn larger (render/view.hpp's FrameView::sun_size)
+  double moon_size = 1;  // the moon's disc drawn larger (FrameView::moon_size)
   // The kinds of cloud drawn in place of the map's (sv_clouds, app/sky_type.hpp), lowest first;
   // a count of -1 keeps the map's own.
   const ge::render::CloudKind* cloud_kinds[ge::render::kCloudLayers] = {};
@@ -203,6 +211,7 @@ struct GameFrame {
   ge::render::Hiz hiz;
   ge::render::Taa taa;
   ge::render::Bloom bloom;
+  ge::render::Lens lens;  // made only when FrameOptions::lens has a half on
   ge::render::Post post;
   ge::render::UiPass ui;
   ge::render::InstancePipelines instancing;
@@ -215,6 +224,8 @@ struct GameFrame {
   std::vector<ge::render::InstanceFamily*> still{&forest};
   std::vector<ge::render::InstanceFamily*> moving{&figures, &crowd};
   std::shared_ptr<const sim::Village> shown_village;  // kept while drawn
+  // The cloud layers the last frame drew (each one's base and top over the sea), for a caption.
+  ge::render::Clouds drawn_clouds;
   std::vector<ge::render::Instance> staged_traffic;
   wgpu::BindGroup instance_light;
   ge::render::SunShadows shadows;

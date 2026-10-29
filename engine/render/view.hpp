@@ -50,6 +50,7 @@
 
 #include <cstdint>
 
+#include "render/moons.hpp"
 #include "render/sky_style.hpp"
 
 namespace ge::render {
@@ -137,6 +138,22 @@ struct Clouds {
   bool spread = true;   // the quarter's march spread over four frames, the rest reprojected
 };
 
+// A MOON OF ANOTHER WORLD where it stands at the frame's moment (render/night.hpp's `set_moons`
+// places a FrameView's MoonSet; render/moons.hpp's kinds).
+struct SkyMoon {
+  int kind = -1;                 // render/moons.hpp's kind: its shape, surface and haze
+  double toward[3] = {0, 0, 1};  // world unit direction toward it
+  double elevation = -1;         // rad
+  double azimuth = 0;            // world heading
+  double radius = 0;             // its long semi-axis's (and haze's) angular radius, rad
+  double pole[3] = {0, 1, 0};    // world: its north pole,
+  double prime[3] = {0, 0, -1};  //   its 0 N 0 E (toward its planet when locked)
+  double surface = 0;            // the full disc's mean luminance at its phase, the sun's
+                                 // units a steradian (its albedo over pi, the surge's)
+  double lux = 0;                // its light outside the air, lx
+  double phase = 0;              // its phase angle, rad (0 full)
+};
+
 // THE NIGHT a frame is seen under (render/night.hpp fills it from where the moon is). The
 // default is none: no moon, no stars, no dark sky's glow.
 struct Night {
@@ -182,6 +199,9 @@ struct Night {
   // The stars' sphere: the local sidereal angle and the latitude, rad.
   double sidereal = 0;
   double latitude = 0;
+  // Other worlds' moons, placed (render/night.hpp's set_moons): the first `moon_count`.
+  int moon_count = 0;
+  SkyMoon moons[kMaxMoons];
 };
 
 struct FrameView {
@@ -202,16 +222,22 @@ struct FrameView {
   Night night{};      // the moon, the stars and the dark sky's glow; the default is none
   Clouds clouds{};    // the cloud's layers; the default is none
   SkyStyle style{};   // the kind of sky (render/sky_style.hpp); the default is the Earth's
-  // THE DISCS DRAWN LARGER, as through a longer lens: the sun's and the moon's angular radii
-  // against what they would be (1: as they are). Only the discs grow, with the glow a cloud
-  // throws off their limbs; their light on the world is the real one's, so the sun's disc
-  // shares the same light over its larger face and the moon's keeps its surface's brightness.
+  MoonSet moons{};    // the moons over it (render/moons.hpp); the default the Earth's alone
+  // THE DISCS DRAWN LARGER, as through a longer lens: the sun's and the moon's (and every other
+  // world's moon's) angular radii against what they would be (1: as they are). Only the discs grow,
+  // with the glow a cloud throws off their limbs; their light on the world is the real one's, so
+  // the sun's disc shares the same light over its larger face and the moon's keeps its surface's
+  // brightness.
   double sun_size = 1;
   double moon_size = 1;
   // THE REACH, m: how far the picture draws. Past half of it a mist closes every surface into
   // the sky behind it, all of it by the reach, and nothing farther is drawn; 0: no reach, no mist.
   double reach_m = 0;
-  double time_s = 0;   // the frame's time (the renderer reads no clock)
+  double time_s = 0;  // the frame's time (the renderer reads no clock)
+  // THE LAMPS' LIGHT THE EYE HAS ADAPTED TO, lx on a white face (render/lights.hpp): what the
+  // local lights round the eye add to the sky's light in the exposure, so a lit street at night
+  // is seen as the eye in it sees it rather than at the dark sky's gain. 0: the sky's alone.
+  double lamp_lux = 0;
   uint64_t frame = 0;  // the frame's number (TAA's jitter is indexed by it)
 };
 

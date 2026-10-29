@@ -115,7 +115,8 @@ void wind_at_blade(const WindGrid& grid, float x, float z, float t, float out[2]
   }
 }
 
-Shape blade_shape(const Kind& kind, const Blade& blade, const float wind[2], float t) {
+Shape blade_shape(const Kind& kind, const Blade& blade, const float wind[2], float t,
+                  const Press& press) {
   const float h = blade.height;
   const uint32_t hp = hash(blade.seed ^ 0x27d4eb2fu);
   const float phase = unit(hp) * kTau;
@@ -140,10 +141,15 @@ Shape blade_shape(const Kind& kind, const Blade& blade, const float wind[2], flo
   const float osc2 =
       static_cast<float>(lm::sin(static_cast<double>(kTau * freq * 1.37f * t + phase * 1.7f)));
   const float amp = 0.04f + 0.6f * b * (1.0f - b);
-  const float ax = blade.lean[0] * (1.0f - b) + dx * (b * kMaxBend) + ox * (osc * amp) -
-                   oz * (osc2 * amp * 0.35f);
-  const float az = blade.lean[1] * (1.0f - b) + dz * (b * kMaxBend) + oz * (osc * amp) +
-                   ox * (osc2 * amp * 0.35f);
+  float ax = blade.lean[0] * (1.0f - b) + dx * (b * kMaxBend) + ox * (osc * amp) -
+             oz * (osc2 * amp * 0.35f);
+  float az = blade.lean[1] * (1.0f - b) + dz * (b * kMaxBend) + oz * (osc * amp) +
+             ox * (osc2 * amp * 0.35f);
+  if (press.amount > 0.0f) {
+    const float p = press.amount;
+    ax = ax * (1.0f - p) + press.way[0] * (kPressBend * p);
+    az = az * (1.0f - p) + press.way[1] * (kPressBend * p);
+  }
   const float al = std::sqrt(ax * ax + az * az);
   const float theta = std::min(al, kMaxBend + 0.1f);
   float ux = 1, uz = 0;

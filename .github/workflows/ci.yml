@@ -6,14 +6,16 @@
 # its CRT, its libm) and macOS (Apple Clang on arm64: another compiler, another ISA, the Metal
 # adapter), each building everything and running the whole suite, so the goldens and the labs'
 # digests are held on both. The merge queue adds the installed package on Windows and macOS, and
-# `ge new`'s scaffold when the change reaches it. A push to main builds the macOS row only, to
-# save its compiler cache. A change that touches only prose (docs, skills, lessons, root Markdown,
+# `ge new`'s scaffold when the change reaches it. A push to main runs the whole matrix (macOS,
+# Windows and the Linux rows), since a pull request may have merged with `skip-ci`; a red main
+# run opens the `main-red` issue (flakes.yml), and a newer push cancels the older run. A change that touches only prose (docs, skills, lessons, root Markdown,
 # changeset fragments) runs the gates alone. A pull request labelled `full-ci` also runs the Linux
 # rows (GCC debug+ASan, GCC and Clang release, arm64), the lint and the shaders' check, and the
 # whole packaging.
 #
 # A pull request labelled `skip-ci` runs nothing at all, on the PR and in the queue: it merges as
-# soon as it is armed, and what it breaks is fixed after it lands (the `commit` skill).
+# soon as it is armed, and what it breaks shows on main's run and is fixed after it lands (the
+# `commit` skill).
 #
 # The ruleset requires ONE check, `required` (the last job): it passes when every job either
 # passed or was skipped by the rules above, so a skipped row never leaves a required check
@@ -38,10 +40,6 @@ permissions:
   contents: read
 
 env:
-  GE_LINUX_PACKAGES: >-
-    libx11-dev libxext-dev libxcursor-dev libxrandr-dev libxi-dev libxss-dev libxfixes-dev
-    libxtst-dev libxkbcommon-dev libwayland-dev wayland-protocols libdecor-0-dev
-    libasound2-dev libpulse-dev libpipewire-0.3-dev mesa-vulkan-drivers xvfb xauth nasm
   # Every runner has four cores (three on macOS); ctest runs that many cases at once.
   CTEST_PARALLEL_LEVEL: "4"
 
@@ -165,6 +163,9 @@ jobs:
             CODE=true  # no base to diff against (a new branch, a forced push): run everything
             SCAFFOLD=true
           fi
+          # A push to main always runs: a newer push cancels the older run, so the commit before
+          # this one may never have been tested, and only a run of the whole tree answers for it.
+          if [ "$EVENT" = push ]; then CODE=true; fi
           # A label other than full-ci changes only the gates' answer: run them alone.
           if [ "$ACTION" = labeled ] && [ "$LABEL" != full-ci ]; then CODE=false; fi
           FULL=false
@@ -173,7 +174,7 @@ jobs:
           if [ "$EVENT" = merge_group ] || [ "$FULL" = true ]; then PACKAGE=true; fi
           ROW_MAC='{"os":"macos-15","cxx":"clang++","preset":"release"}'
           ROWS_LINUX='{"os":"ubuntu-24.04","cxx":"g++","preset":"debug"},{"os":"ubuntu-24.04","cxx":"g++","preset":"release"},{"os":"ubuntu-24.04","cxx":"clang++","preset":"release"},{"os":"ubuntu-24.04-arm","cxx":"g++","preset":"release"}'
-          if [ "$FULL" = true ]; then ROWS="[$ROW_MAC,$ROWS_LINUX]"; else ROWS="[$ROW_MAC]"; fi
+          if [ "$FULL" = true ] || [ "$EVENT" = push ]; then ROWS="[$ROW_MAC,$ROWS_LINUX]"; else ROWS="[$ROW_MAC]"; fi
           {
             echo "code=$CODE"
             echo "full=$FULL"
@@ -235,13 +236,23 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install ninja ccache
       # SDL3's X11 and Wayland headers (engine/platform), Mesa's software Vulkan driver
-      # (lavapipe: the GPU tests' adapter) and a virtual X display for the window test.
+      # (lavapipe: the GPU tests' adapter), a virtual X display for the window test and ccache:
+      # tools/setup-ubuntu.sh installs what the runner's image lacks, from the .debs cached by
+      # the runner's image, the script's hash and the week (a new week takes the image's updates).
+      - name: The week, for the apt cache's key
+        if: runner.os == 'Linux'
+        id: week
+        run: echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        if: runner.os == 'Linux'
+        with:
+          path: .cache/apt
+          key: apt-${{ matrix.os }}-${{ hashFiles('tools/setup-ubuntu.sh') }}-${{ steps.week.outputs.week }}
+          restore-keys: apt-${{ matrix.os }}-
       - name: Install the platform's and the GPU's Linux packages
         if: runner.os == 'Linux'
         timeout-minutes: 15
-        run: |
-          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update
-          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y --no-install-recommends ${{ env.GE_LINUX_PACKAGES }} ccache
+        run: sudo tools/setup-ubuntu.sh --cache-dir=.cache/apt
       # Dawn's prebuilt archive and SDL's source, keyed on the pins that name them.
       - uses: actions/cache@v4
         with:
@@ -273,10 +284,10 @@ jobs:
 
   # MSVC on every pull request too, not only in the queue: its warnings (/W4 /WX) and its CRT are
   # where Linux-built changes break most, and a break first found at the head of the queue costs
-  # every PR queued behind it a full rebuild of the matrix.
+  # every PR queued behind it a full rebuild of the matrix. And on main, after every push.
   windows:
     needs: gates
-    if: needs.gates.outputs.code == 'true' && github.event_name != 'push'
+    if: needs.gates.outputs.code == 'true'
     runs-on: windows-2025
     timeout-minutes: 60
     steps:
@@ -310,11 +321,18 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+      - name: The week, for the apt cache's key
+        id: week
+        run: echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+      # The test row's apt cache (the same image): tools/setup-ubuntu.sh, above.
+      - uses: actions/cache@v4
+        with:
+          path: .cache/apt
+          key: apt-ubuntu-24.04-${{ hashFiles('tools/setup-ubuntu.sh') }}-${{ steps.week.outputs.week }}
+          restore-keys: apt-ubuntu-24.04-
       - name: Install the platform's Linux packages
         timeout-minutes: 15
-        run: |
-          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update
-          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y --no-install-recommends ${{ env.GE_LINUX_PACKAGES }} ccache
+        run: sudo tools/setup-ubuntu.sh --cache-dir=.cache/apt
       - uses: actions/cache@v4
         with:
           path: .cache/deps
