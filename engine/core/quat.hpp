@@ -26,10 +26,23 @@ namespace ge::core {
 
 struct Quat {
   double x, y, z, w;
+  template <class Io>
+  friend void describe(Io& io, Quat& v) {
+    io(v.x);
+    io(v.y);
+    io(v.z);
+    io(v.w);
+  }
 };
 
 struct Vec3 {
   double x, y, z;
+  template <class Io>
+  friend void describe(Io& io, Vec3& v) {
+    io(v.x);
+    io(v.y);
+    io(v.z);
+  }
 };
 
 struct Euler {

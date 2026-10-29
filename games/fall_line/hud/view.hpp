@@ -14,13 +14,18 @@
 //   bottom right  the NEWS: a landing's air and load, a wipeout, a tree brushed, onto a run,
 //                 the top of a lift, the hunt's turns
 //
-// Every box it draws is returned by name for the layout check (`ge::hud::layout_problems`); the
+// The HUD is DATA (engine/hud/layout.hpp): `hud_layout` declares every element above with its
+// place, `fill_hud` writes their content from the snapshot once a frame, and the player moves,
+// resizes, hides and fades any of them through its `hud_<id>_` cvars (`add_hud_cvars`). The ids:
+// seed run best_air stars search timer air lift speed edge height news prompt.
+//
+// Every box it draws is returned by id for the layout check (`ge::hud::layout_problems`); the
 // `hud` lab fails a HUD whose boxes overlap or leave the screen at any of the three reference
 // viewports. Every word comes from words.hpp.
 //
 // ge:summary Fall Line's HUD drawn: the free ride's figures laid out in the game's look
 // ge:keywords hud view draw_hud hud_style layout seed air-clock wanted-stars speed edge-bar
-// ge:keywords prompt news portrait landscape
+// ge:keywords prompt news portrait landscape hud_layout fill_hud elements cvars
 // ge:skill ui
 // ge:test tests/fall_line_hud_test.cpp
 #pragma once
@@ -29,12 +34,25 @@
 
 #include "fall_line/hud/snapshot.hpp"
 #include "hud/hud.hpp"
+#include "hud/layout.hpp"
 
 namespace fall_line::hud {
 
 ge::hud::Style hud_style();
 NewsInk news_ink(const ge::hud::Style& style);
 
+// Fall Line's elements, by index, in the order they are declared (and stacked).
+struct HudLayout {
+  ge::hud::Layout layout;
+  int seed, run, best_air, stars, search, timer, air, lift, speed, edge, height, news, prompt;
+};
+
+// The game's HUD: every element in its default place.
+HudLayout hud_layout(const ge::hud::Style& st);
+// Each element's content from the snapshot; `run`'s feed must outlive the next draw.
+void fill_hud(HudLayout& h, const ge::hud::Style& st, const HudSnapshot& s, const HudRun& run);
+
+// A HUD in the game's default places, filled and drawn: for a lab or a test.
 std::vector<ge::hud::Placed> draw_hud(ge::ui::DrawList& dl, const ge::hud::Frame& f,
                                       const ge::hud::Style& st, const HudSnapshot& s,
                                       const HudRun& run);

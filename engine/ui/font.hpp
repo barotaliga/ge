@@ -9,12 +9,19 @@
 // SIZES are a glyph's pixel height, ascent minus descent: `size` 32 makes a line about 32 px
 // tall before its line gap. Text is UTF-8; a code point the font lacks draws its missing glyph.
 //
+// A GRID FONT is the other kind (`load_grid`): a monospaced bitmap font whose glyphs sit in a
+// square atlas cut into equal cells, code c in cell c (the engine's charsets, charset_font.hpp).
+// Its `size` is the cell's height, its advance a fixed share of it, and a glyph's mask is its
+// cell scaled from the smallest atlas whose cells are at least that tall (an area mean, at the
+// pen's quarter-pixel phase); a PIXEL face is drawn at whole multiples of its grid, nearest.
+//
 // The glyph cache is the font's only state and is not locked: a font is drawn from one thread
 // (the frame's).
 //
 // ge:summary A TrueType font: glyph masks cached per size, kerning, metrics, the built-in family
 // ge:keywords ui font text glyph truetype opentype stb_truetype rasterize kerning advance
 // ge:keywords metrics ascent descent line-height utf8 barlow condensed ofl measure
+// ge:keywords grid-font bitmap-font monospace atlas cell load_grid gridface pixel-font
 // ge:skill ui
 // ge:test tests/ui_font_test.cpp
 #pragma once
@@ -45,6 +52,18 @@ struct VMetrics {
   float line() const { return ascent + descent + line_gap; }
 };
 
+// One atlas of a grid font: `size` x `size` coverage bytes (0..255, row-major from the top) cut
+// into `columns` x `rows` cells.
+struct GridFace {
+  int size = 0;
+  int columns = 16, rows = 8;
+  std::vector<uint8_t> coverage{};
+  float baseline = 0.72f;  // from the cell's top, a share of its height
+  float advance = 0.5f;    // the pen's step, a share of the cell's height
+  uint32_t missing = 127;  // the code drawn for a code point past the grid
+  int pixel_h = 0;         // a pixel face's grid height (16): drawn at its multiples; 0 drawn
+};
+
 class Font {
  public:
   Font();
@@ -55,7 +74,11 @@ class Font {
   // Reads `ttf` (kept by reference: it must outlive the font, as compiled-in bytes do). False,
   // with the reason in `why`, when it is not a font stb_truetype reads.
   bool load(std::span<const uint8_t> ttf, std::string* why = nullptr);
+  // A grid font from its atlases, one face a size (any order). False, with the reason in `why`,
+  // when there is none or a face's bytes are not size x size.
+  bool load_grid(std::vector<GridFace> faces, std::string* why = nullptr);
   bool loaded() const { return impl_ != nullptr; }
+  bool grid() const;
 
   VMetrics metrics(float size) const;
   // The pen's advance over `text` at `size`, kerning and `tracking` (px after each glyph) included.

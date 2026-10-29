@@ -162,6 +162,30 @@ class Driver {
   double top_speed_ = 0;
   int32_t flights_ = 0;
   double max_landing_g_ = 0;
+  template <class Io>
+  friend void describe(Io& io, Driver& v) {
+    io(v.state_);
+    io(v.plan_);
+    io(v.recorder_);
+    io(v.controls_);
+    io(v.shoulders_);
+    io(v.hands_);
+    io(v.lifts_);
+    io(v.sled_rides_);
+    io(v.sled_time_);
+    io(v.heli_rides_);
+    io(v.heli_time_);
+    io(v.para_time_);
+    io(v.y0_);
+    io(v.climbed_);
+    io(v.boarded_at_);
+    io(v.lift_wait_);
+    io(v.lift_ride_);
+    io(v.hash_);
+    io(v.top_speed_);
+    io(v.flights_);
+    io(v.max_landing_g_);
+  }
 };
 
 // The bot down the map built for `seed`.

@@ -6,8 +6,10 @@
 // player, it goes back up); a PLAT (brush model 3) in the east room at x = 192..320,
 // y = -384..-256 rides 96 units up beside a LEDGE whose top is level with its top, waits and comes
 // down, forever; a HEALTH box in the west room is an item (its trigger box grown 15 sideways).
-// Units are the map format's: x and y across, z up; a player standing on the floor has
-// origin z = 24.
+// Open to the sky unless built ROOFED (the
+// server's: a roof over both rooms at z = 256, so a blast cannot throw a player out). Units are the
+// map format's: x and y across, z up; a player standing on the floor has origin z = 24. Eight SPAWN
+// points: the scripted match's two, and six more round both rooms.
 //
 // ge:summary Shooter's Edge's test arena: two rooms, a door and its trigger, a plat, a ledge
 // ge:keywords arena map brushes test-map door plat ledge trigger health doorway build_arena
@@ -26,6 +28,8 @@ namespace sh = ge::shooter;
 constexpr int kDoorModel = 2;  // the models' indices (1 is the world)
 constexpr int kPlatModel = 3;
 
+constexpr int kArenaSpawns = 8;
+
 constexpr float kDoorLift = 120;   // units the door rises
 constexpr float kDoorSpeed = 100;  // units/s
 constexpr float kDoorWait = 3;     // s open before it closes
@@ -43,13 +47,18 @@ struct Arena {
   // The trigger in front of the door and the health box, as boxes in the world.
   sh::Vec3f trigger_mins, trigger_maxs;
   sh::Vec3f health_origin;
-  sh::Vec3f spawn[2];  // the two players' spawn origins
-  float spawn_yaw[2] = {0, 0};
+  // The spawn points: the scripted match's two first (west room, on the plat), then six more
+  // round both rooms for a server with more players (rules.hpp says how one is picked).
+  sh::Vec3f spawn[kArenaSpawns];
+  float spawn_yaw[kArenaSpawns] = {};
+  bool roofed = false;  // the roof is the last of world_brushes
 
   // The models by index - 1 (world, door, plat). Views into this arena: keep it alive and unmoved.
   std::vector<sh::BrushModel> models() const;
 };
 
-void build_arena(Arena& a);
+// `roofed` closes the arena with a roof at z = 256 (the server's: a player thrown by a blast
+// stays in); the scripted match runs without one.
+void build_arena(Arena& a, bool roofed = false);
 
 }  // namespace shooters_edge::sim

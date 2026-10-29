@@ -392,6 +392,7 @@ Outcome run(const Args& a) {
   }
   if (name.starts_with("net ")) return run_net(a);
   if (name == "save inspect") return run_save(a);
+  if (name.rfind("save ", 0) == 0) return run_save_game(build_options(a), a, name.substr(5));
   if (name.starts_with("sound ")) return run_sound(a);
   if (name == "model import") return run_model(a);
   if (name.starts_with("source ")) return run_source(a);
