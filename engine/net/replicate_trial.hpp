@@ -33,6 +33,20 @@ struct ReplicateTrialConfig {
   // The rates, the interest radius, the budget and the rest; the trial sets the entity count,
   // the history ring and which fields interest reads. Every client asks the same rates.
   ReplicateConfig replicate;
+  // Each client's clock runs this much fast (the even ones) or slow (the odd ones): a cheap
+  // crystal, a busy machine. TIME SYNC is what keeps their inputs arriving on time anyway.
+  double skew = 0;
+  // THE PREDICTED WORLD (M17p): movers are discs that push each other apart (`collide`), and in a
+  // JOUST each pair of clients (0 and 1, 2 and 3, ...) charges the other for a second and backs
+  // off for the next, so a contact begins every two seconds. `replicate.predict_radius` turns
+  // their prediction of each other on.
+  bool collide = false;
+  bool joust = false;
+  // LAG COMPENSATION (M17q): every client fires at one of the crowd four times a second, aimed
+  // where it draws it; the server judges each shot at the moment that input was drawn, within
+  // `replicate.rewind_max_s`. A shot lands when the rewound place is within `hit_radius`.
+  bool shoot = false;
+  double hit_radius = 0.5;
 };
 
 struct ReplicateTrial {
@@ -44,9 +58,37 @@ struct ReplicateTrial {
   double view_delay_ms = 0;  // how far behind the server's clock the others are drawn, mean
   uint64_t dropped = 0, decoded = 0, full = 0, starved = 0, repeated = 0, inputs = 0;
   uint64_t rewinds = 0, missed = 0;
-  std::vector<double> gaps;       // a rewind against what was drawn, metres
+  uint64_t trimmed = 0;            // inputs the server dropped for a queue past its most
+  std::vector<double> input_ms;    // each input, made on its client to applied on the server
+  double underrun = 0;             // share of drawn ticks past the newest snapshot (held)
+  std::vector<double> t_q, queue;  // client 1's inputs waiting on the server, ten times a second
+  std::vector<double> delay_ms;    // client 1's view delay at the same moments
+  std::vector<double> dilation;    // client 1's clock speed at the same moments
+  std::vector<double> gaps;        // a rewind against what was drawn, metres
+  // SMOOTHNESS (M17o): the drawn paths' jerk (m/s^3, the third difference of position on x and z):
+  // client 1's own entity as drawn each of its ticks (less the four after each change of its held
+  // input: the game's own steps, the same on any link), and
+  // the first eight of the crowd as it draws them each server tick.
+  std::vector<double> own_jerk, other_jerk;
+  uint64_t snaps = 0;  // corrections shown at once, past snap_distance
+  // Each rewind drawn past the newest snapshot: how late (ms past it) and how far off (metres).
+  std::vector<double> late_ms, late_gap;
   std::vector<double> t_s, kbps;  // snapshot kbit/s a client, each second
-  uint64_t hash = 0;              // every end's final state
+  // The predicted world: contacts begun (the server's), the clients' predicted contact events
+  // and their outcomes, each correction's size, how far client 1 draws its partner from where
+  // the server has it (each tick of the joust), and a replay's entity-steps.
+  uint64_t contacts = 0, predicted_contacts = 0, confirmed = 0, undone = 0, unpredicted = 0;
+  uint64_t heard = 0;  // the server's events about entities a client was not predicting
+  std::vector<double> correction_m;  // every correction of every client's own entity, metres
+  std::vector<double> partner_gap;   // client 1's partner as drawn against the server, metres
+  double resim_mean = 0, resim_max = 0;
+  // The shots: judged, landed, refused past the cap, and how far each rewound place was from
+  // where it was drawn: by the input's own drawn moment, and by the input message's (one per
+  // message, the view before M17q).
+  uint64_t shots = 0, landed = 0, refused = 0;
+  std::vector<double> shot_gap, shot_gap_message;
+  uint64_t resim_capped = 0;
+  uint64_t hash = 0;  // every end's final state
 };
 
 ReplicateTrial run_replicate_trial(const ReplicateTrialConfig& config);

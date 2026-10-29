@@ -218,6 +218,9 @@ Fireball fireball_at(const Blast& b, double now_s) {
   const double out = b.on_surface ? big / 3 : 0;
   for (int i = 0; i < 3; ++i) f.centre[i] = b.at[i] + out * b.normal[i];
   f.centre[1] += lift;
+  // Thrown (a muzzle's puff): carried on, slowing in the air.
+  const double carried = -kBlastDragS * lm::expm1(-tc / kBlastDragS);
+  for (int i = 0; i < 3; ++i) f.centre[i] += b.v[i] * carried;
   f.core_k = k.cool_k + (k.core_k - k.cool_k) * lm::exp(-tc / k.cool_s);
   f.fire = k.fire * lm::exp(-tc / k.fire_s);
   f.smoke = k.smoke * -lm::expm1(-tc / k.smoke_in_s) * (1 - smoothstep(0.35 * life, life, tc));

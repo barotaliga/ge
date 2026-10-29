@@ -96,18 +96,95 @@ void bind_explosion_targets(gpu::Device& device, Explosions& ex, const FrameTarg
       make_group(device, "explosions", ex.layout, {ex.params, ex.blasts, targets.depth_view});
 }
 
+namespace {
+
+// One thing the march draws this frame, a blast's ball or a shot's flame, before it is staged.
+struct Ball {
+  double centre[3];  // world, m
+  double radius_m, stretch = 1;
+  double axis[3] = {0, 1, 0}, side[3] = {1, 0, 0};
+  double core_k, fire, smoke, age_s;
+  uint32_t seed, prongs = 0;
+  double prong_depth = 0;
+  double glow = 1;  // the emission's share of a blackbody's
+  double billows, fray, billow_size, roll;
+  double soot[3] = {0, 0, 0};
+};
+
+Ball ball_of(const Blast& b, double now_s) {
+  const Fireball f = fireball_at(b, now_s);
+  const BlastLook& k = look_of(b);
+  Ball o{};
+  for (int i = 0; i < 3; ++i) o.centre[i] = f.centre[i];
+  o.radius_m = f.radius_m;
+  o.core_k = f.core_k;
+  o.fire = f.fire;
+  o.smoke = f.smoke;
+  o.age_s = f.age_s;
+  o.seed = b.seed;
+  o.billows = k.billows;
+  o.fray = k.fray;
+  o.billow_size = k.billow_size;
+  o.roll = k.roll;
+  for (int c = 0; c < 3; ++c) o.soot[c] = k.smoke_albedo * k.smoke_tint[c];
+  return o;
+}
+
+Ball ball_of(const MuzzleFire& m, double now_s) {
+  const Flame f = flame_at(m.shot, m.pose, now_s);
+  const MuzzleLook& k = look_of(m.shot);
+  Ball o{};
+  for (int i = 0; i < 3; ++i) {
+    o.centre[i] = f.centre[i];
+    o.axis[i] = f.axis[i];
+    o.side[i] = f.side[i];
+  }
+  o.radius_m = f.radius_m;
+  o.stretch = f.stretch;
+  o.core_k = f.core_k;
+  o.fire = f.fire;
+  o.smoke = 0;
+  o.age_s = f.age_s;
+  o.seed = m.shot.seed;
+  o.prongs = k.prongs;
+  o.prong_depth = k.prong_depth;
+  o.glow = k.glow;
+  o.billows = k.billows;
+  o.fray = k.fray;
+  o.billow_size = k.billow_size;
+  o.roll = 0;
+  return o;
+}
+
+bool alive_at(const Blast& b, double now_s) {
+  const double t = now_s - b.born_s;
+  return t >= 0 && t < blast_life(b);
+}
+
+bool alive_at(const MuzzleFire& m, double now_s) {
+  const double t = now_s - m.shot.born_s;
+  return t >= 0 && t < look_of(m.shot).life_s;
+}
+
+}  // namespace
+
 void stage_explosions(Explosions& ex, std::span<const Blast> blasts, const FrameView& view,
-                      uint32_t width, uint32_t height) {
+                      uint32_t width, uint32_t height, std::span<const MuzzleFire> fires) {
   const CameraMatrices cam =
       camera_matrices(view, static_cast<double>(width) / std::max(height, 1u));
   ex.order.clear();
   ex.culled = 0;
-  for (uint32_t i = 0; i < blasts.size(); ++i) {
-    const Fireball f = fireball_at(blasts[i], view.time_s);
-    if (!f.alive) continue;
-    const double bound = kBlastBound * f.radius_m;
+  const auto nb = static_cast<uint32_t>(blasts.size());
+  const auto total = static_cast<uint32_t>(blasts.size() + fires.size());
+  for (uint32_t i = 0; i < total; ++i) {
+    const bool blast = i < nb;
+    if (blast ? !alive_at(blasts[i], view.time_s) : !alive_at(fires[i - nb], view.time_s)) {
+      continue;
+    }
+    const Ball o = blast ? ball_of(blasts[i], view.time_s) : ball_of(fires[i - nb], view.time_s);
+    const double bound = kBlastBound * o.radius_m * o.stretch;
     double rel[3];
-    for (int k = 0; k < 3; ++k) rel[k] = f.centre[k] - view.eye[k];
+    for (int k = 0; k < 3; ++k) rel[k] = o.centre[k] - view.eye[k];
     bool seen = true;
     for (const auto& p : cam.planes) {
       if (p[0] * rel[0] + p[1] * rel[1] + p[2] * rel[2] + p[3] < -bound) seen = false;
@@ -133,40 +210,47 @@ void stage_explosions(Explosions& ex, std::span<const Blast> blasts, const Frame
   ex.drawn = static_cast<uint32_t>(ex.order.size());
   for (uint32_t n = 0; n < ex.drawn; ++n) {
     const auto [dist, i] = ex.order[ex.drawn - 1 - n];
-    const Blast& b = blasts[i];
-    const Fireball f = fireball_at(b, view.time_s);
+    const Ball o = i < nb ? ball_of(blasts[i], view.time_s) : ball_of(fires[i - nb], view.time_s);
     GpuBlast& g = ex.staged[n];
-    for (int k = 0; k < 3; ++k) g.centre[k] = static_cast<float>(f.centre[k] - view.eye[k]);
-    g.centre[3] = static_cast<float>(f.radius_m);
-    g.state[0] = static_cast<float>(f.core_k);
-    g.state[1] = static_cast<float>(f.fire);
-    g.state[2] = static_cast<float>(f.smoke);
-    g.state[3] = static_cast<float>(f.age_s);
+    for (int k = 0; k < 3; ++k) g.centre[k] = static_cast<float>(o.centre[k] - view.eye[k]);
+    g.centre[3] = static_cast<float>(o.radius_m);
+    g.state[0] = static_cast<float>(o.core_k);
+    g.state[1] = static_cast<float>(o.fire);
+    g.state[2] = static_cast<float>(o.smoke);
+    g.state[3] = static_cast<float>(o.age_s);
     // The seed's own place in the noise's tile, so no two blasts billow alike.
-    uint32_t h = b.seed * 0x9e3779b1u + 0x7f4a7c15u;
+    uint32_t h = o.seed * 0x9e3779b1u + 0x7f4a7c15u;
     for (int k = 0; k < 3; ++k) {
       h ^= h >> 15;
       h *= 0x2c1b3c6du;
       h ^= h >> 12;
       g.look[k] = static_cast<float>(h & 0xffffu) / 65536.0f;
     }
-    const double bound = kBlastBound * f.radius_m;
+    const double bound = kBlastBound * o.radius_m * o.stretch;
     g.look[3] = static_cast<float>(bound);
     g.more[0] = dist < bound * 1.02 + 2 * view.near_m ? 1.0f : 0.0f;
-    g.more[1] = g.more[2] = g.more[3] = 0;
-    const BlastLook& k = look_of(b);
-    g.shape[0] = static_cast<float>(k.billows);
-    g.shape[1] = static_cast<float>(k.fray);
-    g.shape[2] = static_cast<float>(kNoiseTiles / k.billow_size);
-    g.shape[3] = static_cast<float>(k.roll);
-    for (int c = 0; c < 3; ++c) g.soot[c] = static_cast<float>(k.smoke_albedo) * k.smoke_tint[c];
+    g.more[1] = static_cast<float>(o.prong_depth);
+    g.more[2] = static_cast<float>(o.glow);
+    g.more[3] = 0;
+    g.shape[0] = static_cast<float>(o.billows);
+    g.shape[1] = static_cast<float>(o.fray);
+    g.shape[2] = static_cast<float>(kNoiseTiles / o.billow_size);
+    g.shape[3] = static_cast<float>(o.roll);
+    for (int c = 0; c < 3; ++c) g.soot[c] = static_cast<float>(o.soot[c]);
     g.soot[3] = 0;
+    for (int k = 0; k < 3; ++k) {
+      g.axis[k] = static_cast<float>(o.axis[k]);
+      g.side[k] = static_cast<float>(o.side[k]);
+    }
+    g.axis[3] = static_cast<float>(o.stretch);
+    g.side[3] = static_cast<float>(o.prongs);
   }
 }
 
 void prepare_explosions(gpu::Device& device, Explosions& ex, std::span<const Blast> blasts,
-                        const FrameView& view, uint32_t width, uint32_t height) {
-  stage_explosions(ex, blasts, view, width, height);
+                        const FrameView& view, uint32_t width, uint32_t height,
+                        std::span<const MuzzleFire> fires) {
+  stage_explosions(ex, blasts, view, width, height, fires);
   Params p{};
   p.info[0] = static_cast<float>(view.near_m);
   p.info[1] = static_cast<float>(ex.settings.steps);
@@ -239,6 +323,15 @@ Particle spark_particle(const Spark& s) {
 size_t throw_blast(Particles& particles, const Blast& blast) {
   std::array<Spark, kMostBirths> sparks{};
   const size_t n = blast_births(blast, sparks);
+  std::array<Particle, kMostBirths> births{};
+  for (size_t i = 0; i < n; ++i) births[i] = spark_particle(sparks[i]);
+  emit_particles(particles, std::span<const Particle>(births.data(), n));
+  return n;
+}
+
+size_t throw_shot(Particles& particles, const Shot& shot, const MuzzlePose& pose_at_shot) {
+  std::array<Spark, kMostBirths> sparks{};
+  const size_t n = shot_births(shot, pose_at_shot, sparks);
   std::array<Particle, kMostBirths> births{};
   for (size_t i = 0; i < n; ++i) births[i] = spark_particle(sparks[i]);
   emit_particles(particles, std::span<const Particle>(births.data(), n));
