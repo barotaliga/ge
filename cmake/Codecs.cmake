@@ -36,7 +36,7 @@ enable_language(C)
 set(GE_DEPS_DIR "${PROJECT_SOURCE_DIR}/.cache/deps" CACHE PATH
   "Where prebuilt dependencies are downloaded and unpacked")
 
-# x86 assembly needs nasm (GE_LINUX_PACKAGES installs it on CI). Without it libaom is built as
+# x86 assembly needs nasm (tools/setup-ubuntu.sh installs it). Without it libaom is built as
 # plain C: the same bitstream, several times slower to encode.
 find_program(GE_NASM nasm)
 set(_ge_codec_cpu "")
