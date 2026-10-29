@@ -65,6 +65,6 @@ under about 30 s in debug so the CI matrix stays quick.
 ## Labs are tests too
 
 CTest's `labs_smoke` runs every lab at its smoke flags twice in one process and checks each
-digest against `tests/labs_digests.txt` (the `labs` skill). A behaviour worth LOOKING at gets
+digest against `tests/digests/` (the `labs` skill). A behaviour worth LOOKING at gets
 a lab. A behaviour with one right answer gets a test. Many subjects need both, and a
 scenario row (M5) can back both at once.
