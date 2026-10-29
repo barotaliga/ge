@@ -5,7 +5,9 @@
 //
 // - A FAMILY holds a table of meshes, each with up to kMaxLods levels of detail (each LOD a
 //   packed mesh, render/mesh.hpp, in one shared vertex buffer, its vertices pulled by index), a
-//   table of materials (linear albedo; an instance's material plus a vertex's part picks one),
+//   table of materials (render/surface.hpp's surfaces, two rows each; an instance's material
+//   plus a vertex's part picks one), lit by the sun, the sky and the local lights
+//   (render/lights.hpp) through wgsl/surface.wgsl's model,
 //   and the instances as streams in one storage buffer (structure of arrays): the position and
 //   material, the rotation, the scale and mesh, and the last frame's position and rotation (the
 //   motion vectors of what moves).
@@ -71,6 +73,7 @@
 #include "render/frame.hpp"
 #include "render/hiz.hpp"
 #include "render/mesh.hpp"
+#include "render/surface.hpp"
 #include "render/terrain.hpp"
 
 namespace ge::render {
@@ -220,6 +223,12 @@ struct InstanceFamily {
 void create_family(gpu::Device& device, const InstancePipelines& ip, InstanceFamily& family,
                    std::string_view label, std::span<const MeshSource> meshes,
                    std::span<const float> materials_rgb, uint32_t capacity,
+                   uint32_t palette_joints = 0);
+// The same with each material's whole surface (render/surface.hpp: roughness, metal, spec, its
+// glow); the rgb form above makes every material matte.
+void create_family(gpu::Device& device, const InstancePipelines& ip, InstanceFamily& family,
+                   std::string_view label, std::span<const MeshSource> meshes,
+                   std::span<const Surface> surfaces, uint32_t capacity,
                    uint32_t palette_joints = 0);
 void bind_family_hiz(gpu::Device& device, const InstancePipelines& ip, InstanceFamily& family,
                      const Hiz& hiz);

@@ -10,6 +10,7 @@
 //   ge lab publish level
 //   ge lab publish world --before=before --width=560
 //   ge lab publish water lake --before=before    several labs on one page (previews/publish.html)
+//   ge lab publish water lake --title="Lake shore"   the page's own title
 //
 // ge:summary ge lab publish: a lab's run on one self-contained page, before beside after, to share
 // ge:keywords cli ge lab publish page html review report pull-request pictures gif inline
@@ -35,6 +36,7 @@ struct PublishOptions {
   std::string before;            // a kept run's tag, or ""
   int width = 720;               // the pictures' width on the page
   std::string out;               // the page's path; "" for previews/<id>/publish.html
+  std::string title;             // the page's <title>; "" for "<id> lab run" (or "Lab runs")
 };
 
 // What the page shows, read off a run's report.json (and the kept run's).
@@ -64,8 +66,9 @@ std::string base64(std::string_view bytes);
 std::string html_escape(std::string_view text);
 // The page as HTML; a table longer than `max_rows` shows its first rows and says how many more.
 std::string publish_html(const Page& page, size_t max_rows = 60);
-// Several labs' runs on one page, one after another.
-std::string publish_html(const std::vector<Page>& pages, size_t max_rows = 60);
+// Several labs' runs on one page, one after another, under `title` ("" for the labs' own).
+std::string publish_html(const std::vector<Page>& pages, size_t max_rows = 60,
+                         const std::string& title = "");
 
 Outcome run_lab_publish(const fs::path& repo, const PublishOptions& o);
 

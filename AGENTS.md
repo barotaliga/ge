@@ -31,6 +31,7 @@ updates that row's status file (`docs/goals/<row>.md`) in its PR.
 | [`docs/architecture.md`](docs/architecture.md) | The layers and their dependency direction, the frame, the code conventions, diagnostics, the determinism contract and the build |
 | [`docs/labs.md`](docs/labs.md) | The labs: the contract every subsystem, plugin and game plugs into, the kinds (sim, scenario, picture, drive, bench), captions, digests, and the labs each milestone lands |
 | [`docs/debugging.md`](docs/debugging.md) | Debugging a run: the log channels and the log spec, log dumps, series traces and spans files, the outlier rule, the charts and `ge graph` |
+| `docs/lab-list.md` | GENERATED from every lab's `LabSpec` by `make index` (and `make agents-check`), never committed: each lab's kind, owner, subject, skill, the rows that land it and its file |
 | `docs/index.md` | GENERATED from the code's `ge:` tags by `make index` (and `make agents-check`) in every checkout, never committed: every file's one-line summary, owning skill and test; keyword to files |
 | [`docs/rendering.md`](docs/rendering.md) | The GPU backend (Dawn), the frame's pass table, every rendering technique and why, budgets, lab hooks, and what was considered and not taken |
 | [`docs/perf.md`](docs/perf.md) | The performance ledger: every speed-up, before and after, and how it was measured |
@@ -172,6 +173,7 @@ porting ends, and nothing outside it may depend on it except `make golden`.
 ## Build and test
 
 ```sh
+sudo tools/setup-ubuntu.sh  # an Ubuntu 24.04/22.04 machine brought up to what the tree needs; a no-op when it is
 make build        # cmake --preset debug && cmake --build (PRESET=release for -O2, no sanitizers)
 make test         # build + ctest;  make test T=cli_ builds and runs only the tests the regex names
 make fmt          # clang-format in place;  make fmt-check is what CI runs
@@ -203,8 +205,8 @@ make shaders-check # every embedded WGSL shader compiled by Tint offline (needs 
 ```
 
 **A cloud session starts the build itself.** `.claude/settings.json`'s SessionStart hook runs
-`tools/session-start.sh`, which installs CI's Linux packages the container lacks and runs `make
-build` (the debug preset, reusing `build/debug/`) in the background while you read. Before you
+`tools/session-start.sh`, which runs `tools/setup-ubuntu.sh` (the one list of Linux packages, CI's
+too) and then `make build` (the debug preset, reusing `build/debug/`) in the background while you read. Before you
 rely on the build, `tools/session-start.sh --wait` blocks until it is done and exits with its
 result; the output is `build/session-start.log`, the one-line state `build/session-start.status`.
 
