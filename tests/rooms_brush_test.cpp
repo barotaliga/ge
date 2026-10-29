@@ -105,9 +105,9 @@ std::string box(const char* contents, double x0, double y0, double z0, double x1
 
 TEST(the_vault_reads_back_from_its_text_and_bytes_to_the_bit) {
   const rm::Level level = vault();
-  CHECK(level.brushes.size() == 13);
-  CHECK(level.groups.size() == 1);
-  CHECK(level.entities.size() == 2);
+  CHECK(level.brushes.size() == 14);
+  CHECK(level.groups.size() == 2);
+  CHECK(level.entities.size() == 3);
   CHECK(level.entities[1].classname == "func_door");
   CHECK(level.entities[1].get("targetname") == "vault door");
   CHECK(level.brushes[11].group == 0);
@@ -154,9 +154,9 @@ TEST(the_csg_keeps_what_is_seen_and_drops_what_is_buried) {
   // The west wall's top (brush 1) is under the roof.
   CHECK(!covers(m, 1, 1, 3, -0.25, 3));
   CHECK(covers(m, 7, 1, 3.5, 2, 3));
-  // The clip brush (12) is never drawn.
+  // The trigger (12) and the clip brush (13) are never drawn.
   for (size_t t = 0; t < m.triangles(); ++t) {
-    if (m.brush[t] == 12) CHECK(m.hidden[t] == 1);
+    if (m.brush[t] >= 12) CHECK(m.hidden[t] == 1);
   }
   const rm::BrushMesh one = rm::build_brushes(level, 1);
   const rm::BrushMesh four = rm::build_brushes(level, 4);

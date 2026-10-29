@@ -27,6 +27,10 @@
 //
 // THE KEYFRAME is a `clone` of the run (engine/replay): a replay seeks by cloning the nearest one
 // and stepping it on off the input log.
+// THE SAVE (engine/save, docs/saves.md) is the run's state as chunks of a save file: `save` writes
+// them, `load` reads them into a run the engine has just opened on the same setup, and the run
+// loaded steps on exactly as the saved one would (play/saves.hpp holds every game to that). What
+// the setup rebuilds (a map, the indices over it) is never in a save.
 //
 // THE RUN'S SOUND (`ge record --format=mkv`, engine/capture/av_export.hpp): a play executable
 // built with its game's sound also registers a `SoundSpec` (`GE_SOUND(spec)`), whose `open` sets a
@@ -49,7 +53,7 @@
 // ge:summary The play contract: GameSpec, the axes, Run (step, observe, state, digest, pilot)
 // ge:keywords play contract game spec run axis axes option setup pilot bot observe state digest
 // ge:keywords snap_axis ge_game register view views shoot shot picture caption trace why
-// ge:keywords clone keyframe copy
+// ge:keywords clone keyframe copy save load chunk
 // ge:keywords renderer renderer-spec ge_renderer gpu mode modes lit wireframe depth overlay
 // ge:keywords sound sound-spec ge_sound synth audio export
 // ge:keywords cvars console cfg
@@ -67,6 +71,7 @@
 #include "ai/why.hpp"
 #include "console/console.hpp"
 #include "lab/raster.hpp"
+#include "save/file.hpp"
 
 namespace ge::audio {
 class Synth;
@@ -161,6 +166,19 @@ class Run {
   // the game keeps no copies: then a replay seeks back only by playing again from the start. The
   // copy's decision trace is off whatever this run's is.
   virtual std::unique_ptr<Run> clone() const { return nullptr; }
+  // THE SAVE: the run's state as the game's own chunks into `file` (the engine writes the meta and
+  // the step). False when the game keeps no saves.
+  virtual bool save(save::FileWriter& file) const {
+    (void)file;
+    return false;
+  }
+  // The game's chunks of `file` read into this run, just opened on the save's setup and never
+  // stepped. False with `error` (the reader's problem: the chunk and why) when one does not read.
+  virtual bool load(save::FileReader& file, std::string& error) {
+    (void)file;
+    error = "this game keeps no saves";
+    return false;
+  }
 };
 
 struct GameSpec {

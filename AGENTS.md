@@ -48,6 +48,8 @@ updates that row's status file (`docs/goals/<row>.md`) in its PR.
 | [`docs/shooters-edge.md`](docs/shooters-edge.md) | The second game, Shooter's Edge (M18, after Fall Line): the compatibility contract, the clean room, the homes, the protocols, the labs and the `ge` commands it needs |
 | [`docs/detail.md`](docs/detail.md) | Brush detail (M42): bevels on exposed brush edges and which edges stay sharp, decals clipped to surfaces that age in a pool, seeded props by rules, the labs |
 | [`docs/water.md`](docs/water.md) | Water and wind (M24): the bodies and the one query, the waves the wind grows, floating, swimming tuned per game, flowing water, the colour from what is in the water, the surface and the view under it, the sound, and the labs |
+| [`docs/storms.md`](docs/storms.md) | Thunderstorms (M37): the cell's life cycle, the gust front and the rain, lightning's kinds, strokes, flicker and channels, the light a frame catches, thunder by distance, the picture and the labs |
+| [`docs/liquids.md`](docs/liquids.md) | Liquids other than water (M30): viscosity, yield and harm on a body's stuff, the wind and the swimmer in them, lava and slime drawn, and the labs |
 | [`docs/climate.md`](docs/climate.md) | Temperature and humidity (M51): the air by the hour, the height, the weather and the ground, the dew point, and what they do: fog of five kinds, snow or rain, the snow's feel, frost, rime, black ice, the breath, lake ice; who reads what |
 | [`docs/grass.md`](docs/grass.md) | Grass (M34): the research, kinds and recipes, covers on a heightfield or a mesh's floors, the blade scatter, the sway in the wind, the grass drawn, and the rows |
 
@@ -264,7 +266,7 @@ characters.
 | `engine/console/` | The console (`ge::console`, `docs/console.md`): cvars and their tiers, the console language, aliases, binds, cfg files, the drop-down console's model | `console` |
 | `engine/replay/` | Replays (`ge::replay`, `docs/replays.md`): a run watched again off its input log, the keyframes a seek starts from (the game's `Run::clone`), the player's seek in a step budget, the transport | `replay` |
 | `engine/save/` | Saves (`ge::save`, `docs/saves.md`): the save file (header, meta, tagged versioned chunks, directory, XXH64), the state described once for its writer and reader | `save` |
-| `engine/capture/` | Video with sound (`ge::capture`, in `ge_play`; `docs/replays.md`): the Matroska muxer and reader, I420, the encoders, the export's A/V clock, the live capture, the sync fixture | `replay` |
+| `engine/capture/` | Video with sound (`ge::capture`, in `ge_play`; `docs/replays.md`): the Matroska and fragmented MP4 muxers and readers, I420, the encoders, the export's A/V clock, the live capture, the sync fixture | `replay` |
 | `engine/net/` | Multiplayer networking (`ge::net`, `docs/networking.md`): addresses, the wire, UDP and TCP sockets, links, the simulated network, sessions, LAN discovery, replication; the only place socket headers are included | `net` |
 | `engine/texgen/` | Procedural textures (`ge::texgen`, `docs/textures.md`): the `.tex` recipe, tileable noise, the layer kinds, the bake to maps and its disk cache; `library/` the specimens | `textures` |
 | `engine/snow/` | Snow over any ground (`ge::snow`, `docs/snow.md`): the layer and its cover, sparse fixed-point tiles, `sample`, `press` and imprint records, reference contacts, the snapshot | `snow` |
@@ -396,6 +398,7 @@ and the directories agree.
 | `sim` | `games/fall_line/sim`: `create_game`, the step, the bot, the headless sim CLI, the run clock |
 | `platform` | `engine/platform`: SDL3, the window, input, the gamepad, the audio device, files |
 | `textures` | `engine/texgen`: a procedural texture's `.tex` recipe and its layer kinds (bricks, planks, panels, noise, dirt, dust, grime, wear, rust, moss, snow, glow), tileable noise, texture references a level stores, the bake to albedo, normal, ORM, glow and height and its cache, `ge texture`, the `texgen-*` labs; the M31 rows |
+| `texture-references` | Growing `engine/texgen` from reference textures as inspiration (another game's walls, photographs): fetch to scratch, sheet, name the techniques, build them, steer recipes with `texgen-compare`, publish, delete; no pixel or source name enters the tree; M31d |
 | `move` | `engine/move`: a moving character's knobs, presets and step (ground and air acceleration, friction, jumps, strafe jumping, steps, slopes, crouch, slide, flight), the trace a world answers, the box world, the strafer, the scenarios, the `move-*` labs; the M28 rows |
 | `input` | `engine/input`: keyboards, raw mice, gamepads, joysticks, wheels and pedals, touch; actions, contexts, the bindings file, rebinding, the device database, players and hot-plug, rumble and force feedback, the event log, the simulated backend; `play/devices`; the M19 rows |
 | `camera` | `engine/camera`: the pose and its roll, the followers, the subject and the world's queries, the rigs (first person with bob, roll and kick; the boom; the mounted head; orbit, planted, free), shake and comfort, cut, blend and inertialize, the camera stack, the scripted subjects and the camera labs; the M26 rows |

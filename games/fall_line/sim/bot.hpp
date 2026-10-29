@@ -45,6 +45,11 @@ namespace bot = ge::skier::pilot;
 struct BotPlan : ge::skier::PilotPlan {
   // A line laid to a lift's load zone (outing.hpp): skied on past a run's foot, slowing to its end.
   bool to_lift = false;
+  template <class Io>
+  friend void describe(Io& io, BotPlan& v) {
+    io(static_cast<ge::skier::PilotPlan&>(v));
+    io(v.to_lift);
+  }
 };
 
 BotPlan plan_bot(const ge::mountain::mapgen::Level& level, const ge::skier::SkiSpec& spec);

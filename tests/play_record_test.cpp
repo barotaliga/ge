@@ -108,16 +108,21 @@ TEST(each_format_has_its_encoder_command) {
   CHECK(has(a, "-f rawvideo -pix_fmt rgba -s 640x360 -r 30 -i -"));
   CHECK(has(a, "-c:v libx264 -preset medium -pix_fmt yuv420p -crf 23 -movflags +faststart"));
   CHECK(has(a, "\"out.mp4\" 2>> \"e.log\""));
-  gp::Encoding webm{"webm", "", -1, "4M", ""};
+  gp::Encoding webm{"webm", "", -1, "4M", "", ""};
   const std::string b = gp::ffmpeg_command(webm, 64, 64, 24, "o.webm", "l");
   CHECK(has(b, "-c:v libvpx-vp9") && has(b, "-b:v 4M") && !has(b, "-crf"));
-  gp::Encoding gif{"gif", "", -1, "", ""};
+  gp::Encoding gif{"gif", "", -1, "", "", ""};
   CHECK(has(gp::ffmpeg_command(gif, 64, 64, 10, "o.gif", "l"), "palettegen"));
   CHECK(gp::extension_of(gif) == "gif");
   CHECK(gp::encoding_problem(mp4).empty());
-  CHECK(has(gp::encoding_problem({"mov", "", -1, "", ""}), "the formats are"));
-  CHECK(has(gp::encoding_problem({"mp4", "x;rm", -1, "", ""}), "not a plain word"));
-  CHECK(has(gp::encoding_problem({"mp4", "", 70, "", ""}), "over 63"));
+  CHECK(has(gp::encoding_problem({"mov", "", -1, "", "", ""}), "the formats are"));
+  CHECK(has(gp::encoding_problem({"mp4", "x;rm", -1, "", "", ""}), "not a plain word"));
+  CHECK(has(gp::encoding_problem({"mp4", "", 70, "", "", ""}), "over 63"));
+  // The engine's own MP4 holds AV1 and Opus only.
+  const gp::Encoding own_mp4{"mkv", "av1", -1, "", "", "mp4"};
+  CHECK(gp::encoding_problem(own_mp4).empty() && gp::extension_of(own_mp4) == "mp4");
+  CHECK(has(gp::encoding_problem({"mkv", "", -1, "", "", "mp4"}), "--codec=av1"));
+  CHECK(has(gp::encoding_problem({"mkv", "av1", -1, "", "", "avi"}), "no container"));
 }
 
 TEST(a_picture_resizes_by_the_mean_of_its_pixels) {

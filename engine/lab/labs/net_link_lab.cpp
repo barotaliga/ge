@@ -9,12 +9,17 @@
 // `--transport=tcp` makes every link a stream (nothing lost, a drop a resend's wait late, the
 // packets behind it waiting); a mix with a bulk (`--mix=download`) adds a table of the big
 // messages, each sent in pieces and checked whole; `--budget` caps what every connection sends.
+// `--secure=1` runs each preset again with connect tokens and sealed packets (M17i), the host's
+// flood guards on, and attackers at it: forged and stolen tokens, replayed and forged payloads, a
+// flood of requests from 64 addresses and a client sending fifty times its share; the
+// security table says what each attack sent and what the host refused, and holds the honest
+// clients' round trip, loss and deliveries to the same preset's run without them.
 // Everything runs on a virtual clock off one seed, so the lab is a determinism test too.
 //
 // ge:summary Lab: fake traffic over each network preset: delivery, RTT, loss, latency, bandwidth
 // ge:keywords lab net network link latency rtt ping loss packet-loss jitter bandwidth resend
 // ge:keywords fake-traffic preset pcap capture chart reliable traffic-mix tcp stream big-message
-// ge:keywords fragmentation bulk download budget
+// ge:keywords fragmentation bulk download budget security secure token attack replay flood
 // ge:skill net labs
 // ge:test tests/net_traffic_test.cpp
 #include <cmath>
@@ -105,6 +110,27 @@ void run(gl::Lab& lab) {
                           {"preset", "sent", "whole", "late", "broken", "order", "refused",
                            "p50 ms", "p95 ms", "max ms"},
                           {}};
+  const bool secure = lab.arg_num("secure") != 0;
+  gl::LabTable sec_table{
+      "secure, under attack (" + lab.arg("clients") +
+          " honest clients; attackers each second: 20 forged tokens, 20 stolen ones, 50 replayed "
+          "payloads, 50 forged ones, 4000 requests from 64 addresses, and one client sending "
+          "3000 packets)",
+      {"preset", "joined", "rtt ms", "plain", "loss", "plain", "events", "host out kbps", "plain",
+       "bad tokens", "stolen refused", "replays refused", "forgeries refused", "throttled",
+       "flooded", "answered"},
+      {}};
+  gl::LineChart attacked_chart{
+      {"ROUND TRIP UNDER ATTACK, LESS THE SAME PRESET'S WITHOUT",
+       "the host's mean over its honest peers, secure and attacked minus plain", "t (s)",
+       "difference (ms)"},
+      {},
+      {},
+      {},
+      {},
+      false,
+      false,
+      false};
   const std::string transport = lab.arg("transport");
   if (transport != "udp" && transport != "tcp") {
     lab.fail("unknown transport '" + transport + "'",
@@ -197,6 +223,86 @@ void run(gl::Lab& lab) {
                "Read the reliable channel in engine/net/connection.cpp (resends, the held window), "
                "then run tests/net_connection_test.cpp; skill: net.");
     }
+    if (secure) {
+      gn::TrafficPlan sp = plan;
+      sp.capture = false;
+      sp.secure = true;
+      sp.guards = gn::default_guards();
+      const double x = lab.arg_num("attack");
+      sp.attack.forged_tokens_per_s = 20 * x;
+      sp.attack.stolen_tokens_per_s = 20 * x;
+      sp.attack.replays_per_s = 50 * x;
+      sp.attack.forgeries_per_s = 50 * x;
+      sp.attack.flood_per_s = 4000 * x;
+      sp.attack.flood_addresses = 64;
+      sp.attack.flooders = x > 0 ? 1 : 0;
+      sp.attack.flooder_packets_per_s = 3000 * x;
+      const gn::TrafficReport s = gn::run_traffic(sp);
+      const gn::NodeStats& st = s.host_stats;
+      const auto s_sent = s.events_up.sent + s.events_down.sent;
+      const auto s_got = s.events_up.delivered + s.events_down.delivered;
+      const auto s_bad = s.events_up.out_of_order + s.events_down.out_of_order +
+                         s.events_up.duplicated + s.events_down.duplicated;
+      const auto pair = [](uint64_t refused, uint64_t sent) {
+        return std::to_string(refused) + "/" + std::to_string(sent);
+      };
+      sec_table.rows.push_back(
+          {name, std::to_string(s.connected), fmt(s.rtt_ms, 1), fmt(r.rtt_ms, 1),
+           fmt(100 * s.loss_total, 2) + "%", fmt(100 * r.loss_total, 2) + "%",
+           s_got == s_sent && !s_bad ? "ok" : std::to_string(s_got) + "/" + std::to_string(s_sent),
+           fmt(s.host_send_kbps, 0), fmt(r.host_send_kbps, 0),
+           pair(st.bad_tokens, s.attack.forged_tokens + s.attack.flood),
+           pair(st.replayed_tokens, s.attack.stolen_tokens), pair(st.replayed, s.attack.replays),
+           pair(st.forged, s.attack.forgeries), std::to_string(st.throttled),
+           pair(st.flooded, s.attack.flooder_packets), std::to_string(s.attack.answered)});
+      lab.metric(k + "secure-rtt-ms", s.rtt_ms, "ms");
+      lab.metric(k + "secure-loss", 100 * s.loss_total, "%");
+      lab.metric(k + "secure-host-send-kbps", s.host_send_kbps, "kbit/s");
+      lab.metric(k + "refused-bad-tokens", static_cast<double>(st.bad_tokens), "count");
+      lab.metric(k + "refused-stolen", static_cast<double>(st.replayed_tokens), "count");
+      lab.metric(k + "refused-replays", static_cast<double>(st.replayed), "count");
+      lab.metric(k + "refused-forgeries", static_cast<double>(st.forged), "count");
+      lab.metric(k + "throttled", static_cast<double>(st.throttled), "count");
+      lab.metric(k + "flooded", static_cast<double>(st.flooded), "count");
+      lab.metric(k + "answered", static_cast<double>(s.attack.answered), "count");
+      std::vector<double> diff;
+      for (size_t i = 0; i < s.series_rtt_ms.size() && i < r.series_rtt_ms.size(); i++) {
+        diff.push_back(s.series_rtt_ms[i] - r.series_rtt_ms[i]);
+      }
+      attacked_chart.traces.push_back(
+          {name, std::vector<double>(s.t_s.begin(), s.t_s.begin() + static_cast<long>(diff.size())),
+           diff});
+      // THE ROW'S BOUNDS: no attacker is answered or let in, every honest client joins and gets
+      // every event once and in order, and the honest links measure what the same preset does
+      // without the attack: the round trip within two ticks and a fifth, the loss within two
+      // points and half the preset's own (a short run's loss is a few bursts: the slack is its
+      // noise, not the attack's).
+      if (s.attack.answered || s.connected != sp.clients || s.dropped ||
+          s.attack.flooders_connected != sp.attack.flooders) {
+        lab.fail(name + " secure: " + std::to_string(s.attack.answered) +
+                     " answers to attackers, " + std::to_string(s.connected) + " of " +
+                     std::to_string(sp.clients) + " honest clients joined, " +
+                     std::to_string(s.dropped) + " dropped",
+                 "Read the token checks and the guards in engine/net/node.cpp (node_update), then "
+                 "run tests/net_node_secure_test.cpp; skill: net.");
+      }
+      if (s_got != s_sent || s_bad) {
+        lab.fail(name + " secure: " + std::to_string(s_got) + " of " + std::to_string(s_sent) +
+                     " reliable events arrived, " + std::to_string(s_bad) +
+                     " out of order or twice",
+                 "Read the sealing and the replay window in engine/net/node.cpp, then run "
+                 "tests/net_node_secure_test.cpp; skill: net.");
+      }
+      const double rtt_slack = 2 * tick + 0.2 * r.rtt_ms;
+      if (std::fabs(s.rtt_ms - r.rtt_ms) > rtt_slack ||
+          std::fabs(s.loss_total - r.loss_total) > 0.02 + 0.5 * c.loss) {
+        lab.fail(name + " secure: the attack moved the honest links: rtt " + fmt(s.rtt_ms, 1) +
+                     " ms against " + fmt(r.rtt_ms, 1) + ", loss " + fmt(100 * s.loss_total, 2) +
+                     "% against " + fmt(100 * r.loss_total, 2) + "%",
+                 "Check what the guards let through (NodeStats::throttled, flooded) and the "
+                 "rates in default_guards (engine/net/node.cpp); skill: net.");
+      }
+    }
     if (plan.mix.bulk_hz > 0) {
       const gl::Summary b = gl::summarize(r.bulk.latency_ms);
       bulk_table.rows.push_back(
@@ -236,6 +342,19 @@ void run(gl::Lab& lab) {
     }
   }
   lab.table(std::move(table));
+  if (secure) {
+    lab.table(std::move(sec_table));
+    lab.note(
+        "secure: every client connects with a token the matchmaker made (net/token.hpp) and every "
+        "packet is sealed with its keys; the host keeps default_guards(). 'plain' is the same "
+        "preset without either, above. 'bad tokens' are requests whose token did not open, of the "
+        "forged tokens and the flood sent (the rest of the flood was throttled first); 'stolen "
+        "refused' are honest tokens sent from another address; 'replays' and 'forgeries' are an "
+        "honest client's sealed payloads sent again from its address, as they are and changed; "
+        "'flooded' are the loud client's packets dropped over its rate. What the network lost on "
+        "the way never reached the host, so a refused count is under what was sent. 'answered' "
+        "must be 0: the host never answers an attacker.");
+  }
   if (!bulk_table.rows.empty()) {
     lab.table(std::move(bulk_table));
     lab.note(
@@ -261,6 +380,13 @@ void run(gl::Lab& lab) {
           "each line settles inside its preset's want range (the table) and stays flat; a climbing "
           "line is "
           "a queue building (the bandwidth too small for the traffic).");
+    if (secure) {
+      shoot(lab, "attacked", gl::line_chart(attacked_chart),
+            "How much longer the host's round trip to its honest clients was, secure with every "
+            "attack running, than the same preset plain: one line a preset.",
+            "every line hugs zero once the clients have joined, inside the jitter of its preset: "
+            "the attack costs the honest links nothing they can measure.");
+    }
     shoot(lab, "loss", gl::line_chart(loss_chart),
           "The share of the host's packets never acked, smoothed over about 64 packets, one line "
           "a preset.",
@@ -294,8 +420,11 @@ const gl::LabSpec kSpec{
         {"tick-hz", "60", "how often every node updates and flushes"},
         {"seed", "1", "the network's and the nodes' stream"},
         {"capture", "bad", "the preset whose session is attached as a pcap ('' none)"},
+        {"secure", "0",
+         "1: each preset again with tokens, sealed packets and the guards, under attack"},
+        {"attack", "1", "with --secure: the attackers' rates times this (0: none)"},
     },
-    "--clients=4 --seconds=3 --drain=3",
+    "--clients=4 --seconds=3 --drain=3 --secure=1",
     run,
 };
 GE_LAB(kSpec);
