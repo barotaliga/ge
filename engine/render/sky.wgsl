@@ -486,8 +486,8 @@ fn fs_main(in: VertexOut) -> FragmentOut {
     // Other worlds' moons by day, pale in the blue as the moon is.
     colour += other_moons(d, r, px).rgb * (1.0 - frame.weather.y);
   }
-  // Seen through the fog's or the fall's veil.
-  colour = veil_sky(h, colour);
+  // Seen through the fog's or the fall's veil, and the fog in areas in front of it all.
+  colour = local_fog(veil_sky(h, colour), in.uv, 1e30);
   var out: FragmentOut;
   out.colour = vec4f(min(colour, vec3f(60000.0)), 1.0);
   out.motion = vec4f(screen_motion(frame, vec4f(d, 0.0), in.position.xy), 0.0, 0.0);
