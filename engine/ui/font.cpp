@@ -117,8 +117,10 @@ float grid_cell(const std::vector<GridFace>& faces, float size) {
 
 // The smallest face whose cells are at least `cell` px tall (only ever shrunk), else the largest.
 const GridFace& face_for(const std::vector<GridFace>& faces, float cell) {
-  for (const GridFace& f : faces)
-    if (static_cast<float>(f.size / f.rows) >= cell) return f;
+  for (const GridFace& f : faces) {
+    const int ch = f.size / f.rows;  // whole pixels a cell
+    if (static_cast<float>(ch) >= cell) return f;
+  }
   return faces.back();
 }
 
