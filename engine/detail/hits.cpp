@@ -71,6 +71,7 @@ ShotResult shot_hit(DecalPool& pool, const Receivers& rec, const ShotAt& s) {
                        s.now_s, rng, hit, r.normal);
   r.hit = hit.hit;
   r.at = hit.at;
+  if (hit.hit) r.tri = static_cast<int>(hit.tri);
   return r;
 }
 

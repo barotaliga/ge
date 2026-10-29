@@ -35,6 +35,16 @@ struct Knobs {
   double stopper = 0;
   crowd::Style style = crowd::Style::carve;
   double turn = 20;
+  template <class Io>
+  friend void describe(Io& io, Knobs& v) {
+    io(v.skill);
+    io(v.aggression);
+    io(v.width);
+    io(v.wobble);
+    io(v.stopper);
+    io(v.style);
+    io(v.turn);
+  }
 };
 
 // ONE OF THE CROWD: kept as where he is along his run (`run`, `s`) and across it (`d`, m right of
@@ -77,6 +87,43 @@ struct Amateur {
   double lean = 0;
   double crouch = 0;
   double plough = 0;
+  template <class Io>
+  friend void describe(Io& io, Amateur& v) {
+    io(v.id);
+    io(v.group);
+    io(v.rank);
+    io(v.body);
+    io(v.kind);
+    io(v.knobs);
+    io(v.mode);
+    io(v.run);
+    io(v.s);
+    io(v.d);
+    io(v.speed);
+    io(v.yaw);
+    io(v.centre);
+    io(v.phase);
+    io(v.cap);
+    io(v.timer);
+    io(v.think);
+    io(v.rising);
+    io(v.lift);
+    io(v.ticket);
+    io(v.carrier);
+    io(v.seat);
+    io(v.leg);
+    io(v.tx);
+    io(v.tz);
+    io(v.x);
+    io(v.y);
+    io(v.z);
+    io(v.heading);
+    io(v.vx);
+    io(v.vz);
+    io(v.lean);
+    io(v.crouch);
+    io(v.plough);
+  }
 };
 
 // A GROUP: its kind, who is in it (the leader first), how it follows, the gap down the run between
@@ -93,12 +140,29 @@ struct CrowdGroup {
   int32_t stop_lift = -1;
   int32_t stop_run = -1;
   double stop_s = 0;
+  template <class Io>
+  friend void describe(Io& io, CrowdGroup& v) {
+    io(v.kind);
+    io(v.members);
+    io(v.track);
+    io(v.gap);
+    io(v.next);
+    io(v.unseen);
+    io(v.stop_lift);
+    io(v.stop_run);
+    io(v.stop_s);
+  }
 };
 
 // A lift's queue: the tickets handed out and the ones taken up.
 struct CrowdQueue {
   int32_t issued = 0;
   int32_t served = 0;
+  template <class Io>
+  friend void describe(Io& io, CrowdQueue& v) {
+    io(v.issued);
+    io(v.served);
+  }
 };
 
 // THE NETWORK the crowd skis, read off the map once at the deal: each run's colour (0 green … 3
@@ -110,6 +174,11 @@ struct CrowdQueue {
 struct CrowdStop {
   int32_t lift = -1;
   double s = 0;
+  template <class Io>
+  friend void describe(Io& io, CrowdStop& v) {
+    io(v.lift);
+    io(v.s);
+  }
 };
 struct CrowdRun {
   int32_t grade = 0;
@@ -119,12 +188,31 @@ struct CrowdRun {
   bool top = false;
   int32_t foot = -1;
   std::vector<CrowdStop> stops;
+  template <class Io>
+  friend void describe(Io& io, CrowdRun& v) {
+    io(v.grade);
+    io(v.length);
+    io(v.into);
+    io(v.into_s);
+    io(v.top);
+    io(v.foot);
+    io(v.stops);
+  }
 };
 struct CrowdRamp {
   int32_t run = -1;
   double fx = 0, fz = 0;
   double tx = 0, tz = 0;
   double s = 0;
+  template <class Io>
+  friend void describe(Io& io, CrowdRamp& v) {
+    io(v.run);
+    io(v.fx);
+    io(v.fz);
+    io(v.tx);
+    io(v.tz);
+    io(v.s);
+  }
 };
 
 struct CrowdState {
@@ -137,6 +225,17 @@ struct CrowdState {
   std::vector<CrowdQueue> queues;  // one a lift
   // Scratch, sized at the deal so a step never allocates: who is on each run this step.
   std::vector<std::vector<int32_t>> on_run;
+  template <class Io>
+  friend void describe(Io& io, CrowdState& v) {
+    io(v.active);
+    io(v.rng);
+    io(v.net);
+    io(v.ramps);
+    io(v.amateurs);
+    io(v.groups);
+    io(v.queues);
+    io(v.on_run);
+  }
 };
 
 }  // namespace fall_line::sim

@@ -62,6 +62,13 @@ struct ParaControls {
   double brake = 0;
   double steer = 0;
   double bar = 0;
+  template <class Io>
+  friend void describe(Io& io, ParaControls& v) {
+    io(v.throttle);
+    io(v.brake);
+    io(v.steer);
+    io(v.bar);
+  }
 };
 
 // What the rig is doing (the header's THE RIDE).
@@ -82,6 +89,17 @@ struct ParaPiece {
   double vx = 0, vy = 0, vz = 0;
   double heading = 0;
   bool down = false;
+  template <class Io>
+  friend void describe(Io& io, ParaPiece& v) {
+    io(v.x);
+    io(v.y);
+    io(v.z);
+    io(v.vx);
+    io(v.vy);
+    io(v.vz);
+    io(v.heading);
+    io(v.down);
+  }
 };
 
 struct ParaState {
@@ -125,6 +143,49 @@ struct ParaState {
   ParaCut cut = ParaCut::none;
   ParaPiece canopy;  // once dropped: the canopy, falling free
   ParaPiece motor;   // ...and the motor
+  template <class Io>
+  friend void describe(Io& io, ParaState& v) {
+    io(v.mode);
+    io(v.x);
+    io(v.y);
+    io(v.z);
+    io(v.vx);
+    io(v.vy);
+    io(v.vz);
+    io(v.heading);
+    io(v.bank);
+    io(v.pitch);
+    io(v.airspeed);
+    io(v.alpha);
+    io(v.stalled);
+    io(v.fold);
+    io(v.fold_side);
+    io(v.wind);
+    io(v.lift);
+    io(v.rough);
+    io(v.tension);
+    io(v.way);
+    io(v.controls);
+    io(v.swing);
+    io(v.loops);
+    io(v.slack);
+    io(v.rears);
+    io(v.g);
+    io(v.hold);
+    io(v.hold_at);
+    io(v.rpm);
+    io(v.thrust);
+    io(v.prop);
+    io(v.flying);
+    io(v.agl);
+    io(v.climb);
+    io(v.t);
+    io(v.air_time);
+    io(v.flights);
+    io(v.cut);
+    io(v.canopy);
+    io(v.motor);
+  }
 };
 
 // What one step did, for the game to turn into its events and the labs to count.

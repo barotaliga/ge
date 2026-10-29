@@ -76,6 +76,8 @@ fa::FrameOptions bare() {
   o.look = {};
   o.lens = {};
   o.grade = {};
+  o.ao = {};
+  o.dof = {};
   return o;
 }
 
@@ -85,17 +87,23 @@ struct Variant {
   std::string look_for;  // what the picture must show
   std::function<void(fa::FrameOptions&)> set;
   bool sun = true, start = true;  // the scenes it is shot in
+  bool moving = false;            // the eye moves through the frames (kStride a frame)
 };
+
+// The moving eye: 0.35 m a frame along its heading (21 m/s at 60 frames a second, a skier's
+// cruising speed) turning 0.25 degrees a frame, its height over the ground kept.
+constexpr double kStride = 0.35, kTurn = 0.0044;
 
 std::vector<Variant> variants() {
   return {
       {"off", "Every effect off: the frame as it was before the lens and the film.",
        "the reference the others are judged against", [](fa::FrameOptions& o) { o = bare(); }},
       {"defaults",
-       "Fall Line's defaults: the sun's rays at 0.5, sharpening at 0.3, the vignette at 0.25; the "
-       "flare, the fringes, the grain and the dirt off.",
+       "Fall Line's defaults: the sun's rays at 0.5, sharpening at 0.3, the vignette at 0.25, "
+       "ambient occlusion at 0.6; the flare, the fringes, the grain, the dirt and motion blur off.",
        "close to the reference at a glance: a little crisper, the corners a touch darker, the sun "
-       "streaming softly through the trees; nothing that reads as an effect",
+       "streaming softly through the trees, the trees' feet a shade darker; nothing that reads as "
+       "an effect",
        [](fa::FrameOptions& o) { o = fa::FrameOptions{}; }},
       {"sunrays", "The sun's rays alone at full strength (r_sunrays 1).",
        "beams fanning from the sun through the gaps between the trunks and crowns, dark behind "
@@ -147,6 +155,37 @@ std::vector<Variant> variants() {
          o.look.dirt = 1;
        },
        true, false},
+      {"moving",
+       "Every effect off with the eye moving at 21 m/s and turning, the reference for "
+       "motion blur.",
+       "the frame as sharp as a still one: TAA keeps the moving picture clean",
+       [](fa::FrameOptions& o) { o = bare(); }, true, true, true},
+      {"motionblur",
+       "Motion blur at a film camera's shutter (r_motionblur 0.5), the eye moving at 21 m/s and "
+       "turning.",
+       "the snow and the trees streaked along their motion, more toward the edges and the near "
+       "ground; the middle of the picture, where the eye is heading, nearly sharp; no halo round "
+       "the trunks and no seam between tiles",
+       [](fa::FrameOptions& o) {
+         o = bare();
+         o.look.motion_blur = 0.5;
+       },
+       true, true, true},
+      {"ao", "Ambient occlusion alone at full strength (r_ao 1, r_ao_radius 1.5).",
+       "the snow darker in the creases: round each trunk's foot, under the crowns' skirts, in "
+       "the skier's lee and the start hut's corners; open snow and the far slopes untouched; no "
+       "dark halo round a trunk against the snow behind it",
+       [](fa::FrameOptions& o) {
+         o = bare();
+         o.ao.strength = 1;
+       }},
+      {"dof", "Depth of field at full strength (r_dof 1) focused 30 m out (r_dof_focus 30).",
+       "the trees about 30 m out sharp, the near snow and the far ridges blurred into soft shapes; "
+       "a sharp edge round each trunk in focus, no halo of the blurred background over it",
+       [](fa::FrameOptions& o) {
+         o = bare();
+         o.dof = {.strength = 1, .focus_m = 30};
+       }},
       {"grade",
        "The grade's knobs turned: r_contrast 1.2, r_saturation 1.15, r_temperature 0.3 (warm).",
        "a warmer, punchier picture with the white snow still white and the black still black",
@@ -229,7 +268,13 @@ void run(ge::lab::Lab& lab) {
              "next: try another --seed or --hour (the sun must be up).");
     return;
   }
-  const std::vector<Variant> all = variants();
+  std::vector<Variant> all = variants();
+  const std::string only = lab.arg("only");
+  if (!only.empty()) {
+    std::erase_if(all, [&](const Variant& v) {
+      return v.name != "off" && ("," + only + ",").find("," + v.name + ",") == std::string::npos;
+    });
+  }
   const std::string seed_s = fixed(seed, 0), hour_s = fixed(hour, 1);
   auto shot_of = [&](const Variant& var, bool in_sun) {
     const std::string scene = in_sun ? "sun" : "start";
@@ -269,7 +314,7 @@ void run(ge::lab::Lab& lab) {
   const std::string adapter = device->report.name;
   uint32_t errors = 0;
   struct Timing {
-    double total = 1e18, post = 1e18, lens = 1e18;
+    double total = 1e18, post = 1e18, lens = 1e18, tiles = 1e18, ao = 1e18, dof = 1e18;
   };
   std::vector<Timing> timing(all.size());
   for (int round = 0; round < rounds; ++round) {
@@ -293,27 +338,39 @@ void run(ge::lab::Lab& lab) {
                  "Read the gpu: lines above. Skill: render.");
         return;
       }
-      auto still = [&](gr::FrameView view) {
+      // A scene's frames: still, or with the eye moving (`advance`) a frame at a time.
+      auto advance = [&](gr::FrameView& view) {
+        if (!all[i].moving) return;
+        const double over = view.eye[1] - level.ground_at(view.eye[0], view.eye[2]);
+        view.eye[0] += kStride * ge::core::libm::sin(view.heading);
+        view.eye[2] += kStride * ge::core::libm::cos(view.heading);
+        view.eye[1] = level.ground_at(view.eye[0], view.eye[2]) + over;
+        view.heading += kTurn;
+      };
+      auto still = [&](gr::FrameView& view) {
         fa::cut(*frame);
         for (int k = 0; k < settle; ++k) {
           view.frame = static_cast<uint64_t>(k);
+          advance(view);
           fa::draw(*device, *frame, view, {}, target.view);
         }
       };
       if (round == 0) {
         for (bool in_sun : {true, false}) {
           if (in_sun ? !all[i].sun : !all[i].start) continue;
-          still(in_sun ? sun : start);
+          gr::FrameView view = in_sun ? sun : start;
+          still(view);
           lab.shot(shot_of(all[i], in_sun),
                    ge::lab::Picture{width, height, ge::gpu::read_now(*device, target).rgba},
                    Det::measured);
         }
       }
-      still(sun);
-      std::vector<double> total, post, lens;
+      gr::FrameView view = sun;
+      still(view);
+      std::vector<double> total, post, lens, tiles, ao, dof;
       for (int k = 0; k < frames; ++k) {
-        gr::FrameView view = sun;
         view.frame = static_cast<uint64_t>(settle) + static_cast<uint64_t>(k);
+        advance(view);
         fa::draw(*device, *frame, view, {}, target.view);
         frame->recorder.wait(*device);
         const gr::FrameStats& st = frame->recorder.stats;
@@ -324,25 +381,32 @@ void run(ge::lab::Lab& lab) {
           sum += pass.gpu_ms;
           if (pass.name == "post") post.push_back(pass.gpu_ms);
           if (pass.name == "lens") lens.push_back(pass.gpu_ms);
+          if (pass.name == "motion_blur.tiles") tiles.push_back(pass.gpu_ms);
+          if (pass.name == "ao") ao.push_back(pass.gpu_ms);
+          if (pass.name == "dof") dof.push_back(pass.gpu_ms);
         }
         total.push_back(sum);
       }
       timing[i].total = std::min(timing[i].total, median(total));
       timing[i].post = std::min(timing[i].post, median(post));
       timing[i].lens = std::min(timing[i].lens, median(lens));
+      timing[i].tiles = std::min(timing[i].tiles, median(tiles));
+      timing[i].ao = std::min(timing[i].ao, median(ao));
+      timing[i].dof = std::min(timing[i].dof, median(dof));
       frame.reset();
       errors += device->errors.load();
     }
   }
-  ge::lab::LabTable table{"Each variant's GPU frame on the sun scene against every effect off, " +
-                              adapter + " at " + std::to_string(width) + "x" +
-                              std::to_string(height),
-                          {"variant", "frame ms", "over off ms", "post ms", "lens ms"},
-                          {}};
+  ge::lab::LabTable table{
+      "Each variant's GPU frame on the sun scene against every effect off, " + adapter + " at " +
+          std::to_string(width) + "x" + std::to_string(height),
+      {"variant", "frame ms", "over off ms", "post ms", "lens ms", "tiles ms", "ao ms", "dof ms"},
+      {}};
   for (size_t i = 0; i < all.size(); ++i) {
     table.rows.push_back({all[i].name, fixed(timing[i].total, 2),
                           fixed(timing[i].total - timing[0].total, 2), fixed(timing[i].post, 2),
-                          fixed(timing[i].lens, 2)});
+                          fixed(timing[i].lens, 2), fixed(timing[i].tiles, 2),
+                          fixed(timing[i].ao, 2), fixed(timing[i].dof, 2)});
     lab.metric("cost." + all[i].name + "-ms", timing[i].total - timing[0].total, "ms",
                Det::measured);
   }
@@ -371,6 +435,7 @@ const ge::lab::LabSpec kSpec{
         {"height", "360", "the picture's height, px"},
         {"frames", "6", "frames timed a variant, after the history settles"},
         {"rounds", "1", "times every variant is timed in turn, keeping its least"},
+        {"only", "", "the variants to run, by name, comma-separated (off always; empty: all)"},
     },
     "--width=160 --height=90 --frames=1",
     run,

@@ -44,6 +44,10 @@ struct Frame {
   // its dents; 5 its haze.
   moons: array<vec4f, 24>,
   fog: vec4f,              // the fog in areas (render/fog.hpp): its range (m; 0: none), its slices
+  // The sea of fog in the valleys (render/valley_fog.hpp): 0 its top over the eye (m), its
+  // extinction (1/m; 0 none), its edge (m), its wave (m); 1 one over the noise's tile (1/m), the
+  // noise's offset at the eye (x, z), its albedo.
+  valley: array<vec4f, 2>,
 }
 
 // THE MOTION a surface at camera-relative `rel` (w = 1; w = 0 for a direction at infinity) made

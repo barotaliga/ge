@@ -30,6 +30,7 @@
 #include "render/wgsl/atmosphere.wgsl"
 #include "render/wgsl/surface.wgsl"
 #include "render/wgsl/lights.wgsl"
+#include "render/wgsl/valley_fog.wgsl"
 
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var linear_clamp: sampler;
@@ -54,6 +55,35 @@ struct SkyLight {
 // The fog in areas (render/fog.hpp): the in-scatter toward the eye (rgb) and the transmittance (a)
 // over the screen's uv and sqrt(distance / range), read by `local_fog`.
 @group(0) @binding(11) var fog_volume: texture_3d<f32>;
+
+// The ambient occlusion (render/ao.hpp: half size, r the occlusion times its strength, g the
+// depth it was worked at), or the sky's 1 x 1 blank with it off.
+@group(0) @binding(12) var ao_map: texture_2d<f32>;
+
+// THE SHARE OF THE SKY a surface drawn at `at` (a fragment's position: the pixel and its depth)
+// sees, 0..1: the four half-size texels round it, each by how near it is and how like the
+// surface's own its depth is, so one surface's shade stays off the one beside it.
+fn sky_seen(at: vec4f) -> f32 {
+  let dims = vec2i(textureDimensions(ao_map));
+  if (dims.x < 2) {
+    return 1.0;
+  }
+  let q = at.xy * 0.5 - 0.5;
+  let b = vec2i(floor(q));
+  let f = q - floor(q);
+  var sum = 0.0;
+  var weights = 0.0;
+  for (var k = 0; k < 4; k++) {
+    let o = vec2i(k & 1, k >> 1);
+    let t = textureLoad(ao_map, clamp(b + o, vec2i(0), dims - 1), 0);
+    let near = select(1.0 - f, f, vec2<bool>(o.x == 1, o.y == 1));
+    let like = max(1.0 - 10.0 * abs(t.g - at.z) / max(at.z, 1e-6), 1e-3);
+    let w = near.x * near.y * like;
+    sum += t.r * w;
+    weights += w;
+  }
+  return 1.0 - sum / max(weights, 1e-6);
+}
 
 // A world height (m) as a radius from the planet's centre, km.
 fn radius_at(world_y: f32) -> f32 {
@@ -324,19 +354,21 @@ fn mist_sky(d: vec3f) -> vec3f {
   return veil_sky(h, sky_luminance(h));
 }
 
-// THE HAZE: a surface's colour seen through `dist_m` of air at screen `uv` (0..1): its colour
+// THE HAZE: a surface's colour seen through `dist_m` of air at screen `uv` (0..1): first through
+// the sea of fog in the valleys (`valley_fog`, lying beyond most of the air); then its colour
 // times the air's transmittance plus the light the air scatters in, from the aerial-perspective
 // volume (under a deck, the deck's grey in its place); then a fog or a fall closing it into its
 // grey veil, so a surface at the visual range keeps 2 % of its contrast against it; then the
-// reach's mist closing it into the sky behind it; then the fog in areas (`local_fog`). Every world
-// material calls this, and none has its own fog.
+// reach's mist closing it into the sky behind it (seen through the valley's sea as the sky is);
+// then the fog in areas (`local_fog`). Every world material calls this, and none has its own fog.
 fn haze(colour: vec3f, uv: vec2f, dist_m: f32) -> vec3f {
-  let c = haze_air(colour, uv, dist_m);
+  let c = haze_air(valley_fog(colour, uv, dist_m), uv, dist_m);
   if (frame.mist.y <= 0.0) {
     return local_fog(c, uv, dist_m);
   }
   let t = clamp((dist_m - frame.mist.x) / (frame.mist.y - frame.mist.x), 0.0, 1.0);
-  return local_fog(mix(c, mist_sky(view_ray(frame, uv)), t * t * (3.0 - 2.0 * t)), uv, dist_m);
+  let behind = valley_fog(mist_sky(view_ray(frame, uv)), uv, 1e30);
+  return local_fog(mix(c, behind, t * t * (3.0 - 2.0 * t)), uv, dist_m);
 }
 
 // THE FOG IN AN AREA (render/fog.hpp), the nearest air of all, so it veils the haze, the mist,

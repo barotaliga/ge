@@ -17,6 +17,11 @@
 // ended: connected, timed out cleanly, or stuck between the two. A `hook` runs every tick with
 // the network, for a caller that puts its own datagrams on the wire (the fuzzer).
 //
+// SECURITY (M17i): with `secure` the plan's matchmaker (a master key off the seed) makes each
+// client a connect token, the host opens them and seals every packet (node.hpp), and keeps the
+// plan's flood guards; `attack` sets attackers on it (traffic_attack.hpp). The flooders are
+// clients of their own, outside the honest ones the report's tallies count.
+//
 // ge:summary Fake traffic: a host and clients over the simulated network, measured end to end
 // ge:keywords net traffic fake-traffic generator load session simulate bots latency loss
 // ge:keywords reliable-delivery in-order goodput bandwidth report digest stress mix
@@ -80,6 +85,27 @@ struct ChaosStep {
 
 using TrafficHook = void (*)(void* ctx, SimNetwork& net, int64_t now_us, int64_t tick);
 
+// The attackers' rates a second (traffic_attack.hpp says what each sends).
+struct TrafficAttack {
+  double forged_tokens_per_s = 0;
+  double stolen_tokens_per_s = 0;
+  double replays_per_s = 0;
+  double forgeries_per_s = 0;
+  double flood_per_s = 0;
+  int flood_addresses = 1024;  // the flood's addresses, taken in turn
+  int flooders = 0;
+  double flooder_packets_per_s = 0;  // each flooder's
+};
+bool any_attack(const TrafficAttack& a);
+
+// What the attackers sent, and the answers they got (a secure host gives none).
+struct AttackTally {
+  uint64_t forged_tokens = 0, stolen_tokens = 0, replays = 0, forgeries = 0, flood = 0;
+  uint64_t flooder_packets = 0;
+  uint64_t answered = 0;       // datagrams the host sent the forgers and the thieves
+  int flooders_connected = 0;  // at the end: a flooder is a client, and stays one
+};
+
 struct TrafficPlan {
   int clients = 8;
   int max_peers = 32;        // the host's slots; clients past it are denied
@@ -98,6 +124,9 @@ struct TrafficPlan {
   bool keep_latencies = true;    // every delivery's latency kept (a long soak keeps the sums only)
   TrafficHook hook = nullptr;    // every tick, after the network's clock moves
   void* hook_ctx = nullptr;
+  bool secure = false;  // tokens and sealed packets (SECURITY above)
+  NodeGuards guards;    // the host's
+  TrafficAttack attack;
 };
 
 // One kind of message, summed over its streams.
@@ -130,6 +159,8 @@ struct TrafficReport {
   int host_zombies = 0;  // the host's connected peers at the end with no client behind them
   uint64_t host_packets_min = 0;  // the fewest packets the host sent one of its peers
   uint64_t host_strangers = 0, host_bad_keys = 0, host_bad_cookies = 0, host_foreign = 0;
+  NodeStats host_stats;  // all of the host's, the security's and the guards' counts with them
+  AttackTally attack;
   Capture capture;  // empty unless the plan asked for it
   uint64_t digest = 0;
 };

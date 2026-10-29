@@ -1147,9 +1147,10 @@ twilight matches `twilight_lux` within 1 % down to twelve degrees under.
 ## Fog in an area
 
 The sky's haze is the air's, the same over the whole map; the weather's fog closes everything at
-one visual range. **Fog in an area** is the third kind: a mist lying in a wood, a sea of fog in
-the valleys, the dust of a hall, the glowing haze over a pool of lava, placed by the game where
-it is (`render/fog.hpp`, M38a).
+one visual range. **Fog in an area** is the third kind: a mist lying in a wood, the dust of a
+hall, the glowing haze over a pool of lava, placed by the game where it is (`render/fog.hpp`,
+M38a). The froxels reach a few hundred metres; the sea of fog in the valleys seen from a peak is
+the next section's.
 
 - **The volumes** (`FogVolume`): a box or an ellipsoid turned about the vertical; its extinction
   at its floor, thinning upward by a falloff; soft over an edge inside its faces; carved into
@@ -1190,6 +1191,37 @@ it is (`render/fog.hpp`, M38a).
 On the software adapter at the default 160 x 90 x 64 froxels the inject costs 40 to 210 ms (the
 march toward the light in every froxel the medium fills) and the integrate 15 to 25 ms (the `fog` lab's `gpu-ms` rows); a real GPU's figures and a ladder row
 (the froxels' size) wait for M38f. Not yet: the lamps in the fog (M38e, on M39's light list).
+
+## The valley fog
+
+A still morning's inversion fills the valleys with fog up to a level top: from a peak a white sea
+with the ridges standing out of it as islands, from under its top a grey gloom. It lies over
+kilometres and its edge on a slope must stay sharp at any range, which no froxel volume of a few
+hundred metres can give, so it is a layer of its own, drawn per pixel (`render/valley_fog.hpp`,
+`FrameView::valley`, M38h).
+
+- **The medium**: an even extinction under the top, thinning linearly to none over an edge above
+  it. The integral of that share from a height up, G(y), is 0 over the edge, a square across it
+  and a line under it, so a ray's optical depth between the eye and a surface is the extinction
+  times |G(0) - G(end)| over the ray's slope: closed form, no march, no texture
+  (`valley_depth`, held against a numeric march by `render_valley_fog_test`).
+- **The top** rises and falls on two octaves of the cloud's tiled noise, read where the ray meets
+  it, drifting on the fog's own wind; the eye's offset in the noise is folded into its tile in
+  doubles on the CPU (`valley_rows`), so it stays exact at any place and hour.
+- **The light**: a white face's under this sun and sky, the fog's albedo of it (0.85): the sun on
+  the top's billows (the first octave's slope over two texels, with a wrapped cosine, since the
+  light a fog sends back is scattered many times inside it; laid level from three tiles off to
+  ten, where the waves are under a pixel) past the cloud's shadow, and the sky over them; dimmed
+  under the top by the eye's depth in it, to 0.3 of the top's at the deepest.
+- **The read**: `valley_fog` (wgsl/valley_fog.wgsl) first in `haze`, before the air's haze, so a
+  far sea is veiled by the air in front of it; by the sky pass, so the sea reaches the horizon
+  where no ground is drawn; and over the cloud's premultiplied colour (`valley_fog_over`). A
+  ray that meets no fog returns its colour as it came, and with no fog (`density` 0) nothing
+  reads it: the bits are the ones drawn without it.
+
+The `valley-fog` lab draws a seed's sea from the summit, from the air, at dawn and from under it.
+Not yet: the mountains' shade on the top (a sea at dawn is lit to its far shore under every
+ridge's shadow) and Fall Line's own seas, dealt by the map's weather and hour (M38f).
 
 ## Anti-aliasing and resolution
 
@@ -1283,6 +1315,79 @@ strength, and each chosen to cost nothing when it is off and almost nothing when
   depth, so it needs no bloom; the post pass adds it in one tap. The sky's own shafts (the cloud's
   shadow across the air, § Sky) stay the sky pass's; these are the screen's half, from trunks,
   crowns, ridges and figures, and the two stack.
+
+**As built (M35c): motion blur** (`render/motion_blur.hpp`, the gather in `post.wgsl`; the
+`post` lab's `moving` and `motionblur` variants). The picture is smeared along the motion target
+the opaque passes already write (the camera's and each thing's own motion), for the shutter's
+share of a frame (`PostLook::motion_blur`; 0.5 is a film camera's 180-degree shutter), each streak
+at most 4 % of the picture's height:
+
+- **Two small dispatches before post, `motion_blur.tiles`:** the fastest motion of each 16 x 16
+  tile (and the slowest's length), one lane a tile reading its texels in turn, then the fastest
+  and slowest over each tile's 3 x 3 neighbours, so a fast thing's blur reaches into the still
+  tiles round it. A first cut reduced each tile in shared memory, a workgroup a tile; its eight
+  barriers cost 30.7 ms at 1280 x 720 on the software rasterizer, and one lane a tile 3.7 ms.
+- **The gather, folded into post:** a pixel whose neighbourhood moves under half a pixel costs one
+  load. Where the slowest motion round it is at least half the fastest (the camera turning over
+  open snow: nothing to keep sharp), the fast path averages 3 to 6 bilinear taps along the streak
+  (one every four pixels) and reads nothing else. Elsewhere each tap also reads its motion and
+  depth and is weighted by whether its own streak reaches the pixel and which of the two stands in
+  front (a scatter-as-gather reconstruction), so a figure the camera follows stays sharp against
+  the streaming slope and the slope does not smear over it. The taps' offsets are a fixed
+  screen-space noise, so their gaps break up instead of banding.
+- **Cost** at 1280 x 720 on the software rasterizer, the eye moving at 21 m/s and turning: the
+  tiles 3.7 ms and the post pass 16.1 → 27.7 ms; the first cut with eight taps and no fast path
+  was +26 ms on the post pass at 960 x 540. It is the dearest of the lens and film, so Fall Line
+  keeps it off (`r_motionblur 0`) and offers 0.5.
+
+**As built (M35e): ambient occlusion** (`render/ao.hpp`, `sky_seen` in `wgsl/frame.wgsl`; the
+`post` lab's `ao` variant and the `world` lab's `--cfg="r_ao …"`). How much of the sky each
+surface sees, worked out from the depth alone and taken off the sky's light only (the sun keeps its
+shadow maps), so the snow darkens at a trunk's foot, under the crowns' skirts and round a skier's
+boots, and a figure stands on the snow instead of floating over it:
+
+- **One half-size compute pass, `ao`, after the depth prepass:** each texel stands for one of the
+  four render pixels under it (a different one each frame), rebuilds its point and its normal from
+  the depth, and searches 2 slices through the view ray, 4 steps out each way, within a radius in
+  metres (`r_ao_radius`, 1.5): the highest thing on each side is that side's horizon and the
+  cosine-weighted arc between them is the sky the surface sees (a ground-truth horizon search). The
+  slices turn and the steps shift by a noise of the texel and the frame that any 3 x 3 texels
+  hold evenly, and the pass's second dispatch takes each texel's mean over the 3 x 3 round it whose
+  depth is like its own. Without it TAA-U alone left the shade under a moving skier speckled: the
+  history it would average is the one it rejects where a figure moves. A texel whose radius spans under two pixels (the
+  far ground) stops after its first load; the few hundredths of occlusion open ground reads off
+  the depth's own steps are dropped, so a flat slope is as lit as with the pass off.
+- **Read in the lit passes** (`sky_seen`, the frame group's binding 10): the four half-size texels
+  round the pixel, each weighted by how near it is and how like the pixel's own its depth is, so
+  one surface's shade does not bleed onto the one behind it. With the pass off the frame group
+  binds the sky's blank and `sky_seen` is one dimension query.
+- **Cost** at 1280 x 720 on the software rasterizer: the pass 22.6 ms (the search about 14.5, the
+  smoothing 8) against the post pass's 16, about 4 % of the frame; one slice instead of two saved
+  only a tenth of the search, so two it is. Fall
+  Line keeps it on at 0.6 (`r_ao`): the snow's bounce fills the creases in life, so the full
+  strength reads too dark.
+
+**As built (M35d): depth of field** (`render/dof.hpp`, `defocused` in `post.wgsl`; the `post`
+lab's `dof` variant and the `world` lab's `--cfg="r_dof …"`). The picture blurred away from a
+focus the game names, for a replay's lens or a photograph rather than for play:
+
+- **The blur circle** (`wgsl/dof_coc.wgsl`, one copy for both passes) grows with
+  |1 - focus / distance|, as a lens's does: the far field tends to the widest circle
+  (`DofSettings::strength` x 1.5 % of the picture's height), the near field reaches it a little in
+  front of the focus, and `sharp` (0.15) of the way either side of the focus stays sharp.
+- **One half-size compute pass, `dof`, after the lens pass:** 16 taps of the post pass's input
+  over a disc as wide as the widest circle, turned per texel, each counted as far as its own
+  circle reaches the texel; a tap behind the texel counts no further than the texel's own circle,
+  so the blurred background never takes a sharp subject's edge. A texel in focus skips the gather.
+- **The mix, folded into post:** each pixel reads its own circle off the full-size depth and
+  takes the gather in by it (fully past a pixel and a half), so the subject's edge is as sharp as
+  its pixels. The near field's spread over the focus, which a scatter would draw, is left out: a
+  blurred near thing keeps a hard edge against a sharp one behind it.
+- **The focus** is live (`set_dof`, `set_post_focus`): Fall Line's `r_dof_focus`, or with 0 how far
+  the camera's subject is (`camera/subject.hpp`'s `framed_point`), every frame.
+- **Cost** at 1280 x 720 on the software rasterizer, into the sun focused 30 m out at full
+  strength: the pass 26 ms and the post pass 15.5 → 18.6 ms. Fall Line keeps it off
+  (`r_dof 0`): in play the whole picture is the road ahead.
 
 Considered and not taken: a screen-space "god rays" occlusion pre-pass (the depth target already
 says what is sky), image-based ghosts off the bloom chain (its Karis-weighted first level flattens

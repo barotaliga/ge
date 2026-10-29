@@ -127,6 +127,10 @@ struct Divergence {
   uint64_t digest_a = 0, digest_b = 0;  // each at its own end
 };
 
+// The fields of two `Run::state` texts that differ, noted into `d` (the first `kMostFields`,
+// then counted).
+void compare_states(const std::string& a, const std::string& b, Divergence& d);
+
 // `a` and `b` stepped side by side: the first input that differs and the first step after which
 // the runs differ, with the fields of `state` that differ there.
 std::optional<Divergence> diverge(const GameSpec& spec, const InputLog& a, const InputLog& b,

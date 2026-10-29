@@ -15,6 +15,7 @@
 
 #include "render/clouds.hpp"
 #include "render/night.hpp"
+#include "render/valley_fog.hpp"
 
 namespace ge::render {
 
@@ -157,6 +158,8 @@ void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint
 
   // THE FOG IN AREAS: none until render/fog.hpp's fog_uniforms says a volume is in reach.
   for (float& f : u.fog) f = 0.0f;
+  // THE SEA OF FOG IN THE VALLEYS (render/valley_fog.hpp).
+  valley_rows(view.valley, view, u.valley);
 }
 
 FrameTargets create_targets(gpu::Device& device, std::string_view label, uint32_t width,
@@ -535,7 +538,7 @@ uint16_t float_to_half(float f) {
 }
 
 std::vector<float> read_red(gpu::Device& device, const wgpu::Texture& texture, uint32_t mip,
-                            uint32_t w, uint32_t h, wgpu::TextureFormat format) {
+                            uint32_t w, uint32_t h, wgpu::TextureFormat format, uint32_t channel) {
   const bool half =
       format == wgpu::TextureFormat::R16Float || format == wgpu::TextureFormat::RGBA16Float;
   const uint32_t texel = format == wgpu::TextureFormat::RGBA16Float ? 8 : half ? 2 : 4;
@@ -566,7 +569,8 @@ std::vector<float> read_red(gpu::Device& device, const wgpu::Texture& texture, u
     const auto* bytes = static_cast<const uint8_t*>(p);
     for (uint32_t y = 0; y < h; ++y) {
       for (uint32_t x = 0; x < w; ++x) {
-        const uint8_t* at = bytes + size_t{y} * row + size_t{x} * texel;
+        const uint8_t* at = bytes + size_t{y} * row + size_t{x} * texel +
+                            (texel == 8 ? size_t{channel % 4} * 2 : 0);
         if (half) {
           uint16_t v;
           std::memcpy(&v, at, 2);

@@ -26,7 +26,6 @@
 #pragma once
 
 #include <cstdint>
-#include <cstdio>
 #include <optional>
 #include <span>
 #include <string>
@@ -34,6 +33,7 @@
 #include <vector>
 
 #include "capture/ebml.hpp"
+#include "capture/out_file.hpp"
 
 namespace ge::capture {
 
@@ -73,7 +73,6 @@ class MatroskaWriter {
   MatroskaWriter() = default;
   MatroskaWriter(const MatroskaWriter&) = delete;
   MatroskaWriter& operator=(const MatroskaWriter&) = delete;
-  ~MatroskaWriter();
 
   // Start a file at `path`, or with an empty path keep every byte in memory (`bytes()`).
   bool open(const std::string& path, const MatroskaOptions& o, std::string& error);
@@ -84,8 +83,8 @@ class MatroskaWriter {
   // patched. `end_ms` is when the last block ends (the duration).
   bool close(int64_t end_ms, std::string& error);
 
-  const std::vector<uint8_t>& bytes() const { return memory_; }
-  int64_t written() const { return written_; }
+  const std::vector<uint8_t>& bytes() const { return out_.bytes(); }
+  int64_t written() const { return out_.written(); }
   int64_t clusters() const { return static_cast<int64_t>(cues_.size()); }
 
  private:
@@ -99,10 +98,8 @@ class MatroskaWriter {
   bool flush_cluster(std::string& error);
 
   MatroskaOptions opt_;
-  std::FILE* file_ = nullptr;
+  OutFile out_;
   bool open_ = false;
-  std::vector<uint8_t> memory_;
-  int64_t written_ = 0;
   int64_t segment_size_at_ = 0;          // where the segment's 8-byte size is
   int64_t segment_body_ = 0;             // where the segment's body starts
   int64_t seek_head_at_ = 0;             // the reserved Void the seek head is written over

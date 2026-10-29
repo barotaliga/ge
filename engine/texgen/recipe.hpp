@@ -32,6 +32,7 @@
 // ge:test tests/texgen_recipe_test.cpp
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -88,11 +89,15 @@ struct Recipe {
   std::vector<LayerLine> layers;
 };
 
-// What a level names: a recipe, a seed and the params it turns.
+// What a level names: a recipe, a seed and the params it turns. Two reserved keys recolour the
+// bake: `tint=#rrggbb` moves each channel's mean onto those bytes and `spread=#rrggbb` its
+// standard deviation (within a factor of two of the bake's own), so one recipe matches a room's
+// colours. A level written from another game's map (`replace.hpp`) carries both.
 struct TextureRef {
   std::string name;
   std::optional<uint32_t> seed;
   std::vector<std::pair<std::string, double>> params;
+  std::optional<std::array<uint8_t, 3>> tint = std::nullopt, spread = std::nullopt;
 };
 
 struct ParseResult {
@@ -105,7 +110,7 @@ ParseResult parse_recipe(std::string_view text);
 
 // A reference string; errors go to `errors`.
 TextureRef parse_ref(std::string_view text, std::vector<Diagnostic>& errors);
-// The reference written back in its canonical order (seed, then params by name).
+// The reference written back in its canonical order (seed, params by name, tint, spread).
 std::string ref_text(const TextureRef& ref);
 
 // The value of every param once `ref` has turned it, clamped to its range, in recipe order.

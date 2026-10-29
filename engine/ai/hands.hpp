@@ -49,6 +49,19 @@ struct AxisHands {
   double slew = 0;         // the most the hand moves a second, axis units (0: no limit)
   double lo = -1, hi = 1;  // the axis's travel
   double rest = 0;         // where it sits let go
+  template <class Io>
+  friend void describe(Io& io, AxisHands& v) {
+    io(v.pass);
+    io(v.delay_s);
+    io(v.wander);
+    io(v.wander_hz);
+    io(v.settle_s);
+    io(v.damping);
+    io(v.slew);
+    io(v.lo);
+    io(v.hi);
+    io(v.rest);
+  }
 };
 
 // The most axes hands hold, and the longest delay in steps (0.8 s at 120 Hz). Hands keep no heap
@@ -77,11 +90,29 @@ class Hands {
     size_t len = 1, head = 0;
     double wander = 0, wander_to = 0;
     double pos = 0, vel = 0;
+    template <class Io>
+    friend void describe(Io& io, Axis& v) {
+      io(v.spec);
+      io(v.ring);
+      io(v.len);
+      io(v.head);
+      io(v.wander);
+      io(v.wander_to);
+      io(v.pos);
+      io(v.vel);
+    }
   };
   double dt_ = 0;
   core::Rng rng_{0};
   std::array<Axis, kMostHandAxes> axes_{};
   size_t count_ = 0;
+  template <class Io>
+  friend void describe(Io& io, Hands& v) {
+    io(v.dt_);
+    io(v.rng_);
+    io(v.axes_);
+    io(v.count_);
+  }
 };
 
 // The intent before the hands, as a decision called "hands" with one fact an axis (`names`, each
