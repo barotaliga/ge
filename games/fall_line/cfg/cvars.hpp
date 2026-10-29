@@ -15,7 +15,7 @@
 //   volume s_wind s_effects s_mute      the sound's faders (A)
 //   sv_seed sv_hour                     the run's map and hour (the server's, server info)
 //   sv_weather sv_snowfall sv_snowline sv_fog sv_wind sv_winddir sv_cover sv_clouddensity
-//   sv_skyrate sv_cloudheight sv_cloudspeed
+//   sv_skyrate sv_cloudheight sv_cloudthickness sv_cloudspeed
 //                                       the sky over the run, picked by hand, and how fast its
 //                                       hour runs (the server's, server info; sim/sky.hpp)
 //   sv_skytype sv_skyair sv_skydust sv_sunsize sv_sun2 sv_planet sv_planetdir sv_planetel
@@ -26,10 +26,12 @@
 // ge:summary Fall Line's cvars: the window, the picture, the camera, the sound, the map
 // ge:keywords fall-line cvars settings cfg vid_width r_taa r_bloom r_shadowsize cl_view volume
 // ge:keywords s_mute sv_seed sv_hour add_cvars register_cvars sv_weather sv_snowfall sv_fog
-// ge:keywords sv_wind sv_winddir sv_cover sv_clouddensity sv_cloudthickness sv_skyrate r_clouds
-// sv_skytype sky-type ge:keywords sky-knobs cl_chasedist cl_motion r_precip r_precip_density
-// r_splashes r_wet ge:keywords sv_snowline rain sv_cloudheight sv_cloudspeed r_sunsize r_moonsize
-// disc-size ge:skill console sim ge:test tests/fall_line_cvars_test.cpp
+// ge:keywords sv_wind sv_winddir sv_cover sv_clouddensity sv_skyrate r_clouds
+// ge:keywords sv_cloudthickness sv_skytype sky-type sky-knobs cl_chasedist cl_motion r_precip
+// ge:keywords r_precip_density r_splashes r_wet sv_snowline rain sv_cloudheight sv_cloudspeed
+// ge:keywords r_sunsize r_moonsize disc-size
+// ge:skill console sim
+// ge:test tests/fall_line_cvars_test.cpp
 #pragma once
 
 #include <cstdint>
