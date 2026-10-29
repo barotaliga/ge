@@ -18,8 +18,10 @@
 //   of civil twilight); a point is drawn as the eye sees it, at least a few times the sky behind
 //   it at the threshold and brighter by its light above it;
 // - the GALAXY's band about the galactic equator, brightest toward its centre, mottled;
+// - OTHER WORLDS' MOONS (render/wgsl/moons.wgsl), drawn as the moon is, the nearer over the farther;
 // all of it behind the deck's share and lost in a fog's or a fall's air.
 #include "render/wgsl/frame.wgsl"
+#include "render/wgsl/moons.wgsl"
 
 // The real stars' map (render/stars.hpp): kStarSlots layers of the cube's cells.
 @group(1) @binding(0) var star_map: texture_2d_array<f32>;
@@ -27,6 +29,10 @@
 // latitude 90 N..90 S down v, its bytes over 255 times `frame.moon_shadow.w` the albedo against
 // the near side's mean; mipmapped.
 @group(1) @binding(1) var moon_map: texture_2d<f32>;
+// Other worlds' moons' maps (render/moon_maps.hpp), a layer a kind: the luminance (a byte over
+// kMoonMapMean the albedo against the kind's mean) and the colour over it (128 a byte of 1).
+@group(1) @binding(2) var moon_maps: texture_2d_array<f32>;
+@group(1) @binding(3) var moon_colours: texture_2d_array<f32>;
 
 // The sun's angular radius, rad.
 const kSunRadius = 0.00465;
@@ -468,10 +474,17 @@ fn fs_main(in: VertexOut) -> FragmentOut {
     let cover = on_moon(d);
     let limit = limiting_magnitude(bg * kSunLux / frame.world.y);
     colour += (stars(cel, bg, px, limit) + galaxy(cel)) * air * clear * (1.0 - max(cover, hidden));
-    colour = mix(colour, rods(colour), cover) + moon_disc(d, r, px) * clear;
-  } else if (frame.moon_light.z > 0.0) {
+    // Other worlds' moons as the moon is: the stars behind them hidden (`cover`), the air's light
+    // in front of them kept.
+    colour = mix(colour, rods(colour), cover) +
+             (moon_disc(d, r, px) + other_moons(d, r, px).rgb) * clear;
+  } else {
     let r = kGroundRadius + max(frame.eye.w, 0.0);
-    colour += moon_disc(d, r, px) * (1.0 - frame.weather.y);
+    if (frame.moon_light.z > 0.0) {
+      colour += moon_disc(d, r, px) * (1.0 - frame.weather.y);
+    }
+    // Other worlds' moons by day, pale in the blue as the moon is.
+    colour += other_moons(d, r, px).rgb * (1.0 - frame.weather.y);
   }
   // Seen through the fog's or the fall's veil.
   colour = veil_sky(h, colour);

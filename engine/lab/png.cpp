@@ -15,6 +15,7 @@
 #include <iterator>
 
 #include "assets/image.hpp"
+#include "lab/deflate.hpp"
 
 namespace ge::lab {
 
@@ -33,6 +34,12 @@ void chunk(std::vector<uint8_t>& out, const char* type, const std::vector<uint8_
   out.insert(out.end(), type, type + 4);
   out.insert(out.end(), data.begin(), data.end());
   put32(out, crc32(&out[start], out.size() - start));
+}
+
+// The PNG Paeth predictor: whichever of left, up and up-left is nearest left + up - up-left.
+int paeth(int a, int b, int c) {
+  const int p = a + b - c, pa = std::abs(p - a), pb = std::abs(p - b), pc = std::abs(p - c);
+  return pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
 }
 
 }  // namespace
@@ -81,7 +88,10 @@ std::vector<uint8_t> encode_png(const Picture& picture) {
 }
 
 bool write_png(const std::string& path, const Picture& picture) {
-  const std::vector<uint8_t> bytes = encode_png(picture);
+  return write_file(path, encode_png(picture));
+}
+
+bool write_file(const std::string& path, std::span<const uint8_t> bytes) {
   bool ok = false;
   {
     std::ofstream f(path, std::ios::binary | std::ios::trunc);
@@ -93,6 +103,46 @@ bool write_png(const std::string& path, const Picture& picture) {
   }
   if (!ok) std::remove(path.c_str());
   return ok;
+}
+
+std::vector<uint8_t> encode_png_grey(int width, int height, std::span<const uint8_t> grey) {
+  const size_t w = static_cast<size_t>(width);
+  // Each row under the filter (none, sub, up, paeth) whose bytes sum smallest as signed values:
+  // the usual guess at what deflates best.
+  std::vector<uint8_t> raw;
+  raw.reserve((w + 1) * height);
+  std::vector<uint8_t> trial(w), best(w);
+  for (int y = 0; y < height; ++y) {
+    const uint8_t* row = &grey[y * w];
+    const uint8_t* up = y > 0 ? &grey[(y - 1) * w] : nullptr;
+    long best_cost = -1;
+    uint8_t best_type = 0;
+    for (const uint8_t type : {uint8_t{0}, uint8_t{1}, uint8_t{2}, uint8_t{4}}) {
+      long cost = 0;
+      for (size_t x = 0; x < w; ++x) {
+        const int a = x > 0 ? row[x - 1] : 0, b = up ? up[x] : 0, c = x > 0 && up ? up[x - 1] : 0;
+        const int pred = type == 0 ? 0 : type == 1 ? a : type == 2 ? b : paeth(a, b, c);
+        trial[x] = static_cast<uint8_t>(row[x] - pred);
+        cost += trial[x] < 128 ? trial[x] : 256 - trial[x];
+      }
+      if (best_cost < 0 || cost < best_cost) {
+        best_cost = cost;
+        best_type = type;
+        best.swap(trial);
+      }
+    }
+    raw.push_back(best_type);
+    raw.insert(raw.end(), best.begin(), best.end());
+  }
+  std::vector<uint8_t> png{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'};
+  std::vector<uint8_t> ihdr;
+  put32(ihdr, static_cast<uint32_t>(width));
+  put32(ihdr, static_cast<uint32_t>(height));
+  ihdr.insert(ihdr.end(), {8, 0, 0, 0, 0});  // 8-bit grey, deflate, adaptive, no interlace
+  chunk(png, "IHDR", ihdr);
+  chunk(png, "IDAT", deflate_zlib(raw));
+  chunk(png, "IEND", {});
+  return png;
 }
 
 std::optional<Picture> decode_png(std::span<const uint8_t> bytes) {

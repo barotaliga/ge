@@ -17,7 +17,9 @@ plugins/<name>           reusable by any game of one genre or world (§ Plugins)
         │                skier (the skier on the snow: step_skier, snow, limits, the pilot),
         │                snowmobile (the machine on the snow: step_sled, the drive, the pilot),
         │                helicopter (the machine in the air: step_heli, the wash, the pilot),
-        │                paramotor (the speed wing a skier flies: step_para, the air, the pilot)
+        │                paramotor (the speed wing a skier flies: step_para, the air, the pilot),
+        │                rooms (the engine's own level format: rooms grown from their seeds),
+        │                brush (the classic BSP families read into one view, fixture writers)
         ▼
 engine/render  engine/audio  engine/ui     generic draw passes, the synth, the 2D layer
         │             │          │
@@ -101,6 +103,9 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   world for labs and prototypes, the strafe jumper's best angle and the scenarios, and the knobs
   bound as console cvars (`cvars.hpp`). It depends on `engine/core`, and on `engine/console` for
   that binding alone; the step is a pure function of its inputs, so a run replays from its commands.
+- **`engine/vfs`**: content files (`ge::vfs`, M18a): the pack archive's directory checked whole
+  before anything is read, and each file handed out as a view into the archive. Search paths, zip
+  archives and directories come with the rest of M18a. It depends on `engine/core` only.
 - **`engine/snow`**: a layer of snow over any ground (`ge::snow`, M29; `docs/snow.md` is the
   design): the analytic cover read exactly where nothing has crossed, sparse fixed-point tiles
   of columns (depth and mass) where something has, `sample`, `press` with its mass conserved to
@@ -108,6 +113,21 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   snapshot. It depends on `engine/core` only and draws nothing from a clock or an RNG.
 - **`engine/ui`**: the immediate-mode 2D layer (rects, images, SDF text), plus Dear
   ImGui behind `GE_DEV_UI`.
+- **`engine/charset`**: the engine's bitmap fonts (`ge::charset`, M27; `docs/charsets.md`):
+  ten monospaced ASCII fonts committed as 256, 512 and 1024 px coverage atlases, the builder
+  that makes them, the noise layers and the text looks with their CPU reference, and text
+  layout. It depends on `engine/core` only, so a game, the console, the menus and a lab all
+  draw text from the same atlases.
+- **`engine/hud`**: the HUD kit (`ge::hud`, M10a): what any game draws over its running
+  picture, as widgets over the 2D layer's draw list: a face (a TrueType font or a bitmap
+  charset behind one size and baseline), the frame (the scale to a 720 px short side, the safe
+  area), nine anchors and stacks, readouts, big numbers with units, bars, pips (stars, hearts),
+  banners, the feed that holds and fades, and `layout_problems`. It holds no game's words or
+  state; a game's view builds its HUD from a snapshot of its own state. It depends on
+  `engine/ui` and `engine/charset`, and holds no GPU.
+- **`games/fall_line/hud`**: Fall Line's HUD (`fall_line_hud`, no GPU): the snapshot of the free
+  ride (a pure function of the state and what the HUD remembers across the run), the news off
+  the run's events, every word, and the view over `engine/hud`.
 - **`games/fall_line/app`**: Fall Line's presentation, the `fall_line_app` library (which
   the window and the game's GPU labs link): its pass table over `engine/render`, the
   `FrameView` it extracts (from named views now, from `GameState` once the run lands),
@@ -144,6 +164,11 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   river, a volume of hulls) and the one `sample` query everything reads, the sea a wind grows
   over each point's fetch and the components the simulation sums. It depends on `engine/core`
   and `engine/wind` and is simulation code (`docs/water.md`).
+- **`engine/detail`**: a level's surface detail (`ge::detail`, `docs/detail.md`): convex solids as
+  planes and the bevels on their exposed edges, a level's triangles binned for queries, decals
+  clipped onto them that age in a fixed pool, and props scattered over them by rules. It depends
+  on `engine/core` alone and is simulation code: a shot's hole and a seed's rubble are the same
+  bits everywhere, so a replay leaves the same marks.
 - **`engine/grass`**: the grass (`ge::grass`): kinds and their recipes, covers of triangles
   from a heightfield's region or a mesh's floors, every blade scattered off its triangle's own
   seed, and a blade's shape in the engine's wind. It depends on `engine/core` and `engine/wind`
