@@ -1,8 +1,10 @@
 // The audio device over SDL3: the audio subsystem's lifetime and the stream's callback, which
-// pulls in chunks into a buffer on the stack and hands them to SDL.
+// pulls in chunks into a buffer on the stack and hands them to SDL; the microphone's stream, read
+// from the game thread.
 //
-// ge:summary The audio device implemented on SDL3's device stream and its callback
+// ge:summary The audio device implemented on SDL3: the output callback and the microphone stream
 // ge:keywords sdl sdl3 audio-stream callback device-stream put-audio-stream-data
+// ge:keywords get-audio-stream-data recording microphone
 // ge:skill platform audio
 // ge:test tests/platform_audio_test.cpp
 #include "platform/audio.hpp"
@@ -95,5 +97,51 @@ std::unique_ptr<AudioOut> open_audio(const AudioDesc& desc) {
 
 void pause_audio(AudioOut& out) { SDL_PauseAudioStreamDevice(out.impl_->stream); }
 void resume_audio(AudioOut& out) { SDL_ResumeAudioStreamDevice(out.impl_->stream); }
+
+struct AudioIn::Impl {
+  SDL_AudioStream* stream = nullptr;
+};
+
+AudioIn::AudioIn(std::unique_ptr<Impl> impl) : impl_(std::move(impl)) {}
+
+AudioIn::~AudioIn() {
+  if (impl_->stream) SDL_DestroyAudioStream(impl_->stream);
+  SDL_QuitSubSystem(SDL_INIT_AUDIO);
+}
+
+const char* AudioIn::driver() const {
+  const char* d = SDL_GetCurrentAudioDriver();
+  return d ? d : "";
+}
+
+std::unique_ptr<AudioIn> open_audio_in(int rate) {
+  if (!SDL_InitSubSystem(SDL_INIT_AUDIO)) {
+    out::error(std::string("platform: no audio driver for the microphone (") + SDL_GetError() +
+               "). In a container run with SDL_AUDIO_DRIVER=dummy; skill: platform.");
+    return nullptr;
+  }
+  auto impl = std::make_unique<AudioIn::Impl>();
+  const SDL_AudioSpec spec{SDL_AUDIO_F32, 1, rate};
+  impl->stream =
+      SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_RECORDING, &spec, nullptr, nullptr);
+  if (!impl->stream) {
+    out::error(std::string("platform: no microphone to open (") + SDL_GetError() +
+               "). Check that one is connected and that the app may use it (the system's privacy "
+               "settings); voice chat still plays the others; skill: platform.");
+    SDL_QuitSubSystem(SDL_INIT_AUDIO);
+    return nullptr;
+  }
+  SDL_ResumeAudioStreamDevice(impl->stream);
+  return std::unique_ptr<AudioIn>(new AudioIn(std::move(impl)));
+}
+
+int read_audio_in(AudioIn& in, float* mono, int max) {
+  if (max <= 0) return 0;
+  const int got =
+      SDL_GetAudioStreamData(in.impl_->stream, mono, max * static_cast<int>(sizeof(float)));
+  const int frames = got > 0 ? got / static_cast<int>(sizeof(float)) : 0;
+  in.read_ += static_cast<uint64_t>(frames);
+  return frames;
+}
 
 }  // namespace ge::platform
