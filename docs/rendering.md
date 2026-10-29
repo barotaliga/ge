@@ -1376,6 +1376,50 @@ eye. The model's own flash triangles are hidden with `DrawLit::hidden = model.fl
 **Not yet:** the classic pack's weapons each given their look and fired in a lab (M48b), and the
 flash as a local light (M47b).
 
+## Impacts
+
+A round that hits something throws a burst off it, and what is thrown says what the surface is.
+Concrete and stone give a grey cloud of powder blown out of the hole, with flakes thrown wide; a
+steel round may strike a few sparks there. A steel plate gives almost no dust but a bright spray
+of sparks carried on along the round's glance. Wood gives a tan puff and pale splinters and never
+sparks. Soil kicks a dark plume nearly straight up, and clods fall back out of it. Sand fans out in
+pale fines that settle fast. Glazed tile breaks into white shards. Water throws a narrow column of
+beads and a little mist. A soft lead pellet strikes far fewer sparks than a hardened spike.
+
+**As built (M47e).** `engine/render/impact.hpp` gives each surface's answer as pure functions of
+the hit (`Impact`: the point, the surface's normal, the round's way, the look, the round, a seed,
+the clock). **One code for every surface and a LOOK of knobs for each** (`ImpactLook`, 19 knobs
+in `impact_knobs()`, set by name and clamped with `set_impact_knob`). The DUST is a whole
+`BlastLook`, set as `dust.<knob>`, with `dust_speed` setting how fast it leaves. `ricochet` sets
+the burst's axis between the surface's normal and the round's glance (its way mirrored in the
+surface), always lifted out of the surface. Then come SPARKS (count, speed, life, heat, cone),
+CHIPS (count, speed, size, life, shade, cone), GRIT (fines that hang and drift: count, speed,
+shade) and DROPS (count, speed, cone). The presets are named `impact.<surface>`, using the words
+engine/detail's surface classes use: stone, metal, wood, dirt, grass, sand, tile, liquid, and
+unknown (stone's). `impact_look_for(word)` gives the look and returns none for the sky. The ROUND
+(`ImpactRound`) sizes the burst like a blast's `scale` and says how much of the look's sparks it
+strikes: `round.nail` gives all of them, and `round.pellet` gives 0.6 of the size and a third of
+the sparks. A shotgun's shot is a handful of pellet hits, each with its own seed.
+
+**Drawn by the passes already there.** `dust_of` is the puff as a `Blast` on the surface, thrown
+out along the axis. The explosions pass marches it as smoke of the surface's albedo and tint.
+`throw_impact` puts the sparks, chips, grit and drops into the particle pool. Each kind flies its
+own way (`spark_particle`):
+- A chip falls on its arc in the surface's shade (`Spark::albedo`).
+- Grit is slowed by the air at once and drifts down at a seventh of gravity, half clear.
+- A drop is a bright, half-clear streak.
+- A spark glows and cools as a blast's does.
+
+The MARK the hit leaves is the decals' (engine/detail's `shot_hit`, pressed at the same point and
+normal), so the hole and the burst never depend on each other. A game classes the surface it hit
+(engine/detail's `classify_surface`) and asks `impact_look_for(surface_name(class))`.
+
+**The cost.** The dust is staged in the same list as the blasts, so the 32 the pass draws are shared. A hit's throw is 4 to 24 things into the pool. On the software adapter at 320 x 180 (`gpu-impact`), a shotgun's spread of nine puffs filling a third of the view costs the pass about 3 ms (0.13 ms with nothing in view); the CPU throws the spread in about 0.12 ms (a debug build).
+
+**Not yet:** hits in a real level, where the shooter's code traces the round, classes the face it
+hit by its texture and hands the impact here and the hole to the decals (M18, M42f); a light for
+the metal's sparks; chips tinted by the surface's own texture rather than its shade.
+
 ## Shaders
 
 - **WGSL**, one file per pass, beside the pass's C++. A small build step resolves
