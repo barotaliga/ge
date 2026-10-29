@@ -10,9 +10,10 @@
 // is up in the hall and gone in the side room, the water the other way round, no level jumps
 // faster than the rate, a silent layer holds no voice, and nothing clips.
 //
-// ge:summary Lab: the ambience by leaf on a walk through the fixture halls, charted and heard as
-// WAV ge:keywords lab audio ambience ambient leaf water sky walk crossfade bed se-ambient ge:skill
-// audio labs ge:test tests/shooters_edge_ambience_test.cpp
+// ge:summary Lab: the ambience by leaf on a walk through the fixture halls, charted and as WAV
+// ge:keywords lab audio ambience ambient leaf water sky walk crossfade bed se-ambient
+// ge:skill audio labs
+// ge:test tests/shooters_edge_ambience_test.cpp
 #include <cstdio>
 #include <fstream>
 #include <iterator>

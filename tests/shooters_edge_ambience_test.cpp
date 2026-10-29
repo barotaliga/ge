@@ -3,9 +3,9 @@
 // levels are silence, and walking from an open hall into a room by water fades the sky out and
 // the water in at the bed's rate rather than at once.
 //
-// ge:summary Tests for Shooter's Edge's ambience: the leaf's levels as targets, the walk between
-// rooms ge:keywords test ambience ambient leaf water sky level volume walk fixture ge:skill audio
-// testing
+// ge:summary Tests for Shooter's Edge's ambience: the leaf's levels as targets, a walk
+// ge:keywords test ambience ambient leaf water sky level volume walk fixture
+// ge:skill audio testing
 #include <string>
 #include <vector>
 
