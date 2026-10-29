@@ -9,7 +9,6 @@ charset-looks 8905e4d42c149c41
 charsets 92706253fa5e80a4
 camera-director d471bf22e0fde9f5
 by-hand 724329dc4776353a
-camera-director d471bf22e0fde9f5
 camera-follow b1dbf6ae474cba78
 camera-machines fa674ce82d9f1c5e
 camera-rigs bd01263b4d16d23c
