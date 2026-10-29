@@ -15,6 +15,7 @@ technique, change that page in the same PR.
 
 - `engine/render/`: a mechanism any game could use, with no genre's words (a
   heightfield, an instance family, a cloud volume, TAA-U).
+- `engine/bake/`: light worked out once on the CPU into a lightmap atlas (charts, a BVH, bounce, the light's direction; no GPU, `docs/rendering.md` § Baked light).
 - `plugins/<name>/app/`: a plugin's presentation half, such as `mountain/app`'s snow material or tree shapes (the `plugins` skill classifies a file).
 - `games/<game>/app/`: the game's pass table, its quality ladder's values, its grade.
 
@@ -55,6 +56,7 @@ void encode(TerrainPass&, gpu::Encoder&);                 // GPU: bind and dispa
 | `engine/render/mesh.hpp` | CPU meshes for instance families: `add_box`, `add_cylinder` (and cones), `add_ellipsoid`, all wound outward; `bounding_sphere`; `pack_mesh` (three words a vertex) and `unpack_vertex` |
 | `engine/render/instances.hpp` | Instance families (`instances_cull.wgsl`, `instances.wgsl`, `wgsl/instances_common.wgsl`): `create_family`, `set_instances` / `cut_family`, `prepare_family`; the two-phase cull (`encode_instances_cull`, `late` false then true), the depth draws, the lit draw over both phases, the overdraw probe; `pick_lod` (the CPU twin of the LOD band), `read_instance_stats` (the cull's counters) |
 | `engine/render/morph.hpp` | Morph meshes (`morph.wgsl`, `docs/rendering.md` § Morph meshes): vertex-animated models uploaded once (`create_morph`), each draw's two frames blended on the GPU with the last frame's for motion, skins in one atlas (`pack_morph_atlas`) whose alpha is a mark (plain, glow, tint region and step) resolved against the game's `TintRamps` (`ramp_from`), sharp or smooth per draw, lit by `outdoor` sky and sun plus the game's own ambient and shade; CPU twins `pose_morph` and `morph_texel` |
+| `engine/render/sprites.hpp` | Sprites (`sprites.wgsl`, `docs/rendering.md` § Sprites): frames in one atlas (`pack_sprite_atlas`), each with an origin; five facing rules worked out on the CPU (`sprite_basis`: parallel, upright, parallel_upright, oriented, parallel_oriented); `cutout` (alpha-tested, depth and motion written, drawn first) or `over` / `add` (premultiplied through one blend, sorted far to near, the reactive channel); `glow`, `outdoor` and `ambient` light; sharp or smooth |
 | `engine/render/wgsl/` | The shared WGSL: `frame_types.wgsl` (and `screen_motion`, the one motion vector), `atmosphere.wgsl` (the air, the tables' maps, the scattering march), `frame.wgsl` (group 0, the haze, the sun's light, the sky's irradiance, the exposure), `terrain_common.wgsl` (the terrain's params block, `ground_shadow`), `terrain_draw.wgsl` (the half every ground material shares), `instances_common.wgsl` (the family's blocks, the packed vertex, the list entry's bits) |
 | `games/fall_line/app/frame.hpp` | Fall Line's pass table (`kPassTable`) and the `GameFrame` that owns the GPU half; `create_frame` is the manifest, `FrameOptions` the TAA switch and the render scale, `cut` the camera cut |
 | `games/fall_line/app/views.hpp`, `look.hpp` | The named views, the chase camera and the map's day; the ground's albedo |
