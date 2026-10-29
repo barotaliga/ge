@@ -4,18 +4,13 @@
 // - THE GROUND MAP (group 3, `snow_ground`): the packed share (the groomed piste), the rock share
 //   (too steep to hold snow) and the piste's direction as the doubled angle (a comb line has no
 //   front and back), faded to nought off the piste.
-// - THE MICRO-RELIEF, bent into the baked normal as a slope (dh/dx, dh/dz): wind-packed swells a
-//   few metres long and a finer grain on the loose snow; on the piste the groomer's CORDUROY
-//   across its direction (a comb 14 cm a rib, worn in patches) and the machine's LANES a swath
-//   wide, each a shade of its own; on rock, a coarse broken face. Every term fades out, by the
-//   pixel's own footprint, before it aliases.
-// - THE LIGHT: Lambert on the bent normal; the WRAP, the soft terminator light that has passed
-//   through a few centimetres of ice brings round the shadow side, tinted its blue; the GLITTER,
-//   one crystal at most a cell of world space at a random facet, flaring as a point where it
-//   lines the sun up with the eye (two sizes of cell, none on the piste or rock, none past
-//   140 m), marked reactive so TAA does not smear it; the GLARE, the sun scattered forward off
-//   the snow, broad on powder and gathered into a harder streak on the polished piste; the
-//   sky's light on the bent normal.
+// - THE SNOW LIGHT MODEL (render/wgsl/snow_light.wgsl, the engine's for any material): the
+//   micro-relief bent into the baked normal as a slope, the rock its bare share; Lambert, the
+//   wrap's blue terminator, the glare (a harder streak on the packed piste), the wet sheen and the
+//   glitter, marked reactive so TAA does not smear it.
+// - THE MOUNTAIN'S OWN, over it: on the piste the groomer's CORDUROY across its direction (a comb
+//   14 cm a rib, worn in patches) and the machine's LANES a swath wide, each a shade of its own,
+//   faded by the pixel's own footprint before they alias.
 // - THE TRACKS (group 3, the trail maps of trails.hpp): every groove and berm a skier has left,
 //   bent into the normal as a slope taken across the pixel's own footprint (so a groove narrower
 //   than a pixel fades instead of shimmering), the sky's light dimmed in a deep trough, and the
@@ -23,6 +18,7 @@
 //   reaches, the coarse map beyond, blended over the window's outer rim.
 
 #include "render/wgsl/terrain_draw.wgsl"
+#include "render/wgsl/snow_light.wgsl"
 
 struct SnowParams {
   look: vec4f,   // glitter, corduroy, relief, wrap (each a gain; 1 is the tuned look)
@@ -113,71 +109,6 @@ fn track_at(p: vec2f, foot: f32) -> Track {
   return t;
 }
 
-fn hash3(p0: vec3f) -> vec3f {
-  var p = fract(p0 * vec3f(0.1031, 0.1030, 0.0973));
-  p += dot(p, p.yxz + 33.33);
-  return fract((p.xxy + p.yxx) * p.zyx);
-}
-
-fn hash1(p0: vec2f) -> f32 {
-  var p = fract(p0 * vec2f(123.34, 456.21));
-  p += dot(p, p + 45.32);
-  return fract(p.x * p.y);
-}
-
-fn noise(p: vec2f) -> f32 {
-  let i = floor(p);
-  let f = fract(p);
-  let u = f * f * (3.0 - 2.0 * f);
-  return mix(mix(hash1(i), hash1(i + vec2f(1.0, 0.0)), u.x),
-             mix(hash1(i + vec2f(0.0, 1.0)), hash1(i + vec2f(1.0, 1.0)), u.x), u.y);
-}
-
-// The gradient of `noise` at p, analytic (one cell's four hashes and the smoothstep's slope),
-// per unit of p.
-fn noise_grad(p: vec2f) -> vec2f {
-  let i = floor(p);
-  let f = fract(p);
-  let u = f * f * (3.0 - 2.0 * f);
-  let du = 6.0 * f * (1.0 - f);
-  let a = hash1(i);
-  let b = hash1(i + vec2f(1.0, 0.0));
-  let c = hash1(i + vec2f(0.0, 1.0));
-  let d = hash1(i + vec2f(1.0, 1.0));
-  let k = a - b - c + d;
-  return du * vec2f(b - a + k * u.y, c - a + k * u.x);
-}
-
-// A layer of relief: noise of wavelength 1/`freq` m and height `amp` m, as a world slope, faded to
-// nought where a pixel spans more than a quarter of a wavelength (`foot`: m a pixel).
-fn relief(p: vec2f, freq: f32, amp: f32, foot: f32, seed: f32) -> vec2f {
-  let aa = 1.0 - smoothstep(0.12, 0.25, foot * freq);
-  if (aa <= 0.0) {
-    return vec2f(0.0);
-  }
-  return noise_grad(p * freq + seed) * freq * amp * aa;
-}
-
-// ONE LAYER OF CRYSTALS: a cell of `1/scale` m holds at most one (`keep` of them), at a random
-// place in it with a random facet; it flares when that facet lines the sun up with the eye
-// (`h`, the half vector). Drawn as a point at least a pixel across, dimmed as it is widened.
-fn glints(wp: vec3f, scale: f32, sharp: f32, keep: f32, n: vec3f, h: vec3f, seed: f32,
-          foot: f32) -> f32 {
-  let q = wp * scale;
-  let cell = floor(q);
-  let r = hash3(cell + seed);
-  if (r.z > keep) {
-    return 0.0;
-  }
-  let facet = normalize(n + (hash3(cell + seed + 7.13) * 2.0 - 1.0) * 0.6);
-  let g = pow(max(dot(facet, h), 0.0), sharp);
-  let f = fract(q) - (0.2 + 0.6 * r);
-  let rad = max(0.14, foot * scale * 0.75);
-  let spot = 1.0 - smoothstep(rad * 0.45, rad, length(f));
-  let k = 0.14 / rad;
-  return g * spot * k * k;
-}
-
 @fragment
 fn fs_main(in: VertexOut) -> FragmentOut {
   let g = ground_at(in);
@@ -198,15 +129,9 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   let loose = (1.0 - 0.85 * packed) * (1.0 - rock) * (1.0 - 0.8 * pressed);
   let world = g.rel + frame.eye.xyz;
 
-  // THE MICRO-RELIEF, as a slope.
-  var grad = vec2f(0.0);
+  // THE MICRO-RELIEF, as a slope (render/wgsl/snow_light.wgsl), the rock its bare share.
   let gain = snow.look.z;
-  // Swells a few metres long on the loose snow, and the grain over everything.
-  grad += relief(p, 0.23, 0.35, foot, 0.0) * (1.0 - packed) * (1.0 - rock);
-  grad += relief(p, 1.7, 0.035, foot, 3.1) * (1.0 - 0.5 * packed);
-  grad += relief(p, 7.0, 0.007, foot, 8.3) * loose;
-  // Rock: a coarse, broken face.
-  grad += (relief(p, 0.5, 0.6, foot, 17.0) + relief(p, 2.3, 0.08, foot, 5.0)) * rock;
+  var grad = snow_relief(p, foot, packed, rock, loose);
   grad *= gain;
   grad += track.slope * tk;
 
@@ -220,60 +145,32 @@ fn fs_main(in: VertexOut) -> FragmentOut {
     // metres long and chipped a hand across.
     let phase = dot(p, across) * (2.0 * PI / 0.14);
     let aa = 1.0 - smoothstep(0.2, 0.45, foot / 0.14);
-    let worn = smoothstep(0.3, 0.7, noise(p * 0.42 + 11.0));
-    let chip = noise(p * 2.6 + 5.0);
+    let worn = smoothstep(0.3, 0.7, snow_noise(p * 0.42 + 11.0));
+    let chip = snow_noise(p * 2.6 + 5.0);
     let k = on * aa * mix(0.3, 1.0, worn) * mix(0.55, 1.0, chip) * snow.look.y;
     grad += across * cos(phase) * 0.14 * k * 0.5;
     // The lanes: a swath 5.2 m wide each, a shade of its own. Where two passes meet the tiller's
     // edge leaves a low berm, a centimetre or two of snow a hand wide, never a groove: the
     // driver overlaps the last pass, so the seam wanders a little and is lost in stretches.
-    let lane = (dot(p, across) + (noise(p * 0.03 + 2.0) - 0.5) * 0.8) / 5.2;
+    let lane = (dot(p, across) + (snow_noise(p * 0.03 + 2.0) - 0.5) * 0.8) / 5.2;
     let u = fract(lane) - 0.5;
     let seam = 1.0 - smoothstep(0.0, 0.02, abs(u));
-    let kept = smoothstep(0.35, 0.65, noise(p * 0.06 + 23.0));
+    let kept = smoothstep(0.35, 0.65, snow_noise(p * 0.06 + 23.0));
     let laa = 1.0 - smoothstep(0.3, 0.8, foot / 5.2 * 12.0);
     let kl = on * snow.look2.y;
     grad -= across * sign(u) * seam * kept * 0.04 * kl * laa;
-    shade += (hash1(vec2f(floor(lane), 7.0)) * 2.0 - 1.0) * 0.025 * kl;
+    shade += (snow_hash1(vec2f(floor(lane), 7.0)) * 2.0 - 1.0) * 0.025 * kl;
   }
   let n = normalize(g.n - vec3f(grad.x, 0.0, grad.y));
 
-  // THE LIGHT.
-  let l = frame.sun.xyz;
+  // THE LIGHT (render/wgsl/snow_light.wgsl).
   let v = -g.rel / max(g.dist, 1e-3);
-  let ndl = dot(n, l);
   // Rain on snow: the water in its pores darkens it to slush (rock less, being sealed).
   let albedo = wet_albedo(g.albedo * shade, mix(1.0, 0.4, rock));
   // A deep trough sees less of the sky.
   let cavity = 1.0 - 0.4 * smoothstep(0.0, 0.25, track.depth * tk);
-  var c = albedo / PI * (g.sun * max(ndl, 0.0) + sky_irradiance(n) * cavity);
-  // The wrap: what the terminator gains, the blue of light through a few centimetres of ice.
-  let wrap = max(0.0, (ndl + 0.45) / 1.45) - max(ndl, 0.0);
-  c += albedo / PI * g.sun * wrap * vec3f(0.55, 0.78, 1.0) * 0.9 * snow.look.w * (1.0 - rock);
-  // The glare: forward scatter off the snow, the brighter the more grazing the look; the
-  // groomed piste gathers it into a harder streak.
-  let rv = max(dot(reflect(-l, n), v), 0.0);
-  let gloss = clamp(0.35 * packed, 0.0, 1.0) * (1.0 - rock);
-  let sharp = mix(6.0, 140.0, gloss * gloss);
-  var graze = 1.0 - max(dot(n, v), 0.0);
-  graze *= graze;
-  let lobe = pow(rv, sharp) * (0.25 + 2.5 * gloss * gloss) * (0.15 + 1.6 * graze);
-  c += g.sun * lobe * 0.35 * snow.look2.x * (1.0 - rock) * (1.0 - 0.7 * frame.mist.z) / PI;
-  // The wet film's mirror and the slush's pools on the flats.
-  c += wet_sheen(n, v, g.sun, g.n.y);
-  // The glitter, on the loose snow in the sun: fine cells close in, coarser ones a little
-  // further, none past 140 m.
-  var glint = 0.0;
-  if (g.dist < 140.0 && snow.look.x > 0.0) {
-    let h = normalize(l + v);
-    glint += glints(world, 7.0, 300.0, 0.6, n, h, 0.0, foot) *
-             (1.0 - smoothstep(15.0, 45.0, g.dist));
-    glint += glints(world, 2.5, 450.0, 0.35, n, h, 31.0, foot) * smoothstep(8.0, 25.0, g.dist) *
-             (1.0 - smoothstep(50.0, 140.0, g.dist));
-    // A glint is the sun's disc in a crystal: through cloud the disc spreads and the glint goes
-    // before the light does.
-    glint *= loose * snow.look.x * frame.weather.x * (1.0 - frame.mist.z);
-    c += g.sun * glint * 400.0 / PI;
-  }
-  return ground_out(in, c, clamp(glint * 4.0, 0.0, 1.0));
+  let lit = snow_light(SnowPoint(albedo, n, g.n, v, world, g.sun, g.dist, foot, packed, rock, loose,
+                                 cavity),
+                       SnowGains(snow.look.x, snow.look.w, snow.look2.x));
+  return ground_out(in, lit.rgb, clamp(lit.a * 4.0, 0.0, 1.0));
 }
