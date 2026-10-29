@@ -130,7 +130,9 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   area), nine anchors and stacks, readouts, big numbers with units, bars, pips (stars, hearts),
   banners, the feed that holds and fades, and `layout_problems`. It holds no game's words or
   state; a game's view builds its HUD from a snapshot of its own state. It depends on
-  `engine/ui` and `engine/charset`, and holds no GPU.
+  `engine/ui` and `engine/charset`, and holds no GPU. `docs/hud.md` is the design it grows to
+  (M10d–M10h): elements and channels in a table the game declares, the layout as `hud_` cvars,
+  skins, the instruments, the minimap and the edit mode.
 - **`games/fall_line/hud`**: Fall Line's HUD (`fall_line_hud`, no GPU): the snapshot of the free
   ride (a pure function of the state and what the HUD remembers across the run), the news off
   the run's events, every word, and the view over `engine/hud`.

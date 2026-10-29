@@ -11,6 +11,7 @@
 #include <string>
 
 #include "check.hpp"
+#include "console/console.hpp"
 #include "fall_line/hud/snapshot.hpp"
 #include "fall_line/hud/view.hpp"
 #include "fall_line/hud/words.hpp"
@@ -18,6 +19,7 @@
 #include "fall_line/sim/free.hpp"
 #include "fall_line/sim/game.hpp"
 #include "fall_line/sim/wanted.hpp"
+#include "hud/layout.hpp"
 #include "skier/synthetic.hpp"
 
 namespace {
@@ -87,7 +89,7 @@ TEST(words_put_numbers_into_their_lines) {
   CHECK(fh::words::seconds(1.844) == "1.84 S");
 }
 
-TEST(every_widget_up_lays_out_clean_at_the_three_viewports) {
+TEST(every_widget_up_lays_out_clean_at_the_three_viewports_and_a_square) {
   const ge::hud::Style st = fh::hud_style();
   fh::HudSnapshot s;
   s.t = 12.3;
@@ -103,7 +105,7 @@ TEST(every_widget_up_lays_out_clean_at_the_three_viewports) {
   run.news.push("AIR 2.31 S  3.4 G", st.good, 11);
   run.news.push("ONTO B12 BLACK", st.ink, 11.5);
   run.news.push("TOP OF THE LIFT  4:12", st.ink, 12);
-  for (const auto& [w_px, h_px] : {std::pair{1280, 720}, {390, 844}, {844, 390}}) {
+  for (const auto& [w_px, h_px] : {std::pair{1280, 720}, {390, 844}, {844, 390}, {700, 700}}) {
     const ge::hud::Frame f = ge::hud::frame_for(w_px, h_px, st);
     ge::ui::DrawList dl;
     dl.begin(w_px, h_px);
@@ -112,5 +114,42 @@ TEST(every_widget_up_lays_out_clean_at_the_three_viewports) {
     std::string all;
     for (const auto& p : problems) all += p + "; ";
     CHECK_MSG(problems.empty(), std::to_string(w_px) + "x" + std::to_string(h_px) + ": " + all);
+  }
+}
+
+TEST(a_players_cfg_moves_the_element_it_names_and_reset_brings_it_back) {
+  const ge::hud::Style st = fh::hud_style();
+  fh::HudSnapshot s;
+  s.speed_kmh = 88, s.edge = 0.3, s.run = "B12 BLACK";
+  fh::HudRun run;
+  fh::HudLayout h = fh::hud_layout(st);
+  ge::console::Console console;
+  ge::hud::add_hud_cvars(console, h.layout);
+  auto boxes = [&] {
+    fh::fill_hud(h, st, s, run);
+    const ge::hud::Frame f = h.layout.frame(1280, 720, st);
+    ge::ui::DrawList dl;
+    dl.begin(1280, 720);
+    return h.layout.draw(dl, f, st);
+  };
+  auto at = [](const std::vector<ge::hud::Placed>& placed, const char* id) {
+    for (const auto& p : placed)
+      if (p.name == id) return p.rect;
+    return ge::ui::Rect{-1, -1, 0, 0};
+  };
+  const auto game = boxes();
+  console.execute("seta hud_seed_x 0.2; seta hud_speed_anchor bottom_right; seta hud_news_show 0");
+  const auto mine = boxes();
+  CHECK(at(mine, "seed").x > at(game, "seed").x);
+  CHECK(at(mine, "seed").y == at(game, "seed").y);
+  CHECK(at(mine, "run").x == at(game, "run").x && at(mine, "run").y == at(game, "run").y);
+  CHECK(at(mine, "speed").right() > 1000);
+  CHECK(at(mine, "news").w == 0);
+  console.execute("hud_reset");
+  const auto back = boxes();
+  CHECK(game.size() == back.size());
+  for (size_t i = 0; i < game.size() && i < back.size(); ++i) {
+    CHECK(game[i].name == back[i].name);
+    CHECK(game[i].rect.x == back[i].rect.x && game[i].rect.y == back[i].rect.y);
   }
 }

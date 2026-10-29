@@ -4,6 +4,6 @@
 # labs. Published as ge::hud.
 file(GLOB GE_HUD_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/hud/*.cpp)
 add_library(ge_hud STATIC ${GE_HUD_SOURCES})
-target_link_libraries(ge_hud PUBLIC ge_ui ge_charset)
+target_link_libraries(ge_hud PUBLIC ge_ui ge_charset ge_console)
 
 ge_module(ge_hud EXPORT hud)
