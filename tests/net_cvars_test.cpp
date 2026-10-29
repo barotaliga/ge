@@ -1,5 +1,6 @@
 // The network's cvars: bound to the replication config, the game's defaults kept, sv_fps latched
-// and the durations right at any tick rate; the input backup and the predicted world set.
+// and the durations right at any tick rate; the input backup and the predicted world set; voice
+// chat's gate, codec and buffer.
 //
 // ge:summary Tests the network's cvars: binding, defaults, sv_fps latched, cl_interp to ticks
 // ge:keywords test net cvars sv_fps tick-rate cl_interp latch
@@ -68,4 +69,26 @@ TEST(net_cvars_set_the_input_backup_and_the_predicted_world) {
   CHECK(k.rewind_max_s == 0.25);
   cv.set("cl_cmdbackup", "0", console::Source::local);
   CHECK(k.redundancy == 1);  // clamped: the input itself always goes
+}
+
+TEST(voice_cvars_set_the_gate_the_codec_and_the_buffer) {
+  console::Cvars cv;
+  net::VoiceConfig k;
+  k.mode = net::VoiceMode::activity;  // a game's default
+  net::VoiceCvars v{&k};
+  net::add_voice_cvars(cv, v);
+  CHECK(cv.find("voice_mode") && cv.find("voice_mode")->value == "1");
+  cv.set("voice_mode", "0", console::Source::local);
+  cv.set("voice_threshold", "-30", console::Source::local);
+  cv.set("voice_bitrate", "16000", console::Source::local);
+  cv.set("voice_fec", "0", console::Source::local);
+  cv.set("voice_jitter", "0.1", console::Source::local);
+  cv.set("voice_volume", "0.5", console::Source::local);
+  net::voice_cvars_apply(v);
+  CHECK(k.mode == net::VoiceMode::push_to_talk);
+  CHECK(k.open_db == -30 && k.codec.bitrate == 16000 && !k.codec.fec);
+  CHECK(k.jitter_max == 5);  // 0.1 s of 20 ms frames
+  CHECK(k.jitter_start <= k.jitter_max);
+  CHECK(k.volume == 0.5f);
+  CHECK(cv.find("sv_voiceflood") && cv.find("sv_voiceflood")->value == "10");
 }
