@@ -28,6 +28,8 @@
 #include <string>
 #include <vector>
 
+#include "core/libm/libm.hpp"
+#include "core/math.hpp"
 #include "fall_line/app/frame.hpp"
 #include "fall_line/app/views.hpp"
 #include "gpu/device.hpp"
@@ -48,6 +50,7 @@ using ge::lab::Det;
 namespace mg = ge::mountain::mapgen;
 namespace gw = ge::wind;
 namespace r = ge::render;
+namespace libm = ge::core::libm;
 
 bool env_on(const char* name) {
 #ifdef _MSC_VER
@@ -108,7 +111,7 @@ std::vector<r::BoltSegment> bolts_of(const gw::Flash* flash, const gw::Channel& 
     const gw::Segment& s = ch.seg[i];
     if (s.order > 0 && !branches) continue;
     if (std::min(s.y0, s.y1) > base_y + 200) continue;
-    const double len = std::hypot(s.x1 - s.x0, s.y1 - s.y0, s.z1 - s.z0);
+    const double len = ge::core::hypot(ge::core::hypot(s.x1 - s.x0, s.y1 - s.y0), s.z1 - s.z0);
     sum += s.glow * len;
     out.push_back({{s.x0, s.y0, s.z0}, 0.15f, {s.x1, s.y1, s.z1}, s.glow});
   }
@@ -231,7 +234,7 @@ void run(ge::lab::Lab& lab) {
   for (int j = -8; j <= 8; ++j) {
     for (int i = -6; i <= 6; ++i) {
       const double d = ahead * (1 + j / 24.0), h = base.heading + i * 0.035;
-      const double x = base.eye[0] + d * std::sin(h), z = base.eye[2] + d * std::cos(h);
+      const double x = base.eye[0] + d * libm::sin(h), z = base.eye[2] + d * libm::cos(h);
       const double c = r::cloud_column(tower, x, z);
       if (c > best) {
         best = c;
@@ -255,7 +258,7 @@ void run(ge::lab::Lab& lab) {
     const auto seen = [&](const gw::Flash& f) {
       if (f.kind != gw::FlashKind::cloud) return true;
       const double mx = 0.5 * (f.x + f.ex) - base.eye[0], mz = 0.5 * (f.z + f.ez) - base.eye[2];
-      double off = std::atan2(mx, mz) - base.heading;
+      double off = libm::atan2(mx, mz) - base.heading;
       off = std::remainder(off, 2 * 3.14159265358979);
       return std::fabs(off) < 0.35 && 0.5 * (f.y + f.ey) - storm.ground < 8000 &&
              r::cloud_column(tower, 0.5 * (f.x + f.ex), 0.5 * (f.z + f.ez)) > 0.4;
@@ -272,7 +275,9 @@ void run(ge::lab::Lab& lab) {
     lab.metric(id + ".t", f.t0, "s");
     lab.metric(id + ".strokes", f.strokes, "count");
     lab.metric(id + ".distance",
-               std::hypot(f.ex - base.eye[0], f.ey - base.eye[1], f.ez - base.eye[2]), "m");
+               ge::core::hypot(ge::core::hypot(f.ex - base.eye[0], f.ey - base.eye[1]),
+                               f.ez - base.eye[2]),
+               "m");
   }
   static gw::Channel channel[std::size(kPicks)];
   for (size_t i = 0; i < std::size(kPicks); ++i) gw::build_channel(picked[i], channel[i]);
@@ -351,7 +356,7 @@ void run(ge::lab::Lab& lab) {
     const double at = f.t0 + f.stroke[0].t + 0.5 * kFrame;
     const ge::lab::Picture pic = draw_to(at, &f, &channel[i], kPicks[i].lift);
     const std::string id = kPicks[i].id;
-    const double d = std::hypot(f.ex - base.eye[0], f.ez - base.eye[2]);
+    const double d = ge::core::hypot(f.ex - base.eye[0], f.ez - base.eye[2]);
     lab.shot(
         shot(id, kPicks[i].title, kPicks[i].look,
              std::string(f.kind == gw::FlashKind::ground ? "a ground flash" : "a cloud flash") +

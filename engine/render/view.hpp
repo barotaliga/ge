@@ -249,8 +249,8 @@ struct FrameView {
   // would, not blown out against a dark sky. 0: the sky's light alone.
   double adapt_cd = 0;
   Flashes flashes{};  // the lightning's lamps; the default is none
-  SkyStyle style{};  // the kind of sky (render/sky_style.hpp); the default is the Earth's
-  MoonSet moons{};   // the moons over it (render/moons.hpp); the default the Earth's alone
+  SkyStyle style{};   // the kind of sky (render/sky_style.hpp); the default is the Earth's
+  MoonSet moons{};    // the moons over it (render/moons.hpp); the default the Earth's alone
   // THE DISCS DRAWN LARGER, as through a longer lens: the sun's and the moon's (and every other
   // world's moon's) angular radii against what they would be (1: as they are). Only the discs grow,
   // with the glow a cloud throws off their limbs; their light on the world is the real one's, so
