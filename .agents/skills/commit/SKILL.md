@@ -1,6 +1,6 @@
 ---
 name: commit
-description: "Use to end every gameengine2 work session: run the gates, write a conventional commit, push the branch, open the PR with its milestone row and evidence, drive CI to green, and squash-merge once green. Also for anything about the merge queue: arming, holding PRs behind one (`queue-priority`), ejections and re-arms, stale runs, and a red test that may be a flake."
+description: "Use to end every gameengine2 work session: run the gates, write a conventional commit, push the branch, open the PR with its milestone row and evidence, drive CI to green, and squash-merge once green. Also for anything about the merge queue: arming, holding PRs behind one (`queue-priority`), merging without CI (`skip-ci`), ejections and re-arms, stale runs, and a red test that may be a flake."
 ---
 
 # Commit, push, PR, merge
@@ -81,6 +81,10 @@ PR armed-off; keep it clean against main. A queued run that ended with no failed
 or abandoned jobs only) re-arms the PRs it ejected by itself, with a comment naming the run; one
 with a real failure is yours to fix. Never cancel a `merge_group` run to free runners: it ejects
 every entry queued behind it.
+
+**`skip-ci`**: a PR labelled `skip-ci` runs no CI at all, on the PR and in the queue, so it merges
+as soon as it is armed. Only Niclas decides which PRs get it. Whatever it breaks on main is fixed
+afterwards by its owner, in the next PR, before any other work on that thread.
 
 **A red test that is not yours** (`.github/workflows/flakes.yml`): every failed run's failing tests
 go into the `ci-ledger` issue, and a test that failed on two different PRs within a day gets a
