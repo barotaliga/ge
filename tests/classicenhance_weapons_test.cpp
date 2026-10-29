@@ -3,7 +3,8 @@
 // its frames, its texture coordinates and its fullbright texels as the glow; the light under a
 // point of the fixture map is its floor's lightmap, brighter under a lamp than in a corner, and
 // nothing below the map is nothing; the map's torches become live lights; and the pack's held
-// weapons are found by name, sorted, a damaged one skipped with its reason.
+// weapons are found by name, sorted, a damaged one skipped with its reason; each weapon names its
+// muzzle fire, and a shot plays the firing frames at ten a second and comes back to rest.
 //
 // ge:summary Tests the classic held weapons: the held frame, winding, glow, the floor's light
 // ge:keywords test classicenhance viewmodel held-weapon morph winding glow fullbright probe
@@ -164,4 +165,28 @@ TEST(pack_weapons_finds_the_held_models_by_name) {
   CHECK(w.size() == 2 && w[0].name == "progs/v_one.mdl" && w[1].name == "progs/v_two.mdl");
   CHECK(w[0].model.frames.size() == 3);
   CHECK(skipped.size() == 1 && skipped[0].find("v_bad") != std::string::npos);
+}
+
+TEST(classic_fire_names_each_weapons_muzzle_look) {
+  const ce::ClassicFire* shot = ce::classic_fire_of("progs/v_shot.mdl");
+  CHECK(shot != nullptr && shot->muzzle == "muzzle.shotgun" && shot->refire_s > 0);
+  CHECK(ce::classic_fire_of("v_rock2")->muzzle == "muzzle.rocket");
+  CHECK(ce::classic_fire_of("progs/v_axe.mdl")->muzzle.empty());  // a blade throws no flame
+  CHECK(ce::classic_fire_of("progs/g_shot.mdl") == nullptr);
+  for (const ce::ClassicFire& f : ce::classic_fires()) CHECK(f.refire_s > 0);
+}
+
+TEST(classic_fire_frame_plays_the_firing_frames_then_rests) {
+  int a = -1, b = -1;
+  double t = -1;
+  ce::classic_fire_frame(7, 0, &a, &b, &t);
+  CHECK(a == 1 && b == 2 && t == 0);
+  ce::classic_fire_frame(7, 0.25, &a, &b, &t);  // halfway through the third
+  CHECK(a == 3 && b == 4 && std::fabs(t - 0.5) < 1e-9);
+  ce::classic_fire_frame(7, 0.55, &a, &b, &t);  // the last firing frame turns back to rest
+  CHECK(a == 6 && b == 0);
+  ce::classic_fire_frame(7, 0.61, &a, &b, &t);
+  CHECK(a == 0 && b == 0 && t == 0);
+  ce::classic_fire_frame(1, 0.05, &a, &b, &t);  // one frame: nothing to play
+  CHECK(a == 0 && b == 0);
 }

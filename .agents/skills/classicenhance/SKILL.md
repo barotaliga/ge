@@ -11,7 +11,8 @@ cache. It depends on the core, `assets` (the inflater, SHA-256), `audio` (the sp
 resampler), `lab` (the PNG writer), `vfs`
 (the pack and zip archives), `camera` and `viewmodel` (the view, and the held weapon's form, place and light), `brush` (the
 maps) and `morph` (the models and sprites):
-`ge_add_plugin(classicenhance ENGINE core assets audio camera lab vfs viewmodel PLUGINS brush morph)`.
+`ge_add_plugin(classicenhance ENGINE core assets audio camera lab vfs viewmodel PLUGINS brush morph APP gpu render)`
+(the APP list is for the GPU lab alone).
 
 ## The line that keeps it legal
 
@@ -49,7 +50,7 @@ maps) and `morph` (the models and sprites):
 | `classicenhance/models.hpp/.cpp` | The models stage: `enhance_models` (every model as glTF with enhanced skins, sprites' frames as PNGs, the index and `replaced.txt`), `drop_glowing` |
 | `classicenhance/replace.hpp` | `kReplacements`: the pack files the engine draws its own effect in place of (file, effect id, keep the glowing parts, why) |
 | `classicenhance/pipeline.hpp/.cpp` | `run_pipeline`: the stages pack → textures → lightmaps → sounds → models, each skipped when its recorded key is current; `pack_textures` |
-| `classicenhance/weapons.hpp/.cpp` | The held weapons (M48b): `held_from_morph` (the eye frame into the held frame, wound back out, the fullbright skin texels as glow), `classic_weapon_row`, `probe_under` (the lightmap under the player, 128 = 1), `muzzle_flash_light`, `flame_lights`, `pack_weapons` |
+| `classicenhance/weapons.hpp/.cpp` | The held weapons (M48b): `held_from_morph` (the eye frame into the held frame, wound back out, the fullbright skin texels as glow), `classic_weapon_row`, `probe_under` (the lightmap under the player, 128 = 1), `muzzle_flash_light`, `flame_lights`, `pack_weapons`, `classic_fire_of` and `classic_fire_frame` (each weapon's muzzle-fire look and rate, the firing frames); the labs `classic-weapons` and `classic-weapons-fire` (GPU) |
 | `classicenhance/tool/main.cpp` | The `classicenhance` executable (`verify`, `run`, `status`), one JSON object an answer |
 
 Beside it in the engine: `engine/vfs/zip.hpp` (the zip reader, also the `.pk3` container),

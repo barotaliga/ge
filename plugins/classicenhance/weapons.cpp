@@ -216,6 +216,44 @@ std::vector<viewmodel::PointLight> flame_lights(const brush::Map& map) {
   return out;
 }
 
+std::span<const ClassicFire> classic_fires() {
+  // The shotguns throw a short wide flash, the nailguns a quick small jet, the grenade launcher a
+  // thump and the rocket launcher a long jet; the rates are the classic game's.
+  static constexpr ClassicFire kFires[] = {
+      {"v_axe", "", 0.5},
+      {"v_shot", "muzzle.shotgun", 0.5},
+      {"v_shot2", "muzzle.shotgun", 0.7},
+      {"v_nail", "muzzle.nailgun", 0.2},
+      {"v_nail2", "muzzle.nailgun", 0.2},
+      {"v_rock", "muzzle.grenade", 0.6},
+      {"v_rock2", "muzzle.rocket", 0.8},
+      {"v_light", "", 0.1},
+  };
+  return kFires;
+}
+
+const ClassicFire* classic_fire_of(std::string_view path) {
+  std::string_view name =
+      path.substr(path.rfind('/') == std::string_view::npos ? 0 : path.rfind('/') + 1);
+  if (name.size() > 4 && name.substr(name.size() - 4) == ".mdl") name.remove_suffix(4);
+  for (const ClassicFire& f : classic_fires()) {
+    if (f.weapon == name) return &f;
+  }
+  return nullptr;
+}
+
+void classic_fire_frame(int frames, double since_s, int* a, int* b, double* t) {
+  *a = *b = 0;
+  *t = 0;
+  if (frames < 2 || since_s < 0) return;
+  const double at = since_s / kFrameSeconds;
+  const auto k = int(at);
+  if (k >= frames - 1) return;  // the firing frames are played out: at rest
+  *a = 1 + k;
+  *b = *a + 1 < frames ? *a + 1 : 0;
+  *t = at - k;
+}
+
 std::vector<PackWeapon> pack_weapons(std::span<const uint8_t> pack,
                                      std::vector<std::string>* skipped) {
   std::vector<PackWeapon> out;

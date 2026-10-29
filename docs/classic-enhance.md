@@ -97,10 +97,21 @@ ships.
   units of reach); in the enhanced mode, whose torches burn as live lights, `flame_lights` lists
   the map's torches and flames as point lights (outside it their light is in the lightmaps
   already).
+- **The fire**: in the enhanced mode a weapon's shot is the engine's muzzle fire
+  (`engine/render/muzzle.hpp`), not the flash its file draws. `classic_fire_of` names each
+  weapon's look by its file (the shotguns `muzzle.shotgun`, the nailguns `muzzle.nailgun`, the
+  grenade launcher `muzzle.grenade`, the rocket launcher `muzzle.rocket`; the axe and the
+  lightning gun throw no flame) and its rate of fire. A shot plays the firing frames at ten a
+  second, blended (`classic_fire_frame`), and the flame is staged each frame off the muzzle carried
+  into the world through the gun's lens (`viewmodel::muzzle_to_world`), so it rides the recoil.
+  The file's flash triangles (the model's `flame` mask) are hidden with `DrawLit::hidden`.
 
 The `classic-weapons` lab draws every weapon over the map in first person: the lineup at the
 start, one weapon at the darkest and brightest places to stand, a shot in the dark and the
-torches baked and live. With `--source` the pictures are of the player's pack and stay local.
+torches baked and live. The `classic-weapons-fire` lab (GPU) fires every weapon that throws a
+flame in the explosion labs' yard: each shot through its life at dusk, the file's flash beside the
+engine's fire, and each by day. With `--source` the pictures are of the player's pack and stay
+local.
 
 ## The sound enhancer
 
