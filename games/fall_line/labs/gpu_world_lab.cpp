@@ -213,7 +213,7 @@ ge::lab::Picture diff_picture(const ge::gpu::Image& culled, const ge::gpu::Image
   for (size_t i = 0; i + 3 < std::min(p.rgba.size(), all.rgba.size()); i += 4) {
     const bool differs = std::memcmp(&culled.rgba[i], &all.rgba[i], 3) != 0;
     for (int c = 0; c < 3; ++c) {
-      p.rgba[i + c] = differs ? (c == 0 ? 255 : 0) : static_cast<uint8_t>(p.rgba[i + c] / 3);
+      p.rgba[i + c] = static_cast<uint8_t>(differs ? (c == 0 ? 255 : 0) : p.rgba[i + c] / 3);
     }
   }
   return p;
