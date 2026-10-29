@@ -78,6 +78,12 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   packet format, connections with their channels, and nodes of up to 32 peers. It depends on
   `engine/core` only and reads no clock: the caller passes the time and the seeds, so a session
   over the simulated network is deterministic and every net lab is a determinism test.
+- **`engine/mod`**: mods in C++ (M52; `docs/mods.md` is the design): the C ABI header a mod and
+  a game both include (`abi.hpp`, a versioned table each way that grows only at its end), the
+  package's manifest and the SHA-256 of its files, the loader and its checks, and the one file
+  that opens a shared library (`library.cpp`: `dlopen`, `LoadLibraryW`). It depends on
+  `engine/core` only; a game's hooks and services are the game's own header, and the mod's state
+  is a block the game keeps in its snapshots. `cmake/Mods.cmake` builds a mod as a package.
 - **`engine/console`**: the console and cfg files (M21; `docs/console.md` is the design): cvars
   in three tiers (the player's, the server's, code's), bound to the settings structs the
   subsystems already read so no subsystem includes the console; the command buffer, aliases,
@@ -332,7 +338,7 @@ whole tree to it, and `ge doctor` holds a game repo to it (the `agent-interface`
   `pow` and the rest are forbidden in `engine/core`, `engine/loop`, `plugins/*` (bar a plugin's `app/`) and
   `games/*/sim`; `tools/check-libm.sh` (`make libm-check`, CI's `agents` job) fails a call.
 - FP flags: `-ffp-contract=off -fno-fast-math` (GCC: `-fexcess-precision=standard`;
-  MSVC: `/fp:strict`), set once on `ge_fp` in the root `CMakeLists.txt`
+  MSVC: `/fp:strict`), set once on `ge_fp` in `cmake/Fp.cmake`
   (linked by `ge_core` and published with it as `ge::fp`, so a game built against a
   release gets them too).
 - The instruction-set baseline: `ge_isa` (x86-64-v3, so AVX2, on x86-64; the default on

@@ -353,6 +353,15 @@ constexpr FlagSpec kContentScanFlags[] = {
     kPreset,
     kEngine,
     kRepo};
+constexpr FlagSpec kModNewFlags[] = {
+    {"game", "<id>", "the game the mod is for (shooters_edge)"},
+    {"name", "<kebab>", "the mod's name (default: the directory's)"},
+    kEngine};
+constexpr FlagSpec kModBuildFlags[] = {kEngine};
+constexpr FlagSpec kModCheckFlags[] = {
+    {"game", "<id>", "check it against this game (default: the game its manifest names)"}};
+constexpr FlagSpec kModPackFlags[] = {
+    {"out", "<dir>", "where the package goes (default dist/<name>-<version>)"}};
 constexpr FlagSpec kSnowShowFlags[] = {
     {"out", "<dir>", "where the PNGs go (default: snow/ beside the file)"}};
 constexpr FlagSpec kSnowColumnFlags[] = {{"at", "<x,z>", "the point, m (required)"}};
@@ -593,6 +602,22 @@ const CommandSpec kCommands[] = {
      kQcProfile,
      "ge qc profile previews/qc/sample.dat --function=run --args=12 --builtins=sample --repeat=20",
      "progs"},
+    {"mod new", "<dir>", 1, 1, "create",
+     "a C++ mod repo for a game that offers mods: its CMakeLists.txt over the engine's "
+     "cmake/Mods.cmake and a working mod in src/mod.cpp",
+     kModNewFlags, "ge mod new faster-rockets --game=shooters_edge", "mod"},
+    {"mod build", "[<dir>]", 0, 1, "build",
+     "the mod built (Release) into its package, build/mods/<name>/ (the library and its "
+     "mod.manifest), then checked as the game's loader would; errors come back as findings",
+     kModBuildFlags, "ge mod build faster-rockets", "mod"},
+    {"mod check", "<package>", 1, 1, "build",
+     "a mod package (a directory or its mod.manifest) through the engine's loader: the manifest, "
+     "the ABI, the game and its API, the library's hash, the entry table",
+     kModCheckFlags, "ge mod check faster-rockets/build/mods/faster-rockets", "mod"},
+    {"mod pack", "<package>...", 1, -1, "build",
+     "one package from several platforms' builds of one mod: manifests merged, libraries copied, "
+     "the result checked",
+     kModPackFlags, "ge mod pack linux/faster-rockets windows/faster-rockets --out=dist/fr", "mod"},
     {"snow show", "<file.snow>", 1, 1, "see",
      "a saved snow layer read without its game: its tiles and memory, the samples pressed, the "
      "deepest drop and the densest snow, the mass held, and depth, density and state maps",

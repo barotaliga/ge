@@ -53,6 +53,7 @@ updates that row's status file (`docs/goals/<row>.md`) in its PR.
 | [`docs/liquids.md`](docs/liquids.md) | Liquids other than water (M30): viscosity, yield and harm on a body's stuff, the wind and the swimmer in them, lava and slime drawn, and the labs |
 | [`docs/climate.md`](docs/climate.md) | Temperature and humidity (M51): the air by the hour, the height, the weather and the ground, the dew point, and what they do: fog of five kinds, snow or rain, the snow's feel, frost, rime, black ice, the breath, lake ice; who reads what |
 | [`docs/grass.md`](docs/grass.md) | Grass (M34): the research, kinds and recipes, covers on a heightfield or a mesh's floors, the blade scatter, the sway in the wind, the grass drawn, and the rows |
+| [`docs/mods.md`](docs/mods.md) | The engine's own mods (M52): the C ABI each way and how it grows, determinism (the state block, the game's stream, the libm), the sandbox, the loader, the platforms and the store form, the package, `ge mod` |
 
 **The working area.** `porting/` holds everything that only matters while modules are
 being carried over from their reference sources: the porting guide (`porting/README.md`),
@@ -264,6 +265,7 @@ characters.
 | `templates/` | What `ge add` writes (a system, a test, a lab of each kind) and the starting games of `ge new --game=<name>`, compiled into `ge` | `agent-interface` |
 | `*/assets/<name>/` | Built models (`ge asset`): the manifest, the Blender builder, the committed .glb and its data | `assets` |
 | `*/labs/` | Labs beside their subject, compiled into the one `labs` executable | `labs` |
+| `games/*/mods/` | A game's sample mods for its mod seam (`docs/mods.md`), each built as a package by `ge_add_mod` into `build/<preset>/mods/` | `mod` |
 | `engine/console/` | The console (`ge::console`, `docs/console.md`): cvars and their tiers, the console language, aliases, binds, cfg files, the drop-down console's model | `console` |
 | `engine/replay/` | Replays (`ge::replay`, `docs/replays.md`): a run watched again off its input log, the keyframes a seek starts from (the game's `Run::clone`), the player's seek in a step budget, the transport | `replay` |
 | `engine/save/` | Saves (`ge::save`, `docs/saves.md`): the save file (header, meta, tagged versioned chunks, directory, XXH64), the state described once for its writer and reader | `save` |
@@ -277,6 +279,7 @@ characters.
 | `engine/camera/` | The camera (`ge::camera`, `docs/camera.md`): poses, followers, the rigs (first person, boom, mounted, orbit, planted, free), shake, transitions, the stack, the scripted subjects | `camera` |
 | `engine/viewmodel/` | The first-person held weapon (`ge::viewmodel`, `docs/rendering.md` § The view model): its form and grip mount, its place in the view, its light from the world, the CPU reference | `render`, `camera` |
 | `engine/services/` | Platform services (`ge::services`, `docs/services.md`): one interface for a store's achievements, stats, boards, cloud, presence, friends, overlay, DLC and screenshots; the simulated and offline stores | `services` |
+| `engine/mod/` | Mods in C++ (`ge::mod`, `docs/mods.md`): the C ABI header, the manifest, the SHA-256, the library file, the loader; `cmake/Mods.cmake` builds a package | `mod` |
 | `engine/platform/` | SDL3 (`GE_PLATFORM`): the window, the input devices as `engine/input` events, the frame clock, the audio device; the only place SDL is included | `platform`, `input` |
 | `engine/gpu/` | The native GPU device over Dawn (`GE_GPU`): adapters and tiers, pipelines and the manifest, surfaces, targets, timers; the only place webgpu.h is included | `gpu` |
 | `engine/render/` | Generic rendering mechanisms (`docs/rendering.md`): the frame and its pass table, sky, terrain, shadows, Hi-Z, TAA-U, bloom, post, meshes, instances, skinning; WGSL beside each | `render` |
@@ -343,10 +346,10 @@ Agents find code by grep, so the tree is built to be grepped:
 
 ### Stated once
 
-- **The FP flags**: `ge_fp` in the root `CMakeLists.txt`, linked by `ge_core` (so by every
-  target) and published with it as `ge::fp`. **The instruction-set baseline** (AVX2 on
-  x86-64): `ge_isa` beside it, published as `ge::isa`. `ge_flags` is the tree's own warnings and
-  sanitizers, never published.
+- **The FP flags**: `ge_fp` in `cmake/Fp.cmake` (the root `CMakeLists.txt` and
+  `cmake/Mods.cmake` include it), linked by `ge_core` (so by every target) and published with it
+  as `ge::fp`. **The instruction-set baseline** (AVX2 on x86-64): `ge_isa` beside it, published
+  as `ge::isa`. `ge_flags` is the tree's own warnings and sanitizers, never published.
 - **The plugin contract** (homes, layout, naming, dependencies, registration):
   `docs/architecture.md` § Plugins; built by `cmake/Plugins.cmake`, checked by
   `tools/check-plugins.mjs`.
@@ -432,3 +435,4 @@ and the directories agree.
 | `save` | `engine/save`: saves: the save file (header, chunks, directory, checksums), the state described once (`describe`, since and until, `GE_SAVE_PLAIN`), `ge save inspect`, the save labs; the M25 rows (the run saved, slots, pictures, characters, cloud, the content cache) |
 | `net` | `engine/net`: multiplayer networking: sockets, the simulated network and its conditions, captures, the wire format, connections and channels, nodes up to 32, sessions (lobby, teams, chat, kick, reconnect), LAN discovery, NAT traversal (STUN, the rendezvous, hole punching, the relay, a port opened by PCP, NAT-PMP or UPnP), fake traffic, the `net-link`, `net-session` and `net-reach` labs; the M17 plan |
 | `services` | `engine/services`: platform services (achievements, stats, leaderboards, cloud, presence, friends, overlay, DLC, screenshots) behind one `Backend`, the game's catalog, the simulated and offline stores, the `services` lab; Steam and other stores' backends, the SDK kept out of the tree; Discord's presence over its local IPC and the `discord` lab (M20) |
+| `mod` | `engine/mod` and a game's mod seam (Shooter's Edge's `sim/mod_api.hpp`, `mod_host`): the C ABI and its growth, the manifest and the loader, the state block and determinism, `cmake/Mods.cmake`, `ge mod`, the sample mod and the `mod` lab; the M52 rows |

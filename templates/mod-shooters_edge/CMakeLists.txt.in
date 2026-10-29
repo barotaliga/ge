@@ -1,0 +1,18 @@
+# {{name}}: a C++ mod for {{game}} (the engine's docs/mods.md; the `mod` skill). `ge mod build`
+# configures and builds it; the package (the library and its mod.manifest) lands in
+# build/mods/{{name}}/, ready for `ge mod check` and for the game to load.
+cmake_minimum_required(VERSION 3.25)
+project({{ident}} LANGUAGES CXX)
+
+# The engine tree the mod is built against: its cmake/Mods.cmake, engine/mod/abi.hpp and the
+# game's header. `ge mod build --engine=<dir>` sets it for one build.
+set(GE_ENGINE_DIR "{{engine}}" CACHE PATH "The engine tree this mod is built against")
+include("${GE_ENGINE_DIR}/cmake/Mods.cmake")
+
+ge_add_mod({{ident}}
+  NAME {{name}}
+  VERSION 0.1.0
+  GAME {{game}}
+  GAME_API 1
+  SOURCES src/mod.cpp
+  INCLUDE_DIRS "${GE_ENGINE_DIR}/{{game_include}}")

@@ -1,0 +1,65 @@
+// {{name}}: a {{game}} mod. The game runs its own rules first and then each hook here; everything
+// the mod remembers lives in `State`, the block the game keeps in its snapshots (no globals, no
+// clock, no <cmath>: the host table carries the engine's libm and the game's random stream).
+#include "{{game_header}}"
+
+namespace {
+
+constexpr float kRocketScale = 1.25f;  // the game's rockets fly this much faster
+
+struct State {
+  int32_t frames;
+  int32_t rockets;
+};
+
+const se_mod_services_v1* game(const ge_mod_host_v1* h) {
+  return static_cast<const se_mod_services_v1*>(h->game);
+}
+
+void start_frame(void* state, const ge_mod_host_v1* /*host*/) {
+  static_cast<State*>(state)->frames++;
+}
+
+// After a player's post-think: a rocket the game just fired is in `newmis`.
+void player_post_think(void* state, const ge_mod_host_v1* h, int32_t /*player*/) {
+  const se_mod_services_v1* g = game(h);
+  const int32_t m = g->newmis(h->ctx);
+  if (m <= 0 || g->get_int(h->ctx, m, SE_FIELD_MOVETYPE) != SE_MOVETYPE_FLYMISSILE) return;
+  float v[3];
+  g->get_vec(h->ctx, m, SE_FIELD_VELOCITY, v);
+  for (float& c : v) c = c * kRocketScale;
+  g->set_vec(h->ctx, m, SE_FIELD_VELOCITY, v);
+  static_cast<State*>(state)->rockets++;
+}
+
+se_mod_hooks_v1 hooks() {
+  se_mod_hooks_v1 k{};
+  k.size = sizeof(se_mod_hooks_v1);
+  k.api = SE_MOD_API;
+  k.start_frame = start_frame;
+  k.player_post_think = player_post_think;
+  return k;
+}
+
+const se_mod_hooks_v1 kHooks = hooks();
+
+ge_mod_v1 table() {
+  ge_mod_v1 t{};
+  t.size = sizeof(ge_mod_v1);
+  t.abi = GE_MOD_ABI;
+  t.name = "{{name}}";
+  t.version = "0.1.0";
+  t.game = SE_MOD_GAME;
+  t.game_api = SE_MOD_API;
+  t.state_bytes = sizeof(State);
+  t.hooks = &kHooks;
+  return t;
+}
+
+const ge_mod_v1 kMod = table();
+
+}  // namespace
+
+GE_MOD_EXPORT const ge_mod_v1* ge_mod_entry(uint32_t host_abi) {
+  return GE_MOD_ABI_MAJOR_OF(host_abi) == GE_MOD_ABI_MAJOR ? &kMod : nullptr;
+}

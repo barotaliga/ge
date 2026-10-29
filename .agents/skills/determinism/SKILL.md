@@ -21,7 +21,7 @@ and a deliberate behaviour change rewrites them in its PR (the `testing` skill).
 ## The rules
 
 1. **Flags**: `-ffp-contract=off -fno-fast-math` (GCC `-fexcess-precision=standard`,
-   MSVC `/fp:strict`), set on `ge_fp` in `CMakeLists.txt`. Every target links
+   MSVC `/fp:strict`), set on `ge_fp` in `cmake/Fp.cmake`. Every target links
    `ge_fp` (through `ge_core`), and a published package carries it as `ge::fp`. Never add `-ffast-math`, `-Ofast` or `-march=native` to a sim target.
 2. **libm**: simulation code calls `ge::core::libm::*` for sin, cos, tan, atan,
    atan2, asin, acos, exp, expm1, log, log2, pow, cbrt and tanh. It may use `<cmath>`

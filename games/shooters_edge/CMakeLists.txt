@@ -1,15 +1,17 @@
 # Shooter's Edge, the engine's second game (docs/shooters-edge.md). Its simulation (sim/) is one
 # static library the labs and the tests link: the native game program, the test arena and the
 # scripted match over plugins/shooter's classic loop (skill: shooter), and the adapter that lets a
-# loaded progs (plugins/progs) drive that loop (skill: progs). Its content registry
+# loaded progs (plugins/progs) drive that loop (skill: progs), and the host of a C++ mod on the
+# same seam (sim/mod_host.hpp, skill: mod). Its content registry
 # (content/) is data and builds nothing. Its sound (sound/) is a second library: what the game
 # plays on the engine's synth, over the brush world's leaves. Its server (server/) is a library and
 # the headless `shooters_edge_server` executable. Its HUD (hud/) is a library
-# of its own.
+# of its own. mods/ holds the sample C++ mod, built as a package (cmake/Mods.cmake) the tests and
+# the `mod` lab load.
 file(GLOB SHOOTERS_EDGE_SIM_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/sim/*.cpp)
 add_library(shooters_edge_sim STATIC ${SHOOTERS_EDGE_SIM_SOURCES})
 target_include_directories(shooters_edge_sim PUBLIC ${PROJECT_SOURCE_DIR}/games)
-target_link_libraries(shooters_edge_sim PUBLIC ge_core ge_console ge_shooter ge_progs)
+target_link_libraries(shooters_edge_sim PUBLIC ge_core ge_console ge_mod ge_shooter ge_progs)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_sim)
 
 file(GLOB SHOOTERS_EDGE_SOUND_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/sound/*.cpp)
@@ -43,3 +45,8 @@ add_library(shooters_edge_hud STATIC ${SHOOTERS_EDGE_HUD_SOURCES})
 target_include_directories(shooters_edge_hud PUBLIC ${PROJECT_SOURCE_DIR}/games)
 target_link_libraries(shooters_edge_hud PUBLIC ge_hud ge_console ge_assets)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_hud)
+
+include(${PROJECT_SOURCE_DIR}/cmake/Mods.cmake)
+ge_add_mod(shooters_edge_mod_rocket_bounce NAME rocket-bounce VERSION 1.0.0 GAME shooters_edge
+  GAME_API 1 SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/mods/rocket_bounce/rocket_bounce.cpp
+  INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/games)

@@ -1,0 +1,13 @@
+# {{name}}
+
+A C++ mod for {{game}}, built against the engine's mod ABI (`engine/mod/abi.hpp`) and the game's
+mod API (`{{game_header}}`).
+
+```sh
+ge mod build            # the package in build/mods/{{name}}/, checked as the game loads it
+ge mod check build/mods/{{name}}
+ge mod pack build/mods/{{name}} <another platform's build>...   # one package, several platforms
+```
+
+The rules a mod keeps (no clock, no globals, the game's random stream and libm through the table,
+its whole state in its state block) are the engine's `docs/mods.md` § Determinism.

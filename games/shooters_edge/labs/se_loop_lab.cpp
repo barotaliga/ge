@@ -27,6 +27,7 @@
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
 #include "shooter/toss_recording.hpp"
+#include "shooters_edge/labs/arena_chart.hpp"
 #include "shooters_edge/sim/match.hpp"
 
 namespace {
@@ -36,7 +37,11 @@ namespace sh = ge::shooter;
 namespace se = shooters_edge::sim;
 using ge::core::num::to_fixed;
 
-constexpr double kNan = std::numeric_limits<double>::quiet_NaN();
+using shooters_edge::labs::brush_bounds;
+using shooters_edge::labs::kNan;
+using shooters_edge::labs::path;
+using shooters_edge::labs::rect;
+using shooters_edge::labs::shoot;
 
 std::string hex64(uint64_t v) {
   char buf[17];
@@ -51,46 +56,6 @@ std::string upper(std::string s) {
     else if (c == '_')
       c = ' ';
   return s;
-}
-
-// A box brush's bounds off its axial planes.
-void brush_bounds(const sh::Brush& b, sh::Vec3f& lo, sh::Vec3f& hi) {
-  for (const sh::Plane& p : b.planes)
-    for (int i = 0; i < 3; i++) {
-      if (p.normal[i] == 1) hi[i] = p.dist;
-      if (p.normal[i] == -1) lo[i] = -p.dist;
-    }
-}
-
-// A rectangle in the chart's two axes (0 x, 1 y, 2 z), closed and broken off from the next.
-void rect(gl::Trace& t, sh::Vec3f lo, sh::Vec3f hi, int a, int b) {
-  const double xs[5] = {lo[a], hi[a], hi[a], lo[a], lo[a]};
-  const double ys[5] = {lo[b], lo[b], hi[b], hi[b], lo[b]};
-  for (int i = 0; i < 5; i++) {
-    t.x.push_back(xs[i]);
-    t.y.push_back(ys[i]);
-  }
-  t.x.push_back(lo[a]);
-  t.y.push_back(kNan);
-}
-
-void path(gl::Trace& t, const std::vector<sh::Vec3f>& pts, int a, int b) {
-  for (const sh::Vec3f& p : pts) {
-    t.x.push_back(p[a]);
-    t.y.push_back(p[b]);
-  }
-  if (!pts.empty()) {
-    t.x.push_back(pts.back()[a]);
-    t.y.push_back(kNan);
-  }
-}
-
-void shoot(gl::Lab& lab, const std::string& id, const gl::Chart& chart, const std::string& caption,
-           const std::string& look_for,
-           const std::vector<std::pair<std::string, std::string>>& in) {
-  const std::string svg = gl::to_svg(chart.plot);
-  lab.attach(id + ".svg", std::vector<uint8_t>(svg.begin(), svg.end()));
-  lab.shot({id, chart.title, caption, look_for, in}, gl::to_picture(chart.plot));
 }
 
 // The arena's walls, door, plat and trigger in two axes, and both players' and the missiles' paths.

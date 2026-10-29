@@ -11,7 +11,8 @@
 //
 // The whole run is a pure function of the options: one timeline in whole milliseconds, no clock,
 // no randomness. `MatchReport::frames[i].hash` is the server's whole state after frame i
-// (`server_hash`), so two runs agreeing on every frame's hash replay to the bit.
+// (`server_hash`, folded with a C++ mod's run when one plays: mod_host.hpp), so two runs agreeing
+// on every frame's hash replay to the bit.
 //
 // The script (`match_script`): player 1 looks down and fires a rocket at his feet, takes the
 // health box, runs and jumps east through the doorway (opening the door) and comes back to stand
@@ -29,7 +30,10 @@
 #include <cstdint>
 #include <vector>
 
+#include <string>
+
 #include "shooter/predict.hpp"
+#include "shooters_edge/sim/mod_host.hpp"
 #include "shooters_edge/sim/rules.hpp"
 
 namespace shooters_edge::sim {
@@ -57,6 +61,10 @@ struct MatchOptions {
   int latency_ms = 40;      // one way, each direction
   int lose_every = 23;      // player 2 loses every Nth packet it sends (0: none lost)
   bool predict = true;      // the clients predict (false: they show the server's state)
+  // A C++ mod (a loaded table, engine/mod/loader.hpp) run after the native program, its stream
+  // seeded with `mod_seed`; null for none (the match and its hashes are then the native ones).
+  const ge_mod_v1* mod = nullptr;
+  uint32_t mod_seed = 1;
 };
 
 // The server after one frame.
@@ -105,6 +113,10 @@ struct MatchReport {
   ClientReport clients[kPlayers];
   sh::LoopCounts counts;
   uint64_t final_hash = 0;
+  // With a mod: why it was refused (the match did not run), its run at the end, its log.
+  std::vector<std::string> mod_errors;
+  ModRun mod_run;
+  std::vector<std::string> mod_log;
 };
 
 MatchReport run_match(const MatchOptions& opt);

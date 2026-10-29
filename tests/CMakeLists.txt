@@ -18,6 +18,15 @@ get_property(GE_GAME_TARGETS GLOBAL PROPERTY GE_GAME_TARGETS)
 add_library(ge_test_main OBJECT main.cpp)
 target_link_libraries(ge_test_main PRIVATE ge_core)
 target_compile_definitions(ge_test_main PRIVATE GE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+# The mods the tests load (cmake/Mods.cmake, docs/mods.md): the game's sample mod (its CMake) and
+# a fixture built against a mod ABI this engine does not speak, which the loader must refuse with
+# a message naming the version. A test named *mod_* depends on them and finds their packages
+# under GE_MOD_DIR.
+include(${PROJECT_SOURCE_DIR}/cmake/Mods.cmake)
+ge_add_mod(ge_test_mod_abi_two NAME abi-two VERSION 1.0.0 GAME shooters_edge GAME_API 1
+  SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/mod_abi_two_fixture.cpp
+  INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/games)
+get_property(GE_MOD_TARGETS GLOBAL PROPERTY GE_MOD_TARGETS)
 foreach(src ${GE_TEST_SOURCES})
   get_filename_component(name ${src} NAME_WE)
   set(extra)
@@ -73,6 +82,10 @@ foreach(src ${GE_TEST_SOURCES})
     ${extra} ${cli})
   target_compile_definitions(${name} PRIVATE GE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
   add_test(NAME ${name} COMMAND ${name})
+  if(name MATCHES "mod_")
+    add_dependencies(${name} ${GE_MOD_TARGETS})
+    target_compile_definitions(${name} PRIVATE GE_MOD_DIR="${PROJECT_BINARY_DIR}/mods")
+  endif()
   if(name MATCHES "^mountain_")
     # The generator's tests build whole maps and are the slowest cases: start them early.
     set_tests_properties(${name} PROPERTIES COST 50)

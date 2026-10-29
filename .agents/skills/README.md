@@ -54,6 +54,7 @@ router's Skills table and the directories against each other.
 | `net` | Multiplayer networking: sockets, the simulated network, captures, the wire, channels, nodes, sessions and the lobby, LAN discovery, NAT traversal, port mapping, replication, fake traffic |
 | `vfs` | Content files: the pack archive's checked directory and its files as views, zip archives; later search paths and directories |
 | `services` | Platform services: achievements, stats, leaderboards, cloud, presence, friends, overlay, DLC and screenshots behind one interface; the simulated and offline stores; Steam's backend; Discord's presence |
+| `mod` | Mods in C++: the C ABI each way and how it grows, the manifest and the loader, the state block and determinism, a game's mod seam, `ge mod`, the sample mod and the `mod` lab |
 | `plugins` | Engine, plugin or game: where code lives, adding a plugin, moving code between homes |
 
 ## Plugins

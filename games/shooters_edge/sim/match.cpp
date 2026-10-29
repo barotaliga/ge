@@ -8,6 +8,7 @@
 #include "shooters_edge/sim/match.hpp"
 
 #include <algorithm>
+#include <memory>
 
 #include "shooter/frame.hpp"
 #include "shooter/usercmd.hpp"
@@ -174,9 +175,18 @@ MatchReport run_match(const MatchOptions& opt) {
   set.max_edicts = 64;
   Rules rules;
   create_rules(rules, arena, set.max_edicts);
+  sh::Program program = rules_program(rules);
+  std::unique_ptr<ModHost> mod;
+  if (opt.mod) {
+    mod = std::make_unique<ModHost>();
+    rep.mod_errors = create_mod_host(*mod, opt.mod, program, opt.mod_seed);
+    if (!rep.mod_errors.empty()) return rep;
+    program = mod_program(*mod);
+  }
   sh::Server sv;
-  sh::create_server(sv, set, w.models, rules_program(rules));
+  sh::create_server(sv, set, w.models, program);
   spawn_arena_entities(sv, rules);
+  if (mod) mod_match_start(*mod, sv);
   for (int p = 0; p < kPlayers; p++) sh::connect_client(sv, p, false, false);
 
   ClientSim clients[kPlayers];
@@ -285,7 +295,7 @@ MatchReport run_match(const MatchOptions& opt) {
     }
     fr.door_z = sv.edicts[static_cast<size_t>(rules.door)].origin.z;
     fr.plat_z = sv.edicts[static_cast<size_t>(rules.plat)].origin.z;
-    fr.hash = sh::server_hash(sv);
+    fr.hash = mod ? mod_hash(mod->run, sh::server_hash(sv)) : sh::server_hash(sv);
     rep.frames.push_back(fr);
 
     // Missiles: new ones from this frame's events, each live one's place.
@@ -336,6 +346,10 @@ MatchReport run_match(const MatchOptions& opt) {
   rep.events = rules.events;
   rep.counts = sv.counts;
   rep.final_hash = rep.frames.empty() ? 0 : rep.frames.back().hash;
+  if (mod) {
+    rep.mod_run = mod->run;
+    rep.mod_log = mod->log;
+  }
   return rep;
 }
 

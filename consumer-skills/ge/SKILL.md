@@ -66,6 +66,10 @@ ge qc disasm <progs>             # a QC program's functions as statements, opera
 ge qc run <progs> --function=f   # one function run headless: its return, or its fault and QC stack
 ge qc trace <progs> --function=f # every call with its arguments and return; --statements for more
 ge qc profile <progs> --function=f  # statements and calls per function, the builtins hit
+ge mod new <dir> --game=<id>     # a C++ mod for a game that offers mods (skill: mod)
+ge mod build [<dir>]             # the mod built into its package and checked as the game loads it
+ge mod check <package>           # a package through the loader: manifest, ABI, game, hash, table
+ge mod pack <package>...         # several platforms' builds of one mod merged into one package
 ge cvar ls [<prefix>]            # the game's settings: value, default, range, flags, help
 ge cvar get <name>...            # the named ones (an unknown name: the nearest known)
 ge cfg check <file>... [--server]   # a cfg's problems at file:line, and names nothing reads
