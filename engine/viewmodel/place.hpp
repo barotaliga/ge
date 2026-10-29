@@ -32,13 +32,14 @@
 // ge:keywords viewmodel view-model first-person weapon gun held place placement offset bob
 // ge:keywords gun-bob weapon-bob sway weapon-sway lag inertia kick recoil dip landing switch
 // ge:keywords lower raise put-away idle breathing viewmodel-fov frame_viewmodel placement-row
-// ge:keywords held_to_world held_dir_to_world muzzle-world lens-match
+// ge:keywords held_to_world held_dir_to_world muzzle-world lens-match muzzle_to_world muzzle-pose
 // ge:skill render camera
 // ge:test tests/viewmodel_place_test.cpp
 #pragma once
 
 #include "camera/follow.hpp"
 #include "camera/pose.hpp"
+#include "viewmodel/held.hpp"
 
 namespace ge::viewmodel {
 
@@ -121,5 +122,13 @@ void held_to_world(const Placement& p, double gun_fov_y, const camera::Pose& vie
 // way from the tip's world point to the world point of the tip moved a step along it.
 void held_dir_to_world(const Placement& p, double gun_fov_y, const camera::Pose& view,
                        const float held_at[3], const float held_dir[3], double out[3]);
+
+// THE MUZZLE IN THE WORLD this display frame, for an effect fired from it (render/muzzle.hpp's
+// `MuzzlePose`): the barrel's tip on frames `a` and `b` blended by `t` (`muzzle_at`), the way the
+// shot leaves (`muzzle_dir`) and the gun's up (held +y, made square to the way), all through
+// `held_to_world`'s lens match, so the flame rides the firing animation and the placement's kick.
+void muzzle_to_world(const HeldModel& model, int a, int b, double t, const Placement& p,
+                     double gun_fov_y, const camera::Pose& view, double at[3], double dir[3],
+                     double up[3]);
 
 }  // namespace ge::viewmodel
