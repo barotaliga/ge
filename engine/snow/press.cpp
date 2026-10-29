@@ -14,6 +14,7 @@
 #include "core/math.hpp"
 #include "core/num.hpp"
 #include "snow/contact.hpp"
+#include "snow/lod.hpp"
 #include "snow/time.hpp"
 
 namespace ge::snow {
@@ -155,6 +156,15 @@ Pressed press(Layer& layer, const Imprint& imp, double t) {
   Pressed out;
   const Shape& s = imp.shape;
   if (s.half_width <= 0) return out;
+  layer.clock = t;
+  {
+    // Far from every focus, over ground no fine tile holds: the coarse layer takes it (lod.hpp).
+    const double cx = s.kind == ShapeKind::capsule ? (s.ax + s.bx) / 2 : s.ax;
+    const double cz = s.kind == ShapeKind::capsule ? (s.az + s.bz) / 2 : s.az;
+    const int c = static_cast<int>(core::num::round((cx - layer.spec.region.x0) / layer.spec.cell));
+    const int r = static_cast<int>(core::num::round((cz - layer.spec.region.z0) / layer.spec.cell));
+    if (far_from_focus(layer, cx, cz) && !cell_at(layer, c, r)) return press_coarse(layer, imp, t);
+  }
   const double area = imp.area > 0 ? imp.area : shape_area(s);
   out.pressure = area > 0 ? imp.load / area : 0;
   const bool by_sink = imp.sink >= 0;
