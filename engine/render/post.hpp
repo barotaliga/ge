@@ -66,7 +66,7 @@ struct PostLook {
 
 struct PostSettings {
   double bloom = 0;   // the share of the bloom's glow mixed in (BloomSettings::strength); 0: none
-  PostLook look;      // which of the lens and film are compiled (above 0), and their start
+  PostLook look{};    // which of the lens and film are compiled (above 0), and their start
   bool lens = false;  // mix in the lens pass's target (render/lens.hpp)
 };
 
