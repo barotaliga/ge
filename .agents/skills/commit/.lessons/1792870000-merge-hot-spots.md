@@ -1,7 +1,7 @@
 ---
 title: A line every pull request edits conflicts every parallel pull request
 date: 2026-10-22
-scope: AGENTS.md, docs/goals.md, tests/labs_digests.txt
+scope: AGENTS.md, docs/goals.md, tests/digests
 concepts: [merge-conflict, hot-spot, parallel-threads, auto-merge, digests]
 ---
 
