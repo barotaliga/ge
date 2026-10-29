@@ -1303,8 +1303,14 @@ the software adapter at 480 x 270 (`gpu-muzzle`), a shotgun's flame at its peak 
 1.2 to 2.6 ms, a nailgun's stream (seven flames and wisps in view) about 2.6 ms, and a rocket's jet
 about 1.2 ms. The CPU stages a stream in about 13 us.
 
-**Not yet:** the flame on a weapon model's own muzzle, with its flash triangles hidden (it needs
-the view models, M48), and the flash as a local light (M47b).
+**On a held weapon.** `engine/viewmodel`'s `muzzle_to_world` gives a `MuzzlePose` straight off
+the held model: the barrel's tip on the frames the firing animation blends (`muzzle_at`), the way
+the shot leaves and the gun's up, carried into the world through the gun's own lens
+(`held_to_world`), so the flame drawn in the world's pass sits on the barrel drawn in front of the
+eye. The model's own flash triangles are hidden with `DrawLit::hidden = model.flame`.
+
+**Not yet:** the classic pack's weapons each given their look and fired in a lab (M48b), and the
+flash as a local light (M47b).
 
 ## Shaders
 
