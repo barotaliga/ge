@@ -8,6 +8,7 @@
 // ge:skill brush
 // ge:test tests/brush_read_test.cpp
 #include <array>
+#include <cstddef>
 
 #include "brush/read_parts.hpp"
 
@@ -114,6 +115,10 @@ bool read_v29(std::span<const uint8_t> file, bool bsp2, Map* out, std::string* e
               err, f,
               "texture " + std::to_string(i) + " (" + t.name + ") has a size its pixels do not fit",
               "the file is damaged: rebuild the map");
+        }
+        if (pixels != 0) {
+          const auto from = r.b.begin() + std::ptrdiff_t(off) + std::ptrdiff_t(pixels);
+          t.indexed.assign(from, from + std::ptrdiff_t(uint64_t(t.width) * t.height));
         }
       }
       m.textures.push_back(t);

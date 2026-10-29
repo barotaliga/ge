@@ -61,6 +61,58 @@ std::string m_of(int64_t units) {
   return s;
 }
 
+// A float printed in the fewest digits that read back to its bits.
+std::string f_of(float v) {
+  char b[48];
+  for (int digits = 1; digits <= 9; ++digits) {
+    std::snprintf(b, sizeof b, "%.*g", digits, double(v));
+    if (std::strtof(b, nullptr) == v) break;
+  }
+  std::string s = b;
+  if (s == "-0") s = "0";
+  return s;
+}
+
+// "a,b,c,..." into `n` floats, each read straight to the nearest float.
+bool floats(std::string_view s, float* out, size_t n) {
+  for (size_t i = 0; i < n; ++i) {
+    const size_t comma = i + 1 < n ? s.find(',') : s.size();
+    if (comma == std::string_view::npos || comma == 0 || comma > 40) return false;
+    char b[48];
+    s.copy(b, comma);
+    b[comma] = 0;
+    char* end = nullptr;
+    out[i] = std::strtof(b, &end);
+    if (end != b + comma || !std::isfinite(out[i])) return false;
+    s = comma < s.size() ? s.substr(comma + 1) : std::string_view{};
+  }
+  return s.empty();
+}
+
+const char* const kContents[] = {"solid", "water", "slime", "lava", "sky", "clip", "trigger"};
+
+// A face line's trailing words: `hidden`, `smooth`, each at most once.
+bool face_flags(const std::vector<std::string_view>& w, Face* f) {
+  for (size_t i = 6; i < w.size(); ++i) {
+    if (w[i] == "hidden" && !f->hidden) {
+      f->hidden = true;
+    } else if (w[i] == "smooth" && !f->smooth) {
+      f->smooth = true;
+    } else {
+      return false;
+    }
+  }
+  return true;
+}
+
+// The rest of `line` from word `w`, trailing blanks trimmed ("" when there is no such word).
+std::string rest_of(std::string_view line, const std::vector<std::string_view>& w, size_t i) {
+  if (i >= w.size()) return {};
+  std::string_view r = line.substr(size_t(w[i].data() - line.data()));
+  while (!r.empty() && (r.back() == ' ' || r.back() == '\t')) r.remove_suffix(1);
+  return std::string(r);
+}
+
 }  // namespace
 
 bool parse(std::string_view text, Level* out, std::string* error) {
@@ -104,8 +156,14 @@ bool parse(std::string_view text, Level* out, std::string* error) {
     std::string_view line = text.substr(at, end - at);
     at = end + 1;
     ++line_no;
-    if (const size_t hash = line.find('#'); hash != std::string_view::npos)
-      line = line.substr(0, hash);
+    // A comment starts at a '#' that begins the line or follows a space, so a value may hold one
+    // inside a word (a texture reference's `tint=#8a5a40`).
+    for (size_t i = 0; i < line.size(); ++i) {
+      if (line[i] == '#' && (i == 0 || line[i - 1] == ' ' || line[i - 1] == '\t')) {
+        line = line.substr(0, i);
+        break;
+      }
+    }
     if (!line.empty() && line.back() == '\r') line.remove_suffix(1);
     const auto w = words_of(line);
     if (w.empty()) continue;
@@ -123,6 +181,11 @@ bool parse(std::string_view text, Level* out, std::string* error) {
           while (!ref.empty() && (ref.back() == ' ' || ref.back() == '\t')) ref.remove_suffix(1);
           m.texture = std::string(ref);
           break;
+        } else if (w[i].starts_with("size=") && numbers(w[i].substr(5), v, 2) && v[0] >= 0 &&
+                   v[1] >= 0 && v[0] <= 65535 && v[1] <= 65535 && v[0] == std::floor(v[0]) &&
+                   v[1] == std::floor(v[1])) {
+          m.tex_w = uint16_t(v[0]);
+          m.tex_h = uint16_t(v[1]);
         } else if (w[i].starts_with("rgb=") && numbers(w[i].substr(4), v, 3)) {
           for (int k = 0; k < 3; ++k) {
             if (!byte(v[k], &m.rgb[k])) return fail("rgb: " + problem);
@@ -141,7 +204,8 @@ bool parse(std::string_view text, Level* out, std::string* error) {
           }
         } else {
           return fail("unknown material option '" + std::string(w[i]) +
-                      "'; write rgb=r,g,b, relief=<kind>,<cm>,<dm> or tex <reference>");
+                      "'; write rgb=r,g,b, relief=<kind>,<cm>,<dm>, size=<w>,<h> or tex "
+                      "<reference>");
         }
       }
       level.materials.push_back(std::move(m));
@@ -244,9 +308,68 @@ bool parse(std::string_view text, Level* out, std::string* error) {
         if (!units16(v, k < 3 ? &s.min[k] : &s.max[k - 3])) return fail(problem);
       }
       level.solids.push_back(s);
+    } else if (kind == "surface") {
+      uint8_t m = 0;
+      if (w.size() < 3) return fail("write surface <material> <surface reference...>");
+      if (!mat(w[1], &m)) return fail(problem);
+      level.materials[m].surface = rest_of(line, w, 2);
+    } else if (kind == "group") {
+      if (w.size() != 2) return fail("write group <name>");
+      level.groups.push_back(Group{std::string(w[1])});
+    } else if (kind == "brush") {
+      Brush b;
+      size_t c = 0;
+      while (w.size() >= 2 && c < 7 && w[1] != kContents[c]) ++c;
+      if (w.size() < 2 || w.size() > 3 || c == 7) {
+        return fail("write brush <solid|water|slime|lava|sky|clip|trigger> [group=<name>]");
+      }
+      b.contents = Contents(c);
+      if (w.size() == 3) {
+        const int g =
+            w[2].starts_with("group=") ? group_index(level, std::string(w[2].substr(6))) : -1;
+        if (g < 0)
+          return fail("no group '" + std::string(w[2]) + "'; declare it with `group` first");
+        b.group = uint16_t(g);
+      }
+      b.first_face = uint32_t(level.faces.size());
+      level.brushes.push_back(b);
+    } else if (kind == "face") {
+      if (level.brushes.empty()) return fail("`face` before any `brush`; start the brush first");
+      Face f;
+      Projection p;
+      if (w.size() < 6 || w.size() > 8 || !floats(w[1], f.n, 3) || !floats(w[2], &f.d, 1) ||
+          !w[4].starts_with("s=") || !floats(w[4].substr(2), p.s, 4) || !w[5].starts_with("t=") ||
+          !floats(w[5].substr(2), p.t, 4) || !face_flags(w, &f)) {
+        return fail(
+            "write face <nx>,<ny>,<nz> <d> <material> s=<x>,<y>,<z>,<off> "
+            "t=<x>,<y>,<z>,<off> [hidden] [smooth]");
+      }
+      if (!mat(w[3], &f.material)) return fail(problem);
+      f.projection = projection_index(level, p);
+      Brush& b = level.brushes.back();
+      if (b.faces == 255) return fail("a brush holds at most 255 faces; split it");
+      ++b.faces;
+      level.faces.push_back(f);
+    } else if (kind == "entity") {
+      Entity e;
+      if (w.size() < 2 || w.size() > 3) return fail("write entity <class> [group=<name>]");
+      e.classname = std::string(w[1]);
+      if (w.size() == 3) {
+        const int g =
+            w[2].starts_with("group=") ? group_index(level, std::string(w[2].substr(6))) : -1;
+        if (g < 0)
+          return fail("no group '" + std::string(w[2]) + "'; declare it with `group` first");
+        e.group = uint16_t(g);
+      }
+      level.entities.push_back(std::move(e));
+    } else if (kind == "key") {
+      if (level.entities.empty()) return fail("`key` before any `entity`; start the entity first");
+      if (w.size() < 2) return fail("write key <name> <value...>");
+      level.entities.back().keys.emplace_back(std::string(w[1]), rest_of(line, w, 2));
     } else {
       return fail("unknown line '" + std::string(kind) +
-                  "'; a line is material, room, corner, portal or solid");
+                  "'; a line is material, surface, room, corner, portal, solid, group, brush, "
+                  "face, entity or key");
     }
   }
   line_no = 0;
@@ -271,8 +394,13 @@ std::string print(const Level& level) {
                     m.scale_dm);
       s += b;
     }
+    if (m.tex_w != 0 || m.tex_h != 0)
+      s += " size=" + std::to_string(m.tex_w) + "," + std::to_string(m.tex_h);
     if (!m.texture.empty()) s += " tex " + m.texture;
     s += '\n';
+  }
+  for (const Material& m : level.materials) {
+    if (!m.surface.empty()) s += "surface " + m.name + " " + m.surface + "\n";
   }
   const auto mname = [&](uint8_t i) { return level.materials[i].name; };
   for (const Room& r : level.rooms) {
@@ -303,6 +431,27 @@ std::string print(const Level& level) {
     for (int16_t v : o.min) s += " " + m_of(v);
     for (int16_t v : o.max) s += " " + m_of(v);
     s += '\n';
+  }
+  if (!level.groups.empty()) s += '\n';
+  for (const Group& g : level.groups) s += "group " + g.name + "\n";
+  const auto group_opt = [&](uint16_t g) {
+    return g == kWorld ? std::string() : " group=" + level.groups[g].name;
+  };
+  for (const Brush& br : level.brushes) {
+    s += "\nbrush " + std::string(kContents[uint8_t(br.contents)]) + group_opt(br.group) + "\n";
+    for (uint32_t i = br.first_face; i < br.first_face + br.faces; ++i) {
+      const Face& f = level.faces[i];
+      const Projection& p = level.projections[f.projection];
+      s += "face " + f_of(f.n[0]) + "," + f_of(f.n[1]) + "," + f_of(f.n[2]) + " " + f_of(f.d) +
+           " " + mname(f.material) + " s=" + f_of(p.s[0]) + "," + f_of(p.s[1]) + "," +
+           f_of(p.s[2]) + "," + f_of(p.s[3]) + " t=" + f_of(p.t[0]) + "," + f_of(p.t[1]) + "," +
+           f_of(p.t[2]) + "," + f_of(p.t[3]) + (f.hidden ? " hidden" : "") +
+           (f.smooth ? " smooth" : "") + "\n";
+    }
+  }
+  for (const Entity& e : level.entities) {
+    s += "\nentity " + e.classname + group_opt(e.group) + "\n";
+    for (const auto& [k, v] : e.keys) s += "key " + k + (v.empty() ? "" : " " + v) + "\n";
   }
   return s;
 }

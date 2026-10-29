@@ -263,6 +263,7 @@ characters.
 | `engine/net/` | Multiplayer networking (`ge::net`, `docs/networking.md`): addresses, the wire, UDP and TCP sockets, links, the simulated network, sessions, LAN discovery, replication; the only place socket headers are included | `net` |
 | `engine/snow/` | Snow over any ground (`ge::snow`, `docs/snow.md`): the layer and its cover, sparse fixed-point tiles, `sample`, `press` and imprint records, reference contacts, the snapshot | `snow` |
 | `engine/move/` | Character movement (`ge::move`, `docs/movement.md`): the knobs and presets, the step over a trace callback, the box world, the strafer, the scenarios | `move` |
+| `engine/vfs/` | Content files (`ge::vfs`): the pack archive's checked directory and its files as views into it; search paths, zips and directories to come (M18a) | `vfs` |
 | `engine/input/` | Input devices (`ge::input`, `docs/input.md`): the device model, events, state, dead zones, actions and bindings, rebinding, wheels' roles, touch, players, feedback, the event log, simulated devices | `input` |
 | `engine/camera/` | The camera (`ge::camera`, `docs/camera.md`): poses, followers, the rigs (first person, boom, mounted, orbit, planted, free), shake, transitions, the stack, the scripted subjects | `camera` |
 | `engine/viewmodel/` | The first-person held weapon (`ge::viewmodel`, `docs/rendering.md` § The view model): its form and grip mount, its place in the view, its light from the world, the CPU reference | `render`, `camera` |
@@ -379,6 +380,7 @@ and the directories agree.
 | `snowmobile` | `plugins/snowmobile`: the snowmobile on the snow (`step_sled`, the body, the drive), what throws its rider, the bot's hands on it, the sled scenarios |
 | `helicopter` | `plugins/helicopter`: the helicopter (`step_heli`, the rotor, the disc, the landing, the strikes), the downwash, the bot's hands on it, the heli scenarios |
 | `paramotor` | `plugins/paramotor`: the powered speed wing a skier flies (`step_para`, the wing on its lines, the engine, the fold, the cut-away), the air it flies in, the bot's hands on it, the para scenarios |
+| `vfs` | `engine/vfs`: content files and archives (the pack archive today; search paths, zips and directories in M18a), reading a file out of an archive, a refused archive |
 | `brush` | `plugins/brush`: maps in the classic BSP families (version 29, BSP2, 38, 46) read into one view (surfaces, lightmaps, tree, clusters, visibility, entities, 46's patches tessellated), refusing damage; the fixture writers; the `bsp` lab |
 | `rooms` | `plugins/rooms`: the engine's own level format (rooms, openings, solids, materials with a texture reference and a relief), its bytes (.gelv) and text form, growing rooms from their seeds (rock, crag, stones, ashlar, tiles, planks, corrugated, dents; caves by surface nets), the `rooms` lab |
 | `shooter` | `plugins/shooter`: the classic player move in 32-bit floats (`player_move`, `run_command`, every move type and server setting), clip hulls and the line trace, hulls from brushes, the move's solids, the recorded scenarios and the `pmove` lab; the M18o rows |

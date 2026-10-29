@@ -19,7 +19,8 @@ format notes (the clean-room rules there say what may be written where).
 | `bytes.hpp` | The little-endian cursor and writer |
 | `write.hpp`, `write_parts.hpp`, `fixture.cpp` | Fixtures: the sample, the compile every writer shares |
 | `write_v29.cpp`, `write_v38.cpp`, `write_v46.cpp` | One writer a family |
-| `labs/bsp_lab.cpp` | The `bsp` lab |
+| `labs/bsp_lab.cpp` | The `bsp` lab (`--map`, `--lit`, `--pak`, `--textures-out`: a map's textures as PNGs for the matcher) |
+| `labs/textured_view.hpp/.cpp` | The lab's textured software view of a 29 or BSP2 map: its own pictures through a palette, its lightmaps, sky layers |
 
 ## Reading a new field or lump
 

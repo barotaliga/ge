@@ -284,6 +284,7 @@ std::vector<std::string> validate(const Level& level) {
       out.push_back(fmt("solid %zu: min is not below max on every axis", k));
     }
   }
+  validate_brushes(level, out);
   return out;
 }
 

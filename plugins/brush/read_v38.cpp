@@ -106,7 +106,7 @@ bool read_v38(std::span<const uint8_t> file, Map* out, std::string* err) {
       const std::string name = c.name(32);
       c.skip(4);
       const auto [it, added] = by_name.emplace(name, uint32_t(m.textures.size()));
-      if (added) m.textures.push_back(Texture{name, 0, 0, uint32_t(t.flags)});
+      if (added) m.textures.push_back(Texture{name, 0, 0, uint32_t(t.flags), {}});
       t.texture = it->second;
     }
   }
