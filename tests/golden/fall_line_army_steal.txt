@@ -1,0 +1,56 @@
+# each 5 s: the scenario, the state digest, the stars, the free ride's helicopter's mode, every army machine's (fall_line_army_steal_test, seed 38)
+steal bd7797de8e0f699c 3 parked due
+steal 26c230892ed591d2 3 parked due
+steal ed7684e44659081b 3 parked land
+steal 73999ead01986a57 3 parked land
+steal c35ce97da3e43b10 3 parked land
+steal 537374eeb957a9bf 3 parked land
+steal 4436a060a825282f 3 parked land
+steal d88da6074fcf64aa 3 parked land
+steal 7a288c377738e311 4 flown-army due due
+steal cfef49e9a207fd70 4 home-army due due
+steal 04b8023964055121 4 wreck-army hunt due
+steal 63f2e2ba17d9f972 4 wreck-army land hunt
+steal 1aa985127f07a99c 4 parked land hunt
+steal abc1adc91e391d6c 5 parked land hunt due
+steal 631a95245caff036 5 parked land hunt due
+steal d5edbc6d9ee1c8d9 5 parked land hunt hunt
+steal 108da580b88da63f 5 parked land hunt land
+steal 1363df2800d1442d 5 parked set hunt land
+steal 7a7cca507c8cce38 5 parked set hunt land
+steal f689e3928dd76b81 5 parked rise hunt land
+steal 01f20eb566426af0 5 parked hunt land land
+ram bd7797de8e0f699c 3 parked due
+ram 26c230892ed591d2 3 parked due
+ram d09fd9e23af68a6d 4 wreck fall due due
+ram eb64a749232826ee 4 flown wreck due due
+ram 56ee42fef52b3b1a 4 flown wreck hunt due
+ram 10c4ada170c2435f 4 flown wreck hunt hunt
+ram baab44b87e182f11 4 flown wreck hunt hunt
+ram aedbcef2ac25b53e 4 flown wreck hunt hunt
+ram 1fd6d3eb13ff9a54 4 flown wreck hunt hunt
+ram c93a89f769b12cee 4 flown wreck hunt hunt
+ram 1f599dfb4c9f3150 4 flown wreck hunt hunt
+ram 88eb0761da76ade5 4 flown wreck hunt hunt
+ram 981da43f136cf0e8 4 flown wreck hunt hunt
+ram 5c65d2766935072b 4 flown wreck hunt hunt
+ram 793906bf67f5d843 5 flown wreck hunt hunt due
+ram 001d76fc8a754e13 5 flown wreck hunt hunt due
+ram 7a09007413b61682 5 flown wreck hunt hunt hunt
+ram 6d4b79b66a821135 5 flown wreck hunt hunt hunt
+ram 8d8540c5a094ea82 5 flown wreck hunt hunt hunt
+ram 4c38eb093012f706 5 flown wreck hunt hunt hunt
+ram ede168ab857998f0 5 flown wreck hunt hunt hunt
+ram 24c1e727635b4215 5 flown wreck hunt hunt hunt
+ram 219da69b1e3f2762 5 flown wreck hunt hunt hunt
+ram 3801f1a3c6194ff4 5 flown wreck hunt hunt hunt
+ram 1c293a891c3bb070 5 flown wreck hunt hunt hunt
+ram db566f21fd22a224 5 flown wreck hunt hunt hunt
+ram 02e13360d3403fe2 5 flown wreck hunt hunt hunt
+ram bedf41ae705c1853 5 flown hunt hunt hunt
+ram 533369cfe7205482 5 flown hunt hunt hunt
+ram 5c8d7e89e5d86c13 5 flown hunt hunt hunt
+ram f03bad7e680931dc 5 flown hunt hunt hunt
+ram 6c1644259c7008a5 5 flown hunt hunt hunt
+ram 634b776a2a1a004e 5 flown hunt hunt hunt
+ram 3989e66577791ea4 5 flown hunt hunt hunt

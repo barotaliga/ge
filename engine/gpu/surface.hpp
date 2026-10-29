@@ -2,7 +2,9 @@
 // `NativeWindow` handles (engine/platform/window.hpp; no SDL here), configured to the
 // window's pixel size, and presented at vsync (FIFO, which every adapter has) unless asked
 // otherwise. A surface that went stale (resized, minimised, its swapchain lost) is
-// reconfigured by `acquire`, which then skips that frame.
+// reconfigured by `acquire`, which then skips that frame. Between `acquire` and `present` the
+// frame's texture is a `Target` a readback can copy (`frame_target`; the live capture's ring,
+// gpu/readback_ring.hpp): the surface is configured with CopySrc for it.
 //
 // ge:summary The window surface: made from native handles, configured, acquired, presented
 // ge:keywords gpu surface swapchain present vsync fifo mailbox configure acquire resize
@@ -14,6 +16,7 @@
 #include <cstdint>
 
 #include "gpu/device.hpp"
+#include "gpu/target.hpp"
 #include "platform/window.hpp"
 
 namespace ge::gpu {
@@ -29,6 +32,8 @@ class Surface {
   // stale and has been reconfigured, or the window has no area).
   wgpu::TextureView acquire(Device& device);
   void present();
+  // The acquired frame's texture as a target (a null texture outside acquire..present).
+  Target frame_target() const;
 
   wgpu::TextureFormat format() const { return format_; }
   uint32_t width() const { return width_; }
@@ -36,6 +41,7 @@ class Surface {
 
  private:
   wgpu::Surface surface_;
+  wgpu::Texture current_;  // the acquired frame's texture, until present
   wgpu::TextureFormat format_ = wgpu::TextureFormat::Undefined;
   wgpu::PresentMode mode_ = wgpu::PresentMode::Fifo;
   uint32_t width_ = 0, height_ = 0;

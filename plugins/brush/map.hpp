@@ -61,6 +61,9 @@ struct Texture {
   std::string name;
   uint32_t width = 0, height = 0;  // 0 when the family does not store it (38, 46)
   uint32_t flags = 0;              // the family's own surface flags
+  // The full-size picture as palette indices, rows of `width` (29, BSP2, when the map carries its
+  // pixels; empty otherwise). The palette is not in the map: a game's files hold it.
+  std::vector<uint8_t> indexed;
 };
 
 struct Lightmap {

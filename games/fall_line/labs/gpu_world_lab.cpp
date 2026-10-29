@@ -30,7 +30,7 @@
 // few lines in its scrollback and a command half typed, its suggestions under the panel.
 //
 // --cfg runs console commands over Fall Line's cvars first (cfg/cvars.hpp), so a sky a server
-// picks (sv_weather, sv_snowfall, sv_fog, sv_wind, sv_winddir, sv_cover, sv_thick,
+// picks (sv_weather, sv_snowfall, sv_fog, sv_wind, sv_winddir, sv_cover, sv_clouddensity,
 // sv_cloudheight, sv_cloudspeed, sv_hour, sv_skyrate) and r_clouds are photographed as the game
 // draws them (sim/sky.hpp).
 //
@@ -178,6 +178,18 @@ std::string fixed(double v, int places) {
   return b;
 }
 
+// Each cloud layer drawn, lowest first, as its base and top over the valley floor, m.
+std::string layers_of(const ge::render::Clouds& clouds, double floor_y) {
+  if (clouds.count == 0) return "none";
+  std::string out;
+  for (int i = 0; i < clouds.count; ++i) {
+    const ge::render::CloudLayer& l = clouds.layers[i];
+    if (i > 0) out += ", ";
+    out += fixed(l.base_m - floor_y, 0) + ".." + fixed(l.top_m - floor_y, 0) + " m";
+  }
+  return out;
+}
+
 // The pixels two stills differ in, and the box round them.
 struct CullDiff {
   double pixels = 0;
@@ -246,6 +258,7 @@ void run(ge::lab::Lab& lab) {
   options.cover = cvars.cover;
   options.thick = cvars.thick;
   options.cloud_height = cvars.cloud_height;
+  options.cloud_thickness = cvars.cloud_thickness;
   options.cloud_speed = cvars.cloud_speed;
   options.sun_size = cvars.disc_sun;
   options.moon_size = cvars.disc_moon;
@@ -288,6 +301,10 @@ void run(ge::lab::Lab& lab) {
   if (const std::string problem = fall_line::app::sky_style_of(cvars, style); !problem.empty()) {
     lab.fail("--cfg: " + problem, "Skill: console.");
   }
+  ge::render::MoonSet moons;
+  if (const std::string problem = fall_line::app::moon_set_of(cvars, moons); !problem.empty()) {
+    lab.fail("--cfg: " + problem, "Skill: console.");
+  }
   const auto shared = std::make_shared<const ge::mountain::mapgen::Level>(std::move(built));
   const ge::mountain::mapgen::Level& level = *shared;
   const std::string seed_s = std::to_string(static_cast<long long>(seed));
@@ -301,6 +318,8 @@ void run(ge::lab::Lab& lab) {
     std::vector<ge::skier::SkierState> skiers;
     // The racers every fourth step since the last moment: the tracks laid before it is shot.
     std::vector<std::vector<ge::skier::SkierState>> laid;
+    // The cloud layers the still drew, for its stamp.
+    std::string clouds = "none";
   };
   std::vector<Scene> scenes;
   // Each named view at each of the sky's --at seconds (more than one: a sequence, each shot
@@ -314,8 +333,10 @@ void run(ge::lab::Lab& lab) {
         sc.name += "+" + fixed(at, 1);
         sc.caption += " At " + fixed(at, 1) + " s.";
       }
-      fall_line::app::day_view(level, hour, sc.view);
       sc.view.style = style;
+      sc.view.moons = moons;
+      sc.view.moon_size = cvars.disc_moon;  // a lens on a moon frames it as it is drawn
+      fall_line::app::day_view(level, hour, sc.view);
       sc.view.time_s = at;
       if (!fall_line::app::make_view(level, name, sc.view)) {
         lab.fail("no view named '" + name + "'",
@@ -415,7 +436,9 @@ void run(ge::lab::Lab& lab) {
          {"render", std::to_string(render_w) + "x" + std::to_string(render_h) +
                         (options.taa ? ", TAA-U" : ", no TAA")},
          {"reach", options.reach_m > 0 ? fixed(options.reach_m, 0) + " m, misted" : "all"},
-         {"cfg", lab.arg("cfg").empty() ? "none" : lab.arg("cfg")}}};
+         {"cfg", lab.arg("cfg").empty() ? "none" : lab.arg("cfg")},
+         {"eye", fixed(sc.view.eye[1] - level.mountain.base.y, 0) + " m over the floor"},
+         {"clouds", sc.clouds}}};
   };
 
   // The console's still: the last scene with the drop-down console down over it.
@@ -498,6 +521,7 @@ void run(ge::lab::Lab& lab) {
     for (const auto& racers : sc.laid) fall_line::app::track(*frame, {racers});
     const ge::gpu::Image img = still(sc);
     frame->recorder.wait(*device);
+    sc.clouds = layers_of(frame->drawn_clouds, level.mountain.base.y);
     // How far away each pixel is, off this still's depth, for a diff (`--compare`).
     ge::lab::DistanceMap distance{static_cast<int>(frame->targets.width),
                                   static_cast<int>(frame->targets.height),

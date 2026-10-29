@@ -21,8 +21,15 @@
 // table at the moon's height, lit by its light), summed wherever the sky's light is read; the
 // KEY LIGHT (`frame.sun`, the one direct light) is the moon once the sun is gone, and the haze
 // is the brighter sky's light scattered, the other's added as the sky behind it.
+//
+// THE SURFACE MODEL (wgsl/surface.wgsl: one physically based response for every material) and
+// THE LOCAL LIGHTS (wgsl/lights.wgsl, binding 10: render/lights.hpp's lamps and their clusters)
+// are included here, so every draw that reads the frame can light a surface by the sun, the sky
+// and the lamps the same way.
 #include "render/wgsl/frame_types.wgsl"
 #include "render/wgsl/atmosphere.wgsl"
+#include "render/wgsl/surface.wgsl"
+#include "render/wgsl/lights.wgsl"
 
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var linear_clamp: sampler;
@@ -44,6 +51,9 @@ struct SkyLight {
 // The cloud's noise (render/clouds.hpp: 64^3, 0..1) and its wrapping sampler.
 @group(0) @binding(8) var cloud_noise: texture_3d<f32>;
 @group(0) @binding(9) var linear_repeat: sampler;
+// The fog in areas (render/fog.hpp): the in-scatter toward the eye (rgb) and the transmittance (a)
+// over the screen's uv and sqrt(distance / range), read by `local_fog`.
+@group(0) @binding(11) var fog_volume: texture_3d<f32>;
 
 // A world height (m) as a radius from the planet's centre, km.
 fn radius_at(world_y: f32) -> f32 {
@@ -318,15 +328,48 @@ fn mist_sky(d: vec3f) -> vec3f {
 // times the air's transmittance plus the light the air scatters in, from the aerial-perspective
 // volume (under a deck, the deck's grey in its place); then a fog or a fall closing it into its
 // grey veil, so a surface at the visual range keeps 2 % of its contrast against it; then the
-// reach's mist closing it into the sky behind it. Every world material calls this, and none has
-// its own fog.
+// reach's mist closing it into the sky behind it; then the fog in areas (`local_fog`). Every world
+// material calls this, and none has its own fog.
 fn haze(colour: vec3f, uv: vec2f, dist_m: f32) -> vec3f {
   let c = haze_air(colour, uv, dist_m);
   if (frame.mist.y <= 0.0) {
-    return c;
+    return local_fog(c, uv, dist_m);
   }
   let t = clamp((dist_m - frame.mist.x) / (frame.mist.y - frame.mist.x), 0.0, 1.0);
-  return mix(c, mist_sky(view_ray(frame, uv)), t * t * (3.0 - 2.0 * t));
+  return local_fog(mix(c, mist_sky(view_ray(frame, uv)), t * t * (3.0 - 2.0 * t)), uv, dist_m);
+}
+
+// THE FOG IN AN AREA (render/fog.hpp), the nearest air of all, so it veils the haze, the mist,
+// the sky and the cloud behind it alike: a colour at `dist_m` (infinity for the sky) seen through
+// the froxel volume's column at screen `uv`. With no volume in reach (`frame.fog.x` 0) the colour
+// is returned as it came.
+fn local_fog(colour: vec3f, uv: vec2f, dist_m: f32) -> vec3f {
+  if (frame.fog.x <= 0.0) {
+    return colour;
+  }
+  let v = fog_column(uv, dist_m);
+  return colour * v.a + v.rgb;
+}
+
+// The same over a premultiplied colour (a cloud's light and cover blended over the sky): the
+// cover takes its share of the fog's in-scatter, the sky behind it the rest.
+fn local_fog_over(c: vec4f, uv: vec2f, dist_m: f32) -> vec4f {
+  if (frame.fog.x <= 0.0) {
+    return c;
+  }
+  let v = fog_column(uv, dist_m);
+  return vec4f(c.rgb * v.a + v.rgb * c.a, c.a);
+}
+
+// The volume's column at `uv` out to `dist_m`: the in-scatter (rgb) and the transmittance (a).
+// Nearer than the first slice's far edge, from no fog to the first slice's.
+fn fog_column(uv: vec2f, dist_m: f32) -> vec4f {
+  let n = frame.fog.y;
+  let s = sqrt(clamp(dist_m / frame.fog.x, 0.0, 1.0));
+  let w = max(s - 0.5 / n, 0.5 / n);
+  let v = textureSampleLevel(fog_volume, linear_clamp, vec3f(uv, w), 0.0);
+  let k = clamp(s * n, 0.0, 1.0);
+  return vec4f(v.rgb * k, mix(1.0, v.a, k));
 }
 
 // The haze without the reach's mist: the air and the weather alone (the cloud's, which is the
@@ -403,8 +446,8 @@ const kDarkestLux = 1e-4;
 fn white_luminance() -> f32 {
   let sun = key_at_eye() * frame.sun.w * frame.weather.x * max(frame.sun.y, 0.0);
   let sky = sky_irradiance(vec3f(0.0, 1.0, 0.0));
-  // The scene's own lights (a lava lake at night) key it when they outshine the sky.
-  return max(max(dot((sun + sky) / PI, kLuma), frame.time.z),
+  // The scene's own lights (a lava lake at night) key it when they outshine the sky and lamps.
+  return max(max(dot((sun + sky) / PI, kLuma) + frame.time.z, frame.time.w),
              kDarkestLux * frame.world.y / (PI * kSunLux));
 }
 
@@ -470,14 +513,26 @@ fn rod_share() -> f32 {
 // It reads no depth, so a ridge or a cloud layer in front of the disc counts as the disc: a
 // ridge there is a dark silhouette, and the cloud pass gives a cloud's own light there to the
 // rods itself (render/clouds.wgsl), so neither shows it.
+// Other worlds' moons (render/moons.hpp) count by the circle that bounds each.
 fn on_moon(d: vec3f) -> f32 {
+  var on = 0.0;
   let rad = frame.moon_light.z;
   let c = dot(d, frame.moon.xyz);
-  if (rad <= 0.0 || c <= 0.0) {
+  if (rad > 0.0 && c > 0.0) {
+    on = 1.0 - smoothstep(0.95, 1.0, sqrt(max(1.0 - c * c, 0.0)) / sin(rad));
+  }
+  for (var k = 0; k < 4; k++) {
+    let o = frame.moons[k * 6];
+    let ck = dot(d, o.xyz);
+    if (o.w > 0.0 && ck > 0.0) {
+      on = max(on, 1.0 - smoothstep(0.95, 1.0, sqrt(max(1.0 - ck * ck, 0.0)) / sin(o.w)));
+    }
+  }
+  if (on <= 0.0) {
     return 0.0;
   }
   let clear = (1.0 - frame.weather.y) * exp(-frame.weather.z * 10000.0);
-  return (1.0 - smoothstep(0.95, 1.0, sqrt(max(1.0 - c * c, 0.0)) / sin(rad))) * clear;
+  return on * clear;
 }
 
 // NIGHT VISION: a colour as the rods see it, its luminance in a blue grey, by their share. A part

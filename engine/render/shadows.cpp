@@ -120,8 +120,9 @@ void shadow_view(const double sun[3], double radius, double depth, double basis[
 }
 
 wgpu::BindGroupLayout sun_shadow_layout(gpu::Device& device) {
+  // The fragment shaders' and the fog's light (render/fog.hpp's inject, a compute pass).
   return make_layout(device, "shadows", {Slot::uniform, Slot::depth_array, Slot::compare},
-                     wgpu::ShaderStage::Fragment);
+                     wgpu::ShaderStage::Fragment | wgpu::ShaderStage::Compute);
 }
 
 wgpu::BindGroup no_sun_shadows(gpu::Device& device) {

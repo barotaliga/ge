@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstring>
 
+#include "render/lights.hpp"
 #include "render/sky.wgsl.hpp"
 #include "render/sky_tables.wgsl.hpp"
 
@@ -38,7 +39,8 @@ wgpu::BindGroupLayout frame_layout(gpu::Device& device) {
   return make_layout(
       device, "render.frame",
       {Slot::uniform, Slot::sampler, Slot::texture, Slot::texture, Slot::texture, Slot::texture_3d,
-       Slot::storage_read, Slot::texture, Slot::texture_3d, Slot::sampler},
+       Slot::storage_read, Slot::texture, Slot::texture_3d, Slot::sampler, Slot::storage_shade,
+       Slot::texture_3d},
       wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment | wgpu::ShaderStage::Compute);
 }
 
@@ -60,8 +62,26 @@ void create_sky(gpu::Device& device, gpu::PipelineSet& pipelines, Sky& sky,
   sky.moon_view_view = sky.moon_view.CreateView();
   sky.aerial_view = sky.aerial.CreateView();
   sky.blank_view = sky.blank.CreateView();
+  // Clear air for group 0's fog volume (render/fog.hpp): no in-scatter, all seen. Nothing reads it
+  // while the frame block's fog range is 0; written all the same so a read is never undefined.
+  sky.no_fog = make_texture(device, "sky.no_fog", 1, 1, 2, f16, TU::TextureBinding | TU::CopyDst);
+  sky.no_fog_view = sky.no_fog.CreateView();
+  {
+    const uint16_t one = float_to_half(1.0f);
+    const uint16_t clear[8] = {0, 0, 0, one, 0, 0, 0, one};
+    wgpu::TexelCopyTextureInfo dst{};
+    dst.texture = sky.no_fog;
+    wgpu::TexelCopyBufferLayout layout{};
+    layout.bytesPerRow = 8;
+    layout.rowsPerImage = 1;
+    const wgpu::Extent3D extent{1, 1, 2};
+    device.queue.WriteTexture(&dst, clear, sizeof clear, &layout, &extent);
+  }
   sky.light = make_buffer(device, "sky.light", kSkyLightBytes,
                           wgpu::BufferUsage::Storage | wgpu::BufferUsage::CopySrc);
+  // Zeroed at creation: no light.
+  sky.no_lights =
+      make_buffer(device, "sky.no_lights", kRefsOffset + 16, wgpu::BufferUsage::Storage);
 
   wgpu::SamplerDescriptor sd{};
   sd.label = "render.linear_clamp";
@@ -160,10 +180,14 @@ void create_sky(gpu::Device& device, gpu::PipelineSet& pipelines, Sky& sky,
   desc.label = "sky.draw";
   sky.stars = create_star_texture(device);
   sky.moon = create_moon_texture(device);
-  sky.star_layout = make_layout(device, "sky.stars", {Slot::texture_array, Slot::texture},
-                                wgpu::ShaderStage::Fragment);
+  sky.moons = create_moon_maps(device);
+  sky.star_layout =
+      make_layout(device, "sky.stars",
+                  {Slot::texture_array, Slot::texture, Slot::texture_array, Slot::texture_array},
+                  wgpu::ShaderStage::Fragment);
   sky.star_group =
-      make_group(device, "sky.stars", sky.star_layout, {sky.stars.view, sky.moon.view});
+      make_group(device, "sky.stars", sky.star_layout,
+                 {sky.stars.view, sky.moon.view, sky.moons.albedo_view, sky.moons.colour_view});
   desc.layout = make_pipeline_layout(device, "sky.draw", {frame, sky.star_layout});
   desc.vertex.module = draw;
   desc.vertex.entryPoint = "vs_main";
@@ -174,11 +198,13 @@ void create_sky(gpu::Device& device, gpu::PipelineSet& pipelines, Sky& sky,
 }
 
 wgpu::BindGroup frame_group(gpu::Device& device, const wgpu::BindGroupLayout& layout,
-                            const wgpu::Buffer& uniforms, const Sky& sky) {
+                            const wgpu::Buffer& uniforms, const Sky& sky,
+                            const wgpu::Buffer& lights, const wgpu::TextureView& fog) {
   return make_group(
       device, "render.frame", layout,
       {uniforms, sky.sampler, sky.transmittance_view, sky.multiscatter_view, sky.sky_view_view,
-       sky.aerial_view, sky.light, sky.moon_view_view, sky.cloud.view, sky.cloud.sampler});
+       sky.aerial_view, sky.light, sky.moon_view_view, sky.cloud.view, sky.cloud.sampler,
+       lights ? lights : sky.no_lights, fog ? fog : sky.no_fog_view});
 }
 
 void prepare_sky(Sky& sky, const FrameView& view) {

@@ -29,17 +29,20 @@ router's Skills table and the directories against each other.
 | `sim` | Fall Line's headless simulation: mapgen, the step, the bot, the run clock |
 | `platform` | SDL3: window, input, gamepad, audio device, files, focus |
 | `move` | Character movement: the knobs and presets, the step, strafe jumping, steps, slopes, crouch, the trace a world answers, the `move-*` labs |
+| `textures` | Procedural textures: the `.tex` recipe, the layer kinds, tileable noise, texture references, the bake and its cache, the `texgen-*` labs |
 | `input` | Input devices: keyboards, raw mice, gamepads, wheels and pedals, sticks, touch; actions, bindings, rebinding, feedback, the event log |
 | `camera` | The camera: poses, followers, the rigs (first person, boom, mounted, orbit, planted, free), shake and comfort, transitions, the stack, the camera labs |
 | `gpu` | The native GPU device over Dawn: device, feature tiers, resources, the pipeline manifest, WGSL |
 | `render` | The pass table, a pass's two halves, the rules that keep a frame fast, captures and prices |
 | `assets` | Authored models: the glTF loader, posing and skinning, the `models` lab, Blender exports |
 | `audio` | The synth's DSP graph, the beds, the audio thread, checking a sound by meter |
-| `ui` | The 2D layer and text, the HUD and cards, the strings table, the dev UI |
+| `ui` | The 2D layer and text, the bitmap fonts (engine/charset), the HUD and cards, the strings table, the dev UI |
 | `labs` | The lab contract: write, run and read a lab; captions, digests, before-and-after |
 | `debug` | Log channels and dumps, series traces, the outlier rule, the chart kit, `ge graph` |
 | `perf` | Budgets, measuring, the proofs a speed-up owes, the levers |
 | `agent-interface` | Diagnostics as prompts, consumer skills, the `ge` CLI |
+| `save` | Saves: the save file and its chunks, the state described once, versions, the save labs, `ge save` |
+| `detail` | Brush detail: solids and bevels on exposed edges, receivers, decals that age, the marks of shots and wounds, seeded props by rules, floor clutter by surface class, the `detail-*` labs |
 | `water` | Water and wind: the wind's field and sources, bodies of water, waves, floating, swimming, colour, flow, and their labs |
 | `grass` | Grass: kinds and recipes, covers from a heightfield or a mesh's floors, the blade scatter, the sway in the wind, the grass drawn, and their labs |
 | `bots` | What a bot decides: `engine/ai`, the decision record, `ge why`, making a bot more human |
@@ -48,6 +51,7 @@ router's Skills table and the directories against each other.
 | `replay` | Watching a run again: a game's clone, the keyframes, the player's seek, the transport; later the replay file, the director, spectating and the video export |
 | `free-assets` | Free sounds and models: the sources, the licences we can carry, the registry, matching, converting, credits |
 | `net` | Multiplayer networking: sockets, the simulated network, captures, the wire, channels, nodes, sessions and the lobby, LAN discovery, NAT traversal, port mapping, replication, fake traffic |
+| `vfs` | Content files: the pack archive's checked directory and its files as views; later search paths, zips and directories |
 | `services` | Platform services: achievements, stats, leaderboards, cloud, presence, friends, overlay, DLC and screenshots behind one interface; the simulated and offline stores; Steam's backend; Discord's presence |
 | `plugins` | Engine, plugin or game: where code lives, adding a plugin, moving code between homes |
 

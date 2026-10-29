@@ -1,7 +1,7 @@
 // The brush chain's builder (brush_hull.hpp states the layout).
 //
 // ge:summary Builds a hull's plane chain from brushes, moving each plane out by a box
-// ge:keywords build_point_hull build_box_hull chain brush expand
+// ge:keywords build_point_hull build_box_hull chain brush expand build_brush_model bounds
 // ge:skill shooter
 // ge:test tests/shooter_brush_hull_test.cpp
 #include "shooter/brush_hull.hpp"
@@ -58,6 +58,39 @@ HullData build_box_hull(const std::vector<Brush>& brushes, Vec3f mins, Vec3f max
   for (const Brush& b : brushes)
     if (b.contents == kContentsSolid && !b.planes.empty()) kept.push_back(&b);
   return chain(kept, true, mins, maxs);
+}
+
+BrushModel ModelData::model() const {
+  BrushModel m;
+  for (int h = 0; h < 3; h++) m.hulls[h] = hulls[h].hull();
+  m.clip_mins[0] = {};
+  m.clip_mins[1] = kPlayerMins;
+  m.clip_mins[2] = kLargeMins;
+  m.mins = mins;
+  m.maxs = maxs;
+  return m;
+}
+
+ModelData build_brush_model(const std::vector<Brush>& brushes) {
+  ModelData d;
+  d.hulls[0] = build_point_hull(brushes);
+  d.hulls[1] = build_box_hull(brushes, kPlayerMins, kPlayerMaxs);
+  d.hulls[2] = build_box_hull(brushes, kLargeMins, kLargeMaxs);
+  constexpr float kFar = 1e30f;
+  d.mins = {kFar, kFar, kFar};
+  d.maxs = {-kFar, -kFar, -kFar};
+  for (const Brush& b : brushes) {
+    for (const Plane& p : b.planes) {
+      for (int i = 0; i < 3; i++) {
+        Vec3f axis{};
+        axis[i] = 1;
+        if (p.normal == axis && p.dist > d.maxs[i]) d.maxs[i] = p.dist;
+        if (p.normal == -axis && -p.dist < d.mins[i]) d.mins[i] = -p.dist;
+      }
+    }
+  }
+  if (d.mins.x > d.maxs.x) d.mins = d.maxs = {};  // no brush: a model of no size
+  return d;
 }
 
 }  // namespace ge::shooter
