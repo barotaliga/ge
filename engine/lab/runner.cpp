@@ -20,6 +20,7 @@
 
 #include "core/output.hpp"
 #include "lab/diff.hpp"
+#include "lab/digests.hpp"
 #include "lab/lab.hpp"
 #include "lab/report.hpp"
 
@@ -46,9 +47,10 @@ const LabFlag kRunnerFlags[] = {
     {"shard", "",
      "with --all, run only slice I of N (I/N, from 1/N): every Nth lab, so CTest runs them in "
      "parallel"},
-    {"check-digests", "", "compare each lab's digest with this baseline file"},
+    {"check-digests", "",
+     "compare each lab's digest with this baseline (a directory of <lab>.txt, or a .txt of rows)"},
     {"write-digests", "",
-     "rewrite this baseline file from this run's digests (only the labs run, unless --all)"},
+     "rewrite this baseline from this run's digests (only the labs run, unless --all)"},
     {"quiet", "", "print only failures and the summary", true},
     {"debug", "", "let the engine's debug lines through", true},
     {"log", "",
@@ -211,40 +213,6 @@ Args lab_args(const LabSpec& spec, bool smoke, const Args& typed, std::string& e
     }
   }
   return args;
-}
-
-std::map<std::string, std::string> read_digests(const std::string& path) {
-  std::map<std::string, std::string> out;
-  std::ifstream f(path);
-  std::string line;
-  while (std::getline(f, line)) {
-    if (line.empty() || line[0] == '#') continue;
-    std::istringstream row(line);
-    std::string id, hex;
-    row >> id >> hex;
-    out[id] = hex;
-  }
-  return out;
-}
-
-// The ids the baseline holds more than one row for: a union merge (.gitattributes) keeps both
-// sides' rows when two branches moved the same lab's digest.
-std::vector<std::string> doubled_digests(const std::string& path) {
-  std::map<std::string, int> rows;
-  std::ifstream f(path);
-  std::string line;
-  while (std::getline(f, line)) {
-    if (line.empty() || line[0] == '#') continue;
-    std::istringstream row(line);
-    std::string id;
-    row >> id;
-    rows[id]++;
-  }
-  std::vector<std::string> out;
-  for (const auto& [id, n] : rows) {
-    if (n > 1) out.push_back(id);
-  }
-  return out;
 }
 
 }  // namespace
@@ -480,10 +448,7 @@ int run_labs(int argc, const char* const* argv) {
     if (!ok) failed++;
   }
   if (!write.empty()) {
-    std::ofstream f(write, std::ios::binary);
-    f << "# lab digests at their smoke flags: labs --all --smoke --write-digests\n";
-    for (const auto& [id, hex] : digests) f << id << " " << hex << "\n";
-    if (!f) {
+    if (!write_digests(write, digests)) {
       std::fprintf(stderr, "labs: could not write %s.\n", write.c_str());
       return 1;
     }

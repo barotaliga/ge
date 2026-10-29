@@ -73,6 +73,6 @@ function's bits.
 ## Labs
 
 Every lab's digest is a determinism check (`labs_smoke`): two runs in one process must
-agree, and every CI row must reproduce `tests/labs_digests.txt`. A digest that differs
+agree, and every CI row must reproduce `tests/digests/`. A digest that differs
 between the two runs points at state kept between runs. A digest that differs on one row
 points at that row's compiler, so treat it as a parity failure.
