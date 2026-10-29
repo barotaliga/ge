@@ -152,4 +152,24 @@ void held_dir_to_world(const Placement& p, double gun_fov_y, const camera::Pose&
   for (int k = 0; k < 3; ++k) out[k] = len > 0 ? out[k] / len : 0;
 }
 
+void muzzle_to_world(const HeldModel& model, int a, int b, double t, const Placement& p,
+                     double gun_fov_y, const camera::Pose& view, double at[3], double dir[3],
+                     double up[3]) {
+  float tip[3];
+  muzzle_at(model, a, b, t, tip);
+  held_to_world(p, gun_fov_y, view, tip, at);
+  held_dir_to_world(p, gun_fov_y, view, tip, model.muzzle_dir, dir);
+  constexpr float kUp[3] = {0, 1, 0};
+  double u[3];
+  held_dir_to_world(p, gun_fov_y, view, tip, kUp, u);
+  const double along = u[0] * dir[0] + u[1] * dir[1] + u[2] * dir[2];
+  double len = 0;
+  for (int k = 0; k < 3; ++k) {
+    up[k] = u[k] - along * dir[k];
+    len += up[k] * up[k];
+  }
+  len = std::sqrt(len);
+  for (int k = 0; k < 3; ++k) up[k] = len > 0 ? up[k] / len : (k == 1 ? 1 : 0);
+}
+
 }  // namespace ge::viewmodel
