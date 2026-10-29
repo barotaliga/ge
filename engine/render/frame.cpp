@@ -63,6 +63,8 @@ void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint
   u.size[3] = 1.0f / static_cast<float>(height);
   u.time[0] = static_cast<float>(view.time_s);
   u.time[1] = static_cast<float>(view.frame);
+  // A white Lambertian face under lamp_lux: lamp_lux / pi in the sun's units, pre-exposed.
+  u.time[2] = static_cast<float>(view.lamp_lux / (kSunLux * 3.14159265358979323846) * pre);
   u.world[0] = static_cast<float>(view.altitude_m * 1e-3);
   std::memcpy(u.planes, cam.planes, sizeof cam.planes);
   // THE WEATHER: a visual range V closes the view as exp(-3.912 d / V) (the contrast a black
@@ -353,6 +355,11 @@ wgpu::BindGroupLayout make_layout(gpu::Device& device, std::string_view label,
         break;
       case Slot::storage_read:
         e.buffer.type = wgpu::BufferBindingType::ReadOnlyStorage;
+        break;
+      case Slot::storage_shade:
+        // Kept off the vertex stage's storage-buffer count (8 on the smallest devices).
+        e.buffer.type = wgpu::BufferBindingType::ReadOnlyStorage;
+        e.visibility = visibility & ~wgpu::ShaderStage::Vertex;
         break;
       case Slot::storage:
         e.buffer.type = wgpu::BufferBindingType::Storage;

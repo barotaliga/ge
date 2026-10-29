@@ -299,6 +299,17 @@ void create_family(gpu::Device& device, const InstancePipelines& ip, InstanceFam
                    std::string_view label, std::span<const MeshSource> meshes,
                    std::span<const float> materials_rgb, uint32_t capacity,
                    uint32_t palette_joints) {
+  std::vector<Surface> surfaces;
+  for (size_t i = 0; i + 2 < materials_rgb.size(); i += 3) {
+    surfaces.push_back(matte_surface(&materials_rgb[i]));
+  }
+  create_family(device, ip, f, label, meshes, std::span<const Surface>(surfaces), capacity,
+                palette_joints);
+}
+
+void create_family(gpu::Device& device, const InstancePipelines& ip, InstanceFamily& f,
+                   std::string_view label, std::span<const MeshSource> meshes,
+                   std::span<const Surface> surfaces, uint32_t capacity, uint32_t palette_joints) {
   f.label = std::string(label);
   f.capacity = std::clamp(capacity, 1u, kMaxInstances);
   f.count = 0;
@@ -427,10 +438,11 @@ void create_family(gpu::Device& device, const InstancePipelines& ip, InstanceFam
   f.lods = buffer("lods", lod_rows.size() * sizeof(LodRow), BU::Storage);
   device.queue.WriteBuffer(f.lods, 0, lod_rows.data(), lod_rows.size() * sizeof(LodRow));
   std::vector<float> mats;
-  for (size_t i = 0; i + 2 < materials_rgb.size(); i += 3) {
-    mats.insert(mats.end(), {materials_rgb[i], materials_rgb[i + 1], materials_rgb[i + 2], 1.0f});
+  pack_surfaces(surfaces, mats);
+  if (mats.empty()) {
+    const Surface white;
+    pack_surfaces(std::span<const Surface>(&white, 1), mats);
   }
-  if (mats.empty()) mats.assign(4, 1.0f);
   f.materials = buffer("materials", mats.size() * 4, BU::Storage);
   device.queue.WriteBuffer(f.materials, 0, mats.data(), mats.size() * 4);
   f.instances = buffer("instances", uint64_t{kStreams} * f.capacity * 16, BU::Storage);
