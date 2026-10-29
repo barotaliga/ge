@@ -172,5 +172,7 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   let lit = snow_light(SnowPoint(albedo, n, g.n, v, world, g.sun, g.dist, foot, packed, rock, loose,
                                  cavity),
                        SnowGains(snow.look.x, snow.look.w, snow.look2.x));
-  return ground_out(in, lit.rgb, clamp(lit.a * 4.0, 0.0, 1.0));
+  // The lamps: the street's, a headlamp's, a fire's.
+  let lamps = local_lights(matte(albedo), g.rel, n, v, in.position.xyz);
+  return ground_out(in, lit.rgb + lamps, clamp(lit.a * 4.0, 0.0, 1.0));
 }

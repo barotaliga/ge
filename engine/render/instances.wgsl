@@ -207,6 +207,13 @@ fn fs_depth(in: VertexOut) {
   }
 }
 
+// Material `m`'s surface (render/surface.hpp: two rows a material), soaked by the rain.
+fn surface_of(m: u32) -> Surface {
+  let a = materials[m * 2u];
+  let b = materials[m * 2u + 1u];
+  return Surface(wet_albedo(a.rgb, b.w), a.w, b.x, b.y, b.z, b.w);
+}
+
 struct FragmentOut {
   @location(0) colour: vec4f,
   @location(1) motion: vec4f,  // rg: the screen motion (uv), b: reactive (0: a solid surface)
@@ -218,14 +225,17 @@ fn fs_main(in: VertexOut, @builtin(front_facing) front: bool) -> FragmentOut {
   if (!front) {
     n = -n;
   }
-  let a = wet_albedo(materials[in.material].rgb, 0.6);
+  let s = surface_of(in.material);
   let y = in.rel.y + frame.eye.y;
   let xz = in.rel.xz + frame.eye.xz;
-  let lit = max(dot(n, frame.sun.xyz), 0.0) *
+  let v = -in.rel / max(length(in.rel), 1e-3);
+  let sun = sun_light(y, xz) *
             ground_shadow(ground, horizon0, horizon1, linear_clamp, frame.sun.xyz, xz) *
             sun_shadow(shadow, shadow_maps, shadow_cmp, in.rel, n, in.position.xy, frame.time.y);
-  var c = a / PI * (sun_light(y, xz) * lit + sky_irradiance(n));
-  c += wet_sheen(n, -in.rel / max(length(in.rel), 1e-3), sun_light(y, xz) * lit, 0.0);
+  var c = surface_lit(s, n, v, sun);
+  c += local_lights(s, in.rel, n, v, in.position.xyz);
+  c += s.albedo * s.emissive * (frame.world.y / kSunLux);
+  c += wet_sheen(n, v, sun * max(dot(n, frame.sun.xyz), 0.0), 0.0);
   var out: FragmentOut;
   out.colour = vec4f(haze(c, in.position.xy * frame.size.zw, length(in.rel)), 1.0);
   out.motion = vec4f(screen_motion(frame, vec4f(in.last_rel, 1.0), in.position.xy), 0.0, 0.0);

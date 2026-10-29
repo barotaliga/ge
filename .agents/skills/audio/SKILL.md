@@ -16,14 +16,14 @@ and the beds a genre shares go in that plugin's `app/` half (`plugins` skill).
 | --- | --- |
 | `voice.hpp` | The vocabulary: `Tone`, `Noise` (one-shots), `LayerSpec`, `LayerTarget` (steered layers), `kRate` (48 kHz, everywhere), the envelope floor `kMinAttackMs`, `safe_cutoff`, the shaper's rules |
 | `dsp.hpp` | Per-sample blocks: the sine table, the saturation curves, the noise pools, polyBLEP oscillators, the state-variable filter (`svf_tune` every `kControl` samples), one-pole glides |
-| `synth.hpp` | The graph: `tone`, `noise`, `layer`/`set`/`stop`, `bus_gain`, `render`; the ring, the voice pool, the echo, the limiter, `stats` |
+| `synth.hpp` | The graph: `tone`, `noise`, `layer`/`set`/`stop`, `bus_gain`, `render`; the ring, the voice pool, the echo, the limiter, `stats`; STREAMS (`stream`, `feed`, `queued`, `steer`, `stop`): mono samples made elsewhere (voice chat's talkers, `engine/net/voice.hpp`) on a lock-free ring each, played on a bus, `Stats::starved` when one runs dry |
 | `sound.hpp` | `SoundDef` (id, the sentence it should feel like, its voices), `PlayShape` (gain, pitch, stretch, pan), `play_def`, `find_sound` |
 | `rack.hpp` | A bed's layers: built on the first `rack_apply`, steered every frame |
 | `pcm.hpp` | `Pcm` (mono samples at their own rate, the loop) and `read_wav` (8/16-bit PCM, float, extensible, the loop from `smpl`, `cue ` + `ltxt`, or `cue ` alone) |
 | `synth.hpp` (`sample`) | Sampled voices: a `Pcm` read in 32.32 fixed point with Catmull-Rom interpolation, pitched, looped (`Loop::file`, `once`, `whole`), steered (`sample_set`), stopped with a fade (`sample_stop`), `kMaxSamples` at once, the quietest stolen; `sample_live` from the producer |
 | `channels.hpp` | Sounds in a world: `hear` (gain falling linearly with distance, pan off the listener's right) and `Channels` (an entity's channel replaces, channel 0 stacks, the limit steals the quietest, the inaudible never start, the listener's own centred, `move` and `update` once a frame) |
 | `meter.hpp`, `wav.hpp` | A buffer's level, peak, octave bands, centroid, onset, length and balance; its WAV bytes |
-| `engine/platform/audio.hpp` | The device: `open_audio` pulls the synth on SDL's audio thread |
+| `engine/platform/audio.hpp` | The device: `open_audio` pulls the synth on SDL's audio thread; `open_audio_in` and `read_audio_in` the microphone |
 | `engine/lab/sound.hpp` | `sound_shot`: a buffer metered, its metrics, its picture, its WAV, in a lab |
 
 ## Design rules

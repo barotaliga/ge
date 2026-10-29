@@ -3,7 +3,7 @@
 // there (the synth's ring carries it). The dummy driver is what makes the real device path
 // testable in a container; a desktop with a sound server runs the same code.
 //
-// ge:summary Tests for the audio device: opens on the dummy driver and pulls the synth
+// ge:summary Tests for the audio device and the microphone on the dummy driver
 // ge:keywords test audio device dummy-driver pull frames-pulled synth ring thread
 // ge:skill platform audio testing
 #include <chrono>
@@ -49,4 +49,31 @@ TEST(the_device_pulls_the_synth_on_its_own_thread) {
   CHECK(synth.now_s() > 0.1);
   ge::platform::pause_audio(*out);
   ge::platform::resume_audio(*out);
+}
+
+TEST(the_microphone_opens_and_is_read_on_the_game_thread) {
+#if defined(_WIN32)
+  _putenv_s("SDL_AUDIO_DRIVER", "dummy");
+#else
+  setenv("SDL_AUDIO_DRIVER", "dummy", 1);
+#endif
+  if (!ge::platform::audio_available()) {
+    ge::test::skip("no audio driver, not even SDL's dummy");
+    return;
+  }
+  auto in = ge::platform::open_audio_in(48000);
+  if (!in) {
+    ge::test::skip("this SDL's dummy driver records nothing");
+    return;
+  }
+  float buffer[960];
+  const auto until = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+  while (in->frames_read() < 4800 && std::chrono::steady_clock::now() < until) {
+    ge::platform::read_audio_in(*in, buffer, 960);
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+  CHECK_MSG(in->frames_read() >= 4800, "the dummy microphone gave " +
+                                           std::to_string(in->frames_read()) +
+                                           " frames in 3 s (skill: platform)");
+  CHECK(ge::platform::read_audio_in(*in, buffer, 0) == 0);
 }
