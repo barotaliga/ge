@@ -131,7 +131,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 ## Measuring
 
 - `ge lab <gpu-lab>` printing the frame's per-pass GPU and CPU costs as a table beside its metrics
-- `ge lab sound <lab>` (a spectrogram of each WAV a lab writes, on its report page: the cut-off falling with distance seen without listening; the classic-enhance sound page's spectrogram moved into engine/lab and reused)
+- `ge lab sound <lab>` (a spectrogram of each WAV a lab writes, on its report page: the cut-off falling with distance seen without listening; the classic-enhance sound page's spectrogram moved into engine/lab and reused; also `ge lab listen <id> <wav>` for one WAV: its meters printed (peak, RMS, band, dropouts) and its spectrogram drawn, so an agent with no speakers checks a voice without writing a chart)
 - `ge profile --wall` (a sampling CPU profiler: wall time by inlined frame, the main thread apart from the workers, where instruction counts hide a slow call)
 - `ge profile --callgrind <lab>`
 - `ge lab <id> --toggle=<feature>` (a lab's passes timed with the feature on and off, one table)
