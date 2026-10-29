@@ -22,12 +22,22 @@
 //   up and out at up to 0.8 of the entry speed (two drops a joule's square root, 8 to 160), and,
 //   as the crater closes (`Entry::jet_at`), the jet's column of drops straight up at half the
 //   entry speed.
+// - MOVING ACROSS THE SURFACE (a running jump, a dive, a stone thrown): the body pushes the water
+//   ahead of it instead of only dropping into it. Its angle off the vertical, a, leans the ring
+//   (wake.hpp) by kLeanMost sin a toward where it is going: the rim and the crown piled up ahead,
+//   the waves ahead higher and those behind lower. The crater is drawn out along the run by what
+//   the body covers under the surface while it is open (kReachShare of its speed across over
+//   that time, at most kReachMost crater radii), and the crown's drops are flung on forward
+//   (`Entry::ahead`). The crater's size still comes from the speed down; the drops count the
+//   whole energy. The player's running jump off the bank (10 m/s across, 10.8 m/s down) leans
+//   his splash by a half and draws his crater out to about 2.5 m by 1.4.
 // A body coming out of the water (`leaving`) sets off a ring of its volume's share alone and a
 // curtain of drops falling off it, no crater.
 //
 // ge:summary A body through the surface: the crater, the ring and the spray by its mass and speed
 // ge:keywords water entry splash crater cavity jet worthington body mass density footprint
-// ge:keywords kinetic-energy crown spray entry_of jump-in dive cannonball
+// ge:keywords kinetic-energy crown spray entry_of jump-in dive cannonball oblique running-jump
+// ge:keywords lean bow
 // ge:skill water
 // ge:test tests/water_entry_test.cpp
 #pragma once
@@ -36,7 +46,10 @@
 
 namespace ge::water {
 
-inline constexpr double kCraterShare = 0.35;  // of the entry's kinetic energy
+inline constexpr double kCraterShare = 0.35;  // of the entry's kinetic energy down
+inline constexpr double kLeanMost = 0.75;     // the lean of a body skimming in flat
+inline constexpr double kReachShare = 0.4;    // of the distance run across while the crater is open
+inline constexpr double kReachMost = 1.5;     // crater radii the cavity is drawn out at most
 
 // The body going through the surface.
 struct Entrant {
@@ -51,10 +64,11 @@ struct Entrant {
 // What the water does about it.
 struct Entry {
   Ring ring;             // the waves and, going in, the crater (set off at `ring.t0`)
-  double energy = 0;     // J: the kinetic energy down through the surface
+  double energy = 0;     // J: the body's kinetic energy at the surface
   double radius = 0;     // m: the crater's
   int drops = 0;         // the crown's drops (going in) or the curtain's (leaving)
-  double speed = 0;      // m/s: the fastest drop's
+  double speed = 0;      // m/s: the fastest drop's, up and out
+  double ahead = 0;      // m/s: the most a crown's drop is flung on along the run
   double jet_at = 0;     // s after t0: the crater closed and the jet thrown up (0: none)
   double jet_speed = 0;  // m/s: the jet's
   double y = 0;          // the surface's height, m

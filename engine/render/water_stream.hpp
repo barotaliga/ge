@@ -69,7 +69,8 @@ void waterfall_spray(const water::Flow& flow, double dt, core::Rng& rng,
 // A splash's spray: drops thrown up and out by its speed and size.
 void splash_spray(const water::Splash& splash, core::Rng& rng, std::vector<Particle>& out);
 // A body through the surface (water/entry.hpp): going in, the crown of drops off the crater's rim
-// and a little mist; coming out, the curtain falling off it.
+// and a little mist, more of them, taller and flung on ahead when it came in moving across;
+// coming out, the curtain falling off it.
 void entry_spray(const water::Entry& entry, core::Rng& rng, std::vector<Particle>& out);
 // The jet the closing crater throws up its middle, `entry.jet_at` s after it went in.
 void jet_spray(const water::Entry& entry, core::Rng& rng, std::vector<Particle>& out);

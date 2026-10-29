@@ -225,50 +225,94 @@ void splash_spray(const water::Splash& splash, core::Rng& rng, std::vector<Parti
   }
 }
 
-void entry_spray(const water::Entry& entry, core::Rng& rng, std::vector<Particle>& out) {
+namespace {
+
+// A ring's lean as a unit direction, its share, and the crater's drawn-out centre (entry.hpp).
+struct Lean {
+  double share = 0, ux = 1, uz = 0, x = 0, z = 0, along = 0;
+};
+Lean lean_of(const water::Entry& entry) {
   const water::Ring& ring = entry.ring;
-  const double rim = entry.radius > 0 ? entry.radius : ring.size;
+  Lean l;
+  l.share = core::hypot(ring.lean_x, ring.lean_z);
+  l.x = ring.x;
+  l.z = ring.z;
+  l.along = entry.radius > 0 ? entry.radius : ring.size;
+  if (l.share <= 0) return l;
+  l.ux = ring.lean_x / l.share;
+  l.uz = ring.lean_z / l.share;
+  l.x += 0.5 * ring.reach * l.ux;
+  l.z += 0.5 * ring.reach * l.uz;
+  l.along += 0.5 * ring.reach;
+  return l;
+}
+
+// An angle round the rim, `a` 0 straight ahead: more of them ahead the more the ring leans (drawn
+// by rejection against 1 + lean cos a).
+double rim_angle(const Lean& l, core::Rng& rng) {
+  for (int i = 0; i < 16; ++i) {
+    const double a = core::range(rng, -kPi, kPi);
+    if (core::range(rng, 0, 1 + l.share) <= 1 + l.share * lm::cos(a)) return a;
+  }
+  return 0;
+}
+
+}  // namespace
+
+void entry_spray(const water::Entry& entry, core::Rng& rng, std::vector<Particle>& out) {
+  const Lean l = lean_of(entry);
+  const double rim = entry.radius > 0 ? entry.radius : entry.ring.size;
   for (int i = 0; i < entry.drops; ++i) {
-    const double a = core::range(rng, 0, 2 * kPi);
-    const double r = core::range(rng, 0.7, 1.1) * rim;
+    const double a = rim_angle(l, rng);
+    const double ca = lm::cos(a), sa = lm::sin(a);
+    // The rim's point and its outward direction on the plan, the lean's frame turned to the world.
+    const double r = core::range(rng, 0.7, 1.1);
+    const double fx = l.along * ca, fz = rim * sa;
+    const double px = l.x + r * (fx * l.ux - fz * l.uz), pz = l.z + r * (fx * l.uz + fz * l.ux);
+    const double ox = ca * l.ux - sa * l.uz, oz = ca * l.uz + sa * l.ux;
     if (entry.radius > 0) {
-      // The crown: thrown up steeply off the rim, the fastest highest.
-      const double s = core::range(rng, 0.35, 1.0) * entry.speed;
+      // The crown: thrown up steeply off the rim, the fastest highest, the side ahead taller and
+      // flung on along the run.
+      const double tall = 1 + l.share * ca;
+      const double s = core::range(rng, 0.35, 1.0) * entry.speed * tall;
       const double up = s * core::range(rng, 0.75, 0.95), side = s * core::range(rng, 0.2, 0.5);
-      out.push_back(drop(ring.x + r * lm::cos(a), entry.y, ring.z + r * lm::sin(a),
-                         side * lm::cos(a), up, side * lm::sin(a), core::range(rng, 0.8, 1.6),
-                         core::range(rng, 0.03, 0.08), 0.3, 1.0, 0.85));
+      const double on = entry.ahead * core::range(rng, 0.3, 1.0) * 0.5 * (1 + ca);
+      out.push_back(drop(px, entry.y, pz, side * ox + on * l.ux, up, side * oz + on * l.uz,
+                         core::range(rng, 0.8, 1.6), core::range(rng, 0.03, 0.08), 0.3, 1.0, 0.85));
     } else {
       // The curtain off a body coming out: drops falling back near where it rose.
       const double s = core::range(rng, 0.2, 1.0) * entry.speed;
-      out.push_back(drop(ring.x + r * lm::cos(a), entry.y + core::range(rng, 0.05, 0.6),
-                         ring.z + r * lm::sin(a), 0.3 * s * lm::cos(a), s * 0.3,
-                         0.3 * s * lm::sin(a), core::range(rng, 0.5, 1.0), 0.03, 0.2, 1.0, 0.8));
+      out.push_back(drop(px, entry.y + core::range(rng, 0.05, 0.6), pz, 0.3 * s * ox, s * 0.3,
+                         0.3 * s * oz, core::range(rng, 0.5, 1.0), 0.03, 0.2, 1.0, 0.8));
     }
   }
-  // A mist off the crown, a fine that drifts.
+  // A mist off the crown, a fine that drifts, carried on along the run.
   const int mist = entry.drops / 4;
   for (int i = 0; i < mist; ++i) {
-    const double a = core::range(rng, 0, 2 * kPi);
+    const double a = rim_angle(l, rng);
+    const double ca = lm::cos(a), sa = lm::sin(a);
+    const double ox = ca * l.ux - sa * l.uz, oz = ca * l.uz + sa * l.ux;
+    const double fx = l.along * ca, fz = rim * sa;
     const double s = core::range(rng, 0.1, 0.4) * entry.speed;
-    out.push_back(drop(ring.x + rim * lm::cos(a), entry.y + 0.1, ring.z + rim * lm::sin(a),
-                       s * lm::cos(a), s, s * lm::sin(a), core::range(rng, 1.0, 2.0),
+    const double on = 0.5 * entry.ahead * core::range(rng, 0.2, 0.6);
+    out.push_back(drop(l.x + fx * l.ux - fz * l.uz, entry.y + 0.1, l.z + fx * l.uz + fz * l.ux,
+                       s * ox + on * l.ux, s, s * oz + on * l.uz, core::range(rng, 1.0, 2.0),
                        core::range(rng, 0.15, 0.3), 1.5, 0.15, 0.35));
   }
 }
 
 void jet_spray(const water::Entry& entry, core::Rng& rng, std::vector<Particle>& out) {
   if (entry.jet_speed <= 0) return;
-  const water::Ring& ring = entry.ring;
+  const Lean l = lean_of(entry);
   const int n = std::max(6, entry.drops / 3);
   for (int i = 0; i < n; ++i) {
     const double a = core::range(rng, 0, 2 * kPi);
     const double r = core::range(rng, 0, 0.25) * entry.radius;
     const double up = core::range(rng, 0.5, 1.0) * entry.jet_speed;
     const double side = core::range(rng, 0, 0.12) * entry.jet_speed;
-    out.push_back(drop(ring.x + r * lm::cos(a), entry.y, ring.z + r * lm::sin(a), side * lm::cos(a),
-                       up, side * lm::sin(a), core::range(rng, 0.6, 1.2),
-                       core::range(rng, 0.04, 0.09), 0.2, 1.0, 0.9));
+    out.push_back(drop(l.x + r * lm::cos(a), entry.y, l.z + r * lm::sin(a), side * lm::cos(a), up,
+                       side * lm::sin(a), core::range(rng, 0.6, 1.2), core::range(rng, 0.04, 0.09),
+                       0.2, 1.0, 0.9));
   }
 }
 

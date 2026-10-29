@@ -186,12 +186,24 @@ is seen of it is evaluated. From the kinetic energy E = ½mv² down through the 
   joule's square root, 8 to 160) with a little mist, and the jet's column of drops when the crater
   closes (`render/water_stream.hpp`'s `entry_spray` and `jet_spray`). A body coming out sets off a
   ring of its volume's share and a curtain of drops, no crater.
+- **Running in.** A body moving across the surface pushes the water ahead of it rather than
+  dropping into it. Its angle off the vertical, a, leans the ring by 0.75 sin a toward where it is
+  going (`Ring::lean_x`, `lean_z`): everything the ring does is multiplied by 1 + |lean| cos φ,
+  φ from that direction, so the waves ahead are higher, those behind lower and the crater's rim
+  piled up in front. A cosine round the circle sums to nothing, so the lean moves no water. The
+  crater is drawn out along the run by what the body covers under the surface while it is open
+  (0.4 of its speed across over that time, at most 1.5 radii: `Ring::reach`), an ellipse centred
+  half that ahead, and the waves are set off from its centre. The crown is denser, taller and
+  flung on ahead (up to 0.6 of the speed across). The crater's size still comes from the speed
+  down; the drops count the whole energy. Oblique impact studies show the same picture: the splash
+  curtain is higher and faster on the downstream side, and the cavity is drawn out along the path.
 
 Dropped from 2 m (6.3 m/s) into still water, the `gpu-plunge` lab's table: a 50 g pebble opens
 0.08 m and sends 0.1 cm waves 2 m out; a 20 kg crate (it floats) 0.37 m, 1 cm; the 90 kg player
 0.53 m, 3.3 cm; a 400 kg boulder 0.77 m, 7.6 cm. The player jumping in off a bank in the classic
-move enters at 10.8 m/s: a crater 1.4 m across and 0.42 m deep, 145 drops, waves of 4.7 cm at
-2 m. A grid simulation of the surface (a height field stepped by the wave equation, or a
+move enters at 10.8 m/s down and 10 m/s across: a crater 1.4 m across drawn out to 2.45 m
+along his run and 0.42 m deep, 160 drops, a lean of 0.51, waves of 10.4 cm 2 m ahead and 4.0 cm
+2 m behind (6.2 and 1.8 cm at 5 m). A grid simulation of the surface (a height field stepped by the wave equation, or a
 convolution of the ripples) was not taken: it costs a grid round every splash every frame, has to
 be absorbed at its edges, and the rings already carry the waves out at the right speed for any
 length (§ Not taken).
@@ -663,7 +675,7 @@ never read back by the simulation.
 | `gpu-water` | picture | M24g, M24g2, M24i | Named views: the calm mirror, a windy lake, the sea at several Beaufort forces, surf on a beach, a boat's wake from behind and from the side, crates dropped in, a river, a waterfall, sunset glitter, night, rain; the distance-band diff |
 | `lake` | picture | M24g, M24h, M24l | Fall Line's own frame with a tarn on a seed: from the shore, from over it, into the sun, in a fresh wind, at the day's end, under it and looking up from under it |
 | `gpu-underwater` | picture | M24h, M24h3 | Every look's view round a scene under water, the presets, Snell's window measured, a dive through the surface; then the caustics and the shafts |
-| `gpu-plunge` | picture | M24h2 | A first-person player in the classic move jumping off a bank into a dirty pond: the plunge from his eyes, the splash from the bank (crater, crown, jet, rings), under the water, surfacing through the waterline into the wet lens; four bodies of different mass dropped in; the entry's numbers |
+| `gpu-plunge` | picture | M24h2 | A first-person player in the classic move jumping off a bank into a dirty pond: the plunge from his eyes, the splash from the bank (crater, crown, jet, rings), under the water, surfacing through the waterline into the wet lens; four bodies of different mass dropped in; the player straight in against running in; the entry's numbers |
 | `water-lod` | picture | M24f, M24g | The tiers round an actor and round the camera as maps; a flow region coarsened and refined with its volume held; the picture diff per distance band across a slow fly-out (no band pops); the cost against distance |
 | `water-audition` | sound | M24j | Every water voice, metered and written as WAV: the bank, splashes from a pebble to a boulder, eleven places (a calm and a fresh lake from the shore, a boat and under it, a gale on a beach, a slow river and a stream, a waterfall from 15 and 60 m and under its pool, nowhere), the roar against distance beside 1 / r, a swim |
 | `water-cost` | bench | M24f, M24g | The CPU's costs per step (sample, floats, the flow grid) and the GPU's per pass |

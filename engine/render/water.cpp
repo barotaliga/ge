@@ -271,7 +271,7 @@ int add_water_body(gpu::Device& device, Water& water, const water::Body& body,
   slot.waves =
       make_buffer(device, "water.waves", size_t{kWaveSlots} * 32, wgpu::BufferUsage::Storage);
   slot.rings =
-      make_buffer(device, "water.rings", size_t{kWaterRings} * 32, wgpu::BufferUsage::Storage);
+      make_buffer(device, "water.rings", size_t{kWaterRings} * 48, wgpu::BufferUsage::Storage);
   stage_body(slot, body);
   upload_waves(device, slot, body);
   if (water.scene_colour_view) {
@@ -293,14 +293,16 @@ void set_water_wakes(gpu::Device& device, Water& water, int index, const water::
                      int body) {
   Water::Slot& slot = water.bodies[static_cast<size_t>(index)];
   std::vector<float> data;
-  data.reserve(size_t{kWaterRings} * 8);
+  data.reserve(size_t{kWaterRings} * 12);
   int n = 0;
   for (auto r = wakes.rings.rbegin(); r != wakes.rings.rend() && n < kWaterRings; ++r) {
     if (r->body != body) continue;
-    data.insert(data.end(), {static_cast<float>(r->x), static_cast<float>(r->z),
-                             static_cast<float>(r->t0), static_cast<float>(r->volume),
-                             static_cast<float>(r->size), static_cast<float>(r->shortest),
-                             static_cast<float>(r->crater), static_cast<float>(r->depth)});
+    data.insert(data.end(),
+                {static_cast<float>(r->x), static_cast<float>(r->z), static_cast<float>(r->t0),
+                 static_cast<float>(r->volume), static_cast<float>(r->size),
+                 static_cast<float>(r->shortest), static_cast<float>(r->crater),
+                 static_cast<float>(r->depth), static_cast<float>(r->lean_x),
+                 static_cast<float>(r->lean_z), static_cast<float>(r->reach), 0.0f});
     ++n;
   }
   slot.staged.wake[0] = static_cast<float>(n);

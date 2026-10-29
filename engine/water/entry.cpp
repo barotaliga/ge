@@ -34,19 +34,32 @@ Entry entry_of(const Entrant& body, int water_body, double t, double rho) {
     e.speed = 0.5 + 0.3 * v;
     return e;
   }
-  e.energy = 0.5 * body.mass * v * v;
-  // The crater: a share of the energy lifts a hemisphere's water to the surface.
-  const double r4 = 4 * kCraterShare * e.energy / (kPi * rho * kGravity);
+  // The crater: a share of the energy down through the surface lifts a hemisphere's water.
+  const double down = 0.5 * body.mass * v * v;
+  const double r4 = 4 * kCraterShare * down / (kPi * rho * kGravity);
   e.radius = std::max(std::sqrt(std::sqrt(r4)), footprint);
   const double density = body.mass / std::max(body.volume, 1e-9);
   const double dense = std::clamp(std::sqrt(density / rho), 0.5, 1.5);
   e.ring.crater = e.radius;
   e.ring.depth = 0.6 * e.radius * dense;
   e.ring.size = e.radius;
-  e.ring.volume = 2.0 / 3.0 * kPi * e.radius * e.radius * e.ring.depth;
+  e.jet_at = 2 * std::sqrt(e.radius / kGravity);
+  // Moving across the surface: the water ahead pushed on, by the angle off the vertical, and the
+  // cavity drawn out along the run.
+  const double across = std::sqrt(body.vx * body.vx + body.vz * body.vz);
+  const double total = std::sqrt(across * across + v * v);
+  if (across > 0 && total > 0) {
+    const double lean = kLeanMost * across / total;
+    e.ring.lean_x = lean * body.vx / across;
+    e.ring.lean_z = lean * body.vz / across;
+    e.ring.reach = std::min(kReachShare * across * e.jet_at, kReachMost * e.radius);
+  }
+  const double along = e.radius + 0.5 * e.ring.reach;
+  e.ring.volume = 2.0 / 3.0 * kPi * e.radius * along * e.ring.depth;
+  e.energy = 0.5 * body.mass * total * total;
   e.drops = static_cast<int>(std::clamp(2 * std::sqrt(e.energy), 8.0, 160.0));
   e.speed = 0.8 * v;
-  e.jet_at = 2 * std::sqrt(e.radius / kGravity);
+  e.ahead = 0.6 * across;
   e.jet_speed = 0.5 * v;
   return e;
 }

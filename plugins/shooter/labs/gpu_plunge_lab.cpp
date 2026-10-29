@@ -8,18 +8,21 @@
 // down, looks round, swims up, and his eyes coming out leave the lens wet (render/wet_lens.hpp:
 // the sheet draining, the drops sliding and drying). A second camera on the bank watches the
 // same run from 2 m up. Then four bodies of different mass and size dropped from 2 m, side by side
-// in time, show the water's answer scaling with the body.
+// in time, show the water's answer scaling with the body, and the player going in straight down
+// against going in at his run's speed shows the water pushed on ahead of a body moving across.
 //
 // Shots: the bank; the plunge in eight frames from his eyes; the bank's view of the splash in
 // six; the view under (looking ahead, down and up); surfacing in six frames; the four bodies;
-// a chart of his eyes and feet against the surface. Metrics (deterministic: the move, the water
-// and the lens are CPU and exact): the entry speed and energy, the crater, the drops, the wave at
-// 2 m, the lens's drops after surfacing, each body's crater and wave. Without an adapter the
+// straight in against running in; a chart of his eyes and feet against the surface. Metrics
+// (deterministic: the move, the water and the lens are CPU and exact): the entry speed and
+// energy, the crater, the drops, the waves ahead of and behind his run at 2 and 5 m, the lens's
+// drops after surfacing, each body's crater and wave. Without an adapter the
 // pictures are placeholders and the numbers are the same.
 //
 // ge:summary Lab: a first-person jump into a dirty pond: the splash, rings, the murk, the wet lens
 // ge:keywords lab gpu plunge jump splash crater crown jet rings ripples dive underwater murky
 // ge:keywords waterline wet-lens drops surfacing first-person shooter pmove mass size entry
+// ge:keywords oblique running-jump lean
 // ge:skill shooter water labs
 // ge:test tests/water_entry_test.cpp
 #include <algorithm>
@@ -355,14 +358,36 @@ gl::Picture shrink(const gl::Picture& p, int k) {
   return out;
 }
 
-// The wave a ring set: the highest crest it raises at `r` m over `span` s.
-double crest_at(const gw::Wakes& wakes, const gw::Ring& ring, double r, double span) {
+// The wave a ring set: the highest crest it raises (dx, dz) m from its point over `span` s.
+double crest_at(const gw::Wakes& wakes, const gw::Ring& ring, double dx, double dz, double span) {
   double most = 0;
   for (int i = 5; i <= static_cast<int>(span * 100); ++i) {
     const double tau = i * 0.01;
-    most = std::max(most, gw::ring_height(wakes, ring, r, tau));
+    most = std::max(most, gw::ring_height(wakes, ring, dx, dz, tau));
   }
   return most;
+}
+
+// The way a ring leans, as a unit direction on the plan (+x without a lean).
+void lean_dir(const gw::Ring& ring, double& ux, double& uz) {
+  const double l = ge::core::hypot(ring.lean_x, ring.lean_z);
+  ux = l > 0 ? ring.lean_x / l : 1;
+  uz = l > 0 ? ring.lean_z / l : 0;
+}
+
+// Two cameras on a run's line at (x, z) going (ux, uz): from the side, 5 m off its left and
+// 1.6 m up, the run going left to right, looking at the point 0.8 m on along it; or from behind,
+// 3 m up and 6 m back, looking at the point a metre on (low enough for the sky to show in the
+// opaque water's slopes).
+gr::FrameView run_view(double x, double z, double ux, double uz, bool above, double t) {
+  const double on = above ? 1.0 : 0.8, up = above ? 3.0 : 1.6;
+  const double ax = x + on * ux, az = z + on * uz;
+  const double ex = above ? x - 6 * ux : ax + 5 * uz, ez = above ? z - 6 * uz : az - 5 * ux;
+  const double heading = lm::atan2(ax - ex, az - ez);
+  const double run = ge::core::hypot(ax - ex, az - ez);
+  gr::FrameView v = ws::view_at(ex, kLevel + up, ez, heading, -lm::atan2(up, run), 0.62, 2.2, t);
+  v.fov_y = 0.75;
+  return v;
 }
 
 // THE FOUR BODIES, dropped from 2 m.
@@ -441,8 +466,15 @@ void run(gl::Lab& lab) {
   lab.metric("crown.drops", e.drops, "count");
   lab.metric("crown.speed", e.speed, "m/s");
   gw::Wakes still;
-  lab.metric("wave.at-2m", crest_at(still, e.ring, 2, 4), "m");
-  lab.metric("wave.at-5m", crest_at(still, e.ring, 5, 6), "m");
+  double ux = 1, uz = 0;
+  lean_dir(e.ring, ux, uz);
+  lab.metric("entry.across", e.ahead / 0.6, "m/s");
+  lab.metric("entry.lean", ge::core::hypot(e.ring.lean_x, e.ring.lean_z), "share");
+  lab.metric("crater.length", 2 * e.radius + e.ring.reach, "m");
+  lab.metric("wave.ahead-2m", crest_at(still, e.ring, 2 * ux, 2 * uz, 4), "m");
+  lab.metric("wave.behind-2m", crest_at(still, e.ring, -2 * ux, -2 * uz, 4), "m");
+  lab.metric("wave.ahead-5m", crest_at(still, e.ring, 5 * ux, 5 * uz, 6), "m");
+  lab.metric("wave.behind-5m", crest_at(still, e.ring, -5 * ux, -5 * uz, 6), "m");
   lab.metric("lens.drops-1s", drops_1s, "count");
   lab.metric("lens.drops-3s", drops_3s, "count");
   {
@@ -478,15 +510,16 @@ void run(gl::Lab& lab) {
                                        0, 0);
       t.rows.push_back({b.name, fixed(b.mass, 2), fixed(b.volume, 5), fixed(d.energy, 1),
                         fixed(d.radius, 3), fixed(d.ring.depth, 3), std::to_string(d.drops),
-                        fixed(crest_at(still, d.ring, 2, 4) * 100, 2) + " cm",
-                        fixed(crest_at(still, d.ring, 5, 6) * 100, 2) + " cm"});
+                        fixed(crest_at(still, d.ring, 2, 0, 4) * 100, 2) + " cm",
+                        fixed(crest_at(still, d.ring, 5, 0, 6) * 100, 2) + " cm"});
     }
     lab.table(t);
   }
 
   // PASS TWO, drawn.
   auto device = ge::gpu::create_device({.label = "gpu-plunge", .validation = 1});
-  const std::vector<std::string> ids = {"bank", "plunge", "splash", "under", "surfacing", "bodies"};
+  const std::vector<std::string> ids = {"bank",      "plunge", "splash", "under",
+                                        "surfacing", "bodies", "oblique"};
   if (!device) {
     if (ws::gpu_required()) {
       lab.fail("no GPU device, and GE_GPU_REQUIRE=1",
@@ -694,6 +727,71 @@ void run(gl::Lab& lab) {
               "and the boulder's wide craters, tall crowns and long, high rings",
               inputs},
              bodies.pic, Det::measured);
+  }
+
+  // STRAIGHT IN AGAINST RUNNING IN: the player at his entry's speed down, once with nothing
+  // across and once with his run's, side by side in time, from the side and from above.
+  {
+    Sheet oblique(12, 3, tw, th);
+    const double vy = -std::sqrt(2 * e.energy / 90 - (e.ahead / 0.6) * (e.ahead / 0.6));
+    const double across = e.ahead / 0.6;
+    const double at[3] = {0.18, e.jet_at + 0.1, 1.6};
+    for (int row = 0; row < 4; ++row) {
+      gw::Wakes wakes;
+      const double t0 = 400.0 + 20 * row;
+      const double run = row % 2 == 0 ? 0 : across;
+      const gw::Entry d = gw::entry_of({.mass = 90,
+                                        .volume = 0.088,
+                                        .footprint = 0.15,
+                                        .x = kMid - 2 * ux,
+                                        .y = kLevel,
+                                        .z = kMid - 2 * uz,
+                                        .vx = run * ux,
+                                        .vy = vy,
+                                        .vz = run * uz},
+                                       0, t0);
+      gw::emit_ring(wakes, d.ring);
+      gr::set_water_wakes(*device, s.water, 0, wakes, 0);
+      std::vector<gr::Particle> spray;
+      ge::core::Rng rng = ge::core::make_rng(7);
+      gr::entry_spray(d, rng, spray);
+      double now = t0;
+      ws::fly(*device, s, spray, 0.0);
+      bool jet = false;
+      for (int k = 0; k < 3; ++k) {
+        while (now < t0 + at[k] - 1e-9) {
+          std::vector<gr::Particle> more;
+          if (!jet && now >= t0 + d.jet_at) {
+            jet = true;
+            gr::jet_spray(d, rng, more);
+          }
+          ws::fly(*device, s, more, kStep);
+          now += kStep;
+        }
+        const bool above = row >= 2;
+        const gr::FrameView v = run_view(d.ring.x, d.ring.z, ux, uz, above, now);
+        const char* names[4] = {"STRAIGHT IN", "RUNNING IN", "STRAIGHT IN, BEHIND",
+                                "RUNNING IN, BEHIND"};
+        const char* name = names[row];
+        oblique.put(row * 3 + k, shrink(ws::draw(*device, s, v), 2),
+                    std::string(name) + "  +" + fixed(at[k], 2) + " S");
+      }
+      ws::fly(*device, s, {}, 5.0);
+    }
+    lab.shot(
+        {"oblique", "RUNNING IN PUSHES THE WATER AHEAD",
+         "The player going in at his entry's " + fixed(-vy, 1) +
+             " m/s down, first straight down, then with his run's " + fixed(across, 1) +
+             " m/s across, from the side (left to right) and from behind: the crater drawn out "
+             "along the run to " +
+             fixed(2 * e.radius + e.ring.reach, 2) +
+             " m, the crown piled up and flung on "
+             "ahead, the rings higher ahead than behind (water/entry.hpp, water/wake.hpp).",
+         "a round, upright crown straight in; running in, a lopsided crown leaning right, "
+         "drops thrown on ahead, a long crater; from behind (the run going away up the "
+         "frame) a round crater and rings against a long crater and rings stronger ahead",
+         inputs},
+        oblique.pic, Det::measured);
   }
 
   const uint32_t errors = device->errors.load();

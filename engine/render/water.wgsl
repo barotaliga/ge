@@ -38,10 +38,12 @@ struct WaterBody {
 }
 
 // A wake's ring (water/wake.hpp): x, z, the moment it was set off, its volume; its source's
-// size, its own shortest wave, a body's crater (m across, 0: none) and its depth.
+// size, its own shortest wave, a body's crater (m across, 0: none) and its depth; its lean (the
+// water pushed forward: x, z) and the crater drawn out along it (m), 0.
 struct Ring {
   at: vec4f,
   more: vec4f,
+  lean: vec4f,
 }
 
 // A wave: kx, kz, amplitude, angular frequency; phase, k, 0, 0.
@@ -86,28 +88,36 @@ fn height_at(xz: vec2f, t: f32, shortest: f32) -> f32 {
 
 const kGravity = 9.80665;
 
-// A ring's crater and the jet after it (water/wake.cpp's `near_field`): the height and its
-// slope along the radius.
-fn crater_at(r: Ring, dist: f32, tau: f32) -> vec2f {
+// Where `e` (m from a ring's point) lies against its lean: along it from the drawn-out crater's
+// centre and across it (water/wake.cpp's `frame_of`).
+fn lean_frame(r: Ring, e: vec2f) -> vec2f {
+  let share = length(r.lean.xy);
+  if (share <= 0.0) {
+    return vec2f(length(e), 0.0);
+  }
+  let u = r.lean.xy / share;
+  return vec2f(dot(e, u) - 0.5 * r.lean.z, e.y * u.x - e.x * u.y);
+}
+
+// A ring's crater and the jet after it at `e` (water/wake.cpp's `near_field`): the height.
+fn crater_at(r: Ring, e: vec2f, tau: f32) -> f32 {
   let crater = r.more.z;
   let open = 2.0 * sqrt(crater / kGravity);
   let height = 0.6 * r.more.w;
   let jet = 2.0 * sqrt(2.0 * height / kGravity);
+  let f = lean_frame(r, e);
   if (tau < open) {
-    let rho = dist / crater;
-    let g = exp(-rho * rho);
-    let e = sin(PI * tau / open);
-    return vec2f(-r.more.w * e * (1.0 - rho * rho) * g,
-                 -r.more.w * e * (-2.0 * rho * (2.0 - rho * rho) * g) / crater);
+    let q = vec2f(f.x / (crater + 0.5 * r.lean.z), f.y / crater);
+    let rho2 = dot(q, q);
+    let share = length(r.lean.xy);
+    let ahead = 1.0 + share * q.x / sqrt(rho2 + 0.0625);
+    return -r.more.w * sin(PI * tau / open) * (1.0 - rho2) * exp(-rho2) * ahead;
   }
   if (tau < open + jet) {
     let wide = crater / 3.0;
-    let q = dist / wide;
-    let g = exp(-q * q);
-    let e = sin(PI * (tau - open) / jet);
-    return vec2f(height * e * g, height * e * g * (-2.0 * dist / (wide * wide)));
+    return height * sin(PI * (tau - open) / jet) * exp(-dot(f, f) / (wide * wide));
   }
-  return vec2f(0.0);
+  return 0.0;
 }
 
 // THE WAKES: every ring's far field (water/wake.cpp's `wake_at`: its source's spectrum, its
@@ -124,15 +134,19 @@ fn wake_at(xz: vec2f, t: f32, shortest: f32) -> vec4f {
     if (tau <= 0.0) {
       continue;
     }
-    let e = xz - r.at.xy;
+    var e = xz - r.at.xy;
     if (r.more.z > 0.0) {
-      let dist = length(e);
-      let c = crater_at(r, dist, tau);
-      out.x += c.x;
-      if (dist > 0.0) {
-        out.y += c.y * e.x / dist;
-        out.z += c.y * e.y / dist;
-      }
+      // The crater's slope by central differences a thousandth of it apart.
+      let s = 1e-3 * r.more.z;
+      out.x += crater_at(r, e, tau);
+      out.y += (crater_at(r, e + vec2f(s, 0.0), tau) - crater_at(r, e - vec2f(s, 0.0), tau)) /
+               (2.0 * s);
+      out.z += (crater_at(r, e + vec2f(0.0, s), tau) - crater_at(r, e - vec2f(0.0, s), tau)) /
+               (2.0 * s);
+    }
+    let share = length(r.lean.xy);
+    if (share > 0.0) {
+      e -= 0.5 * r.lean.z * r.lean.xy / share;  // set off from the drawn-out crater's centre
     }
     let rs = sqrt(dot(e, e) + r.more.x * r.more.x);
     let phase = kGravity * tau * tau / (4.0 * rs);
@@ -150,9 +164,14 @@ fn wake_at(xz: vec2f, t: f32, shortest: f32) -> vec4f {
     }
     // The phase taken round in f32 from where it is still exact enough.
     let p = phase - 6.2831853 * floor(phase / 6.2831853);
-    out.x += keep * a * cos(p);
-    out.y += keep * a * k * sin(p) * e.x / rs;
-    out.z += keep * a * k * sin(p) * e.y / rs;
+    // Tipped forward by 1 + lean . e / rs (1 without a lean), its own slope carried by the height.
+    let d = dot(e, r.lean.xy);
+    let m = 1.0 + d / rs;
+    let dm = r.lean.xy / rs - d * e / (rs * rs * rs);
+    let h = keep * a * cos(p);
+    out.x += h * m;
+    out.y += keep * a * k * sin(p) * e.x / rs * m + h * dm.x;
+    out.z += keep * a * k * sin(p) * e.y / rs * m + h * dm.y;
   }
   return out;
 }
