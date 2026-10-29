@@ -24,13 +24,14 @@
 // con_lines (the scrollback kept), con_notifylines, con_notifytime, con_chat, con_suggest (how
 // many suggestions the list under the input line holds), and what the panel
 // is drawn on: con_bgtop and con_bgbottom (a gradient's colours, "rrggbb"), con_bgalpha and
-// con_bgimage (a picture over the gradient).
+// con_bgimage (a picture over the gradient); and con_font, the charset its text is written in
+// (docs/charsets.md: terminal, mono, ...; "" the 2D layer's own UI font).
 //
 // ge:summary The drop-down console: scrollback by kind, the input line, history, / commands, chat
 // ge:keywords console view drop-down tilde backquote toggleconsole scrollback history input-line
 // ge:keywords chat say say_team say_prox proximity whisper message server event notify
 // ge:keywords completion tab con_height con_chat con_speed con_lines slash-command
-// ge:keywords background gradient colour con_bgtop con_bgbottom con_bgalpha con_bgimage
+// ge:keywords background gradient colour con_bgtop con_bgbottom con_bgalpha con_bgimage con_font
 // ge:keywords autocomplete suggestion suggestions hint con_suggest
 // ge:skill console
 // ge:test tests/console_view_test.cpp
@@ -166,6 +167,8 @@ class ConsoleView {
 
   // What the panel is drawn on (the con_bg* cvars).
   Background background() const;
+  // con_font: the charset the text is written in ("": the 2D layer's UI font).
+  const std::string& font() const { return font_; }
 
   // The game's chat; none: a line is shown as said by `name`.
   void set_chat(ChatSender send) { chat_ = std::move(send); }
@@ -193,6 +196,7 @@ class ConsoleView {
   double notify_time_ = 4;
   bool chat_default_ = false;
   std::string bg_top_ = "10141c", bg_bottom_ = "10141c", bg_image_;
+  std::string font_ = "mono";
   double bg_alpha_ = 0.85;
   ChatSender chat_;
 };

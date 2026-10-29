@@ -11,6 +11,7 @@
 #include <string>
 
 #include "ui/background.hpp"
+#include "ui/charset_font.hpp"
 #include "ui/font.hpp"
 
 namespace ge::ui {
@@ -39,12 +40,17 @@ std::string fitted(const Font& f, float size, const std::string& text, float wid
 
 void draw_console(DrawList& list, const con::ConsoleView& view, const ConsoleStyle& style,
                   const Image* image, double time_s) {
-  const Font& font = style.font ? *style.font : ui_font(Weight::medium);
+  // The style's font, else con_font's charset, else the UI font.
+  const Font* named = style.font ? nullptr : charset_font(view.font());
+  const Font& font = style.font ? *style.font : named ? *named : ui_font(Weight::medium);
   const auto w = static_cast<float>(list.width());
   const auto h = static_cast<float>(list.height());
   const float s = h / 720.0f;
-  const float text = style.text_px * s, row = style.row_px * s, margin = style.margin_px * s;
-  const float ascent = font.metrics(text).ascent;
+  const float text = style.text_px * s, margin = style.margin_px * s;
+  const VMetrics m = font.metrics(text);
+  const float ascent = m.ascent;
+  // A pixel charset draws taller than asked (a whole multiple of its grid): its rows grow with it.
+  const float row = style.row_px * s * std::max(1.0f, (m.ascent + m.descent) / text);
   const float cover = std::round(static_cast<float>(view.cover()) * h);
 
   if (cover <= 0) {

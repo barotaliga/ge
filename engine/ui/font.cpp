@@ -6,10 +6,12 @@
 //
 // ge:summary The TrueType font over stb_truetype: glyph cache, kerning, UTF-8, built-in fonts
 // ge:keywords ui font stb_truetype glyph cache kerning utf8 codepoint embed barlow
+// ge:keywords grid-font load_grid area-mean pixel-font
 // ge:skill ui
 // ge:test tests/ui_font_test.cpp
 #include "ui/font.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 
@@ -53,6 +55,7 @@ namespace ge::ui {
 struct Font::Impl {
   stbtt_fontinfo info{};
   int ascent = 0, descent = 0, line_gap = 0;  // font units
+  std::vector<GridFace> grid;  // a grid font's faces, smallest first; empty: TrueType
 };
 
 Font::Font() = default;
@@ -74,34 +77,133 @@ bool Font::load(std::span<const uint8_t> ttf, std::string* why) {
   return true;
 }
 
+bool Font::load_grid(std::vector<GridFace> faces, std::string* why) {
+  impl_.reset();
+  cache_.clear();
+  for (const GridFace& f : faces) {
+    if (f.size <= 0 || f.columns <= 0 || f.rows <= 0 ||
+        f.coverage.size() != static_cast<size_t>(f.size) * static_cast<size_t>(f.size)) {
+      if (why) *why = "a grid face's coverage is not size x size bytes, or its grid is empty";
+      return false;
+    }
+  }
+  if (faces.empty()) {
+    if (why) *why = "a grid font needs at least one face";
+    return false;
+  }
+  std::sort(faces.begin(), faces.end(),
+            [](const GridFace& a, const GridFace& b) { return a.size < b.size; });
+  auto impl = std::make_unique<Impl>();
+  impl->grid = std::move(faces);
+  impl_ = std::move(impl);
+  return true;
+}
+
+bool Font::grid() const { return impl_ && !impl_->grid.empty(); }
+
 namespace {
 
 float scale_of(const stbtt_fontinfo& info, float size) {
   return stbtt_ScaleForPixelHeight(&info, size);
 }
 
+// The cell height a grid font draws at `size`: a pixel face's at a whole multiple of its grid.
+float grid_cell(const std::vector<GridFace>& faces, float size) {
+  const int pixel_h = faces.front().pixel_h;
+  if (pixel_h <= 0) return size;
+  const float h = static_cast<float>(pixel_h);
+  return std::max(1.0f, std::floor(size / h)) * h;
+}
+
+// The smallest face whose cells are at least `cell` px tall (only ever shrunk), else the largest.
+const GridFace& face_for(const std::vector<GridFace>& faces, float cell) {
+  for (const GridFace& f : faces)
+    if (static_cast<float>(f.size / f.rows) >= cell) return f;
+  return faces.back();
+}
+
+// A grid glyph's cell scaled to `cell` px tall at the pen's `shift` (0..1 px): an area mean of
+// the texels under each pixel, or a pixel face's texel at each pixel's centre.
+GlyphMask grid_mask(const std::vector<GridFace>& faces, int glyph, float cell, float shift) {
+  const GridFace& f = face_for(faces, cell);
+  const int cw = f.size / f.columns, ch = f.size / f.rows;
+  const int sx0 = (glyph % f.columns) * cw, sy0 = (glyph / f.columns) * ch;
+  const float scale = cell / static_cast<float>(ch);  // pixels a texel
+  const bool pixel = f.pixel_h > 0;
+  if (pixel) shift = 0;
+  GlyphMask m;
+  m.w = static_cast<int>(std::ceil(static_cast<float>(cw) * scale + shift));
+  m.h = static_cast<int>(std::ceil(cell));
+  m.x0 = 0;
+  m.y0 = -static_cast<int>(std::lround(f.baseline * cell));
+  m.alpha.assign(static_cast<size_t>(m.w) * static_cast<size_t>(m.h), 0);
+  auto texel = [&](int x, int y) {
+    return static_cast<float>(f.coverage[static_cast<size_t>(sy0 + y) * f.size + sx0 + x]);
+  };
+  for (int oy = 0; oy < m.h; ++oy) {
+    for (int ox = 0; ox < m.w; ++ox) {
+      float v = 0;
+      if (pixel) {
+        const int x = static_cast<int>(std::floor((static_cast<float>(ox) + 0.5f) / scale));
+        const int y = static_cast<int>(std::floor((static_cast<float>(oy) + 0.5f) / scale));
+        if (x < cw && y < ch) v = texel(x, y);
+      } else {
+        const float ax = (static_cast<float>(ox) - shift) / scale, bx = ax + 1 / scale;
+        const float ay = static_cast<float>(oy) / scale, by = ay + 1 / scale;
+        float sum = 0;
+        for (int y = std::max(0, static_cast<int>(std::floor(ay)));
+             y < std::min(ch, static_cast<int>(std::ceil(by))); ++y) {
+          const float wy =
+              std::min(by, static_cast<float>(y + 1)) - std::max(ay, static_cast<float>(y));
+          for (int x = std::max(0, static_cast<int>(std::floor(ax)));
+               x < std::min(cw, static_cast<int>(std::ceil(bx))); ++x) {
+            const float wx =
+                std::min(bx, static_cast<float>(x + 1)) - std::max(ax, static_cast<float>(x));
+            sum += texel(x, y) * wx * wy;
+          }
+        }
+        v = sum * scale * scale;
+      }
+      m.alpha[static_cast<size_t>(oy) * m.w + ox] =
+          static_cast<uint8_t>(std::min(255.0f, std::round(v)));
+    }
+  }
+  return m;
+}
+
 }  // namespace
 
 VMetrics Font::metrics(float size) const {
   if (!impl_) return {};
+  if (grid()) {
+    const float cell = grid_cell(impl_->grid, size);
+    const float base = impl_->grid.front().baseline;
+    return {base * cell, (1 - base) * cell, 0};
+  }
   const float s = scale_of(impl_->info, size);
   return {static_cast<float>(impl_->ascent) * s, static_cast<float>(-impl_->descent) * s,
           static_cast<float>(impl_->line_gap) * s};
 }
 
 int Font::glyph_index(uint32_t codepoint) const {
+  if (grid()) {
+    const GridFace& f = impl_->grid.front();
+    const auto cells = static_cast<uint32_t>(f.columns * f.rows);
+    return static_cast<int>(codepoint > 0 && codepoint < cells ? codepoint : f.missing);
+  }
   return impl_ ? stbtt_FindGlyphIndex(&impl_->info, static_cast<int>(codepoint)) : 0;
 }
 
 float Font::glyph_advance(int glyph, float size) const {
   if (!impl_) return 0;
+  if (grid()) return impl_->grid.front().advance * grid_cell(impl_->grid, size);
   int adv = 0, lsb = 0;
   stbtt_GetGlyphHMetrics(&impl_->info, glyph, &adv, &lsb);
   return static_cast<float>(adv) * scale_of(impl_->info, size);
 }
 
 float Font::kern(int left, int right, float size) const {
-  if (!impl_) return 0;
+  if (!impl_ || grid()) return 0;
   return static_cast<float>(stbtt_GetGlyphKernAdvance(&impl_->info, left, right)) *
          scale_of(impl_->info, size);
 }
@@ -141,7 +243,10 @@ const GlyphMask& Font::mask(int glyph, float size, float phase) const {
   auto it = cache_.find(key);
   if (it != cache_.end()) return it->second;
   GlyphMask m;
-  if (impl_) {
+  if (grid()) {
+    m = grid_mask(impl_->grid, glyph, grid_cell(impl_->grid, size),
+                  static_cast<float>(quarter) / 4);
+  } else if (impl_) {
     const float s = scale_of(impl_->info, size);
     const float shift = static_cast<float>(quarter) / 4;
     int x0 = 0, y0 = 0, x1 = 0, y1 = 0;
