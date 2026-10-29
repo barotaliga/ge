@@ -14,5 +14,5 @@ if(GE_GPU)
     engine/render/clouds.wgsl engine/render/water.wgsl engine/render/water_copy.wgsl
     engine/render/water_stream.wgsl
     engine/render/underwater.wgsl engine/render/ui_pass.wgsl engine/render/eye.wgsl
-    engine/render/eye_adapt.wgsl)
+    engine/render/eye_adapt.wgsl engine/render/explosions.wgsl)
 endif()
