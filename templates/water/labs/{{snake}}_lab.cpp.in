@@ -1,0 +1,187 @@
+// LAB `{{kebab}}` (picture): the game's water (sim/{{snake}}.hpp) as the one query sees it, so
+// an agent can LOOK at it. Three shots: the lake from above, every pixel a `ge::water::sample`
+// (its colour the look's water-leaving colour over the bed at that depth, shaded by the waves'
+// normal, white where they break); the windward and the lee water side by side, close enough to
+// see the waves the fetch grew; and a section across the lake (the surface over the bed, the
+// waves' height exaggerated). The numbers: the sea at the lee and the windward shore, the depth,
+// the look's visibility. Drawn on the CPU raster, so the pixels are in the digest (skill: water).
+//
+// ge:summary Lab: the game's lake from above, close up and in section, every pixel a sample
+// ge:keywords lab picture water lake sample look colour reflectance waves section
+// ge:keywords {{kebab}}
+// ge:skill water
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include "lab/lab.hpp"
+#include "sim/{{snake}}.hpp"
+#include "water/optics.hpp"
+
+namespace {
+
+namespace water = ge::water;
+namespace lab = ge::lab;
+namespace sim = {{ident}}::sim;
+
+constexpr int kW = 300, kH = 198;           // the plan: 100 m by 66 m round the origin
+constexpr double kPxPerMetre = 3.0;
+constexpr int kSectionH = 120;              // the section: across the lake at z = 0
+constexpr double kSectionPxPerMetre = 12.0;  // down the section
+constexpr double kWaveGain = 40.0;          // the waves' height drawn forty times over
+constexpr double kExposure = 6.0;           // a lake gives back a few % of the light it gets
+constexpr int kPatchW = 150, kPatchH = 200;  // the shores: two patches of 6 m by 8 m
+constexpr double kPatchPxPerMetre = 25.0;
+constexpr double kShoreZ = 15.0;  // the patches' middles, m north and south of the origin
+constexpr int kDepthSteps = 33;             // the colour over the bed every 0.25 m to 8 m
+constexpr lab::Rgba kLand{96, 104, 84};
+constexpr lab::Rgba kBedRock{110, 92, 70};
+
+uint8_t channel(double linear) {
+  // A gamma of 2: near enough sRGB for a lab's picture.
+  const double v = std::sqrt(std::clamp(linear * kExposure, 0.0, 1.0));
+  return static_cast<uint8_t>(v * 255 + 0.5);
+}
+
+lab::Rgba mix(lab::Rgba a, lab::Rgba b, double t) {
+  auto one = [t](uint8_t x, uint8_t y) {
+    return static_cast<uint8_t>(x + (y - x) * std::clamp(t, 0.0, 1.0) + 0.5);
+  };
+  return {one(a.r, b.r), one(a.g, b.g), one(a.b, b.b)};
+}
+
+// The water as seen from above: the look's water-leaving colour over the bed at the sample's
+// depth, shaded by the waves' normal when `shade` (the sun low in the south-west: a facet turned
+// to it is brighter; a picture too coarse for the waves leaves it off, or they alias), white
+// where the waves break.
+struct Painter {
+  std::array<water::Rgb, kDepthSteps> colour{};
+
+  explicit Painter(const water::Constituents& stuff) {
+    const water::Iops iops = water::iops(stuff);
+    for (int i = 0; i < kDepthSteps; ++i) {
+      const water::Spectrum r = water::reflectance(iops, stuff, i * 0.25);
+      colour[static_cast<size_t>(i)] = water::colour_of(r);
+    }
+  }
+
+  lab::Rgba operator()(const water::Sample& s, bool shade) const {
+    const double depth = s.surface - s.bed;
+    const int band = std::clamp(static_cast<int>(depth / 0.25 + 0.5), 0, kDepthSteps - 1);
+    const water::Rgb c = colour[static_cast<size_t>(band)];
+    const double lit = shade ? std::clamp(1 + 6 * (-0.6 * s.nx - 0.6 * s.nz), 0.4, 1.8) : 1.0;
+    const lab::Rgba rgb{channel(c.r * lit), channel(c.g * lit), channel(c.b * lit)};
+    const double foam = std::max({s.breaking.crest, s.breaking.shoal, s.breaking.wind});
+    return mix(rgb, {235, 240, 242}, foam);
+  }
+};
+
+// The water over a patch `w` by `h` px at `scale` px a metre round (cx, cz), north up, shaded by
+// the waves from 10 px a metre; returns the wet pixels.
+int paint(lab::Picture& pic, int x0, int w, int h, double scale, double cx, double cz,
+          const water::World& world, const Painter& painter, double t) {
+  int wet = 0;
+  for (int py = 0; py < h; ++py) {
+    for (int px = 0; px < w; ++px) {
+      const double x = cx + (px + 0.5 - w / 2.0) / scale;
+      const double z = cz + (h / 2.0 - py - 0.5) / scale;
+      const water::Sample s = water::sample(world, x, sim::kLakeLevel, z, t);
+      if (s.body < 0) continue;
+      ++wet;
+      lab::set_pixel(pic, x0 + px, py, painter(s, scale >= 10));
+    }
+  }
+  return wet;
+}
+
+void run(lab::Lab& lab) {
+  const double t = lab.arg_num("time");
+  const water::World world = sim::make_{{snake}}(lab.arg_num("wind"));
+  const water::Body& lake = world.bodies[0];
+  const water::Constituents& stuff =
+      lake.stuff.water ? *lake.stuff.water : *water::find_look(lake.stuff.look);
+  const Painter painter(stuff);
+
+  // THE PLAN: every pixel asked of the water.
+  lab::Picture plan = lab::create_picture(kW, kH, kLand);
+  const int wet = paint(plan, 0, kW, kH, kPxPerMetre, 0, 0, world, painter, t);
+  lab::draw_line(plan, 0, kH / 2.0, kW, kH / 2.0, {200, 200, 210, 120});  // the section's line
+
+  // THE SHORES: 6 m by 8 m of the windward water (north) beside as much of the lee's (south).
+  lab::Picture shores = lab::create_picture(2 * kPatchW + 4, kPatchH, {20, 20, 24});
+  paint(shores, 0, kPatchW, kPatchH, kPatchPxPerMetre, 0, kShoreZ, world, painter, t);
+  paint(shores, kPatchW + 4, kPatchW, kPatchH, kPatchPxPerMetre, 0, -kShoreZ, world, painter, t);
+
+  // THE SECTION: across the lake at z = 0, the surface over the bed.
+  lab::Picture section = lab::create_picture(kW, kSectionH, {170, 190, 210});
+  const double top = 30;  // the level's row
+  for (int px = 0; px < kW; ++px) {
+    const double x = (px + 0.5 - kW / 2.0) / kPxPerMetre;
+    const water::Sample s = water::sample(world, x, sim::kLakeLevel, 0, t);
+    if (s.body < 0) {
+      lab::fill_rect(section, px, top - 2, 1, kSectionH, kLand);
+      continue;
+    }
+    const double rise = (s.surface - sim::kLakeLevel) * kWaveGain;
+    const double surface = top - rise * kSectionPxPerMetre;
+    const double bed = top + (sim::kLakeLevel - s.bed) * kSectionPxPerMetre;
+    lab::fill_rect(section, px, surface, 1, bed - surface, {40, 80, 110});
+    lab::fill_rect(section, px, bed, 1, kSectionH - bed, kBedRock);
+  }
+
+  const water::Sample lee = water::sample(world, 0, sim::kLakeLevel, -kShoreZ, t);
+  const water::Sample windward = water::sample(world, 0, sim::kLakeLevel, kShoreZ, t);
+  const water::Sample middle = water::sample(world, 0, sim::kLakeLevel, 0, t);
+  lab.metric("wet_area", wet / (kPxPerMetre * kPxPerMetre), "m2");
+  lab.metric("hs_lee", lee.hs, "m");
+  lab.metric("hs_windward", windward.hs, "m");
+  lab.metric("depth_middle", middle.surface - middle.bed, "m");
+  lab.metric("visibility", water::optics(stuff).visibility, "m");
+
+  const std::vector<std::pair<std::string, std::string>> inputs = {
+      {"wind", lab.arg("wind")}, {"time", lab.arg("time")}, {"look", lake.stuff.look}};
+  lab.shot({"plan",
+            "THE LAKE FROM ABOVE",
+            "Every pixel a water sample: the look's colour over the bed at its depth, white where "
+            "the waves break; the wind blows from the top. 3 px a metre, too coarse for the "
+            "waves (the next shot has them).",
+            "dark in the deep middle, paling to the bed's colour at the shallow shore",
+            inputs},
+           plan);
+  lab.shot({"shores",
+            "THE WINDWARD AND THE LEE WATER",
+            "6 m by 8 m of the lake 15 m north of its middle (left: the wind comes off the shore "
+            "behind it) and as much 15 m south (right: the wind has crossed the lake). 25 px a "
+            "metre, shaded as the plan.",
+            "short, faint ripples on the left; longer, steeper waves on the right",
+            inputs},
+           shores);
+  lab.shot({"section",
+            "ACROSS THE LAKE",
+            "The surface over the bed along the plan's line, west to east; the waves' height is "
+            "drawn forty times over.",
+            "the bed a bowl from shore to shore, the water's top a line of small waves",
+            inputs},
+           section);
+}
+
+const lab::LabSpec kSpec{
+    "{{kebab}}",
+    lab::LabKind::picture,
+    "game:{{name}}",
+    "sim/{{snake}}.cpp",
+    "water",
+    "What does the game's water look like, where is it deep and where is it rough?",
+    {
+        {"wind", "7", "the wind at 10 m over the lake, m/s"},
+        {"time", "10", "the moment the waves are pictured at, s"},
+    },
+    "",
+    run,
+};
+GE_LAB(kSpec);
+
+}  // namespace

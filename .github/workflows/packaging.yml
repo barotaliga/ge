@@ -6,7 +6,7 @@ name: packaging
 #   package        install the package and build a consumer against it,
 #                  on every platform a release ships
 #   scaffold       `ge new` writes a game repo and ge alone grows it (use, add
-#                  system, lab, test), passes `ge check` against this tree, and
+#                  system, lab, test, water), passes `ge check` against this tree, and
 #                  plays it (sim, replay, play, state, diverge)
 on:
   workflow_call:
@@ -62,6 +62,7 @@ jobs:
           "$G" add lab wind-look --kind=picture
           "$G" add lab wind-cost --kind=bench
           "$G" add test wind
+          "$G" add water
           git add -A
           # CI's gates, as the new repo's own ci.yml runs them: ge check, the pilot, the replays.
           "$G" precheck --preset=debug --engine="$GITHUB_WORKSPACE"

@@ -185,8 +185,8 @@ Outcome run(const Args& a) {
     return o;
   }
   if (name.starts_with("add ")) {
-    return run_add(repo_of(a), name.substr(4), a.words[0], flag_value(a, "kind"),
-                   has_flag(a, "dry-run"));
+    return run_add(repo_of(a), name.substr(4), a.words.empty() ? "" : a.words[0],
+                   flag_value(a, "kind"), has_flag(a, "dry-run"));
   }
   if (name == "build") return run_build(build_options(a));
   if (name == "test") {
