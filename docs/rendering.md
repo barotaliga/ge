@@ -478,6 +478,44 @@ classic weapon's glowing triangles on its firing frames) marks them in `flame`, 
 engine draws the flash hides them through `DrawLit::hidden`. The effect is drawn after the gun,
 so a flame can overlap the barrel.
 
+## Sprites
+
+A **sprite** (`engine/render/sprites.hpp`, `sprites.wgsl`) is a flat picture stood in the world:
+one frame of a set of images, turned by a rule, cut out or blended. Shooter's Edge draws its
+classic effects and pickups this way (M18i). The pass is generic. A game hands it its
+`SpriteFrame`s once, and each frame a list of `SpriteDraw`s.
+
+- **One atlas.** Every frame is shelf-packed into one 2048-wide atlas, tallest first, a texel
+  apart (`pack_sprite_atlas`). A frame has an ORIGIN, the texel that stands at the sprite's
+  position (a flame's foot, a ball's middle). An animation is a run of frames, and which one
+  shows is the game's choice.
+- **Five facing rules** (`SpriteFacing`), all worked out on the CPU (`sprite_basis`):
+  - `parallel` lies in the screen's plane;
+  - `upright` stands on the world's up, turned to face the eye's point;
+  - `parallel_upright` stands on the world's up, turned with the camera's heading;
+  - `oriented` is fixed by the draw's own rotation;
+  - `parallel_oriented` lies in the screen's plane, rolled by the draw's `roll`.
+
+  The shader only builds the quad from the right, up and extent staged for it.
+- **Three blends** (`SpriteBlend`):
+  - `cutout` is alpha-tested at half coverage, writes depth and its own motion for TAA, and is
+    drawn first, in one draw.
+  - `over` (premultiplied) and `add` are drawn after the cutouts, sorted far to near, in one
+    draw through one blend state. An added sprite's alpha out is 0, so the same blend adds it.
+    They write no depth, and they set the motion target's reactive channel as particles do.
+- **Light.** `glow` times the scene's white (fullbright), plus `outdoor` of the sky and sun on
+  the face turned to the eye, plus a game's `ambient`. The haze applies. An added sprite only
+  fades with distance, because the air adds nothing to light that is itself added.
+- **Sharp or smooth**, per draw. Smooth is bilinear over premultiplied texels, so a cutout's
+  edge never darkens.
+- The pass runs after the sky and the clouds, where the particles are drawn: the blended
+  sprites lie over whatever is behind them, the sky included. At most `kMaxSprites` (4096) are
+  drawn a frame. The sort allocates nothing.
+
+`tests/render_sprites_test.cpp` holds the five rules and the atlas. The `gpu-sprites` lab draws
+every kind on a yard by day, from the eye's height and from above, sharp beside smooth, a
+fireball's frames and the yard at dusk, and times 2000 sprites.
+
 ## Terrain
 
 A generic **heightfield renderer** in `engine/render`, which a game hands a height

@@ -33,6 +33,7 @@ gpu-explosion ad9b9b63b7fc0982
 gpu-eye dec0f5b45ab21c1c
 gpu-load d0f81d39aa78ab53
 gpu-muzzle 498da44098188771
+gpu-sprites 66cd3e3120e8aa7b
 gpu-underwater eb4871f6a59d741e
 grass 53a6cf6a3e856ba4
 gpu-water eee3da1407e861c4
