@@ -206,7 +206,7 @@ struct FrameView {
   // the sky or this, whichever is brighter, so a lava lake at night reads as a photograph of it
   // would, not blown out against a dark sky. 0: the sky's light alone.
   double adapt_cd = 0;
-  SkyStyle style{};   // the kind of sky (render/sky_style.hpp); the default is the Earth's
+  SkyStyle style{};  // the kind of sky (render/sky_style.hpp); the default is the Earth's
   // THE DISCS DRAWN LARGER, as through a longer lens: the sun's and the moon's angular radii
   // against what they would be (1: as they are). Only the discs grow, with the glow a cloud
   // throws off their limbs; their light on the world is the real one's, so the sun's disc
