@@ -179,7 +179,8 @@ AGENTS.md and the non-goals in `docs/goals.md` state this exception.
 | Input | Keyboard, pointer, focus | Captured mouse with raw deltas, every key, the wheel, binds, text input (M18k) |
 | 2D and text | Planned in M10 | Bitmap fonts, palette pictures, the console's view, the HUD and menus (M18k, after M10) |
 | A console and settings | Fall Line's settings | `engine/console` (M18k) |
-| Bots | `engine/ai`: decision records, hands, paths, sight | A deathmatch bot as a server-side client: navigation over the brush world (a waypoint graph generated from the map on `ai/path`), aim hands, item timing, its decisions traced (M18f) |
+| Bots | `engine/ai`: decision records, hands, paths, sight | A deathmatch bot as a client of the server that plays through the simulation like a player: navigation over the brush world (a graph generated from the map on `ai/path`), aim hands, item timing, its decisions traced (M18r; § Playing together) |
+| Hosting and the lobby | `engine/net/session` (M17d), NAT traversal and the rendezvous (M17e, M17j) | HOST and the lobby in the game's menus, a listen or dedicated server started from inside the game, the server browser (M18q; § Playing together) |
 | Labs | Sim, scenario, picture, drive and bench labs; digests; `ge lab diff`, `ge graph` | Each row's labs (§ Labs) |
 
 ## The network
@@ -244,6 +245,48 @@ every pass, and judged by captioned screenshots:
 - **Headless**: a CPU raster view of any map from above (the leaves, the PVS of a point, the
   hulls) for the labs, like Fall Line's map views, with no GPU at all.
 
+## Playing together
+
+The owner asked for three things beyond a server and a client: a lobby on the network, servers
+hosted from inside the game, and bots that use the simulation code, so improving the simulation
+improves them.
+
+**Hosting from inside the game (M18q).** The menu's HOST page starts a server with its settings
+on one page: the map and the rotation, the mode, the mod, the frag and time limits, the player
+cap, the bots and their skill, a password, and public or LAN only. Two ways to run it, picked on
+the page:
+
+- A listen server: the server's frame runs in the player's own process beside the client, on
+  the same run clock, and the host plays over a loopback link like any other client (no special
+  case in the game program). The match ends when the host leaves.
+- A dedicated server: the game spawns the same `shooters_edge_server` binary M18f builds as its
+  own process, hands it the settings as a cfg, and joins it. It keeps running after the window
+  that started it closes; the menu finds it again by its local address and can stop it.
+
+Either way the server registers with the LAN discovery and, when public, with the rendezvous
+(M17e, M17j), and answers the classic status queries, so one server browser lists ours and
+existing ones.
+
+**The lobby (M18q).** Before the match, on M17d's sessions: the players and their pings, teams,
+ready, chat to all or the team, a map vote, kick, and the host's start; at the end of the match
+everyone returns to it. Joining is from the server browser, an invite (M17j's friends), or an
+address, with NATs crossed by hole punching or the relay (M17e). A client speaking the
+compatible protocol skips the lobby and joins the match, as it would on an existing server.
+
+**Bots on the simulation (M18r).** A bot is a client of the server like any player. Its only
+output is a usercmd a frame (the look angles, the movement axes, the buttons, the impulse),
+which goes through the same move and the same game program as a person's, so a bot can do
+nothing a player cannot, and any change to the movement or the game program is a change the
+bots play under at once. A bot never reads the client's prediction or edits the world. What it
+knows, it learns through the server's own queries: the hull trace for sight, the sounds the
+program starts for hearing, and the items and players the program exposes, the same facts a
+player's client receives. Its parts are the engine's (`engine/ai`): navigation generated from
+the map on `ai/path` (where a player can walk, jump, fall, swim and ride a plat), sight and
+memory, aim and movement on `ai/hands` with skill profiles, the fights and items chosen on
+`ai/choose`, and the strafe-jump and the rocket jump as moves it plans. Every decision is
+recorded for `ge why`, and its play is measured against people's input logs with `ai/human`,
+so a change to a bot is shown before and after: frags, deaths, items held and humanness.
+
 ## Modern features
 
 Today's community clients and servers added much since the original release. Grouped by what a
@@ -260,7 +303,9 @@ list is in `porting/shooters-edge/survey.md`.
 | Expected | Raw mouse input sampled at its own rate, independent of the frame | M18k |
 | Expected | Lag compensation on the server for hitscan weapons (rewinding the other players) | M18g |
 | Expected | Larger maps and limits (BSP2, float coordinates, more entities, more models and sounds) | M18b, M18g |
-| Expected | A server browser over status queries and the public masters | M18k |
+| Expected | A server browser over LAN discovery, our rendezvous, status queries and the public masters | M18q |
+| Expected | Hosting a listen or a dedicated server from the menu; a lobby before the match | M18q |
+| Expected | Bots that fill a server, at a chosen skill, playing by the same rules as people | M18r |
 | Better | Coloured lightmaps, replacement textures, skyboxes, fog, transparency | M18i |
 | Better | Real-time shadows from the engine's shadow passes on models | M18i |
 | Better | Voice chat on the native protocol (M17h) | M18l |
@@ -284,6 +329,8 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `se-loop` | scenario | The classic loop on the test arena: two clients over latency and loss, a rocket, a bouncing grenade, a door a player blocks, a plat; the program's events and the loop's counts, paths from above and the side, the door and the plat against the clock, the prediction's corrections; the thrown entities against their recorded vectors (built, M18o2) |
 | `se-parity` | scenario | The same scripted inputs through our movement and an existing server's, measured against each other within a tolerance (needs the reference program; skipped with a reason when its cache is absent) |
 | `se-server` | drive | Eight bots deathmatch on a free map for a minute: frags, items, the server's frame cost, its digest |
+| `se-bots` | drive | Bots against bots and against recorded people: frags, deaths, items, the paths drawn on the map, the decisions round a fight, the humanness bands; before and after a change |
+| `se-lobby` | sim | Clients find a hosted game on the LAN and through the rendezvous, fill the lobby, pick teams, chat, start, play and return; a dedicated server outlives the client that started it |
 | `se-net` | sim | Compatible and native clients on the simulated network under every preset: bandwidth, prediction errors, corrections |
 | `se-interop` | drive | Our client and server against existing programs on loopback (cache-gated like `se-parity`) |
 | `se-world` | picture | Named views of free maps in both looks, with captions |
@@ -306,13 +353,14 @@ during the work is added when it is found and recorded in `docs/goals/ge-backlog
 | `ge demo info/frames/shot/diff <demo>` | A demo decoded to text frame by frame, a frame pictured, two demos compared to their first difference |
 | `ge net inspect --protocol=classic <pcap>` | A capture decoded as the classic protocol's messages (the net channel, every server and client message, the deltas) |
 | `ge pmove <scenario>` | A movement scenario's trajectory as a table and a chart, against the parity recording when one exists |
+| `ge bot run/compare/sweep` | Bots on a map for a time, two bot builds or profiles against each other, a knob swept; frags, humanness and the decisions behind a fight |
 | `ge console <server> "<command>"` | A command or cvar run in a headless server or client, its output returned |
 | `ge play` with angle axes | An agent at the controls of a first-person game: look angles on the protocol's grid, the usercmd's milliseconds, several players a run |
 
 ## Rows
 
 The roadmap rows are in `docs/goals.md` (M18 and its lettered rows), after Fall Line. The order:
-content (M18a) and the map (M18b) first, then QC (M18c, M18d), movement (M18e), the server
-with bots (M18f), the compatible protocol (M18g), the client (M18h), the picture (M18i), sound
-(M18j), input and the 2D layer (M18k), the modern features that need all of it (M18l) and what
+content (M18a) and the map (M18b) first, then QC (M18c, M18d), movement (M18e), the game loop and
+multiplayer mods (M18o, M18p), the server (M18f) and its bots (M18r), the compatible protocol (M18g), the client (M18h), the picture (M18i), sound
+(M18j), input and the 2D layer (M18k), hosting and the lobby (M18q), the modern features that need all of it (M18l) and what
 can wait (M18m).
