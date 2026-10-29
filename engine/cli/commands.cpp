@@ -78,6 +78,13 @@ constexpr FlagSpec kLabSweepFlags[] = {
     kEngine,
     kRepo};
 
+constexpr FlagSpec kLabPublishFlags[] = {
+    {"before", "<tag>",
+     "a kept run (ge lab <id> --tag=<tag>) shown beside this one, metric by metric"},
+    {"width", "<px>", "the pictures' width on the page (default 720)"},
+    {"out", "<file>", "where the page goes (default previews/<id>/publish.html)"},
+    {"title", "<text>", "the page's title (default \"<id> lab run\", or \"Lab runs\")"},
+    kRepo};
 constexpr FlagSpec kLabDiffFlags[] = {
     kPreset,
     {"against", "<name>", "the kept run to diff against (default before: --tag=before)"},
@@ -99,7 +106,7 @@ constexpr FlagSpec kCiFlags[] = {
      "block until the checks finish, one fails or it conflicts (at most 60 minutes), then answer"},
     kRepo};
 constexpr FlagSpec kDigestFlags[] = {
-    {"write", "", "rewrite the lab's row of tests/labs_digests.txt (every row with no lab)"},
+    {"write", "", "rewrite the lab's file under tests/digests/ (every lab's with no lab named)"},
     {"diff", "", "print only the labs whose digest is off the baseline; write nothing"},
     {"affected", "", "the labs the change since --base reaches, each by its own source's object"},
     {"base", "<ref>", "with --affected: the change since this ref (default origin/main)"},
@@ -115,7 +122,13 @@ constexpr FlagSpec kLintFlags[] = {
     kRepo};
 constexpr FlagSpec kGoalsFlags[] = {
     {"base", "<ref>", "the roadmap rows are already taken on (default origin/main)"},
-    {"fetch", "", "git fetch origin first, so every branch is current"},
+    {"fetch", "", "git fetch origin first (the default; kept so old command lines still run)"},
+    {"no-fetch", "", "answer from the branches as last fetched, without the network"},
+    kRepo};
+constexpr FlagSpec kGoalsClaimFlags[] = {
+    {"under", "<row>",
+     "claim the next letter under this milestone (M17: M17e) instead of a number"},
+    {"base", "<ref>", "the roadmap rows are already taken on (default origin/main)"},
     kRepo};
 constexpr FlagSpec kGoldenDiffFlags[] = {
     {"base", "<ref>", "the git ref to compare with (default HEAD)"}, kRepo};
@@ -239,6 +252,10 @@ constexpr FlagSpec kRecordFlags[] = {
      "the build to record with (default release: a frame is drawn on the CPU)"},
     kEngine,
     kRepo};
+constexpr FlagSpec kSnowShowFlags[] = {
+    {"out", "<dir>", "where the PNGs go (default: snow/ beside the file)"}};
+constexpr FlagSpec kSnowColumnFlags[] = {{"at", "<x,z>", "the point, m (required)"}};
+
 constexpr FlagSpec kGraphFlags[] = {
     {"kind", "<auto|line|scatter|hist|box|heat|spans>",
      "the chart (default auto: spans for a spans file, line for the rest)"},
@@ -303,6 +320,23 @@ constexpr FlagSpec kNetSweepFlags[] = {
     {"backup", "<n>", "inputs repeated in every input message (default 4)"},
     {"seed", "<n>", "the network's, the hands' and the crowd's seed (default 1)"}};
 
+constexpr FlagSpec kNetStressFlags[] = {
+    {"knobs", "<a,b>", "the knobs to ramp: loss, burst, latency, jitter, bandwidth (default all)"},
+    {"preset", "<name>", "the conditions each ramp starts from (default broadband)"},
+    {"mix", "<racing|action|rpg|world|lockstep|download>", "the traffic's shape (default racing)"},
+    {"link", "<k=v,...>", "override the preset's conditions (as ge net sim)"},
+    {"clients", "<n>", "clients a session, 1..32 (default 8)"},
+    {"seconds", "<s>", "how long each ramp's session sends (default 6)"},
+    {"steps", "<n>", "a ramp's coarse steps (default 8)"},
+    {"refine", "<n>", "bisections to the breaking point (default 4)"},
+    {"chaos", "<a,b|all>",
+     "also run chaos scripts: flap, partition, host-lost, host-restart, rebind, skew, burst, "
+     "collapse"},
+    {"soak", "<s>", "also soak a session this many virtual seconds (default none)"},
+    {"soak-clients", "<n>", "clients in the soak (default 32)"},
+    {"fuzz", "<n>", "also put this many fuzzed datagrams beside an honest session"},
+    {"seed", "<n>", "the network's seed (default 1)"}};
+
 const CommandSpec kCommands[] = {
     {"help",
      "[<command>]",
@@ -335,7 +369,11 @@ const CommandSpec kCommands[] = {
     {"goals free", "[<row>]", 0, 1, "learn",
      "the roadmap rows taken on the base and on every remote branch, and the next free number "
      "(or, for a row such as M17, the next free letter under it)",
-     kGoalsFlags, "ge goals free --fetch", "commit"},
+     kGoalsFlags, "ge goals free", "commit"},
+    {"goals claim", "<what>", 1, -1, "learn",
+     "the next free row reserved and pushed to this branch at once, then checked against every "
+     "branch: an earlier claim on the same row keeps it, and this one moves to the next",
+     kGoalsClaimFlags, "ge goals claim \"Lava and slime\"", "commit"},
     {"new", "<dir>", 1, 1, "create",
      "a game repo against this engine release: the simulation, a lab, a test, the skills",
      kNewFlags, "ge new snow-racer --game=racer", "ge"},
@@ -349,6 +387,10 @@ const CommandSpec kCommands[] = {
      kAddLabFlags, "ge add lab wind --kind=sim", "labs"},
     {"add test", "<name>", 1, 1, "create", "a test file on the repo's harness", kAddFlags,
      "ge add test wind", "sim-system"},
+    {"add water", "[<name>]", 0, 1, "create",
+     "a lake laid in one call (sim/<name>.hpp, .cpp), its picture lab and its test; links "
+     "ge::water (default name: water)",
+     kAddFlags, "ge add water", "water"},
     {"build", "", 0, 0, "build",
      "configure and build; compiler and CMake errors come back as findings", kBuildFlags,
      "ge build", "ge"},
@@ -395,10 +437,22 @@ const CommandSpec kCommands[] = {
      "diff every picture of a lab's last run against a kept run: PSNR, SSIM and the share "
      "changed per distance band, each band held to its floor, a four-panel sheet a shot",
      kLabDiffFlags, "ge lab diff world --run -- --views=start,vista", "labs"},
+    {"lab publish", "<id>...", 1, -1, "see",
+     "a lab's last run (or several labs') on one self-contained page to share: every picture "
+     "shrunk and inlined, captions, metrics and tables; --before puts a kept run beside it",
+     kLabPublishFlags, "ge lab publish world --before=before", "labs"},
     {"graph", "<file>...", 1, -1, "see",
      "chart series or spans files (a trace, a bench, a profile) to PNG and SVG; several files "
      "overlay; every outlier comes back as a note",
      kGraphFlags, "ge graph runs/before.tsv runs/after.tsv --columns=step_ms", "debug"},
+    {"snow show", "<file.snow>", 1, 1, "see",
+     "a saved snow layer read without its game: its tiles and memory, the samples pressed, the "
+     "deepest drop and the densest snow, the mass held, and depth, density and state maps",
+     kSnowShowFlags, "ge snow show runs/yard.snow", "snow"},
+    {"snow column", "<file.snow>", 1, 1, "see",
+     "the column of a saved snow layer at a point: depth, density, packed share, kind, and "
+     "whether a press changed it",
+     kSnowColumnFlags, "ge snow column runs/yard.snow --at=3.5,-12", "snow"},
     {"net inspect", "<pcap>", 1, 1, "see",
      "a capture decoded datagram by datagram: time, addresses, packet type, sequence, acks, "
      "each message's channel, id and size",
@@ -408,6 +462,16 @@ const CommandSpec kCommands[] = {
      "round trip, loss each way, duplicates, reorders, resends; kbps, rtt and loss over time "
      "charted",
      kNetStatsFlags, "ge net stats previews/net-link/bad.pcap", "multiplayer"},
+    {"save inspect",
+     "<file>",
+     1,
+     1,
+     "see",
+     "a save file's header, the meta a menu lists and every chunk (tag, instance, version, "
+     "offset, bytes, checksum), or the one line that says why it is refused",
+     {},
+     "ge save inspect saves/slot-1",
+     "saves"},
     {"shot", "[<log>]", 0, 1, "see",
      "a still of a run at a step, drawn headless and captioned (seed, options, step, digest): "
      "a log played to --step, or the pilot's run of --seed; the game's options go after --",
@@ -470,6 +534,12 @@ const CommandSpec kCommands[] = {
      "port: each connection's packets, kbps, round trip and loss every second, then the whole "
      "watch saved as a capture and measured as ge net stats measures it",
      kNetWatchFlags, "ge net watch --port=27950 --seconds=30", "multiplayer"},
+    {"net stress", "", 0, 0, "measure",
+     "the network pushed until it breaks: each link knob ramped until a traffic mix breaks a "
+     "bound (inputs late, snapshots lost, a reliable message lost, a drop), bisected to its "
+     "breaking point; --chaos, --soak and --fuzz add the scripts, the long run and the fuzzer",
+     kNetStressFlags, "ge net stress --mix=action --chaos=all --soak=3600 --fuzz=1000000",
+     "multiplayer"},
     {"net sweep", "", 0, 0, "measure",
      "a replicated world run once a value of one knob (a rate, the interpolation, a link "
      "condition or a drop pattern): bandwidth each way, view delay, corrections, rewind gaps, "

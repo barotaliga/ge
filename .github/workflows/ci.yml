@@ -1,27 +1,38 @@
-# Every push, pull request and queued merge. The org's runners are a small shared pool, so a
-# pull request runs the cheap gates, ONE Linux build-and-test row and the Windows row; the merge
-# queue runs the whole matrix (every compiler and OS the engine promises the same bits on) and
-# the packaging, on the exact tree that lands; a push to main builds the cached rows only, to
-# save their compiler caches. A change that touches only prose (docs, skills, lessons, root
-# Markdown, changeset fragments) runs the gates alone. A pull request labelled `full-ci` runs
-# the whole matrix.
+# Every push, pull request and queued merge. Linux is checked BEFORE the push, not here: `make
+# precheck` (tools/precheck.sh) builds this tree in the development container (Linux x64, GCC
+# debug with ASan, Mesa's lavapipe as the GPU) and runs the gates, the lint, the shaders, the tests
+# and the labs' digests the change reaches. So CI runs only what can come out DIFFERENT somewhere
+# else: the gates (cheap, and they hold the queue's combined tree), Windows (MSVC: its warnings,
+# its CRT, its libm) and macOS (Apple Clang on arm64: another compiler, another ISA, the Metal
+# adapter), each building everything and running the whole suite, so the goldens and the labs'
+# digests are held on both. The merge queue adds the installed package on Windows and macOS, and
+# `ge new`'s scaffold when the change reaches it. A push to main runs the whole matrix (macOS,
+# Windows and the Linux rows), since a pull request may have merged with `skip-ci`; a red main
+# run opens the `main-red` issue (flakes.yml), and a newer push cancels the older run. A change that touches only prose (docs, skills, lessons, root Markdown,
+# changeset fragments) runs the gates alone. A pull request labelled `full-ci` also runs the Linux
+# rows (GCC debug+ASan, GCC and Clang release, arm64), the lint and the shaders' check, and the
+# whole packaging.
+#
+# A pull request labelled `skip-ci` runs nothing at all, on the PR and in the queue: it merges as
+# soon as it is armed, and what it breaks shows on main's run and is fixed after it lands (the
+# `commit` skill).
 #
 # The ruleset requires ONE check, `required` (the last job): it passes when every job either
 # passed or was skipped by the rules above, so a skipped row never leaves a required check
-# pending. A determinism break shows as a parity test failing on ONE row of the matrix: that
-# row's compiler or libm is the suspect.
+# pending. A determinism break shows as a parity test failing on ONE row: that row's compiler or
+# libm is the suspect.
 #
 # Speed: every ctest runs its cases in parallel (CTEST_PARALLEL_LEVEL; the labs' smoke pass is
 # cut into slices for it), the Linux and macOS rows compile through ccache (restored on every
-# run, saved only from main so pull requests do not churn the cache), and on a pull request the
-# lint checks only what the change can reach (tools/lint.sh).
+# run, saved only from main so pull requests do not churn the cache), and the lint checks only
+# what the change can reach (tools/lint.sh).
 name: ci
 
 on:
   push:
     branches: [main]
   pull_request:
-    types: [opened, synchronize, reopened, labeled]
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
   # The merge queue: each queued PR is tested on top of the ones ahead of it before it lands.
   merge_group:
 
@@ -29,30 +40,73 @@ permissions:
   contents: read
 
 env:
-  GE_LINUX_PACKAGES: >-
-    libx11-dev libxext-dev libxcursor-dev libxrandr-dev libxi-dev libxss-dev libxfixes-dev
-    libxtst-dev libxkbcommon-dev libwayland-dev wayland-protocols libdecor-0-dev
-    libasound2-dev libpulse-dev libpipewire-0.3-dev mesa-vulkan-drivers xvfb xauth
   # Every runner has four cores (three on macOS); ctest runs that many cases at once.
   CTEST_PARALLEL_LEVEL: "4"
 
-# A new push to a pull request cancels its older run (a queued merge has a ref of its own).
+# Runners are a small shared pool, so nothing runs that cannot change the answer:
+#   - a new push to a pull request cancels its older run (a queued merge has a ref of its own);
+#   - a draft runs nothing (marking it ready for review runs it);
+#   - a label runs only the gates (no-changelog changes their answer), in a group of its own so it
+#     never cancels the run already going; only `full-ci` runs the matrix;
+#   - each queue run's gates cancel the queue runs whose group GitHub has thrown away (a PR ahead
+#     failed or left, so the queue rebuilt its groups), which would otherwise run to the end;
+#   - every heavy job has a timeout near twice its usual time, so a hung runner frees up.
+# GitHub has no counting semaphore for jobs (a concurrency group holds one running and one
+# pending job and CANCELS the pending one a third arrival replaces), so the macOS and Windows
+# jobs are not capped by group: these rules keep their number down instead.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.ref }}${{ (github.event.action == 'labeled' && github.event.label.name != 'full-ci') && format('-label-{0}', github.run_id) || '' }}
   cancel-in-progress: true
 
 jobs:
   # The cheap gates, on every run, and the decision what else runs.
   gates:
+    if: github.event.pull_request.draft != true
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: read  # a queued PR's labels, for `skip-ci` (below)
+      actions: write  # cancelling the queue's stale runs
     outputs:
       code: ${{ steps.scope.outputs.code }}
       full: ${{ steps.scope.outputs.full }}
+      package: ${{ steps.scope.outputs.package }}
+      scaffold: ${{ steps.scope.outputs.scaffold }}
       rows: ${{ steps.scope.outputs.rows }}
+      skip: ${{ steps.scope.outputs.skip }}
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+      # A queue group whose ref is gone was thrown away when the queue rebuilt; its run's result
+      # can never land, so it gives its runners back. Runs are listed BEFORE the refs, so a group
+      # made in between is never taken for a stale one.
+      - name: Cancel the queue's stale runs
+        if: github.event_name == 'merge_group'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -o pipefail
+          runs=$(for s in queued in_progress waiting; do
+            gh api "repos/$REPO/actions/runs?event=merge_group&status=$s&per_page=100" \
+              --jq '.workflow_runs[] | "\(.id) \(.head_branch)"'
+          done)
+          live=$(gh api "repos/$REPO/git/matching-refs/heads/gh-readonly-queue" --jq '.[].ref' |
+            sed 's|^refs/heads/||')
+          # This run's own group must be among the live ones, or the listing is not to be trusted.
+          if ! grep -qxF "${GITHUB_REF#refs/heads/}" <<< "$live"; then
+            echo "this run's group is not among the live refs; cancelling nothing"
+            exit 0
+          fi
+          echo "$runs" | while read -r id branch; do
+            [ -n "$id" ] && [ "$id" != "$GITHUB_RUN_ID" ] || continue
+            if ! grep -qxF "$branch" <<< "$live"; then
+              echo "cancelling run $id: its queue group $branch is gone"
+              gh api -X POST "repos/$REPO/actions/runs/$id/cancel" > /dev/null || true
+            fi
+          done
       - name: What the change touches, and how much of the matrix runs
         id: scope
         env:
@@ -61,7 +115,37 @@ jobs:
           QUEUE_BASE: ${{ github.event.merge_group.base_sha }}
           PUSH_BASE: ${{ github.event.before }}
           FULL_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') }}
+          SKIP_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'skip-ci') }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ACTION: ${{ github.event.action }}
+          LABEL: ${{ github.event.label.name }}
         run: |
+          # `skip-ci`: a PR its owner wants merged now, with CI fixed after it lands. Every job is
+          # skipped, the gates' checks included, so `required` passes, on the PR and in the merge
+          # queue. A queued run reads the label off the PR at the head of its group
+          # (gh-readonly-queue/main/pr-<n>-<sha>).
+          SKIP="$SKIP_LABEL"
+          if [ "$EVENT" = merge_group ]; then
+            N=$(echo "$GITHUB_REF" | sed -nE 's#.*/pr-([0-9]+)-[0-9a-f]+$#\1#p')
+            if [ -n "$N" ] && gh api "repos/$GH_REPO/issues/$N/labels" --jq '.[].name' | grep -qx skip-ci; then
+              SKIP=true
+            fi
+          fi
+          if [ "$SKIP" = true ]; then
+            echo "::warning::skip-ci: no check runs on this change; fix what it breaks after it lands"
+            {
+              echo "skip=true"
+              echo "code=false"
+              echo "full=false"
+              echo "package=false"
+              echo "scaffold=false"
+              echo 'rows=[{"os":"macos-15","cxx":"clang++","preset":"release"}]'
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
           case "$EVENT" in
             pull_request) BASE="$PR_BASE" ;;
             merge_group) BASE="$QUEUE_BASE" ;;
@@ -70,35 +154,51 @@ jobs:
           # Prose only: nothing a build, a test or a package reads. consumer-skills/, scaffold/
           # and templates/ are compiled into ge, so their Markdown is code.
           PROSE='^(docs/|\.agents/|\.changes/|porting/.*\.md$|[^/]*\.md$|LICENSE$)'
+          # What `ge new` writes and grows a repo with, and the build it grows it on.
+          SCAFFOLD='^(engine/cli/|engine/play/|engine/lab/|scaffold/|templates/|consumer-skills/|cmake/|CMakeLists\.txt$|\.github/workflows/)'
           if CHANGED=$(git diff --name-only "$BASE" HEAD 2> /dev/null); then
             CODE=$(echo "$CHANGED" | grep -Evq "$PROSE" && echo true || echo false)
+            SCAFFOLD=$(echo "$CHANGED" | grep -Eq "$SCAFFOLD" && echo true || echo false)
           else
             CODE=true  # no base to diff against (a new branch, a forced push): run everything
+            SCAFFOLD=true
           fi
+          # A push to main always runs: a newer push cancels the older run, so the commit before
+          # this one may never have been tested, and only a run of the whole tree answers for it.
+          if [ "$EVENT" = push ]; then CODE=true; fi
+          # A label other than full-ci changes only the gates' answer: run them alone.
+          if [ "$ACTION" = labeled ] && [ "$LABEL" != full-ci ]; then CODE=false; fi
           FULL=false
-          if [ "$EVENT" = merge_group ] || [ "$FULL_LABEL" = true ]; then FULL=true; fi
-          ROW_DEBUG='{"os":"ubuntu-24.04","cxx":"g++","preset":"debug"}'
-          ROWS_REST='{"os":"ubuntu-24.04","cxx":"g++","preset":"release"},{"os":"ubuntu-24.04","cxx":"clang++","preset":"release"},{"os":"ubuntu-24.04-arm","cxx":"g++","preset":"release"},{"os":"macos-15","cxx":"clang++","preset":"release"}'
-          if [ "$FULL" = true ] || [ "$EVENT" = push ]; then
-            ROWS="[$ROW_DEBUG,$ROWS_REST]"
-          else
-            ROWS="[$ROW_DEBUG]"
-          fi
-          echo "code=$CODE" >> "$GITHUB_OUTPUT"
-          echo "full=$FULL" >> "$GITHUB_OUTPUT"
-          echo "rows=$ROWS" >> "$GITHUB_OUTPUT"
-          echo "event $EVENT, code $CODE, full $FULL, rows $ROWS"
-      - run: make fmt-check
+          if [ "$FULL_LABEL" = true ]; then FULL=true; SCAFFOLD=true; fi
+          PACKAGE=false
+          if [ "$EVENT" = merge_group ] || [ "$FULL" = true ]; then PACKAGE=true; fi
+          ROW_MAC='{"os":"macos-15","cxx":"clang++","preset":"release"}'
+          ROWS_LINUX='{"os":"ubuntu-24.04","cxx":"g++","preset":"debug"},{"os":"ubuntu-24.04","cxx":"g++","preset":"release"},{"os":"ubuntu-24.04","cxx":"clang++","preset":"release"},{"os":"ubuntu-24.04-arm","cxx":"g++","preset":"release"}'
+          if [ "$FULL" = true ] || [ "$EVENT" = push ]; then ROWS="[$ROW_MAC,$ROWS_LINUX]"; else ROWS="[$ROW_MAC]"; fi
+          {
+            echo "code=$CODE"
+            echo "full=$FULL"
+            echo "package=$PACKAGE"
+            echo "scaffold=$SCAFFOLD"
+            echo "rows=$ROWS"
+          } >> "$GITHUB_OUTPUT"
+          echo "event $EVENT, code $CODE, full $FULL, package $PACKAGE, scaffold $SCAFFOLD, rows $ROWS"
+      - if: steps.scope.outputs.skip != 'true'
+        run: make fmt-check
       # tools/agents-index.mjs and tools/skill-lessons.mjs: plain Node, no npm install.
-      - uses: actions/setup-node@v4
+      - if: steps.scope.outputs.skip != 'true'
+        uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: make agents-check
-      - run: make libm-check
+      - if: steps.scope.outputs.skip != 'true'
+        run: make agents-check
+      - if: steps.scope.outputs.skip != 'true'
+        run: make libm-check
       # tools/release.py's tests, and every fragment valid (docs/publishing.md).
-      - run: make release-check
+      - if: steps.scope.outputs.skip != 'true'
+        run: make release-check
       - name: A shipped change carries a fragment
-        if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'no-changelog')
+        if: steps.scope.outputs.skip != 'true' && github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'no-changelog')
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
         run: |
@@ -117,6 +217,8 @@ jobs:
     needs: gates
     if: needs.gates.outputs.code == 'true'
     runs-on: ${{ matrix.os }}
+    # The debug+ASan row takes about an hour; the release rows a quarter of one.
+    timeout-minutes: ${{ matrix.preset == 'debug' && 150 || 60 }}
     strategy:
       fail-fast: false
       matrix:
@@ -134,17 +236,28 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install ninja ccache
       # SDL3's X11 and Wayland headers (engine/platform), Mesa's software Vulkan driver
-      # (lavapipe: the GPU tests' adapter) and a virtual X display for the window test.
+      # (lavapipe: the GPU tests' adapter), a virtual X display for the window test and ccache:
+      # tools/setup-ubuntu.sh installs what the runner's image lacks, from the .debs cached by
+      # the runner's image, the script's hash and the week (a new week takes the image's updates).
+      - name: The week, for the apt cache's key
+        if: runner.os == 'Linux'
+        id: week
+        run: echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        if: runner.os == 'Linux'
+        with:
+          path: .cache/apt
+          key: apt-${{ matrix.os }}-${{ hashFiles('tools/setup-ubuntu.sh') }}-${{ steps.week.outputs.week }}
+          restore-keys: apt-${{ matrix.os }}-
       - name: Install the platform's and the GPU's Linux packages
         if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ${{ env.GE_LINUX_PACKAGES }} ccache
+        timeout-minutes: 15
+        run: sudo tools/setup-ubuntu.sh --cache-dir=.cache/apt
       # Dawn's prebuilt archive and SDL's source, keyed on the pins that name them.
       - uses: actions/cache@v4
         with:
           path: .cache/deps
-          key: deps-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('cmake/Dawn.cmake', 'cmake/SDL.cmake') }}
+          key: deps-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('cmake/Dawn.cmake', 'cmake/SDL.cmake', 'cmake/Codecs.cmake') }}
       # The compiler cache: the newest one main saved for this row.
       - uses: actions/cache/restore@v4
         with:
@@ -171,17 +284,18 @@ jobs:
 
   # MSVC on every pull request too, not only in the queue: its warnings (/W4 /WX) and its CRT are
   # where Linux-built changes break most, and a break first found at the head of the queue costs
-  # every PR queued behind it a full rebuild of the matrix.
+  # every PR queued behind it a full rebuild of the matrix. And on main, after every push.
   windows:
     needs: gates
-    if: needs.gates.outputs.code == 'true' && github.event_name != 'push'
+    if: needs.gates.outputs.code == 'true'
     runs-on: windows-2025
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
       - uses: actions/cache@v4
         with:
           path: .cache/deps
-          key: deps-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('cmake/Dawn.cmake', 'cmake/SDL.cmake') }}
+          key: deps-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('cmake/Dawn.cmake', 'cmake/SDL.cmake', 'cmake/Codecs.cmake') }}
       - uses: ilammy/msvc-dev-cmd@v1
       - run: cmake --preset release
       - run: cmake --build --preset release
@@ -189,11 +303,13 @@ jobs:
 
   # clang-tidy's bug-finding checks (.clang-tidy), in parallel, over the files the change can
   # reach: each changed .cpp and each .cpp that includes a changed header (tools/lint.sh); a
-  # change to the lint's rules lints them all. The queue already linted what lands on main.
+  # change to the lint's rules lints them all. `make precheck` runs both before every push (the
+  # lint and the shaders do not depend on the platform), so here only under `full-ci`.
   lint:
     needs: gates
-    if: needs.gates.outputs.code == 'true' && github.event_name != 'push'
+    if: needs.gates.outputs.code == 'true' && needs.gates.outputs.full == 'true'
     runs-on: ubuntu-24.04
+    timeout-minutes: 90
     env:
       CXX: g++
       CMAKE_C_COMPILER_LAUNCHER: ccache
@@ -205,13 +321,22 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ${{ env.GE_LINUX_PACKAGES }} ccache
+      - name: The week, for the apt cache's key
+        id: week
+        run: echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+      # The test row's apt cache (the same image): tools/setup-ubuntu.sh, above.
+      - uses: actions/cache@v4
+        with:
+          path: .cache/apt
+          key: apt-ubuntu-24.04-${{ hashFiles('tools/setup-ubuntu.sh') }}-${{ steps.week.outputs.week }}
+          restore-keys: apt-ubuntu-24.04-
+      - name: Install the platform's Linux packages
+        timeout-minutes: 15
+        run: sudo tools/setup-ubuntu.sh --cache-dir=.cache/apt
       - uses: actions/cache@v4
         with:
           path: .cache/deps
-          key: deps-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('cmake/Dawn.cmake', 'cmake/SDL.cmake') }}
+          key: deps-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('cmake/Dawn.cmake', 'cmake/SDL.cmake', 'cmake/Codecs.cmake') }}
       # The same compiler and preset as the g++ release row: share its cache.
       - uses: actions/cache/restore@v4
         with:
@@ -227,17 +352,22 @@ jobs:
       # Every embedded WGSL shader through Tint, offline (no GPU needed).
       - run: make shaders-check PRESET=release
 
-  # The installed package consumed on every platform, and ge growing a new repo: the queue's.
+  # The installed package consumed on Windows and macOS (Linux too under `full-ci`), and ge
+  # growing a new repo when the change reaches it: the queue's.
   packaging:
     needs: gates
-    if: needs.gates.outputs.code == 'true' && needs.gates.outputs.full == 'true'
+    if: needs.gates.outputs.code == 'true' && needs.gates.outputs.package == 'true'
     uses: ./.github/workflows/packaging.yml
+    with:
+      linux: ${{ needs.gates.outputs.full == 'true' }}
+      scaffold: ${{ needs.gates.outputs.scaffold == 'true' }}
 
   # The one check the ruleset requires: every job above passed, or was skipped by the rules.
   required:
     needs: [gates, test, windows, lint, packaging]
     if: always()
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - env:
           RESULTS: ${{ join(needs.*.result, ' ') }}

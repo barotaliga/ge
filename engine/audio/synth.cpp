@@ -1,19 +1,22 @@
-// The synth's graph: the call ring, the voice pool, the layers, the buses, the echo and the
-// limiter, rendered a block at a time. Everything is allocated in the constructor; `render` only
-// reads and writes what is already there.
+// The synth's graph: the call ring, the voice pool, the layers, the streams, the buses, the echo,
+// the room and the limiter, rendered a block at a time. Everything is allocated in the constructor
+// but a stream's ring, allocated once on the producer's thread before its slot is first used;
+// `render` only reads and writes what is already there.
 //
 // ge:summary The synth's render: the ring, one-shot envelopes, layers, buses, echo and limiter
 // ge:keywords synth render envelope attack hold decay voice-pool steal layer glide bus echo
-// ge:keywords limiter soft-knee gain-reduction ring drain
+// ge:keywords limiter soft-knee gain-reduction ring drain stream feed starved
 // ge:skill audio
 // ge:test tests/audio_synth_test.cpp
 #include "audio/synth.hpp"
 
 #include <array>
 #include <atomic>
+#include <memory>
 #include <vector>
 
 #include "audio/dsp.hpp"
+#include "audio/reverb.hpp"
 #include "core/libm/libm.hpp"
 #include "core/num.hpp"
 #include "core/prng.hpp"
@@ -56,7 +59,18 @@ float db_of(float x) {  // 20 log10 x, for x > 0
 }
 float gain_of_db(float db) { return static_cast<float>(libm::exp(0.11512925464970229 * db)); }
 
-enum class Cmd : uint8_t { tone, noise, layer_new, layer_set, layer_stop, bus };
+enum class Cmd : uint8_t {
+  tone,
+  noise,
+  layer_new,
+  layer_set,
+  layer_stop,
+  bus,
+  room,
+  stream_new,
+  stream_set,
+  stream_stop
+};
 
 struct Command {
   Cmd kind = Cmd::tone;
@@ -66,8 +80,11 @@ struct Command {
   Noise noise;
   LayerSpec spec;
   LayerTarget target;
+  RoomSound room;
   float glide = 0;
   float gain = 0;
+  float pan = 0;
+  float echo = 0;
 };
 
 // ONE ONE-SHOT, from its first frame to its last.
@@ -130,6 +147,25 @@ struct Bus {
   float gain = 1, target = 1, coeff = 1;
 };
 
+// ONE STREAM's ring: the producer writes at `head`, the render thread reads at `tail`.
+struct StreamRing {
+  std::unique_ptr<float[]> data;  // kStreamFrames, allocated on the slot's first use
+  std::atomic<uint32_t> head{0}, tail{0};
+};
+
+// ONE STREAM as the render thread plays it, from `stream` to the end of its fade after `stop`.
+struct StreamVoice {
+  bool live = false;
+  bool stopping = false;
+  int64_t free_at = 0;
+  int bus = 0;
+  float echo = 0;
+  float gain = 1, t_gain = 1, c_gain = 1;
+  float pan = 0, t_pan = 0, c_pan = 1;
+  float gl = 1, gr = 1;
+  int ctl = 0;
+};
+
 }  // namespace
 
 struct Synth::Impl {
@@ -142,10 +178,16 @@ struct Synth::Impl {
   std::array<bool, kMaxLayers> used{};
   std::array<LayerTarget, kMaxLayers> sent{};
   std::array<bool, kMaxLayers> has_sent{};
+  std::array<bool, kMaxStreams> stream_used{};
   std::atomic<uint32_t> dropped{0};
+  std::atomic<uint64_t> overfed{0};
+  // the streams' rings, shared; `stream_free` is set by the render thread once a slot's fade ends
+  std::array<StreamRing, kMaxStreams> rings{};
+  std::array<std::atomic<bool>, kMaxStreams> stream_free{};
   // the render side
   std::array<Voice, kMaxVoices> voices{};
   std::array<LayerVoice, kMaxLayers> layers{};
+  std::array<StreamVoice, kMaxStreams> streams{};
   std::array<Bus, kBuses> buses{};
   uint64_t order = 0;
   int64_t frame = 0;  // the first frame of the next block
@@ -155,11 +197,15 @@ struct Synth::Impl {
   std::vector<float> line;
   int line_write = 0, line_delay = 1;
   float echo_feedback = 0, echo_coeff = 1, echo_damp = 0;
+  // the room
+  Reverb reverb;
+  std::array<float, kBlock> room_l{}, room_r{};
   // the limiter
   float limit_g = 0, limit_attack = 1, limit_release = 1, limit_below = 0;
   // the stats, read from any thread
   std::atomic<uint64_t> frames{0};
   std::atomic<uint32_t> voices_live{0}, layers_live{0}, stolen{0};
+  std::atomic<uint64_t> starved{0};
   std::atomic<float> reduction{0};
 
   Impl(uint32_t seed, const EchoRoom& room) : tables(make_tables(seed)), rng(core::make_rng(seed)) {
@@ -172,6 +218,7 @@ struct Synth::Impl {
     limit_attack = glide_coeff(kLimitAttackS);
     limit_release = glide_coeff(kLimitReleaseS);
     limit_below = gain_of_db(kLimitThresholdDb - kLimitKneeDb / 2);
+    for (auto& f : stream_free) f.store(true, std::memory_order_relaxed);
   }
 
   void push(const Command& c) {
@@ -221,6 +268,38 @@ struct Synth::Impl {
         b.target = c.gain < 0 ? 0 : c.gain;
         b.coeff = glide_coeff(c.glide);
         if (c.glide <= 0) b.gain = b.target;  // a fader set, not moved: before anything plays
+        break;
+      }
+      case Cmd::room:
+        reverb.set(c.room, c.glide);
+        break;
+      case Cmd::stream_new: {
+        StreamVoice& v = streams[c.slot];
+        v = StreamVoice{};
+        v.live = true;
+        v.bus = c.bus;
+        v.echo = c.echo;
+        break;
+      }
+      case Cmd::stream_set: {
+        StreamVoice& v = streams[c.slot];
+        v.t_gain = c.gain < 0 ? 0 : c.gain;
+        v.t_pan = c.pan;
+        v.c_gain = glide_coeff(c.glide);
+        v.c_pan = glide_coeff(c.glide);
+        if (c.glide <= 0) {
+          v.gain = v.t_gain;
+          v.pan = v.t_pan;
+          pan_gains(v.pan, v.gl, v.gr);
+        }
+        break;
+      }
+      case Cmd::stream_stop: {
+        StreamVoice& v = streams[c.slot];
+        v.stopping = true;
+        v.t_gain = 0;
+        v.c_gain = glide_coeff(kStopFadeS);
+        v.free_at = frame + frames_of(kStopFreeS * 1000);
         break;
       }
     }
@@ -488,6 +567,44 @@ struct Synth::Impl {
     }
   }
 
+  // A stream's samples off its ring; what is not there is silence, counted as starved.
+  void render_stream(int slot, int64_t b0, int count) {
+    StreamVoice& v = streams[slot];
+    StreamRing& r = rings[slot];
+    if (v.stopping && b0 >= v.free_at) {
+      v.live = false;
+      r.tail.store(r.head.load(std::memory_order_acquire), std::memory_order_release);
+      stream_free[slot].store(true, std::memory_order_release);
+      return;
+    }
+    const float* bus = bus_gain[v.bus].data();
+    const uint32_t fed = r.head.load(std::memory_order_acquire);
+    uint32_t read = r.tail.load(std::memory_order_relaxed);
+    const float* data = r.data.get();
+    uint64_t silent = 0;
+    for (int i = 0; i < count; i++) {
+      v.gain += (v.t_gain - v.gain) * v.c_gain;
+      if (++v.ctl == kControl) {
+        v.ctl = 0;
+        for (int k = 0; k < kControl; k++) v.pan += (v.t_pan - v.pan) * v.c_pan;
+        pan_gains(v.pan, v.gl, v.gr);
+      }
+      float x = 0;
+      if (read != fed) {
+        x = data[read & (kStreamFrames - 1)];
+        ++read;
+      } else {
+        ++silent;
+      }
+      x *= v.gain * bus[i];
+      mix_l[i] += x * v.gl;
+      mix_r[i] += x * v.gr;
+      mix_e[i] += x * v.echo;
+    }
+    r.tail.store(read, std::memory_order_release);
+    if (silent && !v.stopping) starved.fetch_add(silent, std::memory_order_relaxed);
+  }
+
   void block(float* out, int count) {
     drain();
     for (int i = 0; i < count; i++) mix_l[i] = mix_r[i] = mix_e[i] = 0;
@@ -510,6 +627,15 @@ struct Synth::Impl {
       render_layer(l, frame, count);
       built += l.live;
     }
+    for (int k = 0; k < kMaxStreams; k++)
+      if (streams[k].live) render_stream(k, frame, count);
+    // The room (reverb.hpp): only while one is set, so a synth with none keeps its bits.
+    const bool room = reverb.active();
+    if (room) {
+      for (int i = 0; i < count; i++) room_l[i] = room_r[i] = 0;
+      reverb.process(mix_e.data(), room_l.data(), room_r.data(), count);
+    }
+    const float echo_share = room ? reverb.echo_share() : 1.0f;
     const int size = static_cast<int>(line.size());
     for (int i = 0; i < count; i++) {
       int read = line_write - line_delay;
@@ -517,8 +643,12 @@ struct Synth::Impl {
       echo_damp += (line[read] - echo_damp) * echo_coeff;
       line[line_write] = mix_e[i] + echo_feedback * echo_damp;
       if (++line_write == size) line_write = 0;
-      float l = mix_l[i] + echo_damp;
-      float r = mix_r[i] + echo_damp;
+      float l = mix_l[i] + echo_damp * echo_share;
+      float r = mix_r[i] + echo_damp * echo_share;
+      if (room) {
+        l += room_l[i];
+        r += room_r[i];
+      }
       // The limiter: a soft-knee gain computer on the louder channel, smoothed in dB.
       const float a = l < 0 ? -l : l, b = r < 0 ? -r : r;
       const float peak = a > b ? a : b;
@@ -635,6 +765,73 @@ void Synth::bus_gain(int bus, float gain, float glide_s) {
   impl_->push(c);
 }
 
+void Synth::room(const RoomSound& room, float glide_s) {
+  Command c;
+  c.kind = Cmd::room;
+  c.room = room;
+  c.glide = glide_s;
+  impl_->push(c);
+}
+
+StreamId Synth::stream(int bus, float echo) {
+  for (int i = 0; i < kMaxStreams; i++) {
+    if (impl_->stream_used[i] || !impl_->stream_free[i].load(std::memory_order_acquire)) continue;
+    impl_->stream_used[i] = true;
+    impl_->stream_free[i].store(false, std::memory_order_relaxed);
+    StreamRing& r = impl_->rings[i];
+    if (!r.data) r.data = std::make_unique<float[]>(kStreamFrames);
+    Command c;
+    c.kind = Cmd::stream_new;
+    c.bus = bus_of(bus);
+    c.slot = static_cast<int16_t>(i);
+    c.echo = echo;
+    impl_->push(c);
+    return StreamId{static_cast<int16_t>(i)};
+  }
+  return StreamId{};
+}
+
+int Synth::feed(StreamId id, const float* mono, int frames) {
+  if (!id.valid() || !impl_->stream_used[id.slot] || frames <= 0) return 0;
+  StreamRing& r = impl_->rings[id.slot];
+  const uint32_t head = r.head.load(std::memory_order_relaxed);
+  const uint32_t room = kStreamFrames - (head - r.tail.load(std::memory_order_acquire));
+  const int n = frames < static_cast<int>(room) ? frames : static_cast<int>(room);
+  for (int i = 0; i < n; i++)
+    r.data[(head + static_cast<uint32_t>(i)) & (kStreamFrames - 1)] = mono[i];
+  r.head.store(head + static_cast<uint32_t>(n), std::memory_order_release);
+  if (n < frames)
+    impl_->overfed.fetch_add(static_cast<uint64_t>(frames - n), std::memory_order_relaxed);
+  return n;
+}
+
+int Synth::queued(StreamId id) const {
+  if (!id.valid()) return 0;
+  const StreamRing& r = impl_->rings[id.slot];
+  return static_cast<int>(r.head.load(std::memory_order_relaxed) -
+                          r.tail.load(std::memory_order_acquire));
+}
+
+void Synth::steer(StreamId id, float gain, float pan, float glide_s) {
+  if (!id.valid() || !impl_->stream_used[id.slot]) return;
+  Command c;
+  c.kind = Cmd::stream_set;
+  c.slot = id.slot;
+  c.gain = gain;
+  c.pan = pan;
+  c.glide = glide_s;
+  impl_->push(c);
+}
+
+void Synth::stop(StreamId id) {
+  if (!id.valid() || !impl_->stream_used[id.slot]) return;
+  impl_->stream_used[id.slot] = false;
+  Command c;
+  c.kind = Cmd::stream_stop;
+  c.slot = id.slot;
+  impl_->push(c);
+}
+
 void Synth::render(float* out, int frames) {
   while (frames > 0) {
     const int n = frames < kBlock ? frames : kBlock;
@@ -656,6 +853,8 @@ Stats Synth::stats() const {
   s.dropped = impl_->dropped.load(std::memory_order_relaxed);
   s.stolen = impl_->stolen.load(std::memory_order_relaxed);
   s.reduction_db = impl_->reduction.load(std::memory_order_relaxed);
+  s.starved = impl_->starved.load(std::memory_order_relaxed);
+  s.overfed = impl_->overfed.load(std::memory_order_relaxed);
   return s;
 }
 

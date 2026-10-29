@@ -3,7 +3,8 @@
 // (the software adapter in the GPU-less container and on CI) and renders each named view
 // (views.hpp) offscreen, reads it back and hands it to `Lab::shot` with its caption. Then the
 // bot skis the map (with --rivals beside him) and each --moments second of the run is shot from
-// the chase camera, the racers drawn as figures. Beside each picture: the tiles the terrain's GPU
+// the chase camera, the racers drawn as figures. --at shoots each named view at the sky's moments,
+// so a sequence shows the cloud on the wind. Beside each picture: the tiles the terrain's GPU
 // cull drew, what the instances' cull did (drawn early, drawn late, hidden), every pass's GPU ms
 // (measured: a software adapter's times say nothing about a real GPU) and the frame's CPU half.
 //
@@ -14,23 +15,30 @@
 // terrain shades per covered pixel with the depth prepass, which must be 1 but for coincident
 // surfaces, and without it, the cost the prepass saves), both over the ground and the instances;
 // and the CULL check: the same still drawn again with the depth pyramid's culling off must be the
-// same picture, or the cull dropped something that shows. And the sun's CASCADES over the whole
-// run, without a device: how many frames of the chase camera redraw the near and the far one.
+// same picture, or the cull dropped something that shows (a difference is drawn again first: on a
+// hardware adapter one that does not come back is a warning, `cull-unrepeated`, never a fault). And
+// the sun's CASCADES over the whole run, without a device: how many frames of the chase camera
+// redraw the near and the far one.
 //
 // What must hold on every row is deterministic (the views shot, the pass table, the render size
 // and jitter cycle, no pipeline after load, no GPU error); pixels and timings are measured. Without
 // an adapter it notes that and draws placeholders, so the digest is the same on every row;
 // GE_GPU_REQUIRE=1 fails instead. Built only with GE_GPU.
 //
+// --console=1 draws the last scene once more with the drop-down console down over it, as the
+// window draws it (frame.hpp's `ui` row: ui/console.hpp's list through the 2D pass after post): a
+// few lines in its scrollback and a command half typed, its suggestions under the panel.
+//
 // --cfg runs console commands over Fall Line's cvars first (cfg/cvars.hpp), so a sky a server
-// picks (sv_weather, sv_snowfall, sv_fog, sv_wind, sv_winddir, sv_cover, sv_hour, sv_skyrate) and
-// r_clouds are photographed as the game draws them (sim/sky.hpp).
+// picks (sv_weather, sv_snowfall, sv_fog, sv_wind, sv_winddir, sv_cover, sv_clouddensity,
+// sv_cloudheight, sv_cloudspeed, sv_hour, sv_skyrate) and r_clouds are photographed as the game
+// draws them (sim/sky.hpp).
 //
 // ge:summary Lab: Fall Line's frame from named views of a seed, captured headless
 // ge:keywords lab world picture screenshot views frame terrain sky post gpu-capture headless
 // ge:keywords tiles-drawn gpu-ms cpu-ms pass-table fall-line taa render-scale shimmer overdraw
 // ge:keywords instances forest figures run-moments chase-camera occlusion-culling cull-check
-// ge:keywords sun-shadow cascade-redraws shadow-cache
+// ge:keywords sun-shadow cascade-redraws shadow-cache drop-down-console overlay ui-pass
 // ge:skill render labs
 #include <algorithm>
 #include <array>
@@ -45,6 +53,8 @@
 #include <vector>
 
 #include "console/console.hpp"
+#include "console/view.hpp"
+#include "core/output.hpp"
 #include "fall_line/app/frame.hpp"
 #include "fall_line/app/sky_type.hpp"
 #include "fall_line/app/views.hpp"
@@ -55,10 +65,13 @@
 #include "gpu/device.hpp"
 #include "gpu/target.hpp"
 #include "lab/lab.hpp"
+#include "lab/png.hpp"
 #include "lab/raster.hpp"
 #include "mountain/mapgen/generate.hpp"
 #include "render/shadows.hpp"
 #include "render/taa.hpp"
+#include "ui/console.hpp"
+#include "ui/draw.hpp"
 
 namespace {
 
@@ -95,10 +108,11 @@ std::vector<std::string> views_of(const ge::lab::Lab& lab) {
   return out;
 }
 
-// The --moments list: seconds of the run, each a shot from the chase camera.
-std::vector<double> moments_of(const ge::lab::Lab& lab) {
+// A comma-separated list of seconds: --moments (the run's, each a shot from the chase camera) or
+// --at (the sky's, each named view shot at each).
+std::vector<double> seconds_of(const ge::lab::Lab& lab, const char* arg) {
   std::vector<double> out;
-  const std::string& list = lab.arg("moments");
+  const std::string& list = lab.arg(arg);
   size_t i = 0;
   while (i < list.size()) {
     const size_t j = list.find(',', i);
@@ -164,6 +178,59 @@ std::string fixed(double v, int places) {
   return b;
 }
 
+// Each cloud layer drawn, lowest first, as its base and top over the valley floor, m.
+std::string layers_of(const ge::render::Clouds& clouds, double floor_y) {
+  if (clouds.count == 0) return "none";
+  std::string out;
+  for (int i = 0; i < clouds.count; ++i) {
+    const ge::render::CloudLayer& l = clouds.layers[i];
+    if (i > 0) out += ", ";
+    out += fixed(l.base_m - floor_y, 0) + ".." + fixed(l.top_m - floor_y, 0) + " m";
+  }
+  return out;
+}
+
+// The pixels two stills differ in, and the box round them.
+struct CullDiff {
+  double pixels = 0;
+  int x0 = 0, y0 = 0, x1 = -1, y1 = -1;
+  std::string describe() const {
+    if (pixels == 0) return "0 pixels";
+    return fixed(pixels, 0) + (pixels == 1 ? " pixel" : " pixels") + " in x " + std::to_string(x0) +
+           ".." + std::to_string(x1) + ", y " + std::to_string(y0) + ".." + std::to_string(y1);
+  }
+};
+
+CullDiff cull_diff(const ge::gpu::Image& a, const ge::gpu::Image& b, int width) {
+  CullDiff d;
+  d.x0 = width;
+  d.y0 = 1 << 30;
+  for (size_t i = 0; i + 3 < std::min(a.rgba.size(), b.rgba.size()); i += 4) {
+    if (std::memcmp(&a.rgba[i], &b.rgba[i], 3) == 0) continue;
+    const int x = static_cast<int>(i / 4 % static_cast<size_t>(width));
+    const int y = static_cast<int>(i / 4 / static_cast<size_t>(width));
+    ++d.pixels;
+    d.x0 = std::min(d.x0, x);
+    d.x1 = std::max(d.x1, x);
+    d.y0 = std::min(d.y0, y);
+    d.y1 = std::max(d.y1, y);
+  }
+  return d;
+}
+
+// The culled still darkened, with every pixel the unculled one differs in painted red.
+ge::lab::Picture diff_picture(const ge::gpu::Image& culled, const ge::gpu::Image& all, int width,
+                              int height) {
+  ge::lab::Picture p{width, height, culled.rgba};
+  for (size_t i = 0; i + 3 < std::min(p.rgba.size(), all.rgba.size()); i += 4) {
+    const bool differs = std::memcmp(&culled.rgba[i], &all.rgba[i], 3) != 0;
+    for (int c = 0; c < 3; ++c) {
+      p.rgba[i + c] = static_cast<uint8_t>(differs ? (c == 0 ? 255 : 0) : p.rgba[i + c] / 3);
+    }
+  }
+  return p;
+}
+
 void run(ge::lab::Lab& lab) {
   const double seed = lab.arg_num("seed");
   // --cfg: console commands over Fall Line's cvars, as a cfg would set them (the sky's sv_ cvars
@@ -189,6 +256,12 @@ void run(ge::lab::Lab& lab) {
   options.reach_m = lab.arg_num("reach");
   options.clouds = cvars.clouds;
   options.cover = cvars.cover;
+  options.thick = cvars.thick;
+  options.cloud_height = cvars.cloud_height;
+  options.cloud_thickness = cvars.cloud_thickness;
+  options.cloud_speed = cvars.cloud_speed;
+  options.sun_size = cvars.disc_sun;
+  options.moon_size = cvars.disc_moon;
   if (const std::string problem = fall_line::app::cloud_stack_of(cvars, options);
       !problem.empty()) {
     lab.fail("--cfg: " + problem, "Skill: console.");
@@ -228,6 +301,10 @@ void run(ge::lab::Lab& lab) {
   if (const std::string problem = fall_line::app::sky_style_of(cvars, style); !problem.empty()) {
     lab.fail("--cfg: " + problem, "Skill: console.");
   }
+  ge::render::MoonSet moons;
+  if (const std::string problem = fall_line::app::moon_set_of(cvars, moons); !problem.empty()) {
+    lab.fail("--cfg: " + problem, "Skill: console.");
+  }
   const auto shared = std::make_shared<const ge::mountain::mapgen::Level>(std::move(built));
   const ge::mountain::mapgen::Level& level = *shared;
   const std::string seed_s = std::to_string(static_cast<long long>(seed));
@@ -241,20 +318,35 @@ void run(ge::lab::Lab& lab) {
     std::vector<ge::skier::SkierState> skiers;
     // The racers every fourth step since the last moment: the tracks laid before it is shot.
     std::vector<std::vector<ge::skier::SkierState>> laid;
+    // The cloud layers the still drew, for its stamp.
+    std::string clouds = "none";
   };
   std::vector<Scene> scenes;
+  // Each named view at each of the sky's --at seconds (more than one: a sequence, each shot
+  // named `<view>+<s>`), the cloud carried on by the wind between them.
+  std::vector<double> ats = seconds_of(lab, "at");
+  if (ats.empty()) ats.push_back(0);
   for (const std::string& name : views) {
-    Scene sc{name, std::string(fall_line::app::view_caption(name)), {}, {}, {}};
-    fall_line::app::day_view(level, hour, sc.view);
-    sc.view.style = style;
-    if (!fall_line::app::make_view(level, name, sc.view)) {
-      lab.fail("no view named '" + name + "'",
-               "next: pick from games/fall_line/app/views.hpp (or --views=all).");
-      continue;
+    for (double at : ats) {
+      Scene sc{name, std::string(fall_line::app::view_caption(name)), {}, {}, {}};
+      if (ats.size() > 1) {
+        sc.name += "+" + fixed(at, 1);
+        sc.caption += " At " + fixed(at, 1) + " s.";
+      }
+      sc.view.style = style;
+      sc.view.moons = moons;
+      sc.view.moon_size = cvars.disc_moon;  // a lens on a moon frames it as it is drawn
+      fall_line::app::day_view(level, hour, sc.view);
+      sc.view.time_s = at;
+      if (!fall_line::app::make_view(level, name, sc.view)) {
+        lab.fail("no view named '" + name + "'",
+                 "next: pick from games/fall_line/app/views.hpp (or --views=all).");
+        break;
+      }
+      scenes.push_back(std::move(sc));
     }
-    scenes.push_back(std::move(sc));
   }
-  const std::vector<double> moments = moments_of(lab);
+  const std::vector<double> moments = seconds_of(lab, "moments");
   const int rivals = static_cast<int>(lab.arg_num("rivals"));
   if (!moments.empty()) {
     fall_line::sim::Driver run(shared, std::max(rivals, 0));
@@ -344,7 +436,27 @@ void run(ge::lab::Lab& lab) {
          {"render", std::to_string(render_w) + "x" + std::to_string(render_h) +
                         (options.taa ? ", TAA-U" : ", no TAA")},
          {"reach", options.reach_m > 0 ? fixed(options.reach_m, 0) + " m, misted" : "all"},
-         {"cfg", lab.arg("cfg").empty() ? "none" : lab.arg("cfg")}}};
+         {"cfg", lab.arg("cfg").empty() ? "none" : lab.arg("cfg")},
+         {"eye", fixed(sc.view.eye[1] - level.mountain.base.y, 0) + " m over the floor"},
+         {"clouds", sc.clouds}}};
+  };
+
+  // The console's still: the last scene with the drop-down console down over it.
+  const bool with_console = lab.arg_num("console") != 0 && !scenes.empty();
+  auto console_shot = [&] {
+    ge::lab::Shot shot = shot_of(scenes.back());
+    shot.id = "console";
+    shot.title = "SEED " + seed_s + ", CONSOLE";
+    shot.caption =
+        "The last scene again with the drop-down console down over the top half, drawn by the "
+        "2D pass after post as the window draws it: the con_bg gradient over the game, the "
+        "scrollback coloured by kind, the input line with a cvar's name half typed and its hint, "
+        "the suggestions under the panel's edge.";
+    shot.look_for =
+        "the panel covers the top of the frame and the mountain shows under it and through it; "
+        "the text is crisp and inside the panel; the suggestion list hangs under the yellow "
+        "edge; the mountain below the panel is the same picture as the scene";
+    return shot;
   };
 
   auto device = ge::gpu::create_device({.label = "world", .validation = 1});
@@ -358,6 +470,11 @@ void run(ge::lab::Lab& lab) {
       ge::lab::Picture none = ge::lab::create_picture(width, height, {40, 40, 48});
       ge::lab::draw_text(none, 4, 4, "NO GPU ADAPTER", {230, 230, 230});
       lab.shot(shot_of(sc), none, Det::measured);
+    }
+    if (with_console) {
+      ge::lab::Picture none = ge::lab::create_picture(width, height, {40, 40, 48});
+      ge::lab::draw_text(none, 4, 4, "NO GPU ADAPTER", {230, 230, 230});
+      lab.shot(console_shot(), none, Det::measured);
     }
     // The digest hashes in call order: the shots, then these, as the device path does.
     lab.metric("overdraw-faults", 0, "count");
@@ -383,7 +500,7 @@ void run(ge::lab::Lab& lab) {
       *device, "world.overdraw", render_w, render_h, 1, wgpu::TextureFormat::R16Float,
       wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc);
   const wgpu::TextureView count_view = count.CreateView();
-  int overdraw_faults = 0, cull_faults = 0;
+  int overdraw_faults = 0, cull_faults = 0, cull_unrepeated = 0, cull_hardware = 0;
 
   // A still of the scene: a cut, then `settle` frames.
   auto still = [&](Scene& sc) {
@@ -404,6 +521,7 @@ void run(ge::lab::Lab& lab) {
     for (const auto& racers : sc.laid) fall_line::app::track(*frame, {racers});
     const ge::gpu::Image img = still(sc);
     frame->recorder.wait(*device);
+    sc.clouds = layers_of(frame->drawn_clouds, level.mountain.base.y);
     // How far away each pixel is, off this still's depth, for a diff (`--compare`).
     ge::lab::DistanceMap distance{static_cast<int>(frame->targets.width),
                                   static_cast<int>(frame->targets.height),
@@ -452,16 +570,49 @@ void run(ge::lab::Lab& lab) {
     // THE CULL CHECK: the same still with the pyramid's culling off draws every instance in the
     // frustum; on the software adapter the two pictures are the same bits, so a pixel that differs
     // is one the cull dropped although it shows.
+    // A cull that drops what shows drops it every time it draws the same frames, so a difference
+    // is drawn again before it is called the cull's. On the software adapter any difference is a
+    // fault. On a hardware adapter it is measured and warned, with the pictures, and never gates:
+    // Apple's paravirtual Metal drops a pixel of a tree on some runs and not others in one process
+    // (docs/goals/M7d1.md), so a count there would move the digest from run to run.
     {
       frame->options.occlusion = false;
       const ge::gpu::Image all = still(sc);
       frame->options.occlusion = true;
-      double differ = 0;
-      for (size_t i = 0; i + 3 < std::min(img.rgba.size(), all.rgba.size()); i += 4) {
-        if (std::memcmp(&img.rgba[i], &all.rgba[i], 3) != 0) ++differ;
+      const CullDiff first = cull_diff(img, all, width);
+      lab.metric(name + ".cull-diff-pixels", first.pixels, "count", Det::measured);
+      if (first.pixels > 0) {
+        const ge::gpu::Image again = still(sc);
+        const CullDiff second = cull_diff(again, all, width);
+        const ge::render::InstanceStats seen_again =
+            ge::render::read_instance_stats(*device, frame->forest);
+        const std::string line =
+            "world: view '" + name + "' on " + device->report.name +
+            ": the culled still differed from the unculled one in " + first.describe() +
+            " (trees early+late, hidden: " + std::to_string(trees.early) + "+" +
+            std::to_string(trees.late) + ", " + std::to_string(trees.hidden) + "); drawn again, " +
+            second.describe() + " (" + std::to_string(seen_again.early) + "+" +
+            std::to_string(seen_again.late) + ", " + std::to_string(seen_again.hidden) + ").";
+        lab.note(line);
+        // The pictures only where a difference fails: an attachment's name is in the digest.
+        if (device->report.software) {
+          ++cull_faults;
+          ge::core::output::error(line);
+          lab.attach(name + ".cull-culled.png", ge::lab::encode_png({width, height, img.rgba}),
+                     Det::measured);
+          lab.attach(name + ".cull-unculled.png", ge::lab::encode_png({width, height, all.rgba}),
+                     Det::measured);
+          lab.attach(name + ".cull-diff.png",
+                     ge::lab::encode_png(diff_picture(img, all, width, height)), Det::measured);
+        } else if (second.pixels > 0) {
+          ++cull_hardware;
+          ge::core::output::warn(line +
+                                 " Repeated on hardware: measured, not gating. Skill: render.");
+        } else {
+          ++cull_unrepeated;
+          ge::core::output::warn(line + " Not repeated: not counted as the cull's. Skill: render.");
+        }
       }
-      lab.metric(name + ".cull-diff-pixels", differ, "count", Det::measured);
-      if (differ > 0) ++cull_faults;
     }
     ge::lab::Picture picture{width, height, img.rgba};
     if (img.rgba.size() != static_cast<size_t>(width) * static_cast<size_t>(height) * 4) {
@@ -470,6 +621,33 @@ void run(ge::lab::Lab& lab) {
       continue;
     }
     lab.shot(shot_of(sc), picture, Det::measured, std::move(distance));
+  }
+  if (with_console) {
+    Scene& sc = scenes.back();
+    ge::console::ConsoleView con(console);
+    con.add(ge::console::LineKind::output, "Fall Line: seed " + seed_s + ", the free ride");
+    con.add(ge::console::LineKind::command, "] /sv_hour 15.5");
+    con.add(ge::console::LineKind::event, "a gate missed: 4");
+    con.add(ge::console::LineKind::chat, "skier: the powder under the ridge is untracked");
+    con.toggle();
+    con.frame(10);
+    con.type("/r_bl");
+    ge::ui::DrawList overlay;
+    overlay.begin(width, height);
+    ge::ui::draw_console(overlay, con, {}, nullptr, 0);
+    fall_line::app::cut(*frame);
+    for (int i = 0; i < settle; ++i) {
+      sc.view.frame = static_cast<uint64_t>(i);
+      fall_line::app::draw(*device, *frame, sc.view,
+                           {sc.skiers, 0, true, {}, std::nullopt, &overlay}, target.view);
+    }
+    const ge::gpu::Image img = ge::gpu::read_now(*device, target);
+    if (img.rgba.size() == static_cast<size_t>(width) * static_cast<size_t>(height) * 4) {
+      lab.shot(console_shot(), ge::lab::Picture{width, height, img.rgba}, Det::measured);
+    } else {
+      lab.fail("the readback of the console's still came back the wrong size",
+               "Check engine/gpu/target.cpp's Readback. Skill: gpu.");
+    }
   }
   lab.note(costs);
   lab.metric("overdraw-faults", overdraw_faults, "count");
@@ -482,6 +660,8 @@ void run(ge::lab::Lab& lab) {
         "Skill: render.");
   }
   lab.metric("cull-faults", cull_faults, "count");
+  lab.metric("cull-unrepeated", cull_unrepeated, "count", Det::measured);
+  lab.metric("cull-hardware", cull_hardware, "count", Det::measured);
   if (cull_faults != 0) {
     lab.fail("the depth pyramid's cull dropped instances that show (the .cull-diff-pixels rows)",
              "Check engine/render/instances_cull.wgsl's `hidden` (the box's nearest corner, the "
@@ -527,6 +707,10 @@ const ge::lab::LabSpec kSpec{
          "seconds of the bot's run to shoot from the chase camera, comma-"
          "separated (empty: none)"},
         {"rivals", "3", "the bots racing beside him"},
+        {"at", "0",
+         "the sky's moment each named view is shot at, s; comma-separated for a sequence of "
+         "each (the cloud carried on by the wind between them)"},
+        {"console", "1", "the last scene again with the drop-down console down over it (0: not)"},
     },
     "--views=start,vista --moments=4 --width=160 --height=90 --settle=2",
     run,

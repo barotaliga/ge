@@ -32,6 +32,9 @@ make lab LAB=<id> ARGS="--seeds=38 --tag=before" # BEFORE your change: kept in p
 # ...change the code...
 make lab LAB=<id> ARGS="--seeds=38 --compare=before"   # AFTER: every metric beside the kept run,
                                                        # every picture diffed (previews/<id>/diff/)
+build/debug/ge lab publish <id> --before=before   # THE PICTURES FOR THE REPORT AND THE PR: one
+                                                  # self-contained page, before beside after, ready
+                                                  # to publish (previews/<id>/publish.html)
 ```
 
 **A change to how something LOOKS** is proved by the picture diff, not by eye alone: the
@@ -69,8 +72,8 @@ picture's band says what it shows and what to look for, so check exactly that. T
 **What a PR owes:** for a change in a lab's subject, the lab's output before and after (the
 `--compare` table, the diff table and the sheets of the pictures that moved) in the PR body, plus
 `make labs-smoke` green. If the change moves a lab's digest on purpose, run `make ge ARGS="digest <id> --write"`
-(that lab's row only; `make labs-digests` rewrites every row), commit
-`tests/labs_digests.txt`, and say in the PR which lab moved and why.
+(that lab's file only; `make labs-digests` rewrites every lab's), commit
+`tests/digests/`, and say in the PR which lab moved and why.
 
 ## Write one
 
@@ -97,8 +100,9 @@ picture's band says what it shows and what to look for, so check exactly that. T
 4. **Caption every picture** (below).
 5. **Run it**, look at its contact sheet, run `make labs-smoke`, then `make ge ARGS="digest <id> --write"`
    for the new row, and `make index` (a lab file carries a `ge:` block like any source).
-6. Add its row to `docs/labs.md`'s table, and to its milestone's **Labs** cell in
-   `docs/goals.md` if it is one a milestone owes.
+6. Add it to its milestone's **Labs** cell in `docs/goals.md` if it is one a milestone owes.
+   There is no table of labs to add it to: the `LabSpec` is the list, and `make index` writes
+   `docs/lab-list.md` from every one.
 
 ## Captions: a picture's acceptance test, written down
 
@@ -116,7 +120,7 @@ The font is upper case, 5x7 and ASCII only. A character it lacks draws blank, so
 
 Every lab's digest hashes its deterministic metrics, its table cells and its pictures'
 pixels. `labs_smoke` (CTest, every CI row) runs each lab twice in one process and checks the
-result against `tests/labs_digests.txt`:
+result against `tests/digests/`:
 
 - **Different digests between the two runs**: the lab or the code under it keeps state
   between runs or draws from an unseeded source. Load `determinism`.

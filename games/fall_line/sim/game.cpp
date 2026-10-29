@@ -18,6 +18,8 @@
 #include "fall_line/sim/army_heli.hpp"
 #include "fall_line/sim/army_heli_rules.hpp"
 #include "fall_line/sim/army_meet.hpp"
+#include "fall_line/sim/army_para.hpp"
+#include "fall_line/sim/army_para_rules.hpp"
 #include "fall_line/sim/army_rules.hpp"
 #include "fall_line/sim/army_sled.hpp"
 #include "fall_line/sim/army_sled_rules.hpp"
@@ -30,6 +32,7 @@
 #include "fall_line/sim/lift_ride.hpp"
 #include "fall_line/sim/para_ride.hpp"
 #include "fall_line/sim/sled_ride.hpp"
+#include "fall_line/sim/village.hpp"
 #include "fall_line/sim/wanted.hpp"
 #include "mountain/mapgen/generate.hpp"
 #include "prof/zones.hpp"
@@ -156,6 +159,16 @@ void log_step(const GameState& state) {
       case EventKind::died:
         line += " at severity " + f(e.value, 0);
         break;
+      case EventKind::traffic:
+        line += (e.gate >= 0 ? " vehicle " + std::to_string(e.gate)
+                             : " parked car " + std::to_string(-1 - e.gate)) +
+                " at " + f(e.value, 1) + " m/s";
+        break;
+      case EventKind::army_para:
+        line += " paramotor " + f(e.value, 0) + " " +
+                army_para_change_name(static_cast<ArmyParaChange>(e.gate)) + ", " +
+                std::to_string(state.army.paras.size()) + " out";
+        break;
     }
     line += " at x " + f(s.x, 1) + " z " + f(s.z, 1) + ", " + f(s.speed * 3.6, 1) + " km/h";
     out::log_on(ch, out::Level::debug, line);
@@ -245,6 +258,10 @@ const char* event_name(EventKind kind) {
       return "hurt";
     case EventKind::died:
       return "died";
+    case EventKind::traffic:
+      return "traffic";
+    case EventKind::army_para:
+      return "army-para";
   }
   return "?";
 }
@@ -273,6 +290,7 @@ GameState create_game_on(std::shared_ptr<const mg::Level> level, int32_t racers)
   state.army.soldiers.reserve(army::kMostSoldiers);
   state.army.sleds.reserve(army_sled::kMostSleds);
   state.army.helis.reserve(army_heli::kMostHelis);
+  state.army.paras.reserve(army_para::kMostParas);
   state.ways = army_ways(*state.level);
   const std::vector<Rider> field =
       deal_field(*state.level, static_cast<int32_t>(state.racers.size()));
@@ -374,6 +392,10 @@ void step(GameState& state, std::span<const Controls> controls) {
     GE_ZONE("crowd");
     step_crowd(state);
     meet_crowd(state);
+  }
+  if (state.village) {
+    GE_ZONE("traffic");
+    meet_traffic(state);
   }
   {
     GE_ZONE("army");

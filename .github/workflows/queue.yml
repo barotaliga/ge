@@ -1,0 +1,237 @@
+# The merge queue's two automatic hands, so nobody has to disarm, message and re-arm pull requests
+# by hand (the `commit` skill says when to reach for them):
+#
+#   HOLD     While any open pull request carries the `queue-priority` label, every OTHER pull
+#            request armed for auto-merge but not yet in the queue is disarmed and labelled
+#            `queued-hold`, with one comment saying which pull requests it waits for, so the
+#            priority ones reach the queue first and are not raced to it. Pull requests already
+#            in the queue stay there (only a maintainer can take one out). When no open pull
+#            request carries the label any more (it was removed, or the last one merged or
+#            closed), every `queued-hold` pull request is re-armed and loses the label.
+#   JUMP     A `queue-priority` pull request that is ready (not a draft, its required check
+#            green) is put into the queue AT ITS FRONT, as the queue's "jump" does by hand: one
+#            not yet queued is enqueued with the jump, one queued behind others without it is
+#            taken out and put back with it. GitHub lets only a repository admin jump, so this
+#            uses the `QUEUE_TOKEN` secret when it is set (an admin's fine-grained token with
+#            pull requests and contents read and write on this repository) and the workflow's
+#            own token otherwise, whose refusal is logged as a warning and nothing more: the
+#            pull request then reaches the queue armed, first among the armed ones (HOLD).
+#   RE-ARM   A queued run that ended without a single failed job (every red job cancelled or
+#            abandoned: a lost runner, a timeout, the queue rebuilding) ejects its pull requests
+#            for nothing the change did. Each one no longer in the queue and no longer armed is
+#            re-armed, with one comment naming the run. A run with a real failure is left alone:
+#            its owner fixes it.
+#   CONFLICT Every open pull request that is not a draft and conflicts with main is labelled
+#            `merge-conflict`, with one comment, so its owner (a thread subscribed to it) is told
+#            even when it was armed but not queued, which GitHub sends no event for. The label
+#            comes off when the pull request merges cleanly again. This runs on every push to
+#            main, which is what turns a clean pull request into a conflicting one.
+#
+# All read the queue through GraphQL (`isInMergeQueue`, `autoMergeRequest`), which the workflow's
+# own token may use. The token arms with SQUASH, as the ruleset merges. It runs on the label's
+# events, on every arm, on a closed or merged pull request, on every push to main, when a `ci` run completes, every ten
+# minutes as a backstop, and by hand. One run at a time; a run never cancels another.
+name: queue
+
+on:
+  push:
+    branches: [main]
+  pull_request_target:
+    types: [labeled, unlabeled, closed, auto_merge_enabled]
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: read
+
+concurrency:
+  group: queue
+  cancel-in-progress: false
+
+jobs:
+  queue:
+    # Of the ci runs, only the merge queue's can eject anything.
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.event == 'merge_group'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      EVENT: ${{ github.event_name }}
+      RUN_ID: ${{ github.event.workflow_run.id }}
+      RUN_EVENT: ${{ github.event.workflow_run.event }}
+      RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+      RUN_BRANCH: ${{ github.event.workflow_run.head_branch }}
+      RUN_URL: ${{ github.event.workflow_run.html_url }}
+    steps:
+      # No checkout: this job reads and writes pull requests through the API and runs no code
+      # from any of them (pull_request_target runs with the base's token).
+      - name: The open pull requests, as the queue sees them
+        run: |
+          gh api graphql --paginate -F owner="${GH_REPO%/*}" -F name="${GH_REPO#*/}" -f query='
+            query($owner: String!, $name: String!, $endCursor: String) {
+              repository(owner: $owner, name: $name) {
+                pullRequests(states: OPEN, first: 100, after: $endCursor) {
+                  pageInfo { hasNextPage endCursor }
+                  nodes {
+                    number id isDraft isInMergeQueue mergeable
+                    autoMergeRequest { enabledAt }
+                    mergeQueueEntry { position jump }
+                    labels(first: 30) { nodes { name } }
+                  }
+                }
+              }
+            }' --jq '.data.repository.pullRequests.nodes[]
+              | [.number, .isDraft, .isInMergeQueue, (.autoMergeRequest != null),
+                 ([.labels.nodes[].name] | join(",")), .id,
+                 (.mergeQueueEntry.position // 0), (.mergeQueueEntry.jump // false),
+                 .mergeable] | @tsv' > prs.tsv
+          # Columns: number, draft, queued, armed, labels (comma-joined; may be empty), node id,
+          # queue position (1 is the front; 0 not queued), jumped, mergeable (MERGEABLE,
+          # CONFLICTING, or UNKNOWN while GitHub has not yet worked it out).
+          cat prs.tsv
+
+      - name: Hold every armed pull request behind the priority ones, or release them
+        run: |
+          has() { case ",$1," in *",$2,"*) return 0 ;; *) return 1 ;; esac; }
+          priority=()
+          while IFS=$'\t' read -r n _ _ _ labels _; do
+            has "$labels" queue-priority && priority+=("#$n")
+          done < prs.tsv
+          # The loop below reads its rows on fd 3, so no gh call inside it eats them from stdin, and
+          # one pull request's refusal is a warning, not the end of the others.
+          gh label create queued-hold --color BFD4F2 \
+            --description "Disarmed while a queue-priority pull request goes first; re-armed automatically" \
+            2> /dev/null || true
+          while IFS=$'\t' read -r -u 3 n draft queued armed labels _; do
+            if ((${#priority[@]})); then
+              has "$labels" queue-priority && continue
+              [ "$queued" = true ] && continue
+              [ "$armed" = true ] || continue
+              gh pr merge "$n" --disable-auto || { echo "::warning::#$n could not be disarmed"; continue; }
+              gh pr edit "$n" --add-label queued-hold
+              gh pr comment "$n" --body "Disarmed while ${priority[*]} (labelled \`queue-priority\`) reaches the merge queue first. It is re-armed automatically when no open pull request carries that label; nothing to do meanwhile but keep this branch clean against main.
+
+          ---
+          _Posted by the \`queue\` workflow_"
+              echo "#$n held behind ${priority[*]}"
+            elif has "$labels" queued-hold; then
+              gh pr edit "$n" --remove-label queued-hold
+              if [ "$draft" = false ]; then
+                gh pr merge "$n" --auto --squash && echo "#$n released and re-armed" ||
+                  echo "::warning::#$n could not be re-armed; arm it by hand"
+              fi
+            fi
+          done 3< prs.tsv
+
+      - name: Put the priority pull requests at the front of the queue
+        env:
+          JUMP_TOKEN: ${{ secrets.QUEUE_TOKEN || github.token }}
+        run: |
+          has() { case ",$1," in *",$2,"*) return 0 ;; *) return 1 ;; esac; }
+          gq() { GH_TOKEN="$JUMP_TOKEN" gh api graphql -F id="$1" -f query="$2" > /dev/null; }
+          while IFS=$'\t' read -r -u 3 n draft queued _ labels id position jumped _; do
+            has "$labels" queue-priority || continue
+            [ "$draft" = false ] || { echo "#$n is a draft"; continue; }
+            if [ "$queued" = true ]; then
+              { [ "$position" -le 1 ] || [ "$jumped" = true ]; } && { echo "#$n is at the front, or jumped"; continue; }
+              gq "$id" 'mutation($id: ID!) { dequeuePullRequest(input: {id: $id}) { clientMutationId } }' ||
+                { echo "::warning::#$n could not be taken out to jump (QUEUE_TOKEN unset, or not an admin's)"; continue; }
+            fi
+            # Refused until the pull request's required check is green; the next run tries again.
+            if gq "$id" 'mutation($id: ID!) { enqueuePullRequest(input: {pullRequestId: $id, jump: true}) { clientMutationId } }'; then
+              echo "#$n jumped to the front of the queue"
+            else
+              echo "::warning::#$n could not jump the queue (its check not green yet, or QUEUE_TOKEN unset or not an admin's)"
+              # Taken out above and refused back in: re-arm, so it is not left out of the queue.
+              [ "$queued" = true ] && gh pr merge "$n" --auto --squash
+            fi
+          done 3< prs.tsv
+
+      - name: Label the pull requests that conflict with main
+        if: github.event_name != 'workflow_run'
+        run: |
+          has() { case ",$1," in *",$2,"*) return 0 ;; *) return 1 ;; esac; }
+          gh label create merge-conflict --color D93F0B \
+            --description "Conflicts with main: merge main, precheck, push; removed automatically" \
+            2> /dev/null || true
+          # GitHub works out a pull request's mergeability lazily, after main moves: the listing
+          # above asked for it, so a minute later most UNKNOWNs are answered. The rest wait for the
+          # next run.
+          if cut -f9 prs.tsv | grep -qx UNKNOWN; then
+            sleep 60
+            gh api graphql --paginate -F owner="${GH_REPO%/*}" -F name="${GH_REPO#*/}" -f query='
+              query($owner: String!, $name: String!, $endCursor: String) {
+                repository(owner: $owner, name: $name) {
+                  pullRequests(states: OPEN, first: 100, after: $endCursor) {
+                    pageInfo { hasNextPage endCursor }
+                    nodes { number isDraft mergeable labels(first: 30) { nodes { name } } }
+                  }
+                }
+              }' --jq '.data.repository.pullRequests.nodes[]
+                | [.number, .isDraft, .mergeable, ([.labels.nodes[].name] | join(","))] | @tsv' > merge.tsv
+          else
+            awk -F'\t' -v OFS='\t' '{ print $1, $2, $9, $5 }' prs.tsv > merge.tsv
+          fi
+          while IFS=$'\t' read -r -u 3 n draft mergeable labels; do
+            if [ "$mergeable" = CONFLICTING ] && [ "$draft" = false ] && ! has "$labels" merge-conflict; then
+              gh pr edit "$n" --add-label merge-conflict
+              gh pr comment "$n" --body "This pull request conflicts with main, so it cannot enter the merge queue. Merge \`origin/main\` into the branch, resolve the conflicts, run \`make precheck\`, push and re-arm. The \`merge-conflict\` label comes off by itself once it merges cleanly.
+
+          ---
+          _Posted by the \`queue\` workflow_"
+              echo "#$n conflicts with main"
+            elif [ "$mergeable" = MERGEABLE ] && has "$labels" merge-conflict; then
+              gh pr edit "$n" --remove-label merge-conflict
+              echo "#$n merges cleanly again"
+            fi
+          done 3< merge.tsv
+
+      - name: Re-arm what a queued run ejected for no failure of its own
+        if: github.event_name == 'workflow_run' && github.event.workflow_run.event == 'merge_group' && github.event.workflow_run.conclusion != 'success'
+        run: |
+          # A job that failed is the change's (or a flake's, which its owner reruns); only a run
+          # whose red is all cancelled or abandoned jobs is the infrastructure's.
+          failed=$(gh api "repos/$GH_REPO/actions/runs/$RUN_ID/jobs?per_page=100" --paginate \
+            --jq '.jobs[] | select(.conclusion == "failure" and .name != "required") | .name')
+          if [ -n "$failed" ]; then
+            echo "run $RUN_ID has failed jobs, left to their owners:"; echo "$failed"; exit 0
+          fi
+          # The group's branch names the pull request at its head: gh-readonly-queue/main/pr-<n>-<sha>.
+          n=$(echo "$RUN_BRANCH" | sed -nE 's#.*/pr-([0-9]+)-[0-9a-f]+$#\1#p')
+          [ -n "$n" ] || { echo "no pull request in $RUN_BRANCH"; exit 0; }
+          # The queue drops an ejected entry a little after its run ends: look for up to three minutes.
+          for _ in 1 2 3 4 5 6; do
+            row=$(gh api graphql -F owner="${GH_REPO%/*}" -F name="${GH_REPO#*/}" -F n="$n" -f query='
+              query($owner: String!, $name: String!, $n: Int!) {
+                repository(owner: $owner, name: $name) {
+                  pullRequest(number: $n) {
+                    state isDraft isInMergeQueue autoMergeRequest { enabledAt }
+                    labels(first: 30) { nodes { name } }
+                  }
+                }
+              }' --jq '.data.repository.pullRequest
+                | [.state, .isDraft, .isInMergeQueue, (.autoMergeRequest != null),
+                   ([.labels.nodes[].name] | join(","))] | @tsv')
+            IFS=$'\t' read -r state draft queued armed labels <<< "$row"
+            [ "$state" = OPEN ] && [ "$queued" = false ] && break
+            sleep 30
+          done
+          [ "$state" = OPEN ] || { echo "#$n is $state"; exit 0; }
+          case ",$labels," in *",queued-hold,"*) echo "#$n is held"; exit 0 ;; esac
+          if [ "$draft" = true ] || [ "$queued" = true ] || [ "$armed" = true ]; then
+            echo "#$n: draft $draft, queued $queued, armed $armed: nothing to do"; exit 0
+          fi
+          gh pr merge "$n" --auto --squash
+          gh pr comment "$n" --body "Re-armed: the merge queue's run [$RUN_ID]($RUN_URL) ended $RUN_CONCLUSION with no failed job (cancelled or abandoned jobs only), so nothing in this change was at fault.
+
+          ---
+          _Posted by the \`queue\` workflow_"
+          echo "#$n re-armed after run $RUN_ID ($RUN_CONCLUSION)"

@@ -29,6 +29,7 @@ void toy(Lab& lab) {
   lab.table({"rows", {"a", "b"}, {{"1", "2"}}});
   Picture p = create_picture(32, 16, {0, 90, 0});
   lab.shot({"green", "A GREEN BOX", "A box, green.", "that it is green", {{"n", lab.arg("n")}}}, p);
+  lab.attach("frames/0001.txt", {'o', 'k'});
   if (lab.arg_bool("fail")) lab.fail("asked to", "Do not pass --fail.");
 }
 
@@ -95,6 +96,7 @@ TEST(a_run_writes_its_files) {
   const std::string d = dir() + "/toy";
   CHECK(slurp(d + "/metrics.tsv").find("n-squared\t16\tcount\tdeterministic") != std::string::npos);
   CHECK(slurp(d + "/metrics.tsv").find("wall\t1.5\tms\tmeasured") != std::string::npos);
+  CHECK(slurp(d + "/frames/0001.txt") == "ok");  // an attachment in a subdirectory
   const std::string json = slurp(d + "/report.json");
   CHECK(json.find("\"lab\": \"toy\"") != std::string::npos);
   CHECK(json.find("\"look_for\": \"that it is green\"") != std::string::npos);
@@ -149,6 +151,29 @@ TEST(digest_baseline) {
   const std::string every = slurp(base);
   CHECK_MSG(every.find("gpu-only 0123456789abcdef") != std::string::npos, every);
   CHECK(every.find("toy ") != std::string::npos);
+}
+
+TEST(digest_baseline_as_a_directory_of_one_file_a_lab) {
+  // The repository's form: tests/digests/<lab>.txt, so two pull requests moving different labs
+  // touch different files and never conflict.
+  const std::string base = dir() + "/digests";
+  fs::remove_all(base);
+  CHECK(run({"toy", "--smoke", "--write-digests=" + base}) == 0);
+  const std::string toy = slurp(base + "/toy.txt");
+  CHECK_MSG(toy.size() == 17 && toy.back() == '\n', toy);  // 16 hex digits and a newline
+  CHECK(!fs::exists(base + "/drift.txt"));
+  CHECK(run({"toy", "--smoke", "--check-digests=" + base}) == 0);
+  CHECK(run({"toy", "--n=9", "--check-digests=" + base}) == 1);
+  CHECK(run({"drift", "--check-digests=" + base}) == 1);
+  // Writing one lab leaves every other lab's file as it was, and a file of a lab this build does
+  // not register (a GPU lab on a GPU-less build) stays.
+  std::ofstream(base + "/gpu-only.txt", std::ios::binary) << "0123456789abcdef\n";
+  CHECK(run({"drift", "--smoke", "--write-digests=" + base}) == 0);
+  CHECK(slurp(base + "/toy.txt") == toy);
+  CHECK(fs::exists(base + "/drift.txt"));
+  run({"--all", "--smoke", "--write-digests=" + base});
+  CHECK(slurp(base + "/gpu-only.txt") == "0123456789abcdef\n");
+  CHECK(run({"toy", "--smoke", "--check-digests=" + base}) == 0);
 }
 
 TEST(a_measured_shot_keeps_its_pixels_out_of_the_digest) {

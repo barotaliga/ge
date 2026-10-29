@@ -14,13 +14,24 @@
 // Every band (the base, the depth, the cover, the cell) is dealt off the map's seed on a hash of
 // its own, never a run's random stream. THE WIND ALOFT is the map's mean wind grown with height
 // on a log law, turned with it (clockwise in the north, the other way in the south), floored at
-// the speed each kind of cloud is seen to move at; the layers drift at a quarter of it (a real
-// cloud's shadow at a game's lens reads as a time-lapse; a quarter crosses a slope in ten minutes),
-// and a cell lives its kind's life (a heap's eight minutes, a veil's half hour).
+// the speed each kind of cloud is seen to move at; the layers drift at the true wind (M8f9: at a
+// quarter of it, as before, a low cloud hung still where a real one races; `sv_cloudspeed 0.25`
+// is the old sky), and a cell lives its kind's life (a heap's eight minutes, a veil's half hour).
+// THE EVENING'S LOW-LEVEL JET: once the sun is down the ground cools, the air over it stops
+// mixing with the air aloft, and the wind a few hundred metres up speeds up past its day's value
+// (up to about 1.7 times it at 300 to 500 m, peaking after midnight). A layer's wind grows by that
+// as dusk falls (`Aloft::dusk`). With a wind of 2 m/s or more, a fair, flurrying, grey or snowing
+// sky also gets ragged scud racing under it at 200 to 450 m (`fractus`) from twilight into the
+// night. The scud is so near that it crosses the sky many times faster than the layers over it, and
+// it blows across a lit moon. A layer's height and its speed can be picked by hand (`Aloft::base`,
+// `Aloft::speed`): every height is a true one over the floor, since the layers are marched on the
+// eye's rays and need no world under them; a lower layer moves faster across the sky for the same
+// wind.
 //
 // ge:summary Which cloud layers a broken sky stands over a map, and how the wind carries them
 // ge:keywords cloud field layers cumulus congestus altocumulus cirrus veil wind-aloft veer
-// ge:keywords drift cloud_field cloud_layers_for sky_at
+// ge:keywords drift cloud_field cloud_layers_for sky_at low-level-jet scud fractus dusk aloft
+// ge:keywords cloud-height cloud-speed
 // ge:skill mountain render
 // ge:test tests/mountain_cloud_field_test.cpp
 #pragma once
@@ -32,8 +43,30 @@
 
 namespace ge::mountain::app {
 
-// How fast the layers drift, a share of the wind aloft that carries them.
-inline constexpr double kCloudDrift = 0.25;
+// How fast the layers drift, a share of the wind aloft that carries them: all of it.
+inline constexpr double kCloudDrift = 1;
+
+// What a sky's layers are dealt under beside the map: how far dusk has fallen (0 by day, 1 with
+// the sun 6 degrees under the horizon; `dusk_of`), a share of the TRUE wind aloft they drift at
+// in place of `kCloudDrift` (negative: kCloudDrift), the lowest layer's base over the floor, m,
+// every layer over it raised or lowered in the same proportion (negative: the dealt heights), and
+// the lowest layer's THICKNESS, how tall it stands from its base to its top, m (negative: the
+// dealt depth). A layer's cloud is as dense a metre whatever its thickness, so a taller one is
+// darker below and hides more of the sun. However they are dealt, every layer starts where the
+// one under it ends: from a layer's top up there is clear sky or the next layer, never two
+// layers in one slab of air.
+struct Aloft {
+  double dusk = 0;
+  double speed = -1;
+  double base = -1;
+  double thickness = -1;
+};
+
+// How far dusk has fallen with the sun `elevation` rad over the horizon: 0 with it 6 degrees up
+// or higher, 1 with it 6 degrees down or lower.
+double dusk_of(double elevation);
+// The low-level jet's factor on the wind at `h` m over the floor at dusk `dusk`.
+double jet_at(double h, double dusk);
 
 // The wind aloft at `h` m over the floor from a surface mean of `surface` m/s, floored at
 // `least` and held under 45 m/s; and how far it has turned by then, rad (positive clockwise).
@@ -45,7 +78,7 @@ double veer_aloft(double h, double latitude);
 // `t` (s): each kind's bands dealt off the seed as a broken sky's are.
 render::Clouds cloud_layers_of(const render::CloudKind* const* kinds, int count,
                                const mapgen::Weather& weather, double seed, double floor_y,
-                               double latitude, double t);
+                               double latitude, double t, const Aloft& aloft = {});
 
 // The weather under `count` kinds of cloud picked by hand: a LID among them (a full, thick sheet
 // over the valley floor: stratus, nimbostratus) turns `weather` to a deck's, the sky's light on
@@ -53,12 +86,12 @@ render::Clouds cloud_layers_of(const render::CloudKind* const* kinds, int count,
 void lid_under(const render::CloudKind* const* kinds, int count, render::Weather& weather);
 
 // The layers `weather` stands over a map of `seed` whose valley floor is at world `floor_y`, at
-// the map's moment `t` (s).
+// the map's moment `t` (s); from twilight, with scud under them (above).
 render::Clouds cloud_layers_for(const mapgen::Weather& weather, double seed, double floor_y,
-                                double latitude, double t);
+                                double latitude, double t, const Aloft& aloft = {});
 
 // The same over `level` at `t`.
-render::Clouds cloud_field(const mapgen::Level& level, double t);
+render::Clouds cloud_field(const mapgen::Level& level, double t, const Aloft& aloft = {});
 
 // THE SKY AT A MOMENT, drawn: the weather (weather_look.hpp's, with the share of the sun a broken
 // sky's mean cloud takes given back, since each layer now casts its own shadow) and the layers.
@@ -67,6 +100,6 @@ render::Clouds cloud_field(const mapgen::Level& level, double t);
 // `eye_y` is the eye's world height, m: under the map's snow line the fall it looks through is
 // rain (air::fall_at).
 void sky_at(const mapgen::Level& level, double t, render::Weather& weather, render::Clouds& clouds,
-            bool layers = true, double eye_y = air::kAloft);
+            bool layers = true, double eye_y = air::kAloft, const Aloft& aloft = {});
 
 }  // namespace ge::mountain::app

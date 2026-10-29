@@ -9,10 +9,17 @@ description: "Use for CMake, presets, the Makefile, compiler flags, adding a dep
 
 - Root `CMakeLists.txt`: the project, `ge_fp` (the **determinism flags**, linked by
   `ge_core` and published as `ge::fp`), `ge_flags` (warnings, `-Werror`, sanitizers;
-  this tree only, never published), `ge_core`, `add_subdirectory(tests)` when
-  top-level, and `include(cmake/Packaging.cmake)` (the installed package, `release` skill). Each
-  later layer adds a library target (`ge_platform`, `ge_gpu`, …) linking the layers
-  below it, and nothing above it.
+  this tree only, never published), the modules, the plugins and the games, `add_subdirectory(tests)`
+  when top-level, and `include(cmake/Packaging.cmake)` (the installed package, `release` skill).
+- **An engine module builds itself**: `engine/<module>/module.cmake` defines its target (linking
+  the layers below it, nothing above) and ends with one `ge_module(ge_<module> [EXPORT <name>]
+  [SIMULATION] ...)` call (`cmake/Modules.cmake`). The root includes every such file, and the
+  package, the tests, the labs, `tools/check-plugins.mjs` and `tools/check-libm.sh` read the
+  registration, so a new module is a new directory plus its AGENTS.md row, and no shared list is
+  edited (parallel pull requests adding modules do not conflict). A change to a module's,
+  plugin's or game's own build file reaches only its directory's code in `ge test --affected`,
+  `ge digest --affected` and precheck; a change to the root's, `cmake/`'s or `tests/`'s reaches
+  everything.
 - `CMakePresets.json`: `debug` (ASan + UBSan) and `release`. Ninja generator,
   `build/<preset>/`.
 - `Makefile`: names the everyday calls. The logic lives in CMake.
@@ -21,12 +28,22 @@ description: "Use for CMake, presets, the Makefile, compiler flags, adding a dep
 
 `tools/session-start.sh` is the cloud session's SessionStart hook (registered in
 `.claude/settings.json`, the one Claude-specific config file; the script lives in `tools/` with the
-other checks). It returns at once and leaves a detached worker that installs the packages in
-`ci.yml`'s `GE_LINUX_PACKAGES` the container lacks (read from there, never restated) and runs
-`make build` into `build/debug/`. One worker at a time (`build/session-start.lock`); the log is
+other checks). It returns at once and leaves a detached worker that runs `tools/setup-ubuntu.sh --https-mirrors`
+(the container's proxy passes HTTPS alone) and then `make build` into `build/debug/`. One worker at a time (`build/session-start.lock`); the log is
 `build/session-start.log`, the state `build/session-start.status`; `--wait` blocks until it ends.
-It does nothing outside a cloud session unless `GE_SESSION_BUILD=1`. A new system package a build
-needs goes in `GE_LINUX_PACKAGES`, and the hook picks it up.
+It does nothing outside a cloud session unless `GE_SESSION_BUILD=1`. 
+
+## The Ubuntu packages
+
+`tools/setup-ubuntu.sh` is the ONE list of Linux packages (`LIB_PKGS`, checked by dpkg, and
+`TOOLS`, checked by the command on PATH and its version), for a fresh Ubuntu Server 24.04 or 22.04
+(which gets Kitware's, the toolchain PPA's, apt.llvm.org's, NodeSource's and GitHub's sources), a
+machine that has some of it, CI's Linux jobs and the session hook. It installs or upgrades only what
+is missing or too old and is a sub-second no-op with no network when nothing is, so callers run it
+unconditionally. CI passes `--cache-dir=.cache/apt` under an `actions/cache` keyed on the image, the
+script's hash and the week. `--check` reports without installing; `--verify` builds and runs the
+whole suite as CI's Linux x64 row. A new system package a build needs goes in `LIB_PKGS` (a library)
+or `TOOLS` (a command and its minimum), and CI and the hook pick it up.
 
 ## Adding a dependency
 
@@ -52,18 +69,27 @@ webgpu only by `ge_gpu`.
 ## CI (`.github/workflows/ci.yml`)
 
 Jobs: `gates` (clang-format, `tools/check-agents.sh`, libm, release-check, the changeset rule,
-and the decision what else runs), `lint` (clang-tidy), `test` (Linux x64 GCC debug, GCC release
-and Clang release; Linux arm64 GCC; macOS Clang), `windows` (MSVC), `packaging`
+and the decision what else runs), `lint` (clang-tidy), `test` (macOS Clang; under `full-ci` also
+Linux x64 GCC debug, GCC release and Clang release, and Linux arm64 GCC), `windows` (MSVC), `packaging`
 (`packaging.yml`, called), and `required`, the ONE check the ruleset requires. `fail-fast:
 false`, so one row's golden failure shows alongside the others.
 
-- **Tiered, because runners are scarce**: a pull request runs `gates`, `lint` and the GCC
-  debug row; the merge queue runs every row, `windows` and `packaging`; a push to main builds
-  the five cached rows only (to save their caches). A change to prose alone runs `gates` only.
-  `full-ci` on a pull request runs everything. `required` passes when every job passed or was
+- **Only what can differ across platforms**: Linux is `make precheck`'s, run in the container
+  before every push, so a pull request runs `gates`, `windows` and the macOS row; the merge
+  queue adds `packaging` (the package on Windows and macOS, `scaffold` only when the change
+  reaches `engine/cli`, `engine/play`, `engine/lab`, the templates or the build); a push to main
+  builds the macOS row only (to save its cache). A change to prose alone runs `gates` only.
+  `full-ci` on a pull request adds the Linux rows, `lint` and the whole packaging. `required` passes when every job passed or was
   skipped by the rules, so a skipped row never leaves a check pending: a new job joins its
   `needs:`, never the ruleset. A failure only the queue sees ejects the pull request from the
   queue; fix it, push, and auto-merge queues it again.
+- **Kept off the runners when it cannot change the answer** (`ci.yml`'s header): a newer push
+  cancels a PR's older run; a draft runs nothing until it is marked ready; a label other than
+  `full-ci` runs the gates alone, in its own concurrency group, so it never cancels the run going;
+  each queue run's gates cancel the queue runs whose group ref is gone (the queue rebuilt), so
+  nobody cancels stale queue runs by hand any more; the heavy jobs time out at about twice their
+  usual time. GitHub cannot cap a job kind by count (a concurrency group cancels its pending
+  job), so there is no cap on macOS or Windows jobs.
 - **Kept fast**: ctest runs four cases at
   once (`CTEST_PARALLEL_LEVEL`; `make test` uses every core), the labs' smoke pass is eight
   CTest cases (`labs_smoke_1`..`_8`, `labs --all --smoke --shard=I/N`) and the slow cases carry

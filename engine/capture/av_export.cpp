@@ -7,6 +7,7 @@
 #include "capture/av_export.hpp"
 
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 
 #include "audio/voice.hpp"
@@ -36,12 +37,29 @@ bool AvExport::open(const AvExportOptions& o, std::string& error) {
     error = "the frame rate and the step rate must be over 0";
     return false;
   }
+  if (!o.codec.empty() && o.codec != "av1") {
+    error = "no codec `" + o.codec + "`; the export's codecs are av1 and none (uncompressed)";
+    return false;
+  }
   opt_ = o;
+  coded_ = o.codec == "av1";
   MatroskaOptions m;
   VideoTrack v;
   v.width = o.width;
   v.height = o.height;
   v.fps = o.fps;
+  if (coded_) {
+    Av1Options a;
+    a.width = o.width;
+    a.height = o.height;
+    a.fps = o.fps;
+    a.crf = o.crf;
+    a.speed = o.speed;
+    a.threads = o.threads;
+    if (!av1_.open(a, error)) return false;
+    v.codec = "V_AV1";
+    v.codec_private = av1_codec_private(av1_.sequence_header());
+  }
   m.video = v;
   if (o.sound) {
     synth_ = std::make_unique<audio::Synth>(o.seed);
@@ -49,6 +67,15 @@ bool AvExport::open(const AvExportOptions& o, std::string& error) {
     if (!sound_) return false;
     AudioTrack a;
     a.rate = audio::kRate;
+    if (coded_) {
+      static_assert(audio::kRate == kOpusRate, "Opus is fed at the synth's rate");
+      if (!opus_.open(o.audio_bitrate, error)) return false;
+      a.codec = "A_OPUS";
+      a.bits = 0;
+      a.codec_private = opus_.codec_private();
+      a.codec_delay_ns = std::llround(opus_.preskip() * 1e9 / kOpusRate);
+      a.seek_pre_roll_ns = kOpusSeekPreRollNs;
+    }
     m.audio = a;
   }
   doc_type_ = std::string(doc_type_of(m));
@@ -74,6 +101,12 @@ bool AvExport::emit_sound(int64_t to, std::string& error) {
   if (!synth_ || to <= emitted_) return true;
   render_to(to);
   const auto n = static_cast<size_t>(to - emitted_);
+  if (coded_) {
+    if (!opus_.push(pending_.data(), n, audio_q_, error)) return false;
+    pending_.erase(pending_.begin(), pending_.begin() + static_cast<std::ptrdiff_t>(2 * n));
+    emitted_ = to;
+    return true;
+  }
   pcm_.resize(2 * n * sizeof(float));
   // Little-endian float, as A_PCM/FLOAT/IEEE is (every platform the engine runs on is).
   std::memcpy(pcm_.data(), pending_.data(), pcm_.size());
@@ -93,14 +126,58 @@ bool AvExport::frame(const play::Run& run, const lab::Picture& p, std::string& e
   // The last picture's sound, which runs up to this one's time.
   if (!emit_sound(frame_sample(frames_, opt_.fps, audio::kRate), error)) return false;
   to_i420(p, yuv_);
-  if (!mux_.video(frame_ms(frames_, opt_.fps), true, yuv_, error)) return false;
+  if (coded_) {
+    if (!av1_.encode(yuv_, frame_ms(frames_, opt_.fps), video_q_, error)) return false;
+  } else if (!mux_.video(frame_ms(frames_, opt_.fps), true, yuv_, error)) {
+    return false;
+  }
   frames_++;
+  if (coded_ && !interleave(false, error)) return false;
   if (sound_) sound_->frame(run, 1.0 / opt_.fps);
+  return true;
+}
+
+bool AvExport::interleave(bool all, std::string& error) {
+  // What is still to be encoded starts no sooner than the next picture's time and the next
+  // packet the Opus encoder will cut.
+  const int64_t next_video = frame_ms(frames_, opt_.fps);
+  const int64_t next_audio = sound_ ? opus_.next_ms() : INT64_MAX;
+  for (;;) {
+    const bool v = video_at_ < video_q_.size(), a = audio_at_ < audio_q_.size();
+    bool take_audio = false;
+    if (v && a) {
+      take_audio = audio_q_[audio_at_].ms < video_q_[video_at_].ms;
+    } else if (a) {
+      if (!all && audio_q_[audio_at_].ms >= next_video) break;
+      take_audio = true;
+    } else if (v) {
+      if (!all && video_q_[video_at_].ms > next_audio) break;
+    } else {
+      break;
+    }
+    const Packet& p = take_audio ? audio_q_[audio_at_++] : video_q_[video_at_++];
+    if (!(take_audio ? mux_.audio(p.ms, p.data, error) : mux_.video(p.ms, p.key, p.data, error))) {
+      return false;
+    }
+  }
+  if (video_at_ == video_q_.size()) {
+    video_q_.clear();
+    video_at_ = 0;
+  }
+  if (audio_at_ == audio_q_.size()) {
+    audio_q_.clear();
+    audio_at_ = 0;
+  }
   return true;
 }
 
 bool AvExport::close(std::string& error) {
   if (!emit_sound(frame_sample(frames_, opt_.fps, audio::kRate), error)) return false;
+  if (coded_) {
+    if (!av1_.flush(video_q_, error)) return false;
+    if (sound_ && !opus_.finish(audio_q_, error)) return false;
+    if (!interleave(true, error)) return false;
+  }
   return mux_.close(frame_ms(frames_, opt_.fps), error);
 }
 

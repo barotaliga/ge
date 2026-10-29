@@ -8,8 +8,8 @@
 
 #include <algorithm>
 
-#include <charconv>
 #include <cmath>
+#include <cstdlib>
 #include <string>
 
 #include "core/libm/libm.hpp"
@@ -40,10 +40,19 @@ struct Reader {
   }
   double num() {
     skip();
-    double v = 0;
-    const auto [end, ec] = std::from_chars(s.data() + i, s.data() + s.size(), v);
-    if (ec != std::errc{}) return 0;
-    i = static_cast<size_t>(end - s.data());
+    // A plain decimal ("12", "-3.5"), read by strtod: it rounds correctly on every platform's C
+    // library, and the engine never changes the C locale. (Floating-point from_chars is missing
+    // from some standard libraries.)
+    size_t j = i;
+    while (j < s.size() &&
+           (s[j] == '-' || s[j] == '+' || s[j] == '.' || (s[j] >= '0' && s[j] <= '9')))
+      ++j;
+    if (j == i) return 0;
+    const std::string token(s.substr(i, j - i));
+    char* end = nullptr;
+    const double v = std::strtod(token.c_str(), &end);
+    if (end == token.c_str()) return 0;
+    i += static_cast<size_t>(end - token.c_str());
     return v;
   }
 };

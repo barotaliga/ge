@@ -3,6 +3,7 @@
 //
 // ge:summary Test: ge goals free's rows parsed off the roadmap, and the next free row
 // ge:keywords test cli goals roadmap milestone goal_rows next_free_number next_free_letter
+// ge:keywords next_free_digit sub-row
 // ge:skill testing agent-interface
 #include <string>
 
@@ -47,4 +48,25 @@ TEST(the_next_free_row_is_one_past_the_highest_taken) {
   CHECK(next_free_letter({"", "a", "e2", "c"}) == "f");
   CHECK(next_free_letter({""}) == "a");
   CHECK(next_free_letter({"z"}).empty());
+  // Under a row ending in a letter the sub-rows are numbered: M18k -> M18k1, M8f7 -> M8f8.
+  CHECK(next_free_digit({}) == "1");
+  CHECK(next_free_digit({"1", "7", "3a"}) == "8");
+}
+
+TEST(a_claim_adds_its_line_to_the_reserved_table_and_gives_it_up_again) {
+  const std::string held =
+      "# Reserved roadmap rows\n\n| Row | What |\n| --- | --- |\n| M27 | **Fonts** |\n";
+  const std::string with = with_reserved_row(held, "M34", "Lava and slime");
+  CHECK(with == held + "| M34 | **Lava and slime** |\n");
+  CHECK(without_reserved_row(with, "M34") == held);
+  CHECK(without_reserved_row(with, "M3") == with);  // M3 is not M34
+  const std::string fresh = with_reserved_row("", "M34", "Lava");
+  CHECK(fresh.find("| Row | What |\n| --- | --- |\n| M34 | **Lava** |\n") != std::string::npos);
+  CHECK(goal_rows(fresh).size() == 1 && goal_rows(fresh)[0].number == 34);
+}
+
+TEST(the_earliest_claim_wins_and_a_tie_goes_to_the_first_ref_by_name) {
+  CHECK(claim_winner({{"origin/b", 100}, {"origin/a", 101}}) == 0);
+  CHECK(claim_winner({{"origin/b", 100}, {"origin/a", 100}}) == 1);
+  CHECK(claim_winner({{"origin/c", 0}}) == 0);
 }
