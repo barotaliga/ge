@@ -69,6 +69,7 @@ ge sound import <file> <name>    # a free sound trimmed, loudness-matched, writt
 ge sound split <file> <name>     # a recording of many sounds cut at its silences
 ge model import <file> <name>    # a free kit's model packed into one .glb, loaded and measured
 ge credits check [<dir>]         # every asset credited, every credit's file there, licences allowed
+ge content scan <pak|dir>        # a classic set's sounds, models and sets held to an asset map (brush)
 ge check                         # the whole gate: format, doctor, build, tests
 ge lint [--base=<ref>] [<file>...]  # clang-tidy's bug-finding checks over what the change reaches
 ge precheck [--preset=<p>]       # what CI runs, both presets: ge check, the pilot, the replays

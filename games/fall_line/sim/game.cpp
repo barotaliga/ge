@@ -168,6 +168,7 @@ void log_step(const GameState& state) {
         line += " paramotor " + f(e.value, 0) + " " +
                 army_para_change_name(static_cast<ArmyParaChange>(e.gate)) + ", " +
                 std::to_string(state.army.paras.size()) + " out";
+        break;
       case EventKind::building:
         line += " building " + std::to_string(e.gate) + " at " + f(e.value, 1) + " m/s";
         break;
