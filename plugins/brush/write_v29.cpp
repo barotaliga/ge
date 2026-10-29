@@ -155,7 +155,7 @@ bool write_v29(const Fixture& fx, const Compiled& c, bool bsp2, Out* out, std::s
   }
 
   const auto leaf = [&](int32_t contents, int32_t vis, const float* lo, const float* hi,
-                        uint32_t first_mark, uint32_t marks) {
+                        uint32_t first_mark, uint32_t marks, const uint8_t* ambient) {
     leafs.i32(contents);
     leafs.i32(vis);
     for (const float* b : {lo, hi}) {
@@ -168,16 +168,16 @@ bool write_v29(const Fixture& fx, const Compiled& c, bool bsp2, Out* out, std::s
       leafs.u16(uint16_t(first_mark));
       leafs.u16(uint16_t(marks));
     }
-    for (int k = 0; k < 4; ++k) leafs.u8(0);
+    for (int k = 0; k < 4; ++k) leafs.u8(ambient ? ambient[k] : 0);
   };
   const float zero[3] = {0, 0, 0};
-  leaf(-2, -1, zero, zero, 0, 0);
+  leaf(-2, -1, zero, zero, 0, 0, nullptr);
   uint32_t marks = 0;
   for (size_t r = 0; r < rooms; ++r) {
     const FixtureRoom& rm = fx.rooms[r];
     const float lo[3] = {float(rm.min[0]), float(rm.min[1]), float(rm.min[2])};
     const float hi[3] = {float(rm.max[0]), float(rm.max[1]), float(rm.max[2])};
-    leaf(-1, visofs[r], lo, hi, marks, uint32_t(c.room_faces[r].size()));
+    leaf(-1, visofs[r], lo, hi, marks, uint32_t(c.room_faces[r].size()), rm.ambient);
     for (uint32_t f : c.room_faces[r]) bsp2 ? marksurfaces.u32(f) : marksurfaces.u16(uint16_t(f));
     marks += uint32_t(c.room_faces[r].size());
   }

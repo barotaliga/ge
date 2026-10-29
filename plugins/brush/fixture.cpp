@@ -398,7 +398,12 @@ bool compile(const Fixture& fx, Compiled* out, std::string* err) {
   // The entities: the world, a start in the first room, the lights.
   const auto num = [](double v) { return std::to_string(int64_t(std::floor(v + 0.5))); };
   const FixtureRoom& first = fx.rooms[0];
-  c.entities = "{\n\"classname\" \"worldspawn\"\n\"message\" \"" + fx.message + "\"\n}\n";
+  const auto pair = [](const std::string& k, const std::string& v) {
+    return "\"" + k + "\" \"" + v + "\"\n";
+  };
+  c.entities = "{\n" + pair("classname", "worldspawn") + pair("message", fx.message);
+  for (const auto& [k, v] : fx.world_keys) c.entities += pair(k, v);
+  c.entities += "}\n";
   c.entities += "{\n\"classname\" \"info_player_start\"\n\"origin\" \"" +
                 num((first.min[0] + first.max[0]) / 2.0) + " " +
                 num((first.min[1] + first.max[1]) / 2.0) + " " + num(first.min[2] + 24.0) +
@@ -407,6 +412,11 @@ bool compile(const Fixture& fx, Compiled* out, std::string* err) {
     c.entities += "{\n\"classname\" \"light\"\n\"origin\" \"" + num(l.pos[0]) + " " +
                   num(l.pos[1]) + " " + num(l.pos[2]) + "\"\n\"light\" \"" + num(l.bright) +
                   "\"\n}\n";
+  }
+  for (const Entity& e : fx.entities) {
+    c.entities += "{\n";
+    for (const auto& [k, v] : e.pairs) c.entities += pair(k, v);
+    c.entities += "}\n";
   }
   return true;
 }

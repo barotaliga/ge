@@ -1,6 +1,6 @@
 ---
 name: brush
-description: "Use for plugins/brush in gameengine2: maps in the classic BSP families (version 29, BSP2, 38, 46) read into one view (surfaces, lightmaps, the tree, clusters, visibility, entities, patches), refusing damage; the fixture writers that make test maps of each family; the bsp lab; the brush fuzz and read tests."
+description: "Use for plugins/brush in gameengine2: maps in the classic BSP families (version 29, BSP2, 38, 46) read into one view (surfaces, lightmaps, the tree, clusters, visibility, entities, patches), refusing damage; the fixture writers that make test maps of each family; the content scan and asset map (`ge content scan`); the bsp and content-scan labs; the brush fuzz and read tests."
 ---
 
 # The brush plugin
@@ -19,6 +19,8 @@ format notes (the clean-room rules there say what may be written where).
 | `bytes.hpp` | The little-endian cursor and writer |
 | `write.hpp`, `write_parts.hpp`, `fixture.cpp` | Fixtures: the sample, the weather's (a hall, a yard, a store), the compile every writer shares |
 | `write_v29.cpp`, `write_v38.cpp`, `write_v46.cpp` | One writer a family |
+| `content.hpp/.cpp` | The content scan (what a set ships, what its maps' entities name, the numbered sets they pick), the asset map's parse and the match, the fixture set |
+| `labs/content_scan_lab.cpp` | The `content-scan` lab behind `ge content scan` (skill: free-assets) |
 | `labs/bsp_lab.cpp` | The `bsp` lab (`--map`, `--lit`, `--pak`, `--textures-out`: a map's textures as PNGs for the matcher) |
 | `labs/textured_view.hpp/.cpp` | The lab's textured software view of a 29 or BSP2 map: its own pictures through a palette, its lightmaps, sky layers |
 | `app/bsp_weather.hpp/.cpp`, `labs/gpu_bsp_weather_lab.cpp` | The weather on a map by cvars (`sv_weather` …), its shelter along the fall in `bsp_draw` and `bsp.wgsl`'s `weathered`; the `gpu-bsp-weather` lab |
