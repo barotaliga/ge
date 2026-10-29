@@ -98,10 +98,6 @@ uint16_t quantize(double v, double unit, uint16_t most) {
   return q <= 0 ? 0 : q >= most ? most : static_cast<uint16_t>(q);
 }
 
-Snowpack pack_of(const Cell& c) {
-  return {cell_depth(c), cell_mass(c), c.kind, (c.flags & kPressed) != 0};
-}
-
 }  // namespace
 
 double value_at(const Schedule& s, double t) {
@@ -262,15 +258,16 @@ Snowpack cover_now(Moment& m, int c, int r) {
 
 Snowpack column_now(Moment& m, int c, int r) {
   const Layer& l = *m.layer;
-  const Cell* cell = cell_at(l, c, r);
-  if (!cell || !(cell->flags & kTouched)) return cover_now(m, c, r);
-  if (!l.spec.weather) return pack_of(*cell);
+  Stored st;
+  if (!stored_at(l, c, r, st)) return cover_now(m, c, r);
+  const Snowpack here{st.depth, st.mass, st.kind, st.pressed};
+  if (!l.spec.weather) return here;
   const Weather& w = *l.spec.weather;
-  if (cell->minute != m.minute) {
-    m.minute = cell->minute;
-    m.since_minute = spell(w, cell->minute * 60.0, m.t);
+  if (st.minute != m.minute) {
+    m.minute = st.minute;
+    m.since_minute = spell(w, st.minute * 60.0, m.t);
   }
-  const Snowpack p = weathered(w, m.since_minute, pack_of(*cell));
+  const Snowpack p = weathered(w, m.since_minute, here);
   return filled(w, m.since_minute, p, cover_now(m, c, r).depth - p.depth);
 }
 
@@ -313,8 +310,8 @@ Column sample(const Layer& layer, double x, double z, double t) {
   const int cs4[4] = {c0, c1, c0, c1}, rs4[4] = {r0, r0, r1, r1};
   bool any = false;
   for (int k = 0; k < 4; k++) {
-    const Cell* cell = cell_at(layer, cs4[k], rs4[k]);
-    any = any || (cell && (cell->flags & kTouched));
+    Stored st;
+    any = any || stored_at(layer, cs4[k], rs4[k], st);
   }
   if (!any) {
     col.depth = here.depth;
@@ -351,6 +348,7 @@ Groomed groom(Layer& layer, const Shape& swath, double t) {
   if (swath.half_width <= 0) return out;
   const uint16_t minute = minute_of(t);
   Moment m = moment(layer, minute * 60.0);
+  layer.clock = t;
   const double cell = layer.spec.cell;
   // The swath's box in samples.
   double r = swath.half_width;
