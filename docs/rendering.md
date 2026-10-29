@@ -906,6 +906,21 @@ layer's frame block (`CloudLayer::anvil`, `erode`, `fibre`, `patch`); its LIGHT 
   and the half-size picture's half floats, which hold one minus a transmittance near 1 only in
   steps of 1/2048 (they now hold the transmittance itself). A sun tens of thousands of times the
   white showed through both as a disc behind any deck.
+- NO CLOUD ENDS IN A CUT. Round the sun and the moon the glow is seen as the disc is, far over
+  the picture's white, so a difference of a thousandth in what a cloud lets through shows. Three
+  things cut a cloud's edge into a line a pixel wide there, and each is now continuous:
+  - the march's stop: a ray stopped at a hundredth of the light and took the rest of its path
+    as thick, while the next ray, past a thin wisp into clear air, marched on and kept its
+    hundredth. Within 0.1 rad of the key light the march goes on to a millionth (back to the
+    hundredth by 0.3 rad, so only the rays round the disc pay for it);
+  - the layers behind an opaque one were dropped once a hundredth was left; they now fade out
+    with what is let through, from a hundredth to a thousandth;
+  - a layer under a ten-thousandth of cover was skipped, its glow with it; only one under a
+    ten-millionth is now.
+  And a dense layer's edge is FEATHERED (`feather`): its density's share, climbing from nothing
+  to full across the edge, is taken to the power ln τ / ln(1/0.3) (τ the layer's whole depth),
+  so the edge reaches an optical depth of one 0.3 of the way in rather than a thirtieth of the
+  way in on a scud of 30. A layer under 3.3 deep keeps its edge as it was.
 - THE GLOW'S ORDERS: the glow is lit by the light the ray's steps scatter times the ray's own
   transmittance (τ e^−τ: brightest through a patch about one deep, gone behind a thick core).
   Through a thicker cloud the light is bent again and again: the orders past the first (Poisson
