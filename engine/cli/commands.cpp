@@ -256,6 +256,8 @@ constexpr FlagSpec kRecordFlags[] = {
     {"size", "<WxH>", "the frame size (default: the view's own)"},
     {"format", "<mp4|webm|gif|png>", "H.264 MP4, VP9 WebM, a GIF, or PNG frames (default mp4)"},
     {"codec", "<name>", "an ffmpeg encoder in place of the format's own (libx264, libvpx-vp9)"},
+    {"container", "<mkv|mp4>",
+     "with --format=mkv --codec=av1: the engine's own fragmented MP4 in place of a .webm"},
     {"crf", "<n>", "quality: lower is better and larger (default 23 for mp4, 32 for webm)"},
     {"bitrate", "<rate>", "a bit rate such as 4M in place of --crf"},
     {"encoder-preset", "<name>",
