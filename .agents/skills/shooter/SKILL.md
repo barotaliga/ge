@@ -1,6 +1,6 @@
 ---
 name: shooter
-description: "Use for plugins/shooter in gameengine2: the first-person shooter's simulation half. The classic player move in 32-bit floats (every step in order, every move type, the server settings at the modern defaults), clip hulls (planes, clip nodes, point contents, the box hull, the line trace with its 1/32 back-off), hulls built from convex brushes, the move's list of solids and its traces, the recorded scenarios the move is held to, and the pmove lab; the classic game loop (the game-program seam, entities, the area tree, world traces, physics frames on the run clock, thinking, toss and bounce, step, pushers, touches, new missiles, a player's packet and command, the client's commands and prediction), Shooter's Edge's native program and scripted match, the thrown-entity vectors and the se-loop lab; the M18o rows."
+description: "Use for plugins/shooter in gameengine2: the first-person shooter's simulation half. The classic player move in 32-bit floats (every step in order, every move type, the server settings at the modern defaults), clip hulls (planes, clip nodes, point contents, the box hull, the line trace with its 1/32 back-off), hulls built from convex brushes, the move's list of solids and its traces, the recorded scenarios the move is held to, and the pmove lab; the classic game loop (the game-program seam, entities, the area tree, world traces, physics frames on the run clock, thinking, toss and bounce, step, pushers, touches, new missiles, a player's packet and command, the client's commands and prediction), Shooter's Edge's native program and scripted match, the thrown-entity vectors and the se-loop lab; the server's host, its bot slots and command sources, the input log and its replay, the stand-in bot, the shooters_edge_server binary and the se-server lab; the M18o and M18f rows."
 ---
 
 # The shooter plugin
@@ -30,6 +30,9 @@ a game converts to the engine's y-up at its edges. `docs/shooters-edge.md` is th
 | `shooter/toss_recording.hpp/.cpp` | The thrown-entity vectors (`tests/golden/shooter_toss_recording.txt`) and their replay |
 | `games/shooters_edge/sim/` | The native program (`rules`), the test arena, the scripted match (`run_match`) |
 | `games/shooters_edge/labs/se_loop_lab.cpp` | The `se-loop` lab: the match's events, counts, paths and corrections; the vectors |
+| `shooter/cmd_source.hpp` | The bots' seam: a slot's command source, read-only on the server |
+| `games/shooters_edge/server/` | The server's host (slots, bots' packets, the frame), the input log and its replay, the stand-in bot, the `shooters_edge_server` binary (`bin/main.cpp`) |
+| `games/shooters_edge/labs/se_server_lab.cpp` | The `se-server` lab: a full server of stand-ins, its players and counts, the log replayed, the trails |
 
 ## Rules
 
@@ -61,6 +64,13 @@ a game converts to the engine's y-up at its edges. `docs/shooters-edge.md` is th
   flight (all 454 frames exact today); `tests/shooter_physics_test.cpp` holds the spec's thinking
   examples and the physics' bits (`tests/golden/shooter_physics.txt`); the match test holds the
   whole loop. Run `make lab LAB=se-loop` before and after a change to any loop file.
+- **A server replays from its input log alone.** The host logs, per frame, the slot events and
+  every packet it handed `server_frame` (a bot's as well as a person's) and the hash after it;
+  `replay_input_log` runs the log with no bot at all. So a command source READS the server and
+  never writes it, and draws only off its own seeded stream (`core::Rng`), never the server's.
+  `tests/golden/shooters_edge_host.txt` and the `se-server` digest hold a server of eight
+  stand-ins; run `make lab LAB=se-server` before and after a change to the host, the log or a
+  bot.
 - Still to come: the cvars bound through `engine/console` (setting `pm_airstep` sets
   `pm_pground`), a map's compiled hulls (M18b) answering `MoveWorld`, and the other entities'
   interpolation on the client (M18h).

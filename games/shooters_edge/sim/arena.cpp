@@ -20,7 +20,7 @@ std::vector<sh::BrushModel> Arena::models() const {
   return {world.model(), door.model(), plat.model()};
 }
 
-void build_arena(Arena& a) {
+void build_arena(Arena& a, bool roofed) {
   a.world_brushes = {
       box_brush({-528, -528, -64}, {528, 528, 0}),   // the floor
       box_brush({-528, -528, 0}, {-512, 528, 256}),  // the west wall
@@ -32,6 +32,9 @@ void build_arena(Arena& a) {
       box_brush({128, -64, 128}, {144, 64, 256}),    // the lintel over the doorway
       box_brush({192, -512, 0}, {512, -384, 104}),   // the ledge beside the plat
   };
+  // The roof last, so the brushes before it are the same with and without it.
+  if (roofed) a.world_brushes.push_back(box_brush({-528, -528, 256}, {528, 528, 320}));
+  a.roofed = roofed;
   a.door_brush = box_brush({128, -64, 0}, {144, 64, 128});
   a.plat_brush = box_brush({192, -384, 0}, {320, -256, 8});
   a.world = sh::build_brush_model(a.world_brushes);
@@ -44,6 +47,14 @@ void build_arena(Arena& a) {
   a.spawn_yaw[0] = 0;
   a.spawn[1] = {256, -320, 32};  // standing on the plat
   a.spawn_yaw[1] = 90;
+  // Six more on the floor, clear of the door's trigger, the health box and the plat.
+  const sh::Vec3f more[6] = {{-416, 384, 24}, {-416, -384, 24}, {0, 384, 24},
+                             {0, -384, 24},   {416, 384, 24},   {416, 0, 24}};
+  const float more_yaw[6] = {-45, 45, -90, 90, 180, 180};
+  for (int i = 0; i < 6; i++) {
+    a.spawn[i + 2] = more[i];
+    a.spawn_yaw[i + 2] = more_yaw[i];
+  }
 }
 
 }  // namespace shooters_edge::sim
