@@ -279,6 +279,53 @@ lab::ViewCam curve_cam(const rm::Level& level, const rm::Curve& c) {
 }
 
 // The map's eye for an engine camera (file units, z up; yaw and pitch toward the target).
+// The clone's mesh as a map the textured view draws: each triangle in the map's file units with
+// its own texels and the original's picture for its material (a clone's materials are the map's
+// textures in order). There is no lightmap for a moved surface, so every corner is shaded from
+// its own normal under one fixed light instead, read off a one-row ramp through the lightmap's
+// coordinate: the flat clone and the round one lit alike.
+br::Map mesh_map(const rm::BrushMesh& m, const br::Map& src) {
+  br::Map out;
+  out.family = src.family;
+  out.textures = src.textures;
+  br::Lightmap ramp;
+  ramp.width = 256, ramp.height = 1;
+  for (int i = 0; i < 256; ++i) out.light_rgb.insert(out.light_rgb.end(), 3, uint8_t(i));
+  out.lightmaps.push_back(ramp);
+  const double light[3] = {0.38, 0.84, 0.39};  // engine axes, y up
+  for (size_t t = 0; t < m.triangles(); ++t) {
+    if (m.hidden[t] || m.material[t] >= src.textures.size()) continue;
+    // A trigger's or a clip's volume is never drawn, as in the map's own view.
+    const std::string& name = src.textures[m.material[t]].name;
+    if (name.rfind("trigger", 0) == 0 || name.rfind("clip", 0) == 0) continue;
+    br::Surface s;
+    s.texture = m.material[t];
+    s.first = uint32_t(out.indices.size()), s.count = 3;
+    s.lightmap = 0;
+    if (name.rfind("sky", 0) == 0) {
+      s.kind = br::SurfaceKind::sky;
+    } else if (m.contents[t] != rm::Contents::solid) {
+      s.kind = br::SurfaceKind::liquid;
+    }
+    for (size_t k = 0; k < 3; ++k) {
+      const size_t v = m.idx[t * 3 + k];
+      br::Vertex x;
+      x.pos[0] = float(m.pos[v * 3] / br::kUnitM), x.pos[1] = float(m.pos[v * 3 + 2] / br::kUnitM);
+      x.pos[2] = float(m.pos[v * 3 + 1] / br::kUnitM);
+      x.st[0] = m.st[v * 2], x.st[1] = m.st[v * 2 + 1];
+      double lit = 0;
+      for (size_t a = 0; a < 3; ++a) lit += m.nrm[v * 3 + a] * light[a];
+      x.lm[0] =
+          float((std::clamp(128 * (0.62 + 0.5 * std::max(0.0, lit)), 0.0, 255.0) + 0.5) / 256);
+      x.lm[1] = 0.5f;
+      out.indices.push_back(uint32_t(out.vertices.size()));
+      out.vertices.push_back(x);
+    }
+    out.surfaces.push_back(s);
+  }
+  return out;
+}
+
 br::labs::TexturedEye eye_of(const lab::ViewCam& cam) {
   br::labs::TexturedEye e;
   e.at[0] = cam.eye[0] / br::kUnitM, e.at[1] = cam.eye[2] / br::kUnitM;
@@ -608,6 +655,31 @@ void run(lab::Lab& lab) {
         label(o, 4, y + 4,
               std::string(c.concave ? "CONCAVE" : "CONVEX") + ", " + std::to_string(c.facets) +
                   " FACETS, R " + fixed(c.radius, 2) + " M, " + fixed(c.sweep_deg, 0) + " DEG");
+      }
+      if (textured) {
+        // The same close-ups with the map's own pictures on the clone, flat and drawn round.
+        const br::Map flat_map = mesh_map(mesh, l.map), round_map = mesh_map(rounded, l.map);
+        Picture tx = lab::create_picture(cw * 3, ch * int(shown), kDark);
+        for (size_t r = 0; r < shown; ++r) {
+          lab::ViewCam cam = curve_cam(level, curves[order[r]]);
+          cam.fov_deg = 64.0;
+          const int y = int(r) * ch;
+          br::labs::draw_textured(tx, 0, y, cw, ch, l.map, palette, eye_of(cam));
+          br::labs::draw_textured(tx, cw, y, cw, ch, flat_map, palette, eye_of(cam));
+          br::labs::draw_textured(tx, cw * 2, y, cw, ch, round_map, palette, eye_of(cam));
+          label(tx, 4, y + 4, "THE MAP");
+          label(tx, cw + 4, y + 4, "THE CLONE, FLAT");
+          label(tx, cw * 2 + 4, y + 4, "THE CLONE, DRAWN ROUND");
+        }
+        lab.shot({id + "-curves-textured",
+                  "CURVES WITH THEIR PICTURES: " + l.name,
+                  "The close-ups again with the map's own textures on the clone: the map with its "
+                  "lightmaps, the clone as cloned and the clone drawn round, both shaded from "
+                  "their normals under one light (a moved surface has no lightmap).",
+                  "the texture runs on across the rounded surface as on its facets; no face "
+                  "drawn blank",
+                  {{"map", l.name}}},
+                 tx);
       }
       lab.shot({id + "-curves",
                 "CURVES FOUND: " + l.name,
