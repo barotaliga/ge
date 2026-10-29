@@ -124,17 +124,37 @@ void fire(sh::Server& sv, Rules& r, int p) {
   }
 }
 
-void put_in_server(sh::Server& sv, Rules& r, int p) {
+// The spawn point for player `p`: its slot's own (slot modulo the arena's), or the next one round
+// the list that no other living player stands within kSpawnClear of on every axis.
+int pick_spawn(const sh::Server& sv, const Rules& r, int p) {
   const int slot = p - 1;
+  for (int i = 0; i < kArenaSpawns; i++) {
+    const int s = (slot + i) % kArenaSpawns;
+    const sh::Vec3f at = r.arena->spawn[s];
+    bool clear = true;
+    for (int o = 1; o <= sv.set.maxclients && clear; o++) {
+      const sh::Edict& other = sv.edicts[static_cast<size_t>(o)];
+      if (o == p || other.free || other.solid == sh::kSolidNot || other.health <= 0) continue;
+      const sh::Vec3f d = other.origin - at;
+      clear = d.x > kSpawnClear || d.x < -kSpawnClear || d.y > kSpawnClear || d.y < -kSpawnClear ||
+              d.z > kSpawnClear || d.z < -kSpawnClear;
+    }
+    if (clear) return s;
+  }
+  return slot % kArenaSpawns;
+}
+
+void put_in_server(sh::Server& sv, Rules& r, int p) {
+  const int spawn = pick_spawn(sv, r, p);
   sh::Edict& pl = ent(sv, p);
   pl.movetype = sh::kMovetypeWalk;
   pl.solid = sh::kSolidSlidebox;
   pl.health = 100;
-  pl.v_angle = {0, r.arena->spawn_yaw[slot], 0};
+  pl.v_angle = {0, r.arena->spawn_yaw[spawn], 0};
   pl.angles = pl.v_angle;
-  r.weapon[static_cast<size_t>(p)] = slot == 0 ? kImpulseRocket : kImpulseGrenade;
+  r.weapon[static_cast<size_t>(p)] = p == 1 ? kImpulseRocket : kImpulseGrenade;
   r.attack_finished[static_cast<size_t>(p)] = 0;
-  pl.origin = r.arena->spawn[slot];
+  pl.origin = r.arena->spawn[spawn];
   sh::set_size(sv, p, sh::kPlayerMins, sh::kPlayerMaxs);
 }
 

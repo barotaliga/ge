@@ -2,11 +2,13 @@
 // program seam (plugins/shooter/program.hpp), until the bytecode VM (M18c, M18p) runs a mod's own.
 // Small on purpose: what the loop's test arena needs and no more.
 //
-// - PLAYERS: put in the server at the arena's spawn (walk, slidebox, 100 health). The post-think
-//   fires the weapon held while attack is down and the weapon is ready: impulse 7 picks the
-//   ROCKET (flymissile, 1000 units/s along the view, explodes on touch, gone after 5 s), impulse 6
-//   the GRENADE (bounce, 600 along the view and 200 up, spinning, explodes after 2.5 s or on a
-//   player). Each missile is the program's `newmis`, so the loop runs it 0.05 s ahead.
+// - PLAYERS: put in the server at a spawn point (walk, slidebox, 100 health): the slot's own
+//   (slot modulo the arena's eight), or the next one round the list that no living player
+//   stands within kSpawnClear of. The first player holds the rocket, the others the grenade. The
+//   post-think fires the weapon held while attack is down and the weapon is ready: impulse 7 picks
+//   the ROCKET (flymissile, 1000 units/s along the view, explodes on touch, gone after 5 s),
+//   impulse 6 the GRENADE (bounce, 600 along the view and 200 up, spinning, explodes after 2.5 s or
+//   on a player). Each missile is the program's `newmis`, so the loop runs it 0.05 s ahead.
 // - EXPLOSIONS hurt each living player within reach (120 less half the distance, half to the one
 //   who fired) and throw him 8 units/s a point; health never drops below 1 (no deaths in the test).
 // - THE DOOR goes up when a living player touches its trigger, waits 3 s (touching again restarts
@@ -70,6 +72,7 @@ constexpr float kGrenadeReload = 0.6f;  // s
 constexpr float kBlastReach = 120;      // points at the centre; less half the distance
 constexpr float kKnockback = 8;         // units/s a point
 constexpr float kHealthGain = 25;
+constexpr float kSpawnClear = 64;  // units: a spawn point this near another player is taken
 
 enum class EventKind : uint8_t {
   rocket_fired,
