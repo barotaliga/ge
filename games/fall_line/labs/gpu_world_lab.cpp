@@ -477,7 +477,7 @@ void run(ge::lab::Lab& lab) {
       *device, "world.overdraw", render_w, render_h, 1, wgpu::TextureFormat::R16Float,
       wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc);
   const wgpu::TextureView count_view = count.CreateView();
-  int overdraw_faults = 0, cull_faults = 0, cull_unrepeated = 0;
+  int overdraw_faults = 0, cull_faults = 0, cull_unrepeated = 0, cull_hardware = 0;
 
   // A still of the scene: a cut, then `settle` frames.
   auto still = [&](Scene& sc) {
@@ -547,8 +547,10 @@ void run(ge::lab::Lab& lab) {
     // frustum; on the software adapter the two pictures are the same bits, so a pixel that differs
     // is one the cull dropped although it shows.
     // A cull that drops what shows drops it every time it draws the same frames, so a difference
-    // is drawn again before it is called the cull's: on a hardware adapter one that does not come
-    // back was the adapter's (a warning naming the view), on the software one it is a fault.
+    // is drawn again before it is called the cull's. On the software adapter any difference is a
+    // fault. On a hardware adapter it is measured and warned, with the pictures, and never gates:
+    // Apple's paravirtual Metal drops a pixel of a tree on some runs and not others in one process
+    // (docs/goals/M7d1.md), so a count there would move the digest from run to run.
     {
       frame->options.occlusion = false;
       const ge::gpu::Image all = still(sc);
@@ -568,7 +570,8 @@ void run(ge::lab::Lab& lab) {
             second.describe() + " (" + std::to_string(seen_again.early) + "+" +
             std::to_string(seen_again.late) + ", " + std::to_string(seen_again.hidden) + ").";
         lab.note(line);
-        if (second.pixels > 0 || device->report.software) {
+        // The pictures only where a difference fails: an attachment's name is in the digest.
+        if (device->report.software) {
           ++cull_faults;
           ge::core::output::error(line);
           lab.attach(name + ".cull-culled.png", ge::lab::encode_png({width, height, img.rgba}),
@@ -577,6 +580,10 @@ void run(ge::lab::Lab& lab) {
                      Det::measured);
           lab.attach(name + ".cull-diff.png",
                      ge::lab::encode_png(diff_picture(img, all, width, height)), Det::measured);
+        } else if (second.pixels > 0) {
+          ++cull_hardware;
+          ge::core::output::warn(line +
+                                 " Repeated on hardware: measured, not gating. Skill: render.");
         } else {
           ++cull_unrepeated;
           ge::core::output::warn(line + " Not repeated: not counted as the cull's. Skill: render.");
@@ -630,6 +637,7 @@ void run(ge::lab::Lab& lab) {
   }
   lab.metric("cull-faults", cull_faults, "count");
   lab.metric("cull-unrepeated", cull_unrepeated, "count", Det::measured);
+  lab.metric("cull-hardware", cull_hardware, "count", Det::measured);
   if (cull_faults != 0) {
     lab.fail("the depth pyramid's cull dropped instances that show (the .cull-diff-pixels rows)",
              "Check engine/render/instances_cull.wgsl's `hidden` (the box's nearest corner, the "
