@@ -95,8 +95,9 @@ admin's) a `queue-priority` PR also JUMPS to the front once its check is green. 
 itself. Never cancel a `merge_group` run to free runners: it ejects
 every entry queued behind it.
 
-**`skip-ci`**: a PR labelled `skip-ci` runs no CI at all, on the PR and in the queue, so it merges
-as soon as it is armed. Any thread may label its own PR so, once `make precheck` is green and the
+**`skip-ci`**: a PR labelled `skip-ci` runs no CI on the PR, and in the queue only the Linux GCC
+compile (`linux-gcc`, no tests: GCC's -Werror is what merged changes break), so it merges within
+minutes of being armed. Any thread may label its own PR so, once `make precheck` is green and the
 branch is clean against main: the precheck is then the only build and test it had. Every push to
 main runs the WHOLE matrix (macOS, Windows and the Linux rows), so what a skipped PR breaks shows
 on main within the hour: a red main run opens (or adds to) the one `main-red` issue, names the
