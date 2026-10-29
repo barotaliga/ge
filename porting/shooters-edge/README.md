@@ -15,7 +15,9 @@ classic game", "QC" and "the classic protocol", and `make agents-check` holds it
 | `configs.md` | The console language at its modern extent, as a specification in our words (`engine/console` is built from it) |
 | `formats.md` | The file formats: pak, pk3, the search order, BSP29 lump by lump, BSP2, MDL, SPR, WAD2, LMP, WAV |
 | `progs.md` | QuakeC bytecode: the file, the records, the globals, every opcode; the engine-side fields and the builtins to fill with M18c |
-| `movement.md` | The player's movement: the server's settings and the model, as starting values for `se-parity` |
+| `movement.md` | The player's movement at the modern server's defaults: the settings, every step of the move, the clip hulls and the trace, the test vectors' format (M18o1) |
+| `gameloop.md` | The game loop: the game program's hooks, entities, the area tree, the server frame, thinking, tossing, pushers, touching, the player's packet and command, client prediction (M18o2) |
+| `vectors/` | Measured test vectors: `pmove.txt` (the player's move in hand-built worlds) and `entity.txt` (tossed, bounced and flying entities), for `se-parity` |
 | `protocol.md` | The classic protocol, version 28: connectionless packets, the net channel, the messages to fill with M18g |
 
 Still to come with its row: `demos.md` (QWD and MVD, M18h). Every fact marked `verify` is
