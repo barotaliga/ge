@@ -9,6 +9,7 @@
 // ge:skill brush labs
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <span>
 #include <string>
@@ -16,6 +17,7 @@
 #include <vector>
 
 #include "brush/map.hpp"
+#include "brush/rebake.hpp"
 
 namespace ge::brush::app {
 
@@ -46,7 +48,8 @@ enum Kind : uint32_t {
 inline constexpr int kKinds = 8;
 
 // One vertex: engine metres, the texture's texels, the lightmap atlas's uv, the normal, the
-// texture's rectangle in the atlas (mip 0 texels: x, y, w, h), its kind.
+// texture's rectangle in the atlas (mip 0 texels: x, y, w, h), its kind, the map vertex it was
+// made from, and its place in the rebaked atlas (rebake.hpp; −1 when there is none).
 struct DrawVertex {
   float pos[3];
   float st[2];
@@ -54,9 +57,10 @@ struct DrawVertex {
   float nrm[3];
   float rect[4];
   uint32_t kind;
-  uint32_t pad;
+  uint32_t source;
+  float lm2[2];
 };
-static_assert(sizeof(DrawVertex) == 64);
+static_assert(sizeof(DrawVertex) == 72);
 
 // A liquid's top drawn by our renderer: its kind, its level (m) and its box over the plan (x0, z0,
 // x1, z1, m).
@@ -126,6 +130,7 @@ struct Scene {
   uint32_t sky_texture = UINT32_MAX;  // the first sky texture (the classic before's)
   SkyColours sky_colours;             // that texture's colours (bsp_sky.hpp picks our sky by them)
   uint32_t counts[kKinds] = {};       // triangles of each kind
+  Rebaked rebaked;                    // the map's light rebaked (attach_rebake), or empty
 };
 
 // THE TEXTURE SOURCE: where a texture's pixels come from. The map's own (its miptex through the
@@ -142,6 +147,14 @@ struct TextureSource {
 // The map `path` in `pack` read and made ready, with `palette` (768 bytes) for its pixels.
 bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t> palette,
                 Scene* out, std::string* error, const TextureSource& source = {});
+
+// Each texture's mean colour in linear light (rebake.hpp's albedo), from the atlas's mip 0.
+std::vector<std::array<float, 3>> texture_means(const Scene& scene);
+// The scene's light entities as a bake's lights: each with the falloff the real-time path gives it
+// (bsp_draw.hpp; `strength` its Options::strength), steady, its shadow soft over 0.2 m.
+std::vector<bake::Light> bake_lights(const Scene& scene, double strength = 1);
+// `baked` kept with the scene and every vertex given its place in it (DrawVertex::lm2).
+void attach_rebake(Scene& scene, Rebaked baked);
 
 // The classic's heading (degrees counter-clockwise from +x, from above) as the engine's.
 double heading_of(double angle_deg);
