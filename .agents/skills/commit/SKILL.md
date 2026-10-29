@@ -71,3 +71,19 @@ refused, so `ge ci <pr> --merge` on a queue base arms auto-merge instead and say
 the background, is the check-in as one call: it returns when a check fails, the PR conflicts,
 or every check is green. Then
 name the next step to the user.
+
+**The queue's hands** (`.github/workflows/queue.yml`): nobody disarms, messages and re-arms other
+threads' PRs by hand. To let one PR reach the queue before the rest (a structural change every
+other branch must merge), label it `queue-priority`: every other PR that is armed but not yet
+queued is disarmed and labelled `queued-hold`, with one comment, and re-armed by itself when no
+open PR carries the label any more (it merged, closed or lost the label). Leave a `queued-hold`
+PR armed-off; keep it clean against main. A queued run that ended with no failed job (cancelled
+or abandoned jobs only) re-arms the PRs it ejected by itself, with a comment naming the run; one
+with a real failure is yours to fix. Never cancel a `merge_group` run to free runners: it ejects
+every entry queued behind it.
+
+**A red test that is not yours** (`.github/workflows/flakes.yml`): every failed run's failing tests
+go into the `ci-ledger` issue, and a test that failed on two different PRs within a day gets a
+`Flake: <test>` issue labelled `flake`, fed with every later sighting. Before you chase a red test
+in your PR, look for its flake issue; if there is one, say so on your PR and rerun the failed job
+once. The flake itself is fixed by whoever takes the issue, never skipped or weakened.
