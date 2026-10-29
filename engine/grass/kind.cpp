@@ -52,6 +52,24 @@ const std::vector<Kind>& table() {
                      {0.110f, 0.100f, 0.040f}, {0.420f, 0.360f, 0.150f}, 0.6f));
     v.push_back(make("reeds", 1.6f, 0.012f, 90, 0.08f, 0.5f, 0.1f, 9, 0.6f,
                      {0.060f, 0.080f, 0.030f}, {0.250f, 0.270f, 0.110f}, 0.25f));
+    // How long a path pressed into each stays: a springy lawn is back in seconds, long soft
+    // grass keeps a walked line for most of a minute.
+    const float spring[] = {3, 8, 25, 12, 15, 5};
+    for (size_t i = 0; i < v.size(); ++i) v[i].spring = spring[i];
+    // In flower and in seed: buttercups and daisies in the meadow, a few in the long grass; seed
+    // heads on the grasses that grow long enough to set them, the reeds' dark plumes.
+    const float flowers[] = {0, 0.06f, 0.02f, 0.01f, 0, 0};
+    const float seeds[] = {0, 0.06f, 0.2f, 0.12f, 0.3f, 0.35f};
+    for (size_t i = 0; i < v.size(); ++i) {
+      v[i].flowers = flowers[i];
+      v[i].seeds = seeds[i];
+    }
+    v[2].flower = {0.55f, 0.12f, 0.45f};  // knapweed purple among the long grass
+    v[2].flower2_share = 0.3f;
+    v[2].seed = {0.30f, 0.20f, 0.14f};  // purple-brown panicles over the long grass
+    v[4].seed = {0.50f, 0.42f, 0.22f};
+    v[5].seed = {0.12f, 0.07f, 0.04f};
+    v[5].seed_length = 0.18f;
     v[2].height_jitter = 0.35f;
     v[5].height_jitter = 0.2f;
     v[5].lean_jitter = 0.1f;
@@ -94,13 +112,29 @@ struct Field {
 };
 
 const Field kFields[] = {
-    {"height", &Kind::height, nullptr}, {"height_jitter", &Kind::height_jitter, nullptr},
-    {"width", &Kind::width, nullptr},   {"density", &Kind::density, nullptr},
-    {"lean", &Kind::lean, nullptr},     {"lean_jitter", &Kind::lean_jitter, nullptr},
-    {"clump", &Kind::clump, nullptr},   {"pull", &Kind::pull, nullptr},
-    {"give", &Kind::give, nullptr},     {"sway", &Kind::sway, nullptr},
-    {"dry", &Kind::dry, nullptr},       {"root", nullptr, &Kind::root},
-    {"tip", nullptr, &Kind::tip},       {"dry_tip", nullptr, &Kind::dry_tip},
+    {"height", &Kind::height, nullptr},
+    {"height_jitter", &Kind::height_jitter, nullptr},
+    {"width", &Kind::width, nullptr},
+    {"density", &Kind::density, nullptr},
+    {"lean", &Kind::lean, nullptr},
+    {"lean_jitter", &Kind::lean_jitter, nullptr},
+    {"clump", &Kind::clump, nullptr},
+    {"pull", &Kind::pull, nullptr},
+    {"give", &Kind::give, nullptr},
+    {"sway", &Kind::sway, nullptr},
+    {"spring", &Kind::spring, nullptr},
+    {"dry", &Kind::dry, nullptr},
+    {"root", nullptr, &Kind::root},
+    {"tip", nullptr, &Kind::tip},
+    {"dry_tip", nullptr, &Kind::dry_tip},
+    {"flowers", &Kind::flowers, nullptr},
+    {"flower_size", &Kind::flower_size, nullptr},
+    {"flower", nullptr, &Kind::flower},
+    {"flower2_share", &Kind::flower2_share, nullptr},
+    {"flower2", nullptr, &Kind::flower2},
+    {"seeds", &Kind::seeds, nullptr},
+    {"seed_length", &Kind::seed_length, nullptr},
+    {"seed", nullptr, &Kind::seed},
 };
 
 std::string names() {
@@ -163,9 +197,17 @@ std::optional<Kind> parse_kind(std::string_view recipe, std::string* error) {
     }
   }
   if (kind->height <= 0 || kind->width <= 0 || kind->density < 0 || kind->give <= 0 ||
-      kind->sway <= 0) {
+      kind->sway <= 0 || kind->spring <= 0) {
     return fail("grass recipe '" + std::string(recipe) +
-                "': height, width, give and sway must be above 0 and density at least 0");
+                "': height, width, give, sway and spring must be above 0 and density at least 0");
+  }
+  const auto share = [](float v) { return v >= 0 && v <= 1; };
+  if (!share(kind->flowers) || !share(kind->seeds) || kind->flowers + kind->seeds > 1 ||
+      !share(kind->flower2_share) || kind->seed_length <= 0 || kind->seed_length > 0.5f ||
+      kind->flower_size <= 0) {
+    return fail("grass recipe '" + std::string(recipe) +
+                "': flowers, seeds and flower2_share are shares 0..1 (flowers + seeds at most 1), "
+                "seed_length above 0 and at most 0.5, flower_size above 0");
   }
   return kind;
 }
@@ -197,7 +239,14 @@ std::array<float, 3> far_colour(const Kind& kind) {
   for (size_t i = 0; i < 3; ++i) {
     const float green = 0.3f * kind.root[i] + 0.7f * kind.tip[i];
     const float dried = 0.3f * kind.root[i] + 0.7f * kind.dry_tip[i];
-    c[i] = (green + (dried - green) * kind.dry) * kSelfShade;
+    const float leaf = green + (dried - green) * kind.dry;
+    // A head covers about a blade's top tenth seen from afar.
+    const float bloom = kind.flower[i] + (kind.flower2[i] - kind.flower[i]) * kind.flower2_share;
+    const float heads = 0.1f * (kind.flowers + kind.seeds);
+    const float head =
+        heads > 0 ? (bloom * kind.flowers + kind.seed[i] * kind.seeds) / (kind.flowers + kind.seeds)
+                  : 0.0f;
+    c[i] = (leaf + (head - leaf) * heads) * kSelfShade;
   }
   return c;
 }

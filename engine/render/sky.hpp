@@ -30,6 +30,7 @@
 #include "render/clouds.hpp"
 #include "render/frame.hpp"
 #include "render/moon.hpp"
+#include "render/moon_maps.hpp"
 #include "render/stars.hpp"
 
 namespace ge::render {
@@ -53,9 +54,11 @@ struct Sky {
       aerial_view, blank_view;
   wgpu::Buffer
       light;  // frame.wgsl's SkyLight: the sky's four rows, then the eye's (render/eye.hpp)
+  wgpu::Buffer no_lights;  // an empty local light list (render/lights.hpp), for a frame with none
   wgpu::Sampler sampler;
   StarTexture stars;  // the real stars' map (render/stars.hpp), the sky pass's group 1
   MoonTexture moon;   // the moon's albedo map (render/moon.hpp), beside it
+  MoonMaps moons;     // other worlds' moons' maps (render/moon_maps.hpp), beside that
   wgpu::BindGroupLayout star_layout;
   wgpu::BindGroup star_group;
   CloudNoise cloud;  // the cloud's noise, bound beside the tables (frame.wgsl's 8 and 9)
@@ -81,9 +84,11 @@ struct Sky {
 // the frame's depth). `uniforms` is the frame block's buffer.
 void create_sky(gpu::Device& device, gpu::PipelineSet& pipelines, Sky& sky,
                 const wgpu::Buffer& uniforms, const wgpu::BindGroupLayout& frame);
-// Group 0 of every draw, made once the sky's tables exist.
+// Group 0 of every draw, made once the sky's tables exist. `lights` is the frame's local lights
+// (render/lights.hpp's `Lights::buffer`, binding 10); none: the sky's empty list.
 wgpu::BindGroup frame_group(gpu::Device& device, const wgpu::BindGroupLayout& layout,
-                            const wgpu::Buffer& uniforms, const Sky& sky);
+                            const wgpu::Buffer& uniforms, const Sky& sky,
+                            const wgpu::Buffer& lights = nullptr);
 
 // Decide which tables this frame rebuilds.
 void prepare_sky(Sky& sky, const FrameView& view);

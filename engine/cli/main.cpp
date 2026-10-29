@@ -39,6 +39,7 @@
 #include "cli/perf.hpp"
 #include "cli/play.hpp"
 #include "cli/publish.hpp"
+#include "cli/save.hpp"
 #include "cli/scaffold.hpp"
 #include "cli/skills.hpp"
 #include "cli/snow.hpp"
@@ -155,7 +156,7 @@ Outcome run(const Args& a) {
   if (name == "goals free") {
     const std::string base = flag_value(a, "base");
     return run_goals_free(fs::absolute(repo_of(a)), a.words.empty() ? "" : a.words[0],
-                          base.empty() ? "origin/main" : base, has_flag(a, "fetch"));
+                          base.empty() ? "origin/main" : base, !has_flag(a, "no-fetch"));
   }
   if (name == "goals claim") {
     const std::string base = flag_value(a, "base");
@@ -206,6 +207,7 @@ Outcome run(const Args& a) {
     p.ids = a.words;
     p.before = flag_value(a, "before");
     p.out = flag_value(a, "out");
+    p.title = flag_value(a, "title");
     if (const std::string w = flag_value(a, "width"); !w.empty()) {
       if (w.find_first_not_of("0123456789") != std::string::npos || w.size() > 5 ||
           std::stoi(w) < 16)
@@ -349,6 +351,7 @@ Outcome run(const Args& a) {
     return run_mem(b, p);
   }
   if (name.starts_with("net ")) return run_net(a);
+  if (name == "save inspect") return run_save(a);
   if (name == "asset list") return run_asset_list(build_options(a));
   if (name == "asset check") return run_asset_check(build_options(a));
   if (name == "asset build") {

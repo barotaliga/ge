@@ -14,21 +14,26 @@
 //   rung of Fall Line's)                 the camera's settings (engine/camera/cvars.hpp, A)
 //   volume s_wind s_effects s_mute      the sound's faders (A)
 //   sv_seed sv_hour                     the run's map and hour (the server's, server info)
-//   sv_weather sv_snowfall sv_snowline sv_fog sv_wind sv_winddir sv_cover sv_thick sv_skyrate
-//   sv_cloudheight sv_cloudspeed
+//   sv_weather sv_snowfall sv_snowline sv_fog sv_wind sv_winddir sv_cover sv_clouddensity
+//   sv_skyrate sv_cloudheight sv_cloudthickness sv_cloudspeed
 //                                       the sky over the run, picked by hand, and how fast its
 //                                       hour runs (the server's, server info; sim/sky.hpp)
 //   sv_skytype sv_skyair sv_skydust sv_sunsize sv_sun2 sv_planet sv_planetdir sv_planetel
 //   sv_ring sv_nebula sv_skystars sv_skyglow
 //                                       the kind of sky (render/sky_style.hpp's types) and its
 //                                       knobs (the server's, server info; app/sky_type.hpp)
+//   sv_lethal sv_armyfire sv_helis sv_paras
+//                                       the hunt: whether the army shoots to kill, fires at all,
+//                                       and sends its helicopters and paramotors (the server's)
 //
-// ge:summary Fall Line's cvars: the window, the picture, the camera, the sound, the map
+// ge:summary Fall Line's cvars: the window, the picture, the camera, the sound, the map, the hunt
 // ge:keywords fall-line cvars settings cfg vid_width r_taa r_bloom r_shadowsize cl_view volume
 // ge:keywords s_mute sv_seed sv_hour add_cvars register_cvars sv_weather sv_snowfall sv_fog
-// ge:keywords sv_wind sv_winddir sv_cover sv_thick sv_skyrate r_clouds sv_skytype sky-type
-// ge:keywords sky-knobs cl_chasedist cl_motion r_precip r_precip_density r_splashes r_wet
-// ge:keywords sv_snowline rain sv_cloudheight sv_cloudspeed r_sunsize r_moonsize disc-size
+// ge:keywords sv_wind sv_winddir sv_cover sv_clouddensity sv_skyrate r_clouds
+// ge:keywords sv_cloudthickness sv_skytype sky-type sky-knobs cl_chasedist cl_motion r_precip
+// ge:keywords r_precip_density r_splashes r_wet sv_snowline rain sv_cloudheight sv_cloudspeed
+// ge:keywords r_sunsize r_moonsize disc-size
+// ge:keywords sv_lethal sv_armyfire sv_helis sv_paras hunt army
 // ge:skill console sim
 // ge:test tests/fall_line_cvars_test.cpp
 #pragma once
@@ -71,17 +76,24 @@ struct Settings {
   double snowline = -1;  // the snow line, a share of the mountain's height (rain under it)
   double air = -1, air_from = -1;  // the mean wind, m/s at 10 m; the heading it blows from, deg
   double cover = -1;               // the broken sky's cloud cover, 0..1
-  double thick = -1;               // how thick the clouds are, 0 thin .. 1 thick
+  double thick = -1;               // how dense the clouds are, 0 thin .. 1 thick
   double cloud_height = -1;        // the lowest layer's base over the floor, m
+  double cloud_thickness = -1;     // the lowest layer's height from its base to its top, m
   double cloud_speed = -1;         // the clouds' share of the wind aloft (1: the true wind)
   double sky_rate = 0;             // the sky's hours per hour of the run (0: the hour stands)
   // The kind of sky (render/sky_style.hpp's type names) and its knobs, each kept where negative
   // (render/sky_style.hpp's SkyKnobs; angles in degrees).
   std::string cloud_kinds = "map";  // sv_clouds: the kinds of cloud drawn (map: the map's)
   std::string sky_type = "earth";
+  std::string moons = "type";  // sv_moons: the moons over the sky (app/sky_type.hpp)
   double sky_air = -1, sky_dust = -1, sun_size = -1, sun2 = -1;
   double planet = -1, planet_dir = -1, planet_el = -1, ring = -1;
   double nebula = -1, sky_stars = -1, sky_glow = -1;
+  // The hunt (sim/hunt_cfg.hpp hands them to a run's wanted level and army).
+  bool lethal = true;  // the army shoots to kill; off, it chases him down and arrests him
+  bool army_fire = true;
+  bool helis = true;
+  bool paras = true;
 };
 
 // Every cvar above, bound to `s`'s fields (which take the defaults now).

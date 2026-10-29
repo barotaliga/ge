@@ -2,7 +2,7 @@
 // scatter and draw passes, and the read-backs labs and tests use.
 //
 // ge:summary Grass drawn definitions: buffers, pipelines, cover upload, wind grid, passes, probes
-// ge:keywords render grass scatter draw cover upload wind-grid indirect readback probe
+// ge:keywords render grass scatter draw cover upload wind-grid indirect readback probe trample
 // ge:skill render grass
 // ge:test tests/render_grass_test.cpp
 #include "render/grass.hpp"
@@ -24,7 +24,7 @@ constexpr uint32_t kRows = 65535;
 
 // grass_common.wgsl's GrassKind, GrassTri and GrassParams.
 struct GpuKind {
-  float shape[4], lean[4], air[4], root[4], tip[4], dry_tip[4];
+  float shape[4], lean[4], air[4], root[4], tip[4], dry_tip[4], flower[4], flower2[4], seed[4];
 };
 struct GpuTri {
   float a[4], b[4], c[4];
@@ -35,6 +35,7 @@ struct Params {
   float lod[4];
   float wind[4];
   float mean[4];
+  float trample[4];
 };
 struct DrawArgs {
   uint32_t vertex_count, instance_count, first_vertex, first_instance;
@@ -64,9 +65,9 @@ std::vector<uint8_t> read_buffer(gpu::Device& device, const wgpu::Buffer& src, u
 void make_groups(gpu::Device& device, Grass& g) {
   g.scatter_group =
       make_group(device, "grass.scatter", g.scatter_layout,
-                 {g.params, g.tris, g.kinds, g.near_blades, g.far_blades, g.args, g.wind});
+                 {g.params, g.tris, g.kinds, g.near_blades, g.far_blades, g.args, g.wind, g.press});
   g.draw_group = make_group(device, "grass.draw", g.draw_layout,
-                            {g.params, g.kinds, g.near_blades, g.far_blades, g.wind});
+                            {g.params, g.kinds, g.near_blades, g.far_blades, g.wind, g.press});
 }
 
 }  // namespace
@@ -87,11 +88,13 @@ void create_grass(gpu::Device& device, gpu::PipelineSet& pipelines, Grass& g,
   g.far_blades = make_buffer(device, "grass.far", list, BU::Storage | BU::CopySrc);
   g.args = make_buffer(device, "grass.args", sizeof(DrawArgs) * 2,
                        BU::Storage | BU::Indirect | BU::CopySrc);
+  g.press = make_buffer(device, "grass.press", sizeof(grass::PressCell), BU::Storage | BU::CopyDst);
 
-  g.scatter_layout = make_layout(device, "grass.scatter",
-                                 {Slot::uniform, Slot::storage_read, Slot::storage_read,
-                                  Slot::storage, Slot::storage, Slot::storage, Slot::storage_read},
-                                 wgpu::ShaderStage::Compute);
+  g.scatter_layout =
+      make_layout(device, "grass.scatter",
+                  {Slot::uniform, Slot::storage_read, Slot::storage_read, Slot::storage,
+                   Slot::storage, Slot::storage, Slot::storage_read, Slot::storage_read},
+                  wgpu::ShaderStage::Compute);
   const wgpu::ShaderModule scatter =
       gpu::create_shader(device, wgsl::grass_scatter, "grass_scatter");
   const auto compute = [&](const char* label, const char* entry,
@@ -118,7 +121,7 @@ void create_grass(gpu::Device& device, gpu::PipelineSet& pipelines, Grass& g,
                              {terrain.params, terrain.horizon.views[0], terrain.horizon.views[1]});
   g.draw_layout = make_layout(device, "grass.draw",
                               {Slot::uniform, Slot::storage_read, Slot::storage_read,
-                               Slot::storage_read, Slot::storage_read},
+                               Slot::storage_read, Slot::storage_read, Slot::storage_read},
                               vf);
   g.shadows = no_sun_shadows(device);
 
@@ -160,7 +163,7 @@ bool set_grass_cover(gpu::Device& device, Grass& g, const grass::Cover& cover) {
     GpuKind& o = kinds[i];
     const float shape[4] = {k.height, k.height_jitter, k.width, k.density};
     const float lean[4] = {k.lean, k.lean_jitter, k.clump, k.pull};
-    const float air[4] = {k.give, k.sway, k.dry, 0};
+    const float air[4] = {k.give, k.sway, k.dry, k.spring};
     std::memcpy(o.shape, shape, sizeof shape);
     std::memcpy(o.lean, lean, sizeof lean);
     std::memcpy(o.air, air, sizeof air);
@@ -168,7 +171,15 @@ bool set_grass_cover(gpu::Device& device, Grass& g, const grass::Cover& cover) {
       o.root[c] = k.root[c];
       o.tip[c] = k.tip[c];
       o.dry_tip[c] = k.dry_tip[c];
+      o.flower[c] = k.flower[c];
+      o.flower2[c] = k.flower2[c];
+      o.seed[c] = k.seed[c];
     }
+    o.root[3] = k.flowers;
+    o.tip[3] = k.seeds;
+    o.flower[3] = k.flower_size;
+    o.flower2[3] = k.flower2_share;
+    o.seed[3] = k.seed_length;
   }
   device.queue.WriteBuffer(g.kinds, 0, kinds.data(), kinds.size() * sizeof(GpuKind));
   std::vector<GpuTri> tris;
@@ -198,6 +209,25 @@ bool set_grass_cover(gpu::Device& device, Grass& g, const grass::Cover& cover) {
 
 void bind_grass_shadows(Grass& g, const wgpu::BindGroup& shadows) { g.shadows = shadows; }
 
+void set_grass_trample(gpu::Device& device, Grass& g, grass::Trample& trample) {
+  if (trample.cells.empty()) return;
+  const size_t bytes = trample.cells.size() * sizeof(grass::PressCell);
+  if (trample.n != g.trample_n || trample.cell != g.trample_cell) {
+    g.press = make_buffer(device, "grass.press", bytes, BU::Storage | BU::CopyDst);
+    g.trample_n = trample.n;
+    g.trample_cell = trample.cell;
+    trample.dirty_lo = 0;
+    trample.dirty_hi = trample.cells.size();
+    make_groups(device, g);
+  }
+  if (trample.dirty_lo < trample.dirty_hi) {
+    device.queue.WriteBuffer(g.press, trample.dirty_lo * sizeof(grass::PressCell),
+                             trample.cells.data() + trample.dirty_lo,
+                             (trample.dirty_hi - trample.dirty_lo) * sizeof(grass::PressCell));
+  }
+  grass::clean(trample);
+}
+
 void prepare_grass(gpu::Device& device, Grass& g, const FrameView& view, const grass::GrassAir& air,
                    double t) {
   const GrassSettings& s = g.settings;
@@ -205,7 +235,9 @@ void prepare_grass(gpu::Device& device, Grass& g, const FrameView& view, const g
   if (!g.grid.air.empty()) {
     device.queue.WriteBuffer(g.wind, 0, g.grid.air.data(), g.grid.air.size() * sizeof(float));
   }
+  g.prev_time = g.timed ? g.time : static_cast<float>(t);
   g.time = static_cast<float>(t);
+  g.timed = true;
   Params p{};
   p.cover[0] = g.tri_count;
   p.cover[1] = s.capacity;
@@ -222,6 +254,9 @@ void prepare_grass(gpu::Device& device, Grass& g, const FrameView& view, const g
   p.mean[0] = g.grid.mean[0];
   p.mean[1] = g.grid.mean[1];
   p.mean[2] = g.time;
+  p.mean[3] = g.prev_time;
+  p.trample[0] = g.trample_cell;
+  p.trample[1] = static_cast<float>(g.trample_n);
   device.queue.WriteBuffer(g.params, 0, &p, sizeof p);
   const DrawArgs args[2] = {{strip_vertices(s.near_segments), 0, 0, 0},
                             {strip_vertices(s.far_segments), 0, 0, 0}};

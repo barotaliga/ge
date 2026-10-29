@@ -331,10 +331,13 @@ int main(int argc, char** argv) {
       fall_line::controls::hand_state(*hand).level;
   const ge::mountain::mapgen::Level& level = *level_ptr;
   ge::render::FrameView view;
-  fall_line::app::day_view(level, set.hour, view);
   if (const std::string problem = fall_line::app::sky_style_of(set, view.style); !problem.empty())
     out::error("fall_line: the run's sky type was not picked as set (see docs/console.md): " +
                problem);
+  if (const std::string problem = fall_line::app::moon_set_of(set, view.moons); !problem.empty())
+    out::error("fall_line: the run's moons were not picked as set (see docs/console.md): " +
+               problem);
+  fall_line::app::day_view(level, set.hour, view);
   // A rung of the camera ladder follows the run; any other name is a still view of the map.
   fall_line::camera::Rung rung = fall_line::camera::Rung::chase;
   const bool follow = fall_line::camera::rung_named(set.view, rung);

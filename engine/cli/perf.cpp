@@ -295,7 +295,7 @@ std::vector<Finding> leak_findings(const BuildOptions& o, const std::string& rep
     open = false;
   };
   for (const auto view : split_lines(report)) {
-    const std::string l(view);
+    const std::string l = regex_line(view);
     std::smatch s;
     if (std::regex_search(l, s, kLsanHead)) {
       flush();

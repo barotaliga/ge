@@ -112,3 +112,78 @@ jobs:
             tail -n 300 rows.md
           } > body.md
           gh issue edit "$ledger" --body-file body.md
+
+  # Main's own runs. A pull request may merge with `skip-ci`, so a push to main runs the whole
+  # matrix, and its answer is kept in ONE issue labelled `main-red`: opened (or added to) when a
+  # run on main fails, with the failing jobs, the commits since the last green run and a comment
+  # on the pull request each landed with; closed by the next green run. A cancelled run (a newer
+  # push replaced it) says nothing.
+  main:
+    if: >-
+      github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' &&
+      (github.event.workflow_run.conclusion == 'failure' || github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RUN_ID: ${{ github.event.workflow_run.id }}
+      RUN_URL: ${{ github.event.workflow_run.html_url }}
+      RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+      CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+    steps:
+      - name: Open, add to or close the main-red issue
+        run: |
+          gh label create main-red --color B60205 \
+            --description "Main's CI is red: the PR that broke it fixes it first; no skip-ci until closed" \
+            2> /dev/null || true
+          issue=$(gh issue list --label main-red --state open --limit 1 --json number --jq '.[0].number // empty')
+          if [ "$CONCLUSION" = success ]; then
+            [ -n "$issue" ] || { echo "main is green"; exit 0; }
+            gh issue close "$issue" --comment "Green again at ${RUN_SHA:0:9} ([run $RUN_ID]($RUN_URL)).
+
+          ---
+          _Posted by the \`flakes\` workflow_"
+            exit 0
+          fi
+          jobs=$(gh api "repos/$GH_REPO/actions/runs/$RUN_ID/jobs?per_page=100" --paginate \
+            --jq '.jobs[] | select(.conclusion == "failure" and .name != "required") | "- [\(.name)](\(.html_url))"')
+          # The commits since main's last green run: one of them broke it.
+          green=$(gh api "repos/$GH_REPO/actions/workflows/ci.yml/runs?branch=main&event=push&status=success&per_page=1" \
+            --jq '.workflow_runs[0].head_sha // empty')
+          if [ -n "$green" ]; then
+            commits=$(gh api "repos/$GH_REPO/compare/$green...$RUN_SHA" --jq '.commits[] | "\(.sha[0:9]) \(.commit.message | split("\n")[0])"' | tail -n 30)
+          else
+            commits=$(gh api "repos/$GH_REPO/commits/$RUN_SHA" --jq '"\(.sha[0:9]) \(.commit.message | split("\n")[0])"')
+          fi
+          note="Main's \`ci\` run [$RUN_ID]($RUN_URL) at ${RUN_SHA:0:9} failed:
+
+          $jobs
+
+          Commits since the last green run on main${green:+ (${green:0:9})}:
+
+          \`\`\`
+          $commits
+          \`\`\`
+
+          The pull request that broke it fixes it first, in its next PR; no pull request is labelled \`skip-ci\` while this issue is open. It closes itself on the next green run.
+
+          ---
+          _Posted by the \`flakes\` workflow_"
+          if [ -n "$issue" ]; then
+            gh issue comment "$issue" --body "$note"
+          else
+            issue=$(gh issue create --label main-red --title "Main is red" --body "$note" | sed -nE 's#.*/issues/([0-9]+)$#\1#p')
+          fi
+          # Tell each pull request those commits landed with, so the thread that owns it hears.
+          echo "$commits" | sed -nE 's/.*\(#([0-9]+)\)$/\1/p' | sort -u | while read -r n; do
+            gh pr comment "$n" --body "Main's CI went red after this merged (#$issue, [run $RUN_ID]($RUN_URL)); this pull request is one of the commits since the last green run. If the failure is this change's, fix it in the next pull request first.
+
+          ---
+          _Posted by the \`flakes\` workflow_" < /dev/null || true
+          done

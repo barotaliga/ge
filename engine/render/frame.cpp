@@ -63,6 +63,8 @@ void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint
   u.size[3] = 1.0f / static_cast<float>(height);
   u.time[0] = static_cast<float>(view.time_s);
   u.time[1] = static_cast<float>(view.frame);
+  // A white Lambertian face under lamp_lux: lamp_lux / pi in the sun's units, pre-exposed.
+  u.time[2] = static_cast<float>(view.lamp_lux / (kSunLux * 3.14159265358979323846) * pre);
   u.world[0] = static_cast<float>(view.altitude_m * 1e-3);
   std::memcpy(u.planes, cam.planes, sizeof cam.planes);
   // THE WEATHER: a visual range V closes the view as exp(-3.912 d / V) (the contrast a black
@@ -124,6 +126,32 @@ void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint
   style_rows(view.style, d, u.style);
   // The sun's disc drawn larger (FrameView::sun_size) over the type's own.
   u.style[2][3] = static_cast<float>(view.style.sun_size * view.sun_size);
+  // OTHER WORLDS' MOONS (render/night.hpp's set_moons), drawn larger as the moon is; one smaller
+  // than a pixel and a half is drawn that large, its light shared over it, as a star is.
+  const double pixel = view.fov_y / std::max<double>(height, 1);
+  const std::span<const MoonKind> kinds = moon_kinds();
+  for (int k = 0; k < n.moon_count && k < kMaxMoons; ++k) {
+    const SkyMoon& m = n.moons[k];
+    if (m.kind < 0 || m.kind >= static_cast<int>(kinds.size())) continue;
+    const MoonKind& kind = kinds[static_cast<size_t>(m.kind)];
+    float(*row)[4] = &u.moons[static_cast<ptrdiff_t>(k) * kMoonRows];
+    const double sized = m.radius * view.moon_size;
+    const double drawn = std::max(sized, 1.5 * pixel);
+    const double most = std::max({kind.axes_km[0], kind.axes_km[1], kind.axes_km[2]});
+    for (int c = 0; c < 3; ++c) {
+      row[0][c] = static_cast<float>(m.toward[c]);
+      row[1][c] = static_cast<float>(m.pole[c]);
+      row[2][c] = static_cast<float>(m.prime[c]);
+      row[3][c] = static_cast<float>(kind.tint[c]);
+      row[4][c] = static_cast<float>(kind.axes_km[c] / most);
+    }
+    row[0][3] = static_cast<float>(drawn);
+    row[1][3] = static_cast<float>(m.kind);
+    row[2][3] = static_cast<float>(m.surface * pre * (sized * sized) / (drawn * drawn));
+    row[3][3] = static_cast<float>(kind.lambert);
+    row[4][3] = static_cast<float>(kind.lump);
+    row[5][0] = static_cast<float>(kind.haze);
+  }
 }
 
 FrameTargets create_targets(gpu::Device& device, std::string_view label, uint32_t width,
@@ -142,12 +170,13 @@ FrameTargets create_targets(gpu::Device& device, std::string_view label, uint32_
   };
   t.hdr = make("hdr", kHdrFormat,
                wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding);
-  // CopySrc: the labs and tests read the depth back (render/hiz.hpp's read_depth).
+  // CopySrc: the labs and tests read the depth and the motion back (render/hiz.hpp's read_depth).
   t.depth = make("depth", kDepthFormat,
                  wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding |
                      wgpu::TextureUsage::CopySrc);
   t.motion = make("motion", kMotionFormat,
-                  wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding);
+                  wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding |
+                      wgpu::TextureUsage::CopySrc);
   t.hdr_view = t.hdr.CreateView();
   t.depth_view = t.depth.CreateView();
   t.motion_view = t.motion.CreateView();
@@ -327,6 +356,11 @@ wgpu::BindGroupLayout make_layout(gpu::Device& device, std::string_view label,
         break;
       case Slot::storage_read:
         e.buffer.type = wgpu::BufferBindingType::ReadOnlyStorage;
+        break;
+      case Slot::storage_shade:
+        // Kept off the vertex stage's storage-buffer count (8 on the smallest devices).
+        e.buffer.type = wgpu::BufferBindingType::ReadOnlyStorage;
+        e.visibility = visibility & ~wgpu::ShaderStage::Vertex;
         break;
       case Slot::storage:
         e.buffer.type = wgpu::BufferBindingType::Storage;
