@@ -15,6 +15,7 @@
 
 #include "render/clouds.hpp"
 #include "render/night.hpp"
+#include "render/valley_fog.hpp"
 
 namespace ge::render {
 
@@ -167,6 +168,8 @@ void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint
 
   // THE FOG IN AREAS: none until render/fog.hpp's fog_uniforms says a volume is in reach.
   for (float& f : u.fog) f = 0.0f;
+  // THE SEA OF FOG IN THE VALLEYS (render/valley_fog.hpp).
+  valley_rows(view.valley, view, u.valley);
 
   // THE LIGHTNING (render/view.hpp).
   flash_rows(view.flashes, pre, u.flash_info, u.flashes);

@@ -4,5 +4,5 @@
 # Its app/ half (ge_mountain_app, with the GPU) is the mountain as drawn: the snow's material.
 ge_add_plugin(mountain ENGINE core ai wind prof lab assets save APP render gpu)
 if(TARGET ge_mountain_app)
-  ge_embed_wgsl(ge_mountain_app app/snow.wgsl app/trails.wgsl)
+  ge_embed_wgsl(ge_mountain_app app/snow.wgsl)
 endif()

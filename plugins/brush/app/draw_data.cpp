@@ -430,6 +430,8 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
       d.rect[2] = float(p.w);
       d.rect[3] = float(p.h);
       d.kind = kind;
+      d.source = v;
+      d.lm2[0] = d.lm2[1] = -1;
       s.vertices.push_back(d);
       if (model_of[si] == 0) {
         for (int k = 0; k < 3; ++k)
@@ -642,6 +644,65 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
     s.lights.push_back(l);
   }
   return true;
+}
+
+std::vector<std::array<float, 3>> texture_means(const Scene& scene) {
+  std::vector<std::array<float, 3>> out(scene.map.textures.size(), {0.5f, 0.5f, 0.5f});
+  // A texture's atlas rectangle, from any vertex drawn with it.
+  std::vector<int64_t> drawn(scene.map.vertices.size(), -1);
+  for (size_t i = 0; i < scene.vertices.size(); ++i) {
+    if (scene.vertices[i].source < drawn.size()) drawn[scene.vertices[i].source] = int64_t(i);
+  }
+  std::vector<bool> done(out.size(), false);
+  const Atlas& a = scene.textures;
+  if (a.levels.empty()) return out;
+  for (const Surface& sf : scene.map.surfaces) {
+    if (sf.count == 0 || sf.texture >= out.size() || done[sf.texture]) continue;
+    const int64_t di = drawn[scene.map.indices[sf.first]];
+    if (di < 0) continue;
+    const float* r = scene.vertices[size_t(di)].rect;
+    const auto x0 = uint32_t(r[0]), y0 = uint32_t(r[1]), w = uint32_t(r[2]), h = uint32_t(r[3]);
+    double sum[3] = {0, 0, 0}, n = 0;
+    for (uint32_t y = y0; y < std::min(y0 + h, a.height); ++y)
+      for (uint32_t x = x0; x < std::min(x0 + w, a.width); ++x) {
+        const uint8_t* t = &a.levels[0][(size_t(y) * a.width + x) * 4];
+        for (int k = 0; k < 3; ++k) sum[k] += linear_of(t[k]);
+        n += 1;
+      }
+    if (n > 0) {
+      for (int k = 0; k < 3; ++k) out[sf.texture][size_t(k)] = float(sum[k] / n);
+    }
+    done[sf.texture] = true;
+  }
+  return out;
+}
+
+std::vector<bake::Light> bake_lights(const Scene& scene, double strength) {
+  std::vector<bake::Light> out;
+  for (const PointLight& l : scene.lights) {
+    if (l.physical) continue;
+    bake::Light b;
+    for (int k = 0; k < 3; ++k) b.pos[k] = l.pos[k];
+    // The real-time path's strength a metre off (bsp_draw.cpp, prepare_bsp): the classic's light
+    // at half its reach, value / 2 of 128, matched by an inverse square.
+    const double half = l.value * kUnitM / 2;
+    const double at1 = l.value / 256.0 * half * half * strength;
+    for (int k = 0; k < 3; ++k) b.colour[k] = l.colour[k] * at1;
+    b.reach = l.reach * 1.5;
+    b.radius = 0.2;
+    out.push_back(b);
+  }
+  return out;
+}
+
+void attach_rebake(Scene& scene, Rebaked baked) {
+  scene.rebaked = std::move(baked);
+  const std::vector<float>& lm = scene.rebaked.lm;
+  for (DrawVertex& v : scene.vertices) {
+    const bool has = size_t(v.source) * 2 + 1 < lm.size();
+    v.lm2[0] = has ? lm[size_t(v.source) * 2] : -1;
+    v.lm2[1] = has ? lm[size_t(v.source) * 2 + 1] : -1;
+  }
 }
 
 }  // namespace ge::brush::app
