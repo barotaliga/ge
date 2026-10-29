@@ -21,7 +21,7 @@
 
 namespace ge::capture {
 
-enum class Container { kMatroska, kMp4 };
+enum class Container : uint8_t { kMatroska, kMp4 };
 
 // kMp4 for a name ending .mp4 or .m4v (any case), else kMatroska.
 Container container_of(std::string_view path);

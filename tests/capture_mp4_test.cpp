@@ -45,14 +45,17 @@ std::vector<uint8_t> opus_head(int preskip) {
   return h;
 }
 
-gc::MatroskaOptions small(bool audio = true) {
+const std::vector<uint8_t> kAv1Config = {0x81, 0x00, 0x0C, 0x00, 0x0A, 0x0B};
+
+// A 64x32 AV1 track (`config`: with its codec private) and, with `audio`, an Opus one.
+gc::MatroskaOptions small(bool audio = true, bool config = true) {
   gc::MatroskaOptions o;
   gc::VideoTrack v;
   v.codec = "V_AV1";
   v.width = 64;
   v.height = 32;
   v.fps = 30;
-  v.codec_private = {0x81, 0x00, 0x0C, 0x00, 0x0A, 0x0B};
+  if (config) v.codec_private = kAv1Config;
   o.video = v;
   if (audio) {
     gc::AudioTrack a;
@@ -110,7 +113,7 @@ TEST(the_moov_names_both_tracks_with_their_entries_and_configuration) {
   const gc::Mp4Track& v = f->tracks[0];
   CHECK(v.id == 1 && v.handler == "vide" && v.entry == "av01" && v.timescale == 1000);
   CHECK(v.width == 64 && v.height == 32);
-  CHECK(v.config_type == "av1C" && v.config == small().video->codec_private);
+  CHECK(v.config_type == "av1C" && v.config == kAv1Config);
   CHECK(v.edit_start == 0);
   const gc::Mp4Track& a = f->tracks[1];
   CHECK(a.id == 2 && a.handler == "soun" && a.entry == "Opus" && a.timescale == 48000);
@@ -182,7 +185,8 @@ TEST(a_file_cut_at_any_byte_reads_to_its_last_whole_fragment) {
   const auto whole = gc::read_mp4(bytes, error);
   CHECK_MSG(whole.has_value(), error.c_str());
   if (!whole || whole->fragments.size() != 4) return;
-  const size_t moov_end = static_cast<size_t>(whole->fragments[0]);
+  const gc::Mp4File& full = *whole;
+  const size_t moov_end = static_cast<size_t>(full.fragments[0]);
   // Inside the header, nothing reads.
   for (size_t cut : {size_t{0}, size_t{20}, moov_end - 1}) {
     const auto f = gc::read_mp4(std::span(bytes.data(), cut), error);
@@ -194,41 +198,41 @@ TEST(a_file_cut_at_any_byte_reads_to_its_last_whole_fragment) {
   const size_t mfra = n - ((size_t{bytes[n - 4]} << 24) | (size_t{bytes[n - 3]} << 16) |
                            (size_t{bytes[n - 2]} << 8) | bytes[n - 1]);
   std::vector<size_t> ends;
-  for (size_t i = 0; i < whole->fragments.size(); i++) {
-    ends.push_back(i + 1 < whole->fragments.size() ? static_cast<size_t>(whole->fragments[i + 1])
-                                                   : mfra);
+  for (size_t i = 0; i < full.fragments.size(); i++) {
+    ends.push_back(i + 1 < full.fragments.size() ? static_cast<size_t>(full.fragments[i + 1])
+                                                 : mfra);
   }
   for (size_t cut = moov_end; cut < mfra; cut += 7) {
-    const auto f = gc::read_mp4(std::span(bytes.data(), cut), error);
-    CHECK_MSG(f.has_value(), error.c_str());
-    if (!f) return;
+    const auto read = gc::read_mp4(std::span(bytes.data(), cut), error);
+    CHECK_MSG(read.has_value(), error.c_str());
+    if (!read) return;
+    const gc::Mp4File& f = *read;
     size_t kept = 0;
     while (kept < ends.size() && ends[kept] <= cut) kept++;
-    CHECK(f->fragments.size() == kept);
+    CHECK(f.fragments.size() == kept);
     const size_t upto = kept > 0 ? ends[kept - 1] : moov_end;  // where the whole part ends
     size_t samples = 0;
-    for (const gc::Mp4Sample& s : whole->samples) samples += s.offset < upto ? 1 : 0;
-    CHECK(f->samples.size() == samples);
-    CHECK(f->cut == (cut != upto));
-    CHECK(f->seeks.empty());
+    for (const gc::Mp4Sample& s : full.samples) samples += s.offset < upto ? 1 : 0;
+    CHECK(f.samples.size() == samples);
+    CHECK(f.cut == (cut != upto));
+    CHECK(f.seeks.empty());
   }
 }
 
 TEST(what_an_mp4_cannot_carry_is_refused_and_says_where_it_goes) {
   std::string error;
   gc::MatroskaOptions raw;
-  raw.video = gc::VideoTrack{};
-  raw.video->width = 4;
-  raw.video->height = 2;
+  gc::VideoTrack tiny;
+  tiny.width = 4;
+  tiny.height = 2;
+  raw.video = tiny;
   gc::Mp4Writer w;
   CHECK(!w.open("", raw, error));
   CHECK(error.find(".mkv") != std::string::npos);
   gc::MatroskaOptions pcm = small();
   pcm.audio = gc::AudioTrack{};
   CHECK(!gc::mp4_problem(pcm).empty());
-  gc::MatroskaOptions bare = small();
-  bare.video->codec_private.clear();
-  CHECK(gc::mp4_problem(bare).find("codec private") != std::string::npos);
+  CHECK(gc::mp4_problem(small(true, false)).find("codec private") != std::string::npos);
   gc::Mp4Writer x;
   CHECK_MSG(x.open("", small(false), error), error.c_str());
   CHECK(x.video(100, true, std::vector<uint8_t>(4, 1), error));

@@ -1,7 +1,7 @@
 // A muxer's output (out_file.hpp).
 //
 // ge:summary OutFile's definitions: the file or the memory, the write, the 64-bit seek and patch
-// ge:keywords muxer output file patch fseeko _fseeki64
+// ge:keywords muxer output file patch fseeko seek-64
 // ge:skill replay
 // ge:test tests/capture_matroska_test.cpp
 #include "capture/out_file.hpp"

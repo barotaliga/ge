@@ -298,12 +298,15 @@ bool Mp4Writer::open(const std::string& path, const MatroskaOptions& o, std::str
   sequence_ = 0;
   starts_.clear();
   uint32_t id = 1;
-  for (Track* k : {&video_, &audio_}) {
-    const bool on = k == &video_ ? o.video.has_value() : o.audio.has_value();
-    if (!on) continue;
-    k->on = true;
-    k->id = id++;
-    k->timescale = k == &video_ ? kMovieTimescale : o.audio->rate;
+  if (o.video) {
+    video_.on = true;
+    video_.id = id++;
+    video_.timescale = kMovieTimescale;
+  }
+  if (o.audio) {
+    audio_.on = true;
+    audio_.id = id++;
+    audio_.timescale = o.audio->rate;
   }
   if (!out_.open(path, error)) return false;
 
