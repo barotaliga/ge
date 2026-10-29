@@ -295,7 +295,8 @@ bool read_v29(std::span<const uint8_t> file, bool bsp2, Map* out, std::string* e
       const int32_t visofs = c.i32();
       for (float& x : lf.mins) x = bsp2 ? c.f32() : float(c.i16());
       for (float& x : lf.maxs) x = bsp2 ? c.f32() : float(c.i16());
-      c.skip(bsp2 ? 12 : 8);
+      c.skip(bsp2 ? 8 : 4);  // the leaf's marked surfaces: drawn from the faces instead
+      for (uint8_t& a : lf.ambient) a = c.u8();
       lf.solid = lf.contents == -2;
       lf.cluster = i > 0 && int64_t(i) - 1 < visleafs ? int32_t(i - 1) : -1;
       if (lf.cluster < 0) continue;

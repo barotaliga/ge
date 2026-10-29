@@ -1,6 +1,6 @@
 ---
 name: net
-description: "Use for engine/net in gameengine2: multiplayer networking. Addresses, the wire, UDP and TCP sockets, the simulated network (stream links too) and its conditions, pcap captures, the packet format, connections (acks, round trip, loss, unreliable/sequenced/reliable channels, big messages in pieces, priorities, the send budget), nodes (host, client, peer; up to 32), sessions (the lobby: seats, teams, chat, kick, start, reconnect by token), LAN discovery, hosting from inside a game and the server browser (the directory, the rendezvous's list, invite-only and LAN-only games), NATs (the simulated kinds, STUN, the rendezvous, hole punching, the relay), opening a port on the router (PCP, NAT-PMP, UPnP IGD, the simulated router), replication (quantized snapshots and deltas, interest, the byte budget, prediction and reconciliation, interpolation, lag compensation by rewind), lockstep and rollback (turns, input delay, prediction and resimulation, step digests that name a desync), voice chat (the Opus codec at a constant bitrate with FEC, push-to-talk and voice activity, the host's relay by route, the jitter buffer, the mix onto the synth's streams, the voice cvars), fake-traffic sessions, pressure tests (ramps to a breaking point, chaos scripts and reconnects, soaks and memory, the fuzzer), the net-link, net-session, net-reach, net-host, net-replicate, net-lockstep, net-stress, net-chaos, net-fuzz and voice labs; and the M17 plan (lobby, chat, NAT, replication, lockstep, voice, accounts)."
+description: "Use for engine/net in gameengine2: multiplayer networking. Addresses, the wire, UDP and TCP sockets, the simulated network (stream links too) and its conditions, pcap captures, the packet format, connections (acks, round trip, loss, unreliable/sequenced/reliable channels, big messages in pieces, priorities, the send budget), nodes (host, client, peer; up to 32), sessions (the lobby: seats, teams, chat, kick, start, reconnect by token), LAN discovery, hosting from inside a game and the server browser (the directory, the rendezvous's list, invite-only and LAN-only games), NATs (the simulated kinds, STUN, the rendezvous, hole punching, the relay), opening a port on the router (PCP, NAT-PMP, UPnP IGD, the simulated router), replication (quantized snapshots and deltas, interest, the byte budget, prediction and reconciliation, interpolation, lag compensation by rewind), lockstep and rollback (turns, input delay, prediction and resimulation, step digests that name a desync), security (connect tokens sealed per host, AEAD on every packet, the replay window, flood guards, keys from the environment, the attackers), voice chat (the Opus codec at a constant bitrate with FEC, push-to-talk and voice activity, the host's relay by route, the jitter buffer, the mix onto the synth's streams, the voice cvars), fake-traffic sessions, pressure tests (ramps to a breaking point, chaos scripts and reconnects, soaks and memory, the fuzzer), the net-link, net-session, net-reach, net-host, net-replicate, net-lockstep, net-stress, net-chaos, net-fuzz and voice labs; and the M17 plan (lobby, chat, NAT, replication, lockstep, voice, accounts)."
 ---
 
 # Networking
@@ -45,6 +45,9 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
 | `net/voice_codec.hpp` | The voice codec: Opus mono at 48 kHz, 20 ms frames at a CONSTANT bitrate, in-band FEC (`recover` from the next frame), concealment; a silent stand-in of the same frame size without GE_ENCODERS |
 | `net/voice.hpp` | Voice chat: the sender's gate (push to talk, activity with a hangover, open) and spurt flags, a frame's sequence and clock, the host's relay (the seat stamped, the route by the session's rules, the flood bucket, the server mute), the talker's jitter buffer (target by the transit spread at a spurt's start; played, recovered, concealed, late, dropped), the listener's mix onto synth streams with each talker's volume and placing, `voice_distance_gain` |
 | `net/voice_trial.hpp` | One measured voice session: talkers on the four routes through a dedicated host, every pair heard and metered against the clean decode; what the `voice` lab runs |
+| `net/crypto.hpp` | The crypto (M17i): XChaCha20-Poly1305 seal and open, keyed BLAKE2b derivation, the nonce from a counter and a packet's type, keys from hex or a named environment variable, `wipe`; the only file that includes Monocypher (`cmake/Crypto.cmake`) |
+| `net/token.hpp` | Connect tokens: the matchmaker's grant sealed under a key derived per host, the client's copy with its session keys, opened and checked by the host; `os_random_bytes` |
+| `net/traffic_attack.hpp` | The attackers of a secure traffic session: forged and stolen tokens, replayed and forged payloads, a flood of requests, loud clients; what `net-link --secure=1` runs |
 | `net/tap.hpp` | The live tap: a running node's datagrams mirrored as pcap records to a loopback port for `ge net watch` |
 | `net/traffic.hpp` | Fake traffic: a whole session over the simulated network, measured end to end; chaos steps, reconnect tries, a per-tick hook; `sim_held_bytes` and `node_held_bytes` (what a soak holds flat) |
 | `net/stress.hpp` | Pressure tests over the traffic session: ramps bisected to a knob's breaking point against `StressBounds`, the named chaos scripts and their endings, the soak, the fuzzer (`stress_fuzz.cpp`) |
@@ -99,6 +102,15 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
   without bits enough for its step makes every prediction wrong by a quantum. A snapshot's row
   priority is the age of the client's copy in the BASELINE, never a counter reset when a row is
   sent: acks lag, so snapshots chain on two or three baselines at once.
+- **Security off sends the bytes it always did.** A node without `NodeSecurity` and with
+  `NodeGuards` zeroed must keep every plain lab digest unchanged; anything M17i-only (a refusal
+  count, the attack tally) is folded into a digest only when the run is secure. A nonce is never
+  used twice under one key: it is the packet's 64-bit counter and its type, the counter starts
+  fresh with every connection's fresh keys, and the replay window is checked before a packet is
+  opened and marked only after it opens. Keys never enter the tree: `key_from_env` in a game, the
+  seed in a lab or a test.
+- **A secure host answers no stranger it cannot place.** A request with a bad, expired, stolen or
+  throttled token gets no reply at all (a reply is an amplifier); the lab fails on one answer.
 - **A voice frame's size is the bitrate's alone.** The codec runs at a constant bitrate (padded
   with `opus_packet_pad`), so the packets a voice session sends are the same on every platform
   although Opus's samples are floating point; a digest may count frames and turns but never read
@@ -111,7 +123,8 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
 
 - `make lab LAB=net-link` (`--presets=bad,awful --clients=32 --seconds=30`; `--transport=tcp`
   makes every link a stream, `--mix=download` adds 64 KB messages checked whole, `--budget` caps
-  every connection): fake traffic under
+  every connection, `--secure=1` adds every preset again secure and under attack, `--attack`
+  scales the attacks, 0 for none): fake traffic under
   each preset; the table (joined, rtt beside the model's range, loss beside the configured,
   reliable events delivered and in order, latencies, delivery of snapshots and inputs, the host's
   bandwidth, resends), the round trip and loss charts, the reliable latency boxes, and one

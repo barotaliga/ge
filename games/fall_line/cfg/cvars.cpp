@@ -171,12 +171,26 @@ void add_cvars(con::Console& c, Settings& s) {
   strength("r_grain", "0", "film grain, 0..1 (0: off)", &s.grain);
   strength("r_lensdirt", "0", "dirt on the lens, lit by the sun and the glow, 0..1 (0: off)",
            &s.lensdirt);
+  strength("r_motionblur", "0",
+           "motion blur: the shutter's share of a frame, 0..1 (0.5: a film camera's; 0: off)",
+           &s.motionblur);
   const auto look = [&](const char* name, const char* fallback, const char* help, double lo,
                         double hi, double* field) {
     v.bind(
         {.name = name, .fallback = fallback, .flags = kStartup, .help = help, .min = lo, .max = hi},
         field);
   };
+  strength("r_ao", "0.6",
+           "ambient occlusion: the sky's light kept out of creases and corners, 0..1 (0: off)",
+           &s.ao);
+  look("r_ao_radius", "1.5", "how far the ambient occlusion reaches from a surface, m", 0.25, 4,
+       &s.ao_radius);
+  strength("r_dof", "0",
+           "depth of field: the widest blur away from the focus, 0..1 (1: 1.5 % of the picture's "
+           "height; 0: off)",
+           &s.dof);
+  look("r_dof_focus", "0", "depth of field's focus, m (0: how far the camera's subject is)", 0,
+       10000, &s.dof_focus);
   look("r_contrast", "1", "the picture's contrast (1: as graded; above 1 steeper)", 0.5, 2,
        &s.contrast);
   look("r_saturation", "1", "the picture's colour (0: grey, 1: as graded, 2: doubled)", 0, 2,

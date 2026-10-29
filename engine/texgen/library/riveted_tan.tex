@@ -1,0 +1,16 @@
+# One tan plate held by a row of rivets down each side, scuffed and a little dirty.
+texture riveted_tan
+size    64
+seed    6
+surface metal
+scale   1
+tags    panels metal wall tech panel low-colour
+param   dirt 0.3 0 1
+
+layer panels  rows=1 cols=1 seam=0.03 bevel=0.03 color=#3e2c16 vary=0 rivets=5 rivet_size=0.055 rivet_height=0.4 rivet_sides=x depth=0.4 metal=0.6
+layer noise   kind=perlin period=5 octaves=5 color=#000000 color2=#ffffff blend=overlay amount=0.3
+layer speckle size=1 contrast=0.2 cavity=0
+layer dirt    amount=$dirt period=3
+layer scratches count=8 amount=0.25
+layer shade   strength=0.9 highlight=0.15 occlusion=0.2
+layer palette color=#7a5a2c steps=16

@@ -1,0 +1,17 @@
+# Large stone tiles, every other one a second stone: a mottled face inside a lit bevel, dark
+# grout between.
+texture stone_tiles
+size    64
+seed    3
+surface stone
+scale   2
+tags    tiles stone floor wall checker low-colour
+param   rows 2 1 16
+param   cols 2 1 16
+param   checker 1 0 1
+
+layer tiles   rows=$rows cols=$cols mortar=0.03 bevel=0.12 depth=0.5 color=#2c3420 color2=#20283a checker=$checker vary=0.2 mortar_color=#0a0a0c rough=0.8
+layer noise   kind=perlin period=3 octaves=5 color=#000000 color2=#ffffff blend=overlay amount=0.45
+layer speckle size=1 contrast=0.4 amount=0.12 color=#4a3a20 cavity=0
+layer shade   strength=0.9 highlight=0.25 occlusion=0.2
+layer palette color=#5a6040 color2=#404a60 steps=16
