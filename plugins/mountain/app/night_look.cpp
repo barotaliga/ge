@@ -22,6 +22,9 @@ MapMoon moon_of(const mapgen::Level& level, double hour) {
 void night_look(const mapgen::Level& level, double hour, render::FrameView& view) {
   const MapMoon m = moon_of(level, hour);
   render::set_night(view, render::moon_of(m.sky), level.sun.latitude, m.sidereal_deg);
+  // Other worlds' moons the view's set names, at the same moment.
+  const double jd0 = core::julian_day_of_year(kSkyYear, level.sun.day_of_year);
+  render::set_moons(view, jd0 + core::universal_hour_of(jd0, hour, 0.0) / 24.0);
 }
 
 }  // namespace ge::mountain::app
