@@ -39,6 +39,7 @@
 #include "cli/perf.hpp"
 #include "cli/play.hpp"
 #include "cli/publish.hpp"
+#include "cli/save.hpp"
 #include "cli/scaffold.hpp"
 #include "cli/skills.hpp"
 #include "cli/snow.hpp"
@@ -357,6 +358,7 @@ Outcome run(const Args& a) {
     return run_mem(b, p);
   }
   if (name.starts_with("net ")) return run_net(a);
+  if (name == "save inspect") return run_save(a);
   if (name == "asset list") return run_asset_list(build_options(a));
   if (name == "asset check") return run_asset_check(build_options(a));
   if (name == "asset build") {
