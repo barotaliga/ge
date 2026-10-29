@@ -83,6 +83,7 @@ constexpr FlagSpec kLabPublishFlags[] = {
      "a kept run (ge lab <id> --tag=<tag>) shown beside this one, metric by metric"},
     {"width", "<px>", "the pictures' width on the page (default 720)"},
     {"out", "<file>", "where the page goes (default previews/<id>/publish.html)"},
+    {"title", "<text>", "the page's title (default \"<id> lab run\", or \"Lab runs\")"},
     kRepo};
 constexpr FlagSpec kLabDiffFlags[] = {
     kPreset,
@@ -121,7 +122,8 @@ constexpr FlagSpec kLintFlags[] = {
     kRepo};
 constexpr FlagSpec kGoalsFlags[] = {
     {"base", "<ref>", "the roadmap rows are already taken on (default origin/main)"},
-    {"fetch", "", "git fetch origin first, so every branch is current"},
+    {"fetch", "", "git fetch origin first (the default; kept so old command lines still run)"},
+    {"no-fetch", "", "answer from the branches as last fetched, without the network"},
     kRepo};
 constexpr FlagSpec kGoalsClaimFlags[] = {
     {"under", "<row>",
@@ -367,7 +369,7 @@ const CommandSpec kCommands[] = {
     {"goals free", "[<row>]", 0, 1, "learn",
      "the roadmap rows taken on the base and on every remote branch, and the next free number "
      "(or, for a row such as M17, the next free letter under it)",
-     kGoalsFlags, "ge goals free --fetch", "commit"},
+     kGoalsFlags, "ge goals free", "commit"},
     {"goals claim", "<what>", 1, -1, "learn",
      "the next free row reserved and pushed to this branch at once, then checked against every "
      "branch: an earlier claim on the same row keeps it, and this one moves to the next",

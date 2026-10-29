@@ -58,7 +58,8 @@ std::vector<Finding> ci_log_findings(const fs::path& repo, std::string_view job,
   static const std::regex kGe(R"(^ge [a-z ]+: (error|warn|note): (.*)$)");
   for (size_t i = 0; i < lines.size(); i++) {
     std::smatch m;
-    if (!std::regex_match(lines[i], m, kGe)) continue;
+    const std::string line = regex_line(lines[i]);
+    if (!std::regex_match(line, m, kGe)) continue;
     Finding f{severity_of(m.str(1)), m.str(2), "", ""};
     for (size_t j = i + 1; j < lines.size() && j <= i + 2; j++) {
       if (lines[j].starts_with("    where: ")) f.where = lines[j].substr(11);
