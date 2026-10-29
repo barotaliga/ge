@@ -1,7 +1,7 @@
 # gameengine2 — the top-level build. Targets:
 #   ge_<module>  one per engine/<module>/module.cmake (cmake/Modules.cmake), each file saying what
 #                its module is: ge_core (engine/core and engine/loop), ge_audio, ge_assets, ge_net,
-#                ge_console, ge_services, ge_snow, ge_input, ge_wind, ge_water, ge_move, ge_camera, ge_viewmodel,
+#                ge_console, ge_services, ge_snow, ge_input, ge_wind, ge_water, ge_grass, ge_move, ge_camera, ge_viewmodel,
 #                ge_lab, ge_ai, ge_prof and ge_prof_alloc, ge_play (with engine/capture), ge_replay; and, when their layer is built,
 #                ge_platform (GE_PLATFORM), ge_gpu and ge_render (GE_GPU)
 #   ge_cli, ge   the ge command line (engine/cli, cmake/Cli.cmake)
