@@ -517,6 +517,44 @@ smooth, its frames and in-betweens, at dusk and in a game's own light, and times
 **Not yet:** the local lights of the lighting pass, shadows cast by the figures, and the classic
 model reader (it lands with its plugin).
 
+## Sprites
+
+A **sprite** (`engine/render/sprites.hpp`, `sprites.wgsl`) is a flat picture stood in the world:
+one frame of a set of images, turned by a rule, cut out or blended. Shooter's Edge draws its
+classic effects and pickups this way (M18i). The pass is generic. A game hands it its
+`SpriteFrame`s once, and each frame a list of `SpriteDraw`s.
+
+- **One atlas.** Every frame is shelf-packed into one 2048-wide atlas, tallest first, a texel
+  apart (`pack_sprite_atlas`). A frame has an ORIGIN, the texel that stands at the sprite's
+  position (a flame's foot, a ball's middle). An animation is a run of frames, and which one
+  shows is the game's choice.
+- **Five facing rules** (`SpriteFacing`), all worked out on the CPU (`sprite_basis`):
+  - `parallel` lies in the screen's plane;
+  - `upright` stands on the world's up, turned to face the eye's point;
+  - `parallel_upright` stands on the world's up, turned with the camera's heading;
+  - `oriented` is fixed by the draw's own rotation;
+  - `parallel_oriented` lies in the screen's plane, rolled by the draw's `roll`.
+
+  The shader only builds the quad from the right, up and extent staged for it.
+- **Three blends** (`SpriteBlend`):
+  - `cutout` is alpha-tested at half coverage, writes depth and its own motion for TAA, and is
+    drawn first, in one draw.
+  - `over` (premultiplied) and `add` are drawn after the cutouts, sorted far to near, in one
+    draw through one blend state. An added sprite's alpha out is 0, so the same blend adds it.
+    They write no depth, and they set the motion target's reactive channel as particles do.
+- **Light.** `glow` times the scene's white (fullbright), plus `outdoor` of the sky and sun on
+  the face turned to the eye, plus a game's `ambient`. The haze applies. An added sprite only
+  fades with distance, because the air adds nothing to light that is itself added.
+- **Sharp or smooth**, per draw. Smooth is bilinear over premultiplied texels, so a cutout's
+  edge never darkens.
+- The pass runs after the sky and the clouds, where the particles are drawn: the blended
+  sprites lie over whatever is behind them, the sky included. At most `kMaxSprites` (4096) are
+  drawn a frame. The sort allocates nothing.
+
+`tests/render_sprites_test.cpp` holds the five rules and the atlas. The `gpu-sprites` lab draws
+every kind on a yard by day, from the eye's height and from above, sharp beside smooth, a
+fireball's frames and the yard at dusk, and times 2000 sprites.
+
 ## Terrain
 
 A generic **heightfield renderer** in `engine/render`, which a game hands a height
@@ -728,6 +766,22 @@ timings, and slicing a bake over frames if one shows as a hitch, wait for the `p
 (M7d3). Past the map's edge the ground is drawn mirrored and so are its maps: the shadows
 there fall at the mirrored bearing, which only the distant ground shows until the far
 ranges replace it (M8).
+
+### Baked light (`engine/bake`)
+
+A static world's light is worked out once on the CPU and drawn from a lightmap atlas
+(M40). The baker reads triangles, each with a material and the planar **chart** its luxels
+live on, the lights and the sky's brightness, and writes two things a luxel: the
+**irradiance** (direct light with soft shadows, then gather passes of bounced light coloured
+by what it bounced off, the glow of emissive faces and the sky through sky faces) and the
+light's **mean direction**, weighted by luminance, whose length says how much of the light
+comes from one way. A renderer shades a face's detailed normal with it
+(`directional_scale`: a half-Lambert lobe renormalised so the flat normal gets exactly the
+baked irradiance), so relief and normal maps catch the room's real lamps at almost no cost.
+Luxels inside walls (their rays mostly meet the backs of faces) and luxels off a face are
+filled from their chart's neighbours, so bilinear reads never fetch black. The bake is the
+same bits on any number of workers. The `bake` lab compares an old-style bake, the rebake
+and its directional reading on a test hall.
 
 ## Sky, atmosphere and clouds
 
@@ -1044,6 +1098,21 @@ read in 2026, longitude 0) by `core/moon.hpp` (M8f6):
   leaves and the umbra the air's refracted red (a thousandth of the sun's light at its edge, a
   ten-thousandth on its axis), its contrast against the disc's brightest point to the power
   0.5; the moonlight on the snow is dimmed by the disc's mean (`eclipse_of`, on the CPU);
+- OTHER WORLDS' MOONS (M8f14; `render/moons.hpp`, `FrameView::moons`, `render/night.hpp`'s
+  `set_moons`, `render/wgsl/moons.wgsl`; Fall Line's `sv_moons`): ten kinds taken from real moons
+  of other planets, each as large as it looks from its own planet (Io a little larger than the
+  Moon, Phobos a third of it, Deimos a point drawn a pixel and a half wide, its light shared
+  over it). Up to four go round the sky near the celestial equator, each at its own period
+  (Phobos faster than the sky turns, so it rises in the west; Triton backwards). Each is locked
+  face-on and rocks by its libration, and is lit by the real sun, so two moons show two phases.
+  Each is drawn as an ellipsoid hit in closed form, or, for a dented kind, marched inside that
+  bound. Its face is the real moon's map (`render/moon_maps.hpp`: the public-domain spacecraft
+  mosaics, 1024 x 512, Io, Ganymede and Triton in colour; `render/moon_maps/SOURCES.md` names
+  each), in its body frame at the mip level its size asks; its light is
+  Lommel-Seeliger's blended toward Lambert's, as seen, and Titan has a haze shell. A set without
+  the Earth's moon hides that disc and keys the night on the others' summed light from the
+  brightest one's direction. Each sky type names its own set (`SkyType::moons`). Post's night
+  vision leaves each one's bounding disc to the cones (`on_moon`);
 - THE KEY LIGHT, the one direct light that casts shadows, is the sun until three degrees under
   the horizon, then the moon when it is up (`FrameView::sun_*` become the moon's; the real sun
   stays in `night_sun`). The sky is TWO tables at once: the sun's own sky view and a second at
@@ -1074,6 +1143,53 @@ The `night` lab draws it on seed 38's vista: the snow's luma falls from 194 at t
 under to 67 at fourteen, a full moon's snow is 71, a quarter's 28 and a new moon's 10, the
 handover moves the snow by 0.1 %, a moonless sky draws 319 star pixels, and the sky tables'
 twilight matches `twilight_lux` within 1 % down to twelve degrees under.
+
+## Fog in an area
+
+The sky's haze is the air's, the same over the whole map; the weather's fog closes everything at
+one visual range. **Fog in an area** is the third kind: a mist lying in a wood, a sea of fog in
+the valleys, the dust of a hall, the glowing haze over a pool of lava, placed by the game where
+it is (`render/fog.hpp`, M38a).
+
+- **The volumes** (`FogVolume`): a box or an ellipsoid turned about the vertical; its extinction
+  at its floor, thinning upward by a falloff; soft over an edge inside its faces; carved into
+  wisps by two octaves of the cloud's tiled noise drifting on the wind; scattering an albedo's
+  share of what it takes out on a Henyey-Greenstein lobe; glowing (cd/m2 a metre of extinction).
+  One that **hugs the ground** measures its height up from the terrain under each point, so a
+  mist lies as deep on a slope as on a flat. `prepare_fog` keeps the 32 nearest in reach.
+- **The froxels**: 160 x 90 columns over the screen, 64 slices deep to the range (160 m by
+  default), a slice's far edge at range x (slice / slices)^2: centimetres deep at the eye,
+  metres at the far end. A bank kilometres off takes a range of kilometres (`FogSettings`).
+- **`fog.inject`** (compute, a thread a froxel): the medium at a point jittered in depth inside
+  the froxel (a new depth each frame on the golden ratio), lit by the key light (`sun_light`:
+  the air's transmittance, the cloud's shadow) past the casters' maps (the shafts through a wood)
+  and the mountains (`terrain_sun`: 16 steps toward the sun over the ground's heights, growing
+  from 6 m to about 11 km, soft by the distance; near the snow the horizon maps' answer too: the
+  horizon a point on the ground sees says little of what one 300 m over it sees, so a bank in a
+  shaded valley lies in the shade with its floor), dimmed by the fog's own medium toward the light (a 63 m march: the floor of a bank in
+  its top's shade). The orders of scattering past the first come out evenly, held to what a deep
+  bank's lit top sends back (0.8 of a white face's light, so a sunlit bank is as bright as the
+  snow beside it), counted only as far as the fog round the point is thick (a dust scatters once)
+  and falling as one over the reduced depth into it from above. Then the sky's light through the
+  fog over the point, and THE GROUND'S LIGHT from below: the sun and the sky sent back by the
+  terrain's albedo under the point (the frame's even ground with no terrain), through the fog
+  over and under the point. Over snow that is nearly the light from above again, and without it
+  a mist over a sunlit field came out at under half the snow's brightness. Last, its glow. The
+  result is blended with the
+  last frame's light at the same world point (reprojected through the last camera), nine
+  tenths of it, so the jitter averages to a smooth medium.
+- **`fog.integrate`** (compute, a thread a column): front to back, each slice's light over its
+  depth dimmed by the slice itself (energy-conserving), the transmittance multiplied on, both
+  written at the slice's far edge.
+- **The read**: `frame.wgsl`'s `local_fog`, called last in `haze` (after the air, the weather's
+  veil and the reach's mist, since this air is the nearest), by the sky pass and, over a
+  premultiplied colour, by the cloud's composite (`local_fog_over`). It is group 0's binding 11
+  and `frame.fog` (the range, the slices). With no volume in reach the range is 0, nothing reads
+  the volume, and the picture is the bits it was without fog (`render_fog_test`).
+
+On the software adapter at the default 160 x 90 x 64 froxels the inject costs 40 to 210 ms (the
+march toward the light in every froxel the medium fills) and the integrate 15 to 25 ms (the `fog` lab's `gpu-ms` rows); a real GPU's figures and a ladder row
+(the froxels' size) wait for M38f. Not yet: the lamps in the fog (M38e, on M39's light list).
 
 ## Anti-aliasing and resolution
 
@@ -1144,6 +1260,36 @@ identity, and the game bakes its own (`fall_line::app::bake_grade`: a little con
 through the middle tones with the ends held, cooler shadows, warmer highlights, 5 % more
 saturation). On the software adapter at 1280 × 720 the bloom costs about 11 ms and the post
 pass 7 ms (the `profile` lab); the bloom's cost on a real GPU waits for the Mac's numbers.
+
+**As built (M35a, M35b): the lens and the film** (`render/post.hpp`, `render/lens.hpp`,
+`render/grade.hpp`; the `post` lab). The effects a modern game ships, each a switch and a
+strength, and each chosen to cost nothing when it is off and almost nothing when it is on:
+
+- **Folded into the post pass, no pass of their own:** contrast-adaptive sharpening (the four
+  neighbours' headroom scales the negative lobe, so a flat area sharpens most and an edge already
+  at full contrast barely: it undoes TAA-U's softness without halos), the lens's lateral colour
+  (two extra bilinear taps), the vignette and the film grain (arithmetic), and the lens dirt (a
+  small procedural picture made once at load, lit only by the glow past white and the lens pass,
+  so it shows round the sun and never over the snow). Each is an `override` switch, so a game
+  that leaves one at 0 compiles it out; the strengths are a 32-byte uniform (`set_post_look`).
+- **Baked into the grade's table, free:** contrast (an S-curve about middle grey, the ends held),
+  saturation and a white balance (temperature, tint) in linear light keeping the luminance, and
+  gamma (`apply_grade_knobs` after the game's own grade).
+- **One quarter-size compute pass, `lens`, after the bloom:** the sun streaming through what
+  stands in front of it (a 32-step radial march toward the sun's place over the open sky round it,
+  read off the depth target, started at the first step inside the sun's radius so a far texel
+  costs nothing) and the sun's flare (six analytic ghosts and a ring on the line through the
+  middle, scaled by how much of the sun is open sky). It reads only the post pass's input and the
+  depth, so it needs no bloom; the post pass adds it in one tap. The sky's own shafts (the cloud's
+  shadow across the air, § Sky) stay the sky pass's; these are the screen's half, from trunks,
+  crowns, ridges and figures, and the two stack.
+
+Considered and not taken: a screen-space "god rays" occlusion pre-pass (the depth target already
+says what is sky), image-based ghosts off the bloom chain (its Karis-weighted first level flattens
+the sun on purpose, so the ghosts came out dim and blotchy; the sun's own analytic flare is sharper
+and cheaper), a starburst (reads as a filter, not a lens) and anamorphic streaks (a film look the
+game does not want). Fall Line keeps the sharpening (0.3), the vignette (0.25) and the rays (0.5)
+on and the flare, fringes, grain and dirt off: those read as an effect rather than as the picture.
 
 **As built (M43)** (`render/eye.hpp`). **The eye's adaptation** leaves the sky's exposure as
 the eye AT REST, so the snow under the sky still never pumps, and opens the eye past it only
@@ -1334,6 +1480,62 @@ quarter of the tile's texels a metre (`ShadowSettings::figure_lod_share`), since
 the silhouette, not the folds. The `crowd-look` lab
 films a lift's queue, a busy run, a group and one of them down at `--hour` (11: the sun on the
 runs), each with the crowd and without.
+
+### Beams
+
+A held electric beam (a weapon's lightning gun, a machine's arc, a spell) is a channel of
+glowing segments from its source to whatever it hits, redrawn many times a second, lighting the
+room round it and burning where it lands (`engine/render/beam.hpp`, `beams.hpp`, `beams.wgsl`).
+
+- **The channel is struck, not animated.** A real arc's path does not slide; it is ionised
+  afresh and the eye sees one bright path, then another. `build_beam` draws a walk from the
+  source to the hit in `step_m` steps, each point kicked sideways (`wander`) and pulled back to
+  the line (`pull`), pinned at both ends, from a hash of the shot's seed and the strike number
+  (`strike_hz` a second). Inside one strike two frames see the same channel; the next strike is
+  a new one. A pull of 0.4 keeps a 15 m beam within a few centimetres of straight (a thick,
+  nearly straight bar); a pull of 0.2 with a large wander is lightning's stepped
+  zigzag. `filaments` strands wind round the axis on a spinning helix (`braid_m`, `twist`,
+  `spin_hz`), and forks (`fork_chance`, `fork_m`) branch off, dimmer and thinner to their tips,
+  never in the first 1.5 m off the source, where a fork by the eye would fill the view.
+- **The light flickers by strike.** `beam_level` swells in over `attack_s`, gives each strike
+  its own level (`flicker`), flashes in a strike's first `flash_s` (`flash`: a return stroke's
+  peak over its glow) and fades over `release_s` when let go. Inside a strike the shader ripples
+  the glow along the beam (`shimmer`).
+- **The look is a core and a sheath in physical units.** The core (`core_m`, `core_cd`, cd/m²)
+  is a Gaussian at least a pixel and a half wide (its light kept as it widens, so a far beam is
+  a fainter line, never a gap) and at most a hundredth of the screen's height (its brightness
+  kept, so the root by the eye is a thick line, not a white blot), and is whitened as it
+  brightens; the sheath (`glow_m`,
+  `glow_cd`) is the ionised air's glow round it. Both are emissive at the frame's pre-exposure,
+  added over the lit picture, depth-tested and softened against the depth behind so the beam
+  sinks into the wall it hits. A segment's ribbon runs a ramp past each end and the ramps of two
+  segments cross-fade, so the glow is even along a bent channel with no bead at a joint.
+- **It lights the world through the local lights.** `beam_lights` hands render/lights a row of
+  steady point lights along the beam (one each `light_every_m`, the look's `light_cd` shared
+  among them, each as soft as their spacing), one at its root by the source (`root_cd`: the
+  muzzle's glow on the gun and the hand) and one at the hit, at this frame's level, so the
+  walls, the floor and the gun flicker with the strikes. The lamps' light counts in the frame's
+  pre-exposure (`night.cpp`'s `pre_exposure` adds `FrameView::lamp_lux`): a dark room exposed for
+  its torches alone stores the beam's white past a half float's 65504, the target holds
+  infinity and the tone curve turns it black. The pass also clamps what it writes below that.
+- **It burns where it lands.** `beam_burns` says when a held beam leaves a scorch: at once on a
+  new spot, again each `scorch_every_s` while it dwells, and, when the hit jumps further than
+  half a scorch in a frame, at every half scorch along the jump (the caller asks again until it
+  says no), so a fast sweep still leaves an unbroken trail. The game presses each through its decal
+  system (engine/detail's `place_decal`, a scorch) and hands the pass the clipped meshes; the
+  pass lays the soot over the picture and a fresh burn's ember (`ember_level`: `ember_cd`
+  cooling over `ember_s`) in it, white-yellow to a dull red, hottest in the heart and the cracks
+  of the atlas's mask, in one blend (the ember added, the picture kept by the soot's alpha).
+- **Presets.** `arc` (one thick, nearly straight channel in a violet-blue sheath, struck 30
+  times a second), `bolt` (a jagged forking channel, struck 14 times a second with a bright
+  flash each), `braid` (three thin strands wound round each other, cyan, crackling at 40 a
+  second). Every knob is named (`beam_knobs`, `set_beam_knob`) for a console or a lab's `--set`.
+
+The `gpu-beam` lab fires each preset from a held gun down a stone corridor at night and sweeps it
+over three walls, with the bloom mixed in as a game's frame mixes it and the eye adapting to the
+room's light (quick to a brighter room, slow to a darker one), so the corridor falls back to its
+torches when the beam is let go; `--frames=N` writes each sweep's frames
+(`frame-<look>-NNN.png`) for an animation.
 
 ## Explosions
 

@@ -82,12 +82,12 @@ bool clear_of_lift(const mg::Lift& lift, double x, double z) {
   return !(v < across && ((u <= 0 && u > -reach) || (u >= len && u < len + reach)));
 }
 
+}  // namespace
+
 // What a street keeps away from, worked out once a plan: is (x, z) clear? `hub_pad` overrides
 // the hub's clearance (the square and the car park reach up to it, onto the hub's fading snow,
 // where the groomed snow is not asked).
-using Clear = std::function<bool(double x, double z, double hub_pad)>;
-
-Clear clearance_of(const mg::Level& level, std::span<const PlanPoint> pads) {
+Clear clearance_of(const mapgen::Level& level, std::span<const mapgen::PlanPoint> pads) {
   namespace S = streets;
   const mg::ResortMap& area = *level.resort;
   // The runs' lines as tracks the query can index, and the piste raced.
@@ -175,6 +175,8 @@ Clear clearance_of(const mg::Level& level, std::span<const PlanPoint> pads) {
     return true;
   };
 }
+
+namespace {
 
 // Whether a street's line is clear to the back of both its sides, and no steeper along it than a
 // street is built.

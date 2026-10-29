@@ -25,6 +25,7 @@
 #include "cli/build.hpp"
 #include "cli/ci.hpp"
 #include "cli/commands.hpp"
+#include "cli/credits.hpp"
 #include "cli/cvar.hpp"
 #include "cli/doctor.hpp"
 #include "cli/embedded.hpp"
@@ -34,6 +35,7 @@
 #include "cli/index.hpp"
 #include "cli/json.hpp"
 #include "cli/lint.hpp"
+#include "cli/model.hpp"
 #include "cli/net.hpp"
 #include "cli/outcome.hpp"
 #include "cli/perf.hpp"
@@ -43,7 +45,10 @@
 #include "cli/scaffold.hpp"
 #include "cli/skills.hpp"
 #include "cli/snow.hpp"
+#include "cli/sound.hpp"
+#include "cli/source.hpp"
 #include "cli/sweep.hpp"
+#include "cli/texture.hpp"
 #include "cli/tool.hpp"
 #include "cli/upgrade.hpp"
 
@@ -158,6 +163,12 @@ Outcome run(const Args& a) {
     const std::string base = flag_value(a, "base");
     return run_goals_free(fs::absolute(repo_of(a)), a.words.empty() ? "" : a.words[0],
                           base.empty() ? "origin/main" : base, !has_flag(a, "no-fetch"));
+  }
+  if (name == "texture kinds") return run_texture_kinds();
+  if (name == "texture check") return run_texture_check(fs::absolute(repo_of(a)), a.words);
+  if (name == "texture bake") {
+    return run_texture_bake(fs::absolute(repo_of(a)), a.words[0], flag_value(a, "ref"),
+                            flag_value(a, "size"), flag_value(a, "out"));
   }
   if (name == "goals claim") {
     const std::string base = flag_value(a, "base");
@@ -356,6 +367,10 @@ Outcome run(const Args& a) {
   }
   if (name.starts_with("net ")) return run_net(a);
   if (name == "save inspect") return run_save(a);
+  if (name.starts_with("sound ")) return run_sound(a);
+  if (name == "model import") return run_model(a);
+  if (name.starts_with("source ")) return run_source(a);
+  if (name == "credits check") return run_credits_check(a.words.empty() ? "." : a.words[0]);
   if (name == "asset list") return run_asset_list(build_options(a));
   if (name == "asset check") return run_asset_check(build_options(a));
   if (name == "asset build") {

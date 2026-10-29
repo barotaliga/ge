@@ -24,7 +24,7 @@
 // ge:summary Moving water drawn: river ribbons, flow grids, waterfall curtains, flow maps, foam
 // ge:keywords render water river stream channel flow flow-map two-phase ripples foam lace
 // ge:keywords waterfall curtain sheet mist spray white-water froude build_water_streams
-// ge:keywords prepare_water_streams waterfall_spray splash_spray
+// ge:keywords prepare_water_streams waterfall_spray splash_spray entry_spray jet_spray crown
 // ge:skill render water
 // ge:test tests/render_water_stream_test.cpp
 #pragma once
@@ -35,6 +35,7 @@
 #include "core/prng.hpp"
 #include "render/particles.hpp"
 #include "render/water.hpp"
+#include "water/entry.hpp"
 #include "water/float.hpp"
 #include "water/world.hpp"
 
@@ -67,6 +68,12 @@ void waterfall_spray(const water::Flow& flow, double dt, core::Rng& rng,
                      std::vector<Particle>& out);
 // A splash's spray: drops thrown up and out by its speed and size.
 void splash_spray(const water::Splash& splash, core::Rng& rng, std::vector<Particle>& out);
+// A body through the surface (water/entry.hpp): going in, the crown of drops off the crater's rim
+// and a little mist, more of them, taller and flung on ahead when it came in moving across;
+// coming out, the curtain falling off it.
+void entry_spray(const water::Entry& entry, core::Rng& rng, std::vector<Particle>& out);
+// The jet the closing crater throws up its middle, `entry.jet_at` s after it went in.
+void jet_spray(const water::Entry& entry, core::Rng& rng, std::vector<Particle>& out);
 
 // This frame's moving water uploaded (`mesh` from `build_water_streams` over `world`), drawn by
 // encode_water's "water" pass after the still bodies.

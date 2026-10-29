@@ -8,6 +8,9 @@
 //   r_taa r_scale r_occlusion r_shadowsize r_bloom r_snow r_trails r_spray r_precip
 //   r_precip_density r_splashes r_wet r_weather r_clouds r_sunsize r_moonsize
 //                                       the picture (A, latched: the frame is made once)
+//   r_sharpen r_sunrays r_flare r_vignette r_chromatic r_grain r_lensdirt
+//   r_contrast r_saturation r_temperature r_tint r_gamma
+//                                       the lens, the film and the grade's knobs (A, latched)
 //   cl_view                             the camera: a rung or a still view (A)
 //   cl_chasedist cl_chaseheight cl_fovspeed cl_camblend cl_motion cl_shake, and the first
 //   person's (cl_fov cl_viewheight cl_bob* cl_roll* v_kick* v_idlescale cl_landdip, read by no
@@ -34,6 +37,8 @@
 // ge:keywords r_precip_density r_splashes r_wet sv_snowline rain sv_cloudheight sv_cloudspeed
 // ge:keywords r_sunsize r_moonsize disc-size
 // ge:keywords sv_lethal sv_armyfire sv_helis sv_paras hunt army
+// ge:keywords r_sharpen r_sunrays r_flare r_vignette r_chromatic r_grain r_lensdirt r_contrast
+// ge:keywords r_saturation r_temperature r_tint r_gamma post-effects
 // ge:skill console sim
 // ge:test tests/fall_line_cvars_test.cpp
 #pragma once
@@ -61,6 +66,10 @@ struct Settings {
   double precip_density = 1.0;                      // the share of the falling particles, 0.25..2
   double clouds = 1.0;  // the share of the cloud march's steps; 0: no layer drawn
   double disc_sun = 1.0, disc_moon = 1.0;  // r_sunsize r_moonsize: the discs drawn larger, 0.5..20
+  // The lens and the film, each 0..1 (0: off), and the grade's knobs (render/grade.hpp).
+  double sharpen = 0.3, sunrays = 0.5, flare = 0, vignette = 0.25, chromatic = 0, grain = 0,
+         lensdirt = 0;
+  double contrast = 1, saturation = 1, temperature = 0, tint = 0, gamma = 1;
   // The camera.
   std::string view = "chase";
   ge::camera::CameraCvars camera;  // the camera's settings, in metres (no cl_camera: cl_view)
@@ -85,6 +94,7 @@ struct Settings {
   // (render/sky_style.hpp's SkyKnobs; angles in degrees).
   std::string cloud_kinds = "map";  // sv_clouds: the kinds of cloud drawn (map: the map's)
   std::string sky_type = "earth";
+  std::string moons = "type";  // sv_moons: the moons over the sky (app/sky_type.hpp)
   double sky_air = -1, sky_dust = -1, sun_size = -1, sun2 = -1;
   double planet = -1, planet_dir = -1, planet_el = -1, ring = -1;
   double nebula = -1, sky_stars = -1, sky_glow = -1;

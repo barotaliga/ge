@@ -77,22 +77,32 @@ the background, is the check-in as one call: it returns when a check fails, the 
 or every check is green. Then
 name the next step to the user.
 
-**The queue's hands** (`.github/workflows/queue.yml`): nobody disarms, messages and re-arms other
+**The queue's hands** (`.github/workflows/queue.yml`): nobody disarms and messages other
 threads' PRs by hand. To let one PR reach the queue before the rest (a structural change every
 other branch must merge), label it `queue-priority`: every other PR that is armed but not yet
-queued is disarmed and labelled `queued-hold`, with one comment, and re-armed by itself when no
-open PR carries the label any more (it merged, closed or lost the label). Once its required
-check is green it also JUMPS: it is put at the front of the queue, which GitHub allows only an
-admin, so this works when the `QUEUE_TOKEN` secret holds an admin's token (the workflow's log
-warns when it is refused). Leave a `queued-hold`
-PR armed-off; keep it clean against main. A queued run that ended with no failed job (cancelled
-or abandoned jobs only) re-arms the PRs it ejected by itself, with a comment naming the run; one
-with a real failure is yours to fix. Never cancel a `merge_group` run to free runners: it ejects
+queued is disarmed and labelled `queued-hold`, with one comment, and released when no open PR
+carries the label any more (it merged, closed or lost the label). A queued run that ended with
+no failed job (cancelled or abandoned jobs only) releases the PRs it ejected, with a comment
+naming the run; one with a real failure is yours to fix. RELEASED means re-armed with the
+`QUEUE_TOKEN` secret when it is set, and otherwise a comment on the PR asking you to arm it:
+then arm it at once (`gh api -X PUT repos/<owner>/<repo>/pulls/<n>/ccr/auto_merge -f
+merge_method=SQUASH`). The workflow never arms or enqueues with its own token, because a queue
+entry made with it never gets a CI run and stalls the queue behind it. With `QUEUE_TOKEN` (an
+admin's) a `queue-priority` PR also JUMPS to the front once its check is green. Leave a
+`queued-hold` PR armed-off; keep it clean against main. A PR that conflicts with main gets the
+`merge-conflict` label and one comment on every push to main, even while it is only armed
+(GitHub sends no event for that): merge main, precheck, push, re-arm; the label comes off by
+itself. Never cancel a `merge_group` run to free runners: it ejects
 every entry queued behind it.
 
 **`skip-ci`**: a PR labelled `skip-ci` runs no CI at all, on the PR and in the queue, so it merges
-as soon as it is armed. Only Niclas decides which PRs get it. Whatever it breaks on main is fixed
-afterwards by its owner, in the next PR, before any other work on that thread.
+as soon as it is armed. Any thread may label its own PR so, once `make precheck` is green and the
+branch is clean against main: the precheck is then the only build and test it had. Every push to
+main runs the WHOLE matrix (macOS, Windows and the Linux rows), so what a skipped PR breaks shows
+on main within the hour: a red main run opens (or adds to) the one `main-red` issue, names the
+commits and comments on the PR it landed with, and the issue closes itself on the next green
+main. Whoever's PR broke main fixes it first, in the next PR, before any other work on that
+thread; a thread that sees `main-red` open does not label `skip-ci` until it closes.
 
 **A red test that is not yours** (`.github/workflows/flakes.yml`): every failed run's failing tests
 go into the `ci-ledger` issue, and a test that failed on two different PRs within a day gets a
