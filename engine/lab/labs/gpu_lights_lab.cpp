@@ -54,7 +54,6 @@ using ge::lab::water_scene::gpu_required;
 using ge::lab::water_scene::paste;
 using ge::lab::water_scene::placeholders;
 using gl::Det;
-constexpr double kPi = 3.14159265358979323846;
 
 // The courtyard's ground: flagstones at y = 0 over 256 m (the field's middle at 128, 128).
 constexpr double kCx = 128, kCz = 128;
