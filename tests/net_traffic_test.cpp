@@ -115,3 +115,32 @@ TEST(traffic_budget_holds_the_host_to_its_rate) {
   CHECK(r.dropped_unsent > 0);
   CHECK(r.events_down.delivered == r.events_down.sent);  // reliable messages wait, never drop
 }
+
+TEST(traffic_secure_under_attack_answers_no_attacker) {
+  TrafficPlan plan;
+  plan.clients = 4;
+  plan.seconds = 3;
+  plan.drain_seconds = 3;
+  plan.seed = 38;
+  conditions_preset("wifi", plan.conditions);
+  plan.secure = true;
+  plan.guards = default_guards();
+  plan.attack.forged_tokens_per_s = 20;
+  plan.attack.stolen_tokens_per_s = 20;
+  plan.attack.replays_per_s = 50;
+  plan.attack.forgeries_per_s = 50;
+  plan.attack.flood_per_s = 2000;
+  plan.attack.flood_addresses = 16;
+  plan.attack.flooders = 1;
+  plan.attack.flooder_packets_per_s = 2000;
+  const TrafficReport r = run_traffic(plan);
+  CHECK(r.connected == 4 && r.dropped == 0);
+  CHECK(r.events_up.delivered == r.events_up.sent && r.events_down.delivered == r.events_down.sent);
+  CHECK(r.events_up.duplicated == 0 && r.events_down.duplicated == 0);
+  CHECK(r.attack.answered == 0 && r.attack.flooders_connected == 1);
+  const NodeStats& st = r.host_stats;
+  CHECK(st.bad_tokens > 0 && st.replayed_tokens > 0 && st.replayed > 0 && st.forged > 0);
+  CHECK(st.throttled > 0 && st.flooded > 0);
+  // The attackers draw from the plan's seed too: the run is still its plan's, bit for bit.
+  CHECK(run_traffic(plan).digest == r.digest);
+}

@@ -11,7 +11,7 @@
 // is still to come, whatever `next_video` says.
 //
 // ge:summary The encoded pictures and sound held and written into the file in time order
-// ge:keywords interleave packets time-order matroska webm av1 opus video audio queue
+// ge:keywords interleave packets time-order matroska webm mp4 av1 opus video audio queue
 // ge:skill replay
 // ge:test tests/capture_codecs_test.cpp
 #pragma once
@@ -22,7 +22,7 @@
 #include <vector>
 
 #include "capture/codecs.hpp"
-#include "capture/matroska.hpp"
+#include "capture/mux.hpp"
 
 namespace ge::capture {
 
@@ -31,8 +31,7 @@ struct Interleave {
 
   // A picture at `ms` handed to the encoder.
   void fed(int64_t ms) { fed_.push_back(ms); }
-  bool write(MatroskaWriter& mux, int64_t next_video, int64_t next_audio, bool all,
-             std::string& error);
+  bool write(Mux& mux, int64_t next_video, int64_t next_audio, bool all, std::string& error);
   bool empty() const { return v_ == video.size() && a_ == audio.size(); }
 
  private:

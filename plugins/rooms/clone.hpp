@@ -27,7 +27,8 @@
 // the face's plane), so the face's texels land where the map put them. An ENTITY's `origin` is
 // written in metres in the engine's frame and its `angle` (degrees anticlockwise from the map's
 // +x) as `heading` (degrees clockwise from +z, the engine's), up and down kept as -1 and -2.
-// Other keys come across as written (a door's `speed` and `lip` in map units: M32g reads them).
+// A `func_` entity's `speed`, `lip` and `height` are written in metres (a second); other keys come
+// across as written.
 //
 // SMOOTHING (`smooth`): every face is marked smooth, so neighbours under about 53 degrees apart
 // are shaded as one curve (a faceted arch drawn round) while walls meeting at a right angle stay

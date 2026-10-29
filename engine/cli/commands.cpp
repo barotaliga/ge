@@ -127,6 +127,16 @@ constexpr FlagSpec kTextureBakeFlags[] = {
     {"size", "<px>", "bake at this size instead of the recipe's (a power of two)"},
     {"out", "<dir>", "the cache directory (default build/textures)"},
     kRepo};
+constexpr FlagSpec kTextureMatchFlags[] = {
+    {"map", "<file>", "the texture map to write (default <dir>/textures.texmap)"},
+    {"only", "<a,b>", "draw sheets for these textures (default: the farthest)"},
+    {"top", "<n>", "the nearest recipes listed and drawn per texture (default 4)"},
+    {"sheets", "<n>", "with no --only, sheets for the n farthest (default 8)"},
+    {"list", "<n>", "textures printed, farthest first (default 20)"},
+    {"near", "<d>", "over this distance a texture is far (default 0.5)"},
+    {"library", "<dir>", "the recipes to match from (default engine/texgen/library)"},
+    {"sheet-dir", "<dir>", "where the sheets go (default <dir>/sheets)"},
+    kRepo};
 constexpr FlagSpec kGoalsFlags[] = {
     {"base", "<ref>", "the roadmap rows are already taken on (default origin/main)"},
     {"fetch", "", "git fetch origin first (the default; kept so old command lines still run)"},
@@ -248,6 +258,8 @@ constexpr FlagSpec kRecordFlags[] = {
     {"size", "<WxH>", "the frame size (default: the view's own)"},
     {"format", "<mp4|webm|gif|png>", "H.264 MP4, VP9 WebM, a GIF, or PNG frames (default mp4)"},
     {"codec", "<name>", "an ffmpeg encoder in place of the format's own (libx264, libvpx-vp9)"},
+    {"container", "<mkv|mp4>",
+     "with --format=mkv --codec=av1: the engine's own fragmented MP4 in place of a .webm"},
     {"crf", "<n>", "quality: lower is better and larger (default 23 for mp4, 32 for webm)"},
     {"bitrate", "<rate>", "a bit rate such as 4M in place of --crf"},
     {"encoder-preset", "<name>",
@@ -288,6 +300,12 @@ constexpr FlagSpec kSourceSearchFlags[] = {
     {"kind", "<sound|model>", "only sounds or only models, where a source holds both"},
     {"refresh", "", "read the source's listing again instead of the cached one"},
     {"cache", "<dir>", "where packs are kept (default GE_ASSET_CACHE, else ~/.cache/ge/sources)"}};
+constexpr FlagSpec kContentScanFlags[] = {
+    {"assetmap", "<file>", "the game's asset map the set is held to"},
+    {"registry", "<dir>", "the directory of the game's sounds.tsv and models.tsv"},
+    kPreset,
+    kEngine,
+    kRepo};
 constexpr FlagSpec kSnowShowFlags[] = {
     {"out", "<dir>", "where the PNGs go (default: snow/ beside the file)"}};
 constexpr FlagSpec kSnowColumnFlags[] = {{"at", "<x,z>", "the point, m (required)"}};
@@ -420,6 +438,11 @@ const CommandSpec kCommands[] = {
      "the next free row reserved and pushed to this branch at once, then checked against every "
      "branch: an earlier claim on the same row keeps it, and this one moves to the next",
      kGoalsClaimFlags, "ge goals claim \"Lava and slime\"", "commit"},
+    {"texture match", "<dir>", 1, 1, "see",
+     "match a converted map's textures to recipes in a texture map an agent steers: scores, "
+     "nearest recipes, sheets",
+     kTextureMatchFlags, "ge texture match /tmp/e1m1-textures --map=levels/e1m1.texmap",
+     "textures"},
     {"new", "<dir>", 1, 1, "create",
      "a game repo against this engine release: the simulation, a lab, a test, the skills",
      kNewFlags, "ge new snow-racer --game=racer", "ge"},
@@ -675,6 +698,14 @@ const CommandSpec kCommands[] = {
      "a pack downloaded and unpacked into the cache (never the repository) with SOURCE.txt: "
      "title, author, page and licence; a licence the repository cannot carry is refused",
      kSourceFlags, "ge source fetch kenney:impact-sounds", "assets"},
+    {"content scan", "<pak|dir>", 1, 1, "see",
+     "every sound, model and numbered sound set a classic content set ships or its maps name, "
+     "where each is used, and what the game's asset map still leaves unmapped (the "
+     "content-scan lab: tables, a picture, assetmap-draft.txt); the report stays in previews/",
+     kContentScanFlags,
+     "ge content scan ~/classic/id1 --assetmap=games/shooters_edge/content/classic.assetmap "
+     "--registry=games/shooters_edge/content",
+     "assets"},
     {"credits check",
      "[<dir>]",
      0,

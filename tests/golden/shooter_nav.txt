@@ -1,0 +1,2 @@
+# plugins/shooter/nav.hpp on the nav course: nodes, links, proofs, nav_hash (tests/shooter_nav_test.cpp)
+1c1 d3e 1470 94e62eb0e7a780b3

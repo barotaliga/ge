@@ -28,8 +28,8 @@
 // this one through its ring. No device (a container, SDL_AUDIO_DRIVER=dummy failing) is not an
 // error: the app runs silent. Focus lost fades the buses out with the clock.
 //
-// THE CAPTURE: --capture=PATH.webm (AV1, Opus) or .mkv (raw) records the window and its sound as
-// played, never waiting on either (capture/live.hpp, docs/replays.md § The live capture).
+// THE CAPTURE: --capture=PATH.webm or .mp4 (AV1, Opus) or .mkv (raw) records the window and its
+// sound as played, never waiting on either (capture/live.hpp, docs/replays.md § The live capture).
 //
 //   fall_line [--frames=N] [--size=WxH] [--no-vsync] [--seed=N] [--rivals=N] [--view=NAME]
 //             [--hour=H] [--mute] [--bot] [--bindings=PATH] [--inputs=PATH] [--events=PATH]
@@ -128,7 +128,7 @@ struct Args {
   std::string inputs;         // where the run's log goes ("" its place in the prefs directory)
   std::string events;         // a scripted session to play in place of the devices
   std::string record_events;  // where the session's device events go ("" nowhere)
-  std::string capture;        // where the window's capture goes ("" none): .webm or .mkv
+  std::string capture;        // where the window's capture goes ("" none): .webm, .mp4 or .mkv
   bool play = false;          // straight onto the run, no front door
 };
 
@@ -247,7 +247,7 @@ int main(int argc, char** argv) {
         "[--seed=N] [--rivals=N] "
         "[--view=tips|helmet|chase|far|high|orbit|start|piste|lookback|vista|aerial] "
         "[--hour=H] [--mute] [--bot] [--bindings=PATH] [--inputs=PATH] [--events=PATH] "
-        "[--record-events=PATH] [--capture=PATH.webm|PATH.mkv] [--play] [+<command> ...]; next: "
+        "[--record-events=PATH] [--capture=PATH.webm|.mp4|.mkv] [--play] [+<command> ...]; next: "
         "rerun with those flags only.");
     return 2;
   }
@@ -388,7 +388,7 @@ int main(int argc, char** argv) {
     o.codec = std::filesystem::path(args.capture).extension() == ".mkv" ? "" : "av1";
     if (!capture.open(o, ge::platform::now_ns(), error)) {
       out::error("fall_line: cannot capture to " + args.capture + ": " + error +
-                 "; next: pass --capture=<a writable .webm or .mkv path>");
+                 "; next: pass --capture=<a writable .webm, .mp4 or .mkv path>");
       return 2;
     }
     out::status("fall_line: capturing the window to " + args.capture);
