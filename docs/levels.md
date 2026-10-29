@@ -238,8 +238,9 @@ gains a second kind of geometry beside its rooms:
 - **Entities**: a class and its key/value pairs, standing at a point or owning a brush group.
   The format keeps them as data. The classic gameplay classes run on M32g's step.
 - **Surface replacements**: a material may name a procedural surface (tall grass, short grass,
-  moss) drawn in place of its texture. The grass system fills the name. The cloner offers a
-  table from texture names to replacements.
+  moss) drawn in place of its texture. The cloner offers a table from texture names to
+  replacements. A surface that starts with `grass` is grass: its floors grow a cover of the
+  recipe after it (`plugins/rooms/grass.hpp`, `docs/grass.md` § Cover).
 
 Brushes are built into faces at load: each brush's faces are cut by its own planes, and the
 parts that lie inside another solid brush are removed (constructive solid geometry, the same

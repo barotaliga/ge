@@ -289,8 +289,9 @@ bool make_scene(ge::gpu::Device& d, Scene& s, uint32_t w, uint32_t h) {
   gr::create_beams(d, s.pipelines, s.beams, s.layout, bs);
   // The lens's glow round the beam: the bloom, as a game's frame mixes it.
   gr::create_bloom_pipelines(d, s.pipelines, s.bloom, {.levels = 6, .strength = kBloom});
-  gr::create_post(d, s.pipelines, s.post, s.layout, wgpu::TextureFormat::RGBA8Unorm,
-                  {.bloom = kBloom, .look = {}});
+  gr::PostSettings post;
+  post.bloom = kBloom;
+  gr::create_post(d, s.pipelines, s.post, s.layout, wgpu::TextureFormat::RGBA8Unorm, post);
   if (!s.pipelines.finish(d)) return false;
   ge::gpu::end_load(d);
   gr::create_lights(d, s.lights);
