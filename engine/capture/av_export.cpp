@@ -102,7 +102,7 @@ bool AvExport::emit_sound(int64_t to, std::string& error) {
   render_to(to);
   const auto n = static_cast<size_t>(to - emitted_);
   if (coded_) {
-    if (!opus_.push(pending_.data(), n, audio_q_, error)) return false;
+    if (!opus_.push(pending_.data(), n, held_.audio, error)) return false;
     pending_.erase(pending_.begin(), pending_.begin() + static_cast<std::ptrdiff_t>(2 * n));
     emitted_ = to;
     return true;
@@ -127,7 +127,8 @@ bool AvExport::frame(const play::Run& run, const lab::Picture& p, std::string& e
   if (!emit_sound(frame_sample(frames_, opt_.fps, audio::kRate), error)) return false;
   to_i420(p, yuv_);
   if (coded_) {
-    if (!av1_.encode(yuv_, frame_ms(frames_, opt_.fps), video_q_, error)) return false;
+    held_.fed(frame_ms(frames_, opt_.fps));
+    if (!av1_.encode(yuv_, frame_ms(frames_, opt_.fps), held_.video, error)) return false;
   } else if (!mux_.video(frame_ms(frames_, opt_.fps), true, yuv_, error)) {
     return false;
   }
@@ -140,42 +141,15 @@ bool AvExport::frame(const play::Run& run, const lab::Picture& p, std::string& e
 bool AvExport::interleave(bool all, std::string& error) {
   // What is still to be encoded starts no sooner than the next picture's time and the next
   // packet the Opus encoder will cut.
-  const int64_t next_video = frame_ms(frames_, opt_.fps);
-  const int64_t next_audio = sound_ ? opus_.next_ms() : INT64_MAX;
-  for (;;) {
-    const bool v = video_at_ < video_q_.size(), a = audio_at_ < audio_q_.size();
-    bool take_audio = false;
-    if (v && a) {
-      take_audio = audio_q_[audio_at_].ms < video_q_[video_at_].ms;
-    } else if (a) {
-      if (!all && audio_q_[audio_at_].ms >= next_video) break;
-      take_audio = true;
-    } else if (v) {
-      if (!all && video_q_[video_at_].ms > next_audio) break;
-    } else {
-      break;
-    }
-    const Packet& p = take_audio ? audio_q_[audio_at_++] : video_q_[video_at_++];
-    if (!(take_audio ? mux_.audio(p.ms, p.data, error) : mux_.video(p.ms, p.key, p.data, error))) {
-      return false;
-    }
-  }
-  if (video_at_ == video_q_.size()) {
-    video_q_.clear();
-    video_at_ = 0;
-  }
-  if (audio_at_ == audio_q_.size()) {
-    audio_q_.clear();
-    audio_at_ = 0;
-  }
-  return true;
+  return held_.write(mux_, frame_ms(frames_, opt_.fps), sound_ ? opus_.next_ms() : INT64_MAX, all,
+                     error);
 }
 
 bool AvExport::close(std::string& error) {
   if (!emit_sound(frame_sample(frames_, opt_.fps, audio::kRate), error)) return false;
   if (coded_) {
-    if (!av1_.flush(video_q_, error)) return false;
-    if (sound_ && !opus_.finish(audio_q_, error)) return false;
+    if (!av1_.flush(held_.video, error)) return false;
+    if (sound_ && !opus_.finish(held_.audio, error)) return false;
     if (!interleave(true, error)) return false;
   }
   return mux_.close(frame_ms(frames_, opt_.fps), error);
