@@ -20,6 +20,7 @@
 // ge:keywords lab village village-look streets vehicles traffic felled picture fall-line
 // ge:skill render mountain labs
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -69,6 +70,7 @@ struct Look {
   const char* title;
   const char* caption;
   const char* look_for;
+  double hour = -2;  // the sun's hour for this look; -2: the lab's --hour
 };
 constexpr Look kLooks[] = {
     {"above", "THE VILLAGE FROM ABOVE",
@@ -80,15 +82,24 @@ constexpr Look kLooks[] = {
      "the carriageway darker than its sidewalks, laid on the snow with no gap or hole; cars on "
      "their lanes; the bus at its stop when the clock has it there"},
     {"carpark", "THE DAY CAR PARK", "From 25 m back and 15 m over the car park.",
-     "the aisles and rows of parked cars, each in its bay, in a village's mix of colours"},
+     "the aisles and rows of parked cars, each in its bay, in a village's mix of colours; each "
+     "car's shadow on the snow beside it"},
+    {"low-sun", "THE CAR PARK IN THE AFTERNOON", "The car park from the same place at 14:00.",
+     "every parked car's long shadow across its neighbours and the aisle; the trees' shadows "
+     "on the streets",
+     14},
     {"street", "A CAR ON ITS LANE", "From 9 m behind and 2.5 m over the first car under way.",
      "a car with its glasshouse, bumpers and four wheels sitting on the street, not floating or "
-     "sunk; the street under it"},
+     "sunk; the street under it; its shadow under it and the skier's beside the street"},
 };
 
-// The camera `back` m behind and `up` m over (x, y, z) along `heading`, looking at it.
+// The camera `back` m behind and `up` m over (x, y, z) along `heading`, looking at it; `where`
+// the point looked at.
 void look_at(const ge::mountain::mapgen::Level& level, double x, double y, double z, double heading,
-             double back, double up, r::FrameView& v) {
+             double back, double up, r::FrameView& v, double where[3]) {
+  where[0] = x;
+  where[1] = y;
+  where[2] = z;
   const double ex = x - back * lm::sin(heading), ez = z - back * lm::cos(heading);
   v.eye[0] = ex;
   v.eye[2] = ez;
@@ -99,7 +110,7 @@ void look_at(const ge::mountain::mapgen::Level& level, double x, double y, doubl
 }
 
 // Where each look stands its camera at `t`; false when the village has nothing for it.
-bool aim(const fs::GameState& st, const char* id, double t, r::FrameView& v) {
+bool aim(const fs::GameState& st, const char* id, double t, r::FrameView& v, double where[3]) {
   const fs::Village& vil = *st.village;
   const vg::Streets& s = vil.streets;
   const ge::mountain::mapgen::Level& level = *st.level;
@@ -107,15 +118,15 @@ bool aim(const fs::GameState& st, const char* id, double t, r::FrameView& v) {
   const double valley = s.valley > 0 ? 0 : 3.14159265358979323846;
   if (std::strcmp(id, "above") == 0) {
     look_at(level, s.centre_x, level.ground_at(s.centre_x, s.centre_z), s.centre_z, valley, 90, 140,
-            v);
+            v, where);
     return true;
   }
   for (const vg::VillageArea& a : s.areas) {
     const bool square = a.kind == vg::AreaKind::square;
     if ((std::strcmp(id, "square") == 0 && square) ||
-        (std::strcmp(id, "carpark") == 0 && !square)) {
+        ((std::strcmp(id, "carpark") == 0 || std::strcmp(id, "low-sun") == 0) && !square)) {
       const double back = square ? 30 : 25, up = square ? 18 : 15;
-      look_at(level, a.x, a.y, a.z, a.heading + 3.14159265358979323846, back, up, v);
+      look_at(level, a.x, a.y, a.z, a.heading + 3.14159265358979323846, back, up, v, where);
       return true;
     }
   }
@@ -125,7 +136,7 @@ bool aim(const fs::GameState& st, const char* id, double t, r::FrameView& v) {
       if (plan.vehicles[static_cast<size_t>(k)].kind == vg::VehicleKind::bike) continue;
       const vg::VehiclePose p = vg::vehicle_at(level, plan, k, t);
       if (!p.shown || p.speed < 2) continue;
-      look_at(level, p.x, p.y, p.z, p.heading, 9, 2.5, v);
+      look_at(level, p.x, p.y, p.z, p.heading, 9, 2.5, v, where);
       return true;
     }
   }
@@ -198,8 +209,13 @@ void run(ge::lab::Lab& lab) {
     lab.fail("Fall Line's frame did not build", "Read the gpu: lines above. Skill: render.");
     return;
   }
-  const ge::skier::SkierState skier = st.racers[0].skier;
-  auto film = [&](r::FrameView v) {
+  // The skier stood 5 m to the side of what each look is at, so the figures' atlas (where the
+  // traffic casts) has a tile there.
+  auto film = [&](r::FrameView v, const double where[3]) {
+    ge::skier::SkierState skier = st.racers[0].skier;
+    skier.x = where[0] + 5;
+    skier.z = where[2];
+    skier.y = level->ground_at(skier.x, skier.z);
     fall_line::app::cut(*frame);
     for (int k = 0; k < frames; ++k) {
       const double t = at + (k - frames + 1) / 60.0;
@@ -217,16 +233,19 @@ void run(ge::lab::Lab& lab) {
     return ge::gpu::read_now(*device, target);
   };
   std::vector<r::FrameView> views;
+  std::vector<std::array<double, 3>> wheres;
   std::vector<bool> shown;
   for (const Look& l : kLooks) {
     r::FrameView v;
-    fall_line::app::day_view(*level, lab.arg_num("hour"), v);
-    shown.push_back(aim(st, l.id, at, v));
+    fall_line::app::day_view(*level, l.hour > -2 ? l.hour : lab.arg_num("hour"), v);
+    std::array<double, 3> where{};
+    shown.push_back(aim(st, l.id, at, v, where.data()));
     views.push_back(v);
+    wheres.push_back(where);
   }
   std::vector<ge::gpu::Image> before(std::size(kLooks));
   for (size_t i = 0; i < std::size(kLooks); ++i) {
-    if (shown[i]) before[i] = film(views[i]);
+    if (shown[i]) before[i] = film(views[i], wheres[i].data());
   }
   fall_line::app::show_village(*device, *frame, st.village);
   for (size_t i = 0; i < std::size(kLooks); ++i) {
@@ -236,7 +255,7 @@ void run(ge::lab::Lab& lab) {
       blank(l, "NOTHING TO SHOW");
       continue;
     }
-    const ge::gpu::Image after = film(views[i]);
+    const ge::gpu::Image after = film(views[i], wheres[i].data());
     const std::vector<uint8_t>& was = before[i].rgba;
     size_t covered = 0;
     for (size_t p = 0; p + 3 < after.rgba.size() && p + 3 < was.size(); p += 4) {
