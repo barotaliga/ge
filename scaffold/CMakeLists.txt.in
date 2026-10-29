@@ -56,11 +56,12 @@ foreach(src ${GAME_TEST_SOURCES})
 endforeach()
 
 # Every lab at its smoke flags, twice in one process: a digest that moves between the two runs is
-# a determinism break. Once `ge digest --write` has committed tests/labs_digests.txt, every
-# digest is held to its row there too (ge configures before every build, so a new file counts).
+# a determinism break. Once `ge digest --write` has committed tests/digests/ (one file a lab),
+# every digest is held to its file there too (ge configures before every build, so a new one
+# counts).
 set(GAME_LAB_BASELINE "")
-if(EXISTS ${PROJECT_SOURCE_DIR}/tests/labs_digests.txt)
-  set(GAME_LAB_BASELINE --check-digests=${PROJECT_SOURCE_DIR}/tests/labs_digests.txt)
+if(IS_DIRECTORY ${PROJECT_SOURCE_DIR}/tests/digests)
+  set(GAME_LAB_BASELINE --check-digests=${PROJECT_SOURCE_DIR}/tests/digests)
 endif()
 add_test(NAME labs_smoke COMMAND labs --all --smoke --repeat=2 --quiet
   --out=${PROJECT_BINARY_DIR}/previews ${GAME_LAB_BASELINE})
