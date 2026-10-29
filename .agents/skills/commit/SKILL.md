@@ -87,7 +87,9 @@ admin, so this works when the `QUEUE_TOKEN` secret holds an admin's token (the w
 warns when it is refused). Leave a `queued-hold`
 PR armed-off; keep it clean against main. A queued run that ended with no failed job (cancelled
 or abandoned jobs only) re-arms the PRs it ejected by itself, with a comment naming the run; one
-with a real failure is yours to fix. Never cancel a `merge_group` run to free runners: it ejects
+with a real failure is yours to fix. A PR that conflicts with main gets the `merge-conflict` label and one
+comment on every push to main, even while it is only armed (GitHub sends no event for that):
+merge main, precheck, push, re-arm; the label comes off by itself. Never cancel a `merge_group` run to free runners: it ejects
 every entry queued behind it.
 
 **`skip-ci`**: a PR labelled `skip-ci` runs no CI at all, on the PR and in the queue, so it merges
