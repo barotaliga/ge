@@ -1,11 +1,12 @@
 // engine/water/world.hpp: each kind of body answers the one query: a lake inside its shore and
 // rougher at its lee, an ocean wherever its bed is under its level, a river with its current
 // fastest mid-stream and carrying its discharge, a volume in its hulls; the point above the
-// surface reads a negative depth; the batch is the single query many times; and every number keeps
-// its bits in tests/golden/water_world.txt.
+// surface reads a negative depth; the batch is the single query many times; the one step is the
+// flow regions' step; and every number keeps its bits in tests/golden/water_world.txt.
 //
 // ge:summary Test: bodies of water and the one sample query, every kind; golden
 // ge:keywords test water world lake ocean river channel volume hull sample current depth golden
+// ge:keywords step one-call
 // ge:skill water testing
 #include <cmath>
 #include <vector>
@@ -150,6 +151,24 @@ TEST(the_batch_is_the_single_query_many_times) {
     CHECK(out[i].body == one.body);
     CHECK_BITS(out[i].surface, one.surface);
   }
+}
+
+TEST(the_one_step_steps_every_flow_region_and_nothing_else) {
+  // Water piled at one end of a flow region: the one step is the flow regions' step, bit for bit.
+  gw::World a, b;
+  for (gw::World* w : {&a, &b}) {
+    gw::Flow f = gw::make_flow({.nx = 32, .nz = 8, .cell = 0.5});
+    gw::fill_to(f, 0, 0, 6, 4, 2);
+    gw::add_flow(*w, std::move(f));
+  }
+  for (int i = 0; i < 120; ++i) {
+    gw::step(a, 1.0 / 120);
+    gw::step_flows(b, 1.0 / 120);
+  }
+  CHECK(gw::volume(a.flows[0]) == gw::volume(b.flows[0]));
+  CHECK(a.flows[0].grids[0].vol == b.flows[0].grids[0].vol);
+  CHECK(a.flows[0].grids[0].qx[40] != 0);  // it moved
+  CHECK_BITS(a.flows[0].grids[0].qx[40], b.flows[0].grids[0].qx[40]);
 }
 
 TEST(every_number_keeps_its_golden) {
