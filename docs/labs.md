@@ -95,7 +95,7 @@ make lab LAB=level ARGS=--tag=before          # keep this run as previews/level@
 make lab LAB=level ARGS=--compare=before      # every metric beside the kept run's, every picture diffed
 make lab LAB=world ARGS=--diff=before         # run nothing: the last run's pictures against the kept run's
 make labs-smoke                               # every lab at its smoke flags, twice, digests checked
-make labs-digests                             # rewrite tests/labs_digests.txt (a reviewed change)
+make labs-digests                             # rewrite tests/digests/ (a reviewed change)
 make ge ARGS="digest level --write"           # rewrite one lab's row only; no --write: just check it
 build/debug/labs --json                       # the list as one JSON array (what `ge lab` reads)
 make lab LAB=trace ARGS="--log=course=debug"  # any lab: the log spec's lines in previews/<id>/log.txt
@@ -230,18 +230,20 @@ fails when it is off. Three checks use it:
 
 - **`--repeat=N`** runs the lab N times in one process and fails when the digests differ.
   That catches state kept between runs and unseeded draws.
-- **`--check-digests=tests/labs_digests.txt`** compares each lab's smoke-run digest with
+- **`--check-digests=tests/digests/`** compares each lab's smoke-run digest with
   the committed baseline. CTest's `labs_smoke_1`..`_8` (one slice of the labs each,
   `--shard=I/N`) run it on every CI row, so a lab whose
   output differs between compilers fails on the row that differs.
 - A lab that has to move (its drawing changed, or the code it runs changed on purpose)
-  rewrites its row of the baseline with `ge digest <id> --write` (`make ge ARGS=...` here; the
-  runner's `--write-digests` on one lab or a shard keeps the other rows), and the PR says why.
+  rewrites its file of the baseline with `ge digest <id> --write` (`make ge ARGS=...` here; the
+  runner's `--write-digests` on one lab or a shard leaves the other labs' files), and the PR says why.
   A game repo keeps the same baseline once `ge digest --write` writes it, and its
   `labs_smoke` case checks it from then on.
-- The baseline merges with git's union driver (`.gitattributes`): two branches that add or move
-  different labs' rows merge cleanly. Two branches that move the same lab's row leave two rows
-  for it, and `--check-digests` fails naming the lab until `ge digest <id> --write` keeps one.
+- The baseline is one file a lab (`tests/digests/<lab>.txt`, the digest's 16 hex digits):
+  two branches that add or move different labs touch different files and merge cleanly, in the
+  merge queue too, which ignores custom merge drivers. Two branches that move the same lab
+  conflict on its one file; keep the digest `ge digest <id> --write` writes on the merged tree.
+  A runner path ending in `.txt` is still read and written as the older single file of rows.
 - After a change, `ge digest --diff` runs every lab at its smoke flags and prints only the labs
   whose digest is off the baseline (or not in it), writing nothing: the list of rows the PR has
   to explain or fix, in one command (about 14 minutes for every lab in the debug build; name a
