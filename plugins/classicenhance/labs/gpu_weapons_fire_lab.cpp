@@ -13,7 +13,8 @@
 // shotgun's look, so the pictures are the same everywhere and nothing of the pack is in the tree.
 // Named views: every firing weapon through a shot at dusk; the file's flash beside the engine's
 // fire on the first firing frame; each by day. It fails on a GPU error or a pipeline made after
-// the load. Without an adapter it notes that, with grey cards.
+// the load. Without an adapter it notes that, with grey cards. A weapon of several barrels (the
+// nailguns) is also held firing: each shot leaves from the barrel its file flashes on that frame.
 //
 // ge:summary Lab: the classic held weapons firing the engine's muzzle fire from their muzzles
 // ge:keywords lab gpu classicenhance viewmodel held-weapon muzzle muzzle-fire flame smoke fire
@@ -22,6 +23,7 @@
 // ge:test tests/classicenhance_weapons_test.cpp
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <string>
 #include <vector>
 
@@ -60,8 +62,28 @@ constexpr double kStep = 1.0 / 120;
 struct Gun {
   std::string name;  // the file's name, `v_shot`
   vm::HeldModel held;
-  const gr::MuzzleLook* look = nullptr;
+  gr::MuzzleLook look;  // the preset with the weapon's own knobs turned
+  double refire_s = 0.5;
 };
+
+// The weapon's fire: its preset with its knobs turned; false for a preset or a knob not known.
+bool look_of(const ce::ClassicFire& f, gr::MuzzleLook* out) {
+  const gr::MuzzleLook* preset = gr::muzzle_look_by_id(f.muzzle);
+  if (!preset) return false;
+  *out = *preset;
+  for (std::string_view rest = f.knobs; !rest.empty();) {
+    const size_t comma = rest.find(',');
+    const std::string_view one = rest.substr(0, comma);
+    rest = comma == std::string_view::npos ? std::string_view{} : rest.substr(comma + 1);
+    const size_t eq = one.find('=');
+    if (eq == std::string_view::npos ||
+        !gr::set_muzzle_knob(*out, one.substr(0, eq),
+                             std::strtod(std::string(one.substr(eq + 1)).c_str(), nullptr))) {
+      return false;
+    }
+  }
+  return true;
+}
 
 std::string short_name(const std::string& path) {
   std::string s = path.substr(path.rfind('/') + 1);
@@ -88,12 +110,29 @@ struct Moment {
   gr::MuzzlePose pose;
 };
 
-Moment moment_at(const Gun& g, const ge::camera::Pose& view, double t) {
+// The gun `t` s after its first shot: one shot's frames, or held firing (`stream`) the firing
+// frames round and round until `until`, then the rest.
+Moment moment_at(const Gun& g, double t, bool stream, double until) {
   Moment m;
-  ce::classic_fire_frame(int(g.held.frames.size()), t, &m.a, &m.b, &m.ft);
+  const int frames = int(g.held.frames.size());
+  if (stream && t <= until) {
+    ce::classic_stream_frame(frames, t, &m.a, &m.b, &m.ft);
+  } else {
+    // The last shot's frames play out.
+    const double last = stream ? std::floor(until / g.refire_s + 1e-9) * g.refire_s : 0;
+    ce::classic_fire_frame(frames, t - last, &m.a, &m.b, &m.ft);
+  }
   m.place = placement_at(t);
-  vm::muzzle_to_world(g.held, m.a, m.b, m.ft, m.place, 0, view, m.pose.at, m.pose.dir, m.pose.up);
   return m;
+}
+
+// Where shot `k` (fired on frame `shot_frame`) leaves the gun on moment `m`: its barrel's tip.
+gr::MuzzlePose pose_at(const Gun& g, const ge::camera::Pose& view, const Moment& m,
+                       int shot_frame) {
+  gr::MuzzlePose p;
+  vm::muzzle_to_world(g.held, m.a, m.b, m.ft, m.place, 0, view, p.at, p.dir, p.up,
+                      ce::classic_shot_barrel(g.held, shot_frame));
+  return p;
 }
 
 ge::camera::Pose pose_of(const gr::FrameView& v) {
@@ -139,42 +178,69 @@ void draw_gun(gl::Picture& pic, const Gun& g, const Moment& m, const ge::camera:
   pic.rgba = vm::resolve_over(t, pic.rgba);
 }
 
-// One shot fired at 0 and pictured at each moment: the particles flown at 120 Hz between them,
-// each still settled over `settle` frames, the gun drawn over it. `fire` off: the file's own
-// flash and no engine fire (the classic look).
+// The gun fired at 0 and pictured at each moment: one shot, or (`stream`) held firing at its rate
+// until `until`. The particles flown at 120 Hz between the moments, each still settled over
+// `settle` frames, the gun drawn over it. `fire` off: the file's own flash and no engine fire.
 std::vector<gl::Picture> shoot(ge::gpu::Device& d, es::Scene& s, const Gun& g, gr::FrameView v0,
-                               const std::vector<double>& moments, int settle, bool fire) {
+                               const std::vector<double>& moments, int settle, bool fire,
+                               bool stream = false, double until = 0) {
   gr::clear_particles(d, s.particles);
   const ge::camera::Pose view = pose_of(v0);
-  const gr::Shot shot{g.look, 3, 0};
-  const gr::MuzzlePose at_shot = moment_at(g, view, 0).pose;
-  const std::vector<gr::Blast> puff = {gr::smoke_of(shot, at_shot)};
+  // The shots, each with the firing frame it went off on (its barrel) and its puff.
+  struct Fired {
+    gr::Shot shot;
+    int frame;
+    gr::MuzzlePose at_shot;
+  };
+  std::vector<Fired> fired;
+  const int n = stream ? int(until / g.refire_s + 1e-9) + 1 : 1;
+  for (int k = 0; k < n; ++k) {
+    const double born = k * g.refire_s;
+    const Moment m = moment_at(g, born, stream, until);
+    const int frame = stream ? m.a : 1;
+    fired.push_back({{&g.look, uint32_t(3 + k), born}, frame, pose_at(g, view, m, frame)});
+  }
   std::vector<gl::Picture> out;
   out.reserve(moments.size());
-  bool thrown = false;
+  size_t thrown = 0;
   double t = 0;
+  const auto live = [&](double now, const Moment& m, std::vector<gr::Blast>& puffs,
+                        std::vector<gr::MuzzleFire>& fires) {
+    for (const Fired& f : fired) {
+      if (f.shot.born_s > now + 1e-9) continue;
+      puffs.push_back(gr::smoke_of(f.shot, f.at_shot));
+      fires.push_back({f.shot, pose_at(g, view, m, f.frame)});
+    }
+  };
   for (const double when : moments) {
     while (fire && t + 1e-9 < when) {
       const double dt = std::min(kStep, when - t);
       t += dt;
-      if (!thrown) {
-        gr::throw_shot(s.particles, shot, at_shot);
-        thrown = true;
+      for (; thrown < fired.size() && fired[thrown].shot.born_s <= t + 1e-9; ++thrown) {
+        gr::throw_shot(s.particles, fired[thrown].shot, fired[thrown].at_shot);
       }
       gr::FrameView v = v0;
       v.time_s = t;
-      const gr::MuzzleFire f{shot, moment_at(g, view, t).pose};
-      es::draw(d, s, v, puff, dt, std::span<const gr::MuzzleFire>(&f, 1));
+      std::vector<gr::Blast> puffs;
+      std::vector<gr::MuzzleFire> fires;
+      live(t, moment_at(g, t, stream, until), puffs, fires);
+      es::draw(d, s, v, puffs, dt, fires);
     }
     gr::FrameView v = v0;
     v.time_s = when;
-    const Moment m = moment_at(g, view, when);
-    const gr::MuzzleFire f{shot, m.pose};
+    const Moment m = moment_at(g, when, stream, until);
+    std::vector<gr::Blast> puffs;
+    std::vector<gr::MuzzleFire> fires;
+    live(when, m, puffs, fires);
     gl::Picture pic =
-        fire ? es::settled(d, s, v, puff, settle, std::span<const gr::MuzzleFire>(&f, 1))
-             : es::settled(d, s, v, {}, settle);
-    const gr::Flame flame = gr::flame_at(shot, m.pose, when);
-    draw_gun(pic, g, m, view, v.sun_elevation, fire && flame.alive ? flame.fire : 0, fire);
+        fire ? es::settled(d, s, v, puffs, settle, fires) : es::settled(d, s, v, {}, settle);
+    // The gun lit by the brightest flame still burning (a nailgun's puff throws no light).
+    double burning = 0;
+    for (const gr::MuzzleFire& f : fires) {
+      const gr::Flame flame = gr::flame_at(f.shot, f.pose, when);
+      if (flame.alive && g.look.flash > 0) burning = std::max(burning, flame.fire);
+    }
+    draw_gun(pic, g, m, view, v.sun_elevation, fire ? burning : 0, fire);
     out.push_back(std::move(pic));
   }
   return out;
@@ -194,8 +260,11 @@ void run(gl::Lab& lab) {
   std::string error;
   if (path.empty()) {
     const ce::Palette palette = ce::labs::fixture_palette();
-    guns.push_back({"fixture", ce::held_from_morph(ce::labs::fixture_weapon(palette), palette),
-                    gr::muzzle_look_by_id(ce::classic_fire_of("v_shot")->muzzle)});
+    Gun g{"fixture", ce::held_from_morph(ce::labs::fixture_weapon(palette), palette), {}, 0.5};
+    const ce::ClassicFire* f = ce::classic_fire_of("v_shot");
+    look_of(*f, &g.look);
+    g.refire_s = f->refire_s;
+    guns.push_back(std::move(g));
   } else {
     ce::Source src;
     ge::vfs::Pak pak;
@@ -216,23 +285,35 @@ void run(gl::Lab& lab) {
     for (ce::PackWeapon& pw : ce::pack_weapons(src.pack, &skipped)) {
       const ce::ClassicFire* f = ce::classic_fire_of(pw.name);
       if (!f || f->muzzle.empty()) continue;
-      guns.push_back({short_name(pw.name), ce::held_from_morph(pw.model, palette),
-                      gr::muzzle_look_by_id(f->muzzle)});
+      Gun g{short_name(pw.name), ce::held_from_morph(pw.model, palette), {}, f->refire_s};
+      if (!look_of(*f, &g.look)) {
+        lab.fail(
+            "no muzzle look for " + g.name + " (\"" + std::string(f->muzzle) + "\" " +
+                std::string(f->knobs) + ")",
+            "next: name a render/muzzle.hpp preset and its knobs in classicenhance/weapons.cpp.");
+        return;
+      }
+      guns.push_back(std::move(g));
     }
     for (const std::string& s : skipped) lab.note("skipped: " + s);
     lab.note(
         "local run on the classic pack: these pictures are derived from it; keep them on this "
         "machine");
   }
+  gl::LabTable table{"each weapon's fire",
+                     {"weapon", "look", "every s", "flame tris", "barrels", "barrel a frame"},
+                     {}};
   for (const Gun& g : guns) {
-    if (!g.look) {
-      lab.fail("no muzzle look for " + g.name,
-               "next: name a render/muzzle.hpp preset in classicenhance/weapons.cpp's fires.");
-      return;
-    }
-    lab.metric("flame-tris-" + g.name,
-               double(std::count(g.held.flame.begin(), g.held.flame.end(), uint8_t{1})), "count");
+    const auto flames = double(std::count(g.held.flame.begin(), g.held.flame.end(), uint8_t{1}));
+    lab.metric("flame-tris-" + g.name, flames, "count");
+    lab.metric("barrels-" + g.name, double(g.held.barrels.size()), "count");
+    std::string order;
+    for (int16_t b : g.held.frame_barrel) order += b < 0 ? "-" : std::to_string(b);
+    table.rows.push_back({g.name, std::string(g.look.id) + (g.look.flash > 0 ? "" : " (puff)"),
+                          fixed(g.refire_s, 2), fixed(flames, 0),
+                          std::to_string(g.held.barrels.size()), order.empty() ? "-" : order});
   }
+  lab.table(table);
   if (guns.empty()) {
     lab.fail("the pack has no held weapon that fires", "next: give --source the classic pack.");
     return;
@@ -244,7 +325,7 @@ void run(gl::Lab& lab) {
       lab.fail("no GPU device, and GE_GPU_REQUIRE=1",
                "Install Mesa's Vulkan drivers (apt install mesa-vulkan-drivers). Skill: gpu.");
     }
-    placeholders(lab, {"fire", "swap", "day"}, w, h);
+    placeholders(lab, {"fire", "swap", "stream", "day"}, w, h);
     return;
   }
   es::Scene s;
@@ -276,7 +357,8 @@ void run(gl::Lab& lab) {
               "muzzle fire on its real model, at six moments from 10 ms to 0.8 s; the file's "
               "flash hidden.",
               "each flame on its own barrel's tip and riding it through the firing frames; the "
-              "shotguns' short wide flash, the nailguns' quick jet, the grenade launcher's thump, "
+              "shotguns' short wide flash, the nailguns' faint puff and no flame, the grenade "
+              "launcher's thump, "
               "the rocket launcher's long jet; the gun lit warm while the flame burns; the smoke "
               "drifting on after the frames come back to rest",
               {}},
@@ -299,6 +381,31 @@ void run(gl::Lab& lab) {
               "the engine's flame where the file's flash was, nothing of the file's left over",
               {}},
              es::sheet_of(pics, names, 4), Det::measured);
+  }
+  {
+    // Held firing: every quick-firing weapon of several barrels, a picture every 50 ms for 0.4 s.
+    std::vector<double> at;
+    for (int k = 1; k <= 8; ++k) at.push_back(0.05 * k - 0.02);
+    std::vector<gl::Picture> pics;
+    std::vector<std::string> names;
+    for (const Gun& g : guns) {
+      if (g.held.barrels.size() < 2 || g.refire_s > 0.15) continue;  // the nailguns
+      for (gl::Picture& p : shoot(*device, s, g, dusk, at, settle, true, true, 0.4)) {
+        pics.push_back(std::move(p));
+      }
+      for (const double m : at) names.push_back(g.name + " " + fixed(m, 2) + " S");
+    }
+    if (!pics.empty()) {
+      lab.shot({"stream",
+                "HELD FIRING, BARREL BY BARREL",
+                "Each weapon of several barrels held firing at its rate for 0.4 s, a picture "
+                "every 50 ms: each shot leaves from the barrel its file shows the flash on for "
+                "that frame.",
+                "the nailgun's puffs from its two barrels in turn; the super nailgun's from one "
+                "barrel at a time round its cluster; each puff on its barrel's mouth",
+                {}},
+               es::sheet_of(pics, names, static_cast<int>(at.size())), Det::measured);
+    }
   }
   {
     std::vector<gl::Picture> pics;

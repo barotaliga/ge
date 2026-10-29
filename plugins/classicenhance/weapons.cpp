@@ -9,6 +9,7 @@
 #include "classicenhance/weapons.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdio>
 
@@ -75,6 +76,71 @@ void mark_flame(viewmodel::HeldModel& h) {
   }
 }
 
+// THE BARRELS, read off the file's own flash: on each firing frame the flash's visible triangles
+// stand in front of the barrel that fires, so their base (the mean across, the nearest along) is
+// that barrel's mouth on that frame, and the model's own vertices nearest it are the barrel's tip,
+// which then ride every frame. A barrel met on several frames is one: two mouths within
+// kSameBarrel of each other across the barrels' axis are the same barrel.
+void find_barrels(viewmodel::HeldModel& h) {
+  constexpr size_t kTipVertices = 8;
+  constexpr double kSameBarrel = 0.03;  // m, under a barrel's own width
+  h.barrels.clear();
+  h.frame_barrel.assign(h.frames.size(), -1);
+  if (h.flame.empty()) return;
+  const size_t n = h.vertex_count();
+  std::vector<uint8_t> in_flame(n, 0);
+  for (size_t t = 0; t < h.flame.size(); ++t) {
+    if (h.flame[t] == 0) continue;
+    for (size_t k = 0; k < 3; ++k) in_flame[h.indices[t * 3 + k]] = 1;
+  }
+  std::vector<std::array<double, 2>> mouths;
+  for (size_t f = 0; f < h.frames.size(); ++f) {
+    const std::vector<float>& p = h.frames[f].positions;
+    double mouth[3] = {0, 0, 1e18};
+    size_t seen = 0;
+    for (size_t t = 0; t < h.flame.size(); ++t) {
+      if (h.flame[t] == 0) continue;
+      double z = 0;
+      for (size_t k = 0; k < 3; ++k) z += p[size_t{h.indices[t * 3 + k]} * 3 + 2];
+      if (z < 0) continue;  // parked behind the eye: not shown on this frame
+      for (size_t k = 0; k < 3; ++k) {
+        const size_t v = h.indices[t * 3 + k];
+        mouth[0] += p[v * 3];
+        mouth[1] += p[v * 3 + 1];
+        mouth[2] = std::min(mouth[2], double(p[v * 3 + 2]));
+        seen++;
+      }
+    }
+    if (seen == 0) continue;
+    mouth[0] /= double(seen);
+    mouth[1] /= double(seen);
+    std::vector<std::pair<double, uint32_t>> near;
+    near.reserve(n);
+    for (size_t v = 0; v < n; ++v) {
+      if (in_flame[v]) continue;
+      const double dx = p[v * 3] - mouth[0], dy = p[v * 3 + 1] - mouth[1],
+                   dz = p[v * 3 + 2] - mouth[2];
+      near.emplace_back(dx * dx + dy * dy + dz * dz, uint32_t(v));
+    }
+    std::sort(near.begin(), near.end());  // ties by index: the same pick every time
+    int same = -1;
+    for (size_t b = 0; b < mouths.size() && same < 0; ++b) {
+      const double dx = mouth[0] - mouths[b][0], dy = mouth[1] - mouths[b][1];
+      if (dx * dx + dy * dy < kSameBarrel * kSameBarrel) same = int(b);
+    }
+    if (same < 0) {
+      std::vector<uint32_t> tip;
+      for (size_t i = 0; i < near.size() && i < kTipVertices; ++i) tip.push_back(near[i].second);
+      if (tip.empty()) continue;
+      same = int(h.barrels.size());
+      h.barrels.push_back(std::move(tip));
+      mouths.push_back({mouth[0], mouth[1]});
+    }
+    h.frame_barrel[f] = int16_t(same);
+  }
+  if (h.barrels.empty()) h.frame_barrel.clear();
+}
+
 }  // namespace
 
 viewmodel::HeldModel held_from_morph(const morph::Model& model, const Palette& palette, int skin) {
@@ -115,6 +181,7 @@ viewmodel::HeldModel held_from_morph(const morph::Model& model, const Palette& p
   }
   mark_flame(out);
   viewmodel::find_muzzle(out);
+  find_barrels(out);
   return out;
 }
 
@@ -217,17 +284,21 @@ std::vector<viewmodel::PointLight> flame_lights(const brush::Map& map) {
 }
 
 std::span<const ClassicFire> classic_fires() {
-  // The shotguns throw a short wide flash, the nailguns a quick small jet, the grenade launcher a
-  // thump and the rocket launcher a long jet; the rates are the classic game's.
+  // The shotguns throw a short wide flash, the grenade launcher a thump and the rocket launcher a
+  // long jet. A nailgun throws nails, not burning powder: no flame, no flash, only a faint puff
+  // from the barrel that fired. The rates are the classic game's.
+  static constexpr std::string_view kPuff =
+      "length=0.02,width=0.02,glow=0,flash=0,sparks=0,light_range=0,smoke.smoke=0.22,"
+      "smoke_speed=1.5";
   static constexpr ClassicFire kFires[] = {
-      {"v_axe", "", 0.5},
-      {"v_shot", "muzzle.shotgun", 0.5},
-      {"v_shot2", "muzzle.shotgun", 0.7},
-      {"v_nail", "muzzle.nailgun", 0.2},
-      {"v_nail2", "muzzle.nailgun", 0.2},
-      {"v_rock", "muzzle.grenade", 0.6},
-      {"v_rock2", "muzzle.rocket", 0.8},
-      {"v_light", "", 0.1},
+      {"v_axe", "", "", 0.5},
+      {"v_shot", "muzzle.shotgun", "", 0.5},
+      {"v_shot2", "muzzle.shotgun", "", 0.7},
+      {"v_nail", "muzzle.nailgun", kPuff, 0.1},
+      {"v_nail2", "muzzle.nailgun", kPuff, 0.1},
+      {"v_rock", "muzzle.grenade", "", 0.6},
+      {"v_rock2", "muzzle.rocket", "", 0.8},
+      {"v_light", "", "", 0.1},
   };
   return kFires;
 }
@@ -252,6 +323,29 @@ void classic_fire_frame(int frames, double since_s, int* a, int* b, double* t) {
   *a = 1 + k;
   *b = *a + 1 < frames ? *a + 1 : 0;
   *t = at - k;
+}
+
+void classic_stream_frame(int frames, double since_s, int* a, int* b, double* t) {
+  *a = *b = 0;
+  *t = 0;
+  if (frames < 2 || since_s < 0) return;
+  const double at = since_s / kFrameSeconds;
+  const auto k = int(at);
+  const int firing = frames - 1;
+  *a = 1 + k % firing;
+  *b = 1 + (k + 1) % firing;
+  *t = at - k;
+}
+
+int classic_shot_barrel(const viewmodel::HeldModel& model, int frame) {
+  // The frame's own barrel; a frame that shows none takes the next one that does.
+  const int n = int(model.frames.size());
+  for (int i = 0; i < n; ++i) {
+    const int f = 1 + (std::max(frame, 1) - 1 + i) % std::max(n - 1, 1);
+    const int b = viewmodel::barrel_of_frame(model, f);
+    if (b >= 0) return b;
+  }
+  return -1;
 }
 
 std::vector<PackWeapon> pack_weapons(std::span<const uint8_t> pack,

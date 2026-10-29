@@ -154,9 +154,9 @@ void held_dir_to_world(const Placement& p, double gun_fov_y, const camera::Pose&
 
 void muzzle_to_world(const HeldModel& model, int a, int b, double t, const Placement& p,
                      double gun_fov_y, const camera::Pose& view, double at[3], double dir[3],
-                     double up[3]) {
+                     double up[3], int barrel) {
   float tip[3];
-  muzzle_at(model, a, b, t, tip);
+  muzzle_at(model, a, b, t, tip, barrel);
   held_to_world(p, gun_fov_y, view, tip, at);
   held_dir_to_world(p, gun_fov_y, view, tip, model.muzzle_dir, dir);
   constexpr float kUp[3] = {0, 1, 0};

@@ -99,9 +99,13 @@ ships.
   already).
 - **The fire**: in the enhanced mode a weapon's shot is the engine's muzzle fire
   (`engine/render/muzzle.hpp`), not the flash its file draws. `classic_fire_of` names each
-  weapon's look by its file (the shotguns `muzzle.shotgun`, the nailguns `muzzle.nailgun`, the
-  grenade launcher `muzzle.grenade`, the rocket launcher `muzzle.rocket`; the axe and the
-  lightning gun throw no flame) and its rate of fire. A shot plays the firing frames at ten a
+  weapon's look by its file (the shotguns `muzzle.shotgun`, the grenade launcher
+  `muzzle.grenade`, the rocket launcher `muzzle.rocket`; the nailguns throw nails, not burning
+  powder, so theirs is `muzzle.nailgun` turned down to a faint puff with no flame and no light;
+  the axe and the lightning gun throw no flame) and its rate of fire. Each shot leaves from the
+  barrel the file shows its flash on for that frame: where the flash stands on each firing frame
+  is read as a barrel (`barrels`, `frame_barrel` on the held model), so the nailgun's two barrels
+  fire in turn and the super nailgun's cluster one barrel at a time. A shot plays the firing frames at ten a
   second, blended (`classic_fire_frame`), and the flame is staged each frame off the muzzle carried
   into the world through the gun's lens (`viewmodel::muzzle_to_world`), so it rides the recoil.
   The file's flash triangles (the model's `flame` mask) are hidden with `DrawLit::hidden`.

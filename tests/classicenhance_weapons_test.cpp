@@ -190,3 +190,25 @@ TEST(classic_fire_frame_plays_the_firing_frames_then_rests) {
   ce::classic_fire_frame(1, 0.05, &a, &b, &t);  // one frame: nothing to play
   CHECK(a == 0 && b == 0);
 }
+
+TEST(classic_stream_frame_goes_round_the_firing_frames) {
+  int a = -1, b = -1;
+  double t = -1;
+  ce::classic_stream_frame(9, 0.05, &a, &b, &t);  // eight firing frames
+  CHECK(a == 1 && b == 2 && std::fabs(t - 0.5) < 1e-9);
+  ce::classic_stream_frame(9, 0.75, &a, &b, &t);  // the eighth turns back to the first
+  CHECK(a == 8 && b == 1);
+  ce::classic_stream_frame(9, 0.85, &a, &b, &t);
+  CHECK(a == 1 && b == 2);
+}
+
+TEST(a_shot_leaves_from_the_barrel_its_frame_names) {
+  vm::HeldModel m;
+  m.frames.resize(5);
+  m.barrels = {{0}, {1}};
+  m.frame_barrel = {-1, 0, 1, -1, 1};  // frame 3 shows no flash: the next frame's barrel
+  CHECK(ce::classic_shot_barrel(m, 1) == 0 && ce::classic_shot_barrel(m, 2) == 1);
+  CHECK(ce::classic_shot_barrel(m, 3) == 1);
+  const vm::HeldModel none;
+  CHECK(ce::classic_shot_barrel(none, 1) == -1);
+}

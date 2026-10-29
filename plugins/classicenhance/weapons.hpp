@@ -15,7 +15,9 @@
 //   parked behind the eye between shots and brought in front of the barrel on the firing frames.
 //   Those are marked as the model's `flame` (a game whose engine draws the flash hides them); the
 //   muzzle is the barrel's front on the rest frame, the flash left out (`find_muzzle`), so the tip
-//   rides the recoil frames with the barrel.
+//   rides the recoil frames with the barrel. Where the flash stands on each firing frame says
+//   which barrel fired (a nailgun's two in turn, the super nailgun's cluster round and round): the
+//   model's vertices nearest it are that barrel's tip (`barrels`, `frame_barrel`).
 // - **The light** (`probe_under`): the classic game lights a model by the floor under it, so the
 //   probe is the lightmap of the first surface straight below the player, read where the line down
 //   meets it. A luxel of 128 is a surface as painted, so 128 is 1 in the view model's light unit;
@@ -37,7 +39,7 @@
 // ge:keywords viewmodel view-model held-weapon first-person weapon mdl morph classic palette
 // ge:keywords fullbright glow light-point lightmap probe floor muzzle-flash torch flame dlight
 // ge:keywords held_from_morph probe_under classic_weapon_row classic_fire_of muzzle-look refire
-// ge:keywords firing-frames
+// ge:keywords firing-frames barrels alternating classic_shot_barrel classic_stream_frame puff
 // ge:skill classicenhance
 // ge:test tests/classicenhance_weapons_test.cpp
 #pragma once
@@ -93,6 +95,7 @@ std::vector<viewmodel::PointLight> flame_lights(const brush::Map& map);
 struct ClassicFire {
   std::string_view weapon;
   std::string_view muzzle;
+  std::string_view knobs;  // turned on the preset: "knob=value,..." (render/muzzle.hpp's names)
   double refire_s;
 };
 std::span<const ClassicFire> classic_fires();
@@ -102,6 +105,13 @@ const ClassicFire* classic_fire_of(std::string_view path);
 // The frames a shot plays `since_s` after it went off, on a model of `frames` frames: the firing
 // frames 1.. at ten a second, each blended toward the next by `*t`, and then the rest frame 0.
 void classic_fire_frame(int frames, double since_s, int* a, int* b, double* t);
+// The frames a weapon held firing plays `since_s` after its first shot: the firing frames round
+// and round at ten a second (a nailgun's, one frame a shot).
+void classic_stream_frame(int frames, double since_s, int* a, int* b, double* t);
+// The barrel a shot fired on firing frame `frame` leaves from: the barrel the file shows its
+// flash on for that frame (`frame_barrel`, read by `held_from_morph`), or the next frame's that
+// shows one; -1 for a model with no barrels (its one muzzle).
+int classic_shot_barrel(const viewmodel::HeldModel& model, int frame);
 
 // The pack's held weapons by name (`progs/v_*.mdl`, sorted), read; a model the reader refuses is
 // skipped with its reason in `*skipped`.
