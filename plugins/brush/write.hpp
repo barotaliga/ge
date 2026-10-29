@@ -36,6 +36,7 @@ struct FixtureRoom {
   std::string name;
   int32_t min[3] = {}, max[3] = {};  // map units, z up
   std::string floor, wall, ceiling;  // texture names
+  uint8_t ambient[4] = {};           // the leaf's ambient levels (29 and BSP2 write them)
 };
 
 struct FixtureLight {
