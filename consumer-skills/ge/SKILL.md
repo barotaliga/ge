@@ -70,6 +70,9 @@ ge sound split <file> <name>     # a recording of many sounds cut at its silence
 ge model import <file> <name>    # a free kit's model packed into one .glb, loaded and measured
 ge credits check [<dir>]         # every asset credited, every credit's file there, licences allowed
 ge content scan <pak|dir>        # a classic set's sounds, models and sets held to an asset map (brush)
+ge texture kinds                 # every procedural texture layer kind and key (skill: textures)
+ge texture check <file.tex>...   # a texture recipe's mistakes, each at its line
+ge texture bake <file.tex> --ref="seed=12 wear=0.8"   # one variant to PNG maps in build/textures
 ge check                         # the whole gate: format, doctor, build, tests
 ge lint [--base=<ref>] [<file>...]  # clang-tidy's bug-finding checks over what the change reaches
 ge precheck [--preset=<p>]       # what CI runs, both presets: ge check, the pilot, the replays

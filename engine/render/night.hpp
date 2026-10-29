@@ -82,7 +82,8 @@ double moonlight_on_ground(double lux, double elevation);
 
 // THE PRE-EXPOSURE: the scale the frame stores light at (FrameUniforms::night_sun[3]), so a
 // night's luminances, a millionth of the day's, keep their bits in a half-float target: the light
-// on a white face estimated (the moon's or the twilight's, and the dark sky's) brought to about
+// on a white face estimated (the moon's or the twilight's, the dark sky's and the lamps' the eye
+// adapted to, `lamp_lux`) brought to about
 // a quarter of a unit. 1 whenever the sun is up, so a day's bits never move; the exposure
 // divides it back out, and every absolute reading (the eye's adaptation, a star's light) is
 // taken through it.
