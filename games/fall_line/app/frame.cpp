@@ -168,6 +168,8 @@ FrameOptions frame_options(const cfg::Settings& s) {
   o.thick = s.thick;
   o.cloud_height = s.cloud_height;
   o.cloud_speed = s.cloud_speed;
+  o.sun_size = s.disc_sun;
+  o.moon_size = s.disc_moon;
   cloud_stack_of(s, o);
   return o;
 }
@@ -423,6 +425,8 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   GE_ZONE("frame");
   // The map's sky at the view's moment: the cloud, the deck and the fog it is seen under.
   r::FrameView view = seen;
+  view.sun_size = f.options.sun_size;
+  view.moon_size = f.options.moon_size;
   if (f.options.weather) {
     // How far dusk has fallen under the view's sun (the evening's jet and its scud), and the
     // height and the speed picked by hand.
