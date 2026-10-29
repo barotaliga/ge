@@ -81,6 +81,13 @@ struct Recording {
   std::vector<RecordedScenario> scenarios;
 };
 
+// The format's words: a line split on blanks, a number, a whole number, a contents name (solid,
+// water, slime, lava). Shared with toss_recording.hpp.
+std::vector<std::string_view> split_words(std::string_view line);
+bool parse_float(std::string_view tok, float& out);
+bool parse_int(std::string_view tok, int& out);
+bool parse_contents(std::string_view word, int& contents);
+
 // Reads the text format. On a malformed line returns false with `error` naming the line.
 bool parse_recording(std::string_view text, Recording& out, std::string& error);
 
