@@ -6,14 +6,17 @@
 # its CRT, its libm) and macOS (Apple Clang on arm64: another compiler, another ISA, the Metal
 # adapter), each building everything and running the whole suite, so the goldens and the labs'
 # digests are held on both. The merge queue adds the installed package on Windows and macOS, and
-# `ge new`'s scaffold when the change reaches it. A push to main builds the macOS row only, to
-# save its compiler cache. A change that touches only prose (docs, skills, lessons, root Markdown,
+# `ge new`'s scaffold when the change reaches it. A push to main runs the whole matrix (macOS,
+# Windows and the Linux rows), since a pull request may have merged with `skip-ci`; a red main
+# run opens the `main-red` issue (flakes.yml), and a newer push cancels the older run. A change that touches only prose (docs, skills, lessons, root Markdown,
 # changeset fragments) runs the gates alone. A pull request labelled `full-ci` also runs the Linux
 # rows (GCC debug+ASan, GCC and Clang release, arm64), the lint and the shaders' check, and the
 # whole packaging.
 #
-# A pull request labelled `skip-ci` runs nothing at all, on the PR and in the queue: it merges as
-# soon as it is armed, and what it breaks is fixed after it lands (the `commit` skill).
+# Every queued group that changes more than prose is also compiled with Linux GCC (no tests),
+# `skip-ci` or not. A pull request labelled `skip-ci` runs nothing else, on the PR and in the
+# queue: it merges once that compile passes, and what else it breaks shows on main's run and is
+# fixed after it lands (the `commit` skill).
 #
 # The ruleset requires ONE check, `required` (the last job): it passes when every job either
 # passed or was skipped by the rules above, so a skipped row never leaves a required check
@@ -72,6 +75,7 @@ jobs:
       package: ${{ steps.scope.outputs.package }}
       scaffold: ${{ steps.scope.outputs.scaffold }}
       rows: ${{ steps.scope.outputs.rows }}
+      compile: ${{ steps.scope.outputs.compile }}
       skip: ${{ steps.scope.outputs.skip }}
     steps:
       - uses: actions/checkout@v5
@@ -130,8 +134,18 @@ jobs:
               SKIP=true
             fi
           fi
+          # A queued group that changes more than prose is always compiled with Linux GCC (the
+          # `linux-gcc` job), skip-ci or not: its -Werror is where merged changes break main.
+          COMPILE=false
+          if [ "$EVENT" = merge_group ]; then
+            if ! CHANGED=$(git diff --name-only "$QUEUE_BASE" HEAD 2> /dev/null) ||
+              echo "$CHANGED" | grep -Evq '^(docs/|\.agents/|\.changes/|porting/.*\.md$|[^/]*\.md$|LICENSE$)'; then
+              COMPILE=true
+            fi
+          fi
+          echo "compile=$COMPILE" >> "$GITHUB_OUTPUT"
           if [ "$SKIP" = true ]; then
-            echo "::warning::skip-ci: no check runs on this change; fix what it breaks after it lands"
+            echo "::warning::skip-ci: no check runs on this change but the Linux GCC compile; fix what it breaks after it lands"
             {
               echo "skip=true"
               echo "code=false"
@@ -161,6 +175,9 @@ jobs:
             CODE=true  # no base to diff against (a new branch, a forced push): run everything
             SCAFFOLD=true
           fi
+          # A push to main always runs: a newer push cancels the older run, so the commit before
+          # this one may never have been tested, and only a run of the whole tree answers for it.
+          if [ "$EVENT" = push ]; then CODE=true; fi
           # A label other than full-ci changes only the gates' answer: run them alone.
           if [ "$ACTION" = labeled ] && [ "$LABEL" != full-ci ]; then CODE=false; fi
           FULL=false
@@ -169,7 +186,7 @@ jobs:
           if [ "$EVENT" = merge_group ] || [ "$FULL" = true ]; then PACKAGE=true; fi
           ROW_MAC='{"os":"macos-15","cxx":"clang++","preset":"release"}'
           ROWS_LINUX='{"os":"ubuntu-24.04","cxx":"g++","preset":"debug"},{"os":"ubuntu-24.04","cxx":"g++","preset":"release"},{"os":"ubuntu-24.04","cxx":"clang++","preset":"release"},{"os":"ubuntu-24.04-arm","cxx":"g++","preset":"release"}'
-          if [ "$FULL" = true ]; then ROWS="[$ROW_MAC,$ROWS_LINUX]"; else ROWS="[$ROW_MAC]"; fi
+          if [ "$FULL" = true ] || [ "$EVENT" = push ]; then ROWS="[$ROW_MAC,$ROWS_LINUX]"; else ROWS="[$ROW_MAC]"; fi
           {
             echo "code=$CODE"
             echo "full=$FULL"
@@ -277,12 +294,55 @@ jobs:
         if: runner.os != 'Linux' || runner.arch != 'X64'
         run: ctest --preset ${{ matrix.preset }}
 
+  # Linux GCC, compile only, on every queued group that changes more than prose, `skip-ci`
+  # included: the release preset with the tree's -Werror, through main's compiler cache. No pull
+  # request row builds with GCC, so without this a GCC-only warning (a missing break, a missing
+  # field initializer) lands on main and breaks every thread's precheck.
+  linux-gcc:
+    needs: gates
+    if: needs.gates.outputs.compile == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CXX: g++
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+      CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_MAXSIZE: 500M
+    steps:
+      - uses: actions/checkout@v5
+      - name: The week, for the apt cache's key
+        id: week
+        run: echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: .cache/apt
+          key: apt-ubuntu-24.04-${{ hashFiles('tools/setup-ubuntu.sh') }}-${{ steps.week.outputs.week }}
+          restore-keys: apt-ubuntu-24.04-
+      - name: Install the platform's and the GPU's Linux packages
+        timeout-minutes: 15
+        run: sudo tools/setup-ubuntu.sh --cache-dir=.cache/apt
+      - uses: actions/cache@v4
+        with:
+          path: .cache/deps
+          key: deps-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('cmake/Dawn.cmake', 'cmake/SDL.cmake', 'cmake/Codecs.cmake') }}
+      # The test job's GCC release row, as main last saved it.
+      - uses: actions/cache/restore@v4
+        with:
+          path: .cache/ccache
+          key: ccache-ubuntu-24.04-g++-release-${{ github.sha }}
+          restore-keys: ccache-ubuntu-24.04-g++-release-
+      - run: cmake --preset release
+      - run: cmake --build --preset release
+      - run: ccache --show-stats
+
   # MSVC on every pull request too, not only in the queue: its warnings (/W4 /WX) and its CRT are
   # where Linux-built changes break most, and a break first found at the head of the queue costs
-  # every PR queued behind it a full rebuild of the matrix.
+  # every PR queued behind it a full rebuild of the matrix. And on main, after every push.
   windows:
     needs: gates
-    if: needs.gates.outputs.code == 'true' && github.event_name != 'push'
+    if: needs.gates.outputs.code == 'true'
     runs-on: windows-2025
     timeout-minutes: 60
     steps:
@@ -359,7 +419,7 @@ jobs:
 
   # The one check the ruleset requires: every job above passed, or was skipped by the rules.
   required:
-    needs: [gates, test, windows, lint, packaging]
+    needs: [gates, test, linux-gcc, windows, lint, packaging]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 10

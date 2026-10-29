@@ -25,6 +25,9 @@ stepped again through the game's own `Run`, never a recording of positions or pi
 | `capture/av_export.hpp/.cpp` | The A/V clock: pictures on the frame clock, the synth rendered to each step's sample before the run's sound hears it, the file interleaved by time |
 | `capture/sync_fixture.hpp/.cpp` | A game that flashes and clicks on the same steps, with its sound |
 | `capture/codecs.hpp/.cpp` | The AV1 (libaom) and Opus (libopus) encoders and decoders as packets, the `av1C` record; stubs when `GE_ENCODERS` is off (`cmake/Codecs.cmake`) |
+| `capture/interleave.hpp/.cpp` | The encoded pictures and sound held and written in time order; a picture fed to the encoder is still to come until its packet is out |
+| `capture/live.hpp/.cpp` | The live capture: the mix tapped into a lock-free ring whose sample count is the clock, frames stamped on it, pictures handed in by a swap, a worker that encodes and writes |
+| `gpu/readback_ring.hpp/.cpp` | The live capture's ring of readbacks: a frame copied back with no stall, oldest first, a capture with every slot in flight dropped |
 | `play/game.hpp`'s `Sound`, `SoundSpec`, `GE_SOUND` | The run's sound on the play contract; Fall Line's is `games/fall_line/sound/play_sound.hpp` |
 
 `tests/replay_walker.hpp` is the toy game the replay tests share (a walker on its own seeded
@@ -68,6 +71,15 @@ stream, its log and the straight digest).
   change to `av_export`, `record`'s mkv path or a game's `Sound` runs `make lab LAB=capture`
   before and after: `late`, `early` and `unshown` 0, `sound-off-ms` under 0.1; Fall Line's runs
   `make lab LAB=capture-run` too (the sound never silence, every picture and sample in the file).
+- **The live capture never makes a frame wait.** The game's thread only stamps, requests a copy
+  and swaps buffers (`Live::stamp`, `ReadbackRing::capture`/`poll`, `Live::picture`); the audio
+  thread only copies into a lock-free ring; everything slow is the worker's. A frame that finds
+  no free slot or a full queue is DROPPED and counted, never queued without bound. The clock is
+  the tap's sample count, so the sync is the device's, not the wall clock's. A change to
+  `live.cpp`, `interleave.cpp` or `readback_ring.cpp` runs `tests/capture_live_test.cpp`,
+  `tests/gpu_readback_ring_test.cpp` and `make lab LAB=gpu-capture-live` before and after
+  (`frames.in-file` equal to the frames handed in, `sync.worst-lag` under a frame,
+  `capture-call.max` far under a frame).
 - **The muxer's bytes are pinned.** `tests/capture_matroska_test.cpp` pins one small file's hash;
   a deliberate change of the layout rewrites it and says why in the PR. The file must still read
   when cut at a cluster's end (a crash), and ffmpeg must decode what the labs write.
