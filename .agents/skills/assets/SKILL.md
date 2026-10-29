@@ -167,6 +167,15 @@ make lab LAB=models ARGS="--model=plugins/skier/assets/skier/skier.glb"   # then
   influences a vertex, one rest pose a skin, an action baked at **60 frames a second** (24 shows
   as a row of kinks in the lab), glb with base colour factors and no textures.
 
+## Images: PNG and PCX
+
+`assets/image.hpp` reads PNG (palette included) into RGBA8. `assets/pcx.hpp` reads the 8-bit,
+one-plane, run-length PCX that classic player skins come in, and keeps the INDICES (a skin's
+colour rows are what a player's colours replace) and the file's palette. Its runs are decoded as
+one stream across lines, because writers differ. `encode_pcx` writes the same form for tests and
+tools. Both run at load, never on a frame. Skins found online are third-party: read them locally,
+never commit them.
+
 ## A model's size in the repository
 
 A `.glb` does not diff, so every rebuild adds a whole copy to the history. Commit only the
