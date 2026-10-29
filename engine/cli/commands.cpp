@@ -120,6 +120,11 @@ constexpr FlagSpec kLintFlags[] = {
     kPreset,
     kEngine,
     kRepo};
+constexpr FlagSpec kTextureBakeFlags[] = {
+    {"ref", "<words>", "the reference's seed and params: \"seed=12 wear=0.8\""},
+    {"size", "<px>", "bake at this size instead of the recipe's (a power of two)"},
+    {"out", "<dir>", "the cache directory (default build/textures)"},
+    kRepo};
 constexpr FlagSpec kGoalsFlags[] = {
     {"base", "<ref>", "the roadmap rows are already taken on (default origin/main)"},
     {"fetch", "", "git fetch origin first (the default; kept so old command lines still run)"},
@@ -281,6 +286,12 @@ constexpr FlagSpec kSourceSearchFlags[] = {
     {"kind", "<sound|model>", "only sounds or only models, where a source holds both"},
     {"refresh", "", "read the source's listing again instead of the cached one"},
     {"cache", "<dir>", "where packs are kept (default GE_ASSET_CACHE, else ~/.cache/ge/sources)"}};
+constexpr FlagSpec kContentScanFlags[] = {
+    {"assetmap", "<file>", "the game's asset map the set is held to"},
+    {"registry", "<dir>", "the directory of the game's sounds.tsv and models.tsv"},
+    kPreset,
+    kEngine,
+    kRepo};
 constexpr FlagSpec kSnowShowFlags[] = {
     {"out", "<dir>", "where the PNGs go (default: snow/ beside the file)"}};
 constexpr FlagSpec kSnowColumnFlags[] = {{"at", "<x,z>", "the point, m (required)"}};
@@ -399,6 +410,16 @@ const CommandSpec kCommands[] = {
      "the roadmap rows taken on the base and on every remote branch, and the next free number "
      "(or, for a row such as M17, the next free letter under it)",
      kGoalsFlags, "ge goals free", "commit"},
+    {"texture kinds", "", 0, 0, "learn",
+     "every procedural texture layer kind, its keys, their defaults and ranges", kRepoOnly,
+     "ge texture kinds", "textures"},
+    {"texture check", "<file.tex>...", 1, -1, "build",
+     "parse texture recipes; every mistake a finding at its line", kRepoOnly,
+     "ge texture check textures/brick_wall.tex", "textures"},
+    {"texture bake", "<file.tex>", 1, 1, "build",
+     "bake one texture variant to PNG maps and a .meta in the cache, or reuse it",
+     kTextureBakeFlags, "ge texture bake textures/brick_wall.tex --ref=\"seed=12 wear=0.8\"",
+     "textures"},
     {"goals claim", "<what>", 1, -1, "learn",
      "the next free row reserved and pushed to this branch at once, then checked against every "
      "branch: an earlier claim on the same row keeps it, and this one moves to the next",
@@ -654,6 +675,14 @@ const CommandSpec kCommands[] = {
      "a pack downloaded and unpacked into the cache (never the repository) with SOURCE.txt: "
      "title, author, page and licence; a licence the repository cannot carry is refused",
      kSourceFlags, "ge source fetch kenney:impact-sounds", "assets"},
+    {"content scan", "<pak|dir>", 1, 1, "see",
+     "every sound, model and numbered sound set a classic content set ships or its maps name, "
+     "where each is used, and what the game's asset map still leaves unmapped (the "
+     "content-scan lab: tables, a picture, assetmap-draft.txt); the report stays in previews/",
+     kContentScanFlags,
+     "ge content scan ~/classic/id1 --assetmap=games/shooters_edge/content/classic.assetmap "
+     "--registry=games/shooters_edge/content",
+     "assets"},
     {"credits check",
      "[<dir>]",
      0,

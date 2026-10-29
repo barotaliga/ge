@@ -143,6 +143,7 @@ side, and charts the steer meant against pressed.
 | A skier's pilot (pure pursuit, the speed plan on the limits) | `plugins/skier/pilot.hpp` | built (M16c) |
 | Paths (one heap, grid and graph search), thinking on a schedule | `engine/ai/path.hpp`, `think.hpp` | built (M16d) |
 | Sight and memory, steering (pursuit along a line, a fan of headings, separation over a grid, the stuck check), choosing (a utility selector, a flat state machine, both decision records) | `engine/ai/sight.hpp`, `memory.hpp`, `steer.hpp`, `choose.hpp` | built (M16e) |
+| A first-person map's navigation, every link proven by running the player move (the first plugin user of `ai/path`'s graph search on its own) | `plugins/shooter/nav.hpp` | built (M18r1) |
 
 A piece lands with its first user, never before (G4). A bot a game writes before its piece exists
 still records its decisions, and moves onto the piece when it lands.
