@@ -3,13 +3,21 @@ name: packaging
 # Holds what the release workflow will need, so a dispatched release does not find out first
 # (docs/publishing.md). Called by ci.yml on a queued merge (and a pull request labelled
 # `full-ci`); tools/release.py's tests and the changeset rule run in ci.yml's gates.
-#   package        install the package and build a consumer against it,
-#                  on every platform a release ships
+#   package        install the package and build a consumer against it, on Windows and macOS
+#                  (where the install rules can come out different), and on Linux when asked
 #   scaffold       `ge new` writes a game repo and ge alone grows it (use, add
 #                  system, lab, test, water), passes `ge check` against this tree, and
-#                  plays it (sim, replay, play, state, diverge)
+#                  plays it (sim, replay, play, state, diverge); when asked (ci.yml asks when
+#                  the change reaches the command line, the templates or the build)
 on:
   workflow_call:
+    inputs:
+      linux:
+        type: boolean
+        default: true
+      scaffold:
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -21,7 +29,7 @@ jobs:
       matrix:
         # Windows on the same image as ci.yml's windows row, so one MSVC judges every Windows
         # build: windows-latest moved to a newer MSVC whose warnings the PR row never saw.
-        os: [ubuntu-latest, macos-latest, windows-2025]
+        os: ${{ fromJSON(inputs.linux && '["ubuntu-latest","macos-latest","windows-2025"]' || '["macos-latest","windows-2025"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
     defaults:
@@ -43,6 +51,7 @@ jobs:
           stage/bin/ge version
 
   scaffold:
+    if: inputs.scaffold
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -120,7 +129,7 @@ jobs:
           # The recorded bits: every lab's digest committed and held by ge test, one lab checked
           # alone; a golden file's rows diffed column by column; a test with no golden written.
           "$G" digest --write "$E"
-          test -s tests/labs_digests.txt
+          test -s tests/digests/look.txt
           "$G" digest look "$E" --json | grep -q '"state":"same"'
           "$G" test --filter=labs_smoke "$E"
           # A filter builds only its tests' targets: laps_test alone, then run.
