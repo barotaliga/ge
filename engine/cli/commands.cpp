@@ -105,7 +105,7 @@ constexpr FlagSpec kCiFlags[] = {
      "block until the checks finish, one fails or it conflicts (at most 60 minutes), then answer"},
     kRepo};
 constexpr FlagSpec kDigestFlags[] = {
-    {"write", "", "rewrite the lab's row of tests/labs_digests.txt (every row with no lab)"},
+    {"write", "", "rewrite the lab's file under tests/digests/ (every lab's with no lab named)"},
     {"diff", "", "print only the labs whose digest is off the baseline; write nothing"},
     {"affected", "", "the labs the change since --base reaches, each by its own source's object"},
     {"base", "<ref>", "with --affected: the change since this ref (default origin/main)"},
