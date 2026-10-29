@@ -48,13 +48,15 @@ namespace ge::play {
 // own (an mkv's: none, uncompressed; `av1` for AV1 and Opus); `crf` < 0 its usual quality (23
 // for H.264, 32 for VP9 and AV1: lower is better and larger); a
 // `bitrate` ("4M") replaces the crf. `preset` is H.264's speed against size (ultrafast .. veryslow;
-// default medium).
+// default medium). `container` mp4 puts an mkv's AV1 and Opus in the engine's own fragmented MP4
+// (capture/mp4.hpp) in place of a .webm.
 struct Encoding {
   std::string format = "mp4";
   std::string codec;
   int crf = -1;
   std::string bitrate;
   std::string preset;
+  std::string container;
 };
 
 // Why `e` cannot be encoded ("" when it can).
