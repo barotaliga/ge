@@ -8,7 +8,8 @@
 #   2. agents-check  the links, the router, the line cap, the ge: tags, the lessons
 #   3. libm-check    no <cmath> transcendental in simulation code
 #   4. release       the changeset fragments valid
-#   5. build         the preset's build (incremental)
+#   5. build         the preset's build (incremental); a change no build reads (prose, the gates'
+#                    Node and Python tools) stops after step 4
 #   6. lint          clang-tidy over what the change since BASE (default origin/main) reaches
 #      shaders       every embedded WGSL shader through Tint (incremental: only what changed)
 #   7. tests         cli_diagnostics_test (every message held to the diagnostics convention),
@@ -63,6 +64,23 @@ gate fmt-check make -s fmt-check || true
 gate agents-check make -s agents-check || true
 gate libm-check make -s libm-check || true
 gate release python3 tools/release.py check || true
+
+# A change no build reads (prose as ci.yml's gates job counts it, the gates' own Node and Python
+# tools, .gitignore) stops at the gates above: building 10 GB to test it proves nothing more.
+merge_base="$(git merge-base "$base" HEAD 2>/dev/null || echo HEAD)"
+gate_only='^(docs/|\.agents/|\.changes/|porting/.*\.md$|[^/]*\.md$|LICENSE$|\.gitignore$|tools/[^/]*\.(mjs|py)$)'
+if ! { git diff --name-only "$merge_base" --; git ls-files --others --exclude-standard; } |
+  grep -Evq "$gate_only"; then
+  if ((${#failed[@]})); then
+    echo "precheck: red: ${failed[*]} (each above; every gate's output in $log). Fix them, then" \
+      "make precheck again." >&2
+    exit 1
+  fi
+  echo "precheck: the change touches nothing a build reads, so the gates are all of it" \
+    "($((SECONDS - start)) s); push."
+  exit 0
+fi
+
 if ! gate build make -s build PRESET="$preset"; then
   echo "precheck: the build failed, so the lint, the tests and the digests could not run;" \
     "red: ${failed[*]}. Fix them, then make precheck again." >&2
@@ -78,7 +96,6 @@ fi
 # whose target the change reaches through the include graph (`ge test --affected --list`: a plugin
 # change reaches the game's tests through the game library including its headers). The labs'
 # smoke slices are left to the digests below.
-merge_base="$(git merge-base "$base" HEAD 2>/dev/null || echo HEAD)"
 mapfile -t changed < <(git diff --name-only --diff-filter=d "$merge_base" --; git ls-files --others --exclude-standard)
 tests=(cli_diagnostics_test)
 for f in "${changed[@]}"; do
