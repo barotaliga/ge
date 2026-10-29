@@ -1,0 +1,155 @@
+// THE HUD AS DATA: a game declares its HUD once as a table of ELEMENTS (its speed, its health
+// bar, its wanted stars, its news column), writes each element's CONTENT once a frame, and the
+// layout places and draws them with the kit's widgets (hud.hpp). Where an element sits and how
+// big it is drawn are the element's PLACE, and every place is a set of cvars (`add_hud_cvars`),
+// so a player moves, resizes, hides and fades any element from a cfg or the console without the
+// game's code knowing (docs/hud.md).
+//
+// AN ELEMENT is a widget `Kind`, a default place (one of the nine anchors, an offset as a share
+// of the safe area, a scale and an opacity) and the kind's shape (a bar's length, the pips' size,
+// the feed's column). Elements that share an anchor STACK in table order (hud.hpp's `Stack`):
+// hiding one closes the gap, and an element's own offset moves it alone. Two rules keep the
+// centre clear of the corners, each an element's option:
+//   - `under_corners`: an element on the top or bottom row's middle anchor that would meet a box
+//     of its row's corner stacks drops past both (the taller one's height and a gap), so a narrow
+//     screen's air clock goes under the corners' columns instead of over them;
+//   - `under`: an element kept at least a gap below another element's box while that one shows.
+//
+// THE CONTENT is what the game writes once a frame, by the element's index: whether it shows
+// now, its words (value, caption, unit), its level (a bar's 0..1, or -1..1 centred), its pips
+// (count, lit, blinking off), its colour, and for a feed the feed and the clock. The layout
+// never reads the game: a snapshot in, pixels out, so a lab, a test or a replay draws the HUD
+// with no game running.
+//
+// THE CVARS, per element `<id>` (no archive flag until the player's own `seta` gives one, so
+// `cfg_save` keeps only what the player set):
+//   hud_<id>_show     0 hides it
+//   hud_<id>_anchor   top_left, top, top_right, left, center, right, bottom_left, bottom,
+//                     bottom_right (a word it does not know keeps the game's)
+//   hud_<id>_x/_y     its offset, a share of the safe area's width and height (y down)
+//   hud_<id>_scale    its size, times the frame's scale
+//   hud_<id>_alpha    its opacity, 0..1
+// and for the whole HUD `hud_scale`, `hud_alpha` and `hud_margin` (reference px from the screen's
+// safe edge). `hud_reset [<id>]` puts one element (or all of them) back to the game's place.
+//
+// ge:summary The HUD as data: elements, their places as hud_ cvars, per-frame content, drawing
+// ge:keywords hud layout element elements content place anchor offset scale alpha show cvars
+// ge:keywords hud_scale hud_alpha hud_margin hud_reset under-corners stack customizable
+// ge:keywords player-layout add_hud_cvars
+// ge:skill ui console
+// ge:test tests/hud_layout_test.cpp
+#pragma once
+
+#include <cstdint>
+#include <deque>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <vector>
+
+#include "console/console.hpp"
+#include "hud/feed.hpp"
+#include "hud/hud.hpp"
+
+namespace ge::hud {
+
+// The widget that draws an element.
+enum class Kind : uint8_t {
+  readout,  // a value over its caption
+  big,      // a big number, its unit, a caption under them
+  bar,      // a meter; with a caption, the caption under it
+  pips,     // a row of symbols, some lit
+  banner,   // a title and a line on a plate
+  feed,     // lines that arrive, hold and fade
+};
+
+// An anchor's cvar word, and back (nullopt for a word that is none of the nine).
+std::string_view anchor_name(Anchor a);
+std::optional<Anchor> anchor_from(std::string_view word);
+
+// What the game declares once: an element's id (its cvars' middle word: lower case, digits and
+// `_`), kind, default place and shape.
+struct ElementSpec {
+  std::string_view id;
+  Kind kind = Kind::readout;
+  Anchor anchor = Anchor::top_left;
+  double x = 0, y = 0;  // the offset, a share of the safe area's width and height
+  double scale = 1, alpha = 1;
+  bool show = true;
+  std::string_view help = {};  // what it shows, for its cvars' help
+  Meter bar = {};              // kind bar: its length, height, ticks, centred (the fill is content)
+  Pips pips = {};              // kind pips: the symbol, its font, size and spacing
+  float feed_size = 21;        // kind feed: the type, reference px
+  float feed_w = 330;          // kind feed: the column's width at most, reference px
+  float feed_share = 1;        // kind feed: and at most this share of the safe area's width
+  bool under_corners = false;
+  std::string_view under = {};  // an element's id
+};
+
+// What the player may change: bound to the element's cvars.
+struct ElementPlace {
+  bool show = true;
+  std::string anchor;
+  double x = 0, y = 0, scale = 1, alpha = 1;
+};
+
+// What the game writes once a frame.
+struct Content {
+  bool on = false;  // shown this frame (and the player has not hidden it)
+  std::string value, caption, unit;
+  float level = 0;
+  int count = 0, lit = 0;
+  bool blink_off = false;
+  ui::Color color{1, 1, 1, 1};
+  const Feed* feed = nullptr;
+  double t = 0;  // s, the feed's clock
+};
+
+struct Element {
+  std::string id, help;
+  ElementSpec spec;  // its `id` and `help` views point at the strings above; `under` is cleared
+  ElementPlace place;
+  Content content;
+  int under = -1;  // the index of `spec.under`, or -1
+  // Where it was drawn last, for `under` and the edit mode.
+  ui::Rect drawn;
+  bool shown = false;
+};
+
+class Layout {
+ public:
+  Layout() = default;
+  Layout(const Layout&) = delete;
+  Layout& operator=(const Layout&) = delete;
+  Layout(Layout&&) noexcept = default;
+  Layout& operator=(Layout&&) noexcept = default;
+
+  // Declares an element; returns its index. Every `under` names an element declared before it.
+  int add(const ElementSpec& spec);
+  int find(std::string_view id) const;  // -1 when none
+  size_t size() const { return elements_.size(); }
+  Element& operator[](size_t i) { return elements_[i]; }
+  const Element& operator[](size_t i) const { return elements_[i]; }
+  Content& content(int i) { return elements_[static_cast<size_t>(i)].content; }
+
+  // The whole HUD: its scale over the frame's, its opacity, and the margin (reference px) its
+  // frame keeps from the screen's safe edge. Bound to hud_scale, hud_alpha, hud_margin.
+  double scale = 1, alpha = 1;
+  double margin = 20;
+
+  // The frame the layout draws in: `style`'s, with this layout's margin and scale.
+  Frame frame(int width, int height, const Style& style, Insets insets = {}) const;
+
+  // Every element whose content is on and whose place shows, in table order; returns each box
+  // by the element's id, for the layout check.
+  std::vector<Placed> draw(ui::DrawList& dl, const Frame& f, const Style& st);
+
+ private:
+  std::deque<Element> elements_;  // stable addresses: the cvars are bound into them
+};
+
+// Registers every element's cvars, the whole HUD's and `hud_reset`, bound into `layout` (which
+// must outlive `con`). Call once, after the last `add`.
+void add_hud_cvars(console::Console& con, Layout& layout);
+
+}  // namespace ge::hud

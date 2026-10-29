@@ -39,6 +39,7 @@
 #include <cstdint>
 
 #include "mountain/mapgen/types.hpp"
+#include "save/io.hpp"
 #include "skier/trees.hpp"
 
 namespace ge::skier {
@@ -87,6 +88,30 @@ struct Ragdoll {
   std::array<double, kPoints> impact{};
   std::array<double, kPoints> struck{};
   std::array<int32_t, kPoints> struck_by{};  // the trunk each point met hardest, -1 none
+  template <class Io>
+  friend void describe(Io& io, Ragdoll& v) {
+    io(v.active);
+    io(v.p);
+    io(v.last);
+    io(v.x);
+    io(v.y);
+    io(v.z);
+    io(v.vx);
+    io(v.vy);
+    io(v.vz);
+    io(v.t);
+    io(v.tumble);
+    io(v.touching);
+    io(v.planted);
+    io(v.leaning);
+    io(v.down);
+    io(v.still);
+    io(v.aloft);
+    io(v.ground);
+    io(v.impact);
+    io(v.struck);
+    io(v.struck_by);
+  }
 };
 
 // HOW A BODY GOES OVER: the share of his tumble head over heels along his way (negative back),

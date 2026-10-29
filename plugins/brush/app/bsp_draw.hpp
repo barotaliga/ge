@@ -39,7 +39,7 @@
 namespace ge::brush::app {
 
 enum class Mode : uint8_t { classic, v2 };
-enum class Lighting : uint8_t { lightmaps, lights };
+enum class Lighting : uint8_t { lightmaps, lights, rebaked };
 // "classic" or "v2"; false for any other word.
 bool parse_mode(std::string_view word, Mode* out);
 
@@ -67,6 +67,9 @@ struct Options {
   // halls), times `sky_tint` (each channel's share, a tint toward the map's own sky).
   double sky_light = 1;
   double sky_tint[3] = {1, 1, 1};
+  // r_bump: the relief the rebaked lighting reads off each texture's luminance, m from black to
+  // white (0: flat faces). Only `Lighting::rebaked` draws it.
+  double bump = 0.012;
   // THE WEATHER (v2; bsp_weather.hpp): on, the rain falling now (0 .. 1: its ripples in the
   // puddles), and the way it falls (unit, down and downwind), which a third orthographic map looks
   // along so only what the fall reaches is wet, pooled or snowed on. How wet, how deep the
@@ -97,7 +100,8 @@ struct GpuBsp {
   float info2[4];
   float sky[4];
   float info3[4];    // the floor (minlight), the bounce, the sky's light, filtered (1) or crisp
-  float weather[4];  // on (1), the rain falling now, 0, 0
+  float info4[4];    // the relief's depth (bump), m
+  float weather[4];  // on (1), the rain falling now, the fall's spread, 0
   GpuJob ortho[kOrthos];
 };
 
@@ -107,6 +111,8 @@ struct BspDraw {
   // Index ranges by kind (draw_data.hpp's `Kind`): first, count.
   uint32_t range[kKinds][2] = {};
   wgpu::Texture atlas, light;
+  // The scene's rebaked light (RGB9E5) and its direction (RGBA8), or 1 x 1 stand-ins.
+  wgpu::Texture rebake_rgb, rebake_dir;
   wgpu::Buffer uniform, lights, jobs;
   wgpu::Texture cubes, orthos;
   std::vector<wgpu::TextureView> cube_layers;  // a view a cube face

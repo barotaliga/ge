@@ -30,6 +30,7 @@
 #include "render/wgsl/atmosphere.wgsl"
 #include "render/wgsl/surface.wgsl"
 #include "render/wgsl/lights.wgsl"
+#include "render/wgsl/valley_fog.wgsl"
 
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var linear_clamp: sampler;
@@ -353,19 +354,21 @@ fn mist_sky(d: vec3f) -> vec3f {
   return veil_sky(h, sky_luminance(h));
 }
 
-// THE HAZE: a surface's colour seen through `dist_m` of air at screen `uv` (0..1): its colour
+// THE HAZE: a surface's colour seen through `dist_m` of air at screen `uv` (0..1): first through
+// the sea of fog in the valleys (`valley_fog`, lying beyond most of the air); then its colour
 // times the air's transmittance plus the light the air scatters in, from the aerial-perspective
 // volume (under a deck, the deck's grey in its place); then a fog or a fall closing it into its
 // grey veil, so a surface at the visual range keeps 2 % of its contrast against it; then the
-// reach's mist closing it into the sky behind it; then the fog in areas (`local_fog`). Every world
-// material calls this, and none has its own fog.
+// reach's mist closing it into the sky behind it (seen through the valley's sea as the sky is);
+// then the fog in areas (`local_fog`). Every world material calls this, and none has its own fog.
 fn haze(colour: vec3f, uv: vec2f, dist_m: f32) -> vec3f {
-  let c = haze_air(colour, uv, dist_m);
+  let c = haze_air(valley_fog(colour, uv, dist_m), uv, dist_m);
   if (frame.mist.y <= 0.0) {
     return local_fog(c, uv, dist_m);
   }
   let t = clamp((dist_m - frame.mist.x) / (frame.mist.y - frame.mist.x), 0.0, 1.0);
-  return local_fog(mix(c, mist_sky(view_ray(frame, uv)), t * t * (3.0 - 2.0 * t)), uv, dist_m);
+  let behind = valley_fog(mist_sky(view_ray(frame, uv)), uv, 1e30);
+  return local_fog(mix(c, behind, t * t * (3.0 - 2.0 * t)), uv, dist_m);
 }
 
 // THE FOG IN AN AREA (render/fog.hpp), the nearest air of all, so it veils the haze, the mist,

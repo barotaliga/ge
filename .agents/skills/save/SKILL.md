@@ -23,7 +23,10 @@ is the procedure. Read its lessons first: `make lessons ARGS=save`.
 - **Bulk where it is honest.** Numbers, enums and their vectors and arrays are one memcpy. A
   struct may be `GE_SAVE_PLAIN(T)` only when `plain_problem<T>()` is empty (no padding, every
   byte a described field, in order); put that check in the type's test.
-- **No pointers in a save.** Refer by index; the shared, immutable parts are rebuilt by the setup.
+- **No pointers into the setup.** Refer by index; the shared, immutable parts (the map, its
+  indices, `GameState::level`) are rebuilt by the setup and left out of the describe. A
+  `shared_ptr` a step can replace (a bot's plan's track) is saved as its own copy; a debug hook
+  (`ai::Why*`) is not the run's and is left out.
 - **Refusals are prompts.** A reader never throws and never reads past its bytes: it keeps the
   first problem with its byte, and `FileReader` names the file, the chunk and the next action.
 
@@ -34,7 +37,23 @@ is the procedure. Read its lessons first: `make lessons ARGS=save`.
    version starting at 1.
 3. Test it: a value written and read back writes the same bytes (`save_io_test.cpp` is the
    pattern), and a plain type's `plain_problem` is empty.
-4. For a run: saved, loaded and stepped on, the digest equals the run never saved (M25b's lab).
+4. For a run: `Run::save` puts the chunks, `Run::load` gets them (both walk the same fields; a
+   group of private members goes through one private template, as Fall Line's `pilot_fields`),
+   and `check_saves` (`ge save check`, the `save-run` lab, `tests/play_saves_test.cpp`) holds
+   every save to the run never saved.
+
+## Checking a run
+
+```sh
+make lab LAB=save-run                                  # every Fall Line scene, a save every 10 s
+build/debug/ge save check runs/fall_line-38.inputs     # a log's saves against the run never saved
+build/debug/ge save diff a.save b.save                 # which chunk and which field of `state`
+```
+
+A save that parts: `ge save write` the log at the step it parted from and at the step before,
+`ge save diff` them, and look for the field a step wrote that no describe lists. A new member in
+a described struct is the usual cause: add it to the describe (and bump the chunk's version
+with `since` when saves already exist).
 
 ## Checking a file
 

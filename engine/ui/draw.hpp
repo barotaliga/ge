@@ -209,6 +209,9 @@ class DrawList {
 
   const std::vector<Cmd>& cmds() const { return cmds_; }
   size_t size() const { return cmds_.size(); }
+  // Every command from the `from`th on drawn `alpha` times as strongly (a HUD element faded as
+  // a whole): its opacity, or a text run's colour, scaled.
+  void fade(size_t from, float alpha);
   // Every polygon's points, each command's at its `first`.
   const std::vector<PolyPoint>& points() const { return points_; }
 
