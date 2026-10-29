@@ -70,6 +70,7 @@
 
 #include "fall_line/app/scene.hpp"
 #include "fall_line/cfg/cvars.hpp"
+#include "fall_line/sim/village.hpp"
 #include "gpu/device.hpp"
 #include "gpu/pipeline.hpp"
 #include "mountain/app/snow.hpp"
@@ -128,6 +129,8 @@ struct FrameOptions {
       -1;  // how thick every layer is, 0 thin .. 1 thick (CloudLayer::thick_bias); -1 own
   double cloud_height = -1;  // the lowest layer's base over the floor, m (Aloft::base); -1 own
   double cloud_speed = -1;   // the layers' share of the true wind aloft (Aloft::speed); -1 own
+  double sun_size = 1;       // the sun's disc drawn larger (render/view.hpp's FrameView::sun_size)
+  double moon_size = 1;      // the moon's disc drawn larger (FrameView::moon_size)
   // The kinds of cloud drawn in place of the map's (sv_clouds, app/sky_type.hpp), lowest first;
   // a count of -1 keeps the map's own.
   const ge::render::CloudKind* cloud_kinds[ge::render::kCloudLayers] = {};
@@ -160,6 +163,8 @@ struct FrameScene {
   // The 2D layer's list drawn over the finished frame (the console, ui/console.hpp), begun at
   // the output's size; null or empty: nothing.
   const ge::ui::DrawList* overlay = nullptr;
+  // The run's clock, s: where the village's traffic is drawn (sim/village.hpp's `vehicle_at`).
+  double run_time = 0;
 };
 
 struct GameFrame {
@@ -202,7 +207,12 @@ struct GameFrame {
   ge::render::UiPass ui;
   ge::render::InstancePipelines instancing;
   ge::render::InstanceFamily forest, figures, crowd;
-  ge::render::InstanceFamily* families[3] = {&forest, &figures, &crowd};
+  // The free ride's village (`show_village`): its streets, its parked cars and its traffic.
+  ge::render::InstanceFamily village;
+  std::vector<ge::render::InstanceFamily*> families{&forest, &figures, &crowd};
+  std::shared_ptr<const sim::Village> shown_village;  // kept while drawn
+  uint32_t village_fixed = 0;  // the streets' instance and the parked cars', before the traffic
+  std::vector<ge::render::Instance> staged_village;
   wgpu::BindGroup instance_light;
   ge::render::SunShadows shadows;
   const ge::mountain::mapgen::Level* level = nullptr;
@@ -237,6 +247,13 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
                                         const ge::mountain::mapgen::Level& level, uint32_t width,
                                         uint32_t height, wgpu::TextureFormat output,
                                         const FrameOptions& options = {});
+
+// THE FREE RIDE'S VILLAGE drawn in the frame from now on: the trees felled for it left out of the
+// forest, its streets laid on the snow, its parked cars, and its traffic where each frame's
+// `FrameScene::run_time` has it (mountain/app/village_look.hpp); the frame keeps it while it draws
+// it. Nothing for null. Its vehicles cast no shadow yet: the cascades are cached for what stands.
+void show_village(ge::gpu::Device& device, GameFrame& frame,
+                  std::shared_ptr<const sim::Village> village);
 
 // New targets for outputs of width x height (a resized window); the history starts over.
 void resize(ge::gpu::Device& device, GameFrame& frame, uint32_t width, uint32_t height);

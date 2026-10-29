@@ -46,8 +46,9 @@ inline constexpr int kMaxFigures = 8;
 std::vector<ge::render::MeshSource> forest_meshes();
 // Linear rgb, three floats a material.
 std::vector<float> forest_materials();
-// Every tree of the map, in its order.
-std::vector<ge::render::Instance> tree_instances(const ge::mountain::mapgen::Level& level);
+// Every tree of the map, in its order, but those `felled` flags 1 (empty: none felled).
+std::vector<ge::render::Instance> tree_instances(const ge::mountain::mapgen::Level& level,
+                                                 std::span<const uint8_t> felled = {});
 
 // The skier model, read once from the bytes compiled into the game; `ok` false (and `error` why)
 // only when the committed skier.glb is broken.

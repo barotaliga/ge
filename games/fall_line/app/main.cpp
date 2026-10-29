@@ -299,6 +299,7 @@ int main(int argc, char** argv) {
                                             static_cast<uint32_t>(h), surface.format(),
                                             fall_line::app::frame_options(set));
   if (!frame) return 1;
+  fall_line::app::show_village(*device, *frame, fall_line::controls::hand_state(*hand).village);
 
   // The run's sound. The synth outlives the device that pulls it (declared first).
   ge::audio::Synth synth;
@@ -489,10 +490,15 @@ int main(int argc, char** argv) {
     overlay.begin(static_cast<int>(out_w), static_cast<int>(out_h));
     ge::ui::draw_console(overlay, con_view, {}, nullptr, view.time_s);
     // The figures' lags run over the steps this frame took; the first frame starts them settled.
-    fall_line::app::draw(
-        *device, *frame, view,
-        {skiers, static_cast<double>(granted) / 120.0, presented == 0, {}, subject, &overlay},
-        target);
+    fall_line::app::draw(*device, *frame, view,
+                         {skiers,
+                          static_cast<double>(granted) / 120.0,
+                          presented == 0,
+                          {},
+                          subject,
+                          &overlay,
+                          fall_line::controls::hand_state(*hand).t},
+                         target);
     surface.present();
     ++presented;
   }
