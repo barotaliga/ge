@@ -41,6 +41,7 @@
 #include "cli/perf.hpp"
 #include "cli/play.hpp"
 #include "cli/publish.hpp"
+#include "cli/queue.hpp"
 #include "cli/save.hpp"
 #include "cli/scaffold.hpp"
 #include "cli/skills.hpp"
@@ -281,6 +282,11 @@ Outcome run(const Args& a) {
     return run_ci(fs::absolute(repo_of(a)), a.words.empty() ? "" : a.words[0], flag_value(a, "log"),
                   has_flag(a, "merge"));
   }
+  if (name == "queue" || name == "pr clash") {
+    const std::string base = flag_value(a, "base", "origin/main");
+    if (name == "queue") return run_queue(fs::absolute(repo_of(a)), base);
+    return run_pr_clash(fs::absolute(repo_of(a)), a.words[0], base);
+  }
   if (name == "lint") {
     LintOptions l;
     l.files = a.words;
@@ -396,6 +402,7 @@ Outcome run(const Args& a) {
   }
   if (name.starts_with("net ")) return run_net(a);
   if (name == "save inspect") return run_save(a);
+  if (name.rfind("save ", 0) == 0) return run_save_game(build_options(a), a, name.substr(5));
   if (name.starts_with("sound ")) return run_sound(a);
   if (name == "model import") return run_model(a);
   if (name.starts_with("source ")) return run_source(a);

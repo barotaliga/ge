@@ -107,6 +107,8 @@ constexpr FlagSpec kCiFlags[] = {
     {"wait", "[<minutes>]",
      "block until the checks finish, one fails or it conflicts (at most 60 minutes), then answer"},
     kRepo};
+constexpr FlagSpec kQueueFlags[] = {
+    {"base", "<ref>", "the branch the queue merges into (default origin/main)"}, kRepo};
 constexpr FlagSpec kDigestFlags[] = {
     {"write", "", "rewrite the lab's file under tests/digests/ (every lab's with no lab named)"},
     {"diff", "", "print only the labs whose digest is off the baseline; write nothing"},
@@ -222,6 +224,21 @@ constexpr FlagSpec kAssetBuildFlags[] = {
     kRepo};
 constexpr FlagSpec kStateFlags[] = {
     {"step", "<n>", "after this many steps (default: the log's end)"}, kPreset, kEngine, kRepo};
+constexpr FlagSpec kSaveWriteFlags[] = {
+    {"step", "<n>", "save after this many steps of the log (default 0)"},
+    {"out", "<file>", "the save file to write"},
+    {"title", "<text>", "the line a menu shows"},
+    {"place", "<text>", "where in the run, as a menu shows it"},
+    kPreset,
+    kEngine,
+    kRepo};
+constexpr FlagSpec kSaveLoadFlags[] = {
+    {"steps", "<n>", "steps the game's pilot plays on after the load (default 0)"},
+    kPreset,
+    kEngine,
+    kRepo};
+constexpr FlagSpec kSaveCheckFlags[] = {
+    {"every", "<s>", "seconds between saves (default 10)"}, kPreset, kEngine, kRepo};
 constexpr FlagSpec kWhyFlags[] = {
     {"agent", "<n>",
      "the bot to explain: 0 the player's pilot, then the game's others (default 0)"},
@@ -481,6 +498,15 @@ const CommandSpec kCommands[] = {
      "a pull request's state: whether it conflicts with its base, and each failed job's log "
      "read back as findings (through gh, or a saved log); --merge squash-merges it once green",
      kCiFlags, "ge ci 12", "commit"},
+    {"queue", "", 0, 0, "build",
+     "the merge queue in the order it merges (queued, then armed), each merged onto main and "
+     "the queue ahead by git merge-tree; open pull requests that conflict with main; each "
+     "failed queue run's jobs",
+     kQueueFlags, "ge queue", "commit"},
+    {"pr clash", "<pr>", 1, 1, "build",
+     "a pull request merged onto main, then onto main and every pull request queued or armed "
+     "ahead of it: the files that conflict and the first one ahead that brings them in",
+     kQueueFlags, "ge pr clash 209", "commit"},
     {"digest", "[<lab>...]", 0, -1, "build",
      "the labs named (or every lab) at their smoke flags, twice: each digest beside the "
      "committed baseline; --write moves only those labs' rows; --diff prints only the labs "
@@ -545,6 +571,22 @@ const CommandSpec kCommands[] = {
      {},
      "ge save inspect saves/slot-1",
      "saves"},
+    {"save write", "<log>", 1, 1, "play",
+     "a log played to --step and saved by the game to --out: the file's bytes, chunks and the "
+     "save's time",
+     kSaveWriteFlags, "ge save write runs/fall_line-38.inputs --step=7200 --out=saves/a.save",
+     "saves"},
+    {"save load", "<file>", 1, 1, "play",
+     "a save loaded (its map built from the setup it carries) and played on by the game's pilot "
+     "for --steps: the load's time and the digests",
+     kSaveLoadFlags, "ge save load saves/a.save --steps=1200", "saves"},
+    {"save check", "<log>", 1, 1, "play",
+     "a log saved every --every seconds, each save loaded and played on beside the run never "
+     "saved: the first step any parts (a field missing from a describe)",
+     kSaveCheckFlags, "ge save check runs/fall_line-38.inputs --every=10", "saves"},
+    {"save diff", "<a> <b>", 2, 2, "play",
+     "two saves of a game compared: the chunks that differ, then the fields of the state",
+     kBuildFlags, "ge save diff saves/a.save saves/b.save", "saves"},
     {"shot", "[<log>]", 0, 1, "see",
      "a still of a run at a step, drawn headless and captioned (seed, options, step, digest): "
      "a log played to --step, or the pilot's run of --seed; the game's options go after --",

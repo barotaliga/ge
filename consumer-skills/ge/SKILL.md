@@ -36,6 +36,8 @@ ge lab publish <id>... [--before=before]   # the run (or several labs') on one s
 ge digest [<lab>...] [--write]   # the labs' digests beside tests/digests/<lab>.txt; --write moves their files
 ge digest --affected [--list]    # only the labs the change since --base reaches
 ge digest --diff                 # every lab, printing only the digests off the baseline
+ge queue                         # the merge queue in merge order, each merged onto main and the queue ahead; dirty PRs; failed queue runs
+ge pr clash <n>                  # will it merge onto main and everything queued ahead of it? the files, and who brings them in
 ge golden diff [<test>] [--base=<ref>]   # what moved in each golden file, column by column
 ge golden write <test>           # a test's goldens rewritten (GE_GOLDEN_WRITE=1), held, diffed
 ge sim [--seeds=1,2]             # the game's pilot plays each seed; input logs in runs/
@@ -55,6 +57,7 @@ ge load [--render]               # how the run spreads over the cores and the GP
 ge graph <file>... [--kind=<k>]  # chart traces, benches, profiles: PNG + SVG, outliers as notes
 ge net inspect <pcap>            # a network capture, datagram by datagram (skill: multiplayer)
 ge save inspect <file>           # a save file's header, meta and chunks, or why it is refused (skill: saves)
+ge save check <log> --every=10   # every save of a run steps on as the run never saved (skill: saves)
 ge net stats <pcap>              # per connection: kbps, round trip, loss, resends; charted
 ge net sim [--presets=wifi,bad]  # fake clients and a host over bad links, no game needed
 ge snow show <file.snow>         # a saved snow layer: tiles, pressed samples, mass, maps (skill: snow)

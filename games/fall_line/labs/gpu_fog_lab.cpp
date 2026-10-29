@@ -1,11 +1,9 @@
-// LAB `fog`: the fog in areas (engine/render/fog.hpp) in Fall Line's frame. Five scenes over a
+// LAB `fog`: the fog in areas (engine/render/fog.hpp) in Fall Line's frame. Four scenes over a
 // seed's map, each drawn without its fog and with it, from a camera the scene places:
 // - WOODS: under the late morning sun, the wood the sun lights best seen across the sun (the `wood`
 //   view), a ground mist laid over it, the trees' shadows falling through it;
 // - SHAFTS: the same mist from the wood's shaded side, looking toward the sun through the trees,
 //   so they throw shafts through it toward the eye;
-// - VALLEY: from over the summit, a bank of fog lying in the valley round the base, thinning
-//   upward, its top lit by the sun;
 // - GLOW: at night, a glowing haze on the snow ahead (what a fire or a pool of lava lights), red
 //   and orange, among clear air;
 // - DUST: at noon on the piste, a thin warm dust in the air round the eye, carved into drifting
@@ -18,8 +16,10 @@
 // it was, or on a GPU error. Without an adapter it notes that and draws placeholders, so the
 // digest is the same on every row; GE_GPU_REQUIRE=1 fails instead. Built only with GE_GPU.
 //
-// ge:summary Lab: the fog in areas: woods mist with shafts, a valley bank, a glow, drifting dust
-// ge:keywords lab fog mist ground-fog valley-fog dust glow light-shafts god-rays froxel volume
+// The sea of fog in the valleys is the `valley-fog` lab's (engine/render/valley_fog.hpp).
+//
+// ge:summary Lab: the fog in areas: woods mist with shafts, a glow, drifting dust
+// ge:keywords lab fog mist ground-fog dust glow light-shafts god-rays froxel volume
 // ge:keywords fall-line picture
 // ge:skill render labs
 #include <algorithm>
@@ -160,36 +160,6 @@ Scene shafts(const mg::Level& level, double hour) {
   return s;
 }
 
-Scene valley(const mg::Level& level, double hour) {
-  Scene s;
-  s.id = "valley";
-  s.look =
-      "a white sea of fog filling the valleys, its top lit and soft, the slopes and the far "
-      "ridges standing clear out of it";
-  s.range = 4000;
-  fall_line::app::day_view(level, hour, s.view);
-  fall_line::app::make_view(level, "vista", s.view);
-  const auto& m = level.mountain;
-  r::FogVolume f;
-  // Over the whole map and round it, so every low ground is under it: the sea of fog an
-  // inversion holds in the valleys.
-  f.centre[0] = f.centre[2] = 0.5 * level.size;
-  f.half[0] = f.half[2] = 3000;
-  f.half[1] = 170;
-  f.centre[1] = m.base.y - 40 + f.half[1];  // its floor 40 m under the base, its top 300 m over
-  f.density = 0.08;
-  f.falloff = 0.005;
-  f.edge = 70;
-  f.phase = 0.2;
-  f.noise = 0.35;
-  f.noise_size = 300;
-  s.fog = {f};
-  s.what =
-      "a sea of fog over every low ground, its top 300 m over the base, 0.08/m at its floor "
-      "thinning 0.5 % a metre, its top softened over 70 m and carved by the noise";
-  return s;
-}
-
 Scene glow(const mg::Level& level, double hour) {
   Scene s;
   s.id = "glow";
@@ -279,12 +249,11 @@ void run(ge::lab::Lab& lab) {
   };
   if (wanted("woods")) scenes.push_back(woods(level, lab.arg_num("morning")));
   if (wanted("shafts")) scenes.push_back(shafts(level, lab.arg_num("morning")));
-  if (wanted("valley")) scenes.push_back(valley(level, lab.arg_num("morning") + 1));
   if (wanted("glow")) scenes.push_back(glow(level, lab.arg_num("night")));
   if (wanted("dust")) scenes.push_back(dust(level, 12));
   if (scenes.empty()) {
     lab.fail("--scenes `" + want + "` names no scene",
-             "Pass --scenes=all or ids from woods,shafts,valley,glow,dust, comma-separated. Skill: "
+             "Pass --scenes=all or ids from woods,shafts,glow,dust, comma-separated. Skill: "
              "render.");
     return;
   }
@@ -435,14 +404,13 @@ const ge::lab::LabSpec kSpec{
     "game:fall_line",
     "engine/render/fog.hpp (the fog in areas) in Fall Line's frame",
     "render",
-    "Does the fog in areas read as a mist in the woods with the sun's shafts through it, a fog "
-    "bank in the valley, a glowing haze at night and a drifting dust, each veiling what is behind "
+    "Does the fog in areas read as a mist in the woods with the sun's shafts through it, a glowing "
+    "haze at night and a drifting dust, each veiling what is behind "
     "it and lit by the light round it?",
     {
         {"seed", "38", "the map's seed"},
-        {"scenes", "all",
-         "the scenes drawn: all, or ids comma-separated (woods,shafts,valley,glow,dust)"},
-        {"morning", "11", "the solar hour of the woods (the valley's an hour later)"},
+        {"scenes", "all", "the scenes drawn: all, or ids comma-separated (woods,shafts,glow,dust)"},
+        {"morning", "11", "the solar hour of the woods"},
         {"night", "22", "the solar hour of the glow"},
         {"weather", "1", "1: the map's own sky (its cloud and deck); 0: a clear one"},
         {"frames", "16", "frames drawn, at 60 a second, up to each picture"},

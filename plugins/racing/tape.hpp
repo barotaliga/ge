@@ -131,10 +131,22 @@ class TapeRecorder {
     uint8_t value = 0;           // the open run's byte
     uint8_t run = 0;             // the open run's length, 0 before the first step
     bool open_nan = false;       // the open run is a NaN, which nothing joins
+    template <class Io>
+    friend void describe(Io& io, Stream& v) {
+      io(v.pairs);
+      io(v.value);
+      io(v.run);
+      io(v.open_nan);
+    }
   };
   std::vector<TapeAxis> schema_;
   std::vector<Stream> streams_;
   int32_t steps_ = 0;
+  template <class Io>
+  friend void describe(Io& io, TapeRecorder& v) {  // the schema is the game's, set at creation
+    io(v.streams_);
+    io(v.steps_);
+  }
 };
 
 // A tape put back on the ground: every stream decoded once, stream-major.

@@ -9,7 +9,7 @@
 # camera, whose poses feed lab digests and goldens, the lab framework, audio, whose rendered buffers
 # are goldens and lab digests, net, whose simulated sessions are goldens too, and console, whose
 # cvars set simulation values), except engine/core/libm itself; every plugin (except a plugin's app/ directory, its
-# presentation half), games/*/sim, and every labs/ directory, whose pictures and digests must match
+# presentation half), games/*/sim, games/*/server (the server and its bots), and every labs/ directory, whose pictures and digests must match
 # on every CI row. Renderer and UI code may use <cmath>: they feed no digest.
 #
 # ge:summary Fails any <cmath> transcendental in simulation code (make libm-check)
@@ -49,7 +49,7 @@ sim_dirs() {
   done
 }
 dirs=()
-for d in $(sim_dirs) plugins games/*/sim games/*/labs; do [[ -d "$d" ]] && dirs+=("$d"); done
+for d in $(sim_dirs) plugins games/*/sim games/*/server games/*/labs; do [[ -d "$d" ]] && dirs+=("$d"); done
 hits="$(git ls-files -- "${dirs[@]}" | grep -E '\.(cpp|hpp|h)$' | grep -v '^engine/core/libm/' | grep -v '^plugins/[^/]*/app/' \
   | xargs -r grep -nE "$FNS|hypot|__builtin_" /dev/null | scan)"
 if [[ -n "$hits" ]]; then

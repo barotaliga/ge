@@ -42,6 +42,10 @@ is the design; this skill is how to work in it.
 
 ## The HUD kit (`engine/hud/`, `ge::hud`)
 
+`docs/hud.md` is the design of what the kit becomes (M10d–M10h): the HUD as data, a layout the
+game sets in its `hud.cfg` and the player tunes with `hud_` cvars or by dragging, skins, the
+instruments and the minimap. Read it before adding an element or a widget.
+
 - **Faces** (`face.hpp`): a HUD's type is a `Face`, a TrueType font of the 2D layer or a bitmap
   charset, behind one size (the line's pixel height) and one baseline. A charset run is one image
   box a character over the charset's atlas, built on first use at the multiple of 64 px whose

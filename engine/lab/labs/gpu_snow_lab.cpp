@@ -29,10 +29,14 @@
 
 #include "core/libm/libm.hpp"
 #include "gpu/device.hpp"
+#include "gpu/pipeline.hpp"
+#include "gpu/target.hpp"
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
 #include "lab/labs/water_scene.hpp"
 #include "lab/raster.hpp"
+#include "render/frame.hpp"
+#include "render/snow_marks.hpp"
 #include "render/snow_mirror.hpp"
 #include "snow/layer.hpp"
 #include "snow/lod.hpp"
@@ -146,7 +150,7 @@ void run(gl::Lab& lab) {
   const auto budget = static_cast<uint32_t>(lab.arg_num("budget"));
   const int window = static_cast<int>(lab.arg_num("window"));
   const int ppm = static_cast<int>(lab.arg_num("px-per-m"));
-  const std::vector<std::string> ids = {"drop", "near", "sources", "uploads"};
+  const std::vector<std::string> ids = {"drop", "near", "marks", "sources", "uploads"};
 
   sn::LayerSpec spec;
   spec.region = {-half, 0, half, size};
@@ -163,9 +167,15 @@ void run(gl::Lab& lab) {
       lab.fail("no GPU device, and GE_GPU_REQUIRE=1",
                "Install Mesa's Vulkan drivers (apt install mesa-vulkan-drivers). Skill: gpu.");
     }
-    const Run r = ski(layer, half, [](double, double, double) {});
+    std::vector<gr::MarkStamp> stamps;
+    const Run r = ski(layer, half, [&](double, double, double) {
+      gr::marks_from_records(layer.records, stamps);
+      sn::clear_records(layer);
+    });
+    gr::marks_from_records(layer.records, stamps);  // the steps after the last update's
     lab.metric("presses", r.presses, "count");
     lab.metric("folds", layer.folds, "count");
+    lab.metric("marks", static_cast<double>(stamps.size()), "count");
     lab.metric("mismatches", 0, "count");
     placeholders(lab, ids, 640, 360);
     return;
@@ -173,6 +183,34 @@ void run(gl::Lab& lab) {
   ge::gpu::Device& d = *device;
   gr::SnowMirror mirror;
   gr::create_snow_mirror(d, mirror, layer, {.window = window});
+  // THE FINE MARKS, from the layer's imprint records: a 48 m window at 2.3 cm a texel.
+  ge::gpu::PipelineSet pipelines;
+  gr::SnowMarks marks;
+  gr::MarkOptions mark_options;
+  mark_options.fine_size = 2048;
+  mark_options.fine_span = 48;
+  mark_options.coarse_size = 512;
+  gr::create_snow_marks(d, pipelines, marks, -half, 0, size, mark_options);
+  if (!pipelines.finish(d))
+    lab.fail("the marks' pipeline failed", "Read the line above. Skill: gpu.");
+  gr::FrameRecorder rec;
+  rec.init(d, "gpu-snow", 2);
+  std::vector<gr::MarkStamp> stamps;
+  size_t stamped = 0;
+  const auto mark_frame = [&](double x, double z) {
+    gr::marks_from_records(layer.records, stamps);
+    sn::clear_records(layer);
+    gr::add_mark_stamps(marks, std::span(stamps).subspan(stamped));
+    stamped = stamps.size();
+    rec.begin_frame(d);
+    gr::prepare_snow_marks(d, pipelines, marks, x, z);
+    wgpu::CommandEncoder encoder = d.device.CreateCommandEncoder();
+    gr::encode_snow_marks(marks, pipelines, rec, encoder);
+    rec.end_frame(encoder);
+    wgpu::CommandBuffer commands = encoder.Finish();
+    d.queue.Submit(1, &commands);
+    rec.after_submit(d);
+  };
 
   using Clock = std::chrono::steady_clock;
   gl::Trace sent{"KB sent", {}, {}}, tiles_sent{"fine tiles", {}, {}};
@@ -189,8 +227,10 @@ void run(gl::Lab& lab) {
     sent.y.push_back(static_cast<double>(mirror.last.bytes) / 1024);
     tiles_sent.x.push_back(t);
     tiles_sent.y.push_back(mirror.last.tiles);
+    mark_frame(x, z);
   });
   gr::update_snow_mirror(d, mirror, layer, r.end_x, r.end_z);
+  mark_frame(r.end_x, r.end_z);
   ge::gpu::end_load(d);
 
   // THE RAW CELLS, every sample, a strip of rows at a time.
@@ -289,6 +329,43 @@ void run(gl::Lab& lab) {
              "Read `snow_column` in render/wgsl/snow_mirror.wgsl against `snow::sample`. Skill: "
              "snow.");
   }
+  // THE MARKS beside the mirror over a 4 m square on the skier's last metres, at a centimetre a
+  // pixel: the GPU's column (the simulation's 10 cm) on the left, the fine marks' depth and their
+  // berms, warm, on the right.
+  const ge::gpu::Image fine = ge::gpu::read_now(d, marks.fine);
+  const gr::MarkRect fr = gr::fine_rect(marks);
+  constexpr double kMarkSide = 4;
+  constexpr int kMarkPx = 100;
+  const int mn = static_cast<int>(kMarkSide * kMarkPx);
+  const double mz0 = r.end_z + 1, mx0 = line_x(mz0 + kMarkSide / 2, half) - kMarkSide / 2;
+  std::vector<float> mxz;
+  mxz.reserve(static_cast<size_t>(mn) * mn * 2);
+  for (int j = 0; j < mn; j++) {
+    for (int i = 0; i < mn; i++) {
+      mxz.push_back(static_cast<float>(mx0 + (i + 0.5) / kMarkPx));
+      mxz.push_back(static_cast<float>(mz0 + kMarkSide - (j + 0.5) / kMarkPx));
+    }
+  }
+  const std::vector<gr::SnowColumnRead> mcol = gr::read_snow_columns(d, mirror, mxz);
+  gl::Picture marks_pic = gl::create_picture(2 * mn + 8, mn, {255, 255, 255, 255});
+  for (int j = 0; j < mn; j++) {
+    for (int i = 0; i < mn; i++) {
+      const size_t k = static_cast<size_t>(j) * mn + i;
+      gl::set_pixel(marks_pic, i, j, worn(mcol[k].drop, 0.08));
+      const int c = static_cast<int>(std::floor((mxz[2 * k] - fr.x0) / fr.texel));
+      const int rr = static_cast<int>(std::floor((mxz[2 * k + 1] - fr.z0) / fr.texel));
+      double under = 0;
+      if (c >= 0 && rr >= 0 && c < static_cast<int>(fine.width) &&
+          rr < static_cast<int>(fine.height)) {
+        const size_t t = (static_cast<size_t>(rr) * fine.width + static_cast<size_t>(c)) * 4;
+        const double dv = fine.rgba[t] / 255.0, bv = fine.rgba[t + 1] / 255.0;
+        under = dv * dv * gr::kMarkDepth - bv * bv * gr::kMarkBerm;
+      }
+      gl::set_pixel(marks_pic, mn + 8 + i, j, worn(under, 0.08));
+    }
+  }
+  gl::draw_text(marks_pic, 4, 4, "MIRROR 10 CM", {200, 40, 40});
+  gl::draw_text(marks_pic, mn + 12, 4, "MARKS 2.3 CM", {200, 40, 40});
 
   // THE SOURCES.
   gl::Picture src = gl::create_picture(w, w, {255, 255, 255, 255});
@@ -311,6 +388,7 @@ void run(gl::Lab& lab) {
   // THE NUMBERS. The traffic's are the CPU's and cut the digest; the mirror's are measured.
   lab.metric("presses", r.presses, "count");
   lab.metric("folds", layer.folds, "count");
+  lab.metric("marks", static_cast<double>(stamps.size()), "count");
   lab.metric("mismatches", wrong, "count");
   lab.metric("updates", updates, "count", Det::measured);
   lab.metric("tiles-sent", mirror.total.tiles, "count", Det::measured);
@@ -361,6 +439,16 @@ void run(gl::Lab& lab) {
             "physics' column on the left, the GPU's on the right, read from the fine atlas.",
             "the two halves identical: the two sharp grooves of his skis", inputs},
            near, Det::measured);
+  lab.shot({"marks", "THE FINE MARKS OVER THE MIRROR",
+            "4 m of the skier's last metres at a centimetre a pixel: on the left the mirror's "
+            "column at the simulation's 10 cm, on the right the fine marks drawn from the layer's "
+            "imprint records (render/snow_marks.hpp) "
+            "at 2.3 cm a texel, with the berms warm. The marks are the detail a material draws on "
+            "top of the mirror's surface.",
+            "on the right the two ski grooves crisp and narrow; on the left the same grooves wider "
+            "and blurred over the 10 cm samples",
+            inputs},
+           marks_pic, Det::measured);
   lab.shot({"sources", "WHERE THE GPU READS EACH SAMPLE FROM",
             "Orange: the fine atlas, inside the window (red, " + std::to_string(window) +
                 " tiles a side) round the skier at the end; blue: the coarse view (folded blocks, "
@@ -392,9 +480,10 @@ const gl::LabSpec kSpec{
     "gpu-snow",
     gl::LabKind::picture,
     "engine",
-    "engine/render/snow_mirror.hpp",
+    "engine/render/snow_mirror.hpp, engine/render/snow_marks.hpp",
     "snow",
-    "Does the GPU read the snow the physics wrote, to the bit, while sending only what changed?",
+    "Does the GPU read the snow the physics wrote, to the bit, while sending only what changed, "
+    "and do the fine marks drawn from its imprint records sit where the snow was pressed?",
     {
         {"size", "192", "the square's side, m"},
         {"budget", "64", "fine tiles the layer keeps at most"},

@@ -76,6 +76,14 @@ struct PilotPlan {
   // them (a weave through gates) before `lay_pilot_plan`.
   std::vector<double> line;
   std::vector<double> room;
+  template <class Io>
+  friend void describe(Io& io, PilotPlan& v) {
+    io(v.track);
+    io(v.curvature);
+    io(v.speed);
+    io(v.line);
+    io(v.room);
+  }
 };
 
 // Lays `plan`'s curvature and speed along `plan.track` (and `plan.line` where set): `lips` the
