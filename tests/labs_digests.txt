@@ -31,6 +31,7 @@ gpu-capture 8b5d5e3b7be5a4fc
 gpu-grass 184eda688754b64c
 gpu-explosion ad9b9b63b7fc0982
 gpu-eye dec0f5b45ab21c1c
+gpu-impact fded00c2cc7af755
 gpu-load d0f81d39aa78ab53
 gpu-muzzle 498da44098188771
 gpu-underwater eb4871f6a59d741e
