@@ -29,7 +29,8 @@ multiplayer builtins and extensions that come next.
   another implementation. Where it marks **Ours**, this VM checks what the classic server did not;
   keep those checks.
 - **Floats are 32-bit and in the stated order.** Every arithmetic opcode works in `float`, a
-  vector's components one at a time, the dot product `(x + y) + z`; only STATE widens (`time`
+  vector's components one at a time, the dot product `(x + y) + z`, and a NaN result stored as the one quiet NaN `0x7fc00000`
+  (which NaN the hardware hands back differs by CPU and operand order); only STATE widens (`time`
   to double, plus 0.1, rounded back). Truth is `!= 0` except IF and IFNOT, which test the RAW
   word (so -0 is true there). BITAND and BITOR truncate toward zero, and out of range or NaN is
   -2147483648. Math builtins call `core/libm`. `tests/golden/progs_ops.txt` holds every result's

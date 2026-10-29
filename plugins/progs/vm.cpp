@@ -118,7 +118,10 @@ bool execute(Vm& vm, int32_t fn) {
   const TraceHooks* t = vm.trace;
 
   const auto F = [g](int ofs) { return as_float(g[ofs]); };
-  const auto setF = [g](int ofs, float v) { g[ofs] = as_word(v); };
+  // A NaN result is stored as the one quiet NaN 0x7fc00000: which NaN an operation hands back
+  // (its sign, which operand's payload) differs between CPUs and with the operand order a
+  // compiler picks, and the bits must not.
+  const auto setF = [g](int ofs, float v) { g[ofs] = v != v ? 0x7fc00000u : as_word(v); };
   const auto I = [g](int ofs) { return static_cast<int32_t>(g[ofs]); };
   const auto truth = [](bool b) { return b ? 1.0f : 0.0f; };
 
