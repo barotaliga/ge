@@ -47,12 +47,18 @@ void reach_from_deps(const fs::path& repo, std::string_view deps,
                      const std::set<std::string>& libraries, Reach& r);
 // The library targets in `ninja -t targets all` output (`libge_core.a: <rule>` is ge_core).
 std::set<std::string> libraries_of(std::string_view targets);
-// Whether a path is the build's own (a CMakeLists.txt, a .cmake file, CMakePresets.json): a
-// change to one reaches every test.
+// Whether a path is the build's own (a CMakeLists.txt, a .cmake file, CMakePresets.json).
 bool build_file(std::string_view path);
+// The directory a build file builds alone: engine/<module>/module.cmake's, a plugin's or a game's
+// CMakeLists.txt's own directory, whose code a change to it reaches (change_reach counts every
+// source and header there as changed). "" for the tree's own: the root's, cmake/'s, tests/'s and
+// the presets, a change to which reaches every test and every lab (global_build_file).
+std::string build_scope(std::string_view path);
+bool global_build_file(std::string_view path);
 // The tests (CTest's names) a change picks: each whose target is in `targets`, the labs' smoke
 // slices when the labs target is or the digests changed, the test of a changed golden
-// (`tests/golden/<name>.txt` is <name>_test), and every test when a build file changed.
+// (`tests/golden/<name>.txt` is <name>_test), and every test when the tree's own build file
+// changed (global_build_file).
 std::vector<std::string> pick_affected(const std::vector<std::string>& tests,
                                        const std::set<std::string>& targets,
                                        const std::set<std::string>& changed);
