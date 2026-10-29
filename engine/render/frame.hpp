@@ -81,13 +81,15 @@ struct FrameUniforms {
   // The sky's style (render/sky_style.hpp's `style_rows`): the air's scales, the sun's disc, the
   // second sun, the planet, the nebula, the glow from below, the ring's tilt and the stars by day.
   float style[kSkyStyleRows][4];
+  // Other worlds' moons (render/moons.hpp's kMoonRows a moon; a drawn radius of 0: none).
+  float moons[kMaxMoons * kMoonRows][4];
   // The fog in areas (render/fog.hpp's `fog_uniforms`): the froxel volume's range (m; 0: none
   // in reach, nothing reads it) and its slices. fill_uniforms writes zero.
   float fog[4];
 };
 static_assert(sizeof(FrameUniforms) == 64 * 3 + 16 * 5 + 16 * 6 + 16 * 9 +
                                            16 * kCloudRows * kCloudLayers + 16 * 5 +
-                                           16 * kSkyStyleRows + 16,
+                                           16 * kSkyStyleRows + 16 * kMaxMoons * kMoonRows + 16,
               "match frame_types.wgsl");
 
 // The last frame's unjittered camera. Invalid on the first frame and after a cut, when the

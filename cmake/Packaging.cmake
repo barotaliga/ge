@@ -134,5 +134,10 @@ install(FILES
 
 # The built-in UI font is compiled into ge::ui; its licence travels with the package.
 install(FILES "${PROJECT_SOURCE_DIR}/engine/ui/fonts/OFL.txt" DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/gameengine2 RENAME FONT-OFL.txt)
+# The charsets' committed atlases and layers, for a game that loads the PNGs rather than
+# building them (engine/charset/charset.hpp's atlas_path, relative to this directory).
+install(DIRECTORY "${PROJECT_SOURCE_DIR}/engine/charset/atlases" "${PROJECT_SOURCE_DIR}/engine/charset/layers"
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/gameengine2/engine/charset)
+
 install(FILES "${PROJECT_SOURCE_DIR}/LICENSE" "${PROJECT_SOURCE_DIR}/CHANGELOG.md"
   DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/gameengine2 OPTIONAL)

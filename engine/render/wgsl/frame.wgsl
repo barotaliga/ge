@@ -512,14 +512,26 @@ fn rod_share() -> f32 {
 // It reads no depth, so a ridge or a cloud layer in front of the disc counts as the disc: a
 // ridge there is a dark silhouette, and the cloud pass gives a cloud's own light there to the
 // rods itself (render/clouds.wgsl), so neither shows it.
+// Other worlds' moons (render/moons.hpp) count by the circle that bounds each.
 fn on_moon(d: vec3f) -> f32 {
+  var on = 0.0;
   let rad = frame.moon_light.z;
   let c = dot(d, frame.moon.xyz);
-  if (rad <= 0.0 || c <= 0.0) {
+  if (rad > 0.0 && c > 0.0) {
+    on = 1.0 - smoothstep(0.95, 1.0, sqrt(max(1.0 - c * c, 0.0)) / sin(rad));
+  }
+  for (var k = 0; k < 4; k++) {
+    let o = frame.moons[k * 6];
+    let ck = dot(d, o.xyz);
+    if (o.w > 0.0 && ck > 0.0) {
+      on = max(on, 1.0 - smoothstep(0.95, 1.0, sqrt(max(1.0 - ck * ck, 0.0)) / sin(o.w)));
+    }
+  }
+  if (on <= 0.0) {
     return 0.0;
   }
   let clear = (1.0 - frame.weather.y) * exp(-frame.weather.z * 10000.0);
-  return (1.0 - smoothstep(0.95, 1.0, sqrt(max(1.0 - c * c, 0.0)) / sin(rad))) * clear;
+  return on * clear;
 }
 
 // NIGHT VISION: a colour as the rods see it, its luminance in a blue grey, by their share. A part

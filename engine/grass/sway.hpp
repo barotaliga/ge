@@ -17,6 +17,8 @@
 //   most kMaxBend off the vertical. On top of that it SWAYS at its own frequency (the kind's `sway`
 //   within ±15 %, the phase its own), most in a middling wind and least in a calm or a gale that
 //   holds it flat, and a little across the wind.
+// - UNDERFOOT: a blade PRESSED by p (trample.hpp) gives up that share of its lean and its sway
+//   to lie along the press's way, kPressBend off the vertical when p is 1.
 //
 // ge:summary A blade's shape in the wind: the wind grid with travelling gusts, bend, sway, Bézier
 // ge:keywords grass sway bend wind-grid gust front travelling-gust bezier blade-shape length
@@ -32,6 +34,7 @@
 #include "core/heightfield.hpp"
 #include "grass/cover.hpp"
 #include "grass/kind.hpp"
+#include "grass/trample.hpp"
 #include "wind/field.hpp"
 #include "wind/sources.hpp"
 
@@ -74,8 +77,10 @@ struct Shape {
   float width;
 };
 
-// THE SHAPE of `blade` of `kind` in plan air `wind` (m/s) at `t`.
-Shape blade_shape(const Kind& kind, const Blade& blade, const float wind[2], float t);
+// THE SHAPE of `blade` of `kind` in plan air `wind` (m/s) at `t`, pressed by `press`
+// (trample.hpp's `press_at`; none by default).
+Shape blade_shape(const Kind& kind, const Blade& blade, const float wind[2], float t,
+                  const Press& press = {});
 
 // The point at `s` (0 the root .. 1 the tip) along a shape's curve.
 void bezier_point(const Shape& shape, float s, float out[3]);

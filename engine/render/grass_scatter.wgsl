@@ -8,6 +8,7 @@
 // indirect draw; `clamp` then holds each count to the list's capacity.
 #include "render/wgsl/frame.wgsl"
 #include "render/wgsl/grass_common.wgsl"
+#include "render/wgsl/grass_scatter_common.wgsl"
 
 struct DrawArgs {
   vertex_count: u32,
@@ -23,6 +24,7 @@ struct DrawArgs {
 @group(1) @binding(4) var<storage, read_write> far_blades: array<Blade>;
 @group(1) @binding(5) var<storage, read_write> args: array<DrawArgs, 2>;
 @group(1) @binding(6) var<storage, read> grass_wind: array<vec2f>;
+@group(1) @binding(7) var<storage, read> grass_press: array<GrassPress>;
 
 const kGroup = 64u;
 
@@ -120,7 +122,8 @@ fn clamp_counts() {
 }
 
 // THE PROBE (tests only): the shape `blade_shape` gives each near blade at the params' time in
-// the grid's air, three points a blade into `probe`.
+// the grid's air and pressed by the cells, three points a blade into `probe` (the air in the
+// first two's w, the press's amount in the third's).
 @group(2) @binding(0) var<storage, read_write> probe: array<vec4f>;
 
 @compute @workgroup_size(64)
@@ -130,9 +133,11 @@ fn shapes(@builtin(global_invocation_id) id: vec3u) {
     return;
   }
   let b = near_blades[id.x];
+  let k = kinds[b.seed >> 24u];
   let air = wind_at_blade(b.root.x, b.root.z, gp.mean.z);
-  let s = blade_shape(kinds[b.seed >> 24u], b, air, gp.mean.z);
+  let press = press_at(k, b.root.x, b.root.z, gp.mean.z);
+  let s = blade_shape(k, b, air, gp.mean.z, press);
   probe[id.x * 3u] = vec4f(s.v0, air.x);
   probe[id.x * 3u + 1u] = vec4f(s.v1, air.y);
-  probe[id.x * 3u + 2u] = vec4f(s.v2, 0.0);
+  probe[id.x * 3u + 2u] = vec4f(s.v2, press.x);
 }
