@@ -107,26 +107,46 @@ index. The engine walks vectors, strings, optionals, fixed arrays, pairs, enums 
 
 ## The run saved (M25b)
 
-The play contract (`engine/play/game.hpp`) grows two calls beside `clone`:
-`Run::save(save::Writer&) const` writes the run's chunks and `Run::load(save::Reader&)` reads
-them into a run the setup has just opened; a game with no saves returns false from both. A
-`GameSpec` names its save version. `ge save` drives them headless:
+The play contract (`engine/play/game.hpp`) has two calls beside `clone`:
+`Run::save(save::FileWriter&) const` puts the run's chunks into the file it is handed and
+`Run::load(save::FileReader&, error)` reads them into a run the save's setup has just opened; a
+game with no saves returns false from both. `engine/play/saves.hpp` wraps them: `save_run`
+writes the meta (the game, the setup as the input log's header, the time played; the game's
+behaviour version, `GameSpec::version`, once the replays' M23b adds it) and the engine's own
+`PLAY` chunk (the step the run had reached) before the game's chunks, and `load_run` reads the
+setup back out of the meta, opens a run on it the way a replay does and loads it. A save
+therefore reopens on its own, with no log beside it. Compatibility is each chunk's own version
+(`since`, `until`), never the game's version as a whole.
+
+Everything a step reads and writes is described, the bots' state included (a bot's plan, its
+hands, the agent's events not yet told); only what the setup rebuilds is left out (the map, the
+indices over it, the pointers into it) and what is not the run's (a debug hook such as
+`ai::Why`). The state types of the plugins (the skier, the snowmobile, the helicopter, the
+paramotor) carry their `describe` beside them, so any game linking a plugin saves its state for
+free. Fall Line's run is two chunks: `DRVR` (the Driver: the state, the bot's plan, the tape, the
+tallies) and `PILT` (the pilot's hands and the events the agent has not yet been told).
+
+`ge save` drives them headless:
 
 ```sh
 ge save write runs/fall_line-38.inputs --step=7200 --out=saves/at-60s.save
 ge save inspect saves/at-60s.save      # the header, the meta, every chunk: tag, version, bytes, checksum
-ge save load saves/at-60s.save --pilot --steps=2400   # loaded and stepped on; prints the digest
+ge save load saves/at-60s.save --steps=2400   # loaded and played on by the pilot; the digests
+ge save check runs/fall_line-38.inputs --every=10   # every save steps on as the run never saved
 ge save diff a.save b.save             # chunk by chunk, then field by field through `state`
 ```
 
-`ge bench` gains a `save` zone and a `load` zone, timed per call, so a save's cost is held in the
-performance ledger (`docs/perf.md`) like a step's. Fall Line's chunks are its own (`games/fall_line`);
-the state types of its plugins (the skier, the snowmobile, the helicopter, the paramotor) carry
-their `describe` beside them in their plugins, so any game linking a plugin saves its state for free.
+**The check** (`check_saves`, `ge save check`, the `save-run` lab, `tests/play_saves_test.cpp`):
+a log played straight, saved at the steps asked; each save loaded into a run ALREADY PLAYED ON a
+few seconds (so a field left out of a describe keeps a wrong value of its own, not a lucky
+default) and stepped beside the straight run's digests to the log's end, where the two must also
+save to the same bytes. A field a step writes and a describe leaves out shows up as the first
+step where the two part; `ge save diff` of the two runs' saves at that step names the field.
 
-**Targets** (on the container, release build, to be measured by the lab and moved into
-`docs/perf.md` when met): a whole Fall Line run saved to memory in under 1 ms; loaded, map
-excluded, in under 2 ms; the file read and every checksum checked at over 2 GB/s.
+**Measured** (the `save-run` lab, release, the container): a Fall Line save is 37 to 155 KB,
+written in 0.04 to 0.25 ms and read back in 0.05 to 0.19 ms, against the targets of 1 ms and
+2 ms; the file is read with every checksum at 8 GB/s (M25a). What a load costs is the map its
+setup builds: 0.3 s for the race map, 1.3 s for the free ride's. That is M25h's content cache.
 
 ## Slots and the store (M25c)
 
