@@ -153,6 +153,45 @@ TEST(a_slow_skier_is_held_out_of_a_parked_car) {
   CHECK(c.vx * rx + c.vz * rz > 0);
 }
 
+TEST(the_village_stands_buildings_and_a_skier_into_a_wall_goes_down) {
+  fs::GameState st = seed38();
+  if (!st.village || st.village->buildings.empty()) {
+    CHECK(false);
+    return;
+  }
+  const vg::Building& b = st.village->buildings.front();
+  // Every building's trees felled: none left on a footprint.
+  for (size_t i = 0; i < st.level->trees.size(); i++) {
+    const mg::TreeDef& t = st.level->trees[i];
+    for (const vg::Building& o : st.village->buildings) {
+      if (vg::in_building(o, t.x, t.z)) CHECK(st.village->felled[i] == 1);
+    }
+  }
+  at_side(st, b.x, b.z, b.heading, b.width / 2 + kRadius - 0.05, 8);
+  st.events.clear();
+  fs::meet_traffic(st);
+  CHECK(count(st, fs::EventKind::building) == 1);
+  CHECK(count(st, fs::EventKind::wipeout) == 1);
+  CHECK(st.racers[0].skier.down);
+}
+
+TEST(a_slow_skier_is_held_out_of_a_wall) {
+  fs::GameState st = seed38();
+  if (!st.village || st.village->buildings.empty()) {
+    CHECK(false);
+    return;
+  }
+  const vg::Building& b = st.village->buildings.front();
+  at_side(st, b.x, b.z, b.heading, b.width / 2 + kRadius - 0.1, 1);
+  st.events.clear();
+  fs::meet_traffic(st);
+  const sk::SkierState& c = st.racers[0].skier;
+  CHECK(!c.down);
+  const double rx = lm::cos(b.heading);
+  const double rz = -lm::sin(b.heading);
+  CHECK((c.x - b.x) * rx + (c.z - b.z) * rz >= b.width / 2 + kRadius - 1e-9);
+}
+
 TEST(a_vehicle_driving_into_a_skier_stood_in_its_way_puts_him_down) {
   fs::GameState st = seed38();
   const vg::TrafficPlan* found_plan = plan_of(st);

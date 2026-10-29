@@ -89,8 +89,8 @@ TEST(rings_keep_their_life_and_their_count) {
   gw::Wakes one;
   one.life = 10;
   const gw::Ring r{.volume = 1, .size = 0.1};
-  CHECK(std::fabs(gw::ring_height(one, r, 20, 10.0)) < 1e-12);
-  CHECK(gw::ring_height(one, r, 20, -1) == 0);
+  CHECK(std::fabs(gw::ring_height(one, r, 20, 0, 10.0)) < 1e-12);
+  CHECK(gw::ring_height(one, r, 20, 0, -1) == 0);
 }
 
 TEST(a_rings_waves_run_at_the_group_speed) {
@@ -102,10 +102,10 @@ TEST(a_rings_waves_run_at_the_group_speed) {
   const double tau = 20, lambda = 4, k = 2 * kPi / lambda;
   const double at = 0.5 * std::sqrt(gw::kGravity / k) * tau;
   std::vector<double> zeros;
-  double prev = gw::ring_height(w, r, at - 2 * lambda, tau);
+  double prev = gw::ring_height(w, r, at - 2 * lambda, 0, tau);
   for (int j = 0; j < static_cast<int>(4 * lambda / 0.001); ++j) {
     const double x = at - 2 * lambda + j * 0.001;
-    const double h = gw::ring_height(w, r, x, tau);
+    const double h = gw::ring_height(w, r, x, 0, tau);
     if ((h > 0) != (prev > 0)) zeros.push_back(x);
     prev = h;
   }

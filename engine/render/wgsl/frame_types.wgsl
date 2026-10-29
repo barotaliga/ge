@@ -38,6 +38,11 @@ struct Frame {
   // tint, its size; 9 the glow's colour, its height; 10 the ring's tilt, the stars by day, the
   // dust's asymmetry, its scale height (km).
   style: array<vec4f, 11>,
+  // Other worlds' moons (render/moons.hpp's kMaxMoons, kMoonRows a moon): 0 toward it, its drawn
+  // angular radius (0: none); 1 its north pole, its kind; 2 its 0 N 0 E, its surface's luminance
+  // at its phase, pre-exposed; 3 its tint, Lambert's share; 4 its semi-axes against the longest,
+  // its dents; 5 its haze.
+  moons: array<vec4f, 24>,
 }
 
 // THE MOTION a surface at camera-relative `rel` (w = 1; w = 0 for a direction at infinity) made

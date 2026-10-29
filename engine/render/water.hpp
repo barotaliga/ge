@@ -46,11 +46,12 @@
 
 namespace ge::render {
 
-inline constexpr uint32_t kWaterGrid = 64;    // a level's quads a side (water.wgsl's override)
-inline constexpr int kWaterLevels = 12;       // at most
-inline constexpr int kWaterDetailWaves = 32;  // the detail components
-inline constexpr int kWaterBodies = 8;        // bodies a Water draws
-inline constexpr int kWaterRings = 512;       // a body's wake rings drawn (the newest)
+inline constexpr uint32_t kWaterGrid = 64;     // a level's quads a side (water.wgsl's override)
+inline constexpr int kWaterLevels = 12;        // at most
+inline constexpr int kWaterDetailWaves = 32;   // the detail components
+inline constexpr int kWaterBodies = 8;         // bodies a Water draws
+inline constexpr int kWaterRings = 512;        // a body's wake rings drawn (the newest)
+inline constexpr double kWaterlineBand = 0.5;  // m over a level an eye is at its waterline
 
 // The detail band past the simulation's waves: components from the laid band's top frequency
 // to waves `shortest` m long, and the slope variance of the spectrum from there to `finest` m.
@@ -114,6 +115,7 @@ struct Water {
     wgpu::BindGroup group;
   } streams;
   int eye_under = -1;  // this frame's: the body the eye is under (render/underwater.hpp), or -1
+  int eye_near = -1;   // this frame's: the body the eye is just over (its waterline), or -1
 };
 
 // The pipelines into the manifest.

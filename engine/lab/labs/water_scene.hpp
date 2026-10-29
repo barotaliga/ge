@@ -1,9 +1,11 @@
-// THE WATER LABS' SCENE (shared by `gpu-water` and `gpu-underwater`): a heightfield's ground
-// drawn under the sky with the water's passes and the view under water over it, on a device of
-// its own (its pipelines all made before that device's load ends), read back as a picture.
+// THE WATER LABS' SCENE (shared by `gpu-water`, `gpu-underwater` and `gpu-plunge`): a
+// heightfield's ground drawn under the sky with the water's passes, the view under water and
+// the wet lens over it, on a device of its own (its pipelines all made before that device's load
+// ends), read back as a picture.
 //
 // ge:summary The water labs' scene: ground, sky, the water and the view under it, read back
 // ge:keywords lab water scene heightfield picture make_scene view_at gpu-water gpu-underwater
+// ge:keywords gpu-plunge wet-lens
 // ge:skill render water labs
 #pragma once
 
@@ -27,6 +29,7 @@
 #include "render/terrain.hpp"
 #include "render/underwater.hpp"
 #include "render/water.hpp"
+#include "render/wet_lens.hpp"
 
 namespace ge::lab::water_scene {
 
@@ -106,6 +109,8 @@ struct Scene {
   gr::Underwater under;
   gr::Particles particles;  // the mist and the spray
   gr::Post post;
+  gr::WetLens lens;                 // dry unless a lab wets it
+  wgpu::BindGroup post_lens_group;  // post over the wet lens's target
   gr::FrameRecorder rec;
   Ground ground;
   ge::gpu::Target out;
@@ -135,6 +140,7 @@ inline bool make_scene(ge::gpu::Device& d, Scene& s, float (*height)(double, dou
   gr::create_underwater(d, s.pipelines, s.under, s.layout);
   gr::create_particles(d, s.pipelines, s.particles, s.layout, s.terrain, {.capacity = 8192});
   gr::create_post(d, s.pipelines, s.post, s.layout, wgpu::TextureFormat::RGBA8Unorm);
+  gr::create_wet_lens(d, s.pipelines, s.lens, s.layout);
   if (!s.pipelines.finish(d)) return false;
   ge::gpu::end_load(d);
   s.frame = gr::frame_group(d, s.layout, s.uniforms, s.sky);
@@ -142,19 +148,24 @@ inline bool make_scene(ge::gpu::Device& d, Scene& s, float (*height)(double, dou
   gr::bind_underwater(d, s.under, s.water);
   gr::bind_particle_targets(d, s.particles, s.targets);
   s.post_group = gr::post_group(d, s.post, s.targets.hdr_view);
+  gr::create_wet_lens_target(d, s.lens, s.targets.hdr_view, w, h);
+  s.post_lens_group = gr::post_group(d, s.post, s.lens.target_view);
   s.rec.init(d, "gpu-water.timer", 10);
   s.out = ge::gpu::create_target(d, "gpu-water.final", w, h);
   return true;
 }
 
-inline gl::Picture draw(ge::gpu::Device& d, Scene& s, const gr::FrameView& v, bool water = true) {
+// `line`, when given, is the surface at the eye (the waterline follows the waves through it).
+inline gl::Picture draw(ge::gpu::Device& d, Scene& s, const gr::FrameView& v, bool water = true,
+                        const gr::Waterline* line = nullptr) {
   s.rec.begin_frame(d);
   gr::fill_uniforms(s.staged, v, s.targets.width, s.targets.height);
   d.queue.WriteBuffer(s.uniforms, 0, &s.staged, sizeof s.staged);
   gr::prepare_sky(s.sky, v);
   gr::prepare_terrain(d, s.terrain, v);
   gr::prepare_water(d, s.water, v);
-  gr::prepare_underwater(d, s.under, s.water, v, s.targets.height);
+  gr::prepare_underwater(d, s.under, s.water, v, s.targets.height, line);
+  gr::prepare_wet_lens(d, s.lens, v.time_s);
   gr::prepare_particles(d, s.particles, 0, 0.1);
   wgpu::CommandEncoder e = d.device.CreateCommandEncoder();
   gr::encode_sky_tables(s.sky, s.pipelines, s.rec, e);
@@ -168,7 +179,9 @@ inline gl::Picture draw(ge::gpu::Device& d, Scene& s, const gr::FrameView& v, bo
     gr::encode_underwater(s.under, s.pipelines, s.rec, e, s.targets, s.frame);
   }
   gr::encode_particles(s.particles, s.pipelines, s.rec, e, s.targets, s.frame);
-  gr::encode_post(s.post, s.pipelines, s.rec, e, s.frame, s.post_group, s.out.view);
+  gr::encode_wet_lens(s.lens, s.pipelines, s.rec, e, s.frame);
+  gr::encode_post(s.post, s.pipelines, s.rec, e, s.frame,
+                  s.lens.active ? s.post_lens_group : s.post_group, s.out.view);
   s.rec.end_frame(e);
   wgpu::CommandBuffer c = e.Finish();
   d.queue.Submit(1, &c);

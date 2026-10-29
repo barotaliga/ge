@@ -46,8 +46,10 @@ updates that row's status file (`docs/goals/<row>.md`) in its PR.
 | [`docs/replays.md`](docs/replays.md) | Replays, recording and broadcasting: a run kept as its inputs, keyframes and the seek, the replay file, the director, video with sound, streaming to a video service, spectating by inputs, Discord presence (M23) |
 | [`docs/saves.md`](docs/saves.md) | Saves: a save is the state, never the inputs; the file and its chunks, the state described once, the run saved and loaded, slots and the store, pictures, characters carried to another world, cloud saves, the content cache (M25) |
 | [`docs/shooters-edge.md`](docs/shooters-edge.md) | The second game, Shooter's Edge (M18, after Fall Line): the compatibility contract, the clean room, the homes, the protocols, the labs and the `ge` commands it needs |
+| [`docs/detail.md`](docs/detail.md) | Brush detail (M42): bevels on exposed brush edges and which edges stay sharp, decals clipped to surfaces that age in a pool, seeded props by rules, the labs |
 | [`docs/water.md`](docs/water.md) | Water and wind (M24): the bodies and the one query, the waves the wind grows, floating, swimming tuned per game, flowing water, the colour from what is in the water, the surface and the view under it, the sound, and the labs |
 | [`docs/liquids.md`](docs/liquids.md) | Liquids other than water (M30): viscosity, yield and harm on a body's stuff, the wind and the swimmer in them, lava and slime drawn, and the labs |
+| [`docs/climate.md`](docs/climate.md) | Temperature and humidity (M51): the air by the hour, the height, the weather and the ground, the dew point, and what they do: fog of five kinds, snow or rain, the snow's feel, frost, rime, black ice, the breath, lake ice; who reads what |
 | [`docs/grass.md`](docs/grass.md) | Grass (M34): the research, kinds and recipes, covers on a heightfield or a mesh's floors, the blade scatter, the sway in the wind, the grass drawn, and the rows |
 
 **The working area.** `porting/` holds everything that only matters while modules are
@@ -251,6 +253,7 @@ characters.
 | `engine/ai/` | The bots' layer (`ge::ai`): the decision record `ge why` reads, the hands that look human, paths, thinking on a schedule, sight and memory, steering, choosing | `bots` |
 | `engine/wind/` | The wind (`ge::wind`): a pure function of place and time over a field (mean, gusts, veer, the log-law profile, shelter, local sources); a world's wind is one field of it | `water` |
 | `engine/water/` | The water (`ge::water`): bodies and the one `sample` query, the sea a wind grows over a fetch, floating, swimming, the colour from what is in the water, flowing water and its tiers | `water` |
+| `engine/detail/` | Brush detail (`ge::detail`, `docs/detail.md`): convex solids and bevels on their exposed edges, the receivers grid, decals that age in a pool, seeded props by rules and their shapes, the test hall | `detail` |
 | `engine/grass/` | The grass (`ge::grass`): kinds and recipes, covers from a heightfield's region or a mesh's floors, every blade scattered off its triangle's seed, a blade's sway in the engine's wind | `grass` |
 | `engine/cli/` | The `ge` command line for game repos (`cmake/Cli.cmake`): the command catalog, the answer shape and findings, and one file per command group | `agent-interface` |
 | `consumer-skills/` | The skills a game repo gets from `ge new` and `ge skills sync`, compiled into `ge`; written for a game repo, never for this one | `agent-interface` |
@@ -277,6 +280,7 @@ characters.
 | `engine/assets/` | Authored models: the glTF loader and writer, the `Model`, posing and CPU skinning; no GPU | `assets` |
 | `engine/ui/` | The 2D layer (`ge::ui`): paints, the draw list, images, fonts, the CPU raster, backdrops, menus as a model and a view; no GPU | `ui` |
 | `engine/charset/` | The bitmap fonts (`ge::charset`, `docs/charsets.md`): ten ASCII charsets as committed atlases and their builder, the noise layers, the text looks, text layout | `ui` |
+| `engine/hud/` | The HUD kit (`ge::hud`): faces over TrueType or a charset, the frame and anchors, readouts, bars, pips, banners, the feed, the layout check | `ui` |
 | `plugins/` | Plugins, one directory each, built as `ge_<name>` (`cmake/Plugins.cmake`, checked by `tools/check-plugins.mjs`) | `plugins` |
 | `plugins/racing/` | The racing primitives (`ge::racing`): the control tape, the record book's policy, the standings | `racing` |
 | `plugins/mountain/mapgen/` | The world generator (`ge::mountain::mapgen`): the piste and the ski area by stage, the rule books, the real faces and hints, the digest; `picture/` the map on the CPU | `mountain` |
@@ -298,6 +302,7 @@ characters.
 | `games/fall_line/sound/` | Fall Line's sound (`fall_line_sound`, no GPU): the bank, the route, the listener, the mix | `audio`, `sim` |
 | `games/fall_line/camera/` | Fall Line's camera (`fall_line_camera`, no GPU): the ladder of engine rigs and the camera key, the skier as the subject, the trunks and posts it answers | `camera` |
 | `games/fall_line/controls/` | Fall Line's controls (`fall_line_controls`, no GPU): the actions and default bindings, the player's file, the rebinding walk, what is felt, the run played by hand, scripted sessions | `input` |
+| `games/fall_line/hud/` | Fall Line's HUD (`fall_line_hud`, no GPU): the free ride's snapshot, the news, the words, the view | `ui` |
 | `games/fall_line/labs/` | Fall Line's labs, the headless ones and the GPU's | `sim`, `labs`, `audio` |
 | `games/fall_line/app/` | Fall Line's presentation (`fall_line_app`): the pass table, the look, the scene, the views, the `fall_line` window; then the HUD | `platform`, `gpu`, `render`, `ui`, `audio` |
 | `tests/` | `<topic>_test.cpp`, one executable each; `check.hpp` (the harness), `golden.hpp`, `golden/` | `testing` |
@@ -401,6 +406,7 @@ and the directories agree.
 | `debug` | Finding out why a run behaves as it does: log channels and `--log` dumps, series traces and spans, the outlier rule, the charts (PNG + SVG), `ge graph` |
 | `perf` | Any optimisation, a benchmark, a profile, a cost claim |
 | `agent-interface` | Diagnostics wording, consumer skills, the `ge` CLI (M12) |
+| `detail` | `engine/detail`: bevels on brush edges (exposed, buried, thin, flat), the receivers grid, decals (scorch and its embers, bullet holes, blood; masks, the atlas, the clip, the pool, ageing), the marks of a game's events (`shot_hit`, `bleed` by health lost), seeded props by rules (rubble, debris, moss), floor clutter by surface class and open sky (`clutter_rules`), the test hall and yard and the `detail-*` labs; the M42 rows |
 | `water` | Water and wind: `engine/wind` (the field, gusts, the log-law profile, shelter, local sources), `engine/water` and its passes as M24's rows land (bodies, waves, floating, swimming, colour, flow), their labs |
 | `grass` | Grass: `engine/grass` (kinds and recipes, covers from a heightfield or a mesh's floors, the blade scatter, the sway in the engine's wind) and `engine/render/grass` (the GPU scatter, thinning, the blades drawn), their labs |
 | `bots` | Anything a bot decides: `engine/ai`, the decision record every bot writes, `Run::trace`, `ge why`, making a bot more human, paths and thinking on a schedule (M16) |

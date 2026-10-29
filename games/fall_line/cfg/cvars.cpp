@@ -309,6 +309,14 @@ void add_cvars(con::Console& c, Settings& s) {
           .help = "the kind of sky: earth dust alien hell void nebula violet ice ash toxic",
           .kind = CvarKind::text},
          &s.sky_type);
+  v.bind({.name = "sv_moons",
+          .fallback = "type",
+          .flags = kRun,
+          .help = "the moons over the sky, up to four besides the Earth's, each name[:size[:spin "
+                  "hours]]: moon phobos deimos io europa ganymede callisto titan enceladus miranda "
+                  "triton, or none (type: the sky type's own)",
+          .kind = CvarKind::text},
+         &s.moons);
   // The sky type's knobs (render/sky_style.hpp's SkyKnobs): -1 keeps the type's own.
   const auto knob = [&](const char* name, const char* help, double max, double* field) {
     v.bind({.name = name, .fallback = "-1", .flags = kRun, .help = help, .min = -1, .max = max},

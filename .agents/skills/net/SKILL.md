@@ -1,6 +1,6 @@
 ---
 name: net
-description: "Use for engine/net in gameengine2: multiplayer networking. Addresses, the wire, UDP and TCP sockets, the simulated network (stream links too) and its conditions, pcap captures, the packet format, connections (acks, round trip, loss, unreliable/sequenced/reliable channels, big messages in pieces, priorities, the send budget), nodes (host, client, peer; up to 32), sessions (the lobby: seats, teams, chat, kick, start, reconnect by token), LAN discovery, NATs (the simulated kinds, STUN, the rendezvous, hole punching, the relay), opening a port on the router (PCP, NAT-PMP, UPnP IGD, the simulated router), replication (quantized snapshots and deltas, interest, the byte budget, prediction and reconciliation, interpolation, lag compensation by rewind), lockstep and rollback (turns, input delay, prediction and resimulation, step digests that name a desync), voice chat (the Opus codec at a constant bitrate with FEC, push-to-talk and voice activity, the host's relay by route, the jitter buffer, the mix onto the synth's streams, the voice cvars), fake-traffic sessions, pressure tests (ramps to a breaking point, chaos scripts and reconnects, soaks and memory, the fuzzer), the net-link, net-session, net-reach, net-replicate, net-lockstep, net-stress, net-chaos, net-fuzz and voice labs; and the M17 plan (lobby, chat, NAT, replication, lockstep, voice, accounts)."
+description: "Use for engine/net in gameengine2: multiplayer networking. Addresses, the wire, UDP and TCP sockets, the simulated network (stream links too) and its conditions, pcap captures, the packet format, connections (acks, round trip, loss, unreliable/sequenced/reliable channels, big messages in pieces, priorities, the send budget), nodes (host, client, peer; up to 32), sessions (the lobby: seats, teams, chat, kick, start, reconnect by token), LAN discovery, hosting from inside a game and the server browser (the directory, the rendezvous's list, invite-only and LAN-only games), NATs (the simulated kinds, STUN, the rendezvous, hole punching, the relay), opening a port on the router (PCP, NAT-PMP, UPnP IGD, the simulated router), replication (quantized snapshots and deltas, interest, the byte budget, prediction and reconciliation, interpolation, lag compensation by rewind), lockstep and rollback (turns, input delay, prediction and resimulation, step digests that name a desync), voice chat (the Opus codec at a constant bitrate with FEC, push-to-talk and voice activity, the host's relay by route, the jitter buffer, the mix onto the synth's streams, the voice cvars), fake-traffic sessions, pressure tests (ramps to a breaking point, chaos scripts and reconnects, soaks and memory, the fuzzer), the net-link, net-session, net-reach, net-host, net-replicate, net-lockstep, net-stress, net-chaos, net-fuzz and voice labs; and the M17 plan (lobby, chat, NAT, replication, lockstep, voice, accounts)."
 ---
 
 # Networking
@@ -28,9 +28,12 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
 | `net/node.hpp` | Host, client or peer: the challenge handshake, up to 32 peers, timeouts, events, flush |
 | `net/session.hpp` | Sessions: the lobby on a node's reliable channel; `SessionHost` seats players and holds the rules, `SessionClient` asks and mirrors |
 | `net/session_wire.hpp` | The session's messages, stated once for both sides (not installed) |
-| `net/discovery.hpp` | LAN discovery: a broadcast probe on a fixed port, each host's advert, the hosts found |
+| `net/discovery.hpp` | LAN discovery: a broadcast probe on a fixed port, each host's advert (the session's id, a locked flag), the hosts found; the same probe sent to a session address is a ping |
+| `net/hosting.hpp` | Hosting from inside a game: LAN answers and pings, the router's forward, the rendezvous, the list kept current and unlisted on stop; visibility `lan`, `invite`, `listed` |
+| `net/directory.hpp` | The server browser's model: the LAN's games and the list's pages merged by session id, pinged, filtered and sorted; `directory_route` to join one |
+| `net/hosting_trial.hpp` | An evening of hosted games found, pinged, joined, started and unlisted: what the `net-host` lab and `net_hosting_test` run |
 | `net/stun.hpp` | STUN's Binding request and answer: the public address a NAT gave a socket |
-| `net/rendezvous.hpp` | The public server: sessions registered, a client introduced to its host with a nonce and a relay port, STUN answered, relays forwarding |
+| `net/rendezvous.hpp` | The public server: sessions registered, a client introduced to its host with a nonce and a relay port, STUN answered, relays forwarding, the list of advertised games a page at a time |
 | `net/reach.hpp` | The two ends on the node's socket: the host registers and punches, the client joins, connects, follows a punch's port (`node_retarget`), falls back on the relay; `reach_wire.hpp` the messages (not installed) |
 | `net/portmap.hpp` | Opening a port on the router: PCP, then NAT-PMP, then UPnP IGD on a socket of its own; the lease renewed at half its life, closed with a lease of 0; `portmap_wire.hpp` the three protocols' messages (not installed) |
 | `net/sim_router.hpp` | The simulated router: PCP, NAT-PMP, SSDP and UPnP's SOAP answered on a NAT's LAN face (`NatConfig::gateway`), each grant a forward on the NAT |
@@ -124,6 +127,11 @@ skier. A game's half (what it replicates, its message ids, its lobby's settings)
   behind each kind; the connect times as a heatmap; then a symmetric host's router speaking each
   of PCP, NAT-PMP and UPnP: the time to map, the fallbacks, the renewals of a 20 s lease over a
   minute, a client behind another symmetric NAT let straight in, the close.
+- `make lab LAB=net-host` (`--presets=lan,wifi,bad --routers=all,none`): an evening of hosted
+  games (a listen server on a home LAN, ten arenas, an invite-only game, a host only the relay
+  reaches, a LAN-only game) found by a friend's and a stranger's browser three times, each join
+  seated and chatting, the game started and unlisted; both browsers drawn as a menu, the joins'
+  times as a heatmap.
 - `make lab LAB=net-replicate` (`--presets=lan,wifi,bad --clients=32 --npcs=64`; `--budget=600`,
   `--radius=150`): a replicated world under each preset: each client's bandwidth, corrections a
   minute and the worst, snapshots dropped, rows starved, inputs repeated, and how far the

@@ -174,6 +174,12 @@ std::string_view view_caption(std::string_view name) {
     return "From the finish, looking at the sun (the moon at night) through what is over it: the "
            "disc, its glow, its corona and its halo (sv_clouds).";
   }
+  if (name == "moons") {
+    return "From the finish, looking up at the other worlds' moons over the sky (sv_moons).";
+  }
+  if (name.size() == 5 && name.substr(0, 4) == "moon") {
+    return "A long lens on one of the other worlds' moons (sv_moons), its face and its phase.";
+  }
   if (name == "aerial") return "From high over a corner of the map, the whole mountain.";
   if (name == "corduroy") {
     return "Close over the groomed piste in the sun, looking down it at the comb's ribs and the "
@@ -275,6 +281,37 @@ bool make_view(const Level& level, std::string_view name, ge::render::FrameView&
     v.heading = v.sun_azimuth;
     v.pitch = std::clamp(v.sun_elevation, 8 * kDeg, 60 * kDeg);
     v.fov_y = 70 * kDeg;
+  } else if (name == "moons" || (name.size() == 5 && name.substr(0, 4) == "moon")) {
+    // From the finish at the other worlds' moons: all of them in one lens (their mean
+    // direction, wide enough for every one), or the n-th through a lens four of its radii
+    // high.
+    const ge::render::Night& n = v.night;
+    if (n.moon_count == 0) return false;
+    const auto& p = station_at(level, track.length);
+    place(level, p.x, p.z, 4.0, v);
+    if (name == "moons") {
+      double mean[3] = {0, 0, 0};
+      for (int k = 0; k < n.moon_count; ++k)
+        for (int c = 0; c < 3; ++c) mean[c] += n.moons[k].toward[c];
+      const double len = std::sqrt(mean[0] * mean[0] + mean[1] * mean[1] + mean[2] * mean[2]);
+      for (double& c : mean) c /= std::max(len, 1e-9);
+      double most = 0;
+      for (int k = 0; k < n.moon_count; ++k) {
+        const double* t = n.moons[k].toward;
+        most = std::max(most, std::acos(std::clamp(t[0] * mean[0] + t[1] * mean[1] + t[2] * mean[2],
+                                                   -1.0, 1.0)));
+      }
+      v.heading = std::atan2(mean[0], mean[2]);
+      v.pitch = std::asin(std::clamp(mean[1], -1.0, 1.0));
+      v.fov_y = std::clamp(2.6 * most, 30 * kDeg, 120 * kDeg);
+    } else {
+      const int k = name[4] - '1';
+      if (k < 0 || k >= n.moon_count) return false;
+      const ge::render::SkyMoon& o = n.moons[k];
+      v.heading = o.azimuth;
+      v.pitch = o.elevation;
+      v.fov_y = std::max(4 * o.radius * v.moon_size, 0.05 * kDeg);
+    }
   } else if (name == "vista") {
     place(level, m.summit.x, m.summit.z, 0, v);
     v.eye[1] = m.summit.y + 150;
