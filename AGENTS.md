@@ -163,6 +163,13 @@ porting ends, and nothing outside it may depend on it except `make golden`.
   queue then runs the whole matrix on the tree that lands and squashes it, or ejects it with
   the failing row named (fix, push, it re-queues). A direct merge is refused. The check-ins
   still catch conflicts, which auto-merge waits on forever. Schedule the check-ins; never sleep in a loop.
+- **THE QUEUE RUNS ITSELF; NEVER HOLD OR RE-ARM OTHER PRS BY HAND** (`.github/workflows/queue.yml`,
+  `flakes.yml`; the `commit` skill). To let one PR into the queue first, label it `queue-priority`:
+  every other armed, unqueued PR is disarmed and labelled `queued-hold`, and re-armed when no open
+  PR has the label. A queue run that failed with no failed job re-arms its PR by itself. Never
+  cancel a `merge_group` run: it ejects everything behind it. A red test that has a `flake` issue
+  is not your change's: say so on the PR and rerun the job once. Tables nobody edits: the labs'
+  list is each lab's `LabSpec` (`docs/lab-list.md` is generated), so a new lab touches no shared file.
 - **Every work session ends with the `commit` skill.**
 
 ## Build and test
