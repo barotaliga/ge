@@ -145,7 +145,8 @@ TEST(the_column_over_a_height_is_the_share_integrated) {
   CHECK(std::fabs(r::valley_column(top, edge, 20) - 10) < 1e-12);  // half the edge
   CHECK(std::fabs(r::valley_column(top, edge, -100) - 130) < 1e-12);
   // Its slope is minus the share at every height.
-  for (double y = -20; y < 60; y += 0.7) {
+  for (int i = 0; i < 115; ++i) {
+    const double y = -20 + 0.7 * i;
     const double h = 1e-4;
     const double slope =
         (r::valley_column(top, edge, y + h) - r::valley_column(top, edge, y - h)) / (2 * h);
