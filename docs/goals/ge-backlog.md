@@ -27,7 +27,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge lab sheet <lab> --grid=2x2 [shots]` (shots on one image) and `--watch`
 - `ge lab grid <lab> --vary=cfg:a,b,c` (one composite picture of the same view under several settings, each tile captioned with its setting; asked again as `ge lab sheet <lab> --view=<v> --vary=cfg:...`)
 - `ge lab run --jobs=N <labs>` (independent labs run in parallel, each with its own log, instead of one after another)
-- `ge lab shot <lab> <id>...` (one named view of a picture lab drawn alone while a look is iterated: a runner-wide `--shots=<ids>` and `lab.wants(id)` the lab asks before it renders, in place of the `--views` flag gpu-world and gpu-snow each added and the rest lack)
+- `ge lab shot <lab> <id>...` / `ge lab <id> --only=<shot>` (one named view of a picture lab drawn alone while a look is iterated, the others left as the last run wrote them, written to `--out=<path>` when given: a runner-wide `--shots=<ids>` and `lab.wants(id)` the lab asks before it renders, in place of the `--views` flag gpu-world and gpu-snow each added and the rest lack; asked for by the console, replays and classic-enhance threads)
 - a shared `--viewports=<w>x<h>,...` flag for picture labs (every view drawn at each size, e.g. a phone, a laptop and a 4K screen, without each lab adding its own)
 - `ge profile --pass=<name>` (one pass's median and p95, before and after) and `--cost <shader-term>`
 - `ge lab <id> --at-ref=<git-ref>` (the "before" shot from a worktree build of that ref, without stashing, rebuilding and restoring this tree)
@@ -40,17 +40,19 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 ## The CI loop
 
 - precheck running every gate and printing each failure whole (done: no gate stops the run but the build, so every lint finding shows in one round)
-- precheck refusing two rows of one lab in `tests/labs_digests.txt` (done: the `digest rows` gate, which CI's labs-smoke would otherwise fail a round later)
+- precheck refusing two rows of one lab in `tests/labs_digests.txt` (done, then retired: each lab's digest is its own file under `tests/digests/`, so no union merge can double one)
 - `ge precheck` (done: the repo's CI gates in both presets) and `ge lint --like-ci` (CI's exact gates and file set)
 - `ge lint` (done: clang-tidy's bug-finding checks over what the change since `--base` reaches, the changed .cpp files and every .cpp including a changed header, or the files named, each finding at its line with its check's page; a few files in seconds)
 - a teleport detector for the labs (done: `engine/lab/teleport.hpp`, every step of a track that moves farther than its speed allows, reported under every scenario lab's `--trace`)
 - `ge test --affected` (done: the tests the change since `--base` reaches through the include graph, a target reached when its objects include a changed file or a header in a reached library's directory; only their targets built, `--list` names them; precheck takes its tests from it)
 - precheck's lab digests following the same reach (done: `ge digest --affected [--list]`, each lab by its own source's object, so a plugin change reaches the game's labs through the game library including its headers; `tools/labs-reached.sh` retired; a changed committed asset reaches the labs under its plugin or game and those naming it)
+- precheck's digests under a time budget (a change to engine/lab or engine/core reaches every lab, and the whole set outran a session's time limit: the labs a changed file names first, then the rest sharded in the background or left to CI's labs-smoke with the list printed)
 - the labs' digest baseline merging without conflicts (done: `merge=union`, a lab's doubled row failed by name)
 - `ge digest`'s smoke run writing its previews apart from a full lab run's (`previews/<id>/smoke/`), so a digest check never overwrites the pictures a full run left
 - `ge digest --dedupe` (the duplicate rows a union merge leaves in the baseline dropped, keeping the row the current build writes)
 - `docs/goals.md` merging without conflicts (done: each row's status in `docs/goals/<row>.md`, this backlog one wish a line, union-merged, held by `tools/check-goals.mjs`)
 - `ge ci <pr>` (done: each failed job's log as findings, over `gh api`; `--merge` squash-merges a green, clean one at its head, and a green PR GitHub blocks is answered with the required check or review it waits on)
+- `ge ci <pr>` reading the merge queue: "in the queue since <t>" or "dequeued at <t>: <reason>" (a merge conflict with a batch-mate, a failed row), off the PR's timeline (`added_to_merge_queue`, `removed_from_merge_queue`), so a silent ejection is seen at the next check-in
 - `ge test --filter` building only the matching tests' targets (done, and `make test T=<regex>` in the engine)
 - lint that also covers the files whose compile command changed (`compile_commands.json` against the base)
 - precheck running the smoke digest of every lab the change reaches (done in the engine's `make precheck`; `ge precheck` already runs every lab)
@@ -70,7 +72,10 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 
 ## Inspecting a run
 
-- plugin commands (next, after the module registry): a plugin's or a game's `tools/*.cpp` registering `GE_TOOL({group, verb, summary, args, flags, run})` into one `tools` executable the build makes, and `ge` forwarding a command it does not know to it, listed in `ge help` and answering with findings and `--json` like its own; first users `ge level textures <pak> <map> --out=<dir>` and `ge level clone <bsp> --texmap=<file>`, which today hide as lab flags
+- plugin commands: `ge tool <plugin> -- <args>` (being built by the classic-enhance PR: a plugin's tool executable built and its JSON relayed); next, its commands listed in `ge help` and forwarded without `tool --`; first users `ge level textures <pak> <map> --out=<dir>` and `ge level clone <bsp> --texmap=<file>`, which today hide as lab flags
+- `ge lab <id> --compare=<tag> --metric=<name>` (one metric across the kept run and this one, a table per scenario or shot, in place of every metric `--compare` prints today)
+- `ge lab why <lab> <metric>` (what drove a lab's metric: the scenario steps, series and inputs that moved it most, and against a kept run with `--compare=<tag>` where it parted)
+- `ge lab listen <lab> <id>` (a lab's WAVs transcoded to a small web format, Opus in Ogg, for its report page and `ge lab publish`, without ffmpeg by hand)
 - `ge record` (done: a run as an MP4, WebM or GIF and a contact sheet of timestamped stills, its resolution, frame rate, speed, range and encoder quality; and `--gpu`, the game's registered renderer drawing each frame headless in a mode, Fall Line's `lit`, `wireframe`, `depth` and `overlay` from a chase camera, a high chase or the named views; `ge shot --gpu` the same still)
 - `ge export <replay> --from-mark=<kind>` (a clip cut straight off a replay file's marks, a crash or a jump, without finding its steps by hand)
 - the CPU views' `shoot` honouring `--size` (Fall Line's near view always draws 512 px, about 0.8 s a frame in debug, whatever size is asked)
@@ -111,7 +116,6 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge lab pixels <lab> <shot> --line=x0,y0,x1,y1 | --histogram` (a picture's values along a line or its colour histogram, for banding and colour checks without decoding the PNG)
 - `ge lab strip <scenario>` (a side-view stick filmstrip of a body over time, frame by frame, without a hand-written dumper and image script)
 - `ge lab trace-points <scenario> --stage` (each point of a body's velocity after every solver stage, for finding an energy pump without instrumenting a copy of the solver; generalizes to `ge trace --actor=<id> --fields=<a,b>`, and to `ge trace-view <lab> <scenario> --around=<step>`: the steps round one as a table of position, velocity, grounded and events)
-- `ge lab <id> --only=<shot>` (one picture of a lab rerun while iterating on it, the others left as the last run wrote them)
 - `ge lab <lab> --scenario=<id> --watch` (one scenario re-run and its picture refreshed on every rebuild, while tuning it)
 - `ge level info|build|shot <file>` (a level file checked, each room's triangles and build time printed, one view rendered without the whole lab)
 - `ge bsp info|ents|shot <file>` (a classic BSP map's lumps and counts, its entities as a table, one view rendered, without the levels lab)
@@ -122,6 +126,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 
 ## Measuring
 
+- `ge lab sound <lab>` (a spectrogram of each WAV a lab writes, on its report page: the cut-off falling with distance seen without listening; the classic-enhance sound page's spectrogram moved into engine/lab and reused)
 - `ge profile --wall` (a sampling CPU profiler: wall time by inlined frame, the main thread apart from the workers, where instruction counts hide a slow call)
 - `ge profile --callgrind <lab>`
 - `ge lab <id> --toggle=<feature>` (a lab's passes timed with the feature on and off, one table)
@@ -142,6 +147,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 
 ## Hygiene
 
+- a shared CPU scene view in engine/lab (a camera, a lit raster with occlusion and a tone map over meshes) for labs that draw a model or a room without the GPU: brush detail's detail_view.cpp is the third lab-local renderer of its kind
 - a `ge` older than the base saying so (the commands main has that this build lacks, and `git merge origin/main` as the next step): a branch cut before `ge goals free` landed scanned branches by hand
 - `ge build` and `ge lab` warning when the labs binary is older than a library it links
 - `ge deps fetch`
@@ -151,6 +157,9 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge add lab --kind=overlay`
 - `ge services check` (a game's store catalog checked by `check_catalog`, and later diffed against a store's exported partner configuration)
 - `ge doctor --tools` / `ge env` (which tools, versions and drivers a gate needs, and which are missing)
+- `ge shader check <file.wgsl>` (one shader's includes resolved as the embedder does, compiled by Tint, the error named with its line: `make shaders-check` builds every shader and needs GE_GPU, and a reserved word showed only as finish() returning false)
+- `ge template check` (every `ge add` template and the scaffold filled at a short and a long game name, then `ge check` and clang-format run on each: a placeholder's tag line reflowed by clang-format broke only at a long name)
+- the WGSL embedder failing on an empty generated shader (an unbalanced bracket in a comment splits the CMake list and silently empties it)
 
 (`ge shot` is M12b's; `ge anim` is M14b's.)
 
@@ -172,7 +181,6 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge net reach --host --client --preset --forward` (one pair of peers' reach timeline)
 ## Shooter's Edge (M18, docs/shooters-edge.md § The `ge` tooling it needs)
 
-- `ge pak ls/cat/extract/build` (a search path's files, which archive wins one, a fixture pack built from a directory)
 - `ge bsp info/ents/shot` (a map's lumps and limits, its entity lump, a CPU picture of leaves, the PVS from a point and the hulls)
 - `ge qc build/disasm/run/trace/profile/diff` (our QC compiler; a progs disassembled, run, traced a step at a time, timed by function, diffed against another build)
 - `ge server --map --bots --for` (a headless dedicated server with bots, writing an input log for `ge replay`, `ge state` and `ge diverge`)
