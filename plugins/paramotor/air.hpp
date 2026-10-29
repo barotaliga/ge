@@ -48,10 +48,23 @@ struct EddyWave {
   double omega = 0;               // rad/s
   double phase = 0;               // rad
   double amp = 0;                 // its share of one sigma
+  template <class Io>
+  friend void describe(Io& io, EddyWave& v) {
+    io(v.kx);
+    io(v.ky);
+    io(v.kz);
+    io(v.omega);
+    io(v.phase);
+    io(v.amp);
+  }
 };
 inline constexpr int kWavesPerComponent = 6;
 struct ParaAirField {
   EddyWave waves[3][kWavesPerComponent];
+  template <class Io>
+  friend void describe(Io& io, ParaAirField& v) {
+    io(v.waves);
+  }
 };
 ParaAirField make_air_field(double seed);
 

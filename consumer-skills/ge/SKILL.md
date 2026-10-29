@@ -54,6 +54,7 @@ ge load [--render]               # how the run spreads over the cores and the GP
 ge graph <file>... [--kind=<k>]  # chart traces, benches, profiles: PNG + SVG, outliers as notes
 ge net inspect <pcap>            # a network capture, datagram by datagram (skill: multiplayer)
 ge save inspect <file>           # a save file's header, meta and chunks, or why it is refused (skill: saves)
+ge save check <log> --every=10   # every save of a run steps on as the run never saved (skill: saves)
 ge net stats <pcap>              # per connection: kbps, round trip, loss, resends; charted
 ge net sim [--presets=wifi,bad]  # fake clients and a host over bad links, no game needed
 ge snow show <file.snow>         # a saved snow layer: tiles, pressed samples, mass, maps (skill: snow)

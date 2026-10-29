@@ -15,6 +15,13 @@ namespace ge::ai {
 struct Memory {
   double x = 0, y = 0, z = 0;                            // where it was last seen, m
   double at = -std::numeric_limits<double>::infinity();  // s, when; -inf: never
+  template <class Io>
+  friend void describe(Io& io, Memory& v) {
+    io(v.x);
+    io(v.y);
+    io(v.z);
+    io(v.at);
+  }
 };
 
 // Seen at (x, y, z) at time `t`.

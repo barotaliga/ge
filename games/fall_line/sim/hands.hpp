@@ -52,6 +52,11 @@ class BotHands {
  private:
   HandsProfile profile_ = HandsProfile::none;
   ge::ai::Hands hands_;
+  template <class Io>
+  friend void describe(Io& io, BotHands& v) {
+    io(v.profile_);
+    io(v.hands_);
+  }
 };
 
 }  // namespace fall_line::sim
