@@ -62,9 +62,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge ci run --row=macos -- <cmd> --repeat=N` (a command on one CI row through a dispatched workflow, no temporary workflow step committed: a Metal flake hunt, the needs-mac bench)
 - `ge ci <pr> --rebase-digests` (after merging the base, the digests both sides moved rewritten and named)
 - `ge goals next` / `ge goals free-rows` (the next open roadmap row with its dependencies, and which rows open pull requests already claim; the second done: `ge goals free [<row>] [--fetch]`, the rows main and every remote branch hold and the next free number or letter; and `ge goals claim <what> [--under=<row>]`, the row reserved and pushed at once, the earlier of two claims keeping it)
-- `ge ci <pr> --wait` (block until the checks finish or the PR conflicts, then answer as `ge ci` does: one call where a thread now schedules check-ins every 15 minutes)
 - `ge lab sweep <id> --set=<const>=a,b,c` (done: one constexpr rewritten to each value, the labs rebuilt and run, every metric side by side, the source put back; next, a scenario row's own numbers, such as a scripted hand's timings, swept the same way, and `--draws=N` over a range `a..b`, a Monte Carlo of one constant with each metric's spread; and a range form, `--set=<const>=a..b/n`, charting each metric against the knob; and `--sheet`, every value's pictures side by side on one `ge lab publish` page, a contact sheet of the knob)
-- `ge ci <pr> --wait` (block until the checks finish or the PR conflicts, then answer as `ge ci` does: one call where a thread now schedules check-ins every 15 minutes)
 - `ge ci <pr> --wait[=<minutes>]` (done: once a minute until a check fails, the PR conflicts or every check finished, at most an hour; with `--merge` the green answer is merged)
 - `ge lab sweep <id> --flag=<flag>=a,b,c` (done: one of the lab's own flags at each value, the labs built once, the same table; the hours of a day over a picture lab)
 - `ge lab --split=N`
@@ -72,6 +70,8 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge merge-main`
 - `ge stack <pr>...` and `ge restack` (build on other open PRs' branches, and once they land replay only this branch's own commits onto main, without hand-picking the base for `git rebase --onto`)
 - `ge build --lean` (no GPU, no debug info: CPU-only plugin work on a small cloud disk), and precheck / `ge digest --affected` reaching only the tests a cmake/ change touches, not every test executable
+- `ge ci --cost[=<runs>]` (runner-minutes and wall time per job over the last N runs, split by event: pull request, merge queue, push; what a workflow change saves, measured)
+- a precheck stamp: `make precheck` writes the head it passed on and its gates, the push carries it, and the gates job fails a push whose head has none (once CI stops running Linux, precheck is the only Linux run, so it must be provable)
 
 ## Inspecting a run
 
