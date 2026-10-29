@@ -213,12 +213,15 @@ struct GameFrame {
   ge::render::UiPass ui;
   ge::render::InstancePipelines instancing;
   ge::render::InstanceFamily forest, figures, crowd;
-  // The free ride's village (`show_village`): its streets, its parked cars and its traffic.
-  ge::render::InstanceFamily village;
+  // The free ride's village (`show_village`): its streets (casting nothing), its parked cars
+  // (casting into the cascades with the forest) and its traffic (into the figures' atlas).
+  ge::render::InstanceFamily streets, parked, traffic;
   std::vector<ge::render::InstanceFamily*> families{&forest, &figures, &crowd};
+  // What casts into the cached cascades and what into the atlas's tiles, each frame.
+  std::vector<ge::render::InstanceFamily*> still{&forest};
+  std::vector<ge::render::InstanceFamily*> moving{&figures, &crowd};
   std::shared_ptr<const sim::Village> shown_village;  // kept while drawn
-  uint32_t village_fixed = 0;  // the streets' instance and the parked cars', before the traffic
-  std::vector<ge::render::Instance> staged_village;
+  std::vector<ge::render::Instance> staged_traffic;
   wgpu::BindGroup instance_light;
   ge::render::SunShadows shadows;
   const ge::mountain::mapgen::Level* level = nullptr;
@@ -257,15 +260,17 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
 // THE FREE RIDE'S VILLAGE drawn in the frame from now on: the trees felled for it left out of the
 // forest, its streets laid on the snow, its parked cars, and its traffic where each frame's
 // `FrameScene::run_time` has it (mountain/app/village_look.hpp); the frame keeps it while it draws
-// it. Nothing for null. Its vehicles cast no shadow yet: the cascades are cached for what stands.
+// it. Nothing for null. The parked cars cast into the cached cascades as the forest does, the
+// traffic into the figures' atlas, so a vehicle under way casts only near a figure's tile.
 void show_village(ge::gpu::Device& device, GameFrame& frame,
                   std::shared_ptr<const sim::Village> village);
 
 // New targets for outputs of width x height (a resized window); the history starts over.
 void resize(ge::gpu::Device& device, GameFrame& frame, uint32_t width, uint32_t height);
 
-// The camera cut: the next frame keeps nothing of the last (no motion, no history). The tracks
-// stay: they are the run's, not the camera's.
+// The camera cut: the next frame keeps nothing of the last (no motion, no history, the sun's
+// cascades drawn again round the new camera). The tracks stay: they are the run's, not the
+// camera's.
 void cut(GameFrame& frame);
 
 // Lay the scene's racers' tracks from where each was at the last call (or the last draw, which
