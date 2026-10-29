@@ -150,7 +150,7 @@ bool read_input_log(const std::vector<uint8_t>& bytes, InputLog& log, std::strin
   for (char& c : magic) c = static_cast<char>(r.u8());
   if (r.short_read || std::memcmp(magic, kMagic, 4) != 0) {
     error =
-        "not a server input log (no GESL magic at byte 0); next: pass a file written by "
+        "not a server input log: no GESL magic at byte 0; next: pass a file written by "
         "shooters_edge_server --log=<path>";
     return false;
   }
