@@ -185,11 +185,11 @@ void create_sky(gpu::Device& device, gpu::PipelineSet& pipelines, Sky& sky,
 wgpu::BindGroup frame_group(gpu::Device& device, const wgpu::BindGroupLayout& layout,
                             const wgpu::Buffer& uniforms, const Sky& sky,
                             const wgpu::Buffer& lights, const wgpu::TextureView& ao) {
-  return make_group(device, "render.frame", layout,
-                    {uniforms, sky.sampler, sky.transmittance_view, sky.multiscatter_view,
-                     sky.sky_view_view, sky.aerial_view, sky.light, sky.moon_view_view,
-                     sky.cloud.view, sky.cloud.sampler, lights ? lights : sky.no_lights,
-                     ao ? ao : sky.blank_view});
+  return make_group(
+      device, "render.frame", layout,
+      {uniforms, sky.sampler, sky.transmittance_view, sky.multiscatter_view, sky.sky_view_view,
+       sky.aerial_view, sky.light, sky.moon_view_view, sky.cloud.view, sky.cloud.sampler,
+       lights ? lights : sky.no_lights, ao ? ao : sky.blank_view});
 }
 
 void prepare_sky(Sky& sky, const FrameView& view) {
