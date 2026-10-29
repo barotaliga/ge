@@ -120,10 +120,8 @@ traffic 488293494d3aafb5
 trails 1aaa468d0dbd81a0
 viewmodel ed059492dc9bd689
 village 23e3236139b8860d
-village-look 7c75c523c343dbe5
-wanted e0ddc59efa40e259
 village-look f18ea7af7a9f4ccf
-wanted 507dbbcbbbb4187e
+wanted e0ddc59efa40e259
 water-audition 3b2a928e2111e5dd
 water-colour f5da3e4186a81286
 water-cost cbf29ce484222325
