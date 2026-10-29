@@ -295,11 +295,11 @@ void add_cvars(con::Console& c, Settings& s) {
           .min = -1,
           .max = 1},
          &s.cover);
-  v.bind({.name = "sv_thick",
+  v.bind({.name = "sv_clouddensity",
           .fallback = "-1",
           .flags = kRun,
-          .help = "how thick the clouds are, the sun and the moon shining through their thin "
-                  "patches, 0 thin .. 1 thick (-1: the map's)",
+          .help = "how dense the clouds are, the sun and the moon shining through their thin "
+                  "patches, 0 thin .. 1 dense (-1: the map's)",
           .min = -1,
           .max = 1},
          &s.thick);
@@ -307,10 +307,20 @@ void add_cvars(con::Console& c, Settings& s) {
           .fallback = "-1",
           .flags = kRun,
           .help = "the lowest cloud layer's base over the valley floor, m, the layers over it "
-                  "moved in proportion; a lower cloud crosses the sky faster (-1: the map's)",
+                  "moved in proportion; a lower cloud crosses the sky faster, and one below the "
+                  "skier's height is skied through (-1: the map's)",
           .min = -1,
           .max = 12000},
          &s.cloud_height);
+  v.bind({.name = "sv_cloudthickness",
+          .fallback = "-1",
+          .flags = kRun,
+          .help = "how tall the lowest cloud layer stands from its base to its top, m: clear "
+                  "sky or the next layer starts over it, and a taller layer is darker under it "
+                  "(-1: the map's)",
+          .min = -1,
+          .max = 12000},
+         &s.cloud_thickness);
   v.bind({.name = "sv_cloudspeed",
           .fallback = "-1",
           .flags = kRun,
