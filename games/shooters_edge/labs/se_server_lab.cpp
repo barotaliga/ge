@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "core/math.hpp"
+#include "core/num.hpp"
 #include "core/num_text.hpp"
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
@@ -171,8 +172,8 @@ void run(gl::Lab& lab) {
   }
   gl::LabTable hashes{"the server's hash every 10 s of server time", {"server time s", "hash"}, {}};
   const double step = h.sv.set.mintic;
-  const auto frames = static_cast<int64_t>(seconds / step + 0.5);
-  const auto every_10s = static_cast<int64_t>(10 / step + 0.5);
+  const auto frames = static_cast<int64_t>(ge::core::num::round(seconds / step));
+  const auto every_10s = static_cast<int64_t>(ge::core::num::round(10 / step));
   const auto t0 = std::chrono::steady_clock::now();
   for (int64_t n = 0; n < frames; n++) {
     std::vector<sh::Vec3f> before(static_cast<size_t>(bots));

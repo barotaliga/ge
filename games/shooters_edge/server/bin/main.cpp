@@ -24,6 +24,7 @@
 #include <thread>
 #include <vector>
 
+#include "core/num.hpp"
 #include "shooters_edge/server/host.hpp"
 #include "shooters_edge/server/stand_in.hpp"
 
@@ -67,7 +68,8 @@ bool parse(int argc, char** argv, Flags& f, std::string& error) {
     const auto num = [&](double& out) {
       out = std::strtod(val.c_str(), &end);
       if (val.empty() || *end != '\0') {
-        error = "flag " + key + " needs a number, got '" + val + "'";
+        error = "flag " + key;
+        error.append(" needs a number, got '").append(val).append("'");
         return false;
       }
       return true;
@@ -168,8 +170,8 @@ int run(const Flags& f) {
   std::fflush(stdout);
 
   const double step = h.sv.set.mintic;
-  const auto frames = static_cast<int64_t>(f.seconds / step + 0.5);
-  const auto status_frames = static_cast<int64_t>(f.status_every / step + 0.5);
+  const auto frames = static_cast<int64_t>(ge::core::num::round(f.seconds / step));
+  const auto status_frames = static_cast<int64_t>(ge::core::num::round(f.status_every / step));
   const auto start = std::chrono::steady_clock::now();
   for (int64_t n = 0; f.seconds == 0 || n < frames; n++) {
     if (f.realtime) {
