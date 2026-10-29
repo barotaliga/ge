@@ -12,9 +12,7 @@
 
 namespace ge::shooter {
 
-namespace {
-
-std::vector<std::string_view> split(std::string_view line) {
+std::vector<std::string_view> split_words(std::string_view line) {
   std::vector<std::string_view> out;
   size_t i = 0;
   while (i < line.size()) {
@@ -27,19 +25,21 @@ std::vector<std::string_view> split(std::string_view line) {
   return out;
 }
 
-bool number(std::string_view tok, float& out) {
+bool parse_float(std::string_view tok, float& out) {
   const std::string s(tok);
   char* end = nullptr;
   out = std::strtof(s.c_str(), &end);
   return end != s.c_str() && *end == '\0';
 }
 
-bool integer(std::string_view tok, int& out) {
+bool parse_int(std::string_view tok, int& out) {
   const std::string s(tok);
   char* end = nullptr;
   out = static_cast<int>(std::strtol(s.c_str(), &end, 10));
   return end != s.c_str() && *end == '\0';
 }
+
+namespace {
 
 // Reads `key` then `n` numbers from `t` at `i`; advances `i`.
 struct Cursor {
@@ -57,13 +57,13 @@ struct Cursor {
   }
   float num() {
     float v = 0;
-    if (i >= t.size() || !number(t[i], v)) ok = false;
+    if (i >= t.size() || !parse_float(t[i], v)) ok = false;
     i++;
     return v;
   }
   int whole() {
     int v = 0;
-    if (i >= t.size() || !integer(t[i], v)) ok = false;
+    if (i >= t.size() || !parse_int(t[i], v)) ok = false;
     i++;
     return v;
   }
@@ -76,7 +76,9 @@ struct Cursor {
   }
 };
 
-bool contents_of(std::string_view w, int& c) {
+}  // namespace
+
+bool parse_contents(std::string_view w, int& c) {
   if (w == "solid")
     c = kContentsSolid;
   else if (w == "water")
@@ -89,6 +91,8 @@ bool contents_of(std::string_view w, int& c) {
     return false;
   return true;
 }
+
+namespace {
 
 bool move_type_of(std::string_view w, MoveType& t) {
   if (w == "normal")
@@ -115,7 +119,7 @@ bool movevar(std::string_view kv, MoveSettings& set, MoveState& st) {
   if (eq == std::string_view::npos) return false;
   const std::string_view k = kv.substr(0, eq);
   float v = 0;
-  if (!number(kv.substr(eq + 1), v)) return false;
+  if (!parse_float(kv.substr(eq + 1), v)) return false;
   if (k == "gravity")
     set.gravity = v;
   else if (k == "stopspeed")
@@ -216,7 +220,7 @@ bool parse_recording(std::string_view text, Recording& out, std::string& error) 
     const std::string_view raw = text.substr(pos, eol - pos);
     pos = eol + 1;
     number_of_line++;
-    const std::vector<std::string_view> t = split(raw);
+    const std::vector<std::string_view> t = split_words(raw);
     if (t.empty() || t[0][0] == '#') continue;
     const std::string_view w = t[0];
 
@@ -229,7 +233,7 @@ bool parse_recording(std::string_view text, Recording& out, std::string& error) 
       in = In::scene;
     } else if (w == "brush") {
       Brush b;
-      if (in != In::scene || t.size() != 2 || !contents_of(t[1], b.contents))
+      if (in != In::scene || t.size() != 2 || !parse_contents(t[1], b.contents))
         return fail("expected 'brush solid|water|slime|lava' inside a scene");
       out.scenes.back().brushes.push_back(b);
     } else if (w == "plane") {

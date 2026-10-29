@@ -48,6 +48,7 @@ simulation code: libm only, no allocation in a decal's placement after the pool 
 3. Run it again with `--compare=before`, look at every picture, and rewrite the golden the change
    moves (`GE_GOLDEN_WRITE=1 build/release/tests/detail_<name>_test`).
 4. Rewrite the lab's smoke digest (`build/debug/ge digest <lab> --write`, which writes `tests/digests/<lab>.txt`), and put both runs' pictures in the PR.
+4. Rewrite the lab's smoke digest (`build/release/labs <lab> --smoke --write-digests=tests/labs_digests.txt`), and put both runs' pictures in the PR.
 
 ## Lessons
 
