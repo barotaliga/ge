@@ -61,11 +61,12 @@ log comes back as findings). A conflict means merge `origin/main` into the branc
 weaken a test, and never push an empty commit to re-run CI. Right after each push, arm squash
 auto-merge on the PR: `main` merges only through GitHub's merge queue, and auto-merge is how a
 PR joins it (`gh pr merge <pr> --auto --squash`; an agent tool that only "enables auto-merge"
-may not enqueue on a queue base, so read the PR's state back after arming). A pull request runs
-only the gates, lint and the GCC debug row; the queue runs the whole matrix (Windows, macOS,
-arm64, packaging) on the tree that lands, and a row only the queue ran ejects the PR with that
-row's log: fix it, push, and it queues again. Label a PR `full-ci` to run the whole matrix
-before queueing a risky change (a compiler-sensitive one, a build change). A direct merge is
+may not enqueue on a queue base, so read the PR's state back after arming). CI runs no Linux
+build, test or lint: `make precheck` is that gate, so a push without it lands unchecked on Linux.
+A pull request runs the gates, Windows and macOS; the queue runs them again on the tree that
+lands, with the packaging, and a job only the queue ran ejects the PR with that job's log: fix
+it, push, and it queues again. Label a PR `full-ci` to add the Linux rows, the lint and the whole
+packaging before queueing a risky change (a compiler-sensitive one, a build change). A direct merge is
 refused, so `ge ci <pr> --merge` on a queue base arms auto-merge instead and says so. `ge ci <pr> --wait`, run in
 the background, is the check-in as one call: it returns when a check fails, the PR conflicts,
 or every check is green. Then

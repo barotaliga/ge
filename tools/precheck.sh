@@ -10,14 +10,16 @@
 #   4. release       the changeset fragments valid
 #   5. build         the preset's build (incremental)
 #   6. lint          clang-tidy over what the change since BASE (default origin/main) reaches
+#      shaders       every embedded WGSL shader through Tint (incremental: only what changed)
 #   7. tests         cli_diagnostics_test (every message held to the diagnostics convention),
 #                    each changed test, and the test every changed file's ge:test tag names
 #   8. digests       each lab the change reaches (`ge digest --affected --list`) at its smoke flags,
 #                    against tests/digests: a digest the change moved is caught here,
 #                    not by CI's labs_smoke a round later
 #
-# It is not the whole of CI: the other compilers, the labs it does not reach and the GPU rows
-# still run there. A game repo has `ge precheck` instead (engine/cli/ci.hpp).
+# It is CI's Linux half: CI runs no Linux build, test or lint on a pull request or in the queue,
+# only Windows and macOS (what can come out different) and the gates again, so a push that skips
+# this lands untested on Linux. A game repo has `ge precheck` instead (engine/cli/ci.hpp).
 #
 #   tools/precheck.sh BUILD_DIR PRESET [BASE_REF]
 #
@@ -67,6 +69,10 @@ if ! gate build make -s build PRESET="$preset"; then
   exit 1
 fi
 gate lint tools/lint.sh "$build" "$base" || true
+# shaders_check exists only where the build has the GPU and Tint (GE_GPU, GE_TINT).
+if grep -q 'shaders_check' "$build/build.ninja" 2>/dev/null; then
+  gate shaders cmake --build "$build" --target shaders_check || true
+fi
 
 # The tests the change reaches: changed tests, the ge:test of every changed file, and every test
 # whose target the change reaches through the include graph (`ge test --affected --list`: a plugin
