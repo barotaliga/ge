@@ -44,10 +44,12 @@ std::vector<r::MeshSource> forest_meshes() { return ge::mountain::app::tree_mesh
 
 std::vector<float> forest_materials() { return ge::mountain::app::tree_materials(); }
 
-std::vector<r::Instance> tree_instances(const ge::mountain::mapgen::Level& level) {
+std::vector<r::Instance> tree_instances(const ge::mountain::mapgen::Level& level,
+                                        std::span<const uint8_t> felled) {
   std::vector<r::Instance> out;
   out.reserve(level.trees.size());
   for (size_t i = 0; i < level.trees.size(); ++i) {
+    if (i < felled.size() && felled[i] != 0) continue;
     // A turn of its own, so the faceted crowns do not all face one way.
     const auto turn = static_cast<float>(std::fmod(static_cast<double>(i) * 2.399963, 6.283185));
     out.push_back(ge::mountain::app::tree_instance(level.trees[i], turn));

@@ -76,5 +76,5 @@ TEST(a_bad_point_or_file_says_what_to_do) {
   std::ofstream(junk) << "not snow";
   o = run_snow_show(junk.string(), "");
   CHECK(count_of(o.findings, Severity::error) == 1 &&
-        o.findings[0].what.find("GESNOW1") != std::string::npos);
+        o.findings[0].what.find("GESNOW2") != std::string::npos);
 }
