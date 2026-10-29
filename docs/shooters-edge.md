@@ -344,6 +344,7 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `se-interop` | drive | Our client and server against existing programs on loopback (cache-gated like `se-parity`) |
 | `se-world` | picture | Named views of free maps in both looks, with captions |
 | `se-audio` | sim | Sounds of a scripted fight rendered, metered and written as WAV |
+| `se-ambient` | sim | A walk through rooms under sky and by water: the ambience by leaf charted, mixed and written as WAV (built, M18j2) |
 | `se-demo` | sim | A demo played back, seeked and re-recorded; the digest of its frames |
 
 ## The `ge` tooling it needs

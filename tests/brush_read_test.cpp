@@ -114,6 +114,27 @@ TEST(a_room_s_centre_is_its_leaf_and_outside_is_solid) {
   }
 }
 
+TEST(a_leaf_carries_its_ambient_levels) {
+  br::Fixture fx = br::sample_fixture();
+  fx.rooms[0].ambient[br::kAmbientSky] = 200;
+  fx.rooms[2].ambient[br::kAmbientWater] = 90;
+  fx.rooms[2].ambient[br::kAmbientLava] = 7;
+  for (br::Family f : kFamilies) {
+    std::vector<uint8_t> bytes;
+    std::string error;
+    CHECK_MSG(br::write_bsp(fx, f, &bytes, &error), error);
+    br::Map m;
+    CHECK_MSG(br::read_bsp(bytes, &m, &error), error);
+    const bool stores = f == br::Family::v29 || f == br::Family::bsp2;
+    for (size_t r = 0; r < fx.rooms.size(); ++r) {
+      for (int k = 0; k < 4; ++k) {
+        CHECK(m.leaves[r + 1].ambient[k] == (stores ? fx.rooms[r].ambient[k] : 0));
+      }
+    }
+    for (uint8_t a : m.leaves[0].ambient) CHECK(a == 0);  // the solid leaf hears nothing
+  }
+}
+
 TEST(the_visibility_reaches_two_doorways_deep) {
   for (br::Family f : kFamilies) {
     const br::Map m = read(f);
