@@ -217,7 +217,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 
 ## Free content
 
-- `ge content scan <pak|dir>` (every sound and model a content set's maps and game logic name, with the event that plays or shows each: the registry and an assetmap draft)
+- `ge content scan <pak|dir>` (done: every sound, model and numbered set a set ships or its maps name, held to the asset map and the registry, with an assetmap draft; next, what the game logic plays or shows, on the progs reader)
 - `ge source search|fetch <source>:<pack>` (done: Kenney, OpenGameArt and Poly Haven found and unpacked into a cache with a SOURCE.txt, a licence the repo cannot carry refused; next, the hash written to a lock file)
 - `ge sound match <reference> <candidates>` (done: ranked by length, bands and envelope with the distance per trait; next, a sheet of waveforms)
 - `ge sound import` and `ge model import` (done: converted to the loudness and format, textures packed, load-checked; next, a preview and the registry and credits rows written)

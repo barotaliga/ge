@@ -293,6 +293,18 @@ Outcome run(const Args& a) {
     lab.passthrough = a.passthrough;
     return run_lab(build_options(a), lab);
   }
+  if (name == "content scan") {
+    LabOptions lab;
+    lab.id = "content-scan";
+    lab.passthrough = {"--content=" + fs::absolute(a.words[0]).string()};
+    for (const char* f : {"assetmap", "registry"}) {
+      if (has_flag(a, f)) {
+        lab.passthrough.push_back("--" + std::string(f) + "=" +
+                                  fs::absolute(flag_value(a, f)).string());
+      }
+    }
+    return run_lab(build_options(a), lab);
+  }
   if (name == "sim") {
     std::vector<std::string> options = a.passthrough;
     if (has_flag(a, "human")) options.emplace_back("--human");
