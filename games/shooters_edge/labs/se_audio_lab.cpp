@@ -92,7 +92,7 @@ const Cue kScript[] = {
     {1.0, "weapon/rocket_fire", kRival, 1, 1, kShot, Loop::once},
     {1.4, "weapon/explosion", kRocket, 0, 1, kShot, Loop::once},
     {2.0, "weapon/grenade_launch", kPlayer, 1, 1, kShot, Loop::once},
-    {2.4, "weapon/grenade_bounce", kGrenade, 1, 1, kShot, Loop::once},
+    {kGrenadeBounce, "weapon/grenade_bounce", kGrenade, 1, 1, kShot, Loop::once},
     {2.8, "weapon/explosion", kGrenade, 1, 1, kShot, Loop::once},
     {3.0, "player/pain_2", kRival, 2, 1, kShot, Loop::once},
     {3.5, "weapon/beam_start", kRival, 1, 1, kShot, Loop::once},
