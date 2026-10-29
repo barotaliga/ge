@@ -45,6 +45,7 @@
 # ge:keywords idempotent ci session-start
 # ge:skill build
 set -euo pipefail
+CALLER_PWD="$(pwd)"
 cd "$(dirname "$0")/.."
 ROOT="$(pwd)"
 
@@ -88,7 +89,8 @@ for arg in "$@"; do
     --list) mode=list ;;
     --verify) mode=verify ;;
     --quiet) quiet=1 ;;
-    --cache-dir=*) cache_dir="${arg#--cache-dir=}" ;;
+    --cache-dir=*) cache_dir="${arg#--cache-dir=}"
+      [[ "$cache_dir" == /* ]] || cache_dir="$CALLER_PWD/$cache_dir" ;;
     --https-mirrors) https_mirrors=1 ;;
     -h | --help) sed -n '2,/^# ge:summary/{/^# ge:summary/d;s/^# \{0,1\}//;p}' "$0"; exit 0 ;;
     *) echo "setup-ubuntu: unknown flag '$arg'; use --check, --list, --verify, --cache-dir=DIR, --https-mirrors, --quiet or none (--help)" >&2; exit 2 ;;
@@ -188,7 +190,14 @@ if ((${#want[@]})); then
   if [[ -n "$cache_dir" ]]; then
     # apt-get keeps what it downloads there, and takes a .deb already there instead of fetching
     # it again when its checksum matches the package lists.
-    mkdir -p "$cache_dir/partial"
+    # Made as the user who ran sudo: a root-owned parent (CI's .cache/) would lock that user out
+    # of everything else under it.
+    if [[ -n "${SUDO_UID:-}" ]]; then
+      sudo -u "#$SUDO_UID" mkdir -p "$cache_dir"
+    else
+      mkdir -p "$cache_dir"
+    fi
+    "${SUDO[@]}" mkdir -p "$cache_dir/partial"
     cache_dir="$(cd "$cache_dir" && pwd)"
     cache_opt=(-o "Dir::Cache::Archives=$cache_dir/" -o APT::Keep-Downloaded-Packages=true)
   fi
