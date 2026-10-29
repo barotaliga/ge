@@ -118,6 +118,16 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   that makes them, the noise layers and the text looks with their CPU reference, and text
   layout. It depends on `engine/core` only, so a game, the console, the menus and a lab all
   draw text from the same atlases.
+- **`engine/hud`**: the HUD kit (`ge::hud`, M10a): what any game draws over its running
+  picture, as widgets over the 2D layer's draw list: a face (a TrueType font or a bitmap
+  charset behind one size and baseline), the frame (the scale to a 720 px short side, the safe
+  area), nine anchors and stacks, readouts, big numbers with units, bars, pips (stars, hearts),
+  banners, the feed that holds and fades, and `layout_problems`. It holds no game's words or
+  state; a game's view builds its HUD from a snapshot of its own state. It depends on
+  `engine/ui` and `engine/charset`, and holds no GPU.
+- **`games/fall_line/hud`**: Fall Line's HUD (`fall_line_hud`, no GPU): the snapshot of the free
+  ride (a pure function of the state and what the HUD remembers across the run), the news off
+  the run's events, every word, and the view over `engine/hud`.
 - **`games/fall_line/app`**: Fall Line's presentation, the `fall_line_app` library (which
   the window and the game's GPU labs link): its pass table over `engine/render`, the
   `FrameView` it extracts (from named views now, from `GameState` once the run lands),
