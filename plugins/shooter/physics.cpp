@@ -15,9 +15,9 @@ namespace ge::shooter {
 
 namespace {
 
-constexpr double kFloorZ = 0.7;      // a plane whose normal z is above this is a floor
-constexpr float kBounceRest = 60;    // a bouncing thing rests on a floor below this speed up
-constexpr float kBounce = 1.5f;      // a bouncing thing's rebound
+constexpr double kFloorZ = 0.7;    // a plane whose normal z is above this is a floor
+constexpr float kBounceRest = 60;  // a bouncing thing rests on a floor below this speed up
+constexpr float kBounce = 1.5f;    // a bouncing thing's rebound
 constexpr int kMaxBumps = 4;
 constexpr int kMaxPlanes = 5;
 
@@ -67,8 +67,8 @@ bool run_think(Server& sv, int e, double dt) {
     Edict& ed = ent(sv, e);
     const float thinktime = ed.nextthink;
     if (thinktime <= 0 || static_cast<double>(thinktime) > sv.time + dt) return true;
-    const float used = static_cast<double>(thinktime) < sv.time ? static_cast<float>(sv.time)
-                                                                : thinktime;
+    const float used =
+        static_cast<double>(thinktime) < sv.time ? static_cast<float>(sv.time) : thinktime;
     ed.nextthink = 0;
     sv.g.time = used;
     sv.g.self = e;

@@ -117,8 +117,8 @@ HullTrace trace_move(const Server& sv, Vec3f start, Vec3f mins, Vec3f maxs, Vec3
 
 bool test_entity_position(const Server& sv, int e) {
   const Edict& ed = sv.edicts[static_cast<size_t>(e)];
-  const int kind = ed.solid == kSolidTrigger || ed.solid == kSolidNot ? kTraceNoMonsters
-                                                                       : kTraceNormal;
+  const int kind =
+      ed.solid == kSolidTrigger || ed.solid == kSolidNot ? kTraceNoMonsters : kTraceNormal;
   const HullTrace tr = trace_move(sv, ed.origin, ed.mins, ed.maxs, ed.origin, kind, e);
   return tr.startsolid;
 }

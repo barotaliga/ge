@@ -48,9 +48,9 @@ constexpr int kMaxSounds = 256;  // sounds a frame keeps for the host (more are 
 // The server's settings: the move's (sent to clients) and the loop's own.
 struct ServerSettings {
   MoveSettings move;
-  double mintic = 0.013;     // sv_mintic: the physics step, s
-  double maxtic = 0.1;       // sv_maxtic: the longest physics step, s
-  float maxvelocity = 2000;  // sv_maxvelocity, units/s
+  double mintic = 0.013;                // sv_mintic: the physics step, s
+  double maxtic = 0.1;                  // sv_maxtic: the longest physics step, s
+  float maxvelocity = 2000;             // sv_maxvelocity, units/s
   float minpitch = -70, maxpitch = 80;  // sv_minpitch, sv_maxpitch: the view's pitch, degrees
   bool speedcheck = true;               // sv_speedcheck
   int maxclients = kMaxClients;
@@ -70,17 +70,17 @@ struct SoundEvent {
 struct ClientSlot {
   bool active = false;
   bool spectator = false;
-  bool bot = false;              // bots skip the speed check
-  bool old_spectator = false;    // a client that knows only the old spectator move
-  uint32_t last_sequence = 0;    // the newest packet received
-  bool any_packet = false;       // a packet has been received
-  MoveCmd last_cmd;              // the newest command, buttons cleared
-  bool jump_held = false;        // the move's jump-held flag between commands
-  Vec3f ground_normal;           // the plane the move last stood on (its jump and landing fix)
-  int speed_bank_ms = 0;         // the speed check's banked surplus, 0..500
-  double speed_check_time = 0;   // the server time of the last speed check
-  int last_msec = 0;             // ms since the server last ran this player's command (for others)
-  double last_cmd_time = 0;      // the server time its last command ran
+  bool bot = false;             // bots skip the speed check
+  bool old_spectator = false;   // a client that knows only the old spectator move
+  uint32_t last_sequence = 0;   // the newest packet received
+  bool any_packet = false;      // a packet has been received
+  MoveCmd last_cmd;             // the newest command, buttons cleared
+  bool jump_held = false;       // the move's jump-held flag between commands
+  Vec3f ground_normal;          // the plane the move last stood on (its jump and landing fix)
+  int speed_bank_ms = 0;        // the speed check's banked surplus, 0..500
+  double speed_check_time = 0;  // the server time of the last speed check
+  int last_msec = 0;            // ms since the server last ran this player's command (for others)
+  double last_cmd_time = 0;     // the server time its last command ran
 };
 
 // What the loop did, counted (the lab and the tests read them; they feed no rule).
@@ -98,9 +98,9 @@ struct Server {
   std::vector<BrushModel> models;  // by modelindex; [0] none, [1] the world
   Program program;
   Globals g;
-  double time = 0;           // the server's time, s
-  int64_t frame = 0;         // server frames run
-  double last_physics = 0;   // the server time physics last ran
+  double time = 0;          // the server's time, s
+  int64_t frame = 0;        // server frames run
+  double last_physics = 0;  // the server time physics last ran
   bool physics_started = false;
   std::vector<ClientSlot> clients;  // set.maxclients
   SoundEvent sounds[kMaxSounds];

@@ -45,8 +45,10 @@ void list_node(const AreaTree& t, int32_t n, const Edict* edicts, Vec3f mins, Ve
     if (count < cap) out[count++] = e;
   }
   if (node.axis < 0) return;
-  if (maxs[node.axis] > node.dist) list_node(t, node.children[0], edicts, mins, maxs, kind, out, cap, count);
-  if (mins[node.axis] < node.dist) list_node(t, node.children[1], edicts, mins, maxs, kind, out, cap, count);
+  if (maxs[node.axis] > node.dist)
+    list_node(t, node.children[0], edicts, mins, maxs, kind, out, cap, count);
+  if (mins[node.axis] < node.dist)
+    list_node(t, node.children[1], edicts, mins, maxs, kind, out, cap, count);
 }
 
 }  // namespace

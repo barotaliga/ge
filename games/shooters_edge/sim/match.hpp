@@ -52,11 +52,11 @@ struct ScriptStep {
 const std::vector<ScriptStep>& match_script();
 
 struct MatchOptions {
-  int frames = 1100;         // server frames of 13 ms (14.3 s)
-  int client_frame_ms = 8;   // each client renders every this many ms
-  int latency_ms = 40;       // one way, each direction
-  int lose_every = 23;       // player 2 loses every Nth packet it sends (0: none lost)
-  bool predict = true;       // the clients predict (false: they show the server's state)
+  int frames = 1100;        // server frames of 13 ms (14.3 s)
+  int client_frame_ms = 8;  // each client renders every this many ms
+  int latency_ms = 40;      // one way, each direction
+  int lose_every = 23;      // player 2 loses every Nth packet it sends (0: none lost)
+  bool predict = true;      // the clients predict (false: they show the server's state)
 };
 
 // The server after one frame.
@@ -80,9 +80,9 @@ struct MissileTrack {
 // A client's view of its own player at one of its frames.
 struct ViewSample {
   int t_ms = 0;
-  sh::Vec3f predicted;   // the prediction over the unacknowledged commands
-  sh::Vec3f shown;       // with the smoothing's correction on top
-  int unacked = 0;       // commands predicted over
+  sh::Vec3f predicted;  // the prediction over the unacknowledged commands
+  sh::Vec3f shown;      // with the smoothing's correction on top
+  int unacked = 0;      // commands predicted over
 };
 
 // A reply's correction: the newest command's prediction before and after it.

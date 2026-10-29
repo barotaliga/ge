@@ -60,15 +60,15 @@ enum Fn : sh::Func {
 
 constexpr uint8_t kImpulseGrenade = 6;
 constexpr uint8_t kImpulseRocket = 7;
-constexpr float kRocketSpeed = 1000;     // units/s
-constexpr float kRocketLife = 5;         // s
-constexpr float kRocketReload = 0.8f;    // s
-constexpr float kGrenadeSpeed = 600;     // units/s along the view
-constexpr float kGrenadeLift = 200;      // units/s up
-constexpr float kGrenadeFuse = 2.5f;     // s
-constexpr float kGrenadeReload = 0.6f;   // s
-constexpr float kBlastReach = 120;       // points at the centre; less half the distance
-constexpr float kKnockback = 8;          // units/s a point
+constexpr float kRocketSpeed = 1000;    // units/s
+constexpr float kRocketLife = 5;        // s
+constexpr float kRocketReload = 0.8f;   // s
+constexpr float kGrenadeSpeed = 600;    // units/s along the view
+constexpr float kGrenadeLift = 200;     // units/s up
+constexpr float kGrenadeFuse = 2.5f;    // s
+constexpr float kGrenadeReload = 0.6f;  // s
+constexpr float kBlastReach = 120;      // points at the centre; less half the distance
+constexpr float kKnockback = 8;         // units/s a point
 constexpr float kHealthGain = 25;
 
 enum class EventKind : uint8_t {
@@ -106,8 +106,8 @@ struct Rules {
   std::vector<int> weapon;  // kImpulseRocket or kImpulseGrenade
   std::vector<sh::Vec3f> pos1, pos2, dest;
   std::vector<sh::Func> move_done;
-  std::vector<int> state;     // a door's or a plat's: 0 at the bottom, 1 rising, 2 top, 3 falling
-  std::vector<int> door_of;   // a trigger's door
+  std::vector<int> state;    // a door's or a plat's: 0 at the bottom, 1 rising, 2 top, 3 falling
+  std::vector<int> door_of;  // a trigger's door
   std::vector<GameEvent> events;  // reserved to kMaxEvents; more are counted, dropped
   int64_t events_dropped = 0;
   int door = 0, trigger = 0, plat = 0, health = 0;

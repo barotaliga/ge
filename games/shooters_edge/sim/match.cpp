@@ -48,24 +48,41 @@ struct ClientSim {
 
 sh::KeyState& key_of(sh::MoveKeys& k, ScriptKey key) {
   switch (key) {
-    case K::forward: return k.forward;
-    case K::back: return k.back;
-    case K::left: return k.moveleft;
-    case K::right: return k.moveright;
-    case K::jump: return k.jump;
-    case K::attack: return k.attack;
-    case K::speed: return k.speed;
+    case K::forward:
+      return k.forward;
+    case K::back:
+      return k.back;
+    case K::left:
+      return k.moveleft;
+    case K::right:
+      return k.moveright;
+    case K::jump:
+      return k.jump;
+    case K::attack:
+      return k.attack;
+    case K::speed:
+      return k.speed;
   }
   return k.forward;
 }
 
 void apply(ClientSim& c, const ScriptStep& s) {
   switch (s.act) {
-    case A::press: sh::key_press(key_of(c.keys, s.key)); break;
-    case A::release: sh::key_release(key_of(c.keys, s.key)); break;
-    case A::yaw: c.view.y = s.value; break;
-    case A::pitch: c.view.x = s.value; break;
-    case A::impulse: c.impulse = static_cast<uint8_t>(s.value); break;
+    case A::press:
+      sh::key_press(key_of(c.keys, s.key));
+      break;
+    case A::release:
+      sh::key_release(key_of(c.keys, s.key));
+      break;
+    case A::yaw:
+      c.view.y = s.value;
+      break;
+    case A::pitch:
+      c.view.x = s.value;
+      break;
+    case A::impulse:
+      c.impulse = static_cast<uint8_t>(s.value);
+      break;
   }
 }
 

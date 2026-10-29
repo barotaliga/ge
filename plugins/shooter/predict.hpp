@@ -41,13 +41,13 @@
 
 namespace ge::shooter {
 
-constexpr float kSmoothMin = 4;   // units: a smaller error is taken at once
-constexpr float kSmoothMax = 64;  // units: a larger one snaps
+constexpr float kSmoothMin = 4;      // units: a smaller error is taken at once
+constexpr float kSmoothMax = 64;     // units: a larger one snaps
 constexpr double kOtherLead = 0.02;  // s: other players drawn this much past now - latency
 
 // A player's state as the protocol carries it.
 struct NetPlayer {
-  int32_t origin8[3] = {0, 0, 0};    // origin x 8, truncated toward zero
+  int32_t origin8[3] = {0, 0, 0};   // origin x 8, truncated toward zero
   int16_t velocity[3] = {0, 0, 0};  // units/s, truncated toward zero
   MoveType type = MoveType::normal;
   bool jump_held = false;
@@ -81,8 +81,8 @@ MoveState predict_player(const NetPlayer& acked, const MoveCmd* cmds, int count,
 // The milliseconds an other player is run forward (0..255).
 int other_msec(double arrival_s, int state_msec, double now_s, double latency_s);
 // An other player run forward by `msec` with its last command.
-MoveState predict_other(const NetPlayer& state, MoveCmd last_cmd, int msec,
-                        const MoveSettings& set, const MoveWorld& world);
+MoveState predict_other(const NetPlayer& state, MoveCmd last_cmd, int msec, const MoveSettings& set,
+                        const MoveWorld& world);
 
 struct Smoothing {
   Vec3f correction;  // drawn on top of the prediction, units

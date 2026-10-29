@@ -26,12 +26,12 @@ namespace sh = ge::shooter;
 constexpr int kDoorModel = 2;  // the models' indices (1 is the world)
 constexpr int kPlatModel = 3;
 
-constexpr float kDoorLift = 120;    // units the door rises
-constexpr float kDoorSpeed = 100;   // units/s
-constexpr float kDoorWait = 3;      // s open before it closes
-constexpr float kPlatRise = 96;     // units the plat rises
-constexpr float kPlatSpeed = 64;    // units/s
-constexpr float kPlatWait = 1.5f;   // s at each end
+constexpr float kDoorLift = 120;   // units the door rises
+constexpr float kDoorSpeed = 100;  // units/s
+constexpr float kDoorWait = 3;     // s open before it closes
+constexpr float kPlatRise = 96;    // units the plat rises
+constexpr float kPlatSpeed = 64;   // units/s
+constexpr float kPlatWait = 1.5f;  // s at each end
 
 // A box as a brush: its six axial planes.
 sh::Brush box_brush(sh::Vec3f mins, sh::Vec3f maxs, int contents = sh::kContentsSolid);
@@ -43,7 +43,7 @@ struct Arena {
   // The trigger in front of the door and the health box, as boxes in the world.
   sh::Vec3f trigger_mins, trigger_maxs;
   sh::Vec3f health_origin;
-  sh::Vec3f spawn[2];       // the two players' spawn origins
+  sh::Vec3f spawn[2];  // the two players' spawn origins
   float spawn_yaw[2] = {0, 0};
 
   // The models by index - 1 (world, door, plat). Views into this arena: keep it alive and unmoved.

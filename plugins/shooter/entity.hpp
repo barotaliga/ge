@@ -58,14 +58,14 @@ constexpr Func kNoFunc = 0;
 struct Edict {
   // The pool's own bookkeeping (not program fields).
   bool free = true;
-  float freetime = 0;    // the server time it was freed, s (a slot is reused 0.5 s later)
-  double last_run = -1;  // the server time it last ran in a physics frame (run once a frame)
+  float freetime = 0;      // the server time it was freed, s (a slot is reused 0.5 s later)
+  double last_run = -1;    // the server time it last ran in a physics frame (run once a frame)
   int32_t area_node = -1;  // the area tree node it is linked in; -1 when unlinked
   int32_t link_prev = -1, link_next = -1;  // its neighbours in that node's list
-  bool in_triggers = false;                 // linked in the trigger list (else the solid list)
+  bool in_triggers = false;                // linked in the trigger list (else the solid list)
 
   // The fields the loop uses.
-  Vec3f origin, velocity;  // units, units/s
+  Vec3f origin, velocity;   // units, units/s
   Vec3f angles, avelocity;  // degrees, degrees/s
   Vec3f mins, maxs, size;   // the box about the origin; size = maxs - mins
   Vec3f absmin, absmax;     // the box in the world, grown (link_edict)

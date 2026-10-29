@@ -1,5 +1,5 @@
-// THE GAME PROGRAM: the rules of a match (weapons, items, doors, scoring, what a touch does) are not
-// the loop's. The loop calls the program at fixed points with its globals set, and the program
+// THE GAME PROGRAM: the rules of a match (weapons, items, doors, scoring, what a touch does) are
+// not the loop's. The loop calls the program at fixed points with its globals set, and the program
 // reads and writes the entities' fields (entity.hpp) and the globals. One seam serves a native
 // C++ program now and a bytecode one later: every hook, think, touch and blocked function is a
 // FUNCTION NUMBER, and the program runs function `fn` when the loop calls `call(ctx, server, fn)`.

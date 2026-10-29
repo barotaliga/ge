@@ -100,8 +100,7 @@ TEST(the_match_does_what_it_is_scripted_to) {
   const se::MatchReport& r = match();
   for (const se::GameEvent& e : r.events)
     std::printf("%8.3f %-15s ent %d other %d at %.1f %.1f %.1f amount %.1f\n", e.time,
-                se::event_name(e.kind), e.ent, e.other, e.where.x, e.where.y, e.where.z,
-                e.amount);
+                se::event_name(e.kind), e.ent, e.other, e.where.x, e.where.y, e.where.z, e.amount);
   std::printf("lost %d of %d packets; commands lost and replayed %lld; speed cuts %lld\n",
               r.clients[1].packets_lost, r.clients[1].packets_sent,
               static_cast<long long>(r.counts.commands_lost),

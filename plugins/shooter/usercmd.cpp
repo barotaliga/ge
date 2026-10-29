@@ -106,10 +106,9 @@ MoveCmd build_cmd(MoveKeys& k, Vec3f view, uint8_t msec, uint8_t impulse,
   cmd.forward = quantize_axis(forward);
   cmd.side = quantize_axis(side);
   cmd.up = quantize_axis(up);
-  cmd.buttons = static_cast<uint8_t>((any_down(k.attack) ? kButtonAttack : 0) |
-                                     (any_down(k.jump) ? kButtonJump : 0) |
-                                     (any_down(k.use) ? kButtonUse : 0) |
-                                     (any_down(k.attack2) ? kButtonAttack2 : 0));
+  cmd.buttons = static_cast<uint8_t>(
+      (any_down(k.attack) ? kButtonAttack : 0) | (any_down(k.jump) ? kButtonJump : 0) |
+      (any_down(k.use) ? kButtonUse : 0) | (any_down(k.attack2) ? kButtonAttack2 : 0));
   cmd.impulse = impulse;
   for (KeyState* key : {&k.forward, &k.back, &k.moveleft, &k.moveright, &k.moveup, &k.movedown,
                         &k.speed, &k.attack, &k.jump, &k.use, &k.attack2})

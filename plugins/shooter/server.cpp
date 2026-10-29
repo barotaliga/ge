@@ -11,8 +11,8 @@ namespace ge::shooter {
 
 namespace {
 
-constexpr float kItemGrow = 15;   // an item's trigger box, grown sideways, units
-constexpr float kLinkGrow = 1;    // every other box, grown on every axis, units
+constexpr float kItemGrow = 15;      // an item's trigger box, grown sideways, units
+constexpr float kLinkGrow = 1;       // every other box, grown on every axis, units
 constexpr double kReuseAfter = 0.5;  // a freed slot is reused after this long, s
 constexpr double kReuseAlways = 2;   // ... or at once before the map's time reaches this, s
 
@@ -103,8 +103,8 @@ void touch_links(Server& sv, int e) {
   // Listed first, then touched: a touch may relink anything (this entity included).
   int list[kMaxEdicts];
   const Edict& ed = sv.edicts[static_cast<size_t>(e)];
-  const int n = area_list(sv.area, sv.edicts.data(), ed.absmin, ed.absmax, AreaKind::triggers,
-                          list, kMaxEdicts);
+  const int n = area_list(sv.area, sv.edicts.data(), ed.absmin, ed.absmax, AreaKind::triggers, list,
+                          kMaxEdicts);
   const int old_self = sv.g.self, old_other = sv.g.other;
   for (int i = 0; i < n; i++) {
     const int t = list[i];
@@ -179,9 +179,7 @@ void start_sound(Server& sv, int e, int channel, const char* sample, float volum
   sv.sounds[sv.sound_count++] = {e, channel, sample, volume, attenuation};
 }
 
-int world_contents(const Server& sv, Vec3f p) {
-  return point_contents(sv.models[1].hulls[0], p);
-}
+int world_contents(const Server& sv, Vec3f p) { return point_contents(sv.models[1].hulls[0], p); }
 
 namespace {
 

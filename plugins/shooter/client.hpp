@@ -54,7 +54,7 @@
 namespace ge::shooter {
 
 constexpr int kSpeedBankMaxMs = 500;
-constexpr int kMaxRepeatLost = 20;  // more lost packets than this replay nothing lost
+constexpr int kMaxRepeatLost = 20;   // more lost packets than this replay nothing lost
 constexpr float kSolidsReach = 256;  // the move's solids lie within this of the player, units
 
 // A client's movement packet: its sequence number and its three newest commands, oldest first.

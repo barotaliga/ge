@@ -19,8 +19,8 @@ constexpr int kStateBottom = 0, kStateRising = 1, kStateTop = 2, kStateFalling =
 
 sh::Edict& ent(sh::Server& sv, int e) { return sv.edicts[static_cast<size_t>(e)]; }
 
-void log(sh::Server& sv, Rules& r, EventKind kind, int e, int other, sh::Vec3f where,
-         float amount = 0) {
+void record_event(sh::Server& sv, Rules& r, EventKind kind, int e, int other, sh::Vec3f where,
+                  float amount = 0) {
   if (static_cast<int>(r.events.size()) >= kMaxEvents) {
     r.events_dropped++;
     return;
@@ -51,7 +51,7 @@ void explode(sh::Server& sv, Rules& r, int e) {
   const sh::Edict& m = ent(sv, e);
   const sh::Vec3f at = m.origin;
   const int owner = m.owner;
-  log(sv, r, EventKind::explosion, e, owner, at);
+  record_event(sv, r, EventKind::explosion, e, owner, at);
   sh::start_sound(sv, e, 0, "weapon/explosion", 1, 1);
   for (int p = 1; p <= sv.set.maxclients; p++) {
     sh::Edict& pl = ent(sv, p);
@@ -66,7 +66,7 @@ void explode(sh::Server& sv, Rules& r, int e) {
     if (pl.health < kMinHealth) pl.health = kMinHealth;
     pl.velocity = sh::mad(pl.velocity, points * kKnockback, dir);
     pl.flags &= ~sh::kFlagOnGround;
-    log(sv, r, EventKind::hurt, p, e, centre, points);
+    record_event(sv, r, EventKind::hurt, p, e, centre, points);
   }
   sh::free_edict(sv, e);
 }
@@ -104,7 +104,7 @@ void fire(sh::Server& sv, Rules& r, int p) {
     sh::set_origin(sv, e, muzzle);
     r.attack_finished[slot] = sv.g.time + kRocketReload;
     sh::start_sound(sv, p, 1, "weapon/rocket_fire", 1, 1);
-    log(sv, r, EventKind::rocket_fired, e, p, muzzle);
+    record_event(sv, r, EventKind::rocket_fired, e, p, muzzle);
     sv.g.newmis = e;
   } else {
     const int e = spawn_missile(sv, p, sh::kMovetypeBounce);
@@ -119,7 +119,7 @@ void fire(sh::Server& sv, Rules& r, int p) {
     sh::set_origin(sv, e, muzzle);
     r.attack_finished[slot] = sv.g.time + kGrenadeReload;
     sh::start_sound(sv, p, 1, "weapon/grenade_launch", 1, 1);
-    log(sv, r, EventKind::grenade_thrown, e, p, muzzle);
+    record_event(sv, r, EventKind::grenade_thrown, e, p, muzzle);
     sv.g.newmis = e;
   }
 }
@@ -140,7 +140,7 @@ void put_in_server(sh::Server& sv, Rules& r, int p) {
 
 void door_go_up(sh::Server& sv, Rules& r, int d) {
   r.state[static_cast<size_t>(d)] = kStateRising;
-  log(sv, r, EventKind::door_opening, d, sv.g.other, ent(sv, d).origin);
+  record_event(sv, r, EventKind::door_opening, d, sv.g.other, ent(sv, d).origin);
   calc_move(sv, r, d, r.pos2[static_cast<size_t>(d)], kDoorSpeed, kFnDoorHitTop);
 }
 
@@ -173,7 +173,7 @@ void call(void* ctx, sh::Server& sv, sh::Func fn) {
         explode(sv, r, self);
         break;
       }
-      log(sv, r, EventKind::grenade_bounce, self, other, ent(sv, self).origin);
+      record_event(sv, r, EventKind::grenade_bounce, self, other, ent(sv, self).origin);
       sh::start_sound(sv, self, 1, "weapon/grenade_bounce", 1, 1);
       break;
     case kFnGrenadeExplode:
@@ -204,46 +204,46 @@ void call(void* ctx, sh::Server& sv, sh::Func fn) {
       sh::Edict& d = ent(sv, self);
       d.think = kFnDoorGoDown;
       d.nextthink = d.ltime + kDoorWait;
-      log(sv, r, EventKind::door_open, self, 0, d.origin);
+      record_event(sv, r, EventKind::door_open, self, 0, d.origin);
       sh::start_sound(sv, self, 2, "door/stone_stop", 1, 1);
       break;
     }
     case kFnDoorGoDown:
       r.state[s] = kStateFalling;
-      log(sv, r, EventKind::door_closing, self, 0, ent(sv, self).origin);
+      record_event(sv, r, EventKind::door_closing, self, 0, ent(sv, self).origin);
       calc_move(sv, r, self, r.pos1[s], kDoorSpeed, kFnDoorHitBottom);
       break;
     case kFnDoorHitBottom:
       r.state[s] = kStateBottom;
-      log(sv, r, EventKind::door_closed, self, 0, ent(sv, self).origin);
+      record_event(sv, r, EventKind::door_closed, self, 0, ent(sv, self).origin);
       sh::start_sound(sv, self, 2, "door/stone_stop", 1, 1);
       break;
     case kFnDoorBlocked:
-      log(sv, r, EventKind::door_blocked, self, other, ent(sv, self).origin);
+      record_event(sv, r, EventKind::door_blocked, self, other, ent(sv, self).origin);
       if (r.state[s] == kStateFalling) door_go_up(sv, r, self);
       break;
     case kFnPlatGoUp:
       r.state[s] = kStateRising;
-      log(sv, r, EventKind::plat_up, self, 0, ent(sv, self).origin);
+      record_event(sv, r, EventKind::plat_up, self, 0, ent(sv, self).origin);
       calc_move(sv, r, self, r.pos2[s], kPlatSpeed, kFnPlatHitTop);
       break;
     case kFnPlatHitTop: {
       r.state[s] = kStateTop;
       sh::Edict& p = ent(sv, self);
-      log(sv, r, EventKind::plat_top, self, 0, p.origin);
+      record_event(sv, r, EventKind::plat_top, self, 0, p.origin);
       p.think = kFnPlatGoDown;
       p.nextthink = p.ltime + kPlatWait;
       break;
     }
     case kFnPlatGoDown:
       r.state[s] = kStateFalling;
-      log(sv, r, EventKind::plat_down, self, 0, ent(sv, self).origin);
+      record_event(sv, r, EventKind::plat_down, self, 0, ent(sv, self).origin);
       calc_move(sv, r, self, r.pos1[s], kPlatSpeed, kFnPlatHitBottom);
       break;
     case kFnPlatHitBottom: {
       r.state[s] = kStateBottom;
       sh::Edict& p = ent(sv, self);
-      log(sv, r, EventKind::plat_bottom, self, 0, p.origin);
+      record_event(sv, r, EventKind::plat_bottom, self, 0, p.origin);
       p.think = kFnPlatGoUp;
       p.nextthink = p.ltime + kPlatWait;
       break;
@@ -254,7 +254,7 @@ void call(void* ctx, sh::Server& sv, sh::Func fn) {
       if (pl.health <= 0 || pl.health >= 100) break;
       const float gain = pl.health + kHealthGain > 100 ? 100 - pl.health : kHealthGain;
       pl.health = pl.health + gain;
-      log(sv, r, EventKind::health_taken, self, other, ent(sv, self).origin, gain);
+      record_event(sv, r, EventKind::health_taken, self, other, ent(sv, self).origin, gain);
       sh::start_sound(sv, other, 3, "pickup/health", 1, 1);
       sh::free_edict(sv, self);
       break;
@@ -268,21 +268,36 @@ void call(void* ctx, sh::Server& sv, sh::Func fn) {
 
 const char* event_name(EventKind k) {
   switch (k) {
-    case EventKind::rocket_fired: return "rocket fired";
-    case EventKind::grenade_thrown: return "grenade thrown";
-    case EventKind::grenade_bounce: return "grenade bounce";
-    case EventKind::explosion: return "explosion";
-    case EventKind::hurt: return "hurt";
-    case EventKind::door_opening: return "door opening";
-    case EventKind::door_open: return "door open";
-    case EventKind::door_closing: return "door closing";
-    case EventKind::door_closed: return "door closed";
-    case EventKind::door_blocked: return "door blocked";
-    case EventKind::plat_up: return "plat up";
-    case EventKind::plat_top: return "plat top";
-    case EventKind::plat_down: return "plat down";
-    case EventKind::plat_bottom: return "plat bottom";
-    case EventKind::health_taken: return "health taken";
+    case EventKind::rocket_fired:
+      return "rocket fired";
+    case EventKind::grenade_thrown:
+      return "grenade thrown";
+    case EventKind::grenade_bounce:
+      return "grenade bounce";
+    case EventKind::explosion:
+      return "explosion";
+    case EventKind::hurt:
+      return "hurt";
+    case EventKind::door_opening:
+      return "door opening";
+    case EventKind::door_open:
+      return "door open";
+    case EventKind::door_closing:
+      return "door closing";
+    case EventKind::door_closed:
+      return "door closed";
+    case EventKind::door_blocked:
+      return "door blocked";
+    case EventKind::plat_up:
+      return "plat up";
+    case EventKind::plat_top:
+      return "plat top";
+    case EventKind::plat_down:
+      return "plat down";
+    case EventKind::plat_bottom:
+      return "plat bottom";
+    case EventKind::health_taken:
+      return "health taken";
   }
   return "?";
 }

@@ -113,8 +113,8 @@ int other_msec(double arrival_s, int state_msec, double now_s, double latency_s)
   return ms < 0 ? 0 : ms > kMaxNetMsec ? kMaxNetMsec : static_cast<int>(ms);
 }
 
-MoveState predict_other(const NetPlayer& state, MoveCmd last_cmd, int msec,
-                        const MoveSettings& set, const MoveWorld& world) {
+MoveState predict_other(const NetPlayer& state, MoveCmd last_cmd, int msec, const MoveSettings& set,
+                        const MoveWorld& world) {
   MoveState s = unquantize_player(state, set);
   last_cmd.msec = static_cast<uint8_t>(msec);
   run_command(s, last_cmd, set, world);

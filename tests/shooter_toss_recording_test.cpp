@@ -65,17 +65,17 @@ TEST(every_recorded_frame_within_tolerance) {
     passed += static_cast<int>(r.frames.size()) - r.failed;
     for (const sh::TossCheck& c : r.frames)
       if (c.ok && c.position_error == 0 && c.velocity_error == 0) exact++;
-    std::printf("%-20s %4zu frames, %3d out; worst position %.3g (frame %d), velocity %.3g "
-                "(frame %d), trace %.3g\n",
-                f.name.c_str(), r.frames.size(), r.failed, r.max_position_error,
-                r.worst_position_frame, r.max_velocity_error, r.worst_velocity_frame,
-                r.max_trace_error);
+    std::printf(
+        "%-20s %4zu frames, %3d out; worst position %.3g (frame %d), velocity %.3g "
+        "(frame %d), trace %.3g\n",
+        f.name.c_str(), r.frames.size(), r.failed, r.max_position_error, r.worst_position_frame,
+        r.max_velocity_error, r.worst_velocity_frame, r.max_trace_error);
     for (const sh::TossCheck& c : r.frames) {
       if (c.ok) continue;
       const sh::TossFrame& w = f.frames[static_cast<size_t>(c.index)];
       CHECK_MSG(false, f.name + " frame " + std::to_string(c.index) + " out of tolerance (" +
-                           c.mismatch + "): ours z " + std::to_string(c.ours.origin.z) +
-                           " vz " + std::to_string(c.ours.velocity.z) + ", recorded z " +
+                           c.mismatch + "): ours z " + std::to_string(c.ours.origin.z) + " vz " +
+                           std::to_string(c.ours.velocity.z) + ", recorded z " +
                            std::to_string(w.origin.z) + " vz " + std::to_string(w.velocity.z) +
                            "; next: read the step in plugins/shooter/physics.cpp's physics_toss");
       break;
