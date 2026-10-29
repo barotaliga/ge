@@ -284,20 +284,31 @@ std::vector<viewmodel::PointLight> flame_lights(const brush::Map& map) {
 }
 
 std::span<const ClassicFire> classic_fires() {
-  // The shotguns throw a short wide flash, the grenade launcher a thump and the rocket launcher a
-  // long jet. A nailgun throws nails, not burning powder: no flame, no flash, only a faint puff
-  // from the barrel that fired. The rates are the classic game's.
+  // As a real gun's flash looks: a few milliseconds of glowing gas, small and dim, the smoke what
+  // is left; each preset's shape (the shotguns' short wide flash, the grenade launcher's thump,
+  // the rocket launcher's jet) at that scale. A nailgun throws nails, not burning powder: no
+  // flame, no flash, only a faint puff from the barrel that fired. The rates are the classic
+  // game's.
   static constexpr std::string_view kPuff =
       "length=0.02,width=0.02,glow=0,flash=0,sparks=0,light_range=0,smoke.smoke=0.14,"
       "smoke_speed=1.5";
+  static constexpr std::string_view kShotgun =
+      "life=0.018,length=0.24,width=0.144,glow=0.0175,flash=0.2,sparks=2,light_range=3.6,"
+      "smoke.smoke=0.45";
+  static constexpr std::string_view kGrenade =
+      "life=0.021,length=0.12,width=0.102,glow=0.0175,flash=0.12,sparks=0,light_range=2.4,"
+      "smoke.smoke=0.54";
+  static constexpr std::string_view kRocket =
+      "life=0.036,length=0.54,width=0.12,glow=0.0315,flash=0.22,sparks=3,light_range=5.6,"
+      "smoke.smoke=0.63";
   static constexpr ClassicFire kFires[] = {
       {"v_axe", "", "", 0.5},
-      {"v_shot", "muzzle.shotgun", "", 0.5},
-      {"v_shot2", "muzzle.shotgun", "", 0.7},
+      {"v_shot", "muzzle.shotgun", kShotgun, 0.5},
+      {"v_shot2", "muzzle.shotgun", kShotgun, 0.7},
       {"v_nail", "muzzle.nailgun", kPuff, 0.1},
       {"v_nail2", "muzzle.nailgun", kPuff, 0.1},
-      {"v_rock", "muzzle.grenade", "", 0.6},
-      {"v_rock2", "muzzle.rocket", "", 0.8},
+      {"v_rock", "muzzle.grenade", kGrenade, 0.6},
+      {"v_rock2", "muzzle.rocket", kRocket, 0.8},
       {"v_light", "", "", 0.1},
   };
   return kFires;

@@ -100,7 +100,8 @@ ships.
 - **The fire**: in the enhanced mode a weapon's shot is the engine's muzzle fire
   (`engine/render/muzzle.hpp`), not the flash its file draws. `classic_fire_of` names each
   weapon's look by its file (the shotguns `muzzle.shotgun`, the grenade launcher
-  `muzzle.grenade`, the rocket launcher `muzzle.rocket`; the nailguns throw nails, not burning
+  `muzzle.grenade`, the rocket launcher `muzzle.rocket`, each turned down to how a real gun's
+  flash looks: a few hundredths of a second of small, dim fire, the smoke what is left; the nailguns throw nails, not burning
   powder, so theirs is `muzzle.nailgun` turned down to a faint puff with no flame and no light;
   the axe and the lightning gun throw no flame) and its rate of fire. Each shot leaves from the
   barrel the file shows its flash on for that frame: where the flash stands on each firing frame

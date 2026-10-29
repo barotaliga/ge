@@ -63,7 +63,8 @@ constexpr double kStep = 1.0 / 120;
 struct Gun {
   std::string name;  // the file's name, `v_shot`
   vm::HeldModel held;
-  gr::MuzzleLook look;  // the preset with the weapon's own knobs turned
+  gr::MuzzleLook look;    // the preset with the weapon's own knobs turned
+  gr::MuzzleLook preset;  // the engine's preset alone
   double refire_s = 0.5;
 };
 
@@ -292,9 +293,10 @@ void run(gl::Lab& lab) {
   std::string error;
   if (path.empty()) {
     const ce::Palette palette = ce::labs::fixture_palette();
-    Gun g{"fixture", ce::held_from_morph(ce::labs::fixture_weapon(palette), palette), {}, 0.5};
+    Gun g{"fixture", ce::held_from_morph(ce::labs::fixture_weapon(palette), palette), {}, {}, 0.5};
     const ce::ClassicFire* f = ce::classic_fire_of("v_shot");
     look_of(*f, &g.look);
+    g.preset = *gr::muzzle_look_by_id(f->muzzle);
     g.refire_s = f->refire_s;
     guns.push_back(std::move(g));
   } else {
@@ -317,7 +319,8 @@ void run(gl::Lab& lab) {
     for (ce::PackWeapon& pw : ce::pack_weapons(src.pack, &skipped)) {
       const ce::ClassicFire* f = ce::classic_fire_of(pw.name);
       if (!f || f->muzzle.empty()) continue;
-      Gun g{short_name(pw.name), ce::held_from_morph(pw.model, palette), {}, f->refire_s};
+      Gun g{short_name(pw.name), ce::held_from_morph(pw.model, palette), {}, {}, f->refire_s};
+      if (look_of(*f, &g.look)) g.preset = *gr::muzzle_look_by_id(f->muzzle);
       if (!look_of(*f, &g.look)) {
         lab.fail(
             "no muzzle look for " + g.name + " (\"" + std::string(f->muzzle) + "\" " +
@@ -388,11 +391,9 @@ void run(gl::Lab& lab) {
               "Each held weapon that throws a flame fired once in the yard at dusk, its own "
               "muzzle fire on its real model, at six moments from 10 ms to 0.8 s; the file's "
               "flash hidden.",
-              "each flame on its own barrel's tip and riding it through the firing frames; the "
-              "shotguns' short wide flash, the nailguns' faint puff and no flame, the grenade "
-              "launcher's thump, "
-              "the rocket launcher's long jet; the gun lit warm while the flame burns; the smoke "
-              "drifting on after the frames come back to rest",
+              "each flame on its own barrel's tip and riding it through the firing frames: a "
+              "brief small flash as a real gun's, gone within a few hundredths of a second, then "
+              "the smoke drifting on; the nailguns' faint puff and no flame",
               {}},
              es::sheet_of(pics, names, static_cast<int>(at.size())), Det::measured);
   }
@@ -447,21 +448,21 @@ void run(gl::Lab& lab) {
     for (const Gun& g : guns) {
       for (int k = -1; k < static_cast<int>(std::size(kVariants)); ++k) {
         Gun v = g;
-        if (k >= 0) v.look = varied(g.look, kVariants[k]);
+        v.look = k < 0 ? g.preset : varied(g.preset, kVariants[k]);
         for (gl::Picture& p : shoot(*device, s, v, dusk, at, settle, true)) {
           pics.push_back(std::move(p));
         }
         for (const double m : at) {
-          names.push_back(g.name + " " + (k < 0 ? "AS IS" : kVariants[k].name) + " " +
+          names.push_back(g.name + " " + (k < 0 ? "PRESET" : kVariants[k].name) + " " +
                           fixed(m * 1000, 0) + " MS");
         }
       }
     }
     lab.shot({"variants",
-              "EACH WEAPON'S FIRE AND THREE VARIANTS",
-              "Each weapon's fire as it is, then fainter, then a one-frame flash, then as a real "
-              "flash looks (a few milliseconds, small, dim, mostly smoke), at dusk 8 ms and 25 ms "
-              "into a shot.",
+              "EACH WEAPON'S PRESET AND THREE VARIANTS",
+              "Each weapon's engine preset, then fainter, then a one-frame flash, then as a real "
+              "flash looks (a few milliseconds, small, dim, mostly smoke: the look the classic "
+              "weapons fire with), at dusk 8 ms and 25 ms into a shot.",
               "which reads best at speed: the brief ones gone by 25 ms, the smoke left",
               {}},
              es::sheet_of(pics, names, static_cast<int>(2 * (std::size(kVariants) + 1))),
