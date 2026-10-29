@@ -5,8 +5,8 @@ army 5e5cb60c383a07ae
 army-flight 383c454be759df5d
 army-sleds bae04af32e36e808
 audition d47fda4a9cb22fbb
-camera-director d471bf22e0fde9f5
 by-hand 724329dc4776353a
+camera-director d471bf22e0fde9f5
 camera-follow b1dbf6ae474cba78
 camera-machines fa674ce82d9f1c5e
 camera-rigs bd01263b4d16d23c
@@ -16,8 +16,7 @@ camera-world 663b2b2d72b24d8b
 capture b274066858db8393
 capture-run 7bce75d64b174712
 charts 77f2319a5ea24272
-cli-loop f1eeab6247224c47
-cli-loop 91e6e81134f41967
+cli-loop 99d1917e14d045ac
 console e8456b0db59560ce
 crowd cf02cf9a7c917783
 crowd-look 194a06db20f2ebb2
