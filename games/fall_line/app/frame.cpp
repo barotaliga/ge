@@ -15,6 +15,7 @@
 #include "fall_line/app/scene.hpp"
 #include "fall_line/app/sky_type.hpp"
 #include "mountain/air/air.hpp"
+#include "mountain/app/building_look.hpp"
 #include "mountain/app/cloud_field.hpp"
 #include "mountain/app/village_look.hpp"
 #include "mountain/app/weather_look.hpp"
@@ -312,8 +313,9 @@ void show_village(ge::gpu::Device& device, GameFrame& f,
   r::set_instance_count(f.forest, static_cast<uint32_t>(trees.size()));
   // The cascades drew the trees that stood: drawn again, without the felled ones' shadows.
   r::reset_sun_shadows(f.shadows);
-  // Three families: the streets (one instance, casting nothing: a sheet on the snow), the parked
-  // cars (still: cast into the cascades) and the traffic (moving: cast into the atlas's tiles).
+  // Four families: the streets (one instance, casting nothing: a sheet on the snow), the buildings
+  // and the parked cars (still: cast into the cascades) and the traffic (moving: cast into the
+  // atlas's tiles).
   r::MeshSource sheet;
   sheet.lods.push_back({ma::street_mesh(*f.level, village.ground), 0.0f});
   if (sheet.lods.front().mesh.vertex_count() > 0) {
@@ -325,6 +327,19 @@ void show_village(ge::gpu::Device& device, GameFrame& f,
     at.position[2] = village.ground.z0;
     r::set_instances(device, f.streets, 0, std::span<const r::Instance>(&at, 1));
     f.families.push_back(&f.streets);
+  }
+  if (!village.buildings.empty()) {
+    // Each building and its plinth: still, casting into the cascades.
+    std::vector<r::Instance> stood;
+    stood.reserve(village.buildings.size() * 2);
+    for (const vg::Building& b : village.buildings) ma::building_instances(b, stood);
+    r::create_family(device, f.instancing, f.buildings, "village.buildings", ma::building_meshes(),
+                     ma::building_materials(), static_cast<uint32_t>(stood.size()));
+    r::create_family_casters(device, f.instancing, f.buildings, r::kCascades);
+    r::bind_family_hiz(device, f.instancing, f.buildings, f.hiz);
+    r::set_instances(device, f.buildings, 0, stood);
+    f.families.push_back(&f.buildings);
+    f.still.push_back(&f.buildings);
   }
   if (!village.traffic) return;
   const vg::TrafficPlan& plan = *village.traffic;
