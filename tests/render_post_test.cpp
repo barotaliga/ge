@@ -1,7 +1,9 @@
 // engine/render/post.hpp and bloom.hpp: halves round to the nearest; the bloom's chain halves
 // down to its levels; on a device, the bloom spreads a bright pixel's light round it while a
 // field of one grey keeps its grey (the mix conserves energy), and the grade's table is read in
-// its documented layout (a table that swaps red and blue swaps them in the picture).
+// its documented layout (a table that swaps red and blue swaps them in the picture); the lens and
+// the film leave a flat field flat (the sharpening and the fringes), darken only the corners (the
+// vignette) and add grain that averages out.
 //
 // ge:summary Tests for the post pass: halves, the bloom's chain and glow, the grade's table
 // ge:keywords test render post bloom grade lut float_to_half energy
@@ -33,7 +35,7 @@ struct Scene {
   wgpu::BindGroup frame;
   r::Sky sky;
   r::Bloom bloom;
-  r::Post plain, glow;
+  r::Post plain, glow, crisp, vignetted, grainy;  // crisp: sharpened and fringed
   wgpu::Texture hdr;
   wgpu::TextureView hdr_view;
   r::FrameRecorder rec;
@@ -51,6 +53,10 @@ void make_scene(ge::gpu::Device& d, Scene& s) {
   r::PostSettings ps;
   ps.bloom = 0.5;
   r::create_post(d, s.pipelines, s.glow, s.layout, wgpu::TextureFormat::RGBA8Unorm, ps);
+  const auto fmt = wgpu::TextureFormat::RGBA8Unorm;
+  r::create_post(d, s.pipelines, s.crisp, s.layout, fmt, {.look = {.sharpen = 1, .chromatic = 1}});
+  r::create_post(d, s.pipelines, s.vignetted, s.layout, fmt, {.look = {.vignette = 1}});
+  r::create_post(d, s.pipelines, s.grainy, s.layout, fmt, {.look = {.grain = 1}});
   CHECK(s.pipelines.finish(d));
   ge::gpu::end_load(d);
   s.frame = r::frame_group(d, s.layout, s.uniforms, s.sky);
@@ -187,5 +193,36 @@ TEST(the_grade_is_read_in_its_layout) {
   r::set_grade(d, s.plain, std::vector<float>(3));  // the wrong size: an error line, no change
   const ge::gpu::Image kept = draw(d, s, s.plain, false, out);
   CHECK(at(kept, 5, 5, 0) == at(swapped, 5, 5, 0));
+  CHECK(d.errors.load() == 0);
+}
+
+TEST(the_lens_and_the_film_do_what_they_name) {
+  auto device = ge::test::test_device();
+  if (!device) return;
+  ge::gpu::Device& d = *device;
+  Scene s;
+  make_scene(d, s);
+  const ge::gpu::Target out = ge::gpu::create_target(d, "test.final", kW, kH);
+  const float grey[3] = {0.1f, 0.1f, 0.1f};
+  fill(d, s, grey, 0);
+  const ge::gpu::Image plain = draw(d, s, s.plain, false, out);
+  const ge::gpu::Image crisp = draw(d, s, s.crisp, false, out);
+  const ge::gpu::Image dark = draw(d, s, s.vignetted, false, out);
+  const ge::gpu::Image grain = draw(d, s, s.grainy, false, out);
+  int worst = 0, changed = 0;
+  long sum = 0, grain_sum = 0;
+  for (uint32_t y = 0; y < kH; ++y) {
+    for (uint32_t x = 0; x < kW; ++x) {
+      worst = std::max(worst, std::abs(at(plain, x, y, 1) - at(crisp, x, y, 1)));
+      changed += at(plain, x, y, 1) != at(grain, x, y, 1) ? 1 : 0;
+      sum += at(plain, x, y, 1);
+      grain_sum += at(grain, x, y, 1);
+    }
+  }
+  CHECK(worst <= 1);  // nothing to sharpen or fringe in a flat field
+  CHECK(std::abs(at(dark, kW / 2, kH / 2, 1) - at(plain, kW / 2, kH / 2, 1)) <= 1);
+  CHECK(at(dark, 0, 0, 1) + 10 < at(plain, 0, 0, 1));              // the corner darker
+  CHECK(changed > static_cast<int>(kW * kH / 4));                  // grain on most pixels
+  CHECK(std::labs(grain_sum - sum) < static_cast<long>(kW * kH));  // averaging under a level
   CHECK(d.errors.load() == 0);
 }
