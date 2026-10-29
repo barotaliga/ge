@@ -10,7 +10,7 @@
 // ge:summary The ge executable: parses the command line against the catalog and runs each command
 // ge:keywords cli ge main command-line usage dispatch help version new find explain use add
 // ge:keywords build test check precheck ci digest golden lab graph shot upgrade doctor skills net
-// ge:keywords snow
+// ge:keywords snow qc progs
 // ge:keywords lessons json bench profile mem leaks asset blender
 // ge:skill agent-interface
 // ge:test tests/cli_commands_test.cpp
@@ -41,6 +41,7 @@
 #include "cli/perf.hpp"
 #include "cli/play.hpp"
 #include "cli/publish.hpp"
+#include "cli/qc.hpp"
 #include "cli/save.hpp"
 #include "cli/scaffold.hpp"
 #include "cli/skills.hpp"
@@ -375,6 +376,14 @@ Outcome run(const Args& a) {
     as.force = has_flag(a, "force");
     as.blender = flag_value(a, "blender");
     return run_asset_build(build_options(a), as);
+  }
+  if (name.starts_with("qc ")) {
+    std::vector<std::string> flags;
+    for (const auto& [k, v] : a.flags) {
+      if (k == "preset" || k == "engine" || k == "repo" || k == "json") continue;
+      flags.push_back(v.empty() ? "--" + k : "--" + k + "=" + v);
+    }
+    return run_qc(build_options(a), std::string(name.substr(3)), a.words[0], flags);
   }
   if (name == "snow show") return run_snow_show(a.words[0], flag_value(a, "out"));
   if (name == "snow column") return run_snow_column(a.words[0], flag_value(a, "at"));

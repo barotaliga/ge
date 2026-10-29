@@ -286,6 +286,36 @@ constexpr FlagSpec kSourceSearchFlags[] = {
     {"kind", "<sound|model>", "only sounds or only models, where a source holds both"},
     {"refresh", "", "read the source's listing again instead of the cached one"},
     {"cache", "<dir>", "where packs are kept (default GE_ASSET_CACHE, else ~/.cache/ge/sources)"}};
+constexpr FlagSpec kQcFunction{"function", "<name>", "the function to run (its name in the progs)"};
+constexpr FlagSpec kQcRun[] = {
+    {"function", "<name>", "the function to run (its name in the progs)"},
+    {"args", "<n,...>", "numbers for its parameters in order, three for a vector"},
+    {"builtins", "<sample>", "install the sample program's builtins (a game's come with the game)"},
+    {"entities", "<n>", "entities in use before the call (default 1: the world)"},
+    kPreset,
+    kEngine,
+    kRepo};
+constexpr FlagSpec kQcDisasm[] = {
+    {"function", "<name>", "only this function (default: every one)"}, kPreset, kEngine, kRepo};
+constexpr FlagSpec kQcTrace[] = {
+    kQcFunction,
+    {"args", "<n,...>", "numbers for its parameters in order, three for a vector"},
+    {"builtins", "<sample>", "install the sample program's builtins (a game's come with the game)"},
+    {"entities", "<n>", "entities in use before the call (default 1: the world)"},
+    {"statements", "", "every statement too, not only the calls"},
+    kPreset,
+    kEngine,
+    kRepo};
+constexpr FlagSpec kQcProfile[] = {
+    kQcFunction,
+    {"args", "<n,...>", "numbers for its parameters in order, three for a vector"},
+    {"builtins", "<sample>", "install the sample program's builtins (a game's come with the game)"},
+    {"entities", "<n>", "entities in use before the call (default 1: the world)"},
+    {"repeat", "<n>", "run it n times (default 1)"},
+    {"top", "<n>", "the most functions to list (default 10)"},
+    kPreset,
+    kEngine,
+    kRepo};
 constexpr FlagSpec kSnowShowFlags[] = {
     {"out", "<dir>", "where the PNGs go (default: snow/ beside the file)"}};
 constexpr FlagSpec kSnowColumnFlags[] = {{"at", "<x,z>", "the point, m (required)"}};
@@ -489,6 +519,25 @@ const CommandSpec kCommands[] = {
      "chart series or spans files (a trace, a bench, a profile) to PNG and SVG; several files "
      "overlay; every outlier comes back as a note",
      kGraphFlags, "ge graph runs/before.tsv runs/after.tsv --columns=step_ms", "debug"},
+    {"qc disasm", "<progs>", 1, 1, "see",
+     "a QC program (a progs file) checked and disassembled: its counts, then every function's "
+     "statements with operands named by their definitions and the source lines when a .lines "
+     "file lies beside it",
+     kQcDisasm, "ge qc disasm previews/qc/sample.dat --function=fib", "progs"},
+    {"qc run", "<progs>", 1, 1, "see",
+     "one function of a QC program run headless: its return value and the statements it ran, "
+     "or its fault with the QC stack trace (function, statement, line)",
+     kQcRun, "ge qc run previews/qc/sample.dat --function=fib --args=10", "progs"},
+    {"qc trace", "<progs>", 1, 1, "see",
+     "a QC function run with every call it makes shown with its arguments and return value, "
+     "indented by depth, and every builtin it calls",
+     kQcTrace, "ge qc trace previews/qc/sample.dat --function=fib --args=4", "progs"},
+    {"qc profile", "<progs>", 1, 1, "see",
+     "a QC function run (repeated) with each function's statements and calls, highest first, "
+     "the builtins it hit, and the time it took",
+     kQcProfile,
+     "ge qc profile previews/qc/sample.dat --function=run --args=12 --builtins=sample --repeat=20",
+     "progs"},
     {"snow show", "<file.snow>", 1, 1, "see",
      "a saved snow layer read without its game: its tiles and memory, the samples pressed, the "
      "deepest drop and the densest snow, the mass held, and depth, density and state maps",
