@@ -729,6 +729,22 @@ timings, and slicing a bake over frames if one shows as a hitch, wait for the `p
 there fall at the mirrored bearing, which only the distant ground shows until the far
 ranges replace it (M8).
 
+### Baked light (`engine/bake`)
+
+A static world's light is worked out once on the CPU and drawn from a lightmap atlas
+(M40). The baker reads triangles, each with a material and the planar **chart** its luxels
+live on, the lights and the sky's brightness, and writes two things a luxel: the
+**irradiance** (direct light with soft shadows, then gather passes of bounced light coloured
+by what it bounced off, the glow of emissive faces and the sky through sky faces) and the
+light's **mean direction**, weighted by luminance, whose length says how much of the light
+comes from one way. A renderer shades a face's detailed normal with it
+(`directional_scale`: a half-Lambert lobe renormalised so the flat normal gets exactly the
+baked irradiance), so relief and normal maps catch the room's real lamps at almost no cost.
+Luxels inside walls (their rays mostly meet the backs of faces) and luxels off a face are
+filled from their chart's neighbours, so bilinear reads never fetch black. The bake is the
+same bits on any number of workers. The `bake` lab compares an old-style bake, the rebake
+and its directional reading on a test hall.
+
 ## Sky, atmosphere and clouds
 
 - **A physically based sky from lookup tables** (the scheme of Hillaire, 2020), all
