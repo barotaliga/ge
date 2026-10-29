@@ -23,5 +23,5 @@ if(GE_GPU)
     engine/render/underwater.wgsl engine/render/grass.wgsl engine/render/grass_scatter.wgsl
     engine/render/ui_pass.wgsl engine/render/eye.wgsl engine/render/eye_adapt.wgsl engine/render/explosions.wgsl
     engine/render/morph.wgsl
-    engine/render/wet_lens.wgsl engine/render/snow_probe.wgsl)
+    engine/render/wet_lens.wgsl engine/render/snow_probe.wgsl engine/render/snow_marks.wgsl)
 endif()

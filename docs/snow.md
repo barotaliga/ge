@@ -384,6 +384,21 @@ physics' (outside the window, a live tile is read through its summary by design)
 20 MB over the run where re-sending the window every update would have been 920 MB, at 0.03 ms
 an update on the CPU.
 
+**As built (M29e, the fine marks).** `render/snow_marks.hpp` is the trail map of M8b moved into
+the engine and generalised: a coarse map over the whole region at about 1.5 m a texel, a fine
+window round the camera at a few centimetres a texel redrawn from the history when it moves, and
+stamps drawn with MAX blending. A stamp is a capsule (a disc where its ends meet), a box or an
+ellipse, with a depth on its axis, a wall power for the cross-section and a berm beside it.
+`marks_from_records` turns a layer's imprint records into stamps: the outline as pressed, the
+sink as the depth, a berm from the snow thrown (heaped at 250 kg/m3 along the outline), and a
+wall by motion (2 for a slide's round groove, 6 for a tyre, 10 for a boot's square print). A
+game that presses snow gets its marks with no stamps of its own; one that lays finer stamps
+than its presses adds those too, as the mountain does with a ski's two edges
+(`skier/app/tracks.hpp`). The mountain's `trails.hpp` is now these marks under its own name, and
+its pictures are bit for bit what they were (`world` and `trails`: 100 dB on every view, same
+digest). In `gpu-snow` the marks at 2.3 cm a texel show a carved track as two crisp grooves where
+the mirror's 10 cm samples blur them.
+
 ## Sound (`engine/audio`, M29h)
 
 Voices driven by the imprint records and the column: the crunch of a step or a tyre, its
@@ -434,7 +449,7 @@ digests on purpose, and the PR names each one; the races, which never ski a pres
 | `snow-weather` | scenario | M29c | Hours in minutes: a ski groove filling in storms of three strengths, a fall settling over days at three temperatures, a road drifting in under three winds, a night's crust against a boot and a carving skier, a churned slope before and after a groomer |
 | `snow-lod` | picture | M29d | The tiers round the focus actors; a tile folded and refined with its mass held; memory against time on a free-ride day |
 | `snow-cost` | bench | M29d, M29e | `press` and `sample` per call, a step's snow with a field of skiers, folding; the GPU's upload and passes |
-| `gpu-snow` | picture | M29e–M29g | The mirror (M29e, built): the drop read on the CPU and the GPU side by side, the fine window close up, where each sample is read from, the bytes each update sent; then named views: grooves, ruts, a trench and footprints close up, displaced and not; snow as a sheet over a road and a yard; snow on a roof; the distance-band diff |
+| `gpu-snow` | picture | M29e–M29g | The mirror and the marks (M29e, built): the drop read on the CPU and the GPU side by side, the fine window close up, the fine marks beside the mirror, where each sample is read from, the bytes each update sent; then named views: grooves, ruts, a trench and footprints close up, displaced and not; snow as a sheet over a road and a yard; snow on a roof; the distance-band diff |
 | `snow-audition` | sound | M29h | Every snow voice by kind and temperature, metered and written as WAV |
 | `snow-wheels` | scenario | M29k | A wheel in a rut, out of it and across its wall; a worn road's lines; grip packed against loose |
 | `free --snow` | drive | M29j | Fall Line: a free-ride day's piste skied up, tracks followed, a sled's trail |
