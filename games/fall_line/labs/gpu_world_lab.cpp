@@ -301,6 +301,10 @@ void run(ge::lab::Lab& lab) {
   if (const std::string problem = fall_line::app::sky_style_of(cvars, style); !problem.empty()) {
     lab.fail("--cfg: " + problem, "Skill: console.");
   }
+  ge::render::MoonSet moons;
+  if (const std::string problem = fall_line::app::moon_set_of(cvars, moons); !problem.empty()) {
+    lab.fail("--cfg: " + problem, "Skill: console.");
+  }
   const auto shared = std::make_shared<const ge::mountain::mapgen::Level>(std::move(built));
   const ge::mountain::mapgen::Level& level = *shared;
   const std::string seed_s = std::to_string(static_cast<long long>(seed));
@@ -329,8 +333,10 @@ void run(ge::lab::Lab& lab) {
         sc.name += "+" + fixed(at, 1);
         sc.caption += " At " + fixed(at, 1) + " s.";
       }
-      fall_line::app::day_view(level, hour, sc.view);
       sc.view.style = style;
+      sc.view.moons = moons;
+      sc.view.moon_size = cvars.disc_moon;  // a lens on a moon frames it as it is drawn
+      fall_line::app::day_view(level, hour, sc.view);
       sc.view.time_s = at;
       if (!fall_line::app::make_view(level, name, sc.view)) {
         lab.fail("no view named '" + name + "'",

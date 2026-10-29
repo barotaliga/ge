@@ -41,6 +41,7 @@
 #include "cli/perf.hpp"
 #include "cli/play.hpp"
 #include "cli/publish.hpp"
+#include "cli/save.hpp"
 #include "cli/scaffold.hpp"
 #include "cli/skills.hpp"
 #include "cli/snow.hpp"
@@ -354,6 +355,7 @@ Outcome run(const Args& a) {
     return run_mem(b, p);
   }
   if (name.starts_with("net ")) return run_net(a);
+  if (name == "save inspect") return run_save(a);
   if (name.starts_with("sound ")) return run_sound(a);
   if (name == "model import") return run_model(a);
   if (name.starts_with("source ")) return run_source(a);
