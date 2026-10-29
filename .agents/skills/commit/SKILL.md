@@ -1,6 +1,6 @@
 ---
 name: commit
-description: "Use to end every gameengine2 work session: run the gates, write a conventional commit, push the branch, open the PR with its milestone row and evidence, drive CI to green, and squash-merge once green."
+description: "Use to end every gameengine2 work session: run the gates, write a conventional commit, push the branch, open the PR with its milestone row and evidence, drive CI to green, and squash-merge once green. Also for anything about the merge queue: arming, holding PRs behind one (`queue-priority`), ejections and re-arms, stale runs, and a red test that may be a flake."
 ---
 
 # Commit, push, PR, merge
