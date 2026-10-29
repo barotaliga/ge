@@ -433,6 +433,47 @@ pass runs and nothing is stored a figure: a palette costs 48 bytes a joint a fra
 draws two limbs in poses of their own as one palette family and through the `skinning` pass and
 finds the same depth on every pixel either covers.
 
+## The view model
+
+A first-person game draws the weapon its player holds in front of the eye (`engine/viewmodel`,
+row M48). Three questions decide how it looks, and each has one answer in one file:
+
+- **What it is** (`held.hpp`): a `HeldModel`, morph frames (a position and a normal a vertex a
+  frame) over shared triangles, coloured by a skin read at its UVs (its glowing texels lit by
+  themselves) or by a colour a vertex. Any format is converted into it once, at load: a glTF
+  posed into frames (`held_from_model`), a game's own morph format by its reader. `fit_mount`
+  turns a model authored in any frame so its muzzle is +z and its up +y without mirroring it,
+  scales it and puts the grip at the origin.
+- **Where it is** (`place.hpp`): an affine from the held frame into the view's, a display frame
+  at a time from the look, the eye's own bob and the moments (a shot, a landing, a weapon put
+  away): the rest offset low and right, the bob pushed forward, the sway that lags a turn on a
+  second-order follower (so a gun has weight), the kick on a stiff spring, the put-away at a
+  steady rate. Presentation only; comfort (`cl_motion`) scales every motion the player did not
+  command. A classic row and a modern one are the starting points.
+- **How it is lit** (`light.hpp`): by the place the player stands in, never by a fixed lamp. A
+  game samples its baked light at the player (the lightmap under the feet, a light grid's cell,
+  the sky and the sun) as a probe of an ambient and a direct colour, and hands its local lights
+  (torches, lamps, a muzzle flash) on the same fall-off law as the renderer's local lights. The
+  strongest eight at the grip are kept, a floor keeps a gun in the dark a silhouette, and the
+  surface is a wrapped Lambert with a Blinn highlight.
+
+**The draw** is two passes into one target: the world, then the depth cleared and the gun drawn
+through its own lens, so it is never cut by a wall it is pushed into and a wide view does not
+stretch it. `raster.hpp` is the CPU reference every lab draws with (`viewmodel`, on the stage's
+corridor and its six named lights); the GPU pass (M48c) draws the same light per pixel over the
+clustered local lights and is held to the reference.
+
+**The muzzle** is where a game stages what a shot makes (the flash, its smoke, its light). A held
+model names its tip as the centre of a few of its vertices (`muzzle_vertices`, the barrel's front
+on the rest frame by `find_muzzle`, or the game's own), so `muzzle_at` follows every morph frame
+the barrel does, and `muzzle_dir` is the way the shot leaves. The gun is drawn through its own
+lens, so its tip is carried into the world by `held_to_world` / `held_dir_to_world`: placed into
+the view, then moved across at its depth by tan(view / 2) / tan(gun / 2), so an effect drawn in
+the world's pass sits on the same screen ray as the barrel. A model that draws its own flash (a
+classic weapon's glowing triangles on its firing frames) marks them in `flame`, and a game whose
+engine draws the flash hides them through `DrawLit::hidden`. The effect is drawn after the gun,
+so a flame can overlap the barrel.
+
 ## Terrain
 
 A generic **heightfield renderer** in `engine/render`, which a game hands a height
@@ -733,9 +774,9 @@ height) and living their kind's life. Where they are drawn a broken sky's mean c
 lid keeps its deck, and stands a sheet under it (OVERCAST a stratus, SNOW and a STORM a
 nimbostratus) so the deck has a texture.
 
-**Cloud kinds (M8f8)** (`render/cloud_kinds.hpp`): fifteen named kinds, each a layer's bands,
+**Cloud kinds (M8f8)** (`render/cloud_kinds.hpp`): sixteen named kinds, each a layer's bands,
 its form and its light, matched by eye against photographs of real skies side by side (the
-photographs are kept out of the tree): inversion, stratus, stratocumulus, cumulus, congestus,
+photographs are kept out of the tree): inversion, fractus (the scud of M8f9), stratus, stratocumulus, cumulus, congestus,
 cumulonimbus, nimbostratus, altocumulus, altostratus, lenticular, cirrocumulus, veil,
 cirrostratus, cirrus and wisps. A kind's bands are its base over the valley floor, its depth, its cover and
 its cell (m); its stretch along the wind, its dome (0 a sheet, 1 a heap), its optical depth,
@@ -816,6 +857,23 @@ layer's frame block (`CloudLayer::anvil`, `erode`, `fibre`, `patch`); its LIGHT 
   read the cloud's shadow; the air scatters that share of the sun (70 % of its in-scatter is
   shadowed at most), on the world through the haze and on the sky strongest toward the sun, so
   the gaps between heaps throw beams.
+- THE HEIGHT AND THE WIND (M8f9, `mountain/app/cloud_field.hpp`): every layer stands at its
+  true height over the valley floor. The march walks the eye's rays through each slab, so a
+  cirrus 8 km up needs no world under it. Each layer drifts on the wind aloft at its own
+  height: the map's wind grown on a log law and turned with height. A low layer crosses the
+  sky the faster for being near. THE EVENING'S LOW-LEVEL JET: as dusk falls (`dusk_of`: 0 with
+  the sun 6 degrees up, 1 with it 6 down) the air a few hundred metres up decouples from the
+  cooling ground, and its wind speeds up to 1.7 times the day's at 400 m (`jet_at`, a Gaussian
+  450 m wide). From twilight a fair, flurrying, grey or snowing sky in a wind of 2 m/s or more
+  also gets ragged SCUD (`fractus`) racing under it at 200 to 450 m. It is dealt on a salt of
+  its own, so it moves none of the stack's layers, and more of it comes the further dusk has
+  fallen. Being so near and in the jet, it crosses the sky five times faster than the heaps
+  over it and blows across a lit moon. `Aloft` carries the picked height and speed (`base`, the
+  lowest layer's base, every layer over it in proportion; `speed`, a share of the true wind in
+  place of the true wind's whole; the layers drifted at a quarter of it before M8f9, and a low
+  cloud hung still where a real one races), and Fall Line's `sv_cloudheight` and `sv_cloudspeed` set them.
+  The drift is the wind times the clock, not integrated, so with the sky's clock running
+  (`sv_skyrate`) a jet winding up moves the layers on a little as it does.
 
 Fall Line picks a stack with `sv_clouds` (kinds joined by '+', such as `cumulus+cirrus`, up to
 four; `map`, the default, keeps the map's own), each kind's bands dealt off the map's seed by
@@ -1144,6 +1202,66 @@ quarter of the tile's texels a metre (`ShadowSettings::figure_lod_share`), since
 the silhouette, not the folds. The `crowd-look` lab
 films a lift's queue, a busy run, a group and one of them down at `--hour` (11: the sun on the
 runs), each with the crowd and without.
+
+## Explosions
+
+A blast is common in the games this engine serves (a rocket, a grenade, a barrel), so it is built
+to cost little and to read as fire and smoke rather than as a flat sprite.
+
+**As built (M47a).** What a blast IS at each moment of its life is `engine/render/explosion.hpp`,
+pure functions of the `Blast` (where and when it went off, its look, its scale, its seed, whether
+it went off against a surface) and the clock, so a replay, a lab and two clients see the same
+fireball. **One code draws every blast; what tells a rocket from a grenade, or one game's blast from
+another's, is its LOOK** (`BlastLook`): 26 knobs, each named, explained and ranged in
+`blast_knobs()` and set by name with `set_knob` (clamped). They cover the fireball (its radius, how
+fast it swells, how much it grows as smoke, how fast it rises), the fire (how much burns, for how
+long, how hot it starts, what it cools toward and how fast, how bright its light), the smoke (how
+thick, how fast it builds, how long it lasts, how pale it is and its tint: soot, dust, steam), the
+shape (how deep the billows cut, their size, the fray at the edge, how fast it rolls), what it throws
+(sparks: how many, how fast, how long, how hot; debris: how many, how many still glowing) and what it
+leaves (the scorch's size, the light's reach). The engine's presets are starting points with stable
+ids a content table names them by: `explosion` (the common blast, 1.4 m), `explosion.rocket` (hot,
+quick and bright, a spray of fast sparks, thin dark smoke), `explosion.grenade` (a short dull flash,
+a fat cloud of pale brown dust, many chunks of debris, hanging longer), `explosion.small` and
+`explosion.large`; a game copies one, turns its knobs and points its blasts at its own, and the
+`gpu-explosion` lab's `--look` and `--set=knob=value,...` show any of them. The shader reads the
+shape and the smoke's colour per blast, so many looks in one frame cost nothing more. The fireball swells to its radius in about a fifth of a second, grows on
+slowly as smoke, rises as hot air does, and cools from about 2300 K toward a dull red while its
+burning share falls and its smoke climbs and thins away over 3 to 5 s. Its colour and brightness are
+a blackbody's (`engine/render/blackbody.hpp`: Planck's law against the CIE 1931 colour matching
+functions, the absolute luminance a perfect radiator has), so the fire sits in the sun's units: blown
+white for a few hundredths of a second, orange, then red, and far brighter against a dusk the eye
+has adapted to than against a sunlit yard. The flash a game hands its local lights
+(`flash_at`) is the glowing ball's own luminous intensity (its disc times its core's blackbody
+luminance times what still burns, about 1.5 million cd at its peak), in the core's colour. What it
+throws (`blast_births`, dealt off its seed at the moment it goes off) is white-hot sparks that cool
+to red as they fall and dark debris, some still glowing; off a surface they fly into the half space
+it faces. The scorch it leaves (`scorch_of`) is its kind's size times its scale, turned and picked
+off the seed, for a game to press with `engine/detail`'s scorch decal (none for a look whose
+scorch is 0).
+
+`engine/render/explosions.hpp` draws them. Each live blast is ONE QUAD round its ball's outline on
+the screen (the whole screen when the eye is inside it), and the pixel's ray is cut by the ball and
+by the scene's depth, so a wall or the floor clips it exactly, and marched in 10 steps from a jittered
+start that the TAA resolve averages away. Each step reads the cloud's tileable noise twice (the
+billows and a finer fray, `render/clouds.hpp`'s texture already bound in group 0, so the pass has no
+texture of its own) and carves the ball's edge into rolling billows. Gas that is deep inside and
+still burning emits its temperature's blackbody light; the rest is smoke of its look's albedo and tint lit by the sun
+on its sunward side, the sky and the fire inside it; emission and absorption are integrated front to
+back and the march stops once the ray is opaque. At most 32 are drawn a frame, the nearest, back to
+front, premultiplied, each writing the reactive channel so TAA does not smear it. The sparks are the
+particle pool's (§ Particles and figures): a particle with a `kelvin` glows as a blackbody cooling
+toward 700 K by e every `cool_s`.
+
+**The cost.** The pass runs only on the pixels a ball covers, two fetches a step. On the software
+adapter at 640 x 360 (`gpu-explosion`, the pass's own timestamps), a frame of the yard costs about
+42 ms; one blast 10 m ahead (3% of the screen) costs the pass 0.5 to 0.7 ms, 32 at once 0.8 ms (most of them small
+and far), and one filling the whole screen 0.9 ms, since dense smoke ends the march early (about 2% of the frame at most). A real
+GPU's times need the Mac. The CPU stages 32 blasts in about 0.1 ms in the debug build.
+
+**Not yet:** the flash lighting the scene (it needs the local lights, M39a) and the scorch pressed
+(it needs the decals, M42b), and particles colliding with anything but a heightfield: rows M47b and
+M47c.
 
 ## Shaders
 

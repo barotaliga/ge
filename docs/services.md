@@ -104,8 +104,38 @@ bytes, a description up to 8000, up to 20 tags, cloud-file names, `SimConfig::it
 and refuses a new version from anyone but its author; a query shows each player only what they
 may see (everyone's items, their friends' friends-only items, their own).
 
-Lobbies, the store's network and the controller layer are rows of their own (M20c, M20e) and
-join the interface when they land.
+Lobbies and the store's network are rows of their own (M20c) and join the interface when they
+land.
+
+### The store's controller layer (M20e)
+
+A store's client can read the player's controller itself and hand the game ACTIONS: Steam Input
+does, and the player configures it in Steam's own configurator. `services/controllers.hpp`'s
+`ControllerLayer` is that shape beside the `Backend`:
+
+| Call | What |
+| --- | --- |
+| `declare(map)` | The game's `input::ActionMap`, once: each context is an action set, each action a digital or analog action. The map's active contexts that bind a pad start the reading: the first is the set, the others layers |
+| `activate(context)`, `set_layer(context, on)` | The set the store reads (one at a time) and the layers over it |
+| `controllers()` | The controllers it reads now: a handle, the family, a name |
+| `read(c, dt, values)` | That controller's action values this frame, one per action of the map |
+| `origins(c, action)` | The physical controls the action is on now, each with a glyph name (`xbox_a`, `ps_cross`, `switch_stick_left`) and the label its family prints, for the HUD's prompts |
+| `rumble(c, low, high)`, `show_bindings(c)` | The motors; the store's configurator |
+
+The game merges a store-read controller into its own values with `merge_store_values` (buttons
+OR'd with their edges, the larger push on an axis or a stick, deltas added: the actions' own
+rules), so the keyboard and a store-read pad drive the same actions at once. A store-read pad
+is not also read by the platform backend: Steam hides it from the OS's other readers, and a game
+leaves it out of `input::Sources::only`. The store's configuration starts from the map's pad
+bindings, so the manifest Steam reads (`action_manifest_text`: the in-game actions file, sets,
+actions, their input modes and their words) and the default configuration
+(`default_config_text`) are written from the map and never drift from it.
+
+`SimControllers` is the layer in memory: virtual pads (`connect`, `press`, `move`, `frame`)
+read through each controller's own copy of the store's configuration by `input::evaluate`
+itself, the player's edits in the configurator (`rebind`, a pad source only), the motors and
+a journal. A store-read pad gives exactly the values the same pad gives read directly: the
+`store-input` lab measures the gap (0) on a script with a rebind and a change of set.
 
 ## Steam, call by call
 
@@ -131,7 +161,7 @@ code that includes Steamworks' headers.
 | `ISteamUser::GetAuthTicketForWebApi`, `BeginAuthSession` | A host trusting a player's store identity; a store account linked to the game's own account service (M17j) | M20c |
 | `ISteamGameServer` | A dedicated server listed and authenticated by Steam | M20c |
 | `ISteamUGC` (`CreateQueryAllUGCRequest`/`CreateQueryUserUGCRequest`, `AddRequiredTag`, `SendQueryUGCRequest`; `CreateItem`, `StartItemUpdate`, `SetItemTitle`/`Description`/`Tags`/`Visibility`/`Content`, `SubmitItemUpdate`; `SubscribeItem`/`UnsubscribeItem`, `GetSubscribedItems`, `GetItemInstallInfo`, `ItemInstalled_t`) | `query_items`, `submit_item` (`item` 0 creates first), `subscribe_item`, `subscribed_items`; `item_files` and `item_read` over the install folder; `item_installed` from `ItemInstalled_t` | M20d (the interface and the simulated store), M20b (Steam's side) |
-| `ISteamInput` (action sets, digital and analog actions, origins and glyphs, rumble, the configurator) | A backend of `engine/input` (M19): its actions and action sets are the engine's action maps, its glyphs the prompts the HUD draws | M20e |
+| `ISteamInput` (`Init`, `RunFrame`, `GetConnectedControllers`, `GetActionSetHandle`, `ActivateActionSet`, `ActivateActionSetLayer`, `GetDigitalActionHandle`/`GetAnalogActionHandle`, `GetDigitalActionData`/`GetAnalogActionData`, `GetDigitalActionOrigins`/`GetAnalogActionOrigins`, `GetGlyphPNGForActionOrigin`, `TriggerVibration`, `ShowBindingPanel`; the in-game actions file) | `ControllerLayer`: `declare` (the handles found by the map's names), `activate`, `set_layer`, `controllers`, `read`, `origins` (Steam's origin as the engine's pad source and glyph), `rumble`, `show_bindings`; the in-game actions file from `action_manifest_text` | M20e (the layer and the simulated store), M20b (Steam's side) |
 | `ISteamUtils::ShowFloatingGamepadTextInput`, the Deck's suspend and resume, `ISteamTimeline` (events and game modes on the recording timeline), `ISteamRemotePlay` | `show_keyboard` and `text_entered` (`FloatingGamepadTextInputDismissed_t`); `suspended` and `resumed`; `timeline_mark` (`AddTimelineEvent`), `timeline_mode` (`SetTimelineGameMode`); `invite_remote_play` (`BSendRemotePlayTogetherInvite`), `remote_players` and their events (`SteamRemotePlaySessionConnected_t`/`Disconnected_t`) | M20f (the interface and the simulated store), M20b (Steam's side) |
 | `ISteamInventory`, `ISteamMicroTxn`, `ISteamHTMLSurface`, `ISteamMusic`, `ISteamParentalSettings`, `ISteamVideo` | Not planned: no game on the engine sells items or plays the player's music; a row is added when one does | none |
 
@@ -216,7 +246,8 @@ two asks, a join, a quit and return) and tables every event and every frame.
   store's directory round trip (`tests/services_offline_test.cpp`) and the catalog's check
   (`tests/services_catalog_test.cpp`); Discord against the simulated Discord app and a real local
   pipe (`tests/services_discord_test.cpp`); the workshop on the simulated and offline stores
-  (`tests/services_workshop_test.cpp`).
+  (`tests/services_workshop_test.cpp`); the store's controller layer on Fall Line's map
+  (`tests/services_controllers_test.cpp`).
 - The `services` lab plays a game's whole use of the services by four players on one script and
   tables every event, the store's journal and how long each kind of answer took
   (`make lab LAB=services ARGS="--latency-ms=200 --jitter-ms=100"`).
@@ -232,7 +263,7 @@ two asks, a join, a quit and return) and tables every event and every frame.
 | M20b | The Steam backend: the SDK supplied, every M20a call mapped, the CI job behind the secret, the live check |
 | M20c | Lobbies, the store's relay as an `engine/net` transport, auth tickets, game servers (with M17) |
 | M20d | The workshop |
-| M20e | Steam Input as an `engine/input` backend (with M19) |
+| M20e | The store's controller layer (Steam Input's shape) beside `engine/input` (with M19) |
 | M20f | The handheld and the extras: the on-screen keyboard, suspend and resume, the timeline, Remote Play Together |
 | M20g | Fall Line on Steam: its catalog, its record book as boards with ghosts, its cloud save, its presence |
 | M20h | Game Center and Google Play Games (with M11) |
