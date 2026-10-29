@@ -112,7 +112,7 @@ camera, the REPRO line). It is never on a release path.
 
 - `menu` (M22a): the front door over every backdrop kind, both pages at the three viewports, the
   highlight's glide, a page's fade and a picture's drift, every picture captioned. Its smoke
-  digest is in `tests/labs_digests.txt`: a change to the raster, a font or the layout moves it, so
+  digest is in `tests/digests/`: a change to the raster, a font or the layout moves it, so
   look at the pictures, then rewrite the row (`--write-digests`).
 - `hud-kit` (M10a): a racer's and a shooter's HUD made from the kit alone, over daylit snow and a
   dim corridor, at the three viewports, and every charset as a HUD face. Pure CPU, digested.
