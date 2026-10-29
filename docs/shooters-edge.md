@@ -210,9 +210,11 @@ the engine's own):
 - Downloads of maps, models, sounds and player skins a client lacks, from the server, in chunks.
 - Player skins: each player's user info carries a `skin` name beside the top and bottom
   colours, and the server passes it on to every client with the player's other user info.
-  A client draws a player with `skins/<name>.pcx` from the game directory (an 8-bit picture in
-  the palette, the size of the player model's skin), recoloured by the top and bottom colours
-  like the base skin. A missing or damaged file falls back to the base skin, and the client
+  A client draws a player with `skins/<name>.png` from the game directory when there is one (a
+  high-resolution skin on the classic skin's layout, its colour rows found by scaling the classic
+  marks), else `skins/<name>.pcx` (an 8-bit picture in the palette, the size of the player model's
+  skin), recoloured by the top and bottom colours like the base skin. A missing or damaged file
+  falls back to the base skin, and the client
   asks the server for a missing skin when downloads are allowed.
 
 **The native protocol** is the engine's own (`docs/networking.md`), used between our client and
