@@ -154,6 +154,11 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   river, a volume of hulls) and the one `sample` query everything reads, the sea a wind grows
   over each point's fetch and the components the simulation sums. It depends on `engine/core`
   and `engine/wind` and is simulation code (`docs/water.md`).
+- **`engine/detail`**: a level's surface detail (`ge::detail`, `docs/detail.md`): convex solids as
+  planes and the bevels on their exposed edges, a level's triangles binned for queries, decals
+  clipped onto them that age in a fixed pool, and props scattered over them by rules. It depends
+  on `engine/core` alone and is simulation code: a shot's hole and a seed's rubble are the same
+  bits everywhere, so a replay leaves the same marks.
 - **`engine/grass`**: the grass (`ge::grass`): kinds and their recipes, covers of triangles
   from a heightfield's region or a mesh's floors, every blade scattered off its triangle's own
   seed, and a blade's shape in the engine's wind. It depends on `engine/core` and `engine/wind`
