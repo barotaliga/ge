@@ -80,6 +80,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge lab <id> --zoom=x,y,w,h` (every shot, or `--zoom=<shot>:x,y,w,h` one, also written cropped to a region and scaled up, so a lab needs no close-up code of its own; Shooter's Edge HUD thread)
 - `ge lab record <lab> --frames=N --fps=F --out=<file>` / `ge lab anim <lab> --shots=<glob> --out=<file>` (a lab's frames written and encoded in one step, or its numbered frame shots assembled: an animated GIF on the engine's own encoder, WebP or MP4 later through the capture's encoders; `ge lab publish` inlining those animations; asked for by the explosions and lightning beam threads)
 - plugin commands: `ge tool <plugin> -- <args>` (being built by the classic-enhance PR: a plugin's tool executable built and its JSON relayed); next, its commands listed in `ge help` and forwarded without `tool --`; first users `ge level textures <pak> <map> --out=<dir>` and `ge level clone <bsp> --texmap=<file>`, which today hide as lab flags
+- `ge lab compare --tile=3x3 <dirA> <dirB> ...` (the method comparison page built from image folders: each image wrap-tiled, nearest-neighbour for a 1x source, a flip between methods per image at full size)
 - `ge lab <id> --compare=<tag> --metric=<name>` (one metric across the kept run and this one, a table per scenario or shot, in place of every metric `--compare` prints today)
 - `ge lab why <lab> <metric>` (what drove a lab's metric: the scenario steps, series and inputs that moved it most, and against a kept run with `--compare=<tag>` where it parted)
 - `ge lab listen <lab> <id>` (a lab's WAVs transcoded to a small web format, Opus in Ogg, for its report page and `ge lab publish`, without ffmpeg by hand)
@@ -176,6 +177,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 ## Shooter's Edge, the FPS port (M18: the ge tooling it needs)
 
 - `ge pak ls|cat|extract|build` (search paths, which archive wins a file, fixture packs: pak, pk3, .pk3dir; asked for by the classic-enhance and weapons threads)
+- `ge tool classicenhance -- extract <kind> <names>` (a pack's original textures or skins written at 1x as PNG to scratch, and the enhanced ones read back out of the cached glTF, in place of a throwaway pak, BSP and MDL reader per experiment)
 - `ge bsp info|ents|shot` (lumps and limits, the entity lump as text, a top-down CPU picture of the leaves, the PVS from a point, the hulls)
 - `ge progs build|disasm|run|trace|profile|diff` (the engine's own compiler for the game's VM language, and the `progs` VM inspected)
 - `ge server --map --bots --for` (a headless dedicated server with bots, its input log written for replay, `ge state` and diverge)
