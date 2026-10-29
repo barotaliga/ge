@@ -6,6 +6,8 @@
 // ge:test tests/render_water_test.cpp
 #include "render/underwater.hpp"
 
+#include <algorithm>
+
 #include "render/underwater.wgsl.hpp"
 
 namespace ge::render {
@@ -22,6 +24,8 @@ bool underwater_look(std::string_view name, UnderwaterLook& out) {
     l.fog = 3;
     l.blur = 9;
     l.blur_range = 1;
+    l.motes = 0.45;
+    l.mote_size = 0.0035;
   } else if (name == "classic") {
     l.fog = 0.25;
     l.blur = 0;
@@ -32,6 +36,7 @@ bool underwater_look(std::string_view name, UnderwaterLook& out) {
     l.tint[1] = 0.85;
     l.tint[2] = 0.75;
     l.tint_mix = 0.6;
+    l.motes = 0;
   } else {
     return false;
   }
@@ -46,8 +51,14 @@ void create_underwater(gpu::Device& device, gpu::PipelineSet& pipelines, Underwa
                   wgpu::ShaderStage::Fragment);
   under.uniform = make_buffer(device, "water.under", sizeof(UnderGpu), wgpu::BufferUsage::Uniform);
   const wgpu::ShaderModule module = gpu::create_shader(device, wgsl::underwater, "water.under");
+  // Premultiplied over the frame: the share under the waterline replaces what was drawn.
+  wgpu::BlendState blend{};
+  blend.color = {wgpu::BlendOperation::Add, wgpu::BlendFactor::One,
+                 wgpu::BlendFactor::OneMinusSrcAlpha};
+  blend.alpha = {wgpu::BlendOperation::Add, wgpu::BlendFactor::Zero, wgpu::BlendFactor::One};
   wgpu::ColorTargetState colour{};
   colour.format = kHdrFormat;
+  colour.blend = &blend;
   wgpu::FragmentState fragment{};
   fragment.module = module;
   fragment.entryPoint = "fs_main";
@@ -68,14 +79,18 @@ void bind_underwater(gpu::Device& device, Underwater& under, const Water& water)
 }
 
 void prepare_underwater(gpu::Device& device, Underwater& under, const Water& water,
-                        const FrameView& view, uint32_t render_height) {
-  under.active = water.eye_under >= 0;
-  if (!under.active) return;
-  const Water::Slot& slot = water.bodies[static_cast<size_t>(water.eye_under)];
+                        const FrameView& view, uint32_t render_height, const Waterline* line) {
   const UnderwaterLook& l = under.look;
+  // At the waterline only with a lens plate to split; under the level always.
+  const int body = water.eye_under >= 0 ? water.eye_under : (l.waterline > 0 ? water.eye_near : -1);
+  under.active = body >= 0;
+  if (!under.active) return;
+  const Water::Slot& slot = water.bodies[static_cast<size_t>(body)];
   UnderGpu& u = under.staged;
-  u.info[0] = slot.staged.info[0];
-  u.info[1] = static_cast<float>(slot.staged.info[0] - view.eye[1]);
+  const bool given = line && line->body == body;
+  const double surface = given ? line->surface : slot.staged.info[0];
+  u.info[0] = static_cast<float>(surface);
+  u.info[1] = static_cast<float>(surface - view.eye[1]);
   u.info[2] = static_cast<float>(l.blur * render_height / 1080.0);
   u.info[3] = static_cast<float>(l.blur_range);
   for (int i = 0; i < 4; ++i) {
@@ -91,6 +106,17 @@ void prepare_underwater(gpu::Device& device, Underwater& under, const Water& wat
   u.tint[3] = static_cast<float>(l.tint_mix);
   u.fog[0] = static_cast<float>(l.fog);
   u.fog[1] = static_cast<float>(l.adapt);
+  u.surface[0] = static_cast<float>(surface);
+  u.surface[1] = static_cast<float>(given ? line->dx : 0.0);
+  u.surface[2] = static_cast<float>(given ? line->dz : 0.0);
+  u.surface[3] = water.eye_under >= 0 ? 1.0f : 0.0f;
+  // The specks thicken with the water's beam attenuation (its green band's): none to speak of in
+  // a pool, the look's share at 2 per metre, three times it in a brown lake's murk.
+  const double turbid = std::clamp(slot.staged.c[1] / 2.0, 0.05, 3.0);
+  u.motes[0] = static_cast<float>(std::min(0.9, l.motes * turbid));
+  u.motes[1] = static_cast<float>(l.mote_size);
+  u.motes[2] = static_cast<float>(l.waterline);
+  u.motes[3] = 0;
   device.queue.WriteBuffer(under.uniform, 0, &u, sizeof u);
 }
 
