@@ -1,7 +1,7 @@
 ---
 title: Rebuild the labs binary before comparing its digest with a test's
 date: 2026-10-22
-scope: games/fall_line/sim, games/fall_line/labs, tests/labs_digests.txt
+scope: games/fall_line/sim, games/fall_line/labs, tests/digests
 concepts: [digest, stale-build, labs-binary, debug-release, determinism]
 ---
 
