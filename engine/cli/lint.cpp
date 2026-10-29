@@ -59,7 +59,7 @@ std::vector<Finding> lint_findings(const fs::path& repo, std::string_view output
   std::set<std::string> seen;
   int more = 0;
   for (const std::string_view view : split_lines(output)) {
-    const std::string line(view);
+    const std::string line = regex_line(view);
     std::smatch m;
     if (!std::regex_match(line, m, kDiag)) continue;
     std::string check = m.str(6);

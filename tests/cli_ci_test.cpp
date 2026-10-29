@@ -132,3 +132,19 @@ TEST(a_moved_repository_s_new_name_is_read_off_its_web_redirect) {
                     "Permanently\r\nLocation: https://github.com/c/d\r\n") == "c/d");
   CHECK(moved_to_of("HTTP/2 200\r\ncontent-type: text/html\r\n").empty());
 }
+
+TEST(a_megabyte_log_line_is_read_without_overflowing_the_stack) {
+  // std::regex recurses once per character it scans, so a long line (a minified dump, a
+  // progress bar redrawn without newlines) once overflowed the stack inside `ge ci`.
+  const std::string long_line(1 << 20, 'x');
+  const std::string log = "2026-10-22T13:44:36.9Z " + long_line + "\n" +
+                          "2026-10-22T13:44:37.0Z ge check: error: " + long_line + "\n" +
+                          "2026-10-22T13:44:37.1Z /work/game/src/a.cpp:12:5: error: " + long_line +
+                          "\n" +
+                          "2026-10-22T13:44:37.2Z /work/game/src/b.cpp:3:1: error: 'y' was not "
+                          "declared\n";
+  const auto f = ci_log_findings(kRepo, "build", log);
+  CHECK(f.size() == 1);
+  CHECK(f[0].severity == Severity::error);
+  CHECK(f[0].what.size() < long_line.size());
+}

@@ -56,7 +56,8 @@ games/<game>/net          what this game replicates, its messages, its lobby's s
 engine/net/replicate      snapshots and deltas, prediction, interpolation, interest, rewind;
 engine/net/lockstep       turns, input delay, desync digests, rollback (M17g)
         │
-engine/net/voice          Opus frames, the jitter buffer, voice routing (M17h)
+engine/net/voice          the gate, Opus frames, the host's relay by route, the jitter buffer,
+                          the mix onto the synth's streams (M17h)
 engine/net/session        lobby, teams, chat, private messages, the player list, kicks,
                           reconnecting by token; discovery: finding a game on the LAN (M17d)
 engine/net/reach          STUN, the rendezvous, hole punching, the relay (M17e1);
@@ -392,6 +393,36 @@ was stepped on a LAN and 233 ms on `awful`. Sending a message every update costs
 kbit/s a peer on a LAN, mostly headers; every third update cuts the inputs' bytes by a third and raises
 `bad`'s waits from 2% to 7% (`--send-every`).
 
+## Voice (M17h)
+
+Players talk over the session: `voice.hpp` on an UNRELIABLE channel of the session's node, the
+codec in `voice_codec.hpp`, the microphone in `engine/platform/audio.hpp` (`open_audio_in`), the
+cvars in `net_cvars.hpp` (`add_voice_cvars`) and every voice played on a stream of the synth.
+
+| Piece | What it does | Why |
+| --- | --- | --- |
+| The codec | Opus in its voice mode, mono at 48 kHz, 20 ms frames at a CONSTANT bitrate (24 kbit/s: 60 bytes a frame), in-band FEC sized for 10% loss, the decoder's concealment; libopus is the one the video export already pins (`cmake/Codecs.cmake`), and a build without it runs a stand-in of the same frame size that plays silence | The standard for speech; a constant size makes a link's packets a function of the session alone, so the lab's digest holds on every platform even though Opus's samples are floating point |
+| The gate | Push to talk, voice activity (a level that opens it, a lower one under which a hangover of 300 ms runs down), or open; a spurt's first frame is flagged `start` and the frame the gate closes on `end` | Nothing is sent while a player is silent; the end flag lets a listener stop at once instead of concealing past the word |
+| The frame's two numbers | A SEQUENCE (frames sent, their order) and a CLOCK (frames cut, sent or not, the time they were spoken) | Across a pause the sequence steps by one and the clock by the pause: the jitter buffer times arrivals by the clock, so a pause is not mistaken for jitter |
+| The relay | The host stamps the talker's seat from the peer, checks the route by the session's rules (everyone, the team, one player, the near ones by `SessionConfig::hears`), holds each talker to a bucket of 10 frames and one more each 20 ms (`sv_voiceflood`), honours a server mute, and sends each listener its copy | A client never names itself and is never sent a voice it may not hear; the same rules and the same earshot as chat |
+| The jitter buffer | Frames into 32 slots by sequence; a spurt starts playing once the buffer holds its target or the first frame has waited that long; each 20 ms the frame is decoded, or rebuilt from the next frame's FEC copy, or concealed (at most 3 in a row before the spurt is taken as over); a late frame is dropped; the target, 1 to 12 frames, is chosen at each spurt's start from the p95 spread of the last second's transit times, one frame more after a late one; a buffer past its target by 4 frames drops its oldest | Delay changes between words, never inside one; one lost frame costs nothing audible, a burst a short fade |
+| The mix | Each talker a synth stream (`Synth::stream`, `feed`, `queued`, `steer`) kept two frames ahead, at the player's volume for that talker (0 mutes) times the game's placing (`voice_distance_gain`: full within `near`, falling as near/distance, faded to nothing at `far`, and a pan) times `voice_volume` | Voices go through the same limiter as every other sound; the stream's ring is lock-free between the game thread and the audio thread |
+
+The `voice` lab seats four talkers on a dedicated host, one on each route, and has every client
+hear the others; 20 s on each preset at 24 kbit/s (run 2026-10-29):
+
+| preset | routes | played | rebuilt | concealed | delay p50 | mouth-to-ear p50 / p95 | up kbit/s | SNR against the clean decode |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| lan | ok | 100% | 0% | 0% | 20 ms | 80 / 120 ms | 37 | 35 dB (the same samples) |
+| wifi | ok | 97.9% | 0.9% | 1.2% | 40 ms | 150 / 170 ms | 33 | 33.5 dB |
+| bad | ok | 91.1% | 3.2% | 5.7% | 80 ms | 350 / 380 ms | 31 | 29.7 dB |
+| awful | ok | 79.4% | 6.4% | 14.2% | 140 ms | 650 / 700 ms | 30 | 23.2 dB |
+
+FEC off, `bad` conceals 8.9% instead of 5.7% and `awful` 20.6% instead of 14.2%. A voice crosses
+two links (talker to host, host to listener), so it meets a preset's loss twice; the presets' loss
+comes in bursts, which FEC (one frame back) mends only at their edges. Mouth to ear is the frame
+(20 ms), the synth's two queued frames, the playout delay and both links' latency.
+
 ## The simulated network (M17a)
 
 `SimNetwork` is a network of nodes with simulated addresses, on a virtual clock in
@@ -519,7 +550,7 @@ game's bots playing as clients across many simulated servers, so its own traffic
 | the live tap and `ge net watch` | M17f2 | A RUNNING game's or server's datagrams mirrored to a loopback port: each connection every second, then saved as a capture and measured as `ge net stats` does |
 | fake conditions (`transport_fake`) | M17f2 | A live game's sends delayed, jittered and dropped (or dropped in a pattern) as a bad link would, for playing an experiment by hand |
 | the `net-predict` lab | M17n–M17q | Clients predicting over each preset: the prediction's error against the server, corrections a minute and their size, the drawn path's jerk, the view delay, the server's input queue against its target, charted over the run |
-| the `voice` lab | M17h | A voice through each preset, metered against the clean one, the WAV attached |
+| the `voice` lab | M17h | Four talkers on four routes through a host under each preset: every voice reaching exactly the listeners its route names, the frames played, rebuilt from FEC, concealed, late and dropped, the playout delay and the mouth-to-ear latency, the bytes each way; against the same frames decoded with nothing lost, the segmental SNR and the level; the worst presets again with FEC off; the delay charted, the latencies boxed, one client's ear charted, each preset's mix as a WAV |
 | the `accounts` lab | M17j | Sign-ups, logins (a wrong password refused, a brute force throttled), friend requests, presence and an invite, against the service on the simulated network |
 | the `cheats` lab | M17l | Each scripted cheat (speed hack, teleport, input flood, off-grid or future inputs, forged and replayed packets, fishing for hidden state, a planted desync, a forged score or ghost) caught or refused; honest bots under every preset raising no flag |
 | `ge net stress` and the `net-stress` lab | M17m | Each link knob ramped to its breaking point for a traffic mix, the bound it broke and the latencies charted against the knob; a soak's memory charted over an hour of virtual time; `ge net stress --chaos=all --soak=3600 --fuzz=1000000` runs every pressure test at once |
