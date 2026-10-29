@@ -9,7 +9,7 @@
 // crack of wood. And drive on anything with a body behind it, because a clean sine is a bell.
 //
 // ge:summary Fall Line's sound bank: the ids route.hpp plays and the bank itself
-// ge:keywords bank sound-def ids landing tree gate missed finish wipeout reset bump
+// ge:keywords bank sound-def ids landing tree gate missed finish wipeout reset bump menu-sounds
 // ge:skill audio sim
 // ge:test tests/fall_line_sound_test.cpp
 #pragma once
@@ -34,6 +34,11 @@ inline constexpr std::string_view kFinish = "finish";
 inline constexpr std::string_view kWipeoutTree = "wipeout_tree";
 inline constexpr std::string_view kWipeoutNose = "wipeout_nose";
 inline constexpr std::string_view kWipeoutCatch = "wipeout_catch";
+// The menus' (the front door, the pause page): the focus moved, an item pressed, a page opened
+// or closed (route.hpp's `play_menu`).
+inline constexpr std::string_view kMenuFocus = "menu_focus";
+inline constexpr std::string_view kMenuPress = "menu_press";
+inline constexpr std::string_view kMenuPage = "menu_page";
 
 extern const std::span<const ge::audio::SoundDef> kBank;
 

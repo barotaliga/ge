@@ -83,9 +83,11 @@ labs-digests: build
 
 # Discovery (AGENTS.md § Finding things). `index` writes docs/index.md (gitignored) from every file's ge:
 # tags; `find` searches the files, the skills and their lessons: make find Q="noise heightfield".
-# `lessons` reads the skills' lessons: make lessons ARGS="port --scope=engine/core".
+# `lessons` reads the skills' lessons: make lessons ARGS="port --scope=engine/core". `index` also
+# writes docs/lab-list.md (gitignored), the labs' table, from every LabSpec.
 index:
 	node tools/agents-index.mjs --write
+	node tools/check-labs.mjs
 
 find:
 	node tools/agents-index.mjs --find $(Q)

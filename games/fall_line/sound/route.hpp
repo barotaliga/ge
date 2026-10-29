@@ -17,6 +17,8 @@
 // ge:test tests/fall_line_sound_test.cpp
 #pragma once
 
+#include <string_view>
+
 #include "audio/synth.hpp"
 #include "fall_line/sim/state.hpp"
 #include "fall_line/sound/listener.hpp"
@@ -38,6 +40,10 @@ void run_sound_step(RunSound& sound, ge::audio::Synth& synth, const sim::GameSta
 // a card).
 void run_sound_frame(RunSound& sound, ge::audio::Synth& synth, const sim::GameState& state,
                      float dt, float duck = 1);
+
+// One of the menus' sounds (bank.hpp's kMenuFocus, kMenuPress, kMenuPage) on the effects bus,
+// heard whatever seat the run has.
+void play_menu(ge::audio::Synth& synth, std::string_view id);
 
 // The run is paused or left: the bed torn down, so nothing holds its last note behind a card.
 void run_sound_silence(RunSound& sound, ge::audio::Synth& synth);
