@@ -10,7 +10,8 @@ struct Frame {
   sun: vec4f,              // unit direction toward the key light; w: its illuminance, pre-exposed
   size: vec4f,             // render width, height, 1/width, 1/height
   time: vec4f,             // seconds, frame number, the lamps' light the eye adapted to (a white
-                           // face's luminance, the frame's units: render/view.hpp's lamp_lux)
+                           // face's luminance, the frame's units: render/view.hpp's lamp_lux), the
+                           // scene's own light the eye adapts to (pre-exposed: FrameView::adapt_cd)
   world: vec4f,            // y = 0's altitude over the sea (km), the pre-exposure (light's stored
                            // scale), the moon's direct light while the sun keys, 1: the haze is the moon's
   planes: array<vec4f, 6>, // the frustum: left, right, bottom, top, near (and one zero)
