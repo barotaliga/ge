@@ -149,6 +149,11 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   clipped onto them that age in a fixed pool, and props scattered over them by rules. It depends
   on `engine/core` alone and is simulation code: a shot's hole and a seed's rubble are the same
   bits everywhere, so a replay leaves the same marks.
+- **`engine/grass`**: the grass (`ge::grass`): kinds and their recipes, covers of triangles
+  from a heightfield's region or a mesh's floors, every blade scattered off its triangle's own
+  seed, and a blade's shape in the engine's wind. It depends on `engine/core` and `engine/wind`
+  and is simulation code; `engine/render/grass` draws exactly the blades it scatters
+  (`docs/grass.md`).
 - **`engine/prof`**: the profiler (`ge::prof`): timing zones (`GE_ZONE("name")`, one relaxed
   load when no recording runs; a span with its depth, time and allocations when one does), their
   totals (a zone's own time and its children's), the counting `operator new` an executable
