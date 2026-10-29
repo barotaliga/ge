@@ -1,6 +1,6 @@
 ---
 name: textures
-description: "Use for engine/texgen in gameengine2 and anything about PROCEDURAL TEXTURES: the .tex recipe format (texture, size, seed, surface, scale, bump, tags, param, layer lines), the layer kinds table (fill, noise, stripes, bricks, tiles, planks, panels, cracks, scratches, dirt, dust, grime, wear, rust, streaks, moss, snow, glow), the tileable noise kinds (value, perlin, cells, edges, voronoi, ridged, turbulence, white, warp), texture references a level stores (`brick_wall seed=12 wear=0.8`), the bake to albedo, normal, ORM, glow and height maps, the on-disk cache and its key, the specimen library, the CPU lit preview, ge texture (kinds, check, bake) and the texgen-specimens, texgen-layers, texgen-variants, texgen-noise and texgen-cost labs; the M31 rows."
+description: "Use for engine/texgen in gameengine2 and anything about PROCEDURAL TEXTURES: the .tex recipe format (texture, size, seed, surface, scale, bump, tags, param, layer lines), the layer kinds table (fill, noise, stripes, bricks, tiles, planks, panels, blocks, studs, scales, cracks, scratches, dirt, dust, grime, wear, rust, streaks, moss, snow, glow, speckle, shade, palette), the tileable noise kinds (value, perlin, cells, edges, voronoi, ridged, turbulence, white, warp), texture references a level stores (`brick_wall seed=12 wear=0.8`), the bake to albedo, normal, ORM, glow and height maps, the on-disk cache and its key, the specimen library, the CPU lit preview, ge texture (kinds, check, bake) and the texgen-specimens, texgen-layers, texgen-variants, texgen-noise, texgen-cost, texgen-compare and texgen-replace labs, the look metrics, replacing a level's painted textures by likeness; the M31 rows."
 ---
 
 # Procedural textures
@@ -16,11 +16,13 @@ before touching a lab.
 | --- | --- |
 | The format, its parser, texture references, params, the layer seeds | `engine/texgen/recipe.hpp` |
 | Every layer kind and key, with defaults and ranges: THE table | `engine/texgen/layers.cpp` (`ge texture kinds` prints it) |
-| The painters | `layers.cpp` (base), `patterns.cpp`, `life.cpp` |
+| The painters | `layers.cpp` (base), `patterns.cpp`, `life.cpp`, `finish.cpp` |
 | The surface planes and the height readings (blur, relief, up-facing) | `surface.hpp` |
 | Tileable noise | `noise.hpp` |
 | The bake, the derived maps, the key, the disk cache, the canonical text | `bake.hpp` |
 | The CPU light for pictures | `preview.hpp` |
+| A texture's look in numbers and the distance between two | `look.hpp` |
+| A level's painted texture replaced by the most alike recipe | `replace.hpp` |
 | The specimen recipes | `engine/texgen/library/*.tex` |
 
 ## Rules
@@ -58,6 +60,16 @@ before touching a lab.
 2. The painter in `patterns.cpp` (structure) or `life.cpp` (aging), declared in `layers.hpp`.
 3. Use it in a library recipe so the labs and the golden show it; add the recipe if none fits.
 4. `ge texture kinds` shows it; update `docs/textures.md`'s kinds summary if a group changed.
+
+## Replacing a level's textures
+
+`replace.hpp` picks, for each painted texture, the library recipe whose likeness (look, line
+direction, repeat) is nearest with the colour left out, bakes it and moves the original's colour
+onto it. When a replacement is wrong, run `make lab LAB=texgen-replace ARGS="--refs=<dir>"`
+over the level's textures (PNGs outside the tree) and read the table's repeat columns beside
+the pick: a missing recipe of that kind is the usual answer (add one, the `texture-references`
+loop), a measure that cannot tell two kinds apart the rarer one. `texgen_replace_test` holds
+that every library recipe still finds itself, so a new recipe too like an old one shows there.
 
 ## Measure
 

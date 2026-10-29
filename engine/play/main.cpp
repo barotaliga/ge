@@ -2,7 +2,7 @@
 //
 // ge:summary play_main: parses the play command line and prints each command's JSON answer
 // ge:keywords play main command-line describe sim replay state diverge bench shot png json why
-// ge:keywords load
+// ge:keywords load save
 // ge:skill agent-interface
 // ge:test tests/play_session_test.cpp
 #include "play/main.hpp"
@@ -23,6 +23,7 @@
 #include "play/human.hpp"
 #include "play/load.hpp"
 #include "play/record.hpp"
+#include "play/saves.hpp"
 #include "play/session.hpp"
 #include "play/why.hpp"
 #include "prof/memory.hpp"
@@ -488,9 +489,10 @@ int record_cmd(const GameSpec& spec, const Line& l, std::ostream& out) {
                    "play record runs/x.inputs --view=map --fps=30");
   }
   static const std::initializer_list<const char*> kOwn = {
-      "seed", "view",    "from",           "to",     "fps",     "speed", "size", "format", "codec",
-      "crf",  "bitrate", "encoder-preset", "thumbs", "columns", "band",  "out",  "gpu",    "mode",
-      "sound"};
+      "seed",      "view",   "from",    "to",   "fps",     "speed",
+      "size",      "format", "codec",   "crf",  "bitrate", "encoder-preset",
+      "container", "thumbs", "columns", "band", "out",     "gpu",
+      "mode",      "sound"};
   InputLog log;
   std::string error;
   if (l.words.size() == 1) {
@@ -537,6 +539,7 @@ int record_cmd(const GameSpec& spec, const Line& l, std::ostream& out) {
   text_flag("view", o.view);
   text_flag("format", o.encoding.format);
   text_flag("codec", o.encoding.codec);
+  text_flag("container", o.encoding.container);
   text_flag("bitrate", o.encoding.bitrate);
   text_flag("encoder-preset", o.encoding.preset);
   if (const auto it = l.flags.find("band"); it != l.flags.end()) o.band = it->second != "0";
@@ -782,9 +785,10 @@ int play_main(int argc, char** argv, std::istream& in, std::ostream& out) {
   if (l.op == "record") return record_cmd(*spec, l, out);
   if (l.op == "cvar") return cvar_cmd(*spec, l.words, l.flags, out);
   if (l.op == "cfg") return cfg_cmd(*spec, l.words, l.flags, out);
+  if (l.op == "save") return save_command(*spec, l.words, l.flags, out);
   return problem(out, 2, "unknown command `" + l.op + "`", "the command line",
                  "run describe, sim, replay, state, diverge, bench, load, shot, record, why, "
-                 "cvar or cfg, or no command for the protocol");
+                 "cvar, cfg or save, or no command for the protocol");
 }
 
 int play_main(int argc, char** argv) {

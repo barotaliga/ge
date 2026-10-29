@@ -34,15 +34,6 @@ constexpr uint32_t kCues = 0x1C53BB6B, kCuePoint = 0xBB, kCueTime = 0xB3, kCueTr
 constexpr int64_t kSeekHeadRoom = 128;      // the Void reserved at the segment's start
 constexpr int64_t kMostRelativeMs = 32767;  // a block's timestamp is an int16 from its cluster's
 
-// A 64-bit seek (a long is 32 bits on Windows, and an export can pass 2 GB).
-bool seek_to(std::FILE* f, int64_t at, int whence) {
-#ifdef _WIN32
-  return _fseeki64(f, at, whence) == 0;
-#else
-  return fseeko(f, static_cast<off_t>(at), whence) == 0;
-#endif
-}
-
 bool webm_codec(std::string_view c) {
   return c == "V_VP8" || c == "V_VP9" || c == "V_AV1" || c == "A_OPUS" || c == "A_VORBIS";
 }
@@ -85,34 +76,12 @@ std::string options_problem(const MatroskaOptions& o) {
   return "";
 }
 
-MatroskaWriter::~MatroskaWriter() {
-  if (file_) std::fclose(file_);
-}
-
 bool MatroskaWriter::emit(std::span<const uint8_t> b, std::string& error) {
-  if (file_) {
-    if (std::fwrite(b.data(), 1, b.size(), file_) != b.size()) {
-      error = "the disk took " + std::to_string(written_) + " bytes and no more";
-      return false;
-    }
-  } else {
-    memory_.insert(memory_.end(), b.begin(), b.end());
-  }
-  written_ += static_cast<int64_t>(b.size());
-  return true;
+  return out_.emit(b, error);
 }
 
 bool MatroskaWriter::patch(int64_t at, std::span<const uint8_t> b, std::string& error) {
-  if (!file_) {
-    std::memcpy(memory_.data() + at, b.data(), b.size());
-    return true;
-  }
-  if (!seek_to(file_, at, SEEK_SET) || std::fwrite(b.data(), 1, b.size(), file_) != b.size() ||
-      !seek_to(file_, 0, SEEK_END)) {
-    error = "cannot patch the file at byte " + std::to_string(at);
-    return false;
-  }
-  return true;
+  return out_.patch(at, b, error);
 }
 
 bool MatroskaWriter::open(const std::string& path, const MatroskaOptions& o, std::string& error) {
@@ -121,17 +90,7 @@ bool MatroskaWriter::open(const std::string& path, const MatroskaOptions& o, std
     return false;
   }
   opt_ = o;
-  if (!path.empty()) {
-#ifdef _WIN32
-    if (fopen_s(&file_, path.c_str(), "wb+") != 0) file_ = nullptr;
-#else
-    file_ = std::fopen(path.c_str(), "wb+");
-#endif
-    if (!file_) {
-      error = "cannot write " + path;
-      return false;
-    }
-  }
+  if (!out_.open(path, error)) return false;
   Ebml h;
   const size_t ebml = h.open(kEbml);
   h.uint(kEbmlVersion, 1);
@@ -209,7 +168,7 @@ bool MatroskaWriter::open(const std::string& path, const MatroskaOptions& o, std
 bool MatroskaWriter::flush_cluster(std::string& error) {
   if (cluster_ms_ < 0) return true;
   cluster_.close(cluster_size_at_);
-  cues_.push_back({cluster_ms_, written_ - segment_body_});
+  cues_.push_back({cluster_ms_, out_.written() - segment_body_});
   const bool ok = emit(cluster_.bytes, error);
   cluster_.bytes.clear();
   cluster_ms_ = -1;
@@ -278,7 +237,7 @@ bool MatroskaWriter::close(int64_t end_ms, std::string& error) {
   }
   open_ = false;
   if (!flush_cluster(error)) return false;
-  const int64_t cues_at = written_ - segment_body_;
+  const int64_t cues_at = out_.written() - segment_body_;
   Ebml c;
   const size_t cues = c.open(kCues);
   for (const Cue& q : cues_) {
@@ -312,16 +271,9 @@ bool MatroskaWriter::close(int64_t end_ms, std::string& error) {
   if (!patch(duration_at_, duration, error)) return false;
 
   std::vector<uint8_t> size;
-  put_vint(size, static_cast<uint64_t>(written_ - segment_body_), 8);
+  put_vint(size, static_cast<uint64_t>(out_.written() - segment_body_), 8);
   if (!patch(segment_size_at_, size, error)) return false;
-  if (file_) {
-    const bool ok = std::fclose(file_) == 0;
-    file_ = nullptr;
-    if (!ok) {
-      error = "the file did not close (a full disk?)";
-      return false;
-    }
-  }
+  if (!out_.close(error)) return false;
   return true;
 }
 

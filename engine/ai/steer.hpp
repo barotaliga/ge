@@ -41,6 +41,13 @@ namespace ge::ai {
 struct LinePoint {
   double x = 0, z = 0;
   double ux = 0, uz = 0;
+  template <class Io>
+  friend void describe(Io& io, LinePoint& v) {
+    io(v.x);
+    io(v.z);
+    io(v.ux);
+    io(v.uz);
+  }
 };
 
 // THE MARK on a line for a bot at (x, z): walked from arc `s` by `step` (negative to walk the line
@@ -137,6 +144,15 @@ class Neighbours {
   std::vector<int32_t> items_;   // the bucketed bots, each bucket's in ascending index
   std::vector<int32_t> roams_;   // the roaming bots, ascending
   std::vector<int32_t> bucket_;  // each bot's bucket, -1 roaming (the build's scratch)
+  template <class Io>
+  friend void describe(Io& io, Neighbours& v) {
+    io(v.n_);
+    io(v.cell_);
+    io(v.start_);
+    io(v.items_);
+    io(v.roams_);
+    io(v.bucket_);
+  }
 };
 
 template <class Place, class Roams>
@@ -220,6 +236,15 @@ struct Progress {
   int32_t slow = 0;
   int32_t side = 1;
   double until = 0;
+  template <class Io>
+  friend void describe(Io& io, Progress& v) {
+    io(v.x);
+    io(v.z);
+    io(v.t);
+    io(v.slow);
+    io(v.side);
+    io(v.until);
+  }
 };
 
 // The window starts again at (x, z) at `t`, nothing caught.

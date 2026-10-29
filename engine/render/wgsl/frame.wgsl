@@ -55,6 +55,35 @@ struct SkyLight {
 // over the screen's uv and sqrt(distance / range), read by `local_fog`.
 @group(0) @binding(11) var fog_volume: texture_3d<f32>;
 
+// The ambient occlusion (render/ao.hpp: half size, r the occlusion times its strength, g the
+// depth it was worked at), or the sky's 1 x 1 blank with it off.
+@group(0) @binding(12) var ao_map: texture_2d<f32>;
+
+// THE SHARE OF THE SKY a surface drawn at `at` (a fragment's position: the pixel and its depth)
+// sees, 0..1: the four half-size texels round it, each by how near it is and how like the
+// surface's own its depth is, so one surface's shade stays off the one beside it.
+fn sky_seen(at: vec4f) -> f32 {
+  let dims = vec2i(textureDimensions(ao_map));
+  if (dims.x < 2) {
+    return 1.0;
+  }
+  let q = at.xy * 0.5 - 0.5;
+  let b = vec2i(floor(q));
+  let f = q - floor(q);
+  var sum = 0.0;
+  var weights = 0.0;
+  for (var k = 0; k < 4; k++) {
+    let o = vec2i(k & 1, k >> 1);
+    let t = textureLoad(ao_map, clamp(b + o, vec2i(0), dims - 1), 0);
+    let near = select(1.0 - f, f, vec2<bool>(o.x == 1, o.y == 1));
+    let like = max(1.0 - 10.0 * abs(t.g - at.z) / max(at.z, 1e-6), 1e-3);
+    let w = near.x * near.y * like;
+    sum += t.r * w;
+    weights += w;
+  }
+  return 1.0 - sum / max(weights, 1e-6);
+}
+
 // A world height (m) as a radius from the planet's centre, km.
 fn radius_at(world_y: f32) -> f32 {
   return kGroundRadius + max(frame.world.x + world_y * 1e-3, 0.0);
@@ -446,7 +475,8 @@ const kDarkestLux = 1e-4;
 fn white_luminance() -> f32 {
   let sun = key_at_eye() * frame.sun.w * frame.weather.x * max(frame.sun.y, 0.0);
   let sky = sky_irradiance(vec3f(0.0, 1.0, 0.0));
-  return max(dot((sun + sky) / PI, kLuma) + frame.time.z,
+  // The scene's own lights (a lava lake at night) key it when they outshine the sky and lamps.
+  return max(max(dot((sun + sky) / PI, kLuma) + frame.time.z, frame.time.w),
              kDarkestLux * frame.world.y / (PI * kSunLux));
 }
 

@@ -24,6 +24,16 @@ struct AimTarget {
   bool quarry = true;
   double x = 0, y = 0, z = 0;
   double vx = 0, vy = 0, vz = 0;
+  template <class Io>
+  friend void describe(Io& io, AimTarget& v) {
+    io(v.quarry);
+    io(v.x);
+    io(v.y);
+    io(v.z);
+    io(v.vx);
+    io(v.vy);
+    io(v.vz);
+  }
 };
 
 // ONE GUN: a rifle in a soldier's hands, the light machine gun on a snowmobile's pillion, a door
@@ -47,6 +57,29 @@ struct Gun {
   double ex = 0, ey = 0, el = 1;
   bool spot = false;
   double ox = 0, oz = 0;
+  template <class Io>
+  friend void describe(Io& io, Gun& v) {
+    io(v.id);
+    io(v.weapon);
+    io(v.x);
+    io(v.y);
+    io(v.z);
+    io(v.vx);
+    io(v.vy);
+    io(v.vz);
+    io(v.left);
+    io(v.wait);
+    io(v.shot);
+    io(v.fired);
+    io(v.rules);
+    io(v.target);
+    io(v.ex);
+    io(v.ey);
+    io(v.el);
+    io(v.spot);
+    io(v.ox);
+    io(v.oz);
+  }
 };
 
 // ONE ROUND IN FLIGHT.
@@ -61,6 +94,23 @@ struct Round {
   bool tracer = false;
   bool warn = false;  // warning fire: never tested against his body
   bool snapped = false;
+  template <class Io>
+  friend void describe(Io& io, Round& v) {
+    io(v.id);
+    io(v.gun);
+    io(v.weapon);
+    io(v.x);
+    io(v.y);
+    io(v.z);
+    io(v.vx);
+    io(v.vy);
+    io(v.vz);
+    io(v.age);
+    io(v.flown);
+    io(v.tracer);
+    io(v.warn);
+    io(v.snapped);
+  }
 };
 
 // What a gunfire event says (`EventKind::gunfire`, its `gate` the phase in the low byte and, on a
@@ -84,6 +134,21 @@ struct GunfireState {
   int32_t trunks = 0;
   int32_t snaps = 0;
   std::array<int32_t, ge::skier::kParts> by_part{};
+  template <class Io>
+  friend void describe(Io& io, GunfireState& v) {
+    io(v.active);
+    io(v.guns);
+    io(v.rounds);
+    io(v.stream);
+    io(v.next);
+    io(v.fired);
+    io(v.hits);
+    io(v.energy);
+    io(v.snow);
+    io(v.trunks);
+    io(v.snaps);
+    io(v.by_part);
+  }
 };
 
 }  // namespace fall_line::sim

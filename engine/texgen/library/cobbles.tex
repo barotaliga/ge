@@ -1,0 +1,18 @@
+# Rounded cobbles packed tight: each stone a lump swelling from its gap, lit from above, the
+# gaps narrow and dark.
+texture cobbles
+size    64
+seed    7
+surface stone
+scale   2
+tags    flagstones cobbles stone floor wall low-colour
+param   cells 5 2 12
+param   gap 0.02 0 0.3
+
+layer fill    color=#1c160e rough=0.95
+layer noise   kind=voronoi period=$cells octaves=1 salt=1 color=#3a3020 color2=#5c4c36 blend=mix amount=1
+layer noise   kind=edges period=$cells octaves=1 salt=1 lo=$gap hi=0.32 color=#000000 color2=#ffffff blend=multiply amount=0.85 height=0.9
+layer noise   kind=perlin period=8 octaves=4 color=#000000 color2=#ffffff blend=overlay amount=0.35 height=0.1
+layer speckle size=1 contrast=0.3 cavity=0
+layer shade   strength=1 highlight=0.3 occlusion=0.3
+layer palette color=#6a5a40 steps=16

@@ -45,7 +45,7 @@
 
 #include "capture/codecs.hpp"
 #include "capture/interleave.hpp"
-#include "capture/matroska.hpp"
+#include "capture/mux.hpp"
 #include "lab/raster.hpp"
 
 namespace ge::capture {
@@ -56,6 +56,7 @@ struct LiveOptions {
   double fps = 60;            // nominal: the track's default duration, AV1's keyframe spacing
   bool sound = true;          // an audio track off the tap
   std::string codec = "av1";  // "av1" (AV1 and Opus, webm) or "" (I420 and float PCM, mkv)
+  std::string container;      // "mp4" or "mkv"; "" by the file's name (mux.hpp)
   int crf = 32;
   int speed = 10;  // libaom's realtime speed, 7..11
   int threads = 4;
@@ -118,7 +119,7 @@ class Live {
   bool open_ = false;
   bool coded_ = false;
   std::string doc_type_;
-  MatroskaWriter mux_;
+  Mux mux_;
   Av1Encoder av1_;
   OpusEncoder opus_;
   Interleave held_;

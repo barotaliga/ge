@@ -259,6 +259,19 @@ The owner asked for three things beyond a server and a client: a lobby on the ne
 hosted from inside the game, and bots that use the simulation code, so improving the simulation
 improves them.
 
+**The server (M18f).** One host (`games/shooters_edge/server/host`) runs a server on the
+classic loop: its slots are empty, a remote client's (its packets handed to the frame in arrival
+order) or a bot's, filled by a command source (`plugins/shooter/cmd_source.hpp`) that reads the
+server and returns a usercmd; the host puts it on the protocol's grid and packs it into a packet
+like a client's, so a bot's commands run exactly as a person's. Every frame is logged (the slot
+events, the packets, the hash after it), and the log replays the run to the bit with no bot at
+all, naming the first frame that leaves it. The headless `shooters_edge_server` binary runs the
+host with its slots filled by bots, prints a status line every few seconds and the digest at the
+end, writes the input log (`--log`) and replays one (`--replay`); `--realtime` paces it to the
+wall clock. Until M18r's bots land, a seeded stand-in wanders the arena and fires at whoever is
+ahead; until M18b's maps, the server runs the test arena under a roof. The `se-server` lab runs a
+full server and replays its log.
+
 **Hosting from inside the game (M18q).** The menu's HOST page starts a server with its settings
 on one page: the map and the rotation, the mode, the mod, the frag and time limits, the player
 cap, the bots and their skill, a password, and public or LAN only. Two ways to run it, picked on
@@ -337,12 +350,14 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `se-loop` | scenario | The classic loop on the test arena: two clients over latency and loss, a rocket, a bouncing grenade, a door a player blocks, a plat; the program's events and the loop's counts, paths from above and the side, the door and the plat against the clock, the prediction's corrections; the thrown entities against their recorded vectors (built, M18o2) |
 | `se-parity` | scenario | The same scripted inputs through our movement and an existing server's, measured against each other within a tolerance (needs the reference program; skipped with a reason when its cache is absent) |
 | `se-server` | drive | Eight bots deathmatch on a free map for a minute: frags, items, the server's frame cost, its digest |
+| `se-nav` | scenario | Where a player can go on a map by the player move's own proof: the nav graph from above to scale (the floor shaded off the point hull, every node and link by kind, what a mover closes), the quickest routes as the proofs moved a player, from above and the side; on the nav course and the test arena (built, M18r1) |
 | `se-bots` | drive | Bots against bots and against recorded people: frags, deaths, items, the paths drawn on the map, the decisions round a fight, the humanness bands; before and after a change |
 | `se-lobby` | sim | Clients find a hosted game on the LAN and through the rendezvous, fill the lobby, pick teams, chat, start, play and return; a dedicated server outlives the client that started it |
 | `se-net` | sim | Compatible and native clients on the simulated network under every preset: bandwidth, prediction errors, corrections |
 | `se-interop` | drive | Our client and server against existing programs on loopback (cache-gated like `se-parity`) |
 | `se-world` | picture | Named views of free maps in both looks, with captions |
 | `se-audio` | sim | Sounds of a scripted fight rendered, metered and written as WAV |
+| `se-ambient` | sim | A walk through rooms under sky and by water: the ambience by leaf charted, mixed and written as WAV (built, M18j2) |
 | `se-demo` | sim | A demo played back, seeked and re-recorded; the digest of its frames |
 
 ## The `ge` tooling it needs

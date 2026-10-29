@@ -78,8 +78,12 @@ bool AvExport::open(const AvExportOptions& o, std::string& error) {
     }
     m.audio = a;
   }
-  doc_type_ = std::string(doc_type_of(m));
-  return mux_.open(o.file, m, error);
+  Container c = Container::kMatroska;
+  if (!container_named(o.container, o.file, c, error) || !mux_.open(o.file, c, m, error)) {
+    return false;
+  }
+  doc_type_ = std::string(mux_.doc_type());
+  return true;
 }
 
 void AvExport::render_to(int64_t sample) {

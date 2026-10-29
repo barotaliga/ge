@@ -85,6 +85,13 @@ std::string encoding_problem(const Encoding& e) {
     return "an mkv's codecs are av1 (AV1 and Opus, a .webm) and none (uncompressed); not `" +
            e.codec + "`";
   }
+  if (!e.container.empty() && e.container != "mkv" && e.container != "mp4") {
+    return "no container `" + e.container + "`; an mkv's containers are mkv and mp4";
+  }
+  if (e.container == "mp4" && (e.format != "mkv" || e.codec != "av1")) {
+    return "--container=mp4 takes --format=mkv --codec=av1 (an MP4 carries no uncompressed "
+           "pictures; ffmpeg's own mp4 is --format=mp4)";
+  }
   if (e.format == "mkv" && !e.bitrate.empty()) {
     return "an mkv takes --crf, not --bitrate";
   }
@@ -96,7 +103,7 @@ std::string encoding_problem(const Encoding& e) {
 
 std::string_view extension_of(const Encoding& e) {
   if (e.format == "png") return "";
-  if (e.format == "mkv" && e.codec == "av1") return "webm";
+  if (e.format == "mkv" && e.codec == "av1") return e.container == "mp4" ? "mp4" : "webm";
   return e.format;
 }
 
@@ -286,6 +293,7 @@ std::optional<Recording> record(const GameSpec& spec, const InputLog& log, const
       ao.from = at;
       ao.sound = opt.sound;
       ao.codec = opt.encoding.codec;
+      ao.container = opt.encoding.container;
       if (opt.encoding.crf >= 0) ao.crf = opt.encoding.crf;
       if (!av.open(ao, error)) return std::nullopt;
       av_open = true;
