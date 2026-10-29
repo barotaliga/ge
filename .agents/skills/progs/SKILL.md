@@ -51,7 +51,9 @@ multiplayer builtins and extensions that come next.
 - **On the shooter seam** a bytecode program is mirrored: the loop's fields of every entity in use
   are copied into the VM's entities before a call and back after, and a builtin that reaches the
   server copies them out and in around it (`qc_program.hpp`). Entity numbers on the loop's side,
-  entity values (bytes) on the VM's.
+  entity values (bytes) on the VM's. The program's own fields live only in the VM, so a removed
+  entity keeps them under the progs' free rule (the listed fields cleared, nextthink -1) while the
+  loop resets its record whole; `live` says which records the VM still mirrors.
 - **Run the lab before and after** a change to the VM: `make lab LAB=qc ARGS="--tag=before"`, then
   `--compare=before`; its digest (`make ge ARGS="digest qc --write"`) holds the sample's profile.
 
