@@ -149,7 +149,8 @@ TEST(a_pillar_drawn_round_lies_on_its_circle_and_its_caps_gap_is_filled) {
       worst = std::max(worst, std::fabs(std::sqrt(dx * dx + dz * dz) - corner));
     }
   }
-  CHECK_MSG(surface >= 8 * 6 * 2, "surface " + std::to_string(surface));
+  // Eight segments by six rings, two triangles each.
+  CHECK_MSG(surface >= std::size_t{96}, "surface " + std::to_string(surface));
   CHECK_MSG(fills > 0, "no strip fills the gap at the caps");
   CHECK_MSG(worst < 1e-5, "off the circle by " + std::to_string(worst));
 }
