@@ -8,6 +8,14 @@
 #            in the queue stay there (only a maintainer can take one out). When no open pull
 #            request carries the label any more (it was removed, or the last one merged or
 #            closed), every `queued-hold` pull request is re-armed and loses the label.
+#   JUMP     A `queue-priority` pull request that is ready (not a draft, its required check
+#            green) is put into the queue AT ITS FRONT, as the queue's "jump" does by hand: one
+#            not yet queued is enqueued with the jump, one queued behind others without it is
+#            taken out and put back with it. GitHub lets only a repository admin jump, so this
+#            uses the `QUEUE_TOKEN` secret when it is set (an admin's fine-grained token with
+#            pull requests and contents read and write on this repository) and the workflow's
+#            own token otherwise, whose refusal is logged as a warning and nothing more: the
+#            pull request then reaches the queue armed, first among the armed ones (HOLD).
 #   RE-ARM   A queued run that ended without a single failed job (every red job cancelled or
 #            abandoned: a lost runner, a timeout, the queue rebuilding) ejects its pull requests
 #            for nothing the change did. Each one no longer in the queue and no longer armed is
@@ -66,23 +74,26 @@ jobs:
                 pullRequests(states: OPEN, first: 100, after: $endCursor) {
                   pageInfo { hasNextPage endCursor }
                   nodes {
-                    number isDraft isInMergeQueue
+                    number id isDraft isInMergeQueue
                     autoMergeRequest { enabledAt }
+                    mergeQueueEntry { position jump }
                     labels(first: 30) { nodes { name } }
                   }
                 }
               }
             }' --jq '.data.repository.pullRequests.nodes[]
               | [.number, .isDraft, .isInMergeQueue, (.autoMergeRequest != null),
-                 ([.labels.nodes[].name] | join(","))] | @tsv' > prs.tsv
-          # Columns: number, draft, queued, armed, labels (comma-joined; may be empty).
+                 ([.labels.nodes[].name] | join(",")), .id,
+                 (.mergeQueueEntry.position // 0), (.mergeQueueEntry.jump // false)] | @tsv' > prs.tsv
+          # Columns: number, draft, queued, armed, labels (comma-joined; may be empty), node id,
+          # queue position (1 is the front; 0 not queued), jumped.
           cat prs.tsv
 
       - name: Hold every armed pull request behind the priority ones, or release them
         run: |
           has() { case ",$1," in *",$2,"*) return 0 ;; *) return 1 ;; esac; }
           priority=()
-          while IFS=$'\t' read -r n _ _ _ labels; do
+          while IFS=$'\t' read -r n _ _ _ labels _; do
             has "$labels" queue-priority && priority+=("#$n")
           done < prs.tsv
           # The loop below reads its rows on fd 3, so no gh call inside it eats them from stdin, and
@@ -90,7 +101,7 @@ jobs:
           gh label create queued-hold --color BFD4F2 \
             --description "Disarmed while a queue-priority pull request goes first; re-armed automatically" \
             2> /dev/null || true
-          while IFS=$'\t' read -r -u 3 n draft queued armed labels; do
+          while IFS=$'\t' read -r -u 3 n draft queued armed labels _; do
             if ((${#priority[@]})); then
               has "$labels" queue-priority && continue
               [ "$queued" = true ] && continue
@@ -108,6 +119,30 @@ jobs:
                 gh pr merge "$n" --auto --squash && echo "#$n released and re-armed" ||
                   echo "::warning::#$n could not be re-armed; arm it by hand"
               fi
+            fi
+          done 3< prs.tsv
+
+      - name: Put the priority pull requests at the front of the queue
+        env:
+          JUMP_TOKEN: ${{ secrets.QUEUE_TOKEN || github.token }}
+        run: |
+          has() { case ",$1," in *",$2,"*) return 0 ;; *) return 1 ;; esac; }
+          gq() { GH_TOKEN="$JUMP_TOKEN" gh api graphql -F id="$1" -f query="$2" > /dev/null; }
+          while IFS=$'\t' read -r -u 3 n draft queued _ labels id position jumped; do
+            has "$labels" queue-priority || continue
+            [ "$draft" = false ] || { echo "#$n is a draft"; continue; }
+            if [ "$queued" = true ]; then
+              { [ "$position" -le 1 ] || [ "$jumped" = true ]; } && { echo "#$n is at the front, or jumped"; continue; }
+              gq "$id" 'mutation($id: ID!) { dequeuePullRequest(input: {id: $id}) { clientMutationId } }' ||
+                { echo "::warning::#$n could not be taken out to jump (QUEUE_TOKEN unset, or not an admin's)"; continue; }
+            fi
+            # Refused until the pull request's required check is green; the next run tries again.
+            if gq "$id" 'mutation($id: ID!) { enqueuePullRequest(input: {pullRequestId: $id, jump: true}) { clientMutationId } }'; then
+              echo "#$n jumped to the front of the queue"
+            else
+              echo "::warning::#$n could not jump the queue (its check not green yet, or QUEUE_TOKEN unset or not an admin's)"
+              # Taken out above and refused back in: re-arm, so it is not left out of the queue.
+              [ "$queued" = true ] && gh pr merge "$n" --auto --squash
             fi
           done 3< prs.tsv
 

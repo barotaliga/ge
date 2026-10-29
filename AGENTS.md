@@ -154,6 +154,11 @@ porting ends, and nothing outside it may depend on it except `make golden`.
   reaches, `ge digest --affected`). A game repo's is `ge precheck`.
   Run it in the background when it is long (a tool's background mode re-invokes you when it
   exits); never poll it in a loop.
+- **OPEN A PR AS A DRAFT; MARK IT READY ONLY WHEN IT CAN LAND.** A draft runs no CI (the runners
+  are a small shared pool). Mark it ready for review (`gh pr ready <pr>`; for an agent,
+  `POST repos/<owner>/<repo>/pulls/<n>/ccr/ready_for_review`) only when the work is finished,
+  `make precheck` passes, and the branch merges cleanly with `origin/main` (merge it in first);
+  that is what starts CI, and then arm auto-merge. Pushing work in progress to a draft is free.
 - **AFTER PUSHING A PR, CHECK IT EVERY 15 MINUTES UNTIL IT IS MERGED.** Each check-in looks at
   the checks AND the merge state, since a branch left behind main is where threads get stuck:
   `build/<preset>/ge ci <pr>` answers both in one command. A conflict: merge `origin/main`,

@@ -31,7 +31,7 @@ jobs:
         # build: windows-latest moved to a newer MSVC whose warnings the PR row never saw.
         os: ${{ fromJSON(inputs.linux && '["ubuntu-latest","macos-latest","windows-2025"]' || '["macos-latest","windows-2025"]') }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 120
+    timeout-minutes: 60
     defaults:
       run:
         shell: bash

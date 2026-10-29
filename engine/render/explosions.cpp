@@ -316,7 +316,29 @@ Particle spark_particle(const Spark& s) {
       p.albedo = 0.08f;
       p.opacity = 1;
       break;
+    case SparkKind::chip:  // a fragment of a surface on its arc, of the surface's shade
+      p.drag = 0.4f;
+      p.fall = 1;
+      p.streak = 0.012f;
+      p.albedo = 0.4f;
+      p.opacity = 1;
+      break;
+    case SparkKind::grit:  // fine dust: slowed fast by the air, drifting down
+      p.drag = 4;
+      p.fall = 0.15f;
+      p.streak = 0.02f;
+      p.albedo = 0.5f;
+      p.opacity = 0.45f;
+      break;
+    case SparkKind::drop:  // a splash's bead: a bright streak, half clear
+      p.drag = 0.5f;
+      p.fall = 1;
+      p.streak = 0.035f;
+      p.albedo = 0.85f;
+      p.opacity = 0.6f;
+      break;
   }
+  if (s.albedo >= 0) p.albedo = static_cast<float>(s.albedo);
   return p;
 }
 
@@ -332,6 +354,15 @@ size_t throw_blast(Particles& particles, const Blast& blast) {
 size_t throw_shot(Particles& particles, const Shot& shot, const MuzzlePose& pose_at_shot) {
   std::array<Spark, kMostBirths> sparks{};
   const size_t n = shot_births(shot, pose_at_shot, sparks);
+  std::array<Particle, kMostBirths> births{};
+  for (size_t i = 0; i < n; ++i) births[i] = spark_particle(sparks[i]);
+  emit_particles(particles, std::span<const Particle>(births.data(), n));
+  return n;
+}
+
+size_t throw_impact(Particles& particles, const Impact& hit) {
+  std::array<Spark, kMostBirths> sparks{};
+  const size_t n = impact_births(hit, sparks);
   std::array<Particle, kMostBirths> births{};
   for (size_t i = 0; i < n; ++i) births[i] = spark_particle(sparks[i]);
   emit_particles(particles, std::span<const Particle>(births.data(), n));

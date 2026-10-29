@@ -53,6 +53,11 @@ squash-merged). The body contains:
 
 ## 5. Green, then merge
 
+**Open the PR as a draft** (`gh pr create --draft`): a draft runs no CI. When the work is done,
+merge `origin/main` into the branch (no conflicts left), run `make precheck`, push, and only then
+mark it ready (`gh pr ready <pr>`, or `POST .../pulls/<n>/ccr/ready_for_review`): that starts CI;
+arm auto-merge after it. A PR that goes back to work in progress goes back to draft.
+
 CI is the gate. **After the push, check the PR every 15 minutes until it is merged**: schedule
 the check-in (never a sleep loop), and on each one look at both its checks and whether it still
 merges (`build/<preset>/ge ci <pr>` answers both: a conflict is an error finding, each red job's
@@ -76,7 +81,10 @@ name the next step to the user.
 threads' PRs by hand. To let one PR reach the queue before the rest (a structural change every
 other branch must merge), label it `queue-priority`: every other PR that is armed but not yet
 queued is disarmed and labelled `queued-hold`, with one comment, and re-armed by itself when no
-open PR carries the label any more (it merged, closed or lost the label). Leave a `queued-hold`
+open PR carries the label any more (it merged, closed or lost the label). Once its required
+check is green it also JUMPS: it is put at the front of the queue, which GitHub allows only an
+admin, so this works when the `QUEUE_TOKEN` secret holds an admin's token (the workflow's log
+warns when it is refused). Leave a `queued-hold`
 PR armed-off; keep it clean against main. A queued run that ended with no failed job (cancelled
 or abandoned jobs only) re-arms the PRs it ejected by itself, with a comment naming the run; one
 with a real failure is yours to fix. Never cancel a `merge_group` run to free runners: it ejects
