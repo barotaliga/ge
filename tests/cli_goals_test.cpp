@@ -3,7 +3,7 @@
 //
 // ge:summary Test: ge goals free's rows parsed off the roadmap, and the next free row
 // ge:keywords test cli goals roadmap milestone goal_rows next_free_number next_free_letter
-// ge:keywords next_free_digit sub-row
+// ge:keywords next_free_digit sub-row row_file_title milestone-line
 // ge:skill testing agent-interface
 #include <string>
 
@@ -51,6 +51,16 @@ TEST(the_next_free_row_is_one_past_the_highest_taken) {
   // Under a row ending in a letter the sub-rows are numbered: M18k -> M18k1, M8f7 -> M8f8.
   CHECK(next_free_digit({}) == "1");
   CHECK(next_free_digit({"1", "7", "3a"}) == "8");
+}
+
+TEST(a_row_files_name_is_the_bold_text_of_its_milestone_line) {
+  const std::string md =
+      "Status: open\nMilestone: **Sessions**: lobby, teams\nExit: a lobby of four\n\n"
+      "Milestone: **not the header**\n";
+  CHECK(row_file_title(md) == "Sessions");
+  CHECK(row_file_title("Status: done\n\nMilestone: **after the blank line**\n").empty());
+  CHECK(row_file_title("# M17d\n\nfree notes\n").empty());
+  CHECK(row_file_title("Status: open\nMilestone: no bold\n").empty());
 }
 
 TEST(a_claim_adds_its_line_to_the_reserved_table_and_gives_it_up_again) {

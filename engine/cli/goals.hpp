@@ -15,13 +15,14 @@
 //                          line up and claims the next
 //
 // A row is a line of `docs/goals.md`'s tables that opens `| M<n><suffix> |`, a status file
-// `docs/goals/M<n><suffix>.md`, or a line of the same shape in `docs/goals/reserved.md`: a row
-// promised to a piece of work before any branch carries it. The remote branches are fetched first
+// `docs/goals/M<n><suffix>.md` (named by the bold text of its `Milestone:` line when it has one),
+// or a line of the same shape in `docs/goals/reserved.md`: a row promised to a piece of work
+// before any branch carries it. The remote branches are fetched first
 // (--no-fetch answers from the branches as last fetched).
 //
 // ge:summary ge goals free and claim: the roadmap rows taken everywhere, the next free one reserved
 // ge:keywords cli ge goals roadmap milestone row next-free number claimed branches pull-request
-// ge:keywords goal_rows next_free_row docs-goals claim reserve reserved race
+// ge:keywords goal_rows next_free_row docs-goals claim reserve reserved race row-file milestone-line
 // ge:skill agent-interface
 // ge:test tests/cli_goals_test.cpp
 #pragma once
@@ -48,6 +49,9 @@ struct GoalRow {
 std::vector<GoalRow> goal_rows(std::string_view goals_md);
 // The row a status file's name stands for ("M17d.md"); number 0 when it is none.
 GoalRow goal_row_of_file(std::string_view file_name);
+// A status file's row name: the bold text of its `Milestone:` line, in the header of `Key: value`
+// lines before the first blank line; empty when it has none.
+std::string row_file_title(std::string_view status_md);
 
 // The next free milestone number: one past the highest among `taken`.
 int next_free_number(const std::vector<int>& taken);

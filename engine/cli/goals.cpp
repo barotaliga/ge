@@ -90,12 +90,25 @@ std::vector<GoalRow> rows_at(const fs::path& repo, const std::string& ref, const
   if (held.code == 0) {
     for (GoalRow& r : goal_rows(held.output)) rows.push_back(std::move(r));
   }
+  // Each status file's `Milestone:` line, one grep for the ref: "<ref>:docs/goals/M17d.md:Milestone:
+  // **Sessions** ...".
+  std::map<std::string, std::string> titles;
+  const Logged named =
+      run_to_log(git + "grep -e \"^Milestone:\" \"" + ref + "\" -- docs/goals/", log);
+  for (std::string_view line : split_lines(named.output)) {
+    const std::size_t at = line.find(":Milestone:");
+    if (at == std::string_view::npos) continue;
+    const std::string_view path = line.substr(0, at);
+    titles[std::string(path.substr(path.rfind('/') + 1))] = row_file_title(line.substr(at + 1));
+  }
   const Logged files = run_to_log(git + "ls-tree --name-only \"" + ref + "\" docs/goals/", log);
   if (files.code == 0) {
     for (std::string_view line : split_lines(files.output)) {
-      const std::size_t slash = line.rfind('/');
-      const GoalRow r = goal_row_of_file(trim(line.substr(slash + 1)));
-      if (r.number != 0 || !r.suffix.empty()) rows.push_back(r);
+      const std::string name(trim(line.substr(line.rfind('/') + 1)));
+      GoalRow r = goal_row_of_file(name);
+      if (r.number == 0 && r.suffix.empty()) continue;
+      if (const auto it = titles.find(name); it != titles.end()) r.title = it->second;
+      rows.push_back(std::move(r));
     }
   }
   return rows;
@@ -110,8 +123,10 @@ std::vector<GoalRow> rows_here(const fs::path& repo) {
   }
   std::error_code ec;
   for (const auto& e : fs::directory_iterator(repo / "docs" / "goals", ec)) {
-    const GoalRow r = goal_row_of_file(e.path().filename().string());
-    if (r.number != 0 || !r.suffix.empty()) rows.push_back(r);
+    GoalRow r = goal_row_of_file(e.path().filename().string());
+    if (r.number == 0 && r.suffix.empty()) continue;
+    r.title = row_file_title(read_text(e.path()).value_or(""));
+    rows.push_back(std::move(r));
   }
   return rows;
 }
@@ -143,6 +158,17 @@ GoalRow goal_row_of_file(std::string_view file_name) {
   if (key_of(r).size() != stem.size() || (r.number == 0 && stem != "M0" && stem.rfind("M0.", 0)))
     return {};
   return r;
+}
+
+std::string row_file_title(std::string_view status_md) {
+  for (std::string_view line : split_lines(status_md)) {
+    if (trim(line).empty()) break;
+    if (line.rfind("Milestone:", 0) != 0) continue;
+    const std::string_view cell = line.substr(10);
+    if (cell.find("**") == std::string_view::npos) return "";
+    return title_of(cell);
+  }
+  return "";
 }
 
 int next_free_number(const std::vector<int>& taken) {
