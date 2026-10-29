@@ -10,6 +10,14 @@
 //   payload     session key, sequence (16), ack (16), ack bits (32), then messages
 //   disconnect  session key
 //
+// SEALED (a node with NodeSecurity on, M17i; docs/networking.md § Security): the request and the
+// response carry the connect token's sealed part (token.hpp) at kRequestTokenAt and
+// kResponseTokenAt, inside their padding; the accept and the deny seal everything after the salt
+// with the key to the client, the salt the nonce's counter, and end in a 16-byte tag; a payload and
+// a disconnect carry a 64-bit packet counter where the session key stands, seal everything after it
+// with the sender's key and end in a 16-byte tag (kMaxSealedPacket). Their first 13 bytes are the
+// associated data: a header changed, or a packet replayed, does not open.
+//
 // A message is its channel byte (the top bit set when a 16-bit id follows: a reliable or a
 // sequenced channel's; the next bit set on every piece of a big message but its last), the id,
 // its length as a varint and its bytes. Little endian throughout.
@@ -38,6 +46,14 @@ constexpr size_t kPayloadHeader = 4 + 1 + 8 + 2 + 2 + 4;
 // The largest message: one alone in a packet, with its channel byte, id and a 2-byte length.
 constexpr size_t kMaxMessage = kMaxPacket - kPayloadHeader - 5;
 constexpr int kMaxChannels = 8;
+// Sealing adds a 16-byte tag (crypto.hpp's kTagBytes): still well inside the path MTU above.
+constexpr size_t kMaxSealedPacket = kMaxPacket + 16;
+// Where a sealed handshake's token starts: after the type byte and the salt (a request), and the
+// cookie (a response).
+constexpr size_t kRequestTokenAt = 4 + 1 + 8;
+constexpr size_t kResponseTokenAt = 4 + 1 + 8 + 8;
+// A sealed packet's associated data: the protocol id, the type and the salt or the counter.
+constexpr size_t kSealedHeader = 4 + 1 + 8;
 
 enum class PacketType : uint8_t {
   request = 1,

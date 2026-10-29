@@ -170,7 +170,7 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   // A deep trough sees less of the sky.
   let cavity = 1.0 - 0.4 * smoothstep(0.0, 0.25, track.depth * tk);
   let lit = snow_light(SnowPoint(albedo, n, g.n, v, world, g.sun, g.dist, foot, packed, rock, loose,
-                                 cavity),
+                                 cavity * sky_seen(in.position)),
                        SnowGains(snow.look.x, snow.look.w, snow.look2.x));
   // The lamps: the street's, a headlamp's, a fire's.
   let lamps = local_lights(matte(albedo), g.rel, n, v, in.position.xyz);

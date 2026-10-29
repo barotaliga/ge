@@ -233,9 +233,11 @@ wgpu::Texture make_texture(gpu::Device& device, std::string_view label, uint32_t
                            wgpu::TextureUsage usage, uint32_t mips = 1);
 
 // Labs and tests (blocks): channel 0 of one mip of a texture, row-major, as floats. `format` is
-// the texture's: R32Float, Depth32Float (the depth aspect), R16Float or RGBA16Float.
+// the texture's: R32Float, Depth32Float (the depth aspect), R16Float or RGBA16Float (whose
+// `channel` 1, 2 or 3 it reads instead when asked).
 std::vector<float> read_red(gpu::Device& device, const wgpu::Texture& texture, uint32_t mip,
-                            uint32_t width, uint32_t height, wgpu::TextureFormat format);
+                            uint32_t width, uint32_t height, wgpu::TextureFormat format,
+                            uint32_t channel = 0);
 // Labs and tests (blocks): how far from the eye, m, each pixel of `targets`' depth lies, seen by
 // `view`'s camera (depth_distance), row-major from the top; infinity where nothing was drawn.
 std::vector<float> read_distance(gpu::Device& device, const FrameTargets& targets,

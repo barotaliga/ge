@@ -1,7 +1,8 @@
 # THE VAULT: the room format's brush sample (plugins/rooms/text.hpp is the syntax). A hall of
 # slab brushes with a pillar, a pool of water sunk to the floor, a door that is its own group
 # with the entity that moves it, an invisible clip box a body cannot enter and a sky over the roof
-# gap. tests/rooms_brush_test.cpp holds it; the `rooms` lab draws it.
+# gap, and a trigger in front of the door that opens it (plugins/rooms/movers.hpp moves it).
+# tests/rooms_brush_test.cpp and tests/rooms_movers_test.cpp hold it; the `rooms` lab draws it.
 
 material wall rgb=140,132,120 size=64,64 tex stone_wall seed=3 tint=#8a8478 # a tinted recipe
 material floor rgb=110,104,96 size=64,64 tex flagstone
@@ -12,6 +13,7 @@ material grass rgb=80,120,60 size=64,64 tex grass_turf
 surface grass grass meadow height=0.6 density=300
 
 group door
+group door_trigger
 
 brush solid
 face 1,0,0 8.5 floor s=0,32,0,0 t=0,0,32,0
@@ -109,6 +111,14 @@ face 0,-1,0 0 wood s=32,0,0,0 t=0,0,32,0
 face 0,0,1 6.4 wood s=32,0,0,0 t=0,-32,0,0
 face 0,0,-1 -6.1 wood s=32,0,0,0 t=0,-32,0,0
 
+brush trigger group=door_trigger
+face 1,0,0 4.7 floor s=0,32,0,0 t=0,0,32,0
+face -1,0,0 -3.3 floor s=0,32,0,0 t=0,0,32,0
+face 0,1,0 2 floor s=32,0,0,0 t=0,0,32,0
+face 0,-1,0 0 floor s=32,0,0,0 t=0,0,32,0
+face 0,0,1 6 floor s=32,0,0,0 t=0,-32,0,0
+face 0,0,-1 -5 floor s=32,0,0,0 t=0,-32,0,0
+
 brush clip
 face 1,0,0 2 wall s=0,32,0,0 t=0,0,32,0
 face -1,0,0 -1 wall s=0,32,0,0 t=0,0,32,0
@@ -122,8 +132,12 @@ key origin 1.5 0.1 1.5
 key angle 90
 
 entity func_door group=door
-key angle 180
+key heading 270
 key speed 2
+key lip 0.05
 key wait 3
 key targetname vault door
+
+entity trigger_multiple group=door_trigger
+key target vault door
 

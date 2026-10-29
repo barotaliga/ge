@@ -39,6 +39,7 @@ struct BrushMesh {
   std::vector<Contents> contents;  // a triangle's brush's
   std::vector<uint8_t> hidden;     // a triangle's: 1 never drawn (a hidden face or a clip brush)
   std::vector<uint32_t> brush;     // a triangle's brush
+  std::vector<uint32_t> face;      // a triangle's face (into Level::faces)
   size_t unbounded = 0;            // brushes left out because their planes do not close
   size_t triangles() const { return idx.size() / 3; }
 };
