@@ -203,20 +203,23 @@ build` (the debug preset, reusing `build/debug/`) in the background while you re
 rely on the build, `tools/session-start.sh --wait` blocks until it is done and exits with its
 result; the output is `build/session-start.log`, the one-line state `build/session-start.status`.
 
-CI (`.github/workflows/ci.yml`) is tiered, because the org's runners are a small shared pool. A pull
-request runs the gates (fmt-check, agents-check, libm-check, release-check, the changeset rule),
-lint and shaders-check, ONE Linux build-and-test row (Linux x64, GCC debug+ASan) and the Windows
-row (MSVC, whose warnings and CRT break most Linux-built changes); the merge queue
-runs the whole matrix on the tree that lands: Linux x64 (GCC debug+ASan, GCC release, Clang
-release), Linux arm64 (GCC), macOS (Apple Clang), Windows (MSVC), and `packaging.yml` (the
-installed package building a consumer on Linux, macOS and Windows, and `ge new` growing a repo).
-A change to prose alone (docs, skills, lessons, root Markdown, fragments) runs the gates only;
-the label `full-ci` runs everything on a pull request. The ruleset requires one check,
-`required`, which passes when every job passed or was skipped by those rules. A golden failure
-on one row points at that row's compiler or libm. The Linux x64 rows install Mesa's lavapipe and
-run the tests under a virtual X display with `GE_GPU_REQUIRE=1`, so the GPU and window tests run
-there and a skip fails; elsewhere they run when the runner has an adapter and skip (CTest's exit
-77) when not. A shipped change carries a `.changes/unreleased/` fragment (or the `no-changelog`
+**Linux is checked here, before the push; CI runs only what can differ elsewhere.** `make
+precheck` is the Linux gate (GCC debug+ASan on Mesa's lavapipe: the build, the lint, the shaders,
+the tests and the labs' digests the change reaches), and CI (`.github/workflows/ci.yml`) runs no
+Linux build, test or lint on a pull request or in the queue. A pull request runs the gates
+(fmt-check, agents-check, libm-check, release-check, the changeset rule: cheap, and the queue's
+combined tree needs them), Windows (MSVC: its warnings, its CRT) and macOS (Apple Clang on arm64:
+another compiler and ISA), each building everything and running the whole suite, so the goldens
+and the labs' digests are held on both; the merge queue runs the same on the tree that lands plus
+`packaging.yml` (the installed package consumed on Windows and macOS, and `ge new` growing a repo
+when the change reaches `engine/cli`, `engine/play`, `engine/lab`, the templates or the build). A
+change to prose alone (docs, skills, lessons, root Markdown, fragments) runs the gates only; the
+label `full-ci` adds the Linux rows (GCC debug+ASan, GCC and Clang release, arm64), the lint and
+the shaders' check, and the whole packaging. The ruleset requires one check, `required`, which
+passes when every job passed or was skipped by those rules. A golden failure on one row points at
+that row's compiler or libm. GPU and window tests run where there is an adapter and skip (CTest's
+exit 77) where not; the Linux rows under `full-ci` run them on lavapipe with `GE_GPU_REQUIRE=1`,
+as the container does. A shipped change carries a `.changes/unreleased/` fragment (or the `no-changelog`
 label). Releases are dispatched, never hand-made (`release` skill,
 [`docs/publishing.md`](docs/publishing.md)).
 

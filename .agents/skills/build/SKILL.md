@@ -52,15 +52,17 @@ webgpu only by `ge_gpu`.
 ## CI (`.github/workflows/ci.yml`)
 
 Jobs: `gates` (clang-format, `tools/check-agents.sh`, libm, release-check, the changeset rule,
-and the decision what else runs), `lint` (clang-tidy), `test` (Linux x64 GCC debug, GCC release
-and Clang release; Linux arm64 GCC; macOS Clang), `windows` (MSVC), `packaging`
+and the decision what else runs), `lint` (clang-tidy), `test` (macOS Clang; under `full-ci` also
+Linux x64 GCC debug, GCC release and Clang release, and Linux arm64 GCC), `windows` (MSVC), `packaging`
 (`packaging.yml`, called), and `required`, the ONE check the ruleset requires. `fail-fast:
 false`, so one row's golden failure shows alongside the others.
 
-- **Tiered, because runners are scarce**: a pull request runs `gates`, `lint` and the GCC
-  debug row; the merge queue runs every row, `windows` and `packaging`; a push to main builds
-  the five cached rows only (to save their caches). A change to prose alone runs `gates` only.
-  `full-ci` on a pull request runs everything. `required` passes when every job passed or was
+- **Only what can differ across platforms**: Linux is `make precheck`'s, run in the container
+  before every push, so a pull request runs `gates`, `windows` and the macOS row; the merge
+  queue adds `packaging` (the package on Windows and macOS, `scaffold` only when the change
+  reaches `engine/cli`, `engine/play`, `engine/lab`, the templates or the build); a push to main
+  builds the macOS row only (to save its cache). A change to prose alone runs `gates` only.
+  `full-ci` on a pull request adds the Linux rows, `lint` and the whole packaging. `required` passes when every job passed or was
   skipped by the rules, so a skipped row never leaves a check pending: a new job joins its
   `needs:`, never the ruleset. A failure only the queue sees ejects the pull request from the
   queue; fix it, push, and auto-merge queues it again.
