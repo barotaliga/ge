@@ -106,6 +106,10 @@ void run_sound_step(RunSound& sound, ge::audio::Synth& synth, const sim::GameSta
         // Into a vehicle's panel: the knock of a body met, louder the faster they closed.
         play(synth, kBump, ear, 0.5f + 0.5f * unit(e.value / 8));
         break;
+      case EventKind::building:
+        // Into a wall: the same knock, harder, as nothing gives.
+        play(synth, kBump, ear, 0.6f + 0.4f * unit(e.value / 6));
+        break;
       case EventKind::takeoff:  // the wind's rush coming up is the take-off
       case EventKind::shoulder:
       case EventKind::bump:
@@ -120,6 +124,7 @@ void run_sound_step(RunSound& sound, ge::audio::Synth& synth, const sim::GameSta
       case EventKind::para:  // the paramotor's sound comes with its own bed
       case EventKind::army_sled:
       case EventKind::army_heli:
+      case EventKind::army_para:
       case EventKind::gunfire:  // the reports, the cracks and the strikes wait for their voices
       case EventKind::hurt:     // the blow is heard as the fall that dealt it
       case EventKind::died:

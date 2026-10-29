@@ -4,7 +4,7 @@
 // rounded halves toward +inf (`core::num::round`), so the bytes are as deterministic as the
 // buffer.
 //
-// ge:summary A rendered buffer as WAV bytes: 16-bit PCM stereo, 48 kHz
+// ge:summary A rendered buffer as WAV bytes: 16-bit PCM, stereo at 48 kHz or any layout
 // ge:keywords wav wave riff pcm file export listen encode wav_bytes
 // ge:skill audio labs
 // ge:test tests/audio_meter_test.cpp
@@ -17,5 +17,8 @@
 namespace ge::audio {
 
 std::vector<uint8_t> wav_bytes(std::span<const float> stereo);
+// Interleaved samples of any channel count and rate, the same 16-bit PCM (`ge sound import` writes
+// mono at a game's own rate).
+std::vector<uint8_t> wav_bytes(std::span<const float> samples, int channels, int rate);
 
 }  // namespace ge::audio

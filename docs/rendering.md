@@ -478,6 +478,45 @@ classic weapon's glowing triangles on its firing frames) marks them in `flame`, 
 engine draws the flash hides them through `DrawLit::hidden`. The effect is drawn after the gun,
 so a flame can overlap the barrel.
 
+## Morph meshes
+
+A **morph mesh** (`engine/render/morph.hpp`, `morph.wgsl`) is a model animated by whole frames:
+every vertex has a position and a normal in every frame, as vertex-animated model formats store
+them. Shooter's Edge draws its players, monsters and items this way (M18i). The pass is generic.
+A game hands it `MorphModel`s (frames, triangles, texture coordinates, a skin) once, and each
+frame a list of `MorphDraw`s.
+
+- **Upload once.** Every frame of every model goes into one storage buffer, two `vec4` a vertex.
+  The triangles and the coordinates go into two more. The skins are shelf-packed into one
+  2048-wide atlas, tallest first, a texel apart (`pack_morph_atlas`). A frame writes only its
+  draws: 160 bytes each, at most `kMaxMorphDraws`.
+- **Frames blended on the GPU.** The vertex stage pulls each vertex by index and mixes the draw's
+  two frames by its share. It does the same for the frame before, so a swinging limb carries its
+  own motion into the motion target and TAA keeps it sharp. A model with frames at 10 a second
+  is drawn between them at any rate.
+- **Team colours without a skin per team.** A skin texel's alpha is its **mark**:
+  - plain, an sRGB colour;
+  - **glow**, which lights itself (eyes, lamps, a muzzle);
+  - **tinted**, in region A or B with a step from 0 to 15.
+
+  A tinted texel takes the instance's ramp for its region at its step. The step keeps the
+  painter's shading and the ramp gives the colour. The ramps are a table of 16-colour rows the
+  game fills, from its palette's colour rows or from any colour with `ramp_from`.
+- **Sharp or smooth, per draw.** Sharp reads the texel the point falls in, which gives the
+  classic look. Smooth blends the four nearest texels, each resolved to its colour first, so a
+  tinted texel never bleeds the wrong ramp into its neighbour.
+- **The game's own light.** `outdoor` is the share of the frame's sun and sky. `ambient` and a
+  `shade` from one direction are what a game samples where the model stands: an indoor map's
+  light at its feet. Glowing texels add `glow` times the scene's white, whatever the light.
+- The draws go into the HDR and motion targets after the opaque world. Depth is tested and
+  written (reversed z) and back faces are culled.
+
+The CPU twins (`pose_morph`, `morph_texel`) are the shader's arithmetic for
+`tests/render_morph_test.cpp`. The `gpu-morph` lab draws a runner in four teams, sharp beside
+smooth, its frames and in-betweens, at dusk and in a game's own light, and times 64 of them.
+**Not yet:** the local lights of the lighting pass, shadows cast by the figures, and the classic
+model reader (it lands with its plugin).
+
 ## Terrain
 
 A generic **heightfield renderer** in `engine/render`, which a game hands a height
@@ -1005,6 +1044,21 @@ read in 2026, longitude 0) by `core/moon.hpp` (M8f6):
   leaves and the umbra the air's refracted red (a thousandth of the sun's light at its edge, a
   ten-thousandth on its axis), its contrast against the disc's brightest point to the power
   0.5; the moonlight on the snow is dimmed by the disc's mean (`eclipse_of`, on the CPU);
+- OTHER WORLDS' MOONS (M8f14; `render/moons.hpp`, `FrameView::moons`, `render/night.hpp`'s
+  `set_moons`, `render/wgsl/moons.wgsl`; Fall Line's `sv_moons`): ten kinds taken from real moons
+  of other planets, each as large as it looks from its own planet (Io a little larger than the
+  Moon, Phobos a third of it, Deimos a point drawn a pixel and a half wide, its light shared
+  over it). Up to four go round the sky near the celestial equator, each at its own period
+  (Phobos faster than the sky turns, so it rises in the west; Triton backwards). Each is locked
+  face-on and rocks by its libration, and is lit by the real sun, so two moons show two phases.
+  Each is drawn as an ellipsoid hit in closed form, or, for a dented kind, marched inside that
+  bound. Its face is the real moon's map (`render/moon_maps.hpp`: the public-domain spacecraft
+  mosaics, 1024 x 512, Io, Ganymede and Triton in colour; `render/moon_maps/SOURCES.md` names
+  each), in its body frame at the mip level its size asks; its light is
+  Lommel-Seeliger's blended toward Lambert's, as seen, and Titan has a haze shell. A set without
+  the Earth's moon hides that disc and keys the night on the others' summed light from the
+  brightest one's direction. Each sky type names its own set (`SkyType::moons`). Post's night
+  vision leaves each one's bounding disc to the cones (`on_moon`);
 - THE KEY LIGHT, the one direct light that casts shadows, is the sun until three degrees under
   the horizon, then the moon when it is up (`FrameView::sun_*` become the moon's; the real sun
   stays in `night_sun`). The sky is TWO tables at once: the sun's own sky view and a second at
@@ -1105,6 +1159,36 @@ identity, and the game bakes its own (`fall_line::app::bake_grade`: a little con
 through the middle tones with the ends held, cooler shadows, warmer highlights, 5 % more
 saturation). On the software adapter at 1280 × 720 the bloom costs about 11 ms and the post
 pass 7 ms (the `profile` lab); the bloom's cost on a real GPU waits for the Mac's numbers.
+
+**As built (M35a, M35b): the lens and the film** (`render/post.hpp`, `render/lens.hpp`,
+`render/grade.hpp`; the `post` lab). The effects a modern game ships, each a switch and a
+strength, and each chosen to cost nothing when it is off and almost nothing when it is on:
+
+- **Folded into the post pass, no pass of their own:** contrast-adaptive sharpening (the four
+  neighbours' headroom scales the negative lobe, so a flat area sharpens most and an edge already
+  at full contrast barely: it undoes TAA-U's softness without halos), the lens's lateral colour
+  (two extra bilinear taps), the vignette and the film grain (arithmetic), and the lens dirt (a
+  small procedural picture made once at load, lit only by the glow past white and the lens pass,
+  so it shows round the sun and never over the snow). Each is an `override` switch, so a game
+  that leaves one at 0 compiles it out; the strengths are a 32-byte uniform (`set_post_look`).
+- **Baked into the grade's table, free:** contrast (an S-curve about middle grey, the ends held),
+  saturation and a white balance (temperature, tint) in linear light keeping the luminance, and
+  gamma (`apply_grade_knobs` after the game's own grade).
+- **One quarter-size compute pass, `lens`, after the bloom:** the sun streaming through what
+  stands in front of it (a 32-step radial march toward the sun's place over the open sky round it,
+  read off the depth target, started at the first step inside the sun's radius so a far texel
+  costs nothing) and the sun's flare (six analytic ghosts and a ring on the line through the
+  middle, scaled by how much of the sun is open sky). It reads only the post pass's input and the
+  depth, so it needs no bloom; the post pass adds it in one tap. The sky's own shafts (the cloud's
+  shadow across the air, § Sky) stay the sky pass's; these are the screen's half, from trunks,
+  crowns, ridges and figures, and the two stack.
+
+Considered and not taken: a screen-space "god rays" occlusion pre-pass (the depth target already
+says what is sky), image-based ghosts off the bloom chain (its Karis-weighted first level flattens
+the sun on purpose, so the ghosts came out dim and blotchy; the sun's own analytic flare is sharper
+and cheaper), a starburst (reads as a filter, not a lens) and anamorphic streaks (a film look the
+game does not want). Fall Line keeps the sharpening (0.3), the vignette (0.25) and the rays (0.5)
+on and the flare, fringes, grain and dirt off: those read as an effect rather than as the picture.
 
 **As built (M43)** (`render/eye.hpp`). **The eye's adaptation** leaves the sky's exposure as
 the eye AT REST, so the snow under the sky still never pumps, and opens the eye past it only

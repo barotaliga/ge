@@ -1,5 +1,5 @@
 # Shooter's Edge sound registry: one row a sound the game needs, by our name.
-# Columns (tab-separated): name, what it is, what plays or shows it, scope (game | creature), status (replaced | open), source pack id (CREDITS.md).
+# Columns (tab-separated): name, what it is, what plays or shows it, scope (game | creature), status (replaced | open | skip: no multiplayer code plays or shows it), source pack id (CREDITS.md).
 # The classic name each row stands in for is in classic.assetmap. Read with the free-assets skill.
 weapon/melee_swing	Melee weapon swung	player attack with the melee weapon	game	replaced	kenney/rpg-audio
 weapon/melee_hit_flesh	Melee weapon hits a body	melee trace hits a living thing (also a player hurt by it)	game	replaced	kenney/impact-sounds
@@ -30,12 +30,12 @@ power/damage_fading	Damage boost running out	a few seconds before it ends	game	r
 power/damage_attack	Attack under the damage boost	any attack while it is on	game	replaced	kenney/digital-audio
 power/shield_pickup	Invulnerability picked up	touch the invulnerability sphere	game	replaced	oga/electricity-game-sound-pack
 power/shield_fading	Invulnerability running out	a few seconds before it ends	game	replaced	kenney/digital-audio
-power/shield_hit	Hit while invulnerable	damage absorbed by it	game	open	-
+power/shield_hit	Hit while invulnerable	damage absorbed by it	game	replaced	kenney/digital-audio
 power/cloak_pickup	Invisibility picked up	touch the invisibility ring	game	replaced	oga/electricity-game-sound-pack
-power/cloak_fading	Invisibility running out	a few seconds before it ends	game	open	-
-power/cloak_idle	Invisibility breathing	random while it is on	game	open	-
+power/cloak_fading	Invisibility running out	a few seconds before it ends	game	replaced	kenney/sci-fi-sounds
+power/cloak_idle	Invisibility breathing	random while it is on	game	replaced	kenney/sci-fi-sounds
 power/suit_pickup	Environment suit picked up	touch the suit	game	replaced	kenney/sci-fi-sounds
-power/suit_fading	Environment suit running out	a few seconds before it ends	game	open	-
+power/suit_fading	Environment suit running out	a few seconds before it ends	game	replaced	kenney/sci-fi-sounds
 player/jump	Jump	player jumps on land	game	replaced	oga/15-vocal-male-strainhurtpainjump-sounds
 player/land	Landing	player lands from a fall that does not hurt	game	replaced	oga/jump-landing-sound
 player/land_hard	Hard landing	player lands from a fall that hurts	game	replaced	oga/100-cc0-sfx-2
@@ -54,41 +54,41 @@ player/gib	Body torn apart	player gibbed by heavy damage	game	replaced	oga/25-cc
 player/gib_wet	Gib splash	any body gibbed (players and creatures)	game	replaced	oga/80-cc0-rpg-sfx
 player/telefrag	Telefragged	killed by someone teleporting into you	game	replaced	oga/25-cc0-mud-sfx
 player/disconnect	Player leaves	client disconnects	game	replaced	kenney/rpg-audio
-player/death_water	Death under water	player dies while submerged	game	open	-
+player/death_water	Death under water	player dies while submerged	game	replaced	oga/40-cc0-water-splash-slime-sfx
 player/drown_1	Drowning	hurt by lack of air (random of two)	game	replaced	oga/40-cc0-water-splash-slime-sfx
-player/drown_2	Drowning	as above	game	open	-
+player/drown_2	Drowning	as above	game	replaced	oga/40-cc0-water-splash-slime-sfx
 player/gasp	Gasp for air	surfacing after a short time under water	game	replaced	oga/80-cc0-creature-sfx
-player/gasp_long	Long gasp	surfacing after nearly drowning	game	open	-
+player/gasp_long	Long gasp	surfacing after nearly drowning	game	replaced	oga/15-vocal-male-strainhurtpainjump-sounds
 player/enter_water	Into water	player enters water	game	replaced	oga/40-cc0-water-splash-slime-sfx
 player/water_jump	Splash landing	player lands in water fast	game	replaced	oga/6-short-water-splashes
 player/enter_lava	Into lava	player enters lava	game	replaced	oga/80-cc0-rpg-sfx
 player/burn_1	Burned by lava	hurt by lava (random of two)	game	replaced	oga/80-cc0-rpg-sfx
 player/burn_2	Burned by lava	as above	game	replaced	oga/80-cc0-rpg-sfx
-player/enter_slime	Into slime	player enters slime	game	open	-
+player/enter_slime	Into slime	player enters slime	game	replaced	oga/6-short-water-splashes
 player/leave_water	Out of water	player leaves water	game	replaced	oga/40-cc0-water-splash-slime-sfx
 player/swim_1	Swim stroke	jumping or swimming in water (random of two)	game	replaced	oga/40-cc0-water-splash-slime-sfx
 player/swim_2	Swim stroke	as above	game	replaced	oga/40-cc0-water-splash-slime-sfx
-player/water_hit	Splash	something falls into water (precached by the world)	game	open	-
+player/water_hit	Splash	something falls into water (precached by the world)	game	replaced	oga/40-cc0-water-splash-slime-sfx
 door/stone_stop	Stone door stops	door set 1: reaches open or closed; also secret door set 1	game	replaced	oga/door-open-door-close-set
 door/stone_move	Stone door moves	door set 1: moving loop	game	replaced	oga/30-cc0-sfx-loops
 door/machine_stop	Machine door stops	door set 2	game	replaced	oga/door-open-door-close-set
 door/machine_move	Machine door moves	door set 2	game	replaced	oga/30-cc0-sfx-loops
-door/chain_stop	Chain door stops	door set 3	game	open	-
-door/chain_move	Chain door moves	door set 3	game	open	-
-door/screech_stop	Screeching door stops	door set 4	game	open	-
+door/chain_stop	Chain door stops	door set 3	game	replaced	kenney/rpg-audio
+door/chain_move	Chain door moves	door set 3	game	replaced	oga/30-cc0-sfx-loops
+door/screech_stop	Screeching door stops	door set 4	game	replaced	oga/100-cc0-sfx
 door/screech_move	Screeching door moves	door set 4	game	replaced	kenney/rpg-audio
 door/locked_old	Locked door, old world	touch a locked door without the key (worldtype 0)	game	replaced	oga/100-cc0-sfx-2
 door/unlock_old	Door unlocked, old world	open a locked door with the key (worldtype 0)	game	replaced	oga/100-cc0-metal-and-wood-sfx
-door/locked_rune	Locked door, rune world	worldtype 1	game	open	-
-door/unlock_rune	Door unlocked, rune world	worldtype 1	game	open	-
-door/locked_base	Locked door, base world	worldtype 2	game	open	-
-door/unlock_base	Door unlocked, base world	worldtype 2	game	open	-
-door/secret_latch	Secret door unlatches	secret door set 1: start	game	open	-
-door/secret_winch	Secret door moves	secret door set 1: moving loop	game	open	-
-door/secret_air_stop	Air secret door stops	secret door set 2	game	open	-
-door/secret_air_move	Air secret door moves	secret door set 2	game	open	-
-door/secret_base_stop	Base secret door stops	secret door set 3	game	open	-
-door/secret_base_move	Base secret door moves	secret door set 3	game	open	-
+door/locked_rune	Locked door, rune world	worldtype 1	game	replaced	kenney/digital-audio
+door/unlock_rune	Door unlocked, rune world	worldtype 1	game	replaced	oga/80-cc0-rpg-sfx
+door/locked_base	Locked door, base world	worldtype 2	game	replaced	oga/electric-buzz
+door/unlock_base	Door unlocked, base world	worldtype 2	game	replaced	kenney/rpg-audio
+door/secret_latch	Secret door unlatches	secret door set 1: start	game	replaced	oga/door-open-door-close-set
+door/secret_winch	Secret door moves	secret door set 1: moving loop	game	replaced	oga/30-cc0-sfx-loops
+door/secret_air_stop	Air secret door stops	secret door set 2	game	replaced	oga/100-cc0-sfx
+door/secret_air_move	Air secret door moves	secret door set 2	game	replaced	oga/30-cc0-sfx-loops
+door/secret_base_stop	Base secret door stops	secret door set 3	game	replaced	kenney/rpg-audio
+door/secret_base_move	Base secret door moves	secret door set 3	game	replaced	oga/30-cc0-sfx-loops
 common/silence	Silence	door set 0 and silent trains: plays nothing	game	replaced	authored
 button/steam	Button pressed (steam)	button set 0	game	replaced	oga/100-cc0-sfx-2
 button/wood	Button pressed (wood)	button set 1	game	replaced	oga/100-cc0-sfx-2
@@ -96,22 +96,22 @@ button/metal	Button pressed (metal)	button set 2	game	replaced	kenney/rpg-audio
 button/switch	Button pressed (switch)	button set 3	game	replaced	kenney/interface-sounds
 lift/base_move	Lift moves	lift set 1: moving loop	game	replaced	oga/30-cc0-sfx-loops
 lift/base_stop	Lift stops	lift set 1	game	replaced	oga/door-open-door-close-set
-lift/chain_move	Chain lift moves	lift set 2: moving loop	game	open	-
-lift/chain_stop	Chain lift stops	lift set 2	game	open	-
-mover/train_stop	Train stops	train set 1: at a path corner	game	open	-
-mover/train_move	Train moves	train set 1: moving loop	game	open	-
+lift/chain_move	Chain lift moves	lift set 2: moving loop	game	replaced	oga/50-cc0-sci-fi-sfx
+lift/chain_stop	Chain lift stops	lift set 2	game	replaced	kenney/rpg-audio
+mover/train_stop	Train stops	train set 1: at a path corner	game	replaced	kenney/sci-fi-sounds
+mover/train_move	Train moves	train set 1: moving loop	game	replaced	oga/100-cc0-sfx
 trigger/secret	Secret found	trigger set 1 and secret areas	game	replaced	kenney/interface-sounds
 common/message	Message beep	trigger set 2, a centre print, a chat line	game	replaced	kenney/interface-sounds
 trigger/activate	Trigger fires	trigger set 3	game	replaced	kenney/digital-audio
 pickup/key_old	Key picked up, old world	worldtype 0	game	replaced	oga/100-cc0-metal-and-wood-sfx
-pickup/key_rune	Key picked up, rune world	worldtype 1; the rune of an episode	game	open	-
-pickup/keycard	Keycard picked up, base world	worldtype 2	game	open	-
+pickup/key_rune	Key picked up, rune world	worldtype 1; the rune of an episode	game	replaced	oga/80-cc0-rpg-sfx
+pickup/keycard	Keycard picked up, base world	worldtype 2	game	replaced	kenney/interface-sounds
 teleport/arrive_1	Teleport arrival	player or thing teleports (random of five)	game	replaced	oga/teleport
 teleport/arrive_2	Teleport arrival	as above	game	replaced	oga/50-cc0-sci-fi-sfx
 teleport/arrive_3	Teleport arrival	as above	game	replaced	oga/electricity-game-sound-pack
 teleport/arrive_4	Teleport arrival	as above	game	replaced	kenney/sci-fi-sounds
 teleport/arrive_5	Teleport arrival	as above	game	replaced	kenney/sci-fi-sounds
-world/power_surge	Power surge	the boss arena's lightning switch	game	open	-
+world/power_surge	Power surge	the boss arena's lightning switch	game	replaced	oga/electricity-game-sound-pack
 world/push_wind	Push volume	player inside a wind tunnel trigger	game	replaced	oga/30-cc0-sfx-loops
 ambient/teleporter	Teleporter hum	every teleport trigger, static loop	game	replaced	oga/50-cc0-sci-fi-sfx
 ambient/fire	Fire crackle	every torch and flame, static loop	game	replaced	oga/fire-crackling
@@ -129,101 +129,101 @@ ambient/leaf_sky	Sky nearby	client: by leaf, under open sky	game	replaced	oga/10
 ui/move	Menu cursor moves	client menu	game	replaced	kenney/interface-sounds
 ui/select	Menu item chosen	client menu	game	replaced	kenney/interface-sounds
 ui/back	Menu closed	client menu	game	replaced	kenney/interface-sounds
-creature/jelly/death	Bouncing jelly: death	killed	creature	open	-
-creature/jelly/hit	Bouncing jelly: hit	projectile or melee hits	creature	open	-
-creature/jelly/land	Bouncing jelly: lands	lands after a leap	creature	open	-
-creature/jelly/sight	Bouncing jelly: sees a target	first sight of an enemy	creature	open	-
-creature/lava_lord/death	Lava lord (boss): death	killed	creature	open	-
-creature/lava_lord/rise	Lava lord (boss): rises	emerges or sinks in lava	creature	open	-
-creature/lava_lord/pain	Lava lord (boss): pain	struck by the arena lightning	creature	open	-
-creature/lava_lord/sight	Lava lord (boss): sees a target	first sight of an enemy	creature	open	-
-creature/lava_lord/attack	Lava lord (boss): ranged attack	fires or throws	creature	open	-
-creature/elder/death	Elder (final boss): death	killed	creature	open	-
-creature/elder/idle	Elder (final boss): idle	random while walking or standing	creature	open	-
-creature/elder/burst	Elder (final boss): bursts	final death	creature	open	-
-creature/elder/sight	Elder (final boss): sees a target	first sight of an enemy	creature	open	-
-creature/leaper/death	Leaping fiend: death	killed	creature	open	-
-creature/leaper/melee	Leaping fiend: melee attack	swings or bites	creature	open	-
-creature/leaper/leap	Leaping fiend: leaps	starts a leap	creature	open	-
-creature/leaper/land	Leaping fiend: lands	lands after a leap	creature	open	-
-creature/leaper/pain	Leaping fiend: pain	hurt	creature	open	-
-creature/leaper/idle	Leaping fiend: idle	random while walking or standing	creature	open	-
-creature/leaper/sight	Leaping fiend: sees a target	first sight of an enemy	creature	open	-
-creature/hound/melee	Hound: melee attack	swings or bites	creature	open	-
-creature/hound/death	Hound: death	killed	creature	open	-
-creature/hound/pain	Hound: pain	hurt	creature	open	-
-creature/hound/sight	Hound: sees a target	first sight of an enemy	creature	open	-
-creature/hound/idle	Hound: idle	random while walking or standing	creature	open	-
-creature/trooper/death	Laser trooper: death	killed	creature	open	-
-creature/trooper/attack	Laser trooper: ranged attack	fires or throws	creature	open	-
-creature/trooper/projectile_hit	Laser trooper: projectile hits	laser hits	creature	open	-
-creature/trooper/idle	Laser trooper: idle	random while walking or standing	creature	open	-
-creature/trooper/pain_1	Laser trooper: pain	hurt	creature	open	-
-creature/trooper/pain_2	Laser trooper: pain	hurt	creature	open	-
-creature/trooper/sight_1	Laser trooper: sees a target	first sight of an enemy	creature	open	-
-creature/trooper/sight_2	Laser trooper: sees a target	first sight of an enemy	creature	open	-
-creature/trooper/sight_3	Laser trooper: sees a target	first sight of an enemy	creature	open	-
-creature/trooper/sight_4	Laser trooper: sees a target	first sight of an enemy	creature	open	-
-creature/eel/melee	Biting fish: melee attack	swings or bites	creature	open	-
-creature/eel/death	Biting fish: death	killed	creature	open	-
-creature/eel/idle	Biting fish: idle	random while walking or standing	creature	open	-
-creature/dark_swordsman/attack	Dark swordsman: ranged attack	fires or throws	creature	open	-
-creature/dark_swordsman/death	Dark swordsman: death	killed	creature	open	-
-creature/dark_swordsman/grunt	Dark swordsman: grunt	attack effort	creature	open	-
-creature/dark_swordsman/hit	Dark swordsman: hit	projectile or melee hits	creature	open	-
-creature/dark_swordsman/idle	Dark swordsman: idle	random while walking or standing	creature	open	-
-creature/dark_swordsman/pain	Dark swordsman: pain	hurt	creature	open	-
-creature/dark_swordsman/sight	Dark swordsman: sees a target	first sight of an enemy	creature	open	-
-creature/dark_swordsman/melee	Dark swordsman: melee attack	swings or bites	creature	open	-
-creature/swordsman/idle	Swordsman: idle	random while walking or standing	creature	open	-
-creature/swordsman/death	Swordsman: death	killed	creature	open	-
-creature/swordsman/pain	Swordsman: pain	hurt	creature	open	-
-creature/swordsman/sight	Swordsman: sees a target	first sight of an enemy	creature	open	-
-creature/swordsman/melee_1	Swordsman: melee attack	swings the sword	creature	open	-
-creature/swordsman/melee_2	Swordsman: melee attack	swings the sword	creature	open	-
-creature/brute/idle_1	Chainsaw brute: idle	random while walking or standing	creature	open	-
-creature/brute/death	Chainsaw brute: death	killed	creature	open	-
-creature/brute/idle_2	Chainsaw brute: idle	random while walking or standing	creature	open	-
-creature/brute/idle_3	Chainsaw brute: idle	random while walking or standing	creature	open	-
-creature/brute/pain	Chainsaw brute: pain	hurt	creature	open	-
-creature/brute/melee	Chainsaw brute: melee attack	swings or bites	creature	open	-
-creature/brute/sight	Chainsaw brute: sees a target	first sight of an enemy	creature	open	-
-creature/caster/attack_1	Homing-pod caster: ranged attack	fires or throws	creature	open	-
-creature/caster/attack_2	Homing-pod caster: ranged attack	fires or throws	creature	open	-
-creature/caster/death	Homing-pod caster: death	killed	creature	open	-
-creature/caster/idle	Homing-pod caster: idle	random while walking or standing	creature	open	-
-creature/caster/pain	Homing-pod caster: pain	hurt	creature	open	-
-creature/caster/sight	Homing-pod caster: sees a target	first sight of an enemy	creature	open	-
-creature/hulk/melee_1	Lightning hulk: melee attack	swings or bites	creature	open	-
-creature/hulk/melee_2	Lightning hulk: melee attack	swings or bites	creature	open	-
-creature/hulk/attack	Lightning hulk: ranged attack	fires or throws	creature	open	-
-creature/hulk/charge	Lightning hulk: charges up	lightning charge	creature	open	-
-creature/hulk/death	Lightning hulk: death	killed	creature	open	-
-creature/hulk/pain	Lightning hulk: pain	hurt	creature	open	-
-creature/hulk/idle	Lightning hulk: idle	random while walking or standing	creature	open	-
-creature/hulk/melee_3	Lightning hulk: melee attack	swings or bites	creature	open	-
-creature/hulk/sight	Lightning hulk: sees a target	first sight of an enemy	creature	open	-
-creature/rifleman/death	Rifleman: death	killed	creature	open	-
-creature/rifleman/idle	Rifleman: idle	random while walking or standing	creature	open	-
-creature/rifleman/pain_1	Rifleman: pain	hurt	creature	open	-
-creature/rifleman/pain_2	Rifleman: pain	hurt	creature	open	-
-creature/rifleman/attack	Rifleman: ranged attack	fires or throws	creature	open	-
-creature/rifleman/sight	Rifleman: sees a target	first sight of an enemy	creature	open	-
-creature/vomit_beast/sight	Vomiting beast: sees a target	first sight of an enemy	creature	open	-
-creature/flyer/hit	Spitting flyer: hit	projectile or melee hits	creature	open	-
-creature/flyer/attack	Spitting flyer: ranged attack	fires or throws	creature	open	-
-creature/flyer/death	Spitting flyer: death	killed	creature	open	-
-creature/flyer/idle_1	Spitting flyer: idle	random while walking or standing	creature	open	-
-creature/flyer/idle_2	Spitting flyer: idle	random while walking or standing	creature	open	-
-creature/flyer/pain	Spitting flyer: pain	hurt	creature	open	-
-creature/flyer/sight	Spitting flyer: sees a target	first sight of an enemy	creature	open	-
-creature/ghoul/idle_1	Flesh-throwing ghoul: idle	random while walking or standing	creature	open	-
-creature/ghoul/pain_1	Flesh-throwing ghoul: pain	hurt	creature	open	-
-creature/ghoul/death	Flesh-throwing ghoul: death	killed	creature	open	-
-creature/ghoul/hit	Flesh-throwing ghoul: thrown flesh hits	projectile hits	creature	open	-
-creature/ghoul/idle_2	Flesh-throwing ghoul: idle	random while walking or standing	creature	open	-
-creature/ghoul/idle_3	Flesh-throwing ghoul: idle	random while walking or standing	creature	open	-
-creature/ghoul/miss	Flesh-throwing ghoul: thrown flesh misses	projectile lands without hitting	creature	open	-
-creature/ghoul/pain_2	Flesh-throwing ghoul: pain	hurt	creature	open	-
-creature/ghoul/pain_3	Flesh-throwing ghoul: pain	hurt	creature	open	-
-creature/ghoul/attack	Flesh-throwing ghoul: ranged attack	fires or throws	creature	open	-
+creature/jelly/death	Bouncing jelly: death	killed	creature	skip	-
+creature/jelly/hit	Bouncing jelly: hit	projectile or melee hits	creature	skip	-
+creature/jelly/land	Bouncing jelly: lands	lands after a leap	creature	skip	-
+creature/jelly/sight	Bouncing jelly: sees a target	first sight of an enemy	creature	skip	-
+creature/lava_lord/death	Lava lord (boss): death	killed	creature	skip	-
+creature/lava_lord/rise	Lava lord (boss): rises	emerges or sinks in lava	creature	skip	-
+creature/lava_lord/pain	Lava lord (boss): pain	struck by the arena lightning	creature	skip	-
+power/bonus_powers	A player is granted every power at once	a weapon picked up in the deathmatch mode that grants every power for 30 seconds	game	replaced	oga/16-monster-growls
+creature/lava_lord/attack	Lava lord (boss): ranged attack	fires or throws	creature	skip	-
+creature/elder/death	Elder (final boss): death	killed	creature	skip	-
+creature/elder/idle	Elder (final boss): idle	random while walking or standing	creature	skip	-
+creature/elder/burst	Elder (final boss): bursts	final death	creature	skip	-
+creature/elder/sight	Elder (final boss): sees a target	first sight of an enemy	creature	skip	-
+creature/leaper/death	Leaping fiend: death	killed	creature	skip	-
+creature/leaper/melee	Leaping fiend: melee attack	swings or bites	creature	skip	-
+creature/leaper/leap	Leaping fiend: leaps	starts a leap	creature	skip	-
+creature/leaper/land	Leaping fiend: lands	lands after a leap	creature	skip	-
+creature/leaper/pain	Leaping fiend: pain	hurt	creature	skip	-
+creature/leaper/idle	Leaping fiend: idle	random while walking or standing	creature	skip	-
+creature/leaper/sight	Leaping fiend: sees a target	first sight of an enemy	creature	skip	-
+creature/hound/melee	Hound: melee attack	swings or bites	creature	skip	-
+creature/hound/death	Hound: death	killed	creature	skip	-
+creature/hound/pain	Hound: pain	hurt	creature	skip	-
+creature/hound/sight	Hound: sees a target	first sight of an enemy	creature	skip	-
+creature/hound/idle	Hound: idle	random while walking or standing	creature	skip	-
+creature/trooper/death	Laser trooper: death	killed	creature	skip	-
+world/laser_fire	A wall trap fires a laser bolt	a laser shooter fires when triggered	game	replaced	kenney/sci-fi-sounds
+world/laser_hit	A laser bolt hits	a trap's laser bolt hits a wall or a player	game	replaced	kenney/sci-fi-sounds
+creature/trooper/idle	Laser trooper: idle	random while walking or standing	creature	skip	-
+creature/trooper/pain_1	Laser trooper: pain	hurt	creature	skip	-
+creature/trooper/pain_2	Laser trooper: pain	hurt	creature	skip	-
+creature/trooper/sight_1	Laser trooper: sees a target	first sight of an enemy	creature	skip	-
+creature/trooper/sight_2	Laser trooper: sees a target	first sight of an enemy	creature	skip	-
+creature/trooper/sight_3	Laser trooper: sees a target	first sight of an enemy	creature	skip	-
+creature/trooper/sight_4	Laser trooper: sees a target	first sight of an enemy	creature	skip	-
+creature/eel/melee	Biting fish: melee attack	swings or bites	creature	skip	-
+creature/eel/death	Biting fish: death	killed	creature	skip	-
+creature/eel/idle	Biting fish: idle	random while walking or standing	creature	skip	-
+creature/dark_swordsman/attack	Dark swordsman: ranged attack	fires or throws	creature	skip	-
+creature/dark_swordsman/death	Dark swordsman: death	killed	creature	skip	-
+creature/dark_swordsman/grunt	Dark swordsman: grunt	attack effort	creature	skip	-
+creature/dark_swordsman/hit	Dark swordsman: hit	projectile or melee hits	creature	skip	-
+creature/dark_swordsman/idle	Dark swordsman: idle	random while walking or standing	creature	skip	-
+creature/dark_swordsman/pain	Dark swordsman: pain	hurt	creature	skip	-
+creature/dark_swordsman/sight	Dark swordsman: sees a target	first sight of an enemy	creature	skip	-
+creature/dark_swordsman/melee	Dark swordsman: melee attack	swings or bites	creature	skip	-
+creature/swordsman/idle	Swordsman: idle	random while walking or standing	creature	skip	-
+creature/swordsman/death	Swordsman: death	killed	creature	skip	-
+creature/swordsman/pain	Swordsman: pain	hurt	creature	skip	-
+creature/swordsman/sight	Swordsman: sees a target	first sight of an enemy	creature	skip	-
+creature/swordsman/melee_1	Swordsman: melee attack	swings the sword	creature	skip	-
+creature/swordsman/melee_2	Swordsman: melee attack	swings the sword	creature	skip	-
+creature/brute/idle_1	Chainsaw brute: idle	random while walking or standing	creature	skip	-
+creature/brute/death	Chainsaw brute: death	killed	creature	skip	-
+creature/brute/idle_2	Chainsaw brute: idle	random while walking or standing	creature	skip	-
+creature/brute/idle_3	Chainsaw brute: idle	random while walking or standing	creature	skip	-
+creature/brute/pain	Chainsaw brute: pain	hurt	creature	skip	-
+creature/brute/melee	Chainsaw brute: melee attack	swings or bites	creature	skip	-
+creature/brute/sight	Chainsaw brute: sees a target	first sight of an enemy	creature	skip	-
+creature/caster/attack_1	Homing-pod caster: ranged attack	fires or throws	creature	skip	-
+creature/caster/attack_2	Homing-pod caster: ranged attack	fires or throws	creature	skip	-
+creature/caster/death	Homing-pod caster: death	killed	creature	skip	-
+creature/caster/idle	Homing-pod caster: idle	random while walking or standing	creature	skip	-
+creature/caster/pain	Homing-pod caster: pain	hurt	creature	skip	-
+creature/caster/sight	Homing-pod caster: sees a target	first sight of an enemy	creature	skip	-
+creature/hulk/melee_1	Lightning hulk: melee attack	swings or bites	creature	skip	-
+creature/hulk/melee_2	Lightning hulk: melee attack	swings or bites	creature	skip	-
+creature/hulk/attack	Lightning hulk: ranged attack	fires or throws	creature	skip	-
+creature/hulk/charge	Lightning hulk: charges up	lightning charge	creature	skip	-
+creature/hulk/death	Lightning hulk: death	killed	creature	skip	-
+creature/hulk/pain	Lightning hulk: pain	hurt	creature	skip	-
+creature/hulk/idle	Lightning hulk: idle	random while walking or standing	creature	skip	-
+creature/hulk/melee_3	Lightning hulk: melee attack	swings or bites	creature	skip	-
+creature/hulk/sight	Lightning hulk: sees a target	first sight of an enemy	creature	skip	-
+creature/rifleman/death	Rifleman: death	killed	creature	skip	-
+creature/rifleman/idle	Rifleman: idle	random while walking or standing	creature	skip	-
+creature/rifleman/pain_1	Rifleman: pain	hurt	creature	skip	-
+creature/rifleman/pain_2	Rifleman: pain	hurt	creature	skip	-
+creature/rifleman/attack	Rifleman: ranged attack	fires or throws	creature	skip	-
+creature/rifleman/sight	Rifleman: sees a target	first sight of an enemy	creature	skip	-
+creature/vomit_beast/sight	Vomiting beast: sees a target	first sight of an enemy	creature	skip	-
+creature/flyer/hit	Spitting flyer: hit	projectile or melee hits	creature	skip	-
+creature/flyer/attack	Spitting flyer: ranged attack	fires or throws	creature	skip	-
+creature/flyer/death	Spitting flyer: death	killed	creature	skip	-
+creature/flyer/idle_1	Spitting flyer: idle	random while walking or standing	creature	skip	-
+creature/flyer/idle_2	Spitting flyer: idle	random while walking or standing	creature	skip	-
+creature/flyer/pain	Spitting flyer: pain	hurt	creature	skip	-
+creature/flyer/sight	Spitting flyer: sees a target	first sight of an enemy	creature	skip	-
+creature/ghoul/idle_1	Flesh-throwing ghoul: idle	random while walking or standing	creature	skip	-
+creature/ghoul/pain_1	Flesh-throwing ghoul: pain	hurt	creature	skip	-
+creature/ghoul/death	Flesh-throwing ghoul: death	killed	creature	skip	-
+creature/ghoul/hit	Flesh-throwing ghoul: thrown flesh hits	projectile hits	creature	skip	-
+creature/ghoul/idle_2	Flesh-throwing ghoul: idle	random while walking or standing	creature	skip	-
+creature/ghoul/idle_3	Flesh-throwing ghoul: idle	random while walking or standing	creature	skip	-
+creature/ghoul/miss	Flesh-throwing ghoul: thrown flesh misses	projectile lands without hitting	creature	skip	-
+creature/ghoul/pain_2	Flesh-throwing ghoul: pain	hurt	creature	skip	-
+creature/ghoul/pain_3	Flesh-throwing ghoul: pain	hurt	creature	skip	-
+creature/ghoul/attack	Flesh-throwing ghoul: ranged attack	fires or throws	creature	skip	-

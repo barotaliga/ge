@@ -1,5 +1,6 @@
 ---
 name: water
+description: "Use for water and wind in gameengine2 or a game on it: engine/wind (the wind as a pure function: the mean, gusts and veer, the log-law profile, shelter, local sources such as a downwash, a whirl or a blast; the air's temperature and humidity and what they do: fog, snow or rain, frost, breath, lake ice, the snow's feel), engine/water as its rows land (bodies of water and the one sample query, waves off the wind and the fetch, floating, swimming and its per-game presets, the colour from what is in the water, flowing water), the water's render passes and sound, and their labs. Load it before adding water or wind to a game, or changing how either behaves."
 description: "Use for water and wind in gameengine2 or a game on it: engine/wind (the wind as a pure function: the mean, gusts and veer, the log-law profile, shelter, local sources such as a downwash, a whirl or a blast; thunderstorms, lightning and thunder), engine/water as its rows land (bodies of water and the one sample query, waves off the wind and the fetch, floating, swimming and its per-game presets, the colour from what is in the water, flowing water), the water's render passes and sound, and their labs. Load it before adding water or wind to a game, or changing how either behaves."
 ---
 
@@ -20,6 +21,9 @@ for anything the simulation reads, `render` for a pass, `audio` for a voice, `la
 | Local wind sources: jet, whirl, blast | `engine/wind/sources.hpp` | `wind` | `tests/wind_sources_test.cpp` |
 | A world's wind as a field (the mountain's) | `plugins/mountain/air/air.hpp` (`field_of`) | `wind`, `precip` | `tests/mountain_air_test.cpp` (golden) |
 | What falls: snow, sleet, rain, the tiers, the phase by height, drop speeds, visibility, the wet ground | `engine/wind/precip.hpp` | `precip-air`, `precip` | `tests/wind_precip_test.cpp` (golden) |
+| The air's temperature and moisture: the day's curve, lapse, cold pool, dew point, wet bulb, snow level | `engine/wind/climate.hpp` (docs/climate.md) | `climate` | `tests/wind_climate_test.cpp` (golden) |
+| Fog from the air: radiation, valley, hill, steam, advection | `engine/wind/mist.hpp` | `climate` | `tests/wind_mist_test.cpp` (golden) |
+| The cold's marks: dew, frost, rime, black ice, breath, lake ice, the snow's feel and glide | `engine/wind/cold.hpp` | `climate` | `tests/wind_cold_test.cpp` (golden) |
 | Thunderstorms: cells' life cycle, gust fronts, rain cores, multicell storms | `engine/wind/storm.hpp` | `storm` | `tests/wind_storm_test.cpp` (golden) |
 | Lightning: the flash schedule, strokes and flicker, light over a frame, channels; thunder by distance | `engine/wind/lightning.hpp`, `thunder.hpp` | `storm` | `tests/wind_lightning_test.cpp` (golden) |
 | The sea a wind grows: growth laws, spectrum, depth, spread, dispersion | `engine/water/spectrum.hpp` | `waves` | `tests/water_spectrum_test.cpp` |
@@ -32,9 +36,11 @@ for anything the simulation reads, `render` for a pass, `audio` for a voice, `la
 | The colour from what is in the water: spectral IOPs, the shallows, the veil, visibility, the looks | `engine/water/optics.hpp` | `water-colour` | `tests/water_optics_test.cpp` (golden) |
 | Flowing water: the HLL scheme, the quanta, sources, drains, open edges, falls, the tiers | `engine/water/flow.hpp` | `flow`, `water-lod`, `water-cost` | `tests/water_flow_test.cpp` (golden) |
 | Wakes: impulse rings, a hull's trail, a splash's ring | `engine/water/wake.hpp` | `float`, `gpu-water` | `tests/water_wake_test.cpp` (golden) |
+| A body through the surface: the crater and its jet (a ring's near field), the rings, the spray, by mass, volume, footprint and speed, leaned forward by a run (`Ring::lean_x`, `reach`) | `engine/water/entry.hpp`, `render/water_stream.hpp`'s `entry_spray` | `gpu-plunge` | `tests/water_entry_test.cpp` |
 | Moving water drawn: river ribbons, flow grids, waterfall curtains, flow maps, foam, spray | `engine/render/water_stream.hpp`, `water_stream.wgsl`, `wgsl/water_light.wgsl` | `gpu-water` | `tests/render_water_stream_test.cpp` |
 | The surface drawn: rings, the waves kept per vertex and pixel, the mirror, the glitter | `engine/render/water.hpp`, `water.wgsl` | `gpu-water`, `lake` | `tests/render_water_test.cpp` |
-| The view under water: the fog, blur, Snell's window, the presets | `engine/render/underwater.hpp`, `underwater.wgsl` | `gpu-underwater`, `lake` | `tests/render_water_test.cpp` |
+| The view under water: the fog, blur, Snell's window, the presets, the waterline split, the specks | `engine/render/underwater.hpp`, `underwater.wgsl` | `gpu-underwater`, `gpu-plunge`, `lake` | `tests/render_water_test.cpp` |
+| The wet lens: the sheet and the drops on leaving the water | `engine/render/wet_lens.hpp`, `wet_lens.wgsl` | `gpu-plunge` | `tests/render_wet_lens_test.cpp` |
 | Water in Fall Line's frame (`add_water`) | `games/fall_line/app/frame.hpp` | `lake` | `create_frame`'s pass-table check |
 | The water's sound: what an ear hears (`hear`), the bed, splashes, strokes, bubbles, the muffle | `engine/water/sound.hpp` | `water-audition` | `tests/water_sound_test.cpp` |
 | The one step (`water::step`) and a game repo's water: `ge add water`, its template, the `water` consumer skill | `engine/water/world.hpp`, `templates/water/`, `consumer-skills/water/`, `engine/cli/add.cpp` | the scaffold's `water` (packaging's `scaffold` job) | `tests/cli_add_test.cpp`, `tests/water_world_test.cpp` |
@@ -55,6 +61,10 @@ for anything the simulation reads, `render` for a pass, `audio` for a voice, `la
   channel, a coast's sea breeze): a field the world fills, never a branch in the engine.
 - **The simulation's level of detail is measured from the game's actors, never the camera**
   (docs/water.md § Level of detail): a camera is one machine's, an actor is every machine's.
+- **Fog needs a supply of water, not just a humid night.** `mist_at` lays its thick bank where a
+  lake, wet ground or a hollow keeps feeding it; tuned off relative humidity alone, every clear
+  night in damp weather fogs everywhere. A change keeps the `climate` lab's dry slope and windy
+  shore over 700 m while the shore and the floor sink under 200 m.
 - **Per-game numbers live in the game or its plugin.** The engine gives a mechanism and a
   default; a preset (the classic swim, the clothed skier) is the game's.
 - **Adding water or wind to a game is one call.** If it takes more, the API is what to fix.

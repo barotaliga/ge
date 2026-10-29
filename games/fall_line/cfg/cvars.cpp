@@ -150,6 +150,41 @@ void add_cvars(con::Console& c, Settings& s) {
           .max = 20},
          &s.disc_moon);
 
+  // The lens and the film (render/post.hpp, render/lens.hpp) and the grade's knobs
+  // (render/grade.hpp): each strength 0..1, 0 compiling it out of the frame.
+  const auto strength = [&](const char* name, const char* fallback, const char* help,
+                            double* field) {
+    v.bind(
+        {.name = name, .fallback = fallback, .flags = kStartup, .help = help, .min = 0, .max = 1},
+        field);
+  };
+  strength("r_sharpen", "0.3", "contrast-adaptive sharpening of the upscaled frame, 0..1 (0: off)",
+           &s.sharpen);
+  strength("r_sunrays", "0.5",
+           "the sun streaming through trees and over ridges in front of it, 0..1 (0: off)",
+           &s.sunrays);
+  strength("r_flare", "0", "the lens flare's ghosts and ring round the sun, 0..1 (0: off)",
+           &s.flare);
+  strength("r_vignette", "0.25", "the picture's corners darker, 0..1 (0: off)", &s.vignette);
+  strength("r_chromatic", "0", "the lens's colour fringes toward the corners, 0..1 (0: off)",
+           &s.chromatic);
+  strength("r_grain", "0", "film grain, 0..1 (0: off)", &s.grain);
+  strength("r_lensdirt", "0", "dirt on the lens, lit by the sun and the glow, 0..1 (0: off)",
+           &s.lensdirt);
+  const auto look = [&](const char* name, const char* fallback, const char* help, double lo,
+                        double hi, double* field) {
+    v.bind(
+        {.name = name, .fallback = fallback, .flags = kStartup, .help = help, .min = lo, .max = hi},
+        field);
+  };
+  look("r_contrast", "1", "the picture's contrast (1: as graded; above 1 steeper)", 0.5, 2,
+       &s.contrast);
+  look("r_saturation", "1", "the picture's colour (0: grey, 1: as graded, 2: doubled)", 0, 2,
+       &s.saturation);
+  look("r_temperature", "0", "the white balance, -1 cold .. 1 warm", -1, 1, &s.temperature);
+  look("r_tint", "0", "the white balance's tint, -1 green .. 1 magenta", -1, 1, &s.tint);
+  look("r_gamma", "1", "the middle tones' brightness (above 1 brighter)", 0.5, 2, &s.gamma);
+
   v.bind({.name = "cl_view",
           .fallback = "chase",
           .flags = kPlayer,
@@ -309,6 +344,14 @@ void add_cvars(con::Console& c, Settings& s) {
           .help = "the kind of sky: earth dust alien hell void nebula violet ice ash toxic",
           .kind = CvarKind::text},
          &s.sky_type);
+  v.bind({.name = "sv_moons",
+          .fallback = "type",
+          .flags = kRun,
+          .help = "the moons over the sky, up to four besides the Earth's, each name[:size[:spin "
+                  "hours]]: moon phobos deimos io europa ganymede callisto titan enceladus miranda "
+                  "triton, or none (type: the sky type's own)",
+          .kind = CvarKind::text},
+         &s.moons);
   // The sky type's knobs (render/sky_style.hpp's SkyKnobs): -1 keeps the type's own.
   const auto knob = [&](const char* name, const char* help, double max, double* field) {
     v.bind({.name = name, .fallback = "-1", .flags = kRun, .help = help, .min = -1, .max = max},
@@ -331,6 +374,31 @@ void add_cvars(con::Console& c, Settings& s) {
        &s.sky_stars);
   knob("sv_skyglow", "a fire's glow from under the horizon: 0 none (-1: the type's)", 4,
        &s.sky_glow);
+
+  v.bind({.name = "sv_lethal",
+          .fallback = "1",
+          .flags = kRun,
+          .help = "the army shoots to kill (0: it chases him down and arrests him)",
+          .kind = CvarKind::boolean},
+         &s.lethal);
+  v.bind({.name = "sv_armyfire",
+          .fallback = "1",
+          .flags = kRun,
+          .help = "the army's guns fire at all (0: it hunts with its guns silent)",
+          .kind = CvarKind::boolean},
+         &s.army_fire);
+  v.bind({.name = "sv_helis",
+          .fallback = "1",
+          .flags = kRun,
+          .help = "the hunt sends the army's helicopters and the men they put down",
+          .kind = CvarKind::boolean},
+         &s.helis);
+  v.bind({.name = "sv_paras",
+          .fallback = "1",
+          .flags = kRun,
+          .help = "the hunt sends the army's paramotor riflemen (from four stars)",
+          .kind = CvarKind::boolean},
+         &s.paras);
 }
 
 void register_cvars(con::Console& c) {

@@ -221,16 +221,21 @@ SkyStyle toxic() {
 
 const std::array<SkyType, 10>& catalogue() {
   static const std::array<SkyType, 10> types = {{
-      {"earth", "The Earth's air: blue by day, red at sunset", earth()},
-      {"dust", "A desert planet: butterscotch by day, a blue sunset, a small sun", dust()},
-      {"alien", "A green air under two suns, a ringed planet up the sky", alien()},
-      {"hell", "A red smoke-thick air, a swollen sun, fire glowing from below", hell()},
-      {"void", "No air: a black sky, stars by day, a nebula and a ringed planet", void_sky()},
-      {"nebula", "A thin violet air, a nebula and the stars showing by day", nebula()},
-      {"violet", "A violet sky, a pale small second sun and a small moon", violet()},
-      {"ice", "A pale cyan air, a giant ringed planet low over the horizon", ice()},
-      {"ash", "A volcanic world's ash: a dim brown air, a dull sun, a faint fire", ash()},
-      {"toxic", "A sickly yellow-green air, its blue drunk by the fumes", toxic()},
+      {"earth", "The Earth's air: blue by day, red at sunset", earth(), "moon"},
+      {"dust", "A desert planet: butterscotch by day, a blue sunset, a small sun", dust(),
+       "phobos deimos"},
+      {"alien", "A green air under two suns, a ringed planet up the sky", alien(),
+       "io europa ganymede"},
+      {"hell", "A red smoke-thick air, a swollen sun, fire glowing from below", hell(), "io:2"},
+      {"void", "No air: a black sky, stars by day, a nebula and a ringed planet", void_sky(),
+       "titan enceladus"},
+      {"nebula", "A thin violet air, a nebula and the stars showing by day", nebula(), "triton"},
+      {"violet", "A violet sky, a pale small second sun and a small moon", violet(), "miranda:2"},
+      {"ice", "A pale cyan air, a giant ringed planet low over the horizon", ice(),
+       "europa enceladus:3"},
+      {"ash", "A volcanic world's ash: a dim brown air, a dull sun, a faint fire", ash(),
+       "callisto:2 deimos"},
+      {"toxic", "A sickly yellow-green air, its blue drunk by the fumes", toxic(), "titan:1.5"},
   }};
   return types;
 }
@@ -261,6 +266,13 @@ bool sky_style_named(std::string_view name, SkyStyle& out) {
 
 std::string_view sky_type_list() {
   return "earth, dust, alien, hell, void, nebula, violet, ice, ash, toxic";
+}
+
+std::string_view sky_moons_named(std::string_view name) {
+  for (const SkyType& t : catalogue()) {
+    if (same_word(t.name, name)) return t.moons;
+  }
+  return "moon";
 }
 
 void with_knobs(SkyStyle& s, const SkyKnobs& k) {

@@ -1,0 +1,4 @@
+---
+type: Added
+---
+Other worlds' moons. `render/moons.hpp` holds ten kinds of moon taken from real moons of other planets (Phobos, Deimos, Io, Europa, Ganymede, Callisto, Titan, Enceladus, Miranda and Triton), each with its real size as seen from its planet, its shape, albedo, colour, orbit and spin. A sky can carry up to four of them, with or without the Earth's moon. `render/night.hpp`'s `set_moons` places them on their orbits at the frame's moment and lights them by the real sun, so each shows its own phase; when the Earth's moon is absent, their light lights the night. The sky pass draws each one lumpy or round, with its real face (`render/moon_maps.hpp`: the public-domain Viking, Voyager, Galileo and Cassini mosaics, Io, Ganymede and Triton in colour) and Titan's haze. Each sky type now has its own set of moons, and Fall Line's `sv_moons` picks a set by name (`phobos deimos`, `moon io:2`, `none`).

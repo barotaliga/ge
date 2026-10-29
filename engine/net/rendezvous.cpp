@@ -100,14 +100,16 @@ void on_server(Rendezvous& rv, const Address& from, const uint8_t* data, size_t 
     }
     RendezvousSession* s = find_session(rv, id);
     if (!s && static_cast<int>(rv.sessions.size()) < rv.config.max_sessions) {
-      rv.sessions.push_back({id, from, now_us});
+      rv.sessions.push_back({});
       s = &rv.sessions.back();
+      s->id = id;
     }
     if (!s) {
       rv.stats.refused++;
       return;
     }
     s->host = from;  // a host whose mapping moved registers from its new address
+    s->from = from;
     if (forwarded) s->host.port = forwarded;  // its router forwards this port to it (portmap.hpp)
     s->last_us = now_us;
     write_start(w, kRegistered);
@@ -148,6 +150,67 @@ void on_server(Rendezvous& rv, const Address& from, const uint8_t* data, size_t 
     write_u64(h, key);
     send(t, s->host, h, now_us);
     rv.stats.joined++;
+    return;
+  }
+  if (kind == kAdvertise) {
+    const uint64_t id = read_u64(r);
+    const uint32_t serial = read_u32(r);
+    Advert a;
+    a.protocol = read_u32(r);
+    const bool listed = read_u8(r) != 0;
+    RendezvousSession* s = find_session(rv, id);
+    if (r.bad || !read_advert_body(r, a) || !s || !(from == s->from)) {
+      rv.stats.refused++;
+      return;
+    }
+    a.session = id;
+    s->listed = listed;
+    s->advert = a;
+    rv.stats.advertised++;
+    write_start(w, kAdvertised);  // far smaller than the advertise
+    write_u64(w, id);
+    write_u32(w, serial);
+    send(t, from, w, now_us);
+    return;
+  }
+  if (kind == kList) {
+    const uint32_t protocol = read_u32(r);
+    const int page = read_u16(r);
+    if (r.bad || size < kListAsk) {
+      rv.stats.refused++;
+      return;
+    }
+    int count = 0;
+    for (const RendezvousSession& s : rv.sessions)
+      count += s.listed && s.advert.protocol == protocol;
+    const int pages = count ? (count + kListPage - 1) / kListPage : 1;
+    uint8_t page_out[kListAsk];
+    Writer lw = make_writer(page_out, sizeof page_out);
+    write_start(lw, kListing);
+    write_u32(lw, protocol);
+    write_u16(lw, static_cast<uint16_t>(page));
+    write_u16(lw, static_cast<uint16_t>(pages));
+    const int first = page * kListPage;
+    const int here =
+        count - first < 0 ? 0 : (count - first < kListPage ? count - first : kListPage);
+    write_u8(lw, static_cast<uint8_t>(here));
+    int at = 0;
+    for (const RendezvousSession& s : rv.sessions) {
+      if (!s.listed || s.advert.protocol != protocol) continue;
+      if (at >= first && at < first + here) {
+        Advert a = s.advert;
+        a.port = s.host.port;  // as clients reach it
+        write_address(lw, s.host);
+        write_advert_body(lw, a);
+      }
+      at++;
+    }
+    if (lw.overflow || lw.size > size) {
+      rv.stats.refused++;
+      return;
+    }
+    transport_send(t, from, page_out, lw.size, now_us);
+    rv.stats.lists++;
     return;
   }
   rv.stats.refused++;
