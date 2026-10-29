@@ -26,6 +26,7 @@
 #include <string>
 #include <vector>
 
+#include "core/libm/libm.hpp"
 #include "gpu/device.hpp"
 #include "lab/lab.hpp"
 #include "lab/labs/explosion_scene.hpp"
@@ -76,7 +77,7 @@ constexpr double kMuzzle[3] = {0.11, -0.12, 0.6};
 double kick_at(double t) {
   if (t < 0) return 0;
   constexpr double kRise = 0.035;
-  return (t / kRise) * std::exp(1 - t / kRise);
+  return (t / kRise) * ge::core::libm::exp(1 - t / kRise);
 }
 
 struct Gun {
@@ -98,7 +99,7 @@ void muzzle_in_view(const Gun& g, double t, double at[3], double dir[3]) {
   for (int i = 0; i < 3; ++i) d[i] = kMuzzle[i] - kGrip[i];
   const double len = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
   for (double& v : d) v /= len;
-  const double c = std::cos(up), sn = std::sin(up);
+  const double c = ge::core::libm::cos(up), sn = ge::core::libm::sin(up);
   const double dy = d[1] * c + d[2] * sn, dz = -d[1] * sn + d[2] * c;
   dir[0] = d[0];
   dir[1] = dy;
@@ -108,7 +109,7 @@ void muzzle_in_view(const Gun& g, double t, double at[3], double dir[3]) {
 
 // The view's frame into the world (heading 0, pitch `pitch`: right +x, forward +z tipped up).
 void to_world(const gr::FrameView& v, const double in[3], double out[3], bool point) {
-  const double c = std::cos(v.pitch), sn = std::sin(v.pitch);
+  const double c = ge::core::libm::cos(v.pitch), sn = ge::core::libm::sin(v.pitch);
   const double y = in[1] * c + in[2] * sn, z = -in[1] * sn + in[2] * c;
   out[0] = in[0] + (point ? v.eye[0] : 0);
   out[1] = y + (point ? v.eye[1] : 0);
@@ -132,7 +133,7 @@ gr::MuzzlePose pose_of(const Gun& g, const gr::FrameView& v, double t) {
 void draw_barrel(gl::Picture& pic, const Gun& g, double t, double fov_y) {
   double at[3], dir[3];
   muzzle_in_view(g, t, at, dir);
-  const double f = 0.5 * pic.height / std::tan(0.5 * fov_y);
+  const double f = 0.5 * pic.height / ge::core::libm::tan(0.5 * fov_y);
   for (int k = 0; k <= 60; ++k) {
     const double u = k / 60.0;
     double p[3];
