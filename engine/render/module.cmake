@@ -25,5 +25,6 @@ if(GE_GPU)
     engine/render/morph.wgsl
     engine/render/wet_lens.wgsl engine/render/snow_probe.wgsl
     engine/render/lens.wgsl
-    engine/render/fog.wgsl engine/render/fog_integrate.wgsl)
+    engine/render/fog.wgsl engine/render/fog_integrate.wgsl
+    engine/render/beams.wgsl)
 endif()
