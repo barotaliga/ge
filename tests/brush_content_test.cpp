@@ -22,6 +22,7 @@ br::ContentScan scanned(br::ContentFixture* fx) {
   ge::vfs::Pak pak;
   CHECK(ge::vfs::read_pak(fx->pak, &pak, &error));
   std::vector<br::ContentFile> files;
+  files.reserve(pak.entries.size());
   for (const ge::vfs::PakEntry& e : pak.entries) {
     files.push_back({e.path, ge::vfs::pak_file(fx->pak, e)});
   }

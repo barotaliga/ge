@@ -186,7 +186,9 @@ void run(lab::Lab& l) {
   const br::ContentScan scan = br::scan_content(set.files);
   const br::ContentMatch match = br::compare_content(scan, map);
   for (const auto& [m, why] : scan.unread) {
-    l.note("map not read: " + m + ": " + why);
+    std::string line = "map not read: ";
+    line.append(m).append(": ").append(why);
+    l.note(std::move(line));
   }
 
   // The tables, and the counts the picture and the metrics carry.
