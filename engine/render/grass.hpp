@@ -18,13 +18,16 @@
 //   `blade_shape`, its WGSL twin), never thinner than about a pixel, turned toward the eye when
 //   edge-on. Lit two-sided by the sun past the ground's horizon and the shadow maps, through the
 //   blade from behind, by the sky dimmed toward the root, hazed; the motion target as a solid
-//   surface's (the camera's motion; a blade's own sway is not a motion vector yet).
+//   surface's plus, for the fine blades, the blade's own motion since the last frame.
+// - UNDERFOOT: the trample cells (engine/grass/trample.hpp) a game stamps are uploaded by
+//   `set_grass_trample`; every blade reads its press in the scatter's probe and the draw.
 // - FAR AWAY the blades are gone and the ground's own albedo carries the field: a game paints it
 //   with each kind's `far_colour` (engine/grass/kind.hpp) under the cover.
 //
 // ge:summary Grass drawn blade by blade: GPU scatter, distance thinning, Bézier blades in the wind
 // ge:keywords render grass blades scatter cover thinning lod reach indirect-draw triangle-strip
 // ge:keywords bezier sway wind-grid translucency two-sided create_grass set_grass_cover
+// ge:keywords trample press motion-vectors set_grass_trample
 // ge:keywords prepare_grass encode_grass_scatter encode_grass read_grass_blades probe_grass_shapes
 // ge:skill render grass
 // ge:test tests/render_grass_test.cpp
@@ -37,6 +40,7 @@
 #include "gpu/pipeline.hpp"
 #include "grass/cover.hpp"
 #include "grass/sway.hpp"
+#include "grass/trample.hpp"
 #include "render/frame.hpp"
 #include "render/terrain.hpp"
 #include "render/view.hpp"
@@ -59,11 +63,14 @@ struct Grass {
   GrassSettings settings;
   uint32_t tri_count = 0;
   grass::WindGrid grid;
-  wgpu::Buffer params, tris, kinds, wind, near_blades, far_blades, args;
+  wgpu::Buffer params, tris, kinds, wind, near_blades, far_blades, args, press;
+  int trample_n = 0;  // the cells bound a side (0: none)
+  float trample_cell = 0;
   wgpu::BindGroupLayout scatter_layout, draw_layout, light_layout, probe_layout;
   wgpu::BindGroup scatter_group, draw_group, light_group, shadows;
   uint32_t p_scatter = 0, p_clamp = 0, p_near = 0, p_far = 0, p_shapes = 0;
-  float time = 0;
+  float time = 0, prev_time = 0;
+  bool timed = false;  // a frame has been prepared (the last frame's time is real)
 };
 
 // The buffers and pipelines (into `pipelines`, before the load ends), with an empty cover;
@@ -77,6 +84,10 @@ void create_grass(gpu::Device& device, gpu::PipelineSet& pipelines, Grass& grass
 bool set_grass_cover(gpu::Device& device, Grass& grass, const grass::Cover& cover);
 
 void bind_grass_shadows(Grass& grass, const wgpu::BindGroup& shadows);
+
+// The trampled cells the blades read (grass/trample.hpp): the whole of them when their size
+// changed, else only the range stamped since the last upload; `trample` is marked clean.
+void set_grass_trample(gpu::Device& device, Grass& grass, grass::Trample& trample);
 
 // The frame's uploads: the wind grid round the eye at `t` s from `air` (no field: still air), the
 // params, the lists' counts reset.
