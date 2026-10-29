@@ -56,6 +56,20 @@ const kSunGlowTop = 8.0;
 // at half its peak, 0.257 wavelengths over the radius, at 0.55 um.
 const kGlowCore = 0.141;
 const kSunGlowWhite = 1.5;
+// THE DISC DRAWN LARGER (render/view.hpp's sun_size and moon_size): a glow is a point's pattern
+// spread over the disc, so off a disc drawn larger than the real one it stands off the drawn
+// limb, its core filling the face. The real discs' radii, rad: the sun's, and the moon's at its
+// nearest, so a disc no larger than these is the point the pattern was cut for.
+const kSunDisc = 0.00465;
+const kMoonDiscMost = 0.0049;
+
+// How far past the real disc's the key light's drawn disc reaches, rad (0: drawn as it is).
+fn disc_swell() -> f32 {
+  if (frame.moon_light.w < 0.5) {
+    return max(kSunDisc * frame.style[2].w - kSunDisc, 0.0);
+  }
+  return max(frame.moon_light.z - kMoonDiscMost, 0.0);
+}
 
 struct VertexOut {
   @builtin(position) position: vec4f,
@@ -232,8 +246,9 @@ fn march(i: i32, d: vec3f, t0: f32, t1: f32, j: f32) -> LayerLook {
   let theta = 2.0 * asin(min(0.5 * length(d - L), 1.0));
   let off = (theta - vec3f(0.3787, 0.3840, 0.3910)) / 0.016;
   let halo = l.glow.z * kHalo * exp(-off * off);
-  // The glow round the disc, off its droplets or crystals.
-  let glow = 0.5 * diffraction(theta, l.glow.x, l.glow.y);
+  // The glow round the disc, off its droplets or crystals, off the drawn limb.
+  let off_limb = max(theta - disc_swell(), 0.0);
+  let glow = 0.5 * diffraction(off_limb, l.glow.x, l.glow.y);
   // The light at the layer: the key's through the air and the layers above at its middle; the
   // sky's from above, the snow's from below.
   let mid_p = eye + d * (0.5 * (t0 + t1));
@@ -323,7 +338,7 @@ fn march(i: i32, d: vec3f, t0: f32, t1: f32, j: f32) -> LayerLook {
   let tf = 0.5 * tau_ray;
   let many = exp(-0.5 * tau_ray) * (1.0 - exp(-tf) * (1.0 + tf));
   let s = kGlowCore / l.glow.x * sqrt(max(2.0, tf));
-  let spread = many * exp(-0.5 * theta * theta / (s * s)) / (2.0 * PI * s * s);
+  let spread = many * exp(-0.5 * off_limb * off_limb / (s * s)) / (2.0 * PI * s * s);
   out.light += glow_seen(key * (glow * (glow_lit * out.through) + spread));
   return out;
 }

@@ -202,6 +202,8 @@ void run(ge::lab::Lab& lab) {
   options.thick = cvars.thick;
   options.cloud_height = cvars.cloud_height;
   options.cloud_speed = cvars.cloud_speed;
+  options.sun_size = cvars.disc_sun;
+  options.moon_size = cvars.disc_moon;
   if (const std::string problem = fall_line::app::cloud_stack_of(cvars, options);
       !problem.empty()) {
     lab.fail("--cfg: " + problem, "Skill: console.");
