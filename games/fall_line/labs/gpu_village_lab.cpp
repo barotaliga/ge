@@ -91,7 +91,26 @@ constexpr Look kLooks[] = {
     {"street", "A CAR ON ITS LANE", "From 9 m behind and 2.5 m over the first car under way.",
      "a car with its glasshouse, bumpers and four wheels sitting on the street, not floating or "
      "sunk; the street under it; its shadow under it and the skier's beside the street"},
+    {"front-row", "THE BASE LODGE", "From 45 m before the lodge and 12 m over it, from the runs.",
+     "the lodge's boarded ground floor, its band of glass and terrace under a broad snowed roof; "
+     "the rental and the school or the ticket office beside it; each on its plinth, none floating "
+     "or sunk into the slope; their shadows on the snow"},
+    {"church", "THE CHURCH ACROSS THE MAIN STREET",
+     "From 75 m before the church and 14 m over the street.",
+     "the nave under its steep snowed roof and the tower with its spire over the village; the "
+     "shops beside it with their awnings and display windows; the street before them"},
+    {"town", "A HOUSE ON THE BACK STREET", "From 35 m before the first house and 12 m over it.",
+     "chalets of stone and timber under deep eaves, flats among them, in a village's mix of "
+     "renders; the trees felled round them, the forest behind"},
 };
+
+// The first building of `kind` in the village, or null.
+const vg::Building* first_of(const fs::Village& vil, vg::BuildingKind kind) {
+  for (const vg::Building& b : vil.buildings) {
+    if (b.kind == kind) return &b;
+  }
+  return nullptr;
+}
 
 // The camera `back` m behind and `up` m over (x, y, z) along `heading`, looking at it; `where`
 // the point looked at.
@@ -129,6 +148,21 @@ bool aim(const fs::GameState& st, const char* id, double t, r::FrameView& v, dou
       look_at(level, a.x, a.y, a.z, a.heading + 3.14159265358979323846, back, up, v, where);
       return true;
     }
+  }
+  const struct {
+    const char* id;
+    vg::BuildingKind kind;
+    double back, up;
+  } fronts[] = {{"front-row", vg::BuildingKind::lodge, 45, 12},
+                {"church", vg::BuildingKind::church, 75, 14},
+                {"town", vg::BuildingKind::house, 35, 12}};
+  for (const auto& f : fronts) {
+    if (std::strcmp(id, f.id) != 0) continue;
+    const vg::Building* b = first_of(vil, f.kind);
+    if (b == nullptr) return false;
+    // Looking back at its front from before it.
+    look_at(level, b->x, b->y, b->z, b->heading + 3.14159265358979323846, f.back, f.up, v, where);
+    return true;
   }
   if (std::strcmp(id, "street") == 0 && vil.traffic) {
     const vg::TrafficPlan& plan = *vil.traffic;
@@ -177,6 +211,7 @@ void run(ge::lab::Lab& lab) {
     return;
   }
   const fs::Village& vil = *st.village;
+  lab.metric("buildings", static_cast<double>(vil.buildings.size()), "count");
   lab.metric("felled", vil.felled_count, "trees");
   lab.metric("vehicles", vil.traffic ? static_cast<double>(vil.traffic->vehicles.size()) : 0,
              "count");
@@ -284,10 +319,10 @@ const ge::lab::LabSpec kSpec{
     ge::lab::LabKind::picture,
     "game:fall_line",
     "games/fall_line/app/frame.hpp's show_village: mountain/app/village_look.hpp's streets and "
-    "vehicles",
+    "vehicles, building_look.hpp's buildings",
     "render",
-    "Does the free ride's village read as streets on the snow with traffic on them, and the "
-    "felled trees gone?",
+    "Does the free ride's village read as streets on the snow with buildings along them and "
+    "traffic on them, and the felled trees gone?",
     {
         {"seed", "38", "the map's seed"},
         {"version", "10", "the generator version (the ski area's)"},
