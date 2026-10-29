@@ -19,6 +19,7 @@
 
 #include "fall_line/sim/army_heli.hpp"
 #include "fall_line/sim/army_para.hpp"
+#include "fall_line/sim/army_vehicle.hpp"
 #include "fall_line/sim/army_rules.hpp"
 #include "fall_line/sim/army_sled.hpp"
 #include "fall_line/sim/army_sled_rules.hpp"
@@ -178,7 +179,7 @@ void send_wave(GameState& state, int32_t stars) {
   for (const Soldier& s : a.soldiers) live += s.from == SoldierFrom::wave && fit(s) ? 1 : 0;
   const int32_t men = std::max(
       0, std::min({mix->foot, army::kWaveMost[static_cast<size_t>(stars)] - live, room(a)}));
-  if (men == 0) return;
+  if (men == 0 && mix->tracked + mix->trucks + mix->tanks == 0) return;
   // THE WAY: the one with a point nearest him, from that point down.
   const Spot q = quarry_of(state);
   int32_t way = -1;
@@ -203,6 +204,9 @@ void send_wave(GameState& state, int32_t stars) {
     if (hypot(p.x - q.x, p.z - q.z) >= army::kAwayM && !in_his_sight(state, p.x, p.z, q)) break;
     s0 += army::kSampleM;
   }
+  // ITS VEHICLES (army_vehicle.hpp), setting off further down the same way.
+  call_vehicles(state, *mix, wave, way, s0, s_hit);
+  if (men == 0) return;
   // THE COLUMN: rank behind rank down the way from its head, each man a little off his file and
   // his rank (his id's own), so it reads as men, not a grid.
   int32_t made = 0;
@@ -551,6 +555,7 @@ void step_army(GameState& state) {
   step_army_sleds(state, on, q, roster.fire);
   step_army_helis(state, on, q);
   step_army_paras(state, on, q);
+  step_army_vehicles(state, on, q);
   write_pursuers(state);
 }
 
@@ -587,7 +592,7 @@ uint64_t army_hash(const ArmyState& a, uint64_t h) {
   mix(a.wave_at);
   mix(a.marched);
   mix(a.arrested_by);
-  return army_paras_hash(a, army_helis_hash(a, army_sleds_hash(a, h)));
+  return army_vehicles_hash(a, army_paras_hash(a, army_helis_hash(a, army_sleds_hash(a, h))));
 }
 
 const char* soldier_mode_name(SoldierMode m) {

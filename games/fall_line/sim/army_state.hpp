@@ -14,6 +14,7 @@
 
 #include <array>
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 #include "ai/steer.hpp"
@@ -232,6 +233,57 @@ struct ArmyPara {
   ge::paramotor::ParaState wing;
 };
 
+// What an army vehicle is doing (army_vehicle.hpp):
+// - `due` called, waiting at the foot of its way (or the road's end of the map) for its clock;
+// - `drive` driving its way up, then at him;
+// - `drop` halted, its men getting out;
+// - `park` halted where it put them down (a carrier), or a tank standing off him;
+// - `leave` driving back down its way, the hunt over or its men put down (a truck);
+// - `gone` taken off the map: dropped at the end of the step.
+enum class ArmyVehicleKind : uint8_t { carrier, truck, tank };
+enum class ArmyVehicleMode : uint8_t { due, drive, drop, park, leave, gone };
+
+// What an army vehicle's event says (`EventKind::army_vehicle`: its `gate` the change, its `value`
+// the vehicle's id): called, set off, halted to put its men down, backed out of where it was held,
+// put back on its way, struck him, gone.
+enum class ArmyVehicleChange : uint8_t { called, out, drop, dug, stuck, strike, gone };
+
+struct VehiclePoint {
+  double x = 0, z = 0;
+};
+
+// The village's road in and the ground its streets clear (army_vehicle.hpp).
+struct ArmyRoad;
+
+// AN ARMY VEHICLE: a tracked carrier (two units on a steered hitch), a truck or a tank.
+struct ArmyVehicle {
+  int32_t id = 0;  // the army's own, in the order called; pursuer `army_vehicle::kPursuerBase` + it
+  ArmyVehicleKind kind = ArmyVehicleKind::carrier;
+  ArmyVehicleMode mode = ArmyVehicleMode::due;
+  int32_t wave = 0;               // the ground wave that called it
+  double due = 0;                 // the clock it sets off at, s
+  double t = 0;                   // s in this mode
+  double x = 0, y = 0, z = 0;     // the middle of its (front) hull on the snow, world frame, m
+  double heading = 0;             // rad
+  double pitch = 0, roll = 0;     // rad, read off the ground under it
+  double speed = 0;               // m/s along `heading` (negative backing)
+  double rear = 0;                // a carrier's rear unit's heading, rad
+  double way = 0;                 // the heading it steers, rad
+  double pace = 0;                // the pace it is driven at, m/s
+  double turret = 0;              // a tank's turret, rad off its hull
+  std::vector<VehiclePoint> path; // its way up, laid when called
+  int32_t leg = 0;                // the point of `path` it is making for
+  double leg_t = 0;               // ...since this clock, s
+  int32_t road = 0;               // how many of `path`'s points are the road in
+  int32_t on_way = -1;            // the way it climbs (`GameState::ways`)
+  double way_end = 0;             // ...to the arc nearest him, m
+  int32_t aboard = 0;             // men aboard to put down
+  double saw = -1e9;              // the clock its crew last saw him, s
+  ge::ai::Progress progress;      // its watch (ai/steer.hpp)
+  int32_t dug = 0;                // times backed out of where it was held
+  int32_t stuck = 0;              // times put back on its way
+};
+
 struct ArmyState {
   bool active = false;  // a soldier was sent this run: only then is any of it hashed
   // THE SOLDIERS OUT, reserved for `army::kMostSoldiers` at create, so a step never allocates.
@@ -289,9 +341,22 @@ struct ArmyState {
   bool fire = true;
   // Whether the paramotors' eddies' field (`para_field`) has been made.
   bool para_air = false;
+  // THE GROUND WAVES' VEHICLES OUT (army_vehicle.hpp); the next one's id, how many were called this
+  // run, the men they put down, the times one was put back on its way (a fault the labs hold at
+  // nought), and the village's road in and its cleared ground (planned when the first is called;
+  // never hashed).
+  std::vector<ArmyVehicle> vehicles;
+  int32_t next_vehicle = 0;
+  int32_t vehicles_called = 0;
+  int32_t unloaded = 0;
+  int32_t vehicles_stuck = 0;
+  std::shared_ptr<const ArmyRoad> road;
   // Whether the hunt sends its paramotors. A lab or a test staging the army's other arms on their
   // own turns it off; the game never does.
   bool send_paras = true;
+  // Whether the ground waves bring their vehicles. A lab or a test staging the men on foot alone
+  // turns it off; the game never does.
+  bool send_vehicles = true;
 };
 
 }  // namespace fall_line::sim

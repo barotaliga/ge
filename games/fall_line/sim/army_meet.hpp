@@ -13,6 +13,10 @@
 // - A MAN ON FOOT: each soldier on the snow is a circle he is held out of the same way; skied into
 //   at `army::kRunDownSpeed` or more he goes down (`SoldierMode::down`), an `army` event
 //   (`run_down`) and a `hit_soldier` offence.
+// - A VEHICLE (army_vehicle.hpp): each hull (a carrier's two units) is a box of steel he is held
+//   out of, giving nothing; met at `army_sled::kThrowSpeed` he goes down, and where the army shoots
+//   to kill a front driven into him faster than `army_vehicle::kStrikeClosing` knocks him down
+//   (`army_vehicle` event, `strike`).
 //
 // Only the player (racer 0), on his skis, off any lift and any machine, still in the run; nothing
 // while the army has never been sent. Draws nothing and allocates nothing.
