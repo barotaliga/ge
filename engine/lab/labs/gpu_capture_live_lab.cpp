@@ -4,10 +4,10 @@
 // copies every frame back through the ring of readbacks and hands it to the capture; an audio
 // thread pulls 10 ms of sound every 10 ms, as a device does, clicking every 1.25 s, and taps it.
 // The file is then decoded (AV1 and Opus, or raw I420 and float PCM without the encoders) and
-// held to: every frame handed in is in the file, every tapped sample, each click's flash less
-// than a frame (the longest gap between frames) after it, and no frame waiting on the capture (the
-// frame's capture call, the copy requested and the frames back handed over, stays far under a
-// frame).
+// held to: every frame handed in is in the file, every tapped sample, every bright frame inside a
+// click's flash and each flash less than a frame (the longest gap between frames) after its click,
+// and no frame waiting on the capture (the frame's capture call, the copy requested and the frames
+// back handed over, stays far under a frame).
 //
 // Everything timed is `measured`, so the digest is the flags and the counts that do not depend
 // on the machine. Without an adapter it notes that and draws placeholders; GE_GPU_REQUIRE=1
@@ -55,8 +55,11 @@ using gl::Det;
 constexpr int kRate = 48000;
 constexpr int kPull = 480;  // a device's pull: 10 ms
 constexpr double kFirst = 0.437, kPeriod = 1.25, kClick = 0.005, kFlash = 0.05;
-// The most a frame's capture call may take before it counts as the frame waiting, ms.
-constexpr double kStallMs = 25;
+// The most a frame's capture call may take before it counts as the frame waiting, ms, and the share
+// of frames that may go over it: a capture that waits does so on many frames, while a loaded
+// machine preempts the odd call.
+constexpr double kStallMs = 25, kStallShare = 0.05;
+constexpr double kSlackMs = 1.5;  // a click's edge against a frame's whole millisecond
 
 bool env_on(const char* name) {
 #ifdef _MSC_VER
@@ -306,14 +309,30 @@ void run(gl::Lab& lab) {
     return;
   }
 
-  // Each click's flash: the first bright frame from it on.
+  // Each click's flash: the first bright frame inside its own window (the click to the flash's
+  // end). A frame dropped, or a gap longer than the flash, can leave a window empty; a bright frame
+  // outside every window is a picture stamped off the sound's clock.
+  const auto in_window = [](double t, double c) {
+    return t >= c - kSlackMs && t < c + kFlash * 1000 + kSlackMs;
+  };
   std::vector<double> lags;
   for (const double c : dec.clicks) {
     for (size_t i = 0; i < dec.times.size(); i++) {
-      if (static_cast<double>(dec.times[i]) + 1 >= c && dec.bright[i] > 200) {
-        lags.push_back(static_cast<double>(dec.times[i]) - c);
+      const auto t = static_cast<double>(dec.times[i]);
+      if (dec.bright[i] > 200 && in_window(t, c)) {
+        lags.push_back(t - c);
         break;
       }
+    }
+  }
+  int stray = 0;
+  double stray_at = 0;
+  for (size_t i = 0; i < dec.times.size(); i++) {
+    const auto t = static_cast<double>(dec.times[i]);
+    if (dec.bright[i] <= 200) continue;
+    if (std::none_of(dec.clicks.begin(), dec.clicks.end(),
+                     [&](double c) { return in_window(t, c); })) {
+      if (stray++ == 0) stray_at = t;
     }
   }
   const gl::Summary cost = gl::summarize(cost_ms);
@@ -357,24 +376,44 @@ void run(gl::Lab& lab) {
   const bool draws = r.backend != "null";
   if (!draws)
     lab.note("The adapter is Dawn's null backend, which draws nothing: no flash to time.");
+  // A flash may go missing only when a frame was dropped or the loop slipped by more than a
+  // flash (a starved machine); otherwise every click heard has its flash.
+  const double frame_gap = std::max(1000.0 / fps, pace.max);
+  const bool may_miss =
+      ring.dropped() > 0 || st.dropped > 0 || frame_gap >= kFlash * 1000 - kSlackMs;
   if (static_cast<int>(dec.clicks.size()) < clicks_due ||
-      (draws && static_cast<int>(lags.size()) != static_cast<int>(dec.clicks.size()))) {
+      (draws && !may_miss &&
+       static_cast<int>(lags.size()) != static_cast<int>(dec.clicks.size()))) {
     lab.fail(std::to_string(clicks_due) + " clicks were due, " + std::to_string(dec.clicks.size()) +
                  " were heard and " + std::to_string(lags.size()) + " had a flash after them",
              "Open previews/gpu-capture-live/frames-at-a-click.png. Skill: replay.");
   }
+  if (draws && lags.size() < dec.clicks.size()) {
+    lab.note(std::to_string(dec.clicks.size() - lags.size()) +
+             " flashes are missing: frames were dropped or the loop slipped by " +
+             num(frame_gap, 1) + " ms, longer than a flash");
+  }
+  if (stray > 0) {
+    lab.fail(std::to_string(stray) + " bright frames (the first at " + num(stray_at, 0) +
+                 " ms) stand outside every click's flash: the pictures are off the sound's clock",
+             "Read capture/live.cpp's stamp. Skill: replay.");
+  }
   // A flash is drawn on the first frame stamped at or after its click, so it lands within the
   // gap between two frames: one frame's time when the loop keeps pace, more on a loaded machine
   // where a frame slips (the longest gap the loop measured).
-  const double frame_gap = std::max(1000.0 / fps, pace.max);
-  if (!lags.empty() && (least_lag <= -1.5 || worst_lag >= frame_gap + 1)) {
+  if (!lags.empty() && (least_lag <= -kSlackMs || worst_lag >= frame_gap + 1)) {
     lab.fail("a flash landed " + num(least_lag, 1) + " to " + num(worst_lag, 1) +
                  " ms from its click, outside the longest gap between frames (" +
                  num(frame_gap, 1) + " ms)",
              "Read capture/live.cpp's stamp. Skill: replay.");
   }
-  if (cost.max > kStallMs) {
-    lab.fail("a frame's capture call took " + num(cost.max, 2) + " ms: the frame waited",
+  const auto stalled =
+      std::count_if(cost_ms.begin(), cost_ms.end(), [](double ms) { return ms > kStallMs; });
+  lab.metric("capture-call.over-stall", static_cast<double>(stalled), "count", Det::measured);
+  if (static_cast<double>(stalled) > kStallShare * static_cast<double>(cost_ms.size())) {
+    lab.fail(std::to_string(stalled) + " of " + std::to_string(cost_ms.size()) +
+                 " frames' capture calls took over " + num(kStallMs, 0) + " ms (the worst " +
+                 num(cost.max, 2) + " ms): the frame waited",
              "Read gpu/readback_ring.hpp and capture/live.cpp's picture. Skill: replay.");
   }
 
