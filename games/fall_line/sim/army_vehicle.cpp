@@ -118,9 +118,11 @@ const std::vector<VehiclePoint>& road_in(GameState& state) {
 // Its way up `way` from arc `s0` to `s1` (s falls up the mountain), a point every `kStepM`.
 void lay_way(const GameState& state, ArmyVehicle& v, int32_t way, double s0, double s1) {
   const mg::Track& t = (*state.ways)[static_cast<size_t>(way)];
-  for (double s = s0; s > s1; s -= kStepM) {
+  double s = s0;
+  while (s > s1) {
     const mg::TrackPoint p = army_way_at(t, s);
     v.path.push_back({p.x, p.z});
+    s -= kStepM;
   }
   const mg::TrackPoint p = army_way_at(t, s1);
   v.path.push_back({p.x, p.z});
@@ -411,7 +413,7 @@ const VehiclePoint* next_point(ArmyVehicle& v, double t) {
 void drive_to(GameState& state, ArmyVehicle& v, double tx, double tz, double pace) {
   const double toward = lm::atan2(tx - v.x, tz - v.z);
   const Spec& S = spec_of(v.kind);
-  if ((state.steps + v.id * 7) % kDecideSteps == 0) {
+  if ((state.steps + int64_t{v.id} * 7) % kDecideSteps == 0) {
     const WayChoice c =
         choose_way(*state.level, state.trees, v.x, v.z, v.way, toward, read_for(v.kind));
     v.way = c.way;

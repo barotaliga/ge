@@ -341,6 +341,12 @@ struct ArmyState {
   bool fire = true;
   // Whether the paramotors' eddies' field (`para_field`) has been made.
   bool para_air = false;
+  // Whether the hunt sends its paramotors. A lab or a test staging the army's other arms on their
+  // own turns it off; the game never does.
+  bool send_paras = true;
+  // Whether the ground waves bring their vehicles. A lab or a test staging the men on foot alone
+  // turns it off; the game never does.
+  bool send_vehicles = true;
   // THE GROUND WAVES' VEHICLES OUT (army_vehicle.hpp); the next one's id, how many were called this
   // run, the men they put down, the times one was put back on its way (a fault the labs hold at
   // nought), and the village's road in and its cleared ground (planned when the first is called;
@@ -351,12 +357,6 @@ struct ArmyState {
   int32_t unloaded = 0;
   int32_t vehicles_stuck = 0;
   std::shared_ptr<const ArmyRoad> road;
-  // Whether the hunt sends its paramotors. A lab or a test staging the army's other arms on their
-  // own turns it off; the game never does.
-  bool send_paras = true;
-  // Whether the ground waves bring their vehicles. A lab or a test staging the men on foot alone
-  // turns it off; the game never does.
-  bool send_vehicles = true;
 };
 
 }  // namespace fall_line::sim
