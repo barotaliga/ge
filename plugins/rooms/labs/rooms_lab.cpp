@@ -3,7 +3,8 @@
 // away from above (the walls nearest the eye and every ceiling drop out, so each room is seen from
 // inside), every room on its own, every relief the format grows on a test room under a raking
 // light, a cave grown from four seeds side by side, views from inside, the cave's mouth wired,
-// the vault sample's brushes built by CSG, and its door opened by its trigger as a walker comes.
+// the vault sample's brushes built by CSG, the grass its grass floor grows (grass.hpp), and its
+// door opened by its trigger as a walker comes.
 // The numbers: the level's bytes on disk against the triangles it grows, each room's triangles
 // and build time, and the whole level built on one thread and on every worker, held to the same
 // bits. CPU pictures, in the digest; times measured.
@@ -23,8 +24,10 @@
 
 #include "assets/model.hpp"
 #include "assets/pose.hpp"
+#include "blades.hpp"
 #include "core/num_text.hpp"
 #include "core/parallel.hpp"
+#include "grass/cover.hpp"
 #include "lab/lab.hpp"
 #include "lab/model_view.hpp"
 #include "lab/raster.hpp"
@@ -34,6 +37,7 @@
 #include "rooms/build.hpp"
 #include "rooms/clip.hpp"
 #include "rooms/codec.hpp"
+#include "rooms/grass.hpp"
 #include "rooms/movers.hpp"
 #include "rooms/relief.hpp"
 #include "rooms/text.hpp"
@@ -379,6 +383,44 @@ void vault_shots(lab::Lab& lab, int px) {
             "no face shows inside a wall; no gap where two brushes meet", inputs},
            p);
   vault_door_shot(lab, level, px, inputs);
+
+  // The grass floor's grass: every grass-surfaced material's up-facing faces, scattered.
+  rm::LevelGrass grass = rm::level_grass(level);
+  rm::grow_on_brushes(grass, m);
+  for (const std::string& f : grass.faults) lab.fail(f, "next: fix the surface line it names");
+  double area = 0;
+  for (const ge::grass::Tri& t : grass.cover.tris) area += ge::grass::tri_area(t);
+  const size_t blades = ge::grass::scatter_all(grass.cover).size();
+  lab.metric("vault-grass-kinds", double(grass.cover.kinds.size()), "count");
+  lab.metric("vault-grass-triangles", double(grass.cover.tris.size()), "count");
+  lab.metric("vault-grass-area", area, "m2");
+  lab.metric("vault-grass-blades", double(blades), "count");
+  auto green = model;
+  ge::assets::Material blade;
+  blade.name = "blade";
+  blade.rgb[0] = 0.10f, blade.rgb[1] = 0.30f, blade.rgb[2] = 0.05f;
+  green.materials.push_back(blade);
+  const auto blade_part = uint8_t(green.materials.size() - 1);
+  ge::rooms::labs::add_blades(low, grass.cover, blade_part);
+  ge::rooms::labs::add_blades(all, grass.cover, blade_part);
+  Picture g = lab::create_picture(w * 2, h, kDark);
+  lab::draw_shape(g, 0, 0, w, h, lab::orbit_cam(box_of(low), 210, 55, 30, 0.95, double(w) / h),
+                  green, low, style());
+  label(g, 4, 4, "FROM ABOVE, ROOF OFF");
+  lab::ViewCam low_cam = cam;
+  low_cam.eye[1] = 0.9;
+  low_cam.target[1] = 0.2;
+  lab::draw_shape(g, w, 0, w, h, low_cam, green, all, style());
+  label(g, w + 4, 4, "CROUCHED AT THE START");
+  lab.shot({"vault-grass", "THE VAULT'S GRASS FLOOR GROWN",
+            "The vault's grass material carries `surface grass meadow height=0.6 density=300`: "
+            "its brush faces that look up are handed to engine/grass and scattered, " +
+                std::to_string(blades) + " blades over " + fixed(area, 1) +
+                " m2, drawn at rest as the CPU's blade_shape.",
+            "blades only on the floor (none on the walls, the pillar, the pool's water or the "
+            "door), up to the walls' feet, none poking through a wall",
+            inputs},
+           g);
 }
 
 void run(lab::Lab& lab) {

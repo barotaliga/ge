@@ -4,7 +4,9 @@
 // drawn in its mean colour), the clone's brushes are built by CSG and drawn from the same eyes as
 // the original's textured view, and a body is stood at every start in the clone's mover world.
 // The numbers: cells, brushes, faces, unseen faces, groups, entities, the level's bytes, the clone
-// and build times, and whether a body put down at each start stands on the original's floor there.
+// and build times, whether a body put down at each start stands on the original's floor there, and
+// the grass grown on the textures `--grass` surfaces as a lawn (rooms/grass.hpp), drawn in both
+// views.
 //
 // Nothing a map holds is written into the tree: the pictures land in previews/, which is not
 // committed, and the clone is written out only with --write (a path outside the tree).
@@ -24,12 +26,14 @@
 #include <string>
 #include <vector>
 
+#include "blades.hpp"
 #include "brush/labs/textured_view.hpp"
 #include "brush/read.hpp"
 #include "brush/write.hpp"
 #include "core/libm/libm.hpp"
 #include "core/num_text.hpp"
 #include "core/parallel.hpp"
+#include "grass/cover.hpp"
 #include "lab/lab.hpp"
 #include "lab/model_view.hpp"
 #include "lab/raster.hpp"
@@ -40,6 +44,7 @@
 #include "rooms/clone.hpp"
 #include "rooms/codec.hpp"
 #include "rooms/curves.hpp"
+#include "rooms/grass.hpp"
 #include "rooms/movers.hpp"
 #include "rooms/text.hpp"
 #include "vfs/pak.hpp"
@@ -351,6 +356,7 @@ void run(lab::Lab& lab) {
   const std::string texmap_path = lab.arg("texmap");
   const bool smooth = lab.arg("smooth") == "1";
   const bool merge = lab.arg("merge") != "0";
+  const std::string grass_arg = lab.arg("grass");
   std::vector<uint8_t> pak_bytes, palette;
   std::vector<Loaded> maps;
   if (pak_path.empty()) {
@@ -447,6 +453,20 @@ void run(lab::Lab& lab) {
       opt.placeholders = lab.arg("placeholders") == "1";
     } else {
       opt.placeholders = true;
+    }
+    // Every texture `--grass` names grows a lawn, unless the texture map surfaces it already.
+    for (size_t a = 0, b; a < grass_arg.size(); a = b + 1) {
+      b = std::min(grass_arg.find(',', a), grass_arg.size());
+      const std::string name = grass_arg.substr(a, b - a);
+      if (name.empty()) continue;
+      auto row = std::find_if(tm.rows.begin(), tm.rows.end(),
+                              [&](const rm::TextureChoice& c) { return c.name == name; });
+      if (row == tm.rows.end()) {
+        rm::TextureChoice c;
+        c.name = name;
+        row = tm.rows.insert(tm.rows.end(), c);
+      }
+      if (row->surface.empty()) row->surface = "grass lawn";
     }
     rm::Level level;
     rm::CloneReport rep;
@@ -571,8 +591,22 @@ void run(lab::Lab& lab) {
 
     // The original and the clone from the same eyes.
     const auto eyes = eyes_of(l.map);
-    const auto model = model_of(level);
-    const lab::Shape shape = shape_of(mesh);
+    rm::LevelGrass grass = rm::level_grass(level);
+    rm::grow_on_brushes(grass, mesh);
+    for (const std::string& f : grass.faults)
+      lab.fail(f, "next: fix the texture map's surface row");
+    double grass_area = 0;
+    for (const ge::grass::Tri& t : grass.cover.tris) grass_area += ge::grass::tri_area(t);
+    lab.metric(stem + "-grass-area", grass_area, "m2");
+    lab.metric(stem + "-grass-blades", double(ge::grass::scatter_all(grass.cover).size()), "count");
+    auto model = model_of(level);
+    ge::assets::Material blade;
+    blade.name = "blade";
+    blade.rgb[0] = 0.10f, blade.rgb[1] = 0.30f, blade.rgb[2] = 0.05f;
+    model.materials.push_back(blade);
+    const auto blade_part = uint8_t(model.materials.size() - 1);
+    lab::Shape shape = shape_of(mesh);
+    ge::rooms::labs::add_blades(shape, grass.cover, blade_part);
     const int cw = px, ch = px * 5 / 8;
     const bool textured = !palette.empty();
     Picture p = lab::create_picture(cw * 2, ch * int(eyes.size()), kDark);
@@ -597,7 +631,8 @@ void run(lab::Lab& lab) {
               {{"pak", pak_path}, {"map", l.name}, {"texmap", texmap_path}}},
              p);
     {
-      const lab::Shape cut = shape_of(mesh, true);
+      lab::Shape cut = shape_of(mesh, true);
+      ge::rooms::labs::add_blades(cut, grass.cover, blade_part);
       Picture o = lab::create_picture(px * 2, px * 4 / 3, kDark);
       lab::draw_shape(o, 0, 0, px * 2, px * 4 / 3,
                       lab::orbit_cam(lab::shape_box(cut), 30, 60, 30, 0.95, 1.5), model, cut,
@@ -721,6 +756,7 @@ const lab::LabSpec kSpec{
         {"list", "0", "print the first N curves found on each map"},
         {"segment", "7.5", "degrees a curve turns between the cuts it is drawn round with"},
         {"closeups", "6", "the curves drawn close up on each map, the most facets first"},
+        {"grass", "tile", "textures grown as a lawn, comma separated (none: \"\")"},
         {"px", "480", "a panel's width, px"},
     },
     "--px=160",
