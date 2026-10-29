@@ -1,11 +1,12 @@
 // `ge use` and `ge add` (engine/cli/add.hpp) on a freshly scaffolded repo: a system, every lab
 // kind and a test are written with every placeholder filled and pass `ge doctor`; a file that
 // exists is never written over; a dry run writes nothing; `ge use` links the plugin once and
-// syncs its skill and the skills of the plugins it brings. That the pieces build and pass is the
-// packaging workflow's `scaffold` job.
+// syncs its skill and the skills of the plugins it brings; `ge add water` lays a lake, links
+// ge::water once and syncs its skill. That the pieces build and pass is the packaging workflow's
+// `scaffold` job.
 //
 // ge:summary Tests: ge add writes filled, doctor-clean pieces; ge use links a plugin and its skills
-// ge:keywords test cli ge use add system lab test template plugin skills_for
+// ge:keywords test cli ge use add system lab test template plugin skills_for add-water lake
 // ge:skill agent-interface testing
 // ge:test tests/cli_add_test.cpp
 #include <string>
@@ -122,6 +123,41 @@ TEST(use_links_a_plugin_once_and_syncs_its_skills) {
   const Outcome twice = run_use(repo, "skier");
   CHECK(twice.written.empty() && twice.summary.find("already") != std::string::npos);
   CHECK(exit_of(run_use(repo, "nope")) == 2);
+  const auto findings = doctor(repo);
+  CHECK_MSG(count_of(findings, Severity::error) == 0, say(findings));
+}
+
+TEST(add_water_lays_a_lake_links_water_once_and_syncs_its_skill) {
+  if (!symlinks_work()) {
+    ge::test::skip("this machine cannot create symlinks, which every game repo's guidance needs");
+    return;
+  }
+  const fs::path repo = new_repo("water");
+  CHECK(!links_plugin(repo, "water"));
+  CHECK(!fs::exists(repo / kSkillsDir / "water"));  // synced only once the repo links ge::water
+  const Outcome o = run_add(repo, "water", "", "", false);
+  CHECK_MSG(exit_of(o) == 0, say(o.findings));
+  for (const char* file :
+       {"sim/water.hpp", "sim/water.cpp", "labs/water_lab.cpp", "tests/sim_water_test.cpp"}) {
+    const std::string text = read_text(repo / file).value_or("");
+    CHECK_MSG(!text.empty(), std::string(file) + " was not written");
+    for (const char* placeholder :
+         {"{{name}}", "{{ident}}", "{{snake}}", "{{kebab}}", "{{Type}}"}) {
+      CHECK_MSG(text.find(placeholder) == std::string::npos,
+                std::string(file) + " still holds " + placeholder);
+    }
+  }
+  CHECK(read_text(repo / "sim/water.hpp").value_or("").find("make_water(") != std::string::npos);
+  CHECK(read_text(repo / "CMakeLists.txt").value_or("").find("PUBLIC ge::core ge::water") !=
+        std::string::npos);
+  CHECK(fs::exists(repo / kSkillsDir / "water" / "SKILL.md"));
+  CHECK(exit_of(run_add(repo, "water", "", "", false)) == 1);  // never written over
+  const Outcome harbour = run_add(repo, "water", "harbour", "", false);
+  CHECK_MSG(exit_of(harbour) == 0, say(harbour.findings));
+  CHECK(read_text(repo / "labs/harbour_lab.cpp").value_or("").find("\"harbour\"") !=
+        std::string::npos);
+  const std::string cmake = read_text(repo / "CMakeLists.txt").value_or("");
+  CHECK(cmake.find("ge::water") == cmake.rfind("ge::water"));  // linked once
   const auto findings = doctor(repo);
   CHECK_MSG(count_of(findings, Severity::error) == 0, say(findings));
 }
