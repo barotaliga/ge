@@ -43,6 +43,7 @@ struct Frame {
   // at its phase, pre-exposed; 3 its tint, Lambert's share; 4 its semi-axes against the longest,
   // its dents; 5 its haze.
   moons: array<vec4f, 24>,
+  fog: vec4f,              // the fog in areas (render/fog.hpp): its range (m; 0: none), its slices
 }
 
 // THE MOTION a surface at camera-relative `rel` (w = 1; w = 0 for a direction at infinity) made

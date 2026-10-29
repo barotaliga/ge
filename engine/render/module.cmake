@@ -5,7 +5,7 @@ ge_module(ge_render)
 if(GE_GPU)
   file(GLOB GE_RENDER_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/render/*.cpp)
   add_library(ge_render STATIC ${GE_RENDER_SOURCES})
-  target_link_libraries(ge_render PUBLIC ge_gpu ge_assets ge_ui ge_water ge_grass)
+  target_link_libraries(ge_render PUBLIC ge_gpu ge_assets ge_ui ge_water ge_grass ge_snow)
   # Other worlds' moons' faces (render/moon_maps.hpp), compiled in: the sky reads no file.
   foreach(moon phobos deimos io europa ganymede callisto titan enceladus miranda triton)
     ge_embed_binary(ge_render ge_moon_map_${moon} engine/render/moon_maps/${moon}.png)
@@ -23,6 +23,9 @@ if(GE_GPU)
     engine/render/underwater.wgsl engine/render/liquid.wgsl engine/render/grass.wgsl
     engine/render/grass_scatter.wgsl
     engine/render/ui_pass.wgsl engine/render/eye.wgsl engine/render/eye_adapt.wgsl engine/render/explosions.wgsl
-    engine/render/morph.wgsl
-    engine/render/wet_lens.wgsl)
+    engine/render/morph.wgsl engine/render/sprites.wgsl
+    engine/render/wet_lens.wgsl engine/render/snow_probe.wgsl
+    engine/render/lens.wgsl
+    engine/render/fog.wgsl engine/render/fog_integrate.wgsl
+    engine/render/beams.wgsl)
 endif()

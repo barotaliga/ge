@@ -28,9 +28,12 @@
 // this one through its ring. No device (a container, SDL_AUDIO_DRIVER=dummy failing) is not an
 // error: the app runs silent. Focus lost fades the buses out with the clock.
 //
+// THE CAPTURE: --capture=PATH.webm (AV1, Opus) or .mkv (raw) records the window and its sound as
+// played, never waiting on either (capture/live.hpp, docs/replays.md § The live capture).
+//
 //   fall_line [--frames=N] [--size=WxH] [--no-vsync] [--seed=N] [--rivals=N] [--view=NAME]
 //             [--hour=H] [--mute] [--bot] [--bindings=PATH] [--inputs=PATH] [--events=PATH]
-//             [--record-events=PATH] [--play] [+<command> <args>...]
+//             [--record-events=PATH] [--capture=PATH] [--play] [+<command> <args>...]
 //
 // THE SETTINGS are cvars (cfg/cvars.hpp): the console execs default.cfg, config.cfg and
 // autoexec.cfg from the current directory, then the command line's `+set r_bloom 0 +exec my.cfg`
@@ -40,13 +43,8 @@
 // sky picked by the sv_ cvars (sim/sky.hpp) is skied as well as drawn, so its run's log names a
 // map `ge replay` does not build from the seed alone.
 //
-// --bindings is the player's file (default: bindings.txt in the platform's per-user directory
-// for the game); --inputs where the run's log is written (default: runs/fall_line-<seed>.inputs
-// there).
-//
-// --frames quits after N presented frames and prints the frame pace (a smoke run under a
-// virtual display: xvfb-run -a build/release/games/fall_line/fall_line --frames=60).
-// Closing the window, or QUIT on the front door, quits.
+// --bindings is the player's file, --inputs the run's log (defaults in the per-user directory).
+// --frames quits after N frames and prints the frame pace. Closing the window, or QUIT, quits.
 //
 // THE CONSOLE: the key under the tilde drops it over the run (engine/console/view.hpp's model, fed
 // by ui/console_keys.hpp, drawn by ui/console.hpp through the frame's 2D pass); while it is down
@@ -73,6 +71,7 @@
 
 #include "audio/synth.hpp"
 #include "camera/to_view.hpp"
+#include "capture/live.hpp"
 #include "console/cfg.hpp"
 #include "console/view.hpp"
 #include "core/num_text.hpp"
@@ -97,6 +96,7 @@
 #include "fall_line/sound/route.hpp"
 #include "gpu/device.hpp"
 #include "gpu/pipeline.hpp"
+#include "gpu/readback_ring.hpp"
 #include "gpu/surface.hpp"
 #include "input/event_log.hpp"
 #include "input/state.hpp"
@@ -128,12 +128,21 @@ struct Args {
   std::string inputs;         // where the run's log goes ("" its place in the prefs directory)
   std::string events;         // a scripted session to play in place of the devices
   std::string record_events;  // where the session's device events go ("" nowhere)
+  std::string capture;        // where the window's capture goes ("" none): .webm or .mkv
   bool play = false;          // straight onto the run, no front door
 };
 
-// The device's thread renders the synth; everything reaches it through the synth's ring.
+// The device's thread renders the synth (everything reaches it through the synth's ring) and,
+// while the window is captured, hands the capture what it rendered.
+struct Pull {
+  ge::audio::Synth* synth = nullptr;
+  ge::capture::Live* capture = nullptr;
+};
+
 void pull(float* out, int frames, void* user) {
-  static_cast<ge::audio::Synth*>(user)->render(out, frames);
+  const auto* p = static_cast<Pull*>(user);
+  p->synth->render(out, frames);
+  if (p->capture) p->capture->audio(out, frames, ge::platform::now_ns());
 }
 
 // How long the buses take to fade in or out, s.
@@ -171,6 +180,16 @@ bool write_file(const std::string& path, const std::string& text) {
   return static_cast<bool>(file);
 }
 
+// A frame come back from the readbacks handed to the capture, the buffers swapped, not copied.
+void hand_in(ge::capture::Live& capture, ge::gpu::Image& img, ge::lab::Picture& handed,
+             int64_t ms) {
+  handed.width = static_cast<int>(img.width);
+  handed.height = static_cast<int>(img.height);
+  handed.rgba.swap(img.rgba);
+  capture.picture(handed, ms);  // kept on a drop, handed back a spare otherwise
+  img.rgba.swap(handed.rgba);
+}
+
 bool parse(int argc, char** argv, Args& a) {
   for (int i = 1; i < argc; ++i) {
     const std::string_view arg = argv[i];
@@ -206,6 +225,8 @@ bool parse(int argc, char** argv, Args& a) {
       a.events = std::string(arg.substr(9));
     } else if (arg.rfind("--record-events=", 0) == 0) {
       a.record_events = std::string(arg.substr(16));
+    } else if (arg.rfind("--capture=", 0) == 0) {
+      a.capture = std::string(arg.substr(10));
     } else if (arg == "--play") {
       a.play = true;
     } else {
@@ -226,7 +247,8 @@ int main(int argc, char** argv) {
         "[--seed=N] [--rivals=N] "
         "[--view=tips|helmet|chase|far|high|orbit|start|piste|lookback|vista|aerial] "
         "[--hour=H] [--mute] [--bot] [--bindings=PATH] [--inputs=PATH] [--events=PATH] "
-        "[--record-events=PATH] [--play] [+<command> ...]; next: rerun with those flags only.");
+        "[--record-events=PATH] [--capture=PATH.webm|PATH.mkv] [--play] [+<command> ...]; next: "
+        "rerun with those flags only.");
     return 2;
   }
   // The settings: the cfgs, the --flags, the command line, then every latched value applied.
@@ -352,9 +374,29 @@ int main(int argc, char** argv) {
   faders.effects = set.effects;
   faders.on = !set.mute;
   fall_line::sound::apply_mix(synth, faders, 0);
+  // The capture, opened before the device so the tap is there from the first pull.
+  ge::capture::Live capture;
+  ge::gpu::ReadbackRing capture_ring(4);
+  ge::gpu::Image captured;
+  ge::lab::Picture handed;
+  if (!args.capture.empty()) {
+    ge::capture::LiveOptions o;
+    o.file = args.capture;
+    o.width = w;
+    o.height = h;
+    o.sound = !set.mute;
+    o.codec = std::filesystem::path(args.capture).extension() == ".mkv" ? "" : "av1";
+    if (!capture.open(o, ge::platform::now_ns(), error)) {
+      out::error("fall_line: cannot capture to " + args.capture + ": " + error +
+                 "; next: pass --capture=<a writable .webm or .mkv path>");
+      return 2;
+    }
+    out::status("fall_line: capturing the window to " + args.capture);
+  }
+  Pull puller{&synth, capture.is_open() ? &capture : nullptr};
   std::unique_ptr<ge::platform::AudioOut> speaker;
   if (!set.mute) {
-    speaker = ge::platform::open_audio({.rate = 48000, .pull = pull, .user = &synth});
+    speaker = ge::platform::open_audio({.rate = 48000, .pull = pull, .user = &puller});
     if (!speaker) {
       out::status("fall_line: no audio device; running silent.");
     } else {
@@ -611,8 +653,39 @@ int main(int argc, char** argv) {
         {skiers, static_cast<double>(granted) / 120.0, fresh, {}, subject, &overlay, shown.t},
         target);
     fresh = false;
+    if (capture.is_open()) {
+      // The frame copied once it is drawn and stamped as it is shown; the copies that have
+      // come back are handed to the capture's worker.
+      capture_ring.capture(*device, surface.frame_target(),
+                           static_cast<uint64_t>(capture.stamp(ge::platform::now_ns())));
+      capture_ring.poll(*device, captured, [&](ge::gpu::Image& img, uint64_t ms) {
+        hand_in(capture, img, handed, static_cast<int64_t>(ms));
+      });
+    }
     surface.present();
     ++presented;
+  }
+  if (capture.is_open()) {
+    capture_ring.drain(*device, captured, [&](ge::gpu::Image& img, uint64_t ms) {
+      hand_in(capture, img, handed, static_cast<int64_t>(ms));
+    });
+    speaker.reset();  // the tap stops with the device
+    const int64_t ring_dropped = capture_ring.dropped();
+    if (capture.close(error)) {
+      const ge::capture::LiveStats st = capture.stats();
+      char line[240];
+      std::snprintf(line, sizeof line,
+                    "fall_line: the capture is written to %s: %lld frames, %.1f s of sound, "
+                    "%lld frames dropped by the readbacks and %lld by the encoder, %.1f MB",
+                    args.capture.c_str(), static_cast<long long>(st.pictures),
+                    static_cast<double>(st.audio_frames) / 48000.0,
+                    static_cast<long long>(ring_dropped), static_cast<long long>(st.dropped),
+                    static_cast<double>(st.bytes) / 1e6);
+      out::status(line);
+    } else {
+      out::error("fall_line: the capture to " + args.capture + " failed: " + error +
+                 "; next: check the disk, or capture to .mkv to rule the encoder out");
+    }
   }
 
   // The run as its input log (the player's latest; none when no run was played from the front

@@ -154,6 +154,9 @@ void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint
     row[4][3] = static_cast<float>(kind.lump);
     row[5][0] = static_cast<float>(kind.haze);
   }
+
+  // THE FOG IN AREAS: none until render/fog.hpp's fog_uniforms says a volume is in reach.
+  for (float& f : u.fog) f = 0.0f;
 }
 
 FrameTargets create_targets(gpu::Device& device, std::string_view label, uint32_t width,
