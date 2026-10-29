@@ -28,7 +28,7 @@
 // few lines in its scrollback and a command half typed, its suggestions under the panel.
 //
 // --cfg runs console commands over Fall Line's cvars first (cfg/cvars.hpp), so a sky a server
-// picks (sv_weather, sv_snowfall, sv_fog, sv_wind, sv_winddir, sv_cover, sv_thick,
+// picks (sv_weather, sv_snowfall, sv_fog, sv_wind, sv_winddir, sv_cover, sv_clouddensity,
 // sv_cloudheight, sv_cloudspeed, sv_hour, sv_skyrate) and r_clouds are photographed as the game
 // draws them (sim/sky.hpp).
 //
@@ -174,6 +174,18 @@ std::string fixed(double v, int places) {
   return b;
 }
 
+// Each cloud layer drawn, lowest first, as its base and top over the valley floor, m.
+std::string layers_of(const ge::render::Clouds& clouds, double floor_y) {
+  if (clouds.count == 0) return "none";
+  std::string out;
+  for (int i = 0; i < clouds.count; ++i) {
+    const ge::render::CloudLayer& l = clouds.layers[i];
+    if (i > 0) out += ", ";
+    out += fixed(l.base_m - floor_y, 0) + ".." + fixed(l.top_m - floor_y, 0) + " m";
+  }
+  return out;
+}
+
 void run(ge::lab::Lab& lab) {
   const double seed = lab.arg_num("seed");
   // --cfg: console commands over Fall Line's cvars, as a cfg would set them (the sky's sv_ cvars
@@ -201,6 +213,7 @@ void run(ge::lab::Lab& lab) {
   options.cover = cvars.cover;
   options.thick = cvars.thick;
   options.cloud_height = cvars.cloud_height;
+  options.cloud_thickness = cvars.cloud_thickness;
   options.cloud_speed = cvars.cloud_speed;
   options.sun_size = cvars.disc_sun;
   options.moon_size = cvars.disc_moon;
@@ -256,6 +269,8 @@ void run(ge::lab::Lab& lab) {
     std::vector<ge::skier::SkierState> skiers;
     // The racers every fourth step since the last moment: the tracks laid before it is shot.
     std::vector<std::vector<ge::skier::SkierState>> laid;
+    // The cloud layers the still drew, for its stamp.
+    std::string clouds = "none";
   };
   std::vector<Scene> scenes;
   // Each named view at each of the sky's --at seconds (more than one: a sequence, each shot
@@ -370,7 +385,9 @@ void run(ge::lab::Lab& lab) {
          {"render", std::to_string(render_w) + "x" + std::to_string(render_h) +
                         (options.taa ? ", TAA-U" : ", no TAA")},
          {"reach", options.reach_m > 0 ? fixed(options.reach_m, 0) + " m, misted" : "all"},
-         {"cfg", lab.arg("cfg").empty() ? "none" : lab.arg("cfg")}}};
+         {"cfg", lab.arg("cfg").empty() ? "none" : lab.arg("cfg")},
+         {"eye", fixed(sc.view.eye[1] - level.mountain.base.y, 0) + " m over the floor"},
+         {"clouds", sc.clouds}}};
   };
 
   // The console's still: the last scene with the drop-down console down over it.
@@ -453,6 +470,7 @@ void run(ge::lab::Lab& lab) {
     for (const auto& racers : sc.laid) fall_line::app::track(*frame, {racers});
     const ge::gpu::Image img = still(sc);
     frame->recorder.wait(*device);
+    sc.clouds = layers_of(frame->drawn_clouds, level.mountain.base.y);
     // How far away each pixel is, off this still's depth, for a diff (`--compare`).
     ge::lab::DistanceMap distance{static_cast<int>(frame->targets.width),
                                   static_cast<int>(frame->targets.height),
