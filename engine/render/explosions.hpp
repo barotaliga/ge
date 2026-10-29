@@ -21,13 +21,20 @@
 //   texture of its own, two fetches a step, one draw for every blast. At most kMaxExplosions are
 //   drawn a frame (the nearest kept), back to front, premultiplied over the picture; each writes
 //   the motion target's reactive channel so TAA does not smear it.
+// - MUZZLE FIRE (render/muzzle.hpp) is drawn by the same march: a shot's flame is a ball
+//   STRETCHED along the barrel (the ray's offset squeezed along the axis by the flame's length
+//   over its width, the noise read in the squeezed frame so its billows streak down the
+//   barrel's line), carved into PRONGS round the axis where its look asks for them, and hotter
+//   at its base. Each frame a game hands the live shots with the muzzle's pose of that frame
+//   (`MuzzleFire`), so the flame rides the gun; its puff is a blast like any other.
 // - THE SPARKS: `throw_blast` turns a blast's births into particles (glowing sparks that cool,
 //   dark debris) and hands them to the pool, once, the frame the blast goes off.
 //
 // ge:summary Explosions drawn: the fireball volume marched per pixel, sorted, and its sparks
 // ge:keywords render explosions fireball volume raymarch billboard impostor smoke emission
 // ge:keywords blackbody sparks debris create_explosions prepare_explosions encode_explosions
-// ge:keywords throw_blast spark_particle explosion-cost
+// ge:keywords throw_blast spark_particle explosion-cost muzzle-fire flame stretched prongs
+// ge:keywords throw_shot
 // ge:skill render
 // ge:test tests/render_explosion_test.cpp
 #pragma once
@@ -40,6 +47,7 @@
 #include "gpu/pipeline.hpp"
 #include "render/explosion.hpp"
 #include "render/frame.hpp"
+#include "render/muzzle.hpp"
 #include "render/particles.hpp"
 #include "render/view.hpp"
 
@@ -57,11 +65,19 @@ struct GpuBlast {
   float centre[4];  // camera-relative, m; the fireball's radius
   float state[4];   // the core's temperature, K; the fire share; the smoke; the age, s
   float look[4];    // the noise's offset (its tile's units); the bound's radius, m
-  float more[4];    // 1 when the eye is inside the bound; 0; 0; 0
+  float more[4];    // 1 when the eye is inside the bound; the prongs' depth; the glow; 0
   float shape[4];   // the look's billows; fray; the noise's tiles per radius; roll, radii/s
   float soot[4];    // the smoke's albedo times its tint; 0
+  float axis[4];    // the stretch's axis (unit); the stretch, its length over its width (1: none)
+  float side[4];    // where the first prong points (unit, square to the axis); the prongs (0: none)
 };
-static_assert(sizeof(GpuBlast) == 96, "match explosions.wgsl's Blast");
+static_assert(sizeof(GpuBlast) == 128, "match explosions.wgsl's Blast");
+
+// A shot's flame this frame: the shot and the muzzle's pose of this frame.
+struct MuzzleFire {
+  Shot shot;
+  MuzzlePose pose;
+};
 
 struct Explosions {
   ExplosionSettings settings;
@@ -84,13 +100,15 @@ void create_explosions(gpu::Device& device, gpu::PipelineSet& pipelines, Explosi
 // The group over a frame's depth (again after a resize).
 void bind_explosion_targets(gpu::Device& device, Explosions& ex, const FrameTargets& targets);
 
-// This frame's blasts: each one alive at `view.time_s` and on the screen of a `width` x `height`
-// render, at most kMaxExplosions of the nearest, staged far to near. Allocates nothing.
+// This frame's blasts and muzzle flames: each one alive at `view.time_s` and on the screen of a
+// `width` x `height` render, at most kMaxExplosions of the nearest, staged far to near.
+// Allocates nothing.
 void stage_explosions(Explosions& ex, std::span<const Blast> blasts, const FrameView& view,
-                      uint32_t width, uint32_t height);
+                      uint32_t width, uint32_t height, std::span<const MuzzleFire> fires = {});
 // Stage (above) and upload.
 void prepare_explosions(gpu::Device& device, Explosions& ex, std::span<const Blast> blasts,
-                        const FrameView& view, uint32_t width, uint32_t height);
+                        const FrameView& view, uint32_t width, uint32_t height,
+                        std::span<const MuzzleFire> fires = {});
 
 // The pass "explosions" (after the particles, before the resolve): one quad a staged blast.
 void encode_explosions(const Explosions& ex, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
@@ -101,5 +119,7 @@ void encode_explosions(const Explosions& ex, const gpu::PipelineSet& pipelines, 
 Particle spark_particle(const Spark& s);
 // Every birth of `blast` into the pool's births (call once, the frame it goes off). The count.
 size_t throw_blast(Particles& particles, const Blast& blast);
+// A shot's sparks, from the pose it was fired on, into the pool (once, the frame it is fired).
+size_t throw_shot(Particles& particles, const Shot& shot, const MuzzlePose& pose_at_shot);
 
 }  // namespace ge::render
