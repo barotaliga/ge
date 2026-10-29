@@ -48,6 +48,7 @@ updates that row's status file (`docs/goals/<row>.md`) in its PR.
 | [`docs/shooters-edge.md`](docs/shooters-edge.md) | The second game, Shooter's Edge (M18, after Fall Line): the compatibility contract, the clean room, the homes, the protocols, the labs and the `ge` commands it needs |
 | [`docs/detail.md`](docs/detail.md) | Brush detail (M42): bevels on exposed brush edges and which edges stay sharp, decals clipped to surfaces that age in a pool, seeded props by rules, the labs |
 | [`docs/water.md`](docs/water.md) | Water and wind (M24): the bodies and the one query, the waves the wind grows, floating, swimming tuned per game, flowing water, the colour from what is in the water, the surface and the view under it, the sound, and the labs |
+| [`docs/climate.md`](docs/climate.md) | Temperature and humidity (M51): the air by the hour, the height, the weather and the ground, the dew point, and what they do: fog of five kinds, snow or rain, the snow's feel, frost, rime, black ice, the breath, lake ice; who reads what |
 | [`docs/grass.md`](docs/grass.md) | Grass (M34): the research, kinds and recipes, covers on a heightfield or a mesh's floors, the blade scatter, the sway in the wind, the grass drawn, and the rows |
 
 **The working area.** `porting/` holds everything that only matters while modules are
@@ -262,7 +263,7 @@ characters.
 | `engine/console/` | The console (`ge::console`, `docs/console.md`): cvars and their tiers, the console language, aliases, binds, cfg files, the drop-down console's model | `console` |
 | `engine/replay/` | Replays (`ge::replay`, `docs/replays.md`): a run watched again off its input log, the keyframes a seek starts from (the game's `Run::clone`), the player's seek in a step budget, the transport | `replay` |
 | `engine/save/` | Saves (`ge::save`, `docs/saves.md`): the save file (header, meta, tagged versioned chunks, directory, XXH64), the state described once for its writer and reader | `save` |
-| `engine/capture/` | Video with sound (`ge::capture`, in `ge_play`; `docs/replays.md`): the Matroska muxer and reader, I420, the export's A/V clock, the sync fixture | `replay` |
+| `engine/capture/` | Video with sound (`ge::capture`, in `ge_play`; `docs/replays.md`): the Matroska muxer and reader, I420, the encoders, the export's A/V clock, the live capture, the sync fixture | `replay` |
 | `engine/net/` | Multiplayer networking (`ge::net`, `docs/networking.md`): addresses, the wire, UDP and TCP sockets, links, the simulated network, sessions, LAN discovery, replication; the only place socket headers are included | `net` |
 | `engine/snow/` | Snow over any ground (`ge::snow`, `docs/snow.md`): the layer and its cover, sparse fixed-point tiles, `sample`, `press` and imprint records, reference contacts, the snapshot | `snow` |
 | `engine/move/` | Character movement (`ge::move`, `docs/movement.md`): the knobs and presets, the step over a trace callback, the box world, the strafer, the scenarios | `move` |
@@ -278,6 +279,7 @@ characters.
 | `engine/assets/` | Authored models: the glTF loader and writer, the `Model`, posing and CPU skinning; no GPU | `assets` |
 | `engine/ui/` | The 2D layer (`ge::ui`): paints, the draw list, images, fonts, the CPU raster, backdrops, menus as a model and a view; no GPU | `ui` |
 | `engine/charset/` | The bitmap fonts (`ge::charset`, `docs/charsets.md`): ten ASCII charsets as committed atlases and their builder, the noise layers, the text looks, text layout | `ui` |
+| `engine/hud/` | The HUD kit (`ge::hud`): faces over TrueType or a charset, the frame and anchors, readouts, bars, pips, banners, the feed, the layout check | `ui` |
 | `plugins/` | Plugins, one directory each, built as `ge_<name>` (`cmake/Plugins.cmake`, checked by `tools/check-plugins.mjs`) | `plugins` |
 | `plugins/racing/` | The racing primitives (`ge::racing`): the control tape, the record book's policy, the standings | `racing` |
 | `plugins/mountain/mapgen/` | The world generator (`ge::mountain::mapgen`): the piste and the ski area by stage, the rule books, the real faces and hints, the digest; `picture/` the map on the CPU | `mountain` |
@@ -299,6 +301,7 @@ characters.
 | `games/fall_line/sound/` | Fall Line's sound (`fall_line_sound`, no GPU): the bank, the route, the listener, the mix | `audio`, `sim` |
 | `games/fall_line/camera/` | Fall Line's camera (`fall_line_camera`, no GPU): the ladder of engine rigs and the camera key, the skier as the subject, the trunks and posts it answers | `camera` |
 | `games/fall_line/controls/` | Fall Line's controls (`fall_line_controls`, no GPU): the actions and default bindings, the player's file, the rebinding walk, what is felt, the run played by hand, scripted sessions | `input` |
+| `games/fall_line/hud/` | Fall Line's HUD (`fall_line_hud`, no GPU): the free ride's snapshot, the news, the words, the view | `ui` |
 | `games/fall_line/labs/` | Fall Line's labs, the headless ones and the GPU's | `sim`, `labs`, `audio` |
 | `games/fall_line/app/` | Fall Line's presentation (`fall_line_app`): the pass table, the look, the scene, the views, the `fall_line` window; then the HUD | `platform`, `gpu`, `render`, `ui`, `audio` |
 | `tests/` | `<topic>_test.cpp`, one executable each; `check.hpp` (the harness), `golden.hpp`, `golden/` | `testing` |

@@ -2,14 +2,16 @@
 // exactly the blades engine/grass scatters (every one the GPU keeps is the CPU's, to the float's
 // last bits but for rounding, and all of a cover in view are kept when nothing is thinned); the
 // distance thins them and splits the fine list from the coarse; the GPU's blade in the wind is the
-// CPU's `blade_shape` in the CPU's `wind_at_blade`; and the draw puts green blades into the
-// picture where the cover is, with no validation error.
+// CPU's `blade_shape` in the CPU's `wind_at_blade`, and a trampled one the CPU's under the same
+// cells' `press_at`; the draw puts green blades into the picture where the cover is, with no
+// validation error; and a blade that sways between frames carries its own motion to TAA.
 //
 // ge:summary Tests for the grass drawn: the GPU scatter against the CPU's, thinning, shapes, draw
-// ge:keywords test render grass scatter thinning shape probe draw wind
+// ge:keywords test render grass scatter thinning shape probe draw wind trample press motion
 // ge:skill render grass testing
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <map>
 #include <vector>
 
@@ -130,6 +132,46 @@ r::GrassSettings keep_all() {
   return gs;
 }
 
+// The motion target read back now: each pixel's two half floats as one word.
+std::vector<uint32_t> read_motion(ge::gpu::Device& d, const r::FrameTargets& t) {
+  const uint32_t row = ((kW * 8 + 255) / 256) * 256;
+  wgpu::BufferDescriptor bd;
+  bd.size = uint64_t{row} * kH;
+  bd.usage = wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::MapRead;
+  const wgpu::Buffer buf = d.device.CreateBuffer(&bd);
+  wgpu::TexelCopyTextureInfo src;
+  src.texture = t.motion;
+  wgpu::TexelCopyBufferInfo dst;
+  dst.buffer = buf;
+  dst.layout.bytesPerRow = row;
+  dst.layout.rowsPerImage = kH;
+  const wgpu::Extent3D size{kW, kH, 1};
+  wgpu::CommandEncoder e = d.device.CreateCommandEncoder();
+  e.CopyTextureToBuffer(&src, &dst, &size);
+  wgpu::CommandBuffer c = e.Finish();
+  d.queue.Submit(1, &c);
+  bool ok = false;
+  const wgpu::Future fut =
+      buf.MapAsync(wgpu::MapMode::Read, 0, bd.size, wgpu::CallbackMode::AllowProcessEvents,
+                   [&ok](wgpu::MapAsyncStatus st, wgpu::StringView) {
+                     ok = st == wgpu::MapAsyncStatus::Success;
+                   });
+  ge::gpu::wait(d, fut);
+  CHECK(ok);
+  std::vector<uint32_t> out(size_t{kW} * kH, 0);
+  if (!ok) return out;
+  const auto* bytes = static_cast<const uint8_t*>(buf.GetConstMappedRange(0, bd.size));
+  for (uint32_t y = 0; y < kH; ++y) {
+    for (uint32_t x = 0; x < kW; ++x) {
+      uint16_t h[2];
+      std::memcpy(h, bytes + size_t{y} * row + size_t{x} * 8, sizeof h);
+      out[size_t{y} * kW + x] = h[0] | (uint32_t{h[1]} << 16u);
+    }
+  }
+  buf.Unmap();
+  return out;
+}
+
 }  // namespace
 
 TEST(the_gpu_grows_the_cpus_blades) {
@@ -243,5 +285,92 @@ TEST(the_draw_puts_green_blades_where_the_cover_is) {
   const size_t pixels = bare.rgba.size() / 4;
   CHECK_MSG(changed > pixels / 50 && changed < pixels / 2, "changed " + std::to_string(changed));
   CHECK_MSG(greener * 10 > changed * 8, "greener " + std::to_string(greener));
+  CHECK(d.errors.load() == 0);
+}
+
+TEST(the_gpus_trampled_blade_lies_as_the_cpus) {
+  auto device = ge::test::test_device();
+  if (!device) return;
+  ge::gpu::Device& d = *device;
+  Scene s;
+  make_scene(d, s, keep_all());
+  const ge::gpu::Target out = ge::gpu::create_target(d, "test.final", kW, kH);
+  // A path walked across the patch, then a wheel's line down it later.
+  gg::Trample tr;
+  gg::init_trample(tr, 0.25f, 128);
+  for (int i = 0; i < 24; ++i)
+    gg::stamp(tr, 250.5f + 0.5f * static_cast<float>(i), 106.0f, 0.4f, 1, 0,
+              0.2f * static_cast<float>(i));
+  for (int i = 0; i < 30; ++i)
+    gg::stamp(tr, 255.0f, 100.5f + 0.4f * static_cast<float>(i), 0.25f, 0, 1, 5.0f);
+  r::set_grass_trample(d, s.grass, tr);
+  CHECK(tr.dirty_hi <= tr.dirty_lo);
+  ge::wind::Field f;
+  f.mean = 4;
+  f.from = 0.4;
+  gg::GrassAir air;
+  air.field = &f;
+  air.ground = &s.field;
+  const double t = 6.5;
+  frame(d, s, out, above(), air, t, false);
+  const r::GrassLists got = r::read_grass_blades(d, s.grass);
+  const std::vector<float> shapes = r::probe_grass_shapes(d, s.pipelines, s.grass, s.frame);
+  float worst = 0, worst_press = 0;
+  size_t pressed = 0;
+  for (size_t i = 0; i < got.near.size(); i += 3) {
+    const gg::Blade& b = got.near[i];
+    const gg::Kind& k = s.cover.kinds[gg::kind_of(b)];
+    float wind[2];
+    gg::wind_at_blade(s.grass.grid, b.root[0], b.root[2], static_cast<float>(t), wind);
+    const gg::Press p = gg::press_at(tr, k, b.root[0], b.root[2], static_cast<float>(t));
+    const gg::Shape want = gg::blade_shape(k, b, wind, static_cast<float>(t), p);
+    const float* g = &shapes[i * 12];
+    pressed += p.amount > 0.1f ? 1 : 0;
+    worst_press = std::max(worst_press, std::fabs(g[11] - p.amount));
+    const float* pts[3] = {want.v0, want.v1, want.v2};
+    for (int q = 0; q < 3; ++q) {
+      for (int k3 = 0; k3 < 3; ++k3) worst = std::max(worst, std::fabs(g[q * 4 + k3] - pts[q][k3]));
+    }
+  }
+  CHECK_MSG(pressed > 50, "pressed " + std::to_string(pressed));
+  CHECK_MSG(worst_press < 1e-4f, "press off by " + std::to_string(worst_press));
+  CHECK_MSG(worst < 2e-3f, "shape off by " + std::to_string(worst) + " m");
+  CHECK(d.errors.load() == 0);
+}
+
+TEST(a_swaying_blade_draws_with_motion_and_a_still_one_without) {
+  auto device = ge::test::test_device();
+  if (!device) return;
+  ge::gpu::Device& d = *device;
+  Scene s;
+  make_scene(d, s, keep_all());
+  const ge::gpu::Target out = ge::gpu::create_target(d, "test.final", kW, kH);
+  ge::wind::Field f;
+  f.mean = 6;
+  f.from = 1.0;
+  ge::wind::lay_gusts(f, 3, 0.4);
+  gg::GrassAir air;
+  air.field = &f;
+  air.ground = &s.field;
+  // The camera is still: the clock alone moves the blades, so a frame's motion differs from a
+  // frame at the same time's only where a blade is drawn, and there it does.
+  const ge::gpu::Image bare = frame(d, s, out, above(), air, 2.0, false);
+  const ge::gpu::Image grown = frame(d, s, out, above(), air, 2.0, true);
+  const std::vector<uint32_t> held = read_motion(d, s.targets);
+  frame(d, s, out, above(), air, 2.0, true);
+  const std::vector<uint32_t> again = read_motion(d, s.targets);
+  frame(d, s, out, above(), air, 2.05, true);
+  const std::vector<uint32_t> moving = read_motion(d, s.targets);
+  size_t moved = 0, off_grass = 0;
+  for (size_t i = 0; i < held.size(); ++i) {
+    if (held[i] == moving[i]) continue;
+    ++moved;
+    const bool grass = std::memcmp(&bare.rgba[i * 4], &grown.rgba[i * 4], 3) != 0;
+    off_grass += grass ? 0 : 1;
+  }
+  CHECK(held == again);
+  CHECK_MSG(moved > 20, "moved " + std::to_string(moved));
+  // A blade swaying onto a pixel it did not cover at 2.0 s is the only way off the grass.
+  CHECK_MSG(off_grass * 20 < moved, "off the grass " + std::to_string(off_grass));
   CHECK(d.errors.load() == 0);
 }

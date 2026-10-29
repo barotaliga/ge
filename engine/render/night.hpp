@@ -13,6 +13,10 @@
 //   (`surface_surge`). The dark part is earthlit: a ten-thousandth of the lit surface's
 //   brightness under a full Earth (a new moon), less as the Earth wanes. Its FACE is the real
 //   one (render/moon.hpp's albedo map, turned as core/moon.hpp's pole and prime meridian say).
+// - OTHER WORLDS' MOONS (`set_moons`, render/moons.hpp's kinds): each on a circle round the sky
+//   at its own period, near the celestial equator, its locked face rocking by its libration; its
+//   light outside the air its albedo times its solid angle's share of the sun's times the phase
+//   law; drawn as the Earth's moon is (as seen, by its own blend of the dusty and the icy law).
 // - THE EARTH'S SHADOW. A point of the disc in the penumbra sees the share of the sun the Earth
 //   leaves uncovered (a circle's segment across the penumbra's width); in the umbra only the
 //   air's refracted red light, a ten-thousandth of full sunlight at the axis, ten times that at
@@ -36,6 +40,7 @@
 // ge:keywords key-light twilight dark-sky airglow sidereal stars set_night moon_lux phase_law
 // ge:keywords surface_surge twilight_lux moon_radius night-sky two-skies moon-sky pre_exposure
 // ge:keywords eclipse umbra penumbra earth-shadow shadow_light eclipse_of lunar-eclipse moon-face
+// ge:keywords set_moons key_moon other-moons moons-light orbit spin libration
 // ge:skill render
 // ge:test tests/render_night_test.cpp
 #pragma once
@@ -126,5 +131,18 @@ Eclipse eclipse_of(const double toward[3], double radius, const double shadow[3]
 // the local sidereal angle (degrees, core/solar.hpp's sidereal_time plus the longitude), and make
 // the moon the key light once the sun is gone.
 void set_night(FrameView& view, const Moon& moon, double latitude_deg, double sidereal_deg);
+
+// The moon's light in `view.night` from where it stands (`elevation` rad, `azimuth` a world
+// heading) and its light outside the air (`lux`, lx), and the key light chosen: set_night's last
+// step, which set_moons takes again when other moons light the night. `view`'s sun is the real
+// sun's.
+void key_moon(FrameView& view, double elevation, double azimuth, double lux);
+
+// OTHER WORLDS' MOONS (render/moons.hpp), after set_night: `view.moons` placed at julian day
+// `jd` in `view.night.moons` (each on its orbit round the sky's celestial pole, its face turned by
+// its spin, lit by the real sun), under the sky set_night turned. A set without the Earth's moon
+// takes its place: its disc is not drawn, and the others light the night (their light summed,
+// falling from the brightest's direction, the key once the sun is gone).
+void set_moons(FrameView& view, double jd);
 
 }  // namespace ge::render

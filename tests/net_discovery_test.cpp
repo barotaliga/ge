@@ -73,7 +73,7 @@ TEST(discovery_advert_never_outgrows_the_probe) {
   sim_advance(net, 1000);
   CHECK(lan_answer(host, advert(game, 7000, "a long enough name", 1), 1000) == 0);
   CHECK(sizeof(Advert::name) == kMaxAdvertName + 1);
-  CHECK(23 + kMaxAdvertName <= kProbeSize);
+  CHECK(kAdvertHead + kAdvertBody + kMaxAdvertName <= kProbeSize);
 }
 
 TEST(discovery_over_real_udp) {
