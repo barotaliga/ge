@@ -58,6 +58,7 @@
 #include "fall_line/app/frame.hpp"
 #include "fall_line/app/sky_type.hpp"
 #include "fall_line/app/views.hpp"
+#include "fall_line/camera/subject.hpp"
 #include "fall_line/cfg/cvars.hpp"
 #include "fall_line/sim/bot.hpp"
 #include "fall_line/sim/simulate.hpp"
@@ -233,8 +234,8 @@ ge::lab::Picture diff_picture(const ge::gpu::Image& culled, const ge::gpu::Image
 
 void run(ge::lab::Lab& lab) {
   const double seed = lab.arg_num("seed");
-  // --cfg: console commands over Fall Line's cvars, as a cfg would set them (the sky's sv_ cvars
-  // and r_clouds reach the map and the picture here; nothing else is read from them).
+  // --cfg: console commands over Fall Line's cvars, as a cfg would set them (the sky's sv_ cvars,
+  // r_clouds, r_ao and r_dof reach the map and the picture here; nothing else is read from them).
   ge::console::Console console;
   fall_line::cfg::Settings cvars;
   fall_line::cfg::add_cvars(console, cvars);
@@ -262,6 +263,8 @@ void run(ge::lab::Lab& lab) {
   options.cloud_speed = cvars.cloud_speed;
   options.sun_size = cvars.disc_sun;
   options.moon_size = cvars.disc_moon;
+  options.ao = {.strength = cvars.ao, .radius_m = cvars.ao_radius};
+  options.dof = {.strength = cvars.dof, .focus_m = cvars.dof_focus};
   if (const std::string problem = fall_line::app::cloud_stack_of(cvars, options);
       !problem.empty()) {
     lab.fail("--cfg: " + problem, "Skill: console.");
@@ -318,6 +321,9 @@ void run(ge::lab::Lab& lab) {
     std::vector<ge::skier::SkierState> skiers;
     // The racers every fourth step since the last moment: the tracks laid before it is shot.
     std::vector<std::vector<ge::skier::SkierState>> laid;
+    // The point the chase camera frames (a moment's: the trees before him seen through, depth of
+    // field's focus); none for a named view.
+    std::optional<std::array<double, 3>> subject = std::nullopt;
     // The cloud layers the still drew, for its stamp.
     std::string clouds = "none";
   };
@@ -376,6 +382,8 @@ void run(ge::lab::Lab& lab) {
                                  sc.view);
       }
       fall_line::app::chase_view(level, sc.skiers[0], sc.view);
+      const ge::camera::Vec3 at = fall_line::camera::framed_point(sc.skiers[0]);
+      sc.subject = std::array<double, 3>{at.x, at.y, at.z};
       scenes.push_back(std::move(sc));
     }
   }
@@ -507,7 +515,8 @@ void run(ge::lab::Lab& lab) {
     fall_line::app::cut(*frame);
     for (int i = 0; i < settle; ++i) {
       sc.view.frame = static_cast<uint64_t>(i);
-      fall_line::app::draw(*device, *frame, sc.view, {sc.skiers}, target.view);
+      fall_line::app::draw(*device, *frame, sc.view, {.skiers = sc.skiers, .subject = sc.subject},
+                           target.view);
     }
     return ge::gpu::read_now(*device, target);
   };
@@ -532,7 +541,8 @@ void run(ge::lab::Lab& lab) {
     // One more frame of the still camera: what changes is the jitter's shimmer.
     {
       sc.view.frame = static_cast<uint64_t>(settle);
-      fall_line::app::draw(*device, *frame, sc.view, {sc.skiers}, target.view);
+      fall_line::app::draw(*device, *frame, sc.view, {.skiers = sc.skiers, .subject = sc.subject},
+                           target.view);
       const ge::gpu::Image next = ge::gpu::read_now(*device, target);
       double diff = 0;
       for (size_t i = 0; i < std::min(img.rgba.size(), next.rgba.size()); ++i) {
