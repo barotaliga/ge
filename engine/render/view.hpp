@@ -206,7 +206,13 @@ struct FrameView {
   // the sky or this, whichever is brighter, so a lava lake at night reads as a photograph of it
   // would, not blown out against a dark sky. 0: the sky's light alone.
   double adapt_cd = 0;
-  SkyStyle style{};  // the kind of sky (render/sky_style.hpp); the default is the Earth's
+  SkyStyle style{};   // the kind of sky (render/sky_style.hpp); the default is the Earth's
+  // THE DISCS DRAWN LARGER, as through a longer lens: the sun's and the moon's angular radii
+  // against what they would be (1: as they are). Only the discs grow, with the glow a cloud
+  // throws off their limbs; their light on the world is the real one's, so the sun's disc
+  // shares the same light over its larger face and the moon's keeps its surface's brightness.
+  double sun_size = 1;
+  double moon_size = 1;
   // THE REACH, m: how far the picture draws. Past half of it a mist closes every surface into
   // the sky behind it, all of it by the reach, and nothing farther is drawn; 0: no reach, no mist.
   double reach_m = 0;
