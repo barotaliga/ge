@@ -3,7 +3,7 @@
 //
 // ge:summary Test: ge goals free's rows parsed off the roadmap, and the next free row
 // ge:keywords test cli goals roadmap milestone goal_rows next_free_number next_free_letter
-// ge:keywords next_free_digit sub-row row_file_title milestone-line
+// ge:keywords next_free_digit sub-row row_file_title claimed_row_file milestone-line
 // ge:skill testing agent-interface
 #include <string>
 
@@ -61,18 +61,11 @@ TEST(a_row_files_name_is_the_bold_text_of_its_milestone_line) {
   CHECK(row_file_title("Status: done\n\nMilestone: **after the blank line**\n").empty());
   CHECK(row_file_title("# M17d\n\nfree notes\n").empty());
   CHECK(row_file_title("Status: open\nMilestone: no bold\n").empty());
-}
-
-TEST(a_claim_adds_its_line_to_the_reserved_table_and_gives_it_up_again) {
-  const std::string held =
-      "# Reserved roadmap rows\n\n| Row | What |\n| --- | --- |\n| M27 | **Fonts** |\n";
-  const std::string with = with_reserved_row(held, "M34", "Lava and slime");
-  CHECK(with == held + "| M34 | **Lava and slime** |\n");
-  CHECK(without_reserved_row(with, "M34") == held);
-  CHECK(without_reserved_row(with, "M3") == with);  // M3 is not M34
-  const std::string fresh = with_reserved_row("", "M34", "Lava");
-  CHECK(fresh.find("| Row | What |\n| --- | --- |\n| M34 | **Lava** |\n") != std::string::npos);
-  CHECK(goal_rows(fresh).size() == 1 && goal_rows(fresh)[0].number == 34);
+  // A claim's file names its row the same way, and leaves the table's other columns to be written.
+  const std::string claimed = claimed_row_file("Lava and slime");
+  CHECK(claimed.rfind("Status: open\n", 0) == 0);
+  CHECK(row_file_title(claimed) == "Lava and slime");
+  CHECK(claimed.find("Exit: ") != std::string::npos && claimed.find("Labs: ") != std::string::npos);
 }
 
 TEST(the_earliest_claim_wins_and_a_tie_goes_to_the_first_ref_by_name) {

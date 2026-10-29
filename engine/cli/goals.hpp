@@ -8,17 +8,17 @@
 //                          base and on every branch, and the next free letter
 //   ge goals free M18k     a row's own sub-rows: numbers under a row ending in a letter (M18k1),
 //                          letters under one ending in a digit (M23d1a)
-//   ge goals claim <what>  the next free row (--under=M17: the next letter under it) written to
-//                          `docs/goals/reserved.md`, committed and pushed to this branch at once;
-//                          then, five seconds on, the branches read again: a branch that claimed
-//                          the same row with an earlier commit keeps it, and this one gives its
-//                          line up and claims the next
+//   ge goals claim <what>  the next free row (--under=M17: the next letter under it) written as its
+//                          own file, `docs/goals/<row>.md` (Status, Milestone, Exit and Labs
+//                          lines), committed and pushed to this branch at once; then, five seconds
+//                          on, the branches read again: a branch that claimed the same row with an
+//                          earlier commit keeps it, and this one removes its file and claims the
+//                          next
 //
-// A row is a line of `docs/goals.md`'s tables that opens `| M<n><suffix> |`, a status file
-// `docs/goals/M<n><suffix>.md` (named by the bold text of its `Milestone:` line when it has one),
-// or a line of the same shape in `docs/goals/reserved.md`: a row promised to a piece of work
-// before any branch carries it. The remote branches are fetched first
-// (--no-fetch answers from the branches as last fetched).
+// A row is a status file `docs/goals/M<n><suffix>.md`, its name read from the bold text of its
+// `Milestone:` line; or, on a branch from before the rows were files, a line of `docs/goals.md`'s
+// tables or `docs/goals/reserved.md` that opens `| M<n><suffix> |`. The remote branches are
+// fetched first (--no-fetch answers from the branches as last fetched).
 //
 // ge:summary ge goals free and claim: the roadmap rows taken everywhere, the next free one reserved
 // ge:keywords cli ge goals roadmap milestone row next-free number claimed branches pull-request
@@ -53,6 +53,8 @@ GoalRow goal_row_of_file(std::string_view file_name);
 // A status file's row name: the bold text of its `Milestone:` line, in the header of `Key: value`
 // lines before the first blank line; empty when it has none.
 std::string row_file_title(std::string_view status_md);
+// The status file a claim writes for a row named `title`.
+std::string claimed_row_file(const std::string& title);
 
 // The next free milestone number: one past the highest among `taken`.
 int next_free_number(const std::vector<int>& taken);
@@ -64,12 +66,6 @@ std::string next_free_digit(const std::vector<std::string>& taken);
 
 Outcome run_goals_free(const fs::path& repo, const std::string& row, const std::string& base,
                        bool fetch);
-
-// `docs/goals/reserved.md` with the row `key` added (the file written fresh when it holds no
-// table), and with it taken out again.
-std::string with_reserved_row(std::string_view reserved_md, const std::string& key,
-                              const std::string& title);
-std::string without_reserved_row(std::string_view reserved_md, const std::string& key);
 
 // One branch's claim on a row: the ref, and when the commit that added the row was made.
 struct Claimant {

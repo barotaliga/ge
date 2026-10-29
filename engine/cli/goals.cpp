@@ -172,6 +172,11 @@ std::string row_file_title(std::string_view status_md) {
   return "";
 }
 
+std::string claimed_row_file(const std::string& title) {
+  return cat("Status: open\nMilestone: **", title,
+             "**\nExit: to be written\nLabs: to be written\n");
+}
+
 int next_free_number(const std::vector<int>& taken) {
   int most = -1;
   for (const int n : taken) most = std::max(most, n);
@@ -277,16 +282,17 @@ bool row_number(const std::string& row, int& number, std::string& suffix, Outcom
   return true;
 }
 
-// Commits `docs/goals/reserved.md` alone, the message read from a file so no shell quotes it.
-bool commit_reserved(const fs::path& repo, const std::string& message, const fs::path& log) {
+// Commits one row's status file alone, added or removed, the message read from a file so no shell
+// quotes it.
+bool commit_row_file(const fs::path& repo, const std::string& path, const std::string& message,
+                     const fs::path& log) {
   const fs::path msg = log.parent_path() / "ge-goals-message.txt";
   std::string error;
   if (!write_text(msg, message + "\n", error)) return false;
   const std::string git = "git -C " + quoted(repo) + " ";
-  // Added first, so a reserved table this claim wrote fresh is committed too.
-  return run_to_log(git + "add docs/goals/reserved.md", log).code == 0 &&
-         run_to_log(git + "commit --quiet -F " + quoted(msg) + " -- docs/goals/reserved.md", log)
-                 .code == 0;
+  // Staged first (-A: a removal too), so a file this claim wrote fresh is committed.
+  return run_to_log(git + "add -A -- " + path, log).code == 0 &&
+         run_to_log(git + "commit --quiet -F " + quoted(msg) + " -- " + path, log).code == 0;
 }
 
 }  // namespace
@@ -339,30 +345,6 @@ Outcome run_goals_free(const fs::path& repo, const std::string& row, const std::
   return out;
 }
 
-std::string with_reserved_row(std::string_view reserved_md, const std::string& key,
-                              const std::string& title) {
-  std::string md(reserved_md);
-  if (md.find("| Row | What |") == std::string::npos) {
-    md = "# Reserved roadmap rows\n\n"
-         "Rows promised to a piece of work before any branch carries them, so `ge goals free` "
-         "never\ndeals the same number twice. A row leaves this table in the pull request that "
-         "adds it to\n[`../goals.md`](../goals.md).\n\n"
-         "| Row | What |\n| --- | --- |\n";
-  }
-  if (!md.empty() && md.back() != '\n') md += '\n';
-  return md.append("| ").append(key).append(" | **").append(title).append("** |\n");
-}
-
-std::string without_reserved_row(std::string_view reserved_md, const std::string& key) {
-  std::string out;
-  const std::string open = "| " + key + " |";
-  for (std::string_view line : split_lines(reserved_md)) {
-    if (line.rfind(open, 0) == 0) continue;
-    out.append(line).append("\n");
-  }
-  return out;
-}
-
 std::size_t claim_winner(const std::vector<Claimant>& claimants) {
   std::size_t best = 0;
   for (std::size_t i = 1; i < claimants.size(); ++i) {
@@ -392,7 +374,6 @@ Outcome run_goals_claim(const fs::path& repo, const std::string& title, const st
   if (branch.empty() || branch == "HEAD")
     return fail("ge goals claim pushes to your branch, and HEAD is detached",
                 "check out your work's branch, then ge goals claim again");
-  const fs::path reserved = repo / "docs" / "goals" / "reserved.md";
   const std::string mine = "origin/" + branch;
   for (int attempt = 0; attempt < 3; ++attempt) {
     if (run_to_log(git + "fetch --quiet origin", log).code != 0)
@@ -401,13 +382,12 @@ Outcome run_goals_claim(const fs::path& repo, const std::string& title, const st
     const std::string key = scan(repo, number, parent, base, log).next;
     if (key.size() < 2 || key == "M" + std::to_string(number) + parent)
       return fail("no letter is free under " + under, "claim a top-level row: drop --under");
-    const std::string before = read_text(reserved).value_or("");
+    const std::string path = cat("docs/goals/", key, ".md");
     std::string error;
-    if (!write_text(reserved, with_reserved_row(before, key, title), error))
-      return fail("could not write " + reserved.string() + ": " + error,
-                  "check the tree is writable");
+    if (!write_text(repo / path, claimed_row_file(title), error))
+      return fail("could not write " + path + ": " + error, "check the tree is writable");
     const std::string msg = cat("docs(goals): reserve ", key, " for ", title);
-    if (!commit_reserved(repo, msg, log))
+    if (!commit_row_file(repo, path, msg, log))
       return fail("git commit of the claim failed", "read the log, then ge goals claim again");
     const Logged pushed = run_to_log(cat(git, "push --quiet origin HEAD:refs/heads/", branch), log);
     if (pushed.code != 0)
@@ -420,13 +400,19 @@ Outcome run_goals_claim(const fs::path& repo, const std::string& title, const st
     run_to_log(git + "fetch --quiet origin", log);
     const Scan after = scan(repo, number, parent, base, log);
     std::vector<Claimant> claimants;
+    // When `ref` first held the row: the commit that added its file, or (a branch from before the
+    // rows were files) the first that wrote its table line; the earlier of the two.
     const auto ct = [&](const std::string& ref) {
-      const std::string t = std::string(
-          trim(first_line(run_to_log(cat(git, "log --reverse --format=%ct \"-G^\\| ", key,
-                                         " \\|\" ", ref, " -- docs/goals.md docs/goals/"),
-                                     log)
-                              .output)));
-      return t.empty() ? 0LL : std::stoll(t);
+      const auto first = [&](const std::string& query) {
+        const std::string t = std::string(trim(first_line(run_to_log(query, log).output)));
+        return t.empty() ? 0LL : std::stoll(t);
+      };
+      const long long added =
+          first(cat(git, "log --reverse --diff-filter=A --format=%ct ", ref, " -- ", path));
+      const long long lined = first(cat(git, "log --reverse --format=%ct \"-G^\\| ", key, " \\|\" ",
+                                        ref, " -- docs/goals.md docs/goals/reserved.md"));
+      if (added == 0 || lined == 0) return std::max(added, lined);
+      return std::min(added, lined);
     };
     claimants.push_back({mine, ct("HEAD")});
     const GoalRow id = row_id(key);
@@ -444,14 +430,15 @@ Outcome run_goals_claim(const fs::path& repo, const std::string& title, const st
                              {"branch", json_str(mine)},
                              {"attempts", std::to_string(attempt + 1)}});
       out.summary = cat(key, " is yours (", title, ")");
-      out.next = cat("add ", key, " to docs/goals.md with its status file docs/goals/", key,
-                     ".md, and drop its line from docs/goals/reserved.md in the same pull request");
+      out.next =
+          cat("write ", path, "'s Exit and Labs lines in the pull request that builds ", key);
       return out;
     }
     out.text += "  " + key + " lost to " + won.ref + ", which claimed it first; trying the next\n";
-    std::string ignored;
-    write_text(reserved, without_reserved_row(read_text(reserved).value_or(""), key), ignored);
-    commit_reserved(repo, "docs(goals): give up " + key + ", claimed first on " + won.ref, log);
+    std::error_code gone;
+    fs::remove(repo / path, gone);
+    commit_row_file(repo, path, "docs(goals): give up " + key + ", claimed first on " + won.ref,
+                    log);
     run_to_log(cat(git, "push --quiet origin HEAD:refs/heads/", branch), log);
   }
   return fail("three rows in a row were claimed first by other branches",
