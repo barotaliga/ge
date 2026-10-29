@@ -255,7 +255,7 @@ TrafficReport run_traffic(const TrafficPlan& plan) {
       return;
     }
     ConnectToken& t = tokens[static_cast<size_t>(i)];
-    t = traffic_token(master, static_cast<uint64_t>(i + 1), at_us + token_life_us, token_rng);
+    t = traffic_token(master, static_cast<uint64_t>(i) + 1, at_us + token_life_us, token_rng);
     node_connect_secure(c.node, sim_address(0, 1), t, at_us);
   };
   // A flooder is the host's peer too, but no honest client: what the host measured of the honest
@@ -604,7 +604,8 @@ TrafficReport run_traffic(const TrafficPlan& plan) {
   rep.host_bad_cookies = host->node.stats.bad_cookies;
   rep.host_foreign = host->node.stats.foreign;
   rep.host_stats = host->node.stats;
-  for (const auto& f : attackers.flooders) rep.attack.flooders_connected += peer_connected(f->node, 0);
+  for (const auto& f : attackers.flooders)
+    rep.attack.flooders_connected += peer_connected(f->node, 0);
   if (plan.secure) {
     const NodeStats& st = rep.host_stats;
     for (const uint64_t v : {st.bad_tokens, st.expired_tokens, st.replayed_tokens, st.forged,

@@ -44,10 +44,10 @@ TEST(crypto_seals_the_published_xchacha20_poly1305_vector) {
   const Key key = key_of(0x80);
   uint8_t tag[kTagBytes];
   seal(data.data(), data.size(), tag, key, nonce.data(), ad.data(), ad.size());
-  const std::vector<uint8_t> want = hex(
-      "bd6d179d3e83d43b9576579493c0e939572a1700252bfaccbed2902c21396cbb731c7f1b0b4aa6440bf3a82f"
-      "4eda7e39ae64c6708c54c216cb96b72e1213b4522f8c9ba40db5d945b11b69b982c1bb9e3f3fac2bc369488f"
-      "76b2383565d3fff921f9664c97637da9768812f615c68b13b52e");
+  const std::vector<uint8_t> want =
+      hex("bd6d179d3e83d43b9576579493c0e939572a1700252bfaccbed2902c21396cbb731c7f1b0b4aa6440bf3a82f"
+          "4eda7e39ae64c6708c54c216cb96b72e1213b4522f8c9ba40db5d945b11b69b982c1bb9e3f3fac2bc369488f"
+          "76b2383565d3fff921f9664c97637da9768812f615c68b13b52e");
   CHECK(data == want);
   CHECK(std::memcmp(tag, hex("c0875924c1c7987947deafd8780acf49").data(), kTagBytes) == 0);
   CHECK(open(data.data(), data.size(), tag, key, nonce.data(), ad.data(), ad.size()));

@@ -252,10 +252,9 @@ void run(gl::Lab& lab) {
            s_got == s_sent && !s_bad ? "ok" : std::to_string(s_got) + "/" + std::to_string(s_sent),
            fmt(s.host_send_kbps, 0), fmt(r.host_send_kbps, 0),
            pair(st.bad_tokens, s.attack.forged_tokens + s.attack.flood),
-           pair(st.replayed_tokens, s.attack.stolen_tokens),
-           pair(st.replayed, s.attack.replays), pair(st.forged, s.attack.forgeries),
-           std::to_string(st.throttled), pair(st.flooded, s.attack.flooder_packets),
-           std::to_string(s.attack.answered)});
+           pair(st.replayed_tokens, s.attack.stolen_tokens), pair(st.replayed, s.attack.replays),
+           pair(st.forged, s.attack.forgeries), std::to_string(st.throttled),
+           pair(st.flooded, s.attack.flooder_packets), std::to_string(s.attack.answered)});
       lab.metric(k + "secure-rtt-ms", s.rtt_ms, "ms");
       lab.metric(k + "secure-loss", 100 * s.loss_total, "%");
       lab.metric(k + "secure-host-send-kbps", s.host_send_kbps, "kbit/s");
@@ -289,7 +288,8 @@ void run(gl::Lab& lab) {
       }
       if (s_got != s_sent || s_bad) {
         lab.fail(name + " secure: " + std::to_string(s_got) + " of " + std::to_string(s_sent) +
-                     " reliable events arrived, " + std::to_string(s_bad) + " out of order or twice",
+                     " reliable events arrived, " + std::to_string(s_bad) +
+                     " out of order or twice",
                  "Read the sealing and the replay window in engine/net/node.cpp, then run "
                  "tests/net_node_secure_test.cpp; skill: net.");
       }

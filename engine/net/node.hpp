@@ -42,8 +42,8 @@
 // ge:test tests/net_node_test.cpp tests/net_node_secure_test.cpp
 #pragma once
 
-#include <cstddef>
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -191,8 +191,8 @@ struct Node {
   std::vector<Foreign> foreign;  // this update's, when keep_foreign
   std::vector<uint8_t> foreign_bytes;
   NodeStats stats;
-  std::vector<SeenToken> seen;     // security on a host: kSeenTokens, the oldest replaced
-  std::vector<Bucket> addresses;   // the guards on: kAddressBuckets, by the address's hash
+  std::vector<SeenToken> seen;    // security on a host: kSeenTokens, the oldest replaced
+  std::vector<Bucket> addresses;  // the guards on: kAddressBuckets, by the address's hash
   Bucket handshakes;
   uint8_t buffer[kMaxDatagram];
 };

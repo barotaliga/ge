@@ -127,8 +127,8 @@ void window_mark(Peer& p, uint64_t counter) {
 // oldest entry.
 bool token_fresh(Node& n, const OpenedToken& t, const Address& from, int64_t token_now_us) {
   for (const Peer& p : n.peers) {
-    if (p.state == PeerState::connected && p.secure && !p.outgoing &&
-        p.client_id == t.client_id && !(p.address == from)) {
+    if (p.state == PeerState::connected && p.secure && !p.outgoing && p.client_id == t.client_id &&
+        !(p.address == from)) {
       return false;
     }
   }
@@ -252,8 +252,7 @@ void on_handshake(Node& n, const Address& from, PacketType type, const Handshake
               {h.salt, 0, 0, 0, static_cast<uint8_t>(DenyReason::closed)}, now_us, to_client);
         return;
       }
-      reply(n, from, PacketType::challenge, {h.salt, make_cookie(n, from, salt), 0, 0, 0},
-            now_us);
+      reply(n, from, PacketType::challenge, {h.salt, make_cookie(n, from, salt), 0, 0, 0}, now_us);
       return;
     }
     case PacketType::challenge:
@@ -463,7 +462,8 @@ void node_update(Node& node, int64_t now_us) {
   node.foreign_bytes.clear();
   Address from;
   while (true) {
-    const int got = transport_receive(*node.transport, node.buffer, sizeof node.buffer, from, now_us);
+    const int got =
+        transport_receive(*node.transport, node.buffer, sizeof node.buffer, from, now_us);
     if (got < 0) break;
     auto n = static_cast<size_t>(got);
     Reader r = make_reader(node.buffer, n);
@@ -531,8 +531,7 @@ void node_update(Node& node, int64_t now_us) {
       const OpenedToken* tok = nullptr;
       if (asks && node.config.accept && node.config.security.on) {
         const NodeSecurity& sec = node.config.security;
-        const size_t token_at =
-            type == PacketType::request ? kRequestTokenAt : kResponseTokenAt;
+        const size_t token_at = type == PacketType::request ? kRequestTokenAt : kResponseTokenAt;
         const int64_t token_now = now_us + sec.clock_offset_us;
         if (!token_open(sec.key, protocol, node.buffer + token_at, token) ||
             token.host_id != sec.host_id) {

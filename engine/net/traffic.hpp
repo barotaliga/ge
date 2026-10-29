@@ -102,7 +102,7 @@ bool any_attack(const TrafficAttack& a);
 struct AttackTally {
   uint64_t forged_tokens = 0, stolen_tokens = 0, replays = 0, forgeries = 0, flood = 0;
   uint64_t flooder_packets = 0;
-  uint64_t answered = 0;   // datagrams the host sent the forgers and the thieves
+  uint64_t answered = 0;       // datagrams the host sent the forgers and the thieves
   int flooders_connected = 0;  // at the end: a flooder is a client, and stays one
 };
 

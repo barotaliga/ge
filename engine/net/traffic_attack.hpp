@@ -43,8 +43,8 @@ struct Attackers {
   uint64_t host_id = 1;
   Address host;
   core::Rng rng{0};
-  uint64_t sent[5] = {};  // forged tokens, stolen, replays, forgeries, the flood: so far
-  Capture seen;           // the honest client 0's datagrams this tick
+  uint64_t sent[5] = {};         // forged tokens, stolen, replays, forgeries, the flood: so far
+  Capture seen;                  // the honest client 0's datagrams this tick
   std::vector<uint8_t> payload;  // the last sealed payload client 0 sent
   std::vector<std::unique_ptr<Flooder>> flooders;
   uint64_t flood_sent = 0;

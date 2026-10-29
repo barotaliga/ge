@@ -133,11 +133,11 @@ TEST(secure_clients_with_tokens_connect_and_talk) {
 TEST(secure_host_refuses_missing_forged_expired_and_others_tokens) {
   SimNetwork net = make_sim_network(2, {});
   auto host = make_end(net, 0, true);
-  auto plain = make_end(net, 1, false);    // no token at all
-  auto forger = make_end(net, 2, false);   // a token under another master key
-  auto late = make_end(net, 3, false);     // an expired token
-  auto lost = make_end(net, 4, false);     // a token for another host
-  auto tamper = make_end(net, 5, false);   // a token with a byte changed
+  auto plain = make_end(net, 1, false);   // no token at all
+  auto forger = make_end(net, 2, false);  // a token under another master key
+  auto late = make_end(net, 3, false);    // an expired token
+  auto lost = make_end(net, 4, false);    // a token for another host
+  auto tamper = make_end(net, 5, false);  // a token with a byte changed
   Key other = master_key();
   other[0] ^= 1;
   node_connect(plain->n, sim_address(0, 1), 0);
@@ -147,8 +147,8 @@ TEST(secure_host_refuses_missing_forged_expired_and_others_tokens) {
   ConnectToken changed = token_for(4);
   changed.sealed[60] ^= 4;
   node_connect_secure(tamper->n, sim_address(0, 1), changed, 0);
-  std::vector<End*> all{host.get(), plain.get(), forger.get(), late.get(), lost.get(),
-                        tamper.get()};
+  std::vector<End*> all{host.get(), plain.get(), forger.get(),
+                        late.get(), lost.get(),  tamper.get()};
   std::vector<std::vector<Event>> seen(all.size());
   step(net, all, 0, 6000, &seen);
   CHECK(node_connected_count(host->n) == 0);

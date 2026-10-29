@@ -51,7 +51,8 @@ constexpr uint32_t kThieves = 8;
 
 bool any_attack(const TrafficAttack& a) {
   return a.forged_tokens_per_s > 0 || a.stolen_tokens_per_s > 0 || a.replays_per_s > 0 ||
-         a.forgeries_per_s > 0 || a.flood_per_s > 0 || (a.flooders > 0 && a.flooder_packets_per_s > 0);
+         a.forgeries_per_s > 0 || a.flood_per_s > 0 ||
+         (a.flooders > 0 && a.flooder_packets_per_s > 0);
 }
 
 Key traffic_master(uint32_t seed) {
@@ -83,8 +84,8 @@ void attackers_init(Attackers& a, const TrafficPlan& plan, SimNetwork& net, cons
   a.seen = make_capture();
   for (uint32_t k = 0; k < kForgers + kThieves; k++) sim_bind(net, sim_address(first_node + k, 1));
   const TrafficAttack& at = plan.attack;
-  const int64_t expire = static_cast<int64_t>(std::floor((plan.seconds + plan.drain_seconds) * 1e6)) +
-                         60000000;
+  const int64_t expire =
+      static_cast<int64_t>(std::floor((plan.seconds + plan.drain_seconds) * 1e6)) + 60000000;
   for (int i = 0; i < at.flooders; i++) {
     auto f = std::make_unique<Attackers::Flooder>();
     open_sim_transport(f->transport, net,
@@ -98,8 +99,8 @@ void attackers_init(Attackers& a, const TrafficPlan& plan, SimNetwork& net, cons
     c.channels.delivery[kTrafficEvents] = Delivery::reliable;
     c.seed = plan.seed * 7919ull + static_cast<uint64_t>(i) + 1;
     node_init(f->node, c, f->transport);
-    node_connect_secure(f->node, host, traffic_token(a.master, 100000 + static_cast<uint64_t>(i),
-                                                     expire, a.rng),
+    node_connect_secure(f->node, host,
+                        traffic_token(a.master, 100000 + static_cast<uint64_t>(i), expire, a.rng),
                         0);
     a.flooders.push_back(std::move(f));
   }
@@ -140,8 +141,7 @@ void attackers_tick(Attackers& a, SimNetwork& net, int64_t now_us,
   }
   for (uint64_t k = a.sent[1]; !tokens.empty() && k < due_by(now_us, at.stolen_tokens_per_s); k++) {
     const ConnectToken& t = tokens[k % tokens.size()];
-    send_request(net,
-                 sim_address(a.first_node + kForgers + static_cast<uint32_t>(k % kThieves), 1),
+    send_request(net, sim_address(a.first_node + kForgers + static_cast<uint32_t>(k % kThieves), 1),
                  a.host, protocol, draw64(a.rng), t.sealed.data());
     a.sent[1] = k + 1;
     tally.stolen_tokens++;
@@ -153,8 +153,7 @@ void attackers_tick(Attackers& a, SimNetwork& net, int64_t now_us,
     a.sent[2] = k + 1;
     tally.replays++;
   }
-  for (uint64_t k = a.sent[3]; !a.payload.empty() && k < due_by(now_us, at.forgeries_per_s);
-       k++) {
+  for (uint64_t k = a.sent[3]; !a.payload.empty() && k < due_by(now_us, at.forgeries_per_s); k++) {
     std::vector<uint8_t> f = a.payload;
     f[12] ^= static_cast<uint8_t>(1 + k % 127);  // the counter far ahead: the window lets it in
     f[kSealedHeader + k % (f.size() - kSealedHeader)] ^= 0x20;
