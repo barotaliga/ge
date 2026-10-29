@@ -1,4 +1,4 @@
-# The merge queue's two automatic hands, so nobody has to disarm, message and re-arm pull requests
+# The merge queue's automatic hands, so nobody has to disarm, message and re-arm pull requests
 # by hand (the `commit` skill says when to reach for them):
 #
 #   HOLD     While any open pull request carries the `queue-priority` label, every OTHER pull
@@ -11,11 +11,16 @@
 #   JUMP     A `queue-priority` pull request that is ready (not a draft, its required check
 #            green) is put into the queue AT ITS FRONT, as the queue's "jump" does by hand: one
 #            not yet queued is enqueued with the jump, one queued behind others without it is
-#            taken out and put back with it. GitHub lets only a repository admin jump, so this
-#            uses the `QUEUE_TOKEN` secret when it is set (an admin's fine-grained token with
-#            pull requests and contents read and write on this repository) and the workflow's
-#            own token otherwise, whose refusal is logged as a warning and nothing more: the
-#            pull request then reaches the queue armed, first among the armed ones (HOLD).
+#            taken out and put back with it. Only with the `QUEUE_TOKEN` secret (an admin's
+#            fine-grained token with pull requests and contents read and write on this
+#            repository); without it the pull request reaches the queue armed, first among the
+#            armed ones (HOLD).
+#
+# NOTHING IS ARMED OR QUEUED WITH THE WORKFLOW'S OWN TOKEN. A queue entry made with it is a
+# group whose `merge_group` event starts no workflow (GitHub never lets its own token's events
+# start runs), so `ci` never runs for it and the whole queue waits behind it. Arming and
+# enqueueing use `QUEUE_TOKEN`; without it a pull request the hands would arm gets a comment
+# asking its owner to arm it instead. Disarming, labels and comments use the workflow's token.
 #   RE-ARM   A queued run that ended without a single failed job (every red job cancelled or
 #            abandoned: a lost runner, a timeout, the queue rebuilding) ejects its pull requests
 #            for nothing the change did. Each one no longer in the queue and no longer armed is
@@ -63,6 +68,8 @@ jobs:
     timeout-minutes: 10
     env:
       GH_TOKEN: ${{ github.token }}
+      # Arms and enqueues (never the workflow's own token: see the header).
+      QUEUE_TOKEN: ${{ secrets.QUEUE_TOKEN }}
       GH_REPO: ${{ github.repository }}
       EVENT: ${{ github.event_name }}
       RUN_ID: ${{ github.event.workflow_run.id }}
@@ -100,6 +107,18 @@ jobs:
 
       - name: Hold every armed pull request behind the priority ones, or release them
         run: |
+          # Arm a pull request with QUEUE_TOKEN, or without it ask its owner to (see the header).
+          arm() {
+            if [ -n "$QUEUE_TOKEN" ]; then
+              GH_TOKEN="$QUEUE_TOKEN" gh pr merge "$1" --auto --squash < /dev/null && { echo "#$1 armed: $2"; return; }
+              echo "::warning::#$1 could not be armed with QUEUE_TOKEN"
+            fi
+            gh pr comment "$1" --body "$2. Arm it again now (\`gh pr merge $1 --auto --squash\`, or the auto-merge button): this workflow cannot, since a queue entry its own token makes never gets a CI run.
+
+          ---
+          _Posted by the \`queue\` workflow_" < /dev/null
+            echo "#$1 needs arming by its owner: $2"
+          }
           has() { case ",$1," in *",$2,"*) return 0 ;; *) return 1 ;; esac; }
           priority=()
           while IFS=$'\t' read -r n _ _ _ labels _; do
@@ -117,7 +136,7 @@ jobs:
               [ "$armed" = true ] || continue
               gh pr merge "$n" --disable-auto || { echo "::warning::#$n could not be disarmed"; continue; }
               gh pr edit "$n" --add-label queued-hold
-              gh pr comment "$n" --body "Disarmed while ${priority[*]} (labelled \`queue-priority\`) reaches the merge queue first. It is re-armed automatically when no open pull request carries that label; nothing to do meanwhile but keep this branch clean against main.
+              gh pr comment "$n" --body "Disarmed while ${priority[*]} (labelled \`queue-priority\`) reaches the merge queue first. It is released (re-armed, or you are asked to arm it) when no open pull request carries that label; meanwhile keep this branch clean against main.
 
           ---
           _Posted by the \`queue\` workflow_"
@@ -125,33 +144,31 @@ jobs:
             elif has "$labels" queued-hold; then
               gh pr edit "$n" --remove-label queued-hold
               if [ "$draft" = false ]; then
-                gh pr merge "$n" --auto --squash && echo "#$n released and re-armed" ||
-                  echo "::warning::#$n could not be re-armed; arm it by hand"
+                arm "$n" "Released: no open pull request carries \`queue-priority\` any more"
               fi
             fi
           done 3< prs.tsv
 
       - name: Put the priority pull requests at the front of the queue
-        env:
-          JUMP_TOKEN: ${{ secrets.QUEUE_TOKEN || github.token }}
+        if: env.QUEUE_TOKEN != ''
         run: |
           has() { case ",$1," in *",$2,"*) return 0 ;; *) return 1 ;; esac; }
-          gq() { GH_TOKEN="$JUMP_TOKEN" gh api graphql -F id="$1" -f query="$2" > /dev/null; }
+          gq() { GH_TOKEN="$QUEUE_TOKEN" gh api graphql -F id="$1" -f query="$2" > /dev/null; }
           while IFS=$'\t' read -r -u 3 n draft queued _ labels id position jumped _; do
             has "$labels" queue-priority || continue
             [ "$draft" = false ] || { echo "#$n is a draft"; continue; }
             if [ "$queued" = true ]; then
               { [ "$position" -le 1 ] || [ "$jumped" = true ]; } && { echo "#$n is at the front, or jumped"; continue; }
               gq "$id" 'mutation($id: ID!) { dequeuePullRequest(input: {id: $id}) { clientMutationId } }' ||
-                { echo "::warning::#$n could not be taken out to jump (QUEUE_TOKEN unset, or not an admin's)"; continue; }
+                { echo "::warning::#$n could not be taken out to jump (QUEUE_TOKEN not an admin's?)"; continue; }
             fi
             # Refused until the pull request's required check is green; the next run tries again.
             if gq "$id" 'mutation($id: ID!) { enqueuePullRequest(input: {pullRequestId: $id, jump: true}) { clientMutationId } }'; then
               echo "#$n jumped to the front of the queue"
             else
-              echo "::warning::#$n could not jump the queue (its check not green yet, or QUEUE_TOKEN unset or not an admin's)"
+              echo "::warning::#$n could not jump the queue (its check not green yet, or QUEUE_TOKEN not an admin's)"
               # Taken out above and refused back in: re-arm, so it is not left out of the queue.
-              [ "$queued" = true ] && gh pr merge "$n" --auto --squash
+              [ "$queued" = true ] && GH_TOKEN="$QUEUE_TOKEN" gh pr merge "$n" --auto --squash < /dev/null
             fi
           done 3< prs.tsv
 
@@ -229,9 +246,16 @@ jobs:
           if [ "$draft" = true ] || [ "$queued" = true ] || [ "$armed" = true ]; then
             echo "#$n: draft $draft, queued $queued, armed $armed: nothing to do"; exit 0
           fi
-          gh pr merge "$n" --auto --squash
-          gh pr comment "$n" --body "Re-armed: the merge queue's run [$RUN_ID]($RUN_URL) ended $RUN_CONCLUSION with no failed job (cancelled or abandoned jobs only), so nothing in this change was at fault.
+          # Arm a pull request with QUEUE_TOKEN, or without it ask its owner to (see the header).
+          arm() {
+            if [ -n "$QUEUE_TOKEN" ]; then
+              GH_TOKEN="$QUEUE_TOKEN" gh pr merge "$1" --auto --squash < /dev/null && { echo "#$1 armed: $2"; return; }
+              echo "::warning::#$1 could not be armed with QUEUE_TOKEN"
+            fi
+            gh pr comment "$1" --body "$2. Arm it again now (\`gh pr merge $1 --auto --squash\`, or the auto-merge button): this workflow cannot, since a queue entry its own token makes never gets a CI run.
 
           ---
-          _Posted by the \`queue\` workflow_"
-          echo "#$n re-armed after run $RUN_ID ($RUN_CONCLUSION)"
+          _Posted by the \`queue\` workflow_" < /dev/null
+            echo "#$1 needs arming by its owner: $2"
+          }
+          arm "$n" "The merge queue's run [$RUN_ID]($RUN_URL) ended $RUN_CONCLUSION with no failed job (cancelled or abandoned jobs only), so nothing in this change was at fault"
