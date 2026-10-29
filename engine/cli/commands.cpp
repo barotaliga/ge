@@ -316,6 +316,12 @@ constexpr FlagSpec kQcProfile[] = {
     kPreset,
     kEngine,
     kRepo};
+constexpr FlagSpec kContentScanFlags[] = {
+    {"assetmap", "<file>", "the game's asset map the set is held to"},
+    {"registry", "<dir>", "the directory of the game's sounds.tsv and models.tsv"},
+    kPreset,
+    kEngine,
+    kRepo};
 constexpr FlagSpec kSnowShowFlags[] = {
     {"out", "<dir>", "where the PNGs go (default: snow/ beside the file)"}};
 constexpr FlagSpec kSnowColumnFlags[] = {{"at", "<x,z>", "the point, m (required)"}};
@@ -718,6 +724,14 @@ const CommandSpec kCommands[] = {
      "a pack downloaded and unpacked into the cache (never the repository) with SOURCE.txt: "
      "title, author, page and licence; a licence the repository cannot carry is refused",
      kSourceFlags, "ge source fetch kenney:impact-sounds", "assets"},
+    {"content scan", "<pak|dir>", 1, 1, "see",
+     "every sound, model and numbered sound set a classic content set ships or its maps name, "
+     "where each is used, and what the game's asset map still leaves unmapped (the "
+     "content-scan lab: tables, a picture, assetmap-draft.txt); the report stays in previews/",
+     kContentScanFlags,
+     "ge content scan ~/classic/id1 --assetmap=games/shooters_edge/content/classic.assetmap "
+     "--registry=games/shooters_edge/content",
+     "assets"},
     {"credits check",
      "[<dir>]",
      0,
