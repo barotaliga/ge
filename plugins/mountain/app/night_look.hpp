@@ -11,7 +11,7 @@
 //   longitude).
 //
 // ge:summary The map's moon and stars on its date at an hour, laid into a frame's night
-// ge:keywords night moon stars date sky-year night_look moonlight phase sidereal
+// ge:keywords night moon stars date sky-year night_look moonlight phase sidereal other-moons
 // ge:skill mountain render
 // ge:test tests/mountain_night_look_test.cpp
 #pragma once
@@ -33,7 +33,8 @@ struct MapMoon {
 };
 MapMoon moon_of(const mapgen::Level& level, double hour);
 
-// Lay `level`'s night at `hour` into `view` (its sun already placed).
+// Lay `level`'s night at `hour` into `view` (its sun already placed), and the other worlds' moons
+// `view.moons` names (render/night.hpp's set_moons).
 void night_look(const mapgen::Level& level, double hour, render::FrameView& view);
 
 }  // namespace ge::mountain::app

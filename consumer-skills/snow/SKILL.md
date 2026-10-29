@@ -20,6 +20,7 @@ columns.
 | `snow/time.hpp` | Snow over time: a `Weather` of schedules (the fall, the air, the wind) on the layer's spec; `sample(layer, x, z, t)`; `crust_load`; `groom` | `ge explain Weather` |
 | `snow/lod.hpp` | The level of detail: name the actors that matter (`set_focus`), fold what nobody is near (`fold_stale`), the coarse layer far tracks land in | `ge explain set_focus` |
 | `snow/kinds.hpp` | The named snows (powder, settled, wind-packed, groomed, spring, crust, machine, ice) | `ge explain kind_row` |
+| `render/snow_mirror.hpp` | The layer on the GPU (with `GE_GPU`): a fine window round the camera and the coarse view, re-sent only where the snow changed; WGSL reads it with `snow_raw` and `snow_column` (`render/wgsl/snow_mirror.wgsl`, group 3) | `ge explain update_snow_mirror` |
 | `snow/snapshot.hpp` | `save` and `load`: a layer's tiles as bytes, for a save game or a late joiner | `ge explain save` |
 
 ## Use it
@@ -48,6 +49,10 @@ columns.
 - **The budget**: `LayerSpec::max_tiles` (32 KB a 6.4 m tile at the default 10 cm cell, 2048 by
   default). Past it the tile least recently near a focus is folded to make room. A courtyard
   match can skip the focus entirely: with no focus, everything stays fine.
+- **Draw it from the same numbers**: `create_snow_mirror` once, `update_snow_mirror(device,
+  mirror, layer, eye_x, eye_z)` once a frame after the step's presses, and bind `mirror.group` at
+  group 3 in a material that includes `render/wgsl/snow_mirror.wgsl` (its own bindings after it).
+  Light it with `render/wgsl/snow_light.wgsl` (`snow_relief`, `snow_light`).
 - **Save it with `snow::save`** and look at the file with `ge snow show <file.snow>` (stats and
   depth, density and state maps) and `ge snow column <file.snow> --at=x,z`.
 - Find the rest with `ge find snow <word>`; every header's leading comment is its manual.

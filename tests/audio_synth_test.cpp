@@ -58,6 +58,22 @@ struct Case {
   double seconds;
 };
 
+// A recording for the sampled voice's case: a falling saw at 22 050 Hz, looped over its back half.
+const Pcm& saw_recording() {
+  static const Pcm pcm = [] {
+    Pcm p;
+    p.rate = 22050;
+    p.samples.resize(4410);
+    for (size_t i = 0; i < p.samples.size(); i++) {
+      p.samples[i] = 0.5f - static_cast<float>(i % 50) / 50.0f;
+    }
+    p.loop_start = 2205;
+    p.loop_end = 4410;
+    return p;
+  }();
+  return pcm;
+}
+
 const Case kCases[] = {
     {"sine", [](Synth& s) { s.tone({.wave = Wave::sine, .from_hz = 440, .duration_ms = 300}); },
      0.4},
@@ -105,6 +121,13 @@ const Case kCases[] = {
                                   .vibrato = {.rate_hz = 3, .depth_cents = 10}});
        s.set(a, {.level = 0.05f, .cutoff = 2000, .pan = -0.5f}, 0.1f);
        s.set(b, {.level = 0.04f, .hz = 90, .cutoff = 600, .grit = 0.8f}, 0.05f);
+     },
+     0.5},
+    {"samples",
+     [](Synth& s) {
+       const SampleId a = s.sample(saw_recording(), {.gain = 0.1f, .pan = -0.3f, .echo = 0.2f});
+       s.sample(saw_recording(), {.gain = 0.05f, .pitch = 1.5f, .delay_ms = 100});
+       s.sample_set(a, 0.08f, 0.6f, 0.05f);
      },
      0.5},
 };

@@ -1044,6 +1044,21 @@ read in 2026, longitude 0) by `core/moon.hpp` (M8f6):
   leaves and the umbra the air's refracted red (a thousandth of the sun's light at its edge, a
   ten-thousandth on its axis), its contrast against the disc's brightest point to the power
   0.5; the moonlight on the snow is dimmed by the disc's mean (`eclipse_of`, on the CPU);
+- OTHER WORLDS' MOONS (M8f14; `render/moons.hpp`, `FrameView::moons`, `render/night.hpp`'s
+  `set_moons`, `render/wgsl/moons.wgsl`; Fall Line's `sv_moons`): ten kinds taken from real moons
+  of other planets, each as large as it looks from its own planet (Io a little larger than the
+  Moon, Phobos a third of it, Deimos a point drawn a pixel and a half wide, its light shared
+  over it). Up to four go round the sky near the celestial equator, each at its own period
+  (Phobos faster than the sky turns, so it rises in the west; Triton backwards). Each is locked
+  face-on and rocks by its libration, and is lit by the real sun, so two moons show two phases.
+  Each is drawn as an ellipsoid hit in closed form, or, for a dented kind, marched inside that
+  bound. Its face is the real moon's map (`render/moon_maps.hpp`: the public-domain spacecraft
+  mosaics, 1024 x 512, Io, Ganymede and Triton in colour; `render/moon_maps/SOURCES.md` names
+  each), in its body frame at the mip level its size asks; its light is
+  Lommel-Seeliger's blended toward Lambert's, as seen, and Titan has a haze shell. A set without
+  the Earth's moon hides that disc and keys the night on the others' summed light from the
+  brightest one's direction. Each sky type names its own set (`SkyType::moons`). Post's night
+  vision leaves each one's bounding disc to the cones (`on_moon`);
 - THE KEY LIGHT, the one direct light that casts shadows, is the sun until three degrees under
   the horizon, then the moon when it is up (`FrameView::sun_*` become the moon's; the real sun
   stays in `night_sun`). The sky is TWO tables at once: the sun's own sky view and a second at
@@ -1144,6 +1159,36 @@ identity, and the game bakes its own (`fall_line::app::bake_grade`: a little con
 through the middle tones with the ends held, cooler shadows, warmer highlights, 5 % more
 saturation). On the software adapter at 1280 × 720 the bloom costs about 11 ms and the post
 pass 7 ms (the `profile` lab); the bloom's cost on a real GPU waits for the Mac's numbers.
+
+**As built (M35a, M35b): the lens and the film** (`render/post.hpp`, `render/lens.hpp`,
+`render/grade.hpp`; the `post` lab). The effects a modern game ships, each a switch and a
+strength, and each chosen to cost nothing when it is off and almost nothing when it is on:
+
+- **Folded into the post pass, no pass of their own:** contrast-adaptive sharpening (the four
+  neighbours' headroom scales the negative lobe, so a flat area sharpens most and an edge already
+  at full contrast barely: it undoes TAA-U's softness without halos), the lens's lateral colour
+  (two extra bilinear taps), the vignette and the film grain (arithmetic), and the lens dirt (a
+  small procedural picture made once at load, lit only by the glow past white and the lens pass,
+  so it shows round the sun and never over the snow). Each is an `override` switch, so a game
+  that leaves one at 0 compiles it out; the strengths are a 32-byte uniform (`set_post_look`).
+- **Baked into the grade's table, free:** contrast (an S-curve about middle grey, the ends held),
+  saturation and a white balance (temperature, tint) in linear light keeping the luminance, and
+  gamma (`apply_grade_knobs` after the game's own grade).
+- **One quarter-size compute pass, `lens`, after the bloom:** the sun streaming through what
+  stands in front of it (a 32-step radial march toward the sun's place over the open sky round it,
+  read off the depth target, started at the first step inside the sun's radius so a far texel
+  costs nothing) and the sun's flare (six analytic ghosts and a ring on the line through the
+  middle, scaled by how much of the sun is open sky). It reads only the post pass's input and the
+  depth, so it needs no bloom; the post pass adds it in one tap. The sky's own shafts (the cloud's
+  shadow across the air, § Sky) stay the sky pass's; these are the screen's half, from trunks,
+  crowns, ridges and figures, and the two stack.
+
+Considered and not taken: a screen-space "god rays" occlusion pre-pass (the depth target already
+says what is sky), image-based ghosts off the bloom chain (its Karis-weighted first level flattens
+the sun on purpose, so the ghosts came out dim and blotchy; the sun's own analytic flare is sharper
+and cheaper), a starburst (reads as a filter, not a lens) and anamorphic streaks (a film look the
+game does not want). Fall Line keeps the sharpening (0.3), the vignette (0.25) and the rays (0.5)
+on and the flare, fringes, grain and dirt off: those read as an effect rather than as the picture.
 
 **As built (M43)** (`render/eye.hpp`). **The eye's adaptation** leaves the sky's exposure as
 the eye AT REST, so the snow under the sky still never pumps, and opens the eye past it only

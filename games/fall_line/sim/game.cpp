@@ -183,6 +183,9 @@ void log_step(const GameState& state) {
                   std::to_string(v.path.size()) + ")";
         }
         break;
+      case EventKind::building:
+        line += " building " + std::to_string(e.gate) + " at " + f(e.value, 1) + " m/s";
+        break;
     }
     line += " at x " + f(s.x, 1) + " z " + f(s.z, 1) + ", " + f(s.speed * 3.6, 1) + " km/h";
     out::log_on(ch, out::Level::debug, line);
@@ -278,6 +281,8 @@ const char* event_name(EventKind kind) {
       return "army-para";
     case EventKind::army_vehicle:
       return "army-vehicle";
+    case EventKind::building:
+      return "building";
   }
   return "?";
 }

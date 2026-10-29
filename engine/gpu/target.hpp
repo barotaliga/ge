@@ -58,6 +58,8 @@ class Readback {
   bool ready(Device& device);
   // The pixels, once ready; unmaps so the readback can be reused.
   Image take();
+  // The same into `img`, reusing its storage (a frame's capture allocates nothing once warm).
+  void take_into(Image& img);
 
  private:
   wgpu::Buffer buffer_;
