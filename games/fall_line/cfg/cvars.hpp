@@ -14,8 +14,8 @@
 //   rung of Fall Line's)                 the camera's settings (engine/camera/cvars.hpp, A)
 //   volume s_wind s_effects s_mute      the sound's faders (A)
 //   sv_seed sv_hour                     the run's map and hour (the server's, server info)
-//   sv_weather sv_snowfall sv_snowline sv_fog sv_wind sv_winddir sv_cover sv_thick sv_skyrate
-//   sv_cloudheight sv_cloudspeed
+//   sv_weather sv_snowfall sv_snowline sv_fog sv_wind sv_winddir sv_cover sv_clouddensity
+//   sv_skyrate sv_cloudheight sv_cloudthickness sv_cloudspeed
 //                                       the sky over the run, picked by hand, and how fast its
 //                                       hour runs (the server's, server info; sim/sky.hpp)
 //   sv_skytype sv_skyair sv_skydust sv_sunsize sv_sun2 sv_planet sv_planetdir sv_planetel
@@ -29,9 +29,10 @@
 // ge:summary Fall Line's cvars: the window, the picture, the camera, the sound, the map, the hunt
 // ge:keywords fall-line cvars settings cfg vid_width r_taa r_bloom r_shadowsize cl_view volume
 // ge:keywords s_mute sv_seed sv_hour add_cvars register_cvars sv_weather sv_snowfall sv_fog
-// ge:keywords sv_wind sv_winddir sv_cover sv_thick sv_skyrate r_clouds sv_skytype sky-type
-// ge:keywords sky-knobs cl_chasedist cl_motion r_precip r_precip_density r_splashes r_wet
-// ge:keywords sv_snowline rain sv_cloudheight sv_cloudspeed r_sunsize r_moonsize disc-size
+// ge:keywords sv_wind sv_winddir sv_cover sv_clouddensity sv_skyrate r_clouds
+// ge:keywords sv_cloudthickness sv_skytype sky-type sky-knobs cl_chasedist cl_motion r_precip
+// ge:keywords r_precip_density r_splashes r_wet sv_snowline rain sv_cloudheight sv_cloudspeed
+// ge:keywords r_sunsize r_moonsize disc-size
 // ge:keywords sv_lethal sv_armyfire sv_helis sv_paras hunt army
 // ge:skill console sim
 // ge:test tests/fall_line_cvars_test.cpp
@@ -75,8 +76,9 @@ struct Settings {
   double snowline = -1;  // the snow line, a share of the mountain's height (rain under it)
   double air = -1, air_from = -1;  // the mean wind, m/s at 10 m; the heading it blows from, deg
   double cover = -1;               // the broken sky's cloud cover, 0..1
-  double thick = -1;               // how thick the clouds are, 0 thin .. 1 thick
+  double thick = -1;               // how dense the clouds are, 0 thin .. 1 thick
   double cloud_height = -1;        // the lowest layer's base over the floor, m
+  double cloud_thickness = -1;     // the lowest layer's height from its base to its top, m
   double cloud_speed = -1;         // the clouds' share of the wind aloft (1: the true wind)
   double sky_rate = 0;             // the sky's hours per hour of the run (0: the hour stands)
   // The kind of sky (render/sky_style.hpp's type names) and its knobs, each kept where negative

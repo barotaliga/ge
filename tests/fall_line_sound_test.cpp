@@ -48,9 +48,10 @@ TEST(every_bank_sound_has_a_sentence_and_its_own_id) {
     ids.insert(std::string(def.id));
   }
   CHECK(ids.size() == snd::kBank.size());
-  for (auto id : {snd::kLandSoft, snd::kLandHard, snd::kLandPowder, snd::kHitTree, snd::kBrushTree,
-                  snd::kBump, snd::kGateTaken, snd::kGateMissed, snd::kReset, snd::kFinish,
-                  snd::kWipeoutTree, snd::kWipeoutNose, snd::kWipeoutCatch}) {
+  for (auto id :
+       {snd::kLandSoft, snd::kLandHard, snd::kLandPowder, snd::kHitTree, snd::kBrushTree,
+        snd::kBump, snd::kGateTaken, snd::kGateMissed, snd::kReset, snd::kFinish, snd::kWipeoutTree,
+        snd::kWipeoutNose, snd::kWipeoutCatch, snd::kMenuFocus, snd::kMenuPress, snd::kMenuPage}) {
     CHECK(ge::audio::find_sound(snd::kBank, id) != nullptr);
   }
 }

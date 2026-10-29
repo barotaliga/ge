@@ -27,6 +27,8 @@
 //   barrel's line), carved into PRONGS round the axis where its look asks for them, and hotter
 //   at its base. Each frame a game hands the live shots with the muzzle's pose of that frame
 //   (`MuzzleFire`), so the flame rides the gun; its puff is a blast like any other.
+// - IMPACTS (render/impact.hpp): a round's hit on a surface is a puff of the surface's dust (a
+//   blast like any other, `dust_of`) and its sparks, chips, grit and drops (`throw_impact`).
 // - THE SPARKS: `throw_blast` turns a blast's births into particles (glowing sparks that cool,
 //   dark debris) and hands them to the pool, once, the frame the blast goes off.
 //
@@ -34,7 +36,7 @@
 // ge:keywords render explosions fireball volume raymarch billboard impostor smoke emission
 // ge:keywords blackbody sparks debris create_explosions prepare_explosions encode_explosions
 // ge:keywords throw_blast spark_particle explosion-cost muzzle-fire flame stretched prongs
-// ge:keywords throw_shot
+// ge:keywords throw_shot throw_impact impact
 // ge:skill render
 // ge:test tests/render_explosion_test.cpp
 #pragma once
@@ -47,6 +49,7 @@
 #include "gpu/pipeline.hpp"
 #include "render/explosion.hpp"
 #include "render/frame.hpp"
+#include "render/impact.hpp"
 #include "render/muzzle.hpp"
 #include "render/particles.hpp"
 #include "render/view.hpp"
@@ -121,5 +124,8 @@ Particle spark_particle(const Spark& s);
 size_t throw_blast(Particles& particles, const Blast& blast);
 // A shot's sparks, from the pose it was fired on, into the pool (once, the frame it is fired).
 size_t throw_shot(Particles& particles, const Shot& shot, const MuzzlePose& pose_at_shot);
+// A round's hit (render/impact.hpp): its sparks, chips, grit and drops into the pool (once, the
+// frame it hits). Its dust is `dust_of`, a blast like any other.
+size_t throw_impact(Particles& particles, const Impact& hit);
 
 }  // namespace ge::render
