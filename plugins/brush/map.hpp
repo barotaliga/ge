@@ -16,14 +16,15 @@
 // - **Leaves**: `contents` is the family's own code (29: −1 empty, −2 solid, −3 water, −4 slime,
 //   −5 lava, −6 sky; 38: a bit set, 1 solid; 46 stores none, 0), `solid` says it plainly (in 46: a
 //   leaf with no cluster). A leaf's `cluster` is its row in the visibility (−1: none, so it sees
-//   nothing and is seen by nothing).
+//   nothing and is seen by nothing). `ambient` is how loud each of the four ambient sounds is
+//   there, as the map's compiler measured it (29 and BSP2 store it; 38 and 46 read as silence).
 // - **Children**: a node's child `c >= 0` is a node, `c < 0` the leaf `-(c + 1)`.
 //
 // Everything is checked when it is read (read.hpp), so every index here is in range.
 //
 // ge:summary The classic BSP families read into one view: surfaces, lightmaps, tree, PVS, entities
 // ge:keywords bsp brush map family v29 bsp2 v38 v46 surface lightmap leaf cluster pvs visibility
-// ge:keywords node plane entity model patch to_engine
+// ge:keywords node plane entity model patch to_engine ambient ambient-level
 // ge:skill brush
 // ge:test tests/brush_read_test.cpp
 #pragma once
@@ -86,7 +87,12 @@ struct Leaf {
   int32_t cluster = -1;
   bool solid = false;
   float mins[3] = {}, maxs[3] = {};
+  uint8_t ambient[4] = {};  // the sounds near it, 0..255 (`kAmbientWater` ...): 29 and BSP2 only
 };
+
+// A leaf's ambient levels, in the order a version 29 or BSP2 file stores them. The map's compiler
+// sets each from the open water, sky, slime and lava a leaf can see.
+inline constexpr int kAmbientWater = 0, kAmbientSky = 1, kAmbientSlime = 2, kAmbientLava = 3;
 
 struct Model {
   float mins[3] = {}, maxs[3] = {};

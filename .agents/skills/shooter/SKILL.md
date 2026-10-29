@@ -1,14 +1,15 @@
 ---
 name: shooter
-description: "Use for plugins/shooter in gameengine2: the first-person shooter's simulation half. The classic player move in 32-bit floats (every step in order, every move type, the server settings at the modern defaults), clip hulls (planes, clip nodes, point contents, the box hull, the line trace with its 1/32 back-off), hulls built from convex brushes, the move's list of solids and its traces, the recorded scenarios the move is held to, and the pmove lab; the classic game loop (the game-program seam, entities, the area tree, world traces, physics frames on the run clock, thinking, toss and bounce, step, pushers, touches, new missiles, a player's packet and command, the client's commands and prediction), Shooter's Edge's native program and scripted match, the thrown-entity vectors and the se-loop lab; the server's host, its bot slots and command sources, the input log and its replay, the stand-in bot, the shooters_edge_server binary and the se-server lab; the M18o and M18f rows."
+description: "Use for plugins/shooter in gameengine2: the first-person shooter's simulation half. The classic player move in 32-bit floats (every step in order, every move type, the server settings at the modern defaults), clip hulls (planes, clip nodes, point contents, the box hull, the line trace with its 1/32 back-off), hulls built from convex brushes, the move's list of solids and its traces, the recorded scenarios the move is held to, and the pmove lab; the classic game loop (the game-program seam, entities, the area tree, world traces, physics frames on the run clock, thinking, toss and bounce, step, pushers, touches, new missiles, a player's packet and command, the client's commands and prediction), Shooter's Edge's native program and scripted match, the thrown-entity vectors and the se-loop lab; the M18o rows. Also the bots' navigation proven by the move (nav.hpp: floor nodes off the hulls, walk, drop and jump links proven by player_move, movers tagged, routes on ai/path), the nav course and the se-nav lab; M18r1. Also the server's host, its bot slots and command sources, the input log and its replay, the stand-in bot, the shooters_edge_server binary and the se-server lab; M18f."
 ---
 
 # The shooter plugin
 
 `plugins/shooter/` (`ge_shooter`, namespace `ge::shooter`) holds what any first-person shooter on
-the engine moves its players with. It depends on the engine's core only
-(`ge_add_plugin(shooter ENGINE core)`). The axes are the map format's (x and y across, z up);
-a game converts to the engine's y-up at its edges. `docs/shooters-edge.md` is the design;
+the engine moves its players with, and how its bots find their way. It depends on the engine's
+core and `ai` (`ge_add_plugin(shooter ENGINE core ai ...)`: the nav graph searches on `ai/path`).
+The axes are the map format's (x and y across, z up); a game converts to the engine's y-up at its
+edges. `docs/shooters-edge.md` is the design;
 `docs/goals.md` M18o is the row.
 
 | File | What |
@@ -27,8 +28,10 @@ a game converts to the engine's y-up at its edges. `docs/shooters-edge.md` is th
 | `shooter/physics.hpp/.cpp`, `push.hpp/.cpp` | The physics frame: thinking, toss, bounce, fly, step, noclip, water, new missiles; pushers |
 | `shooter/frame.hpp/.cpp`, `client.hpp/.cpp` | The server's frame on the run clock; a player's packet and command, the move's solids |
 | `shooter/usercmd.hpp/.cpp`, `predict.hpp/.cpp` | The client's commands; its prediction from the protocol's quantized state, smoothing |
+| `shooter/nav.hpp/.cpp` | Navigation proven by the move: floor nodes off the hulls, walk, drop and jump links proven by `player_move`, movers tagged, `nav_route` on `ai/path` |
 | `shooter/toss_recording.hpp/.cpp` | The thrown-entity vectors (`tests/golden/shooter_toss_recording.txt`) and their replay |
 | `games/shooters_edge/sim/` | The native program (`rules`), the test arena, the scripted match (`run_match`) |
+| `games/shooters_edge/sim/nav_course.hpp`, `labs/se_nav_lab.cpp` | The nav course (stairs, a crate, a pit, two ramps) and the `se-nav` lab: the graph from above, routes as proven |
 | `games/shooters_edge/labs/se_loop_lab.cpp` | The `se-loop` lab: the match's events, counts, paths and corrections; the vectors |
 | `shooter/cmd_source.hpp` | The bots' seam: a slot's command source, read-only on the server |
 | `games/shooters_edge/server/` | The server's host (slots, bots' packets, the frame), the input log and its replay, the stand-in bot, the `shooters_edge_server` binary (`bin/main.cpp`) |
