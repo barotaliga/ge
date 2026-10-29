@@ -227,7 +227,7 @@ void cover_heightfield(Cover& cover, const core::Heightfield& field, const Regio
 }
 
 void add_mesh(Cover& cover, std::span<const float> positions, std::span<const uint32_t> indices,
-              uint32_t kind, float share, float min_up) {
+              uint32_t kind, float share, float min_up, std::span<const float> shares) {
   for (size_t i = 0; i + 2 < indices.size(); i += 3) {
     Tri t;
     float* dst[3] = {t.a, t.b, t.c};
@@ -242,7 +242,14 @@ void add_mesh(Cover& cover, std::span<const float> positions, std::span<const ui
     const float nz = e1[0] * e2[1] - e1[1] * e2[0];
     const float len = std::sqrt(nx * nx + ny * ny + nz * nz);
     if (len <= 0 || std::fabs(ny) / len < min_up) continue;
-    t.share[0] = t.share[1] = t.share[2] = share;
+    bool bare = true;
+    for (int j = 0; j < 3; ++j) {
+      const size_t v = indices[i + static_cast<size_t>(j)];
+      const float own = v < shares.size() ? std::clamp(shares[v], 0.0f, 1.0f) : 1.0f;
+      t.share[j] = share * own;
+      bare = bare && t.share[j] <= 0;
+    }
+    if (bare) continue;
     t.kind = kind;
     push_split(cover, t);
   }

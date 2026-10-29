@@ -191,6 +191,11 @@ bool load(Layer& layer, const std::vector<uint8_t>& bytes, std::string& error) {
   }
   layer.mass_in = info.mass_in;
   layer.spilled = info.spilled;
+  // Everything loaded is new to a reader.
+  layer.tile_stamp.clear();
+  layer.coarse_stamp.clear();
+  for (size_t i = 0; i < layer.tiles.size(); i++) stamp_tile(layer, static_cast<int32_t>(i));
+  for (size_t i = 0; i < layer.coarse.size(); i++) stamp_coarse(layer, static_cast<int32_t>(i));
   return true;
 }
 

@@ -218,8 +218,6 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 ## Free content
 
 - `ge content scan <pak|dir>` (every sound and model a content set's maps and game logic name, with the event that plays or shows each: the registry and an assetmap draft)
-- `ge asset source search|fetch <source>:<pack>` (the free sources as a catalogue: found, unpacked into a cache, licence, author, URL and hash written to a lock file; a licence the repo cannot carry refused)
-- `ge sound match <reference> <candidates>` (candidates ranked against a reference by length, bands and envelope, a reason per trait and a sheet of waveforms)
-- `ge sound split <file>` (a long take cut at its silences into numbered files)
-- `ge sound import <source> <name> [--loop]` and `ge model import <source> <name>` (converted, textures packed, load-checked, previewed, registry and credits rows written)
-- A check that every file under a game's `content/` has a credits row
+- `ge source search|fetch <source>:<pack>` (done: Kenney, OpenGameArt and Poly Haven found and unpacked into a cache with a SOURCE.txt, a licence the repo cannot carry refused; next, the hash written to a lock file)
+- `ge sound match <reference> <candidates>` (done: ranked by length, bands and envelope with the distance per trait; next, a sheet of waveforms)
+- `ge sound import` and `ge model import` (done: converted to the loudness and format, textures packed, load-checked; next, a preview and the registry and credits rows written)

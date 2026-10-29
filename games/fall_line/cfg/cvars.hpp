@@ -25,14 +25,18 @@
 //   sv_ring sv_nebula sv_skystars sv_skyglow
 //                                       the kind of sky (render/sky_style.hpp's types) and its
 //                                       knobs (the server's, server info; app/sky_type.hpp)
+//   sv_lethal sv_armyfire sv_helis sv_paras
+//                                       the hunt: whether the army shoots to kill, fires at all,
+//                                       and sends its helicopters and paramotors (the server's)
 //
-// ge:summary Fall Line's cvars: the window, the picture, the camera, the sound, the map
+// ge:summary Fall Line's cvars: the window, the picture, the camera, the sound, the map, the hunt
 // ge:keywords fall-line cvars settings cfg vid_width r_taa r_bloom r_shadowsize cl_view volume
 // ge:keywords s_mute sv_seed sv_hour add_cvars register_cvars sv_weather sv_snowfall sv_fog
 // ge:keywords sv_wind sv_winddir sv_cover sv_clouddensity sv_skyrate r_clouds
 // ge:keywords sv_cloudthickness sv_skytype sky-type sky-knobs cl_chasedist cl_motion r_precip
 // ge:keywords r_precip_density r_splashes r_wet sv_snowline rain sv_cloudheight sv_cloudspeed
 // ge:keywords r_sunsize r_moonsize disc-size
+// ge:keywords sv_lethal sv_armyfire sv_helis sv_paras hunt army
 // ge:keywords r_sharpen r_sunrays r_flare r_vignette r_chromatic r_grain r_lensdirt r_contrast
 // ge:keywords r_saturation r_temperature r_tint r_gamma post-effects
 // ge:skill console sim
@@ -90,9 +94,15 @@ struct Settings {
   // (render/sky_style.hpp's SkyKnobs; angles in degrees).
   std::string cloud_kinds = "map";  // sv_clouds: the kinds of cloud drawn (map: the map's)
   std::string sky_type = "earth";
+  std::string moons = "type";  // sv_moons: the moons over the sky (app/sky_type.hpp)
   double sky_air = -1, sky_dust = -1, sun_size = -1, sun2 = -1;
   double planet = -1, planet_dir = -1, planet_el = -1, ring = -1;
   double nebula = -1, sky_stars = -1, sky_glow = -1;
+  // The hunt (sim/hunt_cfg.hpp hands them to a run's wanted level and army).
+  bool lethal = true;  // the army shoots to kill; off, it chases him down and arrests him
+  bool army_fire = true;
+  bool helis = true;
+  bool paras = true;
 };
 
 // Every cvar above, bound to `s`'s fields (which take the defaults now).

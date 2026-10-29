@@ -1044,6 +1044,21 @@ read in 2026, longitude 0) by `core/moon.hpp` (M8f6):
   leaves and the umbra the air's refracted red (a thousandth of the sun's light at its edge, a
   ten-thousandth on its axis), its contrast against the disc's brightest point to the power
   0.5; the moonlight on the snow is dimmed by the disc's mean (`eclipse_of`, on the CPU);
+- OTHER WORLDS' MOONS (M8f14; `render/moons.hpp`, `FrameView::moons`, `render/night.hpp`'s
+  `set_moons`, `render/wgsl/moons.wgsl`; Fall Line's `sv_moons`): ten kinds taken from real moons
+  of other planets, each as large as it looks from its own planet (Io a little larger than the
+  Moon, Phobos a third of it, Deimos a point drawn a pixel and a half wide, its light shared
+  over it). Up to four go round the sky near the celestial equator, each at its own period
+  (Phobos faster than the sky turns, so it rises in the west; Triton backwards). Each is locked
+  face-on and rocks by its libration, and is lit by the real sun, so two moons show two phases.
+  Each is drawn as an ellipsoid hit in closed form, or, for a dented kind, marched inside that
+  bound. Its face is the real moon's map (`render/moon_maps.hpp`: the public-domain spacecraft
+  mosaics, 1024 x 512, Io, Ganymede and Triton in colour; `render/moon_maps/SOURCES.md` names
+  each), in its body frame at the mip level its size asks; its light is
+  Lommel-Seeliger's blended toward Lambert's, as seen, and Titan has a haze shell. A set without
+  the Earth's moon hides that disc and keys the night on the others' summed light from the
+  brightest one's direction. Each sky type names its own set (`SkyType::moons`). Post's night
+  vision leaves each one's bounding disc to the cones (`on_moon`);
 - THE KEY LIGHT, the one direct light that casts shadows, is the sun until three degrees under
   the horizon, then the moon when it is up (`FrameView::sun_*` become the moon's; the real sun
   stays in `night_sun`). The sky is TWO tables at once: the sun's own sky view and a second at
