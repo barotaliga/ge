@@ -129,10 +129,11 @@ struct FrameOptions {
   double cover = -1;  // a broken sky's cover, its lowest layer's (the others kept in step); -1 own
   double thick =
       -1;  // how thick every layer is, 0 thin .. 1 thick (CloudLayer::thick_bias); -1 own
-  double cloud_height = -1;  // the lowest layer's base over the floor, m (Aloft::base); -1 own
-  double cloud_speed = -1;   // the layers' share of the true wind aloft (Aloft::speed); -1 own
-  double sun_size = 1;       // the sun's disc drawn larger (render/view.hpp's FrameView::sun_size)
-  double moon_size = 1;      // the moon's disc drawn larger (FrameView::moon_size)
+  double cloud_height = -1;     // the lowest layer's base over the floor, m (Aloft::base); -1 own
+  double cloud_thickness = -1;  // the lowest layer's height, base to top, m (Aloft); -1 own
+  double cloud_speed = -1;      // the layers' share of the true wind aloft (Aloft::speed); -1 own
+  double sun_size = 1;   // the sun's disc drawn larger (render/view.hpp's FrameView::sun_size)
+  double moon_size = 1;  // the moon's disc drawn larger (FrameView::moon_size)
   // The kinds of cloud drawn in place of the map's (sv_clouds, app/sky_type.hpp), lowest first;
   // a count of -1 keeps the map's own.
   const ge::render::CloudKind* cloud_kinds[ge::render::kCloudLayers] = {};
@@ -221,6 +222,8 @@ struct GameFrame {
   std::vector<ge::render::InstanceFamily*> still{&forest};
   std::vector<ge::render::InstanceFamily*> moving{&figures, &crowd};
   std::shared_ptr<const sim::Village> shown_village;  // kept while drawn
+  // The cloud layers the last frame drew (each one's base and top over the sea), for a caption.
+  ge::render::Clouds drawn_clouds;
   std::vector<ge::render::Instance> staged_traffic;
   wgpu::BindGroup instance_light;
   ge::render::SunShadows shadows;

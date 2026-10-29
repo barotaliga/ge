@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstring>
 
+#include "render/lights.hpp"
 #include "render/sky.wgsl.hpp"
 #include "render/sky_tables.wgsl.hpp"
 
@@ -38,7 +39,8 @@ wgpu::BindGroupLayout frame_layout(gpu::Device& device) {
   return make_layout(
       device, "render.frame",
       {Slot::uniform, Slot::sampler, Slot::texture, Slot::texture, Slot::texture, Slot::texture_3d,
-       Slot::storage_read, Slot::texture, Slot::texture_3d, Slot::sampler, Slot::texture_3d},
+       Slot::storage_read, Slot::texture, Slot::texture_3d, Slot::sampler, Slot::storage_shade,
+       Slot::texture_3d},
       wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment | wgpu::ShaderStage::Compute);
 }
 
@@ -77,6 +79,9 @@ void create_sky(gpu::Device& device, gpu::PipelineSet& pipelines, Sky& sky,
   }
   sky.light = make_buffer(device, "sky.light", kSkyLightBytes,
                           wgpu::BufferUsage::Storage | wgpu::BufferUsage::CopySrc);
+  // Zeroed at creation: no light.
+  sky.no_lights =
+      make_buffer(device, "sky.no_lights", kRefsOffset + 16, wgpu::BufferUsage::Storage);
 
   wgpu::SamplerDescriptor sd{};
   sd.label = "render.linear_clamp";
@@ -190,11 +195,12 @@ void create_sky(gpu::Device& device, gpu::PipelineSet& pipelines, Sky& sky,
 
 wgpu::BindGroup frame_group(gpu::Device& device, const wgpu::BindGroupLayout& layout,
                             const wgpu::Buffer& uniforms, const Sky& sky,
-                            const wgpu::TextureView& fog) {
-  return make_group(device, "render.frame", layout,
-                    {uniforms, sky.sampler, sky.transmittance_view, sky.multiscatter_view,
-                     sky.sky_view_view, sky.aerial_view, sky.light, sky.moon_view_view,
-                     sky.cloud.view, sky.cloud.sampler, fog ? fog : sky.no_fog_view});
+                            const wgpu::Buffer& lights, const wgpu::TextureView& fog) {
+  return make_group(
+      device, "render.frame", layout,
+      {uniforms, sky.sampler, sky.transmittance_view, sky.multiscatter_view, sky.sky_view_view,
+       sky.aerial_view, sky.light, sky.moon_view_view, sky.cloud.view, sky.cloud.sampler,
+       lights ? lights : sky.no_lights, fog ? fog : sky.no_fog_view});
 }
 
 void prepare_sky(Sky& sky, const FrameView& view) {

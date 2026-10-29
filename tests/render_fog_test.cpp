@@ -71,7 +71,7 @@ void make_scene(ge::gpu::Device& d, Scene& s) {
   r::create_post(d, s.pipelines, s.post, s.layout, wgpu::TextureFormat::RGBA8Unorm);
   CHECK(s.pipelines.finish(d));
   ge::gpu::end_load(d);
-  s.frame = r::frame_group(d, s.layout, s.uniforms, s.sky, s.fog.volume_view);
+  s.frame = r::frame_group(d, s.layout, s.uniforms, s.sky, nullptr, s.fog.volume_view);
   s.clear_frame = r::frame_group(d, s.layout, s.uniforms, s.sky);
   s.post_group = r::post_group(d, s.post, s.targets.hdr_view);
   s.rec.init(d, "test.timer", 12);

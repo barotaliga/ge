@@ -52,7 +52,7 @@ struct FrameUniforms {
   float eye[4];              // world xyz (m); w: the eye's altitude over the sea, km
   float sun[4];              // unit direction toward the key light; w: its illuminance, pre-exposed
   float size[4];             // render width, height, 1/width, 1/height
-  float time[4];             // seconds, frame number, 0, 0
+  float time[4];             // seconds, frame number, the lamps' adapted luminance, 0
   float world[4];       // y = 0's altitude over the sea (km), the pre-exposure, the moon's direct
                         // light while the sun keys, 1 when the haze is the moon's
   float planes[6][4];   // the frustum (view.hpp's five), the sixth all zero
@@ -189,6 +189,7 @@ struct FrameRecorder {
 enum class Slot : uint8_t {
   uniform,        // a uniform buffer
   storage_read,   // a read-only storage buffer
+  storage_shade,  // a read-only storage buffer the vertex stage does not see (fragment, compute)
   storage,        // a read-write storage buffer
   sampler,        // a filtering sampler
   texture,        // a filterable float 2D texture
