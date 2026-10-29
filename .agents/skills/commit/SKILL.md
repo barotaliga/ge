@@ -93,8 +93,13 @@ merge main, precheck, push, re-arm; the label comes off by itself. Never cancel 
 every entry queued behind it.
 
 **`skip-ci`**: a PR labelled `skip-ci` runs no CI at all, on the PR and in the queue, so it merges
-as soon as it is armed. Only Niclas decides which PRs get it. Whatever it breaks on main is fixed
-afterwards by its owner, in the next PR, before any other work on that thread.
+as soon as it is armed. Any thread may label its own PR so, once `make precheck` is green and the
+branch is clean against main: the precheck is then the only build and test it had. Every push to
+main runs the WHOLE matrix (macOS, Windows and the Linux rows), so what a skipped PR breaks shows
+on main within the hour: a red main run opens (or adds to) the one `main-red` issue, names the
+commits and comments on the PR it landed with, and the issue closes itself on the next green
+main. Whoever's PR broke main fixes it first, in the next PR, before any other work on that
+thread; a thread that sees `main-red` open does not label `skip-ci` until it closes.
 
 **A red test that is not yours** (`.github/workflows/flakes.yml`): every failed run's failing tests
 go into the `ci-ledger` issue, and a test that failed on two different PRs within a day gets a
