@@ -8,6 +8,7 @@
 
 #include <bit>
 #include <cstring>
+#include <iterator>
 
 namespace ge::progs {
 
@@ -97,7 +98,11 @@ int32_t Assembler::builtin(const char* name, int number, std::initializer_list<u
   const int32_t fn = declare(name);
   Function& f = functions[static_cast<size_t>(fn)];
   f.first_statement = -number;
-  for (uint8_t s : sizes) f.parm_size[f.num_parms++] = s;
+  for (uint8_t s : sizes) {
+    if (f.num_parms >= static_cast<int32_t>(std::size(f.parm_size)))
+      break;  // a function takes 8 at most
+    f.parm_size[f.num_parms++] = s;
+  }
   return fn;
 }
 
@@ -115,6 +120,8 @@ int32_t Assembler::begin_function(const char* name, std::initializer_list<uint8_
   f.num_parms = 0;
   int parm_words = 0;
   for (uint8_t s : sizes) {
+    if (f.num_parms >= static_cast<int32_t>(std::size(f.parm_size)))
+      break;  // a function takes 8 at most
     f.parm_size[f.num_parms++] = s;
     parm_words += s;
   }
