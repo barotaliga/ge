@@ -87,13 +87,16 @@ double jet_at(double h, double dusk) {
 
 namespace {
 
-// Layer `i` of a sky, kind `d`, dealt off the seed on salt `salt`.
+// Layer `i` of a sky, kind `d`, dealt off the seed on salt `salt`: its base no lower than `least`
+// m over the floor (the top of the layer under it), `thickness` m tall when that is not negative
+// (the lowest layer's, picked by hand) and its kind's dealt depth when it is.
 void deal_layer(const CloudKind& d, uint32_t salt, const mapgen::Weather& weather, double seed,
                 double floor_y, double latitude, double t, const Aloft& aloft, double lift,
-                render::CloudLayer& l) {
+                double least, double thickness, render::CloudLayer& l) {
   auto u = [&](uint32_t k) { return hash01(seed, 101 + salt * 17 + k); };
-  const double base = deal(d.base, u(0)) * lift;
-  const double depth = deal(d.depth, u(1));
+  const double base = std::max(deal(d.base, u(0)) * lift, least);
+  const double dealt = deal(d.depth, u(1));
+  const double depth = thickness >= 0 ? std::max(thickness, 1.0) : dealt;
   const double mid = base + 0.5 * depth;
   l.base_m = floor_y + base;
   l.top_m = l.base_m + depth;
@@ -101,8 +104,9 @@ void deal_layer(const CloudKind& d, uint32_t salt, const mapgen::Weather& weathe
   l.cell_m = deal(d.cell, u(3));
   l.stretch = d.stretch;
   l.dome = d.dome;
-  l.density = d.opacity / depth;
-  l.shadow_tau = d.shadow_tau;
+  // As dense a metre as the kind's dealt depth is: a taller layer is the more opaque for it.
+  l.density = d.opacity / dealt;
+  l.shadow_tau = d.shadow_tau * depth / dealt;
   l.anvil = d.anvil;
   l.erode = d.erode;
   l.fibre = d.fibre;
@@ -136,6 +140,8 @@ double lift_of(const CloudKind& lowest, uint32_t salt0, double seed, const Aloft
 
 // The salt scud is dealt on, past any stack's layers so it moves none of theirs.
 constexpr uint32_t kScudSalt = 9;
+// No layer under the lowest: its base is the dealt one (an inversion's lies under the floor).
+constexpr double kNoFloor = -1e9;
 
 }  // namespace
 
@@ -146,9 +152,11 @@ render::Clouds cloud_layers_of(const render::CloudKind* const* kinds, int count,
   out.count = std::clamp(count, 0, render::kCloudLayers);
   if (out.count == 0) return out;
   const double lift = lift_of(*kinds[0], 0, seed, aloft);
+  double least = kNoFloor;
   for (int i = 0; i < out.count; ++i) {
     deal_layer(*kinds[i], static_cast<uint32_t>(i), weather, seed, floor_y, latitude, t, aloft,
-               lift, out.layers[i]);
+               lift, least, i == 0 ? aloft.thickness : -1, out.layers[i]);
+    least = out.layers[i].top_m - floor_y;
   }
   return out;
 }
@@ -165,12 +173,15 @@ render::Clouds cloud_layers_for(const mapgen::Weather& weather, double seed, dou
   const double lift = lift_of(fractus, kScudSalt, seed, aloft);
   render::Clouds out;
   out.count = stack.count + 1;
-  deal_layer(fractus, kScudSalt, weather, seed, floor_y, latitude, t, aloft, lift, out.layers[0]);
+  deal_layer(fractus, kScudSalt, weather, seed, floor_y, latitude, t, aloft, lift, kNoFloor,
+             aloft.thickness, out.layers[0]);
   // More of it the further dusk has fallen.
   out.layers[0].cover *= aloft.dusk;
+  double least = out.layers[0].top_m - floor_y;
   for (int i = 0; i < stack.count; ++i) {
     deal_layer(*stack.kinds[i], static_cast<uint32_t>(i), weather, seed, floor_y, latitude, t,
-               aloft, lift, out.layers[i + 1]);
+               aloft, lift, least, -1, out.layers[i + 1]);
+    least = out.layers[i + 1].top_m - floor_y;
   }
   return out;
 }

@@ -836,7 +836,7 @@ layer's frame block (`CloudLayer::anvil`, `erode`, `fibre`, `patch`); its LIGHT 
 - THE THICKNESS (`cloud_thickness` in `wgsl/frame.wgsl`, mirrored by `render/clouds.hpp`): a
   layer's extinction is not even across it. A read of the noise a patch wide (`thick_cells`
   cells, set off from the column's read), a share of the column itself (so it thins toward its
-  gaps) and the sky's lean (`thick_bias`, dealt per map in ±0.4, or `sv_thick` in Fall Line)
+  gaps) and the sky's lean (`thick_bias`, dealt per map in ±0.4, or `sv_clouddensity` in Fall Line)
   give each column a share of its kind's full optical depth between its thinnest patches
   (`thin`) and 1. The kinds that vary are the sheets: an altostratus from 1.6 (the sun as
   through frosted glass) to 32 (hidden), a stratus from 3.4 (a watery disc) to 28, a
@@ -893,12 +893,23 @@ layer's frame block (`CloudLayer::anvil`, `erode`, `fibre`, `patch`); its LIGHT 
   cloud hung still where a real one races), and Fall Line's `sv_cloudheight` and `sv_cloudspeed` set them.
   The drift is the wind times the clock, not integrated, so with the sky's clock running
   (`sv_skyrate`) a jet winding up moves the layers on a little as it does.
+- CLOUDS SKIED THROUGH (M8f13). A layer is a slab of the world's air at its height over the
+  valley floor, so a deck lower than the mountain lies across its slopes: the skier skis down
+  onto its top, through it and out of its base, and the march, walking each ray from the eye
+  through the slab to the scene's depth, puts the cloud round him and between him and the
+  ground. `Aloft::thickness` (Fall Line's `sv_cloudthickness`, m) is how tall the lowest layer
+  stands from its base to its top. Its cloud keeps its kind's density a metre, so a taller layer
+  is the darker under it and hides more of the sun (its shadow's optical depth grows with it).
+  Every layer, dealt or picked, starts at the top of the one under it, so a layer's top is
+  where clear sky or the next layer begins; two layers never share a slab of the air. The
+  `world` lab stamps every shot with the eye's height and each layer's base and top over the
+  floor, so a shot says whether it was taken over, in or under a layer.
 
 Fall Line picks a stack with `sv_clouds` (kinds joined by '+', such as `cumulus+cirrus`, up to
 four; `map`, the default, keeps the map's own), each kind's bands dealt off the map's seed by
 `cloud_layers_of`; a stack whose lowest kind is a thick, full, low sheet (`lid_under`; a middle
 altostratus, its thin patches the sun shows through, is none) turns the day grey under it as a
-lid would. `sv_thick` (0 thin .. 1 thick, -1 the map's) leans every layer between its kind's
+lid would. `sv_clouddensity` (0 thin .. 1 dense, -1 the map's) leans every layer between its kind's
 thin patches and its cores. The `world` lab's `clouds` view stands at the finish in the
 valley and looks up the sky with the sun behind and to one side, the way a photograph of a sky
 is taken.
