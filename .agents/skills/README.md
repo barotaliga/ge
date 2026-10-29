@@ -69,4 +69,5 @@ One skill per plugin, named after it (`docs/architecture.md` § Plugins).
 | `paramotor` | `plugins/paramotor`: the powered speed wing a skier flies, the air it flies in, the bot's hands on it and the para scenarios |
 | `brush` | `plugins/brush`: maps in the classic BSP families read into one view, the fixture writers that make test maps of each, and the `bsp` lab |
 | `rooms` | `plugins/rooms`: the engine's own level format, rooms of plain geometry grown from their seeds (reliefs, caves), its text form and its lab |
+| `progs` | `plugins/progs`: the QC VM, the progs loader and checker, the builtin table and extensions, the assembler, `ge qc` and the qc lab |
 | `shooter` | `plugins/shooter`: the classic player move in floats, clip hulls and their trace, the recorded scenarios and the pmove lab |

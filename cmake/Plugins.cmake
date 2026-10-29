@@ -5,7 +5,7 @@
 #
 #   ge_add_plugin(mountain ENGINE core PLUGINS racing)
 #
-# which builds every .cpp under the directory (labs/, assets/ and app/ excepted) into the target ge_<name>,
+# which builds every .cpp under the directory (labs/, assets/, app/ and bin/ excepted) into the target ge_<name>,
 # puts plugins/ on its include path (so its headers are spelled "<name>/<file>.hpp"), and links the
 # engine targets it names (ENGINE core -> ge_core) and the plugins it names (PLUGINS racing ->
 # ge_racing). A plugin with a presentation half (plugins/<name>/app/: the sounds and looks a genre
@@ -39,6 +39,7 @@ function(ge_add_plugin name)
   file(GLOB_RECURSE sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
   list(FILTER sources EXCLUDE REGEX "/labs/")
   list(FILTER sources EXCLUDE REGEX "/plugins/${name}/assets/")
+  list(FILTER sources EXCLUDE REGEX "/plugins/${name}/bin/")
   set(app_sources ${sources})
   list(FILTER app_sources INCLUDE REGEX "/plugins/${name}/app/")
   list(FILTER sources EXCLUDE REGEX "/plugins/${name}/app/")
@@ -65,6 +66,17 @@ function(ge_add_plugin name)
     target_link_libraries(${target} ${scope} ge_${plugin})
   endforeach()
   set_property(GLOBAL APPEND PROPERTY GE_PLUGIN_TARGETS ${target})
+
+  # A plugin's command-line tools: each plugins/<name>/bin/<tool>.cpp is the executable <tool>,
+  # linking the plugin and written beside `ge` (build/<preset>/<tool>), which hands a `ge <tool>`
+  # command to it (the progs plugin's `qc` behind `ge qc`).
+  file(GLOB tools CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/bin/*.cpp")
+  foreach(tool_src IN LISTS tools)
+    get_filename_component(tool "${tool_src}" NAME_WE)
+    add_executable(${tool} "${tool_src}")
+    target_link_libraries(${tool} PRIVATE ${target})
+    set_target_properties(${tool} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+  endforeach()
 
   set(missing "")
   foreach(module IN LISTS arg_APP)
