@@ -164,6 +164,50 @@ the track with nothing along its arms. The rings live in `World::wakes`, each on
 over the last third of their life; `sample` adds their height, slope and orbital velocity to a
 lake's or a sea's, so a float rides on them.
 
+**A body through the surface (M24h2, `engine/water/entry.hpp`).** A body that falls in is answered
+by its own size: `entry_of` takes its mass, volume (so its density), its footprint in the surface
+and its velocity, and returns one ring, a crater on it, and the spray's numbers; nothing is
+stepped on a grid and nothing is kept but the ring, so it costs the same as a splash and only what
+is seen of it is evaluated. From the kinetic energy E = ½mv² down through the surface:
+
+- **The crater.** A hemisphere of water of radius R lifted to the surface stores πρgR⁴/4; a share
+  (`kCraterShare`, 0.35) of E goes into it, so R = (4·0.35·E/πρg)^¼, never narrower than the
+  body's footprint. Its depth is 0.6R times the square root of the body's density over the
+  water's, held between a half and one and a half (a dense body carries on down, a light one bobs
+  up). Its shape is (1 − ρ²)e^(−ρ²) with ρ = r/R, a cavity with a raised rim that moves no water;
+  it opens and closes over 2√(R/g) s, then the closing throws a jet up the middle, 0.6 of the depth
+  high and a third of the crater across, up and down ballistically. It is the ring's near field
+  (`crater_height`), added by `ring_height` and `wake_at` and drawn by the water pass in the same
+  formula, so the drawn cavity is the one a float drops into.
+- **The rings.** The waves are the far field of the cavity's volume (⅔πR² times its depth), set
+  off over a source as wide as the crater, so a heavier or faster body throws longer, higher
+  waves and a pebble short ripples.
+- **The spray.** A crown of drops round the rim at up to 0.8 of the entry speed (two drops a
+  joule's square root, 8 to 160) with a little mist, and the jet's column of drops when the crater
+  closes (`render/water_stream.hpp`'s `entry_spray` and `jet_spray`). A body coming out sets off a
+  ring of its volume's share and a curtain of drops, no crater.
+- **Running in.** A body moving across the surface pushes the water ahead of it rather than
+  dropping into it. Its angle off the vertical, a, leans the ring by 0.75 sin a toward where it is
+  going (`Ring::lean_x`, `lean_z`): everything the ring does is multiplied by 1 + |lean| cos φ,
+  φ from that direction, so the waves ahead are higher, those behind lower and the crater's rim
+  piled up in front. A cosine round the circle sums to nothing, so the lean moves no water. The
+  crater is drawn out along the run by what the body covers under the surface while it is open
+  (0.4 of its speed across over that time, at most 1.5 radii: `Ring::reach`), an ellipse centred
+  half that ahead, and the waves are set off from its centre. The crown is denser, taller and
+  flung on ahead (up to 0.6 of the speed across). The crater's size still comes from the speed
+  down; the drops count the whole energy. Oblique impact studies show the same picture: the splash
+  curtain is higher and faster on the downstream side, and the cavity is drawn out along the path.
+
+Dropped from 2 m (6.3 m/s) into still water, the `gpu-plunge` lab's table: a 50 g pebble opens
+0.08 m and sends 0.1 cm waves 2 m out; a 20 kg crate (it floats) 0.37 m, 1 cm; the 90 kg player
+0.53 m, 3.3 cm; a 400 kg boulder 0.77 m, 7.6 cm. The player jumping in off a bank in the classic
+move enters at 10.8 m/s down and 10 m/s across: a crater 1.4 m across drawn out to 2.45 m
+along his run and 0.42 m deep, 160 drops, a lean of 0.51, waves of 10.4 cm 2 m ahead and 4.0 cm
+2 m behind (6.2 and 1.8 cm at 5 m). A grid simulation of the surface (a height field stepped by the wave equation, or a
+convolution of the ripples) was not taken: it costs a grid round every splash every frame, has to
+be absorbed at its edges, and the rings already carry the waves out at the right speed for any
+length (§ Not taken).
+
 ## Floating (`engine/water/float`, M24c)
 
 A floating body is a set of **probes**: spheres (or boxes) with a volume each, fixed in the
@@ -431,8 +475,33 @@ six times so the veil reaches `adapt`); the wobble and a flat tint. The four pre
 is seen through the window unbent: the screen holds only what the camera saw, and the low
 horizon a real window squeezes into its rim lies off it.
 
-Not built yet (M24h2): light shafts, caustics, suspended particles, the waterline split of a camera
-half in, the lens's drops on leaving the water.
+**Built (M24h2, `engine/render/underwater.hpp`, `engine/render/wet_lens.hpp`).** THE WATERLINE:
+the lens is a plate `waterline` m tall (0.12) across the screen's height, so an eye within that of
+the surface, under it (`eye_under`) or just over it (`Water::eye_near`, within
+`kWaterlineBand`), sees the picture split where the plate crosses the water. Each pixel's point on
+the plate is tested against the surface there: the plane through the surface at the eye tilted by
+its slope (`Waterline`, the caller's `water::sample` at the eye, rings and crater included, or
+the flat level), lapping a centimetre; under it the view under water from that point's depth, over
+it the frame as drawn, and a dark meniscus a few pixels wide on the line; the pass blends by the
+share under, so the dry pixels are left alone. THE LIGHT IN THE WATER comes from above: the veil
+is brighter looking up than down (three times, between the nadir and the zenith). THE SUSPENDED
+MATTER: specks fixed in the water, drifting a little, found per pixel on six shells round the eye
+from 0.1 to 1.6 m (each a hashed grid of cells holding at most one speck, faded in and out as the
+shell moves through it, so none pops), lit by the light in the water and fogged over their own
+distance; their share is the look's (`motes`) times the water's beam attenuation over 2 per metre,
+so a brown lake or an algal pond is thick with them and a pool has next to none. THE WET LENS
+(`render/wet_lens.hpp`): leaving the water, a sheet covers the lens and its top edge runs down the
+screen over half a second, accelerating, the view under it rippled; it leaves 40 drops as it
+passes, more small than big; a drop over 0.02 screen heights slides, faster the bigger, and leaves
+beads behind it; every drop dries over its life (5 s for the biggest), and a splash near a dry
+lens spatters it. The drops are the CPU's (`step_wet_lens`, off its own `core::Rng`), so a lab
+digests them and a replay shows the same ones. The pass (`water.lens`) runs after TAA-U at the
+output's size, each drop a lens of water showing the scene behind it upside down and out of focus
+with a dark rim and a highlight; post reads its target only while the lens is wet.
+
+Not built yet (M24h3): light shafts, caustics on what is under the surface, the world above bent
+into the rim of Snell's window. The detail waves' interference shows as a regular hatch in the
+glitter a few centimetres under an eye at the surface; the GPU detail FFT (M24g2) replaces them.
 
 **Under water**, the plan: one `UnderwaterLook`, derived from the body's optics and open to
 every knob a game wants:
@@ -605,7 +674,8 @@ never read back by the simulation.
 | `flow` | picture | M24f | Dam break against the analytic solution, a basin emptying through a breach against Torricelli, a river to steady state, a waterfall's sheet; depth filmstrips; the volume held |
 | `gpu-water` | picture | M24g, M24g2, M24i | Named views: the calm mirror, a windy lake, the sea at several Beaufort forces, surf on a beach, a boat's wake from behind and from the side, crates dropped in, a river, a waterfall, sunset glitter, night, rain; the distance-band diff |
 | `lake` | picture | M24g, M24h, M24l | Fall Line's own frame with a tarn on a seed: from the shore, from over it, into the sun, in a fresh wind, at the day's end, under it and looking up from under it |
-| `gpu-underwater` | picture | M24h, M24h2 | Every look's view round a scene under water, the presets, Snell's window measured, a dive through the surface; then the caustics and the waterline split |
+| `gpu-underwater` | picture | M24h, M24h3 | Every look's view round a scene under water, the presets, Snell's window measured, a dive through the surface; then the caustics and the shafts |
+| `gpu-plunge` | picture | M24h2 | A first-person player in the classic move jumping off a bank into a dirty pond: the plunge from his eyes, the splash from the bank (crater, crown, jet, rings), under the water, surfacing through the waterline into the wet lens; four bodies of different mass dropped in; the player straight in against running in; the entry's numbers |
 | `water-lod` | picture | M24f, M24g | The tiers round an actor and round the camera as maps; a flow region coarsened and refined with its volume held; the picture diff per distance band across a slow fly-out (no band pops); the cost against distance |
 | `water-audition` | sound | M24j | Every water voice, metered and written as WAV: the bank, splashes from a pebble to a boulder, eleven places (a calm and a fresh lake from the shore, a boat and under it, a gale on a beach, a slow river and a stream, a waterfall from 15 and 60 m and under its pool, nowhere), the roar against distance beside 1 / r, a swim |
 | `water-cost` | bench | M24f, M24g | The CPU's costs per step (sample, floats, the flow grid) and the GPU's per pass |
@@ -627,6 +697,13 @@ scattering (Gordon and Morel), shallow-water reflectance (Maritorena et al. 1994
 
 ## Not taken
 
+- **A height-field grid for splashes and ripples.** The common cheap answer to a body falling in is
+  a small grid of heights round it stepped by the wave equation (or by a convolution kernel that
+  disperses each wavelength at its own speed). It costs a grid and a step for every splash every
+  frame, needs absorbing edges, and its shortest waves are its cells. The rings are evaluated only
+  where a vertex or a pixel asks, already disperse every length at its own speed, and the near
+  field a grid would capture (the cavity and its jet) is one closed form on the same ring
+  (`entry.hpp`).
 - **SPH or FLIP for the simulation.** Full 3D particle fluids are the right tool for a glass of
   water and the wrong one for a lake: their cost grows with the volume, they are hard to make
   bit-deterministic across threads, and a game's water is almost all surface. The 2.5D grid

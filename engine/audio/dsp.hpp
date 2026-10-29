@@ -121,6 +121,14 @@ inline float cents_ratio(float cents) {
   return 1 + x * (1 + x * (0.5f + x * (1.0f / 6)));
 }
 
+// A balance law for a pan in -1..1: the centre is full on both sides, and a hard pan silences
+// the far side.
+inline void pan_gains(float pan, float& gl, float& gr) {
+  pan = pan < -1 ? -1 : pan > 1 ? 1 : pan;
+  gl = pan > 0 ? 1 - pan : 1;
+  gr = pan < 0 ? 1 + pan : 1;
+}
+
 // THE STATE-VARIABLE FILTER (the trapezoidal-integrated form): stable under a cutoff that moves
 // every few samples, which a direct-form biquad is not. Tuned every `kControl` samples; the band
 // pass is scaled to unity gain at its centre.

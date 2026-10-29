@@ -23,6 +23,7 @@
 // - A NEBULA: a coloured cloud on the star sphere (two tints over a mottled field), seen by day
 //   when it is bright enough.
 // - THE STARS BY DAY: the share of the night's stars seen whatever the sky's brightness.
+// - ITS MOONS: the Earth's own, or other worlds' (render/moons.hpp), each type's its own set.
 // - A GLOW from under the horizon (a world on fire, a city below): its tint and strength, and how
 //   high it climbs.
 // Only the air is physical; the rest is drawn over the sky in its pass (render/sky.wgsl), costs
@@ -31,7 +32,7 @@
 // ge:summary Sky types: a world's air, extra suns, a planet, a nebula, a glow; named and tunable
 // ge:keywords render sky sky-type sky-style alien-sky other-world rayleigh mie dust air-colour
 // ge:keywords second-sun twin-suns planet ring nebula stars-by-day horizon-glow hellish void
-// ge:keywords sky_types sky_style_named with_knobs style_rows sky-knobs
+// ge:keywords sky_types sky_style_named with_knobs style_rows sky-knobs sky_moons_named
 // ge:skill render
 // ge:test tests/render_sky_style_test.cpp
 #pragma once
@@ -85,11 +86,13 @@ struct SkyStyle {
   double glow_height = 0.12;
 };
 
-// A named sky type: the word a cvar takes, a line for a sheet's caption, and its style.
+// A named sky type: the word a cvar takes, a line for a sheet's caption, its style, and the moons
+// over it (render/moons.hpp's moon_set_named reads the words: `moon` the Earth's own).
 struct SkyType {
   std::string_view name;
   std::string_view caption;
   SkyStyle style;
+  std::string_view moons = "moon";
 };
 
 // Every sky type, the Earth's first.
@@ -98,6 +101,8 @@ std::span<const SkyType> sky_types();
 bool sky_style_named(std::string_view name, SkyStyle& out);
 // The type names as one line ("earth, dust, ..."), for a diagnostic's next step.
 std::string_view sky_type_list();
+// The words of the moons over the type named `name` (any case); "moon" for an unknown word.
+std::string_view sky_moons_named(std::string_view name);
 
 // THE KNOBS over a type: each negative keeps the type's own.
 struct SkyKnobs {

@@ -1,0 +1,4 @@
+# each seed's village buildings at generator v10: the seed, their hash and how many of each kind (mountain_buildings_test)
+38 5d432ef7f4b18fb0 1 1 1 1 1 3 1 1 39 9 4 1
+7 1cea60579f40c7d2 1 1 1 1 1 3 1 1 31 10 4 1
+101 4ea9e63a22d52bcd 1 1 1 1 1 3 1 1 31 10 4 1
