@@ -113,16 +113,17 @@ TEST(the_labs_a_change_reaches_are_its_objects_its_moved_rows_or_every_lab) {
   r.objects = {"plugins/wing/acro.cpp", "games/g/labs/glide_lab.cpp"};
   CHECK((labs_reached(r, sources, {}) == std::vector<std::string>{"glide"}));
   CHECK((labs_reached(r, sources, {"old"}) == std::vector<std::string>{"glide", "old"}));
-  r.changed.insert("plugins/wing/CMakeLists.txt");
+  r.changed.insert("plugins/wing/CMakeLists.txt");  // its own directory's: as before
+  CHECK((labs_reached(r, sources, {}) == std::vector<std::string>{"glide"}));
+  r.changed.insert("cmake/Modules.cmake");  // the tree's: every lab
   CHECK(labs_reached(r, sources, {}).size() == 3);
 }
 
-TEST(a_baseline_diff_names_the_rows_it_moved) {
-  const std::string diff =
-      "--- a/tests/labs_digests.txt\n+++ b/tests/labs_digests.txt\n@@ -1,3 +1,3 @@\n"
-      " # lab digest\n-glide 0123456789abcdef\n+glide fedcba9876543210\n grid 1111111111111111\n"
-      "+ski-cross 2222222222222222\n";
-  CHECK((moved_digest_rows(diff) == std::set<std::string>{"glide", "ski-cross"}));
+TEST(a_changed_baseline_file_names_the_lab_it_moved) {
+  const std::set<std::string> changed = {"tests/digests/glide.txt", "tests/digests/ski-cross.txt",
+                                         "tests/digests/old/x.txt", "tests/golden/glide.txt",
+                                         "plugins/wing/acro.cpp"};
+  CHECK((moved_digest_labs(changed) == std::set<std::string>{"glide", "ski-cross"}));
 }
 
 TEST(a_changed_asset_reaches_the_labs_that_read_it_by_path) {

@@ -25,6 +25,7 @@ fast chase camera close to the ground. Per frame, at the top of its picture ladd
 | Figures | The player, a few rivals, and up to a few hundred people in a crowd, all skinned | Skinning once and drawing many times (main view and shadows) |
 | Snow marks | Trail maps stamped from the skiers' prints every frame | Render-to-texture with max blending, a fine window that follows the camera redrawn from the stamps' history, and a coarse map over the whole mountain |
 | Particles | Tens of thousands of spray, snow, rain and cloud particles | Overdraw of soft transparent quads; simulated on the GPU |
+| Grass | Hundreds of thousands of blades near the eye in summer, none stored: grown from a cover of triangles every frame (`docs/grass.md`) | A compute scatter with culling and distance thinning into indirect draws; the vertex stage bends each blade in the wind |
 | Sky | A physical atmosphere, a raymarched cloud volume, a night sky, aerial perspective on every material | Lookup tables computed on the GPU; a temporal cloud buffer |
 | Light | One sun or moon, the sky's light, at most a handful of point lamps at night | No need for a many-light pipeline |
 | Shadows | The mountain shading itself over kilometres, sharp shadows under the figures | Two different problems, solved by two different techniques |
@@ -207,6 +208,9 @@ The order, with what each stage is for:
    snow shader runs exactly once, whatever the draw order. This is the direct answer to
    the ground's fragment cost, and it lets the ground's shader drop `discard`, which
    tile-based GPUs pay for across a whole draw.
+5b. **Grass** (`render/grass.hpp`, `docs/grass.md` § Drawn): its blades grown by
+   `grass.scatter` (after the frame's uniforms; any time before the draw) and drawn by `grass`
+   after the opaque colour, testing and writing the depth, as blades bent in the wind.
 6. **Sky and clouds:** the sky behind the depth buffer; the cloud volume over it (marched at a
    quarter of the pixels, a quarter of those each frame and the rest reprojected from the last,
    then upsampled by depth and resolved by TAA: § Sky).
@@ -846,6 +850,21 @@ layer's frame block (`CloudLayer::anvil`, `erode`, `fibre`, `patch`); its LIGHT 
   and the half-size picture's half floats, which hold one minus a transmittance near 1 only in
   steps of 1/2048 (they now hold the transmittance itself). A sun tens of thousands of times the
   white showed through both as a disc behind any deck.
+- NO CLOUD ENDS IN A CUT. Round the sun and the moon the glow is seen as the disc is, far over
+  the picture's white, so a difference of a thousandth in what a cloud lets through shows. Three
+  things cut a cloud's edge into a line a pixel wide there, and each is now continuous:
+  - the march's stop: a ray stopped at a hundredth of the light and took the rest of its path
+    as thick, while the next ray, past a thin wisp into clear air, marched on and kept its
+    hundredth. Within 0.1 rad of the key light the march goes on to a millionth (back to the
+    hundredth by 0.3 rad, so only the rays round the disc pay for it);
+  - the layers behind an opaque one were dropped once a hundredth was left; they now fade out
+    with what is let through, from a hundredth to a thousandth;
+  - a layer under a ten-thousandth of cover was skipped, its glow with it; only one under a
+    ten-millionth is now.
+  And a dense layer's edge is FEATHERED (`feather`): its density's share, climbing from nothing
+  to full across the edge, is taken to the power ln τ / ln(1/0.3) (τ the layer's whole depth),
+  so the edge reaches an optical depth of one 0.3 of the way in rather than a thirtieth of the
+  way in on a scud of 30. A layer under 3.3 deep keeps its edge as it was.
 - THE GLOW'S ORDERS: the glow is lit by the light the ray's steps scatter times the ray's own
   transmittance (τ e^−τ: brightest through a patch about one deep, gone behind a thick core).
   Through a thicker cloud the light is bent again and again: the orders past the first (Poisson

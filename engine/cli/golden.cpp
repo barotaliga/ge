@@ -16,6 +16,7 @@
 #include <sstream>
 
 #include "cli/json.hpp"
+#include "lab/digests.hpp"
 
 namespace ge::cli {
 
@@ -421,7 +422,7 @@ std::vector<std::string> labs_reached(const Reach& r,
                                       const std::map<std::string, std::string>& sources,
                                       const std::set<std::string>& moved) {
   const bool all = std::any_of(r.changed.begin(), r.changed.end(),
-                               [](const std::string& f) { return build_file(f); });
+                               [](const std::string& f) { return global_build_file(f); });
   std::vector<std::string> out;
   for (const auto& [id, source] : sources) {
     if (all || moved.count(id) || (!source.empty() && r.objects.count(source))) out.push_back(id);
@@ -453,13 +454,13 @@ bool reads_asset(const std::string& source, std::string_view text, const AssetCh
          text.find(a.name + ".glb") != std::string_view::npos;
 }
 
-std::set<std::string> moved_digest_rows(std::string_view diff) {
-  static const std::regex kRow(R"(^[-+]([a-z0-9-]+) [0-9a-f]{16}$)");
+std::set<std::string> moved_digest_labs(const std::set<std::string>& changed) {
+  const std::string dir = std::string(kDigestBaseline) + "/";
   std::set<std::string> out;
-  for (const std::string_view view : split_lines(diff)) {
-    const std::string line(view);
-    std::smatch m;
-    if (std::regex_match(line, m, kRow)) out.insert(m.str(1));
+  for (const std::string& f : changed) {
+    if (f.starts_with(dir) && f.ends_with(".txt") && f.find('/', dir.size()) == std::string::npos) {
+      out.insert(f.substr(dir.size(), f.size() - dir.size() - 4));
+    }
   }
   return out;
 }
@@ -490,16 +491,8 @@ Outcome run_digest(const BuildOptions& o, const DigestOptions& d) {
   const fs::path baseline = o.repo / kDigestBaseline;
   const std::string rel(kDigestBaseline);
   std::error_code ec;
-  const bool had = fs::is_regular_file(baseline, ec);
-  const auto read_rows = [&] {
-    std::map<std::string, std::string> rows;
-    for (const std::string& line : lines_of(read_text(baseline).value_or(""))) {
-      if (line[0] == '#') continue;
-      const auto w = words_of(line);
-      if (w.size() >= 2) rows[w[0]] = w[1];
-    }
-    return rows;
-  };
+  const bool had = fs::is_directory(baseline, ec);
+  const auto read_rows = [&] { return ge::lab::read_digests(baseline.string()); };
   const auto was = read_rows();
   const fs::path exe = o.repo / "build" / o.preset / "labs";
   const fs::path previews = o.repo / "previews";
@@ -527,11 +520,7 @@ Outcome run_digest(const BuildOptions& o, const DigestOptions& d) {
                               "ge digest --affected --base=<ref>"});
       for (const auto& [id, source] : sources) labs.push_back(id);
     } else {
-      if (reach.changed.count(rel)) {
-        const std::string git =
-            "git -C " + quoted(o.repo) + " diff --merge-base " + d.base + " -- " + rel;
-        moved_rows = moved_digest_rows(run_to_log(git, log).output);
-      }
+      moved_rows = moved_digest_labs(reach.changed);
       labs = labs_reached(reach, sources, moved_rows);
       // A committed asset is read at run time, by path, so no include names it: a lab is
       // reached through one when it lives under the asset's plugin or game, or names it.
@@ -568,7 +557,7 @@ Outcome run_digest(const BuildOptions& o, const DigestOptions& d) {
   // One run of the labs executable a lab (it takes one name, or --all), all into one log.
   std::string flags = " --smoke --repeat=2 --quiet --out=" + quoted(previews);
   if (write) {
-    fs::create_directories(baseline.parent_path(), ec);
+    fs::create_directories(baseline, ec);
     flags += " --write-digests=" + quoted(baseline);
   } else if (had) {
     flags += " --check-digests=" + quoted(baseline);

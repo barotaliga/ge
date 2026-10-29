@@ -95,7 +95,7 @@ make lab LAB=level ARGS=--tag=before          # keep this run as previews/level@
 make lab LAB=level ARGS=--compare=before      # every metric beside the kept run's, every picture diffed
 make lab LAB=world ARGS=--diff=before         # run nothing: the last run's pictures against the kept run's
 make labs-smoke                               # every lab at its smoke flags, twice, digests checked
-make labs-digests                             # rewrite tests/labs_digests.txt (a reviewed change)
+make labs-digests                             # rewrite tests/digests/ (a reviewed change)
 make ge ARGS="digest level --write"           # rewrite one lab's row only; no --write: just check it
 build/debug/labs --json                       # the list as one JSON array (what `ge lab` reads)
 make lab LAB=trace ARGS="--log=course=debug"  # any lab: the log spec's lines in previews/<id>/log.txt
@@ -230,18 +230,20 @@ fails when it is off. Three checks use it:
 
 - **`--repeat=N`** runs the lab N times in one process and fails when the digests differ.
   That catches state kept between runs and unseeded draws.
-- **`--check-digests=tests/labs_digests.txt`** compares each lab's smoke-run digest with
+- **`--check-digests=tests/digests/`** compares each lab's smoke-run digest with
   the committed baseline. CTest's `labs_smoke_1`..`_8` (one slice of the labs each,
   `--shard=I/N`) run it on every CI row, so a lab whose
   output differs between compilers fails on the row that differs.
 - A lab that has to move (its drawing changed, or the code it runs changed on purpose)
-  rewrites its row of the baseline with `ge digest <id> --write` (`make ge ARGS=...` here; the
-  runner's `--write-digests` on one lab or a shard keeps the other rows), and the PR says why.
+  rewrites its file of the baseline with `ge digest <id> --write` (`make ge ARGS=...` here; the
+  runner's `--write-digests` on one lab or a shard leaves the other labs' files), and the PR says why.
   A game repo keeps the same baseline once `ge digest --write` writes it, and its
   `labs_smoke` case checks it from then on.
-- The baseline merges with git's union driver (`.gitattributes`): two branches that add or move
-  different labs' rows merge cleanly. Two branches that move the same lab's row leave two rows
-  for it, and `--check-digests` fails naming the lab until `ge digest <id> --write` keeps one.
+- The baseline is one file a lab (`tests/digests/<lab>.txt`, the digest's 16 hex digits):
+  two branches that add or move different labs touch different files and merge cleanly, in the
+  merge queue too, which ignores custom merge drivers. Two branches that move the same lab
+  conflict on its one file; keep the digest `ge digest <id> --write` writes on the merged tree.
+  A runner path ending in `.txt` is still read and written as the older single file of rows.
 - After a change, `ge digest --diff` runs every lab at its smoke flags and prints only the labs
   whose digest is off the baseline (or not in it), writing nothing: the list of rows the PR has
   to explain or fix, in one command (about 14 minutes for every lab in the debug build; name a
@@ -404,6 +406,8 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 | `gpu-water` | picture | engine | `engine/render/water.hpp` (a lake in a bowl of hills in a light air and a fresh wind; every named look from the shore; the open sea in a light, a fresh and a gale wind; the sea at sunset; a fly-out from 2 m to 2 km; the simulation's crest drawn and read back against `surface_at`, more than 3 cm off fails; any GPU error or pipeline made after the load fails; a view whose water changes under 5 % of the picture fails) | M24g (now) |
 | `gpu-eye` | picture | engine | `engine/render/eye.hpp` (the engine's terrain and sky with a 40 m stone corridor drawn over them from inside: walked out of into a noon, and stepped back into from the day; every moment exposed by the sky alone beside the adapted eye, and the eye's stops, its goal and the metered average charted against the clock; any GPU error fails) | M43 (now) |
 | `gpu-underwater` | picture | engine | `engine/render/underwater.hpp` (from 6 m down in a sandy bowl with white markers 2 to 32 m ahead: every named look with the eyes open, each captioned with its visibility; the four presets; straight up from 5 m down, Snell's window measured off the picture, more than 3 degrees from 48.6 fails; a dive from 1 m over the surface to 3 m under; any GPU error or pipeline made after the load fails) | M24h (now) |
+| `grass` | picture | engine | `engine/grass/kind.hpp`, `cover.hpp`, `sway.hpp` (every preset's recipe and its density measured off a scattered patch, more than 5 % off fails; every kind side on in a calm, 5 and 15 m/s, the shapes `blade_shape` gives; how far each kind bends by the wind; a tussock's clumps from above; a gust crossing a meadow from above and the speed at two points 30 m apart down the wind) | M34a (now) |
+| `gpu-grass` | picture | engine | `engine/render/grass.hpp` (a meadow with a path and stands of long grass in a breeze; every preset from one eye; long grass in 0, 4, 10 and 20 m/s; six moments of its sway; against a low sun; the field out to the reach; a gust from above; lawn on a terraced mesh's treads and none on its risers; the blades kept; a view the grass changes under 10 %, any GPU error or pipeline made after the load fails) | M34b (now) |
 | `run-clock` | sim | engine | `engine/loop/run_clock.hpp` | M2 (now) |
 | `snow-contact` | scenario | engine | `engine/snow/contact.hpp` (the contact laws for every named snow: the sink a plate's pressure reaches, a track's traction against its slip, a base's glide against the temperature, a track's resistance against its speed; each kind's sink under a boot and a tyre, strength, traction, glide and tyre grip as a table; a kind off its fitted plate sink by more than 5 % fails) | M29b (now) |
 | `snow-press` | scenario | engine | `engine/snow/press.hpp` (every reference contact, a ski carving and skidding, a boot, a tyre, a snowmobile's track and a fallen body, pressed into powder, settled snow and the groomer: each from the side, the snow's depth and density under and beside it, and from above; the sink, the pressure, the snow packed and thrown as a table; the mass held to the unit or the lab fails) | M29a (now) |
@@ -436,6 +440,7 @@ report: the RunReport (finish, time, gates, crashes, digest) + the control tape
 | `sled` | scenario | plugin:snowmobile | `plugins/snowmobile` (`step_sled`, the body, the drive, the pilot: the top speed, the sink and the float, the climb and the high-mark, full lock's circle, the carve's roll, the brake and the parking brake, the drop, the cliff, the trunk, the bot up the slope and round a trunk; the line from above, the speed and the belt's sink) | M13b1 (now) |
 | `heli` | scenario | plugin:helicopter | `plugins/helicopter` (`step_heli`, the rotor, the pilot: the spool, the lift-off and the torque's turn, the climb at full lever, the hover's drift, the cruise, the landing, the crash on a dropped lever, a steep face and a crown, the disc over the top, the height kept over a climbing face, the fuselage hung toward a rider; the line from above, the height and the speed) | M13c1 (now) |
 | `para` | scenario | plugin:paramotor | `plugins/paramotor` (`step_para`, the wing, the air, the pilot: the launch off a face, the glide's speed and sink, the climb on full throttle, the banked turn, the stall, the bot down the fall line at its height and onto a spot, ridge lift up a face, the lee's folds, a crown and the drop; the acro: the dive, the swing-up, the loop, the tangle and its cut-away, with the loops, the top load, the tangle's time and the top sink; the line from above, the height, the speed and the folds) | M13d1, M13d3 (now) |
+| `pmove` | scenario | plugin:shooter | `plugins/shooter` (`player_move` over clip hulls) against `tests/golden/shooter_recording.txt`: every recorded scenario replayed line by line, a table of each one's worst position and velocity error, lines out of tolerance and lines exact; a chart of the worsts against the tolerance; each drawn scenario's path from above and from the side, ours over the recording's, the scene's brushes cut at y = 0 (`--draw=<names>`) | M18o1 (now) |
 | `ride` | scenario | plugin:skier | `plugins/skier` (`step_skier`, the snow, the limits) | M5a (now) |
 | `injuries` | scenario | plugin:skier | `plugins/skier/body.hpp` (every ride scenario's injuries by part, its ISS, when he was mortally hurt and died; a trunk skied into head-on (the body thrown on into it), across his whole line, and met beside him by closing speed and a landing by its load over 400 draws: the share hurt, the mean ISS, the share killed, the commonest injury; every scenario's parts by their worst AIS, and the curves) | M13e1 (now) |
 | `play` | drive | game:fall_line | `games/fall_line/sim/play` on `engine/play` (an agent over stdio, the bot through the protocol, its input log replayed) | M5c, M12b (now) |
