@@ -9,6 +9,7 @@
 #include <cmath>
 
 #include "core/num.hpp"
+#include "snow/lod.hpp"
 
 namespace ge::snow {
 
@@ -47,6 +48,7 @@ Layer& add_layer(SnowWorld& world, const LayerSpec& spec) {
   layer->tile_cols = (layer->cols + kTileCells - 1) / kTileCells;
   layer->tile_rows = (layer->rows + kTileCells - 1) / kTileCells;
   layer->slots.assign(static_cast<size_t>(layer->tile_cols) * layer->tile_rows, -1);
+  layer->coarse_slots.assign(layer->slots.size(), -1);
   layer->tiles.reserve(spec.max_tiles < 64 ? spec.max_tiles : 64);
   layer->records.reserve(spec.max_records);
   world.layers.push_back(std::move(layer));
@@ -83,30 +85,74 @@ const Cell* cell_at(const Layer& layer, int c, int r) {
   return &layer.tiles[slot].cells[(r % kTileCells) * kTileCells + c % kTileCells];
 }
 
+Cell cover_cell(const Layer& layer, int c, int r) {
+  Cell cell;
+  if (c >= layer.cols || r >= layer.rows) return cell;  // past the region: no snow kept
+  const CoverSample s = cover_at(layer.spec.cover, sample_x(layer, c), sample_z(layer, r));
+  cell.depth_mm = quantize(s.depth, 0.001, kMaxDepthMm);
+  cell.mass = quantize(s.density * s.depth, kMassUnit, kMaxMass);
+  cell.kind = s.kind;
+  return cell;
+}
+
 Cell* cell_for(Layer& layer, int c, int r) {
   if (c < 0 || r < 0 || c >= layer.cols || r >= layer.rows) return nullptr;
   const int tx = c / kTileCells, tz = r / kTileCells;
-  int32_t& slot = layer.slots[static_cast<size_t>(tz) * layer.tile_cols + tx];
-  if (slot < 0) {
-    if (layer.tiles.size() >= layer.spec.max_tiles) return nullptr;
-    slot = static_cast<int32_t>(layer.tiles.size());
-    Tile& t = layer.tiles.emplace_back();
+  const size_t at = static_cast<size_t>(tz) * layer.tile_cols + tx;
+  if (layer.slots[at] < 0) {
+    if (layer.free_tiles.empty() && layer.tiles.size() >= layer.spec.max_tiles) {
+      const int stalest = stalest_tile(layer);
+      if (stalest < 0) return nullptr;
+      fold_tile(layer, stalest);
+    }
+    int32_t slot;
+    if (!layer.free_tiles.empty()) {
+      slot = layer.free_tiles.back();
+      layer.free_tiles.pop_back();
+      layer.tiles[slot] = Tile{};
+    } else {
+      slot = static_cast<int32_t>(layer.tiles.size());
+      layer.tiles.emplace_back();
+    }
+    layer.slots[at] = slot;
+    Tile& t = layer.tiles[slot];
     t.tx = tx;
     t.tz = tz;
-    for (int j = 0; j < kTileCells; j++) {
-      for (int i = 0; i < kTileCells; i++) {
-        Cell& cell = t.cells[j * kTileCells + i];
-        const int sc = tx * kTileCells + i, sr = tz * kTileCells + j;
-        if (sc >= layer.cols || sr >= layer.rows) continue;  // past the region: no snow kept
-        const CoverSample s = cover_at(layer.spec.cover, sample_x(layer, sc), sample_z(layer, sr));
-        cell.depth_mm = quantize(s.depth, 0.001, kMaxDepthMm);
-        cell.mass = quantize(s.density * s.depth, kMassUnit, kMaxMass);
-        cell.kind = s.kind;
-        layer.mass_in += cell.mass;
-      }
-    }
+    refine_tile(layer, t);
   }
-  return &layer.tiles[slot].cells[(r % kTileCells) * kTileCells + c % kTileCells];
+  Tile& t = layer.tiles[layer.slots[at]];
+  if (t.near_t < layer.clock) t.near_t = layer.clock;
+  return &t.cells[(r % kTileCells) * kTileCells + c % kTileCells];
+}
+
+const CoarseCell* coarse_at(const Layer& layer, int c, int r, int* samples) {
+  if (c < 0 || r < 0 || c >= layer.cols || r >= layer.rows) return nullptr;
+  const int tx = c / kTileCells, tz = r / kTileCells;
+  const int32_t slot = layer.coarse_slots[static_cast<size_t>(tz) * layer.tile_cols + tx];
+  if (slot < 0) return nullptr;
+  const int i = (c % kTileCells) / kCoarseCells, j = (r % kTileCells) / kCoarseCells;
+  if (samples) {
+    const int c0 = tx * kTileCells + i * kCoarseCells, r0 = tz * kTileCells + j * kCoarseCells;
+    const int w = layer.cols - c0 < kCoarseCells ? layer.cols - c0 : kCoarseCells;
+    const int h = layer.rows - r0 < kCoarseCells ? layer.rows - r0 : kCoarseCells;
+    *samples = w * h;
+  }
+  return &layer.coarse[slot].cells[j * kCoarsePerTile + i];
+}
+
+bool stored_at(const Layer& layer, int c, int r, Stored& out) {
+  if (const Cell* cell = cell_at(layer, c, r)) {
+    if (!(cell->flags & kTouched)) return false;
+    out = {cell_depth(*cell), cell_mass(*cell), cell->kind, cell->minute,
+           (cell->flags & kPressed) != 0};
+    return true;
+  }
+  int n = 0;
+  const CoarseCell* cc = coarse_at(layer, c, r, &n);
+  if (!cc || !(cc->flags & kTouched) || n == 0) return false;
+  out = {cc->depth_mm * 0.001 / n, cc->mass * kMassUnit / n, cc->kind, cc->minute,
+         (cc->flags & kPressed) != 0};
+  return true;
 }
 
 Column sample(const Layer& layer, double x, double z) {
@@ -118,10 +164,14 @@ Column sample(const Layer& layer, double x, double z) {
   const int c0 = clamp_index(static_cast<int>(std::floor(fx)), layer.cols);
   const int r0 = clamp_index(static_cast<int>(std::floor(fz)), layer.rows);
   const int c1 = clamp_index(c0 + 1, layer.cols), r1 = clamp_index(r0 + 1, layer.rows);
-  const Cell* cells[4] = {cell_at(layer, c0, r0), cell_at(layer, c1, r0), cell_at(layer, c0, r1),
-                          cell_at(layer, c1, r1)};
+  const int cs[4] = {c0, c1, c0, c1}, rs[4] = {r0, r0, r1, r1};
+  Stored st[4];
+  bool kept[4];
   bool any = false;
-  for (const Cell* c : cells) any = any || (c && (c->flags & kTouched));
+  for (int k = 0; k < 4; k++) {
+    kept[k] = stored_at(layer, cs[k], rs[k], st[k]);
+    any = any || kept[k];
+  }
   if (!any) {
     col.depth = here.depth;
     col.density = here.density;
@@ -131,16 +181,15 @@ Column sample(const Layer& layer, double x, double z) {
     return col;
   }
   const double tx = core::clamp(fx - c0, 0, 1), tz = core::clamp(fz - r0, 0, 1);
-  const int cs[4] = {c0, c1, c0, c1}, rs[4] = {r0, r0, r1, r1};
   const double w[4] = {(1 - tx) * (1 - tz), tx * (1 - tz), (1 - tx) * tz, tx * tz};
   double depth = 0, mass = 0, packed = 0, best = -1;
   for (int k = 0; k < 4; k++) {
     double d, m, p;
     Kind kind;
-    if (cells[k] && (cells[k]->flags & kTouched)) {
-      d = cell_depth(*cells[k]);
-      m = cell_mass(*cells[k]);
-      kind = cells[k]->kind;
+    if (kept[k]) {
+      d = st[k].depth;
+      m = st[k].mass;
+      kind = st[k].kind;
       p = d > 0 ? packed_from_density(kind, m / d) : 1.0;
     } else {
       const CoverSample s =
@@ -182,7 +231,13 @@ bool sample(const SnowWorld& world, double x, double z, Column& out) {
 uint64_t mass_units(const Layer& layer) {
   uint64_t sum = 0;
   for (const Tile& t : layer.tiles) {
+    if (t.tx < 0) continue;  // a free slot
     for (const Cell& c : t.cells) sum += c.mass;
+  }
+  for (const CoarseBlock& b : layer.coarse) {
+    for (const CoarseCell& c : b.cells) {
+      if (c.flags & kTouched) sum += c.mass;
+    }
   }
   return sum;
 }

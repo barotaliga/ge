@@ -20,13 +20,15 @@
 //   lit as the instances are, by the sun past the ground's horizon and the shadow maps and by the
 //   sky, with a forward lobe so spray seen into a low sun is silver, and hazed. Blended
 //   premultiplied over the picture, unsorted (a grain is small and nearly opaque, the fines nearly
-//   clear); it writes the motion target's reactive channel (b) so the resolve does not smear it,
-//   and nothing else there.
+//   clear). A particle with a `kelvin` GLOWS as well: a blackbody at a heat falling from it toward
+//   700 K by e every `cool_s` (render/blackbody.hpp's table, kSparkEmissivity of a perfect
+//   radiator's light), so a spark thrown white-hot reddens and goes dark as it falls; it writes the
+//   motion target's reactive channel (b) so the resolve does not smear it, and nothing else there.
 //
 // ge:summary GPU particles: a ring pool, births, the compute flight, streaks softened by depth
 // ge:keywords render particles spray particle-pool ring births compute streak soft-particles
 // ge:keywords premultiplied reactive emit_particles prepare_particles encode_particles_sim
-// ge:keywords encode_particles step_particle create_particles read_particles
+// ge:keywords encode_particles step_particle create_particles read_particles glow spark kelvin
 // ge:skill render
 // ge:test tests/render_particles_test.cpp
 #pragma once
@@ -55,11 +57,13 @@ struct Particle {
   float streak;   // s of motion drawn as its streak
   float albedo;   // its whiteness, 0..1
   float opacity;  // at its densest, 0..1
-  float pad[2];
+  float kelvin;   // a glowing particle's heat at birth, K (0: it gives no light of its own)
+  float cool_s;   // its heat's fall toward a dull red, e-folding s
 };
 static_assert(sizeof(Particle) == 64, "match particles.wgsl's Particle");
 
-inline constexpr double kGravity = 9.81;  // m/s²
+inline constexpr double kGravity = 9.81;          // m/s²
+inline constexpr double kSparkEmissivity = 0.35;  // a glowing particle's light over a blackbody's
 
 // THE FLIGHT of one particle over `dt` s (no ground) in air moving at `air` m/s (null: still): the
 // CPU twin of particles_sim.wgsl's `fly`.
@@ -80,6 +84,8 @@ struct Particles {
   uint64_t born = 0;             // since creation
   std::vector<Particle> births;  // this frame's, waiting for prepare
   float dt = 0;                  // this frame's step
+  float glow_table[64][4];       // render/blackbody.hpp's rows, made once
+  float glow_cd = 0;             // the last row's light times kSparkEmissivity, cd/m^2
 };
 
 // The pool, its pipelines (into `pipelines`, before the load ends) and its groups over the
