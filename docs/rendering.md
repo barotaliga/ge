@@ -478,6 +478,45 @@ classic weapon's glowing triangles on its firing frames) marks them in `flame`, 
 engine draws the flash hides them through `DrawLit::hidden`. The effect is drawn after the gun,
 so a flame can overlap the barrel.
 
+## Morph meshes
+
+A **morph mesh** (`engine/render/morph.hpp`, `morph.wgsl`) is a model animated by whole frames:
+every vertex has a position and a normal in every frame, as vertex-animated model formats store
+them. Shooter's Edge draws its players, monsters and items this way (M18i). The pass is generic.
+A game hands it `MorphModel`s (frames, triangles, texture coordinates, a skin) once, and each
+frame a list of `MorphDraw`s.
+
+- **Upload once.** Every frame of every model goes into one storage buffer, two `vec4` a vertex.
+  The triangles and the coordinates go into two more. The skins are shelf-packed into one
+  2048-wide atlas, tallest first, a texel apart (`pack_morph_atlas`). A frame writes only its
+  draws: 160 bytes each, at most `kMaxMorphDraws`.
+- **Frames blended on the GPU.** The vertex stage pulls each vertex by index and mixes the draw's
+  two frames by its share. It does the same for the frame before, so a swinging limb carries its
+  own motion into the motion target and TAA keeps it sharp. A model with frames at 10 a second
+  is drawn between them at any rate.
+- **Team colours without a skin per team.** A skin texel's alpha is its **mark**:
+  - plain, an sRGB colour;
+  - **glow**, which lights itself (eyes, lamps, a muzzle);
+  - **tinted**, in region A or B with a step from 0 to 15.
+
+  A tinted texel takes the instance's ramp for its region at its step. The step keeps the
+  painter's shading and the ramp gives the colour. The ramps are a table of 16-colour rows the
+  game fills, from its palette's colour rows or from any colour with `ramp_from`.
+- **Sharp or smooth, per draw.** Sharp reads the texel the point falls in, which gives the
+  classic look. Smooth blends the four nearest texels, each resolved to its colour first, so a
+  tinted texel never bleeds the wrong ramp into its neighbour.
+- **The game's own light.** `outdoor` is the share of the frame's sun and sky. `ambient` and a
+  `shade` from one direction are what a game samples where the model stands: an indoor map's
+  light at its feet. Glowing texels add `glow` times the scene's white, whatever the light.
+- The draws go into the HDR and motion targets after the opaque world. Depth is tested and
+  written (reversed z) and back faces are culled.
+
+The CPU twins (`pose_morph`, `morph_texel`) are the shader's arithmetic for
+`tests/render_morph_test.cpp`. The `gpu-morph` lab draws a runner in four teams, sharp beside
+smooth, its frames and in-betweens, at dusk and in a game's own light, and times 64 of them.
+**Not yet:** the local lights of the lighting pass, shadows cast by the figures, and the classic
+model reader (it lands with its plugin).
+
 ## Terrain
 
 A generic **heightfield renderer** in `engine/render`, which a game hands a height
@@ -562,12 +601,68 @@ would need it.
 
 ## Lighting and shadows
 
-**Forward shading with a fixed light list.** The sun or moon, the sky's light (read
-from the sky's irradiance table), and up to eight point lamps whose slots are dealt by
-distance each frame. With this few lights, forward shading has the lowest bandwidth,
-works with MSAA and transparency, and suits tile-based GPUs. **Clustered light
-culling** (a compute pass that bins lamps into a froxel grid) is the planned upgrade,
-and it is built when a scene measurably needs more than eight lamps.
+**Forward shading with clustered local lights.** The sun or moon, the sky's light (read
+from the sky's irradiance table), and the local lights (§ Local lights) a game sets, each pixel
+reading only the lamps its cluster lists. Forward shading keeps the lowest bandwidth, works with
+MSAA and transparency, and suits tile-based GPUs; the clusters make a town's hundreds of lamps
+cost a pixel only the few that reach it. Every surface answers all three through one physically
+based model (§ Materials).
+
+### Local lights
+
+**As built (M39a)** (`render/lights.hpp`, `wgsl/lights.wgsl`). A game keeps its own list of
+`LocalLight`s and hands it to `prepare_lights` each frame; nothing about a light is stored
+between frames.
+
+- **Units.** A light's `candela` is its luminous intensity; a point `d` m off gets candela / d²
+  lux, the units the sun's 128 000 lx is in, and the shader pre-exposes it as it does the sun. A
+  torch is 10 to 40 cd, a bulb about 70, a street lamp 1000 to 3000, a muzzle flash 10⁴ to 10⁵
+  for a few milliseconds. Every light ends at its `range_m` by the window (1 − (d/r)⁴)², and the
+  inverse square stops at the emitter's `radius_m`. A spot is whole inside `inner_deg` of its
+  axis and dark past `outer_deg`, smoothstepped between.
+- **Flicker** is `flicker_level(light, t)`, a pure function of the light and the frame's time
+  computed on the CPU (so the shader reads one colour a light, and a replay or a lab flickers
+  the same): a flame (two octaves of smooth noise and a slow breath, its own seed), a buzz (a
+  failing tube's short dark gaps), a strobe, a pulse (up in `attack_s`, down by e every
+  `decay_s`: a muzzle flash, a spark, an explosion; dropped once under a thousandth), and steps,
+  a pattern of letters 'a' (dark) to 'z' played at `rate_hz`, 'm' its full level.
+- **The clusters.** The view is cut into 16 × 9 tiles and 24 depth slices (0 to 2 m, then
+  logarithmic to 2 km, the last on to infinity). `bin_lights` (CPU) keeps the lit lights whose
+  sphere reaches the frustum, the nearest 256, walks each one's slices and the tiles its
+  sphere's box covers and tests the sphere against each cluster's box in view space. One storage
+  buffer holds the head, the lights, each cluster's (first, count) and the lists; it is group 0's
+  binding 10 (`frame_group`'s `lights`, visible to fragment and compute stages but not the
+  vertex stage, whose storage-buffer count is 8 on the smallest devices), and a frame with no
+  lights binds the sky's empty list. A pixel finds its cluster from its position and its
+  reversed-z depth (distance = near / z), so no extra target is read. The binning is checked
+  both ways: `tests/render_lights_test.cpp` against points inside every light's sphere, and the
+  `gpu-lights` lab off the depth read back, every pixel a lamp reaches finding that lamp.
+- **Readers.** `local_lights(surface, p, n, v, frag)` sums every listed lamp through the
+  surface's model; the instances, the plain terrain and the snow call it. `light_inscatter(p,
+  dir, frag, g)` is the air's (a Henyey-Greenstein phase), for a fog volume's march.
+- **The eye under lamps.** The exposure is read off the sky's light; a lit street at night
+  needs the lamps' light in it too, or the eye is at the dark sky's gain and every lamp burns
+  out. `FrameView::lamp_lux` is that light (lx on a white face); `lamp_lux_at` gives it at a
+  point, and a game picks where its eye adapts (the `gpu-lights` lab takes the geometric mean
+  of a few points of what it looks at). Metering it off the picture is the eye adaptation row's.
+
+**Not yet**: local lights' shadows (a shadow atlas of spot and cube faces, cached for lamps that
+stand still: M39c), and the lamps on particles and water.
+
+### Materials
+
+**As built (M39b)** (`render/surface.hpp`, `wgsl/surface.wgsl`). One physically based model for
+every material: a Lambert body weighed by (1 − F) and by how little metal it is, and a GGX lobe
+with the height-correlated Smith visibility and Schlick's Fresnel. A dielectric reflects 0.08 ×
+`spec` head on (0.5 is 4 %), a metal its albedo. The sky in a surface is its radiance along the
+reflected ray, blurred toward the sky's irradiance as it roughens, times the split sum's
+analytic environment term (no table to bake). A `Surface` is albedo, roughness, metal, spec, an
+emissive luminance (cd/m², tinted by the albedo) and how porous the rain finds it; the presets
+name stone, metal, wood, slime, a wet floor and a lamp's glowing face. An instance family takes
+its materials as surfaces (two rows each); the rgb form makes every material matte (`spec` 0:
+no lobe at all, not even at a grazing angle), so every picture made before the model is
+unchanged. The `gpu-lights` lab's sphere sheet shows roughness across a dielectric, a metal and
+the presets under the noon sun and under one lamp at night.
 
 **Shadows use three techniques, one for each scale:**
 
