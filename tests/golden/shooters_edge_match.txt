@@ -1,0 +1,12 @@
+# games/shooters_edge/sim/match.hpp's own record: frame, server_hash after it (tests/shooters_edge_match_test.cpp)
+63 370e750c36ac1073
+c7 915f1df61d7a77aa
+12b cc076e7949627225
+18f 80a8ba470649e81c
+1f3 f5840af4c5db7b5a
+257 5206d75542ceab32
+2bb a9844c0d165cff65
+31f 1869affb3f1f9f4b
+383 2b08a182e7ef4de9
+3e7 2c34e83ef70c2951
+44b b13d2908b66abdd7
