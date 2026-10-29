@@ -1,0 +1,16 @@
+# A dark plate pressed with rows of round studs that catch the light.
+texture stud_plate
+size    64
+seed    3
+surface metal
+scale   1
+tags    plate metal floor wall studs low-colour
+param   rows 8 1 32
+param   cols 8 1 32
+
+layer fill    color=#1a1612 height=0.45 rough=0.5 metal=0.9
+layer noise   kind=perlin period=6 octaves=3 color=#121010 color2=#241e18 blend=mix amount=0.5
+layer speckle size=1 contrast=0.4 amount=0.05 color=#2a2638 cavity=0
+layer studs   rows=$rows cols=$cols shape=dome size=0.34 depth=0.3 color=#6a4a2a amount=0.7
+layer shade   strength=1.2 highlight=0.35 occlusion=0.3
+layer palette color=#6a5a48 color2=#a07848 steps=16

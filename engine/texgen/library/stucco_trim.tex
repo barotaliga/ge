@@ -1,0 +1,20 @@
+# Speckled stucco under a moulded band along the top: beads, and teeth below them when the
+# recipe asks for a crenellation. The band casts its shadow on the wall.
+texture stucco_trim
+size    64
+seed    5
+surface plaster
+scale   1
+tags    plain trim wall stucco low-colour
+param   at 0.06 0 1
+param   band 0.14 0.04 0.5
+param   beads 3 1 8
+param   teeth 0 0 16
+
+layer fill    color=#4a2a18 rough=0.9
+layer noise   kind=perlin period=6 octaves=4 color=#000000 color2=#ffffff blend=overlay amount=0.35
+layer speckle size=1 contrast=0.35 amount=0.1 color=#1a0e08 cavity=0
+layer trim    at=$at height=$band beads=$beads teeth=$teeth depth=0.6 color=#806a4c shadow=0.45
+layer noise   kind=perlin period=3 octaves=3 color=#000000 color2=#ffffff blend=multiply amount=0.12
+layer shade   strength=0.7 highlight=0.15 occlusion=0.2
+layer palette color=#8a5a3a steps=16
