@@ -79,6 +79,7 @@ struct Settings {
   // (render/sky_style.hpp's SkyKnobs; angles in degrees).
   std::string cloud_kinds = "map";  // sv_clouds: the kinds of cloud drawn (map: the map's)
   std::string sky_type = "earth";
+  std::string moons = "type";  // sv_moons: the moons over the sky (app/sky_type.hpp)
   double sky_air = -1, sky_dust = -1, sun_size = -1, sun2 = -1;
   double planet = -1, planet_dir = -1, planet_el = -1, ring = -1;
   double nebula = -1, sky_stars = -1, sky_glow = -1;
