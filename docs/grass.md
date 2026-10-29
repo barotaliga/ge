@@ -43,17 +43,20 @@ A kind (`grass::Kind`) is a handful of numbers: the blade's height and how much 
 width at the root, the blades a square metre (`density`), the rest lean, the clumps (`clump`:
 their size; `pull`: how far a blade leans toward its clump's middle), the wind's `give` (the
 speed at the blade's height that bends it halfway) and its own `sway` frequency, and the colours
-(root, tip, a `dry` share turned to `dry_tip`). Tall or short is `height`, thick or thin is
-`density` and `width`.
+(root, tip, a `dry` share turned to `dry_tip`), how long a trampled blade takes to stand up
+(`spring`), and its **heads**: a `flowers` share of blades topped by a cup `flower_size` m
+across in `flower` (or, for `flower2_share` of them, `flower2`), and a `seeds` share whose top
+`seed_length` of the blade swells into a seed head in `seed`. Tall or short is `height`, thick or
+thin is `density` and `width`.
 
-| Preset | Height | Width | Blades/m² | Give | Sway | What it is |
-| --- | --- | --- | --- | --- | --- | --- |
-| `lawn` | 0.07 m | 3 mm | 900 | 11 m/s | 2.8 Hz | short, dense, stiff |
-| `meadow` | 0.35 m | 5 mm | 400 | 6 m/s | 1.6 Hz | shin high, some dry |
-| `long` | 0.85 m | 7 mm | 220 | 3.5 m/s | 0.9 Hz | knee to thigh high, soft |
-| `tussock` | 0.5 m | 4 mm | 450 | 5 m/s | 1.3 Hz | tufts, strongly clumped |
-| `steppe` | 0.45 m | 2.5 mm | 300 | 7 m/s | 1.4 Hz | thin, wiry, mostly dry |
-| `reeds` | 1.6 m | 12 mm | 90 | 9 m/s | 0.6 Hz | tall, stiff, sparse |
+| Preset | Height | Width | Blades/m² | Give | Sway | Spring | Heads | What it is |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `lawn` | 0.07 m | 3 mm | 900 | 11 m/s | 2.8 Hz | 3 s | none | short, dense, stiff |
+| `meadow` | 0.35 m | 5 mm | 400 | 6 m/s | 1.6 Hz | 8 s | 6 % yellow and white flowers, 6 % seed | shin high, some dry |
+| `long` | 0.85 m | 7 mm | 220 | 3.5 m/s | 0.9 Hz | 25 s | 2 % purple and white flowers, 20 % seed | knee to thigh high, soft |
+| `tussock` | 0.5 m | 4 mm | 450 | 5 m/s | 1.3 Hz | 12 s | 1 % flowers, 12 % seed | tufts, strongly clumped |
+| `steppe` | 0.45 m | 2.5 mm | 300 | 7 m/s | 1.4 Hz | 15 s | 30 % straw seed | thin, wiry, mostly dry |
+| `reeds` | 1.6 m | 12 mm | 90 | 9 m/s | 0.6 Hz | 5 s | 35 % dark plumes | tall, stiff, sparse |
 
 A **recipe** is a preset's name and overrides, the form a level file and the command line
 write: `meadow height=0.6 density=300 width=0.004 dry=0.2`. `parse_kind` reads one and names
@@ -102,6 +105,31 @@ A blade's shape is a pure function of its kind, its numbers, the air at its root
   0.05)`, then both scaled so the Bézier's length (between its chord and its guide polygon) is
   the blade's length.
 
+## Trampling
+
+`engine/grass/trample.hpp`: grass pressed down by whatever walks, rolls or lands on it, standing
+back up over its kind's `spring` (a lawn in 3 s, a meadow in 8 s, long grass in 25 s).
+
+- **The cells**: `n × n` cells of `cell` m (256 × 0.25 m by default) that wrap round the world. A
+  cell is found by its world column and row modulo `n` and keeps its key, so a stale cell reads as
+  unpressed and a trail can be laid anywhere; where two places share a slot the newest print wins.
+  Each cell is 16 bytes: when it was pressed, how hard (0..1) and the plan way its blades lie (two
+  snorm16s).
+- **A stamp** (`stamp`): a disc of `radius` m pressed flat over its middle 60 % and falling off to
+  its rim (`1.6 (1 − (d / r)²)`, clamped to 1), its blades laid along the stamper's way of travel
+  and splayed outward from the middle. A cell keeps the harder of its old press and the new one.
+  A game stamps a foot, a wheel, a body or a landing; nothing else writes the cells.
+- **Standing back up** (`press_at`): `amount × r²` with `r = 1 − age / spring`, read bilinearly
+  between the four cells round a blade's root. Nothing is stepped: the press is a function of the
+  cells and the clock, so a replay or a seek draws the same trail.
+- **The blade**: pressed by `p`, it gives up that share of its lean and sway to lie along the
+  press's way, 1.45 rad off the vertical at `p = 1`. Drawn, it lies on top of the field, so it is
+  lit to its root and shows its paler back: a trodden line reads lighter than the field round it.
+
+`render::set_grass_trample` uploads the cells a stamp changed (the dirty range) before a frame;
+the scatter's probe and the draw read the same cells as the CPU, held to them by
+`render_grass_test`.
+
 ## Drawn
 
 `engine/render/grass.hpp`, two passes:
@@ -118,13 +146,30 @@ A blade's shape is a pure function of its kind, its numbers, the air at its root
    tapering to the tip, never under about 0.7 px, turned toward the eye when edge-on. Lit
    two-sided: the sun past the ground's horizon and the shadow maps on the face toward the eye,
    the sun through the blade from behind (translucency, strongest at the tip), the sky dimmed
-   toward the root (a dense field shades its own floor), a faint sheen; hazed.
+   toward the root (a dense field shades its own floor from the sky), a faint sheen; hazed.
+   **The field's own shade**: the sun reaching a point of a blade has crossed the canopy above it,
+   `exp(−0.5 · lad · L)` of it getting through, where `lad` is the kind's blade area a cubic
+   metre (density × width: 2.7 for a lawn, 1.5 for long grass), the 0.5 the share of a blade
+   facing the sun's way, and `L` the path along the sun from the canopy's top (the blade's own
+   tip, so a field laid over by a gale or trampled flat is lit deeper) down to the point. A high
+   sun lights long grass halfway down; a sun 8° up lights only its tips, the rest glowing
+   through from behind (the light through a blade is scattered forward, so the canopy dims it
+   by the square root of that). The fine blades
+   bend again at the last frame's time and write their own motion, so temporal anti-aliasing keeps
+   a waving field sharp; the coarse ones move by less than a pixel and carry the camera's.
+
+**Why the blades do not cast into the shadow maps.** The sun's cascades are cached and redrawn
+only when the eye drifts or the sun turns (`render/shadows.hpp`); a swaying field would have to
+redraw the near cascade every frame, and draw hundreds of thousands of blades into it, to put on
+the ground a shadow the blades themselves hide. The canopy's shade above gives the field its
+depth for the price of an exponential a vertex. What stands on the grass (trees, figures) does
+cast onto it: the blades read the shadow maps.
 
 **Far away** there are no blades: the game paints the ground's albedo under a cover with each
 kind's `far_colour` (the blades' mean as seen from afar, darkened by the field's own shade), so
 the field thins into a ground of its own colour with no ring.
 
-On the software adapter the `gpu-grass` lab's eight views (about 130,000 blades each at 480 ×
+On the software adapter the `gpu-grass` lab's ten views (about 130,000 blades each at 480 ×
 270) take about 11 s together.
 
 ## Rows
@@ -133,6 +178,6 @@ On the software adapter the `gpu-grass` lab's eight views (about 130,000 blades 
 | --- | --- | --- |
 | M34a | Kinds, covers, the scatter and the sway on the CPU; the `grass` lab | done |
 | M34b | The grass drawn: the scatter pass, thinning, the blades, the light; the `gpu-grass` lab | done |
-| M34c | The rest of the look: blades pressed down by what walks or drives through them and springing back (a trample map), blades casting into the sun's shadow maps, flowers and seed heads, the sway's own motion vectors, a stop on the picture's quality ladder priced | open |
+| M34c | The rest of the look: blades pressed down by what walks or drives through them and springing back (a trample map), the canopy's own shade from the sun, flowers and seed heads, the sway's own motion vectors, a stop on the picture's quality ladder priced | in progress: trampling, motion vectors, the canopy's shade, flowers and seed heads built |
 | M34d | A level's grass: a room format material's `surface <material> grass <recipe>` line and a cloned classic map's grass-textured faces (the cloner's texture map, `*grass*` to a meadow by default) grown into covers by the builders (`plugins/rooms`, `plugins/brush`, with M32) | open |
 | M34e | Fall Line's summer grass: the summer ground's meadows, pastures and runs as covers, the rotor's downwash flattening them | open |

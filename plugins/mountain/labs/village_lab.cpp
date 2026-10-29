@@ -28,6 +28,7 @@
 #include "mountain/mapgen/hub.hpp"
 #include "mountain/mapgen/query.hpp"
 #include "mountain/mapgen/versions.hpp"
+#include "mountain/village/buildings.hpp"
 #include "mountain/village/ground.hpp"
 #include "mountain/village/streets.hpp"
 
@@ -105,9 +106,34 @@ Nearest nearest_of(const mg::Level& level, const vg::Streets& plan) {
   return out;
 }
 
+// A building's colour on the map by kind: the base's own warm, the town's cool, the church white.
+Rgba building_colour(vg::BuildingKind k) {
+  switch (k) {
+    case vg::BuildingKind::lodge:
+    case vg::BuildingKind::ticket:
+    case vg::BuildingKind::rental:
+    case vg::BuildingKind::school:
+    case vg::BuildingKind::first_aid:
+      return {240, 150, 60};
+    case vg::BuildingKind::hotel:
+      return {230, 90, 90};
+    case vg::BuildingKind::garage:
+    case vg::BuildingKind::pump_house:
+      return {150, 150, 160};
+    case vg::BuildingKind::church:
+      return {255, 255, 255};
+    case vg::BuildingKind::shop:
+      return {240, 220, 90};
+    case vg::BuildingKind::house:
+    case vg::BuildingKind::flats:
+      return {120, 180, 240};
+  }
+  return {255, 0, 255};
+}
+
 ge::lab::Picture draw_village(const mg::Level& level, const vg::Streets& plan,
                               const vg::GroundMask& mask, const std::vector<uint8_t>& felled,
-                              int px, double metres) {
+                              const std::vector<vg::Building>& buildings, int px, double metres) {
   const ge::mountain::picture::MapWindow win{plan.centre_x, plan.centre_z + plan.valley * 40,
                                              metres};
   ge::lab::Picture pic = ge::mountain::labs::draw_map(level, px, win);
@@ -157,6 +183,25 @@ ge::lab::Picture draw_village(const mg::Level& level, const vg::Streets& plan,
   for (const vg::Junction& j : plan.junctions) {
     ge::lab::fill_disc(pic, sx(j.x), sz(j.z), 3, j.exit ? Rgba{60, 160, 255} : Rgba{20, 20, 20});
   }
+  // The buildings: each footprint filled in its kind's colour, a tick from its middle to its
+  // front, and its kind's first letters.
+  for (const vg::Building& b : buildings) {
+    const double fx = ge::core::libm::sin(b.heading);
+    const double fz = ge::core::libm::cos(b.heading);
+    const Rgba col = building_colour(b.kind);
+    for (int j = 0; j < px; j++) {
+      for (int i = 0; i < px; i++) {
+        if (vg::in_building(b, x0 + (i + 0.5) / k, z0 + (j + 0.5) / k)) {
+          ge::lab::set_pixel(pic, i, j, col);
+        }
+      }
+    }
+    ge::lab::draw_line(pic, sx(b.x), sz(b.z), sx(b.x + fx * b.depth / 2),
+                       sz(b.z + fz * b.depth / 2), {20, 20, 20}, 1);
+    const std::string word = std::string(vg::building_kind_name(b.kind)).substr(0, 3);
+    ge::lab::draw_text(pic, sx(b.x) - ge::lab::text_width(word) / 2.0, sz(b.z) - 3, word,
+                       {20, 20, 20});
+  }
   for (const vg::Street& st : plan.streets) {
     if (st.kind == vg::StreetKind::aisle) continue;
     const vg::StreetPoint m = vg::street_at(st, st.length / 2);
@@ -197,7 +242,10 @@ void run(ge::lab::Lab& lab) {
     }
     laid++;
     const vg::GroundMask mask = vg::bake_ground(*plan);
-    const std::vector<uint8_t> felled = vg::felled_trees(*level, mask);
+    std::vector<uint8_t> felled = vg::felled_trees(*level, mask);
+    const std::vector<vg::Building> buildings =
+        vg::place_buildings(*level, *plan, mask, vg::clearance_of(*level));
+    vg::fell_for_buildings(*level, buildings, felled);
     int n_felled = 0;
     for (const uint8_t f : felled) n_felled += f;
     double loop = 0;
@@ -226,6 +274,7 @@ void run(ge::lab::Lab& lab) {
     lab.metric(id + ".crosses", crosses, "count");
     lab.metric(id + ".car-park", plan->carpark_side != 0 ? 1 : 0, "bool");
     lab.metric(id + ".felled", n_felled, "count");
+    lab.metric(id + ".buildings", double(buildings.size()), "count");
     lab.metric(id + ".nearest-run", near.run, "m");
     lab.metric(id + ".nearest-station", near.station, "m");
     lab.metric(id + ".hash", double(vg::streets_hash(*plan, 0xcbf29ce484222325ull) % 1000000007ull),
@@ -246,11 +295,14 @@ void run(ge::lab::Lab& lab) {
                   "of each street to the back of its sidewalks pale, the felled margin tan and "
                   "the gardens faint green; the main street red, the back street orange, the "
                   "cross streets yellow, the roads out blue (off the map's edge), the car park's "
-                  "aisles violet; the junctions dots, the trees felled crossed out in red.",
+                  "aisles violet; the junctions dots, the trees felled crossed out in red; the "
+                  "buildings filled by kind (the base's orange, hotels red, shops yellow, houses "
+                  "and flats blue, the church white, the garage and pump house grey), a tick to "
+                  "each one's front.",
               "a loop of four streets below the hub with a road leaving it; no street across a "
               "run, a lift's line or a station; the square below a lift",
               ge::mountain::labs::map_inputs(lab, *level)},
-             draw_village(*level, *plan, mask, felled, px, metres));
+             draw_village(*level, *plan, mask, felled, buildings, px, metres));
   }
   lab.table(std::move(all));
   lab.metric("laid", laid, "count");

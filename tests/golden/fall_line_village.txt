@@ -1,2 +1,2 @@
 # seed, trees felled, vehicles, cars parked, the traffic's digest (fall_line_village_test)
-38 447 17 59 a30337ee84751f4a
+38 478 17 59 a30337ee84751f4a

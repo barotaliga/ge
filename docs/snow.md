@@ -356,6 +356,34 @@ hashes) are there for a material's own additions. The mountain's material
 it adds over the library. Every `world` view is bit for bit what it was, with the same digest
 and 100 dB on every view and band, so the material's cost is unchanged.
 
+**As built (M29e, the mirror).** `render/snow_mirror.hpp` mirrors one layer on the GPU, and a
+material or a compute pass reads it through `render/wgsl/snow_mirror.wgsl` at group 3, bindings 0
+to 4 (its own bindings come after them):
+
+- **The fine window**: the live fine tiles in a square of `window` tiles a side round the eye
+  (16 by default, 102 m at a 10 cm cell), each uploaded into an atlas slot as it is stored (eight
+  bytes a cell, so the GPU reads the integers the physics wrote), behind a page table of the
+  window's tiles. Storage buffers, not textures: a cell is two words, read as such.
+- **The coarse view**: one block of 4×4 coarse cells for every tile holding any coarse snow: the
+  layer's own blocks and, for a live fine tile, what folding it would leave (`snow::summary_of`),
+  so a fine tile outside the window draws worn rather than as untouched cover.
+- **The cover**: read once at the region's origin (a constant cover; a cover drawn from grids reads
+  that constant until a material samples its own grids), with the named snows' densities for the
+  packed share.
+- **Only what changed is sent**: every write stamps its tile or coarse block
+  (`Layer::tile_stamp`, `coarse_stamp`), and `update_snow_mirror`, once a frame after the step's
+  presses, re-sends a tile or a block only when its stamp moved, or when the window moves onto it.
+
+In WGSL, `snow_raw(c, r)` reads a sample to the bit (fine, else coarse, else the cover) and
+`snow_column(x, z)` reads the column at a plan point as `snow::sample` does: the depth, the density,
+the packed share, the drop under the cover, touched and the pressed share. `snow_mirror_expect` is
+`snow_raw`'s CPU twin, and `read_snow_raw` / `read_snow_columns` read the GPU back for a test or a
+lab. In the `gpu-snow` lab a 192 m square skied for 15 s, with the mirror updated every fourth
+step, reads every raw sample to the bit and every column within a tenth of a millimetre of the
+physics' (outside the window, a live tile is read through its summary by design). It sends
+20 MB over the run where re-sending the window every update would have been 920 MB, at 0.03 ms
+an update on the CPU.
+
 ## Sound (`engine/audio`, M29h)
 
 Voices driven by the imprint records and the column: the crunch of a step or a tyre, its
@@ -406,7 +434,7 @@ digests on purpose, and the PR names each one; the races, which never ski a pres
 | `snow-weather` | scenario | M29c | Hours in minutes: a ski groove filling in storms of three strengths, a fall settling over days at three temperatures, a road drifting in under three winds, a night's crust against a boot and a carving skier, a churned slope before and after a groomer |
 | `snow-lod` | picture | M29d | The tiers round the focus actors; a tile folded and refined with its mass held; memory against time on a free-ride day |
 | `snow-cost` | bench | M29d, M29e | `press` and `sample` per call, a step's snow with a field of skiers, folding; the GPU's upload and passes |
-| `gpu-snow` | picture | M29e–M29g | Named views: grooves, ruts, a trench and footprints close up, displaced and not; snow as a sheet over a road and a yard; snow on a roof; the distance-band diff |
+| `gpu-snow` | picture | M29e–M29g | The mirror (M29e, built): the drop read on the CPU and the GPU side by side, the fine window close up, where each sample is read from, the bytes each update sent; then named views: grooves, ruts, a trench and footprints close up, displaced and not; snow as a sheet over a road and a yard; snow on a roof; the distance-band diff |
 | `snow-audition` | sound | M29h | Every snow voice by kind and temperature, metered and written as WAV |
 | `snow-wheels` | scenario | M29k | A wheel in a rut, out of it and across its wall; a worn road's lines; grip packed against loose |
 | `free --snow` | drive | M29j | Fall Line: a free-ride day's piste skied up, tracks followed, a sled's trail |

@@ -12,11 +12,14 @@
 //   moved out by the box: `dist - (n.x * ex + n.y * ey + n.z * ez)` with `e` the box's mins on an
 //   axis whose normal is positive and its maxs otherwise, summed in float in axis order.
 // A map's compiled hulls (M18b) answer the same queries; this builder is how a scenario stands
-// up a world without one. Held by tests/shooter_brush_hull_test.cpp.
+// up a world without one. `build_brush_model` builds a whole brush model (the world, a door, a
+// plat) the way a server traces it: hull 0, hull 1 (the player's box) and hull 2 (the large box),
+// each with the box it was grown by (`BrushModel::clip_mins`). Held by
+// tests/shooter_brush_hull_test.cpp.
 //
 // ge:summary Clip hulls built from convex brushes: hull 0 and the player's hull as a plane chain
 // ge:keywords brush brushes convex clip-hull hull0 hull1 chain expand grow player-box build
-// ge:keywords build_hull brush_contents
+// ge:keywords build_hull brush_contents brush-model build_brush_model hull2 large-box clip-mins
 // ge:skill shooter
 // ge:test tests/shooter_brush_hull_test.cpp
 #pragma once
@@ -30,6 +33,9 @@ namespace ge::shooter {
 // The player's box about its origin, units: the origin is 24 above the feet.
 constexpr Vec3f kPlayerMins{-16, -16, -24};
 constexpr Vec3f kPlayerMaxs{16, 16, 32};
+// The large box hull 2 is grown by, units.
+constexpr Vec3f kLargeMins{-32, -32, -24};
+constexpr Vec3f kLargeMaxs{32, 32, 64};
 
 struct Brush {
   int contents = kContentsSolid;
@@ -50,5 +56,25 @@ struct HullData {
 HullData build_point_hull(const std::vector<Brush>& brushes);
 // The hull of a box (mins, maxs) swept through the solid brushes.
 HullData build_box_hull(const std::vector<Brush>& brushes, Vec3f mins, Vec3f maxs);
+
+// A brush model as a trace reads it: three hulls (0 points, 1 the player's box, 2 the large
+// box), the box each was grown by (`clip_mins`, so a mover's box `mins` is offset by
+// `clip_mins[h] - mins`), and the model's bounds. A view: the arrays belong to `ModelData`.
+struct BrushModel {
+  Hull hulls[3];
+  Vec3f clip_mins[3];
+  Vec3f mins, maxs;
+};
+
+// A brush model's owned hulls. Never copy one once `model()` has been taken (moving is fine).
+struct ModelData {
+  HullData hulls[3];
+  Vec3f mins, maxs;
+
+  BrushModel model() const;
+};
+
+// The three hulls of a model made of these brushes, and its bounds (each brush's axial planes).
+ModelData build_brush_model(const std::vector<Brush>& brushes);
 
 }  // namespace ge::shooter

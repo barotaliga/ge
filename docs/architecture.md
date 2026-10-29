@@ -97,6 +97,12 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   with a responsive view. It depends on `engine/core` only and holds no GPU: the draw list is data,
   and the 2D pass in `engine/render` (M22b) draws the same commands. A menu never calls the game;
   it hands back events, so the game's state stays the game's and a menu replays from its inputs.
+- **`engine/texgen`**: procedural textures (`ge::texgen`, M31; `docs/textures.md` is the design):
+  a recipe an agent writes as text (`.tex`), its layers painted over float planes (colour,
+  height, roughness, metal, glow) in order, the maps derived off them, and the bake cached on
+  disk as PNG under a key of everything its bytes depend on, so a variant is baked once. Pure
+  functions of the recipe and the texture reference, deterministic to the bit; no platform, no
+  GPU. Links `ge_lab` for the PNG writer.
 - **`engine/move`**: character movement (`ge::move`, M28; `docs/movement.md` is the design): the
   knobs of a moving body and their names, preset rows (an arena shooter's, a platformer's, a
   walker's), one step over a swept-box trace callback the game answers with its own world, a box
@@ -118,6 +124,16 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   that makes them, the noise layers and the text looks with their CPU reference, and text
   layout. It depends on `engine/core` only, so a game, the console, the menus and a lab all
   draw text from the same atlases.
+- **`engine/hud`**: the HUD kit (`ge::hud`, M10a): what any game draws over its running
+  picture, as widgets over the 2D layer's draw list: a face (a TrueType font or a bitmap
+  charset behind one size and baseline), the frame (the scale to a 720 px short side, the safe
+  area), nine anchors and stacks, readouts, big numbers with units, bars, pips (stars, hearts),
+  banners, the feed that holds and fades, and `layout_problems`. It holds no game's words or
+  state; a game's view builds its HUD from a snapshot of its own state. It depends on
+  `engine/ui` and `engine/charset`, and holds no GPU.
+- **`games/fall_line/hud`**: Fall Line's HUD (`fall_line_hud`, no GPU): the snapshot of the free
+  ride (a pure function of the state and what the HUD remembers across the run), the news off
+  the run's events, every word, and the view over `engine/hud`.
 - **`games/fall_line/app`**: Fall Line's presentation, the `fall_line_app` library (which
   the window and the game's GPU labs link): its pass table over `engine/render`, the
   `FrameView` it extracts (from named views now, from `GameState` once the run lands),
@@ -154,6 +170,11 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   river, a volume of hulls) and the one `sample` query everything reads, the sea a wind grows
   over each point's fetch and the components the simulation sums. It depends on `engine/core`
   and `engine/wind` and is simulation code (`docs/water.md`).
+- **`engine/detail`**: a level's surface detail (`ge::detail`, `docs/detail.md`): convex solids as
+  planes and the bevels on their exposed edges, a level's triangles binned for queries, decals
+  clipped onto them that age in a fixed pool, and props scattered over them by rules. It depends
+  on `engine/core` alone and is simulation code: a shot's hole and a seed's rubble are the same
+  bits everywhere, so a replay leaves the same marks.
 - **`engine/grass`**: the grass (`ge::grass`): kinds and their recipes, covers of triangles
   from a heightfield's region or a mesh's floors, every blade scattered off its triangle's own
   seed, and a blade's shape in the engine's wind. It depends on `engine/core` and `engine/wind`

@@ -190,6 +190,20 @@ int sim_nat_of(const SimNetwork& net, uint32_t node) {
   return -1;
 }
 
+namespace {
+
+// The LAN a node is on: its NAT's (the router's own LAN face counted in it), or -1 for the open
+// network, where every node without a NAT sits.
+int lan_of(const SimNetwork& net, uint32_t node) {
+  for (size_t i = 0; i < net.nats.size(); i++) {
+    if (has(net.nats[i].config.inside, node) || net.nats[i].config.gateway == node)
+      return static_cast<int>(i);
+  }
+  return -1;
+}
+
+}  // namespace
+
 SimNetwork make_sim_network(uint32_t seed, const LinkConditions& defaults) {
   SimNetwork net;
   net.rng = core::make_rng(seed);
@@ -235,10 +249,14 @@ bool sim_send(SimNetwork& net, const Address& from, const Address& to, const uin
               size_t size) {
   if (size > kMaxDatagram) return false;
   if (sim_node(to) == kSimBroadcast) {
-    // Every socket on the port but the sender's; the list cannot change while it is walked.
+    // Every socket on the port but the sender's, on the sender's own LAN (a router does not
+    // forward a broadcast); the list cannot change while it is walked.
+    const int lan = net.nats.empty() ? -1 : lan_of(net, sim_node(from));
     for (size_t i = 0; i < net.sockets.size(); i++) {
       const Address at = net.sockets[i].address;
-      if (at.port == to.port && at != from) sim_send(net, from, at, data, size);
+      if (at.port != to.port || at == from) continue;
+      if (!net.nats.empty() && lan_of(net, sim_node(at)) != lan) continue;
+      sim_send(net, from, at, data, size);
     }
     return true;
   }

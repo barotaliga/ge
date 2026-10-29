@@ -140,7 +140,7 @@ sound blob/sight1.wav creature/jelly/sight
 sound boss1/death.wav creature/lava_lord/death
 sound boss1/out1.wav creature/lava_lord/rise
 sound boss1/pain.wav creature/lava_lord/pain
-sound boss1/sight1.wav creature/lava_lord/sight
+sound boss1/sight1.wav power/bonus_powers
 sound boss1/throw.wav creature/lava_lord/attack
 sound boss2/death.wav creature/elder/death
 sound boss2/idle.wav creature/elder/idle
@@ -159,8 +159,8 @@ sound dog/dpain1.wav creature/hound/pain
 sound dog/dsight.wav creature/hound/sight
 sound dog/idle.wav creature/hound/idle
 sound enforcer/death1.wav creature/trooper/death
-sound enforcer/enfire.wav creature/trooper/attack
-sound enforcer/enfstop.wav creature/trooper/projectile_hit
+sound enforcer/enfire.wav world/laser_fire
+sound enforcer/enfstop.wav world/laser_hit
 sound enforcer/idle1.wav creature/trooper/idle
 sound enforcer/pain1.wav creature/trooper/pain_1
 sound enforcer/pain2.wav creature/trooper/pain_2
@@ -234,6 +234,7 @@ sound zombie/z_shot1.wav creature/ghoul/attack
 model progs/player.mdl character/player
 model progs/h_player.mdl character/player_head
 model progs/eyes.mdl character/player_eyes
+model progs/flag.mdl prop/flag
 model progs/gib1.mdl gore/gib_1
 model progs/gib2.mdl gore/gib_2
 model progs/gib3.mdl gore/gib_3
