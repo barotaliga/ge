@@ -174,6 +174,7 @@ porting ends, and nothing outside it may depend on it except `make golden`.
 ## Build and test
 
 ```sh
+sudo tools/setup-ubuntu.sh  # an Ubuntu 24.04/22.04 machine brought up to what the tree needs; a no-op when it is
 make build        # cmake --preset debug && cmake --build (PRESET=release for -O2, no sanitizers)
 make test         # build + ctest;  make test T=cli_ builds and runs only the tests the regex names
 make fmt          # clang-format in place;  make fmt-check is what CI runs
@@ -205,8 +206,8 @@ make shaders-check # every embedded WGSL shader compiled by Tint offline (needs 
 ```
 
 **A cloud session starts the build itself.** `.claude/settings.json`'s SessionStart hook runs
-`tools/session-start.sh`, which installs CI's Linux packages the container lacks and runs `make
-build` (the debug preset, reusing `build/debug/`) in the background while you read. Before you
+`tools/session-start.sh`, which runs `tools/setup-ubuntu.sh` (the one list of Linux packages, CI's
+too) and then `make build` (the debug preset, reusing `build/debug/`) in the background while you read. Before you
 rely on the build, `tools/session-start.sh --wait` blocks until it is done and exits with its
 result; the output is `build/session-start.log`, the one-line state `build/session-start.status`.
 
