@@ -28,12 +28,22 @@ description: "Use for CMake, presets, the Makefile, compiler flags, adding a dep
 
 `tools/session-start.sh` is the cloud session's SessionStart hook (registered in
 `.claude/settings.json`, the one Claude-specific config file; the script lives in `tools/` with the
-other checks). It returns at once and leaves a detached worker that installs the packages in
-`ci.yml`'s `GE_LINUX_PACKAGES` the container lacks (read from there, never restated) and runs
-`make build` into `build/debug/`. One worker at a time (`build/session-start.lock`); the log is
+other checks). It returns at once and leaves a detached worker that runs `tools/setup-ubuntu.sh --https-mirrors`
+(the container's proxy passes HTTPS alone) and then `make build` into `build/debug/`. One worker at a time (`build/session-start.lock`); the log is
 `build/session-start.log`, the state `build/session-start.status`; `--wait` blocks until it ends.
-It does nothing outside a cloud session unless `GE_SESSION_BUILD=1`. A new system package a build
-needs goes in `GE_LINUX_PACKAGES`, and the hook picks it up.
+It does nothing outside a cloud session unless `GE_SESSION_BUILD=1`. 
+
+## The Ubuntu packages
+
+`tools/setup-ubuntu.sh` is the ONE list of Linux packages (`LIB_PKGS`, checked by dpkg, and
+`TOOLS`, checked by the command on PATH and its version), for a fresh Ubuntu Server 24.04 or 22.04
+(which gets Kitware's, the toolchain PPA's, apt.llvm.org's, NodeSource's and GitHub's sources), a
+machine that has some of it, CI's Linux jobs and the session hook. It installs or upgrades only what
+is missing or too old and is a sub-second no-op with no network when nothing is, so callers run it
+unconditionally. CI passes `--cache-dir=.cache/apt` under an `actions/cache` keyed on the image, the
+script's hash and the week. `--check` reports without installing; `--verify` builds and runs the
+whole suite as CI's Linux x64 row. A new system package a build needs goes in `LIB_PKGS` (a library)
+or `TOOLS` (a command and its minimum), and CI and the hook pick it up.
 
 ## Adding a dependency
 

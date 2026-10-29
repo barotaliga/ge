@@ -290,8 +290,11 @@ std::string page_body(const Page& page, size_t max_rows) {
 
 }  // namespace
 
-std::string publish_html(const std::vector<Page>& pages, size_t max_rows) {
-  std::string h = page_head(pages.size() == 1 ? pages[0].lab + " lab run" : "Lab runs");
+std::string publish_html(const std::vector<Page>& pages, size_t max_rows,
+                         const std::string& title) {
+  std::string h = page_head(!title.empty()      ? title
+                            : pages.size() == 1 ? pages[0].lab + " lab run"
+                                                : "Lab runs");
   for (size_t i = 0; i < pages.size(); ++i) {
     if (i > 0) h += "<hr style=\"width:100%;border:0;border-top:3px solid var(--line)\">\n";
     h += page_body(pages[i], max_rows);
@@ -418,7 +421,7 @@ Outcome run_lab_publish(const fs::path& repo, const PublishOptions& o) {
   std::string error;
   const std::string name = o.ids.size() == 1 ? o.ids[0] : "the labs";
   const fs::path dir = o.ids.size() == 1 ? repo / "previews" / o.ids[0] : repo / "previews";
-  const std::string html = publish_html(pages);
+  const std::string html = publish_html(pages, 60, o.title);
   const fs::path file = o.out.empty() ? dir / "publish.html" : fs::path(o.out);
   if (!write_text(file, html, error)) {
     out.findings.push_back({Severity::error, "could not write the page: " + error, file.string(),

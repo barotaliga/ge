@@ -156,7 +156,7 @@ Outcome run(const Args& a) {
   if (name == "goals free") {
     const std::string base = flag_value(a, "base");
     return run_goals_free(fs::absolute(repo_of(a)), a.words.empty() ? "" : a.words[0],
-                          base.empty() ? "origin/main" : base, has_flag(a, "fetch"));
+                          base.empty() ? "origin/main" : base, !has_flag(a, "no-fetch"));
   }
   if (name == "texture kinds") return run_texture_kinds();
   if (name == "texture check") return run_texture_check(fs::absolute(repo_of(a)), a.words);
@@ -213,6 +213,7 @@ Outcome run(const Args& a) {
     p.ids = a.words;
     p.before = flag_value(a, "before");
     p.out = flag_value(a, "out");
+    p.title = flag_value(a, "title");
     if (const std::string w = flag_value(a, "width"); !w.empty()) {
       if (w.find_first_not_of("0123456789") != std::string::npos || w.size() > 5 ||
           std::stoi(w) < 16)
