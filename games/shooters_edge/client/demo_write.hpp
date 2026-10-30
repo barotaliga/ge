@@ -1,15 +1,16 @@
 // RECORDED GAMES WRITTEN IN CODE, for the tests and the labs that read and benchmark demos
 // (demo.hpp, timedemo.hpp) without any recorded file: a scripted path of the player's eye
-// through a map, written in either format with the messages a real recording carries around it
-// (the level's start and precache lists, baselines, stats, sounds, effects, prints, a moving
-// entity), so both readers are walked end to end.
+// through a map, written in any of the three formats with the messages a real recording carries
+// around it (the level's start and precache lists, baselines, stats, sounds, effects, prints, a
+// moving entity), so every reader is walked end to end.
 //
 // Coordinates go on the wire as eighths of a unit and angles as 1/256 of a turn (a view angle
 // in a block or a command as an f32), so a script whose origins are whole eighths reads back
 // exactly.
 //
-// ge:summary Recorded games written in code: a scripted eye path in both demo formats
+// ge:summary Recorded games written in code: a scripted eye path in every demo format
 // ge:keywords demo-writer synthetic-demo fixture write_single_demo write_client_demo
+// ge:keywords write_multiview_demo multiview
 // ge:keywords demo-script scripted-path test-demo
 // ge:skill shooter testing
 // ge:test tests/shooters_edge_demo_test.cpp
@@ -41,6 +42,10 @@ std::vector<uint8_t> write_single_demo(const DemoScript& script);
 std::vector<uint8_t> write_client_demo(const DemoScript& script, int cmd_size = 24);
 // A scripted walk round `map`'s floor: `frames` frames along a closed loop of `radius` units
 // about `centre`, turning to look along it, a full turn of the view's pitch's sway.
+// The multiview recording: the signon to everyone, two players' stats records, then a frame
+// every `frame_s` (whole milliseconds): the scripted player in slot 0 and a second one standing
+// in slot 3, a rocket in the entity list, a hidden record, a print and stats for slot 3 alone.
+std::vector<uint8_t> write_multiview_demo(const DemoScript& script);
 DemoScript loop_script(const std::string& map, ge::shooter::Vec3f centre, float radius, int frames);
 
 }  // namespace shooters_edge::client

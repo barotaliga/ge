@@ -23,6 +23,7 @@
 // ge:keywords timedemo benchmark demo fps frame-rate average max min one-percent-low low
 // ge:keywords percentile frame-time find_demo bench_stats bench_report timedemo_start
 // ge:keywords timedemo_step timedemo_mark demo_view demo_status unlocked-fps vsync-off
+// ge:keywords playdemo playdemo_step cl_demospeed demo-pace
 // ge:skill shooter perf
 // ge:test tests/shooters_edge_demo_test.cpp
 #pragma once
@@ -39,7 +40,8 @@
 
 namespace shooters_edge::client {
 
-inline constexpr int kSkipAfterLevel = 3;  // frames not timed after a level starts
+inline constexpr int kSkipAfterLevel = 3;     // frames not timed after a level starts
+inline constexpr double kMostPlayStep = 0.1;  // playback: the most wall time one frame counts, s
 
 struct BenchStats {
   int64_t frames = 0;
@@ -69,6 +71,8 @@ struct Timedemo {
   uint64_t last_ns = 0;         // the last mark (0: none yet)
   bool active = false;
   bool quit_after = false;  // the command line's run: quit with the report
+  bool paced = false;       // played at the demo's pace (playdemo), not flat out
+  double clock = -1;        // the paced run's demo clock, s (-1: not started)
 };
 
 // `name` found and opened; the run begins at the next step.
@@ -83,6 +87,13 @@ enum class TimedemoStep : uint8_t {
 };
 // The next demo frame.
 TimedemoStep timedemo_step(Timedemo& t, std::string& error);
+
+// PLAYBACK AT THE DEMO'S OWN PACE (`playdemo <demo>`): the same run, but each drawn frame reads
+// the demo frames up to the demo's clock moved on by the frame's wall time (at most
+// `kMostPlayStep`) times `speed` (`cl_demospeed`, 0..20; 0 pauses), none when the clock has not
+// reached the next one. A level start stops the step there as `new_level` and sets the clock to
+// that level's time; the frames are not timed.
+TimedemoStep playdemo_step(Timedemo& t, double wall_dt_s, double speed, std::string& error);
 
 // A frame presented at `now_ns`: its length is timed unless it is one of the untimed frames.
 void timedemo_mark(Timedemo& t, uint64_t now_ns);

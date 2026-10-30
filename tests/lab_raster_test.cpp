@@ -119,6 +119,24 @@ TEST(inflate_reads_every_block_kind) {
   const auto c = ge::core::inflate_raw(raw, want.size());
   CHECK(c && std::string(c->begin(), c->end()) == want);
   CHECK(!ge::core::inflate_raw(raw, want.size() + 1));
+  // A gzip file (written by a stock gzip at -9n): read, and refused when torn or its CRC is off.
+  // The second carries the original's name in its header, which is skipped.
+  const std::vector<uint8_t> gz{31,  139, 8,   0,   0,   0,   0,   0,   2,   3,   43,  201,
+                                72,  85,  40,  206, 203, 47,  87,  200, 207, 83,  40,  1,
+                                178, 115, 243, 75,  243, 74,  18,  51,  243, 116, 192, 60,
+                                108, 50,  92,  0,   76,  223, 115, 61,  51,  0,   0,   0};
+  const auto g = ge::core::inflate_gzip(gz);
+  CHECK(g && std::string(g->begin(), g->end()) ==
+                 "the snow on the mountain, the snow on the mountain\n");
+  CHECK(!ge::core::inflate_gzip(std::span(gz).first(30)));
+  std::vector<uint8_t> gz_bad = gz;
+  gz_bad[gz.size() - 8] ^= 1;
+  CHECK(!ge::core::inflate_gzip(gz_bad));
+  const std::vector<uint8_t> named{31,  139, 8,   8,   249, 195, 228, 106, 0, 3,
+                                   103, 122, 110, 97,  109, 101, 0,   171, 0, 0,
+                                   131, 22,  220, 140, 1,   0,   0,   0};
+  const auto n = ge::core::inflate_gzip(named);
+  CHECK(n && n->size() == 1 && (*n)[0] == 'x');
   // Stored blocks: the PNG writer's image data back to its filtered rows.
   ge::lab::Picture pic = ge::lab::create_picture(300, 200, {10, 20, 30});
   const std::vector<uint8_t> png = ge::lab::encode_png(pic);
