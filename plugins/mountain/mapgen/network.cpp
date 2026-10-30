@@ -217,7 +217,24 @@ double choose_heading(const ge::core::Heightfield& ground, double x, double z, d
   const auto turn_of = [&](const Heading& c) {
     return std::abs(angle_diff(c.h, want)) * 0.35 + std::abs(angle_diff(c.h, current)) * 0.25;
   };
-  const auto cost_of = [&](const Heading& c, double turn) {
+  // Whether a heading turns against the zig-zag's side, which costs it `kZigzagSide` more.
+  const auto against = [&](const Heading& c) {
+    if (side == 0) return false;
+    const double off = angle_diff(down, c.h);
+    return std::abs(off) > 0.12 && num::sign(off) != side;
+  };
+  size_t best_at = 0;
+  // Whether a heading `i` whose cost is at least `at_least` cannot be the cheapest: dearer than the
+  // best so far, or as dear and after it in the table's order.
+  const auto beaten = [&](double at_least, size_t i) {
+    return at_least > best_cost || (at_least == best_cost && i > best_at);
+  };
+  // A heading's cost, or none once the look-aheads read so far already make it `beaten`. Each
+  // term only adds to the cost, so the terms read so far, summed in the cost's own order, are a
+  // floor under it that rounds no higher: no heading is passed over that could have won.
+  const auto cost_of = [&](size_t i, double turn) -> std::optional<double> {
+    const Heading& c = headings[i];
+    const bool turned = against(c);
     double over = 0;
     double under = 0;
     double fall_sum = 0;
@@ -226,19 +243,19 @@ double choose_heading(const ge::core::Heightfield& ground, double x, double z, d
       over = num::max(over, fall - cap);
       under = num::max(under, least - fall);
       fall_sum += fall;
+      double so_far = num::max(0.0, over) * 40 + num::max(0.0, under) * 40 + turn;
+      if (turned) so_far += kZigzagSide;
+      if (beaten(so_far, i)) return std::nullopt;
     }
     double cost = num::max(0.0, over) * 40 + num::max(0.0, under) * 40;
     if (aim) cost += std::abs(fall_sum / 3 - *aim) * 12;
     cost += turn;
-    if (side != 0) {
-      const double off = angle_diff(down, c.h);
-      if (std::abs(off) > 0.12 && num::sign(off) != side) cost += kZigzagSide;
-    }
+    if (turned) cost += kZigzagSide;
     return cost;
   };
   // The cheapest, the first of equals in the table's order. The heading that turns least is
-  // weighed first, so that a heading whose turn alone costs more than the best so far is never
-  // read off the ground: the same choice, from fewer samples.
+  // weighed first, so that a heading whose turn alone (and its side's cost) is more than the best
+  // so far is never read off the ground: the same choice, from fewer samples.
   size_t first = 0;
   double first_turn = kInf;
   for (size_t i = 0; i < headings.size(); i++) {
@@ -248,9 +265,10 @@ double choose_heading(const ge::core::Heightfield& ground, double x, double z, d
       first = i;
     }
   }
-  size_t best_at = headings.size();
+  best_at = headings.size();
   if (first < headings.size()) {
-    best_cost = cost_of(headings[first], first_turn);
+    // Nothing is beaten yet, so the first heading is weighed in full.
+    best_cost = cost_of(first, first_turn).value_or(kInf);
     if (best_cost < kInf) {
       best = headings[first].h;
       best_at = first;
@@ -261,10 +279,11 @@ double choose_heading(const ge::core::Heightfield& ground, double x, double z, d
   for (size_t i = 0; i < headings.size(); i++) {
     if (i == first) continue;
     const double turn = turn_of(headings[i]);
-    if (turn > best_cost || (turn == best_cost && i > best_at)) continue;
-    const double cost = cost_of(headings[i], turn);
-    if (cost < best_cost || (cost == best_cost && i < best_at && best_at < headings.size())) {
-      best_cost = cost;
+    if (beaten(against(headings[i]) ? turn + kZigzagSide : turn, i)) continue;
+    const std::optional<double> cost = cost_of(i, turn);
+    if (!cost) continue;
+    if (*cost < best_cost || (*cost == best_cost && i < best_at && best_at < headings.size())) {
+      best_cost = *cost;
       best = headings[i].h;
       best_at = i;
     }
