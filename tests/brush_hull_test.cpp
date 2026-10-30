@@ -105,7 +105,7 @@ TEST(a_clip_hull_that_loops_is_refused) {
   std::vector<uint8_t> b = written(br::Family::v29);
   // Lump 9 (the clip nodes): node 0's front child made node 0.
   uint32_t off = 0;
-  std::memcpy(&off, b.data() + 4 + 9 * 8, 4);
+  std::memcpy(&off, b.data() + 76, 4);  // the version word, then 8 bytes a lump
   b[off + 4] = 0;
   b[off + 5] = 0;
   br::Map m;
