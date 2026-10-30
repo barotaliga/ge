@@ -1,56 +1,56 @@
-# each 5 s: the scenario, the state digest, the stars, the free ride's helicopter's mode, every army machine's (fall_line_army_steal_test, seed 38)
-steal bd7797de8e0f699c 3 parked due
-steal 26c230892ed591d2 3 parked due
-steal ed7684e44659081b 3 parked land
-steal 73999ead01986a57 3 parked land
-steal c35ce97da3e43b10 3 parked land
-steal 537374eeb957a9bf 3 parked land
-steal 4436a060a825282f 3 parked land
-steal d88da6074fcf64aa 3 parked land
-steal 7a288c377738e311 4 flown-army due due
-steal cfef49e9a207fd70 4 home-army due due
-steal 04b8023964055121 4 wreck-army hunt due
-steal 63f2e2ba17d9f972 4 wreck-army land hunt
-steal 1aa985127f07a99c 4 parked land hunt
-steal abc1adc91e391d6c 5 parked land hunt due
-steal 631a95245caff036 5 parked land hunt due
-steal d5edbc6d9ee1c8d9 5 parked land hunt hunt
-steal 108da580b88da63f 5 parked land hunt land
-steal 1363df2800d1442d 5 parked set hunt land
-steal 7a7cca507c8cce38 5 parked set hunt land
-steal f49b2b6f546a0f0b 5 parked rise hunt land
-steal db8237fcd7e56e22 5 parked hunt land land
-ram bd7797de8e0f699c 3 parked due
-ram 26c230892ed591d2 3 parked due
-ram d09fd9e23af68a6d 4 wreck fall due due
-ram eb64a749232826ee 4 flown wreck due due
-ram 56ee42fef52b3b1a 4 flown wreck hunt due
-ram 10c4ada170c2435f 4 flown wreck hunt hunt
-ram baab44b87e182f11 4 flown wreck hunt hunt
-ram aedbcef2ac25b53e 4 flown wreck hunt hunt
-ram 1fd6d3eb13ff9a54 4 flown wreck hunt hunt
-ram c93a89f769b12cee 4 flown wreck hunt hunt
-ram 1f599dfb4c9f3150 4 flown wreck hunt hunt
-ram 91d99db3da980b6b 4 flown wreck hunt hunt
-ram 738e6671e4d29b8f 4 flown wreck hunt hunt
-ram 08c00912520dc4fe 4 flown wreck hunt hunt
-ram 21babd4cf88f18b7 5 flown wreck hunt hunt due
-ram 246fe6292831b8f9 5 flown wreck hunt hunt due
-ram be6807691bb304d7 5 flown wreck hunt hunt hunt
-ram 802f468f458db8eb 5 flown wreck hunt hunt hunt
-ram c5bb411194ab42a1 5 flown wreck hunt hunt hunt
-ram d221b5eb61d7406f 5 flown wreck hunt hunt hunt
-ram ac3679d4227650dd 5 flown wreck hunt hunt hunt
-ram 978026ad63ea5dd2 5 flown wreck hunt hunt hunt
-ram 5e1d33a55dc06190 5 flown wreck hunt hunt hunt
-ram f1a63a4251b76174 5 flown wreck hunt hunt hunt
-ram 473ba1e2b69bd5af 5 flown wreck hunt hunt hunt
-ram bf35fe5d02a5f527 5 flown wreck hunt hunt hunt
-ram e8c2828aa242e83f 5 flown wreck hunt hunt hunt
-ram 37bfb705e326fa93 5 flown hunt hunt hunt
-ram feac9a81f3cd1312 5 flown hunt hunt hunt
-ram ea56b10f720eb008 5 flown hunt hunt hunt
-ram 2c929c13d875626f 5 flown hunt hunt hunt
-ram 9e696e8c8ce6140f 5 flown hunt hunt hunt
-ram 9cac853e1bb8226f 5 flown hunt hunt hunt
-ram fca7c9683f83f1d4 5 flown hunt hunt hunt
+# each 5 s: the scenario, the state digest, its parts, the stars, the free ride's helicopter's mode, every army machine's (fall_line_army_steal_test, seed 38)
+steal bd7797de8e0f699c skiers:4762e315,sleds:0951cb7b,heli:9e78fce2,para:4fd0bfc1,crowd:4fd0bfc1,wanted:a4d494b5,army:ef36a2ef,gunfire:4fd0bfc1 3 parked due
+steal 26c230892ed591d2 skiers:b9681dd5,sleds:f9d8b179,heli:988a1448,para:4fd0bfc1,crowd:4fd0bfc1,wanted:3cd089d5,army:ef36a2ef,gunfire:4fd0bfc1 3 parked due
+steal ed7684e44659081b skiers:4779af67,sleds:5fcfdd08,heli:108544ba,para:4fd0bfc1,crowd:4fd0bfc1,wanted:e85338be,army:81a7a88b,gunfire:4fd0bfc1 3 parked land
+steal 73999ead01986a57 skiers:7327ed1a,sleds:0a7f9286,heli:c8f0e871,para:4fd0bfc1,crowd:4fd0bfc1,wanted:e592d297,army:27ffa6e4,gunfire:4fd0bfc1 3 parked land
+steal c35ce97da3e43b10 skiers:d607165a,sleds:7f5c9cb4,heli:d2f37df3,para:4fd0bfc1,crowd:4fd0bfc1,wanted:1f3c0d5a,army:3ae5d7e7,gunfire:4fd0bfc1 3 parked land
+steal 537374eeb957a9bf skiers:af720e0a,sleds:608afc26,heli:f57f78d3,para:4fd0bfc1,crowd:4fd0bfc1,wanted:f3c7257e,army:c4e088fd,gunfire:4fd0bfc1 3 parked land
+steal 4436a060a825282f skiers:acb2be91,sleds:2dcdbd33,heli:936072a2,para:4fd0bfc1,crowd:4fd0bfc1,wanted:3848c02a,army:3059784c,gunfire:4fd0bfc1 3 parked land
+steal d88da6074fcf64aa skiers:bcf836ba,sleds:7bb68f4f,heli:25f14a98,para:4fd0bfc1,crowd:4fd0bfc1,wanted:1db01db2,army:667d842b,gunfire:4fd0bfc1 3 parked land
+steal 7a288c377738e311 skiers:38b1b54d,sleds:25d69c8e,heli:75ec935a,para:4fd0bfc1,crowd:4fd0bfc1,wanted:0671f36a,army:88057f64,gunfire:4fd0bfc1 4 flown-army due due
+steal cfef49e9a207fd70 skiers:c4c421ce,sleds:973c4db7,heli:b3c0fb47,para:4fd0bfc1,crowd:4fd0bfc1,wanted:60288d74,army:d566c430,gunfire:4fd0bfc1 4 home-army due due
+steal 04b8023964055121 skiers:a2637339,sleds:29337f87,heli:dae10a9d,para:4fd0bfc1,crowd:4fd0bfc1,wanted:f818efdf,army:f6978ccf,gunfire:4fd0bfc1 4 wreck-army hunt due
+steal 63f2e2ba17d9f972 skiers:1f1a39db,sleds:7c4a3d95,heli:9ac26f8c,para:4fd0bfc1,crowd:4fd0bfc1,wanted:7d3285ca,army:0cf714b0,gunfire:4fd0bfc1 4 wreck-army land hunt
+steal 1aa985127f07a99c skiers:f67e5a07,sleds:f948a228,heli:97a73247,para:4fd0bfc1,crowd:4fd0bfc1,wanted:4af706b9,army:5c7754fa,gunfire:4fd0bfc1 4 parked land hunt
+steal abc1adc91e391d6c skiers:55bb70ed,sleds:4d52df58,heli:d40cd1ef,para:4fd0bfc1,crowd:4fd0bfc1,wanted:dacae7c9,army:0ddb993a,gunfire:4fd0bfc1 5 parked land hunt due
+steal 631a95245caff036 skiers:cc686516,sleds:7d355a73,heli:cb5a77d9,para:4fd0bfc1,crowd:4fd0bfc1,wanted:96c77b03,army:e0159e0c,gunfire:4fd0bfc1 5 parked land hunt due
+steal d5edbc6d9ee1c8d9 skiers:93a25f49,sleds:78d0edd3,heli:ec918dbc,para:4fd0bfc1,crowd:4fd0bfc1,wanted:704217ea,army:089738ea,gunfire:4fd0bfc1 5 parked land hunt hunt
+steal 108da580b88da63f skiers:c063cdd0,sleds:369cb614,heli:c3ae4b91,para:4fd0bfc1,crowd:4fd0bfc1,wanted:a504bbc2,army:a560b7b2,gunfire:4fd0bfc1 5 parked land hunt land
+steal 1363df2800d1442d skiers:85fe6b43,sleds:af323b4e,heli:14643d79,para:4fd0bfc1,crowd:4fd0bfc1,wanted:e80a9b28,army:6f488262,gunfire:4fd0bfc1 5 parked set hunt land
+steal 7a7cca507c8cce38 skiers:2e31b1a9,sleds:83f11ac6,heli:01d9028f,para:4fd0bfc1,crowd:4fd0bfc1,wanted:6e09f690,army:5235787b,gunfire:4fd0bfc1 5 parked set hunt land
+steal f49b2b6f546a0f0b skiers:8a23b615,sleds:2761c7a8,heli:2df5a8fa,para:4fd0bfc1,crowd:4fd0bfc1,wanted:c755d8bc,army:950a38dd,gunfire:4fd0bfc1 5 parked rise hunt land
+steal db8237fcd7e56e22 skiers:9375e10e,sleds:0e35f9b4,heli:5f00e4b4,para:4fd0bfc1,crowd:4fd0bfc1,wanted:c77fb58c,army:c53bd3ee,gunfire:4fd0bfc1 5 parked hunt land land
+ram bd7797de8e0f699c skiers:4762e315,sleds:0951cb7b,heli:9e78fce2,para:4fd0bfc1,crowd:4fd0bfc1,wanted:a4d494b5,army:ef36a2ef,gunfire:4fd0bfc1 3 parked due
+ram 26c230892ed591d2 skiers:b9681dd5,sleds:f9d8b179,heli:988a1448,para:4fd0bfc1,crowd:4fd0bfc1,wanted:3cd089d5,army:ef36a2ef,gunfire:4fd0bfc1 3 parked due
+ram d09fd9e23af68a6d skiers:92971bc9,sleds:7307071e,heli:75e79c2e,para:4fd0bfc1,crowd:4fd0bfc1,wanted:fe57f8c0,army:efe56429,gunfire:4fd0bfc1 4 wreck fall due due
+ram eb64a749232826ee skiers:a0e2010f,sleds:d1ed0f63,heli:f5ea785f,para:4fd0bfc1,crowd:4fd0bfc1,wanted:4d949581,army:8b5bc9eb,gunfire:4fd0bfc1 4 flown wreck due due
+ram 56ee42fef52b3b1a skiers:b836dc24,sleds:d1ed0f63,heli:34985690,para:4fd0bfc1,crowd:4fd0bfc1,wanted:a86935e2,army:e02e7f45,gunfire:4fd0bfc1 4 flown wreck hunt due
+ram 10c4ada170c2435f skiers:04208455,sleds:d1ed0f63,heli:0f24a421,para:4fd0bfc1,crowd:4fd0bfc1,wanted:3a93616d,army:46ce8b31,gunfire:4fd0bfc1 4 flown wreck hunt hunt
+ram baab44b87e182f11 skiers:fc454584,sleds:d1ed0f63,heli:4f9ea5ef,para:4fd0bfc1,crowd:4fd0bfc1,wanted:bd787522,army:a0f16f10,gunfire:4fd0bfc1 4 flown wreck hunt hunt
+ram aedbcef2ac25b53e skiers:41dfedc8,sleds:d1ed0f63,heli:3de14427,para:4fd0bfc1,crowd:4fd0bfc1,wanted:94d681cc,army:77191a16,gunfire:4fd0bfc1 4 flown wreck hunt hunt
+ram 1fd6d3eb13ff9a54 skiers:4260ebaa,sleds:d1ed0f63,heli:d3ddc377,para:4fd0bfc1,crowd:4fd0bfc1,wanted:fccbe273,army:9ef96869,gunfire:4fd0bfc1 4 flown wreck hunt hunt
+ram c93a89f769b12cee skiers:28bae3b8,sleds:d1ed0f63,heli:815b93d1,para:4fd0bfc1,crowd:4fd0bfc1,wanted:b6088037,army:224f1719,gunfire:4fd0bfc1 4 flown wreck hunt hunt
+ram 1f599dfb4c9f3150 skiers:20bba353,sleds:d1ed0f63,heli:94a1a8e2,para:4fd0bfc1,crowd:4fd0bfc1,wanted:b26d0aa3,army:3c827916,gunfire:4fd0bfc1 4 flown wreck hunt hunt
+ram 91d99db3da980b6b skiers:4edf6ff2,sleds:d1ed0f63,heli:d6c4727f,para:4fd0bfc1,crowd:4fd0bfc1,wanted:1d8aeecd,army:c5e8a645,gunfire:4fd0bfc1 4 flown wreck hunt hunt
+ram 738e6671e4d29b8f skiers:8478ff45,sleds:d1ed0f63,heli:2911bad2,para:4fd0bfc1,crowd:4fd0bfc1,wanted:36935619,army:c7dc2ccf,gunfire:4fd0bfc1 4 flown wreck hunt hunt
+ram 08c00912520dc4fe skiers:14baeb05,sleds:d1ed0f63,heli:4f2bb684,para:4fd0bfc1,crowd:4fd0bfc1,wanted:62aaccf6,army:563eeba6,gunfire:4fd0bfc1 4 flown wreck hunt hunt
+ram 21babd4cf88f18b7 skiers:11736001,sleds:d1ed0f63,heli:300cafb9,para:4fd0bfc1,crowd:4fd0bfc1,wanted:db6ba50f,army:f91f13ab,gunfire:4fd0bfc1 5 flown wreck hunt hunt due
+ram 246fe6292831b8f9 skiers:ca00bc16,sleds:d1ed0f63,heli:aa32d6be,para:4fd0bfc1,crowd:4fd0bfc1,wanted:a40b6793,army:2e37ee5a,gunfire:4fd0bfc1 5 flown wreck hunt hunt due
+ram be6807691bb304d7 skiers:ed056821,sleds:d1ed0f63,heli:de0fb047,para:4fd0bfc1,crowd:4fd0bfc1,wanted:f6b4f2f4,army:78bc0ac3,gunfire:4fd0bfc1 5 flown wreck hunt hunt hunt
+ram 802f468f458db8eb skiers:138bbe08,sleds:d1ed0f63,heli:a04416c4,para:4fd0bfc1,crowd:4fd0bfc1,wanted:399b054a,army:e3e4c163,gunfire:4fd0bfc1 5 flown wreck hunt hunt hunt
+ram c5bb411194ab42a1 skiers:513ac863,sleds:d1ed0f63,heli:ba0c065c,para:4fd0bfc1,crowd:4fd0bfc1,wanted:ff96cae0,army:11268db6,gunfire:4fd0bfc1 5 flown wreck hunt hunt hunt
+ram d221b5eb61d7406f skiers:863646dc,sleds:d1ed0f63,heli:9121d236,para:4fd0bfc1,crowd:4fd0bfc1,wanted:be386b42,army:59c64c92,gunfire:4fd0bfc1 5 flown wreck hunt hunt hunt
+ram ac3679d4227650dd skiers:efc1ba83,sleds:d1ed0f63,heli:4ff05c45,para:4fd0bfc1,crowd:4fd0bfc1,wanted:63874e72,army:3fcd23cc,gunfire:4fd0bfc1 5 flown wreck hunt hunt hunt
+ram 978026ad63ea5dd2 skiers:f387f25a,sleds:d1ed0f63,heli:0907f067,para:4fd0bfc1,crowd:4fd0bfc1,wanted:b35db363,army:da6acdb4,gunfire:4fd0bfc1 5 flown wreck hunt hunt hunt
+ram 5e1d33a55dc06190 skiers:36ccddcd,sleds:d1ed0f63,heli:32026d28,para:4fd0bfc1,crowd:4fd0bfc1,wanted:f4a535ae,army:c92eb97a,gunfire:4fd0bfc1 5 flown wreck hunt hunt hunt
+ram f1a63a4251b76174 skiers:711c4312,sleds:d1ed0f63,heli:78df5914,para:4fd0bfc1,crowd:4fd0bfc1,wanted:f58ce9b5,army:bc88e69b,gunfire:4fd0bfc1 5 flown wreck hunt hunt hunt
+ram 473ba1e2b69bd5af skiers:f3d5403c,sleds:d1ed0f63,heli:b266817c,para:4fd0bfc1,crowd:4fd0bfc1,wanted:387ce6f9,army:4e650cc5,gunfire:4fd0bfc1 5 flown wreck hunt hunt hunt
+ram bf35fe5d02a5f527 skiers:526a2dd9,sleds:d1ed0f63,heli:a99a4350,para:4fd0bfc1,crowd:4fd0bfc1,wanted:dcc865ff,army:8ef47478,gunfire:4fd0bfc1 5 flown wreck hunt hunt hunt
+ram e8c2828aa242e83f skiers:05129d73,sleds:d1ed0f63,heli:842f94b2,para:4fd0bfc1,crowd:4fd0bfc1,wanted:5d5db3ee,army:8a0f95e0,gunfire:4fd0bfc1 5 flown wreck hunt hunt hunt
+ram 37bfb705e326fa93 skiers:b25af4d7,sleds:d1ed0f63,heli:8a5884eb,para:4fd0bfc1,crowd:4fd0bfc1,wanted:9d93e8e7,army:d59b174f,gunfire:4fd0bfc1 5 flown hunt hunt hunt
+ram feac9a81f3cd1312 skiers:73ab9624,sleds:d1ed0f63,heli:b5620a61,para:4fd0bfc1,crowd:4fd0bfc1,wanted:1d92f440,army:ef2ae3f1,gunfire:4fd0bfc1 5 flown hunt hunt hunt
+ram ea56b10f720eb008 skiers:e848b9a9,sleds:d1ed0f63,heli:89ac1e8e,para:4fd0bfc1,crowd:4fd0bfc1,wanted:094a5ad4,army:a870384d,gunfire:4fd0bfc1 5 flown hunt hunt hunt
+ram 2c929c13d875626f skiers:4b02b101,sleds:d1ed0f63,heli:be634862,para:4fd0bfc1,crowd:4fd0bfc1,wanted:3a06a226,army:bcbff3d7,gunfire:4fd0bfc1 5 flown hunt hunt hunt
+ram 9e696e8c8ce6140f skiers:9b08e803,sleds:d1ed0f63,heli:f156c0b8,para:4fd0bfc1,crowd:4fd0bfc1,wanted:419567b1,army:aaff2a2f,gunfire:4fd0bfc1 5 flown hunt hunt hunt
+ram 9cac853e1bb8226f skiers:40cfb3ee,sleds:d1ed0f63,heli:c4c119ba,para:4fd0bfc1,crowd:4fd0bfc1,wanted:5494551f,army:82da7fff,gunfire:4fd0bfc1 5 flown hunt hunt hunt
+ram fca7c9683f83f1d4 skiers:719f84b1,sleds:d1ed0f63,heli:1b525f1f,para:4fd0bfc1,crowd:4fd0bfc1,wanted:97400b63,army:c52f0f33,gunfire:4fd0bfc1 5 flown hunt hunt hunt
