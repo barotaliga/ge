@@ -137,6 +137,7 @@ TEST(the_deal_ranks_keeps_and_redraws_only_what_is_due) {
   // Eleven point lights ahead of the eye, brighter the further (each 6 tiles: ten fit in 64),
   // a keyless one, and two spots.
   std::vector<r::LocalLight> list;
+  list.reserve(14);
   for (int i = 0; i < 11; ++i)
     list.push_back(lamp(-6 + i, 6 + i * 0.5, 10 + i, 20 + 10.0f * static_cast<float>(i), false));
   list.push_back(lamp(0, 5, 0, 500, false));
