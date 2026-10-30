@@ -29,6 +29,7 @@ ce::net::Map pattern(int h, int w) {
 
 TEST(gpu_upscale_matches_the_cpu) {
   auto device = ge::test::test_device();
+  if (!device) return;
   ce::Upscaler u;
   std::string error;
   CHECK_MSG(ce::load_upscaler(ce::seeded_upscaler_weights(7), u, error), error.c_str());
@@ -54,6 +55,7 @@ TEST(gpu_upscale_matches_the_cpu) {
 
 TEST(texture_enhancer_runs_the_network_on_the_device_it_is_handed) {
   auto device = ge::test::test_device();
+  if (!device) return;
   ce::Upscaler u;
   std::string error;
   CHECK_MSG(ce::load_upscaler(ce::seeded_upscaler_weights(7), u, error), error.c_str());
