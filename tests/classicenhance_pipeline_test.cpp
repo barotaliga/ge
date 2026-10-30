@@ -222,7 +222,7 @@ TEST(pipeline_reports_every_stage_and_stops_when_cancelled) {
     CHECK(at < seen.size() && seen[at].kind == ce::Progress::Kind::started);
     const uint32_t total = at < seen.size() ? seen[at].total : 0;
     uint32_t items = 0;
-    while (++at < seen.size() && seen[at].kind == ce::Progress::Kind::item) items++;
+    for (at++; at < seen.size() && seen[at].kind == ce::Progress::Kind::item; at++) items++;
     CHECK_MSG(at < seen.size() && seen[at].kind == ce::Progress::Kind::finished &&
                   seen[at].stage == s && items == total,
               std::string(ce::stage_name(s)) + ": " + std::to_string(items) + " items of " +

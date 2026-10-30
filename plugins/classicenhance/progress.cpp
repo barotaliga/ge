@@ -127,11 +127,10 @@ void ProgressBoard::on(const Progress& p, double now_s) {
     board_.recent.insert(board_.recent.begin(), std::move(thumb));
     if (board_.recent.size() > kRecent) board_.recent.resize(kRecent);
   }
-  board_.finished = !board_.failed && std::all_of(board_.stages.begin(), board_.stages.end(),
-                                                  [](const StageView& v) {
-                                                    return v.state == StageState::done ||
-                                                           v.state == StageState::skipped;
-                                                  });
+  board_.finished = !board_.failed &&
+                    std::all_of(board_.stages.begin(), board_.stages.end(), [](const StageView& v) {
+                      return v.state == StageState::done || v.state == StageState::skipped;
+                    });
   // The time left: the running stage at its own rate, a waiting stage at the last rate seen.
   board_.left = board_.finished ? 0.0 : -1.0;
   double rate = -1;  // seconds an item
@@ -169,9 +168,8 @@ bool EnhanceJob::start(Source source, std::filesystem::path root, RunOptions opt
   source_ = std::move(source);
   opts.cancel = &cancel_;
   opts.progress = [this](const Progress& p) {
-    const double now = std::chrono::duration<double>(
-                           std::chrono::steady_clock::now().time_since_epoch())
-                           .count();
+    const double now =
+        std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
     board_.on(p, now);
   };
   thread_ = std::thread([this, root = std::move(root), opts = std::move(opts)] {

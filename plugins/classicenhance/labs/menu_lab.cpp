@@ -164,11 +164,14 @@ void run(ge::lab::Lab& lab) {
 
   int problems = 0, cramped = 0;
   auto shoot = [&](const std::string& id, const std::string& title, const std::string& caption,
-                   const std::string& look, Menu& m, const Viewport& v, const ce::BoardView* board) {
+                   const std::string& look, Menu& m, const Viewport& v,
+                   const ce::BoardView* board) {
     MenuLayout L = layout_menu(m, v.w, v.h, st);
     for (const std::string& p : layout_problems(m, L, st)) {
       problems++;
-      lab.fail(id + ": " + p,
+      std::string what = id;
+      what.append(": ").append(p);
+      lab.fail(what,
                "fix the words in plugins/classicenhance/switches.cpp or menu.cpp; rerun `make lab "
                "LAB=classic-menu`. Skill: classicenhance.");
     }
@@ -208,12 +211,13 @@ void run(ge::lab::Lab& lab) {
       Menu m = ce::classic_menu(packs, values);
       m.input({});
       m.focus("enhance");
-      shoot("root", "THE CLASSIC MENU",
-            "The root page: the pack to use (the packs found on this machine), ENHANCE (prominent), "
-            "the switches and back.",
-            "ENHANCE lit and bigger than the rest; the pack's name fits its slab; the hint under "
-            "the column",
-            m, v, nullptr);
+      shoot(
+          "root", "THE CLASSIC MENU",
+          "The root page: the pack to use (the packs found on this machine), ENHANCE (prominent), "
+          "the switches and back.",
+          "ENHANCE lit and bigger than the rest; the pack's name fits its slab; the hint under "
+          "the column",
+          m, v, nullptr);
     }
     {
       Menu m = ce::classic_menu(packs, values);
@@ -262,24 +266,23 @@ void run(ge::lab::Lab& lab) {
       m.input({});
       const std::string n = name;
       if (n == "ready") m.focus("play");
-      shoot(
-          "enhancing-" + n,
-          n == "mid"     ? "ENHANCING, HALFWAY THROUGH THE TEXTURES"
-          : n == "ready" ? "ENHANCING DONE"
-                         : "ENHANCING CANCELLED",
-          n == "mid" ? "The run caught halfway through the textures: the pack copied, the "
-                       "textures stage working on its item, the stages after it waiting; the "
-                       "last textures beside their enhanced albedo."
-          : n == "ready"
-              ? "Every stage done: READY, the whole bar full, PLAY lit and enabled."
-              : "CANCEL pressed one texture in: STOPPED, the pack's stage kept, the textures' "
-                "stage failed as cancelled, the rest never started.",
-          n == "mid"     ? "the overall bar part full; TEXTURES WORKING with its count and item; "
-                           "pairs of thumbnails, the enhanced one sharper"
-          : n == "ready" ? "every row DONE in green; READY at the top; PLAY enabled and lit"
-                         : "STOPPED at the top; the textures' row FAILED in red; what to do next "
-                           "at the bottom",
-          m, v, board);
+      shoot("enhancing-" + n,
+            n == "mid"     ? "ENHANCING, HALFWAY THROUGH THE TEXTURES"
+            : n == "ready" ? "ENHANCING DONE"
+                           : "ENHANCING CANCELLED",
+            n == "mid" ? "The run caught halfway through the textures: the pack copied, the "
+                         "textures stage working on its item, the stages after it waiting; the "
+                         "last textures beside their enhanced albedo."
+            : n == "ready"
+                ? "Every stage done: READY, the whole bar full, PLAY lit and enabled."
+                : "CANCEL pressed one texture in: STOPPED, the pack's stage kept, the textures' "
+                  "stage failed as cancelled, the rest never started.",
+            n == "mid"     ? "the overall bar part full; TEXTURES WORKING with its count and item; "
+                             "pairs of thumbnails, the enhanced one sharper"
+            : n == "ready" ? "every row DONE in green; READY at the top; PLAY enabled and lit"
+                           : "STOPPED at the top; the textures' row FAILED in red; what to do next "
+                             "at the bottom",
+            m, v, board);
     }
   }
 

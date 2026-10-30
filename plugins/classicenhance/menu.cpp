@@ -7,6 +7,7 @@
 #include "classicenhance/menu.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 
 #include "ui/font.hpp"
@@ -56,7 +57,7 @@ void set_switch(console::Cvars& cvars, std::string_view id, bool on) {
 }  // namespace
 
 std::string clock_text(double seconds) {
-  const long s = long(std::max(0.0, seconds) + 0.5);
+  const long s = std::lround(std::max(0.0, seconds));
   char buf[32];
   if (s < 60) {
     std::snprintf(buf, sizeof buf, "%ld S", s);
@@ -119,7 +120,8 @@ ui::Menu classic_menu(std::span<const std::string> packs, const Switches& values
     ui::Page& page = m.add_page(group_page(kSwitchGroups[g]), std::string(kSwitchGroups[g]));
     for (const SwitchSpec& s : switches()) {
       if (s.group != kSwitchGroups[g]) continue;
-      ui::Item it{.id = std::string(s.id), .text = std::string(s.text), .kind = ui::ItemKind::toggle};
+      ui::Item it{
+          .id = std::string(s.id), .text = std::string(s.text), .kind = ui::ItemKind::toggle};
       it.hint = std::string(s.hint) + (s.bake ? " Changes the cache: ENHANCE again." : "");
       it.on = values.*s.field;
       page.items.push_back(it);
@@ -201,8 +203,8 @@ ui::Rect panel_area(const ui::MenuLayout& layout) {
   return {x, safe.y + gap, std::max(0.0f, w), std::max(0.0f, bottom - safe.y - gap)};
 }
 
-void draw_progress(ui::DrawList& list, const BoardView& board, ui::Rect area,
-                   const PanelStyle& st, std::vector<ui::Image>& store, const std::string& pack) {
+void draw_progress(ui::DrawList& list, const BoardView& board, ui::Rect area, const PanelStyle& st,
+                   std::vector<ui::Image>& store, const std::string& pack) {
   if (area.w < 40 || area.h < 40) return;
   const float s = st.scale;
   const ui::Font& bold = ui::ui_font(ui::Weight::semibold);
@@ -222,10 +224,10 @@ void draw_progress(ui::DrawList& list, const BoardView& board, ui::Rect area,
   // The head: what is being enhanced, the whole run's share, the time.
   const double f = board.fraction();
   char pct[16];
-  std::snprintf(pct, sizeof pct, "%d%%", int(f * 100 + 0.5));
+  std::snprintf(pct, sizeof pct, "%d%%", int(std::lround(f * 100)));
   y += 26 * s;
-  const std::string what = board.finished ? "READY"
-                           : board.failed ? "STOPPED"
+  const std::string what = board.finished  ? "READY"
+                           : board.failed  ? "STOPPED"
                            : board.started ? "ENHANCING"
                                            : "NOT STARTED";
   list.text(bold, 28 * s, x, y, what, st.text);
@@ -253,9 +255,9 @@ void draw_progress(ui::DrawList& list, const BoardView& board, ui::Rect area,
   const float row = (narrow ? 50 : 44) * s, name_w = 120 * s, state_w = (narrow ? 96 : 120) * s;
   const float count_w = (narrow ? 60 : 110) * s;
   for (const StageView& v : board.stages) {
-    const ui::Color c = v.state == StageState::running ? st.running
-                        : v.state == StageState::done  ? st.done
-                        : v.state == StageState::failed ? st.failed
+    const ui::Color c = v.state == StageState::running   ? st.running
+                        : v.state == StageState::done    ? st.done
+                        : v.state == StageState::failed  ? st.failed
                         : v.state == StageState::skipped ? st.skipped
                                                          : st.dim;
     const float base = y + 20 * s;
@@ -274,9 +276,9 @@ void draw_progress(ui::DrawList& list, const BoardView& board, ui::Rect area,
                 st.text, ui::Align::right);
     }
     if (!v.item.empty() && v.state != StageState::waiting) {
-      const ui::Rect clip = narrow ? ui::Rect{x + name_w + state_w, y, w - name_w - state_w - count_w,
-                                              row - 22 * s}
-                                   : ui::Rect{bar.x, base + 2 * s, w - name_w - state_w, row - 22 * s};
+      const ui::Rect clip =
+          narrow ? ui::Rect{x + name_w + state_w, y, w - name_w - state_w - count_w, row - 22 * s}
+                 : ui::Rect{bar.x, base + 2 * s, w - name_w - state_w, row - 22 * s};
       list.push_clip(clip);
       list.text(thin, 14 * s, clip.x, narrow ? base : base + 17 * s, upper(v.item), st.dim);
       list.pop_clip();

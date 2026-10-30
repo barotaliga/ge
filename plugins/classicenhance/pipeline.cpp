@@ -290,8 +290,7 @@ bool run_models(const Source& src, const fs::path& dir, const RunOptions& o, Rep
     }
     return rep.item(name, error);
   };
-  if (!enhance_models(src.content(), palette, dir, models, o.textures, &stats, error))
-    return false;
+  if (!enhance_models(src.content(), palette, dir, models, o.textures, &stats, error)) return false;
   r.files = stats.files;
   r.note = std::to_string(stats.models) + " models as glTF, skins at " +
            std::to_string(o.models.skin_scale) + "x, " + std::to_string(stats.sprites) +

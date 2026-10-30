@@ -21,7 +21,8 @@ TEST(every_switch_has_its_own_id_field_and_group) {
   const ce::Switches probe;
   for (const ce::SwitchSpec& s : ce::switches()) {
     CHECK_MSG(ids.insert(s.id).second, std::string(s.id) + " is in the catalog twice");
-    CHECK_MSG(fields.insert(&(probe.*s.field)).second, std::string(s.id) + " shares another's field");
+    CHECK_MSG(fields.insert(&(probe.*s.field)).second,
+              std::string(s.id) + " shares another's field");
     CHECK(!s.text.empty() && s.hint.find("Off:") != std::string_view::npos);
     bool grouped = false;
     for (size_t g = 0; g < ce::kSwitchGroupCount; g++) grouped |= ce::kSwitchGroups[g] == s.group;
@@ -36,8 +37,8 @@ TEST(every_switch_has_its_own_id_field_and_group) {
     CHECK_MSG(n > 0, std::string(ce::kSwitchGroups[g]) + " has no switch");
   }
   // What the player asked for by name.
-  for (const char* id : {"decals", "flames", "skies", "water", "lava", "muzzles", "teleports",
-                         "rubble"}) {
+  for (const char* id :
+       {"decals", "flames", "skies", "water", "lava", "muzzles", "teleports", "rubble"}) {
     CHECK_MSG(ce::find_switch(id) != nullptr, std::string(id) + " is not a switch");
   }
   CHECK(ce::find_switch("nothing") == nullptr);
@@ -57,8 +58,7 @@ TEST(each_switch_is_an_archived_cvar_that_writes_its_value) {
     CHECK(c->kind == ge::console::CvarKind::boolean);
     CHECK(c->on() == ce::Switches{}.*s.field);
   }
-  CHECK(cvars.set("ce_decals", "0", ge::console::Source::local) ==
-        ge::console::SetResult::changed);
+  CHECK(cvars.set("ce_decals", "0", ge::console::Source::local) == ge::console::SetResult::changed);
   CHECK(!values.decals);
   CHECK(cvars.set("ce_rounded", "1", ge::console::Source::local) ==
         ge::console::SetResult::changed);

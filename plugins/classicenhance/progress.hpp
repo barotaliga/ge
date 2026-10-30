@@ -3,7 +3,8 @@
 // it is through its items, the item it is on, the last textures it finished (the pack's picture
 // beside the enhanced one), the time so far and the time left.
 //
-// - **A report** (`Progress`, pipeline.hpp) is sent by the pipeline from the thread it runs on: a stage
+// - **A report** (`Progress`, pipeline.hpp) is sent by the pipeline from the thread it runs on: a
+// stage
 //   started (with its item count), an item done, a stage finished, skipped (up to date or not
 //   asked for) or failed. A texture's item carries its source and its albedo, which the board
 //   shrinks into a thumbnail before the call returns.
@@ -60,11 +61,11 @@ struct BoardView {
   std::vector<StageView> stages;  // one a stage, in the pipeline's order
   std::vector<Thumb> recent;      // the last textures finished, newest first
   uint32_t textures_done = 0;
-  double elapsed = 0;         // seconds since the first report
-  double left = -1;           // seconds still to go; -1 before there is a rate to go by
-  bool started = false;       // a report has come in
-  bool finished = false;      // every stage done or skipped
-  bool failed = false;        // a stage failed (`error` says which and why)
+  double elapsed = 0;     // seconds since the first report
+  double left = -1;       // seconds still to go; -1 before there is a rate to go by
+  bool started = false;   // a report has come in
+  bool finished = false;  // every stage done or skipped
+  bool failed = false;    // a stage failed (`error` says which and why)
   std::string error;
   // How far through the whole run, 0..1: finished stages count whole, the running one by items.
   double fraction() const;
