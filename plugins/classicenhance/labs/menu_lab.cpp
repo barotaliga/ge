@@ -109,12 +109,14 @@ void run(ge::lab::Lab& lab) {
   const ce::Palette palette = ce::labs::fixture_palette();
   ce::Source src;
   std::string error;
+  // The source keeps a pointer to its known entry, so the entry lives as long as the source.
   std::string sha;
+  ce::KnownFile known[1] = {};
   if (lab.arg("source").empty()) {
     src.path = "fixture";
     src.pack = ce::labs::fixture_pack(palette);
     sha = ge::assets::sha256_hex(src.pack);
-    const ce::KnownFile known[] = {{sha.c_str(), uint32_t(src.pack.size()), "the lab's pack"}};
+    known[0] = {sha.c_str(), uint32_t(src.pack.size()), "the lab's pack"};
     if (!ce::verify_pack(&src, &error, known)) {
       lab.fail("the fixture pack did not verify: " + error,
                "check fixture_pack in plugins/classicenhance/labs/fixtures.cpp. Skill: "
