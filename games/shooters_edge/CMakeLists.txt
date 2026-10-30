@@ -4,7 +4,8 @@
 # loaded progs (plugins/progs) drive that loop (skill: progs). Its content registry
 # (content/) is data and builds nothing. Its sound (sound/) is a second library: what the game
 # plays on the engine's synth, over the brush world's leaves. Its server (server/) is a library and
-# the headless `shooters_edge_server` executable.
+# the headless `shooters_edge_server` executable. Its HUD (hud/) is a library
+# of its own.
 file(GLOB SHOOTERS_EDGE_SIM_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/sim/*.cpp)
 add_library(shooters_edge_sim STATIC ${SHOOTERS_EDGE_SIM_SOURCES})
 target_include_directories(shooters_edge_sim PUBLIC ${PROJECT_SOURCE_DIR}/games)
@@ -30,3 +31,13 @@ add_executable(shooters_edge_dedicated server/bin/main.cpp)
 target_link_libraries(shooters_edge_dedicated PRIVATE shooters_edge_server)
 set_target_properties(shooters_edge_dedicated PROPERTIES OUTPUT_NAME shooters_edge_server
                                                          RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
+
+# Its HUD (hud/): the player's status snapshot, the HUD's pictures (the free set painted in code),
+# and the three looks over the engine's HUD layout with their hud_ cvars. No GPU: the CPU raster
+# draws it in the `se-hud` lab and the tests (skill: ui). Headers are spelled
+# "shooters_edge/hud/<file>.hpp".
+file(GLOB SHOOTERS_EDGE_HUD_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/hud/*.cpp)
+add_library(shooters_edge_hud STATIC ${SHOOTERS_EDGE_HUD_SOURCES})
+target_include_directories(shooters_edge_hud PUBLIC ${PROJECT_SOURCE_DIR}/games)
+target_link_libraries(shooters_edge_hud PUBLIC ge_hud ge_console ge_assets)
+set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_hud)

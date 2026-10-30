@@ -11,7 +11,7 @@ struct Screen {
 }
 
 // The fields by kind (render/ui_pass.hpp's UiItem says the same):
-//   box:     rect x, y, w, h; uv the image's u, v at the corner and du/dx, dv/dy (sliced: u, v,
+//   box:     info.w 1 samples the nearest texel; rect x, y, w, h; uv the image's u, v at the corner and du/dx, dv/dy (sliced: u, v,
 //            and the uv's width and height); ink the border; shape radius, feather, border,
 //            opacity; turn cos, sin, pivot; src / dst the slice's source (uv) and box (px) insets
 //   glyph:   rect the mask's place; uv its atlas x, y (texels); ink the colour
@@ -25,7 +25,7 @@ struct Item {
   uv: vec4f,
   ink: vec4f,
   shape: vec4f,  // radius, feather, border, opacity
-  info: vec4u,   // kind, paint index, a box: sliced / a polygon: first point, its count
+  info: vec4u,   // kind, paint index, a box: sliced, nearest / a polygon: first point, its count
   turn: vec4f,
   src: vec4f,
   dst: vec4f,
@@ -271,7 +271,14 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
       uv = vec2f(slice_map(local.x, it.rect.z, it.dst.x, it.dst.z, it.uv.x, it.uv.z, it.src.x, it.src.z),
                  slice_map(local.y, it.rect.w, it.dst.y, it.dst.w, it.uv.y, it.uv.w, it.src.y, it.src.w));
     }
-    c *= textureSampleLevel(image, lin, uv, 0.0);
+    if (it.info.w != 0u) {
+      // The nearest texel, as ui::sample_nearest picks it: pixel art stays crisp.
+      let size = vec2i(textureDimensions(image));
+      let texel = clamp(vec2i(floor(uv * vec2f(size))), vec2i(0), size - vec2i(1));
+      c *= textureLoad(image, texel, 0);
+    } else {
+      c *= textureSampleLevel(image, lin, uv, 0.0);
+    }
   }
   let fill = c.a * inner * it.shape.w;
   var ring = 0.0;

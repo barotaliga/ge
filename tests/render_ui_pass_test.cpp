@@ -1,10 +1,11 @@
 // engine/render/ui_pass.hpp: the 2D pass draws what the CPU raster (ui/raster.hpp) draws. Each
 // list is drawn both ways and held within a level or two at almost every pixel: rounded boxes,
 // borders, feathered shadows, every paint, opacity and clips; text at several sizes, clipped;
-// images stretched and tinted; boxes turned about their centre or a pivot and nine-sliced;
-// lines, arcs and convex polygons; a whole menu page over a backdrop. Then the bookkeeping: a list
-// drawn again uploads no glyph again, a list with no image is one draw, each image change
-// another, and an atlas too small for a frame is emptied and refilled.
+// images stretched and tinted, and sampled nearest at a whole scale for crisp pixel art; boxes
+// turned about their centre or a pivot and nine-sliced; lines, arcs and convex polygons; a whole
+// menu page over a backdrop. Then the bookkeeping: a list drawn again uploads no glyph again, a
+// list with no image is one draw, each image change another, and an atlas too small for a frame is
+// emptied and refilled.
 //
 // ge:summary Tests for the 2D pass: GPU pictures against the CPU raster, the atlas, the draws
 // ge:keywords test render ui 2d-pass raster parity glyph atlas image draws tolerance
@@ -201,6 +202,37 @@ TEST(images_match_the_raster_stretched_and_tinted) {
   b.fill = u::solid(u::hex(0xd6e2ef, 0.9f));
   list.box(b);
   check_same(*rig, "ui_pass_images", list, w, h);
+}
+
+TEST(nearest_boxes_match_the_raster_pixel_for_pixel_art) {
+  auto rig = make_rig();
+  if (!rig) return;
+  constexpr int w = 96, h = 64;
+  u::Image img = u::make_image(8, 6, {0, 0, 0, 1});
+  for (int y = 0; y < img.height; ++y) {
+    for (int x = 0; x < img.width; ++x) {
+      uint8_t* p = img.rgba.data() + (static_cast<size_t>(y) * img.width + x) * 4;
+      const bool on = (x + y) % 2 != 0;
+      p[0] = on ? 240 : 20, p[1] = static_cast<uint8_t>(x * 30), p[2] = on ? 30 : 220, p[3] = 255;
+    }
+  }
+  u::DrawList list;
+  list.begin(w, h);
+  backdrop(list, w, h);
+  u::Box a;
+  a.rect = {4, 4, 32, 24};  // 4 px an image pixel
+  a.image = &img;
+  a.uv = {0, 0, 8, 6};
+  a.nearest = true;
+  list.box(a);
+  u::Box b;  // a sheet's cell, 3 px a pixel, tinted
+  b.rect = {44, 8, 12, 9};
+  b.image = &img;
+  b.uv = {2, 1, 4, 3};
+  b.nearest = true;
+  b.fill = u::solid(u::hex(0xffd080));
+  list.box(b);
+  check_same(*rig, "ui_pass_nearest", list, w, h);
 }
 
 TEST(turned_and_sliced_boxes_lines_arcs_and_polygons_match_the_raster) {
