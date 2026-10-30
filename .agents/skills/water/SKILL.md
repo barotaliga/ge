@@ -22,6 +22,7 @@ for anything the simulation reads, `render` for a pass, `audio` for a voice, `la
 | What falls: snow, sleet, rain, the tiers, the phase by height, drop speeds, visibility, the wet ground | `engine/wind/precip.hpp` | `precip-air`, `precip` | `tests/wind_precip_test.cpp` (golden) |
 | Thunderstorms: cells' life cycle, gust fronts, rain cores, multicell storms | `engine/wind/storm.hpp` | `storm` | `tests/wind_storm_test.cpp` (golden) |
 | Lightning: the flash schedule, strokes and flicker, light over a frame, channels; thunder by distance | `engine/wind/lightning.hpp`, `thunder.hpp` | `storm` | `tests/wind_lightning_test.cpp` (golden) |
+| Thunder heard: each flash's thunder queued at its arrival, played on the synth, panned | `engine/wind/thunder_play.hpp` | `storm` | `tests/wind_thunder_play_test.cpp` |
 | The air's temperature and moisture: the day's curve, lapse, cold pool, dew point, wet bulb, snow level | `engine/wind/climate.hpp` (docs/climate.md) | `climate` | `tests/wind_climate_test.cpp` (golden) |
 | Fog from the air: radiation, valley, hill, steam, advection | `engine/wind/mist.hpp` | `climate` | `tests/wind_mist_test.cpp` (golden) |
 | The cold's marks: dew, frost, rime, black ice, breath, lake ice, the snow's feel and glide | `engine/wind/cold.hpp` | `climate` | `tests/wind_cold_test.cpp` (golden) |
