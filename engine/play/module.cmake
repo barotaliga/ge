@@ -18,6 +18,14 @@ include(cmake/Codecs.cmake)
 if(GE_ENCODERS)
   target_link_libraries(ge_play PRIVATE $<BUILD_INTERFACE:ge::aom> $<BUILD_INTERFACE:ge::opus>)
   target_compile_definitions(ge_play PRIVATE GE_ENCODERS=1)
+  # The platform's own encoder (engine/capture/videotoolbox.cpp): system frameworks, so nothing
+  # is downloaded for it.
+  if(APPLE)
+    foreach(fw VideoToolbox CoreMedia CoreVideo CoreFoundation)
+      find_library(GE_FW_${fw} ${fw} REQUIRED)
+      target_link_libraries(ge_play PRIVATE $<BUILD_INTERFACE:${GE_FW_${fw}}>)
+    endforeach()
+  endif()
 endif()
 
 ge_module(ge_play EXPORT play DIRS play capture)

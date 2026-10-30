@@ -39,6 +39,7 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <string>
 
 #include "fall_line/sim/state.hpp"
 #include "mountain/mapgen/types.hpp"
@@ -65,5 +66,10 @@ void step(GameState& state, std::span<const Controls> controls);
 // FNV-1a 64 over every racer's skier and progress, the hunt and the army (once raised) and the
 // clock, folded into `h`; on the free ride his free ride too (a race's digest reads none of it).
 uint64_t state_hash(const GameState& state, uint64_t h);
+// The same state hashed a part at a time, one golden word: `skiers:<8 hex>,sleds:…,heli:…,
+// para:…,crowd:…,wanted:…,army:…,gunfire:…` (each part's FNV-1a 64 from the offset basis,
+// folded to 32 bits). A golden row writes it beside the state digest, so `ge golden diff` names
+// the part a moved digest moved in.
+std::string state_parts(const GameState& state);
 
 }  // namespace fall_line::sim

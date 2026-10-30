@@ -2,6 +2,7 @@
 //
 // ge:summary ge digest and ge golden's definitions: the runs, the git reads, the column diff
 // ge:keywords cli ge digest golden diff write baseline git-show columns moved double-bits
+// ge:keywords parts-word state-parts
 // ge:skill agent-interface
 // ge:test tests/cli_golden_test.cpp
 #include "cli/golden.hpp"
@@ -75,6 +76,22 @@ std::string as_double(const std::string& word, const std::string& column) {
   char buf[40];
   std::snprintf(buf, sizeof buf, "%.17g", v);
   return buf;
+}
+
+// A parts word, `name:value,name:value,...` (two parts or more), split; empty when it is not one.
+std::vector<std::pair<std::string, std::string>> parts_of(const std::string& word) {
+  std::vector<std::pair<std::string, std::string>> out;
+  size_t at = 0;
+  while (at <= word.size()) {
+    size_t end = word.find(',', at);
+    if (end == std::string::npos) end = word.size();
+    const size_t colon = word.find(':', at);
+    if (colon == std::string::npos || colon >= end || colon == at || colon + 1 == end) return {};
+    out.emplace_back(word.substr(at, colon - at), word.substr(colon + 1, end - colon - 1));
+    at = end + 1;
+  }
+  if (out.size() < 2) return {};
+  return out;
 }
 
 std::string shown(const std::string& word, const std::string& column) {
@@ -153,7 +170,22 @@ GoldenDiff diff_golden(std::string_view file, std::string_view before, std::stri
   const Table& named = b.rows.empty() ? a : b;
   std::vector<std::string> names = named.header;
   if (named.rows.empty() || names.size() != named.rows[0].size()) names.clear();
-  std::map<size_t, int> moved;  // column → rows it moved in
+  // Unnamed, a 16-hex-digit word just before a parts word is the digest those parts make up.
+  if (names.empty() && !named.rows.empty()) {
+    const std::vector<std::string>& first = named.rows[0];
+    for (size_t c = 1; c < first.size(); c++) {
+      if (parts_of(first[c]).empty() || first[c - 1].size() != 16 ||
+          first[c - 1].find_first_not_of("0123456789abcdef") != std::string::npos) {
+        continue;
+      }
+      for (size_t k = names.size(); k < first.size(); k++) names.push_back(column_name({}, k));
+      names[c - 1] = "digest";
+      names[c] = "parts";
+    }
+  }
+  // (column, part) → rows it moved in; part 0 is the whole word, part k a parts word's k-th.
+  std::map<std::pair<size_t, size_t>, int> moved;
+  std::map<std::pair<size_t, size_t>, std::string> moved_name;
   static const std::vector<std::string> kNone;
   // One pair of rows (`r` from 1, in the after table, or the before table for a row gone).
   const auto compare = [&](size_t r, const std::vector<std::string>& wa,
@@ -167,8 +199,26 @@ GoldenDiff diff_golden(std::string_view file, std::string_view before, std::stri
       const std::string x = c < wa.size() ? wa[c] : "-";
       const std::string y = c < wb.size() ? wb[c] : "-";
       if (x == y) continue;
+      // A parts word (a digest hashed a part at a time) names each part that moved.
+      const auto px = parts_of(x), py = parts_of(y);
+      bool same_names = !px.empty() && px.size() == py.size();
+      for (size_t k = 0; same_names && k < px.size(); k++) same_names = px[k].first == py[k].first;
+      if (same_names) {
+        for (size_t k = 0; k < px.size(); k++) {
+          if (px[k].second == py[k].second) continue;
+          const std::string name = column_name(names, c) + "." + px[k].first;
+          row.cells.push_back({name, px[k].second, py[k].second});
+          if (!row.change.empty()) continue;
+          moved[{c, k + 1}]++;
+          moved_name[{c, k + 1}] = name;
+        }
+        continue;
+      }
       row.cells.push_back({column_name(names, c), x, y});
-      if (row.change.empty()) moved[c]++;
+      if (row.change.empty()) {
+        moved[{c, 0}]++;
+        moved_name[{c, 0}] = column_name(names, c);
+      }
     }
     d.rows.push_back(std::move(row));
   };
@@ -200,7 +250,7 @@ GoldenDiff diff_golden(std::string_view file, std::string_view before, std::stri
               "");
     }
   }
-  for (const auto& [c, n] : moved) d.moved.emplace_back(column_name(names, c), n);
+  for (const auto& [at, n] : moved) d.moved.emplace_back(moved_name[at], n);
   return d;
 }
 

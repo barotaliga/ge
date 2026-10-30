@@ -157,7 +157,7 @@ It lands in four rows:
 | M23d1 | The export's core: the engine's Matroska muxer and reader, I420, the run's sound on the play contract, `record --format=mkv` with the sound in lockstep, uncompressed | `capture`, `capture-run` |
 | M23d2 | The software encoders (AV1 by libaom, Opus by libopus) in WebM, `record --format=mkv --codec=av1` | `capture`, `capture-run` |
 | M23d3 | The live capture: the readback ring and the mix tapped, stamped on the tap's clock, `fall_line --capture` | `gpu-capture-live` |
-| M23d4 | The platform's hardware encoders | `capture` (on the machine that has one) |
+| M23d4 | The platform's hardware encoders (VideoToolbox first), `--codec=h264`, `hevc` and `auto` | `capture` (on the machine that has one) |
 | M23d5 | The fragmented MP4 muxer, for the hardware encoders' H.264 and HEVC | `capture` |
 
 ### The export's core (M23d1)
@@ -266,6 +266,41 @@ stamps and colours, a full ring dropping instead of waiting, BGRA read back as R
 adapter with an audio thread pulling 10 ms every 10 ms took all 1800 frames, dropped none, spent at
 most 0.9 ms of a frame on the capture (0.24 ms on average) and put every one of 24 flashes within
 2 ms of its click; AV1 cost the worker 7.4 ms a 640x360 frame on average.
+
+### The platform's encoders (M23d4)
+
+`--codec=h264` or `--codec=hevc` (`ge record --format=mkv`, an `.mp4` by default) codes the
+pictures with the encoder the operating system ships, and `--codec=auto` takes the platform's
+H.264 where there is one and the engine's own AV1 where there is not: the hardware first, the
+software behind it. `fall_line --capture=run.mp4` captures with `auto`, so on a Mac the window goes
+through the media engine and a game's frame barely pays for it. `capture/video.hpp` names the
+codec by its word for the export, the live capture and the labs, which never learn which library
+codes; `capture/platform_video.hpp` is the platform's half, one file a platform:
+
+- **VideoToolbox** (`capture/videotoolbox.cpp`, macOS and iOS, linked with the system's
+  frameworks, nothing downloaded): a compression session asks for the hardware encoder and takes
+  the system's software one without it (a virtual machine), and says which (`hardware()`, the
+  lab's `encoder` column). H.264 High and HEVC Main, NV12 at BT.709 limited range (the export's
+  I420, `capture/yuv.hpp`, copied into the session's pixel buffers), an average bitrate (0.1 bit a
+  pixel a frame by default, 2.8 Mbit/s at 720p30), a keyframe every two seconds, and NO B-FRAMES:
+  pictures come out in the order they go in, so neither container needs a composition offset and
+  the interleave's floor holds. Each `encode` waits for its picture's packet.
+- **The codec private** (`avcC` or `hvcC`) has to be in the file's header before the first
+  packet exists, so `open` encodes one black picture on a session of the same settings and keeps
+  that session's record; a later keyframe carrying another record is an error that says so. The
+  packets are length-prefixed NAL units, which Matroska's V_MPEG4/ISO/AVC and V_MPEGH/ISO/HEVC and
+  MP4's `avc1` and `hvc1` carry as they are. A `.webm` refuses them (WebM carries AV1 alone);
+  `--container=mkv` puts them in a Matroska file.
+- **Later**: Media Foundation on Windows, MediaCodec on Android and VA-API on Linux fill the same
+  `PlatformEncoder`. A build without GE_ENCODERS, or a platform with none yet, answers `h264` with
+  what to pass instead and runs `auto` as AV1.
+- **Proved** by `tests/capture_platform_video_test.cpp` (on the macOS row: H.264 and HEVC
+  pictures coded a packet each, the first a keyframe, decoded back by VideoToolbox's decoder close
+  to what went in; the sync fixture recorded as an H.264 `.mp4`, every picture decoded and each
+  click within 3 ms of its step and each flash within a frame; everywhere: the words, NV12 with
+  padded strides, the fallback, the `.webm` refusal) and the `capture` lab's platform table and
+  `sync-platform` shot (the encoder that coded, the same sync check, ffmpeg decoding the file, and
+  a 720p frame's encode time, size and PSNR), measured, so every machine has one digest.
 
 ### Fragmented MP4 (M23d5)
 

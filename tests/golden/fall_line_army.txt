@@ -1,6 +1,6 @@
-# each minute: state digest, men out, riding, holding; then the lift taken, the lifted men sent, the waves' men, the men let off (fall_line_army_test, the seed 38 hunt)
-433ef18c0ad0bf20 4 4 0
-fc6f8ee282dee955 12 4 8
-42be17b168bedadf 24 2 20
-62ca54dd7169ff90 36 0 36
+# each minute: state digest, its parts, men out, riding, holding; then the lift taken, the lifted men sent, the waves' men, the men let off (fall_line_army_test, the seed 38 hunt)
+433ef18c0ad0bf20 skiers:cbe8bf10,sleds:a1ff6fa1,heli:2ff850b4,para:4fd0bfc1,crowd:4fd0bfc1,wanted:861fb778,army:4d9642f2,gunfire:4fd0bfc1 4 4 0
+fc6f8ee282dee955 skiers:b6b25119,sleds:50c28576,heli:b7950a0f,para:4fd0bfc1,crowd:4fd0bfc1,wanted:8a67cf57,army:7cbf81d4,gunfire:4fd0bfc1 12 4 8
+42be17b168bedadf skiers:87b44e3f,sleds:c0c1c4d9,heli:11a2ac8f,para:4fd0bfc1,crowd:4fd0bfc1,wanted:ba139d82,army:3a1cf909,gunfire:4fd0bfc1 24 2 20
+62ca54dd7169ff90 skiers:bea0ef15,sleds:dc70e80b,heli:5e0679cf,para:4fd0bfc1,crowd:4fd0bfc1,wanted:f57af3db,army:a0796682,gunfire:4fd0bfc1 36 0 36
 3 4 32 4
