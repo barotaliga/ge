@@ -112,6 +112,10 @@ seed. The skier on the snow is `plugins/skier` (the `skier` skill).
   run's own resets wait while he is on it, and the bot's hands are off. The carriers are the
   mountain plugin's (`plugins/mountain/lifts/lift_loop.hpp`), a pure function of the clock;
   the ride stores only which carrier has him, never where it is.
+- **The state digest has parts**: `state_hash` folds eight parts in order (skiers, sleds, heli,
+  para, crowd, wanted, army, gunfire), and `state_parts` hashes each on its own as one golden
+  word; every golden row with a state digest writes its parts right after it, so `ge golden diff`
+  names the part that moved. A new system's hash is a new part in `kParts` (`game.cpp`).
 - **A race's digest reads nothing of the free ride**: `state_hash` mixes `FreeRide` only when
   the mode is `free`, and a race never steps it, so a free-ride change moves only
   `tests/golden/fall_line_free.txt` and the `free` lab. Run `make lab LAB=free ARGS=--seeds=1,2,3,4,5,6,7,8,38`

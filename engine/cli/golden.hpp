@@ -25,11 +25,15 @@
 //
 // A golden file is rows of words, '#' lines its provenance; its last '#' line before the rows,
 // when it has one word a column, names the columns. A 16-hex-digit word in a column whose name
-// is not a digest's or a hash's is shown as the double its bits are too.
+// is not a digest's or a hash's is shown as the double its bits are too. A PARTS word,
+// `name:value,name:value,...`, is a digest hashed a part at a time (a game's state hash beside
+// its parts): when one moves, each part that moved is its own column, `<column>.<part>`, so the
+// diff names the part (the skiers, the army) a moved digest moved in. Under a prose header, the
+// 16-hex-digit word before a parts word is named `digest` and the parts word `parts`.
 //
 // ge:summary ge digest, ge golden diff and ge golden write: a lab's baseline, a golden's moves
 // ge:keywords cli ge digest golden diff write baseline labs_digests tests-digests golden-tables
-// ge:keywords columns moved
+// ge:keywords columns moved parts-word state-parts
 // ge:keywords ge_golden_write run_digest run_golden_diff run_golden_write diff_golden
 // ge:skill agent-interface
 // ge:test tests/cli_golden_test.cpp

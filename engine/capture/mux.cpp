@@ -42,6 +42,17 @@ bool Mux::open(const std::string& path, Container c, const MatroskaOptions& o, s
     return mp4_.open(path, o, error);
   }
   doc_type_ = std::string(doc_type_of(o));
+  if (doc_type_ != "webm" && path.size() >= 5) {
+    std::string ext;
+    for (const char ch : std::string_view(path).substr(path.size() - 5)) {
+      ext.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+    }
+    if (ext == ".webm") {
+      error = "a .webm carries AV1 and Opus only, and " + path +
+              "'s tracks are not; name it .mp4 or .mkv, or record with --codec=av1";
+      return false;
+    }
+  }
   return mkv_.open(path, o, error);
 }
 

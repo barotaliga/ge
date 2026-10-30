@@ -217,14 +217,15 @@ TEST(seed_38s_crowd_keeps_its_golden) {
     run_for(st, 10);
     int32_t modes[7] = {};
     for (const fs::Amateur& a : st.crowd.amateurs) modes[static_cast<size_t>(a.mode)]++;
-    std::string row = hex(fs::state_hash(st, 0));
+    std::string row = hex(fs::state_hash(st, 0)) + " " + fs::state_parts(st);
     for (const int32_t m : modes) row += " " + std::to_string(m);
     got.push_back(row);
   }
   if (env_set("GE_GOLDEN_WRITE")) {
     std::ofstream out(ge::test::root_path(kGolden));
     out << "# every 10 s of seed 38's free ride dealt 300 amateurs, the player stood still: the "
-           "state digest, then how many ski, stop, are down, queue, ride, skate and are up a lift "
+           "state digest and its parts, then how many ski, stop, are down, queue, ride, skate and "
+           "are up a lift "
            "unseen (fall_line_crowd_test)\n";
     for (const std::string& row : got) out << row << "\n";
     return;

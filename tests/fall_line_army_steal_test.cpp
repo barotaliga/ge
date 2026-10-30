@@ -100,9 +100,10 @@ void tick(Hunt& h, bool stand, const fs::Controls& c) {
   h.st.racers[0].body = sk::BodyState{};
   fs::step(h.st, std::span<const fs::Controls>(&c, 1));
   if (h.st.steps % static_cast<int64_t>(5 * fs::kHz) != 0) return;
-  std::string row =
-      hex(fs::state_hash(h.st, 0xcbf29ce484222325ull)) + " " + std::to_string(h.st.wanted.stars) +
-      " " + kHeliModes[static_cast<size_t>(h.st.heli.mode)] + (h.st.heli.army ? "-army" : "");
+  std::string row = hex(fs::state_hash(h.st, 0xcbf29ce484222325ull)) + " " + fs::state_parts(h.st) +
+                    " " + std::to_string(h.st.wanted.stars) + " " +
+                    kHeliModes[static_cast<size_t>(h.st.heli.mode)] +
+                    (h.st.heli.army ? "-army" : "");
   for (const fs::ArmyHeli& m : h.st.army.helis) {
     row += " " + std::string(fs::army_heli_mode_name(m.mode));
   }
@@ -280,7 +281,8 @@ TEST(the_theft_and_the_ram_on_seed_38_keep_their_golden) {
   for (const auto& row : r.h.rows) got.push_back("ram " + row);
   if (env_set("GE_GOLDEN_WRITE")) {
     std::ofstream out(ge::test::root_path(kGolden));
-    out << "# each 5 s: the scenario, the state digest, the stars, the free ride's helicopter's "
+    out << "# each 5 s: the scenario, the state digest, its parts, the stars, the free ride's "
+           "helicopter's "
            "mode, every army machine's (fall_line_army_steal_test, seed 38)\n";
     for (const std::string& row : got) out << row << "\n";
     return;
