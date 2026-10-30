@@ -56,7 +56,6 @@ namespace fx = shooters_edge::effects;
 namespace lk = shooters_edge::look;
 using gl::Det;
 constexpr double kPi = 3.14159265358979323846;
-constexpr double kDeg = kPi / 180;
 
 // The arena's light styles: our own patterns (draw_data.hpp's letters, 'm' the light as baked).
 constexpr int kFlicker = 1;
@@ -493,7 +492,7 @@ void run(gl::Lab& lab) {
       draw(d, f, first, fv, look, true, 0.12);  // the births flown a moment
       pics.push_back(draw(d, f, first, fv, look, true, 0));
       lab.metric(std::string("effects.") + lk::look_name(look) + ".births", double(births.size()),
-                 "count");
+                 "count", Det::measured);
     }
     ba::set_dynamic_lights(first.bsp, {});
     gr::clear_particles(d, f.particles);

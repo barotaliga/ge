@@ -917,7 +917,7 @@ void run(gl::Lab& lab) {
     lab.metric(v.id + ".shadowed", double(m.bsp.shadowed), "count", Det::measured);
     // The faces the last frame's cull drew (bsp_cull.hpp).
     const ba::CullStats cs = ba::read_bsp_cull(d, m.bsp.cull);
-    lab.metric(v.id + ".faces", double(cs.chunks), "count", Det::deterministic);
+    lab.metric(v.id + ".faces", double(cs.chunks), "count", Det::measured);
     lab.metric(v.id + ".faces.drawn", double(cs.early + cs.late), "count", Det::measured);
   }
   ls::checked(lab, int(d.errors.load()), int(d.pipelines_after_load));
