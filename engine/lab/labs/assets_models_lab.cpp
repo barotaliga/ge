@@ -5,7 +5,9 @@
 // acceleration graphed over time, where a pop, a jolt or a joint that twists past its range
 // shows as a spike. The numbers say what the model is (joints, meshes, triangles, materials,
 // clips), whether its weights hold (summing to 1, every joint index inside the skeleton) and
-// each clip's largest angle and acceleration. With no `--model` it is the test model
+// each clip's largest angle and acceleration. A mesh's morph targets (a vertex-animated
+// model's frames, a target a frame) are weighted as each clip weights them, so the filmstrips
+// draw such a model frame by frame. With no `--model` it is the test model
 // (assets/test_model.hpp) written as a .glb and loaded back, so the smoke run goes through the
 // loader too. CPU pictures (an orthographic raster of the model), so in the digest.
 //
@@ -101,9 +103,14 @@ Posed pose(const a::Model& m, int clip, double t) {
   }
   a::pose_globals(m, local, p.global);
   a::skin_palette(m, p.global, palette);
-  for (const a::Mesh& mesh : m.meshes) {
+  for (size_t k = 0; k < m.meshes.size(); ++k) {
+    const a::Mesh& mesh = m.meshes[k];
     std::vector<float> pos(size_t{mesh.vertex_count()} * 3), nrm(pos.size());
-    a::skin_mesh(mesh, palette, pos, nrm);
+    std::vector<float> bind(pos.size()), bind_n(pos.size()), weights(mesh.targets.size());
+    a::sample_weights(m, clip < 0 ? nullptr : &m.clips[static_cast<size_t>(clip)], k, t, false,
+                      weights);
+    a::morph_mesh(mesh, weights, bind, bind_n);
+    a::skin_mesh(mesh, palette, bind, bind_n, pos, nrm);
     p.pos.insert(p.pos.end(), pos.begin(), pos.end());
     p.nrm.insert(p.nrm.end(), nrm.begin(), nrm.end());
   }
@@ -253,9 +260,10 @@ void run(ge::lab::Lab& lab) {
   const std::vector<std::pair<std::string, std::string>> inputs = {{"model", name}};
 
   // ── What the model is ──
-  size_t vertices = 0, triangles = 0, bad_weights = 0, bad_joints = 0;
+  size_t vertices = 0, triangles = 0, bad_weights = 0, bad_joints = 0, targets = 0;
   for (const a::Mesh& mesh : m.meshes) {
     vertices += mesh.vertex_count();
+    targets += mesh.targets.size();
     triangles += mesh.indices.size() / 3;
     for (uint32_t v = 0; v < mesh.vertex_count(); ++v) {
       float sum = 0;
@@ -274,6 +282,8 @@ void run(ge::lab::Lab& lab) {
   lab.metric("triangles", static_cast<double>(triangles), "count");
   lab.metric("materials", static_cast<double>(m.materials.size()), "count");
   lab.metric("clips", static_cast<double>(m.clips.size()), "count");
+  // A morph model's frames: only a model that has them reports them.
+  if (targets) lab.metric("morph-targets", static_cast<double>(targets), "count");
   lab.metric("weights-not-one", static_cast<double>(bad_weights), "count");
   lab.metric("joints-outside", static_cast<double>(bad_joints), "count");
   if (bad_weights || bad_joints) {

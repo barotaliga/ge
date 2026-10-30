@@ -11,6 +11,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge digest <lab> [--write]` (one lab's baseline, not the whole smoke run)
 - `ge digest <a> <b> --write` (done: several labs' rows checked or rewritten in one call; the labs executable refuses a second name rather than running only the first)
 - `ge golden diff` (which columns of a golden's rows moved) and `ge golden write`
+- `ge golden diff <test>` naming the component of a state hash that moved (skier, heli, army, wanted, gunfire), so a golden another PR's change moved is told from a cross-platform break; #279
 - `ge digest --diff` (done: every lab's digest against the baseline in one command, nothing written, only the labs that moved printed)
 - `ge golden diff` pairing rows by their key when the count changes (done: a row inserted mid-table is one row added)
 - `ge golden write` listing every golden file it rewrote, and the engine's own tree pointed at it (`build/<preset>/ge golden write <test>`) rather than setting `GE_GOLDEN_WRITE` by hand
@@ -19,7 +20,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 
 ## Before and after across refs
 
-- `ge bench ab --base=<ref>` (or `--ab <binA> <binB>`: two builds interleaved N times with statistics, since a container's timings wander by about 5%; for a bench lab too: `ge ab <lab> --before=<binary> --runs=3`, the median of each metric) and `ge compare <ref>` (both builds, one table)
+- `ge bench ab --base=<ref>` (or `--ab <binA> <binB>`: two builds interleaved N times with statistics, since a container's timings wander by about 5%; for a bench lab too: `ge ab <lab> --before=<binary> --runs=3`, the median of each metric; also `--rounds=3`, each side's best and the delta printed beside the measured noise band, the second binary built or reused off `--before=<ref>`: the approximation study) and `ge compare <ref>` (both builds, one table)
 - `ge bench --ab=<option>` (one frame option against another in the same build, interleaved rounds, the least median kept: a quality ladder priced without a bespoke loop)
 - `ge profile --compare` (per zone and per pass, GPU and CPU deltas, outliers flagged)
 - `ge lab bench <lab> --runs=N --base=main` (each metric's median and spread over N runs, this tree beside the base)
@@ -69,18 +70,19 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge lab sweep <id> --flag=<flag>=a,b,c` (done: one of the lab's own flags at each value, the labs built once, the same table; the hours of a day over a picture lab)
 - `ge lab --split=N`
 - `ge job run\|status\|log` (a long run in the background)
-- `ge merge-main`
+- `ge merge-main` (done: `origin/main` merged in, a file main retired taking main's deletion with what to carry named, a lab digest both sides moved rerun and rewritten, every other conflict named and left, the merge committed once none is left; asked by #80, #276, #284); next, a generated file taken from main and regenerated
 - `ge stack <pr>...` and `ge restack` (build on other open PRs' branches, and once they land replay only this branch's own commits onto main, without hand-picking the base for `git rebase --onto`)
 - `ge build --lean` (no GPU, no debug info: CPU-only plugin work on a small cloud disk), and precheck / `ge digest --affected` reaching only the tests a cmake/ change touches, not every test executable
 - `ge ci --cost[=<runs>]` (runner-minutes and wall time per job over the last N runs, split by event: pull request, merge queue, push; what a workflow change saves, measured)
 - a precheck stamp: `make precheck` writes the head it passed on and its gates, the push carries it, and the gates job fails a push whose head has none (once CI stops running Linux, precheck is the only Linux run, so it must be provable)
 - `ge queue` and `ge pr clash <n>` (done in #250: the merge queue in merge order by each PR's last queue event, the armed PRs behind it, every PR dirty against main and the failed group runs, all by a real `git merge-tree`; one PR merged onto main and everything ahead of it, the PR ahead that brings a conflict named); next, `ge queue --watch` on a schedule telling each PR's owner when it starts to clash (#250), and each group run's ref checked so a stale run shows (#243)
-- `ge test --affected --by-link` (a test counted as reached when it links a library whose `.cpp` changed, not only through the include graph: #231's precheck missed the army-steal golden this way; #257, #277)
+- `ge test --affected --by-link` (a test counted as reached when it links a library whose `.cpp` changed, not only through the include graph; #257, #277. Checked: #231 changed `games/fall_line/sim/state.hpp`, which the army-steal test includes, so the include reach already took it; the golden moved because #231 and #164 were each prechecked alone and met only on main, which `ge pr clash` and a precheck after `ge merge-main` catch)
 - `ge test --affected --budget=<s>` / `ge precheck --budget=<s>` (when the reach is wide, the reached tests nearest the change run first and the run stops at the budget, the rest left to CI and listed: a shared-library change reached 78 tests and about 8 minutes; #110, #115)
 - precheck running a lab's full flags, not only its smoke flags, when a change reaches that lab's subject (`ge lab run --full-for=<lab>`: the smoke run stopped short of the moment that moved; #156)
 - precheck naming the goldens and digests main already fails (`--known-red`, off main's last CI run), so a red that is main's own is ruled out without a second full run (#267)
 - `ge ci <run> --lab-log` (a failed lab's per-view metrics read out of a CI job's log, so a flake names its view without a rerun; #233)
 - `ge digest --affected` following the running `ge`'s preset (the release `ge` still ran the debug labs), and `--only-moved-by=<symbol>` (only the labs whose digest a named symbol can move: a `state.hpp` change reached 67 labs, over 25 minutes in debug; #231)
+- `ge digest --affected --write` (only the digests the change moved rewritten, each named with why, in place of one lab at a time; #270), and `ge digest --affected` resuming after an interrupt (a container restart lost a half-written set; #279)
 
 ## Inspecting a run
 
@@ -149,13 +151,16 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge lab <id> --stage=<pass>:<off>` (one stage of a pass switched off for a run, a layer's glow or its compression, without editing the shader; #224)
 - `ge save check --describe-coverage` (every field of a state struct its `describe` leaves out, read from the struct: today a missing field shows only when a save parts from the straight run; #276)
 - `ge texture match --round=<n>` keeping each round's verdicts and printing what moved against the last round (#259)
+- `ge probe <file>` (a capture's container, tracks and fragments read with the engine's own readers, without ffprobe; #271)
+- `ge lab sheet <id> --pairs` (a lab's off and on shots tiled into one before-and-after image; #272)
 
 ## Measuring
 
 - `ge lab <gpu-lab>` printing the frame's per-pass GPU and CPU costs as a table beside its metrics
 - `ge lab sound <lab>` (a spectrogram of each WAV a lab writes, on its report page: the cut-off falling with distance seen without listening; the classic-enhance sound page's spectrogram moved into engine/lab and reused; also `ge lab listen <id> <wav>` for one WAV: its meters printed (peak, RMS, band, dropouts) and its spectrogram drawn, so an agent with no speakers checks a voice without writing a chart)
 - `ge profile --wall` (a sampling CPU profiler: wall time by inlined frame, the main thread apart from the workers, where instruction counts hide a slow call)
-- `ge profile --callgrind <lab>`
+- `ge profile --callgrind <lab>` (also as `ge hot <lab> [--callers=<fn>]`: the self and inclusive ranking and one function's top callers in one table; the approximation study)
+- `ge mapgen-bench --tree=<worktree>` (only the mountain plugin and core built from a worktree into a scratch directory and the generator timed, so variants are compared without rebuilding every target; the approximation study)
 - `ge lab <id> --toggle=<feature>` (a lab's passes timed with the feature on and off, one table)
 - `ge issue needs-mac --bench=<invocation>` (the needs-mac issue written with the exact GPU bench command and what to paste back, after trying CI's macOS runner on Metal first, since software-rendered timings say little about real cost)
 - `ge mem --where` (the allocating call stack)
@@ -192,10 +197,11 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge shader check <file.wgsl>` (one shader's includes resolved as the embedder does, compiled by Tint, the error named with its line: `make shaders-check` builds every shader and needs GE_GPU, and a reserved word showed only as finish() returning false; and the same Tint error printed wherever a test or a lab sees `pipelines.finish` fail)
 - `ge template check` (every `ge add` template and the scaffold filled at a short and a long game name, then `ge check` and clang-format run on each: a placeholder's tag line reflowed by clang-format broke only at a long name)
 - the WGSL embedder failing on an empty generated shader (an unbalanced bracket in a comment splits the CMake list and silently empties it)
-
 - `ge lab run --no-gpu` (a GPU lab forced onto its placeholder path, to check its digest matches a runner without an adapter, without a temporary code switch; #228)
 - `ge lab new <id> --like=<lab>` (a lab's skeleton copied from another: the spec, a WAV loader, the sound shot; #274)
 - `ge lab run <lab> --pak=<file>` remembered (an installed pack's path kept for content-dependent labs; #278)
+- `ge fetch <url> --sha256=<hex> --into=<cache>` (one shared, verified download for the tools that fetch inputs at bake time, in place of each shelling out to curl; #286)
+- `ge mod run <pkg> --lab=mod` (a mod built, loaded and run against a recorded match in one command; #289)
 
 (`ge shot` is M12b's; `ge anim` is M14b's.)
 

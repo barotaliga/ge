@@ -54,6 +54,21 @@ int32_t mover_at(std::span<const NavMover> movers, Vec3f lo, Vec3f hi) {
   return -1;
 }
 
+// The mover holding a node standing at `p`: a ridden one only under the node's own origin (a
+// player beside a plat is not on it), any other wherever its box meets the player's.
+int32_t mover_holding(std::span<const NavMover> movers, Vec3f p) {
+  for (const NavMover& m : movers) {
+    if (m.model != nullptr) {
+      if (p.x > m.absmin.x && p.x < m.absmax.x && p.y > m.absmin.y && p.y < m.absmax.y &&
+          p.z + kPlayerMins.z <= m.absmax.z + 1 && p.z + kPlayerMaxs.z >= m.absmin.z)
+        return m.ent;
+    } else if (boxes_meet(p + kPlayerMins, p + kPlayerMaxs, m.absmin, m.absmax)) {
+      return m.ent;
+    }
+  }
+  return -1;
+}
+
 // Free, level floor straight back from `from`, away from `to`, for `dist` units.
 bool room_to_run_up(const MoveWorld& world, Vec3f from, Vec3f to, float dist) {
   Vec3f dir{from.x - to.x, from.y - to.y, 0};
@@ -95,6 +110,8 @@ const char* nav_kind_name(NavKind k) {
       return "drop";
     case NavKind::jump:
       return "jump";
+    case NavKind::ride:
+      return "ride";
   }
   return "?";
 }
@@ -200,7 +217,7 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
         n.origin = f;
         n.col = i;
         n.row = j;
-        n.mover = mover_at(movers, f + kPlayerMins, f + kPlayerMaxs);
+        n.mover = mover_holding(movers, f);
         g.nodes.push_back(n);
       }
     }
@@ -251,14 +268,15 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
     NavKind kind;
     float speed;
   };
-  auto prove = [&](size_t a, int32_t b, const Try* tries, int n, std::vector<NavLink>& out) {
+  auto prove_in = [&](const MoveWorld& on, size_t a, int32_t b, const Try* tries, int n,
+                      std::vector<NavLink>& out) {
     const Vec3f from = g.nodes[a].origin, to = g.nodes[static_cast<size_t>(b)].origin;
     for (int q = 0; q < n; q++) {
-      const NavProof pr = prove_link(world, move, from, to, tries[q].kind, tries[q].speed, set);
+      const NavProof pr = prove_link(on, move, from, to, tries[q].kind, tries[q].speed, set);
       g.counts.proofs++;
       g.counts.commands += pr.commands;
       if (!pr.reached) continue;
-      if (tries[q].kind == NavKind::jump && !room_to_run_up(world, from, to, set.run_up)) {
+      if (tries[q].kind == NavKind::jump && !room_to_run_up(on, from, to, set.run_up)) {
         g.counts.no_run_up++;
         continue;
       }
@@ -269,6 +287,9 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
       return;
     }
     g.counts.refused++;
+  };
+  auto prove = [&](size_t a, int32_t b, const Try* tries, int n, std::vector<NavLink>& out) {
+    prove_in(world, a, b, tries, n, out);
   };
   Try jumps[std::size(kJumpShares)];
   int njumps = 0;
@@ -338,6 +359,69 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
     });
   }
 
+  // RIDES: each ridden mover placed at the far end of its travel, the columns it held at rest
+  // traced again for the floor on its top, a ride up to each, and the ways off it proven there.
+  g.movers.assign(movers.begin(), movers.end());
+  for (const NavMover& m : movers) {
+    if (m.model == nullptr) continue;
+    MoveWorld there = world;
+    if (there.count >= kMaxSolids) continue;
+    Solid& s = there.solids[there.count++];
+    s = Solid{};
+    s.kind = SolidKind::brush;
+    s.origin = m.travel;
+    s.point_hull = m.model->hulls[0];
+    s.clip_hull = m.model->hulls[1];
+    s.mins = m.model->mins;
+    s.maxs = m.model->maxs;
+    const size_t rest = g.nodes.size();
+    for (size_t a = 0; a < rest; a++) {
+      const NavNode& na = g.nodes[a];
+      if (na.mover != m.ent) continue;
+      const float x = na.origin.x, y = na.origin.y;
+      // Ridden only where the player's whole box stands on the top: a ride from a column on its
+      // edge ends half over the drop.
+      if (x - m.absmin.x < kPlayerMaxs.x || m.absmax.x - x < kPlayerMaxs.x ||
+          y - m.absmin.y < kPlayerMaxs.y || m.absmax.y - y < kPlayerMaxs.y)
+        continue;
+      // The mover's top in this column: the highest floor above a step and below its travel's
+      // reach plus the player's height (a ceiling's own floor above is not it).
+      const float above = na.origin.z + m.travel.z + (kPlayerMaxs.z - kPlayerMins.z);
+      column_floors(there, x, y, top, bottom, floors);
+      const Vec3f* on = nullptr;
+      for (const Vec3f& f : floors)
+        if (f.z > na.origin.z + kStepHeight && f.z <= above && (on == nullptr || f.z > on->z))
+          on = &f;
+      if (on == nullptr) continue;
+      NavNode t;
+      t.origin = *on;
+      t.col = na.col;
+      t.row = na.row;
+      t.mover = m.ent;
+      t.ride = m.ent;
+      const int32_t ti = static_cast<int32_t>(g.nodes.size());
+      g.nodes.push_back(t);
+      edge.push_back(0);
+      out.emplace_back();
+      out[a].push_back({ti, NavKind::ride, m.ride_s, m.ent, 0});
+      g.counts.by_kind[static_cast<int>(NavKind::ride)]++;
+      // Off the top: to the nodes beside it that the mover does not hold.
+      const Vec3f tz = t.origin;
+      each_column(t, 1, [&](int32_t, int32_t, int32_t b) {
+        const NavNode& nb = g.nodes[static_cast<size_t>(b)];
+        if (nb.mover == m.ent) return;
+        const float rise = nb.origin.z - tz.z;
+        if (rise > kJumpUp) return;
+        Try tries[1 + std::size(jumps)];
+        int n = 0;
+        tries[n++] = walk;
+        if (rise > kStepHeight)
+          for (int q = 0; q < njumps; q++) tries[n++] = jumps[q];
+        prove_in(there, static_cast<size_t>(ti), b, tries, n, out[static_cast<size_t>(ti)]);
+      });
+    }
+  }
+
   for (size_t a = 0; a < g.nodes.size(); a++) {
     g.nodes[a].first_link = static_cast<int32_t>(g.links.size());
     g.nodes[a].links = static_cast<int32_t>(out[a].size());
@@ -369,11 +453,29 @@ int32_t nav_nearest(const NavGraph& g, Vec3f p) {
       }
     }
   }
+  // A ridden mover's top nodes come after the columns' (build_nav).
+  const size_t tops =
+      g.col_n.empty() ? g.nodes.size() : static_cast<size_t>(g.col_first.back() + g.col_n.back());
+  for (size_t n = tops; n < g.nodes.size(); n++) {
+    const Vec3f d = g.nodes[n].origin - p;
+    if (d.z > kNearestUp || d.z < -kNearestUp) continue;
+    const float dd = dot(d, d);
+    if (best < 0 || dd < best_d) {
+      best = static_cast<int32_t>(n);
+      best_d = dd;
+    }
+  }
   return best;
 }
 
 NavRoute nav_route(const NavGraph& g, int32_t from, int32_t to, ai::Search& search,
-                   float mover_penalty_s) {
+                   float mover_penalty_s, std::span<const int32_t> barred) {
+  auto is_barred = [&](int32_t m) {
+    if (m < 0) return false;
+    for (const int32_t b : barred)
+      if (b == m) return true;
+    return false;
+  };
   NavRoute r;
   if (from < 0 || to < 0) return r;
   // The fastest any link crosses ground, so the heuristic never overestimates.
@@ -397,6 +499,7 @@ NavRoute nav_route(const NavGraph& g, int32_t from, int32_t to, ai::Search& sear
         const NavNode& n = g.nodes[static_cast<size_t>(a)];
         for (int32_t k = 0; k < n.links; k++) {
           const NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)];
+          if (is_barred(l.mover)) continue;
           const double cost = search.cost(a) + l.time_s + (l.mover >= 0 ? mover_penalty_s : 0);
           if (search.improves(l.to, cost)) search.reach(l.to, cost, a, heuristic(l.to));
         }
@@ -450,6 +553,7 @@ uint64_t nav_hash(const NavGraph& g) {
     mix(&n.origin.y, 4);
     mix(&n.origin.z, 4);
     mix(&n.mover, 4);
+    if (n.ride >= 0) mix(&n.ride, 4);
     mix(&n.links, 4);
   }
   for (const NavLink& l : g.links) {
