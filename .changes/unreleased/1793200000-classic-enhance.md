@@ -1,0 +1,5 @@
+---
+type: Added
+title: The classic packs enhanced on the player's machine
+---
+`plugins/classicenhance` finds the player's own classic packs (the shareware release zip, whose self-extracting LHA installer it unpacks, an installed folder, or the pack file), layers the full game's later packs (`pak1.pak` ...) over the first so an owned full game is enhanced whole, reports a known release by SHA-256 and any other readable pack as unverified, refuses a pack that does not read, and enhances them into a local cache: every wall texture upscaled along its edges with generated height, normal, roughness and emissive maps, tiling kept, and each map's lightmaps packed for the rebake to replace. Nothing read from the pack or made from it is committed or shipped. Run it with `ge tool classicenhance -- verify|run|status`; `ge tool <plugin>` builds and runs any plugin's `tool/` executable. The engine gains zip archives (`vfs::read_zip`, stored and deflated, CRC-checked), `assets::sha256` and `assets::inflate_raw`. The `enhance` lab draws painted fixtures before and after.

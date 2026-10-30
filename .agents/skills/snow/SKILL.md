@@ -22,6 +22,7 @@ and the plan (rows M29a–M29l); this skill is how to work on it.
 | `engine/render/wgsl/snow_light.wgsl` | The snow light model for any material: `snow_relief`, `snow_light` (`SnowPoint`, `SnowGains`), and the `snow_` noise, relief and glint blocks |
 | `engine/render/snow_mirror.hpp/.cpp` | The layer mirrored on the GPU: `create_snow_mirror`, `update_snow_mirror` (the fine window's atlas, the coarse view, only stamped tiles and blocks re-sent), `snow_mirror_expect`, `read_snow_raw`, `read_snow_columns` |
 | `engine/render/wgsl/snow_mirror.wgsl` | The mirror's bindings (group 3, 0 to 4), `snow_raw` (a sample to the bit) and `snow_column` (`snow::sample` on the GPU) |
+| `engine/render/snow_marks.hpp/.cpp/.wgsl` | The fine marks: the coarse map and the fine window redrawn from the history, capsule, box and ellipse stamps with MAX blending, `marks_from_records` (the mountain's `trails.hpp` is these under its own name) |
 | `engine/cli/snow.hpp/.cpp` | `ge snow show` and `ge snow column` over a saved layer |
 
 ## Rules
@@ -80,5 +81,8 @@ and the plan (rows M29a–M29l); this skill is how to work on it.
   mirror re-sends only what a stamp moved, so a new write path that skips them leaves the picture
   stale. `tests/render_snow_mirror_test.cpp` holds the uploads; `gpu-snow` holds the GPU to the
   layer to the bit (run it before and after any change to the mirror or the cell layout).
-- **What is next** is `docs/snow.md`'s rows: the rest of M29e (the fine marks from the imprint
-  records, the mountain's material reading the mirror).
+- **The marks are the mountain's trails.** `mountain/app/trails.hpp` forwards to
+  `render/snow_marks.hpp`; a change to the marks' shader or encoding moves Fall Line's tracks.
+  Run `world` and `trails` with `--tag=before` and `--compare=before` around it.
+- **What is next** is `docs/snow.md`'s rows: M29f (deformed geometry), then M29j (Fall Line on the
+  engine's snow, where the mountain's material reads the mirror).

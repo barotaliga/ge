@@ -7,7 +7,8 @@ description: "Use for engine/audio in gameengine2 and any sound: the synth (tone
 
 Fall Line's every sound is synthesized: it ships no audio files and no music. A game that ships
 recordings (Shooter's Edge) plays them on the same instrument as SAMPLED VOICES (below), through
-the same buses, echo, room and limiter. `engine/audio/` is the instrument; a game's sound (its bank, its beds, its listener table, its faders) is the game's,
+the same buses, echo, room and limiter. (A player's own classic pack is read and enhanced
+offline by `plugins/classicenhance`, into their cache.) `engine/audio/` is the instrument; a game's sound (its bank, its beds, its listener table, its faders) is the game's,
 and the beds a genre shares go in that plugin's `app/` half (`plugins` skill).
 
 ## What is built (M9a)
@@ -23,6 +24,7 @@ and the beds a genre shares go in that plugin's `app/` half (`plugins` skill).
 | `synth.hpp` (`sample`) | Sampled voices: a `Pcm` read in 32.32 fixed point with Catmull-Rom interpolation, pitched, looped (`Loop::file`, `once`, `whole`), steered (`sample_set`), stopped with a fade (`sample_stop`), `kMaxSamples` at once, the quietest stolen; `sample_live` from the producer |
 | `channels.hpp` | Sounds in a world: `hear` (gain falling linearly with distance, pan off the listener's right) and `Channels` (an entity's channel replaces, channel 0 stacks, the limit steals the quietest, the inaudible never start, the listener's own centred, `move` and `update` once a frame) |
 | `meter.hpp`, `wav.hpp` | A buffer's level, peak, octave bands, centroid, onset, length and balance; its WAV bytes |
+| `fft.hpp`, `resample.hpp` | Offline analysis: a radix-2 transform, the short-time spectrum (sqrt-Hann, overlap-add inverse); a Kaiser-windowed sinc resampler. Never on the audio thread (they allocate) |
 | `engine/platform/audio.hpp` | The device: `open_audio` pulls the synth on SDL's audio thread; `open_audio_in` and `read_audio_in` the microphone |
 | `engine/lab/sound.hpp` | `sound_shot`: a buffer metered, its metrics, its picture, its WAV, in a lab |
 
