@@ -11,7 +11,8 @@ not repeat.
 the shared protocol header and the 1996 release (2026-10-30), with the **modern server's
 behaviour and defaults as the baseline**; where the 1996 release differs it says so. Message ids
 and bit values are wire constants and are listed as such. The quantization and the move
-checksum are measured (`vectors/quantize.txt`, `vectors/checksum.txt`). Anything not yet
+checksum are measured (`vectors/quantize.txt`, `vectors/checksum.txt`); the checksum's key table
+is a wire constant kept for interop (`vectors/checksum_table.txt`). Anything not yet
 confirmed against a capture is marked **verify**; `se-interop`'s loopback captures are the check
 for every table here.
 
@@ -302,12 +303,11 @@ blood particles become temporary entities on the way.
 3. Take CRC-16 over the result: polynomial 0x1021, initial value 0xFFFF, most significant bit
    first, no reflection, no final XOR (CRC-16/CCITT-FALSE). The checksum byte is the CRC's low
    byte. Test values: the empty input gives 0xFFFF, the ASCII `123456789` gives 0x29B1.
-4. **The key table is not in this note** (it is an arbitrary constant, not something the format
-   defines in words). **Decision for the lead**: our server may simply not verify the byte (it
-   protects nothing a modern threat cares about); our client needs the exact table to be accepted
-   by existing servers, so it must be supplied by a decision (treat the table as a wire constant
-   and take it, or interoperate only with servers that skip the check). `vectors/checksum.txt`
-   holds 72 black-box vectors and a 2048-sequence digest that any table we adopt must reproduce.
+4. **The key table** is the 1024 bytes in `vectors/checksum_table.txt`: a wire constant, kept
+   because existing servers check every move's checksum and a client must use exactly these bytes
+   to be accepted (decided 2026-10-30). Our server may still choose not to verify the byte.
+   `vectors/checksum.txt` holds 72 vectors and a 2048-sequence digest; a program using only the
+   table file and steps 1 to 3 reproduces all of them (checked 2026-10-30).
 
 ## 5. Signon
 
@@ -557,4 +557,4 @@ and always sent wrapped in quotes.
    a wall clock; the wire format does not change.
 2. Our client never offers or accepts client-side programs, voice, or the server-side weapon
    extension.
-3. The checksum key table is a decision (§ 4.7).
+3. The checksum key table is a wire constant taken for interop (§ 4.7).
