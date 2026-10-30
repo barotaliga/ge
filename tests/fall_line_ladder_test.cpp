@@ -6,6 +6,8 @@
 // ge:summary Tests for Fall Line's quality ladder: the rows, the stops, the presets, the fit
 // ge:keywords test fall-line quality-ladder preset apply_picture auto_picture
 // ge:skill render testing
+#include <string>
+
 #include "check.hpp"
 #include "fall_line/app/ladder.hpp"
 
@@ -73,4 +75,23 @@ TEST(the_automatic_preset_lowers_the_resolution_first) {
   CHECK(f.fits && f.pick[res] < top[res]);
   for (size_t i = 0; i < top.size(); ++i)
     if (i != res) CHECK(f.pick[i] == top[i]);
+}
+
+TEST(fall_lines_ladder_is_its_values_over_the_engines_setting) {
+  const gr::QualityLadder& ladder = fa::quality_ladder();
+  CHECK(ladder.rows.size() == fa::picture_rows().size() && ladder.table.width == 1920);
+  // The presets in order, each reachable by its name; top is every row at its dearest.
+  CHECK(ladder.presets.size() == 4);
+  for (fa::Preset p : {fa::Preset::low, fa::Preset::medium, fa::Preset::high, fa::Preset::top}) {
+    const auto pick = gr::preset_pick(ladder, fa::preset_name(p));
+    CHECK(pick && *pick == fa::preset_pick(p));
+    if (pick) CHECK(static_cast<int>(pick->size()) == fa::kPictureRows);
+  }
+  CHECK(fa::preset_pick(fa::Preset::top) == gr::top_pick(ladder.rows));
+  // The game's word for it is the engine's over this ladder.
+  std::string error;
+  const auto half = fa::quality_pick("0.5", 8.3, 2560, 1440, error);
+  const auto same = gr::quality_pick(ladder, "0.5", 8.3, 2560, 1440, error);
+  CHECK(half && same && *half == *same && error.empty());
+  CHECK(!fa::quality_pick("custom", 8.3, 2560, 1440, error));
 }

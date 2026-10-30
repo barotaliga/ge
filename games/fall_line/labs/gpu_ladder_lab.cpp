@@ -76,7 +76,7 @@ std::string pick_text(const gr::LadderPick& pick) {
 // The deterministic half: the table, the presets, the fit over a sweep of budgets.
 void check_table(ge::lab::Lab& lab) {
   const auto rows = fa::picture_rows();
-  const fa::PriceTable& table = fa::price_table();
+  const ge::render::PriceTable& table = fa::price_table();
   lab.metric("rows", static_cast<double>(rows.size()), "count");
   int stops = 0;
   for (const gr::LadderRow& row : rows) {

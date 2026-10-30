@@ -33,6 +33,7 @@
 #include <vector>
 
 #include "fall_line/app/frame.hpp"
+#include "fall_line/app/ladder.hpp"
 #include "fall_line/app/views.hpp"
 #include "fall_line/sim/bot.hpp"
 #include "fall_line/sim/simulate.hpp"
@@ -92,6 +93,16 @@ void run(ge::lab::Lab& lab) {
         "--width and --height must be 1..4096, --frames at least 1, --from at least 0 and "
         "--scale 0.25..1",
         "next: pass a size such as --width=1280 --height=720 --frames=120.");
+    return;
+  }
+  // --quality: the game's r_quality over these options (app/ladder.hpp's quality_pick).
+  std::string quality_error;
+  if (const auto pick = fall_line::app::quality_pick(
+          lab.arg("quality"), lab.arg_num("budget"), static_cast<uint32_t>(width),
+          static_cast<uint32_t>(height), quality_error)) {
+    options = fall_line::app::apply_picture(*pick, options);
+  } else if (!quality_error.empty()) {
+    lab.fail(quality_error, "next: pass --quality=custom, low, medium, high, top, auto or 0..1.");
     return;
   }
   const std::string faults = fall_line::app::pass_table_faults();
@@ -330,6 +341,9 @@ const ge::lab::LabSpec kSpec{
         {"snow", "1", "the snow's material (1) or the albedo lit (0)"},
         {"trails", "1", "the tracks (1) or none (0); drawn only with the snow's material"},
         {"cpu-budget", "1", "the CPU half's budget a frame, ms"},
+        {"quality", "custom",
+         "the game's r_quality: custom (the flags above), low, medium, high, top, auto or 0..1"},
+        {"budget", "8.3", "the GPU ms a frame fits with --quality=auto (the game's r_budget)"},
     },
     "--width=160 --height=90 --frames=4 --from=3 --rivals=1",
     run,

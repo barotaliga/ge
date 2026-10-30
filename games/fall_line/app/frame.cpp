@@ -11,6 +11,7 @@
 #include <iterator>
 
 #include "core/output.hpp"
+#include "fall_line/app/ladder.hpp"
 #include "fall_line/app/lamps.hpp"
 #include "fall_line/app/look.hpp"
 #include "fall_line/app/scene.hpp"
@@ -248,6 +249,13 @@ FrameOptions frame_options(const cfg::Settings& s) {
   o.sun_size = s.disc_sun;
   o.moon_size = s.disc_moon;
   cloud_stack_of(s, o);
+  // r_quality: the ladder's picture over the rows it owns; `custom` leaves the settings above.
+  std::string error;
+  if (const auto pick = quality_pick(s.quality, s.budget_ms, static_cast<uint32_t>(s.width),
+                                     static_cast<uint32_t>(s.height), error))
+    o = apply_picture(*pick, o);
+  else if (!error.empty())
+    ge::core::output::warn(error);
   return o;
 }
 

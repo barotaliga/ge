@@ -139,6 +139,41 @@ the tint under water, slime or lava); the HUD (`hud_style classic|modern|compact
 Not yet: the other players' and items' models, the weapon in hand, sounds, and the
 network (the rest of M18h, M18i).
 
+<<<<<<< HEAD
+### Benchmarking a demo
+
+`benchmark <demo>` in the console, or `-benchmark <demo>` on the command line (which quits with
+the report and exits non-zero if the demo stopped early), plays a recorded game **as fast as the
+machine draws it**: vsync off for the run (an immediate present where the platform has one,
+which Metal needs: its mailbox present still waits on the display; the report names the mode in
+use), no frame cap, one demo frame a drawn frame whatever
+the demo's own clock says, at the window's settings (its size, `r_look` and the picture cvars, `hud_style`). The
+listen server waits meanwhile; ESCAPE stops the run early. At the end the console and the
+terminal print the frames timed and their seconds, the **average** frame rate, the **max** and
+**min** (one over the shortest and longest frame), the **1% low** and **0.1% low** (the slowest
+1% and 0.1% of frames as a rate over their own time), and the median and 99th-percentile frame:
+
+```sh
+build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic -benchmark demo1
+build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic --size=2560x1600 \
+    -benchmark ~/Downloads/match.dem
+```
+
+- **Which demo**: a path (absolute, or starting `./` or `../`) is read from disk alone; else the name through the search path (`demo1.dem` in `pak0.pak`, or a loose file
+  in the game folder), with `.dem` added when the name has no extension, then any file in the
+  packs whose name before its extension matches; else the name as a path on disk.
+- **The formats**, told apart by their first bytes (`client/demo.hpp`): the single-player demo
+  (protocol 15, `.dem`: the shareware pack's `demo1` to `demo3`) and the multiplayer client's
+  recording (protocol 28, with the extensions that change how a message reads). Server-side
+  multi-view recordings are not read yet (M18h).
+- **What is timed**: every frame but the first few after a level starts (the map's load and its
+  pipelines' first use; `kSkipAfterLevel`). A level change inside the demo loads that map from
+  the packs. What is drawn is what the window draws today: the map from the recorded eye and
+  the HUD off the recorded stats (the demo's effects are not read yet); the entities' models join when the window draws them (M18i).
+- **Headless**: `make lab LAB=se-timedemo` runs the same loop into an offscreen target, on a
+  demo written in code round the fixture halls (`--format=client` for the other format), or on
+  a real one with `ARGS="--basedir=<dir> --demo=demo1"`, and charts every frame's time.
+=======
 ### The main menu
 
 `games/shooters_edge/menu/` (M18k2) is the menu ESCAPE opens over the running game (the listen
@@ -173,6 +208,7 @@ server's frames go on under it). Its pages are the classic game's:
   on the search path), ENHANCE into the local cache watched stage by stage, every `ce_` switch.
 - `togglemenu`, `menu_main`, `menu_options` and `menu_quit` open it from the console or a bind.
   The `se-menu` lab pictures every page in both looks.
+>>>>>>> origin/main
 
 ## Running your own mod
 

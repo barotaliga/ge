@@ -37,6 +37,16 @@ bool underwater_look(std::string_view name, UnderwaterLook& out) {
     l.tint[2] = 0.75;
     l.tint_mix = 0.6;
     l.motes = 0;
+  } else if (name == "pool") {
+    // Clear water under a lit room: the light read off the room, the surface rippled, the water
+    // below mirrored past the window, the caustics on the walls, the floor and the ceiling.
+    l.fog = 0.15;
+    l.blur = 3;
+    l.motes = 0.1;
+    l.ambient = 1;
+    l.ripple = 0.08;
+    l.mirror = 1;
+    l.caustics = 1;
   } else {
     return false;
   }
@@ -117,6 +127,10 @@ void prepare_underwater(gpu::Device& device, Underwater& under, const Water& wat
   u.motes[1] = static_cast<float>(l.mote_size);
   u.motes[2] = static_cast<float>(l.waterline);
   u.motes[3] = 0;
+  u.lit[0] = static_cast<float>(l.ambient);
+  u.lit[1] = static_cast<float>(l.ripple);
+  u.lit[2] = static_cast<float>(l.mirror);
+  u.lit[3] = static_cast<float>(l.caustics);
   device.queue.WriteBuffer(under.uniform, 0, &u, sizeof u);
 }
 
