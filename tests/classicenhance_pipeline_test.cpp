@@ -4,15 +4,19 @@
 // neither, and a picture under gfx/ with the colour map beside it.
 // Every stage writes what its header says into a temporary cache; a rerun skips every stage; a
 // changed option reruns only the textures; --force reruns all; `only` runs the one asked; and a
-// source that was never verified is refused before anything is written.
+// source that was never verified is refused before anything is written; every stage reports its
+// start, its items and its end, a cancel stops the stage running, and the job runs on its thread.
 //
 // ge:summary Tests the pipeline's stages, cache layout, reruns and refusals on a fixture pack
 // ge:keywords test classicenhance pipeline cache stages rerun skip force lightmaps textures sounds
 // ge:keywords models sprites replaced glb pictures wad
 // ge:skill classicenhance testing
+#include <atomic>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "assets/gltf.hpp"
@@ -21,6 +25,7 @@
 #include "check.hpp"
 #include "classicenhance/cache.hpp"
 #include "classicenhance/pipeline.hpp"
+#include "classicenhance/progress.hpp"
 #include "classicenhance/sound.hpp"
 #include "lab/png.hpp"
 #include "morph/write.hpp"
@@ -185,4 +190,74 @@ TEST(pipeline_refuses_an_unopened_source) {
   CHECK(!fs::exists(root));
   CHECK(ce::safe_name("*Water0") == "liq_water0" && ce::safe_name("+0Slip") == "anim_0slip");
   CHECK(ce::safe_name("a/b c") == "a_b_c");
+}
+
+TEST(pipeline_reports_every_stage_and_stops_when_cancelled) {
+  ce::Source src;
+  src.path = "fixture";
+  src.pack = fixture_pack();
+  const std::string sha = ge::assets::sha256_hex(src.pack);
+  const ce::KnownFile known[] = {{sha.c_str(), uint32_t(src.pack.size()), "the fixture pack"}};
+  std::string error;
+  CHECK_MSG(ce::verify_pack(&src, &error, known), error);
+  const fs::path root = fs::temp_directory_path() / "ge_classicenhance_reports";
+  fs::remove_all(root);
+
+  // Every stage starts and finishes in order, the textures with a picture before and after.
+  std::vector<ce::Progress> seen;
+  int pictures = 0;
+  ce::RunOptions opts;
+  opts.textures.scale = 2;
+  opts.sounds.extend = 0;
+  opts.progress = [&](const ce::Progress& p) {
+    if (p.before && p.after && p.after->width == 2 * p.before->width) pictures++;
+    seen.push_back(p);
+    seen.back().before = seen.back().after = nullptr;
+  };
+  ce::RunReport report;
+  CHECK_MSG(ce::run_pipeline(src, root, opts, &report, &error), error);
+  size_t at = 0;
+  for (const ce::Stage s : ce::kStages) {
+    while (at < seen.size() && seen[at].stage != s) at++;
+    CHECK(at < seen.size() && seen[at].kind == ce::Progress::Kind::started);
+    const uint32_t total = at < seen.size() ? seen[at].total : 0;
+    uint32_t items = 0;
+    while (++at < seen.size() && seen[at].kind == ce::Progress::Kind::item) items++;
+    CHECK_MSG(at < seen.size() && seen[at].kind == ce::Progress::Kind::finished &&
+                  seen[at].stage == s && items == total,
+              std::string(ce::stage_name(s)) + ": " + std::to_string(items) + " items of " +
+                  std::to_string(total));
+  }
+  CHECK(pictures > 0);
+  // A rerun reports every stage up to date.
+  seen.clear();
+  CHECK(ce::run_pipeline(src, root, opts, &report, &error));
+  CHECK(seen.size() == 6);
+  for (const ce::Progress& p : seen) CHECK(p.kind == ce::Progress::Kind::skipped);
+
+  // Cancelled on the first texture: the stage fails as cancelled and nothing after it runs.
+  std::atomic<bool> stop{false};
+  opts.force = true;
+  opts.cancel = &stop;
+  seen.clear();
+  opts.progress = [&](const ce::Progress& p) {
+    if (p.stage == ce::Stage::textures && p.kind == ce::Progress::Kind::item) stop.store(true);
+    seen.push_back(p);
+  };
+  CHECK(!ce::run_pipeline(src, root, opts, &report, &error));
+  CHECK(error.find("cancelled") != std::string::npos);
+  CHECK(seen.back().kind == ce::Progress::Kind::failed && seen.back().stage == ce::Stage::textures);
+
+  // The job runs it on its own thread and its board ends ready.
+  fs::remove_all(root);
+  ce::EnhanceJob job;
+  ce::RunOptions quick;
+  quick.textures.scale = 2;
+  quick.sounds.extend = 0;
+  CHECK(job.start(src, root, quick));
+  while (job.running()) std::this_thread::sleep_for(std::chrono::milliseconds(5));
+  const ce::BoardView v = job.view();
+  CHECK_MSG(v.finished && !v.failed, v.error);
+  CHECK(job.report().stages.size() == 6);
+  fs::remove_all(root);
 }

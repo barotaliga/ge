@@ -99,9 +99,34 @@ std::string map_name(const std::string& path) {
   return path.substr(5, path.size() - 9);  // "maps/" ... ".bsp"
 }
 
+// The run's reports: a stage starting with its item count, and each item done. `item` is false
+// once the run has been asked to stop, with the reason in `*error`.
+struct Reports {
+  const RunOptions& o;
+  Stage stage;
+  uint32_t total = 0, done = 0;
+
+  void started(size_t items) {
+    total = uint32_t(items);
+    if (o.progress) o.progress({Progress::Kind::started, stage, 0, total, {}, nullptr, nullptr});
+  }
+  bool item(const std::string& name, std::string* error, const assets::Image* before = nullptr,
+            const assets::Image* after = nullptr) {
+    done++;
+    if (o.progress) o.progress({Progress::Kind::item, stage, done, total, name, before, after});
+    if (o.cancel != nullptr && o.cancel->load()) {
+      *error = "cancelled";
+      return false;
+    }
+    return true;
+  }
+};
+
 constexpr const char* kUnverified = "unverified: the player's own copy";
 
-bool run_pack(const Source& src, const fs::path& dir, StageResult& r, std::string* error) {
+bool run_pack(const Source& src, const fs::path& dir, Reports& rep, StageResult& r,
+              std::string* error) {
+  rep.started(1);
   bool copied = write_whole(dir / "pack" / "pak0.pak", src.pack);
   for (const LaterPack& p : src.later)
     copied = copied && write_whole(dir / "pack" / p.name, p.bytes);
@@ -128,15 +153,16 @@ bool run_pack(const Source& src, const fs::path& dir, StageResult& r, std::strin
   r.note = src.known != nullptr ? std::string("the pack, verified: ") + src.known->what
                                 : std::string("the pack, ") + kUnverified;
   if (!src.later.empty()) r.note += "; and " + std::to_string(src.later.size()) + " later pack(s)";
-  return true;
+  return rep.item("pak0.pak", error);
 }
 
-bool run_textures(const Source& src, const fs::path& dir, const RunOptions& o, StageResult& r,
-                  std::string* error) {
+bool run_textures(const Source& src, const fs::path& dir, const RunOptions& o, Reports& rep,
+                  StageResult& r, std::string* error) {
   Palette palette;
   std::vector<PackTexture> textures;
   if (!pack_textures(src.content(), &palette, &textures, error)) return false;
   if (o.texture_limit > 0 && textures.size() > o.texture_limit) textures.resize(o.texture_limit);
+  rep.started(textures.size());
   std::string index = "# name folder width height material glows (first map)\n";
   uint32_t glowing = 0;
   for (const PackTexture& t : textures) {
@@ -162,6 +188,12 @@ bool run_textures(const Source& src, const fs::path& dir, const RunOptions& o, S
     index += t.name + " " + folder + " " + std::to_string(t.width) + " " +
              std::to_string(t.height) + " " + material_name(e.material) + " " +
              (e.glows ? "glows" : "-") + " " + t.map + "\n";
+    if (o.progress) {
+      const assets::Image source = to_rgba(t.indexed, t.width, t.height, palette);
+      if (!rep.item(t.name, error, &source, &e.albedo)) return false;
+    } else if (!rep.item(t.name, error)) {
+      return false;
+    }
   }
   if (!write_text(dir / "textures" / "index.txt", index)) {
     *error = "cannot write " + (dir / "textures" / "index.txt").string();
@@ -178,10 +210,13 @@ bool run_textures(const Source& src, const fs::path& dir, const RunOptions& o, S
   return true;
 }
 
-bool run_lightmaps(const Source& src, const fs::path& dir, StageResult& r, std::string* error) {
+bool run_lightmaps(const Source& src, const fs::path& dir, Reports& rep, StageResult& r,
+                   std::string* error) {
   vfs::Pak pak;
   if (!vfs::read_pak(src.content(), &pak, error)) return false;
-  for (const vfs::PakEntry* e : maps_of(pak)) {
+  const std::vector<const vfs::PakEntry*> maps = maps_of(pak);
+  rep.started(maps.size());
+  for (const vfs::PakEntry* e : maps) {
     brush::Map map;
     if (!brush::read_bsp(vfs::pak_file(src.content(), *e), &map, error)) {
       *error = e->path + ": " + *error;
@@ -189,13 +224,14 @@ bool run_lightmaps(const Source& src, const fs::path& dir, StageResult& r, std::
     }
     if (!light_map(map, map_name(e->path), dir / "lightmaps", error)) return false;
     r.files++;
+    if (!rep.item(map_name(e->path), error)) return false;
   }
   r.note = std::to_string(r.files) + " maps' own light packed (the rebake is row M40's)";
   return true;
 }
 
-bool run_sounds(const Source& src, const fs::path& dir, const RunOptions& o, StageResult& r,
-                std::string* error) {
+bool run_sounds(const Source& src, const fs::path& dir, const RunOptions& o, Reports& reports,
+                StageResult& r, std::string* error) {
   vfs::Pak pak;
   if (!vfs::read_pak(src.content(), &pak, error)) return false;
   std::vector<const vfs::PakEntry*> sounds;
@@ -203,6 +239,7 @@ bool run_sounds(const Source& src, const fs::path& dir, const RunOptions& o, Sta
     if (e.path.rfind("sound/", 0) == 0 && e.path.ends_with(".wav")) sounds.push_back(&e);
   }
   std::sort(sounds.begin(), sounds.end(), [](auto* a, auto* b) { return a->path < b->path; });
+  reports.started(sounds.size());
   std::string index = "# path seconds loop-start source-hz noise-db removed-db added-db\n";
   for (const vfs::PakEntry* e : sounds) {
     Pcm in;
@@ -222,6 +259,7 @@ bool run_sounds(const Source& src, const fs::path& dir, const RunOptions& o, Sta
     index += rel + " " + num(seconds) + " " + std::to_string(out.loop_start) + " " +
              num(rep.source_hz) + " " + num(rep.noise_db) + " " + num(rep.removed_db) + " " +
              num(rep.added_db) + "\n";
+    if (!reports.item(rel, error)) return false;
   }
   if (!write_text(dir / "sounds" / "index.txt", index)) {
     *error = "cannot write " + (dir / "sounds" / "index.txt").string();
@@ -232,8 +270,8 @@ bool run_sounds(const Source& src, const fs::path& dir, const RunOptions& o, Sta
   return true;
 }
 
-bool run_models(const Source& src, const fs::path& dir, const RunOptions& o, StageResult& r,
-                std::string* error) {
+bool run_models(const Source& src, const fs::path& dir, const RunOptions& o, Reports& rep,
+                StageResult& r, std::string* error) {
   vfs::Pak pak;
   if (!vfs::read_pak(src.content(), &pak, error)) return false;
   const vfs::PakEntry* pal = vfs::pak_find(pak, "gfx/palette.lmp");
@@ -244,7 +282,15 @@ bool run_models(const Source& src, const fs::path& dir, const RunOptions& o, Sta
   Palette palette;
   std::copy_n(vfs::pak_file(src.content(), *pal).data(), 768, palette.rgb.data());
   ModelStats stats;
-  if (!enhance_models(src.content(), palette, dir, o.models, o.textures, &stats, error))
+  ModelOptions models = o.models;
+  models.each = [&](const std::string& name, uint32_t done, uint32_t total) {
+    if (done == 0) {
+      rep.started(total);
+      return true;
+    }
+    return rep.item(name, error);
+  };
+  if (!enhance_models(src.content(), palette, dir, models, o.textures, &stats, error))
     return false;
   r.files = stats.files;
   r.note = std::to_string(stats.models) + " models as glTF, skins at " +
@@ -253,10 +299,12 @@ bool run_models(const Source& src, const fs::path& dir, const RunOptions& o, Sta
   return true;
 }
 
-bool run_pictures(const Source& src, const fs::path& dir, StageResult& r, std::string* error) {
+bool run_pictures(const Source& src, const fs::path& dir, Reports& rep, StageResult& r,
+                  std::string* error) {
   Palette palette;
   std::vector<PackPicture> pictures;
   if (!pack_pictures(src.pack, &palette, &pictures, error)) return false;
+  rep.started(pictures.size());
   std::string index = "# name width height transparent-index from\n";
   for (const PackPicture& p : pictures) {
     const fs::path at = dir / "pictures" / (p.name + ".png");
@@ -268,6 +316,7 @@ bool run_pictures(const Source& src, const fs::path& dir, StageResult& r, std::s
     index += p.name + " " + std::to_string(p.picture.width) + " " +
              std::to_string(p.picture.height) + " " + std::to_string(p.transparent) + " " + p.from +
              "\n";
+    if (!rep.item(p.name, error)) return false;
   }
   if (!write_text(dir / "pictures" / "index.txt", index)) {
     *error = "cannot write " + (dir / "pictures" / "index.txt").string();
@@ -353,42 +402,48 @@ bool run_pipeline(const Source& source, const fs::path& root_in, const RunOption
     const bool asked =
         opts.only.empty() || std::find(opts.only.begin(), opts.only.end(), s) != opts.only.end();
     const std::string key = stage_key(s, opts);
-    if (!asked) {
-      r.note = "not asked for";
+    auto skip = [&](const char* why) {
+      r.note = why;
       report->stages.push_back(r);
+      if (opts.progress) opts.progress({Progress::Kind::skipped, s, 0, 0, why, nullptr, nullptr});
+    };
+    if (!asked) {
+      skip("not asked for");
       continue;
     }
     if (!opts.force && recorded_key(report->dir, stage_name(s)) == key) {
-      r.note = "up to date";
-      report->stages.push_back(r);
+      skip("up to date");
       continue;
     }
+    Reports rep{opts, s};
     const auto t0 = std::chrono::steady_clock::now();
     bool ok = false;
     switch (s) {
       case Stage::pack:
-        ok = run_pack(source, report->dir, r, error);
+        ok = run_pack(source, report->dir, rep, r, error);
         break;
       case Stage::textures:
-        ok = run_textures(source, report->dir, opts, r, error);
+        ok = run_textures(source, report->dir, opts, rep, r, error);
         break;
       case Stage::lightmaps:
-        ok = run_lightmaps(source, report->dir, r, error);
+        ok = run_lightmaps(source, report->dir, rep, r, error);
         break;
       case Stage::sounds:
-        ok = run_sounds(source, report->dir, opts, r, error);
+        ok = run_sounds(source, report->dir, opts, rep, r, error);
         break;
       case Stage::models:
-        ok = run_models(source, report->dir, opts, r, error);
+        ok = run_models(source, report->dir, opts, rep, r, error);
         break;
       case Stage::pictures:
-        ok = run_pictures(source, report->dir, r, error);
+        ok = run_pictures(source, report->dir, rep, r, error);
         break;
     }
     r.seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
     r.ran = true;
     report->stages.push_back(r);
     if (!ok) {
+      if (opts.progress)
+        opts.progress({Progress::Kind::failed, s, rep.done, rep.total, *error, nullptr, nullptr});
       *error = std::string(stage_name(s)) + " stage: " + *error;
       return false;
     }
@@ -397,6 +452,8 @@ bool run_pipeline(const Source& source, const fs::path& root_in, const RunOption
           "cannot record the " + std::string(stage_name(s)) + " stage in " + report->dir.string();
       return false;
     }
+    if (opts.progress)
+      opts.progress({Progress::Kind::finished, s, rep.done, rep.total, r.note, nullptr, nullptr});
   }
   return true;
 }
