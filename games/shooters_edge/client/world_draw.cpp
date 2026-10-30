@@ -25,8 +25,8 @@
 #include "render/sky.hpp"
 #include "render/ui_pass.hpp"
 #include "render/viewmodel.hpp"
-#include "viewmodel/light.hpp"
 #include "shooters_edge/client/world_extras.hpp"
+#include "viewmodel/light.hpp"
 
 namespace shooters_edge::client {
 
