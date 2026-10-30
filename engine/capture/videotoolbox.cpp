@@ -44,6 +44,8 @@ struct Cf {
   }
   Cf(const Cf&) = delete;
   Cf& operator=(const Cf&) = delete;
+  Cf(Cf&& o) noexcept : ref(o.ref) { o.ref = nullptr; }
+  Cf& operator=(Cf&&) = delete;
   T get() const { return ref; }
 };
 
