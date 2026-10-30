@@ -2,16 +2,20 @@
 // the software adapter. A courtyard at the bottom of a moonless night (a stone wall and pillars,
 // wooden crates, an iron post and a copper urn, a pool of slime and a wet flagstone floor) seen
 // unlit, then lit by two torches that waver, a street lamp's spot, a failing tube and a muzzle
-// flash; the clusters each pixel reads its lamps from, as a heat map; the flash's first tenth of
+// flash, without their shadows and with them (render/lamp_shadows.hpp); the lamps' shadow atlas
+// itself; the clusters each pixel reads its lamps from, as a heat map; the flash's first tenth of
 // a second; a sheet of spheres (roughness across, dielectric, metal and the presets down) under
 // the noon sun and under one lamp at night; and every flicker's level over two seconds, charted.
 // It holds the binning to its CPU twin (every pixel lit by a lamp's sphere finds that lamp in its
 // cluster: checked off the depth read back), the lit courtyard brighter than the unlit one where
-// the lamps reach and no darker anywhere, and fails on a GPU error or a pipeline made after load.
+// the lamps reach and no darker anywhere, the shadows darkening a share of it, a still frame
+// redrawing no tile and a moved crate only the tiles that see it, and fails on a GPU error or a
+// pipeline made after load.
 //
 // ge:summary Lab: local lights and surfaces drawn: a night courtyard, clusters, a flash, spheres
 // ge:keywords lab gpu lights local-lights torch flame street-lamp spot muzzle-flash buzz flicker
 // ge:keywords clusters heat-map materials pbr spheres roughness metal stone wood slime wet-floor
+// ge:keywords lamp-shadows shadow-atlas cube-faces cached-tiles movers
 // ge:skill render labs
 // ge:test tests/render_lights_test.cpp
 #include <algorithm>
@@ -110,8 +114,9 @@ std::vector<gr::Surface> surfaces() {
   return s;
 }
 
-// THE COURTYARD: the wall 14 m ahead of the eye, two pillars, crates, the iron post and the
-// copper urn, the slime's pool and the wet flags; the lamps' own glowing parts.
+// THE COURTYARD: the wall 14 m ahead of the eye, two pillars, crates, the street lamp's post and
+// its arm, the copper urn, the slime's pool and the wet flags.
+constexpr size_t kSmallCrate = 5;  // the crate the mover shot moves
 std::vector<gr::Instance> courtyard() {
   std::vector<gr::Instance> v;
   v.push_back(at(kCx, 0, kCz + 14, 26, 6, 1, 0, kStone));           // the wall
@@ -120,12 +125,19 @@ std::vector<gr::Instance> courtyard() {
   v.push_back(at(kCx - 3.2, 0, kCz + 12, 1.4f, 1.0f, 1.0f, 0, kWood));  // the crates
   v.push_back(at(kCx - 3.0, 1.0, kCz + 12.1, 0.9f, 0.8f, 0.8f, 0, kWood));
   v.push_back(at(kCx + 2.6, 0, kCz + 11.5, 1.0f, 1.0f, 1.0f, 0, kWood));
-  v.push_back(at(kCx + 4.2, 0, kCz + 7.5, 0.25f, 3.6f, 0.25f, 2, kIron));         // the lamp's post
+  v.push_back(at(kCx + 4.2, 0, kCz + 7.5, 0.25f, 3.7f, 0.25f, 2, kIron));         // the lamp's post
+  v.push_back(at(kCx + 3.7, 3.62, kCz + 7.5, 1.1f, 0.08f, 0.08f, 0, kIron));      // and its arm
   v.push_back(at(kCx - 1.0, 0.45, kCz + 9.5, 0.45f, 0.45f, 0.45f, 1, kCopper));   // the urn
   v.push_back(at(kCx + 0.8, -0.03, kCz + 6.5, 3.5f, 0.05f, 2.2f, 0, kSlime));     // the pool
   v.push_back(at(kCx - 2.2, -0.03, kCz + 5.0, 4.0f, 0.04f, 3.0f, 0, kWetFloor));  // wet flags
-  v.push_back(at(kCx + 4.2, 3.6, kCz + 7.5, 0.16f, 0.16f, 0.16f, 1, kBulb));      // its bulb
-  v.push_back(at(kCx - 6, 2.6, kCz + 9.3, 0.07f, 0.16f, 0.07f, 1, kFlame));       // the torches
+  return v;
+}
+
+// The lamps' own glowing parts: drawn, but no lamp's shadow is cast by them.
+std::vector<gr::Instance> glows() {
+  std::vector<gr::Instance> v;
+  v.push_back(at(kCx + 3.25, 3.5, kCz + 7.5, 0.16f, 0.16f, 0.16f, 1, kBulb));  // the lamp's bulb
+  v.push_back(at(kCx - 6, 2.6, kCz + 9.3, 0.07f, 0.16f, 0.07f, 1, kFlame));    // the torches
   v.push_back(at(kCx + 6, 2.6, kCz + 9.3, 0.07f, 0.16f, 0.07f, 1, kFlame));
   v.push_back(at(kCx + 1.2, 2.6, kCz + 13.45, 1.2f, 0.06f, 0.06f, 0, kTube));  // the tube
   return v;
@@ -150,11 +162,12 @@ std::vector<gr::LocalLight> lamps(double flash_s) {
     t.rate_hz = 9;
     t.depth = 0.35f;
     t.seed = side < 0 ? 3 : 11;
+    t.shadow = side < 0 ? 1 : 2;
     v.push_back(t);
   }
   gr::LocalLight s;
-  s.position[0] = kCx + 4.2;
-  s.position[1] = 3.5;
+  s.position[0] = kCx + 3.25;
+  s.position[1] = 3.4;
   s.position[2] = kCz + 7.5;
   s.direction[0] = -0.25f;
   s.direction[1] = -1;
@@ -167,6 +180,7 @@ std::vector<gr::LocalLight> lamps(double flash_s) {
   s.radius_m = 0.08f;
   s.inner_deg = 30;
   s.outer_deg = 55;
+  s.shadow = 3;
   v.push_back(s);
   gr::LocalLight tube;
   tube.position[0] = kCx + 1.2;
@@ -182,6 +196,7 @@ std::vector<gr::LocalLight> lamps(double flash_s) {
   tube.rate_hz = 14;
   tube.depth = 0.5f;
   tube.seed = 5;
+  tube.shadow = 4;
   v.push_back(tube);
   if (flash_s >= 0) {
     gr::LocalLight f;
@@ -198,16 +213,50 @@ std::vector<gr::LocalLight> lamps(double flash_s) {
     f.born_s = flash_s;
     f.attack_s = 0.0015f;
     f.decay_s = 0.012f;
+    f.shadow = 5;
     v.push_back(f);
   }
   return v;
 }
 
-// The courtyard's scene in the lab's surfaces.
+// A scene in the lab's surfaces: `glows` cast no shadow; `shadows` gives the lamps theirs.
 bool make_scene(ge::gpu::Device& d, Scene& s, const std::vector<gr::Instance>& props, uint32_t w,
-                uint32_t h, const std::string& label) {
+                uint32_t h, const std::string& label, const std::vector<gr::Instance>& glow = {},
+                bool shadows = false) {
   const std::vector<gr::Surface> surf = surfaces();
-  return ge::lab::lit_scene::make_scene(d, s, surf, props, w, h, label);
+  return ge::lab::lit_scene::make_scene(d, s, surf, props, w, h, label, glow, shadows);
+}
+
+// The atlas as a picture: each tile's depth (near / distance) on a log scale, near white and far
+// dark; black where nothing is cast.
+gl::Picture atlas_picture(ge::gpu::Device& d, const gr::LampShadows& ls, int side) {
+  const uint32_t n = ls.settings.size;
+  const std::vector<float> depth = gr::read_red(d, ls.atlas, 0, n, n, gr::kDepthFormat);
+  gl::Picture p = gl::create_picture(side, side, {0, 0, 0});
+  const double near = ls.settings.near_m;
+  for (int y = 0; y < side; ++y) {
+    for (int x = 0; x < side; ++x) {
+      const size_t sx = static_cast<size_t>(x) * n / static_cast<size_t>(side);
+      const size_t sy = static_cast<size_t>(y) * n / static_cast<size_t>(side);
+      const float z = depth[sy * n + sx];
+      const size_t i = (static_cast<size_t>(y) * static_cast<size_t>(side) + x) * 4;
+      uint8_t v = 0;
+      if (z > 0) {
+        // The distance from the lamp, 0.3 m white to 12 m dark.
+        const double dist = near / z;
+        const double k = std::clamp(1 - libm::log(dist / 0.3) / libm::log(40.0), 0.0, 1.0);
+        v = static_cast<uint8_t>(40 + 215 * k);
+      }
+      // A tile's border, faint.
+      const uint32_t tile = n / gr::kLampTilesAcross;
+      const bool edge = sx % tile == 0 || sy % tile == 0;
+      p.rgba[i] = edge ? 70 : v;
+      p.rgba[i + 1] = edge ? 50 : v;
+      p.rgba[i + 2] = edge ? 30 : v;
+      p.rgba[i + 3] = 255;
+    }
+  }
+  return p;
 }
 
 // What an eye in the courtyard adapts to: the geometric mean of the lamps' light on a white face
@@ -366,13 +415,14 @@ void run(gl::Lab& lab) {
                "Install Mesa's Vulkan drivers (apt install mesa-vulkan-drivers). Skill: gpu.");
     }
     placeholders(lab,
-                 {"night-unlit", "night-lit", "clusters", "flash", "spheres-noon", "spheres-lamp"},
+                 {"night-unlit", "night-unshadowed", "night-lit", "atlas", "clusters", "flash",
+                  "spheres-noon", "spheres-lamp"},
                  w, h);
     return;
   }
   ge::gpu::Device& d = *device;
   Scene s;
-  if (!make_scene(d, s, courtyard(), w, h, "gpu-lights")) {
+  if (!make_scene(d, s, courtyard(), w, h, "gpu-lights", glows(), true)) {
     lab.fail("the scene's pipelines did not build", "Read the gpu: lines above. Skill: render.");
     return;
   }
@@ -384,6 +434,35 @@ void run(gl::Lab& lab) {
   lab.metric("yard.lamp-lux", yard.lamp_lux, "lx", Det::measured);
   const gl::Picture unlit = draw(d, s, yard, {});
   const gl::Picture lit = draw(d, s, yard, lit_list);
+  const uint32_t dealt = s.lamp_shadows.used, first_drawn = s.lamp_shadows.drawn;
+  lab.metric("yard.shadow-lamps", s.lamp_shadows.lamps, "count");
+  lab.metric("yard.shadow-tiles", dealt, "count");
+  // The same frame again: every lamp stood still and nothing moved, so no tile is redrawn.
+  (void)draw(d, s, yard, lit_list);
+  const uint32_t still_drawn = s.lamp_shadows.drawn;
+  lab.metric("yard.tiles-redrawn-still", still_drawn, "count");
+  if (first_drawn != dealt || still_drawn != 0) {
+    lab.fail("the still courtyard redrew " + std::to_string(still_drawn) + " of " +
+                 std::to_string(dealt) + " shadow tiles (" + std::to_string(first_drawn) +
+                 " the first frame)",
+             "Check deal_lamp_tiles' due test (render/lamp_shadows.cpp): a tile is due only when "
+             "new, its lamp moved, or a mover touches its view. Skill: render.");
+  }
+  const gl::Picture atlas = atlas_picture(d, s.lamp_shadows, static_cast<int>(h));
+  // The lamps without their shadows, on a scene of their own.
+  gl::Picture plain;
+  int plain_errors = 0, plain_late = 0;
+  {
+    auto dev = ge::gpu::create_device({.label = "gpu-lights.plain", .validation = 1});
+    Scene p;
+    if (!dev || !make_scene(*dev, p, courtyard(), w, h, "gpu-lights.plain", glows(), false)) {
+      lab.fail("the unshadowed scene did not build", "Read the gpu: lines above. Skill: render.");
+      return;
+    }
+    plain = draw(*dev, p, yard, lit_list);
+    plain_errors = static_cast<int>(dev->errors.load());
+    plain_late = static_cast<int>(dev->pipelines_after_load);
+  }
   lab.metric("yard.lights", s.lights.bins.head.info[0], "count", Det::measured);
   lab.metric("yard.refs", s.lights.bins.ref_count, "count", Det::measured);
   const std::vector<std::pair<std::string, std::string>> inputs = {
@@ -397,17 +476,84 @@ void run(gl::Lab& lab) {
             "faint glow with nothing round them lit",
             inputs},
            unlit, Det::measured);
-  lab.shot({"night-lit", "THE COURTYARD BY ITS LAMPS",
+  lab.shot({"night-unshadowed", "THE COURTYARD BY ITS LAMPS, NO SHADOWS",
             "The same night lit by two flame-flickered torches on the pillars (35 cd, 9 m), the "
-            "street lamp's spot (900 cd, a 30 to 55 degree cone, 16 m), and a failing tube on the "
-            "wall (60 cd, 6 m): each pixel lit by the lamps listed in its cluster "
-            "(render/lights.hpp), through the physically based surfaces (wgsl/surface.wgsl).",
+            "street lamp's spot under its arm (900 cd, a 30 to 55 degree cone, 16 m), and a "
+            "failing tube on the wall (60 cd, 6 m): each pixel lit by the lamps listed in its "
+            "cluster (render/lights.hpp), through the physically based surfaces "
+            "(wgsl/surface.wgsl), with no lamp casting a shadow.",
             "warm pools on the pillars and the flags under each torch, falling off by the inverse "
-            "square; the spot's hard-edged disc under the post; highlights on the iron post, the "
-            "copper urn and the wet flags, none on the matte stone; the slime glossy and faintly "
-            "glowing; no light past a lamp's range, and no seam at a tile's edge",
+            "square; the spot's hard-edged disc under the arm; highlights on the iron post, the "
+            "copper urn and the wet flags, none on the matte stone; light reaching the wall "
+            "straight through the pillars and the crates",
+            inputs},
+           plain, Det::measured);
+  lab.shot({"night-lit", "THE COURTYARD BY ITS LAMPS, WITH THEIR SHADOWS",
+            "The same lamps casting (render/lamp_shadows.hpp): each torch and the tube a point "
+            "light's six cube faces, the spot one tile round its axis, dealt from one depth atlas "
+            "and read through four rotated comparison taps a pixel. The lamps' own glowing parts "
+            "cast nothing.",
+            "the pillars throwing wide dark wedges on the wall behind them from the torches just "
+            "in front; the crates' and the urn's shadows on the flags and the wall, softer the "
+            "further they fall; the post's thin shadow and the arm's on the flags under the spot; "
+            "no light leaking under a crate, no acne on a lit face, no seam where two cube faces "
+            "meet",
             inputs},
            lit, Det::measured);
+  lab.shot({"atlas", "THE LAMPS' SHADOW ATLAS",
+            "The depth atlas the frame above read, 8 x 8 tiles: the two torches' and the tube's "
+            "cube faces (+x, -x, +y, -y, +z, -z, left to right in a run) and the spot's one tile, "
+            "each pixel the distance from its lamp to the nearest caster on a "
+            "log scale (0.3 m white, 12 m dark), black where nothing casts and in the tiles no "
+            "lamp holds.",
+            "three runs of six tiles and one more in the top rows; the pillar filling the torch's "
+            "+z face nearly "
+            "white; the floor's face (-y) black (the flags are terrain, which the lamps do not "
+            "draw); the spot's tile the crates and the urn seen from above",
+            inputs},
+           atlas, Det::measured);
+  // The shadows darken a share of the courtyard, and never brighten it.
+  {
+    int darker = 0, brighter = 0;
+    for (int y = 0; y < lit.height; ++y) {
+      for (int x = 0; x < lit.width; ++x) {
+        const double a = luma(plain, x, y), b = luma(lit, x, y);
+        if (b + 4 < a) ++darker;
+        if (b > a + 4) ++brighter;
+      }
+    }
+    const double share =
+        static_cast<double>(darker) / (static_cast<double>(lit.width) * lit.height);
+    lab.metric("yard.shadowed-share", share, "share", Det::measured);
+    lab.metric("yard.shadow-brighter-pixels", brighter, "count", Det::measured);
+    if (share < 0.01) {
+      lab.fail("the lamps' shadows darken " + fixed(100 * share, 2) + " % of the courtyard",
+               "Check prepare_lamp_shadows ran, frame_group bound the atlas (binding 13) and "
+               "lamp_shadow in wgsl/lights.wgsl reads the tile's slot. Skill: render.");
+    }
+  }
+  // A crate shoved half a metre: the tiles that see it redrawn, the rest kept.
+  {
+    std::vector<gr::Instance> moved = courtyard();
+    gr::Instance& crate = moved[kSmallCrate];
+    crate.position[0] += 0.5;
+    gr::set_instances(d, s.props, 0, moved);
+    s.movers.push_back({crate.position[0], 0.5, crate.position[2], 0.9});
+    (void)draw(d, s, yard, lit_list);
+    const uint32_t moved_drawn = s.lamp_shadows.drawn;
+    // And back: the crate moves again, so the tiles that see it are redrawn once more.
+    s.movers.back()[0] -= 0.5;
+    gr::set_instances(d, s.props, 0, courtyard());
+    (void)draw(d, s, yard, lit_list);
+    s.movers.clear();
+    lab.metric("yard.tiles-redrawn-mover", moved_drawn, "count");
+    if (moved_drawn == 0 || moved_drawn >= dealt) {
+      lab.fail("a moved crate redrew " + std::to_string(moved_drawn) + " of " +
+                   std::to_string(dealt) + " shadow tiles",
+               "Check deal_lamp_tiles' mover test against the tiles' planes "
+               "(render/lamp_shadows.cpp). Skill: render.");
+    }
+  }
 
   // Lit no darker anywhere, and brighter where the lamps reach.
   int darker = 0;
@@ -539,8 +685,8 @@ void run(gl::Lab& lab) {
               "the far spheres dimmer by the inverse square",
               {{"lamp", "120 cd"}}},
              draw(*dev2, sp, night, std::vector<gr::LocalLight>{one}), Det::measured);
-    checked(lab, static_cast<int>(d.errors.load() + dev2->errors.load()),
-            static_cast<int>(d.pipelines_after_load + dev2->pipelines_after_load));
+    checked(lab, static_cast<int>(d.errors.load() + dev2->errors.load()) + plain_errors,
+            static_cast<int>(d.pipelines_after_load + dev2->pipelines_after_load) + plain_late);
   }
 }
 
