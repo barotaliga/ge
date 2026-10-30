@@ -42,8 +42,11 @@ jobs:
       CMAKE_C_COMPILER_LAUNCHER: ccache
       CMAKE_CXX_COMPILER_LAUNCHER: ccache
       CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
-      CCACHE_BASEDIR: ${{ github.workspace }}
-      CCACHE_MAXSIZE: 500M
+      # On Windows, depend mode and no base directory, as ci.yml's windows row (its comment says
+      # why); the Windows install step turns depend mode on, since ccache refuses CCACHE_DEPEND=false
+      # and takes an empty value as true. An empty base directory is none.
+      CCACHE_BASEDIR: ${{ matrix.os != 'windows-2025' && github.workspace || '' }}
+      CCACHE_MAXSIZE: 800M
       CACHE_ROW: ${{ matrix.os == 'windows-2025' && 'windows-2025-msvc' || (matrix.os == 'macos-latest' && 'macos-15-clang++' || 'ubuntu-24.04-g++') }}
     steps:
       - uses: actions/checkout@v7
@@ -63,6 +66,7 @@ jobs:
           Invoke-WebRequest -Uri "https://github.com/ccache/ccache/releases/download/v$env:CCACHE_VERSION/ccache-$env:CCACHE_VERSION-windows-x86_64.zip" -OutFile $zip
           Expand-Archive $zip -DestinationPath "$env:RUNNER_TEMP" -Force
           "$env:RUNNER_TEMP/ccache-$env:CCACHE_VERSION-windows-x86_64" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          "CCACHE_DEPEND=true" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       # MSVC on PATH for Ninja (ci.yml's windows row builds the same way).
       - if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
