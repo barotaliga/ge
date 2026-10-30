@@ -84,25 +84,24 @@ bool operand_ok(Check& ck, const Progs& p, size_t i, char which, int16_t v, Oper
   return true;
 }
 
-bool check_layout(Check& ck, const Progs& p) {
-  if (p.globals.size() < static_cast<size_t>(kEngineGlobalsEnd))
-    return ck.refuse("globals: " + std::to_string(p.globals.size()) +
-                     " words are fewer than the engine-side layout's " +
-                     std::to_string(kEngineGlobalsEnd));
-  if (p.entityfields < kEngineFields)
-    return ck.refuse("entityfields = " + std::to_string(p.entityfields) +
-                     " is fewer than the engine-side layout's " + std::to_string(kEngineFields));
+bool check_layout(Check& ck, const Progs& p, const Layout& l) {
+  if (p.globals.size() < static_cast<size_t>(l.globals_end))
+    return ck.refuse("globals: " + std::to_string(p.globals.size()) + " words are fewer than the " +
+                     l.name + " layout's " + std::to_string(l.globals_end));
+  if (p.entityfields < l.fields_end)
+    return ck.refuse("entityfields = " + std::to_string(p.entityfields) + " is fewer than the " +
+                     l.name + " layout's " + std::to_string(l.fields_end));
   // Each engine-side name's FIRST definition (a later one is a local that shadows the name).
   for (int table = 0; table < 2; table++) {
-    int count = 0;
-    const LayoutEntry* entries = table == 0 ? layout_globals(count) : layout_fields(count);
+    const int count = table == 0 ? l.num_globals : l.num_fields;
+    const LayoutEntry* entries = table == 0 ? l.globals : l.fields;
     for (int i = 0; i < count; i++) {
       const LayoutEntry& e = entries[i];
       const Def* d = table == 0 ? find_global(p, e.name) : find_field(p, e.name);
       if (d != nullptr && (d->offset != e.offset || (d->type & kTypeMask) != e.type))
         return ck.refuse(std::string(table == 0 ? "globaldefs" : "fielddefs") + ": '" + e.name +
                          "' is a " + type_name(d->type) + " at " + std::to_string(d->offset) +
-                         "; the engine-side layout has a " + type_name(e.type) + " at " +
+                         "; the " + l.name + " layout has a " + type_name(e.type) + " at " +
                          std::to_string(e.offset));
     }
   }
@@ -172,20 +171,31 @@ bool check(Check& ck, const Progs& p, const LoadOptions& o) {
                          "] = " + std::to_string(f.parm_size[k]) + " is not 1 or 3");
       parm_words += f.parm_size[k];
     }
-    if (f.locals < parm_words)
+    if (f.locals < 0)
       return ck.refuse(at("functions", i, "locals") + " = " + std::to_string(f.locals) +
-                       " is fewer than its parameters' " + std::to_string(parm_words) + " words");
+                       " is negative");
+    // Fewer locals than parameter words is accepted (a shipped single-player program has such a
+    // function): the parameters are still copied in, past the words the call saves, so both
+    // ranges must lie inside the globals.
+    const int32_t words = f.locals > parm_words ? f.locals : parm_words;
     if (f.parm_start < 0 ||
-        static_cast<int64_t>(f.parm_start) + f.locals > static_cast<int64_t>(p.globals.size()))
+        static_cast<int64_t>(f.parm_start) + words > static_cast<int64_t>(p.globals.size()))
       return ck.refuse(at("functions", i, "parm_start") + " = " + std::to_string(f.parm_start) +
-                       " with " + std::to_string(f.locals) + " locals is outside the globals (0.." +
+                       " with " + std::to_string(words) +
+                       " words of parameters and locals is outside the globals (0.." +
                        std::to_string(p.globals.size()) + ")");
   }
-  if (o.check_layout && !check_layout(ck, p)) return false;
+  if (o.check_layout && p.layout != nullptr && !check_layout(ck, p, *p.layout)) return false;
   return true;
 }
 
 }  // namespace
+
+LoadOptions every_form() {
+  LoadOptions o;
+  for (int i = 0; i < kLayoutForms; i++) o.forms[i] = kLayouts[i];
+  return o;
+}
 
 bool load_progs(const uint8_t* bytes, size_t size, Progs& p, std::string& error,
                 const LoadOptions& o) {
@@ -199,10 +209,24 @@ bool load_progs(const uint8_t* bytes, size_t size, Progs& p, std::string& error,
   p.crc = h[1];
   if (p.version != 6)
     return ck.refuse("header: wrong version: " + std::to_string(p.version) + ", expected 6");
-  if (p.crc != o.crc)
-    return ck.refuse("header: the engine-side layout's crc is " + std::to_string(p.crc) +
-                     ", this game provides " + std::to_string(o.crc) +
-                     " (a single-player or another game's progs)");
+  p.layout = nullptr;
+  for (const Layout* l : o.forms) {
+    if (l != nullptr && l->crc == p.crc) p.layout = l;
+  }
+  if (p.layout == nullptr && !o.any_crc) {
+    std::string offered;
+    for (const Layout* l : o.forms) {
+      if (l == nullptr) continue;
+      offered +=
+          std::string(offered.empty() ? "" : ", ") + std::to_string(l->crc) + " (" + l->name + ")";
+    }
+    const Layout* known = layout_for_crc(p.crc);
+    return ck.refuse(
+        "header: the engine-side layout's crc is " + std::to_string(p.crc) +
+        (known != nullptr ? std::string(" (the ") + known->name + " form)" : "") +
+        ", this game provides " + offered +
+        (known != nullptr ? "; run it on a host for that form" : " (another game's progs)"));
+  }
   if (!section(ck, "statements", h[2], h[3], 8, size) ||
       !section(ck, "globaldefs", h[4], h[5], 8, size) ||
       !section(ck, "fielddefs", h[6], h[7], 8, size) ||

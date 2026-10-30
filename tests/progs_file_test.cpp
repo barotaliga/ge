@@ -81,15 +81,18 @@ TEST(the_assemblers_file_loads_back_record_for_record) {
 
 TEST(the_layout_counts_to_the_headers_constants) {
   int n = 0;
-  const LayoutEntry* g = layout_globals(n);
+  const Layout& mp = kMultiplayerLayout;
+  n = mp.num_globals;
+  const LayoutEntry* g = mp.globals;
   CHECK(g[0].offset == kReservedGlobals && n == 52);
-  CHECK(layout_global("PutClientInServer")->offset == kGPutClientInServer);
-  CHECK(layout_global("trace_plane_normal")->offset == kGTracePlaneNormal);
-  const LayoutEntry* f = layout_fields(n);
+  CHECK(layout_global(mp, "PutClientInServer")->offset == kGPutClientInServer);
+  CHECK(layout_global(mp, "trace_plane_normal")->offset == kGTracePlaneNormal);
+  n = mp.num_fields;
+  const LayoutEntry* f = mp.fields;
   CHECK(f[0].offset == 0 && f[n - 1].offset == kEngineFields - 1);
-  CHECK(layout_field("noise3")->offset == kEngineFields - 1);
-  CHECK(layout_field("movedir")->type == kTypeVector);
-  CHECK(layout_field("sky") == nullptr);
+  CHECK(layout_field(mp, "noise3")->offset == kEngineFields - 1);
+  CHECK(layout_field(mp, "movedir")->type == kTypeVector);
+  CHECK(layout_field(mp, "sky") == nullptr);
 }
 
 TEST(the_header_is_checked) {
@@ -151,8 +154,15 @@ TEST(every_record_is_checked) {
   b[fn + size_t{36} * 7 + 28] = 2;
   refused(b, {"functions[7].parm_size[0] = 2", "not 1 or 3"}, "a two-word parameter");
   b = good;
-  put(b, fn + size_t{36} * 7 + 8, 0);
-  refused(b, {"functions[7].locals = 0", "fewer than its parameters"}, "no room for a parameter");
+  put(b, fn + size_t{36} * 7 + 8, -1);
+  refused(b, {"functions[7].locals = -1", "negative"}, "negative locals");
+  b = good;
+  put(b, fn + size_t{36} * 7 + 8, 0);  // fewer locals than parameter words: copied, not saved
+  {
+    Progs p;
+    std::string error;
+    CHECK_MSG(load_progs(b.data(), b.size(), p, error), error);
+  }
   b = good;
   put(b, fn + size_t{36} * 2 + 16, str_size);
   refused(b, {"functions[2].name", "outside the strings"}, "a name past the strings");

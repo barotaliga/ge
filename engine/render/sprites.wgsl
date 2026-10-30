@@ -3,6 +3,8 @@
 // smooth (premultiplied, so an edge never darkens), cut out at half coverage (`fs_cutout`: depth
 // and its own motion written) or laid premultiplied over the picture (`fs_blend`: an added
 // sprite's alpha out is 0, so the same blend adds it; the motion target's reactive channel only).
+// Lit as a thin card by the sun, the sky, its own ambient and the lamps
+// (`lamps_on_card`; an added sprite takes none).
 #include "render/wgsl/frame.wgsl"
 
 struct Sprite {
@@ -86,7 +88,13 @@ fn shaded(in: VertexOut) -> vec4f {
   let y = in.rel.y + frame.eye.y;
   // The face turned to the eye, lit as a thin card: the sun through it half as well as on it.
   let sun = sun_light_open(y) * (0.5 + 0.5 * dot(to_eye, frame.sun.xyz)) * 0.5;
-  let light = s.light.y * (sun + sky_irradiance(to_eye)) + s.ambient.rgb;
+  // The lamps on it as the sun is, wherever it stands (a lamp lights a card indoors too); an
+  // added sprite is light of its own and takes none.
+  var lamps = vec3f(0.0);
+  if (s.info.y != 2u) {
+    lamps = lamps_on_card(in.rel, to_eye, in.position.xyz);
+  }
+  let light = s.light.y * (sun + sky_irradiance(to_eye)) + s.ambient.rgb + lamps;
   let c = t.rgb * s.colour.rgb * (light / PI + s.light.x * white_luminance());
   return vec4f(c, t.a) * s.colour.a;
 }

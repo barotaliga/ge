@@ -2,13 +2,16 @@
 // walked, the message reader both formats' messages are read with.
 //
 // ge:summary The demo file's records: the format detected, blocks and records walked, the reader
-// ge:keywords open_demo next_frame demo-msg detect block record usercmd-size
+// ge:keywords open_demo next_frame demo-msg detect block record usercmd-size gzip track
 // ge:skill shooter
 // ge:test tests/shooters_edge_demo_test.cpp
 #include "shooters_edge/client/demo.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
+
+#include "core/inflate.hpp"
 
 namespace shooters_edge::client {
 
@@ -69,9 +72,35 @@ bool chain_ok(const std::vector<uint8_t>& b, size_t at, int cmd_size, int count)
 
 std::string at_offset(size_t pos) { return " at byte " + std::to_string(pos); }
 
+// The multiview format's tracked player: the one asked for, else the one already tracked while he
+// plays, else the lowest slot playing; his stats become the view's.
+void track_player(Demo& d) {
+  DemoState& s = d.state;
+  const auto playing = [&](int k) {
+    return k >= 0 && static_cast<size_t>(k) < s.players.size() &&
+           s.players[static_cast<size_t>(k)].present;
+  };
+  if (d.track >= 0) {
+    s.player = d.track;
+  } else if (!playing(s.player)) {
+    for (int k = 0; k < static_cast<int>(s.players.size()); k++) {
+      if (playing(k)) {
+        s.player = k;
+        break;
+      }
+    }
+  }
+  if (static_cast<size_t>(s.player) < d.player_stats.size()) {
+    const auto& st = d.player_stats[static_cast<size_t>(s.player)];
+    std::copy(st.begin(), st.end(), s.stats);
+  }
+  if (playing(s.player)) s.angles = s.players[static_cast<size_t>(s.player)].angles;
+}
+
 void finish_frame(Demo& d) {
   DemoState& s = d.state;
   s.frames++;
+  if (s.format == DemoFormat::multiview) track_player(d);
   if (s.intermission) return;
   if (s.format == DemoFormat::single) {
     if (s.view_entity >= 0 && static_cast<size_t>(s.view_entity) < s.entities.size()) {
@@ -230,7 +259,22 @@ std::string map_of_model(const std::string& model) {
 
 bool open_demo(std::vector<uint8_t> bytes, Demo& out, std::string& error) {
   out = Demo{};
-  if (const size_t head = single_header(bytes); head != 0) {
+  if (bytes.size() >= 2 && bytes[0] == 0x1f && bytes[1] == 0x8b) {
+    auto unpacked = ge::core::inflate_gzip(bytes);
+    if (!unpacked) {
+      error =
+          "the file is a gzip file that does not unpack (torn, or its checksum is off); next: "
+          "download it again, or unpack it and name the recording inside";
+      return false;
+    }
+    bytes = std::move(*unpacked);
+  }
+  if (is_multiview(bytes)) {
+    out.state.format = DemoFormat::multiview;
+    out.state.view_height = 22;
+    out.ring.resize(1);
+    out.player_stats.resize(32);
+  } else if (const size_t head = single_header(bytes); head != 0) {
     out.state.format = DemoFormat::single;
     out.pos = head;
   } else if (!bytes.empty() && record_at(bytes, 0) && bytes.size() >= 5) {
@@ -239,9 +283,10 @@ bool open_demo(std::vector<uint8_t> bytes, Demo& out, std::string& error) {
     out.ring.resize(64);
   } else {
     error =
-        "the file is neither a single-player demo (it opens with the music track: digits and a "
-        "newline) nor a client recording (it opens with a time and a record type 0..2); next: "
-        "check the file, or name another";
+        "the file is not a single-player demo (it opens with the music track: digits and a "
+        "newline), a client recording (a time and a record type 0..2) or a multiview recording "
+        "(a milliseconds byte, a record type and the server data); next: check the file, or "
+        "name another";
     return false;
   }
   out.state.players.resize(32);
@@ -252,6 +297,11 @@ bool open_demo(std::vector<uint8_t> bytes, Demo& out, std::string& error) {
 DemoRead next_frame(Demo& d, std::string& error) {
   if (d.ended) return DemoRead::end;
   if (d.state.format == DemoFormat::client) return next_client(d, error);
+  if (d.state.format == DemoFormat::multiview) {
+    const DemoRead r = next_multiview(d, error);
+    if (r == DemoRead::frame) finish_frame(d);
+    return r;
+  }
   // A single-player entity is seen only in the frames whose message updates it.
   for (DemoEntity& e : d.state.entities) e.present = false;
   return next_single(d, error);

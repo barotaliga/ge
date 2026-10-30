@@ -12,15 +12,14 @@
 
 namespace ge::progs {
 
-Assembler::Assembler() {
+Assembler::Assembler(const Layout& form) : entityfields(form.fields_end), layout(&form) {
   strings.push_back(0);  // offset 0: the empty string
   globals.assign(kReservedGlobals, 0u);
-  int count = 0;
-  const LayoutEntry* g = layout_globals(count);
-  for (int i = 0; i < count; i++) global(g[i].name, g[i].type);
-  const LayoutEntry* f = layout_fields(count);
-  for (int i = 0; i < count; i++)
-    fielddefs.push_back({f[i].type, static_cast<uint16_t>(f[i].offset), string(f[i].name)});
+  for (int i = 0; i < form.num_globals; i++) global(form.globals[i].name, form.globals[i].type);
+  for (int i = 0; i < form.num_fields; i++) {
+    const LayoutEntry& f = form.fields[i];
+    fielddefs.push_back({f.type, static_cast<uint16_t>(f.offset), string(f.name)});
+  }
   functions.push_back(Function{0, 0, 0, 0, 0, 0, {}});  // the null function
   statements.push_back({kOpDone, 0, 0, 0});             // statement 0: never run
   lines_.push_back(0);
@@ -78,7 +77,7 @@ int Assembler::constant_s(const char* text) { return constant_i(string(text)); }
 int Assembler::constant_fn(int32_t function) { return constant_i(function); }
 
 int Assembler::field(const char* name, uint16_t type) {
-  if (const LayoutEntry* e = layout_field(name)) return constant_i(e->offset);
+  if (const LayoutEntry* e = layout_field(*layout, name)) return constant_i(e->offset);
   const int ofs = entityfields;
   entityfields += type_words(type);
   fielddefs.push_back({type, static_cast<uint16_t>(ofs), string(name)});
@@ -189,7 +188,7 @@ void Assembler::place(int label_id) {
 std::vector<uint8_t> Assembler::bytes() const {
   Progs p;
   p.version = 6;
-  p.crc = kClassicCrc;
+  p.crc = layout->crc;
   p.statements = statements;
   p.globaldefs = globaldefs;
   p.fielddefs = fielddefs;
@@ -202,7 +201,7 @@ std::vector<uint8_t> Assembler::bytes() const {
 
 bool Assembler::build(Progs& out, std::string& error) const {
   const std::vector<uint8_t> b = bytes();
-  if (!load_progs(b.data(), b.size(), out, error)) return false;
+  if (!load_progs(b.data(), b.size(), out, error, every_form())) return false;
   return set_lines(out, lines_, error);
 }
 

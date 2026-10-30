@@ -24,8 +24,8 @@ classic game", "QC" and "the classic protocol", and `make agents-check` holds it
 | `frame-move.md` | The original player move and the movement setting `sv_playermove` (M18s): who jumps in each mix of program and move, the single-player frame |
 | `campaign-rules.md` | What a campaign program does (monsters' senses and states, the roster, the level flow), for our own campaign variant mod (M18s7) |
 
-Still to come with its row: `demos.md` (QWD and MVD, M18h). Every fact marked `verify` is
-checked by a lab before code depends on it.
+The recorded-game formats are built (M18h, `games/shooters_edge/client/demo.hpp`) and their note
+retired. Every fact marked `verify` is checked by a lab before code depends on it.
 
 ## The rules for a note
 

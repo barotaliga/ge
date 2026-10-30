@@ -37,7 +37,7 @@ void stop_map(pg::Vm& vm, const char* what, bool free_self) {
   const char* fn = vm.function > 0
                        ? pg::progs_string(p, p.functions[static_cast<size_t>(vm.function)].name)
                        : "(the engine)";
-  const int self = pg::entity_number(vm, pg::global_int(vm, pg::kGSelf));
+  const int self = pg::entity_number(vm, pg::global_int(vm, pg::vm_layout(vm).g.self));
   const std::string msg =
       std::string(what) + " in " + fn + " (self " + std::to_string(self) + "): " + text;
   console_print(s, msg);

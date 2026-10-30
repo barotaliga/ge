@@ -213,9 +213,8 @@ PlayerState player_state(const Listen& l) {
   p.dead = me.health <= 0;
   p.on_ground = (me.flags & sh::kFlagOnGround) != 0;
   const pg::Vm& vm = l.server->q.vm;
-  p.view_ofs = {pg::as_float(*pg::entity_field(vm, 1, pg::kFViewOfs)),
-                pg::as_float(*pg::entity_field(vm, 1, pg::kFViewOfs + 1)),
-                pg::as_float(*pg::entity_field(vm, 1, pg::kFViewOfs + 2))};
+  const uint32_t* view_ofs = pg::entity_field(vm, 1, pg::vm_layout(vm).f.view_ofs);
+  p.view_ofs = {pg::as_float(view_ofs[0]), pg::as_float(view_ofs[1]), pg::as_float(view_ofs[2])};
   return p;
 }
 
@@ -225,7 +224,7 @@ void missiles_of(const Listen& l, std::vector<Missile>& out) {
   for (int e = sh::kMaxClients + 1; e < s.sv.num_edicts; e++) {
     const sh::Edict& ed = s.sv.edicts[static_cast<size_t>(e)];
     if (ed.free) continue;
-    const std::string cn = text_field(l, e, pg::kFClassname);
+    const std::string cn = text_field(l, e, l.server->q.layout->f.classname);
     if (cn != "rocket" && cn != "grenade" && cn != "spike" && cn != "missile") continue;
     out.push_back({e, ed.origin, cn != "spike"});
   }

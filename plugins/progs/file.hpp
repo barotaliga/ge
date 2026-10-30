@@ -4,9 +4,10 @@
 // the interpreter.
 //
 // THE FILE (little endian): a header of fifteen i32 (version 6; the CRC of the engine-side layout,
-// 54730 for the classic multiplayer one, layout.hpp; then offset and count of the statements, the
-// global definitions, the field definitions, the functions, the strings (in bytes) and the
-// globals (in words); then the entity size in words), and the six sections it points at:
+// which names the program's FORM: 54730 multiplayer, 5927 single-player, layout.hpp; then offset
+// and count of the statements, the global definitions, the field definitions, the functions, the
+// strings (in bytes) and the globals (in words); then the entity size in words), and the six
+// sections it points at:
 //
 //   statement   8 bytes: opcode u16, a b c i16 (global offsets, or a relative jump)
 //   definition  8 bytes: type u16 (bit 15 saved, never on a field), offset u16 (words), name i32
@@ -23,7 +24,8 @@
 // each size 1 or 3; every name a string inside the table; every definition's type known, a global
 // definition inside the globals and a field definition inside the entity; at least the
 // engine-side globals and fields, and every definition the engine-side layout names at its
-// offset with its type.
+// offset with its type. The layout is the form the header's crc names among the forms the game
+// provides (`LoadOptions::forms`); a crc none of them has is refused, naming the forms offered.
 //
 // A LINE TABLE (one source line per statement) is optional and comes beside the file
 // (`set_lines`): a fault then names the line too (vm.hpp).
@@ -39,6 +41,8 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+
+#include "progs/layout.hpp"
 
 namespace ge::progs {
 
@@ -72,12 +76,17 @@ struct Progs {
   std::vector<uint32_t> globals;    // the initial value of every global word
   int32_t entityfields = 0;         // words an entity holds
   std::vector<int32_t> lines;       // optional: the source line of each statement
+  const Layout* layout = nullptr;   // the form its crc names (null: a standalone program)
 };
 
 struct LoadOptions {
-  int32_t crc = 54730;       // the engine-side layout the game provides (layout.hpp's kClassicCrc)
-  bool check_layout = true;  // hold the engine-side definitions to the classic layout
+  // The program forms the game provides (null-ended): the header's crc must name one of them.
+  const Layout* forms[kLayoutForms] = {&kMultiplayerLayout, nullptr};
+  bool check_layout = true;  // hold the engine-side definitions to the form's table
+  bool any_crc = false;      // accept a crc no form offered has (a standalone program)
 };
+// Options that provide every form this plugin knows (a tool, a lab, the campaign's host).
+LoadOptions every_form();
 
 // Loads and checks `bytes`. False with `error` naming what is wrong (and `progs` unspecified).
 bool load_progs(const uint8_t* bytes, size_t size, Progs& progs, std::string& error,
