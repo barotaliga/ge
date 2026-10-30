@@ -32,6 +32,7 @@ updates that row's status file (`docs/goals/<row>.md`) in its PR.
 | [`docs/labs.md`](docs/labs.md) | The labs: the contract every subsystem, plugin and game plugs into, the kinds (sim, scenario, picture, drive, bench), captions, digests, and the labs each milestone lands |
 | [`docs/debugging.md`](docs/debugging.md) | Debugging a run: the log channels and the log spec, log dumps, series traces and spans files, the outlier rule, the charts and `ge graph` |
 | `docs/lab-list.md` | GENERATED from every lab's `LabSpec` by `make index` (and `make agents-check`), never committed: each lab's kind, owner, subject, skill, the rows that land it and its file |
+| `docs/roadmap.md` | GENERATED from the rows' files, `docs/goals/<row>.md`, by `make index` (and `make agents-check`), never committed: the milestone table in id order |
 | `docs/index.md` | GENERATED from the code's `ge:` tags by `make index` (and `make agents-check`) in every checkout, never committed: every file's one-line summary, owning skill and test; keyword to files |
 | [`docs/rendering.md`](docs/rendering.md) | The GPU backend (Dawn), the frame's pass table, every rendering technique and why, budgets, lab hooks, and what was considered and not taken |
 | [`docs/perf.md`](docs/perf.md) | The performance ledger: every speed-up, before and after, and how it was measured |
@@ -125,7 +126,7 @@ porting ends, and nothing outside it may depend on it except `make golden`.
 - **LABS, NOT GUESSES** (G9). Every subsystem, plugin and game has labs (`docs/labs.md`).
   A change in a lab's subject runs it before and after (`--tag=before`, then
   `--compare=before`) and puts both in the PR. A milestone row is done only when the labs
-  in its **Labs it lands** cell run in `make labs-smoke` (`labs` skill).
+  in its `Labs:` line run in `make labs-smoke` (`labs` skill).
 - **AGENT-ACTIONABLE OUTPUT** (G6). Every error, assert and log line says what failed,
   where, and the next action to take (`docs/architecture.md` § Diagnostics).
 - **GREEN, THEN MERGE** (G7). CI must pass on every row. A PR you open is yours to drive

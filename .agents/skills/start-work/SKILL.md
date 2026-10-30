@@ -1,6 +1,6 @@
 ---
 name: start-work
-description: "Use before beginning any task in gameengine2, before edits. Confirms a clean tree, syncs with origin/main, sets up the porting references when the task ports, and names the docs/goals.md milestone row the task serves, then finds what already exists (make find, the skills' lessons)."
+description: "Use before beginning any task in gameengine2, before edits. Confirms a clean tree, syncs with origin/main, sets up the porting references when the task ports, and names the milestone row (docs/goals/<row>.md) the task serves, then finds what already exists (make find, the skills' lessons)."
 ---
 
 # Start work
@@ -37,11 +37,14 @@ commands. Never commit, push or comment there.
 
 ## 4. The row
 
-Open `docs/goals.md` and name the milestone row this task serves. If no row fits, the
+Run `make index` and open `docs/roadmap.md` (the table generated from the rows' files,
+`docs/goals/<row>.md`; the goals themselves are `docs/goals.md`), and name the milestone row this
+task serves. If no row fits, the
 task is probably out of scope (G4), so ask before you build it. A task that adds a NEW row claims
 its number before anything else: `build/<preset>/ge goals claim "<what the row is>"` (`--under=M17`
-for a letter under one) writes its status file `docs/goals/<row>.md`, pushes it to your branch at once
-and checks every branch, so two threads starting together never take the same number. Then load the skill
+for a letter under one) writes the row's file `docs/goals/<row>.md` (`Status:`, `Milestone:`,
+`Exit:`, `Labs:`, then notes), pushes it to your branch at once and checks every branch, so two
+threads starting together never take the same number; a new row edits no shared table. Then load the skill
 `AGENTS.md` routes the subject to, plus `write-code`.
 
 ## 5. What already exists

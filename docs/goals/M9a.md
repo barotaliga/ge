@@ -1,1 +1,4 @@
 Status: done
+Milestone: **The synth and the device** (`engine/audio`, `engine/platform/audio`): the vocabulary (tones, noise, layers), the DSP graph (polyBLEP oscillators, the noise pools, the state-variable filter and its sweep, the envelope, the saturation curve, the detuned pair and vibrato, pan, four buses, the echo, the soft-knee limiter), the producer-to-render ring, `SoundDef` and `play_def`, racks, the meter and WAV bytes, and the audio device pulled on SDL's audio thread
+Exit: The reference renders hold their golden hashes bit for bit on every CI row; the device pulls the synth on SDL's dummy driver; a busy race's load renders in a few % of a core
+Labs: `synth` (every voice, colour, filter, drive, echo, layer and the limiter, metered, pictured and written as WAV; the render's cost, measured)

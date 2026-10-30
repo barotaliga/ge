@@ -1,3 +1,6 @@
 Status: done
+Milestone: **The tracks**: the skis' prints (`skier/app/tracks.hpp`: two capsules a frame, the load on the outside ski, the carve, the skid, the snow's depth) and the trail map (`mountain/app/trails.hpp`: the coarse map over the mountain and the fine window round the camera, stamped with max blending and redrawn from the stamps' history when the window moves), read by the snow's material (the grooves and berms bent into the normal, the trough's shade, the pressed floor)
+Exit: The `trails` lab shows two thin grooves that open and deepen on the outside ski through a turn, and a rival's track still there when the player comes down it
+Labs: `trails`, `world`
 
 seed 38 with three rivals, 20 s at 60 frames a second, 4,750 prints: through the deepest turn (24 degrees at 14.2 m/s, in loose snow) the outside groove read back 168 mm deep against the inside's 103 mm, on the flattest straight 78 and 78 mm; a racer coming down another's line laid 1.35 s before finds it 11.9 mm deep in the fine map, redrawn from the history; `profile` at 1280x720 on the software adapter: the terrain pass 61.3 ms without the tracks and 65.2 with them (+6 %), the two stamp passes 0.5 ms each, the CPU half's median 0.25 to 0.27 ms, its worst 1.7 ms on a frame that moves the window
