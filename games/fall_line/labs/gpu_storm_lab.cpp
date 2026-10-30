@@ -293,18 +293,41 @@ void run(ge::lab::Lab& lab) {
                          look,
                          {{"seed", seed_s}, {"view", view_name}, {"hour", fixed(hour, 1)}}};
   };
+  // Every shot's spec, the same with a device or without one.
+  std::vector<ge::lab::Shot> shots;
+  shots.push_back(shot("dark", "THE STORM'S NIGHT, NO FLASH",
+                       "the towers dark against the night sky, the snow dim", "no flash"));
+  for (size_t i = 0; i < std::size(kPicks); ++i) {
+    const gw::Flash& f = picked[i];
+    const double d = ge::core::hypot(f.ex - base.eye[0], f.ez - base.eye[2]);
+    shots.push_back(
+        shot(kPicks[i].id, kPicks[i].title, kPicks[i].look,
+             std::string(f.kind == gw::FlashKind::ground ? "a ground flash" : "a cloud flash") +
+                 " of " + std::to_string(f.strokes) + " strokes, " + fixed(d / 1000, 1) +
+                 " km off, the frame of its first stroke"));
+  }
+  shots.push_back(shot("filmstrip", "THE STRIKE FRAME BY FRAME, 60 A SECOND",
+                       "a frame bright for each return stroke, darker between, the channel there "
+                       "only while a stroke or its glow lasts, the dark after it",
+                       "the strike's first eight frames from its leader, each labelled with the "
+                       "light that fell in it (the unit)"));
+  // The frame of the strike's first stroke.
+  const int first = static_cast<int>((picked[0].stroke[0].t) / kFrame);
   if (!device) {
     if (env_on("GE_GPU_REQUIRE")) {
       lab.fail("no GPU device, and GE_GPU_REQUIRE=1",
                "Install Mesa's Vulkan drivers (apt install mesa-vulkan-drivers). Skill: gpu.");
     }
     lab.note("No GPU adapter on this machine: the pictures are placeholders.");
-    for (const char* id : {"dark", "strike", "sheet", "blue", "filmstrip"}) {
+    // The digest hashes the shots and the metrics in call order, so the placeholders carry the
+    // device path's shots and its one deterministic metric, in its order.
+    for (const ge::lab::Shot& s : shots) {
       ge::lab::Picture none = ge::lab::create_picture(width, height, {40, 40, 48});
       ge::lab::draw_text(none, 4, 4, "NO GPU ADAPTER", {230, 230, 230});
-      lab.shot(shot(id, id, "", "a placeholder"), none, Det::measured);
+      lab.shot(s, none, Det::measured);
     }
-    lab.metric("gpu-errors", 0, "count");
+    lab.metric("filmstrip.first-stroke", first + 1, "frame");
+    lab.metric("gpu-errors", 0, "count", Det::measured);
     return;
   }
 
@@ -346,9 +369,7 @@ void run(ge::lab::Lab& lab) {
 
   const ge::lab::Picture dark = draw_to(sky_t, nullptr, nullptr, 0);
   const double dark_luma = mean_luma(dark);
-  lab.shot(shot("dark", "THE STORM'S NIGHT, NO FLASH",
-                "the towers dark against the night sky, the snow dim", "no flash"),
-           dark, Det::measured);
+  lab.shot(shots[0], dark, Det::measured);
   lab.metric("dark.luma", dark_luma, "level", Det::measured);
   for (size_t i = 0; i < std::size(kPicks); ++i) {
     const gw::Flash& f = picked[i];
@@ -356,13 +377,7 @@ void run(ge::lab::Lab& lab) {
     const double at = f.t0 + f.stroke[0].t + 0.5 * kFrame;
     const ge::lab::Picture pic = draw_to(at, &f, &channel[i], kPicks[i].lift);
     const std::string id = kPicks[i].id;
-    const double d = ge::core::hypot(f.ex - base.eye[0], f.ez - base.eye[2]);
-    lab.shot(
-        shot(id, kPicks[i].title, kPicks[i].look,
-             std::string(f.kind == gw::FlashKind::ground ? "a ground flash" : "a cloud flash") +
-                 " of " + std::to_string(f.strokes) + " strokes, " + fixed(d / 1000, 1) +
-                 " km off, the frame of its first stroke"),
-        pic, Det::measured);
+    lab.shot(shots[i + 1], pic, Det::measured);
     const double luma = mean_luma(pic);
     // The night with no flash, framed as this shot is.
     const double unlit = kPicks[i].lift == 0
@@ -405,14 +420,8 @@ void run(ge::lab::Lab& lab) {
     lab.metric("filmstrip." + std::to_string(n + 1) + ".luma", lumas.back(), "level",
                Det::measured);
   }
-  lab.shot(shot("filmstrip", "THE STRIKE FRAME BY FRAME, 60 A SECOND",
-                "a frame bright for each return stroke, darker between, the channel there only "
-                "while a stroke or its glow lasts, the dark after it",
-                "the strike's first eight frames from its leader, each labelled with the light "
-                "that fell in it (the unit)"),
-           strip, Det::measured);
+  lab.shot(shots.back(), strip, Det::measured);
   // The brightest frame is the first stroke's.
-  const int first = static_cast<int>((strike.stroke[0].t) / kFrame);
   const auto most = std::max_element(lumas.begin(), lumas.end()) - lumas.begin();
   double best_light = -1;
   int lit = 0;
