@@ -66,7 +66,7 @@ vfs::Palette fixture_palette() {
   for (int i = 0; i < 256; ++i) {
     const int ramp = i / 16, shade = i % 16;
     for (int k = 0; k < 3; ++k)
-      p.rgb[size_t(i * 3 + k)] = uint8_t(hues[ramp][k] * (16 - shade) / 16);
+      p.rgb[size_t(i) * 3 + k] = uint8_t(hues[ramp][k] * (16 - shade) / 16);
   }
   return p;
 }
@@ -76,7 +76,7 @@ vfs::Colormap fixture_colormap() {
   for (int level = 0; level < int(vfs::kColormapLevels); ++level) {
     for (int i = 0; i < 256; ++i) {
       const int shade = std::min(15, i % 16 + level / 4);
-      c.map[size_t(level * 256 + i)] = uint8_t(i / 16 * 16 + shade);
+      c.map[size_t(level) * 256 + size_t(i)] = uint8_t(i / 16 * 16 + shade);
     }
   }
   return c;
@@ -154,9 +154,10 @@ Picture palette_picture(const vfs::Palette& pal) {
   const int cell = 16;
   Picture p = lab::create_picture(cell * 16, cell * 16, kPaper);
   for (int i = 0; i < 256; ++i) {
-    const lab::Rgba c{pal.rgb[size_t(i * 3)], pal.rgb[size_t(i * 3 + 1)],
-                      pal.rgb[size_t(i * 3 + 2)], 255};
-    lab::fill_rect(p, (i % 16) * cell, (i / 16) * cell, cell, cell, c);
+    const lab::Rgba c{pal.rgb[size_t(i) * 3], pal.rgb[size_t(i) * 3 + 1],
+                      pal.rgb[size_t(i) * 3 + 2], 255};
+    const int col = i % 16, row = i / 16;
+    lab::fill_rect(p, col * cell, row * cell, cell, cell, c);
   }
   return p;
 }
@@ -211,7 +212,7 @@ void run(lab::Lab& lab) {
   vfs::SearchPath sp;
   for (const std::string& g : games) {
     if (!vfs::add_game(&sp, root, g, &error)) {
-      lab.fail("game directory " + g + " was refused: " + error,
+      lab.fail(std::string("game directory ").append(g).append(" was refused: ").append(error),
                "Point --root at the directory that holds the game directories, and --game at "
                "one of them. Skill: vfs.");
       return;
@@ -346,7 +347,7 @@ void run(lab::Lab& lab) {
     lab.note("No palette read (gfx/palette.lmp): " + (pf ? error : std::string("not found")) +
              "; the pictures are drawn in grey.");
     for (int i = 0; i < 256; ++i) {
-      for (int k = 0; k < 3; ++k) pal.rgb[size_t(i * 3 + k)] = uint8_t(i);
+      for (int k = 0; k < 3; ++k) pal.rgb[size_t(i) * 3 + k] = uint8_t(i);
     }
   } else {
     lab.shot({"palette", "THE PALETTE",
