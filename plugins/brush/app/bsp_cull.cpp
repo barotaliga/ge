@@ -67,7 +67,7 @@ void create_bsp_cull(gpu::Device& device, gpu::PipelineSet& pipelines, BspCull& 
                          BU::Storage | BU::Index);
   c.sizes = r::make_buffer(device, "bsp.cull.sizes", n * 4, BU::Storage);
   c.state = r::make_buffer(device, "bsp.cull.state", n * 4, BU::Storage);
-  c.args = r::make_buffer(device, "bsp.cull.args", (kStatsAt + kStats) * 4,
+  c.args = r::make_buffer(device, "bsp.cull.args", uint64_t{kStatsAt + kStats} * 4,
                           BU::Storage | BU::Indirect | BU::CopySrc);
   c.params = r::make_buffer(device, "bsp.cull.params", 16, BU::Uniform);
   c.args_reset.assign(kStatsAt + kStats, 0);
