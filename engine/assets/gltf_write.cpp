@@ -205,6 +205,7 @@ std::vector<uint8_t> write_glb(const Model& model) {
     std::string extra;
     if (!mesh.targets.empty()) {
       std::vector<std::string> names;
+      names.reserve(mesh.targets.size());
       for (const MorphTarget& t : mesh.targets) names.push_back(quoted(t.name));
       extra = ",\"weights\":" +
               list(mesh.target_weights.data(), static_cast<int>(mesh.target_weights.size())) +
