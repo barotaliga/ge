@@ -1,6 +1,7 @@
 // The held model's CPU raster (engine/viewmodel/raster.hpp): a front face is drawn and its back
 // is not, the nearer of two faces wins, a face cut by the near plane still fills what is in front
-// of it, a glowing texel ignores the light, and the resolve's bytes are the same twice.
+// of it, a glowing texel ignores the light, the resolve's bytes are the same twice, and the
+// resolve laid over a picture keeps that picture where nothing was drawn.
 //
 // ge:summary Tests: the CPU raster's culling, depth, near clip, glow and repeatable resolve
 // ge:keywords test viewmodel raster draw_lit depth near-clip back-face glow resolve
@@ -143,4 +144,27 @@ TEST(a_hidden_triangle_is_not_drawn) {
     vm::draw_lit(t, d, bright());
     CHECK((centre_red(t) > 0) == !hide);
   }
+}
+
+TEST(resolve_over_keeps_the_picture_beneath_where_nothing_was_drawn) {
+  vm::ViewTarget t = vm::make_target(32, 32, 2, kBlack);
+  std::vector<float> p, n, c;
+  std::vector<uint32_t> idx;
+  square(p, n, idx, 1, 0.1f);
+  c.assign(p.size(), 1.0f);
+  vm::DrawLit d;
+  d.positions = p;
+  d.normals = n;
+  d.indices = idx;
+  d.colour = c;
+  vm::draw_lit(t, d, bright());
+  std::vector<uint8_t> under(size_t{32} * 32 * 4, 255);
+  for (size_t i = 0; i < under.size(); i += 4) under[i] = 40;  // a cyan picture
+  const std::vector<uint8_t> over = vm::resolve_over(t, under);
+  const std::vector<uint8_t> plain = vm::resolve(t);
+  CHECK(over.size() == under.size());
+  // A corner: the picture beneath. The centre: the drawn square, as the plain resolve has it.
+  CHECK(over[0] == 40 && over[1] == 255);
+  const size_t mid = (size_t{16} * 32 + 16) * 4;
+  CHECK(over[mid] == plain[mid] && over[mid + 1] == plain[mid + 1]);
 }

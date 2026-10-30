@@ -233,6 +233,44 @@ std::vector<uint8_t> resolve(const ViewTarget& t, double exposure) {
   return out;
 }
 
+std::vector<uint8_t> resolve_over(const ViewTarget& t, std::span<const uint8_t> under,
+                                  double exposure) {
+  const int ss = t.supersample;
+  const int w = t.width / ss, h = t.height / ss;
+  const auto& table = srgb_table();
+  std::vector<uint8_t> out(under.begin(), under.end());
+  out.resize(size_t(w) * size_t(h) * 4, 255);
+  constexpr float kKnee = 0.8f;
+  for (int y = 0; y < h; ++y) {
+    for (int x = 0; x < w; ++x) {
+      float sum[3] = {0, 0, 0};
+      int covered = 0;
+      for (int j = 0; j < ss; ++j)
+        for (int i = 0; i < ss; ++i) {
+          const size_t at = size_t(y * ss + j) * size_t(t.width) + size_t(x * ss + i);
+          if (!(t.depth[at] < std::numeric_limits<float>::infinity())) continue;
+          ++covered;
+          for (int k = 0; k < 3; ++k) sum[k] += t.rgb[at * 3 + k];
+        }
+      if (covered == 0) continue;
+      const float c = float(covered) / float(ss * ss);
+      uint8_t* o = &out[(size_t(y) * size_t(w) + size_t(x)) * 4];
+      for (int k = 0; k < 3; ++k) {
+        float v = sum[k] * static_cast<float>(exposure) / float(covered);
+        if (v > kKnee) {
+          const float e = v - kKnee;
+          v = kKnee + e / (1 + e / (1 - kKnee));
+        }
+        v = c * v + (1 - c) * assets::srgb_to_linear(o[k]);
+        v = v < 0 ? 0 : v > 1 ? 1 : v;
+        o[k] = table[size_t(std::lround(v * kSteps))];
+      }
+      o[3] = 255;
+    }
+  }
+  return out;
+}
+
 void place_held(const HeldModel& model, const Placement& place, int a, int b, double t,
                 std::vector<float>& out_positions, std::vector<float>& out_normals) {
   std::vector<float> p, n;

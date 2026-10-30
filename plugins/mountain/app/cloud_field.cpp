@@ -10,7 +10,6 @@
 #include <algorithm>
 #include <cstdint>
 
-#include "core/libm/libm.hpp"
 #include "mountain/air/air.hpp"
 #include "mountain/app/weather_look.hpp"
 #include "render/cloud_kinds.hpp"
@@ -65,28 +64,6 @@ double deal(const double band[2], double u) { return band[0] + (band[1] - band[0
 
 constexpr double kPi = 3.14159265358979323846;
 
-}  // namespace
-
-double wind_aloft(double surface, double h, double least) {
-  return std::min(45.0, std::max(least, surface * (1 + 1.2 * core::libm::log(1 + h / 600))));
-}
-
-double veer_aloft(double h, double latitude) {
-  return (latitude < 0 ? -1.0 : 1.0) * 0.35 * core::libm::log(1 + h / 1000);
-}
-
-double dusk_of(double elevation) {
-  constexpr double kSix = 6 * kPi / 180;
-  return std::clamp((kSix - elevation) / (2 * kSix), 0.0, 1.0);
-}
-
-double jet_at(double h, double dusk) {
-  const double z = (h - 400) / 450;
-  return 1 + 0.7 * dusk * core::libm::exp(-z * z);
-}
-
-namespace {
-
 // Layer `i` of a sky, kind `d`, dealt off the seed on salt `salt`: its base no lower than `least`
 // m over the floor (the top of the layer under it), `thickness` m tall when that is not negative
 // (the lowest layer's, picked by hand) and its kind's dealt depth when it is.
@@ -102,21 +79,9 @@ void deal_layer(const CloudKind& d, uint32_t salt, const mapgen::Weather& weathe
   l.top_m = l.base_m + depth;
   l.cover = deal(d.cover, u(2));
   l.cell_m = deal(d.cell, u(3));
-  l.stretch = d.stretch;
-  l.dome = d.dome;
   // As dense a metre as the kind's dealt depth is: a taller layer is the more opaque for it.
-  l.density = d.opacity / dealt;
+  render::take_form(d, dealt, l);
   l.shadow_tau = d.shadow_tau * depth / dealt;
-  l.anvil = d.anvil;
-  l.erode = d.erode;
-  l.fibre = d.fibre;
-  l.patch = d.patch;
-  l.drop_um = d.drop;
-  l.drop_spread = d.spread;
-  l.halo = d.halo;
-  l.deck = d.deck;
-  l.thin = d.thin;
-  l.thick_cells = d.thick_cells;
   // This sky's layer thinner or thicker than the kind's middle.
   l.thick_bias = 0.8 * u(6) - 0.4;
   const double h = std::max(mid, 0.0);

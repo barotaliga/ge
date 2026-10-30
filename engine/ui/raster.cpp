@@ -80,7 +80,7 @@ void draw_box(const Box& b, Rect clip, Image& target) {
         const float v = sliced ? slice_map(l.y, b.rect.h, to.top, to.bottom, b.uv.y, b.uv.h,
                                            b.slice.top, b.slice.bottom)
                                : b.uv.y + l.y * sv;
-        const Color s = sample(*b.image, u, v);
+        const Color s = b.nearest ? sample_nearest(*b.image, u, v) : sample(*b.image, u, v);
         c = {c.r * s.r, c.g * s.g, c.b * s.b, c.a * s.a};
       }
       c.a *= inner * b.opacity;

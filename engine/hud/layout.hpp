@@ -29,13 +29,16 @@
 //   hud_<id>_x/_y     its offset, a share of the safe area's width and height (y down)
 //   hud_<id>_scale    its size, times the frame's scale
 //   hud_<id>_alpha    its opacity, 0..1
+//   hud_<id>_parent   an element's id to hang from ("" none), declared before it
+//   hud_<id>_attach   the point of its own box set on the parent's anchor point
 // and for the whole HUD `hud_scale`, `hud_alpha` and `hud_margin` (reference px from the screen's
 // safe edge). `hud_reset [<id>]` puts one element (or all of them) back to the game's place.
 //
 // ge:summary The HUD as data: elements, their places as hud_ cvars, per-frame content, drawing
 // ge:keywords hud layout element elements content place anchor offset scale alpha show cvars
 // ge:keywords hud_scale hud_alpha hud_margin hud_reset under-corners stack customizable
-// ge:keywords player-layout add_hud_cvars
+// ge:keywords player-layout add_hud_cvars parent attach child picture digits strip ring unit
+// ge:keywords snap fit pixel-art status-bar
 // ge:skill ui console
 // ge:test tests/hud_layout_test.cpp
 #pragma once
@@ -52,6 +55,7 @@
 #include "hud/feed.hpp"
 #include "hud/hud.hpp"
 #include "hud/instruments.hpp"
+#include "hud/pictures.hpp"
 
 namespace ge::hud {
 
@@ -63,6 +67,10 @@ enum class Kind : uint8_t {
   pips,     // a row of symbols, some lit
   banner,   // a title and a line on a plate
   feed,     // lines that arrive, hold and fade
+  picture,  // a picture (pictures.hpp): a panel, an icon, a portrait, a crosshair
+  digits,   // a number drawn from a digit sheet, right-aligned in its cells
+  strip,    // a row of picture cells: weapons, keys, powerups, counts, frag plates
+  ring,     // a meter bent round a centre
   dial,     // a needle gauge, its reading in digits in the face (instruments.hpp)
   wind,     // the felt wind, heading-up, and the weather's mark on the rim
   compass,  // a strip of headings, the current one centred
@@ -92,6 +100,23 @@ struct ElementSpec {
   Compass compass = {};        // kind compass: its size, span and tick step
   bool under_corners = false;
   std::string_view under = {};  // an element's id
+  // PICTURE KINDS (picture, digits, strip): reference px per art pixel, so a 24 px icon at
+  // unit 3 is 72 px tall at the reference size. `snap` floors the screen's px per art pixel
+  // to a whole number (at least 1) so pixel art stays crisp; `fit` (0: no limit) shrinks the
+  // element until it takes at most that share of the safe area's width.
+  float unit = 1;
+  float fit = 0;
+  int digit_cells = 3;  // kind digits: the field's width in cells
+  bool snap = false;
+  // A PARENT: an element declared before this one. The child is drawn at the parent's scale
+  // times its own, with its `attach` point (its own box's nine points) on the parent's box's
+  // `anchor` point, moved by (x, y) in the parent's units (its picture px, or reference px for
+  // a printed kind) instead of shares of the safe area; it never stacks. A status bar's pieces
+  // are children of its panel: each sits on its spot and each is still moved or hidden alone.
+  Anchor attach = Anchor::top_left;
+  std::string_view parent = {};
+  StripShape strip = {};  // kind strip
+  RingShape ring = {};    // kind ring
 };
 
 // What the player may change: bound to the element's cvars.
@@ -99,6 +124,7 @@ struct ElementPlace {
   bool show = true;
   std::string anchor;
   double x = 0, y = 0, scale = 1, alpha = 1;
+  std::string parent, attach;  // the parent's id ("" none) and the attach point's word
 };
 
 // What the game writes once a frame.
@@ -110,6 +136,16 @@ struct Content {
   bool blink_off = false;
   ui::Color color{1, 1, 1, 1};
   const Feed* feed = nullptr;
+  // The picture kinds' art, which a game may swap (its own pictures or a player's): the picture,
+  // the digit sheet (`alt`: its alternate figures), the strip's cells and its counts' face (the
+  // style's value face when null), the ring's second-lap colour.
+  const ui::Image* image = nullptr;
+  const DigitSheet* sheet = nullptr;
+  bool alt = false;
+  std::vector<Cell> cells;
+  const Face* face = nullptr;
+  float density = 1;  // the pictures' pixels per art pixel (pictures.hpp)
+  ui::Color over{1, 1, 1, 1};
   double t = 0;  // s, the frame's clock: the feed's, and the dial's needle eases by it
   // The instruments' numbers (instruments.hpp): a dial's value (`value` is its figure), the
   // heading (rad) a wind meter and a compass turn by, the felt and the weather's wind (world,
@@ -123,14 +159,18 @@ struct Content {
 };
 
 struct Element {
-  std::string id, help;
-  ElementSpec spec;  // its `id` and `help` views point at the strings above; `under` is cleared
+  std::string id, help, parent;
+  ElementSpec spec;  // its `id`, `help` and `parent` views point at the strings above; `under`
+                     // is cleared
   ElementPlace place;
   Content content;
   int under = -1;  // the index of `spec.under`, or -1
   Needle needle;   // kind dial: where its needle was drawn last
-  // Where it was drawn last, for `under` and the edit mode.
+  // Where it was drawn last, for `under`, its children and the edit mode: its box, its scale
+  // over the frame's reference size and its unit (screen px per picture pixel, or per reference
+  // px for a printed kind).
   ui::Rect drawn;
+  float drawn_scale = 1, drawn_unit = 1;
   bool shown = false;
 };
 

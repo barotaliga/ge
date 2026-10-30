@@ -470,7 +470,10 @@ clustered local lights and is held to the reference.
 **The muzzle** is where a game stages what a shot makes (the flash, its smoke, its light). A held
 model names its tip as the centre of a few of its vertices (`muzzle_vertices`, the barrel's front
 on the rest frame by `find_muzzle`, or the game's own), so `muzzle_at` follows every morph frame
-the barrel does, and `muzzle_dir` is the way the shot leaves. The gun is drawn through its own
+the barrel does, and `muzzle_dir` is the way the shot leaves. A gun of several barrels lists each
+one's tip (`barrels`) and the barrel each frame of its firing animation fires from
+(`frame_barrel`, `barrel_of_frame`); `muzzle_at` and `muzzle_to_world` take the barrel, so a pair
+that alternates or a cluster that turns fires from the right mouth. The gun is drawn through its own
 lens, so its tip is carried into the world by `held_to_world` / `held_dir_to_world`: placed into
 the view, then moved across at its depth by tan(view / 2) / tan(gun / 2), so an effect drawn in
 the world's pass sits on the same screen ray as the barrel. A model that draws its own flash (a
@@ -727,6 +730,16 @@ with the flame's seed), and
 `prepare_flames` swells and brightens the gas with that light's level. A game puts the light in
 its lights list. `Flame::wind` bends the flame downwind against its rise, and its light leans
 with it. The presets are a torch, a candle, a brazier and a camp fire.
+
+**In brush maps (M39g)** (`plugins/brush/app/bsp_flames.hpp`). A classic map's wall torches and
+large flames are light entities; `bsp_fires` stands a torch or a brazier flame where each one's
+model burns, scaled to the model's flame (a wall torch's from 6 to 29 units above its origin, a
+large flame's from 2 to 43), and drives its gas with the light's own `flicker_at`, so the fire and
+the wall it lights waver together. The light is lifted to the middle of the gas and softened over
+the flame's height (`fire_light_lift`, `fire_light_size`), as `flame_light` does. A brush map is
+lit in its lightmaps' units rather than the sun's, so the gas's core is set by `Flame::relative`:
+`kFireGlow` (30) times a white face under the map's own light. The `gpu-bsp` lab draws them in
+its real-time panel.
 
 **Shadows use three techniques, one for each scale:**
 
@@ -1774,8 +1787,8 @@ the shot leaves and the gun's up, carried into the world through the gun's own l
 (`held_to_world`), so the flame drawn in the world's pass sits on the barrel drawn in front of the
 eye. The model's own flash triangles are hidden with `DrawLit::hidden = model.flame`.
 
-**Not yet:** the classic pack's weapons each given their look and fired in a lab (M48b), and the
-flash as a local light (M47b).
+The classic pack's weapons fire it this way in the `classic-weapons-fire` lab (M48b,
+`docs/classic-enhance.md`). **Not yet:** the flash as a local light (M47b).
 
 ## Impacts
 

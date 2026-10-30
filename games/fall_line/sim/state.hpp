@@ -101,6 +101,7 @@ enum class EventKind : uint8_t {
               // the closing speed, m/s; village.hpp)
   army_para,  // an army paramotor (`gate` its ArmyParaChange, `value` its id; army_para.hpp)
   building,  // met a wall of the village (`gate` the building's id, `value` the closing speed, m/s)
+  army_vehicle,  // an army vehicle (`gate` its ArmyVehicleChange, `value` its id; army_vehicle.hpp)
 };
 
 const char* event_name(EventKind kind);

@@ -129,6 +129,7 @@ Hunt hunt(bool lethal, double hunted, double after) {
   fs::GameState st = fs::create_free_ride(seed38(), 0);
   // Staged: the snowmobiles alone: the helicopters are fall_line_army_heli_test's.
   st.army.send_helis = false;
+  st.army.send_vehicles = false;
   st.army.fire = false;
   Hunt h;
   const fs::Spot at = open_spot(st);
@@ -299,6 +300,7 @@ TEST(where_the_army_does_not_shoot_to_kill_a_crew_runs_him_down_and_takes_him_in
 TEST(a_race_sends_no_machines) {
   fs::GameState st = fs::create_game_on(seed38(), 1);
   st.army.send_helis = false;
+  st.army.send_vehicles = false;
   st.army.fire = false;
   fs::set_wanted(st, 5);
   const fs::Controls none{};

@@ -23,6 +23,7 @@
 #include "fall_line/sim/army_rules.hpp"
 #include "fall_line/sim/army_sled.hpp"
 #include "fall_line/sim/army_sled_rules.hpp"
+#include "fall_line/sim/army_vehicle.hpp"
 #include "fall_line/sim/course.hpp"
 #include "fall_line/sim/crowd.hpp"
 #include "fall_line/sim/field.hpp"
@@ -65,13 +66,15 @@ void log_step(const GameState& state) {
         e.kind == EventKind::reset || e.kind == EventKind::onto || e.kind == EventKind::arrived ||
         e.kind == EventKind::boarded || e.kind == EventKind::unloaded ||
         e.kind == EventKind::sled || e.kind == EventKind::heli || e.kind == EventKind::para;
-    const out::Channel ch = e.kind == EventKind::shoulder || e.kind == EventKind::bump ? kField
-                            : e.kind == EventKind::wanted                              ? kWanted
-                            : e.kind == EventKind::army || e.kind == EventKind::army_sled ||
-                                    e.kind == EventKind::army_heli || e.kind == EventKind::gunfire
-                                ? kArmy
-                            : course ? kCourse
-                                     : kSkier;
+    const out::Channel ch =
+        e.kind == EventKind::shoulder || e.kind == EventKind::bump ? kField
+        : e.kind == EventKind::wanted                              ? kWanted
+        : e.kind == EventKind::army || e.kind == EventKind::army_sled ||
+                e.kind == EventKind::army_heli || e.kind == EventKind::gunfire ||
+                e.kind == EventKind::army_para || e.kind == EventKind::army_vehicle
+            ? kArmy
+        : course ? kCourse
+                 : kSkier;
     if (!out::enabled(ch, out::Level::debug)) continue;
     const sk::SkierState& s = state.racers[static_cast<size_t>(e.racer)].skier;
     std::string line = "racer " + std::to_string(e.racer) + " ";
@@ -169,6 +172,17 @@ void log_step(const GameState& state) {
                 army_para_change_name(static_cast<ArmyParaChange>(e.gate)) + ", " +
                 std::to_string(state.army.paras.size()) + " out";
         break;
+      case EventKind::army_vehicle:
+        line += " vehicle " + f(e.value, 0) + " " +
+                army_vehicle_change_name(static_cast<ArmyVehicleChange>(e.gate)) + ", " +
+                std::to_string(state.army.vehicles.size()) + " out";
+        for (const ArmyVehicle& v : state.army.vehicles) {
+          if (v.id != static_cast<int32_t>(e.value)) continue;
+          line += std::string(" (") + army_vehicle_kind_name(v.kind) + " at x " + f(v.x, 1) +
+                  " z " + f(v.z, 1) + ", leg " + std::to_string(v.leg) + " of " +
+                  std::to_string(v.path.size()) + ")";
+        }
+        break;
       case EventKind::building:
         line += " building " + std::to_string(e.gate) + " at " + f(e.value, 1) + " m/s";
         break;
@@ -265,6 +279,8 @@ const char* event_name(EventKind kind) {
       return "traffic";
     case EventKind::army_para:
       return "army-para";
+    case EventKind::army_vehicle:
+      return "army-vehicle";
     case EventKind::building:
       return "building";
   }
@@ -296,6 +312,7 @@ GameState create_game_on(std::shared_ptr<const mg::Level> level, int32_t racers)
   state.army.sleds.reserve(army_sled::kMostSleds);
   state.army.helis.reserve(army_heli::kMostHelis);
   state.army.paras.reserve(army_para::kMostParas);
+  state.army.vehicles.reserve(army_vehicle::kMostVehicles);
   state.ways = army_ways(*state.level);
   const std::vector<Rider> field =
       deal_field(*state.level, static_cast<int32_t>(state.racers.size()));

@@ -74,6 +74,51 @@ Each wall texture is indexed colour on a 256-entry palette. The enhancer works i
 
 Every step wraps at the edges, so the textures still tile. Sky textures get the albedo only.
 
+## The held weapons
+
+The pack's first-person weapons (`progs/v_*.mdl`) are drawn through the engine's view-model layer
+(`engine/viewmodel`, `docs/rendering.md` § The view model); `plugins/classicenhance/weapons.hpp`
+is the bridge, and like everything here it reads the player's own pack and writes nothing that
+ships.
+
+- **The form**: the classic model reader (`plugins/morph`) reads each file; `held_from_morph`
+  turns every frame into the held frame in metres. The files author a held weapon at the eye
+  (+x forward, +y left, +z up), so no grip mount is needed: the classic row
+  (`classic_weapon_row`) holds it at the eye with no offset, and the bob, the lag on a turn and
+  the kick are the engine's. The two frames differ in handedness, so the triangles are wound the
+  other way round to keep their fronts outward. The frames play at ten a second.
+- **The skin**: the palette indices through `gfx/palette.lmp`; the fullbright entries (224 and
+  up) are the glow mask, so a sight or a lamp on the weapon lights itself. An enhanced skin from
+  the cache can stand in for it unchanged.
+- **The light**: the classic game lights a model by the floor under it. `probe_under` follows
+  the line straight down from the player to the first lit surface (up to 2048 units) and reads
+  its lightmap there, bilinear, with a luxel of 128 as 1 (the surface as painted): most of it
+  ambient and the rest from above. The weapon is never darker than the classic 24 of 128
+  (`kClassicFloor`). A shot's flash is a point light at the muzzle (`muzzle_flash_light`, 200
+  units of reach); in the enhanced mode, whose torches burn as live lights, `flame_lights` lists
+  the map's torches and flames as point lights (outside it their light is in the lightmaps
+  already).
+- **The fire**: in the enhanced mode a weapon's shot is the engine's muzzle fire
+  (`engine/render/muzzle.hpp`), not the flash its file draws. `classic_fire_of` names each
+  weapon's look by its file (the shotguns `muzzle.shotgun`, the grenade launcher
+  `muzzle.grenade`, the rocket launcher `muzzle.rocket`, each turned down to how a real gun's
+  flash looks: a few hundredths of a second of small, dim fire, the smoke what is left; the nailguns throw nails, not burning
+  powder, so theirs is `muzzle.nailgun` turned down to a faint puff with no flame and no light;
+  the axe and the lightning gun throw no flame) and its rate of fire. Each shot leaves from the
+  barrel the file shows its flash on for that frame: where the flash stands on each firing frame
+  is read as a barrel (`barrels`, `frame_barrel` on the held model), so the nailgun's two barrels
+  fire in turn and the super nailgun's cluster one barrel at a time. A shot plays the firing frames at ten a
+  second, blended (`classic_fire_frame`), and the flame is staged each frame off the muzzle carried
+  into the world through the gun's lens (`viewmodel::muzzle_to_world`), so it rides the recoil.
+  The file's flash triangles (the model's `flame` mask) are hidden with `DrawLit::hidden`.
+
+The `classic-weapons` lab draws every weapon over the map in first person: the lineup at the
+start, one weapon at the darkest and brightest places to stand, a shot in the dark and the
+torches baked and live. The `classic-weapons-fire` lab (GPU) fires every weapon that throws a
+flame in the explosion labs' yard: each shot through its life at dusk, the file's flash beside the
+engine's fire, and each by day. With `--source` the pictures are of the player's pack and stay
+local.
+
 ## The sound enhancer
 
 The pack's sounds are 8-bit or 16-bit mono PCM at 11 025 Hz: band-limited near 5 kHz, with

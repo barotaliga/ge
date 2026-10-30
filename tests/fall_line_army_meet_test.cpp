@@ -94,6 +94,7 @@ fs::Spot open_spot(const fs::GameState& st) {
 fs::GameState ride() {
   fs::GameState st = fs::create_free_ride(seed38(), 0);
   st.army.send_helis = false;
+  st.army.send_vehicles = false;
   st.army.fire = false;
   return st;
 }
