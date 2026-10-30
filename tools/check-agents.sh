@@ -10,7 +10,8 @@
 #     (tools/agents-index.mjs), and every lesson fragment is well formed
 #     (tools/skill-lessons.mjs);
 #   - every plugin keeps the plugin contract (tools/check-plugins.mjs);
-#   - every roadmap row has its status file and agrees with it (tools/check-goals.mjs);
+#   - every roadmap row's file has its header, and no table lists the rows (tools/check-goals.mjs,
+#     which writes docs/roadmap.md);
 #   - every lab's LabSpec reads off its source, and no table lists the labs (tools/check-labs.mjs,
 #     which writes docs/lab-list.md).
 #

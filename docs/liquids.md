@@ -15,7 +15,7 @@ numbers:
 
 The look is a second, separate choice: lava drawn as a black body, slime as a turbid volume.
 
-The roadmap is `docs/goals.md` § M30 (one status file a row, `docs/goals/M30<x>.md`). The skill is
+The roadmap is the rows `docs/goals/M30<x>.md` (one file a row; `docs/roadmap.md` lists them). The skill is
 `water`.
 
 ## What the games ask of it

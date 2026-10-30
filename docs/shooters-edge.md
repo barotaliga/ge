@@ -433,7 +433,7 @@ during the work is added when it is found and recorded in `docs/goals/ge-backlog
 
 ## Rows
 
-The roadmap rows are in `docs/goals.md` (M18 and its lettered rows), after Fall Line. The order:
+The roadmap rows are `docs/goals/M18*.md` (M18 and its lettered rows), after Fall Line. The order:
 content (M18a) and the map (M18b) first, then QC (M18c, M18d), movement (M18e), the game loop and
 multiplayer mods (M18o, M18p), the server (M18f) and its bots (M18r), the compatible protocol (M18g), the client (M18h), the picture (M18i), sound
 (M18j), input and the 2D layer (M18k), hosting and the lobby (M18q), the modern features that need all of it (M18l) and what
