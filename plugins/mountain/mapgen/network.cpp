@@ -267,7 +267,8 @@ double choose_heading(const ge::core::Heightfield& ground, double x, double z, d
   }
   best_at = headings.size();
   if (first < headings.size()) {
-    best_cost = *cost_of(first, first_turn);
+    // Nothing is beaten yet, so the first heading is weighed in full.
+    best_cost = cost_of(first, first_turn).value_or(kInf);
     if (best_cost < kInf) {
       best = headings[first].h;
       best_at = first;

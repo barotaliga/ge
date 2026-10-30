@@ -50,7 +50,8 @@ double long_way(const ge::core::Heightfield& ground, double x, double z, double 
                   -(sample_field(ground, x, z + w) - sample_field(ground, x, z - w)));
   double best = want;
   double best_cost = kInf;
-  for (double h = -swing; h <= swing + 1e-9; h += kHeadingStep) {
+  double h = -swing;
+  while (h <= swing + 1e-9) {
     const double fx = libm::sin(h);
     const double fz = libm::cos(h);
     double over = 0;
@@ -73,6 +74,7 @@ double long_way(const ge::core::Heightfield& ground, double x, double z, double 
       best_cost = cost;
       best = h;
     }
+    h += kHeadingStep;
   }
   return best;
 }

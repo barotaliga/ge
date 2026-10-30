@@ -577,7 +577,8 @@ std::vector<SkiRoute> lay_ski_routes(const RouteGround& area, bool wild) {
         const double step = step_cost[size_t(a) * moves + m];
         if (step == kInf) continue;
         const bool drop = drops_move[m];
-        if (drop && run_of[size_t((j + dj / 2) * n + (i + di / 2))] >= 0) continue;
+        const int mid = (j + dj / 2) * n + (i + di / 2);
+        if (drop && run_of[size_t(mid)] >= 0) continue;
         const double cost = from.cost(a) + step;
         if (!from.improves(c, cost)) continue;
         from.reach(c, cost, a);
