@@ -3,7 +3,8 @@
 // player's status at every frame, and checked so a damaged file is refused with the place it
 // broke rather than misread.
 //
-// THE TWO FORMATS (`DemoFormat`), told apart by their first bytes, never by the file's name:
+// THE THREE FORMATS (`DemoFormat`), told apart by their first bytes, never by the file's name (a
+// gzip file is unpacked first, so a `.gz` recording opens as the one inside):
 //
 // - SINGLE (`.dem`): the single-player protocol (version 15) as a client received it. The file
 //   opens with the music track as text and a newline (`-1\n`, `2\n`), then blocks: i32 length,
@@ -16,6 +17,12 @@
 //   then three f32 view angles), 1 a packet as received (i32 length, the 8-byte channel header,
 //   the multiplayer protocol's messages, version 28: demo_client.cpp), 2 the sequences (two
 //   i32). A frame ends at each packet. The eye is the recording player's own `playerinfo` origin.
+// - MULTIVIEW (the server's recording of every player, `.mvd`): records of a milliseconds byte, a
+//   type byte (the low 3 bits the kind, the high 5 a player) and a body; the messages are the
+//   multiplayer protocol's as a client that sees everything would get them, the players as the
+//   recorder's own `playerinfo` form (demo_multiview.cpp). A frame ends where the next record's
+//   milliseconds are not 0. The view rides one player (`Demo::track`, the lowest one playing by
+//   default): his origin and his view's angles, his stats, the messages sent to him alone.
 //
 // THE AXES are the map's: units, z up, angles in degrees with the pitch down positive and the
 // yaw counter-clockwise from +x (view.hpp converts to the engine's).
@@ -27,11 +34,12 @@
 // ge:summary Recorded games read frame by frame: the single-player demo and the client recording
 // ge:keywords demo recording dem playback timedemo benchmark single-player multiplayer client
 // ge:keywords serverinfo serverdata playerinfo packet-entities clientdata view-entity open_demo
-// ge:keywords next_frame demo-format demo-state stats intermission
+// ge:keywords next_frame demo-format demo-state stats intermission multiview mvd gzip track
 // ge:skill shooter
 // ge:test tests/shooters_edge_demo_test.cpp
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -44,7 +52,7 @@ namespace shooters_edge::client {
 
 namespace sh = ge::shooter;
 
-enum class DemoFormat : uint8_t { single, client };
+enum class DemoFormat : uint8_t { single, client, multiview };
 
 // The stats a frame carries (the single-player `clientdata`, the multiplayer `updatestat`): the
 // classic stat numbers, so the HUD reads one table for both.
@@ -69,20 +77,20 @@ struct DemoEntity {
 
 struct DemoState {
   DemoFormat format = DemoFormat::single;
-  int protocol = 0;                         // 15 single, 28 client
+  int protocol = 0;                         // 15 single, 28 client and multiview
   std::string map;                          // "e1m1" off `maps/e1m1.bsp`; "" before the first level
   int levels = 0;                           // level starts read so far (a new level: load its map)
   double time = 0;                          // the demo's clock, s
   sh::Vec3f eye;                            // the view's eye, units
   sh::Vec3f angles;                         // the view's angles, degrees
   int view_entity = 1;                      // single: the entity the eye rides
-  int player = 0;                           // client: the recording player's slot
+  int player = 0;                           // the recording (client) or tracked (multiview) slot
   float view_height = 22;                   // over the origin, units
   bool intermission = false;                // the level ended: the eye is the intermission's
   int32_t stats[kStatCount] = {};           // health, ammo, items ... (DemoStat)
   std::vector<std::string> models, sounds;  // precache lists, index 1 first ([0] is "")
   std::vector<DemoEntity> entities;         // by number
-  std::vector<DemoEntity> players;          // client: by slot (32)
+  std::vector<DemoEntity> players;          // client, multiview: by slot (32)
   int64_t frames = 0;                       // frames read
 };
 
@@ -97,6 +105,13 @@ struct Demo {
   uint32_t ext_fte = 0, ext_mvd = 0;  // the client format's protocol extensions
   int cmd_size = 0;                   // the client format's usercmd struct: 24 or 28 (0: unknown)
   bool ended = false;
+  // The multiview format: the player the view rides (-1: the lowest slot playing), each player's
+  // own stats (the stats records write them; the tracked one's are copied to `state.stats`).
+  int track = -1;
+  std::vector<std::array<int32_t, kStatCount>> player_stats;
+  int64_t hidden = 0;   // records no client sees (the recorder's own data), skipped
+  int64_t records = 0;  // records read
+  int pending = 0;      // records read into the frame not yet finished
 };
 
 // `bytes` as a demo of either format (detected), positioned at its first frame. False with the
@@ -131,6 +146,9 @@ struct DemoMsg {
 // with the reason in `error`.
 bool read_single_messages(Demo& d, DemoMsg& m, std::string& error);
 bool read_client_messages(Demo& d, DemoMsg& m, std::string& error);
+// The multiview format: whether `bytes` opens as one, and its next frame.
+bool is_multiview(std::span<const uint8_t> bytes);
+DemoRead next_multiview(Demo& d, std::string& error);
 
 // `maps/<name>.bsp` -> `<name>`; anything else -> "".
 std::string map_of_model(const std::string& model);

@@ -8,7 +8,7 @@
 // console.
 //
 //   shooters_edge [-basedir <dir>] [-game <folder>] [-progs <file>] [-benchmark <demo>]
-//                 [--frames=N] [--size=WxH] [+<command> ...]
+//                 [-playdemo <demo>] [--frames=N] [--size=WxH] [+<command> ...]
 //
 // `-basedir` is the folder that holds the game folder (`id1` unless `-game` names another) with
 // its `pak0.pak`, `pak1.pak` ...; a leading `~` is the home folder, and a path with spaces is one
@@ -31,13 +31,17 @@
 // which quits when it is done) plays a recorded game (`demo1` from the packs, or a file's path)
 // with vsync off, one demo frame a drawn frame, at the window's settings, and prints the average,
 // max, min, 1% low and 0.1% low frame rates (client/timedemo.hpp); the listen server waits.
+// `playdemo <demo>` (`-playdemo <demo>`) plays one at its own pace instead, vsync on and nothing
+// timed, `cl_demospeed <x>` (0..20, 0 pauses) its speed; `demo_track <slot>` picks the player a
+// multiview recording's view rides (-1: the lowest playing). Every format plays, `.gz` included.
 //
 // ge:summary Shooter's Edge's window: the listen server, the keys and mouse, the world and the HUD
 // ge:keywords app main window listen-server basedir game-folder plus-commands map console
 // ge:keywords relative-mouse mouse-look hud first-person effects r_look quit shooters-edge
-// ge:keywords benchmark timedemo demo vsync-off fps
+// ge:keywords benchmark timedemo demo vsync-off fps playdemo demo_track cl_demospeed
 // ge:keywords main-menu escape
 // ge:skill platform input camera render ui shooter
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <exception>
@@ -86,6 +90,7 @@ struct Args {
   std::string game = "id1";
   std::string progs;      // a mod's progs file ("": the baseline mod)
   std::string benchmark;  // a demo to benchmark, then quit ("": none)
+  std::string playdemo;   // a demo to play at its own pace ("": none)
   long frames = 0;        // 0: until quit
   int width = 1280, height = 720;
   std::vector<std::string> plus;  // the command line from the first `+` word on
@@ -113,6 +118,8 @@ bool parse(int argc, char** argv, Args& a) {
       a.progs = expand_home(argv[++i]);
     } else if ((arg == "-benchmark" || arg == "--benchmark") && i + 1 < argc) {
       a.benchmark = expand_home(argv[++i]);
+    } else if ((arg == "-playdemo" || arg == "--playdemo") && i + 1 < argc) {
+      a.playdemo = expand_home(argv[++i]);
     } else if ((arg == "-game" || arg == "--game") && i + 1 < argc) {
       a.game = argv[++i];
     } else if (arg.rfind("--frames=", 0) == 0) {
@@ -138,8 +145,8 @@ static int run_main(int argc, char** argv) {
   if (!parse(argc, argv, args)) {
     out::error(
         "shooters_edge: unknown flag. Usage: shooters_edge [-basedir <dir>] [-game <folder>] "
-        "[-progs <file>] [-benchmark <demo>] [--frames=N] [--size=WxH] [+<command> ...]; next: "
-        "rerun with those flags only.");
+        "[-progs <file>] [-benchmark <demo>] [-playdemo <demo>] [--frames=N] [--size=WxH] "
+        "[+<command> ...]; next: rerun with those flags only.");
     return 2;
   }
 
@@ -180,6 +187,32 @@ static int run_main(int argc, char** argv) {
                           c.print("benchmark: name a demo (benchmark demo1)");
                         else
                           bench_ask = expand_home(a[1]);
+                      });
+  bool play_ask = false;  // the demo asked for is played at its own pace, not benchmarked
+  console.add_command("playdemo", "playdemo <demo>: play a demo at its own pace",
+                      [&](Con& c, const CArgs& a) {
+                        if (a.size() < 2) {
+                          c.print("playdemo: name a demo (playdemo demo1, playdemo match.mvd)");
+                        } else {
+                          bench_ask = expand_home(a[1]);
+                          play_ask = true;
+                        }
+                      });
+  double demo_speed = 1;
+  console.add_command("cl_demospeed", "cl_demospeed <x>: a played demo's speed, 0..20 (0 pauses)",
+                      [&](Con& c, const CArgs& a) {
+                        if (a.size() > 1)
+                          demo_speed = std::clamp(std::atof(a[1].c_str()), 0.0, 20.0);
+                        c.print("cl_demospeed " + std::to_string(demo_speed));
+                      });
+  int demo_track = -1;
+  cl::Timedemo bench;
+  console.add_command("demo_track", "demo_track <slot>: the player a multiview demo's view rides",
+                      [&](Con& c, const CArgs& a) {
+                        if (a.size() > 1) demo_track = std::atoi(a[1].c_str());
+                        bench.demo.track = demo_track;
+                        c.print("demo_track " + std::to_string(demo_track) +
+                                (demo_track < 0 ? " (the lowest slot playing)" : ""));
                       });
   se::Hud hud = se::make_hud();
   se::add_cvars(console, hud);
@@ -264,9 +297,12 @@ static int run_main(int argc, char** argv) {
   ge::platform::set_relative_mouse(*window, true);
   bool captured = true;
   bool vsync = true;
-  cl::Timedemo bench;
   std::unique_ptr<cl::LoadedMap> bench_map;  // the benchmark's level (the world draws it)
   if (!args.benchmark.empty()) bench_ask = args.benchmark;
+  if (!args.playdemo.empty()) {
+    bench_ask = args.playdemo;
+    play_ask = true;
+  }
   // The world's frame for `map`, or false with the error said.
   const auto rebuild_world = [&](const cl::LoadedMap& map) {
     world.reset();
@@ -283,14 +319,17 @@ static int run_main(int argc, char** argv) {
     const std::string setup = std::to_string(w) + "x" + std::to_string(h) + ", present " +
                               surface.present_mode() + ", r_look " + picture.look + ", " +
                               device->report.name + " on " + device->report.backend;
-    // A run stopped before a frame was timed has no report, only its reason.
-    if (why.empty() || !bench.frame_s.empty())
+    // A run stopped before a frame was timed has no report, only its reason; playback times none.
+    if (bench.paced) {
+      console.print("playdemo: " + bench.name + (why.empty() ? " ended" : " stopped: " + why));
+      if (why.find("Escape") == std::string::npos && !why.empty()) bench_failed = 1;
+    } else if (why.empty() || !bench.frame_s.empty())
       for (const std::string& line :
            cl::bench_report(bench.name, setup, cl::bench_stats(bench.frame_s))) {
         console.print(line);
         hud.notify.push(line, se::hud_style().ink, now_s);
       }
-    if (!why.empty()) {
+    if (!why.empty() && !bench.paced) {
       console.print("benchmark: stopped early: " + why);
       bench_failed = 1;
     }
@@ -401,9 +440,10 @@ static int run_main(int argc, char** argv) {
       }
     }
 
-    // A benchmark asked for: vsync off, the listen server waits until it is done.
+    // A benchmark asked for: vsync off, the listen server waits until it is done. A demo played
+    // at its pace keeps vsync.
     if (!bench_ask.empty()) {
-      const bool quit_after = bench_ask == args.benchmark;
+      const bool quit_after = bench_ask == args.benchmark || bench_ask == args.playdemo;
       if (!cl::timedemo_start(files, bench_ask, bench, error)) {
         console.print("benchmark: " + error);
         if (quit_after) {
@@ -413,20 +453,27 @@ static int run_main(int argc, char** argv) {
         }
       } else {
         bench.quit_after = quit_after;
-        console.print("benchmark: " + bench.found);
+        bench.paced = play_ask;
+        bench.demo.track = demo_track;
+        console.print((play_ask ? "playdemo: " : "benchmark: ") + bench.found);
         con_view.set_open(false);
-        vsync = false;  // and unlocked: immediate present, where the platform has it
-        surface.configure_unlocked(*device, static_cast<uint32_t>(w), static_cast<uint32_t>(h));
+        if (!play_ask) {
+          vsync = false;  // and unlocked: immediate present, where the platform has it
+          surface.configure_unlocked(*device, static_cast<uint32_t>(w), static_cast<uint32_t>(h));
+        }
       }
       args.benchmark.clear();
+      args.playdemo.clear();
       bench_ask.clear();
+      play_ask = false;
     }
     if (bench.active && input.tapped(ge::platform::Key::escape)) {
       if (!end_bench("Escape pressed", t)) return 1;
       continue;
     }
     if (bench.active) {
-      const cl::TimedemoStep step = cl::timedemo_step(bench, error);
+      const cl::TimedemoStep step = bench.paced ? cl::playdemo_step(bench, wall, demo_speed, error)
+                                                : cl::timedemo_step(bench, error);
       if (step == cl::TimedemoStep::new_level) {
         bench_map = cl::load_named_map(files, bench.demo.state.map, error);
         if (!bench_map) {
@@ -449,7 +496,7 @@ static int run_main(int argc, char** argv) {
       // The demo's effects are not read yet: the world's frame with none of its own.
       cl::draw_world(*device, *world, view, cl::FxFrame{}, wall, overlay, target);
       surface.present();
-      cl::timedemo_mark(bench, ge::platform::now_ns());
+      if (!bench.paced) cl::timedemo_mark(bench, ge::platform::now_ns());
       ++presented;
       continue;
     }

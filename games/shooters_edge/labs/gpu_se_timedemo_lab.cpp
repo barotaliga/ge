@@ -62,8 +62,9 @@ bool fixture_pack(const std::string& format, std::vector<uint8_t>& out, std::str
   if (!ge::brush::write_bsp(ge::brush::sample_fixture(), ge::brush::Family::v29, &bsp, &error))
     return false;
   const cl::DemoScript s = cl::loop_script("halls", {256, 192, 24}, 120, 600);
-  std::vector<uint8_t> demo =
-      format == "client" ? cl::write_client_demo(s) : cl::write_single_demo(s);
+  std::vector<uint8_t> demo = format == "client"      ? cl::write_client_demo(s)
+                              : format == "multiview" ? cl::write_multiview_demo(s)
+                                                      : cl::write_single_demo(s);
   return ge::vfs::write_pak({{"maps/halls.bsp", bsp}, {"demo1.dem", demo}}, &out, &error);
 }
 
@@ -241,7 +242,7 @@ const gl::LabSpec kSpec{
     "shooter",
     "How fast does the window's frame play a demo back, and how even are its frames?",
     {{"size", "960,540", "the frame's width and height, px"},
-     {"format", "single", "the written demo's format: single or client"},
+     {"format", "single", "the written demo's format: single, client or multiview"},
      {"basedir", "", "a folder holding a game folder: play its demo instead of the fixture"},
      {"game", "id1", "the game folder under --basedir"},
      {"demo", "demo1", "the demo to play, by name or path"}},
