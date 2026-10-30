@@ -133,6 +133,19 @@ void add_cvars(con::Console& c, Settings& s) {
           .help = "rain wets the ground: darker, mirroring the sky, pooled on the flats",
           .kind = CvarKind::boolean},
          &s.wet);
+  v.bind({.name = "r_lights",
+          .fallback = "1",
+          .flags = kStartup,
+          .help = "the lamps after dark: the piste's floodlights, the street lamps, the lit "
+                  "windows' spill and every skier's headlamp",
+          .kind = CvarKind::boolean},
+         &s.lights);
+  v.bind({.name = "r_light_shadows",
+          .fallback = "1",
+          .flags = kStartup,
+          .help = "the nearest, brightest lamps cast shadows (needs r_lights)",
+          .kind = CvarKind::boolean},
+         &s.light_shadows);
   v.bind({.name = "r_lightning",
           .fallback = "1",
           .flags = kStartup,

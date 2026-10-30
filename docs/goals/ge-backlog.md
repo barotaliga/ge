@@ -11,7 +11,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge digest <lab> [--write]` (one lab's baseline, not the whole smoke run)
 - `ge digest <a> <b> --write` (done: several labs' rows checked or rewritten in one call; the labs executable refuses a second name rather than running only the first)
 - `ge golden diff` (which columns of a golden's rows moved) and `ge golden write`
-- `ge golden diff <test>` naming the component of a state hash that moved (skier, heli, army, wanted, gunfire), so a golden another PR's change moved is told from a cross-platform break; #279
+- `ge golden diff <test>` naming the component of a state hash that moved (skier, heli, army, wanted, gunfire), so a golden another PR's change moved is told from a cross-platform break; #279 (done: a parts word beside the digest, diffed part by part)
 - `ge digest --diff` (done: every lab's digest against the baseline in one command, nothing written, only the labs that moved printed)
 - `ge golden diff` pairing rows by their key when the count changes (done: a row inserted mid-table is one row added)
 - `ge golden write` listing every golden file it rewrote, and the engine's own tree pointed at it (`build/<preset>/ge golden write <test>`) rather than setting `GE_GOLDEN_WRITE` by hand

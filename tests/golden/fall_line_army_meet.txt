@@ -1,5 +1,5 @@
-# each scene's end: its name and the state digest (fall_line_army_meet_test)
-knock e313fed892d51c61
-hull 182667d97bcb3319
-steal 8bf758061c3e7ab6
-run-down 9d43a5b344560363
+# each scene's end: its name, the state digest and its parts (fall_line_army_meet_test)
+knock e313fed892d51c61 skiers:0b36ded6,sleds:7fc0d776,heli:79d62579,para:4fd0bfc1,crowd:4fd0bfc1,wanted:0713f065,army:684114dc,gunfire:4fd0bfc1
+hull 182667d97bcb3319 skiers:7c481a05,sleds:032ba38b,heli:6bb1c26e,para:4fd0bfc1,crowd:4fd0bfc1,wanted:4fd0bfc1,army:f3d85d65,gunfire:4fd0bfc1
+steal 8bf758061c3e7ab6 skiers:a8227d3f,sleds:34dc312f,heli:bc96ba2c,para:4fd0bfc1,crowd:4fd0bfc1,wanted:24c1ebbb,army:f2025653,gunfire:4fd0bfc1
+run-down 9d43a5b344560363 skiers:e2691938,sleds:d18b4cd8,heli:cc919aba,para:4fd0bfc1,crowd:4fd0bfc1,wanted:e4e74c3e,army:34097a08,gunfire:4fd0bfc1

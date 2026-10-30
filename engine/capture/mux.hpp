@@ -32,7 +32,8 @@ bool container_named(std::string_view word, std::string_view path, Container& ou
 
 class Mux {
  public:
-  // Start a file at `path` (in memory with an empty one) in container `c`.
+  // Start a file at `path` (in memory with an empty one) in container `c`. A Matroska file
+  // named .webm whose tracks a WebM cannot carry (H.264, HEVC, uncompressed) is refused.
   bool open(const std::string& path, Container c, const MatroskaOptions& o, std::string& error);
   bool video(int64_t ms, bool key, std::span<const uint8_t> data, std::string& error) {
     return mp4_on_ ? mp4_.video(ms, key, data, error) : mkv_.video(ms, key, data, error);

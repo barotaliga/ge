@@ -278,7 +278,9 @@ void prepare_sun_shadows(gpu::Device& device, SunShadows& s, const FrameView& vi
         s.view_uniforms[static_cast<size_t>(kCascades) + static_cast<size_t>(k)], 0, &u, sizeof u);
   }
   for (InstanceFamily* f : moving) {
-    for (int k = 0; k < static_cast<int>(f->casters.size()); ++k) {
+    // The atlas's slots: those before the lamps' tiles (render/lamp_shadows.hpp's own).
+    const int slots = f->lamp_slot >= 0 ? f->lamp_slot : static_cast<int>(f->casters.size());
+    for (int k = 0; k < slots; ++k) {
       if (k < s.figures) {
         prepare_family_caster(
             device, *f, k,

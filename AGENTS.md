@@ -319,6 +319,7 @@ characters.
 | `games/fall_line/app/` | Fall Line's presentation (`fall_line_app`): the pass table, the look, the scene, the views, the `fall_line` window; then the HUD | `platform`, `gpu`, `render`, `ui`, `audio` |
 | `games/shooters_edge/view/` | Shooter's Edge's held weapons (`shooters_edge_view`, no GPU): the free set's mounts, kicks and muzzle lights, the hand that switches and fires them, the view-model cvars | `render`, `shooter` |
 | `games/shooters_edge/hud/` | Shooter's Edge's HUDs (`shooters_edge_hud`, no GPU): the classic, modern and compact looks, `hud_style`, the free art, the classic set's pictures | `ui` |
+| `games/shooters_edge/menu/` | Shooter's Edge's main menu (`shooters_edge_menu`, no GPU): the classic pages on ESCAPE, rows wired to cvars, the rest dimmed, the pack's own pictures, classic enhance under OPTIONS | `ui` |
 | `games/shooters_edge/labs/` | Shooter's Edge's labs | `labs`, `ui` |
 | `games/shooters_edge/server/` | Shooter's Edge's server: the host, its slots and input log, the dedicated binary; the mod server (QC builtins and extensions, hooks, the test and baseline mods, a progs from a path) | `shooter`, `progs` |
 | `games/shooters_edge/qc/` | Shooter's Edge's baseline deathmatch mod in QC, the one modders start from (built by `ge qc build`) | `progs` |

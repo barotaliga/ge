@@ -693,7 +693,7 @@ based model (§ Materials).
 
 ### Local lights
 
-**As built (M39a, M39c)** (`render/lights.hpp`, `render/lamp_shadows.hpp`, `wgsl/lights.wgsl`). A game keeps its own list of
+**As built (M39a, M39c, M39d)** (`render/lights.hpp`, `render/lamp_shadows.hpp`, `wgsl/lights.wgsl`). A game keeps its own list of
 `LocalLight`s and hands it to `prepare_lights` each frame; nothing about a light is stored
 between frames.
 
@@ -753,11 +753,14 @@ serve unchanged.
   tile and a shoved crate to redrawing only the tiles that see it. A muzzle flash is a lamp like
   any other with its shot's key: its six tiles are drawn the frame it fires and kept for the
   few frames it lasts.
-- **The casters** are the instance families made with caster slots `first_slot` onward (one a
-  tile, `create_family_casters`); tile k culls into its slot by its view's planes and the lamp's
-  range and draws at a LOD picked by its texels a metre a quarter of the range out. A family
-  made without them casts no lamp's shadow, which is how a lamp's own bulb or flame stays out of
-  its tiles. The terrain casts none (the ground under a lamp only receives).
+- **The casters** are the instance families made with lamp slots (`create_family_casters`'s
+  `lamp_tiles`, one a tile from the family's own `lamp_slot`, after its sun maps); tile k culls
+  into its slot by its view's planes and the lamp's range and draws at a LOD picked by its
+  texels a metre a quarter of the range out. A family made without them casts no lamp's shadow,
+  which is how a lamp's own bulb or flame stays out of its tiles. A slot costs a family its
+  capacity's lists, so a game with a big forest deals fewer tiles (`LampShadowSettings::tiles`:
+  Fall Line's 16, every family then 16 slots). The terrain casts none (the ground under a lamp
+  only receives).
 - **The receivers.** `local_lights` multiplies each lamp's light by `lamp_shadow`: a point
   light's face is the one the way to the pixel leaves by, the point is moved off its surface by a
   texel and a half of the tile at its distance and drawn 0.4 % nearer the lamp, and four rotated
@@ -766,8 +769,30 @@ serve unchanged.
   and its comparison sampler 14 (`frame_group`'s `lamp_atlas`; without one, the sky's empty 1 × 1
   atlas, never read while every slot is −1).
 
+**Fall Line's lamps after dark (M39d)** (`plugins/mountain/app/night_lamps.hpp`,
+`games/fall_line/app/lamps.hpp`). The mountain's lamps are laid off the map and the street plan,
+never drawn from a stream: floodlight masts every 50 m down the piste on its left, 3 m off the
+edge, 12 m tall (16 m beside a piste over 40 m wide), each with two floods aimed downhill of
+square across (a wide near flood at the piste's far half and a brighter, narrower throw into the
+gap before the next mast), so a 40 m piste is lit to a mean over 20 lx and nowhere under 4 lx, a
+recreational night piste's class (`tests/mountain_night_lamps_test.cpp` holds it); a street lamp
+every 30 m along the village's streets (40 m along the road out), 5.5 m tall over the sidewalk,
+shining down on the carriageway; and a soft warm point a metre before each lit building's front
+for its windows' spill. Every racer wears a headlamp on the brow of his posed head (the rig's
+`head` joint): a 5000 cd spot 13° off its axis that casts shadows and a dim 60° flood that does
+not, tipped down so the spot lands some seven metres ahead. All of them come up as the sun sinks
+to the horizon and are full on once it is 2° under, when the windows light, and the posts' glass
+glows with them. The masts' and the street lamps' posts are two instance families casting into
+the sun's cascades; the floods, the street lamps and the headlamps' spots are keyed, so the 16
+lamps that light the eye most cast into the atlas. The eye adapts to 0.4 of the geometric mean
+of the lamps' light on the snow at 5, 10, 18 and 30 m along the view (`eye_lamp_lux`), so the lit
+snow reads bright and the moonlit mountain past the lamps is still there, if dim. `r_lights` and
+`r_light_shadows` switch them; the `world` lab at `--hour=22` and the `village-look` lab's
+evening, night and small-hours looks (`--lights=0` for a before) picture them.
+
 **Not yet**: the lamps' shadows in the air (`light_inscatter`, the fog's light shafts), a brush
-map's world casting into the atlas, and the lamps on particles and water.
+map's world casting into the atlas, the lamps on particles and water, the lift stations' lamps
+(the stations are not drawn yet) and fires (nothing in the free ride burns yet).
 
 ### Materials
 
