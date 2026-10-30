@@ -3,6 +3,8 @@
 //   * THE ROUND TRIP: the test model written as a .glb and loaded back poses as the model did,
 //     at every clip and time the test sweeps, its names, materials and clips kept; a write is
 //     the same bytes twice.
+//   * THE MORPH TARGETS: a target, the mesh's own weight and a clip's weights written and loaded
+//     back pose as the model did.
 //   * THE FRAME: a hand-written .gltf (a rigid triangle on a node moved +1 m along glTF's x,
 //     with no normals) loads mirrored in x, faceted, its front toward +z as written.
 //   * THE SAMPLERS: STEP holds its key, LINEAR blends, a node's matrix is split into its rest.
@@ -11,6 +13,7 @@
 //
 // ge:summary Tests for the glTF loader and writer: round trip, frame, samplers, errors
 // ge:keywords test assets gltf glb loader writer round-trip mirror faceted step linear matrix
+// ge:keywords morph-target weights
 // ge:skill assets testing
 #include <cmath>
 #include <cstring>
@@ -37,8 +40,13 @@ std::vector<float> posed(const a::Model& m, int clip, double t) {
   }
   a::pose_globals(m, local, global);
   a::skin_palette(m, global, palette);
-  std::vector<float> pos(size_t{m.meshes[0].vertex_count()} * 3), nrm(pos.size());
-  a::skin_mesh(m.meshes[0], palette, pos, nrm);
+  const a::Mesh& mesh = m.meshes[0];
+  std::vector<float> pos(size_t{mesh.vertex_count()} * 3), nrm(pos.size());
+  std::vector<float> bind(pos.size()), bind_n(pos.size()), weights(mesh.targets.size());
+  a::sample_weights(m, clip < 0 ? nullptr : &m.clips[static_cast<size_t>(clip)], 0, t, false,
+                    weights);
+  a::morph_mesh(mesh, weights, bind, bind_n);
+  a::skin_mesh(mesh, palette, bind, bind_n, pos, nrm);
   pos.insert(pos.end(), nrm.begin(), nrm.end());
   return pos;
 }
@@ -129,6 +137,58 @@ TEST(test_model_round_trips_through_a_glb) {
                                    " poses " + std::to_string(worst) + " away after a round trip");
     }
   }
+}
+
+TEST(morph_targets_and_their_weights_round_trip_through_a_glb) {
+  a::Model m = a::make_test_model();
+  a::Mesh& mesh = m.meshes[0];
+  // One target leaning the limb over and bending its normals; its own weight a quarter, and the
+  // first clip ramping it from 0 to 1.
+  a::MorphTarget lean{"lean", {}, {}};
+  for (uint32_t v = 0; v < mesh.vertex_count(); ++v) {
+    const float y = mesh.positions[size_t{v} * 3 + 1];
+    lean.positions.insert(lean.positions.end(), {0.3f * y, 0.0f, -0.1f * y});
+    lean.normals.insert(lean.normals.end(), {0.2f, 0.0f, 0.0f});
+  }
+  mesh.targets.push_back(lean);
+  mesh.target_weights = {0.25f};
+  a::MorphTrack ramp{0, {}};
+  for (uint32_t f = 0; f < m.clips[0].frames; ++f)
+    ramp.weights.push_back(static_cast<float>(f) / static_cast<float>(m.clips[0].frames - 1));
+  m.clips[0].morphs.push_back(ramp);
+  const a::LoadResult r = a::load_gltf(a::write_glb(m), "lean.glb");
+  CHECK_MSG(r.ok, r.error);
+  if (!r.ok) return;
+  CHECK(r.notes.empty());
+  const a::Model& l = r.model;
+  CHECK(l.meshes[0].targets.size() == 1 && l.meshes[0].targets[0].name == "lean");
+  CHECK(l.meshes[0].target_weights == std::vector<float>{0.25f});
+  CHECK(l.clips[0].morphs.size() == 1 && l.clips[1].morphs.empty());
+  // The weights: the mesh's own outside the ramping clip, the ramp inside it.
+  std::vector<float> w(1);
+  a::sample_weights(l, &l.clips[1], 0, 0.3, false, w);
+  CHECK(w[0] == 0.25f);
+  a::sample_weights(l, &l.clips[0], 0, l.clips[0].duration_s(), false, w);
+  CHECK(std::fabs(w[0] - 1.0f) < 1e-6f);
+  for (int clip = -1; clip < 2; ++clip) {
+    for (double t : {0.0, 0.2, 0.5, 0.9}) {
+      const std::vector<float> want = posed(m, clip, t), got = posed(l, clip, t);
+      float worst = 0;
+      for (size_t i = 0; i < want.size(); ++i) worst = std::max(worst, std::fabs(want[i] - got[i]));
+      CHECK_MSG(worst < 1e-5f, "clip " + std::to_string(clip) + " at " + std::to_string(t) +
+                                   " poses " + std::to_string(worst) + " away after a round trip");
+    }
+  }
+  // The target moves the limb: its tip at the clip's end is not where the bind leaves it.
+  const std::vector<float> leaned = posed(l, 0, l.clips[0].duration_s());
+  a::Model plain = l;
+  plain.meshes[0].targets.clear();
+  plain.meshes[0].target_weights.clear();
+  const std::vector<float> straight = posed(plain, 0, l.clips[0].duration_s());
+  float moved = 0;
+  for (size_t i = 0; i < leaned.size(); ++i)
+    moved = std::max(moved, std::fabs(leaned[i] - straight[i]));
+  CHECK(moved > 0.05f);
 }
 
 TEST(gltf_is_mirrored_into_the_engine_frame_and_made_faceted) {
