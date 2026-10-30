@@ -133,9 +133,20 @@ void find_muzzle(HeldModel& model, double share) {
     model.muzzle_vertices.push_back(near[i].second);
 }
 
-void muzzle_at(const HeldModel& model, int a, int b, double t, float out[3]) {
+int barrel_of_frame(const HeldModel& model, int frame) {
+  if (frame < 0 || static_cast<size_t>(frame) >= model.frame_barrel.size()) return -1;
+  const int b = model.frame_barrel[size_t(frame)];
+  return b >= 0 && static_cast<size_t>(b) < model.barrels.size() ? b : -1;
+}
+
+void muzzle_at(const HeldModel& model, int a, int b, double t, float out[3], int barrel) {
   out[0] = out[1] = out[2] = 0;
-  if (model.frames.empty() || model.muzzle_vertices.empty()) return;
+  const std::vector<uint32_t>& tip = barrel >= 0 &&
+                                             static_cast<size_t>(barrel) < model.barrels.size() &&
+                                             !model.barrels[size_t(barrel)].empty()
+                                         ? model.barrels[size_t(barrel)]
+                                         : model.muzzle_vertices;
+  if (model.frames.empty() || tip.empty()) return;
   const int last = static_cast<int>(model.frames.size()) - 1;
   a = a < 0 ? 0 : a > last ? last : a;
   b = b < 0 ? 0 : b > last ? last : b;
@@ -143,13 +154,13 @@ void muzzle_at(const HeldModel& model, int a, int b, double t, float out[3]) {
   const std::vector<float>& pb = model.frames[size_t(b)].positions;
   const double u = t < 0 ? 0 : t > 1 ? 1 : t;
   double sum[3] = {0, 0, 0};
-  for (uint32_t v : model.muzzle_vertices) {
+  for (uint32_t v : tip) {
     for (size_t k = 0; k < 3; ++k) {
       const double x = pa[size_t{v} * 3 + k], y = pb[size_t{v} * 3 + k];
       sum[k] += x + (y - x) * u;
     }
   }
-  const auto n = static_cast<double>(model.muzzle_vertices.size());
+  const auto n = static_cast<double>(tip.size());
   for (size_t k = 0; k < 3; ++k) out[k] = static_cast<float>(sum[k] / n);
 }
 

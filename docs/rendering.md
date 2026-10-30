@@ -470,7 +470,10 @@ clustered local lights and is held to the reference.
 **The muzzle** is where a game stages what a shot makes (the flash, its smoke, its light). A held
 model names its tip as the centre of a few of its vertices (`muzzle_vertices`, the barrel's front
 on the rest frame by `find_muzzle`, or the game's own), so `muzzle_at` follows every morph frame
-the barrel does, and `muzzle_dir` is the way the shot leaves. The gun is drawn through its own
+the barrel does, and `muzzle_dir` is the way the shot leaves. A gun of several barrels lists each
+one's tip (`barrels`) and the barrel each frame of its firing animation fires from
+(`frame_barrel`, `barrel_of_frame`); `muzzle_at` and `muzzle_to_world` take the barrel, so a pair
+that alternates or a cluster that turns fires from the right mouth. The gun is drawn through its own
 lens, so its tip is carried into the world by `held_to_world` / `held_dir_to_world`: placed into
 the view, then moved across at its depth by tan(view / 2) / tan(gun / 2), so an effect drawn in
 the world's pass sits on the same screen ray as the barrel. A model that draws its own flash (a
@@ -1774,8 +1777,8 @@ the shot leaves and the gun's up, carried into the world through the gun's own l
 (`held_to_world`), so the flame drawn in the world's pass sits on the barrel drawn in front of the
 eye. The model's own flash triangles are hidden with `DrawLit::hidden = model.flame`.
 
-**Not yet:** the classic pack's weapons each given their look and fired in a lab (M48b), and the
-flash as a local light (M47b).
+The classic pack's weapons fire it this way in the `classic-weapons-fire` lab (M48b,
+`docs/classic-enhance.md`). **Not yet:** the flash as a local light (M47b).
 
 ## Impacts
 

@@ -17,7 +17,9 @@
 //   light, given by the vertices it is the centre of (`muzzle_vertices`), so it rides every morph
 //   frame (a recoil, a pump) as the barrel does; `find_muzzle` picks the front-most ones.
 //   `muzzle_dir` is the way the shot leaves, held frame. `held_to_world` (place.hpp) takes the tip
-//   into the world's lens.
+//   into the world's lens. A gun of SEVERAL BARRELS lists each one's tip vertices (`barrels`) and
+//   which barrel each frame of its firing animation fires from (`frame_barrel`): a pair that
+//   alternates, a cluster that turns; `muzzle_at` takes the barrel.
 // - THE MODEL'S OWN FLAME: `flame` marks the triangles that are the file's muzzle flash (a classic
 //   weapon draws its flash as glowing geometry on its firing frames), so a game whose engine
 //   draws the flash hides them (`DrawLit::hidden`).
@@ -26,6 +28,7 @@
 // ge:keywords viewmodel view-model held-model first-person weapon gun hands morph-frames
 // ge:keywords skin glow fullbright emissive uv grip muzzle mount fit_mount held_from_model
 // ge:keywords pose_frames held-frame muzzle-tip find_muzzle muzzle_at muzzle-flash flame
+// ge:keywords barrels multi-barrel alternating-barrels frame_barrel barrel_of_frame
 // ge:skill render assets
 // ge:test tests/viewmodel_held_test.cpp
 #pragma once
@@ -59,6 +62,10 @@ struct HeldModel {
   std::vector<uint32_t> muzzle_vertices;  // the barrel's tip is their centre (empty: the origin)
   float muzzle_dir[3] = {0, 0, 1};        // the way the shot leaves, held frame, unit
   std::vector<uint8_t> flame;             // one a triangle: 1 the model's own muzzle flash
+  // More than one barrel: each one's tip vertices (empty: the one muzzle, `muzzle_vertices`), and
+  // the barrel each frame fires from, one a frame (-1: none; empty: barrel 0 on every frame).
+  std::vector<std::vector<uint32_t>> barrels;
+  std::vector<int16_t> frame_barrel;
   uint32_t vertex_count() const {
     return frames.empty() ? 0 : static_cast<uint32_t>(frames[0].positions.size() / 3);
   }
@@ -92,8 +99,11 @@ void fit_mount(HeldModel& model, const Mount& mount);
 // direction is +z.
 void find_muzzle(HeldModel& model, double share = 0.04);
 
-// The barrel's tip on frames `a` and `b` blended by `t`, held frame, m.
-void muzzle_at(const HeldModel& model, int a, int b, double t, float out[3]);
+// The barrel's tip on frames `a` and `b` blended by `t`, held frame, m: barrel `barrel` of
+// `barrels` (-1, or a model with none: the one muzzle).
+void muzzle_at(const HeldModel& model, int a, int b, double t, float out[3], int barrel = -1);
+// The barrel frame `frame` fires from (`frame_barrel`), or -1 (the one muzzle) when it names none.
+int barrel_of_frame(const HeldModel& model, int frame);
 
 // A glTF model (engine frame, metres) as a held model: every mesh at its rest pose, or posed by
 // clip `clip` at `frames` evenly spaced times as morph frames, each vertex coloured by its part's
