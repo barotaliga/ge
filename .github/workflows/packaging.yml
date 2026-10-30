@@ -42,7 +42,8 @@ jobs:
       CMAKE_C_COMPILER_LAUNCHER: ccache
       CMAKE_CXX_COMPILER_LAUNCHER: ccache
       CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
-      CCACHE_BASEDIR: ${{ github.workspace }}
+      # On Windows, depend mode and no base directory, as ci.yml's windows row (its comment says why).
+      CCACHE_BASEDIR: ${{ matrix.os != 'windows-2025' && github.workspace || '' }}
       CCACHE_MAXSIZE: 800M
       CCACHE_DEPEND: ${{ matrix.os == 'windows-2025' && 'true' || 'false' }}
       CACHE_ROW: ${{ matrix.os == 'windows-2025' && 'windows-2025-msvc' || (matrix.os == 'macos-latest' && 'macos-15-clang++' || 'ubuntu-24.04-g++') }}

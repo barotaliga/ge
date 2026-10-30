@@ -357,11 +357,13 @@ jobs:
       CMAKE_C_COMPILER_LAUNCHER: ccache
       CMAKE_CXX_COMPILER_LAUNCHER: ccache
       CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
-      CCACHE_BASEDIR: ${{ github.workspace }}
       CCACHE_MAXSIZE: 800M
       # Depend mode: a miss takes its headers from MSVC's /showIncludes (Ninja asks for it anyway)
       # instead of running the preprocessor first, which made the first, empty-cache build take
-      # 34 minutes against 19 with no cache.
+      # 34 minutes against 19 with no cache. No CCACHE_BASEDIR here: depend mode compiles with
+      # the paths it rewrote, and MSVC looks for a relative /FI header (SDL's precompiled one)
+      # beside the source, not in the build directory. The checkout's path never changes, so the
+      # base directory bought nothing on this row.
       CCACHE_DEPEND: "1"
     steps:
       - uses: actions/checkout@v5
