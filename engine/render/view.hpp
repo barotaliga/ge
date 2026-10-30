@@ -91,6 +91,10 @@ struct Weather {
   // the open sky's, a share (engine/wind/precip.hpp's `flash_at`).
   double snow = 0.0;
   double flash = 0.0;
+  // THE RAIN reaching the ground, mm/h of liquid (engine/wind/precip.hpp's `rate_of` times the
+  // rain share; snow lands silently): a water body open to the sky rings with its drops
+  // (water.wgsl's `rain_rings`).
+  double rain = 0.0;
 };
 
 // ONE LAYER OF CLOUD (render/clouds.hpp): a slab of the air where the noise passes its cover's

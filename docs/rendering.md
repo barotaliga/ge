@@ -1647,6 +1647,13 @@ drain and dry by the wind and the sun). The picture reads the same numbers:
   rotated by a hash of the position break it into spots, so a fall scatters out from where the
   slant puts it instead of landing as the window's square. A particle is kept by its open share
   against a hash of its own, so the edge thins rather than fades.
+- THE RAIN ON WATER (M36d): `Weather::rain` (mm/h of liquid) rides in the frame's `mist.zw` as
+  the drops of 2 mm and more landing a square metre a second (`wind::drops_per_m2s`) and their
+  mean size (`wind::mean_drop_over`); `water.wgsl`'s `rain_rings` deals them to cells and rings
+  the water under each body's open sky, and hands the crests too fine for a pixel to the
+  glitter's roughness, so a lake far off in a downpour is a dull grey (`docs/water.md` § Rain
+  on the water). The rain's sound by its rate is `engine/water/rain.hpp` (the `rain-audition`
+  lab).
 
 **The weather on a BSP map (M36e).** `plugins/brush/app/bsp_weather.hpp` turns twelve cvars
 (`sv_weather`, `sv_precip`, `sv_rain`, `sv_wind`, `sv_winddir`, `sv_gust` the server's;

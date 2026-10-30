@@ -1,0 +1,4 @@
+---
+type: Added
+---
+Rain rings water and is heard by its rate. A water body open to the sky rings with the rain's drops of 2 mm and more (`water.wgsl`'s `rain_rings`), counted off the rain's drop spectrum (`wind::drops_per_m2s`, `wind::mean_drop_over`) and handed in through `Weather::rain`; crests too fine for a pixel dull the far water instead. Fall Line's frame and a classic map's weather both feed it. `engine/water/rain.hpp` is the rain's sound: each voice is the root of the drops' kinetic energy over a downpour's, split by the open sky, the water and a roof round the ear (the patter, the wash, drops on water near 14 kHz, a roof's drum, snow driven on a wind), with a drizzle's single drops near the ear. The `rain-audition` lab meters it, and `gpu-water` adds a light and a heavy rain on its lake.

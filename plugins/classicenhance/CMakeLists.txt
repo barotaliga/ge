@@ -7,7 +7,7 @@
 # Its app/ half (ge_classicenhance_app, with the GPU) runs the trained texture upscaler through
 # compute shaders; the tool links it when it is built and runs the upscaler on the CPU otherwise.
 # Its GPU labs also fire the engine's muzzle fire from the weapons (APP render: the labs only).
-ge_add_plugin(classicenhance ENGINE core assets audio camera lab vfs viewmodel wind PLUGINS brush morph
+ge_add_plugin(classicenhance ENGINE core assets audio camera console lab ui vfs viewmodel wind PLUGINS brush morph
   APP gpu render)
 if(TARGET ge_classicenhance_app)
   ge_embed_wgsl(ge_classicenhance_app app/upscaler.wgsl)

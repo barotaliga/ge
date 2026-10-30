@@ -120,6 +120,25 @@ intensity-weighted mean of the segments in it. `render_thunder` makes the sound:
 under that envelope, low-passed bin by bin at its cut-off, over a 70 Hz rumble that lingers on
 the envelope, soft-clipped, mono at any rate.
 
+## Thunder heard
+
+`engine/wind/thunder_play.hpp` plays a storm's thunder on the synth's sampled voices, so a game
+only has to say where the ear is:
+
+- `hear_storm(player, storm, t, ear)` looks at every flash that started since the last call. The
+  first call looks back as far as thunder carries (25 km at the speed of sound, about 75 s), so a
+  listener arriving under a storm hears the thunder already on its way. For each flash it works
+  out the thunder at the ear, renders it once, and queues it at its first sound, panned by the
+  bearing to the channel's nearest point.
+- `play_thunder(player, synth, t, block_s, bus)` starts every queued clap due inside the block,
+  its first sample placed in the block by the play's delay. It frees a clap's recording once its
+  voice has ended. A clap more than 0.25 s late (a run paused through it) is let go.
+
+Rendering is the cost: a near strike is up to 60 s of samples, made once a flash. No more than 12
+claps wait or sound at once; past that the quietest is let go. Played offline in 10 ms blocks, a
+strike's thunder begins within 2 ms of its first sound's arrival at 1, 4 and 12 km
+(`tests/wind_thunder_play_test.cpp`, and the `storm` lab's table).
+
 ## The picture
 
 A renderer reads the flashes alive in its frame's window (`flashes_between` over
@@ -140,13 +159,18 @@ spread over a frame.
 **`render/wgsl/flash.wgsl`** turns a lamp into light (`frame.wgsl` includes it, so every pass can
 call it):
 
-- `flash_light(p, σ)` is the light at a point inside a medium: L / (4π r²) / (1 + 0.15 τ). The
-  channel's extent softens the near field (r² plus a quarter of the reach squared). Light that
-  scatters many times through a cloud of optical depth τ leaves it as a diffusion does, falling as
-  one over the depth rather than exponentially. Inside the cloud τ = σ·r, capped at the reach and
-  at the lamp's own depth out. The clouds' march adds it, times the scattering orders over 4π, to
-  each step's light. That is how a flash deep in a tower lights all of it, and how its base glows
-  as a sheet.
+- `flash_light(p, σ)` is the light at a point inside a medium: L / (4π r²) / (1 + 0.15 τ) ·
+  exp(−r / 1200 m). The channel's extent softens the near field (r² plus a quarter of the reach
+  squared). Light that scatters many times through a cloud of optical depth τ leaves it as a
+  diffusion does, falling as one over the depth rather than exponentially. Inside the cloud
+  τ = σ·r, capped at the reach and at the lamp's own depth out. A cloud a few kilometres deep
+  loses the light through its top, base and sides as it spreads, so it also falls off across the
+  cloud over about the cloud's depth over π (`flash_spread`, measured from the channel's half
+  reach). The clouds' march adds it, times one order of scattering over 4π, to each step's light.
+  Night photographs of strikes set both: the channel is the brightest thing in the frame, and the
+  cloud glows only in a band a kilometre or two across where the channel leaves its base, with
+  the rest of the deck dark. An in-cloud flash lights a patch of the tower round itself (sheet
+  lightning), not the whole sky.
 - `flash_on(p, n)` is the light on a face. For a strike it comes from the lamp's direction. For
   a flash in the cloud it comes as much from the base overhead as from the lamp. The ground's
   materials (the snow, the default terrain) and the instances (the trees) add it to the sky's
@@ -164,13 +188,20 @@ carry it into the dark frames after it. A frame with a lamp, and the four after 
 quarter whole (`FrameHistory::flash_frame`).
 
 **The channel** (`render/bolts.hpp`, the `bolts` pass after the fall and before the resolve and
-the bloom). Each segment is a camera-facing ribbon two drawn widths across, with a Gaussian core.
-The width is the channel's true width, or 1.5 px at its distance if that is wider. The segment's
-light is luminous intensity per metre: the flash's candela shared along the lit segments by glow
-and length. Its luminance is that over the drawn width, so a far channel drawn wider is dimmer
-and gives the same light. The air's extinction dims it, the depth hides it behind a ridge, and it
-marks the motion target reactive so the resolve does not smear a stroke into the next frame. The
-bloom spreads its glare. The main channel is lit by every stroke and the branches only by the
+the bloom). Each segment is a camera-facing ribbon eight drawn widths across: a Gaussian core a
+drawn width wide and a soft halo round it, the light the rain and the air scatter close to the
+channel. Night photographs show every channel in such a glow and never with a hard edge, so the
+halo is capped at half of white on the screen and fades into the night however bright the core
+is. The width is the channel's true width, or 2 px at its distance if that is wider. The
+segment's light is luminous intensity per metre: the flash's candela shared along the lit
+segments by glow and length. Its luminance is that over the profile, so a far channel drawn wider
+is dimmer and gives the same light, held under what a half-float picture can store. The air's
+extinction dims it, the depth hides it behind a ridge, and it marks its whole ribbon reactive.
+A frame with a flash takes no history in the resolve at all: the last frame's dark is no history
+for a frame the flash lights anew, and beside a channel the neighbourhood's box is too wide to
+clip it away, which left dark pixels along the channel. The post's sharpening works on the
+light squashed into 0..1 for the same reason: in linear light its lobe beside a channel pulled
+the neighbours below black. The bloom spreads the core's glare. The main channel is lit by every stroke and the branches only by the
 first. A flash inside the cloud shows no channel (that is sheet lightning), and neither does a
 strike's channel above the cloud's base.
 
@@ -179,7 +210,8 @@ strike's channel above the cloud's base.
 `make lab LAB=storm` (`docs/labs.md`): a cell's life cycle, a multicell storm's flashes minute by
 minute, one flash's flicker against 60 Hz frames, night views of a ground strike, sheet lightning
 and a bolt from the blue, a filmstrip, the radar view with gust fronts and strikes, thunder's
-envelope at 1, 4 and 12 km with its sound, and the bands table above, which fails the lab when the
+envelope at 1, 4 and 12 km with its sound, the same strike played through the synth with how late
+each began, a minute and a half of the storm heard from 5 km, and the bands table above, which fails the lab when the
 in-cloud share, the strokes or the interstroke time leave their band.
 
 `make lab LAB=storm-sky` draws the storm in Fall Line's frame: a seed's map at night under
