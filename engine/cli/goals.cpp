@@ -172,9 +172,20 @@ std::string row_file_title(std::string_view status_md) {
   return "";
 }
 
-std::string claimed_row_file(const std::string& title) {
+std::string claimed_row_file(const std::string& title, const std::string& exit,
+                             const std::string& labs) {
+  std::string cell;
+  for (std::size_t at = 0; at < labs.size();) {
+    std::size_t end = labs.find(',', at);
+    if (end == std::string::npos) end = labs.size();
+    const std::string id(trim(std::string_view(labs).substr(at, end - at)));
+    if (!id.empty()) cell += cat(cell.empty() ? "" : ", ", "`", id, "`");
+    at = end + 1;
+  }
   return cat("Status: open\nMilestone: **", title,
-             "**\nExit: to be written\nLabs: to be written\n\nNotes to be written.\n");
+             "**\nExit: ", exit.empty() ? std::string("to be written") : exit,
+             "\nLabs: ", cell.empty() ? std::string("to be written") : cell,
+             "\n\nNotes to be written.\n");
 }
 
 int next_free_number(const std::vector<int>& taken) {
@@ -356,7 +367,7 @@ std::size_t claim_winner(const std::vector<Claimant>& claimants) {
 }
 
 Outcome run_goals_claim(const fs::path& repo, const std::string& title, const std::string& under,
-                        const std::string& base) {
+                        const std::string& base, const std::string& exit, const std::string& labs) {
   Outcome out;
   const fs::path log = repo / "build" / "ge-goals.log";
   std::error_code ec;
@@ -366,6 +377,9 @@ Outcome run_goals_claim(const fs::path& repo, const std::string& title, const st
     out.findings.push_back({Severity::error, what, log.string(), next});
     return out;
   };
+  // The row file's header is one line a key: a line break would end it early.
+  if ((exit + labs).find_first_of("\r\n") != std::string::npos)
+    return fail("--exit and --labs are one line each", "write them without a line break");
   int number = -1;
   std::string parent;
   if (!row_number(under, number, parent, out)) return out;
@@ -384,7 +398,7 @@ Outcome run_goals_claim(const fs::path& repo, const std::string& title, const st
       return fail("no letter is free under " + under, "claim a top-level row: drop --under");
     const std::string path = cat("docs/goals/", key, ".md");
     std::string error;
-    if (!write_text(repo / path, claimed_row_file(title), error))
+    if (!write_text(repo / path, claimed_row_file(title, exit, labs), error))
       return fail(cat("could not write ", path, ": ", error), "check the tree is writable");
     const std::string msg = cat("docs(goals): reserve ", key, " for ", title);
     if (!commit_row_file(repo, path, msg, log))

@@ -65,7 +65,12 @@ TEST(a_row_files_name_is_the_bold_text_of_its_milestone_line) {
   const std::string claimed = claimed_row_file("Lava and slime");
   CHECK(claimed.rfind("Status: open\n", 0) == 0);
   CHECK(row_file_title(claimed) == "Lava and slime");
-  CHECK(claimed.find("Exit: ") != std::string::npos && claimed.find("Labs: ") != std::string::npos);
+  CHECK(claimed.find("Exit: to be written\nLabs: to be written\n") != std::string::npos);
+  // --exit and --labs fill them in the same step, each lab id as code.
+  const std::string full = claimed_row_file("Lava", "Lava hurts and flows", "lava, lava-flow,");
+  CHECK(full.find("\nExit: Lava hurts and flows\nLabs: `lava`, `lava-flow`\n") !=
+        std::string::npos);
+  CHECK(row_file_title(full) == "Lava");
 }
 
 TEST(the_earliest_claim_wins_and_a_tie_goes_to_the_first_ref_by_name) {
