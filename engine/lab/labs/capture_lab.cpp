@@ -10,14 +10,17 @@
 // muxer, a frame, and the bytes a minute of it takes. Then the COMPRESSED export (AV1 and Opus,
 // capture/codecs.hpp): the same sync check through the decoders, with ffmpeg decoding the .webm,
 // the same again in the engine's fragmented MP4 (and that file cut short, read to its last
-// whole fragment), and what the AV1 encoder costs at 720p and 1080p at three qualities. Those
-// numbers are all measured, so a build without the encoders (GE_ENCODERS=OFF) has the same digest.
+// whole fragment), and what the AV1 encoder costs at 720p and 1080p at three qualities. Last the
+// PLATFORM'S OWN ENCODERS (capture/platform_video.hpp: VideoToolbox's H.264 and HEVC on a Mac):
+// which encoder coded, the sync fixture as an .mp4 through them and back, and a 720p frame's cost.
+// Those numbers are all measured, so a build without the encoders (GE_ENCODERS=OFF) or a machine
+// without a platform encoder has the same digest.
 //
 //   make lab LAB=capture ARGS="--seconds=30 --fps=24,25,30,60"
 //
 // ge:summary Lab: an export's sound against its pictures, a click and a flash on one step
 // ge:keywords lab capture export sync flash click lag mkv ffmpeg decode i420 cost av1 opus webm
-// ge:keywords encoder-cost psnr crf
+// ge:keywords encoder-cost psnr crf h264 hevc videotoolbox platform-encoder hardware-encoder
 // ge:skill replay labs
 // ge:test tests/capture_av_export_test.cpp
 #include <algorithm>
@@ -39,7 +42,9 @@
 #include "capture/matroska.hpp"
 #include "capture/mkv_read.hpp"
 #include "capture/mp4_read.hpp"
+#include "capture/platform_video.hpp"
 #include "capture/sync_fixture.hpp"
+#include "capture/video.hpp"
 #include "capture/yuv.hpp"
 #include "core/libm/libm.hpp"
 #include "core/num_text.hpp"
@@ -122,13 +127,31 @@ struct Block {
   size_t offset = 0, size = 0;
 };
 
+// The video track as a decoder opens it: its Matroska codec id, codec private and size.
+struct VideoInfo {
+  std::string codec;
+  std::vector<uint8_t> codec_private;
+  int width = 0, height = 0;
+};
+
+std::string matroska_id_of(const std::string& entry) {
+  if (entry == "avc1") return "V_MPEG4/ISO/AVC";
+  if (entry == "hvc1") return "V_MPEGH/ISO/HEVC";
+  return entry == "av01" ? "V_AV1" : entry;
+}
+
 bool blocks_of(const std::vector<uint8_t>& bytes, bool mp4, std::vector<Block>& out, size_t& skip,
-               std::string& error) {
+               VideoInfo& video, std::string& error) {
   skip = 0;
   if (mp4) {
     const auto f = gc::read_mp4(bytes, error);
     if (!f) return false;
     for (const gc::Mp4Sample& s : f->samples) out.push_back({s.track, s.ms, s.offset, s.size});
+    if (!f->tracks.empty()) {
+      const gc::Mp4Track& v = f->tracks[0];
+      video = {matroska_id_of(v.entry), v.config, static_cast<int>(v.width),
+               static_cast<int>(v.height)};
+    }
     // The pre-skip is the sound track's edit list.
     if (f->tracks.size() == 2) skip = static_cast<size_t>(f->tracks[1].edit_start);
     return true;
@@ -136,6 +159,10 @@ bool blocks_of(const std::vector<uint8_t>& bytes, bool mp4, std::vector<Block>& 
   const auto f = gc::read_mkv(bytes, error);
   if (!f) return false;
   for (const gc::ReadBlock& b : f->blocks) out.push_back({b.track, b.ms, b.offset, b.size});
+  if (!f->tracks.empty()) {
+    const gc::ReadTrack& v = f->tracks[0];
+    video = {v.codec, v.codec_private, static_cast<int>(v.width), static_cast<int>(v.height)};
+  }
   if (f->tracks.size() == 2) {
     // The track's CodecDelay, as a player drops it.
     skip = static_cast<size_t>(
@@ -144,9 +171,9 @@ bool blocks_of(const std::vector<uint8_t>& bytes, bool mp4, std::vector<Block>& 
   return true;
 }
 
-// The sync fixture exported at `fps`, uncompressed (`codec` "") or as AV1 and Opus ("av1") in a
-// .webm or (`mp4`) the engine's fragmented MP4, and read back: the raw file by its bytes, the
-// compressed one through the decoders.
+// The sync fixture exported at `fps`, uncompressed (`codec` "") or coded (capture/video.hpp's word,
+// with Opus) in a .webm or (`mp4`) the engine's fragmented MP4, and read back: the raw file by its
+// bytes, the coded one through the decoders its tracks name.
 Take take(double fps, int64_t steps, const fs::path& dir, bool ffmpeg, const std::string& codec,
           bool mp4 = false) {
   Take t;
@@ -159,7 +186,8 @@ Take take(double fps, int64_t steps, const fs::path& dir, bool ffmpeg, const std
   o.encoding.format = "mkv";
   o.encoding.codec = codec;
   o.sound = &gc::kSyncSound;
-  o.video = (dir / ("sync-" + num::to_string(fps) + "fps" +
+  o.video = (dir / ("sync-" + (codec.empty() || codec == "av1" ? "" : codec + "-") +
+                    num::to_string(fps) + "fps" +
                     (codec.empty() ? ".mkv"
                      : mp4         ? ".mp4"
                                    : ".webm")))
@@ -169,15 +197,19 @@ Take take(double fps, int64_t steps, const fs::path& dir, bool ffmpeg, const std
   const std::vector<uint8_t> bytes = read_all(o.video);
   std::vector<Block> blocks;
   size_t skip = 0;
-  if (!blocks_of(bytes, mp4, blocks, skip, t.error)) return t;
+  VideoInfo info;
+  if (!blocks_of(bytes, mp4, blocks, skip, info, t.error)) return t;
   t.frames = rec->frames;
   t.samples = rec->samples;
   t.bytes = rec->bytes;
   const bool coded = !codec.empty();
-  gc::Av1Decoder vd;
+  gc::VideoDecoder vd;
   gc::OpusDecoder ad;
   std::vector<float> stereo;
-  if (coded && (!vd.open(t.error) || !ad.open(t.error))) return t;
+  if (coded && (!vd.open(info.codec, info.codec_private, info.width, info.height, t.error) ||
+                !ad.open(t.error))) {
+    return t;
+  }
   for (const Block& b : blocks) {
     const std::span<const uint8_t> data(bytes.data() + b.offset, b.size);
     if (coded && b.track == 1) {
@@ -601,6 +633,124 @@ void coded(gl::Lab& lab, const std::vector<double>& rates, int64_t steps, const 
   lab.table(std::move(cost), gl::Det::measured);
 }
 
+// The platform's own encoders (capture/platform_video.hpp, M23d4), on a machine that has one:
+// for H.264 and HEVC, which encoder took the pictures (the media engine or the system's software
+// one), the sync fixture exported as an .mp4 at 30 fps and decoded back by the platform's decoder
+// (every picture out, each click on its step, ffmpeg playing the same file), and what a frame
+// costs at 720p with its size and quality. A machine with none says so. Everything is measured,
+// so every machine has the same digest.
+void platform(gl::Lab& lab, int64_t steps, const fs::path& dir, bool ffmpeg, int cost_frames) {
+  const std::string shot_id = "sync-platform";
+  const std::string title = "THE SAME, AS THE PLATFORM'S H.264 AND HEVC IN AN .MP4";
+  const std::string about =
+      "The sync fixture exported at 30 fps through the platform's encoder (VideoToolbox on a "
+      "Mac) and decoded back by its decoder: the first row H.264, the second HEVC, each 240 ms "
+      "round its first click.";
+  const std::string look =
+      "The wave starting within 3 ms of the red line in each row, and the first white box after "
+      "it by less than one box's width.";
+  if (gc::platform_encoder_name().empty() || !gc::encoders_built()) {
+    lab.note("this build or platform has no platform video encoder: its rows are skipped");
+    gl::Picture blank = gl::create_picture(480, 60, {250, 250, 252, 255});
+    gl::draw_text(blank, 8, 24, "NO PLATFORM ENCODER HERE", {30, 34, 40, 255});
+    lab.shot({shot_id, title, about, look, {}}, blank, gl::Det::measured);
+    return;
+  }
+  gl::LabTable table{
+      "The platform's encoders: who coded the pictures, the sync fixture at 30 fps as an .mp4 "
+      "(pictures decoded back, worst lag, sound off its step, ffmpeg), and a 720p frame's encode "
+      "at the default bitrate (MB a minute, luma PSNR decoded)",
+      {"codec", "encoder", "frames", "decoded", "worst-lag-ms", "sound-off-ms", "ffmpeg",
+       "720p encode-ms", "MB/min", "psnr-db"},
+      {}};
+  std::vector<Take> takes;
+  int64_t bad = 0;
+  std::vector<std::vector<uint8_t>> frames;
+  for (int k = 0; k < cost_frames; k++) {
+    std::vector<uint8_t> yuv;
+    gc::to_i420(pattern(1280, 720, k), yuv);
+    frames.push_back(std::move(yuv));
+  }
+  for (const std::string codec : {"h264", "hevc"}) {
+    gc::VideoEncoder enc;
+    gc::VideoEncoderOptions o;
+    o.width = 1280;
+    o.height = 720;
+    std::string error;
+    if (!enc.open(codec, o, error)) {
+      lab.fail("the platform's " + codec + " encoder did not open: " + error,
+               "Run tests/capture_platform_video_test.cpp on this machine (skill: replay).");
+      continue;
+    }
+    std::vector<gc::Packet> packets;
+    const auto t0 = Clock::now();
+    for (size_t k = 0; k < frames.size(); k++) {
+      if (!enc.encode(frames[k], gc::frame_ms(static_cast<int64_t>(k), 30), packets, error)) break;
+    }
+    enc.flush(packets, error);
+    const double ms = std::chrono::duration<double, std::milli>(Clock::now() - t0).count() /
+                      static_cast<double>(frames.size());
+    gc::VideoDecoder dec;
+    size_t bytes = 0;
+    double psnr = 0;
+    int decoded = 0;
+    if (dec.open(enc.matroska_codec(), enc.codec_private(), o.width, o.height, error)) {
+      for (size_t k = 0; k < packets.size() && k < frames.size(); k++) {
+        bytes += packets[k].data.size();
+        std::vector<uint8_t> got;
+        int gw = 0, gh = 0;
+        bool any = false;
+        if (dec.decode(packets[k].data, got, gw, gh, any, error) && any) {
+          psnr += luma_psnr(frames[k], got, gw, gh);
+          decoded++;
+        }
+      }
+    }
+    psnr /= std::max(1, decoded);
+    const double mb_min =
+        static_cast<double>(bytes) / static_cast<double>(frames.size()) * 30 * 60 / 1e6;
+    Take t = take(30, steps, dir, ffmpeg, codec, true);
+    double worst = 0, off = 0;
+    for (const Click& c : t.clicks) {
+      off = std::max(off, std::fabs(c.sound_ms - c.due_ms));
+      worst = std::max(worst, c.lit_ms < 0 ? 1e9 : c.lit_ms - c.due_ms);
+    }
+    const auto pictures = static_cast<int64_t>(t.pictures.size());
+    if (!t.error.empty() || worst >= 1000.0 / 30 + 3 || off > 3 || t.clicks.empty() ||
+        pictures != t.frames || decoded != static_cast<int>(frames.size())) {
+      bad++;
+    }
+    if (ffmpeg && (!t.ffmpeg_decodes || t.ffmpeg_frames != t.frames)) bad++;
+    table.rows.push_back({codec, enc.encoder(), std::to_string(t.frames), std::to_string(pictures),
+                          num::to_fixed(worst, 2), num::to_fixed(off, 2),
+                          !ffmpeg                                           ? "-"
+                          : t.ffmpeg_decodes && t.ffmpeg_frames == t.frames ? "every picture"
+                                                                            : "NO",
+                          num::to_fixed(ms, 2), num::to_fixed(mb_min, 1), num::to_fixed(psnr, 1)});
+    const std::string key = "platform." + codec;
+    lab.metric(key + ".hardware", enc.hardware() ? 1 : 0, "bool", gl::Det::measured);
+    lab.metric(key + ".worst-lag-ms", worst, "ms", gl::Det::measured);
+    lab.metric(key + ".720p.encode-ms", ms, "ms", gl::Det::measured);
+    lab.metric(key + ".720p.mb-per-minute", mb_min, "MB", gl::Det::measured);
+    lab.metric(key + ".720p.psnr-db", psnr, "dB", gl::Det::measured);
+    if (!t.error.empty()) {
+      lab.fail("the platform's " + codec + " export failed: " + t.error,
+               "Run tests/capture_platform_video_test.cpp on this machine (skill: replay).");
+    }
+    t.fps = 30;
+    takes.push_back(std::move(t));
+  }
+  lab.table(std::move(table), gl::Det::measured);
+  if (bad) {
+    lab.fail(std::to_string(bad) +
+                 " platform exports out of sync, not decoded whole by the platform's decoder or "
+                 "by ffmpeg",
+             "Read capture/videotoolbox.cpp; run tests/capture_platform_video_test.cpp on this "
+             "machine (skill: replay).");
+  }
+  lab.shot({shot_id, title, about, look, {}}, strips(takes, title), gl::Det::measured);
+}
+
 void run(gl::Lab& lab) {
   const double seconds = lab.arg_num("seconds");
   const std::vector<double> rates = lab.arg_nums("fps");
@@ -721,13 +871,15 @@ void run(gl::Lab& lab) {
            strips(takes, "EACH FRAME RATE'S FIRST CLICK: PICTURES ABOVE, SOUND BELOW"));
 
   coded(lab, rates, steps, dir, ffmpeg, static_cast<int>(lab.arg_num("cost-frames")));
+  platform(lab, steps, dir, ffmpeg, static_cast<int>(lab.arg_num("cost-frames")));
 }
 
 const gl::LabSpec kSpec{
     "capture",
     gl::LabKind::scenario,
     "engine",
-    "engine/capture (av_export, matroska, mkv_read, sync_fixture), engine/play/record.cpp",
+    "engine/capture (av_export, matroska, mkv_read, mp4, sync_fixture, video, platform_video), "
+    "engine/play/record.cpp",
     "replay",
     "Does an export's sound land on its steps, and does a flash on a click's step show less than "
     "a frame after it, at every frame rate?",

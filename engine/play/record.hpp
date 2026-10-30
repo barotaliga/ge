@@ -21,12 +21,15 @@
 // --speed=1 only. Uncompressed it is large (width * height * 1.5 bytes a frame); with `codec`
 // av1 the pictures are AV1 and the sound Opus, by the engine's own encoders (capture/codecs.hpp),
 // in a .webm, about a hundredth of the size (docs/replays.md § Compressed video), or in the
-// engine's own fragmented MP4 when the file's name ends .mp4 (capture/mp4.hpp).
+// engine's own fragmented MP4 when the file's name ends .mp4 (capture/mp4.hpp). With `codec`
+// h264 or hevc the pictures go through the platform's own encoder (VideoToolbox on a Mac,
+// capture/platform_video.hpp) into an .mp4, and `auto` takes h264 where there is one, else av1.
 //
 // ge:summary A run recorded: a view drawn at a frame rate, encoded by ffmpeg, and a contact sheet
 // ge:keywords record video recording mp4 webm gif h264 vp9 ffmpeg encode frames frame-rate speed
 // ge:keywords contact-sheet thumbnails timestamps resolution crf bitrate frame_steps
 // ge:keywords gpu-recording record-gpu mode lit wireframe depth overlay mkv sound av1 opus
+// ge:keywords hevc videotoolbox platform-encoder auto
 // ge:skill agent-interface
 // ge:test tests/play_record_test.cpp
 #pragma once
@@ -45,11 +48,13 @@ namespace ge::play {
 
 // How the frames become a file. `format` mp4 (H.264), webm (VP9), gif, mkv (the engine's own,
 // with sound: above), or png (frames in a directory, no encoder). An empty `codec` is the format's
-// own (an mkv's: none, uncompressed; `av1` for AV1 and Opus); `crf` < 0 its usual quality (23
+// own (an mkv's: none, uncompressed; `av1` for AV1 and Opus; `h264`, `hevc` or `auto` for the
+// platform's encoder, capture/video.hpp); `crf` < 0 its usual quality (23
 // for H.264, 32 for VP9 and AV1: lower is better and larger); a
 // `bitrate` ("4M") replaces the crf. `preset` is H.264's speed against size (ultrafast .. veryslow;
 // default medium). `container` mp4 puts an mkv's AV1 and Opus in the engine's own fragmented MP4
-// (capture/mp4.hpp) in place of a .webm.
+// (capture/mp4.hpp) in place of a .webm; `container` mkv puts the platform's codecs in a Matroska
+// file in place of an .mp4.
 struct Encoding {
   std::string format = "mp4";
   std::string codec;
