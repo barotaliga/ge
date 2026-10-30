@@ -7,8 +7,8 @@
 //   list through the search path: a `.mdl` as one morph model a skin, a `.spr` as sprite frames,
 //   a `.bsp` item (a health box, an ammo crate) as one morph model of its faces
 //   (app/classic_models.hpp). The map's own brush models ("*1", ...) are the map's, not these.
-//   `hide_flames` draws a torch's stick and cage without its painted flame, for a game whose
-//   effects light the flame instead.
+//   A torch's flame (`flame.mdl`, `flame2.mdl`) is also loaded bare, its stick and cage without
+//   the painted flame, for the frames whose effects burn the flame instead.
 // - PLACED (`place_models`, each frame from the server): every live entity with a model but the
 //   local player (whose eyes the camera is), then the static ones; its frame, skin, angles and
 //   colours as the server holds them.
@@ -20,7 +20,7 @@
 // ge:summary The window's models: items, weapons, flames, players, loaded from the packs and drawn
 // ge:keywords world-models create_models place_models prepare_models encode_models placed-model
 // ge:keywords items armour health weapons flames torches players statics entity-models morph
-// ge:keywords sprites hide-flames topcolor bottomcolor
+// ge:keywords sprites bare-flames topcolor bottomcolor
 // ge:skill render shooter morph
 #pragma once
 
@@ -59,13 +59,14 @@ void place_models(const Listen& l, std::vector<Placed>& out);
 
 struct ModelLoad {
   std::span<const std::string> names;  // the server's model list
-  bool hide_flames = false;
 };
 
 // One server model as drawn.
 struct ModelKind {
   enum class Is : uint8_t { none, alias, sprite, brush } is = Is::none;
   uint32_t first = 0;  // its first morph model (a skin each) or sprite frame
+  static constexpr uint32_t kNone = ~0u;
+  uint32_t bare = kNone;  // a flame's first morph model without its painted flame
   models::Groups frames, skins;
   bool spin = false, synced = true;
   ge::render::SpriteFacing facing = ge::render::SpriteFacing::parallel;
@@ -96,10 +97,11 @@ void create_models(ge::gpu::Device& device, ge::gpu::PipelineSet& pipelines, Wor
                    const ModelLoad& load);
 // This frame's draws of `placed` at `view` (its time the animations' clock), lit `brightness`
 // times the lightmap under each and never under `minlight` (the world's own: ba::Options's
-// brightness and minlight), `smooth` texels.
+// brightness and minlight), `smooth` texels; with `bare_flames` a torch's flame is drawn bare
+// (the modern look's burning gas, `ce_flames`, is the flame).
 void prepare_models(ge::gpu::Device& device, WorldModels& m, const ge::brush::Map& map,
                     std::span<const Placed> placed, const ge::render::FrameView& view,
-                    double brightness, double minlight, bool smooth);
+                    double brightness, double minlight, bool smooth, bool bare_flames);
 // The models after the opaque world; the sprites where the particles are drawn.
 void encode_models(const WorldModels& m, const ge::gpu::PipelineSet& pipelines,
                    ge::render::FrameRecorder& rec, wgpu::CommandEncoder& encoder,

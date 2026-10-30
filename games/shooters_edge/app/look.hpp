@@ -15,7 +15,7 @@
 //
 // ge:summary Shooter's Edge's classic and modern looks: the world's options, the post's, the
 // palette grade
-// ge:keywords look classic modern r_look r_fx_lights r_fx_glow r_bloom r_lava_glow
+// ge:keywords look classic modern r_look r_fx_lights r_fx_glow r_bloom r_lava_glow ce-switches
 // r_slime_glow cvars palette grade quantize
 // crisp bloom shooter picture
 // ge:skill render shooter
@@ -30,6 +30,8 @@
 #include <string>
 
 #include "brush/app/bsp_draw.hpp"
+#include "brush/app/bsp_weather.hpp"
+#include "classicenhance/switches.hpp"
 #include "console/console.hpp"
 #include "render/post.hpp"
 
@@ -42,17 +44,20 @@ const char* look_name(Look look);
 
 // The picture as the player set it (the r_ cvars); the defaults are the modern look's tuning.
 struct Picture {
-  std::string look = "classic";  // r_look
-  double fx_lights = 0.2;        // r_fx_lights: the dynamic lights' strength, the classic's 1
-  double fx_glow = 0.15;         // r_fx_glow: the glowing particles' light, the classic's 1
-  double bloom = 0.3;            // r_bloom: the bloom's share, 0 none
-  double lava_glow = 0.2;        // r_lava_glow: the lava's light on the walls round it, 0 none
-  double slime_glow = 1;         // r_slime_glow: the slime's faint green light, 0 none
+  std::string look = "modern";  // r_look
+  double fx_lights = 0.2;       // r_fx_lights: the dynamic lights' strength, the classic's 1
+  double fx_glow = 0.15;        // r_fx_glow: the glowing particles' light, the classic's 1
+  double bloom = 0.3;           // r_bloom: the bloom's share, 0 none
+  double lava_glow = 0.2;       // r_lava_glow: the lava's light on the walls round it, 0 none
+  double slime_glow = 1;        // r_slime_glow: the slime's faint green light, 0 none
+  // The ce_ switches: each enhancement the modern look draws over the pack, on or off.
+  ge::classicenhance::Switches ce;
+  ge::brush::app::WeatherCvars weather;  // r_weather and its kin: the rain and the storm
 };
-// Registers r_look, r_fx_lights, r_fx_glow, r_bloom, r_lava_glow and r_slime_glow over `picture`
-// (it must outlive `con`).
+// Registers r_look, r_fx_lights, r_fx_glow, r_bloom, r_lava_glow, r_slime_glow, every ce_ switch
+// and the weather's cvars over `picture` (it must outlive `con`).
 void add_cvars(ge::console::Console& con, Picture& picture);
-// r_look's look; classic for a word it does not know.
+// r_look's look; modern for a word it does not know.
 Look look_of(const Picture& picture);
 
 // The world renderer's options in `look`, over `base` (the game's other settings).

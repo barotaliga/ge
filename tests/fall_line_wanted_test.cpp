@@ -327,11 +327,11 @@ TEST(a_scripted_hunt_round_a_ridge_keeps_its_golden) {
          std::string(fs::wanted_end_name(state.wanted.ended)) + " " +
          std::to_string(changes(events, fs::WantedChange::searching)) + " " +
          std::to_string(changes(events, fs::WantedChange::seen)) + " " +
-         hex(fs::state_hash(state, 0xcbf29ce484222325ull));
+         hex(fs::state_hash(state, 0xcbf29ce484222325ull)) + " " + fs::state_parts(state);
   CHECK_MSG(changes(events, fs::WantedChange::searching) > 0, "the ridge never hid him");
   if (env_set("GE_GOLDEN_WRITE")) {
     std::ofstream out(ge::test::root_path(kGolden));
-    out << "# reached-bits for stars 0..5, stars, end, searching, seen, state digest "
+    out << "# reached-bits for stars 0..5, stars, end, searching, seen, state digest, its parts "
            "(fall_line_wanted_test, the ridge hunt)\n"
         << row << "\n";
     return;

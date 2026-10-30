@@ -230,7 +230,7 @@ void run(gl::Lab& lab) {
   }
   cl::WorldDrawPtr frame;
   ge::gpu::Target out;
-  const cl::ModelLoad load{l.server->models, false};
+  const cl::ModelLoad load{l.server->models};
   if (device) {
     frame = cl::create_world_draw(*device, files, *l.map, w, h, wgpu::TextureFormat::RGBA8Unorm,
                                   look, error, load);

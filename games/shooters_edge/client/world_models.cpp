@@ -114,8 +114,6 @@ void create_models(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines, WorldMod
           ge::core::output::status("shooters_edge: model " + name + " not drawn: " + error);
         continue;
       }
-      if (load.hide_flames && (ends_with(name, "/flame.mdl") || ends_with(name, "/flame2.mdl")))
-        model = ge::classicenhance::drop_glowing(model);
       k.is = ModelKind::Is::alias;
       k.first = uint32_t(morphs.size());
       k.frames = models::frame_groups(model);
@@ -124,6 +122,12 @@ void create_models(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines, WorldMod
       k.synced = model.synced;
       for (size_t s = 0; s < std::max<size_t>(1, model.skins.size()); s++)
         morphs.push_back(models::morph_from_alias(model, palette, int(s)));
+      if (ends_with(name, "/flame.mdl") || ends_with(name, "/flame2.mdl")) {
+        const mo::Model bare = ge::classicenhance::drop_glowing(model);
+        k.bare = uint32_t(morphs.size());
+        for (size_t s = 0; s < std::max<size_t>(1, bare.skins.size()); s++)
+          morphs.push_back(models::morph_from_alias(bare, palette, int(s)));
+      }
     } else if (ends_with(name, ".spr")) {
       mo::Sprite sprite;
       if (!mo::read_sprite(bytes, name, &sprite, &error)) {
@@ -168,7 +172,7 @@ void create_models(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines, WorldMod
 
 void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
                     std::span<const Placed> placed, const gr::FrameView& view, double brightness,
-                    double minlight, bool smooth) {
+                    double minlight, bool smooth, bool bare_flames) {
   m.morph_draws.clear();
   m.sprite_draws.clear();
   m.near.clear();
@@ -209,7 +213,7 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     }
     if (!m.has_morph || m.morph_draws.size() >= gr::kMaxMorphDraws) continue;
     gr::MorphDraw g;
-    g.model = k.first;
+    g.model = bare_flames && k.bare != ModelKind::kNone ? k.bare : k.first;
     uint32_t frame = 0;
     if (k.is == ModelKind::Is::alias) {
       g.model += models::frame_in(k.skins, p.skin, at);

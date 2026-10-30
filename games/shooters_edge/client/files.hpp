@@ -8,7 +8,7 @@
 //
 // ge:summary The client's search path: a game folder's loose files and its numbered packs
 // ge:keywords search-path basedir game-folder pak pack archive find_file open_game_dir files
-// ge:keywords loose-files palette maps
+// ge:keywords loose-files palette maps map_names
 // ge:skill vfs shooter
 // ge:test tests/shooters_edge_listen_test.cpp
 #pragma once
@@ -46,5 +46,9 @@ bool add_archive(SearchPath& path, std::string name, std::vector<uint8_t> bytes,
 // `store` and viewed, or a view into its pack. Empty when no place has it.
 std::span<const uint8_t> find_file(const SearchPath& path, std::string_view name,
                                    std::vector<uint8_t>& store);
+
+// The maps the search path holds (`maps/<name>.bsp`, loose or in a pack), by name, `start` first
+// and the rest in order.
+std::vector<std::string> map_names(const SearchPath& path);
 
 }  // namespace shooters_edge::client

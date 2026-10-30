@@ -161,7 +161,7 @@ void run(ge::lab::Lab& lab) {
   };
   ge::prof::start(static_cast<size_t>(frames) * 256);
   std::map<std::string, std::pair<uint32_t, uint32_t>> work;
-  std::vector<double> cpu, totals;
+  std::vector<double> cpu, totals, gpu_spans;
   double cpu_first = 0;
   std::vector<ge::skier::SkierState> skiers;
   ge::render::FrameView view;
@@ -186,6 +186,9 @@ void run(ge::lab::Lab& lab) {
     } else {
       cpu.push_back(st.cpu_ms);
     }
+    // The sum of the passes' times, and the frame's span on the GPU (FrameStats::gpu_span_ms):
+    // on a tiled GPU the passes overlap, so the sum counts the overlap twice; the span is the
+    // frame's time.
     double total = 0;
     for (int i = 0; i < st.count; ++i) {
       const ge::render::PassStat& p = st.passes[static_cast<size_t>(i)];
@@ -198,6 +201,7 @@ void run(ge::lab::Lab& lab) {
       work[name] = {p.draws, p.dispatches};
     }
     totals.push_back(total);
+    if (k > 0 && std::isfinite(st.gpu_span_ms())) gpu_spans.push_back(st.gpu_span_ms());
     const int64_t t0 = ge::prof::now_ns();
     for (int s = 0; s < 2 && !racing.over(); ++s) step();
     const double sim_ms = static_cast<double>(ge::prof::now_ns() - t0) / 1e6;
@@ -259,6 +263,11 @@ void run(ge::lab::Lab& lab) {
   table.rows.push_back({"(frame)", fixed(quantile(totals, 0.5), 3),
                         fixed(quantile(totals, 0.95), 3), fixed(quantile(totals, 1.0), 3),
                         fixed(quantile(cpu, 0.5), 3), "", ""});
+  table.rows.push_back({"(span)", fixed(quantile(gpu_spans, 0.5), 3),
+                        fixed(quantile(gpu_spans, 0.95), 3), fixed(quantile(gpu_spans, 1.0), 3), "",
+                        "", ""});
+  lab.metric("gpu-ms.span.median", quantile(gpu_spans, 0.5), "ms", Det::measured);
+  lab.metric("gpu-ms.span.p95", quantile(gpu_spans, 0.95), "ms", Det::measured);
   lab.table(std::move(table), Det::measured);
 
   // Where a frame's CPU goes: the prepare's zones, then the simulation's steps between frames.

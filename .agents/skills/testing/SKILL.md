@@ -41,7 +41,10 @@ and prints `ok` or `FAIL` per test.
   the release build, runs it again to hold it, and answers with what moved;
   `make ge ARGS="golden diff --base=origin/main"` is the same table for every golden file the
   branch changed: each column that moved, in how many rows, and the rows (a double's bits shown
-  as the double). Paste that into the PR's why.
+  as the double). Paste that into the PR's why. A digest written beside its PARTS word
+  (`name:hex,name:hex,...`, Fall Line's `state_parts` after `state_hash`) is diffed a part at a
+  time: `parts.army moved in 5 rows` says which part moved, so a digest another PR's system moved
+  is told from a cross-platform break. A new golden row with a state digest writes its parts too.
 - Keep a file under about 1 MB. Draw inputs from a fixed mulberry32 seed so the table
   is reproducible.
 

@@ -13,7 +13,7 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
   namespace gc = ge::console;
   auto& cv = con.cvars();
   cv.bind({.name = "r_look",
-           .fallback = "classic",
+           .fallback = "modern",
            .help = "the picture: classic (crisp texels, the lightmaps, the palette) or modern "
                    "(filtered, real-time lights, bloom)",
            .kind = gc::CvarKind::text},
@@ -52,10 +52,12 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
            .min = 0,
            .max = 4},
           &picture.slime_glow);
+  ge::classicenhance::bind_switches(cv, &picture.ce);
+  ge::brush::app::add_weather_cvars(cv, picture.weather);
 }
 
 Look look_of(const Picture& picture) {
-  Look look = Look::classic;
+  Look look = Look::modern;
   parse_look(picture.look, &look);
   return look;
 }

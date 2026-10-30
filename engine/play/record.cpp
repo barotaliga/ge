@@ -13,6 +13,7 @@
 #include <filesystem>
 
 #include "capture/av_export.hpp"
+#include "capture/video.hpp"
 #include "core/num_text.hpp"
 #include "lab/png.hpp"
 #include "play/session.hpp"
@@ -81,15 +82,17 @@ std::string encoding_problem(const Encoding& e) {
     return "no format `" + e.format + "`; the formats are mp4, webm, gif, mkv and png";
   }
   if (e.crf > 63) return "--crf " + std::to_string(e.crf) + " is over 63";
-  if (e.format == "mkv" && !e.codec.empty() && e.codec != "av1") {
-    return "an mkv's codecs are av1 (AV1 and Opus, a .webm) and none (uncompressed); not `" +
+  if (e.format == "mkv" && !e.codec.empty() && !capture::video_codec_word(e.codec)) {
+    return "an mkv's codecs are av1 (AV1 and Opus, a .webm), h264 and hevc (the platform's "
+           "encoder, an .mp4), auto (h264 when the platform has it, else av1) and none "
+           "(uncompressed); not `" +
            e.codec + "`";
   }
   if (!e.container.empty() && e.container != "mkv" && e.container != "mp4") {
     return "no container `" + e.container + "`; an mkv's containers are mkv and mp4";
   }
-  if (e.container == "mp4" && (e.format != "mkv" || e.codec != "av1")) {
-    return "--container=mp4 takes --format=mkv --codec=av1 (an MP4 carries no uncompressed "
+  if (e.container == "mp4" && (e.format != "mkv" || e.codec.empty())) {
+    return "--container=mp4 takes --format=mkv with a --codec (an MP4 carries no uncompressed "
            "pictures; ffmpeg's own mp4 is --format=mp4)";
   }
   if (e.format == "mkv" && !e.bitrate.empty()) {
@@ -104,6 +107,8 @@ std::string encoding_problem(const Encoding& e) {
 std::string_view extension_of(const Encoding& e) {
   if (e.format == "png") return "";
   if (e.format == "mkv" && e.codec == "av1") return e.container == "mp4" ? "mp4" : "webm";
+  // The platform's codecs (and auto, which may be either): an .mp4 unless an .mkv is asked for.
+  if (e.format == "mkv" && !e.codec.empty()) return e.container == "mkv" ? "mkv" : "mp4";
   return e.format;
 }
 
