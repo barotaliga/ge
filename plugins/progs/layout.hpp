@@ -34,6 +34,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
 namespace ge::progs {
 
@@ -203,5 +204,8 @@ const Layout* layout_for_crc(int32_t crc);
 // A form's entry by name, or nullptr.
 const LayoutEntry* layout_global(const Layout& layout, const char* name);
 const LayoutEntry* layout_field(const Layout& layout, const char* name);
+// The form's engine-side declarations as QC source, in its order (each hook declared, not
+// defined), so a program compiled with them first carries exactly that layout.
+std::string layout_declarations(const Layout& layout);
 
 }  // namespace ge::progs

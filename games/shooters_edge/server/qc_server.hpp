@@ -113,6 +113,11 @@ struct HookCall {
   int self = 0;
 };
 
+// The change a console line asks for: `map` a new game, `changelevel` the next map with the
+// players' parms carried (SetChangeParms), `restart` the same map with the parms it was entered
+// with.
+enum class MapChange : uint8_t { new_game, change_level, restart };
+
 // What the server keeps of one client (the player is entity slot + 1).
 struct ClientInfo {
   bool active = false;
@@ -174,7 +179,11 @@ struct QcServer {
   std::vector<std::string> map_messages;  // the entity text's messages ("x is not a field")
 
   std::string stop_reason;  // why the map stopped (error / objerror)
-  std::string pending_map;  // a `map` console line: the change the game makes
+  std::string pending_map;  // a `map`, `changelevel` or `restart` console line: the change made
+  MapChange pending_change = MapChange::new_game;  // which of the three `pending_map` is
+  // The flags a game carries from map to map (the program's `serverflags`, written at each map's
+  // start; a campaign's runes). The host keeps them across a level change.
+  float serverflags = 0;
 
   // Statement tracing (traceon / traceoff) into the console, at most `trace_lines` lines.
   pg::TraceHooks trace_hooks;
@@ -221,9 +230,11 @@ std::unique_ptr<QcServer> make_qc_server(const pg::Progs& progs, const QcServerO
 bool load_map(QcServer& s, const MapSpec& map, std::string& error);
 
 // A client takes slot `slot`: its user info (`name`), its entity cleared in the VM with that name
-// as its netname, SetNewParms, then ClientConnect and PutClientInServer (a spectator's
-// SpectatorConnect).
-void connect(QcServer& s, int slot, const std::string& name, bool spectator, bool bot);
+// as its netname, SetNewParms (or the carried `parms`), then ClientConnect and PutClientInServer (a
+// spectator's SpectatorConnect). `parms` (16) are the spawn parms the client carries from the last
+// map: written where the program reads them in place of SetNewParms.
+void connect(QcServer& s, int slot, const std::string& name, bool spectator, bool bot,
+             const float* parms = nullptr);
 void disconnect(QcServer& s, int slot);
 // SetChangeParms for every client (before a map change), saving their parms.
 void save_change_parms(QcServer& s);
