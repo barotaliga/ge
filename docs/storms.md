@@ -120,6 +120,25 @@ intensity-weighted mean of the segments in it. `render_thunder` makes the sound:
 under that envelope, low-passed bin by bin at its cut-off, over a 70 Hz rumble that lingers on
 the envelope, soft-clipped, mono at any rate.
 
+## Thunder heard
+
+`engine/wind/thunder_play.hpp` plays a storm's thunder on the synth's sampled voices, so a game
+only has to say where the ear is:
+
+- `hear_storm(player, storm, t, ear)` looks at every flash that started since the last call. The
+  first call looks back as far as thunder carries (25 km at the speed of sound, about 75 s), so a
+  listener arriving under a storm hears the thunder already on its way. For each flash it works
+  out the thunder at the ear, renders it once, and queues it at its first sound, panned by the
+  bearing to the channel's nearest point.
+- `play_thunder(player, synth, t, block_s, bus)` starts every queued clap due inside the block,
+  its first sample placed in the block by the play's delay. It frees a clap's recording once its
+  voice has ended. A clap more than 0.25 s late (a run paused through it) is let go.
+
+Rendering is the cost: a near strike is up to 60 s of samples, made once a flash. No more than 12
+claps wait or sound at once; past that the quietest is let go. Played offline in 10 ms blocks, a
+strike's thunder begins within 2 ms of its first sound's arrival at 1, 4 and 12 km
+(`tests/wind_thunder_play_test.cpp`, and the `storm` lab's table).
+
 ## The picture
 
 A renderer reads the flashes alive in its frame's window (`flashes_between` over
@@ -179,7 +198,8 @@ strike's channel above the cloud's base.
 `make lab LAB=storm` (`docs/labs.md`): a cell's life cycle, a multicell storm's flashes minute by
 minute, one flash's flicker against 60 Hz frames, night views of a ground strike, sheet lightning
 and a bolt from the blue, a filmstrip, the radar view with gust fronts and strikes, thunder's
-envelope at 1, 4 and 12 km with its sound, and the bands table above, which fails the lab when the
+envelope at 1, 4 and 12 km with its sound, the same strike played through the synth with how late
+each began, a minute and a half of the storm heard from 5 km, and the bands table above, which fails the lab when the
 in-cloud share, the strokes or the interstroke time leave their band.
 
 `make lab LAB=storm-sky` draws the storm in Fall Line's frame: a seed's map at night under

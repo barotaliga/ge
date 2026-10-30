@@ -5,9 +5,9 @@
 # snow's feel (climate.hpp, mist.hpp, cold.hpp; docs/climate.md). Deterministic, no platform;
 # published as ge::wind.
 add_library(ge_wind STATIC engine/wind/field.cpp engine/wind/sources.cpp engine/wind/precip.cpp
-                    engine/wind/storm.cpp engine/wind/lightning.cpp engine/wind/thunder.cpp
+                    engine/wind/storm.cpp engine/wind/lightning.cpp engine/wind/thunder.cpp engine/wind/thunder_play.cpp
                     engine/wind/climate.cpp engine/wind/mist.cpp engine/wind/cold.cpp
                     engine/wind/aloft.cpp)
-target_link_libraries(ge_wind PUBLIC ge_core)
+target_link_libraries(ge_wind PUBLIC ge_core ge_audio)
 
 ge_module(ge_wind EXPORT wind SIMULATION)

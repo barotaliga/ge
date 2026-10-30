@@ -13,6 +13,7 @@
 // ge:keywords bolt-from-the-blue radar gust-front thunder rumble wav
 // ge:skill water labs
 // ge:test tests/wind_storm_test.cpp tests/wind_lightning_test.cpp
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -20,6 +21,7 @@
 #include <string>
 #include <vector>
 
+#include "audio/synth.hpp"
 #include "core/libm/libm.hpp"
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
@@ -28,6 +30,7 @@
 #include "wind/lightning.hpp"
 #include "wind/storm.hpp"
 #include "wind/thunder.hpp"
+#include "wind/thunder_play.hpp"
 
 namespace {
 
@@ -249,6 +252,102 @@ void thunder(gl::Lab& lab, const gw::Flash& f, double seconds) {
              "off it starts later, is far quieter and loses its highs.",
              "1 km starting near 3 s, 12 km near 35 s; each farther line lower");
   lab.table(table);
+}
+
+// THE THUNDER HEARD: the same strike played through the synth's sampled voices by the thunder
+// player (wind/thunder_play.hpp), offline in 10 ms blocks, and the storm itself listened to.
+struct Played {
+  double onset = -1;
+  double peak = 0;
+};
+
+Played play_one(const gw::Storm& storm, const gw::Flash& f, const gw::Ear& ear, double seconds,
+                std::vector<float>* keep) {
+  constexpr int kBlock = 480;
+  gw::ThunderPlayer player;
+  player.started = true;
+  player.last = f.t0 - 1e-6;
+  ge::audio::Synth synth;
+  std::vector<float> out(2 * kBlock);
+  Played p;
+  gw::hear_storm(player, storm, f.t0 + 1e-3, ear);
+  for (int b = 0; b * kBlock < seconds * 48000; ++b) {
+    const double t = f.t0 + b * 0.01;
+    gw::play_thunder(player, synth, t, 0.01);
+    synth.render(out.data(), kBlock);
+    for (int i = 0; i < kBlock; ++i) {
+      const double a = std::max(std::fabs(out[2 * static_cast<size_t>(i)]),
+                                std::fabs(out[2 * static_cast<size_t>(i) + 1]));
+      if (p.onset < 0 && a > 1e-4) p.onset = t + i / 48000.0;
+      p.peak = std::max(p.peak, a);
+    }
+    if (keep != nullptr) keep->insert(keep->end(), out.begin(), out.end());
+  }
+  return p;
+}
+
+void heard(gl::Lab& lab, const gw::Storm& severe, const gw::Storm& storm, const gw::Flash& f,
+           double listen) {
+  gl::LabTable table{"Thunder heard through the synth",
+                     {"listener", "due s", "began s", "late ms", "peak dBFS"},
+                     {}};
+  auto ch = std::make_unique<gw::Channel>();
+  auto th = std::make_unique<gw::Thunder>();
+  gw::build_channel(f, *ch);
+  for (const double km : {1.0, 4.0, 12.0}) {
+    gw::Ear ear;
+    ear.x = f.ex + km * 1000;
+    ear.y = f.ey;
+    ear.z = f.ez;
+    ear.celsius = 15;
+    gw::hear_thunder(f, *ch, ear.x, ear.y, ear.z, gw::sound_speed(ear.celsius), *th);
+    const double due = th->first;
+    const Played p = play_one(severe, f, ear, due + 1.0, nullptr);
+    const double began = p.onset - f.t0;
+    const double late = (began - due) * 1000;
+    const double db = 20 * lm::log(p.peak + 1e-9) / lm::log(10.0);
+    table.rows.push_back(
+        {fixed(km, 0) + " km", fixed(due, 3), fixed(began, 3), fixed(late, 1), fixed(db, 1)});
+    lab.metric("heard." + fixed(km, 0) + "km.late", late, "ms");
+  }
+  lab.table(table);
+
+  // The multicell storm listened to for `listen` s from 5 km south-west of where it rose, the
+  // ear facing north: every flash's thunder at its own arrival, panned to its channel.
+  constexpr int kBlock = 480;
+  gw::ThunderPlayer player;
+  ge::audio::Synth synth;
+  const double t0 = 1800;
+  gw::Ear ear;
+  ear.x = storm.vx * t0 - 3500;  // where the storm has drifted to by then, 5 km off it
+  ear.z = storm.vz * t0 - 3500;
+  ear.celsius = 15;
+  std::vector<float> out(2 * kBlock), all;
+  int claps = 0;
+  for (int b = 0; b * kBlock < listen * 48000; ++b) {
+    const double t = t0 + b * 0.01;
+    if (b % 10 == 0) gw::hear_storm(player, storm, t, ear);
+    const size_t before = player.sounding.size();
+    gw::play_thunder(player, synth, t, 0.01);
+    claps +=
+        static_cast<int>(player.sounding.size() > before ? player.sounding.size() - before : 0);
+    synth.render(out.data(), kBlock);
+    all.insert(all.end(), out.begin(), out.end());
+  }
+  lab.metric("heard.storm.claps", claps, "count");
+  gl::sound_shot(lab,
+                 {"storm-heard",
+                  "THE STORM HEARD FROM 5 KM",
+                  "The multicell storm listened to for " + fixed(listen, 0) +
+                      " s from 5 km south-west of where its first cell rose, facing north, from "
+                      "30 minutes into its life: " +
+                      std::to_string(claps) +
+                      " claps, each flash's thunder started at the moment its first sound "
+                      "arrives and panned toward its channel's nearest point.",
+                  "near claps cracking on one side, far ones low and long, overlapping into a "
+                  "rolling background as the storm grows",
+                  {{"from", "5 km"}, {"t", fixed(t0, 0) + " s"}}},
+                 all);
 }
 
 void bands(gl::Lab& lab, const std::vector<gw::Flash>& flashes) {
@@ -645,21 +744,24 @@ void run(gl::Lab& lab) {
   plan(lab, storm, lab.arg_num("minute") * 60);
   const gw::Flash* strike = pick(many, gw::FlashKind::ground, 3, false, false);
   if (strike != nullptr) thunder(lab, *strike, seconds);
+  if (strike != nullptr) heard(lab, severe, storm, *strike, lab.arg_num("listen"));
 }
 
 const gl::LabSpec kSpec{
     "storm",
     gl::LabKind::picture,
     "engine",
-    "engine/wind/storm.hpp, engine/wind/lightning.hpp, engine/wind/thunder.hpp",
+    "engine/wind/storm.hpp, engine/wind/lightning.hpp, engine/wind/thunder.hpp, "
+    "engine/wind/thunder_play.hpp",
     "water",
     "Do the engine's thunderstorms live, flash, light the cloud, flicker, branch and thunder the "
     "way real ones do?",
     {{"seed", "38", "the multicell storm's seed"},
      {"width", "960", "the night pictures' width, px"},
      {"minute", "50", "the radar view's moment, min"},
-     {"seconds", "14", "how much of each thunder is rendered, s"}},
-    "--width=320 --seconds=2",
+     {"seconds", "14", "how much of each thunder is rendered, s"},
+     {"listen", "90", "how long the storm is listened to, s"}},
+    "--width=320 --seconds=2 --listen=6",
     run};
 GE_LAB(kSpec);
 
