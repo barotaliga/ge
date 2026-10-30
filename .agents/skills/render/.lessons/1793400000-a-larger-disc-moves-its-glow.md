@@ -9,4 +9,4 @@ The sky draws the sun's and the moon's discs off one radius each (the sun's off 
 
 A cloud's glow is a point's diffraction pattern. Left alone, a moon drawn five times larger has its corona's bright core as a small spot in the middle of its face. Reading the pattern at the angle off the drawn limb (`theta - disc_swell()`) moves the ring out with the edge. A swell of zero (any disc no larger than the real one) keeps every picture bit for bit.
 
-To aim the `world` lab at the sun or the moon, a turned view needs their heading. A temporary note in the lab printing `sun_azimuth` and `night.moon_azimuth` per scene was the quickest way to get them; then `vista@<heading>:<pitch>:<lens>`.
+To aim the `world` lab at the sun or the moon, use `vista@sun:<lens>` or `vista@moon:<lens>` (the render skill's § Labs); no heading needs printing first.

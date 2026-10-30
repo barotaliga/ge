@@ -1,0 +1,124 @@
+// THE FIGHTER: a bot (plugins/shooter/bot.hpp) that plays the baseline deathmatch mod
+// (games/shooters_edge/qc): it chooses where to go, what to hold and when to shoot, on `ai/choose`,
+// from what a player's client has and nothing else.
+//
+// WHAT IT KNOWS:
+// - its own stats, as the server sends a client its own (health, armour and its share, the items
+//   carried, the weapon held, the four ammunitions: `read_stats`);
+// - the map's items, off the map's entity text (a client loads the map file, and its entities with
+//   it): each one's classname, place and spawnflags, matched at the start to the entity the server
+//   sends for it;
+// - whether each item is there: an item taken is no longer sent (its model is gone), and it is back
+//   its respawn time later (health, armour and ammunition 20 s, a weapon 30 s), so an item seen to
+//   go is timed;
+// - the others through its senses: sight in its view's cone, hearing, memory (senses.hpp).
+//
+// WHAT IT CHOOSES, every `kThink_s` (each a decision on `ai::Why`):
+// - its MODE (`ai::enter`): `roam` (no one known: go for the item worth most), `fight` (a contact
+//   in sight: keep to the item route and shoot), `chase` (lost from sight a moment ago: go where it
+//   was last seen), `retreat` (weak with someone about: go for the nearest health or armour away
+//   from them, and back to fighting once strong again);
+// - its GOAL (`ai::pick_best`): every item scored by what it gives this player now (health it
+//   lacks, protection over what it wears, a weapon it does not carry, ammunition it is short of)
+//   over the time to have it (the run there at full speed, or the wait for its return, whichever is
+//   longer);
+// - its WEAPON (`ai::pick_best`): every weapon carried with the ammunition to fire, scored by the
+//   range to the target (the double scattergun close, the rockets past their own blast, the arc
+//   within its beam), sent as the weapon's impulse;
+// and every command, whether to FIRE: a contact in sight, the view within the weapon's tolerance
+// of the aim (the target's width at its range, a blast's wider), and in range. A rocket and a
+// grenade are aimed at the feet, a projectile led by its flight time. Dead, it presses attack to
+// come back once the mod allows.
+//
+// Deterministic: a pure function of what it is sent and its hands' seeds.
+//
+// ge:summary The fighter: a bot on the baseline mod choosing its mode, goal, weapon and trigger
+// ge:keywords fighter deathmatch mode roam fight chase retreat item-timing respawn weapon-choice
+// ge:keywords fire trigger tolerance stats items pick_best enter baseline-mod
+// ge:skill shooter bots
+// ge:test tests/shooters_edge_fight_test.cpp
+#pragma once
+
+#include <cstdint>
+#include <string>
+#include <vector>
+
+#include "shooter/bot.hpp"
+#include "shooters_edge/server/qc_server.hpp"
+
+namespace shooters_edge::bots {
+
+namespace sh = ge::shooter;
+
+constexpr double kThink_s = 0.1;  // how often the mode, the goal and the weapon are chosen
+
+// What a client is sent of its own player.
+struct Stats {
+  float health = 0, armor = 0, armortype = 0;
+  int32_t items = 0;   // the W_ and IT_ bits
+  int32_t weapon = 0;  // the W_ bit held
+  float shells = 0, nails = 0, rockets = 0, cells = 0;
+};
+Stats read_stats(const server::QcServer& s, int ent);
+
+enum class ItemKind : uint8_t {
+  health,
+  mega,
+  armor1,
+  armor2,
+  armor3,
+  shells,
+  nails,
+  rockets,
+  cells,
+  weapon,
+};
+
+struct ItemSpot {
+  int ent = -1;  // the server's entity for it, -1 when none matched
+  ItemKind kind = ItemKind::health;
+  int32_t weapon = 0;    // a weapon's W_ bit
+  float amount = 0;      // health given, or ammunition (doubled by spawnflags 1)
+  float respawn_s = 20;  // gone this long once taken
+  sh::Vec3f at;          // where it stands (the middle of its box on the floor)
+  int32_t node = -1;     // the nav node nearest it
+  bool present = true;   // sent this frame
+  double back_at = 0;    // when it is expected back (while gone)
+  std::string name;      // its classname (a health box by its size)
+};
+
+enum class FightMode : uint8_t { roam, fight, chase, retreat };
+const char* fight_mode_name(FightMode m);
+
+struct FighterStats {
+  int64_t commands = 0, shots = 0, switches = 0, pickups = 0, respawns = 0;
+  int64_t taken = 0;                // items seen to go (by anyone)
+  int64_t modes = 0;                // mode changes
+  int64_t mode_commands[4] = {};    // commands spent in each mode
+  int64_t weapon_commands[9] = {};  // commands holding each weapon, by its number (1..8)
+};
+
+struct Fighter {
+  sh::Bot bot;
+  std::vector<ItemSpot> items;
+  FightMode mode = FightMode::roam;
+  double held = 0;        // in the mode this long
+  double next_think = 0;  // server time of the next choice
+  int32_t goal_item = -1;
+  int32_t goal_node = -1;
+  int32_t want_weapon = 0;  // the number (1..8) asked for; 0 none pending
+  double impulse_at = -1;   // when the last impulse went
+  bool was_dead = false;
+  ge::ai::Why* why = nullptr;
+  FighterStats stats;
+};
+
+// A fighter on graph `g` with `skill`'s aim, the map's items off `entities` (the map's text)
+// matched to what the server `s` sends client `slot`'s player now. Call after the slot connects.
+void fighter_init(Fighter& f, const sh::NavGraph& g, const server::QcServer& s, int slot,
+                  const char* entities, sh::AimSkill skill, double hz, uint32_t seed);
+
+// The fighter's next command, `msec` long, on server `s` as it stands after the last frame.
+sh::MoveCmd fighter_command(Fighter& f, const server::QcServer& s, int slot, int msec);
+
+}  // namespace shooters_edge::bots

@@ -16,8 +16,10 @@
 
 namespace {
 
+using ge::render::aim_at;
 using ge::render::camera_matrices;
 using ge::render::FrameView;
+using ge::render::SkyBody;
 
 // Clip coordinates of a camera-relative point, divided through.
 void project(const ge::render::Mat4& m, double x, double y, double z, double ndc[3]) {
@@ -118,4 +120,23 @@ TEST(a_depth_unprojects_to_its_distance) {
     CHECK(std::fabs(d - want) < want * 1e-4);
   }
   CHECK(ge::render::depth_distance(c, 0, 0, 0.0f) == std::numeric_limits<double>::infinity());
+}
+
+TEST(aim_at_looks_at_the_real_sun_or_the_moon) {
+  FrameView v;
+  v.sun_azimuth = 1.0;
+  v.sun_elevation = 0.2;
+  v.night.moon_azimuth = -2.0;
+  v.night.moon_elevation = 0.5;
+  v.fov_y = 0.7;
+  aim_at(v, SkyBody::sun);
+  CHECK(v.heading == 1.0 && v.pitch == 0.2 && v.fov_y == 0.7);
+  aim_at(v, SkyBody::moon);
+  CHECK(v.heading == -2.0 && v.pitch == 0.5);
+  // When the moon is the key, the view's own sun is the moon's: the real sun is the night's.
+  v.night.moon_key = true;
+  v.night.sun_azimuth = 3.0;
+  v.night.sun_elevation = -0.1;
+  aim_at(v, SkyBody::sun);
+  CHECK(v.heading == 3.0 && v.pitch == -0.1);
 }
