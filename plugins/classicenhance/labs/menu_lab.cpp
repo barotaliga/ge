@@ -4,7 +4,8 @@
 // fixture pack (fixtures.hpp): caught halfway through the textures, finished (READY, PLAY lit),
 // and cancelled mid-stage (STOPPED, the finished stages kept). The run's reports go to a
 // `ProgressBoard` on a clock of the lab's own (each report 0.4 s on), so the times on the panel
-// and the digest are the same everywhere.
+// and the digest are the same everywhere. `--source=<path>` runs it over the player's own pack;
+// those pictures are derived from the pack and stay on this machine.
 //
 // Every layout is held to `layout_problems`, and the panel to its area: a panel narrower than a
 // stage's row fails the lab. The switches page is driven through `apply_menu_event`, so the
@@ -104,18 +105,24 @@ void run(ge::lab::Lab& lab) {
     return;
   }
 
-  // The fixture pack, verified as a known pack so the pipeline takes it.
+  // The fixture pack, verified as a known pack so the pipeline takes it; or the player's own.
   const ce::Palette palette = ce::labs::fixture_palette();
   ce::Source src;
-  src.path = "fixture";
-  src.pack = ce::labs::fixture_pack(palette);
-  const std::string sha = ge::assets::sha256_hex(src.pack);
-  const ce::KnownFile known[] = {{sha.c_str(), uint32_t(src.pack.size()), "the lab's pack"}};
   std::string error;
-  if (!ce::verify_pack(&src, &error, known)) {
-    lab.fail("the fixture pack did not verify: " + error,
-             "check fixture_pack in plugins/classicenhance/labs/fixtures.cpp. Skill: "
-             "classicenhance.");
+  std::string sha;
+  if (lab.arg("source").empty()) {
+    src.path = "fixture";
+    src.pack = ce::labs::fixture_pack(palette);
+    sha = ge::assets::sha256_hex(src.pack);
+    const ce::KnownFile known[] = {{sha.c_str(), uint32_t(src.pack.size()), "the lab's pack"}};
+    if (!ce::verify_pack(&src, &error, known)) {
+      lab.fail("the fixture pack did not verify: " + error,
+               "check fixture_pack in plugins/classicenhance/labs/fixtures.cpp. Skill: "
+               "classicenhance.");
+      return;
+    }
+  } else if (!ce::open_source(lab.arg("source"), &src, &error)) {
+    lab.fail(error, "next: give --source a release zip, an installed folder or its pack.");
     return;
   }
   const fs::path root = fs::temp_directory_path() / "ge_lab_classic_menu";
@@ -157,7 +164,7 @@ void run(ge::lab::Lab& lab) {
   MenuStyle st;
   st.logo = "CLASSIC";
   st.help = "ENTER SELECT   ESC BACK";
-  st.footer = "FIXTURE PACK";
+  st.footer = lab.arg("source").empty() ? "FIXTURE PACK" : "YOUR OWN PACK";
   const Stop stops[] = {{0, hex(0x1b2a3a)}, {0.55f, hex(0x101a26)}, {1, hex(0x07090d)}};
   Background bg = Background::gradient(180, stops, 3);
   bg.glow(0.75f, 0.35f, 0.6f, hex(0xf0a63f, 0.10f)).vignette(0.45f);
@@ -307,6 +314,9 @@ const ge::lab::LabSpec kSpec{
     {
         {"viewports", "1280x720,390x844,844x390",
          "screen sizes, WxH, comma-separated (a desktop, a phone upright, a phone on its side)"},
+        {"source", "",
+         "the classic pack (zip, folder or pack); empty: the lab's fixture pack. Its pictures stay "
+         "on this machine: never attach them to a PR or publish them"},
     },
     "--viewports=1280x720,390x844",
     run,
