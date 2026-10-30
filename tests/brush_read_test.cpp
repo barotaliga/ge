@@ -148,6 +148,28 @@ TEST(the_visibility_reaches_two_doorways_deep) {
   }
 }
 
+TEST(a_room_sees_its_own_faces_and_not_a_room_three_doorways_off) {
+  for (br::Family f : {br::Family::v29, br::Family::bsp2, br::Family::v38}) {
+    const br::Map m = read(f);
+    std::vector<uint8_t> seen;
+    // Leaf 1 is the hall (cluster 0), leaf 7 the vault (cluster 6): the hall sees none of it.
+    const uint32_t n = br::potentially_visible(m, 1, &seen);
+    CHECK(n > 0 && n < m.surfaces.size());
+    CHECK(m.leaves[1].marks > 0 && m.leaves[7].marks > 0);
+    for (uint32_t k = 0; k < m.leaves[1].marks; ++k) CHECK(seen[m.marks[m.leaves[1].first_mark + k]]);
+    for (uint32_t k = 0; k < m.leaves[7].marks; ++k) {
+      CHECK(!seen[m.marks[m.leaves[7].first_mark + k]]);
+    }
+    // The eye in solid (leaf 0) sees everything.
+    CHECK(br::potentially_visible(m, 0, &seen) == m.surfaces.size());
+    // Every lit face's styles are numbered, the first the steady one the fixture lights with.
+    for (const br::Surface& s : m.surfaces) {
+      if (s.styles > 0) CHECK(s.style[0] == 0);
+      for (int k = s.styles; k < 4; ++k) CHECK(s.style[k] == 255);
+    }
+  }
+}
+
 TEST(every_triangle_faces_into_its_room) {
   for (br::Family f : kFamilies) {
     const br::Map m = read(f);

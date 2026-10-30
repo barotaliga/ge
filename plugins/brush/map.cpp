@@ -52,6 +52,25 @@ bool cluster_sees(const Map& map, int32_t from, int32_t to) {
   return (byte >> (to % 8)) & 1;
 }
 
+uint32_t potentially_visible(const Map& map, uint32_t leaf, std::vector<uint8_t>* seen) {
+  const int32_t from = leaf < map.leaves.size() ? map.leaves[leaf].cluster : -1;
+  if (from < 0 || map.pvs.empty()) {
+    seen->assign(map.surfaces.size(), 1);
+    return uint32_t(map.surfaces.size());
+  }
+  seen->assign(map.surfaces.size(), 0);
+  uint32_t n = 0;
+  for (const Leaf& l : map.leaves) {
+    if (l.marks == 0 || !cluster_sees(map, from, l.cluster)) continue;
+    for (uint32_t k = l.first_mark; k < l.first_mark + l.marks; ++k) {
+      uint8_t& s = (*seen)[map.marks[k]];
+      n += s == 0;
+      s = 1;
+    }
+  }
+  return n;
+}
+
 void to_engine(const float p[3], double out[3]) {
   out[0] = double(p[0]) * kUnitM;
   out[1] = double(p[2]) * kUnitM;

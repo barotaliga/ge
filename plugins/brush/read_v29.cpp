@@ -195,7 +195,7 @@ bool read_v29(std::span<const uint8_t> file, bool bsp2, Map* out, std::string* e
       s.count = uint32_t(m.indices.size()) - s.first;
       for (uint8_t st : styles) {
         if (st == 255) break;
-        ++s.styles;
+        s.style[s.styles++] = st;
       }
       if (lightofs >= 0 && (t.flags & 1) == 0 && s.styles > 0) {
         const detail::Extent e = detail::extent_of(m, base, uint32_t(count));
@@ -275,6 +275,22 @@ bool read_v29(std::span<const uint8_t> file, bool bsp2, Map* out, std::string* e
     }
   }
 
+  // The marked surfaces: each leaf's run of them names the faces seen from inside it.
+  if (!detail::count_of(L[kMarksurfaces], bsp2 ? 4 : 2, f, &n, err)) return false;
+  {
+    Cursor c = lump(kMarksurfaces);
+    m.marks.resize(n);
+    for (size_t i = 0; i < n; ++i) {
+      m.marks[i] = bsp2 ? c.u32() : c.u16();
+      if (m.marks[i] >= m.surfaces.size()) {
+        return detail::refuse(err, f,
+                              "marked surface " + std::to_string(i) + " names face " +
+                                  std::to_string(m.marks[i]) + ", not in the map",
+                              "the file is damaged: rebuild the map");
+      }
+    }
+  }
+
   if (!detail::count_of(L[kLeafs], bsp2 ? 44 : 28, f, &n, err)) return false;
   if (visleafs < 0 || (n > 0 && size_t(visleafs) > n - 1)) {
     return detail::refuse(
@@ -295,7 +311,13 @@ bool read_v29(std::span<const uint8_t> file, bool bsp2, Map* out, std::string* e
       const int32_t visofs = c.i32();
       for (float& x : lf.mins) x = bsp2 ? c.f32() : float(c.i16());
       for (float& x : lf.maxs) x = bsp2 ? c.f32() : float(c.i16());
-      c.skip(bsp2 ? 8 : 4);  // the leaf's marked surfaces: drawn from the faces instead
+      lf.first_mark = bsp2 ? c.u32() : c.u16();
+      lf.marks = bsp2 ? c.u32() : c.u16();
+      if (uint64_t(lf.first_mark) + lf.marks > m.marks.size()) {
+        return detail::refuse(err, f,
+                              "leaf " + std::to_string(i) + "'s marked surfaces run past the lump",
+                              "the file is damaged: rebuild the map");
+      }
       for (uint8_t& a : lf.ambient) a = c.u8();
       lf.solid = lf.contents == -2;
       lf.cluster = i > 0 && int64_t(i) - 1 < visleafs ? int32_t(i - 1) : -1;
