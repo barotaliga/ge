@@ -140,7 +140,7 @@ fn vs_main(v: VsIn) -> VsOut {
 
 // The texel at `st` (texels of mip 0) of the texture at `rect`, at mip `lod`, wrapped.
 fn texel(st: vec2f, rect: vec4f, lod: f32) -> vec4f {
-  let k = u32(clamp(lod, 0.0, 3.0));
+  let k = u32(clamp(lod, 0.0, f32(textureNumLevels(atlas) - 1u)));
   let s = f32(1u << k);
   let size = max(floor(rect.zw / s), vec2f(1.0));
   var t = floor(st / s);
@@ -178,9 +178,10 @@ fn filtered(st: vec2f, rect: vec4f, dx: vec2f, dy: vec2f) -> vec4f {
   let big = max(lx, ly);
   let small = max(min(lx, ly), 1e-6);
   let taps = clamp(ceil(big / small), 1.0, 4.0);
-  let lod = clamp(log2(max(big / taps, 1e-6)), 0.0, 3.0);
+  let top = textureNumLevels(atlas) - 1u;  // 3, or 5 when a texture is upscaled
+  let lod = clamp(log2(max(big / taps, 1e-6)), 0.0, f32(top));
   let k0 = u32(floor(lod));
-  let k1 = min(k0 + 1u, 3u);
+  let k1 = min(k0 + 1u, top);
   let fr = lod - floor(lod);
   var sum = vec4f(0.0);
   for (var i = 0; i < i32(taps); i++) {
@@ -317,7 +318,7 @@ fn relief_normal(ng: vec3f, st: vec2f, rect: vec4f, lod: f32, dx: vec2f, dy: vec
   if (depth <= 0.0) {
     return ng;
   }
-  let k = u32(clamp(lod, 0.0, 3.0));
+  let k = u32(clamp(lod, 0.0, f32(textureNumLevels(atlas) - 1u)));
   let w = vec3f(0.2126, 0.7152, 0.0722);
   let h0 = dot(bilinear(st, rect, k).rgb, w);
   let hx = (dot(bilinear(st + dx, rect, k).rgb, w) - h0) * depth;

@@ -117,10 +117,12 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/games/classic +map dm
   counts, captured); ESCAPE lets it go and a click takes it back; closing the window quits.
 - **The console** (the key under ESCAPE): `map <name>` changes the map, `sv <line>` runs a line on
   the server's console (`sv timelimit 10`, `sv fraglimit 20`, `sv sv_gravity 600`),
-  `sensitivity <degrees a mouse count>` (0.066 by default), `m_invert 1`, `r_look modern` (our
-  sky, filtered textures and real-time lights; `classic` is the default) with the picture's other
-  cvars (`r_fx_lights`, `r_fx_glow`, `r_bloom`, `r_lava_glow`, `r_slime_glow`; the bloom's from
-  the next map) and `quit`.
+  `sensitivity <degrees a mouse count>` (0.066 by default), `m_invert 1`, `r_look classic` (the
+  pack's own picture; `modern`, the default, is our sky, filtered textures, real-time lights,
+  water, lava, slime, torch flames and weather) with the picture's other cvars (`r_fx_lights`,
+  `r_fx_glow`, `r_bloom`, `r_lava_glow`, `r_slime_glow`; the bloom's from the next map), every
+  classic-enhance switch (`ce_water 0`, `ce_flames 0`, `ce_shadows 0`, ...; `ce_textures` and
+  `ce_bloom` from the next map), the weather's (`sv_weather 1` brings the rain) and `quit`.
 - **A rocket jump**: 7 for the launcher, look straight down, then SPACE and the left button
   together. The blast costs about half your health and throws you about four times as high as
   a jump (held by `tests/shooters_edge_listen_test.cpp` and the `se-client` lab).
@@ -399,8 +401,12 @@ every pass, and judged by captioned screenshots:
 - **Two looks, one renderer** (`games/shooters_edge/app/look.hpp`): the classic look (crisp
   texels, the lightmaps and their styles, the map's own sky, no bloom, and the post pass's grade
   pulling every colour to the nearest of the palette's 256) and the modern look (filtered,
-  real-time lights with shadows, our sky and liquids, bloom; TAA-U and replacement textures to
-  come). The `se-world` lab pictures every named view in both. The player sets the picture with
+  real-time lights with shadows, our sky and liquids, bloom). In the window
+  (`client/world_extras.hpp`) the modern look also draws the water, the lava and the slime as
+  real liquids, the torches' burning gas and the weather through the open sky, and the map's
+  textures come from classic-enhance's cache when the pack was enhanced, each behind its `ce_`
+  switch; `make lab LAB=se-client ARGS="--game=<folder> --map=<name>"` draws a pack's map in
+  both looks, for private pictures only. The `se-world` lab pictures every named view in both. The player sets the picture with
   cvars: `r_look` (classic or modern), and for the modern look `r_fx_lights` (the light the
   effects throw, default 0.2 of the classic's), `r_fx_glow` (a spark's glow, default 0.15) and
   `r_bloom` (default 0.3), `r_lava_glow` (the lava's light on the walls round it, default 0.2)
