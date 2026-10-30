@@ -230,8 +230,6 @@ struct GameFrame {
   ge::render::Bolts bolts;
   ge::wind::Wet wet;    // the water on the ground, stepped by the frames' clock
   double wet_time = 0;  // the last drawn frame's time_s
-  bool wet_placed =
-      false;  // a frame has been drawn: off, the wet ground starts at its steady state
   // The map's thunderstorm (air::storm_of: none without `Weather::thunder`), laid once for the map
   // it was laid over, and its lightning chosen each frame from the last drawn frame's time.
   ge::wind::Storm storm;
@@ -239,16 +237,18 @@ struct GameFrame {
   double storm_thunder = 0;
   ge::mountain::app::StormLights lightning;
   double lightning_time = 0;
-  bool lightning_placed = false;
   ge::render::CloudPass clouds;
   ge::render::Water water;       // its bodies, `add_water`'s; none: the passes draw nothing
   ge::render::Underwater under;  // the view when the eye is under a body (`under.look`)
   std::vector<ge::skier::SprayPen> spray_pens;  // each racer's, by his place in the scene
   std::vector<ge::skier::SprayGrain> thrown;
   std::vector<ge::render::Particle> births;
-  double spray_time = 0;      // the last drawn frame's time_s
-  bool spray_placed = false;  // a frame has been drawn since the spray was last forgotten
-  bool spray_forget = false;  // kill every particle at the next draw
+  double spray_time = 0;          // the last drawn frame's time_s
+  bool spray_placed = false;      // a frame has been drawn since the spray was last forgotten
+  bool spray_forget = false;      // kill every particle at the next draw
+  bool wet_placed = false;        // a frame has been drawn: off, the wet ground starts steady
+  bool lightning_placed = false;  // a frame has been drawn since the storm's lightning was chosen
+  bool lamps_glow = false;        // the posts' glass as last written, lit or dark
   ge::render::Hiz hiz;
   ge::render::Taa taa;
   ge::render::Bloom bloom;
@@ -283,8 +283,7 @@ struct GameFrame {
   ge::render::LampShadows lamp_shadows;
   ge::render::InstanceFamily masts, posts;
   std::vector<ge::mountain::app::Lamp> piste_lamps, street_lamps;
-  bool lamps_glow = false;  // the posts' glass as last written, lit or dark
-  double lamp_lux = 0;      // the last frame's: the lux the eye adapted to among the lamps
+  double lamp_lux = 0;  // the last frame's: the lux the eye adapted to among the lamps
   std::vector<ge::render::LocalLight> lamp_list;
   std::vector<std::array<double, 4>> lamp_movers;
   // What casts the lamps' shadows: every family made with lamp tiles.
