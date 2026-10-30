@@ -54,14 +54,15 @@ squash-merged). The body contains:
 ## 5. Green, then merge
 
 **Open the PR as a draft** (`gh pr create --draft`): a draft runs no CI. When the work is done,
-merge `origin/main` into the branch (no conflicts left), run `make precheck`, push, and only then
+merge `origin/main` into the branch (`build/<preset>/ge merge-main`: it settles retired files and
+clashing lab digests and names the rest; no conflicts left), run `make precheck`, push, and only then
 mark it ready (`gh pr ready <pr>`, or `POST .../pulls/<n>/ccr/ready_for_review`): that starts CI;
 arm auto-merge after it. A PR that goes back to work in progress goes back to draft.
 
 CI is the gate. **After the push, check the PR every 15 minutes until it is merged**: schedule
 the check-in (never a sleep loop), and on each one look at both its checks and whether it still
 merges (`build/<preset>/ge ci <pr>` answers both: a conflict is an error finding, each red job's
-log comes back as findings). A conflict means merge `origin/main` into the branch, resolve it,
+log comes back as findings). A conflict means `ge merge-main`, resolve what it names,
 `make precheck` and push; a red row means read its log, fix the cause and push. Never skip or
 weaken a test, and never push an empty commit to re-run CI. Right after each push, arm squash
 auto-merge on the PR: `main` merges only through GitHub's merge queue, and auto-merge is how a

@@ -224,7 +224,7 @@ bool make_scene(ge::gpu::Device& d, Scene& s, const std::vector<gr::Instance>& p
                 uint32_t h, const std::string& label, const std::vector<gr::Instance>& glow = {},
                 bool shadows = false) {
   const std::vector<gr::Surface> surf = surfaces();
-  return ge::lab::lit_scene::make_scene(d, s, surf, props, w, h, label, glow, shadows);
+  return ge::lab::lit_scene::make_scene(d, s, surf, props, w, h, label, {}, 0, glow, shadows);
 }
 
 // The atlas as a picture: each tile's depth (near / distance) on a log scale, near white and far
