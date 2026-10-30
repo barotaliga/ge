@@ -2,13 +2,14 @@
 // as a map of every family (29, BSP2, 38, 46) and read back: each drawn from above with its
 // lightmaps and the ceilings cut away, views from inside lit only by the lightmaps, the lightmaps
 // themselves (one tile a face, and 46's pages), the leaves from above coloured by what one cluster
-// can see, and 46's curved patch tessellated at three levels. With `--map=<file>` (and `--lit`)
+// can see and can hear (the PHS), a slice through each clip hull at standing height (29 and BSP2),
+// and 46's curved patch tessellated at three levels. With `--map=<file>` (and `--lit`)
 // any map of these families is drawn the same way instead. The numbers: each file's bytes, its
-// surfaces, triangles, lightmaps, leaves and clusters, and how long a read takes.
+// surfaces, triangles, lightmaps, leaves, clusters and clip nodes, and how long a read takes.
 //
 // ge:summary Lab: every BSP family's fixture read and drawn: cutaway, inside, lightmaps, pvs, patch
 // ge:keywords lab bsp brush map family v29 bsp2 v38 v46 fixture cutaway lightmap atlas pvs leaves
-// ge:keywords patch tessellation read-time
+// ge:keywords patch tessellation read-time phs hearing clip-hull hull-slice
 // ge:skill brush labs
 // ge:test tests/brush_read_test.cpp
 #include <algorithm>
@@ -171,8 +172,9 @@ void label(Picture& p, int x, int y, const std::string& text) {
 std::string kb(size_t bytes) { return ge::core::num::to_fixed(double(bytes) / 1024.0, 1) + " KB"; }
 
 // The leaves from above (x right, y up the page), each filled by what cluster `from` sees.
+// The map's open leaves from above, filled by what `from` sees (or, `hear`, hears: the PHS).
 void draw_pvs(Picture& p, int x0, int y0, int w, int h, const br::Map& map, int32_t from,
-              const std::vector<std::string>& names) {
+              const std::vector<std::string>& names, bool hear = false) {
   float lo[2] = {1e30f, 1e30f}, hi[2] = {-1e30f, -1e30f};
   for (const br::Leaf& l : map.leaves) {
     if (l.solid || l.cluster < 0) continue;
@@ -186,9 +188,11 @@ void draw_pvs(Picture& p, int x0, int y0, int w, int h, const br::Map& map, int3
   const auto Y = [&](double y) { return oy - (y - lo[1]) * s; };
   for (const br::Leaf& l : map.leaves) {
     if (l.solid || l.cluster < 0) continue;
-    const Rgba fill = l.cluster == from                        ? Rgba{232, 150, 60}
-                      : br::cluster_sees(map, from, l.cluster) ? Rgba{90, 180, 110}
-                                                               : Rgba{200, 198, 190};
+    const bool in =
+        hear ? br::cluster_hears(map, from, l.cluster) : br::cluster_sees(map, from, l.cluster);
+    const Rgba fill = l.cluster == from ? Rgba{232, 150, 60}
+                      : in              ? (hear ? Rgba{110, 150, 210} : Rgba{90, 180, 110})
+                                        : Rgba{200, 198, 190};
     lab::fill_rect(p, X(l.mins[0]), Y(l.maxs[1]), (l.maxs[0] - l.mins[0]) * s,
                    (l.maxs[1] - l.mins[1]) * s, fill);
     const double xs[2] = {X(l.mins[0]), X(l.maxs[0])}, ys[2] = {Y(l.mins[1]), Y(l.maxs[1])};
@@ -201,6 +205,43 @@ void draw_pvs(Picture& p, int x0, int y0, int w, int h, const br::Map& map, int3
     if (lab::text_width(name) < (l.maxs[0] - l.mins[0]) * s) {
       lab::draw_text(p, (xs[0] + xs[1]) / 2 - lab::text_width(name) / 2.0, (ys[0] + ys[1]) / 2 - 4,
                      name, kInk);
+    }
+  }
+}
+
+// A slice through clip hull `hull` (0 the point tree) at height `z` from above: each pixel the
+// contents where the hull's box would stand, open in paper, solid in ink, liquids in blue, over
+// the open leaves' outlines.
+void draw_hull_slice(Picture& p, int x0, int y0, int w, int h, const br::Map& map, int hull,
+                     float z) {
+  float lo[2] = {1e30f, 1e30f}, hi[2] = {-1e30f, -1e30f};
+  for (const br::Leaf& l : map.leaves) {
+    if (l.solid || l.cluster < 0) continue;
+    for (int k = 0; k < 2; ++k)
+      lo[k] = std::min(lo[k], l.mins[k]), hi[k] = std::max(hi[k], l.maxs[k]);
+  }
+  const double span = std::max(hi[0] - lo[0], hi[1] - lo[1]) * 1.1;
+  const double s = std::min(w, h) / span;
+  const double ox = x0 + (w - (hi[0] - lo[0]) * s) / 2, oy = y0 + (h + (hi[1] - lo[1]) * s) / 2;
+  for (int py = y0; py < y0 + h; ++py) {
+    for (int px = x0; px < x0 + w; ++px) {
+      const float at[3] = {float(lo[0] + (px + 0.5 - ox) / s), float(lo[1] + (oy - py - 0.5) / s),
+                           z};
+      const int32_t c = br::hull_contents(map, at, 0, hull);
+      const Rgba fill = c == -1   ? Rgba{236, 232, 220}
+                        : c == -2 ? Rgba{52, 54, 60}
+                        : c == -6 ? Rgba{150, 190, 230}
+                                  : Rgba{70, 120, 200};
+      lab::fill_rect(p, px, py, 1, 1, fill);
+    }
+  }
+  for (const br::Leaf& l : map.leaves) {
+    if (l.solid || l.cluster < 0 || z < l.mins[2] || z > l.maxs[2]) continue;
+    const double xs[2] = {ox + (l.mins[0] - lo[0]) * s, ox + (l.maxs[0] - lo[0]) * s};
+    const double ys[2] = {oy - (l.mins[1] - lo[1]) * s, oy - (l.maxs[1] - lo[1]) * s};
+    for (int k = 0; k < 2; ++k) {
+      lab::draw_line(p, xs[0], ys[k], xs[1], ys[k], Rgba{232, 150, 60}, 1);
+      lab::draw_line(p, xs[k], ys[0], xs[k], ys[1], Rgba{232, 150, 60}, 1);
     }
   }
 }
@@ -414,7 +455,7 @@ void run(lab::Lab& lab) {
 
   lab::LabTable table{"MAPS",
                       {"family", "bytes", "surfaces", "triangles", "lightmaps", "luxels", "leaves",
-                       "clusters", "entities", "patches"},
+                       "clusters", "clip nodes", "entities", "patches"},
                       {}};
   lab::LabTable times{"READ TIMES (measured, best of 12)", {"family", "us"}, {}};
   for (const Loaded& l : maps) {
@@ -425,7 +466,8 @@ void run(lab::Lab& lab) {
                           std::to_string(m.surfaces.size()), std::to_string(m.triangles()),
                           std::to_string(m.lightmaps.size()), std::to_string(luxels),
                           std::to_string(m.leaves.size()), std::to_string(m.clusters),
-                          std::to_string(m.entities.size()), std::to_string(m.patches)});
+                          std::to_string(m.clip_nodes.size()), std::to_string(m.entities.size()),
+                          std::to_string(m.patches)});
     // A map given by name is keyed by its file name too, so two maps of one family keep apart.
     std::string key = br::family_name(m.family);
     if (!path.empty()) {
@@ -435,6 +477,7 @@ void run(lab::Lab& lab) {
     for (char& c : key) c = char(std::tolower(uint8_t(c)));
     lab.metric("bytes-" + key, double(l.bytes.size()), "count");
     lab.metric("triangles-" + key, double(m.triangles()), "count");
+    lab.metric("clip-nodes-" + key, double(m.clip_nodes.size()), "count");
     const double us = read_us(l.bytes);
     lab.metric("read-us-" + key, us, "us", Det::measured);
     times.rows.push_back({key, ge::core::num::to_fixed(us, 1)});
@@ -583,6 +626,57 @@ void run(lab::Lab& lab) {
               "cannot in grey. Left from the first cluster, right from the last.",
               "a cluster sees through its doorways two rooms deep and no further", inputs},
              p);
+  }
+
+  // What the first cluster hears: the PHS built from the PVS.
+  {
+    br::Map m = maps.back().map;
+    br::build_phs(&m);
+    const int cw = px, ch = px;
+    Picture p = lab::create_picture(cw * 2, ch, kPaper);
+    for (int i = 0; i < 2; ++i) {
+      draw_pvs(p, i * cw, 0, cw, ch, m, 0, names, i == 1);
+      const std::string who = names.empty() ? std::string("C0") : names[0];
+      lab::draw_text(p, i * cw + 8, 8, "WHAT " + who + (i ? " HEARS" : " SEES"), kInk, 2);
+    }
+    lab.shot(
+        {"phs", "WHAT A CLUSTER SEES AND HEARS",
+         "The first cluster's PVS (left, green) beside its PHS (right, blue): a cluster "
+         "hears every cluster any cluster it sees can see, so a sound carries one set of "
+         "doorways further than sight.",
+         "the hearing set holds the seeing set and reaches one room further at each edge", inputs},
+        p);
+  }
+
+  // The clip hulls: a slice at standing height through each, on the first map that has them.
+  for (const Loaded& l : maps) {
+    const br::Map& m = l.map;
+    if (m.clip_nodes.empty()) continue;
+    float z = 24;  // the fixture's floor is at 0; a player's origin is 24 above his feet
+    for (const br::Entity& e : m.entities) {
+      if (e.get("classname") != "info_player_start") continue;
+      float o[3] = {0, 0, 24};
+      if (std::sscanf(e.get("origin").c_str(), "%f %f %f", &o[0], &o[1], &o[2]) == 3) z = o[2];
+      break;
+    }
+    const int cw = px, ch = px;
+    Picture p = lab::create_picture(cw * 3, ch + 24, kDark);
+    const char* names3[3] = {"HULL 0: POINTS", "HULL 1: THE PLAYER'S BOX", "HULL 2: THE LARGE BOX"};
+    for (int h = 0; h < 3; ++h) {
+      draw_hull_slice(p, h * cw, 24, cw, ch, m, h, z);
+      label(p, h * cw + 4, 4, names3[h]);
+    }
+    lab.shot({"hulls", "THE CLIP HULLS AT STANDING HEIGHT",
+              "A slice from above at the start's height (" + ge::core::num::to_fixed(z, 0) +
+                  " units) through the " + br::family_name(m.family) +
+                  " map's three hulls: where a point, the player's 32 x 32 x 56 box and the large "
+                  "64 x 64 x 88 box can stand, open in paper and solid in ink, over the open "
+                  "leaves' outlines in orange. Each box hull is the rooms shrunk by its box.",
+              "the player's hull leaves 16 units at every wall and still passes each doorway; "
+              "the large box, as wide as a doorway, passes none",
+              inputs},
+             p);
+    break;
   }
 
   if (path.empty()) {

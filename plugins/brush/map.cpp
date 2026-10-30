@@ -1,8 +1,9 @@
-// The map view's queries: a point's leaf down a model's tree, one cluster seeing another, the
-// engine's frame, and the view's digest.
+// The map view's queries: a point's leaf down a model's tree, one cluster seeing or hearing
+// another, a point's contents in a clip hull, the engine's frame, and the view's digest.
 //
 // ge:summary The map view's queries: leaf_at, cluster_sees, to_engine, map_digest, family names
-// ge:keywords leaf_at point leaf tree walk cluster_sees pvs to_engine frame digest fnv
+// ge:keywords leaf_at point leaf tree walk cluster_sees pvs to_engine frame digest fnv phs
+// ge:keywords build_phs cluster_hears hull_contents clip-hull
 // ge:skill brush
 // ge:test tests/brush_read_test.cpp
 #include <cstring>
@@ -50,6 +51,44 @@ bool cluster_sees(const Map& map, int32_t from, int32_t to) {
   if (map.pvs.empty()) return true;
   const uint8_t byte = map.pvs[size_t(from) * map.row_bytes + size_t(to) / 8];
   return (byte >> (to % 8)) & 1;
+}
+
+void build_phs(Map* map) {
+  Map& m = *map;
+  if (!m.phs.empty() || m.pvs.empty() || m.clusters <= 0) return;
+  const size_t rows = size_t(m.clusters), bytes = m.row_bytes;
+  m.phs.assign(rows * bytes, 0);
+  for (size_t a = 0; a < rows; ++a) {
+    const uint8_t* seen = m.pvs.data() + a * bytes;
+    uint8_t* out = m.phs.data() + a * bytes;
+    for (size_t b = 0; b < rows; ++b) {
+      if (!((seen[b / 8] >> (b % 8)) & 1)) continue;
+      const uint8_t* far = m.pvs.data() + b * bytes;
+      for (size_t k = 0; k < bytes; ++k) out[k] |= far[k];
+    }
+  }
+}
+
+bool cluster_hears(const Map& map, int32_t from, int32_t to) {
+  if (from < 0 || to < 0 || from >= map.clusters || to >= map.clusters) return false;
+  if (map.phs.empty()) return true;
+  const uint8_t byte = map.phs[size_t(from) * map.row_bytes + size_t(to) / 8];
+  return (byte >> (to % 8)) & 1;
+}
+
+int32_t hull_contents(const Map& map, const float p[3], uint32_t model, int hull) {
+  if (hull == 0 || map.clip_nodes.empty() || model >= map.models.size()) {
+    return map.leaves[leaf_at(map, p, model)].contents;
+  }
+  int32_t at = map.models[model].hulls[hull - 1];
+  // The reader refused a clip hull that loops, so this walk ends.
+  while (at >= 0) {
+    const ClipNode& n = map.clip_nodes[size_t(at)];
+    const Plane& pl = map.planes[n.plane];
+    const float d = pl.n[0] * p[0] + pl.n[1] * p[1] + pl.n[2] * p[2] - pl.d;
+    at = n.child[d >= 0 ? 0 : 1];
+  }
+  return at;
 }
 
 void to_engine(const float p[3], double out[3]) {
@@ -100,6 +139,8 @@ uint64_t map_digest(const Map& map) {
     mix(l.maxs, sizeof l.maxs);
   }
   mix(map.pvs.data(), map.pvs.size());
+  for (const ClipNode& n : map.clip_nodes) mix(&n, sizeof n);
+  for (const Model& md : map.models) mix(md.hulls, sizeof md.hulls);
   mix(map.entity_text.data(), map.entity_text.size());
   return h;
 }

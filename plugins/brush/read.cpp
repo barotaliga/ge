@@ -187,6 +187,36 @@ uint32_t add_polygon(Map* map, const Polys& p, int32_t first, int32_t count, con
   return base;
 }
 
+// Whether the graph of `n` nodes, each with the two children `child(i, k)` (>= 0 a node, < 0 out
+// of the graph), has no cycle: an iterative three-colour depth-first walk, so a damaged map
+// whose tree loops back is refused before a recursive walk can follow it forever.
+template <class Child>
+bool acyclic(size_t n, Child child) {
+  std::vector<uint8_t> colour(n, 0);  // 0 unseen, 1 on the walk, 2 done
+  std::vector<std::pair<int32_t, int>> stack;
+  for (size_t root = 0; root < n; ++root) {
+    if (colour[root]) continue;
+    stack.push_back({int32_t(root), 0});
+    colour[root] = 1;
+    while (!stack.empty()) {
+      auto& [at, k] = stack.back();
+      if (k == 2) {
+        colour[size_t(at)] = 2;
+        stack.pop_back();
+        continue;
+      }
+      const int32_t c = child(size_t(at), k++);
+      if (c < 0) continue;
+      if (colour[size_t(c)] == 1) return false;
+      if (colour[size_t(c)] == 0) {
+        colour[size_t(c)] = 1;
+        stack.push_back({c, 0});
+      }
+    }
+  }
+  return true;
+}
+
 bool check_tree(const Map& map, std::string* err) {
   const Family f = map.family;
   const auto child_ok = [&](int32_t c) {
@@ -199,6 +229,12 @@ bool check_tree(const Map& map, std::string* err) {
                     "node " + std::to_string(i) + " names a plane or child that is not in the map",
                     "the file is damaged: rebuild the map with its compiler");
     }
+  }
+  if (!acyclic(map.nodes.size(), [&](size_t i, int k) { return map.nodes[i].child[k]; }) ||
+      !acyclic(map.clip_nodes.size(),
+               [&](size_t i, int k) { return map.clip_nodes[i].child[k]; })) {
+    return refuse(err, f, "the node tree or a clip hull loops back on itself",
+                  "the file is damaged: rebuild the map with its compiler");
   }
   if (map.leaves.empty()) {
     return refuse(err, f, "the map has no leaves", "the file is damaged: rebuild the map");
