@@ -130,6 +130,38 @@ console; a hot dot on each rocket in flight and an orange disc where one went of
 the other players' and items' models, the weapon in hand, sounds, the effects of the classic
 world pass, menus, and the network (the rest of M18h, M18i).
 
+### Benchmarking a demo
+
+`benchmark <demo>` in the console, or `-benchmark <demo>` on the command line (which quits with
+the report and exits non-zero if the demo stopped early), plays a recorded game **as fast as the
+machine draws it**: vsync off for the run, no frame cap, one demo frame a drawn frame whatever
+the demo's own clock says, at the window's settings (its size, `r_bspmode`, `hud_style`). The
+listen server waits meanwhile; ESCAPE stops the run early. At the end the console and the
+terminal print the frames timed and their seconds, the **average** frame rate, the **max** and
+**min** (one over the shortest and longest frame), the **1% low** and **0.1% low** (the slowest
+1% and 0.1% of frames as a rate over their own time), and the median and 99th-percentile frame:
+
+```sh
+build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic -benchmark demo1
+build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic --size=2560x1600 \
+    -benchmark ~/Downloads/match.dem
+```
+
+- **Which demo**: the name through the search path (`demo1.dem` in `pak0.pak`, or a loose file
+  in the game folder), with `.dem` added when the name has no extension, then any file in the
+  packs whose name before its extension matches; else the name as a path on disk.
+- **The formats**, told apart by their first bytes (`client/demo.hpp`): the single-player demo
+  (protocol 15, `.dem`: the shareware pack's `demo1` to `demo3`) and the multiplayer client's
+  recording (protocol 28, with the extensions that change how a message reads). Server-side
+  multi-view recordings are not read yet (M18h).
+- **What is timed**: every frame but the first few after a level starts (the map's load and its
+  pipelines' first use; `kSkipAfterLevel`). A level change inside the demo loads that map from
+  the packs. What is drawn is what the window draws today: the map from the recorded eye and
+  the HUD off the recorded stats; the entities' models join when the window draws them (M18i).
+- **Headless**: `make lab LAB=se-timedemo` runs the same loop into an offscreen target, on a
+  demo written in code round the fixture halls (`--format=client` for the other format), or on
+  a real one with `ARGS="--basedir=<dir> --demo=demo1"`, and charts every frame's time.
+
 ## Running your own mod
 
 The mod server (`games/shooters_edge/server`, M18p) runs a multiplayer `progs` as a compiler
