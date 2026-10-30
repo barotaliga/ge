@@ -4,16 +4,19 @@
 // window reads the keys and the raw mouse (controls.hpp), steps the server by the frames the wall
 // time makes due, and draws the map from the player's eyes (engine/camera's first-person rig:
 // the view height, the stairs smoothed, the landing's dip) with the game's effects (world_fx.hpp:
-// rocket trails, explosions and their light, the screen's blend), the HUD (hud/layout.hpp) and the
-// console.
+// rocket trails, explosions and their light, the screen's blend), the weapon in hand (held.hpp:
+// switched, kicked and flashing as the mod fires it), the HUD (hud/layout.hpp) and the console.
 //
-//   shooters_edge [-basedir <dir>] [-game <folder>] [-progs <file>] [-benchmark <demo>]
-//                 [-playdemo <demo>] [--frames=N] [--size=WxH] [+<command> ...]
+//   shooters_edge [-basedir <dir>] [-game <folder>] [-progs <file>] [-models <dir>]
+//                 [-benchmark <demo>] [-playdemo <demo>] [--frames=N] [--size=WxH]
+//                 [+<command> ...]
 //
 // `-basedir` is the folder that holds the game folder (`id1` unless `-game` names another) with
 // its `pak0.pak`, `pak1.pak` ...; a leading `~` is the home folder, and a path with spaces is one
-// argument when quoted. `-progs` runs a mod's progs file in place of the baseline mod. The `+`
-// words are console lines run at start: `+map dm6` loads that map
+// argument when quoted. `-progs` runs a mod's progs file in place of the baseline mod, and
+// `-models` names the held weapons' folder (by default the tree's
+// `games/shooters_edge/content/models/view`, from where the game runs or where it was built). The
+// `+` words are console lines run at start: `+map dm6` loads that map
 // (`map arena` is the built-in test arena); with none, the map `start` when the packs have it,
 // else the arena.
 //
@@ -25,7 +28,8 @@
 // <line>` is a line for the server's console (`sv timelimit 10`), `sensitivity <deg a count>`
 // and `m_invert 0|1` set the look, `r_look classic|modern` and the other picture cvars
 // (app/look.hpp: `r_fx_lights`, `r_fx_glow`, `r_bloom`, `r_lava_glow`, `r_slime_glow`) the world's
-// look, and `quit` quits.
+// look, the view-model cvars (view/hand.hpp: `r_drawviewmodel`, `r_viewmodel_fov`, `cl_gunx`,
+// `cl_guny`, `cl_gunz`, `cl_gunsway`) the weapon in hand, and `quit` quits.
 //
 // THE BENCHMARK: `benchmark <demo>` in the console (or `-benchmark <demo>` on the command line,
 // which quits when it is done) plays a recorded game (`demo1` from the packs, or a file's path)
@@ -60,6 +64,7 @@
 #include "platform/window.hpp"
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/files.hpp"
+#include "shooters_edge/client/held.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/timedemo.hpp"
@@ -70,6 +75,7 @@
 #include "shooters_edge/menu/game_menu.hpp"
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/mod_match.hpp"
+#include "shooters_edge/view/weapons.hpp"
 #include "ui/console.hpp"
 #include "ui/console_keys.hpp"
 #include "ui/draw.hpp"
@@ -89,6 +95,7 @@ struct Args {
   std::string basedir = ".";
   std::string game = "id1";
   std::string progs;      // a mod's progs file ("": the baseline mod)
+  std::string models;     // the held weapons' folder ("": the tree's)
   std::string benchmark;  // a demo to benchmark, then quit ("": none)
   std::string playdemo;   // a demo to play at its own pace ("": none)
   long frames = 0;        // 0: until quit
@@ -116,6 +123,8 @@ bool parse(int argc, char** argv, Args& a) {
       a.basedir = expand_home(argv[++i]);
     } else if ((arg == "-progs" || arg == "--progs") && i + 1 < argc) {
       a.progs = expand_home(argv[++i]);
+    } else if ((arg == "-models" || arg == "--models") && i + 1 < argc) {
+      a.models = expand_home(argv[++i]);
     } else if ((arg == "-benchmark" || arg == "--benchmark") && i + 1 < argc) {
       a.benchmark = expand_home(argv[++i]);
     } else if ((arg == "-playdemo" || arg == "--playdemo") && i + 1 < argc) {
@@ -145,7 +154,8 @@ static int run_main(int argc, char** argv) {
   if (!parse(argc, argv, args)) {
     out::error(
         "shooters_edge: unknown flag. Usage: shooters_edge [-basedir <dir>] [-game <folder>] "
-        "[-progs <file>] [-benchmark <demo>] [-playdemo <demo>] [--frames=N] [--size=WxH] "
+        "[-progs <file>] [-models <dir>] [-benchmark <demo>] [-playdemo <demo>] [--frames=N] "
+        "[--size=WxH] "
         "[+<command> ...]; next: rerun with those flags only.");
     return 2;
   }
@@ -179,6 +189,8 @@ static int run_main(int argc, char** argv) {
                       });
   cl::add_cvars(console, controls);
   shooters_edge::look::add_cvars(console, picture);
+  shooters_edge::view::ViewSettings view_settings;
+  shooters_edge::view::add_view_cvars(console.cvars(), view_settings);
   console.add_command("quit", "quit the game", [&](Con&, const CArgs&) { quit = true; });
   std::string bench_ask;  // a demo the console asked to benchmark
   console.add_command("benchmark", "benchmark <demo>: play a demo flat out and report its fps",
@@ -272,6 +284,23 @@ static int run_main(int argc, char** argv) {
   }
   next_map.clear();
 
+  // The held weapons: the folder given, else the tree's from here, else from where it was built.
+  std::vector<ge::viewmodel::HeldModel> weapons;
+  {
+    std::vector<std::string> dirs;
+    if (!args.models.empty()) dirs.push_back(args.models);
+    dirs.emplace_back("games/shooters_edge/content/models/view");
+#ifdef SE_MODELS_DIR
+    dirs.emplace_back(SE_MODELS_DIR);
+#endif
+    std::string why;
+    for (const std::string& dir : dirs)
+      if (shooters_edge::view::load_weapon_models(dir, weapons, &why)) break;
+    if (weapons.empty())
+      out::status("shooters_edge: no weapon is drawn: " + why +
+                  "; next: pass -models <the tree's games/shooters_edge/content/models/view>");
+  }
+
   auto window = ge::platform::open_window(
       {.title = "Shooter's Edge", .width = args.width, .height = args.height});
   if (!window) return 1;
@@ -287,7 +316,7 @@ static int run_main(int argc, char** argv) {
   surface.configure(*device, static_cast<uint32_t>(w), static_cast<uint32_t>(h), true);
   cl::WorldDrawPtr world =
       cl::create_world_draw(*device, files, *listen.map, static_cast<uint32_t>(w),
-                            static_cast<uint32_t>(h), surface.format(), picture, error);
+                            static_cast<uint32_t>(h), surface.format(), picture, weapons, error);
   if (!world) {
     out::error("shooters_edge: the world draw did not load: " + error + "; see docs/rendering.md");
     return 1;
@@ -306,8 +335,9 @@ static int run_main(int argc, char** argv) {
   // The world's frame for `map`, or false with the error said.
   const auto rebuild_world = [&](const cl::LoadedMap& map) {
     world.reset();
-    world = cl::create_world_draw(*device, files, map, static_cast<uint32_t>(w),
-                                  static_cast<uint32_t>(h), surface.format(), picture, error);
+    world =
+        cl::create_world_draw(*device, files, map, static_cast<uint32_t>(w),
+                              static_cast<uint32_t>(h), surface.format(), picture, weapons, error);
     if (!world)
       out::error("shooters_edge: the world draw did not load: " + error +
                  "; see docs/rendering.md");
@@ -352,6 +382,7 @@ static int run_main(int argc, char** argv) {
   ge::ui::Vec2 last_pointer;
   cl::FxState fx_state;
   cl::FxFrame fx;
+  cl::HeldState in_hand;
   size_t printed = 0;
   const uint64_t first_ns = ge::platform::now_ns();
   uint64_t last = first_ns;
@@ -429,7 +460,8 @@ static int run_main(int argc, char** argv) {
       } else {
         world.reset();
         world = cl::create_world_draw(*device, files, *listen.map, static_cast<uint32_t>(w),
-                                      static_cast<uint32_t>(h), surface.format(), picture, error);
+                                      static_cast<uint32_t>(h), surface.format(), picture, weapons,
+                                      error);
         if (!world) {
           out::error("shooters_edge: the new world draw did not load: " + error +
                      "; see docs/rendering.md");
@@ -437,6 +469,7 @@ static int run_main(int argc, char** argv) {
         }
         shown = {};
         fx_state = {};
+        in_hand = {};
       }
     }
 
@@ -494,7 +527,7 @@ static int run_main(int argc, char** argv) {
       wgpu::TextureView target = surface.acquire(*device);
       if (!target) continue;
       // The demo's effects are not read yet: the world's frame with none of its own.
-      cl::draw_world(*device, *world, view, cl::FxFrame{}, wall, overlay, target);
+      cl::draw_world(*device, *world, view, cl::FxFrame{}, nullptr, wall, overlay, target);
       surface.present();
       if (!bench.paced) cl::timedemo_mark(bench, ge::platform::now_ns());
       ++presented;
@@ -515,6 +548,10 @@ static int run_main(int argc, char** argv) {
     ge::render::FrameView view = cl::frame_view(listen, shown, frames, t, wall);
     view.frame = static_cast<uint64_t>(presented);
     cl::step_fx(listen, shown, fx_state, t, wall, fx);
+    const shooters_edge::view::HandFrame hand =
+        cl::step_held(listen, shown, in_hand, view_settings, weapons, t, wall);
+    if (hand.flashing)
+      fx.lights.push_back(shooters_edge::effects::muzzle_light(hand.flash.position));
     overlay.begin(w, h);
     se::fill_hud(hud, cl::status_of(listen, t), art);
     const ge::hud::Frame hf = hud.layout.frame(w, h, se::hud_style());
@@ -525,7 +562,7 @@ static int run_main(int argc, char** argv) {
 
     wgpu::TextureView target = surface.acquire(*device);
     if (!target) continue;
-    cl::draw_world(*device, *world, view, fx, wall, overlay, target);
+    cl::draw_world(*device, *world, view, fx, &hand, wall, overlay, target);
     surface.present();
     ++presented;
   }
