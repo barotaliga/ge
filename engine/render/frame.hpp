@@ -100,10 +100,10 @@ struct FrameUniforms {
   float flash_info[4];
   float flashes[2 * kFlashLamps][4];
 };
-static_assert(sizeof(FrameUniforms) ==
-                  64 * 3 + 16 * 5 + 16 * 6 + 16 * 9 + 16 * kCloudRows * kCloudLayers + 16 * 6 +
-                      16 * kSkyStyleRows + 16 * kMaxMoons * kMoonRows + 16 + 32 + 16 +
-                      16 * 2 * kFlashLamps,
+static_assert(sizeof(FrameUniforms) == 64 * 3 + 16 * 5 + 16 * 6 + 16 * 9 +
+                                           16 * kCloudRows * kCloudLayers + 16 * 6 +
+                                           16 * kSkyStyleRows + 16 * kMaxMoons * kMoonRows + 16 +
+                                           32 + 16 + 16 * 2 * kFlashLamps,
               "match frame_types.wgsl");
 
 // The last frame's unjittered camera. Invalid on the first frame and after a cut, when the
