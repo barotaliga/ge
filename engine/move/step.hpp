@@ -25,6 +25,7 @@
 // ge:keywords friction accelerate air-accelerate gravity jump land slide clip-velocity step-up
 // ge:keywords ground-snap crouch edge-friction coyote-time jump-buffer air-control events
 // ge:keywords landing impact wish-direction usercmd ladder climb moving-ground platform bounce
+// ge:keywords carry_along gravity-lead land-clip-speed
 // ge:skill move
 // ge:test tests/move_step_test.cpp
 #pragma once
@@ -119,6 +120,13 @@ MoveState stand_at(const MoveSpec& spec, const World& world, const Vec3& pos);
 // One step; returns what happened.
 MoveEvents step_move(const MoveSpec& spec, const World& world, MoveState& s, const MoveCmd& cmd,
                      double dt);
+
+// The body carried along its own velocity for `dt` and nothing else (no friction, gravity, wish
+// or ground probe): the slide along whatever it hits and, with `step_up`, the lifted try that
+// climbs a step. What a game moves a body with while something else decides its velocity (a
+// swimmer, docs/movement.md § Water); `kBlocked` and `kSteppedUp` are reported as a step does.
+MoveEvents carry_along(const MoveSpec& spec, const World& world, MoveState& s, double dt,
+                       bool step_up);
 
 // THE ACCELERATION RULE, shared by the ground, the air and the labs that chart it: `vel` gains
 // along the unit `wish_dir` up to `accel * wish_speed * dt`, but only until its speed along

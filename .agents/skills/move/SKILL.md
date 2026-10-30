@@ -48,6 +48,10 @@ here names a genre's word: a feel is a ROW of knobs, never a code path.
 - **A model change moves goldens.** `tests/move_scenarios_test.cpp` holds every scenario's
   digest: rewrite it with `GE_GOLDEN_WRITE=1` only for a change you meant, say which runs moved
   and why, and update the lab digests (`make ge ARGS="digest move-trace move-strafe --write"`).
+- **The classic row lives in `plugins/shooter/row.hpp`**, not in the presets: built from a
+  server's settings, held to the classic recordings (the `shooter` skill). Its knobs
+  (`gravitylead`, `landclipspeed`, `frictionwhole`, `clipfromstart`) default to the old
+  behaviour, so a preset's digest does not move; keep any new knob that way.
 - **The camera reads, never writes** (`docs/movement.md` § What a camera reads). Swimming is the
   water module's (§ Water).
 

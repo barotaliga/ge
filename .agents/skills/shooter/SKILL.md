@@ -1,6 +1,6 @@
 ---
 name: shooter
-description: "Use for plugins/shooter in gameengine2: the first-person shooter's simulation half. The classic player move in 32-bit floats (every step in order, every move type, the server settings at the modern defaults), clip hulls (planes, clip nodes, point contents, the box hull, the line trace with its 1/32 back-off), hulls built from convex brushes, the move's list of solids and its traces, the recorded scenarios the move is held to, and the pmove lab; the classic game loop (the game-program seam, entities, the area tree, world traces, physics frames on the run clock, thinking, toss and bounce, step, pushers, touches, new missiles, a player's packet and command, the client's commands and prediction), Shooter's Edge's native program and scripted match, the thrown-entity vectors and the se-loop lab; the M18o rows. Also the bots' navigation proven by the move (nav.hpp: floor nodes off the hulls, walk, drop and jump links proven by player_move, movers tagged, routes on ai/path), the nav course and the se-nav lab; M18r1. Also the server's host, its bot slots and command sources, the input log and its replay, the stand-in bot, the shooters_edge_server binary and the se-server lab; M18f. Also the loop's settings a QC server uses (first_dynamic, a full pool reusing the last entity, the command's movement); M18p's loop changes."
+description: "Use for plugins/shooter in gameengine2: the first-person shooter's simulation half. The classic player move in 32-bit floats (every step in order, every move type, the server settings at the modern defaults), clip hulls (planes, clip nodes, point contents, the box hull, the line trace with its 1/32 back-off), hulls built from convex brushes, the move's list of solids and its traces, the recorded scenarios the move is held to, and the pmove lab; the classic game loop (the game-program seam, entities, the area tree, world traces, physics frames on the run clock, thinking, toss and bounce, step, pushers, touches, new missiles, a player's packet and command, the client's commands and prediction), Shooter's Edge's native program and scripted match, the thrown-entity vectors and the se-loop lab; the M18o rows. Also the engine mover's classic row over brush worlds (`row.hpp`, `hull_world.hpp`) and its parity; M18e. Also the bots' navigation proven by the move (nav.hpp: floor nodes off the hulls, walk, drop and jump links proven by player_move, movers tagged, routes on ai/path), the nav course and the se-nav lab; M18r1. Also the server's host, its bot slots and command sources, the input log and its replay, the stand-in bot, the shooters_edge_server binary and the se-server lab; M18f. Also the loop's settings a QC server uses (first_dynamic, a full pool reusing the last entity, the command's movement); M18p's loop changes."
 ---
 
 # The shooter plugin
@@ -21,6 +21,9 @@ edges. `docs/shooters-edge.md` is the design;
 | `shooter/pmove.hpp/.cpp` | The move: `MoveCmd`, `MoveSettings`, `MoveState`, `player_move`, `run_command` (the 50 ms split) |
 | `shooter/slide.hpp/.cpp` | The slide along planes, the step-slide up stairs, `clip_velocity` |
 | `shooter/recording.hpp/.cpp` | The recorded scenarios: the text format, `replay` line by line, the tolerance |
+| `shooter/hull_world.hpp/.cpp` | The engine mover's world over brush models' clip hulls (`mover_world`, the axes `to_engine`/`to_map`, `contents_at`) and a hull 0's liquids laid as `engine/water` volumes (`add_liquids`) |
+| `shooter/row.hpp/.cpp` | The classic row on the engine's mover and swimmer: `classic_rows` from the settings, `row_body`, `row_command` |
+| `shooter/row_recording.hpp/.cpp` | The row against the recordings, one command at a time and as runs (`replay_row`, `row_covers`) |
 | `labs/pmove_lab.cpp` | The `pmove` lab: every scenario's worst error, paths from above and the side |
 | `shooter/program.hpp` | The game-program seam: hooks and functions by number, the globals |
 | `shooter/entity.hpp`, `server.hpp/.cpp` | The entity record and pool, linking, trigger and impact touches, sounds, `server_hash` |
@@ -79,6 +82,12 @@ edges. `docs/shooters-edge.md` is the design;
   and reuses the last entity, counted in `spawns_full`) default off, so the native program's
   digests do not move; the mod server (`games/shooters_edge/server`, the `progs` skill) turns
   both on. `Edict::movement` carries the command's moves to the program before each command.
+- **The engine mover's row is held two ways too.** `tests/shooter_row_recording_test.cpp` holds
+  every covered scenario's lines within the recordings' own tolerance, step by step and as runs;
+  `tests/shooter_row_test.cpp` holds the row's own bits (`tests/golden/shooter_row.txt`). A
+  change to `engine/move/step.cpp` or `engine/water/swim.cpp` can move the second: rewrite it
+  only when the first stays green. A classic behaviour the row lacks is a new engine KNOB, off
+  by default (the `move` skill), never a branch on the classic in `engine/`.
 - Still to come: the cvars bound through `engine/console` (setting `pm_airstep` sets
   `pm_pground`), a map's compiled hulls (M18b) answering `MoveWorld`, and the other entities'
   interpolation on the client (M18h).

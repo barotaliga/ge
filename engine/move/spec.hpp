@@ -51,27 +51,36 @@ struct MoveSpec {
   double crouch_eye = 22;     // L: the eyes above the feet, crouched
 
   // ─── on the ground ──────────────────────────────────────────────────────────────────────
-  double max_speed = 320;       // L/s: the wish speed with the stick (or a key) fully over
-  double back_scale = 1;        // share of `max_speed` going backwards
-  double side_scale = 1;        // share of `max_speed` straight sideways
-  double walk_scale = 0.5;      // share while the walk button is held
-  double sprint_scale = 1;      // share while sprint is held (1: no sprint)
-  double crouch_scale = 0.333;  // share while crouched (not sliding)
-  double accelerate = 10;       // 1/s: the ground's acceleration factor
-  double friction = 4;          // 1/s: the ground's friction factor
-  double stop_speed = 100;      // L/s: friction acts as if the speed were at least this
-  double edge_friction = 2;     // friction's factor where the ground ahead drops away (1: none)
-  double edge_probe = 16;       // L: how far ahead of the feet the drop is looked for
-  double walk_normal = 0.7;     // the least up part of a ground's normal that is walkable
-  double step_height = 18;      // L: the tallest step walked up without a jump
-  double ground_snap = 0;       // L: a drop this small under a walker is followed, not fallen off
-  double contact = 0.25;        // L: a gap under the feet this small still counts as standing
-  double unground_speed = 180;  // L/s: rising faster than this leaves the ground
+  double max_speed = 320;        // L/s: the wish speed with the stick (or a key) fully over
+  double back_scale = 1;         // share of `max_speed` going backwards
+  double side_scale = 1;         // share of `max_speed` straight sideways
+  double walk_scale = 0.5;       // share while the walk button is held
+  double sprint_scale = 1;       // share while sprint is held (1: no sprint)
+  double crouch_scale = 0.333;   // share while crouched (not sliding)
+  double accelerate = 10;        // 1/s: the ground's acceleration factor
+  double friction = 4;           // 1/s: the ground's friction factor
+  double stop_speed = 100;       // L/s: friction acts as if the speed were at least this
+  double edge_friction = 2;      // friction's factor where the ground ahead drops away (1: none)
+  double edge_probe = 16;        // L: how far ahead of the feet the drop is looked for
+  double walk_normal = 0.7;      // the least up part of a ground's normal that is walkable
+  double step_height = 18;       // L: the tallest step walked up without a jump
+  double ground_snap = 0;        // L: a drop this small under a walker is followed, not fallen off
+  double contact = 0.25;         // L: a gap under the feet this small still counts as standing
+  double unground_speed = 180;   // L/s: rising faster than this leaves the ground
+  bool friction_whole = false;   // ground friction measured on the whole velocity (a landing's kept
+                                 // fall included) before the vertical part is dropped
+  bool clip_from_start = false;  // each surface a move meets clips the velocity the move started
+                                 // with, not the one the last surface left
+  double land_clip_speed = 0;    // L/s: the velocity into the ground is cut at a step's end only
+                                 // when falling faster than this; slower, it is kept until the
+                                 // next ground move drops it (0: always cut)
 
   // ─── in the air ─────────────────────────────────────────────────────────────────────────
   double gravity = 800;              // L/s^2: down
   double fall_gravity_scale = 1;     // gravity's factor while falling (a platformer's heavier fall)
   double terminal_speed = 0;         // L/s: the fastest fall (0: none)
+  double gravity_lead = 0.5;         // share of a step's gravity applied before the move (0.5:
+                                     // by halves, a jump's apex the same at any step length)
   double air_accelerate = 0.7;       // 1/s: the air's acceleration factor
   double air_speed_cap = 30;         // L/s: the speed along the wish held to this (0: no cap)
   double air_control = 0;            // L/s^2: forward-only steering of the velocity (0: none)

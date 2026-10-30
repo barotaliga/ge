@@ -52,7 +52,7 @@ Slid slide_move(const MoveSpec& spec, const World& world, const Box& box, Vec3& 
     if (h.normal.y < spec.walk_normal) out.wall = true;
     left -= left * h.fraction;
     planes[np++] = h.normal;
-    const Vec3 before = vel;
+    const Vec3 before = spec.clip_from_start ? primal : vel;
     int i = 0;
     for (; i < np; i++) {
       vel = clip(before, planes[i]);
@@ -331,6 +331,20 @@ Wish wish_of(const MoveSpec& spec, const MoveState& s, const MoveCmd& cmd) {
   return {scale(raw, 1.0 / n), spec.max_speed * (n < 1 ? n : 1.0) * scale_by};
 }
 
+MoveEvents carry_along(const MoveSpec& spec, const World& world, MoveState& s, double dt,
+                       bool step_up) {
+  MoveEvents ev;
+  s.t += dt;
+  const Box box = hull(spec, s.ducked);
+  const Slid slid = step_up ? ground_move(spec, world, box, s, dt, ev)
+                            : slide_move(spec, world, box, s.pos, s.vel, dt);
+  if (slid.wall && slid.wall_lost > 0) {
+    ev.bits |= kBlocked;
+    ev.blocked = slid.wall_lost;
+  }
+  return ev;
+}
+
 MoveEvents step_move(const MoveSpec& spec, const World& world, MoveState& s, const MoveCmd& cmd,
                      double dt) {
   MoveEvents ev;
@@ -409,8 +423,9 @@ MoveEvents step_move(const MoveSpec& spec, const World& world, MoveState& s, con
   Slid slid;
   double vy_into = 0;
   if (s.grounded) {
-    s.vel.y = 0;
+    if (!spec.friction_whole) s.vel.y = 0;
     apply_friction(spec, world, s, s.sliding ? spec.slide_friction : spec.friction, true, dt);
+    s.vel.y = 0;
     accelerate(s.vel, w.dir, w.speed, w.speed,
                spec.accelerate * (s.sliding ? spec.slide_steer : 1.0), dt);
     slid = ground_move(spec, world, box, s, dt, ev);
@@ -439,12 +454,13 @@ MoveEvents step_move(const MoveSpec& spec, const World& world, MoveState& s, con
         s.vel = {s.vel.x * k, s.vel.y, s.vel.z * k};
       }
     }
-    // Gravity by halves either side of the move: a jump's apex is v^2 / 2g at any step length.
+    // Gravity either side of the move, by halves unless the row leads with more: by halves a
+    // jump's apex is v^2 / 2g at any step length.
     const double g = spec.gravity * (s.vel.y < 0 ? spec.fall_gravity_scale : 1.0);
-    s.vel.y -= g * dt * 0.5;
+    s.vel.y -= g * dt * spec.gravity_lead;
     vy_into = s.vel.y;
     slid = slide_move(spec, world, box, s.pos, s.vel, dt);
-    s.vel.y -= g * dt * 0.5;
+    s.vel.y -= g * dt * (1 - spec.gravity_lead);
     if (spec.terminal_speed > 0 && s.vel.y < -spec.terminal_speed) s.vel.y = -spec.terminal_speed;
   }
   if (slid.wall && slid.wall_lost > 0) {
@@ -468,7 +484,10 @@ MoveEvents step_move(const MoveSpec& spec, const World& world, MoveState& s, con
     ev.stepped = 0;
   }
   if (s.grounded) {
-    if (dot(s.vel, s.ground_normal) < 0) s.vel = clip(s.vel, s.ground_normal);
+    // The speed into the ground is cut, unless the row keeps a fall slower than its limit for
+    // the next ground move to drop.
+    const bool cut = spec.land_clip_speed <= 0 || -s.vel.y > spec.land_clip_speed;
+    if (cut && dot(s.vel, s.ground_normal) < 0) s.vel = clip(s.vel, s.ground_normal);
     if (!was_grounded) {
       s.vel.x -= s.ground_vel.x;  // standing, the velocity is the ground's relative one
       s.vel.z -= s.ground_vel.z;

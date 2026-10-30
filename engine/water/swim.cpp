@@ -61,7 +61,8 @@ void kinematic(const SwimSpec& spec, const SwimScale& motion, const SwimInput& i
   }
   // The acceleration toward the wish, up to it.
   if (wish > 0) {
-    const double add = wish - speed;
+    const double along = spec.along_wish ? (st.v.x * wx + st.v.y * wy + st.v.z * wz) / wish : speed;
+    const double add = wish - along;
     if (add > 0) {
       const double step = core::num::min(add, spec.accelerate * wish * dt);
       st.v.x += step * wx / wish;
@@ -195,7 +196,7 @@ Budget budget(const SwimSpec& spec, double in_water) {
 int immersion(const World& world, const SwimSpec& spec, const core::Vec3& p, double t) {
   const double s = spec.scale > 0 ? spec.scale : 1;
   const double x = p.x / s, y = p.y / s, z = p.z / s;
-  if (!wet_at(world, x, y + 0.01, z, t)) return 0;
+  if (!wet_at(world, x, y + spec.feet, z, t)) return 0;
   if (!wet_at(world, x, y + spec.waist, z, t)) return 1;
   if (!wet_at(world, x, y + spec.eyes, z, t)) return 2;
   return 3;
