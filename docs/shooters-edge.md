@@ -143,7 +143,6 @@ lit by the map's baked light under the player; `r_drawviewmodel`, `r_viewmodel_f
 classic|modern|compact`); the console; the main menu (below). Not yet: the other players' and
 items' models, sounds, and the network (the rest of M18h, M18i).
 
-<<<<<<< HEAD
 ### Benchmarking a demo
 
 `benchmark <demo>` in the console, or `-benchmark <demo>` on the command line (which quits with
@@ -182,7 +181,7 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic --size=
 - **Headless**: `make lab LAB=se-timedemo` runs the same loop into an offscreen target, on a
   demo written in code round the fixture halls (`--format=client` for the other format), or on
   a real one with `ARGS="--basedir=<dir> --demo=demo1"`, and charts every frame's time.
-=======
+
 ### The main menu
 
 `games/shooters_edge/menu/` (M18k2) is the menu ESCAPE opens over the running game (the listen
@@ -217,7 +216,6 @@ server's frames go on under it). Its pages are the classic game's:
   on the search path), ENHANCE into the local cache watched stage by stage, every `ce_` switch.
 - `togglemenu`, `menu_main`, `menu_options` and `menu_quit` open it from the console or a bind.
   The `se-menu` lab pictures every page in both looks.
->>>>>>> origin/main
 
 ## Running your own mod
 
