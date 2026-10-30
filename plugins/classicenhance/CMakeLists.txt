@@ -5,5 +5,5 @@
 # pack's held weapons as view models, lit by the map under the player. Nothing it
 # makes is committed or shipped (skill: classicenhance). Its GPU lab fires the engine's muzzle
 # fire from the weapons (APP gpu render: the labs only; the plugin itself draws nothing).
-ge_add_plugin(classicenhance ENGINE core assets audio camera lab vfs viewmodel PLUGINS brush morph
+ge_add_plugin(classicenhance ENGINE core assets audio camera lab vfs viewmodel wind PLUGINS brush morph
   APP gpu render)

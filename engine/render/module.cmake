@@ -29,5 +29,5 @@ if(GE_GPU)
     engine/render/fog.wgsl engine/render/fog_integrate.wgsl
     engine/render/beams.wgsl engine/render/motion_blur.wgsl engine/render/ao.wgsl
     engine/render/ao_blur.wgsl engine/render/dof.wgsl
-    engine/render/snow_marks.wgsl)
+    engine/render/snow_marks.wgsl engine/render/flame.wgsl)
 endif()
