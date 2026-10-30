@@ -1,9 +1,10 @@
-// The multiplayer protocol's messages (version 28) as a client recording's packets carry them
-// (demo.hpp): every message read to its end so the next one is found, and the few that matter
-// kept: the server data (the protocol's extensions, the recording player's slot), the model
-// list's first entry (the map), the players' origins, the entity lists against their baselines
-// and earlier frames, the stats, the intermission. `docs/shooters-edge.md` § Demos lists what is
-// read; the protocol's own tables are the protocol note's (M18g).
+// The multiplayer protocol's messages (version 28) as a client recording's packets and a
+// multiview recording's records carry them (demo.hpp): every message read to its end so the next
+// one is found, and the few that matter kept: the server data (the protocol's extensions, the
+// recording player's slot), the model list's first entry (the map), the players' origins, the
+// entity lists against their baselines and earlier frames, the stats, the intermission.
+// `docs/shooters-edge.md` § Demos lists what is read; the protocol's own tables are the protocol
+// note's (M18g).
 //
 // EXTENSIONS: the server data may open with extension families (a 4-byte tag and a bit set
 // each) before the version. The ones that change how a message reads are honoured: wider
@@ -143,8 +144,14 @@ const DemoEntity& baseline(const Demo& d, int n) {
 // and the state's entities.
 bool packet_entities(Demo& d, DemoMsg& m, bool delta, std::string& error) {
   const Wire w = wire_of(d);
+  // A multiview recording deltas each list against the one written before it, whatever its
+  // sequence byte says, so it keeps one slot.
+  const bool one = d.state.format == DemoFormat::multiview;
   Frame from;
-  if (delta) from = d.ring[static_cast<size_t>(m.u8() & 63)];
+  if (delta) {
+    const int seq = m.u8();
+    from = d.ring[one ? 0 : static_cast<size_t>(seq & 63)];
+  }
   Frame to;
   size_t old = 0;
   for (;;) {
@@ -173,7 +180,7 @@ bool packet_entities(Demo& d, DemoMsg& m, bool delta, std::string& error) {
     if (static_cast<size_t>(n) >= ents.size()) ents.resize(static_cast<size_t>(n) + 1);
     ents[static_cast<size_t>(n)] = e;
   }
-  d.ring[d.incoming & 63] = std::move(to);
+  d.ring[one ? 0 : d.incoming & 63] = std::move(to);
   return true;
 }
 
@@ -212,6 +219,32 @@ void player_info(Demo& d, DemoMsg& m) {
   if (slot >= 0 && slot < 32) d.state.players[static_cast<size_t>(slot)] = p;
 }
 
+// A multiview recording's `playerinfo`: the slot, the field bits, the frame, then the fields the
+// bits name in the order origin, angles (16 bits each, the pitch the view's own), model, skin,
+// effects, weapon frame. A field left out keeps the player's last value; the dead and gib bits
+// are the player's state this frame.
+void multiview_player(Demo& d, DemoMsg& m) {
+  constexpr int kMvAngles = 8;  // 8, 16, 32: the three angles; 1, 2, 4: the three origins
+  constexpr int kMvEffects = 64, kMvSkin = 128, kMvWeaponFrame = 1024, kMvModel = 2048;
+  const Wire w = wire_of(d);
+  const int slot = m.u8();
+  const int bits = m.u16();
+  DemoEntity scratch;
+  DemoEntity& p = slot >= 0 && slot < 32 ? d.state.players[static_cast<size_t>(slot)] : scratch;
+  p.frame = m.u8();
+  float* o[3] = {&p.origin.x, &p.origin.y, &p.origin.z};
+  float* a[3] = {&p.angles.x, &p.angles.y, &p.angles.z};
+  for (int i = 0; i < 3; i++)
+    if ((bits & (1 << i)) != 0) *o[i] = origin(m, w);
+  for (int i = 0; i < 3; i++)
+    if ((bits & (kMvAngles << i)) != 0) *a[i] = angle16(m);
+  if ((bits & kMvModel) != 0) p.model = m.u8();
+  if ((bits & kMvSkin) != 0) p.skin = m.u8();
+  if ((bits & kMvEffects) != 0) p.effects = m.u8();
+  if ((bits & kMvWeaponFrame) != 0) m.u8();
+  p.present = true;
+}
+
 bool server_data(Demo& d, DemoMsg& m, std::string& error) {
   DemoState& s = d.state;
   d.ext_fte = d.ext_mvd = 0;
@@ -235,8 +268,12 @@ bool server_data(Demo& d, DemoMsg& m, std::string& error) {
   }
   m.i32();  // the spawn count
   m.str();  // the game folder
-  const int slot = m.u8();
-  s.player = slot & 127;   // bit 7: the recorder was a spectator
+  if (s.format == DemoFormat::multiview) {
+    m.f32();  // the server's time where a client's recording has its slot
+  } else {
+    const int slot = m.u8();
+    s.player = slot & 127;  // bit 7: the recorder was a spectator
+  }
   m.str();                 // the level's title
   m.skip(size_t{10} * 4);  // the movement settings
   s.levels++;
@@ -248,6 +285,7 @@ bool server_data(Demo& d, DemoMsg& m, std::string& error) {
   d.baselines.clear();
   for (Frame& f : d.ring) f.clear();
   for (DemoEntity& p : s.players) p = DemoEntity{};
+  for (auto& st : d.player_stats) st.fill(0);
   return true;
 }
 
@@ -350,7 +388,8 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
       case 31:
         m.str();
         break;    // stufftext, centerprint, finale
-      case 10: {  // setangle
+      case 10: {  // setangle; a multiview recording's names the player it turns first
+        if (s.format == DemoFormat::multiview) m.u8();
         if ((d.ext_mvd & kMvdHighLagTeleport) != 0) m.u8();
         const float a = angle(m, w), b = angle(m, w), c = angle(m, w);
         s.angles = {a, b, c};
@@ -455,7 +494,10 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
         break;
       }
       case 42:
-        player_info(d, m);
+        if (s.format == DemoFormat::multiview)
+          multiview_player(d, m);
+        else
+          player_info(d, m);
         break;
       case 43:
         m.skip(static_cast<size_t>(m.u8()) * 6);

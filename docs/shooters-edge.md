@@ -170,17 +170,43 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic --size=
 - **Which demo**: a path (absolute, or starting `./` or `../`) is read from disk alone; else the name through the search path (`demo1.dem` in `pak0.pak`, or a loose file
   in the game folder), with `.dem` added when the name has no extension, then any file in the
   packs whose name before its extension matches; else the name as a path on disk.
-- **The formats**, told apart by their first bytes (`client/demo.hpp`): the single-player demo
-  (protocol 15, `.dem`: the shareware pack's `demo1` to `demo3`) and the multiplayer client's
-  recording (protocol 28, with the extensions that change how a message reads). Server-side
-  multi-view recordings are not read yet (M18h).
+- **The formats**, told apart by their first bytes (`client/demo.hpp`), never by the name: the
+  single-player demo (protocol 15, `.dem`: the shareware pack's `demo1` to `demo3`), the
+  multiplayer client's recording (protocol 28, with the extensions that change how a message
+  reads) and the server's **multiview recording** of every player (`.mvd`, below). A gzip file
+  (`.mvd.gz`, as recordings are usually downloaded) is unpacked on the way in.
 - **What is timed**: every frame but the first few after a level starts (the map's load and its
   pipelines' first use; `kSkipAfterLevel`). A level change inside the demo loads that map from
   the packs. What is drawn is what the window draws today: the map from the recorded eye and
   the HUD off the recorded stats (the demo's effects are not read yet); the entities' models join when the window draws them (M18i).
 - **Headless**: `make lab LAB=se-timedemo` runs the same loop into an offscreen target, on a
-  demo written in code round the fixture halls (`--format=client` for the other format), or on
-  a real one with `ARGS="--basedir=<dir> --demo=demo1"`, and charts every frame's time.
+  demo written in code round the fixture halls (`--format=client` or `--format=multiview` for the
+  other formats), or on a real one with `ARGS="--basedir=<dir> --demo=demo1"`, and charts every
+  frame's time, and every pass's GPU time (`--look=classic|modern` picks the look).
+
+### Watching a demo
+
+`playdemo <demo>` in the console (`-playdemo <demo>` on the command line, which quits when the
+demo ends) plays a recorded game **at its own pace**: vsync on, nothing timed, each drawn frame
+moving the demo's clock on by the frame's wall time (at most a tenth of a second, so a stall
+slows the demo instead of skipping it). `cl_demospeed <x>` sets the speed (1 by default, up to
+20; 0 pauses). ESCAPE stops it. The demo is found and drawn as the benchmark finds and draws it.
+
+```sh
+build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic \
+    -playdemo ~/Downloads/match.mvd.gz +demo_track 2 +cl_demospeed 2
+```
+
+(The `+` words go last: everything from the first `+` on is the console's.)
+
+**A multiview recording** holds every player, so the view rides one of them: the lowest slot
+playing by default, or the one `demo_track <slot>` names (`demo_track -1` goes back to the
+default). The view takes that player's origin and his own view angles, his stats for the HUD and
+the messages the server sent to him alone. Records written for no client (the recorder's own
+data) are skipped. The demo's clock is the sum of the records' milliseconds. `make lab
+LAB=se-demo ARGS="--file=<demo>"` reads any demo without a GPU and draws every player's path
+from above and his health over the clock, with a table of who played (`--track=<slot>` picks
+the view).
 
 ### The main menu
 
@@ -675,7 +701,7 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `se-audio` | sim | Sounds of a scripted fight rendered, metered and written as WAV |
 | `se-viewmodel` | picture | The game's eight free weapons in first person on the engine's corridor stage: every one held at rest, each fired in the dark lit by its own muzzle light, the shotgun switched to the rocket launcher, and the player's view-model cvars; each weapon's share of the picture, its muzzle on the screen, its flash's lift and the switch's time (built, M48d) |
 | `se-ambient` | sim | A walk through rooms under sky and by water: the ambience by leaf charted, mixed and written as WAV (built, M18j2) |
-| `se-demo` | sim | A demo played back, seeked and re-recorded; the digest of its frames |
+| `se-demo` | sim | A demo of any format read headless (`--file` a real one, plain or gzip): the recording's counts, every player's path from above, each one's health and the view's over the demo's clock, a table of who played (built for reading, M18h); then seeked and re-recorded, with the digest of its frames |
 
 ## The `ge` tooling it needs
 

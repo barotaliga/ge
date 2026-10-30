@@ -3,9 +3,9 @@
 The multiplayer protocol, version 28, in our words (README.md, the rules): the out-of-band
 packets, the net channel, every message a server and a client exchange with its body field by
 field, the signon, the deltas, the move and its checksum, the info strings, downloads, the first
-tier of extensions and the server's lag compensation. Recorded games are `demos.md`; how the
-client builds its commands and predicts is `gameloop.md` (§ The client), which this note does
-not repeat.
+tier of extensions and the server's lag compensation. Recorded games are read by the game's own
+demo reader (`games/shooters_edge/client/demo.hpp`); how the client builds its commands and
+predicts is `gameloop.md` (§ The client), which this note does not repeat.
 
 **Where each fact came from.** A research session read the modern server, the modern client,
 the shared protocol header and the 1996 release (2026-10-30), with the **modern server's
@@ -290,7 +290,7 @@ Temporary entities go out through the multicast (§ 4.6) by the potentially visi
 ### 4.6 Multicast
 
 A message the game program writes for many clients goes to everyone, or by the PHS, or by the
-PVS of a point, each reliably or not; plus a demo-only "hidden" target (`demos.md`). Gunshot and
+PVS of a point, each reliably or not; plus a demo-only "hidden" target (the multiview recording's mask-0 record). Gunshot and
 blood particles become temporary entities on the way.
 
 ### 4.7 The move checksum

@@ -219,6 +219,33 @@ std::optional<std::vector<uint8_t>> inflate_raw(std::span<const uint8_t> stream,
   return out;
 }
 
+std::optional<std::vector<uint8_t>> inflate_gzip(std::span<const uint8_t> file) {
+  // The header (RFC 1952): magic, deflate, flags, time, extra flags, OS; then the optional
+  // fields the flags name. The trailer: the CRC-32 and the size mod 2^32.
+  if (file.size() < 18 || file[0] != 0x1f || file[1] != 0x8b || file[2] != 8) return std::nullopt;
+  const uint8_t flags = file[3];
+  size_t at = 10;
+  const size_t end = file.size() - 8;
+  if ((flags & 4) != 0) {  // extra field
+    if (at + 2 > end) return std::nullopt;
+    at += 2 + (file[at] | (size_t(file[at + 1]) << 8));
+  }
+  for (const uint8_t text : {uint8_t{8}, uint8_t{16}}) {  // name, comment: zero-ended
+    if ((flags & text) == 0) continue;
+    while (at < end && file[at] != 0) at++;
+    at++;
+  }
+  if ((flags & 2) != 0) at += 2;  // header CRC
+  if (at > end) return std::nullopt;
+  const auto u32 = [&](size_t i) {
+    return uint32_t(file[i]) | (uint32_t(file[i + 1]) << 8) | (uint32_t(file[i + 2]) << 16) |
+           (uint32_t(file[i + 3]) << 24);
+  };
+  auto out = inflate_raw(file.subspan(at, end - at), u32(end + 4));
+  if (!out || crc32(out->data(), out->size()) != u32(end)) return std::nullopt;
+  return out;
+}
+
 uint32_t crc32(const uint8_t* bytes, size_t n, uint32_t crc) {
   crc = ~crc;
   for (size_t i = 0; i < n; i++) {
