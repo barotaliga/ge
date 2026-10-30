@@ -9,6 +9,8 @@
 
 #include <array>
 
+#include "console/cvar.hpp"
+
 namespace fall_line::app {
 
 namespace {
@@ -150,6 +152,29 @@ r::LadderPick preset_pick(Preset p) {
 r::LadderFit auto_picture(double budget_ms, const r::LadderPick& drawn, double timed_ms) {
   const double scale = r::machine_scale(kRows, drawn, kTable.floor_ms, timed_ms);
   return r::fit_ladder(kRows, budget_ms, kTable.floor_ms, scale);
+}
+
+std::optional<r::LadderPick> quality_pick(std::string_view quality, double budget_ms,
+                                          uint32_t width, uint32_t height, std::string& error) {
+  if (quality.empty() || quality == "custom") return std::nullopt;
+  for (Preset p : {Preset::low, Preset::medium, Preset::high, Preset::top})
+    if (quality == preset_name(p)) return preset_pick(p);
+  // The table's prices are the reference machine's at its own size; a frame's cost is mostly its
+  // pixels', so another window scales them by its share of the table's.
+  const double pixels = static_cast<double>(width) * static_cast<double>(height);
+  const double scale =
+      pixels > 0 ? pixels / (static_cast<double>(kTable.width) * kTable.height) : 1.0;
+  if (quality == "auto") return r::fit_ladder(kRows, budget_ms, kTable.floor_ms, scale).pick;
+  double share = 0;
+  if (!ge::console::parse_number(quality, share) || !(share >= 0 && share <= 1)) {
+    error = "r_quality \"" + std::string(quality) +
+            "\" is none of custom, low, medium, high, top, auto or a number from 0 to 1; the "
+            "individual r_ settings are used";
+    return std::nullopt;
+  }
+  const double top_ms = r::ladder_cost(kRows, preset_pick(Preset::top));
+  return r::fit_ladder(kRows, (kTable.floor_ms + share * top_ms) * scale, kTable.floor_ms, scale)
+      .pick;
 }
 
 }  // namespace fall_line::app

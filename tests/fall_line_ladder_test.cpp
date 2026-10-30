@@ -6,6 +6,8 @@
 // ge:summary Tests for Fall Line's quality ladder: the rows, the stops, the presets, the fit
 // ge:keywords test fall-line quality-ladder preset apply_picture auto_picture
 // ge:skill render testing
+#include <string>
+
 #include "check.hpp"
 #include "fall_line/app/ladder.hpp"
 
@@ -73,4 +75,47 @@ TEST(the_automatic_preset_lowers_the_resolution_first) {
   CHECK(f.fits && f.pick[res] < top[res]);
   for (size_t i = 0; i < top.size(); ++i)
     if (i != res) CHECK(f.pick[i] == top[i]);
+}
+
+TEST(the_quality_setting_names_a_preset_a_share_or_a_budget) {
+  const auto rows = fa::picture_rows();
+  std::string error;
+  // custom: no pick, the individual r_ settings rule.
+  CHECK(!fa::quality_pick("custom", 8.3, 1920, 1080, error) && error.empty());
+  CHECK(!fa::quality_pick("", 8.3, 1920, 1080, error) && error.empty());
+  // The presets by name.
+  for (fa::Preset p : {fa::Preset::low, fa::Preset::medium, fa::Preset::high, fa::Preset::top}) {
+    const auto pick = fa::quality_pick(fa::preset_name(p), 8.3, 1920, 1080, error);
+    CHECK(pick && *pick == fa::preset_pick(p));
+  }
+  // A word it does not know: no pick, and a line that says so.
+  CHECK(!fa::quality_pick("ultra", 8.3, 1920, 1080, error) && !error.empty());
+  error.clear();
+  CHECK(!fa::quality_pick("1.5", 8.3, 1920, 1080, error) && !error.empty());
+  error.clear();
+  // 0 is every row's cheapest cost, 1 the top; the worth never falls as the share rises.
+  const auto none = fa::quality_pick("0", 8.3, 1920, 1080, error);
+  const auto all = fa::quality_pick("1", 8.3, 1920, 1080, error);
+  CHECK(none && all && error.empty());
+  if (!none || !all) return;
+  CHECK(gr::ladder_cost(rows, *none) == 0);
+  CHECK(*all == fa::preset_pick(fa::Preset::top));
+  double last = -1;
+  for (const char* share : {"0", "0.1", "0.25", "0.5", "0.75", "0.9", "1"}) {
+    const auto pick = fa::quality_pick(share, 8.3, 1920, 1080, error);
+    CHECK(pick && error.empty());
+    if (!pick) continue;
+    const double worth = gr::ladder_worth(rows, *pick);
+    CHECK(worth >= last);
+    last = worth;
+  }
+  // auto: a budget past the top's price draws the top; a smaller window fits more in the same.
+  const auto roomy = fa::quality_pick("auto", 100, 1920, 1080, error);
+  const auto tight = fa::quality_pick("auto", 3, 1920, 1080, error);
+  const auto small = fa::quality_pick("auto", 3, 1280, 720, error);
+  CHECK(roomy && tight && small);
+  if (!roomy || !tight || !small) return;
+  CHECK(*roomy == fa::preset_pick(fa::Preset::top));
+  CHECK(gr::ladder_worth(rows, *small) >= gr::ladder_worth(rows, *tight));
+  CHECK(gr::ladder_worth(rows, *tight) < gr::ladder_worth(rows, *roomy));
 }

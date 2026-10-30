@@ -2005,9 +2005,20 @@ own bill, because a machine can be short of pixels and rich in passes, or the ot
   so the second reading is of the neighbourhood the answer lies in.
 - **The presets** (low, medium, high, top) are fixed picks a player can choose by name; the
   automatic preset is the fit at the display's budget.
+- **The player's word for it** is Fall Line's `r_quality` (`quality_pick` in `app/ladder.hpp`,
+  applied over the individual `r_` settings by `frame_options`): `custom` (the default: each
+  `r_` setting as set), a preset by name, a number from 0 to 1 (the picture of most worth inside
+  a budget that share of the way from every row's cheapest to the top), or `auto` (the picture of
+  most worth inside `r_budget` ms). The table's prices are the reference machine's at its own
+  size; another window scales them by its pixels. The `profile` lab's `--quality` and the `world`
+  lab's `--cfg="r_quality ..."` draw the frame at one.
+- **A frame's time is its span on the GPU** (`FrameStats::gpu_span_ms`: the first pass's start to
+  the end of the last pass that drew or dispatched), never the sum of its passes' times: on a
+  tiled GPU one pass's vertex work runs under the last one's fragments, so the sum counts their
+  overlap again and again (a chase frame on the M3 Max sums to 36.8 ms where its span is 5.2).
 
-The table's costs today are the software adapter's (lavapipe at 1280 × 720), whose ratios are a
-CPU raster's: the reference machine's prices (the Mac, § Where it is developed) replace them.
+The table's costs are the reference machine's (an Apple M3 Max at 1920 × 1080, by the span; the
+numbers and how they were measured are beside the table in `ladder.cpp`).
 - **The reach and its mist.** `FrameView::reach_m` is how far a picture draws. The ground's
   clipmap draws only the levels that cover it (`clipmap_levels_to`: 1, 2 or 4 km round the eye
   where all eight reach 8 km), the instances' cull drops every one past it (counted with the

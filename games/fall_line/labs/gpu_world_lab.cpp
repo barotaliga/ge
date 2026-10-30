@@ -56,6 +56,7 @@
 #include "console/view.hpp"
 #include "core/output.hpp"
 #include "fall_line/app/frame.hpp"
+#include "fall_line/app/ladder.hpp"
 #include "fall_line/app/sky_type.hpp"
 #include "fall_line/app/views.hpp"
 #include "fall_line/camera/subject.hpp"
@@ -235,7 +236,8 @@ ge::lab::Picture diff_picture(const ge::gpu::Image& culled, const ge::gpu::Image
 void run(ge::lab::Lab& lab) {
   const double seed = lab.arg_num("seed");
   // --cfg: console commands over Fall Line's cvars, as a cfg would set them (the sky's sv_ cvars,
-  // r_clouds, r_ao and r_dof reach the map and the picture here; nothing else is read from them).
+  // r_clouds, r_ao, r_dof and r_quality reach the map and the picture here; nothing else is read
+  // from them).
   ge::console::Console console;
   fall_line::cfg::Settings cvars;
   fall_line::cfg::add_cvars(console, cvars);
@@ -269,6 +271,20 @@ void run(ge::lab::Lab& lab) {
       !problem.empty()) {
     lab.fail("--cfg: " + problem, "Skill: console.");
   }
+  // r_quality in --cfg: the ladder's picture over the options above, as the game draws it.
+  {
+    std::string error;
+    if (const auto pick = fall_line::app::quality_pick(cvars.quality, cvars.budget_ms,
+                                                       static_cast<uint32_t>(width),
+                                                       static_cast<uint32_t>(height), error)) {
+      options = fall_line::app::apply_picture(*pick, options);
+    } else if (!error.empty()) {
+      lab.fail("--cfg: " + error,
+               "next: set r_quality to custom, low, medium, high, top, auto or 0..1.");
+      return;
+    }
+  }
+
   if (width <= 0 || height <= 0 || width > 4096 || height > 4096 || settle < 1 ||
       options.scale < 0.25 || options.scale > 1 || options.reach_m < 0) {
     lab.fail(

@@ -25,7 +25,9 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <span>
+#include <string>
 #include <string_view>
 
 #include "fall_line/app/frame.hpp"
@@ -70,5 +72,14 @@ ge::render::LadderPick preset_pick(Preset p);
 // `drawn` in `timed_ms` at the table's size (render/ladder.hpp's fit over the table's scale).
 ge::render::LadderFit auto_picture(double budget_ms, const ge::render::LadderPick& drawn,
                                    double timed_ms);
+// THE QUALITY SETTING (`r_quality`): the picture a player's word names, for a `width` x `height`
+// window, the table's prices scaled by its pixels. `custom` (or empty): none, the individual
+// r_ settings rule. `low`, `medium`, `high`, `top`: the presets. A number from 0 to 1: the
+// picture of most worth inside a budget that many parts of the way from every row's cheapest to
+// the top. `auto`: the picture of most worth inside `budget_ms`. Anything else: none, and `error`
+// says what was wrong.
+std::optional<ge::render::LadderPick> quality_pick(std::string_view quality, double budget_ms,
+                                                   uint32_t width, uint32_t height,
+                                                   std::string& error);
 
 }  // namespace fall_line::app
