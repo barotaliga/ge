@@ -144,7 +144,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge lab probe <id> --at=<time>` (a lab's frame records printed around one moment, a match's say, without dumping the whole trace)
 - `ge lab diff --mask=<family>` (only the pixels one instance family covers compared, so a change to the figures is shown to touch nothing else; #78) and `ge lab diff --summary` (one line a view with its worst band, in place of the full band table; #225)
 - `ge graph <lab> --scenario=<id> --cols=a,b` (a scenario's trace read from `previews/<lab>/<id>.trace.tsv` without naming the path; #96)
-- `--look=sun|moon[:lens]` on every picture lab (a view aimed at the key light or the moon at the scene's hour, in place of a named view or a printed heading each time; #187, #217, #222)
+- `--look=sun|moon[:lens]` on every picture lab (done for every lab over Fall Line's named views as `<view>@sun[:lens]` and `<view>@moon[:lens]`, on `ge::render::aim_at`; next, the bsp lab's views, which aim after the sky is dressed; #187, #217, #222)
 - the world lab's aims: `--aim=cloud` (the nearest cloud of a layer in frame, for a sparse kind; #183), `--ski-through=<layer>` (the eye above, at the top of, inside and under a layer; #234), `--wind-across` (the wind set across a view's heading, so a sequence shows it moving; #214)
 - `ge lab shelter <map> <point>` (whether a point is open to a fall at a slant, and which face stops it; #203)
 - `ge record --gpu --modes=lit,wireframe` (several modes side by side on one contact sheet, frame for frame; #85)
