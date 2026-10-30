@@ -24,7 +24,7 @@ using shooters_edge::sim::QcProgram;
 
 namespace {
 
-constexpr int kSpawn = 1, kRemove = 2, kSetorigin = 3;
+constexpr int kSpawn = 14, kRemove = 15, kSetorigin = 2;  // the standard numbers
 
 struct Mod {
   pg::Progs progs;
@@ -118,7 +118,9 @@ struct Match {
     std::string error;
     CHECK_MSG(shooters_edge::sim::create_qc_program(q, mod.progs, b.sv.set.max_edicts, error),
               error);
-    shooters_edge::sim::install_seam_builtins(q, kSpawn, kRemove, kSetorigin);
+    pg::set_builtin(q.vm, kSpawn, shooters_edge::sim::qc_spawn, "spawn");
+    pg::set_builtin(q.vm, kRemove, shooters_edge::sim::qc_remove, "remove");
+    pg::set_builtin(q.vm, kSetorigin, shooters_edge::sim::qc_setorigin, "setorigin");
     b.sv.program = shooters_edge::sim::qc_program(q);
   }
 

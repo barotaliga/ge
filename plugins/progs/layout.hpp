@@ -85,6 +85,9 @@ constexpr int kFHealth = 46, kFTakedamage = 57, kFButton0 = 63, kFButton1 = 64;
 constexpr int kFButton2 = 65, kFImpulse = 66, kFFixangle = 67, kFVAngle = 68, kFFlags = 73;
 constexpr int kFColormap = 74, kFTeleportTime = 77, kFWaterlevel = 80, kFWatertype = 81;
 constexpr int kFSpawnflags = 86, kFOwner = 92;
+constexpr int kFFrags = 47, kFWeaponmodel = 49, kFItems = 56, kFChain = 58, kFViewOfs = 60;
+constexpr int kFNetname = 71, kFEnemy = 72, kFTeam = 75, kFIdealYaw = 82, kFYawSpeed = 83;
+constexpr int kFGoalentity = 85;
 constexpr int kEngineFields = 102;  // words
 
 // The optional fields and hooks a game looks up by name after loading (absent: the feature is off).

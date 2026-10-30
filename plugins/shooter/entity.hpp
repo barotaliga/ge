@@ -88,6 +88,7 @@ struct Edict {
   float impulse = 0;
   float gravity = 0;   // a factor; 0 means 1
   float maxspeed = 0;  // a player's own cap; 0 means sv_maxspeed
+  Vec3f movement;      // the command's forward, side and up moves, written before each command
 };
 
 }  // namespace ge::shooter
