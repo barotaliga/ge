@@ -199,6 +199,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - the WGSL embedder failing on an empty generated shader (an unbalanced bracket in a comment splits the CMake list and silently empties it)
 - `ge lab run --no-gpu` (a GPU lab forced onto its placeholder path, to check its digest matches a runner without an adapter, without a temporary code switch; #228)
 - `ge lab new <id> --like=<lab>` (a lab's skeleton copied from another: the spec, a WAV loader, the sound shot; #274)
+- `ge lab run <lab> --dprint` (a QC mod's dprint console lines shown live while a lab runs, in place of a throwaway test that prints a match report's console: M18d)
 - `ge lab run <lab> --pak=<file>` remembered (an installed pack's path kept for content-dependent labs; #278)
 - `ge fetch <url> --sha256=<hex> --into=<cache>` (one shared, verified download for the tools that fetch inputs at bake time, in place of each shelling out to curl; #286)
 - `ge mod run <pkg> --lab=mod` (a mod built, loaded and run against a recorded match in one command; #289)
@@ -207,7 +208,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 
 ## Shooter's Edge, the FPS port (M18: the ge tooling it needs)
 
-- `ge pak ls|cat|extract|build` (search paths, which archive wins a file, fixture packs: pak, pk3, .pk3dir; asked for by the classic-enhance and weapons threads)
+- `ge pak ls|extract|build|convert|sum` (done: pak and pk3 listed with CRC-32 and SHA-256, files extracted, a directory packed, pak to pk3 and back, a file's sums kept and checked; next, once engine/vfs/search.hpp lands, `ge pak ls <gamedir>` naming which archive wins each file over the search path, .pk3dir, and a deflated .pk3 when the engine has a deflate writer; asked for by the classic-enhance and weapons threads and Niclas)
 - `ge tool classicenhance -- extract <kind> <names>` (a pack's original textures or skins written at 1x as PNG to scratch, and the enhanced ones read back out of the cached glTF, in place of a throwaway pak, BSP and MDL reader per experiment)
 - `ge bsp info|ents|shot` (lumps and limits, the entity lump as text, a top-down CPU picture of the leaves, the PVS from a point, the hulls)
 - `ge progs build|disasm|run|trace|profile|diff` (the engine's own compiler for the game's VM language, and the `progs` VM inspected)
@@ -237,7 +238,8 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge pmove <scenario>` (a movement scenario's trajectory as a table and a chart, against its parity recording)
 - `ge console <target> "<command>"` (a console command or cvar run in a headless server or client, its output returned)
 - `ge play` for first-person games (an angle axis on the protocol's grid, a step whose length the input sets, several players a run)
-- `ge bot nav <map>` (build a map's navigation graph without a lab run, and print its node and link counts, the nodes no route reaches, and the proof of one route: bots thread, M18r)
+- `ge bot nav <map>` (build a map's navigation graph without a lab run, and print its node and link counts, the nodes no route reaches, and the proof of one route: bots thread, M18r; also `--near=x,y,z`, the nodes and links near a point: #293)
+- `ge bot run <map> --from=<x,y,z> --to=<x,y,z> --hands=human --seeds=N` (one route ridden by the bot and printed as its trail, its mode timeline and its why-record, without editing a test: #293, M18r2)
 
 ## Store services
 

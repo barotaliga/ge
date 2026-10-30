@@ -41,6 +41,7 @@
 #include "cli/model.hpp"
 #include "cli/net.hpp"
 #include "cli/outcome.hpp"
+#include "cli/pak.hpp"
 #include "cli/perf.hpp"
 #include "cli/play.hpp"
 #include "cli/publish.hpp"
@@ -408,6 +409,7 @@ Outcome run(const Args& a) {
     return run_mem(b, p);
   }
   if (name.starts_with("net ")) return run_net(a);
+  if (name.rfind("pak ", 0) == 0) return run_pak(a, name.substr(4));
   if (name == "save inspect") return run_save(a);
   if (name.rfind("save ", 0) == 0) return run_save_game(build_options(a), a, name.substr(5));
   if (name.starts_with("sound ")) return run_sound(a);
