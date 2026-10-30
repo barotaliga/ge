@@ -507,6 +507,7 @@ void run(gl::Lab& lab) {
       const vm::Lighting light = vm::light_held(l.probe, l.lights, view, grip, l.floor);
       vm::Lighting bare = vm::light_held(l.probe, {}, view, grip, l.floor);
       std::vector<gr::LocalLight> lamps;
+      lamps.reserve(l.lights.size());
       for (const vm::PointLight& p : l.lights) lamps.push_back(gr::lamp_of(p, kWhiteLux));
       const gl::Picture cpu = reference(gun, rest, light, gun_fov, iw, ih);
       const gl::Picture gpu = resolved(d, s, fv, lamps, held_draw(bare));
