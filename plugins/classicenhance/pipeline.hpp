@@ -12,13 +12,17 @@
 // 5. **models**: every model and sprite in the pack (`progs/*.mdl`, `progs/*.spr`; models.hpp)
 //    as glTF with enhanced skins under `models/`, sprites' frames under `sprites/`, and
 //    `replaced.txt`: what the engine draws in their place (replace.hpp).
+// 6. **pictures**: the pack's 2D art (pictures.hpp: the wad's pictures and font sheet, the
+//    `gfx/` pictures) in the palette's colours under `pictures/<name>.png`, unscaled, with
+//    `pictures/index.txt`.
 //
 // A stage whose recorded key (its version and options) matches is skipped; `RunOptions::force`
 // reruns it. `RunOptions::only` runs the named stages alone (the ones before them must have run).
 // A report says per stage whether it ran, what it wrote and how long it took.
 //
-// ge:summary The enhancement pipeline's stages, pack to models, into the cache
+// ge:summary The enhancement pipeline's stages, pack to pictures, into the cache
 // ge:keywords pipeline stage pack textures lightmaps sounds models run skip force cache enhance
+// ge:keywords pictures
 // ge:skill classicenhance
 // ge:test tests/classicenhance_pipeline_test.cpp
 #pragma once
@@ -36,15 +40,16 @@
 
 namespace ge::classicenhance {
 
-enum class Stage : uint8_t { pack, textures, lightmaps, sounds, models };
-inline constexpr Stage kStages[] = {Stage::pack, Stage::textures, Stage::lightmaps, Stage::sounds,
-                                    Stage::models};
+enum class Stage : uint8_t { pack, textures, lightmaps, sounds, models, pictures };
+inline constexpr Stage kStages[] = {Stage::pack,   Stage::textures, Stage::lightmaps,
+                                    Stage::sounds, Stage::models,   Stage::pictures};
 const char* stage_name(Stage s);
 // The stage named `name`; false when none is.
 bool stage_named(const std::string& name, Stage* out);
 
 inline constexpr int kTextureStageVersion = 1;
 inline constexpr int kSoundStageVersion = 1;
+inline constexpr int kPictureStageVersion = 1;
 
 struct RunOptions {
   EnhanceOptions textures;
