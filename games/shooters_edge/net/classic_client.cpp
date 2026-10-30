@@ -254,7 +254,7 @@ void apply(ClassicClientEnd& c, const SvcMsg& m) {
   switch (m.id) {
     case svc::serverdata:
       for (const auto& [magic, bits] : m.ext) {
-        ExtFamily f;
+        ExtFamily f{};
         if (family_of_magic(magic, f)) c.ext[f] = bits;
       }
       c.spawncount = m.ints[1];
@@ -387,7 +387,7 @@ void read_oob(ClassicClientEnd& c, const uint8_t* data, size_t size) {
     c.challenge = static_cast<int32_t>(std::atol(read_string(r).c_str()));
     while (remaining(r) >= 8) {
       const uint32_t magic = gn::read_u32(r), bits = gn::read_u32(r);
-      ExtFamily f;
+      ExtFamily f{};
       if (family_of_magic(magic, f)) c.offered[f] = bits;
     }
     c.stage = ClientStage::connect;

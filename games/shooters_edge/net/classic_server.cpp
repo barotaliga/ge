@@ -95,7 +95,7 @@ bool read_ext_lines(const std::string& text, Ext& asked) {
     pg::Words w;
     pg::tokenize_words(line.c_str(), w);
     uint32_t magic = 0, bits = 0;
-    ExtFamily f;
+    ExtFamily f{};
     if (w.count >= 2 && parse_number(pg::word(w, 0), magic) && parse_number(pg::word(w, 1), bits) &&
         family_of_magic(magic, f)) {
       asked[f] = bits;

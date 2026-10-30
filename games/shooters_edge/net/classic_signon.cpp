@@ -81,7 +81,7 @@ void cmd_pext(ClassicServer& s, int slot, const pg::Words& w) {
   asked[ExtFamily::z] = c.ext[ExtFamily::z];
   for (int i = 1; i + 1 < w.count; i += 2) {
     const uint32_t magic = static_cast<uint32_t>(std::strtoul(pg::word(w, i), nullptr, 0));
-    ExtFamily f;
+    ExtFamily f{};
     if (family_of_magic(magic, f))
       asked[f] = static_cast<uint32_t>(std::strtoul(pg::word(w, i + 1), nullptr, 0));
   }

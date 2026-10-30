@@ -381,7 +381,7 @@ bool read_svc(gn::Reader& r, SvcMsg& m, const WireCtx& ctx, std::string& error) 
         break;
       case svc::serverdata: {
         int32_t v = read_long(r);
-        ExtFamily f;
+        ExtFamily f{};
         while (!r.bad && v != kProtocolVersion && family_of_magic(static_cast<uint32_t>(v), f)) {
           m.ext.emplace_back(static_cast<uint32_t>(v), gn::read_u32(r));
           v = read_long(r);
