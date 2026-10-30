@@ -36,6 +36,7 @@
 #include "cli/index.hpp"
 #include "cli/json.hpp"
 #include "cli/lint.hpp"
+#include "cli/merge.hpp"
 #include "cli/mod.hpp"
 #include "cli/model.hpp"
 #include "cli/net.hpp"
@@ -284,6 +285,9 @@ Outcome run(const Args& a) {
     }
     return run_ci(fs::absolute(repo_of(a)), a.words.empty() ? "" : a.words[0], flag_value(a, "log"),
                   has_flag(a, "merge"));
+  }
+  if (name == "merge-main") {
+    return run_merge_main(build_options(a), flag_value(a, "base", "origin/main"));
   }
   if (name == "queue" || name == "pr clash") {
     const std::string base = flag_value(a, "base", "origin/main");

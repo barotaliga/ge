@@ -377,6 +377,13 @@ figure, the machines). They come in as **glTF 2.0** and nothing else.
   whole to its node's joint), the base colours as materials, the clips baked at 60 Hz. glTF's
   frame is mirrored in x into the world's, so a model faces heading 0. Nothing after the
   load reads glTF.
+- **Morph targets are read too**: each mesh's targets (offsets of its positions and normals from
+  the bind, named by the mesh's `targetNames`) and its default weights, and each clip's weights
+  channels baked at 60 Hz into a track a mesh (`MorphTarget`, `MorphTrack` in
+  `assets/model.hpp`). A pose takes a mesh's weights (`sample_weights`), adds the weighted
+  targets to the bind (`morph_mesh`) and skins that; the `models` lab draws a morph model's
+  clips that way, frame by frame. On the GPU, a classic model's whole-frame animation is the
+  morph-mesh pass below; the skinning pass skins the bind alone.
 - **A base colour texture is baked into parts at load** (`assets/image.hpp`, its PNG reader
   palettes included). Each triangle takes the texel at its middle (NEAREST, repeating, through
   the texture's KHR_texture_transform), linear and times the base colour factor, as a material

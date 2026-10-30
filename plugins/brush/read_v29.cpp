@@ -225,19 +225,28 @@ bool read_v29(std::span<const uint8_t> file, bool bsp2, Map* out, std::string* e
   }
 
   if (!detail::count_of(L[kClipnodes], bsp2 ? 12 : 8, f, &n, err)) return false;
-  m.clipnodes = uint32_t(n);
   {
     Cursor c = lump(kClipnodes);
+    m.clip_nodes.resize(n);
     for (size_t i = 0; i < n; ++i) {
-      const uint32_t plane = c.u32();
-      for (int k = 0; k < 2; ++k) {
-        const int32_t ch = bsp2 ? c.i32() : c.i16();
-        if (plane >= m.planes.size() || (ch >= 0 && size_t(ch) >= n)) {
-          return detail::refuse(err, f,
-                                "clipnode " + std::to_string(i) +
-                                    " names a plane or child not "
-                                    "in the map",
-                                "the file is damaged: rebuild the map");
+      ClipNode& cn = m.clip_nodes[i];
+      cn.plane = c.u32();
+      for (int32_t& ch : cn.child) {
+        // 29 stores a child in 16 bits: read unsigned so a map of more than 32767 clip nodes
+        // still reaches them all, with the top sixteen values the contents numbers.
+        if (bsp2) {
+          ch = c.i32();
+        } else {
+          const uint32_t v = c.u16();
+          ch = v >= 0xfff0u ? int32_t(v) - 0x10000 : int32_t(v);
+        }
+      }
+      for (int32_t ch : cn.child) {
+        if (cn.plane >= m.planes.size() || (ch >= 0 && size_t(ch) >= n) || ch < -15) {
+          return detail::refuse(
+              err, f,
+              "clipnode " + std::to_string(i) + " names a plane, child or contents not in the map",
+              "the file is damaged: rebuild the map");
         }
       }
     }
@@ -256,12 +265,16 @@ bool read_v29(std::span<const uint8_t> file, bool bsp2, Map* out, std::string* e
       md.head_node = c.i32();
       for (int h = 1; h < 4; ++h) {
         const int32_t hull = c.i32();
-        if (h < 3 && hull >= 0 && uint32_t(hull) >= m.clipnodes && m.clipnodes > 0) {
+        const bool in = hull >= 0 && size_t(hull) < m.clip_nodes.size();
+        // Hulls 1 and 2 are traced; hull 3 is unused by the format's games, so a value out of range
+        // there is kept as none (-1) rather than refused.
+        if (h < 3 && !in && !m.clip_nodes.empty()) {
           return detail::refuse(err, f,
                                 "model " + std::to_string(i) + "'s clip hull " + std::to_string(h) +
                                     " names a clipnode not in the map",
                                 "the file is damaged: rebuild the map");
         }
+        md.hulls[h - 1] = in ? hull : -1;
       }
       const int32_t vl = c.i32();
       if (i == 0) visleafs = vl;

@@ -1,7 +1,7 @@
 // The version 29 and BSP2 fixture writer: the compile laid out in fifteen lumps, with 64 × 64
 // miptex (four levels, palette indices in a pattern of their own), one texinfo and one grey
-// lightmap a face, leaf-numbered visibility rows, and the point tree written again as the clip
-// hulls' nodes.
+// lightmap a face, leaf-numbered visibility rows, and the player's and the large box's clip hulls
+// (`compile_hulls`) as the clip nodes.
 //
 // ge:summary Writes a fixture as a version 29 or BSP2 map: miptex, faces, grey luxels, leaf rows
 // ge:keywords write v29 bsp2 fixture miptex texinfo faces edges surfedges lighting clipnodes leafs
@@ -146,12 +146,11 @@ bool write_v29(const Fixture& fx, const Compiled& c, bool bsp2, Out* out, std::s
       nodes.u16(0);
       nodes.u16(0);
     }
-    // The clip hulls: the same tree, its leaves as contents (−2 solid, −1 empty).
+  }
+  // The box hulls (compile_hulls): hull 1's nodes, then hull 2's.
+  for (const CClip& n : c.clips) {
     clipnodes.i32(int32_t(n.plane));
-    for (int32_t ch : n.child) {
-      const int32_t v = ch >= 0 ? ch : (ch == -1 ? -2 : -1);
-      bsp2 ? clipnodes.i32(v) : clipnodes.i16(v);
-    }
+    for (int32_t ch : n.child) bsp2 ? clipnodes.i32(ch) : clipnodes.i16(ch);
   }
 
   const auto leaf = [&](int32_t contents, int32_t vis, const float* lo, const float* hi,
@@ -186,7 +185,7 @@ bool write_v29(const Fixture& fx, const Compiled& c, bool bsp2, Out* out, std::s
     for (int k = 0; k < 3; ++k) models.f32(b[k]);
   }
   for (int k = 0; k < 3; ++k) models.f32(0);
-  for (int h = 0; h < 4; ++h) models.i32(0);
+  for (int32_t head : {0, c.hull_head[0], c.hull_head[1], 0}) models.i32(head);
   models.i32(int32_t(rooms));
   models.i32(0);
   models.i32(int32_t(c.faces.size()));

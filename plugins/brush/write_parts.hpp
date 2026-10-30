@@ -3,6 +3,7 @@
 //
 // ge:summary The fixture compile every BSP writer shares: faces, planes, tree, visibility, luxels
 // ge:keywords fixture compile faces planes tree split leaves visibility luxels rle packer
+// ge:keywords clip-hull box-hull compile_hulls
 // ge:skill brush
 // ge:test tests/brush_read_test.cpp
 #pragma once
@@ -42,6 +43,13 @@ struct CNode {
   float mins[3] = {}, maxs[3] = {};
 };
 
+// A clip hull's node: an axial plane (into Compiled::planes) and two children, a node (>= 0) or a
+// contents number (−1 empty, −2 solid).
+struct CClip {
+  uint32_t plane = 0;
+  int32_t child[2] = {};  // [0] in front, [1] behind
+};
+
 struct Compiled {
   std::vector<std::string> textures;
   std::vector<CPlane> planes;
@@ -51,9 +59,18 @@ struct Compiled {
   std::vector<std::vector<uint8_t>> sees;  // rooms × rooms
   std::string entities;
   float mins[3] = {}, maxs[3] = {};
+  // The box hulls (29 and BSP2, `compile_hulls`): every hull's nodes, and hull 1's and 2's first.
+  std::vector<CClip> clips;
+  int32_t hull_head[2] = {};
 };
 
 bool compile(const Fixture& fx, Compiled* out, std::string* err);
+// The player's (−16, −16, −24)..(16, 16, 32) and the large (−32, −32, −24)..(32, 32, 64) box
+// hulls: a point is open when the box about it lies inside the rooms, solid otherwise. Each is a
+// tree of axial planes over the grid of the rooms' sides moved by the box, split down the middle
+// of its widest run of cells until a cell range is all open or all solid; its planes are added to
+// `c->planes`.
+void compile_hulls(const Fixture& fx, Compiled* c);
 // The luxel brightness at `p` on a surface facing `n` in room `room`.
 // The light at `p` on a face facing `n` in `room`: of the lights of `style` (0 with the ambient).
 uint8_t light_at(const Fixture& fx, uint32_t room, const double p[3], const float n[3],

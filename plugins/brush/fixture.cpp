@@ -443,6 +443,7 @@ bool write_bsp(const Fixture& fixture, Family family, std::vector<uint8_t>* out,
   switch (family) {
     case Family::v29:
     case Family::bsp2:
+      detail::compile_hulls(fixture, &c);
       ok = detail::write_v29(fixture, c, family == Family::bsp2, &o, error);
       break;
     case Family::v38:

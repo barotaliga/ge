@@ -16,8 +16,11 @@
 //   factor, as a part of its own a colour (`<material>#rrggbb`), the vertices two colours share
 //   split. A low-poly kit's colour atlas draws exactly, and every pass that draws parts draws
 //   it; a photograph's texture is reduced to a colour a face, and a note says so;
+// - each mesh's morph targets (their POSITION and NORMAL offsets, their names from the mesh's
+//   `targetNames`, the mesh's or its node's default weights);
 // - each animation as a Clip baked at kClipRateHz: translations, rotations and scales, with
-//   STEP, LINEAR (rotations on the arc) and CUBICSPLINE samplers.
+//   STEP, LINEAR (rotations on the arc) and CUBICSPLINE samplers, and the morph weights as a
+//   track for each mesh they move.
 //
 // THE FRAME. glTF is right-handed with +y up and an asset's front toward +z, so its +x is the
 // asset's left; the engine's +x is its right. Every position, normal, rotation and matrix is
@@ -25,14 +28,15 @@
 // triangle's last two indices swap so its front stays outside.
 //
 // What it skips, each named in `notes` so a reader knows what the model lost: a texture it
-// cannot read (a JPEG, a URI image) and every texture but the base colour's, morph targets, a
-// second set of joints and weights, cameras and lights, and an animation of morph weights. Points
-// and lines are an error.
+// cannot read (a JPEG, a URI image) and every texture but the base colour's, a second set of
+// joints and weights, a target's tangent offsets, cameras and lights. Points and lines are an
+// error.
 //
 // ge:summary The glTF 2.0 loader: nodes, skins, meshes, materials and clips into a Model
 // ge:keywords assets gltf glb cgltf loader import load_gltf load_gltf_file mirror handedness
 // ge:keywords skin inverse-bind joints weights animation sampler step linear cubicspline
 // ge:keywords slerp bake clip base-colour faceted rigid-node blender export
+// ge:keywords morph-target target-names weights-channel shape-key blend-shape
 // ge:keywords base-colour-texture texture-bake colour-atlas texcoord khr-texture-transform
 // ge:skill assets
 // ge:test tests/assets_gltf_test.cpp

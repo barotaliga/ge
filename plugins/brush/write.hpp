@@ -13,7 +13,8 @@
 // - **Light**: per luxel (one every 16 texels), an ambient plus each light in its room, falling
 //   off linearly to its radius and leaning with the angle; grey in 29 and BSP2, the same as RGB
 //   in 38 and 46. A light of a style other than 0 lights a lightmap of its own (29, BSP2, 38). Clip
-//   hulls (29, BSP2) are the point tree again; their expansion is the trace's.
+//   hulls (29, BSP2): the player's box and the large box, each a tree of the points where that box
+//   fits inside the rooms (`compile_hulls`).
 //
 // The bytes are a pure function of the fixture: the same file on every platform.
 //
