@@ -114,11 +114,12 @@ void run(gl::Lab& lab) {
   };
   const auto picture = [&](const char* title, const char* caption, const char* look_for) {
     const char* id = kShots[shot++];
+    // The view is taken with or without an adapter, so the run's state is the same on every row.
+    ge::render::FrameView view = cl::frame_view(l, shown, 0, t, 0);
     if (!device) {
       ls::placeholders(lab, {id});
       return;
     }
-    ge::render::FrameView view = cl::frame_view(l, shown, 0, t, 0);
     ge::ui::DrawList overlay;
     overlay.begin(static_cast<int>(w), static_cast<int>(h));
     cl::draw_markers(overlay, shown, view, static_cast<int>(w), static_cast<int>(h), t);
@@ -178,9 +179,12 @@ void run(gl::Lab& lab) {
     lab.fail("the rocket jump rose only " + std::to_string(peak - ground) + " units",
              "Read combat.qc's push and the rocket's blast (games/shooters_edge/qc). Skill: "
              "shooter.");
+  // With no adapter the same two metrics are written as zero, so the digest is one on every row.
   if (device)
     ls::checked(lab, static_cast<int>(device->errors.load()),
                 static_cast<int>(device->pipelines_after_load));
+  else
+    ls::checked(lab, 0, 0);
 }
 
 const gl::LabSpec kSpec{
