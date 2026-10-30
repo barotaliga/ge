@@ -18,7 +18,7 @@ using namespace ge;
 
 namespace {
 
-constexpr uint16_t kGrave = 53, kEnter = 40, kBackspace = 42, kS = 22, kCtrl = 224;
+constexpr uint16_t kGrave = 53, kNonUs = 100, kEnter = 40, kBackspace = 42, kS = 22, kCtrl = 224;
 
 void key(input::Queue& q, uint16_t usage, bool down, bool repeat = false) {
   q.push(input::key_event(0, 1, usage, down, repeat));
@@ -36,6 +36,7 @@ TEST(bind_names_by_usage) {
   CHECK(console::usage_key(53) == "`" && console::usage_key(51) == "semicolon");
   CHECK(console::usage_key(75) == "pgup" && console::usage_key(99) == "kp_del");
   CHECK(console::usage_key(229) == "shift" && console::usage_key(224) == "ctrl");
+  CHECK(console::usage_key(100) == "nonus");
   CHECK(console::usage_key(50).empty() && console::usage_key(0).empty());
   // Every name it gives is one a bind takes.
   for (uint16_t u = 0; u < 256; ++u) {
@@ -75,6 +76,25 @@ TEST(the_tilde_opens_it_and_only_then_text_is_typed) {
   q.clear();
   ui::feed_console(c, v, q, keys);
   CHECK(!keys.held);
+}
+
+// A Mac that does not recognise its ISO keyboard reports § (under Escape) as the ISO key.
+TEST(the_iso_key_opens_it_too_and_types_nothing) {
+  console::Console c;
+  console::ConsoleView v(c);
+  ui::ConsoleKeys keys;
+  input::Queue q;
+  key(q, kNonUs, true);
+  q.push({0, 1, input::EventType::text, 0, 0, {static_cast<float>(0xa7)}});  // §
+  key(q, kNonUs, false);
+  text(q, "map");
+  ui::feed_console(c, v, q, keys);
+  CHECK(v.open() && v.input() == "map");
+
+  q.clear();
+  key(q, kNonUs, true);
+  ui::feed_console(c, v, q, keys);
+  CHECK(!v.open());
 }
 
 TEST(enter_runs_the_line) {
