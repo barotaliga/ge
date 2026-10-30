@@ -435,12 +435,12 @@ void run(gl::Lab& lab) {
   const gl::Picture unlit = draw(d, s, yard, {});
   const gl::Picture lit = draw(d, s, yard, lit_list);
   const uint32_t dealt = s.lamp_shadows.used, first_drawn = s.lamp_shadows.drawn;
-  lab.metric("yard.shadow-lamps", s.lamp_shadows.lamps, "count");
-  lab.metric("yard.shadow-tiles", dealt, "count");
+  lab.metric("yard.shadow-lamps", s.lamp_shadows.lamps, "count", Det::measured);
+  lab.metric("yard.shadow-tiles", dealt, "count", Det::measured);
   // The same frame again: every lamp stood still and nothing moved, so no tile is redrawn.
   (void)draw(d, s, yard, lit_list);
   const uint32_t still_drawn = s.lamp_shadows.drawn;
-  lab.metric("yard.tiles-redrawn-still", still_drawn, "count");
+  lab.metric("yard.tiles-redrawn-still", still_drawn, "count", Det::measured);
   if (first_drawn != dealt || still_drawn != 0) {
     lab.fail("the still courtyard redrew " + std::to_string(still_drawn) + " of " +
                  std::to_string(dealt) + " shadow tiles (" + std::to_string(first_drawn) +
@@ -546,7 +546,7 @@ void run(gl::Lab& lab) {
     gr::set_instances(d, s.props, 0, courtyard());
     (void)draw(d, s, yard, lit_list);
     s.movers.clear();
-    lab.metric("yard.tiles-redrawn-mover", moved_drawn, "count");
+    lab.metric("yard.tiles-redrawn-mover", moved_drawn, "count", Det::measured);
     if (moved_drawn == 0 || moved_drawn >= dealt) {
       lab.fail("a moved crate redrew " + std::to_string(moved_drawn) + " of " +
                    std::to_string(dealt) + " shadow tiles",
