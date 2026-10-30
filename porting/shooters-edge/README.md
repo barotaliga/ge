@@ -20,6 +20,9 @@ classic game", "QC" and "the classic protocol", and `make agents-check` holds it
 | `gameloop.md` | The game loop: the game program's hooks, entities, the area tree, the server frame, thinking, tossing, pushers, touching, the player's packet and command, client prediction (M18o2) |
 | `vectors/` | Measured test vectors: `pmove.txt` (the player's move in hand-built worlds) and `entity.txt` (tossed, bounced and flying entities), for `se-parity` |
 | `protocol.md` | The classic protocol, version 28: connectionless packets, the net channel, the messages to fill with M18g |
+| `campaign.md` | The single-player program's host (M18s): its layout (crc 5927), the builtin differences, spawn parms, `serverflags`, level changes, intermission and finale, the statistics, episodes and the full game, saves |
+| `frame-move.md` | The original player move and the movement setting `sv_playermove` (M18s): who jumps in each mix of program and move, the single-player frame |
+| `campaign-rules.md` | What a campaign program does (monsters' senses and states, the roster, the level flow), for our own campaign variant mod (M18s7) |
 
 Still to come with its row: `demos.md` (QWD and MVD, M18h). Every fact marked `verify` is
 checked by a lab before code depends on it.

@@ -252,6 +252,7 @@ The numbers above come from:
 These are open rows in `docs/goals.md` § M30:
 
 - viscous flow and lava that cools (M30d);
-- heat shimmer, the glow lighting the walls, and reflections in the slime (M30e);
+- heat shimmer and reflections in the slime (M30e); the glow lighting the walls is built
+  (`liquid_lamps`, M39e: docs/rendering.md § Local lights);
 - the sound (M30f);
 - Shooter's Edge's own liquids (M30g).

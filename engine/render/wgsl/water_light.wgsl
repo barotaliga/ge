@@ -7,8 +7,8 @@
 // scene marched in screen space through the depth copy, else the sky's own model) and the water
 // seen into: the scene behind bent by the normal and dimmed over the view's path and the light's
 // way down to the bed, over the light the water itself sends back; the sun's glitter (Beckmann
-// over the slopes the pixel cannot resolve); a body's glow; and foam, a white lit face over it
-// all by its share.
+// over the slopes the pixel cannot resolve) and each lamp's; a body's glow; and foam, a white lit
+// face over it all by its share.
 
 // A body's optics, three bands (water/optics.hpp).
 struct Optics {
@@ -93,6 +93,18 @@ fn reflected_scene(rel: vec3f, r: vec3f, first: f32) -> vec4f {
   return vec4f(0.0);
 }
 
+// Smith's share of the facets a ray at `cos_t` to the mean surface sees past the others, for
+// Beckmann's slopes of mean square `mss` (the rational fit): nearly all from overhead, few at a
+// graze, where the facets hide each other.
+fn smith_g1(cos_t: f32, mss: f32) -> f32 {
+  let c = clamp(cos_t, 1e-4, 1.0);
+  let a = c / (sqrt(mss) * sqrt(1.0 - c * c) + 1e-6);
+  if (a >= 1.6) {
+    return 1.0;
+  }
+  return (3.535 * a + 2.181 * a * a) / (1.0 + 2.276 * a + 2.577 * a * a);
+}
+
 // Beckmann's distribution of the facets' normals for a mean square slope `mss`.
 fn beckmann(cos_h: f32, mss: f32) -> f32 {
   let c2 = max(cos_h * cos_h, 1e-4);
@@ -106,10 +118,10 @@ fn fresnel(cos_t: f32) -> f32 {
 }
 
 // The colour of a pixel of water before the haze: its normal `n`, its camera-relative place
-// `rel`, its world plan place `xz`, its pixel `position`, the surface's level over the bed under
-// it, the slope variance the pixel cannot resolve (`lost`), how far the normal bends the view in,
-// the body's optics, and the foam's share.
-fn shade_water(n: vec3f, rel: vec3f, xz: vec2f, position: vec2f, level: f32, lost: f32,
+// `rel`, its world plan place `xz`, its fragment `position` (the pixel, and its depth for the
+// lamps' cluster), the surface's level over the bed under it, the slope variance the pixel cannot
+// resolve (`lost`), how far the normal bends the view in, the body's optics, and the foam's share.
+fn shade_water(n: vec3f, rel: vec3f, xz: vec2f, position: vec3f, level: f32, lost: f32,
                refract: f32, o: Optics, foam: f32) -> vec3f {
   return shade_water_roofed(n, rel, xz, position, level, lost, refract, o, foam, 1.0, 0.0);
 }
@@ -117,7 +129,7 @@ fn shade_water(n: vec3f, rel: vec3f, xz: vec2f, position: vec2f, level: f32, los
 // The same under a roof (a cave's pool): the surface sees the sky through `open` of its dome and
 // the room's own light, `room` of a white face's, over the rest; the sun and the sky light the
 // water by `open`, the room by its own.
-fn shade_water_roofed(n: vec3f, rel: vec3f, xz: vec2f, position: vec2f, level: f32, lost: f32,
+fn shade_water_roofed(n: vec3f, rel: vec3f, xz: vec2f, position: vec3f, level: f32, lost: f32,
                       refract: f32, o: Optics, foam: f32, open: f32, room_share: f32) -> vec3f {
   let dist = length(rel);
   let v = -rel / dist;
@@ -135,8 +147,8 @@ fn shade_water_roofed(n: vec3f, rel: vec3f, xz: vec2f, position: vec2f, level: f
 
   // Into the water: the scene behind the surface, bent by the normal.
   let size = vec2i(frame.size.xy);
-  let pixel = vec2i(position);
-  let uv = position * frame.size.zw;
+  let pixel = vec2i(position.xy);
+  let uv = position.xy * frame.size.zw;
   var behind = scene_rel(pixel, uv);
   var depth_view = max(length(behind.xyz) - dist, 0.0);
   let bend = n.xz * refract * min(depth_view, 4.0) / max(dist, 1.0);
@@ -155,20 +167,42 @@ fn shade_water_roofed(n: vec3f, rel: vec3f, xz: vec2f, position: vec2f, level: f
   let sun = sun_light(world_y, xz) * open;
   let light = sun * max(frame.sun.y, 0.0) + sky_irradiance(vec3f(0.0, 1.0, 0.0)) * open +
               room * PI;
-  let own = o.deep * light / PI;
+  let mss = max(lost, 2e-4);
+  // THE LAMPS on the water: each one's glitter over the slopes the pixel cannot resolve (a street
+  // lamp's broken road of light across a lake at night), its light down into the water's own
+  // colour, and on the foam; past what casts into its tiles.
+  var lamp_glint = vec3f(0.0);
+  var lamp_down = vec3f(0.0);
+  var lamp_foam = vec3f(0.0);
+  if (light_grid.info.x != 0u) {
+    let cell = light_grid.cells[cluster_index(position)];
+    for (var k = 0u; k < cell.y; k++) {
+      var l: vec3f;
+      let i = light_grid.refs[cell.x + k];
+      let e = lamp_irradiance(i, rel, &l) * lamp_shadow(i, rel, n, position);
+      let hl = normalize(l + v);
+      // A lamp sits low over the water near the eye, both rays near a graze where the facets
+      // hide each other (Smith's masking), which the far sun's glitter never needs.
+      let masked = smith_g1(cos_v, mss) * smith_g1(dot(n, l), mss);
+      lamp_glint += e * (fresnel(dot(v, hl)) * beckmann(dot(n, hl), mss) / (4.0 * cos_v) *
+                         masked * step(0.0, dot(n, l)));
+      lamp_down += e * max(l.y, 0.0);
+      lamp_foam += e * max(dot(n, l), 0.0);
+    }
+  }
+  let own = o.deep * (light + lamp_down) / PI;
   var into = seen * through + own * (1.0 - through);
   into += o.emission * (0.8 * frame.world.y / PI);
 
   // The sun's glitter over the slopes the pixel cannot resolve.
   let h = normalize(frame.sun.xyz + v);
-  let mss = max(lost, 2e-4);
   let glint = sun * fresnel(dot(v, h)) * beckmann(dot(n, h), mss) / (4.0 * cos_v) *
               step(0.0, frame.sun.y) * step(0.0, dot(n, frame.sun.xyz));
 
   // Fresnel, feathered to nothing in the last centimetres at the shore.
   let f = fresnel(cos_v) * smoothstep(0.0, 0.15, depth_view);
-  let c = mix(into, sky, f) + glint * smoothstep(0.0, 0.15, depth_view);
+  let c = mix(into, sky, f) + (glint + lamp_glint) * smoothstep(0.0, 0.15, depth_view);
   // Foam: a white face lit by the sun on its normal and the sky.
-  let lit = sun * max(dot(n, frame.sun.xyz), 0.0) + sky_irradiance(n);
+  let lit = sun * max(dot(n, frame.sun.xyz), 0.0) + sky_irradiance(n) + lamp_foam;
   return mix(c, 0.85 * lit / PI, clamp(foam, 0.0, 1.0));
 }

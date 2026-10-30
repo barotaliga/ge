@@ -1,11 +1,11 @@
 // engine/render/liquid.hpp: every named look is found and of its kind, the eye keyed to a look's
-// brightest part, the body's uniform laid out as the shader reads it; and on a device, a lava
-// pool drawn at night under a dark sky glows red-orange, brighter than the ground round it, and a
-// slime's ripples are staged only for a liquid thin enough to keep them, with no GPU error and
-// no pipeline after the load.
+// brightest part, a glowing body handing a few lamps as bright as its face, the body's uniform laid
+// out as the shader reads it; and on a device, a lava pool drawn at night under a dark sky glows
+// red-orange, brighter than the ground round it, and a slime's ripples are staged only for a liquid
+// thin enough to keep them, with no GPU error and no pipeline after the load.
 //
 // ge:summary Tests for lava and slime drawn: the looks, the eye's key, a lava pool on a device
-// ge:keywords test render liquid lava slime looks adapt_for glow-table ripples gpu
+// ge:keywords test render liquid lava slime looks adapt_for glow-table ripples gpu liquid_lamps
 // ge:skill render water testing
 #include <cmath>
 #include <string>
@@ -77,6 +77,44 @@ TEST(the_eye_is_keyed_to_a_looks_brightest_part) {
   // The toxic slime glows; the tar does not.
   CHECK(r::adapt_for(toxic, 1) > 10);
   CHECK(r::adapt_for(tar, 1) == 0);
+}
+
+TEST(a_glowing_body_lights_its_surroundings_with_a_few_lamps_as_bright_as_its_face) {
+  const gw::World world = pool("lava", 0);
+  const gw::Body& body = world.bodies.front();
+  const r::LiquidLook& lava = *r::find_liquid_look("lava");
+  std::vector<r::LocalLight> lamps;
+  r::liquid_lamps(body, lava, lamps, 10);
+  // 20 m across in cells of 10: four lamps over the surface, inside its box, warm.
+  CHECK(lamps.size() == 4);
+  const gw::Rgb glow = r::liquid_glow(lava);
+  const double lum = 0.2126 * glow.r + 0.7152 * glow.g + 0.0722 * glow.b;
+  double cd = 0;
+  for (const r::LocalLight& l : lamps) {
+    CHECK(l.position[0] > body.box[0] && l.position[0] < body.box[2]);
+    CHECK(l.position[2] > body.box[1] && l.position[2] < body.box[3]);
+    CHECK(l.position[1] > body.level);
+    CHECK(l.colour[0] > l.colour[1] && l.colour[1] > l.colour[2]);
+    CHECK(l.outer_deg == 0 && l.shadow == 0);
+    CHECK(l.range_m <= r::kLiquidLampReach + 1e-3);
+    cd += l.candela;
+  }
+  // The whole face's light at 60 degrees off its normal: L A / 2.
+  CHECK(std::fabs(cd - lum * 400 * 0.5) < 1e-3 * cd);
+  // Under the melt's glow: most of it is crusted over.
+  CHECK(lum < r::adapt_for(lava, 1));
+  // A crusted lava is dimmer; a large one is held to the most lamps; a tar sends none.
+  std::vector<r::LocalLight> crusted;
+  r::liquid_lamps(body, *r::find_liquid_look("lava-crusted"), crusted, 10);
+  CHECK(crusted.size() == 4 && crusted[0].candela < lamps[0].candela);
+  gw::Body wide = body;
+  wide.box[2] = wide.box[0] + 200;
+  std::vector<r::LocalLight> many;
+  r::liquid_lamps(wide, lava, many, 10);
+  CHECK(!many.empty() && many.size() <= static_cast<size_t>(r::kLiquidLampsMost));
+  std::vector<r::LocalLight> none;
+  r::liquid_lamps(body, *r::find_liquid_look("slime-tar"), none);
+  CHECK(none.empty());
 }
 
 TEST(the_bodys_uniform_is_laid_out_in_vec4s) {

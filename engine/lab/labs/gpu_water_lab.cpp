@@ -1,7 +1,8 @@
 // LAB `gpu-water`: THE WATER'S SURFACE DRAWN (render/water.hpp), on the software adapter, over
 // two scenes: a lake in a bowl of hills (its shore shelving from the sand to 25 m) and a sea off
 // a beach. Named views: the calm lake and the same lake in a fresh wind; the lake in a light and a
-// heavy rain (its drops' rings); the sea under a light
+// heavy rain (its drops' rings); the lake at night in the rain under a street lamp, the spray
+// off its post lit (render/lights.hpp), the lamp off and on; the sea under a light
 // air, a fresh breeze and a gale; the sea at sunset into the sun's path; the shallows from above
 // in six looks (the colour from what is in the water, water/optics.hpp); and a slow fly-out
 // over the sea, every distance's band in one strip. It holds the GPU's crest to the
@@ -11,7 +12,8 @@
 //
 // ge:summary Lab: the water's surface drawn: lake, sea by wind, sunset, looks, the fly-out
 // ge:keywords lab gpu water surface lake sea sunset glitter fresnel refraction looks fly-out
-// ge:keywords crest detail-waves picture software-adapter rain rain-rings
+// ge:keywords crest detail-waves picture software-adapter rain rain-rings street-lamp night
+// ge:keywords lamp-glitter
 // ge:skill render water labs
 // ge:test tests/render_water_test.cpp
 #include <algorithm>
@@ -20,6 +22,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <span>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -33,6 +36,9 @@
 #include "lab/labs/water_scene.hpp"
 #include "lab/raster.hpp"
 #include "render/frame.hpp"
+#include "render/lights.hpp"
+#include "render/night.hpp"
+#include "render/particles.hpp"
 #include "render/post.hpp"
 #include "render/sky.hpp"
 #include "render/terrain.hpp"
@@ -186,11 +192,11 @@ void run(gl::Lab& lab) {
       lab.fail("no GPU device, and GE_GPU_REQUIRE=1",
                "Install Mesa's Vulkan drivers (apt install mesa-vulkan-drivers). Skill: gpu.");
     }
-    placeholders(
-        lab,
-        {"lake-calm", "lake-fresh", "wake", "wake-high", "rings", "rain-light", "rain-heavy",
-         "looks", "sea-light", "sea-fresh", "sea-gale", "sunset", "fly-out", "river", "waterfall"},
-        w, h);
+    placeholders(lab,
+                 {"lake-calm", "lake-fresh", "wake", "wake-high", "rings", "rain-light",
+                  "rain-heavy", "lamp-night-off", "lamp-night", "looks", "sea-light", "sea-fresh",
+                  "sea-gale", "sunset", "fly-out", "river", "waterfall"},
+                 w, h);
     return;
   }
   std::vector<std::unique_ptr<ge::gpu::Device>> devices;
@@ -366,6 +372,102 @@ void run(gl::Lab& lab) {
                 {{"rain", fixed(rate, 1) + " mm/h"}, {"wind", "0.5 m/s"}}},
                pic, Det::measured);
     }
+  }
+
+  // THE LAMP AT NIGHT (render/lights.hpp on the water, the spray and the rain's rings): the calm
+  // lake from the jetty on a moonless night in a light rain, a street lamp on a post at the
+  // water's edge 6 m up throwing its cone onto the water, and the spray a wave throws off the
+  // post's foot flown 1.5 s; drawn with the lamp off and on.
+  {
+    gw::World world = lake_world(0.5, "nordic-clear");
+    gr::set_water_body(d, lake.water, 0, world.bodies[0]);
+    gr::FrameView night =
+        view_at(kLakeX - 290, kLakeLevel + 1.5, kLakeZ - 40, 1.2, -0.25, -0.35, 2.4, 12.0);
+    gr::Moon none{-0.8, 1.0, 0.0, 384400};
+    gr::set_night(night, none, 46, 120);
+    night.weather.rain = 2.5;
+    // The post 9 m ahead of the eye and 3 m to its left, the lamp over the water before it.
+    const double ax = lm::sin(1.2), az = lm::cos(1.2);
+    const double px = night.eye[0] + 9 * ax - 3 * az, pz = night.eye[2] + 9 * az + 3 * ax;
+    gr::LocalLight lamp;
+    lamp.position[0] = px + 0.8 * ax;
+    lamp.position[1] = kLakeLevel + 6;
+    lamp.position[2] = pz + 0.8 * az;
+    lamp.direction[0] = static_cast<float>(0.26 * ax);
+    lamp.direction[1] = -0.97f;
+    lamp.direction[2] = static_cast<float>(0.26 * az);
+    lamp.colour[0] = 1.0f;
+    lamp.colour[1] = 0.86f;
+    lamp.colour[2] = 0.66f;
+    lamp.candela = 1000;
+    lamp.inner_deg = 40;
+    lamp.outer_deg = 72;
+    lamp.range_m = 30;
+    lamp.radius_m = 0.15f;
+    ge::core::Rng rng = ge::core::make_rng(39);
+    gr::clear_particles(d, lake.particles);
+    std::vector<gr::Particle> births;
+    for (int i = 0; i < 45; ++i) {
+      births.clear();
+      for (int k = 0; k < 24; ++k) {
+        const double a = 6.2831853 * ge::core::next(rng), up = 2 + 3 * ge::core::next(rng),
+                     out = 0.5 + ge::core::next(rng);
+        gr::Particle q{};
+        q.p[0] = static_cast<float>(px + 0.3 * lm::cos(a));
+        q.p[1] = static_cast<float>(kLakeLevel + 0.1);
+        q.p[2] = static_cast<float>(pz + 0.3 * lm::sin(a));
+        q.v[0] = static_cast<float>(out * lm::cos(a));
+        q.v[1] = static_cast<float>(up);
+        q.v[2] = static_cast<float>(out * lm::sin(a));
+        q.life = static_cast<float>(1.0 + 0.6 * ge::core::next(rng));
+        q.size = 0.03f;
+        q.drag = 0.6f;
+        q.fall = 1;
+        q.streak = 0.02f;
+        q.albedo = 0.8f;
+        q.opacity = 0.7f;
+        births.push_back(q);
+      }
+      fly(d, lake, births, 1.0 / 30);
+    }
+    // The eye adapted to a fiftieth of the lamp's light on the water under it (the dark lake round
+    // it holds the eye lower), as a game's would be, the same with the lamp off so the two compare.
+    const double under[3] = {lamp.position[0] + 3 * ax, kLakeLevel, lamp.position[2] + 3 * az};
+    night.lamp_lux = 0.02 * gr::lamp_lux_at(std::span(&lamp, 1), under, night.time_s);
+    lab.metric("lamp-night.eye-lux", night.lamp_lux, "lx", Det::measured);
+    lake.lamps.clear();
+    const gl::Picture off = draw(d, lake, night);
+    lake.lamps.push_back(lamp);
+    const gl::Picture on = draw(d, lake, night);
+    lake.lamps.clear();
+    gr::clear_particles(d, lake.particles);
+    const double share = changed(on, off);
+    lab.metric("lamp-night.lit-share", share, "", Det::measured);
+    if (share < 0.01) {
+      lab.fail(
+          "the street lamp lights none of the night lake (" + fixed(share * 100, 1) + "% changed)",
+          "Check water_light.wgsl's lamps, particles.wgsl's lamps_through and that "
+          "water_scene's frame_group binds Lights::buffer. Skill: render.");
+    }
+    const std::string caption =
+        "The calm lake from the jetty on a moonless night in a light rain (2.5 mm/h), a street "
+        "lamp of 1000 cd 6 m up on a post at the water's edge, its cone tipped out over the "
+        "water; spray thrown off the post's foot flown 1.5 s; the eye adapted to the lamp's light "
+        "on the water.";
+    lab.shot({"lamp-night-off",
+              "THE LAKE AT NIGHT, THE LAMP OFF",
+              caption,
+              "the lake nearly black, the rain's rings and the spray unseen",
+              {}},
+             off, Det::measured);
+    lab.shot({"lamp-night",
+              "THE LAKE AT NIGHT UNDER A STREET LAMP",
+              caption,
+              "the lamp's glitter a broken road of warm light down the water toward the camera, "
+              "the rain's rings catching it, the shallows under the cone seen into, the spray "
+              "lit against the dark",
+              {{"lamp", "1000 cd"}, {"rain", "2.5 mm/h"}}},
+             on, Det::measured);
   }
 
   // THE LOOKS: the shallows from above, a sandy shelf from 0 to 6 m deep.

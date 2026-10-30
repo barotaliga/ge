@@ -115,6 +115,9 @@ constexpr FlagSpec kDigestFlags[] = {
 constexpr FlagSpec kLintFlags[] = {
     {"base", "<ref>", "lint what the change since this ref reaches (default origin/main)"},
     {"all", "", "lint every .cpp"},
+    {"like-ci", "",
+     "as CI's lint job: the release preset, the shaders' check, and a reached file this build "
+     "cannot compile an error"},
     kPreset,
     kEngine,
     kRepo};

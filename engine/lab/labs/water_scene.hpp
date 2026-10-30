@@ -1,7 +1,7 @@
 // THE WATER LABS' SCENE (shared by `gpu-water`, `gpu-underwater` and `gpu-plunge`): a
-// heightfield's ground drawn under the sky with the water's passes, the view under water and
-// the wet lens over it, on a device of its own (its pipelines all made before that device's load
-// ends), read back as a picture.
+// heightfield's ground drawn under the sky (and the lamps a view sets) with the water's passes, the
+// view under water and the wet lens over it, on a device of its own (its pipelines all made before
+// that device's load ends), read back as a picture.
 //
 // ge:summary The water labs' scene: ground, sky, the water and the view under it, read back
 // ge:keywords lab water scene heightfield picture make_scene view_at gpu-water gpu-underwater
@@ -23,6 +23,7 @@
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
 #include "render/frame.hpp"
+#include "render/lights.hpp"
 #include "render/particles.hpp"
 #include "render/post.hpp"
 #include "render/sky.hpp"
@@ -108,6 +109,8 @@ struct Scene {
   gr::Water water;
   gr::Underwater under;
   gr::Particles particles;  // the mist and the spray
+  gr::Lights lights;        // the lamps a view sets (`lamps`), none by default
+  std::vector<gr::LocalLight> lamps;
   gr::Post post;
   gr::WetLens lens;                 // dry unless a lab wets it
   wgpu::BindGroup post_lens_group;  // post over the wet lens's target
@@ -143,7 +146,8 @@ inline bool make_scene(ge::gpu::Device& d, Scene& s, float (*height)(double, dou
   gr::create_wet_lens(d, s.pipelines, s.lens, s.layout);
   if (!s.pipelines.finish(d)) return false;
   ge::gpu::end_load(d);
-  s.frame = gr::frame_group(d, s.layout, s.uniforms, s.sky);
+  gr::create_lights(d, s.lights);
+  s.frame = gr::frame_group(d, s.layout, s.uniforms, s.sky, s.lights.buffer);
   gr::create_water_targets(d, s.water, s.targets);
   gr::bind_underwater(d, s.under, s.water);
   gr::bind_particle_targets(d, s.particles, s.targets);
@@ -167,6 +171,7 @@ inline gl::Picture draw(ge::gpu::Device& d, Scene& s, const gr::FrameView& v, bo
   gr::prepare_underwater(d, s.under, s.water, v, s.targets.height, line);
   gr::prepare_wet_lens(d, s.lens, v.time_s);
   gr::prepare_particles(d, s.particles, 0, 0.1);
+  gr::prepare_lights(d, s.lights, s.lamps, v, s.targets.width, s.targets.height);
   wgpu::CommandEncoder e = d.device.CreateCommandEncoder();
   gr::encode_sky_tables(s.sky, s.pipelines, s.rec, e);
   gr::encode_terrain_cull(s.terrain, s.pipelines, s.rec, e, s.frame);

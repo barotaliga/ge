@@ -1,6 +1,7 @@
 // THE LOCAL LIGHTS a frame holds (render/lights.hpp): group 0 binding 10, the light list and the
-// clusters' lists, and the two readers: `local_lights` (a surface lit by every lamp whose sphere
-// reaches its cluster, past what casts into its shadow tiles) and `light_inscatter` (the light a point in the air scatters toward the
+// clusters' lists, and the three readers: `local_lights` (a surface lit by every lamp whose sphere
+// reaches its cluster, past what casts into its shadow tiles), `lamps_through` (a cloud of grains
+// or drops lit through) and `light_inscatter` (the light a point in the air scatters toward the
 // eye, for a fog volume's march). Included by frame.wgsl, after the surface model.
 //
 // A light's colour is in candela (rgb, its level applied); the frame's units are the sun's
@@ -10,7 +11,7 @@
 // ge:summary Local lights in WGSL: the cluster lookup, a lamp's irradiance, surfaces and air
 // ge:keywords render lights local-lights local_lights light_inscatter cluster light-grid
 // ge:keywords inverse-square window spot-cone point-light lamp_irradiance cluster_index
-// ge:keywords lamp_shadow lamp-atlas shadow-tile cube-face pcf
+// ge:keywords lamp_shadow lamp-atlas shadow-tile cube-face pcf lamps_through grains drops
 // ge:skill render
 
 struct GpuLight {
@@ -157,6 +158,29 @@ fn light_inscatter(p: vec3f, dir: vec3f, frag: vec3f, g: f32) -> vec3f {
     let mu = dot(-dir, l);
     let hg = (1.0 - g * g) / (4.0 * PI * pow(max(1.0 + g * g + 2.0 * g * mu, 1e-4), 1.5));
     c += e * hg;
+  }
+  return c;
+}
+
+// EVERY LAMP through a cloud of grains or drops (spray, mist, a snowflake, a raindrop) at
+// camera-relative `p`, seen along `dir` (unit, away from the eye): each lamp's irradiance past
+// what casts into its tiles, `share` of it round a Henyey-Greenstein lobe of asymmetry `g` (held
+// to a mean of 1 over the sphere, so a lamp behind the cloud lights it as the sun behind it does)
+// and the rest every way alike. The caller weighs it by the grains' albedo over pi, as it weighs
+// the sun's.
+fn lamps_through(p: vec3f, dir: vec3f, frag: vec3f, g: f32, share: f32) -> vec3f {
+  if (light_grid.info.x == 0u) {
+    return vec3f(0.0);
+  }
+  let cell = light_grid.cells[cluster_index(frag)];
+  var c = vec3f(0.0);
+  for (var k = 0u; k < cell.y; k++) {
+    var l: vec3f;
+    let i = light_grid.refs[cell.x + k];
+    let e = lamp_irradiance(i, p, &l);
+    let mu = dot(-dir, l);
+    let lobe = (1.0 - g * g) / pow(max(1.0 + g * g + 2.0 * g * mu, 1e-4), 1.5);
+    c += e * (mix(1.0, lobe, share) * lamp_shadow(i, p, l, frag));
   }
   return c;
 }
