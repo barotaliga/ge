@@ -196,7 +196,8 @@ struct InstanceFamily {
   std::vector<uint32_t> lod_vertex;  // each LOD's first vertex in `vertices`
   std::vector<uint32_t> lod_last;    // each skinned LOD's last positions' first word, else 0
   std::vector<CasterSlot> casters;   // a shadow map's draws each (create_family_casters)
-  bool moved_since_cut = false;      // false: the next write's last frame is the write itself
+  int lamp_slot = -1;  // the lamps' shadow tile 0's slot (render/lamp_shadows.hpp); -1: casts none
+  bool moved_since_cut = false;  // false: the next write's last frame is the write itself
   // A palette family's (`palette_joints` > 0): every instance's palette, `palette_joints` joints
   // of three vec4 rows each, twice (this frame's half and the last frame's, swapped by each
   // `set_palettes`); `palettes_settle`: the next write is its own last frame too.
@@ -233,9 +234,10 @@ void create_family(gpu::Device& device, const InstancePipelines& ip, InstanceFam
 void bind_family_hiz(gpu::Device& device, const InstancePipelines& ip, InstanceFamily& family,
                      const Hiz& hiz);
 
-// Slots for `maps` shadow maps (before `bind_family_hiz`, which makes their cull groups).
+// Slots for `maps` shadow maps, then for `lamp_tiles` tiles of the lamps' shadow atlas from
+// `lamp_slot` = `maps` on (before `bind_family_hiz`, which makes their cull groups).
 void create_family_casters(gpu::Device& device, const InstancePipelines& ip, InstanceFamily& family,
-                           int maps);
+                           int maps, int lamp_tiles = 0);
 
 // Write instances [first, first + n): this frame's place, and the last frame's from the place
 // written before (or this one, the first time and after `cut_family`). Grows `count` to cover.

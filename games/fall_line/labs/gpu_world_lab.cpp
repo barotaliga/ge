@@ -31,13 +31,16 @@
 //
 // --cfg runs console commands over Fall Line's cvars first (cfg/cvars.hpp), so a sky a server
 // picks (sv_weather, sv_snowfall, sv_fog, sv_wind, sv_winddir, sv_cover, sv_clouddensity,
-// sv_cloudheight, sv_cloudspeed, sv_hour, sv_skyrate) and r_clouds are photographed as the game
-// draws them (sim/sky.hpp).
+// sv_cloudheight, sv_cloudspeed, sv_hour, sv_skyrate), r_clouds and the lamps after dark
+// (r_lights, r_light_shadows: the piste's floodlights, the headlamps, app/lamps.hpp) are
+// photographed as the game draws them (sim/sky.hpp); beside each picture, the lights drawn, the
+// lamps' shadow tiles dealt and the lux the eye adapted to (measured).
 //
 // ge:summary Lab: Fall Line's frame from named views of a seed, captured headless
 // ge:keywords lab world picture screenshot views frame terrain sky post gpu-capture headless
 // ge:keywords tiles-drawn gpu-ms cpu-ms pass-table fall-line taa render-scale shimmer overdraw
 // ge:keywords instances forest figures run-moments chase-camera occlusion-culling cull-check
+// ge:keywords night-lamps floodlights headlamp lamp-lux r_lights
 // ge:keywords sun-shadow cascade-redraws shadow-cache drop-down-console overlay ui-pass
 // ge:skill render labs
 #include <algorithm>
@@ -265,6 +268,8 @@ void run(ge::lab::Lab& lab) {
   options.moon_size = cvars.disc_moon;
   options.ao = {.strength = cvars.ao, .radius_m = cvars.ao_radius};
   options.dof = {.strength = cvars.dof, .focus_m = cvars.dof_focus};
+  options.lights = cvars.lights;
+  options.light_shadows = cvars.lights && cvars.light_shadows;
   if (const std::string problem = fall_line::app::cloud_stack_of(cvars, options);
       !problem.empty()) {
     lab.fail("--cfg: " + problem, "Skill: console.");
@@ -567,6 +572,11 @@ void run(ge::lab::Lab& lab) {
     lab.metric(name + ".trees-hidden", trees.hidden, "count", Det::measured);
     lab.metric(name + ".trees-outside", trees.frustum + trees.small, "count", Det::measured);
     lab.metric(name + ".figures", figures.early + figures.late, "count", Det::measured);
+    // The lamps after dark (app/lamps.hpp): the lights drawn, the lamps' shadow tiles dealt, the
+    // lux the eye adapted to.
+    lab.metric(name + ".lights", frame->lights.bins.head.info[0], "count", Det::measured);
+    lab.metric(name + ".lamp-tiles", frame->lamp_shadows.used, "count", Det::measured);
+    lab.metric(name + ".lamp-lux", frame->lamp_lux, "lx", Det::measured);
     lab.metric(name + ".cpu-ms", stats.cpu_ms, "ms", Det::measured);
     for (int p = 0; p < stats.count; ++p) {
       const auto& ps = stats.passes[static_cast<size_t>(p)];

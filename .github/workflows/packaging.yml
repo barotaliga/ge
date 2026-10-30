@@ -35,20 +35,55 @@ jobs:
     defaults:
       run:
         shell: bash
+    # The engine compiles through ccache, from the cache main saved for ci.yml's release row on
+    # the same OS: built with Ninja into build/release, as that row is, so the compile lines match
+    # and most objects come out of the cache. Never saved: a queue run's cache is its own.
+    env:
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+      CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_MAXSIZE: 500M
+      CACHE_ROW: ${{ matrix.os == 'windows-2025' && 'windows-2025-msvc' || (matrix.os == 'macos-latest' && 'macos-15-clang++' || 'ubuntu-24.04-g++') }}
     steps:
       - uses: actions/checkout@v7
+      - name: Install Ninja and ccache (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja ccache
+      - name: Install Ninja and ccache (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends ninja-build ccache
+      - name: Install ccache (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          CCACHE_VERSION: 4.10.2
+        run: |
+          $zip = "$env:RUNNER_TEMP/ccache.zip"
+          Invoke-WebRequest -Uri "https://github.com/ccache/ccache/releases/download/v$env:CCACHE_VERSION/ccache-$env:CCACHE_VERSION-windows-x86_64.zip" -OutFile $zip
+          Expand-Archive $zip -DestinationPath "$env:RUNNER_TEMP" -Force
+          "$env:RUNNER_TEMP/ccache-$env:CCACHE_VERSION-windows-x86_64" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      # MSVC on PATH for Ninja (ci.yml's windows row builds the same way).
+      - if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+      - uses: actions/cache/restore@v4
+        with:
+          path: .cache/ccache
+          key: ccache-${{ env.CACHE_ROW }}-release-${{ github.sha }}
+          restore-keys: ccache-${{ env.CACHE_ROW }}-release-
+      - run: ccache --zero-stats
       - name: Build, install, consume
         run: |
           ROOT=$(cygpath -m "$PWD" 2>/dev/null || pwd)  # a path CMake reads on Windows too
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DGE_PLATFORM=OFF -DGE_GPU=OFF -DGE_ENCODERS=OFF
-          # A bounded job count: an unbounded one under Make runs every source at once and the
-          # runner runs out of memory.
-          cmake --build build --config Release --parallel 4
-          cmake --install build --config Release --prefix stage
+          cmake -S . -B build/release -G Ninja -DCMAKE_BUILD_TYPE=Release -DGE_PLATFORM=OFF -DGE_GPU=OFF -DGE_ENCODERS=OFF
+          # A bounded job count, so the runner never runs out of memory.
+          cmake --build build/release --config Release --parallel 4
+          cmake --install build/release --config Release --prefix stage
           cmake -S tests/package/consumer -B build-consumer -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$ROOT/stage"
           cmake --build build-consumer --config Release
           ctest --test-dir build-consumer -C Release --output-on-failure
           stage/bin/ge version
+      - run: ccache --show-stats
 
   scaffold:
     if: inputs.scaffold

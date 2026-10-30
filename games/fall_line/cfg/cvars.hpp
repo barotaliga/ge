@@ -7,6 +7,7 @@
 //   vid_width vid_height vid_vsync      the window (A, latched: read at startup)
 //   r_taa r_scale r_occlusion r_shadowsize r_bloom r_snow r_trails r_spray r_precip
 //   r_precip_density r_splashes r_wet r_lightning r_weather r_clouds r_sunsize r_moonsize
+//   r_lights r_light_shadows
 //                                       the picture (A, latched: the frame is made once)
 //   r_sharpen r_sunrays r_flare r_vignette r_chromatic r_grain r_lensdirt r_motionblur r_ao
 //   r_ao_radius r_dof r_dof_focus
@@ -35,6 +36,7 @@
 // ge:keywords fall-line cvars settings cfg vid_width r_taa r_bloom r_shadowsize cl_view volume
 // ge:keywords s_mute sv_seed sv_hour add_cvars register_cvars sv_weather sv_snowfall sv_fog
 // ge:keywords sv_wind sv_winddir sv_cover sv_clouddensity sv_skyrate r_clouds
+// ge:keywords r_lights r_light_shadows lamps
 // ge:keywords sv_cloudthickness sv_skytype sky-type sky-knobs cl_chasedist cl_motion r_precip
 // ge:keywords r_precip_density r_splashes r_wet sv_snowline rain sv_cloudheight sv_cloudspeed
 // ge:keywords sv_storm r_lightning s_thunder thunderstorm
@@ -67,6 +69,7 @@ struct Settings {
   double bloom = 0.04;
   bool snow = true, trails = true, spray = true, weather = true;
   bool precip = true, splashes = true, wet = true;  // what falls, the rain's splashes, wet ground
+  bool lights = true, light_shadows = true;         // the lamps after dark, their shadows
   bool lightning = true;                            // a thunderstorm's flashes and channels drawn
   double precip_density = 1.0;                      // the share of the falling particles, 0.25..2
   double clouds = 1.0;  // the share of the cloud march's steps; 0: no layer drawn

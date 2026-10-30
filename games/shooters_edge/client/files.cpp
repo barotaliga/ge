@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <set>
 #include <system_error>
 
 namespace shooters_edge::client {
@@ -96,6 +97,25 @@ std::span<const uint8_t> find_file(const SearchPath& path, std::string_view name
       return ge::vfs::pak_file(a.bytes, *e);
   }
   return {};
+}
+
+std::vector<std::string> map_names(const SearchPath& path) {
+  std::set<std::string> names;
+  const auto take = [&](std::string_view p) {
+    if (p.rfind("maps/", 0) != 0 || p.size() <= 9 || p.substr(p.size() - 4) != ".bsp") return;
+    const std::string_view n = p.substr(5, p.size() - 9);
+    if (n.find('/') == std::string_view::npos) names.emplace(n);
+  };
+  for (const SearchPath::Archive& a : path.archives)
+    for (const ge::vfs::PakEntry& e : a.dir.entries) take(e.path);
+  std::error_code ec;
+  if (!path.folder.empty())
+    for (const fs::directory_entry& e : fs::directory_iterator(fs::path(path.folder) / "maps", ec))
+      if (e.is_regular_file(ec)) take("maps/" + e.path().filename().string());
+  std::vector<std::string> out;
+  if (names.erase("start") > 0) out.emplace_back("start");
+  out.insert(out.end(), names.begin(), names.end());
+  return out;
 }
 
 }  // namespace shooters_edge::client
