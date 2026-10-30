@@ -12,7 +12,9 @@
 // Every decision is on the `ai::Why` (the pilot's `link`, the senses', and `aim`), and the aim's
 // intent beside what it pressed (`record_intent`: aim_yaw, aim_pitch).
 //
-// It shoots nothing yet: choosing to fire, and what with, is M18r4's.
+// It fires nothing itself: a game's fighter chooses the weapon and the trigger, and sets how the
+// aim leads for it (`shot_speed`: a projectile's speed, the time it flies added to the lead; 0 a
+// hitscan; `aim_dz`: aimed this far over the middle, below it for a blast at the feet).
 //
 // ge:summary The bot: the pilot with senses and aim, a server slot's command source
 // ge:keywords bot pilot senses aim view look contact track hold release bot_source
@@ -43,6 +45,8 @@ struct Bot {
   int32_t target = -1;       // the contact's entity the view is on
   float yaw = 0, pitch = 0;  // the view last pressed, degrees (yaw unwrapped)
   double wanted[2] = {}, pressed[2] = {};  // the aim's last yaw and pitch, wanted and pressed
+  float shot_speed = 0;                    // the held weapon's projectile, units/s; 0 a hitscan
+  float aim_dz = 0;                        // the aim point over the target's middle, units
   BotStats stats;
 };
 
@@ -51,5 +55,9 @@ struct Bot {
 void bot_init(Bot& b, const NavGraph& g, const PilotSettings& set, PilotHands hands, AimSkill skill,
               double hz, uint32_t seed);
 CmdSource bot_source(Bot& b);
+// Sends the bot's pilot to node `goal` alone from its next command (the goals list replaced).
+void bot_goal(Bot& b, int32_t goal);
+// How far the view is off the aim's wanted angles, degrees (0 while not aiming).
+float bot_aim_off(const Bot& b);
 
 }  // namespace ge::shooter

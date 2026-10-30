@@ -25,7 +25,7 @@
 
 namespace ge::lab {
 
-using assets::crc32;  // the one CRC-32, assets/image.hpp's
+using core::crc32;  // the one CRC-32, core/inflate.hpp's
 
 std::vector<uint8_t> encode_png(const Picture& picture);
 

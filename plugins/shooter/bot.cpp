@@ -5,6 +5,7 @@
 #include "shooter/bot.hpp"
 
 #include <array>
+#include <cmath>
 
 #include "shooter/usercmd.hpp"
 
@@ -41,10 +42,14 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       c && ai::known(c->seen) && (c->visible || ai::age(c->seen, sv.time) <= b.aim.hold_s);
   double want[2];
   if (fresh) {
-    const double ahead = ai::age(c->seen, sv.time) + b.aim.lead_s;
+    double ahead = ai::age(c->seen, sv.time) + b.aim.lead_s;
+    if (b.shot_speed > 0) {
+      const double dx = c->seen.x - eye.x, dy = c->seen.y - eye.y, dz = c->seen.z - eye.z;
+      ahead += std::sqrt(dx * dx + dy * dy + dz * dz) / b.shot_speed;
+    }
     const Vec3f at{static_cast<float>(c->seen.x + c->velocity.x * ahead),
                    static_cast<float>(c->seen.y + c->velocity.y * ahead),
-                   static_cast<float>(c->seen.z + c->velocity.z * ahead)};
+                   static_cast<float>(c->seen.z + c->velocity.z * ahead + b.aim_dz)};
     float yaw = 0, pitch = 0;
     aim_angles(eye, at, yaw, pitch);
     if (!b.aiming) {
@@ -122,5 +127,18 @@ void bot_init(Bot& b, const NavGraph& g, const PilotSettings& set, PilotHands ha
 }
 
 CmdSource bot_source(Bot& b) { return {&b, bot_next}; }
+
+void bot_goal(Bot& b, int32_t goal) {
+  b.pilot.goals.assign(1, goal);
+  b.pilot.next_goal = 0;
+  b.pilot.pilot.mode = PilotMode::idle;
+}
+
+float bot_aim_off(const Bot& b) {
+  if (!b.aiming) return 0;
+  const float dy = wrap(static_cast<float>(b.wanted[0] - b.pressed[0]));
+  const float dp = static_cast<float>(b.wanted[1] - b.pressed[1]);
+  return std::sqrt(dy * dy + dp * dp);
+}
 
 }  // namespace ge::shooter

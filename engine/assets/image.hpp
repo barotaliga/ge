@@ -4,7 +4,7 @@
 //
 // THE PNG READER takes every PNG a model ships with: grey, grey with alpha, RGB and RGBA at 8
 // bits, and a PALETTE at 1, 2, 4 or 8 bits with its transparency (`tRNS`); any of the five row
-// filters, through the inflater (assets/inflate.hpp). Not 16-bit or interlaced images: nothing
+// filters, through the inflater (core/inflate.hpp). Not 16-bit or interlaced images: nothing
 // comes back, and the caller says what it skipped. It runs at load, never on a frame's path.
 //
 // `texel` reads the image's nearest texel at a glTF texture coordinate (u to the right, v down
@@ -24,6 +24,8 @@
 #include <span>
 #include <vector>
 
+#include "core/inflate.hpp"
+
 namespace ge::assets {
 
 struct Image {
@@ -31,8 +33,8 @@ struct Image {
   std::vector<uint8_t> rgba;  // four bytes a pixel, from the top row
 };
 
-// The CRC-32 PNG's chunks are checked with (ISO 3309), continuing from `crc`.
-uint32_t crc32(const uint8_t* bytes, size_t n, uint32_t crc = 0);
+// The CRC-32 PNG's chunks are checked with: core's (core/inflate.hpp).
+using core::crc32;
 
 // The image a PNG holds, or nothing when the bytes are not a PNG this reader takes (16-bit or
 // interlaced) or a checksum fails.

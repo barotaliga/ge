@@ -44,6 +44,7 @@
 // ge:summary The FrameView a game extracts each frame, and its camera matrices and frustum
 // ge:keywords render frame-view camera view projection reverse-z infinite-far camera-relative
 // ge:keywords frustum planes heading pitch fov mat4 inverse sun-direction camera_matrices
+// ge:keywords aim_at sky-body look-at-sun look-at-moon
 // ge:keywords look_dir sun_direction depth_distance distance-from-depth unproject weather
 // ge:keywords overcast deck cloud-cover sun-pass visibility fog flat-light night moon key-light
 // ge:keywords cloud-layer clouds heap sheet roll horizon-tilt valley-fog sea-of-fog
@@ -302,6 +303,10 @@ void look_dir(double heading, double pitch, double out[3]);
 void sun_direction(const FrameView& view, double out[3]);
 // The unit direction toward the real sun, whichever is the key.
 void real_sun_direction(const FrameView& view, double out[3]);
+// The view turned to look straight at the real sun or the moon (the night's), whichever is the
+// key, the eye and the lens kept: a picture aimed at a sky body at the scene's own hour.
+enum class SkyBody : uint8_t { sun, moon };
+void aim_at(FrameView& view, SkyBody body);
 
 struct CameraMatrices {
   Mat4 view;           // camera-relative world -> view (a rotation)

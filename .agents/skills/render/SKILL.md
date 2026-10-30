@@ -115,6 +115,9 @@ the shimmer of a still and the overdraw probe (shaded per covered pixel, with an
 prepass) are measured metrics beside each picture.
 Run it before and after any change to a pass, and look at every view's picture against its
 `look_for`. For a shadow change, run it at several `--hour`s.
+A view name takes a turn after `@`: `vista@<deg>[:<pitch deg>[:<lens deg>]]` turns the named
+view's eye, and `vista@sun[:<lens deg>]` or `vista@moon[:<lens deg>]` aims it at the sun or the
+moon at the scene's hour (`ge::render::aim_at`), in every lab that takes Fall Line's views.
 
 **`shadows`** (`games/fall_line/labs/gpu_shadows_lab.cpp`): the horizon maps themselves, the
 map from straight above at each `--hours` hour with its shadowed share, and the bake counter

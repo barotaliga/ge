@@ -1,0 +1,11 @@
+# name source size digest (vfs_search_test)
+a.txt base 5 bf0a40b6bac87781
+b.txt mod/pak0.pak 3 0808591917670ee3
+d.txt base/b.pk3 5 dde3a3a555bc6581
+e.txt base/pak10.pak 5 449a2fa730b74082
+f.txt base/b.pk3 5 dde3a3a555bc6581
+g/h.txt base/a.pk3dir 13 32b676c01dd61dd7
+gfx/palette.lmp base/pak0.pak 7 9dd691088352b680
+maps/c.bsp base/pak1.pak 8 79ba67dada366d9c
+progs.dat mod 9 9f6c9cfdd1b5bed6
+sound/door.wav base 9 9a2420656a10c3d3

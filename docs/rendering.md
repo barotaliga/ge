@@ -474,6 +474,13 @@ stretch it. `raster.hpp` is the CPU reference every lab draws with (`viewmodel`,
 corridor and its six named lights). The GPU pass (`render/viewmodel.hpp`, M48c) draws the same
 light per pixel and is held to that reference.
 
+**A game's own set** sits on top of these three answers. Shooter's Edge's (`games/shooters_edge/view`,
+M48d) is its eight free models, each with its own mount (held length, grip), offset from the eye,
+kick, refire and muzzle light. Its hand switches weapons by putting one away and raising the
+next, and lights the muzzle on every shot. The player moves it with `r_drawviewmodel`,
+`r_viewmodel_fov`, `cl_gunx`/`cl_guny`/`cl_gunz` and `cl_gunsway`. The `se-viewmodel` lab
+pictures every weapon held, fired in the dark, switched and moved by the cvars.
+
 **The GPU pass** ("viewmodel") draws after the world and its transparent effects and before the TAA
 and post, so the HUD lands over it.
 

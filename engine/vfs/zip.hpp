@@ -2,7 +2,7 @@
 // (pak.hpp; a content zip renamed .pk3 is the same thing): the end record found from the back,
 // the central directory checked whole before anything is read (every entry's local header and
 // data inside the file, every method one this reader takes), then an entry's bytes unpacked
-// (stored, or deflated through assets/inflate.hpp) with its CRC-32 checked. No zip64, no
+// (stored, or deflated through core/inflate.hpp) with its CRC-32 checked. No zip64, no
 // encryption, no spanning; each is refused naming the entry. Entry names are only matched,
 // never used as paths on disk.
 //
