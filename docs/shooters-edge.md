@@ -317,7 +317,11 @@ every pass, and judged by captioned screenshots:
   texels, the lightmaps and their styles, the map's own sky, no bloom, and the post pass's grade
   pulling every colour to the nearest of the palette's 256) and the modern look (filtered,
   real-time lights with shadows, our sky and liquids, bloom; TAA-U and replacement textures to
-  come). The `se-world` lab pictures every named view in both.
+  come). The `se-world` lab pictures every named view in both. The player sets the picture with
+  cvars: `r_look` (classic or modern), and for the modern look `r_fx_lights` (the light the
+  effects throw, default 0.2 of the classic's), `r_fx_glow` (a spark's glow, default 0.15) and
+  `r_bloom` (default 0.3); the modern's exposure and bloom wash a room out at the classic's
+  strengths, so its defaults turn them down. The classic keeps its own.
 - **Headless**: a CPU raster view of any map from above (the leaves, the PVS of a point, the
   hulls) for the labs, like Fall Line's map views, with no GPU at all.
 

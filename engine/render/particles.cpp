@@ -202,7 +202,7 @@ void prepare_particles(gpu::Device& device, Particles& ps, double dt, double nea
   p.step[2] = ps.settings.soft_m;
   p.info[0] = cap;
   for (int k = 0; k < 3; ++k) p.air[k] = air ? static_cast<float>(air[k]) : 0.0f;
-  p.glow[0] = ps.glow_cd;
+  p.glow[0] = ps.glow_cd * ps.settings.glow;
   std::memcpy(p.table, ps.glow_table, sizeof p.table);
   device.queue.WriteBuffer(ps.params, 0, &p, sizeof p);
 }

@@ -72,6 +72,7 @@ void step_particle(Particle& p, float dt, const float air[3] = nullptr);
 struct ParticleSettings {
   uint32_t capacity = 16384;  // slots in the ring
   float soft_m = 0.4f;        // the depth over which a particle fades into what is behind it
+  float glow = 1;             // the glowing particles' light, a share of kSparkEmissivity's
 };
 
 struct Particles {

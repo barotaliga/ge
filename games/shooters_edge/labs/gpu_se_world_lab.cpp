@@ -159,6 +159,7 @@ gl::Picture draw(ge::gpu::Device& d, Frame& f, MapState& m, const gr::FrameView&
   o.sky_seen = m.sky.sky_seen;
   for (int k = 0; k < 3; ++k) o.sky_tint[k] = m.sky.tint[k];
   ba::prepare_bsp(d, m.bsp, v, o);
+  f.particles.settings.glow = float(lk::effects_glow(look));
   gr::prepare_particles(d, f.particles, particle_dt, v.near_m);
   const int p = look == lk::Look::classic ? 0 : 1;
   const double none[4] = {0, 0, 0, 0};

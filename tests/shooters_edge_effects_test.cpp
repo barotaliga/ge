@@ -139,4 +139,21 @@ TEST(the_looks_switch_the_world_renderer_and_the_post) {
   CHECK(m.mode == ge::brush::app::Mode::v2 && !m.crisp &&
         m.lighting == ge::brush::app::Lighting::lights);
   CHECK(lk::post_settings(lk::Look::modern).bloom > 0);
+  CHECK(c.dynamic_strength == 1 && m.dynamic_strength < 1);
+  CHECK(lk::effects_glow(lk::Look::classic) == 1 && lk::effects_glow(lk::Look::modern) < 1);
+}
+
+TEST(the_picture_cvars_tune_the_modern_look_and_leave_the_classic) {
+  ge::console::Console con;
+  lk::Picture pic;
+  lk::add_cvars(con, pic);
+  con.execute("r_look modern; r_fx_lights 0.8; r_fx_glow 9; r_bloom 0.1");
+  CHECK(lk::look_of(pic) == lk::Look::modern);
+  CHECK(lk::world_options(lk::look_of(pic), {}, pic).dynamic_strength == 0.8);
+  CHECK(lk::effects_glow(lk::Look::modern, pic) == 4);  // clamped to the cvar's range
+  CHECK(lk::post_settings(lk::Look::modern, pic).bloom == 0.1);
+  CHECK(lk::world_options(lk::Look::classic, {}, pic).dynamic_strength == 1);
+  CHECK(lk::post_settings(lk::Look::classic, pic).bloom == 0);
+  con.execute("r_look retro");
+  CHECK(lk::look_of(pic) == lk::Look::classic);
 }

@@ -54,6 +54,7 @@ struct Options {
   double ambient = 0.015;     // the light every face gets, the lightmaps' units
   double brightness = 2.0;    // a lightmap's 1 against a white face under the open day
   double strength = 1;        // the point lights' strength against the classic's
+  double dynamic_strength = 1;  // the dynamic lights' (set_dynamic_lights) against the classic's
   int shadowed = 32;          // the nearest lights that cast shadows
   int most = 160;             // the lights a frame draws at most (the nearest)
   bool lava_lights = true;    // the lava's glow lights the walls round it
