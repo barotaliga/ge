@@ -4,13 +4,14 @@
 // to the look); the pit at night lit by its lava (the glow handed to the frame's lamps), without
 // and with its lamps; the crust's cover from open melt to crusted over; a close look at the
 // plates, their cracks and the ropy folds; the crust carried by a flow, four moments two seconds
-// apart; and the named looks side by side. It holds the glow's brightness to the black body's (a
+// apart; the heat shimmer across the lake, off and on; three stones breaking the crust, at four
+// moments; and the named looks side by side. It holds the glow's brightness to the black body's (a
 // molten pixel's luminance at night against the table's), and fails on a GPU error, a pipeline
 // made after the load, or a view with no lava in it.
 //
-// ge:summary Lab: lava drawn: day, dusk, night, cover, plates close up, flow, the looks
+// ge:summary Lab: lava drawn: day, dusk, night, cover, close up, flow, shimmer, crust broken
 // ge:keywords lab gpu lava crust plates cracks glow blackbody night dusk flow cover pahoehoe
-// ge:keywords lava-light walls liquid_lamps
+// ge:keywords lava-light walls liquid_lamps heat-shimmer crust-broken break_liquid_crust
 // ge:keywords picture software-adapter
 // ge:skill render water labs
 // ge:test tests/render_liquid_test.cpp
@@ -92,7 +93,7 @@ void run(gl::Lab& lab) {
     // row.
     lab.note("No GPU adapter on this machine: no pictures.");
     ls::placeholders(lab, {"day", "dusk", "night", "night-walls-off", "night-walls", "cover",
-                           "close", "flow", "looks"});
+                           "close", "flow", "shimmer", "crust-broken", "looks"});
     glow_table(lab);
     ls::checked(lab, 0, 0);
     return;
@@ -273,6 +274,82 @@ void run(gl::Lab& lab) {
               "the plates moving right by about a metre between frames without stretching; "
               "the pattern crossfading, never jumping",
               {{"flow", "0.6 m/s"}}},
+             strip(pics, labels, 2), Det::measured);
+  }
+  // THE SHIMMER: across the lake from 1.6 m over the near rim at dusk, the far wall and the
+  // quarry beyond seen through the hot air, without the shimmer and with it.
+  {
+    ls::Scene small;
+    ge::gpu::Device& ds = fresh();
+    ls::make_scene(ds, small, kBasalt, static_cast<uint32_t>(tw), static_cast<uint32_t>(th), 0.05,
+                   true);
+    gr::LiquidLook l = look_of("lava");
+    const gr::FrameView v =
+        ls::view_at(ls::kPitX - 2, ls::kFloor + 1.6, ls::kPitZ - 23, 0.05, -0.05, -0.03, 2.4, t);
+    gr::FrameView lit = v;
+    lit.adapt_cd = gr::adapt_for(l, 0.3);
+    std::vector<gl::Picture> pics;
+    l.lava.shimmer = 0;
+    put(ds, small, "lava", l);
+    pics.push_back(ls::draw(ds, small, lit));
+    l.lava.shimmer = look_of("lava").lava.shimmer;
+    put(ds, small, "lava", l);
+    pics.push_back(ls::draw(ds, small, lit));
+    gr::FrameView later = lit;
+    later.time_s = t + 0.15;
+    pics.push_back(ls::draw(ds, small, later));
+    const double share = ls::changed(pics[0], pics[1]);
+    lab.metric("shimmer.changed-share", share, "", Det::measured);
+    if (share < 0.005) {
+      lab.fail("the shimmer bends nothing (" + ls::fixed(share * 100, 2) + "% changed by it)",
+               "Check bend and fs_shimmer in engine/render/liquid.wgsl. Skill: render.");
+    }
+    lab.shot({"shimmer",
+              "THE HEAT SHIMMER",
+              "Across the lake at dusk from 1.6 m over the near rim: without the shimmer, with it, "
+              "and with it 0.15 s later (LavaLook::shimmer, " +
+                  ls::fixed(l.lava.shimmer * 1000, 1) +
+                  " mrad a metre of hot air, in a layer 3 m deep).",
+              "the far rim's edge and the lava's far part wavering, rippled differently in the "
+              "last frame; the near lava and the sky over the layer steady",
+              {}},
+             strip(pics, {"NO SHIMMER", "SHIMMER", "0.15 S LATER"}, 3), Det::measured);
+  }
+  // THE CRUST BROKEN: three stones fall into a crusted lake, seen from above at dusk at four
+  // moments after.
+  {
+    ls::Scene small;
+    ge::gpu::Device& ds = fresh();
+    ls::make_scene(ds, small, kBasalt, static_cast<uint32_t>(tw), static_cast<uint32_t>(th));
+    gr::LiquidLook l = look_of("lava-crusted");
+    put(ds, small, "lava-crusted", l);
+    gr::break_liquid_crust(small.liquids, 0, ls::kPitX - 3, ls::kPitZ + 1, 1.2, t);
+    gr::break_liquid_crust(small.liquids, 0, ls::kPitX + 3.5, ls::kPitZ - 2, 0.6, t);
+    gr::break_liquid_crust(small.liquids, 0, ls::kPitX + 1, ls::kPitZ + 4, 2.0, t);
+    std::vector<gl::Picture> pics;
+    std::vector<std::string> labels;
+    for (const double after : {-1.0, 0.4, 4.0, 20.0}) {
+      gr::FrameView over = ls::view_at(ls::kPitX, ls::kLevel + 12, ls::kPitZ, 0.0, -kPi / 2 + 0.01,
+                                       0.1, 2.4, t + after);
+      over.adapt_cd = gr::adapt_for(l, 1.5);
+      pics.push_back(ls::draw(ds, small, over));
+      labels.push_back(after < 0 ? "BEFORE" : "T = " + ls::fixed(after, 1) + " S");
+    }
+    const double share = ls::changed(pics[0], pics[1]);
+    lab.metric("crust-broken.changed-share", share, "", Det::measured);
+    if (share < 0.01) {
+      lab.fail("the crust shows no break where the stones fell in",
+               "Check broken_at in engine/render/liquid.wgsl and break_liquid_crust. "
+               "Skill: render.");
+    }
+    lab.shot({"crust-broken",
+              "THE CRUST BROKEN",
+              "The crusted lake from 12 m over it: three stones fall in at once (breaks of 0.6, "
+              "1.2 and 2 m), shown before, and 0.4, 4 and 20 s after.",
+              "three holes of bright melt with torn edges, the crust round them broken into "
+              "shards with glowing cracks, and a crest running out in the first moment; the "
+              "holes skinning over, the small one shrunk to a spot by the end",
+              {}},
              strip(pics, labels, 2), Det::measured);
   }
   // THE LOOKS.
