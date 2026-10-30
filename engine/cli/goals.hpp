@@ -53,8 +53,10 @@ GoalRow goal_row_of_file(std::string_view file_name);
 // A status file's row name: the bold text of its `Milestone:` line, in the header of `Key: value`
 // lines before the first blank line; empty when it has none.
 std::string row_file_title(std::string_view status_md);
-// The status file a claim writes for a row named `title`.
-std::string claimed_row_file(const std::string& title);
+// The status file a claim writes for a row named `title`: its exit criterion `exit` and the labs it
+// lands (`labs`, comma-separated ids, each written as code) when given, "to be written" when not.
+std::string claimed_row_file(const std::string& title, const std::string& exit = "",
+                             const std::string& labs = "");
 
 // The next free milestone number: one past the highest among `taken`.
 int next_free_number(const std::vector<int>& taken);
@@ -76,6 +78,7 @@ struct Claimant {
 std::size_t claim_winner(const std::vector<Claimant>& claimants);
 
 Outcome run_goals_claim(const fs::path& repo, const std::string& title, const std::string& under,
-                        const std::string& base);
+                        const std::string& base, const std::string& exit = "",
+                        const std::string& labs = "");
 
 }  // namespace ge::cli
