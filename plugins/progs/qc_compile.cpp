@@ -542,6 +542,7 @@ void Compiler::finish() {
     }
   };
   prog.crc = 0;
+  prog.layout = nullptr;
   const Layout* nearest = nullptr;
   for (const Layout* form : kLayouts) {
     int n = 0;
@@ -550,6 +551,7 @@ void Compiler::finish() {
     check(form->fields, form->num_fields, prog.fielddefs, "field", n, first);
     if (n == 0) {
       prog.crc = form->crc;
+      prog.layout = form;
       wrong = 0;
       break;
     }

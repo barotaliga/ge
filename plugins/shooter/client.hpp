@@ -65,8 +65,10 @@ struct Packet {
 };
 
 // A client takes a player slot (entity slot + 1): the program's new parms, connect and
-// put-in-server hooks (a spectator's connect hook instead).
-void connect_client(Server& sv, int slot, bool spectator, bool bot);
+// put-in-server hooks (a spectator's connect hook instead). `new_parms` false skips the new parms
+// hook: the host has put the parms the client carried from the last map where the program reads
+// them.
+void connect_client(Server& sv, int slot, bool spectator, bool bot, bool new_parms = true);
 void disconnect_client(Server& sv, int slot);
 
 // The command length the speed check lets through, and the bank it leaves.

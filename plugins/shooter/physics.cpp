@@ -76,8 +76,9 @@ bool run_think(Server& sv, int e, double dt) {
     sv.counts.thinks++;
     call_program(sv, ed.think);
     if (ent(sv, e).free) return false;
-    // Again within this frame only when the think made progress.
-    if (!(ent(sv, e).nextthink > used)) return true;
+    // Again within this frame only when the think made progress (never on the single-player
+    // clock: one think a frame).
+    if (sv.set.single_player_clock || !(ent(sv, e).nextthink > used)) return true;
   }
 }
 

@@ -380,4 +380,27 @@ const LayoutEntry* layout_field(const Layout& layout, const char* name) {
   return nullptr;
 }
 
+std::string layout_declarations(const Layout& layout) {
+  auto type = [](uint16_t t) -> const char* {
+    switch (t) {
+      case kTypeString:
+        return "string";
+      case kTypeVector:
+        return "vector";
+      case kTypeEntity:
+        return "entity";
+      case kTypeFunction:
+        return "void()";
+      default:
+        return "float";
+    }
+  };
+  std::string out;
+  for (int i = 0; i < layout.num_globals; i++)
+    out += std::string(type(layout.globals[i].type)) + " " + layout.globals[i].name + ";\n";
+  for (int i = 0; i < layout.num_fields; i++)
+    out += std::string(".") + type(layout.fields[i].type) + " " + layout.fields[i].name + ";\n";
+  return out;
+}
+
 }  // namespace ge::progs
