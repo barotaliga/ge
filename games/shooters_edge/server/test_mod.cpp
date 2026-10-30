@@ -105,6 +105,7 @@ std::vector<uint8_t> test_mod_bytes(std::vector<int32_t>& lines) {
   const int eight = a.constant_f(8), refire = a.constant_f(kRefire);
   const int rocket_speed = a.constant_f(kRocketSpeed), radius = a.constant_f(kBlastRadius);
   const int five = a.constant_f(5), max_speed = a.constant_f(320);
+  const int svc_temp_entity = a.constant_f(23);
   const int slidebox = a.constant_f(sh::kSolidSlidebox), walk = a.constant_f(sh::kMovetypeWalk);
   const int bbox = a.constant_f(sh::kSolidBbox), flymissile = a.constant_f(sh::kMovetypeFlyMissile);
   const int up16 = a.constant_v(0, 0, 16), up1 = a.constant_v(0, 0, 1);
@@ -321,7 +322,8 @@ std::vector<uint8_t> test_mod_bytes(std::vector<int32_t>& lines) {
     a.emit(pg::kOpEqE, pg::kGOther, own, c);
     a.jump(pg::kOpIf, done, c);
     q.load(pg::kOpLoadV, pg::kGSelf, origin, org);
-    a.call(writebyte, {{four, 1}, {three, 1}});  // MSG_MULTICAST, TE_EXPLOSION
+    a.call(writebyte, {{four, 1}, {svc_temp_entity, 1}});  // MSG_MULTICAST, svc_temp_entity
+    a.call(writebyte, {{four, 1}, {three, 1}});            // TE_EXPLOSION
     a.call(writecoord, {{four, 1}, {org, 1}});
     a.call(writecoord, {{four, 1}, {org + 1, 1}});
     a.call(writecoord, {{four, 1}, {org + 2, 1}});

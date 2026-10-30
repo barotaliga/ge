@@ -184,6 +184,13 @@ struct QcServer {
   bool (*vis)(void* ctx, sh::Vec3f from, sh::Vec3f to, bool see) = nullptr;
   void* vis_ctx = nullptr;
 
+  // Lag compensation: called before (`begin`) and after a trace a player shoots (traceline or
+  // tracebox whose pass entity, or its owner, is a client) so the protocol's server can move the
+  // other players to where the shooter saw them and back. Null: traces see the players as they
+  // are (games/shooters_edge/net/classic_antilag.hpp).
+  void (*lag_rewind)(void* ctx, int shooter, bool begin) = nullptr;
+  void* lag_ctx = nullptr;
+
   std::vector<HookCall> hook_log;
   int64_t hook_counts[static_cast<int>(HookId::count)] = {};
 

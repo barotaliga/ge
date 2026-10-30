@@ -11,6 +11,12 @@ are `docs/goals.md` M17a–M17k. Everything here is generic: peers, channels, me
 skier. A game's half (what it replicates, its message ids, its lobby's settings) lives in
 `games/<game>/net/`.
 
+A game's own wire protocol uses only the sockets, the simulated network and the capture from
+here. Shooter's Edge's classic protocol (`games/shooters_edge/net/classic_*`, M18g:
+`docs/shooters-edge.md` § The network) is the example. It has its own channel, codec, server
+endpoint, scripted client and measured session, and the `se-net` lab runs that session under
+every preset.
+
 | File | What |
 | --- | --- |
 | `net/address.hpp` | IPv4, IPv6 and simulated (`sim:<node>:<port>`) addresses; parse, print, hash |
