@@ -3,11 +3,13 @@
 // through `player_move` (plugins/shooter/recording.hpp) and measured line by line: one table of
 // each scenario's worst position and velocity error against the tolerance, a chart of those
 // worsts, and for each drawn scenario its path from above and from the side, ours over the
-// recording's, the scene's brushes cut at y = 0 behind the side view.
+// recording's, the scene's brushes cut at y = 0 behind the side view. Then the engine's generic
+// mover on the classic rows (plugins/shooter/row.hpp) against the same recordings: its table
+// and chart of each scenario's step and run errors.
 //
 // ge:summary Lab: the classic move against its recordings, worst errors and paths per scenario
 // ge:keywords lab pmove parity recording tolerance trajectory top-view side-view strafe-jump
-// ge:keywords stairs ramp water-jump scenario
+// ge:keywords stairs ramp water-jump scenario classic-row engine-mover row_recording
 // ge:skill shooter labs
 // ge:test tests/shooter_recording_test.cpp
 #include <algorithm>
@@ -22,6 +24,7 @@
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
 #include "shooter/recording.hpp"
+#include "shooter/row_recording.hpp"
 
 namespace {
 
@@ -157,6 +160,8 @@ void draw(gl::Lab& lab, const sh::Recording& rec, const sh::RecordedScenario& sc
         look + "; the origin rides 24 above each floor and climbs stairs and ramps", sc.name);
 }
 
+void row_table(gl::Lab& lab, const sh::Recording& rec);  // below
+
 void run(gl::Lab& lab) {
   const std::string& path = lab.arg("recording");
   std::ifstream in(path);
@@ -238,6 +243,77 @@ void run(gl::Lab& lab) {
         "units/s divided by 5, so the one dashed rule at 0.01 is both tolerances (0.01 u and "
         "0.05 u/s). Scenarios in the table's order.",
         "every dot sits under the dashed rule; most sit on zero (bit-exact runs)", "all");
+  row_table(lab, rec);
+}
+
+// THE ENGINE MOVER'S CLASSIC ROW (plugins/shooter/row.hpp) on the same scenarios: each one's
+// worst step error (one command from the recorded state) and its run's, the covered ones held to
+// the recordings' own tolerance with on-ground, the ground and the water equal.
+void row_table(gl::Lab& lab, const sh::Recording& rec) {
+  gl::LabTable table{
+      "the engine mover's classic row against every recording",
+      {"scenario", "held", "step out", "run out", "step position u", "step velocity u/s",
+       "run position u", "at cmd", "run velocity u/s", "at cmd"},
+      {}};
+  gl::Trace step{"step: worst position error (u)", {}, {}};
+  gl::Trace run{"run: worst position error (u)", {}, {}};
+  gl::Trace runv{"run: worst velocity error / 5 (u/s)", {}, {}};
+  int held = 0, held_out = 0, lines = 0;
+  for (size_t i = 0; i < rec.scenarios.size(); i++) {
+    const sh::RecordedScenario& sc = rec.scenarios[i];
+    const sh::RowReplay r = sh::replay_row(rec, sc);
+    const bool covered = sh::row_covers(sc);
+    if (covered) {
+      held++;
+      lines += static_cast<int>(r.run.lines.size());
+      if (r.step.failed + r.run.failed > 0) {
+        held_out++;
+        lab.fail("pmove: the classic row leaves the tolerance on " + sc.name + " (" +
+                     std::to_string(r.step.failed) + " step lines, " +
+                     std::to_string(r.run.failed) + " run lines)",
+                 "next: run tests/shooter_row_recording_test.cpp and read the scenario's first "
+                 "line out; the row is plugins/shooter/row.cpp over engine/move/step.cpp");
+      }
+    }
+    table.rows.push_back(
+        {sc.name, covered ? "yes" : "no", std::to_string(r.step.failed),
+         std::to_string(r.run.failed), to_fixed(r.step.max_position_error, 6),
+         to_fixed(r.step.max_velocity_error, 6), to_fixed(r.run.max_position_error, 6),
+         std::to_string(r.run.worst_position_line), to_fixed(r.run.max_velocity_error, 6),
+         std::to_string(r.run.worst_velocity_line)});
+    lab.metric("row." + sc.name + ".step-position", r.step.max_position_error, "u");
+    lab.metric("row." + sc.name + ".run-position", r.run.max_position_error, "u");
+    lab.metric("row." + sc.name + ".run-velocity", r.run.max_velocity_error, "u/s");
+    const double x = static_cast<double>(i);
+    step.x.push_back(x);
+    step.y.push_back(covered ? r.step.max_position_error : kNan);
+    run.x.push_back(x);
+    run.y.push_back(covered ? r.run.max_position_error : kNan);
+    runv.x.push_back(x);
+    runv.y.push_back(covered ? r.run.max_velocity_error / 5 : kNan);
+  }
+  lab.metric("row.held-scenarios", held, "count");
+  lab.metric("row.held-scenarios-out", held_out, "count");
+  lab.metric("row.held-lines", lines, "count");
+  lab.table(table);
+
+  gl::LineChart chart;
+  chart.points = true;
+  chart.spikes = false;
+  chart.frame = {"THE ENGINE MOVER'S CLASSIC ROW",
+                 std::to_string(held) + " scenarios held (" + std::to_string(lines) + " lines), " +
+                     std::to_string(held_out) + " out of the tolerance",
+                 "scenario (the table's order)", "error"};
+  chart.traces = {step, run, runv};
+  chart.rules = {static_cast<double>(sh::kPositionTolerance)};
+  shoot(lab, "row", gl::line_chart(chart),
+        "The engine's generic mover (engine/move, engine/water/swim) on the classic rows "
+        "(plugins/shooter/row.hpp), over the same brush worlds: each covered scenario's worst "
+        "one-command position error from the recorded state, and its whole run's worst position "
+        "and velocity (divided by 5) errors. The dashed rule at 0.01 is both tolerances, the "
+        "recordings' own. Uncovered scenarios (a move type or setting the row does not carry) "
+        "are left out.",
+        "every dot far under the dashed rule: the generic mover carries the classic feel", "all");
 }
 
 const gl::LabSpec kSpec{
