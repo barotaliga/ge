@@ -12,6 +12,7 @@
 
 #include "brush/app/bsp.wgsl.hpp"
 #include "brush/app/bsp_fix.wgsl.hpp"
+#include "brush/app/bsp_flames.hpp"
 #include "brush/app/bsp_shadow.wgsl.hpp"
 #include "render/view.hpp"
 #include "water/glow.hpp"
@@ -241,7 +242,8 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
                           {d.uniform, d.atlas.CreateView(), d.light.CreateView(), d.light_sampler,
                            d.lights, d.cubes_view, d.compare, d.orthos_view,
                            d.rebake_rgb.CreateView(), d.rebake_dir.CreateView()});
-  d.fix_layout = r::make_layout(device, "bsp.sky", {Slot::texture}, wgpu::ShaderStage::Fragment);
+  d.fix_layout = r::make_layout(device, "bsp.sky", {Slot::texture, Slot::uniform},
+                                wgpu::ShaderStage::Fragment);
   d.shadow_layout = r::make_layout(device, "bsp.shadows", {Slot::storage_read}, both);
   d.shadow_group = r::make_group(device, "bsp.shadows", d.shadow_layout, {d.jobs});
 
@@ -310,10 +312,10 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
   }
   {
     const wgpu::ShaderModule module = gpu::create_shader(device, wgsl::bsp_fix, "bsp.veil");
-    // The sky's pixels times the blend constant: dst * constant.
+    // The sky's pixels times the veil the fragment writes: dst * src (unclamped, so over 1 lifts).
     wgpu::BlendState blend{};
     blend.color.srcFactor = wgpu::BlendFactor::Zero;
-    blend.color.dstFactor = wgpu::BlendFactor::Constant;
+    blend.color.dstFactor = wgpu::BlendFactor::Src;
     blend.alpha.srcFactor = wgpu::BlendFactor::Zero;
     blend.alpha.dstFactor = wgpu::BlendFactor::One;
     wgpu::ColorTargetState target{};
@@ -369,7 +371,7 @@ void create_bsp_targets(gpu::Device& device, BspDraw& d, const r::FrameTargets& 
       device, "bsp.mask", targets.width, targets.height, 1, wgpu::TextureFormat::R8Unorm,
       wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding);
   d.mask_view = d.mask.CreateView();
-  d.fix_group = r::make_group(device, "bsp.sky", d.fix_layout, {d.mask_view});
+  d.fix_group = r::make_group(device, "bsp.sky", d.fix_layout, {d.mask_view, d.uniform});
 }
 
 void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, const Options& o) {
@@ -415,17 +417,19 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
       // the strength a metre off is that times the half reach squared.
       const double half = l.value * kUnitM / 2;
       const double at1 = l.value / 256.0 * half * half * o.strength * flicker_at(l, view.time_s);
-      set4(g.pos, l.pos[0], l.pos[1], l.pos[2], l.reach * 1.5);
+      set4(g.pos, l.pos[0], l.pos[1] + fire_light_lift(l), l.pos[2], l.reach * 1.5);
       set4(g.colour, l.colour[0] * at1, l.colour[1] * at1, l.colour[2] * at1, 0);
     }
-    set4(g.info, -1, 0, 0, 0);
+    // A fire lights the wall behind it from its whole flame: its light softened over its height.
+    const double soft = fire_light_size(l);
+    set4(g.info, -1, soft * soft, 0, 0);
     if (!l.physical && shadowed < d.options.shadowed) {
       g.info[0] = float(shadowed * 6);
       for (int f = 0; f < 6; ++f) {
         const int i = f / 2;
         const double sign = f % 2 ? -1.0 : 1.0;
         GpuJob j{};
-        set4(j.o, l.pos[0], l.pos[1], l.pos[2], g.pos[3]);
+        set4(j.o, g.pos[0], g.pos[1], g.pos[2], g.pos[3]);
         double ax[3] = {0, 0, 0}, ay[3] = {0, 0, 0}, az[3] = {0, 0, 0};
         ax[(i + 1) % 3] = 1;
         ay[(i + 2) % 3] = 1;
@@ -464,6 +468,8 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   set4(d.staged.info3, o.minlight, o.lighting == Lighting::lights ? o.bounce : 0, o.sky_light,
        o.crisp ? 0 : 1);
   set4(d.staged.info4, o.bump, 0, 0, 0);
+  const double veil = o.sky_light * o.sky_seen;
+  set4(d.staged.veil, veil * o.sky_tint[0], veil * o.sky_tint[1], veil * o.sky_tint[2], 1);
   if (s.sky_texture < s.map.textures.size()) {
     // The sky texture's rectangle: any vertex of a sky face carries it.
     for (size_t k = 0; k < s.vertices.size(); ++k) {
@@ -572,8 +578,7 @@ void encode_bsp_veil(const BspDraw& d, const gpu::PipelineSet& pipelines,
                      render::FrameRecorder& rec, wgpu::CommandEncoder& encoder,
                      const render::FrameTargets& targets) {
   const Options& o = d.options;
-  const double k[3] = {o.sky_light * o.sky_tint[0], o.sky_light * o.sky_tint[1],
-                       o.sky_light * o.sky_tint[2]};
+  const float* k = d.staged.veil;
   if (o.mode != Mode::v2 || (k[0] == 1 && k[1] == 1 && k[2] == 1)) {
     rec.compute(encoder, "bsp.veil").End();
     return;
@@ -588,8 +593,6 @@ void encode_bsp_veil(const BspDraw& d, const gpu::PipelineSet& pipelines,
   wgpu::RenderPassEncoder pass = rec.render(encoder, desc, "bsp.veil");
   pass.SetPipeline(pipelines.render(d.p_veil));
   pass.SetBindGroup(0, d.fix_group);
-  const wgpu::Color c{k[0], k[1], k[2], 1};
-  pass.SetBlendConstant(&c);
   pass.Draw(3);
   ++rec.current().draws;
   pass.End();

@@ -1,10 +1,10 @@
 // The held model (engine/viewmodel/held.hpp): a glTF model becomes frames with a colour a vertex,
 // the mount turns a model so its muzzle is +z and its up +y without mirroring it (a triangle's
 // front stays outside), scales it to its length and puts the grip at the origin, and two frames
-// blend with unit normals.
+// blend with unit normals; a gun of two barrels fires from the one each frame names.
 //
 // ge:summary Tests: the held model's conversion from a model, the grip mount, the frame blend
-// ge:keywords test viewmodel held-model mount grip muzzle fit_mount pose_frames
+// ge:keywords test viewmodel held-model mount grip muzzle fit_mount pose_frames barrels
 // ge:skill render testing
 // ge:test tests/viewmodel_held_test.cpp
 #include <cmath>
@@ -127,4 +127,30 @@ TEST(the_muzzle_is_the_front_of_the_barrel_and_rides_the_frames) {
   vm::muzzle_at(m, 0, 1, 0.5, tip);
   CHECK(std::fabs(tip[2] - 0.95f) < 1e-6f);
   CHECK(m.muzzle_dir[2] == 1.0f);
+}
+
+TEST(a_gun_of_two_barrels_fires_from_the_one_each_frame_names) {
+  // Two vertices a barrel: the left one's tip at x = -0.1, the right one's at x = +0.1, and the one
+  // muzzle (no barrel named) between them; frame 1 fires the left, frame 2 the right, frame 0 none.
+  vm::HeldModel m;
+  vm::HeldFrame f;
+  for (float x : {-0.1f, -0.1f, 0.1f, 0.1f, 0.0f}) {
+    f.positions.insert(f.positions.end(), {x, 0, 1});
+    f.normals.insert(f.normals.end(), {0, 0, 1});
+  }
+  m.frames = {f, f, f};
+  m.muzzle_vertices = {4};
+  m.barrels = {{0, 1}, {2, 3}};
+  m.frame_barrel = {-1, 0, 1};
+  CHECK(vm::barrel_of_frame(m, 0) == -1 && vm::barrel_of_frame(m, 1) == 0);
+  CHECK(vm::barrel_of_frame(m, 2) == 1 && vm::barrel_of_frame(m, 7) == -1);
+  float tip[3];
+  vm::muzzle_at(m, 1, 1, 0, tip, vm::barrel_of_frame(m, 1));
+  CHECK(std::fabs(tip[0] + 0.1f) < 1e-6f);
+  vm::muzzle_at(m, 2, 2, 0, tip, vm::barrel_of_frame(m, 2));
+  CHECK(std::fabs(tip[0] - 0.1f) < 1e-6f);
+  vm::muzzle_at(m, 0, 0, 0, tip, -1);  // the one muzzle
+  CHECK(std::fabs(tip[0]) < 1e-6f);
+  vm::muzzle_at(m, 0, 0, 0, tip, 5);  // no such barrel: the one muzzle too
+  CHECK(std::fabs(tip[0]) < 1e-6f);
 }

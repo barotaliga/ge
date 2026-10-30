@@ -85,15 +85,19 @@ struct Portal {
 // How a light entity's brightness moves (our own functions, picked by the entity's style number).
 enum class Flicker : uint8_t { steady, candle, pulse, strobe, buzz };
 
+// The fire a light entity's model stands for, drawn as burning gas (bsp_flames.hpp).
+enum class Fire : uint8_t { none, wall_torch, large };
+
 struct PointLight {
   double pos[3] = {0, 0, 0};  // engine metres
   double value = 300;         // the entity's brightness
   double reach = 7.5;         // m: where its light ends (value / wait map units)
   double colour[3] = {1, 1, 1};
   Flicker flicker = Flicker::steady;
-  uint32_t seed = 0;      // the flicker's phase
-  bool flame = false;     // a torch or a flame (warmer)
-  bool physical = false;  // `value` is a luminous intensity, cd (a glowing liquid's light)
+  uint32_t seed = 0;       // the flicker's phase
+  bool flame = false;      // a torch or a flame (warmer)
+  Fire fire = Fire::none;  // the fire drawn at it (bsp_flames.hpp)
+  bool physical = false;   // `value` is a luminous intensity, cd (a glowing liquid's light)
 };
 // The light's share of its brightness at time t, s.
 double flicker_at(const PointLight& light, double t);

@@ -72,4 +72,5 @@ One skill per plugin, named after it (`docs/architecture.md` § Plugins).
 | `morph` | `plugins/morph`: classic vertex-animated models and sprites read into one view, the fixture writers, smooth normals and the optional rounding, and the `morph` lab |
 | `classicenhance` | `plugins/classicenhance`: the player's classic packs (shareware or full game) enhanced on the player's own machine into a local cache (textures, their maps, the lightmap stage), run through `ge tool` |
 | `rooms` | `plugins/rooms`: the engine's own level format, rooms of plain geometry grown from their seeds (reliefs, caves), its text form and its lab |
+| `progs` | `plugins/progs`: the QC VM, the progs loader and checker, the builtin table and extensions, the assembler, `ge qc` and the qc lab |
 | `shooter` | `plugins/shooter`: the classic player move in floats, clip hulls and their trace, the recorded scenarios and the pmove lab |
