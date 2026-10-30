@@ -36,6 +36,8 @@ the lightmaps work's (`plugins/brush`, M40) and this plugin only calls it.
 ge tool classicenhance -- verify <zip|folder|pack>   # which route, each pack's digest, known or not
 ge tool classicenhance -- run <zip|folder|pack>      # every stage, skipping those up to date
 ge tool classicenhance -- run <src> --only=textures --force --scale=4 --limit=8
+ge tool classicenhance -- run <src> --upscaler=kernel     # no download: the kernel at any scale
+ge tool classicenhance -- run <src> --device=cpu          # the trained upscaler on the CPU
 ge tool classicenhance -- status <src>               # what the cache holds for this pack
 ```
 
@@ -48,7 +50,7 @@ cache is `GE_CLASSIC_CACHE` when set, else the platform's cache folder (`XDG_CAC
 | Stage | Writes | Rerun when |
 | --- | --- | --- |
 | `pack` | `pack/pak0.pak`, `NOTICE.txt`, `source.txt` | the source changes |
-| `textures` | `textures/<name>/{albedo,height,normal,roughness,emissive}.png` | `kTextureStageVersion` or the options move |
+| `textures` | `textures/<name>/{albedo,height,normal,roughness,emissive}.png` | `kTextureStageVersion`, the options, the upscaler's weights or its device move |
 | `lightmaps` | `lightmaps/<map>.png` (the map's own light, packed); the rebake's file once M41b lands | `kLightmapStageVersion` moves |
 | `sounds` | `sounds/<path>.wav` (48 kHz, 16-bit, the loop start in a `cue ` chunk), `sounds/index.txt` | `kSoundStageVersion` or the options move |
 | `models` | `models/<name>.glb` (every model: enhanced skins, smooth normals, a morph target a frame, its clips), `sprites/<name>/<frame>.png`, `models/index.txt`, `replaced.txt` | `kModelStageVersion` or the options move |
@@ -72,6 +74,42 @@ Each wall texture is indexed colour on a 256-entry palette. The enhancer works i
    wood, liquid) moved by height; **emissive** is the fullbright palette entries (224 and up).
 
 Every step wraps at the edges, so the textures still tile. Sky textures get the albedo only.
+
+## The trained upscaler
+
+At 4× (the default) the albedo is a trained network's instead of the kernel's (row M41g): a
+**dual aggregation transformer** trained to upscale material textures, keeping grain, cracks
+and worn edges where the kernel can only keep the edges sharp. The height, normal, roughness and
+glow maps are still made from that albedo as above; the glow stays the kernel's.
+
+- **The weights** (`kUpscalerWeights` in `upscaler.hpp`: a CC0 release, 32.5 million parameters,
+  140 MB in the safetensors layout) are fetched once by the tool into the cache's `weights/`
+  folder with `curl` and held to their published SHA-256; `--weights=<file>` reads a copy from
+  disk. They are never committed. `--upscaler=kernel`, or any other `--scale`, uses the kernel
+  and fetches nothing.
+- **The network** (`upscaler.hpp`): a 3 × 3 convolution to 180 channels, six residual groups of
+  six blocks, then upsampling by two pixel shuffles. An even block attends within windows of
+  8 × 32 tokens (half the channels) and 32 × 8 (the other half), with a learned bias by the
+  tokens' offset, some blocks on windows rolled by half a window; an odd block attends across
+  channels over the whole map. Each attention is gated by a depthwise convolution of its values
+  and gates it back, and a gated feed-forward follows. The texture is wrapped round a margin of
+  8 texels before it goes in, so the network sees what the wall shows across each edge, and the
+  margin is cropped off after.
+- **On the CPU** (`net.hpp`, `upscaler.cpp`): the layers in plain C++ in a fixed order, the rows
+  split in bands on the worker pool. It gives the original's output within 1.2e-6 (an 8-bit step
+  is 3.9e-3), and the tests hold a small seeded network of the same form to values the original
+  gives for the same weights. A 64 × 64 texture takes about 3.5 s on four cores.
+- **On the GPU** (`app/upscaler_gpu.hpp`, `app/upscaler.wgsl`): the same layers as compute
+  shaders through Dawn: a tiled 64 × 64 matrix product (a 3 × 3 convolution is the same product
+  over each token's neighbours), the window attention one query a thread with the keys streamed
+  through workgroup memory and the softmax kept online, the channel attention as reductions.
+  The weights are uploaded once; a texture's few hundred dispatches go in one submit. It matches
+  the CPU within 1e-4 (the tests' network), a step of 1 in 8 bits at most on the trained one.
+  The tool uses it when the build has a GPU and the adapter is not a software one
+  (`--device=auto|gpu|cpu`); the `gpu-upscaler` lab times both.
+
+The cache's `textures` key names the weights' digest and the device, so a new network or a move
+between CPU and GPU reruns the stage.
 
 ## The sound enhancer
 

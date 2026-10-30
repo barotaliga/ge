@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "classicenhance/planes.hpp"
+#include "classicenhance/upscaler.hpp"
 #include "core/noise.hpp"
 #include "core/parallel.hpp"
 
@@ -265,6 +266,41 @@ float base_roughness(Material m) {
   return 0.75f;
 }
 
+// The trained network's picture: the texture's stored colours wrapped round a margin of
+// kNetMargin texels (so the network sees across each edge what the wall shows there), upscaled,
+// the margin cropped off, clamped and linearised.
+constexpr int kNetMargin = 8;
+
+Rgb network_albedo(const Upscaler& u, UpscaleDevice* device, std::span<const uint8_t> indexed,
+                   int width, int height, const Palette& palette) {
+  const int m = kNetMargin, s = u.scale;
+  net::Map in(height + 2 * m, width + 2 * m, 3);
+  for (int y = 0; y < in.h; y++) {
+    for (int x = 0; x < in.w; x++) {
+      const int sx = ((x - m) % width + width) % width, sy = ((y - m) % height + height) % height;
+      const size_t i = size_t(sy) * size_t(width) + size_t(sx);
+      const uint8_t k = i < indexed.size() ? indexed[i] : 0;
+      for (int c = 0; c < 3; c++)
+        in.at(y, x)[c] = float(palette.rgb[size_t(k) * 3 + size_t(c)]) / 255.0f;
+    }
+  }
+  net::Map out;
+  std::string error;
+  if (device == nullptr || !device->run(in, out, error)) out = upscale(u, in);
+  Rgb big{Plane(width * s, height * s), Plane(width * s, height * s), Plane(width * s, height * s)};
+  for (int y = 0; y < height * s; y++) {
+    for (int x = 0; x < width * s; x++) {
+      const float* p = out.at(y + m * s, x + m * s);
+      Plane* planes[3] = {&big.r, &big.g, &big.b};
+      for (int c = 0; c < 3; c++) {
+        const float v = std::clamp(p[c], 0.0f, 1.0f);
+        planes[c]->at(x, y) = srgb_to_linear(v);
+      }
+    }
+  }
+  return big;
+}
+
 }  // namespace
 
 const char* material_name(Material m) {
@@ -345,8 +381,12 @@ Enhanced enhance_texture(std::string_view name, std::span<const uint8_t> indexed
   Rgb big;
   Plane big_glow;
   upscale(src, glow, scale, big, big_glow);
-  back_project(big, src, scale, 1);
-  finish(big, src, src_lum, scale, o, name_seed(name));
+  if (o.network != nullptr && o.network->scale == scale) {
+    big = network_albedo(*o.network, o.device, indexed, width, height, palette);
+  } else {
+    back_project(big, src, scale, 1);
+    finish(big, src, src_lum, scale, o, name_seed(name));
+  }
   out.albedo = colour(big, nullptr);
   if (out.material == Material::sky) return out;
 
