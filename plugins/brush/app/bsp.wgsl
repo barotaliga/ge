@@ -34,6 +34,7 @@ struct Bsp {
                  // sky's light (r_skylight: the sun's and the open sky's in the rooms), the
                  // textures filtered (1) or crisp (0)
   info4: vec4f,  // the relief's depth from the textures' luminance, m (r_bump); unused
+  veil: vec4f,   // the sky faces' pixels times these (bsp_fix.wgsl's veil)
   ortho: array<Job, 2>,  // the sun's map and the zenith's
 };
 

@@ -9,7 +9,8 @@
 //   milliseconds. The shader scales them by the frame's pre-exposure, as it scales the sun.
 // - THE REACH: every light ends at its `range_m` (a smooth window, (1 - (d/r)^4)^2, on top of the
 //   inverse square), so it lights a bounded sphere and the clusters can drop it outside. The
-//   emitter's `radius_m` caps the inverse square at its own surface.
+//   emitter's `radius_m` softens the inverse square near it (candela / (d^2 + radius^2)): a big
+//   or spread source, a fire's whole flame, lights what is close by less sharply.
 // - A SPOT shines along `direction` inside a cone: whole inside `inner_deg` of the axis, none
 //   past `outer_deg`, a smooth fall between; `outer_deg` 0 is a point light (every way).
 // - FLICKER (`flicker_level`, a pure function of the light and the frame's time, so a replay and
@@ -69,7 +70,7 @@ struct LocalLight {
   float colour[3] = {1, 1, 1};         // linear rgb, its luminance about 1
   float candela = 100;                 // luminous intensity at full level, cd
   float range_m = 10;                  // where its light ends
-  float radius_m = 0.05f;              // the emitter's size: the inverse square stops here
+  float radius_m = 0.05f;              // the emitter's size: softens the inverse square near it
   float inner_deg = 0, outer_deg = 0;  // a spot's cone off its axis; outer 0: a point light
   Flicker flicker = Flicker::steady;
   float rate_hz = 10;   // a flame's waver, a buzz's or strobe's beat, the steps' letters a second
