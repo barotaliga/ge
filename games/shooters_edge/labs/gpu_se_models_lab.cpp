@@ -233,7 +233,7 @@ void run(gl::Lab& lab) {
   const cl::ModelLoad load{l.server->models};
   if (device) {
     frame = cl::create_world_draw(*device, files, *l.map, w, h, wgpu::TextureFormat::RGBA8Unorm,
-                                  look, error, load);
+                                  look, {}, error, load);
     if (!frame) {
       lab.fail(error, "Read the gpu: lines above. Skill: render.");
       return;
@@ -281,7 +281,7 @@ void run(gl::Lab& lab) {
         continue;
       }
       look.look = lk;
-      cl::draw_world(*device, *frame, view, fx, 0, {}, out.view);
+      cl::draw_world(*device, *frame, view, fx, nullptr, 0, {}, out.view);
       const ge::gpu::Image img = ge::gpu::read_now(*device, out);
       lab.shot({shot_id,
                 title + " (" + lk + ")",

@@ -110,8 +110,9 @@ file(GLOB SHOOTERS_EDGE_CLIENT_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_
 list(FILTER SHOOTERS_EDGE_CLIENT_SOURCES EXCLUDE REGEX
      "/client/(main|world_draw|world_extras|world_fx|world_models)\\.cpp$")
 add_library(shooters_edge_client STATIC ${SHOOTERS_EDGE_CLIENT_SOURCES})
-target_link_libraries(shooters_edge_client PUBLIC shooters_edge_server shooters_edge_hud ge_vfs
-                                                  ge_brush ge_camera ge_input)
+target_link_libraries(shooters_edge_client PUBLIC shooters_edge_server shooters_edge_hud
+                                                  shooters_edge_view ge_vfs ge_brush ge_camera
+                                                  ge_input)
 include(${PROJECT_SOURCE_DIR}/cmake/EmbedBinary.cmake)
 foreach(qc defs util combat weapons items player world)
   ge_embed_binary(shooters_edge_client se_qc_${qc} ${CMAKE_CURRENT_SOURCE_DIR}/qc/${qc}.qc)
@@ -134,4 +135,7 @@ if(GE_PLATFORM AND GE_GPU AND TARGET ge_brush_app)
   add_executable(shooters_edge client/main.cpp)
   target_link_libraries(shooters_edge PRIVATE shooters_edge_client_gpu shooters_edge_menu
                                               ge_platform ge_hud ge_console)
+  # The held weapons' models where the tree is, for a game run from somewhere else (-models wins).
+  target_compile_definitions(shooters_edge
+                             PRIVATE SE_MODELS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/content/models/view")
 endif()

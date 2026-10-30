@@ -4,12 +4,13 @@
 // on a rocket launcher, who walks, jumps, and then ROCKET-JUMPS: looking straight down, he jumps
 // and fires at the floor in the same frame and rises far higher than his jump alone takes him,
 // for the rocket's health. The run is held to the bit by its golden rows. Also the keys and the
-// mouse as commands, and the HUD's status off the player. The powers: the quad's and the shield's
-// glow round their holder, the shield taking a blast, both running out.
+// mouse as commands, the HUD's status off the player, and the weapon in his hand: the launcher
+// raised, one shot seen for one rocket and none for the spawn. The powers: the quad's and the
+// shield's glow round their holder, the shield taking a blast, both running out.
 //
 // ge:summary Tests: the listen server headless: a fixture map from a pack, a rocket jump, golden
 // ge:keywords test listen-server rocket-jump search-path pak baseline-mod controls hud-status
-// ge:keywords golden fixture quad shield powers effects
+// ge:keywords golden fixture held-weapon step_held quad shield powers effects
 // ge:skill shooter progs testing
 #include <algorithm>
 #include <bit>
@@ -27,7 +28,9 @@
 #include "progs/vm.hpp"
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/files.hpp"
+#include "shooters_edge/client/held.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/view.hpp"
 #include "vfs/pak.hpp"
 
@@ -304,4 +307,35 @@ TEST(the_powers_glow_round_their_holder_the_shield_takes_the_blast_and_both_run_
   set_field(l, 1, "invincible_finished", later + 0.05f);
   for (int i = 0; i < 10; i++) cl::listen_frame(l, {});
   CHECK(static_cast<int>(cl::field_named(l, 1, "effects")) == 0);
+}
+
+TEST(the_hand_raises_the_launcher_and_sees_one_shot_a_rocket) {
+  cl::Listen l;
+  if (!start(l)) return;
+  cl::ViewState shown;
+  cl::HeldState held;
+  const shooters_edge::view::ViewSettings settings;
+  constexpr double kTic = 0.013;
+  double t = 0;
+  shooters_edge::view::HandFrame f;
+  const auto run = [&](int frames, sh::MoveCmd cmd) {
+    for (int i = 0; i < frames; i++) {
+      cl::listen_frame(l, cmd);
+      cmd.impulse = 0;
+      t += kTic;
+      cl::frame_view(l, shown, 1, t, kTic);
+      f = cl::step_held(l, shown, held, settings, {}, t, kTic);
+    }
+  };
+  run(80, {});
+  CHECK(held.shots == 0);  // the spawn sets attack_finished to now: no shot
+  l.impulse = 7;
+  run(80, {});
+  CHECK(f.weapon == shooters_edge::view::Weapon::rocket_launcher);
+  CHECK(!f.switching);
+  sh::MoveCmd fire;
+  fire.buttons = sh::kButtonAttack;
+  run(1, fire);
+  run(40, {});
+  CHECK(held.shots == 1);
 }

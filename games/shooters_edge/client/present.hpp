@@ -33,6 +33,7 @@ struct Blast {
 struct ViewState {
   ge::camera::FirstPersonRow row;
   ge::camera::FirstPersonState eyes;
+  ge::camera::Pose pose;  // the last frame's eye
   std::vector<Missile> missiles;
   std::vector<Blast> blasts;
   std::size_t explosions_seen = 0;  // of Listen::explosions

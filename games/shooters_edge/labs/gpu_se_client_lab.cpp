@@ -3,7 +3,8 @@
 // player spawned on a rocket launcher; he takes it, steps into the hall, looks straight down,
 // jumps and fires at the floor in the same frame: a ROCKET JUMP. The frame is drawn as the window
 // draws it (client/world_draw.hpp, the first-person eyes of client/present.hpp, the effects of
-// client/world_fx.hpp, the HUD of hud/layout.hpp) at three moments: standing at the spawn, the
+// client/world_fx.hpp, the weapon in hand of client/held.hpp, the HUD of hud/layout.hpp) at three
+// moments: standing at the spawn, the
 // blast under him (the rocket's trail, the explosion's sparks and its light on the floor, the hit's
 // red flash), and the top of the jump looking down at the floor he left. The rise, the health it
 // cost and the effects thrown are deterministic metrics; the pictures are measured (each adapter
@@ -32,12 +33,14 @@
 #include "lab/lab.hpp"
 #include "lab/labs/liquid_scene.hpp"
 #include "shooters_edge/client/files.hpp"
+#include "shooters_edge/client/held.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
 #include "shooters_edge/hud/layout.hpp"
+#include "shooters_edge/view/weapons.hpp"
 #include "vfs/pak.hpp"
 
 namespace {
@@ -99,7 +102,7 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   cl::WorldDrawPtr world[2];
   for (int k = 0; k < 2; ++k) {
     world[k] = cl::create_world_draw(*device, files, *l.map, w, h, wgpu::TextureFormat::RGBA8Unorm,
-                                     looks[k], error);
+                                     looks[k], {}, error);
     if (!world[k]) {
       lab.fail(error, "Read the gpu: lines above. Skill: render.");
       return;
@@ -162,7 +165,7 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     ge::render::FrameView view = cl::frame_view(l, shown, 0, t, 0);
     for (int k = 0; k < 2; ++k) {
       for (int f = 0; f < 30; ++f)  // the weather and the flames run a moment in
-        cl::draw_world(*device, *world[k], view, fx, 1.0 / 30, {}, out.view);
+        cl::draw_world(*device, *world[k], view, fx, nullptr, 1.0 / 30, {}, out.view);
       const ge::gpu::Image img = ge::gpu::read_now(*device, out);
       const std::string id = std::string(kLooks[k]) + "-" + std::to_string(v);
       lab.shot({id,
@@ -206,11 +209,14 @@ void run(gl::Lab& lab) {
              "Install Mesa's Vulkan drivers (apt install mesa-vulkan-drivers). Skill: gpu.");
   }
   const shooters_edge::look::Picture look;
+  std::vector<ge::viewmodel::HeldModel> weapons;
+  if (!shooters_edge::view::load_weapon_models(lab.arg("models"), weapons, &error))
+    lab.note("no weapon is drawn: " + error);
   cl::WorldDrawPtr world;
   ge::gpu::Target out;
   if (device) {
     world = cl::create_world_draw(*device, files, *l.map, w, h, wgpu::TextureFormat::RGBA8Unorm,
-                                  look, error);
+                                  look, weapons, error);
     if (!world) {
       lab.fail(error, "Read the gpu: lines above. Skill: render.");
       return;
@@ -226,6 +232,9 @@ void run(gl::Lab& lab) {
   cl::ViewState shown;
   cl::FxState fx_state;
   cl::FxFrame fx;
+  cl::HeldState held;
+  const shooters_edge::view::ViewSettings view_settings;
+  shooters_edge::view::HandFrame hand;
   shooters_edge::effects::Particles births;  // thrown since the last picture
   double births_total = 0;
   constexpr double kTic = 0.013;
@@ -241,6 +250,7 @@ void run(gl::Lab& lab) {
       peak = std::max(peak, l.server->sv.edicts[1].origin.z);
       cl::frame_view(l, shown, 1, t, kTic);
       cl::step_fx(l, shown, fx_state, t, kTic, fx);
+      hand = cl::step_held(l, shown, held, view_settings, weapons, t, kTic);
       births.insert(births.end(), fx.births.begin(), fx.births.end());
       births_total += static_cast<double>(fx.births.size());
     }
@@ -262,9 +272,9 @@ void run(gl::Lab& lab) {
     hud.layout.draw(overlay,
                     hud.layout.frame(static_cast<int>(w), static_cast<int>(h), se::hud_style()),
                     se::hud_style());
-    cl::draw_world(*device, *world, view, fx, 0.08, {}, out.view);  // the births flown a moment
+    cl::draw_world(*device, *world, view, fx, &hand, 0.08, {}, out.view);  // births flown a moment
     fx.births.clear();
-    cl::draw_world(*device, *world, view, fx, 0, overlay, out.view);
+    cl::draw_world(*device, *world, view, fx, &hand, 0, overlay, out.view);
     const ge::gpu::Image img = ge::gpu::read_now(*device, out);
     lab.shot({id, title, caption, look_for, {{"map", "halls"}, {"size", lab.arg("size")}}},
              gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba},
@@ -277,7 +287,7 @@ void run(gl::Lab& lab) {
   ground = l.server->sv.edicts[1].origin.z;
   picture("AT THE SPAWN",
           "The fixture hall from the player's eyes at the deathmatch spot, facing east, the "
-          "rocket launcher in hand; the classic HUD along the bottom.",
+          "rocket launcher in hand at the lower right; the classic HUD along the bottom.",
           "the floor level under the eyes; the HUD's rockets and the launcher lit");
   sh::MoveCmd walk;
   walk.forward = 400;
@@ -315,6 +325,7 @@ void run(gl::Lab& lab) {
   lab.metric("rocket-jump.health-lost", health_before - l.server->sv.edicts[1].health, "hp");
   lab.metric("effects.births", births_total, "particles");
   lab.metric("effects.explosions", static_cast<double>(fx_state.explosions_seen), "count");
+  lab.metric("hand.shots", held.shots, "count");
   if (peak - ground < 100)
     lab.fail("the rocket jump rose only " + std::to_string(peak - ground) + " units",
              "Read combat.qc's push and the rocket's blast (games/shooters_edge/qc). Skill: "
@@ -336,6 +347,7 @@ const gl::LabSpec kSpec{
     "Does the window's frame show the map from the player's eyes with the HUD, and does a "
     "rocket jump lift him?",
     {{"size", "960,540", "the frame's width and height, px"},
+     {"models", "games/shooters_edge/content/models/view", "the held weapons' folder"},
      {"game", "", "a game folder of packs to draw instead of the halls (private pictures only)"},
      {"map", "start", "with --game: the map's name"},
      {"cvars", "", "with --game: the modern side's cvars, as the console takes them"},

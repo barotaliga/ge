@@ -105,7 +105,8 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/games/classic +map dm
 - **`-basedir <dir>`**: the folder holding the game folder; `~` is your home folder, and a path
   with spaces goes in quotes (`-basedir "/Volumes/Old Games/classic"`). **`-game <folder>`**
   picks a game folder other than `id1`. **`-progs <file>`** runs a mod's progs in place of the
-  baseline mod (§ Running your own mod). Its packs are read in order (`pak0.pak`, `pak1.pak`, ...
+  baseline mod (§ Running your own mod), and **`-models <dir>`** names the held weapons' folder
+  (by default the tree's `games/shooters_edge/content/models/view`). Its packs are read in order (`pak0.pak`, `pak1.pak`, ...
   until a number is missing; any case), and a loose file in the folder (`maps/mymap.bsp`)
   overrides the packs (`client/files.hpp`).
 - **`+<command>`**: console lines run at start. `+map dm6` loads that map; `+map arena` the
@@ -141,9 +142,12 @@ map, then drawn each frame where the server's entities and its static ones stand
 lying about, armour, health and ammo boxes, the torches and their flames, the powers, the other
 players in their own top and bottom colours; a group of frames plays at its intervals, an item
 flagged to spin turns, each lit by the lightmap on the floor under it, shaded from above, its
-fullbright texels glowing); the HUD (`hud_style classic|modern|compact`); the console.
-Not yet: the weapon in hand, sounds, menus, the map's moving brush models (doors, plats) drawn
-where they move, and the network (the rest of M18h, M18i).
+fullbright texels glowing); the weapon in hand (`client/held.hpp`: the game's free
+models, switched with the number keys, kicked and lit by its muzzle flash as the mod fires it,
+lit by the map's baked light under the player; `r_drawviewmodel`, `r_viewmodel_fov`, `cl_gunx`,
+`cl_guny`, `cl_gunz` and `cl_gunsway` in the console); the HUD (`hud_style
+classic|modern|compact`); the console; the main menu (below). Not yet: sounds, the map's moving
+brush models (doors, plats) drawn where they move, and the network (the rest of M18h, M18i).
 
 The baseline mod's POWERS (`qc/items.qc`): the quad (`item_artifact_super_damage`, four times
 the damage dealt) and the shield (`item_artifact_invulnerability`, no damage taken), 30 s each,
@@ -153,7 +157,6 @@ and flames (`light_torch_small_walltorch`, `light_flame_*`) are static things th
 the modern look with `ce_flames` on, the torch's model is drawn without its painted flame and the
 engine's burning gas is the flame.
 
-<<<<<<< HEAD
 ### Benchmarking a demo
 
 `benchmark <demo>` in the console, or `-benchmark <demo>` on the command line (which quits with
@@ -187,7 +190,7 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic --size=
 - **Headless**: `make lab LAB=se-timedemo` runs the same loop into an offscreen target, on a
   demo written in code round the fixture halls (`--format=client` for the other format), or on
   a real one with `ARGS="--basedir=<dir> --demo=demo1"`, and charts every frame's time.
-=======
+
 ### The main menu
 
 `games/shooters_edge/menu/` (M18k2) is the menu ESCAPE opens over the running game (the listen
@@ -222,7 +225,6 @@ server's frames go on under it). Its pages are the classic game's:
   on the search path), ENHANCE into the local cache watched stage by stage, every `ce_` switch.
 - `togglemenu`, `menu_main`, `menu_options` and `menu_quit` open it from the console or a bind.
   The `se-menu` lab pictures every page in both looks.
->>>>>>> origin/main
 
 ## Running your own mod
 
@@ -675,7 +677,7 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `se-lobby` | sim | Clients find a hosted game on the LAN and through the rendezvous, fill the lobby, pick teams, chat, start, play and return; a dedicated server outlives the client that started it |
 | `se-net` | sim | Compatible and native clients on the simulated network under every preset: bandwidth, prediction errors, corrections (the compatible server half built, M18g: scripted clients under every preset, bytes a second, loss, downloads, the digest) |
 | `se-interop` | drive | Our client and server against existing programs on loopback (cache-gated like `se-parity`; a stub reporting "not run" with its commands, M18g) |
-| `se-client` | picture | The `shooters_edge` window's frame without a window: the fixture halls from a pack, the baseline mod as a listen server, a rocket jump; the frame from the player's eyes with the HUD and the effects at the spawn, the blast (its sparks, light and red flash) and the top of the jump; the rise, the health it cost and the effects thrown (built, M18h first slice) |
+| `se-client` | picture | The `shooters_edge` window's frame without a window: the fixture halls from a pack, the baseline mod as a listen server, a rocket jump; the frame from the player's eyes with the weapon in hand, the HUD and the effects at the spawn, the blast (its sparks, light and red flash) and the top of the jump; the rise, the health it cost, the effects thrown and the shots the hand saw (built, M18h first slice) |
 | `se-world` | picture | Named views of free maps in both looks, with captions |
 | `se-models` | picture | The things a map places, as the window draws them: the armour, a health box, an ammo box, a weapon, a torch or a flame, the quad, the shield, another player in his colours and one holding both powers, each from a clear spot near it in both looks; the things placed by kind and the light under each (built, M18i3; `--pak` and `--map` for a pack's own maps) |
 | `se-menu` | picture | The main menu's pages in the modern look and in the classic look (the fixture's pictures, or the player's pack with `--pack`), every row the game cannot do yet dimmed, classic-enhance's menu under OPTIONS; at desktop, wide and phone sizes (built, M18k2) |
