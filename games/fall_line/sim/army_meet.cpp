@@ -6,6 +6,7 @@
 // ge:test tests/fall_line_army_meet_test.cpp
 #include "fall_line/sim/army_meet.hpp"
 
+#include <algorithm>
 #include <cmath>
 
 #include "core/libm/libm.hpp"
@@ -15,6 +16,8 @@
 #include "fall_line/sim/army_rules.hpp"
 #include "fall_line/sim/army_sled.hpp"
 #include "fall_line/sim/army_sled_rules.hpp"
+#include "fall_line/sim/army_vehicle.hpp"
+#include "fall_line/sim/army_vehicle_rules.hpp"
 #include "fall_line/sim/sled_ride.hpp"
 #include "fall_line/sim/wanted.hpp"
 #include "skier/skier.hpp"
@@ -133,6 +136,59 @@ void meet_soldiers(GameState& state, sk::SkierState& c, double mk) {
   raise_heat(state, WantedCause::hit_soldier);
 }
 
+// One unit of steel (a hull, a carrier's front or rear unit): a box in the plan, its middle at
+// `ux`, `uz` turned to `h`, held against him. Returns the closing speed met, m/s.
+double meet_unit(sk::SkierState& c, double ux, double uz, double h, double hl, double hw, double mk,
+                 double vx, double vz, double& into) {
+  const double fx = lm::sin(h);
+  const double fz = lm::cos(h);
+  const double dx = c.x - ux;
+  const double dz = c.z - uz;
+  const double u = dx * fx + dz * fz;
+  const double w = dx * fz - dz * fx;
+  const double pu = hl + kSkierRadius - std::fabs(u);
+  const double pw = hw + kSkierRadius - std::fabs(w);
+  if (pu <= 0 || pw <= 0) return 0;
+  // Out the nearer face: its end or its side.
+  const Contact k = pu < pw ? Contact{pu, u >= 0 ? fx : -fx, u >= 0 ? fz : -fz}
+                            : Contact{pw, w >= 0 ? fz : -fz, w >= 0 ? -fx : fx};
+  // Its own pace into him: what a moving front strikes him with.
+  into = std::max(0.0, vx * k.nx + vz * k.nz);
+  // Steel driven by its engine: it gives nothing, so the whole push is his.
+  double ox = ux, oz = uz, ovx = vx, ovz = vz;
+  return push_apart(c, ox, oz, ovx, ovz, k, mk, mk * 1e9, army_sled::kRestitution);
+}
+
+void meet_vehicles(GameState& state, sk::SkierState& c, double mk) {
+  for (const ArmyVehicle& v : state.army.vehicles) {
+    if (!on_snow(v)) continue;
+    const army_vehicle::Spec& S = spec_of(v.kind);
+    const double reach = S.half_length * 3 + army_vehicle::kHitchM + 2;
+    if (std::fabs(c.x - v.x) > reach || std::fabs(c.z - v.z) > reach) continue;
+    if (c.y > v.y + S.height || c.y < v.y - army_vehicle::kHullBaseM - 2) continue;
+    const double vx = v.speed * lm::sin(v.heading);
+    const double vz = v.speed * lm::cos(v.heading);
+    double into = 0;
+    double closing =
+        meet_unit(c, v.x, v.z, v.heading, S.half_length, S.half_width, mk, vx, vz, into);
+    if (v.kind == ArmyVehicleKind::carrier) {
+      const PlanSpot r = rear_of(v);
+      double rear_into = 0;
+      closing = std::max(closing, meet_unit(c, r.x, r.z, v.rear, S.half_length, S.half_width, mk,
+                                            vx, vz, rear_into));
+      into = std::max(into, rear_into);
+    }
+    if (closing <= 0 || c.down) continue;
+    const bool struck = state.wanted.lethal && into >= army_vehicle::kStrikeClosing;
+    if (struck) {
+      state.events.push_back(GameEvent{EventKind::army_vehicle, 0,
+                                       static_cast<int32_t>(ArmyVehicleChange::strike),
+                                       static_cast<double>(v.id)});
+    }
+    if (struck || closing >= army_sled::kThrowSpeed) throw_down(state, c);
+  }
+}
+
 }  // namespace
 
 void meet_army(GameState& state) {
@@ -144,6 +200,7 @@ void meet_army(GameState& state) {
   const double mk = state.spec.mass;
   meet_machines(state, r.skier, mk);
   meet_soldiers(state, r.skier, mk);
+  meet_vehicles(state, r.skier, mk);
 }
 
 }  // namespace fall_line::sim
