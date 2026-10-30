@@ -43,7 +43,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 
 - precheck running every gate and printing each failure whole (done: no gate stops the run but the build, so every lint finding shows in one round)
 - precheck refusing two rows of one lab in `tests/labs_digests.txt` (done, then retired: each lab's digest is its own file under `tests/digests/`, so no union merge can double one)
-- `ge precheck` (done: the repo's CI gates in both presets) and `ge lint --like-ci` (CI's exact gates and file set)
+- `ge precheck` (done: the repo's CI gates in both presets) and `ge lint --like-ci` (CI's exact gates and file set) (done: the release preset, the shaders' check, and each reached file the build does not compile an error instead of linted bare)
 - `ge lint` (done: clang-tidy's bug-finding checks over what the change since `--base` reaches, the changed .cpp files and every .cpp including a changed header, or the files named, each finding at its line with its check's page; a few files in seconds)
 - `ge lint` with no configured build (configures the compile database it needs on its own, export-compile-commands only, instead of failing)
 - a teleport detector for the labs (done: `engine/lab/teleport.hpp`, every step of a track that moves farther than its speed allows, reported under every scenario lab's `--trace`)
