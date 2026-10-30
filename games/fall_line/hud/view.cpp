@@ -11,6 +11,7 @@
 #include <string>
 #include <utility>
 
+#include "core/math.hpp"
 #include "core/num_text.hpp"
 #include "fall_line/hud/words.hpp"
 #include "hud/feed.hpp"
@@ -32,6 +33,11 @@ constexpr float kNewsShare = 0.48f;
 constexpr float kNewsSize = 21;
 // The prompt's place: above the centre by this share of the safe area's height.
 constexpr double kPromptY = -0.2;
+// The speedometer, km/h: the crawl under the knee squeezed into the sweep's first quarter, so the
+// run's band gets the rest; red past a racer's pace.
+constexpr double kSpeedoMax = 140;
+constexpr double kSpeedoKnee = 30;
+constexpr double kSpeedoRed = 110;
 
 const char* machine_word(Machine m) {
   switch (m) {
@@ -112,7 +118,22 @@ HudLayout hud_layout(const gh::Style& st) {
                    .kind = Kind::readout,
                    .anchor = Anchor::top_right,
                    .help = "the time survived"});
-  // TOP CENTRE: the air clock, under the corners' columns where it would meet them.
+  // and under them the wind meter.
+  gh::WindGauge wind;
+  wind.size = 110;
+  h.wind = l.add({.id = "wind",
+                  .kind = Kind::wind,
+                  .anchor = Anchor::top_right,
+                  .help = "the wind meter",
+                  .wind = wind});
+  // TOP CENTRE: the compass (shown by the player's choice), and the air clock; each under the
+  // corners' columns where it would meet them.
+  h.compass = l.add({.id = "compass",
+                     .kind = Kind::compass,
+                     .anchor = Anchor::top,
+                     .show = false,
+                     .help = "the compass",
+                     .under_corners = true});
   h.air = l.add({.id = "air",
                  .kind = Kind::big,
                  .anchor = Anchor::top,
@@ -125,6 +146,15 @@ HudLayout hud_layout(const gh::Style& st) {
                   .help = "riding a lift"});
   h.speed =
       l.add({.id = "speed", .kind = Kind::big, .anchor = Anchor::bottom_left, .help = "the speed"});
+  gh::Dial speedo;
+  speedo.max = kSpeedoMax;
+  speedo.knee = kSpeedoKnee;
+  speedo.red = kSpeedoRed;
+  h.speedo = l.add({.id = "speedo",
+                    .kind = Kind::dial,
+                    .anchor = Anchor::bottom_left,
+                    .help = "the speedometer",
+                    .dial = speedo});
   gh::Meter edge;
   edge.centred = true;
   edge.ticks = 4;
@@ -191,6 +221,15 @@ void fill_hud(HudLayout& h, const gh::Style& st, const HudSnapshot& s, const Hud
          w.ended == sim::WantedEnd::escaped ? words::kEscaped : words::kSurvived, st.ink);
   }
 
+  const double felt = ge::core::hypot(s.felt_x, s.felt_z);
+  gh::Content& wind = *text(h.wind, num::to_fixed(std::round(felt), 0), "", st.ink);
+  wind.unit = words::kWindUnit;
+  wind.heading = s.heading;
+  wind.felt_x = s.felt_x, wind.felt_z = s.felt_z;
+  wind.weather = true;
+  wind.weather_x = s.weather_x, wind.weather_z = s.weather_z;
+  text(h.compass, "", "", st.ink)->heading = s.heading;
+
   if (s.air_s > 0) {
     gh::Content& c =
         *text(h.air, num::to_fixed(s.air_s, 2), s.air_best ? words::kBestAir : words::kAir,
@@ -203,9 +242,12 @@ void fill_hud(HudLayout& h, const gh::Style& st, const HudSnapshot& s, const Hud
   } else {
     const bool skis = s.machine == Machine::skis;
     const double kmh = skis || s.machine == Machine::para ? s.speed_kmh : s.machine_kmh;
-    gh::Content& c = *text(h.speed, num::to_fixed(std::round(kmh), 0),
+    const bool dial = skis && h.speedo_style == "dial";
+    gh::Content& c = *text(dial ? h.speedo : h.speed, num::to_fixed(std::round(kmh), 0),
                            skis ? "" : machine_word(s.machine), st.ink);
     c.unit = words::kSpeedUnit;
+    c.number = kmh;
+    c.t = s.t;
     if (skis) {
       gh::Content& e = *text(h.edge, "", "", st.accent);
       e.level = static_cast<float>(s.edge);
@@ -224,6 +266,22 @@ void fill_hud(HudLayout& h, const gh::Style& st, const HudSnapshot& s, const Hud
     const bool bad = s.prompt == Prompt::died || s.prompt == Prompt::arrested;
     text(h.prompt, pw.title, pw.line, bad ? st.bad : st.ink);
   }
+}
+
+void add_hud_cvars(ge::console::Console& con, HudLayout& h) {
+  gh::add_hud_cvars(con, h.layout);
+  ge::console::Cvars& cv = con.cvars();
+  cv.bind({.name = "hud_speedo_style",
+           .fallback = "dial",
+           .help = "the speedometer: dial (a needle gauge) or number (the figure alone)",
+           .kind = ge::console::CvarKind::text},
+          &h.speedo_style);
+  cv.bind({.name = "hud_speedo_max",
+           .fallback = num::to_string(kSpeedoMax),
+           .help = "km/h at the speedometer dial's end",
+           .min = 40,
+           .max = 400},
+          &h.layout[static_cast<size_t>(h.speedo)].spec.dial.max);
 }
 
 std::vector<gh::Placed> draw_hud(ui::DrawList& dl, const gh::Frame& f, const gh::Style& st,

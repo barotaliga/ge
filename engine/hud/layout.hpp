@@ -43,6 +43,7 @@
 #include <cstdint>
 #include <deque>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -50,6 +51,7 @@
 #include "console/console.hpp"
 #include "hud/feed.hpp"
 #include "hud/hud.hpp"
+#include "hud/instruments.hpp"
 
 namespace ge::hud {
 
@@ -61,6 +63,9 @@ enum class Kind : uint8_t {
   pips,     // a row of symbols, some lit
   banner,   // a title and a line on a plate
   feed,     // lines that arrive, hold and fade
+  dial,     // a needle gauge, its reading in digits in the face (instruments.hpp)
+  wind,     // the felt wind, heading-up, and the weather's mark on the rim
+  compass,  // a strip of headings, the current one centred
 };
 
 // An anchor's cvar word, and back (nullopt for a word that is none of the nine).
@@ -82,6 +87,9 @@ struct ElementSpec {
   float feed_size = 21;        // kind feed: the type, reference px
   float feed_w = 330;          // kind feed: the column's width at most, reference px
   float feed_share = 1;        // kind feed: and at most this share of the safe area's width
+  Dial dial = {};              // kind dial: its range, knee, red band, ticks, size, settling
+  WindGauge wind = {};         // kind wind: its size, the arrow's full length, gale and calm
+  Compass compass = {};        // kind compass: its size, span and tick step
   bool under_corners = false;
   std::string_view under = {};  // an element's id
 };
@@ -102,7 +110,16 @@ struct Content {
   bool blink_off = false;
   ui::Color color{1, 1, 1, 1};
   const Feed* feed = nullptr;
-  double t = 0;  // s, the feed's clock
+  double t = 0;  // s, the frame's clock: the feed's, and the dial's needle eases by it
+  // The instruments' numbers (instruments.hpp): a dial's value (`value` is its figure), the
+  // heading (rad) a wind meter and a compass turn by, the felt and the weather's wind (world,
+  // m/s, the way the air blows to), and a compass's marks (must outlive the draw).
+  double number = 0;
+  double heading = 0;
+  double felt_x = 0, felt_z = 0;
+  bool weather = false;
+  double weather_x = 0, weather_z = 0;
+  std::span<const CompassMark> marks;
 };
 
 struct Element {
@@ -111,6 +128,7 @@ struct Element {
   ElementPlace place;
   Content content;
   int under = -1;  // the index of `spec.under`, or -1
+  Needle needle;   // kind dial: where its needle was drawn last
   // Where it was drawn last, for `under` and the edit mode.
   ui::Rect drawn;
   bool shown = false;
