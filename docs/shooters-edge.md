@@ -117,18 +117,21 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/games/classic +map dm
   counts, captured); ESCAPE lets it go and a click takes it back; closing the window quits.
 - **The console** (the key under ESCAPE): `map <name>` changes the map, `sv <line>` runs a line on
   the server's console (`sv timelimit 10`, `sv fraglimit 20`, `sv sv_gravity 600`),
-  `sensitivity <degrees a mouse count>` (0.066 by default), `m_invert 1`, `r_bspmode v2`
-  (our sky and real-time lights from the next map; `classic` is the default) and `quit`.
+  `sensitivity <degrees a mouse count>` (0.066 by default), `m_invert 1`, `r_look modern` (our
+  sky, filtered textures and real-time lights; `classic` is the default) with the picture's other
+  cvars (`r_fx_lights`, `r_fx_glow`, `r_bloom`, `r_lava_glow`, `r_slime_glow`; the bloom's from
+  the next map) and `quit`.
 - **A rocket jump**: 7 for the launcher, look straight down, then SPACE and the left button
   together. The blast costs about half your health and throws you about four times as high as
   a jump (held by `tests/shooters_edge_listen_test.cpp` and the `se-client` lab).
 
 What the first slice draws: the map in its classic look (its textures, lightmaps, warped liquids
 and sky) over the engine's sky, from the first-person rig (the view height off the mod's view
-offset, stairs smoothed, a landing's dip); the HUD (`hud_style classic|modern|compact`); the
-console; a hot dot on each rocket in flight and an orange disc where one went off. Not yet:
-the other players' and items' models, the weapon in hand, sounds, the effects of the classic
-world pass, menus, and the network (the rest of M18h, M18i).
+offset, stairs smoothed, a landing's dip); the game's effects (`client/world_fx.hpp`: a rocket's
+trail and glow, an explosion's sparks, smoke and light on the walls, the red flash of a hit and
+the tint under water, slime or lava); the HUD (`hud_style classic|modern|compact`); the console.
+Not yet: the other players' and items' models, the weapon in hand, sounds, menus, and the
+network (the rest of M18h, M18i).
 
 ## Running your own mod
 
@@ -515,7 +518,7 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `se-lobby` | sim | Clients find a hosted game on the LAN and through the rendezvous, fill the lobby, pick teams, chat, start, play and return; a dedicated server outlives the client that started it |
 | `se-net` | sim | Compatible and native clients on the simulated network under every preset: bandwidth, prediction errors, corrections (the compatible server half built, M18g: scripted clients under every preset, bytes a second, loss, downloads, the digest) |
 | `se-interop` | drive | Our client and server against existing programs on loopback (cache-gated like `se-parity`; a stub reporting "not run" with its commands, M18g) |
-| `se-client` | picture | The `shooters_edge` window's frame without a window: the fixture halls from a pack, the baseline mod as a listen server, a rocket jump; the frame from the player's eyes with the HUD and the markers at the spawn, the blast and the top of the jump; the rise and the health it cost (built, M18h first slice) |
+| `se-client` | picture | The `shooters_edge` window's frame without a window: the fixture halls from a pack, the baseline mod as a listen server, a rocket jump; the frame from the player's eyes with the HUD and the effects at the spawn, the blast (its sparks, light and red flash) and the top of the jump; the rise, the health it cost and the effects thrown (built, M18h first slice) |
 | `se-world` | picture | Named views of free maps in both looks, with captions |
 | `se-audio` | sim | Sounds of a scripted fight rendered, metered and written as WAV |
 | `se-viewmodel` | picture | The game's eight free weapons in first person on the engine's corridor stage: every one held at rest, each fired in the dark lit by its own muzzle light, the shotgun switched to the rocket launcher, and the player's view-model cvars; each weapon's share of the picture, its muzzle on the screen, its flash's lift and the switch's time (built, M48d) |
