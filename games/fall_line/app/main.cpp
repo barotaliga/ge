@@ -368,6 +368,7 @@ int main(int argc, char** argv) {
   // The run's sound. The synth outlives the device that pulls it (declared first).
   ge::audio::Synth synth;
   fall_line::sound::RunSound sound = fall_line::sound::make_run_sound();
+  sound.thunder = set.thunder;
   fall_line::sound::Faders faders;
   faders.master = set.volume;
   faders.wind = set.wind;

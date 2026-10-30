@@ -204,6 +204,7 @@ FrameOptions frame_options(const cfg::Settings& s) {
   o.precip = s.precip;
   o.splashes = s.splashes;
   o.wet = s.wet;
+  o.lightning = s.lightning;
   o.fall.particles = static_cast<uint32_t>(
       std::lround(o.fall.particles * std::clamp(s.precip_density, 0.25, 2.0)));
   o.weather = s.weather;
@@ -505,6 +506,18 @@ void pose_crowd(ge::gpu::Device& device, GameFrame& f, const FrameScene& scene) 
   r::set_palettes(device, f.crowd, f.crowd_palettes);
 }
 
+// The map's thunderstorm, laid again only when the map or its strength changed; null without one.
+const ge::wind::Storm* storm_over(GameFrame& f) {
+  const ge::mountain::mapgen::Level& l = *f.level;
+  if (f.storm_level != &l || f.storm_thunder != l.weather.thunder) {
+    f.storm = ge::mountain::air::storm_of(l);
+    f.storm_level = &l;
+    f.storm_thunder = l.weather.thunder;
+    f.lightning.kept.clear();
+  }
+  return f.storm.cells > 0 ? &f.storm : nullptr;
+}
+
 }  // namespace
 
 void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const FrameScene& scene,
@@ -514,6 +527,9 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   r::FrameView view = seen;
   view.sun_size = f.options.sun_size;
   view.moon_size = f.options.moon_size;
+  const ge::wind::Storm* storm = f.options.weather ? storm_over(f) : nullptr;
+  const ge::wind::Storm none;
+  const ge::wind::Storm& storm_air = storm != nullptr ? *storm : none;
   if (f.options.weather) {
     // How far dusk has fallen under the view's sun (the evening's jet and its scud), and the
     // height and the speed picked by hand.
@@ -525,6 +541,11 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
                                          .thickness = f.options.cloud_thickness};
     ge::mountain::app::sky_at(*f.level, view.time_s, view.weather, view.clouds,
                               f.options.clouds > 0, view.eye[1], aloft);
+    // A thunderstorm's towers in place of the map's own cloud, and the sky under them.
+    if (storm != nullptr) {
+      ge::mountain::app::storm_sky(*f.level, *storm, view.time_s, view.eye, f.options.clouds > 0,
+                                   aloft, view.weather, view.clouds);
+    }
     // Kinds of cloud picked by hand (sv_clouds) in place of the map's, dealt off its seed.
     if (f.options.cloud_count >= 0 && f.options.clouds > 0) {
       const ge::mountain::mapgen::Level& l = *f.level;
@@ -555,13 +576,15 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   // THE WET GROUND the rain leaves (the eye's own: one wet ground a frame), stepped by the frames'
   // clock from the steady state its rain and drying would leave, before the uniforms take it.
   if (f.options.wet && f.options.weather) {
-    const ge::mountain::air::Fall fall =
-        ge::mountain::air::fall_at(*f.level, view.time_s, view.eye[1]);
+    const ge::mountain::air::Fall fall = ge::mountain::air::fall_at(
+        *f.level, storm_air, view.time_s, view.eye[0], view.eye[1], view.eye[2]);
     const ge::wind::Precip here{fall.fall, fall.rain};
     const double rate = ge::wind::rate_of(here) * here.rain;
     const double sun = view.weather.sun_pass * std::max(0.0, std::sin(view.sun_elevation));
-    const double dry =
-        ge::wind::dry_rate(ge::mountain::air::wind_at(*f.level, view.time_s).speed, sun);
+    const double dry = ge::wind::dry_rate(
+        ge::mountain::air::wind_at(*f.level, storm_air, view.time_s, view.eye[0], view.eye[2])
+            .speed,
+        sun);
     const double since = view.time_s - f.wet_time;
     f.wet = f.wet_placed && since >= 0 && since < 60 ? ge::wind::step_wet(f.wet, rate, dry, since)
                                                      : ge::wind::wet_steady(rate, dry);
@@ -570,6 +593,22 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
     view.weather.wet = f.wet.wet;
     view.weather.puddles = f.wet.puddles;
   }
+  // THE STORM'S LIGHTNING over the time since the last drawn frame (a sixtieth on the first, or
+  // after the clock went back): its lamps, the open sky's flash, and the strikes' channels, unless
+  // the caller lit the frame itself.
+  std::span<const r::BoltSegment> bolts = scene.bolts;
+  if (storm != nullptr && f.options.lightning && view.flashes.count == 0 && scene.bolts.empty()) {
+    GE_ZONE("frame.lightning");
+    const double since = view.time_s - f.lightning_time;
+    const double window = f.lightning_placed && since > 0 && since < 0.25 ? since : 1.0 / 60;
+    const double eye[3] = {view.eye[0], view.eye[1], view.eye[2]};
+    ge::mountain::app::storm_lights(f.lightning, *storm, eye, view.time_s - window, view.time_s);
+    view.flashes = f.lightning.lamps;
+    view.weather.flash = f.lightning.sky;
+    bolts = f.lightning.bolts;
+  }
+  f.lightning_time = view.time_s;
+  f.lightning_placed = true;
   view.reach_m = f.options.reach_m;
   const auto start = std::chrono::steady_clock::now();
   f.recorder.begin_frame(device);
@@ -624,16 +663,18 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
     f.spray_placed = true;
     throw_spray(f, scene, dt);
     // The map's air at this moment: the wind carries the spray and the flakes.
-    const ge::mountain::air::Wind wind = ge::mountain::air::wind_at(*f.level, view.time_s);
-    const double air[3] = {wind.x, 0.0, wind.z};
-    r::prepare_particles(device, f.particles, dt, view.near_m, air);
-    // What falls at the eye: snow above the map's snow line, rain under it, sleet between.
-    const ge::mountain::air::Fall fall =
-        ge::mountain::air::fall_at(*f.level, view.time_s, view.eye[1]);
+    const ge::mountain::air::Wind wind =
+        ge::mountain::air::wind_at(*f.level, storm_air, view.time_s, view.eye[0], view.eye[2]);
+    const double carried[3] = {wind.x, 0.0, wind.z};
+    r::prepare_particles(device, f.particles, dt, view.near_m, carried);
+    // What falls at the eye: snow above the map's snow line, rain under it, sleet between, and a
+    // storm's rain.
+    const ge::mountain::air::Fall fall = ge::mountain::air::fall_at(
+        *f.level, storm_air, view.time_s, view.eye[0], view.eye[1], view.eye[2]);
     r::PrecipFrame at;
     for (int k = 0; k < 3; ++k) {
       at.eye[k] = view.eye[k];
-      at.wind[k] = air[k];
+      at.wind[k] = carried[k];
     }
     at.fall = f.options.precip ? fall.fall : 0.0;
     at.rain = fall.rain;
@@ -645,7 +686,7 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
     at.near_m = view.near_m;
     r::prepare_precip(device, f.precip, at);
   }
-  r::prepare_bolts(device, f.bolts, scene.bolts, view, f.targets.height);
+  r::prepare_bolts(device, f.bolts, bolts, view, f.targets.height);
   const size_t racers = std::min<size_t>(scene.skiers.size(), kMaxFigures);
   {
     GE_ZONE("frame.figures");
