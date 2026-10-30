@@ -28,6 +28,7 @@
 #include "brush/app/bsp_sky.hpp"
 #include "brush/app/draw_data.hpp"
 #include "brush/write.hpp"
+#include "core/libm/libm.hpp"
 #include "gpu/device.hpp"
 #include "gpu/target.hpp"
 #include "lab/lab.hpp"
@@ -121,8 +122,8 @@ std::vector<View> room_views(const br::Fixture& f, const std::string& map) {
     v.caption = "From near the " + r.name + "'s corner, looking across it.";
     for (int k = 0; k < 3; ++k) v.eye[k] = e[k];
     const double dx = t[0] - e[0], dz = t[2] - e[2];
-    v.heading = std::atan2(dx, dz);
-    v.pitch = std::atan2(t[1] - e[1], std::sqrt(dx * dx + dz * dz));
+    v.heading = ge::core::libm::atan2(dx, dz);
+    v.pitch = ge::core::libm::atan2(t[1] - e[1], std::sqrt(dx * dx + dz * dz));
     out.push_back(v);
   }
   return out;
@@ -451,7 +452,7 @@ void run(gl::Lab& lab) {
   // ── The effects, both looks ──
   {
     gr::FrameView fv = frame_view(hall, first, t);
-    const double s = std::sin(hall.heading), c = std::cos(hall.heading);
+    const double s = ge::core::libm::sin(hall.heading), c = ge::core::libm::cos(hall.heading);
     const auto ahead = [&](double fwd, double right, double up, double out[3]) {
       out[0] = hall.eye[0] + s * fwd + c * right;
       out[1] = hall.eye[1] + up;
