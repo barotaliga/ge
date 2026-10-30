@@ -2,7 +2,7 @@
 title: A bot's view must send players by their slot, not by their model, and measure aim off its own view
 date: 2026-10-30
 scope: plugins/shooter/senses.cpp, plugins/shooter/aim.cpp, games/shooters_edge/bots/duel_run.cpp
-concepts: [senses, client-view, modelindex, sight, aim, turn_axes, quantize, skill]
+concepts: [senses, client-view, modelindex, sight, aim, turn-axes, quantize, skill]
 ---
 
 The first client view sent every entity "with a model" and the seer saw nothing: the server's
